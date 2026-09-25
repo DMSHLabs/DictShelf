@@ -1,0 +1,90 @@
+/* =========================================================
+   BACKGROUND IMAGE
+   ========================================================= */
+
+:host,
+:root > body,
+:host > *,
+:root > body > * {
+  background:none !important;
+}
+
+:host :is(p, div, figure, td, span):has(> img),
+:root > body :is(p, div, figure, td, span):has(> img),
+
+:host :is(p, div, figure, td, span):has(> a > img),
+:root > body :is(p, div, figure, td, span):has(> a > img) {
+
+  background-color:var(--paper-bg, transparent) !important;
+
+  background-image:var(--paper-bk-image, none) !important;
+  background-size:100% 100% !important;
+  background-position:center !important;
+  background-repeat:no-repeat !important;
+  background-attachment:fixed !important;
+
+  /*
+     Keep blending local to the paper backdrop.
+  */
+  isolation:isolate;
+}
+
+:host #ox-enlarge {
+  background:none !important;
+}
+
+:host #ox-enlarge > a.topic,
+:host #ox-enlarge > a.topic:hover {
+  display:inline-block !important;
+
+  padding:0 !important;
+  margin:0 !important;
+  border:0 !important;
+
+  line-height:0 !important;
+  font-size:0 !important;
+
+  background-color:var(--paper-bg, transparent) !important;
+
+  background-image:var(--paper-bk-image, none) !important;
+
+  /*
+     Preserve the paper image proportions.
+     Do NOT use 100% 100% here — that stretches the texture badly
+     when the tall full-size Oxford picture is opened.
+  */
+  background-size:cover !important;
+  background-position:center !important;
+  background-repeat:no-repeat !important;
+
+  color:inherit !important;
+
+  isolation:isolate;
+}
+
+:root > body #ox-enlarge {
+  background:none !important;
+}
+
+:root > body #ox-enlarge > a.topic,
+:root > body #ox-enlarge > a.topic:hover {
+  display:inline-block !important;
+
+  padding:0 !important;
+  margin:0 !important;
+  border:0 !important;
+
+  line-height:0 !important;
+  font-size:0 !important;
+
+  background-color:var(--paper-bg, transparent) !important;
+
+  background-image:var(--paper-bk-image, none) !important;
+  background-size:cover !important;
+  background-position:center !important;
+  background-repeat:no-repeat !important;
+
+  color:inherit !important;
+
+  isolation:isolate;
+}
