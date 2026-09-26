@@ -991,11 +991,24 @@ dialog.panel-card:not([open]){display:none}
    handful of unrelated questions — what is in the collection, how an answer is
    shown, how it looks, the search box's memory, what this app is — and it used
    to answer all of them as one column of controls under a single <details>.
-   The headings are static; the markup says why nothing folds here. --line is
-   the faintest rule in the system, which is what this drawer already separated
-   its blocks with. */
+   The headings are static; the markup says why nothing folds here.
+
+   The hairline is drawn from the INK, not from --line (2026-09-27). It used to
+   borrow that token, which is the faintest rule in the system and is shared
+   with every card and chip border — 39 uses. On a card that tone works: the
+   border sits against text and reads as an outline. As one line across the
+   whole drawer it did not, and the reader reported it from the phone in both
+   of the looks they use. Measured on a preview server, the difference in
+   lightness (ΔL*) between the rule and what is behind it: Clean day 7.6 and
+   Old paper light 8.7 — an amber paper under a warm grey rule — against 13.3
+   in the dark theme and about 32 on the dark paper. A fifth of the ink lands
+   at 16 / 13 / 19 in those four modes, and because the colour is MIXED it
+   follows whatever ink, paper and theme are in force, including the reader's
+   own CSS: no per-theme constant and no per-preset override to keep in step,
+   and no grey line on an amber page. 22% is the measured pick; 20 and 24 were
+   14.8/11.8/17.5 and 17.7/14.1/20.9. */
 .sect{margin:0 var(--sp-2) var(--sp-1);padding-bottom:var(--sp-1);
-  border-bottom:1px solid var(--line)}
+  border-bottom:1px solid color-mix(in srgb,var(--fg) 22%,transparent)}
 .sect:last-child{border-bottom:0;margin-bottom:0}
 .sect-h{margin:0;font-size:13px;font-weight:600;color:var(--fg-soft)}
 /* One door per row: label on the left, chevron on the right, and the WHOLE row
@@ -1042,19 +1055,27 @@ dialog.panel-card:not([open]){display:none}
    The buttons are never `disabled` at the bounds, only dimmed. Clamping in
    applyFS is what holds the range and .lim is what says so; a control that
    stops taking presses reads as broken, and the bound is two presses away. */
-/* The three rows are read as one column, and the column is as WIDE AS ITS
-   LONGEST NAME and no wider - "Font weight", 60px. Every control then sits as
-   close to its label as a column allows, which is what the reader asked for
+/* The rows are read as one column, and the column is as WIDE AS ITS LONGEST
+   NAME and no wider - "Font weight", 60px. Every control then sits as close
+   to its label as a column allows, which is what the reader asked for
    ("shift the controls as far left as they go"): a shared column was never the
    point, a shared column with slack in it was the problem.
-   Scoped to the rows that hold a stepper, and to the Presets row, which is the
-   third of them: no other `.facts` row in the panel has a `.rowlabel` at all.
+   Scoped to the rows that hold a stepper, to the Presets row, and to the
+   Compact row, which joined them on 2026-09-27 - its pair begins at the same
+   x as the steppers do, which is the whole reason it is not wearing the
+   reading strip's wider column. No other `.facts` row in the panel has a
+   `.rowlabel` at all.
    The reading strip's pairs keep their own 96px - their labels are longer
    ("Highlight matches"), and they are a different section. */
 .facts:has(>#fsCtl)>.rowlabel,.facts:has(>#fwCtl)>.rowlabel,
-.facts:has(>#looksChoice)>.rowlabel{
+.facts:has(>#looksChoice)>.rowlabel,.facts:has(>#compactSeg)>.rowlabel{
   flex:0 1 60px;min-width:0;white-space:nowrap;overflow:hidden;
   text-overflow:ellipsis}
+/* A `.facts` row is `display:flex`, which outvotes the user-agent's
+   `[hidden]{display:none}` - the same trap the sheet's groups carry a rule
+   for. The Compact row is hidden whenever there is nothing to switch, and a
+   row that showed anyway would be a switch that does nothing. */
+.facts[hidden]{display:none}
 /* The Presets row's control is the app's drawn menu, which is a .choice-btn
    and so carries the sheet's `width:100%`: here the row is a label and an
    answer on one line, so it takes the width of the ANSWER - the current look's
@@ -1154,17 +1175,31 @@ dialog.panel-card:not([open]){display:none}
    as the font rows have theirs. It used to GROW instead, take the row's slack
    and pin the pair to the right edge, which is where the reader looked last
    for a control that belongs to the label on its left.
-   `flex-shrink:1` with `min-width:0` and the ellipsis are for a phone
-   narrower than these names are long: the label gives up room it does not
-   need and says so, rather than the pair sliding out of the row. */
-.facts .seg>span{flex:0 1 96px;min-width:0;white-space:nowrap;overflow:hidden;
+
+   `flex-shrink:0` is what makes that true (2026-09-26). It was `0 1 96px`,
+   and a seg is an inline-flex item in a column, so each row was sized to its
+   OWN content and then shrank the span to fit: measured, the three labels came
+   out 92px, 76px and 50px wide and the three pairs began at 986, 969 and 943 —
+   three columns pretending to be one, which is the raggedness this rule was
+   written to prevent. Nothing may shrink the label now: on a phone too narrow
+   for label + pair, the pair wraps to the next line (see the media query
+   above) instead of pulling the buttons out of line. The ellipsis stays for
+   the one case a wrap cannot help — a name longer than the column itself. */
+.facts .seg>span{flex:0 0 96px;min-width:0;white-space:nowrap;overflow:hidden;
   text-overflow:ellipsis;font-size:11.5px;line-height:1.2;color:var(--fg-faint)}
+/* A mark may ride in the label, as the speaker does. It is drawn at the same
+   size and in the same faint colour as the marks that ride ON a control, but
+   it sits in the label column with the words it belongs to: the row it came
+   from was one button carrying both, which is exactly what kept it out of the
+   column the other two rows are read down. */
+.facts .seg>span svg{width:14px;height:14px;flex:none;color:var(--fg-faint);
+  vertical-align:-2px;margin-right:.4em}
 /* Both halves of every pair are as wide as the widest word in the section, so
    the six buttons make ONE column and the edge the halves share falls at the
    same x in all three rows. At their natural widths the rows came out ragged:
    the pair still ended at the right edge, but it STARTED wherever its own
-   label happened to end, so "On | Off" and "Alphabetical | My order" could not
-   be read as the same control in two states. */
+   label happened to end, so "On | Off" and "My order | Fastest" could not be
+   read as the same control in two states. */
 .facts .seg .act{position:relative;border-radius:0;min-width:80px;
   justify-content:center}
 .facts .seg .act:first-of-type{border-radius:8px 0 0 8px}
@@ -1181,9 +1216,18 @@ dialog.panel-card:not([open]){display:none}
 .facts .act svg{width:14px;height:14px;flex:none;color:var(--fg-faint)}
 .facts .act:hover svg{color:var(--fg-soft)}
 /* Read aloud off: the same speaker, silent. Only the waves go; the svg keeps
-   its fixed 14px box (flex:none above), and the cone stays where it was
-   inside it, so neither the glyph nor the label shifts on toggle. */
-#speakBtn[aria-pressed="false"] .wave{display:none}
+   its fixed 14px box, and the cone stays where it was inside it, so neither
+   the glyph nor the label shifts on toggle. The class applySpeak sets, rather
+   than a :has() over the buttons: that code already holds the answer and hands
+   it to the speech engine, so the CSS reads the same one instead of computing
+   it a second time from the pair.
+   The LABEL is never coloured by the state (the user asked for that on
+   2026-09-26): a row whose answer is already written in words — On, Off —
+   does not need a second, quieter signal in the same row saying it again, and
+   the label column is where the reader looks for the NAME of a thing, not for
+   what it is set to. The waves are not a colour: they are part of the mark, a
+   speaker that is speaking rather than one that is muted, and they stay. */
+#speakSeg:not(.on) .wave{display:none}
 /* It belongs with the other things you came to this drawer to DO, so it wears
    the row's chrome — but it still reveals a choice rather than performing one,
    and it keeps the ▸/▾ every other disclosure in this app uses (.prov,

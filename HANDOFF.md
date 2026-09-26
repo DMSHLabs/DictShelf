@@ -76,6 +76,29 @@ port is the shape to remember:
   longer matched the page (`?v={{PICKJS}}` arrived in the 09-23 merge). Fixed in
   the main checkout, and `index.full.html` regenerated from the merged page.
 
+**Working tree, 2026-09-26/27 (uncommitted, left for the user):** three changes
+to the ☰ panel, all verified on a throwaway server (127.0.0.1:6899,
+`test_data`, Chromium at 1100 and 390/360/320px) plus `go build ./...`,
+`go vet`, the prefs/looks/presets/asset server tests and a clean-first-run
+check. (1) The `Sort dictionaries` pair is gone with everything behind it — the
+picker lists the reader's own arrangement and no other (`refreshDictUI` →
+`orderedDicts()`; no `sortOwn`, no `sortMine` in the prefs body, no
+`UIPrefs.SortMine`) — and a fresh `state.json` still carries no `fastFirst`, so
+**Open first is My order by default**. (2) `Read aloud` is a label + `On|Off`
+pair like the rows beside it (the label keeps its colour — the pair states the
+state — and only the speaker's waves hide while it is off); the three rows'
+labels and both button columns now line up (`.facts .seg>span` was shrinking to
+each row's own text); and **Compact** is promoted onto the panel under Font
+weight, a pair reading the same payload the sheet's checkbox does, with the
+sheet keeping its row and the two verified to follow each other both ways.
+(3) `.sect` draws the drawer's section hairlines from the ink instead of
+borrowing `--line`, which is shared with every card border — from a phone
+report that they were invisible in both of the reader's looks; `--line` itself
+is untouched. Owed on a phone: the three Results rows, Compact's effect on a
+real narrow screen, the hairlines in daylight, and the picker's order. Rules,
+measurements and the CSS traps are in `docs/ANDROID-UI-HANDOFF.md` →
+"Decisions to preserve".
+
 Facts that are not derivable from the code (still standing):
 - **The setup page's 📁 is now a host capability, not our prompt.** The page
   calls `wudictPickFolder` and shows the button only while the host has set

@@ -262,8 +262,20 @@ window.wudictShellBackground = function (color, image, imageName) {
   <!-- Selecting text in an article offers a speaker that reads it aloud in a
        system voice (D148). Here because it costs nothing until a reader
        selects something, and a reader who never wants it should be able to
-       make the offer stop appearing. Hidden where the browser cannot speak. -->
-  <button type="button" class="act" id="speakBtn" aria-pressed="true" title="Offer to read selected article text aloud"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M2.5 6h2.5l3.5-3v10l-3.5-3H2.5z"/><path class="wave" d="M11 5.8a3 3 0 0 1 0 4.4"/><path class="wave" d="M12.9 3.9a5.8 5.8 0 0 1 0 8.2"/></svg>Read aloud</button>
+       make the offer stop appearing. Hidden where the browser cannot speak.
+
+       A label and a pair, like the two rows beside it, and no longer the lone
+       button it was: one button named "Read aloud" said what the feature IS,
+       and only its colour said whether it was in force — a state the two rows
+       around it state in words. The mark stays, because it is the only place
+       this row can say WHICH sense is offered; it moves into the label with
+       the words, so the three rows keep one column of names and one column of
+       pairs. -->
+  <span class="seg" role="group" aria-label="Offer to read selected article text aloud" id="speakSeg">
+    <span><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M2.5 6h2.5l3.5-3v10l-3.5-3H2.5z"/><path class="wave" d="M11 5.8a3 3 0 0 1 0 4.4"/><path class="wave" d="M12.9 3.9a5.8 5.8 0 0 1 0 8.2"/></svg>Read aloud</span>
+    <button type="button" class="act" id="speakOn" aria-pressed="true" title="Offer a speaker over the text you select in an article — tap it to hear that selection">On</button>
+    <button type="button" class="act" id="speakOff" aria-pressed="false" title="Never offer the speaker — articles stay silent">Off</button>
+  </span>
   <!-- Which section unfolds itself once the answers start arriving (D142).
        A pair rather than one toggle, because neither choice is an "off":
        both are strategies, and an unpressed pen cannot say which of the two
@@ -277,18 +289,12 @@ window.wudictShellBackground = function (color, image, imageName) {
     <button type="button" class="act" id="openOrder" aria-pressed="true" title="Expand the first dictionary in your list that has a result — waits briefly for the ones above it">My order</button>
     <button type="button" class="act" id="openFast" aria-pressed="false" title="Expand whichever dictionary answers first — the quickest definition on screen">Fastest</button>
   </span>
-  <!-- How the dictionary PICKER lists the library. A pair for the same reason
-       as the one above: both halves are orders, and neither is an "off".
-       It moves the picker and nothing else — this list below stays in the
-       user's own order because this is where that order is made, by dragging,
-       and a list that re-sorted itself under the drag could not express one.
-       Alphabetical is first and pressed: it is what the picker has always
-       done, so nothing moves for anyone who never touches this. -->
-  <span class="seg" role="group" aria-label="How the dictionary list is ordered">
-    <span>Sort dictionaries</span>
-    <button type="button" class="act" id="sortAZ" aria-pressed="true" title="List the dictionaries A→Z in the picker, whatever order you arranged them in here">Alphabetical</button>
-    <button type="button" class="act" id="sortOwn" aria-pressed="false" title="List the dictionaries in the picker the way you arranged them below">My order</button>
-  </span>
+  <!-- There was a third pair here, "Sort dictionaries: Alphabetical | My
+       order", and it is gone with the choice it offered: the picker now lists
+       the library in the reader's own arrangement and in no other, which is
+       also the only order this panel shows and the only one the search
+       follows. Keeping it as a row nobody needs meant keeping a way for a
+       reader to meet a list that is not the one they arranged. -->
 </div>
   <!-- Reading the library instead of asking it something. It is a destination,
        not a mode of the search: the search box answers a question, and this
@@ -356,6 +362,26 @@ window.wudictShellBackground = function (color, image, imageName) {
       <button type="button" class="fsbtn" id="fwDown" aria-label="Lighter article text">&#8722;</button>
       <button type="button" class="fsval" id="fwVal" title="Article text weight — click to reset" aria-label="Article text weight; click to reset">Normal</button>
       <button type="button" class="fsbtn" id="fwUp" aria-label="Bolder article text">+</button>
+    </span>
+  </div>
+  <!-- Compact, and the one style layer that lives on the panel instead of
+       behind the Style layers door (the user's call, 2026-09-27). It is the
+       only preset that fixes a DEFECT rather than expressing a taste:
+       dictionaries write their widths for a desktop window, so on a phone the
+       article drags sideways and the gutters eat the line — and the reader
+       meets that while reading, which is the same reason the size stepper is
+       up here. In the sheet it sat 450px of scrolling down, behind a door and
+       a section.
+       It is still a layer, not a copy of one: this pair and the sheet's
+       checkbox are two handles on ONE switch, and both paint from the payload
+       the server answers with (compactRowPaint). The row is hidden while
+       there is nothing to switch — the preview off, or no configuration
+       folder to remember the choice in. -->
+  <div class="facts" id="compactRow" hidden>
+    <span class="rowlabel">Compact</span>
+    <span class="seg" role="group" aria-label="Fit the app and its articles to a phone screen" id="compactSeg">
+      <button type="button" class="act" id="compactOn" aria-pressed="false" title="Drop the app's side gutters and stop articles dragging sideways — the phone fit, on every page">On</button>
+      <button type="button" class="act" id="compactOff" aria-pressed="true" title="Keep the app's own gutters and each article's own margins">Off</button>
     </span>
   </div>
   <!-- One door per subject, and the sheet opens on the one that was asked for.
@@ -670,7 +696,7 @@ async function loadPrefs(){
     prefsReady=true;
     // Read before the exists branch below returns: on a first run there is no
     // ui record, but there is also nothing here that can go wrong.
-    if(st.ui){applyFS(st.ui.fontSize,false);applyFW(st.ui.fontWeight,false);applyHL(!st.ui.hlOff,false);applySpeak(!st.ui.speakOff,false);applyOpenOrder(!st.ui.fastFirst,false);applySortOrder(st.ui.sortMine,false)}
+    if(st.ui){applyFS(st.ui.fontSize,false);applyFW(st.ui.fontWeight,false);applyHL(!st.ui.hlOff,false);applySpeak(!st.ui.speakOff,false);applyOpenOrder(!st.ui.fastFirst,false)}
     if(!st.exists){adoptLocalPrefs();return} // first run: keep whatever we had
     prefOrder=rows.map(d=>d.id);
   }catch(e){
@@ -694,7 +720,7 @@ function savePrefs(now){
   // omitempty zero value), which is what retires a flag set by the switches
   // that no longer exist.
   const body=JSON.stringify({dicts:orderedDicts().map(d=>({id:d.id,name:dictLabel(d)})),
-    ui:{fontSize:articleFS,fontWeight:articleFW,hlOff:!hlOn,speakOff:!speakOn,fastFirst:!orderFirst,sortMine:sortOwn}});
+    ui:{fontSize:articleFS,fontWeight:articleFW,hlOff:!hlOn,speakOff:!speakOn,fastFirst:!orderFirst}});
   if(body===prefsSent)return;
   prefsSent=body;
   fetch("/api/prefs",{method:"PUT",headers:{"Content-Type":"application/json"},body})
@@ -999,16 +1025,21 @@ function speakWake(){
 function applySpeak(on,save){
   const v=!!on,moved=v!==speakOn;
   speakOn=v;
-  const b=$("speakBtn");
-  b.setAttribute("aria-pressed",v?"true":"false");
-  b.style.color=v?"var(--accent)":"";
+  for(const [id,want] of [["speakOff",false],["speakOn",true]])
+    $(id).setAttribute("aria-pressed",v===want?"true":"false");
+  // The label keeps its own colour whatever this says: the pair beside it is
+  // what states on or off, and a second signal in the same row is noise (the
+  // user's call, 2026-09-26). The class only decides whether the mark shows
+  // its waves - a speaker talking rather than one muted.
+  $("speakSeg").classList.toggle("on",v);
   if(window.wuSpeak)window.wuSpeak.on(v);
   else speakGate(v);
   if(moved)for(const f of document.querySelectorAll("iframe.article"))
     f.contentWindow&&f.contentWindow.postMessage({t:"speak",on:v},"*");
   if(save&&moved)savePrefs();
 }
-$("speakBtn").addEventListener("click",()=>applySpeak(!speakOn,true));
+for(const [id,want] of [["speakOff",false],["speakOn",true]])
+  $(id).addEventListener("click",()=>applySpeak(want,true));
 applySpeak(true,false);
 /* Which section auto-expands: the first dictionary in the user's own order
    that has a result (D142, and the default since D144), or the one that
@@ -1027,30 +1058,16 @@ function applyOpenOrder(on,save){
   if(save&&moved)savePrefs();
   return moved;
 }
-/* How the PICKER lists the library: A→Z (what it has always done, and so the
-   zero value) or the reader's own arrangement. Server state like the three
-   above, because the arrangement it follows is server state.
-
-   It touches the picker alone. The panel keeps listing the user's order
-   whatever this says — the panel is where that order is made, by dragging, and
-   a list that re-sorted itself under the drag could not express one. "All
-   dictionaries" is searched in the user's order either way (D142): which
-   dictionary answers first is a property of the collection, not of how a menu
-   is sorted. So nothing here re-runs a query; only the menu is rebuilt. */
-let sortOwn=false;
-function applySortOrder(on,save){
-  const v=!!on,moved=v!==sortOwn;
-  sortOwn=v;
-  for(const [id,want] of [["sortAZ",false],["sortOwn",true]])
-    $(id).setAttribute("aria-pressed",v===want?"true":"false");
-  // Nothing to rebuild before the first row arrives; loadDicts draws it.
-  if(moved&&dicts.length)refreshDictUI(true);
-  if(save&&moved)savePrefs();
-  return moved;
-}
-for(const [id,want] of [["sortAZ",false],["sortOwn",true]])
-  $(id).addEventListener("click",()=>applySortOrder(want,true));
-applySortOrder(false,false);
+/* There was a control here, and a stored setting behind it: how the PICKER
+   lists the library — A→Z, which is what it had always done, or the reader's
+   own arrangement. The choice is gone and only the arrangement is left (see
+   refreshDictUI). There is one order in this app: the one the panel below is
+   dragged into, which is also the order "All dictionaries" is searched in
+   (D142) — which dictionary answers first is a property of the collection,
+   not of how a menu happens to be sorted. A `sortMine` left in state.json by
+   a build that offered the switch is not read (the row that could write it is
+   gone, so honouring it would strand a reader in a list they cannot explain
+   and cannot leave), and the next save drops the key. */
 /* Re-run on a real change only. A policy control that visibly does nothing
    until the next query reads as broken — and pressing the half that is already
    in force is not a change, so it must not throw the answer away and rebuild
@@ -1575,9 +1592,11 @@ function refreshDictUI(now){
   const host=groups.length
     ?sel.appendChild(Object.assign(document.createElement("optgroup"),{label:"Dictionaries"}))
     :sel;
-  // A→Z by default, for quick name lookup; the reader's own arrangement when
-  // they asked for it (and the panel below always shows that arrangement).
-  for(const d of (sortOwn?orderedDicts():dicts)){
+  // The reader's own arrangement, never A→Z: it is the order the panel above
+  // is dragged into and the order the search itself follows (D142), so a menu
+  // sorted any other way could only list the library in an order the reader
+  // has no way to see or change.
+  for(const d of orderedDicts()){
     const o=document.createElement("option");
     o.value=d.id;o.textContent=dictLabel(d);
     host.appendChild(o);
@@ -2042,7 +2061,11 @@ function reissueIfCorpusMoved(){
 function showPanel(){panelSnap=panelState();  /* before the lock: once the root stops scrolling the bar is gone to measure */
   document.documentElement.style.setProperty("--wd-sbw",
     Math.max(0,innerWidth-document.documentElement.clientWidth)+"px");
-$("speakBtn").hidden=!speakCan();$("panel").classList.add("show");loadFolders();
+$("speakSeg").hidden=!speakCan();$("panel").classList.add("show");loadFolders();
+  // Another window can switch a layer; the panel's Compact row is repainted
+  // from the registry in hand whenever the drawer opens, the way the Presets
+  // row is re-asked whether the screen still matches the look in force.
+  compactRowPaint();
   // The Presets row's button says whether the screen still matches the look in
   // force, and that answer is only ever as fresh as the last time it was
   // asked: opening the panel is one of the three moments worth asking at.
@@ -4763,7 +4786,7 @@ async function stylerUpload(list){
    switches its group-mates off, and the fresh payload that comes back is
    the truth the pane re-renders from. */
 async function presetsLoad(){
-  if(STYLE_OFF)return false;
+  if(STYLE_OFF){compactRowPaint();return false}
   try{
     const r=await fetch("/api/presets");
     if(!r.ok)throw new Error("HTTP "+r.status);
@@ -4772,6 +4795,9 @@ async function presetsLoad(){
     return true;
   }catch(e){
     console.warn("could not load presets:",e);
+    // No registry means nothing to switch: the panel's Compact row stands
+    // down rather than offering a switch that cannot read its own state.
+    compactRowPaint();
     return false;
   }
 }
@@ -4781,7 +4807,7 @@ async function presetsLoad(){
    elsewhere (another window) loses its element here too, because the sync
    prunes by the enabled set, not by what this page remembers touching. */
 function presetApplyAll(){
-  if(STYLE_OFF){presetArticleCSS="";return}
+  if(STYLE_OFF){presetArticleCSS="";compactRowPaint();return}
   const enabled=new Set(PRESETS?PRESETS.enabled:[]);
   const dark=themeIsDark();
   const article=[];
@@ -4813,15 +4839,29 @@ function presetApplyAll(){
   }
   presetArticleCSS=article.join("\n");
   articleRefresh();
+  // The enabled set is the one thing the panel's Compact row mirrors, and it
+  // has just changed - on boot, on every toggle, and on a theme flip.
+  compactRowPaint();
 }
-async function presetToggle(id,on){
+/* The switch behind every preset handle on the page - the sheet's checkbox
+   and the panel's Compact row. What lands is the SERVER's answer, never the
+   tap: the payload that comes back is what presetApplyAll attaches and what
+   the pane re-renders from, and the panel's row paints from the same one
+   (compactRowPaint), so the two handles cannot drift apart.
+   `notify` is where a refusal or a failure is announced. The sheet has a line
+   of its own for that; the panel does not - its Compact row is a control
+   outside the sheet, and a note written inside a closed sheet would be a
+   switch that does nothing when it fails. Returns true only when the layer
+   really moved. */
+async function presetToggle(id,on,notify){
+  const say=notify||stylerNote;
   if(STYLE_OFF){
-    stylerNote("Preview is off (?style=off). You can still edit and save; reload without it to see the result.");
-    return;
+    say("Preview is off (?style=off). You can still edit and save; reload without it to see the result.");
+    return false;
   }
   if(PRESETS&&!PRESETS.writable){
-    stylerNote("No configuration folder, so there is nowhere to remember preset choices.");
-    return;
+    say("No configuration folder, so there is nowhere to remember preset choices.");
+    return false;
   }
   try{
     const r=await fetch("/api/presets",{method:"PUT",
@@ -4830,14 +4870,38 @@ async function presetToggle(id,on){
     PRESETS=await r.json();
     presetApplyAll();
     presetsPaneRender();
+    return true;
   }catch(e){
     // The switch on screen has already flipped; re-rendering from the last
     // known payload puts it back, because a switch that lies is worse than
     // a note alone.
     presetsPaneRender();
-    stylerNote("Could not switch the preset: "+e.message);
+    say("Could not switch the preset: "+e.message);
+    return false;
   }
 }
+/* The panel's Compact row, painted from the layer registry rather than from
+   what the tap did: `enabled` is the server's answer, and the row is a handle
+   on it, not a memory of its own.
+   Hidden where the layer cannot be switched or cannot reach the page, which
+   is the same rule the rest of this panel lives by - a switch that cannot act
+   must not be on screen. Hidden in the MARKUP too, so a page whose script
+   broke shows no dead control. */
+function compactRowPaint(){
+  const row=$("compactRow");
+  if(!row)return;
+  let p=null;
+  for(const g of ((PRESETS&&PRESETS.groups)||[]))
+    for(const q of g.presets)if(q.id==="compact")p=q;
+  if(!p||STYLE_OFF||(PRESETS&&!PRESETS.writable)){row.hidden=true;return}
+  row.hidden=false;
+  const on=!!p.enabled;
+  for(const [id,want] of [["compactOff",false],["compactOn",true]])
+    $(id).setAttribute("aria-pressed",on===want?"true":"false");
+}
+for(const [id,want] of [["compactOff",false],["compactOn",true]])
+  $(id).addEventListener("click",()=>presetToggle("compact",want,
+    msg=>setStatus("⚠ "+esc(msg))));
 /* The pane. Groups in manifest order; a group of more than one is a
    conflict group and says so, because two switches that silently undo each
    other are worse than a label. The Background preset only shows while the
