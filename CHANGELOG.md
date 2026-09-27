@@ -5,6 +5,41 @@ Notable changes in **wuDict2**, the Android fork of
 version it was forked from. Fork release tags are prefixed `wudict2-`; one
 tagged line per release, newest first.
 
+## wudict2-v0.4.0 — 2026-09-27
+
+Still no upstream sync — upstream `master` is unchanged at `5f0ad02`. One
+change this cycle, and it is fork-only.
+
+### A status bar at the bottom of the screen
+
+- **A fixed bar holding three controls and nothing else**: ▲ and ▼ walk the
+  dictionaries of the current answer — opening each one as it lands, and
+  wrapping at the ends — and an **Examples** chip folds and unfolds the
+  example-only lines without leaving the article.
+- It exists because the drawer covers most of a phone's width, and a control
+  you judge by watching the text move cannot live there. Everything on the bar
+  also exists in the drawer — the fold has its row, the jumps have the picker's
+  list — which is what makes hiding the bar safe. Its own switch is a row
+  there too, **Status bar: Show | Hide**, beside the controls it duplicates.
+- **The arrows use the picker's jump.** A dictionary reached by an arrow is as
+  much a chosen destination as one picked off the list, so it opens and lands
+  instantly rather than gliding; the arrows walk the dictionaries in your own
+  order and skip the "could not be searched" row, which is a reference and not
+  a place to read.
+- **It appears with the first results, not before** — an empty page has nothing
+  to walk. It is on by default and hides itself where it has nothing to do:
+  taken away entirely where there is nothing to walk, and down to the chip
+  alone when only one dictionary answered.
+- It wears the bottom inset itself, exactly as the top bar wears the top one,
+  so it stands clear of the gesture bar with **no Android-side change**. The
+  wallpaper layer paints it as the same piece of paper as the top bar, and the
+  page's bottom space follows the bar's measured height — so showing or hiding
+  it re-flows the text instead of leaving the last line behind it.
+- The chip is one button with two states, and it is lit while the examples are
+  **shown** — the same answer the panel's Show half gives, said in colour. The
+  choice of whether the bar is there is per window, like wide mode; it is not a
+  reading habit that follows you to another device.
+
 ## wudict2-v0.3.0 — 2026-09-27
 
 No upstream sync in this cycle — upstream `master` still stands at `5f0ad02`,
