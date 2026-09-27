@@ -5,6 +5,48 @@ Notable changes in **wuDict2**, the Android fork of
 version it was forked from. Fork release tags are prefixed `wudict2-`; one
 tagged line per release, newest first.
 
+## wudict2-v0.3.0 — 2026-09-27
+
+No upstream sync in this cycle — upstream `master` still stands at `5f0ad02`,
+so the upstream work described under v0.2.0 is unchanged. Everything below is
+fork-only.
+
+### The panel's controls state themselves
+
+- **"Sort dictionaries" is gone**, and with it the choice it offered: the
+  picker lists the library in your own arrangement and no other — the order
+  you drag the cards into, which is also the order the search already
+  followed. A sort preference left in an older `state.json` is not read.
+- **"Read aloud" is a label and an On/Off pair** like the rows beside it; the
+  label keeps its own colour, because the pair is what states the state.
+- The three Results rows line up now: their label column had been shrinking to
+  each row's own text, so the names and both button columns started at three
+  different x positions.
+- The drawer's **section rules are drawn from the ink** instead of borrowing
+  the faintest tone in the system, which every card border also uses. On the
+  light themes they measured ΔL* 7.6 and 8.7 against what is behind them —
+  invisible on a phone — and are now 16.2 and 12.9, in the same band as the
+  dark ones. The shared tone itself is untouched.
+
+### Compact and Examples move onto the panel
+
+- **Compact is a row on the panel**, under Font weight, instead of a checkbox
+  hundreds of pixels down in Style layers. It stays a layer: the panel's pair
+  and the sheet's checkbox are two handles on one switch, both painted from
+  the same payload, and the row hides itself where there is nothing to switch.
+- **A new Examples row, Show | Hide, sits under it** and folds away the lines
+  that hold nothing but examples, leaving the entry's own text. A definition
+  line that merely contains an example keeps its line.
+- The two halves of that feature are deliberately separate: as an article is
+  built, the lines that hold nothing else are **marked**, and the layer's own
+  article rule is what hides them. So folding back is just taking the rule
+  away — the examples return at once, in the articles already on screen, with
+  no re-render and no second pass.
+- Otherwise it is an ordinary style layer: state in `presets.json`, applies in
+  both themes, article side only. **Nothing in the stored library changes**, so
+  no dictionary rebuild is offered and existing libraries need nothing done to
+  them.
+
 ## wudict2-v0.2.0 — 2026-09-26
 
 Also carries everything merged from upstream since v0.1.0 — upstream
