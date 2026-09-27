@@ -58,6 +58,7 @@
 //	wu-sub   an article section pulled in beside a link (written by the UI)
 //	wu-hl    a full-text match, marked at response time (internal/hilite)
 //	wu-cur   the one match being walked to (written by the UI, not ingested)
+//	wu-xonly a line whose whole content is examples (written by the UI, web/examples.js)
 //
 // DefaultCSS is served once per page into both article surfaces (the shadow
 // root and the sandboxed iframe), so an article carries none of it: a role

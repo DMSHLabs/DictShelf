@@ -374,14 +374,33 @@ window.wudictShellBackground = function (color, image, imageName) {
        a section.
        It is still a layer, not a copy of one: this pair and the sheet's
        checkbox are two handles on ONE switch, and both paint from the payload
-       the server answers with (compactRowPaint). The row is hidden while
+       the server answers with (presetRowsPaint). The row is hidden while
        there is nothing to switch — the preview off, or no configuration
        folder to remember the choice in. -->
   <div class="facts" id="compactRow" hidden>
     <span class="rowlabel">Compact</span>
     <span class="seg" role="group" aria-label="Fit the app and its articles to a phone screen" id="compactSeg">
-      <button type="button" class="act" id="compactOn" aria-pressed="false" title="Drop the app's side gutters and stop articles dragging sideways — the phone fit, on every page">On</button>
-      <button type="button" class="act" id="compactOff" aria-pressed="true" title="Keep the app's own gutters and each article's own margins">Off</button>
+      <button type="button" class="act" data-layer="on" id="compactOn" aria-pressed="false" title="Drop the app's side gutters and stop articles dragging sideways — the phone fit, on every page">On</button>
+      <button type="button" class="act" data-layer="off" id="compactOff" aria-pressed="true" title="Keep the app's own gutters and each article's own margins">Off</button>
+    </span>
+  </div>
+  <!-- Examples, the second layer with a handle on the panel. Same reasoning as
+       Compact above, and the same machinery: the pair and the sheet's checkbox
+       are one switch, painted from one payload (presetRowsPaint), and the row
+       stands down where there is nothing to switch.
+       The halves name what the reader GETS, and Show is the one in force by
+       default: a dictionary is read for its examples as much as for its
+       definitions, and nothing in this app changes until the reader asks.
+       The WORK is split between the two files that own it: examples.js marks
+       the lines that hold nothing but examples as the articles are built, and
+       this layer's article half (presets/examples/) is the rule that hides
+       them - so the switch needs no call into the script, and folding examples
+       back is taking a rule away, in the articles already on screen included. -->
+  <div class="facts" id="examplesRow" hidden>
+    <span class="rowlabel">Examples</span>
+    <span class="seg" role="group" aria-label="Show or fold the examples in articles" id="examplesSeg">
+      <button type="button" class="act" data-layer="off" id="examplesOn" aria-pressed="true" title="Show every example a dictionary gives">Show</button>
+      <button type="button" class="act" data-layer="on" id="examplesOff" aria-pressed="false" title="Fold away the lines that hold nothing but examples — the entry's own text stays">Hide</button>
     </span>
   </div>
   <!-- One door per subject, and the sheet opens on the one that was asked for.
@@ -2062,10 +2081,10 @@ function showPanel(){panelSnap=panelState();  /* before the lock: once the root 
   document.documentElement.style.setProperty("--wd-sbw",
     Math.max(0,innerWidth-document.documentElement.clientWidth)+"px");
 $("speakSeg").hidden=!speakCan();$("panel").classList.add("show");loadFolders();
-  // Another window can switch a layer; the panel's Compact row is repainted
+  // Another window can switch a layer; the panel's layer rows are repainted
   // from the registry in hand whenever the drawer opens, the way the Presets
   // row is re-asked whether the screen still matches the look in force.
-  compactRowPaint();
+  presetRowsPaint();
   // The Presets row's button says whether the screen still matches the look in
   // force, and that answer is only ever as fresh as the last time it was
   // asked: opening the panel is one of the three moments worth asking at.
@@ -4786,7 +4805,7 @@ async function stylerUpload(list){
    switches its group-mates off, and the fresh payload that comes back is
    the truth the pane re-renders from. */
 async function presetsLoad(){
-  if(STYLE_OFF){compactRowPaint();return false}
+  if(STYLE_OFF){presetRowsPaint();return false}
   try{
     const r=await fetch("/api/presets");
     if(!r.ok)throw new Error("HTTP "+r.status);
@@ -4797,7 +4816,7 @@ async function presetsLoad(){
     console.warn("could not load presets:",e);
     // No registry means nothing to switch: the panel's Compact row stands
     // down rather than offering a switch that cannot read its own state.
-    compactRowPaint();
+    presetRowsPaint();
     return false;
   }
 }
@@ -4807,7 +4826,7 @@ async function presetsLoad(){
    elsewhere (another window) loses its element here too, because the sync
    prunes by the enabled set, not by what this page remembers touching. */
 function presetApplyAll(){
-  if(STYLE_OFF){presetArticleCSS="";compactRowPaint();return}
+  if(STYLE_OFF){presetArticleCSS="";presetRowsPaint();return}
   const enabled=new Set(PRESETS?PRESETS.enabled:[]);
   const dark=themeIsDark();
   const article=[];
@@ -4839,20 +4858,19 @@ function presetApplyAll(){
   }
   presetArticleCSS=article.join("\n");
   articleRefresh();
-  // The enabled set is the one thing the panel's Compact row mirrors, and it
+  // The enabled set is the one thing the panel's layer rows mirror, and it
   // has just changed - on boot, on every toggle, and on a theme flip.
-  compactRowPaint();
+  presetRowsPaint();
 }
 /* The switch behind every preset handle on the page - the sheet's checkbox
-   and the panel's Compact row. What lands is the SERVER's answer, never the
+   and the panel's layer rows. What lands is the SERVER's answer, never the
    tap: the payload that comes back is what presetApplyAll attaches and what
-   the pane re-renders from, and the panel's row paints from the same one
-   (compactRowPaint), so the two handles cannot drift apart.
+   the pane re-renders from, and the panel's rows paint from the same one
+   (presetRowsPaint), so the two handles cannot drift apart.
    `notify` is where a refusal or a failure is announced. The sheet has a line
-   of its own for that; the panel does not - its Compact row is a control
-   outside the sheet, and a note written inside a closed sheet would be a
-   switch that does nothing when it fails. Returns true only when the layer
-   really moved. */
+   of its own for that; the panel does not - its rows are controls outside the
+   sheet, and a note written inside a closed sheet would be a switch that does
+   nothing when it fails. Returns true only when the layer really moved. */
 async function presetToggle(id,on,notify){
   const say=notify||stylerNote;
   if(STYLE_OFF){
@@ -4880,28 +4898,40 @@ async function presetToggle(id,on,notify){
     return false;
   }
 }
-/* The panel's Compact row, painted from the layer registry rather than from
-   what the tap did: `enabled` is the server's answer, and the row is a handle
-   on it, not a memory of its own.
-   Hidden where the layer cannot be switched or cannot reach the page, which
-   is the same rule the rest of this panel lives by - a switch that cannot act
-   must not be on screen. Hidden in the MARKUP too, so a page whose script
-   broke shows no dead control. */
-function compactRowPaint(){
-  const row=$("compactRow");
-  if(!row)return;
-  let p=null;
-  for(const g of ((PRESETS&&PRESETS.groups)||[]))
-    for(const q of g.presets)if(q.id==="compact")p=q;
-  if(!p||STYLE_OFF||(PRESETS&&!PRESETS.writable)){row.hidden=true;return}
-  row.hidden=false;
-  const on=!!p.enabled;
-  for(const [id,want] of [["compactOff",false],["compactOn",true]])
-    $(id).setAttribute("aria-pressed",on===want?"true":"false");
+/* The panel's layer rows: the drawer carries a handle for every layer the
+   reader reaches for while reading, as [row id, preset id]. Both handles of a
+   layer - this row and the sheet's checkbox - paint from the layer registry
+   rather than from what a tap did, so they cannot drift apart. A button says
+   which answer it IS with data-layer: "on" for the half that means the layer
+   is in force, "off" for the other. That is why the Examples row reads
+   Show | Hide while Compact reads Off | On - the halves are named for what the
+   reader gets, and the attribute is what the code follows, not the words. */
+const PRESET_ROWS=[["compactRow","compact"],["examplesRow","hide_examples"]];
+function presetRowsPaint(){
+  for(const [rowId,id] of PRESET_ROWS){
+    const row=$(rowId);
+    if(!row)continue;
+    let p=null;
+    for(const g of ((PRESETS&&PRESETS.groups)||[]))
+      for(const q of g.presets)if(q.id===id)p=q;
+    // Hidden where the layer cannot be switched or cannot reach the page,
+    // which is the same rule the rest of this panel lives by - a switch that
+    // cannot act must not be on screen. Hidden in the MARKUP too, so a page
+    // whose script broke shows no dead control.
+    if(!p||STYLE_OFF||(PRESETS&&!PRESETS.writable)){row.hidden=true;continue}
+    row.hidden=false;
+    const on=!!p.enabled;
+    for(const b of row.querySelectorAll("button[data-layer]"))
+      b.setAttribute("aria-pressed",(b.dataset.layer==="on")===on?"true":"false");
+  }
 }
-for(const [id,want] of [["compactOff",false],["compactOn",true]])
-  $(id).addEventListener("click",()=>presetToggle("compact",want,
-    msg=>setStatus("⚠ "+esc(msg))));
+for(const [rowId,id] of PRESET_ROWS){
+  const row=$(rowId);
+  if(!row)continue;
+  for(const b of row.querySelectorAll("button[data-layer]"))
+    b.addEventListener("click",()=>presetToggle(id,b.dataset.layer==="on",
+      msg=>setStatus("⚠ "+esc(msg))));
+}
 /* The pane. Groups in manifest order; a group of more than one is a
    conflict group and says so, because two switches that silently undo each
    other are worse than a label. The Background preset only shows while the
@@ -5899,5 +5929,9 @@ $("styler").addEventListener("keydown",e=>{
 </dialog>
 <script src="/assets/group-editor.js?v={{GROUPJS}}"></script>
 <script src="/assets/looks.js?v={{LOOKSJS}}"></script>
+<!-- Last, so the results' container is there to watch: this file marks the
+     article lines that hold nothing but examples, and the layer that folds
+     them away (presets/examples/) is what does the hiding. See examples.js. -->
+<script src="/assets/examples.js?v={{EXAMPLESJS}}"></script>
 </body>
 </html>

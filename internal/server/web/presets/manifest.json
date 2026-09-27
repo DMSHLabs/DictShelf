@@ -205,6 +205,19 @@
       ]
     },
     {
+      "dir": "examples",
+      "title": "Examples",
+      "presets": [
+        {
+          "id": "hide_examples",
+          "title": "Hide examples",
+          "desc": "Lines that hold nothing but examples are folded away, leaving the entry's own text. The lines are marked by examples.js as the articles are built.",
+          "article": "hide_examples_article.css",
+          "articleNight": "hide_examples_article.css"
+        }
+      ]
+    },
+    {
       "dir": "tighter_indents",
       "title": "Tighter indents",
       "presets": [

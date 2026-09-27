@@ -1,0 +1,12 @@
+/* The example folding layer's half: the lines that hold nothing but examples
+   go, and the entry's own text stays.
+   `wu-xonly` is put on by web/examples.js - the class says the line has
+   nothing else in it, and THIS rule is what decides that nothing else is
+   SHOWN. The two are deliberately separate jobs: an article half exists in the
+   article sheet only while the layer is on, so switching it off takes the rule
+   away and every example is back, in the articles already on screen included,
+   without the script being told anything.
+   The rule is not scoped to `p.wu-m` (the author-indented blocks these lines
+   usually are): the class alone is the whole condition, and a line that is
+   nothing but examples is worth folding wherever a dictionary put it. */
+p.wu-xonly{display:none}

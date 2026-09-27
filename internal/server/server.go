@@ -85,6 +85,9 @@ var doubleTapProbe []byte // temporary Android gesture diagnostic
 //go:embed web/speak.js
 var speakJS []byte // read-aloud of selected article text, fetched on the first selection
 
+//go:embed web/examples.js
+var examplesJS []byte // example folding: marks the lines that hold nothing but examples
+
 //go:embed web/favicon.svg
 var faviconSVG []byte // "Lookup" mark: magnifier over headword lines
 
@@ -406,6 +409,7 @@ func (s *Server) basePage() []byte {
 		page = strings.ReplaceAll(page, "{{LOOKSJS}}", assetTag(looksJS))
 		page = strings.ReplaceAll(page, "{{PICKJS}}", assetTag(pickJS))
 		page = strings.ReplaceAll(page, "{{SPEAKJS}}", assetTag(speakJS))
+		page = strings.ReplaceAll(page, "{{EXAMPLESJS}}", assetTag(examplesJS))
 		// The role stylesheet for articles wudict writes itself
 		// (internal/artmark). It is a floor under BOTH article surfaces, so
 		// it is substituted once here and index.html hands it to the shadow

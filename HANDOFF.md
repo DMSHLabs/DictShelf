@@ -94,10 +94,17 @@ sheet keeping its row and the two verified to follow each other both ways.
 (3) `.sect` draws the drawer's section hairlines from the ink instead of
 borrowing `--line`, which is shared with every card border — from a phone
 report that they were invisible in both of the reader's looks; `--line` itself
-is untouched. Owed on a phone: the three Results rows, Compact's effect on a
-real narrow screen, the hairlines in daylight, and the picker's order. Rules,
-measurements and the CSS traps are in `docs/ANDROID-UI-HANDOFF.md` →
-"Decisions to preserve".
+is untouched. (4) A second layer moved onto the panel the same way: **Examples
+`Show|Hide`**, which folds the lines that hold nothing but examples. The work is
+split — `web/examples.js` marks each shadow article's example-only `<p>` with
+`wu-xonly` as the DOM appears (no state, no library rebuild, `artmark.Version`
+untouched) and the layer's article half is the one rule that hides them — so the
+switch is a plain preset (`style/presets.json`, `hide_examples`) and folding
+back needs no sweep. Owed on a phone: the three Results
+rows, Compact's effect on a real narrow screen, the Examples fold in a real
+entry, the hairlines in daylight, and the picker's order. Rules, measurements
+and the CSS traps are in `docs/ANDROID-UI-HANDOFF.md` → "Decisions to
+preserve".
 
 Facts that are not derivable from the code (still standing):
 - **The setup page's 📁 is now a host capability, not our prompt.** The page

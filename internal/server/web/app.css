@@ -1060,15 +1060,16 @@ dialog.panel-card:not([open]){display:none}
    to its label as a column allows, which is what the reader asked for
    ("shift the controls as far left as they go"): a shared column was never the
    point, a shared column with slack in it was the problem.
-   Scoped to the rows that hold a stepper, to the Presets row, and to the
-   Compact row, which joined them on 2026-09-27 - its pair begins at the same
-   x as the steppers do, which is the whole reason it is not wearing the
-   reading strip's wider column. No other `.facts` row in the panel has a
-   `.rowlabel` at all.
+   Scoped to the rows that hold a stepper, to the Presets row, and to the two
+   layer rows (Compact, Examples) that joined them on 2026-09-27 - their pairs
+   begin at the same x as the steppers do, which is the whole reason they are
+   not wearing the reading strip's wider column. No other `.facts` row in the
+   panel has a `.rowlabel` at all.
    The reading strip's pairs keep their own 96px - their labels are longer
    ("Highlight matches"), and they are a different section. */
 .facts:has(>#fsCtl)>.rowlabel,.facts:has(>#fwCtl)>.rowlabel,
-.facts:has(>#looksChoice)>.rowlabel,.facts:has(>#compactSeg)>.rowlabel{
+.facts:has(>#looksChoice)>.rowlabel,.facts:has(>#compactSeg)>.rowlabel,
+.facts:has(>#examplesSeg)>.rowlabel{
   flex:0 1 60px;min-width:0;white-space:nowrap;overflow:hidden;
   text-overflow:ellipsis}
 /* A `.facts` row is `display:flex`, which outvotes the user-agent's
