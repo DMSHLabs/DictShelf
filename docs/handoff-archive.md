@@ -53,6 +53,7 @@ narratives, so `git log` is a second copy.
 | The Appearance rows hug their labels (2026-09-25, from the reader) | 2026-09-25 | 2482–2498 |
 | Release wudict2-v0.2.0 (2026-09-26, this session) | 2026-09-26 | 1628–1669 |
 | Release wudict2-v0.3.0 (2026-09-27, this session) | 2026-09-27 | — (added after the split) |
+| Release wudict2-v0.4.0 (2026-09-27, this session) | 2026-09-27 | — (added after the split) |
 
 ## The preset-switch "crash" was a TDZ cascade (2026-09-25, diagnosis only)
 
@@ -1607,6 +1608,30 @@ The tooling traps listed in the v0.2.0 section above still stand and were partly
 hit again (python3 resolving a leading `/tmp` against the CURRENT drive). No
 `gh`; the token still comes from `git credential fill`; build the release JSON
 with `python3`, never PowerShell 5.1.
+
+## Release wudict2-v0.4.0 (2026-09-27, this session)
+
+Fourth tagged build, same order again: the changelog commit (`bd17906`), `dev`
+pushed, the tag `wudict2-v0.4.0` on it, pushed, then `build-android.cmd
+release`, then the REST create and the asset upload. aapt2:
+`versionName='wudict2-v0.4.0'`, versionCode 379, arm64 only. One content commit
+this cycle (`155e30d`, the Status bar) and again no upstream sync — `master`
+still at `5f0ad02`.
+
+Verified as before: the published asset was downloaded back and hashed against
+the local build (identical, 7,493,181 bytes,
+sha256 `961b8fc68bc46da6cfcb76b1215fb387e447677d1a46b0ac6ce825ae4fc11fe8`); the
+signer certificate is still the one every tag carries (`b7ddc95d…`, CN=Dmitry
+Shepeta) with 379 > 376, so v0.3.0 updates in place; the published body is
+byte-identical to CHANGELOG.md's v0.4.0 section.
+https://github.com/DmShAl/wudict2/releases/tag/wudict2-v0.4.0
+
+Nothing new was learned about the tooling — the same commands, and the
+create-then-upload window noted under v0.3.0 above still applies. The cycle is
+routine now, and the one thing that needs deciding each time is the version
+number. The convention actually followed so far: **fork-visible features get a
+minor bump** (`0.1 → 0.2 → 0.3 → 0.4`), including a release that only removed a
+control; a patch bump has not been used yet and would fit a fix-only cycle.
 
 ## Appearance implementation (2026-09-20)
 

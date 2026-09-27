@@ -16,12 +16,12 @@ Where everything else lives:
 
 ## Branch state (verify with git before trusting)
 
-**Rechecked 2026-09-27 (release session):** `dev` is at `fad2d12`, clean and
-pushed, and carries the annotated tag `wudict2-v0.3.0` — the release cut this
-session, described in "Release wudict2-v0.3.0" in `docs/handoff-archive.md`. It
-contains the ☰ panel work described below, which is now committed (`5dc4d99`,
-`a808a64`) rather than sitting in the tree. `master` has not moved since
-`5f0ad02`, so this release carries no new upstream work. On this branch
+**Rechecked 2026-09-27 (second release session):** `dev` is at `bd17906`, clean
+and pushed, carrying the annotated tag `wudict2-v0.4.0` — the release cut this
+session ("Release wudict2-v0.4.0" in `docs/handoff-archive.md`). It ships the
+Status bar (item 5 in the ☰ panel paragraph below, committed as `155e30d`)
+together with the ☰ panel work of the earlier releases. `master` still has not
+moved since `5f0ad02`, so no upstream work is in it. On this branch
 `test_data/` and `android/app/src/emuX86/jniLibs/` are ignored rather than
 untracked, so `git status` is genuinely empty.
 
