@@ -52,6 +52,7 @@ narratives, so `git log` is a second copy.
 | The preset row: the answer left, three icons right (2026-09-25, from the reader) | 2026-09-25 | 2457–2481 |
 | The Appearance rows hug their labels (2026-09-25, from the reader) | 2026-09-25 | 2482–2498 |
 | Release wudict2-v0.2.0 (2026-09-26, this session) | 2026-09-26 | 1628–1669 |
+| Release wudict2-v0.3.0 (2026-09-27, this session) | 2026-09-27 | — (added after the split) |
 
 ## The preset-switch "crash" was a TDZ cascade (2026-09-25, diagnosis only)
 
@@ -1577,6 +1578,35 @@ Tooling facts that cost time here and will again:
 
 The notes deliberately do not name the application ID — the standing user
 preference recorded in the identity section above.
+
+## Release wudict2-v0.3.0 (2026-09-27, this session)
+
+Third tagged build, same order as v0.2.0 and confirmed again: the changelog
+commit on `dev` (`fad2d12`), `dev` pushed, the annotated tag `wudict2-v0.3.0`
+on that commit and pushed, and only THEN `build-android.cmd release` — the
+build has to come after the tag, because versionName is `git describe` at build
+time. aapt2: `versionName='wudict2-v0.3.0'`, versionCode 376 (dev's commit
+count), arm64 only. The cycle carried two UI commits (`5dc4d99`, `a808a64`)
+and no upstream sync — `master` had not moved since `5f0ad02`.
+
+Verified the same way: the published asset was downloaded back and hashed
+against the local build (identical, 7,488,237 bytes,
+sha256 `28e2027b89cf1e2d81ca114eb5ccca22939a68e586fd21d5104e13963887412e`), the
+signer certificate is the one v0.1.0 and v0.2.0 already carry
+(`b7ddc95d…`, CN=Dmitry Shepeta) with 376 > 371 > 291, so an installed v0.1.0
+or v0.2.0 updates in place, and the published body is byte-identical to
+CHANGELOG.md's v0.3.0 section.
+https://github.com/DmShAl/wudict2/releases/tag/wudict2-v0.3.0
+
+One operational fact worth knowing: creating a release and uploading its asset
+are two API calls, so the release is PUBLIC and asset-less for the ~30 s
+between them — both times so far, invisible only because nobody was looking. If
+that ever matters, create it with `draft: true` and flip it after the upload.
+
+The tooling traps listed in the v0.2.0 section above still stand and were partly
+hit again (python3 resolving a leading `/tmp` against the CURRENT drive). No
+`gh`; the token still comes from `git credential fill`; build the release JSON
+with `python3`, never PowerShell 5.1.
 
 ## Appearance implementation (2026-09-20)
 

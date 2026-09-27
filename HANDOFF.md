@@ -16,10 +16,12 @@ Where everything else lives:
 
 ## Branch state (verify with git before trusting)
 
-**Rechecked 2026-09-26 (release session):** `dev` is at `771d258`, clean and
-pushed, and carries the annotated tag `wudict2-v0.2.0` — the release cut this
-session, described in "Release wudict2-v0.2.0" in `docs/handoff-archive.md`. On
-this branch
+**Rechecked 2026-09-27 (release session):** `dev` is at `fad2d12`, clean and
+pushed, and carries the annotated tag `wudict2-v0.3.0` — the release cut this
+session, described in "Release wudict2-v0.3.0" in `docs/handoff-archive.md`. It
+contains the ☰ panel work described below, which is now committed (`5dc4d99`,
+`a808a64`) rather than sitting in the tree. `master` has not moved since
+`5f0ad02`, so this release carries no new upstream work. On this branch
 `test_data/` and `android/app/src/emuX86/jniLibs/` are ignored rather than
 untracked, so `git status` is genuinely empty.
 
@@ -76,11 +78,11 @@ port is the shape to remember:
   longer matched the page (`?v={{PICKJS}}` arrived in the 09-23 merge). Fixed in
   the main checkout, and `index.full.html` regenerated from the merged page.
 
-**Working tree, 2026-09-26/27 (uncommitted, left for the user):** three changes
-to the ☰ panel, all verified on a throwaway server (127.0.0.1:6899,
-`test_data`, Chromium at 1100 and 390/360/320px) plus `go build ./...`,
-`go vet`, the prefs/looks/presets/asset server tests and a clean-first-run
-check. (1) The `Sort dictionaries` pair is gone with everything behind it — the
+**The ☰ panel's 2026-09-26/27 changes (committed `5dc4d99` and `a808a64`,
+shipped in v0.3.0):** four changes to the ☰ panel, all verified on a throwaway
+server (127.0.0.1:6899, `test_data`, Chromium at 1100 and 390/360/320px) plus
+`go build ./...`, `go vet`, the prefs/looks/presets/asset server tests and a
+clean-first-run check. (1) The `Sort dictionaries` pair is gone with everything behind it — the
 picker lists the reader's own arrangement and no other (`refreshDictUI` →
 `orderedDicts()`; no `sortOwn`, no `sortMine` in the prefs body, no
 `UIPrefs.SortMine`) — and a fresh `state.json` still carries no `fastFirst`, so
