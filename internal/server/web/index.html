@@ -1564,6 +1564,33 @@ function jumpToSection(det){
   det.open=true;openedIdx=-1;clearTimeout(barrier);barrier=null;
   if(markedAnswer)navAttach(det);
   requestAnimationFrame(()=>det.scrollIntoView({block:"start",behavior:"auto"}));
+  sbarSettleStart(det);
+}
+/* The landing is re-aligned for a moment after the jump, because the page it
+   lands on is still growing: the scroll is aimed at a document that does not
+   yet hold everything the section is about to have (a collapsed section
+   expands, a deferred one fetches, a frame measures itself on load), and a
+   scroll clamped by a document that is still too short leaves the header
+   halfway down the screen instead of under the bar — the reader reported
+   exactly that, and only for collapsed sections. Bounded in time, and
+   abandoned the moment the reader takes over: their own scroll clears the aim,
+   which is the condition this loop watches. */
+let sbarSettle=null;
+function sbarSettleStart(det){
+  clearInterval(sbarSettle);
+  const t0=performance.now();
+  let good=0;
+  sbarSettle=setInterval(()=>{
+    const stop=()=>{clearInterval(sbarSettle);sbarSettle=null};
+    if(sbarAimed!==det||!det.isConnected||performance.now()-t0>1500)return stop();
+    const line=parseFloat(getComputedStyle(det).scrollMarginTop)||0;
+    if(Math.abs(det.getBoundingClientRect().top-line)>2){
+      good=0;
+      det.scrollIntoView({block:"start",behavior:"auto"});
+      return;
+    }
+    if(++good>=2)stop();
+  },70);
 }
 window.wudictPickerDictionarySelected=id=>{
   const det=(liveSearchBoxes||[$("out")]).flatMap(root=>[...root.querySelectorAll("details.dict")]).find(d=>
@@ -4165,11 +4192,13 @@ function sbarPaint(){
   const n=sbarSections().length;
   $("sbar").hidden=!(sbarWant&&n>0);
   // A control that cannot act is not shown (D102): with one dictionary there is
-  // nowhere to walk, and the arrows are what would lie about it.
+  // nowhere to walk, and the arrows are what would lie about it. Where an arrow
+  // can act but has run out of list, it is dimmed instead - see sbarEndsPaint.
   $("sbarPrev").hidden=$("sbarNext").hidden=n<2;
   $("sbarOn").setAttribute("aria-pressed",sbarWant?"true":"false");
   $("sbarOff").setAttribute("aria-pressed",sbarWant?"false":"true");
   sbarMeasure();
+  sbarEndsPaint();
 }
 function sbarSet(on){
   sbarWant=!!on;
@@ -4178,42 +4207,82 @@ function sbarSet(on){
 }
 $("sbarOn").onclick=()=>sbarSet(true);
 $("sbarOff").onclick=()=>sbarSet(false);
-/* Where the reader is. Two answers, in this order, and the order is the whole
-   trick: a jump of OURS (an arrow, or the picker's list) records what it aimed
-   at, and that stands until the reader scrolls by hand - because the page
-   settles a little AFTER the landing: an opened section grows as its own
-   content reports its height (a frame measures itself on load, images arrive
-   later), so the section just landed on can sit a hundred pixels below the line
-   this rule reads, and a pure geometric answer would name the section it was
-   jumped away from. Pressing next twice then walked to the same dictionary
-   again and again. Reading the position back off the page is right whenever the
-   reader is the one who moved - which is exactly when the aim is cleared.
-   -1 means above the first section: "next" is then the first, and "previous"
-   wraps to the last. The walk wraps, like the match walk does - a list of
-   dictionaries has no natural end, and stopping at the edges would make the
-   reader watch for the edge instead of reading. */
+/* Where the reader is: an index into the sections, always - the first one
+   included, because at the top of the page the first dictionary is the one in
+   front of them. Two answers, in this order, and the order is the whole trick:
+   a jump of OURS (an arrow, or the picker's list) records what it aimed at, and
+   that stands until the reader scrolls by hand - because the page settles a
+   little AFTER the landing, so the section just landed on can sit below the
+   line this rule reads, and a pure geometric answer would name the section it
+   was jumped away from. Reading the position back off the page is right
+   whenever the reader is the one who moved - which is exactly when the aim is
+   cleared. */
 let sbarAimed=null;
+function sbarAt(list){
+  if(sbarAimed&&list.includes(sbarAimed))return list.indexOf(sbarAimed);
+  // At the bottom of the page the reader is at the last dictionary, whatever
+  // the line says - every section below is behind them, and a short page (all
+  // of them collapsed) never brings its last header up to the line at all. Read
+  // the other way round it left the down arrow looking live at the end of the
+  // answer. It takes a SCROLLED page to say that: a page that fits the screen
+  // is at its bottom and its top at once, and there the top is the truth.
+  const doc=document.documentElement;
+  if(scrollY>0&&scrollY+innerHeight>=doc.scrollHeight-2)return list.length-1;
+  // The sections' own scroll-margin-top is the line a jump lands them on - NOT
+  // barH(), which reads 0 while the top bar is auto-hidden, and a jump downward
+  // is exactly the scroll that hides it.
+  const line=(parseFloat(getComputedStyle(list[0]).scrollMarginTop)||0)+8;
+  // The FIRST section is the reader's before anything has crossed that line:
+  // the answer starts right under the bar, so at the top of the page the
+  // dictionary in front of them is the first one - not "none", which aimed the
+  // down arrow at the section they were already looking at and merely lifted it
+  // into place (reported by the reader). Starting at 0 also means a spent
+  // up-arrow (at the first dictionary) and a spent down-arrow (at the last)
+  // cover every position the walk can be in.
+  let at=0;
+  for(let i=0;i<list.length;i++)if(list[i].getBoundingClientRect().top<=line)at=i;
+  return at;
+}
+/* The ends of the list, and what happens there. The walk does NOT wrap - the
+   reader asked for a first and a last dictionary, and an arrow that comes back
+   round the other side tells them nothing about where they are. At the end the
+   arrow is DIMMED (`.lim`), which is the same call the font steppers make at
+   their bounds: never `disabled`, because a control that stops taking presses
+   reads as broken, and a press there does nothing anyway (sbarGo clamps). */
+function sbarEndsPaint(){
+  const list=sbarSections();
+  if(!list.length)return;
+  const at=sbarAt(list);
+  $("sbarPrev").classList.toggle("lim",at<=0);
+  $("sbarNext").classList.toggle("lim",at>=list.length-1);
+}
 function sbarGo(step){
   const list=sbarSections();
   if(list.length<2)return;
-  let at=sbarAimed&&list.includes(sbarAimed)?list.indexOf(sbarAimed):-1;
-  if(at<0){
-    // The sections' own scroll-margin-top is the line a jump lands them on -
-    // NOT barH(), which reads 0 while the top bar is auto-hidden, and a jump
-    // downward is exactly the scroll that hides it.
-    const line=(parseFloat(getComputedStyle(list[0]).scrollMarginTop)||0)+8;
-    for(let i=0;i<list.length;i++)if(list[i].getBoundingClientRect().top<=line)at=i;
-  }
-  jumpToSection(list[((at+step)%list.length+list.length)%list.length]);
+  const at=sbarAt(list);
+  const to=at+step;
+  if(to<0||to>list.length-1)return;   // the end of the list: nothing to do
+  jumpToSection(list[to]);
 }
 $("sbarPrev").onclick=()=>sbarGo(-1);
 $("sbarNext").onclick=()=>sbarGo(1);
-/* The reader's own scrolling puts the page back in charge of "where am I". A
-   press inside the bar does not: that is the same reader asking for the next
-   dictionary, not moving the page under our feet. */
+/* The ends move as the reader moves, so they are repainted on the page's own
+   scroll too - coalesced to one paint per frame, like the sections' own
+   repaint. */
+let sbarEndsQueued=false;
+function sbarEndsChanged(){
+  if(sbarEndsQueued)return;
+  sbarEndsQueued=true;
+  requestAnimationFrame(()=>{sbarEndsQueued=false;sbarEndsPaint()});
+}
+/* The reader's own scrolling puts the page back in charge of "where am I", and
+   it is also what moves the ends. A press inside the bar does neither: that is
+   the same reader asking for the next dictionary, not moving the page under our
+   feet. */
 for(const ev of ["wheel","touchmove"])
-  addEventListener(ev,()=>{sbarAimed=null},{passive:true});
-addEventListener("pointerdown",e=>{if(!e.target.closest?.("#sbar"))sbarAimed=null},{passive:true});
+  addEventListener(ev,()=>{sbarAimed=null;sbarEndsChanged()},{passive:true});
+addEventListener("pointerdown",e=>{if(!e.target.closest?.("#sbar")){sbarAimed=null;sbarEndsChanged()}},{passive:true});
+addEventListener("scroll",sbarEndsChanged,{passive:true});
 /* Sections stream in, a new search replaces them all, and highlighting
    re-renders what it touched - so the bar follows the DOM rather than the
    search, coalesced to one paint per frame. The observer is the same shape as

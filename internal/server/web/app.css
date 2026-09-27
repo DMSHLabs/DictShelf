@@ -179,6 +179,12 @@ body.barpinned{--stick:var(--barh)}
    so the width has to be stated. */
 .sbar .rpad{flex:none;width:var(--sbar-sq,2.2em);height:var(--sbar-sq,2.2em)}
 .sbar #sbarExamples{margin-left:auto}
+/* An arrow that has run out of list: dimmed, not gone and not `disabled` - the
+   same call the font steppers make at their bounds (`.fsbtn.lim`), for the same
+   reason: a control that stops taking presses reads as broken, and a press at
+   the end does nothing anyway. Louder than the steppers' .3, because this one
+   sits on its own with nothing beside it to compare against. */
+.sbar .btn.lim{opacity:.38}
 /* The fold's handle, wearing the same words as the panel's row so the two are
    recognisably one setting: lit means the examples are SHOWN - what you get -
    which is the layer being off. That is the panel pair's Show half, and the
