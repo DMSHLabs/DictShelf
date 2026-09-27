@@ -51,7 +51,7 @@ final class Shell {
 
     static String pageUrl(Context c) {
         String k = key(c);
-        return origin(c) + "/?" + backgroundQuery(c) + (k.isEmpty() ? "" : "&" + k);
+        return origin(c) + "/?" + shellQuery(c) + (k.isEmpty() ? "" : "&" + k);
     }
 
     /**
@@ -89,13 +89,30 @@ final class Shell {
         if (dict != null && !dict.isEmpty()) b.append("&dict=").append(enc(dict));
         String k = key(c);
         if (!k.isEmpty()) b.append("&").append(k);
-        return b.append("&").append(backgroundQuery(c)).toString();
+        return b.append("&").append(shellQuery(c)).toString();
     }
 
-    // Explicit empty value clears any cached override before the first paint.
-    private static String backgroundQuery(Context c) {
+    /**
+     * The shell's own parameters for the page, every one of them written as an
+     * explicit value: the window's background, and whether the page shows its
+     * waiting messages, the "N of M ready" line and the morph note
+     * (ShellPrefs.INFO_MESSAGES).
+     *
+     * <p>On the URL rather than installed afterwards for the reason the key is
+     * (see {@link #key}): each of these has to be true at FIRST PAINT - the
+     * page paints its background and its waiting art before anything the shell
+     * could evaluate later - and an explicit value is what lets a page that
+     * remembers one of them (both the background and this are kept in
+     * sessionStorage, because a reload re-requests this same URL) hear a
+     * withdrawal as clearly as a setting.
+     */
+    private static String shellQuery(Context c) {
         return "shell_bg=" + (ShellPrefs.sepia(c) ? enc(ShellPrefs.sepiaColorText(c)) : "")
-                + "&shell_image=" + (WindowBackground.active(c) ? "1" : "0");
+                + "&shell_image=" + (WindowBackground.active(c) ? "1" : "0")
+                // One inversion, here and nowhere else: the settings screen
+                // stores what the user chose to SEE, the page is told what to
+                // SUPPRESS.
+                + "&shell_quiet=" + (ShellPrefs.infoMessages(c) ? "0" : "1");
     }
 
     static void applyBackground(WebView web) {

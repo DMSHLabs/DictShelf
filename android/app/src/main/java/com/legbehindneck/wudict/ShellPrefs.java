@@ -143,6 +143,28 @@ final class ShellPrefs {
     static final String SHARE = "lookup_share_in_app";
     static final String LINK = "lookup_link_in_app";
 
+    // ── the information messages (2026-09-27) ────────────────────────────────
+    //
+    // The transient text this app draws while it is starting and while it is
+    // loading dictionaries: "Starting wuDict2…", the page's waiting art, its
+    // "N of M ready" counter, and the note that a word was missing from some
+    // dictionaries. They are honest and they are also unreadable - the first
+    // ones are on screen for a few hundred milliseconds - so the row exists to
+    // turn them off.
+    //
+    // A shell fact by the CHARTER's own test above, and this is the reason the
+    // row is here rather than in the page's Appearance sheet, which is where
+    // the Screen rows went: one of the messages is painted by MainActivity
+    // BEFORE a page or a server exists, so the decider has nobody to ask, and
+    // a preference stored behind the page could not be read in time to silence
+    // that first frame. The page's half rides the URL beside shell_bg
+    // (Shell.shellQuery) - the same way a look is delivered, and for the same
+    // reason: it has to be true at first paint.
+    //
+    // ON by default. The row exists to turn the messages off, and an install
+    // that never touches it must behave exactly as it did before it existed.
+    static final String INFO_MESSAGES = "show_info_messages";
+
     // Whether the app's own window hides the system bars while it is read.
     // A shell fact by the same two tests as the three above: the WINDOW is the
     // subject, and the decider - MainActivity, painting its first frame - has
@@ -271,6 +293,16 @@ final class ShellPrefs {
     /** Whether lookups arriving this way skip the popup and open the app. */
     static boolean opensApp(Context c, String key) {
         return of(c).getBoolean(key, false);
+    }
+
+    /**
+     * Whether the app's transient messages are shown ({@link #INFO_MESSAGES}).
+     * Read by MainActivity for its first frame and by Shell for the page's URL;
+     * the only key here whose default is ON, which is why it has its own reader
+     * rather than going through {@link #opensApp}.
+     */
+    static boolean infoMessages(Context c) {
+        return of(c).getBoolean(INFO_MESSAGES, true);
     }
 
     static void set(Context c, String key, boolean on) {

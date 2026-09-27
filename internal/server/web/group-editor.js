@@ -6,6 +6,11 @@ async function loadPickerGroups(){
   try{userGroups=await groupRequest("/api/groups","GET");
     if(!userGroups.some(g=>g.id===pickerGroup))pickerGroup="all";
   }catch(e){console.warn("could not load dictionary groups:",e);pickerGroup="all"}
+  // The panel's drop-down and the status bar's chip both name the group in
+  // force, and this is the moment the names exist. The chip is painted from
+  // what this call caches, because syncChips runs BEFORE this script has
+  // declared userGroups at all (see scopeLabel in index.html).
+  if(typeof paintPickerGroup==="function")paintPickerGroup();
 }
 async function groupRequest(path,method,body){
   const response=await fetch(path,{method,headers:{"Content-Type":"application/json"},body:body===undefined?undefined:JSON.stringify(body)});

@@ -39,9 +39,15 @@ window.wudictShellBackground = function (color, image, imageName) {
   var params = new URLSearchParams(location.search);
   var color = params.get('shell_bg');
   var image = params.get('shell_image');
-  if (params.has('shell_bg') || params.has('shell_image')) {
+  // Whether the waiting art and the loading lines are shown at all - the
+  // other half of the shell's "Show info messages" (ShellPrefs.INFO_MESSAGES).
+  // Unlike the background it is not a look, so it is a flag rather than a
+  // value, and 1 means the messages are SUPPRESSED.
+  var quiet = params.get('shell_quiet');
+  if (params.has('shell_bg') || params.has('shell_image') || params.has('shell_quiet')) {
     params.delete('shell_bg');
     params.delete('shell_image');
+    params.delete('shell_quiet');
     var query = params.toString();
     history.replaceState(history.state, '', location.pathname + (query ? '?' + query : '') + location.hash);
   }
@@ -51,6 +57,18 @@ window.wudictShellBackground = function (color, image, imageName) {
   if (image === null) {
     try { image = sessionStorage.getItem('wudict_shell_image'); } catch (_) {}
   }
+  // Remembered for the same reason the background is: the switch is on the
+  // URL the shell built, and the address bar no longer carries it, so a
+  // reload of this document would otherwise forget a setting the reader
+  // chose. An explicit 0 is what makes turning it back on take effect.
+  if (quiet === null) {
+    try { quiet = sessionStorage.getItem('wudict_shell_quiet'); } catch (_) {}
+  }
+  try {
+    if (quiet === '1') sessionStorage.setItem('wudict_shell_quiet', '1');
+    else sessionStorage.removeItem('wudict_shell_quiet');
+  } catch (_) {}
+  window.wudictShellQuiet = quiet === '1';
   window.wudictShellBackground(color || '', image === '1');
 })();
 (function () {
@@ -152,10 +170,11 @@ window.wudictShellBackground = function (color, image, imageName) {
 <option value="fts">full-text</option>
 </select>
 </span>
-<span class="seg">
-<span class="chip" id="dictChip" aria-hidden="true"><svg class="bk" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path fill="currentColor" d="M1.5 3.1c1.9-.5 3.8-.3 5.6.7v8.4c-1.8-1-3.7-1.2-5.6-.7V3.1zm13 0c-1.9-.5-3.8-.3-5.6.7v8.4c1.8-1 3.7-1.2 5.6-.7V3.1z"/></svg><span class="lbl" id="dictLbl"></span></span>
-<select id="dict" aria-label="Dictionary" disabled><option value="all">All dictionaries</option></select>
-</span>
+<!-- The dictionary scope's seg is NOT here in the markup: it lives in the
+     status bar while that bar is on screen and is moved back to this exact spot
+     (right after the mode seg) when the bar is hidden — before the first search,
+     or whenever the reader switches it off. See placeDictSeg: the node moves,
+     the mechanism does not. -->
 </span>
 <!-- No submit button, at any width. The form has exactly one field that
      blocks implicit submission (#q; <select> does not count), so Enter
@@ -179,12 +198,13 @@ window.wudictShellBackground = function (color, image, imageName) {
 <div id="out"></div>
 </main>
 
-<!-- The status bar. Three controls and nothing else: the two jumps between the
-     dictionaries of the current answer, and one handle on the example fold -
-     the controls a reader touches WHILE reading, at one tap, with the article
-     still on screen. Everything here also exists in the drawer (the fold has
-     its row there, the jumps have the picker's list), so hiding the bar takes
-     nothing away; that is what its row in Settings is for.
+<!-- The status bar. Four controls and nothing else: the two jumps between the
+     dictionaries of the current answer, the scope those jumps walk inside, and
+     one handle on the example fold - the controls a reader touches WHILE
+     reading, at one tap, with the article still on screen. Everything here
+     also exists in the drawer (the fold has its row there, the jumps have the
+     picker's list, the scope has the panel's group row), so hiding the bar
+     takes nothing away; that is what its row in Settings is for.
      The arrows walk the sections in DOM order - the order the server emits in
      the reader's preference, which is also the order the native picker's list
      is built from - and jump with the SAME call the picker makes, opening the
@@ -201,6 +221,26 @@ window.wudictShellBackground = function (color, image, imageName) {
   <button type="button" class="btn" id="sbarPrev" aria-label="Previous dictionary" title="Jump to the dictionary above — instant, and opens it">▲</button>
   <span class="rpad" aria-hidden="true"></span>
   <button type="button" class="btn" id="sbarNext" aria-label="Next dictionary" title="Jump to the dictionary below — instant, and opens it">▼</button>
+  <!-- The dictionary scope, moved here from the search field (2026-09-27, the
+       reader's call): it names the place the two arrows walk, so it belongs
+       beside them, and the field is left holding only what is about the WORD.
+       It moves whole - the chip and the real <select> under it - so the
+       mechanism is the field's own and nothing new was invented: the select is
+       laid transparently over the chip, keeps the native picker, the keyboard,
+       the aria-label and its .value, and every call site that reads
+       $("dict").value goes on reading it. The CSS that used to describe that
+       pair for .bar .seg below 600px now describes .sbar .seg at every width
+       (see app.css); the phone block's copy keeps the mode chip's.
+       AND IT TRAVELS: while this bar is hidden - before the first search, or
+       with the bar switched off - the same seg is put back in the search field
+       by placeDictSeg, because a control the reader cannot see is a control
+       they cannot use. The bar is hidden until a search has sections to walk,
+       which is also why the panel's Dictionaries row chooses the group on its
+       own. -->
+  <span class="seg" id="dictSeg">
+    <span class="chip btn" id="dictChip" aria-hidden="true"><svg class="bk" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path fill="currentColor" d="M1.5 3.1c1.9-.5 3.8-.3 5.6.7v8.4c-1.8-1-3.7-1.2-5.6-.7V3.1zm13 0c-1.9-.5-3.8-.3-5.6.7v8.4c1.8-1 3.7-1.2 5.6-.7V3.1z"/></svg><span class="lbl" id="dictLbl"></span></span>
+    <select id="dict" aria-label="Dictionary" disabled><option value="all">All dictionaries</option></select>
+  </span>
   <button type="button" class="btn" data-layer="off" id="sbarExamples" aria-pressed="true" title="Examples are shown — tap to fold the lines that hold nothing but examples">Examples</button>
   <span class="rpad" aria-hidden="true"></span>
 </div>
@@ -302,19 +342,38 @@ window.wudictShellBackground = function (color, image, imageName) {
     <button type="button" class="act" id="speakOn" aria-pressed="true" title="Offer a speaker over the text you select in an article — tap it to hear that selection">On</button>
     <button type="button" class="act" id="speakOff" aria-pressed="false" title="Never offer the speaker — articles stay silent">Off</button>
   </span>
-  <!-- Which section unfolds itself once the answers start arriving (D142).
-       A pair rather than one toggle, because neither choice is an "off":
-       both are strategies, and an unpressed pen cannot say which of the two
-       is in force. Named by what the user gets, not by the mechanism behind
-       it (D102) — "My order" is the top of the dictionary list they arranged
-       below, "Fastest" is whichever answer arrives soonest. The default is
-       first and pressed: the list a reader arranged IS their answer to "which
-       of these do I want", and a race winner is not that answer (D144). -->
-  <span class="seg" role="group" aria-label="Which dictionary opens first">
-    <span>Open first</span>
-    <button type="button" class="act" id="openOrder" aria-pressed="true" title="Expand the first dictionary in your list that has a result — waits briefly for the ones above it">My order</button>
-    <button type="button" class="act" id="openFast" aria-pressed="false" title="Expand whichever dictionary answers first — the quickest definition on screen">Fastest</button>
-  </span>
+  <!-- Which section unfolds itself once the answers start arriving (D142) used
+       to be chosen here, as a pair: "Open first: My order | Fastest". The pair
+       is GONE (2026-09-27, the reader's call) and "My order" is the only
+       answer left, for the reason D144 gave when it made it the default: the
+       list a reader arranged IS their answer to "which of these do I want",
+       and a race winner is not that answer. The machinery stays - orderFirst
+       is still read in doSearch, applyOpenOrder still exists and savePrefs
+       still writes `fastFirst` - because it is upstream's, and a fork that
+       deletes a flag it no longer shows is a fork that conflicts with every
+       later upstream change to it. What was removed is the READING of the
+       stored value (loadPrefs no longer applies st.ui.fastFirst), so nobody
+       who once chose "Fastest" is stranded in a strategy with no row left to
+       explain it - the same call the removed `sortMine` got above. -->
+  <!-- And what stands in its place is the GROUP the search is on, as the
+       reader's own drop-down: the bar names the group in force and the card
+       under it lists the groups, the answer ticked. It is the app's drawn menu
+       (.choice-btn/.choice-menu), not a <select>, for the reason the Presets
+       row gives: the platform's popup can wear neither the app's paper nor its
+       wallpaper. It is the same choice the native window's spinner makes at the
+       top of the dictionary list, and it goes through the same function
+       (wudictPickerGroupChanged) — store the group, drop the one-dictionary
+       scope, re-run the search — so the two cannot disagree.
+       It is here because this is where the reader's attention lands when a
+       search comes back from the wrong dictionaries, and because the status
+       bar's scope chip lives in a bar that only appears with results: this is
+       the door for scoping BEFORE any search exists. A group's name is
+       truncated by CSS (the bar is one line). -->
+  <div class="facts">
+    <span class="rowlabel" id="pickerGroupLabel">Dictionaries</span>
+    <button type="button" class="choice-btn" id="pickerGroupBtn" aria-haspopup="listbox" aria-labelledby="pickerGroupLabel" title="Choose the group of dictionaries to search"></button>
+    <div class="choice-menu menu-card" id="pickerGroupMenu" role="listbox" aria-label="Dictionary groups" data-w="anchor" hidden></div>
+  </div>
   <!-- There was a third pair here, "Sort dictionaries: Alphabetical | My
        order", and it is gone with the choice it offered: the picker now lists
        the library in the reader's own arrangement and in no other, which is
@@ -761,7 +820,12 @@ async function loadPrefs(){
     prefsReady=true;
     // Read before the exists branch below returns: on a first run there is no
     // ui record, but there is also nothing here that can go wrong.
-    if(st.ui){applyFS(st.ui.fontSize,false);applyFW(st.ui.fontWeight,false);applyHL(!st.ui.hlOff,false);applySpeak(!st.ui.speakOff,false);applyOpenOrder(!st.ui.fastFirst,false)}
+    /* `fastFirst` is deliberately NOT read any more: the row that could set it
+       is gone from the panel, so honouring a stored "Fastest" would strand a
+       reader in a strategy with nothing on screen to explain or change it -
+       the same call the removed `sortMine` got. The field is still WRITTEN
+       (below, always false), because it is upstream's. */
+    if(st.ui){applyFS(st.ui.fontSize,false);applyFW(st.ui.fontWeight,false);applyHL(!st.ui.hlOff,false);applySpeak(!st.ui.speakOff,false)}
     if(!st.exists){adoptLocalPrefs();return} // first run: keep whatever we had
     prefOrder=rows.map(d=>d.id);
   }catch(e){
@@ -1107,19 +1171,27 @@ for(const [id,want] of [["speakOff",false],["speakOn",true]])
   $(id).addEventListener("click",()=>applySpeak(want,true));
 applySpeak(true,false);
 /* Which section auto-expands: the first dictionary in the user's own order
-   that has a result (D142, and the default since D144), or the one that
-   ANSWERS first (D73, now the opt-out). Stored as `fastFirst`, so an absent
-   key is the default here too.
+   that has a result (D142, and the default since D144). There WAS a second
+   strategy — the one that ANSWERS first (D73) — with a pair in the panel to
+   choose between them; the pair is gone (2026-09-27, the reader's call) and
+   this is now the only value the page ever holds.
    Server state like the two above, not localStorage: it is a reading habit,
    not a property of this browser, so it follows the person across ports and
    hosts. /api/search never learns of it — which section a reader unfolds is a
-   property of the reader, not of the answer. */
+   property of the reader, not of the answer.
+
+   DELIBERATELY LEFT HANGING, both this function and the flag it sets, because
+   they are upstream's: a fork that deletes the machinery it no longer shows
+   conflicts with every later upstream change to it, and `fastFirst` is still
+   written by savePrefs (always false) and still in the server's UIPrefs. What
+   was removed is the wiring — no control calls applyOpenOrder any more, and
+   nothing reads the stored value (see loadPrefs) — so `orderFirst` is true for
+   the life of the page and doSearch's two branches always take the reader's
+   order. Re-wiring it is a pair of buttons and one call. */
 let orderFirst=true;
 function applyOpenOrder(on,save){
   const v=!!on,moved=v!==orderFirst;
   orderFirst=v;
-  for(const [id,want] of [["openFast",false],["openOrder",true]])
-    $(id).setAttribute("aria-pressed",v===want?"true":"false");
   if(save&&moved)savePrefs();
   return moved;
 }
@@ -1133,15 +1205,10 @@ function applyOpenOrder(on,save){
    a build that offered the switch is not read (the row that could write it is
    gone, so honouring it would strand a reader in a list they cannot explain
    and cannot leave), and the next save drops the key. */
-/* Re-run on a real change only. A policy control that visibly does nothing
-   until the next query reads as broken — and pressing the half that is already
-   in force is not a change, so it must not throw the answer away and rebuild
-   it identically. */
-for(const [id,want] of [["openFast",false],["openOrder",true]])
-  $(id).addEventListener("click",()=>{
-    if(applyOpenOrder(want,true)&&$("q").value.trim())doSearch();
-  });
-applyOpenOrder(true,false);
+/* The pair's wiring is gone with the pair (see applyOpenOrder, which is kept
+   for the upstream merge): a loop over two buttons that no longer exist is a
+   page that throws before it ever paints. orderFirst is already true where it
+   is declared, which is the whole of the state this app now has. */
 for(const [id,step] of [["fsDown",-1],["fsUp",1],["fsVal",0]])
   $(id).addEventListener("click",()=>applyFS(step?articleFS+step:FS_DEF,true));
 applyFS(FS_DEF,false);   // paints --wd-fs and the .lim state before any load
@@ -1393,7 +1460,17 @@ function setPhase(p){
    imminence: the honest progress signal is the "N of M ready" counter beside
    it. The spinner is deliberately indeterminate — per-dictionary cost varies
    by orders of magnitude (cold MDX ~180 ms, cold SLOB ~1 s), so a progress
-   bar would be guessing while the counter cannot. */
+   bar would be guessing while the counter cannot.
+
+   All of it is optional, and that is the shell's "Show info messages" switch
+   (ShellPrefs.INFO_MESSAGES, delivered as shell_quiet and read in the head
+   block). What is turned off is everything that PASSES: the art, its counter
+   and the morph note. A failure is not a passing note and keeps its sentence
+   in full (bootFailed below), and neither are the search-time uses of
+   readyCount() — those answer a question the reader has just asked. With the
+   messages off the screen simply stays empty until results arrive, which is
+   the point: a message nobody can finish reading is noise, not information. */
+const quietMessages=!!window.wudictShellQuiet;
 const BOOT_MSGS=["Warming up the wok…","Stir-frying the dictionaries…",
   "Chopping headwords, with the grain…","Letting the definitions marinate…",
   "Tasting for seasoning…"];
@@ -1402,7 +1479,7 @@ function paintBoot(){
   $("out").innerHTML=`<div class="empty boot"><span class="spin big"></span><p>${BOOT_MSGS[bootIdx]}</p></div>`;
 }
 function startBootScreen(){
-  if(bootTimer)return;
+  if(quietMessages||bootTimer)return;
   bootIdx=0;paintBoot();
   bootTimer=setInterval(()=>{bootIdx=(bootIdx+1)%BOOT_MSGS.length;paintBoot()},3500);
 }
@@ -1414,6 +1491,12 @@ function stopBootScreen(){
 function readyCount(){
   return dictTotal?`Loading dictionaries — ${dicts.length} of ${dictTotal} ready…`
                   :"Looking for dictionaries…";
+}
+/* The counter is the other half of the art above it, so it goes with it: the
+   same switch, the same silence. Only the FIRST load's line - the three calls
+   in loadDicts that are gated on `blocking` - goes through here. */
+function syncBootStatus(){
+  if(!quietMessages)setStatus(esc(readyCount()),"load");
 }
 function bootFailed(msg){
   setPhase("failed");
@@ -1496,6 +1579,107 @@ function scopedDictionary(){
   const d=dicts.find(x=>x.id===v);
   return d?{id:"d:"+v,name:dictLabel(d)}:null;
 }
+/* The group the picker is on, by name — the panel's drop-down writes it, the
+   status bar's chip says it, and the native window's spinner shows the same
+   string inside itself. The name comes from the server's own group list, so
+   the reserved group reads "All Dictionaries" here exactly as it does in the
+   window; an id that no longer exists (a group deleted in the editor) falls
+   back to it, for the reason the scope does. */
+function pickerGroupName(id){
+  const g=userGroups.find(x=>x.id===(id||pickerGroup));
+  return g?g.name:"All dictionaries";
+}
+/* The panel's group drop-down: the bar names the group in force, the card lists
+   the reader's groups with the chosen one ticked. Its own helper rather than
+   screenChoice because the answer is an ID and not an index — the list is
+   rebuilt whenever it opens and whenever /api/groups answers, and an index
+   would then point at whatever slid into that place. Built on open for the same
+   reason: a group added in the editor is in the menu the next time it is read,
+   with nothing to keep in step. */
+function pickerGroupMenu(bar,menu,onPick){
+  let value="all";
+  const ctl=sheetMenuNew(bar,menu,()=>{
+    menu.replaceChildren();
+    if(!userGroups.length)return false; // nothing to list: do not open an empty card
+    for(const g of userGroups){
+      const b=document.createElement("button");
+      b.type="button";b.className="choice-item";b.setAttribute("role","option");
+      b.setAttribute("aria-selected",String(g.id===value));
+      b.textContent=g.name;
+      b.onclick=()=>{ctl.hide();onPick(g.id)};
+      menu.appendChild(b);
+    }
+    return true;
+  });
+  const show=ctl.show,hide=ctl.hide;
+  ctl.show=()=>{show();bar.setAttribute("aria-expanded","true")};
+  ctl.hide=()=>{hide();bar.setAttribute("aria-expanded","false")};
+  bar.onclick=()=>ctl.toggle();
+  // Escape shuts the menu before the drawer, as the Presets row's does.
+  bar.addEventListener("keydown",e=>{
+    if(e.key==="Escape"&&ctl.isOpen()){e.stopPropagation();ctl.hide()}
+  });
+  return {set(id){
+    value=id;
+    const lbl=document.createElement("span");
+    lbl.textContent=pickerGroupName(id);
+    bar.replaceChildren(lbl);
+  }};
+}
+/* Created on first use, not here, and for two ordering reasons rather than for
+   laziness: sheetMenuNew pushes onto `sheetMenus`, which this script declares
+   further down, and pickerGroupName reads userGroups, which group-editor.js
+   declares AFTER this script has run. paintPickerGroup is only ever called once
+   a page has loaded (the panel opening, the picker's own spinner, /api/groups
+   answering), when both exist. */
+let pickerGroupChoice=null;
+/* Says which group is in force wherever it is said: the panel's drop-down and,
+   through syncChips, the status bar's chip. Called when the panel opens
+   (loadFolders, which showPanel already calls), when /api/groups answers, and
+   from the one place the group can change from OUTSIDE the panel — the native
+   window's spinner. */
+function paintPickerGroup(){
+  if($("pickerGroupBtn")){
+    if(!pickerGroupChoice)
+      pickerGroupChoice=pickerGroupMenu($("pickerGroupBtn"),$("pickerGroupMenu"),id=>{
+        // The same function the native window's spinner calls, so the two
+        // controls cannot disagree: store the group, drop the one-dictionary
+        // scope, re-run the search.
+        wudictPickerGroupChanged(id);
+        paintPickerGroup();
+      });
+    pickerGroupChoice.set(pickerGroup);
+  }
+  syncChips();
+}
+/* What the scope chip says. The all-scope is not nameless: it resolves to the
+   reader's standing group, so the chip names THAT — it said "All" whatever
+   group was in force, which is the one label that cannot tell the reader where
+   a search went (reported from the phone). A scope that names a facet group or
+   a single dictionary still speaks for itself, and the transient before
+   /api/dicts lands still shows the bare glyph.
+   TWO HOMES, TWO LENGTHS, because the same chip travels (see placeDictSeg): in
+   the status bar there is room and the reserved group reads "All Dictionaries",
+   exactly as the native window's spinner says it; back in the search FIELD the
+   chip is 11ch wide, and there it says "All" — which is what that chip has
+   always said and what fits. A group the reader named reads the same in both
+   places, ellipsised where the field has no room.
+   The group's name is read through a GUARD, and it is not defensive dressing:
+   this function is called from syncChips, which the page calls while its own
+   script is still running — before group-editor.js, which declares userGroups,
+   has executed. An unguarded read there is a TDZ ReferenceError that kills the
+   rest of the page script (measured on the emulator: the mode chip never
+   painted). "All dictionaries" is the right answer in that window anyway. */
+function scopeLabel(){
+  const d=$("dict"),opt=d.selectedOptions[0];
+  if(d.value==="all"){
+    let name="All dictionaries";
+    try{name=pickerGroupName()}catch(_){}
+    const inBar=$("dictSeg")&&$("dictSeg").parentElement===$("sbar");
+    return inBar?name:(name==="All Dictionaries"?"All":name);
+  }
+  return opt?(opt.dataset.label||opt.text):"";
+}
 function livePickerPayload(kind){
   /* found:true is a statement about this list, not a mode: these rows are
      dictionaries that answered, so the native window draws them as plain rows
@@ -1540,6 +1724,7 @@ window.wudictPickerGroupChanged=id=>{
   const scoped=scopedDictionary();
   if(!userGroups.some(g=>g.id===id)||id===(scoped?scoped.id:pickerGroup))return;
   pickerGroup=id;localStorage.setItem("wudict_picker_group",id);
+  paintPickerGroup(); // the panel's row says which group, and it just changed
   $("dict").value="all";localStorage.setItem("wudict_dict","all");
   scopeOnce=null;syncChips();
   const url=new URL(location.href);url.searchParams.delete("dict");url.searchParams.delete("from");
@@ -1718,7 +1903,7 @@ async function loadDicts(rescan){
   // one being replaced row by row, and blanking the groups under it would
   // drop a group the user currently has selected.
   if(blocking)dictsSettled=false;
-  if(blocking){setPhase("boot");startBootScreen();dictTotal=0;setStatus(esc(readyCount()),"load")}
+  if(blocking){setPhase("boot");startBootScreen();dictTotal=0;syncBootStatus()}
   else setStatus('<span class="spin"></span>Loading dictionaries…',"load");
   const rows=[];
   let published=false,sawBegin=false;
@@ -1729,7 +1914,7 @@ async function loadDicts(rescan){
     await fetchStream(rescan?"/api/rescan":"/api/dicts",msg=>{
       if(msg.t==="begin"){
         sawBegin=true;dictTotal=msg.total||0;
-        if(blocking)setStatus(esc(readyCount()),"load");
+        if(blocking)syncBootStatus();
       }else if(msg.t==="dict"&&msg.dict){
         rows.push(msg.dict);
         if(!published){
@@ -1739,7 +1924,7 @@ async function loadDicts(rescan){
           if(phase==="failed")$("out").innerHTML=""; // a slow stream beat the watchdog
           setPhase("partial");
         }
-        if(blocking)setStatus(esc(readyCount()),"load");
+        if(blocking)syncBootStatus();
         refreshDictUI();
       }
     });
@@ -1782,26 +1967,24 @@ function moveDict(id,where){
    result summaries all use, and a chip that renamed "full-text" would sever
    the link to every other place it appears. */
 const MODE_SHORT={prefix:"starts",exact:"exact",contains:"contains",fts:"full-text"};
-/* The one scope name the app supplies itself, and the only one short enough to
-   be worth a map: the chip's own cap is 11ch, and it cannot be widened - a chip
-   wide enough for "All dictionaries" would leave the 320px field about 25px.
-   The picker's list keeps the full wording, exactly as the mode dropdown keeps
-   "starts with". */
-const SCOPE_SHORT={all:"All"};
+/* There was a SCOPE_SHORT map here, holding one entry: all → "All". It existed
+   because the chip had to live in the search FIELD, where its cap of 11ch could
+   not be widened without taking the room the reader types in — a chip wide
+   enough for "All dictionaries" left the 320px field about 25px. The chip moved
+   to the status bar (2026-09-27), which is wide and has nothing to type in, and
+   the name went with it: the all-scope now says the group's own name, which is
+   also the name the native window's spinner shows. See scopeLabel. */
 function syncChips(){
-  const m=$("mode"),d=$("dict");
+  const m=$("mode");
   $("modeChip").textContent=MODE_SHORT[m.value]||m.value;
-  // A saved id is written to .value before /api/dicts has put that option in
-  // the list, and assigning an id the <select> does not have yet leaves value
-  // "" — that transient is the only nameless state left, and it shows the bare
-  // glyph. "All dictionaries" is NOT one of those: this picker has a single
-  // mode, so the all-scope is an ordinary group and is named like one. It used
-  // to hide its own name as "the default", which is the difference the fork
-  // removed — there is no all-mode left to contrast it against.
-  const opt=d.selectedOptions[0];
-  // dataset.label is set on the group rows, whose text carries a count the
-  // chip has no room for; a dictionary row has no dataset and reads as before.
-  $("dictLbl").textContent=opt?(opt.dataset.label||SCOPE_SHORT[opt.value]||opt.text):"";
+  // The scope chip's label is its own function now (scopeLabel): the all-scope
+  // is no longer the shorthand "All" but the name of the group it resolves to -
+  // reported from the phone, where the chip said "All" whichever group was in
+  // force. The transient before /api/dicts lands is still nameless, and that is
+  // the whole of the bare-glyph state: "All dictionaries" is NOT one of those,
+  // because this picker has a single mode and the all-scope is an ordinary
+  // group with a name like any other.
+  $("dictLbl").textContent=scopeLabel();
 }
 /* Picking a dictionary is already a statement that it is about to be searched,
    so its index is demanded on the selection itself and not on the first query
@@ -2303,6 +2486,7 @@ async function loadFolders(){
   const c=cfgInfo,b=$("folderBody");
   const n=(c.roots||[]).length;
   $("folderSummary").textContent=`${n} folder${n===1?"":"s"} · ${c.total} dictionar${c.total===1?"y":"ies"}`;
+  paintPickerGroup(); // the row that says which group the search is on
   b.innerHTML="";
   const row=(path,note,bad)=>{
     const d=document.createElement("div");d.className="frow";
@@ -3521,6 +3705,14 @@ async function doSearch(ev){
            `anyResults` is latched at the FIRST morph message — every later one
            arrives after this wave's own hits have already set it. */
         if(!boxes.length||!msg.to||morphSeen.has(msg.to))return;
+        // "Show info messages" off: the note is one of the messages that pass
+        // (it is the one the reader complained could not be read), and it is
+        // the only one of the three narrowings that is a NOTE rather than an
+        // answer - nothing went wrong and nothing is missing from the answer
+        // below, the dictionaries simply answered a different form of the
+        // word. The widened search keeps its own note (widenNote), which says
+        // a scope was left behind: that one changes WHAT was searched.
+        if(quietMessages)return;
         if(morphAll===null)morphAll=!anyResults;
         morphSeen.add(msg.to);
         if(!morphNote){
@@ -4197,8 +4389,35 @@ function sbarPaint(){
   $("sbarPrev").hidden=$("sbarNext").hidden=n<2;
   $("sbarOn").setAttribute("aria-pressed",sbarWant?"true":"false");
   $("sbarOff").setAttribute("aria-pressed",sbarWant?"false":"true");
+  placeDictSeg();
   sbarMeasure();
   sbarEndsPaint();
+}
+/* Where the scope control lives, which is wherever the reader can reach it: in
+   the status bar while that bar is on screen, and back inside the search field
+   when it is not (2026-09-27, the reader's call — the bar is hidden before the
+   first search and whenever they switch it off, and a control they cannot see
+   is a control they cannot use). The seg moves whole, chip and <select> alike,
+   so both homes keep the mechanism they always had: in the FIELD the chip
+   carries the real select transparently over it below 600px and the plain
+   select above it (which is upstream's own layout), and in the status bar the
+   same pair wears .sbar .seg. Nothing about the picker changes: the shell
+   still finds #dict wherever it is, because it is the same element.
+   Moved on every paint rather than on a transition, so it cannot be caught
+   half-placed: appendChild/after move the node, and a node already in the right
+   home is a no-op. */
+function placeDictSeg(){
+  const seg=$("dictSeg");
+  if(!seg)return;
+  const toBar=$("sbar").hidden?$("mode").parentElement:$("sbarExamples");
+  if(seg.parentElement!==toBar){
+    if($("sbar").hidden)toBar.after(seg);
+    else toBar.before(seg);
+  }
+  // The chip's label depends on where it lives (see scopeLabel), so the move
+  // repaints it - and moving the node does not fire the observer the bar is
+  // painted from, so nothing else would.
+  syncChips();
 }
 function sbarSet(on){
   sbarWant=!!on;

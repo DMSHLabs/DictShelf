@@ -131,6 +131,19 @@ public class SettingsActivity extends Activity {
         col.addView(row(ShellPrefs.SHARE, R.string.settings_lookup_share));
         col.addView(row(ShellPrefs.LINK, R.string.settings_lookup_link));
 
+        // The messages row. It is the one row on this screen whose subject is
+        // partly the page - the waiting art and the morph note are drawn there
+        // - and it is still a shell fact by the charter at the top of this
+        // class: the first of these messages is drawn by MainActivity before a
+        // page or a server exists, so the value has to be readable here, and
+        // the page's half rides the URL (Shell.shellQuery) rather than a
+        // bridge it would have to answer before it has painted. Turning it off
+        // is what the reader who cannot finish reading a message that is gone
+        // in a moment does, instead of being told the message was honest.
+        col.addView(head(R.string.settings_messages_head, SP_6));
+        col.addView(caption(getString(R.string.settings_info_hint), SP_2, SP_3));
+        col.addView(infoRow());
+
         // The Screen section - how the margins around the page are painted and
         // which bars hide while reading - is NOT here any more. Those two rows
         // moved to the web Appearance sheet, beside the window background they
@@ -263,6 +276,23 @@ public class SettingsActivity extends Activity {
         // as the user having chosen anything.
         c.setChecked(ShellPrefs.opensApp(this, key));
         c.setOnCheckedChangeListener((v, on) -> ShellPrefs.set(this, key, on));
+        return c;
+    }
+
+    /**
+     * The information-message switch. Not a {@link #row}: its default is ON
+     * and the three lookup rows' is off, so reading it needs
+     * {@link ShellPrefs#infoMessages} rather than {@link ShellPrefs#opensApp}.
+     * Same shape otherwise, including state-before-listener.
+     */
+    private CheckBox infoRow() {
+        CheckBox c = new CheckBox(this);
+        c.setText(R.string.settings_info_messages);
+        c.setTextSize(TypedValue.COMPLEX_UNIT_SP, TEXT_LABEL);
+        c.setMinHeight(dp(ROW_MIN));
+        c.setChecked(ShellPrefs.infoMessages(this));
+        c.setOnCheckedChangeListener((v, on) ->
+                ShellPrefs.set(this, ShellPrefs.INFO_MESSAGES, on));
         return c;
     }
 

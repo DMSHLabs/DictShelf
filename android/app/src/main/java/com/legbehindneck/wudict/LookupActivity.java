@@ -124,7 +124,15 @@ public class LookupActivity extends Activity {
         root.setBackground(WindowBackground.dialogDrawable(this, pageBg));
         status = new TextView(this);
 		status.setTextColor(ShellPrefs.darkIcons(pageBg) ? 0xDE000000 : 0xFFFFFFFF);
-        status.setText(getString(R.string.lookup_starting, query));
+        // The popup's half of the same switch as the app window's "Starting
+        // wuDict2…" (ShellPrefs.INFO_MESSAGES): this line is a placeholder for
+        // an article that is on its way, and it is the one drawn most often -
+        // every tap on a word brings it up for as long as the lookup takes.
+        // Left empty, the popup wears its window until the page has something
+        // to show, which is what a reader who turned the messages off asked
+        // for. The view stays for the reason it does in the app window: a
+        // failure is an answer, and showFailure writes it here.
+        if (ShellPrefs.infoMessages(this)) status.setText(getString(R.string.lookup_starting, query));
         status.setGravity(Gravity.CENTER);
 
         root.addView(status, new FrameLayout.LayoutParams(

@@ -25,6 +25,59 @@ moved since `5f0ad02`, so no upstream work is in it. On this branch
 `test_data/` and `android/app/src/emuX86/jniLibs/` are ignored rather than
 untracked, so `git status` is genuinely empty.
 
+**Uncommitted on `dev` (2026-09-27, third session): the `Show info messages`
+row, the page's top edge, and the panel/status-bar moves.** The working tree
+carries three things, nothing committed.
+
+1. The switch that turns the app's transient notes off — MainActivity's
+   "Starting wuDict2…", the page's waiting art and its "N of M ready" counter,
+   the lookup popup's "Looking up …", and the morph note ("Some dictionaries do
+   not list …"). A plain `ShellPrefs` boolean (`INFO_MESSAGES`, ON by default),
+   read by three Activities and delivered to the page on the URL beside
+   `shell_bg` (`shell_quiet=0|1`); the page's half is in `index.html`'s head
+   block and its boot/status/morph guards. **A phone has to confirm the row, the
+   empty first frame and the popup without its line.** Full statement, reasons
+   and measurements: `docs/ANDROID-UI-HANDOFF.md` → "Decisions to preserve" →
+   "The information messages are one switch".
+2. The page's top edge: `body{padding-top:var(--barh)}` — one rule at every
+   width, replacing a fixed `4.236em` above 600px and a `--barh + --sp-2` copy
+   below it — plus `#out>:first-child>details.dict{margin-top:0}`, which gives
+   the first section up its `--sp-2` so its header is flush against the bar.
+   Between them they remove the empty band between the search bar and the first
+   dictionary header (34px at 1100px, 20px on a phone) and fix 601–800px, where
+   the fixed value was 11px too small for a two-row bar and the first card
+   began above the bar's lower edge. The header is now in the same place in
+   every state — at the bar's edge while the bar is visible, at the window's
+   top edge once it auto-hides. `details.dict>summary` no longer transitions
+   `top`: the bar's box changes size in a single frame (the shell re-publishes
+   the top inset on every frame of a system-bar swipe, and a two-row wrap or a
+   growing `<select>` does the same), and a .28s offset arrived after the edge
+   it aimed at — which is the header that was seen tucked under the bar while
+   scrolling up. Same doc, bullet "The first section's header is flush against
+   the bar, in every state".
+3. Three UI moves of the reader's: the "Open first" pair is out of the panel
+   (the wiring removed, the machinery — `orderFirst`, `applyOpenOrder`,
+   `fastFirst`, the server's `UIPrefs.FastFirst` — deliberately left in place
+   for upstream merges, and the stored value is no longer read); the dictionary
+   chip moved WHOLE from the search field to the status bar, between the arrows
+   and Examples (chip + its real `<select>`, so the shell's picker wiring is
+   untouched) — and it TRAVELS: back into the field whenever that bar is hidden,
+   which is the empty start and any time the bar is switched off, with "All" in
+   the field and the group's own name in the bar; and its place in the panel's
+   Results section is taken by a labelled drop-down of the reader's groups
+   (label "Dictionaries", in the reading strip's own 96px column), whose choice
+   goes through the same `wudictPickerGroupChanged` the native window's spinner
+   calls. The chip itself now names the group in force instead of saying "All"
+   (which is what removed the old `SCOPE_SHORT` map), and the read is guarded
+   because `syncChips` runs before `group-editor.js` declares `userGroups` — an
+   unguarded read there kills the rest of the page script (seen on the
+   emulator). **Verified on the x86_64 emulator** (`build-android.cmd debug
+   intel`, installed over the debug package that was already there): the panel
+   drop-down and its label, the group list, the re-run it triggers, the chip
+   reading "Test" then "All Dictionaries" in the bar, and the chip sitting in
+   the field on the empty start. Same doc, bullet "Open first is gone, the
+   dictionary chip lives in the status bar…".
+
 Branch `master_build` (`0cc878c`, pushed): upstream `master` + the fork's
 build system only — `build-android.cmd` adapted to master's
 version-suffixed APK names (script computes `APK_VERSION` from git
@@ -209,7 +262,11 @@ elsewhere, and a session must read the named place BEFORE changing that area.
   button is no longer a prompt consumer: it navigates to `wudict://folder`
   through `wudictPickFolder`, see the facts above);
   `window.wudictNativeShell=1` injected by `Shell.applyBackground` marks a
-  page that will be answered. Web assets stay upstream-shared; Android
+  page that will be answered; and `Shell.shellQuery` puts the shell's own
+  page parameters on the URL — `shell_bg`, `shell_image`, `shell_quiet` —
+  which the page reads in its head block and remembers in `sessionStorage`,
+  because each of them has to be true at FIRST paint (the injected channel
+  only runs at `onPageFinished`). Web assets stay upstream-shared; Android
   behavior is injected, not compiled in (D54).
 - Registry entry backends: `upgraded{Store over text.db + lazy src}`,
   `native` (no source), direct preview. `dsl.Dict` and `bgl.Dict` embed

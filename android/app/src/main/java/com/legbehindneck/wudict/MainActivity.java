@@ -66,7 +66,14 @@ public class MainActivity extends Activity {
 
         root = new FrameLayout(this);
         status = new TextView(this);
-        status.setText(R.string.starting);
+        // The view stays either way: it is what paints the page's own colour
+        // over the window (applyEdges) while the server starts, and it is
+        // where showFailure puts the one message that is never suppressed -
+        // a failure is an answer, not a note passing by. Only its text goes
+        // with ShellPrefs.INFO_MESSAGES, whose first half this is: the page's
+        // half rides the URL (Shell.shellQuery), because a page could not be
+        // asked in time to silence this frame.
+        if (ShellPrefs.infoMessages(this)) status.setText(R.string.starting);
 		/*
         root.addView(status, new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.WRAP_CONTENT,

@@ -82,7 +82,24 @@ html[data-theme="dark"]{color-scheme:dark}
    so a plain browser sees exactly the layout it always did. Only top and
    bottom: a side inset never reaches the page, because the host keeps landscape
    cutouts off it. */
-body{margin:0;padding-top:calc(4.236em + var(--wd-inset-top,0px));
+/* The page begins exactly where the bar ends. --barh is the bar's BORDER-box
+   height, measured at the end of the body (see measureBar) and already
+   carrying the top inset the bar wears - which is why the inset is not added
+   here as well. The only air between the bar and the first section is then
+   that card's own margin-top: the same --sp-2 that separates every other pair
+   of sections, so the first section reads as the first row of one list rather
+   than as a special case.
+
+   What this replaces was a fixed 4.236em plus the inset, and the trouble with
+   a fixed number is that the bar does not have it. Measured 2026-09-27: on a
+   wide window it left a 34px band of nothing between the search bar and the
+   first dictionary header (the reader drew a red box round it and asked why
+   it was there), and from 601 to 800px, where the bar wraps to two rows and
+   stands 79px tall, it was 11px too SMALL - the first card began above the
+   bar's lower edge with its header pinned under the hairline. One measured
+   value is right at every width, and the phone's own copy of this rule said so
+   already; there is now only one. */
+body{margin:0;padding-top:var(--barh);
   background:var(--bg);color:var(--fg);
   font-family:var(--font);line-height:var(--fi)}
 /* ── the content column ─────────────────────────────────────────────
@@ -119,8 +136,11 @@ body.wide .col{max-width:min(1280px,96vw)}
   transition:transform .28s ease}
 .bar.hidden{transform:translateY(-100%)}
 /* When the bar slides away, the stuck header takes the space it vacated
-   instead of leaving a hole. Same .28s as the bar, so the two read as one
-   piece of chrome moving rather than two things reacting to each other. */
+   instead of leaving a hole. It takes it AT ONCE rather than over the bar's
+   own .28s, and that is the fix for the header being tucked under the bar on
+   an upward scroll: the bar's box can also change size with no scrolling
+   involved at all, and an offset that arrives after the edge it aims at is an
+   offset that is under it. See the summary rule below. */
 body.barhidden{--stick:0px}
 /* When pinned, the bar never hides and --stick stays at --barh. This is not
    a toggle between hiding and not hiding; it is a mode switch that disables
@@ -178,7 +198,36 @@ body.barpinned{--stick:var(--barh)}
    alone would not do it: an empty flex item has no main size to derive from,
    so the width has to be stated. */
 .sbar .rpad{flex:none;width:var(--sbar-sq,2.2em);height:var(--sbar-sq,2.2em)}
-.sbar #sbarExamples{margin-left:auto}
+/* The scope, in the middle of the row: between the two arrows it belongs to
+   and the fold's handle, which is where the reader asked for it. `margin:0
+   auto` is what puts it there and what keeps Examples against the right edge
+   (the two auto margins split the free space, so the gap before the chip and
+   the gap after it are the same and the handle follows the second one) - which
+   is why #sbarExamples no longer carries an auto margin of its own. It is the
+   field's own .seg treatment, stated here for a row that is one line tall at
+   every width: the chip is what you see, the transparent select is what you
+   hit, and it keeps the native picker, the aria-label and its .value. */
+.sbar .seg{display:flex;position:relative;flex:0 1 auto;align-self:stretch;
+  align-items:center;justify-content:center;min-width:0;margin:0 auto}
+.sbar .seg select{position:absolute;inset:0;width:100%;height:100%;margin:0;
+  padding:0;border:0;max-width:none;opacity:0;-webkit-appearance:none;
+  appearance:none}
+.sbar .seg:has(select:focus-visible) .chip{outline:2px solid var(--focus);outline-offset:1px}
+.sbar .seg:has(select:disabled){opacity:.55}
+/* The status bar is wider than the search field's pill, so the chip may show
+   more of a group's name before it ellipsises - and it has to: "All
+   Dictionaries" is 16 characters and the field's own cap of 11ch cut it to
+   "All Dictiona…" on a 412px phone. Two caps, and the reason for each: 30ch is
+   what the bar has room for around the arrows and the fold's handle, and
+   `min()` with 60vw keeps a long name from ever crowding them out - the seg
+   above can shrink and the label inside it ellipsises, so the three fixed
+   things (arrows, Examples, the closing square) keep their pixels whatever the
+   reader called their group, on a 320px phone included. Measured: with this
+   cap "All Dictionaries" is whole at 412px (the chip sizes to its content,
+   145px, the cap is not reached); at 320px the row has no free space left, the
+   seg shrinks and the name is cut, with Examples still 43px off the right
+   edge. */
+.sbar #dictChip{max-width:min(30ch,60vw);min-width:0}
 /* An arrow that has run out of list: dimmed, not gone and not `disabled` - the
    same call the font steppers make at their bounds (`.fsbtn.lim`), for the same
    reason: a control that stops taking presses reads as broken, and a press at
@@ -257,7 +306,24 @@ select{font-size:13px;color:var(--fg-soft);background:var(--bg-card);
    all) made those groups refuse to shrink - one long row with a sideways
    scroll on narrow screens, a tidy wrap on wide ones. */
 .pill,.bar .seg{display:contents}
-.chip{display:none}
+/* A scope control is a chip with its real <select> laid transparently over it:
+   the select keeps the native picker, the keyboard, the aria-label and its
+   .value, so every call site that reads $("dict").value is untouched — only
+   the rendering is replaced. Two of them, in two places, since 2026-09-27: the
+   MODE chip still belongs to the search field (below 600px; above it the field
+   shows the real select, which is what `.bar .chip{display:none}` does), while
+   the DICTIONARY chip moved to the status bar to sit with the arrows that walk
+   the sections (see the markup there). The look is therefore stated once, at
+   the top level, and the phone block below only decides which of them the field
+   shows. */
+.chip{display:flex;align-items:center;gap:.3em;max-width:11ch;
+  white-space:nowrap;font-size:11.5px;line-height:1;color:var(--fg);
+  border-radius:7px;padding:.45em .3em .45em .45em}
+.chip::after{content:"";flex:none;width:0;height:0;margin-top:1px;
+  border:3px solid transparent;border-top-color:var(--fg-faint)}
+.chip .lbl{overflow:hidden;text-overflow:ellipsis}
+.chip .bk{width:14px;height:14px;flex:none}
+.bar .chip{display:none}
 .btn{font-size:15px;background:var(--bg-card);color:var(--fg-soft);
   border:1px solid var(--line);border-radius:8px;padding:.3em .55em;cursor:pointer;line-height:1.2}
 .btn:hover{color:var(--fg);border-color:var(--fg-faint)}
@@ -309,6 +375,23 @@ details.dict{margin-top:var(--sp-2);background:var(--bg-card);border:1px solid v
   /* so scrollIntoView lands the section below the bar instead of under it,
      with no arithmetic and no re-derivation when the bar rewraps */
   scroll-margin-top:var(--barh)}
+/* The first section is flush against the bar (2026-09-27, the reader's call
+   after the top edge was fixed): the header of the first dictionary sits under
+   the bar exactly where every other section's header sits once it sticks, so
+   scrolling never changes the header's relationship with the bar - it is
+   against the bar's lower edge while the bar is there and against the window's
+   top edge once the bar has slid away. --sp-2 of air here was the ONE state in
+   which the header was not against anything, and it is the space the reader
+   asked about.
+
+   Written against the SLOT WRAPPER, because that is where a section actually
+   lives: doSearch appends one bare div per slot (#out > div > details.dict)
+   so a slower dictionary can fill its own position, and the card's margin
+   collapses through it. Written as :first-child rather than as a rule about
+   the first section, so it yields to whatever the page puts above the
+   results: the morph note is inserted as #out's first child and carries
+   margin-top:0 of its own, and the card below it then keeps its --sp-2. */
+#out>:first-child>details.dict{margin-top:0}
 /* The section header stays put while you read inside it, so "which dictionary
    am I looking at" never has to be remembered — or scrolled back for. It is
    also the collapse control, which now stays within reach of a long article.
@@ -318,7 +401,32 @@ details.dict>summary{position:sticky;top:var(--stick);z-index:2;
   background:var(--bg-card);
   cursor:pointer;padding:var(--sp-1) .62rem;font-weight:600;
   color:var(--fg-soft);list-style:none;display:flex;align-items:center;gap:var(--sp-1);
-  transition:font-size .16s ease,line-height .16s ease,padding .16s ease,top .28s ease}
+  /* `top` is deliberately NOT in this list, and the reason is the reader's
+     report that scrolling UP tucked the header a couple of pixels under the
+     bar. The bar's height is not a constant this page may animate after: it is
+     --barh, re-measured whenever the bar's BOX changes, and that box changes
+     INSTANTLY - the shell re-publishes the top inset on whatever frame the
+     system bars change (its own publishInsets comment records that a transient
+     bar swipe delivers an inset callback on every frame of the animation, and
+     each one makes the bar taller or shorter by the status bar's height at
+     once), the two-row wrap below 800px does the same, and so does the
+     dictionary <select> growing as the names arrive. A .28s transition on
+     `top` made the header reach the new --barh a quarter of a second after the
+     bar's edge had already moved, and for that quarter of a second the header
+     was UNDER the bar. Measured in one synchronous read: aim the header at
+     120px and it is there in the same task; with the old transition forced
+     back on it is still at 89px.
+
+     The offset now changes in the same frame the bar's box does, so the header
+     is against the bar's edge in every frame, whatever made the bar change
+     size. The bar keeps its own .28s slide; the header snaps to the edge the
+     bar is heading for - which is what the reader asked for ("always like the
+     first screenshot"), since a header that arrives late is a header that
+     spends that time hidden.
+
+     The size and the padding still glide (the open/closed resize on a click,
+     where nothing else is moving). */
+  transition:font-size .16s ease,line-height .16s ease,padding .16s ease}
 /* Two jobs, two sizes. CLOSED, the header is a row in a list you scan across a
    hundred dictionaries — it wants presence. OPEN, you are reading the section
    and it has become a context label you consult occasionally — it wants to get
@@ -1093,6 +1201,22 @@ dialog.panel-card:not([open]){display:none}
 .facts .mrow.door::after{content:"›";margin-left:auto;color:var(--fg-faint);
   font-size:15px;line-height:1;flex:none}
 .facts .mrow.door:hover::after{color:var(--fg-soft)}
+/* The panel's group drop-down (which group the search is on, in place of the
+   removed "Open first" pair): the label takes the READING STRIP's own 96px
+   column - not the Appearance rows' 60px, which would cut "Dictionaries" (72px
+   at this size) - so it lines up with "Highlight matches" and "Read aloud"
+   above it. The bar then fills the rest of the row, and its own label is
+   ellipsised: min-width:0 is what lets a flex item shrink below its content at
+   all, and the caret keeps its place on its own auto margin. The button's
+   `width:100%` is replaced by `flex:1 1 0` because `.facts` wraps: an item
+   100% wide beside a label would take a line of its own. The row itself needs
+   `width:100%` too: it is a child of `.facts.reading`, which is a column with
+   `align-items:flex-start`, so without it the row and the bar inside it would
+   be only as wide as their content - a short group name left a short bar. */
+.facts:has(>#pickerGroupBtn){width:100%;align-self:stretch}
+.facts:has(>#pickerGroupBtn)>.rowlabel{flex:0 0 96px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.facts:has(>#pickerGroupBtn)>#pickerGroupBtn{width:auto;flex:1 1 0;min-width:0}
+#pickerGroupBtn>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* A label for the control on its row, in the register the segs' labels use. */
 .facts .rowlabel{font-size:11.5px;line-height:1.2;color:var(--fg-faint)}
 /* The collection's count, on its own line under the heading: the answer to "is
@@ -1407,7 +1531,11 @@ dialog.panel-card:not([open]){display:none}
      the user CONSULTS rather than operates, and the rest are view settings
      that the ☰ panel already houses. So the field takes the row and the
      scope rides inside it. */
-  body{padding-top:calc(var(--barh) + var(--sp-2))} /* --barh is measured; see the boot script */
+  /* body's padding-top used to be repeated here as --barh + --sp-2, because
+     the base rule was a hard-coded 4.236em that fit the wide bar and not this
+     one. It is now --barh for both (see that rule), so this override is gone:
+     the phone's first section sits one --sp-2 below the bar, exactly like
+     every other section, instead of two. */
   .col{width:auto;padding-left:var(--sp-1);padding-right:var(--sp-1)}
   .container{padding-bottom:calc(var(--sp-4) + var(--sbarh,var(--wd-inset-bottom,0px)))}
   /* Scoped to the top bar: the About wordmark inside the panel must survive
@@ -1462,13 +1590,10 @@ dialog.panel-card:not([open]){display:none}
     appearance:none}
   .bar .seg:has(select:focus-visible) .chip{outline:2px solid var(--focus);outline-offset:1px}
   .bar .seg:has(select:disabled){opacity:.55}
-  .chip{display:flex;align-items:center;gap:.3em;max-width:11ch;
-    white-space:nowrap;font-size:11.5px;line-height:1;color:var(--fg);
-    background:var(--accent-soft);border-radius:7px;padding:.45em .3em .45em .45em}
-  .chip::after{content:"";flex:none;width:0;height:0;margin-top:1px;
-    border:3px solid transparent;border-top-color:var(--fg-faint)}
-  .chip .lbl{overflow:hidden;text-overflow:ellipsis}
-  .chip .bk{width:14px;height:14px;flex:none}
+  /* The chip's own look is at the top level now (the dictionary chip wears it
+     in the status bar at every width); this block only says that the FIELD
+     shows its chip here. */
+  .bar .chip{display:flex}
   /* Both chips look the same in every state. Neither wears the accent tint — a
      scope names a PLACE to search, it is not a departure to announce — and
      neither has a state that recedes. The mode chip used to fade to the faint
@@ -1476,8 +1601,12 @@ dialog.panel-card:not([open]){display:none}
      while the scope was "all" AND dropped its own label. That second one is a
      difference this fork does not have: its picker has ONE mode, so "All
      dictionaries" is an ordinary group with a name like any other, not the
-     nameless "all" mode it was upstream. */
-  #dictChip,#modeChip{background:none;color:var(--fg)}
+     nameless "all" mode it was upstream.
+     Only the MODE chip is named here now: the dictionary chip left the field
+     for the status bar, where it wears that row's button (class .btn) instead
+     — the tint is a field thing, and the bar's vocabulary is bordered
+     buttons. */
+  #modeChip{background:none;color:var(--fg)}
 
   /* Desktop gutters, reclaimed. Three nested insets of .618em — column, list
      and article — put 30px of a 360px screen into margins before a word of a
