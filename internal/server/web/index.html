@@ -179,6 +179,32 @@ window.wudictShellBackground = function (color, image, imageName) {
 <div id="out"></div>
 </main>
 
+<!-- The status bar. Three controls and nothing else: the two jumps between the
+     dictionaries of the current answer, and one handle on the example fold -
+     the controls a reader touches WHILE reading, at one tap, with the article
+     still on screen. Everything here also exists in the drawer (the fold has
+     its row there, the jumps have the picker's list), so hiding the bar takes
+     nothing away; that is what its row in Settings is for.
+     The arrows walk the sections in DOM order - the order the server emits in
+     the reader's preference, which is also the order the native picker's list
+     is built from - and jump with the SAME call the picker makes, opening the
+     section they land on (jumpToSection). They are hidden when there is
+     nowhere to go: fewer than two dictionaries answered.
+     The chip's words are the panel row's words, and its colour is the state:
+     accent = the examples are shown, which is the layer being off.
+     The row reads left to right as a square of air, the two arrows with a
+     square between them, then the fold's handle against the right edge and a
+     square of air closing the row - .rpad is that square, and it is built from
+     the row's own height rather than a number (see app.css). -->
+<div class="sbar" id="sbar" hidden>
+  <span class="rpad" aria-hidden="true"></span>
+  <button type="button" class="btn" id="sbarPrev" aria-label="Previous dictionary" title="Jump to the dictionary above — instant, and opens it">▲</button>
+  <span class="rpad" aria-hidden="true"></span>
+  <button type="button" class="btn" id="sbarNext" aria-label="Next dictionary" title="Jump to the dictionary below — instant, and opens it">▼</button>
+  <button type="button" class="btn" data-layer="off" id="sbarExamples" aria-pressed="true" title="Examples are shown — tap to fold the lines that hold nothing but examples">Examples</button>
+  <span class="rpad" aria-hidden="true"></span>
+</div>
+
 <div id="panel" role="dialog" aria-label="Settings">
 <div class="panel-card">
 <div class="panel-head"><h2>Settings
@@ -401,6 +427,26 @@ window.wudictShellBackground = function (color, image, imageName) {
     <span class="seg" role="group" aria-label="Show or fold the examples in articles" id="examplesSeg">
       <button type="button" class="act" data-layer="off" id="examplesOn" aria-pressed="true" title="Show every example a dictionary gives">Show</button>
       <button type="button" class="act" data-layer="on" id="examplesOff" aria-pressed="false" title="Fold away the lines that hold nothing but examples — the entry's own text stays">Hide</button>
+    </span>
+  </div>
+  <!-- Whether the status bar is there at all. It is the bar's only door, so it
+       has to be findable by someone who has just hidden it - hence a row here,
+       in the drawer, beside the controls the bar duplicates, rather than in the
+       sheet's Screen group (where the system bars and the insets live: a
+       different subject, and three taps away).
+       The name came from the reader and it is a collision they accepted: the
+       platform's bar is also called the status bar, and the sheet's Screen
+       group speaks of that one ("The clock and status icons"). Nothing here puts
+       the two side by side, and the buttons say what they do - but a sentence
+       that has to mean both must say which.
+       Stored in localStorage, not in state.json: it is a choice about this
+       window, like wide mode, not a reading habit that should follow the reader
+       to another device. -->
+  <div class="facts" id="sbarRow">
+    <span class="rowlabel">Status bar</span>
+    <span class="seg" role="group" aria-label="Show or hide the bar at the bottom of the screen" id="sbarSeg">
+      <button type="button" class="act" id="sbarOn" aria-pressed="true" title="Keep the bar at the bottom: the jumps between dictionaries, and the example fold">Show</button>
+      <button type="button" class="act" id="sbarOff" aria-pressed="false" title="Hide the bar — the same controls stay in this drawer">Hide</button>
     </span>
   </div>
   <!-- One door per subject, and the sheet opens on the one that was asked for.
@@ -1501,22 +1547,29 @@ window.wudictPickerGroupChanged=id=>{
   $("out").replaceChildren();liveSearchBoxes=null;refreshLivePicker();
   if($("q").value.trim())doSearch();
 };
+/* One jump, two callers: the native picker's list and the status bar's
+   arrows. Open the section, put the match walk back if it was in play, and
+   move INSTANTLY, always — the one scroll in this app that neither animates
+   nor asks the system first (D…, the picker's jump). A dictionary picked off
+   a list, or reached by an arrow, is a destination the reader has already
+   chosen, so there is nothing to orient them: the jump can cross a document
+   tens of thousands of pixels tall, and a glide over that is not orientation,
+   it is waiting. It is the same call navGo already makes for a match more than
+   two screens away, and the reason it is not conditional on
+   prefers-reduced-motion is that this is where the reader ASKED to be moved —
+   the other two scrolls (a section opened by hand, the walk through matches)
+   keep the system's answer, because there the path is part of the reading. */
+function jumpToSection(det){
+  sbarAimed=det;
+  det.open=true;openedIdx=-1;clearTimeout(barrier);barrier=null;
+  if(markedAnswer)navAttach(det);
+  requestAnimationFrame(()=>det.scrollIntoView({block:"start",behavior:"auto"}));
+}
 window.wudictPickerDictionarySelected=id=>{
   const det=(liveSearchBoxes||[$("out")]).flatMap(root=>[...root.querySelectorAll("details.dict")]).find(d=>
     d.querySelector(":scope > dl > dd[data-dict]")?.dataset.dict===id);
   if(!det)return;
-  det.open=true;openedIdx=-1;clearTimeout(barrier);barrier=null;
-  if(markedAnswer)navAttach(det);
-  /* INSTANT, always — the one scroll in this app that neither animates nor asks
-     the system first. A dictionary picked off the list is a destination the
-     reader has already chosen, so there is nothing to orient them: the jump can
-     cross a document tens of thousands of pixels tall, and a glide over that is
-     not orientation, it is waiting. It is the same call navGo already makes for
-     a match more than two screens away, and the reason it is not conditional on
-     prefers-reduced-motion is that this is where the reader ASKED to be moved —
-     the other two scrolls (a section opened by hand, the walk through matches)
-     keep the system's answer, because there the path is part of the reading. */
-  requestAnimationFrame(()=>det.scrollIntoView({block:"start",behavior:"auto"}));
+  jumpToSection(det);
 };
 $("out").addEventListener("click",e=>{
   const sum=e.target.closest("details.dict:not(.noindex)>summary");
@@ -4054,6 +4107,130 @@ measureBar();
 // A border-box change is a superset of a content-box one here (nothing shrinks
 // the padding as the content grows), so the <select> case above still fires.
 new ResizeObserver(measureBar).observe($("bar"),{box:"border-box"});
+
+/* ── the status bar ─────────────────────────────────────────────────
+   The three controls at the bottom of the screen: the jump to the previous and
+   the next dictionary of the current answer, and one handle on the example
+   fold. What admits a control here is the rule the top bar already lives by -
+   something the reader touches WHILE reading - and, unlike ⇔ and ⊞, which the
+   top bar drops below 600px as big-screen affordances, these are what a phone
+   needs: a phone is where the jump saves the most scrolling, and where the
+   example fold changes the most text.
+   Everything here exists in the drawer as well (the fold has its row there,
+   the jumps have the picker's list), which is exactly what makes hiding the
+   bar safe: the bar is a shortcut, never the only door.
+   Stored in localStorage, like wide mode: a choice about this window, not a
+   reading habit that should follow the reader to another device. Absent means
+   the app's default, which is on. */
+const RBAR_KEY="wudict_sbar";
+let sbarWant=localStorage.getItem(RBAR_KEY)!=="0";
+/* The sections the arrows walk. `.noindex` is not one of them: that row is the
+   list of dictionaries this search could not run at all, a reference with an
+   offer on it, not a place to read. A deferred section IS one - it is a
+   dictionary of this answer that has not been fetched yet, and opening it is
+   precisely what the reader asks for by walking to it (one at a time, which is
+   not the burst `expand all` has to avoid). */
+function sbarSections(){return [...$("out").querySelectorAll("details.dict:not(.noindex)")]}
+/* Measured and published, like --barh above and for the same reason: the page's
+   bottom padding is built from it, and a guessed number would either leave the
+   last line under the bar or float it above a visible gap. The bar wears the
+   host's bottom inset in its own padding, so its border box is the whole thing
+   the content has to clear. */
+let sbarH="",sbarSq="";
+function sbarMeasure(){
+  if($("sbar").hidden){
+    if(sbarH){sbarH="";document.documentElement.style.removeProperty("--sbarh")}
+    return;
+  }
+  const root=document.documentElement.style;
+  const h=$("sbar").offsetHeight+"px";
+  if(h!==sbarH){
+    sbarH=h;
+    root.setProperty("--sbarh",h);
+  }
+  // The squares of air in the row are as tall as the row's buttons, so they are
+  // measured from them: the tallest button that is on screen, because the
+  // arrows step aside when there is only one dictionary to walk and the fold's
+  // handle steps aside when the layer cannot be switched.
+  let sq=0;
+  for(const b of $("sbar").querySelectorAll("button"))
+    if(!b.hidden&&b.offsetHeight>sq)sq=b.offsetHeight;
+  const s=sq+"px";
+  if(sq&&s!==sbarSq){
+    sbarSq=s;
+    root.setProperty("--sbar-sq",s);
+  }
+}
+function sbarPaint(){
+  const n=sbarSections().length;
+  $("sbar").hidden=!(sbarWant&&n>0);
+  // A control that cannot act is not shown (D102): with one dictionary there is
+  // nowhere to walk, and the arrows are what would lie about it.
+  $("sbarPrev").hidden=$("sbarNext").hidden=n<2;
+  $("sbarOn").setAttribute("aria-pressed",sbarWant?"true":"false");
+  $("sbarOff").setAttribute("aria-pressed",sbarWant?"false":"true");
+  sbarMeasure();
+}
+function sbarSet(on){
+  sbarWant=!!on;
+  localStorage.setItem(RBAR_KEY,sbarWant?"":"0");
+  sbarPaint();
+}
+$("sbarOn").onclick=()=>sbarSet(true);
+$("sbarOff").onclick=()=>sbarSet(false);
+/* Where the reader is. Two answers, in this order, and the order is the whole
+   trick: a jump of OURS (an arrow, or the picker's list) records what it aimed
+   at, and that stands until the reader scrolls by hand - because the page
+   settles a little AFTER the landing: an opened section grows as its own
+   content reports its height (a frame measures itself on load, images arrive
+   later), so the section just landed on can sit a hundred pixels below the line
+   this rule reads, and a pure geometric answer would name the section it was
+   jumped away from. Pressing next twice then walked to the same dictionary
+   again and again. Reading the position back off the page is right whenever the
+   reader is the one who moved - which is exactly when the aim is cleared.
+   -1 means above the first section: "next" is then the first, and "previous"
+   wraps to the last. The walk wraps, like the match walk does - a list of
+   dictionaries has no natural end, and stopping at the edges would make the
+   reader watch for the edge instead of reading. */
+let sbarAimed=null;
+function sbarGo(step){
+  const list=sbarSections();
+  if(list.length<2)return;
+  let at=sbarAimed&&list.includes(sbarAimed)?list.indexOf(sbarAimed):-1;
+  if(at<0){
+    // The sections' own scroll-margin-top is the line a jump lands them on -
+    // NOT barH(), which reads 0 while the top bar is auto-hidden, and a jump
+    // downward is exactly the scroll that hides it.
+    const line=(parseFloat(getComputedStyle(list[0]).scrollMarginTop)||0)+8;
+    for(let i=0;i<list.length;i++)if(list[i].getBoundingClientRect().top<=line)at=i;
+  }
+  jumpToSection(list[((at+step)%list.length+list.length)%list.length]);
+}
+$("sbarPrev").onclick=()=>sbarGo(-1);
+$("sbarNext").onclick=()=>sbarGo(1);
+/* The reader's own scrolling puts the page back in charge of "where am I". A
+   press inside the bar does not: that is the same reader asking for the next
+   dictionary, not moving the page under our feet. */
+for(const ev of ["wheel","touchmove"])
+  addEventListener(ev,()=>{sbarAimed=null},{passive:true});
+addEventListener("pointerdown",e=>{if(!e.target.closest?.("#sbar"))sbarAimed=null},{passive:true});
+/* Sections stream in, a new search replaces them all, and highlighting
+   re-renders what it touched - so the bar follows the DOM rather than the
+   search, coalesced to one paint per frame. The observer is the same shape as
+   examples.js's, and for the same reason: there is no single "results are in"
+   moment to hang this on. */
+let sbarQueued=false;
+function sbarChanged(){
+  if(sbarQueued)return;
+  sbarQueued=true;
+  requestAnimationFrame(()=>{sbarQueued=false;sbarPaint()});
+}
+new MutationObserver(sbarChanged).observe($("out"),{childList:true,subtree:true});
+// Border-box, like the top bar's observer: the height that matters is the one
+// the page's padding is built from, and a host publishing the bottom inset
+// after load (the Android shell does it at onPageFinished) grows exactly that.
+new ResizeObserver(sbarMeasure).observe($("sbar"),{box:"border-box"});
+sbarPaint();
 let prevScroll=window.pageYOffset;
 addEventListener("scroll",()=>{
   const cur=window.pageYOffset;
@@ -4906,7 +5083,23 @@ async function presetToggle(id,on,notify){
    is in force, "off" for the other. That is why the Examples row reads
    Show | Hide while Compact reads Off | On - the halves are named for what the
    reader gets, and the attribute is what the code follows, not the words. */
-const PRESET_ROWS=[["compactRow","compact"],["examplesRow","hide_examples"]];
+/* [row id, preset id, kind]. The kind is what a PRESS means: a pair's halves
+   each name their answer ("set"), and a lone button - the status bar's chip,
+   where both states are the same control - flips whatever it is now
+   ("toggle"). Painting is the same for both: it follows the payload, never the
+   press. */
+const PRESET_ROWS=[
+  ["compactRow","compact"],
+  ["examplesRow","hide_examples"],
+  ["sbarExamples","hide_examples","toggle"],
+];
+/* The buttons one entry drives. A row in the drawer holds a PAIR; the reading
+   bar's handle is a single button wearing the same data-layer, which is why
+   this returns the element itself when it is one - same painter, same payload,
+   three handles on the example fold and two on Compact. */
+function layerButtons(row){
+  return row.matches("button[data-layer]")?[row]:[...row.querySelectorAll("button[data-layer]")];
+}
 function presetRowsPaint(){
   for(const [rowId,id] of PRESET_ROWS){
     const row=$(rowId);
@@ -4921,16 +5114,20 @@ function presetRowsPaint(){
     if(!p||STYLE_OFF||(PRESETS&&!PRESETS.writable)){row.hidden=true;continue}
     row.hidden=false;
     const on=!!p.enabled;
-    for(const b of row.querySelectorAll("button[data-layer]"))
+    for(const b of layerButtons(row))
       b.setAttribute("aria-pressed",(b.dataset.layer==="on")===on?"true":"false");
   }
 }
-for(const [rowId,id] of PRESET_ROWS){
+for(const [rowId,id,kind] of PRESET_ROWS){
   const row=$(rowId);
   if(!row)continue;
-  for(const b of row.querySelectorAll("button[data-layer]"))
-    b.addEventListener("click",()=>presetToggle(id,b.dataset.layer==="on",
-      msg=>setStatus("⚠ "+esc(msg))));
+  for(const b of layerButtons(row))
+    b.addEventListener("click",()=>{
+      const want=kind==="toggle"
+        ? !((PRESETS&&PRESETS.enabled)||[]).includes(id)
+        : b.dataset.layer==="on";
+      presetToggle(id,want,msg=>setStatus("⚠ "+esc(msg)));
+    });
 }
 /* The pane. Groups in manifest order; a group of more than one is a
    conflict group and says so, because two switches that silently undo each

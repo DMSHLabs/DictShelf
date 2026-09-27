@@ -102,9 +102,23 @@ split — `web/examples.js` marks each shadow article's example-only `<p>` with
 `wu-xonly` as the DOM appears (no state, no library rebuild, `artmark.Version`
 untouched) and the layer's article half is the one rule that hides them — so the
 switch is a plain preset (`style/presets.json`, `hide_examples`) and folding
-back needs no sweep. Owed on a phone: the three Results
+back needs no sweep. (5) The **Status bar** (`.sbar`, the user's design): a
+fixed bottom bar carrying `▲` / `Examples` / `▼` — the jumps between
+dictionaries (the picker's own jump, walked and wrapping) and a quick handle on
+the fold — with `Status bar: Show|Hide` as a row in the drawer, beside the
+controls it duplicates. It wears the bottom inset the shell already publishes,
+so **no Java change was needed**; its row is a square of air, the two arrows, a
+square, then `Examples` against the right edge and a closing square (the
+squares are measured from the buttons, `--sbar-sq`), and the wallpaper layer
+paints it exactly as it paints the top bar (both `background_image_app*.css`
+files grew a `.sbar` selector — the day half mirrored to the bar's top
+hairline). Two traps are written down in the area doc
+because each cost a round here: `barH()` reads 0 while the top bar is
+auto-hidden, and the page settles after a landing, so geometry alone cannot say
+where the reader is. Owed on a phone: the three Results
 rows, Compact's effect on a real narrow screen, the Examples fold in a real
-entry, the hairlines in daylight, and the picker's order. Rules, measurements
+entry, the Status bar end to end (jumps, chip, and the sheet covering it), the
+hairlines in daylight, and the picker's order. Rules, measurements
 and the CSS traps are in `docs/ANDROID-UI-HANDOFF.md` → "Decisions to
 preserve".
 

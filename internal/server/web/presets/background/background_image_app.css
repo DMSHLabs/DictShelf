@@ -32,6 +32,7 @@ html[data-shell-image] {
 html[data-shell-image] body{background:transparent}
 
 html[data-shell-image] .bar,
+html[data-shell-image] .sbar,
 html[data-shell-image] .panel-card,
 html[data-shell-image] .panel-head{background-color:var(--paper-bg)}
 
@@ -100,6 +101,34 @@ html[data-shell-image] .bar {
   -webkit-backdrop-filter:blur(1px);
 
   border-bottom:1px solid rgba(120,90,45,.22);
+}
+
+/* =========================================================
+   BOTTOM wuDict BAR (the Status bar)
+   ========================================================= */
+
+/* The same paper as the top bar, mirrored to the edge this one owns: the
+   texture, the light wash that keeps it readable, the blur turned down so the
+   grain still shows - and the hairline on the TOP, because that is the edge
+   facing the article. `background-attachment:fixed` is what makes the two bars
+   the same piece of paper rather than two tiles of it: the image is positioned
+   against the viewport, so the bottom bar shows the part of the wallpaper that
+   is actually under it. */
+html[data-shell-image] .sbar {
+  background-color:var(--paper-bg);
+  background-image:
+    linear-gradient(
+      rgba(255,245,220,.25),
+      rgba(255,245,220,.25)
+    ),
+    var(--paper-bk-image, none);
+  background-size:100% 100%, 100% 100%;
+  background-position:center;
+  background-repeat:no-repeat;
+  background-attachment:fixed;
+  backdrop-filter:blur(1px);
+  -webkit-backdrop-filter:blur(1px);
+  border-top:1px solid rgba(120,90,45,.22);
 }
 
 /* =========================================================

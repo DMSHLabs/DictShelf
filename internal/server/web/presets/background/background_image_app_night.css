@@ -15,6 +15,7 @@ html[data-shell-image] {
 html[data-shell-image] body{background:transparent}
 
 html[data-shell-image] .bar,
+html[data-shell-image] .sbar,
 html[data-shell-image] .panel-card,
 html[data-shell-image] .panel-head{background-color:var(--paper-bg)}
 

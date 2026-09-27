@@ -98,7 +98,12 @@ body{margin:0;padding-top:calc(4.236em + var(--wd-inset-top,0px));
   padding-left:var(--sp-2);padding-right:var(--sp-2);
   transition:max-width .25s ease} /* on .col so the bar eases with the cards */
 body.wide .col{max-width:min(1280px,96vw)}
-.container{padding-bottom:calc(var(--sp-5) + var(--wd-inset-bottom,0px))}
+/* The page's own bottom space, in one expression: the usual gutter, and under
+   it whichever of the two things owns the bottom edge is taller - the reading
+   bar (--sbarh, which already includes the inset it wears) or, when the bar is
+   away, the host's inset by itself. Written as a fallback chain rather than a
+   sum, so a bar standing on the gesture bar is not counted twice. */
+.container{padding-bottom:calc(var(--sp-5) + var(--sbarh,var(--wd-inset-bottom,0px)))}
 
 .bar{position:fixed;top:0;left:0;right:0;z-index:100;background:var(--bg-bar);
   backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
@@ -132,6 +137,55 @@ body.barpinned{--stick:var(--barh)}
    controls already fill the row; it does its work in wide mode and any time a
    control is removed. Move this class if the button order ever changes. */
 .bar form .tools{margin-left:auto}
+/* ── the status bar ─────────────────────────────────────────────────
+   The one piece of chrome the reader keeps while reading: two jumps between
+   the dictionaries of the current answer, and one quick handle on the example
+   fold. It is not a second Settings - the drawer is where things are NAMED and
+   configured, and every one of these exists there too (the fold has its row,
+   the jump already had the picker's list) - it is the same few controls at the
+   distance a reader uses them: one tap, with the article still on screen. The
+   drawer covers 92vw of a phone, so a control you judge by watching the text
+   move cannot live there.
+
+   A sibling of the top bar, in its idiom and not a new one: full-bleed, the
+   blurred bar colour, one hairline, and it wears the bottom inset itself -
+   its background then fills the strip behind the gesture bar and the buttons
+   sit clear above it, exactly as the top bar does with a camera cutout. The
+   height is measured and published as --sbarh (index.html), which is what the
+   page's own bottom padding is built from: a guessed number would either leave
+   the last line under the bar or float it above a visible gap.
+
+   z-index 100 puts it under the panel (200) and under the Appearance sheet
+   (210), which is deliberate: the sheet is a bottom pane and owns this edge
+   while it is open, so the bar is simply covered rather than fighting it for
+   the same strip of screen. `hidden` is what takes it away (no results, or the
+   reader switched it off) - stated as a rule because `display:flex` here would
+   outvote the user-agent's [hidden]{display:none}, the trap #styler has a rule
+   for too. */
+.sbar{position:fixed;left:0;right:0;bottom:0;z-index:100;
+  display:flex;align-items:center;justify-content:flex-start;
+  background:var(--bg-bar);backdrop-filter:blur(10px);
+  -webkit-backdrop-filter:blur(10px);
+  border-top:1px solid var(--line);padding:var(--sp-1) 0;
+  padding-bottom:calc(var(--sp-1) + var(--wd-inset-bottom,0px))}
+.sbar[hidden]{display:none}
+/* The spaces of the row: an empty element as wide and as tall as the buttons
+   (--sbar-sq, measured from them in index.html - the row's height is theirs,
+   and it changes with the inset the bar wears, so a number written here would
+   be a number that goes stale). Three of them sit in the markup where the
+   reader asked for air: before the arrows, between them, and after the fold's
+   handle, which the auto margin then pushes to the right edge. `aspect-ratio`
+   alone would not do it: an empty flex item has no main size to derive from,
+   so the width has to be stated. */
+.sbar .rpad{flex:none;width:var(--sbar-sq,2.2em);height:var(--sbar-sq,2.2em)}
+.sbar #sbarExamples{margin-left:auto}
+/* The fold's handle, wearing the same words as the panel's row so the two are
+   recognisably one setting: lit means the examples are SHOWN - what you get -
+   which is the layer being off. That is the panel pair's Show half, and the
+   colour says the same thing here: accent is "this is what you are looking
+   at", never "the thing is switched off". */
+.sbar #sbarExamples{font-weight:600}
+.sbar #sbarExamples[aria-pressed="true"]{color:var(--accent);border-color:var(--accent)}
 .brand{font-weight:700;color:var(--accent);font-size:15px;letter-spacing:.02em;
   margin-right:var(--sp-1);user-select:none;white-space:nowrap}
 /* Wordmark: "WuWei" carries the accent, "Dict" recedes to normal weight — one
@@ -1069,7 +1123,7 @@ dialog.panel-card:not([open]){display:none}
    ("Highlight matches"), and they are a different section. */
 .facts:has(>#fsCtl)>.rowlabel,.facts:has(>#fwCtl)>.rowlabel,
 .facts:has(>#looksChoice)>.rowlabel,.facts:has(>#compactSeg)>.rowlabel,
-.facts:has(>#examplesSeg)>.rowlabel{
+.facts:has(>#examplesSeg)>.rowlabel,.facts:has(>#sbarSeg)>.rowlabel{
   flex:0 1 60px;min-width:0;white-space:nowrap;overflow:hidden;
   text-overflow:ellipsis}
 /* A `.facts` row is `display:flex`, which outvotes the user-agent's
@@ -1349,7 +1403,7 @@ dialog.panel-card:not([open]){display:none}
      scope rides inside it. */
   body{padding-top:calc(var(--barh) + var(--sp-2))} /* --barh is measured; see the boot script */
   .col{width:auto;padding-left:var(--sp-1);padding-right:var(--sp-1)}
-  .container{padding-bottom:calc(var(--sp-4) + var(--wd-inset-bottom,0px))}
+  .container{padding-bottom:calc(var(--sp-4) + var(--sbarh,var(--wd-inset-bottom,0px)))}
   /* Scoped to the top bar: the About wordmark inside the panel must survive
      on narrow screens — that is where the app says what it is. */
   .bar .brand{display:none}
