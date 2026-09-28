@@ -16,98 +16,22 @@ Where everything else lives:
 
 ## Branch state (verify with git before trusting)
 
-**Rechecked 2026-09-27 (second release session):** `dev` is at `bd17906`, clean
-and pushed, carrying the annotated tag `wudict2-v0.4.0` — the release cut this
-session ("Release wudict2-v0.4.0" in `docs/handoff-archive.md`). It ships the
-Status bar (item 5 in the ☰ panel paragraph below, committed as `155e30d`)
-together with the ☰ panel work of the earlier releases. `master` still has not
-moved since `5f0ad02`, so no upstream work is in it. On this branch
-`test_data/` and `android/app/src/emuX86/jniLibs/` are ignored rather than
-untracked, so `git status` is genuinely empty.
+**Rechecked 2026-09-28 (third release session):** `dev` is at `577c586`, clean
+and pushed, carrying the annotated tag `wudict2-v0.5.0` — the release cut this
+session ("Release wudict2-v0.5.0" in `docs/handoff-archive.md`). It ships
+everything the third session produced, which is the five changes listed below:
+the `Show info messages` row, the page's top edge, the panel/status-bar moves,
+the notes' ink and the preset's paper (commits `bef262d`, `7eb0e40`, `7be896e`,
+`3bfe24d`). `master` still has not moved since `5f0ad02`, so no upstream work is
+in it. On this branch `test_data/` and `android/app/src/emuX86/jniLibs/` are
+ignored rather than untracked, so `git status` is genuinely empty.
 
-**Uncommitted on `dev` (2026-09-27/28, third session): the `Show info messages`
-row, the page's top edge, the panel/status-bar moves, the notes' ink, and the
-preset's paper.** The working tree carries five things, nothing committed. This
-session's earlier work went in as `bef262d`, whose message landed as one
-2785-character subject line — the intended subject is `feat(ui): the notes
-switch, the flush header, and the scope chip`, and git-cliff reads only the
-first line.
-
-1. The switch that turns the app's transient notes off — MainActivity's
-   "Starting wuDict2…", the page's waiting art and its "N of M ready" counter,
-   and the lookup popup's "Looking up …". A plain `ShellPrefs` boolean
-   (`INFO_MESSAGES`, ON by default), read by three Activities and delivered to
-   the page on the URL beside `shell_bg` (`shell_quiet=0|1`); the page's half
-   is in `index.html`'s head block and its boot/status guards. **The morph note
-   is NOT silenced** — the switch covered it at first and the reader asked for
-   it back ("this message must stay"): it says the answers are for a different
-   form of the word, which is read rather than skimmed. **A phone has to
-   confirm the row, the empty first frame and the popup without its line.**
-   Full statement, reasons
-   and measurements: `docs/ANDROID-UI-HANDOFF.md` → "Decisions to preserve" →
-   "The information messages are one switch".
-2. The page's top edge: `body{padding-top:var(--barh)}` — one rule at every
-   width, replacing a fixed `4.236em` above 600px and a `--barh + --sp-2` copy
-   below it — plus `#out>:first-child>details.dict{margin-top:0}`, which gives
-   the first section up its `--sp-2` so its header is flush against the bar.
-   Between them they remove the empty band between the search bar and the first
-   dictionary header (34px at 1100px, 20px on a phone) and fix 601–800px, where
-   the fixed value was 11px too small for a two-row bar and the first card
-   began above the bar's lower edge. The header is now in the same place in
-   every state — at the bar's edge while the bar is visible, at the window's
-   top edge once it auto-hides. `details.dict>summary` no longer transitions
-   `top`: the bar's box changes size in a single frame (the shell re-publishes
-   the top inset on every frame of a system-bar swipe, and a two-row wrap or a
-   growing `<select>` does the same), and a .28s offset arrived after the edge
-   it aimed at — which is the header that was seen tucked under the bar while
-   scrolling up. Same doc, bullet "The first section's header is flush against
-   the bar, in every state".
-3. Three UI moves of the reader's: the "Open first" pair is out of the panel
-   (the wiring removed, the machinery — `orderFirst`, `applyOpenOrder`,
-   `fastFirst`, the server's `UIPrefs.FastFirst` — deliberately left in place
-   for upstream merges, and the stored value is no longer read); the dictionary
-   chip moved WHOLE from the search field to the status bar, between the arrows
-   and Examples (chip + its real `<select>`, so the shell's picker wiring is
-   untouched) — and it TRAVELS: back into the field whenever that bar is hidden,
-   which is the empty start and any time the bar is switched off, with "All" in
-   the field and the group's own name in the bar; and its place in the panel's
-   Results section is taken by a labelled drop-down of the reader's groups
-   (label "Dictionaries", in the reading strip's own 96px column), whose choice
-   goes through the same `wudictPickerGroupChanged` the native window's spinner
-   calls. The chip itself now names the group in force instead of saying "All"
-   (which is what removed the old `SCOPE_SHORT` map), and the read is guarded
-   because `syncChips` runs before `group-editor.js` declares `userGroups` — an
-   unguarded read there kills the rest of the page script (seen on the
-   emulator). **Verified on the x86_64 emulator** (`build-android.cmd debug
-   intel`, installed over the debug package that was already there): the panel
-   drop-down and its label, the group list, the re-run it triggers, the chip
-   reading "Test" then "All Dictionaries" in the bar, and the chip sitting in
-   the field on the empty start. The row's own spacing came from the reader's
-   phone afterwards (third round): the two ends are 10px gutters instead of
-   full squares, the chip has a floor of one square of air on EACH side
-   (`.rpad.floor` carrying the auto margins, so the two gaps are equal and
-   neither can collapse — the phone had the chip pressed against ▼), and the
-   fold's handle shortens to "Ex" below 420px, the width at which the full word
-   stops fitting beside "All Dictionaries". Same doc, bullet "Open first is
-   gone, the dictionary chip lives in the status bar…".
-4. The notes' ink: `.scopenote` (the scope, widen and morph notes) is
-   `--fg-soft` now, not `--fg-faint` — the reader's "these messages are too
-   pale", and `--fg-faint` is 2.9:1 against the light paper.
-5. **The preset's paper reaches the windows the app page does not paint**
-   (2026-09-28, from the reader: in Warm the Folders/Lemmatization/Browse
-   pages were white while `Edit dictionary groups` was warm). A preset layer
-   reaches one document, so the colour now travels to the host: manifest →
-   `/api/presets` (resolved per theme) → the appearance bridge → `ShellPrefs`
-   (`preset_paper`) → `pageBg`, plus a new `shell_paper` parameter and the
-   hook's fourth argument for the three pages. **The app page only FORWARDS
-   it** (`shell_bg` stays the reader's colour), and the wallpaper is
-   untouched. With it: the two pages' checkboxes are DRAWN now (the app's own
-   square — they were platform widgets that ignored the paper entirely), and
-   the four page rules that kept a platform box's `width:auto` had to drop it.
-   Verified in Chromium on a throwaway server plus `go test`, `go vet`, the
-   Java compile; **not on a phone**. Statement, the naming of every window
-   (report them by these names) and a night-preset defect found on the way:
-   `docs/ANDROID-UI-HANDOFF.md`.
+**The third session's five changes (2026-09-27/28; committed `bef262d`,
+`7eb0e40`, `7be896e`, `3bfe24d`; shipped in v0.5.0) — the `Show info messages`
+row, the page's top edge, the panel/status-bar moves, the notes' ink and the
+preset's paper — are written up in `docs/handoff-archive.md` as "The third
+session: five changes…". The live rules they produced are in
+`docs/ANDROID-UI-HANDOFF.md` → "Decisions to preserve".**
 
 Branch `master_build` (`0cc878c`, pushed): upstream `master` + the fork's
 build system only — `build-android.cmd` adapted to master's
