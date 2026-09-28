@@ -1,8 +1,13 @@
 /* The NIGHT half, warmer than the default grey. Hue survives the article
    flip described in True black, so a warm off-white lands as a warm
-   near-black. */
+   near-black.
 
-:root{
+   On html[data-dark] rather than :root for the reason spelled out in
+   true_black_app_night.css: app.css declares its dark palette at (0,1,1), so
+   a bare :root loses to it — which is what this file did (pinned dark,
+   `--bg` stayed #191a1c). */
+
+html[data-dark]{
   --bg:#1c1a17; --bg-card:#252220; --bg-bar:rgba(28,26,23,.92);
   --wd-article-bg:#faf6ef; --wd-article-fg:#1a1a1a;
 }

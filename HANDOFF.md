@@ -33,6 +33,19 @@ preset's paper — are written up in `docs/handoff-archive.md` as "The third
 session: five changes…". The live rules they produced are in
 `docs/ANDROID-UI-HANDOFF.md` → "Decisions to preserve".**
 
+**Uncommitted on `dev` (2026-09-28, after the release): the night presets'
+palette fix.** `true_black_app_night.css` and `warm_dark_app_night.css` moved
+from `:root` to `html[data-dark]` — (0,1,0) → (0,1,1) — so a night half
+finally outranks `app.css`'s dark palette: before this, both switched on and
+changed only the article tokens while the chrome stayed `#191a1c`. Guarded by
+`presets_test.go`'s `TestPresetAppHalvesOutrankTheirPalette` (per property,
+against app.css's own weights) plus `TestSpecificityCountsTheSelectorsTheseFilesUse`.
+Verified in Chromium (True black → `--bg` `#000`, Warm dark → `#1c1a17`, the
+light theme inert), `go test ./internal/server` green apart from the two known
+Windows failures; **not on a phone**. The live rule:
+`docs/ANDROID-UI-HANDOFF.md` → "Decisions to preserve" → "An app half must
+outrank the palette of the theme it is attached in".
+
 Branch `master_build` (`0cc878c`, pushed): upstream `master` + the fork's
 build system only — `build-android.cmd` adapted to master's
 version-suffixed APK names (script computes `APK_VERSION` from git
@@ -177,12 +190,6 @@ elsewhere, and a session must read the named place BEFORE changing that area.
 
 ## What remains from the review (with the reasons for leaving each)
 
-- **A preset's night half never reaches the page** (found and measured
-  2026-09-28, not fixed — it changes what two shipped looks do): the night
-  halves declare `:root` (0,1,0) and `app.css`'s dark palette is 0,1,1, so
-  True black and Warm dark attach and change nothing (theme pinned dark,
-  `--bg` stays `#191a1c`). Day halves are fine: a tie, the layer later. Fix
-  shape in the area doc's "Unfinished work".
 - **Ingest is not cancellable** — deferred on purpose. Plumbing ctx through
   `IngestPlan`/`IngestMedia`/Progress touches signatures shared with the CLI,
   the server and format self-prepare: a wide diff in upstream-shared code for

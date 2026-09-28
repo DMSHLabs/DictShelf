@@ -2,9 +2,26 @@
    backwards and is not: dark articles are rendered LIGHT and then inverted,
    so what you set here is the value BEFORE the flip — #fff becomes the near
    black behind the text, #000 becomes the text. (A hair off pure black: the
-   flip carries a contrast pass with it.) */
+   flip carries a contrast pass with it.)
+   ── on html[data-dark], NOT on :root ────────────────────────────────────
+   This file only arrives when the page is dark, but that is not what decides
+   who WINS: app.css writes its own dark palette on html[data-theme="dark"]
+   (and, for Auto under a dark OS, on html:not([data-theme])) — a weight of
+   (0,1,1) against :root's (0,1,0). A bare :root therefore lost to it, and
+   this preset used to switch on and change only the article tokens below
+   (the ones app.css's dark block does not declare) while the whole chrome
+   stayed the app's grey — measured 2026-09-28: pinned dark, `--bg` stayed
+   #191a1c. html[data-dark] is that same element at (0,1,1): syncAutoDark sets
+   the attribute for a pinned dark and for Auto alike, and it is the app's own
+   "the page is dark" marker — app.css's paper rule and the articles'
+   inversion both read it. It also agrees with this file's NAME by
+   construction, since a night half can only ever be attached while the page
+   is dark. A test
+   (presets_test.go, TestPresetAppHalvesOutrankTheirPalette) asserts the
+   weight of every app half against app.css's palette, so this cannot quietly
+   come back. */
 
-:root{
+html[data-dark]{
   --bg:#000; --bg-card:#0a0a0a; --bg-bar:rgba(0,0,0,.94);
   --fg:#ededed; --fg-soft:#a8a8a8; --fg-faint:#7a7a7a;
   --line:#242424; --line-soft:#161616;

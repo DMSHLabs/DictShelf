@@ -6,6 +6,7 @@ package server
 
 import (
 	"encoding/json"
+	"fmt"
 	"path"
 	"strings"
 	"testing"
@@ -111,6 +112,268 @@ func TestPresetPaperMatchesItsOwnHalf(t *testing.T) {
 	if declared == 0 {
 		t.Fatal("no preset declares a paper at all; the windows the page does not own would go white")
 	}
+}
+
+// An app half has to be able to WIN against the palette of the theme it is
+// attached in, or its switch turns on and the page does not move. That is not
+// a hypothetical: app.css declares the light palette on `:root` (0,1,0) and
+// the dark one on `html[data-theme="dark"]`, with an `html:not([data-theme])`
+// copy for Auto under a dark OS — both (0,1,1). Sepia and High contrast tie
+// with the light one and win by being later; True black and Warm dark were
+// written on a bare `:root` too, so they LOST, and all a reader saw was the
+// article tokens (the ones that block does not declare) taking effect while
+// the chrome stayed grey. Measured 2026-09-28 with the theme pinned dark:
+// `--bg` stayed #191a1c; fixed the same day by moving both files to
+// `html[data-dark]`.
+//
+// The comparison is per PROPERTY, against app.css's own weight for it, so a
+// preset that only paints tokens the palette does not touch — the fonts, the
+// article surface — is left alone. app.css is read from the embedded asset,
+// so it is the file that ships that is being asked.
+func TestPresetAppHalvesOutrankTheirPalette(t *testing.T) {
+	palette := appPaletteWeight(t)
+	groups, _ := presetRegistry()
+	checked := 0
+	for _, g := range groups {
+		for _, p := range g.Presets {
+			for _, half := range []struct {
+				name string
+				css  []byte
+				slot string // the palette the half has to beat
+			}{
+				{p.App, p.appCSS, "light"},
+				{p.AppNight, p.appNightCSS, "dark"},
+			} {
+				if half.css == nil {
+					continue
+				}
+				checked++
+				for selector, props := range cssTokenBlocks(string(half.css)) {
+					have := specificity(selector)
+					for _, prop := range props {
+						want := palette[half.slot][prop]
+						if lessSpecific(have, want) {
+							t.Errorf("%s (%s): %s declares %s at %v, which loses to app.css's %v for the %s palette",
+								p.ID, half.name, selector, prop, have, want, half.slot)
+						}
+					}
+				}
+			}
+		}
+	}
+	if checked == 0 {
+		t.Fatal("no app halves were checked at all")
+	}
+}
+
+// The counter above is compared with itself, so a reading that is too heavy
+// everywhere would pass the test above while being wrong. These are the
+// numbers it has to produce - the four selectors the presets and palettes
+// actually use, plus one at the weight app.css's Auto copy of the dark palette
+// carries.
+func TestSpecificityCountsTheSelectorsTheseFilesUse(t *testing.T) {
+	cases := []struct {
+		selector string
+		want     specific
+	}{
+		{":root", specific{0, 1, 0}},
+		{"html[data-dark]", specific{0, 1, 1}},
+		{"html[data-shell-image]", specific{0, 1, 1}},
+		{`html[data-theme="dark"]`, specific{0, 1, 1}},
+		{"html:not([data-theme])", specific{0, 2, 1}},
+		{"body", specific{0, 0, 1}},
+		{".card input", specific{0, 1, 1}},
+		{":root, html[data-dark]", specific{0, 1, 1}},
+	}
+	for _, c := range cases {
+		if got := specificity(c.selector); got != c.want {
+			t.Errorf("specificity(%q) = %v, want %v", c.selector, got, c.want)
+		}
+	}
+}
+
+// appPaletteWeight is app.css's weight for each palette token, per theme: the
+// `:root` block for the light palette, the max of `:root` and
+// `html[data-theme="dark"]` for the dark one (its `html:not([data-theme])`
+// twin in the media query carries the same weight and the same values).
+func appPaletteWeight(t *testing.T) map[string]map[string]specific {
+	t.Helper()
+	out := map[string]map[string]specific{"light": {}, "dark": {}}
+	root, dark := false, false
+	for selector, props := range cssTokenBlocks(string(appCSS)) {
+		switch selector {
+		case ":root":
+			root = true
+			for _, prop := range props {
+				out["light"][prop] = specificity(selector)
+				out["dark"][prop] = specificity(selector)
+			}
+		case `html[data-theme="dark"]`:
+			dark = true
+			for _, prop := range props {
+				out["dark"][prop] = specificity(selector)
+			}
+		}
+	}
+	if !root || !dark {
+		t.Fatalf("app.css's palettes were not found (%v): this test is looking at the wrong asset", []bool{root, dark})
+	}
+	return out
+}
+
+// specific is a CSS specificity, a-b-c (ids, classes/attributes/pseudo-classes,
+// elements), compared lexicographically.
+type specific [3]int
+
+func (s specific) String() string { return fmt.Sprintf("(%d,%d,%d)", s[0], s[1], s[2]) }
+
+func lessSpecific(a, b specific) bool {
+	for i := range a {
+		if a[i] != b[i] {
+			return a[i] < b[i]
+		}
+	}
+	return false
+}
+
+// specificity is deliberately a small counter for the selectors these files
+// hold - `:root`, `html[data-dark]`, `html[data-shell-image]`,
+// `html[data-theme="dark"]` - and not a CSS engine: `:not()`/`:is()` count as
+// written rather than by their argument (which makes a selector read a shade
+// heavier, never lighter, so the test can only be too quiet, not wrong about
+// the shape it exists to catch), and a selector LIST counts as its heaviest
+// part, which is how the cascade reads one too.
+func specificity(selector string) specific {
+	var out specific
+	for _, part := range strings.Split(selector, ",") {
+		if s := oneSpecificity(part); lessSpecific(out, s) {
+			out = s
+		}
+	}
+	return out
+}
+
+func oneSpecificity(part string) specific {
+	var out specific
+	for i := 0; i < len(part); {
+		switch c := part[i]; {
+		case c == '#':
+			out[0]++
+			i++
+			i = skipName(part, i)
+		case c == '.' || c == '[' || c == ':':
+			// A class, an attribute or a pseudo-class: the name that follows
+			// belongs to it and is not an element name.
+			out[1]++
+			i = skipName(part, i+1)
+		case c == '"' || c == '\'':
+			// An attribute's value: `[data-theme="dark"]` is one attribute,
+			// and `dark` is not an element.
+			i++
+			for i < len(part) && part[i] != c {
+				i++
+			}
+			i++
+		case isNameByte(c):
+			if !isLetter(c) {
+				i++ // a lone `-` or a digit at this position names nothing
+				break
+			}
+			out[2]++
+			i = skipName(part, i)
+		default:
+			i++
+		}
+	}
+	return out
+}
+
+func skipName(s string, i int) int {
+	for i < len(s) && isNameByte(s[i]) {
+		i++
+	}
+	return i
+}
+
+func isLetter(c byte) bool {
+	return c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z'
+}
+
+func isNameByte(c byte) bool {
+	return c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' ||
+		c == '_' || c == '-'
+}
+
+// cssTokenBlocks lists the rules of a stylesheet that declare custom
+// properties, as selector -> property names. At-rule bodies are descended
+// into (a token block inside @media is still a token block) and comments are
+// dropped first, so `/* --bg: … */` cannot be mistaken for a declaration.
+func cssTokenBlocks(css string) map[string][]string {
+	out := map[string][]string{}
+	var walk func(string)
+	walk = func(src string) {
+		for i := 0; ; {
+			open := strings.IndexByte(src[i:], '{')
+			if open < 0 {
+				return
+			}
+			open += i
+			selector := strings.TrimSpace(src[i:open])
+			depth, j := 1, open+1
+			for j < len(src) && depth > 0 {
+				if src[j] == '{' {
+					depth++
+				} else if src[j] == '}' {
+					depth--
+				}
+				j++
+			}
+			body := src[open+1 : j-1]
+			if strings.HasPrefix(selector, "@") {
+				walk(body)
+			} else if props := customProps(body); len(props) > 0 {
+				out[selector] = props
+			}
+			i = j
+		}
+	}
+	walk(stripComments(css))
+	return out
+}
+
+// customProps names the custom properties a rule body declares.
+func customProps(body string) []string {
+	var out []string
+	for i := 0; i+1 < len(body); i++ {
+		if body[i] != '-' || body[i+1] != '-' {
+			continue
+		}
+		j := i + 2
+		for j < len(body) && isNameByte(body[j]) {
+			j++
+		}
+		if j > i+2 && j < len(body) && body[j] == ':' {
+			out = append(out, body[i:j])
+		}
+		i = j
+	}
+	return out
+}
+
+func stripComments(css string) string {
+	var b strings.Builder
+	for i := 0; i < len(css); i++ {
+		if css[i] == '/' && i+1 < len(css) && css[i+1] == '*' {
+			end := strings.Index(css[i+2:], "*/")
+			if end < 0 {
+				break
+			}
+			i += end + 3
+			continue
+		}
+		b.WriteByte(css[i])
+	}
+	return b.String()
 }
 
 // The resolved set is what the page hands the shell: one value per theme, from
