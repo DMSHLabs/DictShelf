@@ -18,11 +18,15 @@ rem can find a C compiler. With none it falls back to the pure-Go flavour,
 rem which is correct but not the fast one: modernc SQLite, and .spx audio only
 rem through an external speexdec. `purego` asks for that flavour deliberately.
 rem
-rem THE C COMPILER need not be on PATH, and cl.exe cannot be used - Go's cgo
-rem drives a gcc-style compiler, not MSVC. The search is: %CC%, then gcc.exe on
-rem PATH, then the roots a mingw-w64 GCC is normally installed under. One found
-rem by path is handed to Go as an absolute CC, with CXX beside it; gcc locates
-rem its own cc1, ld and runtime DLLs relative to itself, so PATH is untouched.
+rem THE PATHS this script depends on are at the top, in the block below this
+rem one: the C compiler and the Inno Setup compiler. Everything else it needs
+rem is either on PATH or derived from the repository.
+rem
+rem A C COMPILER need not be on PATH, and cl.exe can never be used - Go's cgo
+rem drives a gcc-style compiler, not MSVC. With GCC_PATH left empty, the search
+rem is: %CC%, then gcc.exe on PATH, then GCC_ROOTS. One found by path is handed
+rem to Go as an absolute CC, with CXX beside it; gcc locates its own cc1, ld and
+rem runtime DLLs relative to itself, so PATH is untouched.
 rem
 rem This builds the DESKTOP product - upstream's wuDict, port 6888, its own
 rem config and library. It is NOT the Android app: that one is
@@ -30,6 +34,34 @@ rem build-android.cmd (wuDict2, port 6889, the same code inside an APK).
 rem ============================================================
 
 cd /d "%~dp0"
+
+rem ============================================================
+rem PATHS - what this machine has to provide. Edit here, not below.
+rem ============================================================
+
+rem The C compiler behind the cgo flavour: a 64-bit mingw-w64 GCC (cl.exe
+rem cannot be driven by Go's cgo). This machine's comes from Qt, and is the one
+rem the search below would land on anyway. An inherited GCC_PATH is respected,
+rem the way build-android.cmd respects an inherited ANDROID_HOME.
+if not defined GCC_PATH set "GCC_PATH=C:\Qt\Tools\mingw1310_64\bin\gcc.exe"
+
+rem Where a mingw-w64 GCC is looked for when GCC_PATH is empty or stale and
+rem gcc.exe is not on PATH. Quoted, wildcards allowed; the last directory that
+rem matches and really holds bin\gcc.exe wins.
+set "GCC_ROOTS="%SystemDrive%\Qt\Tools\mingw*_64" "%SystemDrive%\msys64\mingw64" "%SystemDrive%\mingw64" "%ProgramFiles%\mingw64" "%ProgramFiles%\WinLibs*\mingw64" "%LOCALAPPDATA%\Programs\mingw64""
+
+rem ISCC.exe, the Inno Setup compiler, and it must be 6.3 or newer:
+rem packaging\windows\wudict.iss uses x64compatible and
+rem PrivilegesRequiredOverridesAllowed, which nothing older reads. This
+rem machine's Inno Setup is 7, installed outside the uninstall registry, so the
+rem installer script cannot find it on its own - `make-installer.ps1 -Locate`
+rem prints nothing - and the path is pinned here. (Inno Setup 5, a copy of
+rem which also sits on this machine, cannot read the script at all: it emits no
+rem error text a redirect can carry, and either fails or reports a success that
+rem wrote no file.) Empty = ask tools\make-installer.ps1, whose own search
+rem covers the uninstall registry and PATH. An inherited ISCC_PATH is
+rem respected, the way an inherited GCC_PATH is.
+if not defined ISCC_PATH set "ISCC_PATH=D:\ProgSoft\InnoSetup7\ISCC.exe"
 
 rem ------------------------------------------------------------
 rem Arguments
@@ -316,6 +348,20 @@ rem and a binary that is not a compiler Go can drive fails the build loudly.
 rem ============================================================
 
 :find_gcc
+rem GCC_PATH first: a pinned path outranks any search. Then %CC%, passed on as
+rem given (a bare `gcc` or `clang` is left for Go to resolve). Then PATH, which
+rem needs nothing set at all. Then GCC_ROOTS.
+if defined GCC_PATH (
+    if exist "%GCC_PATH%" (
+        set "CC_PATH=%GCC_PATH%"
+        exit /b 0
+    )
+    echo Note: GCC_PATH points at a file that is not there:
+    echo   %GCC_PATH%
+    echo   Falling back to the search: gcc.exe on PATH, then GCC_ROOTS.
+    echo.
+)
+
 if defined CC (
     set "CC_PATH=%CC%"
     exit /b 0
@@ -326,14 +372,7 @@ if not errorlevel 1 exit /b 0
 
 rem A pattern that matched nothing comes back as itself, so it is the `if exist`
 rem that decides, not the loop having run.
-for /d %%D in (
-    "%SystemDrive%\Qt\Tools\mingw*_64"
-    "%SystemDrive%\msys64\mingw64"
-    "%SystemDrive%\mingw64"
-    "%ProgramFiles%\mingw64"
-    "%ProgramFiles%\WinLibs*\mingw64"
-    "%LOCALAPPDATA%\Programs\mingw64"
-) do if exist "%%~fD\bin\gcc.exe" set "CC_PATH=%%~fD\bin\gcc.exe"
+for /d %%D in (%GCC_ROOTS%) do if exist "%%~fD\bin\gcc.exe" set "CC_PATH=%%~fD\bin\gcc.exe"
 
 exit /b 0
 
@@ -355,13 +394,31 @@ if errorlevel 1 (
 )
 
 set "ISCC="
+set "ISCC_ARG="
 
-for /f "delims=" %%I in ('powershell -NoProfile -ExecutionPolicy Bypass -File tools\make-installer.ps1 -Locate 2^>nul') do (
-    set "ISCC=%%I"
+if defined ISCC_PATH (
+    if exist "%ISCC_PATH%" (
+        set "ISCC=%ISCC_PATH%"
+        rem Handed to make-installer.ps1 as -Iscc: a pinned compiler is used as
+        rem given, which also bypasses that script's own search and its 6.3
+        rem floor - the reason ISCC_PATH has to point at 6.3 or newer.
+        set "ISCC_ARG=-Iscc "%ISCC_PATH%""
+    ) else (
+        echo Note: ISCC_PATH points at a file that is not there:
+        echo   %ISCC_PATH%
+        echo   Falling back to the installer script's own search.
+        echo.
+    )
 )
 
 if not defined ISCC (
-    echo ERROR: Inno Setup 6.3 or newer was not found, and `release` builds the
+    for /f "delims=" %%I in ('powershell -NoProfile -ExecutionPolicy Bypass -File tools\make-installer.ps1 -Locate 2^>nul') do (
+        set "ISCC=%%I"
+    )
+)
+
+if not defined ISCC (
+    echo ERROR: no Inno Setup 6.3 or newer was found, and `release` builds the
     echo   installer. Install it, then run this script again:
     echo     winget install JRSoftware.InnoSetup
     echo   A plain `build-windows.cmd` still produces wudict.exe.
@@ -389,13 +446,21 @@ echo Building the per-user installer
 echo ============================================================
 echo.
 
-powershell -NoProfile -ExecutionPolicy Bypass -File tools\make-installer.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\make-installer.ps1 %ISCC_ARG%
 
 if errorlevel 1 (
     echo.
     echo ============================================================
     echo ERROR: Inno Setup failed.
     echo ============================================================
+    echo   A compiler older than 6.3 cannot read packaging\windows\wudict.iss
+    echo   ^(x64compatible, PrivilegesRequiredOverridesAllowed^). Inno Setup 5
+    echo   is one: it writes no error text a redirect can carry, and it either
+    echo   fails or reports a success that produced no file - both seen here.
+    echo   This installer needs 6.3 or newer:
+    echo     winget install JRSoftware.InnoSetup
+    echo   then either clear ISCC_PATH at the top of this file, so the installer
+    echo   script finds the new compiler itself, or point ISCC_PATH at it.
     exit /b 1
 )
 

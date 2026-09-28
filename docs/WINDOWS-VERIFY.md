@@ -36,23 +36,40 @@ them are in `docs/handoff-archive.md`.
 - **`build-windows.cmd [debug|release] [purego]`** — the fork's desktop build
   (added 2026-09-28, beside `build-android.cmd`): `wudict.exe` in the repo root,
   upstream's product (wuDict, port 6888, its own config and library), NOT the
-  Android app. Flavour is chosen for you — cgo (`-tags sqlite_fts5`,
-  CGO_ENABLED=1) when a C compiler can be found, the pure-Go one when it cannot
-  (`purego` forces the second). The compiler need not be on PATH: `%CC%` first,
-  then `gcc.exe` on PATH, then mingw-w64 roots; on this machine it finds Qt's
-  `C:\Qt\Tools\mingw1310_64\bin\gcc.exe` (GCC 13.1.0), so the default build here
-  IS the cgo one — which is what `make build` and the CI cgo job ship.
-  `cl.exe` is unusable: Go's cgo drives a gcc-style compiler, not MSVC. Verified
-  2026-09-28: both flavours build, run, and the cgo exe ingests a `test_data`
-  `.dsl.dz` and answers `fts` (mattn + FTS5 inside the artifact; tags, CGO flag
-  and driver are read back out of it with `go version -m`); its imports are
-  KERNEL32 and msvcrt only, so no mingw DLL has to sit beside it. `release`
-  additionally compiles the Inno Setup installer into `dist\` and needs Inno
-  Setup 6.3+ (`winget install JRSoftware.InnoSetup`) — **not installed here as
-  of 2026-09-28**, so that branch fails fast with that line and the installer
-  compile itself is unverified. Expect the setup file to be named
-  `…-setup-0.0.0.exe`: upstream's numeric-version parser wants `v1.2.3` and
-  fork tags are `wudict2-v…`; the version inside the wizard is the real tag.
+  Android app. **Every machine path it needs is in one block at the top of the
+  file** — `GCC_PATH` (pinned to Qt's mingw-w64 GCC; empty falls back to `%CC%`,
+  then `gcc.exe` on PATH, then `GCC_ROOTS`), `GCC_ROOTS`, `ISCC_PATH` — and each
+  of those respects a value inherited from the environment, the way
+  build-android.cmd respects `ANDROID_HOME`. Flavour is chosen for you: cgo
+  (`-tags sqlite_fts5`, CGO_ENABLED=1) when a C compiler can be found, the
+  pure-Go one when it cannot (`purego` forces the second). On this machine the
+  Qt GCC 13.1.0 is found, so the default build here IS the cgo one — what
+  `make build` and the CI cgo job ship. `cl.exe` is unusable: Go's cgo drives a
+  gcc-style compiler, not MSVC. Verified 2026-09-28: both flavours build, run,
+  and the cgo exe ingests a `test_data` `.dsl.dz` and answers `fts` (mattn +
+  FTS5 inside the artifact; tags, CGO flag and driver are read back out of it
+  with `go version -m`); its imports are KERNEL32 and msvcrt only, so no mingw
+  DLL has to sit beside it.
+- **The Windows installer (`release`) builds — with Inno Setup 7, pinned at the
+  top of the script.** Neither compiler on this machine is in the uninstall
+  registry, so `tools\make-installer.ps1 -Locate` finds neither of them, and
+  `ISCC_PATH` in `build-windows.cmd` is pinned to
+  `D:\ProgSoft\InnoSetup7\ISCC.exe`. Verified 2026-09-28: `build-windows.cmd
+  release` builds the cgo `wudict.exe` and then the setup program,
+  `dist\wudict-windows-x64-setup-0.0.0.exe` (7.3 MB, ProductName wuDict,
+  FileDescription "wuDict Setup"); Inno Setup 7 still accepts the legacy
+  `/D<name>=<value>` defines `make-installer.ps1` passes it. The **5** that is
+  also on this machine (`D:\ProgSoft\InnoSetup5\`) cannot read the script at all
+  — no `x64compatible`, no `PrivilegesRequiredOverridesAllowed` — and fails
+  without a usable error: no text a redirect can capture, and either a failure
+  or a success that wrote no file. Do not point `ISCC_PATH` at it.
+- The setup file is named `…-setup-0.0.0.exe` and Windows shows version 0.0.0,
+  because the numeric-version rule both packagers use (`tools\make-installer.ps1`
+  and `tools\version.sh`) wants `v1.2.3`, and fork tags are `wudict2-v…`. What
+  the wizard and the installed-programs entry read is the real tag
+  (`wudict2-v0.5.0-2-gfffb163-dirty` at that date). Making the name right means
+  either stripping the fork prefix when stamping the binary or teaching those
+  two tools a numeric override — neither is done.
 - Android Java: from `android/`,
   `ANDROID_HOME="$LOCALAPPDATA/Android/Sdk" ./gradlew.bat :app:compileFossDebugJavaWithJavac --offline`.
   No ANDROID_HOME in the bash environment by default.
