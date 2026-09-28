@@ -19,19 +19,22 @@
           "title": "Sepia",
           "desc": "Warm sepia paper everywhere: #f4ecd8 in the app, lighter paper in articles.",
           "app": "sepia_app.css",
-          "article": "sepia_article.css"
+          "article": "sepia_article.css",
+          "paper": "f4ecd8"
         },
         {
           "id": "true_black",
           "title": "True black",
           "desc": "OLED black chrome; in dark mode articles flip to white on black.",
-          "appNight": "true_black_app_night.css"
+          "appNight": "true_black_app_night.css",
+          "paperNight": "000"
         },
         {
           "id": "warm_dark",
           "title": "Warm dark",
           "desc": "Dark mode in warm browns instead of grey.",
-          "appNight": "warm_dark_app_night.css"
+          "appNight": "warm_dark_app_night.css",
+          "paperNight": "1c1a17"
         }
       ]
     },
@@ -44,7 +47,8 @@
           "title": "High contrast",
           "desc": "Light mode without the blinding white: near-black text on warm off-white.",
           "app": "high_contrast_app.css",
-          "article": "high_contrast_article.css"
+          "article": "high_contrast_article.css",
+          "paper": "f1f0ed"
         }
       ]
     },

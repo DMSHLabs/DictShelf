@@ -14,9 +14,17 @@
 // this is what tells the page it is there, before the first paint.
 // Session storage preserves it across page reloads; an explicit empty URL
 // value withdraws it on the next launch.
-window.wudictShellBackground = function (color, image) {
+window.wudictShellBackground = function (color, image, imageName, paper) {
   var root = document.documentElement;
   root.toggleAttribute('data-shell-image', !!image);
+  // The paper an enabled PRESET paints, handed here by the app page: that page
+  // paints this paper with its own layer and does not wear it as a shell
+  // colour, while this document - no layers of its own - has nothing but the
+  // host to give it a ground. It arrives with every call, and it is also kept
+  // in wudict_shell_paper, because this page is reached by tapping a link and
+  // so carries no shell parameters of its own. The READER's own colour wins
+  // when there is one: that is the colour the app page paints as well.
+  if (!/^#[0-9a-f]{6}$/i.test(color) && /^#[0-9a-f]{6}$/i.test(paper || '')) color = paper;
   var valid = /^#[0-9a-f]{6}$/i.test(color);
   root.toggleAttribute('data-shell-custom', valid || !!image);
   if (valid) {
@@ -30,14 +38,18 @@ window.wudictShellBackground = function (color, image) {
     else sessionStorage.removeItem('wudict_shell_image');
     if (valid) sessionStorage.setItem('wudict_shell_bg', color);
     else sessionStorage.removeItem('wudict_shell_bg');
+    if (/^#[0-9a-f]{6}$/i.test(paper || '')) sessionStorage.setItem('wudict_shell_paper', paper);
+    else sessionStorage.removeItem('wudict_shell_paper');
   } catch (_) {}
 };
 (function () {
   var params = new URLSearchParams(location.search);
   var color = params.get('shell_bg');
   var image = params.get('shell_image');
-  if (params.has('shell_bg') || params.has('shell_image')) {
+  var paper = params.get('shell_paper');
+  if (params.has('shell_bg') || params.has('shell_paper') || params.has('shell_image')) {
     params.delete('shell_bg');
+    params.delete('shell_paper');
     params.delete('shell_image');
     var query = params.toString();
     history.replaceState(history.state, '', location.pathname + (query ? '?' + query : '') + location.hash);
@@ -48,7 +60,10 @@ window.wudictShellBackground = function (color, image) {
   if (image === null) {
     try { image = sessionStorage.getItem('wudict_shell_image'); } catch (_) {}
   }
-  window.wudictShellBackground(color || '', image === '1');
+  if (paper === null) {
+    try { paper = sessionStorage.getItem('wudict_shell_paper'); } catch (_) {}
+  }
+  window.wudictShellBackground(color || '', image === '1', undefined, paper || '');
 })();
 </script>
 <meta name="viewport" content="width=device-width, initial-scale=1">

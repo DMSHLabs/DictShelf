@@ -74,6 +74,19 @@ type preset struct {
 	App, Article           string
 	AppNight, ArticleNight string
 
+	// Paper / PaperNight name the colour this preset paints the app's OWN
+	// paper with, as "#rrggbb" - the --bg its app half declares, written down
+	// beside the file name it lives in. It is a second statement of something
+	// the CSS already says, and that is deliberate: the app's paper is not
+	// only the page's business. Three of the app's windows are whole DOCUMENTS
+	// the shell hosts (Edit Folders, Lemmatization, Browse) and the dictionary
+	// list, the search-mode list and the popup are native windows - none of
+	// them reads a CSS file, so the colour has to travel to the host as a
+	// value. "" means the preset leaves the app's own background alone, which
+	// is why only the four presets that repaint --bg declare one; a test
+	// compares each declaration with the file, so the two cannot drift.
+	Paper, PaperNight string
+
 	appCSS, articleCSS           []byte
 	appTag, articleTag           string
 	appURL, articleURL           string
@@ -140,6 +153,7 @@ func presetRegistry() ([]*presetGroup, map[string]*preset) {
 					RequiresImage          bool
 					App, Article           string
 					AppNight, ArticleNight string
+					Paper, PaperNight      string
 				}
 			} `json:"groups"`
 		}
@@ -157,6 +171,8 @@ func presetRegistry() ([]*presetGroup, map[string]*preset) {
 					Dir: g.Dir, RequiresImage: p.RequiresImage,
 					App: p.App, Article: p.Article,
 					AppNight: p.AppNight, ArticleNight: p.ArticleNight,
+					Paper:      presetPaper(p.ID, p.Paper),
+					PaperNight: presetPaper(p.ID, p.PaperNight),
 				}
 				load := func(name string) ([]byte, string, string) {
 					if name == "" {
@@ -188,6 +204,62 @@ func presetRegistry() ([]*presetGroup, map[string]*preset) {
 		}
 	})
 	return presetGroups, presetIndex
+}
+
+// presetPaper normalizes a declared paper into the one spelling the shell
+// validates: "#rrggbb", lower case, with the three-digit shorthand expanded.
+// Anything else is dropped with a warning rather than passed on - a colour the
+// shell cannot parse is a window that keeps the app's own background, which is
+// the state an install has before any preset is switched on.
+func presetPaper(id, raw string) string {
+	s := strings.TrimPrefix(strings.TrimSpace(raw), "#")
+	switch len(s) {
+	case 3:
+		s = string([]byte{s[0], s[0], s[1], s[1], s[2], s[2]})
+	case 6:
+	default:
+		s = ""
+	}
+	if s == "" || strings.Trim(s, "0123456789abcdefABCDEF") != "" {
+		if strings.TrimSpace(raw) != "" {
+			logx.Warn("preset %s: paper %q is not a colour, ignored", id, raw)
+		}
+		return ""
+	}
+	return "#" + strings.ToLower(s)
+}
+
+// presetPaperSet is the paper the ENABLED layers paint, one value per theme -
+// what the page hands the shell so the windows the page does not own wear it
+// too (preset.Paper's comment says which those are).
+//
+// Manifest order decides when two presets declare one for the same theme, and
+// the LAST declarer wins. That is not a new rule: it is the order the page
+// attaches the layers in, so it is what CSS itself does with two :root blocks,
+// and the page's --bg - the thing this value has to match - follows it.
+// Presets of different groups can both be on (the radio rule is per group), so
+// the case is reachable: sepia and high_contrast both paint the light paper,
+// and high_contrast, which comes later in the manifest, is what the page shows.
+func presetPaperSet(groups []*presetGroup, enabled []string) map[string]string {
+	on := make(map[string]bool, len(enabled))
+	for _, id := range enabled {
+		on[id] = true
+	}
+	out := map[string]string{"light": "", "dark": ""}
+	for _, g := range groups {
+		for _, p := range g.Presets {
+			if !on[p.ID] {
+				continue
+			}
+			if p.Paper != "" {
+				out["light"] = p.Paper
+			}
+			if p.PaperNight != "" {
+				out["dark"] = p.PaperNight
+			}
+		}
+	}
+	return out
 }
 
 // presetStatePath is where the enabled list lives: beside the stylesheets it
@@ -358,6 +430,12 @@ func (s *Server) presetPayload() map[string]any {
 		"writable": s.StyleDir != "",
 		"enabled":  enabled,
 		"groups":   out,
+		// The paper the ENABLED set paints, per theme, resolved here rather
+		// than summed up by the page: the manifest order is the server's, and
+		// so is the rule that reads it. The page's only job is to hand it to
+		// the shell (presetPaperPush), which is what makes the standalone pages
+		// and the native windows wear the preset the app page is wearing.
+		"paper": presetPaperSet(groups, enabled),
 	}
 }
 

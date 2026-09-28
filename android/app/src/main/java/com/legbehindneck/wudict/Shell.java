@@ -95,8 +95,8 @@ final class Shell {
     /**
      * The shell's own parameters for the page, every one of them written as an
      * explicit value: the window's background, and whether the page shows its
-     * waiting messages, the "N of M ready" line and the morph note
-     * (ShellPrefs.INFO_MESSAGES).
+     * waiting messages and the "N of M ready" line (ShellPrefs.INFO_MESSAGES;
+     * the page's morph note is deliberately outside that switch).
      *
      * <p>On the URL rather than installed afterwards for the reason the key is
      * (see {@link #key}): each of these has to be true at FIRST PAINT - the
@@ -107,7 +107,15 @@ final class Shell {
      * withdrawal as clearly as a setting.
      */
     private static String shellQuery(Context c) {
+        // shell_bg is the READER's colour and shell_paper the paper an enabled
+        // PRESET paints, and the two are separate parameters because they mean
+        // different things to the app page: it wears the first (the colour
+        // pins --bg and gives its windows the paper tint) and only FORWARDS
+        // the second, because it is already painting that paper itself - the
+        // preset's layer is its --bg. What needs the paper told is the three
+        // standalone pages, which have no layers, and the shell's own windows.
         return "shell_bg=" + (ShellPrefs.sepia(c) ? enc(ShellPrefs.sepiaColorText(c)) : "")
+                + "&shell_paper=" + enc(ShellPrefs.paperFor(c, ShellPrefs.night(c)))
                 + "&shell_image=" + (WindowBackground.active(c) ? "1" : "0")
                 // One inversion, here and nowhere else: the settings screen
                 // stores what the user chose to SEE, the page is told what to
@@ -120,18 +128,33 @@ final class Shell {
         boolean image = WindowBackground.active(c);
         web.setBackgroundColor(image ? android.graphics.Color.TRANSPARENT : ShellPrefs.pageBg(c));
         String color = ShellPrefs.sepia(c) ? ShellPrefs.sepiaColorText(c) : "";
+        String paper = ShellPrefs.paperFor(c, ShellPrefs.night(c));
         // Only a validated six-digit colour is interpolated into JavaScript.
         // The NAME comes from the same theme-aware reader as `active` above:
         // reading the raw key here sent the DAY wallpaper's name while the
         // image was the night one, which is how the Appearance sheet came to
         // wear the day's picture on a dark page.
+        //
+        // The fourth argument is the PRESET's paper, and it is not a second
+        // colour for this document: the app page paints that paper with its
+        // own layer and only forwards it, while the three standalone pages -
+        // no layers, no --bg of their own - wear it as their ground. One call
+        // shape, and each document's hook is what differs.
         web.evaluateJavascript("window.wudictShellBackground && window.wudictShellBackground('"
                 + color + "'," + image + "," + org.json.JSONObject.quote(image
-                ? ShellPrefs.backgroundImage(c) : "") + ")", null);
+                ? ShellPrefs.backgroundImage(c) : "") + "," + org.json.JSONObject.quote(paper)
+                + ")", null);
         // wudictNativeShell is how a page knows the shell answers its
         // wudict: prompts - the setup page's folder button speaks only when
         // it will be heard.
+        // The flag first, then the two calls that need it: the page reports the
+        // paper an enabled preset paints only where a shell answers, and the
+        // report is what keeps the standalone pages and the native windows in
+        // step with the app page. It is asked for here rather than left to the
+        // page's own boot push because the flag arrives at onPageFinished,
+        // which either side of that push can win.
         web.evaluateJavascript("window.wudictNativeShell=1;"
+                + "if(typeof wudictPresetPaper==='function')wudictPresetPaper();"
                 + "if(typeof appearanceRead==='function' && document.getElementById('styler')"
                 + " && document.getElementById('styler').classList.contains('show')) appearanceRead();"
                 + DICTIONARY_PICKER_JS, null);
@@ -438,6 +461,11 @@ final class Shell {
                             // them to - a popup does not own the system bars -
                             // and the value simply awaits the app window.
                             boolean window = false;
+                            // Whether the write left the screen different.
+                            // Only the paper says so; every other field here
+                            // repaints, because a write that changes nothing
+                            // is what the page's own controls never send.
+                            boolean changed = true;
                             if ("colorEnabled".equals(field)) {
                                 ShellPrefs.setSepia(a, night, request.getBoolean("value"));
                             } else if ("color".equals(field)) {
@@ -466,13 +494,26 @@ final class Shell {
                                     throw new IllegalArgumentException("Unknown bar mask");
                                 ShellPrefs.setBars(a, mask);
                                 window = true;
+                            } else if ("paper".equals(field)) {
+                                // The paper an enabled PRESET paints, reported
+                                // by the page (index.html: presetPaperPush).
+                                // Not a row anywhere: the reader switched the
+                                // layer on, and that is what has to be undone
+                                // to change it. A value that did not change
+                                // repaints nothing - this arrives on every
+                                // layer load, and the page's own push would
+                                // otherwise be answered by another one.
+                                changed = ShellPrefs.setPaper(a, night,
+                                        request.getString("value"));
                             } else throw new IllegalArgumentException("Unknown field");
                             if (window) {
                                 if (a instanceof MainActivity) ((MainActivity) a).refreshScreen();
-                            } else if (a instanceof MainActivity) {
-                                ((MainActivity) a).refreshAppearance();
-                            } else if (a instanceof LookupActivity) {
-                                ((LookupActivity) a).refreshAppearance();
+                            } else if (changed) {
+                                if (a instanceof MainActivity) {
+                                    ((MainActivity) a).refreshAppearance();
+                                } else if (a instanceof LookupActivity) {
+                                    ((LookupActivity) a).refreshAppearance();
+                                }
                             }
                         } else if (!"get".equals(action)) throw new IllegalArgumentException("Unknown action");
                         org.json.JSONObject reply = new org.json.JSONObject();
@@ -482,6 +523,10 @@ final class Shell {
                         reply.put("colorEnabled", ShellPrefs.sepiaFor(a, night));
                         reply.put("color", ShellPrefs.sepiaColorTextFor(a, night));
                         reply.put("image", ShellPrefs.backgroundImageFor(a, night));
+                        // What the enabled preset paints, so a page can tell
+                        // whether its own report landed. Not a control: the
+                        // sheet draws the reader's colour, not this.
+                        reply.put("paper", ShellPrefs.paperFor(a, night));
                         org.json.JSONArray images = new org.json.JSONArray();
                         for (String name : WindowBackground.images(a)) images.put(name);
                         reply.put("images", images);

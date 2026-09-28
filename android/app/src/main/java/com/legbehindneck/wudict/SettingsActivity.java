@@ -132,14 +132,14 @@ public class SettingsActivity extends Activity {
         col.addView(row(ShellPrefs.LINK, R.string.settings_lookup_link));
 
         // The messages row. It is the one row on this screen whose subject is
-        // partly the page - the waiting art and the morph note are drawn there
-        // - and it is still a shell fact by the charter at the top of this
-        // class: the first of these messages is drawn by MainActivity before a
-        // page or a server exists, so the value has to be readable here, and
-        // the page's half rides the URL (Shell.shellQuery) rather than a
-        // bridge it would have to answer before it has painted. Turning it off
-        // is what the reader who cannot finish reading a message that is gone
-        // in a moment does, instead of being told the message was honest.
+        // partly the page - the waiting art is drawn there - and it is still a
+        // shell fact by the charter at the top of this class: the first of
+        // these messages is drawn by MainActivity before a page or a server
+        // exists, so the value has to be readable here, and the page's half
+        // rides the URL (Shell.shellQuery) rather than a bridge it would have
+        // to answer before it has painted. Turning it off is what the reader
+        // who cannot finish reading a message that is gone in a moment does,
+        // instead of being told the message was honest.
         col.addView(head(R.string.settings_messages_head, SP_6));
         col.addView(caption(getString(R.string.settings_info_hint), SP_2, SP_3));
         col.addView(infoRow());

@@ -62,7 +62,7 @@
 	-->
 	<string name="settings_messages_head">Messages</string>
 	<string name="settings_info_messages">Show info messages</string>
-	<string name="settings_info_hint">The notes this app puts on screen while it is starting and while it is looking a word up — "Starting wuDict2…", the waiting art, the "N of M ready" counter, the "Looking up …" line in the floating window — and the note that a word was missing from some of the dictionaries. They are true and they pass in a moment, which is why they can be turned off: with this off a window stays empty until its results arrive. A failure is still reported.</string>
+	<string name="settings_info_hint">The notes this app puts on screen while it is starting and while it is looking a word up — "Starting wuDict2…", the waiting art, the "N of M ready" counter, the "Looking up …" line in the floating window. They are true and they pass in a moment, which is why they can be turned off: with this off a window stays empty until its results arrive. A failure is still reported, and so is the note that answers below are for a different form of the word you typed.</string>
 	<!--
  Screen (D141): how the margins around the page are painted, and which
           bars hide while reading. Those two rows are NOT here any more - they

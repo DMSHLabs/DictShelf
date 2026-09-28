@@ -198,6 +198,19 @@ body.barpinned{--stick:var(--barh)}
    alone would not do it: an empty flex item has no main size to derive from,
    so the width has to be stated. */
 .sbar .rpad{flex:none;width:var(--sbar-sq,2.2em);height:var(--sbar-sq,2.2em)}
+/* The two ENDS are gutters, not squares (the reader's phone report: the arrows
+   and the fold's handle sat too far from the screen's edges). Everything
+   between them keeps the row's own square of air. */
+.sbar .rpad.edge{width:var(--sp-2)}
+/* The squares around the scope chip carry the auto margins, so the chip is
+   centred between the ▼ and the fold's handle AND the gap on each side of it
+   can never collapse: on a phone the auto margins had nothing to share, the
+   chip sat against the ▼, and the row read as one run of buttons. Two floors
+   and four equal shares of the free space, so what the chip sees on its left
+   and on its right is always the same: a floor of one square, plus whatever
+   slack there is. Under pressure the chip is what gives - its label
+   ellipsises, and the fold's handle shortens itself below - never the air. */
+.sbar .rpad.floor{margin:0 auto}
 /* The scope, in the middle of the row: between the two arrows it belongs to
    and the fold's handle, which is where the reader asked for it. `margin:0
    auto` is what puts it there and what keeps Examples against the right edge
@@ -208,7 +221,7 @@ body.barpinned{--stick:var(--barh)}
    every width: the chip is what you see, the transparent select is what you
    hit, and it keeps the native picker, the aria-label and its .value. */
 .sbar .seg{display:flex;position:relative;flex:0 1 auto;align-self:stretch;
-  align-items:center;justify-content:center;min-width:0;margin:0 auto}
+  align-items:center;justify-content:center;min-width:0}
 .sbar .seg select{position:absolute;inset:0;width:100%;height:100%;margin:0;
   padding:0;border:0;max-width:none;opacity:0;-webkit-appearance:none;
   appearance:none}
@@ -241,6 +254,21 @@ body.barpinned{--stick:var(--barh)}
    at", never "the thing is switched off". */
 .sbar #sbarExamples{font-weight:600}
 .sbar #sbarExamples[aria-pressed="true"]{color:var(--accent);border-color:var(--accent)}
+/* The fold's handle wears TWO lengths, and it is the one control in this row
+   that may give up width without giving up meaning - the reader said so
+   ("on narrow screens Examples can be shortened to Ex"). CSS picks one; the
+   title and the aria-label keep the full word in both cases. The switch is a
+   media query rather than a measurement, because what has to fit beside it is
+   a known-ish set: the two arrows, their square, the two floors around the
+   scope chip and the chip itself, whose name can be long. Measured in the
+   browser: the row needs 415px of viewport for the full word with "All
+   Dictionaries" in the chip, so the breakpoint sits just under that - 420 -
+   and a 412px phone (the reader's own) takes the short one. */
+.sbar #sbarExamples .lbl-short{display:none}
+@media (max-width:420px){
+  .sbar #sbarExamples .lbl-full{display:none}
+  .sbar #sbarExamples .lbl-short{display:inline}
+}
 .brand{font-weight:700;color:var(--accent);font-size:15px;letter-spacing:.02em;
   margin-right:var(--sp-1);user-select:none;white-space:nowrap}
 /* Wordmark: "WuWei" carries the accent, "Dict" recedes to normal weight — one
@@ -512,9 +540,16 @@ iframe.article{width:100%;border:0;display:block;background:var(--wd-article-bg,
   padding:0;overflow:hidden}
 
 /* Under the results, not in the status line: the scope describes what is on
-   screen, so it must live and die with it rather than fade on a timer. */
+   screen, so it must live and die with it rather than fade on a timer.
+
+   The ink is --fg-soft, not --fg-faint, from the reader's report that these
+   notes were too pale to read. --fg-faint is 2.9:1 against the light paper,
+   under every legibility floor there is, and the three notes wearing this class
+   are sentences to be READ - the morph one is the only thing on screen that
+   says the answer is for a different word than the one typed. --fg-soft is
+   6.4:1, still a step below the article's own --fg, so a note stays a note. */
 .scopenote{margin-top:var(--sp-2);padding:var(--sp-1) .62rem;font-size:12px;
-  color:var(--fg-faint);text-align:center}
+  color:var(--fg-soft);text-align:center}
 .scopenote .widen{color:var(--link);cursor:pointer;text-decoration:underline;
   text-underline-offset:2px}
 .scopenote .widen:hover{color:var(--link-hover)}

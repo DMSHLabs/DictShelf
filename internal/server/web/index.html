@@ -11,7 +11,7 @@
 <script>
 // An optional host background. Session storage preserves it across page reloads;
 // an explicit empty URL value withdraws it on the next launch.
-window.wudictShellBackground = function (color, image, imageName) {
+window.wudictShellBackground = function (color, image, imageName, paper) {
   var root = document.documentElement;
   root.toggleAttribute('data-shell-image', !!image);
   var valid = /^#[0-9a-f]{6}$/i.test(color);
@@ -24,11 +24,23 @@ window.wudictShellBackground = function (color, image, imageName) {
   root.style.setProperty('--paper-bk-image', file ? 'url("/files/' + file + '")' : 'none');
   if (valid) root.style.setProperty('--bg', color, 'important');
   else root.style.removeProperty('--bg');
+  // The FOURTH argument is the paper an enabled preset paints, and this page
+  // does not wear it: the preset's own layer is already this page's --bg, so
+  // offering it as a shell colour would change what the app looks like (a
+  // shell colour tints the sheet, the menus and the history window, and at
+  // night it lifts the muted registers - which is right for a paper the READER
+  // chose and wrong for one the app is already painting). What this page does
+  // with it is hand it over, under a key of its own: Edit Folders,
+  // Lemmatization and Browse are reached by tapping a link, carry no shell
+  // parameters of their own, and have no layers either - so for them the
+  // preset's paper IS their ground, and this is where they get it.
   try {
     if (image) sessionStorage.setItem('wudict_shell_image', '1');
     else sessionStorage.removeItem('wudict_shell_image');
     if (valid) sessionStorage.setItem('wudict_shell_bg', color);
     else sessionStorage.removeItem('wudict_shell_bg');
+    if (/^#[0-9a-f]{6}$/i.test(paper || '')) sessionStorage.setItem('wudict_shell_paper', paper);
+    else sessionStorage.removeItem('wudict_shell_paper');
   } catch (_) {}
   try { sessionStorage.setItem('wudict_shell_image_name', file); } catch (_) {}
   // Existing iframe articles must receive Settings changes as well.
@@ -39,13 +51,19 @@ window.wudictShellBackground = function (color, image, imageName) {
   var params = new URLSearchParams(location.search);
   var color = params.get('shell_bg');
   var image = params.get('shell_image');
+  // The paper an enabled preset paints (ShellPrefs.PAPER). Kept apart from
+  // shell_bg on purpose: the two look alike and mean different things here -
+  // see wudictShellBackground below.
+  var paper = params.get('shell_paper');
   // Whether the waiting art and the loading lines are shown at all - the
   // other half of the shell's "Show info messages" (ShellPrefs.INFO_MESSAGES).
   // Unlike the background it is not a look, so it is a flag rather than a
   // value, and 1 means the messages are SUPPRESSED.
   var quiet = params.get('shell_quiet');
-  if (params.has('shell_bg') || params.has('shell_image') || params.has('shell_quiet')) {
+  if (params.has('shell_bg') || params.has('shell_paper') || params.has('shell_image')
+      || params.has('shell_quiet')) {
     params.delete('shell_bg');
+    params.delete('shell_paper');
     params.delete('shell_image');
     params.delete('shell_quiet');
     var query = params.toString();
@@ -56,6 +74,9 @@ window.wudictShellBackground = function (color, image, imageName) {
   }
   if (image === null) {
     try { image = sessionStorage.getItem('wudict_shell_image'); } catch (_) {}
+  }
+  if (paper === null) {
+    try { paper = sessionStorage.getItem('wudict_shell_paper'); } catch (_) {}
   }
   // Remembered for the same reason the background is: the switch is on the
   // URL the shell built, and the address bar no longer carries it, so a
@@ -69,7 +90,7 @@ window.wudictShellBackground = function (color, image, imageName) {
     else sessionStorage.removeItem('wudict_shell_quiet');
   } catch (_) {}
   window.wudictShellQuiet = quiet === '1';
-  window.wudictShellBackground(color || '', image === '1');
+  window.wudictShellBackground(color || '', image === '1', undefined, paper || '');
 })();
 (function () {
   try {
@@ -212,12 +233,21 @@ window.wudictShellBackground = function (color, image, imageName) {
      nowhere to go: fewer than two dictionaries answered.
      The chip's words are the panel row's words, and its colour is the state:
      accent = the examples are shown, which is the layer being off.
-     The row reads left to right as a square of air, the two arrows with a
-     square between them, then the fold's handle against the right edge and a
-     square of air closing the row - .rpad is that square, and it is built from
-     the row's own height rather than a number (see app.css). -->
+     The row reads left to right as a small gutter, the two arrows with a square
+     of air between them, the scope chip with a square of air on EACH side of it,
+     then the fold's handle and a small gutter closing the row. `.rpad` is that
+     square and it is built from the row's own height rather than a number (see
+     app.css); `.edge` is the two ends, which are gutters and not squares - the
+     reader reported from the phone that the arrows and the fold's handle sat
+     too far from the screen's edges.
+     The two squares around the chip are FLOORS, not decoration: they carry the
+     auto margins that centre the group, so the gap before the chip and the gap
+     after it are the same and neither can collapse to nothing on a narrow
+     screen - a phone showed the chip pressed against the ▼ with no air at all.
+     Under pressure the chip is what gives (its label ellipsises, and the fold's
+     handle shortens itself - see app.css), never the spacing around it. -->
 <div class="sbar" id="sbar" hidden>
-  <span class="rpad" aria-hidden="true"></span>
+  <span class="rpad edge" aria-hidden="true"></span>
   <button type="button" class="btn" id="sbarPrev" aria-label="Previous dictionary" title="Jump to the dictionary above — instant, and opens it">▲</button>
   <span class="rpad" aria-hidden="true"></span>
   <button type="button" class="btn" id="sbarNext" aria-label="Next dictionary" title="Jump to the dictionary below — instant, and opens it">▼</button>
@@ -237,12 +267,24 @@ window.wudictShellBackground = function (color, image, imageName) {
        they cannot use. The bar is hidden until a search has sections to walk,
        which is also why the panel's Dictionaries row chooses the group on its
        own. -->
+  <span class="rpad floor" aria-hidden="true"></span>
   <span class="seg" id="dictSeg">
     <span class="chip btn" id="dictChip" aria-hidden="true"><svg class="bk" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path fill="currentColor" d="M1.5 3.1c1.9-.5 3.8-.3 5.6.7v8.4c-1.8-1-3.7-1.2-5.6-.7V3.1zm13 0c-1.9-.5-3.8-.3-5.6.7v8.4c1.8-1 3.7-1.2 5.6-.7V3.1z"/></svg><span class="lbl" id="dictLbl"></span></span>
     <select id="dict" aria-label="Dictionary" disabled><option value="all">All dictionaries</option></select>
   </span>
-  <button type="button" class="btn" data-layer="off" id="sbarExamples" aria-pressed="true" title="Examples are shown — tap to fold the lines that hold nothing but examples">Examples</button>
-  <span class="rpad" aria-hidden="true"></span>
+  <!-- The chip's place in this row is BETWEEN the two floors, which is why this
+       one carries an id: placeDictSeg moves the seg back on every paint, and
+       "before the Examples button" would land it after BOTH floors and glue it
+       to the handle (measured: the two floors ended up adjacent and the gap on
+       the chip's right was zero). -->
+  <span class="rpad floor" id="dictSegGap" aria-hidden="true"></span>
+  <!-- The fold's handle wears two lengths: "Examples" where the row has room,
+     "Ex" on a narrow screen, where the reader said shortening it was
+     acceptable. Which one is drawn is CSS's business (app.css), so nothing has
+     to measure the row at runtime and the title/aria-label keep the full word
+     in both cases. -->
+  <button type="button" class="btn" data-layer="off" id="sbarExamples" aria-pressed="true" title="Examples are shown — tap to fold the lines that hold nothing but examples"><span class="lbl-full">Examples</span><span class="lbl-short" aria-hidden="true">Ex</span></button>
+  <span class="rpad edge" aria-hidden="true"></span>
 </div>
 
 <div id="panel" role="dialog" aria-label="Settings">
@@ -1464,12 +1506,14 @@ function setPhase(p){
 
    All of it is optional, and that is the shell's "Show info messages" switch
    (ShellPrefs.INFO_MESSAGES, delivered as shell_quiet and read in the head
-   block). What is turned off is everything that PASSES: the art, its counter
-   and the morph note. A failure is not a passing note and keeps its sentence
-   in full (bootFailed below), and neither are the search-time uses of
-   readyCount() — those answer a question the reader has just asked. With the
-   messages off the screen simply stays empty until results arrive, which is
-   the point: a message nobody can finish reading is noise, not information. */
+   block). What is turned off is everything that PASSES: the art and its
+   counter, and the shell's own start-up lines. A failure is not a passing note
+   and keeps its sentence in full (bootFailed below), the search-time uses of
+   readyCount() answer a question the reader has just asked, and the morph note
+   says the answer is for a different word than the one typed — it is read, not
+   skimmed, so the switch leaves it alone (see the morph branch in doSearch).
+   With the messages off the screen simply stays empty until results arrive,
+   which is the point: a message nobody can finish reading is noise. */
 const quietMessages=!!window.wudictShellQuiet;
 const BOOT_MSGS=["Warming up the wok…","Stir-frying the dictionaries…",
   "Chopping headwords, with the grain…","Letting the definitions marinate…",
@@ -3705,14 +3749,13 @@ async function doSearch(ev){
            `anyResults` is latched at the FIRST morph message — every later one
            arrives after this wave's own hits have already set it. */
         if(!boxes.length||!msg.to||morphSeen.has(msg.to))return;
-        // "Show info messages" off: the note is one of the messages that pass
-        // (it is the one the reader complained could not be read), and it is
-        // the only one of the three narrowings that is a NOTE rather than an
-        // answer - nothing went wrong and nothing is missing from the answer
-        // below, the dictionaries simply answered a different form of the
-        // word. The widened search keeps its own note (widenNote), which says
-        // a scope was left behind: that one changes WHAT was searched.
-        if(quietMessages)return;
+        /* NOT one of the messages "Show info messages" turns off, and the
+           reader said so in as many words after living with the switch for a
+           day: this note is the only thing on screen that says the answer is
+           for a DIFFERENT word than the one that was typed. The switch takes
+           the notes that pass - the waiting art and its counter, the shell's
+           own start-up lines - and leaves the ones that change how the answer
+           below is read. */
         if(morphAll===null)morphAll=!anyResults;
         morphSeen.add(msg.to);
         if(!morphNote){
@@ -4409,7 +4452,9 @@ function sbarPaint(){
 function placeDictSeg(){
   const seg=$("dictSeg");
   if(!seg)return;
-  const toBar=$("sbar").hidden?$("mode").parentElement:$("sbarExamples");
+  // In the bar the seg goes BETWEEN the two floors, which is what keeps a
+  // square of air on each side of it (see the markup and .rpad.floor).
+  const toBar=$("sbar").hidden?$("mode").parentElement:$("dictSegGap");
   if(seg.parentElement!==toBar){
     if($("sbar").hidden)toBar.after(seg);
     else toBar.before(seg);
@@ -5326,7 +5371,39 @@ function presetApplyAll(){
   // The enabled set is the one thing the panel's layer rows mirror, and it
   // has just changed - on boot, on every toggle, and on a theme flip.
   presetRowsPaint();
+  // And it is the moment the app's own paper may have moved, which the windows
+  // this page does NOT paint have to hear about.
+  presetPaperPush();
 }
+/* The paper the enabled layers paint, handed to the SHELL.
+   Everything else in this file styles THIS document. Three pages of the app are
+   documents of their own (Edit Folders, Lemmatization, Browse) and are only
+   told a colour by the host, and the dictionary list, the search-mode list, the
+   popup and the strip behind the system bars are native windows that read no
+   CSS at all - so the colour a preset declares for the app's paper (the --bg in
+   its app half) has to travel the way the reader's window colour travels: over
+   the appearance bridge, into the shell's paper slot. The shell prefers the
+   reader's own colour over it (that is what this page paints: the colour pins
+   --bg), and its built-in background over nothing.
+   BOTH themes go at once, because the payload carries both: the paper is per
+   theme and there is no moment at which only one of them is known.
+   PRESETS absent means the payload has not arrived yet, and then this says
+   NOTHING - a cold start would otherwise blank a paper the shell still
+   remembers and put it back a moment later, and which of the two comes first
+   (this fetch or the shell's own hook) is not fixed. */
+function presetPaperPush(){
+  if(!window.wudictNativeShell||!PRESETS)return;
+  const paper=PRESETS.paper||{};
+  for(const [night,key] of [[false,"light"],[true,"dark"]]){
+    appearanceRequest({action:"set",night,field:"paper",
+      value:typeof paper[key]==="string"?paper[key]:""});
+  }
+}
+/* Named for the shell to call: the boot push above runs while
+   wudictNativeShell is usually still unset (the flag is injected with the
+   page's first applyBackground, and this fetch can win that race either way),
+   so the shell asks again once it knows the document is its own. */
+window.wudictPresetPaper=presetPaperPush;
 /* The switch behind every preset handle on the page - the sheet's checkbox
    and the panel's layer rows. What lands is the SERVER's answer, never the
    tap: the payload that comes back is what presetApplyAll attaches and what

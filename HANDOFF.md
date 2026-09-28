@@ -25,18 +25,25 @@ moved since `5f0ad02`, so no upstream work is in it. On this branch
 `test_data/` and `android/app/src/emuX86/jniLibs/` are ignored rather than
 untracked, so `git status` is genuinely empty.
 
-**Uncommitted on `dev` (2026-09-27, third session): the `Show info messages`
-row, the page's top edge, and the panel/status-bar moves.** The working tree
-carries three things, nothing committed.
+**Uncommitted on `dev` (2026-09-27/28, third session): the `Show info messages`
+row, the page's top edge, the panel/status-bar moves, the notes' ink, and the
+preset's paper.** The working tree carries five things, nothing committed. This
+session's earlier work went in as `bef262d`, whose message landed as one
+2785-character subject line — the intended subject is `feat(ui): the notes
+switch, the flush header, and the scope chip`, and git-cliff reads only the
+first line.
 
 1. The switch that turns the app's transient notes off — MainActivity's
    "Starting wuDict2…", the page's waiting art and its "N of M ready" counter,
-   the lookup popup's "Looking up …", and the morph note ("Some dictionaries do
-   not list …"). A plain `ShellPrefs` boolean (`INFO_MESSAGES`, ON by default),
-   read by three Activities and delivered to the page on the URL beside
-   `shell_bg` (`shell_quiet=0|1`); the page's half is in `index.html`'s head
-   block and its boot/status/morph guards. **A phone has to confirm the row, the
-   empty first frame and the popup without its line.** Full statement, reasons
+   and the lookup popup's "Looking up …". A plain `ShellPrefs` boolean
+   (`INFO_MESSAGES`, ON by default), read by three Activities and delivered to
+   the page on the URL beside `shell_bg` (`shell_quiet=0|1`); the page's half
+   is in `index.html`'s head block and its boot/status guards. **The morph note
+   is NOT silenced** — the switch covered it at first and the reader asked for
+   it back ("this message must stay"): it says the answers are for a different
+   form of the word, which is read rather than skimmed. **A phone has to
+   confirm the row, the empty first frame and the popup without its line.**
+   Full statement, reasons
    and measurements: `docs/ANDROID-UI-HANDOFF.md` → "Decisions to preserve" →
    "The information messages are one switch".
 2. The page's top edge: `body{padding-top:var(--barh)}` — one rule at every
@@ -75,8 +82,29 @@ carries three things, nothing committed.
    intel`, installed over the debug package that was already there): the panel
    drop-down and its label, the group list, the re-run it triggers, the chip
    reading "Test" then "All Dictionaries" in the bar, and the chip sitting in
-   the field on the empty start. Same doc, bullet "Open first is gone, the
-   dictionary chip lives in the status bar…".
+   the field on the empty start. The row's own spacing came from the reader's
+   phone afterwards (third round): the two ends are 10px gutters instead of
+   full squares, the chip has a floor of one square of air on EACH side
+   (`.rpad.floor` carrying the auto margins, so the two gaps are equal and
+   neither can collapse — the phone had the chip pressed against ▼), and the
+   fold's handle shortens to "Ex" below 420px, the width at which the full word
+   stops fitting beside "All Dictionaries". Same doc, bullet "Open first is
+   gone, the dictionary chip lives in the status bar…".
+4. The notes' ink: `.scopenote` (the scope, widen and morph notes) is
+   `--fg-soft` now, not `--fg-faint` — the reader's "these messages are too
+   pale", and `--fg-faint` is 2.9:1 against the light paper.
+5. **The preset's paper reaches the windows the app page does not paint**
+   (2026-09-28, from the reader: in Warm the Folders/Lemmatization/Browse
+   pages were white while `Edit dictionary groups` was warm). A preset layer
+   reaches one document, so the colour now travels to the host: manifest →
+   `/api/presets` (resolved per theme) → the appearance bridge → `ShellPrefs`
+   (`preset_paper`) → `pageBg`, plus a new `shell_paper` parameter and the
+   hook's fourth argument for the three pages. **The app page only FORWARDS
+   it** (`shell_bg` stays the reader's colour), and the wallpaper is
+   untouched. Verified in Chromium on a throwaway server plus `go test`,
+   `go vet`, the Java compile; **not on a phone**. Statement, the naming of
+   every window (report them by these names) and a night-preset defect found
+   on the way: `docs/ANDROID-UI-HANDOFF.md`.
 
 Branch `master_build` (`0cc878c`, pushed): upstream `master` + the fork's
 build system only — `build-android.cmd` adapted to master's
@@ -222,6 +250,12 @@ elsewhere, and a session must read the named place BEFORE changing that area.
 
 ## What remains from the review (with the reasons for leaving each)
 
+- **A preset's night half never reaches the page** (found and measured
+  2026-09-28, not fixed — it changes what two shipped looks do): the night
+  halves declare `:root` (0,1,0) and `app.css`'s dark palette is 0,1,1, so
+  True black and Warm dark attach and change nothing (theme pinned dark,
+  `--bg` stays `#191a1c`). Day halves are fine: a tie, the layer later. Fix
+  shape in the area doc's "Unfinished work".
 - **Ingest is not cancellable** — deferred on purpose. Plumbing ctx through
   `IngestPlan`/`IngestMedia`/Progress touches signatures shared with the CLI,
   the server and format self-prepare: a wide diff in upstream-shared code for
@@ -263,11 +297,13 @@ elsewhere, and a session must read the named place BEFORE changing that area.
   through `wudictPickFolder`, see the facts above);
   `window.wudictNativeShell=1` injected by `Shell.applyBackground` marks a
   page that will be answered; and `Shell.shellQuery` puts the shell's own
-  page parameters on the URL — `shell_bg`, `shell_image`, `shell_quiet` —
-  which the page reads in its head block and remembers in `sessionStorage`,
-  because each of them has to be true at FIRST paint (the injected channel
-  only runs at `onPageFinished`). Web assets stay upstream-shared; Android
-  behavior is injected, not compiled in (D54).
+  page parameters on the URL — `shell_bg` (the reader's window colour),
+  `shell_paper` (the paper an enabled preset paints, which the app page only
+  forwards), `shell_image`, `shell_quiet` — which the page reads in its head
+  block and remembers in `sessionStorage`, because each of them has to be
+  true at FIRST paint (the injected channel only runs at
+  `onPageFinished`). Web assets stay upstream-shared; Android behavior is
+  injected, not compiled in (D54).
 - Registry entry backends: `upgraded{Store over text.db + lazy src}`,
   `native` (no source), direct preview. `dsl.Dict` and `bgl.Dict` embed
   `*store.Store` themselves (auto-prepare formats) — they hold text.db too,

@@ -77,6 +77,29 @@ final class ShellPrefs {
     private static final int DEFAULT_SEPIA_COLOR = 0xFFF4ECD8;
     static final String BACKGROUND_IMAGE = "background_image";
 
+    // ── the paper an enabled preset paints (2026-09-28) ─────────────────────
+    //
+    // The app page's own background, when a preset layer repaints it: the
+    // Warm look is a layer whose --bg is #f4ecd8 and nothing else, so the page
+    // is warm while every OTHER window of the app stayed the app's off-white.
+    // Those windows cannot read a CSS file - three of them (Edit Folders,
+    // Lemmatization, Browse) are documents the host tells a colour, and the
+    // dictionary list, the search-mode list, the popup and the inset strip are
+    // drawn by this side outright - so the page REPORTS the paper it is
+    // painting (index.html: presetPaperPush, over the appearance bridge) and
+    // this file remembers it per theme, exactly like the reader's own colour.
+    //
+    // Precedence, and it is the page's own: the reader's window colour wins
+    // over the preset's paper (the colour pins --bg), the preset's paper wins
+    // over the app's built-in background, and nothing at all leaves the
+    // built-in to decide. Both are per theme, so a day-only preset says
+    // nothing at night by construction.
+    //
+    // NOT the reader's colour: this key is never drawn in the Appearance
+    // sheet, because the reader never set it - the layer they switched on did,
+    // and switching that off withdraws it.
+    private static final String PAPER = "preset_paper";
+
     // The background belongs to a THEME, and the theme is the page's to
     // resolve (wudict_theme, plus "auto" following the system). So each key
     // below has a night twin, and every reader here picks by what the page last
@@ -120,6 +143,38 @@ final class ShellPrefs {
         return of(c).getString(themed(BACKGROUND_IMAGE, night), "");
     }
 
+    /** The paper the enabled preset paints for the theme, or "" for none. */
+    static String paperFor(Context c, boolean night) {
+        return of(c).getString(themed(PAPER, night), "");
+    }
+
+    /**
+     * Records the paper the page reported for one theme. An empty value
+     * WITHDRAWS it - that is how switching the preset off is heard - and
+     * anything that is not a six-digit colour is refused outright, because a
+     * value this side cannot parse would be a window painted in whatever
+     * {@code Color.parseColor} makes of it.
+     *
+     * <p>Answers whether the value CHANGED, which is what keeps the bridge
+     * from ping-ponging: the page pushes this on every layer load, and a write
+     * that repainted unconditionally would come back as another push.
+     */
+    static boolean setPaper(Context c, boolean night, String value) {
+        String v = value == null ? "" : value.trim();
+        if (!v.isEmpty() && !v.matches("#[0-9a-fA-F]{6}")) {
+            throw new IllegalArgumentException(v);
+        }
+        v = v.toLowerCase(java.util.Locale.ROOT);
+        SharedPreferences p = of(c);
+        String key = themed(PAPER, night);
+        if (v.equals(p.getString(key, ""))) return false;
+        SharedPreferences.Editor e = p.edit();
+        if (v.isEmpty()) e.remove(key);
+        else e.putString(key, v);
+        e.apply();
+        return true;
+    }
+
     static void setSepia(Context c, boolean night, boolean on) {
         of(c).edit().putBoolean(themed(SEPIA, night), on).apply();
     }
@@ -147,10 +202,13 @@ final class ShellPrefs {
     //
     // The transient text this app draws while it is starting and while it is
     // loading dictionaries: "Starting wuDict2…", the page's waiting art, its
-    // "N of M ready" counter, and the note that a word was missing from some
-    // dictionaries. They are honest and they are also unreadable - the first
-    // ones are on screen for a few hundred milliseconds - so the row exists to
-    // turn them off.
+    // "N of M ready" counter, the lookup window's "Looking up …". They are
+    // honest and they are also unreadable - the first ones are on screen for a
+    // few hundred milliseconds - so the row exists to turn them off. What it
+    // does NOT reach is anything the reader has to act on: a failure, or the
+    // page's note that the answers below are for a different form of the word
+    // that was typed (the reader kept that one, deliberately, after living with
+    // the switch for a day).
     //
     // A shell fact by the CHARTER's own test above, and this is the reason the
     // row is here rather than in the page's Appearance sheet, which is where
@@ -358,9 +416,23 @@ final class ShellPrefs {
                 & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES;
     }
 
-    /** The page's own background colour, per whatever theme it is showing. */
+    /**
+     * The page's own background colour, per whatever theme it is showing -
+     * the colour every window this side paints wears: the native dialogs, the
+     * lookup popup, the WebView behind its first frame, and the strip the
+     * system bars sit on under EDGE_PAGE.
+     *
+     * <p>Three answers in the order the app page itself resolves them: the
+     * reader's window colour (which pins the page's --bg), the paper an
+     * enabled preset paints (the layer's --bg), and the app's built-in
+     * background - the same value the page's own --bg token carries, so
+     * nothing here is a colour of this side's own invention.
+     */
     static int pageBg(Context c) {
-        if (sepia(c)) return sepiaColor(c);
+        boolean night = night(c);
+        if (sepiaFor(c, night)) return sepiaColorFor(c, night);
+        String paper = paperFor(c, night);
+        if (!paper.isEmpty()) return Color.parseColor(paper) | 0xFF000000;
         return c.getColor(pageDark(c) ? R.color.page_bg_dark : R.color.page_bg_light);
     }
 
