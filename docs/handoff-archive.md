@@ -1749,8 +1749,14 @@ the first line.
    square — they were platform widgets that ignored the paper entirely), and
    the four page rules that kept a platform box's `width:auto` had to drop it.
    Verified in Chromium on a throwaway server plus `go test`, `go vet`, the
-   Java compile; **not on a phone**. Statement, the naming of every window
-   (report them by these names) and a night-preset defect found on the way:
+   Java compile — and **confirmed on the reader's phone the same day**: the
+   release build of 2026-09-28 11:49 was cut from exactly this state of the
+   tree (the paper, the two pages' checkboxes and the night-preset fix below
+   are all in it) and the reader's answer was "Работает". Statement, the naming
+   of every window (report them by these names) and a night-preset defect found
+   on the way — **fixed and phone-confirmed the same day** by moving the two
+   night app halves to `html[data-dark]`, now guarded by
+   `TestPresetAppHalvesOutrankTheirPalette`:
    `docs/ANDROID-UI-HANDOFF.md`.
 
 ## Appearance implementation (2026-09-20)

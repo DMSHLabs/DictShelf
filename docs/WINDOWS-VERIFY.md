@@ -11,6 +11,17 @@ history — the sessions that produced them are in `docs/handoff-archive.md`.
   En-En 6.8k entries, Oxford En-Ru 35.8k, Zimmerman Ru-En 15.9k, ~5.4 MB, now
   git-ignored). Point a throwaway `DICT_DIR` at it to see the UI with real
   sizes, chips and index estimates instead of stub dictionaries.
+- **Isolate the LIBRARY too, not just the config: pass `-db-dir` (or set an
+  isolated `USERPROFILE`).** `-config /tmp/foo/wudict.toml` moves only the
+  config and `style/` — `DB_DIR` still defaults to the REAL
+  `~/.wudict/db`, so the first search in that preview PREPARES the `test_data`
+  dictionaries into the user's own library. Measured 2026-09-28: one preview
+  session added five entries and ~150 MB (`Webster's Unabridged 3 … (dsl)`
+  alone is 100 MB), and they stay in this machine's "Previously imported
+  dictionaries" list (the phone has its own library — untouched). Add
+  `-db-dir /tmp/foo/db` (or export a throwaway `USERPROFILE`) and nothing of
+  the user's is touched; a run that forgot is cleaned up from the setup page's
+  library list, not by hand.
 - **Kill EVERY `wudict.exe` before starting a preview server** —
   `taskkill /F /IM wudict.exe`. A stale instance keeps port 6899 and the new one
   exits with "stop the running instance first", so the browser goes on being
