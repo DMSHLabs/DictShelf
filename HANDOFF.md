@@ -16,16 +16,17 @@ Where everything else lives:
 
 ## Branch state (verify with git before trusting)
 
-**Rechecked 2026-09-28 (after the release):** `dev` is at `6d7dc6a`, pushed,
-carrying the annotated tag `wudict2-v0.5.0` (`577c586`; the release is recorded
-in `docs/handoff-archive.md`). The release ships the third session's five
-changes — the `Show info messages` row, the page's top edge, the
-panel/status-bar moves, the notes' ink and the preset's paper (commits
-`bef262d`, `7eb0e40`, `7be896e`, `3bfe24d`) — and two commits follow it: the
-handoff record (`b847f4f`) and the night-preset fix (`6d7dc6a`, below).
+**Rechecked 2026-09-28 (the release was REPLACED):** `dev` is at `373273e`,
+pushed, and the annotated tag `wudict2-v0.5.0` was MOVED onto it (`577c586` →
+`373273e`) so the released v0.5.0 carries the night-preset fix instead of a new
+tag following it. The release page was updated in place — new body, new APK
+(versionCode 389, sha256 `1e8f0de9…`), the old asset deleted. The released build
+is therefore the third session's five changes (the `Show info messages` row, the
+page's top edge, the panel/status-bar moves, the notes' ink, the preset's paper
+— `bef262d`, `7eb0e40`, `7be896e`, `3bfe24d`) PLUS the night-preset fix below.
 `master` still has not moved since `5f0ad02`, so no upstream work is in it. On
-this branch `test_data/` and `android/app/src/emuX86/jniLibs/` are ignored
-rather than untracked, so the working tree holds only these docs.
+this branch `test_data/` and `android/app/src/emuX86/jniLibs/` are ignored rather
+than untracked, so `git status` is genuinely empty.
 
 **The third session's five changes (2026-09-27/28; committed `bef262d`,
 `7eb0e40`, `7be896e`, `3bfe24d`; shipped in v0.5.0) — the `Show info messages`
@@ -34,8 +35,8 @@ preset's paper — are written up in `docs/handoff-archive.md` as "The third
 session: five changes…". The live rules they produced are in
 `docs/ANDROID-UI-HANDOFF.md` → "Decisions to preserve".**
 
-**The night presets' palette fix (`6d7dc6a`, after the release, still
-unreleased):** `true_black_app_night.css` and `warm_dark_app_night.css` moved
+**The night presets' palette fix (`6d7dc6a`, shipped in the replaced v0.5.0):**
+`true_black_app_night.css` and `warm_dark_app_night.css` moved
 from `:root` to `html[data-dark]` — (0,1,0) → (0,1,1) — so a night half finally
 outranks `app.css`'s dark palette: before this, both switched on and changed
 only the article tokens while the chrome stayed `#191a1c`. Guarded by

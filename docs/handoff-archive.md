@@ -1667,6 +1667,34 @@ Two departures from the four before it, both worth knowing:
   this release introduced, and recorded in HANDOFF.md's "what remains" too.
   Notes that hide a defect the reader will hit are worse than notes that name it.
 
+**REPLACED the same day** (2026-09-28), at the reader's request — "не добавлять
+новый релиз, а заменить последний", nobody but this session's own verification
+having fetched the asset. The night-preset fix (`6d7dc6a`: `:root` →
+`html[data-dark]` in the two night halves, guarded by
+`TestPresetAppHalvesOutrankTheirPalette`) was folded INTO v0.5.0: the changelog
+gained a "True black and Warm dark take effect at night" subsection, the body
+dropped its "Known issue" paragraph, the tag was moved to the new commit, and the
+APK was rebuilt (versionCode 385 → 389, sha256
+`1e8f0de9f13b03ec48d8f4b13fd45c9062989deafbcb74395b0113963a40ff5f`) and swapped
+in.
+
+**The trap that cost a detour, and will again: deleting a release's tag makes
+GitHub convert that release into a DRAFT.** It happened on the tag deletion
+alone, before anything was pushed — the next API call returned the release as
+`draft: true` with `tag_name` rewritten to `untagged-<sha>`, i.e. gone from the
+public releases page — and PATCHing the body alone does not undo it. Recovery, in
+this order: push the tag again, then `PATCH /releases/<id>` with
+`{"tag_name": "<tag>", "name": "...", "draft": false}`, then check `html_url` and
+`draft`. So a re-release is: PATCH the body and swap the asset FREELY (both are
+safe in place), and move the tag ONLY if the APK itself has to change — the tag
+move is the one step that costs the draft round-trip.
+
+Also about the asset swap: it is DELETE the old asset, then POST the new one under
+the same name, and the fresh asset starts a new `download_count` — so a "0
+downloads" right after says nothing about whether the old one was fetched.
+(v0.5.0's pre-fix asset read 2, and both were this session's own verification
+fetches: the hash check and the final status check.)
+
 ## The third session: five changes in the panel, the bar and the paper (2026-09-27/28)
 
 **The third session's five changes (2026-09-27/28; committed `bef262d`,
