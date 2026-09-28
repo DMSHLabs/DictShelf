@@ -126,7 +126,12 @@ html:not([data-folder-picker]) .frow .pick{display:none}
   .frow .rm{margin-left:auto;font-size:18px;padding:.15em .35em}
 }
 label.keep{display:flex;gap:.5em;align-items:flex-start;font-size:13.5px;color:var(--soft);margin-top:.618em}
-label.keep input{width:auto;margin:.25em 0 0}
+/* The box's own width and shape come from setup.css (appearance:none, 20px);
+   all this adds is the nudge down onto the label's first line. It used to say
+   `width:auto`, which was how a platform checkbox kept its natural size
+   against setup.css's input{width:100%} - with the box drawn, a width here
+   would be the thing that breaks it. */
+label.keep input[type=checkbox]{margin:.25em 0 0}
 label.keep em{font-style:normal;color:var(--faint);font-size:12.5px}
 #lib{max-height:38vh;overflow:auto;margin:.618em 0 0;border:1px solid var(--line);border-radius:8px}
 .row{display:flex;gap:.5em;align-items:baseline;padding:.38em .618em;border-bottom:1px solid var(--line);font-size:13px}
@@ -153,7 +158,7 @@ label.keep em{font-style:normal;color:var(--faint);font-size:12.5px}
 #cands{margin:.618em 0 0;border:1px solid var(--line);border-radius:8px;max-height:38vh;overflow:auto}
 #cands label.row{cursor:pointer}
 #cands label.row.no{cursor:default;color:var(--faint)}
-#cands .row input{width:auto;flex:none;margin:0}
+#cands .row input[type=checkbox]{flex:none;margin:0}
 /* The files a candidate is made of. They take the flexible width and the name
    keeps its own: the name is short and is the identity, the list is the part
    that can grow, and a row that truncated the name to fit its files would hide
@@ -166,7 +171,7 @@ label.keep em{font-style:normal;color:var(--faint);font-size:12.5px}
 #extras{margin:.618em 0 0}
 #extras .head{font-size:12px;color:var(--soft);margin:0 0 .3em}
 #extras label.row{cursor:pointer}
-#extras .row input{width:auto;flex:none;margin:0}
+#extras .row input[type=checkbox]{flex:none;margin:0}
 #extras .row .need{color:var(--soft);font-size:11.5px}
 #extras .row .need.req{color:var(--err)}
 /* One line, as the whole of the progress report: a bar per file, a byte

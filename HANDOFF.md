@@ -101,10 +101,13 @@ first line.
    (`preset_paper`) → `pageBg`, plus a new `shell_paper` parameter and the
    hook's fourth argument for the three pages. **The app page only FORWARDS
    it** (`shell_bg` stays the reader's colour), and the wallpaper is
-   untouched. Verified in Chromium on a throwaway server plus `go test`,
-   `go vet`, the Java compile; **not on a phone**. Statement, the naming of
-   every window (report them by these names) and a night-preset defect found
-   on the way: `docs/ANDROID-UI-HANDOFF.md`.
+   untouched. With it: the two pages' checkboxes are DRAWN now (the app's own
+   square — they were platform widgets that ignored the paper entirely), and
+   the four page rules that kept a platform box's `width:auto` had to drop it.
+   Verified in Chromium on a throwaway server plus `go test`, `go vet`, the
+   Java compile; **not on a phone**. Statement, the naming of every window
+   (report them by these names) and a night-preset defect found on the way:
+   `docs/ANDROID-UI-HANDOFF.md`.
 
 Branch `master_build` (`0cc878c`, pushed): upstream `master` + the fork's
 build system only — `build-android.cmd` adapted to master's

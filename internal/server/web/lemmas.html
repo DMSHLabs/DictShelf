@@ -93,7 +93,10 @@ html[data-shell-tone="dark"] {
 .lrow{display:flex;flex-wrap:wrap;align-items:center;gap:.5em;
   padding:.5em .618em;border-bottom:1px solid var(--line);font-size:13.5px}
 .lrow:last-child{border-bottom:none}
-.lrow input[type=checkbox]{width:auto;margin:0;flex:none}
+/* Shape and width come from setup.css (appearance:none, 20px, the app's own
+   square); this only holds the row's spacing. `width:auto` used to be how a
+   platform checkbox kept its size against input{width:100%}. */
+.lrow input[type=checkbox]{margin:0;flex:none}
 .lrow .nm{flex:1 1 8em;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .lrow .cost{flex:none;color:var(--soft);font-size:12px;font-variant-numeric:tabular-nums}
 /* The indicator is the row's second line on a phone and its right edge on a
