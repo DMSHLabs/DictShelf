@@ -27,6 +27,18 @@ Still no upstream sync — upstream `master` is unchanged at `5f0ad02`.
   "widened" notice and the morph note used the faintest tone in the system,
   which measured 2.9:1 against the light paper.
 
+### True black and Warm dark take effect at night
+
+- **The night halves of the True black and Warm dark layers work now.** They
+  attached and changed only the article tokens while the chrome stayed the
+  app's grey — the page's own dark palette is written at a higher CSS weight
+  than the layers' bare `:root`, so they lost. They now declare themselves at
+  the page's own "the page is dark" marker, which is a tie the later layer
+  wins, so True black reaches `#000` and Warm dark `#1c1a17`, as their names
+  promise. Neither touches the light theme.
+- A test now asserts the weight of **every** app half against the app's own
+  palette, property by property, so this cannot quietly come back.
+
 ### The status bar
 
 - **The walk no longer wraps.** ▲ is spent at the first dictionary and ▼ at the
