@@ -5,6 +5,69 @@ Notable changes in **wuDict2**, the Android fork of
 version it was forked from. Fork release tags are prefixed `wudict2-`; one
 tagged line per release, newest first.
 
+## wudict2-v0.5.0 — 2026-09-28
+
+Still no upstream sync — upstream `master` is unchanged at `5f0ad02`.
+
+### A layer's paper reaches the rest of the app
+
+- **Sepia, High contrast and the night halves of True black and Warm dark now
+  paint the Folders, Lemmatization and Browse pages too**, and the window
+  behind them. Those four layers repaint the app's own paper, but until now the
+  colour stopped at the app page and the group editor — the other pages stayed
+  white while the window beside them was warm. The colour now travels from the
+  preset, through the appearance bridge, to the shell and down to each page,
+  resolved for the theme you are in, and it is there before the page is painted.
+- **The checkboxes on Edit Folders and Lemmatization are drawn**, in the app's
+  own square: ink border, drawn tick, and the same ground as the fields beside
+  them. So they wear a paper instead of staying platform-white, and a wallpaper
+  shows through them. The group window's boxes already turned with the paper;
+  these two were the last that did not.
+- **The notes the app draws while you work are darker.** The scope line, the
+  "widened" notice and the morph note used the faintest tone in the system,
+  which measured 2.9:1 against the light paper.
+
+### The status bar
+
+- **The walk no longer wraps.** ▲ is spent at the first dictionary and ▼ at the
+  last, and a spent arrow is dimmed rather than removed — the same call the font
+  steppers make at their bounds.
+- **Every jump re-aligns its landing** for a moment afterwards, so a section
+  that is still growing — it expands, a frame measures itself on load, images
+  arrive later — cannot leave its header halfway down the screen. Measured after
+  the fix: every jump, up or down, into a collapsed section or an open one,
+  lands the header on the same line.
+- **The dictionary chip moved into the bar**, between the arrows and the
+  Examples fold. It is out of the search field on a phone, and it travels back
+  into the field whenever the bar is hidden. In the panel its place is a
+  drop-down of your groups, under the name "Dictionaries".
+- The bar's spacing came from a phone: 10px gutters at the ends, a floor of one
+  square of air on **each** side of the chip so it cannot press against an
+  arrow, and the fold's handle shortens to "Ex" on a narrow screen rather than
+  pushing the group's name out of the row.
+
+### The panel and the page's top edge
+
+- **"Open first: My order | Fastest" is gone** from the panel. The stored value
+  is no longer read, so a reader who once chose "Fastest" is not stranded on it.
+- **The empty band above the first dictionary is gone.** The page's top space is
+  the bar's measured height at every width, and the first section now sits flush
+  against the bar — 34px removed at 1100px and 20px on a phone. Between 601 and
+  800px, where the old fixed value was 11px too small, the first card no longer
+  starts above the bar's lower edge.
+- The stuck section header no longer animates its offset: an offset that arrives
+  after the edge it aims at is an offset that is under it, which is the header
+  that was seen tucked under the bar while scrolling up.
+
+### Android
+
+- **"Show info messages"** in the shell's settings, on by default, turns off the
+  notes that pass in a moment and cannot be read: "Starting wuDict2…", the
+  waiting art and its "N of M ready" counter, and the lookup window's
+  "Looking up …". A failure is not one of these notes — the error sentences stay
+  in either window — and the morph note **stays** too: it says the answers are
+  for a different form of the word, which is read rather than skimmed.
+
 ## wudict2-v0.4.0 — 2026-09-27
 
 Still no upstream sync — upstream `master` is unchanged at `5f0ad02`. One
