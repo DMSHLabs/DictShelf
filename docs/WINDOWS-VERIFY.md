@@ -1,9 +1,11 @@
 # Windows verification recipes
 
 This machine's recipes for building, testing, previewing and poking the app,
-moved out of `HANDOFF.md` on 2026-09-26. Scope: Windows x64, Git Bash, no `node`
-and no `gcc` (what that rules out is below). Commands and traps, not the
-history — the sessions that produced them are in `docs/handoff-archive.md`.
+moved out of `HANDOFF.md` on 2026-09-26. Scope: Windows x64, Git Bash, no
+`node`, and no `gcc` **on PATH** — a mingw-w64 GCC does exist here, inside Qt
+(build-windows.cmd finds it by itself, and it is what made cgo and `-race`
+possible). Commands and traps, not the history — the sessions that produced
+them are in `docs/handoff-archive.md`.
 
 ## Windows verification recipes (this machine)
 
@@ -31,11 +33,35 @@ history — the sessions that produced them are in `docs/handoff-archive.md`.
   process after a restart. The page also caches its CSS by the `?v=` hash, so
   the browser must be reloaded after the server is really new.
 - Go: `go build ./...`; targeted `go test ./internal/<pkg> -run '...' -count=1`.
+- **`build-windows.cmd [debug|release] [purego]`** — the fork's desktop build
+  (added 2026-09-28, beside `build-android.cmd`): `wudict.exe` in the repo root,
+  upstream's product (wuDict, port 6888, its own config and library), NOT the
+  Android app. Flavour is chosen for you — cgo (`-tags sqlite_fts5`,
+  CGO_ENABLED=1) when a C compiler can be found, the pure-Go one when it cannot
+  (`purego` forces the second). The compiler need not be on PATH: `%CC%` first,
+  then `gcc.exe` on PATH, then mingw-w64 roots; on this machine it finds Qt's
+  `C:\Qt\Tools\mingw1310_64\bin\gcc.exe` (GCC 13.1.0), so the default build here
+  IS the cgo one — which is what `make build` and the CI cgo job ship.
+  `cl.exe` is unusable: Go's cgo drives a gcc-style compiler, not MSVC. Verified
+  2026-09-28: both flavours build, run, and the cgo exe ingests a `test_data`
+  `.dsl.dz` and answers `fts` (mattn + FTS5 inside the artifact; tags, CGO flag
+  and driver are read back out of it with `go version -m`); its imports are
+  KERNEL32 and msvcrt only, so no mingw DLL has to sit beside it. `release`
+  additionally compiles the Inno Setup installer into `dist\` and needs Inno
+  Setup 6.3+ (`winget install JRSoftware.InnoSetup`) — **not installed here as
+  of 2026-09-28**, so that branch fails fast with that line and the installer
+  compile itself is unverified. Expect the setup file to be named
+  `…-setup-0.0.0.exe`: upstream's numeric-version parser wants `v1.2.3` and
+  fork tags are `wudict2-v…`; the version inside the wizard is the real tag.
 - Android Java: from `android/`,
   `ANDROID_HOME="$LOCALAPPDATA/Android/Sdk" ./gradlew.bat :app:compileFossDebugJavaWithJavac --offline`.
   No ANDROID_HOME in the bash environment by default.
-- No `node`, no `gcc` in this shell: JS syntax checks by hand/`vm`, and
-  `-race` cannot run (cgo). Do not burn time on either.
+- No `node` in this shell: JS syntax checks by hand/`vm`. **`-race` runs here
+  now** (2026-09-28): it needs cgo, and a compiler exists — point CC at it the
+  way `build-windows.cmd` does, e.g.
+  `CC="C:/Qt/Tools/mingw1310_64/bin/gcc.exe" CGO_ENABLED=1 go test -race …`,
+  which passed for `internal/lang`, `facet`, `hilite` and `artmark` in about
+  eight seconds together.
 - `gofmt -l` flags nearly every tracked Go file — CRLF working-copy noise,
   not real. `git diff --check` is the meaningful check.
 - **The Android emulator (AVD `Small`) is x86_64 and cannot run the arm64 Go

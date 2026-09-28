@@ -150,6 +150,16 @@ and the CSS traps are in `docs/ANDROID-UI-HANDOFF.md` → "Decisions to
 preserve".
 
 Facts that are not derivable from the code (still standing):
+- **The fork gained a Windows desktop build on 2026-09-28: `build-windows.cmd`**
+  (uncommitted at the time of writing, in the working tree). It builds
+  upstream's product — `wudict.exe`, wuDict, port 6888, its own config and
+  library — not the Android app, in the cgo flavour when it can find a C
+  compiler; on this machine it finds Qt's mingw-w64 GCC
+  (`C:\Qt\Tools\mingw1310_64\bin\gcc.exe`) on its own, which is also the first
+  time cgo — and with it `-race` — is available here. `release` adds the Inno
+  Setup installer and needs Inno Setup 6.3+, still not installed; expect that
+  installer's numeric version to read 0.0.0, since fork tags are `wudict2-v…`
+  and upstream's parser wants `v1.2.3`. Recipes: `docs/WINDOWS-VERIFY.md`.
 - **The setup page's 📁 is now a host capability, not our prompt.** The page
   calls `wudictPickFolder` and shows the button only while the host has set
   `data-folder-picker` (foss `Storage.java`, reached through `MainActivity` →
