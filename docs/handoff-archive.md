@@ -2565,3 +2565,83 @@ Resolution trial-merged and verified first: build/vet green, tests green except
 known-failing TestSetupFlow (fails on clean `dev` too). The upstream build was
 also stood up for the user to evaluate on `http://127.0.0.1:6890` (temp db dir,
 pure-Go build) — stop it when no longer needed.
+
+## Pre-assessment branch snapshots (2026-09-29)
+
+**Rechecked 2026-09-28 (the release was REPLACED):** `dev` is at `373273e`,
+pushed, and the annotated tag `wudict2-v0.5.0` was MOVED onto it (`577c586` →
+`373273e`) so the released v0.5.0 carries the night-preset fix instead of a new
+tag following it. The release page was updated in place — new body, new APK
+(versionCode 389, sha256 `1e8f0de9…`), the old asset deleted. The released build
+is therefore the third session's five changes (the `Show info messages` row, the
+page's top edge, the panel/status-bar moves, the notes' ink, the preset's paper
+— `bef262d`, `7eb0e40`, `7be896e`, `3bfe24d`) PLUS the night-preset fix below.
+`master` still has not moved since `5f0ad02`, so no upstream work is in it. On
+this branch `test_data/` and `android/app/src/emuX86/jniLibs/` are ignored rather
+than untracked, **and `dev` has moved since**: the `fonts-colour` work is
+`70f8c78` and the branch now sits at `c7dd178`, the merge of
+`Move-System-to-settings` (the shell's own settings moved into the page as the
+System pane, with the Java side of that bridge). Two files are uncommitted at the
+time of writing — `app.css` and `presets_test.go`, the System pane's label
+register (see below).
+
+**The picker's dropdown, the scope chip and the scope note all name what is
+actually being searched (2026-09-28).** `scopedDictionary()` reads
+`lastScope||$("dict").value` (label = the dictionary alone; naming its groups was
+tried and dropped on the reader's word) and `lastScope` is cleared wherever the
+answer is, so a view entered by following a `bword://` link no longer lists one
+dictionary under a spinner saying "All dictionaries" — and "All dictionaries"
+itself is now the way out of it. `scopeLabel()` asks the same function first, so
+the chip (which lives in the status bar now) names the dictionary too, and
+`searchScopeName()` gives the note's link and the automatic widening's note the
+standing group's name instead of "all dictionaries", which was false whenever a
+picker group was in force. Rules and reasons:
+`docs/ANDROID-UI-HANDOFF.md` → "Dictionary groups: current work" → the bullets
+"The dropdown names the dictionary the answer was scoped to" and "The scope note
+names the group it will search".
+
+**The third session's five changes (2026-09-27/28; committed `bef262d`,
+`7eb0e40`, `7be896e`, `3bfe24d`; shipped in v0.5.0) — the `Show info messages`
+row, the page's top edge, the panel/status-bar moves, the notes' ink and the
+preset's paper — are written up in `docs/handoff-archive.md` as "The third
+session: five changes…". The live rules they produced are in
+`docs/ANDROID-UI-HANDOFF.md` → "Decisions to preserve".**
+
+**GREY MEANS DISABLED, and the old hierarchy is a PRESET (`70f8c78`, merged as
+`c7dd178`, unreleased):** labels, heads, hints and counts read `--label` /
+`--label-quiet` (both defaulting to the ink), the greys are kept only for states,
+and `presets/labels/quiet_labels_app.css` is the way back — on the three
+standalone pages too, via the new `"pages": true` manifest field. On the phone.
+Live rule: the area doc → "GREY MEANS DISABLED".
+
+**Uncommitted on `dev` (2026-09-29): the System pane, and an appearance test
+for the next one.** The merge's `#sysSettings` was written with `--fg-soft` on
+its heads, hints, units and notes — grey in BOTH looks; all six read `--label`
+now. Two guards cover the shape from here: `presets_test.go`'s
+`TestGreyTextIsOnlyForDisabledStates` (a grey `color:` must be on an allow-listed
+selector with a reason) and the new `appearance_contract_test.go:
+TestAppearanceContract`, five checks over the served bytes — no unsubstituted
+placeholder, the four-argument shell hook and the three page parameters, the
+wallpaper/paper/register rules, text colours as tokens, and every bare `var(--x)`
+declared. Its first run found four real defects (three literal `#c0564f` and the
+shadow root's `a{color:#5b7a99}`), now tokens. **Not verified on a device** (a
+static contract by design): the reader tests it.
+
+**The night presets' palette fix (`6d7dc6a`, in the replaced v0.5.0)** is in the
+area doc → "An app half must outrank the palette of the theme it is attached in".
+
+Branch `master_build` (`0cc878c`, pushed): upstream `master` + the fork's
+build system only — `build-android.cmd` adapted to master's
+version-suffixed APK names (script computes `APK_VERSION` from git
+describe, same sanitization as build.gradle's `apkVersion`), and
+build.gradle carries the fork's `-PemuX86` debug-ABI support
+(src/emuX86/jniLibs, debug-only). App identity stays upstream
+(`com.legbehindneck.wudict`, port 6888), so builds from this branch are
+the ORIGINAL product and install beside wuDict2. Verified:
+`build-android.cmd debug intel` produced
+`wudict-android-arm64-x86_64-foss-debug-<ver>.apk` with both ABIs.
+Release signing reads the same untracked `build-android.local.bat` when
+the MAIN checkout is switched to `master_build` (a worktree has no
+local.bat — copy it there first). After each upstream `master` sync,
+repeat this small overlay (two files) or merge `master` into
+`master_build` when the naming/emuX86 code still applies.
