@@ -26,9 +26,12 @@ page's top edge, the panel/status-bar moves, the notes' ink, the preset's paper
 — `bef262d`, `7eb0e40`, `7be896e`, `3bfe24d`) PLUS the night-preset fix below.
 `master` still has not moved since `5f0ad02`, so no upstream work is in it. On
 this branch `test_data/` and `android/app/src/emuX86/jniLibs/` are ignored rather
-than untracked, **but `git status` is not empty at the time of writing**: one
-uncommitted file, `internal/server/web/index.html`, carrying the picker
-correction below.
+than untracked, **and `dev` has moved since**: the `fonts-colour` work is
+`70f8c78` and the branch now sits at `c7dd178`, the merge of
+`Move-System-to-settings` (the shell's own settings moved into the page as the
+System pane, with the Java side of that bridge). Two files are uncommitted at the
+time of writing — `app.css` and `presets_test.go`, the System pane's label
+register (see below).
 
 **The picker's dropdown, the scope chip and the scope note all name what is
 actually being searched (2026-09-28).** `scopedDictionary()` reads
@@ -52,26 +55,28 @@ preset's paper — are written up in `docs/handoff-archive.md` as "The third
 session: five changes…". The live rules they produced are in
 `docs/ANDROID-UI-HANDOFF.md` → "Decisions to preserve".**
 
-**Uncommitted on `fonts-colour` (branch cut by the reader, 2026-09-28): GREY
-MEANS DISABLED, and the old hierarchy is a PRESET.** The greys were doing double
-duty as a hierarchy, so the panel's labels, heads, hints and controls read as
-switched off in every look. The ~116 declarations that carried them now read
-`--label` / `--label-quiet`, both defaulting to `var(--fg)`, and the greys are
-kept only where they ARE a state (`details.noindex`, `.group-control-disabled`,
-`.rmgo.busy`, a locked capability chip, a disabled checkbox's fill, the Folders
-page's `.row.no`, the field's ⌕/spinner). **The way back is
-`presets/labels/quiet_labels_app.css`** — its own manifest group, one file for
-both themes, and it reaches the three standalone pages through the new
-`"pages": true` manifest field (they alias `--fg-soft`/`--fg-faint` to their own
-`--soft`/`--faint`, so one file serves all four documents). Verified in Chromium
-(four documents, on/off, day/night, a paper tone) plus three new Go tests, and
-**on the reader's phone** ("на телефоне отлично работает"). Live rule: the area
-doc → "GREY MEANS DISABLED — the app's text is `--fg`".
+**GREY MEANS DISABLED, and the old hierarchy is a PRESET (`70f8c78`, merged as
+`c7dd178`, unreleased):** labels, heads, hints and counts read `--label` /
+`--label-quiet` (both defaulting to the ink), the greys are kept only for states,
+and `presets/labels/quiet_labels_app.css` is the way back — on the three
+standalone pages too, via the new `"pages": true` manifest field. On the phone.
+Live rule: the area doc → "GREY MEANS DISABLED".
 
-**The night presets' palette fix (`6d7dc6a`, in the replaced v0.5.0)** is
-written up in the area doc → "An app half must outrank the palette of the theme
-it is attached in"; guarded by `TestPresetAppHalvesOutrankTheirPalette`,
-verified on the reader's phone.
+**Uncommitted on `dev` (2026-09-29): the System pane, and an appearance test
+for the next one.** The merge's `#sysSettings` was written with `--fg-soft` on
+its heads, hints, units and notes — grey in BOTH looks; all six read `--label`
+now. Two guards cover the shape from here: `presets_test.go`'s
+`TestGreyTextIsOnlyForDisabledStates` (a grey `color:` must be on an allow-listed
+selector with a reason) and the new `appearance_contract_test.go:
+TestAppearanceContract`, five checks over the served bytes — no unsubstituted
+placeholder, the four-argument shell hook and the three page parameters, the
+wallpaper/paper/register rules, text colours as tokens, and every bare `var(--x)`
+declared. Its first run found four real defects (three literal `#c0564f` and the
+shadow root's `a{color:#5b7a99}`), now tokens. **Not verified on a device** (a
+static contract by design): the reader tests it.
+
+**The night presets' palette fix (`6d7dc6a`, in the replaced v0.5.0)** is in the
+area doc → "An app half must outrank the palette of the theme it is attached in".
 
 Branch `master_build` (`0cc878c`, pushed): upstream `master` + the fork's
 build system only — `build-android.cmd` adapted to master's

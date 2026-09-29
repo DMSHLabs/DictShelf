@@ -775,8 +775,19 @@ body.styling{padding-bottom:var(--styler-shown,var(--styler-h))}
    sentence under it, one row per setting, and the two notes the window speaks
    with. The rows are the phone's: 44px of touch floor like the group editor's,
    with the label as the flexible half so a long name wraps instead of pushing
-   the number field off the edge. */
-#sysSettings h3.sys-head{margin:1.2em 0 .2em;font-size:14px;font-weight:600;color:var(--fg)}
+   the number field off the edge.
+   ── the label register ─────────────────────────────────────────────────
+   Everything readable in this window is a LABEL (2026-09-29, the reader's
+   check after the ink rule): the group names, the sentences under them, the
+   row names, the MB beside a field, the two notes and the fold's ▸. They read
+   --label / --label-quiet, never --fg and never the greys directly, so the
+   window follows the "Quiet labels" preset like every other window - and its
+   published default is the ink, so nothing here is grey unless the reader asks
+   for the old hierarchy (measured: this pane was written with --fg-soft on
+   four of them, which made it grey in BOTH looks, the one thing the register
+   exists to prevent). The greys are LEFT to things the reader cannot act on,
+   which in this window is nothing: no row here can be disabled. */
+#sysSettings h3.sys-head{margin:1.2em 0 .2em;font-size:14px;font-weight:600;color:var(--label)}
 #sysSettings h3.sys-head:first-child{margin-top:0}
 /* The one group that folds, wearing the heading it replaces: same type, same
    spacing, plus the ▸/▾ this app uses everywhere it means "there is more
@@ -800,7 +811,7 @@ body.styling{padding-bottom:var(--styler-shown,var(--styler-h))}
   margin:1.4em 0 .2em;padding:.8em 0 0;border:0;background:none;text-align:left;
   font:inherit;font-size:14px;font-weight:600;color:var(--fg);cursor:pointer;
   border-top:1px solid color-mix(in srgb,var(--fg) 22%,transparent)}
-#sysSettings .sys-fold::before{content:"▸";color:var(--fg-soft);font-size:13px;
+#sysSettings .sys-fold::before{content:"▸";color:var(--label);font-size:13px;
   line-height:1;display:inline-block;width:.9em;flex:none;text-align:center}
 #sysSettings .sys-fold[aria-expanded="true"]::before{content:"▾";color:var(--accent)}
 #sysSettings .sys-fold:hover::before{color:var(--fg)}
@@ -811,11 +822,11 @@ body.styling{padding-bottom:var(--styler-shown,var(--styler-h))}
    shell's table ends with, and this keeps the separation the same whatever that
    is. */
 #sysSettings .sys-gap{height:1.2em}
-#sysSettings .sys-hint{margin:0;font-size:12.5px;line-height:1.618;color:var(--fg-soft)}
+#sysSettings .sys-hint{margin:0;font-size:12.5px;line-height:1.618;color:var(--label)}
 #sysSettings .sys-item{margin:.5em 0 .2em}
 #sysSettings .sys-row{display:flex;align-items:center;gap:.6em;min-height:44px;cursor:pointer}
 #sysSettings .sys-row.sys-num{cursor:default}
-#sysSettings .sys-label{flex:1 1 auto;min-width:0;font-size:14px;overflow-wrap:anywhere}
+#sysSettings .sys-label{flex:1 1 auto;color:var(--label);min-width:0;font-size:14px;overflow-wrap:anywhere}
 #sysSettings .sys-num input{flex:none;width:6.5em;font:inherit;font-size:14px;text-align:right;
   color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:.5em .6em}
 #sysSettings .sys-num input:focus{outline:none;border-color:var(--focus);
@@ -825,13 +836,13 @@ body.styling{padding-bottom:var(--styler-shown,var(--styler-h))}
    number is OF. Muted and pulled back against its field, so the row reads as
    one control rather than as a field with a word beside it. */
 #sysSettings .sys-unit{flex:none;margin-left:-.35em;font-size:12.5px;
-  color:var(--fg-soft);font-variant-numeric:tabular-nums}
+  color:var(--label);font-variant-numeric:tabular-nums}
 /* The window's two voices. The stale note is a state of the MACHINE - the
    server is still running with the settings it was started with - so it is a
    boxed sentence where this app's other notes are plain text; the line under it
    answers a refusal, and is quiet because it is not a control. An empty one
    takes no room, and both exist from the moment the window opens. */
-#sysSettings .sys-note{margin:.9em 0 0;font-size:12.5px;line-height:1.618;color:var(--fg-soft)}
+#sysSettings .sys-note{margin:.9em 0 0;font-size:12.5px;line-height:1.618;color:var(--label)}
 #sysSettings .sys-note:empty{margin:0}
 #sysSettings #sysStale{border:1px solid var(--line);border-radius:8px;padding:.5em .7em}
 /* The Background-color checkbox wears the groups editor's square - one
@@ -1304,7 +1315,7 @@ dialog.panel-card:not([open]){display:none}
 .pd .prow.sub{opacity:.8}
 .pd .pfx{color:var(--label)}
 .pd .path{color:var(--label-quiet);cursor:pointer}
-.pd .err{color:#c0564f}
+.pd .err{color:var(--danger)}
 /* Not a .feat: those chips are switches that spend disk, and this one only
    opens a page. Same muted register as the provenance rows under it. */
 .pd .acts a.browse{display:inline-flex;align-items:center;gap:.35em;margin-top:.3em;
@@ -1472,7 +1483,7 @@ dialog.panel-card:not([open]){display:none}
 #folderBody .frow .meta{margin-left:auto;display:flex;align-items:baseline;gap:.9em;
   white-space:nowrap}
 #folderBody .frow .n{color:var(--label-quiet);font-size:11px}
-#folderBody .frow .n.bad{color:#c0564f}
+#folderBody .frow .n.bad{color:var(--danger)}
 #folderBody .rv{color:var(--label-quiet);font-size:11px;cursor:pointer}
 #folderBody .rv:hover{color:var(--link);text-decoration:underline}
 #folderBody .frow:hover .rv{color:var(--label)}
@@ -1607,7 +1618,7 @@ dialog.panel-card:not([open]){display:none}
 .bulkbox p:last-child{margin-bottom:0}
 .bulkbox .cost{color:var(--label-quiet)}
 .bulkbox .btn{font-size:11.5px;padding:.25em .6em;margin-right:.4em}
-#folderBody .warn{color:#c0564f;font-size:11.5px;margin:.3em 0}
+#folderBody .warn{color:var(--danger);font-size:11.5px;margin:.3em 0}
 /* Info: quiet by construction — one accent word, everything else the muted
    text colour. It is an identity card, not a call to action, and it is the last
    section in the drawer, so the hairline between sections and its own heading

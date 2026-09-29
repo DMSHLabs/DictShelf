@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http/httptest"
 	"path"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -169,6 +170,69 @@ func TestPagePresetsNameOneFileForBothThemes(t *testing.T) {
 	}
 	if found == 0 {
 		t.Fatal("no preset asks for the standalone pages, so the wiring above is untested")
+	}
+}
+
+// GREY TEXT IS A STATE, and this test is the door it has to come through.
+// Everything readable in the app reads --label / --label-quiet (the pages call
+// them --label too, over their own greys), and a `color:` that takes a grey
+// directly must be on a selector in the list below — a thing the reader cannot
+// act on.
+//
+// It exists because the rule has already been broken once, by a NEW window:
+// the System pane arrived on 2026-09-29 with --fg-soft on its group heads,
+// hints, units and notes, so it was grey in BOTH looks — the one outcome the
+// register exists to prevent, and one no other test could see. A new label
+// wants var(--label); a disabled thing wants an entry here, with its reason.
+func TestGreyTextIsOnlyForDisabledStates(t *testing.T) {
+	allowed := map[string]string{
+		".qled":                   "the search field's mark: not a label, and its lightness is argued where it lives",
+		"details.noindex>summary": "a section the search could not run on",
+		".pd .rmgo.busy":          "a removal that is running and cannot be pressed",
+		".group-control-disabled": "a control the reader cannot act on",
+		"#cands label.row.no":     "a candidate that cannot be installed",
+	}
+	// Each sheet with the names ITS greys go by: the app page's own, and the
+	// two shorthands the standalone pages spell them with. The leading
+	// delimiter is what keeps `border-color` and `background-color` out — a
+	// border is not text, and one of the app's hover rules sets a grey one on
+	// purpose.
+	const appGrey = `(?:^|[;{\s])color:var\(--fg-(?:soft|faint)\)`
+	const pageGrey = `(?:^|[;{\s])color:var\(--(?:soft|faint)\)`
+	sheets := []struct {
+		name    string
+		css     string
+		greyPat string
+	}{
+		{"app.css", string(appCSS), appGrey},
+		{"group-editor.css", string(groupEditorCSS), appGrey},
+		{"history.css", string(historyCSS), appGrey},
+		{"setup.css", string(setupCSS), pageGrey},
+		{"setup.html", setupHTML, pageGrey},
+		{"lemmas.html", string(lemmasHTML), pageGrey},
+		{"browse.html", string(browseHTML), pageGrey},
+	}
+	seen := map[string]bool{}
+	for _, sheet := range sheets {
+		re := regexp.MustCompile(sheet.greyPat)
+		for _, rule := range cssRules(sheet.css) {
+			if !re.MatchString(rule.body) {
+				continue
+			}
+			if _, ok := allowed[rule.selector]; !ok {
+				t.Errorf("%s: %s paints text with a grey that is not in the allowed list: use var(--label) / var(--label-quiet), or add it here with a reason",
+					sheet.name, rule.selector)
+				continue
+			}
+			seen[rule.selector] = true
+		}
+	}
+	// An entry that nothing uses any more is a permission nobody needs, and it
+	// would quietly cover a rule that comes back.
+	for selector := range allowed {
+		if !seen[selector] {
+			t.Errorf("the allowed list keeps %s, which no stylesheet paints grey any more", selector)
+		}
 	}
 }
 
@@ -383,12 +447,16 @@ func isNameByte(c byte) bool {
 		c == '_' || c == '-'
 }
 
-// cssTokenBlocks lists the rules of a stylesheet that declare custom
-// properties, as selector -> property names. At-rule bodies are descended
-// into (a token block inside @media is still a token block) and comments are
-// dropped first, so `/* --bg: … */` cannot be mistaken for a declaration.
-func cssTokenBlocks(css string) map[string][]string {
-	out := map[string][]string{}
+// cssRulePair is one rule of a stylesheet: the selector as written and the
+// body between its braces.
+type cssRulePair struct{ selector, body string }
+
+// cssRules lists the rules of a stylesheet, in order. At-rule bodies are
+// descended into (a rule inside @media is still a rule) and comments are
+// dropped first, so `/* color:var(--fg-soft) */` cannot be mistaken for a
+// declaration.
+func cssRules(css string) []cssRulePair {
+	var out []cssRulePair
 	var walk func(string)
 	walk = func(src string) {
 		for i := 0; ; {
@@ -410,13 +478,25 @@ func cssTokenBlocks(css string) map[string][]string {
 			body := src[open+1 : j-1]
 			if strings.HasPrefix(selector, "@") {
 				walk(body)
-			} else if props := customProps(body); len(props) > 0 {
-				out[selector] = props
+			} else {
+				out = append(out, cssRulePair{selector, body})
 			}
 			i = j
 		}
 	}
 	walk(stripComments(css))
+	return out
+}
+
+// cssTokenBlocks lists the rules of a stylesheet that declare custom
+// properties, as selector -> property names.
+func cssTokenBlocks(css string) map[string][]string {
+	out := map[string][]string{}
+	for _, rule := range cssRules(css) {
+		if props := customProps(rule.body); len(props) > 0 {
+			out[rule.selector] = props
+		}
+	}
 	return out
 }
 
