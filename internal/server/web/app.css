@@ -217,10 +217,14 @@ body.barpinned{--stick:var(--barh)}
    alone would not do it: an empty flex item has no main size to derive from,
    so the width has to be stated. */
 .sbar .rpad{flex:none;width:var(--sbar-sq,2.2em);height:var(--sbar-sq,2.2em)}
-/* The two ENDS are gutters, not squares (the reader's phone report: the arrows
-   and the fold's handle sat too far from the screen's edges). Everything
-   between them keeps the row's own square of air. */
-.sbar .rpad.edge{width:var(--sp-2)}
+/* The two ENDS are one button-height wide, so the arrows and the fold's handle
+   stand clear of the screen's edge. They were `--sp-2` (a hair over nine
+   pixels) from the reader's first pass at this row, which read as pressed
+   against the glass on a phone; the square is exactly what they asked for -
+   "move them in by the height of the button" - and it is measured, not chosen
+   (--sbar-sq, below). Everything between the ends keeps the row's own square of
+   air. */
+.sbar .rpad.edge{width:var(--sbar-sq,2.2em)}
 /* The squares around the scope chip carry the auto margins, so the chip is
    centred between the ▼ and the fold's handle AND the gap on each side of it
    can never collapse: on a phone the auto margins had nothing to share, the

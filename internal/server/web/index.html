@@ -261,12 +261,11 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
        $("dict").value goes on reading it. The CSS that used to describe that
        pair for .bar .seg below 600px now describes .sbar .seg at every width
        (see app.css); the phone block's copy keeps the mode chip's.
-       AND IT TRAVELS: while this bar is hidden - before the first search, or
-       with the bar switched off - the same seg is put back in the search field
-       by placeDictSeg, because a control the reader cannot see is a control
-       they cannot use. The bar is hidden until a search has sections to walk,
-       which is also why the panel's Dictionaries row chooses the group on its
-       own. -->
+       AND IT TRAVELS: while this bar is hidden - with the bar switched off, the
+       only case left since it now stands from the first paint - the same seg is
+       put back in the search field by placeDictSeg, because a control the reader
+       cannot see is a control they cannot use. There it says nothing but its
+       book mark (scopeLabel), because the field has no room for a name. -->
   <span class="rpad floor" aria-hidden="true"></span>
   <span class="seg" id="dictSeg">
     <span class="chip btn" id="dictChip" aria-hidden="true"><svg class="bk" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path fill="currentColor" d="M1.5 3.1c1.9-.5 3.8-.3 5.6.7v8.4c-1.8-1-3.7-1.2-5.6-.7V3.1zm13 0c-1.9-.5-3.8-.3-5.6.7v8.4c1.8-1 3.7-1.2 5.6-.7V3.1z"/></svg><span class="lbl" id="dictLbl"></span></span>
@@ -1716,12 +1715,23 @@ function paintPickerGroup(){
    painted). "All dictionaries" is the right answer in that window anyway. */
 function scopeLabel(){
   const d=$("dict"),opt=d.selectedOptions[0];
+  // Where the chip lives decides what it says (the reader's call, 2026-09-27):
+  // in the status bar it names the scope in full - that row has the width and
+  // the name is what the two arrows beside it walk - and back in the search
+  // field on a phone it says NOTHING, because the field has no room for it and
+  // the book mark alone is the control's face there. The name is not lost: the
+  // traced-out scope is on screen in the bar, in the picker's own spinner and in
+  // the results' own message, and the field's chip only appears at all when the
+  // reader has switched the bar off.
+  const inBar=$("dictSeg")&&$("dictSeg").parentElement===$("sbar");
   if(d.value==="all"){
+    if(!inBar)return "";
     let name="All dictionaries";
     try{name=pickerGroupName()}catch(_){}
-    const inBar=$("dictSeg")&&$("dictSeg").parentElement===$("sbar");
-    return inBar?name:(name==="All Dictionaries"?"All":name);
+    return name;
   }
+  // A dictionary the reader named for one search keeps its name even in the
+  // field: that is what is being searched, not a group the bar can speak for.
   return opt?(opt.dataset.label||opt.text):"";
 }
 function livePickerPayload(kind){
@@ -4428,7 +4438,15 @@ function sbarMeasure(){
 }
 function sbarPaint(){
   const n=sbarSections().length;
-  $("sbar").hidden=!(sbarWant&&n>0);
+  // The bar is there from the moment the reader has it on - before the first
+  // search too, where it shows the scope and the fold's handle and nothing else
+  // (the scope lives in it, so this is also what keeps the picker reachable from
+  // the start). It used to wait for results, on the argument that a bar with
+  // nothing to walk is noise; the reader's answer was that a control they
+  // switched on has to be where they left it, and the arrows stand down on their
+  // own while there is nothing to walk (D102). Hidden in the MARKUP as well, so
+  // a page whose script broke shows no dead chrome.
+  $("sbar").hidden=!sbarWant;
   // A control that cannot act is not shown (D102): with one dictionary there is
   // nowhere to walk, and the arrows are what would lie about it. Where an arrow
   // can act but has run out of list, it is dimmed instead - see sbarEndsPaint.
@@ -4441,9 +4459,10 @@ function sbarPaint(){
 }
 /* Where the scope control lives, which is wherever the reader can reach it: in
    the status bar while that bar is on screen, and back inside the search field
-   when it is not (2026-09-27, the reader's call — the bar is hidden before the
-   first search and whenever they switch it off, and a control they cannot see
-   is a control they cannot use). The seg moves whole, chip and <select> alike,
+   when it is not (2026-09-27, the reader's call — the bar stands from the first
+   paint now, so the field is the home it returns to only when they switch the
+   bar off, and a control they cannot see is a control they cannot use). The seg
+   moves whole, chip and <select> alike,
    so both homes keep the mechanism they always had: in the FIELD the chip
    carries the real select transparently over it below 600px and the plain
    select above it (which is upstream's own layout), and in the status bar the
