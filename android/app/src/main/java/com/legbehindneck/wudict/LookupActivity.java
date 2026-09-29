@@ -4,9 +4,10 @@
 
 // Look up a word that was selected in some OTHER app (D67).
 //
-// One activity behind three filters - the selection toolbar
-// (ACTION_PROCESS_TEXT), the share sheet (ACTION_SEND text/plain) and
-// wudict://lookup?q= (ACTION_VIEW, for other apps and automation). They differ
+// One activity behind four filters - the selection toolbar
+// (ACTION_PROCESS_TEXT), the share sheet (ACTION_SEND text/plain),
+// wudict://lookup?q= (ACTION_VIEW, for other apps and automation) and a reading
+// app's dictionary button (READER_ACTIONS, Dictan's category). They differ
 // only in where the string comes from; everything after that is the same, and
 // the whole feature reduces to loading `…/?q=<word>` in a WebView, because
 // applyURL() in web/index.html already fills the box and searches. No server
@@ -27,6 +28,7 @@
 package com.legbehindneck.wudict;
 
 import android.app.Activity;
+import android.app.SearchManager;
 import android.content.Intent;
 import android.content.res.Configuration;
 import android.graphics.Color;
@@ -47,6 +49,10 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
+
 public class LookupActivity extends Activity {
 
     // A selection can be a whole paragraph - PROCESS_TEXT hands over whatever
@@ -58,6 +64,46 @@ public class LookupActivity extends Activity {
     private static final int QUERY_LIMIT = 256;
 
     private static final int DIALOG_MAX_WIDTH_DP = 640;
+
+    // The reading apps' dictionary APIs - the actions of the manifest's
+    // reader filters, which name the reader behind each. Kept in step with
+    // the manifest by hand: an action missing here still looks the word up,
+    // but is governed by the toolbar's settings row instead of the reader's.
+    private static final Set<String> READER_ACTIONS = new HashSet<>(Arrays.asList(
+            "colordict.intent.action.SEARCH",
+            "aard2.lookup",
+            "aard2.search",
+            "com.abbyy.mobile.lingvo.intent.action.TRANSLATE",
+            "com.ngc.fora.action.LOOKUP",
+            "org.openintents.action.TRANSLATE",
+            "com.hughes.action.ACTION_SEARCH_DICT",
+            "com.yunci.search",
+            Intent.ACTION_SEARCH));
+    // Absent on purpose: Intent.ACTION_TRANSLATE. Its main sender is the
+    // system's own selection toolbar, so it keeps the toolbar's row.
+
+    /** Dictan's dispatcher: ACTION_VIEW plus this category, sent for a result. */
+    private static final String CATEGORY_DICTAN = "info.softex.dictan.EXTERNAL_DISPATCHER";
+
+    // Where the word travels, beyond the platform's own extras. Read by NAME
+    // whatever the action, because callers mix them - KOReader sends
+    // EXTRA_QUERY under aard2.lookup.
+    private static final String[] WORD_EXTRAS = {
+            "EXTRA_QUERY",                                  // ColorDict, YunCi
+            SearchManager.QUERY,                            // Aard2, QuickDic, SEARCH
+            "com.abbyy.mobile.lingvo.intent.extra.TEXT",    // Lingvo
+            "HEADWORD",                                     // Fora
+            "article.word",                                 // Dictan
+    };
+    private static final String EXTRA_FULLSCREEN = "EXTRA_FULLSCREEN";
+
+    /** Whether this launch came through a reading app's dictionary API. */
+    static boolean fromReader(Intent i) {
+        String action = i == null ? null : i.getAction();
+        if (action == null) return false;
+        if (READER_ACTIONS.contains(action)) return true;
+        return Intent.ACTION_VIEW.equals(action) && i.hasCategory(CATEGORY_DICTAN);
+    }
 
     private FrameLayout root;
     private TextView status;
@@ -86,6 +132,12 @@ public class LookupActivity extends Activity {
             finish();
             return;
         }
+        // Only a caller that asked for a result sees this - Dictan's protocol,
+        // as CoolReader and FBReader speak it. CoolReader reports the default
+        // RESULT_CANCELED as an error; FBReader, given OK with no data, just
+        // clears its selection. An empty lookup above keeps CANCELED, which
+        // is the truth.
+        setResult(RESULT_OK);
         // A link, not a word. A browser's "share download link" and a forum
         // post pasted from a clipboard both arrive here as text/plain, because
         // that is the filter this activity owns - and looking up
@@ -171,13 +223,25 @@ public class LookupActivity extends Activity {
     /** The selection, wherever this launch put it. */
     private static CharSequence text(Intent i) {
         if (i == null) return null;
-        CharSequence cs = i.getCharSequenceExtra(Intent.EXTRA_PROCESS_TEXT);
-        // The read-only variant is what a non-editable view sends - a web page,
-        // a reader, a received message: the majority of real lookups.
-        if (cs == null) cs = i.getCharSequenceExtra(Intent.EXTRA_PROCESS_TEXT_READONLY);
-        if (cs == null) cs = i.getCharSequenceExtra(Intent.EXTRA_TEXT); // ACTION_SEND
-        if (cs == null) cs = param(i.getData(), "q");
-        return cs;
+        try {
+            CharSequence cs = i.getCharSequenceExtra(Intent.EXTRA_PROCESS_TEXT);
+            // By the platform's contract this one is a boolean flag, and a
+            // conforming caller makes the read below null. KOReader and Librera
+            // put the text in it as well, so it stays as a fallback.
+            if (cs == null) cs = i.getCharSequenceExtra(Intent.EXTRA_PROCESS_TEXT_READONLY);
+            // SEND, TRANSLATE and OpenIntents' TRANSLATE
+            if (cs == null) cs = i.getCharSequenceExtra(Intent.EXTRA_TEXT);
+            for (int k = 0; cs == null && k < WORD_EXTRAS.length; k++) {
+                cs = i.getCharSequenceExtra(WORD_EXTRAS[k]);
+            }
+            if (cs == null) cs = param(i.getData(), "q");
+            return cs;
+        } catch (RuntimeException badParcel) {
+            // Extras another app built are unparcelled here, in our process: a
+            // class we cannot load throws BadParcelableException. Nothing
+            // usable arrived, which is what null already says.
+            return null;
+        }
     }
 
     /**
@@ -252,12 +316,28 @@ public class LookupActivity extends Activity {
     /**
      * Whether this lookup skips the popup and opens the app. The stored answer
      * is per entry point (D100); a wudict:// caller may override it for this one
-     * call, which is the only entry point that can carry a parameter at all -
-     * PROCESS_TEXT and SEND bring no URI.
+     * call with `&full=`, and a reading app with ColorDict's EXTRA_FULLSCREEN.
+     * PROCESS_TEXT and SEND carry neither.
      */
     private boolean opensApp(Intent i, Uri data) {
         Boolean once = full(param(data, "full"));
+        if (once == null && fullscreen(i)) once = Boolean.TRUE;
         return once != null ? once : ShellPrefs.opensApp(this, ShellPrefs.sourceKey(i));
+    }
+
+    /**
+     * EXTRA_FULLSCREEN, honoured only when TRUE. Reading apps hard-code false
+     * on every call (Librera), so false carries no choice and must not
+     * override the user's stored answer; true is sent where the reader offers
+     * a full-window entry beside a popup one (KnownReader's "GoldenDict" vs
+     * its "minicard"), and there it IS the user's choice.
+     */
+    private static boolean fullscreen(Intent i) {
+        try {
+            return i != null && i.getBooleanExtra(EXTRA_FULLSCREEN, false);
+        } catch (RuntimeException badParcel) {
+            return false;
+        }
     }
 
     /** `&full=0|1`, whitelisted like mode(): anything else is the caller's typo. */

@@ -717,3 +717,27 @@ address as text under the switch and offer nothing.
 The switch is for *TESTING ONLY* with its limits stated in the hint; nothing was built to
 prolong a session or to advertise the address. Reopen only together with §3 of that
 document — server-side authentication — since every larger version of this depends on it.
+
+---
+
+## O11 — wudict markdown bundle (`.wudict.zip`) — **DEFERRED (D154, 2026-09-27)**
+
+One zip holding `<s>.wudict.md` and `<s>.wudict.files/`: a single file to hand over. It was prototyped on the
+archived `wumark-poc` branch and deferred for its own safety surface: bomb bounds, entry-name validation, symlinks,
+a deterministic writer, and intake treating it as a dictionary rather than a delivery. Version 1 has `.wudict.md`,
+`.gz` and a resource folder beside the file.
+
+Reopen with the prototype's review findings in hand (`docs.local/archive/WUDICT-MARKDOWN-CODE-REVIEW.md` WM-12,
+WM-15): bundle entries keep resource names exactly (no filesystem sanitizing), and the markdown's name is matched
+exactly.
+
+---
+
+## O12 — Admonitions in wudict markdown — **DEFERRED (D154, 2026-09-27)**
+
+Zensical/Material-style `!!! note "Title"` blocks, with an indented body. They carry no meaning in version 1: stock
+CommonMark renders the marker as text and the indented body as a code block, and the writer never emits them.
+
+Giving them meaning is a MINOR version of the format. The first question is whether a **stock** parser setting can
+read them on both reference stacks (goldmark, markdown-it-py); an in-house parser is exactly what D154 removed.
+Until then, `<details><summary>` with markdown inside is the collapsible block that works everywhere.

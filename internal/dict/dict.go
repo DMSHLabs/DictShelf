@@ -34,7 +34,7 @@ type Caps struct {
 // Meta describes one opened dictionary.
 type Meta struct {
 	Name        string // display name (dictionary title, else file stem)
-	Format      string // "mdx" | "stardict" | "slob" | "dsl" | "wudict"
+	Format      string // "mdx" | "stardict" | "slob" | "dsl" | "bgl" | "zim" | "wmd" | "wudict"
 	Path        string // source path (or .text.db path for ingested)
 	Description string
 	EntryCount  int

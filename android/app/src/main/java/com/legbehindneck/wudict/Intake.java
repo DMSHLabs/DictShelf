@@ -113,6 +113,10 @@ final class Intake {
      */
     private static final String[] DICT_EXTS = {
             ".mdx", ".mdd", ".slob", ".bgl", ".zim", ".ifo", ".dsl", ".dsl.dz",
+            // WuWeiDict markdown: ".md" covers ".wudict.md". Most .md files
+            // are not dictionaries; the server reads the file's second line
+            // (`wudict: 1`) and declines the rest.
+            ".md", ".wudict.md.gz", ".wudict.md.dz",
     };
 
     /**
@@ -129,6 +133,9 @@ final class Intake {
             "application/x-7z-compressed",
             "application/octet-stream",
             "application/gzip",
+            // what providers report a .md as, where they type it at all
+            "text/markdown",
+            "text/x-markdown",
     };
 
     private Intake() {

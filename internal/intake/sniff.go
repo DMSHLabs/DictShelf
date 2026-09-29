@@ -6,6 +6,7 @@ package intake
 
 import (
 	"errors"
+	"io"
 	"sort"
 	"strings"
 
@@ -17,9 +18,11 @@ import (
 // is in here" would be a list the user is invited to trust.
 var ErrTooManyEntries = errors.New("archive holds too many files")
 
-// Sniff lists an archive and reports the dictionaries in it. No entry is
-// decompressed and no byte is written; the answer comes from names and the
-// directory's declared sizes.
+// Sniff lists an archive and reports the dictionaries in it. No byte is
+// written, and the answer comes from names and the directory's declared sizes
+// - except for a name whose content decides (dict.KindCandidate, the markdown
+// family): the head of that one entry is read, a few KiB, since a README.md
+// beside a dictionary must not be offered as one.
 //
 // The grouping rule is dict's, not one of our own: a candidate is one main
 // file plus every companion sharing its stem IN THE SAME ARCHIVE DIRECTORY.
@@ -60,7 +63,8 @@ func Sniff(a Archive) ([]Candidate, error) {
 		if !safeEntryName(e.Name) {
 			continue
 		}
-		switch dict.ClassifyName(e.Base) {
+		name := e.Name
+		switch kindOf(e.Base, func() (io.ReadCloser, error) { return a.Open(name) }) {
 		case dict.KindMain:
 			k := key(e.Dir, dict.Stem(e.Base))
 			g := groups[k]

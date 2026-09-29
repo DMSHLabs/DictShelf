@@ -35,3 +35,4 @@ code-review/
 /fastlane/report.xml
 /fastlane/README.md
 /vendor/bundle/
+**/testdata/fuzz/*

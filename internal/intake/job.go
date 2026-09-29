@@ -782,9 +782,13 @@ func OpenArchive(path string) (Archive, error) {
 // (CompanionSuffixes): ".css" and ".js" are the two most common file names on
 // the web, and a link to one identifies a dictionary to nobody. They are files
 // this package CARRIES, found from the .mdx side, never a link it acts on.
+//
+// A name whose content decides (dict.KindCandidate) can begin one too: from
+// the name alone it may be a dictionary, and OpenPlain settles it once the
+// file is there.
 func canBegin(name string) bool {
 	switch dict.ClassifyName(name) {
-	case dict.KindMain:
+	case dict.KindMain, dict.KindCandidate:
 		return true
 	case dict.KindCompanion:
 		return !dict.IsAssetName(name)

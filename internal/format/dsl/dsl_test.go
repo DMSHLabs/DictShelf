@@ -35,8 +35,9 @@ func TestTransformBody(t *testing.T) {
 		{`[m2]indent[/m2]`, `<p class="wu-m" style="--wd-m:2">indent</p>`},
 		{`[m]bare[/m0]`, `<p class="wu-m">bare</p>`},
 		{`[ex]sample[/ex]`, `<span class="wu-ex">sample</span>`},
-		{`a [ref]target[/ref]`, `a <a href="bword://target">target</a>`},
-		{`<<other>>`, `<a href="bword://other">other</a>`},
+		{`a [ref]target[/ref]`, `a <a href="entry://target">target</a>`},
+		{`<<other>>`, `<a href="entry://other">other</a>`},
+		{`[ref]C#[/ref] <<100%>>`, `<a href="entry://C%23">C#</a> <a href="entry://100%25">100%</a>`},
 		{`[url]example.com[/url]`, `<a href="http://example.com">example.com</a>`},
 		{`[p]adj.[/p]`, `<span class="wu-p">adj.</span>`},
 		{`x {{comment}} y`, `x  y`},
@@ -331,7 +332,7 @@ func checkEntries(t *testing.T, entries []dict.Entry) {
 		t.Errorf("tilde: %q", entries[1].Body)
 	}
 	// casa: sub-entry split off and linked
-	if entries[2].Headwords[0] != "casa" || !strings.Contains(entries[2].Body, `bword://casa rural`) {
+	if entries[2].Headwords[0] != "casa" || !strings.Contains(entries[2].Body, `entry://casa rural`) {
 		t.Errorf("entry2: %+v", entries[2])
 	}
 	if entries[3].Headwords[0] != "casa rural" || !strings.Contains(entries[3].Body, "vivienda en el campo") {
@@ -562,7 +563,7 @@ func TestReaderHeaderTabsAndSubEntries(t *testing.T) {
 	if strings.Contains(main.Body, "{") || !strings.Contains(main.Body, `<span class="wu-acc">`) {
 		t.Errorf("main body: %q", main.Body)
 	}
-	if !strings.Contains(main.Body, `href="bword://подстатьями"`) {
+	if !strings.Contains(main.Body, `href="entry://подстатьями"`) {
 		t.Errorf("sub-entry back-reference missing: %q", main.Body)
 	}
 
@@ -639,14 +640,14 @@ func TestReaderSubCardHeadings(t *testing.T) {
 	}
 	pos := 0
 	for _, w := range wantLinks {
-		want := `- <a href="bword://` + w + `">`
+		want := `- <a href="entry://` + w + `">`
 		i := strings.Index(main.Body[pos:], want)
 		if i < 0 {
 			t.Fatalf("link %q missing or out of order in main body: %q", w, main.Body)
 		}
 		pos += i + len(want)
 	}
-	if n := strings.Count(main.Body, "bword://"); n != len(wantLinks) {
+	if n := strings.Count(main.Body, "entry://"); n != len(wantLinks) {
 		t.Errorf("main body has %d links, want %d: %q", n, len(wantLinks), main.Body)
 	}
 
@@ -696,7 +697,7 @@ func TestDslEscapeRoundTrip(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		want := `href="bword://` + escape(key) + `"`
+		want := `href="entry://` + escape(key) + `"`
 		if !strings.Contains(body, want) {
 			t.Errorf("dslEscape(%q): body %q lacks %q", key, body, want)
 		}
@@ -799,17 +800,17 @@ func TestRefDict(t *testing.T) {
 		// The spec's only [ref] attribute. target= is GoldenDict's extension
 		// and still works alongside it.
 		{`[ref dict="Other Dict"]Word[/ref]`,
-			`<a class="wu-xref" data-dict="Other Dict" title="Other Dict" href="bword://Word">Word</a>`},
+			`<a class="wu-xref" data-dict="Other Dict" title="Other Dict" href="entry://Word">Word</a>`},
 		{`[ref dict="Other Dict" target="Real Head"]Shown[/ref]`,
-			`<a class="wu-xref" data-dict="Other Dict" title="Other Dict" href="bword://Real Head">Shown</a>`},
+			`<a class="wu-xref" data-dict="Other Dict" title="Other Dict" href="entry://Real Head">Shown</a>`},
 		// No dict=: an in-dictionary link, unchanged.
-		{`[ref]Word[/ref]`, `<a href="bword://Word">Word</a>`},
+		{`[ref]Word[/ref]`, `<a href="entry://Word">Word</a>`},
 		// An empty or whitespace dict= names nothing and must not produce a
 		// cross-reference that resolves to no dictionary at all.
-		{`[ref dict=" "]Word[/ref]`, `<a href="bword://Word">Word</a>`},
+		{`[ref dict=" "]Word[/ref]`, `<a href="entry://Word">Word</a>`},
 		// A hostile dictionary name cannot break out of either attribute.
 		{`[ref dict="a<b&c"]W[/ref]`,
-			`<a class="wu-xref" data-dict="a&lt;b&amp;c" title="a&lt;b&amp;c" href="bword://W">W</a>`},
+			`<a class="wu-xref" data-dict="a&lt;b&amp;c" title="a&lt;b&amp;c" href="entry://W">W</a>`},
 	}
 	for _, c := range cases {
 		got, _, err := transformBody(c.in, "KEY")

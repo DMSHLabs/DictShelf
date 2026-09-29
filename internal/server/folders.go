@@ -18,6 +18,7 @@ import (
 
 	"github.com/wuweidict/wudict/internal/config"
 	"github.com/wuweidict/wudict/internal/dict"
+	"github.com/wuweidict/wudict/internal/howto"
 	"github.com/wuweidict/wudict/internal/store"
 )
 
@@ -33,6 +34,9 @@ type configInfo struct {
 	UseCached  bool   `json:"useCached"`
 	ConfigPath string `json:"configPath"`
 	Total      int    `json:"total"`
+	// HowtoRemoved: the user removed the built-in wudict howto; the setup
+	// page offers it back.
+	HowtoRemoved bool `json:"howtoRemoved,omitempty"`
 
 	// DictDirOrigin is "flag", "env", "file" or "default"; DictDirEditable is
 	// false when a flag or environment variable outranks the config file, so
@@ -203,7 +207,8 @@ func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 		Prepared:        len(lib),
 		UseCached:       s.reg.UseCached(),
 		ConfigPath:      s.ConfigPath,
-		Total:           s.reg.Count(),
+		Total:           s.reg.UserCount(),
+		HowtoRemoved:    s.HowtoDir != "" && howto.IsRemoved(s.HowtoDir),
 		DictDirOrigin:   s.DictDirOrigin,
 		DictDirEditable: s.DictDirEditable,
 		Effective:       s.Effective,

@@ -83,7 +83,7 @@ const (
 // not be asked about would be a worse outcome than one that installs without
 // it.
 func probeCompanions(ctx context.Context, f Fetcher, base *url.URL, fileName, dir string) []Extra {
-	if dict.ClassifyName(fileName) != dict.KindMain {
+	if kindOf(fileName, onDisk(filepath.Join(dir, fileName))) != dict.KindMain {
 		return nil // a companion has no companions of its own
 	}
 	stem := dict.Stem(fileName)

@@ -1,6 +1,6 @@
 ---
 title: FAQ
-description: Questions people ask about privacy, disk space, moving a library, updating, and using WuWeiDict without a browser.
+description: Questions people ask about privacy, disk space, moving a library, updating, and using wudict without a browser.
 ---
 
 # FAQ
@@ -10,13 +10,13 @@ Questions, not symptoms. For a symptom, see
 
 ??? question "Is any of my data sent anywhere?"
 
-    No. WuWeiDict binds to the loopback address `127.0.0.1` on one port. It has no
+    No. wudict binds to the loopback address `127.0.0.1` on one port. It has no
     account system, no telemetry, no analytics and no crash reporting.
 
     Your dictionaries are read from your disk, indexed on your disk, and served
     to your own browser.
 
-??? question "Why two names, WuWeiDict and wudict?"
+??? question "Why two names, wudict and wudict?"
 
     *Wú wéi* (無為) is the classical Chinese term for effortless action, or no action, depending on whom you ask. 
     The project took this name, because good tools should not get in the way (no pun intended).
@@ -36,7 +36,7 @@ Questions, not symptoms. For a symptom, see
     ```
 
     Windows and Android put the same tree elsewhere. See
-    [every file WuWeiDict owns](../reference/configuration.md#every-file-wudict-owns).
+    [every file wudict owns](../reference/configuration.md#every-file-wudict-owns).
 
 ??? question "Can I move my library to another machine?"
 
@@ -48,12 +48,12 @@ Questions, not symptoms. For a symptom, see
 
     [More about the library](../dictionaries/library.md)
 
-??? question "How do I update WuWeiDict?"
+??? question "How do I update wudict?"
 
     Download the new binary and replace the old one. That is the whole
     procedure. For windows, download the wudict setup wizard and rerun it.
 
-    Your prepared libraries stay. WuWeiDict checks what each database supports
+    Your prepared libraries stay. wudict checks what each database supports
     when it opens it, so an older `text.db` keeps working, without the newest
     index until you rebuild it.
 
@@ -69,7 +69,7 @@ Questions, not symptoms. For a symptom, see
     is gone keeps its prepared data - that data is now the only copy - and its
     switches lock.
 
-??? question "Can I use WuWeiDict without a browser?"
+??? question "Can I use wudict without a browser?"
 
     Yes. Every search mode has a CLI equivalent command.
 
@@ -89,19 +89,19 @@ Questions, not symptoms. For a symptom, see
     **wuDict** entry to the text-selection toolbar, so you can look a word up
     without leaving the app you are reading.
 
-    There is no iOS app, and not planned, unless sufficient interest arises.
+    There is no iOS app, and not planned, unless sufficient interest exists.
 
     [The Android app](../apps/android.md)
 
 ??? question "Can other computers on my network use it?"
 
     Set [`SERVER_IP`](../reference/configuration.md#server_ip-and-server_port)
-    to `0.0.0.0` and WuWeiDict accepts connections from your network.
+    to `0.0.0.0` and wudict accepts connections from your network.
 
-    Do this only on a network you trust. WuWeiDict has no login and no access
+    Do this only on a network you trust. wudict has no login and no access
     control.
 
-??? question "Does WuWeiDict change my dictionary files?"
+??? question "Does wudict change my dictionary files?"
 
     Never. It reads them. Everything it builds goes into the library folder,
     which is a different folder by design.
@@ -112,7 +112,7 @@ Questions, not symptoms. For a symptom, see
 
 ??? question "Why does searching *estuviera* find nothing?"
 
-    Because word-form data for Spanish is not installed. WuWeiDict retries a
+    Because word-form data for Spanish is not installed. wudict retries a
     failed search with the word's dictionary form — *knew* → **know** — but
     only English is built into the program; every other language is a small
     file you install.
@@ -147,7 +147,7 @@ Questions, not symptoms. For a symptom, see
 
 ??? question "How do I stop the browser tab opening at every start?"
 
-    Start WuWeiDict with `--no-browser`, or put `NO_BROWSER = "1"` in
+    Start wudict with `--no-browser`, or put `NO_BROWSER = "1"` in
     `~/.wudict/wudict.toml`.
 
 ??? question "How can I build this documentation site?"

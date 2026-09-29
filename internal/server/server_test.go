@@ -1138,7 +1138,7 @@ func TestCleanFormatStripsChromeAndScripts(t *testing.T) {
 		`<span class="hw">speed</span> <i>noun</i>` +
 		`<img src="/res/abc/spkr.png" alt="say"> ` +
 		`<a href="javascript:alert(1)">bad</a>` +
-		`<a href="bword://run">run</a>` +
+		`<a href="entry://run">run</a>` +
 		`<font size="2">how fast something moves</font></div>`
 	got := applyFormat(body, formatClean, "http://127.0.0.1:6888", nil)
 
@@ -1149,7 +1149,7 @@ func TestCleanFormatStripsChromeAndScripts(t *testing.T) {
 		}
 	}
 	for _, kept := range []string{"speed", "<i>noun</i>", "how fast something moves",
-		`href="bword://run"`, `src="http://127.0.0.1:6888/res/abc/spkr.png"`, `alt="say"`} {
+		`href="entry://run"`, `src="http://127.0.0.1:6888/res/abc/spkr.png"`, `alt="say"`} {
 		if !strings.Contains(got, kept) {
 			t.Errorf("clean lost %q:\n%s", kept, got)
 		}

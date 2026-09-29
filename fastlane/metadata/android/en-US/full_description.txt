@@ -1,7 +1,7 @@
-wuDict searches all your MDict, StarDict, AARD2, Lingvo DSL, Babylon and ZIM dictionaries on your device, providing instant offline search across your entire dictionary collection.
+wuDict searches all your MDict, StarDict, AARD2, Lingvo DSL, Babylon, ZIM and wudict markdown dictionaries on your device, providing instant offline search across your entire dictionary collection.
 
 <h2>FEATURES</h2>
-- Formats: MDict (.mdx/.mdd), StarDict (.ifo/.idx/.dict), Aard2 (.slob), Lingvo DSL (.dsl), Babylon (.bgl), ZIM (.zim) - library.kiwix.org
+- Formats: MDict (.mdx/.mdd), StarDict (.ifo/.idx/.dict), Aard2 (.slob), Lingvo DSL (.dsl), Babylon (.bgl), ZIM (.zim) - library.kiwix.org, wuDict markdown (.wudict.md) - a plain-text dictionary you can write in any editor
 - Instant search across all dictionaries with four modes: prefix, exact, contains, and full-text search
 - Dictionaries are automatically grouped by language, publisher, direction, etc.
 - Double-tap any word in a wudict dictionary article to instantly look up its definition

@@ -43,6 +43,7 @@
      <string name="settings_lookup_hint">Otherwise a lookup floats over the app you were reading.</string>
      <string name="settings_lookup_toolbar">From the text selection menu</string>
      <string name="settings_lookup_share">From the share menu</string>
+     <string name="settings_lookup_reader">From a reading app\'s dictionary button</string>
      <string name="settings_lookup_link">From links and automation</string>
 
      <!-- Window facts (D141), and the only rows on this screen whose effect the

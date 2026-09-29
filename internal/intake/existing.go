@@ -87,7 +87,7 @@ func holdsDictionary(dir string) bool {
 		return false
 	}
 	for _, e := range ents {
-		if !e.IsDir() && dict.ClassifyName(e.Name()) == dict.KindMain {
+		if !e.IsDir() && kindOf(e.Name(), onDisk(filepath.Join(dir, e.Name()))) == dict.KindMain {
 			return true
 		}
 	}

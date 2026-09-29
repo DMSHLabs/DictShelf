@@ -231,15 +231,47 @@ than aborting the operation.
 **Indexed dictionaries vs. source dictoinaries.** A dictionary that has been indexed in the library
 can be dumped either way, and the two differ in one respect: dumping the
 source writes an MDX `@@@LINK` redirect as its own row pointing at
-`bword://target`, while dumping the prepared folder writes it as an alternate
+`entry://target`, while dumping the prepared folder writes it as an alternate
 headword on the target's row, because that is what ingest resolved it into.
 Both are valid and accepted by [pyglossary](https://github.com/ilius/pyglossary).
+
+**Only some resources.** `-resources` chooses what goes beside the dump, for either format:
+
+- `all` (the default): every resource.
+- `text`: only files an article loads as text: `.css`, `.js`, `.mjs`, `.json`, `.html`, `.htm`, `.xml`, `.txt`. Images, audio, video and fonts are left out.
+- `none`: the articles only; no resource folder is written.
+
+``` sh title="articles and their stylesheets, no media"
+wudict dump -resources text -o ~/exports ~/Dicts/Oxford.mdx
+```
 
 If the output folder already exists, `dump` warns before overwritting. 
 Files left by an earlier dump under a different name are **not** deleted.
 
 To read a prepared dictionary directly instead of converting it, its SQLite
 tables are documented in [The text.db format](text-db.md).
+
+### As markdown
+
+``` sh title="export a dictionary to WuWeiDict markdown"
+wudict dump -format md -o <outdir> <dictfile>
+
+# Keep every article's own HTML, and compress:
+wudict dump -format md -mode html -compress gz -o ~/exports ~/Dicts/Oxford.mdx
+```
+
+Writes `<outdir>/<name>.wudict.md`: plain markdown that any editor opens and any markdown viewer
+shows, and that WuWeiDict reads back as a dictionary. Each entry is a `## headword` heading;
+an entry's other spellings are more `##` headings right under it. Resources go to
+`<name>.wudict.files` beside it.
+
+- `-mode html` (the default) keeps each article's HTML exactly, so nothing is lost and it
+  looks as it did; the file is then less pleasant to edit by hand.
+- `-mode clean` keeps only what markdown writes natively: paragraphs, bold and italic,
+  links, images, lists, tables, headings. Styling and anything else is left behind. If an
+  article cannot be written this way, the dump stops, prints the article, and gives the
+  command for `-mode html`.
+- `-compress gz` writes `<name>.wudict.md.gz`.
 
 ## ingest
 

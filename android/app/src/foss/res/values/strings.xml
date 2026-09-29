@@ -3,7 +3,7 @@
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 <resources>
     <string name="storage_title">Dictionary storage</string>
-    <string name="storage_message">wuDict reads dictionaries from the shared “Dictionaries” folder (Internal storage ▸ Dictionaries). Choose “Grant access” and allow All files access on the next screen, then copy your .mdx/.mdd, .ifo, .slob, .dsl and .bgl files into that folder.</string>
+    <string name="storage_message">wuDict reads dictionaries from the shared “Dictionaries” folder (Internal storage ▸ Dictionaries). Choose “Grant access” and allow All files access on the next screen, then copy your .mdx/.mdd, .ifo, .slob, .dsl, .bgl, .zim and .wudict.md files into that folder.</string>
     <string name="storage_grant">Grant access</string>
     <string name="storage_later">Later</string>
     <!-- The listen-address switch exists only in this flavour (Net, D62), so

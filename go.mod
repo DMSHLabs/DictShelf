@@ -18,6 +18,7 @@ require (
 	github.com/klauspost/compress v1.19.0
 	github.com/mattn/go-sqlite3 v1.14.48
 	github.com/ulikunitz/xz v0.5.16
+	github.com/yuin/goldmark/v2 v2.1.5
 	golang.org/x/net v0.57.0
 	modernc.org/sqlite v1.54.0
 )

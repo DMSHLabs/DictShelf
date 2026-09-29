@@ -23,7 +23,7 @@ import (
 // ReaderVersion is the behaviour version of this format's Reader (see
 // dict.RegisterReaderVersion). Bump it in the same commit as any change to
 // what the Reader yields, and update the golden in reader_golden_test.go.
-const ReaderVersion = 1
+const ReaderVersion = 3
 
 func init() {
 	openFn := func(path string) (dict.Dictionary, error) { return Open(path) }

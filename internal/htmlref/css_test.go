@@ -175,3 +175,40 @@ func TestParseCSSSurvivesGarbage(t *testing.T) {
 		ParseCSS(css, nil) // must return
 	}
 }
+
+// TestStylesGap: a positive horizontal margin or padding sets a class apart
+// (gapBit); Class never sees it.
+func TestStylesGap(t *testing.T) {
+	for _, tc := range []struct {
+		css  string
+		gap  bool
+		disp Display
+	}{
+		{`.x { margin-right: 3px }`, true, DisplayUnset},
+		{`span.x { margin-left: .5em; font-weight: bold }`, true, DisplayUnset},
+		{`.x { padding: 1px 2px 1px 1px }`, true, DisplayUnset},
+		{`.x { padding: 1px 0 }`, false, DisplayUnset},          // vertical only
+		{`.x { margin: 0 0 0 4px }`, true, DisplayUnset},        // left, of four
+		{`.x { margin-inline-start: 1ch }`, true, DisplayUnset}, // logical
+		{`.x { margin-left: -2px }`, false, DisplayUnset},       // pulled in, not apart
+		{`.x { margin: auto }`, false, DisplayUnset},            // not a length
+		{`.x { margin-left: calc(1px + 1px) }`, false, DisplayUnset},
+		{`.x { margin-left: 2px; margin-left: 0 }`, false, DisplayUnset}, // last wins
+		{`.x { margin-top: 5px; margin-bottom: 5px }`, false, DisplayUnset},
+		{`.x { display: inline-block; margin-left: 2px }`, true, DisplayInline},
+		{`.x { display: none; margin: 2px }`, false, DisplayNone}, // hidden: no gap
+		{`.x { display: block } .x { padding-left: 3px }`, true, DisplayBlock},
+		{`.x { color: red }`, false, DisplayUnset},
+	} {
+		st := ParseCSS(tc.css, nil)
+		if got := st.Gap("y x"); got != tc.gap {
+			t.Errorf("%s: Gap = %v, want %v", tc.css, got, tc.gap)
+		}
+		if got := st.Class("x"); got != tc.disp {
+			t.Errorf("%s: Class = %v, want %v", tc.css, got, tc.disp)
+		}
+	}
+	if (Styles{}).Gap("x") || Styles(nil).Gap("x") {
+		t.Error("no stylesheet: a gap")
+	}
+}

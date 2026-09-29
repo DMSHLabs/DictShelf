@@ -344,6 +344,10 @@ iframe.article{width:100%;border:0;display:block;background:var(--wd-article-bg,
    searched for, and that has to be read BEFORE the articles it explains. */
 .morphnote{margin-top:0;margin-bottom:var(--sp-1)}
 .empty{padding-top:var(--sp-5);text-align:center;color:var(--fg-faint)}
+/* The one line above the wudict howto while it is all there is (welcome). */
+#welcome{margin:.6em 0;padding:.55em .8em;border:1px solid var(--line);border-radius:6px;
+  background:var(--accent-soft);color:var(--fg)}
+#welcome a{color:var(--link);font-weight:600}
 .empty svg path{fill:var(--line)}
 /* the search bar is inert until at least one dictionary is usable */
 input:disabled,select:disabled{opacity:.55;cursor:not-allowed}
@@ -2424,7 +2428,7 @@ function hidePanel(){
   $("panel").classList.remove("show");
   const was=panelSnap;panelSnap=null;
   /* Only an "All dictionaries" answer is built from the enabled set. A view
-     scoped to one dictionary — by the selector, or one-shot by a bword:// link
+     scoped to one dictionary — by the selector, or one-shot by an entry:// link
      (lastScope) — reads that dictionary whether or not it is enabled, so the
      panel cannot have changed it; and re-running here would carry no scopeOnce
      and silently widen a cross-reference view back to "all". */
@@ -2792,6 +2796,15 @@ function askRemoval(pd){
   // file list it is about, already open, with the paths it would delete listed
   // directly above it.
   const wrap=pd.querySelector(".rmwrap");if(!wrap)return;
+  /* The wudict howto is the app's own: removing it loses nothing that cannot
+     be had back, so it is one plain choice and says where the way back is -
+     none of the "no undo" warning, which would be untrue here. */
+  if(d.builtin){
+    wrap.innerHTML=`<span class="rmq">Remove <b>${esc(dictLabel(d))}</b>`+
+      ` — Setup can bring it back any time`+
+      `<br><span class="rmgo" data-rm="all">remove</span><span class="rmno">↩ cancel</span></span>`;
+    return;
+  }
   const idx=(d.dbSize||0)+(d.mediaSize||0);
   const prepared=idx>0||!!d.mediaDB;
   // "dictionary files only" is a genuine option exactly once: the dictionary is
@@ -3495,7 +3508,7 @@ function renderSlot(box,h,mode,q,perDict,group){
   }
   det.open=expandAll;
   det.appendChild(dl);box.appendChild(det);
-  // A `bword://Word#frag` link: now that the article is in the document, put
+  // An `entry://Word#frag` link: now that the article is in the document, put
   // the fragment on screen. Shadow-DOM articles can be measured immediately
   // (next frame, once laid out); iframe ones jump themselves — frameDoc has
   // already been handed the fragment below.
@@ -3852,7 +3865,7 @@ document.addEventListener("keydown",e=>{
                      clause, and must be tidied into something lookup-shaped.
 
    These used to be one function carrying lookupSelection's tidying, so
-   `bword://Artificial Intelligence Notes#note-1` was cut at the first space
+   `entry://Artificial Intelligence Notes#note-1` was cut at the first space
    and searched for "Artificial". A cleaner that is right for one caller is
    silent corruption for the other; the fix is two functions, not a smarter
    regex. */
@@ -3891,17 +3904,20 @@ function playAudio(url){
   if(p&&p.catch)p.catch(err=>{console.warn("audio play failed:",url,err);setStatus("⚠ could not play audio")});
 }
 /* ── Dictionary references ────────────────────────────────────────────
-   `bword://Artificial Intelligence Notes#note-1` IS NOT A URL, and must never
+   `entry://Artificial Intelligence Notes#note-1` IS NOT A URL, and must never
    be handed to one. The `//` promises an authority component, and an authority
    may not contain spaces — while headwords contain spaces, apostrophes,
    ampersands and question marks all day long. `new URL()` (or anything that
    normalises an authority) mangles them silently. So this parses by string
-   position and nothing else. It is also why the server rewrites `bword://@…`
-   to the slash-less `bword:@…` before it ever reaches us: "@" is the userinfo
+   position and nothing else. It is also why the server rewrites `entry://@…`
+   to the slash-less `entry:@…` before it ever reaches us: "@" is the userinfo
    delimiter, and URL normalisation eats everything before it (rewrite.go).
 
    Accepted forms, all equivalent:
-     bword://word   bword:word   entry://word   entry:word   d:word   x:word
+     entry://word   entry:word   bword://word   bword:word   d:word   x:word
+   `entry://` is the one wudict writes; the server respells a dictionary's
+   `bword:` links (Babylon's proprietary scheme) before they reach us, and
+   the parser keeps accepting them for links a dictionary's own script builds.
    The slash-less spelling is what GoldenDict also accepts and several MDX
    dictionaries emit.
 
@@ -3916,10 +3932,15 @@ function playAudio(url){
      "anchor"  no headword: a #fragment in the article being read — the
                article's own table of contents, not a cross-reference
      "sub"     "@name", an article's own expandable section stored as a
-               headword (MDict convention, D26) — inlined, never searched
+               headword (MDict convention, D26) — inlined, never searched.
+               Decided on the UNDECODED target: a real headword that starts
+               with "@" arrives as "%40…" and stays a lookup.
+   The target is trimmed of spaces and tabs only: a headword may begin or end
+   with any other blank (U+3000, NBSP), and String.trim() would eat it.
    null when the href is not a reference at all. */
 const REF_SCHEME=/^(?:(?:bword|entry):(?:\/\/)?|[dx]:)/i;
 function decodeRef(s){try{return decodeURIComponent(s)}catch(_){return s}}
+function refTrim(s){return s.replace(/^[ \t]+|[ \t]+$/g,"")}
 function parseRef(href){
   const m=REF_SCHEME.exec(href||"");
   if(!m)return null;
@@ -3929,9 +3950,9 @@ function parseRef(href){
   let rest=href.slice(m[0].length),frag="";
   const h=rest.indexOf("#");
   if(h>=0){frag=rest.slice(h+1);rest=rest.slice(0,h)}
-  const word=decodeRef(rest).trim();
+  const raw=refTrim(rest),word=refTrim(decodeRef(rest));
   frag=decodeRef(frag);
-  if(word.charAt(0)==="@"&&word.length>1)return{kind:"sub",word,frag};
+  if(raw.charAt(0)==="@"&&raw.length>1)return{kind:"sub",word,frag};
   return{kind:word?"lookup":"anchor",word,frag};
 }
 function anchorTarget(root,frag){
@@ -4256,7 +4277,7 @@ document.addEventListener("click",e=>{
   else if(a){
     const href=a.getAttribute("href")||"";
     // A dictionary reference outranks the extension, as it does in the chain
-    // below: `bword://…mp3` names a headword, not a file.
+    // below: `entry://…mp3` names a headword, not a file.
     if(parseRef(href))return;
     const dictID=path.find(el=>el.classList?.contains("article"))?.dataset.dict;
     if(/\.(mp3|ogg|wav|spx|m4a)(\?|#|$)/i.test(href))
@@ -4327,7 +4348,7 @@ addEventListener("scroll",()=>{
 let navRecord="replace"; // how the NEXT doSearch should record itself
 /* One-shot state consumed by the next doSearch, same idiom as navRecord.
 
-   scopeOnce is the dictionary a cross-reference came FROM. A `bword://` link
+   scopeOnce is the dictionary a cross-reference came FROM. An `entry://` link
    inside an article is the dictionary talking to itself — the author wrote it
    pointing at their own entry — so searching all 105 dictionaries for it is
    both wasteful and wrong: it buries the intended article among namesakes from
@@ -5220,7 +5241,26 @@ $("styler").addEventListener("keydown",e=>{
 // boot screen over. The config comes alongside rather than after, because the
 // cards need its home prefix to render paths as ~/… on the FIRST draw; run
 // concurrently it costs no extra latency, and it cannot reject.
-Promise.all([loadPrefs(),loadConfig(),loadUserCSS()]).then(loadDicts).then(applyURL);
+/* The empty library is the one moment the app has the reader's whole
+   attention and nothing of theirs to show. So it shows its own: the wudict
+   howto, opened on its intro - a real search, answered by a real dictionary,
+   which is the proof no sentence about "instant search" could be - under one
+   line that says what is missing and the one place that fixes it. Only on a
+   plain start: a link or a bookmark with a word in it asked for that word. */
+function welcome(){
+  if(new URLSearchParams(location.search).get("q"))return;
+  const guide=dicts.find(d=>d.builtin);
+  if(!guide||dicts.some(d=>!d.builtin))return;
+  if(!$("welcome")){
+    const w=document.createElement("div");
+    w.id="welcome";
+    w.innerHTML='No dictionaries found. Tap <a href="/setup">Add more dictionaries</a> to configure your collection. '+
+      'Or, browse wudict\u2019s howto guide below.';
+    $("out").before(w);
+  }
+  searchFor("wudict welcome",{scope:guide.id,record:"replace"});
+}
+Promise.all([loadPrefs(),loadConfig(),loadUserCSS()]).then(loadDicts).then(()=>{applyURL();welcome()});
 </script>
 </body>
 </html>

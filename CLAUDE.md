@@ -1,12 +1,13 @@
 # WuWeiDict
 
-**Naming (D27).** The product is **WuWeiDict** in anything a user reads; the technical name is **`wudict`** everywhere else — binary, env prefix (`WUDICT_*`), config dir (`~/.wudict`), db format prefix (`wudict:`), localStorage keys, CSS classes. The module path is `github.com/wuweidict/wudict` because the repo is `wudict`.
+**Naming (D27, amended 2026-09-28).** In anything a user reads, prefer **`wudict`** (lowercase; **wuDict** in the Android app and browser extensions); **WuWeiDict** is the official full name, used only where the official name is required. The technical name is **`wudict`** everywhere else — binary, env prefix (`WUDICT_*`), config dir (`~/.wudict`), db format prefix (`wudict:`), localStorage keys, CSS classes. The module path is `github.com/wuweidict/wudict` because the repo is `wudict`.
 
-Go web dictionary app supporting MDX/MDD, StarDict, Aard2 Slob, Lingvo DSL, Babylon BGL. Dual-backend: a dictionary is searched through its own format ("preview", D15) until it is **prepared** into a library folder — `<db dir>/<name>/{text.db, media.db, info.txt}` (D20) — which is the primary mode. Preparation is automatic and cheap (headwords only, `AUTO_INDEX`); *contains* (trigram) and *full-text* are per-dictionary switches, and media packing a third (D24). Search modes are exact · prefix · contains · full-text (D16 — "fuzzy" is retired).
+Go web dictionary app supporting MDX/MDD, StarDict, Aard2 Slob, Lingvo DSL, Babylon BGL, openZIM; wudict markdown (`.wudict.md`: standard CommonMark, read by `internal/format/wmd` and written by `wudict dump -format md`). Dual-backend: a dictionary is searched through its own format ("preview", D15) until it is **prepared** into a library folder — `<db dir>/<name>/{text.db, media.db, info.txt}` (D20) — which is the primary mode. Preparation is automatic and cheap (headwords only, `AUTO_INDEX`); *contains* (trigram) and *full-text* are per-dictionary switches, and media packing a third (D24). Search modes are exact · prefix · contains · full-text (D16 — "fuzzy" is retired).
 
 ## Read this first (token discipline)
 - `docs/SPEC.md` — architecture, schema, query engine. Read before writing any code.
 - `docs/FORMATS.md` — per-format facts + exact reference-code pointers. Read the section for the format you touch, nothing more.
+- `docs/WUDICT-MARKDOWN.md` — normative spec of wudict markdown (reader + writer). Read only when touching that format or its export. `entry://` is the canonical lookup link; `bword://` is a legacy alias: parse, never emit.
 - `docs/OPEN.md` — researched but **unscheduled** items (O-numbers). Check before proposing morphology, stemming or Unicode-folding work; do not start anything in it without being asked.
 
 **D-, P- and C-numbers** cited throughout the code (`D15`, `docs.local/PERF.md §3.1`,
@@ -25,6 +26,7 @@ This repository is the whole project (`github.com/wuweidict/wudict`); there is n
 - `internal/store` — the prepared SQLite backend: schema, ingest, library folders, media.
 - `internal/server` — registry, HTTP API, embedded UI (`web/index.html`, `web/setup.html`, `web/frame.js`).
 - `internal/gomdict` — inlined MDX/MDD parser. `internal/speex` — in-process .spx decoder (D18).
+- `internal/howto` — the **wudict howto**, the app's guide as an embedded wudict markdown dictionary (`wudict-howto.wudict.md` + `.files/`). Every headword starts with `wudict `; `howto_test.go` holds it to the format (gate, zero warnings, links resolve, a clean dump reproduces it byte for byte). Edit the guide there; `pages/` is the website and is not part of the app.
 - `android/` — the Android app (D52): a dependency-free Java WebView shell that execs the android/arm64 binary shipped inside the APK as `libwudict.so`. `make android-go` rebuilds the Go side (cgo flavour, D53: mattn FTS5 + built-in speex, needs the NDK; `make android-go-purego` is the NDK-less fallback), `make apk` the whole app; CI signs via repo secrets. The port adds no Go code and no build tags.
 - **The Makefile is the developer UI (D10): every action has a target, `make help` lists them, `make check` before declaring work done.**
 

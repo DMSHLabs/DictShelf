@@ -124,6 +124,7 @@ public class SettingsActivity extends Activity {
         // loss and again in onPause, for the same reason.
         col.addView(row(ShellPrefs.TOOLBAR, R.string.settings_lookup_toolbar));
         col.addView(row(ShellPrefs.SHARE, R.string.settings_lookup_share));
+        col.addView(row(ShellPrefs.READER, R.string.settings_lookup_reader));
         col.addView(row(ShellPrefs.LINK, R.string.settings_lookup_link));
 
         // Window facts, so they sit on their own rather than under the lookup

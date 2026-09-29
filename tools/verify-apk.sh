@@ -128,6 +128,14 @@ for apk in $FOSS $PLAY; do
         || fail "$apk declares no PROCESS_TEXT filter: no selection lookup"
     echo "ok: $apk offers selection lookup"
 
+    # Same rot, same silence, for the readers' dictionary APIs: without the
+    # ColorDict action, wuDict simply stops being offered by Moon+, FBReader
+    # and the rest, and nothing anywhere reports it.
+    "$AAPT2" dump xmltree --file AndroidManifest.xml "$apk" \
+        | grep -q 'colordict.intent.action.SEARCH' \
+        || fail "$apk declares no ColorDict filter: no reader dictionary lookup"
+    echo "ok: $apk answers reader dictionary lookups"
+
     # Cleartext HTTP is scoped to loopback by a network security config
     # (src/main/res/xml). Reverting to android:usesCleartextTraffic="true"
     # builds and runs identically on the device, so nothing but this notices.

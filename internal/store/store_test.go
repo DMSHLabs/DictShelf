@@ -46,12 +46,19 @@ func writeSrc(t *testing.T, path, content string) string {
 
 func TestFolderName(t *testing.T) {
 	cases := map[string]string{
-		"/d/AHD5-2017.slob":      "AHD5-2017",
-		"/d/Oxford Advanced.mdx": "Oxford Advanced",
-		"/d/big.dsl.dz":          "big",
-		"/d/we:ird/na*me.ifo":    "na-me",
-		"/d/trailing. ":          "trailing",
-		"/d/.mdx":                "dictionary",
+		"/d/AHD5-2017.slob":        "AHD5-2017",
+		"/d/Oxford Advanced.mdx":   "Oxford Advanced",
+		"/d/big.dsl.dz":            "big",
+		"/d/we:ird/na*me.ifo":      "na-me",
+		"/d/trailing. ":            "trailing",
+		"/d/.mdx":                  "dictionary",
+		"/d/Glossary.wudict.md":    "Glossary",
+		"/d/notes.WUDICT.md":       "notes",
+		"/d/plain.md":              "plain",
+		"/d/.wudict.md":            "dictionary",
+		"/d/Glossary.wudict.md.gz": "Glossary",
+		"/d/Glossary.wudict.md.dz": "Glossary",
+		"/d/notes.md.gz":           "notes",
 	}
 	for in, want := range cases {
 		if got := FolderName(in); got != want {

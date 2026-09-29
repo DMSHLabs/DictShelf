@@ -75,7 +75,7 @@ func articleBody(s string) string {
 // anything useful with that: the server's /res/ rewriter correctly declines to
 // touch href on <a> (it is a cross-reference, not a resource), so the link
 // would reach the browser as a relative URL and resolve against the page
-// origin. `bword://` is the scheme the UI navigates on, so that is what these
+// origin. `entry://` is the scheme the UI navigates on, so that is what these
 // become.
 //
 // src and <link href> are deliberately NOT touched here - they are real
@@ -90,14 +90,14 @@ func rewriteLinks(body string, newNS bool) string {
 			if r.Site != htmlref.SiteAttr || r.Tag != "a" || r.Attr != "href" {
 				return r.URL
 			}
-			return bwordRef(r.URL, newNS)
+			return entryRef(r.URL, newNS)
 		},
 	}.Rewrite(body)
 }
 
-// bwordRef maps one relative article path to a bword:// lookup, or returns it
+// entryRef maps one relative article path to an entry:// lookup, or returns it
 // unchanged when it is not one.
-func bwordRef(ref string, newNS bool) string {
+func entryRef(ref string, newNS bool) string {
 	if ref == "" || strings.HasPrefix(ref, "#") || strings.HasPrefix(ref, "//") ||
 		absoluteRef.MatchString(ref) {
 		return ref
@@ -128,7 +128,7 @@ func bwordRef(ref string, newNS bool) string {
 	// Paths spell a space as '_'; the headword a user (or another dictionary)
 	// would recognise does not.
 	path = strings.ReplaceAll(path, "_", " ")
-	return "bword://" + path + frag
+	return htmlref.EntryHref(path) + frag
 }
 
 // trimRelative strips the leading "./", "../" and "/" segments a stored

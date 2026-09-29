@@ -347,10 +347,10 @@ type Lookuper interface { Lookup(word string) ([]Result, error); Resolve(name st
 - Endpoints: `/` app, `/api/search`, `/api/entry/{dict}/{id|word}`, `/res/{dict}/{name}`, `/api/ingest` + SSE progress, `/api/reindex` (D151).
 - **URL convention (D14, root-only)**: wudict is served at the **site root** by design. Article resource refs are rewritten to **root-absolute** `/res/{dictID}/…` by `RewriteEntryHTML` (idempotent; skips both `/res/{d}/` and a stray relative `res/{d}/`), and the client `resURL` fallback + the srcdoc `<script src="/assets/frame.js">` use the same absolute form. Rationale: articles render in three contexts — main page, Shadow-DOM, and **srcdoc iframe** — and a *relative* ref resolves against each context's base URL, which differs for the iframe and which third-party dictionary scripts re-resolve against the wrong base, producing the `res/{d}/res/{d}/…` doubling 404 (seen twice: OED `OED4.js`, AHD5 `wavs/*`). Absolute `/res/` is context-insensitive and resolves to the same origin URL everywhere. Subpath mounting was **explicitly dropped** as an always-on requirement; if ever needed it returns as a deliberate `<base href>` + server-known-prefix feature, not implicit relative URLs. (Client `fetch`/`EventSource`/asset refs are all root-absolute too.) `RewriteEntryHTML` coverage: `src/href/data/poster` (and prefixed variants like `xlink:href`, `data-src`) via a `\b`-anchored regex that does **not** corrupt attribute-name substrings (`metadata=` is safe), `srcset` candidate lists, `url(...)` inside inline `style=` attrs and `<style>` blocks (external stylesheets need none — their `url()` resolves against the sheet's own `/res/` URL), and it **strips `<base>`** (a scraping leftover that would hijack all relative resolution).
 - **Browser history**: the URL carries `?q=&mode=&dict=`, and *how* it is recorded depends on the action. Typing uses `replaceState` (the search is debounced, so pushing would put `c`, `ca`, `cas`, `casa` on the stack and Back would walk letter by letter); following a cross-reference — `lookupWord`, i.e. a `bword:`/`entry:` link, a double-click lookup, or the iframe bridge — uses `pushState`, so Back returns to the previous entry. A `popstate` restores `q`/`mode`/`dict` from the URL and re-runs the search recording nothing; popping to a URL without `q` aborts any in-flight search and clears the results rather than leaving stale ones on screen. Identical consecutive URLs are not pushed twice.
-- **Cross-reference links**: `entry://` is the canonical lookup link (D153); `bword:` (legacy, parsed but never emitted by new code) and `entry:` (with or without `//`), plus the `d:`/`x:` shorthands, are accepted as equivalents. `RewriteEntryHTML` leaves every scheme form untouched — they are navigation, not resources — and the client resolves them: `wordFromHref` in `index.html` for the main page and Shadow-DOM articles, the same logic in `frame.js` for sandboxed iframes (kept in step deliberately; one shared table-test runs both). A trailing `#fragment` is dropped before decoding (it addresses a place inside the target article, never part of the headword, so an encoded `%23` still survives), and a link naming no word swallows the click instead of searching for nothing.
+- **Cross-reference links**: `entry://` is the canonical lookup link (D153) and the only one wudict emits; `bword:` (Babylon Ltd.'s proprietary scheme from BGL / Babylon Builder, late 1990s, no public spec — parsed, never emitted: `htmlref.CanonRef` respells a dictionary's own `bword:` links to `entry://` on every way out) and `entry:` (with or without `//`), plus the `d:`/`x:` shorthands, are accepted as equivalents. `RewriteEntryHTML` never turns them into resources — they are navigation — and only respells them (`bword:` → `entry://`, `entry://@x` → `entry:@x`); the client resolves them: `wordFromHref` in `index.html` for the main page and Shadow-DOM articles, the same logic in `frame.js` for sandboxed iframes (kept in step deliberately; one shared table, `internal/server/parseref_test.go`, runs both copies under node and skips without it). The target is trimmed of spaces and tabs only, and the `@` sub-entry test runs on the undecoded target, so the headword `@home` (written `entry://%40home`) stays a lookup. Every emitter builds lookup links with `htmlref.EntryHref`, which percent-encodes only `%`, `#`, controls and a leading `@`. A trailing `#fragment` is dropped before decoding (it addresses a place inside the target article, never part of the headword, so an encoded `%23` still survives), and a link naming no word swallows the click instead of searching for nothing.
 - **Panel provenance**: the summary line (format, source *file name*, `+ n mdd`; full path in its tooltip) is a teaser and the disclosure toggle — one affordance for the whole row, nothing inside it styled as a link; the expanded body is the single place every path appears as a click-to-copy row, including the source itself.
 - **In-article clicks are intercepted in the CAPTURE phase** (`frame.js`). Dictionary scripts install their own handlers inside the article — LDOCE6's `entry.js` calls `stopPropagation()` on a speaker `<img>` so that playing a sound does not also toggle the accordion around it — and a bubble-phase listener on `document` never sees those clicks. The browser then followed the link and replaced the article with a bare media player. Capture runs on the way down, before any in-article handler can stop it, and only acts on anchors we recognise, so the dictionary's own toggles keep working.
-- **Article sandboxing (hybrid)**: script-free articles render in a Shadow DOM (`:host{all:initial}`) — cheap, total CSS isolation both ways. Script-bearing articles (custom tooltip JS, MathJax) auto-detect into a **sandboxed iframe** with a bridge script (`/assets/frame.js`): auto-height via ResizeObserver+postMessage, bword:// and dblclick lookups, theme sync. Rationale: innerHTML never executes `<script>` in a shadow root and dictionary JS cannot see shadow content — iframes are the only correct primitive for third-party HTML+JS.
+- **Article sandboxing (hybrid)**: script-free articles render in a Shadow DOM (`:host{all:initial}`) — cheap, total CSS isolation both ways. Script-bearing articles (custom tooltip JS, MathJax) auto-detect into a **sandboxed iframe** with a bridge script (`/assets/frame.js`): auto-height via ResizeObserver+postMessage, entry:// and dblclick lookups, theme sync. Rationale: innerHTML never executes `<script>` in a shadow root and dictionary JS cannot see shadow content — iframes are the only correct primitive for third-party HTML+JS.
 - Layout: draego chrome (sticky autohide bar, accordion, dl/dt/dd) with φ-scale spacing; dark mode per mdict-go-web/notes.
 
 ## 6b. Later additions (implemented)
@@ -395,11 +395,39 @@ House style lives in the `internal/logx` package doc and is enforced by keeping 
 - **Levels**: `logx.V` verbose detail · `logx.Warn` real degradation · `logx.Status` progress on a slow foreground step · `logx.Progress`/`ClearLine` in-place counters, **suppressed when stderr is not a terminal** (they are for a human watching a wait, and their carriage returns collide with results on stdout).
 - **Startup prints the effective configuration** — dictionary folder, library (DB_DIR), config file in use, address, .spx decoder, indexing mode, and what is being served — each folder counted by what *it* contributed, then a single next-step line when there is something to do.
 
-## 6e. wudict markdown (D153) — specified, not implemented
+## 6e. wudict markdown (D154)
 
-- `.wudict.md`: one UTF-8 markdown file per dictionary, read as a format (id `wmd`) and written by `wudict dump -format md|markdown`. Normative spec: `docs/WUDICT-MARKDOWN.md`; canonical examples in `docs/wudict-markdown/examples/`.
-- Structure is a line scan (`# title`, `## headword`, `key: value` fields: `alias:`, `see:`); bodies are CommonMark + raw HTML + pandoc attributes/spans/divs, sup/sub, strikeout, GFM tables, `{=html}` fences, `[[wikilinks]]` → `entry://`, DenDen ruby.
-- The writer maps HTML to the leanest markdown and verifies each block by re-rendering (equivalence N); anything that does not round-trip stays raw HTML. Invariants P1–P3 (spec §9).
+- **The wudict howto** (`internal/howto`, D154 Am. 5): the app's guide, shipped as a wudict markdown dictionary
+  embedded in the binary.
+  - At start the CLI writes it to `<config dir>/builtin/`, rewriting only a file whose content differs, and
+    passes it to the registry (`server.WithBuiltin`).
+  - It is listed after the folder scan, while its file exists, under the fixed id `wudict-howto`, so
+    `/browse?dict=wudict-howto` works everywhere, and it is flagged `builtin` in `/api/dicts`. Its library folder is
+    never listed as imported.
+  - Removing it (the panel's Remove…, whole only) deletes its file, images and index, and leaves the marker
+    `wudict-howto.removed` beside it: the app no longer writes it back at start. `/api/config` then reports
+    `howtoRemoved`, and the setup page's "Bring back the wudict howto" (`POST /api/howto?restore=1`) undoes it.
+  - It stands down while a dictionary folder holds a file of its name: the user's copy, which
+    `POST /api/howto` (the setup page's link) writes into the import folder. The copy takes over the fixed id, so
+    the guide's own links still reach it. It is not flagged `builtin`; it is the user's file.
+  - Counts that mean "the user's library" exclude it (`UserCount`). The index page serves the app, not the setup
+    page, when it is all there is, and opens it on `wudict welcome` under an "Add dictionaries" line.
+  - Every headword starts with `wudict `, so it never answers a lookup meant for the user's own dictionaries.
+
+- `.wudict.md` or a plain `.md`, either one a dictionary only when its line 2 is `wudict: <version>` (the gate,
+  whatever the name, in folder scans and intake alike): one UTF-8 markdown file per dictionary, also read as
+  `.wudict.md.gz` or `.wudict.md.dz`. It is read as a format (id `wmd`) and written by
+  `wudict dump -format md -mode html|clean [-compress gz]`. Normative spec: `docs/WUDICT-MARKDOWN.md`.
+- Standard CommonMark + GFM tables, parsed by a stock parser.
+  - `# title`, `wudict: 1` and `key: value` header lines.
+  - Entries are the top-level `##` headings; adjacent `##` lines are one entry (headword, then aliases).
+  - `see: target` is a redirect to a target outside the dictionary.
+  - Links are standard `[t](entry://…)`.
+- The writer has two modes, chosen per dump:
+  - `html` (default): each body verbatim as one HTML block; nothing is lost.
+  - `clean`: a destructive cleanup to markdown primitives; if cleanup is not enough, it aborts with a hint to use
+    `html`.
+- There is no lossless-round-trip machinery: `html` keeps the HTML, `clean` is lossy by design.
 
 ## 7. Non-goals (v1)
 Writing/exporting formats other than wudict markdown (D153, the one sanctioned writer); entry editing; draego's `.db` as input (one-off migration script if ever needed); EPWING/etc. (BGL moved *into* scope in P10.)

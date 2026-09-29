@@ -93,7 +93,14 @@ func FolderName(srcPath string) string {
 	ext := strings.ToLower(filepath.Ext(name))
 	name = strings.TrimSuffix(name, filepath.Ext(name))
 	if ext == ".dz" || ext == ".gz" {
+		ext = strings.ToLower(filepath.Ext(name))
 		name = strings.TrimSuffix(name, filepath.Ext(name))
+	}
+	// x.wudict.md (.gz, .dz) is x, as x.dsl.dz is x
+	if ext == ".md" {
+		if n := len(name) - len(".wudict"); n >= 0 && strings.EqualFold(name[n:], ".wudict") {
+			name = name[:n]
+		}
 	}
 	var b strings.Builder
 	for _, r := range name {
