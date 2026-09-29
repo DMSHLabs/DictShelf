@@ -34,6 +34,12 @@ const (
 	// index, an abbreviation glossary. Carried along with its dictionary,
 	// never offered as one.
 	KindCompanion
+	// KindCandidate is a main file by name whose CONTENT decides (a
+	// RegisterSniffed suffix: the markdown family, where most files are not
+	// dictionaries). A caller holding the bytes settles it with Claims; one
+	// that has only the name - a download not yet taken - may begin with it
+	// and must settle it once the file is there.
+	KindCandidate
 )
 
 // stardictResZip is StarDict's shared resource archive: a fixed NAME rather
@@ -74,6 +80,7 @@ func ClassifyName(name string) Kind {
 	}
 
 	main := suffixLen(openers, base)
+	cand := suffixLen(sniffedFormats, base)
 	comp := suffixLen(inspectOpeners, base)
 	if n := suffixLen(companionSuffixes, base); n > comp {
 		comp = n
@@ -86,12 +93,14 @@ func ClassifyName(name string) Kind {
 	}
 
 	switch {
-	case comp > main:
+	case comp > max(main, cand):
 		// Longest suffix wins, so "x_abrv.dsl" is a companion although ".dsl"
 		// also matches it, and "x.dict.dz" is one although nothing else does.
 		return KindCompanion
 	case main > 0:
 		return KindMain
+	case cand > 0:
+		return KindCandidate
 	}
 	return KindOther
 }

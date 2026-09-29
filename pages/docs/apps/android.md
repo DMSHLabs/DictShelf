@@ -70,13 +70,15 @@ dictionaries appear in the list.
 
 ## Look up a word from another app
 
-You do not have to switch apps to read a definition. Three ways in, all
+You do not have to switch apps to read a definition. Four ways in, all
 producing the same floating window over what you were reading:
 
 -   **Select the word you want to look up** — the selection toolbar should have a <kbd>**wuDict2**</kbd> entry, next
     to *Copy* and *Translate*.
 -   **Share the selection.** Use <kbd>**Share**</kbd> → <kbd>**wuDict2**</kbd> when an app hides the
     toolbar, or when the passage spans several paragraphs.
+-   **Use your reading app's dictionary button.** Set wuDict as the reader's
+    dictionary once, as described in the next section.
 -   **Open a `wudict://lookup?q=word` link.** For automation apps, note apps
     and scripts.
 
@@ -86,6 +88,41 @@ kept in the recents list.
 ``` sh title="from Termux or Tasker"
 am start -a android.intent.action.VIEW -d "wudict://lookup?q=phubbing"
 ```
+
+The link also takes `mode=exact|prefix|contains|fts`, `dict=<name>`, and
+`full=1` to open the full app, or `full=0` to force the popup.
+
+## Use wuDict as a reading app's dictionary
+
+| Reader | What to choose |
+| --- | --- |
+| **Moon+ Reader** | *ColorDict3* (listed as ColorDict/BlueDict/GoldenDict), *Lingvo*, *Fora* or *YunCi*; or *Customized*, with the URL `wudict://lookup?q=%s`; or wuDict from its list of installed apps |
+| **ReadEra** | wuDict, from its list of dictionary and translator apps |
+| **Librera Reader** | wuDict, from its dictionary list; it is listed more than once, and any of the entries works |
+| **FBReader** | *ColorDict 3*, *ABBYY Lingvo* or *Dictan* |
+| **KnownReader** | *ColorDict new / GoldenDict (minicard)* for the popup, *ColorDict new / GoldenDict* for the full app; *Aard 2* and *Dictan* also work, even when listed as not installed |
+| **Prestigio eReader** | *ColorDict* or *ABBYY Lingvo*, then wuDict |
+| **Readest, Book's Story, Lithium, Aldiko** | wuDict; these list the apps of the selection menu |
+| **KOReader** | see below |
+| **CoolReader** | *ColorDict new / GoldenDict*, *Aard 2 Dictionary* or *Dictan* |
+| **Kindle, Google Play Books, Kobo** | none: they offer no outside dictionary |
+
+If the app a reader names (GoldenDict, Aard2, Lingvo, Fora, QuickDic, YunCi,
+Dictan) is also installed, Android asks which app to use the first time;
+choose wuDict and *Always*.
+
+**KOReader** reads its list of outside dictionaries from a file you can
+replace. Create `koreader/dictionaries.lua` in internal storage:
+
+``` lua title="koreader/dictionaries.lua"
+return {
+    { "wudict", "wuDict", false, "com.legbehindneck.wudict", "text" },
+}
+```
+
+The file replaces KOReader's built-in list, so add back any dictionary app you
+still use. Then, in KOReader: *Dictionary settings* → check *Use external
+dictionary* → *Dictionary: wuDict*.
 
 ## Where the app keeps its files
 

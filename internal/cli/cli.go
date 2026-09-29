@@ -44,6 +44,7 @@ import (
 	_ "github.com/wuweidict/wudict/internal/format/mdx"      // register .mdx
 	_ "github.com/wuweidict/wudict/internal/format/slob"     // register .slob
 	_ "github.com/wuweidict/wudict/internal/format/stardict" // register .ifo
+	_ "github.com/wuweidict/wudict/internal/format/wmd"      // register .wudict.md (+ .md with a wudict: field)
 	_ "github.com/wuweidict/wudict/internal/format/zim"      // register .zim
 )
 
@@ -111,12 +112,22 @@ COMMANDS
                                           overwrite). -o names the output: a path
                                           (parents created), a directory, or "-"
                                           for stdout.
-  dump   -o <outdir> <dictfile>           Write the whole dictionary out as CSV in
-                                          pyglossary's import/export layout, so any
-                                          format its converter writes is reachable
-                                          from here. Resources are unpacked beside
-                                          it into <name>.csv_res. -output is the
-                                          long form of -o.
+  dump   [-format csv|md] [-mode html|clean] [-compress gz] [-resources all|text|none] -o <outdir> <dictfile>
+                                          Write the whole dictionary out. csv (the
+                                          default) is pyglossary's import/export
+                                          layout, so any format its converter writes
+                                          is reachable from here; resources are
+                                          unpacked beside it into <name>.csv_res.
+                                          md writes WuWeiDict markdown,
+                                          <name>.wudict.md, resources in
+                                          <name>.wudict.files: -mode html (default)
+                                          keeps each article's HTML; -mode clean
+                                          keeps only what markdown can write (lossy),
+                                          and stops at an article it cannot. -compress gz
+                                          writes <name>.wudict.md.gz. -resources
+                                          text keeps only .css, .js and other text
+                                          files; none writes the articles alone.
+                                          -output is the long form of -o.
   ingest [-full] [-headwords] [-contains] [<dictfile|folder…>]
                                           Prepare dictionaries into the library:
                                           <db-dir>/<dictionary name>/text.db (+ info.txt).
@@ -1396,8 +1407,18 @@ Hint: pick another port with --port, e.g.:  wudict --port %s
 	// beside the config file in effect, so a portable install carries both and
 	// --config re-points both. Loaded BEFORE the registry: Warm skips disabled
 	// dictionaries, and it starts inside NewRegistry.
-	reg, err := server.NewRegistry(cfg.DictDirs, cfg.UseCached,
-		server.WithPrefs(server.LoadPrefs(statePath(cfgFile))))
+	regOpts := []server.Option{server.WithPrefs(server.LoadPrefs(statePath(cfgFile)))}
+	// The wudict howto (internal/howto) is deliberately NOT installed or
+	// listed here. It ships as a dictionary, so listing it would make the
+	// registry non-empty on a first run that has no dictionaries of the
+	// reader's own - and "/" would open the guide instead of the setup page,
+	// which is the order this fork keeps - and the guide would appear among
+	// the reader's dictionaries in the picker. An empty HowtoDir does both:
+	// server.handleIndex still sends an empty registry to the setup page, and
+	// HowtoRemoved stays false. The package, its endpoints and the guide
+	// itself stay in the tree, unwired, for a host that wants them back.
+	howtoDir := ""
+	reg, err := server.NewRegistry(cfg.DictDirs, cfg.UseCached, regOpts...)
 	if err != nil {
 		return fmt.Errorf("scanning %s: %w", strings.Join(cfg.DictDirs, ", "), err)
 	}
@@ -1408,6 +1429,7 @@ Hint: pick another port with --port, e.g.:  wudict --port %s
 	}
 	srv := server.New(reg)
 	srv.ConfigPath = cfgFile
+	srv.HowtoDir = howtoDir
 	srv.StyleDir = stylePath(cfgFile)
 	store.SetCompressBodies(!cfg.NoCompress)
 	server.SetIndexWorkers(cfg.IndexWorkers)

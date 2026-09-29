@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/wuweidict/wudict/internal/dict"
+	"github.com/wuweidict/wudict/internal/howto"
 	"github.com/wuweidict/wudict/internal/logx"
 	"github.com/wuweidict/wudict/internal/store"
 )
@@ -79,6 +80,10 @@ func (r *Registry) Remove(id string, dropPrepared, dropSource bool) (removal, er
 	e, err := r.get(id)
 	if err != nil {
 		return rep, err
+	}
+	if e.builtin && !(dropPrepared && dropSource) {
+		// The app wrote both halves and keeps no other copy: it goes whole.
+		return rep, fmt.Errorf("%s is removed whole, with its index", filepath.Base(e.Path))
 	}
 	// Blocks (and is blocked by) an ingest on this dictionary: deleting the
 	// folder a rebuild is writing into would leave the rebuild finishing into
@@ -258,10 +263,18 @@ func (s *Server) handleRemoveLibrary(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 409, "turn on prepared dictionaries first, or this one would vanish from the list with its files")
 		return
 	}
+	builtin := s.reg.builtinID(id)
 	rep, err := s.reg.Remove(id, prepared, source)
 	if err != nil {
 		httpErr(w, 400, "%v", err)
 		return
+	}
+	if builtin && s.HowtoDir != "" {
+		// Recorded, so the next start does not write it back; Setup's
+		// "Bring back the wudict howto" undoes it (POST /api/howto?restore=1).
+		if err := howto.MarkRemoved(s.HowtoDir); err != nil {
+			rep.Note = "it will be back at the next start: " + err.Error()
+		}
 	}
 	writeJSON(w, rep)
 }

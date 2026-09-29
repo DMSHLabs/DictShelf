@@ -720,7 +720,31 @@ document — server-side authentication — since every larger version of this d
 
 ---
 
-## O11 — Choosing a single dictionary as a search scope — **CLOSED (2026-09-21): the jump is the answer, plus a derived picker entry**
+## O11 — wudict markdown bundle (`.wudict.zip`) — **DEFERRED (D154, 2026-09-27)**
+
+One zip holding `<s>.wudict.md` and `<s>.wudict.files/`: a single file to hand over. It was prototyped on the
+archived `wumark-poc` branch and deferred for its own safety surface: bomb bounds, entry-name validation, symlinks,
+a deterministic writer, and intake treating it as a dictionary rather than a delivery. Version 1 has `.wudict.md`,
+`.gz` and a resource folder beside the file.
+
+Reopen with the prototype's review findings in hand (`docs.local/archive/WUDICT-MARKDOWN-CODE-REVIEW.md` WM-12,
+WM-15): bundle entries keep resource names exactly (no filesystem sanitizing), and the markdown's name is matched
+exactly.
+
+---
+
+## O12 — Admonitions in wudict markdown — **DEFERRED (D154, 2026-09-27)**
+
+Zensical/Material-style `!!! note "Title"` blocks, with an indented body. They carry no meaning in version 1: stock
+CommonMark renders the marker as text and the indented body as a code block, and the writer never emits them.
+
+Giving them meaning is a MINOR version of the format. The first question is whether a **stock** parser setting can
+read them on both reference stacks (goldmark, markdown-it-py); an in-house parser is exactly what D154 removed.
+Until then, `<details><summary>` with markdown inside is the collapsible block that works everywhere.
+
+---
+
+## O13 — Choosing a single dictionary as a search scope — **CLOSED (2026-09-21): the jump is the answer, plus a derived picker entry**
 
 Raised 2026-09-21, the same day the dictionary picker lost its **All** mode and became a
 list of the dictionaries that answered. What that removal took away is narrower than
@@ -802,3 +826,6 @@ The general shape, kept for reference if a *stored* or *selectable* one-dictiona
 wanted: a `d:<id>` spelling beside `g:<facet>:<value>`, resolved by the same `dictSel` branch to
 `[id]`, with the picker offering it only while the current scope is a single dictionary. That is
 the version that needs the resolver; the built one does not.
+
+*(Renumbered from O11 to O13 by the upstream sync of 2026-09-29 — upstream's O11 and O12 are the wumark bundle and admonitions. The references in docs/handoff-archive.md were updated with it.)*
+

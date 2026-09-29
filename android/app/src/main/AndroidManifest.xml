@@ -206,11 +206,11 @@
         </activity>
 
         <!-- Look up a selection made in another app (D67). One activity behind
-             three ways in; a floating dialog, so it appears OVER the app the
+             four ways in; a floating dialog, so it appears OVER the app the
              user is reading rather than replacing it. taskAffinity="" plus
              excludeFromRecents keeps it out of the app's own task and out of
-             the recents list: it is an answer, not a place. Both filters live
-             in src/main, so foss and play get them identically - nothing here
+             the recents list: it is an answer, not a place. All its filters
+             live in src/main, so foss and play get them identically - nothing here
              touches storage. -->
         <activity
             android:name="com.dmshepeta.wudict2.LookupActivity"
@@ -251,6 +251,78 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:host="lookup" android:scheme="wudict" />
+            </intent-filter>
+
+            <!-- A reading app's own dictionary button. Every action below was
+                 found in a reader that sends it WITHOUT naming a package, so
+                 any app declaring the action is a candidate - the way GoldenDict
+                 and Aard2 answer the first two. The word's extra, per action:
+
+                 * colordict.intent.action.SEARCH  EXTRA_QUERY - "ColorDict 3":
+                   Moon+ Reader, FBReader, KnownReader, Prestigio, Librera.
+                 * aard2.lookup, aard2.search      query - KOReader, KnownReader.
+                 * com.abbyy.mobile.lingvo.intent.action.TRANSLATE
+                                                   com.abbyy.mobile.lingvo.intent.extra.TEXT
+                                                   - Moon+ "Lingvo", FBReader "ABBYY Lingvo".
+                 * com.ngc.fora.action.LOOKUP      HEADWORD - Moon+ "Fora".
+                 * org.openintents.action.TRANSLATE EXTRA_TEXT - Prestigio "ABBYY".
+                 * com.hughes.action.ACTION_SEARCH_DICT
+                                                   query - KOReader "QuickDic".
+                 * com.yunci.search                EXTRA_QUERY - Moon+ "YunCi".
+                 * android.intent.action.SEARCH    query - listed as a dictionary
+                   by Moon+ and Librera, sent by KOReader's "search" entries.
+                 * android.intent.action.TRANSLATE EXTRA_TEXT - the platform's
+                   own translate action (API 29).
+
+                 The vendor-named ones (Lingvo, Fora, QuickDic, YunCi) are a
+                 user decision recorded in the D67 amendment: the reader shows
+                 that vendor's name, and with the vendor's app also installed
+                 Android asks which one to use.
+
+                 Twice: untyped, because every caller seen sends these without
+                 a type, and text/plain, because a filter matches a typed intent
+                 only if it names the type, and nothing stops a reader from
+                 adding one. Not BROWSABLE: a web page has no business naming
+                 any of them. -->
+            <intent-filter>
+                <action android:name="colordict.intent.action.SEARCH" />
+                <action android:name="aard2.lookup" />
+                <action android:name="aard2.search" />
+                <action android:name="com.abbyy.mobile.lingvo.intent.action.TRANSLATE" />
+                <action android:name="com.ngc.fora.action.LOOKUP" />
+                <action android:name="org.openintents.action.TRANSLATE" />
+                <action android:name="com.hughes.action.ACTION_SEARCH_DICT" />
+                <action android:name="com.yunci.search" />
+                <action android:name="android.intent.action.SEARCH" />
+                <action android:name="android.intent.action.TRANSLATE" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="colordict.intent.action.SEARCH" />
+                <action android:name="aard2.lookup" />
+                <action android:name="aard2.search" />
+                <action android:name="com.abbyy.mobile.lingvo.intent.action.TRANSLATE" />
+                <action android:name="com.ngc.fora.action.LOOKUP" />
+                <action android:name="org.openintents.action.TRANSLATE" />
+                <action android:name="com.hughes.action.ACTION_SEARCH_DICT" />
+                <action android:name="com.yunci.search" />
+                <action android:name="android.intent.action.SEARCH" />
+                <action android:name="android.intent.action.TRANSLATE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+
+            <!-- Dictan's external dispatcher: VIEW + this category, the word in
+                 article.word, launched FOR A RESULT - CoolReader/KnownReader
+                 and FBReader both send it without naming a package. The caller
+                 reads the result code (LookupActivity.onCreate sets RESULT_OK;
+                 CoolReader reports CANCELED as an error). No <data>, so a bare
+                 VIEW with no URI also lands here - no app sends one, and one
+                 that did would get "nothing to look up". -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="info.softex.dictan.EXTERNAL_DISPATCHER" />
             </intent-filter>
         </activity>
 

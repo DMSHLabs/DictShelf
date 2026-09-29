@@ -4,7 +4,10 @@
 
 package htmlref
 
-import "strings"
+import (
+	"strconv"
+	"strings"
+)
 
 // A dictionary article's layout is not in its tags. LDOCE's `destination`
 // entry is 3,796 elements of which 3,237 are <span>, and every boundary a
@@ -51,6 +54,17 @@ const (
 	DisplayBlock                 // block, list-item, table-*, flex, grid: a boundary
 )
 
+// gapBit rides on a class's Display: the stylesheet sets the class apart
+// horizontally - a positive margin or padding on its left or right - which a
+// reader of the page sees as space between it and its neighbours even when the
+// text has none (`<span class="num">2</span><span>be the…`). It is a second,
+// independent fact kept in the same table; Class masks it off, so no consumer
+// of Display ever sees it, and Gap reads it.
+const (
+	gapBit      Display = 0x80
+	displayMask Display = 0x0F
+)
+
 // Styles maps a CSS class name to its resolved Display. A nil or empty Styles
 // is the "no stylesheet" case and every consumer must treat it as a no-op, so
 // that a dictionary without CSS costs exactly what it cost before.
@@ -78,13 +92,35 @@ func (s Styles) Class(attr string) Display {
 			j++
 		}
 		if j > i {
-			if d := s[attr[i:j]]; d > best {
+			if d := s[attr[i:j]] & displayMask; d > best {
 				best = d
 			}
 		}
 		i = j
 	}
 	return best
+}
+
+// Gap reports whether any of an element's classes - the whole `class`
+// attribute - is set apart from its neighbours (see gapBit).
+func (s Styles) Gap(attr string) bool {
+	if len(s) == 0 || attr == "" {
+		return false
+	}
+	for i := 0; i < len(attr); {
+		for i < len(attr) && isSpaceByte(attr[i]) {
+			i++
+		}
+		j := i
+		for j < len(attr) && !isSpaceByte(attr[j]) {
+			j++
+		}
+		if j > i && s[attr[i:j]]&gapBit != 0 {
+			return true
+		}
+		i = j
+	}
+	return false
 }
 
 // Limits. A stylesheet is third-party input like everything else here: these
@@ -150,15 +186,20 @@ func (p *cssParser) rules(depth int) {
 			}
 			continue
 		}
-		if d := displayOf(p.block()); d != DisplayUnset {
-			p.apply(prelude, d)
+		body := p.block()
+		d, gap := displayOf(body), gapOf(body)
+		if d == DisplayNone {
+			gap = false // hidden: there is nothing to set apart
+		}
+		if d != DisplayUnset || gap {
+			p.apply(prelude, d, gap)
 		}
 	}
 }
 
-// apply records one rule's display against every class it can be attributed to
-// with confidence.
-func (p *cssParser) apply(selectors string, d Display) {
+// apply records one rule's display, and gap, against every class it can be
+// attributed to with confidence.
+func (p *cssParser) apply(selectors string, d Display, gap bool) {
 	for _, sel := range splitTop(selectors, ',') {
 		classes := finalClasses(sel)
 		if len(classes) == 0 {
@@ -172,11 +213,13 @@ func (p *cssParser) apply(selectors string, d Display) {
 		if len(classes) > 1 && d == DisplayNone {
 			continue
 		}
+		v := d
+		if gap {
+			v |= gapBit
+		}
 		for _, c := range classes {
 			if cur, ok := p.out[c]; ok {
-				if d > cur {
-					p.out[c] = d
-				}
+				p.out[c] = max(cur&displayMask, d) | cur&gapBit | v&gapBit
 				continue
 			}
 			if p.out == nil {
@@ -185,7 +228,7 @@ func (p *cssParser) apply(selectors string, d Display) {
 			if len(p.out) >= maxClasses {
 				return
 			}
-			p.out[c] = d
+			p.out[c] = v
 		}
 	}
 }
@@ -340,6 +383,81 @@ func displayOf(body string) Display {
 		i = j + 1
 	}
 	return out
+}
+
+// gapOf reports whether a declaration block leaves a positive margin or
+// padding on the left or right of its element, each side's last declaration
+// winning - longhands, the margin/padding shorthands and the inline logical
+// properties alike. A value it cannot read (auto, calc(), var()) leaves the
+// side as it was: a spurious space is a blemish, and it is not guessed at.
+func gapOf(body string) bool {
+	var side [4]bool // margin left, margin right, padding left, padding right
+	for _, decl := range splitTop(body, ';') {
+		if strings.IndexByte(decl, '{') >= 0 {
+			break // a nested rule: its declarations are another selector's
+		}
+		name, val, ok := strings.Cut(decl, ":")
+		if !ok {
+			continue
+		}
+		name = strings.ToLower(strings.TrimSpace(name))
+		if i := strings.IndexByte(val, '!'); i >= 0 {
+			val = val[:i]
+		}
+		f := strings.Fields(strings.ToLower(val))
+		if len(f) == 0 || strings.ContainsAny(val, "()") {
+			continue
+		}
+		base := 0
+		prop, ok := strings.CutPrefix(name, "margin")
+		if !ok {
+			if prop, ok = strings.CutPrefix(name, "padding"); !ok {
+				continue
+			}
+			base = 2
+		}
+		set := func(i int, v string) {
+			if pos, known := positiveLength(v); known {
+				side[base+i] = pos
+			}
+		}
+		switch prop {
+		case "-left", "-inline-start":
+			set(0, f[0])
+		case "-right", "-inline-end":
+			set(1, f[0])
+		case "-inline":
+			set(0, f[0])
+			set(1, f[len(f)-1])
+		case "":
+			switch len(f) {
+			case 1:
+				set(0, f[0])
+				set(1, f[0])
+			case 2, 3:
+				set(0, f[1])
+				set(1, f[1])
+			case 4:
+				set(0, f[3])
+				set(1, f[1])
+			}
+		}
+	}
+	return side[0] || side[1] || side[2] || side[3]
+}
+
+// positiveLength reads a CSS length: whether it is above zero, and whether it
+// could be read at all.
+func positiveLength(v string) (pos, known bool) {
+	j := 0
+	for j < len(v) && (v[j] >= '0' && v[j] <= '9' || v[j] == '.' || j == 0 && (v[j] == '+' || v[j] == '-')) {
+		j++
+	}
+	n, err := strconv.ParseFloat(v[:j], 64)
+	if err != nil {
+		return false, false
+	}
+	return n > 0, true
 }
 
 func declDisplay(decl string) Display {

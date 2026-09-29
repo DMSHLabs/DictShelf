@@ -30,6 +30,11 @@ func TestStemAndMainExt(t *testing.T) {
 		{"/d/star.ifo", "/d/star", ".ifo"},
 		{"/d/x.slob", "/d/x", ".slob"},
 		{"/d/x.bgl", "/d/x", ".bgl"},
+		{"/d/g.wudict.md", "/d/g.wudict", ".wudict.md"},
+		{"/d/g.wudict.md.gz", "/d/g.wudict", ".wudict.md.gz"},
+		{"/d/g.WUDICT.MD.DZ", "/d/g.WUDICT", ".wudict.md.dz"},
+		{"/d/g.md", "/d/g", ".md"},
+		{"/d/g.tar.gz", "/d/g.tar", ".gz"},
 	}
 	for _, c := range cases {
 		if got := Stem(c.src); got != c.stem {

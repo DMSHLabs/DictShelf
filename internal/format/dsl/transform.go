@@ -15,6 +15,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/wuweidict/wudict/internal/artmark"
+	"github.com/wuweidict/wudict/internal/htmlref"
 	"github.com/wuweidict/wudict/internal/store"
 )
 
@@ -547,7 +548,7 @@ func (tr *transformer) lexRefText(attrs map[string]string) {
 	if target == "" {
 		target = text
 	}
-	href := quoteAttr("bword://" + target)
+	href := quoteAttr(htmlref.EntryHref(target))
 	// dict="..." names ANOTHER dictionary by its #NAME, and the link is meant
 	// to land there rather than in this one (lingvo-ref "Тэг [ref]···[/ref]").
 	// Lingvo draws that name as the hover tooltip, so it rides in `title` -

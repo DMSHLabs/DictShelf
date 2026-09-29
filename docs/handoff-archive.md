@@ -824,7 +824,7 @@ VectorDrawable, which their list did not contain.
 The user's task: in the Dictionary settings window every dictionary has a
 **Browse** link, which opens that dictionary's word list, and **clicking a word
 must open the standard view with that word shown**. What it turned out to be is
-the answer to `docs/OPEN.md` **O11**, whose open question was exactly "is the
+the answer to `docs/OPEN.md` **O13**, whose open question was exactly "is the
 jump out of the word list enough (then nothing is built), or must the picker
 itself offer a single dictionary". The jump was already there and was verified
 rather than written; the picker half then came back — in the same message — in a
@@ -860,7 +860,7 @@ and lists. No Java, no Go, no CSS, no `browse.html`.
   debug build needs the user's word. The phone's server also answers 401
   without its access key, which is not ours to read. So the device pass is owed,
   and it is listed in `docs/ANDROID-UI-HANDOFF.md`.
-- **Two observations left alone on purpose** (both written up in O11): the
+- **Two observations left alone on purpose** (both written up in O13): the
   browse page's magnifier is `<a href="/">` — it loads the app with no query and
   leaves the word list on the history stack, the shape the user rejected on
   `/setup` and `/lemmas`, but here Back is the returning path and the magnifier
@@ -898,7 +898,7 @@ and lists. No Java, no Go, no CSS, no `browse.html`.
   branches: "No results in this dictionary" when scoped, "No results in this
   group" otherwise. A `d:` id is unreachable as a selection (it is only ever the
   current entry) and fails the membership guard, so no `doSearch` resolver was
-  added — `docs/OPEN.md` O11 carries that correction to its original sketch.
+  added — `docs/OPEN.md` O13 carries that correction to its original sketch.
 - **The caret no longer lands in the search field when a page arrives with `?q=`**
   (the user's follow-up: `history.js` opens its dropdown on the field's `focus`,
   so a word opened from the word list came up with the history drawn over the
@@ -1078,10 +1078,10 @@ the phone); the verification is below.
   a view, and picking a group in the picker resets the scope to all. The user
   then raised how a single-dictionary scope should be chosen at all (their
   sketch: a group holding one dictionary, added on demand, driven from a
-  word-list window) — that design question went to `docs/OPEN.md` as **O11**,
+  word-list window) — that design question went to `docs/OPEN.md` as **O13**,
   which recorded the fact that matters most: the entry point already exists
   (`Browse A–Z…` → `browse.html` → `/?q=<word>&dict=<id>`), so nothing needs
-  to be built for "show this word in this dictionary". **O11 is now CLOSED**
+  to be built for "show this word in this dictionary". **O13 is now CLOSED**
   (see the section below): the user answered with the jump, and it was verified
   rather than built.
 - **Verified** (throwaway server on 127.0.0.1:6899, temp config + db dir,

@@ -70,11 +70,11 @@ func OpenPlain(path string) (Archive, error) {
 		return nil, ErrUnsupported
 	}
 	base := filepath.Base(abs)
-	stem := plainStem(base)
+	dir := filepath.Dir(abs)
+	stem := plainStem(dir, base)
 	if stem == "" {
 		return nil, ErrUnsupported
 	}
-	dir := filepath.Dir(abs)
 
 	ents, err := os.ReadDir(dir)
 	if err != nil {
@@ -87,7 +87,7 @@ func OpenPlain(path string) (Archive, error) {
 	stardict := false
 	for _, e := range ents {
 		name := e.Name()
-		if e.IsDir() || !belongsTo(name, stem) {
+		if e.IsDir() || !belongsTo(dir, name, stem) {
 			continue
 		}
 		info, err := e.Info()
@@ -118,12 +118,13 @@ func OpenPlain(path string) (Archive, error) {
 	return a, nil
 }
 
-// plainStem is the dictionary a loose file belongs to, by name alone: its own
-// stem when it is a main file, its parent's when it is a companion. Empty for
-// anything else, and for StarDict's res.zip, which is named after a folder and
-// so names no dictionary on its own.
-func plainStem(name string) string {
-	switch dict.ClassifyName(name) {
+// plainStem is the dictionary a loose file in dir belongs to, by name - and,
+// for a name whose content decides, by its head: its own stem when it is a
+// main file, its parent's when it is a companion. Empty for anything else, and
+// for StarDict's res.zip, which is named after a folder and so names no
+// dictionary on its own.
+func plainStem(dir, name string) string {
+	switch kindOf(name, onDisk(filepath.Join(dir, name))) {
 	case dict.KindMain:
 		return dict.Stem(name)
 	case dict.KindCompanion:
@@ -137,8 +138,8 @@ func plainStem(name string) string {
 // its own grouping: a bundle written on Windows spells "Oxford.MDX" beside
 // "oxford.mdd", and a case-insensitive filesystem cannot tell the two stems
 // apart in the first place.
-func belongsTo(name, stem string) bool {
-	s := plainStem(name)
+func belongsTo(dir, name, stem string) bool {
+	s := plainStem(dir, name)
 	return s != "" && strings.EqualFold(s, stem)
 }
 

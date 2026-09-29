@@ -29,15 +29,16 @@ Runs natively on [android](https://wuweidict.github.io/wudict/apps/android/), [m
 
 **Supported formats**
 
-| Format | Files                               | Notes |
-|---|-------------------------------------|---|
-| MDict | `.mdx` + `.mdd`                     | companion `*.mdd`, `*.1.mdd`, … resource archives; built-in `.spx` audio decoding |
-| StarDict | `.ifo` + `.idx(.gz)` + `.dict(.dz)` | `.syn` synonyms, `res/` folder or `res.zip` resources |
-| Aard2 | `.slob`                             | zlib/bz2/lzma2; embedded images/audio/css |
-| Lingvo DSL | `.dsl`, `.dsl.dz`                   | UTF-8/16/32 auto-detected; `*.dsl.files.zip` resources; auto-indexed |
-| Babylon | `.bgl`                              | gzip block stream; source/target charset auto-detected (Latin / Cyrillic / CJK code pages); embedded images; indexed automatically on first open |
-| ZIM | `.zim`                              | Kiwix/Wikimedia offline archives; see https://library.kiwix.org
-| WuWeiDict | cache folder (`text.db`)            | wuDict's own SQLite-based format (see *Sharing*, below) |
+| Format          | Files                               | Notes |
+|-----------------|-------------------------------------|---|
+| MDict           | `.mdx` + `.mdd`                     | companion `*.mdd`, `*.1.mdd`, … resource archives; built-in `.spx` audio decoding |
+| StarDict        | `.ifo` + `.idx(.gz)` + `.dict(.dz)` | `.syn` synonyms, `res/` folder or `res.zip` resources |
+| Aard2           | `.slob`                             | zlib/bz2/lzma2; embedded images/audio/css |
+| Lingvo DSL      | `.dsl`, `.dsl.dz`                   | UTF-8/16/32 auto-detected; `*.dsl.files.zip` resources; auto-indexed |
+| Babylon         | `.bgl`                              | gzip block stream; source/target charset auto-detected (Latin / Cyrillic / CJK code pages); embedded images; indexed automatically on first open |
+| ZIM             | `.zim`                              | Kiwix/Wikimedia offline archives; see https://library.kiwix.org
+| wudict markdown | `.wudict.md` or `.md`, `.wudict.md.gz` | plain CommonMark, readable and editable in any editor; a dictionary only when its first two lines are `# Title` and `wudict: 1`, whatever the name; `<name>.wudict.files/` resources; auto-indexed; written by `wudict dump -format md` |
+| wudict          | cache folder (`text.db`)            | wuDict's own SQLite-based format (see *Sharing*, below) |
 
 ## wuDict for Desktop
 

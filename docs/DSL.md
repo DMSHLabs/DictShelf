@@ -407,13 +407,13 @@ dictionary and no other marker.
 	[m1][p]См. тж.[/p] [ref dict="Справочник реставратора (Ru-Ru)"]адгезивы в реставрации[/ref][/m]
 ```
 
-What we emit:
+What we emit (the target is percent-encoded only where it would be misread: `%`, `#`, controls and a leading `@`, so `[ref]C#[/ref]` gives `href="entry://C%23"`):
 
 | Form | HTML |
 | --- | --- |
-| `[ref]word[/ref]`, `<<word>>` | `<a href="bword://word">word</a>` |
-| `[ref dict="D"]word[/ref]` | `<a class="wu-xref" data-dict="D" title="D" href="bword://word">word</a>` |
-| `[ref target="t"]word[/ref]` | `<a href="bword://t">word</a>` — `target=` is **not** Lingvo's; it is a GoldenDict-era extension we keep because dictionaries in circulation use it |
+| `[ref]word[/ref]`, `<<word>>` | `<a href="entry://word">word</a>` |
+| `[ref dict="D"]word[/ref]` | `<a class="wu-xref" data-dict="D" title="D" href="entry://word">word</a>` |
+| `[ref target="t"]word[/ref]` | `<a href="entry://t">word</a>` — `target=` is **not** Lingvo's; it is a GoldenDict-era extension we keep because dictionaries in circulation use it |
 
 - `title=` carries the dictionary name because that is exactly Lingvo's own
   tooltip, and because `title` is one of the few attributes `-format clean`
@@ -430,7 +430,7 @@ What we emit:
   a target with an optional part must be named **resolved** (`[ref]вдохновить[/ref]`,
   not `[ref]вдохновить(ся)[/ref]`); escaped parens in the target must be
   reproduced; an unsorted `{…}` part must be omitted; and Lingvo matches
-  **case-sensitively**. `[D]` Our `bword://` lookup goes through the store's own
+  **case-sensitively**. `[D]` Our `entry://` lookup goes through the store's own
   headword index, which is case-insensitive and therefore strictly more
   forgiving. `[V]`
 - The target text must fill the whole zone — no spaces between it and the

@@ -318,6 +318,8 @@ func release(sem chan struct{}) { <-sem }
 type entry struct {
 	ID   string
 	Path string
+	// builtin: a dictionary the app ships (Builtin), not one the user added.
+	builtin bool
 
 	// reg is the registry that owns this entry, so an open can tell the
 	// janitor there is something to watch again. Nil in tests that build an
@@ -967,6 +969,7 @@ type Registry struct {
 	byID      map[string]*entry
 	fromLib   int    // how many entries came from the library, not a dict folder
 	roots     []Root // per-folder status, for the startup summary and setup page
+	builtin   []Builtin
 
 	// previewBudget caps the memory unprepared dictionaries may hold open
 	// (PREVIEW_MEMORY; 0 = unlimited). Prepared ones answer from disk and are
@@ -1002,6 +1005,22 @@ func (r *Registry) nudge() {
 // that pre-opened everything and only then learned what to skip would have
 // already paid the memory it was told to save.
 type Option func(*Registry)
+
+// Builtin is a dictionary the app ships: the wudict howto (internal/howto).
+// It is listed after every folder is scanned, while its file exists, under a
+// fixed ID so links to it work on every machine, and it stands down when a
+// dictionary folder holds a file of the same name - the user's own copy, which
+// is then the one listed. Removing it deletes its file, so it is no longer
+// listed; the caller records the removal so it is not written back.
+type Builtin struct {
+	ID   string
+	Path string
+}
+
+// WithBuiltin lists the app's own dictionaries alongside the user's.
+func WithBuiltin(b ...Builtin) Option {
+	return func(r *Registry) { r.builtin = append(r.builtin, b...) }
+}
 
 // WithPrefs attaches the persisted enabled/disabled state.
 func WithPrefs(p *Prefs) Option {
@@ -1084,6 +1103,20 @@ func (r *Registry) Count() int {
 	return len(r.entries)
 }
 
+// UserCount is Count without the dictionaries the app ships (Builtin): what
+// the user has, which is what "your library is empty" is about.
+func (r *Registry) UserCount() int {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	n := 0
+	for _, e := range r.entries {
+		if !e.builtin {
+			n++
+		}
+	}
+	return n
+}
+
 // SetDirs re-points the registry at new dictionary folders and rescans
 // (used by the first-run setup flow - no restart needed).
 func (r *Registry) SetDirs(dirs []string) error {
@@ -1114,9 +1147,33 @@ func (r *Registry) Rescan() error {
 	for i, d := range dirs {
 		roots[i] = Root{Path: d, Count: perRoot[i].New, Total: perRoot[i].Total, Exists: dirExists(d)}
 	}
+	r.mu.RLock()
+	builtin := append([]Builtin(nil), r.builtin...)
+	r.mu.RUnlock()
+	ids := map[string]string{}     // path → fixed id: a builtin, or the user's copy of one
+	shippedBy := map[string]bool{} // the builtins listed
+	var shipped []string           // every builtin's path, listed or standing down
+	for _, b := range builtin {
+		shipped = append(shipped, b.Path)
+		if !fileExists(b.Path) {
+			continue // removed by the user (howto.MarkRemoved), or never written
+		}
+		if copyPath, ok := fileNamed(paths, filepath.Base(b.Path)); ok {
+			// The user's copy stands in, under the builtin's id, so every
+			// link written to the guide still reaches it. It is theirs:
+			// not flagged builtin, removable like any file of theirs.
+			ids[copyPath] = b.ID
+			continue
+		}
+		ids[b.Path] = b.ID
+		shippedBy[b.Path] = true
+		paths = append(paths, b.Path)
+	}
 	fromLib := 0
 	if useCached {
-		lib := libraryPaths(paths)
+		// A builtin's library folder is never listed on its own: it belongs
+		// to the builtin, or to nothing while the user's copy stands in.
+		lib := libraryPaths(append(paths, shipped...))
 		fromLib = len(lib)
 		paths = append(paths, lib...)
 	}
@@ -1127,16 +1184,27 @@ func (r *Registry) Rescan() error {
 	// Keeping it made `get` hand out an entry that is not in the list, so a
 	// removed dictionary stayed addressable by anyone still holding its id.
 	byID := make(map[string]*entry, len(paths))
-	var entries, kept []*entry
+	var entries, kept, replaced []*entry
 	for _, p := range paths {
-		id := pathID(p)
+		id, fixed := ids[p]
+		if !fixed {
+			id = pathID(p)
+		}
+		builtin := shippedBy[p]
 		if seen[id] {
 			continue
 		}
 		seen[id] = true
 		e, ok := r.byID[id] // keep the open backend across a rescan
+		if ok && e.Path != p {
+			// A fixed id that now names another file: the built-in guide's,
+			// taken over by the user's copy of it, or given back. The old
+			// entry is closed like one the scan no longer finds.
+			replaced = append(replaced, e)
+			ok = false
+		}
 		if !ok {
-			e = &entry{ID: id, Path: p, reg: r}
+			e = &entry{ID: id, Path: p, builtin: builtin, reg: r}
 		} else {
 			kept = append(kept, e)
 		}
@@ -1150,7 +1218,7 @@ func (r *Registry) Rescan() error {
 	// hundreds of bytes per entry, with nothing left in the registry able to
 	// reach it. The janitor sweeps r.entries, so an entry that has just left it
 	// is unreachable by design.
-	var gone []*entry
+	gone := replaced
 	for id, e := range r.byID {
 		if !seen[id] {
 			gone = append(gone, e)
@@ -1186,7 +1254,13 @@ func (r *Registry) Rescan() error {
 func (r *Registry) Counts() (fromFolder, fromLibrary int) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	return len(r.entries) - r.fromLib, r.fromLib
+	builtin := 0
+	for _, e := range r.entries {
+		if e.builtin {
+			builtin++
+		}
+	}
+	return len(r.entries) - r.fromLib - builtin, r.fromLib
 }
 
 // libraryPaths returns the text.db of every prepared dictionary that is not
@@ -1223,6 +1297,53 @@ func libraryPaths(discovered []string) []string {
 		out = append(out, e.TextDB)
 	}
 	return out
+}
+
+// builtinID reports whether id names a dictionary the app ships, as listed now.
+func (r *Registry) builtinID(id string) bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	e, ok := r.byID[id]
+	return ok && e.builtin
+}
+
+// AddBuiltin lists one more of the app's own dictionaries (a restored guide);
+// the next Rescan picks it up.
+func (r *Registry) AddBuiltin(b Builtin) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, have := range r.builtin {
+		if have.ID == b.ID {
+			return
+		}
+	}
+	r.builtin = append(r.builtin, b)
+}
+
+// IsBuiltin reports whether path is the source of a dictionary the app ships.
+func (r *Registry) IsBuiltin(path string) bool {
+	if path == "" {
+		return false
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	for _, b := range r.builtin {
+		if filepath.Clean(b.Path) == filepath.Clean(path) {
+			return true
+		}
+	}
+	return false
+}
+
+// fileNamed returns the first of paths that is a file named name, ignoring
+// case as the file systems most dictionaries live on do.
+func fileNamed(paths []string, name string) (string, bool) {
+	for _, p := range paths {
+		if strings.EqualFold(filepath.Base(p), name) {
+			return p, true
+		}
+	}
+	return "", false
 }
 
 // pathID derives a stable slash-free dictionary id from its path.

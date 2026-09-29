@@ -36,8 +36,9 @@ import (
 // differently is how a dictionary comes to list media it will never serve.
 func Stem(src string) string {
 	s := src
-	if strings.EqualFold(filepath.Ext(s), ".dz") {
-		s = s[:len(s)-len(".dz")]
+	switch ext := strings.ToLower(filepath.Ext(s)); {
+	case ext == ".dz", ext == ".gz" && strings.HasSuffix(strings.ToLower(s), ".wudict.md.gz"):
+		s = s[:len(s)-len(ext)]
 	}
 	return strings.TrimSuffix(s, filepath.Ext(s))
 }
@@ -46,7 +47,7 @@ func Stem(src string) string {
 // the ".dsl" inside it. One list, read twice: MainExt matches a name against
 // it, and classify.go walks it to build the companion vocabulary, so a format
 // that grows a companion table cannot be forgotten by the other reader.
-var mainExts = []string{".dsl.dz", ".dsl", ".mdx", ".ifo", ".slob", ".bgl", ".zim"}
+var mainExts = []string{".wudict.md.gz", ".wudict.md.dz", ".wudict.md", ".dsl.dz", ".dsl", ".mdx", ".ifo", ".slob", ".bgl", ".zim", ".md"}
 
 // MainExt names the format of a main file for the tables below: the longest
 // spelling this file has companion knowledge about, so a compressed DSL is
@@ -115,6 +116,15 @@ func CompanionMedia(src string) []string {
 				out = append(out, z)
 			}
 		}
+	case ".wudict.md", ".wudict.md.gz", ".wudict.md.dz", ".md":
+		// "x.wudict.files/" or "x.wudict.files.zip" beside "x.wudict.md"
+		// (the Stem keeps ".wudict"); a plain "x.md" uses "x.files".
+		if z := base + ".files.zip"; fileExists(z) {
+			out = append(out, z)
+		}
+		if d := base + ".files"; dirExists(d) {
+			out = append(out, d)
+		}
 	}
 	return out
 }
@@ -166,7 +176,7 @@ func MediaSuffixes(mainExt string) []string {
 	case ".mdx":
 		// covers ".mdd" and every ".<n>.mdd" part, which end in it
 		return []string{".mdd"}
-	case ".dsl", ".dsl.dz":
+	case ".dsl", ".dsl.dz", ".wudict.md", ".wudict.md.gz", ".wudict.md.dz", ".md":
 		return []string{".files.zip"}
 	}
 	return nil

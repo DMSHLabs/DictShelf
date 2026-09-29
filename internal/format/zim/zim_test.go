@@ -121,7 +121,7 @@ func TestExactBodyIsRewritten(t *testing.T) {
 		t.Errorf("icon link hoisted: %q", body)
 	}
 	// The cross-reference becomes a lookup, percent-decoded.
-	if !strings.Contains(body, `href="bword://odraslă"`) {
+	if !strings.Contains(body, `href="entry://odraslă"`) {
 		t.Errorf("anchor not rewritten: %q", body)
 	}
 	// The image reference stays a resource reference for htmlref.
@@ -307,7 +307,7 @@ func TestOldNamespaces(t *testing.T) {
 	if err != nil || len(res) != 1 {
 		t.Fatalf("Exact(dog) = %v, %+v", err, res)
 	}
-	if !strings.Contains(res[0].Body, `href="bword://wolf"`) {
+	if !strings.Contains(res[0].Body, `href="entry://wolf"`) {
 		t.Errorf("A/ reference not rewritten: %q", res[0].Body)
 	}
 	if !strings.Contains(res[0].Body, `href="../I/p.png"`) {

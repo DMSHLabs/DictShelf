@@ -20,23 +20,25 @@ var schemeRef = regexp.MustCompile(`(?i)^[a-z][a-z0-9+.-]*:`)
 // bundled resources; these DO get rewritten.
 var soundOrFile = regexp.MustCompile(`(?i)^(?:sound|file)://`)
 
-// subEntryRef matches a cross-reference to an MDict sub-entry (D26): a headword
-// beginning with "@", addressed through an authority - `entry://@examples_woman`.
+// Cross-references are written in their canonical spelling on the way out
+// (htmlref.CanonRef): a dictionary's `bword:` links become `entry://`, so
+// wudict never emits `bword:`, and an MDict sub-entry link (D26) - a headword
+// beginning with "@", `entry://@examples_woman` - becomes the slash-less
+// `entry:@…`.
 //
-// That spelling is unsafe and we rewrite it to the slash-less `entry:@…`.
-// With "//" the browser parses an AUTHORITY, in which "@" is the userinfo
-// delimiter: `entry://@examples_woman` has empty userinfo and host
-// "examples_woman", and re-serializing drops the "@" entirely. getAttribute()
-// still returns the raw string, but anything that reads the .href *property*
-// gets the mangled form - the status bar on hover, and, decisively, dictionary
-// scripts that round-trip their own anchors (LDOCE6's entry.js does). Once the
-// attribute has been rewritten in the DOM, our "@" test fails and the click
-// falls through to a lookup, replacing the article with a fragment of itself
-// - exactly the navigation D26 set out to prevent.
+// That sub-entry spelling is unsafe with "//": the browser parses an
+// AUTHORITY, in which "@" is the userinfo delimiter, so
+// `entry://@examples_woman` has empty userinfo and host "examples_woman", and
+// re-serializing drops the "@" entirely. getAttribute() still returns the raw
+// string, but anything that reads the .href *property* gets the mangled form -
+// the status bar on hover, and, decisively, dictionary scripts that round-trip
+// their own anchors (LDOCE6's entry.js does). Once the attribute has been
+// rewritten in the DOM, our "@" test fails and the click falls through to a
+// lookup, replacing the article with a fragment of itself - exactly the
+// navigation D26 set out to prevent.
 //
 // Without "//" the rest is an opaque path: no authority, no userinfo, so "@"
-// survives every normalization. Idempotent (the output no longer matches).
-var subEntryRef = regexp.MustCompile(`(?i)^(bword|entry)://@`)
+// survives every normalization. Idempotent (the output is already canonical).
 
 // isResourceRef decides whether one reference names a file this dictionary
 // BUNDLES - something the browser will fetch - as opposed to a cross-reference
@@ -117,9 +119,11 @@ func attrBase(name string) string {
 // class of doubled res/{d}/res/{d}/… bugs.
 //
 // Left untouched: fragments (#), query-only (?), protocol-relative (//), real
-// schemes (http:, https:, data:, bword:, entry:, d:, x:, …), cross-reference
-// links (see isResourceRef), and anything already under /res/{dictID}/ - the
-// function is idempotent and can never produce a doubled URL.
+// schemes (http:, https:, data:, entry:, d:, x:, …), cross-reference links
+// (see isResourceRef), and anything already under /res/{dictID}/ - the
+// function is idempotent and can never produce a doubled URL. The one scheme
+// rewritten is a lookup link: `bword:` → `entry://`, `entry://@` → `entry:@`
+// (htmlref.CanonRef).
 //
 // <base> is dropped: in dictionary HTML it is a scraping leftover, and left in
 // place it would re-root every relative reference in the article.
@@ -204,9 +208,10 @@ func entryRewriter(dictID string, text func(string) string) htmlref.Rewriter {
 			// referencing a font or an image they uploaded.
 			strings.HasPrefix(ref, userFileURL):
 			return ref
-		case subEntryRef.MatchString(ref):
+		case isLookupRef(ref):
 			// Must precede the scheme case, which would pass it through.
-			return subEntryRef.ReplaceAllString(ref, "$1:@")
+			c, _ := htmlref.CanonRef(ref)
+			return c
 		case schemeRef.MatchString(ref) && !soundOrFile.MatchString(ref):
 			return ref
 		}
@@ -216,6 +221,12 @@ func entryRewriter(dictID string, text func(string) string) htmlref.Rewriter {
 		return resURL(dictID, ref)
 	}
 	return rw
+}
+
+// isLookupRef reports a cross-reference CanonRef respells.
+func isLookupRef(ref string) bool {
+	_, ok := htmlref.CanonRef(ref)
+	return ok
 }
 
 // resURL maps one dictionary-internal reference to its root-absolute /res/

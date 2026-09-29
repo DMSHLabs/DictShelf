@@ -4,7 +4,11 @@
 
 package server
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/wuweidict/wudict/internal/dict"
+)
 
 // The cases are whole ELEMENTS, not bare `href="…"` fragments as they once
 // were. That is not cosmetic: the rewriter parses a document now instead of
@@ -54,10 +58,13 @@ func TestRewriteEntryHTML(t *testing.T) {
 		{"svg use IS a resource", `<use href="icons.svg#play"/>`, `<use href="` + R + `icons.svg#play"/>`},
 
 		// ── schemes and shapes left alone ───────────────────────────────────
-		{"bword untouched", `<a href="bword://abandon">a</a>`, `<a href="bword://abandon">a</a>`},
+		{"bword respelled entry://", `<a href="bword://abandon">a</a>`, `<a href="entry://abandon">a</a>`},
 		{"entry untouched", `<a href="entry://x">a</a>`, `<a href="entry://x">a</a>`},
-		{"bword no slashes untouched", `<a href="bword:abandon">a</a>`, `<a href="bword:abandon">a</a>`},
-		{"bword with fragment untouched", `<a href="bword://word#sense2">a</a>`, `<a href="bword://word#sense2">a</a>`},
+		{"bword no slashes respelled", `<a href="bword:abandon">a</a>`, `<a href="entry://abandon">a</a>`},
+		{"bword with fragment respelled", `<a href="bword://word#sense2">a</a>`, `<a href="entry://word#sense2">a</a>`},
+		{"bword sub-entry respelled", `<a href="BWORD://@ex">a</a>`, `<a href="entry:@ex">a</a>`},
+		{"entry sub-entry loses //", `<a href="entry://@ex">a</a>`, `<a href="entry:@ex">a</a>`},
+		{"entry untouched", `<a href="entry://abandon">a</a>`, `<a href="entry://abandon">a</a>`},
 		{"d-link untouched", `<a href="d:other">a</a>`, `<a href="d:other">a</a>`},
 		{"http untouched", `<a href="http://x.com/a.mp3">a</a>`, `<a href="http://x.com/a.mp3">a</a>`},
 		{"data-uri untouched", `<img src="data:image/png;base64,AA">`, `<img src="data:image/png;base64,AA">`},
@@ -102,7 +109,7 @@ func TestRewriteEntryHTML(t *testing.T) {
 		// ── a whole line of real article markup ─────────────────────────────
 		{"mixed article",
 			`<a href="sound://a.mp3"><img src="spkr_b.png"></a> <a href="bword://apple">apple</a>`,
-			`<a href="` + R + `a.mp3"><img src="` + R + `spkr_b.png"></a> <a href="bword://apple">apple</a>`},
+			`<a href="` + R + `a.mp3"><img src="` + R + `spkr_b.png"></a> <a href="entry://apple">apple</a>`},
 	}
 	for _, c := range cases {
 		if got := RewriteEntryHTML(c.in, id); got != c.want {
@@ -136,11 +143,29 @@ func TestRewriteEntryHTMLPreservesUntouchedMarkup(t *testing.T) {
 	const id = "001598b628f5"
 	for _, in := range []string{
 		`<div CLASS='x'   id=y ><b>bold</b>&nbsp;&amp; <i>it</i></div>`,
-		`<p>text with <a href="bword://w">a link</a> and an &eacute;</p>`,
+		`<p>text with <a href="entry://w">a link</a> and an &eacute;</p>`,
 		`<span data-x="1" DATA-Y='2'>unquoted=ok</span>`,
 	} {
 		if got := RewriteEntryHTML(in, id); got != in {
 			t.Errorf("markup not preserved:\n  in  %s\n  got %s", in, got)
+		}
+	}
+}
+
+// TestFormatArticlesRawNeverBword: raw output is verbatim except that a
+// dictionary's bword: links leave as entry://.
+func TestFormatArticlesRawNeverBword(t *testing.T) {
+	rs := []dict.Result{
+		{Body: `<a href="bword://run">run</a> <a href="bword:@sub">s</a>`},
+		{Body: `<p>as <b>stored</b></p>`},
+	}
+	FormatArticles(nil, formatRaw, "", rs)
+	for i, want := range []string{
+		`<a href="entry://run">run</a> <a href="entry:@sub">s</a>`,
+		`<p>as <b>stored</b></p>`,
+	} {
+		if rs[i].Body != want {
+			t.Errorf("result %d = %q, want %q", i, rs[i].Body, want)
 		}
 	}
 }

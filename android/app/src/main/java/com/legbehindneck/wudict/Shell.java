@@ -255,6 +255,7 @@ final class Shell {
         reply.put("toolbar", ShellPrefs.opensApp(c, ShellPrefs.TOOLBAR));
         reply.put("share", ShellPrefs.opensApp(c, ShellPrefs.SHARE));
         reply.put("link", ShellPrefs.opensApp(c, ShellPrefs.LINK));
+        reply.put("reader", ShellPrefs.opensApp(c, ShellPrefs.READER));
         reply.put("info", ShellPrefs.infoMessages(c));
         reply.put("key", ShellPrefs.requireKey(c));
         // The CONFIGURED port, and not ServerProcess.port: the page prints this
@@ -684,6 +685,8 @@ final class Shell {
                                 ShellPrefs.set(a, ShellPrefs.SHARE, request.getBoolean("value"));
                             } else if ("link".equals(field)) {
                                 ShellPrefs.set(a, ShellPrefs.LINK, request.getBoolean("value"));
+                            } else if ("reader".equals(field)) {
+                                ShellPrefs.set(a, ShellPrefs.READER, request.getBoolean("value"));
                             } else if ("info".equals(field)) {
                                 ShellPrefs.set(a, ShellPrefs.INFO_MESSAGES, request.getBoolean("value"));
                             } else if ("key".equals(field)) {

@@ -213,10 +213,10 @@ label.keep em{font-style:normal;color:var(--label-quiet);font-size:12.5px}
   <h2>Add dictionaries</h2>
   <p>Drag-n-drop a link to a packed dictionary (<code>.zip</code>/ <code>.7z</code>) or unpacked (<code>.mdx</code>,
     <code>.ifo</code>, <code>.dsl/.dsl.dz</code>, <code>.slob</code>,
-     <code>.bgl</code> or <code>.zim</code>). Or paste a link, and the dictionaries will be installed into
+     <code>.bgl</code>, <code>.zim</code> or <code>.wudict.md</code>). Or paste a link, and the dictionaries will be installed into
      <code id="addDir"></code> — .mdd assets are auto-discovered.</p>
   <div id="drop">
-    <input type="file" id="file" accept=".zip,.7z,.mdx,.mdd,.ifo,.idx,.dict,.dz,.syn,.dsl,.slob,.bgl,.zim" hidden>
+    <input type="file" id="file" accept=".zip,.7z,.mdx,.mdd,.ifo,.idx,.dict,.dz,.syn,.dsl,.slob,.bgl,.zim,.md,.gz" hidden>
     <button type="button" id="choose" class="link">Choose a file…</button>
     <span class="hint">or drop one here</span>
   </div>
@@ -238,6 +238,10 @@ label.keep em{font-style:normal;color:var(--label-quiet);font-size:12.5px}
     <button type="button" id="dropJob" class="btn ghost">Cancel</button>
   </div>
   <div id="impMsg"></div>
+  <!-- The guide as a file of the user's own: proof that a dictionary can be a
+       text file they write, one click from here. Named by what it does. -->
+  <p class="formats"><a href="#" id="howtoCopy">Put the wudict howto in this folder</a>
+     — wudict's own guide, as a file you can open in any text editor and change.</p>
 </div>
 
 <div id="libSection" class="hidden">
@@ -255,10 +259,13 @@ label.keep em{font-style:normal;color:var(--label-quiet);font-size:12.5px}
 <div id="msg"></div>
 <button id="save" disabled>Use this folder</button>
 
-<p class="formats">Supported: MDict (.mdx + .mdd) · StarDict (.ifo) · Aard2 (.slob) · Lingvo DSL (.dsl, .dsl.dz) · Babylon (.bgl) · ZIM (.zim) · prepared dictionary folders</p>
+<!-- Shown only after the user removed the built-in guide (D154 Am. 5). -->
+<p class="formats hidden" id="howtoBackRow"><a href="#" id="howtoBack">Bring back the wudict howto</a>
+   — wudict's own guide, built into the app.</p>
+<p class="formats">Supported: MDict (.mdx + .mdd) · StarDict (.ifo) · Aard2 (.slob) · Lingvo DSL (.dsl, .dsl.dz) · Babylon (.bgl) · ZIM (.zim) · wudict markdown (.wudict.md, .md) · prepared dictionary folders</p>
 <!-- First run is the one moment the app has the user's full attention and
      nothing else to say; one line is the whole budget. -->
-<p class="about"><b>WuWei</b>Dict — search every dictionary you own, from one browser tab.
+<p class="about"><b>wu</b>Dict — search every dictionary you own, from one browser tab.
   <a href="https://wuweidict.github.io/wudict" target="_blank" rel="noopener">Website</a>
   · <a href="https://github.com/wuweidict/wudict" target="_blank" rel="noopener">Source</a></p>
 </div>
@@ -638,6 +645,29 @@ async function impCancel(){
   impSay("");
 }
 
+/* Copies the guide into the folder above (POST /api/howto); the copy then
+   stands in for the built-in guide, and the server has already rescanned. */
+async function howtoBack(e){
+  e.preventDefault();
+  const msg=$("howtoBackRow");
+  let r;
+  try{ r=await fetch("/api/howto?restore=1",{method:"POST"}) }
+  catch(_){ msg.textContent="✕ wudict is not answering";return }
+  const j=await r.json().catch(()=>({}));
+  msg.textContent=r.ok?"✓ The wudict howto is back — search “wudict” to find it"
+                      :"✕ "+(j.error||("error "+r.status));
+}
+
+async function howtoCopy(e){
+  e.preventDefault();
+  let r;
+  try{ r=await fetch("/api/howto",{method:"POST"}) }
+  catch(_){ impSay("✕ wudict is not answering","err");return }
+  const j=await r.json().catch(()=>({}));
+  if(!r.ok){impSay("✕ "+(j.error||("error "+r.status)),"err");return}
+  impSay("✓ Added "+j.path+" — edit it, then press Rescan folders to see your changes","ok");
+}
+
 function wireIntake(dir){
   if(!dir)return; // nowhere to install into yet: the folder above comes first
   $("addDir").textContent=dir;
@@ -648,6 +678,7 @@ function wireIntake(dir){
   $("url").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();impFetch()}});
   $("install").addEventListener("click",impInstall);
   $("dropJob").addEventListener("click",impCancel);
+  $("howtoCopy").addEventListener("click",howtoCopy);
   const d=$("drop");
   // dragover must be cancelled or the browser navigates to the file instead,
   // which on a drop of a 2 GB zip is a download of it.
@@ -676,6 +707,13 @@ async function start(){
   inUse=!!(cfg&&cfg.total>0);
   const dirs=(cfg&&cfg.roots||[]).map(r=>r.path);
   if(dirs.length)dirs.forEach(d=>addRow(d)); else addRow("");
+  /* howtoRemoved is a fact about the host: it stays false while the builtin
+     guide is not wired, so this row never appears - kept whole, like the
+     markup and howtoBack, for a host that offers the guide. */
+  if(cfg&&cfg.howtoRemoved){
+    $("howtoBackRow").classList.remove("hidden");
+    $("howtoBack").addEventListener("click",howtoBack);
+  }
   if(cfg&&cfg.dictDirEditable===false){
     const how=cfg.dictDirOrigin==="flag"?"the --dict-dir command-line flag":"the DICT_DIR environment variable";
     $("origin").textContent="⚠ These folders come from "+how+

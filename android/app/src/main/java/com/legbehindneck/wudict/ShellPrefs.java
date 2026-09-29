@@ -190,13 +190,15 @@ final class ShellPrefs {
         of(c).edit().putInt(themed(SEPIA_COLOR, night), Color.parseColor(value)).apply();
     }
 
-    // One key per way in, because the three carry different intent: a
+    // One key per way in, because the four carry different intent: a
     // selection-toolbar tap is a glance, a shared passage is deliberate, a
-    // wudict:// call is programmatic. All default to false - float - so an
-    // upgrade changes nothing for anyone.
+    // wudict:// call is programmatic, and a reader's dictionary button is the
+    // reader's habit, configured once in the reader. All default to false -
+    // float - so an upgrade changes nothing for anyone.
     static final String TOOLBAR = "lookup_toolbar_in_app";
     static final String SHARE = "lookup_share_in_app";
     static final String LINK = "lookup_link_in_app";
+    static final String READER = "lookup_reader_in_app";
 
     // ── the information messages (2026-09-27) ────────────────────────────────
     //
@@ -224,7 +226,7 @@ final class ShellPrefs {
     static final String INFO_MESSAGES = "show_info_messages";
 
     // Whether the app's own window hides the system bars while it is read.
-    // A shell fact by the same two tests as the three above: the WINDOW is the
+    // A shell fact by the same two tests as the four above: the WINDOW is the
     // subject, and the decider - MainActivity, painting its first frame - has
     // no page and no server to ask. The popup is exempt by construction: a
     // floating window does not own the bars, so this key is read in one place.
@@ -574,6 +576,8 @@ final class ShellPrefs {
      * gets the least intrusive outcome rather than a hijacked task.
      */
     static String sourceKey(Intent i) {
+        // Before VIEW: Dictan's dispatcher is a VIEW told apart by its category.
+        if (LookupActivity.fromReader(i)) return READER;
         String action = i == null ? null : i.getAction();
         if (Intent.ACTION_SEND.equals(action)) return SHARE;
         if (Intent.ACTION_VIEW.equals(action)) return LINK;

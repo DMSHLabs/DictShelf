@@ -6,7 +6,7 @@
 
 // wudict iframe bridge: runs inside sandboxed article iframes
 // (script-bearing dictionaries). Reports content height, forwards
-// bword:// lookups and double-click word lookups to the app, follows
+// entry:// lookups and double-click word lookups to the app, follows
 // theme changes.
 (function () {
 	"use strict";
@@ -361,11 +361,13 @@
 	});
 
 	// The reference parser, mirroring parseRef in index.html — keep the two in
-	// step. `bword://Some Headword#frag` is NOT a URL: "//" promises an
+	// step. `entry://Some Headword#frag` is NOT a URL: "//" promises an
 	// authority, which cannot hold the spaces that headwords are full of, so
 	// this works by string position and never touches URL().
 	var REF_SCHEME = /^(?:(?:bword|entry):(?:\/\/)?|[dx]:)/i;
 	function decodeRef(s) { try { return decodeURIComponent(s); } catch (_) { return s; } }
+	// spaces and tabs only: a headword may begin or end with U+3000 or NBSP
+	function refTrim(s) { return s.replace(/^[ \t]+|[ \t]+$/g, ""); }
 	function parseRef(href) {
 		var m = REF_SCHEME.exec(href || "");
 		if (!m) return null;
@@ -373,12 +375,13 @@
 		var rest = href.slice(m[0].length), frag = "";
 		var h = rest.indexOf("#");
 		if (h >= 0) { frag = rest.slice(h + 1); rest = rest.slice(0, h); }
-		var word = decodeRef(rest).trim();
+		var raw = refTrim(rest), word = refTrim(decodeRef(rest));
 		frag = decodeRef(frag);
-		if (word.charAt(0) === "@" && word.length > 1) return { kind: "sub", word: word, frag: frag };
+		// "@" is tested undecoded: a real headword "@home" arrives as %40home
+		if (raw.charAt(0) === "@" && raw.length > 1) return { kind: "sub", word: word, frag: frag };
 		return { kind: word ? "lookup" : "anchor", word: word, frag: frag };
 	}
-	// A lookup-scheme link carrying only a fragment (`bword://#HistAI`) is the
+	// A lookup-scheme link carrying only a fragment (`entry://#HistAI`) is the
 	// article's own table of contents, not a cross-reference. We cannot scroll
 	// to it here: the iframe is sized to its content and so never scrolls
 	// itself. Report the target's offset and let the page move, where the fixed
@@ -511,7 +514,7 @@
 			// where this renderer and the shadow-DOM one genuinely differ, so
 			// mirroring index.html's exclusion list was bound to get it wrong.
 			//
-			// Propagation is deliberately NOT stopped. Unlike a bword:// link,
+			// Propagation is deliberately NOT stopped. Unlike an entry:// link,
 			// this click belongs to the dictionary — Cambridge's English/American
 			// tabs are jQuery handlers on <a href="#dataset-british"> — and
 			// cancelling the navigation is the only thing they needed from us.

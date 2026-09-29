@@ -49,6 +49,64 @@ The reference projects cited below (`pyglossary/…`, `mdict-go-web/…`, `draeg
 - **Namespaces are versioned.** `minorVersion >= 1` (ZIM 6.1) means the new scheme — `C` content, `M` metadata, `W` well-known, `X` index; below it, `A` articles, `I` images, `-` layout, `M` metadata. The whole compatibility story is one function (`contentNS()`), and every content lookup, resource lookup and link rewrite routes through it. ZIM 6.3 also **removed the title pointer list** (`titlePtrPos` = `0xFFFF…FF` in all nine corpus files).
 - **The path pointer list is sorted in raw byte order over `(namespace, path)`** — verified across all 181,966 entries of a real wiktionary, zero inversions. That is what makes this the first format in the tree whose direct backend needs **no resident index at all**: exact and prefix lookup are a binary search over the file (~21 `pread`s), and `docs/SPEC.md` §6c's ban on binary-search work in a direct backend does not apply, because that rule targets a *guessed* collation and byte order is exactly what the file was written with. Consequence: `Dict` implements `PreviewBytes` and `SelfIndexed` (`internal/server/registry.go`), so the server neither bills it for a map it does not hold nor prepares it behind the user's back — ZIM packs whole clusters with zstd (~14×) while a prepared `text.db` DEFLATEs one article at a time (~3.5×, D24), so preparing a 123 MB wiktionary would *expand* it to ~431 MB. Preparation stays available on request; only the automatic path declines.
 - Paths carry no percent-encoding, spell a space `_`, and store an **empty title when it equals the path** — so the headword is `title or path`, and a `_` is never substituted back. MediaWiki capitalises the first letter of a title, so a user's word is tried in a short closed list of spellings (`pathVariants`), each one binary search; that is not case folding, and folded/contains/full-text still arrive with preparation.
-- Articles are complete HTML documents. `articleBody` keeps the `<body>` inner HTML plus the head's stylesheet `<link>`s (22% smaller on a real wiktionary), falling back to the whole document when there is no `<body>` — devdocs and zimit captures depend on that fallback. `rewriteLinks` maps a relative `<a href>` to `bword://`, because a ZIM cross-reference is a percent-encoded sibling path (`href="odrasl%C4%83"`) that nothing downstream can resolve; `src` and `<link href>` are deliberately left to `htmlref`.
+- Articles are complete HTML documents. `articleBody` keeps the `<body>` inner HTML plus the head's stylesheet `<link>`s (22% smaller on a real wiktionary), falling back to the whole document when there is no `<body>` — devdocs and zimit captures depend on that fallback. `rewriteLinks` (`entryRef`) maps a relative `<a href>` to `entry://`, because a ZIM cross-reference is a percent-encoded sibling path (`href="odrasl%C4%83"`) that nothing downstream can resolve; `src` and `<link href>` are deliberately left to `htmlref`.
 - **No `resource.Provider` is registered**, for the same reason bgl has none but the opposite arithmetic: O8's locator exists because reopening an `.mdx` costs 280 MB of index build, and reopening a `.zim` builds nothing at all. Rung 3 is already the cheap path.
 - Reference: **`unidict-deps/czim`** (C11, plus its `docs/zim_format.md`) is the only from-scratch implementation of the four that were available, and the structural source here; pyglossary's `zimfile`, `zim-cgo`, and — contrary to expectation — **goldendict-ng's `zim.cc`** are all `libzim` shims and carry no binary knowledge. Two czim defects are **not** ported: a fixed 256-byte MIME-string buffer that silently desynchronises the list walk (a zimit capture has multi-kilobyte paths), and `lzma_alone_decoder` for codec 4, where real files write an **xz** stream (`FD 37 7A 58 5A 00`).
+
+## wudict markdown (D154)
+
+- Normative spec: `docs/WUDICT-MARKDOWN.md`. The examples (`docs/wudict-markdown/examples/{clean,html}.wudict.md`)
+  are the spec's §10 byte for byte, and are what the writer produces from §10's sources.
+- Standard CommonMark + GFM tables, read by a **stock** parser with no plugins: goldmark v2 (`extension.TableParser`,
+  `html.WithUnsafe()`). Entries are the top-level H2 nodes; adjacent H2s are one entry (headword + aliases).
+  Verified on the Espasa-Calpe dump in both modes: stock markdown-it-py (`commonmark` + `table`) finds the same
+  38,521 entries with the same names.
+- `internal/format/wmd`:
+  - `read.go` — the reader. It parses in ~1 MB chunks cut at heading groups, every cut confirmed by the parser
+    (a syntax tree costs ≈43× its text). Link definitions are collected file-wide and prefilled, detached from
+    their nodes. Redirects (`see:`) are folded into every matching article (exact, then case-folded); a dangling
+    one becomes a lookup-link article.
+  - `source.go` — the text a Reader reads a range at a time (`ReaderAt`), so it never holds a whole file: a clean
+    plain file in place; a compressed file, or one needing R2.1 repair, decoded once (streaming, across block
+    boundaries) into a temporary file removed on Close, or into memory where no temporary file can be made. The
+    same pass collects the candidate entry lines, `]:` presence and lines 1-2. Measured: reading back a 1.18 GB
+    file peaks at 113 MB.
+  - `load.go` — R2.1 decoding of a block; `.gz`/`.dz` suffixes, bounded to 1 GiB decompressed.
+  - `wmd.go` — registration: every spelling (`.wudict.md`, `.md`, `.wudict.md.gz`, `.wudict.md.dz`) through
+    `dict.RegisterSniffed` + `Claim`, so the gate is the same whatever the name (R2.2): line 1 `# title`, line 2
+    the `wudict` field, read from a 4 KiB head (decompressed for `.gz`/`.dz`). A DSL-style auto-prepared `Dict`,
+    and `MediaSources` (`<stem>.files.zip`, `<stem>.files/`, loose files). The gate reads the source's head on
+    every open; the prepared store is then opened without reading the rest.
+  - The gate is `dict`'s, applied everywhere a file becomes a dictionary: `Discover`, `Open`/`OpenReader`
+    (which report the claim's reason for an explicitly named file), `IsDictionaryFile`, and intake through
+    `dict.ClassifyName` → `KindCandidate` + `dict.Claims`: an archive entry's head is read in `intake.Sniff`, a
+    loose file's on disk (`OpenPlain`, `holdsDictionary`, `probeCompanions`), and a download may begin by
+    name alone (`canBegin`) and is settled once it has arrived.
+  - `convert.go` — `clean` mode: one walk applying the R6.6 allowlist and R6.7 escaping, then a stock parse
+    proving the body cannot split its entry. Fuzzed as a fixed point: converting the stock rendering of its
+    output gives the same output.
+  - `rawmode.go` — `html` mode: `CanonLinks`, the `<div>` wrapper unless already one type-6 element, blank lines
+    removed or turned into `&#10;` inside `pre`/`textarea`/`listing`.
+  - `writer.go` — names (R6.2), header keys (R6.3), bodies spooled to a temporary file with only names in
+    memory, redirect folding with chains (R6.4), assembly (R6.1).
+- `internal/cli/dump_md.go` — `wudict dump -format md -mode html|clean [-compress gz]`: `<base>.wudict.md[.gz]`
+  written to a temporary file and renamed, resources in `<base>.wudict.files/`. A `clean` failure aborts: the raw
+  entry goes to stdout, and the error with the exact `-mode html` command to stderr.
+- F22 (done) — wudict never emits `bword:`. `bword:` is Babylon Ltd.'s proprietary cross-reference scheme, from its BGL glossaries and Babylon Builder projects (late 1990s); no public RFC-style specification exists, only the behaviour open-source dictionary readers reverse-engineered and preserved. Emitters switched to `entry://`: CSV dump redirect anchors, DSL `[ref]`/`<<ref>>` (dsl reader 2), ZIM `entryRef` (zim reader 2); prepared dictionaries get the stale/rebuild offer, never a forced rebuild. A dictionary's own `bword:` links are stored as found and respelled on every way out by `htmlref.CanonRef`/`CanonLinks` (`bword:[//]w` → `entry://w`, `@sub` → `entry:@sub`): the server's article rewrite (so BGL id links like `bword://E310420` too), `lookup -format raw`, and the CSV dump of both a source and a prepared `text.db`. Resolvers (`parseRef` in `index.html`/`frame.js`) keep accepting `bword:`. Targets are built by `htmlref.EntryHref` (`%`, `#`, controls and a leading `@` percent-encoded), so `[ref]C#[/ref]` links to `C%23`, not to `C` with an empty fragment (dsl reader 3, zim reader 3).
+- **The wudict howto** (`internal/howto/wudict-howto.wudict.md`) is the format's standing proof. `howto_test.go`
+  checks that it:
+  - passes the gate and reads without a warning;
+  - keeps every headword under `wudict `;
+  - resolves every `entry://` link to one of its headwords, and links only to app pages (`/browse`, `/setup`,
+    `/lemmas`);
+  - ships every image it shows and shows every image it ships;
+  - comes back byte for byte from `wudict dump -mode clean`.
+
+  Write it in that canonical form: one line per paragraph; bold and italic that start and end with a letter
+  (punctuation outside); `<kbd>` for controls.
+- **Known limit (R9.3, accepted 2026-09-28):** stock goldmark is quadratic on list markers nested on one line
+  (`- - - … x`: 40k deep = 2.3 s) and on tens of thousands of reference definitions in one entry (40k = 0.5 s);
+  the reader parses each chunk about twice. No guard: a crafted file in a dictionary folder can hold its first
+  open (the auto-prepare) for minutes. Every other shape measured (brackets, emphasis, backticks, `<`, quotes,
+  ordered lists, headings, `##` inside code or HTML) scales linearly.
+- Tests: examples ≡ spec, written and read; header and entry rules; chunking invisible (test + differential fuzz); clean fixed-point fuzz; names round trip; folding; idempotence in both modes; CLI round trip, gzip determinism, resources; reader golden; `-race`.

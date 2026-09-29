@@ -359,6 +359,40 @@ paths:
         '500':
           $ref: '#/components/responses/ServerError'
 
+  /api/howto:
+    post:
+      tags: [internal]
+      operationId: howtoCopy
+      x-internal: true
+      summary: Put an editable copy of the wudict howto into the import folder
+      description: >
+        Copies the built-in guide (`wudict-howto.wudict.md` and its
+        `wudict-howto.wudict.files/`) into the folder imports go to - the first
+        dictionary folder - then rescans. The copy is listed in place of the
+        built-in guide. An existing copy is never overwritten.
+        With `restore=1` it instead brings the built-in guide back after the
+        user removed it (`DELETE /api/library?dict=wudict-howto`, which
+        records the removal so it is not written back at the next start).
+      parameters:
+        - name: restore
+          in: query
+          required: false
+          schema: { type: string, enum: ['1'] }
+          description: Bring the removed built-in guide back instead of copying it.
+      responses:
+        '200':
+          description: Copied; `path` is the new file.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  path: { type: string }
+        '409':
+          description: No dictionary folder is configured, or the folder already holds the guide.
+        '500':
+          $ref: '#/components/responses/ServerError'
+
   /api/ingest:
     get:
       tags: [internal]
@@ -2294,7 +2328,7 @@ components:
         name: { type: string }
         format:
           type: string
-          enum: [mdx, stardict, slob, dsl, bgl, zim, wudict]
+          enum: [mdx, stardict, slob, dsl, bgl, zim, wmd, wudict]
         path:
           type: string
           description: The source file, or the text.db of a prepared dictionary.
@@ -2327,6 +2361,7 @@ components:
         dbSize: { type: integer, description: Bytes of text.db. }
         mediaSize: { type: integer, description: Bytes of media.db. }
         hasMedia: { type: boolean, description: 'Packable media exists, so "pack media" is offered.' }
+        builtin: { type: boolean, description: 'Shipped with the app (the wudict howto, id `wudict-howto`), not added by the user; it cannot be removed.' }
         groups:
           type: array
           items: { $ref: '#/components/schemas/DictGroup' }
@@ -2412,6 +2447,7 @@ components:
         prepared: { type: integer }
         useCached: { type: boolean }
         configPath: { type: string, description: The config file in effect. }
+        howtoRemoved: { type: boolean, description: 'The user removed the built-in wudict howto; POST /api/howto?restore=1 brings it back.' }
         total: { type: integer, description: Dictionaries served. }
         dictDirOrigin:
           type: string

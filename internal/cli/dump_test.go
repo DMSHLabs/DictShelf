@@ -114,8 +114,7 @@ func testReader() *fakeReader {
 }
 
 // readAll is the source-file path: a redirect has no body of its own and is
-// written as a bword: anchor, which is the cross-reference scheme every
-// importer downstream of the CSV understands.
+// written as an entry:// anchor.
 func TestReadAllRedirect(t *testing.T) {
 	var got [][]string
 	err := readAll(testReader(), func(words []string, body string) error {
@@ -131,7 +130,7 @@ func TestReadAllRedirect(t *testing.T) {
 	if want := []string{"aardvark", "ant bear", "<b>burrowing</b>, \"quoted\"\nnext"}; !reflect.DeepEqual(got[0], want) {
 		t.Errorf("row 0 = %q, want %q", got[0], want)
 	}
-	if want := `<a href="bword://know">know</a>`; got[2][1] != want {
+	if want := `<a href="entry://know">know</a>`; got[2][1] != want {
 		t.Errorf("redirect body = %q, want %q", got[2][1], want)
 	}
 	// BodyText is escaped and wrapped by the ingest normalizer, not passed
@@ -211,5 +210,79 @@ func TestDumpEntriesNoOutputOnFailure(t *testing.T) {
 	}
 	if _, err := os.Stat(out); !os.IsNotExist(err) {
 		t.Fatalf("output folder was created for a failed dump: %v", err)
+	}
+}
+
+// TestCSVNeverBword: the CSV dump writes cross-references as entry://, both
+// its own redirect anchors and the source's bword: links it passes through.
+func TestCSVNeverBword(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		e    dict.Entry
+		want string
+	}{
+		{"redirect", dict.Entry{Headwords: []string{"a"}, LinkTo: "b c"}, `<a href="entry://b c">b c</a>`},
+		// a redirect names a headword: a leading "@" is encoded so the host
+		// looks it up instead of inlining an MDict sub-entry (R5.16)
+		{"redirect to an @ headword", dict.Entry{Headwords: []string{"a"}, LinkTo: "@sub"}, `<a href="entry://%40sub">@sub</a>`},
+		{"redirect to C#", dict.Entry{Headwords: []string{"a"}, LinkTo: "C#"}, `<a href="entry://C%23">C#</a>`},
+		{"redirect escaped", dict.Entry{Headwords: []string{"a"}, LinkTo: `x"<y`}, `<a href="entry://x&#34;&lt;y">x&#34;&lt;y</a>`},
+		{"source bword://", dict.Entry{Headwords: []string{"a"}, Body: `<a href="bword://run#s2">run</a>`, Kind: dict.BodyHTML},
+			`<a href="entry://run#s2">run</a>`},
+		{"source bword: no slashes", dict.Entry{Headwords: []string{"a"}, Body: `<a href=bword:run>run</a>`, Kind: dict.BodyHTML},
+			`<a href="entry://run">run</a>`},
+		{"source BWORD sub-entry", dict.Entry{Headwords: []string{"a"}, Body: `<a href="BWORD://@ex">e</a>`, Kind: dict.BodyHTML},
+			`<a href="entry:@ex">e</a>`},
+		{"text body untouched", dict.Entry{Headwords: []string{"a"}, Body: "see bword://x", Kind: dict.BodyText},
+			"<p>see bword://x</p>"},
+		{"entry:// untouched", dict.Entry{Headwords: []string{"a"}, Body: `<a href='entry://run'>run</a>`, Kind: dict.BodyHTML},
+			`<a href='entry://run'>run</a>`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var got string
+			err := readAll(&fakeReader{entries: []dict.Entry{tc.e}}, func(_ []string, body string) error {
+				got = body
+				return nil
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != tc.want {
+				t.Errorf("body = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// A prepared dictionary stores its source's links as found; the dump of its
+// text.db respells them like the Reader path does.
+func TestDumpEntriesPreparedNeverBword(t *testing.T) {
+	src := &fakeReader{
+		meta: dict.Meta{Name: "B"},
+		entries: []dict.Entry{
+			{Headwords: []string{"a"}, Body: `<a href="bword://run">run</a> <a href="bword:@sub">s</a>`, Kind: dict.BodyHTML},
+		},
+	}
+	dbPath := filepath.Join(t.TempDir(), "B", store.TextDBName)
+	if _, err := store.IngestPlan(src, dbPath, store.Plan{}, func(done, total int) {}); err != nil {
+		t.Fatal(err)
+	}
+	out := filepath.Join(t.TempDir(), "dump")
+	csvPath := filepath.Join(out, "B.csv")
+	if _, err := dumpEntries(dbPath, out, csvPath); err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(csvPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(b)
+	if strings.Contains(strings.ToLower(got), "bword:") {
+		t.Errorf("dump still carries bword:\n%s", got)
+	}
+	for _, want := range []string{"entry://run", "entry:@sub"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("dump lacks %q:\n%s", want, got)
+		}
 	}
 }

@@ -61,15 +61,80 @@ func RegisterInspectable(ext string, fn opener) {
 	inspectOpeners[strings.ToLower(ext)] = fn
 }
 
+// sniffed is a format claimed by content rather than by name alone: its
+// suffix is shared with files that are not dictionaries (a ".md" is far more
+// often a README than a glossary), so the suffix only nominates the file and
+// claim decides. See RegisterSniffed.
+type sniffed struct {
+	claim func(name string, head io.Reader) error
+	open  opener
+	read  readerOpener
+}
+
+var sniffedFormats = map[string]sniffed{}
+
+// RegisterSniffed wires a suffix that is a dictionary only when its content
+// says so. claim reads the start of the file - name is its name, for a format
+// that must know how the bytes are packed - and returns nil when the file is
+// one, else why not. Every path that decides "is this a dictionary" applies
+// it: discovery, Open, OpenReader, IsDictionaryFile, and intake through
+// Claims. It is consulted after every name-only registration misses. claim
+// must be cheap - it runs on every candidate a folder scan walks past - read
+// a bounded head, and not panic on hostile bytes.
+func RegisterSniffed(ext string, claim func(name string, head io.Reader) error, open opener, read readerOpener) {
+	sniffedFormats[strings.ToLower(ext)] = sniffed{claim: claim, open: open, read: read}
+}
+
+// errNoClaim is a name no RegisterSniffed suffix nominates.
+var errNoClaim = errors.New("not a content-claimed format")
+
+// Claims applies the content gate of a RegisterSniffed suffix to one file,
+// whose bytes open returns - a file on disk or an entry of an archive. nil
+// when name has such a suffix and the content qualifies; otherwise an error
+// saying why not. open is called only for such a suffix.
+func Claims(name string, open func() (io.ReadCloser, error)) (err error) {
+	s, ok := matchKey(sniffedFormats, name)
+	if !ok {
+		return errNoClaim
+	}
+	defer func() {
+		if p := recover(); p != nil {
+			err = fmt.Errorf("unreadable: %v", p)
+		}
+	}()
+	rc, err := open()
+	if err != nil {
+		return err
+	}
+	defer rc.Close()
+	return s.claim(name, rc)
+}
+
+// sniffedFor resolves a content-claimed format for path, reading its head.
+// ok reports a nominating suffix; err, when ok, why its content does not
+// qualify.
+func sniffedFor(path string) (s sniffed, ok bool, err error) {
+	if s, ok = matchKey(sniffedFormats, path); !ok {
+		return sniffed{}, false, nil
+	}
+	return s, true, Claims(path, func() (io.ReadCloser, error) { return os.Open(path) })
+}
+
+// sniffedErr is the reason an explicitly named file with a content-claimed
+// suffix is not a dictionary, or nil.
+func sniffedErr(path string) error {
+	if _, ok, err := sniffedFor(path); ok && err != nil {
+		return fmt.Errorf("%s is not a dictionary: %w", filepath.Base(path), err)
+	}
+	return nil
+}
+
 // openerFor resolves the opener for an explicitly named path: an exact
 // base-name registration first (bundle main files), then the longest matching
-// dictionary suffix, and only then an inspect-only container - so a real
-// format always wins.
+// dictionary suffix, then a content-sniffed suffix, and only then an
+// inspect-only container - so a real format always wins.
 func openerFor(path string) (opener, bool) {
-	if fn, ok := fileOpeners[strings.ToLower(filepath.Base(path))]; ok {
-		return fn, true
-	}
-	if fn, ok := matchKey(openers, path); ok {
+	if fn, ok := discoverableFor(path); ok {
 		return fn, true
 	}
 	return matchKey(inspectOpeners, path)
@@ -134,7 +199,13 @@ func discoverableFor(path string) (opener, bool) {
 	if fn, ok := fileOpeners[strings.ToLower(filepath.Base(path))]; ok {
 		return fn, true
 	}
-	return matchKey(openers, path)
+	if fn, ok := matchKey(openers, path); ok {
+		return fn, true
+	}
+	if s, ok, err := sniffedFor(path); ok && err == nil {
+		return s.open, true
+	}
+	return nil, false
 }
 
 // matchKey returns the registered map key that path ends with, preferring the
@@ -210,8 +281,16 @@ func RegisterReader(ext string, fn readerOpener) {
 func OpenReader(path string) (r Reader, err error) {
 	fn, ok := matchKey(readerOpeners, path)
 	if !ok {
+		if s, sok, err := sniffedFor(path); sok && err == nil {
+			fn, ok = s.read, true
+		}
+	}
+	if !ok {
 		if p := MainFile(path); p != path {
 			return OpenReader(p)
+		}
+		if err := sniffedErr(path); err != nil {
+			return nil, err
 		}
 		return nil, fmt.Errorf("no ingest reader for format: %s", formatOf(path))
 	}
@@ -228,6 +307,9 @@ func Open(path string) (d Dictionary, err error) {
 	if !ok {
 		if p := MainFile(path); p != path {
 			return Open(p)
+		}
+		if err := sniffedErr(path); err != nil {
+			return nil, err
 		}
 		return nil, fmt.Errorf("unsupported dictionary format: %s", formatOf(path))
 	}
@@ -472,7 +554,8 @@ func Discover(root string) ([]string, error) {
 // IsDictionaryFile reports whether path names a file this build can serve as a
 // dictionary: a registered main file or suffix, and not an inspect-only
 // container (an .mdd is readable but is not a dictionary - see inspectOpeners).
-// It is a name test, not a probe: no bytes are read.
+// It is a name test, not a probe: no bytes are read - except for a suffix
+// registered with RegisterSniffed (the markdown family), whose head decides.
 //
 // Used by the "open this file with wudict" entry point the desktop file
 // associations rely on, so that `wudict nonsense` still reports an unknown

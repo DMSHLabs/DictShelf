@@ -24,12 +24,16 @@ the config file in effect. Then it opens your browser.
 
 To start a copy you built in the current folder, run `./wudict`.
 
+wudict comes with its own guide, **wudict howto**, a small dictionary built into the app. With no dictionaries of
+your own yet, the main page opens on it. Search `wudict` any time to list its topics.
+
 ## 2. Set the folders with dictionaries
 
 wuDict looks for dictionaries under **`~/Dictionaries`** by default, including subfolders.
 
-If the default folder is missing or empty, the browser opens the setup page at
-[localhost:6888/setup](http://localhost:6888/setup) where you can set the custom folders with your dictionaries. 
+If the default folder is missing or empty, the main page shows the guide with **Add dictionaries** above it, which
+opens the setup page at [localhost:6888/setup](http://localhost:6888/setup), where you can set the custom folders
+with your dictionaries. 
 Paste the folder path to your dictionaries folder (can contain `~`). The page validates the path while you type and
 counts displays the number of total dictionaries found.
 

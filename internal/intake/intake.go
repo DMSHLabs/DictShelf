@@ -32,8 +32,31 @@ package intake
 import (
 	"encoding/json"
 	"io"
+	"os"
 	"strings"
+
+	"github.com/wuweidict/wudict/internal/dict"
 )
+
+// kindOf is dict.ClassifyName, with a candidate - a name whose content
+// decides (the markdown family) - settled by reading the head of the file open
+// returns: a main file if its content qualifies, else nothing this package
+// carries.
+func kindOf(name string, open func() (io.ReadCloser, error)) dict.Kind {
+	k := dict.ClassifyName(name)
+	if k != dict.KindCandidate {
+		return k
+	}
+	if dict.Claims(name, open) != nil {
+		return dict.KindOther
+	}
+	return dict.KindMain
+}
+
+// onDisk opens a file for kindOf.
+func onDisk(path string) func() (io.ReadCloser, error) {
+	return func() (io.ReadCloser, error) { return os.Open(path) }
+}
 
 // Entry is one member of an archive as its directory describes it - a name and
 // two numbers, none of which has been verified against the bytes yet.
