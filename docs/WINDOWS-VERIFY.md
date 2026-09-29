@@ -9,6 +9,14 @@ them are in `docs/handoff-archive.md`.
 
 ## Windows verification recipes (this machine)
 
+- **2026-09-29 localization baseline:** `TestSetupFlow` also fails on unchanged
+  `e938e17` (`server_test.go:574`, "app page not served after setup"). Its
+  assertion searches served HTML for the old `design tokens` comment after CSS
+  extraction. Reproduced using a Go overlay of unchanged HEAD without switching
+  the working branch. Together with the nine failures below, the full suite
+  currently reports ten failing top-level tests. Localization checks are listed
+  in `docs/I18N.md`.
+
 - Real dictionaries for manual checks: `test_data/` (three `.dsl.dz` — Asperger
   En-En 6.8k entries, Oxford En-Ru 35.8k, Zimmerman Ru-En 15.9k, ~5.4 MB, now
   git-ignored). Point a throwaway `DICT_DIR` at it to see the UI with real

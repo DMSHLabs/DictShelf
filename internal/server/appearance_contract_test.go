@@ -45,10 +45,10 @@ func TestAppearanceContract(t *testing.T) {
 		toneAttr string
 	}
 	docs := []doc{
-		{"the app page", "/", []string{string(appCSS), string(groupEditorCSS), string(historyCSS)}, "data-shell-sepia"},
-		{"Edit Folders", "/setup", []string{string(setupCSS)}, "data-shell-tone"},
+		{"the app page", "/", []string{string(appCSS), string(groupEditorCSS), string(historyCSS), string(i18nCSS)}, "data-shell-sepia"},
+		{"Edit Folders", "/setup", []string{string(setupCSS), string(i18nCSS)}, "data-shell-tone"},
 		{"Lemmatization", "/lemmas", []string{string(setupCSS)}, "data-shell-tone"},
-		{"Browse", "/browse", nil, "data-shell-tone"},
+		{"Browse", "/browse", []string{string(i18nCSS)}, "data-shell-tone"},
 	}
 	// Everything that can paint a colour without being one of the sheets above:
 	// the scripts that build styles in memory (the voice menu, the article
@@ -59,6 +59,7 @@ func TestAppearanceContract(t *testing.T) {
 		"history.js": string(historyJS), "group-editor.js": string(groupEditorJS),
 		"examples.js": string(examplesJS), "pick.js": string(pickJS),
 		"frame.js": string(frameJS), "index.html": string(indexHTML),
+		"i18n.js": string(i18nJS),
 	}
 
 	s, _ := newStyleServer(t)

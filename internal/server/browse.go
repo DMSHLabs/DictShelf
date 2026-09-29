@@ -174,5 +174,5 @@ func browseUnprepared(w http.ResponseWriter, e *entry) {
 func (s *Server) handleBrowsePage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache")
-	_, _ = w.Write(bytes.ReplaceAll(browseHTML, []byte("{{PRESETS}}"), []byte(s.pagePresetLinks())))
+	_, _ = w.Write([]byte(renderUI(string(bytes.ReplaceAll(browseHTML, []byte("{{PRESETS}}"), []byte(s.pagePresetLinks()))), s.reg.prefs.Language())))
 }

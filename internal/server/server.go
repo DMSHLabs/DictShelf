@@ -361,7 +361,7 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	// howto counts: with it listed the app has something to show, and the
 	// page opens on it instead, with the way to add dictionaries on top.
 	if s.reg.Count() == 0 {
-		_, _ = io.WriteString(w, setupPage(s.reg.Dirs(), 0, s.pagePresetLinks()))
+		_, _ = io.WriteString(w, renderUI(setupPage(s.reg.Dirs(), 0, s.pagePresetLinks()), s.reg.prefs.Language()))
 		return
 	}
 	// "no-cache" means REVALIDATE, not "never store" - and revalidation needs
@@ -441,7 +441,8 @@ func (s *Server) basePage() []byte {
 func (s *Server) pageFor(dayTag, nightTag, presetLinks string) ([]byte, string) {
 	s.styleMu.Lock()
 	defer s.styleMu.Unlock()
-	key := dayTag + "\x00" + nightTag + "\x00" + presetLinks
+	language := s.reg.prefs.Language()
+	key := dayTag + "\x00" + nightTag + "\x00" + presetLinks + "\x00" + language
 	if s.styledPage != nil && s.styledTag == key {
 		return s.styledPage, s.styledETag
 	}
@@ -460,7 +461,7 @@ func (s *Server) pageFor(dayTag, nightTag, presetLinks string) ([]byte, string) 
 	if nightTag != "" {
 		links += `<link rel="stylesheet" href="/style/` + appNightCSSName + `?v=` + nightTag + `" data-skin="dark">`
 	}
-	page := []byte(strings.ReplaceAll(string(s.basePage()), "{{USERCSS}}", presetLinks+links+"\n"))
+	page := []byte(renderUI(strings.ReplaceAll(string(s.basePage()), "{{USERCSS}}", presetLinks+links+"\n"), language))
 	s.styledTag, s.styledPage, s.styledETag = key, page, `"`+assetTag(page)+`"`
 	return s.styledPage, s.styledETag
 }
@@ -471,7 +472,7 @@ func (s *Server) pageFor(dayTag, nightTag, presetLinks string) ([]byte, string) 
 func (s *Server) handleSetupPage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache")
-	_, _ = io.WriteString(w, setupPage(s.reg.Dirs(), s.reg.UserCount(), s.pagePresetLinks()))
+	_, _ = io.WriteString(w, renderUI(setupPage(s.reg.Dirs(), s.reg.UserCount(), s.pagePresetLinks()), s.reg.prefs.Language()))
 }
 
 // setupPage renders the folder chooser/editor. The intro names a single

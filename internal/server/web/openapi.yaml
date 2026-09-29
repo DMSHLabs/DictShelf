@@ -1187,6 +1187,51 @@ paths:
         '500':
           description: State could not be saved; order unchanged.
 
+  /api/language:
+    get:
+      tags: [internal]
+      operationId: getInterfaceLanguage
+      x-internal: true
+      summary: Read the installation's manually selected interface language
+      description: Defaults to English. Does not inspect system or browser locales or change dictionary languages.
+      responses:
+        '200':
+          description: Current interface language.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  language: { type: string, enum: [en, ru] }
+    put:
+      tags: [internal]
+      operationId: setInterfaceLanguage
+      x-internal: true
+      summary: Save the interface language for subsequent page loads
+      description: Updates only the language; dictionary preferences and content are unchanged. Reload the page to apply.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [language]
+              properties:
+                language: { type: string, enum: [en, ru] }
+      responses:
+        '200':
+          description: Saved interface language.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  language: { type: string, enum: [en, ru] }
+        '400':
+          description: Malformed request or unsupported language.
+        '500':
+          description: The language could not be saved; the previous value remains in effect.
+
   /api/prefs:
     get:
       tags: [internal]

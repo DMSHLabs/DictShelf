@@ -52,6 +52,14 @@ ARGS ?=
 
 .DEFAULT_GOAL := help
 
+.PHONY: i18n-check
+i18n-check: ## Check interface catalogs, persistence, cache and English fallback
+	go test ./internal/server -run TestI18n -count=1
+
+.PHONY: i18n-check-js
+i18n-check-js: ## Check JS plural rules and fallback (optional; requires Node, no npm)
+	node tools/i18n-test.cjs
+
 # ---- meta ---------------------------------------------------------------
 
 .PHONY: help

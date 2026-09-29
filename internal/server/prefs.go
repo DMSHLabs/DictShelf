@@ -130,6 +130,8 @@ func (u *UIPrefs) normalize() {
 }
 
 type prefsFile struct {
+	Language string `json:"language,omitempty"` // explicit interface language, never the dictionary language
+
 	Groups  []DictionaryGroup `json:"groups,omitempty"`
 	Version int               `json:"version"`
 	UI      *UIPrefs          `json:"ui,omitempty"`
@@ -140,6 +142,8 @@ type prefsFile struct {
 // empty path is in-memory only: it answers questions and forgets on exit,
 // which is what tests and a home-less environment need.
 type Prefs struct {
+	language string // installation-wide UI choice; independent of /api/prefs replacements
+
 	editMu sync.Mutex // serialize read/merge/write operations, including identity healing
 	groups []DictionaryGroup
 	path   string
@@ -174,6 +178,7 @@ func LoadPrefs(path string) *Prefs {
 	f.UI.normalize()
 	p.exists, p.dicts, p.ui = true, f.Dicts, f.UI
 	p.groups = f.Groups
+	p.language = uiLanguage(f.Language)
 	return p
 }
 
@@ -240,7 +245,7 @@ func (p *Prefs) update(dicts []DictPref, ui *UIPrefs) error {
 // Keep the lock through rename: concurrent writes must reach disk in order.
 func (p *Prefs) saveLocked() error {
 	path := p.path
-	data, err := json.MarshalIndent(prefsFile{Version: prefsVersion, UI: p.ui, Dicts: p.dicts, Groups: p.groups}, "", "  ")
+	data, err := json.MarshalIndent(prefsFile{Version: prefsVersion, UI: p.ui, Dicts: p.dicts, Groups: p.groups, Language: p.language}, "", "  ")
 	if err != nil || path == "" {
 		return err
 	}

@@ -4,8 +4,9 @@ Read whole before planning; keep under ~300 lines. Historical narratives belong 
 
 ## Branch state (verify with git before trusting)
 
-**Rechecked 2026-09-29:** `dev` at `de80420`, clean before this documentation update; `master` is upstream-only. No implementation, build or commit in this assessment.
-Localization is assessed, not approved: consider web infrastructure plus one visible screen first; language ownership (per client vs installation) is undecided. Account for upstream merge costs.
+**Rechecked 2026-09-29:** user-selected `translation` at `e938e17`, clean before this session. First localization slice is now uncommitted here; no branch switch, commit or publication. `master` remains upstream-only. With explicit user approval, debug versionCode 417 (arm64+x86_64) was built and installed over the existing Debug app on emulator-5554, preserving data.
+**Localization, stage 1:** manual Language → English/Русский → apply and reload; English default, no system-locale detection. Selection is installation-wide and persists independently of dictionary/reading preferences. Browse UI is translated; other screens and native Android UI remain English. Dictionaries/search/speech/word selection are unchanged. Implementation/extension rules and checks: `docs/I18N.md`.
+Verified: host build/vet, targeted Go and JS checks, browser round trip and restart persistence, 320/360px menus, Android debug build. The user confirmed Language opens its chooser and Browse changes to the selected language; the emulator retains its Old paper appearance and six dictionaries. Full suite has ten failing top-level tests: the nine documented Windows failures plus `TestSetupFlow` (stale `design tokens` marker), reproduced on unchanged HEAD using Go overlay. Physical-phone and exhaustive appearance/back-navigation checks remain. Next slice: main interface and native-shell integration; preserve word selection's UI-independent locale before changing the main document's `lang`.
 Earlier release/branch snapshots and picker, label-register, appearance-test and `master_build` notes moved intact to `docs/handoff-archive.md` → "Pre-assessment branch snapshots (2026-09-29)"; live UI rules and device checks remain in `docs/ANDROID-UI-HANDOFF.md`.
 
 **Rechecked 2026-09-29:** `dev` is at `f09ee61`, the merge of upstream `master`

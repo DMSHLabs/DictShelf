@@ -1,6 +1,7 @@
 <!doctype html>
-<html lang="en">
+<html lang="{{T:locale}}">
 <meta charset="utf-8">
+{{I18N}}
 <script>
 // An optional host background, the same hook setup.html and lemmas.html carry:
 // the Android host paints the chosen image (or colour) behind a transparent
@@ -66,7 +67,7 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
 })();
 </script>
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Browse</title>
+<title>{{T:browse.title}}</title>
 <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
 <!--
  Copyright (C) 2026 glowinthedark
@@ -190,6 +191,9 @@ header{position:sticky;top:0;z-index:5;background:var(--bar);
 .words a:hover{background:var(--line-soft);color:var(--fg)}
 .words a:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 
+/* Language is reachable even when the dictionary list is empty. */
+.language-button{display:block;margin:12px 1rem 0 auto;font:inherit;padding:6px 12px;
+  color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:7px;cursor:pointer}
 footer{display:flex;justify-content:center;padding:0 1rem 2.2rem}
 footer .nav button{height:2.3rem;padding:0 1rem}
 
@@ -211,30 +215,31 @@ footer .nav button{height:2.3rem;padding:0 1rem}
 
 <header id="top" hidden>
   <div class="bar">
-    <a class="back" href="/" title="Back to search" aria-label="Back to search"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="7" cy="7" r="4.3"/><path d="M10.2 10.2 14 14"/></svg></a>
+    <a class="back" href="/" title="{{T:browse.back}}" aria-label="{{T:browse.back}}"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="7" cy="7" r="4.3"/><path d="M10.2 10.2 14 14"/></svg></a>
     <div class="title"><b id="name"></b><span id="sub"></span></div>
-    <input id="jump" type="search" placeholder="Jump to…" spellcheck="false" autocomplete="off"
-           autocapitalize="off" enterkeyhint="go" aria-label="Jump to a word">
+    <input id="jump" type="search" placeholder="{{T:browse.jump}}" spellcheck="false" autocomplete="off"
+           autocapitalize="off" enterkeyhint="go" aria-label="{{T:browse.jumpWord}}">
     <div class="nav">
-      <button type="button" data-go="prev" title="Previous page (←)">‹</button>
+      <button type="button" data-go="prev" title="{{T:browse.previousTitle}}">‹</button>
       <b data-pos></b>
-      <button type="button" data-go="next" title="Next page (→)">›</button>
+      <button type="button" data-go="next" title="{{T:browse.nextTitle}}">›</button>
     </div>
   </div>
-  <nav class="strip" id="strip" aria-label="Jump to a letter"></nav>
+  <nav class="strip" id="strip" aria-label="{{T:browse.jumpLetter}}"></nav>
 </header>
 
 <main>
+  <button type="button" class="language-button" data-ui-language>Language</button>
   <div class="msg" id="msg" hidden></div>
   <div class="words" id="list"></div>
 </main>
 <footer id="foot" hidden>
   <div class="nav">
-    <button type="button" data-go="first" title="First page (Home)">«</button>
-    <button type="button" data-go="prev" title="Previous page (←)">‹ Previous</button>
+    <button type="button" data-go="first" title="{{T:browse.firstTitle}}">«</button>
+    <button type="button" data-go="prev" title="{{T:browse.previousTitle}}">{{T:browse.previous}}</button>
     <b data-pos></b>
-    <button type="button" data-go="next" title="Next page (→)">Next ›</button>
-    <button type="button" data-go="last" title="Last page (End)">»</button>
+    <button type="button" data-go="next" title="{{T:browse.nextTitle}}">{{T:browse.next}}</button>
+    <button type="button" data-go="last" title="{{T:browse.lastTitle}}">»</button>
   </div>
 </footer>
 
@@ -242,7 +247,8 @@ footer .nav button{height:2.3rem;padding:0 1rem}
 "use strict";
 const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-const num=n=>n.toLocaleString();
+const {t,number:num}=window.wudictI18n;
+const tx=(key,params)=>esc(t(key,params));
 /* Some dictionaries store their headwords still escaped - a Chinese
    encyclopaedia lists `&#x3B1;-松油烯` and `&alpha;粒子散射实验` - and a list
    that prints the escape is showing the reader the file, not the word.
@@ -286,11 +292,13 @@ async function show(opts,record){
   if(opts.at)u.set("at",opts.at);else u.set("p",String(opts.p||1));
   let r;
   try{r=await fetch("/api/browse?"+u.toString())}
-  catch(e){return card("<b>No answer</b><p>The app stopped responding. Reload this page once it is running again.</p>")}
+  catch(e){return card("<b>"+tx("browse.noAnswer")+"</b><p>"+tx("browse.noAnswerBody")+"</p>")}
   if(r.status===409)return unprepared(await r.json().catch(()=>({})));
   if(!r.ok){const j=await r.json().catch(()=>({}));
-    return card("<b>Cannot browse this dictionary</b><p>"+esc(j.error||("Error "+r.status))+"</p>"+
-      '<p><a href="/browse">Choose another…</a></p>')}
+    return card("<b>"+tx("browse.cannotBrowse")+"</b><p>"+
+      tx(r.status===404?"browse.missing":"browse.error",{status:r.status})+"</p>"+
+      (j.error?"<details><summary>"+tx("browse.details")+"</summary>"+esc(j.error)+"</details>":"")+
+      '<p><a href="/browse">'+tx("browse.chooseAnother")+"</a></p>")}
   state=await r.json();
   /* What the reader asked for, which the strip highlights by: the chip they
      clicked, or - for a typed jump - the row the server located. */
@@ -308,11 +316,11 @@ async function show(opts,record){
 
 function render(){
   const d=state;
-  document.title=d.name+" · Browse";
+  document.title=t("browse.pageTitle",{name:d.name});
   $("top").hidden=false;$("foot").hidden=false;
   $("name").textContent=d.name;
   const a=unesc(d.words[0]||""),z=unesc(d.words[d.words.length-1]||"");
-  $("sub").textContent=d.total?a+" — "+z+"  ·  "+num(d.total)+" words":"no headwords";
+  $("sub").textContent=d.total?a+" — "+z+"  ·  "+t("browse.words",{count:d.total,number:num(d.total)}):t("browse.emptyWords");
   $("list").innerHTML=d.words.map(w=>{
     const e=esc(unesc(w));
     return '<a href="/?q='+encodeURIComponent(w)+"&dict="+encodeURIComponent(d.dict)+
@@ -325,7 +333,7 @@ function render(){
     stripFor=d.dict;
     $("strip").innerHTML=d.alphabet.map(l=>{
       const e=esc(unesc(l.l));
-      return '<button type="button" data-o="'+l.o+'" title="'+e+" — "+num(l.n)+' words">'+e+"</button>";
+      return '<button type="button" data-o="'+l.o+'" title="'+e+" — "+tx("browse.words",{count:l.n,number:num(l.n)})+'">'+e+"</button>";
     }).join("");
   }
   /* Highlight what was ASKED for, not what the page happens to start with.
@@ -361,7 +369,7 @@ function turn(where){
    (explicit: even with AUTO_INDEX off, this is the user's own trigger) and
    waits. Once per page: a dictionary that stops indexing without becoming
    browsable failed, and asking again would only meet the server's cooldown. */
-const building="<p>Building the index…⌛️</p>";
+const building="<p>"+tx("browse.building")+"</p>";
 async function unprepared(j){
   if(!j.indexing&&!demanded){
     demanded=true;
@@ -375,8 +383,8 @@ async function unprepared(j){
     card(building);
     poll=setTimeout(()=>show(last,"none"),2500);
   }else{
-    card("<b>Could not build the index</b><p>Preparing this dictionary for browsing failed. "+
-      'Reload this page to try again, or <a href="/browse">choose another…</a></p>');
+    card("<b>"+tx("browse.buildFailed")+"</b><p>"+tx("browse.buildFailedBody")+
+      '</p><p><a href="/browse">'+tx("browse.chooseAnother")+"</a></p>");
   }
 }
 
@@ -385,9 +393,11 @@ async function unprepared(j){
    dictionary that opens is offered: choosing one that has no index yet
    builds it (unprepared). */
 async function chooser(){
-  card("<b>Browse a dictionary</b><p>Reading it word by word, A to Z.</p>");
+  const heading="<b>"+tx("browse.choose")+"</b><p>"+tx("browse.chooseHint")+"</p>";
+  card(heading);
   let text="";
-  try{text=await(await fetch("/api/dicts")).text()}catch(e){}
+  try{const response=await fetch("/api/dicts");if(!response.ok)throw new Error("load");
+    text=await response.text()}catch(e){return card("<b>"+tx("browse.noAnswer")+"</b><p>"+tx("browse.loadFailed")+"</p>")}
   const ds=[];
   for(const line of text.split("\n")){
     if(!line)continue;
@@ -395,11 +405,11 @@ async function chooser(){
     if(m.t==="dict"&&m.dict&&!m.dict.error)ds.push(m.dict);
   }
   ds.sort((x,y)=>(x.name||"").localeCompare(y.name||""));
-  if(!ds.length)return card("<b>Nothing to browse yet</b><p>No dictionaries are loaded. "+
-    'Open <a href="/">the app</a> to add some.</p>');
-  card("<b>Browse a dictionary</b><p>Reading it word by word, A to Z.</p><div class='picks'>"+
+  if(!ds.length)return card("<b>"+tx("browse.empty")+"</b><p>"+tx("browse.emptyBody")+
+    '</p><p><a href="/">'+tx("browse.openApp")+"</a></p>");
+  card(heading+"<div class='picks'>"+
     ds.map(d=>'<a href="?dict='+encodeURIComponent(d.id)+'">'+esc(d.name||d.id)+
-      (d.entries?"<span>"+num(d.entries)+" entries</span>":"")+"</a>").join("")+"</div>");
+      (d.entries?"<span>"+tx("browse.entries",{count:d.entries,number:num(d.entries)})+"</span>":"")+"</a>").join("")+"</div>");
 }
 
 document.addEventListener("click",e=>{

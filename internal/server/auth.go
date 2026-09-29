@@ -75,6 +75,8 @@ var authFree = map[string]bool{
 	"GET /assets/pick.js":     true,
 	"GET /assets/speak.js":    true,
 	"GET /assets/setup.css":   true,
+	"GET /assets/i18n.js":     true,
+	"GET /assets/i18n.css":    true,
 	"GET /assets/favicon.svg": true,
 	"GET /favicon.ico":        true,
 }
