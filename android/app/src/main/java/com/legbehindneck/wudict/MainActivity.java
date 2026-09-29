@@ -442,7 +442,27 @@ public class MainActivity extends Activity {
             applyEdges();
             Shell.applyBackground(web);
             root.requestApplyInsets();
+            // A start that FAILED is retried here, and nowhere else. The reader
+            // has been to the settings screen (a port that was already taken,
+            // a memory cap) or has freed whatever held the port - and nothing
+            // else ever asks again: ensure() runs in onCreate alone, and this
+            // activity is singleTask with its config changes intercepted, so
+            // coming back to it does not recreate it. Without this, the only
+            // way out of a port that would not bind was to swipe the app away
+            // and start it over - even after the settings were fixed. A READY
+            // server is left alone (nothing to do) and a start in flight is
+            // joined by ensure() itself, so the narrow test is "failed".
+            if (ServerProcess.failed()) retryServer();
         }
+    }
+
+    /** A failed start, retried with whatever the settings say now. */
+    private void retryServer() {
+        status.setText(R.string.starting);
+        ServerProcess.ensure(this, new ServerProcess.Listener() {
+            @Override public void onReady() { showPage(); }
+            @Override public void onFailed(String message) { showFailure(message); }
+        });
     }
 
     // ── navigation ───────────────────────────────────────────────────────

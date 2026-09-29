@@ -571,30 +571,6 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
   </div>
 </section>
 
-<section class="sect" id="sysSection" hidden>
-  <h3 class="sect-h">System</h3>
-  <!-- The shell's own settings, which until now lived only on the screen the
-       launcher icon's long-press menu opens: what a lookup from another app
-       does, the messages this app draws while it starts, the access key, and
-       the config keys whose right answer differs because of THIS device
-       (D101). One subject, and it is the machine serving the reading rather
-       than the reading itself - so it sits below the look and above the
-       field's memory and the identity card.
-       The section exists only where a shell answers, which is the flag the
-       shell injects at onPageFinished: every row behind that door is a fact
-       about THIS window - where a lookup from another app lands, and whether
-       this app's own view may spend the machine's cache - and a browser has
-       no such window to decide anything about.
-       A door and not the rows themselves: what is behind it is a window of
-       this app (the same frame, paper and wallpaper as Dictionary settings),
-       and the Advanced rows are a table only the SHELL holds - a flavour
-       without a listen-address row sends none - so the page cannot draw them
-       from anything of its own. -->
-  <div class="facts">
-    <button type="button" class="mrow door" id="editSysSettings" title="How a lookup from another app lands, the messages this app draws, the access key, and the limits its server runs within">System settings…</button>
-  </div>
-</section>
-
 <section class="sect">
   <h3 class="sect-h">History</h3>
   <!-- The search box's memory, which is neither a look nor a result: its own
@@ -607,6 +583,32 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
       </label>
       <button type="button" class="act" id="clearHistory" disabled>Clear</button>
     </span>
+  </div>
+</section>
+
+<section class="sect" id="sysSection" hidden>
+  <h3 class="sect-h">System</h3>
+  <!-- The shell's own settings, which until now lived only on the screen the
+       launcher icon's long-press menu opens: what a lookup from another app
+       does, the messages this app draws while it starts, the access key, and
+       the config keys whose right answer differs because of THIS device
+       (D101). One subject, and it is the machine serving the reading rather
+       than the reading itself - which is why it sits LAST of the working
+       sections, below the search field's own memory (the reader's placement,
+       2026-09-28: the drawer is read top-down for things one reaches for
+       often, and this is where one reaches rarely).
+       The section exists only where a shell answers, which is the flag the
+       shell injects at onPageFinished: every row behind that door is a fact
+       about THIS window - where a lookup from another app lands, and whether
+       this app's own view may spend the machine's cache - and a browser has
+       no such window to decide anything about.
+       A door and not the rows themselves: what is behind it is a window of
+       this app (the same frame, paper and wallpaper as Dictionary settings),
+       and the Advanced rows are a table only the SHELL holds - a flavour
+       without a listen-address row sends none - so the page cannot draw them
+       from anything of its own. -->
+  <div class="facts">
+    <button type="button" class="mrow door" id="editSysSettings" title="How a lookup from another app lands, the messages this app draws, the access key, and the limits its server runs within">System settings…</button>
   </div>
 </section>
 
@@ -699,7 +701,7 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
      A browser has no such bridge, so the door that opens this window is not
      drawn there; the window itself is only reachable through that door. -->
 <dialog id="sysSettings" class="group-dialog panel-card" aria-labelledby="sysSettingsTitle">
-  <h2 id="sysSettingsTitle">System <button type="button" class="btn" id="closeSysSettings" aria-label="Close system settings">✕</button></h2>
+  <h2 id="sysSettingsTitle">System Settings <button type="button" class="btn" id="closeSysSettings" aria-label="Close system settings">✕</button></h2>
   <div class="panel-scroll" id="sysScroll">
     <h3 class="sys-head">Look up in the full app</h3>
     <p class="sys-hint">Otherwise a lookup floats over the app you were reading.</p>
@@ -732,16 +734,39 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
        are not touched.</p>
     <div class="group-toolbar"><button type="button" class="btn" id="sysClearCache">Clear browser cache</button></div>
 
-    <h3 class="sys-head">Advanced</h3>
-    <p class="sys-hint">These change how the dictionary server itself runs. Leave
-       them alone unless you know what they do. Anything left empty follows the
-       settings file.</p>
-    <!-- The rows themselves, drawn from the shell's answer (sysRowsRender):
-         a switch per BOOL key, a number field per count, each with its own
-         label, hint and bounds. Empty in markup on purpose - what is in here
-         is not this page's to know. -->
-    <div id="sysAdvanced"></div>
-    <div class="group-toolbar"><button type="button" class="btn" id="sysRestore">Restore defaults</button></div>
+    <!-- Advanced FOLDS, and starts folded (the reader's ask, 2026-09-28). Two
+         reasons it is the one group that does: its rows are the server's own
+         limits rather than anything about reading, so the window a reader opens
+         for the lookups should not stand at its full height because of them -
+         and the disclosure is the app's own idiom for "there is more behind
+         this word" (the ▸/▾ of #ftsAllBtn and every .prov in this page), here
+         shaped like a section heading because that is what it is.
+         The marker is driven by aria-expanded, which the handler below
+         maintains, so there is no second source of truth to drift from
+         #sysAdvBody.hidden. The state is not remembered: showSysSettings folds
+         it again on every open, because "folded by default" is what the reader
+         asked for and a surface that is not rebuilt between visits would
+         otherwise keep whatever it was left in. -->
+    <button type="button" class="sys-fold" id="sysAdvBar" aria-expanded="false" aria-controls="sysAdvBody">Advanced</button>
+    <div id="sysAdvBody" hidden>
+      <p class="sys-hint">These change how the dictionary server itself runs. Leave
+         them alone unless you know what they do. Anything left empty follows the
+         settings file.</p>
+      <!-- The rows themselves, drawn from the shell's answer (sysRowsRender):
+           a switch per BOOL key, a number field per count, each with its own
+           label, hint and bounds. Empty in markup on purpose - what is in here
+           is not this page's to know. -->
+      <div id="sysAdvanced"></div>
+      <!-- Restore defaults stands INSIDE this group (the reader's word): it
+           clears exactly the rows above it and nothing else in the window, so a
+           button outside the fold would be the one control acting on a group it
+           is not part of. The blank row the reader asked for separates the rows
+           from the button, which is where that break is now read - a row of air
+           rather than a margin on the button, so it is the same whether the
+           group is open or closed. -->
+      <div class="sys-gap" aria-hidden="true"></div>
+      <div class="group-toolbar"><button type="button" class="btn" id="sysRestore">Restore defaults</button></div>
+    </div>
 
     <!-- The running server was started with different values (sysStale), and
          under it the window's own voice (sysNote): what it just did, or why an
@@ -2855,9 +2880,24 @@ function sysCommitNumber(row,field){
 function sysNote(text){$("sysNote").textContent=text||""}
 
 function showSysSettings(){
+  // Advanced starts folded EVERY time the window opens, which is what "folded
+  // by default" has to mean for a surface that is not rebuilt between visits:
+  // the element keeps whatever state it was left in, so a window reopened onto
+  // an open group would be a window that looks different every time.
+  $("sysAdvBody").hidden=true;
+  $("sysAdvBar").setAttribute("aria-expanded","false");
   $("sysSettings").showModal();
   sysRead();
 }
+/* The Advanced group folds, and starts folded: its rows are the server's own
+   limits, not anything about reading, and they are the longest part of this
+   window. The state is not remembered - a window opened twice should look the
+   same twice, and "folded" is where the reader asked it to start. */
+$("sysAdvBar").onclick=()=>{
+  const open=$("sysAdvBody").hidden;
+  $("sysAdvBody").hidden=!open;
+  $("sysAdvBar").setAttribute("aria-expanded",open?"true":"false");
+};
 $("editSysSettings").onclick=showSysSettings;
 $("closeSysSettings").onclick=()=>$("sysSettings").close();
 $("sysSettings").addEventListener("close",()=>$("editSysSettings").focus());

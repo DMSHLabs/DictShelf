@@ -257,7 +257,14 @@ final class Shell {
         reply.put("link", ShellPrefs.opensApp(c, ShellPrefs.LINK));
         reply.put("info", ShellPrefs.infoMessages(c));
         reply.put("key", ShellPrefs.requireKey(c));
-        reply.put("port", ServerProcess.port(c));
+        // The CONFIGURED port, and not ServerProcess.port: the page prints this
+        // in the sentence under the listen switch ("other devices on this
+        // network would use 192.168.1.44:6889"), which is a statement about the
+        // address a spawn would bind - exactly like that switch itself, which
+        // is read once, at spawn. The port the app talks to is a different
+        // question with a different answer while a stored change is pending,
+        // and the page never needs it: it is being served by that server.
+        reply.put("port", ShellPrefs.port(c));
         // Only the row that HAS a listen address draws the note that says
         // where this phone would be reached, and that row is the flavour's
         // (foss) - in Play there is no row, so this answer is unused.

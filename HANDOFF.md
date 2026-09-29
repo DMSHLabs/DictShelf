@@ -82,33 +82,36 @@ local.bat — copy it there first). After each upstream `master` sync,
 repeat this small overlay (two files) or merge `master` into
 `master_build` when the naming/emuX86 code still applies.
 
-**The shell's own settings now have a home in the app page: the `System`
-window (2026-09-28, uncommitted).** The ☰ Settings drawer gained a `System`
-section — a door row, drawn only where the shell answers — opening
-`#sysSettings`, a window of the app's own family carrying the shell screen's
-rows: the three lookups, the info messages, the access key, Clear browser
-cache ABOVE Advanced (the reader's order), the Advanced override rows and
-Restore defaults. The shell side is a new `wudict:system` prompt
+**The shell's own settings now live in the app page: the `System Settings` window
+(2026-09-28; the first half is committed as `ae0958f` "Move system to
+settings", the rest is uncommitted).** The ☰ drawer gained a `System` section —
+a door row, drawn only where the shell answers — opening `#sysSettings`, a
+window of the app's own family carrying the shell screen's rows (three lookups,
+info messages, access key, Clear browser cache above Advanced, the Advanced
+override rows, Restore defaults) over a new `wudict:system` prompt
 (`Shell.systemState`, plus `ShellPrefs.setOverrideChecked`, which the shell
-screen's `commit()` now shares); what each config key RESOLVES to, and which
-layer gave it, is the page's own `/api/config` read. No Close button (the
-window's corner ✕ is the way out), paper and wallpaper like Dictionary
-settings, and the app's own drawn checkbox by construction (it is a
-`.group-dialog`). `SettingsActivity` itself is now ONLY the restart footer
-(`Restart server now`, unreachable from the page — a page holds the server),
-a duplicated `Restore defaults`, a sentence pointing at the app's System
-window, and Close: the 21 strings, the effective-values cache on both sides
-and the row-building half of that class went with the rows. Verified on the
-EMULATOR (AVD `Small`, `debug intel`, 2026-09-28) with the real bridge —
-values, ticks, numbers, Restore defaults, the stale footer, the trimmed
-screen — and that pass found four bugs, all fixed: a byte count read as
-megabytes in the memory fields, the prompt bridge falling through to the
-WebView's own dialog after a port row changed (`Shell.notePageUrl`/
-`ownPage`), the stale note reading the state from before the write, and the
-native footer probing the configured port instead of
-`ServerProcess.livePort`. Live rules, the pass's evidence and what is still
-owed on the phone: `docs/ANDROID-UI-HANDOFF.md` → "The System window: current
-work"; the emulator and Bash recipes: `docs/WINDOWS-VERIFY.md`.
+screen shares). `SettingsActivity` keeps only the **Server port** row (the one
+row that can lock the app out — a port that will not bind means no page, and
+`Restore defaults` is all-or-nothing and points at 6889, which may itself be
+the busy one), a duplicated `Restore defaults`, the restart footer and the
+signpost; 18 strings and the effective-values cache went with the other rows.
+Three rules hold the two views together: every write goes through
+`setOverrideChecked`; `ServerProcess.port` answers "the server we can reach"
+(the live child's port while one is up, the configured one otherwise), so a
+stored port change is inert until the next start and no window knocks at a port
+nobody bound; and a FAILED start is retried on a focus gain
+(`ServerProcess.failed` + `MainActivity.retryServer`). Verified on the EMULATOR
+(AVD `Small`, `debug intel`, 2026-09-28) with the real bridge, including the
+busy-port walk end to end: adbd held 5555, the app failed with the child's own
+diagnosis, the native row took 6901, and the retry brought the app up on it.
+That pass found four bugs, all fixed: a byte count read as megabytes in the
+memory fields (every size row now states its unit), the prompt bridge falling
+through to the WebView's own dialog after a port row changed
+(`Shell.notePageUrl`/`ownPage`), the stale note reading the state from before
+the write, and the native footer probing the configured port. Live rules, the
+evidence and what is owed on the phone: `docs/ANDROID-UI-HANDOFF.md` → "The
+System Settings window: current work"; emulator/Bash recipes:
+`docs/WINDOWS-VERIFY.md`.
 
 **The 09-26 upstream sync (into `dev2`) moved to the archive:
 `docs/handoff-archive.md` → "The 09-26 upstream sync into `dev2`".** It holds

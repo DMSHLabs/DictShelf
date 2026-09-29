@@ -738,6 +738,39 @@ body.styling{padding-bottom:var(--styler-shown,var(--styler-h))}
    the number field off the edge. */
 #sysSettings h3.sys-head{margin:1.2em 0 .2em;font-size:14px;font-weight:600;color:var(--fg)}
 #sysSettings h3.sys-head:first-child{margin-top:0}
+/* The one group that folds, wearing the heading it replaces: same type, same
+   spacing, plus the ▸/▾ this app uses everywhere it means "there is more
+   behind this word" (.act.disc, .prov, .pd .about). A button and not a
+   heading, because it IS the control, and aria-expanded is the only thing the
+   marker reads - the handler keeps it in step with #sysAdvBody.hidden.
+   The marker is sized against the HEADING, not against the 9px one the button
+   rows use: at that size beside 14px bold it read as a speck (the reader's
+   screenshot), and this is the only place the triangle is the sole sign that a
+   group is folded - the rows it hides are the window's longest. The box it
+   reserves is stated in ems so it keeps the label's left edge steady when the
+   glyph swaps to ▾.
+   A RULE stands over that heading (the reader's ask): the groups above it are
+   about the reader's lookups, this one is about the server's own limits, and
+   the line is what says so before the fold is opened. It is drawn from the INK
+   exactly as the drawer's section rules are (`.sect`, and the measurement that
+   chose the ratio is written there) - a `--line` rule was the thing that read
+   as invisible on a phone in the two light looks, and this window wears the
+   same paper. */
+#sysSettings .sys-fold{display:flex;align-items:center;gap:.45em;width:100%;
+  margin:1.4em 0 .2em;padding:.8em 0 0;border:0;background:none;text-align:left;
+  font:inherit;font-size:14px;font-weight:600;color:var(--fg);cursor:pointer;
+  border-top:1px solid color-mix(in srgb,var(--fg) 22%,transparent)}
+#sysSettings .sys-fold::before{content:"▸";color:var(--fg-soft);font-size:13px;
+  line-height:1;display:inline-block;width:.9em;flex:none;text-align:center}
+#sysSettings .sys-fold[aria-expanded="true"]::before{content:"▾";color:var(--accent)}
+#sysSettings .sys-fold:hover::before{color:var(--fg)}
+#sysSettings .sys-fold:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+/* The blank row the reader asked for, between the Advanced rows and the button
+   that clears them - inside that group, where the break is read. A row of air
+   rather than a margin on the button: the rows above it end in whatever the
+   shell's table ends with, and this keeps the separation the same whatever that
+   is. */
+#sysSettings .sys-gap{height:1.2em}
 #sysSettings .sys-hint{margin:0;font-size:12.5px;line-height:1.618;color:var(--fg-soft)}
 #sysSettings .sys-item{margin:.5em 0 .2em}
 #sysSettings .sys-row{display:flex;align-items:center;gap:.6em;min-height:44px;cursor:pointer}
