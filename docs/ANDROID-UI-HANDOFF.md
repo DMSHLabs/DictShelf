@@ -30,7 +30,7 @@ Java paths below are relative to `android/app/src/main/java/com/legbehindneck/wu
 
 | Area | Entry points |
 | --- | --- |
-| Settings reached from launcher icon menu | `SettingsActivity.java`: lookup behavior, access and server controls, **Clear browser cache** — `Shell.clearWebCache` (a throwaway WebView's `clearCache(true)`, which is per-application despite being an instance method) plus `MainActivity`'s `Shell.EXTRA_RELOAD` intent, which makes the window that shows the page load it again. It empties the browser's cache and nothing else: the prepared library is the server's files on disk and localStorage is the reader's theme — neither is touched, which is why the tap is not confirmed. The **Screen** rows (edges of the screen, hide while you read) are NOT here: they moved to the web Appearance sheet, and this screen keeps only the rows that decide what a lookup does and how the server runs |
+| The shell screen, and the window that replaced most of it | `SettingsActivity.java` holds the restart footer, a duplicated `Restore defaults`, the signpost and `Close` — nothing else since 2026-09-28 (the rows are in the page's `System` window: see "The System Settings window: current work"). **Clear browser cache** is one of the rows that MOVED, and its two halves are what it always was: `Shell.clearWebCache` (a throwaway WebView's `clearCache(true)`, which is per-application despite being an instance method) plus the hosting window's own reload — `MainActivity.reloadPage` (also reached by the settings screen through `Shell.EXTRA_RELOAD`) or `LookupActivity.reloadPage`, asked over the `wudict:system` bridge. The **Screen** rows (edges of the screen, hide while you read) went to the web Appearance sheet in 2026-09-21, and the rest of the rows — the lookups, the messages, the access key, the Advanced table and Clear browser cache — followed them into the app page's `System` window on 2026-09-28, at the reader's ask. What is left on this screen, and why, is in "The System Settings window: current work": the restart footer, a duplicated `Restore defaults`, the signpost, and `Close`. It is still what the launcher's long-press menu opens |
 | Persisted Android preferences | `ShellPrefs.java`: keys `sepia`, `sepia_color` (and their `_night` twins), `background_image`, `preset_paper` / `preset_paper_night` (the paper an enabled preset paints — see "Decisions to preserve"), `edge_mode`/`edge_color`/`hide_bars`, `page_dark`, `show_info_messages`, the three lookup keys, the access key and the per-key overrides; `found_dictionaries` is **no longer read** — the picker has one list (the dictionaries that answered), so a stored value from an older build cannot put the app back into the other mode |
 | Native backgrounds and built-in images | `WindowBackground.java`: `directory`, `images`, `bitmap`, `drawable`, `dialogDrawable`, `withMargins` |
 | WebView settings and native select bridge | `Shell.java`: `applyBackground`, `wudict:appearance` prompt bridge, `DICTIONARY_PICKER_JS`, `windows().onJsPrompt` |
@@ -51,13 +51,13 @@ describing it. The reader's own shorthand is in brackets.
 | Name | What it is | Where it lives |
 | --- | --- | --- |
 | **the app page** (`страница приложения`) | the SPA the reader searches in — the only document with the preset layers | `web/index.html` at `/` |
-| **the app's own windows** (`окна приложения`) | the windows INSIDE the app page, which wear the app's paper already: `Edit dictionary groups` (`#groupEditor`), `Dictionary settings` (`#dictSettings`), the `Appearance sheet` (`#styler`), the `colour window` (`#colorDialog`), the menu cards and the history drop-down | `index.html` + `web/group-editor.css` |
+| **the app's own windows** (`окна приложения`) | the windows INSIDE the app page, which wear the app's paper already: `Edit dictionary groups` (`#groupEditor`), `Dictionary settings` (`#dictSettings`), **`System Settings` (`#sysSettings`)**, the `Appearance sheet` (`#styler`), the `colour window` (`#colorDialog`), the menu cards and the history drop-down | `index.html` + `web/group-editor.css` |
 | **the three pages** (`страницы`) | the standalone documents the HOST dresses: `the Folders page` = Edit Folders (`/setup`), `the Lemmas page` = Lemmatization (`/lemmas`), `the Browse page` = Browse A–Z (`/browse`) | `web/setup.html`, `web/lemmas.html`, `web/browse.html`; `setupPage`, `handleLemmasPage`, `handleBrowsePage` |
 | **the dictionary list** (`список словарей`) | the native list of dictionaries + the group spinner over it — the status-bar chip's tap | `DictionaryPicker.showLive` |
 | **the mode list** (`список режимов`) | the native list behind the chip left of the search field: starts with, exact, contains, full-text | `DictionaryPicker.show`, payload `kind:"mode"` |
 | **the ask window** (`окно вопроса`) | the native confirm/alert, on the app's own surface (the Files list's "Delete X?") | `BackgroundDialogBuilder` |
 | **the popup** (`всплывающее окно`) | the floating selection-lookup window | `LookupActivity` |
-| the shell screen (`экран оболочки`) | the settings screen reached by long-pressing the launcher icon | `SettingsActivity` |
+| **the shell screen** (`экран оболочки`) | the settings screen reached by long-pressing the launcher icon. Since 2026-09-28 the settings THEMSELVES are in the app page — the **System** window below — and the screen keeps only what cannot live there: the restart footer, a duplicated `Restore defaults`, a sentence saying where the rows went, and `Close` | `SettingsActivity`; the page's half is `#sysSettings` in `index.html` |
 
 Two of these are families, and the words that matter in a report are the ones
 above, not the class names: "the three pages" are the windows the shell dresses
@@ -77,10 +77,12 @@ Membership and group order belong to Go/state.json. The automatic All Dictionari
 
 The dictionary picker at the word field has a group dropdown above the list of dictionaries that answered the current search. Changing group reruns the current word, resets a single-dictionary selection, and clears old results; an empty group never falls through to a whole-library search. Tapping a row opens that dictionary's section and scrolls to it. The live Android picker confirms its opening `window.prompt` immediately, then receives short update prompts while results stream. This avoids holding JavaScript blocked for the life of the dialog. Main and floating lookup windows both use the `Shell` bridge. Keep these flows in sync when editing picker behavior.
 
-Two corrections to that list landed on 2026-09-21, both from a word-list jump (see the "Dictionary word list → article" row below) landing in one dictionary that the reader's picker group did not contain:
+Corrections to that list, all from one family: a view whose ANSWER comes from a single dictionary — a word-list jump, or a `bword://` link followed inside an article — while the group above the list says something else. They landed on 2026-09-21 and 2026-09-28.
 
 - **The rows are no longer filtered by the picker's group.** `livePickerRows()` returned only dictionaries that answered AND were members of the reader's group, so a view scoped to a dictionary outside it rendered the article while the window said "No results in this group" — the list could only ever drop a row that was on screen, because the scope already resolved to the group's members before the search was sent. The filter is gone; the row's own comment says why it must not come back.
-- **The dropdown names the dictionary being searched.** `scopedDictionary()` contributes `{id:"d:<id>", name:<dictionary label>}` to the payload's `groups` — spliced directly under "All dictionaries" — and it is the payload's `group` (the spinner's current entry) whenever the standing scope is one dictionary. It is DERIVED, never stored: nothing is written to `state.json`, `/api/groups`, the group editor or localStorage, so it disappears by being recomputed — it exists exactly while that dictionary is the scope, and picking anything else in the dropdown (which resets the scope to all) is the moment it stops existing. `wudictPickerGroupChanged` compares the tap against what the spinner SHOWS (`scopedDictionary()`), not against the stored `pickerGroup` — otherwise picking the reader's own standing group out of a scoped view would be swallowed and the spinner would snap back. `empty` reads "No results in this dictionary" while scoped, "No results in this group" otherwise. No Java change: `DictionaryPicker.Live` renders whatever `groups`/`group`/`rows`/`empty` the payload carries.
+- **The dropdown names the dictionary the answer was scoped to**, standing or one-shot. `scopedDictionary()` contributes `{id:"d:<id>", name:<dictionary label>}` to the payload's `groups` — spliced directly under "All dictionaries" — and it is the payload's `group` (the spinner's current entry) whenever the answer is one dictionary's. **The label is the dictionary and nothing else**: naming the groups it belongs to was built, seen and removed on the reader's word ("это лишнее") — the groups are already in the dropdown as themselves, and the entry's job is to say which dictionary is being searched, not to place it in the taxonomy. It reads **`lastScope||$("dict").value`**, and the `lastScope` half is load-bearing: a link inside an article scopes ITS search and deliberately leaves `#dict` alone (the selector is the reader's standing preference for the words they type), so reading `#dict` alone listed one dictionary under a spinner that said "All dictionaries" — reported from the phone, with the way out of it being a group switched twice, because the "already current" guard swallowed the tap on "All dictionaries". Naming the answer's own scope makes that tap the way out. **The CHIP follows it too** (2026-09-28, from the reader's screenshot of the phone: the status bar said "All Dictionaries" under a one-dictionary list, and the ask was "the selected group or the dictionary"): `scopeLabel()` asks `scopedDictionary()` FIRST and only then falls back to the group's name, so the chip and the picker's spinner — the two places that say where the search went — cannot disagree. The chip is still the transparent face of the `#dict` select, so the select's own VALUE is untouched (the standing preference); `scopeLabel` is wrapped in try/catch because `syncChips` runs while the page's script is still executing and `scopedDictionary` reads `lastScope`, declared far below (the same TDZ trap the group's name is wrapped for). `doSearch` and the two places that clear the answer call `syncChips` explicitly: the status bar's own repaint is a rAF-coalesced DOM observer, which is a repaint that happens to be nearby, not one a label may depend on. `pickerGroup` and the panel's group row keep naming the STANDING group — that row is the control that chooses the group, not a statement about the answer. It is DERIVED, never stored: nothing is written to `state.json`, `/api/groups`, the group editor or localStorage, so it disappears by being recomputed — and `wudictPickerGroupChanged` compares the tap against what the spinner SHOWS (`scopedDictionary()`), not against the stored `pickerGroup`. `empty` reads "No results in this dictionary" while scoped, "No results in this group" otherwise. No Java change: `DictionaryPicker.Live` renders whatever `groups`/`group`/`rows`/`empty` the payload carries.
+- **The scope note names the group it will search, not "all dictionaries"** (2026-09-28, from the same phone report). The note under a link-scoped answer offers a way out — "Search all dictionaries" — and its handler re-runs the search at the **selector's** scope, which "all" resolves to the standing GROUP's members. With a picker group in force the old wording was therefore a false claim about the destination. `searchScopeName()` names it: the picker group's own name (so "Search in All Dictionaries" when that is the group, matching what the chip and the spinner call it), or a facet group / single dictionary when the desktop selector holds one. The same helper fixes the note the automatic widening leaves behind, which said "all dictionaries were searched instead" for exactly the same reason.
+- **`lastScope` is cleared wherever the answer is** — the popstate branch that restores an empty query, the field's blur-with-empty-field branch, and `wudictPickerGroupChanged`'s reset. Without that the spinner would go on naming a dictionary over an empty list.
 
 ### Dictionary settings window: current work
 
@@ -95,13 +97,290 @@ Two corrections to that list landed on 2026-09-21, both from a word-list jump (s
 | Page names | The ☰ drawer in `web/index.html` is titled **Settings** — `<h2>`, the panel's `aria-label` and the button's own `title`/`aria-label` (it was "Dictionaries"/"Manage dictionaries", and the user asked for the rename; `docs/DICTIONARY-GROUPS.md` and the picker-mode note above were updated with it). `web/setup.html` → **Edit Folders**, `web/lemmas.html` → **Lemmatization** (`<h1>` and `<title>`, no wordmark prefix) |
 | Dictionary word list → article | The card's `Browse` link (drawn only while the dictionary is indexed): `index.html:1548` → `/browse?dict=<id>` → `web/browse.html`, whose every word is a link back into the app (`browse.html:217`): `/?q=<word>&dict=<id>&mode=exact` → `applyURL` (`index.html:3621`) sets `#mode`/`#dict` and searches through the ordinary `doSearch`, so the scope is the app's own `dict=` scope and nothing Android-specific is involved. This is `docs/OPEN.md` **O11**, closed on the user's answer ("clicking a word opens the standard view and shows it there") and verified in the desktop browser: unscoped, `act` renders two sections (Asperger + Oxford) and the jump renders one — that dictionary's — with the chip naming it; a Cyrillic headword round-trips; Back returns to the word list. The picker that opens on such a view is covered by the two corrections in the group-picker paragraph above (its dropdown carries the dictionary, its rows are the dictionary itself) |
 
-The panel keeps the job it is for — choosing what to search and reading a path — and everything that configures the collection moved one press out. **Since the 2026-09-21 reorganisation the drawer is five headed sections** (`Dictionaries`, `Results`, `Appearance`, `History`, `Info`; static headings, a hairline between neighbours, no folding): `Dictionaries` carries the real counts as a plain line of text (`#folderSummary` in `.counts`, `N folders · M dictionaries` from `/api/config` — no cog, no disclosure, no target), then one full-width door row each for `Edit dictionary settings`, `Edit dictionary groups`, `Edit folders…`, `Rescan folders` (the one row that acts in place, so it has no chevron) and `Lemmatization…`; `Results` holds the reading strip plus `Browse A–Z…`; `Appearance` holds the Presets row (`#looksChoice` plus its three icon buttons), the two steppers (`#fsCtl` size, `#fwCtl` weight), the two layer rows — **Compact** (`#compactSeg`) and **Examples** (`#examplesSeg`), the style layers promoted out of the sheet (2026-09-27, see "Decisions to preserve") — and the four doors (`Edges of the screen…`, `Window background…`, `Style layers…`, `Custom CSS…`); `History` holds `#historyLength` + `#clearHistory`; `Info` holds the paths (`#folderBody`: `Dictionary folders`, `Library`, `Config file`, sentence case and unfolded — `loadFolders()` fills it on every `showPanel`) and then the About block. The `.mrow`/`.mrow.door` rows, the `.sect`/`.sect-h` headings and `.counts` live in `web/app.css`. Only the collection's doors and the bulk indexing action are left in the settings window — `Full-text for every dictionary…` is the bulk form of the per-card switches under it.
+The panel keeps the job it is for — choosing what to search and reading a path — and everything that configures the collection moved one press out. **Since the 2026-09-28 System Settings window the drawer is six headed sections** (`Dictionaries`, `Results`, `Appearance`, `History`, `System`, `Info`; static headings, a hairline between neighbours, no folding — the System one is drawn only where a shell answers): `Dictionaries` carries the real counts as a plain line of text (`#folderSummary` in `.counts`, `N folders · M dictionaries` from `/api/config` — no cog, no disclosure, no target), then one full-width door row each for `Edit dictionary settings`, `Edit dictionary groups`, `Edit folders…`, `Rescan folders` (the one row that acts in place, so it has no chevron) and `Lemmatization…`; `Results` holds the reading strip plus `Browse A–Z…`; `Appearance` holds the Presets row (`#looksChoice` plus its three icon buttons), the two steppers (`#fsCtl` size, `#fwCtl` weight), the two layer rows — **Compact** (`#compactSeg`) and **Examples** (`#examplesSeg`), the style layers promoted out of the sheet (2026-09-27, see "Decisions to preserve") — and the four doors (`Edges of the screen…`, `Window background…`, `Style layers…`, `Custom CSS…`); `History` holds `#historyLength` + `#clearHistory`; `System` holds the one door to the window of that name (`System settings…` → **System Settings**), which carries the shell's own settings (see "The System Settings window: current work"); `Info` holds the paths (`#folderBody`: `Dictionary folders`, `Library`, `Config file`, sentence case and unfolded — `loadFolders()` fills it on every `showPanel`) and then the About block. The `.mrow`/`.mrow.door` rows, the `.sect`/`.sect-h` headings and `.counts` live in `web/app.css`. Only the collection's doors and the bulk indexing action are left in the settings window — `Full-text for every dictionary…` is the bulk form of the per-card switches under it.
 
 **The enable/disable feature is gone, not just hidden.** Both switches (the master one and the per-card one) were removed, and the client no longer honours the stored `off` flag either: a dictionary switched off before this would otherwise be invisible with nothing left to switch it back on. `savePrefs` writes no `off` key, so the server's omitempty field falls back to false and `state.json` converges on "nothing off" (the server's `prefs.Off`, which only skips a dictionary during warm-up, is untouched). The client's `disabled` set, `enabledOrderedIds`, `toggleDict`, `setAllEnabled` and `syncPanelHeader` are deleted; `activeUserGroupIds`/`groupIds` no longer filter. The empty-result message for a scope with no members is now `“<group>” is empty — add dictionaries in Edit dictionary groups` (or `⚠ No dictionaries to search — add some from Edit folders…`).
 
 The query is re-issued when the WINDOW closes if the preference order moved; the panel's own close then finds the snapshot level, because `reissueIfCorpusMoved` keeps one snapshot per visit (taken in `showPanel`, or in `showDictSettings` when the panel was somehow bypassed). Dragging inside the window never searches per hovered row — the results are behind two overlays. Closing the panel after the window therefore does not search twice, and opening either one without moving anything searches not at all. Scope rules are unchanged: a single-dictionary or `bword://` one-shot view (which includes a URL-driven `?dict=` search, `lastScope`) is never re-run from here.
 
 Verified in the desktop browser against a throwaway server (`127.0.0.1:6899`, temp config, two stub `.dsl` files): the panel shows the two buttons, the reading strip, the drawer (History length/Clear, Browse A–Z…, Appearance…, paths, About) and none of the four machine actions; the window opens modal at 560×650 with the toolbar above the cards and no checkbox anywhere (`#dictSettings input` count 0); moving a card reorders it, persists, and `searchSeq` stays put while the window is open; after closing the window and the panel the query is re-issued exactly once and the sections come back in the new order; reopening restores the scroll offset; `Rescan folders` runs from the toolbar and redraws the cards; `Full-text for every dictionary…` opens its box inside the window and the card list shrinks under it (540px → 410px at 1100×820); an empty user group searches to the new message above; the file list, `Remove…` + Cancel, `About this dictionary` and the group editor's own checkboxes are unchanged; 380×700 and 320×640 both fit, with the toolbar wrapping to two rows. NOT verified on a phone, and not in the dark/paper themes.
+
+### The System Settings window: current work (2026-09-28)
+
+The shell's own settings screen — reached by long-pressing the launcher icon —
+now has a second home inside the app page: a window opened from the ☰ drawer's
+new **System** section, for the reader who is already in the app (the reader's
+ask: move it into the settings panel and call it System). Four things about it
+are the reader's own decisions and are not to be "improved" away:
+
+- **There is no Close button.** The ✕ in the window's corner is the way out —
+  the frame every window of this app already wears (`dialog.group-dialog
+  .panel-card`) — where the screen this mirrors puts a Close button under its
+  rows as well.
+- **Clear browser cache stands ABOVE Advanced.** It is about this window's own
+  copies of the page, not about the server whose limits are below it — and
+  those limits are the rows that need a restart before they are true.
+- **The window wears what the other windows wear**: the frame, the paper and
+  the wallpaper (measured through the shell hook: the dialog's background
+  `rgb(244,236,216)` and its `::backdrop` carrying
+  `url("/files/paper_01.jpg")`).
+- **Its checkboxes are the app's own square, and no rule was written for
+  them.** The window is a `.group-dialog`, so `group-editor.css`'s
+  `input[type=checkbox]` already draws them — 20px, a 1.5px `--fg` border, a
+  tick of two borders, the ground `--paper-bg`, the same recipe the
+  Lemmatization page copies. Anything similar in `app.css`'s System block
+  would be the second recipe that control must not get.
+
+| Concern | Entry points |
+| --- | --- |
+| The door, and the flag that draws it | `index.html`: `<section id="sysSection">` in the drawer (between Appearance and History, `hidden` in markup) and `showPanel`'s `if(window.wudictNativeShell)$("sysSection").hidden=false`. Every row behind it is a fact about THIS window, so a browser is not offered the door at all — the same call the sheet's Screen group made, with the opposite mechanism (that one is drawn everywhere and inert) |
+| The window | `index.html`: `<dialog id="sysSettings">`, placed beside `#dictSettings`; `showSysSettings` / `#closeSysSettings`; and the overlay memory — `rememberOverlays`, `reopenOverlays`, and the `persisted` branch that closes and re-shows it to re-enter the top layer |
+| The bridge | `Shell.java`: `"wudict:system"` in `windows().onJsPrompt` — `get`, `set` (the five switches, and `override` with a key), `restore`, `clearCache` — and `Shell.systemState`, which builds the answer. Every call answers with the WHOLE state, which is what the page repaints from: a write that returned a delta would leave the page holding a copy of a value the shell owns |
+| What the shell sends, and what it does not | `systemState`: the five values, the address and port, and the row table — each override row with its key, kind, LABEL, HINT, bounds, ON marker, stored value and what a spawn would pass (`emitted`). The value each key RESOLVES to, and which layer gave it, is the page's own `/api/config` (`sysConfigRead`), exactly as the shell screen asks it over HTTP rather than recomputing Go's device-derived defaults |
+| The page's half | `index.html`: `sysRead`/`sysPaint`/`sysRowBuild`/`sysEffectPaint`, `sysSeen`/`sysBare`/`sysSeenText`/`sysMb` (the page's reader of the server's `FormatSize`, and the unit each size row prints), `sysStalePaint`/`sysIsStale`/`sysSame`, `sysSet`/`sysSwitch`/`sysSetSwitch`/`sysCommitNumber`, `sysNote`; styles in `app.css` under "the System Settings window" (`.sys-unit` is the `MB` beside a size field) |
+| The port, in both places, and the rule that keeps them one | `SettingsActivity.portRow`/`commitPort`/`paintPortHint` (its strings: `settings_server_port` + `settings_range`/`settings_in_effect`/`settings_out_of_range`) and the page's own row in `#sysAdvanced` — both through `ShellPrefs.setOverrideChecked`. What the port MEANS at runtime is `ServerProcess.port(Context)`: the live child's port while one is up, the configured one otherwise (`livePort`, recorded at ready and cleared at stop/release). `Shell.systemState` sends the CONFIGURED port, on purpose: its sentence is about the next spawn |
+| The way back in after a failed start | `ServerProcess.failed()` (state == FAILED) and `MainActivity.retryServer()`, called from `onWindowFocusChanged` on a focus gain — fix a setting on either screen and come back |
+| Clearing the cache | `Shell.clearWebCache` (unchanged) plus the hosting window's own reload: `MainActivity.reloadPage` (the existing method, which now has a second caller) or the new `LookupActivity.reloadPage` — the popup hosts the same page, so the row works there too |
+| The words | The five switches' words are the PAGE's (they read the same on every device) — the same call the Screen rows got. The Advanced rows' words travel WITH the row, because the table is the shell's and a flavour without a listen-address row contributes none, so a page that spelled them itself would have to know the flavour |
+
+Three rules inside the window, each from a way it can be got wrong:
+
+- **No "Restart server now", and the reason is structural rather than a
+  shortening.** Stopping the server is safe only while no window holds it, and
+  the window asking here IS one (MainActivity retains the server for as long as
+  it exists) — so from inside the page the honest sentence is always "it will
+  pick them up the next time the app is opened", which is what the note says,
+  and the button would be dead code. The screen reached from the launcher keeps
+  the button: it can be open with no page behind it.
+- **The stale note is the shell screen's own two rules, computed in the page**:
+  a value we WOULD pass differs from the one the running server reports, or we
+  would pass nothing for a key it reports with origin `env` or `flag` (this
+  shell's own fingerprint, since nothing else puts values in the child's
+  environment). A key the server does not report at all is a silence and is
+  skipped, never read as a zero.
+- **A refused write puts the control BACK.** The shell's answer to a value it
+  will not store is a cancel (`result.cancel()`), and the page's `sysSet`
+  repaints from the state it already holds — a box left showing the write that
+  was refused is a control promising a setting that does not exist. Found in
+  the browser pass, not reasoned into the first draft.
+
+**Verified in Chromium against a throwaway server** (127.0.0.1:6899, `test_data`,
+2026-09-28) with the bridge stubbed in the page the way the shell answers it:
+the door appears only once `wudictNativeShell` is set; the window opens modal,
+560×680 at 1280×800, and at 390×780 it is the pages' card (358×748, 16px
+margins, no horizontal overflow, the inner scroller taking the rest); the rows
+are drawn from the payload — the switch rows, a BOOL override, three number
+fields whose placeholders are what `/api/config` resolved to (`1024` for `1GB`,
+`1`, `6899`), each hint carrying "Between …" and "In effect now: …", and the
+LAN sentence on the checked listen row; writes land as
+`{action:"set",field:"toolbar",value:true}`,
+`{action:"set",field:"override",key:"NO_COMPRESS",value:"1"}` and `value:null`
+for unticking (an override's off-state is the ABSENCE of a value), a number is
+stored in canonical form, an out-of-range number is refused locally with the
+field put back, a refused write restores the box and says so, `restore` clears
+every row, `clearCache` reaches the shell; the stale note appears while an
+emitted value differs from the running server's and goes when they agree — and
+with everything withdrawn it appears for the PORT, because the preview server
+was started with `-port 6899` (origin `flag`), which is the rule working;
+`sessionStorage.wudict_overlays` ends up `["panel","sysSettings"]`.
+
+**The address row and the way back in (2026-09-28, after the reader's question
+"does the Advanced section move safely, or is it better before the app
+starts?").** The answer splits the table by WHO READS the value back:
+
+- The rows only the CHILD reads - compression, both memory caps, workers, and
+  the FOSS listen-address switch - are safe from anywhere: they are handed over
+  on the exec line at spawn and then forgotten, so changing one while the app
+  runs is inert until the next start, which is exactly what the row's hint says.
+  They stay in the page's window, and the LAN note there keeps naming the
+  CONFIGURED port on purpose (`Shell.systemState`), because that sentence - like
+  the switch it belongs to - is about the address a spawn would bind.
+- The PORT is the one row the SHELL reads back, and it did so from
+  `ServerProcess.port(c)` = the configured value, so a stored port change made
+  every window built afterwards - a lookup popup, a handed-over search, the
+  PowerSignal ping - knock at an address where nothing was listening yet.
+  `ServerProcess.port(c)` now answers "the server we can reach": the live
+  child's port (`livePort`) while one is up, the configured one when none is.
+  That single rule makes a port change behave like every other row (nothing
+  until the next start) and closes the adoption case too - a child left over
+  from a previous app process keeps its port, and the app now talks to it
+  instead of to a port nobody has bound.
+- **Starting has a way back in.** A port that will not bind means the page
+  never loads, so the page's own window is not reachable; `ensure()` ran in
+  onCreate alone, and the activity is singleTask with its config changes
+  intercepted, so returning to the window did not retry either - the reader had
+  to swipe the app away. `ServerProcess.failed()` plus `MainActivity`'s new
+  `retryServer()` on a focus gain fixes that: fix the setting (either screen) and
+  come back. FAILED-only, deliberately: a READY server is left alone and a start
+  in flight is joined by `ensure` itself.
+- **And the port row is back ON THE NATIVE SCREEN**, as the reader asked, under
+  their own criterion ("what does not work from Settings"): it does not work
+  there precisely when it is needed. `Restore defaults` is not enough on its
+  own, for two reasons worth keeping: it is all-or-nothing (it would throw away
+  every other tuned row along with a bad port) and it can walk the reader into a
+  wall - something holding 6889 is the very reason the row exists, and the
+  default is 6889. The row is the one the screen used to have: label, field, the
+  server's own answer as the placeholder, `Between 1024 and 65535.`, `In effect
+  now: …`, commit on focus loss / Enter / leaving the screen, and a refusal that
+  puts the field back and says why. Its three generic strings came back with it
+  (`settings_range`, `settings_in_effect`, `settings_out_of_range`); the page's
+  window says the same three things in its own words, and the two cannot drift
+  in EFFECT because both write through `ShellPrefs.setOverrideChecked`.
+
+**Verified on the emulator, end to end (2026-09-28, AVD `Small`, `debug intel`).**
+`ss -ltn` on the device showed adbd holding 5555, which is a real busy port: the
+row on the native screen took it (`override_SERVER_PORT=5555`), the next launch
+failed with the child's own diagnosis ("server failed to start: … lsof -i
+:5555"), the native screen then took 6901, and closing it brought the app up -
+the retry fired on the focus gain, `127.0.0.1:6901` was listening seconds later,
+and the page rendered at that origin. With the stored port then set to 6902
+while the server ran on 6901, the row's hint read "In effect now: 6901", the
+footer said the server was still running with the previous settings, and a
+lookup intent built its URL from the LIVE port - the app opened and found
+"home" (before this rule it would have pointed at 6902 and shown a dead page).
+`Restore defaults` from the same screen cleared the overrides afterwards, and
+the app was force-stopped so the emulator keeps no state.
+
+**Four fixes the emulator pass produced, in the order they were found.** Each
+one was invisible from the page-side stub, and the first two are why this pass
+was worth running:
+
+1. **A bare number is BYTES, not megabytes — and every number a size row
+   prints is now in the unit its box holds.** The server's `FormatSize` writes
+   the largest unit that divides a value exactly, so a cap that is not a whole
+   number of MB comes back as the byte count — and the page's `sysMb` read a
+   suffix-less number as MB, which showed `256394496` in a field that means
+   megabytes (a value 2000× the truth, in the one box a reader might leave
+   alone). The device said so on the first look: "In effect now: 256394496"
+   beside a placeholder of the same number. `sysMb` now reads a bare number as
+   bytes, exactly as `config.ParseSize` does — and that also settles `sysSame`
+   for a size row, which is the shell screen's own comparison.
+   **The reader then pointed at what was still wrong** (2026-09-28, the
+   follow-up): the boxes read `244` and `81` with nothing saying those are
+   megabytes, while the hint beside them quoted `256394496` — the same value
+   twice in units that look like two different values. So the unit is stated,
+   once per place it can be read: `.sys-unit` (`MB`) stands beside a size
+   field, which is the only thing that can say what a bare number in a number
+   input is OF; the range says "Between 0 and 3912 MB"; and the hint's value
+   goes through `sysSeenText`, which translates a BARE count into megabytes and
+   keeps the server's own spelling when it already carries a unit (`1GB`) —
+   that answer is the value as it was resolved, and rewriting it would be this
+   page second-guessing the server. Count rows (cores, a port) take none of
+   this: they have no unit, and their hints still read "Between 1 and 4."
+2. **The prompt bridge stopped answering once a row changed the port.**
+   `Shell.origin()` is built from the CONFIGURED port, and every `onJsPrompt`
+   branch required the page's URL to start with it — but the page in front of
+   the reader was loaded from the port in force when it was opened. Restore
+   defaults (and the port row) moved one while the other stayed, so every later
+   bridge call — the appearance sheet's own paper push included — fell through
+   to the WebView's default prompt dialog: a modal "The page at … says:
+   wudict:appearance" over the page, with the page's JavaScript blocked behind
+   it. Fixed by remembering the origin the page was actually loaded from
+   (`Shell.notePageUrl`, called from each window's `onPageStarted`) and
+   accepting either it or the current one (`Shell.ownPage`) in `onJsPrompt` AND
+   in `openExternal` — the same mismatch would otherwise have handed the app's
+   own links to the system browser.
+3. **The stale note read the state from BEFORE the write.** `sysSet` painted
+   the answer but left `sysState` — which `sysIsStale` reads — at the previous
+   value, so the note appeared a write late (and, on the device, not at all in
+   the session that made the change). The answer IS the state now.
+4. **The shell screen's footer probed the configured port.** After a port row
+   changes, the configured port has no server behind it, so the probe found
+   nothing and the footer stayed silent in exactly the case it is kept for.
+   `ServerProcess.livePort()` (recorded when a child becomes ready, cleared
+   when it is stopped or released) is what `SettingsActivity.askServer` asks
+   now, falling back to the configured port when nothing is up.
+
+**Five small changes from the reader's next look (2026-09-28, made together and
+NOT device-checked by the agent — the reader runs that pass).** Four are the
+window's shape and one is the shell screen's field:
+
+- **The drawer's `System` section sits BELOW `History` now** (the reader's
+  placement): the working sections are read top-down for what one reaches for
+  often, and the machine's own settings are the ones reached for rarely. The
+  order is `Dictionaries`, `Results`, `Appearance`, `History`, `System`, `Info`.
+- **The window is called `System Settings`** (`#sysSettingsTitle`), not
+  `System`: the drawer SECTION keeps its short name, the window it opens says
+  what it is. The shell screen's signpost was reworded with it ("open System
+  Settings"), since that sentence is what a reader follows to find it.
+- **`Advanced` folds, and starts folded.** Its rows are the server's own limits
+  rather than anything about reading, and they are the longest part of the
+  window. The trigger wears the heading's own type plus the ▸/▾ this app uses
+  for "there is more behind this word" (`.act.disc`, `.prov`, `.pd .about`), and
+  `aria-expanded` is the only thing the marker reads — the click handler keeps
+  it in step with `#sysAdvBody.hidden`. **The triangle is sized against the
+  HEADING (13px, `--fg-soft`), not the 9px one the button rows use**: at that
+  size beside 14px bold it read as a speck (the reader sent a screenshot), and
+  this is the only place where the triangle is the sole sign that a group is
+  folded. **A hairline stands over that heading** (the reader's ask): the groups
+  above it are about the reader's lookups, this one is about the server's own
+  limits, and the rule says so before the fold is opened. It is drawn from the
+  INK, exactly as the drawer's section rules are — `color-mix(in
+  srgb, var(--fg) 22%, transparent)`, the same ratio and for the same measured
+  reason (a `--line` rule read as invisible on a phone in the two light looks,
+  and this window wears the same paper). The state is not remembered:
+  `showSysSettings` folds it again on every open — the element is not rebuilt
+  between visits, so without that reset the window would reopen however it was
+  left, and "folded by default" is what the reader asked for.
+- **A blank row stands between the Advanced rows and `Restore defaults`**
+  (`.sys-gap`), and the button itself lives INSIDE the fold — it clears exactly
+  the rows above it and nothing else in the window, so a button outside the
+  group would be the one control acting on a group it is not part of (the
+  reader's word, same day). A row of air rather than a margin on the button, so
+  the gap is the same whatever the shell's table ends with.
+- **The shell screen's port field now SHOWS the port in force** instead of
+  standing empty with a grey placeholder — an empty box beside a hint that names
+  a port reads as a missing value, not as "the file decides". `portValue()` is
+  the reader's own port or `ShellPrefs.emitted` (what a spawn would use; never
+  nothing for this key), and `commitPort()` knows the difference: a field left
+  alone at that seeded number stores nothing, so opening the screen and leaving
+  it cannot turn "inherited" into an override. Clearing the field still means
+  "follow the settings file", and the number that resolves to comes straight
+  back into the box. The hint keeps naming the RUNNING server's port under "In
+  effect now", which is the one thing the field cannot say: the field holds what
+  the next start will pass, and after a change the two differ until then.
+
+**The shell screen, after the reader's second ask ("delete from the native
+screen everything that moved, except Restore defaults and what does not work
+from Settings").** It is now five things and nothing else: the sentence saying
+where the rows went (`settings_moved_hint`), the **Server port** row (the one
+row that does not work from Settings when it is needed — see "The address row
+and the way back in"), the duplicated `Restore defaults`, the restart footer,
+and `Close`. Deleted with the other rows: the lookup rows, Messages, Access, the
+Advanced table and their eight strings plus the range / in-effect / LAN /
+out-of-range / clear-cache family (18 strings, each with exactly one reader —
+that screen; the three the port row needs came back with it), the per-key
+effective-values CACHE on both sides (`ShellPrefs.cacheEffective`/
+`cachedEffective`, `ServerProcess.cacheEffective` and its two call sites, with
+`migrate()` now REMOVING what older files still carry), and the row-building
+half of the class (`row`, `infoRow`, `keyRow`, `switchRow`, `numberRow`,
+`fillFromPrefs`, `paintHint`, `commit`, `display`, `head`). Verified on the
+emulator: the screen shows the signpost, the port row, `RESTORE DEFAULTS` and
+`CLOSE` and nothing else; a tap on RESTORE DEFAULTS raises the themed confirm
+and clears every override (`override_*` count 0 in the app's preferences); with
+the server on 6889 and a stored 7010 the footer says "the server is still
+running with the previous settings… next time the app is opened" and offers no
+button — correct, because the app window behind it holds the server.
+
+**THE EMULATOR PASS HAPPENED (2026-09-28, AVD `Small`, `build-android.cmd debug
+intel`, `com.dmshepeta.wudict2.debug`), and it turned the paragraph above into
+what follows — including four fixes, three of them bugs the page-side stub
+could not have caught.**
+
+Verified with the REAL bridge: the drawer's `System` door appears only in the
+app (the emulator's own store: the three lookups true, messages and access key
+on their defaults); the window opens as the phone card with the corner ✕ and no
+Close button; every switch and every Advanced row is drawn from the shell's own
+table, with the numbers the device resolved (`244`/`81` for the memory caps,
+`1` worker, `3912` MB from the RAM, `4` cores, `6889`); a tick stores
+`override_NO_COMPRESS=1` and unticking WITHDRAWS the key; a number typed into
+the port row stores `override_SERVER_PORT=7001` in canonical form and the next
+launch REALLY serves on 7001 (`In effect now: 7001`, and the page loads from
+that origin); `Restore defaults` clears every override and `window.confirm`
+raises the app's own themed ask window; the footer says "the server is still
+running with the previous settings" the moment a value differs from the running
+server's; and the app's `effective_*` preference cache is gone from the file
+after the migration (it had five keys before).
 
 ### Appearance sheet: collapsible groups and the Screen rows (2026-09-21)
 
@@ -230,6 +509,23 @@ Typing in `q` changes only the dropdown suggestions. Articles update when a sugg
 
 ## Decisions to preserve
 
+- **The shell's own settings live in the app page, and the screen the launcher opens keeps only what cannot live there** (2026-09-28, the reader's ask to have them in the ☰ Settings drawer named System; then, on their word, to delete from the native screen everything that moved). The page's `System` window is the home: it draws the shell's rows over the `wudict:system` bridge and reads the running server's resolved values from `/api/config` itself. What stays in `SettingsActivity` is the **Server port** (the one row the reader
+can need when the page cannot load at all — a port that will not bind means no
+page, and `Restore defaults` is both all-or-nothing and pointed at 6889, which
+may itself be the busy one), `Restore defaults` (DUPLICATED on purpose — the
+last line of defence, reachable with no page and no server), the restart footer
+(`Restart server now`, which the page can never offer: stopping the server is
+safe only while no window holds it, and the window that asks from inside the
+page IS one), a sentence saying where the other rows went (that screen is on the
+launcher's long-press menu, so it is where a reader who remembers the old screen
+arrives), and `Close`. **Two rules keep a value a reader typed from meaning two
+things:** every write goes through `ShellPrefs.setOverrideChecked`, and the
+runtime question "which port do we talk to" is `ServerProcess.port` — the live
+child's port while one is up, the configured one otherwise — while "what would a
+spawn use" is asked of `ShellPrefs.port` (the LAN note and both rows' hints). A
+failed start is retried on a focus gain (`ServerProcess.failed` +
+`MainActivity.retryServer`), which is what makes fixing a port a one-step repair
+rather than "swipe the app away and start it over". What keeps the two from becoming a second copy of a control: the writes share ONE validator (`ShellPrefs.setOverrideChecked`, which the screen's `commit()` used to have its own copy of), the Advanced rows' words and bounds come from ONE table (`strings.xml` through `Shell.systemState`), and both read `/api/config` for the resolved values. The five switches' labels and hints are the page's own words — the page draws them, so it says them, the call the Screen rows already got — and the 18 strings the trimmed screen let go are gone from `strings.xml` with a note at the top saying where their words live now (the three the port row needs came back with it, which is the same rule read backwards: the screen that draws a row says its words). Two rules the window carries: a refused write repaints from the shell's state rather than leaving a control promising a setting that was never stored (found in the browser pass), and the state a write answers with becomes the state the stale note is computed from (found on the emulator).
 - Android fork package, label, lookup component, and server port are documented in [ANDROID-FORK.md](ANDROID-FORK.md). The separate exported lookup class matters to external readers that distinguish components by class name.
 - Appearance uses the existing Android `sepia`, `sepia_color`, and `background_image` preferences through `wudict:appearance`; no duplicate page storage. **Background color** defaults to `#f4ecd8`, unchecked by default. Its field displays six hex digits without `#`; accepts either form and either case. Existing saved colors remain unchanged. CSS-facing `sepiaColorText` still includes `#`. **The sheet owns the window's Screen rows too** (edges of the screen, hide while you read, and the margin colour of "a colour you pick"): the shell's settings screen no longer carries them, and the same bridge fields (`edgeMode`, `edgeColor`, `bars`) write the same `ShellPrefs` keys — see the Appearance sheet section above. `MainActivity.refreshScreen` applies them to the live window; the floating lookup window stores them and the app window picks them up on its next focus gain.
 - **The Appearance sheet's groups are collapsible, and its menus are the page's own.** The order is `Screen`, `Window background`, `Custom CSS`, and all three are the same thing: a bar and a body inside `#appearanceGroups`, which is the sheet's whole scroll — so every section scrolls with its bar instead of two scrolling while the third stood pinned below them. Open/closed lives in `appearanceOpen` (JS) and is never read back off the DOM, because `appearanceRender` re-runs on every bridge round trip. The caret in the CSS box still stands the window-background group down and returns it on blur (`stylerEditing`, edge-triggered so the 300ms poll cannot overrule a bar tap), and the box is then scrolled back into view (`stylerBoxIntoView`). Folding Custom CSS also makes the sheet `height:auto` (capped at `--styler-h`) and the page's bottom padding follows the MEASURED height (`--styler-shown`), so closing the editor gives the screen back. Both Screen answers and both colour fields open `.menu-card` menus the page draws, `position:fixed` and placed from their anchor (the sheet scrolls; absolute menus would be cut off at the scroller's edge) — a `<select>` was refused because the platform's own popup window can wear neither the app's background colour nor its wallpaper. Three rounds of phone corrections shaped this: a pinned bar read as a section that never moved, a pinned bar beside a scrolling section parted company with it, and the answer was one scroll with every section the same.
@@ -309,6 +605,13 @@ Typing in `q` changes only the dropdown suggestions. Articles update when a sugg
 
 ## Unfinished work
 
+- **The System Settings window and the trimmed shell screen were checked on the
+  EMULATOR (2026-09-28, AVD `Small`, `debug intel`) — see "The System Settings window:
+  current work" for what that pass verified and the four fixes it produced.
+  Still owed on the reader's PHONE:** the same walk at their own density and
+  theme (the emulator is stock 320 dpi), Clear browser cache actually
+  reloading the window (the one action the emulator pass did not exercise),
+  and the door's absence in a plain browser.
 - The last change (2026-09-21) is the Appearance sheet's collapsible groups and the Screen rows moved in from the shell screen — see its section above for what is verified and what the phone has to confirm. Do not add speculative controls (visible move-to-top arrows were discussed but not chosen).
 - Do not apply old stashes or an earlier dictionary-groups patch over the current implementation.
 

@@ -61,8 +61,33 @@ class ServerProcess {
     // PowerSignal already treats as an ordinary miss.
     private static volatile int portCache = ShellPrefs.DEFAULT_PORT;
 
-    /** The port this install's server listens on, and primes {@link #port()}. */
+    /**
+     * The port to TALK to: the one the live child is on, or - when none is up -
+     * the one a spawn would use ({@link ShellPrefs#port}).
+     *
+     * <p>The two differ whenever a stored port has changed under a running app,
+     * and the difference is deliberate: a value from the settings takes effect
+     * at the NEXT start (that is what every row there says), so until then the
+     * server this app can reach is the one it already has, at the port it was
+     * exec'd with. Asking the configured port instead sent every window built
+     * in that window of time - a lookup popup, a handed-over search, the
+     * PowerSignal ping - to an address where nothing was listening yet.
+     * {@link #livePort()} is that fact, and this is the rule that reads it.
+     * What a spawn WOULD use is asked of {@link ShellPrefs#port} directly: the
+     * settings window's own note about the listen address, and the port row's
+     * hint on either screen, are sentences about the next start and not about
+     * now, so they name the configured one on purpose.
+     *
+     * <p>Adoption is the other half of the same coin: a child left over from a
+     * previous app process is adopted and keeps its port, so an app started
+     * after a port change still talks to what is really there.
+     */
     static int port(Context c) {
+        int live = livePort;
+        if (live != 0) {
+            portCache = live;
+            return live;
+        }
         int p = ShellPrefs.port(c);
         portCache = p;
         return p;
@@ -71,6 +96,32 @@ class ServerProcess {
     /** The last port {@link #port(Context)} resolved. For callers with no Context. */
     static int port() {
         return portCache;
+    }
+
+    /**
+     * Whether the last start attempt failed and nobody has retried it. Read by
+     * MainActivity, which retries on a focus gain: the reader has been to the
+     * settings screen (a port, a memory cap) or has freed whatever held the
+     * port - and nothing else asks again, because ensure() runs in onCreate
+     * alone and that activity is singleTask with its config changes
+     * intercepted, so returning to it does not recreate it.
+     */
+    static synchronized boolean failed() {
+        return state == FAILED;
+    }
+
+    // The port the LIVE child was actually exec'd with, or 0 when none is up.
+    // Read by port(Context) above, which is the rule that matters, and by the
+    // settings screen's probe - a probe of the CONFIGURED port finds nothing
+    // there, so the footer would go silent in exactly the case it exists for
+    // (found on the emulator, 2026-09-28, with the server on 7003 and the row
+    // already saying 7004). The page's own System window has no such problem:
+    // it asks the server it is being served by.
+    private static volatile int livePort;
+
+    /** The port the running server listens on, or 0 when none is running. */
+    static int livePort() {
+        return livePort;
     }
 
     interface Listener {
@@ -169,6 +220,7 @@ class ServerProcess {
         generation++; // any callback still in flight from this child is now stale
         if (shared != null) shared.stop();
         shared = null;
+        livePort = 0; // nothing is listening now
         state = IDLE;
         waiting.clear();
     }
@@ -202,8 +254,8 @@ class ServerProcess {
         ShellPrefs.token(app);
         if (adoptRunningServer(app, port)) {
             Log.i(TAG, "adopted a wudict server already listening on " + port);
+            livePort = port; // the port the adopted child is really on
             listener.onReady();
-            cacheEffective(app, port); // after onReady: nothing waits on this
             return;
         }
 
@@ -273,8 +325,8 @@ class ServerProcess {
         logOutput(process.getInputStream());
 
         if (awaitPort(app, process, port)) {
+            livePort = port; // and the one this child was exec'd with
             listener.onReady();
-            cacheEffective(app, port); // after onReady: nothing waits on this
             return;
         }
 
@@ -385,23 +437,6 @@ class ServerProcess {
         } finally {
             if (c != null) c.disconnect();
         }
-    }
-
-    // ── what the running server resolved the tunable keys to (D101) ──────────
-    //
-    // The settings screen is reached by long-pressing the launcher icon, so the
-    // normal case is that it opens with NO server to ask - while the values it
-    // must show as inherited are the ones Go computes from the device itself
-    // (internal/config/tuning.go), which Java must never recompute. So the
-    // shell records them whenever it DOES have a server: every start and every
-    // adoption refreshes the cache, and the screen falls back to it when
-    // nobody answers. One local request, issued after the caller has already
-    // been told the server is ready, so nothing waits on it.
-
-    static void cacheEffective(Context c, int port) {
-        Map<String, String> values = new LinkedHashMap<>();
-        Map<String, String> origins = new HashMap<>();
-        if (fetchEffective(port, values, origins)) ShellPrefs.cacheEffective(c, values);
     }
 
     /**
@@ -520,6 +555,7 @@ class ServerProcess {
         boolean owned = shared != null;
         if (owned) shared.stop();
         shared = null;
+        livePort = 0;
         state = IDLE;
         waiting.clear();
         if (owned) return true;

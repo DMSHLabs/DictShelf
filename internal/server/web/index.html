@@ -585,6 +585,32 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
   </div>
 </section>
 
+<section class="sect" id="sysSection" hidden>
+  <h3 class="sect-h">System</h3>
+  <!-- The shell's own settings, which until now lived only on the screen the
+       launcher icon's long-press menu opens: what a lookup from another app
+       does, the messages this app draws while it starts, the access key, and
+       the config keys whose right answer differs because of THIS device
+       (D101). One subject, and it is the machine serving the reading rather
+       than the reading itself - which is why it sits LAST of the working
+       sections, below the search field's own memory (the reader's placement,
+       2026-09-28: the drawer is read top-down for things one reaches for
+       often, and this is where one reaches rarely).
+       The section exists only where a shell answers, which is the flag the
+       shell injects at onPageFinished: every row behind that door is a fact
+       about THIS window - where a lookup from another app lands, and whether
+       this app's own view may spend the machine's cache - and a browser has
+       no such window to decide anything about.
+       A door and not the rows themselves: what is behind it is a window of
+       this app (the same frame, paper and wallpaper as Dictionary settings),
+       and the Advanced rows are a table only the SHELL holds - a flavour
+       without a listen-address row sends none - so the page cannot draw them
+       from anything of its own. -->
+  <div class="facts">
+    <button type="button" class="mrow door" id="editSysSettings" title="How a lookup from another app lands, the messages this app draws, the access key, and the limits its server runs within">System settings…</button>
+  </div>
+</section>
+
 <section class="sect">
   <h3 class="sect-h">Info</h3>
   <!-- Where the app keeps things: the folders it scans, the prepared library and
@@ -648,6 +674,105 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
   <div id="reindexLine" class="bulkbox" hidden aria-live="polite"></div>
   <div class="panel-scroll" id="dictSettingsScroll">
     <div id="panelList"></div>
+  </div>
+</dialog>
+
+<!-- System: the shell's own settings, drawn by the page. It is the second view
+     of one set of values the SHELL owns - the screen the launcher icon's
+     long-press menu opens is the other - so nothing here is stored twice: the
+     window asks over the wudict:system bridge (Shell.systemState) and writes
+     through the same prompt, and the answer to every call is the whole state,
+     which is what it repaints from.
+     Two kinds of row, and the difference is which side knows the words. The
+     three lookups, the messages and the access key read the same everywhere, so
+     they are spelled here, the way the Appearance sheet spells the Screen rows
+     it took over from the same screen. The Advanced rows are cut from a table
+     the shell holds - the flavour without a listen-address row contributes
+     none, the labels and bounds are its own - so each one arrives with its
+     words, and the page only draws what it is given.
+     NO Close button, deliberately: the ✕ in this window's corner is the way
+     out, and a second control meaning the same thing was the reader's
+     complaint about the screen this replaces.
+     Clear browser cache stands ABOVE Advanced (the reader's order): it is
+     about this window's own copies of the page, not about the server whose
+     limits are below it - and those limits are the rows that need a restart
+     before they are true.
+     A browser has no such bridge, so the door that opens this window is not
+     drawn there; the window itself is only reachable through that door. -->
+<dialog id="sysSettings" class="group-dialog panel-card" aria-labelledby="sysSettingsTitle">
+  <h2 id="sysSettingsTitle">System Settings <button type="button" class="btn" id="closeSysSettings" aria-label="Close system settings">✕</button></h2>
+  <div class="panel-scroll" id="sysScroll">
+    <h3 class="sys-head">Look up in the full app</h3>
+    <p class="sys-hint">Otherwise a lookup floats over the app you were reading.</p>
+    <label class="sys-row"><input type="checkbox" id="sysToolbar"><span class="sys-label">From the text selection menu</span></label>
+    <label class="sys-row"><input type="checkbox" id="sysShare"><span class="sys-label">From the share menu</span></label>
+    <label class="sys-row"><input type="checkbox" id="sysLink"><span class="sys-label">From links and automation</span></label>
+
+    <h3 class="sys-head">Messages</h3>
+    <p class="sys-hint">The notes this app puts on screen while it is starting and
+       while it is looking a word up — the “Starting…” line, the waiting art, the
+       “N of M ready” counter, and the “Looking up …” line in the floating window.
+       They are true and they pass in a moment, which is why they can be turned
+       off: with this off, a window stays empty until its results arrive. A failure
+       is still reported, and so is the note that the answers below are for a
+       different form of the word you typed.</p>
+    <label class="sys-row"><input type="checkbox" id="sysInfo"><span class="sys-label">Show info messages</span></label>
+
+    <h3 class="sys-head">Access</h3>
+    <p class="sys-hint">Other apps on this phone can reach the dictionary server.
+       With this on, they can look words up but cannot change anything — no
+       importing, preparing or removing dictionaries, and no settings. Turn it off
+       if another app should be able to change things too. Takes effect the next
+       time the app starts.</p>
+    <label class="sys-row"><input type="checkbox" id="sysKey"><span class="sys-label">Only this app may change your dictionaries</span></label>
+
+    <h3 class="sys-head">Browser cache</h3>
+    <p class="sys-hint">Throws away the copies of the page's files this app keeps
+       on the device, then loads the page again — for when an update leaves it
+       showing something old. Your dictionaries, their indexes and your settings
+       are not touched.</p>
+    <div class="group-toolbar"><button type="button" class="btn" id="sysClearCache">Clear browser cache</button></div>
+
+    <!-- Advanced FOLDS, and starts folded (the reader's ask, 2026-09-28). Two
+         reasons it is the one group that does: its rows are the server's own
+         limits rather than anything about reading, so the window a reader opens
+         for the lookups should not stand at its full height because of them -
+         and the disclosure is the app's own idiom for "there is more behind
+         this word" (the ▸/▾ of #ftsAllBtn and every .prov in this page), here
+         shaped like a section heading because that is what it is.
+         The marker is driven by aria-expanded, which the handler below
+         maintains, so there is no second source of truth to drift from
+         #sysAdvBody.hidden. The state is not remembered: showSysSettings folds
+         it again on every open, because "folded by default" is what the reader
+         asked for and a surface that is not rebuilt between visits would
+         otherwise keep whatever it was left in. -->
+    <button type="button" class="sys-fold" id="sysAdvBar" aria-expanded="false" aria-controls="sysAdvBody">Advanced</button>
+    <div id="sysAdvBody" hidden>
+      <p class="sys-hint">These change how the dictionary server itself runs. Leave
+         them alone unless you know what they do. Anything left empty follows the
+         settings file.</p>
+      <!-- The rows themselves, drawn from the shell's answer (sysRowsRender):
+           a switch per BOOL key, a number field per count, each with its own
+           label, hint and bounds. Empty in markup on purpose - what is in here
+           is not this page's to know. -->
+      <div id="sysAdvanced"></div>
+      <!-- Restore defaults stands INSIDE this group (the reader's word): it
+           clears exactly the rows above it and nothing else in the window, so a
+           button outside the fold would be the one control acting on a group it
+           is not part of. The blank row the reader asked for separates the rows
+           from the button, which is where that break is now read - a row of air
+           rather than a margin on the button, so it is the same whether the
+           group is open or closed. -->
+      <div class="sys-gap" aria-hidden="true"></div>
+      <div class="group-toolbar"><button type="button" class="btn" id="sysRestore">Restore defaults</button></div>
+    </div>
+
+    <!-- The running server was started with different values (sysStale), and
+         under it the window's own voice (sysNote): what it just did, or why an
+         out-of-range value came back. Both are written by sysStalePaint and
+         sysNote, and both take no room while empty. -->
+    <p class="sys-note" id="sysStale" hidden></p>
+    <p class="sys-note" id="sysNote" aria-live="polite"></p>
   </div>
 </dialog>
 
@@ -1600,12 +1725,18 @@ function livePickerRows(){
   }
   return rows;
 }
-/* The standing scope, when it is ONE dictionary, as an entry for the picker's
-   own dropdown. A word list's jump and a `?dict=` link land there, and the
-   dropdown then has to say so instead of naming the group the reader picked
-   earlier: that group is still what a later scope of "all" resolves to, but it
-   is not what is being searched, and a spinner claiming otherwise is a label
-   for the wrong thing — the list under it holds that one dictionary.
+/* The dictionary the current ANSWER is scoped to, when it is scoped to one: the
+   standing scope (`#dict`) if the reader picked one, else the one-shot scope a
+   cross-reference link arrived with — `lastScope`, which every search sets and
+   which is the same value that rides in the URL as `from`. Reading `#dict`
+   alone was wrong for links, and the way it failed is worth keeping: a link
+   inside an article scopes ITS search without touching the reader's standing
+   preference (that rule is deliberate — the selector is the preference for the
+   words THEY type), so `#dict` still said "all" while the answer on screen was
+   one dictionary's — the window then listed that one dictionary under "All
+   dictionaries", which reads as a bug and left no way out of it except
+   switching groups twice. Naming the answer's own scope is what makes that
+   window honest, and what makes "All dictionaries" a working way back.
 
    DERIVED, never stored: this entry exists only in the payload of the open
    window — not in state.json, not in /api/groups, and so not in the group
@@ -1615,9 +1746,14 @@ function livePickerRows(){
    scope to all (wudictPickerGroupChanged), which is the moment the entry stops
    existing; a load without `dict=` in the URL never has one. `d:` is only a
    marker that cannot collide with a group id (those are random hex), and
-   nothing resolves it — the scope was already set when the reader arrived. */
+   nothing resolves it — the scope was already set when the reader arrived.
+
+   The label is the dictionary and NOTHING ELSE: naming the groups it belongs
+   to was tried and read as clutter (the reader's word), and the groups are
+   already in the dropdown as themselves — the entry's job is to say which
+   dictionary is being searched, not to place it in the taxonomy. */
 function scopedDictionary(){
-  const v=$("dict").value;
+  const v=lastScope||$("dict").value;
   if(!v||v==="all"||v.startsWith("g:"))return null;
   const d=dicts.find(x=>x.id===v);
   return d?{id:"d:"+v,name:dictLabel(d)}:null;
@@ -1714,6 +1850,23 @@ function paintPickerGroup(){
    rest of the page script (measured on the emulator: the mode chip never
    painted). "All dictionaries" is the right answer in that window anyway. */
 function scopeLabel(){
+  /* The ANSWER's own scope first, when it is one dictionary. This chip and the
+     picker's spinner are the two places that say where the search went, and
+     they are read one after the other by the same reader: the spinner names the
+     dictionary a link-scoped answer came from (scopedDictionary), so the chip
+     must not go on naming the group UNDER that answer — "All Dictionaries"
+     over a one-dictionary list is the same false label in a second place
+     (reported from the phone, with the picker's own window in the screenshot).
+     Both homes read the same string: the field's 11ch chip ellipsises it, which
+     is what that chip does with a long group name too.
+     Wrapped in try/catch for the reason the group's name below is: syncChips
+     runs while this script is still executing, and scopedDictionary reads
+     `lastScope`, which is declared far below — an unguarded read there is a TDZ
+     ReferenceError that kills the rest of the page. */
+  try{
+    const scoped=scopedDictionary();
+    if(scoped)return scoped.name;
+  }catch(_){}
   const d=$("dict"),opt=d.selectedOptions[0];
   // Where the chip lives decides what it says (the reader's call, 2026-09-27):
   // in the status bar it names the scope in full - that row has the width and
@@ -1780,7 +1933,7 @@ window.wudictPickerGroupChanged=id=>{
   pickerGroup=id;localStorage.setItem("wudict_picker_group",id);
   paintPickerGroup(); // the panel's row says which group, and it just changed
   $("dict").value="all";localStorage.setItem("wudict_dict","all");
-  scopeOnce=null;syncChips();
+  scopeOnce=null;lastScope=null;syncChips();
   const url=new URL(location.href);url.searchParams.delete("dict");url.searchParams.delete("from");
   history.replaceState(history.state,"",url.pathname+url.search+url.hash);
   $("out").replaceChildren();liveSearchBoxes=null;refreshLivePicker();
@@ -2401,6 +2554,11 @@ function showPanel(){panelSnap=panelState();  /* before the lock: once the root 
   document.documentElement.style.setProperty("--wd-sbw",
     Math.max(0,innerWidth-document.documentElement.clientWidth)+"px");
 $("speakSeg").hidden=!speakCan();$("panel").classList.add("show");loadFolders();
+  // The System door exists only where a shell answers - the flag it injects at
+  // onPageFinished - because every row behind it is a fact about this window.
+  // Asked here rather than at load: the flag arrives after this script has run,
+  // and the drawer is opened by the reader long afterwards.
+  if(window.wudictNativeShell)$("sysSection").hidden=false;
   // Another window can switch a layer; the panel's layer rows are repainted
   // from the registry in hand whenever the drawer opens, the way the Presets
   // row is re-asked whether the screen still matches the look in force.
@@ -2443,6 +2601,340 @@ $("dictSettings").addEventListener("close",()=>{
 });
 $("rescanBtn").onclick=()=>{loadDicts(true).then(loadFolders)};
 
+/* The panel's third window: System. Wired like Dictionary settings — modal over
+   the drawer, focus handed back to the door it came from — and it moves no
+   dictionary, so it takes no snapshot and re-runs no search when it closes.
+
+   The page keeps no copy of a value the SHELL owns: every call - a read, a
+   write, Restore defaults - is answered with the whole state, and everything
+   below paints from that answer alone. What the answer cannot carry is what
+   the RUNNING server resolved each config key to, and which layer gave it:
+   that is the server's own /api/config, asked here directly rather than
+   through Java, exactly as the shell's settings screen asks it over HTTP
+   instead of recomputing Go's device-derived defaults. Both halves are needed
+   for the two things a row says about a value it was not given - what it is
+   INHERITING (the empty field's placeholder) and whether the server now
+   running was started with something else (the note at the bottom).
+
+   Nothing here names a platform. The rows that arrive from the shell arrive
+   with their own words because the shell's TABLE is what they are cut from
+   (the flavour without a listen-address row contributes none); the five
+   switches above them are the same everywhere, so the page says them. */
+let sysState=null;   // the shell's last answer: the switches, the rows, the address
+let sysCfg=null;     // the server's last /api/config answer, or null when it did not
+const sysRows=[];    // one entry per Advanced row: {row, field, hint}
+function sysRequest(request){
+  if(!window.wudictNativeShell)return null;
+  try{
+    const answer=window.prompt("wudict:system",JSON.stringify(request));
+    return answer===null?null:JSON.parse(answer);
+  }catch(e){console.warn("system bridge:",e);return null}
+}
+/* The server's own answer, asked fresh every time the window opens: the window
+   exists partly to say whether the server is BEHIND, and a remembered answer
+   is the one thing that note must never quote. Nothing is fetched twice on
+   this page's account - this is the same /api/config the drawer's Info section
+   reads, and the two are not kept in step with each other on purpose: the
+   window's subject is what the server is RUNNING, the Info section's is where
+   the folders are. */
+async function sysConfigRead(){
+  try{
+    const r=await fetch("/api/config");
+    if(!r.ok)throw new Error("HTTP "+r.status);
+    sysCfg=await r.json();
+    return true;
+  }catch(e){sysCfg=null;return false}
+}
+function sysRead(){
+  const state=sysRequest({action:"get"});
+  if(!state)return null;
+  sysState=state;
+  sysPaint(state);
+  // The server answers on its own road: what the shell said is on screen at
+  // once, and what only the server can add joins it a moment later.
+  sysConfigRead().then(sysEffectPaint);
+  return state;
+}
+/* Everything the shell answered: the five switches, and the Advanced rows.
+   REBUILT rather than patched, because the rows themselves are the answer - a
+   flavour may contribute none, and a write answers with the same shape a read
+   does, so one path draws both. */
+function sysPaint(state){
+  for(const pair of [["sysToolbar",state.toolbar],["sysShare",state.share],
+      ["sysLink",state.link],["sysInfo",state.info],["sysKey",state.key]]){
+    $(pair[0]).checked=!!pair[1];
+  }
+  const box=$("sysAdvanced");
+  box.replaceChildren();
+  sysRows.length=0;
+  for(const row of state.rows||[])box.appendChild(sysRowBuild(row));
+  sysEffectPaint();
+}
+function sysRowBuild(row){
+  const wrap=document.createElement("div");
+  wrap.className="sys-item";
+  const entry={row,field:null,hint:document.createElement("p")};
+  entry.hint.className="sys-hint";
+  if(row.kind==="bool"){
+    const label=document.createElement("label");
+    label.className="sys-row";
+    const box=document.createElement("input");
+    box.type="checkbox";
+    box.checked=row.stored!=null;
+    // Written as it is used - there is no Save anywhere in this app - so a
+    // switch the shell refused has to put itself back, which is what the
+    // repaint-from-the-answer does: the answer it did not get leaves the box
+    // as it was found.
+    box.addEventListener("change",()=>sysSetSwitch(row,box.checked));
+    const span=document.createElement("span");
+    span.className="sys-label";
+    span.textContent=row.label;
+    label.appendChild(box);
+    label.appendChild(span);
+    entry.field=box;
+    wrap.appendChild(label);
+  } else {
+    const line=document.createElement("div");
+    line.className="sys-row sys-num";
+    const span=document.createElement("span");
+    span.className="sys-label";
+    span.textContent=row.label;
+    const field=document.createElement("input");
+    field.type="number";
+    field.inputMode="numeric";
+    field.step="1";
+    field.min=row.min;
+    field.max=row.max;
+    field.value=row.stored==null?"":row.stored;
+    field.setAttribute("aria-label",row.label);
+    // Committed on change, which is a blur or Enter: "1" on the way to "128"
+    // is an unfinished value, not an invalid one.
+    field.addEventListener("change",()=>sysCommitNumber(row,field));
+    line.appendChild(span);
+    line.appendChild(field);
+    // The unit, beside the box: a number field holds a number and nothing
+    // else, so "244" in a box whose subject is memory says nothing about what
+    // it is 244 OF - and the box already means megabytes (the hint says so in
+    // words, and the value the server reports is translated into them).
+    if(row.kind==="mb"){
+      const unit=document.createElement("span");
+      unit.className="sys-unit";
+      unit.textContent="MB";
+      line.appendChild(unit);
+    }
+    entry.field=field;
+    wrap.appendChild(line);
+  }
+  wrap.appendChild(entry.hint);
+  sysRows.push(entry);
+  return wrap;
+}
+/* The half that comes from the server: what a key resolves to now, the range
+   its row accepts, and the sentence that says where this phone would be
+   reached while its listen switch is on. A value the server did not answer
+   about is left unsaid rather than guessed at - the placeholder stays empty
+   and the hint says nothing, which is the same silence the shell's screen
+   keeps when nothing has ever been seen.
+
+   Every number a MEGABYTES row prints is in megabytes, the unit its field
+   holds - the range, the value in effect, and the box itself, which carries
+   "MB" beside it. The server reports this one key on its own terms and the two
+   do not always agree: a cap that is not a whole number of MB comes back as a
+   byte count, so the hint quoted "In effect now: 256394496" beside a field
+   reading 244 - the same value twice, in units that look like two different
+   values. Suffixed answers keep the server's own spelling ("1GB"), because
+   that is the value as it was resolved; a bare count is the one case that
+   needs translating, and sysSeenText is where. */
+function sysEffectPaint(){
+  const eff=(sysCfg&&sysCfg.effective)||{};
+  for(const entry of sysRows){
+    const row=entry.row,seen=sysSeen(row,eff);
+    let text=row.hint;
+    if(row.kind!=="bool"){
+      text+=" Between "+row.min+" and "+row.max+(row.kind==="mb"?" MB":"")+".";
+      entry.field.placeholder=seen==null?"":sysBare(row.kind,seen);
+    }
+    if(seen!=null)text+=" In effect now: "+sysSeenText(row,seen)+".";
+    if(row.lan&&entry.field.checked){
+      const ip=sysState&&sysState.lan;
+      text+=" "+(ip?"While it is on, other devices on this network would use "+ip+":"+sysState.port+"."
+                  :"This phone is not on a network right now.");
+    }
+    entry.hint.textContent=text;
+  }
+  sysStalePaint();
+}
+/* The running server's value for a key, or null when it answered nothing about
+   it - a key it does not report at all is a silence, not a zero. */
+function sysSeen(row,eff){
+  const e=eff[row.key];
+  const v=e&&e.value!=null?String(e.value):"";
+  return v===""?null:v;
+}
+/* A megabytes value AS A READER READS IT: still the server's own spelling when
+   it carries a unit, and megabytes when it does not - a bare count is bytes,
+   and printing it beside a box that holds megabytes is what made a correct
+   number look wrong. The empty answer is left to the caller. */
+function sysSeenText(row,value){
+  if(row.kind!=="mb")return value;
+  const mb=sysMb(value);
+  if(mb==null)return value;
+  return /[A-Z]$/.test(value.trim().toUpperCase())?value:String(mb)+"MB";
+}
+/* A megabytes value as the FIELD shows it: bare, in MB - the unit is stated
+   once, beside the box (`.sys-unit`), and the hint speaks it in words. Mirrors
+   the shell screen's display(). */
+function sysBare(kind,value){
+  if(kind!=="mb")return value;
+  const mb=sysMb(value);
+  return mb==null?value:String(mb);
+}
+/* Reads what the server's FormatSize writes: a number with an optional
+   B/KB/MB/GB suffix, in the largest unit that divides it exactly. A BARE number
+   is BYTES, not megabytes - config.ParseSize's own rule, and the reason the
+   suffix is optional at all ("0" is no cap, and a cap that is not a whole
+   number of MB comes back as the byte count: the emulator answered
+   256394496 for the search cap). Getting this wrong in the one direction that
+   LOOKS harmless is what the device check caught: the field read "256394496"
+   under a hint saying "In effect now: 256394496", i.e. a number 2000× the
+   truth, in the one box the reader might actually leave alone. null for
+   anything else, which is treated as unknown rather than guessed at. */
+function sysMb(value){
+  const m=/^(\d+)(B|KB|MB|GB)?$/.exec(String(value||"").trim().toUpperCase());
+  if(!m)return null;
+  const n=Number(m[1]);
+  if(m[2]==="GB")return n*1024;
+  if(m[2]==="MB")return n;
+  if(m[2]==="KB")return Math.floor(n/1024);
+  return Math.floor(n/1048576);   // bytes: "B", or no suffix at all
+}
+/* Whether the server now answering was started with values this window would
+   no longer pass. Two ways that happens, and they are the shell screen's own
+   two: a value we WOULD pass differs from the one it reports, or we would pass
+   nothing for a key it received from a previous exec line - origin "env" or
+   "flag" is this shell's own fingerprint, since nothing else on the device
+   puts values into the child's environment.
+   The note has no "restart now" button, and the reason is structural rather
+   than a shortening: stopping the server is safe only while no window holds
+   it, and the window asking here IS one - the app retains it for as long as it
+   exists - so from inside the page the honest sentence is always the second
+   one, and it is the sentence that is written. The screen reached from the
+   launcher keeps the button, because it can be open with no page behind it. */
+function sysStalePaint(){
+  const stale=sysIsStale();
+  $("sysStale").hidden=!stale;
+  $("sysStale").textContent=stale?"The dictionary server is still running with the previous settings. It will pick them up the next time the app is opened.":"";
+}
+function sysIsStale(){
+  if(!sysState||!sysCfg)return false;
+  const eff=sysCfg.effective||{};
+  for(const row of sysState.rows||[]){
+    const e=eff[row.key];
+    if(!e||e.value==null)continue;
+    if(row.emitted==null){
+      if(e.origin==="env"||e.origin==="flag")return true;
+      continue;
+    }
+    if(!sysSame(row,String(row.emitted),String(e.value)))return true;
+  }
+  return false;
+}
+/* Value equality in the row's own terms: sizes by bytes, the rest literally. */
+function sysSame(row,a,b){
+  if(row.kind!=="mb")return a===b;
+  const x=sysMb(a),y=sysMb(b);
+  return x!=null&&x===y;
+}
+/* A write, answered by the new state. null means the shell refused the value -
+    a number outside the row's bounds, a BOOL's off-state arriving as a value,
+    anything this side would have to invent a config from. The window then says
+    so and paints what the shell DOES hold: a box left showing a write that was
+    refused is a control promising a setting that does not exist, and this
+    window is the only place some of these values can be read at all. */
+function sysSet(request){
+  const state=sysRequest(request);
+  if(!state){
+    sysNote("Could not save that setting.");
+    if(sysState)sysPaint(sysState);
+    return null;
+  }
+  // The answer IS the state now, and it is kept before anything paints: the
+  // stale note at the bottom reads `sysState` (its `emitted` per row), and
+  // leaving the previous one there made that note appear a write LATE - the
+  // port row was set, the running server still answered the old one, and the
+  // window said nothing until some later round trip happened to refresh it.
+  // Caught on the emulator, where the note never appeared at all: the answer
+  // was painted while the STATE it is compared against was still the one from
+  // before the write.
+  sysState=state;
+  sysNote();
+  sysPaint(state);
+  return state;
+}
+function sysSwitch(field,on){return sysSet({action:"set",field,value:on})}
+function sysSetSwitch(row,on){
+  return sysSet({action:"set",field:"override",key:row.key,value:on?row.onValue:null});
+}
+function sysCommitNumber(row,field){
+  const typed=field.value.trim(),stored=row.stored==null?"":row.stored;
+  if(!typed){
+    if(row.stored!=null)sysSet({action:"set",field:"override",key:row.key,value:null});
+    return;
+  }
+  const n=Number(typed);
+  if(!/^\d+$/.test(typed)||n<row.min||n>row.max){
+    sysNote("“"+typed+"” must be a whole number between "+row.min+" and "+row.max+".");
+    field.value=stored;
+    return;
+  }
+  if(String(n)===String(stored))return;
+  sysSet({action:"set",field:"override",key:row.key,value:String(n)});
+}
+function sysNote(text){$("sysNote").textContent=text||""}
+
+function showSysSettings(){
+  // Advanced starts folded EVERY time the window opens, which is what "folded
+  // by default" has to mean for a surface that is not rebuilt between visits:
+  // the element keeps whatever state it was left in, so a window reopened onto
+  // an open group would be a window that looks different every time.
+  $("sysAdvBody").hidden=true;
+  $("sysAdvBar").setAttribute("aria-expanded","false");
+  $("sysSettings").showModal();
+  sysRead();
+}
+/* The Advanced group folds, and starts folded: its rows are the server's own
+   limits, not anything about reading, and they are the longest part of this
+   window. The state is not remembered - a window opened twice should look the
+   same twice, and "folded" is where the reader asked it to start. */
+$("sysAdvBar").onclick=()=>{
+  const open=$("sysAdvBody").hidden;
+  $("sysAdvBody").hidden=!open;
+  $("sysAdvBar").setAttribute("aria-expanded",open?"true":"false");
+};
+$("editSysSettings").onclick=showSysSettings;
+$("closeSysSettings").onclick=()=>$("sysSettings").close();
+$("sysSettings").addEventListener("close",()=>$("editSysSettings").focus());
+$("sysToolbar").addEventListener("change",e=>sysSwitch("toolbar",e.target.checked));
+$("sysShare").addEventListener("change",e=>sysSwitch("share",e.target.checked));
+$("sysLink").addEventListener("change",e=>sysSwitch("link",e.target.checked));
+$("sysInfo").addEventListener("change",e=>sysSwitch("info",e.target.checked));
+$("sysKey").addEventListener("change",e=>sysSwitch("key",e.target.checked));
+/* Restore defaults: one tap clears every Advanced row at once, which is why it
+   is confirmed. Clearing writes nothing anywhere else - it withdraws the
+   overrides, and "follow the settings file" is what an absent override is. */
+$("sysRestore").onclick=()=>{
+  if(!confirm("Clear every advanced setting and go back to what the settings file says?"))return;
+  if(sysSet({action:"restore"}))sysNote("Advanced settings cleared.");
+};
+/* Clear browser cache: the shell throws away the copies of THIS APP'S files the
+   WebView keeps and loads the page again, in this window. Nothing of the
+   reader's is touched - not the library, not the stored preferences - which is
+   why it is not confirmed, and the answer to the tap is the page coming back
+   rather than a sentence about it. */
+$("sysClearCache").onclick=()=>{
+  if(!sysRequest({action:"clearCache"}))sysNote("Could not clear the cache.");
+};
+
 /* Coming back from `Lemmatization…` or `Edit folders…` puts the reader back in
    the window they left — and the page can return in either of two shapes, which
    is why this is two mechanisms and not one.
@@ -2466,7 +2958,7 @@ $("rescanBtn").onclick=()=>{loadDicts(true).then(loadFolders)};
    is left, so it cannot resurrect a window the reader has since closed. */
 const OVERLAY_KEY="wudict_overlays";
 function rememberOverlays(){
-  const open=["panel","dictSettings","groupEditor","newGroupDialog"].filter(id=>{
+  const open=["panel","dictSettings","groupEditor","newGroupDialog","sysSettings"].filter(id=>{
     const el=$(id);
     return el&&(id==="panel"?el.classList.contains("show"):el.open);
   });
@@ -2480,12 +2972,13 @@ function reopenOverlays(){
   // window shows, and the panel's snapshot goes with them
   if(want.includes("panel"))showPanel();
   if(want.includes("dictSettings"))showDictSettings();
+  else if(want.includes("sysSettings"))showSysSettings();
   else if(want.includes("groupEditor"))$("editGroups").click();
 }
 window.addEventListener("pagehide",rememberOverlays);
 window.addEventListener("pageshow",e=>{
   if(e.persisted){
-    for(const id of["dictSettings","groupEditor","newGroupDialog"]){
+    for(const id of["dictSettings","groupEditor","newGroupDialog","sysSettings"]){
       const d=$(id);
       if(d&&d.open){d.close();d.showModal()}
     }
@@ -3322,6 +3815,19 @@ function dictName(id){
   const d=dicts.find(x=>x.id===id);
   return d?dictLabel(d):id;
 }
+/* Where a search runs once the one-shot scope is dropped — the destination the
+   note's link promises AND the one the automatic widening actually takes, which
+   is why both notes name it rather than claiming "all dictionaries". It is the
+   SELECTOR's scope, and "all" is not "everything": doSearch resolves it to the
+   standing group's members, so the honest name for it is the group's — the same
+   name the chip, the panel's row and the picker's spinner use for it. A facet
+   group or a single dictionary in the selector (the desktop ways of scoping)
+   are named as themselves. */
+function searchScopeName(){
+  const v=$("dict").value;
+  if(!v||v==="all")return pickerGroupName(pickerGroup);
+  return groupLabel(v)||dictName(v);
+}
 /* Says what was searched and offers the way out, placed under the results
    rather than in the status line: the scope is a property of what is on
    screen, so it should live and die with it instead of fading on a timer. */
@@ -3329,7 +3835,7 @@ function scopeNote(id){
   const div=document.createElement("div");
   div.className="scopenote";
   div.innerHTML=`Followed a link inside <b>${esc(dictName(id))}</b> — only this dictionary was searched. `+
-    `<span class="widen">Search all dictionaries</span>`;
+    `<span class="widen">Search in ${esc(searchScopeName())}</span>`;
   return div;
 }
 /* Said once, after the automatic widening, so the user learns what the link
@@ -3339,7 +3845,7 @@ function widenNote(id,q){
   const div=document.createElement("div");
   div.className="scopenote";
   div.innerHTML=`“${esc(q)}” is not in <b>${esc(dictName(id))}</b>, `+
-    `where the link came from — all dictionaries were searched instead.`;
+    `where the link came from — <b>${esc(searchScopeName())}</b> was searched instead.`;
   return div;
 }
 $("out").addEventListener("click",e=>{
@@ -3596,6 +4102,11 @@ async function doSearch(ev){
   // consumed before the first await, so the history wrapper below can still
   // read which scope was used
   const scope=scopeOnce;scopeOnce=null;lastScope=scope;
+  /* The chip names the answer's scope now (scopeLabel asks scopedDictionary
+     first), so it has to be repainted when that scope changes — the status
+     bar's own paint follows the DOM through a rAF-coalesced observer, which is
+     a repaint that happens to be nearby, not one this label may depend on. */
+  syncChips();
   const commit=commitOnce;commitOnce=false; // this query was asked for, not typed
   const widened=widenedFrom;widenedFrom=null; // set by the fallback below
   // ||"all" is the floor under a selection that no longer exists: assigning
@@ -4677,6 +5188,8 @@ window.addEventListener("popstate",()=>{
     if(searchAC)searchAC.abort();
     $("out").innerHTML="";
     lastQuery="";
+    lastScope=null; // no answer, so no answer-scope for the picker to name
+    syncChips();    // ...nor for the chip, which was naming it
     setStatus("");
     return;
   }
@@ -4728,6 +5241,8 @@ $("q").addEventListener("blur",()=>setTimeout(()=>{
     if(searchAC)searchAC.abort();
     searchSeq++;
     lastQuery="";
+    lastScope=null; // the answer is gone, and its scope goes with it
+    syncChips();    // the chip was naming that scope (scopeLabel)
     $("out").replaceChildren();
     navDetach();
     setBusy(false);

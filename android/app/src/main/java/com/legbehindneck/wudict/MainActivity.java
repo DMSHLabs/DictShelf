@@ -442,7 +442,27 @@ public class MainActivity extends Activity {
             applyEdges();
             Shell.applyBackground(web);
             root.requestApplyInsets();
+            // A start that FAILED is retried here, and nowhere else. The reader
+            // has been to the settings screen (a port that was already taken,
+            // a memory cap) or has freed whatever held the port - and nothing
+            // else ever asks again: ensure() runs in onCreate alone, and this
+            // activity is singleTask with its config changes intercepted, so
+            // coming back to it does not recreate it. Without this, the only
+            // way out of a port that would not bind was to swipe the app away
+            // and start it over - even after the settings were fixed. A READY
+            // server is left alone (nothing to do) and a start in flight is
+            // joined by ensure() itself, so the narrow test is "failed".
+            if (ServerProcess.failed()) retryServer();
         }
+    }
+
+    /** A failed start, retried with whatever the settings say now. */
+    private void retryServer() {
+        status.setText(R.string.starting);
+        ServerProcess.ensure(this, new ServerProcess.Listener() {
+            @Override public void onReady() { showPage(); }
+            @Override public void onFailed(String message) { showFailure(message); }
+        });
     }
 
     // ── navigation ───────────────────────────────────────────────────────
@@ -474,6 +494,9 @@ public class MainActivity extends Activity {
         @Override
         public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
             pageLoading = true;
+            // Where the bridge's prompts will come from: the address a stored
+            // port change can move out from under them (Shell.pageOrigin).
+            Shell.notePageUrl(url);
         }
 
         @Override
@@ -687,7 +710,13 @@ public class MainActivity extends Activity {
         });
     }
 
-    /** Re-loads the page after the library behind it changed (an import). */
+    /**
+     * Re-loads the page after the library behind it changed (an import), and
+     * after the page's own System window threw away what this window was last
+     * loaded from - "Clear browser cache", which is the same second half the
+     * settings screen asks for through {@link Shell#EXTRA_RELOAD}, taken here
+     * because the window that asked is this one (Shell, wudict:system).
+     */
     void reloadPage() {
         navigate(null);
     }

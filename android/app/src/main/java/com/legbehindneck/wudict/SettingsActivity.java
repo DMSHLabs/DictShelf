@@ -2,29 +2,43 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-// The shell's own settings (D100). Reached by long-pressing the launcher icon,
-// which is the only entry point it has and deliberately so: the screen exists
-// mainly so a setting that HIDES the lookup popup can still be undone, and
-// every other route would cost either a second surface or another injection
-// into a page the shell does not own.
+// The shell's own settings (D100) - and what is LEFT of them on this side.
 //
-// CHARTER, and it is the whole reason this class is allowed to exist: this
-// screen holds ANDROID-SHELL FACTS ONLY - windows, intents, tasks,
-// notifications, the process. A dictionary fact never appears here. Those
-// belong to the page and the server, which own them, and the page must not
-// learn that Android exists (D54). The test is simple: if a proposed row can
-// be phrased without naming an Android concept, it does not go in this screen.
+// Until 2026-09-28 this screen carried the whole set: the three lookup rows,
+// the information messages, the access key and the Advanced overrides (D101).
+// They live in the app page now - the Settings drawer's System window, which
+// draws them over the wudict:system bridge and writes the same ShellPrefs -
+// and the reader asked for the copies here to go, so that there is one place
+// per setting instead of two views to keep in step.
 //
-// D101 amends that charter in exactly one direction, and it is worth being
-// precise about the shape of the hole. The Advanced section below sets GO
-// CONFIG KEYS - but every row there passes a stricter test than the one above:
-// its right value differs BECAUSE OF THIS DEVICE, and the shell is the only
-// agent that knows the device. Storage headroom, RAM, cores, a port collision:
-// device facts wearing a config key's name. Dictionary order, default search
-// mode, theme: still not here, and a row that would read identically on a
-// desktop still does not belong.
-// The shell still owns the background for first paint; its controls are in
-// the web Appearance sheet, which writes the same preferences through Shell.
+// Three things are left, and each for its own reason:
+//
+//   * The listen PORT, which is a row in the page's System window too. It is
+//     here because of the one case the page cannot cover: a port that will not
+//     bind means the page never loads, and the page is where the row would
+//     otherwise live - so the app would have no way back in, and Restore
+//     defaults (all-or-nothing, and it clears every other tuned row with it)
+//     would be the only instrument. Both copies write the same key through the
+//     same validator, and this screen is also the one that can apply the change
+//     on the spot (Restart server now below).
+//   * Restore defaults, DUPLICATED on the reader's word. It is the last line of
+//     defence: a config row the app cannot start with - a port held by another
+//     app, say - is undone from here, with no page and no server in the way.
+//   * The restart footer - the stale notice and "Restart server now" - which
+//     CANNOT work from the page: stopping the server is safe only while no
+//     window holds it, and the window that asks from inside the page IS one
+//     (MainActivity retains the server for as long as it exists). So the page
+//     always says "it will pick them up the next time the app is opened", and
+//     the one place the button can ever appear is here - the screen a reader
+//     reaches with no app window behind it.
+//   * The sentence saying where the rest of the rows went. This screen is on
+//     the launcher's long-press menu, so it is where a reader who remembers the
+//     old screen arrives; an almost empty screen with no signpost would read as
+//     something lost.
+//
+// What is left still passes the charter: the restart is the PROCESS, the
+// restore is a shell preference, and the sentence is a signpost - never a
+// dictionary fact, which belongs to the page and the server (D54).
 //
 // Nothing here writes wudict.toml. An override is stored in SharedPreferences
 // and delivered on the child's exec line, which is a HIGHER config layer than
@@ -43,19 +57,16 @@
 // --sp-* scale), and D70's lesson is that φ coordinates land between pixels:
 // on an integer grid you use the Fibonacci integers, whose successive ratios
 // are within half a percent of φ and which are whole numbers by definition. dp
-// is an integer grid, so spacing here is 3·5·8·13·21·34·55 and the numeric
-// field is 89. Type steps by √φ (1.272) rather than φ, because a full φ step
-// from 13 sp lands on 21 and leaves nothing usable in between. Where beauty
-// and ergonomics disagree, ergonomics wins: every interactive row is at least
-// 55 dp tall, which is the ladder's own rung above Android's 48 dp touch
-// minimum - the two agree here, which is why 55 and not 48.
+// is an integer grid, so spacing here is 3·5·8·13·21·34·55. Type steps by √φ
+// (1.272) rather than φ, because a full φ step from 13 sp lands on 21 and
+// leaves nothing usable in between. Where beauty and ergonomics disagree,
+// ergonomics wins: every interactive row is at least 55 dp tall, which is the
+// ladder's own rung above Android's 48 dp touch minimum - the two agree here,
+// which is why 55 and not 48.
 package com.legbehindneck.wudict;
 
 import android.app.Activity;
-import android.app.AlertDialog;
-import android.content.Intent;
 import android.graphics.Color;
-import android.graphics.drawable.ColorDrawable;
 import android.os.Bundle;
 import android.text.InputType;
 import android.util.TypedValue;
@@ -64,7 +75,6 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.widget.Button;
-import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
@@ -80,33 +90,29 @@ public class SettingsActivity extends Activity {
     // The Fibonacci dp ladder, and the two rungs that are ergonomic floors.
     private static final int SP_2 = 5, SP_3 = 8, SP_4 = 13, SP_5 = 21, SP_6 = 34;
     private static final int ROW_MIN = 55;   // ≥ the 48 dp touch minimum
-    private static final int FIELD_W = 89;   // three digits, right-aligned column
+    private static final int FIELD_W = 89;   // four digits, right-aligned column
 
-    // 13 · 13√φ · 13φ
-    private static final float TEXT_HINT = 13f, TEXT_LABEL = 16.5f, TEXT_HEAD = 21f;
+    // 13 · 13√φ
+    private static final float TEXT_HINT = 13f, TEXT_LABEL = 16.5f;
     private static final float LINE_PHI = 1.618f;
-
-    private final ShellPrefs.Override[] keys = ShellPrefs.OVERRIDES;
-    private final CheckBox[] boxes = new CheckBox[keys.length];
-    private final EditText[] fields = new EditText[keys.length];
-    private final TextView[] hints = new TextView[keys.length];
 
     private TextView staleText;
     private final java.util.List<Runnable> backgroundButtonUpdates = new java.util.ArrayList<>();
     private Button applyNow;
     private volatile boolean gone;
 
-    // What the running server answered, kept so that every later edit can be
-    // re-tested against it without asking again: the server's own values
-    // cannot change while it runs - only what this screen would spawn with can.
+    // The port row - the one override this screen still edits (see the class
+    // comment), and the only field left to keep in step.
+    private EditText portField;
+    private TextView portHint;
+
+    // What the running server answered, kept so that a later re-test can be
+    // made against it without asking again: the server's own values cannot
+    // change while it runs - only what a spawn would pass can, and that is what
+    // isStale compares.
     private final Map<String, String> serverValues = new LinkedHashMap<>();
     private final Map<String, String> serverOrigins = new HashMap<>();
     private boolean serverAnswered;
-
-    // The last value each key was seen resolving to, and whether that sighting
-    // was a server answering just now or the cache from when one last did.
-    private final String[] effective = new String[keys.length];
-    private boolean effectiveLive;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -119,50 +125,27 @@ public class SettingsActivity extends Activity {
         int pad = dp(SP_5);
         col.setPadding(pad, pad, pad, pad);
 
-        col.addView(head(R.string.settings_lookup_head, 0));
-        col.addView(caption(getString(R.string.settings_lookup_hint), SP_2, SP_3));
+        // The signpost, first, because it answers the question the reader
+        // arrived with: this screen used to hold the lookup rows, the messages,
+        // the access key and the advanced rows, and they are in the app now.
+        // A row on the launcher's long-press menu that opens an almost empty
+        // window with no explanation reads as something lost rather than as
+        // something moved.
+        col.addView(caption(getString(R.string.settings_moved_hint), 0, SP_4));
 
-        // Written on toggle, so there is no Save button, no OK/Cancel and no
-        // state machine - which is what makes the theme's
-        // windowCloseOnTouchOutside safe: there is never an unsaved edit to
-        // lose by tapping outside. The Advanced fields below commit on focus
-        // loss and again in onPause, for the same reason.
-        col.addView(row(ShellPrefs.TOOLBAR, R.string.settings_lookup_toolbar));
-        col.addView(row(ShellPrefs.SHARE, R.string.settings_lookup_share));
-        col.addView(row(ShellPrefs.LINK, R.string.settings_lookup_link));
+        // The port, first among the controls because it is the one that can
+        // keep the app from starting at all (see the class comment).
+        col.addView(portRow());
 
-        // The messages row. It is the one row on this screen whose subject is
-        // partly the page - the waiting art is drawn there - and it is still a
-        // shell fact by the charter at the top of this class: the first of
-        // these messages is drawn by MainActivity before a page or a server
-        // exists, so the value has to be readable here, and the page's half
-        // rides the URL (Shell.shellQuery) rather than a bridge it would have
-        // to answer before it has painted. Turning it off is what the reader
-        // who cannot finish reading a message that is gone in a moment does,
-        // instead of being told the message was honest.
-        col.addView(head(R.string.settings_messages_head, SP_6));
-        col.addView(caption(getString(R.string.settings_info_hint), SP_2, SP_3));
-        col.addView(infoRow());
-
-        // The Screen section - how the margins around the page are painted and
-        // which bars hide while reading - is NOT here any more. Those two rows
-        // moved to the web Appearance sheet, beside the window background they
-        // belong with, and write the same ShellPrefs through the same
-        // wudict:appearance bridge; nothing on this screen needs them, and a
-        // second copy of a picker is a second thing to keep in step.
-        col.addView(head(R.string.settings_access_head, SP_6));
-        col.addView(keyRow());
-        col.addView(caption(getString(R.string.settings_access_key_hint), SP_2, SP_3));
-
-        col.addView(head(R.string.settings_advanced_head, SP_6));
-        col.addView(caption(getString(R.string.settings_advanced_hint), SP_2, SP_3));
-
-        for (int i = 0; i < keys.length; i++) {
-            col.addView(keys[i].kind == ShellPrefs.BOOL ? switchRow(i) : numberRow(i));
-        }
-
+        // Restore defaults, duplicated on the reader's word: it is the one bulk
+        // action, and it is worth having when the app page is not reachable
+        // (see the class comment). Both copies confirm and both clear the same
+        // overrides.
         col.addView(restoreButton());
 
+        // What the running server was started with, and the one way to change
+        // it without reopening the app. The notice is built from /api/config's
+        // own answer, so it can say the true thing rather than a remembered one.
         staleText = caption("", SP_6, SP_2);
         staleText.setVisibility(View.GONE);
         col.addView(staleText);
@@ -174,24 +157,14 @@ public class SettingsActivity extends Activity {
         applyNow.setOnClickListener(v -> applyNow());
         col.addView(applyNow, wide(SP_2));
 
-        // The way out, always present and always the same thing. It is not an
-        // OK: there is nothing here to confirm, since every control writes as
-        // it is used. It exists because a screen the user cannot see the end
-        // of gives no sign that it is finished with them - and because with
-        // the keyboard up, Back dismisses the keyboard first, so leaving would
-        // otherwise cost two presses. Closing commits the fields on the way
-        // out (onPause), exactly as Back and tapping outside already do.
+        // The way out. Kept although the screen is short, because this window
+        // wears no ✕ in a corner: tapping outside and Back both close it, and
+        // neither is visible on the screen the reader is looking at.
         Button close = new Button(this);
         styleBackgroundButton(close);
         close.setText(R.string.settings_close);
         close.setOnClickListener(v -> finish());
         col.addView(close, wide(SP_6));
-
-        // Below the way out, deliberately: it is the last resort, not one of
-        // the settings, and a reader who is not looking for it should meet the
-        // end of the screen where they expect it.
-        col.addView(caption(getString(R.string.settings_clear_cache_hint), SP_6, SP_3));
-        col.addView(clearCacheButton());
 
         ScrollView scroll = new ScrollView(this);
         scroll.addView(col, new ViewGroup.LayoutParams(
@@ -206,19 +179,7 @@ public class SettingsActivity extends Activity {
         getWindow().setLayout((int) (getResources().getDisplayMetrics().widthPixels * 0.92f),
                 WindowManager.LayoutParams.WRAP_CONTENT);
 
-        fillFromPrefs();
         askServer();
-    }
-
-    @Override
-    protected void onPause() {
-        super.onPause();
-        // Leaving with a half-typed number in a field must not lose it, and
-        // must not store a value the server would refuse either: commit()
-        // either stores a valid number or puts the field back.
-        for (int i = 0; i < keys.length; i++) {
-            if (fields[i] != null) commit(i);
-        }
     }
 
     @Override
@@ -227,7 +188,7 @@ public class SettingsActivity extends Activity {
         super.onDestroy();
     }
 
-    // ── rows ─────────────────────────────────────────────────────────────
+    // ── the window ───────────────────────────────────────────────────────
 
     private void applySepiaWindow() {
         getWindow().setBackgroundDrawable(WindowBackground.dialogDrawable(this, ShellPrefs.sepia(this)
@@ -267,83 +228,16 @@ public class SettingsActivity extends Activity {
         update.run();
     }
 
-    private CheckBox row(String key, int label) {
-        CheckBox c = new CheckBox(this);
-        c.setText(label);
-        c.setTextSize(TypedValue.COMPLEX_UNIT_SP, TEXT_LABEL);
-        c.setMinHeight(dp(ROW_MIN));
-        // State first, listener second: painting the screen must never count
-        // as the user having chosen anything.
-        c.setChecked(ShellPrefs.opensApp(this, key));
-        c.setOnCheckedChangeListener((v, on) -> ShellPrefs.set(this, key, on));
-        return c;
-    }
-
     /**
-     * The information-message switch. Not a {@link #row}: its default is ON
-     * and the three lookup rows' is off, so reading it needs
-     * {@link ShellPrefs#infoMessages} rather than {@link ShellPrefs#opensApp}.
-     * Same shape otherwise, including state-before-listener.
+     * The listen port: the row the page has too, and the only one that is here
+     * as well (the class comment argues why). Everything about it is what the
+     * removed number rows did — the server's own answer as the placeholder, the
+     * range and the value in effect appended to the hint, commit on focus loss,
+     * on Enter and on leaving the screen, and a refusal that puts the field
+     * back and says why.
      */
-    private CheckBox infoRow() {
-        CheckBox c = new CheckBox(this);
-        c.setText(R.string.settings_info_messages);
-        c.setTextSize(TypedValue.COMPLEX_UNIT_SP, TEXT_LABEL);
-        c.setMinHeight(dp(ROW_MIN));
-        c.setChecked(ShellPrefs.infoMessages(this));
-        c.setOnCheckedChangeListener((v, on) ->
-                ShellPrefs.set(this, ShellPrefs.INFO_MESSAGES, on));
-        return c;
-    }
-
-    /**
-     * The access key switch. Not a {@link ShellPrefs.Override} row: it has no
-     * inherited value to display and no server-reported effective value to
-     * compare against, and its off-state is emitted rather than withheld
-     * (ShellPrefs.REQUIRE_KEY). On by default, which is why it cannot reuse
-     * {@link #row}.
-     */
-    private CheckBox keyRow() {
-        CheckBox c = new CheckBox(this);
-        c.setText(R.string.settings_access_key);
-        c.setTextSize(TypedValue.COMPLEX_UNIT_SP, TEXT_LABEL);
-        c.setMinHeight(dp(ROW_MIN));
-        c.setChecked(ShellPrefs.requireKey(this));
-        c.setOnCheckedChangeListener((v, on) ->
-                ShellPrefs.set(this, ShellPrefs.REQUIRE_KEY, on));
-        return c;
-    }
-
-    /** A BOOL override: the box is the whole control, its hint sits under it. */
-    private View switchRow(int i) {
-        ShellPrefs.Override o = keys[i];
-        LinearLayout box = new LinearLayout(this);
-        box.setOrientation(LinearLayout.VERTICAL);
-        box.setPadding(0, dp(SP_2), 0, dp(SP_2));
-
-        CheckBox c = new CheckBox(this);
-        c.setText(o.label);
-        c.setTextSize(TypedValue.COMPLEX_UNIT_SP, TEXT_LABEL);
-        c.setMinHeight(dp(ROW_MIN));
-        // State first, listener second - fillFromPrefs() repaints this box
-        // after Restore defaults, and that must not write anything back.
-        c.setChecked(ShellPrefs.override(this, o) != null);
-        c.setOnCheckedChangeListener((v, on) -> {
-            ShellPrefs.setOverride(this, o, on ? o.onValue : null);
-            paintHint(i); // the address line below appears with the tick
-            recheck();
-        });
-        boxes[i] = c;
-        box.addView(c);
-
-        hints[i] = caption(getString(o.hint), 0, SP_4);
-        box.addView(hints[i]);
-        return box;
-    }
-
-    /** A numeric override: label and hint on the left, an 89 dp field right. */
-    private View numberRow(int i) {
-        ShellPrefs.Override o = keys[i];
+    private View portRow() {
+        ShellPrefs.Override o = ShellPrefs.byKey("SERVER_PORT");
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
         box.setPadding(0, dp(SP_2), 0, dp(SP_2));
@@ -365,23 +259,104 @@ public class SettingsActivity extends Activity {
         f.setGravity(Gravity.END);
         f.setSingleLine(true);
         f.setMinHeight(dp(ROW_MIN));
+        f.setText(portValue());
         // Committing on focus loss rather than on every keystroke: "1" on the
-        // way to "128" is not an invalid value, it is an unfinished one.
+        // way to "1024" is not an invalid value, it is an unfinished one.
         f.setOnFocusChangeListener((v, focused) -> {
-            if (!focused) commit(i);
+            if (!focused) commitPort();
         });
         f.setOnEditorActionListener((v, id, ev) -> {
-            commit(i);
+            commitPort();
             return false;
         });
-        fields[i] = f;
+        portField = f;
         line.addView(f, new LinearLayout.LayoutParams(dp(FIELD_W),
                 ViewGroup.LayoutParams.WRAP_CONTENT));
         box.addView(line);
 
-        hints[i] = caption("", 0, SP_4);
-        box.addView(hints[i]);
+        portHint = caption("", 0, SP_4);
+        box.addView(portHint);
+        paintPortHint();
         return box;
+    }
+
+    /**
+     * What the field shows: the reader's own port, or - when they have not
+     * chosen one - the port a spawn would use ({@link ShellPrefs#emitted},
+     * which for this key is never nothing: the shell always passes a port).
+     *
+     * <p>A blank box was the reader's report (2026-09-28): an empty field beside
+     * a hint that names a port reads as a missing value, not as "the file
+     * decides", and the port is the one row here whose value is worth seeing at
+     * a glance. The seeded number is NOT a choice, and {@link #commitPort}
+     * knows the difference - leaving it alone stores nothing.
+     */
+    private String portValue() {
+        ShellPrefs.Override o = ShellPrefs.byKey("SERVER_PORT");
+        String stored = ShellPrefs.override(this, o);
+        return stored != null ? stored : String.valueOf(ShellPrefs.emitted(this, o));
+    }
+
+    /**
+     * The port row's hint: what it costs, the range it accepts, and what the
+     * RUNNING server was started with. That last part is the one thing the
+     * field cannot say - the field holds what a spawn would pass, and after a
+     * change the two differ until the next start.
+     */
+    private void paintPortHint() {
+        if (portHint == null || portField == null) return;
+        ShellPrefs.Override o = ShellPrefs.byKey("SERVER_PORT");
+        int max = ShellPrefs.maxOf(this, o);
+        String seen = serverAnswered ? serverValues.get(o.key) : null;
+        portHint.setText(getString(o.hint)
+                + " " + getString(R.string.settings_range, o.min, max)
+                + (seen == null ? "" : " " + getString(R.string.settings_in_effect, seen)));
+    }
+
+    /**
+     * Stores the port, or puts the field back with a sentence about why not.
+     * The validator is {@link ShellPrefs#setOverrideChecked} - the very call the
+     * page's System window writes through - so a value this screen accepts can
+     * never be one the child cannot use, and the two copies cannot drift.
+     */
+    private void commitPort() {
+        if (portField == null || gone) return;
+        ShellPrefs.Override o = ShellPrefs.byKey("SERVER_PORT");
+        String stored = ShellPrefs.override(this, o);
+        String typed = portField.getText().toString().trim();
+        if (typed.isEmpty()) {
+            // An empty field is "follow the settings file" - and the number
+            // that resolves to is put straight back, so the reader is never
+            // left looking at a box that is blank and still means a port.
+            if (stored != null) {
+                ShellPrefs.setOverrideChecked(this, o, null);
+                recheck();
+            }
+            portField.setText(portValue());
+            paintPortHint();
+            return;
+        }
+        if (stored == null && typed.equals(String.valueOf(ShellPrefs.emitted(this, o)))) {
+            // The number on screen is the one already in force, not a choice:
+            // a seeded field must not become an override by being left alone -
+            // which is what a focus loss or a Back would otherwise do.
+            portField.setText(portValue());
+            return;
+        }
+        try {
+            ShellPrefs.setOverrideChecked(this, o, typed);
+        } catch (IllegalArgumentException refused) {
+            toast(getString(R.string.settings_out_of_range, typed, o.min,
+                    ShellPrefs.maxOf(this, o)));
+            portField.setText(portValue());
+            return;
+        }
+        portField.setText(portValue()); // canonical: "0128" is stored "128"
+        // The footer is re-tested here because a port is the one row whose new
+        // value can make the running server wrong to keep: it will be the next
+        // SPAWN's port, and the child that is up was exec'd with another.
+        recheck();
+        paintPortHint();
     }
 
     private View restoreButton() {
@@ -395,138 +370,27 @@ public class SettingsActivity extends Activity {
                 .setNegativeButton(R.string.settings_cancel, null)
                 .setPositiveButton(R.string.settings_restore, (d, w) -> {
                     ShellPrefs.clearOverrides(this);
-                    fillFromPrefs();
+                    // The port row shows an override again, so it is repainted
+                    // with the rest - and what it shows now is the port a spawn
+                    // would use, because there is no longer one of the reader's.
+                    if (portField != null) portField.setText(portValue());
+                    paintPortHint();
                     toast(getString(R.string.settings_restore_done));
+                    // The running server may now hold values nobody would pass,
+                    // so the footer is re-tested against the answer in hand.
                     recheck();
                 })
                 .show());
         return wrap(b, SP_6);
     }
 
-    /**
-     * The way out of a page that is showing something old after an update:
-     * whatever the WebView cached is gone and the window that shows the page is
-     * asked to load it again.
-     *
-     * Not confirmed, and the screen closes behind it. There is nothing to lose -
-     * see Shell.clearWebCache, which empties the browser's cache and nothing
-     * else - and the answer to this tap is the page coming back, not a sentence
-     * about it.
-     */
-    private View clearCacheButton() {
-        Button b = new Button(this);
-        styleBackgroundButton(b);
-        b.setText(R.string.settings_clear_cache);
-        b.setOnClickListener(v -> {
-            Shell.clearWebCache(this);
-            toast(getString(R.string.settings_clear_cache_done));
-            // MainActivity is singleTask: this brings the window that shows the
-            // page forward with the extra, or starts one when there is none -
-            // and a fresh window loads the page anyway.
-            startActivity(new Intent(this, MainActivity.class)
-                    .putExtra(Shell.EXTRA_RELOAD, true));
-            finish();
-        });
-        return wrap(b, SP_6);
-    }
-
-    // ── values ───────────────────────────────────────────────────────────
-
-    /** Paints every control from what is stored right now. */
-    private void fillFromPrefs() {
-        for (int i = 0; i < keys.length; i++) {
-            ShellPrefs.Override o = keys[i];
-            String v = ShellPrefs.override(this, o);
-            if (boxes[i] != null) {
-                boxes[i].setChecked(v != null && v.equals(o.onValue));
-            }
-            if (fields[i] != null) {
-                fields[i].setText(v == null ? "" : v);
-            }
-            paintHint(i, ShellPrefs.cachedEffective(this, o));
-        }
-    }
-
-    /**
-     * The hint under a row: what it costs, the range it accepts, and what the
-     * key is resolving to right now. The last part is the reason an empty
-     * field is legible at all - empty means "inherited", and this says
-     * inherited from what.
-     */
-    private void paintHint(int i, String seen) {
-        effective[i] = seen;
-        paintHint(i);
-    }
-
-    private void paintHint(int i) {
-        ShellPrefs.Override o = keys[i];
-        String seen = effective[i];
-        StringBuilder b = new StringBuilder(getString(o.hint));
-        if (o.kind != ShellPrefs.BOOL) {
-            b.append(' ').append(getString(R.string.settings_range, o.min, ShellPrefs.maxOf(this, o)));
-            if (fields[i] != null) {
-                // The placeholder IS the inherited value, in the field's own
-                // grey - "chosen" and "inherited" then differ by colour alone,
-                // with no extra chrome to explain the difference.
-                fields[i].setHint(seen == null ? "" : display(o, seen));
-            }
-        }
-        // "Now" may only be said of a server that answered just now. A cached
-        // value is what was in effect the last time one ran, and quoting it in
-        // the present tense is how a settings screen comes to contradict its
-        // own controls - a ticked box over the words "In effect now:
-        // 127.0.0.1", with nothing on screen to explain the disagreement.
-        if (seen != null && effectiveLive) {
-            b.append(' ').append(getString(R.string.settings_in_effect, seen));
-        }
-        // The one row whose value the user cannot look up anywhere else: while
-        // it is on, say where this phone would be reached. Only while it is on
-        // - an address printed under an unticked switch reads as an offer.
-        if (boxes[i] != null && boxes[i].isChecked() && o.flag != null) {
-            String ip = Net.lanAddress();
-            b.append(' ').append(ip == null ? getString(R.string.settings_lan_none)
-                    : getString(R.string.settings_lan_at, ip + ":" + ServerProcess.port(this)));
-        }
-        hints[i].setText(b.toString());
-    }
-
-    /** Stores a field's value, or puts the field back if it cannot be stored. */
-    private void commit(int i) {
-        ShellPrefs.Override o = keys[i];
-        String stored = ShellPrefs.override(this, o);
-        String typed = fields[i].getText().toString().trim();
-        if (typed.isEmpty()) {
-            if (stored != null) {
-                ShellPrefs.setOverride(this, o, null);
-                recheck();
-            }
-            return;
-        }
-        int max = ShellPrefs.maxOf(this, o);
-        long n;
-        try {
-            n = Long.parseLong(typed);
-        } catch (NumberFormatException e) {
-            n = -1; // an unparseable value fails the same way an out-of-range one does
-        }
-        if (n < o.min || n > max) {
-            toast(getString(R.string.settings_out_of_range, typed, o.min, max));
-            fields[i].setText(stored == null ? "" : stored);
-            return;
-        }
-        String v = String.valueOf(n);
-        if (!v.equals(stored)) {
-            ShellPrefs.setOverride(this, o, v);
-            fields[i].setText(v); // canonical form: "0128" is stored as "128"
-            recheck();
-        }
-    }
-
-    /** A stored or effective value as the field shows it: bare, in MB. */
-    private String display(ShellPrefs.Override o, String value) {
-        if (o.kind != ShellPrefs.MEGABYTES) return value;
-        long bytes = parseSize(value);
-        return bytes < 0 ? value : String.valueOf(bytes >> 20);
+    @Override
+    protected void onPause() {
+        super.onPause();
+        // Leaving with a half-typed port must not lose it, and must not store a
+        // value the server would refuse either: commitPort stores a valid
+        // number or puts the field back, and both are what the reader meant.
+        commitPort();
     }
 
     /**
@@ -560,30 +424,34 @@ public class SettingsActivity extends Activity {
     //
     // Several of these defaults are computed by Go from the device itself
     // (internal/config/tuning.go), so Java must not recompute them - it asks.
-    // /api/config also answers the second question this screen has: whether a
-    // server that is already running was started with different values.
+    // /api/config also answers the only question this screen still has: whether
+    // a server that is already running was started with different values. The
+    // page's System window asks the same endpoint for the same reason; neither
+    // side keeps a copy of what it said, because the subject of the sentence is
+    // what the server is RUNNING, and a remembered answer cannot say that.
 
     private void askServer() {
+        // ServerProcess.port is "the server we can reach": the live child's
+        // port while one is up, the configured one when none is. A probe of the
+        // configured port instead would find nothing whenever a port row has
+        // changed under a running app - and that is one of the states this
+        // footer exists to report (found on the emulator, 2026-09-28).
         final int port = ServerProcess.port(this);
         Thread t = new Thread(() -> {
             Map<String, String> values = new LinkedHashMap<>();
             Map<String, String> origins = new HashMap<>();
             boolean answered = ServerProcess.fetchEffective(port, values, origins);
             if (gone) return;
-            if (answered) ShellPrefs.cacheEffective(this, values);
             runOnUiThread(() -> {
                 if (gone) return;
                 serverAnswered = answered;
-                effectiveLive = answered;
                 serverValues.clear();
                 serverOrigins.clear();
                 serverValues.putAll(values);
                 serverOrigins.putAll(origins);
-                for (int i = 0; i < keys.length; i++) {
-                    String v = answered ? values.get(keys[i].key)
-                            : ShellPrefs.cachedEffective(this, keys[i]);
-                    paintHint(i, v);
-                }
+                // The port row's placeholder and "in effect" line arrive with
+                // this answer, so it is repainted before the footer is judged.
+                paintPortHint();
                 recheck();
             });
         }, "wudict-settings");
@@ -592,11 +460,10 @@ public class SettingsActivity extends Activity {
     }
 
     /**
-     * Re-tests the running server against what this screen would spawn with
-     * now. Called after every stored change, because a footer that was only
-     * computed when the screen opened could never appear in the session that
-     * made the change - which is the only session in which it is useful.
-     * Cheap: no request, only the maps the one request already brought back.
+     * Re-tests the running server against what a spawn would pass now: on the
+     * answer arriving, and after Restore defaults, which is the one change this
+     * screen can still make. Cheap: no request, only the maps the one request
+     * already brought back.
      */
     private void recheck() {
         showStale(serverAnswered && isStale(serverValues, serverOrigins));
@@ -610,7 +477,7 @@ public class SettingsActivity extends Activity {
      * else on this device sets the child's environment.
      */
     private boolean isStale(Map<String, String> values, Map<String, String> origins) {
-        for (ShellPrefs.Override o : keys) {
+        for (ShellPrefs.Override o : ShellPrefs.OVERRIDES) {
             String has = values.get(o.key);
             if (has == null) continue;
             String want = ShellPrefs.emitted(this, o);
@@ -667,14 +534,6 @@ public class SettingsActivity extends Activity {
     }
 
     // ── the ladder ───────────────────────────────────────────────────────
-
-    private TextView head(int text, int topDp) {
-        TextView t = new TextView(this);
-        t.setText(text);
-        t.setTextSize(TypedValue.COMPLEX_UNIT_SP, TEXT_HEAD);
-        t.setPadding(0, dp(topDp), 0, 0);
-        return t;
-    }
 
     private TextView caption(String text, int topDp, int bottomDp) {
         TextView t = new TextView(this);

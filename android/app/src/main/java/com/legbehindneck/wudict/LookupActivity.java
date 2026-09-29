@@ -150,6 +150,14 @@ public class LookupActivity extends Activity {
         speech = new Speech(this, web);
         web.setWebViewClient(new WebViewClient() {
             @Override
+            public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
+                // Where the bridge's prompts will come from: the address a
+                // stored port change can move out from under them, and the
+                // popup hosts the same page (Shell.pageOrigin).
+                Shell.notePageUrl(url);
+            }
+
+            @Override
             public void onPageFinished(WebView view, String url) {
                 Shell.applyBackground(view);
                 // Per document, the same rule as the app window: the WebView's
@@ -201,6 +209,15 @@ public class LookupActivity extends Activity {
         root.setBackground(WindowBackground.dialogDrawable(this, color));
         status.setTextColor(ShellPrefs.darkIcons(color) ? 0xDE000000 : 0xFFFFFFFF);
         Shell.applyBackground(web);
+    }
+
+    /**
+     * Loads the page again, in place. "Clear browser cache" in the page's own
+     * System window emptied the WebView's cache and asked for this: the popup
+     * hosts the same page, so the row works here too (Shell, wudict:system).
+     */
+    void reloadPage() {
+        if (!gone && web != null) web.reload();
     }
 
     /** The selection, wherever this launch put it. */
