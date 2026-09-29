@@ -67,6 +67,10 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
 <title>Edit Folders</title>
 <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
 <link rel="stylesheet" href="/assets/setup.css?v={{CSS}}">
+<!-- The app halves of any preset that asked to be on this page too (manifest
+     "pages" — Quiet labels is the one): attached by the server, after
+     setup.css so their token overrides win the tie, and empty otherwise. -->
+{{PRESETS}}
 <style>
 /* The Android host paints the selected image behind the transparent WebView. */
 html[data-shell-image], html[data-shell-image] body { background:transparent !important; }
@@ -86,7 +90,7 @@ html[data-shell-tone="dark"] {
    /assets/setup.css, which lemmas.html shares. */
 .frow{display:flex;align-items:center;gap:.4em}
 .frow input{margin:.3em 0;min-width:0}
-.frow .rm{flex:none;background:none;border:0;color:var(--faint);font-size:16px;
+.frow .rm{flex:none;background:none;border:0;color:var(--label-quiet);font-size:16px;
   cursor:pointer;padding:0 .2em;margin:0;line-height:1}
 .frow .rm:hover{color:var(--err)}
 /* 📁 is offered only by a host whose folder dialog answers with a real path:
@@ -94,12 +98,12 @@ html[data-shell-tone="dark"] {
    addRow). A browser has no such dialog - showDirectoryPicker names a folder
    but never its path - so here the button simply does not exist. Pure CSS, so
    it cannot race the rows, which are built only once /api/config answers. */
-.frow .pick{flex:none;background:none;border:0;color:var(--faint);font-size:16px;
+.frow .pick{flex:none;background:none;border:0;color:var(--label-quiet);font-size:16px;
   cursor:pointer;padding:0 .2em;margin:0;line-height:1}
 .frow .pick:hover{color:var(--accent)}
 html:not([data-folder-picker]) .frow .pick{display:none}
 .frow .brk{display:none}
-.frow .st{flex:none;font-size:12px;min-width:8.5em;text-align:right;color:var(--soft)}
+.frow .st{flex:none;font-size:12px;min-width:8.5em;text-align:right;color:var(--label)}
 .frow .st.ok{color:var(--ok)}.frow .st.err{color:var(--err)}
 /* Narrow viewports: two lines per folder, never three. A path is long and
    "✓ 1,284 found" is 8.5em wide, so one shared line leaves the field too
@@ -125,30 +129,30 @@ html:not([data-folder-picker]) .frow .pick{display:none}
   .frow .pick{font-size:18px;padding:.15em .35em}
   .frow .rm{margin-left:auto;font-size:18px;padding:.15em .35em}
 }
-label.keep{display:flex;gap:.5em;align-items:flex-start;font-size:13.5px;color:var(--soft);margin-top:.618em}
+label.keep{display:flex;gap:.5em;align-items:flex-start;font-size:13.5px;color:var(--label);margin-top:.618em}
 /* The box's own width and shape come from setup.css (appearance:none, 20px);
    all this adds is the nudge down onto the label's first line. It used to say
    `width:auto`, which was how a platform checkbox kept its natural size
    against setup.css's input{width:100%} - with the box drawn, a width here
    would be the thing that breaks it. */
 label.keep input[type=checkbox]{margin:.25em 0 0}
-label.keep em{font-style:normal;color:var(--faint);font-size:12.5px}
+label.keep em{font-style:normal;color:var(--label-quiet);font-size:12.5px}
 #lib{max-height:38vh;overflow:auto;margin:.618em 0 0;border:1px solid var(--line);border-radius:8px}
 .row{display:flex;gap:.5em;align-items:baseline;padding:.38em .618em;border-bottom:1px solid var(--line);font-size:13px}
 .row:last-child{border-bottom:none}
 .row .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.row .fmt{color:var(--faint);font-size:11.5px;text-transform:uppercase;letter-spacing:.04em}
-.row .n{color:var(--soft);font-variant-numeric:tabular-nums;font-size:12px}
-.tag{font-size:10.5px;border:1px solid var(--line);border-radius:99px;padding:0 .5em;color:var(--soft)}
+.row .fmt{color:var(--label-quiet);font-size:11.5px;text-transform:uppercase;letter-spacing:.04em}
+.row .n{color:var(--label);font-variant-numeric:tabular-nums;font-size:12px}
+.tag{font-size:10.5px;border:1px solid var(--line);border-radius:99px;padding:0 .5em;color:var(--label)}
 .tag.on{border-color:var(--accent);color:var(--accent)}
 /* The drop target is one control with two ways into it: a click, and a drag
    for a mouse user who already has the file in hand. Dashed, because a solid
    box of that size reads as a panel of content rather than as somewhere to put
    something. */
 #drop{border:1.5px dashed var(--line);border-radius:10px;padding:1em .8em;text-align:center;
-  color:var(--soft);font-size:13.5px;transition:border-color .15s,background .15s}
+  color:var(--label);font-size:13.5px;transition:border-color .15s,background .15s}
 #drop.over{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 7%,transparent)}
-#drop .hint{color:var(--faint);font-size:12.5px}
+#drop .hint{color:var(--label-quiet);font-size:12.5px}
 /* The link row sits under the drop box rather than beside it: the two are the
    same act arriving by different means, and side by side they would read as a
    choice to make before doing anything. */
@@ -157,6 +161,9 @@ label.keep em{font-style:normal;color:var(--faint);font-size:12.5px}
 #urlRow button{flex:none}
 #cands{margin:.618em 0 0;border:1px solid var(--line);border-radius:8px;max-height:38vh;overflow:auto}
 #cands label.row{cursor:pointer}
+/* Grey means disabled (2026-09-28): a candidate that cannot be installed is
+   the one row on this page that is not a choice, so it keeps the grey every
+   other label here gave up. Its ⚠ line (`.why`) stays in the error colour. */
 #cands label.row.no{cursor:default;color:var(--faint)}
 #cands .row input[type=checkbox]{flex:none;margin:0}
 /* The files a candidate is made of. They take the flexible width and the name
@@ -165,14 +172,14 @@ label.keep em{font-style:normal;color:var(--faint);font-size:12.5px}
    the one word the library is about to use. */
 #cands .row .nm{flex:none}
 #cands .row .fl{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
-  color:var(--soft);font-size:12px}
+  color:var(--label);font-size:12px}
 #cands .row .why{color:var(--err);font-size:11.5px}
-#cands .row .have{color:var(--soft);font-size:11.5px}
+#cands .row .have{color:var(--label);font-size:11.5px}
 #extras{margin:.618em 0 0}
-#extras .head{font-size:12px;color:var(--soft);margin:0 0 .3em}
+#extras .head{font-size:12px;color:var(--label);margin:0 0 .3em}
 #extras label.row{cursor:pointer}
 #extras .row input[type=checkbox]{flex:none;margin:0}
-#extras .row .need{color:var(--soft);font-size:11.5px}
+#extras .row .need{color:var(--label);font-size:11.5px}
 #extras .row .need.req{color:var(--err)}
 /* One line, as the whole of the progress report: a bar per file, a byte
    counter or an entry name would all be the machinery of extraction rather

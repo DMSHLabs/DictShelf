@@ -317,8 +317,10 @@ const CSS =
   "padding:9px 12px;cursor:pointer}" +
   ".wd-sp-menu button:hover{background:var(--accent-soft,#fff3e0)}" +
   ".wd-sp-menu button[aria-checked=true]{color:var(--accent,#e08600)}" +
-  ".wd-sp-menu small{margin-left:auto;color:var(--fg-faint,#999);font-size:12px}" +
-  ".wd-sp-menu .note{padding:9px 12px;color:var(--fg-soft,#666)}" +
+  // Read at the ink, not at a grey (2026-09-28): a menu's rows and its note are
+  // things to read, and the greys belong to disabled controls.
+  ".wd-sp-menu small{margin-left:auto;color:var(--fg,#222);font-size:12px}" +
+  ".wd-sp-menu .note{padding:9px 12px;color:var(--fg,#222)}" +
   ".wd-sp-menu hr{border:0;border-top:1px solid var(--line-soft,#eee);margin:4px 0}";
 
 let ui = null, mainBtn = null, moreBtn = null, menu = null, menuNote = "";

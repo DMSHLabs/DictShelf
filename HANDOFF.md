@@ -35,19 +35,26 @@ preset's paper — are written up in `docs/handoff-archive.md` as "The third
 session: five changes…". The live rules they produced are in
 `docs/ANDROID-UI-HANDOFF.md` → "Decisions to preserve".**
 
-**The night presets' palette fix (`6d7dc6a`, shipped in the replaced v0.5.0):**
-`true_black_app_night.css` and `warm_dark_app_night.css` moved
-from `:root` to `html[data-dark]` — (0,1,0) → (0,1,1) — so a night half finally
-outranks `app.css`'s dark palette: before this, both switched on and changed
-only the article tokens while the chrome stayed `#191a1c`. Guarded by
-`presets_test.go`'s `TestPresetAppHalvesOutrankTheirPalette` (per property,
-against app.css's own weights) plus `TestSpecificityCountsTheSelectorsTheseFilesUse`.
-Verified in Chromium (True black → `--bg` `#000`, Warm dark → `#1c1a17`, the
-light theme inert) and **on the reader's phone** — the 2026-09-28 11:49 release
-build was cut from exactly that commit, and "Работает" is the reader's word for
-it; `go test ./internal/server` green apart from the two known Windows
-failures. The live rule: `docs/ANDROID-UI-HANDOFF.md` → "Decisions to preserve"
-→ "An app half must outrank the palette of the theme it is attached in".
+**Uncommitted on `fonts-colour` (branch cut by the reader, 2026-09-28): GREY
+MEANS DISABLED, and the old hierarchy is a PRESET.** The greys were doing double
+duty as a hierarchy, so the panel's labels, heads, hints and controls read as
+switched off in every look. The ~116 declarations that carried them now read
+`--label` / `--label-quiet`, both defaulting to `var(--fg)`, and the greys are
+kept only where they ARE a state (`details.noindex`, `.group-control-disabled`,
+`.rmgo.busy`, a locked capability chip, a disabled checkbox's fill, the Folders
+page's `.row.no`, the field's ⌕/spinner). **The way back is
+`presets/labels/quiet_labels_app.css`** — its own manifest group, one file for
+both themes, and it reaches the three standalone pages through the new
+`"pages": true` manifest field (they alias `--fg-soft`/`--fg-faint` to their own
+`--soft`/`--faint`, so one file serves all four documents). Verified in Chromium
+(four documents, on/off, day/night, a paper tone) plus three new Go tests, and
+**on the reader's phone** ("на телефоне отлично работает"). Live rule: the area
+doc → "GREY MEANS DISABLED — the app's text is `--fg`".
+
+**The night presets' palette fix (`6d7dc6a`, in the replaced v0.5.0)** is
+written up in the area doc → "An app half must outrank the palette of the theme
+it is attached in"; guarded by `TestPresetAppHalvesOutrankTheirPalette`,
+verified on the reader's phone.
 
 Branch `master_build` (`0cc878c`, pushed): upstream `master` + the fork's
 build system only — `build-android.cmd` adapted to master's

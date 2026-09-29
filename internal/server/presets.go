@@ -74,6 +74,20 @@ type preset struct {
 	App, Article           string
 	AppNight, ArticleNight string
 
+	// Pages says this preset's app half belongs on the three standalone
+	// documents too - Edit Folders, Lemmatization and Browse - which are
+	// documents the SERVER serves and which have no layer machinery of their
+	// own: the server attaches the half as a <link> there (pagePresetLinks).
+	//
+	// It is for a preset that speaks in TOKENS rather than in rules about the
+	// app's markup (Quiet labels is the first): the app's own classes do not
+	// exist on those pages, so a half that restyles them would land on nothing.
+	// A page preset must name ONE file for both themes (a test enforces it),
+	// because the pages resolve their theme themselves - the OS preference, or
+	// a pinned theme read from localStorage - and have none of the machinery
+	// that switches a day half for a night one on the app page.
+	Pages bool
+
 	// Paper / PaperNight name the colour this preset paints the app's OWN
 	// paper with, as "#rrggbb" - the --bg its app half declares, written down
 	// beside the file name it lives in. It is a second statement of something
@@ -151,6 +165,7 @@ func presetRegistry() ([]*presetGroup, map[string]*preset) {
 				Presets    []struct {
 					ID, Title, Desc        string
 					RequiresImage          bool
+					Pages                  bool
 					App, Article           string
 					AppNight, ArticleNight string
 					Paper, PaperNight      string
@@ -168,7 +183,7 @@ func presetRegistry() ([]*presetGroup, map[string]*preset) {
 			for _, p := range g.Presets {
 				preset := &preset{
 					ID: p.ID, Title: p.Title, Desc: p.Desc,
-					Dir: g.Dir, RequiresImage: p.RequiresImage,
+					Dir: g.Dir, RequiresImage: p.RequiresImage, Pages: p.Pages,
 					App: p.App, Article: p.Article,
 					AppNight: p.AppNight, ArticleNight: p.ArticleNight,
 					Paper:      presetPaper(p.ID, p.Paper),
@@ -338,6 +353,35 @@ func (s *Server) presetStateWrite(enabled []string) error {
 // server cannot know the user link's hash here (it is per request), so the
 // caller splices these BEFORE it: presets lose every tie to the user's own
 // sheet, which is the whole point of the layering.
+// pagePresetLinks is what the three standalone documents are sent: the app
+// halves of the enabled presets that asked for them (preset.Pages), and
+// nothing else. The app page's own links cannot be reused here — those halves
+// restyle the app's markup, which these pages do not have — and the pages have
+// no script of their own to enable one skin or another, which is why a page
+// preset names ONE file for both themes (a test says so). Attached in manifest
+// order, so a later half wins the same ties it would win on the app page.
+func (s *Server) pagePresetLinks() string {
+	enabled := s.presetEnabled()
+	if len(enabled) == 0 {
+		return ""
+	}
+	on := make(map[string]bool, len(enabled))
+	for _, id := range enabled {
+		on[id] = true
+	}
+	var b bytes.Buffer
+	groups, _ := presetRegistry()
+	for _, g := range groups {
+		for _, p := range g.Presets {
+			if !on[p.ID] || !p.Pages || p.App == "" || p.App != p.AppNight || p.appCSS == nil {
+				continue
+			}
+			b.WriteString(`<link rel="stylesheet" data-preset="` + p.ID + `" href="` + p.appURL + `">` + "\n")
+		}
+	}
+	return b.String()
+}
+
 func (s *Server) presetLinksHTML() string {
 	enabled := s.presetEnabled()
 	if len(enabled) == 0 {

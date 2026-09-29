@@ -209,6 +209,20 @@
       ]
     },
     {
+      "dir": "labels",
+      "title": "Labels",
+      "presets": [
+        {
+          "id": "quiet_labels",
+          "title": "Quiet labels",
+          "desc": "Show labels, headings, hints and counts in the muted greys.",
+          "app": "quiet_labels_app.css",
+          "appNight": "quiet_labels_app.css",
+          "pages": true
+        }
+      ]
+    },
+    {
       "dir": "examples",
       "title": "Examples",
       "presets": [

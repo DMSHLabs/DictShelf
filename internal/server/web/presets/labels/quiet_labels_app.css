@@ -1,0 +1,28 @@
+/* The app's label register back in the two muted greys — the hierarchy the
+   panel, its dialogs and the three standalone pages wore before 2026-09-28,
+   when grey became a state for disabled things alone.
+
+   Nothing here restates a colour. --label and --label-quiet are what every
+   label, heading, hint, count and meta line READS (app.css's :root comment says
+   why they exist), their default is the ink, and this file points them at the
+   greys — so switching it off is taking the rule away, and no selector in
+   app.css has to be repeated here.
+
+   ONE file serves all four documents. The app page links it with every other
+   enabled preset; Edit Folders, Lemmatization and Browse get it from the server
+   itself, because they are documents of their own with no layer machinery at
+   all (presets.go's pagePresetLinks). Their palettes call the greys
+   --soft / --faint, so both pages alias --fg-soft / --fg-faint to them
+   (setup.css, browse.html) — which is what lets the same declaration resolve
+   everywhere.
+
+   Both themes name this SAME file, and that is not a shortcut: the register is
+   not a palette. The greys it points at are theme-dependent VALUES, not colours
+   of its own — the dark theme's --fg-soft is #96938d because that block says
+   so, a tone picked from a wallpaper overrides it, and a dark paper lifts it
+   where it lifts every other muted register. The disabled greys do not move with
+   this switch at all: a disabled control is grey in both looks. */
+
+:root{
+  --label:var(--fg-soft); --label-quiet:var(--fg-faint);
+}

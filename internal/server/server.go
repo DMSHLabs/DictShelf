@@ -355,7 +355,7 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	// validator here: this body is a function of registry state that nothing
 	// versions, so an ETag would be a promise we cannot keep.
 	if s.reg.Count() == 0 {
-		_, _ = io.WriteString(w, setupPage(s.reg.Dirs(), 0))
+		_, _ = io.WriteString(w, setupPage(s.reg.Dirs(), 0, s.pagePresetLinks()))
 		return
 	}
 	// "no-cache" means REVALIDATE, not "never store" - and revalidation needs
@@ -465,13 +465,18 @@ func (s *Server) pageFor(dayTag, nightTag, presetLinks string) ([]byte, string) 
 func (s *Server) handleSetupPage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache")
-	_, _ = io.WriteString(w, setupPage(s.reg.Dirs(), s.reg.Count()))
+	_, _ = io.WriteString(w, setupPage(s.reg.Dirs(), s.reg.Count(), s.pagePresetLinks()))
 }
 
 // setupPage renders the folder chooser/editor. The intro names a single
 // folder, but never repeats a list the editable rows below already show -
 // four long paths in a sentence pushed the actual controls off the screen.
-func setupPage(dirs []string, serving int) string {
+//
+// presetLinks is what the page gets from the presets that asked to be here
+// (presets.go's pagePresetLinks) - empty in the ordinary case, and the reason
+// a "Quiet labels" choice reaches this page at all: it is a document of its
+// own, and the app's layer machinery cannot reach it.
+func setupPage(dirs []string, serving int, presetLinks string) string {
 	var intro string
 	switch {
 	case serving > 0:
@@ -488,7 +493,8 @@ func setupPage(dirs []string, serving int) string {
 	default:
 		intro = "No dictionary folder is configured yet."
 	}
-	return strings.ReplaceAll(strings.ReplaceAll(setupHTML, "{{INTRO}}", intro), "{{CSS}}", cssTag)
+	page := strings.ReplaceAll(strings.ReplaceAll(setupHTML, "{{INTRO}}", intro), "{{CSS}}", cssTag)
+	return strings.ReplaceAll(page, "{{PRESETS}}", presetLinks)
 }
 
 // cssTag content-addresses the shared stylesheet, so its week-long cache is
@@ -502,7 +508,10 @@ var cssTag = assetTag(setupCSS)
 func (s *Server) handleLemmasPage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache")
-	_, _ = w.Write(bytes.ReplaceAll(lemmasHTML, []byte("{{CSS}}"), []byte(cssTag)))
+	// {{PRESETS}} is the same courtesy setup.html gets: the app halves of the
+	// presets that asked to be on this page too (presets.go).
+	page := bytes.ReplaceAll(lemmasHTML, []byte("{{CSS}}"), []byte(cssTag))
+	_, _ = w.Write(bytes.ReplaceAll(page, []byte("{{PRESETS}}"), []byte(s.pagePresetLinks())))
 }
 
 // plural renders a count with the right noun ("1 folder", "3 folders").

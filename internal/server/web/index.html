@@ -2257,7 +2257,10 @@ function renderPanel(){
        there is one. A size rather than a tick: a number is what the reader can
        act on, and it is the same number that was in the meta line above until
        now (the word "indexed" stays there). The done state is .locked, so the
-       click handler leaves it alone: it is a fact, not a switch. Removing an
+       click handler leaves it alone: it is a fact, not a switch — and since
+       2026-09-28 the CSS leaves it at full strength too, dimming only the
+       chips that carry data-feat (a capability whose source is gone is a
+       disabled control; a measurement is not). Removing an
        index is Remove… → "index only", which asks first, as deleting should.
        No chip at all when the source is gone — a prepared-only dictionary
        cannot be rebuilt, and dbSize covers it anyway. */
@@ -4759,13 +4762,16 @@ Tokens set on :root reach articles too.
 The app's colours are CUSTOM PROPERTIES, so restyle by changing a value rather
 than every rule that reads it:
 
-  --bg           page and sheet background   --fg          main text
-  --bg-card      cards, fields, buttons      --fg-soft     secondary text
-  --bg-bar       the search bar              --fg-faint    hints, labels
+  --bg           page and sheet background   --fg          all text
+  --bg-card      cards, fields, buttons      --fg-soft     DISABLED states
+  --bg-bar       the search bar              --fg-faint    (and the ⌕ mark)
   --accent       highlights, pressed states  --line        borders
   --accent-soft  the accent's tint           --line-soft   hairlines
   --link         result headwords            --focus       focus rings
   --paper-bg     the reader's paper          --paper-bk-image  its texture
+  --label / --label-quiet   what labels, headings, hints and counts read;
+                            both are the ink unless something says otherwise
+                            (the "Quiet labels" preset points them at the greys)
   --wd-article-bg / --wd-article-fg   the article surface inside a frame
 
 html[data-dark] is true whenever the page is dark, "auto" included;
@@ -4779,7 +4785,8 @@ An article is a frame of its own, and the app's custom properties reach it, so
 the same names work here:
 
   --wd-article-bg   the article surface      --wd-article-fg   its text
-  --fg, --fg-soft, --fg-faint   the app's text registers
+  --fg, --fg-soft, --fg-faint   the app's text: --fg is all of it, the two
+                                greys are the DISABLED states
   --link, --accent              headwords and highlights
   --bg-card, --line             surfaces and borders
 

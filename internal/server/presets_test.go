@@ -7,6 +7,7 @@ package server
 import (
 	"encoding/json"
 	"fmt"
+	"net/http/httptest"
 	"path"
 	"strings"
 	"testing"
@@ -111,6 +112,84 @@ func TestPresetPaperMatchesItsOwnHalf(t *testing.T) {
 	}
 	if declared == 0 {
 		t.Fatal("no preset declares a paper at all; the windows the page does not own would go white")
+	}
+}
+
+// The three standalone documents are served by the server and have none of the
+// app's layer machinery, so a preset that asks for them (manifest "pages") is
+// attached by the SERVER — and only while it is on. Quiet labels is the first:
+// it speaks in the label TOKENS, which those pages define for the same names.
+func TestPagePresetsReachTheStandalonePages(t *testing.T) {
+	s, _ := newStyleServer(t)
+	const needle = `data-preset="quiet_labels"`
+	paths := []string{"/", "/setup", "/lemmas", "/browse"}
+	get := func(path string) string {
+		t.Helper()
+		rec := httptest.NewRecorder()
+		s.ServeHTTP(rec, newRequest("GET", path, nil))
+		if rec.Code != 200 {
+			t.Fatalf("GET %s: got %d", path, rec.Code)
+		}
+		return rec.Body.String()
+	}
+	for _, p := range paths {
+		if strings.Contains(get(p), needle) {
+			t.Errorf("%s carries the page preset with nothing enabled", p)
+		}
+	}
+	if err := s.presetStateWrite([]string{"quiet_labels"}); err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range paths {
+		if !strings.Contains(get(p), needle) {
+			t.Errorf("%s does not carry the enabled page preset", p)
+		}
+	}
+}
+
+// A preset that asks for the standalone pages must name ONE file for both
+// themes: those pages resolve their own theme — the OS preference, or the theme
+// the reader pinned in the app — and have none of the machinery that swaps a
+// day half for a night one, so the server would have to guess, and a guess is
+// how a light half lands on a dark page.
+func TestPagePresetsNameOneFileForBothThemes(t *testing.T) {
+	groups, _ := presetRegistry()
+	found := 0
+	for _, g := range groups {
+		for _, p := range g.Presets {
+			if !p.Pages {
+				continue
+			}
+			found++
+			if p.App == "" || p.App != p.AppNight {
+				t.Errorf("preset %s asks for the standalone pages but names app=%q appNight=%q",
+					p.ID, p.App, p.AppNight)
+			}
+		}
+	}
+	if found == 0 {
+		t.Fatal("no preset asks for the standalone pages, so the wiring above is untested")
+	}
+}
+
+// The label register, both halves of it: app.css must default BOTH tokens to
+// the ink — that is what makes the quiet look a choice rather than the
+// baseline — and the preset that restores the greys must set both, or half the
+// labels would stay switched over.
+func TestLabelRegisterDefaultsToInkAndTheQuietPresetSetsBoth(t *testing.T) {
+	for _, decl := range []string{"--label:var(--fg)", "--label-quiet:var(--fg)"} {
+		if !strings.Contains(string(appCSS), decl) {
+			t.Errorf("app.css does not declare %s: the ink default is what keeps the new look the baseline", decl)
+		}
+	}
+	body, err := presetFS.ReadFile("web/presets/labels/quiet_labels_app.css")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, decl := range []string{"--label:var(--fg-soft)", "--label-quiet:var(--fg-faint)"} {
+		if !strings.Contains(string(body), decl) {
+			t.Errorf("the quiet-labels preset does not declare %s", decl)
+		}
 	}
 }
 

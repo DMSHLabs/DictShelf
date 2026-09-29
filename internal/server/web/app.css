@@ -14,7 +14,26 @@ html[data-shell-image], html[data-shell-image] body { background:transparent !im
   --t-1:.236s; --t-2:.382s; --t-3:.618s; --t-4:1s; --t-5:1.618s; --t-6:2.618s;
   --font:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
   --bg:#fbfaf8; --bg-card:#ffffff; --bg-bar:rgba(251,250,248,.92);
+  /* --fg is the ink EVERYTHING readable wears. The two greys are a STATE, not
+     a hierarchy (2026-09-28, from the reader: the panel's labels, section
+     heads, hints and controls "looked switched off" in every look, Clean
+     included): --fg-soft and --fg-faint belong to things the reader cannot act
+     on - `details.noindex`, `.group-control-disabled`, `.pd .feat.locked`,
+     `.pd .rmgo.busy`, a disabled checkbox's fill - and to marks that are not
+     text at all (hairlines, hover borders, the search field's ⌕ and its
+     spinner, whose pairing is argued where they live). A new "quieter" label
+     wants --fg and a smaller size, never a grey.
+     --label / --label-quiet are what every LABEL, heading, hint, count and
+     meta line actually reads, and their default is the ink, so the sentence
+     above stays true wherever nothing turns them. They exist for ONE reason:
+     the greys they used to carry are wanted back by some readers, and a preset
+     can restore them without touching a single rule - `presets/labels/
+     quiet_labels_app.css` points both at the greys, and the same file is
+     attached to the three standalone pages (which alias --fg-soft/--fg-faint
+     to their own --soft/--faint so one file serves all four documents). Read
+     them as "the label register", never as a colour of their own. */
   --fg:#2b2a28; --fg-soft:#6d6a64; --fg-faint:#a5a19a;
+  --label:var(--fg); --label-quiet:var(--fg);
   --accent:#e08600; --accent-soft:#fff3e0;
   --link:#5b7a99; --link-hover:#3f5e7d;
   --pin:#6ba3d6; --pin-hover:#4a86bd;
@@ -273,7 +292,7 @@ body.barpinned{--stick:var(--barh)}
   margin-right:var(--sp-1);user-select:none;white-space:nowrap}
 /* Wordmark: "WuWei" carries the accent, "Dict" recedes to normal weight — one
    colour, one weight step, no second font. */
-.brand small{font-size:1em;color:var(--fg-soft);font-weight:400}
+.brand small{font-size:1em;color:var(--label);font-weight:400}
 /* The geometry lives on .qbox so the glyph can be positioned against the
    field; the input only fills it. */
 .qbox{position:relative;display:flex;flex:1;min-width:130px;max-width:300px}
@@ -285,7 +304,13 @@ input[type=search]:focus{border-color:var(--focus);box-shadow:0 0 0 3px color-mi
    of identity in an occupied box rather than an element arriving — the least
    intrusive transition available, and the only one that costs no layout.
    At rest the ⌕ also gives the field an identity, which matters most on
-   narrow screens where the wordmark is hidden. */
+   narrow screens where the wordmark is hidden.
+   It is also the ONE grey left in the UI by the 2026-09-28 rule (--fg-soft
+   and --fg-faint are for DISABLED things, and everything else is --fg): the
+   glyph is not a label but a state mark of the field, and its lightness is
+   argued in the .spin note below — the arc steps up to --fg-soft precisely
+   because the glyph carries more ink per pixel. Reading either of them as
+   "grey text" and darkening it would break that pairing, not fix it. */
 .qled{position:absolute;left:.62em;top:50%;margin-top:-7px;width:14px;height:14px;
   color:var(--fg-faint);pointer-events:none}
 .qled>*{position:absolute;inset:0;width:14px;height:14px;margin:0;
@@ -321,7 +346,7 @@ input[type=search]:focus{border-color:var(--focus);box-shadow:0 0 0 3px color-mi
    moving, demanding nothing. A fast spinner makes a promise — "wait for me to
    stop"; this one only reports. */
 @media (prefers-reduced-motion:reduce){.qled .spin{animation:none}}
-select{font-size:13px;color:var(--fg-soft);background:var(--bg-card);
+select{font-size:13px;color:var(--label);background:var(--bg-card);
   border:1px solid var(--line);border-radius:8px;padding:.3em .4em;max-width:180px}
 /* The pill is INERT above 600px: display:contents leaves the field and the two
    selects as direct flex children of the form, which is the layout the bar has
@@ -347,12 +372,15 @@ select{font-size:13px;color:var(--fg-soft);background:var(--bg-card);
 .chip{display:flex;align-items:center;gap:.3em;max-width:11ch;
   white-space:nowrap;font-size:11.5px;line-height:1;color:var(--fg);
   border-radius:7px;padding:.45em .3em .45em .45em}
+/* The caret is the CONTROL's own mark, not a border: it steps into the ink
+   with the label beside it (2026-09-28), where a faint one read as a control
+   that was switched off. */
 .chip::after{content:"";flex:none;width:0;height:0;margin-top:1px;
-  border:3px solid transparent;border-top-color:var(--fg-faint)}
+  border:3px solid transparent;border-top-color:var(--fg)}
 .chip .lbl{overflow:hidden;text-overflow:ellipsis}
 .chip .bk{width:14px;height:14px;flex:none}
 .bar .chip{display:none}
-.btn{font-size:15px;background:var(--bg-card);color:var(--fg-soft);
+.btn{font-size:15px;background:var(--bg-card);color:var(--label);
   border:1px solid var(--line);border-radius:8px;padding:.3em .55em;cursor:pointer;line-height:1.2}
 .btn:hover{color:var(--fg);border-color:var(--fg-faint)}
 #pinBtn{color:var(--pin);border:none;background:none;padding:.3em .4em;font-size:16px;line-height:1;cursor:pointer;display:inline-flex;align-items:center}
@@ -373,7 +401,7 @@ select{font-size:13px;color:var(--fg-soft);background:var(--bg-card);
    so the closed state is 0px and not 0px-plus-padding. Progress no longer
    comes through here at all: "Searching…" is the field's own glyph now, so
    this opens only for statements worth reading. */
-#status{display:grid;grid-template-rows:0fr;color:var(--fg-soft);font-size:13px;
+#status{display:grid;grid-template-rows:0fr;color:var(--label);font-size:13px;
   opacity:0;transition:grid-template-rows .28s ease,opacity .3s ease}
 #status>.msg{overflow:hidden;min-height:0}
 #status .txt{padding:var(--sp-2) 0}
@@ -382,7 +410,7 @@ select{font-size:13px;color:var(--fg-soft);background:var(--bg-card);
    like the sheet's other reference text, and never hidden: it answers "which
    of the four boxes is this" at the moment the reader is typing, which is
    exactly when the placeholder above has already gone. */
-#stylerFile{font-size:11px;line-height:1.4;color:var(--fg-faint);padding:.25em .1em 0}
+#stylerFile{font-size:11px;line-height:1.4;color:var(--label-quiet);padding:.25em .1em 0}
 
 #status[hidden]{display:none}
 /* one spinner, two homes: inline in #status, and large in the startup
@@ -428,7 +456,7 @@ details.dict{margin-top:var(--sp-2);background:var(--bg-card);border:1px solid v
 details.dict>summary{position:sticky;top:var(--stick);z-index:2;
   background:var(--bg-card);
   cursor:pointer;padding:var(--sp-1) .62rem;font-weight:600;
-  color:var(--fg-soft);list-style:none;display:flex;align-items:center;gap:var(--sp-1);
+  color:var(--label);list-style:none;display:flex;align-items:center;gap:var(--sp-1);
   /* `top` is deliberately NOT in this list, and the reason is the reader's
      report that scrolling UP tucked the header a couple of pixels under the
      bar. The bar's height is not a constant this page may animate after: it is
@@ -465,7 +493,7 @@ details.dict[open]>summary{font-size:.8125rem;line-height:1.25;
   padding-top:.25rem;padding-bottom:.25rem}
 details.dict[open]>summary .count{font-size:11px}
 details.dict>summary::-webkit-details-marker{display:none}
-details.dict>summary::before{content:"›";color:var(--fg-faint);
+details.dict>summary::before{content:"›";color:var(--label-quiet);
   transition:transform .18s ease;font-weight:400}
 details.dict[open]>summary::before{transform:rotate(90deg)}
 details.dict[open]>summary{border-bottom:1px solid var(--line-soft)}
@@ -475,7 +503,7 @@ details.dict[open]>summary{border-bottom:1px solid var(--line-soft)}
    which this hands back by skipping both for sections nobody has scrolled to.
    The size hint keeps the scrollbar from jumping as they are rendered. */
 details.dict[open]>dl{content-visibility:auto;contain-intrinsic-size:0 400px}
-summary .count{margin-left:auto;font-weight:400;color:var(--fg-faint);font-size:12px}
+summary .count{margin-left:auto;font-weight:400;color:var(--label-quiet);font-size:12px}
 /* The relaxation note (renderSlot, h.rung). A full-text search asks for the
    words as a phrase first; when no article had them adjacent the server answers
    a weaker question, and saying so is not an explanation of the machinery but
@@ -492,12 +520,12 @@ summary .rung{color:var(--accent)}
    pushes it to a second line. */
 summary .mnav{display:flex;align-items:center;gap:1px;margin-left:auto;font-weight:400}
 summary .mnav~.count{margin-left:var(--sp-1)} /* two auto margins would split the row */
-summary .mbtn{cursor:pointer;color:var(--fg-soft);font-size:16px;line-height:1;
+summary .mbtn{cursor:pointer;color:var(--label);font-size:16px;line-height:1;
   padding:9px 7px;margin:-9px 0;border-radius:5px;user-select:none;
   -webkit-tap-highlight-color:transparent}
 summary .mbtn:hover{color:var(--fg);background:var(--bg)}
 summary .mbtn:active{color:var(--accent)}
-summary .mpos{font-size:11px;color:var(--fg-faint);min-width:2.8em;text-align:center;
+summary .mpos{font-size:11px;color:var(--label-quiet);min-width:2.8em;text-align:center;
   font-variant-numeric:tabular-nums}
 /* a dictionary's own script threw; the article is intact but inert */
 summary .jserr{margin-left:6px;font-weight:400;color:var(--accent);font-size:12px;cursor:help}
@@ -515,10 +543,15 @@ summary .upgrade{font-weight:400;font-size:12px;color:var(--link);cursor:pointer
    section each (renderSlot, h.skipped). The offer inside is per dictionary
    because that is the unit the user acts on; the count outside is what they
    need to read. */
+/* Grey is a STATE here, not hierarchy: a section the search could not run on
+   is one of the two places the UI is allowed to be grey at all (the other is
+   .group-control-disabled, and the ⌕ in the field). Everything else reads at
+   --fg — the reader's report of 2026-09-28 was that the whole panel looked
+   switched off. */
 details.noindex>summary{font-weight:400;color:var(--fg-faint)}
 .noidx{padding:var(--sp-1) .62rem var(--sp-2)}
 .noidx>div{display:flex;align-items:baseline;gap:var(--sp-1);font-size:12px;
-  color:var(--fg-soft);padding:.15rem 0}
+  color:var(--label);padding:.15rem 0}
 .noidx .upgrade{font-size:12px;color:var(--link);cursor:pointer;
   text-decoration:underline;text-underline-offset:2px;margin-left:auto;white-space:nowrap}
 dl{margin:0;padding:var(--sp-1) var(--sp-2) var(--sp-2)}
@@ -542,21 +575,22 @@ iframe.article{width:100%;border:0;display:block;background:var(--wd-article-bg,
 /* Under the results, not in the status line: the scope describes what is on
    screen, so it must live and die with it rather than fade on a timer.
 
-   The ink is --fg-soft, not --fg-faint, from the reader's report that these
-   notes were too pale to read. --fg-faint is 2.9:1 against the light paper,
-   under every legibility floor there is, and the three notes wearing this class
-   are sentences to be READ - the morph one is the only thing on screen that
-   says the answer is for a different word than the one typed. --fg-soft is
-   6.4:1, still a step below the article's own --fg, so a note stays a note. */
+   The ink is the app's own --fg. It was --fg-faint, then --fg-soft, each time
+   because the reader reported the notes too pale to read (--fg-faint is 2.9:1
+   against the light paper, under every legibility floor there is) - and since
+   2026-09-28 grey is a STATE for disabled things alone, of which a note is
+   none: the three notes wearing this class are sentences to be READ, and the
+   morph one is the only thing on screen that says the answer is for a
+   different word than the one typed. */
 .scopenote{margin-top:var(--sp-2);padding:var(--sp-1) .62rem;font-size:12px;
-  color:var(--fg-soft);text-align:center}
+  color:var(--label);text-align:center}
 .scopenote .widen{color:var(--link);cursor:pointer;text-decoration:underline;
   text-underline-offset:2px}
 .scopenote .widen:hover{color:var(--link-hover)}
 /* Same voice as .scopenote, but above the results: it says what was actually
    searched for, and that has to be read BEFORE the articles it explains. */
 .morphnote{margin-top:0;margin-bottom:var(--sp-1)}
-.empty{padding-top:var(--sp-5);text-align:center;color:var(--fg-faint)}
+.empty{padding-top:var(--sp-5);text-align:center;color:var(--label-quiet)}
 .empty svg path{fill:var(--line)}
 /* the search bar is inert until at least one dictionary is usable */
 input:disabled,select:disabled{opacity:.55;cursor:not-allowed}
@@ -593,15 +627,17 @@ html[data-shell-image] #styler{
   background-color:var(--paper-bg,var(--bg));
   background-image:linear-gradient(#ffffff24,#ffffff24),var(--paper-bk-image);
   background-size:100% 100%}
-/* A PAPER LIFTS THE MUTED REGISTERS UNDER A DARK THEME. The dark palette's
-   --fg-soft and --fg-faint are tuned for the app's own near-black surface, and
-   on a paper of any kind - a colour or a texture, chosen by the reader - they
-   land within a shade of it: the sheet's row labels and the hints under the
-   Screen dropdowns came out unreadable, which is what a reader reported from
-   the phone. The values are the ones lemmas.html and browse.html already use
-   for their dark tone, so a paper reads the same wherever the reader meets
-   one. --fg, --link and --accent are left alone: the dark theme's are already
-   light enough over a paper. */
+/* A PAPER LIFTS THE MUTED REGISTERS UNDER A DARK THEME. Those registers are
+   the two greys, the hairlines and the disabled states built on them: the dark
+   palette's --fg-soft and --fg-faint are tuned for the app's own near-black
+   surface, and on a paper of any kind - a colour or a texture, chosen by the
+   reader - they land within a shade of it, so a disabled control (and the
+   sheet's hairlines) disappear into the paper. The values are the ones
+   lemmas.html and browse.html already use for their dark tone, so a paper
+   reads the same wherever the reader meets one. --fg, --link and --accent are
+   left alone: the dark theme's are already light enough over a paper.
+   This used to be argued from row labels and hints, which were the greys the
+   app's TEXT wore - since 2026-09-28 they read at --fg and need no lift. */
 html:is([data-shell-sepia],[data-shell-image])[data-dark]{
   --fg-soft:#ded8cc; --fg-faint:#c6beaf;
   --line:rgba(230,220,201,.4); --line-soft:rgba(230,220,201,.2)}
@@ -681,7 +717,7 @@ body.styling{padding-bottom:var(--styler-shown,var(--styler-h))}
 .radio-row .color-box:has(input:disabled){opacity:.45}
 .color-pick{flex:none;display:flex;align-items:center;justify-content:center;
   width:2em;height:2em;padding:0;cursor:pointer;
-  font-size:13px;background:var(--bg-card);color:var(--fg-soft);
+  font-size:13px;background:var(--bg-card);color:var(--label);
   border:1px solid var(--line);border-radius:5px}
 .color-pick svg{width:1.05em;height:1.05em;display:block}
 /* Hover only reaches a pipette with no colour on it: once the button wears a
@@ -705,10 +741,10 @@ body.styling{padding-bottom:var(--styler-shown,var(--styler-h))}
 #colorPreviewHex{font-size:13px;letter-spacing:.06em;color:var(--fg)}
 .pick-rows{display:flex;flex-direction:column;gap:.5em}
 .pick-row{display:flex;align-items:center;gap:.6em}
-.pick-key{flex:0 0 1.2em;font-size:13px;color:var(--fg-soft)}
+.pick-key{flex:0 0 1.2em;font-size:13px;color:var(--label)}
 .pick-row input[type=range]{flex:1 1 auto;min-width:0}
 .pick-row output{flex:0 0 2.6em;text-align:right;font-size:13px;
-  color:var(--fg-soft);font-variant-numeric:tabular-nums}
+  color:var(--label);font-variant-numeric:tabular-nums}
 #pickR{--track:linear-gradient(90deg,#000,#f00)}
 #pickG{--track:linear-gradient(90deg,#000,#0f0)}
 #pickB{--track:linear-gradient(90deg,#000,#00f)}
@@ -769,13 +805,13 @@ html[data-shell-image] .menu-card{
    answer means - the shape the shell's own settings screen gives these two
    rows, which is where they came from. */
 .screen-row{padding:.2em 0 .45em}
-.screen-title{font-size:13px;font-weight:600;color:var(--fg-soft);margin-bottom:.25em}
+.screen-title{font-size:13px;font-weight:600;color:var(--label);margin-bottom:.25em}
 .choice-btn{display:flex;align-items:center;gap:.4em;width:100%;min-height:2.2em;
   font:inherit;font-size:13px;color:var(--fg);
   background:var(--bg-card);border:1px solid var(--line);border-radius:5px;
   padding:.35em .55em;text-align:left;cursor:pointer}
 .choice-btn::after{content:"";flex:none;margin-left:auto;width:0;height:0;
-  border:4px solid transparent;border-top-color:var(--fg-faint)}
+  border:4px solid transparent;border-top-color:var(--fg)}
 .choice-btn:hover{border-color:var(--fg-faint)}
 .choice-btn:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
 /* A group of radios, the two Screen answers: everything on screen at once,
@@ -798,7 +834,7 @@ html[data-shell-image] .menu-card{
   color:var(--accent);font-weight:400}
 .choice-menu .choice-item[aria-selected="true"]::before{content:"✓"}
 #appearanceBackground small,.screen-row small{display:block;font-size:11px;
-  line-height:1.4;color:var(--fg-faint)}
+  line-height:1.4;color:var(--label-quiet)}
 .screen-row small{margin-top:.25em}
 /* The picker is the pictures themselves: a scrollable row of thumbnails, the
    selected one ringed in the accent, None at the left and a dashed "+" at
@@ -849,7 +885,7 @@ html[data-shell-image] .menu-card{
 #appearanceStrip.fade-l.fade-r{-webkit-mask-image:linear-gradient(90deg,transparent 1.8em,#000 3.2em,#000 calc(100% - 3.2em),transparent calc(100% - 1.8em));
   mask-image:linear-gradient(90deg,transparent 1.8em,#000 3.2em,#000 calc(100% - 3.2em),transparent calc(100% - 1.8em))}
 #appearanceStrip .tile{flex:0 0 auto;width:4.1em;height:4.1em;border-radius:7px;
-  border:2px solid var(--line);background:var(--bg-card);color:var(--fg-soft);
+  border:2px solid var(--line);background:var(--bg-card);color:var(--label);
   display:flex;align-items:center;justify-content:center;overflow:hidden;
   padding:0;cursor:pointer;font:inherit;font-size:12px;line-height:1.1}
 #appearanceStrip .tile img{width:100%;height:100%;object-fit:cover;display:block}
@@ -860,11 +896,11 @@ html[data-shell-image] .menu-card{
    row reads as one grid - and says "not a picture" with the dashed border
    alone. Its glyph is a span so it can outgrow the tile's 12px basis: bare
    text would inherit the basis and look lost in the box. */
-#appearanceStrip .tile.add{border-style:dashed;color:var(--fg-soft)}
+#appearanceStrip .tile.add{border-style:dashed;color:var(--label)}
 #appearanceStrip .tile.add span{font-size:1.9em;line-height:1}
 #appearanceStrip .tile.add:hover{color:var(--fg)}
 #appearanceStrip .tile.missing{font-size:10px;padding:0 .25em;overflow-wrap:anywhere;
-  border-style:dashed;color:var(--fg-faint)}
+  border-style:dashed;color:var(--label-quiet)}
 html[data-native-appearance]{--styler-h:min(65vh,560px)}
 /* One row, at every width. nowrap is load-bearing and not a preference:
    flex decides WRAPPING from an item's hypothetical size and only then
@@ -899,7 +935,7 @@ html[data-native-appearance]{--styler-h:min(65vh,560px)}
    hover border. */
 #styler .tab,#styler .btn{
   font:inherit;font-size:12.5px;line-height:1.2;padding:.34em .55em;
-  color:var(--fg-soft);background:var(--bg-card);
+  color:var(--label);background:var(--bg-card);
   border:1px solid var(--line);border-radius:8px;cursor:pointer}
 #styler .tab{padding:.34em .7em}
 #styler .tab:hover,#styler .btn:hover{color:var(--fg);
@@ -911,7 +947,7 @@ html[data-native-appearance]{--styler-h:min(65vh,560px)}
    be answered by clicking both. Accent: and it is not saved yet, which is why
    it also shows on a box someone has just emptied. The colour is never the
    only carrier: the tab's title says it in words. */
-#styler .tab[data-has="1"]::after{content:"•";margin-left:.35em;color:var(--fg-faint)}
+#styler .tab[data-has="1"]::after{content:"•";margin-left:.35em;color:var(--label-quiet)}
 #styler .tab[data-dirty="1"]::after{content:"•";margin-left:.35em;color:var(--accent)}
 #styler .tab:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
 /* The editor speaks the sheet's own typeface, the way the Background rows
@@ -926,10 +962,10 @@ html[data-native-appearance]{--styler-h:min(65vh,560px)}
    steal height from the editor on a phone. */
 /* Two lines at most, and it may wrap: it carries the way back out of a bad
    rule, and an instruction truncated to an ellipsis is not an instruction. */
-#stylerNote{margin-top:.4em;font-size:11px;line-height:1.4;color:var(--fg-faint);
+#stylerNote{margin-top:.4em;font-size:11px;line-height:1.4;color:var(--label-quiet);
   max-height:2.8em;overflow:hidden}
 #stylerNote .p{cursor:pointer}
-#stylerNote .p:hover{color:var(--fg-soft)}
+#stylerNote .p:hover{color:var(--label)}
 /* The files pane occupies exactly the textarea's box, so switching tabs does
    not resize the sheet under the reader's thumb. */
 /* ── the Files and Presets panes ─────────────────────────────────────
@@ -939,7 +975,7 @@ html[data-native-appearance]{--styler-h:min(65vh,560px)}
    lay their rows out in full and #appearanceGroups scrolls them. */
 #stylerFiles{width:100%;margin-top:.5em;
   background:var(--bg-card);border:1px solid var(--line);border-radius:8px}
-#stylerFiles .empty{padding:1.2em .8em;text-align:center;color:var(--fg-faint);
+#stylerFiles .empty{padding:1.2em .8em;text-align:center;color:var(--label-quiet);
   font-size:12px;line-height:1.5}
 #stylerFiles .f{display:flex;align-items:center;gap:.6em;padding:.4em .6em;
   border-bottom:1px solid var(--line)}
@@ -949,11 +985,11 @@ html[data-native-appearance]{--styler-h:min(65vh,560px)}
 #stylerFiles .th{flex:0 0 auto;width:2.4em;height:2.4em;border-radius:5px;
   object-fit:cover;background:var(--bg);border:1px solid var(--line);
   display:flex;align-items:center;justify-content:center;
-  font-size:9px;letter-spacing:.02em;color:var(--fg-faint);overflow:hidden}
+  font-size:9px;letter-spacing:.02em;color:var(--label-quiet);overflow:hidden}
 #stylerFiles .n{flex:1 1 auto;min-width:0;cursor:pointer}
 #stylerFiles .n b{display:block;font-weight:500;font-size:12.5px;color:var(--fg);
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-#stylerFiles .n s{display:block;text-decoration:none;font-size:11px;color:var(--fg-faint)}
+#stylerFiles .n s{display:block;text-decoration:none;font-size:11px;color:var(--label-quiet)}
 #stylerFiles .n:hover b{color:var(--accent)}
 #stylerFiles .btn{flex:0 0 auto;font-size:12px;padding:.25em .55em}
 /* The presets pane wears the Files pane's box, because they are the same
@@ -965,9 +1001,9 @@ html[data-native-appearance]{--styler-h:min(65vh,560px)}
   background:var(--bg-card);border:1px solid var(--line);
   border-radius:8px}
 #stylerPresetsPane .empty{padding:1.2em .8em;text-align:center;
-  color:var(--fg-faint);font-size:12px}
+  color:var(--label-quiet);font-size:12px}
 #stylerPresetsPane .ph{padding:.55em .6em .2em;font-size:11px;font-weight:600;
-  color:var(--fg-soft);text-transform:uppercase;letter-spacing:.04em}
+  color:var(--label);text-transform:uppercase;letter-spacing:.04em}
 /* A preset that cannot take effect where the reader is: shown, dimmed and
    inert, with the reason on its own line - see presetsPaneRender. Hiding it
    instead answered "why is this not here?" with silence. */
@@ -979,7 +1015,7 @@ html[data-native-appearance]{--styler-h:min(65vh,560px)}
 #stylerPresetsPane .n{flex:1 1 auto;min-width:0;font-size:12.5px}
 #stylerPresetsPane .n b{display:block;font-weight:500;color:var(--fg)}
 #stylerPresetsPane .n s{display:block;text-decoration:none;font-size:11px;
-  color:var(--fg-faint);overflow-wrap:anywhere}
+  color:var(--label-quiet);overflow-wrap:anywhere}
 #stylerPresetsPane .n u{ text-decoration:none;color:var(--accent);font-size:11px}
 #stylerPresetsPane .btn{flex:0 0 auto;font-size:12px;padding:.25em .55em}
 
@@ -1067,7 +1103,7 @@ dialog.panel-card:not([open]){display:none}
 .pd.drop-before{box-shadow:0 -2px 0 var(--accent)}
 .pd.drop-after{box-shadow:0 2px 0 var(--accent)}
 .pd .hd{display:flex;align-items:center;gap:.35em}
-.pd .grip{cursor:grab;color:var(--fg-faint);user-select:none;font-size:14px;
+.pd .grip{cursor:grab;color:var(--label-quiet);user-select:none;font-size:14px;
   line-height:1;letter-spacing:-.15em;padding-right:.15em}
 .pd .grip:active{cursor:grabbing}
 /* The title is a control (see the panel's click handler), so it has to look
@@ -1077,7 +1113,7 @@ dialog.panel-card:not([open]){display:none}
 .pd b:hover{color:var(--link);text-decoration:underline;text-underline-offset:2px}
 .pd b:focus-visible{outline:2px solid var(--focus);outline-offset:2px;border-radius:3px}
 .pd .ord{display:flex;gap:.1em;margin-left:auto}
-.pd .ord button{background:none;border:0;color:var(--fg-faint);cursor:pointer;
+.pd .ord button{background:none;border:0;color:var(--label-quiet);cursor:pointer;
   font-size:12px;line-height:1;padding:.15em .2em;border-radius:4px}
 .pd .ord button:hover{color:var(--fg);background:var(--line-soft)}
 .en{appearance:none;width:32px;height:18px;border-radius:9px;background:var(--line);
@@ -1096,22 +1132,35 @@ dialog.panel-card:not([open]){display:none}
    watching it appear. */
 .btn:disabled{opacity:.45;cursor:default}
 .en:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
-.pd .meta{color:var(--fg-faint);font-size:11.5px;margin:.15em 0 .3em}
+.pd .meta{color:var(--label-quiet);font-size:11.5px;margin:.15em 0 .3em}
 .pd .feat{display:inline-block;border:1px solid var(--line);border-radius:99px;
-  padding:.05em .55em;margin:.15em .25em .15em 0;font-size:10.5px;color:var(--fg-faint);
+  padding:.05em .55em;margin:.15em .25em .15em 0;font-size:10.5px;color:var(--label-quiet);
   cursor:pointer;user-select:none;transition:color .12s,border-color .12s,background .12s}
 .pd .feat:hover{border-color:var(--accent);color:var(--accent)}
 .pd .feat.on{border-color:var(--accent);color:#fff;background:var(--accent)}
 .pd .feat.on:hover{opacity:.82}
+/* A chip that cannot be clicked says one of TWO things, and only one of them is
+   a disabled control (2026-09-28, from the reader: "100 MB" and "contains" read
+   grey on a card whose switches are all live). `.locked` on a CAPABILITY — the
+   chips that carry data-feat — means the source file is gone, so the switch
+   cannot be moved: disabled, and dimmed. `.locked` on the INDEX chip means
+   nothing of the sort: that chip is not a control at all but the measurement of
+   a file on disk, and a measurement keeps its full strength. data-feat is the
+   marker — every capability chip has one, the index chip has none — so the
+   dimming, and the hover that would otherwise promise a click, are scoped to
+   it. */
 .pd .feat.locked{cursor:default;opacity:.5}
-.pd .feat.locked:hover{border-color:var(--line);color:var(--fg-faint)}
+.pd .feat.locked:not([data-feat]){opacity:1}
+.pd .feat.locked:not([data-feat]):hover{border-color:var(--accent);color:#fff}
+.pd .feat.locked:hover{border-color:var(--line);color:var(--label-quiet)}
 .pd .feat.on.locked:hover{border-color:var(--accent);color:#fff;opacity:.5}
+.pd .feat.on.locked:not([data-feat]):hover{opacity:1}
 .pd .feat.busy{border-style:dashed;cursor:default}
 /* stale: still on, still working, but rebuildable — a dotted edge reads as
    "provisional" without the alarm of an error colour */
 .pd .feat.on.stale{border-style:dotted;border-color:var(--fg-faint)}
 .pd .tag{display:inline-block;border:1px solid var(--line);border-radius:5px;
-  padding:0 .4em;font-size:10.5px;color:var(--fg-soft);margin-right:.25em}
+  padding:0 .4em;font-size:10.5px;color:var(--label);margin-right:.25em}
 .pd .tag.on{color:var(--accent);border-color:var(--accent)}
 .act{color:var(--link);cursor:pointer;text-decoration:underline;
   text-underline-offset:2px;font-size:12px;margin-right:var(--sp-2)}
@@ -1132,7 +1181,7 @@ dialog.panel-card:not([open]){display:none}
 /* The confirmation is a hazard panel, not a sentence: diagonal stripes in the
    danger colour at low alpha, so it reads as cordoned-off area at a glance and
    still passes contrast for the text on top of it. */
-.pd .rmq{display:block;font-size:11.5px;color:var(--fg-soft);line-height:1.7;
+.pd .rmq{display:block;font-size:11.5px;color:var(--label);line-height:1.7;
   border:1px solid var(--danger);border-radius:8px;padding:.5em .6em;
   margin-top:.2em;background:var(--danger-soft);
   background-image:repeating-linear-gradient(-45deg,
@@ -1158,6 +1207,8 @@ dialog.panel-card:not([open]){display:none}
   70%{box-shadow:0 0 0 .45em transparent}
   100%{box-shadow:0 0 0 0 transparent}}
 @media (prefers-reduced-motion:reduce){.pd .rmgo[data-rm="all"]{animation:none}}
+/* Busy is the button's disabled state, so it keeps the grey the 2026-09-28
+   rule reserves for exactly this. */
 .pd .rmgo.busy{border-style:dashed;cursor:default;background:none;
   color:var(--fg-faint);animation:none;box-shadow:none;filter:none}
 /* Cancel is a button too, and green — the one way out of a panel that is
@@ -1174,15 +1225,15 @@ dialog.panel-card:not([open]){display:none}
    elements rather than composed into one sentence — the path carries what it
    copies in data-full, so nothing downstream has to take a display string
    apart again to find it (see D49). */
-.pd .prow{font-size:10.5px;color:var(--fg-faint);overflow-wrap:break-word}
+.pd .prow{font-size:10.5px;color:var(--label-quiet);overflow-wrap:break-word}
 .pd .prow.sub{opacity:.8}
-.pd .pfx{color:var(--fg-soft)}
-.pd .path{color:var(--fg-faint);cursor:pointer}
+.pd .pfx{color:var(--label)}
+.pd .path{color:var(--label-quiet);cursor:pointer}
 .pd .err{color:#c0564f}
 /* Not a .feat: those chips are switches that spend disk, and this one only
    opens a page. Same muted register as the provenance rows under it. */
 .pd .acts a.browse{display:inline-flex;align-items:center;gap:.35em;margin-top:.3em;
-  font-size:11.5px;color:var(--fg-faint);text-decoration:none}
+  font-size:11.5px;color:var(--label-quiet);text-decoration:none}
 .pd .acts a.browse:hover{color:var(--accent)}
 .pd .acts a.browse svg{width:13px;height:13px;flex:none}
 .facts .act[hidden]{display:none}
@@ -1213,7 +1264,7 @@ dialog.panel-card:not([open]){display:none}
 .sect{margin:0 var(--sp-2) var(--sp-1);padding-bottom:var(--sp-1);
   border-bottom:1px solid color-mix(in srgb,var(--fg) 22%,transparent)}
 .sect:last-child{border-bottom:0;margin-bottom:0}
-.sect-h{margin:0;font-size:13px;font-weight:600;color:var(--fg-soft)}
+.sect-h{margin:0;font-size:13px;font-weight:600;color:var(--label)}
 /* One door per row: label on the left, chevron on the right, and the WHOLE row
    is the target. Same chrome as .facts .act — the faintest border over the card
    colour, because colour in this system means "on" and is not spent on edges —
@@ -1222,20 +1273,20 @@ dialog.panel-card:not([open]){display:none}
 .facts .mrow{display:flex;align-items:center;gap:.5em;width:100%;
   box-sizing:border-box;text-align:left;text-decoration:none;cursor:pointer;
   font-family:inherit;font-size:12.5px;line-height:1.25;padding:.5em .65em;margin:0;
-  color:var(--fg-soft);background:var(--bg-card);
+  color:var(--label);background:var(--bg-card);
   border:1px solid var(--line);border-radius:8px;
   transition:color .12s,border-color .12s}
 .facts .mrow:hover{color:var(--fg);border-color:var(--fg-faint)}
 .facts .mrow:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
-.facts .mrow svg{width:14px;height:14px;flex:none;color:var(--fg-faint)}
-.facts .mrow:hover svg{color:var(--fg-soft)}
+.facts .mrow svg{width:14px;height:14px;flex:none;color:var(--label-quiet)}
+.facts .mrow:hover svg{color:var(--label)}
 /* The chevron says "this leads somewhere" — a page, a window, a sheet. The one
    row that ACTS where it stands (Rescan folders) carries no chevron and its own
    glyph instead: a chevron over work that stays put would spend the distinction
    every other row here depends on. */
-.facts .mrow.door::after{content:"›";margin-left:auto;color:var(--fg-faint);
+.facts .mrow.door::after{content:"›";margin-left:auto;color:var(--label-quiet);
   font-size:15px;line-height:1;flex:none}
-.facts .mrow.door:hover::after{color:var(--fg-soft)}
+.facts .mrow.door:hover::after{color:var(--label)}
 /* The panel's group drop-down (which group the search is on, in place of the
    removed "Open first" pair): the label takes the READING STRIP's own 96px
    column - not the Appearance rows' 60px, which would cut "Dictionaries" (72px
@@ -1253,7 +1304,7 @@ dialog.panel-card:not([open]){display:none}
 .facts:has(>#pickerGroupBtn)>#pickerGroupBtn{width:auto;flex:1 1 0;min-width:0}
 #pickerGroupBtn>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* A label for the control on its row, in the register the segs' labels use. */
-.facts .rowlabel{font-size:11.5px;line-height:1.2;color:var(--fg-faint)}
+.facts .rowlabel{font-size:11.5px;line-height:1.2;color:var(--label-quiet)}
 /* The collection's count, on its own line under the heading: the answer to "is
    it looking where I think?", and the number a reader opens this drawer to
    check. Text and nothing else — it is not a control, so it is not drawn as one
@@ -1262,7 +1313,7 @@ dialog.panel-card:not([open]){display:none}
    The count truncates rather than wrapping: this line must stay ONE line at
    320px, and the count is the half that can afford to lose its tail. */
 .counts{display:flex;align-items:center;gap:.5em;padding:.15em 0 var(--sp-2);
-  color:var(--fg-faint);font-size:12px}
+  color:var(--label-quiet);font-size:12px}
 .counts .fsum{flex:1 1 auto;min-width:0;white-space:nowrap;overflow:hidden;
   text-overflow:ellipsis}
 /* ── article text size ──────────────────────────────────────────────
@@ -1312,7 +1363,7 @@ dialog.panel-card:not([open]){display:none}
 #fsCtl,#fwCtl{flex:none;display:flex;align-items:center;gap:2px}
 #fsCtl button,#fwCtl button{font:inherit;line-height:1;margin:0;padding:0;cursor:pointer;
   display:flex;align-items:center;justify-content:center;
-  color:var(--fg-soft);background:var(--bg-card);border:1px solid var(--line);
+  color:var(--label);background:var(--bg-card);border:1px solid var(--line);
   border-radius:6px;transition:color .12s,border-color .12s,opacity .12s}
 #fsCtl button:hover,#fwCtl button:hover{color:var(--fg);border-color:var(--fg-faint)}
 #fsCtl button:focus-visible,#fwCtl button:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
@@ -1323,14 +1374,14 @@ dialog.panel-card:not([open]){display:none}
    size, "Medium" the widest weight, and both boxes take the wider of the two.
    tabular-nums holds the digits still within it. */
 #fsCtl .fsval,#fwCtl .fsval{height:22px;min-width:48px;padding:0 3px;font-size:11px;
-  color:var(--fg-faint);font-variant-numeric:tabular-nums}
+  color:var(--label-quiet);font-variant-numeric:tabular-nums}
 /* A group's name over the rows it heads — "Dictionary folders", "Library",
    "Config file". Sentence case and a heavier weight, NOT the uppercase+tracking
    this used to wear: those headings are read as labels here, and a shouted line
    in a section made of quiet reference text reads as a different kind of thing.
    Weight is what separates it from the paths below, which are the same size and
    colour. */
-#folderBody .grp{margin:.7em 0 .15em;color:var(--fg-soft);font-size:11.5px;
+#folderBody .grp{margin:.7em 0 .15em;color:var(--label);font-size:11.5px;
   font-weight:600}
 #folderBody>.grp:first-child{margin-top:0}
 /* One row = a path (long, variable) beside its facts (short, fixed). The old
@@ -1342,14 +1393,14 @@ dialog.panel-card:not([open]){display:none}
 #folderBody .frow{display:flex;flex-wrap:wrap;align-items:baseline;
   column-gap:.6em;padding:.15em 0}
 #folderBody .frow .p{flex:1 1 auto;min-width:min(24ch,100%);overflow-wrap:break-word;
-  color:var(--fg-soft);font-size:11.5px;cursor:pointer}
+  color:var(--label);font-size:11.5px;cursor:pointer}
 #folderBody .frow .meta{margin-left:auto;display:flex;align-items:baseline;gap:.9em;
   white-space:nowrap}
-#folderBody .frow .n{color:var(--fg-faint);font-size:11px}
+#folderBody .frow .n{color:var(--label-quiet);font-size:11px}
 #folderBody .frow .n.bad{color:#c0564f}
-#folderBody .rv{color:var(--fg-faint);font-size:11px;cursor:pointer}
+#folderBody .rv{color:var(--label-quiet);font-size:11px;cursor:pointer}
 #folderBody .rv:hover{color:var(--link);text-decoration:underline}
-#folderBody .frow:hover .rv{color:var(--fg-soft)}
+#folderBody .frow:hover .rv{color:var(--label)}
 /* The rows. An affordance on the web is a BOUNDARY, not a pictograph beside a
    word — a border is what says "aim here", which is the one thing the emoji
    that used to sit in these rows never said. Quietest possible bounding in this
@@ -1368,7 +1419,7 @@ dialog.panel-card:not([open]){display:none}
 .facts.reading{flex-direction:column;align-items:flex-start;margin:.6em 0 var(--sp-1)}
 .facts .act{display:inline-flex;align-items:center;gap:.4em;
   font-family:inherit;font-size:11.5px;line-height:1.2;padding:.28em .6em;margin:0;
-  color:var(--fg-soft);background:var(--bg-card);
+  color:var(--label);background:var(--bg-card);
   border:1px solid var(--line);border-radius:8px;
   text-decoration:none;cursor:pointer;transition:color .12s,border-color .12s}
 .facts .act:hover{color:var(--fg);border-color:var(--fg-faint);text-decoration:none}
@@ -1406,13 +1457,13 @@ dialog.panel-card:not([open]){display:none}
    above) instead of pulling the buttons out of line. The ellipsis stays for
    the one case a wrap cannot help — a name longer than the column itself. */
 .facts .seg>span{flex:0 0 96px;min-width:0;white-space:nowrap;overflow:hidden;
-  text-overflow:ellipsis;font-size:11.5px;line-height:1.2;color:var(--fg-faint)}
+  text-overflow:ellipsis;font-size:11.5px;line-height:1.2;color:var(--label-quiet)}
 /* A mark may ride in the label, as the speaker does. It is drawn at the same
    size and in the same faint colour as the marks that ride ON a control, but
    it sits in the label column with the words it belongs to: the row it came
    from was one button carrying both, which is exactly what kept it out of the
    column the other two rows are read down. */
-.facts .seg>span svg{width:14px;height:14px;flex:none;color:var(--fg-faint);
+.facts .seg>span svg{width:14px;height:14px;flex:none;color:var(--label-quiet);
   vertical-align:-2px;margin-right:.4em}
 /* Both halves of every pair are as wide as the widest word in the section, so
    the six buttons make ONE column and the edge the halves share falls at the
@@ -1433,8 +1484,8 @@ dialog.panel-card:not([open]){display:none}
    rather than as a second word. Both idioms below (fill and stroke) resolve
    through currentColor, so this one declaration colours all three — and they
    follow the theme, which is exactly what emoji could not do. */
-.facts .act svg{width:14px;height:14px;flex:none;color:var(--fg-faint)}
-.facts .act:hover svg{color:var(--fg-soft)}
+.facts .act svg{width:14px;height:14px;flex:none;color:var(--label-quiet)}
+.facts .act:hover svg{color:var(--label)}
 /* Read aloud off: the same speaker, silent. Only the waves go; the svg keeps
    its fixed 14px box, and the cone stays where it was inside it, so neither
    the glyph nor the label shifts on toggle. The class applySpeak sets, rather
@@ -1458,7 +1509,7 @@ dialog.panel-card:not([open]){display:none}
    truth to drift from #ftsAllBox.hidden. The accent while open is the tie
    between the trigger and the panel it opened, since the panel is no longer
    adjacent to it once the row wraps. */
-.facts .act.disc::before{content:"▸";color:var(--fg-faint);font-size:9px;
+.facts .act.disc::before{content:"▸";color:var(--label-quiet);font-size:9px;
   display:inline-block;width:.8em;flex:none;text-align:center}
 .facts .act.disc[aria-expanded="true"]::before{content:"▾";color:var(--accent)}
 .facts .act.disc[aria-expanded="true"]{color:var(--accent);border-color:var(--accent)}
@@ -1476,10 +1527,10 @@ dialog.panel-card:not([open]){display:none}
   background-image:repeating-linear-gradient(-45deg,
     color-mix(in srgb,var(--accent) 8%,transparent) 0 6px,
     transparent 6px 14px);
-  font-size:11.5px;color:var(--fg-soft);line-height:1.5}
+  font-size:11.5px;color:var(--label);line-height:1.5}
 .bulkbox p{margin:0 0 .5em}
 .bulkbox p:last-child{margin-bottom:0}
-.bulkbox .cost{color:var(--fg-faint)}
+.bulkbox .cost{color:var(--label-quiet)}
 .bulkbox .btn{font-size:11.5px;padding:.25em .6em;margin-right:.4em}
 #folderBody .warn{color:#c0564f;font-size:11.5px;margin:.3em 0}
 /* Info: quiet by construction — one accent word, everything else the muted
@@ -1491,28 +1542,28 @@ dialog.panel-card:not([open]){display:none}
    `.about a` here would restyle that card's links. */
 .sect .about{margin-top:.2em}
 .sect .about .brand{font-size:13px;margin-right:.4em}
-.sect .about .ver{font-size:10.5px;color:var(--fg-faint);font-variant-numeric:tabular-nums}
-.sect .about p{margin:.35em 0 0;font-size:11.5px;color:var(--fg-faint);line-height:1.45}
-.sect .about a{color:var(--fg-soft);text-decoration:none;border-bottom:1px solid var(--line)}
+.sect .about .ver{font-size:10.5px;color:var(--label-quiet);font-variant-numeric:tabular-nums}
+.sect .about p{margin:.35em 0 0;font-size:11.5px;color:var(--label-quiet);line-height:1.45}
+.sect .about a{color:var(--label);text-decoration:none;border-bottom:1px solid var(--line)}
 .sect .about a:hover{color:var(--link);border-bottom-color:currentColor}
-.pd .prov,.pd .prov1{font-size:10.5px;color:var(--fg-faint);overflow-wrap:break-word;margin-top:.15em}
+.pd .prov,.pd .prov1{font-size:10.5px;color:var(--label-quiet);overflow-wrap:break-word;margin-top:.15em}
 /* The whole summary toggles, so the whole summary is the affordance: hover
    the row, not a fragment of it. Nothing in here is underlined — on the web an
    underline promises a link that goes somewhere else, and this goes nowhere. */
-.pd .prov>summary{cursor:pointer;list-style:none;color:var(--fg-faint);
+.pd .prov>summary{cursor:pointer;list-style:none;color:var(--label-quiet);
   border-radius:4px;padding:.05em .15em;margin-left:-.15em;transition:background .12s,color .12s}
-.pd .prov>summary:hover{color:var(--fg-soft);background:var(--line-soft)}
+.pd .prov>summary:hover{color:var(--label);background:var(--line-soft)}
 .pd .prov>summary:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
 .pd .prov>summary::-webkit-details-marker{display:none}
-.pd .prov>summary::before{content:"▸";color:var(--fg-soft);display:inline-block;width:1em;font-size:9px}
+.pd .prov>summary::before{content:"▸";color:var(--label);display:inline-block;width:1em;font-size:9px}
 .pd .prov[open]>summary::before{content:"▾"}
-.pd .fmt{color:var(--fg-soft);text-transform:uppercase;font-size:9px;letter-spacing:.04em}
+.pd .fmt{color:var(--label);text-transform:uppercase;font-size:9px;letter-spacing:.04em}
 /* companion media count ("+ 2 mdd"): part of the summary text, not a control.
    It used to carry class "more", which collided with the search-results
    "more…" link — that link's document handler matched it, cancelled the
    disclosure toggle with preventDefault and then threw looking for a
    details.dict that does not exist here. */
-.pd .companions{color:var(--fg-soft)}
+.pd .companions{color:var(--label)}
 .pd .provbody{margin:.2em 0 0 1em;display:flex;flex-direction:column;gap:.1em}
 /* "About" — what the dictionary says about ITSELF (/api/about). Same
    disclosure MECHANICS as .prov above, one size up, because this one is prose
@@ -1522,24 +1573,24 @@ dialog.panel-card:not([open]){display:none}
    The hairline moves this into the card's footer register, below the file
    facts, where a description belongs. The body is fetched on first open: an
    annotation can be a page long and there is one per dictionary. */
-.pd .about{font-size:11px;color:var(--fg-faint);overflow-wrap:break-word;
+.pd .about{font-size:11px;color:var(--label-quiet);overflow-wrap:break-word;
   margin-top:.45em;padding-top:.4em;border-top:1px solid var(--line-soft)}
-.pd .about>summary{cursor:pointer;list-style:none;color:var(--fg-faint);
+.pd .about>summary{cursor:pointer;list-style:none;color:var(--label-quiet);
   border-radius:4px;padding:.05em .15em;margin-left:-.15em;transition:background .12s,color .12s}
-.pd .about>summary:hover{color:var(--fg-soft);background:var(--line-soft)}
+.pd .about>summary:hover{color:var(--label);background:var(--line-soft)}
 .pd .about>summary:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
 .pd .about>summary::-webkit-details-marker{display:none}
-.pd .about>summary::before{content:"▸";color:var(--fg-soft);display:inline-block;width:1em;font-size:9px}
+.pd .about>summary::before{content:"▸";color:var(--label);display:inline-block;width:1em;font-size:9px}
 .pd .about[open]>summary::before{content:"▾"}
 .pd .aboutbody{margin:.2em 0 0 1em;line-height:1.45}
 .pd .aboutbody p{margin:.25em 0}
 .pd .aboutbody h4{margin:.5em 0 .1em;font-size:10px;text-transform:uppercase;
-  letter-spacing:.04em;color:var(--fg-soft);font-weight:600}
+  letter-spacing:.04em;color:var(--label);font-weight:600}
 .pd .aboutbody h4:first-child{margin-top:0}
-.pd .aboutbody a{color:var(--fg-soft);text-decoration:none;border-bottom:1px solid var(--line)}
+.pd .aboutbody a{color:var(--label);text-decoration:none;border-bottom:1px solid var(--line)}
 .pd .aboutbody a:hover{color:var(--link);border-bottom-color:currentColor}
 .pd .aboutbody ul,.pd .aboutbody ol{margin:.25em 0;padding-left:1.2em}
-.pd .aboutlangs{margin-top:.4em;color:var(--fg-soft)}
+.pd .aboutlangs{margin-top:.4em;color:var(--label)}
 /* The traits the dictionary was filed under — the same values the picker's
    sections are built from, on the card that describes the dictionary. They are
    FACTS, not switches, so they deliberately do not borrow .feat's pill: a round
@@ -1549,9 +1600,9 @@ dialog.panel-card:not([open]){display:none}
    the rest sit quiet. */
 .pd .traits{display:flex;flex-wrap:wrap;gap:.3em;margin:0 0 .5em 1em}
 .pd .trait{display:inline-flex;flex-direction:column;align-items:flex-start;
-  font:inherit;font-size:11px;line-height:1.3;color:var(--fg-soft);text-align:left;
+  font:inherit;font-size:11px;line-height:1.3;color:var(--label);text-align:left;
   background:var(--line-soft);border:1px solid transparent;border-radius:5px;padding:.15em .5em}
-.pd .trait .tk{font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:var(--fg-faint)}
+.pd .trait .tk{font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:var(--label-quiet)}
 .pd button.trait{cursor:pointer;transition:color .12s,border-color .12s,background .12s}
 .pd button.trait:hover{color:var(--accent);border-color:var(--accent);background:transparent}
 .pd button.trait:hover .tk{color:var(--accent)}

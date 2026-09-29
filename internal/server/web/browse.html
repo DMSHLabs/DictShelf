@@ -93,6 +93,12 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
   --bg:#fbfaf8; --bar:rgba(251,250,248,.94); --fg:#2b2a28; --soft:#6d6a64;
   --faint:#a5a19a; --accent:#e08600; --line:#e8e4dd; --line-soft:#f1eee8;
   --link:#5b7a99; --focus:#7aa7d1;
+  /* The label register (app.css and setup.css say what it is for): every
+     label, count and hint here reads --label / --label-quiet, whose default is
+     the ink, and the two aliases let ONE preset file — the same one the app
+     page links — resolve on this page too. */
+  --label:var(--fg); --label-quiet:var(--fg);
+  --fg-soft:var(--soft); --fg-faint:var(--faint);
 }
 /* Same three-way spelling the app uses: the OS preference, unless the reader
    pinned a theme in the app (wudict_theme, read once at boot). */
@@ -140,7 +146,7 @@ body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 -apple-system,B
 header{position:sticky;top:0;z-index:5;background:var(--bar);
   backdrop-filter:saturate(1.6) blur(8px);border-bottom:1px solid var(--line)}
 .bar{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;padding:.5rem .9rem .45rem}
-.back{display:inline-flex;color:var(--soft);padding:.25rem;border-radius:7px;text-decoration:none}
+.back{display:inline-flex;color:var(--label);padding:.25rem;border-radius:7px;text-decoration:none}
 .back:hover{color:var(--accent);background:var(--line-soft)}
 .back svg{width:18px;height:18px}
 /* The title block takes the row on a wide screen and yields it on a narrow
@@ -151,13 +157,13 @@ header{position:sticky;top:0;z-index:5;background:var(--bar);
 /* The running head, exactly as a printed page carries it: the first and last
    word ON THIS PAGE. It is the one thing that tells a reader where they are
    without counting. */
-.title span{display:block;font-size:11.5px;color:var(--faint);white-space:nowrap;
+.title span{display:block;font-size:11.5px;color:var(--label-quiet);white-space:nowrap;
   overflow:hidden;text-overflow:ellipsis}
 #jump{flex:0 1 12rem;min-width:7rem;font:inherit;font-size:13px;color:var(--fg);background:var(--bg);
   border:1px solid var(--line);border-radius:99px;padding:.3rem .8rem;outline:none;-webkit-appearance:none}
 #jump:focus{border-color:var(--focus);box-shadow:0 0 0 3px color-mix(in srgb,var(--focus) 22%,transparent)}
-.nav{display:flex;align-items:center;gap:.35rem;font-size:12.5px;color:var(--soft);white-space:nowrap}
-.nav button{font:inherit;font-size:13px;background:none;border:1px solid var(--line);color:var(--soft);
+.nav{display:flex;align-items:center;gap:.35rem;font-size:12.5px;color:var(--label);white-space:nowrap}
+.nav button{font:inherit;font-size:13px;background:none;border:1px solid var(--line);color:var(--label);
   border-radius:8px;min-width:2.1rem;height:1.95rem;padding:0 .55rem;cursor:pointer}
 .nav button:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}
 .nav button:disabled{opacity:.3;cursor:default}
@@ -169,7 +175,7 @@ header{position:sticky;top:0;z-index:5;background:var(--bar);
    never scrolled to a place the reader is not. */
 .strip{display:flex;gap:.1rem;overflow-x:auto;padding:0 .9rem .4rem;scrollbar-width:thin;
   overscroll-behavior-x:contain}
-.strip button{font:inherit;font-size:12.5px;line-height:1;background:none;border:0;color:var(--soft);
+.strip button{font:inherit;font-size:12.5px;line-height:1;background:none;border:0;color:var(--label);
   cursor:pointer;padding:.36rem .5rem;border-radius:7px;flex:0 0 auto;min-width:1.85rem;text-align:center}
 .strip button:hover{background:var(--line-soft);color:var(--fg)}
 .strip button[aria-current=true]{background:var(--accent);color:#fff}
@@ -190,13 +196,18 @@ footer .nav button{height:2.3rem;padding:0 1rem}
 .msg{max-width:34rem;margin:4rem auto;padding:1.4rem 1.6rem;background:var(--bg);
   border:1px solid var(--line);border-radius:12px}
 .msg b{display:block;font-size:16px;margin-bottom:.3rem}
-.msg p{margin:.3rem 0;color:var(--soft);font-size:14px}
+.msg p{margin:.3rem 0;color:var(--label);font-size:14px}
 .msg a{color:var(--accent)}
 .picks{display:flex;flex-direction:column;gap:.1rem;margin-top:.8rem}
 .picks a{color:var(--link);text-decoration:none;padding:.3rem .4rem;border-radius:6px}
 .picks a:hover{background:var(--line-soft);color:var(--fg)}
-.picks span{color:var(--faint);font-size:12px;margin-left:.4rem}
+.picks span{color:var(--label-quiet);font-size:12px;margin-left:.4rem}
 </style>
+<!-- The app halves of any preset that asked to be on this page too (manifest
+     "pages" — Quiet labels is the one): attached by the server, after this
+     page's own sheet so their token overrides win the tie, and empty
+     otherwise. -->
+{{PRESETS}}
 
 <header id="top" hidden>
   <div class="bar">

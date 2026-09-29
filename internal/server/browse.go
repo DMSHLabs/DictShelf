@@ -5,6 +5,7 @@
 package server
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
 	"strconv"
@@ -165,8 +166,13 @@ func browseUnprepared(w http.ResponseWriter, e *entry) {
 // is baked in: the page asks /api/browse for everything it draws, so the same
 // bytes serve every dictionary and the browser caches nothing that can go
 // stale against the library.
+//
+// The one substitution is {{PRESETS}} - the app halves of the presets that
+// asked to be on the standalone pages too (presets.go's pagePresetLinks). This
+// page has a palette of its own and no layer machinery, so that link is how a
+// "Quiet labels" choice reaches it.
 func (s *Server) handleBrowsePage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache")
-	_, _ = w.Write(browseHTML)
+	_, _ = w.Write(bytes.ReplaceAll(browseHTML, []byte("{{PRESETS}}"), []byte(s.pagePresetLinks())))
 }
