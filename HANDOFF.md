@@ -26,7 +26,24 @@ page's top edge, the panel/status-bar moves, the notes' ink, the preset's paper
 — `bef262d`, `7eb0e40`, `7be896e`, `3bfe24d`) PLUS the night-preset fix below.
 `master` still has not moved since `5f0ad02`, so no upstream work is in it. On
 this branch `test_data/` and `android/app/src/emuX86/jniLibs/` are ignored rather
-than untracked, so `git status` is genuinely empty.
+than untracked, **but `git status` is not empty at the time of writing**: one
+uncommitted file, `internal/server/web/index.html`, carrying the picker
+correction below.
+
+**The picker's dropdown, the scope chip and the scope note all name what is
+actually being searched (2026-09-28).** `scopedDictionary()` reads
+`lastScope||$("dict").value` (label = the dictionary alone; naming its groups was
+tried and dropped on the reader's word) and `lastScope` is cleared wherever the
+answer is, so a view entered by following a `bword://` link no longer lists one
+dictionary under a spinner saying "All dictionaries" — and "All dictionaries"
+itself is now the way out of it. `scopeLabel()` asks the same function first, so
+the chip (which lives in the status bar now) names the dictionary too, and
+`searchScopeName()` gives the note's link and the automatic widening's note the
+standing group's name instead of "all dictionaries", which was false whenever a
+picker group was in force. Rules and reasons:
+`docs/ANDROID-UI-HANDOFF.md` → "Dictionary groups: current work" → the bullets
+"The dropdown names the dictionary the answer was scoped to" and "The scope note
+names the group it will search".
 
 **The third session's five changes (2026-09-27/28; committed `bef262d`,
 `7eb0e40`, `7be896e`, `3bfe24d`; shipped in v0.5.0) — the `Show info messages`
@@ -65,42 +82,42 @@ local.bat — copy it there first). After each upstream `master` sync,
 repeat this small overlay (two files) or merge `master` into
 `master_build` when the naming/emuX86 code still applies.
 
-**Rechecked 2026-09-26:** `dev2` is at `f5b95d8`, the merge of upstream `master`
-(`5f0ad02`) into it — five upstream commits: the index-version subsystem
-(`0688c89`: `dict.ReaderVersion`, `store/fingerprint.go`, `store/stale.go`, the
-`reindex` CLI and `/api/reindex`, the panel's Rebuild line, `ingest` defaulting
-to the configured DICT_DIR), Browse triggering indexing (`95f0238`), and three
-UI fixes (`78deb59` Group by, `17e730b` read-aloud icon, `fa83443` double
-scrollbars). Two conflicts; both resolutions are in the merge message. The page
-port is the shape to remember:
+**The shell's own settings now have a home in the app page: the `System`
+window (2026-09-28, uncommitted).** The ☰ Settings drawer gained a `System`
+section — a door row, drawn only where the shell answers — opening
+`#sysSettings`, a window of the app's own family carrying the shell screen's
+rows: the three lookups, the info messages, the access key, Clear browser
+cache ABOVE Advanced (the reader's order), the Advanced override rows and
+Restore defaults. The shell side is a new `wudict:system` prompt
+(`Shell.systemState`, plus `ShellPrefs.setOverrideChecked`, which the shell
+screen's `commit()` now shares); what each config key RESOLVES to, and which
+layer gave it, is the page's own `/api/config` read. No Close button (the
+window's corner ✕ is the way out), paper and wallpaper like Dictionary
+settings, and the app's own drawn checkbox by construction (it is a
+`.group-dialog`). `SettingsActivity` itself is now ONLY the restart footer
+(`Restart server now`, unreachable from the page — a page holds the server),
+a duplicated `Restore defaults`, a sentence pointing at the app's System
+window, and Close: the 21 strings, the effective-values cache on both sides
+and the row-building half of that class went with the rows. Verified on the
+EMULATOR (AVD `Small`, `debug intel`, 2026-09-28) with the real bridge —
+values, ticks, numbers, Restore defaults, the stale footer, the trimmed
+screen — and that pass found four bugs, all fixed: a byte count read as
+megabytes in the memory fields, the prompt bridge falling through to the
+WebView's own dialog after a port row changed (`Shell.notePageUrl`/
+`ownPage`), the stale note reading the state from before the write, and the
+native footer probing the configured port instead of
+`ServerProcess.livePort`. Live rules, the pass's evidence and what is still
+owed on the phone: `docs/ANDROID-UI-HANDOFF.md` → "The System window: current
+work"; the emulator and Bash recipes: `docs/WINDOWS-VERIFY.md`.
 
-- index.html's 963-line "conflict" was upstream's inline stylesheet against our
-  two `<link>`s (upstream has no `app.css` at all), and the remaining six hunks
-  are the D149 picker-sections UI this fork never took — the same call as the
-  09-25 sync. So: take OURS everywhere, then port upstream's deltas, CSS into
-  `app.css` and JS/markup into the page. Ported: `.seg` scoped to `.bar` (top
-  and phone query), the one-scrollbar lock (`html:has(#panel.show)` plus
-  `--wd-sbw` measured in `showPanel`), `overscroll-behavior:contain`,
-  `#speakBtn[aria-pressed="false"] .wave`, and the Rebuild line's markup with
-  upstream's reindex JS verbatim — `renderReindex()` is called at the end of
-  `renderPanel`, since the fork has no `syncPanelHeader`. Skipped: the
-  `.chips`/`aria-pressed` rules and the `renderGroupSeg`/`CHECK_SVG` rework.
-- Verified in a browser, not just by build: a throwaway server (isolated
-  `USERPROFILE`, port 6899, pure-Go build) served the merged page, `loadDicts`
-  filled the scope picker, and the new feature ran end to end — editing the
-  source and pressing Rescan made the panel show "1 dictionary was prepared by
-  an older version [Rebuild]", and Rebuild took `/api/reindex` to
-  `{"done":1,"total":1}` and cleared the line.
-- **`TestRescanSeesEditedSource` is a new known Windows failure** (upstream's own
-  new test; it fails identically on clean `master`, so it is inherited rather
-  than introduced). The live repro is "edit a dictionary source → Rescan
-  folders → the page re-opens it": the implicit prepare cannot rename over
-  text.db and the card shows `Access is denied`. The Rebuild button then fixes
-  it, so the blast radius is that one path. Only the tag-less/pure-Go build
-  could be tested here (no gcc) — the shipped cgo build is unverified.
-- `merge-work/inline.go` needed a fix to run at all: its `pick.js` reference no
-  longer matched the page (`?v={{PICKJS}}` arrived in the 09-23 merge). Fixed in
-  the main checkout, and `index.full.html` regenerated from the merged page.
+**The 09-26 upstream sync (into `dev2`) moved to the archive:
+`docs/handoff-archive.md` → "The 09-26 upstream sync into `dev2`".** It holds
+the five upstream commits it carried, the two conflicts, the port shape to
+reuse on the NEXT sync (take OURS everywhere, then port upstream's deltas —
+CSS into `app.css`, JS/markup into the page — diffing against a regenerated
+`merge-work/index.full.html`), the new known Windows failure it inherited
+(`TestRescanSeesEditedSource`, identical on clean `master`), and the
+`merge-work/inline.go` fix. `master_build` (below) is what that sync feeds.
 
 **The ☰ panel's 2026-09-26/27 changes (committed `5dc4d99` and `a808a64`,
 shipped in v0.3.0):** four changes to the ☰ panel, all verified on a throwaway

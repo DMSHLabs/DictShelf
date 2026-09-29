@@ -723,6 +723,44 @@ body.styling{padding-bottom:var(--styler-shown,var(--styler-h))}
   box-shadow:0 1px 3px rgba(0,0,0,.35)}
 #colorDialog input[type=range]:focus-visible::-webkit-slider-thumb{
   outline:2px solid var(--focus);outline-offset:1px}
+/* ── the System window ─────────────────────────────────────────────────
+   The shell's own settings, drawn by the page. Its frame, its paper and the
+   wallpaper beside it come from dialog.group-dialog.panel-card, and so do its
+   CHECKBOXES - from that file's `input[type=checkbox]`, the app's own square
+   (20px, a 1.5px --fg border, a tick drawn from two borders) and the very
+   recipe the Lemmatization page copies. Nothing about a checkbox is stated
+   here on purpose: a second recipe for one control is a second thing to keep
+   in step, and the platform's own box is what these windows must not wear.
+   What is stated here is the window's own furniture - a group's name, the
+   sentence under it, one row per setting, and the two notes the window speaks
+   with. The rows are the phone's: 44px of touch floor like the group editor's,
+   with the label as the flexible half so a long name wraps instead of pushing
+   the number field off the edge. */
+#sysSettings h3.sys-head{margin:1.2em 0 .2em;font-size:14px;font-weight:600;color:var(--fg)}
+#sysSettings h3.sys-head:first-child{margin-top:0}
+#sysSettings .sys-hint{margin:0;font-size:12.5px;line-height:1.618;color:var(--fg-soft)}
+#sysSettings .sys-item{margin:.5em 0 .2em}
+#sysSettings .sys-row{display:flex;align-items:center;gap:.6em;min-height:44px;cursor:pointer}
+#sysSettings .sys-row.sys-num{cursor:default}
+#sysSettings .sys-label{flex:1 1 auto;min-width:0;font-size:14px;overflow-wrap:anywhere}
+#sysSettings .sys-num input{flex:none;width:6.5em;font:inherit;font-size:14px;text-align:right;
+  color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:.5em .6em}
+#sysSettings .sys-num input:focus{outline:none;border-color:var(--focus);
+  box-shadow:0 0 0 3px color-mix(in srgb,var(--focus) 25%,transparent)}
+/* The unit beside a megabytes field. The box holds a bare number - a number
+   input can hold nothing else - so this is the only thing that says what the
+   number is OF. Muted and pulled back against its field, so the row reads as
+   one control rather than as a field with a word beside it. */
+#sysSettings .sys-unit{flex:none;margin-left:-.35em;font-size:12.5px;
+  color:var(--fg-soft);font-variant-numeric:tabular-nums}
+/* The window's two voices. The stale note is a state of the MACHINE - the
+   server is still running with the settings it was started with - so it is a
+   boxed sentence where this app's other notes are plain text; the line under it
+   answers a refusal, and is quiet because it is not a control. An empty one
+   takes no room, and both exist from the moment the window opens. */
+#sysSettings .sys-note{margin:.9em 0 0;font-size:12.5px;line-height:1.618;color:var(--fg-soft)}
+#sysSettings .sys-note:empty{margin:0}
+#sysSettings #sysStale{border:1px solid var(--line);border-radius:8px;padding:.5em .7em}
 /* The Background-color checkbox wears the groups editor's square - one
    checkbox shape across the panels: 20px, a --fg border, and the check drawn
    rather than left to the platform, whose default box reads as foreign next

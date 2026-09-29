@@ -40,29 +40,25 @@
 	<string name="index_download_title">Downloading a dictionary</string>
 	<string name="index_download_text">This continues while you use other apps.</string>
 	<!--
- The shell's own settings (D100). The wording never names the Android
-          mechanism behind a row: the user is choosing where a lookup lands,
-          not which intent filter it arrived through. 
+ The shell's own settings (D100). SINCE 2026-09-28 the rows themselves are
+          drawn by the app page - the Settings drawer's System window
+          (web/index.html, #sysSettings) - so the words a reader READS for the
+          lookups, the messages, the access key, the browser cache and the
+          Advanced headings live there now, in the page's own copy, the way the
+          Appearance sheet's Screen rows got them. What is left here is the
+          window's own chrome (its title and its two buttons) and the restart
+          footer's sentences; the OVERRIDE rows' words below stay because the
+          TABLE is Java's (ShellPrefs.OVERRIDES, whose flavour rows differ) and
+          Shell.systemState sends each row's label and hint to the page with it.
 	-->
 	<string name="settings_short_label">Settings</string>
 	<string name="settings_title">wuDict2 settings</string>
-	<string name="settings_lookup_head">Look up in the full app</string>
-	<string name="settings_lookup_hint">Otherwise a lookup floats over the app you were reading.</string>
-	<string name="settings_lookup_toolbar">From the text selection menu</string>
-	<string name="settings_lookup_share">From the share menu</string>
-	<string name="settings_lookup_link">From links and automation</string>
 	<!--
- The messages row. Here rather than in the page's Appearance sheet for
-          the reason ShellPrefs.INFO_MESSAGES records: "Starting wuDict2…" is
-          painted by this app before any page exists, so the switch has to be
-          readable by the shell, and the page's half is delivered on the URL.
-          The hint names what disappears and, just as deliberately, what does
-          not - a failure keeps its sentence, because that is the one message
-          the screen must never swallow.
+ The signpost, and the reason the screen is not simply empty: it is on the
+          launcher's long-press menu, so a reader who remembers the full screen
+          arrives here.
 	-->
-	<string name="settings_messages_head">Messages</string>
-	<string name="settings_info_messages">Show info messages</string>
-	<string name="settings_info_hint">The notes this app puts on screen while it is starting and while it is looking a word up — "Starting wuDict2…", the waiting art, the "N of M ready" counter, the "Looking up …" line in the floating window. They are true and they pass in a moment, which is why they can be turned off: with this off a window stays empty until its results arrive. A failure is still reported, and so is the note that answers below are for a different form of the word you typed.</string>
+	<string name="settings_moved_hint">These settings are in the app now — tap ☰ there and open System. What is left here is what only this screen can do: clear every advanced setting at once, and restart the dictionary server on the spot.</string>
 	<!--
  Screen (D141): how the margins around the page are painted, and which
           bars hide while reading. Those two rows are NOT here any more - they
@@ -84,30 +80,18 @@
           forces - space, memory, cores, an address - never a dictionary fact,
           which is the test for whether a row may exist here at all. The copy
           says what the value costs, because a number with no consequence
-          attached is a number nobody can set responsibly. 
+          attached is a number nobody can set responsibly. The rows are drawn
+          by the app page, and these two strings per row are what it draws:
+          Shell.systemState sends them with the row's bounds and its value, so
+          a flavour that has no row (Play's listen address) sends none and the
+          page cannot offer a control this build would not honour.
 	-->
 	<!--
- D102: the switch is here because the user must DECIDE - other apps on
-          the device can reach 
-the dictionary server, and turning the key off
-          is how you let one. Nothing about how the key 
-works reaches the
-          screen; there is nothing to do with that.
-
-          The copy says CHANGES, 
-not use: looking words up is deliberately left
-          open to other apps even with the key on (D69 
-- it is the same surface
-          a browser extension is given), so a label promising that only this 
-app
-          may use the dictionaries would be describing a thing the app does not
-          do. 
+ D102: the key is a setting like any other now, drawn in the page beside
+          the rest; what has NOT changed is why it exists - other apps on the
+          device can reach the dictionary server, and turning the key off is how
+          you let one. Nothing about how the key works reaches the screen.
 	-->
-	<string name="settings_access_head">Access</string>
-	<string name="settings_access_key">Only this app may change your dictionaries</string>
-	<string name="settings_access_key_hint">Other apps on this phone can reach the dictionary server. With this on, they can look words up but cannot change anything — no importing, preparing or removing dictionaries, and no settings. Turn it off if another app should be able to change things too. Takes effect the next time wuDict2 starts.</string>
-	<string name="settings_advanced_head">Advanced</string>
-	<string name="settings_advanced_hint">These change how the dictionary server itself runs. Leave them alone unless you know what they do. Anything left empty follows the settings file.</string>
 	<string name="settings_no_compress">Store dictionaries uncompressed</string>
 	<string name="settings_no_compress_hint">Databases become roughly 3× larger — a 100 MB dictionary lands at about 300 MB. Reading gets slightly faster with no decompression step: expect a few percent, not a transformation. Applies to dictionaries prepared from now on. Default: off.</string>
 	<string name="settings_search_memory">Memory one search may use</string>
@@ -118,15 +102,12 @@ app
 	<string name="settings_index_workers_hint">Each one saturates a core and holds a few hundred bytes per headword while it runs. More is faster and hotter; the phone stays comfortable at 1.</string>
 	<string name="settings_server_port">Server port</string>
 	<string name="settings_server_port_hint">Change only if something else on this device already uses 6889. Page preferences such as theme and panel state are saved per address, so a different port starts them fresh. Default: 6889.</string>
-	<string name="settings_range">Between %1$d and %2$d.</string>
-	<string name="settings_in_effect">In effect now: %1$s.</string>
-	<string name="settings_lan_at">While it is on, other devices on this network would use %1$s.</string>
-	<string name="settings_lan_none">This phone is not on a network right now.</string>
-	<string name="settings_out_of_range">“%1$s” must be a whole number between %2$d and %3$d.</string>
 	<!--
  The running server was started with different values. Never claims a
           restart that did not happen: the button appears only when stopping it
-          is actually safe. 
+          is actually safe - and this screen is the ONLY place it can appear,
+          because a page that shows the System window holds the server itself
+          and so can never offer to stop it.
 	-->
 	<string name="settings_stale">The dictionary server is still running with the previous settings.</string>
 	<string name="settings_stale_later">It will pick them up the next time the app is opened.</string>
@@ -136,9 +117,6 @@ app
 	<string name="settings_restore">Restore defaults</string>
 	<string name="settings_restore_confirm">Clear every advanced setting and go back to what the settings file says?</string>
 	<string name="settings_restore_done">Advanced settings cleared.</string>
-	<string name="settings_clear_cache">Clear browser cache</string>
-	<string name="settings_clear_cache_hint">Throws away the copies of the page\'s files this app keeps on the device, then loads the page again — for when an update leaves it showing something old. Your dictionaries, their indexes and your settings are not touched.</string>
-	<string name="settings_clear_cache_done">Browser cache cleared.</string>
 	<string name="settings_cancel">Cancel</string>
 	<!--
  Intake: an archive arriving from a file manager, a share sheet or the

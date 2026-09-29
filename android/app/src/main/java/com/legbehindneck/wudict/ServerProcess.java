@@ -73,6 +73,21 @@ class ServerProcess {
         return portCache;
     }
 
+    // The port the LIVE child was actually exec'd with, or 0 when none is up.
+    // The two differ the moment a stored port changes while the app runs, and
+    // the difference is worth keeping: a probe of the CONFIGURED port finds
+    // nothing there, so the settings screen's stale footer - the one thing
+    // that screen is still for - went silent in exactly the case it exists for
+    // (found on the emulator, 2026-09-28, with the server on 7003 and the row
+    // already saying 7004). The page's own System window has no such problem:
+    // it asks the server it is being served by.
+    private static volatile int livePort;
+
+    /** The port the running server listens on, or 0 when none is running. */
+    static int livePort() {
+        return livePort;
+    }
+
     interface Listener {
         void onReady();
         void onFailed(String message);
@@ -169,6 +184,7 @@ class ServerProcess {
         generation++; // any callback still in flight from this child is now stale
         if (shared != null) shared.stop();
         shared = null;
+        livePort = 0; // nothing is listening now
         state = IDLE;
         waiting.clear();
     }
@@ -202,8 +218,8 @@ class ServerProcess {
         ShellPrefs.token(app);
         if (adoptRunningServer(app, port)) {
             Log.i(TAG, "adopted a wudict server already listening on " + port);
+            livePort = port; // the port the adopted child is really on
             listener.onReady();
-            cacheEffective(app, port); // after onReady: nothing waits on this
             return;
         }
 
@@ -273,8 +289,8 @@ class ServerProcess {
         logOutput(process.getInputStream());
 
         if (awaitPort(app, process, port)) {
+            livePort = port; // and the one this child was exec'd with
             listener.onReady();
-            cacheEffective(app, port); // after onReady: nothing waits on this
             return;
         }
 
@@ -385,23 +401,6 @@ class ServerProcess {
         } finally {
             if (c != null) c.disconnect();
         }
-    }
-
-    // ── what the running server resolved the tunable keys to (D101) ──────────
-    //
-    // The settings screen is reached by long-pressing the launcher icon, so the
-    // normal case is that it opens with NO server to ask - while the values it
-    // must show as inherited are the ones Go computes from the device itself
-    // (internal/config/tuning.go), which Java must never recompute. So the
-    // shell records them whenever it DOES have a server: every start and every
-    // adoption refreshes the cache, and the screen falls back to it when
-    // nobody answers. One local request, issued after the caller has already
-    // been told the server is ready, so nothing waits on it.
-
-    static void cacheEffective(Context c, int port) {
-        Map<String, String> values = new LinkedHashMap<>();
-        Map<String, String> origins = new HashMap<>();
-        if (fetchEffective(port, values, origins)) ShellPrefs.cacheEffective(c, values);
     }
 
     /**
@@ -520,6 +519,7 @@ class ServerProcess {
         boolean owned = shared != null;
         if (owned) shared.stop();
         shared = null;
+        livePort = 0;
         state = IDLE;
         waiting.clear();
         if (owned) return true;

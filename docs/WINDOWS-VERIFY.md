@@ -109,13 +109,42 @@ them are in `docs/handoff-archive.md`.
   likewise, `CGO_ENABLED=1 GOOS=android GOARCH=amd64`, same `-tags sqlite_fts5
   -trimpath` and the same ldflags including
   `-extldflags=-Wl,-z,max-page-size=16384`.
+- **`build-android.cmd` needs `ANDROID_HOME` DELETED, not defaulted** (found
+  2026-09-28). This shell exports `ANDROID_HOME=%LOCALAPPDATA%\Android\Sdk` —
+  the cmd-style literal, unexpanded — and the script only falls back to
+  `%LOCALAPPDATA%\Android\Sdk` when the variable is *undefined*, so it fails
+  with "Android SDK directory does not exist: %LOCALAPPDATA%\Android\Sdk".
+  Passing a real path works (`env ANDROID_HOME='C:\Users\shepe\AppData\Local\Android\Sdk'
+  cmd //c build-android.cmd debug intel`), and `set`-ing it inside the `cmd //c`
+  string does NOT — MSYS mangles the nested quotes. `gradlew` is unaffected:
+  it takes `ANDROID_HOME="$LOCALAPPDATA/Android/Sdk"` inline.
+- **Driving the app on the emulator** (2026-09-28, AVD `Small`, `debug intel`
+  APK, `emulator-5554`; `android_ui_tap`/`swipe`/`type_text` all work there,
+  unlike the MIUI phone). Three traps, each cost a round:
+  - `uiautomator` sees the WebView as ONE node — every tap has to come from a
+    screenshot's coordinates, so take a screenshot, read it, then tap.
+  - **`BACK` finishes the activity once the keyboard is down.** Pressing it to
+    hide the keyboard after `ENTER` in a field closed the app twice; prefer
+    tapping inside the page to blur, or accept the keyboard in the screenshot.
+  - **Typing into a number field APPENDS unless the field is cleared** — the tap
+    puts a caret, not a selection, so "7002" landed after the existing "7001"
+    and the page rightly refused `70027001`. Clear with
+    `adb shell input keyevent 123` (MOVE_END) then `67` (DEL) per digit.
+  - The app's own preferences are readable on a debug build:
+    `adb shell run-as com.dmshepeta.wudict2.debug cat shared_prefs/shell.xml`
+    — that is how a write from the page was confirmed, and how the dead
+    `effective_*` keys were seen leaving the file.
+  - `am start -n <appId>/com.legbehindneck.wudict.SettingsActivity` opens the
+    shell settings screen (exported, floating, `taskAffinity=""`), which is the
+    only practical way to reach it without the launcher's long-press menu.
 - Known Windows test failures that fail identically on clean HEAD (do NOT
   chase them as regressions — compare against a clean checkout via
   `git worktree add /tmp/x HEAD`):
   - `internal/server`: TestSetupFlow, and TestRescanSeesEditedSource — the
     latter is new in the 09-26 upstream merge and fails identically on clean
-    upstream `master` (same `rename … Access is denied`, see the 09-26 note in
-    Branch state for the live reproduction and its workaround).
+    upstream `master` (same `rename … Access is denied`, see
+    `docs/handoff-archive.md` → "The 09-26 upstream sync into `dev2`" for the
+    live reproduction and its workaround).
   - The 09-23 and 09-26 upstream merges fixed the rest of what used to be
     listed here — TestAndroidAliases(×2), TestDamagedTextResource…,
     TestIntakeUploadAndInstall, TestOpenAPICoversEveryRoute,

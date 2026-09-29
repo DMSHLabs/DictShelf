@@ -306,6 +306,11 @@ final class ShellPrefs {
 
     private static boolean migrated;
 
+    // What an older build cached /api/config's resolved values under (D101).
+    // Nothing writes it any more - see migrate(), which is also what removes
+    // what an existing install is still carrying.
+    private static final String CACHE_PREFIX = "effective_";
+
     static SharedPreferences of(Context c) {
         SharedPreferences p = c.getSharedPreferences(FILE, Context.MODE_PRIVATE);
         migrate(p);
@@ -343,6 +348,17 @@ final class ShellPrefs {
             int v = p.getBoolean(IMMERSIVE, false) ? BARS_BOTH : BARS_OFF;
             if (e == null) e = p.edit();
             e.putInt(BARS, v);
+        }
+
+        // The effective-values cache is GONE (2026-09-28). Its only reader was
+        // the shell screen's inherited-value display, and the rows are drawn by
+        // the app page now, which asks the server for those values itself. An
+        // older file keeps them forever otherwise, and a preference nobody
+        // reads is a fact nobody can check - so this is where they go.
+        for (String key : new java.util.ArrayList<>(p.getAll().keySet())) {
+            if (!key.startsWith(CACHE_PREFIX)) continue;
+            if (e == null) e = p.edit();
+            e.remove(key);
         }
 
         if (e != null) e.apply();
@@ -675,6 +691,45 @@ final class ShellPrefs {
         e.apply();
     }
 
+    /**
+     * Stores an override after checking it against the row's own rules: a
+     * whole number inside [min, maxOf], or a BOOL's ON marker and nothing
+     * else. Empty withdraws the override, which is what "follow the settings
+     * file" is.
+     *
+     * <p>This is the check the shell settings screen's commit() has always
+     * made; it lives here now that a second control writes the same keys (the
+     * app page's System window, over the wudict:system bridge), because the
+     * value it guards is emitted on a child's exec line: a number the child
+     * cannot use, or a BOOL's off-state stored as a value, would be this side
+     * inventing its own config. The screen keeps the user-facing half - it
+     * says WHY a value was refused, in the field's own terms.
+     *
+     * @throws IllegalArgumentException when the value cannot be stored as given
+     */
+    static void setOverrideChecked(Context c, Override o, String value) {
+        String v = value == null ? "" : value.trim();
+        if (v.isEmpty()) {
+            setOverride(c, o, null);
+            return;
+        }
+        if (o.kind == BOOL) {
+            // Two states, never three: "off" is the absence of the key.
+            if (!o.onValue.equals(v)) throw new IllegalArgumentException(v);
+            setOverride(c, o, o.onValue);
+            return;
+        }
+        long n;
+        try {
+            n = Long.parseLong(v);
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException(v);
+        }
+        int max = maxOf(c, o);
+        if (n < o.min || n > max) throw new IllegalArgumentException(v);
+        setOverride(c, o, String.valueOf(n)); // canonical: "0128" is stored as "128"
+    }
+
     static void clearOverrides(Context c) {
         SharedPreferences.Editor e = of(c).edit();
         for (Override o : OVERRIDES) e.remove(o.pref());
@@ -765,32 +820,5 @@ final class ShellPrefs {
         ActivityManager.MemoryInfo mi = new ActivityManager.MemoryInfo();
         am.getMemoryInfo(mi);
         return mi.totalMem >> 20;
-    }
-
-    // ── what the running server reported ─────────────────────────────────────
-    //
-    // Several defaults - the memory caps above all - are computed by Go from
-    // the device itself (internal/config/tuning.go), so Java must never
-    // recompute them: it asks /api/config instead. The last answer is cached
-    // here so the screen can still show inherited values when no server is up.
-
-    private static final String CACHE = "effective_";
-
-    static void cacheEffective(Context c, Map<String, String> values) {
-        SharedPreferences.Editor e = of(c).edit();
-        for (Override o : OVERRIDES) {
-            String v = values.get(o.key);
-            if (v == null) {
-                e.remove(CACHE + o.key);
-            } else {
-                e.putString(CACHE + o.key, v);
-            }
-        }
-        e.apply();
-    }
-
-    /** The last value this key was seen resolving to, or null if never seen. */
-    static String cachedEffective(Context c, Override o) {
-        return of(c).getString(CACHE + o.key, null);
     }
 }

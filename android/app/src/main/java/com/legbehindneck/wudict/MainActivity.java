@@ -474,6 +474,9 @@ public class MainActivity extends Activity {
         @Override
         public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
             pageLoading = true;
+            // Where the bridge's prompts will come from: the address a stored
+            // port change can move out from under them (Shell.pageOrigin).
+            Shell.notePageUrl(url);
         }
 
         @Override
@@ -687,7 +690,13 @@ public class MainActivity extends Activity {
         });
     }
 
-    /** Re-loads the page after the library behind it changed (an import). */
+    /**
+     * Re-loads the page after the library behind it changed (an import), and
+     * after the page's own System window threw away what this window was last
+     * loaded from - "Clear browser cache", which is the same second half the
+     * settings screen asks for through {@link Shell#EXTRA_RELOAD}, taken here
+     * because the window that asked is this one (Shell, wudict:system).
+     */
     void reloadPage() {
         navigate(null);
     }

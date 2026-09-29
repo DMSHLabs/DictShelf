@@ -49,6 +49,51 @@ final class Shell {
         return "http://" + ServerProcess.HOST + ":" + ServerProcess.port(c);
     }
 
+    /**
+     * The origin of the page now on screen, remembered as it is loaded.
+     *
+     * <p>It is usually {@link #origin}, and it used to BE that by assumption -
+     * which broke the moment a row could change the stored port from inside the
+     * page: the port is part of {@code origin()}, so Restore defaults (or the
+     * port row) moved what the shell considers our own address while the open
+     * page went on living at the old one, and every later bridge prompt failed
+     * the check below and fell through to the WebView's own prompt dialog -
+     * a modal "The page at … says: wudict:appearance" over the page, blocking
+     * its JavaScript. Found on the emulator, 2026-09-28, the first time that
+     * combination was ever possible.
+     *
+     * <p>Written on every page start, and read only by the prompt check: the
+     * question the check answers is "did this prompt come from a page WE put in
+     * this window", and the page in the window is the one that was loaded.
+     */
+    private static volatile String pageOrigin;
+
+    /** Records where the page in this window came from. Called on page start. */
+    static void notePageUrl(String url) {
+        int scheme = url == null ? -1 : url.indexOf("://");
+        if (scheme < 0) {
+            pageOrigin = null; // about:blank and friends are not a page of ours
+            return;
+        }
+        int cut = url.indexOf('/', scheme + 3);
+        pageOrigin = cut < 0 ? url : url.substring(0, cut);
+    }
+
+    /**
+     * Whether a prompt came from this app's own page. Two origins answer yes:
+     * the address the shell would build NOW (which is what a page loaded at
+     * this moment carries) and the one the page in front of the reader was
+     * loaded from (see {@link #pageOrigin}). A third party's page in this
+     * window - a dictionary's website that a link somehow reached - is refused
+     * by both.
+     */
+    private static boolean ownPage(Context c, String url) {
+        if (url == null) return false;
+        if (url.startsWith(origin(c) + "/")) return true;
+        String loaded = pageOrigin;
+        return loaded != null && url.startsWith(loaded + "/");
+    }
+
     static String pageUrl(Context c) {
         String k = key(c);
         return origin(c) + "/?" + shellQuery(c) + (k.isEmpty() ? "" : "&" + k);
@@ -184,6 +229,69 @@ final class Shell {
         probe.destroy();
     }
 
+    /**
+     * The app page's System window: every row of the shell's own settings
+     * screen, as the page draws them (index.html, #sysSettings).
+     *
+     * <p>The direction of knowledge is the one D54 sets: the page asks here
+     * with a {@code wudict:system} prompt and is told VALUES - which lookups
+     * open the app, whether the messages are shown, whether the access key is
+     * required, and the overridable config rows with their labels and bounds -
+     * and it never learns which platform answered. The wording of a row
+     * travels with it because the row's LABEL is Android's own string
+     * resource: the row table exists here, and the flavour that has no row
+     * (Play's listen address) sends none, so a page cannot draw a control this
+     * build cannot honour.
+     *
+     * <p>What is here is what only this side knows. The value each config key
+     * RESOLVES to, and which layer gave it, is asked of the running server
+     * instead (the page's own /api/config), exactly as the settings screen
+     * asks it rather than recomputing Go's device-derived defaults - so a key
+     * left empty reads as inherited from what, and a server running with
+     * older values is spotted the same way in both places.
+     */
+    static org.json.JSONObject systemState(Context c) throws org.json.JSONException {
+        org.json.JSONObject reply = new org.json.JSONObject();
+        reply.put("toolbar", ShellPrefs.opensApp(c, ShellPrefs.TOOLBAR));
+        reply.put("share", ShellPrefs.opensApp(c, ShellPrefs.SHARE));
+        reply.put("link", ShellPrefs.opensApp(c, ShellPrefs.LINK));
+        reply.put("info", ShellPrefs.infoMessages(c));
+        reply.put("key", ShellPrefs.requireKey(c));
+        reply.put("port", ServerProcess.port(c));
+        // Only the row that HAS a listen address draws the note that says
+        // where this phone would be reached, and that row is the flavour's
+        // (foss) - in Play there is no row, so this answer is unused.
+        String lan = Net.lanAddress();
+        reply.put("lan", lan == null ? org.json.JSONObject.NULL : lan);
+        org.json.JSONArray rows = new org.json.JSONArray();
+        for (ShellPrefs.Override o : ShellPrefs.OVERRIDES) {
+            org.json.JSONObject row = new org.json.JSONObject();
+            row.put("key", o.key);
+            row.put("kind", o.kind == ShellPrefs.BOOL ? "bool"
+                    : o.kind == ShellPrefs.MEGABYTES ? "mb" : "count");
+            row.put("label", c.getString(o.label));
+            row.put("hint", c.getString(o.hint));
+            row.put("min", o.min);
+            row.put("max", ShellPrefs.maxOf(c, o));
+            row.put("onValue", o.onValue == null ? org.json.JSONObject.NULL : o.onValue);
+            // The switch that carries an address, which is the one row whose
+            // hint grows a sentence naming where this phone is reachable.
+            row.put("lan", o.flag != null && o.kind == ShellPrefs.BOOL);
+            String stored = ShellPrefs.override(c, o);
+            row.put("stored", stored == null ? org.json.JSONObject.NULL : stored);
+            // What a spawn would pass for this key right now - a SERVER_IP
+            // resolved against the interfaces this moment - or null when
+            // nothing here sets it and the config's own layers decide. The
+            // page compares it against what the RUNNING server reported, which
+            // is the whole "still running with the previous settings" check.
+            String emitted = ShellPrefs.emitted(c, o);
+            row.put("emitted", emitted == null ? org.json.JSONObject.NULL : emitted);
+            rows.put(row);
+        }
+        reply.put("rows", rows);
+        return reply;
+    }
+
     // Keep the real select as the source of truth, including streamed options,
     // groups, disabled entries and its existing change handler.
     static final String DICTIONARY_PICKER_JS = """
@@ -305,8 +413,11 @@ final class Shell {
             return false;
         }
         String url = uri.toString();
-        String origin = origin(a);
-        if (url.equals(origin) || url.startsWith(origin + "/")) return false;
+        // Our own pages stay: the origin the shell builds now, or the one the
+        // open page was loaded from when a stored port change moved the first
+        // (see pageOrigin) - without the second, the app's own links would be
+        // handed to the system browser for as long as that mismatch lasts.
+        if (ownPage(a, url)) return false;
         // Shell-private URLs (wudict://…) are a channel from the page to the
         // Java side that costs no JavascriptInterface and no server API: this
         // method already inspects every navigation, so the branch is free.
@@ -437,7 +548,7 @@ final class Shell {
             @Override
             public boolean onJsPrompt(WebView view, String url, String message,
                                       String defaultValue, android.webkit.JsPromptResult result) {
-                if (url == null || !url.startsWith(origin(a) + "/")) return false;
+                if (!ownPage(a, url)) return false;
                 if ("wudict:appearance".equals(message)) {
                     try {
                         org.json.JSONObject request = new org.json.JSONObject(defaultValue);
@@ -536,6 +647,63 @@ final class Shell {
                         reply.put("bars", ShellPrefs.bars(a));
                         result.confirm(reply.toString());
                     } catch (org.json.JSONException | IllegalArgumentException bad) {
+                        result.cancel();
+                    }
+                    return true;
+                }
+                // The app page's System window: the shell's own settings,
+                // drawn by the page. One prompt carries the whole round trip -
+                // a read, a write, Restore defaults and Clear browser cache -
+                // because all four answer with the same thing (the state after
+                // the change), which is what keeps the page from holding a
+                // copy of a value the shell owns.
+                //
+                // Clear browser cache is the one action whose second half is
+                // not state at all: the window that shows the page has to load
+                // it again, and that window is an Activity - asked, not reached
+                // into, exactly as the settings screen asks it through
+                // EXTRA_RELOAD. Here the reader is IN the window, so it is the
+                // hosting one that reloads, whether that is the app or the
+                // popup.
+                if ("wudict:system".equals(message)) {
+                    try {
+                        org.json.JSONObject request = new org.json.JSONObject(defaultValue);
+                        String action = request.optString("action", "get");
+                        if ("set".equals(action)) {
+                            String field = request.getString("field");
+                            if ("toolbar".equals(field)) {
+                                ShellPrefs.set(a, ShellPrefs.TOOLBAR, request.getBoolean("value"));
+                            } else if ("share".equals(field)) {
+                                ShellPrefs.set(a, ShellPrefs.SHARE, request.getBoolean("value"));
+                            } else if ("link".equals(field)) {
+                                ShellPrefs.set(a, ShellPrefs.LINK, request.getBoolean("value"));
+                            } else if ("info".equals(field)) {
+                                ShellPrefs.set(a, ShellPrefs.INFO_MESSAGES, request.getBoolean("value"));
+                            } else if ("key".equals(field)) {
+                                ShellPrefs.set(a, ShellPrefs.REQUIRE_KEY, request.getBoolean("value"));
+                            } else if ("override".equals(field)) {
+                                ShellPrefs.Override o = ShellPrefs.byKey(request.getString("key"));
+                                // An absent or null value is "follow the
+                                // settings file", which is a write like any
+                                // other and not an error.
+                                String value = request.isNull("value") ? null
+                                        : request.optString("value", "");
+                                ShellPrefs.setOverrideChecked(a, o, value);
+                            } else throw new IllegalArgumentException("Unknown field");
+                        } else if ("restore".equals(action)) {
+                            ShellPrefs.clearOverrides(a);
+                        } else if ("clearCache".equals(action)) {
+                            clearWebCache(a);
+                            if (a instanceof MainActivity) ((MainActivity) a).reloadPage();
+                            else if (a instanceof LookupActivity) ((LookupActivity) a).reloadPage();
+                        } else if (!"get".equals(action)) {
+                            throw new IllegalArgumentException("Unknown action");
+                        }
+                        result.confirm(systemState(a).toString());
+                    } catch (org.json.JSONException | IllegalArgumentException bad) {
+                        // Nothing is said here: the page holds the sentence a
+                        // refused value deserves (its own field, its own
+                        // words), and a cancel is how it learns to say it.
                         result.cancel();
                     }
                     return true;
