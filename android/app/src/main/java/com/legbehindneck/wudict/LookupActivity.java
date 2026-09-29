@@ -55,6 +55,10 @@ import java.util.HashSet;
 import java.util.Set;
 
 public class LookupActivity extends Activity {
+    @Override public android.content.res.Resources getResources() {
+        return UiLanguage.resources(getBaseContext(), super.getResources());
+    }
+
 
     // A selection can be a whole paragraph - PROCESS_TEXT hands over whatever
     // was highlighted, and a "select all" in a reader is megabytes. Two caps,

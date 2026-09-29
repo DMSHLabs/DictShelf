@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="storage_title">Хранилище словарей</string>
+    <string name="storage_message">wuDict2 читает словари из общей папки «Dictionaries» (Внутренняя память ▸ Dictionaries). Нажмите «Предоставить доступ» и разрешите доступ ко всем файлам на следующем экране. Затем скопируйте в эту папку файлы .mdx/.mdd, .ifo, .slob, .dsl, .bgl, .zim и .wudict.md.</string>
+    <string name="storage_grant">Предоставить доступ</string>
+    <string name="storage_later">Позже</string>
+    <string name="settings_server_ip">Доступ с других устройств (для тестирования)</string>
+    <string name="settings_server_ip_hint">Для краткой проверки в вашей сети. Другие устройства могут обращаться к библиотеке только пока wuDict2 открыт на экране. После закрытия приложения или выключения экрана доступ вскоре прекращается. При смене сети доступ отключается до следующего открытия приложения. Любое устройство в этой сети может читать библиотеку без пароля. По умолчанию выключено.</string>
+</resources>

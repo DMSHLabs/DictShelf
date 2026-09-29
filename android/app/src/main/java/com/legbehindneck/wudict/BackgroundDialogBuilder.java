@@ -8,7 +8,7 @@ final class BackgroundDialogBuilder extends AlertDialog.Builder {
     private final Context context;
 
     BackgroundDialogBuilder(Context context) {
-        super(context, ShellPrefs.darkIcons(ShellPrefs.pageBg(context))
+        super(UiLanguage.context(context), ShellPrefs.darkIcons(ShellPrefs.pageBg(context))
                 ? android.R.style.Theme_Material_Light_Dialog_Alert
                 : android.R.style.Theme_Material_Dialog_Alert);
         this.context = context;

@@ -86,6 +86,10 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 public class SettingsActivity extends Activity {
+    @Override public android.content.res.Resources getResources() {
+        return UiLanguage.resources(getBaseContext(), super.getResources());
+    }
+
 
     // The Fibonacci dp ladder, and the two rungs that are ergonomic floors.
     private static final int SP_2 = 5, SP_3 = 8, SP_4 = 13, SP_5 = 21, SP_6 = 34;

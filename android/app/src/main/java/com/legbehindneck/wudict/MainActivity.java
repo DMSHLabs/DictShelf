@@ -31,6 +31,10 @@ import android.window.OnBackInvokedDispatcher;
 import java.io.ByteArrayInputStream;
 
 public class MainActivity extends Activity {
+    @Override public android.content.res.Resources getResources() {
+        return UiLanguage.resources(getBaseContext(), super.getResources());
+    }
+
 
     // An optional search to run on load, handed over by LookupActivity - either
     // by the popup's handoff row (D67) or because the entry point is set to open

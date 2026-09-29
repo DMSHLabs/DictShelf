@@ -84,6 +84,10 @@ import android.util.Log;
  * this class existed.
  */
 public final class IndexService extends Service {
+    @Override public android.content.res.Resources getResources() {
+        return UiLanguage.resources(getBaseContext(), super.getResources());
+    }
+
 
     private static final String TAG = "wudict";
     private static final String CHANNEL = "wudict.index";
@@ -421,12 +425,15 @@ public final class IndexService extends Service {
 
     private void startInForeground(boolean typed) {
         NotificationManager nm = getSystemService(NotificationManager.class);
-        if (nm != null && nm.getNotificationChannel(CHANNEL) == null) {
+        if (nm != null) {
             // LOW: no sound, no heads-up. It is a receipt for work in progress,
             // not an alert - the user started this and is watching the page.
-            NotificationChannel ch = new NotificationChannel(
-                    CHANNEL, getString(R.string.index_channel), NotificationManager.IMPORTANCE_LOW);
-            ch.setShowBadge(false);
+            NotificationChannel ch = nm.getNotificationChannel(CHANNEL);
+            if (ch == null) {
+                ch = new NotificationChannel(CHANNEL, getString(R.string.index_channel), NotificationManager.IMPORTANCE_LOW);
+                ch.setShowBadge(false);
+            }
+            ch.setName(getString(R.string.index_channel));
             nm.createNotificationChannel(ch);
         }
         Notification n = build(this);
@@ -447,6 +454,7 @@ public final class IndexService extends Service {
      * which repost() has already asked.
      */
     private static Notification build(Context ctx) {
+        ctx = UiLanguage.context(ctx);
         Intent open = new Intent(ctx, MainActivity.class)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
         PendingIntent pi = PendingIntent.getActivity(ctx, 0, open,
