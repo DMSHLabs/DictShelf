@@ -145,13 +145,24 @@ them are in `docs/handoff-archive.md`.
     upstream `master` (same `rename … Access is denied`, see
     `docs/handoff-archive.md` → "The 09-26 upstream sync into `dev2`" for the
     live reproduction and its workaround).
-  - The 09-23 and 09-26 upstream merges fixed the rest of what used to be
-    listed here — TestAndroidAliases(×2), TestDamagedTextResource…,
-    TestIntakeUploadAndInstall, TestOpenAPICoversEveryRoute,
-    TestRescanRecoversFromDeletedPreparedFolder, TestResourceAndIndex,
-    TestResourceOverrideFromLibraryFolder, TestSetupMultipleFolders and
-    `internal/format/dsl`'s TestMediaSourcesEveryZipSpelling all pass on the
-    tag-less/pure-Go build now.
+  - The wumark packages, new in the 09-29 merge: `internal/howto`'s TestExamples
+    and TestGuideIsCleanMarkdown, `internal/cli`'s TestDumpMarkdownRoundTrip and
+    TestDumpMarkdownGzip, and `internal/format/wmd`'s TestWriteSpecExamples and
+    TestDumpMarkdownRoundTrip. All six compare text read from the worktree
+    against LF expectations, so they are artefacts of this CRLF checkout: in an
+    LF tree (`git -c core.autocrlf=false checkout --force`) they pass.
+    `internal/format/wmd`'s TestPlainMarkdown (a TempDir RemoveAll race against
+    a still-open file) and TestSourceFiles are real and keep failing there;
+    clean upstream `master` fails the same way.
+  - The 09-23, 09-26 and 09-29 merges fixed the rest of what used to be listed
+    here — TestAndroidAliases(×2), TestDamagedTextResource…,
+    TestIntakeUploadAndInstall, TestRescanRecoversFromDeletedPreparedFolder,
+    TestResourceAndIndex, TestResourceOverrideFromLibraryFolder,
+    TestSetupMultipleFolders and `internal/format/dsl`'s
+    TestMediaSourcesEveryZipSpelling all pass on the tag-less/pure-Go build now.
+    TestOpenAPICoversEveryRoute also passes here — and still FAILS on upstream
+    `master`, because the fork's own `web/openapi.yaml` is what covers the
+    missing routes. Do not "fix" the fork's copy against that failure.
   - Flaky everywhere: TestFailedDemandIsRetried (TempDir cleanup races the
     ingest goroutine; failed 4/5 on clean HEAD once).
   - `internal/intake`: TestJobDisposesSource and

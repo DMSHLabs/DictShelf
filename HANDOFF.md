@@ -94,6 +94,52 @@ local.bat — copy it there first). After each upstream `master` sync,
 repeat this small overlay (two files) or merge `master` into
 `master_build` when the naming/emuX86 code still applies.
 
+**Rechecked 2026-09-29:** `dev` is at `f09ee61`, the merge of upstream `master`
+(`d3f3936`) into it; `dev2` (`932e833`) is an ancestor of `dev`, so `dev` is the
+one full line. Upstream's fifteen commits brought **wumark** — a whole new
+dictionary format (`internal/format/wmd` with goldmark/v2, the `dump --md`
+writer, `docs/WUDICT-MARKDOWN.md` and its examples, format detection and
+companions) — plus the `bword` → `entry` link canonicalization fix and the
+Android share/reader lookup intents. Eight files conflicted; the merge message
+carries the resolutions, and three of them are standing fork decisions worth
+knowing without reading the code:
+
+- **The wudict howto is not wired.** `internal/cli/cli.go` deliberately leaves
+  `HowtoDir` empty: it neither installs nor registers the guide, because a
+  listed built-in would make the registry non-empty on a first run with no
+  dictionaries of the reader's own and `/` would open the guide instead of the
+  setup page. That first run is the fork's, so the guide stays out of the
+  registry and out of the picker; `internal/howto`, its `/api/howto` endpoints,
+  the guide file and its tests all remain in the tree, unwired. `setup.html`'s
+  "bring back the howto" row and the `d.builtin` branch in `askRemoval` are
+  kept whole but can never fire (`HowtoRemoved` is false while `HowtoDir` is
+  empty).
+- **The share/reader intents are ported into the fork's structures.** The
+  toggle is a fourth `sys-row` in the web System pane (`#sysReader`, with its
+  state sync and listener in index.html) and travels over the existing
+  `wudict:system` bridge — `Shell.systemState` puts `reader`, the set handler
+  writes `ShellPrefs.READER`. Upstream's row in `SettingsActivity` is NOT
+  taken: this fork draws those rows in the page (the file's own D100 note).
+  The manifest filters, `LookupActivity.fromReader` and `Intake` merged clean.
+- **`docs/OPEN.md` numbering:** upstream's O11 (wumark bundle) and O12
+  (admonitions) keep their numbers; the fork's O11 (single-dictionary scope,
+  CLOSED) is now **O13**, and the five references in `docs/handoff-archive.md`
+  were updated with it.
+
+Verified: `go build`/`go vet` clean (the new goldmark dependency downloads
+fine); `go test ./...` leaves nine failures against `dev`'s two — the seven new
+ones are upstream's own Windows problems in the wumark packages, all of them
+reproducing on clean `master`, and six disappear in an LF checkout
+(`docs/WINDOWS-VERIFY.md` carries the list). The page was also checked live: a
+throwaway server
+(isolated `USERPROFILE`, port 6902, pure-Go build) served the merged page, the
+scope picker listed only the reader's dictionary (no guide), and the panel
+counted "1 folder · 1 dictionary"; a second server on an EMPTY dictionary
+folder served the SETUP page for `/`, which is the first-run order this fork
+keeps. The System pane itself is shell-only, so the new row is verified in the
+page's source (and by the Android string-reference check), not in a desktop
+browser.
+
 **The shell's own settings now live in the app page: the `System Settings` window
 (2026-09-28; the first half is committed as `ae0958f` "Move system to
 settings", the rest is uncommitted).** The ☰ drawer gained a `System` section —
