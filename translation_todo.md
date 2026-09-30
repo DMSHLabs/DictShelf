@@ -4,7 +4,7 @@ Updated 2026-09-30. Implementation rules are in [translation.md](translation.md)
 
 ## Checkout state
 
-Rechecked 2026-09-30 during the documentation audit: branch `translation_layout_fix`, HEAD `ace52db` (preview-release handoff). Uncommitted changes are limited to `translation.md`, `translation_todo.md`, and `HANDOFF.md`: English documentation and this audit. The Settings label layout fix was committed as `156e802` (`Settings pane layout fix`). The label column is measured (`panelRowColumns()` in `index.html` → `--rlcol` on the section), the drawer's `#panel:lang(ru)` rule was removed from `i18n.css`, the Results strip no longer clips “Читать вслух,” and the three appearance buttons move as a single `iconrow` block. The separate `#styler:lang(ru)` toolbar rule remains. Rules and measurements are in `docs/ANDROID-UI-HANDOFF.md`, “The drawer's rows are read down ONE column per section”; verified in Chromium at 320/360/375/393/412px in both languages and with simulated 1.4× text zoom, **not verified on a phone**. Check the actual `git status` before working: this snapshot becomes outdated quickly.
+Rechecked 2026-09-30 for category localization: user-selected branch `translation`, HEAD `6dfab3c`, clean at session start. Category-label localization, its tests, and documentation updates are now uncommitted. The Settings label layout fix was committed as `156e802` (`Settings pane layout fix`). The label column is measured (`panelRowColumns()` in `index.html` → `--rlcol` on the section), the drawer's `#panel:lang(ru)` rule was removed from `i18n.css`, the Results strip no longer clips “Читать вслух,” and the three appearance buttons move as a single `iconrow` block. The separate `#styler:lang(ru)` toolbar rule remains. Rules and measurements are in `docs/ANDROID-UI-HANDOFF.md`, “The drawer's rows are read down ONE column per section”; verified in Chromium at 320/360/375/393/412px in both languages and with simulated 1.4× text zoom, **not verified on a phone**. Check the actual `git status` before working: this snapshot becomes outdated quickly.
 
 **Preview `wudict2-v0.6.0-ru.1` published** (2026-09-30, at the user's request). Tag on `01a1438`, APK built with `build-android.cmd release`: `versionName='wudict2-v0.6.0-ru.1'`, versionCode 426, `locales: '--_--' 'ru'` and the `web/i18n/ru.json` catalog with Russian strings confirmed inside the APK, sha256 `d1af995b935fcefbcdf69cff0bdf38b02fef85dcb6dc46fe2f0ae84833b56935`, same signing certificate as previous releases. The release is marked **pre-release**, at publication, `latest` remained stable v0.5.0: https://github.com/DmShAl/wudict2/releases/tag/wudict2-v0.6.0-ru.1. The build comes from a branch that also contains all unreleased `dev` work, so the release notes describe that work too. Before publishing: `TestI18n` and `TestAppearanceContract` passed, `git diff --check` was clean, `make i18n-check-js` was **not run** — that release run reported Node unavailable; this does not supersede the earlier successful Node checks.
 
@@ -30,15 +30,15 @@ Continue to commit, merge into `dev`, and publish only when requested; do not in
 
 A checkmark means implemented in code, **not** exhaustively tested on a phone.
 
-## 1. Still to translate: dictionary categories and filters
+## 1. Implemented: dictionary categories and filters
 
-- [ ] Inspect `internal/facet/facet.go`: displayed `FL`/`VL`, language names, and content-category names.
-- [ ] Check all consumers: grouping in the dictionary selector, `traits()` and category labels in dictionary information, `groupLabel()`/search scope. A category must have the same name in different places.
-- [ ] Preferred option to evaluate: translate display text on the client using stable `F`/`V`, with fallback to server labels. This is a proposal, not an already accepted decision.
-- [ ] Do not change IDs, name-recognition rules, group membership, English `internal/lang` tables, or publisher brands. Verify that `g:...` and dictionary lists remain unchanged when the UI language changes.
-- [ ] For language names, consider the existing `Intl.DisplayNames` approach with a safe fallback. Do not translate data fields used for recognition/search.
+- [x] Translate Language, Language pair, Content, Publisher, and all nine current content categories using stable facet/value IDs on the client.
+- [x] Share display labels between the dictionary selector, dictionary-information traits/tooltips, and scope labels read from selector options.
+- [x] Display language names, bilingual pairs, and monolingual labels using `Intl.DisplayNames`; retain original labels when unavailable or unknown. English labels and publisher brands remain literal.
+- [x] Preserve Go recognition rules, API metadata, group IDs, membership, and dictionary order. Node checks exercise actual grouping, trait rendering, scope naming, and selected dictionary IDs in both languages, including unknown values and missing `Intl.DisplayNames`.
+- [ ] Verify the translated categories and their selection on a phone after rebuilding. Check long language-pair labels and confirm that the same category selects the same dictionaries in English and Russian.
 
-Completion: category/language labels are translated in the Russian version, selecting the same categories returns the same dictionaries, and unknown upstream values remain visible with their original names.
+Implementation is complete; device verification is still pending. Future upstream categories fall back to their original server labels until a translation is added.
 
 ## 2. Still to translate: Go/API messages
 
@@ -104,7 +104,7 @@ Checks covered catalogs, served pages, plural forms, preservation of data/identi
 
 An APK was not built or installed during those translation stages. The later preview release did include an APK build, as recorded above; that build is not evidence of phone/emulator verification. The layout stage separately recorded Chromium checks, including simulated text zoom. The full test suite was not rerun during the final translation stages; known baseline problems are documented in `docs/WINDOWS-VERIFY.md`.
 
-This documentation audit checked the guide against the current implementation and corrected the checkout snapshot and verification boundaries. It did not change application code or rerun runtime tests, build an APK, or perform device checks.
+Category localization: targeted `Test(I18n|AppearanceContract)` server tests, `go test ./internal/facet ./internal/lang`, `node tools/i18n-test.cjs`, and `git diff --check` passed. The new Node cases cover labels, language pairs, unknown values, absent language-name support, HTML escaping, unchanged metadata, and identical selected dictionary IDs. No APK build or device check was performed.
 
 ## 7. Maintaining this file
 

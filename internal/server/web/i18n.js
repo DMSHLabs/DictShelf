@@ -12,7 +12,31 @@
     return String(text).replace(/\{([a-zA-Z0-9_]+)\}/g, (match, name) =>
       Object.prototype.hasOwnProperty.call(params, name) ? String(params[name]) : match);
   }
-  window.wudictI18n = Object.freeze({language, t, number: n => numbers.format(n)});
+  let languageNames;
+  try { languageNames = new Intl.DisplayNames([language], {type:"language", fallback:"none"}); } catch (_) {}
+  // Display only: never rewrite memberships or server labels. Unknown values
+  // (including future upstream facets) retain the server's complete label.
+  function facetLabels(g) {
+    if (language === "en") return {fl:g.fl, vl:g.vl};
+    const headings = {lang:"facets.language", pair:"facets.pair", kind:"facets.content", pub:"facets.publisher"};
+    const kinds = {encyclopedia:"facets.encyclopedia", thesaurus:"facets.thesaurus",
+      idioms:"facets.idioms", slang:"facets.slang", etymology:"facets.etymology",
+      abbrev:"facets.abbrev", grammar:"facets.grammar", medical:"facets.medical", legal:"facets.legal"};
+    let vl = g.vl;
+    if (g.f === "kind" && Object.prototype.hasOwnProperty.call(kinds, g.v)) vl = t(kinds[g.v]);
+    if ((g.f === "lang" || g.f === "pair") && languageNames) {
+      const codes = g.f === "pair" ? g.v.split("-") : [g.v];
+      if (codes.length <= 2 && codes.every(c => /^[a-z]{2}$/.test(c))) {
+        try {
+          const names = codes.map(c => languageNames.of(c));
+          if (names.every((n,i) => n && n !== codes[i])) vl = g.f === "pair" && names.length === 1
+            ? t("facets.monolingual", {language:names[0]}) : names.join(" ↔ ");
+        } catch (_) {}
+      }
+    }
+    return {fl:Object.prototype.hasOwnProperty.call(headings, g.f) ? t(headings[g.f]) : g.fl, vl};
+  }
+  window.wudictI18n = Object.freeze({language, t, facetLabels, number: n => numbers.format(n)});
 
   function openLanguage(anchor) {
     if (document.getElementById("uiLanguageDialog")) return;

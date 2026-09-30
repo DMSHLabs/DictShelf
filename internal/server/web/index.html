@@ -2018,8 +2018,8 @@ $("out").addEventListener("click",e=>{
    one repaint instead of ~100 of them. */
 /* The groups the picker offers above the names, assembled from the per-row
    memberships the server derived (internal/facet). The client holds no
-   taxonomy at all: a row says which group it is in, what to head that group
-   with and what to call it, and this only counts and orders.
+   classification rules: a row says which group it is in. Known display labels
+   are localized; unknown labels remain as supplied. This only counts and orders.
 
    Two suppressions, and they are what keeps the list honest rather than
    tidy. A value with ONE member sorts nothing — the dictionary itself is in
@@ -2034,10 +2034,11 @@ function facetGroups(){
   if(!dictsSettled)return []; // mid-stream counts would be wrong, then change
   const byF=new Map();
   for(const d of dicts)for(const g of d.groups||[]){
+    const labels=window.wudictI18n.facetLabels(g);
     let f=byF.get(g.f);
-    if(!f){f={id:g.f,label:g.fl,fo:g.fo,vals:new Map()};byF.set(g.f,f)}
+    if(!f){f={id:g.f,label:labels.fl,fo:g.fo,vals:new Map()};byF.set(g.f,f)}
     const v=f.vals.get(g.v);
-    if(v)v.n++;else f.vals.set(g.v,{id:g.v,label:g.vl,n:1});
+    if(v)v.n++;else f.vals.set(g.v,{id:g.v,label:labels.vl,n:1});
   }
   return [...byF.values()].sort((a,b)=>a.fo-b.fo)
     .map(f=>({id:f.id,label:f.label,
@@ -2057,7 +2058,7 @@ function refreshDictUI(now){
   // last row is in — and then only the remembered one still names the choice.
   const sel=$("dict"),saved=localStorage.getItem("wudict_dict");
   const prev=sel.value&&sel.value!=="all"?sel.value:(saved||sel.value||"all");
-  sel.innerHTML='<option value="all">All dictionaries</option>';
+  sel.innerHTML=`<option value="all">${esc(tx("panel.allDictionaries"))}</option>`;
   /* <optgroup> and nothing more: the heading is the facet and is NOT
      selectable, which is exactly the required behaviour for a section label,
      and every row under it is an ordinary <option> the native picker already
@@ -2249,10 +2250,11 @@ function traits(d){
   const opts=new Set([...$("dict").options].map(o=>o.value));
   const body=gs.map(g=>{
     const sel="g:"+g.f+":"+g.v;
-    const face=`<span class="tk">${esc(g.fl)}</span>${esc(g.vl)}`;
+    const labels=window.wudictI18n.facetLabels(g);
+    const face=`<span class="tk">${esc(labels.fl)}</span>${esc(labels.vl)}`;
     return opts.has(sel)
-      ? `<button class="trait" data-g="${escAttr(sel)}" title="${escAttr(tx("search.traitHint",{name:g.vl}))}">${face}</button>`
-      : `<span class="trait" title="${escAttr(g.fl)}: ${escAttr(g.vl)}">${face}</span>`;
+      ? `<button class="trait" data-g="${escAttr(sel)}" title="${escAttr(tx("search.traitHint",{name:labels.vl}))}">${face}</button>`
+      : `<span class="trait" title="${escAttr(labels.fl)}: ${escAttr(labels.vl)}">${face}</span>`;
   }).join("");
   return `<div class="traits">${body}</div>`;
 }

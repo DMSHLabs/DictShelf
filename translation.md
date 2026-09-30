@@ -169,6 +169,8 @@ Built-in looks and layers are translated **for display** by stable ID. The `look
 
 `All Dictionaries` is a reserved group. Translating its label does not mean renaming the group in the API or changing the reserved-name rule. Likewise, “содержит” is a label, while `contains` is an unchanged mode/feature.
 
+Dictionary categories use `window.wudictI18n.facetLabels(g)` in `i18n.js`. Both `facetGroups()` (selector and scope labels) and `traits()` (dictionary information and tooltips) consume its display-only result. The helper maps known `f`/`v` IDs to `facets.*` catalog keys and uses `Intl.DisplayNames` for language and language-pair labels. English retains the server's labels exactly. Unknown categories/values, publisher names, unsupported language codes, and language labels on browsers without `Intl.DisplayNames` retain server text. If either half of a pair cannot be named, retain the whole original pair label. Do not mutate `d.groups`, change `g:...` values, or localize the recognition tables in Go. Add tests for new mapping keys because these calls are indirect.
+
 ## 6. Interface language versus article language
 
 This is a critical boundary:

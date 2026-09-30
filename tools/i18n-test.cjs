@@ -27,6 +27,47 @@ for (const language of ['en', 'ru']) {
   vm.runInNewContext(script, context);
   const {t} = context.window.wudictI18n;
   const attrEscape=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  // Render real facet consumers and resolve the same scope in both languages.
+  const facet = context.window.wudictI18n.facetLabels;
+  const enGroup={f:'lang',fl:'Language',fo:1,v:'en',vl:'English'};
+  const ruGroup={f:'lang',fl:'Language',fo:1,v:'ru',vl:'Russian'};
+  const dictionaries=[enGroup,enGroup,ruGroup,ruGroup].map((g,i)=>({id:'dict-'+i,groups:[g]}));
+  const original=JSON.stringify(dictionaries);
+  const opts=[{value:'g:lang:en',dataset:{label:facet(enGroup).vl}}];
+  const facetContext={window:context.window,tx:t,dicts:dictionaries,dictsSettled:true,
+    orderedDicts:()=>dictionaries,$:()=>({options:opts}),esc:attrEscape,escAttr:attrEscape};
+  for(const name of ['facetGroups','groupIds','groupLabel','traits']){
+    vm.runInNewContext(main.match(new RegExp('function '+name+'\\([^)]*\\)\\{[\\s\\S]*?\\n}'))[0],facetContext);
+  }
+  const offered=facetContext.facetGroups();
+  assert.equal(offered[0].label,language==='ru'?'Язык':'Language');
+  assert.equal(offered[0].values.find(v=>v.id==='en').label,language==='ru'?'английский':'English');
+  assert.equal(offered[0].values.find(v=>v.id==='en').n,2);
+  assert.equal(JSON.stringify(facetContext.groupIds('g:lang:en')),JSON.stringify(['dict-0','dict-1']));
+  assert.equal(facetContext.groupLabel('g:lang:en'),facet(enGroup).vl);
+  const traitHTML=facetContext.traits(dictionaries[0]);
+  assert.ok(traitHTML.includes('data-g="g:lang:en"'));
+  assert.ok(traitHTML.includes(attrEscape(t('search.traitHint',{name:facet(enGroup).vl}))));
+  assert.equal(JSON.stringify(dictionaries),original);
+  const kindLabels={encyclopedia:'Энциклопедии',thesaurus:'Тезаурусы',idioms:'Идиомы и выражения',
+    slang:'Сленг',etymology:'Этимология',abbrev:'Сокращения',grammar:'Грамматика',medical:'Медицина',legal:'Право'};
+  for(const [v,label] of Object.entries(kindLabels)){
+    assert.equal(facet({f:'kind',fl:'Content',v,vl:fallback['facets.'+v]}).vl,
+      language==='ru'?label:fallback['facets.'+v]);
+  }
+  for(const [v,vl,expected] of [['en-ru','English ↔ Russian','английский ↔ русский'],
+    ['en','Monolingual English','Одноязычные: английский'],['en-zz','Unknown pair','Unknown pair']]){
+    assert.equal(facet({f:'pair',fl:'Language pair',v,vl}).vl,language==='ru'?expected:vl);
+  }
+  assert.equal(facet({f:'pub',fl:'Publisher',v:'oxford',vl:'Oxford'}).vl,'Oxford');
+  const unknown={f:'future',fl:'<New category>',v:'new',vl:'<New value>'};
+  assert.equal(facet(unknown).vl,unknown.vl);
+  assert.ok(facetContext.traits({groups:[unknown]}).includes('&lt;New value&gt;'));
+  assert.equal(facet({f:'kind',fl:'Content',v:'future',vl:'New kind'}).vl,'New kind');
+  assert.equal(facet({f:'lang',fl:'Language',v:'bad_code',vl:'Unlisted language'}).vl,'Unlisted language');
+  const noNames={Intl:{PluralRules:Intl.PluralRules,NumberFormat:Intl.NumberFormat},window:{},document:context.document};
+  vm.runInNewContext(script,noNames);
+  assert.equal(noNames.window.wudictI18n.facetLabels(enGroup).vl,'English');
   const frameContext={tx:t,esc:attrEscape,escAttr:attrEscape,articleFS:18,articleFW:400,
     ARTCSS:'',speakOn:true,frameCSS:()=>'',styleSafe:s=>s};
   vm.runInNewContext(main.match(/function frameDoc\(content,fid,dark,dictID,frag\)\{[\s\S]*?\n}/)[0],frameContext);
