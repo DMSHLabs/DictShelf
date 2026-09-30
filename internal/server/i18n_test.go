@@ -113,6 +113,11 @@ func TestI18nPagesAndCache(t *testing.T) {
 			t.Fatal("partial UI translation changed article segmentation fallback")
 		}
 		if path == "/" {
+			for _, text := range []string{`placeholder="Поиск…"`, `<option value="prefix">начинается с</option>`, `<option value="exact">точно</option>`} {
+				if !strings.Contains(body, text) {
+					t.Errorf("search UI missing %q", text)
+				}
+			}
 			for _, text := range []string{`id="panel" lang="ru"`, `>Настройки`, `>Фон окна…</button>`, `>Слои оформления…</button>`, `>Сохранить оформление</h2>`} {
 				if !strings.Contains(body, text) {
 					t.Errorf("main settings/appearance missing %q", text)

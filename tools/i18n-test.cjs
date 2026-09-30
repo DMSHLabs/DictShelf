@@ -22,6 +22,30 @@ for (const language of ['en', 'ru']) {
   }};
   vm.runInNewContext(script, context);
   const {t} = context.window.wudictI18n;
+  // Exercise actual result rendering: translating the surrounding UI must not
+  // alter headwords, article HTML, dictionary IDs or the index action values.
+  const articles = [];
+  const node = () => ({dataset:{}, children:[], appendChild(n){this.children.push(n)}, addEventListener(){}});
+  const resultContext = {tx:t, window:context.window, document:{createElement:node},
+    esc:s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'),
+    expandAll:false, anchorOnce:null,
+    renderArticle:(dd,body,id)=>{articles.push({body,id});return null}};
+  vm.runInNewContext(main.match(/function renderSlot\(box,h,mode,q,perDict,group\)\{[\s\S]*?\n}/)[0], resultContext);
+  const box=node(), body='<p lang="en">word {query}</p>', headword='<word> {number}';
+  resultContext.renderSlot(box,{dict:'original-id',name:'<Dictionary>',results:[{Headword:headword,Body:body}]},'prefix','word',1,false);
+  assert.match(box.children[0].innerHTML, /&lt;Dictionary&gt;/);
+  assert.ok(box.children[0].innerHTML.includes(t('search.results',{count:1,number:'1+'})));
+  assert.ok(box.children[0].innerHTML.includes(t('search.more')));
+  assert.equal(box.children[0].children[0].children[0].textContent,headword);
+  assert.deepEqual(articles,[{body,id:'original-id'}]);
+  const skipped=node();
+  resultContext.renderSlot(skipped,{dict:'original-id',name:'<Dictionary>',skipped:true},'fts','word',5,false);
+  assert.match(skipped.innerHTML,/data-id="original-id" data-feat="fts"/);
+  assert.ok(skipped.innerHTML.includes(t('search.enableMode',{mode:t('search.fullText')})));
+  for(const [count,word] of [[1,'результат'],[2,'результата'],[5,'результатов'],[11,'результатов'],[21,'результат'],[22,'результата']]){
+    assert.equal(t('search.results',{count,number:count}),`${count} ${language==='ru'?word:count===1?'result':'results'}`);
+  }
+  assert.equal(t('search.noQuery',{query:'<b>{query}</b>'}),language==='ru'?'По запросу «<b>{query}</b>» ничего не найдено':'No results for “<b>{query}</b>”');
   const lemmas = fs.readFileSync(path.join(web, 'lemmas.html'), 'utf8');
   const rowContext = {Intl, window:context.window, tx:t, mb:n=>String(n), document:{
     createElement:()=>({children:[], setAttribute(k,v){this[k]=v}, addEventListener(){}, append(...nodes){this.children.push(...nodes)}})

@@ -171,7 +171,7 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
      search (an empty query never runs one) and it is a control the user has
      a motor habit for. .qbox is a real element at both widths; .pill is
      display:contents above 600px and could not position this. -->
-<button type="button" id="pinBtn" title="Pin search bar" aria-label="Pin search bar" aria-pressed="false" style="margin-right:.3em;"><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false" fill="currentColor"><path d="M4.2 2.2h7.6a1 1 0 0 1 1 1v.4a1 1 0 0 1-1 1h-1.4v3.9l1.8 2.3a.7.7 0 0 1-.55 1.15H8.7v3.35a.7.7 0 0 1-1.4 0V11.95H4.35a.7.7 0 0 1-.55-1.15l1.8-2.3V4.6H4.2a1 1 0 0 1-1-1v-.4a1 1 0 0 1 1-1z"/></svg></button>
+<button type="button" id="pinBtn" title="{{T:search.pin}}" aria-label="{{T:search.pin}}" aria-pressed="false" style="margin-right:.3em;"><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false" fill="currentColor"><path d="M4.2 2.2h7.6a1 1 0 0 1 1 1v.4a1 1 0 0 1-1 1h-1.4v3.9l1.8 2.3a.7.7 0 0 1-.55 1.15H8.7v3.35a.7.7 0 0 1-1.4 0V11.95H4.35a.7.7 0 0 1-.55-1.15l1.8-2.3V4.6H4.2a1 1 0 0 1-1-1v-.4a1 1 0 0 1 1-1z"/></svg></button>
 <span class="qbox" id="qbox">
 <span class="qled" aria-hidden="true">
 <svg class="mag" viewBox="0 0 16 16" focusable="false"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" d="M7.1 2.4a4.7 4.7 0 1 0 0 9.4 4.7 4.7 0 0 0 0-9.4zm3.6 8.3l3 3"/></svg>
@@ -180,14 +180,14 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
 <!-- enterkeyhint is declared, not inferred: type=search happens to label the
      soft key "Search" on most Android builds, but that is a browser default
      and not a contract. -->
-<input type="search" id="q" placeholder="Search…" autocomplete="off" enterkeyhint="search" autofocus aria-label="Search term" disabled>
-<span id="searchHistory" class="search-history" role="group" aria-label="Recent searches" hidden></span>
+<input type="search" id="q" placeholder="{{T:search.input}}" autocomplete="off" enterkeyhint="search" autofocus aria-label="{{T:search.term}}" disabled>
+<span id="searchHistory" class="search-history" role="group" aria-label="{{T:search.history}}" hidden></span>
 </span>
 <span class="seg">
 <span class="chip" id="modeChip" aria-hidden="true"></span>
-<select id="mode" aria-label="Search mode" disabled>
-<option value="prefix">starts with</option>
-<option value="exact">exact</option>
+<select id="mode" aria-label="{{T:search.mode}}" disabled>
+<option value="prefix">{{T:search.prefix}}</option>
+<option value="exact">{{T:search.exact}}</option>
 <option value="contains">{{T:dictUI.contains}}</option>
 <option value="fts">{{T:dictUI.fts}}</option>
 </select>
@@ -206,8 +206,8 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
      as you type. The button's only remaining ground was a magnifier next
      to a magnifier. -->
 <span class="themeSwitch tools"><button type="button" class="btn themeAuto" aria-pressed="false" title="{{T:panel.themeAuto}}">{{T:panel.auto}}</button><button type="button" class="btn themeFlip" aria-pressed="true" title="{{T:panel.themeNight}}">☀☾</button></span>
-<button type="button" class="btn tools" id="wideBtn" title="Toggle wide layout" aria-label="Toggle wide layout">⇔</button>
-<button type="button" class="btn tools" id="expandBtn" title="Expand all results" aria-label="Expand all results" aria-pressed="false">⊞</button>
+<button type="button" class="btn tools" id="wideBtn" title="{{T:search.wide}}" aria-label="{{T:search.wide}}">⇔</button>
+<button type="button" class="btn tools" id="expandBtn" title="{{T:search.expand}}" aria-label="{{T:search.expand}}" aria-pressed="false">⊞</button>
 <button type="button" class="btn tools" id="panelBtn" title="{{T:panel.settings}}" aria-label="{{T:panel.settings}}">☰</button>
 </form>
 </header>
@@ -249,9 +249,9 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
      handle shortens itself - see app.css), never the spacing around it. -->
 <div class="sbar" id="sbar" hidden>
   <span class="rpad edge" aria-hidden="true"></span>
-  <button type="button" class="btn" id="sbarPrev" aria-label="Previous dictionary" title="Jump to the dictionary above — instant, and opens it">▲</button>
+  <button type="button" class="btn" id="sbarPrev" aria-label="{{T:search.previousDict}}" title="{{T:search.jumpAbove}}">▲</button>
   <span class="rpad" aria-hidden="true"></span>
-  <button type="button" class="btn" id="sbarNext" aria-label="Next dictionary" title="Jump to the dictionary below — instant, and opens it">▼</button>
+  <button type="button" class="btn" id="sbarNext" aria-label="{{T:search.nextDict}}" title="{{T:search.jumpBelow}}">▼</button>
   <!-- The dictionary scope, moved here from the search field (2026-09-27, the
        reader's call): it names the place the two arrows walk, so it belongs
        beside them, and the field is left holding only what is about the WORD.
@@ -270,7 +270,7 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
   <span class="rpad floor" aria-hidden="true"></span>
   <span class="seg" id="dictSeg">
     <span class="chip btn" id="dictChip" aria-hidden="true"><svg class="bk" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path fill="currentColor" d="M1.5 3.1c1.9-.5 3.8-.3 5.6.7v8.4c-1.8-1-3.7-1.2-5.6-.7V3.1zm13 0c-1.9-.5-3.8-.3-5.6.7v8.4c1.8-1 3.7-1.2 5.6-.7V3.1z"/></svg><span class="lbl" id="dictLbl"></span></span>
-    <select id="dict" aria-label="Dictionary" disabled><option value="all">All dictionaries</option></select>
+    <select id="dict" aria-label="{{T:search.dictionary}}" disabled><option value="all">{{T:search.all}}</option></select>
   </span>
   <!-- The chip's place in this row is BETWEEN the two floors, which is why this
        one carries an id: placeDictSeg moves the seg back on every paint, and
@@ -283,7 +283,7 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
      acceptable. Which one is drawn is CSS's business (app.css), so nothing has
      to measure the row at runtime and the title/aria-label keep the full word
      in both cases. -->
-  <button type="button" class="btn" data-layer="off" id="sbarExamples" aria-pressed="true" title="Examples are shown — tap to fold the lines that hold nothing but examples"><span class="lbl-full">{{T:panel.examples}}</span><span class="lbl-short" aria-hidden="true">Ex</span></button>
+  <button type="button" class="btn" data-layer="off" id="sbarExamples" aria-pressed="true" title="{{T:search.examplesHint}}"><span class="lbl-full">{{T:panel.examples}}</span><span class="lbl-short" aria-hidden="true">{{T:search.examplesShort}}</span></button>
   <span class="rpad edge" aria-hidden="true"></span>
 </div>
 
@@ -1163,7 +1163,7 @@ function applyBarPinned(on){
   document.body.classList.toggle("barpinned",on);
   const b=$("pinBtn");
   b.setAttribute("aria-pressed",on?"true":"false");
-  const label=on?"Unpin search bar":"Pin search bar";
+  const label=on?tx("search.unpin"):tx("search.pin");
   b.title=label;
   b.setAttribute("aria-label",label);
 }
@@ -1492,7 +1492,7 @@ let expandAll=false;
 function applyExpand(){
   const b=$("expandBtn");
   b.textContent=expandAll?"⊟":"⊞";
-  b.title=expandAll?"Collapse all results":"Expand all results";
+  b.title=expandAll?tx("search.collapse"):tx("search.expand");
   b.setAttribute("aria-label",b.title);
   b.setAttribute("aria-pressed",expandAll?"true":"false");
   b.style.color=expandAll?"var(--accent)":"";
@@ -1648,12 +1648,12 @@ function setPhase(p){
    With the messages off the screen simply stays empty until results arrive,
    which is the point: a message nobody can finish reading is noise. */
 const quietMessages=!!window.wudictShellQuiet;
-const BOOT_MSGS=["Warming up the wok…","Stir-frying the dictionaries…",
-  "Chopping headwords, with the grain…","Letting the definitions marinate…",
-  "Tasting for seasoning…"];
+const BOOT_MSGS=[tx("search.boot1"),tx("search.boot2"),
+  tx("search.boot3"),tx("search.boot4"),
+  tx("search.boot5")];
 let bootTimer=null,bootIdx=0;
 function paintBoot(){
-  $("out").innerHTML=`<div class="empty boot"><span class="spin big"></span><p>${BOOT_MSGS[bootIdx]}</p></div>`;
+  $("out").innerHTML=`<div class="empty boot"><span class="spin big"></span><p>${esc(BOOT_MSGS[bootIdx])}</p></div>`;
 }
 function startBootScreen(){
   if(quietMessages||bootTimer)return;
@@ -1666,8 +1666,8 @@ function stopBootScreen(){
 }
 /* the honest progress line: a count, never a percentage */
 function readyCount(){
-  return dictTotal?`Loading dictionaries — ${dicts.length} of ${dictTotal} ready…`
-                  :"Looking for dictionaries…";
+  return dictTotal?tx("search.ready",{number:dicts.length,total:dictTotal})
+                  :tx("search.looking");
 }
 /* The counter is the other half of the art above it, so it goes with it: the
    same switch, the same silence. Only the FIRST load's line - the three calls
@@ -1678,9 +1678,9 @@ function syncBootStatus(){
 function bootFailed(msg){
   setPhase("failed");
   clearStatus("load");
-  $("out").innerHTML=`<div class="empty"><p>⚠ Could not load your dictionaries.</p>`+
-    `<p>${esc(msg||"unknown error")}</p>`+
-    `<p><button type="button" class="btn" id="retryBtn">Try again</button></p></div>`;
+  $("out").innerHTML=`<div class="empty"><p>${esc(tx("search.bootFailed"))}</p>`+
+    `<p>${esc(msg||tx("search.unknown"))}</p>`+
+    `<p><button type="button" class="btn" id="retryBtn">${esc(tx("search.retry"))}</button></p></div>`;
 }
 $("out").addEventListener("click",e=>{if(e.target.id==="retryBtn")loadDicts()});
 
@@ -1888,7 +1888,7 @@ function scopeLabel(){
   const inBar=$("dictSeg")&&$("dictSeg").parentElement===$("sbar");
   if(d.value==="all"){
     if(!inBar)return "";
-    let name="All dictionaries";
+    let name=tx("search.all");
     try{name=pickerGroupName()}catch(_){}
     return name;
   }
@@ -1906,7 +1906,7 @@ function livePickerPayload(kind){
   if(scoped)groups.splice(1,0,scoped); // under "All dictionaries": the same axis, narrower
   return {kind,groups,group:scoped?scoped.id:pickerGroup,
     found:true,rows:livePickerRows(),
-    empty:livePickerSearching?"Searching…":scoped?"No results in this dictionary":"No results in this group"};
+    empty:livePickerSearching?tx("search.searching"):scoped?tx("search.emptyDict"):tx("search.emptyGroup")};
 }
 function refreshLivePicker(){
   if(!livePickerOpen)return;
@@ -1923,7 +1923,7 @@ window.wudictNativeDictionaryPicker=async function(){
     livePickerOpen=true;
     if(window.prompt("wudict:dictionary-picker",JSON.stringify(livePickerPayload("liveDict")))===null)
       livePickerOpen=false;
-  }catch(e){setStatus("⚠ could not load dictionary groups: "+esc(e.message))}
+  }catch(e){setStatus(esc(tx("search.groupFailed",{error:e.message})))}
   finally{livePickerOpening=false}
 };
 window.wudictPickerClosed=()=>{livePickerOpen=false;clearTimeout(livePickerTimer)};
@@ -2120,12 +2120,12 @@ async function loadDicts(rescan){
   // drop a group the user currently has selected.
   if(blocking)dictsSettled=false;
   if(blocking){setPhase("boot");startBootScreen();dictTotal=0;syncBootStatus()}
-  else setStatus('<span class="spin"></span>Loading dictionaries…',"load");
+  else setStatus('<span class="spin"></span>'+esc(tx("search.loading")),"load");
   const rows=[];
   let published=false,sawBegin=false;
   // "begin" costs the server no opens at all, so its absence means the server
   // is not answering — never leave the form inert waiting on a hang.
-  const watchdog=blocking?setTimeout(()=>{if(!sawBegin)bootFailed("the server is not responding")},20000):null;
+  const watchdog=blocking?setTimeout(()=>{if(!sawBegin)bootFailed(tx("search.serverSilent"))},20000):null;
   try{
     await fetchStream(rescan?"/api/rescan":"/api/dicts",msg=>{
       if(msg.t==="begin"){
@@ -2182,7 +2182,7 @@ function moveDict(id,where){
    words are the ones the mode dropdown, the per-dictionary switch and the
    result summaries all use, and a chip that renamed "full-text" would sever
    the link to every other place it appears. */
-const MODE_SHORT={prefix:"starts",exact:"exact",contains:"contains",fts:"full-text"};
+const MODE_SHORT={prefix:tx("search.prefixShort"),exact:tx("search.exact"),contains:tx("dictUI.contains"),fts:tx("dictUI.fts")};
 /* There was a SCOPE_SHORT map here, holding one entry: all → "All". It existed
    because the chip had to live in the search FIELD, where its cap of 11ch could
    not be widened without taking the room the reader types in — a chip wide
@@ -2258,7 +2258,7 @@ function traits(d){
     const sel="g:"+g.f+":"+g.v;
     const face=`<span class="tk">${esc(g.fl)}</span>${esc(g.vl)}`;
     return opts.has(sel)
-      ? `<button class="trait" data-g="${escAttr(sel)}" title="Search every dictionary under &quot;${escAttr(g.vl)}&quot;">${face}</button>`
+      ? `<button class="trait" data-g="${escAttr(sel)}" title="${escAttr(tx("search.traitHint",{name:g.vl}))}">${face}</button>`
       : `<span class="trait" title="${escAttr(g.fl)}: ${escAttr(g.vl)}">${face}</span>`;
   }).join("");
   return `<div class="traits">${body}</div>`;
@@ -3726,7 +3726,7 @@ addEventListener("message",e=>{
     if(sum&&!sum.querySelector(".jserr")){
       const s=document.createElement("span");
       s.className="jserr";s.textContent="\u26a0";
-      s.title="This dictionary's own script failed: "+(d.msg||"script error");
+      s.title=tx("search.scriptFailed",{error:d.msg||tx("search.unknown")});
       sum.appendChild(s);
     }
   }else if(d.t==="sel"&&d.fid){
@@ -3847,8 +3847,8 @@ function searchScopeName(){
 function scopeNote(id){
   const div=document.createElement("div");
   div.className="scopenote";
-  div.innerHTML=`Followed a link inside <b>${esc(dictName(id))}</b> — only this dictionary was searched. `+
-    `<span class="widen">Search in ${esc(searchScopeName())}</span>`;
+  div.innerHTML=esc(tx("search.scope",{name:dictName(id)}))+" "+
+    `<span class="widen">${esc(tx("search.widen",{name:searchScopeName()}))}</span>`;
   return div;
 }
 /* Said once, after the automatic widening, so the user learns what the link
@@ -3857,8 +3857,7 @@ function scopeNote(id){
 function widenNote(id,q){
   const div=document.createElement("div");
   div.className="scopenote";
-  div.innerHTML=`“${esc(q)}” is not in <b>${esc(dictName(id))}</b>, `+
-    `where the link came from — <b>${esc(searchScopeName())}</b> was searched instead.`;
+  div.textContent=tx("search.widened",{query:q,name:dictName(id),scope:searchScopeName()});
   return div;
 }
 $("out").addEventListener("click",e=>{
@@ -3897,13 +3896,13 @@ const TAPS=matchMedia("(pointer:coarse)").matches;
    over at a dictionary that is already doing the work, which reads as the first
    tap having done nothing. */
 function deferLabel(indexing){
-  return indexing?"preparing…":(TAPS?"tap":"click")+" to search";
+  return indexing?tx("search.preparing"):tx(TAPS?"search.tap":"search.click");
 }
 function loadDeferred(det,box,h,mode,q){
   if(det.dataset.loading)return;
   det.dataset.loading="1";
   const cnt=det.querySelector(".count");
-  if(cnt)cnt.innerHTML='<span class="spin"></span>searching…';
+  if(cnt)cnt.innerHTML='<span class="spin"></span>'+esc(tx("search.searching"));
   let shown=false;
   fetchStream("/api/search?q="+encodeURIComponent(q)+"&mode="+mode+"&hl="+(hlOn?1:0)+"&dict="+encodeURIComponent(h.dict)+"&n=25",msg=>{
     // The user has moved on: a new search replaced every box, so this one is
@@ -3918,7 +3917,7 @@ function loadDeferred(det,box,h,mode,q){
     // point — a section that vanished under the finger it was tapped with
     // would read as a bug.
     box.innerHTML=`<details class="dict" open><summary>${esc(hitName(h))}`+
-      `<span class="count">no results</span></summary></details>`;
+      `<span class="count">${esc(tx("search.noResults"))}</span></summary></details>`;
   }).catch(err=>{
     if(!box.isConnected)return; // superseded and already off screen
     // Re-arm either way: the section stays tappable and a second try is one
@@ -3930,7 +3929,7 @@ function loadDeferred(det,box,h,mode,q){
     const aborted=err.name==="AbortError";
     cnt.classList.toggle("hint",aborted); // an error is not an offer: drop the link colour
     cnt.textContent=aborted?deferLabel(det.dataset.indexing==="1")
-                           :"⚠ "+(err.message||"could not search this dictionary");
+                           :"⚠ "+(err.message||tx("search.failedDict"));
   });
 }
 /* render one dictionary's results into its ordered slot box; returns
@@ -4011,7 +4010,7 @@ function renderSlot(box,h,mode,q,perDict,group){
     det.dataset.deferred=h.dict; // also what excludes it from expand-all
     if(h.indexing)det.dataset.indexing="1";
     det.innerHTML=`<summary>${esc(hitName(h))}`+
-      `<span class="count hint">${deferLabel(h.indexing)}</span></summary>`;
+      `<span class="count hint">${esc(deferLabel(h.indexing))}</span></summary>`;
     // `toggle` does not bubble, so this is bound to the element rather than
     // delegated on #out. It is not `once`: a failed load re-arms itself.
     det.addEventListener("toggle",()=>{if(det.open)loadDeferred(det,box,h,mode,q)});
@@ -4046,21 +4045,21 @@ function renderSlot(box,h,mode,q,perDict,group){
          link-scoped search keeps its own `shown`, and with it the guard that
          stops a scoped miss from silently widening. */
       if(group)return{shown:true,noIndex:{dict:h.dict,name:h.name,feat}};
-      const what=feat==="fts"?"full-text search":"substring search";
+      const what=feat==="fts"?tx("search.fullText"):tx("search.substring");
       box.innerHTML=`<details class="dict"><summary>${esc(h.name)}`+
-        `<span class="upgrade" data-id="${h.dict}" data-feat="${feat}">enable ${what} for this dictionary</span></summary></details>`;
+        `<span class="upgrade" data-id="${h.dict}" data-feat="${feat}">${esc(tx("search.enableMode",{mode:what}))}</span></summary></details>`;
       return{shown:true};
     }
     return{};
   }
   if(!h.results?.length)return{};
   const det=document.createElement("details");det.className="dict";
-  const more=h.results.length>=perDict?`<span class="more" data-id="${h.dict}">more…</span>`:"";
+  const more=h.results.length>=perDict?`<span class="more" data-id="${h.dict}">${esc(tx("search.more"))}</span>`:"";
   // Only for a multi-word full-text query: a single word has no phrase to fail
   // at, and every other mode has no ladder at all.
   const rung=mode==="fts"&&/\s/.test(q||"")&&(h.rung==="near"||h.rung==="words")
-    ?`<span class="rung">phrase not found · ${h.rung==="near"?"words proximity":"words anywhere"} · </span>`:"";
-  det.innerHTML=`<summary>${esc(h.name)}<span class="count">${rung}${h.results.length}${more?"+":""} result${h.results.length===1?"":"s"}</span>${more}</summary>`;
+    ?`<span class="rung">${esc(tx(h.rung==="near"?"search.phraseNear":"search.phraseWords"))} · </span>`:"";
+  det.innerHTML=`<summary>${esc(h.name)}<span class="count">${rung}${esc(tx("search.results",{count:h.results.length,number:window.wudictI18n.number(h.results.length)+(more?"+":"")}))}</span>${more}</summary>`;
   const dl=document.createElement("dl"),roots=[];
   for(const r of h.results){
     const dt=document.createElement("dt");dt.textContent=r.Headword;
@@ -4099,12 +4098,11 @@ function noIndexRow(el,out,info){
   }
   const list=el.lastElementChild,row=document.createElement("div");
   row.innerHTML=`<span>${esc(info.name)}</span>`+
-    `<span class="upgrade" data-id="${info.dict}" data-feat="${info.feat}">enable</span>`;
+    `<span class="upgrade" data-id="${info.dict}" data-feat="${info.feat}">${esc(tx("search.enable"))}</span>`;
   list.appendChild(row);
   const n=list.childElementCount;
   el.firstElementChild.textContent=
-    `${n} dictionar${n===1?"y has":"ies have"} no `+
-    (info.feat==="fts"?"full-text":"substring")+" index";
+    tx(info.feat==="fts"?"search.noFTS":"search.noSubstring",{count:n,number:window.wudictI18n.number(n)});
   return el;
 }
 
@@ -4157,8 +4155,8 @@ async function doSearch(ev){
       livePickerSearching=false;
       setBusy(false); // nothing was ever sent; both branches below are statements
       setStatus(settled
-        ?(lbl?`“${esc(lbl)}” is empty — add dictionaries in Edit dictionary groups`
-             :"⚠ No dictionaries to search — add some from Edit folders…")
+        ?(lbl?esc(tx("search.groupEmpty",{name:lbl}))
+             :esc(tx("search.noDicts")))
         :'<span class="spin"></span>'+esc(readyCount()));
       if(!settled)staleSearch=true;
       return;
@@ -4300,10 +4298,8 @@ async function doSearch(ev){
           morphNote.className="scopenote morphnote";
           out.insertBefore(morphNote,boxes[0]);
         }
-        const forms=[...morphSeen].map(w=>`<b>${esc(w)}</b>`).join(", ");
-        morphNote.innerHTML=morphAll
-          ?`Nothing found for “${esc(msg.from||q)}” — showing results for ${forms}`
-          :`Some dictionaries do not list “${esc(msg.from||q)}” — also showing results for ${forms}`;
+        const forms=[...morphSeen].join(", ");
+        morphNote.textContent=tx(morphAll?"search.morphAll":"search.morphSome",{query:msg.from||q,forms});
       }else if(msg.t==="end"){
         refreshLivePicker();
         // Nothing further can resolve the frontier, so release the hold and
@@ -4330,7 +4326,7 @@ async function doSearch(ev){
            no-index line IS the answer; otherwise the line keeps its place
            under the empty state, which innerHTML would otherwise drop. */
         if(!anyShown&&noIdxCount<boxes.length){
-          out.innerHTML=`<div class="empty">${noResultsSVG}<p>No results for “${esc(q)}”</p></div>`;
+          out.innerHTML=`<div class="empty">${noResultsSVG}<p>${esc(tx("search.noQuery",{query:q}))}</p></div>`;
           if(noIdx)out.appendChild(noIdx);
         }
         if(scope&&anyShown)out.appendChild(scopeNote(scope));
@@ -4339,7 +4335,7 @@ async function doSearch(ev){
         // incomplete answer look complete, and re-run when the rest lands.
         if(phase==="partial"){
           staleSearch=true;
-          setStatus(`searched ${dicts.length} of ${dictTotal||dicts.length} dictionaries — still loading…`);
+          setStatus(esc(tx("search.partial",{number:dicts.length,total:dictTotal||dicts.length})));
         }
       }
     },signal);
@@ -4361,7 +4357,7 @@ document.addEventListener("click",e=>{
   more.textContent="…";
   fetchStream("/api/search?q="+encodeURIComponent(lastQuery)+"&mode="+mode+"&hl="+(hlOn?1:0)+"&dict="+id+"&n=100",msg=>{
     if(msg.t==="hit"){renderSlot(box,msg,mode,lastQuery,1e9);const nd=box.querySelector("details.dict");if(nd)nd.open=true}
-  }).catch(()=>{more.textContent="more…"});
+  }).catch(()=>{more.textContent=tx("search.more")});
 });
 
 /* Typing updates suggestions; committing the field updates articles. */
@@ -4618,11 +4614,11 @@ function navBuild(){
   if(navEl)return navEl;
   navEl=document.createElement("span");
   navEl.className="mnav";navEl.hidden=true;
-  navEl.setAttribute("role","group");navEl.setAttribute("aria-label","matches");
+  navEl.setAttribute("role","group");navEl.setAttribute("aria-label",tx("search.matches"));
   navEl.innerHTML=
-    '<span class="mbtn" role="button" tabindex="0" data-step="-1" aria-label="Previous match">\u2039</span>'+
+    '<span class="mbtn" role="button" tabindex="0" data-step="-1" aria-label="'+escAttr(tx("search.previousMatch"))+'">\u2039</span>'+
     '<span class="mpos" aria-live="polite"></span>'+
-    '<span class="mbtn" role="button" tabindex="0" data-step="1" aria-label="Next match">\u203a</span>';
+    '<span class="mbtn" role="button" tabindex="0" data-step="1" aria-label="'+escAttr(tx("search.nextMatch"))+'">\u203a</span>';
   const hit=e=>{
     // The whole control sits inside a <summary>, whose default action is to
     // collapse the very section being walked - so every event that lands on it
@@ -4819,10 +4815,10 @@ async function toggleSub(link,word,dictID){
       let m;try{m=JSON.parse(line)}catch(_){continue}
       if(m.t==="hit"&&m.results?.length)html=m.results[0].Body;
     }
-    if(html===null){box.textContent="(not in this dictionary)";return}
+    if(html===null){box.textContent=tx("search.notHere");return}
     box.innerHTML=`<span class="wu-sub-close" title="${escAttr(tx("panel.close"))}">✕</span>`+html.replace(/<link\b[^>]*>/gi,"");
     box.querySelector(".wu-sub-close").addEventListener("click",()=>toggleSub(link,word,dictID));
-  }catch(_){box.textContent="(could not load)"}
+  }catch(_){box.textContent=tx("search.loadFailed")}
 }
 
 document.addEventListener("dblclick",e=>{
