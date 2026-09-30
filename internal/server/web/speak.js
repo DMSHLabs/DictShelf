@@ -15,6 +15,7 @@
 (function () {
 "use strict";
 if (window.wuSpeak) return;
+const tx = window.wudictI18n.t;
 
 // Android's getMaxSpeechInputLength floor; a selection past it is a page, not
 // a phrase, and reading it all would hold the device for minutes.
@@ -112,7 +113,7 @@ function decide(sc, a, h) {
 let langNames = null;
 function langName(code) {
   try {
-    langNames = langNames || new Intl.DisplayNames([navigator.language, "en"], { type: "language" });
+    langNames = langNames || new Intl.DisplayNames([window.wudictI18n.language, "en"], { type: "language" });
     return langNames.of(code) || code;
   } catch (_) { return code }
 }
@@ -122,6 +123,15 @@ function langName(code) {
 // the page has loaded.
 const S = () => window.speechSynthesis;
 let voices = [], voicesDone = false, voicesStarted = false;
+
+// The shell supplies generated locale labels; browser voice names may be
+// brands. Translate only the former, never the voice identity used by say().
+function voiceLabel(v) {
+  if (!window.__wdSpeech) return v.label || v.name;
+  const peers = voices.filter(x => x.lang === v.lang).slice().sort((a,b) => String(a.name).localeCompare(String(b.name)));
+  const n = peers.indexOf(v) + 1;
+  return langName(v.lang) + (n > 1 ? " " + n : "") + (v.localService === false ? " · " + tx("speech.online") : "");
+}
 
 function readVoices() {
   try { voices = (S() && S().getVoices()) || [] } catch (_) { voices = [] }
@@ -269,7 +279,7 @@ function fail(er, L) {
   else console.warn("wudict: read aloud failed:", er || "unknown error");
 }
 
-const noVoice = L => "No voice for " + langName(L) + " on this device";
+const noVoice = L => tx("speech.noVoice", {language: langName(L)});
 
 // ------------------------------------------------------------- the stash
 // What was selected when it settled. Speaking reads this, never the live
@@ -335,12 +345,15 @@ function build() {
   ui.className = "wd-speak";
   ui.hidden = true;
   ui.innerHTML = '<button type="button" class="wd-sp-main"></button>' +
-    '<button type="button" class="wd-sp-more" aria-haspopup="menu" aria-expanded="false" ' +
-    'aria-label="Voice" title="Voice">' + ICON_MORE + "</button>";
+    '<button type="button" class="wd-sp-more" aria-haspopup="menu" aria-expanded="false">' + ICON_MORE + "</button>";
   mainBtn = ui.firstChild;
   moreBtn = ui.lastChild;
+  moreBtn.setAttribute("aria-label", tx("speech.voice"));
+  moreBtn.title = tx("speech.voice");
+  ui.lang = window.wudictI18n.language;
   menu = document.createElement("div");
   menu.className = "wd-sp-menu";
+  menu.lang = window.wudictI18n.language;
   menu.setAttribute("role", "menu");
   menu.hidden = true;
   // Pressing the icon must not take the selection or the focus away from the
@@ -365,7 +378,7 @@ function setBusy(v) {
   if (!mainBtn) return;
   ui.classList.toggle("busy", v);
   mainBtn.innerHTML = v ? ICON_STOP : ICON_SPEAK;
-  const label = v ? "Stop reading" : "Read aloud";
+  const label = v ? tx("speech.stop") : tx("speech.read");
   mainBtn.setAttribute("aria-label", label);
   mainBtn.title = label;
 }
@@ -466,19 +479,19 @@ function openMenu(note, focusFirst) {
   }
   if (stash.alts.length) {
     rule();
-    for (const l of stash.alts) add("Read as " + langName(l), "", () => go(l, null));
+    for (const l of stash.alts) add(tx("speech.readAs", {language: langName(l)}), "", () => go(l, null));
   }
   const L = stash.lang, vs = voicesFor(L);
   if (vs.length) {
     rule();
     const cur = pickVoice(L);
-    for (const v of vs.slice().sort((a, b) => String(a.label || a.name).localeCompare(String(b.label || b.name))))
-      add(v.label || v.name, v.lang, () => {
+    for (const v of vs.slice().sort((a, b) => String(voiceLabel(a)).localeCompare(String(voiceLabel(b)))))
+      add(voiceLabel(v), v.lang, () => {
         try { localStorage.setItem(VOICE_KEY + L, v.voiceURI) } catch (_) { }
         say(stash.text, L, v); // choosing IS the preview
       }, v === cur);
   }
-  if (settings()) { rule(); add("Speech settings…", "", () => window.__wdSpeech.settings()) }
+  if (settings()) { rule(); add(tx("speech.settings"), "", () => window.__wdSpeech.settings()) }
   if (!menu.childNodes.length) return;
   menu.hidden = false;
   moreBtn.setAttribute("aria-expanded", "true");

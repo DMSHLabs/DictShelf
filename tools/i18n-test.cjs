@@ -10,6 +10,8 @@ const main = fs.readFileSync(path.join(web, 'index.html'), 'utf8');
 const looks = fs.readFileSync(path.join(web, 'looks.js'), 'utf8');
 new vm.Script(looks, {filename: 'looks.js'});
 const groups = fs.readFileSync(path.join(web, 'group-editor.js'), 'utf8');
+const speech = fs.readFileSync(path.join(web, 'speak.js'), 'utf8');
+new vm.Script(speech, {filename:'speak.js'});
 new vm.Script(groups, {filename: 'group-editor.js'});
 assert.doesNotMatch(main, /\s(?:title|aria-label)=tx\(/, 'HTML attributes must interpolate and escape translated text');
 const manifest = JSON.parse(fs.readFileSync(path.join(web, 'presets/manifest.json'), 'utf8'));
@@ -22,6 +24,33 @@ for (const language of ['en', 'ru']) {
   }};
   vm.runInNewContext(script, context);
   const {t} = context.window.wudictI18n;
+  const speechContext = {Intl, window:{wudictI18n:context.window.wudictI18n},
+    navigator:{language:'de-DE',languages:['de-DE']}, localStorage:{getItem:()=>null}};
+  const exposed = speech.replace('window.wuSpeak = {',
+    'window.testSpeech = {decide, langName, voiceLabel, pickVoice, noVoice, setVoices: v => voices = v};\nwindow.wuSpeak = {');
+  vm.runInNewContext(exposed,speechContext);
+  const sp = speechContext.window.testSpeech;
+  assert.equal(sp.langName('en'),language==='ru'?'английский':'English');
+  assert.equal(sp.decide('Latn','en','ru'),'en');
+  assert.equal(sp.decide('Cyrl','en','ru'),'ru');
+  assert.equal(sp.decide('Latn','',''),'de'); // speech fallback retains its own rules
+  const voice={name:'Engine brand {language}',voiceURI:'stable-id',lang:'en-US',localService:true};
+  sp.setVoices([voice]);
+  assert.equal(sp.voiceLabel(voice),voice.name); // browser-provided name is literal
+  speechContext.window.__wdSpeech={};
+  assert.equal(sp.voiceLabel(voice),sp.langName('en-US'));
+  assert.equal(sp.pickVoice('en'),voice);
+  assert.equal(sp.noVoice('en'),t('speech.noVoice',{language:sp.langName('en')}));
+  const writes=[],notes=[];
+  const systemContext={tx:t,sysNote:s=>notes.push(s),sysSet:r=>writes.push(r)};
+  vm.runInNewContext(main.match(/function sysCommitNumber\(row,field\)\{[\s\S]*?\n}/)[0],systemContext);
+  const row={key:'SEARCH_MEMORY',stored:'64',min:0,max:512};
+  const field={value:'900'};
+  systemContext.sysCommitNumber(row,field);
+  assert.equal(field.value,'64');assert.equal(writes.length,0);
+  assert.equal(notes[0],t('system.invalid',{value:'900',min:0,max:512}));
+  field.value='128';systemContext.sysCommitNumber(row,field);
+  assert.equal(JSON.stringify(writes[0]),JSON.stringify({action:'set',field:'override',key:'SEARCH_MEMORY',value:'128'}));
   // Exercise actual result rendering: translating the surrounding UI must not
   // alter headwords, article HTML, dictionary IDs or the index action values.
   const articles = [];

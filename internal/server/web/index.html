@@ -706,40 +706,27 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
      before they are true.
      A browser has no such bridge, so the door that opens this window is not
      drawn there; the window itself is only reachable through that door. -->
-<dialog id="sysSettings" class="group-dialog panel-card" aria-labelledby="sysSettingsTitle">
-  <h2 id="sysSettingsTitle">System Settings <button type="button" class="btn" id="closeSysSettings" aria-label="Close system settings">✕</button></h2>
+<dialog id="sysSettings" lang="{{T:locale}}" class="group-dialog panel-card" aria-labelledby="sysSettingsTitle">
+  <h2 id="sysSettingsTitle">{{T:system.title}} <button type="button" class="btn" id="closeSysSettings" aria-label="{{T:system.close}}">✕</button></h2>
   <div class="panel-scroll" id="sysScroll">
-    <h3 class="sys-head">Look up in the full app</h3>
-    <p class="sys-hint">Otherwise a lookup floats over the app you were reading.</p>
-    <label class="sys-row"><input type="checkbox" id="sysToolbar"><span class="sys-label">From the text selection menu</span></label>
-    <label class="sys-row"><input type="checkbox" id="sysShare"><span class="sys-label">From the share menu</span></label>
-    <label class="sys-row"><input type="checkbox" id="sysLink"><span class="sys-label">From links and automation</span></label>
-    <label class="sys-row"><input type="checkbox" id="sysReader"><span class="sys-label">From a reading app's dictionary button</span></label>
+    <h3 class="sys-head">{{T:system.lookup}}</h3>
+    <p class="sys-hint">{{T:system.lookupHint}}</p>
+    <label class="sys-row"><input type="checkbox" id="sysToolbar"><span class="sys-label">{{T:system.selection}}</span></label>
+    <label class="sys-row"><input type="checkbox" id="sysShare"><span class="sys-label">{{T:system.share}}</span></label>
+    <label class="sys-row"><input type="checkbox" id="sysLink"><span class="sys-label">{{T:system.links}}</span></label>
+    <label class="sys-row"><input type="checkbox" id="sysReader"><span class="sys-label">{{T:system.reader}}</span></label>
 
-    <h3 class="sys-head">Messages</h3>
-    <p class="sys-hint">The notes this app puts on screen while it is starting and
-       while it is looking a word up — the “Starting…” line, the waiting art, the
-       “N of M ready” counter, and the “Looking up …” line in the floating window.
-       They are true and they pass in a moment, which is why they can be turned
-       off: with this off, a window stays empty until its results arrive. A failure
-       is still reported, and so is the note that the answers below are for a
-       different form of the word you typed.</p>
-    <label class="sys-row"><input type="checkbox" id="sysInfo"><span class="sys-label">Show info messages</span></label>
+    <h3 class="sys-head">{{T:system.messages}}</h3>
+    <p class="sys-hint">{{T:system.messagesHint}}</p>
+    <label class="sys-row"><input type="checkbox" id="sysInfo"><span class="sys-label">{{T:system.showInfo}}</span></label>
 
-    <h3 class="sys-head">Access</h3>
-    <p class="sys-hint">Other apps on this phone can reach the dictionary server.
-       With this on, they can look words up but cannot change anything — no
-       importing, preparing or removing dictionaries, and no settings. Turn it off
-       if another app should be able to change things too. Takes effect the next
-       time the app starts.</p>
-    <label class="sys-row"><input type="checkbox" id="sysKey"><span class="sys-label">Only this app may change your dictionaries</span></label>
+    <h3 class="sys-head">{{T:system.access}}</h3>
+    <p class="sys-hint">{{T:system.accessHint}}</p>
+    <label class="sys-row"><input type="checkbox" id="sysKey"><span class="sys-label">{{T:system.key}}</span></label>
 
-    <h3 class="sys-head">Browser cache</h3>
-    <p class="sys-hint">Throws away the copies of the page's files this app keeps
-       on the device, then loads the page again — for when an update leaves it
-       showing something old. Your dictionaries, their indexes and your settings
-       are not touched.</p>
-    <div class="group-toolbar"><button type="button" class="btn" id="sysClearCache">Clear browser cache</button></div>
+    <h3 class="sys-head">{{T:system.cache}}</h3>
+    <p class="sys-hint">{{T:system.cacheHint}}</p>
+    <div class="group-toolbar"><button type="button" class="btn" id="sysClearCache">{{T:system.clearCache}}</button></div>
 
     <!-- Advanced FOLDS, and starts folded (the reader's ask, 2026-09-28). Two
          reasons it is the one group that does: its rows are the server's own
@@ -754,11 +741,9 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
          it again on every open, because "folded by default" is what the reader
          asked for and a surface that is not rebuilt between visits would
          otherwise keep whatever it was left in. -->
-    <button type="button" class="sys-fold" id="sysAdvBar" aria-expanded="false" aria-controls="sysAdvBody">Advanced</button>
+    <button type="button" class="sys-fold" id="sysAdvBar" aria-expanded="false" aria-controls="sysAdvBody">{{T:system.advanced}}</button>
     <div id="sysAdvBody" hidden>
-      <p class="sys-hint">These change how the dictionary server itself runs. Leave
-         them alone unless you know what they do. Anything left empty follows the
-         settings file.</p>
+      <p class="sys-hint">{{T:system.advancedHint}}</p>
       <!-- The rows themselves, drawn from the shell's answer (sysRowsRender):
            a switch per BOOL key, a number field per count, each with its own
            label, hint and bounds. Empty in markup on purpose - what is in here
@@ -772,7 +757,7 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
            rather than a margin on the button, so it is the same whether the
            group is open or closed. -->
       <div class="sys-gap" aria-hidden="true"></div>
-      <div class="group-toolbar"><button type="button" class="btn" id="sysRestore">Restore defaults</button></div>
+      <div class="group-toolbar"><button type="button" class="btn" id="sysRestore">{{T:system.restore}}</button></div>
     </div>
 
     <!-- The running server was started with different values (sysStale), and
@@ -2726,7 +2711,7 @@ function sysRowBuild(row){
     if(row.kind==="mb"){
       const unit=document.createElement("span");
       unit.className="sys-unit";
-      unit.textContent="MB";
+      unit.textContent=tx("system.mb");
       line.appendChild(unit);
     }
     entry.field=field;
@@ -2758,14 +2743,14 @@ function sysEffectPaint(){
     const row=entry.row,seen=sysSeen(row,eff);
     let text=row.hint;
     if(row.kind!=="bool"){
-      text+=" Between "+row.min+" and "+row.max+(row.kind==="mb"?" MB":"")+".";
+      text+=" "+tx("system.range",{min:row.min,max:row.max,unit:row.kind==="mb"?" "+tx("system.mb"):""});
       entry.field.placeholder=seen==null?"":sysBare(row.kind,seen);
     }
-    if(seen!=null)text+=" In effect now: "+sysSeenText(row,seen)+".";
+    if(seen!=null)text+=" "+tx("system.effective",{value:sysSeenText(row,seen)});
     if(row.lan&&entry.field.checked){
       const ip=sysState&&sysState.lan;
-      text+=" "+(ip?"While it is on, other devices on this network would use "+ip+":"+sysState.port+"."
-                  :"This phone is not on a network right now.");
+      text+=" "+(ip?tx("system.address",{address:ip+":"+sysState.port})
+                  :tx("system.offline"));
     }
     entry.hint.textContent=text;
   }
@@ -2830,7 +2815,7 @@ function sysMb(value){
 function sysStalePaint(){
   const stale=sysIsStale();
   $("sysStale").hidden=!stale;
-  $("sysStale").textContent=stale?"The dictionary server is still running with the previous settings. It will pick them up the next time the app is opened.":"";
+  $("sysStale").textContent=stale?tx("system.stale"):"";
 }
 function sysIsStale(){
   if(!sysState||!sysCfg)return false;
@@ -2890,7 +2875,7 @@ function sysCommitNumber(row,field){
   }
   const n=Number(typed);
   if(!/^\d+$/.test(typed)||n<row.min||n>row.max){
-    sysNote("“"+typed+"” must be a whole number between "+row.min+" and "+row.max+".");
+    sysNote(tx("system.invalid",{value:typed,min:row.min,max:row.max}));
     field.value=stored;
     return;
   }
@@ -2931,8 +2916,8 @@ $("sysKey").addEventListener("change",e=>sysSwitch("key",e.target.checked));
    is confirmed. Clearing writes nothing anywhere else - it withdraws the
    overrides, and "follow the settings file" is what an absent override is. */
 $("sysRestore").onclick=()=>{
-  if(!confirm("Clear every advanced setting and go back to what the settings file says?"))return;
-  if(sysSet({action:"restore"}))sysNote("Advanced settings cleared.");
+  if(!confirm(tx("system.restoreQuestion")))return;
+  if(sysSet({action:"restore"}))sysNote(tx("system.restored"));
 };
 /* Clear browser cache: the shell throws away the copies of THIS APP'S files the
    WebView keeps and loads the page again, in this window. Nothing of the
@@ -2940,7 +2925,7 @@ $("sysRestore").onclick=()=>{
    why it is not confirmed, and the answer to the tap is the page coming back
    rather than a sentence about it. */
 $("sysClearCache").onclick=()=>{
-  if(!sysRequest({action:"clearCache"}))sysNote("Could not clear the cache.");
+  if(!sysRequest({action:"clearCache"}))sysNote(tx("system.cacheFailed"));
 };
 
 /* Coming back from `Lemmatization…` or `Edit folders…` puts the reader back in

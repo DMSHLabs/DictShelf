@@ -216,7 +216,7 @@ func TestI18nCatalogs(t *testing.T) {
 	// This checks explicit translation references, not arbitrary new English
 	// upstream literals. Those still need review when merging upstream changes.
 	refs := regexp.MustCompile(`\b(?:t|tx)\("([a-zA-Z0-9_.]+)"`)
-	for _, file := range []string{"web/index.html", "web/setup.html", "web/lemmas.html", "web/browse.html", "web/i18n.js", "web/looks.js", "web/group-editor.js"} {
+	for _, file := range []string{"web/index.html", "web/setup.html", "web/lemmas.html", "web/browse.html", "web/i18n.js", "web/looks.js", "web/group-editor.js", "web/speak.js"} {
 		data, err := os.ReadFile(file)
 		if err != nil {
 			t.Fatal(err)
