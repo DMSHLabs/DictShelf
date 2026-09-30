@@ -4,7 +4,7 @@ Updated 2026-09-30. Implementation rules are in [translation.md](translation.md)
 
 ## Checkout state
 
-Rechecked 2026-09-30 for category localization: user-selected branch `translation`, HEAD `6dfab3c`, clean at session start. Category-label localization, its tests, and documentation updates are now uncommitted. The Settings label layout fix was committed as `156e802` (`Settings pane layout fix`). The label column is measured (`panelRowColumns()` in `index.html` → `--rlcol` on the section), the drawer's `#panel:lang(ru)` rule was removed from `i18n.css`, the Results strip no longer clips “Читать вслух,” and the three appearance buttons move as a single `iconrow` block. The separate `#styler:lang(ru)` toolbar rule remains. Rules and measurements are in `docs/ANDROID-UI-HANDOFF.md`, “The drawer's rows are read down ONE column per section”; verified in Chromium at 320/360/375/393/412px in both languages and with simulated 1.4× text zoom, **not verified on a phone**. Check the actual `git status` before working: this snapshot becomes outdated quickly.
+Rechecked 2026-09-30 for server-message localization: branch `translation`, HEAD `45e99df`, clean at session start. Category localization and the README upstream merge are committed. The current uncommitted slice adds known server-error translations, tests, and documentation. The Settings label layout fix was committed as `156e802` (`Settings pane layout fix`). The label column is measured (`panelRowColumns()` in `index.html` → `--rlcol` on the section), the drawer's `#panel:lang(ru)` rule was removed from `i18n.css`, the Results strip no longer clips “Читать вслух,” and the three appearance buttons move as a single `iconrow` block. The separate `#styler:lang(ru)` toolbar rule remains. Rules and measurements are in `docs/ANDROID-UI-HANDOFF.md`, “The drawer's rows are read down ONE column per section”; verified in Chromium at 320/360/375/393/412px in both languages and with simulated 1.4× text zoom, **not verified on a phone**. Check the actual `git status` before working: this snapshot becomes outdated quickly.
 
 **Preview `wudict2-v0.6.0-ru.1` published** (2026-09-30, at the user's request). Tag on `01a1438`, APK built with `build-android.cmd release`: `versionName='wudict2-v0.6.0-ru.1'`, versionCode 426, `locales: '--_--' 'ru'` and the `web/i18n/ru.json` catalog with Russian strings confirmed inside the APK, sha256 `d1af995b935fcefbcdf69cff0bdf38b02fef85dcb6dc46fe2f0ae84833b56935`, same signing certificate as previous releases. The release is marked **pre-release**, at publication, `latest` remained stable v0.5.0: https://github.com/DmShAl/wudict2/releases/tag/wudict2-v0.6.0-ru.1. The build comes from a branch that also contains all unreleased `dev` work, so the release notes describe that work too. Before publishing: `TestI18n` and `TestAppearanceContract` passed, `git diff --check` was clean, `make i18n-check-js` was **not run** — that release run reported Node unavailable; this does not supersede the earlier successful Node checks.
 
@@ -40,15 +40,16 @@ A checkmark means implemented in code, **not** exhaustively tested on a phone.
 
 Implementation is complete; device verification is still pending. Future upstream categories fall back to their original server labels until a translation is added.
 
-## 2. Still to translate: Go/API messages
+## 2. Go/API messages: common cases implemented, deeper diagnostics remain
 
-- [ ] Collect messages actually visible to readers during import, index preparation, removal, downloads, lemma handling, path/configuration handling, and file saving. Do not begin by replacing every English string in Go.
-- [ ] Separate the user-understandable cause from technical diagnostics (`HTTP`, OS/library text, addresses, paths).
-- [ ] Choose a contract for each family: stable error code + parameters translated on the client, or localization in a specific server HTML path. A general per-request locale is not implemented and is not automatically required.
-- [ ] Preserve client compatibility when extending APIs. Do not replace semantic values with Russian strings or break English API tests merely for localization.
-- [ ] Check both languages and an unknown error: it must remain visible rather than disappearing behind an unknown key.
+- [x] Add a shared display-only adapter for known legacy server messages: import/archive/download restrictions, missing paths/files, lemma configuration and download validation, preparation/removal, saved looks, styles, presets, and file saving.
+- [x] Connect immediate errors and asynchronous import/lemma/ingest/search failures. Preserve filenames, paths, checksum values, diagnostic suffixes, unknown messages, and English responses.
+- [x] Keep existing API response fields and operation behavior unchanged. The adapter uses bounded exact/prefix matches and explicit complete-message templates; see `translation.md` for its maintenance contract.
+- [x] Verify catalogs, registered mappings, parameter preservation, unknown-error fallback, and actual import/lemma/search rendering with Go/Node checks. Escape saved-look application failures before passing them to the HTML status renderer.
+- [ ] Audit deeper failures as they are encountered: archive/parser/OS/network diagnostics, malformed lemma catalogues, less common removal refusals, and authentication/host errors. Do not mechanically translate all Go strings or arbitrary diagnostic substrings.
+- [ ] Verify representative failures on a phone: inaccessible folder, unsupported/password-protected archive, missing companion files, failed download, and failed saving. Local fixtures are not a device test.
 
-Local solutions already exist: `groupErrorText()` maps known group messages and leaves unfamiliar ones unchanged; the Folders page translates the known `folder not found` message. This is not a universal error system. Do not spread long-text matching without restraint; evaluate stable codes when extending it.
+`groupErrorText()` still handles group-specific validation. The Folders page now uses the shared `errorText()` adapter, including `folder not found`. This is not a universal error system; new API families should prefer stable error codes.
 
 Completion: common expected errors have a translated, understandable explanation, unknown technical details remain available, and API values and operation behavior are preserved.
 
@@ -91,6 +92,8 @@ Do not run these actions automatically in the emulator: the user has currently t
 - [ ] **Main-page `html lang`:** do not switch it before separating the article-segmentation fallback from the UI language. Retaining `en` is currently intentional. This is an accessibility/language-architecture task, not a mechanical attribute replacement.
 
 ## 6. What was verified locally
+
+Server-message slice: `node tools/i18n-test.cjs`, targeted `Test(I18n|AppearanceContract)` server tests, and `git diff --check` passed. New checks cover registered exact/prefix mappings, literal parameters, unknown-error fallback, and import/lemma/search failure rendering. No APK build, full-suite run, or device check.
 
 At the last stage before these documents were created, the following passed:
 

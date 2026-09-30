@@ -39,7 +39,7 @@ async function looksFetch(path, method, body) {
     headers: body ? { "Content-Type": "application/json" } : undefined,
     body: body ? JSON.stringify(body) : undefined,
   });
-  if (!r.ok) throw new Error((await r.text()).trim() || "HTTP " + r.status);
+  if (!r.ok) throw new Error(window.wudictI18n.errorText((await r.text()).trim()) || "HTTP " + r.status);
   return r.json();
 }
 
@@ -188,7 +188,7 @@ async function looksApply(id) {
   try {
     answer = await looksFetch("/api/looks/apply", "POST", Object.assign({ id }, looksNow()));
   } catch (e) {
-    setStatus(tx("panel.applyFailed", {error: e.message}));
+    setStatus(esc(tx("panel.applyFailed", {error: e.message})));
     return;
   }
   if (answer.needsConfirm) {
@@ -440,7 +440,7 @@ looksEl("lookAskDiscard").onclick = async () => {
     answer = await looksFetch("/api/looks/apply", "POST",
       Object.assign({ id: looksPending, confirm: true }, looksNow()));
   } catch (e) {
-    setStatus(tx("panel.applyFailed", {error: e.message}));
+    setStatus(esc(tx("panel.applyFailed", {error: e.message})));
     return;
   }
   await looksApplied(answer);

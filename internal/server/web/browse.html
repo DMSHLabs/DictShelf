@@ -293,7 +293,7 @@ async function show(opts,record){
   if(!r.ok){const j=await r.json().catch(()=>({}));
     return card("<b>"+tx("browse.cannotBrowse")+"</b><p>"+
       tx(r.status===404?"browse.missing":"browse.error",{status:r.status})+"</p>"+
-      (j.error?"<details><summary>"+tx("browse.details")+"</summary>"+esc(j.error)+"</details>":"")+
+      (j.error?"<details><summary>"+tx("browse.details")+"</summary>"+esc(window.wudictI18n.errorText(j.error))+"</details>":"")+
       '<p><a href="/browse">'+tx("browse.chooseAnother")+"</a></p>")}
   state=await r.json();
   /* What the reader asked for, which the strip highlights by: the chip they

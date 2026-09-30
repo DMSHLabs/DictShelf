@@ -228,6 +228,14 @@ The Android bridge supplies generated language/region voice labels; `voiceLabel(
 
 ## 9. Finding remaining strings and working with upstream
 
+### Existing server errors
+
+`window.wudictI18n.errorText()` in `web/i18n.js` translates selected legacy server messages for display only. Call it at an error-display boundary, for both immediate HTTP failures and asynchronous job/stream errors. The server's JSON/text responses and operation semantics remain unchanged. It returns plain text: use `textContent`, or escape it before passing it to `setStatus()`/HTML templates.
+
+The finite `errorKeys` and `errorPrefixes` lists use `errors.*` entries in the English fallback catalog as the exact legacy source text. Preserve that English wording when correcting Russian translations; changing it requires checking the corresponding Go producer and tests. Explicit whole-message regular expressions cover a few messages with names, counts, or diagnostics inside them. Parameters are literal and are not translated recursively. Unknown messages, diagnostic suffixes, paths, names, and English-mode errors remain unchanged. Do not translate arbitrary OS/parser errors by replacing words inside them.
+
+This compatibility adapter was chosen to avoid changing existing APIs and job structures for localization. For new API families or substantial error-contract changes, prefer stable codes and parameters instead of extending long-text matching indefinitely. After an upstream merge, check changed error producers: catalog parity alone cannot detect changed source wording. Tests cover the registered exact/prefix messages, selected parameterized templates, and actual import, lemma, and search-error rendering.
+
 Search not only for text between HTML tags, but also for:
 
 - `title`, `aria-label`, `placeholder`, and `<option>` labels;

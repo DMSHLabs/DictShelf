@@ -26,6 +26,40 @@ for (const language of ['en', 'ru']) {
   }};
   vm.runInNewContext(script, context);
   const {t} = context.window.wudictI18n;
+  const errorText = context.window.wudictI18n.errorText;
+  for (const list of ['errorKeys','errorPrefixes']) {
+    const keys=JSON.parse(script.match(new RegExp('const '+list+' = (\\[[\\s\\S]*?\\]);'))[1]);
+    for(const key of keys){
+      assert.ok(messages[key],key);
+      const detail='<file> {detail}: C:\\dictionary\\test';
+      const raw=fallback[key].replace('{detail}',detail);
+      assert.equal(errorText(raw),language==='en'?raw:t(key,{detail}));
+    }
+  }
+  const fixtures=[
+    ['folder not found','Папка не найдена'],
+    ['archive is password-protected','Архив защищён паролем'],
+    ['preparing "<name> {detail}": disk full','Не удалось подготовить "<name> {detail}": disk full'],
+    ['could not save my.css: access denied','Не удалось сохранить my.css: access denied'],
+    ['could not remove my.css: access denied','Не удалось удалить my.css: access denied'],
+    ['"My dictionary" has nothing prepared to remove','У "My dictionary" нет подготовленных данных для удаления'],
+    ['ru: expected 20 bytes, got 10','ru: ожидалось байт: 20, получено: 10'],
+    ['ru: checksum mismatch (expected abcd, got dcba)','ru: контрольная сумма не совпадает (ожидалась abcd, получена dcba)']
+  ];
+  for(const [raw,ru] of fixtures)assert.equal(errorText(raw),language==='ru'?ru:raw);
+  for(const raw of ['Unexpected failure: <b>{detail}</b>','C:\\folder not found\\file','folder not found elsewhere','  unknown error\n']){
+    assert.equal(errorText(raw),raw);
+  }
+  assert.equal(errorText(null),'');
+  const setup=fs.readFileSync(path.join(web,'setup.html'),'utf8');
+  const importMessages=[];
+  const importContext={window:context.window,tx:t,impSay:(message,kind)=>importMessages.push({message,kind})};
+  vm.runInNewContext(setup.match(/function impRender\(j\)\{[\s\S]*?\n}/)[0],importContext);
+  importContext.impRender({state:'error',error:'archive is password-protected'});
+  assert.equal(importMessages[0].message,'✕ '+errorText('archive is password-protected'));
+  assert.equal(importMessages[0].kind,'err');
+  importContext.impRender({state:'error',error:'Unknown <archive> failure'});
+  assert.equal(importMessages[1].message,'✕ Unknown <archive> failure');
   const attrEscape=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   // Render real facet consumers and resolve the same scope in both languages.
   const facet = context.window.wudictI18n.facetLabels;
@@ -112,7 +146,7 @@ for (const language of ['en', 'ru']) {
   const node = () => ({dataset:{}, children:[], appendChild(n){this.children.push(n)}, addEventListener(){}});
   const resultContext = {tx:t, window:context.window, document:{createElement:node},
     esc:s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'),
-    expandAll:false, anchorOnce:null,
+    expandAll:false, anchorOnce:null, hitName:h=>h.name,
     renderArticle:(dd,body,id)=>{articles.push({body,id});return null}};
   vm.runInNewContext(main.match(/function renderSlot\(box,h,mode,q,perDict,group\)\{[\s\S]*?\n}/)[0], resultContext);
   const box=node(), body='<p lang="en">word {query}</p>', headword='<word> {number}';
@@ -125,6 +159,11 @@ for (const language of ['en', 'ru']) {
   const skipped=node();
   resultContext.renderSlot(skipped,{dict:'original-id',name:'<Dictionary>',skipped:true},'fts','word',5,false);
   assert.match(skipped.innerHTML,/data-id="original-id" data-feat="fts"/);
+  const failed=node();
+  resultContext.renderSlot(failed,{dict:'original-id',name:'Dictionary',error:'preparing "<name>": disk full'},'prefix','word',5,false);
+  assert.ok(failed.innerHTML.includes(language==='ru'?'Не удалось подготовить':'preparing'));
+  assert.ok(failed.innerHTML.includes('&lt;name&gt;'));
+  assert.ok(failed.innerHTML.includes('disk full'));
   assert.ok(skipped.innerHTML.includes(t('search.enableMode',{mode:t('search.fullText')})));
   for(const [count,word] of [[1,'результат'],[2,'результата'],[5,'результатов'],[11,'результатов'],[21,'результат'],[22,'результата']]){
     assert.equal(t('search.results',{count,number:count}),`${count} ${language==='ru'?word:count===1?'result':'results'}`);
@@ -142,6 +181,8 @@ for (const language of ['en', 'ru']) {
   assert.equal(lemmaRow.children[1].textContent, language === 'ru' ? 'английский (en)' : 'English (en)');
   assert.equal(lemmaRow.children[3].textContent, t('pages.downloadPercent',{percent:75}));
   assert.equal(rowContext.languageName({code:'invalid_code',name:'Unlisted language'}), 'Unlisted language');
+  const lemmaFailure=rowContext.rowFor({code:'ru',name:'Russian',state:'error',error:'no lemma folder configured (LEMMA_DIR)'},{});
+  assert.equal(lemmaFailure.children[3].textContent,'✕ '+errorText('no lemma folder configured (LEMMA_DIR)'));
   // Built-in presentation may change; user-owned names and unknown upstream
   // additions must remain literal, even if they match a built-in's name.
   context.tx = t;

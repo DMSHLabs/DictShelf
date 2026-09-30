@@ -36,7 +36,118 @@
     }
     return {fl:Object.prototype.hasOwnProperty.call(headings, g.f) ? t(headings[g.f]) : g.fl, vl};
   }
-  window.wudictI18n = Object.freeze({language, t, facetLabels, number: n => numbers.format(n)});
+  // Legacy API errors are plain English text. Match only these complete
+  // messages or explicit prefixes; never replace words inside paths/details.
+  // Unknown errors and English responses remain literal. New API families
+  // should use stable error codes instead of expanding text matching.
+  const errorKeys = [
+    "errors.folderMissing",
+    "errors.notFolder",
+    "errors.fileMissing",
+    "errors.notFile",
+    "errors.importBusy",
+    "errors.noImport",
+    "errors.noDictionaries",
+    "errors.archiveFormat",
+    "errors.noDestination",
+    "errors.incomplete",
+    "errors.https",
+    "errors.notArchive",
+    "errors.notLink",
+    "errors.downloadLarge",
+    "errors.importLarge",
+    "errors.localAddress",
+    "errors.redirects",
+    "errors.noArchiveDictionary",
+    "errors.nothingSelected",
+    "errors.noCompanion",
+    "errors.encrypted",
+    "errors.archiveFiles",
+    "errors.lemmaFolder",
+    "errors.lemmaCatalogue",
+    "errors.reindexing",
+    "errors.noIndex",
+    "errors.nothingRemove",
+    "errors.enablePrepared",
+    "errors.remoteDelete",
+    "errors.localOnly",
+    "errors.notAppFolder",
+    "errors.lookFolder",
+    "errors.rememberFolder",
+    "errors.lookName",
+    "errors.lookExists",
+    "errors.lookBuiltin",
+    "errors.lookDelete",
+    "errors.lookMissing",
+    "errors.presetsFolder",
+    "errors.stylesFolder",
+    "errors.filesFolder",
+    "errors.tooManyFiles",
+    "errors.fileLarge",
+    "errors.emptyFile",
+    "errors.unknownFile",
+    "errors.noRoom",
+    "errors.host",
+    "errors.missingParts",
+    "errors.unsafeArchive",
+    "errors.archiveSize",
+    "errors.archiveRatio"
+  ];
+  const errorPrefixes = [
+    "errors.receive",
+    "errors.hostDetail",
+    "errors.missingPartsDetail",
+    "errors.unsafeArchiveDetail",
+    "errors.archiveSizeDetail",
+    "errors.archiveRatioDetail",
+    "errors.catalogueRead",
+    "errors.noLemmaData",
+    "errors.unknownDict",
+    "errors.saveLook",
+    "errors.deleteLook",
+    "errors.applyLook",
+    "errors.rememberLook",
+    "errors.savePresets",
+    "errors.unknownPreset",
+    "errors.save",
+    "errors.rescan",
+    "errors.libraryRead"
+  ];
+  function errorText(value) {
+    const original = String(value ?? "");
+    if (language === "en") return original;
+    const text = original.trim();
+    for (const key of errorKeys) if (text === boot.fallback[key]) return t(key);
+    for (const key of errorPrefixes) {
+      const source = boot.fallback[key];
+      if (!source || !source.endsWith("{detail}")) continue;
+      const prefix = source.slice(0, -8);
+      if (text.startsWith(prefix)) return t(key, {detail:text.slice(prefix.length)});
+    }
+    // Whole-message templates only. Captured names and diagnostics are literal
+    // parameters, never translated recursively or interpreted as markup.
+    const templates = [
+      [/^preparing (".*"): ([\s\S]+)$/, "errors.preparing"],
+      [/^removing packed media for (".*"): ([\s\S]+)$/, "errors.removingMedia"],
+      [/^(".*") is a prepared dictionary - its original files are gone, so its data cannot be rebuilt$/, "errors.noSource"],
+      [/^(".*") has no original files - it is the prepared dictionary itself$/, "errors.noOriginal"],
+      [/^(".*") has nothing prepared to remove$/, "errors.noPrepared"],
+      [/^(".*") is not prepared, so deleting its files would delete the dictionary$/, "errors.deleteUnprepared"],
+      [/^could not save (.+): ([\s\S]+)$/, "errors.saveFile"],
+      [/^could not remove (.+): ([\s\S]+)$/, "errors.removeFile"],
+      [/^a file named (.+) is already there$/, "errors.fileExists"],
+      [/^(app\.css|article\.css|app_night\.css|article_night\.css) is too large$/, "errors.styleLarge"],
+      [/^([a-z]{2}) is being downloaded$/, "errors.downloading"],
+      [/^([a-z]{2}): expected (\d+) bytes, got (\d+)$/, "errors.downloadSize"],
+      [/^([a-z]{2}): checksum mismatch \(expected ([a-f0-9]+), got ([a-f0-9]+)\)$/, "errors.checksum"]
+    ];
+    for (const [pattern, key] of templates) {
+      const m = text.match(pattern);
+      if (m) return t(key, {name:m[1], detail:m[2], actual:m[3]});
+    }
+    return original;
+  }
+  window.wudictI18n = Object.freeze({language, t, facetLabels, errorText, number: n => numbers.format(n)});
 
   function openLanguage(anchor) {
     if (document.getElementById("uiLanguageDialog")) return;

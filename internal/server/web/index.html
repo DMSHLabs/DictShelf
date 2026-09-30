@@ -1025,7 +1025,7 @@ function savePrefs(now){
       // The size and the weight are part of what a look holds, so a change to
       // them is a change to the screen: the Presets row's button follows.
       if(typeof looksCheckDrift==="function"&&$("panel").classList.contains("show"))looksCheckDrift()})
-    .catch(e=>{prefsSent=null;setStatus(esc(tx("panel.dictSaveFailed",{error:e.message})))});
+    .catch(e=>{prefsSent=null;setStatus(esc(tx("panel.dictSaveFailed",{error:window.wudictI18n.errorText(e.message)})))});
 }
 /* dictionaries in preference order: saved ones first, then unseen ones A→Z */
 const mb=b=>b>=1e9?(b/1e9).toFixed(1)+" GB":b>=1e6?Math.round(b/1e6)+" MB":Math.max(1,Math.round(b/1e3))+" kB";
@@ -1916,7 +1916,7 @@ window.wudictNativeDictionaryPicker=async function(){
     livePickerOpen=true;
     if(window.prompt("wudict:dictionary-picker",JSON.stringify(livePickerPayload("liveDict")))===null)
       livePickerOpen=false;
-  }catch(e){setStatus(esc(tx("search.groupFailed",{error:e.message})))}
+  }catch(e){setStatus(esc(tx("search.groupFailed",{error:window.wudictI18n.errorText(e.message)})))}
   finally{livePickerOpening=false}
 };
 window.wudictPickerClosed=()=>{livePickerOpen=false;clearTimeout(livePickerTimer)};
@@ -2470,7 +2470,7 @@ function renderPanel(){
     // "pack media" is offered only when the dictionary actually has packable
     // media, a source to pack it from, and it isn't already packed.
     let acts="";
-    if(d.error)acts=`<span class="err">${esc(d.error)}</span>`;
+    if(d.error)acts=`<span class="err">${esc(window.wudictI18n.errorText(d.error))}</span>`;
     /* Offered whether or not the index exists yet: browsing IS the index, so
        following this link on an unprepared dictionary is the request to build
        it, and the browse page asks for it and opens the list when it is ready.
@@ -3122,7 +3122,7 @@ async function loadFolders(){
     if(c.canReveal){
       const rv=document.createElement("span");rv.className="rv";rv.textContent=c.revealLabel;
       rv.onclick=e=>{e.stopPropagation();fetch("/api/reveal?path="+encodeURIComponent(path))
-        .then(r=>r.json()).then(j=>{if(j.error)alert(j.error)})};
+        .then(r=>r.json()).then(j=>{if(j.error)alert(window.wudictI18n.errorText(j.error))})};
       m.appendChild(rv);
     }
     if(m.childNodes.length)d.appendChild(m);
@@ -3434,7 +3434,7 @@ async function runRemove(id,kind,node){
   try{
     const r=await fetch(q,{method:"DELETE"});
     rep=await r.json();
-    if(!r.ok)throw new Error((rep&&rep.error)||("HTTP "+r.status));
+    if(!r.ok)throw new Error(window.wudictI18n.errorText(rep&&rep.error)||("HTTP "+r.status));
   }catch(err){
     node.classList.remove("busy");delete node.dataset.busy;
     node.textContent=tx("dictUI.failed");
@@ -3515,7 +3515,7 @@ function runIngest(id,opts,label){
        the reason goes to the status line, which has the room. */
     es.addEventListener("error",ev=>{es.close();
       let why="";
-      try{if(ev&&ev.data){const d=JSON.parse(ev.data);if(d&&d.error)why=String(d.error)}}catch(_){}
+      try{if(ev&&ev.data){const d=JSON.parse(ev.data);if(d&&d.error)why=window.wudictI18n.errorText(d.error)}}catch(_){}
       show(tx("dictUI.failed"),why?tx("dictUI.failedReason",{error:why}):tx("dictUI.failed"));
       label.classList.add("err");resolve(false)});
   });
@@ -3868,7 +3868,7 @@ function setBusy(on){
    ready instead of waiting for the whole fan-out (progressive results). */
 async function fetchStream(url,onMsg,signal){
   const resp=await fetch(url,signal?{signal}:undefined);
-  if(!resp.ok){let e;try{e=(await resp.json()).error}catch(_){}throw new Error(e||resp.statusText)}
+  if(!resp.ok){let e;try{e=(await resp.json()).error}catch(_){}throw new Error(window.wudictI18n.errorText(e)||resp.statusText)}
   const reader=resp.body.getReader(),dec=new TextDecoder();let buf="";
   for(;;){
     const{value,done}=await reader.read();
@@ -4080,7 +4080,7 @@ function renderSlot(box,h,mode,q,perDict,group){
     return{shown:true};
   }
   if(h.error){
-    box.innerHTML=`<details class="dict"><summary>${esc(hitName(h))}<span class="count">⚠ ${esc(h.error)}</span></summary></details>`;
+    box.innerHTML=`<details class="dict"><summary>${esc(hitName(h))}<span class="count">⚠ ${esc(window.wudictI18n.errorText(h.error))}</span></summary></details>`;
     return{shown:true};
   }
   if(h.skipped){
@@ -5790,7 +5790,7 @@ async function stylerFileDelete(f){
     else appearanceRead();
     stylerNote(tx("panel.deleted",{name:f.name}));setTimeout(stylerNote,1600);
   }catch(e){
-    stylerNote(tx("panel.deleteFailed",{name:f.name,error:e.message}));
+    stylerNote(tx("panel.deleteFailed",{name:f.name,error:window.wudictI18n.errorText(e.message)}));
   }
 }
 /* The server's name grammar, applied here as well - not instead. A picked
@@ -5847,7 +5847,7 @@ async function stylerUpload(list){
       done++;
       if(/^image\//.test(file.type||""))lastImage=name;
     }catch(e){
-      stylerNote(tx("panel.uploadFailed",{name,error:e.message}));
+      stylerNote(tx("panel.uploadFailed",{name,error:window.wudictI18n.errorText(e.message)}));
       return;
     }
   }
@@ -6004,7 +6004,7 @@ async function presetToggle(id,on,notify){
     // known payload puts it back, because a switch that lies is worse than
     // a note alone.
     presetsPaneRender();
-    say(tx("panel.presetFailed",{error:e.message}));
+    say(tx("panel.presetFailed",{error:window.wudictI18n.errorText(e.message)}));
     return false;
   }
 }
@@ -6830,7 +6830,7 @@ async function stylerSave(){
     stylerNote(Object.values(stylerText).some(Boolean)?tx("panel.saved"):tx("panel.savedEmpty"));
     setTimeout(stylerNote,1800);
   }catch(e){
-    stylerNote(tx("panel.saveFailed",{error:e.message}));
+    stylerNote(tx("panel.saveFailed",{error:window.wudictI18n.errorText(e.message)}));
   }
 }
 /* One handler for the four doors, each carrying its subject in data-styler.

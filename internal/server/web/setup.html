@@ -359,7 +359,7 @@ async function validateAll(){
     let j;
     try{ j=await (await fetch("/api/setup?path="+encodeURIComponent(p))).json() }
     catch(e){ st.className="st err";st.textContent=tx("pages.unreachable");bad++;return }
-    if(j.error){st.className="st err";st.textContent="✕ "+(j.error==="folder not found"?tx("pages.folderMissing"):j.error);bad++;return}
+    if(j.error){st.className="st err";st.textContent="✕ "+window.wudictI18n.errorText(j.error);bad++;return}
     if(!j.found){st.className="st err";st.textContent=tx("pages.noneFound");bad++;return}
     st.className="st ok";st.textContent=tx("pages.found",{number:fmtN(j.found)});
     total+=j.found;
@@ -412,7 +412,7 @@ async function save(){
   const url=q?("/api/setup?"+q+"&save=1"+keep)
              :"/api/setup?useCached=1&save=1"; // library alone: no folder to save
   const j=await (await fetch(url)).json();
-  if(j.error){$("msg").className="err";$("msg").textContent="✕ "+(j.error==="folder not found"?tx("pages.folderMissing"):j.error);return}
+  if(j.error){$("msg").className="err";$("msg").textContent="✕ "+window.wudictI18n.errorText(j.error);return}
   if(j.saved)location.href="/";
 }
 
@@ -448,7 +448,7 @@ async function impSend(file){
     j=await r.json();
   }catch(e){ impBusy=false; impSay(tx("pages.readFailed",{name:file.name}),"err"); return }
   impBusy=false;
-  if(!r.ok||j.error){impSay("✕ "+(j&&j.error||tx("pages.cannotImport")),"err");return}
+  if(!r.ok||j.error){impSay("✕ "+(window.wudictI18n.errorText(j&&j.error)||tx("pages.cannotImport")),"err");return}
   showCandidates(j);
 }
 
@@ -469,7 +469,7 @@ async function impFetch(){
     j=await r.json();
   }catch(e){ impBusy=false; impSay(tx("pages.cannotOpenMark"),"err"); return }
   impBusy=false;
-  if(!r.ok||j.error){impSay("✕ "+(j&&j.error||tx("pages.cannotOpen")),"err");return}
+  if(!r.ok||j.error){impSay("✕ "+(window.wudictI18n.errorText(j&&j.error)||tx("pages.cannotOpen")),"err");return}
   $("url").value="";
   impRender(j);
   impPoll();
@@ -584,7 +584,7 @@ async function impInstall(){
       body:JSON.stringify({pick:pick,keep:$("srcKeep").checked,copy:$("srcCopy").checked,extras:extras})});
     j=await r.json();
   }catch(e){ impSay(tx("pages.cannotStartMark"),"err"); return }
-  if(!r.ok||j.error){impSay("✕ "+(j&&j.error||tx("pages.cannotStart")),"err");
+  if(!r.ok||j.error){impSay("✕ "+(window.wudictI18n.errorText(j&&j.error)||tx("pages.cannotStart")),"err");
     $("install").disabled=false;return}
   $("found").classList.add("hidden");
   impPoll();
@@ -631,7 +631,7 @@ function impRender(j){
     validateAll();
     return;
   }
-  if(j.state==="error"){impSay("✕ "+(j.error||tx("pages.importFailed")),"err");return}
+  if(j.state==="error"){impSay("✕ "+(window.wudictI18n.errorText(j.error)||tx("pages.importFailed")),"err");return}
   if(j.state==="ready"){showCandidates(j);return}
 }
 
@@ -652,7 +652,7 @@ async function howtoBack(e){
   catch(_){ msg.textContent=tx("pages.notAnswering");return }
   const j=await r.json().catch(()=>({}));
   msg.textContent=r.ok?tx("pages.howtoRestored")
-                      :"✕ "+(j.error||("HTTP "+r.status));
+                      :"✕ "+(window.wudictI18n.errorText(j.error)||("HTTP "+r.status));
 }
 
 async function howtoCopy(e){
@@ -661,7 +661,7 @@ async function howtoCopy(e){
   try{ r=await fetch("/api/howto",{method:"POST"}) }
   catch(_){ impSay(tx("pages.notAnswering"),"err");return }
   const j=await r.json().catch(()=>({}));
-  if(!r.ok){impSay("✕ "+(j.error||("HTTP "+r.status)),"err");return}
+  if(!r.ok){impSay("✕ "+(window.wudictI18n.errorText(j.error)||("HTTP "+r.status)),"err");return}
   impSay(tx("pages.howtoAdded",{path:j.path}),"ok");
 }
 

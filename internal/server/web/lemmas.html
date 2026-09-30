@@ -192,7 +192,7 @@ function render(j){
     b.textContent=tx("pages.lemmaOff");
   }else if(j.error){
     b.className="banner warn";
-    b.textContent=tx("pages.catalogueFailed",{error:j.error});
+    b.textContent=tx("pages.catalogueFailed",{error:window.wudictI18n.errorText(j.error)});
   }else{
     b.className="banner hidden";
   }
@@ -242,7 +242,7 @@ function rowFor(l,j){
     var pct=l.total>0?Math.floor(100*(l.done||0)/l.total):-1;
     st.textContent=pct>=0?tx("pages.downloadPercent",{percent:Math.min(pct,100)}):tx("pages.downloading");
   }else if(l.state==="error"){
-    st.className="st err";st.textContent="✕ "+l.error;
+    st.className="st err";st.textContent="✕ "+window.wudictI18n.errorText(l.error);
   }else if(l.builtin&&!l.localSize){
     st.className="st ok";st.textContent=tx("pages.builtin");
   }else if(l.installed&&l.mismatch){
@@ -266,7 +266,7 @@ async function toggle(l,cb){
     setStatus(cb,"busy",tx("pages.downloading"));
     try{
       const r=await fetch("/api/lemmas?code="+encodeURIComponent(l.code),{method:"POST"});
-      if(!r.ok){ const j=await r.json().catch(()=>({}));fail(cb,j.error||("HTTP "+r.status));return }
+      if(!r.ok){ const j=await r.json().catch(()=>({}));fail(cb,window.wudictI18n.errorText(j.error)||("HTTP "+r.status));return }
     }catch(e){ fail(cb,tx("pages.cannotReachShort"));return }
     poll();
     return;
@@ -278,7 +278,7 @@ async function toggle(l,cb){
   setStatus(cb,"busy",tx("pages.removing"));
   try{
     const r=await fetch("/api/lemmas?code="+encodeURIComponent(l.code),{method:"DELETE"});
-    if(!r.ok){ const j=await r.json().catch(()=>({}));fail(cb,j.error||("HTTP "+r.status));return }
+    if(!r.ok){ const j=await r.json().catch(()=>({}));fail(cb,window.wudictI18n.errorText(j.error)||("HTTP "+r.status));return }
   }catch(e){ fail(cb,tx("pages.cannotReachShort"));return }
   load();
 }
