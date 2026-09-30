@@ -655,5 +655,16 @@
   "speech.settings": "Настройки речи…",
   "speech.noVoice": "На устройстве нет голоса для языка «{language}»",
   "speech.readAs": "Читать на языке «{language}»",
-  "speech.online": "онлайн"
+  "speech.online": "онлайн",
+  "panel.prefsUnavailable": "⚠ Настройки не сохраняются — обновите страницу",
+  "panel.audioFailed": "⚠ Не удалось воспроизвести звук",
+  "panel.savedLocation": "Папка сохранения: ",
+  "panel.styleFileHint": " · «Очистить», затем «Сохранить» удаляет файл · /?style=off открывает приложение без пользовательских стилей",
+  "panel.filesReadFailed": "Не удалось прочитать папку файлов.",
+  "panel.noConfigFolder": "невозможно сохранить: папка настроек не задана",
+  "panel.stylesheetTooLarge": "слишком большой файл стилей",
+  "panel.fileBadge": "ФАЙЛ",
+  "panel.dictSaveFailed": "⚠ Не удалось сохранить настройки словарей: {error}",
+  "panel.replaceFile": "Файл «{name}» уже существует. Заменить его?",
+  "panel.presetFailed": "Не удалось переключить слой оформления: {error}"
 }

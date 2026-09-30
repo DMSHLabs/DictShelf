@@ -12,6 +12,10 @@
 	"use strict";
 	var fid = document.currentScript.dataset.fid;
 	var dictID = document.currentScript.dataset.dict;
+	// Only bridge UI text crosses from the host; article language/content do not.
+	var uiClose = document.currentScript.dataset.uiClose || "Close";
+	var uiNotHere = document.currentScript.dataset.uiNotHere || "(not in this dictionary)";
+	var uiLoadFailed = document.currentScript.dataset.uiLoadFailed || "(could not load)";
 	// a #fragment the incoming cross-reference asked for, jumped to once the
 	// article has reported its height (see the load handler)
 	var wantFrag = document.currentScript.dataset.frag || "";
@@ -591,17 +595,18 @@
 					try { m = JSON.parse(line); } catch (_) { return; }
 					if (m.t === "hit" && m.results && m.results.length) html = m.results[0].Body;
 				});
-				if (html === null) { box.textContent = "(not in this dictionary)"; post(); return; }
+				if (html === null) { box.textContent = uiNotHere; post(); return; }
 				// the fragment repeats the article's stylesheet link; one is enough
-				box.innerHTML = '<span class="wu-sub-close" title="Close">✕</span>' +
+				box.innerHTML = '<span class="wu-sub-close">✕</span>' +
 					html.replace(/<link\b[^>]*>/gi, "");
+				box.querySelector(".wu-sub-close").title = uiClose;
 				box.querySelector(".wu-sub-close").addEventListener("click", function () {
 					toggleSub(link, word);
 				});
 				post();
 				setTimeout(post, 250); // late images/reflow
 			})
-			.catch(function () { box.textContent = "(could not load)"; post(); });
+			.catch(function () { box.textContent = uiLoadFailed; post(); });
 	}
 
 	// "pick", not "ref": a double-clicked word is the user asking what

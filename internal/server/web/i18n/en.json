@@ -641,5 +641,16 @@
   "speech.settings": "Speech settings…",
   "speech.noVoice": "No voice for {language} on this device",
   "speech.readAs": "Read as {language}",
-  "speech.online": "online"
+  "speech.online": "online",
+  "panel.prefsUnavailable": "⚠ settings are not being saved — reload the page",
+  "panel.audioFailed": "⚠ could not play audio",
+  "panel.savedLocation": "Saved in ",
+  "panel.styleFileHint": " · Clear then Save deletes a file · /?style=off loads the app with neither applied",
+  "panel.filesReadFailed": "Could not read the files folder.",
+  "panel.noConfigFolder": "there is nowhere to save: no configuration folder",
+  "panel.stylesheetTooLarge": "that stylesheet is too large",
+  "panel.fileBadge": "FILE",
+  "panel.dictSaveFailed": "⚠ could not save dictionary settings: {error}",
+  "panel.replaceFile": "{name} is already there. Replace it?",
+  "panel.presetFailed": "Could not switch the preset: {error}"
 }

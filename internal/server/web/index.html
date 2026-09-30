@@ -1003,7 +1003,7 @@ function savePrefs(now){
   // Never write a baseline we could not read: if the load failed, "no order"
   // is our ignorance, not the user's setting, and saving it would destroy the
   // real one.
-  if(!prefsReady){setStatus("⚠ settings are not being saved — reload the page");return}
+  if(!prefsReady){setStatus(esc(tx("panel.prefsUnavailable")));return}
   if(!now){prefsTimer=setTimeout(()=>savePrefs(true),400);return}
   // No `off` in the body: the server's field falls back to false (its
   // omitempty zero value), which is what retires a flag set by the switches
@@ -1017,7 +1017,7 @@ function savePrefs(now){
       // The size and the weight are part of what a look holds, so a change to
       // them is a change to the screen: the Presets row's button follows.
       if(typeof looksCheckDrift==="function"&&$("panel").classList.contains("show"))looksCheckDrift()})
-    .catch(e=>{prefsSent=null;setStatus("⚠ could not save dictionary settings: "+esc(e.message))});
+    .catch(e=>{prefsSent=null;setStatus(esc(tx("panel.dictSaveFailed",{error:e.message})))});
 }
 /* dictionaries in preference order: saved ones first, then unseen ones A→Z */
 const mb=b=>b>=1e9?(b/1e9).toFixed(1)+" GB":b>=1e6?Math.round(b/1e6)+" MB":Math.max(1,Math.round(b/1e3))+" kB";
@@ -3608,7 +3608,7 @@ function frameDoc(content,fid,dark,dictID,frag){
     'html.dark :is(img,picture,video,svg,canvas,iframe,embed,object,[data-noinvert]){filter:invert(1) hue-rotate(180deg)}'+
     ARTCSS+
     '</style><script src="/assets/pick.js?v={{PICKJS}}"><\/script><script src="/assets/frame.js?v={{FRAMEJS}}" data-fid="'+fid+'" data-dict="'+(dictID||"")+
-    '" data-speak="'+(speakOn?1:0)+'" data-frag="'+esc(frag||"").replace(/"/g,"&quot;")+'"><\/script></head><body>'+content+
+    '" data-ui-close="'+escAttr(tx("panel.close"))+'" data-ui-not-here="'+escAttr(tx("search.notHere"))+'" data-ui-load-failed="'+escAttr(tx("search.loadFailed"))+'" data-speak="'+(speakOn?1:0)+'" data-frag="'+esc(frag||"").replace(/"/g,"&quot;")+'"><\/script></head><body>'+content+
     /* A stylesheet written for a full page sizes html and body from the
        VIEWPORT — LDOCE's ldoce.css opens with `html, body{height:100%}`. Here the
        viewport is a frame we sized from what the frame measured, so every
@@ -4468,7 +4468,7 @@ function playAudio(url){
   if(!audioEl)audioEl=new Audio();
   audioEl.src=url;
   const p=audioEl.play();
-  if(p&&p.catch)p.catch(err=>{console.warn("audio play failed:",url,err);setStatus("⚠ could not play audio")});
+  if(p&&p.catch)p.catch(err=>{console.warn("audio play failed:",url,err);setStatus(esc(tx("panel.audioFailed")))});
 }
 /* ── Dictionary references ────────────────────────────────────────────
    `entry://Artificial Intelligence Notes#note-1` IS NOT A URL, and must never
@@ -5465,14 +5465,14 @@ function stylerNote(msg){
     n.textContent=tx("panel.noStyleFolder");
     return;
   }
-  n.appendChild(document.createTextNode("Saved in "));
+  n.appendChild(document.createTextNode(tx("panel.savedLocation")));
   const p=document.createElement("span");
   p.className="p";p.textContent=stylerDir;p.title=tx("panel.copyPath");
   p.onclick=()=>{navigator.clipboard&&navigator.clipboard.writeText(stylerDir)
     .then(()=>stylerNote(tx("panel.pathCopied")),()=>{}).then(()=>setTimeout(stylerNote,1400))};
   n.appendChild(p);
   n.appendChild(document.createTextNode(
-    " · Clear then Save deletes a file · /?style=off loads the app with neither applied"));
+    tx("panel.styleFileHint")));
 }
 /* The textarea is the single source of truth for the tab on screen; this is
    the one point where it is folded back into the pair we hold. */
@@ -5531,7 +5531,7 @@ async function stylerFilesLoad(){
     return true;
   }catch(e){
     console.warn("could not list files:",e);
-    stylerFilesRender("Could not read the files folder.");
+    stylerFilesRender(tx("panel.filesReadFailed"));
     return false;
   }
 }
@@ -5560,7 +5560,7 @@ function stylerFilesRender(msg){
       // only thing about the file worth a glance.
       const d=document.createElement("div");d.className="th";
       const dot=f.name.lastIndexOf(".");
-      d.textContent=dot>0?f.name.slice(dot+1,dot+5).toUpperCase():"FILE";
+      d.textContent=dot>0?f.name.slice(dot+1,dot+5).toUpperCase():tx("panel.fileBadge");
       row.appendChild(d);
     }
     const n=document.createElement("div");n.className="n";
@@ -5758,7 +5758,7 @@ async function stylerUpload(list){
     }
     let q="";
     if((stylerFileRows||[]).some(x=>x.name===name)){
-      if(!confirm(name+" is already there. Replace it?"))continue;
+      if(!confirm(tx("panel.replaceFile",{name})))continue;
       q="&replace=1";
     }
     stylerNote(tx("panel.uploading",{name}));
@@ -5931,7 +5931,7 @@ async function presetToggle(id,on,notify){
     // known payload puts it back, because a switch that lies is worse than
     // a note alone.
     presetsPaneRender();
-    say("Could not switch the preset: "+e.message);
+    say(tx("panel.presetFailed",{error:e.message}));
     return false;
   }
 }
@@ -6741,8 +6741,8 @@ async function stylerSave(){
     const r=await fetch("/api/style",{method:"PUT",
       headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
     if(!r.ok)throw new Error(r.status===409
-      ? "there is nowhere to save: no configuration folder"
-      : r.status===413 ? "that stylesheet is too large" : "HTTP "+r.status);
+      ? tx("panel.noConfigFolder")
+      : r.status===413 ? tx("panel.stylesheetTooLarge") : "HTTP "+r.status);
     const j=await r.json();
     // Both pairs are refilled from the answer, and by the theme that is
     // resolved NOW: a save is a round trip, and the reader can flip the theme

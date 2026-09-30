@@ -11,6 +11,8 @@ const looks = fs.readFileSync(path.join(web, 'looks.js'), 'utf8');
 new vm.Script(looks, {filename: 'looks.js'});
 const groups = fs.readFileSync(path.join(web, 'group-editor.js'), 'utf8');
 const speech = fs.readFileSync(path.join(web, 'speak.js'), 'utf8');
+const frame = fs.readFileSync(path.join(web, 'frame.js'), 'utf8');
+new vm.Script(frame, {filename:'frame.js'});
 new vm.Script(speech, {filename:'speak.js'});
 new vm.Script(groups, {filename: 'group-editor.js'});
 assert.doesNotMatch(main, /\s(?:title|aria-label)=tx\(/, 'HTML attributes must interpolate and escape translated text');
@@ -24,6 +26,18 @@ for (const language of ['en', 'ru']) {
   }};
   vm.runInNewContext(script, context);
   const {t} = context.window.wudictI18n;
+  const attrEscape=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  const frameContext={tx:t,esc:attrEscape,escAttr:attrEscape,articleFS:18,articleFW:400,
+    ARTCSS:'',speakOn:true,frameCSS:()=>'',styleSafe:s=>s};
+  vm.runInNewContext(main.match(/function frameDoc\(content,fid,dark,dictID,frag\)\{[\s\S]*?\n}/)[0],frameContext);
+  const article='<p lang="en">Close {name} — original dictionary content</p>';
+  const frameHTML=frameContext.frameDoc(article,'frame-1',false,'dict-1','');
+  assert.ok(frameHTML.includes(article));
+  assert.ok(frameHTML.includes('data-ui-close="'+attrEscape(t('panel.close'))+'"'));
+  assert.ok(frameHTML.includes('data-ui-not-here="'+attrEscape(t('search.notHere'))+'"'));
+  assert.doesNotMatch(frameHTML,/<html[^>]*\blang=/); // UI locale must not reach word segmentation
+  frameContext.tx=()=>'"><script>hostile</script>';
+  assert.ok(frameContext.frameDoc(article,'frame-1',false,'dict-1','').includes('data-ui-close="&quot;&gt;&lt;script&gt;hostile&lt;/script&gt;"'));
   const speechContext = {Intl, window:{wudictI18n:context.window.wudictI18n},
     navigator:{language:'de-DE',languages:['de-DE']}, localStorage:{getItem:()=>null}};
   const exposed = speech.replace('window.wuSpeak = {',
