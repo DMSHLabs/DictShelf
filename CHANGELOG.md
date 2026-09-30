@@ -5,6 +5,88 @@ Notable changes in **wuDict2**, the Android fork of
 version it was forked from. Fork release tags are prefixed `wudict2-`; one
 tagged line per release, newest first.
 
+## wudict2-v0.6.0-ru.1 — 2026-09-30
+
+A **preview**, and the first release cut from a branch other than `dev`:
+`translation_layout_fix` is `dev` plus the Russian interface. It is the FULL
+app — everything in "Also in this build" is ordinary released work — and the
+translation is what this build asks you to test. English stays the default.
+
+### The Russian interface
+
+- **Settings → Language** offers English / Русский and applies on reload. The
+  choice belongs to the installation and not to one browser, so every window
+  that reaches the server follows it. Nothing is decided from the system
+  language, the Android locale or the dictionary.
+- **Translated**: the main screen (search, results, Settings, appearance, the
+  CSS editor and its dialogs), the dictionary settings and group windows, the
+  Folders, Lemmatization and Browse pages, the speech menu, the system settings
+  window, the in-article dialogs, the Android window titles and dialogs, and
+  the counters, with Russian plural forms.
+- **Not translated yet**, so English will show there: dictionary categories and
+  filters (the language and content labels the dictionary list groups by), and
+  the server's own messages — import, index preparation, deletion, download,
+  lemmas, paths and configuration, saving files. Unknown messages stay visible
+  in English rather than disappearing behind a missing key.
+- The interface language is separate from the dictionary's: articles, search,
+  pronunciation and dictionary names are untouched by it.
+- The layout of the longer Russian labels is part of this work: the Settings
+  rows' label column is measured rather than fixed, and the appearance buttons
+  travel as one block.
+
+### Also in this build: the unreleased work since v0.5.0
+
+- **The upstream catch-up** — the first since v0.5.0; upstream master moved from
+  `5f0ad02` to `6cc84cc`, and the wudict markdown format, the cross-reference
+  link fix and the reader-app dictionary button below are all of it.
+- **wudict markdown: a dictionary is one Markdown file.** A plain CommonMark
+  file anyone can read in a Markdown viewer counts as a dictionary when its
+  first two lines are `# Title` and `wudict: 1`: entries are `## headword`
+  headings, links use `entry://`, and resources live in a folder beside it.
+  Accepted as `.md`, `.wudict.md`, and compressed as `.wudict.md.gz` / `.dz` —
+  add one to a dictionary folder or share it to the app and it is indexed on
+  first open, like DSL or BGL. Any dictionary wuDict reads can also be written
+  out in the format.
+- **A dictionary button in a reading app.** Ten reader actions are answered, so
+  the dictionary button of Moon+ Reader, ReadEra, Librera, FBReader, CoolReader
+  and others opens wuDict2's floating lookup. The shipped docs list which
+  reader to pick for each app; Kindle, Play Books and Kobo offer no outside
+  dictionary and cannot be served. A fourth lookup preference controls it, off
+  by default, and a caller asking for full screen opens the full app.
+- **Cross-references are ordinary lookups now.** A Babylon or repacked
+  article's `bword:` links are written out as `entry://`, and
+  `entry://@subentry` becomes the slash-less `entry:@subentry`, so a sub-entry
+  link survives the dictionary scripts that round-trip their own anchors.
+- **System Settings moved into the page**, from the shell's own settings screen
+  into the ☰ drawer's System section: the lookup switches, Show info messages,
+  Access, Clear browser cache, and the Advanced server rows with Restore
+  defaults. The native screen keeps the server port, a signpost and the
+  restart. With it the port field shows the port in force instead of an empty
+  box, size fields state the unit they mean, a refused write snaps the control
+  back with a sentence, and a failed start is retried when the window regains
+  focus instead of needing the app swiped away.
+- **Labels are drawn in ink.** Every label, heading, hint and count wears the
+  full text colour, and the two greys are reserved for disabled states; before
+  this those lines read as switched off in every look. A new **Quiet labels**
+  layer restores the grey hierarchy, on all four pages, for anyone who wants
+  it. Three danger reds the dark theme never reached, and the article link
+  colour, are fixed alongside.
+- **Status bar and picker**: the bar stands from the first paint whenever it is
+  switched on, not only after a search has produced sections, and its arrows
+  stand down on their own when there is nothing to walk; its end gutters
+  widened to one button height so the arrows are not pressed against the edge
+  of the screen; the scope chip names its scope in full in the bar.
+- **A Windows build script** for the desktop product (`build-windows.cmd`) —
+  it builds `wudict.exe` and an installer. A developer tool; the Android app is
+  unaffected.
+
+A preview in what it asks for, not in what it contains: the translation's
+device pass is unfinished. The project's Go checks for it are green
+(`TestI18n`, `TestAppearanceContract`); the JS-side i18n check needs Node,
+which this machine does not have, and so was not run; and the label layout was
+measured in a desktop browser at 320–412px in both languages but is **not yet
+checked on a phone**.
+
 ## wudict2-v0.5.0 — 2026-09-28
 
 Still no upstream sync — upstream `master` is unchanged at `5f0ad02`.
