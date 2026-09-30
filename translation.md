@@ -1,52 +1,54 @@
-# Перевод интерфейса wuDict2
+# Translating the wuDict2 interface
 
-Это рабочее руководство для агента, продолжающего локализацию или исправляющего связанные с ней ошибки. Прочитайте его **до изменения перевода**. Текущее состояние и незавершённые задачи — в [translation_todo.md](translation_todo.md).
+This is a working guide for an agent continuing localization or fixing related bugs. Read it **before changing translations**. Current status and unfinished tasks are in [translation_todo.md](translation_todo.md).
 
-Правила проекта остаются в [AGENTS.md](AGENTS.md), [CLAUDE.md](CLAUDE.md), [HANDOFF.md](HANDOFF.md) и профильных разделах документации. Этот файл описывает именно локализацию, а не заменяет их. Исторические проверки предыдущих этапов сохранены в [docs/I18N.md](docs/I18N.md).
+Keep both documents in English. Russian UI examples are intentional; reusable rules belong here, while pending work and verification evidence belong in the task list.
 
-## 1. Решения пользователя — не пересматривать по умолчанию
+Project rules remain in [AGENTS.md](AGENTS.md), [CLAUDE.md](CLAUDE.md), [HANDOFF.md](HANDOFF.md), and the relevant documentation sections. This file covers localization specifically; it does not replace those documents. Historical verification of earlier stages is preserved in [docs/I18N.md](docs/I18N.md).
 
-- Переводим **только интерфейс**. Язык словаря, статьи, поиска и произношения независим от языка интерфейса.
-- Язык выбирается вручную: **Settings → Language → English / Русский → применить и перезагрузить**. Английский — значение по умолчанию.
-- Не определять язык интерфейса по системе, Android Locale, `navigator.language`, `Accept-Language`, региону или словарю.
-- Переключение на лету не требуется. Перезагрузка страницы — предусмотренный способ применения. Перезапуск Go для этого не нужен.
-- Кнопка `Language` остаётся в настройках. Её английское название и самоназвания `English` / `Русский` намеренны: человек должен найти переключатель даже при незнакомом языке. Временные кнопки на Browse и странице папок удалены по просьбе пользователя; не возвращать их для удобства тестирования.
-- Настройка общая для установки сервера, а не отдельная для каждого браузера. Уже открытые страницы меняют язык после перезагрузки.
-- Пользователь сейчас сам собирает APK и проверяет на устройстве. Не запускать обычную сборку APK, установку и работу в эмуляторе без нового поручения. Лёгкие локальные проверки допустимы. Старое разрешение на установку в предыдущем этапе не является просьбой устанавливать каждую новую версию.
-- Работать в текущей выбранной ветке и сохранять незакоммиченные изменения. На момент создания документа это `translation`; имя здесь не инструкция переключать ветку. `dev` — интеграция, `master` — upstream. Коммит, merge и публикация — только по поручению пользователя.
+## 1. User decisions — do not reconsider by default
 
-## 2. Карта реализации
+- Translate **only the interface**. The language of a dictionary, article, search, and pronunciation is independent of the interface language.
+- The language is selected manually: **Settings → Language → English / Русский → apply and reload**. English is the default.
+- Do not infer the interface language from the system, Android Locale, `navigator.language`, `Accept-Language`, region, or dictionary.
+- Live switching is not required. Reloading the page is the intended way to apply the choice. Restarting Go is not required.
+- The `Language` button stays in Settings. Its English label and the self-names `English` / `Русский` are intentional: readers must be able to find the selector even in an unfamiliar language. Temporary buttons on Browse and the Folders page were removed at the user's request; do not restore them for testing convenience.
+- The setting is shared by the server installation, not separate for each browser. Already open pages change language after reloading.
+- The user currently builds the APK and checks it on a device themselves. Do not routinely build an APK, install it, or operate the emulator without a new request. Lightweight local checks are allowed. Earlier installation permission from a previous stage is not a request to install every new version.
+- Work on the currently selected branch and preserve uncommitted changes. When this document was created, that branch was `translation`; this name is not an instruction to switch branches. `dev` is for integration; `master` is for upstream. Commit, merge, and publish only at the user's request.
 
-| Область | Файлы и назначение |
+## 2. Implementation map
+
+| Area | Files and purpose |
 | --- | --- |
-| Каталоги веб-интерфейса | `internal/server/web/i18n/en.json`, `ru.json`: плоские смысловые ключи, строка или объект форм числа |
-| Серверная инфраструктура | `internal/server/i18n.go`: embed, загрузка каталогов, fallback, `renderUI`, GET/PUT `/api/language` |
-| Сохранение выбора | `internal/server/prefs.go`: поле `language` верхнего уровня в `state.json`, отдельно от `ui` |
-| Клиентская инфраструктура | `internal/server/web/i18n.js`: `window.wudictI18n`, окно выбора, сохранение и reload |
-| Общие правила отображения | `internal/server/web/i18n.css`: окно выбора языка и переносы элементов редактора CSS (`#styler:lang(ru) #stylerDock`). Раскладку переведённых подписей файл больше не правит (см. «Ширины и вёрстка подписей») |
-| Главный экран | `internal/server/web/index.html`: поиск, результаты, Settings, системные настройки и оформление |
-| Отдельные страницы | `web/setup.html`, `lemmas.html`, `browse.html`; обработчики в `internal/server` |
-| Группы и оформления | `web/group-editor.js`, `looks.js`; отображаемые имена отдельно от хранимых |
-| Озвучивание | `web/speak.js`: подписи и отображаемые названия языков; алгоритм выбора произношения отдельный |
-| Статьи в iframe | `frameDoc` в `index.html`, `web/frame.js`: три подписи интерфейса через атрибуты bridge-скрипта |
-| Android | `android/app/src/main/java/com/legbehindneck/wudict/UiLanguage.java`, ресурсы `values-ru/strings.xml` в main и flavor-наборах |
-| Проверки | `internal/server/i18n_test.go`, `tools/i18n-test.cjs`, Makefile: `i18n-check`, `i18n-check-js` |
+| Web interface catalogs | `internal/server/web/i18n/en.json`, `ru.json`: flat semantic keys, each holding a string or an object of plural forms |
+| Server infrastructure | `internal/server/i18n.go`: embedding, catalog loading, fallback, `renderUI`, GET/PUT `/api/language` |
+| Persisting the choice | `internal/server/prefs.go`: top-level `language` field in `state.json`, separate from `ui` |
+| Client infrastructure | `internal/server/web/i18n.js`: `window.wudictI18n`, selection dialog, saving, and reload |
+| Shared presentation rules | `internal/server/web/i18n.css`: language dialog and CSS editor control wrapping (`#styler:lang(ru) #stylerDock`). This file no longer adjusts translated label layout (see “Label widths and layout”) |
+| Main screen | `internal/server/web/index.html`: search, results, Settings, system settings, and appearance |
+| Standalone pages | `web/setup.html`, `lemmas.html`, `browse.html`; handlers in `internal/server` |
+| Groups and looks | `web/group-editor.js`, `looks.js`; display names separate from stored names |
+| Read aloud | `web/speak.js`: labels and displayed language names; the pronunciation selection algorithm is separate |
+| Articles in iframes | `frameDoc` in `index.html`, `web/frame.js`: three interface labels passed through bridge-script attributes |
+| Android | `android/app/src/main/java/com/legbehindneck/wudict/UiLanguage.java`, `values-ru/strings.xml` resources in main and flavor sets |
+| Checks | `internal/server/i18n_test.go`, `tools/i18n-test.cjs`, Makefile: `i18n-check`, `i18n-check-js` |
 
-Пути `web/...` в таблице относятся к `internal/server/web/`.
+The `web/...` paths in the table are relative to `internal/server/web/`.
 
-В проекте нет npm-сборки для перевода. Не добавлять i18n-фреймворк, gettext, генерацию копий `index.ru.html` или отдельный загрузчик каталогов ради следующего небольшого этапа. Использовать существующую инфраструктуру.
+The project has no npm build step for translation. Do not add an i18n framework, gettext, generated `index.ru.html` copies, or a separate catalog loader for the next small stage. Use the existing infrastructure.
 
-## 3. Как добавлять перевод
+## 3. Adding translations
 
-### Каталоги
+### Catalogs
 
-1. Найти существующий ключ с подходящим **смыслом**, а не только совпадающим английским словом.
-2. Если нужен новый ключ, добавить его одновременно в `en.json` и `ru.json`.
-3. Использовать устойчивое смысловое имя. Уже существуют пространства `language.*`, `browse.*`, `panel.*`, `dictUI.*`, `layers.*`, `pages.*`, `search.*`, `system.*`, `speech.*`.
-4. Сохранять имена параметров одинаковыми в обоих языках. Каталог не содержит исполняемый код и HTML-разметку.
-5. Передавать целое предложение с параметрами. Не собирать русскую фразу из английских грамматических фрагментов.
+1. Look for an existing key with the appropriate **meaning**, not merely the same English word.
+2. If a new key is needed, add it to both `en.json` and `ru.json`.
+3. Use a stable semantic name. Existing namespaces include `language.*`, `browse.*`, `panel.*`, `dictUI.*`, `layers.*`, `pages.*`, `search.*`, `system.*`, and `speech.*`.
+4. Keep parameter names identical in both languages. Catalogs contain neither executable code nor HTML markup.
+5. Supply complete sentences with parameters. Do not assemble Russian sentences from English grammatical fragments.
 
-Пример:
+Example:
 
 ```json
 "panel.replaceFile": "{name} is already there. Replace it?"
@@ -60,60 +62,64 @@
 confirm(tx("panel.replaceFile", {name}));
 ```
 
-Не менять ключ при каждой редактуре текста. Имена полей/режимов/файлов не становятся ключами перевода автоматически.
+Do not rename a key every time its wording is edited. Field, mode, and file names do not automatically become translation keys.
 
-### Статическая разметка
+### Static markup
 
-Использовать явные слоты:
+Use explicit slots:
 
 ```html
 <h2>{{T:system.title}}</h2>
 <button aria-label="{{T:panel.close}}">✕</button>
 ```
 
-`renderUI` экранирует текст для HTML. Слоты допустимы в текстовых узлах и **заключённых в кавычки** атрибутах интерфейса. Не вставлять их в JS, CSS, URL или содержимое словарей.
+`renderUI` escapes text for HTML. Slots are valid in text nodes and **quoted** interface attributes. Do not insert them into JS, CSS, URLs, or dictionary content.
 
-Страница должна содержать `{{I18N}}`, а её HTTP-обработчик — вызвать `renderUI` с сохранённым языком. Само наличие слотов в HTML ещё не означает, что перевод подключён.
+Static slots use `uiText()`, which accepts string values only: it neither selects plural forms nor interpolates parameters. Render counted or parameterized messages through the appropriate caller; do not place a plural-object key in a static slot.
 
-### Динамический JavaScript
+The page must contain `{{I18N}}`, and its HTTP handler must call `renderUI` with the saved language. Slots in the HTML alone do not mean translation is connected.
+
+### Dynamic JavaScript
 
 ```js
 const tx = window.wudictI18n.t;
 node.textContent = tx("search.noQuery", {query});
 ```
 
-`t()` возвращает **обычный текст**. Предпочтителен `textContent`. Если существующий код собирает HTML, нужно экранировать результат:
+`t()` returns **plain text**. Prefer `textContent`. If existing code builds HTML, escape the result:
 
 ```js
 box.innerHTML = `<p>${esc(tx("search.noQuery", {query}))}</p>`;
 buttonHTML = `<button title="${escAttr(tx("panel.close"))}">✕</button>`;
 ```
 
-У каждой страницы свой набор helpers. Проверить, что нужная функция существует и экранирует нужный контекст; не предполагать, что `esc` и `escAttr` взаимозаменяемы.
+Each page has its own helpers. Check that the required function exists and escapes for the intended context; do not assume `esc` and `escAttr` are interchangeable.
 
-`setStatus()` на главной странице принимает HTML, тогда как `stylerNote()` и `sysNote()` выводят текст. Вызов `setStatus(esc(tx(...)))` нужен даже без пользовательских параметров: перевод тоже не должен становиться разметкой.
+On the main page, `setStatus()` accepts HTML, whereas `stylerNote()` and `sysNote()` output text. `setStatus(esc(tx(...)))` is required even without user-supplied parameters: a translation must not become markup either.
 
-**Реальная прежняя ошибка:** в HTML-шаблон попало `title=tx("...")` вместо интерполяции. JavaScript при этом синтаксически корректен, но браузер получает неправильный атрибут. Не делать глобальную замену строк по всему файлу без различения HTML, JS, шаблонов и комментариев. После механического извлечения просматривать diff.
+**An actual previous bug:** an HTML template received `title=tx("...")` instead of interpolation. The JavaScript was syntactically valid, but the browser received an incorrect attribute. Do not replace strings globally throughout a file without distinguishing HTML, JS, templates, and comments. Review the diff after mechanical extraction.
 
-Параметры подставляются за один проход. Имя словаря `My {name}` должно остаться буквально таким, а не подставиться повторно. Не добавлять второй проход интерполяции.
+Parameters are substituted in one pass. A dictionary named `My {name}` must remain exactly that, without another substitution. Do not add a second interpolation pass.
 
-### Ширины и вёрстка подписей
+Preserve initialization order. The synchronous i18n bootstrap must run before code reads `window.wudictI18n.t`. Group state is initialized later by `group-editor.js`; early main-page rendering must not eagerly read `userGroups` before it is initialized. Keep the existing early-render fallback in `scopeLabel()` and check startup as well as reopening a menu when changing these helpers.
 
-Английская и русская подписи не совпадают по ширине, и подгонять перевод под фиксированный размер нельзя. `flex-basis`/`width` в пикселях под конкретную строку, медиазапрос «под русский» или правило `:lang(ru)`, разрешающее перенос внутри колонки, дают ровно обратное задуманному: длинная подпись рвётся по пробелу или посреди слова там, где места в панели хватает. Так было в Settings — колонка 60px (ширина самого длинного АНГЛИЙСКОГО имени, «Font weight») плюс `#panel:lang(ru) .facts>.rowlabel{white-space:normal;overflow-wrap:anywhere}` в `i18n.css`; «Толщина шрифта» переносилась по пробелу, «Оформление» и «Компактно» рвались после «Оформлен» и «Компактн», а в полосе «Результаты» фиксированные 96px обрезали «Читать вслух» до «Читать в…».
+### Label widths and layout
 
-С 2026-09-30 и то и другое измеряется: `panelRowColumns()` в `index.html` считает `Range`-ом ширину содержимого подписей каждого раздела панели и публикует самую длинную как `--rlcol` на этом разделе; `flex-basis` подписей берёт её, поэтому подписи стоят в одной колонке, а управления всех строк раздела начинаются на одном x. Строка переносится только тогда, когда её собственное содержимое перестаёт помещаться, и только эта строка. Живые правила и все измерения — `docs/ANDROID-UI-HANDOFF.md`, «The drawer's rows are read down ONE column per section».
+English and Russian labels have different widths, and translations must not be squeezed into a fixed size. Pixel-based `flex-basis`/`width` values tailored to a particular string, a media query “for Russian,” or a `:lang(ru)` rule allowing wrapping inside a column produce the opposite of the intended result: a long label breaks at a space or in the middle of a word even when the drawer has enough room. This happened in Settings: a 60px column (the width of the longest ENGLISH label, “Font weight”) plus `#panel:lang(ru) .facts>.rowlabel{white-space:normal;overflow-wrap:anywhere}` in `i18n.css` caused “Толщина шрифта” to wrap at the space, broke “Оформление” and “Компактно” after “Оформлен” and “Компактн,” and the fixed 96px width in the Results strip clipped “Читать вслух” to “Читать в…”.
 
-Что из этого следует при добавлении перевода:
+Since 2026-09-30, both are measured: `panelRowColumns()` in `index.html` uses a `Range` to measure the label content in each drawer section and publishes the longest width as `--rlcol` on that section. Label `flex-basis` uses that value, aligning labels in one column and making the controls of every row in the section start at the same x coordinate. A row wraps only when its own content no longer fits, and only that row wraps. Current rules and all measurements are in `docs/ANDROID-UI-HANDOFF.md`, “The drawer's rows are read down ONE column per section”.
 
-- Не писать правила `:lang(ru)`/`:lang(en)`, меняющие вёрстку, и не закладывать в CSS длину перевода: язык не должен быть причиной отдельной раскладки. Колонка подписей — измеряемая величина, и если новая подпись её удлиняет, это исправляется переводом, а не числом в CSS.
-- Если новая подпись попадает в разметку строк панели (`.rowlabel` или `.seg>span` внутри `#panel section.sect`), она автоматически входит в измерение. Подпись вне этой разметки — свой случай: проверить, есть ли у неё фиксированная ширина.
-- «Помещается в колонку 96px/60px» не является проверкой: длину подписи в конкретном языке видно только в рендере. Смотреть в браузере на 320/360/393px, в обоих языках, и проверять, что подпись не обрезана (`scrollWidth` против `clientWidth`) и не перенесена, если места хватает.
-- Длинные подписи кнопок и сегментов (`Показать`/`Скрыть`) допустимы: контейнер переносит управление на вторую строку целиком, а не обрезает текст и не разрывает пару.
-- Учитывать системный масштаб шрифта Android (text zoom): подписи растут вместе с ним, а измеренная колонка растёт вместе с подписями; раскладка должна оставаться однострочной там, где ширины хватает, а не рваться внутри слова.
+Consequences when adding a translation:
 
-### Числа
+- Do not add language-specific drawer label widths or wrapping rules. Let the measured column accommodate accurate wording; do not shorten a translation solely to fit the old fixed column. The existing `#styler:lang(ru) #stylerDock` toolbar-wrapping rule is a separate exception, not a pattern for new labels; any generalization needs its own layout checks.
+- If a new label uses the drawer's row markup (`.rowlabel` or `.seg>span` inside `#panel section.sect`), it is included in the measurement automatically. Labels outside that markup are a separate case: check whether they have a fixed width.
+- “Fits in a 96px/60px column” is not a verification: the length of a label in a particular language is only visible when rendered. Inspect it in a browser at 320/360/393px in both languages, checking that it is neither clipped (`scrollWidth` versus `clientWidth`) nor wrapped when enough room is available.
+- Long button and segment labels (`Показать`/`Скрыть`) are acceptable: the container moves the whole control onto a second line instead of clipping the text or separating the pair.
+- Account for Android system font scaling (text zoom): labels grow with it, and the measured column grows with the labels. The layout must remain on one line where space permits, rather than breaking words internally.
 
-Для счётных существительных применять объект форм числа и `Intl.PluralRules`, уже используемый в `i18n.js`:
+### Numbers
+
+For counted nouns, use a plural-form object and `Intl.PluralRules`, already used by `i18n.js`:
 
 ```json
 "search.results": {
@@ -131,116 +137,118 @@ tx("search.results", {
 });
 ```
 
-`count` — исходное число для выбора формы; `number` — представление для человека. Например, число с `+` в ограниченной выдаче нельзя передавать как `count`. Не использовать английское `n === 1 ? "" : "s"` и не писать собственные правила русского склонения.
+`count` is the original number used to choose a form; `number` is its human-readable representation. For example, a count with a `+` suffix in limited results must not be passed as `count`. Do not use English `n === 1 ? "" : "s"` logic or write custom Russian plural rules.
 
-Для нейтральных сообщений вроде «Установлено: 2 из 10» отдельная форма числа не нужна.
+Neutral messages such as “Installed: 2 of 10” do not need separate plural forms.
 
-Fallback: отсутствующий ключ берётся из английского каталога, неизвестный ключ показывается как ключ. Это страховка выполнения; поставляемые каталоги должны оставаться полными и проходить проверки.
+Fallback: a missing key is taken from the English catalog; an unknown key is displayed as the key itself. This is a runtime safeguard; shipped catalogs must remain complete and pass the checks.
 
-## 4. Сохранение, bootstrap и кэш
+## 4. Persistence, bootstrap, and caching
 
-- Источник истины — `state.json`, поле **`language` верхнего уровня**, не `ui.lang` и не localStorage.
-- GET/PUT `/api/language` обновляет только язык. Старые вкладки, сохраняющие `/api/prefs`, не должны перезаписывать новый выбор.
-- Сохранение использует существующие блокировки предпочтений и откат значения при ошибке записи. Не дублировать запись в Android.
-- Каталог встраивается синхронно через `{{I18N}}`: JSON в `script#wudict-i18n`, затем общий JS и CSS с хешем. Не заменять это асинхронным fetch без отдельной задачи: код страницы сразу использует `tx`, а поздняя загрузка даёт смесь языков и вспышку английского.
-- `basePage()` мемоизирован на процесс. Язык главной страницы применяется в `pageFor()`, после общей подготовки; ключ кэша и ETag включают язык.
-- Для новых страниц проверить собственный обработчик, bootstrap и отсутствие необработанных слотов в HTTP-ответе. Страницы и хешированные ассеты имеют разную политику кэширования; не обходить её ручным timestamp.
-- Серверная вводная строка страницы папок сейчас имеет прежнюю английскую ветку и перевод через `pages.*` для выбранного неанглийского языка. Это локальная реализация, а не готовая общая локализация всех Go/API-ошибок.
+- The source of truth is `state.json`, the **top-level `language` field**, not `ui.lang` or localStorage.
+- GET/PUT `/api/language` updates only the language. Older tabs saving `/api/prefs` must not overwrite the new choice.
+- Saving uses the existing preference locks and rolls the value back on a write error. Do not duplicate writes in Android.
+- The catalog is embedded synchronously through `{{I18N}}`: JSON in `script#wudict-i18n`, followed by shared JS and CSS with hashes. Do not replace this with asynchronous fetch without a separate task: page code uses `tx` immediately, and late loading causes mixed languages and a flash of English.
+- `basePage()` is memoized per process. Main-page language is applied in `pageFor()`, after shared preparation; the cache key and ETag include the language.
+- For new pages, check their own handler, bootstrap, and absence of unresolved slots in the HTTP response. Pages and hashed assets have different cache policies; do not bypass them with a manual timestamp.
+- The server-generated Folders introduction currently retains its original English branch and uses `pages.*` translations for the selected non-English language. This is a local implementation, not a general localization system for all Go/API errors.
 
-## 5. Что переводить нельзя
+## 5. What must not be translated
 
-Не изменять ради локализации:
+Do not change the following for localization:
 
-- заголовки, HTML и текст статей, About из словаря, названия файлов/словарей, пути и URL;
-- пользовательские имена групп и сохранённых оформлений;
-- ключи JSON, `state.json`, Android bridge, конфигурации и HTTP-параметров;
-- значения `exact`, `prefix`, `contains`, `fts`, `all`, `g:...`, состояния загрузки и идентификаторы действий;
-- коды языков, таблицы распознавания `internal/lang`, идентификаторы голосов, значения для движка речи;
-- имена CSS-файлов и preset ID, поля manifest, признаки темы и сопоставления групп;
-- бренды издателей и собственные имена, выданные поставщиком голоса.
+- headwords, article HTML and text, dictionary About content, file/dictionary names, paths, and URLs;
+- user-defined group and saved-look names;
+- JSON, `state.json`, Android bridge, configuration, and HTTP parameter keys;
+- values such as `exact`, `prefix`, `contains`, `fts`, `all`, `g:...`, loading states, and action identifiers;
+- language codes, recognition tables in `internal/lang`, voice identifiers, and speech-engine values;
+- CSS filenames and preset IDs, manifest fields, theme markers, and group mappings;
+- publisher brands and proper names supplied by a voice provider.
 
-Встроенные оформления и слои переводятся **для отображения** по стабильному ID. Helpers `looksDisplayName`, `layerText`, `layerTitle` оставляют пользовательские имена и неизвестные upstream-добавления как есть. Не записывать русские названия обратно в manifest или пользовательские данные.
+Built-in looks and layers are translated **for display** by stable ID. The `looksDisplayName`, `layerText`, and `layerTitle` helpers leave user-defined names and unknown upstream additions unchanged. Do not write Russian names back into the manifest or user data.
 
-`All Dictionaries` — зарезервированная группа. Перевод её подписи не означает переименования группы в API или изменения правила резервирования имени. Аналогично «содержит» — подпись, а `contains` — неизменный режим/feature.
+`All Dictionaries` is a reserved group. Translating its label does not mean renaming the group in the API or changing the reserved-name rule. Likewise, “содержит” is a label, while `contains` is an unchanged mode/feature.
 
-## 6. Язык интерфейса и язык статьи
+## 6. Interface language versus article language
 
-Это критическая граница:
+This is a critical boundary:
 
-- Главный документ пока сохраняет `<html lang="en">`. `pick.js` наследует язык для сегментации слов; простое переключение этого атрибута на `ru` меняет обработку словарных статей.
-- Выбранный язык ставится на **контейнеры интерфейса**: диалоги, панели, меню озвучивания. Не на общий контейнер, включающий статьи.
-- Отдельные страницы Browse, папок и словоформ используют выбранный UI-язык, поскольку в них нет такого же пути сегментации статей.
-- Не запускать общий обход DOM с заменой английских слов. Не пропускать статьи через `renderUI` или `t()`.
+- The main document currently retains `<html lang="en">`. `pick.js` inherits language for word segmentation; simply switching this attribute to `ru` changes how dictionary articles are processed.
+- Apply the selected language to **interface containers**: dialogs, panels, and speech menus. Not to a shared container that includes articles.
+- The standalone Browse, Folders, and Lemmas pages use the selected UI language because they do not have the same article-segmentation path.
+- Do not run a general DOM traversal replacing English words. Do not pass articles through `renderUI` or `t()`.
 
-### Статьи с JavaScript в iframe
+### Articles with JavaScript in iframes
 
-`frameDoc()` формирует `srcdoc`, а `frame.js` работает внутри отдельного документа. Он не должен получать весь каталог или зависеть от доступа к родительскому `window.wudictI18n`.
+`frameDoc()` builds `srcdoc`, and `frame.js` runs inside a separate document. It must not receive the entire catalog or depend on access to the parent's `window.wudictI18n`.
 
-В bridge-скрипт передаются только необходимые подписи через экранированные атрибуты:
+Only the required labels are passed to the bridge script through escaped attributes:
 
 - `data-ui-close` → `dataset.uiClose`;
 - `data-ui-not-here` → `dataset.uiNotHere`;
 - `data-ui-load-failed` → `dataset.uiLoadFailed`.
 
-На принимающей стороне сообщения присваиваются через `textContent`, подсказка закрытия — через `.title`. Есть английские fallback-строки для старого host-кода; их не считать забытым переводом и не удалять вслепую.
+On the receiving side, messages are assigned through `textContent`, and the close tooltip through `.title`. English fallback strings support older host code; do not treat them as missing translations or remove them blindly.
 
-Если потребуется новая подпись, расширить этот небольшой контракт. Проверить экранирование кавычек и `<script>`, сохранность исходного HTML статьи и неизменный язык документа iframe.
+If another label is needed, extend this small contract. Check quotation-mark and `<script>` escaping, preservation of original article HTML, and the unchanged iframe document language.
 
-## 7. Android: ресурсы и уже исправленный crash
+## 7. Android: resources and an already fixed crash
 
-- Android-строки остаются в ресурсах. Переводы main и flavor-наборов должны соответствовать своим базовым ресурсам: FOSS и Play имеют разные возможности.
-- `UiLanguage.selected()` читает `.wudict/state.json` относительно `AppDirs.home(context)`. Go владеет записью этого файла. Неподдерживаемое/отсутствующее значение даёт English.
-- `UiLanguage.resources()` применяется существующими Activity/службой к ресурсам приложения. Проверять `%1$s`, `%1$d`, plurals, XML-экранирование и намеренное наследование бренда `app_name`.
-- Не использовать `Locale.setDefault`: это затрагивает произношение и другие механизмы вне интерфейса.
-- Уже открытые native-окна может потребоваться закрыть и открыть снова. Сам reload веб-страницы не обещает пересоздание каждого Android-окна.
-- Системный picker файлов, разрешения и системная страница настроек речи принадлежат Android. Их язык не задаётся этим переводом.
+- Android strings stay in resources. Main and flavor translations must match their own base resources: FOSS and Play have different capabilities.
+- `UiLanguage.selected()` reads `.wudict/state.json` relative to `AppDirs.home(context)`. Go owns writes to that file. Unsupported or absent values mean English.
+- Existing activities/the service use `UiLanguage.resources()` for application resources. Check `%1$s`, `%1$d`, plurals, XML escaping, and intentional inheritance of the `app_name` brand.
+- Do not use `Locale.setDefault`: it affects pronunciation and other mechanisms outside the interface.
+- Native windows that are already open may need to be closed and reopened. Reloading the web page alone does not promise to recreate every Android window.
+- The system file picker, permissions, and system speech-settings page belong to Android. Their language is not controlled by this translation.
 
-**Исправленный дефект:** кнопки режимов поиска и «Все словари» падали с `BadTokenException: token null`. Причина — использование голого `createConfigurationContext()` как контекста диалога: он терял оконные службы Activity.
+**Fixed defect:** the search-mode and “All dictionaries” buttons crashed with `BadTokenException: token null`. The cause was using a bare `createConfigurationContext()` as the dialog context: it lost the Activity's window services.
 
-Текущий `UiLanguage.context()` создаёт `ContextThemeWrapper` над исходным контекстом Activity и вызывает `applyOverrideConfiguration`. Сохранять этот подход. `createConfigurationContext()` пригоден для получения ресурсов, но его нельзя просто передать вместо Activity в диалог. Не «упрощать» код обратно.
+The current `UiLanguage.context()` creates a `ContextThemeWrapper` over the original Activity context and calls `applyOverrideConfiguration`. Preserve this approach. `createConfigurationContext()` is suitable for retrieving resources, but must not simply replace the Activity passed to a dialog. Do not “simplify” the code back to the broken form.
+
+A native dialog can contain text supplied by JavaScript as well as Android resources. For picker labels, trace `livePickerPayload()` and the display-name helpers in `index.html` through the bridge to `DictionaryPicker.java`. Changing `values-ru/strings.xml` alone cannot translate text supplied in a payload. Keep user names and IDs intact, and retain English bridge fallbacks for missing fields.
 
 ### System Settings
 
-`Shell.systemState()` формирует названия и подсказки Advanced-строк из Android-ресурсов. Веб-страница переводит свой текст, диапазоны, подтверждения, ошибки и сообщение об устаревших настройках.
+`Shell.systemState()` builds Advanced-row names and hints from Android resources. The web page translates its own text, ranges, confirmations, errors, and the stale-settings notice.
 
-Не копировать таблицу Advanced-параметров в JavaScript: её состав зависит от flavor. Не менять `row.key`, `kind`, `onValue`, числовые границы и правила `sysCommitNumber` ради перевода. Не добавлять кнопку немедленного перезапуска: устройство этого окна и причины описаны в `docs/ANDROID-UI-HANDOFF.md`.
+Do not copy the Advanced parameter table into JavaScript: its contents depend on the flavor. Do not change `row.key`, `kind`, `onValue`, numeric bounds, or `sysCommitNumber` rules for translation. Do not add an immediate-restart button: this window's design and reasons are documented in `docs/ANDROID-UI-HANDOFF.md`.
 
-## 8. Озвучивание
+## 8. Read aloud
 
-В `speak.js` разделены два разных вопроса:
+`speak.js` separates two different questions:
 
-1. **Как подписать язык и действия:** `tx()`, `langName()` с `Intl.DisplayNames` от UI-языка, `voiceLabel()`.
-2. **На каком языке произнести текст:** `decide`, `userLang`, `pickVoice`, языки словаря, письменность выделения и сохранённый voice URI.
+1. **How to label languages and actions:** `tx()`, `langName()` using `Intl.DisplayNames` with the UI language, and `voiceLabel()`.
+2. **Which language to pronounce the text in:** `decide`, `userLang`, `pickVoice`, dictionary languages, the selected text's script, and the stored voice URI.
 
-Менять первый слой, не второй. Наличие `navigator.language` в правилах произношения само по себе не ошибка локализации: пользователь запретил зависимость **интерфейса** от системы, а не попросил менять алгоритм озвучивания.
+Change the first layer, not the second. The presence of `navigator.language` in pronunciation rules is not itself a localization bug: the user prohibited making the **interface** depend on the system, not requested a change to the speech algorithm.
 
-Android bridge отдаёт сгенерированные названия голосов по языку/региону; `voiceLabel()` локализует их отображение и пометку online, сохраняя voice-объект и идентификатор. В обычном браузере имя голоса может быть брендом — оно остаётся буквальным. Отсутствие `Intl.DisplayNames` не должно ломать меню: fallback — код языка.
+The Android bridge supplies generated language/region voice labels; `voiceLabel()` localizes their display and the online marker while retaining the voice object and identifier. In an ordinary browser, a voice name may be a brand and remains literal. Missing `Intl.DisplayNames` must not break the menu: the fallback is the language code.
 
-## 9. Как искать остатки и работать с upstream
+## 9. Finding remaining strings and working with upstream
 
-Искать не только текст между HTML-тегами, но и:
+Search not only for text between HTML tags, but also for:
 
-- `title`, `aria-label`, `placeholder`, подписи `<option>`;
-- `textContent`, `innerHTML`, `setStatus`, `stylerNote`, `sysNote`, `confirm`, `alert`;
-- HTML внутри JS-шаблонов, условия ошибок, пустые состояния, редкие ветки загрузки;
-- строки, приходящие из Go/Android, iframe и lazy-loaded файлов.
+- `title`, `aria-label`, `placeholder`, and `<option>` labels;
+- `textContent`, `innerHTML`, `setStatus`, `stylerNote`, `sysNote`, `confirm`, and `alert`;
+- HTML inside JS templates, error conditions, empty states, and rare loading branches;
+- strings arriving from Go/Android, iframes, and lazy-loaded files.
 
-Не считать любой английский литерал пропуском: рядом находятся протоколы, CSS, комментарии, console-диагностика и словарные данные. Изменять только после проверки пути до пользователя.
+Do not treat every English literal as an omission: protocol values, CSS, comments, console diagnostics, and dictionary data are nearby. Change a string only after verifying its path to the user.
 
-Для удобства будущих merge:
+To keep future merges manageable:
 
-- сохранять функции, DOM ID, обработчики, API и порядок работы;
-- не смешивать извлечение строк с большим рефакторингом, форматированием всей страницы или сменой UI-фреймворка;
-- оставлять английский каталог понятным сопоставлением с upstream;
-- переносить upstream-изменение поведения, затем подключать его новый текст к каталогам;
-- пересматривать смысл ключа при изменении функции, а не оставлять старый перевод новой логике;
-- повторно проверять новые английские строки: тест полноты каталога не обнаруживает каждый сырой литерал.
+- preserve functions, DOM IDs, handlers, APIs, and execution order;
+- do not mix string extraction with major refactoring, whole-page formatting, or a UI-framework change;
+- keep the English catalog clearly traceable to upstream;
+- port upstream behavior changes, then connect their new text to the catalogs;
+- reconsider a key's meaning when a function changes, rather than attaching an old translation to new logic;
+- review new English strings again: catalog-completeness tests do not detect every raw literal.
 
-Технический процесс upstream-синхронизации и `merge-work` описан в HANDOFF и профильной документации. Этот документ не разрешает merge/commit и не меняет Git-политику.
+The technical upstream-sync and `merge-work` procedure is documented in HANDOFF and the relevant area documentation. This document does not authorize merges/commits or change Git policy.
 
-## 10. Проверки и критерии готовности
+## 10. Checks and completion criteria
 
-Быстрый набор:
+Quick checks:
 
 ```text
 go test ./internal/server -run TestI18n -count=1
@@ -249,20 +257,22 @@ go test ./internal/server -run TestAppearanceContract -count=1
 git diff --check
 ```
 
-Эквиваленты первых двух — `make i18n-check` и `make i18n-check-js`. Node нужен только для проверок; npm и установка пакетов не нужны. Путь к Node на этой Windows-машине, если его нет в PATH, можно найти в `docs/WINDOWS-VERIFY.md` или конфигурации доступного runtime; не добавлять машинный абсолютный путь в код приложения.
+The first two have equivalents: `make i18n-check` and `make i18n-check-js`. Node is needed only for checks; npm and package installation are not required. If Node is not in PATH on this Windows machine, its path can be found in `docs/WINDOWS-VERIFY.md` or the available runtime configuration; do not add a machine-specific absolute path to application code.
 
-Проверки Go покрывают каталоги, параметры, формы числа, явные ссылки на ключи, persistence, cache/ETag, default/fallback и выдачу страниц. При добавлении отдельного JS/HTML-файла включить его в список проверяемых источников в `i18n_test.go`.
+Go checks cover catalogs, parameters, plural forms, explicit key references, persistence, cache/ETag, defaults/fallback, and served pages. When adding a separate JS/HTML file, include it in the checked-source list in `i18n_test.go`.
 
-Node-проверки покрывают синтаксис и отдельные реальные пути отображения: имена, карточки и результаты, склонение, Advanced-валидацию, независимость произношения от UI-языка, создание iframe с безопасными подписями. При изменении этих путей расширять соответствующий тест, а не только проверять наличие строки в исходнике.
+Reference scanning is limited to static slots and literal calls such as `tx("panel.close")` or `t("panel.close")` in that list. It does not enumerate keys selected by a conditional, concatenation, or an indirect helper. Review those key sets explicitly and cover important dynamic branches with rendering tests. Catalog parity does not prove that every call resolves to a key, and neither check detects all untranslated raw literals.
 
-Синтаксический успех **не доказывает**, что HTML-атрибуты корректны, меню помещается на телефон или native-диалог не падает. Результат на устройстве отражать отдельно. Не объявлять проверенными ветки, которые только прочитаны в коде.
+Node checks cover syntax and selected real rendering paths: names, cards and results, plural forms, Advanced validation, pronunciation independence from UI language, and iframe creation with safe labels. When changing these paths, extend the relevant test rather than merely checking that a string exists in source.
 
-Полный набор тестов имеет известные baseline-сбои Windows — см. `docs/WINDOWS-VERIFY.md`. Не чинить их попутно и не скрывать за формулировкой «всё прошло». Новую ошибку сравнить с исходным состоянием, не списывать автоматически на baseline.
+Syntactic success **does not prove** that HTML attributes are correct, a menu fits a phone, or a native dialog does not crash. Record device results separately. Do not claim verification for branches that were only read in code.
 
-После работы:
+The full test suite has known Windows baseline failures; see `docs/WINDOWS-VERIFY.md`. Do not fix them incidentally or hide them behind “everything passed.” Compare a new failure with the original state instead of automatically attributing it to the baseline.
 
-1. Проверить diff: идентификаторы, пользовательские данные, английский fallback, экранирование.
-2. Выполнить соразмерные локальные проверки; отдельно указать, собирался ли APK и был ли тест на устройстве.
-3. Обновить [translation_todo.md](translation_todo.md): завершённое, остатки, непроверенное.
-4. Изменившиеся правила/архитектуру внести сюда. Не копировать текущий TODO обратно в этот файл.
-5. Кратко обновить HANDOFF в пределах его лимита, оставив ссылку на эти документы. Не раздувать HANDOFF списком каждого ключа перевода.
+After the work:
+
+1. Review the diff: identifiers, user data, English fallback, and escaping.
+2. Run proportionate local checks; state separately whether an APK was built and a device test performed.
+3. Update [translation_todo.md](translation_todo.md): completed work, remaining work, and unverified items.
+4. Record changed rules/architecture here. Do not copy the current TODO back into this file.
+5. Briefly update HANDOFF within its limit, retaining a link to these documents. Do not inflate HANDOFF with a list of every translation key.

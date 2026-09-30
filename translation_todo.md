@@ -1,96 +1,98 @@
-# Локализация: состояние и следующие задачи
+# Localization: status and next tasks
 
-Обновлено 2026-09-30. Правила реализации — [translation.md](translation.md). Этот файл — актуальный список задач, а не разрешение автоматически выполнять все перечисленные изменения.
+Updated 2026-09-30. Implementation rules are in [translation.md](translation.md). This file is the current task list, not permission to carry out every listed change automatically.
 
-## Состояние checkout
+## Checkout state
 
-Обновлено 2026-09-30 (третья правка того же дня). Ветка `translation_layout_fix`, HEAD `01a1438` (changelog предпросмотра), дерево чистое: правка раскладки подписей Settings вошла коммитом `156e802` (`Settings pane layout fix`) — колонка подписей измеряется (`panelRowColumns()` в `index.html` → `--rlcol` на разделе), правило `:lang(ru)` в `i18n.css` удалено, полоса «Результаты» больше не обрезает «Читать вслух», три кнопки оформления ходят одним блоком `iconrow`. Правила и измерения — в `docs/ANDROID-UI-HANDOFF.md`, «The drawer's rows are read down ONE column per section»; проверено в Chromium на 320/360/375/393/412px в обоих языках и при имитации text zoom 1.4×, **на телефоне не проверено**. Проверять реальный `git status` перед работой: этот снимок быстро устаревает.
+Rechecked 2026-09-30 during the documentation audit: branch `translation_layout_fix`, HEAD `ace52db` (preview-release handoff). Uncommitted changes are limited to `translation.md`, `translation_todo.md`, and `HANDOFF.md`: English documentation and this audit. The Settings label layout fix was committed as `156e802` (`Settings pane layout fix`). The label column is measured (`panelRowColumns()` in `index.html` → `--rlcol` on the section), the drawer's `#panel:lang(ru)` rule was removed from `i18n.css`, the Results strip no longer clips “Читать вслух,” and the three appearance buttons move as a single `iconrow` block. The separate `#styler:lang(ru)` toolbar rule remains. Rules and measurements are in `docs/ANDROID-UI-HANDOFF.md`, “The drawer's rows are read down ONE column per section”; verified in Chromium at 320/360/375/393/412px in both languages and with simulated 1.4× text zoom, **not verified on a phone**. Check the actual `git status` before working: this snapshot becomes outdated quickly.
 
-**Опубликован предпросмотр `wudict2-v0.6.0-ru.1`** (2026-09-30, по поручению пользователя). Тег на `01a1438`, APK собран `build-android.cmd release`: `versionName='wudict2-v0.6.0-ru.1'`, versionCode 426, в APK подтверждены `locales: '--_--' 'ru'` и каталог `web/i18n/ru.json` с русскими строками, sha256 `d1af995b935fcefbcdf69cff0bdf38b02fef85dcb6dc46fe2f0ae84833b56935`, подпись та же, что у предыдущих релизов. Релиз помечен **pre-release**, поэтому `latest` остаётся стабильным v0.5.0: https://github.com/DmShAl/wudict2/releases/tag/wudict2-v0.6.0-ru.1. Сборка идёт от ветки, которая содержит и весь нерелизнутый `dev`, поэтому в описании релиза описана и его работа. Перед публикацией: `TestI18n` и `TestAppearanceContract` зелёные, `git diff --check` чистый, `make i18n-check-js` **не запускался** — на этой машине нет Node.
+**Preview `wudict2-v0.6.0-ru.1` published** (2026-09-30, at the user's request). Tag on `01a1438`, APK built with `build-android.cmd release`: `versionName='wudict2-v0.6.0-ru.1'`, versionCode 426, `locales: '--_--' 'ru'` and the `web/i18n/ru.json` catalog with Russian strings confirmed inside the APK, sha256 `d1af995b935fcefbcdf69cff0bdf38b02fef85dcb6dc46fe2f0ae84833b56935`, same signing certificate as previous releases. The release is marked **pre-release**, at publication, `latest` remained stable v0.5.0: https://github.com/DmShAl/wudict2/releases/tag/wudict2-v0.6.0-ru.1. The build comes from a branch that also contains all unreleased `dev` work, so the release notes describe that work too. Before publishing: `TestI18n` and `TestAppearanceContract` passed, `git diff --check` was clean, `make i18n-check-js` was **not run** — that release run reported Node unavailable; this does not supersede the earlier successful Node checks.
 
-Коммит, merge в `dev` и публикацию по-прежнему делать только по поручению; установку в эмулятор автоматически не выполнять.
+Continue to commit, merge into `dev`, and publish only when requested; do not install in the emulator automatically.
 
-## Что уже реализовано
+## Already implemented
 
-- [x] Ручной выбор English / Русский в Settings, English по умолчанию, сохранение `language` в `state.json`, применение через reload.
-- [x] Каталоги, fallback, интерполяция, формы числа, синхронный bootstrap и кэш страниц с учётом языка.
-- [x] Browse, включая пустые состояния, счётчики и навигацию.
-- [x] Android-ресурсы main/FOSS/Play и контексты ресурсов, следующие ручному выбору языка.
-- [x] Settings, оформление, встроенные названия слоёв/оформлений, редактор CSS и связанные диалоги.
-- [x] Настройки словарей и группы: карточки, индексы, удаление, подтверждения и известные ошибки валидации групп.
-- [x] «Папки словарей»: подсказки, серверная вводная строка, импорт, загрузка и счётчики.
-- [x] «Словоформы»: подписи, состояния установки/загрузки, подтверждения и отображаемые названия языков.
-- [x] Поиск и результаты: режимы, progress/empty/retry, склонение результатов, предложения создать индекс, сообщения о переходах и словоформах, навигация по совпадениям.
-- [x] System Settings: веб-текст, Advanced-пояснения, диапазоны, валидация, reset/cache и сообщения о применении настроек. Сами Advanced-строки используют уже переведённые Android-ресурсы.
-- [x] Меню озвучивания: читать/остановить, голос, отсутствие голоса, названия языков и переход к системным настройкам речи.
-- [x] Найденные остатки UI: ошибки сохранения предпочтений и аудио, подсказки файлов стилей, подтверждение замены файла, ошибки переключения слоя.
-- [x] Внутристатейные окна iframe: подпись закрытия и два состояния ошибки через небольшой контракт host → frame.
-- [x] Временные кнопки Language на Browse и странице папок удалены; штатная кнопка в настройках сохранена.
+- [x] Manual English / Русский selection in Settings, English default, `language` persisted in `state.json`, applied through reload.
+- [x] Catalogs, fallback, interpolation, plural forms, synchronous bootstrap, and language-aware page caching.
+- [x] Browse, including empty states, counts, and navigation.
+- [x] Main/FOSS/Play Android resources and resource contexts following the manual language choice.
+- [x] Settings, appearance, built-in layer/look names, CSS editor, and related dialogs.
+- [x] Dictionary settings and groups: cards, indexes, removal, confirmations, and known group-validation errors.
+- [x] Folders: hints, server-generated introduction, import, download, and counts.
+- [x] Lemmas: labels, installation/download states, confirmations, and displayed language names.
+- [x] Search and results: modes, progress/empty/retry states, result plurals, index-creation offers, link-scope and morphology messages, and match navigation.
+- [x] System Settings: web text, Advanced explanations, ranges, validation, reset/cache, and settings-application notices. Advanced rows themselves use already translated Android resources.
+- [x] Read-aloud menu: read/stop, voice, unavailable voice, language names, and navigation to system speech settings.
+- [x] Identified remaining UI strings: preference-saving and audio errors, stylesheet-file hints, file-replacement confirmation, and layer-switch errors.
+- [x] In-article iframe windows: close label and two error states through a small host → frame contract.
+- [x] Temporary Language buttons on Browse and Folders removed; the regular Settings button retained.
+- [x] Settings label columns measured from rendered content; Results labels no longer use the old fixed width. Browser verification is recorded above; phone verification remains below.
 
-Галочка означает реализовано в коде, **не** исчерпывающе проверено на телефоне.
+A checkmark means implemented in code, **not** exhaustively tested on a phone.
 
-## 1. Осталось перевести: категории и фильтры словарей
+## 1. Still to translate: dictionary categories and filters
 
-- [ ] Изучить `internal/facet/facet.go`: отображаемые `FL`/`VL`, названия языков и категорий содержимого.
-- [ ] Проверить все потребители: группировка в селекторе словарей, `traits()` и подписи категорий в сведениях о словаре, `groupLabel()`/область поиска. Одна категория должна одинаково называться в разных местах.
-- [ ] Предпочтительный вариант для оценки — перевод отображения по стабильным `F`/`V` на клиенте, с fallback на серверные подписи. Это предложение, а не уже принятое решение.
-- [ ] Не менять ID, правила распознавания названий, состав групп, английские таблицы `internal/lang` и бренды издателей. Проверить неизменность `g:...` и списка словарей при смене UI-языка.
-- [ ] Для названий языков рассмотреть существующий подход `Intl.DisplayNames` с безопасным fallback. Не переводить поля данных, которые используются для распознавания/поиска.
+- [ ] Inspect `internal/facet/facet.go`: displayed `FL`/`VL`, language names, and content-category names.
+- [ ] Check all consumers: grouping in the dictionary selector, `traits()` and category labels in dictionary information, `groupLabel()`/search scope. A category must have the same name in different places.
+- [ ] Preferred option to evaluate: translate display text on the client using stable `F`/`V`, with fallback to server labels. This is a proposal, not an already accepted decision.
+- [ ] Do not change IDs, name-recognition rules, group membership, English `internal/lang` tables, or publisher brands. Verify that `g:...` and dictionary lists remain unchanged when the UI language changes.
+- [ ] For language names, consider the existing `Intl.DisplayNames` approach with a safe fallback. Do not translate data fields used for recognition/search.
 
-Готовность: в русской версии подписи категорий/языков переведены, выбор тех же категорий даёт те же словари, неизвестные значения upstream не пропадают и отображают исходное название.
+Completion: category/language labels are translated in the Russian version, selecting the same categories returns the same dictionaries, and unknown upstream values remain visible with their original names.
 
-## 2. Осталось перевести: сообщения Go/API
+## 2. Still to translate: Go/API messages
 
-- [ ] Собрать сообщения, реально видимые человеку в импорте, подготовке индексов, удалении, загрузке, словоформах, путях/конфигурации и сохранении файлов. Не начинать с замены всех английских строк в Go.
-- [ ] Отделить понятную пользователю причину от технической диагностики (`HTTP`, текст ОС/библиотеки, адреса, пути).
-- [ ] Выбрать контракт для каждого семейства: стабильный код ошибки + параметры с переводом на клиенте либо локализация в конкретном HTML-пути сервера. Общая локаль на запрос сейчас не реализована и не нужна автоматически.
-- [ ] При расширении API сохранить совместимость клиентов. Не заменить семантические значения русскими строками и не ломать тесты английского API только ради локализации.
-- [ ] Проверить оба языка и неизвестную ошибку: она должна оставаться видимой, а не теряться за неизвестным ключом.
+- [ ] Collect messages actually visible to readers during import, index preparation, removal, downloads, lemma handling, path/configuration handling, and file saving. Do not begin by replacing every English string in Go.
+- [ ] Separate the user-understandable cause from technical diagnostics (`HTTP`, OS/library text, addresses, paths).
+- [ ] Choose a contract for each family: stable error code + parameters translated on the client, or localization in a specific server HTML path. A general per-request locale is not implemented and is not automatically required.
+- [ ] Preserve client compatibility when extending APIs. Do not replace semantic values with Russian strings or break English API tests merely for localization.
+- [ ] Check both languages and an unknown error: it must remain visible rather than disappearing behind an unknown key.
 
-Уже есть локальные решения: `groupErrorText()` сопоставляет известные сообщения групп и оставляет незнакомое без изменения; страница папок переводит известное `folder not found`. Это не универсальная система ошибок. Не распространять бесконтрольно сопоставление длинных текстов; для расширения оценить стабильные коды.
+Local solutions already exist: `groupErrorText()` maps known group messages and leaves unfamiliar ones unchanged; the Folders page translates the known `folder not found` message. This is not a universal error system. Do not spread long-text matching without restraint; evaluate stable codes when extending it.
 
-Готовность: основные ожидаемые ошибки имеют переведённую понятную часть, неизвестные технические подробности остаются доступны, значения API и поведение операций сохранены.
+Completion: common expected errors have a translated, understandable explanation, unknown technical details remain available, and API values and operation behavior are preserved.
 
-## 3. Аудит пропущенных строк
+## 3. Audit for missed strings
 
-- [ ] Проверить редкие ветки после текущего этапа: сеть пропала, сервер отказал, read-only каталог, недоступный путь, повреждённые данные, частичная загрузка.
-- [ ] Проверить lazy-loaded JS и сообщения из Android bridge, а не только `index.html`.
-- [ ] Проверить динамические `title`/`aria-label`: успешный JS syntax check не ловит все ошибки в сгенерированных атрибутах.
-- [ ] При поступлении скриншотов пользователя фиксировать конкретный экран, шаги, English/Русский и фактический текст. Сначала найти источник строки, затем править соответствующий слой.
+- [ ] Check rare branches after the current stage: lost network, server refusal, read-only directory, unavailable path, damaged data, partial loading.
+- [ ] Check lazy-loaded JS and Android bridge messages, not only `index.html`.
+- [ ] Check dynamic `title`/`aria-label`: a successful JS syntax check does not catch every error in generated attributes.
+- [ ] Review conditional/computed translation keys and indirect display helpers: the literal-reference scanner does not enumerate them. Check important branches through actual rendering tests.
+- [ ] When the user supplies screenshots, record the exact screen, steps, English/Русский selection, and actual text. Find the string's source first, then fix the appropriate layer.
 
-Не считать дефектами намеренные `Language`, `English`, `Русский`, английские iframe fallback, собственные названия словарей/голосов/издателей, коды, параметры конфигурации и console-диагностику.
+Do not treat intentional `Language`, `English`, `Русский`, English iframe fallbacks, dictionary/voice/publisher proper names, codes, configuration parameters, or console diagnostics as defects.
 
-## 4. Устройство и внешний вид — ещё требуется проверка
+## 4. Device and appearance — verification still required
 
-Пользователь подтвердил работоспособность окна Language и смену языка Browse на раннем этапе. Это не подтверждение всех следующих экранов.
+The user confirmed that the Language dialog worked and Browse changed language at an early stage. This does not confirm every subsequent screen.
 
-- [ ] Повторно открыть picker режима поиска и «Все словари» на APK с исправленным `UiLanguage.context()`. Ранее лог подтверждал `BadTokenException`; исправление компилировалось, но окончательную проверку новой сборки пользователем не считать полученной без его сообщения.
-- [ ] Переключить English → Русский → English; проверить новые страницы, reload, перезапуск приложения и сохранение выбора.
-- [ ] Убедиться, что Language остался только в настройках; на странице первого запуска папок отдельного переключателя теперь нет по просьбе пользователя.
-- [ ] Проверить ширины телефона: 320/360px, длинные подписи, режимы поиска, кнопки «Примеры», System Settings и редактор CSS. Отдельно — подписи Settings: `Оформления`, `Размер шрифта`, `Толщина шрифта`, `Компактно`, `Примеры`, `Нижняя панель` читаются целиком в одну строку, управления строк оформления начинаются на одном x, `Читать вслух` в «Результатах» видно полностью и пара стоит рядом; на второй строке управление оказывается только там, где содержимому строки действительно не хватает ширины, и три кнопки оформления переносятся вместе.
-- [ ] Проверить день/ночь, пользовательский фон, обои и Quiet labels. Перевод не должен возвращать серый цвет активным контролам или ломать оформление окон.
-- [ ] Проверить русские счётчики: 1/2/5/11/21/22; ограниченную выдачу с `+`; длинные имена словарей/групп/путей.
-- [ ] Проверить импорт, уведомления и native-диалоги в нужных flavor; системный picker Android может оставаться на языке системы.
-- [ ] Проверить Advanced: наследуемое значение, диапазоны, ошибку ввода, restore и сообщение о применении при следующем открытии. Не менять реальные настройки ради проверки без необходимости и разрешённого контекста.
-- [ ] Проверить озвучивание на реальном движке: выбор голоса, остановку, несколько голосов одного региона, отсутствие голоса, настройки речи. Английский текст должен оставаться английским при русском интерфейсе.
-- [ ] Проверить раскрываемую ссылку на подстатью в обычной статье и статье с JS/iframe: закрытие, нет результата, ошибка загрузки.
-- [ ] Проверить двойной тап/выделение в английских, русских и других доступных словарях: UI-язык не должен менять сегментацию статьи.
+- [ ] Reopen the search-mode picker and “All dictionaries” in an APK with the fixed `UiLanguage.context()`. Earlier logs confirmed `BadTokenException`; the fix compiled, but do not assume final user verification of a new build without their report.
+- [ ] Switch English → Русский → English; check new pages, reload, application restart, and persistence of the choice.
+- [ ] Confirm that Language remains only in Settings; the first-run Folders page no longer has a separate selector, at the user's request.
+- [ ] Check phone widths: 320/360px, long labels, search modes, Examples buttons, System Settings, and the CSS editor. Specifically check Settings labels: `Оформления`, `Размер шрифта`, `Толщина шрифта`, `Компактно`, `Примеры`, and `Нижняя панель` must be fully readable on one line; appearance-row controls must begin at the same x coordinate; `Читать вслух` in Results must be fully visible with its pair beside it. A control should move to a second line only when that row's content really lacks room, and the three appearance buttons must wrap together.
+- [ ] Check day/night, custom background color, wallpaper, and Quiet labels. Translation must not restore grey text to active controls or break window appearance.
+- [ ] Check Russian counts: 1/2/5/11/21/22; limited results with `+`; long dictionary/group names and paths.
+- [ ] Check import, notifications, and native dialogs in the required flavors; Android's system picker may remain in the system language.
+- [ ] Check Advanced: inherited value, ranges, invalid input, restore, and the notice about applying settings on next opening. Do not change real settings solely for testing without necessity and an authorized context.
+- [ ] Check read aloud with a real engine: voice selection, stopping, multiple voices for one region, unavailable voice, speech settings. English text must remain English with the Russian interface.
+- [ ] Check expandable subentry links in an ordinary article and a JS/iframe article: closing, no result, and loading failure.
+- [ ] Check double-tap/selection in English, Russian, and other available dictionaries: UI language must not change article segmentation.
 
-Эти действия не запускать автоматически в эмуляторе: сейчас проверку взял на себя пользователь.
+Do not run these actions automatically in the emulator: the user has currently taken responsibility for verification.
 
-## 5. Возможные доработки — оценить отдельно, не смешивать с простым переводом
+## 5. Possible improvements — evaluate separately, do not mix with straightforward translation
 
-- [ ] **Серверная вводная страницы папок:** английская ветка сохранена в `setupPage`, другая использует каталог. При расширении языков оценить единый шаблонный путь с сохранением английской совместимости. Не переписывать только ради симметрии.
-- [ ] **Фрагменты предложений:** на странице папок и в подсказке пути сохранения ещё есть отдельные части текста вокруг DOM-узлов. Если следующий язык потребует иного порядка слов, перейти к безопасному шаблону с DOM-параметрами; не вставлять непроверенный HTML из каталога.
-- [ ] **Упрощение хранения знаний:** `docs/I18N.md` содержит раннюю историю этапов; правила теперь в `translation.md`, остатки здесь. Не вести три независимых TODO. При будущей чистке сохранить факты проверок, не объявлять их новыми.
-- [ ] **Названия ключей:** не переименовывать массово уже работающие `panel.*`/`pages.*` и другие namespaces без причины. Если ключ вводит в заблуждение, менять вместе со всеми ссылками и проверками.
-- [ ] **Новый язык:** это отдельная задача. Сейчас allowlist en/ru повторяется в Go-загрузчике и нормализации/валидации, диалоге JS, Android `UiLanguage` и проверках. Одного нового JSON недостаточно; нужны Android-ресурсы, формы числа, fallback и тесты. Не включать автоматический выбор по системе.
-- [ ] **RTL:** не реализован. Понадобится отдельная проверка направления, CSS и меню; нельзя обещать поддержку арабского/иврита после одного каталога.
-- [ ] **`html lang` главной страницы:** не переключать до отделения fallback сегментации статьи от UI-языка. Сейчас сохранение `en` намеренно. Это задача доступности/языковой архитектуры, не механическая замена атрибута.
+- [ ] **Server-generated Folders introduction:** `setupPage` retains the English branch, while the other branch uses the catalog. When adding languages, evaluate a unified template path that preserves English compatibility. Do not rewrite it merely for symmetry.
+- [ ] **Sentence fragments:** the Folders page and saved-path hint still have separate text fragments around DOM nodes. If the next language needs a different word order, move to a safe template with DOM parameters; do not insert unchecked HTML from the catalog.
+- [ ] **Simplifying knowledge storage:** `docs/I18N.md` contains early stage history; rules now live in `translation.md`, and remaining work lives here. Do not maintain three independent TODO lists. Preserve verification facts during future cleanup without presenting them as new checks.
+- [ ] **Key names:** do not rename working `panel.*`/`pages.*` and other namespaces in bulk without a reason. If a key is misleading, change it together with every reference and check.
+- [ ] **A new language:** this is a separate task. The en/ru allowlist is currently repeated in the Go loader and normalization/validation, JS dialog, Android `UiLanguage`, checks, and `/api/language` schemas in `internal/server/web/openapi.yaml`. One new JSON file is not enough; Android resources, plural forms, fallback, and tests are needed. Keep static-slot keys as strings and check dynamic key sets too. Do not enable automatic system-language selection.
+- [ ] **RTL:** not implemented. Direction, CSS, and menus require separate verification; do not promise Arabic/Hebrew support after adding only a catalog.
+- [ ] **Main-page `html lang`:** do not switch it before separating the article-segmentation fallback from the UI language. Retaining `en` is currently intentional. This is an accessibility/language-architecture task, not a mechanical attribute replacement.
 
-## 6. Что подтверждено локально
+## 6. What was verified locally
 
-На последнем этапе до создания документов прошли:
+At the last stage before these documents were created, the following passed:
 
 ```text
 go test ./internal/server -run 'Test(I18n|AppearanceContract)' -count=1
@@ -98,12 +100,14 @@ node tools/i18n-test.cjs
 git diff --check
 ```
 
-Проверялись каталоги, выдача страниц, формы числа, сохранение данных/идентификаторов в рендеринге, Advanced-валидация и payload, независимость языка произношения, экранирование подписей iframe и сохранение статьи. Это проверки отдельных путей, а не end-to-end всех сценариев.
+Checks covered catalogs, served pages, plural forms, preservation of data/identifiers during rendering, Advanced validation and payloads, pronunciation-language independence, iframe label escaping, and article preservation. These are checks of individual paths, not end-to-end coverage of every scenario.
 
-APK на последних этапах не собирался и не устанавливался. Полный набор тестов повторно не запускался; известные baseline-проблемы описаны в `docs/WINDOWS-VERIFY.md`.
+An APK was not built or installed during those translation stages. The later preview release did include an APK build, as recorded above; that build is not evidence of phone/emulator verification. The layout stage separately recorded Chromium checks, including simulated text zoom. The full test suite was not rerun during the final translation stages; known baseline problems are documented in `docs/WINDOWS-VERIFY.md`.
 
-## 7. Как обновлять этот файл
+This documentation audit checked the guide against the current implementation and corrected the checkout snapshot and verification boundaries. It did not change application code or rerun runtime tests, build an APK, or perform device checks.
 
-После каждого этапа отметить сделанное, удалить устаревшее описание остатка, записать новые конкретные риски/непроверенное. Для проверки указывать вид доказательства: код/локальный тест/браузер/эмулятор/сообщение пользователя. Не превращать локальный тест в утверждение о телефоне.
+## 7. Maintaining this file
 
-Правило, полезное следующему агенту независимо от текущей задачи, переносить в `translation.md`. Короткий указатель состояния поддерживать в HANDOFF. Не добавлять сюда полный diff, список всех ключей и повторяющуюся историю каждого запуска теста.
+After each stage, mark completed work, remove outdated descriptions of remaining work, and record new specific risks/unverified items. For verification, state the type of evidence: code/local test/browser/emulator/user report. Do not turn a local test into a claim about a phone.
+
+Move rules useful to the next agent regardless of the current task into `translation.md`. Keep a brief status pointer in HANDOFF. Do not add the full diff, a list of every key, or repeated histories of every test run here.
