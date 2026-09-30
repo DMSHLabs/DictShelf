@@ -92,7 +92,7 @@ func TestI18nPagesAndCache(t *testing.T) {
 	if ru.Code != 200 || ru.Header().Get("ETag") == en.Header().Get("ETag") {
 		t.Fatal("language did not invalidate the cached page")
 	}
-	for _, path := range []string{"/", "/setup", "/browse"} {
+	for _, path := range []string{"/", "/setup", "/browse", "/lemmas"} {
 		r := serve(s, newRequest("GET", path, nil))
 		body := r.Body.String()
 		if r.Code != 200 || strings.Contains(body, "{{") || !strings.Contains(body, `"language":"ru"`) {
@@ -101,8 +101,23 @@ func TestI18nPagesAndCache(t *testing.T) {
 		if path == "/browse" && !strings.Contains(body, `<title>Просмотр словаря</title>`) {
 			t.Fatal("static UI was not translated")
 		}
+		if path != "/" && strings.Contains(body, "data-ui-language") {
+			t.Errorf("temporary language button remains on %s", path)
+		}
+		for route, title := range map[string]string{"/setup": "Папки словарей", "/lemmas": "Словоформы"} {
+			if path == route && !strings.Contains(body, "<title>"+title+"</title>") {
+				t.Errorf("page title not translated: %s", path)
+			}
+		}
 		if path == "/" && !strings.Contains(body, `<html lang="en">`) {
 			t.Fatal("partial UI translation changed article segmentation fallback")
+		}
+		if path == "/" {
+			for _, text := range []string{`id="panel" lang="ru"`, `>Настройки`, `>Фон окна…</button>`, `>Слои оформления…</button>`, `>Сохранить оформление</h2>`} {
+				if !strings.Contains(body, text) {
+					t.Errorf("main settings/appearance missing %q", text)
+				}
+			}
 		}
 	}
 	if err := s.reg.prefs.setLanguage("en"); err != nil {
@@ -121,8 +136,30 @@ func TestI18nPagesAndCache(t *testing.T) {
 		t.Fatal(err)
 	}
 	first := serve(New(empty), newRequest("GET", "/", nil)).Body.String()
-	if strings.Contains(first, "{{") || !strings.Contains(first, "data-ui-language") {
-		t.Fatal("first run cannot select a language")
+	if strings.Contains(first, "{{") || !strings.Contains(first, "Папка словарей ещё не задана.") {
+		t.Fatal("first run is not translated")
+	}
+}
+
+func TestI18nFolderIntro(t *testing.T) {
+	dir := t.TempDir()
+	for _, tc := range []struct {
+		dirs  []string
+		count int
+		want  string
+	}{
+		{nil, 0, "Папка словарей ещё не задана."},
+		{[]string{dir}, 0, "пока нет словарей."},
+		{[]string{dir, dir}, 0, "ни в одной из папок (2)."},
+		{[]string{dir}, 22, "Используется словарей: 22. Папок: 1."},
+		{[]string{`missing/<b>{count}</b>`}, 0, `<code>missing/&lt;b&gt;{count}&lt;/b&gt;</code> не существует.`},
+	} {
+		if page := setupPage(tc.dirs, tc.count, "", "ru"); !strings.Contains(page, tc.want) {
+			t.Errorf("intro missing %q", tc.want)
+		}
+	}
+	if page := setupPage([]string{dir}, 2, "", "en"); !strings.Contains(page, "Serving 2 dictionaries from 1 folder.") {
+		t.Fatal("English intro changed")
 	}
 }
 
@@ -174,7 +211,7 @@ func TestI18nCatalogs(t *testing.T) {
 	// This checks explicit translation references, not arbitrary new English
 	// upstream literals. Those still need review when merging upstream changes.
 	refs := regexp.MustCompile(`\b(?:t|tx)\("([a-zA-Z0-9_.]+)"`)
-	for _, file := range []string{"web/index.html", "web/setup.html", "web/browse.html", "web/i18n.js"} {
+	for _, file := range []string{"web/index.html", "web/setup.html", "web/lemmas.html", "web/browse.html", "web/i18n.js", "web/looks.js", "web/group-editor.js"} {
 		data, err := os.ReadFile(file)
 		if err != nil {
 			t.Fatal(err)

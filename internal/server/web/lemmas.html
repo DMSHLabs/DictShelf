@@ -5,9 +5,10 @@
  SPDX-License-Identifier: GPL-3.0-or-later
 -->
 
-<html lang="en">
+<html lang="{{T:locale}}">
 <head>
 <meta charset="utf-8">
+{{I18N}}
 <script>
 // An optional host background, the same hook setup.html carries: the Android
 // host paints the chosen image (or colour) behind a transparent WebView, and
@@ -67,7 +68,7 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
 })();
 </script>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Lemmatization</title>
+<title>{{T:pages.lemmas}}</title>
 <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
 <link rel="stylesheet" href="/assets/setup.css?v={{CSS}}">
 <!-- The app halves of any preset that asked to be on this page too (manifest
@@ -131,29 +132,28 @@ html[data-shell-tone="dark"] {
      it was and the back gesture does not walk into this page again. Hidden on
      a first run, where "/" is served as /setup and there is nothing behind. -->
 <div class="top">
-<h1>Lemmatization</h1>
-<button type="button" class="x" id="closePage" aria-label="Close">✕</button>
+<h1>{{T:pages.lemmas}}</h1>
+<button type="button" class="x" id="closePage" aria-label="{{T:pages.close}}">✕</button>
 </div>
-<p>When a word is not in a dictionary, wuDict can look up its dictionary form and
-   try again — so <i>understood</i> finds <i>understand</i>, and <i>geese</i> finds <i>goose</i>.
-   Each language needs its word list installed here.</p>
+<p>{{T:pages.lemmaIntro}}</p>
 
 <div id="banner" class="banner hidden"></div>
 
-<div class="head"><h2>Languages</h2><span class="note" id="summary"></span></div>
+<div class="head"><h2>{{T:pages.languages}}</h2><span class="note" id="summary"></span></div>
 <div id="list"></div>
 <p class="note" id="dir"></p>
 <div id="shadow" class="banner warn hidden"></div>
 
 <hr class="sep">
 <p class="formats" id="credit"></p>
-<p class="about"><b>WuWei</b>Dict — search every dictionary you own, from one browser tab.
-  <a href="https://wuweidict.github.io/wudict" target="_blank" rel="noopener">Website</a>
-  · <a href="https://github.com/wuweidict/wudict" target="_blank" rel="noopener">Source</a></p>
+<p class="about"><b>WuWei</b>Dict {{T:pages.about}}
+  <a href="https://wuweidict.github.io/wudict" target="_blank" rel="noopener">{{T:pages.website}}</a>
+  · <a href="https://github.com/wuweidict/wudict" target="_blank" rel="noopener">{{T:pages.source}}</a></p>
 </div>
 <script>
 "use strict";
 const $=id=>document.getElementById(id);
+const tx=window.wudictI18n.t;
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const mb=n=>n>=1048576?(n/1048576).toFixed(1)+" MB":Math.max(1,Math.round(n/1024))+" KB";
 
@@ -161,11 +161,16 @@ const mb=n=>n>=1048576?(n/1048576).toFixed(1)+" MB":Math.max(1,Math.round(n/1024
    this page can be reloaded, rotated or closed and reopened without losing it.
    Everything drawn below comes from one GET, which is also what is polled. */
 let polling=false;
+const languageNames=typeof Intl.DisplayNames==="function"?new Intl.DisplayNames([window.wudictI18n.language],{type:"language"}):null;
+function languageName(l){
+  if(!languageNames)return l.name;
+  try{const name=languageNames.of(l.code);return name&&name!==l.code?name:l.name}catch(_){return l.name}
+}
 
 async function load(){
   let j;
   try{ j=await (await fetch("/api/lemmas")).json() }
-  catch(e){ $("banner").className="banner warn";$("banner").textContent="Cannot reach wuDict.";return null }
+  catch(e){ $("banner").className="banner warn";$("banner").textContent=tx("pages.cannotReach");return null }
   render(j);
   return j;
 }
@@ -178,19 +183,16 @@ function render(j){
     if(l.installed)installed++;
     list.appendChild(rowFor(l,j));
   }
-  $("summary").textContent=installed+" installed"+
-    (j.languages.length?" of "+j.languages.length:"");
-  $("dir").textContent="Installed in "+j.dir;
+  $("summary").textContent=j.languages.length?tx("pages.installedTotal",{number:installed,total:j.languages.length}):tx("pages.installedCount",{number:installed});
+  $("dir").textContent=tx("pages.installedIn",{path:j.dir});
 
   const b=$("banner");
   if(!j.enabled){
     b.className="banner warn";
-    b.innerHTML="Lemmatization is switched off (<code>MORPH_CACHE = 0</code>). "+
-      "Anything installed here will sit on disk unused until it is switched back on.";
+    b.textContent=tx("pages.lemmaOff");
   }else if(j.error){
     b.className="banner warn";
-    b.textContent="Could not read the catalogue: "+j.error+
-      " — languages already installed still work.";
+    b.textContent=tx("pages.catalogueFailed",{error:j.error});
   }else{
     b.className="banner hidden";
   }
@@ -202,8 +204,8 @@ function render(j){
      that installs it is where a user will look for that. */
   const lic=j.languages.find(l=>l.license);
   $("credit").innerHTML=lic
-    ? "Word lists: "+esc(lic.source||"")+" · "+esc(lic.license)+
-      (j.attribution?' · <a href="'+esc(j.attribution)+'" target="_blank" rel="noopener">attribution</a>':"")
+    ? esc(tx("pages.wordLists",{source:lic.source||"",license:lic.license}))+
+      (j.attribution?' · <a href="'+esc(j.attribution)+'" target="_blank" rel="noopener">'+esc(tx("pages.attribution"))+'</a>':"")
     : "";
 }
 
@@ -212,7 +214,7 @@ function rowFor(l,j){
   row.className="lrow"+(l.installed?"":" off");
   const cb=document.createElement("input");
   cb.type="checkbox";cb.checked=l.installed;cb.id="cb-"+l.code;
-  cb.setAttribute("aria-label",l.name);
+  cb.setAttribute("aria-label",languageName(l));
   const busy=l.state==="downloading";
   // Built-in English cannot be "not installed", so its box has nothing to say.
   cb.disabled=busy||(l.builtin&&!l.localSize)||(!l.installed&&!l.catalogued);
@@ -220,14 +222,14 @@ function rowFor(l,j){
 
   const nm=document.createElement("label");
   nm.className="nm";nm.htmlFor=cb.id;
-  nm.textContent=l.name+" ("+l.code+")";
+  nm.textContent=languageName(l)+" ("+l.code+")";
 
   const cost=document.createElement("span");
   cost.className="cost";
   const bits=[];
   if(l.size)bits.push(mb(l.size));
   else if(l.localSize)bits.push(mb(l.localSize));
-  if(l.heapMB)bits.push("~"+l.heapMB+" MB RAM");
+  if(l.heapMB)bits.push(tx("pages.memory",{number:l.heapMB}));
   cost.textContent=bits.join(" · ");
 
   const st=document.createElement("span");
@@ -238,17 +240,17 @@ function rowFor(l,j){
     // size, or a row read from an older build, must read "Downloading…" and
     // never "Downloading… NaN%".
     var pct=l.total>0?Math.floor(100*(l.done||0)/l.total):-1;
-    st.textContent=pct>=0?"Downloading… "+Math.min(pct,100)+"%":"Downloading…";
+    st.textContent=pct>=0?tx("pages.downloadPercent",{percent:Math.min(pct,100)}):tx("pages.downloading");
   }else if(l.state==="error"){
     st.className="st err";st.textContent="✕ "+l.error;
   }else if(l.builtin&&!l.localSize){
-    st.className="st ok";st.textContent="built in";
+    st.className="st ok";st.textContent=tx("pages.builtin");
   }else if(l.installed&&l.mismatch){
-    st.className="st";st.textContent="installed (differs)";
+    st.className="st";st.textContent=tx("pages.installedDiffers");
   }else if(l.installed&&!l.catalogued){
-    st.className="st ok";st.textContent="installed (local file)";
+    st.className="st ok";st.textContent=tx("pages.installedLocal");
   }else if(l.installed){
-    st.className="st ok";st.textContent="installed";
+    st.className="st ok";st.textContent=tx("pages.installed");
   }
   row.append(cb,nm,cost,st);
   return row;
@@ -261,23 +263,23 @@ function rowFor(l,j){
 async function toggle(l,cb){
   cb.disabled=true;
   if(cb.checked){
-    setStatus(cb,"busy","Downloading…");
+    setStatus(cb,"busy",tx("pages.downloading"));
     try{
       const r=await fetch("/api/lemmas?code="+encodeURIComponent(l.code),{method:"POST"});
       if(!r.ok){ const j=await r.json().catch(()=>({}));fail(cb,j.error||("HTTP "+r.status));return }
-    }catch(e){ fail(cb,"cannot reach wuDict");return }
+    }catch(e){ fail(cb,tx("pages.cannotReachShort"));return }
     poll();
     return;
   }
   const size=l.localSize?" ("+mb(l.localSize)+")":"";
-  if(!confirm("Remove "+l.name+" lemma data"+size+"?")){
+  if(!confirm(tx("pages.removeLemmas",{language:languageName(l),size}))){
     cb.checked=true;cb.disabled=false;return;
   }
-  setStatus(cb,"busy","Removing…");
+  setStatus(cb,"busy",tx("pages.removing"));
   try{
     const r=await fetch("/api/lemmas?code="+encodeURIComponent(l.code),{method:"DELETE"});
     if(!r.ok){ const j=await r.json().catch(()=>({}));fail(cb,j.error||("HTTP "+r.status));return }
-  }catch(e){ fail(cb,"cannot reach wuDict");return }
+  }catch(e){ fail(cb,tx("pages.cannotReachShort"));return }
   load();
 }
 

@@ -188,8 +188,8 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
 <select id="mode" aria-label="Search mode" disabled>
 <option value="prefix">starts with</option>
 <option value="exact">exact</option>
-<option value="contains">contains</option>
-<option value="fts">full-text</option>
+<option value="contains">{{T:dictUI.contains}}</option>
+<option value="fts">{{T:dictUI.fts}}</option>
 </select>
 </span>
 <!-- The dictionary scope's seg is NOT here in the markup: it lives in the
@@ -205,10 +205,10 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
      never waits for a keypress at all, because the input handler searches
      as you type. The button's only remaining ground was a magnifier next
      to a magnifier. -->
-<span class="themeSwitch tools"><button type="button" class="btn themeAuto" aria-pressed="false" title="Follow the phone's light or dark setting">Auto</button><button type="button" class="btn themeFlip" aria-pressed="true" title="Switch to night">☀☾</button></span>
+<span class="themeSwitch tools"><button type="button" class="btn themeAuto" aria-pressed="false" title="{{T:panel.themeAuto}}">{{T:panel.auto}}</button><button type="button" class="btn themeFlip" aria-pressed="true" title="{{T:panel.themeNight}}">☀☾</button></span>
 <button type="button" class="btn tools" id="wideBtn" title="Toggle wide layout" aria-label="Toggle wide layout">⇔</button>
 <button type="button" class="btn tools" id="expandBtn" title="Expand all results" aria-label="Expand all results" aria-pressed="false">⊞</button>
-<button type="button" class="btn tools" id="panelBtn" title="Settings" aria-label="Settings">☰</button>
+<button type="button" class="btn tools" id="panelBtn" title="{{T:panel.settings}}" aria-label="{{T:panel.settings}}">☰</button>
 </form>
 </header>
 
@@ -283,19 +283,19 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
      acceptable. Which one is drawn is CSS's business (app.css), so nothing has
      to measure the row at runtime and the title/aria-label keep the full word
      in both cases. -->
-  <button type="button" class="btn" data-layer="off" id="sbarExamples" aria-pressed="true" title="Examples are shown — tap to fold the lines that hold nothing but examples"><span class="lbl-full">Examples</span><span class="lbl-short" aria-hidden="true">Ex</span></button>
+  <button type="button" class="btn" data-layer="off" id="sbarExamples" aria-pressed="true" title="Examples are shown — tap to fold the lines that hold nothing but examples"><span class="lbl-full">{{T:panel.examples}}</span><span class="lbl-short" aria-hidden="true">Ex</span></button>
   <span class="rpad edge" aria-hidden="true"></span>
 </div>
 
-<div id="panel" role="dialog" aria-label="Settings">
+<div id="panel" lang="{{T:locale}}" role="dialog" aria-label="{{T:panel.settings}}">
 <div class="panel-card">
-<div class="panel-head"><h2>Settings
+<div class="panel-head"><h2>{{T:panel.settings}}
 <span class="headacts">
 <!-- The theme control's narrow-viewport home. Not a second control: both
      mounts hold the same two buttons, and one pair of handlers drives them the
      way the wordmark has two mount points selected by media query. -->
-<span class="themeSwitch"><button type="button" class="btn themeAuto" aria-pressed="false" title="Follow the phone's light or dark setting">Auto</button><button type="button" class="btn themeFlip" aria-pressed="true" title="Switch to night">☀☾</button></span>
-<button class="btn" id="closePanel" aria-label="Close">✕</button></span></h2></div>
+<span class="themeSwitch"><button type="button" class="btn themeAuto" aria-pressed="false" title="{{T:panel.themeAuto}}">{{T:panel.auto}}</button><button type="button" class="btn themeFlip" aria-pressed="true" title="{{T:panel.themeNight}}">☀☾</button></span>
+<button class="btn" id="closePanel" aria-label="{{T:panel.close}}">✕</button></span></h2></div>
 <div class="panel-scroll">
 <!-- Five sections, one subject each, in the order a reader arrives: what the
      collection is and the doors that change it, how an answer is shown, how it
@@ -313,7 +313,7 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
      are long; nothing here is. -->
 
 <section class="sect">
-  <h3 class="sect-h">Dictionaries</h3>
+  <h3 class="sect-h">{{T:panel.dictionaries}}</h3>
   <!-- The collection's state, in numbers the server counted (/api/config's roots
        and total): a count is the honest progress line everywhere else in this
        app (D30), and it is what a reader opens this drawer to check. It is a
@@ -337,16 +337,16 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
        dictionaries arrive, so what appears afterwards is configured one row
        above, not in another window behind another door. -->
   <div class="facts">
-    <button type="button" class="mrow door" id="editDictSettings">Edit dictionary settings</button>
-    <button type="button" class="mrow door" id="editGroups">Edit dictionary groups</button>
-    <a class="mrow door" id="editFolders" href="/setup">Edit folders…</a>
-    <button type="button" class="mrow" id="rescanBtn" title="Re-scan every folder and re-open the dictionaries found (takes a moment)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M13.3 8a5.3 5.3 0 1 1-1.7-3.9"/><path d="M13.6 2v3h-3"/></svg>Rescan folders</button>
-    <a class="mrow door" id="lemmaLink" href="/lemmas" title="Install the word-form data that lets an inflected word find its dictionary entry">Lemmatization…</a>
+    <button type="button" class="mrow door" id="editDictSettings">{{T:panel.editDicts}}</button>
+    <button type="button" class="mrow door" id="editGroups">{{T:panel.editGroups}}</button>
+    <a class="mrow door" id="editFolders" href="/setup">{{T:panel.editFolders}}</a>
+    <button type="button" class="mrow" id="rescanBtn" title="{{T:panel.rescanHint}}"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M13.3 8a5.3 5.3 0 1 1-1.7-3.9"/><path d="M13.6 2v3h-3"/></svg>{{T:panel.rescan}}</button>
+    <a class="mrow door" id="lemmaLink" href="/lemmas" title="{{T:panel.lemmasHint}}">{{T:panel.lemmas}}</a>
   </div>
 </section>
 
 <section class="sect">
-  <h3 class="sect-h">Results</h3>
+  <h3 class="sect-h">{{T:panel.results}}</h3>
   <!-- The reading strip (D143), now under the heading it was denied when the
        drawer had only one. THREE controls, admitted by one rule: nothing here
        spends disk, CPU or navigation. They are what a reader reaches for WHILE
@@ -362,10 +362,10 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
        different kind of thing. Buttons and not a checkbox, as before; the
        highlighter's pen went with the button, because the label it now wears
        says the same thing in the register the other two labels use. -->
-  <span class="seg" role="group" aria-label="Highlight the words you searched for">
-    <span>Highlight matches</span>
-    <button type="button" class="act" id="hlOn" aria-pressed="true" title="Mark the words you searched for inside each article — full-text search only">On</button>
-    <button type="button" class="act" id="hlOff" aria-pressed="false" title="Show the article exactly as the dictionary wrote it, with nothing marked">Off</button>
+  <span class="seg" role="group" aria-label="{{T:panel.highlightLabel}}">
+    <span>{{T:panel.highlight}}</span>
+    <button type="button" class="act" id="hlOn" aria-pressed="true" title="{{T:panel.highlightOn}}">{{T:panel.on}}</button>
+    <button type="button" class="act" id="hlOff" aria-pressed="false" title="{{T:panel.highlightOff}}">{{T:panel.off}}</button>
   </span>
   <!-- Selecting text in an article offers a speaker that reads it aloud in a
        system voice (D148). Here because it costs nothing until a reader
@@ -379,10 +379,10 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
        this row can say WHICH sense is offered; it moves into the label with
        the words, so the three rows keep one column of names and one column of
        pairs. -->
-  <span class="seg" role="group" aria-label="Offer to read selected article text aloud" id="speakSeg">
-    <span><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M2.5 6h2.5l3.5-3v10l-3.5-3H2.5z"/><path class="wave" d="M11 5.8a3 3 0 0 1 0 4.4"/><path class="wave" d="M12.9 3.9a5.8 5.8 0 0 1 0 8.2"/></svg>Read aloud</span>
-    <button type="button" class="act" id="speakOn" aria-pressed="true" title="Offer a speaker over the text you select in an article — tap it to hear that selection">On</button>
-    <button type="button" class="act" id="speakOff" aria-pressed="false" title="Never offer the speaker — articles stay silent">Off</button>
+  <span class="seg" role="group" aria-label="{{T:panel.speakLabel}}" id="speakSeg">
+    <span><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M2.5 6h2.5l3.5-3v10l-3.5-3H2.5z"/><path class="wave" d="M11 5.8a3 3 0 0 1 0 4.4"/><path class="wave" d="M12.9 3.9a5.8 5.8 0 0 1 0 8.2"/></svg>{{T:panel.speak}}</span>
+    <button type="button" class="act" id="speakOn" aria-pressed="true" title="{{T:panel.speakOn}}">{{T:panel.on}}</button>
+    <button type="button" class="act" id="speakOff" aria-pressed="false" title="{{T:panel.speakOff}}">{{T:panel.off}}</button>
   </span>
   <!-- Which section unfolds itself once the answers start arriving (D142) used
        to be chosen here, as a pair: "Open first: My order | Fastest". The pair
@@ -412,9 +412,9 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
        the door for scoping BEFORE any search exists. A group's name is
        truncated by CSS (the bar is one line). -->
   <div class="facts">
-    <span class="rowlabel" id="pickerGroupLabel">Dictionaries</span>
-    <button type="button" class="choice-btn" id="pickerGroupBtn" aria-haspopup="listbox" aria-labelledby="pickerGroupLabel" title="Choose the group of dictionaries to search"></button>
-    <div class="choice-menu menu-card" id="pickerGroupMenu" role="listbox" aria-label="Dictionary groups" data-w="anchor" hidden></div>
+    <span class="rowlabel" id="pickerGroupLabel">{{T:panel.dictionaries}}</span>
+    <button type="button" class="choice-btn" id="pickerGroupBtn" aria-haspopup="listbox" aria-labelledby="pickerGroupLabel" title="{{T:panel.chooseGroup}}"></button>
+    <div class="choice-menu menu-card" id="pickerGroupMenu" role="listbox" aria-label="{{T:panel.groups}}" data-w="anchor" hidden></div>
   </div>
   <!-- There was a third pair here, "Sort dictionaries: Alphabetical | My
        order", and it is gone with the choice it offered: the picker now lists
@@ -428,12 +428,12 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
        opens a dictionary at a page. No dictionary in the href on purpose;
        /browse with none asks which. -->
   <div class="facts">
-    <a class="mrow door" id="browseLink" href="/browse" title="Read a dictionary A–Z, page by page">Browse A–Z…</a>
+    <a class="mrow door" id="browseLink" href="/browse" title="{{T:panel.browseHint}}">{{T:panel.browse}}</a>
   </div>
 </section>
 
 <section class="sect">
-  <h3 class="sect-h">Appearance</h3>
+  <h3 class="sect-h">{{T:panel.appearance}}</h3>
   <!-- The whole look, under a name, and the first row of the section because
        it sets everything the rows below it refine. It is the reader's way back
        to a look that worked without setting the size, the layers, the
@@ -444,7 +444,7 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
        row saves what is on screen now, the way the group window's last row
        makes a new group. -->
   <div class="facts">
-    <span class="rowlabel" id="looksLabel">Presets</span>
+    <span class="rowlabel" id="looksLabel">{{T:panel.looks}}</span>
     <button type="button" class="choice-btn" id="looksChoice" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="looksLabel"></button>
     <div class="choice-menu menu-card" id="looksMenu" role="listbox" aria-labelledby="looksLabel" data-w="anchor" hidden></div>
     <!-- The three actions, as icons: the words they would need are longer than
@@ -473,22 +473,22 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
        applyFS is what holds the range, and a control that stops taking presses
        reads as broken. -->
   <div class="facts">
-    <span class="rowlabel">Font size</span>
+    <span class="rowlabel">{{T:panel.fontSize}}</span>
     <span id="fsCtl">
-      <button type="button" class="fsbtn" id="fsDown" aria-label="Smaller article text">&#8722;</button>
-      <button type="button" class="fsval" id="fsVal" title="Article text size — click to reset" aria-label="Article text size; click to reset">15px</button>
-      <button type="button" class="fsbtn" id="fsUp" aria-label="Larger article text">+</button>
+      <button type="button" class="fsbtn" id="fsDown" aria-label="{{T:panel.smaller}}">&#8722;</button>
+      <button type="button" class="fsval" id="fsVal" title="{{T:panel.sizeReset}}" aria-label="{{T:panel.sizeResetLabel}}">15px</button>
+      <button type="button" class="fsbtn" id="fsUp" aria-label="{{T:panel.larger}}">+</button>
     </span>
   </div>
   <!-- The weight, the size's twin - and its three names are the app's own
        words for the faces the stack actually has. No number is shown: the
        reader is choosing a look, not a value. -->
   <div class="facts">
-    <span class="rowlabel">Font weight</span>
+    <span class="rowlabel">{{T:panel.fontWeight}}</span>
     <span id="fwCtl">
-      <button type="button" class="fsbtn" id="fwDown" aria-label="Lighter article text">&#8722;</button>
-      <button type="button" class="fsval" id="fwVal" title="Article text weight — click to reset" aria-label="Article text weight; click to reset">Normal</button>
-      <button type="button" class="fsbtn" id="fwUp" aria-label="Bolder article text">+</button>
+      <button type="button" class="fsbtn" id="fwDown" aria-label="{{T:panel.lighter}}">&#8722;</button>
+      <button type="button" class="fsval" id="fwVal" title="{{T:panel.weightReset}}" aria-label="{{T:panel.weightResetLabel}}">{{T:panel.normal}}</button>
+      <button type="button" class="fsbtn" id="fwUp" aria-label="{{T:panel.bolder}}">+</button>
     </span>
   </div>
   <!-- Compact, and the one style layer that lives on the panel instead of
@@ -505,10 +505,10 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
        there is nothing to switch — the preview off, or no configuration
        folder to remember the choice in. -->
   <div class="facts" id="compactRow" hidden>
-    <span class="rowlabel">Compact</span>
-    <span class="seg" role="group" aria-label="Fit the app and its articles to a phone screen" id="compactSeg">
-      <button type="button" class="act" data-layer="on" id="compactOn" aria-pressed="false" title="Drop the app's side gutters and stop articles dragging sideways — the phone fit, on every page">On</button>
-      <button type="button" class="act" data-layer="off" id="compactOff" aria-pressed="true" title="Keep the app's own gutters and each article's own margins">Off</button>
+    <span class="rowlabel">{{T:panel.compact}}</span>
+    <span class="seg" role="group" aria-label="{{T:panel.compactLabel}}" id="compactSeg">
+      <button type="button" class="act" data-layer="on" id="compactOn" aria-pressed="false" title="{{T:panel.compactOn}}">{{T:panel.on}}</button>
+      <button type="button" class="act" data-layer="off" id="compactOff" aria-pressed="true" title="{{T:panel.compactOff}}">{{T:panel.off}}</button>
     </span>
   </div>
   <!-- Examples, the second layer with a handle on the panel. Same reasoning as
@@ -524,10 +524,10 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
        them - so the switch needs no call into the script, and folding examples
        back is taking a rule away, in the articles already on screen included. -->
   <div class="facts" id="examplesRow" hidden>
-    <span class="rowlabel">Examples</span>
-    <span class="seg" role="group" aria-label="Show or fold the examples in articles" id="examplesSeg">
-      <button type="button" class="act" data-layer="off" id="examplesOn" aria-pressed="true" title="Show every example a dictionary gives">Show</button>
-      <button type="button" class="act" data-layer="on" id="examplesOff" aria-pressed="false" title="Fold away the lines that hold nothing but examples — the entry's own text stays">Hide</button>
+    <span class="rowlabel">{{T:panel.examples}}</span>
+    <span class="seg" role="group" aria-label="{{T:panel.examplesLabel}}" id="examplesSeg">
+      <button type="button" class="act" data-layer="off" id="examplesOn" aria-pressed="true" title="{{T:panel.examplesOn}}">{{T:panel.show}}</button>
+      <button type="button" class="act" data-layer="on" id="examplesOff" aria-pressed="false" title="{{T:panel.examplesOff}}">{{T:panel.hide}}</button>
     </span>
   </div>
   <!-- Whether the status bar is there at all. It is the bar's only door, so it
@@ -544,10 +544,10 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
        window, like wide mode, not a reading habit that should follow the reader
        to another device. -->
   <div class="facts" id="sbarRow">
-    <span class="rowlabel">Status bar</span>
-    <span class="seg" role="group" aria-label="Show or hide the bar at the bottom of the screen" id="sbarSeg">
-      <button type="button" class="act" id="sbarOn" aria-pressed="true" title="Keep the bar at the bottom: the jumps between dictionaries, and the example fold">Show</button>
-      <button type="button" class="act" id="sbarOff" aria-pressed="false" title="Hide the bar — the same controls stay in this drawer">Hide</button>
+    <span class="rowlabel">{{T:panel.statusBar}}</span>
+    <span class="seg" role="group" aria-label="{{T:panel.barLabel}}" id="sbarSeg">
+      <button type="button" class="act" id="sbarOn" aria-pressed="true" title="{{T:panel.barOn}}">{{T:panel.show}}</button>
+      <button type="button" class="act" id="sbarOff" aria-pressed="false" title="{{T:panel.barOff}}">{{T:panel.hide}}</button>
     </span>
   </div>
   <!-- One door per subject, and the sheet opens on the one that was asked for.
@@ -564,24 +564,24 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
        adjusted; the app's own colour window escapes that only by carrying a
        swatch of its own. -->
   <div class="facts">
-    <button type="button" class="mrow door" data-styler="screen" title="What fills the margins around the page, and whether the bars hide while you read">Edges of the screen…</button>
-    <button type="button" class="mrow door" data-styler="bg" title="The colour and the wallpaper behind the app and its articles">Window background…</button>
-    <button type="button" class="mrow door" data-styler="presets" title="Switch the built-in style layers on and off — a background, a palette, a face, a layout tweak">Style layers…</button>
-    <button type="button" class="mrow door" data-styler="css" title="Your own stylesheets, for the app and for the articles">Custom CSS…</button>
+    <button type="button" class="mrow door" data-styler="screen" title="{{T:panel.edgesHint}}">{{T:panel.edgesDoor}}</button>
+    <button type="button" class="mrow door" data-styler="bg" title="{{T:panel.backgroundHint}}">{{T:panel.backgroundDoor}}</button>
+    <button type="button" class="mrow door" data-styler="presets" title="{{T:panel.layersHint}}">{{T:panel.layersDoor}}</button>
+    <button type="button" class="mrow door" data-styler="css" title="{{T:panel.cssHint}}">{{T:panel.cssDoor}}</button>
   </div>
 </section>
 
 <section class="sect">
-  <h3 class="sect-h">History</h3>
+  <h3 class="sect-h">{{T:panel.history}}</h3>
   <!-- The search box's memory, which is neither a look nor a result: its own
        section because it is the one setting that belongs to the field you type
        in. -->
   <div class="facts">
     <span class="history-controls">
-      <label class="history-setting">History length:
-        <input id="historyLength" type="number" min="0" max="100" step="1" inputmode="numeric" value="20" aria-label="History length">
+      <label class="history-setting">{{T:panel.historyLength}}
+        <input id="historyLength" type="number" min="0" max="100" step="1" inputmode="numeric" value="20" aria-label="{{T:panel.historyLengthLabel}}">
       </label>
-      <button type="button" class="act" id="clearHistory" disabled>Clear</button>
+      <button type="button" class="act" id="clearHistory" disabled>{{T:panel.clear}}</button>
     </span>
   </div>
 </section>
@@ -593,7 +593,7 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
 </section>
 
 <section class="sect" id="sysSection" hidden>
-  <h3 class="sect-h">System</h3>
+  <h3 class="sect-h">{{T:panel.system}}</h3>
   <!-- The shell's own settings, which until now lived only on the screen the
        launcher icon's long-press menu opens: what a lookup from another app
        does, the messages this app draws while it starts, the access key, and
@@ -614,12 +614,12 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
        without a listen-address row sends none - so the page cannot draw them
        from anything of its own. -->
   <div class="facts">
-    <button type="button" class="mrow door" id="editSysSettings" title="How a lookup from another app lands, the messages this app draws, the access key, and the limits its server runs within">System settings…</button>
+    <button type="button" class="mrow door" id="editSysSettings" title="{{T:panel.systemHint}}">{{T:panel.systemDoor}}</button>
   </div>
 </section>
 
 <section class="sect">
-  <h3 class="sect-h">Info</h3>
+  <h3 class="sect-h">{{T:panel.info}}</h3>
   <!-- Where the app keeps things: the folders it scans, the prepared library and
        the config file in effect. Reference material — read when a dictionary is
        missing, or when a path has to be copied — so it belongs with the identity
@@ -630,9 +630,9 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
   <!-- The app's identity, last. -->
   <div class="about">
     <span class="brand">wu<small>Dict</small></span> <span class="ver">{{VERSION}}</span>
-    <p>Search every dictionary you own, from one browser tab.</p>
-    <p><a href="https://wuweidict.github.io/wudict" target="_blank" rel="noopener">Website</a>
-       · <a href="https://github.com/wuweidict/wudict" target="_blank" rel="noopener">Source</a></p>
+    <p>{{T:panel.about}}</p>
+    <p><a href="https://wuweidict.github.io/wudict" target="_blank" rel="noopener">{{T:panel.website}}</a>
+       · <a href="https://github.com/wuweidict/wudict" target="_blank" rel="noopener">{{T:panel.source}}</a></p>
   </div>
 </section>
 </div>
@@ -650,8 +650,8 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
      The list keeps its id and its markup, so every renderer, pointer handler
      and disclosure that already worked on it works here; only the box it sits
      in changed. -->
-<dialog id="dictSettings" class="group-dialog panel-card" aria-labelledby="dictSettingsTitle">
-  <h2 id="dictSettingsTitle">Dictionary settings <button type="button" class="btn" id="closeDictSettings" aria-label="Close dictionary settings">✕</button></h2>
+<dialog id="dictSettings" lang="{{T:locale}}" class="group-dialog panel-card" aria-labelledby="dictSettingsTitle">
+  <h2 id="dictSettingsTitle">{{T:dictUI.title}} <button type="button" class="btn" id="closeDictSettings" aria-label="{{T:dictUI.close}}">✕</button></h2>
   <!-- Outside the scroller, so the one action stays reachable however far down
        a hundred cards the reader has gone. It is the only one left here: it is
        the bulk form of the per-dictionary switches on the cards below, so it
@@ -675,7 +675,7 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
          which is the thing that actually indexes — a trigger that only reveals
          a choice must not be named for the choice. -->
     <button type="button" class="act disc" id="ftsAllBtn" aria-expanded="false" aria-controls="ftsAllBox"
-      title="Optional. Every dictionary can already be searched by headword; full-text search also looks inside article text, and uses noticeably more disk space.">Full-text for every dictionary…</button>
+      title="{{T:dictUI.ftsHint}}">{{T:dictUI.ftsAll}}</button>
   </div>
   <div id="ftsAllBox" class="bulkbox" hidden></div>
   <div id="reindexLine" class="bulkbox" hidden aria-live="polite"></div>
@@ -786,7 +786,7 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
 
 <!-- Hidden until asked for, and #styler is outside #panel deliberately: opening
      it CLOSES the panel, because the article it restyles is behind both. -->
-<div id="styler" role="dialog" aria-label="Appearance" aria-modal="false">
+<div id="styler" lang="{{T:locale}}" role="dialog" aria-label="{{T:panel.appearance}}" aria-modal="false">
   <!-- The sheet's own head, so the closer is in the top-right corner whatever
        the sections below are doing: with the native window-background block
        visible the toolbar row sits mid-sheet, and a ✕ wedged between Save and
@@ -803,10 +803,10 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
          and this is a level above them. Before this, all four shared one sheet
          behind a bar each, so the reader came through a door naming one subject
          and got the whole appearance surface. -->
-    <button type="button" class="choice-btn" id="stylerSubject" aria-haspopup="listbox" aria-expanded="false" aria-label="Which part of the appearance to show"></button>
+    <button type="button" class="choice-btn" id="stylerSubject" aria-haspopup="listbox" aria-expanded="false" aria-label="{{T:panel.subjectLabel}}"></button>
     <div class="choice-menu menu-card" id="stylerSubjectMenu" role="listbox" data-w="anchor" hidden></div>
     <span class="grow"></span>
-    <button type="button" class="btn" id="stylerClose" aria-label="Close">✕</button>
+    <button type="button" class="btn" id="stylerClose" aria-label="{{T:panel.close}}">✕</button>
   </div>
   <!-- The sheet's subjects, one at a time, in ONE scroller. The panel's four
        doors open a subject each and the head's menu moves between them, so
@@ -832,7 +832,7 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
        surface every floating menu in the app wears. -->
   <div id="appearanceScreen" hidden>
     <div class="screen-row">
-      <div class="screen-title" id="edgeTitle">Edges of the screen</div>
+      <div class="screen-title" id="edgeTitle">{{T:panel.edges}}</div>
       <!-- A group of radios and not a menu. Five answers here, four in the row
            below, and a menu makes the reader open it to find out what the
            answers ARE - which is what Material's own line at five is about.
@@ -848,25 +848,25 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
            another option is chosen - see appearanceRender. It starts disabled
            for the same reason: a page whose first render has not run yet must
            not offer a field that would write the wrong theme's colour. -->
-      <div class="color-box" id="edgeColorBox" aria-disabled="true"><input id="edgeColor" type="text" inputmode="text" maxlength="7" autocomplete="off" aria-label="Margin colour, six hexadecimal digits" disabled><button type="button" class="color-pick" id="edgeColorPick" disabled aria-label="Pick a colour" title="Pick a colour"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false"><path d="M17.66 5.41l.92.92-2.69 2.69-.92-.92 2.69-2.69M17.67 3c-.26 0-.51.1-.71.29l-3.12 3.12-1.93-1.91-1.41 1.41 1.42 1.42L4.16 14.7c-.39.39-.39 1.02 0 1.41l3.71 3.71c.39.39 1.02.39 1.41 0l7.24-7.24 1.42 1.42 1.41-1.41-1.91-1.93 3.12-3.12c.38-.38.38-1.02 0-1.4l-.92-.92c-.19-.2-.45-.29-.71-.29z"/></svg></button><div id="edgeColorMenu" class="color-history menu-card" hidden></div></div>
+      <div class="color-box" id="edgeColorBox" aria-disabled="true"><input id="edgeColor" type="text" inputmode="text" maxlength="7" autocomplete="off" aria-label="{{T:panel.marginColor}}" disabled><button type="button" class="color-pick" id="edgeColorPick" disabled aria-label="{{T:panel.pickColor}}" title="{{T:panel.pickColor}}"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false"><path d="M17.66 5.41l.92.92-2.69 2.69-.92-.92 2.69-2.69M17.67 3c-.26 0-.51.1-.71.29l-3.12 3.12-1.93-1.91-1.41 1.41 1.42 1.42L4.16 14.7c-.39.39-.39 1.02 0 1.41l3.71 3.71c.39.39 1.02.39 1.41 0l7.24-7.24 1.42 1.42 1.41-1.41-1.91-1.93 3.12-3.12c.38-.38.38-1.02 0-1.4l-.92-.92c-.19-.2-.45-.29-.71-.29z"/></svg></button><div id="edgeColorMenu" class="color-history menu-card" hidden></div></div>
       <small id="edgeHint"></small>
     </div>
     <div class="screen-row">
-      <div class="screen-title" id="barsTitle">Hide while you read</div>
+      <div class="screen-title" id="barsTitle">{{T:panel.hideReading}}</div>
       <div class="radio-group" id="barsChoice" role="radiogroup" aria-labelledby="barsTitle"></div>
-      <small id="barsHint">Swipe in from the top or bottom edge to bring them back for a moment.</small>
+      <small id="barsHint">{{T:panel.barsHint}}</small>
     </div>
     </div>
   <div id="appearanceBackground" hidden>
-    <div class="appearance-row"><label for="appearanceColorOn">Color</label><input id="appearanceColorOn" type="checkbox"><div class="color-box" id="appearanceColorBox"><input id="appearanceColor" type="text" inputmode="text" maxlength="7" autocomplete="off" aria-label="Background color, six hexadecimal digits"><button type="button" class="color-pick" id="appearanceColorPick" aria-label="Pick a colour" title="Pick a colour"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false"><path d="M17.66 5.41l.92.92-2.69 2.69-.92-.92 2.69-2.69M17.67 3c-.26 0-.51.1-.71.29l-3.12 3.12-1.93-1.91-1.41 1.41 1.42 1.42L4.16 14.7c-.39.39-.39 1.02 0 1.41l3.71 3.71c.39.39 1.02.39 1.41 0l7.24-7.24 1.42 1.42 1.41-1.41-1.91-1.93 3.12-3.12c.38-.38.38-1.02 0-1.4l-.92-.92c-.19-.2-.45-.29-.71-.29z"/></svg></button><div id="appearanceColorMenu" class="color-history menu-card" hidden></div></div></div>
+    <div class="appearance-row"><label for="appearanceColorOn">{{T:panel.color}}</label><input id="appearanceColorOn" type="checkbox"><div class="color-box" id="appearanceColorBox"><input id="appearanceColor" type="text" inputmode="text" maxlength="7" autocomplete="off" aria-label="{{T:panel.backgroundColor}}"><button type="button" class="color-pick" id="appearanceColorPick" aria-label="{{T:panel.pickColor}}" title="{{T:panel.pickColor}}"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false"><path d="M17.66 5.41l.92.92-2.69 2.69-.92-.92 2.69-2.69M17.67 3c-.26 0-.51.1-.71.29l-3.12 3.12-1.93-1.91-1.41 1.41 1.42 1.42L4.16 14.7c-.39.39-.39 1.02 0 1.41l3.71 3.71c.39.39 1.02.39 1.41 0l7.24-7.24 1.42 1.42 1.41-1.41-1.91-1.93 3.12-3.12c.38-.38.38-1.02 0-1.4l-.92-.92c-.19-.2-.45-.29-.71-.29z"/></svg></button><div id="appearanceColorMenu" class="color-history menu-card" hidden></div></div></div>
     <!-- The strip IS the image picker: a tap on a thumbnail applies it, and
          the "+" tile opens the device picker directly - no second panel, no
          second Add button. The images are the same files the Files tab
          manages, because they are one store with two consumers: the shell
          paints the chosen one before the page loads, and every one of them is
          addressable from CSS as /files/<name>. -->
-    <div class="appearance-row"><span class="appearance-label">Image</span><div id="appearanceStripWrap"><div id="appearanceStrip" role="group" aria-label="Background image"></div><button type="button" class="stripArrow" id="appearanceStripL" aria-label="Scroll background thumbnails left" hidden><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4.6 2L3 8l1.6 6"/></svg></button><button type="button" class="stripArrow" id="appearanceStripR" aria-label="Scroll background thumbnails right" hidden><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M11.4 2L13 8l-1.6 6"/></svg></button></div></div>
-    <small>Color remains behind the image. None removes the image.</small>
+    <div class="appearance-row"><span class="appearance-label">{{T:panel.image}}</span><div id="appearanceStripWrap"><div id="appearanceStrip" role="group" aria-label="{{T:panel.backgroundImage}}"></div><button type="button" class="stripArrow" id="appearanceStripL" aria-label="{{T:panel.scrollLeft}}" hidden><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4.6 2L3 8l1.6 6"/></svg></button><button type="button" class="stripArrow" id="appearanceStripR" aria-label="{{T:panel.scrollRight}}" hidden><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M11.4 2L13 8l-1.6 6"/></svg></button></div></div>
+    <small>{{T:panel.imageHint}}</small>
     </div>
   <!-- Style layers are a SUBJECT of their own, not a tab among the
        stylesheets: they are layers the page attaches and detaches around
@@ -876,30 +876,30 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
        "Layers" rather than "presets" because PRESETS now means the saved
        appearance a name carries - see looks.js - and two things called a
        preset in one section is one thing too many. -->
-  <div id="stylerPresetsPane" hidden role="tabpanel" aria-label="Style layers"></div>
+  <div id="stylerPresetsPane" hidden role="tabpanel" aria-label="{{T:panel.layers}}"></div>
   <div id="stylerBody" hidden>
   <div class="row" id="stylerDock">
-    <button type="button" class="tab" id="tabApp" role="tab" aria-selected="true" aria-controls="stylerCSS">App</button>
-    <button type="button" class="tab" id="tabArticle" role="tab" aria-selected="false" aria-controls="stylerCSS">Article</button>
+    <button type="button" class="tab" id="tabApp" role="tab" aria-selected="true" aria-controls="stylerCSS">{{T:panel.app}}</button>
+    <button type="button" class="tab" id="tabArticle" role="tab" aria-selected="false" aria-controls="stylerCSS">{{T:panel.article}}</button>
     <!-- The third tab is not a third stylesheet: it is the things the other
          two can point at. Same sheet, because a file is uploaded in order to
          be referenced, and the reference is written one tab away. -->
-    <button type="button" class="tab" id="tabFiles" role="tab" aria-selected="false" aria-controls="stylerFiles">Files</button>
+    <button type="button" class="tab" id="tabFiles" role="tab" aria-selected="false" aria-controls="stylerFiles">{{T:panel.files}}</button>
     <span class="grow"></span>
     <!-- Hidden while the box is empty: an action that would do nothing is a
          control you have to read and dismiss on every visit. -->
-    <button type="button" class="btn" id="stylerClear" hidden title="Empty this box — Save then removes the file">Clear</button>
-    <button type="button" class="btn" id="stylerSave">Save</button>
+    <button type="button" class="btn" id="stylerClear" hidden title="{{T:panel.clearCSS}}">{{T:panel.clear}}</button>
+    <button type="button" class="btn" id="stylerSave">{{T:panel.save}}</button>
     <!-- Only on the Files tab, and it stands where Save stands, because it is
          the same thing there: the one button that writes. -->
-    <button type="button" class="btn" id="stylerAdd" hidden title="Upload a file the stylesheets can reference">Add…</button>
+    <button type="button" class="btn" id="stylerAdd" hidden title="{{T:panel.uploadHint}}">{{T:panel.add}}</button>
   </div>
-  <textarea id="stylerCSS" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off" aria-label="Custom CSS"></textarea>
+  <textarea id="stylerCSS" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off" aria-label="{{T:panel.css}}"></textarea>
   <!-- Which file the box is, said once and left standing: the placeholder
        above says it only while the box is empty, and a reader who writes a
        night sheet while looking at the day one has nothing else to notice. -->
   <div id="stylerFile"></div>
-  <div id="stylerFiles" hidden role="tabpanel" aria-label="Uploaded files"></div>
+  <div id="stylerFiles" hidden role="tabpanel" aria-label="{{T:panel.uploadedFiles}}"></div>
   <input type="file" id="stylerUpload" multiple hidden aria-hidden="true" tabindex="-1">
   </div>
   </div>
@@ -913,8 +913,8 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
      colour, and the platform's dialog is not ours to set - on the phone it
      opened at black while its own swatch showed the colour. Same frame as the
      other windows (dialog.group-dialog.panel-card), so it wears what they wear. -->
-<dialog id="colorDialog" class="group-dialog panel-card" aria-labelledby="colorDialogTitle">
-  <h2 id="colorDialogTitle">Colour <button type="button" class="btn" id="closeColorDialog" aria-label="Close colour">✕</button></h2>
+<dialog id="colorDialog" lang="{{T:locale}}" class="group-dialog panel-card" aria-labelledby="colorDialogTitle">
+  <h2 id="colorDialogTitle">{{T:panel.colour}} <button type="button" class="btn" id="closeColorDialog" aria-label="{{T:panel.closeColor}}">✕</button></h2>
   <div class="pick-preview"><span class="pick-swatch" id="colorPreviewSwatch" aria-hidden="true"></span><b id="colorPreviewHex"></b></div>
   <div class="pick-rows">
     <label class="pick-row"><span class="pick-key">R</span><input type="range" id="pickR" min="0" max="255" step="1"><output id="pickROut" for="pickR">0</output></label>
@@ -924,7 +924,7 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
   <!-- One button, in the same toolbar row the other windows put theirs in. The
        ✕ above is the cancel: it closes with nothing written, which is what the
        second button of a two-button window would be. -->
-  <div class="group-toolbar"><button type="button" class="btn" id="pickApply">Apply</button></div>
+  <div class="group-toolbar"><button type="button" class="btn" id="pickApply">{{T:panel.apply}}</button></div>
 </dialog>
 
 <script src="/assets/pick.js?v={{PICKJS}}"></script>
@@ -932,6 +932,7 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
 <script>
 "use strict";
 const $=id=>document.getElementById(id);
+const tx=window.wudictI18n.t;
 window.wuSearchHistory.setSearch(word=>searchFor(word));
 window.wuSearchHistory.setSuggest((q,onHit,signal)=>{
   const mode=$("mode").value,sel=$("dict").value||"all";
@@ -1202,7 +1203,7 @@ const FS_MIN=11,FS_MAX=32,FS_DEF=15;
    dictionary is read in - Roboto, SF, Segoe - have 400, 500 and 700 reliably,
    and 300 is either missing or SYNTHESISED, which reads as a mistake rather
    than as lighter text. So three steps and no more. */
-const FW_STEPS=[400,500,700],FW_LABEL={400:"Normal",500:"Medium",700:"Bold"},FW_DEF=400;
+const FW_STEPS=[400,500,700],FW_LABEL={400:tx("panel.normal"),500:tx("panel.medium"),700:tx("panel.bold")},FW_DEF=400;
 let articleFS=FS_DEF;
 let articleFW=FW_DEF;
 function applyFS(px,save){
@@ -1529,7 +1530,7 @@ function applyThemeControls(){
     // The label names the ACTION, not the state. While Auto is on, this button
     // shows what is on screen and a tap takes over AND switches, so a label
     // reading "Day" would describe the wrong half of what the press does.
-    const label=dark?"Switch to day":"Switch to night";
+    const label=dark?tx("panel.themeDay"):tx("panel.themeNight");
     b.textContent=dark?"☾":"☀";
     b.title=label;b.setAttribute("aria-label",label);
   }
@@ -1774,7 +1775,7 @@ function scopedDictionary(){
    back to it, for the reason the scope does. */
 function pickerGroupName(id){
   const g=userGroups.find(x=>x.id===(id||pickerGroup));
-  return g?g.name:"All dictionaries";
+  return g&&g.id!=="all"?g.name:tx("panel.allDictionaries");
 }
 /* The panel's group drop-down: the bar names the group in force, the card lists
    the reader's groups with the chosen one ticked. Its own helper rather than
@@ -1792,7 +1793,7 @@ function pickerGroupMenu(bar,menu,onPick){
       const b=document.createElement("button");
       b.type="button";b.className="choice-item";b.setAttribute("role","option");
       b.setAttribute("aria-selected",String(g.id===value));
-      b.textContent=g.name;
+      b.textContent=pickerGroupName(g.id);
       b.onclick=()=>{ctl.hide();onPick(g.id)};
       menu.appendChild(b);
     }
@@ -2089,7 +2090,7 @@ function refreshDictUI(now){
   // above it to be distinguished from: the groups are scrolled PAST once, the
   // names are scrolled THROUGH looking for one.
   const host=groups.length
-    ?sel.appendChild(Object.assign(document.createElement("optgroup"),{label:"Dictionaries"}))
+    ?sel.appendChild(Object.assign(document.createElement("optgroup"),{label:tx("panel.dictionaries")}))
     :sel;
   // The reader's own arrangement, never A→Z: it is the order the panel above
   // is dragged into and the order the search itself follows (D142), so a menu
@@ -2275,7 +2276,7 @@ function provenance(d){
     o=o||{};
     return `<div class="prow${o.cls?" "+o.cls:""}">`+
       (o.pre?`<span class="pfx">${esc(o.pre)}</span> `:"")+
-      `<span class="path" data-full="${escAttr(p)}" title="Click to copy">${pathHTML(p)}</span>`+
+      `<span class="path" data-full="${escAttr(p)}" title="${escAttr(tx("panel.copyPath"))}">${pathHTML(p)}</span>`+
       (o.post?` <span class="pfx">${esc(o.post)}</span>`:"")+
       `</div>`;
   };
@@ -2304,7 +2305,7 @@ function provenance(d){
     for(const m of ms)rows.push(label(m,{cls:"sub"}));
   }else{
     full=d.folder||d.textDB||d.path||"";
-    head=`<span class="fmt">prepared</span>: ${esc(base(full))}`;
+    head=`<span class="fmt">${esc(tx("dictUI.prepared"))}</span>: ${esc(base(full))}`;
     if(full)rows.push(label(full)); // same rule: the full path lives in the body
     if(d.folder)rows.push(note("contains: text.db"+(d.mediaDB?" + media.db":"")+" + info.txt"));
     else if(d.mediaDB)rows.push(label(d.mediaDB,{pre:"media:"}));
@@ -2337,7 +2338,7 @@ function provenance(d){
 /* The trigger, in one place: rendered into the file list, and restored there
    when a confirmation is cancelled. */
 function rmTrigger(){
-  return `<span class="rm" title="Delete this dictionary and its files — permanently, with no undo">🗑 Remove…</span>`;
+  return `<span class="rm" title="${escAttr(tx("dictUI.removeWarning"))}">${esc(tx("dictUI.remove"))}</span>`;
 }
 /* The Rebuild line (server/reindex.go): one line, shown only while some
    dictionary is outdated or a rebuild is running. Nothing here starts on its
@@ -2350,17 +2351,16 @@ function renderReindex(){
   if(st&&st.running){
     const at=Math.min(st.done+1,st.total),
       pct=st.currentTotal?` ${Math.min(100,Math.floor(st.currentDone/st.currentTotal*100))}%`:"";
-    box.innerHTML=`<p><span class="spin"></span>Rebuilding ${at} of ${st.total}`+
+    box.innerHTML=`<p><span class="spin"></span>${esc(tx("dictUI.rebuilding",{at,total:st.total}))}`+
       (st.current?` · ${esc(st.current)}${pct}`:"")+"</p>"+
-      (reindexStopping?"<p class=\"cost\">Stopping after this dictionary…</p>":
-        '<p><button type="button" class="btn" id="reindexStop">Stop</button></p>');
+      (reindexStopping?`<p class="cost">${esc(tx("dictUI.stopping"))}</p>`:
+        `<p><button type="button" class="btn" id="reindexStop">${esc(tx("dictUI.stop"))}</button></p>`);
     box.hidden=false;return;
   }
   const n=dicts.filter(d=>d.outdated).length,failed=st&&st.failed||[];
   if(!n&&!failed.length){box.hidden=true;box.innerHTML="";return}
-  box.innerHTML=(n?`<p>${n} ${n===1?"dictionary was":"dictionaries were"} prepared by an older version `+
-      '<button type="button" class="btn" id="reindexGo">Rebuild</button></p>':"")+
-    (failed.length?'<p class="cost">Could not rebuild: '+failed.map(esc).join("; ")+"</p>":"");
+  box.innerHTML=(n?`<p>${esc(tx("dictUI.outdated",{number:n}))} <button type="button" class="btn" id="reindexGo">${esc(tx("dictUI.rebuild"))}</button></p>`:"")+
+    (failed.length?`<p class="cost">${esc(tx("dictUI.rebuildFailed",{errors:failed.join("; ")}))}</p>`:"");
   box.hidden=false;
 }
 function pollReindex(){
@@ -2373,8 +2373,7 @@ function pollReindex(){
     if(st.running){renderReindex();pollReindex();return}
     reindexStopping=false;
     const ok=st.done-(st.failed||[]).length;
-    setStatus((st.failed&&st.failed.length?"":"✓ ")+`rebuilt ${ok} of ${st.total} `+
-      (st.total===1?"dictionary":"dictionaries")+(st.canceled?" — stopped":""));
+    setStatus((st.failed&&st.failed.length?"":"✓ ")+esc(tx("dictUI.rebuilt",{done:ok,total:st.total}))+(st.canceled?esc(tx("dictUI.stopped")):""));
     await loadDicts();
     renderReindex();
   },1000);
@@ -2391,7 +2390,7 @@ $("reindexLine").addEventListener("click",async e=>{
     const r=await fetch("/api/reindex",{method:"POST"});
     if(!r.ok)throw new Error("HTTP "+r.status);
     reindexSt=await r.json();reindexStopping=false;
-  }catch(err){e.target.disabled=false;setStatus("Could not start the rebuild — "+esc(err.message));return}
+  }catch(err){e.target.disabled=false;setStatus(esc(tx("dictUI.rebuildStartFailed",{error:err.message})));return}
   if(reindexSt.running){renderReindex();pollReindex()}
   else loadDicts(); // nothing was outdated any more: the list was behind
 });
@@ -2418,9 +2417,9 @@ function renderPanel(){
        makes it reversible, and why none of this needs a confirmation. */
     const canToggle=!!d.source;
     const feats=[
-      ["contains","contains",d.caps?.Contains,0],
-      ["fts","full-text",d.caps?.FTS,0],
-      ["media","media",!!d.mediaDB,d.mediaSize||0],
+      ["contains",tx("dictUI.contains"),d.caps?.Contains,0],
+      ["fts",tx("dictUI.fts"),d.caps?.FTS,0],
+      ["media",tx("dictUI.media"),!!d.mediaDB,d.mediaSize||0],
     ];
     /* The index itself, first in the run of chips. Two states, because the
        dictionary only has two: "🚀 index" while there is none — it is searched
@@ -2453,9 +2452,9 @@ function renderPanel(){
        clicking, the size is a fact about what a click already produced. */
     const est=indexed?0:baseIndexBytes(d);
     let caps=indexed
-      ? `<span class="feat on locked" title="Indexed - ${mb(d.dbSize)} on disk">${mb(d.dbSize)}</span>`
+      ? `<span class="feat on locked" title="${escAttr(tx("dictUI.indexedSize",{size:mb(d.dbSize)}))}">${mb(d.dbSize)}</span>`
       : canToggle
-        ? `<span class="feat" data-feat="base" title="Build this dictionary's index - until then it is searched the slow way, through its own format.${est?` Not indexed: the ~${mb(est)} is an estimate of what indexing WOULD use, worked out from your dictionaries that already have an index - not a measurement of this one.`:""}">🚀 index${est?` · est. ~${mb(est)}`:""}</span>`
+        ? `<span class="feat" data-feat="base" title="${escAttr(tx("dictUI.buildHint")+(est?tx("dictUI.estimateHint",{size:mb(est)}):""))}">${esc(tx("dictUI.index"))}${est?" · ~"+mb(est):""}</span>`
         : "";
     for(const[key,label,on,bytes]of feats){
       if(key==="media"&&!on&&!d.hasMedia)continue; // nothing to pack
@@ -2464,12 +2463,12 @@ function renderPanel(){
          rules, so it can only miss words whose folding changed. So it is
          marked, not disabled, and the click rebuilds instead of removing. */
       const stale=key==="contains"&&on&&d.containsStale;
-      const tip=!canToggle?"The dictionary files are gone — this is the only copy, so it cannot be changed":
-        stale?"Built with older text-folding rules — click to rebuild":
-        on?"Click to remove":"Click to add";
+      const tip=!canToggle?tx("dictUI.onlyCopy"):
+        stale?tx("dictUI.stale"):
+        on?tx("dictUI.removeHint"):tx("dictUI.addHint");
       caps+=`<span class="feat${on?" on":""}${stale?" stale":""}${canToggle?"":" locked"}"`+
         ` data-feat="${key}" data-on="${on?1:0}"${stale?' data-stale="1"':""}`+
-        ` title="${tip}">${label}${size}${stale?" ⟳":""}</span>`;
+        ` title="${escAttr(tip)}">${esc(label)}${size}${stale?" ⟳":""}</span>`;
     }
     // the contains index is built automatically on first use, so the only
     // manual action offered is full-text (which also covers contains).
@@ -2482,21 +2481,21 @@ function renderPanel(){
        it, and the browse page asks for it and opens the list when it is ready.
        This is the card for one dictionary, so unlike the row above it carries
        the id. */
-    else acts=`<a class="browse" href="/browse?dict=${encodeURIComponent(d.id)}" title="Read this dictionary A–Z, page by page"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M2.4 3.4a1.2 1.2 0 0 1 1.2-1.2h6.2a1.2 1.2 0 0 1 1.2 1.2v9.2a1.2 1.2 0 0 1-1.2 1.2H3.6a1.2 1.2 0 0 1-1.2-1.2z"/><path d="M11 5h2.6"/><path d="M11 8h2.6"/><path d="M11 11h2.6"/></svg>Browse</a>`;
+    else acts=`<a class="browse" href="/browse?dict=${encodeURIComponent(d.id)}" title="${escAttr(tx("dictUI.browseHint"))}"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M2.4 3.4a1.2 1.2 0 0 1 1.2-1.2h6.2a1.2 1.2 0 0 1 1.2 1.2v9.2a1.2 1.2 0 0 1-1.2 1.2H3.6a1.2 1.2 0 0 1-1.2-1.2z"/><path d="M11 5h2.6"/><path d="M11 8h2.6"/><path d="M11 11h2.6"/></svg>${esc(tx("dictUI.browse"))}</a>`;
     div.innerHTML=`<div class="hd">
-        <span class="grip" draggable="true" title="Drag to reorder">⠿</span>
-        <b tabindex="0" role="button" title="Search only this dictionary">${esc(dictLabel(d))}</b>
+        <span class="grip" draggable="true" title="${escAttr(tx("dictUI.drag"))}">⠿</span>
+        <b tabindex="0" role="button" title="${escAttr(tx("dictUI.searchOnly"))}">${esc(dictLabel(d))}</b>
         <span class="ord">
-          <button data-mv="top" title="Move to top">⏫</button>
-          <button data-mv="up" title="Move up">▲</button>
-          <button data-mv="down" title="Move down">▼</button>
-          <button data-mv="bottom" title="Move to bottom">⏬</button>
+          <button data-mv="top" title="${escAttr(tx("dictUI.top"))}">⏫</button>
+          <button data-mv="up" title="${escAttr(tx("dictUI.up"))}">▲</button>
+          <button data-mv="down" title="${escAttr(tx("dictUI.down"))}">▼</button>
+          <button data-mv="bottom" title="${escAttr(tx("dictUI.bottom"))}">⏬</button>
         </span>
       </div>
-      <div class="meta">${esc(d.format||"?")}${d.entries?" · "+d.entries.toLocaleString()+" entries":""}${d.dbSize?" · indexed":""}</div>
+      <div class="meta">${esc(d.format||"?")}${d.entries?" · "+esc(tx("dictUI.entries",{number:window.wudictI18n.number(d.entries)})):""}${d.dbSize?tx("dictUI.indexed"):""}</div>
       <div>${caps}</div><div class="acts">${acts}</div>
       ${provenance(d)}
-      <details class="about"><summary>About this dictionary</summary>${traits(d)}<div class="aboutbody">…</div></details>`;
+      <details class="about"><summary>${esc(tx("dictUI.about"))}</summary>${traits(d)}<div class="aboutbody">…</div></details>`;
     el.appendChild(div);
   }
   if(scroller)scroller.scrollTop=top;
@@ -2862,7 +2861,7 @@ function sysSame(row,a,b){
 function sysSet(request){
   const state=sysRequest(request);
   if(!state){
-    sysNote("Could not save that setting.");
+    sysNote(tx("panel.settingFailed"));
     if(sysState)sysPaint(sysState);
     return null;
   }
@@ -3044,7 +3043,7 @@ async function loadFolders(){
   if(!await loadConfig())return;
   const c=cfgInfo,b=$("folderBody");
   const n=(c.roots||[]).length;
-  $("folderSummary").textContent=`${n} folder${n===1?"":"s"} · ${c.total} dictionar${c.total===1?"y":"ies"}`;
+  $("folderSummary").textContent=tx("panel.folders",{count:n,number:n})+" · "+tx("panel.dictionaryCount",{count:c.total,number:c.total});
   paintPickerGroup(); // the row that says which group the search is on
   b.innerHTML="";
   const row=(path,note,bad)=>{
@@ -3052,7 +3051,7 @@ async function loadFolders(){
     const p=document.createElement("span");p.className="p path";
     p.dataset.full=path;              // what gets copied, whatever is displayed
     p.innerHTML=pathHTML(path);
-    p.title="Click to copy";
+    p.title=tx("panel.copyPath");
     d.appendChild(p);
     // The facts travel as one unit so they wrap as one — and so a row with no
     // fact (the config file) simply has a shorter unit, instead of holding an
@@ -3072,28 +3071,28 @@ async function loadFolders(){
     b.appendChild(d);
   };
   const grp=t=>{const g=document.createElement("div");g.className="grp";g.textContent=t;b.appendChild(g)};
-  grp("Dictionary folders");
+  grp(tx("panel.dictionaryFolders"));
   for(const r of c.roots||[]){
-    let note=`${r.count} dictionar${r.count===1?"y":"ies"}`,bad=false;
-    if(!r.exists){note="folder not found";bad=true}
-    else if(!r.total){note="no dictionaries"}
-    else if(!r.count){note=`${r.total} already listed above`}
-    else if(r.total>r.count){note+=` (+${r.total-r.count} listed above)`}
+    let note=tx("panel.dictionaryCount",{count:r.count,number:r.count}),bad=false;
+    if(!r.exists){note=tx("panel.folderMissing");bad=true}
+    else if(!r.total){note=tx("panel.noDictionaries")}
+    else if(!r.count){note=tx("panel.listedAbove",{number:r.total})}
+    else if(r.total>r.count){note+=tx("panel.alsoListed",{number:r.total-r.count})}
     row(r.path,note,bad);
   }
   if(c.dictDirEditable===false){
-    const how=c.dictDirOrigin==="flag"?"the --dict-dir flag":"the DICT_DIR environment variable";
+    const how=c.dictDirOrigin==="flag"?"--dict-dir":"DICT_DIR";
     const w=document.createElement("div");w.className="warn";
-    w.textContent="⚠ set by "+how+" — it overrides the config file";
+    w.textContent=tx("panel.configOverride",{source:how});
     b.appendChild(w);
   }
   // "(library)" was the heading explaining itself, and "prepared dictionaries"
   // is restated one line down by the row's own note — the same rule that keeps
   // the format prefix off a file name ending in ".mdx" (see provenance above).
-  grp("Library");
-  row(c.libDir,`${c.prepared} prepared`+(c.useCached?" · in use":c.prepared?" · not in use":""),false);
+  grp(tx("panel.library"));
+  row(c.libDir,tx("panel.prepared",{number:c.prepared})+(c.useCached?tx("panel.inUse"):c.prepared?tx("panel.notInUse"):""),false);
   // Likewise "file": the row shows a path ending in ".toml".
-  if(c.configPath){grp("Config file");row(c.configPath,"",false)}
+  if(c.configPath){grp(tx("panel.configFile"));row(c.configPath,"",false)}
 }
 // The paths are drawn when the drawer opens (showPanel calls loadFolders), not
 // on a disclosure's toggle: they are part of the Info section now, so there is
@@ -3161,22 +3160,19 @@ function closeFtsAll(){
   $("ftsAllBtn").setAttribute("aria-expanded","false");
 }
 function openFtsAll(){
-  const box=$("ftsAllBox"),todo=ftsCandidates(),plural=n=>n===1?"dictionary":"dictionaries";
+  const box=$("ftsAllBox"),todo=ftsCandidates();
   if(!todo.length){
-    box.innerHTML="<p>Every dictionary that can be indexed already has full-text search.</p>";
+    box.innerHTML="<p>"+esc(tx("dictUI.allIndexed"))+"</p>";
   }else{
     const entries=todo.reduce((n,d)=>n+(d.entries||0),0);
     const now=dicts.reduce((n,d)=>n+(d.dbSize||0),0),added=ftsAddedBytes(todo);
-    box.innerHTML=
-      "<p>Full-text search finds words <em>inside</em> article text. Every dictionary "+
-      "is already searchable by headword — only enable if you have sufficient disk space.</p>"+
-      `<p class="cost">Indexes <b>${todo.length}</b> ${plural(todo.length)}`+
-        (entries?` (${entries.toLocaleString()} entries)`:"")+
-        ", one at a time — on a large collection that takes a long while."+
-        (now?` Prepared data uses ${mb(now)} today`+(added?`; expect roughly ${mb(added)} more`:"")+".":"")+
-        " You can remove it from any dictionary afterwards.</p>"+
-      `<p><button type="button" class="btn" id="ftsAllGo">Index ${todo.length} ${plural(todo.length)}</button>`+
-      '<button type="button" class="btn" id="ftsAllNo">Cancel</button></p>';
+    const details=[tx("dictUI.indexPlan",{number:todo.length}),
+      entries?tx("dictUI.entries",{number:window.wudictI18n.number(entries)}):"",
+      tx("dictUI.ftsTime"),now?tx("dictUI.diskNow",{size:mb(now)}):"",
+      now&&added?tx("dictUI.diskMore",{size:mb(added)}):""].filter(Boolean).join(" ");
+    box.innerHTML='<p>'+esc(tx("dictUI.ftsExplain"))+'</p><p class="cost">'+esc(details)+'</p>'+
+      '<p><button type="button" class="btn" id="ftsAllGo">'+esc(tx("dictUI.indexCount",{number:todo.length}))+'</button>'+
+      '<button type="button" class="btn" id="ftsAllNo">'+esc(tx("panel.cancel"))+'</button></p>';
   }
   box.hidden=false;
   $("ftsAllBtn").setAttribute("aria-expanded","true");
@@ -3198,7 +3194,7 @@ $("ftsAllBox").addEventListener("click",async e=>{
     await runIngest(d.id,{fts:1,quiet:true,statusPrefix:`${n}/${todo.length} · `},label);
   }
   closeFtsAll();
-  setStatus(`✓ full-text search enabled on ${todo.length} ${todo.length===1?"dictionary":"dictionaries"}`);
+  setStatus(esc(tx("dictUI.ftsEnabled",{number:todo.length})));
   await loadDicts();if(lastQuery)doSearch();
 });
 /* The About body is fetched once, on the first open, and kept on the element
@@ -3219,9 +3215,9 @@ $("panelList").addEventListener("toggle",async e=>{
     /* Inserted as markup on purpose: the server normalised it (escaped if it
        was plain text, reduced to prose elements if it was markup), so this is
        the one client that does NOT need a sanitiser of its own. */
-    body.innerHTML=(j.html||`<p>✨ Found Emptiness! ✨ 🤷 ✨</p>`)+aboutLangs(j);
+    body.innerHTML=(j.html||`<p>${esc(tx("dictUI.emptyAbout"))}</p>`)+aboutLangs(j);
   }catch(err){
-    body.textContent="Not available.";
+    body.textContent=tx("dictUI.notAvailable");
     det.dataset.loaded=""; // a failed fetch is worth retrying on the next open
   }
 },true);
@@ -3230,8 +3226,8 @@ $("panelList").addEventListener("toggle",async e=>{
    only format that names both ends). */
 function aboutLangs(j){
   const parts=[];
-  if(j.indexLang)parts.push("headwords "+esc(j.indexLang));
-  if(j.contentsLang)parts.push("articles "+esc(j.contentsLang));
+  if(j.indexLang)parts.push(esc(tx("dictUI.headwords",{language:j.indexLang})));
+  if(j.contentsLang)parts.push(esc(tx("dictUI.articles",{language:j.contentsLang})));
   if(!parts.length)return "";
   return `<div class="aboutlangs">${parts.join(" · ")}</div>`;
 }
@@ -3346,9 +3342,8 @@ function askRemoval(pd){
      be had back, so it is one plain choice and says where the way back is -
      none of the "no undo" warning, which would be untrue here. */
   if(d.builtin){
-    wrap.innerHTML=`<span class="rmq">Remove <b>${esc(dictLabel(d))}</b>`+
-      ` — Setup can bring it back any time`+
-      `<br><span class="rmgo" data-rm="all">remove</span><span class="rmno">↩ cancel</span></span>`;
+    wrap.innerHTML=`<span class="rmq">${esc(tx("dictUI.removeBuiltin",{name:dictLabel(d)}))}`+
+      `<br><span class="rmgo" data-rm="all">${esc(tx("panel.remove"))}</span><span class="rmno">${esc(tx("dictUI.cancel"))}</span></span>`;
     return;
   }
   const idx=(d.dbSize||0)+(d.mediaSize||0);
@@ -3358,23 +3353,23 @@ function askRemoval(pd){
   // The server enforces this too (D24 §4) — this only avoids offering what
   // would be refused.
   const canDropSource=!!d.source&&prepared&&(!!d.mediaDB||!d.hasMedia);
-  let btns=`<span class="rmgo" data-rm="all">💥 delete${d.source?" everything":""}</span>`;
-  if(d.source&&prepared)btns+=`<span class="rmgo" data-rm="index">index only${idx?" · "+mb(idx):""}</span>`;
-  if(canDropSource)btns+=`<span class="rmgo" data-rm="source">dictionary files only</span>`;
+  let btns=`<span class="rmgo" data-rm="all">💥 ${esc(tx(d.source?"dictUI.deleteAll":"dictUI.delete"))}</span>`;
+  if(d.source&&prepared)btns+=`<span class="rmgo" data-rm="index">${esc(tx("dictUI.indexOnly"))}${idx?" · "+mb(idx):""}</span>`;
+  if(canDropSource)btns+=`<span class="rmgo" data-rm="source">${esc(tx("dictUI.sourceOnly"))}</span>`;
   // The heading states the irreversibility once, at the top, in the danger
   // colour — the buttons below it say WHAT goes, not how bad it is.
-  wrap.innerHTML=`<span class="rmq"><span class="rmwarn">😱 No undo. No Trash. Gone.</span>`+
-    `Delete <b>${esc(dictLabel(d))}</b>`+
-    (d.source?` — the prepared index${idx?" ("+mb(idx)+")":""} <b>AND</b> the dictionary files`
-             :` — ⚠️ this is the only copy, there are no dictionary files to rebuild it from`)+
-    `<br>${btns}<span class="rmno">↩ cancel</span></span>`;
+  wrap.innerHTML=`<span class="rmq"><span class="rmwarn">${esc(tx("dictUI.irreversible"))}</span>`+
+    esc(tx("dictUI.deleteName",{name:dictLabel(d)}))+
+    (d.source?esc(tx("dictUI.deleteFiles",{size:idx?" ("+mb(idx)+")":""}))
+             :esc(tx("dictUI.deleteOnlyCopy")))+
+    `<br>${btns}<span class="rmno">${esc(tx("dictUI.cancel"))}</span></span>`;
 }
 
 async function runRemove(id,kind,node){
   node.dataset.busy="1";node.classList.add("busy");
   const d=dicts.find(x=>x.id===id)||{path:""},name=dictLabel(d);
-  node.textContent="deleting…";
-  setStatus('<span class="spin"></span>'+esc(name)+" — deleting…");
+  node.textContent=tx("dictUI.deleting");
+  setStatus('<span class="spin"></span>'+esc(tx("dictUI.deletingName",{name})));
   const q="/api/library?dict="+encodeURIComponent(id)+
     "&prepared="+(kind==="source"?0:1)+"&source="+(kind==="index"?0:1);
   let rep;
@@ -3384,11 +3379,11 @@ async function runRemove(id,kind,node){
     if(!r.ok)throw new Error((rep&&rep.error)||("HTTP "+r.status));
   }catch(err){
     node.classList.remove("busy");delete node.dataset.busy;
-    node.textContent="failed";
+    node.textContent=tx("dictUI.failed");
     setStatus("⚠ "+esc(name)+" — "+esc(err.message||String(err)));
     return;
   }
-  setStatus("💀 "+esc(name)+" — deleted, "+mb(rep.freed||0)+" freed"+
+  setStatus("💀 "+esc(tx("dictUI.freed",{name,size:mb(rep.freed||0)}))+
     (rep.note?" · "+esc(rep.note):""));
   // The server has already rescanned; this refetches the list it now reports,
   // and redraws the panel (and the folder section's counts) from it.
@@ -3420,11 +3415,11 @@ function runIngest(id,opts,label){
     setStatus('<span class="spin"></span>'+(opts.statusPrefix||"")+esc(name)+" — "+esc(long||t));
   };
   const removing=Object.values(opts).some(v=>v===0);
-  // "indexing" for the index chip, because that is the word every other
-  // dictionary app uses for this and the chip says it too; "preparing" stays
+  // tx("dictUI.indexing") for the index chip, because that is the word every other
+  // dictionary app uses for this and the chip says it too; tx("dictUI.preparing") stays
   // for the feature switches, which add to an index that already exists.
-  const verb=opts.base?"indexing":"preparing";
-  show(removing?"removing…":verb+"…");
+  const verb=opts.base?tx("dictUI.indexing"):tx("dictUI.preparing");
+  show(removing?tx("dictUI.removing"):verb+"…");
   label.classList.remove("act");label.classList.add("busy");
   label.style.textDecoration="none";label.style.cursor="default";
   const params=Object.entries(opts)
@@ -3443,14 +3438,14 @@ function runIngest(id,opts,label){
       /* The steps after the counted work - two CREATE INDEXes, the commit,
          ANALYZE - are one opaque SQLite call each and can report nothing; on a
          redirect-heavy dictionary they are ~15% of the wall time. Naming that
-         "finishing…" beats a percentage parked at 100. */
+         tx("dictUI.finishing") beats a percentage parked at 100. */
       const pct=p.total?Math.min(100,Math.floor(p.done/p.total*100)):-1;
-      show(verb+"… "+(pct<0?p.done.toLocaleString():pct>=100?"finishing…":pct+"%"),
+      show(verb+"… "+(pct<0?p.done.toLocaleString():pct>=100?tx("dictUI.finishing"):pct+"%"),
         verb+"… "+counts);
     });
     es.addEventListener("done",async()=>{
       es.close();
-      setStatus("✓ "+esc(name)+(removing?" — removed":" — ready"));
+      setStatus("✓ "+esc(name)+(removing?tx("dictUI.removed"):tx("dictUI.ready")));
       if(!opts.quiet){await loadDicts();if(lastQuery)doSearch()}
       resolve(true);
     });
@@ -3458,12 +3453,12 @@ function runIngest(id,opts,label){
        transport error, which carries no data, and the server's `event: error`
        (server.go emit("error", …)), which carries {"error":"…"} and is the
        only thing that can say WHY - a full disk nine minutes into a prepare
-       reads as a bare "failed" otherwise. The chip stays short either way;
+       reads as a bare tx("dictUI.failed") otherwise. The chip stays short either way;
        the reason goes to the status line, which has the room. */
     es.addEventListener("error",ev=>{es.close();
       let why="";
       try{if(ev&&ev.data){const d=JSON.parse(ev.data);if(d&&d.error)why=String(d.error)}}catch(_){}
-      show("failed",why?"failed — "+why:"failed");
+      show(tx("dictUI.failed"),why?tx("dictUI.failedReason",{error:why}):tx("dictUI.failed"));
       label.classList.add("err");resolve(false)});
   });
 }
@@ -4825,7 +4820,7 @@ async function toggleSub(link,word,dictID){
       if(m.t==="hit"&&m.results?.length)html=m.results[0].Body;
     }
     if(html===null){box.textContent="(not in this dictionary)";return}
-    box.innerHTML=`<span class="wu-sub-close" title="Close">✕</span>`+html.replace(/<link\b[^>]*>/gi,"");
+    box.innerHTML=`<span class="wu-sub-close" title="${escAttr(tx("panel.close"))}">✕</span>`+html.replace(/<link\b[^>]*>/gi,"");
     box.querySelector(".wu-sub-close").addEventListener("click",()=>toggleSub(link,word,dictID));
   }catch(_){box.textContent="(could not load)"}
 }
@@ -5308,54 +5303,14 @@ $("q").addEventListener("blur",()=>setTimeout(()=>{
        dictionary caps — is ONE preset with two halves, not two entries the
        reader has to know belong together. */
 
-const BOXNAME={app:"App",article:"Article"};
+const BOXNAME={app:tx("panel.app"),article:tx("panel.article")};
 /* What an EMPTY box says. A placeholder, not seeded text: it is a hint, not
    content - it never reaches the file, never shows up in a diff, and it is
    gone the moment the reader types a character. Both lists name the app's own
    custom properties, which are defined on :root in app.css and inherit into
    every article, shadow root and iframe alike (see style.go), so they are the
    same names in both boxes. */
-const STYLE_HINT={
-app:`CSS for the app itself — its colours and its own layout.
-Tokens set on :root reach articles too.
-
-The app's colours are CUSTOM PROPERTIES, so restyle by changing a value rather
-than every rule that reads it:
-
-  --bg           page and sheet background   --fg          all text
-  --bg-card      cards, fields, buttons      --fg-soft     DISABLED states
-  --bg-bar       the search bar              --fg-faint    (and the ⌕ mark)
-  --accent       highlights, pressed states  --line        borders
-  --accent-soft  the accent's tint           --line-soft   hairlines
-  --link         result headwords            --focus       focus rings
-  --paper-bg     the reader's paper          --paper-bk-image  its texture
-  --label / --label-quiet   what labels, headings, hints and counts read;
-                            both are the ink unless something says otherwise
-                            (the "Quiet labels" preset points them at the greys)
-  --wd-article-bg / --wd-article-fg   the article surface inside a frame
-
-html[data-dark] is true whenever the page is dark, "auto" included;
-html[data-theme="dark"] is true only when the reader pinned dark by hand.
-
-`,
-article:`CSS for what dictionaries render, in every article.
-Use :host, :root > body to reach the article's own root.
-
-An article is a frame of its own, and the app's custom properties reach it, so
-the same names work here:
-
-  --wd-article-bg   the article surface      --wd-article-fg   its text
-  --fg, --fg-soft, --fg-faint   the app's text: --fg is all of it, the two
-                                greys are the DISABLED states
-  --link, --accent              headwords and highlights
-  --bg-card, --line             surfaces and borders
-
-Selectors land INSIDE the article: p, a, table, div, body — and :host when the
-dictionary is drawn as a shadow root. Nothing here reaches the chrome; that is
-what the App box is for.
-
-`
-};
+const STYLE_HINT={app:tx("panel.appCSSHint"),article:tx("panel.articleCSSHint")};
 /* WHICH FILE this box is, spelled out, and the one thing a reader is most
    likely to assume wrongly: the day and the night sheets are two files, and
    neither inherits from the other - an empty one means that theme has nothing
@@ -5365,12 +5320,7 @@ what the App box is for.
 function styleFileNote(tab, night){
   const base=tab==="article"?"article":"app";
   const name=n=>base+(n?"_night":"")+".css";
-  return `Editing ${name(night)} — the ${night?"night":"day"} sheet.
-The ${night?"day":"night"} has ${name(!night)} of its own: the two are separate
-files and neither inherits from the other, so an empty one means nothing is
-applied in that theme.
-
-`;
+  return tx("panel.fileNote",{file:name(night),other:name(!night),theme:tx(night?"panel.night":"panel.day")});
 }
 function styleHint(tab, night){
   return styleFileNote(tab, night) + (STYLE_HINT[tab]||"");
@@ -5391,8 +5341,7 @@ function stylerFileLine(){
   const el=$("stylerFile");
   if(!el)return;
   const night=themeIsDark(), app=stylerTab!=="article";
-  el.textContent="Editing "+(app?"app":"article")+(night?"_night":"")+".css — the "
-    +(night?"night":"day")+" sheet";
+  el.textContent=tx("panel.editingFile",{file:(app?"app":"article")+(night?"_night":"")+".css",theme:tx(night?"panel.night":"panel.day")});
 }
 /* The wallpapers the Android shell unpacks into the files folder when they
    are absent. Deleting one from here would only make the next start copy it
@@ -5501,7 +5450,7 @@ function stylerDirty(tab){return stylerText[tab]!==stylerSaved[tab]}
 function stylerMark(tab,has,dirty){
   tab.dataset.has=has?"1":"";
   tab.dataset.dirty=dirty?"1":"";
-  if(dirty)tab.title="Unsaved changes — press Save";
+  if(dirty)tab.title=tx("panel.unsavedHint");
   else tab.removeAttribute("title");
 }
 /* Which pane the sheet is showing, and which buttons that pane can act on.
@@ -5528,18 +5477,18 @@ function stylerNote(msg){
   n.textContent="";
   if(msg){n.textContent=msg;return}
   if(STYLE_OFF){
-    n.textContent="Preview is off (?style=off). You can still edit and save; reload without it to see the result.";
+    n.textContent=tx("panel.previewOff");
     return;
   }
   if(!stylerDir){
-    n.textContent="No configuration folder, so there is nowhere to save. Start wudict with a config file.";
+    n.textContent=tx("panel.noStyleFolder");
     return;
   }
   n.appendChild(document.createTextNode("Saved in "));
   const p=document.createElement("span");
-  p.className="p";p.textContent=stylerDir;p.title="Click to copy";
+  p.className="p";p.textContent=stylerDir;p.title=tx("panel.copyPath");
   p.onclick=()=>{navigator.clipboard&&navigator.clipboard.writeText(stylerDir)
-    .then(()=>stylerNote("Path copied"),()=>{}).then(()=>setTimeout(stylerNote,1400))};
+    .then(()=>stylerNote(tx("panel.pathCopied")),()=>{}).then(()=>setTimeout(stylerNote,1400))};
   n.appendChild(p);
   n.appendChild(document.createTextNode(
     " · Clear then Save deletes a file · /?style=off loads the app with neither applied"));
@@ -5585,7 +5534,7 @@ function stylerShowTab(tab){
 async function stylerFilesShow(){
   stylerCommit();
   stylerSetView("files");
-  if(stylerFileRows===null){stylerFilesRender("Loading…");await stylerFilesLoad()}
+  if(stylerFileRows===null){stylerFilesRender(tx("panel.loading"));await stylerFilesLoad()}
   else stylerFilesRender();
 }
 function stylerFilesTake(j){
@@ -5615,8 +5564,8 @@ function stylerFilesRender(msg){
   if(msg){say(msg);stylerSync();return}
   if(!stylerFileRows||!stylerFileRows.length){
     say(stylerDir
-      ? "No files yet. Add an image, a font, a stylesheet — anything the CSS should be able to reach — then insert a reference to it."
-      : "No configuration folder, so there is nowhere to keep files.");
+      ? tx("panel.emptyFiles")
+      : tx("panel.noFileFolder"));
     stylerSync();return;
   }
   for(const f of stylerFileRows){
@@ -5634,15 +5583,15 @@ function stylerFilesRender(msg){
       row.appendChild(d);
     }
     const n=document.createElement("div");n.className="n";
-    n.title="Click to copy "+f.url;
+    n.title=tx("panel.copyValue",{value:f.url});
     const b=document.createElement("b");b.textContent=f.name;
     const sub=document.createElement("s");sub.textContent=f.url+" · "+mb(f.size)
-      +(BUILTIN_BACKGROUNDS.includes(f.name)?" · built in, restored at startup":"");
+      +(BUILTIN_BACKGROUNDS.includes(f.name)?tx("panel.builtinFile"):"");
     n.appendChild(b);n.appendChild(sub);
     n.onclick=()=>stylerCopy(f.url);
     row.appendChild(n);
     const ins=document.createElement("button");
-    ins.type="button";ins.className="btn";ins.textContent="Insert";
+    ins.type="button";ins.className="btn";ins.textContent=tx("panel.insert");
     ins.title=stylerFileTitle(f);
     ins.onclick=()=>stylerFileInsert(f);
     row.appendChild(ins);
@@ -5650,7 +5599,7 @@ function stylerFilesRender(msg){
     // they are absent, so the button could only promise what it cannot do.
     if(!BUILTIN_BACKGROUNDS.includes(f.name)){
       const del=document.createElement("button");
-      del.type="button";del.className="btn";del.textContent="Delete";
+      del.type="button";del.className="btn";del.textContent=tx("panel.delete");
       del.onclick=()=>stylerFileDelete(f);
       row.appendChild(del);
     }
@@ -5662,17 +5611,15 @@ function stylerFilesRender(msg){
    "write this where the caret is" - it writes two rules into two boxes. */
 function stylerFileTitle(f){
   const ext=stylerFileExt(f);
-  if(ext==="css")return "Import "+f.name+" at the top of "+BOXNAME[stylerTab];
-  if(FONT_FORMAT[ext])return "Write the rules that use "+f.name+" as the font, "
-    +"in both stylesheets";
-  if(/^image\//.test(f.type||""))return "Write the rule that puts "+f.name
-    +" behind every article";
-  return 'Write url("'+f.url+'") where the caret is';
+  if(ext==="css")return tx("panel.importCSS",{name:f.name,box:BOXNAME[stylerTab]});
+  if(FONT_FORMAT[ext])return tx("panel.fontRules",{name:f.name});
+  if(/^image\//.test(f.type||""))return tx("panel.imageRule",{name:f.name});
+  return tx("panel.urlRule",{url:f.url});
 }
 function stylerCopy(text){
   if(!navigator.clipboard)return;
   navigator.clipboard.writeText(text).then(
-    ()=>{stylerNote("Copied "+text);setTimeout(stylerNote,1400)},()=>{});
+    ()=>{stylerNote(tx("panel.copied",{value:text}));setTimeout(stylerNote,1400)},()=>{});
 }
 /* What Insert actually writes. A url() on its own is a reference to nothing:
    it parses, it lands where the caret is, and it does not do anything until
@@ -5749,13 +5696,13 @@ function stylerFileInsert(f){
     const imp="@import "+'url("'+f.url+'")'+";";
     stylerShowTab(stylerTab);
     if(stylerText[stylerTab].includes(imp)){
-      stylerNote(f.name+" — already in "+BOXNAME[stylerTab]);
+      stylerNote(tx("panel.alreadyIn",{name:f.name,box:BOXNAME[stylerTab]}));
     }else{
       const ta=$("stylerCSS");
       ta.focus();
       ta.selectionStart=ta.selectionEnd=0;
       stylerEdit(imp+"\n");
-      stylerNote(f.name+" — imported into "+BOXNAME[stylerTab]);
+      stylerNote(tx("panel.importedInto",{name:f.name,box:BOXNAME[stylerTab]}));
     }
     setTimeout(stylerNote,2600);
     return;
@@ -5764,7 +5711,7 @@ function stylerFileInsert(f){
   if(rule){stylerInsertPreset(rule);return}
   stylerShowTab(stylerTab);
   stylerEdit('url("'+f.url+'")');
-  stylerNote("Inserted into "+BOXNAME[stylerTab]);
+  stylerNote(tx("panel.insertedInto",{box:BOXNAME[stylerTab]}));
   setTimeout(stylerNote,1800);
 }
 /* The confirmation names the box that will break, because the reader cannot
@@ -5777,19 +5724,19 @@ async function stylerFileDelete(f){
   const used=["app","article"].filter(b=>stylerText[b].includes(f.name)).map(b=>BOXNAME[b]);
   const chosen=!$("appearanceBackground").hidden&&!!appearanceState
     &&appearanceState.image===f.name;
-  if(!confirm("Delete "+f.name+"?"+(used.length
-    ? "\n\nYour "+used.join(" and ")+" CSS refers to it and will stop finding it."
-    : "")+(chosen?"\n\nThis is the selected background image; it will be set to None.":"")))return;
-  stylerNote("Deleting…");
+  if(!confirm(tx("panel.deleteFile",{name:f.name})+(used.length
+    ? tx("panel.fileUsed",{boxes:used.join(", ")})
+    : "")+(chosen?tx("panel.fileBackground"):"")))return;
+  stylerNote(tx("panel.deleting"));
   try{
     const r=await fetch("/api/files?name="+encodeURIComponent(f.name),{method:"DELETE"});
     if(!r.ok)throw new Error("HTTP "+r.status);
     stylerFilesTake(await r.json());
     if(chosen)appearanceSet("image","");
     else appearanceRead();
-    stylerNote("Deleted "+f.name);setTimeout(stylerNote,1600);
+    stylerNote(tx("panel.deleted",{name:f.name}));setTimeout(stylerNote,1600);
   }catch(e){
-    stylerNote("Could not delete "+f.name+": "+e.message);
+    stylerNote(tx("panel.deleteFailed",{name:f.name,error:e.message}));
   }
 }
 /* The server's name grammar, applied here as well - not instead. A picked
@@ -5825,7 +5772,7 @@ async function stylerUpload(list){
   for(const file of list){
     const name=stylerFileName(file.name);
     if(file.size>cap){
-      stylerNote(name+" is "+mb(file.size)+" — one file may be "+mb(cap)+" at most");
+      stylerNote(tx("panel.fileTooLarge",{name,size:mb(file.size),limit:mb(cap)}));
       return;
     }
     let q="";
@@ -5833,7 +5780,7 @@ async function stylerUpload(list){
       if(!confirm(name+" is already there. Replace it?"))continue;
       q="&replace=1";
     }
-    stylerNote("Uploading "+name+"…");
+    stylerNote(tx("panel.uploading",{name}));
     try{
       const r=await fetch("/api/files?name="+encodeURIComponent(name)+q,
         {method:"POST",headers:{"Content-Type":file.type||"application/octet-stream"},body:file});
@@ -5846,7 +5793,7 @@ async function stylerUpload(list){
       done++;
       if(/^image\//.test(file.type||""))lastImage=name;
     }catch(e){
-      stylerNote("Could not upload "+name+": "+e.message);
+      stylerNote(tx("panel.uploadFailed",{name,error:e.message}));
       return;
     }
   }
@@ -5858,13 +5805,13 @@ async function stylerUpload(list){
   // it here. Every other path just refreshes the strip and says what landed.
   if(forBackground&&lastImage){
     if(await appearanceImageChosen(lastImage)){
-      stylerNote(done===1?"Added — set as the background image"
-        :"Added "+done+" files — last image set as the background");
+      stylerNote(done===1?tx("panel.addedBackground")
+        :tx("panel.addedBackgroundMany",{number:done}));
       setTimeout(stylerNote,1600);
     }
   }else{
     appearanceRead();
-    stylerNote(done===1?"Added":"Added "+done+" files");
+    stylerNote(done===1?tx("panel.added"):tx("panel.addedFiles",{number:done}));
     setTimeout(stylerNote,1600);
   }
 }
@@ -5983,11 +5930,11 @@ window.wudictPresetPaper=presetPaperPush;
 async function presetToggle(id,on,notify){
   const say=notify||stylerNote;
   if(STYLE_OFF){
-    say("Preview is off (?style=off). You can still edit and save; reload without it to see the result.");
+    say(tx("panel.previewOff"));
     return false;
   }
   if(PRESETS&&!PRESETS.writable){
-    say("No configuration folder, so there is nowhere to remember preset choices.");
+    say(tx("panel.layerFolder"));
     return false;
   }
   try{
@@ -6068,25 +6015,30 @@ for(const [rowId,id,kind] of PRESET_ROWS){
    the same rule the old menu lived by. "Pasted" marks a preset whose text
    somebody once inserted the old way and is still carrying in a box; the
    button removes that copy so the switch can be the single source. */
+function layerText(key, fallback){
+  const text=tx(key);
+  return text===key?fallback:text;
+}
+function layerTitle(p){return layerText("layers."+p.id+".title",p.title)}
 function presetsPaneRender(){
   const pane=$("stylerPresetsPane");
   pane.textContent="";
   if(!PRESETS){
     pane.appendChild(Object.assign(document.createElement("div"),
-      {className:"empty",textContent:"Loading…"}));
+      {className:"empty",textContent:tx("panel.loading")}));
     return;
   }
   if(!PRESETS.writable){
     pane.appendChild(Object.assign(document.createElement("div"),
       {className:"empty",
-       textContent:"No configuration folder, so there is nowhere to remember preset choices."}));
+       textContent:tx("panel.layerFolder")}));
     return;
   }
   const hasImage=document.documentElement.hasAttribute("data-shell-image");
   const dark=themeIsDark();
   for(const g of (PRESETS.groups||[])){
     const head=document.createElement("div");head.className="ph";
-    head.textContent=g.title+(g.presets.length>1?" — pick one":"");
+    head.textContent=layerText("layers.group."+g.dir,g.title)+(g.presets.length>1?tx("panel.pickOne"):"");
     pane.appendChild(head);
     for(const p of g.presets){
       // A preset that cannot take effect WHERE THE READER IS is SHOWN and
@@ -6096,19 +6048,19 @@ function presetsPaneRender(){
       // are where it works, which is the one thing a reader deciding whether to
       // switch it on has to know. Both facts are the manifest's: requiresImage
       // and theme.
-      const blocked=p.requiresImage&&!hasImage?"Pick an image in Window background first"
-                   :p.theme==="light"&&dark?"Light theme only — the page is in the dark one"
-                   :p.theme==="dark"&&!dark?"Dark theme only — the page is in the light one"
+      const blocked=p.requiresImage&&!hasImage?tx("panel.layerNeedsImage")
+                   :p.theme==="light"&&dark?tx("panel.layerLightOnly")
+                   :p.theme==="dark"&&!dark?tx("panel.layerDarkOnly")
                    :"";
       const row=document.createElement("div");row.className="pr"+(blocked?" off":"");
       const sw=document.createElement("input");
       sw.type="checkbox";sw.className="en";sw.checked=!!p.enabled;
       if(blocked)sw.disabled=true;
-      sw.setAttribute("aria-label",p.title);
+      sw.setAttribute("aria-label",layerTitle(p));
       sw.onchange=()=>presetToggle(p.id,sw.checked);
       row.appendChild(sw);
       const n=document.createElement("div");n.className="n";
-      const b=document.createElement("b");b.textContent=p.title;
+      const b=document.createElement("b");b.textContent=layerTitle(p);
       n.appendChild(b);
       const s=document.createElement("s");
       // The reason REPLACES the description while it is in force: the row has
@@ -6122,10 +6074,10 @@ function presetsPaneRender(){
       // nothing, which is the fourteen that are not about a theme at all.
       // Left off while a reason is in force, because that reason IS about the
       // theme and the line has room for one.
-      const themeNote=p.theme==="light"?"light theme"
-                     :p.theme==="dark"?"dark theme"
-                     :p.theme==="both"?"both themes":"";
-      s.textContent=(blocked||p.desc)+(p.enabled?" — on":"")
+      const themeNote=p.theme==="light"?tx("panel.lightTheme")
+                     :p.theme==="dark"?tx("panel.darkTheme")
+                     :p.theme==="both"?tx("panel.bothThemes"):"";
+      s.textContent=(blocked||layerText("layers."+p.id+".desc",p.desc))+(p.enabled?tx("panel.layerOn"):"")
         +(blocked||!themeNote?"":" · "+themeNote);
       n.appendChild(s);
       // Legacy pastes, detected by their exact text in a box: the switch
@@ -6136,22 +6088,21 @@ function presetsPaneRender(){
         ||p.article&&stylerText.article.includes(p.article.css));
       if(pasted){
         const tag=document.createElement("u");
-        tag.textContent="pasted in your CSS — ";
+        tag.textContent=tx("panel.pasted");
         n.appendChild(tag);
         const rm=document.createElement("button");
-        rm.type="button";rm.className="btn";rm.textContent="remove";
-        rm.title="Delete the pasted copy from your App/Article text, so this switch is the only copy";
+        rm.type="button";rm.className="btn";rm.textContent=tx("panel.remove");
+        rm.title=tx("panel.removePasteHint");
         rm.onclick=()=>{
-          if(!confirm("Remove "+p.title+"'s text from your stylesheets?"+
-            " The switch stays as it is; press Save afterwards to keep the removal."))return;
+          if(!confirm(tx("panel.removePastedQuestion",{name:layerTitle(p)})))return;
           presetRemovePasted(p);
         };
         n.appendChild(rm);
       }
       row.appendChild(n);
       const ins=document.createElement("button");
-      ins.type="button";ins.className="btn";ins.title="Copy this preset into your App/Article text to customise it";
-      ins.textContent="Insert";
+      ins.type="button";ins.className="btn";ins.title=tx("panel.insertLayerHint");
+      ins.textContent=tx("panel.insert");
       ins.onclick=()=>stylerInsertPreset(p);
       row.appendChild(ins);
       pane.appendChild(row);
@@ -6191,9 +6142,9 @@ function stylerInsertPreset(p){
     stylerEdit((ta.value&&!ta.value.endsWith("\n")?"\n\n":"")+css+"\n");
     put.push(BOXNAME[box]);
   }
-  const stillOn=p.enabled?" — the preset is still switched on; turn it off to avoid doubling":"";
-  stylerNote((p.title||p.n)+" — "+[put.length?"inserted into "+put.join(" and "):"",
-    had.length?"already in "+had.join(" and "):""].filter(Boolean).join("; ")+stillOn);
+  const stillOn=p.enabled?tx("panel.layerStillOn"):"";
+  stylerNote([put.length?tx("panel.layerInserted",{name:layerTitle(p),boxes:put.join(", ")}):"",
+    had.length?tx("panel.layerAlready",{name:layerTitle(p),boxes:had.join(", ")}):""].filter(Boolean).join("; ")+stillOn);
   setTimeout(stylerNote,2600);
 }
 /* The pasted copy comes out of the boxes by its exact text, everywhere it
@@ -6220,7 +6171,7 @@ function presetRemovePasted(p){
   }
   stylerShowTab(stylerTab);
   stylerSync();stylerPreview();
-  stylerNote(p.title+" removed from your CSS — press Save to keep it that way");
+  stylerNote(tx("panel.removedCSS",{name:layerTitle(p)}));
   if(stylerSubject==="presets")presetsPaneRender();
 }
 /* ── the sheet's groups ──────────────────────────────────────────────
@@ -6236,10 +6187,10 @@ function presetRemovePasted(p){
    sheet's head cannot drift apart - and the head's dropdown, when it comes,
    reads this list instead of repeating it. */
 const STYLER_SUBJECTS={
-  screen:"Edges of the screen",
-  bg:"Window background",
-  presets:"Style layers",
-  css:"Custom CSS"
+  screen:tx("panel.edges"),
+  bg:tx("panel.background"),
+  presets:tx("panel.layers"),
+  css:tx("panel.css")
 };
 /* WHICH SUBJECT the sheet is showing, one at a time. It used to be three
    groups, each behind a bar, all in one sheet - so the reader came through a
@@ -6362,15 +6313,15 @@ document.addEventListener("pointerdown",e=>{
    Wording and order come from the shell's settings screen, where these two
    rows lived. The order IS the stored value, so it may not be rearranged. */
 const SCREEN_EDGE_OPTIONS=[
-  "Match the phone's light or dark setting",
-  "Match the page",
-  "Black",
-  "A colour you pick",
-  "No margins — the page fills the screen"
+  tx("panel.edgeSystem"),
+  tx("panel.edgePage"),
+  tx("panel.black"),
+  tx("panel.edgeCustom"),
+  tx("panel.edgeNone")
 ];
-const SCREEN_EDGE_HINT="What fills the margins around the page — the strip behind the camera at the top, and the band above the navigation bar at the bottom.";
-const SCREEN_EDGE_NONE_HINT="The page runs under the clock and the navigation bar. The search field stays clear of the camera, and the rest of the screen is yours while you scroll.";
-const SCREEN_BARS_OPTIONS=["Nothing","The clock and status icons","The navigation bar","Both"];
+const SCREEN_EDGE_HINT=tx("panel.edgeExplain");
+const SCREEN_EDGE_NONE_HINT=tx("panel.edgeNoneExplain");
+const SCREEN_BARS_OPTIONS=[tx("panel.nothing"),tx("panel.clock"),tx("panel.navigation"),tx("panel.both")];
 const EDGE_CUSTOM=3,EDGE_NONE=4;
 /* A bar with the answer written on it and the alternatives under it. The
    selected row is ticked rather than left out, so the menu says what the
@@ -6473,7 +6424,7 @@ function colorFieldWire(input,menu,apply){
     menu.replaceChildren();
     for(const hex of colorHistoryRead()){
       const b=document.createElement("button");
-      b.type="button";b.title="Use "+hex;
+      b.type="button";b.title=tx("panel.useColor",{color:hex});
       const sw=document.createElement("span");
       sw.className="sw";sw.style.background="#"+hex;sw.setAttribute("aria-hidden","true");
       b.appendChild(sw);
@@ -6535,7 +6486,7 @@ function appearanceRender(state){
     strip.appendChild(b);
     return b;
   };
-  tile("none","None","No background image",!state.image,()=>appearanceSet("image",""));
+  tile("none",tx("panel.none"),tx("panel.noImage"),!state.image,()=>appearanceSet("image",""));
   const names=Array.isArray(state.images)?state.images:[];
   for(const name of names){
     const b=tile("",null,name,name===state.image,()=>appearanceImageChosen(name));
@@ -6545,15 +6496,15 @@ function appearanceRender(state){
     b.appendChild(img);
   }
   if(state.image&&!names.includes(state.image))
-    tile("missing",state.image,"This image is missing — tap to clear the setting",
+    tile("missing",state.image,tx("panel.missingImage"),
       false,()=>appearanceSet("image",""));
-  const addB=tile("add",null,"Add an image from the device",false,()=>{
+  const addB=tile("add",null,tx("panel.addImage"),false,()=>{
     stylerPickForBackground=true;
     // Synchronously, inside the tap: the file chooser needs the user
     // activation, and nothing here waits for the network first.
     $("stylerUpload").click();
   });
-  addB.setAttribute("aria-label","Add an image from the device");
+  addB.setAttribute("aria-label",tx("panel.addImage"));
   // A span rather than bare text: the glyph outgrows the tile's 12px basis,
   // and a bare text node has no font-size of its own to grow with.
   const plus=document.createElement("span");
@@ -6661,7 +6612,7 @@ function appearanceSet(field,value){
   const state=appearanceRequest({action:"set",field,value});
   // The state is also the answer: null means the shell refused the value,
   // and the caller may have a message of its own to trade for ours.
-  if(!state){stylerNote("Could not save that setting.");appearanceRead();return null}
+  if(!state){stylerNote(tx("panel.settingFailed"));appearanceRead();return null}
   appearanceRender(state);
   return state;
 }
@@ -6679,7 +6630,7 @@ async function stylerOpen(subject){
   appearanceRead();
   document.body.classList.add("styling");
   if(!stylerLoaded){
-    stylerNote("Loading…");
+    stylerNote(tx("panel.loading"));
     try{
       const r=await fetch("/api/style");
       if(!r.ok)throw new Error("HTTP "+r.status);
@@ -6697,7 +6648,7 @@ async function stylerOpen(subject){
       await stylerFilesLoad();
     }catch(e){
       console.warn("could not load custom styles:",e);
-      stylerNote("Could not read the stylesheets.");
+      stylerNote(tx("panel.readStyleFailed"));
       return;
     }
   }
@@ -6803,8 +6754,8 @@ async function stylerSave(){
   const body={theme:night?"dark":"light"};
   if(stylerDirty("app"))body.app=stylerText.app;
   if(stylerDirty("article"))body.article=stylerText.article;
-  if(!("app" in body)&&!("article" in body)){stylerNote("No changes");setTimeout(stylerNote,1400);return}
-  stylerNote("Saving…");
+  if(!("app" in body)&&!("article" in body)){stylerNote(tx("panel.noChanges"));setTimeout(stylerNote,1400);return}
+  stylerNote(tx("panel.saving"));
   try{
     const r=await fetch("/api/style",{method:"PUT",
       headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
@@ -6822,10 +6773,10 @@ async function stylerSave(){
     stylerOther.saved=stylePairFrom(j,!dark);
     $("stylerCSS").value=stylerText[stylerTab];
     stylerSync();
-    stylerNote(Object.values(stylerText).some(Boolean)?"Saved":"Saved — nothing left, both files removed");
+    stylerNote(Object.values(stylerText).some(Boolean)?tx("panel.saved"):tx("panel.savedEmpty"));
     setTimeout(stylerNote,1800);
   }catch(e){
-    stylerNote("Could not save: "+e.message);
+    stylerNote(tx("panel.saveFailed",{error:e.message}));
   }
 }
 /* One handler for the four doors, each carrying its subject in data-styler.
@@ -6859,7 +6810,7 @@ function colorHistoryRemember(hex){
 function colorValueApply(field,value){
   const v=String(value||"").trim();
   if(!COLOR_RE.test(v)){
-    stylerNote("Use six hexadecimal digits, like F4ECD8.");appearanceRead();return false;
+    stylerNote(tx("panel.hexHint"));appearanceRead();return false;
   }
   const hex=v.replace(/^#/,"").toUpperCase();
   if(appearanceSet(field,hex)){colorHistoryRemember(hex);return true}
@@ -6914,7 +6865,7 @@ function colorDialogOpen(field,input){
    pipette on it, or the glyph disappears into it. */
 function colorPickSync(input,button){
   const hex=colorPickHexOf(input);
-  const label="Pick a colour"+(hex?" (now "+hex+")":"");
+  const label=hex?tx("panel.currentColor",{color:hex}):tx("panel.pickColor");
   button.title=label;
   button.setAttribute("aria-label",label);
   if(!hex){
@@ -6991,7 +6942,7 @@ $("stylerClear").onclick=()=>{
   try{ok=document.execCommand("delete")}catch(e){ok=false}
   if(!ok)ta.value="";
   stylerCommit();stylerSync();stylerPreview();
-  stylerNote("Cleared — press Save to remove the file, or ⌘Z / Ctrl-Z to undo");
+  stylerNote(tx("panel.clearedCSS"));
 };
 $("styler").addEventListener("keydown",e=>{
   if(e.key==="Escape"){e.stopPropagation();stylerCloseSheet();return}
@@ -7007,19 +6958,19 @@ $("styler").addEventListener("keydown",e=>{
 // concurrently it costs no extra latency, and it cannot reject.
 </script>
 <link rel="stylesheet" href="/assets/group-editor.css?v={{GROUPCSS}}">
-<dialog id="groupEditor" class="group-dialog panel-card" aria-labelledby="groupTitle">
-  <h2 id="groupTitle">Dictionary groups <button type="button" class="btn" id="closeGroups" aria-label="Close dictionary groups">✕</button></h2>
-  <div class="group-toolbar"><select id="groupSelect" aria-label="Dictionary group"></select><label><input id="groupShowAll" type="checkbox"> Show All</label></div>
+<dialog id="groupEditor" lang="{{T:locale}}" class="group-dialog panel-card" aria-labelledby="groupTitle">
+  <h2 id="groupTitle">{{T:panel.groups}} <button type="button" class="btn" id="closeGroups" aria-label="{{T:dictUI.closeGroups}}">✕</button></h2>
+  <div class="group-toolbar"><select id="groupSelect" aria-label="{{T:dictUI.group}}"></select><label><input id="groupShowAll" type="checkbox"> {{T:dictUI.showAll}}</label></div>
   <p id="groupError" class="group-error" role="alert"></p>
   <p id="groupHint" role="status"></p>
   <div id="groupRows"></div>
 </dialog>
-<dialog id="newGroupDialog" class="group-dialog panel-card" aria-labelledby="newGroupTitle">
-  <h2 id="newGroupTitle">New Group</h2>
+<dialog id="newGroupDialog" lang="{{T:locale}}" class="group-dialog panel-card" aria-labelledby="newGroupTitle">
+  <h2 id="newGroupTitle">{{T:dictUI.newGroup}}</h2>
   <form id="newGroupForm">
-    <label for="groupName">Group Name</label><input type="text" id="groupName" maxlength="100" autocomplete="off">
+    <label for="groupName">{{T:dictUI.groupName}}</label><input type="text" id="groupName" maxlength="100" autocomplete="off">
     <p id="newGroupError" class="group-error" role="alert"></p>
-    <div class="group-toolbar"><button type="submit" class="btn" id="createGroup">Create</button><button type="button" class="btn" id="cancelGroup">Cancel</button></div>
+    <div class="group-toolbar"><button type="submit" class="btn" id="createGroup">{{T:dictUI.create}}</button><button type="button" class="btn" id="cancelGroup">{{T:panel.cancel}}</button></div>
   </form>
 </dialog>
 <!-- Saving a look, and the question asked before a switch that would throw
@@ -7028,32 +6979,32 @@ $("styler").addEventListener("keydown",e=>{
      name is acceptable. The question's buttons change with what is being left
      behind - a built-in cannot be updated, so "Update" is offered only when
      the reader's own look is the one in force. -->
-<dialog id="lookSaveDialog" class="group-dialog panel-card" aria-labelledby="lookSaveTitle">
-  <h2 id="lookSaveTitle">Save Current</h2>
+<dialog id="lookSaveDialog" lang="{{T:locale}}" class="group-dialog panel-card" aria-labelledby="lookSaveTitle">
+  <h2 id="lookSaveTitle">{{T:panel.saveCurrent}}</h2>
   <form id="lookSaveForm">
-    <label for="lookName">Name</label><input type="text" id="lookName" maxlength="100" autocomplete="off">
+    <label for="lookName">{{T:panel.name}}</label><input type="text" id="lookName" maxlength="100" autocomplete="off">
     <p id="lookSaveError" class="group-error" role="alert"></p>
-    <div class="group-toolbar"><button type="submit" class="btn" id="lookSaveGo">Save</button><button type="button" class="btn" id="lookCancel">Cancel</button></div>
+    <div class="group-toolbar"><button type="submit" class="btn" id="lookSaveGo">{{T:panel.save}}</button><button type="button" class="btn" id="lookCancel">{{T:panel.cancel}}</button></div>
   </form>
 </dialog>
 <!-- Deleting one. A window rather than a second thought: the built-ins
      cannot be deleted, and a look the reader made is theirs to lose, so the
      question names it and says what it costs. -->
-<dialog id="lookDeleteDialog" class="group-dialog panel-card" aria-labelledby="lookDeleteTitle">
-  <h2 id="lookDeleteTitle">Delete preset</h2>
+<dialog id="lookDeleteDialog" lang="{{T:locale}}" class="group-dialog panel-card" aria-labelledby="lookDeleteTitle">
+  <h2 id="lookDeleteTitle">{{T:panel.deletePreset}}</h2>
   <p id="lookDeleteBody"></p>
   <p id="lookDeleteError" class="group-error" role="alert"></p>
-  <div class="group-toolbar"><button type="button" class="btn" id="lookDeleteGo">Delete</button><button type="button" class="btn" id="lookDeleteCancel">Cancel</button></div>
+  <div class="group-toolbar"><button type="button" class="btn" id="lookDeleteGo">{{T:panel.delete}}</button><button type="button" class="btn" id="lookDeleteCancel">{{T:panel.cancel}}</button></div>
 </dialog>
-<dialog id="lookAskDialog" class="group-dialog panel-card" aria-labelledby="lookAskTitle">
-  <h2 id="lookAskTitle">Unsaved changes</h2>
+<dialog id="lookAskDialog" lang="{{T:locale}}" class="group-dialog panel-card" aria-labelledby="lookAskTitle">
+  <h2 id="lookAskTitle">{{T:panel.unsaved}}</h2>
   <p id="lookAskBody"></p>
   <p id="lookAskError" class="group-error" role="alert"></p>
   <div class="group-toolbar">
     <button type="button" class="btn" id="lookAskUpdate" hidden></button>
-    <button type="button" class="btn" id="lookAskSaveAs">Save as new…</button>
-    <button type="button" class="btn" id="lookAskDiscard">Switch without saving</button>
-    <button type="button" class="btn" id="lookAskCancel">Cancel</button>
+    <button type="button" class="btn" id="lookAskSaveAs">{{T:panel.saveAs}}</button>
+    <button type="button" class="btn" id="lookAskDiscard">{{T:panel.discard}}</button>
+    <button type="button" class="btn" id="lookAskCancel">{{T:panel.cancel}}</button>
   </div>
 </dialog>
 <script src="/assets/group-editor.js?v={{GROUPJS}}"></script>

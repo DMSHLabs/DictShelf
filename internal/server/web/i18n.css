@@ -14,3 +14,6 @@ html[data-shell-image] .ui-language-dialog::backdrop{background-image:var(--pape
 .ui-language-dialog button{font:inherit;white-space:normal;color:var(--fg);background:var(--bg);
   border:1px solid var(--line);border-radius:7px;padding:8px 12px;cursor:pointer}
 .ui-language-dialog button:disabled{opacity:.5;cursor:default}
+/* Keep the drawer's existing columns; longer translated labels may wrap. */
+#panel:lang(ru) .facts>.rowlabel{white-space:normal;overflow-wrap:anywhere}
+#styler:lang(ru) #stylerDock{flex-wrap:wrap}

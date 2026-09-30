@@ -12,23 +12,28 @@ async function loadPickerGroups(){
   // declared userGroups at all (see scopeLabel in index.html).
   if(typeof paintPickerGroup==="function")paintPickerGroup();
 }
+// Translate known API validation messages only; unknown diagnostic details stay intact.
+function groupErrorText(message){
+  const keys=new Map([["Invalid group name","dictUI.invalidName"],["Enter a group name (1–100 characters, without control characters).","dictUI.nameLength"],["All Dictionaries is a reserved group name.","dictUI.reservedName"],["A group with this name already exists.","dictUI.duplicateName"],["Could not create group","dictUI.createFailed"],["Invalid membership","dictUI.invalidMember"],["All Dictionaries always contains every dictionary.","dictUI.allMembers"],["Dictionary no longer available","dictUI.dictMissing"],["Group not found","dictUI.groupMissing"],["Invalid group order","dictUI.invalidOrder"],["Group membership changed; reload the list","dictUI.reloadGroup"]]);
+  return keys.has(message)?tx(keys.get(message)):message;
+}
 async function groupRequest(path,method,body){
   const response=await fetch(path,{method,headers:{"Content-Type":"application/json"},body:body===undefined?undefined:JSON.stringify(body)});
-  if(!response.ok)throw new Error((await response.text()).trim());
+  if(!response.ok)throw new Error(groupErrorText((await response.text()).trim()));
   return response.json();
 }
 function renderGroupOptions(){
   const select=$("groupSelect");select.replaceChildren();
-  for(const group of userGroups)select.add(new Option(group.name,group.id));
-  select.add(new Option("New Group","new"));select.value=selectedGroup;
+  for(const group of userGroups)select.add(new Option(pickerGroupName(group.id),group.id));
+  select.add(new Option(tx("dictUI.newGroup"),"new"));select.value=selectedGroup;
 }
 function groupHint(group,showAll,ordered){
   const members=new Set(group.members);
   const inside=ordered.filter(d=>members.has(d.id)).length;
   const outside=ordered.length-inside;
-  return group.readonly?"Drag ≡ to reorder all dictionaries."
-    :!showAll?(inside?"Drag ≡ to reorder. Turn on Show All to edit membership.":"This group is empty. Turn on Show All to add dictionaries.")
-    :inside?"":outside?"Select dictionaries to add to this group.":"No dictionaries available. Add dictionaries to your collection first.";
+  return group.readonly?tx("dictUI.dragAll")
+    :!showAll?(inside?tx("dictUI.dragGroup"):tx("dictUI.emptyGroup"))
+    :inside?"":outside?tx("dictUI.addMembers"):tx("dictUI.noMembers");
 }
 function renderGroupRows(){
   const group=userGroups.find(g=>g.id===selectedGroup), rows=$("groupRows");rows.replaceChildren();
@@ -49,7 +54,7 @@ function renderGroupRows(){
     const name=document.createElement("span");name.textContent=dictLabel(d);
     if(group.readonly||!showAll.checked){
       const grip=document.createElement("button");grip.type="button";grip.className="group-grip";
-      grip.textContent="≡";grip.setAttribute("aria-label","Drag to reorder "+dictLabel(d));
+      grip.textContent="≡";grip.setAttribute("aria-label",tx("dictUI.dragNamed",{name:dictLabel(d)}));
       label.append(grip,name);rows.append(label);continue;
     }
     const checkbox=document.createElement("input");checkbox.type="checkbox";checkbox.dataset.dict=d.id;checkbox.checked=members.has(d.id);checkbox.disabled=group.readonly||groupSaving;
@@ -158,7 +163,7 @@ $("groupRows").addEventListener("keydown",event=>{
 });
 $("editGroups").addEventListener("click",async()=>{
   const button=$("editGroups");button.disabled=true;
-  $("groupError").textContent="";$("groupHint").textContent="Loading…";$("groupRows").replaceChildren();
+  $("groupError").textContent="";$("groupHint").textContent=tx("panel.loading");$("groupRows").replaceChildren();
   $("groupSelect").disabled=true;$("groupEditor").showModal();
   try{
     userGroups=await groupRequest("/api/groups","GET");refreshLivePicker();

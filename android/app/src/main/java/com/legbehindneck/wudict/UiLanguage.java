@@ -4,6 +4,7 @@ import android.content.Context;
 import android.content.res.Configuration;
 import android.content.res.Resources;
 import android.os.LocaleList;
+import android.view.ContextThemeWrapper;
 import org.json.JSONObject;
 import java.io.File;
 import java.nio.charset.StandardCharsets;
@@ -37,9 +38,14 @@ final class UiLanguage {
     }
 
     static Context context(Context base) {
-        Configuration config = new Configuration(base.getResources().getConfiguration());
+        Configuration config = new Configuration();
         config.setLocales(LocaleList.forLanguageTags(selected(base)));
-        return base.createConfigurationContext(config);
+        // Override resources while retaining the Activity's window services.
+        // A bare createConfigurationContext loses its window token: dialogs
+        // then fail in show() with BadTokenException (token null).
+        ContextThemeWrapper localized = new ContextThemeWrapper(base, 0);
+        localized.applyOverrideConfiguration(config);
+        return localized;
     }
 
     static synchronized Resources resources(Context base, Resources original) {

@@ -361,7 +361,7 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	// howto counts: with it listed the app has something to show, and the
 	// page opens on it instead, with the way to add dictionaries on top.
 	if s.reg.Count() == 0 {
-		_, _ = io.WriteString(w, renderUI(setupPage(s.reg.Dirs(), 0, s.pagePresetLinks()), s.reg.prefs.Language()))
+		_, _ = io.WriteString(w, renderUI(setupPage(s.reg.Dirs(), 0, s.pagePresetLinks(), s.reg.prefs.Language()), s.reg.prefs.Language()))
 		return
 	}
 	// "no-cache" means REVALIDATE, not "never store" - and revalidation needs
@@ -472,7 +472,7 @@ func (s *Server) pageFor(dayTag, nightTag, presetLinks string) ([]byte, string) 
 func (s *Server) handleSetupPage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache")
-	_, _ = io.WriteString(w, renderUI(setupPage(s.reg.Dirs(), s.reg.UserCount(), s.pagePresetLinks()), s.reg.prefs.Language()))
+	_, _ = io.WriteString(w, renderUI(setupPage(s.reg.Dirs(), s.reg.UserCount(), s.pagePresetLinks(), s.reg.prefs.Language()), s.reg.prefs.Language()))
 }
 
 // setupPage renders the folder chooser/editor. The intro names a single
@@ -483,7 +483,7 @@ func (s *Server) handleSetupPage(w http.ResponseWriter, r *http.Request) {
 // (presets.go's pagePresetLinks) - empty in the ordinary case, and the reason
 // a "Quiet labels" choice reaches this page at all: it is a document of its
 // own, and the app's layer machinery cannot reach it.
-func setupPage(dirs []string, serving int, presetLinks string) string {
+func setupPage(dirs []string, serving int, presetLinks string, language string) string {
 	var intro string
 	switch {
 	case serving > 0:
@@ -499,6 +499,27 @@ func setupPage(dirs []string, serving int, presetLinks string) string {
 		intro = fmt.Sprintf("None of your %d dictionary folders hold dictionaries yet.", len(dirs))
 	default:
 		intro = "No dictionary folder is configured yet."
+	}
+	if uiLanguage(language) != "en" {
+		key := "pages.noFolderIntro"
+		params := map[string]string{"count": fmt.Sprint(serving), "folders": fmt.Sprint(len(dirs))}
+		switch {
+		case serving > 0:
+			key = "pages.servingIntro"
+		case len(dirs) == 1:
+			key = "pages.emptyFolderIntro"
+			if _, err := os.Stat(dirs[0]); err != nil {
+				key = "pages.missingFolderIntro"
+			}
+			params["path"] = "<code>" + htmlEscape(dirs[0]) + "</code>"
+		case len(dirs) > 1:
+			key = "pages.emptyFoldersIntro"
+			params["count"] = fmt.Sprint(len(dirs))
+		}
+		// Escape catalog text first; only the path's code wrapper is markup.
+		intro = uiParameter.ReplaceAllStringFunc(htmlEscape(uiText(language, key)), func(slot string) string {
+			return params[slot[1:len(slot)-1]]
+		})
 	}
 	page := strings.ReplaceAll(strings.ReplaceAll(setupHTML, "{{INTRO}}", intro), "{{CSS}}", cssTag)
 	return strings.ReplaceAll(page, "{{PRESETS}}", presetLinks)
@@ -518,7 +539,7 @@ func (s *Server) handleLemmasPage(w http.ResponseWriter, r *http.Request) {
 	// {{PRESETS}} is the same courtesy setup.html gets: the app halves of the
 	// presets that asked to be on this page too (presets.go).
 	page := bytes.ReplaceAll(lemmasHTML, []byte("{{CSS}}"), []byte(cssTag))
-	_, _ = w.Write(bytes.ReplaceAll(page, []byte("{{PRESETS}}"), []byte(s.pagePresetLinks())))
+	_, _ = io.WriteString(w, renderUI(string(bytes.ReplaceAll(page, []byte("{{PRESETS}}"), []byte(s.pagePresetLinks()))), s.reg.prefs.Language()))
 }
 
 // plural renders a count with the right noun ("1 folder", "3 folders").

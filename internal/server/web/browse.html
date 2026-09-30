@@ -191,9 +191,6 @@ header{position:sticky;top:0;z-index:5;background:var(--bar);
 .words a:hover{background:var(--line-soft);color:var(--fg)}
 .words a:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 
-/* Language is reachable even when the dictionary list is empty. */
-.language-button{display:block;margin:12px 1rem 0 auto;font:inherit;padding:6px 12px;
-  color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:7px;cursor:pointer}
 footer{display:flex;justify-content:center;padding:0 1rem 2.2rem}
 footer .nav button{height:2.3rem;padding:0 1rem}
 
@@ -229,7 +226,6 @@ footer .nav button{height:2.3rem;padding:0 1rem}
 </header>
 
 <main>
-  <button type="button" class="language-button" data-ui-language>Language</button>
   <div class="msg" id="msg" hidden></div>
   <div class="words" id="list"></div>
 </main>

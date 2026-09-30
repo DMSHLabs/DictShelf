@@ -91,6 +91,17 @@ func (s *Server) handleLanguage(w http.ResponseWriter, r *http.Request) {
 }
 
 var uiTextSlot = regexp.MustCompile(`\{\{T:([a-zA-Z0-9_.]+)\}\}`)
+var uiParameter = regexp.MustCompile(`\{[a-zA-Z0-9_]+\}`)
+
+func uiText(code, key string) string {
+	if value, ok := uiCatalogs[uiLanguage(code)][key].(string); ok {
+		return value
+	}
+	if value, ok := uiCatalogs["en"][key].(string); ok {
+		return value
+	}
+	return key
+}
 
 // Only explicit UI slots are translated; dictionary text never passes here.
 // Static text is escaped for HTML/attributes; JSON uses encoding/json's HTML
@@ -99,14 +110,7 @@ func renderUI(page, code string) string {
 	code = uiLanguage(code)
 	page = uiTextSlot.ReplaceAllStringFunc(page, func(slot string) string {
 		key := uiTextSlot.FindStringSubmatch(slot)[1]
-		value, ok := uiCatalogs[code][key].(string)
-		if !ok {
-			value, ok = uiCatalogs["en"][key].(string)
-		}
-		if !ok {
-			value = key
-		}
-		return html.EscapeString(value)
+		return html.EscapeString(uiText(code, key))
 	})
 	boot, _ := json.Marshal(map[string]any{"language": code, "messages": uiCatalogs[code], "fallback": uiCatalogs["en"]})
 	assets := `<script id="wudict-i18n" type="application/json">` + string(boot) + `</script>` +

@@ -14,7 +14,7 @@
 // works in a plain browser: with no shell there is no half to send, and the
 // server stores a look without a backdrop.
 
-const LOOK_SAVE_LABEL = "Save Current…";
+const LOOK_SAVE_LABEL = tx("panel.saveCurrentMenu");
 
 let LOOKS = null; // the payload of GET /api/looks
 // The menu's labels, MUTATED in place rather than replaced: screenChoice
@@ -121,7 +121,7 @@ function looksRowRender() {
   const cur = LOOKS.looks.find((l) => l.id === LOOKS.current) || null;
   const custom = !cur || (LOOKS.currentDrifted && cur.builtin);
   looksChoice.set(custom ? -1 : LOOKS.looks.indexOf(cur));
-  if (custom) looksEl("looksChoice").textContent = "Custom";
+  if (custom) looksEl("looksChoice").textContent = tx("panel.custom");
 
   // All three are always there - one row, one shape - and the two that only a
   // look the reader owns can do are inert for a built-in, with the tooltip
@@ -132,15 +132,15 @@ function looksRowRender() {
   const mine = !!cur && !cur.builtin;
   const drifted = !!LOOKS.currentDrifted;
   save.disabled = !drifted;
-  save.title = "Save what is on screen as a new preset";
+  save.title = tx("panel.saveLookHint");
   save.setAttribute("aria-label", save.title);
   upd.disabled = !drifted || !mine;
   upd.title = mine
-    ? "Update \u201C" + cur.name + "\u201D with what is on screen"
-    : "Only a preset of your own can be updated";
+    ? tx("panel.updateLook", {name: cur.name})
+    : tx("panel.ownUpdate");
   upd.setAttribute("aria-label", upd.title);
   del.disabled = !mine;
-  del.title = mine ? "Delete \u201C" + cur.name + "\u201D" : "Only a preset of your own can be deleted";
+  del.title = mine ? tx("panel.deleteLook", {name: cur.name}) : tx("panel.ownDelete");
   del.setAttribute("aria-label", del.title);
 }
 
@@ -148,11 +148,11 @@ function looksRender() {
   if (!LOOKS) return;
   LOOK_LABELS.length = 0;
   if (!LOOKS.writable) {
-    LOOK_LABELS.push("No configuration folder — a look has nowhere to live");
+    LOOK_LABELS.push(tx("panel.noLookFolder"));
     looksChoice.set(0);
     return;
   }
-  for (const l of LOOKS.looks) LOOK_LABELS.push(l.name);
+  for (const l of LOOKS.looks) LOOK_LABELS.push(looksDisplayName(l));
   looksSaveAt = LOOK_LABELS.push(LOOK_SAVE_LABEL) - 1;
   looksRowRender();
 }
@@ -168,9 +168,15 @@ async function looksLoad() {
   await looksCheckDrift();
 }
 
+function looksDisplayName(l) {
+  if (!l.builtin) return l.name;
+  const keys = {clean:"panel.lookClean", sepia:"panel.lookWarm", oldpaper:"panel.lookOldPaper"};
+  return keys[l.id] ? tx(keys[l.id]) : l.name;
+}
+
 function looksLabelFor(id) {
   const l = LOOKS && LOOKS.looks.find((x) => x.id === id);
-  return l ? l.name : id;
+  return l ? looksDisplayName(l) : id;
 }
 
 // ── applying ─────────────────────────────────────────────────────────────
@@ -182,7 +188,7 @@ async function looksApply(id) {
   try {
     answer = await looksFetch("/api/looks/apply", "POST", Object.assign({ id }, looksNow()));
   } catch (e) {
-    setStatus("⚠ could not apply the preset: " + e.message);
+    setStatus(tx("panel.applyFailed", {error: e.message}));
     return;
   }
   if (answer.needsConfirm) {
@@ -208,7 +214,7 @@ async function looksApplied(answer) {
   await looksCheckDrift();
   looksRender();
   const name = looksLabelFor(answer.applied);
-  setStatus("Presets: “" + name + "” applied");
+  setStatus(tx("panel.applied", {name}));
   setTimeout(() => setStatus(""), 2600);
 }
 
@@ -241,7 +247,7 @@ async function looksReloadSheets() {
   } else {
     // A failed layer read leaves the old links in place; saying so is better
     // than a page that shows half of two looks.
-    setStatus("⚠ the layers could not be reloaded — reload the page");
+    setStatus(tx("panel.layersReloadFailed"));
   }
 }
 
@@ -249,18 +255,16 @@ async function looksReloadSheets() {
 
 function looksAsk(current) {
   const target = looksLabelFor(looksPending);
-  const from = current.name || "";
+  const from = current.name ? looksDisplayName(current) : "";
   looksEl("lookAskBody").textContent = from
-    ? "You have changed “" + from + "” since it was applied. Switching to “" + target +
-      "” will replace those changes — save them first?"
-    : "The screen has been set by hand and no look is in force. Switching to “" + target +
-      "” will replace those changes — save them first?";
+    ? tx("panel.switchChanged", {from, target})
+    : tx("panel.switchCustom", {target});
   const upd = looksEl("lookAskUpdate");
   // Only a look the reader owns can be updated; a built-in is the app's, and
   // a built-in called "Clean" that means something else would be a lie.
   if (current.id && !current.builtin) {
     upd.hidden = false;
-    upd.textContent = "Update “" + from + "”";
+    upd.textContent = tx("panel.update", {name: from});
   } else {
     upd.hidden = true;
   }
@@ -285,8 +289,7 @@ function looksCurrentID() {
 function looksOpenDelete(look) {
   looksDeleteTarget = look.id;
   looksEl("lookDeleteBody").textContent =
-    "Delete \u201C" + look.name + "\u201D? What is on screen stays as it is; only the saved" +
-    " preset goes.";
+    tx("panel.deleteLookQuestion", {name: look.name});
   looksEl("lookDeleteError").textContent = "";
   looksEl("lookDeleteDialog").showModal();
 }
@@ -302,7 +305,7 @@ async function looksSaveSubmit() {
   const err = looksEl("lookSaveError");
   const name = looksEl("lookName").value.trim();
   if (!name) {
-    err.textContent = "Enter a name for it.";
+    err.textContent = tx("panel.enterName");
     return;
   }
   err.textContent = "";
@@ -437,7 +440,7 @@ looksEl("lookAskDiscard").onclick = async () => {
     answer = await looksFetch("/api/looks/apply", "POST",
       Object.assign({ id: looksPending, confirm: true }, looksNow()));
   } catch (e) {
-    setStatus("⚠ could not apply the preset: " + e.message);
+    setStatus(tx("panel.applyFailed", {error: e.message}));
     return;
   }
   await looksApplied(answer);
