@@ -455,13 +455,21 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
          Drawn, not emoji: emoji do not take currentColor, so they cannot follow
          the theme or the paper the way every other mark in this app does. The
          arrow onto a line is "put what is on screen into this one" - a circular
-         arrow reads as "reload", which is what it must not mean. -->
-    <button type="button" class="btn icon-btn" id="looksSaveAsBtn" disabled>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M5 3h11l3 3v15H5z"/><path d="M9 3v5h6V3"/><path d="M8 20v-6h8v6"/></svg></button>
-    <button type="button" class="btn icon-btn" id="looksUpdateBtn" disabled>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 4v10"/><path d="M8 11l4 4 4-4"/><path d="M4 20h16"/></svg></button>
-    <button type="button" class="btn icon-btn" id="looksDeleteBtn" disabled>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M4 6h16"/><path d="M9 6V3h6v3"/><path d="M6 6l1 15h10l1-15"/><path d="M10 10v7M14 10v7"/></svg></button>
+         arrow reads as "reload", which is what it must not mean.
+         The three travel as ONE flex item (`iconrow`), so a drawer too narrow
+         for the whole row drops all three to the second line together: as
+         loose siblings, the wrap parted them (two icons on one line and the
+         third below it at 360px, one and two at 320) for no reason the reader
+         could see. Which icon is which is by id (looks.js), not by position,
+         so the box changes nothing about them. -->
+    <span class="iconrow">
+      <button type="button" class="btn icon-btn" id="looksSaveAsBtn" disabled>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M5 3h11l3 3v15H5z"/><path d="M9 3v5h6V3"/><path d="M8 20v-6h8v6"/></svg></button>
+      <button type="button" class="btn icon-btn" id="looksUpdateBtn" disabled>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 4v10"/><path d="M8 11l4 4 4-4"/><path d="M4 20h16"/></svg></button>
+      <button type="button" class="btn icon-btn" id="looksDeleteBtn" disabled>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M4 6h16"/><path d="M9 6V3h6v3"/><path d="M6 6l1 15h10l1-15"/><path d="M10 10v7M14 10v7"/></svg></button>
+    </span>
   </div>
   <!-- The size stepper is adjusted WHILE reading, so it stays on the panel
        rather than behind the Appearance door — the promise the old layout made
@@ -2542,10 +2550,73 @@ function reissueIfCorpusMoved(){
   if(!(sc==="all"||sc.startsWith("g:")))return;
   if(was!==panelSnap)doSearch();
 }
+/* The drawer's rows are read down ONE column per section, and the column is
+   the longest label OF THAT SECTION - measured here, never written down
+   (app.css: --rlcol, on the Appearance rows' .rowlabel and on the reading
+   strip's .seg>span).
+
+   Why measure rather than fix a width: a number has to be wrong in one
+   language. 60px was the longest ENGLISH name, and the Russian "Толщина
+   шрифта" (91.7px) was wrapped inside it - mid-word for a single word - by a
+   :lang(ru) rule that existed only to make that wrap possible; the strip's
+   96px clipped the Russian "Читать вслух" (105.8px with the speaker's mark in
+   the same label) into "Читать в…" in a row with room to spare. Measured, the
+   column follows the language, the system font scale and the reader's own CSS,
+   and the rows keep the property the 96px rule was written for on 2026-09-26:
+   every control in a section begins at the same x.
+
+   A Range measures the label's CONTENT, so the box it currently sits in is
+   irrelevant and no reset-and-reflow dance is needed. A row hidden at this
+   moment (Compact with nothing to switch, the status bar on a build without
+   it) is shown for the measurement and hidden again - all in one turn of the
+   script, and nothing paints in between, so the reader never sees it. */
+function panelRowColumns(){
+  for(const sect of $("panel").querySelectorAll("section.sect")){
+    const rows=[...sect.querySelectorAll(":scope > .facts")];
+    const hid=rows.filter(row=>row.hidden);hid.forEach(row=>{row.hidden=false});
+    rows.forEach(row=>row.style.removeProperty("--rlcol"));
+    let w=0;
+    for(const el of sect.querySelectorAll(":scope > .facts > .rowlabel,:scope > .facts > .seg>span")){
+      const range=document.createRange();range.selectNodeContents(el);
+      w=Math.max(w,range.getBoundingClientRect().width)}
+    /* A fractional width would put the labels half a pixel out of the column
+       they just set, so the column is rounded UP: slack the reader cannot
+       see, and no label ever measured into a box narrower than itself. */
+    const col=Math.ceil(w);
+    if(col>0)sect.style.setProperty("--rlcol",col+"px");
+    /* But the column is not allowed to COST a row its line. A row whose own
+       control does not fit beside the column keeps its own label width
+       instead: the column is a shared starting point for the controls, and a
+       reader adding up a column of numbers gains nothing when the widest
+       label drags the three preset actions onto a line of their own - the
+       Presets row is the row this exists for (its control is a menu AND three
+       buttons, and it is the one row whose width grows with the look's name).
+       Measured, not guessed: the control widths are read off the row as it
+       stands, which is the width they keep on a line of their own. The
+       property is set to the keyword `auto`, so `flex:0 1 var(--rlcol,auto)`
+       in app.css leaves that label at its own text - the one place the column
+       is not what is wanted. */
+    for(const row of rows){
+      const label=row.querySelector(":scope > .rowlabel");
+      if(!label||col<=0)continue;
+      const gap=parseFloat(getComputedStyle(row).columnGap)||0;
+      const ctl=[...row.children].filter(el=>el!==label&&!el.classList.contains("choice-menu")&&!el.hidden)
+        .reduce((sum,el)=>sum+el.getBoundingClientRect().width,0);
+      if(col+gap+ctl>row.clientWidth)row.style.setProperty("--rlcol","auto")}
+    hid.forEach(row=>{row.hidden=true})}
+}
+/* The column, and each row's own fallback, are facts about the drawer's width
+   as well as its words - so they are taken again when the window changes,
+   while the panel is open, which is the only time either is visible. */
+window.addEventListener("resize",()=>{if($("panel").classList.contains("show"))panelRowColumns()});
 function showPanel(){panelSnap=panelState();  /* before the lock: once the root stops scrolling the bar is gone to measure */
   document.documentElement.style.setProperty("--wd-sbw",
     Math.max(0,innerWidth-document.documentElement.clientWidth)+"px");
-$("speakSeg").hidden=!speakCan();$("panel").classList.add("show");loadFolders();
+$("speakSeg").hidden=!speakCan();$("panel").classList.add("show");
+  // The rows are read down one column per section, so its width has to be
+  // known before the reader sees them: measured here, in the same frame the
+  // drawer is opened in, so nothing paints between the two.
+  panelRowColumns();loadFolders();
   // The System door exists only where a shell answers - the flag it injects at
   // onPageFinished - because every row behind it is a fact about this window.
   // Asked here rather than at load: the flag arrives after this script has run,

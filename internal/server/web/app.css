@@ -1374,10 +1374,10 @@ dialog.panel-card:not([open]){display:none}
   font-size:15px;line-height:1;flex:none}
 .facts .mrow.door:hover::after{color:var(--label)}
 /* The panel's group drop-down (which group the search is on, in place of the
-   removed "Open first" pair): the label takes the READING STRIP's own 96px
-   column - not the Appearance rows' 60px, which would cut "Dictionaries" (72px
-   at this size) - so it lines up with "Highlight matches" and "Read aloud"
-   above it. The bar then fills the rest of the row, and its own label is
+   removed "Open first" pair): the label takes the READING STRIP's own MEASURED
+   column - not the Appearance rows' one, which is narrower here - so it lines
+   up with "Highlight matches" and "Read aloud" above it. The bar then fills
+   the rest of the row, and its own label is
    ellipsised: min-width:0 is what lets a flex item shrink below its content at
    all, and the caret keeps its place on its own auto margin. The button's
    `width:100%` is replaced by `flex:1 1 0` because `.facts` wraps: an item
@@ -1386,7 +1386,7 @@ dialog.panel-card:not([open]){display:none}
    `align-items:flex-start`, so without it the row and the bar inside it would
    be only as wide as their content - a short group name left a short bar. */
 .facts:has(>#pickerGroupBtn){width:100%;align-self:stretch}
-.facts:has(>#pickerGroupBtn)>.rowlabel{flex:0 0 96px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.facts:has(>#pickerGroupBtn)>.rowlabel{flex:0 1 var(--rlcol,96px);min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .facts:has(>#pickerGroupBtn)>#pickerGroupBtn{width:auto;flex:1 1 0;min-width:0}
 #pickerGroupBtn>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* A label for the control on its row, in the register the segs' labels use. */
@@ -1411,22 +1411,37 @@ dialog.panel-card:not([open]){display:none}
    The buttons are never `disabled` at the bounds, only dimmed. Clamping in
    applyFS is what holds the range and .lim is what says so; a control that
    stops taking presses reads as broken, and the bound is two presses away. */
-/* The rows are read as one column, and the column is as WIDE AS ITS LONGEST
-   NAME and no wider - "Font weight", 60px. Every control then sits as close
-   to its label as a column allows, which is what the reader asked for
-   ("shift the controls as far left as they go"): a shared column was never the
-   point, a shared column with slack in it was the problem.
-   Scoped to the rows that hold a stepper, to the Presets row, and to the two
-   layer rows (Compact, Examples) that joined them on 2026-09-27 - their pairs
-   begin at the same x as the steppers do, which is the whole reason they are
-   not wearing the reading strip's wider column. No other `.facts` row in the
-   panel has a `.rowlabel` at all.
-   The reading strip's pairs keep their own 96px - their labels are longer
-   ("Highlight matches"), and they are a different section. */
+/* The rows are read down ONE column per section, and the column is as wide as
+   the longest label of that section and no wider - measured, never written
+   down (`panelRowColumns()` in index.html publishes it as --rlcol on the
+   section). Every control therefore begins at the same x, and the label is
+   the column rather than a spring: `flex-basis` is what holds that, so a short
+   label is padded out to the column and a long one measures it.
+   The width has to be measured because a hard one cannot be right in two
+   languages. This rule used to be a fixed 60px - the width of the longest
+   ENGLISH name, "Font weight" - and a translated name that did not fit was
+   wrapped inside it: the Russian "Толщина шрифта" (91.7px) broke at its space,
+   and "Оформление" and "Компактно", single words the box could not hold,
+   broke after "Оформлен" and "Компактн" (the `#panel:lang(ru)` rule in
+   i18n.css asked for exactly that; it is gone). The measured column is 91.7px
+   in Russian and 60.2px in English, and it follows a new language, a system
+   font scale and the reader's own CSS without anyone re-guessing a number.
+   `white-space:nowrap` keeps a label on one line; a row that cannot hold its
+   label and its control puts the control on the next line instead, which is
+   the row's own `flex-wrap` and the reader's own phone deciding - not this
+   file.
+   min-width:0 and the ellipsis are for the one case a wrap cannot help: a name
+   wider than the drawer itself, which shrinks here instead of pushing the row
+   out of it. `--rlcol` unset (a page whose script never ran) falls back to the
+   label's own text, which is ragged but never clipped.
+   Scoped to the rows that hold a stepper, to the Presets row, and to the
+   layer rows (Compact, Examples, Status bar) that joined them. No other
+   `.facts` row in the panel has a `.rowlabel`; the reading strip's labels
+   measure into their own section's column (see "One label column" there). */
 .facts:has(>#fsCtl)>.rowlabel,.facts:has(>#fwCtl)>.rowlabel,
 .facts:has(>#looksChoice)>.rowlabel,.facts:has(>#compactSeg)>.rowlabel,
 .facts:has(>#examplesSeg)>.rowlabel,.facts:has(>#sbarSeg)>.rowlabel{
-  flex:0 1 60px;min-width:0;white-space:nowrap;overflow:hidden;
+  flex:0 1 var(--rlcol,auto);min-width:0;white-space:nowrap;overflow:hidden;
   text-overflow:ellipsis}
 /* A `.facts` row is `display:flex`, which outvotes the user-agent's
    `[hidden]{display:none}` - the same trap the sheet's groups carry a rule
@@ -1442,10 +1457,15 @@ dialog.panel-card:not([open]){display:none}
    controls are 22px and these are 32, because they are the only way to save,
    update or delete a preset and a miss costs a window - the row is 32px tall
    either way, so the extra comes free. currentColor and the app's stroke
-   weight, so they follow the theme. */
-.facts:has(>#looksChoice)>.icon-btn{width:32px;height:32px;padding:0;
+   weight, so they follow the theme.
+   They are one flex item, so the row's wrap takes all three to the second line
+   together instead of parting them. The gap is the row's own .45em, so on one
+   line the trio is spaced exactly as loose siblings were. */
+.facts:has(>#looksChoice)>.iconrow{display:flex;align-items:center;gap:.45em;
+  flex:none}
+.facts:has(>#looksChoice)>.iconrow>.icon-btn{width:32px;height:32px;padding:0;
   display:flex;align-items:center;justify-content:center}
-.facts:has(>#looksChoice)>.icon-btn svg{width:16px;height:16px}
+.facts:has(>#looksChoice)>.iconrow>.icon-btn svg{width:16px;height:16px}
 #fsCtl,#fwCtl{flex:none;display:flex;align-items:center;gap:2px}
 #fsCtl button,#fwCtl button{font:inherit;line-height:1;margin:0;padding:0;cursor:pointer;
   display:flex;align-items:center;justify-content:center;
@@ -1503,6 +1523,16 @@ dialog.panel-card:not([open]){display:none}
    controls are meant to be compared, and a wrap put whichever two happened to
    fit beside each other. */
 .facts.reading{flex-direction:column;align-items:flex-start;margin:.6em 0 var(--sp-1)}
+/* The reading strip's rows carry their label INSIDE the seg (they are label
+   and pair in one control), and a seg is shrink-to-fit. A box sized from its
+   content asks its items for their max-content size, not for their
+   flex-basis - so the measured column never reached these labels: measured in
+   Russian, labels 54.9px and 85.4px wide inside a section whose column is
+   86px, and the pairs starting at 119 and 150 instead of at one x. Stretching
+   the seg to its row is what lets the column inside it be the column; the
+   strip's content is left-aligned either way, so nothing but the pairs' own
+   starting point moves. */
+.facts.reading>.seg{align-self:stretch}
 .facts .act{display:inline-flex;align-items:center;gap:.4em;
   font-family:inherit;font-size:11.5px;line-height:1.2;padding:.28em .6em;margin:0;
   color:var(--label);background:var(--bg-card);
@@ -1526,23 +1556,27 @@ dialog.panel-card:not([open]){display:none}
 @media (max-width:345px){
   .facts .seg{flex-wrap:wrap}
 }
-/* The label is the column, not a spring. A fixed 96px — the width of the
-   longest name in the sheet, "Highlight matches" — and every control in the
-   panel begins at the same x, the pairs directly after their labels exactly
-   as the font rows have theirs. It used to GROW instead, take the row's slack
-   and pin the pair to the right edge, which is where the reader looked last
-   for a control that belongs to the label on its left.
+/* The label is the column, not a spring. The column is measured from the
+   labels of THIS section (`panelRowColumns()`) and published as --rlcol, so
+   every control in the panel begins at the same x, the pairs directly after
+   their labels exactly as the font rows have theirs. It used to GROW instead,
+   take the row's slack and pin the pair to the right edge, which is where the
+   reader looked last for a control that belongs to the label on its left.
 
-   `flex-shrink:0` is what makes that true (2026-09-26). It was `0 1 96px`,
-   and a seg is an inline-flex item in a column, so each row was sized to its
-   OWN content and then shrank the span to fit: measured, the three labels came
-   out 92px, 76px and 50px wide and the three pairs began at 986, 969 and 943 —
-   three columns pretending to be one, which is the raggedness this rule was
-   written to prevent. Nothing may shrink the label now: on a phone too narrow
-   for label + pair, the pair wraps to the next line (see the media query
-   above) instead of pulling the buttons out of line. The ellipsis stays for
-   the one case a wrap cannot help — a name longer than the column itself. */
-.facts .seg>span{flex:0 0 96px;min-width:0;white-space:nowrap;overflow:hidden;
+   The fixed 96px this carried until 2026-09-30 was the width of the longest
+   ENGLISH name, "Highlight matches" (92.5px of content) - and the reader's
+   own phone CLIPPED the Russian "Читать вслух", because 85.4px of content at
+   a 100% text scale grows past 96px under the display's own text scale, and
+   the label read "Читать в…" in a row with room to spare. The measured
+   column is 86px in Russian and 93px in English.
+   `flex-shrink:0` was what made the column true (2026-09-26), and the
+   measurement replaces it: with the basis set to the column a label can no
+   longer be sized to its own content, and the wrap below 345px still moves
+   the pair to the next line rather than pulling the buttons out of line. The
+   ellipsis stays for the one case a wrap cannot help - a name longer than the
+   column itself - and a page whose script never ran falls back to the label's
+   own text. */
+.facts .seg>span{flex:0 1 var(--rlcol,96px);min-width:0;white-space:nowrap;overflow:hidden;
   text-overflow:ellipsis;font-size:11.5px;line-height:1.2;color:var(--label-quiet)}
 /* A mark may ride in the label, as the speaker does. It is drawn at the same
    size and in the same faint colour as the marks that ride ON a control, but

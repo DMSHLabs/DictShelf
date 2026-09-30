@@ -14,6 +14,9 @@ html[data-shell-image] .ui-language-dialog::backdrop{background-image:var(--pape
 .ui-language-dialog button{font:inherit;white-space:normal;color:var(--fg);background:var(--bg);
   border:1px solid var(--line);border-radius:7px;padding:8px 12px;cursor:pointer}
 .ui-language-dialog button:disabled{opacity:.5;cursor:default}
-/* Keep the drawer's existing columns; longer translated labels may wrap. */
-#panel:lang(ru) .facts>.rowlabel{white-space:normal;overflow-wrap:anywhere}
+/* This asked the drawer's row labels to WRAP inside their old fixed 60px
+   column, which was the column's fault and not the words': a Russian label
+   split mid-word ("Оформлен|ия") in a drawer with room to spare. The labels
+   size to their own text now and the row wraps when it must (app.css, "The
+   label is as wide as its OWN words"), so a per-language layout rule is gone. */
 #styler:lang(ru) #stylerDock{flex-wrap:wrap}
