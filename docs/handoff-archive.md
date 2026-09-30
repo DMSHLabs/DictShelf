@@ -55,6 +55,7 @@ narratives, so `git log` is a second copy.
 | Release wudict2-v0.3.0 (2026-09-27, this session) | 2026-09-27 | — (added after the split) |
 | Release wudict2-v0.4.0 (2026-09-27, this session) | 2026-09-27 | — (added after the split) |
 | Release wudict2-v0.5.0 (2026-09-28, this session) | 2026-09-28 | — (added after the split) |
+| Release wudict2-v0.6.0-ru.1 (2026-09-30, this session) | 2026-09-30 | — (added after the split, on the translation branch) |
 | The third session: five changes in the panel, the bar and the paper (2026-09-27/28) | 2026-09-27/28 | — (added after the split) |
 | The 09-26 upstream sync into `dev2` (2026-09-26) | 2026-09-26 | — (added after the split) |
 
@@ -1695,6 +1696,54 @@ the same name, and the fresh asset starts a new `download_count` — so a "0
 downloads" right after says nothing about whether the old one was fetched.
 (v0.5.0's pre-fix asset read 2, and both were this session's own verification
 fetches: the hash check and the final status check.)
+
+## Release wudict2-v0.6.0-ru.1 (2026-09-30, this session)
+
+The first release cut from a branch other than `dev`, and the first
+PRE-RELEASE: `translation_layout_fix` is `dev` plus the Russian interface. Cut
+at the user's request, with the framing they gave it — "версия
+полнофункциональная, а перевод на русский интерфейса для теста": the build is
+the full app (it carries the 28 unreleased `dev` commits as well), and the
+translation is what it asks to be tested.
+
+Same order as every time before: the changelog commit on this branch
+(`01a1438`), pushed, the annotated tag `wudict2-v0.6.0-ru.1` on it, pushed, then
+`build-android.cmd release`, then the REST create with `prerelease: true` and
+the asset upload. aapt2: `versionName='wudict2-v0.6.0-ru.1'`, versionCode 426,
+`locales: '--_--' 'ru'`, arm64 only. For a translation build the check that
+matters is that the translation is really INSIDE the artifact: the packaged
+`lib/arm64-v8a/libwudict.so` was unpacked and confirmed to contain
+`web/i18n/ru.json` and Russian strings, and aapt2 reports the `ru` locale — a
+successful build proves none of that by itself. sha256
+`d1af995b935fcefbcdf69cff0bdf38b02fef85dcb6dc46fe2f0ae84833b56935`, 8,009,173
+bytes, the same signer certificate as every release so far.
+https://github.com/DmShAl/wudict2/releases/tag/wudict2-v0.6.0-ru.1
+
+**Why pre-release:** so GitHub's `latest` stays the stable v0.5.0 and a visitor
+is not pointed at a build whose translation is explicitly unfinished. One PATCH
+(`prerelease: false`) flips it if the reader decides otherwise.
+
+**What was checked, and what was not.** `go test ./internal/server -run TestI18n`
+and `-run TestAppearanceContract` are green, `git diff --check` is clean;
+`make i18n-check-js` was NOT run — this machine has no Node on PATH and none
+under the usual install roots — and the release body says so rather than
+implying the JS-side check passed. No device or emulator run: the translation's
+own checklist (`translation_todo.md` §4) still owes the phone pass.
+
+**Not merged into `dev`,** deliberately: the branch stays a translation branch
+and the tag lives on it, so `git describe` on `dev` is unaffected. The
+consequence to remember is that this changelog section and this archive section
+exist only on `translation_layout_fix` — when `dev` is next released it needs its
+own section, and a merge of this branch will conflict on both files.
+
+One thing checked because it looked like a defect and is not: the setup page's
+"copy the wudict howto" row is visible while the fork leaves `HowtoDir` empty,
+which reads like a dead control. It works — `handleHowtoCopy` writes the guide
+into the user's own dictionary folder through `importDir()`, and does not look
+at `HowtoDir`. Only the "bring back the howto" row is hidden, which is correct
+while the built-in is never installed. (`pages/docs/start/first-run.md` still
+tells readers the guide is built in, which this fork does not do — a docs
+inconsistency, left for the docs owner.)
 
 ## The third session: five changes in the panel, the bar and the paper (2026-09-27/28)
 
