@@ -29,7 +29,7 @@ func morphServer(t *testing.T, files map[string]string) *Server {
 		}
 	}
 	isolatedDBDir(t)
-	reg, err := NewRegistry([]string{dir}, false)
+	reg, err := NewRegistry([]string{dir}, false, WithComparisons(false))
 	if err != nil {
 		t.Fatal(err)
 	}

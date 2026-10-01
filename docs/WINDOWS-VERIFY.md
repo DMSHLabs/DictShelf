@@ -148,6 +148,11 @@ them are in `docs/handoff-archive.md`.
 - Known Windows test failures that fail identically on clean HEAD (do NOT
   chase them as regressions — compare against a clean checkout via
   `git worktree add /tmp/x HEAD`):
+  - Rechecked 2026-10-02 against `f199fea` using a Go overlay (no checkout
+    switch): `internal/server`'s TestConfigEndpointAndSetupPage,
+    TestParseRefBothCopies and TestSetupConsentFlow also fail unchanged. The
+    first and third still assert removed HTML comments; the link-parser test
+    looks for the old inline `const REF_SCHEME=` declaration.
   - `internal/server`: TestSetupFlow, and TestRescanSeesEditedSource — the
     latter is new in the 09-26 upstream merge and fails identically on clean
     upstream `master` (same `rename … Access is denied`, see

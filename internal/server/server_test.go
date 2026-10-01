@@ -140,7 +140,7 @@ func newTestServer(t *testing.T) *Server {
 	zf.Close()
 
 	isolatedDBDir(t)
-	reg, err := NewRegistry([]string{dir}, false)
+	reg, err := NewRegistry([]string{dir}, false, WithComparisons(false))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -520,7 +520,7 @@ func TestIngestSSEAndMedia(t *testing.T) {
 func TestSetupFlow(t *testing.T) {
 	emptyDir := t.TempDir()
 	isolatedDBDir(t)
-	reg, err := NewRegistry([]string{filepath.Join(emptyDir, "does-not-exist")}, false)
+	reg, err := NewRegistry([]string{filepath.Join(emptyDir, "does-not-exist")}, false, WithComparisons(false))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -769,7 +769,7 @@ func TestSetupMultipleFolders(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	reg, err := NewRegistry([]string{filepath.Join(t.TempDir(), "none")}, false)
+	reg, err := NewRegistry([]string{filepath.Join(t.TempDir(), "none")}, false, WithComparisons(false))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -823,7 +823,7 @@ func TestMissingRootIsNotFatal(t *testing.T) {
 		t.Fatal(err)
 	}
 	gone := filepath.Join(t.TempDir(), "unmounted-drive")
-	reg, err := NewRegistry([]string{gone, good}, false)
+	reg, err := NewRegistry([]string{gone, good}, false, WithComparisons(false))
 	if err != nil {
 		t.Fatalf("a missing folder must not fail the scan: %v", err)
 	}

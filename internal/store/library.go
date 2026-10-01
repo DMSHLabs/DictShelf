@@ -320,6 +320,11 @@ func SourceChanged(textDB, srcPath string) bool {
 
 // sourceChangedMeta is SourceChanged for a meta table already in hand.
 func sourceChangedMeta(meta map[string]string, srcPath string) bool {
+	if want := meta["source_revision"]; want != "" {
+		if revision, err := dict.SourceRevision(srcPath); err == nil && revision != "" {
+			return revision != want
+		}
+	}
 	st, err := os.Stat(srcPath)
 	if err != nil {
 		return false

@@ -52,6 +52,7 @@ type Reader struct {
 	// the tooltip text, so they must not be prefixed with their own headword,
 	// and it has no companion of its own to absorb.
 	plainBody bool
+	gd        bool
 
 	buffered  []string     // lookahead lines
 	orphans   int          // body blocks skipped for having no headword
@@ -639,7 +640,10 @@ func (r *Reader) parseBlock(termLines, textLines []string) (dict.Entry, []dict.E
 	var displayTitles []string
 	seenTerm := map[string]bool{}
 	for _, line := range termLines {
-		t := transformTitle(line)
+		if r.gd && len(terms) > 0 {
+			line = expandTitleTilde(line, terms[0])
+		}
+		t := r.title(line)
 		if t.first() == "" {
 			continue
 		}
@@ -685,7 +689,7 @@ func (r *Reader) parseBlock(termLines, textLines []string) (dict.Entry, []dict.E
 			// ("@ ~ up"). Substituted before the title parser runs, and escaped
 			// on the way in, so a parent carrying "(" or "{" cannot turn into
 			// optional-part or unsorted-part syntax in its child's key.
-			t := transformTitle(expandTitleTilde(h, terms[0]))
+			t := r.title(expandTitleTilde(h, terms[0]))
 			for _, k := range t.Keys {
 				if !seenHead[k] {
 					seenHead[k] = true
@@ -696,7 +700,7 @@ func (r *Reader) parseBlock(termLines, textLines []string) (dict.Entry, []dict.E
 		if len(heads) == 0 {
 			return
 		}
-		body, _, err := transformBodyAbbrev(strings.TrimRight(subText.String(), "\n"), heads[0], r.abbrevs())
+		body, _, err := r.body(strings.TrimRight(subText.String(), "\n"), heads[0])
 		if err == nil {
 			subs = append(subs, dict.Entry{Headwords: heads, Body: body, Kind: dict.BodyHTML})
 		}
@@ -730,7 +734,7 @@ func (r *Reader) parseBlock(termLines, textLines []string) (dict.Entry, []dict.E
 	}
 	flushSub()
 
-	body, _, err := transformBodyAbbrev(strings.TrimRight(mainText.String(), "\n"), terms[0], r.abbrevs())
+	body, _, err := r.body(strings.TrimRight(mainText.String(), "\n"), terms[0])
 	if err != nil {
 		return dict.Entry{}, nil, fmt.Errorf("dsl: entry %q: %w", terms[0], err)
 	}
@@ -738,6 +742,20 @@ func (r *Reader) parseBlock(termLines, textLines []string) (dict.Entry, []dict.E
 		body = strings.Join(displayTitles, "<br/>") + "<br/>" + body
 	}
 	return dict.Entry{Headwords: terms, Body: body, Kind: dict.BodyHTML}, subs, nil
+}
+
+func (r *Reader) title(line string) titleResult {
+	if r.gd {
+		return gdTitle(line)
+	}
+	return transformTitle(line)
+}
+
+func (r *Reader) body(text, key string) (string, []string, error) {
+	if r.gd {
+		return transformGDBody(text, key, r.abbrevs())
+	}
+	return transformBodyAbbrev(text, key, r.abbrevs())
 }
 
 // dslEscape backslash-escapes the characters the DSL lexer treats as markup,

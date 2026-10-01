@@ -947,7 +947,7 @@ func (s *Server) langFacts(info *dictInfo, name, declared, contents string) {
 // rebuildable reports that an entry has a source to prepare from: not a
 // standalone text.db, and the file still on disk.
 func rebuildable(path string) bool {
-	return !store.IsTextDB(path) && fileExists(path)
+	return !store.IsTextDB(path) && fileExists(path) && fileExists(dict.SourceInput(path))
 }
 
 // dbPathOf is the prepared database path for an entry, or "" when it has none.
@@ -977,7 +977,7 @@ func addProvenance(info *dictInfo, entryPath string) {
 	native := store.IsTextDB(entryPath)
 	if !native && fileExists(entryPath) {
 		info.Source = entryPath
-		info.MediaSrc = dict.CompanionMedia(entryPath)
+		info.MediaSrc = dict.CompanionMedia(dict.SourceInput(entryPath))
 	}
 
 	// locate the cached text.db: the entry itself when native, else the
@@ -1512,6 +1512,7 @@ func (s *Server) lemmaWave(
 // the folder holding it carries the dictionary's own name, which is what the
 // naming conventions are written on.
 func langPath(p string) string {
+	p = dict.SourceInput(p)
 	if strings.EqualFold(filepath.Base(p), store.TextDBName) {
 		return filepath.Dir(p)
 	}

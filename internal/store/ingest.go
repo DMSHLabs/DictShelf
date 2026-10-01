@@ -308,6 +308,11 @@ func IngestPlan(r dict.Reader, dbPath string, plan Plan, progress Progress) (rep
 		"created":          time.Now().UTC().Format(time.RFC3339),
 		"source_sha256_1M": sourceHash(srcMeta.Path),
 	}
+	if revision, err := dict.SourceRevision(srcMeta.Path); err != nil {
+		return rep, err
+	} else if revision != "" {
+		metaKV["source_revision"] = revision
+	}
 	// Only what the SOURCE DICTIONARY declared. A language worked out from the
 	// file name or a parent folder is deliberately not recorded: those are
 	// recomputed at every open, so renaming a folder to add a hint takes effect

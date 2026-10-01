@@ -686,6 +686,49 @@ no guess about the container's code page is made. `[V]`
 
 ## 11. State of the implementation
 
+### GD comparison reader (Android fork, 2026-10-02)
+
+The server lists each available DSL source twice: its existing name and the
+same name with ` GD`. The current reader and its behaviour version stay unchanged.
+The alternative is a Go tree parser inspired by the local GoldenDict `ArticleDom`,
+not an exact port of every GoldenDict feature. Both entries have independent
+registry IDs, prepared text databases and search indexes; media and DSL remain
+shared. `WithComparisons(false)` is available for single-view server fixtures.
+
+The GD reader repairs crossed/unclosed tags, moves inline formatting inside
+margin blocks, preserves nested link labels, expands `~` in alternate main
+headings, handles nested optional parts with a 32-key ceiling, and converts the
+legacy Lingvo transcription glyph table inside `[t]`. Empty margin nodes and
+redundant line breaks at margin boundaries are omitted; intentional escaped-space
+blank lines survive. Formatting wrappers are not blindly flattened as in
+GoldenDict Enhancer. No examples expansion button is added.
+
+Comparison source references are JSON `.dslgd` files in the private
+`<DB_DIR>/.dsl-gd/` directory. They retain the absolute original source path;
+each reference owns a separate library folder. `source_revision` additionally
+tracks the real DSL and abbreviation companion (size, nanosecond mtime and a
+hash of the first MiB), so a same-second edit cannot be hidden by the reference's
+timestamp. Scanning updates changed references and preserves unchanged ones.
+Cached-only mode retains the GD registry identity while its reference exists.
+Removing a GD entry deletes its prepared data/reference only, and writes a
+`.disabled` marker beside the reference to prevent automatic recreation. Removing
+that marker permits recreation on the next scan. Shared source/media never belong
+to the GD removal set. Prepared data remains usable without a source, but cannot
+be rebuilt without the original DSL.
+
+File decoding, include handling, entry boundaries, abbreviation loading, media
+HTML and the app's `wu-*` role styling remain shared. Cross-dictionary links keep
+the author's dictionary name and use the existing name resolver (normally the
+ordinary version). This reader does not implement GoldenDict's global sound
+dictionary fallback, native media handlers or picture sizing. Headword display
+markup inside unsorted parts still uses the current fragment transformer.
+
+Verified: DSL golden unchanged; a separate GD prepared-content golden; markup,
+heading, media, source-revision and nesting-limit tests; server search/resource,
+rescan, cached-only and removal checks. Local GD scan: Oxford 35,762 entries,
+Zimmerman 15,889, Asperger 6,787. Visual parity with GoldenDict and Android device
+behaviour still need checking.
+
 Closed in the spec-audit pass (this document's current revision):
 
 | Was | Now |

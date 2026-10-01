@@ -233,6 +233,62 @@ type prober func(path string) (Meta, error)
 
 var probers = map[string]prober{}
 
+var comparisonSources = map[string]func(string) (string, error){}
+var sourceRevisions = map[string]func(string) (string, error){}
+var sourceInputs = map[string]func(string) (string, error){}
+var comparisonRemovals = map[string]func(string) error{}
+
+func RegisterComparisonRemoval(ext string, fn func(string) error) {
+	comparisonRemovals[strings.ToLower(ext)] = fn
+}
+
+// RemoveComparison records an explicit removal before a folder rescan.
+func RemoveComparison(path string) error {
+	if fn, ok := matchKey(comparisonRemovals, path); ok {
+		return fn(path)
+	}
+	return nil
+}
+
+func RegisterSourceInput(ext string, fn func(string) (string, error)) {
+	sourceInputs[strings.ToLower(ext)] = fn
+}
+
+// SourceInput resolves a reference for display and resource discovery only.
+// Ownership and deletion must continue to use the reference itself.
+func SourceInput(path string) string {
+	if fn, ok := matchKey(sourceInputs, path); ok {
+		if input, err := fn(path); err == nil {
+			return input
+		}
+	}
+	return path
+}
+
+// RegisterSourceRevision tracks the real input behind a reference file.
+func RegisterSourceRevision(ext string, fn func(string) (string, error)) {
+	sourceRevisions[strings.ToLower(ext)] = fn
+}
+
+func SourceRevision(path string) (string, error) {
+	if fn, ok := matchKey(sourceRevisions, path); ok {
+		return fn(path)
+	}
+	return "", nil
+}
+
+// RegisterComparison adds a separately indexed view of a source dictionary.
+func RegisterComparison(ext string, fn func(string) (string, error)) {
+	comparisonSources[strings.ToLower(ext)] = fn
+}
+
+func ComparisonSource(path string) (string, error) {
+	if fn, ok := matchKey(comparisonSources, path); ok {
+		return fn(path)
+	}
+	return "", nil
+}
+
 // RegisterProber wires a file extension to a cheap metadata reader.
 // Optional: formats without one fall back to a full Open in Probe.
 func RegisterProber(ext string, fn prober) {
