@@ -56,6 +56,7 @@ narratives, so `git log` is a second copy.
 | Release wudict2-v0.4.0 (2026-09-27, this session) | 2026-09-27 | — (added after the split) |
 | Release wudict2-v0.5.0 (2026-09-28, this session) | 2026-09-28 | — (added after the split) |
 | Release wudict2-v0.6.0 (2026-10-02, this session) | 2026-10-02 | — (added after the split) |
+| Purging the Monotype fonts from history, and replacing the v0.6.0 asset (2026-10-02) | 2026-10-02 | — (added after the split) |
 | Release wudict2-v0.6.0-ru.1 (2026-09-30, this session) | 2026-09-30 | — (added after the split, on the translation branch) |
 | The third session: five changes in the panel, the bar and the paper (2026-09-27/28) | 2026-09-27/28 | — (added after the split) |
 | The 09-26 upstream sync into `dev2` (2026-09-26) | 2026-09-26 | — (added after the split) |
@@ -1697,6 +1698,51 @@ the same name, and the fresh asset starts a new `download_count` — so a "0
 downloads" right after says nothing about whether the old one was fetched.
 (v0.5.0's pre-fix asset read 2, and both were this session's own verification
 fetches: the hash check and the final status check.)
+
+## Purging the Monotype fonts from history, and replacing the v0.6.0 asset (2026-10-02)
+
+Two problems, two fixes, and one tool that turned out to be the wrong one.
+
+**The fonts.** `a195d5d` (the user's) deleted `ArialPlus.ttf`,
+`ArialPlusBold.ttf`, `ArialItalic.ttf`, `ArialBoldItalic.ttf` and
+`QuiviraPhonetic.ttf` and added the author's own `Quivira.otf` — see the Quivira
+section above for why that one is fine. That stopped them being *shipped*, but
+they were still in every clone: the five blobs (3.29 MB) were added by `3c97ea7`
+and reachable from `dev`, `GD_DSL` and the tag `wudict2-v0.6.0`.
+
+**Why `git filter-repo` could not be used — the fact worth keeping.** It was
+tried first and rolled back. filter-repo **strips the `gpgsig` header**, and this
+repository's upstream-sync merges are signed by GitHub; un-signing one re-hashes
+every commit descended from it. The evidence that identified the cause: the root
+commit kept its SHA while `master`, `dev2`, `translation` and all six older tags
+changed — so it is not the filtered paths, it is the signature. The consequence
+would have been a whole-repository rewrite, all 16 branches and all 7 public
+tags, which costs the `master` ↔ `dev` common history (the fork's central merge
+path) and forces all 7 releases to be re-associated, every release being keyed to
+a tag that would move. The rollback was a mirror clone plus a recorded ref list,
+restored ref by ref and verified against it.
+
+**The narrow rewrite used instead** walks the commits reachable from
+`dev`/`GD_DSL` parents-first and re-creates a commit only when its tree holds one
+of the five paths or when a parent was itself re-created; everything else keeps
+its object, and therefore its SHA. It refuses to rewrite a commit carrying
+`gpgsig`, `encoding` or `mergetag` (one signed upstream commit is reachable from
+`dev` — `d20bf57` — and is correctly left alone, not being a descendant). 471
+commits walked, **13 rewritten**. Verification before touching any ref: for each
+rewritten commit, the diff against its original is exactly the expected number of
+`D` entries for those five paths and nothing else; and the tips are
+content-identical modulo those deletions (`git diff a195d5d dev` empty, and
+`GD_DSL`'s tip — older than the deletion — losing exactly the five files). Then
+`dev` (`56a6057b`), `GD_DSL` (`c6809a0e`) and the tag (`ca726dd`, moved onto the
+font-fix commit so `versionName` stays exactly `wudict2-v0.6.0`) were
+force-pushed, the release asset was replaced with a rebuild, and the local store
+was pruned: the five blob SHAs no longer exist and `.git` is 18 MB.
+
+**What a purge cannot do.** Anyone who cloned before it keeps the objects, and
+GitHub may serve unreachable objects by SHA for a while. The step that actually
+stops the distribution is replacing the release asset — which is why it was done
+in the same pass. The pre-rewrite repository survives as a mirror clone in
+`D:\tmp\wudict-backup.git`; it holds the fonts and every old SHA.
 
 ## Release wudict2-v0.6.0 (2026-10-02, this session)
 
