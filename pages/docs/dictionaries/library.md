@@ -105,8 +105,9 @@ OFF by default.
 Turn an index off with the same <kbd>☰</kbd> panel switch that turned it on.
 
 ``` sh title="two commands that delete"
-wudict clean            # list broken or leftover library items
-wudict clean -f         # delete them
+wudict clean            # list broken or leftover library items, and orphans
+wudict clean -f         # delete the leftovers
+wudict clean -f -orphans # and the orphans too
 wudict rm Webster        # list what removing "Webster" would delete
 wudict rm -f Webster     # delete the library folder AND the original files
 ```
@@ -119,6 +120,19 @@ to delete only the originals.
 [Full CLI reference](../reference/cli.md){ .md-button }
 
 ## Dictionaries whose originals are gone
+
+When you delete a dictionary's files via the system file manager or CLI
+their indexes still remain in the wudict database.
+To identify orphan indexes whose source files are gone, open the dictionary panel <kbd>☰</kbd>  
+and click <kbd>**Rescan folders**</kbd>, and
+wuDict will lists all internal databases whose sources don't exist anymore.
+
+A dictionary file you **moved** to another place in your dictionary folders is
+not listed. The rescan detects it was moved and not deletex, so it is
+not re-indexed.
+
+Deleting only the dictionary files with **dictionary files only** keeps the
+prepared data on purpose, so that dictionary is never listed either.
 
 wuDict lists a prepared dictionary only when its original file is still in a
 scanned folder. To list every prepared dictionary regardless, switch

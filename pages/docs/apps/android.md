@@ -116,7 +116,7 @@ replace. Create `koreader/dictionaries.lua` in internal storage:
 
 ``` lua title="koreader/dictionaries.lua"
 return {
-    { "wudict", "wuDict", false, "com.legbehindneck.wudict", "text" },
+    { "wudict", "wuDict", false, "com.legbehindneck.wudict", "search" },
 }
 ```
 

@@ -30,7 +30,7 @@ type Adopted struct {
 // refusing to use it would force the user to prepare the same dictionary
 // twice. Nothing is deleted, and nothing is overwritten - if the dictionary
 // has meanwhile been prepared into a folder of its own, the loose file is left
-// exactly where it is (FindOrphans then reports it as superseded, which is the
+// exactly where it is (FindLeftovers then reports it as superseded, which is the
 // one case where deleting it loses nothing).
 //
 // Called once at server startup; safe to call again (already-adopted

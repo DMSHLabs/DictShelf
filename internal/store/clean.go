@@ -12,24 +12,25 @@ import (
 	"time"
 )
 
-// Orphan is one deletable item in the db dir: an incomplete or unreadable
+// Leftover is one deletable item in the db dir: an incomplete or unreadable
 // library folder, an interrupted ingest temp file, or a file left over from
 // the pre-folder flat layout.
 //
-// A prepared dictionary whose source file merely VANISHED is deliberately NOT
-// an orphan - the folder is the user's only copy of that dictionary now, and
-// deleting it would be data loss. Nor is a dictionary whose source CHANGED:
+// A healthy prepared dictionary is never a leftover. One whose source file
+// VANISHED is an orphan (orphans.go, D156): real data the user may still want,
+// so it is offered on its own, answered one by one, and never swept up with
+// this debris by a plain `clean -f`. One whose source CHANGED is neither:
 // re-indexing overwrites its text.db in place, so nothing is superseded.
-type Orphan struct {
+type Leftover struct {
 	Path   string
 	Size   int64
 	Reason string
 	IsDir  bool
 }
 
-// FindOrphans scans the db dir for deletable items. It never flags a healthy
+// FindLeftovers scans the db dir for deletable items. It never flags a healthy
 // prepared-dictionary folder, whatever became of its source.
-func FindOrphans() ([]Orphan, error) {
+func FindLeftovers() ([]Leftover, error) {
 	dir := DefaultDBDir()
 	des, err := os.ReadDir(dir)
 	if err != nil {
@@ -38,7 +39,7 @@ func FindOrphans() ([]Orphan, error) {
 		}
 		return nil, err
 	}
-	var out []Orphan
+	var out []Leftover
 	for _, de := range des {
 		p := filepath.Join(dir, de.Name())
 		if de.IsDir() {
@@ -69,7 +70,7 @@ func FindOrphans() ([]Orphan, error) {
 			}
 		}
 		if reason != "" {
-			out = append(out, Orphan{Path: p, Size: fi.Size(), Reason: reason})
+			out = append(out, Leftover{Path: p, Size: fi.Size(), Reason: reason})
 		}
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Path < out[j].Path })
@@ -90,7 +91,7 @@ func FindOrphans() ([]Orphan, error) {
 // a general sweep of the folder: a file that is not an ingest temp is left
 // alone, because a folder is the user's unit to copy and move (D20) and
 // whatever else they put in it is theirs.
-func judgeFolder(dir string) []Orphan {
+func judgeFolder(dir string) []Leftover {
 	textDB := TextDBPath(dir)
 	fi, err := os.Stat(textDB)
 	if err != nil || fi.IsDir() {
@@ -98,10 +99,10 @@ func judgeFolder(dir string) []Orphan {
 		if _, err := os.Stat(MediaDBPath(dir)); err == nil {
 			reason = "media.db with no dictionary to pair with"
 		}
-		return []Orphan{{Path: dir, Size: dirSize(dir), Reason: reason, IsDir: true}}
+		return []Leftover{{Path: dir, Size: dirSize(dir), Reason: reason, IsDir: true}}
 	}
 	if _, err := ReadMeta(textDB); err != nil {
-		return []Orphan{{Path: dir, Size: dirSize(dir), Reason: "unreadable database", IsDir: true}}
+		return []Leftover{{Path: dir, Size: dirSize(dir), Reason: "unreadable database", IsDir: true}}
 	}
 	return staleIngests(dir)
 }
@@ -116,13 +117,13 @@ func judgeFolder(dir string) []Orphan {
 const ingestGrace = time.Hour
 
 // staleIngests lists abandoned ingest temps directly inside a healthy folder.
-func staleIngests(dir string) []Orphan {
+func staleIngests(dir string) []Leftover {
 	des, err := os.ReadDir(dir)
 	if err != nil {
 		return nil
 	}
 	cutoff := time.Now().Add(-ingestGrace)
-	var out []Orphan
+	var out []Leftover
 	for _, de := range des {
 		if de.IsDir() || !strings.Contains(strings.ToLower(de.Name()), ".ingest.") {
 			continue
@@ -131,7 +132,7 @@ func staleIngests(dir string) []Orphan {
 		if err != nil || fi.ModTime().After(cutoff) {
 			continue // still being written, or unreadable: not ours to judge
 		}
-		out = append(out, Orphan{
+		out = append(out, Leftover{
 			Path:   filepath.Join(dir, de.Name()),
 			Size:   fi.Size(),
 			Reason: "interrupted ingest (temp file)",

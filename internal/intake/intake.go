@@ -141,6 +141,21 @@ type Candidate struct {
 	// dictionary they have just removed is "installed, will be updated" is
 	// telling them something they can see is false (D137).
 	Stale bool `json:"stale,omitempty"`
+	// Date is when the site says the main file last changed (YYYY-MM-DD), for
+	// a dictionary offered from a link before it is downloaded: beside the
+	// size, it is how a person tells a newer edition from the one they have.
+	// Empty when the site did not say, and for anything already on disk.
+	Date string `json:"date,omitempty"`
+	// Elsewhere is the folder holding a dictionary of this name somewhere
+	// else in the library - another configured folder, any format, however
+	// it got there - when there is none in the import folder. With Unchanged
+	// it is the same files at the same sizes; without, a different copy.
+	// Confirming it overwrites that copy IN PLACE, file by file, rather than
+	// installing a second dictionary of the name (D155 Am. 4).
+	Elsewhere string `json:"elsewhere,omitempty"`
+	// elsewhereMain is that dictionary's main file: where a confirmed install
+	// overwrites it in place (placeDict). Never published (D102).
+	elsewhereMain string
 
 	// sizes are Files' declared sizes, in the same order. Unexported because
 	// it is arithmetic, not something a user chooses between (D102).

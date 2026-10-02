@@ -165,6 +165,22 @@ android {
     }
 }
 
+// F-Droid's scanner reads every resolvable configuration and flags io.opencensus:*
+// as a Tracker. Nothing here declares it: it arrives through
+// com.google.testing.platform (the Unified Test Platform), in the
+// unified-test-platform-* configurations AGP registers on every Android module
+// whether or not it has instrumented tests - and never on a runtime classpath,
+// so the APK never contained it. The configurations cannot be removed (UTP is
+// mandatory since AGP 8); excluding the group from them takes the coordinates
+// out of the graph the scanner reads. AGP 8 named them _internal-unified-test-
+// platform-*, AGP 9 drops the prefix, hence contains() and not startsWith().
+// OpenCensus is UTP's optional gRPC tracing bridge; this app runs no
+// instrumented tests, so nothing uses it. `make android-trackers` checks the
+// whole graph against the scanner's own lists (SUSS, Exodus, ETIP).
+configurations.matching { it.name.contains('unified-test-platform') }.configureEach {
+    exclude group: 'io.opencensus'
+}
+
 // One name for the APK, produced identically by `make apk-foss-release` and by
 // build-android.yml - which is why the workflow no longer copies the file to a
 // second name of its own. Two names for one artifact is the whole bug class.

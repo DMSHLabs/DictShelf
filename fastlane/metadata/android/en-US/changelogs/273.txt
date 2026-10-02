@@ -1,0 +1,7 @@
+- select text to read it aloud using the OS TTS engine
+- new format: wudict markdown
+- install dictionary collections via share URLs via wudict link share proxy https://legbehindneck.com/wudict
+- delete orphan indexes by tapping "Rescan folders" in panel
+- wudict markdown howto guide (search for <b>wudict welcome</b> to view)
+- book reader lookup intents
+- no more double scrollbars in dictionary panel

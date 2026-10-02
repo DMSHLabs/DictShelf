@@ -74,12 +74,12 @@ func TestExistingFollowsAStarDictResourceSubtree(t *testing.T) {
 // No dictionary folder yet - a first-run server - is not a reason to guess.
 func TestExistingSaysNothingWithoutADestination(t *testing.T) {
 	cands := []Candidate{{Name: "Oxford", Main: "Oxford.mdx", Files: []string{"Oxford.mdx"}, sizes: []int64{4}}}
-	markExisting("", cands)
+	markExisting("", nil, cands)
 	if cands[0].Existing != "" || cands[0].Unchanged {
 		t.Fatalf("marked against nothing: %+v", cands[0])
 	}
 	// and a folder that simply is not there
-	markExisting(t.TempDir(), cands)
+	markExisting(t.TempDir(), nil, cands)
 	if cands[0].Existing != "" || cands[0].Unchanged {
 		t.Fatalf("marked against an empty library: %+v", cands[0])
 	}

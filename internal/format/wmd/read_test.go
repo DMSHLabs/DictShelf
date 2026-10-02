@@ -431,8 +431,12 @@ func TestPlainMarkdown(t *testing.T) {
 	if _, es := all(t, dictMD); len(es) != 1 || es[0].Headwords[0] != "word" {
 		t.Errorf("plain .md: %v", es)
 	}
-	if _, err := dict.OpenReader(dictMD); err != nil {
+	// Closed, not discarded: an open reader keeps the file open, and Windows
+	// refuses to delete an open file - t.TempDir's cleanup failed on it.
+	if r, err := dict.OpenReader(dictMD); err != nil {
 		t.Errorf("dict.OpenReader(.md) = %v", err)
+	} else {
+		r.Close()
 	}
 	readme := writeTemp(t, "README.md", "# Project\n\n## Install\n")
 	if dict.IsDictionaryFile(readme) {

@@ -69,6 +69,9 @@ Questions, not symptoms. For a symptom, see
     is gone keeps its prepared data - that data is now the only copy - and its
     switches lock.
 
+    To delete the prepared data of dictionaries whose files you deleted, click
+    <kbd>Rescan folders</kbd>. wuDict lists them and offers to delete them.
+
 ??? question "Can I use wudict without a browser?"
 
     Yes. Every search mode has a CLI equivalent command.

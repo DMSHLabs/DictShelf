@@ -342,7 +342,11 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
     <a class="mrow door" id="editFolders" href="/setup">{{T:panel.editFolders}}</a>
     <button type="button" class="mrow" id="rescanBtn" title="{{T:panel.rescanHint}}"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M13.3 8a5.3 5.3 0 1 1-1.7-3.9"/><path d="M13.6 2v3h-3"/></svg>{{T:panel.rescan}}</button>
     <a class="mrow door" id="lemmaLink" href="/lemmas" title="{{T:panel.lemmasHint}}">{{T:panel.lemmas}}</a>
-  </div>
+    </div>
+  <!-- Prepared dictionaries whose files are gone (D156). Filled only after
+       Rescan folders, right under the row that button is in: the answer
+       appears where the question was asked. -->
+  <div id="orphanBox" class="bulkbox orphbox" hidden></div>
 </section>
 
 <section class="sect">
@@ -2664,7 +2668,7 @@ $("dictSettings").addEventListener("close",()=>{
   reissueIfCorpusMoved();
   $("editDictSettings").focus();
 });
-$("rescanBtn").onclick=()=>{loadDicts(true).then(loadFolders)};
+$("rescanBtn").onclick=()=>{loadDicts(true).then(loadFolders).then(checkOrphans)};
 
 /* The panel's third window: System. Wired like Dictionary settings — modal over
    the drawer, focus handed back to the door it came from — and it moves no
@@ -3254,6 +3258,84 @@ $("ftsAllBox").addEventListener("click",async e=>{
   closeFtsAll();
   setStatus(esc(tx("dictUI.ftsEnabled",{number:todo.length})));
   await loadDicts();if(lastQuery)doSearch();
+});
+/* Orphans (D156): prepared dictionaries whose files are gone - deleted by hand,
+   renamed, or on a drive that is not connected; the app does not guess which.
+   Asked only after Rescan folders, the moment the user says their folders
+   changed, and only of a caller who may delete (D102: an offer that cannot be
+   taken is noise). Every row starts ticked: most users treat prepared data as
+   a cache of files they keep elsewhere. The one button names the whole deed
+   ("Delete 2 · keep 1"), so the ticked list is the confirmation and there is
+   no second "are you sure". Unticked rows are recorded as kept on the server
+   and never asked about again; "Not now" records nothing. */
+function closeOrphans(){const b=$("orphanBox");b.hidden=true;b.innerHTML=""}
+async function checkOrphans(){
+  if(!(cfgInfo&&cfgInfo.canDelete)){closeOrphans();return}
+  let j;
+  try{
+    const r=await fetch("/api/orphans");
+    if(!r.ok)return;
+    j=await r.json();
+  }catch(e){return} // nothing to offer is the correct fallback
+  const list=j.orphans||[],n=list.length;
+  if(!n){closeOrphans();return}
+  const box=$("orphanBox");
+  box.innerHTML=
+    `<p><b>${n} ${n===1?"dictionary has":"dictionaries have"} lost ${n===1?"its":"their"} files</b>`+
+    ` — the prepared data still uses ${mb(j.size||0)}.</p>`+
+    (n>1?'<label class="oall"><input type="checkbox" id="orphAll" checked> all</label>':"")+
+    "<ul>"+list.map(o=>
+      `<li><label><input type="checkbox" class="orph" checked value="${escAttr(o.folder)}" data-size="${+o.size||0}">`+
+      `<span><b>${esc(o.name||o.folder)}</b> · ${mb(o.size||0)}<br>`+
+      `<span class="was">was ${pathHTML(o.source||"")}</span></span></label></li>`).join("")+"</ul>"+
+    '<p><button type="button" class="btn" id="orphGo"></button>'+
+    '<button type="button" class="btn" id="orphNo">Not now</button></p>'+
+    "<p class=\"cost\">Unticked ones are kept and won't be asked about again. Deleting can't be undone.</p>";
+  box.hidden=false;
+  orphLabel();
+}
+function orphLabel(){
+  const boxes=[...document.querySelectorAll("#orphanBox .orph")];
+  const del=boxes.filter(b=>b.checked),keep=boxes.length-del.length;
+  const bytes=del.reduce((s,b)=>s+(+b.dataset.size||0),0);
+  const go=$("orphGo");if(!go)return;
+  go.textContent=!del.length?(keep===1?"Keep it":keep===2?"Keep both":`Keep all ${keep}`):
+    keep?`Delete ${del.length} · keep ${keep}`:`Delete ${del.length} · ${mb(bytes)}`;
+  go.classList.toggle("danger",del.length>0);
+  const all=$("orphAll");
+  if(all){all.checked=keep===0;all.indeterminate=del.length>0&&keep>0}
+}
+$("orphanBox").addEventListener("change",e=>{
+  if(e.target.id==="orphAll")
+    for(const b of document.querySelectorAll("#orphanBox .orph"))b.checked=e.target.checked;
+  orphLabel();
+});
+$("orphanBox").addEventListener("click",async e=>{
+  if(e.target.id==="orphNo"){closeOrphans();return}
+  if(e.target.id!=="orphGo"||e.target.disabled)return;
+  const go=e.target,boxes=[...document.querySelectorAll("#orphanBox .orph")];
+  const del=boxes.filter(b=>b.checked).map(b=>b.value);
+  const keep=boxes.filter(b=>!b.checked).map(b=>b.value);
+  go.disabled=true;go.textContent=del.length?"deleting…":"keeping…";
+  let rep;
+  try{
+    const r=await fetch("/api/orphans",{method:"POST",
+      headers:{"Content-Type":"application/json"},body:JSON.stringify({delete:del,keep})});
+    rep=await r.json();
+    if(!r.ok)throw new Error((rep&&rep.error)||("HTTP "+r.status));
+  }catch(err){
+    go.disabled=false;orphLabel();
+    setStatus("⚠ "+esc(err.message||String(err)));
+    return;
+  }
+  closeOrphans();
+  const parts=[],deleted=rep.deleted||[],kept=rep.kept||[],failed=rep.failed||[];
+  if(deleted.length)parts.push(`💀 deleted ${deleted.length} — ${mb(rep.freed||0)} freed`);
+  if(kept.length)parts.push(`kept ${kept.length}`);
+  if(failed.length)parts.push(`⚠ ${failed.length} failed: `+failed.map(f=>f.folder+" ("+f.error+")").join(", "));
+  setStatus(esc(parts.join(" · ")));
+  // The server has already rescanned after deleting; this redraws from it.
+  if(deleted.length){await loadDicts();loadFolders();if(lastQuery)doSearch()}
 });
 /* The About body is fetched once, on the first open, and kept on the element
    afterwards: /api/dicts deliberately carries no description (an annotation has

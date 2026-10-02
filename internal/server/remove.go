@@ -164,6 +164,14 @@ func (r *Registry) Remove(id string, dropPrepared, dropSource bool) (removal, er
 		}
 		logx.V("removed %d original file(s) of %s", len(rep.Sources), rep.Name)
 		r.pruneEmptied(rep.Sources)
+		if !dropPrepared && prepared != "" {
+			// Keeping the prepared data without its files IS the decision to
+			// keep it standalone: recorded, so Rescan never offers it back as
+			// an orphan (D156).
+			if err := store.MarkKept(prepared); err != nil {
+				logx.V("marking %s kept: %v", prepared, err)
+			}
+		}
 	}
 
 	if err := r.Rescan(); err != nil {

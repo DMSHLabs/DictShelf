@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/wuweidict/wudict/internal/dict"
 )
@@ -64,6 +65,9 @@ type Extra struct {
 	// url is the absolute link. Unexported: it is never shown and never taken
 	// from a caller, so a confirmation cannot be steered at another host.
 	url string
+	// row is the collection row this file belongs to (collection.go); unused
+	// for the companions of a single download.
+	row int
 }
 
 // Need grades.
@@ -86,8 +90,16 @@ func probeCompanions(ctx context.Context, f Fetcher, base *url.URL, fileName, di
 	if kindOf(fileName, onDisk(filepath.Join(dir, fileName))) != dict.KindMain {
 		return nil // a companion has no companions of its own
 	}
+	return probeSiblings(ctx, f, base, fileName, func(name string) bool { return have(dir, name) })
+}
+
+// probeSiblings is the search itself, for a main file whose name is already
+// known to be one. known reports a name that needs no request - on disk
+// already, or listed by the collection the file came from (collection.go).
+func probeSiblings(ctx context.Context, f Fetcher, base *url.URL, fileName string, known func(string) bool) []Extra {
 	stem := dict.Stem(fileName)
-	if stem == "" {
+	if stem == "" || driveID(base) != "" {
+		// A Drive file's address is its id: there is no "beside it" to ask.
 		return nil
 	}
 	var out []Extra
@@ -97,7 +109,7 @@ func probeCompanions(ctx context.Context, f Fetcher, base *url.URL, fileName, di
 	// already downloaded satisfies its group without a request, and it must
 	// not break the numbered series that would otherwise continue past it.
 	ask := func(name, need string) bool {
-		if have(dir, name) {
+		if known(name) {
 			return true
 		}
 		if spent >= maxProbes {
@@ -108,11 +120,11 @@ func probeCompanions(ctx context.Context, f Fetcher, base *url.URL, fileName, di
 		if !ok {
 			return false
 		}
-		size, found := headSize(ctx, f, u)
-		if !found {
+		h := headInfo(ctx, f, u)
+		if !h.found {
 			return false
 		}
-		out = append(out, Extra{Name: name, Size: size, Need: need, url: u.String()})
+		out = append(out, Extra{Name: name, Size: h.size, Need: need, url: u.String()})
 		return true
 	}
 
@@ -224,25 +236,35 @@ func have(dir, name string) bool {
 	return err == nil && fi.Mode().IsRegular()
 }
 
-// headSize asks whether a URL is there and how big it is. A HEAD first,
-// because that is the request that exists for this question; a one-byte ranged
-// GET after it, because a number of the servers that host these files answer
-// HEAD with 403 or 405 and serve the same file perfectly well.
-func headSize(ctx context.Context, f Fetcher, u *url.URL) (int64, bool) {
-	if n, ok, decisive := probe(ctx, f, u, http.MethodHead, ""); decisive {
-		return n, ok
-	}
-	n, ok, _ := probe(ctx, f, u, http.MethodGet, "bytes=0-0")
-	return n, ok
+// head is what a probe learned about a URL: whether it is there, how big it
+// is (0 when the server did not say) and when it last changed (zero when the
+// server did not say).
+type head struct {
+	size     int64
+	modified time.Time
+	found    bool
+	name     string // Content-Disposition's file name, when the server sent one
 }
 
-// probe makes one request and reports the size, whether the file is there, and
-// whether the answer settles the question. A 404 settles it; a refusal of the
-// METHOD does not.
-func probe(ctx context.Context, f Fetcher, u *url.URL, method, rng string) (size int64, found, decisive bool) {
+// headInfo asks whether a URL is there, how big it is and how old. A HEAD
+// first, because that is the request that exists for this question; a
+// one-byte ranged GET after it, because a number of the servers that host
+// these files answer HEAD with 403 or 405 and serve the same file perfectly
+// well.
+func headInfo(ctx context.Context, f Fetcher, u *url.URL) head {
+	if h, decisive := probe(ctx, f, u, http.MethodHead, ""); decisive {
+		return h
+	}
+	h, _ := probe(ctx, f, u, http.MethodGet, "bytes=0-0")
+	return h
+}
+
+// probe makes one request and reports what it learned, and whether the answer
+// settles the question. A 404 settles it; a refusal of the METHOD does not.
+func probe(ctx context.Context, f Fetcher, u *url.URL, method, rng string) (h head, decisive bool) {
 	req, err := http.NewRequestWithContext(ctx, method, u.String(), nil)
 	if err != nil {
-		return 0, false, true
+		return head{}, true
 	}
 	req.Header.Set("User-Agent", "wudict")
 	req.Header.Set("Accept", "*/*")
@@ -251,28 +273,32 @@ func probe(ctx context.Context, f Fetcher, u *url.URL, method, rng string) (size
 	}
 	resp, err := f.client().Do(req)
 	if err != nil {
-		return 0, false, true // unreachable is not "ask again differently"
+		return head{}, true // unreachable is not "ask again differently"
 	}
 	defer resp.Body.Close()
 	// Drain the byte a ranged probe may have produced, so the connection can
 	// be reused rather than torn down for one byte.
 	_, _ = io.CopyN(io.Discard, resp.Body, 64)
 
+	// Unparseable or absent is the zero time, which every reader treats as
+	// "the site did not say".
+	mod, _ := http.ParseTime(resp.Header.Get("Last-Modified"))
 	switch resp.StatusCode {
 	case http.StatusOK:
 		if rng != "" && resp.ContentLength == 1 {
 			// The server ignored the range and is about to send the whole
 			// file; it exists, and its length is the one header we can trust
 			// least here, so it is left unstated rather than guessed.
-			return 0, true, true
+			return head{modified: mod, found: true, name: dispositionName(resp.Header)}, true
 		}
-		return max(resp.ContentLength, 0), true, true
+		return head{size: max(resp.ContentLength, 0), modified: mod, found: true, name: dispositionName(resp.Header)}, true
 	case http.StatusPartialContent:
-		return contentRangeTotal(resp.Header.Get("Content-Range")), true, true
+		return head{size: contentRangeTotal(resp.Header.Get("Content-Range")), modified: mod, found: true,
+			name: dispositionName(resp.Header)}, true
 	case http.StatusMethodNotAllowed, http.StatusNotImplemented, http.StatusForbidden:
-		return 0, false, method != http.MethodHead
+		return head{}, method != http.MethodHead
 	}
-	return 0, false, true
+	return head{}, true
 }
 
 // contentRangeTotal reads the total length out of "bytes 0-0/12345".

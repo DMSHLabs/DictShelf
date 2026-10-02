@@ -137,6 +137,11 @@ Removal is offered while the original dictionary file is still on disk. When
 the original is gone, the prepared data is the only copy, and its switches
 lock.
 
+If you deleted the dictionary files yourself, click <kbd>**Rescan folders**</kbd>
+in the <kbd>☰</kbd> panel. wuDict lists every prepared dictionary whose file is
+gone and offers to delete it. `wudict clean -f -orphans` does the same from the
+terminal.
+
 ## The Android app shows no dictionaries { #android-no-dictionaries }
 
 1. **Storage access was refused.** <kbd>Settings</kbd> ▸ <kbd>Apps</kbd> ▸ <kbd>wuDict</kbd>▸ <kbd>Permissions</kbd>,

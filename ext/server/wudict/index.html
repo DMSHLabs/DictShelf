@@ -1,0 +1,589 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>wudict · dictionary links</title>
+<meta name="description" content="Open this link in wudict to add dictionaries. Free dictionaries to download, and how to share your own.">
+<meta property="og:title" content="wudict · dictionary links">
+<meta property="og:description" content="Open this link in wudict to add dictionaries.">
+<meta property="og:type" content="website">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%234c6680'/%3E%3Cg fill='none' stroke='%23fff' stroke-linecap='round'%3E%3Cpath d='M4 7h13M4 13h8' stroke-width='2'/%3E%3Ccircle cx='20' cy='18' r='5' stroke-width='2'/%3E%3Cpath d='M24 22 27.5 25.5' stroke-width='3'/%3E%3C/g%3E%3C/svg%3E">
+<!--
+  https://legbehindneck.com/wudict#<link>
+
+  The link after "#" never reaches this server: browsers keep the fragment to
+  themselves. This page is what a browser shows when Android did not hand the
+  link to the app (app not installed, a messenger's built-in browser, desktop).
+  Everything here is static; nothing is loaded from anywhere else.
+-->
+<style>
+:root{
+  --bg:#fbfaf8; --bg-card:#fff; --fg:#2b2a28; --fg-soft:#6d6a64; --fg-faint:#a5a19a;
+  --accent:#e08600; --accent-soft:#fff3e0; --link:#5b7a99; --link-hover:#3f5e7d;
+  --line:#e8e4dd; --line-soft:#f1eee8; --focus:#7aa7d1; --ok:#3f7a52; --err:#c0564f;
+  --shadow:0 1px 3px rgba(60,50,30,.07),0 4px 14px rgba(60,50,30,.05);
+  --font:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root{
+  --bg:#191a1c; --bg-card:#212327; --fg:#d8d5d0; --fg-soft:#96938d; --fg-faint:#5f5c57;
+  --accent:#e69a33; --accent-soft:#3a2d18; --link:#8fb0cc; --link-hover:#b3cde3;
+  --line:#33363b; --line-soft:#2a2c30; --focus:#5b86ad; --ok:#79c08f; --err:#e8776f;
+  --shadow:0 1px 3px rgba(0,0,0,.4),0 4px 14px rgba(0,0,0,.3);
+}}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.618 var(--font)}
+.wrap{max-width:760px;margin:0 auto;padding:0 16px}
+a{color:var(--link);text-decoration:none}
+a:hover{color:var(--link-hover);text-decoration:underline}
+code,pre{font-family:var(--mono);font-size:13px}
+code{background:var(--bg-card);border:1px solid var(--line);border-radius:4px;padding:0 .3em;word-break:break-all}
+pre{background:var(--bg-card);border:1px solid var(--line);border-radius:8px;padding:.618em 1em;overflow-x:auto;margin:.618em 0;line-height:1.5}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+
+header{padding:2.618em 0 1em}
+.brand{font-weight:700;color:var(--accent);font-size:15px;letter-spacing:.02em}
+.brand small{font-size:1em;color:var(--fg-soft);font-weight:400}
+a.brand{display:inline-block}
+a.brand:hover{color:var(--accent);text-decoration:none}
+a.brand:hover small{color:var(--fg)}
+h1{font-size:26px;line-height:1.25;margin:.2em 0 .382em}
+h2{font-size:19px;margin:0 0 .236em}
+h3{font-size:15px;margin:1.618em 0 .382em}
+.lead{color:var(--fg-soft);margin:0;max-width:36em}
+section{margin:2.618em 0}
+.sub{color:var(--fg-soft);font-size:14px;margin:0 0 1em}
+
+.btn{display:inline-flex;align-items:center;gap:.4em;font:inherit;font-size:15px;line-height:1.2;
+  background:var(--accent);color:#fff;border:1px solid var(--accent);border-radius:8px;
+  padding:.55em 1.1em;cursor:pointer;text-decoration:none}
+.btn:hover{color:#fff;text-decoration:none;filter:brightness(1.06)}
+.btn.ghost{background:transparent;color:var(--accent)}
+.btn.ghost:hover{background:var(--accent-soft);color:var(--accent)}
+.btns{display:flex;flex-wrap:wrap;gap:.618em;margin:1em 0 .382em}
+
+/* The shared-link card: the reason most visitors are here. */
+#shared{background:var(--bg-card);border:1px solid var(--line);border-left:4px solid var(--accent);
+  border-radius:12px;box-shadow:var(--shadow);padding:1.2em 1.4em;margin:0 0 1em;position:relative}
+#shared .what{font-size:19px;font-weight:600;margin:0;word-break:break-word;padding-right:1.6em}
+#shared .where{color:var(--fg-soft);font-size:14px;margin:0;word-break:break-all}
+#shared .close{position:absolute;top:.5em;right:.6em;background:none;border:0;color:var(--fg-faint);
+  font-size:22px;line-height:1;cursor:pointer;padding:.2em .35em}
+#shared .close:hover{color:var(--fg)}
+#shared .hint{color:var(--fg-soft);font-size:14px;margin:.382em 0 0}
+#shared .bad{color:var(--err);font-weight:600;margin:0}
+#peek{margin:.618em 0 0;padding:0;list-style:none;font-size:14px}
+#peek li{padding:.25em 0;border-top:1px solid var(--line-soft);display:flex;gap:.6em;justify-content:space-between}
+#peek li:first-child{border-top:0}
+#peek .tag{color:var(--fg-faint);font-size:12.5px;white-space:nowrap}
+#peekNote{color:var(--fg-faint);font-size:13px;margin:.382em 0 0}
+
+/* Catalogue */
+.filter{position:sticky;top:0;z-index:2;background:var(--bg);padding:.618em 0}
+.filter input{width:100%;font:inherit;font-size:16px;color:var(--fg);background:var(--bg-card);
+  border:1px solid var(--line);border-radius:8px;padding:.45em .8em;outline:none;appearance:none}
+.filter input:focus{border-color:var(--focus);box-shadow:0 0 0 3px color-mix(in srgb,var(--focus) 25%,transparent)}
+.group{margin:1.618em 0}
+.group h3{margin:0 0 .236em;display:flex;align-items:baseline;gap:.5em}
+.group h3 .n{color:var(--fg-faint);font-weight:400;font-size:13px}
+.group p{color:var(--fg-soft);font-size:13.5px;margin:0 0 .618em}
+ul.list{list-style:none;margin:0;padding:0;background:var(--bg-card);border:1px solid var(--line);
+  border-radius:12px;box-shadow:var(--shadow);overflow:hidden}
+.row{display:grid;grid-template-columns:1fr auto auto;gap:.5em .8em;align-items:center;
+  padding:.62em 1em;border-top:1px solid var(--line-soft)}
+.row:first-child{border-top:0}
+.row .name{font-weight:600;line-height:1.35}
+.row .name .alt{font-weight:400;color:var(--fg-soft)}
+.row .meta{display:block;color:var(--fg-soft);font-size:13px;line-height:1.4}
+.row .big{color:var(--accent);font-weight:600}
+.add{border:1px solid var(--accent);color:var(--accent);border-radius:999px;padding:.18em .95em;
+  font-size:14px;white-space:nowrap}
+.add:hover{background:var(--accent-soft);color:var(--accent);text-decoration:none}
+.dl{color:var(--fg-faint);font-size:18px;line-height:1;padding:.2em .25em}
+.dl:hover{color:var(--accent);text-decoration:none}
+#none{color:var(--fg-soft);text-align:center;padding:1em}
+
+/* The generator: the one tool on this page, so it sits first and looks like one. */
+#generator{background:var(--bg-card);border:1px solid var(--line);border-radius:12px;
+  box-shadow:var(--shadow);padding:1.2em 1.4em;margin:0 0 2.618em}
+#generator .make textarea{background:var(--bg);font-family:var(--mono);font-size:13px;line-height:1.5}
+
+/* Make a link */
+.make{display:flex;flex-direction:column;gap:.5em}
+.make input,.make textarea{width:100%;resize:vertical;font:inherit;font-size:15px;color:var(--fg);background:var(--bg-card);
+  border:1px solid var(--line);border-radius:8px;padding:.5em .8em;outline:none}
+.make input:focus,.make textarea:focus{border-color:var(--focus);box-shadow:0 0 0 3px color-mix(in srgb,var(--focus) 25%,transparent)}
+.make output{display:block;font-family:var(--mono);font-size:13px;word-break:break-all;
+  background:var(--accent-soft);border-radius:8px;padding:.5em .8em;min-height:2.4em}
+.make .err{color:var(--err);font-size:13.5px;min-height:1.4em;margin:0}
+dl.kinds{margin:.618em 0}
+dl.kinds dt{font-weight:600;margin-top:.8em}
+dl.kinds dd{margin:.1em 0 0;color:var(--fg-soft);font-size:14px}
+dl.kinds dd code{color:var(--fg)}
+.formats{color:var(--fg-soft);font-size:14px}
+
+footer{border-top:1px solid var(--line);margin-top:3em;padding:1.2em 0 2.618em;color:var(--fg-faint);font-size:13px}
+footer a:not(.brand){color:var(--fg-soft)}
+footer .brand{font-size:13px}
+.hidden{display:none!important}
+.toast{position:fixed;left:50%;bottom:1.2em;transform:translateX(-50%);background:var(--fg);color:var(--bg);
+  border-radius:8px;padding:.4em 1em;font-size:14px;opacity:0;transition:opacity .236s;pointer-events:none}
+.toast.on{opacity:1}
+@media (max-width:520px){
+  h1{font-size:22px}
+  .row{padding:.62em .8em}
+  #shared,#generator{padding:1em 1.1em}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <a target="_blank" class="brand" href="https://wuweidict.github.io/wudict" title="wudict home page">wu<small>dict</small></a>
+  <h1>Dictionary links</h1>
+  <p class="lead">Tap <b>Add</b> to put a dictionary into wudict. To share dictionaries, send a link to a single dictionary, a whole folder or a list, and the person you send it to chooses what to install.</p>
+</header>
+
+<!-- Filled in when the page was opened with a shared link after "#". -->
+<div id="shared" class="hidden" role="region" aria-label="Shared link">
+  <button class="close" type="button" aria-label="Close">×</button>
+  <p class="what" id="what"></p>
+  <p class="where" id="where"></p>
+  <ul id="peek" class="hidden"></ul>
+  <p id="peekNote" class="hidden"></p>
+  <div class="btns">
+    <button class="btn hidden" type="button" id="send">Send to wudict</button>
+    <button class="btn" type="button" id="copy">Copy link</button>
+    <a class="btn ghost" id="direct" href="#" rel="noopener noreferrer">Direct link</a>
+  </div>
+  <p class="hint" id="hint"></p>
+</div>
+
+<main>
+<section id="generator" aria-labelledby="genTitle">
+  <h2 id="genTitle">wudict share link generator</h2>
+  <p class="sub">Paste a link to a dictionary file, a web folder of dictionaries or a <code>.txt</code> list - or several links, one per line, such as a dictionary's files on Google Drive - and copy the share link. Whoever opens it gets the dictionaries in wudict. How these links work is explained further down.</p>
+  <!-- No in-page anchor here: everything after "#" in this page's URL is read as a shared link. -->
+  <div class="make">
+    <textarea id="src" rows="2" placeholder="Paste a link to a dictionary, a folder or a list - or several links, one per line" aria-label="Links to turn into a wudict share link" autocomplete="off" spellcheck="false"></textarea>
+    <output id="out" for="src" aria-live="polite"></output>
+    <p class="err" id="srcErr"></p>
+    <div class="btns" style="margin-top:0">
+      <button class="btn" type="button" id="outCopy" disabled>Copy</button>
+      <a class="btn ghost hidden" id="outTry" href="#">Try it</a>
+    </div>
+  </div>
+</section>
+
+<section id="catalogue" aria-label="Dictionaries">
+  <div class="filter"><input type="search" id="q" placeholder="Filter: a language or a name" aria-label="Filter dictionaries" autocomplete="off" spellcheck="false"></div>
+  <div id="groups"></div>
+  <p id="none" class="hidden">Nothing matches.</p>
+  <noscript><p class="sub">Turn on JavaScript to see the dictionaries.</p></noscript>
+</section>
+
+<section id="make">
+  <h2>How share links work</h2>
+  <p class="sub">Put <code>https://legbehindneck.com/wudict#</code> in front of a link. On an Android phone with wudict, tapping it opens wudict; anywhere else it opens this page.</p>
+  <dl class="kinds">
+    <dt>One dictionary</dt>
+    <dd>A link to a dictionary file or an archive of one.<br><code>https://legbehindneck.com/wudict#https://download.freedict.org/dictionaries/eng-deu/1.9-fd1/freedict-eng-deu-1.9-fd1.slob</code></dd>
+    <dt>A folder</dt>
+    <dd>A link to a web folder that lists dictionary files, or to a Nextcloud shared folder. Everything in it is offered, and the person chooses.<br><code>https://legbehindneck.com/wudict#https://example.org/dictionaries/</code></dd>
+    <dt>A list</dt>
+    <dd>A link to a text file with one file name or link per line.<br><code>https://legbehindneck.com/wudict#https://example.org/dictionaries/list.txt</code></dd>
+    <dt>Several files</dt>
+    <dd>Several links after <code>#</code>, separated by commas. Use this for files that are not in a shared folder, such as a dictionary and its <code>.mdd</code> on Google Drive.<br><code>https://legbehindneck.com/wudict#https://drive.google.com/file/d/…/view,https://drive.google.com/file/d/…/view</code></dd>
+    <dt>On legbehindneck.com</dt>
+    <dd>For files on this site, the link after <code>#</code> can start at the path.<br><code>https://legbehindneck.com/wudict#/dict/euskera/</code></dd>
+  </dl>
+
+  <h3>List files</h3>
+  <p class="sub">Any name will do, as long as it ends in <code>.txt</code>, which is what makes a web server send it as text. One entry per line, as a file name next to the list or as a full link. A line starting with <code>#</code> gives the collection its title. Blank lines are ignored.</p>
+<pre># Basque · Elhuyar
+en-eu-Elhuyar.mdx
+en-eu-Elhuyar.mdd
+es-eu-Elhuyar.mdx
+es-eu-Elhuyar.mdd
+https://download.freedict.org/dictionaries/eng-spa/2025.11.23/freedict-eng-spa-2025.11.23.slob</pre>
+  <p class="sub">In a folder of dictionaries, <code>ls -1 &gt; list.txt</code> writes one.</p>
+
+  <h3>What wudict reads</h3>
+  <p class="formats">MDict (<code>.mdx</code> with its <code>.mdd</code>), StarDict (<code>.ifo</code>, <code>.idx</code>, <code>.dict</code>), Aard2 <code>.slob</code>, Lingvo <code>.dsl</code>, Babylon <code>.bgl</code>, openZIM <code>.zim</code> and wudict markdown (<code>.wudict.md</code>), either as they are or packed in a <code>.zip</code> or <code>.7z</code>.</p>
+</section>
+</main>
+
+<footer>
+  <a class="brand" href="https://wuweidict.github.io/wudict" title="wudict home page">wu<small>dict</small></a> ·
+  <a href="https://wudict.legbehindneck.com/">Documentation</a> ·
+  <a href="https://wudict.legbehindneck.com/start/install/">Install</a> ·
+  <a href="https://github.com/wuweidict/wudict">Source code</a>
+  <br>The dictionaries on this page are published by their authors and downloaded from their sites. Wiktionary: CC BY-SA. FreeDict: free licences (GPL, CC BY-SA and others), see <a href="https://freedict.org/">freedict.org</a>.
+</footer>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+"use strict";
+const ORIGIN = "https://legbehindneck.com";
+const HOME = ORIGIN + "/wudict#";
+// "#/dict/x/" is the short form of "#https://legbehindneck.com/dict/x/": a
+// path on this site. One leading slash only - "//other.org/x" is another host.
+const SHORT = /^\/(?!\/)/;
+
+// Several links in one share link: "#https://a…,https://b…". A new link starts
+// at "http(s)://" right after a separator - comma, semicolon, bar or
+// whitespace, plain or %-escaped - so a link carrying another in its query
+// stays whole. The app splits by the same rule (intake.UnwrapAll).
+const SEP = "(?:[\\s,;|]|%20|%2c|%3b|%7c|%0a|%0d|%09)";
+const SEP_END = new RegExp(SEP + "$", "i"), SEPS_END = new RegExp(SEP + "+$", "i");
+function splitLinks(s) {
+  const starts = [], re = /https?:\/\//gi;
+  let m;
+  while ((m = re.exec(s))) {
+    if (m.index === 0 || SEP_END.test(s.slice(0, m.index))) starts.push(m.index);
+  }
+  if (starts.length < 2 || starts[0] !== 0) return [s];
+  return starts.map((a, k) => s.slice(a, k + 1 < starts.length ? starts[k + 1] : s.length).replace(SEPS_END, ""))
+    .filter(Boolean);
+}
+// A Drive link is the file's viewer page; its name is only known to Drive.
+const isDrive = u => /^(drive|docs)\.google\.com$/i.test(u.hostname);
+const siteName = u => isDrive(u) ? "Google Drive" : u.hostname;
+// A Drive link at its shortest: "/view?usp=drive_link" is the viewer's, not
+// the file's, and is a third of every link in a long share link. wudict reads
+// the short form the same way.
+function shortDrive(u) {
+  const m = isDrive(u) && u.pathname.match(/^\/file\/(?:u\/\d+\/)?d\/([\w-]{10,})/);
+  if (!m) return u.href;
+  const key = u.searchParams.get("resourcekey");
+  return "https://drive.google.com/file/d/" + m[1] + (key ? "?resourcekey=" + encodeURIComponent(key) : "");
+}
+// Where a share link stops being safe to send. Telegram cuts messages at 4,096
+// characters, and a cut link loses its last files without saying so. And the
+// most files wudict reads from one link (intake maxLinks).
+const SAFE_LINK_CHARS = 4000, MAX_FILES = 500;
+const KIWIX = l => "https://download.kiwix.org/zim/wiktionary_" + l + "_all_nopic.zim";
+const FD = (pair, ver) => "https://download.freedict.org/dictionaries/" + pair + "/" + ver + "/freedict-" + pair + "-" + ver + ".slob";
+
+// Sizes as published in September 2026. The Wiktionary links always lead to
+// the newest edition, so those sizes drift a little from month to month.
+const GROUPS = [
+  { title: "Collections", note: "Several dictionaries behind one link. You choose which to install.", rows: [
+    ["Basque", "Elhuyar: English → Basque, Spanish ⇄ Basque", "3 dictionaries · 37 MB + 1.1 GB media", "https://legbehindneck.com/dict/euskera/", "euskara euskera basque spanish english elhuyar"],
+    ["English ⇄ other languages", "FreeDict", "13 dictionaries · 161 MB", "https://legbehindneck.com/dict/lists/freedict-english.txt", "freedict english german spanish italian russian swedish finnish polish japanese"],
+  ]},
+  { title: "Wiktionary", note: "The free dictionary written by its readers, packaged for offline use by Kiwix. Each edition describes words from every language, written in its own language. Text only, no pictures. Always the latest edition.", rows: [
+    ["English", "Wiktionary in English", "8.5 GB", KIWIX("en"), "english", true],
+    ["Simple English", "Wiktionary in Simple English", "25 MB", KIWIX("en-simple"), "simple english"],
+    ["French", "français", "4.6 GB", KIWIX("fr"), "french francais", true],
+    ["German", "Deutsch", "1.2 GB", KIWIX("de"), "german deutsch", true],
+    ["Russian", "русский", "2.0 GB", KIWIX("ru"), "russian russkiy", true],
+    ["Chinese", "中文", "1.6 GB", KIWIX("zh"), "chinese zhongwen mandarin", true],
+    ["Greek", "Ελληνικά", "919 MB", KIWIX("el"), "greek ellinika"],
+    ["Polish", "polski", "899 MB", KIWIX("pl"), "polish polski"],
+    ["Dutch", "Nederlands", "702 MB", KIWIX("nl"), "dutch nederlands"],
+    ["Spanish", "español", "625 MB", KIWIX("es"), "spanish espanol castellano"],
+    ["Japanese", "日本語", "493 MB", KIWIX("ja"), "japanese nihongo"],
+    ["Swedish", "svenska", "483 MB", KIWIX("sv"), "swedish svenska"],
+    ["Italian", "italiano", "384 MB", KIWIX("it"), "italian italiano"],
+    ["Portuguese", "português", "353 MB", KIWIX("pt"), "portuguese portugues"],
+    ["Catalan", "català", "315 MB", KIWIX("ca"), "catalan catala"],
+    ["Esperanto", "Esperanto", "64 MB", KIWIX("eo"), "esperanto"],
+    ["Latin", "Latina", "35 MB", KIWIX("la"), "latin latina"],
+    ["Basque", "euskara", "32 MB", KIWIX("eu"), "basque euskara euskera"],
+  ]},
+  { title: "FreeDict", note: "Bilingual dictionaries from the FreeDict project, in Aard2 .slob format. Many are built from Wiktionary by WikDict.", rows: [
+    ["English → German", "TU Chemnitz (Ding) · 460,315 entries", "38 MB", FD("eng-deu", "1.9-fd1"), "english german deutsch ding"],
+    ["German → English", "TU Chemnitz (Ding) · 517,534 entries", "42 MB", FD("deu-eng", "1.9-fd1"), "german english deutsch ding"],
+    ["Japanese → English", "JMdict · 173,747 entries", "24 MB", FD("jpn-eng", "0.1"), "japanese english jmdict nihongo"],
+    ["English → Czech", "150,004 entries", "7.3 MB", FD("eng-ces", "0.1.3"), "english czech cestina"],
+    ["English → Hungarian", "89,679 entries", "6.9 MB", FD("eng-hun", "0.2.1"), "english hungarian magyar"],
+    ["English → Arabic", "Arabeyes · 87,424 entries", "4.3 MB", FD("eng-ara", "0.6.3"), "english arabic"],
+    ["English → Finnish", "WikDict · 75,586 entries", "9.7 MB", FD("eng-fin", "2025.11.23"), "english finnish suomi wikdict"],
+    ["Finnish → English", "WikDict · 42,060 entries", "4.2 MB", FD("fin-eng", "2025.11.23"), "finnish english suomi wikdict"],
+    ["English → Spanish", "WikDict · 64,258 entries", "7.7 MB", FD("eng-spa", "2025.11.23"), "english spanish espanol wikdict"],
+    ["English → Russian", "WikDict · 62,181 entries", "8.2 MB", FD("eng-rus", "2025.11.23"), "english russian wikdict"],
+    ["Russian → English", "WikDict · 42,600 entries", "3.9 MB", FD("rus-eng", "2025.11.23"), "russian english wikdict"],
+    ["English → Italian", "WikDict · 53,258 entries", "6.2 MB", FD("eng-ita", "2025.11.23"), "english italian italiano wikdict"],
+    ["Italian → English", "WikDict · 29,660 entries", "2.8 MB", FD("ita-eng", "2025.11.23"), "italian english italiano wikdict"],
+    ["English → Swedish", "WikDict · 44,077 entries", "5.3 MB", FD("eng-swe", "2025.11.23"), "english swedish svenska wikdict"],
+    ["Polish → English", "WikDict · 42,088 entries", "4.5 MB", FD("pol-eng", "2025.11.23"), "polish english polski wikdict"],
+    ["English → Japanese", "WikDict · 38,419 entries", "4.9 MB", FD("eng-jpn", "2025.11.23"), "english japanese nihongo wikdict"],
+    ["English → Turkish", "36,589 entries", "3.7 MB", FD("eng-tur", "0.3"), "english turkish turkce"],
+    ["English → Chinese", "WikDict · 26,660 entries", "3.2 MB", FD("eng-zho", "2025.11.23"), "english chinese mandarin wikdict"],
+    ["German → French", "WikDict · 59,631 entries", "6.6 MB", FD("deu-fra", "2025.11.23"), "german french deutsch francais wikdict"],
+    ["French → German", "WikDict · 48,578 entries", "4.0 MB", FD("fra-deu", "2025.11.23"), "french german francais deutsch wikdict"],
+    ["French → Spanish", "WikDict · 52,659 entries", "3.9 MB", FD("fra-spa", "2025.11.23"), "french spanish francais espanol wikdict"],
+  ]},
+];
+
+const $ = id => document.getElementById(id);
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+
+// A link inside the fragment keeps its own %-escapes; only a "#" of its own
+// has to be escaped, or the browser would split it off.
+// Links on this site get the short form.
+// Several links are joined with commas, each written out in full.
+const wudictLink = hrefs => {
+  const list = [].concat(hrefs).map(h => h.replace(/#/g, "%23"));
+  if (list.length > 1) return HOME + list.join(",");
+  const s = list[0];
+  return HOME + (s.startsWith(ORIGIN + "/") ? s.slice(ORIGIN.length) : s);
+};
+
+function toast(msg) {
+  const t = $("toast");
+  t.textContent = msg; t.classList.add("on");
+  clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove("on"), 1600);
+}
+
+async function copy(text) {
+  try { await navigator.clipboard.writeText(text); toast("Link copied"); return; } catch (_) {}
+  const ta = el("textarea"); ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+  document.body.appendChild(ta); ta.select();
+  try { document.execCommand("copy"); toast("Link copied"); } catch (_) { toast("Copy failed"); }
+  ta.remove();
+}
+
+/* ---------- catalogue ---------- */
+
+function renderCatalogue() {
+  const root = $("groups");
+  for (const g of GROUPS) {
+    const box = el("div", "group");
+    const h = el("h3", null, g.title); h.appendChild(el("span", "n", String(g.rows.length)));
+    box.append(h, el("p", null, g.note));
+    const ul = el("ul", "list");
+    for (const [name, alt, size, url, keys, big] of g.rows) {
+      const li = el("li", "row");
+      li.dataset.q = (name + " " + alt + " " + keys + " " + g.title).toLowerCase();
+      const main = el("div");
+      const n = el("span", "name", name);
+      main.appendChild(n);
+      const meta = el("span", "meta");
+      const s = el("span", big ? "big" : null, size);
+      meta.append(s, document.createTextNode(" · " + alt));
+      main.appendChild(meta);
+      const add = el("a", "add", "Add"); add.href = wudictLink(url);
+      add.setAttribute("aria-label", "Add " + name + " (" + g.title + ") to wudict");
+      const dl = el("a", "dl", "↓"); dl.href = url; dl.rel = "noopener noreferrer";
+      dl.title = url.endsWith("/") ? "Open the folder" : url.endsWith(".txt") ? "Open the list" : "Download the file";
+      dl.setAttribute("aria-label", dl.title);
+      li.append(main, add, dl);
+      ul.appendChild(li);
+    }
+    box.appendChild(ul);
+    root.appendChild(box);
+  }
+  $("q").addEventListener("input", filter);
+}
+
+function filter() {
+  const words = $("q").value.toLowerCase().split(/\s+/).filter(Boolean);
+  let any = false;
+  for (const box of $("groups").children) {
+    let shown = 0;
+    for (const li of box.querySelectorAll(".row")) {
+      const ok = words.every(w => li.dataset.q.includes(w));
+      li.classList.toggle("hidden", !ok); if (ok) shown++;
+    }
+    box.classList.toggle("hidden", shown === 0); if (shown) any = true;
+  }
+  $("none").classList.toggle("hidden", any);
+}
+
+/* ---------- the shared link ---------- */
+
+// What wudict recognises, for the preview only. The app decides for real.
+const MAIN = /\.(mdx|ifo|dsl|dsl\.dz|bgl|slob|zim|wudict\.md|wudict\.md\.gz|wudict\.md\.dz|zip|7z)$/i;
+const ANY = /\.(mdx|mdd|ifo|idx|idx\.gz|idx\.dz|idx\.oft|dict|dict\.dz|syn|syn\.gz|syn\.dz|dsl|dsl\.dz|ann|bgl|slob|zim|wudict\.md|wudict\.md\.gz|wudict\.md\.dz|zip|7z)$/i;
+
+// The links a share link carries: null for none, false for a broken one.
+function sharedTargets() {
+  let h = location.hash.slice(1);
+  if (!h) return null;
+  if (/^https?%3a/i.test(h)) { try { h = decodeURIComponent(h); } catch (_) { return false; } }
+  const parts = SHORT.test(h) ? [ORIGIN + h] : splitLinks(h);
+  const out = [];
+  for (const p of parts) {
+    try {
+      const u = new URL(p);
+      // A host with no dot is what a link cut off inside its host name leaves.
+      if (!((u.protocol === "https:" || u.protocol === "http:") && u.hostname.includes("."))) return false;
+      out.push(u);
+    } catch (_) { return false; }
+  }
+  return out;
+}
+
+const lastSegment = u => {
+  const parts = u.pathname.split("/").filter(Boolean);
+  const s = parts.length ? parts[parts.length - 1] : u.hostname;
+  try { return decodeURIComponent(s); } catch (_) { return s; }
+};
+const isFolder = u => u.pathname.endsWith("/") || u.pathname === "";
+const isList = u => /\.txt$/i.test(u.pathname);
+
+// Only look inside links that point at an ordinary public site: a link can be
+// made by anyone, and this page must not become a way to make a visitor's
+// browser poke at their own network.
+function publicHost(u) {
+  const h = u.hostname.toLowerCase();
+  return u.protocol === "https:" && !/^[\d.]+$/.test(h) && !h.includes(":") && h.includes(".")
+    && !/(^|\.)(localhost|local|lan|internal|home|arpa)$/.test(h);
+}
+
+function stem(name) {
+  return name.replace(/(\.\d+)?\.mdd$/i, "").replace(/_abrv\.dsl(\.dz)?$/i, "").replace(ANY, "");
+}
+
+async function peek(u) {
+  const note = $("peekNote"), list = $("peek");
+  note.textContent = "Looking inside…"; note.classList.remove("hidden");
+  const ctl = new AbortController(); const timer = setTimeout(() => ctl.abort(), 8000);
+  try {
+    const res = await fetch(u.href, { credentials: "omit", referrerPolicy: "no-referrer", signal: ctl.signal });
+    if (!res.ok) throw new Error(String(res.status));
+    const type = (res.headers.get("content-type") || "").toLowerCase();
+    const text = (await res.text()).slice(0, 1 << 20);
+    const base = res.url || u.href;
+    let title = "", hrefs = [];
+    if (type.includes("html")) {
+      const doc = new DOMParser().parseFromString(text, "text/html");
+      hrefs = [...doc.querySelectorAll("a[href]")].map(a => a.getAttribute("href"));
+    } else {
+      for (const raw of text.split(/\r?\n/)) {
+        const line = raw.trim();
+        if (!line) continue;
+        if (line.startsWith("#")) { if (!title && /^#\s/.test(line)) title = line.replace(/^#\s+/, ""); continue; }
+        hrefs.push(line);
+      }
+    }
+    const seen = new Map(); // stem -> {main, media, archive}
+    for (const href of hrefs.slice(0, 500)) {
+      let v; try { v = new URL(href, base); } catch (_) { continue; }
+      if (v.protocol !== "https:" && v.protocol !== "http:") continue;
+      const name = lastSegment(v);
+      if (!ANY.test(name)) continue;
+      const k = stem(name), r = seen.get(k) || { main: false, media: false, archive: false };
+      if (MAIN.test(name)) { r.main = true; if (/\.(zip|7z)$/i.test(name)) r.archive = true; }
+      if (/\.mdd$/i.test(name)) r.media = true;
+      seen.set(k, r);
+    }
+    const rows = [...seen].filter(([, r]) => r.main);
+    if (title) $("what").textContent = title;
+    list.replaceChildren();
+    for (const [k, r] of rows) {
+      const li = el("li"); li.appendChild(el("span", null, k));
+      const tag = r.archive ? "archive" : r.media ? "+ media" : "";
+      if (tag) li.appendChild(el("span", "tag", tag));
+      list.appendChild(li);
+    }
+    list.classList.toggle("hidden", rows.length === 0);
+    note.textContent = rows.length === 0 ? "No dictionaries found at this link."
+      : rows.length === 1 ? "1 dictionary" : rows.length + " dictionaries";
+  } catch (_) {
+    note.textContent = "The browser can't look inside this link. wudict can.";
+  } finally { clearTimeout(timer); }
+}
+
+function showShared() {
+  const box = $("shared"), us = sharedTargets();
+  $("peek").classList.add("hidden"); $("peekNote").classList.add("hidden");
+  if (us === null) { box.classList.add("hidden"); return; }
+  box.classList.remove("hidden");
+  const btns = box.querySelector(".btns");
+  if (us === false) {
+    $("what").replaceChildren(el("span", "bad", "This link is incomplete"));
+    $("where").textContent = "It may have been cut off when it was shared. Ask for it again.";
+    btns.classList.add("hidden"); $("hint").textContent = "";
+    return;
+  }
+  btns.classList.remove("hidden");
+  const direct = $("direct"), u = us[0], many = us.length > 1;
+  const folder = !many && !isDrive(u) && isFolder(u), list = !many && isList(u);
+  if (many) {
+    // Each link is one file. A Drive file's name is not in its link, and this
+    // page cannot ask Drive for it, so the list says where each one is.
+    $("what").textContent = us.length + " files";
+    $("where").textContent = "Dictionary files on " + [...new Set(us.map(siteName))].join(", ");
+    $("peek").replaceChildren(...us.map(v => el("li", null, isDrive(v) ? "a file on Google Drive" : lastSegment(v))));
+    $("peek").classList.remove("hidden");
+    direct.classList.add("hidden");
+  } else {
+    $("what").textContent = isDrive(u) ? "A file on Google Drive"
+      : folder || list ? lastSegment(u).replace(/\.txt$/i, "") : lastSegment(u);
+    $("where").textContent = (folder ? "A folder of dictionaries" : list ? "A list of dictionaries" : "A dictionary") + " on " + siteName(u);
+    direct.classList.remove("hidden");
+    direct.href = u.href;
+    direct.textContent = folder ? "Open the folder" : list ? "Open the list" : "Download";
+  }
+  const link = wudictLink(us.map(v => v.href));
+
+  const android = /Android/i.test(navigator.userAgent);
+  const canSend = android && typeof navigator.share === "function";
+  $("send").classList.toggle("hidden", !canSend);
+  // Several links travel as the share link itself: wudict unwraps it.
+  $("send").onclick = () => navigator.share({ url: many ? link : u.href }).catch(() => {});
+  $("copy").onclick = () => copy(link);
+  $("hint").textContent = canSend
+    ? "Tap Send to wudict, then choose wuDict."
+    : android
+      ? "Copy the link, open wuDict and paste it under Add dictionaries."
+      : "Copy the link, open wudict and paste it under Add dictionaries.";
+  if ((folder || list) && publicHost(u)) peek(u);
+  window.scrollTo({ top: 0 });
+}
+
+function closeShared() {
+  history.replaceState(null, "", location.pathname + location.search);
+  showShared();
+}
+
+/* ---------- make a link ---------- */
+
+// One link, or several - one per line, or separated by spaces or commas -
+// which become one share link.
+function makeLink() {
+  const v = $("src").value.trim(), out = $("out"), err = $("srcErr"), btn = $("outCopy"), tryIt = $("outTry");
+  out.textContent = ""; err.textContent = ""; btn.disabled = true; tryIt.classList.add("hidden");
+  if (!v) return;
+  let raw = v.replace(/^https?:\/\/(www\.)?legbehindneck\.com\/wudict\/?#/i, "");
+  if (/^https?%3a/i.test(raw)) { try { raw = decodeURIComponent(raw); } catch (_) {} }
+  const parts = SHORT.test(raw) ? [ORIGIN + raw] : raw.split(/\s+/).flatMap(splitLinks).filter(Boolean);
+  const us = [];
+  for (const p of parts) {
+    let u;
+    try { u = new URL(p); } catch (_) { err.textContent = parts.length > 1 ? "Not a link: " + p : "That is not a link."; return; }
+    if (u.protocol !== "https:" && u.protocol !== "http:") { err.textContent = "Use links that start with https://"; return; }
+    us.push(u);
+  }
+  if (us.some(u => u.protocol === "http:")) err.textContent = "wudict only downloads over https unless told otherwise.";
+  const link = wudictLink(us.map(shortDrive));
+  if (us.length > MAX_FILES) {
+    err.textContent = "That is " + us.length + " links; wudict reads the first " + MAX_FILES +
+      " from one share link. Put them in a .txt list and share a link to the list.";
+  } else if (link.length > SAFE_LINK_CHARS) {
+    err.textContent = "This link is " + link.length.toLocaleString() + " characters long. Some messengers " +
+      "cut long messages (Telegram at 4,096), and a cut link quietly loses its last files. For this many " +
+      "files, put the links in a .txt list and share a link to the list.";
+  }
+  out.textContent = link; btn.disabled = false;
+  tryIt.href = link; tryIt.classList.remove("hidden");
+}
+
+renderCatalogue();
+showShared();
+window.addEventListener("hashchange", showShared);
+$("shared").querySelector(".close").addEventListener("click", closeShared);
+$("src").addEventListener("input", makeLink);
+$("outCopy").addEventListener("click", () => { const t = $("out").textContent; if (t) copy(t); });
+</script>
+</body>
+</html>

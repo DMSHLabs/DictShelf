@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"mime"
 	"net"
 	"net/http"
@@ -107,13 +108,60 @@ type Fetcher struct {
 // DownloadDir is where fetched archives land under dest.
 func DownloadDir(dest string) string { return filepath.Join(dest, DownloadDirName) }
 
+// maxLinkDepth bounds the folders of a link's path mirrored under Downloads.
+// A real download link is a few folders deep; the bound is for the one that
+// is not, and keeps the path well inside every platform's length limit.
+const maxLinkDepth = 8
+
+// LinkDir is where a download of u is kept: Downloads, then the host, then the
+// folders of the link's path - one folder per place on the web, so
+// "https://a.org/en/oxford.mdx" and "https://b.org/oxford.mdx" never meet.
+//
+// This is what lets a download be replaced without asking (D155 Am. 4). Two
+// different links can no longer share a file name, so the only file a
+// download can ever land on is an earlier download of the same place: an
+// older revision of itself, or a sibling from the same site folder. Neither
+// is a doubt worth a question. The dictionaries themselves are the user's
+// decision, and that is asked where they are installed, not here.
+func LinkDir(dest string, u *url.URL) string {
+	parts := []string{DownloadDir(dest), linkSegment(strings.ToLower(u.Hostname()))}
+	for _, s := range strings.Split(path.Dir(u.Path), "/") {
+		if len(parts) >= 2+maxLinkDepth {
+			break
+		}
+		if s = linkSegment(s); s != "" {
+			parts = append(parts, s)
+		}
+	}
+	return filepath.Join(parts...)
+}
+
+// linkSegment makes one piece of a URL a safe folder name: no separators or
+// reserved characters (safeDirName), no "." or "..", nothing hidden, and a
+// length every filesystem takes. Empty means "skip it".
+func linkSegment(s string) string {
+	if s == "" || s == "." || s == ".." {
+		return ""
+	}
+	s = strings.TrimLeft(safeDirName(s), ".")
+	if len(s) > 100 {
+		s = strings.ToValidUTF8(s[:100], "")
+	}
+	return s
+}
+
 // Check validates a URL against the policy without contacting anything, so a
 // refusal is immediate and no job is claimed for a link that was never going
-// to be fetched.
+// to be fetched. A Google Drive file link comes back as the address of the
+// file itself (drive.go): it is that address which is fetched, so it is that
+// address the policy judges.
 func (f Fetcher) Check(raw string) (*url.URL, error) {
 	u, err := url.Parse(strings.TrimSpace(raw))
 	if err != nil || u.Host == "" {
 		return nil, errors.New("that is not a link")
+	}
+	if d, ok := driveDirect(u); ok {
+		u = d
 	}
 	switch strings.ToLower(u.Scheme) {
 	case "https":
@@ -221,16 +269,16 @@ func (f Fetcher) Fetch(ctx context.Context, dest, raw string, progress Progress)
 	if err != nil {
 		return Source{}, err
 	}
-	dir := DownloadDir(dest)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return Source{}, err
-	}
-	sweepPartials(dir)
+	// The sweep removes empty folders, so it runs before this download's
+	// folder exists - which is only once there are bytes to write into it: a
+	// link refused as not a dictionary leaves nothing behind.
+	sweepPartials(DownloadDir(dest))
+	dir := LinkDir(dest, u)
 
 	// The part name comes from the URL, and the FINAL name may come from a
 	// Content-Disposition header we have not seen yet - so resume identity is
 	// keyed on the URL in the sidecar, never on the file name.
-	base := safeDirName(nameFromURL(u))
+	base := partBase(u)
 	part := filepath.Join(dir, base+".part")
 	meta := part + ".meta"
 	sidecar := filepath.Join(dir, base+".done")
@@ -271,6 +319,9 @@ func (f Fetcher) Fetch(ctx context.Context, dest, raw string, progress Progress)
 	if total > maxDownloadBytes {
 		return Source{}, errors.New("that file is too large to download")
 	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return Source{}, err
+	}
 	writeMeta(meta, partMeta{
 		URL: u.String(), ETag: resp.Header.Get("ETag"),
 		Modified: resp.Header.Get("Last-Modified"), Total: total,
@@ -303,20 +354,85 @@ func (f Fetcher) Fetch(ctx context.Context, dest, raw string, progress Progress)
 	// Only now is the file whole, and only now does it get a name that is not
 	// ".part" - which is the whole convention: nothing but a complete download
 	// is ever visible under a name a scan or a user would take seriously.
-	final, err := uniqueDir(dir, name) // a file, but the same "does not exist yet" question
-	if err != nil {
-		return Source{}, err
-	}
+	//
+	// A file already under that name is REPLACED, never numbered beside: this
+	// folder belongs to this place on the web (LinkDir), so what is there is
+	// an older revision of this file, and a numbered "oxford (2).mdx" became a
+	// second dictionary called "oxford (2)" instead of an update of "oxford".
+	final := filepath.Join(dir, name)
 	if err := os.Rename(part, final); err != nil {
 		return Source{}, err
 	}
 	_ = os.Remove(meta)
+	forgetOthers(dir, name, sidecar)
 	writeJSON(sidecar, doneMeta{
 		URL: u.String(), ETag: resp.Header.Get("ETag"),
 		Modified: resp.Header.Get("Last-Modified"),
 		Size:     n, File: filepath.Base(final),
 	})
 	return Source{Path: final, Name: filepath.Base(final)}, nil
+}
+
+// renameDownload gives a completed download of raw, saved by Fetch as src, the
+// name it must have beside the files it belongs with, and moves its sidecar
+// along so the next import of raw still reuses it.
+//
+// A file already under that name is replaced. The one caller asks for a name
+// sharing the stem of a main file it has just saved or reused, so what is
+// there is either an older copy of this very companion or an orphan that
+// OpenPlain would otherwise splice into the dictionary. Any other sidecar that
+// named it is dropped: its size check is the only thing that would stop it
+// offering the new bytes as the old download.
+func renameDownload(dest, raw string, src Source, name string) (Source, error) {
+	dir := filepath.Dir(src.Path)
+	name = safeDirName(name)
+	to := filepath.Join(dir, name)
+	if src.Path == to {
+		return src, nil
+	}
+	// Only a file Fetch saved is ever renamed here, never one elsewhere that a
+	// Source could also describe.
+	if rel, err := filepath.Rel(DownloadDir(dest), src.Path); err != nil || rel == "." || strings.HasPrefix(rel, "..") {
+		return src, errors.New("not a download")
+	}
+	if err := os.Rename(src.Path, to); err != nil {
+		return src, err
+	}
+	// raw is the link this very file was just fetched from, so it parses; if
+	// it somehow does not, only the sidecar bookkeeping is skipped and the
+	// next import of it downloads again rather than reusing.
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil {
+		return Source{Path: to, Name: name}, nil
+	}
+	own := filepath.Join(dir, partBase(u)+".done")
+	forgetOthers(dir, name, own)
+	if b, err := os.ReadFile(own); err == nil {
+		var m doneMeta
+		if json.Unmarshal(b, &m) == nil && m.URL == u.String() && m.File == src.Name {
+			m.File = name
+			writeJSON(own, m)
+		}
+	}
+	return Source{Path: to, Name: name}, nil
+}
+
+// forgetOthers drops every reuse record in dir that names file, except own:
+// the file has just been replaced, and a record's size check is the only
+// thing that would otherwise stop it offering the new bytes as its old
+// download.
+func forgetOthers(dir, file, own string) {
+	sidecars, _ := filepath.Glob(filepath.Join(dir, "*.done"))
+	for _, sc := range sidecars {
+		if sc == own {
+			continue
+		}
+		b, err := os.ReadFile(sc)
+		var m doneMeta
+		if err == nil && json.Unmarshal(b, &m) == nil && m.File == file {
+			_ = os.Remove(sc)
+		}
+	}
 }
 
 // get issues the request, retrying once from zero if the range was refused.
@@ -581,35 +697,46 @@ func writeJSON(path string, m any) {
 // staging area: this is the layer for the attempt that was never retried, and
 // the age cut is what keeps it from deleting the one the user is about to
 // resume.
-func sweepPartials(dir string) {
+//
+// It walks the whole Downloads tree (LinkDir), and removes the folders that
+// end up empty on the way out - IMPORT_KEEP=delete empties one per import -
+// but never root itself.
+func sweepPartials(root string) {
 	cut := time.Now().Add(-partialStale)
-	ents, err := os.ReadDir(dir)
-	if err != nil {
-		return
-	}
-	for _, e := range ents {
-		if e.IsDir() {
-			continue
+	var dirs []string
+	_ = filepath.WalkDir(root, func(p string, e fs.DirEntry, err error) error {
+		if err != nil {
+			return nil // unreadable: leave it, sweep the rest
 		}
-		name := e.Name()
+		if e.IsDir() {
+			if p != root {
+				dirs = append(dirs, p)
+			}
+			return nil
+		}
+		dir, name := filepath.Dir(p), e.Name()
 		if strings.HasSuffix(name, ".done") {
 			// A reuse record outlives its file whenever the user deletes the
 			// download - which IMPORT_KEEP=delete does on every import - and a
 			// record pointing at nothing would otherwise sit there forever.
 			// No age cut applies: the file either exists or it does not.
 			if !hasFileFor(dir, name) {
-				_ = os.Remove(filepath.Join(dir, name))
+				_ = os.Remove(p)
 			}
-			continue
+			return nil
 		}
 		if !strings.HasSuffix(name, ".part") && !strings.HasSuffix(name, ".part.meta") {
-			continue
+			return nil
 		}
-		fi, err := e.Info()
-		if err != nil || fi.ModTime().After(cut) {
-			continue
+		if fi, err := e.Info(); err == nil && fi.ModTime().Before(cut) {
+			_ = os.Remove(p)
 		}
-		_ = os.Remove(filepath.Join(dir, name))
+		return nil
+	})
+	// Deepest first, so a folder emptied by removing its only child goes too.
+	// os.Remove refuses a folder that is not empty, which is the whole test.
+	for i := len(dirs) - 1; i >= 0; i-- {
+		_ = os.Remove(dirs[i])
 	}
 }
 
@@ -659,14 +786,7 @@ func nameFromURL(u *url.URL) string {
 // even when the name is perfect.
 func archiveName(u *url.URL, resp *http.Response) (string, error) {
 	ct, _, _ := mime.ParseMediaType(resp.Header.Get("Content-Type"))
-	name := ""
-	if cd := resp.Header.Get("Content-Disposition"); cd != "" {
-		if _, params, err := mime.ParseMediaType(cd); err == nil {
-			// filename* (RFC 5987) is decoded by ParseMediaType and lands in
-			// the same key, so there is nothing extra to do for it here.
-			name = filepath.Base(strings.TrimSpace(params["filename"]))
-		}
-	}
+	name := dispositionName(resp.Header)
 	if !Installable(name) {
 		name = nameFromURL(u)
 	}
@@ -706,4 +826,23 @@ func archiveExtForType(ct string) string {
 		return ".7z"
 	}
 	return ""
+}
+
+// dispositionName is the file name a response's Content-Disposition gives, or
+// "". filename* (RFC 5987) is decoded by ParseMediaType and lands in the same
+// key, so there is nothing extra to do for it here.
+func dispositionName(h http.Header) string {
+	cd := h.Get("Content-Disposition")
+	if cd == "" {
+		return ""
+	}
+	_, params, err := mime.ParseMediaType(cd)
+	if err != nil {
+		return ""
+	}
+	name := filepath.Base(strings.TrimSpace(params["filename"]))
+	if name == "." || name == string(filepath.Separator) {
+		return ""
+	}
+	return name
 }

@@ -29,20 +29,73 @@ import (
 
 // markExisting annotates candidates with the library folder that already holds
 // them. dest may be empty - a server with no dictionary folder configured -
-// and then there is nothing to compare against and nothing to say.
-func markExisting(dest string, cands []Candidate) {
-	if dest == "" {
-		return
-	}
+// and then there is no folder to compare against.
+//
+// lib is the main file of every dictionary the library knows, in every
+// configured folder. A candidate with no folder of its own in dest is looked
+// up there BY NAME, whatever format or source that dictionary came from: the
+// import folder is only the first configured folder, and a user who keeps
+// "en-eu-Elhuyar.mdx" loose in another one was otherwise told a second copy
+// was new and got one (D155 Am. 2).
+func markExisting(dest string, lib []string, cands []Candidate) {
+	var byName map[string][]string
 	for i := range cands {
-		cands[i].Existing, cands[i].Unchanged, cands[i].Stale = existingDict(dest, cands[i])
+		c := &cands[i]
+		if dest != "" {
+			c.Existing, c.Unchanged, c.Stale = existingDict(dest, *c)
+			if c.Existing != "" {
+				continue
+			}
+		}
+		if byName == nil {
+			byName = libraryByName(lib)
+		}
+		c.Elsewhere, c.Unchanged, c.elsewhereMain = elsewhere(dest, byName, *c)
 	}
+}
+
+// libraryByName indexes the library's main files by dictionary name - the
+// stem, case-folded, as a case-insensitive filesystem would compare it.
+func libraryByName(lib []string) map[string][]string {
+	m := make(map[string][]string, len(lib))
+	for _, p := range lib {
+		k := strings.ToLower(dict.Stem(filepath.Base(p)))
+		if k != "" {
+			m[k] = append(m[k], p)
+		}
+	}
+	return m
+}
+
+// elsewhere reports the folder, outside the one an install would create, that
+// holds a dictionary of this candidate's name - by its base name, which is
+// what a person recognises - and whether that one is the same files at the
+// same sizes. An identical copy wins over a different one when there are
+// several.
+func elsewhere(dest string, byName map[string][]string, c Candidate) (folder string, same bool, main string) {
+	own := ""
+	if dest != "" {
+		own = filepath.Join(dest, safeDirName(c.Name))
+	}
+	for _, p := range byName[strings.ToLower(c.Name)] {
+		dir := filepath.Dir(p)
+		if dir == own {
+			continue
+		}
+		if sameFiles(dir, c) {
+			return filepath.Base(dir), true, p
+		}
+		if main == "" {
+			folder, main = filepath.Base(dir), p
+		}
+	}
+	return folder, false, main
 }
 
 // existingDict reports the folder in dest that already holds this candidate,
 // and whether its contents match what the archive declares.
 //
-// The folder is the one uniqueDir would have picked first, which is the only
+// The folder is the one an install creates, safeDirName(c.Name), which is the only
 // honest place to look: a dictionary installed from this archive before is in
 // safeDirName(c.Name), and a dictionary installed from somewhere else that
 // happens to own that name is a collision the user must be told about anyway,

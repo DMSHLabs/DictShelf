@@ -4,6 +4,11 @@
 # build links mattn/go-sqlite3 and the built-in Speex decoder, the purego build
 # links modernc's driver (D4, D18, D29). A change can pass one and fail the
 # other.
+#
+# And all three desktop systems, because they are different too: Windows
+# refuses to rename over or delete an open file and checks text out with CRLF
+# unless told otherwise; macOS resolves /var to /private/var. Each of those has
+# shipped a bug that only its own system could see, so each runs the suite.
 name: test
 
 on:
@@ -58,3 +63,49 @@ jobs:
           make test-purego
           go build -tags purego ./...
           go build ./...
+
+  # The same suite on macOS and Windows, on the images the release binaries
+  # are built on (build-cgo.yml), so a test passing here is about the system
+  # users run. Repository-wide checks (tidy) stay with the job above: their
+  # answer does not depend on the system.
+  #
+  # `go` directly, not `make`: the Windows image has no GNU make, and the
+  # Makefile assumes a POSIX shell. The commands are the ones `make vet`,
+  # `make test` and `make test-purego` run - keep them in step.
+  platforms:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # one system failing must not hide whether the other one passes
+      fail-fast: false
+      matrix:
+        os: [macos-14, windows-2022]
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # cgo flavour; the C toolchain is preinstalled on both images (Xcode
+      # clang, MinGW-w64 gcc).
+      - name: vet
+        env:
+          CGO_ENABLED: "1"
+        run: go vet -tags sqlite_fts5 ./...
+
+      - name: test
+        env:
+          CGO_ENABLED: "1"
+        run: go test -tags sqlite_fts5 -trimpath ./...
+
+      - name: purego flavour
+        env:
+          CGO_ENABLED: "0"
+        run: |
+          go test -tags purego ./internal/store/ ./internal/server/
+          go build -tags purego ./...

@@ -30,6 +30,7 @@ import (
 	"github.com/wuweidict/wudict/internal/config"
 	"github.com/wuweidict/wudict/internal/dict"
 	"github.com/wuweidict/wudict/internal/htmlref"
+	"github.com/wuweidict/wudict/internal/howto"
 	"github.com/wuweidict/wudict/internal/intake"
 	"github.com/wuweidict/wudict/internal/logx"
 	"github.com/wuweidict/wudict/internal/morph"
@@ -161,11 +162,14 @@ COMMANDS
                                           wudict listens on the network. -rotate replaces the
                                           key, and every browser and script holding the old
                                           one stops working until it is opened again.
-  clean  [-f]                             List removable items in the library: incomplete or
+  clean  [-f [-orphans]]                  List removable items in the library: incomplete or
                                           unreadable folders, interrupted ingests, leftovers
-                                          from the old flat layout. A cached dictionary is
-                                          never listed, even if its source is gone or changed.
-                                          -f deletes them. Dry run by default.
+                                          from the old flat layout - and, separately, orphans:
+                                          prepared dictionaries whose source file is gone (a
+                                          source moved within a dictionary folder is re-linked
+                                          instead; one kept on purpose is never listed).
+                                          -f deletes the items; -f -orphans the orphans too.
+                                          Dry run by default.
   rm [-f] [-keep-source|-keep-index] <name|path>
                                           Remove one dictionary: its prepared folder in the
                                           library AND its original files. The argument is a
@@ -1417,6 +1421,8 @@ Hint: pick another port with --port, e.g.:  wudict --port %s
 	// server.handleIndex still sends an empty registry to the setup page, and
 	// HowtoRemoved stays false. The package, its endpoints and the guide
 	// itself stay in the tree, unwired, for a host that wants them back.
+	// The package is still imported for isHowtoSource, which keeps a guide
+	// file that does exist from being treated as an orphan.
 	howtoDir := ""
 	reg, err := server.NewRegistry(cfg.DictDirs, cfg.UseCached, regOpts...)
 	if err != nil {
@@ -2191,17 +2197,34 @@ func cmdClean(args []string) error {
 	applyLibrarySettings()
 	fs := flag.NewFlagSet("clean", flag.ExitOnError)
 	force := fs.Bool("f", false, "actually delete (default: dry run, list only)")
+	withOrphans := fs.Bool("orphans", false, "with -f, also delete prepared dictionaries whose source file is gone")
 	fs.Parse(args)
-	orphans, err := store.FindOrphans()
+
+	// A source that was moved inside a dictionary folder takes its prepared
+	// folder with it, exactly as a server rescan does - so a move is never
+	// reported, let alone deleted, as an orphan (D156).
+	if cfg, err := config.Load("", nil); err == nil {
+		if found, _, err := dict.DiscoverAll(cfg.DictDirs); err == nil {
+			for _, rl := range store.Relink(found) {
+				fmt.Printf("relinked  %s\n  moved from %s to %s\n", rl.Dir, rl.From, rl.To)
+			}
+		}
+	}
+
+	leftovers, err := store.FindLeftovers()
 	if err != nil {
 		return err
 	}
-	if len(orphans) == 0 {
+	orphans, err := store.FindOrphans(isHowtoSource)
+	if err != nil {
+		return err
+	}
+	if len(leftovers) == 0 && len(orphans) == 0 {
 		fmt.Println("library is clean - nothing to remove")
 		return nil
 	}
 	var total int64
-	for _, o := range orphans {
+	for _, o := range leftovers {
 		total += o.Size
 		kind := "file"
 		if o.IsDir {
@@ -2209,13 +2232,34 @@ func cmdClean(args []string) error {
 		}
 		fmt.Printf("%s  (%s, %s)\n  %s\n", o.Path, kind, humanSize(o.Size), o.Reason)
 	}
-	fmt.Printf("%d items, %s total\n", len(orphans), humanSize(total))
+	if len(leftovers) > 0 {
+		fmt.Printf("%d items, %s total\n", len(leftovers), humanSize(total))
+	}
+	var orphanTotal int64
+	if len(orphans) > 0 {
+		if len(leftovers) > 0 {
+			fmt.Println()
+		}
+		fmt.Println("orphans - prepared dictionaries whose source file is gone:")
+		for _, o := range orphans {
+			orphanTotal += o.Size
+			fmt.Printf("%s  (%s, %s)\n  source was %s\n", o.Dir, o.Name, humanSize(o.Size), o.Source)
+		}
+		fmt.Printf("%d orphans, %s total\n", len(orphans), humanSize(orphanTotal))
+	}
 	if !*force {
-		fmt.Println("dry run - re-run with -f to delete")
+		switch {
+		case len(orphans) == 0:
+			fmt.Println("dry run - re-run with -f to delete")
+		case len(leftovers) == 0:
+			fmt.Println("dry run - re-run with -f -orphans to delete the orphans")
+		default:
+			fmt.Println("dry run - re-run with -f to delete the items, -f -orphans to delete the orphans as well")
+		}
 		return nil
 	}
-	var failed int
-	for _, o := range orphans {
+	var failed, deleted int
+	for _, o := range leftovers {
 		var err error
 		if o.IsDir {
 			err = os.RemoveAll(o.Path)
@@ -2225,13 +2269,36 @@ func cmdClean(args []string) error {
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "delete %s: %v\n", o.Path, err)
 			failed++
+			continue
 		}
+		deleted++
 	}
-	fmt.Printf("deleted %d items\n", len(orphans)-failed)
+	if *withOrphans {
+		// Re-judged one by one at deletion time (store.RemoveOrphan), so a
+		// source that came back since the listing keeps its folder.
+		for _, o := range orphans {
+			if _, err := store.RemoveOrphan(o.Folder, isHowtoSource); err != nil {
+				fmt.Fprintf(os.Stderr, "delete %s: %v\n", o.Dir, err)
+				failed++
+				continue
+			}
+			deleted++
+		}
+	} else if len(orphans) > 0 {
+		fmt.Printf("%d orphans left in place - add -orphans to delete them\n", len(orphans))
+	}
+	fmt.Printf("deleted %d items\n", deleted)
 	if failed > 0 {
 		return fmt.Errorf("%d deletions failed", failed)
 	}
 	return nil
+}
+
+// isHowtoSource reports whether src is the built-in guide the server writes
+// beside its config (<config dir>/builtin/<howto file>). Its source comes and
+// goes with the app, not with the user's folders, so it is never an orphan.
+func isHowtoSource(src string) bool {
+	return filepath.Base(src) == howto.FileName && filepath.Base(filepath.Dir(src)) == "builtin"
 }
 
 func cmdRes(args []string) error {

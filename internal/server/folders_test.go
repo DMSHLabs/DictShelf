@@ -185,7 +185,10 @@ func TestConfigEndpointAndSetupPage(t *testing.T) {
 	// "/" still serves the app, not setup, while dictionaries are in use
 	rec = httptest.NewRecorder()
 	s.ServeHTTP(rec, newRequest("GET", "/", nil))
-	if strings.Contains(rec.Body.String(), "Point wuDict at your dictionaries") {
+	// Told apart by its own markup, not by one of its sentences: every page
+	// carries the whole i18n catalog, so a phrase from setup.html is in the
+	// app page's body too (renderUI ships messages and fallback alike).
+	if strings.Contains(rec.Body.String(), "<title>Edit Folders</title>") {
 		t.Error("/ should serve the app once dictionaries are in use")
 	}
 }

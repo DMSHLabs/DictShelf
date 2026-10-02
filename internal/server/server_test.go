@@ -567,10 +567,13 @@ func TestSetupFlow(t *testing.T) {
 	if err != nil || !strings.Contains(string(data), "DICT_DIR = "+config.QuoteTOML(dictDir)) {
 		t.Errorf("config not persisted: %v %q", err, data)
 	}
-	// "/" now serves the app
+	// "/" now serves the app. Probed by its markup: this fork keeps the
+	// stylesheet in app.css, so the inline "design tokens" comment is not
+	// there to look for (and the i18n catalog is in every page, so text is
+	// no marker either).
 	rec = httptest.NewRecorder()
 	s.ServeHTTP(rec, newRequest("GET", "/", nil))
-	if !strings.Contains(rec.Body.String(), "design tokens") {
+	if !strings.Contains(rec.Body.String(), "id=\"panel\"") {
 		t.Errorf("app page not served after setup")
 	}
 	// nonexistent path errors cleanly
@@ -717,7 +720,9 @@ func TestSetupConsentFlow(t *testing.T) {
 	// and the app page is served now that dictionaries are in use
 	rec = httptest.NewRecorder()
 	s.ServeHTTP(rec, newRequest("GET", "/", nil))
-	if strings.Contains(rec.Body.String(), "Point wuDict at your dictionaries") {
+	// Markup, not a sentence: every page ships the whole i18n catalog, so
+	// setup.html's phrases are in the app page's body too (renderUI).
+	if strings.Contains(rec.Body.String(), "<title>Edit Folders</title>") {
 		t.Error("setup page still shown after dictionaries were enrolled")
 	}
 }

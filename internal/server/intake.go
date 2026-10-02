@@ -42,6 +42,7 @@ const maxIntakeUpload = 16 << 30
 // nil hook would be the difference between the two.
 func (s *Server) importer() *intake.Manager {
 	s.intakeOnce.Do(func() {
+		s.intake.Library = s.reg.SourcePaths
 		s.intake.Installed = func() {
 			if err := s.reg.Rescan(); err != nil {
 				logx.Warn("rescan after import: %v", err)
@@ -208,9 +209,6 @@ func (s *Server) intakeBegin(w http.ResponseWriter, src intake.Source) {
 type intakeConfirmReq struct {
 	Pick []int `json:"pick"`
 	Keep *bool `json:"keep"`
-	// Copy installs beside a dictionary the library already holds instead of
-	// updating it. Absent means the default, which is to update.
-	Copy bool `json:"copy"`
 	// Extras are indexes into the job's extras: companion files found beside a
 	// downloaded one, which are fetched only when the user says so.
 	Extras []int `json:"extras"`
@@ -234,17 +232,12 @@ func (s *Server) intakeConfirm(w http.ResponseWriter, r *http.Request) {
 			req.Keep = &b
 		}
 	}
-	if !req.Copy {
-		v := r.URL.Query().Get("copy")
-		req.Copy = v != "" && v != "0" && !strings.EqualFold(v, "false") && !strings.EqualFold(v, "no")
-	}
 	dest := s.importDir()
 	if len(req.Extras) == 0 {
 		req.Extras = parsePick(r.URL.Query().Get("extras"))
 	}
 	j, err := s.importer().Confirm(dest, req.Pick, intake.Options{
 		Keep:   s.keepSource(req.Keep),
-		Copy:   req.Copy,
 		Extras: req.Extras,
 	})
 	if err != nil {
@@ -299,7 +292,16 @@ func (s *Server) handleIntakeStatus(w http.ResponseWriter, r *http.Request) {
 
 // handleIntakeCancel abandons whatever is in flight. Also how the page says
 // "not these after all" to a sniffed archive it never confirmed.
+//
+// With ?id=, only that job: a client releasing the job it started must not
+// cancel one another client started since (intake.Manager.CancelID). The
+// answer is then the job that is current, cancelled or not.
 func (s *Server) handleIntakeCancel(w http.ResponseWriter, r *http.Request) {
+	if id := strings.TrimSpace(r.URL.Query().Get("id")); id != "" {
+		s.importer().CancelID(id)
+		writeJSON(w, s.intakeStatus(s.importer().Status()))
+		return
+	}
 	s.importer().Cancel()
 	writeJSON(w, s.intakeStatus(intake.Job{}))
 }
@@ -308,6 +310,15 @@ func (s *Server) handleIntakeCancel(w http.ResponseWriter, r *http.Request) {
 // different thing for a page to do - retry later, reload, tell the user the
 // file is not one we read - and a single 400 would collapse them into one.
 func intakeErr(w http.ResponseWriter, err error) {
+	if errors.Is(err, intake.ErrBusy) {
+		// Marked, because 409 is also "no folder" and "nothing to confirm":
+		// busy is the one a client can answer, by asking the user whether to
+		// stop the other import (GET /api/intake says which it is).
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(http.StatusConflict)
+		_ = json.NewEncoder(w).Encode(map[string]any{"error": err.Error(), "busy": true})
+		return
+	}
 	code := http.StatusBadRequest
 	switch {
 	case errors.Is(err, intake.ErrBusy):
