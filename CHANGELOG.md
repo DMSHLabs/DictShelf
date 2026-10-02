@@ -5,6 +5,86 @@ Notable changes in **wuDict2**, the Android fork of
 version it was forked from. Fork release tags are prefixed `wudict2-`; one
 tagged line per release, newest first.
 
+## wudict2-v0.6.0 — 2026-10-02
+
+The full build, from `dev`. Two things in it are new and worth testing: the
+**Russian interface**, now covering what the v0.6.0-ru.1 preview left in
+English, and a **GoldenDict-compatible DSL parser**. Everything else is
+ordinary released work, and the preview's contents are all here too.
+
+### The Russian interface
+
+- **The two gaps the preview listed are closed.** Dictionary categories,
+  language pairs and filter labels are translated, and so are the server's own
+  messages — import, index preparation, deletion, downloads, orphan review,
+  paths and configuration. An unknown message still stays visible in English
+  rather than disappearing behind a missing key.
+- The Android resources are complete except the application name, which is
+  inherited on purpose. The new DSL parser's controls, errors and bulk actions
+  arrived in both languages with it, and the Russian counts are grammatical for
+  1, 2 and 5.
+- English is still the default; the choice lives in Settings → Language and
+  belongs to the installation, not to one browser. The device pass is still
+  owed, as for the preview.
+
+### GoldenDict-compatible DSL parsing
+
+- **A DSL dictionary can now be read GoldenDict's way.** DSL files in the wild
+  are written for GoldenDict's parser, so a dictionary that renders correctly
+  there could render differently here. The reader chooses once for the
+  installation — **DSL parser: Original / GD compatible / Both** — from the
+  dictionary panel.
+- **The setup page gained a "DSL Dictionaries Parser" section**: which of the
+  two variants get an index, contains or full-text on newly added DSL
+  dictionaries. Existing dictionaries are not touched, and on the very first
+  setup the parser choice is synchronised from these defaults once.
+- **Index work follows the choice.** Bulk create and delete for index, contains
+  and full-text are scoped to the selected parser — all dictionaries, Original
+  only, or GD compatible only — behind a compact confirmation that names the
+  count and the feature, with a live "N/total · name" progress and a **Stop**
+  that halts between dictionaries. A search no longer silently rebuilds an
+  index you deleted, and deleting a base index also removes the contains and
+  full-text indexes that depended on it.
+- **GD articles get their own style** and respect your font size and weight
+  instead of hard-coding 13px; DSL underlining is a plain underline again
+  instead of the old highlighted box. Packing controls are hidden for DSL
+  dictionaries, and existing packed media is left alone.
+- The parser is checked against GoldenDict's own implementation: a comparison
+  harness — Python plus an oracle built from GoldenDict's source, vendored with
+  its provenance recorded — diffs the two parsers over a corpus of DSL
+  constructs. That harness is a development tool and does not ship in the app.
+
+### Also in this build: merged from upstream
+
+- **A dictionary collection can be installed from a link.** The setup page's URL
+  field takes a web folder page, a `.txt` list, several links at once, or a
+  share link; wuDict reads the list once and shows every dictionary it finds
+  with its date and size, installing only the ones you tick. Each dictionary's
+  media is offered beside it, and a failure names the dictionary while the rest
+  still install.
+- **Google Drive and Nextcloud are supported sources** for such an install:
+  Drive file links are rewritten to a direct download (a folder is not
+  supported, and a refused file explains itself), and a Nextcloud public share
+  is listed through the share's own WebDAV.
+- **On Android a share link opens the import directly** — the link form is a
+  verified App Link — and the "an import is already running" dead end is fixed:
+  the app releases its own job on every exit path, and when the slot is held by
+  something else it offers to stop it or leave it running.
+- **Tick now means overwrite and untick means skip.** wuDict never installs a
+  second numbered copy, and both screens gained Select all / none. Un-ticking a
+  dictionary while replacing it keeps the media you already have.
+- **Rescan folders offers to delete orphan indexes**: prepared dictionaries
+  whose source files are gone are listed with how much space they hold, each
+  row ticked, and one button that names the whole action. Un-ticking one
+  remembers it as kept and never asks again.
+- **Windows:** editing a dictionary source no longer makes the next open fail
+  with "Access is denied" — a retired backend held the old database open while
+  the rebuilt one was renamed over it.
+- Documentation and build hygiene: the wudict howto documents the shareable
+  URLs, CI now runs on Windows and macOS as well, the Gradle distribution is
+  pinned by checksum, and the Android build no longer carries Google's tracker
+  packages.
+
 ## wudict2-v0.6.0-ru.1 — 2026-09-30
 
 A **preview**, and the first release cut from a branch other than `dev`:
