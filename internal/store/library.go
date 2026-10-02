@@ -245,6 +245,14 @@ func claimFrom(candidates []string, claim string) (string, error) {
 	if err := os.MkdirAll(DefaultDBDir(), 0o755); err != nil {
 		return "", err
 	}
+	// A lower-numbered name may have become free since the original claim.
+	// Reuse the existing owner before considering any free name.
+	for _, cand := range candidates {
+		owner, _, exists := dirOwner(cand)
+		if exists && sameSource(owner, claim) {
+			return cand, nil
+		}
+	}
 	for _, cand := range candidates {
 		err := os.Mkdir(cand, 0o755)
 		switch {
@@ -277,6 +285,27 @@ func claimFrom(candidates []string, claim string) (string, error) {
 		}
 	}
 	return "", fmt.Errorf("library: no free folder name for %q", claim)
+}
+
+// SourceFolders includes interrupted claims and copies under old folder names.
+// Parser descriptors are distinct sources, so their indexes stay independent.
+func SourceFolders(src string) ([]string, error) {
+	items, err := os.ReadDir(DefaultDBDir())
+	if err != nil {
+		return nil, err
+	}
+	var dirs []string
+	for _, item := range items {
+		if !item.IsDir() || item.Type()&os.ModeSymlink != 0 {
+			continue
+		}
+		dir := filepath.Join(DefaultDBDir(), item.Name())
+		owner, _, _ := dirOwner(dir)
+		if sameSource(owner, src) {
+			dirs = append(dirs, dir)
+		}
+	}
+	return dirs, nil
 }
 
 // claimGrace is how long a folder with no receipt is assumed to belong to a

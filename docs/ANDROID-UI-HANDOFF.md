@@ -509,6 +509,8 @@ Typing in `q` changes only the dropdown suggestions. Articles update when a sugg
 
 ## Decisions to preserve
 
+- **Index maintenance (2026-10-02):** Rescan folders opens Update dictionaries, combining discovery and cleanup. New section has a checked/disabled main-index Create and optional Contains/FTS Create; existing section has main Recreate/Keep and Contains/FTS Update/Delete/Keep. Update affects present indexes only, Keep preserves missing/removed ones, and Recreate can restore main indexes. New options share Edit Folders defaults and its DSL variant choices. Automatic pending preparation cannot undo the final selected feature set. Unused/disabled prepared caches and old packed media are always removed; sources survive. EN/RU 320/390/1100px verified; no device check.
+
 - **GD fonts (2026-10-02):** original Quivira.otf replaces subset phonetic font; bundled Arial-derived files removed. Optional Custom CSS Files names wugd_Regular/Bold/Italic/BoldItalic.ttf or .otf supply GD faces, TTF first; missing faces fall back to system sans-serif. Refresh stylesheet v7 without index rebuild; reload after uploads. Chromium phonetics/system fallback/all four uploaded OTF faces verified; no device check.
 
 - **Global DSL parser (2026-10-02):** settings header Original/GD/Both selects search parser and filters cards/index rows. Single mode treats a missing selected index as unavailable/red even if hidden sibling is indexed; no fallback to hidden parser. Both keeps two cards/rows. Per-family selection controls superseded by header; indexes retained and new-index defaults independent. Chromium EN/RU 320/390/1100px selector checks pass; no device check. Current browser test: verify_parser_selector.cjs (old verify_modes.cjs targets superseded per-family UI).

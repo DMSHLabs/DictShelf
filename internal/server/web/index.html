@@ -341,7 +341,7 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
     <button type="button" class="mrow door" id="editDictSettings">{{T:panel.editDicts}}</button>
     <button type="button" class="mrow door" id="editGroups">{{T:panel.editGroups}}</button>
     <a class="mrow door" id="editFolders" href="/setup">{{T:panel.editFolders}}</a>
-    <button type="button" class="mrow" id="rescanBtn" title="{{T:panel.rescanHint}}"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M13.3 8a5.3 5.3 0 1 1-1.7-3.9"/><path d="M13.6 2v3h-3"/></svg>{{T:panel.rescan}}</button>
+    <button type="button" class="mrow door" id="rescanBtn" title="{{T:panel.rescanHint}}"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M13.3 8a5.3 5.3 0 1 1-1.7-3.9"/><path d="M13.6 2v3h-3"/></svg>{{T:panel.rescan}}</button>
     <a class="mrow door" id="lemmaLink" href="/lemmas" title="{{T:panel.lemmasHint}}">{{T:panel.lemmas}}</a>
     </div>
   <!-- Prepared dictionaries whose files are gone (D156). Filled only after
@@ -691,6 +691,20 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
 </dialog>
 
 <dialog id="bulkIndexDialog" class="group-dialog panel-card" aria-labelledby="bulkIndexDialogTitle"></dialog>
+<dialog id="clearDatabaseDialog" class="group-dialog panel-card" aria-labelledby="clearDatabaseTitle">
+  <h2 id="clearDatabaseTitle">{{T:panel.rescan}} <button type="button" class="btn" id="clearDatabaseClose" aria-label="{{T:panel.close}}">✕</button></h2>
+  <h3>{{T:database.new}}</h3>
+  <label><input type="checkbox" name="index" checked disabled> {{T:database.createBase}}</label>
+  <label><input type="checkbox" name="contains"> {{T:database.createContains}}</label>
+  <label><input type="checkbox" name="fullText"> {{T:database.createFullText}}</label>
+  <h3>{{T:database.existing}}</h3>
+  <div id="rescanActions"></div>
+  <p>{{T:database.rebuild}}</p>
+  <p>{{T:database.obsoleteHint}}</p>
+  <p>{{T:database.sources}}</p>
+  <p id="clearDatabaseStatus" role="status"></p>
+  <div><button type="button" class="btn" id="clearDatabaseGo">{{T:database.clear}}</button> <button type="button" class="btn" id="clearDatabaseCancel" autofocus>{{T:panel.cancel}}</button></div>
+</dialog>
 
 <!-- System: the shell's own settings, drawn by the page. It is the second view
      of one set of values the SHELL owns - the screen the launcher icon's
@@ -2741,7 +2755,54 @@ $("dictSettings").addEventListener("close",()=>{
   reissueIfCorpusMoved();
   $("editDictSettings").focus();
 });
-$("rescanBtn").onclick=()=>{loadDicts(true).then(loadFolders).then(checkOrphans)};
+let rescanExisting={index:"keep",contains:"keep",fullText:"keep"};
+const rescanActionKeys={recreate:"database.recreate",update:"database.update",delete:"database.delete",keep:"database.keep"};
+function paintRescanActions(){
+  $("rescanActions").innerHTML=["index","contains","fullText"].map(feature=>
+    `<div class="rescan-action"><span>${esc(tx(feature==="index"?"database.base":feature==="contains"?"database.contains":"database.fullText"))}</span><div class="seg" role="group">`+
+    (feature==="index"?["recreate","keep"]:["delete","update","keep"]).map(action=>
+      `<button type="button" class="btn${rescanExisting[feature]===action?" on":""}" data-rescan-feature="${feature}" data-rescan-action="${action}" aria-pressed="${rescanExisting[feature]===action}">${esc(tx(rescanActionKeys[action]))}</button>`).join("")+"</div></div>").join("");
+}
+$("rescanActions").onclick=e=>{
+  const button=e.target.closest("[data-rescan-action]");
+  if(!button)return;
+  rescanExisting[button.dataset.rescanFeature]=button.dataset.rescanAction;
+  paintRescanActions();
+};
+$("rescanBtn").onclick=()=>{
+  const dialog=$("clearDatabaseDialog");
+  const defaults=cfgInfo?.dslDefaults||{original:{index:true},gd:{index:false}};
+  for(const feature of ["contains","fullText"]){
+    dialog.querySelector(`input[name="${feature}"]`).checked=[defaults.original,defaults.gd].some(v=>v?.index&&v[feature]);
+  }
+  rescanExisting={index:"keep",contains:"keep",fullText:"keep"};
+  paintRescanActions();
+  $("clearDatabaseGo").disabled=false;
+  $("clearDatabaseStatus").textContent="";
+  dialog.showModal();
+  dialog.scrollTop=0;
+};
+$("clearDatabaseClose").onclick=$("clearDatabaseCancel").onclick=()=>$("clearDatabaseDialog").close();
+$("clearDatabaseGo").onclick=async()=>{
+  const dialog=$("clearDatabaseDialog"),body={new:{index:true},existing:{...rescanExisting}};
+  for(const box of dialog.querySelectorAll("input")){body.new[box.name]=box.checked;box.disabled=true}
+  for(const button of $("rescanActions").querySelectorAll("button"))button.disabled=true;
+  $("clearDatabaseGo").disabled=true;$("clearDatabaseCancel").disabled=true;$("clearDatabaseClose").disabled=true;
+  dialog.oncancel=e=>e.preventDefault();
+  $("clearDatabaseStatus").textContent=tx("database.working");
+  try{
+    const response=await fetch("/api/rescan",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+    if(!response.ok)throw new Error(await response.text());
+    const report=await response.json();
+    $("clearDatabaseStatus").textContent=report.failed.length?tx("database.failed",{error:report.failed.map(window.wudictI18n.errorText).join("; ")}):tx("database.done");
+    await loadDicts(false);await loadFolders();
+  }catch(e){$("clearDatabaseStatus").textContent=tx("database.failed",{error:window.wudictI18n.errorText(e.message)})}
+  finally{
+    for(const box of dialog.querySelectorAll("input"))box.disabled=box.name==="index";
+    paintRescanActions();
+    $("clearDatabaseGo").disabled=false;$("clearDatabaseCancel").disabled=false;$("clearDatabaseClose").disabled=false;dialog.oncancel=null;
+  }
+};
 
 /* The panel's third window: System. Wired like Dictionary settings — modal over
    the drawer, focus handed back to the door it came from — and it moves no
@@ -3177,6 +3238,7 @@ async function loadConfig(){
 async function loadFolders(){
   if(!await loadConfig())return;
   const c=cfgInfo,b=$("folderBody");
+  $("rescanBtn").disabled=!c.canDelete;
   const n=(c.roots||[]).length;
   $("folderSummary").textContent=tx("panel.folders",{count:n,number:n})+" · "+tx("panel.dictionaryCount",{count:c.total,number:c.total});
   paintPickerGroup(); // the row that says which group the search is on

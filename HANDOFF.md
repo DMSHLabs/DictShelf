@@ -1,5 +1,13 @@
 # Agent handoff — current state
 
+Rescan dialog compacted: command/title share panel.rescan, menu door has a chevron, header has a close button (disabled during maintenance), Create labels and existing index names shortened in EN/RU. Browser verifies no dialog scrolling at 320/390/1100 × 700; Node localization checks pass. APK/device check remains with the user.
+
+Rescan dialog opening is synchronous and uses the already loaded configuration; an extra configuration request can no longer delay it. Chromium EN/RU 320/390/1100px checks now also block that request and verify immediate opening. Android APK has not been rebuilt or installed.
+
+Background DSL preparation now reuses a fresh index with the requested Contains/FTS plan; successful preparation removes older folders belonging to that exact source/variant, preserving explicit database sources. Claims reuse existing ownership before vacant names, avoiding duplicates after a name collision disappears. Full Go suite, targeted race checks and vet passed; changes remain uncommitted, no APK/device check.
+
+2026-10-02 unified index maintenance: dev HEAD 7e9a6d4; this slice is uncommitted. Rescan folders opens one Update dictionaries dialog: new dictionaries have mandatory base plus optional Contains/FTS creation; existing ones choose recreate/keep base and update/delete/keep optional indexes. Update never creates absent optional indexes; Keep preserves removals even after restart. New optional choices share the Edit Folders defaults; configured DSL variants are respected. Maintenance drains/suspends the automatic worker, cancels stale pending plans, and always removes unused/disabled caches and old packed media. Originals and explicitly supplied database sources survive. Go/Node and Chromium EN/RU 320/390/1100px verified; no APK/device check. Browser recipe: verify_clear_database.cjs, isolated clear-database-preview at port 6912.
+
 2026-10-02 GD fonts: only unmodified Quivira.otf embedded for phonetics; Arial variants and QuiviraPhonetic removed from distribution. WuGD Arial faces resolve user uploads /files/wugd_{Regular,Bold,Italic,BoldItalic}.{ttf,otf}, TTF first, system sans-serif fallback. CSS v7 refreshes prepared articles without rebuild; uploaded/replaced fonts require page reload.
 
 2026-10-02 localization follow-up: `dev` at `10eaec5`, clean at start. Completed Russian DSL validation, three defaults API errors, collection hint and bulk count wording; known JSON-wrapped errors translate without dropping unknown response diagnostics. Targeted Go/Node/diff checks pass; no APK/device check. Changes uncommitted; details in translation_todo.md.

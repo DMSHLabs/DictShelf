@@ -99,6 +99,20 @@ dialog#bulkIndexDialog.group-dialog.panel-card{
 .group-toolbar select{flex:1;min-width:0;max-width:100%;width:12em}
 .group-dialog select,.group-dialog input[type=text]{font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:.6em}
 .group-dialog h2{display:flex;align-items:center;gap:1em;margin:0}
+dialog#clearDatabaseDialog.group-dialog.panel-card{box-sizing:border-box;height:fit-content;max-height:calc(100dvh - 24px);width:min(480px,calc(100vw - 24px));inset:0;margin:auto;padding:14px;font-size:.9em}
+#clearDatabaseDialog label{margin-top:.4em;display:flex;align-items:flex-start;gap:.3em}
+#clearDatabaseDialog input{margin-top:.15em}
+#clearDatabaseDialog h2{font-size:1.1em;display:flex;align-items:center;justify-content:space-between;gap:.5em;margin:0 0 .5em}
+#clearDatabaseDialog h3{font-size:1em;margin:.65em 0 .3em}
+#clearDatabaseDialog .rescan-action{margin:.4em 0;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:.25em}
+#clearDatabaseDialog .seg{display:inline-flex;flex-wrap:nowrap;gap:0}
+#clearDatabaseDialog .seg .btn{padding:.3em .45em;border-radius:0}
+#clearDatabaseDialog .seg .btn:first-child{border-radius:5px 0 0 5px}
+#clearDatabaseDialog .seg .btn:last-child{border-radius:0 5px 5px 0}
+#clearDatabaseDialog .seg .btn.on{background:var(--accent);color:var(--bg);border-color:var(--accent)}
+#clearDatabaseDialog p{overflow-wrap:anywhere;margin:.5em 0;line-height:1.3;font-size:.85em}
+#clearDatabaseStatus:empty{display:none}
+@media(max-width:360px){dialog#clearDatabaseDialog.group-dialog.panel-card{font-size:.85em;padding:12px}#clearDatabaseDialog .seg .btn{padding:.25em .35em}}
 .group-dialog h2 button{margin-left:auto}
 #groupRows{flex:1;overflow:auto;min-height:0;overscroll-behavior:contain}
 .group-row{display:flex;align-items:center;gap:.7em;min-height:44px;padding:.5em 0;overflow-wrap:anywhere}

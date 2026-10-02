@@ -672,6 +672,16 @@ func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
 				out["error"] = err.Error()
 				break
 			}
+			if s.removalOffered(r) {
+				if err := s.reg.cleanupLibrary(); err != nil {
+					out["error"] = err.Error()
+					break
+				}
+				if err := s.reg.Rescan(); err != nil {
+					out["error"] = err.Error()
+					break
+				}
+			}
 			out["saved"] = true
 			if s.ConfigPath != "" {
 				if err := config.SaveKeyRaw(s.ConfigPath, "DICT_DIR", config.FormatList(dirs)); err != nil {
@@ -1045,8 +1055,12 @@ func dirExists(p string) bool {
 }
 
 func (s *Server) handleRescan(w http.ResponseWriter, r *http.Request) {
-	if err := s.reg.Rescan(); err != nil {
-		httpErr(w, 500, "rescan: %v", err)
+	if !s.removalOffered(r) {
+		httpErr(w, 403, "deleting from another machine is off")
+		return
+	}
+	if failures := s.reg.updateDictionaryIndexes(rescanIndexesRequest{}); len(failures) > 0 {
+		httpErr(w, 500, "rescan: %v", failures)
 		return
 	}
 	s.reg.Warm()

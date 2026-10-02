@@ -4,6 +4,10 @@ Updated 2026-10-02. Implementation rules are in [translation.md](translation.md)
 
 ## Checkout state
 
+2026-10-02 compact Rescan dialog: shortened Create/index labels and explanations in EN/RU, title matches the command, header close and menu chevron added. Chromium confirms one-screen layout at 320/390/1100 × 700; Node checks pass. Device verification pending.
+
+2026-10-02 unified Rescan / Update dictionaries: new/existing sections, mandatory base creation, optional Create checkboxes, Recreate/Update/Delete/Keep controls and exact-action explanations are in EN/RU. Separate Clear database door removed. Browser EN/RU 320/390/1100px and Node checks pass; APK/device verification pending.
+
 **Release `wudict2-v0.6.0` published** (2026-10-02, at the user's request, from `dev`): the first normal release to carry the finished UI localization, so the translation ships in an APK for the first time outside the ru.1 preview. Tag on `bc04112`; `versionName='wudict2-v0.6.0'`, versionCode 468, `locales: '--_--' 'ru'`, `web/i18n/ru.json` confirmed inside the packaged APK, sha256 `934f8113c040179b9edb0cd4b169b0ba06473a3a3031ac1287c027a0cfc4f44f`, pre-release flag off (`latest` moves to it). The release body names the Russian interface as one of the two things to test. `go test ./internal/format/dsl` and the server's `TestGDAssets|TestGDStyle|TestI18n|TestAppearanceContract|DSL` pass; `make i18n-check-js` was still not run (no Node on this machine), and the phone pass below is still owed.
 
 2026-10-02 follow-up after `10eaec5` on `dev` (clean at start): completed the DSL minimum-index prompt in Russian, added three DSL-defaults API error translations, and recognized known errors inside JSON responses read as text. Updated the collection import hint and made bulk confirmation counts grammatical for 1/2/5 dictionaries without changing parameters. Existing labels and Android resources were already translated. Targeted Go I18n/AppearanceContract, Node checks (including JSON/unknown fallback), and diff checks pass; no APK/device check.

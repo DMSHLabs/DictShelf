@@ -330,7 +330,94 @@ paths:
             application/yaml:
               schema: { type: string }
 
+  /api/clear-database:
+    post:
+      tags: [internal]
+      operationId: clearDatabase
+      x-internal: true
+      summary: Clear selected dictionary indexes and obsolete prepared data
+      description: >
+        Requires local access or ALLOW_REMOTE_DELETE. Source dictionaries and
+        their resources are preserved. Index rebuilds atomically replace the
+        main index, retaining optional indexes unless selected for removal.
+        Obsolete cleanup includes unused prepared folders regardless of keep
+        markers, duplicates, incomplete indexes, abandoned ingest files and
+        packed media. Obsolete active indexes are refreshed from their sources.
+        Database dictionaries supplied as sources are never cleared.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                index: { type: boolean, default: false }
+                contains: { type: boolean, default: false }
+                fullText: { type: boolean, default: false }
+                obsolete: { type: boolean, default: false }
+      responses:
+        '200':
+          description: Completed; failures are reported per item.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [failed]
+                properties:
+                  failed:
+                    type: array
+                    items: { type: string }
+        '400':
+          description: Invalid request or no option selected.
+        '403':
+          description: Removal permission denied.
+
   /api/rescan:
+    post:
+      tags: [internal]
+      operationId: updateDictionaryIndexes
+      x-internal: true
+      summary: Rescan folders and apply the selected index actions
+      description: >
+        New dictionaries receive a main index and only the selected optional
+        indexes, respecting configured DSL variants. Existing optional indexes
+        are updated only when already present; deletion cancels pending creation.
+        Keep preserves existing feature presence. Cleanup always removes unused
+        or disabled prepared indexes and legacy packed media. Sources survive.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [new, existing]
+              properties:
+                new:
+                  type: object
+                  required: [index]
+                  properties:
+                    index: { type: boolean, enum: [true] }
+                    contains: { type: boolean }
+                    fullText: { type: boolean }
+                existing:
+                  type: object
+                  properties:
+                    index: { type: string, enum: [recreate, keep] }
+                    contains: { type: string, enum: [update, delete, keep] }
+                    fullText: { type: string, enum: [update, delete, keep] }
+      responses:
+        '200':
+          description: Completed; failed lists any individual failures.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  failed: { type: array, items: { type: string } }
+        '400':
+          description: Invalid index actions.
+        '403':
+          description: Removal permission denied.
     get:
       tags: [internal]
       operationId: rescan
@@ -338,7 +425,10 @@ paths:
       summary: Re-scan the dictionary folders, then list
       description: >
         Reads the dictionary folders again, warms the registry, and then answers
-        exactly as /api/dicts does. Use it after adding files on disk.
+        exactly as /api/dicts does. Removes unused prepared folders (including
+        previously kept caches), abandoned indexes and packed media. Source
+        files and both discovered DSL variants are preserved. Requires removal
+        permission, like POST /api/clear-database.
       x-codeSamples:
         - lang: Shell
           label: curl

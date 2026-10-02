@@ -1159,6 +1159,10 @@ func (r *Registry) SetDirs(dirs []string) error {
 
 // Rescan re-discovers dictionaries, keeping already-open entries.
 func (r *Registry) Rescan() error {
+	return r.rescan(true)
+}
+
+func (r *Registry) rescan(prepare bool) error {
 	r.mu.RLock()
 	dirs := append([]string(nil), r.dictDirs...)
 	useCached := r.useCached
@@ -1325,6 +1329,9 @@ func (r *Registry) Rescan() error {
 		// deleting the library folder it held (an orphan removed right after
 		// the rescan that revealed it). See registry_windows.go.
 		releaseSuperseded(e)
+	}
+	if !prepare {
+		return nil
 	}
 	if err := r.queueNewDSL(); err != nil {
 		return err

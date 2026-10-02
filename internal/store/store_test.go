@@ -103,6 +103,14 @@ func TestClaimDirCollision(t *testing.T) {
 	if len(des) != 2 {
 		t.Errorf("library has %d folders, want 2 (lookups must not create)", len(des))
 	}
+	// Removing the first owner's dictionary must not move the second owner
+	// into the newly vacant name and leave its existing index behind.
+	if _, err := RemovePrepared(d1); err != nil {
+		t.Fatal(err)
+	}
+	if again, err := ClaimDir(mdx); err != nil || again != d2 {
+		t.Fatalf("claim after collision disappeared = %q, %v; want %q", again, err, d2)
+	}
 }
 
 func TestSourceChanged(t *testing.T) {

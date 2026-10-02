@@ -185,8 +185,30 @@ func (e *entry) restoreDSLIndex(plan store.Plan, progress store.Progress) error 
 	if err != nil {
 		return err
 	}
-	if err := e.rebuild(e.probeName(), store.TextDBPath(dir), plan, progress); err != nil {
+	textDB := store.TextDBPath(dir)
+	prepared, ready := store.PreparedFor(e.Path)
+	if !ready || prepared != textDB || len(store.TextStale(textDB, e.Path)) != 0 || store.KeptPlan(textDB) != plan {
+		if err := e.rebuild(e.probeName(), textDB, plan, progress); err != nil {
+			return err
+		}
+	}
+	// Only discard old copies after the replacement is complete. Explicit
+	// database sources are user dictionaries, even if they share a receipt.
+	dirs, err := store.SourceFolders(e.Path)
+	if err != nil {
 		return err
+	}
+	protected := make(map[string]bool)
+	for _, other := range e.reg.all() {
+		protected[dict.CanonPath(other.Path)] = true
+	}
+	for _, old := range dirs {
+		if old == dir || protected[dict.CanonPath(store.TextDBPath(old))] {
+			continue
+		}
+		if _, err := store.RemovePrepared(old); err != nil {
+			return err
+		}
 	}
 	if err := e.setIndexRemoved(false); err != nil {
 		return err

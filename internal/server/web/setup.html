@@ -261,16 +261,6 @@ label.keep em{font-style:normal;color:var(--label-quiet);font-size:12.5px}
      {{T:pages.howtoCopyHint}}</p>
 </div>
 
-<div id="libSection" class="hidden">
-  <hr class="sep">
-  <h2>{{T:pages.library}}</h2>
-  <p>{{T:pages.libraryPrefix}} <b id="libN">0</b>. {{T:pages.libraryLocation}} <code id="libDir"></code>. {{T:pages.libraryWorks}}</p>
-  <label class="keep" id="keepWrap"><input type="checkbox" id="keep" checked>
-    <span>{{T:pages.keepUsing}}
-    <em id="keepHint">{{T:pages.keepHint}}</em></span></label>
-  <div id="lib"></div>
-</div>
-
 <hr class="sep">
 <div id="msg"></div>
 <button id="save" disabled>{{T:pages.useFolder}}</button>
@@ -329,40 +319,6 @@ const fmtN=n=>window.wudictI18n.number(n);
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const el=(tag,cls,txt)=>{const e=document.createElement(tag);if(cls)e.className=cls;
   if(txt!==undefined)e.textContent=txt;return e};
-
-// Previously imported dictionaries: listed for information only. Nothing is
-// enrolled until the user clicks a Use button (that click is the consent, and
-// it is remembered — this page only appears while no dictionaries are in use).
-let inUse=false; // are any dictionaries being served right now?
-async function loadLibrary(){
-  let j;
-  try{ j=await (await fetch("/api/library")).json() }catch(e){ return }
-  if(!j||!j.count)return;
-  $("libDir").textContent=j.dir;
-  $("libN").textContent=fmtN(j.count);
-  const box=$("lib");
-  for(const d of j.entries){
-    const row=el("div","row");
-    row.appendChild(el("span","nm",d.name));
-    row.appendChild(el("span","fmt",d.format||""));
-    row.appendChild(el("span","n",tx("dictUI.entries",{number:fmtN(d.entries||0)})));
-    row.appendChild(el("span","tag on",tx("pages.search")));
-    if(d.fullText)row.appendChild(el("span","tag on",tx("dictUI.fts")));
-    if(d.media)row.appendChild(el("span","tag on",tx("dictUI.media")));
-    box.appendChild(row);
-  }
-  $("libSection").classList.remove("hidden");
-  /* Default ON. These dictionaries exist because the user prepared them, and
-     the box only decides whether the ones this folder does NOT account for
-     (source deleted, moved, or on another drive) stay reachable — prepared
-     dictionaries whose sources are in the folder keep working either way.
-     Checking adds nothing but visibility and is reversible; leaving it off
-     silently hides working dictionaries whose data is sitting on disk. Once
-     the library is in use (or deliberately not), mirror that instead. */
-  $("keep").checked=j.useCached||!inUse;
-  $("keep").addEventListener("change",validateAll);
-  validateAll();
-}
 
 /* One row per folder. Each validates itself as you type (its own status sits
    at the end of the row, so three folders never argue over one message line);
@@ -431,41 +387,28 @@ async function validateAll(){
   syncAct(total,checked,bad);
 }
 
-/* The footer speaks for the whole page: one number covering both sources, one
-   button naming what it will actually do. */
+/* The footer reports dictionaries found in the selected folders. */
 function syncAct(total,checked,bad){
-  const keepOn=libraryOffered()&&$("keep").checked,lib=keepOn?libraryCount():0;
   lastOK=total>0;
   const msg=$("msg");
-  if(!checked&&!keepOn){msg.textContent="";msg.className=""}
-  else if(total>0||lib>0){
+  if(!checked){msg.textContent="";msg.className=""}
+  else if(total>0){
     msg.className="ok";
     const parts=[];
     if(total>0)parts.push(tx("panel.dictionaryCount",{count:total,number:fmtN(total)})+
       (checked>1?tx("pages.inFolders",{number:checked}):""));
-    if(lib>0)parts.push(tx("pages.previouslyImported",{number:fmtN(lib)}));
     msg.textContent="✓ "+parts.join(" + ");
   }else{msg.className="err";msg.textContent=tx("pages.noDictionaries")}
-  // either source is enough to proceed
-  $("save").disabled=!(total>0||lib>0);
-  // name the deed: the folders when there are any (or when they are all there
-  // is), the library only when it is the sole source chosen
-  $("save").textContent=(total>0||!keepOn)?(checked>1?tx("pages.useFolders"):tx("pages.useFolder"))
-                                          :tx("pages.useDictionaries");
+  $("save").disabled=total<=0;
+  $("save").textContent=checked>1?tx("pages.useFolders"):tx("pages.useFolder");
 }
 
-/* One act for both sources. Folders and the library are not alternatives —
-   they are two dimensions of one library — so the page commits once. A second
-   "use these dictionaries" button was not just redundant: it posted without
-   the paths, silently discarding whatever folders had been typed above it. */
+/* Save the selected source folders. */
 async function save(){
   if(!await saveDSLDefaults())return;
   const q=paths().map(p=>"path="+encodeURIComponent(p)).join("&");
-  const keepOn=libraryOffered()&&$("keep").checked;
-  const keep=libraryOffered()?(keepOn?"&useCached=1":"&useCached=0"):"";
-  if(!q&&!keepOn)return;
-  const url=q?("/api/setup?"+q+"&save=1"+keep)
-             :"/api/setup?useCached=1&save=1"; // library alone: no folder to save
+  if(!q)return;
+  const url="/api/setup?"+q+"&save=1";
   const j=await (await fetch(url)).json();
   if(j.error){$("msg").className="err";$("msg").textContent="✕ "+window.wudictI18n.errorText(j.error);return}
   if(j.saved)location.href="/";
@@ -778,8 +721,6 @@ function wireIntake(dir){
   });
 }
 
-function libraryOffered(){return !$("libSection").classList.contains("hidden")}
-function libraryCount(){return parseInt($("libN").textContent.replace(/\D/g,""),10)||0}
 $("addRow").addEventListener("click",()=>{addRow("").focus()});
 $("save").addEventListener("click",save);
 
@@ -797,7 +738,6 @@ async function start(){
   }
   syncDSLDefaults();
   await saveDSLDefaults();
-  inUse=!!(cfg&&cfg.total>0);
   const dirs=(cfg&&cfg.roots||[]).map(r=>r.path);
   if(dirs.length)dirs.forEach(d=>addRow(d)); else addRow("");
   /* howtoRemoved is a fact about the host: it stays false while the builtin
@@ -820,9 +760,9 @@ async function start(){
   if(st&&st.state){impRender(st);
     if(st.state==="installing"||st.state==="downloading")impPoll()}
 }
-// config first: the library checkbox's default depends on whether anything is
-// already in use, which only /api/config knows
-start().then(loadLibrary);
+// Prepared data follows the selected source folders; it is no longer offered
+// as a second, independently retained collection.
+start();
 
 /* The ✕ closes the page the way the back gesture does: no navigation to "/"
    (which would load the app from scratch and stack an entry the back gesture
