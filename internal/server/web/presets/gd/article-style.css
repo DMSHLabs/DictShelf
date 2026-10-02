@@ -1,30 +1,34 @@
 /*********** Quivira Phonetic *************/
 @font-face {
   font-family: 'WuGD Phonetic';
-  src: url('/assets/gd/fonts/QuiviraPhonetic.ttf?v=4');
+  src: url('/assets/gd/fonts/Quivira.otf?v=1') format('opentype');
 }
 
 /**************** Arial *******************/
 @font-face {
   font-family: 'WuGD Arial';
-  src: url('/assets/gd/fonts/ArialPlus.ttf?v=4');
+  src: url('/files/wugd_Regular.ttf') format('truetype'), url('/files/wugd_Regular.otf') format('opentype');
+  font-display: swap;
 }
 
 @font-face {
   font-family: 'WuGD Arial';
-  src: url('/assets/gd/fonts/ArialPlusBold.ttf?v=4');
+  src: url('/files/wugd_Bold.ttf') format('truetype'), url('/files/wugd_Bold.otf') format('opentype');
+  font-display: swap;
   font-weight: bold;
 }
 
 @font-face {
   font-family: 'WuGD Arial';
-  src: url('/assets/gd/fonts/ArialItalic.ttf?v=4');
+  src: url('/files/wugd_Italic.ttf') format('truetype'), url('/files/wugd_Italic.otf') format('opentype');
+  font-display: swap;
   font-style: italic;
 }
 
 @font-face {
   font-family: 'WuGD Arial';
-  src: url('/assets/gd/fonts/ArialBoldItalic.ttf?v=4');
+  src: url('/files/wugd_BoldItalic.ttf') format('truetype'), url('/files/wugd_BoldItalic.otf') format('opentype');
+  font-display: swap;
   font-weight: bold;
   font-style: italic;
 }

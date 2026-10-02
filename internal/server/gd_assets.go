@@ -8,15 +8,15 @@ import (
 	"strings"
 )
 
-// The original fonts are provided with the user's GoldenDict stylesheet.
+// Only the unmodified Quivira font is distributed with the application.
 // Unique family names avoid changing the UI or ordinary dictionary articles.
 //
-//go:embed web/fonts/*.ttf
+//go:embed web/fonts/Quivira.otf
 var gdFonts embed.FS
 
 func (s *Server) handleGDFont(w http.ResponseWriter, r *http.Request) {
 	name := strings.TrimPrefix(r.URL.Path, "/assets/gd/fonts/")
-	if strings.ContainsAny(name, `/\`) || strings.Contains(name, "..") || !strings.HasSuffix(name, ".ttf") {
+	if name != "Quivira.otf" {
 		http.NotFound(w, r)
 		return
 	}
@@ -25,7 +25,7 @@ func (s *Server) handleGDFont(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	w.Header().Set("Content-Type", "font/ttf")
+	w.Header().Set("Content-Type", "font/otf")
 	w.Header().Set("Cache-Control", "public, max-age=604800, immutable")
 	_, _ = w.Write(body)
 }

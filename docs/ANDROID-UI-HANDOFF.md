@@ -509,6 +509,8 @@ Typing in `q` changes only the dropdown suggestions. Articles update when a sugg
 
 ## Decisions to preserve
 
+- **GD fonts (2026-10-02):** original Quivira.otf replaces subset phonetic font; bundled Arial-derived files removed. Optional Custom CSS Files names wugd_Regular/Bold/Italic/BoldItalic.ttf or .otf supply GD faces, TTF first; missing faces fall back to system sans-serif. Refresh stylesheet v7 without index rebuild; reload after uploads. Chromium phonetics/system fallback/all four uploaded OTF faces verified; no device check.
+
 - **Global DSL parser (2026-10-02):** settings header Original/GD/Both selects search parser and filters cards/index rows. Single mode treats a missing selected index as unavailable/red even if hidden sibling is indexed; no fallback to hidden parser. Both keeps two cards/rows. Per-family selection controls superseded by header; indexes retained and new-index defaults independent. Chromium EN/RU 320/390/1100px selector checks pass; no device check. Current browser test: verify_parser_selector.cjs (old verify_modes.cjs targets superseded per-family UI).
 
 - **New DSL defaults (2026-10-02):** Edit Folders starts with Original index, requires at least one variant index, and disables contains/FTS when its base is off. Changes save server-side immediately; folder save/intake confirmation also await successful saving. New discoveries get a persisted snapshot and asynchronous preparation, never replacing existing family's selection/features. Browser EN/RU 320/390/1100px and actual GD-only contains/FTS creation verified; no device test.

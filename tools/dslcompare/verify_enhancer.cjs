@@ -15,7 +15,10 @@ const { chromium } = require('playwright');
   try {
     const page = await browser.newPage();
     const failures = [];
-    page.on('response', r => { if (r.status() >= 400) failures.push(`${r.status()} ${r.url()}`); });
+    page.on('response', r => {
+      const optional=r.status()===404&&/^\/files\/wugd_(Regular|Bold|Italic|BoldItalic)\.(ttf|otf)$/.test(new URL(r.url()).pathname);
+      if(r.status()>=400&&!optional)failures.push(`${r.status()} ${r.url()}`);
+    });
     await page.goto(origin);
     await page.locator('#q').fill('demo');
     await page.locator('#q').press('Enter');
@@ -27,10 +30,7 @@ const { chromium } = require('playwright');
     });
     const state = await page.evaluate(async () => {
       await document.fonts.load('17px "WuGD Phonetic"');
-      await document.fonts.load('13px "WuGD Arial"');
-      await document.fonts.load('bold 13px "WuGD Arial"');
-      await document.fonts.load('italic 13px "WuGD Arial"');
-      await document.fonts.load('italic bold 13px "WuGD Arial"');
+      await Promise.allSettled(['13px','bold 13px','italic 13px','italic bold 13px'].map(style=>document.fonts.load(style+' "WuGD Arial"')));
       const host = [...document.querySelectorAll('.article')].find(el => el.shadowRoot?.querySelector('.wu-gd'));
       const root = host.shadowRoot;
       const marks = [...root.querySelectorAll('.wu-xonly')].map(p => p.textContent.trim());
@@ -45,7 +45,6 @@ const { chromium } = require('playwright');
     assert(state.family.includes('WuGD Phonetic'));
     assert.deepEqual(state.optionalStyle, { fontStyle: 'italic', color: 'rgb(80, 80, 80)' });
     assert(state.fonts.some(f => f.family.includes('Phonetic') && f.status === 'loaded'));
-    assert(state.fonts.some(f => f.family.includes('Arial') && f.status === 'loaded'));
     assert.equal(state.buttons, 0);
     // Settings must affect already-prepared GD articles, including v4 imports.
     for(const size of [15,24])for(const weight of [400,500,700]){
