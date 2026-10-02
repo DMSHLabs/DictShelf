@@ -41,8 +41,15 @@
   // Unknown errors and English responses remain literal. New API families
   // should use stable error codes instead of expanding text matching.
   const errorKeys = [
-    "errors.dslMode",
+    "errors.sharePage",
+    "errors.noLinks",
+    "errors.siteSilent",
+    "errors.driveRefused",
+    "errors.orphanEmpty",
+    "errors.orphanLimit",
     "errors.dslSelection",
+    "errors.dslMode",
+    "errors.notDSL",
     "errors.dslMissing",
     "errors.dslUnavailable",
     "errors.folderMissing",
@@ -95,7 +102,11 @@
     "errors.missingParts",
     "errors.unsafeArchive",
     "errors.archiveSize",
-    "errors.archiveRatio"
+    "errors.archiveRatio",
+    "errors.collectionMissing",
+    "errors.indexRemoved",
+    "errors.collectionFileMissing",
+    "errors.notDownload"
   ];
   const errorPrefixes = [
     "errors.receive",

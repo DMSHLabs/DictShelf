@@ -3366,16 +3366,16 @@ async function checkOrphans(){
   if(!n){closeOrphans();return}
   const box=$("orphanBox");
   box.innerHTML=
-    `<p><b>${n} ${n===1?"dictionary has":"dictionaries have"} lost ${n===1?"its":"their"} files</b>`+
-    ` — the prepared data still uses ${mb(j.size||0)}.</p>`+
-    (n>1?'<label class="oall"><input type="checkbox" id="orphAll" checked> all</label>':"")+
+    `<p><b>${esc(tx("orphans.missing",{count:n,number:window.wudictI18n.number(n)}))}</b>`+
+    ` — ${esc(tx("orphans.space",{size:mb(j.size||0)}))}</p>`+
+    (n>1?`<label class="oall"><input type="checkbox" id="orphAll" checked> ${esc(tx("orphans.all"))}</label>`:"")+
     "<ul>"+list.map(o=>
       `<li><label><input type="checkbox" class="orph" checked value="${escAttr(o.folder)}" data-size="${+o.size||0}">`+
       `<span><b>${esc(o.name||o.folder)}</b> · ${mb(o.size||0)}<br>`+
-      `<span class="was">was ${pathHTML(o.source||"")}</span></span></label></li>`).join("")+"</ul>"+
+      `<span class="was">${esc(tx("orphans.was"))} ${pathHTML(o.source||"")}</span></span></label></li>`).join("")+"</ul>"+
     '<p><button type="button" class="btn" id="orphGo"></button>'+
-    '<button type="button" class="btn" id="orphNo">Not now</button></p>'+
-    "<p class=\"cost\">Unticked ones are kept and won't be asked about again. Deleting can't be undone.</p>";
+    `<button type="button" class="btn" id="orphNo">${esc(tx("orphans.notNow"))}</button></p>`+
+    `<p class="cost">${esc(tx("orphans.warning"))}</p>`;
   box.hidden=false;
   orphLabel();
 }
@@ -3384,8 +3384,8 @@ function orphLabel(){
   const del=boxes.filter(b=>b.checked),keep=boxes.length-del.length;
   const bytes=del.reduce((s,b)=>s+(+b.dataset.size||0),0);
   const go=$("orphGo");if(!go)return;
-  go.textContent=!del.length?(keep===1?"Keep it":keep===2?"Keep both":`Keep all ${keep}`):
-    keep?`Delete ${del.length} · keep ${keep}`:`Delete ${del.length} · ${mb(bytes)}`;
+  go.textContent=!del.length?tx("orphans.keepAll",{number:keep}):
+    keep?tx("orphans.deleteKeep",{remove:del.length,keep}):tx("orphans.deleteSize",{number:del.length,size:mb(bytes)});
   go.classList.toggle("danger",del.length>0);
   const all=$("orphAll");
   if(all){all.checked=keep===0;all.indeterminate=del.length>0&&keep>0}
@@ -3401,13 +3401,13 @@ $("orphanBox").addEventListener("click",async e=>{
   const go=e.target,boxes=[...document.querySelectorAll("#orphanBox .orph")];
   const del=boxes.filter(b=>b.checked).map(b=>b.value);
   const keep=boxes.filter(b=>!b.checked).map(b=>b.value);
-  go.disabled=true;go.textContent=del.length?"deleting…":"keeping…";
+  go.disabled=true;go.textContent=del.length?tx("orphans.deleting"):tx("orphans.keeping");
   let rep;
   try{
     const r=await fetch("/api/orphans",{method:"POST",
       headers:{"Content-Type":"application/json"},body:JSON.stringify({delete:del,keep})});
     rep=await r.json();
-    if(!r.ok)throw new Error((rep&&rep.error)||("HTTP "+r.status));
+    if(!r.ok)throw new Error(window.wudictI18n.errorText(rep&&rep.error)||("HTTP "+r.status));
   }catch(err){
     go.disabled=false;orphLabel();
     setStatus("⚠ "+esc(err.message||String(err)));
@@ -3415,9 +3415,9 @@ $("orphanBox").addEventListener("click",async e=>{
   }
   closeOrphans();
   const parts=[],deleted=rep.deleted||[],kept=rep.kept||[],failed=rep.failed||[];
-  if(deleted.length)parts.push(`💀 deleted ${deleted.length} — ${mb(rep.freed||0)} freed`);
-  if(kept.length)parts.push(`kept ${kept.length}`);
-  if(failed.length)parts.push(`⚠ ${failed.length} failed: `+failed.map(f=>f.folder+" ("+f.error+")").join(", "));
+  if(deleted.length)parts.push("💀 "+tx("orphans.deleted",{number:deleted.length,size:mb(rep.freed||0)}));
+  if(kept.length)parts.push(tx("orphans.kept",{number:kept.length}));
+  if(failed.length)parts.push("⚠ "+tx("orphans.failed",{number:failed.length,detail:failed.map(f=>f.folder+" ("+window.wudictI18n.errorText(f.error)+")").join(", ")}));
   setStatus(esc(parts.join(" · ")));
   // The server has already rescanned after deleting; this redraws from it.
   if(deleted.length){await loadDicts();loadFolders();if(lastQuery)doSearch()}

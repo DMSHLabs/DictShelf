@@ -4,6 +4,11 @@ Updated 2026-10-02. Implementation rules are in [translation.md](translation.md)
 
 ## Checkout state
 
+2026-10-02 translation follow-up: `dev` at `af82000`, clean at start. Added catalog-backed orphan review, selection/action counts, warning and result messages; collection select-all/none links; newly introduced collection/Drive/removed-index errors; eight missing main Android resource translations. Existing DSL labels and user wording were preserved. Go I18n/AppearanceContract and Node checks passed; Android XML parsed and positional parameters matched the English resources. Main resource coverage is complete except the intentionally inherited app_name. New tests cover orphan selection labels and Russian counts; duplicate catalog keys are rejected. No APK or device verification.
+
+- [ ] Check orphan review at phone widths: warning, previous path, mixed delete/keep selection, and partial failure. Deletion behavior is unchanged; use disposable test data if exercising deletion.
+- [ ] Check native collection selection, the existing-import conflict dialog, and missing-browser message with the manually selected Russian language.
+
 2026-10-02 DSL index management: `dev` at `19967aa`, uncommitted deletion shortcuts, independent original/GD Full text toggles, EN/RU confirmation and create-index warnings. Chromium verifies cancellation, cross-card targeting, search exclusion, explicit rebuild, independent full text and 320/390/1100px layouts in both languages; Go regression (including restart) and Node localization checks pass. No APK/device verification.
 
 2026-10-02 DSL selection slice: `GD_DSL` at `074cf1e` before edits; new per-family checkboxes, bulk variant control, unavailable state and known DSL error messages have EN/RU translations. Go localization/appearance/preferences/DSL mode tests and Node catalog/card checks pass; Chromium verifies 320/390/1100px in both languages. No APK/device verification. Earlier snapshots below are historical.

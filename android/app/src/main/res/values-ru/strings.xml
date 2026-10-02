@@ -80,4 +80,12 @@
         <item>Все словари</item>
         <item>Найденные словари</item>
     </string-array>
+	<string name="intake_same_elsewhere">%1$s — уже установлен в %2$s</string>
+	<string name="intake_other_elsewhere">%1$s — заменит вашу копию в %2$s</string>
+	<string name="intake_all">Все / Ничего</string>
+	<string name="intake_other_running">Ещё выполняется другой импорт: %1$s.\n\nОстановить его и начать этот импорт?</string>
+	<string name="intake_other_unnamed">предыдущий импорт</string>
+	<string name="intake_other_stop">Остановить</string>
+	<string name="intake_other_keep">Продолжить текущий</string>
+	<string name="intake_no_browser">На устройстве нет браузера для открытия %1$s.</string>
 </resources>

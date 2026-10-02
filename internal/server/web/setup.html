@@ -223,8 +223,8 @@ label.keep em{font-style:normal;color:var(--label-quiet);font-size:12.5px}
     <button type="button" id="fetch" class="btn ghost">{{T:pages.download}}</button>
   </div>
   <div id="found" class="hidden">
-    <p class="formats hidden" id="candAll">Select <a href="#" id="candAllOn">all</a> ·
-      <a href="#" id="candAllOff">none</a></p>
+    <p class="formats hidden" id="candAll">{{T:pages.select}} <a href="#" id="candAllOn">{{T:pages.selectAll}}</a> ·
+      <a href="#" id="candAllOff">{{T:pages.selectNone}}</a></p>
     <div id="cands"></div>
     <div id="extras" class="hidden"></div>
     <label class="keep" id="srcKeepWrap"><input type="checkbox" id="srcKeep" checked>
@@ -638,7 +638,7 @@ function impRender(j){
     const n=(j.installed||[]).length;
     // A collection is many answers: what did not arrive is said beside what
     // did, rather than lost behind a tick.
-    const also=j.error?tx("pages.alsoFailed",{detail:j.error}):"";
+    const also=j.error?tx("pages.alsoFailed",{detail:window.wudictI18n.errorText(j.error)}):"";
     impSay((n?tx("pages.installedNames",{names:j.installed.join(", ")}):tx("pages.finished"))+also,n||!j.error?"ok":"err");
     // The folder now holds more than it did, and the count under it is what
     // the Save button is enabled from.

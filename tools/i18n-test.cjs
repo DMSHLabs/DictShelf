@@ -18,6 +18,9 @@ new vm.Script(groups, {filename: 'group-editor.js'});
 assert.doesNotMatch(main, /\s(?:title|aria-label)=tx\(/, 'HTML attributes must interpolate and escape translated text');
 const manifest = JSON.parse(fs.readFileSync(path.join(web, 'presets/manifest.json'), 'utf8'));
 for (const language of ['en', 'ru']) {
+  const catalogSource=fs.readFileSync(path.join(web, `i18n/${language}.json`), 'utf8');
+  const catalogKeys=[...catalogSource.matchAll(/^  "([^"\n]+)":/gm)].map(m=>m[1]);
+  assert.equal(new Set(catalogKeys).size,catalogKeys.length,'Duplicate top-level catalog key: '+language);
   const messages = JSON.parse(fs.readFileSync(path.join(web, `i18n/${language}.json`), 'utf8'));
   delete messages['language.cancel'];
   const context = {Intl, window: {}, document: {
@@ -26,6 +29,27 @@ for (const language of ['en', 'ru']) {
   }};
   vm.runInNewContext(script, context);
   const {t} = context.window.wudictI18n;
+  // Changing orphan choices only changes translated labels, never selections.
+  const orphanBoxes=[{checked:true,dataset:{size:12}},{checked:false,dataset:{size:8}}];
+  const orphanGo={classList:{toggle(){}}},orphanAll={};
+  const orphanContext={tx:t,mb:n=>n+' B',document:{querySelectorAll:()=>orphanBoxes},
+    $:id=>id==='orphGo'?orphanGo:orphanAll};
+  vm.runInNewContext(main.match(/function orphLabel\(\)\{[\s\S]*?\n}/)[0],orphanContext);
+  orphanContext.orphLabel();
+  assert.equal(orphanGo.textContent,t('orphans.deleteKeep',{remove:1,keep:1}));
+  assert.equal(orphanBoxes[0].checked,true);
+  assert.equal(orphanBoxes[1].checked,false);
+  assert.equal(orphanAll.indeterminate,true);
+  orphanBoxes[0].checked=false;orphanContext.orphLabel();
+  assert.equal(orphanGo.textContent,t('orphans.keepAll',{number:2}));
+  orphanBoxes.forEach(b=>b.checked=true);orphanContext.orphLabel();
+  assert.equal(orphanGo.textContent,t('orphans.deleteSize',{number:2,size:'20 B'}));
+  assert.equal(orphanAll.checked,true);
+  for(const [n,word]of [[1,'словаря'],[2,'словарей'],[5,'словарей'],[11,'словарей'],[21,'словаря']]){
+    assert.equal(t('orphans.missing',{count:n,number:n}),language==='ru'
+      ?`Не найдены исходные файлы ${n} ${word}`
+      :`${n} ${n===1?'dictionary has lost its':'dictionaries have lost their'} files`);
+  }
   const errorText = context.window.wudictI18n.errorText;
   for (const list of ['errorKeys','errorPrefixes']) {
     const keys=JSON.parse(script.match(new RegExp('const '+list+' = (\\[[\\s\\S]*?\\]);'))[1]);
