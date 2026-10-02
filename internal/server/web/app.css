@@ -1842,3 +1842,14 @@ dialog.panel-card:not([open]){display:none}
   #styler .row{gap:.25em}
   #styler .tab,#styler .btn{font-size:11.5px;padding:.32em .5em}
 }
+.dsl-all{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--line)}
+.dsl-all[hidden]{display:none}
+.dsl-all .seg{display:flex;flex-wrap:wrap;gap:4px}
+.dsl-all button{font:inherit;font-size:12px;color:var(--fg);background:transparent;border:1px solid var(--line);border-radius:4px;padding:5px 8px;cursor:pointer}
+.dsl-all button[aria-pressed="true"]{color:var(--accent);border-color:var(--accent)}
+.dsl-all button:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
+.dsl-all button:disabled{opacity:.55;cursor:wait}
+.dsl-choices{display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px;margin:8px 0}
+.dsl-choices label{display:inline-flex;align-items:center;gap:5px;cursor:pointer}
+.dsl-choices input{margin:0;accent-color:var(--accent)}
+.dsl-unavailable .hd b{opacity:.55}

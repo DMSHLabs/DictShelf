@@ -1419,6 +1419,46 @@ paths:
         '500':
           description: The state file could not be written.
 
+  /api/dsl-mode:
+    put:
+      tags: [internal]
+      operationId: saveDSLMode
+      x-internal: true
+      summary: Select original, GD-compatible or both DSL variants
+      description: >
+        Pass either variant's dictionary id for a single family, or omit dict
+        for all currently registered DSL families. Selection persists in server
+        state without deleting or rebuilding indexes. Unavailable variants stay
+        in /api/dicts for settings but are omitted from search, including explicit
+        id scopes. The last surviving variant stays available.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mode]
+              properties:
+                dict: { type: string }
+                mode: { type: string, enum: [original, gd, both] }
+      responses:
+        '200':
+          description: Selection saved.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+        '400':
+          description: Invalid JSON, mode or non-DSL dictionary.
+        '404':
+          description: Unknown dictionary id.
+        '409':
+          description: Requested variant is missing.
+        '500':
+          description: Could not save selection; previous state retained.
+
   /api/style:
     get:
       tags: [internal]
@@ -2513,7 +2553,19 @@ components:
         name: { type: string }
         format:
           type: string
-          enum: [mdx, stardict, slob, dsl, bgl, zim, wmd, wudict]
+          enum: [mdx, stardict, slob, dsl, dsl-gd, bgl, zim, wmd, wudict]
+        unavailable:
+          type: boolean
+          description: Disabled DSL variant, retained in settings but not searched.
+        dsl:
+          type: object
+          description: Shared DSL family and effective variant selection.
+          properties:
+            source: { type: string }
+            variant: { type: string, enum: [original, gd] }
+            mode: { type: string, enum: [original, gd, both] }
+            original: { type: boolean, description: Original variant exists. }
+            gd: { type: boolean, description: GD variant exists. }
         path:
           type: string
           description: The source file, or the text.db of a prepared dictionary.

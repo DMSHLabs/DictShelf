@@ -24,7 +24,7 @@ func intakeServer(t *testing.T) (*Server, string) {
 	t.Helper()
 	dir := t.TempDir()
 	isolatedDBDir(t)
-	reg, err := NewRegistry([]string{dir}, false)
+	reg, err := NewRegistry([]string{dir}, false, WithComparisons(false))
 	if err != nil {
 		t.Fatal(err)
 	}

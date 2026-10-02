@@ -38,10 +38,10 @@ const JUNK = /^[\s\u00a0▪•·\-–—]*$/;
    a translation in plain text keeps its line, which is the difference between
    folding the examples and folding whatever looked empty. */
 function exampleOnly(p) {
-  if (!p.querySelector(".wu-ex")) return false;
+  if (!p.matches(".wu-ex,.dsl_ex") && !p.querySelector(".wu-ex,.dsl_ex")) return false;
   const walker = document.createTreeWalker(p, NodeFilter.SHOW_TEXT);
   for (let n; (n = walker.nextNode()); ) {
-    if (n.parentElement.closest("a,.wu-ex")) continue;
+    if (n.parentElement.closest("a,.wu-ex,.dsl_ex")) continue;
     if (JUNK.test(n.textContent)) continue;
     return false;
   }
@@ -50,7 +50,7 @@ function exampleOnly(p) {
 
 function mark(root) {
   if (!root || !root.querySelectorAll) return;
-  for (const p of root.querySelectorAll("p")) if (exampleOnly(p)) p.classList.add(CLASS);
+  for (const p of root.querySelectorAll("p,.wu-m")) if (exampleOnly(p)) p.classList.add(CLASS);
 }
 function markHost(el) {
   if (el.classList && el.classList.contains("article") && el.shadowRoot) mark(el.shadowRoot);

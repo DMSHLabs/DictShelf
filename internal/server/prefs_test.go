@@ -21,7 +21,7 @@ func newPrefsServer(t *testing.T) (*Server, string) {
 	}
 	isolatedDBDir(t)
 	state := filepath.Join(t.TempDir(), StateFile)
-	reg, err := NewRegistry([]string{dir}, false, WithPrefs(LoadPrefs(state)))
+	reg, err := NewRegistry([]string{dir}, false, WithPrefs(LoadPrefs(state)), WithComparisons(false))
 	if err != nil {
 		t.Fatal(err)
 	}

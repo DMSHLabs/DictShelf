@@ -158,10 +158,11 @@ func (r *Registry) removeOrphan(o store.Orphan) (int64, error) {
 // entryAt returns the listed entry whose file is path, if any.
 func (r *Registry) entryAt(path string) *entry {
 	path = filepath.Clean(path)
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	for _, e := range r.entries {
+	for _, e := range r.all() {
 		if filepath.Clean(e.Path) == path {
+			return e
+		}
+		if prepared, ok := e.preparedDB(); ok && filepath.Clean(prepared) == path {
 			return e
 		}
 	}

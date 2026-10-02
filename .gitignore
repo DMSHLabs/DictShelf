@@ -45,7 +45,7 @@ code-review/
 /fastlane/report.xml
 /fastlane/README.md
 /vendor/bundle/
-**/testdata/fuzz/*
+# Fuzz regression seeds under testdata/fuzz are source, not scratch outputs.
 
 # The local dictionary-comparison oracle (a Qt/CMake build kept outside the
 # project's own tooling): the build tree and the results it writes are products

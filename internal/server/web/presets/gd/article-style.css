@@ -1,0 +1,103 @@
+/*********** Quivira Phonetic *************/
+@font-face {
+  font-family: 'WuGD Phonetic';
+  src: url('/assets/gd/fonts/QuiviraPhonetic.ttf?v=4');
+}
+
+/**************** Arial *******************/
+@font-face {
+  font-family: 'WuGD Arial';
+  src: url('/assets/gd/fonts/ArialPlus.ttf?v=4');
+}
+
+@font-face {
+  font-family: 'WuGD Arial';
+  src: url('/assets/gd/fonts/ArialPlusBold.ttf?v=4');
+  font-weight: bold;
+}
+
+@font-face {
+  font-family: 'WuGD Arial';
+  src: url('/assets/gd/fonts/ArialItalic.ttf?v=4');
+  font-style: italic;
+}
+
+@font-face {
+  font-family: 'WuGD Arial';
+  src: url('/assets/gd/fonts/ArialBoldItalic.ttf?v=4');
+  font-weight: bold;
+  font-style: italic;
+}
+
+/******** Global, non-dictionary-specific classes ***********/
+:where(.wu-gd)
+{
+  font-family: 'WuGD Arial', sans-serif;
+  font-size: 13px;
+}
+
+/* Non-existent glyphs are shown with this font (right now IPA range) */
+.wu-gd .gde
+{
+  font-family: 'WuGD Arial', sans-serif;
+  font-weight: inherit;
+  font-style: inherit;
+}
+
+/* Headword -- displayes the word being translated, comes just before the
+   article */
+.wu-gd .gdheadword
+{
+  color: #110088;
+  font-size: 15px;
+}
+
+/************* DSL dictionaries **************/
+.wu-gd .dsl_opt .dsl_ex .dsl_lang,
+.wu-gd .wu-sec .wu-ex .wu-lang,
+.wu-gd .wu-sec.wu-ex .wu-lang,
+.wu-gd .wu-sec .wu-ex.wu-lang,
+.wu-gd .wu-sec.wu-ex.wu-lang
+{
+  font-style:italic;
+  font-weight: inherit;
+  color:#505050 !important;
+}
+
+.wu-gd .dsl_u,
+.wu-gd u
+{
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  font-style: inherit;
+  text-decoration: none;
+  border: 1px double #DDDDFF;
+  padding: 0.01em;
+  background-color: #FFEEEE;
+}
+
+.wu-gd .dsl_p,
+.wu-gd .wu-p
+{
+  font-weight: normal;
+}
+
+.wu-gd .dsl_t,
+.wu-gd .wu-ipa
+{
+  font-family: 'WuGD Phonetic' !important;
+  font-size: 17px !important ;
+  font-weight: normal;
+  font-style:normal;
+  line-height: 100%;
+  margin-right: 2px;
+  margin-left: 2px;
+}
+
+.wu-gd .dsl_t > .gde,
+.wu-gd .wu-ipa > .gde
+{
+  font-family: 'WuGD Phonetic' !important;
+  font-size: 17px !important ;
+}

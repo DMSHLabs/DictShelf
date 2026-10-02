@@ -147,6 +147,12 @@ them are in `docs/handoff-archive.md`.
     only practical way to reach it without the launcher's long-press menu.
 - Known Windows test failures: **none, in a checkout made after the 2026-10-02
   merge.** What used to be listed here is accounted for:
+  - GD_DSL integration rechecked the full suite in this checkout. The spec and
+    its clean/html Markdown examples still had CRLF and were converted locally
+    to LF without indexed content changes. TestParseRefBothCopies now normalizes
+    CRLF before extracting JavaScript; the new DSL mode route is documented in
+    OpenAPI. Go build/vet/full suite (default and sqlite_fts5/cgo) and
+    server/store/DSL race tests pass.
   - Upstream fixed `internal/server`'s TestRescanSeesEditedSource — the
     `rename … Access is denied` reported from this machine; `releaseSuperseded`
     closes the backends a rescan retired, before an open re-prepares in place —

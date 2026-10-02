@@ -30,7 +30,7 @@ func newHLServer(t *testing.T) (*Server, string) {
 		t.Fatal(err)
 	}
 	isolatedDBDir(t)
-	reg, err := NewRegistry([]string{dir}, false)
+	reg, err := NewRegistry([]string{dir}, false, WithComparisons(false))
 	if err != nil {
 		t.Fatal(err)
 	}

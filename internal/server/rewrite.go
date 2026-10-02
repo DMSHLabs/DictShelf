@@ -196,6 +196,10 @@ func entryRewriter(dictID string, text func(string) string) htmlref.Rewriter {
 		ref := r.URL
 		switch {
 		case ref == "",
+			// Bundled GD presentation is an application stylesheet, not a
+			// resource from the source dictionary. Keep its root-absolute URL.
+			ref == "/assets/presets/gd/article-style.css",
+			strings.HasPrefix(ref, "/assets/presets/gd/article-style.css?"),
 			strings.HasPrefix(ref, "#"),
 			strings.HasPrefix(ref, "?"),
 			strings.HasPrefix(ref, "//"),

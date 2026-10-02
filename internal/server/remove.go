@@ -136,7 +136,16 @@ func (r *Registry) Remove(id string, dropPrepared, dropSource bool) (removal, er
 	// to be unlinked, Windows refuses to delete an open one, and a reader that
 	// gets an error is a better outcome than a half-deleted folder. Requests
 	// already in flight fail; the next one reopens, or finds it gone.
+	e.rebuilding.Store(true)
+	defer e.rebuilding.Store(false)
+	e.openMu.Lock()
+	defer e.openMu.Unlock()
 	e.closeNow()
+	if dropSource && !native {
+		if err := dict.RemoveComparison(e.Path); err != nil {
+			return rep, err
+		}
+	}
 
 	if dropPrepared && prepared != "" {
 		n, err := store.RemovePrepared(prepared)

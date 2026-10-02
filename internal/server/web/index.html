@@ -7,6 +7,7 @@
 
 <html lang="en">
 <head>
+<link rel="stylesheet" href="/assets/presets/gd/article-style.css?v=4">
 <meta charset="utf-8">
 {{I18N}}
 <script>
@@ -690,6 +691,14 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
       title="{{T:dictUI.ftsHint}}">{{T:dictUI.ftsAll}}</button>
   </div>
   <div id="ftsAllBox" class="bulkbox" hidden></div>
+  <div id="dslAll" class="dsl-all" hidden>
+    <span>{{T:dictUI.dslAll}}</span>
+    <div class="seg" role="group" aria-label="{{T:dictUI.dslAll}}">
+      <button type="button" data-dsl-all="original">{{T:dictUI.dslOriginal}}</button>
+      <button type="button" data-dsl-all="gd">{{T:dictUI.dslGD}}</button>
+      <button type="button" data-dsl-all="both">{{T:dictUI.dslBoth}}</button>
+    </div>
+  </div>
   <div id="reindexLine" class="bulkbox" hidden aria-live="polite"></div>
   <div class="panel-scroll" id="dictSettingsScroll">
     <div id="panelList"></div>
@@ -1055,7 +1064,7 @@ function orderedGroupDicts(group,ordered){
   return first.concat(ordered.filter(d=>members.has(d.id)&&!seen.has(d.id)));
 }
 function activeUserGroupIds(){
-  return userGroupOrderedDicts().map(d=>d.id);
+  return userGroupOrderedDicts().filter(d=>!d.unavailable).map(d=>d.id);
 }
 /* A group selection ("g:lang:en") stands for the dictionaries the server put
    in that group — in the user's own order.
@@ -1067,7 +1076,7 @@ function groupIds(sel){
   const i=sel.indexOf(":",2);
   if(i<0)return [];
   const f=sel.slice(2,i),v=sel.slice(i+1);
-  return orderedDicts().filter(d=>(d.groups||[]).some(g=>g.f===f&&g.v===v)).map(d=>d.id);
+  return orderedDicts().filter(d=>!d.unavailable&&(d.groups||[]).some(g=>g.f===f&&g.v===v)).map(d=>d.id);
 }
 /* The label a group is shown under, for a message that has to name it. */
 function groupLabel(sel){
@@ -1566,6 +1575,7 @@ function dictIDByName(name){
   const k=String(name||"").trim().toLowerCase().replace(/\s+/g," ");
   if(!k)return null;
   for(const d of dicts){
+    if(d.unavailable)continue;
     for(const c of [d.name,dictLabel(d)]){
       if(c&&String(c).trim().toLowerCase().replace(/\s+/g," ")===k)return d.id;
     }
@@ -2037,7 +2047,7 @@ $("out").addEventListener("click",e=>{
 function facetGroups(){
   if(!dictsSettled)return []; // mid-stream counts would be wrong, then change
   const byF=new Map();
-  for(const d of dicts)for(const g of d.groups||[]){
+  for(const d of dicts.filter(d=>!d.unavailable))for(const g of d.groups||[]){
     const labels=window.wudictI18n.facetLabels(g);
     let f=byF.get(g.f);
     if(!f){f={id:g.f,label:labels.fl,fo:g.fo,vals:new Map()};byF.set(g.f,f)}
@@ -2095,6 +2105,7 @@ function refreshDictUI(now){
   // sorted any other way could only list the library in an order the reader
   // has no way to see or change.
   for(const d of orderedDicts()){
+    if(d.unavailable)continue;
     const o=document.createElement("option");
     o.value=d.id;o.textContent=dictLabel(d);
     host.appendChild(o);
@@ -2397,7 +2408,50 @@ fetch("/api/reindex").then(r=>r.ok?r.json():null).then(st=>{
   if(st&&st.running){reindexSt=st;renderReindex();pollReindex()}
 }).catch(()=>{});
 
+let dslSaving=false;
+function dslControls(d){
+  if(!d.dsl)return "";
+  const v=d.dsl;
+  const controls=[["original",tx("dictUI.dslOriginal"),v.original],["gd",tx("dictUI.dslGD"),v.gd]];
+  return `<div class="dsl-choices" role="group" aria-label="${escAttr(tx("dictUI.dslAtLeastOne"))}">`+
+    controls.map(([key,label,exists])=>{
+      const on=exists&&(v.mode==="both"||v.mode===key||!d.unavailable&&v.variant===key);
+      const last=on&&(v.mode!=="both"||!v.original||!v.gd);
+      return `<label title="${escAttr(last?tx("dictUI.dslAtLeastOne"):label)}"><input type="checkbox" data-dsl-mode="${key}"${on?" checked":""}${dslSaving||!exists||last?" disabled":""}>${esc(label)}</label>`;
+    }).join("")+(d.unavailable?`<span class="meta">${esc(tx("dictUI.dslUnavailable"))}</span>`:"")+"</div>";
+}
+async function setDSLMode(id,mode){
+  if(dslSaving)return;
+  dslSaving=true;
+  document.querySelectorAll('#dslAll button,.dsl-choices input').forEach(el=>el.disabled=true);
+  try{
+    const r=await fetch("/api/dsl-mode",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({dict:id,mode})});
+    if(!r.ok)throw new Error(await r.text());
+    await loadDicts();
+    loadFolders();
+    if(lastScope&&dicts.some(d=>d.id===lastScope&&d.unavailable)){
+      lastScope=null;scopeOnce=null;refreshDictUI(true);
+    }
+  }catch(e){setStatus(esc(tx("dictUI.dslSaveFailed",{error:window.wudictI18n.errorText(e.message)})))}
+  finally{dslSaving=false;renderPanel()}
+}
+$("dslAll").addEventListener("click",e=>{
+  const b=e.target.closest("button[data-dsl-all]");if(b)setDSLMode("",b.dataset.dslAll);
+});
+$("panelList").addEventListener("change",e=>{
+  const input=e.target.closest("input[data-dsl-mode]");if(!input)return;
+  const pd=input.closest(".pd"),checked=[...pd.querySelectorAll("input[data-dsl-mode]:checked")];
+  if(!checked.length){renderPanel();return}
+  setDSLMode(pd.dataset.id,checked.length===2?"both":checked[0].dataset.dslMode);
+});
 function renderPanel(){
+  const families=dicts.filter(d=>d.dsl);
+  $("dslAll").hidden=!families.length;
+  for(const b of $("dslAll").querySelectorAll("button")){
+    const on=families.length>0&&families.every(d=>d.dsl.mode===b.dataset.dslAll);
+    b.classList.toggle("on",on);b.setAttribute("aria-pressed",String(on));
+    b.disabled=dslSaving;
+  }
   const el=$("panelList");
   /* Every card is replaced, so the scroll offset has to be carried over by
      hand. Measured on a phone: an ingest that ran for nine minutes ends in a
@@ -2408,7 +2462,7 @@ function renderPanel(){
   el.innerHTML="";
   const ord=orderedDicts();
   for(const d of ord){
-    const div=document.createElement("div");div.className="pd";div.dataset.id=d.id;
+    const div=document.createElement("div");div.className="pd"+(d.unavailable?" dsl-unavailable":"");div.dataset.id=d.id;
     /* Only what varies AND can be changed. exact and prefix are true for every
        dictionary and cost nothing, so showing them was decoration; contains,
        full-text and media each cost real disk, so each is a switch.
@@ -2481,9 +2535,10 @@ function renderPanel(){
        This is the card for one dictionary, so unlike the row above it carries
        the id. */
     else acts=`<a class="browse" href="/browse?dict=${encodeURIComponent(d.id)}" title="${escAttr(tx("dictUI.browseHint"))}"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M2.4 3.4a1.2 1.2 0 0 1 1.2-1.2h6.2a1.2 1.2 0 0 1 1.2 1.2v9.2a1.2 1.2 0 0 1-1.2 1.2H3.6a1.2 1.2 0 0 1-1.2-1.2z"/><path d="M11 5h2.6"/><path d="M11 8h2.6"/><path d="M11 11h2.6"/></svg>${esc(tx("dictUI.browse"))}</a>`;
+    if(d.unavailable)acts="";
     div.innerHTML=`<div class="hd">
         <span class="grip" draggable="true" title="${escAttr(tx("dictUI.drag"))}">⠿</span>
-        <b tabindex="0" role="button" title="${escAttr(tx("dictUI.searchOnly"))}">${esc(dictLabel(d))}</b>
+        <b tabindex="${d.unavailable?-1:0}" role="button" aria-disabled="${!!d.unavailable}" title="${escAttr(tx(d.unavailable?"dictUI.dslUnavailable":"dictUI.searchOnly"))}">${esc(dictLabel(d))}</b>
         <span class="ord">
           <button data-mv="top" title="${escAttr(tx("dictUI.top"))}">⏫</button>
           <button data-mv="up" title="${escAttr(tx("dictUI.up"))}">▲</button>
@@ -2492,6 +2547,7 @@ function renderPanel(){
         </span>
       </div>
       <div class="meta">${esc(d.format||"?")}${d.entries?" · "+esc(tx("dictUI.entries",{number:window.wudictI18n.number(d.entries)})):""}${d.dbSize?tx("dictUI.indexed"):""}</div>
+      ${dslControls(d)}
       <div>${caps}</div><div class="acts">${acts}</div>
       ${provenance(d)}
       <details class="about"><summary>${esc(tx("dictUI.about"))}</summary>${traits(d)}<div class="aboutbody">…</div></details>`;
@@ -2542,7 +2598,7 @@ $("panelList").addEventListener("drop",e=>{
    first and re-issues the query, and the panel's own close then finds the
    snapshot already level and has nothing left to re-run. */
 let panelSnap=null,dictListTop=0;
-function panelState(){return orderedIds().join("\u0000")}
+function panelState(){return orderedDicts().filter(d=>!d.unavailable).map(d=>d.id).join("\u0000")}
 function reissueIfCorpusMoved(){
   const was=panelSnap;panelSnap=panelState();
   /* Only an "All dictionaries" answer is built from the list this window
@@ -3428,6 +3484,7 @@ $("panelList").addEventListener("click",e=>{
   const pick=e.target.closest(".hd>b");
   if(pick){
     const sel=$("dict"),id=pick.closest(".pd").dataset.id;
+    if(dicts.some(d=>d.id===id&&d.unavailable))return;
     // Through the <select> and its change event, so this is the same selection
     // every other caller makes - persisted, chipped, re-run, index demanded.
     if([...sel.options].some(o=>o.value===id)){

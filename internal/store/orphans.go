@@ -13,6 +13,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/wuweidict/wudict/internal/dict"
 )
 
 // Orphaned prepared dictionaries (D156).
@@ -61,6 +63,8 @@ type Orphan struct {
 // definite "does not exist" counts: an empty or relative claim cannot be
 // judged, and a permission error means the file is there.
 func sourceGone(src string) bool {
+	// Comparison descriptors are references, not surviving dictionary sources.
+	src = dict.SourceInput(src)
 	if src == "" || !filepath.IsAbs(src) {
 		return false
 	}

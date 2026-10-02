@@ -201,21 +201,28 @@ for (const language of ['en', 'ru']) {
   // must preserve identifiers, escape the name and keep action attributes.
   const cards = [];
   const name = '<b>My "dictionary" {name}</b>';
-  const panel = {innerHTML:'', closest:()=>null, appendChild:card=>cards.push(card)};
-  const cardContext = {tx:t, window:context.window,
+  const panel = {innerHTML:'', closest:()=>null, appendChild:card=>cards.push(card),querySelectorAll:()=>[]};
+  const cardContext = {tx:t, window:context.window, dicts:[],dslSaving:false,
     $:()=>panel, document:{createElement:()=>({dataset:{}})},
     orderedDicts:()=>[{id:'unchanged-id',name,source:'sample.dsl',format:'dsl',entries:22,caps:{},dbSize:0}],
     dictLabel:d=>d.name, mb:n=>`${n} B`, baseIndexBytes:()=>100,
     esc:s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;'),
     escAttr:s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'),
     provenance:()=>'', traits:()=>'', renderReindex:()=>{}};
-  vm.runInNewContext(main.match(/function renderPanel\(\)\{[\s\S]*?\n\}/)[0], cardContext);
+  vm.runInNewContext(main.match(/function dslControls\(d\)\{[\s\S]*?\n\}/)[0]+'\n'+
+    main.match(/function renderPanel\(\)\{[\s\S]*?\n\}/)[0], cardContext);
   cardContext.renderPanel();
   assert.equal(cards[0].dataset.id, 'unchanged-id');
   assert.ok(cards[0].innerHTML.includes('&lt;b>My "dictionary" {name}&lt;/b>'));
   assert.ok(cards[0].innerHTML.includes(t('dictUI.about')));
   assert.ok(cards[0].innerHTML.includes('data-feat="contains"'));
   assert.ok(cards[0].innerHTML.includes('data-feat="fts"'));
+  const dslControls=cardContext.dslControls({dsl:{mode:'original',variant:'gd',original:true,gd:true},unavailable:true});
+  assert.ok(dslControls.includes(t('dictUI.dslOriginal')));
+  assert.ok(dslControls.includes(t('dictUI.dslGD')));
+  assert.match(dslControls,/data-dsl-mode="original" checked disabled/);
+  assert.match(dslControls,/data-dsl-mode="gd">/);
+  assert.ok(dslControls.includes(t('dictUI.dslUnavailable')));
   for (const g of manifest.groups) {
     assert.equal(fallback['layers.group.' + g.dir], g.title);
     assert.ok(messages['layers.group.' + g.dir]);

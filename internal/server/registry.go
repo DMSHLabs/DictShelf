@@ -316,8 +316,10 @@ func release(sem chan struct{}) { <-sem }
 
 // entry is one discovered dictionary, opened lazily.
 type entry struct {
-	ID   string
-	Path string
+	ID         string
+	Path       string
+	dslSource  string
+	dslVariant string
 	// builtin: a dictionary the app ships (Builtin), not one the user added.
 	builtin bool
 
@@ -604,6 +606,9 @@ func (e *entry) open() (dict.Dictionary, error) {
 	// burst of concurrent searches still opens the file only once.
 	e.openMu.Lock()
 	defer e.openMu.Unlock()
+	if e.rebuilding.Load() {
+		return nil, errReindexing
+	}
 	e.dMu.RLock()
 	d, err = e.d, e.err
 	e.dMu.RUnlock()
@@ -967,14 +972,15 @@ func openUpgradedOrDirect(path string) (dict.Dictionary, error) {
 // non-empty registry. Opting in is a deliberate, remembered choice made on the
 // setup page ("Use these dictionaries").
 type Registry struct {
-	mu        sync.RWMutex
-	dictDirs  []string // dictionary folders: .mdx/.slob/.ifo/.dsl/.bgl sources
-	useCached bool     // include prepared dictionaries from the library (USE_CACHED)
-	entries   []*entry
-	byID      map[string]*entry
-	fromLib   int    // how many entries came from the library, not a dict folder
-	roots     []Root // per-folder status, for the startup summary and setup page
-	builtin   []Builtin
+	mu          sync.RWMutex
+	dictDirs    []string // dictionary folders: .mdx/.slob/.ifo/.dsl/.bgl sources
+	useCached   bool     // include prepared dictionaries from the library (USE_CACHED)
+	comparisons bool
+	entries     []*entry
+	byID        map[string]*entry
+	fromLib     int    // how many entries came from the library, not a dict folder
+	roots       []Root // per-folder status, for the startup summary and setup page
+	builtin     []Builtin
 
 	// previewBudget caps the memory unprepared dictionaries may hold open
 	// (PREVIEW_MEMORY; 0 = unlimited). Prepared ones answer from disk and are
@@ -1036,6 +1042,11 @@ func WithPrefs(p *Prefs) Option {
 	}
 }
 
+// WithComparisons controls alternative parser views; enabled by default.
+func WithComparisons(on bool) Option {
+	return func(r *Registry) { r.comparisons = on }
+}
+
 // Root is one dictionary folder and what it contributed. A folder that is
 // missing (an unmounted drive, a deleted path) is reported, never fatal: the
 // other folders must keep working.
@@ -1048,11 +1059,12 @@ type Root struct {
 
 func NewRegistry(dictDirs []string, useCached bool, opts ...Option) (*Registry, error) {
 	r := &Registry{
-		dictDirs:  dict.DedupeDirs(dictDirs),
-		useCached: useCached,
-		byID:      map[string]*entry{},
-		prefs:     LoadPrefs(""),
-		wake:      make(chan struct{}, 1),
+		dictDirs:    dict.DedupeDirs(dictDirs),
+		useCached:   useCached,
+		comparisons: true,
+		byID:        map[string]*entry{},
+		prefs:       LoadPrefs(""),
+		wake:        make(chan struct{}, 1),
 	}
 	for _, o := range opts {
 		o(r)
@@ -1143,6 +1155,7 @@ func (r *Registry) Rescan() error {
 	r.mu.RLock()
 	dirs := append([]string(nil), r.dictDirs...)
 	useCached := r.useCached
+	comparisons := r.comparisons
 	r.mu.RUnlock()
 	paths, perRoot, err := dict.DiscoverAll(dirs)
 	if err != nil {
@@ -1181,12 +1194,52 @@ func (r *Registry) Rescan() error {
 		paths = append(paths, b.Path)
 	}
 	fromLib := 0
+	// Comparison views have their own source receipts and registry identities.
+	for _, p := range append([]string(nil), paths...) {
+		if !comparisons {
+			break
+		}
+		if alternative, err := dict.ComparisonSource(p); err != nil {
+			logx.Warn("comparison for %s: %v", filepath.Base(p), err)
+		} else if alternative != "" {
+			paths = append(paths, alternative)
+		}
+	}
 	if useCached {
 		// A builtin's library folder is never listed on its own: it belongs
 		// to the builtin, or to nothing while the user's copy stands in.
 		lib := libraryPaths(append(paths, shipped...))
 		fromLib = len(lib)
 		paths = append(paths, lib...)
+		if comparisons {
+			known := make(map[string]bool, len(paths))
+			for _, p := range paths {
+				known[p] = true
+			}
+			for _, p := range lib {
+				source := dict.SourceInput(p)
+				if store.IsTextDB(p) {
+					value, err := store.ReadMetaValue(p, "source_path")
+					if err != nil {
+						continue
+					}
+					source = dict.SourceInput(value)
+				}
+				if !fileExists(source) {
+					continue
+				}
+				alternative, err := dict.ComparisonSource(source)
+				if err != nil {
+					logx.Warn("comparison for %s: %v", filepath.Base(source), err)
+					continue
+				}
+				if alternative != "" && !known[alternative] {
+					paths = append(paths, alternative)
+					known[alternative] = true
+					fromLib++
+				}
+			}
+		}
 	}
 	r.mu.Lock()
 	seen := map[string]bool{}
@@ -1216,6 +1269,7 @@ func (r *Registry) Rescan() error {
 		}
 		if !ok {
 			e = &entry{ID: id, Path: p, builtin: builtin, reg: r}
+			e.dslSource, e.dslVariant = dslIdentity(p)
 		} else {
 			kept = append(kept, e)
 		}
@@ -1237,7 +1291,11 @@ func (r *Registry) Rescan() error {
 	}
 	r.byID = byID
 	sort.Slice(entries, func(i, j int) bool {
-		return strings.ToLower(entries[i].Path) < strings.ToLower(entries[j].Path)
+		a, b := dict.SourceInput(entries[i].Path), dict.SourceInput(entries[j].Path)
+		if a == b {
+			return entries[i].Path == a
+		}
+		return strings.ToLower(a) < strings.ToLower(b)
 	})
 	r.entries = entries
 	r.fromLib = fromLib
@@ -1310,7 +1368,11 @@ func libraryPaths(discovered []string) []string {
 				continue
 			}
 		}
-		out = append(out, e.TextDB)
+		if dict.SourceInput(e.Source) != e.Source && fileExists(e.Source) {
+			out = append(out, e.Source)
+		} else {
+			out = append(out, e.TextDB)
+		}
 	}
 	return out
 }
@@ -1399,10 +1461,13 @@ func (r *Registry) Warm() {
 		sem := make(chan struct{}, 4)
 		var wg sync.WaitGroup
 		for _, e := range entries {
-			if _, prepared := preparedFor(e.Path); !prepared {
+			e.ingestMu.Lock()
+			_, prepared := preparedFor(e.Path)
+			e.ingestMu.Unlock()
+			if !prepared {
 				continue
 			}
-			if prefs.Off(e.ID, e.Path) {
+			if prefs.Off(e.ID, e.Path) || !r.dslAvailable(e) {
 				continue
 			}
 			wg.Add(1)

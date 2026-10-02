@@ -84,6 +84,8 @@ func TestParseRefBothCopies(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	index = []byte(strings.ReplaceAll(string(index), "\r\n", "\n"))
+	frame = []byte(strings.ReplaceAll(string(frame), "\r\n", "\n"))
 	copies := map[string]string{
 		"index.html": cutJS(t, string(index), "const REF_SCHEME=", "\n  return{kind:word?\"lookup\":\"anchor\",word,frag};\n}\n"),
 		"frame.js":   cutJS(t, string(frame), "var REF_SCHEME =", "\n\t\treturn { kind: word ? \"lookup\" : \"anchor\", word: word, frag: frag };\n\t}\n"),

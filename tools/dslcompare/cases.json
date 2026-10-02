@@ -1,0 +1,21 @@
+[
+  {"id":"plain", "key":"give", "headings":["give", "~ up"], "body":"plain text"},
+  {"id":"bold", "key":"word", "headings":["word"], "body":"[b]some[/b] text"},
+  {"id":"crossed", "key":"word", "headings":["word"], "body":"[b][i]one[/b] two[/i]"},
+  {"id":"unclosed", "key":"word", "headings":["word"], "body":"[b]one"},
+  {"id":"nested-ref", "key":"word", "headings":["word"], "body":"[ref]some [b]word[/b][/ref]"},
+  {"id":"target-ref", "key":"word", "headings":["word"], "body":"[ref target=\"C#\"]the [i]word[/i][/ref]"},
+  {"id":"optional", "key":"word", "headings":["a(b(c))"], "body":"text"},
+  {"id":"unsorted", "key":"word", "headings":["a{x}(b)"], "body":"text"},
+  {"id":"empty-margin", "key":"word", "headings":["word"], "body":"[m1][/m][m2]one[/m]"},
+  {"id":"margin-repair", "key":"word", "headings":["word"], "body":"[b]one[m1]two[/b] three[/m]"},
+  {"id":"angles", "key":"word", "headings":["word"], "body":"<<some [b]word[/b]>>"},
+  {"id":"ipa", "key":"word", "headings":["word"], "body":"[t]\u2020\u040f:'[/t]"},
+  {"id":"escaped-space", "key":"word", "headings":["word"], "body":"a\\ b"},
+  {"id":"tilde", "key":"Give", "headings":["Give", "^~ up"], "body":"~ and ^~"},
+  {"id":"language-spaced", "key":"word", "headings":["word"], "body":"[lang id= 2]text[/lang]"},
+  {"id":"language-bare", "key":"word", "headings":["word"], "body":"[lang id 2]text[/lang]"},
+  {"id":"caret", "key":"word", "headings":["word"], "body":"the symbol ^ , a sign (^), ^fathers-in-law, 10^-18, ^"},
+  {"id":"empty-article", "key":"word", "headings":["word"], "body":"[m1][/m]"},
+  {"id":"media-escaping", "key":"Give", "headings":["Give"], "body":"[s]best\\ man.wav[/s] [s]~.wav[/s] [s]^~\\ file.wav[/s]"}
+]

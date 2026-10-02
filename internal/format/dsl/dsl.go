@@ -66,6 +66,11 @@ func Open(path string) (*Dict, error) {
 	if err != nil {
 		return nil, err
 	}
+	return openReader(path, r)
+}
+
+func openReader(path string, r *Reader) (*Dict, error) {
+	var err error
 	src := r.Meta()
 	name := src.Name
 
@@ -102,13 +107,13 @@ func Open(path string) (*Dict, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Dict{Store: s, srcPath: path, src: src}, nil
+	return &Dict{Store: s, srcPath: r.path, src: src}, nil
 }
 
 func (d *Dict) Meta() dict.Meta {
 	m := d.Store.Meta()
-	m.Format = "dsl"
-	m.Path = d.srcPath
+	m.Format = d.src.Format
+	m.Path = d.src.Path
 	m.Description, m.Header = d.src.Description, d.src.Header
 	return m
 }

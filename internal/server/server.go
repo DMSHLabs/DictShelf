@@ -19,6 +19,7 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -736,14 +737,16 @@ func (s *Server) currentFeatures(e *entry) features {
 
 // dictInfo is the /api/dicts row.
 type dictInfo struct {
-	ID      string    `json:"id"`
-	Name    string    `json:"name"`
-	Format  string    `json:"format"`
-	Path    string    `json:"path"`
-	Entries int       `json:"entries"`
-	Caps    dict.Caps `json:"caps"`
-	DBPath  string    `json:"dbPath,omitempty"` // exposed per D7: users share these files
-	Error   string    `json:"error,omitempty"`
+	DSL         *dslView  `json:"dsl,omitempty"`
+	Unavailable bool      `json:"unavailable,omitempty"`
+	ID          string    `json:"id"`
+	Name        string    `json:"name"`
+	Format      string    `json:"format"`
+	Path        string    `json:"path"`
+	Entries     int       `json:"entries"`
+	Caps        dict.Caps `json:"caps"`
+	DBPath      string    `json:"dbPath,omitempty"` // exposed per D7: users share these files
+	Error       string    `json:"error,omitempty"`
 
 	// ContainsStale: the trigram index was built by an older text folding, so
 	// substring search may miss words whose folding changed. Reported, not
@@ -859,6 +862,8 @@ func (s *Server) handleDicts(w http.ResponseWriter, r *http.Request) {
 // (exact+prefix); everything else falls back to a full open for real caps.
 func (s *Server) dictInfoFor(e *entry) dictInfo {
 	info := s.baseDictInfo(e)
+	info.DSL = s.reg.dslView(e)
+	info.Unavailable = !s.reg.dslAvailable(e)
 	// a library folder that exists but is not prepared-for-this-source (an
 	// unreadable or other-schema text.db, or a source edited since) is
 	// outdated too - the prepared branch above never sees it
@@ -909,6 +914,20 @@ func (s *Server) baseDictInfo(e *entry) dictInfo {
 	}
 	// fall back to a full open (non-probeable formats, or probe errors).
 	info := dictInfo{ID: e.ID, Path: e.Path}
+	// A disabled DSL must not auto-prepare just to fill its settings card.
+	if e.dslSource != "" && !s.reg.dslAvailable(e) {
+		reader, err := dict.OpenReader(e.Path)
+		if err != nil {
+			info.Error = err.Error()
+			return info
+		}
+		defer reader.Close()
+		m := reader.Meta()
+		info.Name, info.Format, info.Entries = m.Name, m.Format, m.EntryCount
+		info.Caps = dict.Caps{Exact: true, Prefix: true}
+		s.langFacts(&info, m.Name, m.IndexLang, m.ContentsLang)
+		return info
+	}
 	d, err := e.open()
 	if err != nil {
 		info.Error = err.Error()
@@ -947,7 +966,7 @@ func (s *Server) langFacts(info *dictInfo, name, declared, contents string) {
 // rebuildable reports that an entry has a source to prepare from: not a
 // standalone text.db, and the file still on disk.
 func rebuildable(path string) bool {
-	return !store.IsTextDB(path) && fileExists(path)
+	return !store.IsTextDB(path) && fileExists(path) && fileExists(dict.SourceInput(path))
 }
 
 // dbPathOf is the prepared database path for an entry, or "" when it has none.
@@ -977,7 +996,7 @@ func addProvenance(info *dictInfo, entryPath string) {
 	native := store.IsTextDB(entryPath)
 	if !native && fileExists(entryPath) {
 		info.Source = entryPath
-		info.MediaSrc = dict.CompanionMedia(entryPath)
+		info.MediaSrc = dict.CompanionMedia(dict.SourceInput(entryPath))
 	}
 
 	// locate the cached text.db: the entry itself when native, else the
@@ -1239,6 +1258,12 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 			httpErr(w, 404, "unknown dictionary id %q", dictParam)
 			return
 		}
+	}
+
+	entries = slices.DeleteFunc(entries, func(e *entry) bool { return !s.reg.dslAvailable(e) })
+	if len(entries) == 0 && dictParam != "" && dictParam != "all" {
+		httpErr(w, 404, "dictionary variant unavailable")
+		return
 	}
 
 	fl, ok := w.(http.Flusher)
@@ -1512,6 +1537,7 @@ func (s *Server) lemmaWave(
 // the folder holding it carries the dictionary's own name, which is what the
 // naming conventions are written on.
 func langPath(p string) string {
+	p = dict.SourceInput(p)
 	if strings.EqualFold(filepath.Base(p), store.TextDBName) {
 		return filepath.Dir(p)
 	}

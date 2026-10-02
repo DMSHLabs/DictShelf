@@ -104,6 +104,7 @@ func (s *Server) routes() []route {
 		{"PUT", "/api/groups/member", s.handleGroupMember, "/api/groups/member", false},
 		{"PUT", "/api/groups/order", s.handleGroupOrder, "/api/groups/order", false},
 		{"PUT", "/api/prefs", s.handleSavePrefs, "/api/prefs", false},
+		{"PUT", "/api/dsl-mode", s.handleDSLMode, "/api/dsl-mode", false},
 		{"GET", "/api/reveal", s.handleReveal, "/api/reveal", false},
 		// the user's own global stylesheets (style.go). Never CORS: the GET
 		// reports a path on the user's disk and the PUT writes to it.
@@ -198,6 +199,7 @@ func (s *Server) routes() []route {
 		// content hash - but under their own prefix, because they are a SET
 		// looked up in an embedded folder rather than one file per route.
 		{"GET", "/assets/presets/", s.handlePresetFile, "", false},
+		{"GET", "/assets/gd/fonts/", s.handleGDFont, "", false},
 		{"GET", "/assets/history.css", serveAsset("text/css; charset=utf-8", historyCSS), "", false},
 		{"GET", "/assets/history.js", serveAsset("application/javascript; charset=utf-8", historyJS), "", false},
 		{"GET", "/assets/group-editor.css", serveAsset("text/css; charset=utf-8", groupEditorCSS), "", false},

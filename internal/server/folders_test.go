@@ -117,7 +117,7 @@ func TestConfigEndpointAndSetupPage(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dicts, "x.dsl"), []byte(sampleDSL), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	reg, err := NewRegistry([]string{dicts, filepath.Join(t.TempDir(), "gone")}, false)
+	reg, err := NewRegistry([]string{dicts, filepath.Join(t.TempDir(), "gone")}, false, WithComparisons(false))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -223,8 +223,8 @@ func TestRegistryDedupesFolders(t *testing.T) {
 	if roots := reg.Roots(); len(roots) != 1 {
 		t.Fatalf("four spellings of one folder gave %d rows: %+v", len(roots), roots)
 	}
-	if reg.Count() != 1 {
-		t.Errorf("dictionaries served = %d, want 1", reg.Count())
+	if reg.Count() != 2 {
+		t.Errorf("dictionaries served = %d, want 2 (DSL and GD)", reg.Count())
 	}
 
 	// and through the setup save path, which also persists the list
@@ -372,7 +372,7 @@ func TestFeatureTogglesBothWays(t *testing.T) {
 	if err := store.Ingest(r, store.TextDBPath(odir), nil); err != nil {
 		t.Fatal(err)
 	}
-	reg2, err := NewRegistry([]string{t.TempDir()}, true)
+	reg2, err := NewRegistry([]string{t.TempDir()}, true, WithComparisons(false))
 	if err != nil {
 		t.Fatal(err)
 	}
