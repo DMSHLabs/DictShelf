@@ -1351,6 +1351,14 @@ dialog.panel-card:not([open]){display:none}
   border-bottom:1px solid color-mix(in srgb,var(--fg) 22%,transparent)}
 .sect:last-child{border-bottom:0;margin-bottom:0}
 .sect-h{margin:0;font-size:13px;font-weight:600;color:var(--label)}
+#panel details.sect>summary{cursor:pointer;list-style:none;border-radius:4px}
+#panel details.sect>summary::-webkit-details-marker{display:none}
+#panel details.sect>summary::before{content:"▶";display:inline-block;width:1em;
+  margin-right:.4em;font-size:12px;line-height:1}
+#panel details.sect[open]>summary::before{content:"▼"}
+#panel details.sect>summary:hover{background:var(--line-soft)}
+#panel details.sect>summary:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
+
 /* One door per row: label on the left, chevron on the right, and the WHOLE row
    is the target. Same chrome as .facts .act — the faintest border over the card
    colour, because colour in this system means "on" and is not spent on edges —
@@ -1685,7 +1693,7 @@ dialog.panel-card:not([open]){display:none}
 .pd .prov>summary:hover{color:var(--label);background:var(--line-soft)}
 .pd .prov>summary:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
 .pd .prov>summary::-webkit-details-marker{display:none}
-.pd .prov>summary::before{content:"▶";color:var(--label);display:inline-block;width:1em;font-size:12px;line-height:1}
+.pd .prov>summary::before{content:"▶";color:var(--label);display:inline-block;width:1em;margin-right:.4em;font-size:12px;line-height:1}
 .pd .prov[open]>summary::before{content:"▼"}
 .pd .fmt{color:var(--label);text-transform:uppercase;font-size:9px;letter-spacing:.04em}
 /* companion media count ("+ 2 mdd"): part of the summary text, not a control.
@@ -1710,7 +1718,7 @@ dialog.panel-card:not([open]){display:none}
 .pd .about>summary:hover{color:var(--label);background:var(--line-soft)}
 .pd .about>summary:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
 .pd .about>summary::-webkit-details-marker{display:none}
-.pd .about>summary::before{content:"▶";color:var(--label);display:inline-block;width:1em;font-size:12px;line-height:1}
+.pd .about>summary::before{content:"▶";color:var(--label);display:inline-block;width:1em;margin-right:.4em;font-size:12px;line-height:1}
 .pd .about[open]>summary::before{content:"▼"}
 .pd .aboutbody{margin:.2em 0 0 1em;line-height:1.45}
 .pd .aboutbody p{margin:.25em 0}

@@ -313,8 +313,8 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
      Appearance sheet folds because a stylesheet editor and a thumbnail strip
      are long; nothing here is. -->
 
-<section class="sect">
-  <h3 class="sect-h">{{T:panel.dictionaries}}</h3>
+<details class="sect" data-panel-section="dictionaries" open>
+  <summary class="sect-h">{{T:panel.dictionaries}}</summary>
   <!-- The collection's state, in numbers the server counted (/api/config's roots
        and total): a count is the honest progress line everywhere else in this
        app (D30), and it is what a reader opens this drawer to check. It is a
@@ -348,10 +348,10 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
        Rescan folders, right under the row that button is in: the answer
        appears where the question was asked. -->
   <div id="orphanBox" class="bulkbox orphbox" hidden></div>
-</section>
+</details>
 
-<section class="sect">
-  <h3 class="sect-h">{{T:panel.results}}</h3>
+<details class="sect" data-panel-section="results" open>
+  <summary class="sect-h">{{T:panel.results}}</summary>
   <!-- The reading strip (D143), now under the heading it was denied when the
        drawer had only one. THREE controls, admitted by one rule: nothing here
        spends disk, CPU or navigation. They are what a reader reaches for WHILE
@@ -435,10 +435,10 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
   <div class="facts">
     <a class="mrow door" id="browseLink" href="/browse" title="{{T:panel.browseHint}}">{{T:panel.browse}}</a>
   </div>
-</section>
+</details>
 
-<section class="sect">
-  <h3 class="sect-h">{{T:panel.appearance}}</h3>
+<details class="sect" data-panel-section="appearance" open>
+  <summary class="sect-h">{{T:panel.appearance}}</summary>
   <!-- The whole look, under a name, and the first row of the section because
        it sets everything the rows below it refine. It is the reader's way back
        to a look that worked without setting the size, the layers, the
@@ -582,10 +582,10 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
     <button type="button" class="mrow door" data-styler="presets" title="{{T:panel.layersHint}}">{{T:panel.layersDoor}}</button>
     <button type="button" class="mrow door" data-styler="css" title="{{T:panel.cssHint}}">{{T:panel.cssDoor}}</button>
   </div>
-</section>
+</details>
 
-<section class="sect">
-  <h3 class="sect-h">{{T:panel.history}}</h3>
+<details class="sect" data-panel-section="history" open>
+  <summary class="sect-h">{{T:panel.history}}</summary>
   <!-- The search box's memory, which is neither a look nor a result: its own
        section because it is the one setting that belongs to the field you type
        in. -->
@@ -597,7 +597,7 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
       <button type="button" class="act" id="clearHistory" disabled>{{T:panel.clear}}</button>
     </span>
   </div>
-</section>
+</details>
 
 <section class="sect">
   <div class="facts">
@@ -605,8 +605,8 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
   </div>
 </section>
 
-<section class="sect" id="sysSection" hidden>
-  <h3 class="sect-h">{{T:panel.system}}</h3>
+<details class="sect" id="sysSection" hidden data-panel-section="system" open>
+  <summary class="sect-h">{{T:panel.system}}</summary>
   <!-- The shell's own settings, which until now lived only on the screen the
        launcher icon's long-press menu opens: what a lookup from another app
        does, the messages this app draws while it starts, the access key, and
@@ -629,10 +629,10 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
   <div class="facts">
     <button type="button" class="mrow door" id="editSysSettings" title="{{T:panel.systemHint}}">{{T:panel.systemDoor}}</button>
   </div>
-</section>
+</details>
 
-<section class="sect">
-  <h3 class="sect-h">{{T:panel.info}}</h3>
+<details class="sect" data-panel-section="info" open>
+  <summary class="sect-h">{{T:panel.info}}</summary>
   <!-- Where the app keeps things: the folders it scans, the prepared library and
        the config file in effect. Reference material — read when a dictionary is
        missing, or when a path has to be copied — so it belongs with the identity
@@ -647,7 +647,7 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
     <p><a href="https://wuweidict.github.io/wudict" target="_blank" rel="noopener">{{T:panel.website}}</a>
        · <a href="https://github.com/wuweidict/wudict" target="_blank" rel="noopener">{{T:panel.source}}</a></p>
   </div>
-</section>
+</details>
 </div>
 </div>
 </div>
@@ -2658,8 +2658,22 @@ function reissueIfCorpusMoved(){
    moment (Compact with nothing to switch, the status bar on a build without
    it) is shown for the measurement and hidden again - all in one turn of the
    script, and nothing paints in between, so the reader never sees it. */
+const panelSectionsKey="wudict_panel_sections";
+const panelSectionsSaved=loadJSON(panelSectionsKey,{});
+for(const sect of $("panel").querySelectorAll("details[data-panel-section]")){
+  sect.open=panelSectionsSaved?.[sect.dataset.panelSection]!==false;
+  sect.addEventListener("toggle",()=>{
+    // Toggle events may be coalesced; save the current state of every section.
+    const states={};
+    for(const section of $("panel").querySelectorAll("details[data-panel-section]"))
+      states[section.dataset.panelSection]=section.open;
+    try{localStorage.setItem(panelSectionsKey,JSON.stringify(states))}catch(_){}
+    if(sect.open&&$("panel").classList.contains("show"))panelRowColumns();
+  });
+}
 function panelRowColumns(){
-  for(const sect of $("panel").querySelectorAll("section.sect")){
+  for(const sect of $("panel").querySelectorAll(".sect")){
+    if(sect.matches("details:not([open])"))continue;
     const rows=[...sect.querySelectorAll(":scope > .facts")];
     const hid=rows.filter(row=>row.hidden);hid.forEach(row=>{row.hidden=false});
     rows.forEach(row=>row.style.removeProperty("--rlcol"));

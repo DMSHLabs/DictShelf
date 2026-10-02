@@ -1,5 +1,7 @@
 # Agent handoff — current state
 
+2026-10-02 Settings disclosures: dev HEAD ea3b66b, clean at start; changes uncommitted. Six headed sections now collapse independently and persist locally across page reloads; first use/new sections default open. Dictionary settings source/About triangles have a .4em gap. Label columns are recalculated when a section opens. Targeted server/UI and Node syntax/localization checks plus section-state restoration probe pass; Chromium unavailable in current Node module environment, no APK/device check.
+
 Rescan dialog compacted: command/title share panel.rescan, menu door has a chevron, header has a close button (disabled during maintenance), Create labels and existing index names shortened in EN/RU. Browser verifies no dialog scrolling at 320/390/1100 × 700; Node localization checks pass. APK/device check remains with the user.
 
 Rescan dialog opening is synchronous and uses the already loaded configuration; an extra configuration request can no longer delay it. Chromium EN/RU 320/390/1100px checks now also block that request and verify immediate opening. Android APK has not been rebuilt or installed.
