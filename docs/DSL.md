@@ -729,6 +729,23 @@ rescan, cached-only and removal checks. Local GD scan: Oxford 35,762 entries,
 Zimmerman 15,889, Asperger 6,787. Visual parity with GoldenDict and Android device
 behaviour still need checking.
 
+An opt-in differential harness now lives in `tools/dslcompare/README.md`: original
+GoldenDict ArticleDom/heading functions compiled with Qt6, a Go package-test
+adapter, and a Python key/tree comparator. It does not yet compare GoldenDict's
+HTML renderer or native scanner/index builder. GD reader v2 fixes `^~` in alternate
+and subentry headings, removes closed empty tags during tree repair, and requires
+`id=` for numeric language attributes as GD does. Comparator aligns media/IPA
+stages, spaced assignments and empty roots;
+this is not proof of HTML or full native-index equivalence.
+The full-corpus pass also fixes literal `^` in GD article text: only `^~` changes
+the headword's initial case; an ordinary caret survives unchanged, as in GD.
+GD media filenames now remove DSL escapes (e.g. `best\ man.wav`) and expand
+`~`/`^~`; ordinary media parsing is unchanged. Full user corpus: all 28 files,
+3,259,925 top-level cards; 134 original differences, all retained failing batches
+pass after fixes. Both new Urban parts decompress and compare fully (702,374 and
+716,177 cards). Current curated cases: 19/19; final per-file report is generated
+as `tools/dslcompare/results/full/report.md` (ignored, local output).
+
 Closed in the spec-audit pass (this document's current revision):
 
 | Was | Now |

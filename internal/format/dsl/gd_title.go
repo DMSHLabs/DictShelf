@@ -3,6 +3,24 @@ package dsl
 
 import "strings"
 
+func expandGDTitleTilde(head, parent string) string {
+	var out strings.Builder
+	for i := 0; i < len(head); i++ {
+		if head[i] == '\\' && i+1 < len(head) {
+			out.WriteString(head[i : i+2])
+			i++
+		} else if head[i] == '^' && i+1 < len(head) && head[i+1] == '~' {
+			out.WriteString(titleEscape(flipCaseFirst(strings.TrimSpace(parent))))
+			i++
+		} else if head[i] == '~' {
+			out.WriteString(titleEscape(strings.TrimSpace(parent)))
+		} else {
+			out.WriteByte(head[i])
+		}
+	}
+	return out.String()
+}
+
 func gdTitle(line string) titleResult {
 	t := transformTitle(line)
 	// Keep the existing display form, but expand nested optional parts with

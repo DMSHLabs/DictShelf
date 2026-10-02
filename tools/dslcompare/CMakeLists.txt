@@ -1,0 +1,6 @@
+cmake_minimum_required(VERSION 3.16)
+project(dsl_oracle LANGUAGES CXX)
+set(CMAKE_CXX_STANDARD 17)
+find_package(Qt6 REQUIRED COMPONENTS Core)
+add_executable(dsl-oracle oracle.cpp)
+target_link_libraries(dsl-oracle PRIVATE Qt6::Core)

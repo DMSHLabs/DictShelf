@@ -31,6 +31,7 @@ func TestGDMarkup(t *testing.T) {
 		{"margin repair", `[b]one[m1]two[/b] three[/m]`, `<b>one</b><p class="wu-m" style="--wd-m:1"><b>two</b> three</p>`},
 		{"unknown", `[custom]one[/custom]`, `<span class="wu-unknown">[custom]one</span>`},
 		{"literal angles", `one >> two`, `one &gt;&gt; two`},
+		{"literal caret", `the symbol ^ , a sign (^), ^fathers-in-law, 10^-18, ^`, `the symbol ^ , a sign (^), ^fathers-in-law, 10^-18, ^`},
 		{"angle link", `<<some [b]word[/b]>>`, `<a href="entry://some word">some <b>word</b></a>`},
 		{"line breaks", "[m1]one[/m]\n\t[m2]two[/m]", `<p class="wu-m" style="--wd-m:1">one</p><p class="wu-m" style="--wd-m:2">two</p>`},
 	}
@@ -62,6 +63,19 @@ func TestGDMediaAndAbbrev(t *testing.T) {
 	}
 }
 
+func TestGDMediaEscapesAndTilde(t *testing.T) {
+	html, media, err := transformGDBody(`[s]best\ man.wav[/s] [s]~.wav[/s] [s]^~\ file.wav[/s]`, "Give", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(media, []string{"best man.wav", "Give.wav", "give file.wav"}) {
+		t.Fatal(media)
+	}
+	if !strings.Contains(html, `href="best man.wav"`) || strings.Contains(html, `best\`) {
+		t.Fatal(html)
+	}
+}
+
 func TestGDHeadingVariants(t *testing.T) {
 	if got := gdTitle(`a(b(c))`).Keys; !reflect.DeepEqual(got, []string{"abc", "ab", "a"}) {
 		t.Fatal(got)
@@ -71,6 +85,61 @@ func TestGDHeadingVariants(t *testing.T) {
 	}
 	if got := gdTitle(`a{[c red]x[/c]}(b)`).Keys; !reflect.DeepEqual(got, []string{"ab", "a"}) {
 		t.Fatal(got)
+	}
+}
+
+func TestGDCaseInvertedHeadings(t *testing.T) {
+	for _, c := range []struct{ input, parent, want string }{
+		{"^~ up", "Give", "give up"},
+		{"^~ up", "give", "Give up"},
+		{`\^~`, "Give", "^Give"},
+		{`^\~`, "Give", "^~"},
+		{"^~", "", ""},
+		{"~", "a(b)", "a(b)"},
+	} {
+		got := gdTitle(expandGDTitleTilde(c.input, c.parent)).first()
+		if got != c.want {
+			t.Errorf("%q with %q: got %q want %q", c.input, c.parent, got, c.want)
+		}
+	}
+	r := &Reader{gd: true}
+	main, sub, err := r.parseBlock([]string{"Give", "^~ up"}, []string{"\ttext", "\t@ ^~ away", "\tchild", "\t@"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(main.Headwords, []string{"Give", "give up"}) || len(sub) != 1 || sub[0].Headwords[0] != "give away" {
+		t.Fatal(main.Headwords, sub)
+	}
+}
+
+func TestGDEmptyClosedTags(t *testing.T) {
+	for _, text := range []string{`[b][/b]`, `[b][i][/b][/i]`, `[m1][/m]`} {
+		p := gdParser{}
+		if err := p.parse(text); err != nil {
+			t.Fatal(err)
+		}
+		if len(p.root.children) != 0 {
+			t.Fatalf("%s retained empty nodes", text)
+		}
+		html, _, err := transformGDBody(text, "key", nil)
+		if err != nil || html != "" {
+			t.Fatal(html, err)
+		}
+	}
+}
+
+func TestGDLanguageAttributeSyntax(t *testing.T) {
+	for _, c := range []struct{ text, id string }{
+		{`[lang id 2]text[/lang]`, ""},
+		{`[lang id=2]text[/lang]`, "2"},
+	} {
+		p := gdParser{}
+		if err := p.parse(c.text); err != nil {
+			t.Fatal(err)
+		}
+		if got := p.root.children[0].attrs["id"]; got != c.id {
+			t.Fatalf("%s: id=%q", c.text, got)
+		}
 	}
 }
 
@@ -200,7 +269,7 @@ func TestGDReaderGolden(t *testing.T) {
 		t.Fatal(err)
 	}
 	goldentest.Check(t, "dsl-gd", comparison, goldentest.Golden{
-		Versions: "reader=1 ingest=1 markup=2 fold=1",
+		Versions: "reader=2 ingest=1 markup=2 fold=1",
 		Hash:     "4b5c3f7f82f0022407c486b777300a91cb0d573684c9735b3f11bb75fea2b7a9",
 	})
 }

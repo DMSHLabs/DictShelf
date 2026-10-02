@@ -12,10 +12,12 @@ import (
 )
 
 type gdNode struct {
-	tag      string
-	attrs    map[string]string
-	text     string
-	children []*gdNode
+	tag          string
+	attrs        map[string]string
+	text         string
+	children     []*gdNode
+	mediaTag     string
+	mediaPayload string
 }
 
 type gdParser struct {
@@ -80,6 +82,16 @@ func (p *gdParser) close(tag string) {
 			continue
 		}
 		reopen := append([]*gdNode(nil), p.stack[i+1:]...)
+		for j := len(p.stack) - 1; j >= i; j-- {
+			n := p.stack[j]
+			if len(n.children) == 0 && n.tag != "br" {
+				parent := &p.root
+				if j > 0 {
+					parent = p.stack[j-1]
+				}
+				parent.children = parent.children[:len(parent.children)-1]
+			}
+		}
 		p.stack = p.stack[:i]
 		for _, old := range reopen {
 			p.open(old.tag, old.attrs)
@@ -109,6 +121,12 @@ func gdTag(text string, pos int) (tag string, attrs map[string]string, next int,
 	attrs = tr.lexAttrs()
 	if tr.pos == 0 || text[tr.pos-1] != ']' {
 		return "", nil, pos, false
+	}
+	// GoldenDict's language renderer requires "id=", not the permissive
+	// "id 2" spelling accepted by the ordinary reader's attribute lexer.
+	if tag == "lang" && !strings.Contains(text[i:tr.pos-1], "id=") && attrs["id"] != "" {
+		attrs[attrs["id"]] = ""
+		attrs["id"] = ""
 	}
 	return tag, attrs, tr.pos, true
 }
@@ -157,11 +175,18 @@ func (p *gdParser) parse(text string) error {
 					continue
 				}
 				if tag == "s" || tag == "video" {
+					start := i
 					tr := transformer{input: text, pos: i}
-					tr.lexTagS()
+					name := tr.collectMediaName()
 					i = tr.pos
-					p.resources = append(p.resources, tr.resFiles...)
-					p.append(&gdNode{tag: "media", text: tr.out.String()})
+					media := transformer{input: gdMediaText(name, p.key) + "[/s]"}
+					media.lexTagS()
+					p.resources = append(p.resources, media.resFiles...)
+					payload := text[start:i]
+					if end := strings.Index(payload, "[/"+tag+"]"); end >= 0 {
+						payload = payload[:end]
+					}
+					p.append(&gdNode{tag: "media", text: media.out.String(), mediaTag: tag, mediaPayload: gdMediaText(payload, p.key)})
 					continue
 				}
 				p.open(tag, attrs)
@@ -195,21 +220,13 @@ func (p *gdParser) parse(text string) error {
 			continue
 		}
 		if text[i] == '^' {
-			i++
-			if i == len(text) {
-				break
-			}
-			if text[i] == '~' {
+			if i+1 < len(text) && text[i+1] == '~' {
 				p.text(flipCaseFirst(p.key))
-				i++
+				i += 2
 				continue
 			}
-			if text[i] == '[' || text[i] == '\\' {
-				continue
-			}
-			r, size := utf8.DecodeRuneInString(text[i:])
-			p.text(flipCaseFirst(string(r)))
-			i += size
+			p.text("^")
+			i++
 			continue
 		}
 		// Append runs, not individual bytes: long paragraphs stay linear.
@@ -222,6 +239,29 @@ func (p *gdParser) parse(text string) error {
 	}
 	p.flushText()
 	return nil
+}
+
+// ArticleDom unescapes media text without changing escaped spaces to NBSP.
+func gdMediaText(text, key string) string {
+	var out strings.Builder
+	for i := 0; i < len(text); i++ {
+		switch {
+		case text[i] == '\\' && i+1 < len(text):
+			i++
+			out.WriteByte(text[i])
+		case strings.HasPrefix(text[i:], "[[") || strings.HasPrefix(text[i:], "]]"):
+			out.WriteByte(text[i])
+			i++
+		case strings.HasPrefix(text[i:], "^~"):
+			out.WriteString(flipCaseFirst(key))
+			i++
+		case text[i] == '~':
+			out.WriteString(key)
+		default:
+			out.WriteByte(text[i])
+		}
+	}
+	return out.String()
 }
 
 func gdPlain(n *gdNode) string {

@@ -641,7 +641,7 @@ func (r *Reader) parseBlock(termLines, textLines []string) (dict.Entry, []dict.E
 	seenTerm := map[string]bool{}
 	for _, line := range termLines {
 		if r.gd && len(terms) > 0 {
-			line = expandTitleTilde(line, terms[0])
+			line = expandGDTitleTilde(line, terms[0])
 		}
 		t := r.title(line)
 		if t.first() == "" {
@@ -689,7 +689,11 @@ func (r *Reader) parseBlock(termLines, textLines []string) (dict.Entry, []dict.E
 			// ("@ ~ up"). Substituted before the title parser runs, and escaped
 			// on the way in, so a parent carrying "(" or "{" cannot turn into
 			// optional-part or unsorted-part syntax in its child's key.
-			t := r.title(expandTitleTilde(h, terms[0]))
+			expanded := expandTitleTilde(h, terms[0])
+			if r.gd {
+				expanded = expandGDTitleTilde(h, terms[0])
+			}
+			t := r.title(expanded)
 			for _, k := range t.Keys {
 				if !seenHead[k] {
 					seenHead[k] = true

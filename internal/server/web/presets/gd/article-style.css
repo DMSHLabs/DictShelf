@@ -1,0 +1,97 @@
+/*********** Quivira Phonetic *************/
+@font-face {
+  font-family: 'Quivira Phonetic';
+  src: url('file:///sdcard/GoldenDict/.config/fonts/QuiviraPhonetic.ttf');
+}
+
+/**************** Arial *******************/
+@font-face {
+  font-family: 'Arial';
+  src: url('file:///sdcard/GoldenDict/.config/fonts/ArialPlus.ttf');
+}
+
+@font-face {
+  font-family: 'Arial';
+  src: url('file:///sdcard/GoldenDict/.config/fonts/ArialPlusBold.ttf');
+  font-weight: bold;
+}
+
+@font-face {
+  font-family: 'Arial';
+  src: url('file:///sdcard/GoldenDict/.config/fonts/ArialItalic.ttf');
+  font-style: italic, oblique;
+}
+
+@font-face {
+  font-family: 'Arial';
+  src: url('file:///sdcard/GoldenDict/.config/fonts/ArialBoldItalic.ttf');
+  font-weight: bold;
+  font-style: italic, oblique;
+}
+
+/******** Global, non-dictionary-specific classes ***********/
+body
+{
+  font-family: 'Arial';
+  font-size: 13px;
+}
+
+/* Non-existent glyphs are shown with this font (right now IPA range) */
+.gde
+{
+  font-family: 'Arial';
+  font-weight: inherit;
+  font-style: inherit;
+}
+
+/* Headword -- displayes the word being translated, comes just before the
+   article */
+.gdheadword
+{
+  color: #110088; 
+  font-size: 15px;
+}
+
+/************* DSL dictionaries **************/
+.dsl_opt .dsl_ex .dsl_lang
+{
+  font-style:italic;
+  font-weight: inherit;
+  color:#505050 !important;
+}
+
+.dsl_u
+{
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  font-style: inherit;
+  text-decoration: none;
+  border: 1px double #DDDDFF;
+  padding: 0.01em;
+  background-color: #FFEEEE;
+}
+
+.dsl_p
+{
+  font-weight: normal;
+}
+
+.dsl_t
+{
+  font-family: 'Quivira Phonetic' !important;
+  font-size: 17px !important ;
+  font-weight: normal;
+  font-style:normal;
+  line-height: 100%;
+  margin-right: 2px;
+  margin-left: 2px;
+}
+
+.dsl_t > .gde
+{
+  font-family: 'Quivira Phonetic' !important;
+  font-size: 17px !important ;
+}
+
+
