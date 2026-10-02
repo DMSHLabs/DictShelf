@@ -599,11 +599,12 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
   </div>
 </details>
 
-<section class="sect">
+<details class="sect" data-panel-section="language" open>
+  <summary class="sect-h">Language</summary>
   <div class="facts">
     <button type="button" class="mrow door" data-ui-language>Language</button>
   </div>
-</section>
+</details>
 
 <details class="sect" id="sysSection" hidden data-panel-section="system" open>
   <summary class="sect-h">{{T:panel.system}}</summary>
@@ -940,6 +941,7 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
 "use strict";
 const $=id=>document.getElementById(id);
 const tx=window.wudictI18n.t;
+document.querySelector("[data-ui-language]").textContent="Language — "+(window.wudictI18n.language==="ru"?"Русский":"English");
 window.wuSearchHistory.setSearch(word=>searchFor(word));
 window.wuSearchHistory.setSuggest((q,onHit,signal)=>{
   const mode=$("mode").value,sel=$("dict").value||"all";
@@ -2445,9 +2447,9 @@ function dslIndexControls(d){
     }
     const icon=`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.4 3.4a1.2 1.2 0 0 1 1.2-1.2h6.2a1.2 1.2 0 0 1 1.2 1.2v9.2a1.2 1.2 0 0 1-1.2 1.2H3.6a1.2 1.2 0 0 1-1.2-1.2z"/><path d="M11 5h2.6M11 8h2.6M11 11h2.6"/></svg>`;
     const browse=indexed
-      ? `<a class="browse btn" href="/browse?dict=${encodeURIComponent(target.id)}" title="${escAttr(tx("dictUI.browseHint"))}">${icon}${esc(tx("dictUI.browse"))}</a>`
+      ? `<a class="browse btn" href="/browse?dict=${encodeURIComponent(target.id)}" title="${escAttr(tx("dictUI.browseHint"))}">${icon}${esc(tx("dictUI.browse"))}<span aria-hidden="true">▸</span></a>`
       : empty?"":`<span class="dsl-index-note">${esc(tx(target?.dsl.indexRemoved?"dictUI.dslVariantNeedsIndex":"dictUI.dslNeedsIndex"))}</span>`;
-    return `<div class="dsl-index-row"><span>${esc(label)}</span><div class="dsl-index-tools"><div class="dsl-feature-line">${controls}</div><div class="dsl-browse-line">${browse}</div></div></div>`;
+    return `<div class="dsl-index-row"><span>${esc(label)}</span><div class="dsl-index-tools"><div class="dsl-feature-line">${controls}</div></div><div class="dsl-browse-line">${browse}</div></div>`;
   }).join("")+(empty?`<div class="dsl-index-warning"><b aria-hidden="true">!</b> ${esc(tx("dictUI.dslNeedsIndex"))}</div>`:"")+"</div>";
 }
 async function setDSLMode(id,mode,global=false){

@@ -1866,13 +1866,13 @@ dialog.panel-card:not([open]){display:none}
 .dsl-index-row>span{font-size:12px;padding-top:4px;overflow-wrap:anywhere}
 .dsl-index-tools{display:flex;flex-direction:column;align-items:flex-start;gap:6px;min-width:0}
 .dsl-feature-line{display:flex;flex-wrap:wrap;justify-content:flex-start;align-items:center;gap:6px;max-width:100%}
-.dsl-browse-line{display:flex;justify-content:flex-start}
+.dsl-browse-line{grid-column:1 / -1;display:flex;justify-content:flex-start;padding-left:.7em}
 .dsl-index-tools .feat{margin:0;max-width:100%;white-space:normal;overflow-wrap:anywhere;box-sizing:border-box}
 .dsl-index-row button{font:inherit;font-size:11px;cursor:pointer}
-.dsl-index-tools .browse{display:inline-flex;align-items:center;gap:5px;font:inherit;font-size:11px;text-decoration:none}
-.dsl-index-tools .browse svg{width:13px;height:13px;flex:none}
-.dsl-index-tools .browse:hover:not(:disabled){color:var(--accent)}
-.dsl-index-tools .browse:disabled{color:var(--label-quiet);cursor:default}
+.dsl-index-row .browse{display:inline-flex;align-items:center;gap:5px;font:inherit;font-size:11px;text-decoration:none}
+.dsl-index-row .browse svg{width:13px;height:13px;flex:none}
+.dsl-index-row .browse:hover:not(:disabled){color:var(--accent)}
+.dsl-index-row .browse:disabled{color:var(--label-quiet);cursor:default}
 .dsl-index-warning{color:var(--danger);font-size:12px}
 .dsl-index-note{color:var(--fg);font-size:12px}
 #dslParserSection{flex:none}

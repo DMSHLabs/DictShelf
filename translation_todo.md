@@ -4,6 +4,8 @@ Updated 2026-10-02. Implementation rules are in [translation.md](translation.md)
 
 ## Checkout state
 
+2026-10-02 Language selector: own collapsible Settings section, current language self-name on the door; compact dialog at phone widths. Node/targeted I18n/AppearanceContract checks and isolated Chromium EN/RU 320/390/1100 layout checks pass; APK/device verification pending.
+
 2026-10-02 compact Rescan dialog: shortened Create/index labels and explanations in EN/RU, title matches the command, header close and menu chevron added. Chromium confirms one-screen layout at 320/390/1100 × 700; Node checks pass. Device verification pending.
 
 2026-10-02 unified Rescan / Update dictionaries: new/existing sections, mandatory base creation, optional Create checkboxes, Recreate/Update/Delete/Keep controls and exact-action explanations are in EN/RU. Separate Clear database door removed. Browser EN/RU 320/390/1100px and Node checks pass; APK/device verification pending.
