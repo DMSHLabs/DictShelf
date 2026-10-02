@@ -145,32 +145,36 @@ them are in `docs/handoff-archive.md`.
   - `am start -n <appId>/com.legbehindneck.wudict.SettingsActivity` opens the
     shell settings screen (exported, floating, `taskAffinity=""`), which is the
     only practical way to reach it without the launcher's long-press menu.
-- Known Windows test failures that fail identically on clean HEAD (do NOT
-  chase them as regressions — compare against a clean checkout via
-  `git worktree add /tmp/x HEAD`):
-  - `internal/server`: TestSetupFlow, and TestRescanSeesEditedSource — the
-    latter is new in the 09-26 upstream merge and fails identically on clean
-    upstream `master` (same `rename … Access is denied`, see
-    `docs/handoff-archive.md` → "The 09-26 upstream sync into `dev2`" for the
-    live reproduction and its workaround).
-  - The wumark packages, new in the 09-29 merge: `internal/howto`'s TestExamples
-    and TestGuideIsCleanMarkdown, `internal/cli`'s TestDumpMarkdownRoundTrip and
-    TestDumpMarkdownGzip, and `internal/format/wmd`'s TestWriteSpecExamples and
-    TestDumpMarkdownRoundTrip. All six compare text read from the worktree
-    against LF expectations, so they are artefacts of this CRLF checkout: in an
-    LF tree (`git -c core.autocrlf=false checkout --force`) they pass.
-    `internal/format/wmd`'s TestPlainMarkdown (a TempDir RemoveAll race against
-    a still-open file) and TestSourceFiles are real and keep failing there;
-    clean upstream `master` fails the same way.
+- Known Windows test failures: **none, in a checkout made after the 2026-10-02
+  merge.** What used to be listed here is accounted for:
+  - Upstream fixed `internal/server`'s TestRescanSeesEditedSource — the
+    `rename … Access is denied` reported from this machine; `releaseSuperseded`
+    closes the backends a rescan retired, before an open re-prepares in place —
+    and `internal/format/wmd`'s TestPlainMarkdown, whose reader now closes.
+  - The wmd/cli failures that compared text against LF expectations
+    (TestExamples, TestGuideIsCleanMarkdown, TestSourceFiles,
+    TestWriteSpecExamples, TestDumpMarkdownRoundTrip, TestDumpMarkdownGzip)
+    were CRLF-worktree artefacts, and upstream's own `.gitattributes`
+    (`* text=auto eol=lf`) is the fix. A worktree checked out before that file
+    arrived keeps its CRLF files and still fails them; a fresh one does not —
+    verified at `23670f3`, where `file` reports the spec examples as LF and
+    `internal/cli`, `internal/format/wmd` and `internal/howto` all pass. If
+    they appear again, re-checkout rather than debug them.
+  - The three setup-page probes were fixed on this side (2026-10-02): every page
+    ships the whole i18n catalog, so setup.html's sentences are in the app
+    page's body too, and the app page has no inline stylesheet to find "design
+    tokens" in. TestSetupFlow, TestConfigEndpointAndSetupPage and
+    TestSetupConsentFlow probe markup now (`<title>Edit Folders</title>`,
+    `id="panel"`).
+  - TestOpenAPICoversEveryRoute passes here and still FAILS on upstream
+    `master`, because the fork's own `web/openapi.yaml` is what covers the
+    missing routes. Do not "fix" the fork's copy against that failure.
   - The 09-23, 09-26 and 09-29 merges fixed the rest of what used to be listed
     here — TestAndroidAliases(×2), TestDamagedTextResource…,
     TestIntakeUploadAndInstall, TestRescanRecoversFromDeletedPreparedFolder,
     TestResourceAndIndex, TestResourceOverrideFromLibraryFolder,
     TestSetupMultipleFolders and `internal/format/dsl`'s
     TestMediaSourcesEveryZipSpelling all pass on the tag-less/pure-Go build now.
-    TestOpenAPICoversEveryRoute also passes here — and still FAILS on upstream
-    `master`, because the fork's own `web/openapi.yaml` is what covers the
-    missing routes. Do not "fix" the fork's copy against that failure.
   - Flaky everywhere: TestFailedDemandIsRetried (TempDir cleanup races the
     ingest goroutine; failed 4/5 on clean HEAD once).
   - `internal/intake`: TestJobDisposesSource and
