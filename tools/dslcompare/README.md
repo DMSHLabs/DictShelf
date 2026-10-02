@@ -11,12 +11,18 @@ unchanged from the local GoldenDict sources. Copyright notices and GPLv3 license
 are retained; `vendor/provenance.json` records SHA256 of the input files.
 `prepare.py` regenerates the extracts using function boundaries, not line numbers.
 The Qt6 adapter uses UCS-4 strings and replaces only the QRegExp API with an
-equivalent anchored QRegularExpression. Scanner, index builder, language metadata,
-abbreviations and `DslDictionary::nodeToHtml` are NOT included.
+equivalent anchored QRegularExpression. Scanner and index builder are NOT included.
+The reference now also extracts `nodeToHtml`, HTML escaping, link trimming,
+numeric/named language tables and their original Unicode folding helpers.
+Only the resource/media arm of `nodeToHtml` is replaced by an explicit counted
+placeholder. Qt6 string/UTF-8 and URL-query adapters supply the surrounding API;
+the other renderer branches remain unchanged. The preparation script records
+hashes for every original source and retains GPL notices.
 
 Input is a JSON array of `{id, key, headings, body}` cases. Both adapters produce
-heading keys and a DSL tree. Go also exports its HTML for inspection, but there is
-currently no original GoldenDict HTML output to compare it against.
+heading keys, a DSL tree and raw HTML. Optional `abbreviations` supplies the same
+explicit expansion map to both renderers; this tests rendering, not the native
+companion loaders. Optional `source` supplies GD's main filename for file URLs.
 Heading order/duplicate keys, attribute order and adjacent text-node boundaries
 are ignored. Text whitespace, tag names, nesting and attribute values are not.
 The Go adapter applies the existing legacy IPA conversion to exported text,
@@ -25,6 +31,105 @@ It exports retained DSL media payloads instead of the prepared media HTML. Escap
 literal spaces are kept distinct until the IPA conversion is done. Closed empty
 tags are now removed in the Go tree as in GoldenDict. The report does not claim
 visual or full-index parity; complex media payloads still need dedicated cases.
+
+## Optional Enhancer (2026-10-02)
+
+Production GD reader v4 enables a separate HTML preparation pass after the base
+parser. `GDOptions{}` / `NewGDReaderWithOptions` disables it for direct reading;
+ordinary DSL is unchanged. `compare.py` and every corpus/reference comparison
+default to OFF regardless of inherited environment. Add `--enhance` to compare
+the optional Go output; the original C++ oracle never runs the Enhancer.
+Both the selected mode and raw outputs are recorded. `--enhance` does not add
+the bundled stylesheet to test dumps; styling is a separate reader option.
+
+The user's `GoldenDictEnhancer/GoldenDict Enhancer src v2.3.js` supplies the
+reference behaviour: remove empty paragraph separators before blocks/end, unwrap
+obsolete glyph spans, and merge pure wrapper chains. This is a conservative Go
+HTML-tree implementation: native bold/italic tags stay intact, conflicting
+attributes/roles stay nested, and links, titles, languages, media and block
+semantics are retained. GoldenDict-specific audio scripts, buttons, article
+folding, lazy loading, scrolling and image click handlers are not ported.
+
+GD HTML also marks example-only paragraphs with `wu-xonly` during generation,
+including paragraphs whose example role was moved onto the paragraph by cleanup.
+Mixed example/translation lines are not marked. `Examples Show|Hide` remains the
+existing CSS-layer command; no control or script is embedded in an article.
+The browser marker stays as an idempotent fallback for ordinary/older articles.
+
+Bundled GD presentation uses scoped `wu-gd` selectors and unique font families,
+with TTF files from `internal/server/web/fonts` served at `/assets/gd/fonts/`.
+The original CSS's Android `file://` paths are replaced by application URLs.
+The main document registers font faces for Shadow DOM; generated GD HTML imports
+the scoped stylesheet. Its application URL is exempt from dictionary resource
+rewriting. Presentation asset URLs are pinned to GD reader v4: change their
+version with a future bundled style/font update. Existing GD indexes need a
+rebuild; ordinary indexes do not. Disable both options for byte-stable oracle
+tests, not by changing the production index configuration.
+
+Verified: GD and ordinary DSL package tests, targeted server asset/resource/style
+tests, baseline 19-case HTML comparison with cleanup OFF, and 19-case tree
+comparison with cleanup ON. Chromium at 1100/390px loads all five font faces,
+applies italic/gray optional-example styles even after wrapper merging, and the
+actual existing Examples commands hide/restore only example lines. Browser
+report/screenshots are local ignored outputs in `results/enhancer-preview`.
+No Android/device/APK check. Browser verification tool:
+`verify_enhancer.cjs` requires Playwright; point
+`PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` at an available Chromium browser.
+
+```bat
+"%PY3%" tools/dslcompare/compare.py --html --qt-bin "%QT%\bin" --output tools/dslcompare/results/enhancer-off
+"%PY3%" tools/dslcompare/compare.py --html --enhance --qt-bin "%QT%\bin" --output tools/dslcompare/results/enhancer-on
+```
+
+## Text HTML (Stage 1)
+
+`--html` additionally compares parsed HTML against original GoldenDict output.
+Raw outputs remain in `oracle.json` / `go.json`. The explicit vocabulary mapping
+in `html_compare.py` translates known role classes, margin/color parameters,
+abbreviation wrappers, entry URL encoding and cross-dictionary targets. It ignores
+only generated optional-span IDs and wudict's author-token `data-lang` selector.
+The stress wrapper is translated only after verifying its second branch is the
+first branch plus the accent. All other attributes, text whitespace, break nodes,
+language codes and tooltip values are compared, not silently discarded.
+
+Articles containing media are excluded from HTML comparison altogether (IDs and
+counts are reported); their keys/trees are still compared. Media output, resource
+resolution, CSS, browser layout, optional-section controls and actual navigation
+are outside Stage 1. A vocabulary match is NOT visual equivalence.
+
+`html_spacing_only` is a diagnostic category, NOT an accepted match: these IDs
+remain differences and cause exit 1. It helps distinguish break/ASCII-whitespace
+differences from differences in tags, links, tooltips or non-whitespace text.
+Known retained differences: GD uses empty paragraphs for newlines; wudict trims
+block-edge spacing and uses breaks. GD's numeric Chinese code is literally `ch`,
+while wudict retains valid `zh-Hans` / `zh-Hant` and other script-specific BCP-47
+codes. Neither difference is hidden by the comparator.
+
+```bat
+"%PY3%" tools/dslcompare/compare.py --html --cases tools/dslcompare/html_cases.json --qt-bin "%QT%\bin" --output tools/dslcompare/results/html-fixtures
+"%PY3%" tools/dslcompare/corpus.py D:/Dictionaries/wuDict/Dictionaries --html --limit 1000 --qt-bin "%QT%\bin" --output tools/dslcompare/results/html-corpus
+```
+
+Go GD reader version 3 fixes reference-target ASCII-space normalization, external
+URL trimming, exact abbreviation lookup and short nonbreaking tooltips, NFC text,
+IPA text in link targets, unknown-tag attribute retention and GD's strict language
+attribute syntax. Tags `trs`, `!trn` and stray `preview` are unknown in this GD
+renderer and retain their visible markers. Ordinary DSL parsing is unchanged.
+Existing GD indexes are invalidated by the reader-version change.
+
+Stage 1 sample (2026-10-02): all 28 files, up to 1000 top-level cards per file,
+27,002 cards total. HTML compared for 24,667; 2,335 media-bearing cards excluded.
+2,635 match the explicit vocabulary mapping; 22,032 differ only in break nodes
+or ASCII whitespace; no other HTML or key/tree differences in this sample.
+This is NOT the earlier exhaustive 3,259,925-card key/tree pass. The 24 focused
+HTML cases leave three strict differences: two spacing cases and Chinese language
+codes; one media case is excluded. All 19 original cases match (18 HTML compared).
+Go package tests, 9 Python tests, vet and build pass. No browser/device check.
+Generate the per-file classification without modifying raw adapter results:
+
+```bat
+"%PY3%" tools/dslcompare/html_report.py tools/dslcompare/results/html-corpus
+```
 
 `--dsl` splits ordinary top-level cards in Python and supplies the SAME fragments
 to both parsers. It supports UTF-8, BOM UTF-16 and `.dsl.dz`. This is not a test of

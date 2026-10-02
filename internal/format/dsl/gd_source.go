@@ -18,7 +18,7 @@ import (
 	"github.com/wuweidict/wudict/internal/store"
 )
 
-const GDReaderVersion = 2
+const GDReaderVersion = 4
 
 type gdFileStamp struct {
 	size  int64
@@ -193,11 +193,16 @@ func loadGDSource(p string) (gdSource, error) {
 // NewGDReader shares file decoding and entry boundaries with the current reader,
 // but uses an independent tree parser and heading expansion.
 func NewGDReader(p string) (*Reader, error) {
+	return NewGDReaderWithOptions(p, GDOptions{Enhance: true, Styles: true})
+}
+
+func NewGDReaderWithOptions(p string, options GDOptions) (*Reader, error) {
 	r, err := NewReader(p)
 	if err != nil {
 		return nil, err
 	}
 	r.gd = true
+	r.gdOptions = options
 	r.meta.Name += " GD"
 	r.meta.Format = "dsl-gd"
 	return r, nil

@@ -16,6 +16,8 @@ def main():
     parser.add_argument("--qt-bin", type=Path, required=True)
     parser.add_argument("--limit", type=int, default=100)
     parser.add_argument("--output", type=Path, default=HERE / "results" / "corpus")
+    parser.add_argument("--html", action="store_true")
+    parser.add_argument("--enhance", action="store_true")
     args = parser.parse_args()
     if not args.folder.is_dir() or args.limit < 1:
         parser.error("folder must exist and limit must be positive")
@@ -28,7 +30,7 @@ def main():
         print(f"[{index + 1}/{len(files)}] {path.name}", flush=True)
         run = subprocess.run([sys.executable, str(HERE / "compare.py"),
                               "--dsl", str(path), "--qt-bin", str(args.qt_bin),
-                              "--limit", str(args.limit), "--output", str(output)],
+                              "--limit", str(args.limit), "--output", str(output)] + (["--html"] if args.html else []) + (["--enhance"] if args.enhance else []),
                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=360)
         output.mkdir(exist_ok=True)
         (output / "run.log").write_bytes(run.stdout)

@@ -5,6 +5,7 @@
 #include <cstdio>
 #include <cwctype>
 #include <list>
+#include <map>
 #include <string>
 #include <vector>
 #define THROW_SPEC(x)
@@ -19,15 +20,43 @@ wstring fromQString(QString const &s) {
   return wstring(chars.begin(), chars.end());
 }
 QString toQString(wstring const &s) { return QString::fromUcs4(s.data(), s.size()); }
+wstring toWString(QString const &s) { return fromQString(s); }
+wstring toWString(char const *s) { return fromQString(QString::fromUtf8(s)); }
 }
 using gd::wchar;
 using gd::wstring;
 using std::string;
 using std::list;
 using std::vector;
+using std::map;
 namespace Folding {
+bool isWhitespace(wchar);
+bool isPunct(wchar);
+wstring apply(wstring const &, bool = false);
+#include "vendor/inc_case_folding.hh"
+#include "vendor/inc_diacritic_folding.hh"
 #include "vendor/folding.inc"
+#include "vendor/language_folding.inc"
 }
+class LangCoder {
+public:
+  static quint32 code2toInt(const char code[2]) { return (quint32(code[1]) << 8) + quint32(code[0]); }
+  static QString intToCode2(quint32);
+  static quint32 findIdForLanguage(wstring const &);
+};
+#include "vendor/language.inc"
+namespace Utf8 {
+string encode(wstring const &s) { return gd::toQString(s).toUtf8().toStdString(); }
+wstring decode(string const &s) { return gd::fromQString(QString::fromUtf8(s.data(), s.size())); }
+bool isspace(int c) { return c == ' ' || c == '\f' || c == '\n' || c == '\r' || c == '\t' || c == '\v'; }
+}
+#include "vendor/html_helpers.inc"
+namespace Qt4x5 { namespace Url {
+QString ensureLeadingSlash(QString const &s) { return s.startsWith('/') ? s : '/' + s; }
+void setQueryItems(QUrl &url, QList<QPair<QString, QString>> const &items) {
+  QUrlQuery query; query.setQueryItems(items); url.setQuery(query);
+}
+}}
 namespace Dsl { namespace Details {
 void processUnsortedParts(wstring &, bool);
 void expandOptionalParts(wstring &, list<wstring> *, size_t = 0, bool = false);
@@ -41,8 +70,22 @@ bool isAtSignFirst(wstring const &s) {
   return re.match(gd::toQString(s)).hasMatch();
 }
 #include "vendor/parser.inc"
+#include "vendor/dsl_language.inc"
 }}
 using namespace Dsl::Details;
+class DslDictionary {
+public:
+  map<string, string> abrv;
+  wstring currentHeadword;
+  int articleNom = 0, optionalPartNom = 0, excludedMedia = 0;
+  QString source;
+  string getId() const { return "comparison"; }
+  string getName() const { return "comparison"; }
+  QString getMainFilename() const { return source; }
+  string processNodeChildren(ArticleDom::Node const &);
+  string nodeToHtml(ArticleDom::Node const &);
+};
+#include "vendor/renderer.inc"
 QJsonObject node(ArticleDom::Node const &n) {
   if (!n.isTag) return {{"text", gd::toQString(n.text)}};
   QJsonArray children;
@@ -81,7 +124,21 @@ int main(int argc, char **argv) {
     stripComments(body, comment);
     expandTildes(body, key);
     ArticleDom dom(body, "comparison", key);
-    result.append(QJsonObject{{"id", c["id"]}, {"keys", keys}, {"tree", node(dom.root)}});
+    QJsonObject record{{"id", c["id"]}, {"keys", keys}, {"tree", node(dom.root)}};
+    if (app.arguments().contains("--html")) {
+      DslDictionary renderer;
+      renderer.currentHeadword = key;
+      renderer.source = c["source"].toString();
+      auto abbreviations = c["abbreviations"].toObject();
+      for (auto i = abbreviations.begin(); i != abbreviations.end(); ++i)
+        renderer.abrv[i.key().toUtf8().toStdString()] = i.value().toString().toUtf8().toStdString();
+      // dslToHtml normalizes to NFC before constructing ArticleDom.
+      ArticleDom htmlDom(gd::fromQString(gd::toQString(body).normalized(QString::NormalizationForm_C)), "comparison", key);
+      auto html = renderer.processNodeChildren(htmlDom.root);
+      record.insert("html", QString::fromUtf8(html.data(), html.size()));
+      record.insert("excluded_media", renderer.excludedMedia);
+    }
+    result.append(record);
   }
   auto bytes = QJsonDocument(result).toJson(QJsonDocument::Compact);
   return std::fwrite(bytes.constData(), 1, bytes.size(), stdout) == size_t(bytes.size()) ? 0 : 2;

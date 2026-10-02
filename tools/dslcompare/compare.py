@@ -11,6 +11,7 @@ from pathlib import Path
 import shlex
 import subprocess
 import sys
+from html_compare import normalize_html, without_spacing
 
 ROOT = Path(__file__).resolve().parents[2]
 HERE = Path(__file__).resolve().parent
@@ -95,7 +96,7 @@ def execute(command, **kwargs):
     return subprocess.run(command, check=True, timeout=300, **kwargs)
 
 
-def compare_cases(cases, output, oracle_path, qt_bin=None, go_binary=None):
+def compare_cases(cases, output, oracle_path, qt_bin=None, go_binary=None, html=False, enhance=False):
     if not cases or len({c["id"] for c in cases}) != len(cases):
         raise ValueError("cases must be nonempty and have unique ids")
     output.mkdir(parents=True, exist_ok=True)
@@ -105,11 +106,12 @@ def compare_cases(cases, output, oracle_path, qt_bin=None, go_binary=None):
     env = os.environ.copy()
     if qt_bin:
         env["PATH"] = str(qt_bin.resolve()) + os.pathsep + env["PATH"]
-    oracle = execute([str(oracle_path.resolve())], input=input_path.read_bytes(),
+    oracle = execute([str(oracle_path.resolve())] + (["--html"] if html else []), input=input_path.read_bytes(),
                      stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env)
     (output / "oracle.json").write_bytes(oracle.stdout)
     (output / "oracle.log").write_bytes(oracle.stderr)
     env.update(WUDICT_DSL_COMPARE_INPUT=str(input_path), WUDICT_DSL_COMPARE_OUTPUT=str(go_path))
+    env["WUDICT_DSL_COMPARE_ENHANCE"] = "1" if enhance else "0"
     go_path.unlink(missing_ok=True)
     command = ([str(go_binary.resolve()), "-test.run=^TestGDCompareDump$"] if go_binary else
                ["go", "test", "./internal/format/dsl", "-run", "^TestGDCompareDump$", "-count=1"])
@@ -119,13 +121,20 @@ def compare_cases(cases, output, oracle_path, qt_bin=None, go_binary=None):
     if [v["id"] for v in gd] != [v["id"] for v in go] or len(gd) != len(cases):
         raise ValueError("adapter result ids/count differ")
     report, differences = [], []
+    excluded, raw_equal, spacing_only = [], 0, []
     for c, a, b in zip(cases, gd, go):
         fields = []
-        for field in ("keys", "tree"):
-            left = sorted(set(a[field])) if field == "keys" else normalize(a[field])
-            right = sorted(set(b[field])) if field == "keys" else normalize(b[field])
+        if html and a.get("excluded_media", 0):
+            excluded.append(c["id"])
+        if html and a["html"] == b["html"]:
+            raw_equal += 1
+        for field in ("keys", "tree", "html") if html and c["id"] not in excluded else ("keys", "tree"):
+            convert = (lambda v: sorted(set(v))) if field == "keys" else normalize_html if field == "html" else normalize
+            left, right = convert(a[field]), convert(b[field])
             if left == right:
                 continue
+            if field == "html" and without_spacing(left) == without_spacing(right):
+                spacing_only.append(c["id"])
             fields.append(field)
             left = json.dumps(left, indent=2, ensure_ascii=False).splitlines()
             right = json.dumps(right, indent=2, ensure_ascii=False).splitlines()
@@ -134,7 +143,13 @@ def compare_cases(cases, output, oracle_path, qt_bin=None, go_binary=None):
         if fields:
             differences.append({"id":c["id"], "fields":fields})
     summary = {"cases":len(cases), "matching":len(cases)-len(differences), "differences":differences,
-               "scope":"heading functions and ArticleDom; not GD scanner/index/HTML renderer"}
+               "scope":"heading functions and ArticleDom" + ("; original GD text HTML renderer" if html else "") + "; not native scanner/index/media/CSS layout"}
+    summary["go_enhancer"] = enhance
+    if html:
+        summary.update(html_compared=len(cases)-len(excluded), html_excluded_media=excluded,
+                       html_raw_equal=raw_equal, html_spacing_only=spacing_only,
+                       html_other_differences=[d["id"] for d in differences if "html" in d["fields"] and d["id"] not in spacing_only],
+                       html_policy="explicit vocabulary mapping; whitespace and other attributes preserved")
     (output / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
     (output / "diff.txt").write_text("\n\n".join(report), encoding="utf-8")
     return summary
@@ -149,12 +164,14 @@ def main():
     group.add_argument("--dsl", type=Path)
     parser.add_argument("--limit", type=int, default=100, help="article limit; 0 means all")
     parser.add_argument("--output", type=Path, default=HERE / "results")
+    parser.add_argument("--html", action="store_true", help="also compare original text HTML; exclude articles containing media")
+    parser.add_argument("--enhance", action="store_true", help="enable optional Go HTML cleanup; off for reference comparisons")
     args = parser.parse_args()
     if args.limit < 0:
         parser.error("--limit must be nonnegative")
     cases = dictionary_cases(args.dsl, args.limit) if args.dsl else json.loads(
         (args.cases or HERE / "cases.json").read_text(encoding="utf-8"))
-    summary = compare_cases(cases, args.output, args.oracle, args.qt_bin)
+    summary = compare_cases(cases, args.output, args.oracle, args.qt_bin, html=args.html, enhance=args.enhance)
     print(f"Compared {len(cases)} cases: {summary['matching']} match, {len(summary['differences'])} differ.")
     print(f"Report: {args.output.resolve() / 'diff.txt'}")
     return 1 if summary['differences'] else 0

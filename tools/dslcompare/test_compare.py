@@ -3,9 +3,33 @@ import tempfile
 import unittest
 from pathlib import Path
 from compare import dictionary_cases, iter_dictionary_cases, normalize
+from html_compare import normalize_html, without_spacing
 
 
 class ComparisonTests(unittest.TestCase):
+    def test_html_vocabulary_mapping(self):
+        self.assertEqual(normalize_html('<b class="dsl_b">x &amp; y</b>'), normalize_html('<b>x &amp; y</b>'))
+        self.assertEqual(normalize_html('<a class="dsl_ref" href="gdlookup://localhost/C%23?dict=Other">x</a>'),
+                         normalize_html('<a class="wu-xref" data-dict="Other" title="Other" href="entry://C%23">x</a>'))
+        self.assertEqual(normalize_html('<span class="dsl_p" title="noun">n.</span>'),
+                         normalize_html('<span class="wu-p"><abbr class="wu-abbr" title="noun">n.</abbr></span>'))
+
+    def test_html_preserves_content_and_attributes(self):
+        for left, right in [('a b', 'ab'), ('<br/>', '<p></p>'),
+                            ('<b>x</b>', '<i>x</i>'),
+                            ('<a href="entry://a">x</a>', '<a href="entry://b">x</a>'),
+                            ('<span class="dsl_p" title="a">x</span>', '<span class="dsl_p" title="b">x</span>'),
+                            ('<span class="dsl_lang" lang="ru">x</span>', '<span class="wu-lang" lang="en">x</span>'),
+                            ('<span data-other="a">x</span>', '<span data-other="b">x</span>')]:
+            self.assertNotEqual(normalize_html(left), normalize_html(right))
+        self.assertEqual(without_spacing(normalize_html('a<p></p>b')), without_spacing(normalize_html('a<br/>b')))
+
+    def test_stress_only_removes_verified_duplicate(self):
+        gd = '<span class="dsl_stress"><span class="dsl_stress_without_accent">a</span><span class="dsl_stress_with_accent">a\u0301</span></span>'
+        go = '<span class="wu-acc">a</span>'
+        self.assertEqual(normalize_html(gd), normalize_html(go))
+        self.assertNotEqual(normalize_html(gd.replace('a\u0301', 'b\u0301')), normalize_html(go))
+
     def test_attributes_and_adjacent_text(self):
         gd = {"tag":"ref", "attrs":'target="some word" dict="Other"',
               "children":[{"text":"a"}, {"text":" b"}]}

@@ -53,6 +53,7 @@ type Reader struct {
 	// and it has no companion of its own to absorb.
 	plainBody bool
 	gd        bool
+	gdOptions GDOptions
 
 	buffered  []string     // lookahead lines
 	orphans   int          // body blocks skipped for having no headword
@@ -757,7 +758,7 @@ func (r *Reader) title(line string) titleResult {
 
 func (r *Reader) body(text, key string) (string, []string, error) {
 	if r.gd {
-		return transformGDBody(text, key, r.abbrevs())
+		return transformGDWithOptions(text, key, r.abbrevs(), r.gdOptions)
 	}
 	return transformBodyAbbrev(text, key, r.abbrevs())
 }

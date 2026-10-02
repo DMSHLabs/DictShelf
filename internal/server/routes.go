@@ -193,6 +193,7 @@ func (s *Server) routes() []route {
 		// content hash - but under their own prefix, because they are a SET
 		// looked up in an embedded folder rather than one file per route.
 		{"GET", "/assets/presets/", s.handlePresetFile, "", false},
+		{"GET", "/assets/gd/fonts/", s.handleGDFont, "", false},
 		{"GET", "/assets/history.css", serveAsset("text/css; charset=utf-8", historyCSS), "", false},
 		{"GET", "/assets/history.js", serveAsset("application/javascript; charset=utf-8", historyJS), "", false},
 		{"GET", "/assets/group-editor.css", serveAsset("text/css; charset=utf-8", groupEditorCSS), "", false},

@@ -63,6 +63,30 @@ func TestGDMediaAndAbbrev(t *testing.T) {
 	}
 }
 
+func TestGDHTMLReferenceFixes(t *testing.T) {
+	ab := &abbrevMap{exact: map[string]string{"n.": "noun - short"}, fold: map[string]string{"n.": "noun - short"}}
+	for _, c := range []struct{ input, want string }{
+		{`[ref target="  some   word  "]label[/ref]`, `<a href="entry://some word">label</a>`},
+		{`[url target="  example.org  "]label[/url]`, `<a href="http://example.org">label</a>`},
+		{`[p]n.[/p]`, "<span class=\"wu-p\"><abbr class=\"wu-abbr\" title=\"noun\u00a0\u2011\u00a0short\">n.</abbr></span>"},
+		{`[p] N. [/p]`, `<span class="wu-p"> N. </span>`},
+		{`[xyz foo="bar"]body[/xyz]`, `<span class="wu-unknown">[xyz foo="bar"]body</span>`},
+		{`[b][xyz foo="bar"]one[/b]two[/xyz]`, `<b><span class="wu-unknown">[xyz foo="bar"]one</span></b><span class="wu-unknown">[xyz foo="bar"]two</span>`},
+		{`[xyz foo="bar"]one[m1]two[/xyz][/m]`, `<span class="wu-unknown">[xyz foo="bar"]one</span><p class="wu-m" style="--wd-m:1"><span class="wu-unknown">[xyz foo="bar"]two</span></p>`},
+		{`[trs]body[/trs]`, `<span class="wu-unknown">[trs]body</span>`},
+		{`[lang name=Russian]body[/lang]`, `<span class="wu-lang">body</span>`},
+		{`[lang id=2 name="English"]body[/lang]`, `<span class="wu-lang">body</span>`},
+		{"e\u0301 [b]o\u0308[/b]", "\u00e9 <b>\u00f6</b>"},
+		{`foo[u] bar[/u]`, `foo <u> bar</u>`},
+		{`[ref][t]0[/t][/ref]`, "<a href=\"entry://\u03b2\"><span class=\"wu-ipa\">\u03b2</span></a>"},
+	} {
+		got, _, err := transformGDBody(c.input, "key", ab)
+		if err != nil || got != c.want {
+			t.Errorf("%s: got %q (%v); want %q", c.input, got, err, c.want)
+		}
+	}
+}
+
 func TestGDMediaEscapesAndTilde(t *testing.T) {
 	html, media, err := transformGDBody(`[s]best\ man.wav[/s] [s]~.wav[/s] [s]^~\ file.wav[/s]`, "Give", nil)
 	if err != nil {
@@ -269,8 +293,8 @@ func TestGDReaderGolden(t *testing.T) {
 		t.Fatal(err)
 	}
 	goldentest.Check(t, "dsl-gd", comparison, goldentest.Golden{
-		Versions: "reader=2 ingest=1 markup=2 fold=1",
-		Hash:     "4b5c3f7f82f0022407c486b777300a91cb0d573684c9735b3f11bb75fea2b7a9",
+		Versions: "reader=4 ingest=1 markup=2 fold=1",
+		Hash:     "b81ca516ad709bde4aaf4dac45fcfd4f7218a47fe60b63f7508cdfd8fa3aee1b",
 	})
 }
 

@@ -1,66 +1,71 @@
 /*********** Quivira Phonetic *************/
 @font-face {
-  font-family: 'Quivira Phonetic';
-  src: url('file:///sdcard/GoldenDict/.config/fonts/QuiviraPhonetic.ttf');
+  font-family: 'WuGD Phonetic';
+  src: url('/assets/gd/fonts/QuiviraPhonetic.ttf?v=4');
 }
 
 /**************** Arial *******************/
 @font-face {
-  font-family: 'Arial';
-  src: url('file:///sdcard/GoldenDict/.config/fonts/ArialPlus.ttf');
+  font-family: 'WuGD Arial';
+  src: url('/assets/gd/fonts/ArialPlus.ttf?v=4');
 }
 
 @font-face {
-  font-family: 'Arial';
-  src: url('file:///sdcard/GoldenDict/.config/fonts/ArialPlusBold.ttf');
+  font-family: 'WuGD Arial';
+  src: url('/assets/gd/fonts/ArialPlusBold.ttf?v=4');
   font-weight: bold;
 }
 
 @font-face {
-  font-family: 'Arial';
-  src: url('file:///sdcard/GoldenDict/.config/fonts/ArialItalic.ttf');
-  font-style: italic, oblique;
+  font-family: 'WuGD Arial';
+  src: url('/assets/gd/fonts/ArialItalic.ttf?v=4');
+  font-style: italic;
 }
 
 @font-face {
-  font-family: 'Arial';
-  src: url('file:///sdcard/GoldenDict/.config/fonts/ArialBoldItalic.ttf');
+  font-family: 'WuGD Arial';
+  src: url('/assets/gd/fonts/ArialBoldItalic.ttf?v=4');
   font-weight: bold;
-  font-style: italic, oblique;
+  font-style: italic;
 }
 
 /******** Global, non-dictionary-specific classes ***********/
-body
+:where(.wu-gd)
 {
-  font-family: 'Arial';
+  font-family: 'WuGD Arial', sans-serif;
   font-size: 13px;
 }
 
 /* Non-existent glyphs are shown with this font (right now IPA range) */
-.gde
+.wu-gd .gde
 {
-  font-family: 'Arial';
+  font-family: 'WuGD Arial', sans-serif;
   font-weight: inherit;
   font-style: inherit;
 }
 
 /* Headword -- displayes the word being translated, comes just before the
    article */
-.gdheadword
+.wu-gd .gdheadword
 {
   color: #110088; 
   font-size: 15px;
 }
 
 /************* DSL dictionaries **************/
-.dsl_opt .dsl_ex .dsl_lang
+.wu-gd .dsl_opt .dsl_ex .dsl_lang,
+.wu-gd .wu-sec .wu-ex .wu-lang,
+.wu-gd .wu-sec.wu-ex .wu-lang,
+.wu-gd .wu-sec .wu-ex.wu-lang,
+.wu-gd .wu-sec.wu-ex.wu-lang
 {
   font-style:italic;
   font-weight: inherit;
   color:#505050 !important;
 }
 
-.dsl_u
+.wu-gd .dsl_u,
+.wu-gd u
 {
   font-family: inherit;
   font-size: inherit;
@@ -72,14 +77,16 @@ body
   background-color: #FFEEEE;
 }
 
-.dsl_p
+.wu-gd .dsl_p,
+.wu-gd .wu-p
 {
   font-weight: normal;
 }
 
-.dsl_t
+.wu-gd .dsl_t,
+.wu-gd .wu-ipa
 {
-  font-family: 'Quivira Phonetic' !important;
+  font-family: 'WuGD Phonetic' !important;
   font-size: 17px !important ;
   font-weight: normal;
   font-style:normal;
@@ -88,10 +95,9 @@ body
   margin-left: 2px;
 }
 
-.dsl_t > .gde
+.wu-gd .dsl_t > .gde,
+.wu-gd .wu-ipa > .gde
 {
-  font-family: 'Quivira Phonetic' !important;
+  font-family: 'WuGD Phonetic' !important;
   font-size: 17px !important ;
 }
-
-

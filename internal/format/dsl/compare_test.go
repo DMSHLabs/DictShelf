@@ -15,10 +15,11 @@ func TestGDCompareDump(t *testing.T) {
 		t.Skip("comparison adapter not requested")
 	}
 	var cases []struct {
-		ID       string   `json:"id"`
-		Key      string   `json:"key"`
-		Headings []string `json:"headings"`
-		Body     string   `json:"body"`
+		ID            string            `json:"id"`
+		Key           string            `json:"key"`
+		Headings      []string          `json:"headings"`
+		Body          string            `json:"body"`
+		Abbreviations map[string]string `json:"abbreviations"`
 	}
 	data, err := os.ReadFile(input)
 	if err != nil {
@@ -57,7 +58,11 @@ func TestGDCompareDump(t *testing.T) {
 		for _, heading := range c.Headings {
 			keys = append(keys, gdTitle(expandGDTitleTilde(heading, c.Key)).Keys...)
 		}
-		rendered, _, err := transformGDBody(c.Body, c.Key, nil)
+		var ab *abbrevMap
+		if c.Abbreviations != nil {
+			ab = &abbrevMap{exact: c.Abbreviations}
+		}
+		rendered, _, err := transformGDWithOptions(c.Body, c.Key, ab, GDOptions{Enhance: os.Getenv("WUDICT_DSL_COMPARE_ENHANCE") == "1"})
 		if err != nil {
 			t.Fatal(err)
 		}

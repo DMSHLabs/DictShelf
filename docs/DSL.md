@@ -731,8 +731,10 @@ behaviour still need checking.
 
 An opt-in differential harness now lives in `tools/dslcompare/README.md`: original
 GoldenDict ArticleDom/heading functions compiled with Qt6, a Go package-test
-adapter, and a Python key/tree comparator. It does not yet compare GoldenDict's
-HTML renderer or native scanner/index builder. GD reader v2 fixes `^~` in alternate
+adapter, and a Python key/tree comparator. `--html` also compares the original
+text HTML renderer with an explicit HTML vocabulary mapping; media-bearing
+articles are excluded. Native scanner/index and visual CSS parity remain untested.
+GD reader v2 fixes `^~` in alternate
 and subentry headings, removes closed empty tags during tree repair, and requires
 `id=` for numeric language attributes as GD does. Comparator aligns media/IPA
 stages, spaced assignments and empty roots;
@@ -745,6 +747,38 @@ GD media filenames now remove DSL escapes (e.g. `best\ man.wav`) and expand
 pass after fixes. Both new Urban parts decompress and compare fully (702,374 and
 716,177 cards). Current curated cases: 19/19; final per-file report is generated
 as `tools/dslcompare/results/full/report.md` (ignored, local output).
+GD reader v3 fixes link-target spacing, URL trimming, exact abbreviation lookup
+and short nonbreaking tooltips, NFC rendering, IPA in link targets, unknown-tag
+parameters and strict language syntax. The ordinary reader is unchanged; only
+GD prepared indexes need rebuilding. Text HTML sample: 27,002 cards across all
+28 files, 24,667 compared, 2,335 media-bearing cards excluded. Of the compared
+HTML, 2,635 match; 22,032 differ only in breaks/ASCII whitespace. No other
+HTML/key/tree differences in that bounded sample. Focused cases additionally
+expose retained Chinese language-code differences (`ch` in GD versus valid
+BCP-47 in wudict). Spacing and language differences remain strict failures,
+not silently accepted equivalence. Report: `results/html-corpus/report.md`
+under `tools/dslcompare`; scope/commands and raw results: harness README.
+
+GD reader v4 adds optional post-render HTML preparation inspired by the provided
+GoldenDict Enhancer 2.3: redundant empty separators/glyph wrappers are removed,
+pure wrapper chains merge without discarding native bold/italic formatting or
+conflicting attributes. `NewGDReader` enables cleanup and scoped bundled GD
+presentation; `NewGDReaderWithOptions(path, GDOptions{})` is the unchanged base
+rendering for direct reference tests. The comparison tool defaults to cleanup
+off; `--enhance` explicitly enables it on the Go side. It never modifies the
+original oracle. This is not a runtime switch over an existing prepared index.
+
+Example-only GD paragraphs get `wu-xonly` at generation, including a paragraph
+with its own `wu-ex` role after wrapper merging. Plain translations keep their
+paragraph visible. Existing Examples Show/Hide remains the CSS-layer toggle;
+no GoldenDict in-article button is generated. The browser marker remains for
+ordinary/older entries, recognises self roles, and is idempotent on generated GD
+marks. Bundled CSS is scoped to `wu-gd`; fonts use distinct family names and
+`/assets/gd/fonts/` URLs instead of Android filesystem paths. The main document
+registers font faces for shadow articles; GD HTML imports the same stylesheet.
+Only this exact application stylesheet URL bypasses dictionary resource rewrite.
+Styles/font asset version and GD reader version are 4; GD indexes need rebuilding.
+Tests and Chromium checks pass; physical Android/WebView remains unverified.
 
 Closed in the spec-audit pass (this document's current revision):
 

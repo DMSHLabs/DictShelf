@@ -5,15 +5,18 @@ package dsl
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 
 	"github.com/wuweidict/wudict/internal/htmlref"
+	"golang.org/x/text/unicode/norm"
 )
 
 type gdNode struct {
 	tag          string
 	attrs        map[string]string
+	rawAttrs     string
 	text         string
 	children     []*gdNode
 	mediaTag     string
@@ -54,7 +57,7 @@ func (p *gdParser) flushText() {
 	}
 }
 
-func (p *gdParser) open(tag string, attrs map[string]string) {
+func (p *gdParser) open(tag string, attrs map[string]string) *gdNode {
 	p.flushText()
 	var reopen []*gdNode
 	if isMarginTag(tag) {
@@ -69,10 +72,11 @@ func (p *gdParser) open(tag string, attrs map[string]string) {
 	p.append(n)
 	p.stack = append(p.stack, n)
 	for _, old := range reopen {
-		n := &gdNode{tag: old.tag, attrs: old.attrs}
+		n := &gdNode{tag: old.tag, attrs: old.attrs, rawAttrs: old.rawAttrs}
 		p.append(n)
 		p.stack = append(p.stack, n)
 	}
+	return n
 }
 
 func (p *gdParser) close(tag string) {
@@ -94,7 +98,7 @@ func (p *gdParser) close(tag string) {
 		}
 		p.stack = p.stack[:i]
 		for _, old := range reopen {
-			p.open(old.tag, old.attrs)
+			p.open(old.tag, old.attrs).rawAttrs = old.rawAttrs
 		}
 		return
 	}
@@ -163,6 +167,7 @@ func (p *gdParser) parse(text string) error {
 			continue
 		}
 		if text[i] == '[' {
+			start := i
 			tag, attrs, next, ok := gdTag(text, i)
 			if ok {
 				i = next
@@ -189,7 +194,7 @@ func (p *gdParser) parse(text string) error {
 					p.append(&gdNode{tag: "media", text: media.out.String(), mediaTag: tag, mediaPayload: gdMediaText(payload, p.key)})
 					continue
 				}
-				p.open(tag, attrs)
+				p.open(tag, attrs).rawAttrs = strings.TrimLeft(text[start+1+len(tag):next-1], " \t")
 				continue
 			}
 		}
@@ -266,20 +271,24 @@ func gdMediaText(text, key string) string {
 
 func gdPlain(n *gdNode) string {
 	var b strings.Builder
-	var visit func(*gdNode)
-	visit = func(n *gdNode) {
-		b.WriteString(n.text)
+	var visit func(*gdNode, bool)
+	visit = func(n *gdNode, ipa bool) {
+		if ipa && n.tag == "" {
+			b.WriteString(gdTranscription(n.text))
+		} else {
+			b.WriteString(n.text)
+		}
 		for _, c := range n.children {
-			visit(c)
+			visit(c, ipa || n.tag == "t")
 		}
 	}
-	visit(n)
+	visit(n, false)
 	return b.String()
 }
 
 func transformGDBody(text, key string, ab *abbrevMap) (string, []string, error) {
-	p := gdParser{key: key}
-	if err := p.parse(text); err != nil {
+	p := gdParser{key: norm.NFC.String(key)}
+	if err := p.parse(norm.NFC.String(text)); err != nil {
 		return "", nil, err
 	}
 	var render func(*gdNode, bool) string
@@ -329,12 +338,14 @@ func transformGDBody(text, key string, ab *abbrevMap) (string, []string, error) 
 				target = strings.TrimSpace(gdPlain(n))
 			}
 			if n.tag == "ref" {
+				target = normalizeGDLink(target)
 				extra := ""
 				if d := n.attrs["dict"]; d != "" {
 					extra = ` class="wu-xref" data-dict=` + quoteAttr(d) + ` title=` + quoteAttr(d)
 				}
 				return "<a" + extra + " href=" + quoteAttr(htmlref.EntryHref(target)) + ">" + label + "</a>"
 			}
+			target = strings.Trim(target, " \f\n\r\t\v")
 			if !strings.Contains(target, ":") {
 				target = "http://" + target
 			}
@@ -342,12 +353,47 @@ func transformGDBody(text, key string, ab *abbrevMap) (string, []string, error) 
 		}
 		if n.tag == "p" {
 			label := children(n, ipa)
-			if v, ok := ab.lookup(strings.TrimSpace(gdPlain(n))); ok {
+			var v string
+			var ok bool
+			if ab != nil {
+				v, ok = ab.exact[gdPlain(n)]
+			}
+			if ok {
+				if utf8.RuneCountInString(v) < 70 {
+					v = strings.NewReplacer(" ", "\u00a0", "\t", "\u00a0", "-", "\u2011").Replace(v)
+				}
 				label = `<abbr class="wu-abbr" title=` + quoteAttr(v) + `>` + label + `</abbr>`
 			}
 			return `<span class="wu-p">` + label + `</span>`
 		}
 		content := children(n, ipa || n.tag == "t")
+		if n.tag == "lang" {
+			attrs := map[string]string{}
+			if i := strings.Index(n.rawAttrs, "id="); i >= 0 {
+				if _, err := strconv.Atoi(strings.TrimSpace(n.rawAttrs[i+3:])); err == nil {
+					attrs["id"] = strings.TrimSpace(n.rawAttrs[i+3:])
+				}
+			} else if i := strings.Index(n.rawAttrs, `name="`); i >= 0 {
+				value := n.rawAttrs[i+6:]
+				if end := strings.IndexByte(value, '"'); end >= 0 {
+					attrs["name"] = value[:end]
+				}
+			}
+			return `<span class="wu-lang"` + langAttrs(attrs) + `>` + content + `</span>`
+		}
+		unknown := func() string {
+			marker := "[" + n.tag
+			if n.rawAttrs != "" {
+				marker += " " + n.rawAttrs
+			}
+			return `<span class="wu-unknown">` + escape(marker+"]") + content + "</span>"
+		}
+		if n.tag == "trs" || n.tag == "!trn" || n.tag == "preview" {
+			return unknown()
+		}
+		if n.tag == "u" && (strings.HasPrefix(content, " ") || strings.HasPrefix(content, "\t")) {
+			return " <u>" + content + "</u>"
+		}
 		if isMarginTag(n.tag) && content == "" {
 			return ""
 		}
@@ -358,14 +404,16 @@ func transformGDBody(text, key string, ab *abbrevMap) (string, []string, error) 
 		tr.closeTag(n.tag)
 		closer := tr.out.String()
 		if opener == "" && closer == "" {
-			if n.tag == "preview" {
-				return content
-			}
-			return `<span class="wu-unknown">` + escape("["+n.tag+"]") + content + "</span>"
+			return unknown()
 		}
 		return opener + content + closer
 	}
 	return children(&p.root, false), p.resources, nil
+}
+
+// GoldenDict's normalizeHeadword collapses ASCII spaces, not arbitrary Unicode whitespace.
+func normalizeGDLink(target string) string {
+	return strings.Join(strings.FieldsFunc(target, func(r rune) bool { return r == ' ' }), " ")
 }
 
 // Legacy Lingvo transcription glyphs, as decoded by GoldenDict inside [t].
