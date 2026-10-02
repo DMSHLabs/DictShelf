@@ -1729,18 +1729,33 @@ contains `web/i18n/ru.json`, the GD font and preset paths and the GD parser
 sources, and `aapt2` reports the `ru` locale. No device or emulator run;
 `make i18n-check-js` was not run because there is still no Node on this machine.
 
-**Open licence question — surfaced, not resolved.** The five TTFs under
-`internal/server/web/fonts/` are served to the page and now ship inside the APK.
-Four of them (`ArialPlus`, `ArialPlusBold`, `ArialItalic`, `ArialBoldItalic`)
-carry `Monotype` (six hits) and `The Monotype Corporation` (four hits) in their
-own embedded metadata, and the only licence text they embed covers the Hebrew
-OpenType layout logic, not the font; `QuiviraPhonetic` names Quivira-font.com and
-"All Rights Reserved". `THIRD-PARTY-NOTICES.md` has no font or TTF entry at all
-(`grep -ic 'font|ttf'` = 0). Redistributing a Monotype face inside an APK is not
-covered by its usual terms, so this needs the owner's decision — real notices, or
-different faces. It was raised rather than fixed because only the owner knows
-where the files came from, and it did not block this release since the fonts were
+**Open licence question — the Monotype four, surfaced and not resolved.**
+The five TTFs under `internal/server/web/fonts/` are served to the page and now
+ship inside the APK. Four of them (`ArialPlus`, `ArialPlusBold`, `ArialItalic`,
+`ArialBoldItalic`) carry `Monotype` (six hits) and `The Monotype Corporation`
+(four hits) in their own embedded metadata, and the only licence text they embed
+covers the Hebrew OpenType layout logic, not the font. Redistributing a Monotype
+face inside an APK is not covered by its usual terms, so this needs the owner's
+decision — real notices, or different faces. It was raised rather than fixed
+because only the owner knows where the files came from, and it did not block this
+release since the fonts were
 already public in the repository before it.
+
+**Quivira is a different case, and it is fine — resolved 2026-10-02.** The
+author's own notes page states "From 2019 on, Quivira is in the Public Domain"
+and grants the right "to use, redistribute, remix or adapt Quivira for any
+purpose ... including commercial usage, without attribution or any other
+restrictions unless required by law", with no condition about applications.
+Two details to keep: the file here is **Quivira Phonetic 3.80 (2015)**, which
+predates the 2019 dedication and so sits under the earlier terms — free for any
+purpose including commercial, redistribution allowed, "do not alter it and do
+not claim it to be your own work" — which still permit bundling it unaltered;
+and its embedded metadata says "All Rights Reserved", a leftover that contradicts
+the author's published terms, so a notice should quote the published terms rather
+than the TTF. Read through a Wayback snapshot (`quivira-font.com` serves a
+certificate for `*.alfahosting-server.de` and fails TLS on its own name, so the
+page cannot be cited directly). What Quivira still lacks is only its
+`THIRD-PARTY-NOTICES.md` entry — the Monotype four above are the real problem.
 
 ## Release wudict2-v0.6.0-ru.1 (2026-09-30, this session)
 
