@@ -1,5 +1,6 @@
 // Tree construction and crossed-tag repair follow GoldenDict's ArticleDom
 // (dsl_details.cc, Konstantin Isakov and contributors, GPL-3.0-or-later).
+// Copyright (C) 2026 DmShAl (Shepeta Dmitry)
 // SPDX-License-Identifier: GPL-3.0-or-later
 package dsl
 

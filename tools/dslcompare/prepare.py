@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Copyright (C) 2026 DmShAl (Shepeta Dmitry)
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Extract unchanged GoldenDict parser functions for the isolated Qt harness."""
 import argparse

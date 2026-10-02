@@ -1,3 +1,6 @@
+// Copyright (C) 2026 DmShAl (Shepeta Dmitry)
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Use only the isolated enhancer fixture, never the user's dictionary library.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');

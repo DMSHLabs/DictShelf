@@ -1,3 +1,9 @@
+/**
+ * Copyright (C) 2026 DmShAl (Shepeta Dmitry)
+ *
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 /* Interface text only. Never infer the language from the OS, browser or a
    dictionary. Reload after saving so old and new labels cannot mix in a view. */
 (function () {

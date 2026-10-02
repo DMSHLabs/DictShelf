@@ -1,3 +1,9 @@
+/**
+ * Copyright (C) 2026 DmShAl (Shepeta Dmitry)
+ *
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 // Search history and live headword suggestions for the search field.
 // The page supplies only the ordinary search action; this file owns storage,
 // rendering, input events and the history-length control.

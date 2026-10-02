@@ -1,4 +1,6 @@
 @echo off
+rem Copyright (C) 2026 DmShAl (Shepeta Dmitry)
+rem SPDX-License-Identifier: GPL-3.0-or-later
 setlocal EnableExtensions DisableDelayedExpansion
 
 rem ============================================================

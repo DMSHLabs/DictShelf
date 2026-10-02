@@ -1,3 +1,6 @@
+// Copyright (C) 2026 DmShAl (Shepeta Dmitry)
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Optional JS checks (Node's standard library only; no npm/install/build step).
 const fs = require('node:fs');
 const vm = require('node:vm');

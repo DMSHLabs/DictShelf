@@ -14,7 +14,9 @@ What differs from upstream:
   color and image, CSS presets as toggleable layers), a native folder picker,
   and ongoing reliability fixes.
 - The Go server, the supported formats and the GPL-3.0-or-later license stay
-  upstream-compatible; upstream copyright notices remain in place.
+  upstream-compatible; upstream copyright notices remain in place, and the files
+  this fork authored carry its own — `Copyright (C) 2026 DmShAl (Shepeta
+  Dmitry)`, under the same license.
 
 Desktop builds and the general manual live in the
 [upstream repository](https://github.com/wuweidict/wudict). To build the
@@ -499,6 +501,10 @@ Not affiliated with, or endorsed by, any of the above.
 ## License
 
 GPL-3.0-or-later — see [LICENSE](LICENSE).
+
+The files this fork authored, and its changes to the ones it inherited, are
+© 2026 DmShAl (Shepeta Dmitry), under the same license; upstream's copyright
+notices remain in place where upstream wrote the file.
 
 `wudict licenses` prints the full third-party notices from inside the binary;
 the same text is in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).

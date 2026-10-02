@@ -1,3 +1,8 @@
+/**
+ * Copyright (C) 2026 DmShAl (Shepeta Dmitry)
+ *
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
 
 dialog.group-dialog.panel-card{position:fixed;inset:0;margin:auto;width:min(560px,94vw);height:fit-content;max-height:85vh;max-height:85dvh;padding:1em;border:1px solid var(--line);border-radius:12px;color:var(--fg);background-color:var(--bg);box-shadow:var(--shadow);overflow:auto;z-index:300}
 #groupEditor{height:min(650px,85vh);height:min(650px,85dvh)}

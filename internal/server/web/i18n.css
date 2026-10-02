@@ -1,3 +1,9 @@
+/**
+ * Copyright (C) 2026 DmShAl (Shepeta Dmitry)
+ *
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 #uiLanguageDialog{box-sizing:border-box;position:fixed;inset:0;margin:auto;
   width:min(360px,92vw);height:fit-content;max-height:85vh;overflow:auto;
   background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:12px;padding:20px;font:inherit}

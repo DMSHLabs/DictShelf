@@ -1,7 +1,9 @@
-// Copyright (C) 2026 glowinthedark
-//
-// SPDX-License-Identifier: GPL-3.0-or-later
-//
+/**
+ * Copyright (C) 2026 DmShAl (Shepeta Dmitry)
+ *
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 // Saved appearances: the Presets row on the panel, the menu it opens, the
 // window that names a new one, and the question asked before a switch throws
 // away changes nobody has saved.

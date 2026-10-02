@@ -1,3 +1,9 @@
+/**
+ * Copyright (C) 2026 DmShAl (Shepeta Dmitry)
+ *
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 
 // Group membership never writes disabled, prefOrder or the search selector.
 let userGroups=[], selectedGroup="all", groupSaving=false, groupShowAllPreferred=false;

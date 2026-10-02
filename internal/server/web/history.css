@@ -1,3 +1,9 @@
+/**
+ * Copyright (C) 2026 DmShAl (Shepeta Dmitry)
+ *
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 .search-history{position:absolute;top:calc(100% + 4px);left:0;right:0;
   max-height:min(50vh,320px);overflow-y:auto;background:var(--bg-card);
   border:1px solid var(--line);border-radius:8px;box-shadow:var(--shadow);

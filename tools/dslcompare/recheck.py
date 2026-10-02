@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Copyright (C) 2026 DmShAl (Shepeta Dmitry)
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Recheck every retained failing batch with the current Go parser."""
 import argparse

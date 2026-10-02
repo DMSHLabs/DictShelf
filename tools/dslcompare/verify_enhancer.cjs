@@ -1,3 +1,4 @@
+// Copyright (C) 2026 DmShAl (Shepeta Dmitry)
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Run against the isolated preview fixture, not the user's library.
 const assert = require('node:assert/strict');

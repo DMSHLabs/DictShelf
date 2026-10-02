@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2026 glowinthedark
+ * Copyright (C) 2026 DmShAl (Shepeta Dmitry)
  *
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
