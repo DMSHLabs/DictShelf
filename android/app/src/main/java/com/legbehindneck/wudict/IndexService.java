@@ -149,6 +149,8 @@ public final class IndexService extends Service {
     private static int labelPct = -1;
 
     /** Whether the server is preparing a dictionary right now. */
+    static boolean hasWork() { return inFlight; }
+
     static boolean isBusy() {
         return serverBusy;
     }

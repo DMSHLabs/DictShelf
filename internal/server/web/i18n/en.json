@@ -1,4 +1,5 @@
 {
+  "panel.exit": "Exit",
   "database.createFullText": "Create full-text indexes",
   "database.createContains": "Create Contains indexes",
   "database.createBase": "Create indexes",

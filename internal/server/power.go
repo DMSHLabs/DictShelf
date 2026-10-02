@@ -375,6 +375,10 @@ func (s *Server) handlePower(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 403, "only available from the machine running wudict")
 		return
 	}
+	if r.Method == http.MethodGet {
+		writeJSON(w, map[string]any{"state": CurrentPower().String(), "busy": demandHold.Load() > 0})
+		return
+	}
 	p, ok := ParsePower(r.URL.Query().Get("state"))
 	if !ok {
 		httpErr(w, 400, "state must be active, background or restricted")

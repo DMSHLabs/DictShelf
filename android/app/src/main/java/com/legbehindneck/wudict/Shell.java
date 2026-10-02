@@ -558,6 +558,11 @@ final class Shell {
             public boolean onJsPrompt(WebView view, String url, String message,
                                       String defaultValue, android.webkit.JsPromptResult result) {
                 if (!ownPage(a, url)) return false;
+                if ("wudict:exit".equals(message)) {
+                    result.confirm("ok");
+                    a.runOnUiThread(() -> AppExit.request(a));
+                    return true;
+                }
                 if ("wudict:appearance".equals(message)) {
                     try {
                         org.json.JSONObject request = new org.json.JSONObject(defaultValue);

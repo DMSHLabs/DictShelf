@@ -1,5 +1,9 @@
 # Agent handoff — current state
 
+2026-10-03 Exit phone follow-up: user reports first Exit restarting the app, second closing it. Exit now calls finish on all registered windows and keeps shutdown pending until the final onActivityDestroyed; only then stopAny runs. A new external lookup during teardown revokes the old shutdown. Removed finishAndRemoveTask during iteration. Exit button now lives in .facts and receives the same colour/image-aware .mrow styling as the other Settings buttons. Temporary Java lifecycle harness passes first-request/window-order/fresh-lookup/busy Cancel+wait cases; FOSS/Play Java compilation, Node i18n and Chromium shared-style comparisons at 320/390/1100px pass. Actual first-click close and reader restart still require a rebuilt APK/phone check.
+
+2026-10-03 Exit: current checkout `dev` HEAD `b99ba0f`, clean at start; this slice uncommitted. Android-only Exit / Выход is the last separate Settings row. Application lifecycle registry closes all app windows, preserving a reader task hosting Lookup; stops owned/adopted server without disabling future external intents. Active native transfers or demanded server work offer wait-until-finished or Cancel. GET /api/power reports demanded work (also for an adopted child); cancelled startup cannot spawn later. Full Go tests/build, Node i18n and FOSS/Play Java compilation pass. No APK/device verification: check ordinary Exit, multiple popup windows, busy wait/Cancel, adopted server and immediate reader lookup after Exit. Earlier search/UI changes below are included in b99ba0f; their commit-state notes are historical.
+
 2026-10-03 wording: user approved lowercase **exact / точно** for the article-find exact mode, retaining whole-word/whole-phrase matching. EN/RU labels updated; Node localization checks pass.
 
 2026-10-03 wording: user approved **Search in hidden examples** for the article-find checkbox; English catalog updated, Node localization checks pass.

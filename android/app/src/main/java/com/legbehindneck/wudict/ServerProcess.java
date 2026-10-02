@@ -229,6 +229,7 @@ class ServerProcess {
     private Process process;
     // written by the log thread, read by the start thread when the child dies
     private volatile String lastLine;
+    private boolean stopped;
 
     private ServerProcess(Context app) {
         this.app = app;
@@ -254,7 +255,10 @@ class ServerProcess {
         ShellPrefs.token(app);
         if (adoptRunningServer(app, port)) {
             Log.i(TAG, "adopted a wudict server already listening on " + port);
-            livePort = port; // the port the adopted child is really on
+            synchronized (this) {
+                if (stopped) return;
+                livePort = port; // the port the adopted child is really on
+            }
             listener.onReady();
             return;
         }
@@ -317,7 +321,10 @@ class ServerProcess {
         pb.directory(home);
         pb.redirectErrorStream(true);
         try {
-            process = pb.start();
+            synchronized (this) {
+                if (stopped) return;
+                process = pb.start();
+            }
         } catch (IOException e) {
             listener.onFailed(String.valueOf(e.getMessage()));
             return;
@@ -325,7 +332,10 @@ class ServerProcess {
         logOutput(process.getInputStream());
 
         if (awaitPort(app, process, port)) {
-            livePort = port; // and the one this child was exec'd with
+            synchronized (this) {
+                if (stopped) return;
+                livePort = port; // and the one this child was exec'd with
+            }
             listener.onReady();
             return;
         }
@@ -524,7 +534,8 @@ class ServerProcess {
         return false;
     }
 
-    private void stop() {
+    private synchronized void stop() {
+        stopped = true;
         // Whatever it was preparing died with it, so the notification and the
         // service holding the app up must go with it too. Doing this from the
         // stdout reader instead would not be enough: a killed child closes the
@@ -552,8 +563,8 @@ class ServerProcess {
      */
     static synchronized boolean stopAny(Context ctx) {
         generation++;   // any callback still in flight from this child is stale
-        boolean owned = shared != null;
-        if (owned) shared.stop();
+        boolean owned = shared != null && shared.process != null;
+        if (shared != null) shared.stop();
         shared = null;
         livePort = 0;
         state = IDLE;
@@ -561,6 +572,25 @@ class ServerProcess {
         if (owned) return true;
         IndexService.busy(ctx, false);
         return killAdopted(ctx);
+    }
+
+    /** Reads demanded work even when the server was adopted without stdout. */
+    static boolean workInFlight() {
+        HttpURLConnection c = null;
+        try {
+            c = (HttpURLConnection) new URL("http://" + HOST + ":" + port() + "/api/power").openConnection();
+            ShellPrefs.authorize(c);
+            c.setConnectTimeout(900);
+            c.setReadTimeout(900);
+            if (c.getResponseCode() != 200) return IndexService.hasWork();
+            try (BufferedReader r = new BufferedReader(new InputStreamReader(c.getInputStream(), StandardCharsets.UTF_8))) {
+                return new JSONObject(r.readLine()).optBoolean("busy");
+            }
+        } catch (Exception unavailable) {
+            return IndexService.hasWork();
+        } finally {
+            if (c != null) c.disconnect();
+        }
     }
 
     /**

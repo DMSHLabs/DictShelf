@@ -262,4 +262,7 @@
 	<string name="intake_other_stop">Stop it</string>
 	<string name="intake_other_keep">Keep it running</string>
 	<string name="intake_no_browser">No web browser is installed to open %1$s.</string>
+    <string name="exit_title">Exit</string>
+    <string name="exit_busy">Work is still in progress. Exit after it finishes?</string>
+    <string name="exit_wait">Exit when finished</string>
 </resources>

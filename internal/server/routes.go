@@ -142,6 +142,7 @@ func (s *Server) routes() []route {
 		// what the platform is doing to us (D64) - the Android shell's channel
 		// for onStop / onTrimMemory / thermal / battery-saver, which the
 		// exec'd server has no other way of learning.
+		{"GET", "/api/power", s.handlePower, "/api/power", false},
 		{"POST", "/api/power", s.handlePower, "/api/power", false},
 		// The contract, served by the thing it describes.
 		{"GET", "/api/openapi.yaml", s.handleOpenAPI, "/api/openapi.yaml", false},

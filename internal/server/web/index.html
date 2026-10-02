@@ -651,6 +651,7 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
        · <a href="https://github.com/wuweidict/wudict" target="_blank" rel="noopener">{{T:panel.source}}</a></p>
   </div>
 </details>
+<div id="exitSection" class="sect" hidden><div class="facts"><button type="button" class="mrow" id="exitApp">{{T:panel.exit}}</button></div></div>
 </div>
 </div>
 </div>
@@ -2749,7 +2750,7 @@ $("speakSeg").hidden=!speakCan();$("panel").classList.add("show");
   // onPageFinished - because every row behind it is a fact about this window.
   // Asked here rather than at load: the flag arrives after this script has run,
   // and the drawer is opened by the reader long afterwards.
-  if(window.wudictNativeShell)$("sysSection").hidden=false;
+  if(window.wudictNativeShell){$("sysSection").hidden=false;$("exitSection").hidden=false;}
   // Another window can switch a layer; the panel's layer rows are repainted
   // from the registry in hand whenever the drawer opens, the way the Presets
   // row is re-asked whether the screen still matches the look in force.
@@ -2866,6 +2867,8 @@ $("clearDatabaseGo").onclick=async()=>{
 let sysState=null;   // the shell's last answer: the switches, the rows, the address
 let sysCfg=null;     // the server's last /api/config answer, or null when it did not
 const sysRows=[];    // one entry per Advanced row: {row, field, hint}
+$("exitApp").addEventListener("click",()=>{if(window.wudictNativeShell)window.prompt("wudict:exit","");});
+
 function sysRequest(request){
   if(!window.wudictNativeShell)return null;
   try{

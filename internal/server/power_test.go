@@ -12,6 +12,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"runtime/debug"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 )
@@ -396,5 +398,38 @@ func TestPowerEndpoint(t *testing.T) {
 	}
 	if CurrentPower() != PowerBackground {
 		t.Errorf("a remote caller changed the power state to %v", CurrentPower())
+	}
+}
+
+func TestPowerStatusDemandHolds(t *testing.T) {
+	restorePower(t)
+	s, _ := previewRegistry(t)
+	check := func(busy bool) {
+		t.Helper()
+		req := newRequest("GET", "/api/power", nil)
+		req.RemoteAddr = "127.0.0.1:5000"
+		rec := httptest.NewRecorder()
+		s.ServeHTTP(rec, req)
+		want := "\"busy\":" + strconv.FormatBool(busy)
+		if rec.Code != 200 || !strings.Contains(rec.Body.String(), want) {
+			t.Fatalf("busy=%v: %d %s", busy, rec.Code, rec.Body.String())
+		}
+	}
+	check(false)
+	first := HoldActiveProcs()
+	defer first()
+	second := HoldActiveProcs()
+	defer second()
+	check(true)
+	first()
+	check(true)
+	second()
+	check(false)
+	req := newRequest("GET", "/api/power", nil)
+	req.RemoteAddr = "192.0.2.7:5000"
+	rec := httptest.NewRecorder()
+	s.ServeHTTP(rec, req)
+	if rec.Code != 403 {
+		t.Fatalf("remote status: %d", rec.Code)
 	}
 }

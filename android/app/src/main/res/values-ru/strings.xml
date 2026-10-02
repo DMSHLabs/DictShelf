@@ -88,4 +88,7 @@
 	<string name="intake_other_stop">Остановить</string>
 	<string name="intake_other_keep">Продолжить текущий</string>
 	<string name="intake_no_browser">На устройстве нет браузера для открытия %1$s.</string>
+    <string name="exit_title">Выход</string>
+    <string name="exit_busy">Работа ещё выполняется. Выйти после её завершения?</string>
+    <string name="exit_wait">Выйти после завершения</string>
 </resources>

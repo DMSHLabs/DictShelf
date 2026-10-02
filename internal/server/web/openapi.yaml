@@ -2292,6 +2292,28 @@ paths:
           $ref: '#/components/responses/ServerError'
 
   /api/power:
+    get:
+      tags: [internal]
+      operationId: getPower
+      x-internal: true
+      summary: Read power state and pending user-requested work
+      description: Loopback-only status used by the Android shell before exiting, including an adopted server.
+      responses:
+        '200':
+          description: Current state and whether demanded work is running
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [state, busy]
+                properties:
+                  state:
+                    type: string
+                    enum: [active, background, restricted]
+                  busy:
+                    type: boolean
+        '403':
+          description: Caller is not local
     post:
       tags: [internal]
       operationId: setPower

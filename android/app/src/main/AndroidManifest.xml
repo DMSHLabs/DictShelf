@@ -54,6 +54,7 @@
     </queries>
 
     <application
+        android:name="com.legbehindneck.wudict.AppExit"
         android:allowBackup="false"
         android:hasFragileUserData="true"
         android:icon="@mipmap/ic_launcher"
