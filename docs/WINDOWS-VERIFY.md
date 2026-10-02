@@ -159,7 +159,7 @@ them are in `docs/handoff-archive.md`.
     arrived keeps its CRLF files and still fails them; a fresh one does not —
     verified at `23670f3`, where `file` reports the spec examples as LF and
     `internal/cli`, `internal/format/wmd` and `internal/howto` all pass. If
-    they appear again, re-checkout rather than debug them.
+    they appear again, convert the checkout rather than debug them: a plain `git checkout --force` does NOT rewrite a file whose normalised content already matches the index, so remove the tracked files and check them out again — `git ls-files | xargs rm` then `git checkout -- .` — or clone fresh.
   - The three setup-page probes were fixed on this side (2026-10-02): every page
     ships the whole i18n catalog, so setup.html's sentences are in the app
     page's body too, and the app page has no inline stylesheet to find "design
