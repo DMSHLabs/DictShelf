@@ -209,7 +209,7 @@ for (const language of ['en', 'ru']) {
     esc:s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;'),
     escAttr:s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'),
     provenance:()=>'', traits:()=>'', renderReindex:()=>{}};
-  vm.runInNewContext(main.match(/function dslControls\(d\)\{[\s\S]*?\n\}/)[0]+'\n'+
+  vm.runInNewContext(main.match(/function dslIndexControls\(d\)\{[\s\S]*?\n\}/)[0]+'\n'+main.match(/function dslControls\(d\)\{[\s\S]*?\n\}/)[0]+'\n'+
     main.match(/function renderPanel\(\)\{[\s\S]*?\n\}/)[0], cardContext);
   cardContext.renderPanel();
   assert.equal(cards[0].dataset.id, 'unchanged-id');

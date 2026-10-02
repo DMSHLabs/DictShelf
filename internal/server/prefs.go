@@ -130,8 +130,9 @@ func (u *UIPrefs) normalize() {
 }
 
 type prefsFile struct {
-	DSL      map[string]string `json:"dsl,omitempty"`
-	Language string            `json:"language,omitempty"` // explicit interface language, never the dictionary language
+	DSLRemoved map[string]bool   `json:"dslRemoved,omitempty"`
+	DSL        map[string]string `json:"dsl,omitempty"`
+	Language   string            `json:"language,omitempty"` // explicit interface language, never the dictionary language
 
 	Groups  []DictionaryGroup `json:"groups,omitempty"`
 	Version int               `json:"version"`
@@ -143,8 +144,9 @@ type prefsFile struct {
 // empty path is in-memory only: it answers questions and forgets on exit,
 // which is what tests and a home-less environment need.
 type Prefs struct {
-	dsl      map[string]string
-	language string // installation-wide UI choice; independent of /api/prefs replacements
+	dslRemoved map[string]bool
+	dsl        map[string]string
+	language   string // installation-wide UI choice; independent of /api/prefs replacements
 
 	editMu sync.Mutex // serialize read/merge/write operations, including identity healing
 	groups []DictionaryGroup
@@ -181,6 +183,7 @@ func LoadPrefs(path string) *Prefs {
 	p.exists, p.dicts, p.ui = true, f.Dicts, f.UI
 	p.groups = f.Groups
 	p.dsl = f.DSL
+	p.dslRemoved = f.DSLRemoved
 	p.language = uiLanguage(f.Language)
 	return p
 }
@@ -248,7 +251,7 @@ func (p *Prefs) update(dicts []DictPref, ui *UIPrefs) error {
 // Keep the lock through rename: concurrent writes must reach disk in order.
 func (p *Prefs) saveLocked() error {
 	path := p.path
-	data, err := json.MarshalIndent(prefsFile{Version: prefsVersion, UI: p.ui, Dicts: p.dicts, Groups: p.groups, Language: p.language, DSL: p.dsl}, "", "  ")
+	data, err := json.MarshalIndent(prefsFile{Version: prefsVersion, UI: p.ui, Dicts: p.dicts, Groups: p.groups, Language: p.language, DSL: p.dsl, DSLRemoved: p.dslRemoved}, "", "  ")
 	if err != nil || path == "" {
 		return err
 	}

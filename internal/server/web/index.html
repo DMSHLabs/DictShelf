@@ -2337,7 +2337,7 @@ function provenance(d){
      ALLOW_REMOTE_DELETE is on. Never a platform test done here: the page does
      not know what it is running on, and must not guess. */
   const canDel=!!(cfgInfo&&cfgInfo.canDelete);
-  if(canDel)rows.push(`<div class="rmwrap">${rmTrigger()}</div>`);
+  if(canDel)rows.push(`<div class="rmwrap">${rmTrigger(d)}</div>`);
   // The flat one-line form has nowhere to put a control, so a card that can be
   // deleted always gets the disclosure - even when the body holds nothing else.
   if(!rows.length)return `<div class="prov1" title="${escAttr(full)}">${head}</div>`;
@@ -2347,8 +2347,17 @@ function provenance(d){
 
 /* The trigger, in one place: rendered into the file list, and restored there
    when a confirmation is cancelled. */
-function rmTrigger(){
-  return `<span class="rm" title="${escAttr(tx("dictUI.removeWarning"))}">${esc(tx("dictUI.remove"))}</span>`;
+function rmTrigger(d){
+  let indices="";
+  if(d?.dsl){
+    indices=`<span class="dsl-index-actions">`+["original","gd"].map(variant=>{
+      const target=dicts.find(x=>x.dsl?.source===d.dsl.source&&x.dsl.variant===variant);
+      const ready=!!target?.dbSize&&d.dsl.sourceAvailable;
+      const label=tx(variant==="original"?"dictUI.deleteOriginalIndex":"dictUI.deleteGDIndex");
+      return `<button type="button" class="dsl-index-remove" data-delete-index="${variant}"${ready?"":" disabled"} title="${escAttr(ready?label:tx(d.dsl.sourceAvailable?"dictUI.indexNotPrepared":"dictUI.indexSourceMissing"))}">${esc(label)}</button>`;
+    }).join("")+"</span>";
+  }
+  return `<div class="rm-actions"><span class="rm" title="${escAttr(tx("dictUI.removeWarning"))}">${esc(tx("dictUI.remove"))}</span>${indices}</div>`;
 }
 /* The Rebuild line (server/reindex.go): one line, shown only while some
    dictionary is outdated or a rebuild is running. Nothing here starts on its
@@ -2419,6 +2428,20 @@ function dslControls(d){
       const last=on&&(v.mode!=="both"||!v.original||!v.gd);
       return `<label title="${escAttr(last?tx("dictUI.dslAtLeastOne"):label)}"><input type="checkbox" data-dsl-mode="${key}"${on?" checked":""}${dslSaving||!exists||last?" disabled":""}>${esc(label)}</label>`;
     }).join("")+(d.unavailable?`<span class="meta">${esc(tx("dictUI.dslUnavailable"))}</span>`:"")+"</div>";
+}
+function dslIndexControls(d){
+  if(!d.dsl)return "";
+  const family=dicts.filter(x=>x.dsl?.source===d.dsl.source);
+  const empty=family.every(x=>!x.dbSize)&&family.some(x=>x.dsl.indexRemoved);
+  return `<div class="dsl-index-controls">`+["original","gd"].map(variant=>{
+    const target=family.find(x=>x.dsl.variant===variant);
+    const disabled=!target||!d.dsl.sourceAvailable;
+    const full=!!target?.caps?.FTS;
+    const label=tx(variant==="original"?"dictUI.dslOriginal":"dictUI.dslGD");
+    return `<div class="dsl-index-row"><span>${esc(label)}</span>`+
+      (!target?.dbSize?`<button type="button" class="feat${disabled?" locked":""}" data-feat="base" data-target="${escAttr(target?.id||"")}"${disabled?" disabled":""}>${esc(tx("dictUI.index"))}</button>`:"")+
+      `<button type="button" class="feat${full?" on":""}${disabled?" locked":""}" data-feat="fts" data-target="${escAttr(target?.id||"")}" data-on="${full?1:0}" aria-pressed="${full}"${disabled?" disabled":""}>${esc(tx("dictUI.fts"))}</button></div>`;
+  }).join("")+(empty?`<div class="dsl-index-warning"><b aria-hidden="true">!</b> ${esc(tx("dictUI.dslNeedsIndex"))}</div>`:d.dsl.indexRemoved?`<div class="dsl-index-warning"><b aria-hidden="true">!</b> ${esc(tx("dictUI.dslVariantNeedsIndex"))}</div>`:"")+"</div>";
 }
 async function setDSLMode(id,mode){
   if(dslSaving)return;
@@ -2506,10 +2529,11 @@ function renderPanel(){
     const est=indexed?0:baseIndexBytes(d);
     let caps=indexed
       ? `<span class="feat on locked" title="${escAttr(tx("dictUI.indexedSize",{size:mb(d.dbSize)}))}">${mb(d.dbSize)}</span>`
-      : canToggle
+      : canToggle&&!d.dsl
         ? `<span class="feat" data-feat="base" title="${escAttr(tx("dictUI.buildHint")+(est?tx("dictUI.estimateHint",{size:mb(est)}):""))}">${esc(tx("dictUI.index"))}${est?" · ~"+mb(est):""}</span>`
         : "";
     for(const[key,label,on,bytes]of feats){
+      if(d.dsl&&key==="fts")continue;
       if(key==="media"&&!on&&!d.hasMedia)continue; // nothing to pack
       const size=on&&bytes?" "+mb(bytes):"";
       /* A stale index still works — it was built with older text-folding
@@ -2548,6 +2572,7 @@ function renderPanel(){
       </div>
       <div class="meta">${esc(d.format||"?")}${d.entries?" · "+esc(tx("dictUI.entries",{number:window.wudictI18n.number(d.entries)})):""}${d.dbSize?tx("dictUI.indexed"):""}</div>
       ${dslControls(d)}
+      ${dslIndexControls(d)}
       <div>${caps}</div><div class="acts">${acts}</div>
       ${provenance(d)}
       <details class="about"><summary>${esc(tx("dictUI.about"))}</summary>${traits(d)}<div class="aboutbody">…</div></details>`;
@@ -2718,7 +2743,11 @@ function showDictSettings(){
 $("dictSettingsScroll").addEventListener("scroll",()=>{
   dictListTop=$("dictSettingsScroll").scrollTop;
 },{passive:true});
-$("editDictSettings").onclick=showDictSettings;
+$("editDictSettings").onclick=async()=>{
+  // A search may have prepared an index since the dictionary list was loaded.
+  await loadDicts();
+  showDictSettings();
+};
 $("closeDictSettings").onclick=()=>$("dictSettings").close();
 $("dictSettings").addEventListener("close",()=>{
   reissueIfCorpusMoved();
@@ -3236,7 +3265,7 @@ function ftsCandidates(){
   // a dictionary whose source file is gone cannot be re-indexed at all — the
   // prepared data is the only copy (same rule the per-card chips enforce, and
   // which "index all" ignored: it queued dictionaries guaranteed to fail)
-  return dicts.filter(d=>!d.error&&!d.caps?.FTS&&d.source);
+  return dicts.filter(d=>!d.error&&!d.unavailable&&!d.caps?.FTS&&d.source);
 }
 /* Size estimate calibrated on the user's OWN corpus: bytes-per-entry observed
    across the dictionaries that already have full text. Article length varies
@@ -3307,7 +3336,7 @@ $("ftsAllBox").addEventListener("click",async e=>{
     // the card's own chip shows per-dictionary progress where the user will
     // look for it; a fresh detached node otherwise, because runIngest marks
     // its label busy for good and would refuse every dictionary after the first
-    const label=document.querySelector(`.pd[data-id="${d.id}"] .feat[data-feat="fts"]`)
+    const label=document.querySelector(`.pd[data-id="${d.id}"] .feat[data-feat="fts"]${d.dsl?`[data-target="${d.id}"]`:""}`)
       ||document.createElement("span");
     await runIngest(d.id,{fts:1,quiet:true,statusPrefix:`${n}/${todo.length} · `},label);
   }
@@ -3428,6 +3457,8 @@ function aboutLangs(j){
   return `<div class="aboutlangs">${parts.join(" · ")}</div>`;
 }
 $("panelList").addEventListener("click",e=>{
+  const index=e.target.closest("[data-delete-index]");
+  if(index){if(!index.disabled)askDSLIndexRemoval(index);return}
   const mv=e.target.closest("[data-mv]");
   if(mv){moveDict(mv.closest(".pd").dataset.id,mv.dataset.mv);return}
   /* A trait is a scope, taken the same way the card title takes one (D109):
@@ -3454,7 +3485,7 @@ $("panelList").addEventListener("click",e=>{
     // a stale index is re-requested, not removed: same switch, still "on",
     // which setFeatures reads as "rebuild this"
     const on=feat.dataset.on==="1"&&feat.dataset.stale!=="1";
-    runIngest(feat.closest(".pd").dataset.id,{[feat.dataset.feat]:on?0:1},feat);
+    runIngest(feat.dataset.target||feat.closest(".pd").dataset.id,{[feat.dataset.feat]:on?0:1},feat);
     return;
   }
   const rm=e.target.closest(".rm");
@@ -3463,11 +3494,11 @@ $("panelList").addEventListener("click",e=>{
   // Cancel restores the trigger in place rather than redrawing the panel: a
   // full render would collapse the file list the user opened to get here, and
   // scroll every other card back to wherever renderPanel decides.
-  if(no){const w=no.closest(".rmwrap");if(w)w.innerHTML=rmTrigger();return}
+  if(no){const w=no.closest(".rmwrap");if(w)w.innerHTML=rmTrigger(dicts.find(d=>d.id===no.closest(".pd").dataset.id));return}
   const go=e.target.closest("[data-rm]");
   if(go){
     if(go.dataset.busy)return;
-    runRemove(go.closest(".pd").dataset.id,go.dataset.rm,go);
+    runRemove(go.dataset.target||go.closest(".pd").dataset.id,go.dataset.rm,go);
     return;
   }
   /* The card's title IS the dictionary, so pressing it scopes the search to
@@ -3529,6 +3560,15 @@ $("panelList").addEventListener("keydown",e=>{
    the import dialog uses "originals" for the user's own files on shared
    storage — one word for two different files, in one app, is the confusion
    that made the import's keep/delete question unanswerable. */
+function askDSLIndexRemoval(button){
+  const pd=button.closest(".pd"),d=dicts.find(x=>x.id===pd.dataset.id);
+  const target=dicts.find(x=>x.dsl?.source===d?.dsl?.source&&x.dsl?.variant===button.dataset.deleteIndex);
+  if(!target?.dbSize||!d.dsl.sourceAvailable)return;
+  const name=dictLabel(target),size=mb((target.dbSize||0)+(target.mediaSize||0));
+  pd.querySelector(".rmwrap").innerHTML=`<span class="rmq">${esc(tx("dictUI.deleteVariantIndexConfirm",{name,size}))}<br>`+
+    `<button type="button" class="rmgo" data-rm="variant-index" data-target="${escAttr(target.id)}">${esc(tx("dictUI.indexOnly"))}</button>`+
+    `<button type="button" class="rmno">${esc(tx("dictUI.cancel"))}</button></span>`;
+}
 function askRemoval(pd){
   const d=dicts.find(x=>x.id===pd.dataset.id);if(!d)return;
   // The confirmation replaces the trigger where it stands - at the foot of the
@@ -3568,7 +3608,7 @@ async function runRemove(id,kind,node){
   node.textContent=tx("dictUI.deleting");
   setStatus('<span class="spin"></span>'+esc(tx("dictUI.deletingName",{name})));
   const q="/api/library?dict="+encodeURIComponent(id)+
-    "&prepared="+(kind==="source"?0:1)+"&source="+(kind==="index"?0:1);
+    "&prepared="+(kind==="source"?0:1)+"&source="+(kind==="index"||kind==="variant-index"?0:1);
   let rep;
   try{
     const r=await fetch(q,{method:"DELETE"});
@@ -3585,6 +3625,9 @@ async function runRemove(id,kind,node){
   // The server has already rescanned; this refetches the list it now reports,
   // and redraws the panel (and the folder section's counts) from it.
   await loadDicts();
+  if(lastScope&&dicts.some(d=>d.id===lastScope&&d.unavailable)){
+    lastScope=null;scopeOnce=null;refreshDictUI(true);
+  }
   if($("folderBody").childNodes.length)loadFolders();
   if(lastQuery)doSearch();
 }

@@ -914,8 +914,8 @@ func (s *Server) baseDictInfo(e *entry) dictInfo {
 	}
 	// fall back to a full open (non-probeable formats, or probe errors).
 	info := dictInfo{ID: e.ID, Path: e.Path}
-	// A disabled DSL must not auto-prepare just to fill its settings card.
-	if e.dslSource != "" && !s.reg.dslAvailable(e) {
+	// Disabled or explicitly removed DSL indexes must not reappear for metadata.
+	if e.dslSource != "" && (e.indexBlocked() || !s.reg.dslAvailable(e)) {
 		reader, err := dict.OpenReader(e.Path)
 		if err != nil {
 			info.Error = err.Error()
@@ -1976,6 +1976,13 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 		if time.Since(last) > 200*time.Millisecond {
 			last = time.Now()
 			emit("progress", map[string]int{"done": done, "total": total})
+		}
+	}
+	if e.indexBlocked() {
+		err = e.restoreDSLIndex(store.Plan{FullText: want.FullText, Contains: want.Contains}, progress)
+		if err != nil {
+			emit("error", map[string]string{"error": err.Error()})
+			return
 		}
 	}
 	if base {

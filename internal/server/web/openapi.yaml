@@ -2566,6 +2566,8 @@ components:
             mode: { type: string, enum: [original, gd, both] }
             original: { type: boolean, description: Original variant exists. }
             gd: { type: boolean, description: GD variant exists. }
+            sourceAvailable: { type: boolean, description: Shared DSL source exists and can rebuild deleted indexes. }
+            indexRemoved: { type: boolean, description: Explicitly removed index stays unavailable until explicit ingest; persists across restart. }
         path:
           type: string
           description: The source file, or the text.db of a prepared dictionary.

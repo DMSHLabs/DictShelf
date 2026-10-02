@@ -184,3 +184,129 @@ func TestDSLModeDoesNotPrepareUntilSearch(t *testing.T) {
 		}
 	}
 }
+
+func TestDSLIndexRemovalRequiresExplicitRebuild(t *testing.T) {
+	isolatedDBDir(t)
+	dir := t.TempDir()
+	source := filepath.Join(dir, "demo.dsl")
+	if err := os.WriteFile(source, []byte(sampleDSL), 0600); err != nil {
+		t.Fatal(err)
+	}
+	state := filepath.Join(t.TempDir(), StateFile)
+	reg, err := NewRegistry([]string{dir}, false, WithPrefs(LoadPrefs(state)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	closeBackends(t, reg)
+	s := New(reg)
+	entries := reg.all()
+	for _, e := range entries {
+		if _, err := e.open(); err != nil {
+			t.Fatal(err)
+		}
+		if err := e.setFeatures(features{FullText: true}, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	blocked := filepath.Join(t.TempDir(), "not-a-directory")
+	if err := os.WriteFile(blocked, []byte("file"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	reg.prefs.path = filepath.Join(blocked, StateFile)
+	failed := entries[0]
+	failedDB := s.dictInfoFor(failed).TextDB
+	if rec := deleteReq(t, s, "/api/library?dict="+failed.ID+"&prepared=1&source=0"); rec.Code != 400 {
+		t.Fatalf("failed state save: %d %s", rec.Code, rec.Body.String())
+	}
+	if !fileExists(failedDB) || failed.indexBlocked() {
+		t.Fatal("failed state save deleted or disabled index")
+	}
+	reg.prefs.path = state
+	for _, removed := range entries {
+		var other *entry
+		for _, e := range entries {
+			if e != removed {
+				other = e
+			}
+		}
+		otherDB := s.dictInfoFor(other).TextDB
+		before, err := os.ReadFile(otherDB)
+		if err != nil {
+			t.Fatal(err)
+		}
+		stamp, err := os.Stat(otherDB)
+		if err != nil {
+			t.Fatal(err)
+		}
+		removedDB := s.dictInfoFor(removed).TextDB
+		if rec := deleteReq(t, s, "/api/library?dict="+removed.ID+"&prepared=1&source=0"); rec.Code != 200 {
+			t.Fatalf("delete index: %d %s", rec.Code, rec.Body.String())
+		}
+		groupCall(t, s, "GET", "/api/dicts", nil, 200)
+		if _, err := os.Stat(removedDB); !os.IsNotExist(err) {
+			t.Fatalf("%s index recreated by metadata: %v", removed.dslVariant, err)
+		}
+		if info := s.dictInfoFor(removed); info.TextDB != "" || !info.DSL.SourceAvailable {
+			t.Fatalf("removed index metadata: %+v", info)
+		}
+		after, err := os.ReadFile(otherDB)
+		if err != nil {
+			t.Fatal(err)
+		}
+		newStamp, err := os.Stat(otherDB)
+		if err != nil || string(before) != string(after) || !stamp.ModTime().Equal(newStamp.ModTime()) {
+			t.Fatal("removal changed the other index")
+		}
+		for _, e := range entries {
+			if _, err := os.Stat(e.Path); err != nil {
+				t.Fatalf("removal changed source/descriptor: %v", err)
+			}
+		}
+		body, err := os.ReadFile(source)
+		if err != nil || string(body) != sampleDSL {
+			t.Fatal("removal changed DSL source")
+		}
+		groupCall(t, s, "GET", "/api/search?q=hello&dict="+removed.ID, nil, 404)
+		reg.prefs = LoadPrefs(state)
+		groupCall(t, s, "GET", "/api/dicts", nil, 200)
+		if reg.dslAvailable(removed) || !removed.indexBlocked() {
+			t.Fatal("removed index enabled after reloading saved preferences")
+		}
+		if _, err := removed.open(); err == nil {
+			t.Fatal("removed index can be implicitly opened")
+		}
+		groupCall(t, s, "GET", "/api/ingest?dict="+removed.ID+"&fts=1", nil, 200)
+		if info := s.dictInfoFor(removed); info.TextDB == "" || !info.Caps.FTS || removed.indexBlocked() {
+			t.Fatal("explicit full text did not restore index")
+		}
+		groupCall(t, s, "GET", "/api/ingest?dict="+removed.ID+"&fts=0", nil, 200)
+		if s.dictInfoFor(removed).Caps.FTS || !s.dictInfoFor(other).Caps.FTS {
+			t.Fatal("full text toggle affected the other variant")
+		}
+		groupCall(t, s, "GET", "/api/ingest?dict="+removed.ID+"&fts=1", nil, 200)
+	}
+	for _, e := range entries {
+		if rec := deleteReq(t, s, "/api/library?dict="+e.ID+"&prepared=1&source=0"); rec.Code != 200 {
+			t.Fatal(rec.Body.String())
+		}
+	}
+	restarted, err := NewRegistry([]string{dir}, false, WithPrefs(LoadPrefs(state)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	closeBackends(t, restarted)
+	groupCall(t, New(restarted), "GET", "/api/dicts", nil, 200)
+	for _, e := range restarted.all() {
+		if restarted.dslAvailable(e) || New(restarted).dictInfoFor(e).TextDB != "" {
+			t.Fatal("restart restored a removed index")
+		}
+	}
+	if err := os.Remove(source); err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		if s.dictInfoFor(e).DSL.SourceAvailable {
+			t.Fatal("missing source marked rebuildable")
+		}
+	}
+}

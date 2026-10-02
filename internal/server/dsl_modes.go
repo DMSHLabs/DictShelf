@@ -11,11 +11,13 @@ import (
 )
 
 type dslView struct {
-	Source   string `json:"source"`
-	Variant  string `json:"variant"`
-	Mode     string `json:"mode"`
-	Original bool   `json:"original"`
-	GD       bool   `json:"gd"`
+	Source          string `json:"source"`
+	Variant         string `json:"variant"`
+	Mode            string `json:"mode"`
+	Original        bool   `json:"original"`
+	GD              bool   `json:"gd"`
+	SourceAvailable bool   `json:"sourceAvailable"`
+	IndexRemoved    bool   `json:"indexRemoved"`
 }
 
 // Resolve once at discovery; cached-only dictionaries use their source receipt.
@@ -55,6 +57,8 @@ func (r *Registry) dslView(e *entry) *dslView {
 		return nil
 	}
 	v := &dslView{Source: e.dslSource, Variant: e.dslVariant, Mode: r.prefs.dslMode(e.dslSource)}
+	v.SourceAvailable = fileExists(e.dslSource)
+	v.IndexRemoved = e.indexBlocked()
 	for _, other := range r.all() {
 		if other.dslSource != e.dslSource {
 			continue
@@ -71,6 +75,9 @@ func (r *Registry) dslView(e *entry) *dslView {
 }
 
 func (r *Registry) dslAvailable(e *entry) bool {
+	if e.indexBlocked() {
+		return false
+	}
 	if e.dslSource == "" {
 		return true
 	}
@@ -85,6 +92,73 @@ func (r *Registry) dslAvailable(e *entry) bool {
 		}
 	}
 	return true
+}
+
+func (e *entry) indexBlocked() bool {
+	if e.dslSource == "" || e.reg == nil {
+		return false
+	}
+	p := e.reg.prefs
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.dslRemoved[e.dslSource+"\n"+e.dslVariant]
+}
+
+func (e *entry) setIndexRemoved(removed bool) error {
+	if e.dslSource == "" || e.reg == nil {
+		return nil
+	}
+	p := e.reg.prefs
+	p.editMu.Lock()
+	defer p.editMu.Unlock()
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	key := e.dslSource + "\n" + e.dslVariant
+	old, exists := p.dslRemoved[key], p.exists
+	if p.dslRemoved == nil {
+		p.dslRemoved = make(map[string]bool)
+	}
+	if removed {
+		p.dslRemoved[key] = true
+	} else {
+		delete(p.dslRemoved, key)
+	}
+	p.exists = true
+	if err := p.saveLocked(); err != nil {
+		if old {
+			p.dslRemoved[key] = true
+		} else {
+			delete(p.dslRemoved, key)
+		}
+		p.exists = exists
+		return err
+	}
+	return nil
+}
+
+// Only an explicit ingest request may restore a deliberately removed index.
+func (e *entry) restoreDSLIndex(plan store.Plan, progress store.Progress) error {
+	acquire(frontLimit)
+	defer release(frontLimit)
+	defer HoldActiveProcs()()
+	e.ingestMu.Lock()
+	defer e.ingestMu.Unlock()
+	defer e.rebuilding.Store(false)
+	if !e.indexBlocked() {
+		return nil
+	}
+	dir, err := store.ClaimDir(e.Path)
+	if err != nil {
+		return err
+	}
+	if err := e.rebuild(e.probeName(), store.TextDBPath(dir), plan, progress); err != nil {
+		return err
+	}
+	if err := e.setIndexRemoved(false); err != nil {
+		return err
+	}
+	_ = store.WriteInfo(dir)
+	return e.reopen()
 }
 
 // Selection never changes descriptors, prepared files, order or group membership.

@@ -591,6 +591,9 @@ func (e *entry) indexing() bool { return e.demanded.Load() }
 // open opens the source backend and, when a cached text.db (and
 // media.db) exists for it, wraps it into the upgraded view.
 func (e *entry) open() (dict.Dictionary, error) {
+	if e.indexBlocked() {
+		return nil, errors.New("dictionary index was removed; create an index in Dictionary settings")
+	}
 	e.lastUse.Store(time.Now().UnixNano())
 	if e.rebuilding.Load() {
 		return nil, errReindexing
@@ -606,6 +609,9 @@ func (e *entry) open() (dict.Dictionary, error) {
 	// burst of concurrent searches still opens the file only once.
 	e.openMu.Lock()
 	defer e.openMu.Unlock()
+	if e.indexBlocked() {
+		return nil, errors.New("dictionary index was removed; create an index in Dictionary settings")
+	}
 	if e.rebuilding.Load() {
 		return nil, errReindexing
 	}
@@ -2217,8 +2223,14 @@ func (e *entry) reabsorbAbbrev() error {
 // left to the user: an orphaned media.db degrades to serving from the source,
 // and the dictionary is reported outdated until they rebuild it.
 func (e *entry) ensureBaseIndex(progress store.Progress) error {
+	if e.indexBlocked() {
+		return errors.New("dictionary index was removed; create an index in Dictionary settings")
+	}
 	e.ingestMu.Lock()
 	defer e.ingestMu.Unlock()
+	if e.indexBlocked() {
+		return errors.New("dictionary index was removed; create an index in Dictionary settings")
+	}
 	defer e.rebuilding.Store(false) // rebuild's releasePrepared may have armed it
 	if e.prepared() {
 		return nil // a text.db of its own, or already prepared at whatever level the user chose

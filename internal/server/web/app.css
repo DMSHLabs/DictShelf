@@ -1853,3 +1853,14 @@ dialog.panel-card:not([open]){display:none}
 .dsl-choices label{display:inline-flex;align-items:center;gap:5px;cursor:pointer}
 .dsl-choices input{margin:0;accent-color:var(--accent)}
 .dsl-unavailable .hd b{opacity:.55}
+.rm-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.dsl-index-actions{display:flex;flex:1 1 260px;flex-wrap:wrap;justify-content:flex-end;gap:6px;min-width:0;margin-left:auto}
+.dsl-index-remove{font:inherit;font-size:11px;max-width:100%;white-space:normal;color:var(--danger);background:transparent;border:1px solid var(--line);border-radius:4px;padding:5px 7px;cursor:pointer}
+.dsl-index-remove:hover:not(:disabled){border-color:var(--danger)}
+.dsl-index-remove:disabled{color:var(--label-quiet);cursor:default}
+.dsl-index-remove:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
+.dsl-index-controls{display:flex;flex-direction:column;gap:6px;margin:8px 0}
+.dsl-index-row{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.dsl-index-row>span{flex:1 1 140px;font-size:12px}
+.dsl-index-row button{font:inherit;font-size:11px;cursor:pointer}
+.dsl-index-warning{color:var(--danger);font-size:12px}

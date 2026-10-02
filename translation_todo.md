@@ -1,8 +1,10 @@
 # Localization: status and next tasks
 
-Updated 2026-09-30. Implementation rules are in [translation.md](translation.md). This file is the current task list, not permission to carry out every listed change automatically.
+Updated 2026-10-02. Implementation rules are in [translation.md](translation.md). This file is the current task list, not permission to carry out every listed change automatically.
 
 ## Checkout state
+
+2026-10-02 DSL index management: `dev` at `19967aa`, uncommitted deletion shortcuts, independent original/GD Full text toggles, EN/RU confirmation and create-index warnings. Chromium verifies cancellation, cross-card targeting, search exclusion, explicit rebuild, independent full text and 320/390/1100px layouts in both languages; Go regression (including restart) and Node localization checks pass. No APK/device verification.
 
 2026-10-02 DSL selection slice: `GD_DSL` at `074cf1e` before edits; new per-family checkboxes, bulk variant control, unavailable state and known DSL error messages have EN/RU translations. Go localization/appearance/preferences/DSL mode tests and Node catalog/card checks pass; Chromium verifies 320/390/1100px in both languages. No APK/device verification. Earlier snapshots below are historical.
 

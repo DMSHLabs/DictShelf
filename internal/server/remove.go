@@ -148,8 +148,16 @@ func (r *Registry) Remove(id string, dropPrepared, dropSource bool) (removal, er
 	}
 
 	if dropPrepared && prepared != "" {
+		if !dropSource {
+			if err := e.setIndexRemoved(true); err != nil {
+				return rep, err
+			}
+		}
 		n, err := store.RemovePrepared(prepared)
 		if err != nil {
+			if !dropSource {
+				_ = e.setIndexRemoved(false)
+			}
 			return rep, err
 		}
 		rep.Folder, rep.Freed = prepared, rep.Freed+n
@@ -187,7 +195,7 @@ func (r *Registry) Remove(id string, dropPrepared, dropSource bool) (removal, er
 		logx.V("rescan after removing %s: %v", rep.Name, err)
 	}
 	rep.Gone = !r.has(id)
-	if !rep.Gone && dropPrepared && !dropSource {
+	if !rep.Gone && dropPrepared && !dropSource && e.dslSource == "" {
 		rep.Note = "the original files are still in a scanned folder, so this dictionary will be indexed again the next time it is searched"
 	}
 	return rep, nil

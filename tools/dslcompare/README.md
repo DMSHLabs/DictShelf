@@ -25,6 +25,23 @@ databases and descriptors are never deleted or rebuilt by selection. Missing
 indexes use the existing preparation workflow; inactive DSL settings metadata
 does not initiate preparation. If only one copy survives, it stays available.
 
+The expanded file disclosure has two right-aligned delete-index shortcuts next
+to Remove. Either card can target either family member. Confirmation deletes
+only that member's prepared folder (text index and packed media cache), leaving
+the shared DSL/media sources, descriptor and other prepared variant intact.
+Missing indexes and variants without a rebuildable source have disabled buttons.
+Removal persists in independent `state.json` `dslRemoved` metadata, keyed by
+shared source and variant. Removed variants are unavailable in picker/search,
+including explicit scopes and after rescan/restart; implicit opens and demand
+indexing cannot restore them. Explicit Index or Full text actions restore that
+variant and clear its marker only after successful preparation. Each card has
+separate original/GD full-text toggles; turning one off keeps its base index and
+does not change the other variant. Bulk full text skips unavailable variants.
+If both indexes are removed, both cards show a red warning to create an index.
+Opening settings refreshes index sizes; deletion refreshes the current query.
+Browser regression: `node tools/dslcompare/verify_index_removal.cjs` against the
+isolated fixture on port 6910, including cross-card targeting and cancel.
+
 Checks: `go test ./internal/server -run TestDSLMode`, `node tools/i18n-test.cjs`,
 and `node tools/dslcompare/verify_modes.cjs http://127.0.0.1:6908` against the isolated
 enhancer preview fixture. The browser check exercises bulk/per-family selection,
