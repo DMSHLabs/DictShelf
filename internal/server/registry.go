@@ -316,8 +316,10 @@ func release(sem chan struct{}) { <-sem }
 
 // entry is one discovered dictionary, opened lazily.
 type entry struct {
-	ID   string
-	Path string
+	ID         string
+	Path       string
+	dslSource  string
+	dslVariant string
 	// builtin: a dictionary the app ships (Builtin), not one the user added.
 	builtin bool
 
@@ -1256,6 +1258,7 @@ func (r *Registry) Rescan() error {
 		}
 		if !ok {
 			e = &entry{ID: id, Path: p, builtin: builtin, reg: r}
+			e.dslSource, e.dslVariant = dslIdentity(p)
 		} else {
 			kept = append(kept, e)
 		}
@@ -1448,7 +1451,7 @@ func (r *Registry) Warm() {
 			if !prepared {
 				continue
 			}
-			if prefs.Off(e.ID, e.Path) {
+			if prefs.Off(e.ID, e.Path) || !r.dslAvailable(e) {
 				continue
 			}
 			wg.Add(1)

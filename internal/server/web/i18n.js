@@ -41,6 +41,10 @@
   // Unknown errors and English responses remain literal. New API families
   // should use stable error codes instead of expanding text matching.
   const errorKeys = [
+    "errors.dslMode",
+    "errors.dslSelection",
+    "errors.dslMissing",
+    "errors.dslUnavailable",
     "errors.folderMissing",
     "errors.notFolder",
     "errors.fileMissing",

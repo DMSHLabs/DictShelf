@@ -509,6 +509,8 @@ Typing in `q` changes only the dropdown suggestions. Articles update when a sugg
 
 ## Decisions to preserve
 
+- **DSL variants in Dictionary settings (2026-10-02):** each ordinary/GD pair shares two checkboxes (`Original`, `GD compatible`), with at least one available variant selected. Both cards remain in settings even when one is unavailable; the picker and search omit it. Below the bulk full-text action, the three-way control applies to all currently registered DSL families. Selection is persistent server collection state, independent of ordering/groups and never deletes prepared files. Closing settings reissues a changed corpus query; disabled single-dictionary scopes are cleared. Chromium EN/RU at 320/390/1100px verified; Android/WebView remains unverified.
+
 - **The shell's own settings live in the app page, and the screen the launcher opens keeps only what cannot live there** (2026-09-28, the reader's ask to have them in the ☰ Settings drawer named System; then, on their word, to delete from the native screen everything that moved). The page's `System` window is the home: it draws the shell's rows over the `wudict:system` bridge and reads the running server's resolved values from `/api/config` itself. What stays in `SettingsActivity` is the **Server port** (the one row the reader
 can need when the page cannot load at all — a port that will not bind means no
 page, and `Restore defaults` is both all-or-nothing and pointed at 6889, which

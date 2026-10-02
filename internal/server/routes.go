@@ -99,6 +99,7 @@ func (s *Server) routes() []route {
 		{"PUT", "/api/groups/member", s.handleGroupMember, "/api/groups/member", false},
 		{"PUT", "/api/groups/order", s.handleGroupOrder, "/api/groups/order", false},
 		{"PUT", "/api/prefs", s.handleSavePrefs, "/api/prefs", false},
+		{"PUT", "/api/dsl-mode", s.handleDSLMode, "/api/dsl-mode", false},
 		{"GET", "/api/reveal", s.handleReveal, "/api/reveal", false},
 		// the user's own global stylesheets (style.go). Never CORS: the GET
 		// reports a path on the user's disk and the PUT writes to it.

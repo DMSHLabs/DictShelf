@@ -6,6 +6,32 @@ parser. No source dictionaries or application indexes are modified.
 
 ## Scope
 
+### Dictionary settings selection
+
+Each DSL family offers `Original` and `GD compatible` checkboxes; at least one
+available variant stays selected. `Both` keeps the ordinary and `GD` entries
+in the search picker. The bulk three-way control applies to currently registered
+DSL families, not to other formats or newly added dictionaries (default: both).
+Selection is installation-wide `state.json` metadata, keyed by original source
+path and independent of order, group membership and UI preferences. Moving the
+source to a different path starts with the default selection.
+
+`PUT /api/dsl-mode` accepts `{dict: <either variant id>, mode: "original"|"gd"|"both"}`;
+omit `dict` to apply to every registered DSL family. `/api/dicts` still reports
+both settings cards, adds `dsl` pairing/selection metadata and `unavailable`.
+Search omits unavailable variants even for explicit comma-separated API scopes;
+an explicit scope containing only unavailable variants returns 404. Prepared
+databases and descriptors are never deleted or rebuilt by selection. Missing
+indexes use the existing preparation workflow; inactive DSL settings metadata
+does not initiate preparation. If only one copy survives, it stays available.
+
+Checks: `go test ./internal/server -run TestDSLMode`, `node tools/i18n-test.cjs`,
+and `node tools/dslcompare/verify_modes.cjs http://127.0.0.1:6908` against the isolated
+enhancer preview fixture. The browser check exercises bulk/per-family selection,
+persistence, failure rollback, result refresh and EN/RU layouts at 320/390/1100px.
+
+### Reference parser
+
 The C++ algorithms in `vendor/parser.inc` and `vendor/folding.inc` are extracted
 unchanged from the local GoldenDict sources. Copyright notices and GPLv3 license
 are retained; `vendor/provenance.json` records SHA256 of the input files.
