@@ -89,6 +89,11 @@ final class Intake {
      * URL lands: a browser shares a download link as text/plain, and that is
      * the filter the lookup popup owns. It recognises a link and forwards it
      * here rather than looking it up as a word.
+     *
+     * <p>Also the share page's "Open in wuDict" (ext/server/wudict): an
+     * intent: link naming this package, with the share link in this extra.
+     * Messengers open links in their own in-app browser or a Custom Tab, which
+     * never hands an App Link to its app; an intent: link does.
      */
     static final String EXTRA_URL = "com.legbehindneck.wudict.extra.INTAKE_URL";
 

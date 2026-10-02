@@ -79,8 +79,10 @@ func wrapped(s string) bool {
 	if len(s) <= len(tag) || !strings.EqualFold(s[:len(tag)], tag) {
 		return false
 	}
-	switch s[len(tag)] {
-	case ' ', '\t', '\n', '>', '/':
+	// What follows the name must open the block in the reader (goldmark): a
+	// space, `>` or `/>`; after a tab or a line end it reads a paragraph.
+	switch rest := s[len(tag):]; {
+	case rest[0] == ' ', rest[0] == '>', strings.HasPrefix(rest, "/>"):
 		return true
 	}
 	return false

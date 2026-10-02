@@ -157,6 +157,7 @@ footer .brand{font-size:13px}
   <ul id="peek" class="hidden"></ul>
   <p id="peekNote" class="hidden"></p>
   <div class="btns">
+    <a class="btn hidden" id="openApp" href="#">Open in wuDict</a>
     <button class="btn hidden" type="button" id="send">Send to wudict</button>
     <button class="btn" type="button" id="copy">Copy link</button>
     <a class="btn ghost" id="direct" href="#" rel="noopener noreferrer">Direct link</a>
@@ -255,6 +256,20 @@ function splitLinks(s) {
 // A Drive link is the file's viewer page; its name is only known to Drive.
 const isDrive = u => /^(drive|docs)\.google\.com$/i.test(u.hostname);
 const siteName = u => isDrive(u) ? "Google Drive" : u.hostname;
+
+// "Open in wuDict" on Android. A messenger (Telegram and others) shows a
+// link in its own in-app browser or a Custom Tab, which never hands it to the
+// app the link belongs to - so a visitor who tapped a share link lands here,
+// in the browser. An intent: link names the app outright, and browsers honour
+// it even on the link's own site. The share link travels as the extra the app
+// already reads (Intake.EXTRA_URL), not as the intent's data, because the
+// fragment it lives in is where intent: links keep their own syntax. Without
+// the app installed, the browser goes to the fallback: its store page.
+const APP_ID = "com.legbehindneck.wudict";
+const APP_STORE = "https://play.google.com/store/apps/details?id=" + APP_ID;
+const intentLink = share => "intent://legbehindneck.com/wudict#Intent;scheme=https;package=" + APP_ID +
+  ";S." + APP_ID + ".extra.INTAKE_URL=" + encodeURIComponent(share) +
+  ";S.browser_fallback_url=" + encodeURIComponent(APP_STORE) + ";end";
 // A Drive link at its shortest: "/view?usp=drive_link" is the viewer's, not
 // the file's, and is a third of every link in a long share link. wudict reads
 // the short form the same way.
@@ -528,15 +543,19 @@ function showShared() {
 
   const android = /Android/i.test(navigator.userAgent);
   const canSend = android && typeof navigator.share === "function";
+  $("openApp").classList.toggle("hidden", !android);
+  $("openApp").href = intentLink(link);
+  // The share sheet stays as the second way in, for an in-app browser that
+  // will not follow an intent: link; it is the quieter button beside it.
   $("send").classList.toggle("hidden", !canSend);
+  $("send").classList.toggle("ghost", android);
   // Several links travel as the share link itself: wudict unwraps it.
   $("send").onclick = () => navigator.share({ url: many ? link : u.href }).catch(() => {});
   $("copy").onclick = () => copy(link);
-  $("hint").textContent = canSend
-    ? "Tap Send to wudict, then choose wuDict."
-    : android
-      ? "Copy the link, open wuDict and paste it under Add dictionaries."
-      : "Copy the link, open wudict and paste it under Add dictionaries.";
+  $("hint").textContent = android
+    ? (canSend ? "Tap Open in wuDict. If nothing happens, tap Send to wudict and choose wuDict."
+               : "Tap Open in wuDict. If nothing happens, copy the link, open wuDict and paste it under Add dictionaries.")
+    : "Copy the link, open wudict and paste it under Add dictionaries.";
   if ((folder || list) && publicHost(u)) peek(u);
   window.scrollTo({ top: 0 });
 }

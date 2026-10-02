@@ -17,6 +17,7 @@ import (
 	"github.com/yuin/goldmark/v2/extension"
 	"github.com/yuin/goldmark/v2/parser"
 	gmhtml "github.com/yuin/goldmark/v2/renderer/html"
+	"github.com/yuin/goldmark/v2/text"
 
 	"github.com/wuweidict/wudict/internal/dict"
 	"github.com/wuweidict/wudict/internal/htmlref"
@@ -176,9 +177,11 @@ func digits(s string) bool {
 	return s != ""
 }
 
+// isH2 reports a heading that starts an entry (R3.5): `## `. A setext one is
+// content: a `---` under a line of text is common in hand-written markdown.
 func isH2(n ast.Node) bool {
 	h, ok := n.(*ast.Heading)
-	return ok && h.Level == 2
+	return ok && h.Level == 2 && h.HeadingKind == ast.HeadingKindATX
 }
 
 func isRefDef(n ast.Node) bool { return n.Kind() == ast.KindLinkReferenceDefinition }
@@ -426,6 +429,7 @@ func (r *Reader) scan(ci int, doc, stop ast.Node, src []byte) error {
 			return err
 		}
 	}
+	r.swallowed(ci, doc, stop, src)
 	for _, g := range groups(entriesFrom(doc, ci == 0), stop, src) {
 		switch {
 		case g.blocks == 0:
@@ -450,6 +454,60 @@ func (r *Reader) scan(ci int, doc, stop ast.Node, src []byte) error {
 	return nil
 }
 
+// swallowed warns about every line that looks like an entry heading - `##`
+// and WS at column 0, the lines the chunk cutter collects - but lies inside an
+// HTML block. Markdown makes such a line part of the block, so the entry it
+// meant to start is silently not there: the block opened earlier and has not
+// ended, because a type 6-7 block runs to the next blank line and a <pre>,
+// <script>, <style> or <textarea> block to its closing tag. The reader stays
+// a stock CommonMark reader (D154); what it adds is saying so, on the line
+// where an entry went missing and the line that took it.
+func (r *Reader) swallowed(ci int, doc, stop ast.Node, src []byte) {
+	c := r.chunks[ci]
+	for n := doc.FirstChild(); n != nil && n != stop; n = n.NextSibling() {
+		hb, ok := n.(*ast.HTMLBlock)
+		if !ok {
+			continue
+		}
+		lo, hi := blockSpan(hb)
+		if hi <= lo {
+			continue
+		}
+		// A candidate is a whole line, so one that starts after the block's
+		// first byte and before its last is one of its lines.
+		for k := r.candidateFrom(c.start + lo + 1); k < len(r.src.cands) && r.src.cands[k].at < c.start+hi; k++ {
+			at := r.src.cands[k].at - c.start
+			line, _ := cutLine(src[at:])
+			r.warn(lineAt(src, at, c.line), "%q is inside the HTML block that starts on line %d, so it is not an entry; "+
+				"end that block before it (a blank line, or its closing tag)", clip(string(line)), lineAt(src, lo, c.line))
+		}
+	}
+}
+
+// blockSpan is the byte range an HTML block covers in its chunk's text: the
+// union of its source lines and the raw lines it holds for rendering.
+func blockSpan(hb *ast.HTMLBlock) (lo, hi int) {
+	lo = -1
+	for _, segs := range [][]text.Segment{hb.Source(), hb.Value.Segments()} {
+		for _, sg := range segs {
+			if lo < 0 || sg.Start < lo {
+				lo = sg.Start
+			}
+			hi = max(hi, sg.Stop)
+		}
+	}
+	return max(lo, 0), hi
+}
+
+// clip shortens a line quoted in a warning.
+func clip(s string) string {
+	s = strings.TrimRight(s, "\r")
+	if len(s) > 60 {
+		s = strings.ToValidUTF8(s[:60], "") + "…"
+	}
+	return s
+}
+
 // header reads the title, the header fields and the description (R3.1-R3.3).
 func (r *Reader) header(doc, stop ast.Node, src []byte) error {
 	line1, _ := cutLine(src)
@@ -462,6 +520,9 @@ func (r *Reader) header(doc, stop ast.Node, src []byte) error {
 		return formatErr("the title on line 1 is empty")
 	}
 	head := title.NextSibling()
+	if h, ok := head.(*ast.Heading); ok && h.HeadingKind == ast.HeadingKindSetext {
+		return formatErr("the header must end at a blank line: the `---` or `===` line under it makes it a heading")
+	}
 	if _, ok := head.(*ast.Paragraph); !ok || head.Pos() != len(line1)+1 {
 		return formatErr("line 2 must be `wudict: 1`, directly under the title")
 	}
