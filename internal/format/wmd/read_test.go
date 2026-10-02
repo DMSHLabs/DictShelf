@@ -258,7 +258,6 @@ y
 		{"a"},
 		{"b"},
 		{"code"},
-		{"Setext"},
 		{"not redirect"},
 		{"also article"},
 		{"named after blank"},
@@ -277,23 +276,34 @@ y
 		!strings.Contains(es[6].Body, "<div>\n## not an entry either\n</div>") {
 		t.Errorf("code body = %q", es[6].Body)
 	}
-	if !strings.Contains(es[7].Body, "<h2>") || !strings.Contains(es[7].Body, "<li>") {
-		t.Errorf("setext body = %q", es[7].Body)
+	if !strings.Contains(es[6].Body, "<h2>Setext</h2>") || !strings.Contains(es[6].Body, "<li>") {
+		t.Errorf("a setext heading is content: code body = %q", es[6].Body)
 	}
 	if m := r.Meta(); m.EntryCount != len(es) || m.Description != "<p>intro</p>\n" {
 		t.Errorf("meta = %+v (entries %d)", m, len(es))
 	}
-	if w, _ := r.Warnings(); len(w) != 1 || !strings.Contains(w[0], "without a body") {
-		t.Errorf("warnings = %q, want the trailing group only", w)
+	// The <div> line is content (R3.5) and is said to be: an entry line inside
+	// an HTML block is nearly always one the block swallowed by accident.
+	if w, _ := r.Warnings(); len(w) != 2 || !strings.Contains(w[0], `"## not an entry either" is inside the HTML block`) ||
+		!strings.Contains(w[1], "without a body") {
+		t.Errorf("warnings = %q, want the swallowed line and the trailing group", w)
 	}
 }
 
 // TestSetextIsAnEntry: a setext level-2 heading at top level starts an entry,
 // as a stock parser sees it (R3.5).
-func TestSetextIsAnEntry(t *testing.T) {
-	_, es := readText(t, "# D\nwudict: 1\n\nword\n----\n\nbody\n")
-	if got := names(es); !reflect.DeepEqual(got, [][]string{{"word"}}) {
-		t.Errorf("entries = %q", got)
+// A setext heading is content (R3.5): text over a `---` line neither starts
+// an entry nor joins the heading group above it.
+func TestSetextIsContent(t *testing.T) {
+	_, es := readText(t, "# D\nwudict: 1\n\n## a\n\ntext\n---\n\nmore\n")
+	if got := names(es); !reflect.DeepEqual(got, [][]string{{"a"}}) {
+		t.Fatalf("entries = %q", got)
+	}
+	if want := "<h2>text</h2>\n<p>more</p>\n"; es[0].Body != want {
+		t.Errorf("body = %q, want %q", es[0].Body, want)
+	}
+	if _, err := read([]byte("# D\nwudict: 1\nfrom: en\n---\n")); err == nil || !strings.Contains(err.Error(), "blank line") {
+		t.Errorf("header under a --- line: %v", err)
 	}
 }
 
@@ -726,6 +736,65 @@ func TestChunkingIsInvisible(t *testing.T) {
 			}
 			if !reflect.DeepEqual(m1, m2) || !reflect.DeepEqual(e1, e2) || !reflect.DeepEqual(w1, w2) {
 				t.Errorf("chunked read differs (%d chunks):\nwhole %+v\n      %+v\n      %q\nchunk %+v\n      %+v\n      %q", n2, m1, e1, w1, m2, e2, w2)
+			}
+		})
+	}
+}
+
+// TestSwallowedHeadings: a line that looks like an entry heading but lies
+// inside an HTML block is content, as CommonMark says, and the reader says so
+// - where the entry went missing, and which line opened the block. The
+// reader itself stays stock: the entries are what any CommonMark parser makes.
+func TestSwallowedHeadings(t *testing.T) {
+	const head = "# T\nwudict: 1\n\n"
+	for _, tc := range []struct {
+		name, body string
+		names      []string // entries read
+		warns      []string // each warning holds these, in order
+	}{
+		// a block of type 6 runs to the next blank line
+		{"div without blank line", "## a\n\n<div>x</div>\n## b\n\ny\n",
+			[]string{"a"}, []string{`7: "## b" is inside the HTML block that starts on line 6`}},
+		// <script> runs to </script>, however many entries that takes
+		{"script", "## a\n\n<script src=\"s.js\"/>\n## b\n\nx\n\n## c\n\ny\n",
+			[]string{"a"}, []string{`7: "## b" is inside the HTML block that starts on line 6`, `11: "## c"`}},
+		// goldmark's own start conditions, read as they are
+		{"pre/", "## a\n\n<pre/>\n## b\n\nx\n", []string{"a"}, []string{`7: "## b" is inside the HTML block that starts on line 6`}},
+		{"meta after a paragraph", "## a\n\np\n<meta x=1>\n## b\n\nx\n", []string{"a"}, []string{`8: "## b" is inside the HTML block that starts on line 7`}},
+		// not swallowed: nothing to say
+		{"closed by a blank line", "## a\n\n<div>x</div>\n\n## b\n\ny\n", []string{"a", "b"}, nil},
+		{"closed by its tag", "## a\n\n<script>\nx\n</script>\n\n## b\n\ny\n", []string{"a", "b"}, nil},
+		{"in a code block", "## a\n\n```\n## not an entry\n```\n\n## b\n\ny\n", []string{"a", "b"}, nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, size := range []int{1 << 30, 1} { // whole, and cut as finely as possible
+				saved := chunkSize
+				chunkSize = size
+				r, err := read([]byte(head + tc.body))
+				chunkSize = saved
+				if err != nil {
+					t.Fatal(err)
+				}
+				var names []string
+				for {
+					e, err := r.Next()
+					if err != nil {
+						break
+					}
+					names = append(names, e.Headwords[0])
+				}
+				if !reflect.DeepEqual(names, tc.names) {
+					t.Errorf("chunk %d: entries %q, want %q", size, names, tc.names)
+				}
+				w, _ := r.Warnings()
+				if len(w) != len(tc.warns) {
+					t.Fatalf("chunk %d: warnings %q, want %d", size, w, len(tc.warns))
+				}
+				for i, want := range tc.warns {
+					if !strings.Contains(w[i], want) {
+						t.Errorf("chunk %d: warning %q, want it to hold %q", size, w[i], want)
+					}
+				}
 			}
 		})
 	}

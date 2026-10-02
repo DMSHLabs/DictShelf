@@ -154,7 +154,7 @@ func (w *Writer) clean(s string) string {
 			return -1
 		}
 		return r
-	}, strings.ToValidUTF8(s, "�")), func(r rune) bool { return r == ' ' })
+	}, validUTF8(s)), func(r rune) bool { return r == ' ' })
 	if c != strings.Trim(s, " ") {
 		w.Repaired++
 	}

@@ -84,11 +84,20 @@ func cleanBody(src string, st htmlref.Styles) (md string, err error) {
 	return md, nil
 }
 
-// validText repairs a body as the reader repairs a file (R2.1): invalid
-// UTF-8 and NUL become U+FFFD. The writer never emits what the reader would
-// have to repair.
+// validText repairs a body as the reader repairs a file (R2.1): each byte of
+// invalid UTF-8, and NUL, become U+FFFD. The writer never emits what the
+// reader would have to repair.
 func validText(s string) string {
-	return strings.ReplaceAll(strings.ToValidUTF8(s, "\uFFFD"), "\x00", "\uFFFD")
+	return strings.ReplaceAll(validUTF8(s), "\x00", "\uFFFD")
+}
+
+// validUTF8 is s with each byte of invalid UTF-8 replaced by U+FFFD, as a
+// []rune conversion does.
+func validUTF8(s string) string {
+	if utf8.ValidString(s) {
+		return s
+	}
+	return string([]rune(s))
 }
 
 // splitsEntry parses md as the reader will and refuses a top-level level-1 or
