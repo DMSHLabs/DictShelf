@@ -46,3 +46,17 @@ code-review/
 /fastlane/README.md
 /vendor/bundle/
 **/testdata/fuzz/*
+
+# The local dictionary-comparison oracle (a Qt/CMake build kept outside the
+# project's own tooling): the build tree and the results it writes are products
+# of a hand-run tool, never source. Ignoring these leaves the directory itself
+# listable, so a future source file in it would still show up.
+/tools/dslcompare/build/
+/tools/dslcompare/results/
+# Bytecode of the Python tools in tools/ (csvorjson2wudict.py and friends).
+__pycache__/
+*.pyc
+
+# Agent tooling: plans and scratch written by coding sessions, never part of
+# the product (HANDOFF.md leaves it alone for the same reason).
+/.zcode/
