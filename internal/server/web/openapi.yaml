@@ -556,6 +556,104 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
 
+  /api/orphans:
+    get:
+      tags: [internal]
+      operationId: listOrphans
+      x-internal: true
+      summary: List prepared dictionaries whose source file is gone
+      description: >
+        Every prepared folder in the library whose recorded source file is no
+        longer on disk, whatever the reason (deleted, renamed, on a drive that
+        is not connected), except those kept on purpose. A source that was
+        only moved inside a dictionary folder is not listed: a rescan re-links
+        the folder to it. The built-in guide is never listed.
+      x-codeSamples:
+        - lang: Shell
+          label: curl
+          source: |
+            curl -s 'http://127.0.0.1:6888/api/orphans' | jq '.orphans[].name, .size'
+      responses:
+        '200':
+          description: The orphans, and the bytes they use together.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  orphans:
+                    type: array
+                    items: { $ref: '#/components/schemas/Orphan' }
+                  size: { type: integer, description: Bytes used by all of them. }
+        '500':
+          $ref: '#/components/responses/ServerError'
+    post:
+      tags: [internal]
+      operationId: resolveOrphans
+      x-internal: true
+      summary: Delete or keep orphaned prepared dictionaries
+      description: |
+        Deletes the prepared folders named in `delete` and marks those in
+        `keep` as standalone (`keep = standalone` in the folder's `info.txt`),
+        after which they are never listed again. Folders are named by
+        `Orphan.folder`, never by path, and each is checked again when it is
+        acted on: one that is no longer an orphan is reported under `failed`.
+        A folder named twice, or in both lists, fails too. Body is capped at
+        1 MiB.
+
+        **Deleting is irreversible.** Files are unlinked, not moved to a Trash
+        or Recycle Bin. Allowed on the machine running wudict; from another
+        machine only with `ALLOW_REMOTE_DELETE`, which also governs `keep`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                delete:
+                  type: array
+                  items: { type: string }
+                  description: Folder names to delete.
+                keep:
+                  type: array
+                  items: { type: string }
+                  description: Folder names to keep for good.
+      x-codeSamples:
+        - lang: Shell
+          label: curl
+          source: |
+            curl -s -X POST 'http://127.0.0.1:6888/api/orphans' \
+              -H 'Content-Type: application/json' \
+              -d '{"delete":["AHD5-2017"],"keep":["Oxford Advanced"]}'
+      responses:
+        '200':
+          description: What happened to each folder.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deleted:
+                    type: array
+                    items: { $ref: '#/components/schemas/OrphanOutcome' }
+                  kept:
+                    type: array
+                    items: { $ref: '#/components/schemas/OrphanOutcome' }
+                  failed:
+                    type: array
+                    items: { $ref: '#/components/schemas/OrphanOutcome' }
+                  freed: { type: integer, description: Bytes reclaimed. }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          description: >
+            Deleting from another machine is off (ALLOW_REMOTE_DELETE = "0").
+            Do it on the machine running wudict, or turn the setting on.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
   /api/lemmas:
     get:
       tags: [internal]
@@ -747,11 +845,27 @@ paths:
         IMPORT_INSECURE lifts both; an unfinished download is resumed by the
         next attempt.
 
+        A `url` may also name SEVERAL dictionaries: a web folder page (every
+        link on it to a dictionary, a companion or an archive), a `.txt` list
+        (one file name or link per line, the first `# ` line its title), or
+        several links pasted at once - and a share link
+        `https://legbehindneck.com/wudict#<link>` stands for the link after
+        `#` (`#/dict/x/` is short for a path on that site), or for several
+        links after `#` separated by commas. A Google Drive file link
+        (`drive.google.com/file/d/<id>/view`) is fetched from Drive's download
+        address, and named by Drive's answer. Such a job is a `collection`: `ready` arrives with nothing
+        downloaded, one candidate per dictionary sized and dated from the
+        site's own headers, and each dictionary's media offered in `extras`.
+        Confirming downloads and installs each chosen dictionary in turn; one
+        that fails is named in `error` and the job still ends `done` with the
+        rest installed.
+
         A dictionary the library already holds is reported as such on the
-        candidate (`existing`, `unchanged`) and, by default, is UPDATED rather
-        than installed a second time: two copies of one dictionary means two of
-        every result and a second full indexing pass. `copy` is the opt-out and
-        installs beside it under a numbered name.
+        candidate (`existing`, or `elsewhere` for one in another configured
+        folder; `unchanged` when the files are the same) and, when the caller
+        picks it, is REPLACED - its folder, or its files in place - rather than
+        installed a second time. Not picking it is skipping it. Nothing is ever
+        installed or downloaded under a numbered name.
 
         A downloaded plain file has its companions LOOKED FOR at the sibling
         URLs the format tables name - `oxford.mdd`, `oxford.1.mdd`, and so on,
@@ -802,12 +916,6 @@ paths:
             Whether the caller's own source file survives a SUCCESSFUL import.
             Ignored unless IMPORT_KEEP is `ask`. Used only with `confirm`.
           schema: { type: string, enum: ['0', '1'] }
-        - name: copy
-          in: query
-          description: >
-            Install beside a dictionary the library already holds instead of
-            updating it. Used only with `confirm`.
-          schema: { type: string, enum: ['0', '1'] }
         - name: extras
           in: query
           description: >
@@ -841,11 +949,6 @@ paths:
                   description: >
                     Keep the source file after a successful import. Ignored
                     unless IMPORT_KEEP is `ask`.
-                copy:
-                  type: boolean
-                  description: >
-                    Install beside a dictionary already in the library instead
-                    of updating it. Default is to update.
                 extras:
                   type: array
                   description: >
@@ -875,9 +978,10 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '409':
           description: >
-            An import is already running, there is nothing to confirm, no
-            dictionary folder is configured, or a chosen dictionary is missing
-            files it cannot work without.
+            An import is already running (the body then also carries
+            `"busy": true`; `GET /api/intake` says which), there is nothing to
+            confirm, no dictionary folder is configured, or a chosen
+            dictionary is missing files it cannot work without.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
@@ -940,7 +1044,18 @@ paths:
         Stops an extraction and forgets a sniffed archive that was never
         confirmed. Everything staged is removed; dictionaries already renamed
         into the library stay, because they are whole. Always 200 - cancelling
-        nothing is not a failure.
+        nothing is not a failure. With `id`, only that job is cancelled, and
+        only while it is still the current one: a client releasing its own
+        job never cancels one another client started since.
+
+        A download that nobody has confirmed and nobody has polled for 75
+        seconds is not "running" any more: a new import replaces it instead of
+        being refused. A confirmed import is never replaced.
+      parameters:
+        - name: id
+          in: query
+          description: The job to cancel (`id` from the job). Omit to cancel whatever is current.
+          schema: { type: string }
       x-codeSamples:
         - lang: Shell
           label: curl
@@ -948,7 +1063,9 @@ paths:
             curl -s -X DELETE 'http://127.0.0.1:6888/api/intake'
       responses:
         '200':
-          description: Nothing is running now.
+          description: >
+            Without `id`, nothing is running now. With `id`, the job that is
+            current afterwards (empty when that was the one cancelled).
           content:
             application/json:
               schema: { $ref: '#/components/schemas/IntakeJob' }
@@ -1794,8 +1911,8 @@ components:
         installed:
           type: array
           description: >
-            Folders now in the library. Not always the candidate's name: a
-            second import of the same bundle is numbered rather than merged.
+            The dictionaries now in the library, by name - a folder of its
+            own, or a copy replaced in place in another configured folder.
           items: { type: string }
         done: { type: integer, description: "Bytes extracted, or downloaded, so far." }
         total:
@@ -1803,7 +1920,17 @@ components:
           description: >
             Bytes to extract, or to download. Zero while downloading from a
             server that declared no length.
-        error: { type: string }
+        error:
+          type: string
+          description: >
+            Why the job failed; on a `done` collection, the dictionaries that
+            did not arrive and why, beside those in `installed`.
+        collection:
+          type: boolean
+          description: >
+            The candidates came from a folder, a list or several links rather
+            than from one file: nothing is downloaded yet, `source` is the
+            collection's title, and `extras` are each dictionary's media.
 
     IntakeCandidate:
       type: object
@@ -1839,8 +1966,8 @@ components:
           type: string
           description: >
             The library folder that already holds this dictionary, absent when
-            none does. Confirming replaces that folder whole unless `copy` is
-            set.
+            none does. Picking it replaces that folder; its installed media
+            is kept when the replacement brings none.
         unchanged:
           type: boolean
           description: >
@@ -1848,6 +1975,19 @@ components:
             declares, so installing would replace the dictionary with itself.
             Size and not a checksum - the same test used to decide whether a
             prepared dictionary needs re-indexing.
+        date:
+          type: string
+          description: >
+            For a collection, when the site says the main file last changed
+            (YYYY-MM-DD). Absent when the site did not say.
+        elsewhere:
+          type: string
+          description: >
+            With no folder of its own in the import folder: the folder that
+            holds a dictionary of the same name elsewhere in the library, any
+            configured folder, any format. `unchanged` then says whether it is
+            the same files at the same sizes. Picking it overwrites that copy's
+            files in place; nothing else in its folder is touched.
 
     IntakeExtra:
       type: object
@@ -2125,6 +2265,23 @@ components:
         freed: { type: integer, description: Bytes reclaimed. }
         gone: { type: boolean, description: The dictionary is no longer listed at all. }
         note: { type: string, description: A consequence the user should know about. }
+
+    Orphan:
+      type: object
+      description: A prepared dictionary whose source file is no longer on disk.
+      properties:
+        folder: { type: string, description: 'Its folder name in the library: the handle POST /api/orphans takes.' }
+        name: { type: string }
+        source: { type: string, description: Where its source file was. }
+        size: { type: integer, description: Bytes its prepared folder uses. }
+
+    OrphanOutcome:
+      type: object
+      properties:
+        folder: { type: string }
+        name: { type: string }
+        freed: { type: integer, description: Bytes reclaimed (deleted only). }
+        error: { type: string, description: Why it was not done (failed only). }
 
     Root:
       type: object

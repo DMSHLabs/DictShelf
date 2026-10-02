@@ -15,8 +15,9 @@ Type `wudict help` in the search box for quick access, and [browse](/browse?dict
 
 > *Quick actions*
 
-- [Browse](/browse?dict=wudict-howto) all entries in this guide
-- [Add dictionaries](/setup)
+- [Download free libre dictionaria](https://legbehindneck.com/wudict)
+- [Browse the wudict repertorium](/browse?dict=wudict-howto) all entries in this guide
+- [Add local existing dictionaria](/setup)
 - Add/remove [morphology files](/lemmas)
 - Explore the [dictionary panel <kbd>☰</kbd>](<entry://wudict panel>)
 - Discover [wudict markdown](<entry://wudict markdown>) (this howto is written in [↗ it](https://github.com/wuweidict/wudict/blob/master/internal/howto/wudict-howto.wudict.md))
@@ -35,6 +36,7 @@ Type `wudict help` in the search box for quick access, and [browse](/browse?dict
 - Apply custom CSS styles and fonts via the embedded Styler: <kbd>☰</kbd> → <kbd>⚙️</kbd> → <kbd>**Custom Style**</kbd>
 - Import dictionaries into wudict directly from your file manager: tap a `.mdx/.dsl/.bgl/.zim/.slob/.zip/.7z/.wudict.md` file → <kbd>Share</kbd> → <kbd>**wuDict**</kbd>
 - Long-tap a dictionary download link on any web page (`.mdx/.slob/.dsl/.zip/.7z`) and pick <kbd>Share</kbd> → <kbd>**wuDict**</kbd> to install it locally
+- Share and install single dictionaries and dictionary collections via specially crafted [🔗wudict URLs](https://legbehindneck.com/wudict)
 
 📱 Android only · 💻 desktop only · everything else works on both.
 
@@ -152,7 +154,7 @@ Each language is a small download (under 2 MB) and is used only for dictionaries
 
 - <kbd>−</kbd> <kbd>15px</kbd> <kbd>+</kbd>: [text size](<entry://wudict text size>).
 - ![](folder.svg) <kbd>Edit folders…</kbd>: [add dictionaries](<entry://wudict add dictionaries>).
-- ![](rescan.svg) <kbd>Rescan folders</kbd>: find dictionaries added or removed since.
+- ![](rescan.svg) <kbd>Rescan folders</kbd>: find dictionaries added or removed since. If a dictionary's files are gone, it offers to delete its prepared data.
 - ![](lemmas.svg) <kbd>Lemmatization…</kbd>: [word forms](<entry://wudict lemmatization>).
 - ![](browse.svg) <kbd>Browse A–Z…</kbd>: [read a dictionary page by page](<entry://wudict browse>).
 - ![](styles.svg) <kbd>Custom styles…</kbd>: [your own look](<entry://wudict styles>).
@@ -361,6 +363,25 @@ The property of an object that depends on the light it reflects. See [hue](entry
 </details>
 
 More `##` lines right under the first are other spellings. Links like `[hue](entry://hue)` trigger a lookup. Tables, lists, images and the rest of standard markdown work. 💻 Running `wudict dump -format md` from a console lets you export any existing dictionary to wudict markdown. To edit this guide, put a copy in your folder: [Setup](/setup) → **Put the wudict howto in this folder**.
+
+***
+
+- [index](/browse?dict=wudict-howto)
+
+## wudict install dictionaries
+## wudict shareable URLs
+
+wudict lets you install dictionaries and dictionary collections via custom shareable URLs which open directly in wudict and allow you to pick which items from the collections you want to install.
+
+Some examples are listed on the wudict URL sharing page:
+
+- [🔗wudict URL sharing](https://legbehindneck.com/wudict)
+
+More ways to install dictionaries:
+
+- android: short or long tap on a `.mdx/.dsl/.bgl/.zim/.slob/.zip/.7z/.wudict.md` from a file manager → <kbd>**Share**</kbd> → <kbd>**wuDict**</kbd>
+- android: long tap a dictionary download link on any webpage → <kbd>**Share**</kbd> → <kbd>**wuDict**</kbd>
+- desktop: <kbd>☰</kbd> → <kbd>⚙️</kbd> → <strong>✏️ Edit folders...</strong> and drag and drop a dictionary onto the drop zone (<em>"drop one here"</em>)
 
 ***
 

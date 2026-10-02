@@ -175,6 +175,13 @@
           one worth ticking, one already done and left unticked (D134). -->
      <string name="intake_update">%1$s — replaces your copy</string>
      <string name="intake_same">%1$s — already installed</string>
+    <!-- A dictionary of this name is in another folder of the library (%2$s),
+         from wherever it came. Ticked overwrites that copy in place; there is
+         never a second one (D155 Am. 4). -->
+    <string name="intake_same_elsewhere">%1$s — already in %2$s</string>
+    <string name="intake_other_elsewhere">%1$s — replaces your copy in %2$s</string>
+    <!-- Ticks every row that can be ticked, or clears them when all already are. -->
+    <string name="intake_all">All / None</string>
      <!-- A folder of that name is there and holds no dictionary: one a removal
           left behind, or one the user made. The install takes it over either
           way, so it is said - but it is not an installation, and calling it
@@ -222,7 +229,18 @@
      <string name="intake_unsupported">wuDict cannot read %1$s.</string>
      <string name="intake_cancelled">Cancelled.</string>
      <string name="intake_busy">An import is already running.</string>
+     <!-- The server's import slot is held by an import nothing on this
+          phone is showing - one started before the app was last closed, or
+          from the setup page. The user decides: the shell cannot tell a
+          forgotten import from one that is wanted. %1$s names it. -->
+     <string name="intake_other_running">Another import is still running: %1$s.\n\nStop it and add this one instead?</string>
+     <string name="intake_other_unnamed">an earlier import</string>
+     <string name="intake_other_stop">Stop it</string>
+     <string name="intake_other_keep">Keep it running</string>
      <string name="intake_failed">Could not add dictionaries: %1$s</string>
      <string name="intake_no_server">The dictionary server did not start, so nothing could be added.</string>
      <string name="intake_no_picker">This device has no file picker.</string>
+     <!-- wudict's own page of dictionary links, tapped: it opens in a browser,
+          and this is the answer when the device has none. %1$s is the address. -->
+     <string name="intake_no_browser">No web browser is installed to open %1$s.</string>
 </resources>

@@ -45,3 +45,26 @@ func releasePrepared(e *entry, textDB string) {
 	e.forgetStyles()
 	scheduleReclaim()
 }
+
+// releaseSuperseded closes, now, the backends this entry has retired and not
+// yet closed. Two callers: an open that may re-prepare the dictionary in place,
+// and a rescan letting go of an entry whose dictionary is gone.
+//
+// The second: the files of a prepared dsl dictionary are deleted, the rescan
+// drops the entry, and its retired backend - dsl embeds its own store - keeps
+// the library's text.db open through closeGrace. Removing that folder as an
+// orphan in those seconds failed with "being used by another process". The
+// entry has left the registry, so no request can still be reading through it.
+//
+// The first: the source is edited, a rescan sees it (revalidate) and retires
+// the backend opened against the old edition, and the next open runs the
+// format's own first-open ingest (dsl, bgl, wudict markdown), which ends in a
+// rename over the text.db that retired backend still has open. Windows refuses
+// that rename ("Access is denied"); rebuild never met it because it goes
+// through releasePrepared, which closes the retired set first. Here nothing is
+// lost by closing early: the entry is opening because it has no backend, so a
+// retired one can only be serving a request that began before the change - on
+// data that is being replaced.
+func releaseSuperseded(e *entry) {
+	e.retired.closeAll()
+}

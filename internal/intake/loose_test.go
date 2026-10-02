@@ -95,7 +95,7 @@ func TestExtrasAreOnlyFetchedWhenTicked(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dest, "Oxford", "Oxford.mdx")); err != nil {
 		t.Fatalf("not installed: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(DownloadDir(dest), "Oxford.mdd")); err == nil {
+	if _, err := os.Stat(filepath.Join(linkDirOf(t, dest, srv.URL+"/dicts/Oxford.mdx"), "Oxford.mdd")); err == nil {
 		t.Error("a companion nobody ticked was downloaded anyway")
 	}
 	if _, err := os.Stat(filepath.Join(dest, "Oxford", "Oxford.mdd")); err == nil {

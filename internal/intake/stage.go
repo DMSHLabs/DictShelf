@@ -10,7 +10,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -155,25 +154,6 @@ func safeDirName(name string) string {
 		return "dictionary"
 	}
 	return out
-}
-
-// uniqueDir picks a folder inside dest that does not exist yet, so importing
-// the same bundle twice produces a second dictionary rather than an extraction
-// into the first one's folder. The suffix is the form a file manager uses,
-// because this name is shown to the user and read by them in a listing.
-func uniqueDir(dest, name string) (string, error) {
-	base := safeDirName(name)
-	for n := 1; n <= 200; n++ {
-		try := base
-		if n > 1 {
-			try = base + " (" + strconv.Itoa(n) + ")"
-		}
-		p := filepath.Join(dest, try)
-		if _, err := os.Lstat(p); os.IsNotExist(err) {
-			return p, nil
-		}
-	}
-	return "", os.ErrExist
 }
 
 // spoolPrefix names the per-upload directory Spool creates. It is also the

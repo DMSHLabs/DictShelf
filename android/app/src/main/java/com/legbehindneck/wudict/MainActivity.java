@@ -99,8 +99,22 @@ public class MainActivity extends Activity {
         Storage.ensureAccess(this);
         // Launched by a share or an "open with", possibly. Intake takes it
         // only when it carries an archive; everything else is the flavour's.
-        if (!Intake.onNewIntent(this, getIntent())) Storage.onNewIntent(this, getIntent());
-        takeQuery(getIntent());
+        //
+        // Only on a FRESH launch. A restored activity is handed the intent that
+        // first created its task, again: a task a shared link started keeps that
+        // VIEW intent as its base for good, and the platform replays it after
+        // every process death - reopening the app from the launcher or recents
+        // re-imported the link (and the import still held by the server that
+        // outlived the process refused it as "already running"). Clearing the
+        // data or the extra cannot prevent it: that edits this process's copy,
+        // and the system restores from its own. A recreation carries saved
+        // state; a relaunch from recents after the state is gone carries
+        // FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY.
+        Intent launch = getIntent();
+        boolean fresh = savedInstanceState == null && launch != null
+                && (launch.getFlags() & Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) == 0;
+        if (fresh && !Intake.onNewIntent(this, launch)) Storage.onNewIntent(this, launch);
+        takeQuery(launch);
 
         ServerProcess.retain();
         ServerProcess.ensure(this, new ServerProcess.Listener() {

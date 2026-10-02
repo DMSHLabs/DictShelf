@@ -219,7 +219,7 @@ func TestOwnershipSurvivesBogusReaderPath(t *testing.T) {
 	}
 }
 
-func TestFindOrphansSemantics(t *testing.T) {
+func TestFindLeftoversSemantics(t *testing.T) {
 	db := t.TempDir()
 	t.Setenv("WUDICT_DB_DIR", db)
 	srcDir := t.TempDir()
@@ -253,7 +253,7 @@ func TestFindOrphansSemantics(t *testing.T) {
 	//    destroy the work of a prepare happening in another window.
 	writeSrc(t, filepath.Join(kept2, "text.db.ingest.beefdead"), "in progress")
 
-	orphs, err := FindOrphans()
+	orphs, err := FindLeftovers()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -756,7 +756,7 @@ func TestAdoptLoose(t *testing.T) {
 		t.Fatalf("second AdoptLoose = %v, %v; want none", again, err)
 	}
 	// nothing is deletable
-	orph, err := FindOrphans()
+	orph, err := FindLeftovers()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -795,7 +795,7 @@ func TestAdoptLooseKeepsExistingFolder(t *testing.T) {
 	if !fileExists(TextDBPath(dir)) {
 		t.Fatal("the existing prepared folder must be untouched")
 	}
-	orph, err := FindOrphans()
+	orph, err := FindLeftovers()
 	if err != nil {
 		t.Fatal(err)
 	}

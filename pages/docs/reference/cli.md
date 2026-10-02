@@ -29,7 +29,7 @@ version.
 | [`dump`](#dump) | export a dictionary to a pyglossary-compatible CSV file            |
 | [`ingest`](#ingest) | trigger indexing of dictionaries                                   |
 | [`lemmas`](#lemmas) | list, install and remove lemmatization data                        |
-| [`clean`](#clean) | list or delete broken library items                                |
+| [`clean`](#clean) | list or delete broken library items and orphans                    |
 | [`rm`](#rm) | remove a dictionary                                                |
 
 `--verbose` works with every command.
@@ -358,15 +358,19 @@ to pick up one installed this way.
 ## clean
 
 ``` sh title="find and remove library leftovers"
-wudict clean        # list what could be removed
-wudict clean -f     # remove it
+wudict clean                # list what could be removed
+wudict clean -f             # remove the leftovers
+wudict clean -f -orphans    # remove the orphans as well
 ```
 
 Lists incomplete or unreadable folders, interrupted preparations, and leftovers
 from an older layout. It is a dry run until you add `-f` (to force).
 
-A prepared dictionary is never listed, even when its original file is gone or
-has changed.
+It also lists **orphans**: prepared dictionaries whose original file is gone.
+`-f` leaves them alone; `-f -orphans` deletes them too. A dictionary file you
+moved to another place in your dictionary folders is not an orphan: `clean`
+reconnects its prepared data to the new place instead. One you chose to keep
+(**keep** in the panel, or `rm -keep-index`) is never listed.
 
 ## rm
 

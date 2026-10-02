@@ -161,7 +161,7 @@ platform :android do
       track: 'production',
       aab: AAB,
       skip_upload_metadata: false,
-      skip_upload_images: false,
+      skip_upload_images: true,
       skip_upload_screenshots: false,
       release_status: 'completed'
     )

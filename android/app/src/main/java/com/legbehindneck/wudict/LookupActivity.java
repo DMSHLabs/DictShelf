@@ -123,7 +123,10 @@ public class LookupActivity extends Activity {
         super.onCreate(savedInstanceState);
 
         Intent i = getIntent();
-        query = clean(text(i));
+        // Read once: text() walks every extra a caller might use, and both the
+        // word and the link test below want the same raw string.
+        CharSequence raw = text(i);
+        query = clean(raw);
         if (query == null) {
             // Nothing survived - a selection of whitespace, or a wudict:// URI
             // with no q. A blank floating window over someone else's app would
@@ -145,7 +148,7 @@ public class LookupActivity extends Activity {
         // for the one share a user most obviously meant as an import. The
         // decision of which SITES may be fetched is the server's (D130); this
         // only distinguishes a link from a word.
-        String link = link(text(i));
+        String link = link(raw);
         if (link != null) {
             startActivity(new Intent(this, MainActivity.class)
                     .putExtra(Intake.EXTRA_URL, link)
@@ -266,18 +269,22 @@ public class LookupActivity extends Activity {
     }
 
     /**
-     * The shared text as a LINK, or null if it is not one. Read from the raw
-     * selection rather than from `query`, because clean() bounds a headword at
-     * 256 characters and a download URL with a signature in its query string
-     * is routinely longer than that - truncating one would turn a valid link
-     * into a broken one instead of into a word.
+     * The shared text as LINKS - one, or a list of them - or null if it is
+     * not. Read from the raw selection rather than from `query`, because
+     * clean() bounds a headword at 256 characters and a download URL with a
+     * signature in its query string is routinely longer than that - truncating
+     * one would turn a valid link into a broken one instead of into a word.
+     * For the same reason a text longer than LINKS_LIMIT is not cut to fit: a
+     * list cut short ends in half a link, so it is not taken as links at all.
      */
     private static String link(CharSequence cs) {
-        if (cs == null) return null;
-        String s = (cs.length() > SCAN_LIMIT ? cs.subSequence(0, SCAN_LIMIT) : cs)
-                .toString().trim();
-        return Intake.isURL(s) ? s : null;
+        if (cs == null || cs.length() > LINKS_LIMIT) return null;
+        String s = cs.toString().trim();
+        return Intake.isLinks(s) ? s : null;
     }
+
+    /** The longest shared text read as a list of links: several hundred of them. */
+    private static final int LINKS_LIMIT = 64 << 10;
 
     /** Whitespace collapsed, bounded, or null if nothing usable is left. */
     private static String clean(CharSequence cs) {

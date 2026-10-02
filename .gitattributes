@@ -1,0 +1,15 @@
+# Line endings: LF in the index and in every checkout, Windows included.
+#
+# Git for Windows checks text out with CRLF by default (core.autocrlf=true),
+# and this repository holds text whose BYTES matter: the wudict howto is
+# go:embed'ed from the worktree and its tests require a clean dump to reproduce
+# it byte for byte, and the markdown golden files are compared with what the
+# writer produces, which is LF. With CRLF checkouts those tests failed on
+# Windows only, and a Windows-built binary would have shipped a guide that
+# differs from everyone else's. Every text file in the index is already LF, so
+# this changes no stored bytes.
+* text=auto eol=lf
+
+# cmd.exe misparses labels and GOTO in LF batch files; gradlew.bat uses both.
+*.bat text eol=crlf
+*.cmd text eol=crlf

@@ -110,6 +110,13 @@ func cmdRemove(args []string) error {
 	if failed > 0 {
 		return fmt.Errorf("%d deletions failed", failed)
 	}
+	if dropSource && !dropPrepared && preparedDir != "" {
+		// Keeping the prepared data without its files is the decision to keep
+		// it standalone: recorded, so it is never offered as an orphan (D156).
+		if err := store.MarkKept(preparedDir); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: could not mark %s as kept: %v\n", preparedDir, err)
+		}
+	}
 	fmt.Printf("deleted - %s freed\n", humanSize(total))
 	if dropPrepared && !dropSource && len(allSources) > 0 {
 		fmt.Println("note: the original files are still in place, so this dictionary will be indexed again the next time it is searched")

@@ -125,7 +125,7 @@ label.keep em{font-style:normal;color:var(--faint);font-size:12.5px}
   <h2>Add dictionaries</h2>
   <p>Drag-n-drop a link to a packed dictionary (<code>.zip</code>/ <code>.7z</code>) or unpacked (<code>.mdx</code>,
     <code>.ifo</code>, <code>.dsl/.dsl.dz</code>, <code>.slob</code>,
-     <code>.bgl</code>, <code>.zim</code> or <code>.wudict.md</code>). Or paste a link, and the dictionaries will be installed into
+     <code>.bgl</code>, <code>.zim</code> or <code>.wudict.md</code>). Or paste a link to one, to a web folder of them or to a list, and the dictionaries will be installed into
      <code id="addDir"></code> — .mdd assets are auto-discovered.</p>
   <div id="drop">
     <input type="file" id="file" accept=".zip,.7z,.mdx,.mdd,.ifo,.idx,.dict,.dz,.syn,.dsl,.slob,.bgl,.zim,.md,.gz" hidden>
@@ -133,19 +133,18 @@ label.keep em{font-style:normal;color:var(--faint);font-size:12.5px}
     <span class="hint">or drop one here</span>
   </div>
   <div id="urlRow">
-    <input type="url" id="url" placeholder="…or paste a link to one"
+    <input type="text" id="url" placeholder="…or paste a link: a dictionary, a folder or a list"
            autocomplete="off" spellcheck="false" inputmode="url">
     <button type="button" id="fetch" class="btn ghost">Download</button>
   </div>
   <div id="found" class="hidden">
+    <p class="formats hidden" id="candAll">Select <a href="#" id="candAllOn">all</a> ·
+      <a href="#" id="candAllOff">none</a></p>
     <div id="cands"></div>
     <div id="extras" class="hidden"></div>
     <label class="keep" id="srcKeepWrap"><input type="checkbox" id="srcKeep" checked>
       <span>Keep <b id="srcName"></b> afterwards
       <em>— an import that fails always keeps it</em></span></label>
-    <label class="keep hidden" id="srcCopyWrap"><input type="checkbox" id="srcCopy">
-      <span>Add a second copy instead of updating
-      <em>— leaves the one already installed untouched</em></span></label>
     <button type="button" id="install">Install</button>
     <button type="button" id="dropJob" class="btn ghost">Cancel</button>
   </div>
@@ -411,7 +410,7 @@ function fileList(files){
 
 function showCandidates(j){
   const box=$("cands");box.textContent="";
-  let usable=0,have=0;
+  let usable=0;
   // A missing companion stops being a refusal when the same companion was
   // found beside the file and is about to be downloaded: what the user is
   // choosing is the state AFTER the extras, not the state on disk now. The
@@ -429,6 +428,9 @@ function showCandidates(j){
     // reason to be here is the OTHER dictionary in the same archive. Ticking
     // it is still allowed — repairing a folder is a real reason — and then it
     // is replaced like any other.
+    // Ticked is "overwrite", unticked is "skip": the same file starts skipped,
+    // a different one - almost always a newer edition - starts overwriting,
+    // and the row says what it replaces and where.
     cb.checked=(ok||soon)&&!c.unchanged;cb.disabled=!ok&&!soon;
     row.appendChild(cb);
     row.appendChild(el("span","nm",c.name));
@@ -439,7 +441,10 @@ function showCandidates(j){
     // The size only when it is a cost about to be paid. A dictionary that is
     // already installed, or that cannot be installed at all, is carrying a
     // state instead, and that is what the rest of the row is for.
-    if(ok&&(!c.existing||c.stale))row.appendChild(el("span","n",sizeMB(c.size||0)));
+    if(ok&&(!c.existing||c.stale)&&!(c.elsewhere&&c.unchanged))row.appendChild(el("span","n",sizeMB(c.size||0)));
+    // When the site says the file last changed: beside "replaces your copy",
+    // it is how a newer edition tells itself apart from the one installed.
+    if(c.date)row.appendChild(el("span","n",c.date));
     // Named, not merely refused: the user can go and fetch the missing file,
     // and cannot if they are not told which one it is.
     if(soon)row.appendChild(el("span","why","needs "+miss.join(", ")+" — found, tick it below"));
@@ -449,20 +454,26 @@ function showCandidates(j){
     // is not is an installation: calling it one told the user a dictionary they
     // had just removed was still there (D137).
     else if(c.stale)row.appendChild(el("span","have","takes over a folder of this name"));
-    else if(c.existing){row.appendChild(el("span","have",c.unchanged?"already installed":"replaces your copy"));have++}
+    else if(c.existing)row.appendChild(el("span","have",c.unchanged?"already installed":"replaces your copy"));
+    // In another folder of the library, from wherever it came: named, so the
+    // user can tell "the same file" from "another edition or format".
+    else if(c.elsewhere)row.appendChild(el("span","have",
+      c.unchanged?"already in "+c.elsewhere:"replaces your copy in "+c.elsewhere));
     if(ok||soon)usable++;
     box.appendChild(row);
   });
   showExtras(j);
-  $("srcName").textContent=j.source||"the file";
+  // A collection's files are downloaded one by one; there is no one file to name.
+  $("srcName").textContent=j.collection?"the downloaded files":(j.source||"the file");
   // The question is only asked when it is one: with IMPORT_KEEP set to keep or
   // delete it has already been answered, and asking again would make the
   // setting a suggestion.
   $("srcKeepWrap").style.display=j.keep==="ask"?"":"none";
   // Offered only when there is something to be asked about. Replacing is the
   // default because two of the same dictionary means two of every result.
-  $("srcCopyWrap").classList.toggle("hidden",!have);
-  if(!have)$("srcCopy").checked=false;
+  // Overwrite all / skip all, offered only where there is a choice to make
+  // in bulk: two or more rows that can be ticked.
+  $("candAll").classList.toggle("hidden",usable<2);
   $("found").classList.remove("hidden");
   impSay(usable?"":"✕ nothing here can be installed",usable?"":"err");
   $("install").disabled=!usable;
@@ -480,7 +491,8 @@ function showExtras(j){
   box.classList.toggle("hidden",!list.length);
   if(!list.length)return;
   box.appendChild(el("p","head",
-    list.length===1?"One more file belongs with this dictionary:"
+    j.collection?"Pictures and sound for the dictionaries above:"
+    :list.length===1?"One more file belongs with this dictionary:"
                    :list.length+" more files belong with this dictionary:"));
   list.forEach((x,i)=>{
     const row=el("label","row");
@@ -505,7 +517,7 @@ async function impInstall(){
   try{
     r=await fetch("/api/intake?confirm=1",{method:"POST",
       headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({pick:pick,keep:$("srcKeep").checked,copy:$("srcCopy").checked,extras:extras})});
+      body:JSON.stringify({pick:pick,keep:$("srcKeep").checked,extras:extras})});
     j=await r.json();
   }catch(e){ impSay("✕ the import could not be started","err"); return }
   if(!r.ok||j.error){impSay("✕ "+(j&&j.error||"the import could not be started"),"err");
@@ -536,6 +548,11 @@ function impRender(j){
     // is what a person watching a multi-gigabyte companion download wants to
     // read, and the name is only known once the server has answered — until
     // then the host alone is the honest line.
+    // Before a byte has arrived the server is still asking - about one file,
+    // or about every file a folder or a list names - and "downloading" would
+    // be a promise nothing has made yet.
+    if(!j.source&&!j.done&&!j.total){impSay("Connecting to "+(j.host||"the site")+"…");
+      $("found").classList.add("hidden");return}
     const what=j.source?("Downloading "+j.source+(j.host?" from "+j.host:"")):("Downloading from "+(j.host||"the site"));
     impSay(what+"… "+pct);
     $("found").classList.add("hidden");
@@ -549,7 +566,10 @@ function impRender(j){
   }
   if(j.state==="done"){
     const n=(j.installed||[]).length;
-    impSay(n?"✓ Installed "+j.installed.join(", "):"✓ Finished","ok");
+    // A collection is many answers: what did not arrive is said beside what
+    // did, rather than lost behind a tick.
+    const also=j.error?" — ✕ "+j.error:"";
+    impSay((n?"✓ Installed "+j.installed.join(", "):"✓ Finished")+also,n||!j.error?"ok":"err");
     // The folder now holds more than it did, and the count under it is what
     // the Save button is enabled from.
     validateAll();
@@ -597,7 +617,25 @@ function wireIntake(dir){
   $("file").addEventListener("change",()=>{const f=$("file").files[0];$("file").value="";impSend(f)});
   $("fetch").addEventListener("click",impFetch);
   $("url").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();impFetch()}});
+  // A one-line field deletes the line breaks of a pasted list, which fuses
+  // its links into one that is none of them. They become spaces instead, and
+  // the server reads every link out of what arrives.
+  $("url").addEventListener("paste",e=>{
+    const t=e.clipboardData&&e.clipboardData.getData("text");
+    if(!t||!/[\r\n]/.test(t))return;
+    e.preventDefault();
+    const f=$("url"),a=f.selectionStart??f.value.length,b=f.selectionEnd??a;
+    // "#" lines (a list's title, its comments) are dropped first: joined onto
+    // one line, the first of them would make the whole line a comment.
+    const v=t.split(/\r?\n|\r/).filter(l=>!/^\s*#/.test(l)).join(" ").replace(/\s+/g," ").trim();
+    f.value=f.value.slice(0,a)+v+f.value.slice(b);
+    f.setSelectionRange(a+v.length,a+v.length);
+  });
   $("install").addEventListener("click",impInstall);
+  for(const [id,on] of [["candAllOn",true],["candAllOff",false]])$(id).addEventListener("click",e=>{
+    e.preventDefault();
+    for(const cb of document.querySelectorAll("#cands input:not(:disabled)"))cb.checked=on;
+  });
   $("dropJob").addEventListener("click",impCancel);
   $("howtoCopy").addEventListener("click",howtoCopy);
   const d=$("drop");

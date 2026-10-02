@@ -140,22 +140,27 @@ func TestJobSecondImportOfIdenticalBytesIsUnchanged(t *testing.T) {
 	}
 }
 
-// Copy is the opt-out, and the only way to end up with two.
-func TestJobCopyInstallsBeside(t *testing.T) {
+// There is no way to end up with two: importing the same dictionary again
+// replaces it, and nothing is ever installed under a numbered name.
+func TestJobReinstallNeverNumbers(t *testing.T) {
 	dest := t.TempDir()
 	src := buildZip(t, member{"Oxford.mdx", "main"})
 	m := &Manager{}
 	for i := 0; i < 2; i++ {
 		mustBegin(t, m, dest, src, false)
-		if _, err := m.Confirm(dest, []int{0}, Options{Keep: true, Copy: true}); err != nil {
+		if _, err := m.Confirm(dest, []int{0}, Options{Keep: true}); err != nil {
 			t.Fatalf("Confirm %d: %v", i, err)
 		}
 		m.Wait()
 	}
-	for _, want := range []string{"Oxford", "Oxford (2)"} {
-		if _, err := os.Stat(filepath.Join(dest, want, "Oxford.mdx")); err != nil {
-			t.Errorf("%s: %v", want, err)
+	ents, _ := os.ReadDir(dest)
+	for _, e := range ents {
+		if strings.Contains(e.Name(), "(2)") {
+			t.Errorf("a numbered copy was installed: %s", e.Name())
 		}
+	}
+	if _, err := os.Stat(filepath.Join(dest, "Oxford", "Oxford.mdx")); err != nil {
+		t.Fatal(err)
 	}
 }
 

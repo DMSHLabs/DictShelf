@@ -38,7 +38,7 @@ Runs natively on [android](https://wuweidict.github.io/wudict/apps/android/), [m
 
 ## Adding dictionaries 
 With wuDict running, dictionary folders can be configured from [http://localhost:6888/setup](http://localhost:6888/setup). The browser setup page is a convenience 
-for writing `DICT_DIR` in the configuration file at `~/.wudict/wudict.toml` and other actions, such as configuring lemmatization (morophology), installing dictionaries from a URL via drag-n-drop from the system file manager.
+for writing `DICT_DIR` in the configuration file at `~/.wudict/wudict.toml` and other actions, such as configuring lemmatization (morphology), installing dictionaries from a URL via drag-n-drop from the system file manager.
 
 ### Multiple dictionary folders
 
@@ -92,7 +92,7 @@ be searched by selecting it in the dictionary dropdown.
 > - click links inside articles to follow cross-references
 > - <kbd>⊞</kbd> expands all results (<kbd>⊟</kbd> closes them again — for the current page only, state not persistent)
 > - <kbd>⇔</kbd> toggles a wide layout
-> - <kbd>◐</kbd< cycles auto/light/dark theme. Search URLs are bookmarkable
+> - <kbd>◐</kbd> cycles auto/light/dark theme. Search URLs are bookmarkable
 
 ## Run as an app (macOS)
 
@@ -117,7 +117,7 @@ make mac-agent-uninstall # stop it and delete the plist
 
 ## Run as an app (Windows)
 
-In windows `wudict` runs from `cmd` or cmd/PowerShell as an ordinary
+In windows `wudict` runs from `cmd` or PowerShell as an ordinary
 command-line program. When double-clicked, started from a shortcut, or by double-clicking 
 a dictionary file, it hides the  console window, and shows a **tray icon** instead, logging to
 `%LOCALAPPDATA%\wudict\wudict.log`. See also [running on windows](https://wuweidict.github.io/wudict/apps/windows/).
@@ -330,7 +330,7 @@ html:not([data-dark]){
 
 To undo changes use <kbd>⌘</kbd> + <kbd>Z</kbd> 
 (on windows <kbd>Ctrl</kbd> + <kbd>Z</kbd>).
-A dot on a tab means that box has unsaved changes. If a rogue CSS rule makes the app UI to disappear, apend `/?style=off` in the URL
+A dot on a tab means that box has unsaved changes. If a rogue CSS rule makes the app UI to disappear, append `/?style=off` in the URL
 and the page is served with default styles.
 
 ## Disk use

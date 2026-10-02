@@ -74,7 +74,11 @@ func tempFiles(t *testing.T, dir string) []string {
 // repair, or a compressed one, through a temporary file that Close removes.
 func TestSourceFiles(t *testing.T) {
 	tmp := t.TempDir()
-	t.Setenv("TMPDIR", tmp)
+	// os.TempDir reads TMPDIR on Unix and TMP/TEMP on Windows; set all three,
+	// or on Windows the file lands in the system temp folder and is not seen.
+	for _, k := range []string{"TMPDIR", "TMP", "TEMP"} {
+		t.Setenv(k, tmp)
+	}
 	const doc = "# D\nwudict: 1\n\n## w\n\nbody\n"
 	for _, tc := range []struct {
 		name string

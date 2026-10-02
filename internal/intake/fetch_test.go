@@ -12,6 +12,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -93,7 +94,7 @@ func TestFetchDownloads(t *testing.T) {
 	if src.Temp {
 		t.Fatal("a download must not be marked Temp")
 	}
-	if want := filepath.Join(DownloadDir(dest), "bundle.zip"); src.Path != want {
+	if want := filepath.Join(linkDirOf(t, dest, srv.URL), "bundle.zip"); src.Path != want {
 		t.Fatalf("path = %q, want %q", src.Path, want)
 	}
 	got, err := os.ReadFile(src.Path)
@@ -137,7 +138,7 @@ func TestFetchResumes(t *testing.T) {
 	defer srv.Close()
 
 	dest := t.TempDir()
-	dir := DownloadDir(dest)
+	dir := linkDirOf(t, dest, srv.URL)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -179,7 +180,7 @@ func TestFetchRestartsWhenTheFileChanged(t *testing.T) {
 	defer srv.Close()
 
 	dest := t.TempDir()
-	dir := DownloadDir(dest)
+	dir := linkDirOf(t, dest, srv.URL)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -217,7 +218,7 @@ func TestFetchIgnoresPartialWithoutMeta(t *testing.T) {
 	defer srv.Close()
 
 	dest := t.TempDir()
-	dir := DownloadDir(dest)
+	dir := linkDirOf(t, dest, srv.URL)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -414,7 +415,7 @@ func TestBeginURLDownloadsThenSniffs(t *testing.T) {
 	}
 	// Kept, because keep was true - and kept where the user can find it,
 	// which is the reason a download does not live in the staging area.
-	if _, err := os.Stat(filepath.Join(DownloadDir(dest), "bundle.zip")); err != nil {
+	if _, err := os.Stat(filepath.Join(linkDirOf(t, dest, srv.URL), "bundle.zip")); err != nil {
 		t.Fatalf("the downloaded archive was not kept: %v", err)
 	}
 }
@@ -493,7 +494,7 @@ func TestFetchReusesAnUnchangedDownload(t *testing.T) {
 	if hits != 2 {
 		t.Errorf("requests = %d, want two (the second answered 304)", hits)
 	}
-	ents, err := os.ReadDir(DownloadDir(dest))
+	ents, err := os.ReadDir(linkDirOf(t, dest, srv.URL))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -538,10 +539,10 @@ func TestFetchReusesOnSizeWhenThereIsNoValidator(t *testing.T) {
 	}
 }
 
-// The other half of the rule: a file that DID change is fetched, and lands
-// beside the old one rather than over it. A download may be the user's only
-// copy, so nothing here overwrites one.
-func TestFetchDoesNotOverwriteAChangedDownload(t *testing.T) {
+// The other half of the rule: a file that DID change is fetched, and replaces
+// the older revision of itself. Never a numbered one beside it: that became a
+// second dictionary called "bundle (2)" instead of an update (D155 Am. 4).
+func TestFetchReplacesAChangedDownload(t *testing.T) {
 	bodies := []string{strings.Repeat("a", 2048), strings.Repeat("b", 4096)}
 	var n int
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -567,14 +568,17 @@ func TestFetchDoesNotOverwriteAChangedDownload(t *testing.T) {
 	if err != nil {
 		t.Fatalf("second: %v", err)
 	}
-	if second.Path == first.Path {
-		t.Fatal("the changed file overwrote the one already on disk")
-	}
-	if got, err := os.ReadFile(first.Path); err != nil || string(got) != bodies[0] {
-		t.Fatalf("the first download was disturbed (err %v)", err)
+	if second.Path != first.Path {
+		t.Fatalf("the changed file landed at %s beside %s instead of replacing it", second.Path, first.Path)
 	}
 	if got, err := os.ReadFile(second.Path); err != nil || string(got) != bodies[1] {
-		t.Fatalf("the second download is wrong (err %v)", err)
+		t.Fatalf("the download is not the new revision (err %v)", err)
+	}
+	ents, _ := os.ReadDir(filepath.Dir(second.Path))
+	for _, e := range ents {
+		if strings.Contains(e.Name(), "(2)") {
+			t.Errorf("a numbered file was made: %s", e.Name())
+		}
 	}
 }
 
@@ -627,5 +631,33 @@ func TestReadDoneRefusesWhatItCannotVerify(t *testing.T) {
 	writeJSON(side, doneMeta{URL: raw, Size: 3, File: "a.zip"})
 	if m, full := readDone(side, dir, raw); m == nil || full != filepath.Join(dir, "a.zip") {
 		t.Errorf("a good record was refused: %v %q", m, full)
+	}
+}
+
+// linkDirOf is where Fetch keeps a download of raw (LinkDir).
+func linkDirOf(t *testing.T, dest, raw string) string {
+	t.Helper()
+	u, err := url.Parse(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return LinkDir(dest, u)
+}
+
+// Each download lives under its own place on the web, so two links with one
+// file name never meet; nothing in a URL can climb out or hide.
+func TestLinkDir(t *testing.T) {
+	dest := t.TempDir()
+	for _, tc := range []struct{ in, want string }{
+		{"https://A.org/dict/en/oxford.mdx", "a.org/dict/en"},
+		{"https://b.org/oxford.mdx", "b.org"},
+		{"https://c.org/../../x/./.hidden/y.zip", "c.org/x/hidden"},
+		{"https://d.org/a%2Fb/c:d/x.mdx", "d.org/a/b/c_d"},
+	} {
+		u, _ := url.Parse(tc.in)
+		got, err := filepath.Rel(DownloadDir(dest), LinkDir(dest, u))
+		if err != nil || filepath.ToSlash(got) != tc.want {
+			t.Errorf("LinkDir(%s) = %s, want %s", tc.in, got, tc.want)
+		}
 	}
 }

@@ -27,6 +27,8 @@ import android.content.ClipData;
 import android.content.ContentResolver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Environment;
@@ -71,6 +73,16 @@ final class Intake {
     // instead of after a multi-gigabyte upload that is going to be refused.
     private static volatile boolean running;
     private static volatile boolean cancelled;
+
+    /**
+     * The server job this shell started and has not let go of. The server has
+     * ONE import slot, so a job the shell stops watching - an error read, a
+     * dialog that went with its activity, an exception - must be released, or
+     * it holds that slot, invisible, and every link opened after it is refused
+     * as "an import is already running". Released by id, so a release sent
+     * late never cancels a job somebody else has started since.
+     */
+    private static volatile String ownJob;
 
     /**
      * A link handed over by LookupActivity, which is where a shared http(s)
@@ -159,7 +171,7 @@ final class Intake {
     static boolean onNewIntent(Activity a, Intent intent) {
         if (intent == null) return false;
         String url = intent.getStringExtra(EXTRA_URL);
-        if (isURL(url)) {
+        if (isLinks(url)) {
             // Consumed, not merely read: MainActivity is singleTask and keeps
             // the intent that started it, so an activity recreated later would
             // otherwise start the same download a second time.
@@ -307,6 +319,27 @@ final class Intake {
         }
     }
 
+    /**
+     * Whether shared text is links to install rather than words to look up:
+     * one link, or a list of them - the shape of a list file, one per line,
+     * "#" lines allowed. Prose with a link in it stays a lookup: the user who
+     * selected a sentence meant the sentence. The server reads every link out
+     * of what it is given, a share link included (internal/intake).
+     */
+    static boolean isLinks(String s) {
+        if (s == null) return false;
+        int links = 0;
+        for (String line : s.split("\\r?\\n")) {
+            String v = line.trim();
+            if (v.isEmpty() || v.startsWith("#")) continue;
+            for (String tok : v.split("\\s+")) {
+                if (!isURL(tok)) return false;
+                links++;
+            }
+        }
+        return links > 0;
+    }
+
     // ── the job ──────────────────────────────────────────────────────────
 
     /**
@@ -335,6 +368,10 @@ final class Intake {
             // by name. Cleared for the same singleTask reason as the decline
             // path; startURL outlives this call, so clearing first is safe.
             intent.setData(null);
+            if (isSharePage(u)) {
+                openInBrowser(a, u);
+                return true;
+            }
             startURL(a, u.toString());
             return true;
         }
@@ -349,6 +386,58 @@ final class Intake {
         say(a, a.getString(R.string.intake_unsupported,
                 name != null ? name : u.getLastPathSegment()));
         return true;
+    }
+
+    /**
+     * The share link with nothing after "#": wudict's page of dictionary links
+     * itself (legbehindneck.com/wudict), not a link to any dictionary. The App
+     * Link claims it like any share link, so a tap on it - in the howto, in a
+     * messenger - lands here, and it used to be "imported" as a folder page
+     * that lists nothing. It is a page to look at, so it goes to a browser.
+     */
+    static boolean isSharePage(Uri u) {
+        String host = u.getHost(), path = u.getPath(), frag = u.getEncodedFragment();
+        if (host == null) return false;
+        host = host.toLowerCase(Locale.US);
+        return (host.equals("legbehindneck.com") || host.equals("www.legbehindneck.com"))
+                && ("/wudict".equals(path) || "/wudict/".equals(path))
+                && (frag == null || frag.trim().isEmpty());
+    }
+
+    /**
+     * Opens a page in a web browser - by package, because a plain VIEW of this
+     * address resolves to the App Link, which is this app. The browser is the
+     * one the user chose as default for web pages (asked with an address no
+     * app claims), or else the first installed one that is not this app. No
+     * browser at all is said, never retried as an intent that would loop back.
+     */
+    private static void openInBrowser(Activity a, Uri page) {
+        PackageManager pm = a.getPackageManager();
+        Intent probe = new Intent(Intent.ACTION_VIEW, Uri.parse("https://example.com/"))
+                .addCategory(Intent.CATEGORY_BROWSABLE);
+        List<String> browsers = new ArrayList<>();
+        for (ResolveInfo r : pm.queryIntentActivities(probe, PackageManager.MATCH_DEFAULT_ONLY)) {
+            String p = r.activityInfo == null ? null : r.activityInfo.packageName;
+            if (p != null && !p.equals(a.getPackageName()) && !browsers.contains(p)) browsers.add(p);
+        }
+        ResolveInfo def = pm.resolveActivity(probe, PackageManager.MATCH_DEFAULT_ONLY);
+        String pkg = def != null && def.activityInfo != null
+                && browsers.contains(def.activityInfo.packageName)
+                ? def.activityInfo.packageName // a real default, not the chooser
+                : browsers.isEmpty() ? null : browsers.get(0);
+        if (pkg == null) {
+            say(a, a.getString(R.string.intake_no_browser, page.toString()));
+            return;
+        }
+        try {
+            a.startActivity(new Intent(Intent.ACTION_VIEW, page)
+                    .addCategory(Intent.CATEGORY_BROWSABLE)
+                    .setPackage(pkg)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+        } catch (Exception e) {
+            Log.w(TAG, "could not open " + page + " in " + pkg, e);
+            say(a, a.getString(R.string.intake_no_browser, page.toString()));
+        }
     }
 
     /**
@@ -492,10 +581,20 @@ final class Intake {
     private static String runURL(Activity a, Context app, String url, AlertDialog dialog)
             throws Exception {
         if (!awaitServer(app)) return a.getString(R.string.intake_no_server);
-        JSONObject job = post(app, "/api/intake?url=" + enc(url), null, null);
+        JSONObject job = begin(a, app, () -> post(app, "/api/intake?url=" + enc(url), null, null));
+        if (job == null) return null; // the user kept the other import running
         if (job.has("error")) return job.optString("error");
+        claim(job);
+        try {
+            return followURL(a, app, url, dialog);
+        } finally {
+            release(app);
+        }
+    }
 
-        job = awaitDownload(a, app, dialog);
+    private static String followURL(Activity a, Context app, String url, AlertDialog dialog)
+            throws Exception {
+        JSONObject job = awaitDownload(a, app, dialog);
         if (job == null) {
             return cancelled ? a.getString(R.string.intake_cancelled) : null;
         }
@@ -529,7 +628,7 @@ final class Intake {
             if (cancelled) {
                 // The partial file stays on the server's side on purpose: the
                 // next attempt continues from it rather than starting over.
-                post(app, "/api/intake", "DELETE", null);
+                release(app);
                 return null;
             }
             JSONObject j = post(app, "/api/intake", "GET", null);
@@ -561,11 +660,104 @@ final class Intake {
         // holding all-files access - but the test is the file's readability,
         // not the flavour, so a file:// share reaches it in both.
         String path = realPath(a, u);
-        JSONObject job = path != null
+        final String label = name;
+        JSONObject job = begin(a, app, () -> path != null
                 ? post(app, "/api/intake?path=" + enc(path), null, null)
-                : upload(a, app, u, name);
+                : upload(a, app, u, label));
+        if (job == null) {
+            cancelled = true; // the user kept the other import: the rest of this share waits too
+            return null;
+        }
         if (job.has("error")) return job.optString("error");
-        return offer(a, app, job, name, dialog, added);
+        claim(job);
+        try {
+            return offer(a, app, job, name, dialog, added);
+        } finally {
+            release(app);
+        }
+    }
+
+    /**
+     * Starts a server job, and answers the one refusal a user can resolve:
+     * the server's slot held by another import. Nothing on this screen shows
+     * that one - it was started before the app was last closed, or from the
+     * setup page - so the user is told what it is and chooses. "Stop it"
+     * cancels it and asks again, once; "Keep it running" returns null.
+     */
+    private static JSONObject begin(Activity a, Context app,
+                                    java.util.function.Supplier<JSONObject> request) throws Exception {
+        JSONObject job = request.get();
+        if (!job.optBoolean("busy")) return job;
+        JSONObject other = post(app, "/api/intake", "GET", null);
+        if (!askStopOther(a, describe(a, other))) return null;
+        String id = other.optString("id", "");
+        post(app, id.isEmpty() ? "/api/intake" : "/api/intake?id=" + enc(id), "DELETE", null);
+        return request.get();
+    }
+
+    /** "oxford.mdx from example.org", as far as the server knows it yet. */
+    private static String describe(Activity a, JSONObject job) {
+        String file = job.optString("source", ""), host = job.optString("host", "");
+        if (!file.isEmpty() && !host.isEmpty()) return file + " (" + host + ")";
+        if (!file.isEmpty()) return file;
+        if (!host.isEmpty()) return host;
+        return a.getString(R.string.intake_other_unnamed);
+    }
+
+    private static boolean askStopOther(Activity a, String what) throws InterruptedException {
+        final boolean[] stop = new boolean[1];
+        final CountDownLatch latch = new CountDownLatch(1);
+        a.runOnUiThread(() -> {
+            if (a.isFinishing() || a.isDestroyed()) {
+                latch.countDown();
+                return;
+            }
+            new AlertDialog.Builder(a)
+                    .setTitle(R.string.intake_title)
+                    .setMessage(a.getString(R.string.intake_other_running, what))
+                    .setCancelable(false)
+                    .setPositiveButton(R.string.intake_other_stop, (d, w) -> {
+                        stop[0] = true;
+                        latch.countDown();
+                    })
+                    .setNegativeButton(R.string.intake_other_keep, (d, w) -> latch.countDown())
+                    .show();
+        });
+        if (!awaitAnswer(a, latch, CHOICE_TIMEOUT_MIN)) return false;
+        return stop[0];
+    }
+
+    /** Takes the job a successful start answered with as this shell's own. */
+    private static void claim(JSONObject job) {
+        String id = job.optString("id", "");
+        ownJob = id.isEmpty() ? null : id;
+    }
+
+    /**
+     * Lets go of this shell's job: cancels it on the server if it is still
+     * the current one, and does nothing if it is not. Called on every way out,
+     * so it is idempotent - the first call takes the id.
+     */
+    private static void release(Context app) {
+        String id = ownJob;
+        ownJob = null;
+        if (id != null) post(app, "/api/intake?id=" + enc(id), "DELETE", null);
+    }
+
+    /**
+     * Waits for a dialog's answer, and gives up when the activity that shows
+     * it is gone: a dialog dies with its window, and a latch nobody can count
+     * down would hold this import - and the server's slot - for the whole
+     * timeout. False when no answer came.
+     */
+    private static boolean awaitAnswer(Activity a, CountDownLatch latch, long minutes)
+            throws InterruptedException {
+        long deadline = System.nanoTime() + TimeUnit.MINUTES.toNanos(minutes);
+        while (System.nanoTime() < deadline) {
+            if (latch.await(1, TimeUnit.SECONDS)) return true;
+            if (a.isDestroyed()) return false;
+        }
+        return false;
     }
 
     /**
@@ -583,11 +775,11 @@ final class Intake {
         Choice chose = choose(a, name, cands, extras);
         if (chose == null) {
             cancelled = true;
-            post(app, "/api/intake", "DELETE", null);
+            release(app);
             return null;
         }
         if (chose.dicts.length == 0) {
-            post(app, "/api/intake", "DELETE", null);
+            release(app);
             return null;
         }
 
@@ -618,7 +810,7 @@ final class Intake {
             throws Exception {
         for (; ; ) {
             if (cancelled) {
-                post(app, "/api/intake", "DELETE", null);
+                release(app);
                 return null;
             }
             JSONObject j = post(app, "/api/intake", "GET", null);
@@ -628,7 +820,11 @@ final class Intake {
                 for (int i = 0; inst != null && i < inst.length(); i++) {
                     added.add(inst.optString(i));
                 }
-                return null;
+                // A collection finishes "done" with what did not arrive named
+                // beside what did: one dead link out of forty is a sentence,
+                // not a failure of the other thirty-nine.
+                String err = j.optString("error", "");
+                return err.isEmpty() ? null : err;
             }
             if ("error".equals(state)) return j.optString("error");
             // A confirmed job with companions ticked goes back to DOWNLOADING
@@ -680,6 +876,9 @@ final class Intake {
         long done = j.optLong("done"), total = j.optLong("total");
         String file = j.optString("source", "");
         String host = j.optString("host", "");
+        // Nothing has arrived yet: the server is still asking the site - about
+        // one file, or about every file a folder or a list names.
+        if (file.isEmpty() && done == 0 && total == 0) return a.getString(R.string.intake_connecting);
         // No percentage when the site declared no length: an invented one that
         // stops moving is worse than a line that only says work is happening.
         int pct = total > 0 ? (int) Math.min(100, done * 100 / total) : -1;
@@ -760,6 +959,15 @@ final class Intake {
                     int msg = stale ? R.string.intake_stale
                             : same ? R.string.intake_same : R.string.intake_update;
                     label = a.getString(msg, row(a, c, stale));
+                } else if (!c.optString("elsewhere").isEmpty()) {
+                    // A dictionary of this name in another folder of the
+                    // library, whatever its source. Ticked is "overwrite that
+                    // copy in place", unticked is "skip" - never a second one
+                    // (D155 Am. 4) - and the same file starts skipped.
+                    same = c.optBoolean("unchanged");
+                    label = a.getString(same ? R.string.intake_same_elsewhere
+                                    : R.string.intake_other_elsewhere,
+                            row(a, c, !same), c.optString("elsewhere"));
                 }
             }
             needs.add(dep);
@@ -820,12 +1028,33 @@ final class Intake {
                         latch.countDown();
                     })
                     .setNegativeButton(R.string.intake_cancel, (dlg, w) -> latch.countDown())
+                    // Overwrite all / skip all. Its listener is replaced once
+                    // the dialog is showing, because a dialog button's own
+                    // listener always dismisses the dialog.
+                    .setNeutralButton(R.string.intake_all, null)
                     .create();
+            d.setOnShowListener(x -> {
+                android.widget.Button all = d.getButton(AlertDialog.BUTTON_NEUTRAL);
+                if (all == null) return;
+                all.setOnClickListener(v -> {
+                    // All when anything that can be ticked is not; None when
+                    // everything already is.
+                    boolean on = false;
+                    for (int i = 0; i < checked.length; i++) {
+                        if (ok[i] && !checked[i]) on = true;
+                    }
+                    for (int i = 0; i < checked.length; i++) {
+                        if (!ok[i]) continue;
+                        checked[i] = on;
+                        d.getListView().setItemChecked(i, on);
+                    }
+                });
+            });
             d.show();
         });
         // A dialog whose window went away with the activity would otherwise
         // park this thread - and its server claim - for the life of the app.
-        if (!latch.await(CHOICE_TIMEOUT_MIN, TimeUnit.MINUTES)) return null;
+        if (!awaitAnswer(a, latch, CHOICE_TIMEOUT_MIN)) return null;
         return answer[0];
     }
 
@@ -846,7 +1075,11 @@ final class Intake {
      * not be pushed off the end by a number that is not.
      */
     private static String row(Activity a, JSONObject c, boolean withSize) {
-        String name = c.optString("name");
+        // The site's date for a file offered from a link, kept on every row
+        // that has one: beside "replaces your copy" it is how a newer edition
+        // is told apart from the one installed.
+        String date = c.optString("date", "");
+        String name = date.isEmpty() ? c.optString("name") : c.optString("name") + " · " + date;
         String files = fileList(a, c.optJSONArray("files"));
         long size = withSize ? c.optLong("size") : 0;
         if (files.isEmpty()) {

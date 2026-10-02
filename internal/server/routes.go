@@ -88,6 +88,11 @@ func (s *Server) routes() []route {
 		{"GET", "/api/setup", s.handleSetup, "/api/setup", false},
 		{"GET", "/api/library", s.handleLibrary, "/api/library", false},
 		{"DELETE", "/api/library", s.handleRemoveLibrary, "/api/library", false},
+		// prepared dictionaries whose source is gone (orphans.go, D156): list
+		// them, and delete or keep them. Never CORS - the list names files on
+		// the user's disk, and the answer deletes from the library.
+		{"GET", "/api/orphans", s.handleOrphans, "/api/orphans", false},
+		{"POST", "/api/orphans", s.handleResolveOrphans, "/api/orphans", false},
 		{"GET", "/api/config", s.handleConfig, "/api/config", false},
 		{"GET", "/api/prefs", s.handlePrefs, "/api/prefs", false},
 		{"PUT", "/api/prefs", s.handleSavePrefs, "/api/prefs", false},

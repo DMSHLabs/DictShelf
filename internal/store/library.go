@@ -25,8 +25,10 @@ package store
 //
 // info.txt sits between them as a *derived receipt*: regenerated from the
 // text.db meta after every ingest (WriteInfo) and never edited by hand. It
-// carries exactly one fact of its own - `source`, the path this folder was
-// claimed for, written before the ingest starts. That is the ownership record
+// carries two facts of its own. `source`, the path this folder was claimed
+// for, written before the ingest starts (and re-pointed by Relink when that
+// file moves); and `keep`, present only when the user chose to keep the folder
+// after its source was gone (D156). `source` is the ownership record
 // (meta's own source_path is only what a format reader chose to report, and
 // may be relative, stale or absent); everything else in the receipt is copied
 // from the meta. No library-wide manifest exists, and none should: that would
@@ -313,7 +315,7 @@ func SourceChanged(textDB, srcPath string) bool {
 	}
 	meta, err := ReadMeta(textDB)
 	if err != nil {
-		return false // unreadable meta is FindOrphans' business, not ours
+		return false // unreadable meta is FindLeftovers' business, not ours
 	}
 	return sourceChangedMeta(meta, srcPath)
 }
@@ -355,7 +357,7 @@ func sourceChangedMeta(meta map[string]string, srcPath string) bool {
 func AbbrevChanged(textDB, companionPath string) bool {
 	meta, err := ReadMeta(textDB)
 	if err != nil {
-		return false // unreadable meta is FindOrphans' business, not ours
+		return false // unreadable meta is FindLeftovers' business, not ours
 	}
 	return abbrevChangedMeta(meta, companionPath)
 }
@@ -438,7 +440,7 @@ type LibEntry struct {
 }
 
 // Library lists every prepared dictionary in the db dir, newest name order.
-// Folders without a readable text.db are skipped (FindOrphans reports those).
+// Folders without a readable text.db are skipped (FindLeftovers reports those).
 func Library() ([]LibEntry, error) {
 	root := DefaultDBDir()
 	des, err := os.ReadDir(root)
@@ -549,7 +551,11 @@ func dirSize(dir string) int64 {
 // WriteInfo regenerates a folder's info.txt from its text.db meta and the
 // files actually present. Called after every ingest and media pack, so the
 // receipt can never drift from the database it describes.
-func WriteInfo(dir string) error {
+func WriteInfo(dir string) error { return writeInfo(dir, "") }
+
+// writeInfo is WriteInfo with the ownership claim replaced by source when it
+// is not empty - Relink's one write, re-pointing a folder at its moved source.
+func writeInfo(dir, source string) error {
 	textDB := TextDBPath(dir)
 	meta, err := ReadMeta(textDB)
 	if err != nil {
@@ -564,9 +570,14 @@ func WriteInfo(dir string) error {
 	// whatever the format reader chose to report - which may be relative,
 	// stale, or empty. Overwriting the claim with it would orphan the folder
 	// from its own source (LookupDir would never find it again).
-	source := ""
+	// The keep marker (D156) is the receipt's other fact of its own: a user's
+	// decision, so a regeneration carries it over like the claim.
+	kept := false
 	if prior, err := readInfo(InfoPath(dir)); err == nil {
-		source = prior["source"]
+		if source == "" {
+			source = prior["source"]
+		}
+		kept = prior[keepKey] != ""
 	}
 	if source == "" {
 		source = meta["source_path"]
@@ -608,6 +619,9 @@ func WriteInfo(dir string) error {
 	fmt.Fprintf(&b, "source_mtime = %s\n", meta["source_mtime"])
 	fmt.Fprintf(&b, "imported = %s\n", meta["created"])
 	fmt.Fprintf(&b, "uuid = %s\n", meta["dict_uuid"])
+	if kept {
+		fmt.Fprintf(&b, "\n%s%s = %s\n", keepComment, keepKey, keepValue)
+	}
 	fmt.Fprintf(&b, "\n# origin: %s\n", src)
 	fmt.Fprintf(&b, "# files: %s (articles + search index)", TextDBName)
 	if _, err := os.Stat(MediaDBPath(dir)); err == nil {
