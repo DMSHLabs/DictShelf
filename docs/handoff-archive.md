@@ -55,6 +55,7 @@ narratives, so `git log` is a second copy.
 | Release wudict2-v0.3.0 (2026-09-27, this session) | 2026-09-27 | — (added after the split) |
 | Release wudict2-v0.4.0 (2026-09-27, this session) | 2026-09-27 | — (added after the split) |
 | Release wudict2-v0.5.0 (2026-09-28, this session) | 2026-09-28 | — (added after the split) |
+| Release wudict2-v0.6.0 (2026-10-02, this session) | 2026-10-02 | — (added after the split) |
 | Release wudict2-v0.6.0-ru.1 (2026-09-30, this session) | 2026-09-30 | — (added after the split, on the translation branch) |
 | The third session: five changes in the panel, the bar and the paper (2026-09-27/28) | 2026-09-27/28 | — (added after the split) |
 | The 09-26 upstream sync into `dev2` (2026-09-26) | 2026-09-26 | — (added after the split) |
@@ -1696,6 +1697,50 @@ the same name, and the fresh asset starts a new `download_count` — so a "0
 downloads" right after says nothing about whether the old one was fetched.
 (v0.5.0's pre-fix asset read 2, and both were this session's own verification
 fetches: the hash check and the final status check.)
+
+## Release wudict2-v0.6.0 (2026-10-02, this session)
+
+The normal release that follows the ru.1 preview — cut from `dev` at the user's
+request, with the framing they gave it: the full-featured version, with the
+Russian interface and the GoldenDict-compatible DSL parser as the two things to
+test. Forty-one commits past the preview tag, and the first release to carry the
+translation, the GD parser and the upstream collection work together.
+
+Same order as always: the changelog commit (`bc04112`), `dev` pushed, the
+annotated tag `wudict2-v0.6.0` on it, pushed, then `build-android.cmd release`,
+then the REST create — `prerelease: false` this time — and the asset upload.
+aapt2: `versionName='wudict2-v0.6.0'`, versionCode 468, `locales: '--_--' 'ru'`,
+arm64 only, 10,071,197 bytes (the APK grew by about 2 MB: the GD style and its
+fonts), sha256 `934f8113c040179b9edb0cd4b169b0ba06473a3a3031ac1287c027a0cfc4f44f`,
+the same signer certificate as every release. `latest` moves to it now.
+https://github.com/DmShAl/wudict2/releases/tag/wudict2-v0.6.0
+
+**Why not a pre-release, unlike ru.1:** the preview announced the 0.6.0 line,
+this is that line finished, and the user called it the full-featured build. The
+two "for testing" items are named as such in the body rather than hidden behind
+the pre-release flag — one PATCH (`prerelease: true`) if the owner prefers it the
+other way.
+
+**Verification actually run.** `go test ./internal/format/dsl` (which carries the
+GD parser tests) and the server's
+`TestGDAssets|TestGDStyle|TestI18n|TestAppearanceContract|DSL` are green. The
+artifact was opened, not merely built: the packaged `lib/arm64-v8a/libwudict.so`
+contains `web/i18n/ru.json`, the GD font and preset paths and the GD parser
+sources, and `aapt2` reports the `ru` locale. No device or emulator run;
+`make i18n-check-js` was not run because there is still no Node on this machine.
+
+**Open licence question — surfaced, not resolved.** The five TTFs under
+`internal/server/web/fonts/` are served to the page and now ship inside the APK.
+Four of them (`ArialPlus`, `ArialPlusBold`, `ArialItalic`, `ArialBoldItalic`)
+carry `Monotype` (six hits) and `The Monotype Corporation` (four hits) in their
+own embedded metadata, and the only licence text they embed covers the Hebrew
+OpenType layout logic, not the font; `QuiviraPhonetic` names Quivira-font.com and
+"All Rights Reserved". `THIRD-PARTY-NOTICES.md` has no font or TTF entry at all
+(`grep -ic 'font|ttf'` = 0). Redistributing a Monotype face inside an APK is not
+covered by its usual terms, so this needs the owner's decision — real notices, or
+different faces. It was raised rather than fixed because only the owner knows
+where the files came from, and it did not block this release since the fonts were
+already public in the repository before it.
 
 ## Release wudict2-v0.6.0-ru.1 (2026-09-30, this session)
 
