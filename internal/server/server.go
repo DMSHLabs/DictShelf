@@ -915,7 +915,7 @@ func (s *Server) baseDictInfo(e *entry) dictInfo {
 	// fall back to a full open (non-probeable formats, or probe errors).
 	info := dictInfo{ID: e.ID, Path: e.Path}
 	// Disabled or explicitly removed DSL indexes must not reappear for metadata.
-	if e.dslSource != "" && (e.indexBlocked() || !s.reg.dslAvailable(e)) {
+	if e.indexBlocked() || e.dslSource != "" && !s.reg.dslAvailable(e) {
 		reader, err := dict.OpenReader(e.Path)
 		if err != nil {
 			info.Error = err.Error()

@@ -6,6 +6,27 @@ package server
 
 import "testing"
 
+func TestRemovedNonDSLIndexRequiresExplicitIngest(t *testing.T) {
+	s, e := demandEntry(t)
+	if e.dslSource != "" {
+		t.Fatal("need a non-DSL fixture")
+	}
+	sse(t, s, "/api/ingest?dict="+e.ID+"&level=headwords")
+	if r := deleteReq(t, s, "/api/library?dict="+e.ID+"&prepared=1&source=0"); r.Code != 200 {
+		t.Fatal(r.Body.String())
+	}
+	if !e.indexBlocked() || s.reg.dslAvailable(e) {
+		t.Fatal("deleted non-DSL index remained available")
+	}
+	if _, err := e.open(); err == nil {
+		t.Fatal("implicit restore allowed")
+	}
+	sse(t, s, "/api/ingest?dict="+e.ID+"&level=headwords")
+	if e.indexBlocked() || !prepared(e) {
+		t.Fatal("explicit ingest did not restore index")
+	}
+}
+
 // The panel's "🚀 index" chip: level=headwords at a dictionary that has no
 // database at all prepares it. The chip exists because this path does NOT open
 // the direct backend first (handleIngest), which is what setFeatures does and

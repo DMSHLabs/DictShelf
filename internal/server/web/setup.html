@@ -90,6 +90,11 @@ html[data-shell-tone="dark"] {
 /* Page-specific only; the palette, card, buttons and typography come from
    /assets/setup.css, which lemmas.html shares. */
 .frow{display:flex;align-items:center;gap:.4em}
+.dsl-default-row{display:flex;flex-wrap:wrap;align-items:center;gap:.5em 1em;margin:.6em 0}
+.dsl-default-row>span{flex:0 0 auto;min-width:9em;white-space:nowrap}
+.dsl-default-row>div{display:flex;flex-wrap:wrap;gap:.5em 1em}
+.dsl-default-row label{display:inline-flex;align-items:center;gap:.3em}
+.dsl-default-row input[type=checkbox]{width:20px;height:20px;margin:0}
 .frow input{margin:.3em 0;min-width:0}
 .frow .rm{flex:none;background:none;border:0;color:var(--label-quiet);font-size:16px;
   cursor:pointer;padding:0 .2em;margin:0;line-height:1}
@@ -202,6 +207,22 @@ label.keep em{font-style:normal;color:var(--label-quiet);font-size:12.5px}
 </div>
 <p>{{INTRO}}</p>
 
+<section id="dslDefaults">
+  <h2>{{T:pages.dslParser}}</h2>
+  <p>{{T:pages.dslParserHint}}</p>
+  <div class="dsl-default-row"><span>{{T:dictUI.dslOriginal}}:</span><div>
+    <label><input type="checkbox" id="dslOriginalIndex" checked>{{T:dictUI.indexPlain}}</label>
+    <label><input type="checkbox" id="dslOriginalContains">{{T:dictUI.contains}}</label>
+    <label><input type="checkbox" id="dslOriginalFullText">{{T:dictUI.fts}}</label>
+  </div></div>
+  <div class="dsl-default-row"><span>{{T:dictUI.dslGD}}:</span><div>
+    <label><input type="checkbox" id="dslGDIndex">{{T:dictUI.indexPlain}}</label>
+    <label><input type="checkbox" id="dslGDContains">{{T:dictUI.contains}}</label>
+    <label><input type="checkbox" id="dslGDFullText">{{T:dictUI.fts}}</label>
+  </div></div>
+  <p id="dslDefaultsError" class="err" role="alert" hidden></p>
+</section>
+
 <h2>{{T:pages.point}}</h2>
 <p>{{T:pages.folderHint}}</p>
 <div id="rows"></div>
@@ -268,6 +289,40 @@ label.keep em{font-style:normal;color:var(--label-quiet);font-size:12.5px}
 "use strict";
 const $=id=>document.getElementById(id);
 const tx=window.wudictI18n.t;
+let dslDefaultsWrite=Promise.resolve(true);
+function syncDSLDefaults(){
+  for(const prefix of ["dslOriginal","dslGD"]){
+    for(const suffix of ["Contains","FullText"]){
+      const field=$(prefix+suffix);
+      field.disabled=!$(prefix+"Index").checked;
+      if(field.disabled)field.checked=false;
+    }
+  }
+  const valid=$("dslOriginalIndex").checked||$("dslGDIndex").checked;
+  $("dslDefaultsError").hidden=valid;
+  if(!valid)$("dslDefaultsError").textContent=tx("pages.dslIndexRequired");
+  return valid;
+}
+function saveDSLDefaults(){
+  if(!syncDSLDefaults())return Promise.resolve(false);
+  const body={};
+  for(const [variant,prefix] of [["original","dslOriginal"],["gd","dslGD"]]){
+    body[variant]={index:$(prefix+"Index").checked,contains:$(prefix+"Contains").checked,fullText:$(prefix+"FullText").checked};
+  }
+  dslDefaultsWrite=dslDefaultsWrite.then(async()=>{
+    try{
+      const r=await fetch("/api/dsl-defaults",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+      if(!r.ok)throw new Error(await r.text());
+      return true;
+    }catch(e){
+      $("dslDefaultsError").hidden=false;
+      $("dslDefaultsError").textContent=tx("pages.dslDefaultsFailed",{error:window.wudictI18n.errorText(e.message)});
+      return false;
+    }
+  });
+  return dslDefaultsWrite;
+}
+$("dslDefaults").addEventListener("change",()=>{saveDSLDefaults()});
 let timer=null,lastOK=false;
 
 const fmtN=n=>window.wudictI18n.number(n);
@@ -404,6 +459,7 @@ function syncAct(total,checked,bad){
    "use these dictionaries" button was not just redundant: it posted without
    the paths, silently discarding whatever folders had been typed above it. */
 async function save(){
+  if(!await saveDSLDefaults())return;
   const q=paths().map(p=>"path="+encodeURIComponent(p)).join("&");
   const keepOn=libraryOffered()&&$("keep").checked;
   const keep=libraryOffered()?(keepOn?"&useCached=1":"&useCached=0"):"";
@@ -584,6 +640,7 @@ function showExtras(j){
 }
 
 async function impInstall(){
+  if(!await saveDSLDefaults())return;
   const pick=[...document.querySelectorAll("#cands input:checked")].map(i=>+i.value);
   const extras=[...document.querySelectorAll("#extras input:checked")].map(i=>+i.value);
   if(!pick.length)return;
@@ -733,6 +790,13 @@ $("save").addEventListener("click",save);
 async function start(){
   let cfg=null;
   try{ cfg=await (await fetch("/api/config")).json() }catch(e){}
+  for(const [variant,prefix] of [["original","dslOriginal"],["gd","dslGD"]]){
+    for(const [feature,suffix] of [["index","Index"],["contains","Contains"],["fullText","FullText"]]){
+      $(prefix+suffix).checked=!!(cfg?.dslDefaults?.[variant]?.[feature]??(variant==="original"&&feature==="index"));
+    }
+  }
+  syncDSLDefaults();
+  await saveDSLDefaults();
   inUse=!!(cfg&&cfg.total>0);
   const dirs=(cfg&&cfg.roots||[]).map(r=>r.path);
   if(dirs.length)dirs.forEach(d=>addRow(d)); else addRow("");

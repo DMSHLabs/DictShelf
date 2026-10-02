@@ -16,15 +16,12 @@ const { chromium } = require('playwright');
   const errors = [];
   page.on('pageerror', e => errors.push(e.message));
   async function settled() {
-    await page.waitForFunction(() => !document.querySelector('#dslAll button').disabled);
+    await page.waitForFunction(() => !dslSaving);
   }
   async function mode(value) {
-    await page.locator(`[data-dsl-all="${value}"]`).click();
+    await page.request.put(origin+'/api/dsl-mode',{data:{mode:value}});
+    await page.evaluate(()=>loadDicts());
     await settled();
-    await page.waitForFunction(value => {
-      const b=document.querySelector(`[data-dsl-all="${value}"]`);
-      return b.getAttribute('aria-pressed')==='true';
-    }, value);
   }
   async function counts(visible, hidden) {
     assert.equal(await page.locator('#panelList .pd').count(),2);

@@ -978,6 +978,7 @@ func openUpgradedOrDirect(path string) (dict.Dictionary, error) {
 // non-empty registry. Opting in is a deliberate, remembered choice made on the
 // setup page ("Use these dictionaries").
 type Registry struct {
+	dslAutoMu   sync.Mutex
 	mu          sync.RWMutex
 	dictDirs    []string // dictionary folders: .mdx/.slob/.ifo/.dsl/.bgl sources
 	useCached   bool     // include prepared dictionaries from the library (USE_CACHED)
@@ -1324,6 +1325,15 @@ func (r *Registry) Rescan() error {
 		// deleting the library folder it held (an orphan removed right after
 		// the rescan that revealed it). See registry_windows.go.
 		releaseSuperseded(e)
+	}
+	if err := r.queueNewDSL(); err != nil {
+		return err
+	}
+	r.prefs.mu.RLock()
+	hasNewDSL := len(r.prefs.dslPending) != 0
+	r.prefs.mu.RUnlock()
+	if hasNewDSL {
+		go r.prepareNewDSL()
 	}
 	return nil
 }

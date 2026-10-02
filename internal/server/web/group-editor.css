@@ -86,6 +86,15 @@ html[data-shell-image] .group-dialog::backdrop{
   background-size:100% 100%;
   background-position:center;
   background-repeat:no-repeat}
+#bulkIndexDialog::backdrop,
+html[data-shell-image] #bulkIndexDialog::backdrop{background:transparent}
+/* A confirmation floats over its caller, unlike the full-height settings sheet. */
+dialog#bulkIndexDialog.group-dialog.panel-card{
+  inset:0;margin:auto;box-sizing:border-box;
+  width:min(420px,calc(100% - 64px));max-width:none;
+  height:fit-content;max-height:80vh;max-height:80dvh;padding:1em}
+#bulkIndexDialog h2{font-size:1.1em}
+#bulkIndexDialog p{margin:0;overflow-wrap:anywhere}
 .group-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:.8em}
 .group-toolbar select{flex:1;min-width:0;max-width:100%;width:12em}
 .group-dialog select,.group-dialog input[type=text]{font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:.6em}

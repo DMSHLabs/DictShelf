@@ -195,9 +195,6 @@ func (r *Registry) Remove(id string, dropPrepared, dropSource bool) (removal, er
 		logx.V("rescan after removing %s: %v", rep.Name, err)
 	}
 	rep.Gone = !r.has(id)
-	if !rep.Gone && dropPrepared && !dropSource && e.dslSource == "" {
-		rep.Note = "the original files are still in a scanned folder, so this dictionary will be indexed again the next time it is searched"
-	}
 	return rep, nil
 }
 

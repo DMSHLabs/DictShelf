@@ -194,12 +194,12 @@ func entryRewriter(dictID string, text func(string) string) htmlref.Rewriter {
 	rw.Drop = func(tag string) bool { return tag == "base" }
 	rw.URL = func(r htmlref.Ref) string {
 		ref := r.URL
+		// Refresh cached GD styles in already-prepared articles without reindexing.
+		if ref == "/assets/presets/gd/article-style.css" || strings.HasPrefix(ref, "/assets/presets/gd/article-style.css?") {
+			return "/assets/presets/gd/article-style.css?v=6"
+		}
 		switch {
 		case ref == "",
-			// Bundled GD presentation is an application stylesheet, not a
-			// resource from the source dictionary. Keep its root-absolute URL.
-			ref == "/assets/presets/gd/article-style.css",
-			strings.HasPrefix(ref, "/assets/presets/gd/article-style.css?"),
 			strings.HasPrefix(ref, "#"),
 			strings.HasPrefix(ref, "?"),
 			strings.HasPrefix(ref, "//"),

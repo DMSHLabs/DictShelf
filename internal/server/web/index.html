@@ -7,7 +7,7 @@
 
 <html lang="en">
 <head>
-<link rel="stylesheet" href="/assets/presets/gd/article-style.css?v=4">
+<link rel="stylesheet" href="/assets/presets/gd/article-style.css?v=6">
 <meta charset="utf-8">
 {{I18N}}
 <script>
@@ -672,38 +672,25 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
        folders, the rescan, the word-form data — belongs to the COLLECTION
        rather than to a card, and moved to the panel's Dictionaries section,
        where a reader who has just added a folder can see what arrived. -->
-  <div class="facts configbar">
-    <!-- The only control in the row that opens something instead of doing
-         something — the ▸ says so, and .act.disc is what gives it the row's
-         chrome without taking that distinction away.
-         The shouted version ("ENABLE … GLOBALLY!") gave the least-used action
-         its loudest voice, which is the hierarchy upside down; every word it
-         was shouting is stated precisely, one click away, in the box this
-         opens. "Full-text" and not a friendlier paraphrase: it is the term the
-         mode dropdown, the per-dictionary switch and the result summaries all
-         use, and this action's whole job is to flip that switch in bulk.
-         "every dictionary" and not "globally": the scope is the one thing a
-         reader must not misread here, and "dictionaries" is the unit the cards
-         below already count in. The verb went to the button inside the box,
-         which is the thing that actually indexes — a trigger that only reveals
-         a choice must not be named for the choice. -->
-    <button type="button" class="act disc" id="ftsAllBtn" aria-expanded="false" aria-controls="ftsAllBox"
-      title="{{T:dictUI.ftsHint}}">{{T:dictUI.ftsAll}}</button>
-  </div>
-  <div id="ftsAllBox" class="bulkbox" hidden></div>
-  <div id="dslAll" class="dsl-all" hidden>
-    <span>{{T:dictUI.dslAll}}</span>
-    <div class="seg" role="group" aria-label="{{T:dictUI.dslAll}}">
-      <button type="button" data-dsl-all="original">{{T:dictUI.dslOriginal}}</button>
-      <button type="button" data-dsl-all="gd">{{T:dictUI.dslGD}}</button>
-      <button type="button" data-dsl-all="both">{{T:dictUI.dslBoth}}</button>
-    </div>
-  </div>
   <div id="reindexLine" class="bulkbox" hidden aria-live="polite"></div>
+  <section id="dslParserSection"><h3>{{T:dictUI.dslParser}}</h3>
+    <div class="seg" id="dslParserMode" role="group" aria-label="{{T:dictUI.dslParser}}">
+      <button type="button" data-parser="original">{{T:dictUI.dslOriginal}}</button>
+      <button type="button" data-parser="gd">{{T:dictUI.dslGD}}</button>
+      <button type="button" data-parser="both">{{T:dictUI.dslBoth}}</button>
+    </div>
+  </section>
   <div class="panel-scroll" id="dictSettingsScroll">
+    <div id="bulkIndexes"></div>
+    <div id="bulkIndexStatus" hidden class="bulkbox">
+      <div id="bulkIndexConfirm" role="status" aria-live="polite"></div>
+      <button type="button" class="btn" id="bulkIndexStop" hidden>{{T:dictUI.bulkStop}}</button>
+    </div>
     <div id="panelList"></div>
   </div>
 </dialog>
+
+<dialog id="bulkIndexDialog" class="group-dialog panel-card" aria-labelledby="bulkIndexDialogTitle"></dialog>
 
 <!-- System: the shell's own settings, drawn by the page. It is the second view
      of one set of values the SHELL owns - the screen the launcher icon's
@@ -2348,16 +2335,7 @@ function provenance(d){
 /* The trigger, in one place: rendered into the file list, and restored there
    when a confirmation is cancelled. */
 function rmTrigger(d){
-  let indices="";
-  if(d?.dsl){
-    indices=`<span class="dsl-index-actions">`+["original","gd"].map(variant=>{
-      const target=dicts.find(x=>x.dsl?.source===d.dsl.source&&x.dsl.variant===variant);
-      const ready=!!target?.dbSize&&d.dsl.sourceAvailable;
-      const label=tx(variant==="original"?"dictUI.deleteOriginalIndex":"dictUI.deleteGDIndex");
-      return `<button type="button" class="dsl-index-remove" data-delete-index="${variant}"${ready?"":" disabled"} title="${escAttr(ready?label:tx(d.dsl.sourceAvailable?"dictUI.indexNotPrepared":"dictUI.indexSourceMissing"))}">${esc(label)}</button>`;
-    }).join("")+"</span>";
-  }
-  return `<div class="rm-actions"><span class="rm" title="${escAttr(tx("dictUI.removeWarning"))}">${esc(tx("dictUI.remove"))}</span>${indices}</div>`;
+  return `<span class="rm" title="${escAttr(tx("dictUI.removeWarning"))}">${esc(tx("dictUI.remove"))}</span>`;
 }
 /* The Rebuild line (server/reindex.go): one line, shown only while some
    dictionary is outdated or a rebuild is running. Nothing here starts on its
@@ -2418,6 +2396,11 @@ fetch("/api/reindex").then(r=>r.ok?r.json():null).then(st=>{
 }).catch(()=>{});
 
 let dslSaving=false;
+function selectedDSLParser(){return dicts.find(d=>d.dsl)?.dsl.parser||cfgInfo?.dslParser||"both"}
+$("dslParserMode").addEventListener("click",e=>{
+  const button=e.target.closest("[data-parser]");
+  if(button&&!bulkIndexBusy)setDSLMode("",button.dataset.parser,true);
+});
 function dslControls(d){
   if(!d.dsl)return "";
   const v=d.dsl;
@@ -2431,36 +2414,43 @@ function dslControls(d){
 }
 function dslIndexControls(d){
   if(!d.dsl)return "";
-  const family=dicts.filter(x=>x.dsl?.source===d.dsl.source);
-  const empty=family.every(x=>!x.dbSize)&&family.some(x=>x.dsl.indexRemoved);
-  return `<div class="dsl-index-controls">`+["original","gd"].map(variant=>{
+  const mode=selectedDSLParser();
+  const family=dicts.filter(x=>x.dsl?.source===d.dsl.source&&(mode==="both"||x.dsl.variant===mode));
+  const empty=family.every(x=>!x.dbSize);
+  return `<div class="dsl-index-controls">`+(mode==="both"?["original","gd"]:[mode]).map(variant=>{
     const target=family.find(x=>x.dsl.variant===variant);
     const disabled=!target||!d.dsl.sourceAvailable;
-    const full=!!target?.caps?.FTS;
+    const indexed=!!target?.dbSize;
     const label=tx(variant==="original"?"dictUI.dslOriginal":"dictUI.dslGD");
-    return `<div class="dsl-index-row"><span>${esc(label)}</span>`+
-      (!target?.dbSize?`<button type="button" class="feat${disabled?" locked":""}" data-feat="base" data-target="${escAttr(target?.id||"")}"${disabled?" disabled":""}>${esc(tx("dictUI.index"))}</button>`:"")+
-      `<button type="button" class="feat${full?" on":""}${disabled?" locked":""}" data-feat="fts" data-target="${escAttr(target?.id||"")}" data-on="${full?1:0}" aria-pressed="${full}"${disabled?" disabled":""}>${esc(tx("dictUI.fts"))}</button></div>`;
-  }).join("")+(empty?`<div class="dsl-index-warning"><b aria-hidden="true">!</b> ${esc(tx("dictUI.dslNeedsIndex"))}</div>`:d.dsl.indexRemoved?`<div class="dsl-index-warning"><b aria-hidden="true">!</b> ${esc(tx("dictUI.dslVariantNeedsIndex"))}</div>`:"")+"</div>";
+    let controls=indexed
+      ? `<button type="button" class="feat on${disabled?" locked":""}" data-delete-index="${variant}" data-target="${escAttr(target.id)}" title="${escAttr(tx(variant==="original"?"dictUI.deleteOriginalIndex":"dictUI.deleteGDIndex"))}"${disabled?" disabled":""}>${mb(target.dbSize)}</button>`
+      : `<button type="button" class="feat${disabled?" locked":""}" data-feat="base" data-target="${escAttr(target?.id||"")}"${disabled?" disabled":""}>${esc(tx("dictUI.index"))}</button>`;
+    for(const [key,name,on] of [["contains","dictUI.contains",target?.caps?.Contains],["fts","dictUI.fts",target?.caps?.FTS]]){
+      const stale=key==="contains"&&on&&target?.containsStale;
+      controls+=`<button type="button" class="feat${on?" on":""}${stale?" stale":""}${disabled?" locked":""}" data-feat="${key}" data-target="${escAttr(target?.id||"")}" data-on="${on?1:0}"${stale?' data-stale="1"':""} aria-pressed="${!!on}" title="${escAttr(tx(stale?"dictUI.stale":on?"dictUI.removeHint":"dictUI.addHint"))}"${disabled?" disabled":""}>${esc(tx(name))}</button>`;
+    }
+    const icon=`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.4 3.4a1.2 1.2 0 0 1 1.2-1.2h6.2a1.2 1.2 0 0 1 1.2 1.2v9.2a1.2 1.2 0 0 1-1.2 1.2H3.6a1.2 1.2 0 0 1-1.2-1.2z"/><path d="M11 5h2.6M11 8h2.6M11 11h2.6"/></svg>`;
+    const browse=indexed
+      ? `<a class="browse btn" href="/browse?dict=${encodeURIComponent(target.id)}" title="${escAttr(tx("dictUI.browseHint"))}">${icon}${esc(tx("dictUI.browse"))}</a>`
+      : empty?"":`<span class="dsl-index-note">${esc(tx(target?.dsl.indexRemoved?"dictUI.dslVariantNeedsIndex":"dictUI.dslNeedsIndex"))}</span>`;
+    return `<div class="dsl-index-row"><span>${esc(label)}</span><div class="dsl-index-tools"><div class="dsl-feature-line">${controls}</div><div class="dsl-browse-line">${browse}</div></div></div>`;
+  }).join("")+(empty?`<div class="dsl-index-warning"><b aria-hidden="true">!</b> ${esc(tx("dictUI.dslNeedsIndex"))}</div>`:"")+"</div>";
 }
-async function setDSLMode(id,mode){
+async function setDSLMode(id,mode,global=false){
   if(dslSaving)return;
   dslSaving=true;
-  document.querySelectorAll('#dslAll button,.dsl-choices input').forEach(el=>el.disabled=true);
+  document.querySelectorAll('.dsl-choices input').forEach(el=>el.disabled=true);
   try{
-    const r=await fetch("/api/dsl-mode",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({dict:id,mode})});
+    const r=await fetch("/api/dsl-mode",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({dict:id,mode,global})});
     if(!r.ok)throw new Error(await r.text());
     await loadDicts();
-    loadFolders();
+    await loadFolders();
     if(lastScope&&dicts.some(d=>d.id===lastScope&&d.unavailable)){
       lastScope=null;scopeOnce=null;refreshDictUI(true);
     }
   }catch(e){setStatus(esc(tx("dictUI.dslSaveFailed",{error:window.wudictI18n.errorText(e.message)})))}
   finally{dslSaving=false;renderPanel()}
 }
-$("dslAll").addEventListener("click",e=>{
-  const b=e.target.closest("button[data-dsl-all]");if(b)setDSLMode("",b.dataset.dslAll);
-});
 $("panelList").addEventListener("change",e=>{
   const input=e.target.closest("input[data-dsl-mode]");if(!input)return;
   const pd=input.closest(".pd"),checked=[...pd.querySelectorAll("input[data-dsl-mode]:checked")];
@@ -2468,13 +2458,6 @@ $("panelList").addEventListener("change",e=>{
   setDSLMode(pd.dataset.id,checked.length===2?"both":checked[0].dataset.dslMode);
 });
 function renderPanel(){
-  const families=dicts.filter(d=>d.dsl);
-  $("dslAll").hidden=!families.length;
-  for(const b of $("dslAll").querySelectorAll("button")){
-    const on=families.length>0&&families.every(d=>d.dsl.mode===b.dataset.dslAll);
-    b.classList.toggle("on",on);b.setAttribute("aria-pressed",String(on));
-    b.disabled=dslSaving;
-  }
   const el=$("panelList");
   /* Every card is replaced, so the scroll offset has to be carried over by
      hand. Measured on a phone: an ingest that ran for nine minutes ends in a
@@ -2483,19 +2466,24 @@ function renderPanel(){
      moment they were waiting to see it finish. */
   const scroller=el.closest(".panel-scroll"), top=scroller?scroller.scrollTop:0;
   el.innerHTML="";
-  const ord=orderedDicts();
+  const parser=selectedDSLParser();
+  document.querySelectorAll('#dslParserMode [data-parser]').forEach(button=>{
+    button.classList.toggle("on",button.dataset.parser===parser);
+    button.setAttribute("aria-pressed",String(button.dataset.parser===parser));
+    button.disabled=dslSaving;
+  });
+  const ord=orderedDicts().filter(d=>!d.dsl||parser==="both"||d.dsl.variant===parser);
   for(const d of ord){
     const div=document.createElement("div");div.className="pd"+(d.unavailable?" dsl-unavailable":"");div.dataset.id=d.id;
     /* Only what varies AND can be changed. exact and prefix are true for every
        dictionary and cost nothing, so showing them was decoration; contains,
-       full-text and media each cost real disk, so each is a switch.
+       full-text each cost real disk, so each is a switch.
        Switching is offered only while the SOURCE is on disk — that is what
        makes it reversible, and why none of this needs a confirmation. */
     const canToggle=!!d.source;
     const feats=[
       ["contains",tx("dictUI.contains"),d.caps?.Contains,0],
       ["fts",tx("dictUI.fts"),d.caps?.FTS,0],
-      ["media",tx("dictUI.media"),!!d.mediaDB,d.mediaSize||0],
     ];
     /* The index itself, first in the run of chips. Two states, because the
        dictionary only has two: "🚀 index" while there is none — it is searched
@@ -2527,13 +2515,13 @@ function renderPanel(){
        hence "~", hence plain .feat styling - the estimate is an argument for
        clicking, the size is a fact about what a click already produced. */
     const est=indexed?0:baseIndexBytes(d);
-    let caps=indexed
+    let caps=indexed&&!d.dsl
       ? `<span class="feat on locked" title="${escAttr(tx("dictUI.indexedSize",{size:mb(d.dbSize)}))}">${mb(d.dbSize)}</span>`
       : canToggle&&!d.dsl
         ? `<span class="feat" data-feat="base" title="${escAttr(tx("dictUI.buildHint")+(est?tx("dictUI.estimateHint",{size:mb(est)}):""))}">${esc(tx("dictUI.index"))}${est?" · ~"+mb(est):""}</span>`
         : "";
     for(const[key,label,on,bytes]of feats){
-      if(d.dsl&&key==="fts")continue;
+      if(d.dsl&&(key==="fts"||key==="contains"))continue;
       if(key==="media"&&!on&&!d.hasMedia)continue; // nothing to pack
       const size=on&&bytes?" "+mb(bytes):"";
       /* A stale index still works — it was built with older text-folding
@@ -2559,7 +2547,7 @@ function renderPanel(){
        This is the card for one dictionary, so unlike the row above it carries
        the id. */
     else acts=`<a class="browse" href="/browse?dict=${encodeURIComponent(d.id)}" title="${escAttr(tx("dictUI.browseHint"))}"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M2.4 3.4a1.2 1.2 0 0 1 1.2-1.2h6.2a1.2 1.2 0 0 1 1.2 1.2v9.2a1.2 1.2 0 0 1-1.2 1.2H3.6a1.2 1.2 0 0 1-1.2-1.2z"/><path d="M11 5h2.6"/><path d="M11 8h2.6"/><path d="M11 11h2.6"/></svg>${esc(tx("dictUI.browse"))}</a>`;
-    if(d.unavailable)acts="";
+    if(d.unavailable||d.dsl&&!d.error)acts="";
     div.innerHTML=`<div class="hd">
         <span class="grip" draggable="true" title="${escAttr(tx("dictUI.drag"))}">⠿</span>
         <b tabindex="${d.unavailable?-1:0}" role="button" aria-disabled="${!!d.unavailable}" title="${escAttr(tx(d.unavailable?"dictUI.dslUnavailable":"dictUI.searchOnly"))}">${esc(dictLabel(d))}</b>
@@ -2571,9 +2559,8 @@ function renderPanel(){
         </span>
       </div>
       <div class="meta">${esc(d.format||"?")}${d.entries?" · "+esc(tx("dictUI.entries",{number:window.wudictI18n.number(d.entries)})):""}${d.dbSize?tx("dictUI.indexed"):""}</div>
-      ${dslControls(d)}
       ${dslIndexControls(d)}
-      <div>${caps}</div><div class="acts">${acts}</div>
+      ${caps?`<div>${caps}</div>`:""}${acts?`<div class="acts">${acts}</div>`:""}
       ${provenance(d)}
       <details class="about"><summary>${esc(tx("dictUI.about"))}</summary>${traits(d)}<div class="aboutbody">…</div></details>`;
     el.appendChild(div);
@@ -2732,6 +2719,7 @@ $("panel").onclick=e=>{if(e.target.id==="panel")hidePanel()};
    keeps no list of its own — #panelList lives inside it, so every renderer,
    pointer handler and disclosure below reaches the elements it always did. */
 function showDictSettings(){
+  renderBulkIndexes();
   if(panelSnap===null)panelSnap=panelState();
   $("dictSettings").showModal();
   // The drawer remembered the reader's place by simply staying in the DOM.
@@ -3302,47 +3290,94 @@ function baseIndexBytes(d){
   }
   return baseRate?Math.round(d.entries*baseRate):0;
 }
-function closeFtsAll(){
-  $("ftsAllBox").hidden=true;
-  $("ftsAllBtn").setAttribute("aria-expanded","false");
+let bulkIndexBusy=false;
+let bulkIndexStopRequested=false;
+$("bulkIndexStop").onclick=()=>{
+  if(!bulkIndexBusy)return;
+  bulkIndexStopRequested=true;
+  $("bulkIndexStop").disabled=true;
+  $("bulkIndexStop").textContent=tx("dictUI.bulkStopping");
+};
+function bulkFeatureLabels(d,feat){
+  const selector=feat==="base"?'[data-feat="base"],[data-delete-index]':`[data-feat="${feat}"]`;
+  if(d.dsl)return [...document.querySelectorAll(selector)].filter(el=>el.dataset.target===d.id);
+  const card=document.querySelector(`.pd[data-id="${d.id}"]`);
+  return card?[...card.querySelectorAll(feat==="base"?'.feat[data-feat="base"],.feat.on.locked:not([data-feat])':selector)]:[];
 }
-function openFtsAll(){
-  const box=$("ftsAllBox"),todo=ftsCandidates();
-  if(!todo.length){
-    box.innerHTML="<p>"+esc(tx("dictUI.allIndexed"))+"</p>";
-  }else{
-    const entries=todo.reduce((n,d)=>n+(d.entries||0),0);
-    const now=dicts.reduce((n,d)=>n+(d.dbSize||0),0),added=ftsAddedBytes(todo);
-    const details=[tx("dictUI.indexPlan",{number:todo.length}),
-      entries?tx("dictUI.entries",{number:window.wudictI18n.number(entries)}):"",
-      tx("dictUI.ftsTime"),now?tx("dictUI.diskNow",{size:mb(now)}):"",
-      now&&added?tx("dictUI.diskMore",{size:mb(added)}):""].filter(Boolean).join(" ");
-    box.innerHTML='<p>'+esc(tx("dictUI.ftsExplain"))+'</p><p class="cost">'+esc(details)+'</p>'+
-      '<p><button type="button" class="btn" id="ftsAllGo">'+esc(tx("dictUI.indexCount",{number:todo.length}))+'</button>'+
-      '<button type="button" class="btn" id="ftsAllNo">'+esc(tx("panel.cancel"))+'</button></p>';
-  }
-  box.hidden=false;
-  $("ftsAllBtn").setAttribute("aria-expanded","true");
+function bulkIndexCandidates(scope,feat,remove){
+  const parser=selectedDSLParser();
+  return dicts.filter(d=>{
+    if(scope==="selected"&&d.dsl&&parser!=="both"&&d.dsl.variant!==parser)return false;
+    if(scope==="gd"&&d.dsl?.variant!=="gd")return false;
+    if(scope==="original"&&d.dsl?.variant==="gd")return false;
+    if(d.builtin||!d.source||d.dsl&&!d.dsl.sourceAvailable)return false;
+    const have=feat==="base"?!!d.dbSize:feat==="contains"?!!d.caps?.Contains:!!d.caps?.FTS;
+    return remove?have:!have;
+  });
 }
-$("ftsAllBtn").onclick=()=>{$("ftsAllBox").hidden?openFtsAll():closeFtsAll()};
-$("ftsAllBox").addEventListener("click",async e=>{
-  if(e.target.id==="ftsAllNo"){closeFtsAll();return}
-  if(e.target.id!=="ftsAllGo")return;
-  const go=e.target,todo=ftsCandidates();
-  go.disabled=true;
-  let n=0;
-  for(const d of todo){
-    n++;go.textContent=`${n} / ${todo.length}…`;
-    // the card's own chip shows per-dictionary progress where the user will
-    // look for it; a fresh detached node otherwise, because runIngest marks
-    // its label busy for good and would refuse every dictionary after the first
-    const label=document.querySelector(`.pd[data-id="${d.id}"] .feat[data-feat="fts"]${d.dsl?`[data-target="${d.id}"]`:""}`)
-      ||document.createElement("span");
-    await runIngest(d.id,{fts:1,quiet:true,statusPrefix:`${n}/${todo.length} · `},label);
-  }
-  closeFtsAll();
-  setStatus(esc(tx("dictUI.ftsEnabled",{number:todo.length})));
-  await loadDicts();if(lastQuery)doSearch();
+function renderBulkIndexes(){
+  if(bulkIndexBusy)return;
+  $("bulkIndexes").innerHTML=[false,true].map(remove=>{
+    const action=remove?"delete":"create";
+    return `<section class="bulk-index-section"><h3>${esc(tx(remove?"dictUI.deleteAllTitle":"dictUI.createAllTitle"))}</h3>`+
+        `<div class="bulk-index-buttons">`+
+        [["base","dictUI.indexPlain"],["contains","dictUI.contains"],["fts","dictUI.fts"]].map(([feat,label])=>
+          `<button type="button" class="btn" data-bulk-action="${action}" data-bulk-scope="selected" data-bulk-feat="${feat}"${remove&&feat==="base"&&!cfgInfo?.canDelete?" disabled":""}>${esc(tx(label))}</button>`).join("")+"</div></section>";
+  }).join("");
+}
+$("bulkIndexes").addEventListener("click",async e=>{
+  const button=e.target.closest("[data-bulk-action]");if(!button||bulkIndexBusy)return;
+  const remove=button.dataset.bulkAction==="delete",scope=button.dataset.bulkScope,feat=button.dataset.bulkFeat;
+  const todo=bulkIndexCandidates(scope,feat,remove),box=$("bulkIndexConfirm");
+  if(!todo.length){setIndexStatus(esc(tx("dictUI.bulkNoChanges")));return}
+  const dialog=$("bulkIndexDialog");
+  dialog.innerHTML=`<h2 id="bulkIndexDialogTitle">${esc(tx(remove?"dictUI.deleteAllTitle":"dictUI.createAllTitle"))}</h2><p>${esc(tx(remove?"dictUI.bulkDeleteConfirm":"dictUI.bulkCreateConfirm",{number:todo.length,scope:tx("dictUI.scopeAll"),feature:tx(feat==="base"?"dictUI.indexPlain":feat==="contains"?"dictUI.contains":"dictUI.fts")}))}</p><div><button type="button" class="btn" data-bulk-go>${esc(tx(remove?"dictUI.delete":"dictUI.indexPlain"))}</button> <button type="button" class="btn" data-bulk-cancel autofocus>${esc(tx("panel.cancel"))}</button></div>`;
+  dialog.showModal();
+  dialog.querySelector("[data-bulk-cancel]").onclick=()=>dialog.close();
+  dialog.querySelector("[data-bulk-go]").onclick=async()=>{
+    dialog.close();
+    bulkIndexBusy=true;
+    bulkIndexStopRequested=false;
+    $("bulkIndexStop").hidden=false;
+    $("bulkIndexStop").disabled=false;
+    $("bulkIndexStop").textContent=tx("dictUI.bulkStop");
+    $("bulkIndexes").querySelectorAll("button").forEach(b=>b.disabled=true);
+    const queued=new Map(todo.map(d=>[d.id,bulkFeatureLabels(d,feat).map(label=>({label,text:label.textContent}))]));
+    for(const fields of queued.values())for(const {label} of fields){
+      label.textContent=tx(remove?"dictUI.removing":"dictUI.preparing");
+      label.classList.add("busy");
+    }
+    let succeeded=0,report="";
+    try{
+      for(const d of todo){
+        if(bulkIndexStopRequested)break;
+        button.textContent=`${succeeded+1}/${todo.length}`;
+        if(remove&&feat==="base"){
+          setIndexStatus('<span class="spin"></span>'+`${succeeded+1}/${todo.length} · `+esc(tx("dictUI.deletingName",{name:dictLabel(d)})));
+          const r=await fetch(`/api/library?dict=${encodeURIComponent(d.id)}&prepared=1&source=0`,{method:"DELETE"});
+          if(!r.ok)throw new Error(await r.text());
+        }else{
+          const labels=queued.get(d.id).map(field=>field.label);
+          const label=labels[0]||document.createElement("span");
+          const ok=await runIngest(d.id,{[feat]:remove?0:1,quiet:true,labels,statusPrefix:`${succeeded+1}/${todo.length} · `},label);
+          if(!ok)throw new Error(tx("dictUI.failed"));
+        }
+        for(const {label,text} of queued.get(d.id)){
+          label.textContent=text;label.classList.toggle("on",!remove);
+        }
+        succeeded++;
+      }
+      report=tx(bulkIndexStopRequested?"dictUI.bulkStopped":"dictUI.bulkFinished",{number:succeeded});
+    }catch(err){report=tx("dictUI.bulkFailed",{number:succeeded,error:window.wudictI18n.errorText(err.message)})}
+    finally{
+      bulkIndexBusy=false;
+      $("bulkIndexStop").hidden=true;
+      await loadDicts();renderBulkIndexes();
+      setIndexStatus(esc(report));
+      if(lastScope&&dicts.some(d=>d.id===lastScope&&d.unavailable)){lastScope=null;scopeOnce=null;refreshDictUI(true)}
+      if(lastQuery)doSearch();
+    }
+  };
 });
 /* Orphans (D156): prepared dictionaries whose files are gone - deleted by hand,
    renamed, or on a drive that is not connected; the app does not guess which.
@@ -3458,7 +3493,7 @@ function aboutLangs(j){
 }
 $("panelList").addEventListener("click",e=>{
   const index=e.target.closest("[data-delete-index]");
-  if(index){if(!index.disabled)askDSLIndexRemoval(index);return}
+  if(index){if(!index.disabled&&!index.classList.contains("busy"))askDSLIndexRemoval(index);return}
   const mv=e.target.closest("[data-mv]");
   if(mv){moveDict(mv.closest(".pd").dataset.id,mv.dataset.mv);return}
   /* A trait is a scope, taken the same way the card title takes one (D109):
@@ -3564,10 +3599,15 @@ function askDSLIndexRemoval(button){
   const pd=button.closest(".pd"),d=dicts.find(x=>x.id===pd.dataset.id);
   const target=dicts.find(x=>x.dsl?.source===d?.dsl?.source&&x.dsl?.variant===button.dataset.deleteIndex);
   if(!target?.dbSize||!d.dsl.sourceAvailable)return;
+  pd.querySelector("details.prov").open=true;
   const name=dictLabel(target),size=mb((target.dbSize||0)+(target.mediaSize||0));
-  pd.querySelector(".rmwrap").innerHTML=`<span class="rmq">${esc(tx("dictUI.deleteVariantIndexConfirm",{name,size}))}<br>`+
-    `<button type="button" class="rmgo" data-rm="variant-index" data-target="${escAttr(target.id)}">${esc(tx("dictUI.indexOnly"))}</button>`+
-    `<button type="button" class="rmno">${esc(tx("dictUI.cancel"))}</button></span>`;
+  const features=[tx("dictUI.indexPlain")];
+  if(target.caps?.Contains)features.push(tx("dictUI.contains"));
+  if(target.caps?.FTS)features.push(tx("dictUI.fts"));
+  if(target.mediaDB||target.mediaSize)features.push(tx("dictUI.packedMedia"));
+  pd.querySelector(".rmwrap").innerHTML=`<span class="rmq">${esc(tx("dictUI.deleteVariantIndexConfirm",{name,size,features:features.join(" · ")}))}<br>`+
+    `<button type="button" class="rmgo" data-rm="variant-index" data-target="${escAttr(target.id)}">${esc(tx("panel.delete"))}</button>`+
+    `<button type="button" class="rmno">${esc(tx("panel.cancel"))}</button></span>`;
 }
 function askRemoval(pd){
   const d=dicts.find(x=>x.id===pd.dataset.id);if(!d)return;
@@ -3606,7 +3646,7 @@ async function runRemove(id,kind,node){
   node.dataset.busy="1";node.classList.add("busy");
   const d=dicts.find(x=>x.id===id)||{path:""},name=dictLabel(d);
   node.textContent=tx("dictUI.deleting");
-  setStatus('<span class="spin"></span>'+esc(tx("dictUI.deletingName",{name})));
+  setIndexStatus('<span class="spin"></span>'+esc(tx("dictUI.deletingName",{name})));
   const q="/api/library?dict="+encodeURIComponent(id)+
     "&prepared="+(kind==="source"?0:1)+"&source="+(kind==="index"||kind==="variant-index"?0:1);
   let rep;
@@ -3617,10 +3657,10 @@ async function runRemove(id,kind,node){
   }catch(err){
     node.classList.remove("busy");delete node.dataset.busy;
     node.textContent=tx("dictUI.failed");
-    setStatus("⚠ "+esc(name)+" — "+esc(err.message||String(err)));
+    setIndexStatus("⚠ "+esc(name)+" — "+esc(err.message||String(err)));
     return;
   }
-  setStatus("💀 "+esc(tx("dictUI.freed",{name,size:mb(rep.freed||0)}))+
+  setIndexStatus("💀 "+esc(tx("dictUI.freed",{name,size:mb(rep.freed||0)}))+
     (rep.note?" · "+esc(rep.note):""));
   // The server has already rescanned; this refetches the list it now reports,
   // and redraws the panel (and the folder section's counts) from it.
@@ -3651,14 +3691,14 @@ function runIngest(id,opts,label){
      never changes width; the status line, which has the room, keeps the
      counts. */
   const show=(t,long)=>{
-    label.textContent=t;
-    setStatus('<span class="spin"></span>'+(opts.statusPrefix||"")+esc(name)+" — "+esc(long||t));
+    for(const field of opts.labels||[label])field.textContent=t;
+    setIndexStatus('<span class="spin"></span>'+(opts.statusPrefix||"")+esc(name)+" — "+esc(long||t));
   };
   const removing=Object.values(opts).some(v=>v===0);
   // tx("dictUI.indexing") for the index chip, because that is the word every other
   // dictionary app uses for this and the chip says it too; tx("dictUI.preparing") stays
   // for the feature switches, which add to an index that already exists.
-  const verb=opts.base?tx("dictUI.indexing"):tx("dictUI.preparing");
+  const verb=opts.base&&!opts.labels?tx("dictUI.indexing"):tx("dictUI.preparing");
   show(removing?tx("dictUI.removing"):verb+"…");
   label.classList.remove("act");label.classList.add("busy");
   label.style.textDecoration="none";label.style.cursor="default";
@@ -3680,12 +3720,14 @@ function runIngest(id,opts,label){
          redirect-heavy dictionary they are ~15% of the wall time. Naming that
          tx("dictUI.finishing") beats a percentage parked at 100. */
       const pct=p.total?Math.min(100,Math.floor(p.done/p.total*100)):-1;
-      show(verb+"… "+(pct<0?p.done.toLocaleString():pct>=100?tx("dictUI.finishing"):pct+"%"),
-        verb+"… "+counts);
+      const action=removing?tx("dictUI.removing"):verb+"…";
+      const amount=opts.labels||label.closest(".dsl-index-tools")?counts:
+        pct<0?p.done.toLocaleString():pct>=100?tx("dictUI.finishing"):pct+"%";
+      show(action+" "+amount,action+" "+counts);
     });
     es.addEventListener("done",async()=>{
       es.close();
-      setStatus("✓ "+esc(name)+(removing?tx("dictUI.removed"):tx("dictUI.ready")));
+      setIndexStatus("✓ "+esc(name)+(removing?tx("dictUI.removed"):tx("dictUI.ready")));
       if(!opts.quiet){await loadDicts();if(lastQuery)doSearch()}
       resolve(true);
     });
@@ -3994,6 +4036,12 @@ let statusTs=0,statusTimer=null,statusPending,statusOwner=null;
 /* `owner` lets a long-running writer retract its own message without
    clobbering whatever spoke after it — the dictionary loader used to key that
    on `lastQuery`, which is why a stale warning could sit there unretracted. */
+function setIndexStatus(html){
+  const box=$("bulkIndexConfirm");
+  $("bulkIndexStatus").hidden=!html;
+  box.innerHTML=html;
+  setStatus(html);
+}
 function setStatus(html,owner){
   statusPending=html;
   statusOwner=html?(owner??""):null;

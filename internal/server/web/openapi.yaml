@@ -1419,6 +1419,45 @@ paths:
         '500':
           description: The state file could not be written.
 
+  /api/dsl-defaults:
+    put:
+      tags: [internal]
+      operationId: saveDSLDefaults
+      x-internal: true
+      summary: Set automatic indexes for newly discovered DSL dictionaries
+      description: >
+        Defaults are Original index only. At least one variant must have index
+        enabled; contains and fullText require that variant's index. Existing
+        families are not changed. New families are prepared asynchronously on
+        discovery, with pending plans persisted for retry after restart.
+        The current defaults are returned by GET /api/config as dslDefaults.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                original:
+                  type: object
+                  properties:
+                    index: { type: boolean }
+                    contains: { type: boolean }
+                    fullText: { type: boolean }
+                gd:
+                  type: object
+                  properties:
+                    index: { type: boolean }
+                    contains: { type: boolean }
+                    fullText: { type: boolean }
+      responses:
+        '200':
+          description: Defaults saved.
+        '400':
+          description: Invalid JSON, missing index selection or dependent feature without index.
+        '500':
+          description: State file could not be written; previous defaults retained.
+
   /api/dsl-mode:
     put:
       tags: [internal]
@@ -1441,6 +1480,9 @@ paths:
               properties:
                 dict: { type: string }
                 mode: { type: string, enum: [original, gd, both] }
+                global:
+                  type: boolean
+                  description: Persist an installation-wide parser choice, including future DSL families; no indexes deleted.
       responses:
         '200':
           description: Selection saved.

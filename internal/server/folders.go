@@ -28,12 +28,14 @@ import (
 // otherwise visible only on the terminal at startup, which a user who opened
 // the app in a browser never sees.
 type configInfo struct {
-	Roots      []Root `json:"roots"`
-	LibDir     string `json:"libDir"`
-	Prepared   int    `json:"prepared"`
-	UseCached  bool   `json:"useCached"`
-	ConfigPath string `json:"configPath"`
-	Total      int    `json:"total"`
+	DSLParser   string      `json:"dslParser"`
+	DSLDefaults dslDefaults `json:"dslDefaults"`
+	Roots       []Root      `json:"roots"`
+	LibDir      string      `json:"libDir"`
+	Prepared    int         `json:"prepared"`
+	UseCached   bool        `json:"useCached"`
+	ConfigPath  string      `json:"configPath"`
+	Total       int         `json:"total"`
 	// HowtoRemoved: the user removed the built-in wudict howto; the setup
 	// page offers it back.
 	HowtoRemoved bool `json:"howtoRemoved,omitempty"`
@@ -201,6 +203,8 @@ func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 		shown = append(shown, r.Path)
 	}
 	info := configInfo{
+		DSLParser:       s.reg.prefs.parserSelection(),
+		DSLDefaults:     s.reg.prefs.newDSLDefaults(),
 		PathAliases:     pathAliases(shown),
 		Roots:           roots,
 		LibDir:          store.DefaultDBDir(),

@@ -33,7 +33,8 @@
 :where(.wu-gd)
 {
   font-family: 'WuGD Arial', sans-serif;
-  font-size: 13px;
+  font-size: inherit;
+  font-weight: inherit;
 }
 
 /* Non-existent glyphs are shown with this font (right now IPA range) */
@@ -49,7 +50,7 @@
 .wu-gd .gdheadword
 {
   color: #110088;
-  font-size: 15px;
+  font-size: 1.153846em;
 }
 
 /************* DSL dictionaries **************/
@@ -71,24 +72,21 @@
   font-size: inherit;
   font-weight: inherit;
   font-style: inherit;
-  text-decoration: none;
-  border: 1px double #DDDDFF;
-  padding: 0.01em;
-  background-color: #FFEEEE;
+  text-decoration: underline;
 }
 
 .wu-gd .dsl_p,
 .wu-gd .wu-p
 {
-  font-weight: normal;
+  font-weight: inherit;
 }
 
 .wu-gd .dsl_t,
 .wu-gd .wu-ipa
 {
   font-family: 'WuGD Phonetic' !important;
-  font-size: 17px !important ;
-  font-weight: normal;
+  font-size: 1.307692em !important;
+  font-weight: inherit;
   font-style:normal;
   line-height: 100%;
   margin-right: 2px;
@@ -99,5 +97,5 @@
 .wu-gd .wu-ipa > .gde
 {
   font-family: 'WuGD Phonetic' !important;
-  font-size: 17px !important ;
+  font-size: inherit !important;
 }

@@ -229,14 +229,14 @@ for (const language of ['en', 'ru']) {
   const cards = [];
   const name = '<b>My "dictionary" {name}</b>';
   const panel = {innerHTML:'', closest:()=>null, appendChild:card=>cards.push(card),querySelectorAll:()=>[]};
-  const cardContext = {tx:t, window:context.window, dicts:[],dslSaving:false,
-    $:()=>panel, document:{createElement:()=>({dataset:{}})},
+  const cardContext = {tx:t, window:context.window, dicts:[],dslSaving:false,cfgInfo:null,
+    $:()=>panel, document:{createElement:()=>({dataset:{}}),querySelectorAll:()=>[]},
     orderedDicts:()=>[{id:'unchanged-id',name,source:'sample.dsl',format:'dsl',entries:22,caps:{},dbSize:0}],
     dictLabel:d=>d.name, mb:n=>`${n} B`, baseIndexBytes:()=>100,
     esc:s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;'),
     escAttr:s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'),
     provenance:()=>'', traits:()=>'', renderReindex:()=>{}};
-  vm.runInNewContext(main.match(/function dslIndexControls\(d\)\{[\s\S]*?\n\}/)[0]+'\n'+main.match(/function dslControls\(d\)\{[\s\S]*?\n\}/)[0]+'\n'+
+  vm.runInNewContext(main.match(/function selectedDSLParser\(\)\{[^\n]+/)[0]+'\n'+main.match(/function dslIndexControls\(d\)\{[\s\S]*?\n\}/)[0]+'\n'+main.match(/function dslControls\(d\)\{[\s\S]*?\n\}/)[0]+'\n'+
     main.match(/function renderPanel\(\)\{[\s\S]*?\n\}/)[0], cardContext);
   cardContext.renderPanel();
   assert.equal(cards[0].dataset.id, 'unchanged-id');
@@ -250,6 +250,41 @@ for (const language of ['en', 'ru']) {
   assert.match(dslControls,/data-dsl-mode="original" checked disabled/);
   assert.match(dslControls,/data-dsl-mode="gd">/);
   assert.ok(dslControls.includes(t('dictUI.dslUnavailable')));
+  cardContext.dicts=[
+    {id:'original-id',dbSize:33,dsl:{source:'pair.dsl',variant:'original',sourceAvailable:true},caps:{Contains:true}},
+    {id:'gd-id',dbSize:44,dsl:{source:'pair.dsl',variant:'gd',sourceAvailable:true},caps:{FTS:true}},
+  ];
+  const paired=cardContext.dslIndexControls(cardContext.dicts[0]);
+  assert.match(paired,/data-feat="contains" data-target="original-id" data-on="1"/);
+  assert.match(paired,/data-feat="fts" data-target="gd-id" data-on="1"/);
+  assert.ok(paired.includes('/browse?dict=original-id'));
+  assert.ok(paired.includes('/browse?dict=gd-id'));
+  assert.ok(paired.includes('33 B')&&paired.includes('44 B'));
+  cardContext.dicts[0].dsl.parser='original';
+  cardContext.dicts[0].dbSize=0;
+  const originalOnly=cardContext.dslIndexControls(cardContext.dicts[0]);
+  assert.ok(!originalOnly.includes('data-target="gd-id"'));
+  assert.ok(originalOnly.includes('dsl-index-warning'));
+  assert.ok(!originalOnly.includes('/browse?'));
+  cardContext.dicts[0].dsl.parser='gd';
+  const gdOnly=cardContext.dslIndexControls(cardContext.dicts[1]);
+  assert.ok(!gdOnly.includes('data-target="original-id"'));
+  assert.ok(gdOnly.includes('/browse?dict=gd-id'));
+  assert.ok(!gdOnly.includes('dsl-index-warning'));
+  cardContext.dicts=[
+    {id:'ordinary',source:'a.mdx',dbSize:20,caps:{}},
+    {id:'original',source:'b.dsl',dbSize:30,dsl:{variant:'original',sourceAvailable:true},caps:{FTS:true}},
+    {id:'gd',source:'b.dslgd',dbSize:0,dsl:{variant:'gd',sourceAvailable:true},caps:{}},
+    {id:'only-copy',dbSize:40,caps:{}},
+  ];
+  vm.runInNewContext(main.match(/function bulkIndexCandidates\(scope,feat,remove\)\{[\s\S]*?\n\}/)[0],cardContext);
+  assert.equal(cardContext.bulkIndexCandidates('original','fts',false).map(d=>d.id).join(','),'ordinary');
+  assert.equal(cardContext.bulkIndexCandidates('gd','base',false).map(d=>d.id).join(','),'gd');
+  assert.equal(cardContext.bulkIndexCandidates('all','base',true).map(d=>d.id).join(','),'ordinary,original');
+  cardContext.cfgInfo={dslParser:'gd'};
+  assert.equal(cardContext.bulkIndexCandidates('selected','base',true).map(d=>d.id).join(','),'ordinary');
+  cardContext.cfgInfo={dslParser:'original'};
+  assert.equal(cardContext.bulkIndexCandidates('selected','base',true).map(d=>d.id).join(','),'ordinary,original');
   for (const g of manifest.groups) {
     assert.equal(fallback['layers.group.' + g.dir], g.title);
     assert.ok(messages['layers.group.' + g.dir]);

@@ -1,8 +1,12 @@
 # Localization: status and next tasks
 
-Updated 2026-10-02. Implementation rules are in [translation.md](translation.md). This file is the current task list, not permission to carry out every listed change automatically.
+Updated 2026-10-02. Implementation rules are in [translation.md](translation.md). This file is the current task list, not permission to carry out every listed change automatically. Bulk Stop/finishing-current-dictionary/stopped-result labels added in EN/RU; Node and Chromium checks pass. Stop is a safe queue boundary, not cancellation of the active server ingest.
 
 ## Checkout state
+
+2026-10-02 Edit Folders: new DSL parser section, explanation, minimum-index validation and save-error messages translated in EN/RU. Existing Original/GD labels reused. Browser 320/390/1100px and Node checks pass; device verification pending.
+
+2026-10-02 bulk indexes: new Create/Delete sections, All/Original/GD scopes, confirmation, no-op and completed/failed counts translated in EN/RU. Node candidate/locale tests and Chromium 320/390/1100px bulk create/delete/layout checks pass; no APK/device verification.
 
 2026-10-02 translation follow-up: `dev` at `af82000`, clean at start. Added catalog-backed orphan review, selection/action counts, warning and result messages; collection select-all/none links; newly introduced collection/Drive/removed-index errors; eight missing main Android resource translations. Existing DSL labels and user wording were preserved. Go I18n/AppearanceContract and Node checks passed; Android XML parsed and positional parameters matched the English resources. Main resource coverage is complete except the intentionally inherited app_name. New tests cover orphan selection labels and Russian counts; duplicate catalog keys are rejected. No APK or device verification.
 

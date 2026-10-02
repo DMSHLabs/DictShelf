@@ -12,6 +12,34 @@ import (
 	"testing"
 )
 
+func TestDSLGlobalParser(t *testing.T) {
+	isolatedDBDir(t)
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "demo.dsl"), []byte(sampleDSL), 0600); err != nil {
+		t.Fatal(err)
+	}
+	state := filepath.Join(t.TempDir(), StateFile)
+	r, err := NewRegistry([]string{dir}, false, WithPrefs(LoadPrefs(state)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := New(r)
+	for _, mode := range []string{"original", "gd", "both"} {
+		groupCall(t, s, "PUT", "/api/dsl-mode", map[string]any{"global": true, "mode": mode}, 200)
+		for _, e := range r.all() {
+			if r.dslAvailable(e) != (mode == "both" || mode == e.dslVariant) {
+				t.Fatal("wrong availability", mode, e.dslVariant)
+			}
+			if r.dslView(e).Parser != mode {
+				t.Fatal("parser metadata missing")
+			}
+		}
+		if LoadPrefs(state).parserSelection() != mode {
+			t.Fatal("parser not persisted")
+		}
+	}
+}
+
 func TestDSLModesKeepPreparedFiles(t *testing.T) {
 	isolatedDBDir(t)
 	dir := t.TempDir()

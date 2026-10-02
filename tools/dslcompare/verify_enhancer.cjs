@@ -47,6 +47,21 @@ const { chromium } = require('playwright');
     assert(state.fonts.some(f => f.family.includes('Phonetic') && f.status === 'loaded'));
     assert(state.fonts.some(f => f.family.includes('Arial') && f.status === 'loaded'));
     assert.equal(state.buttons, 0);
+    // Settings must affect already-prepared GD articles, including v4 imports.
+    for(const size of [15,24])for(const weight of [400,500,700]){
+      await page.evaluate(({size,weight})=>{applyFS(size,false);applyFW(weight,false)}, {size,weight});
+      const typography=await page.evaluate(()=>{
+        const root=[...document.querySelectorAll('.article')].find(el=>el.shadowRoot?.querySelector('.wu-gd')).shadowRoot;
+        const read=selector=>{const css=getComputedStyle(root.querySelector(selector));return {size:parseFloat(css.fontSize),weight:css.fontWeight}};
+        return {body:read('.wu-gd'),ipa:read('.wu-ipa'),bold:read('b')};
+      });
+      assert.equal(typography.body.size,size);
+      assert.equal(typography.body.weight,String(weight));
+      assert.ok(Math.abs(typography.ipa.size-size*1.307692)<0.01);
+      assert.equal(typography.ipa.weight,String(weight));
+      assert.ok(Number(typography.bold.weight)>=700);
+    }
+    await page.evaluate(()=>{applyFS(15,false);applyFW(400,false)});
     // Exercise the existing commands, not an injected replacement toggle.
     await page.locator('#examplesOff').evaluate(button => button.click());
     await page.waitForFunction(() => {

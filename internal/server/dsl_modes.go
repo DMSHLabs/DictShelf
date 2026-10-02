@@ -14,6 +14,8 @@ import (
 )
 
 type dslView struct {
+	Parser          string `json:"parser"`
+	GlobalParser    bool   `json:"globalParser"`
 	Source          string `json:"source"`
 	Variant         string `json:"variant"`
 	Mode            string `json:"mode"`
@@ -49,8 +51,20 @@ func (p *Prefs) dslMode(source string) string {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	mode := p.dsl[source]
+	if p.dslParser == "original" || p.dslParser == "gd" || p.dslParser == "both" {
+		return p.dslParser
+	}
 	if mode == "original" || mode == "gd" {
 		return mode
+	}
+	return "both"
+}
+
+func (p *Prefs) parserSelection() string {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	if p.dslParser == "original" || p.dslParser == "gd" {
+		return p.dslParser
 	}
 	return "both"
 }
@@ -60,6 +74,13 @@ func (r *Registry) dslView(e *entry) *dslView {
 		return nil
 	}
 	v := &dslView{Source: e.dslSource, Variant: e.dslVariant, Mode: r.prefs.dslMode(e.dslSource)}
+	r.prefs.mu.RLock()
+	v.Parser = r.prefs.dslParser
+	v.GlobalParser = v.Parser != ""
+	r.prefs.mu.RUnlock()
+	if v.Parser == "" {
+		v.Parser = "both"
+	}
 	v.SourceAvailable = fileExists(e.dslSource)
 	v.IndexRemoved = e.indexBlocked()
 	for _, other := range r.all() {
@@ -84,6 +105,9 @@ func (r *Registry) dslAvailable(e *entry) bool {
 	if e.dslSource == "" {
 		return true
 	}
+	if parser := r.prefs.parserSelection(); parser != "both" {
+		return parser == e.dslVariant
+	}
 	mode := r.prefs.dslMode(e.dslSource)
 	if mode == "both" || mode == e.dslVariant {
 		return true
@@ -98,17 +122,24 @@ func (r *Registry) dslAvailable(e *entry) bool {
 }
 
 func (e *entry) indexBlocked() bool {
-	if e.dslSource == "" || e.reg == nil {
+	if e.reg == nil {
 		return false
 	}
 	p := e.reg.prefs
 	p.mu.RLock()
 	defer p.mu.RUnlock()
-	return p.dslRemoved[e.dslSource+"\n"+e.dslVariant]
+	return p.dslRemoved[e.indexRemovalKey()]
+}
+
+func (e *entry) indexRemovalKey() string {
+	if e.dslSource != "" {
+		return e.dslSource + "\n" + e.dslVariant
+	}
+	return cleanAbs(e.Path) + "\noriginal"
 }
 
 func (e *entry) setIndexRemoved(removed bool) error {
-	if e.dslSource == "" || e.reg == nil {
+	if e.reg == nil {
 		return nil
 	}
 	p := e.reg.prefs
@@ -116,7 +147,7 @@ func (e *entry) setIndexRemoved(removed bool) error {
 	defer p.editMu.Unlock()
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	key := e.dslSource + "\n" + e.dslVariant
+	key := e.indexRemovalKey()
 	old, exists := p.dslRemoved[key], p.exists
 	if p.dslRemoved == nil {
 		p.dslRemoved = make(map[string]bool)
@@ -167,8 +198,9 @@ func (e *entry) restoreDSLIndex(plan store.Plan, progress store.Progress) error 
 // Selection never changes descriptors, prepared files, order or group membership.
 func (s *Server) handleDSLMode(w http.ResponseWriter, req *http.Request) {
 	var body struct {
-		Dict string `json:"dict"`
-		Mode string `json:"mode"`
+		Global bool   `json:"global"`
+		Dict   string `json:"dict"`
+		Mode   string `json:"mode"`
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, req.Body, 4096)).Decode(&body); err != nil {
 		httpErr(w, 400, "invalid DSL selection")
@@ -201,6 +233,10 @@ func (s *Server) handleDSLMode(w http.ResponseWriter, req *http.Request) {
 	defer p.editMu.Unlock()
 	p.mu.Lock()
 	old, oldExists := p.dsl, p.exists
+	oldParser := p.dslParser
+	if body.Global {
+		p.dslParser = body.Mode
+	}
 	next := make(map[string]string, len(old)+len(entries))
 	for k, v := range old {
 		next[k] = v
@@ -214,6 +250,7 @@ func (s *Server) handleDSLMode(w http.ResponseWriter, req *http.Request) {
 	err := p.saveLocked()
 	if err != nil {
 		p.dsl, p.exists = old, oldExists
+		p.dslParser = oldParser
 	}
 	p.mu.Unlock()
 	if err != nil {

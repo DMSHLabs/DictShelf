@@ -6,6 +6,12 @@ parser. No source dictionaries or application indexes are modified.
 
 ## Scope
 
+GD typography follows Settings size/weight via inheritance. Headword/IPA sizes
+use the original relative proportions, not fixed px; bold/italic markup stays.
+The serving resource rewriter upgrades stored v4 stylesheet imports to v5 to
+avoid immutable CSS caches, so existing GD indexes need no rebuild for this fix.
+verify_enhancer.cjs checks live 15/24px and 400/500/700 weights on prepared HTML.
+
 ### Dictionary settings selection
 
 Each DSL family offers `Original` and `GD compatible` checkboxes; at least one
@@ -39,6 +45,28 @@ separate original/GD full-text toggles; turning one off keeps its base index and
 does not change the other variant. Bulk full text skips unavailable variants.
 If both indexes are removed, both cards show a red warning to create an index.
 Opening settings refreshes index sizes; deletion refreshes the current query.
+Each Original/GD row owns its index size/create control and contains/full-text
+switches, left aligned in a responsive control column. Only absent indexes show
+the rocket; clicking a prepared size confirms deletion of the entire variant
+index, including contains/full text. Separate delete-index shortcuts are gone.
+Browse has its book icon and button styling on a separate line below the switches,
+disabled until that variant has an index. Preparing/removing and article counts
+are shown on the buttons and in status. Controls may grow/wrap during progress;
+their control column remains left aligned.
+
+Bulk settings now have Create/Delete sections with All dictionaries, Original
+only (all non-GD formats) and GD compatible only scopes. Each offers index,
+contains and full text. Confirmation snapshots only missing/present features;
+source-less or non-rebuildable dictionaries are skipped. Jobs run sequentially,
+stop on first error and report completed count.
+Queued card fields show preparing/removing; the active dictionary's fields
+show article counts too, mirrored across both cards of a DSL family. Finished
+fields are restored when the batch's final metadata refresh completes.
+Index deletion includes contains/FTS/cache, never source files; removal guards
+now cover non-DSL too.
+Explicit bulk creation may restore removed or inactive variants, without
+changing selection. Per-family checkboxes remain; old bulk mode/FTS controls
+are removed. The mode regression uses the API for collection-wide selection.
 Browser regression: `node tools/dslcompare/verify_index_removal.cjs` against the
 isolated fixture on port 6910, including cross-card targeting and cancel.
 
