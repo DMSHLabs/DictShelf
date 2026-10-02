@@ -8,6 +8,20 @@ Work directly in `D:\Projects\Android\wudict`, as the user requested. Recheck br
 
 ## Existing documentation
 
+### Article find (2026-10-03)
+
+The article-find mode select uses the same Android picker as the main search mode, with the existing native colour/image background and compact width. Its three translated options and selected index still come from the HTML select. Shared bridge selection/change/cancel probe and FOSS debug Java compilation pass; verify colour and wallpaper in a rebuilt APK.
+
+The strip's previous/next buttons have 44×44px minimum touch targets and an extra gap between them, following the reader's report of accidental taps. Verified at 320/390/1100px with a long query and Russian counter; physical-phone check remains.
+
+Status-bar spacing follows the reader's 2026-10-03 correction: at widths up to 600px the four gaps share available space equally; above 600px the arrow pair keeps a smaller gap and the three remaining gaps share the slack equally. End gutters remain one button height; missing dictionary arrows remove their associated spacers. EN/RU geometry checked at 320/390/600/601/620/1100px; phone check remains.
+
+The magnifier after the dictionary arrows searches loaded article text. Prefix starts at a word boundary; Whole word requires both boundaries; Contains matches substrings. Phrases are literal (optional enclosing double quotes), span inline markup/whitespace/line breaks, and do not cross paragraph boundaries. Regex is deliberately absent. These settings are independent of the main dictionary search.
+
+Find next/previous close settings and leave a strip with query, count, previous/next and finish. Tapping the query reopens settings; closing settings keeps find active. The walk wraps with an indication and opens collapsed dictionary sections; unloaded results are not searched. Hidden-example search includes example-only lines hidden by the Examples layer: only the current matching line is temporarily shown, with its prior inline display restored on leaving/finishing. Other hidden article text is excluded. Article content/style changes refresh matches; a new main search or clearing its query finishes find while preserving its query/options locally.
+
+Browser verification: `tools/article-find-test.cjs` against an isolated preview, EN/RU at 320/390/1100px, including inline phrases, Cyrillic boundaries, iframe content, hidden examples, wrapping, late articles, markup preservation, reset/reopen, persistence and native-selection fallback. Owed on a phone: soft-keyboard Enter, dialog sizing with the keyboard open, bottom insets, example reveal/restore with real dictionaries and text scaling. No APK built or installed for this slice.
+
 General architecture/conventions: `CLAUDE.md`, `docs/SPEC.md`. Android usage: `pages/docs/apps/android.md`. Storage distinctions: `docs/ANDROID-PLAY-STORAGE.md`; LAN behavior: `docs/ANDROID-LAN-SHARING.md`. This note covers local UI additions and Windows workflow, not the whole project.
 
 ## Build and checks

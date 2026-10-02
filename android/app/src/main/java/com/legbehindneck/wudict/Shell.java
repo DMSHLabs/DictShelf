@@ -304,7 +304,7 @@ final class Shell {
     // groups, disabled entries and its existing change handler.
     static final String DICTIONARY_PICKER_JS = """
             (() => {
-              for (const id of ['dict', 'mode', 'stylerPreset', 'groupSelect']) {
+              for (const id of ['dict', 'mode', 'articleFindMode', 'stylerPreset', 'groupSelect']) {
               const select = document.getElementById(id);
               if (!select || select.dataset.shellPicker) continue;
               select.dataset.shellPicker = '1';
@@ -328,7 +328,8 @@ final class Shell {
                     disabled: option.disabled || (parent.tagName === 'OPTGROUP' && parent.disabled)});
                 }
                 const answer = window.prompt('wudict:dictionary-picker',
-                  JSON.stringify({rows, selected: select.selectedIndex, kind:id}));
+                  JSON.stringify({rows, selected: select.selectedIndex,
+                    kind: id === 'articleFindMode' ? 'mode' : id}));
                 if (answer === null) return;
                 const index = Number(answer);
                 if (!Number.isInteger(index) || !options[index]) return;

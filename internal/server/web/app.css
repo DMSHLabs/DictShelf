@@ -139,7 +139,7 @@ body.wide .col{max-width:min(1280px,96vw)}
    bar (--sbarh, which already includes the inset it wears) or, when the bar is
    away, the host's inset by itself. Written as a fallback chain rather than a
    sum, so a bar standing on the gesture bar is not counted twice. */
-.container{padding-bottom:calc(var(--sp-5) + var(--sbarh,var(--wd-inset-bottom,0px)))}
+.container{padding-bottom:calc(var(--sp-5) + var(--sbarh,var(--wd-inset-bottom,0px)) + var(--article-find-height,0px))}
 
 .bar{position:fixed;top:0;left:0;right:0;z-index:100;background:var(--bg-bar);
   backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
@@ -208,41 +208,29 @@ body.barpinned{--stick:var(--barh)}
   border-top:1px solid var(--line);padding:var(--sp-1) 0;
   padding-bottom:calc(var(--sp-1) + var(--wd-inset-bottom,0px))}
 .sbar[hidden]{display:none}
-/* The spaces of the row: an empty element as wide and as tall as the buttons
-   (--sbar-sq, measured from them in index.html - the row's height is theirs,
-   and it changes with the inset the bar wears, so a number written here would
-   be a number that goes stale). Three of them sit in the markup where the
-   reader asked for air: before the arrows, between them, and after the fold's
-   handle, which the auto margin then pushes to the right edge. `aspect-ratio`
-   alone would not do it: an empty flex item has no main size to derive from,
-   so the width has to be stated. */
-.sbar .rpad{flex:none;width:var(--sbar-sq,2.2em);height:var(--sbar-sq,2.2em)}
-/* The two ENDS are one button-height wide, so the arrows and the fold's handle
-   stand clear of the screen's edge. They were `--sp-2` (a hair over nine
-   pixels) from the reader's first pass at this row, which read as pressed
-   against the glass on a phone; the square is exactly what they asked for -
-   "move them in by the height of the button" - and it is measured, not chosen
-   (--sbar-sq, below). Everything between the ends keeps the row's own square of
-   air. */
-.sbar .rpad.edge{width:var(--sbar-sq,2.2em)}
-/* The squares around the scope chip carry the auto margins, so the chip is
-   centred between the ▼ and the fold's handle AND the gap on each side of it
-   can never collapse: on a phone the auto margins had nothing to share, the
-   chip sat against the ▼, and the row read as one run of buttons. Two floors
-   and four equal shares of the free space, so what the chip sees on its left
-   and on its right is always the same: a floor of one square, plus whatever
-   slack there is. Under pressure the chip is what gives - its label
-   ellipsises, and the fold's handle shortens itself below - never the air. */
-.sbar .rpad.floor{margin:0 auto}
-/* The scope, in the middle of the row: between the two arrows it belongs to
-   and the fold's handle, which is where the reader asked for it. `margin:0
-   auto` is what puts it there and what keeps Examples against the right edge
-   (the two auto margins split the free space, so the gap before the chip and
-   the gap after it are the same and the handle follows the second one) - which
-   is why #sbarExamples no longer carries an auto margin of its own. It is the
-   field's own .seg treatment, stated here for a row that is one line tall at
-   every width: the chip is what you see, the transparent select is what you
-   hit, and it keeps the native picker, the aria-label and its .value. */
+#sbarFind{flex:none;display:flex;align-items:center;justify-content:center}
+#articleFindStrip{position:fixed;left:0;right:0;bottom:var(--sbarh,var(--wd-inset-bottom,0px));
+  z-index:101;display:flex;align-items:center;gap:var(--sp-1);padding:var(--sp-1) var(--sp-2);
+  background:var(--bg-bar);color:var(--fg);border-top:1px solid var(--line);backdrop-filter:blur(10px)}
+#articleFindStrip[hidden]{display:none}
+#articleFindLabel{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left}
+#articleFindCount{flex:none;white-space:nowrap;font-size:.85em}
+#articleFindStrip>button:not(#articleFindLabel){flex:none}
+#articleFindPrev,#articleFindNext{min-width:44px;min-height:44px}
+#articleFindNext{margin-left:var(--sp-2)}
+/* Gaps scale with the viewport and button height; fixed end gutters keep
+   the controls clear of the screen edges. The dictionary label gives up
+   width before any of the gaps becomes smaller than its shared minimum. */
+.sbar{--sbar-gap:clamp(.4em,2vw,var(--sbar-sq,2.2em))}
+.sbar .rpad{flex:1 0 var(--sbar-gap);width:var(--sbar-gap);height:var(--sbar-sq,2.2em)}
+.sbar .rpad.edge{flex:none;width:var(--sbar-sq,2.2em)}
+/* Narrow screens share the free space between all four gaps. On wide screens
+   the dictionary arrows form a pair; the other three gaps share the slack. */
+.sbar .rpad.floor{margin:0}
+@media(min-width:601px){.sbar .rpad.arrow-gap{flex:none}}
+.sbar:has(#sbarNext[hidden]) .arrow-gap,
+.sbar:has(#sbarNext[hidden]) .find-gap{display:none}
+/* The dictionary picker remains the same transparent select over its chip. */
 .sbar .seg{display:flex;position:relative;flex:0 1 auto;align-self:stretch;
   align-items:center;justify-content:center;min-width:0}
 .sbar .seg select{position:absolute;inset:0;width:100%;height:100%;margin:0;

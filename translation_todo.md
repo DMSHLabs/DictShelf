@@ -1,5 +1,7 @@
 # Localization: status and next tasks
 
+2026-10-03 article find: dialog/strip labels, modes, options, counts, wrap notices and hidden-example hint are catalog-backed in EN/RU. Node/catalog/asset and Chromium 320/390/1100px checks pass; no APK/device verification. Check Russian labels with the soft keyboard and increased text size, plus the strip count and example checkbox on the phone.
+
 Updated 2026-10-02. Implementation rules are in [translation.md](translation.md). This file is the current task list, not permission to carry out every listed change automatically. Bulk Stop/finishing-current-dictionary/stopped-result labels added in EN/RU; Node and Chromium checks pass. Stop is a safe queue boundary, not cancellation of the active server ingest.
 
 ## Checkout state

@@ -1,5 +1,17 @@
 # Agent handoff — current state
 
+2026-10-03 wording: user approved lowercase **exact / точно** for the article-find exact mode, retaining whole-word/whole-phrase matching. EN/RU labels updated; Node localization checks pass.
+
+2026-10-03 wording: user approved **Search in hidden examples** for the article-find checkbox; English catalog updated, Node localization checks pass.
+
+2026-10-03 article-find mode picker: Android now routes the article-find mode select through the existing compact native search-mode picker, including the configured colour/background image and current selection. Shared bridge selection/change/cancel probe and FOSS debug Java compilation pass; no APK/device check.
+
+2026-10-03 quick-find touch targets: previous/next in the article-find strip are at least 44×44px, with an extra gap (about 15px total at default text size). Browser layout probe at 320/390/1100px passes; no APK/device check.
+
+2026-10-03 status-bar spacing follow-up: below/equal 600px all four inter-control gaps are equal and may shrink; above 600px the dictionary arrows form a closer pair, with three equal larger gaps after Down, Find and the dictionary chip. Fixed end gutters retained. Chromium EN/RU 320/390/600/601/620/1100px geometry checks pass without overflow; no APK/device check.
+
+2026-10-03 article find: `dev` HEAD `cd150f4`, clean at start; this slice uncommitted. Magnifier after dictionary arrows opens Find in articles; word-prefix/whole-word/contains, case, highlight-all and hidden-example search, no regex. Next/previous leave a bottom navigation strip; matches span loaded articles in reading order, including collapsed dictionary sections. Only the current hidden example is temporarily shown; leaving it/ending find restores its display. Query/options persist locally; main search/clearing finishes article find. Shadow and same-origin iframe articles preserve markup and selections (older browsers select the current match). Full Go suite/build/vet, targeted asset/i18n and Chromium EN/RU 320/390/1100px checks pass. Module tidy reports only pre-existing go.sum CRLF/LF differences. No APK/device check; soft keyboard, hidden examples and bottom insets remain for the phone.
+
 2026-10-02 Settings language/Browse: dev HEAD 52febec, clean at start; uncommitted. Language is a persisted collapsible section; its door shows Language — English/Русский. Language dialog overrides mobile sheet stretching and empty error spacing. DSL Browse sits below its variant with a small left indent and navigation arrow. Node/targeted server checks and isolated Chromium EN/RU 320/390/1100 layout checks pass; no APK/device check.
 
 2026-10-02 Settings disclosures: dev HEAD ea3b66b, clean at start; changes uncommitted. Six headed sections now collapse independently and persist locally across page reloads; first use/new sections default open. Dictionary settings source/About triangles have a .4em gap. Label columns are recalculated when a section opens. Targeted server/UI and Node syntax/localization checks plus section-state restoration probe pass; Chromium unavailable in current Node module environment, no APK/device check.

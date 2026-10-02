@@ -845,5 +845,21 @@
   "panel.fileBadge": "FILE",
   "panel.dictSaveFailed": "⚠ could not save dictionary settings: {error}",
   "panel.replaceFile": "{name} is already there. Replace it?",
-  "panel.presetFailed": "Could not switch the preset: {error}"
+  "panel.presetFailed": "Could not switch the preset: {error}",
+  "articleFind.title": "Find in articles",
+  "articleFind.query": "Word or phrase",
+  "articleFind.mode": "Search mode",
+  "articleFind.exact": "exact",
+  "articleFind.case": "Match case",
+  "articleFind.all": "Highlight all",
+  "articleFind.examples": "Search in hidden examples",
+  "articleFind.hiddenHint": "Try searching hidden examples.",
+  "articleFind.previous": "Find previous",
+  "articleFind.next": "Find next",
+  "articleFind.position": "{current} of {total}",
+  "articleFind.noMatches": "No matches",
+  "articleFind.fromStart": "From the beginning",
+  "articleFind.fromEnd": "From the end",
+  "articleFind.finish": "Finish finding",
+  "articleFind.settings": "Search settings"
 }

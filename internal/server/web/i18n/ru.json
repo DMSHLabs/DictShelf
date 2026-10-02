@@ -859,5 +859,21 @@
   "panel.fileBadge": "ФАЙЛ",
   "panel.dictSaveFailed": "⚠ Не удалось сохранить настройки словарей: {error}",
   "panel.replaceFile": "Файл «{name}» уже существует. Заменить его?",
-  "panel.presetFailed": "Не удалось переключить слой оформления: {error}"
+  "panel.presetFailed": "Не удалось переключить слой оформления: {error}",
+  "articleFind.title": "Поиск в статьях",
+  "articleFind.query": "Слово или фраза",
+  "articleFind.mode": "Режим поиска",
+  "articleFind.exact": "точно",
+  "articleFind.case": "Учитывать регистр",
+  "articleFind.all": "Подсветить все",
+  "articleFind.examples": "Искать в скрытых примерах",
+  "articleFind.hiddenHint": "Попробуйте искать в скрытых примерах.",
+  "articleFind.previous": "Найти предыдущее",
+  "articleFind.next": "Найти следующее",
+  "articleFind.position": "{current} из {total}",
+  "articleFind.noMatches": "Совпадений нет",
+  "articleFind.fromStart": "С начала",
+  "articleFind.fromEnd": "С конца",
+  "articleFind.finish": "Завершить поиск",
+  "articleFind.settings": "Настройки поиска"
 }

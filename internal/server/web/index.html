@@ -251,8 +251,10 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
 <div class="sbar" id="sbar" hidden>
   <span class="rpad edge" aria-hidden="true"></span>
   <button type="button" class="btn" id="sbarPrev" aria-label="{{T:search.previousDict}}" title="{{T:search.jumpAbove}}">▲</button>
-  <span class="rpad" aria-hidden="true"></span>
+  <span class="rpad arrow-gap" aria-hidden="true"></span>
   <button type="button" class="btn" id="sbarNext" aria-label="{{T:search.nextDict}}" title="{{T:search.jumpBelow}}">▼</button>
+  <span class="rpad floor find-gap" aria-hidden="true"></span>
+  <button type="button" class="btn" id="sbarFind" aria-label="{{T:articleFind.title}}" title="{{T:articleFind.title}}"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><circle cx="8" cy="8" r="5.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="m12 12 5 5" stroke="currentColor" stroke-width="1.8"/></svg></button>
   <!-- The dictionary scope, moved here from the search field (2026-09-27, the
        reader's call): it names the place the two arrows walk, so it belongs
        beside them, and the field is left holding only what is about the WORD.
@@ -664,6 +666,27 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
      The list keeps its id and its markup, so every renderer, pointer handler
      and disclosure that already worked on it works here; only the box it sits
      in changed. -->
+<div id="articleFindStrip" lang="{{T:locale}}" role="group" aria-label="{{T:articleFind.title}}" hidden>
+  <button type="button" class="btn" id="articleFindStop" aria-label="{{T:articleFind.finish}}" title="{{T:articleFind.finish}}">✕</button>
+  <button type="button" class="btn" id="articleFindLabel" aria-label="{{T:articleFind.settings}}"></button>
+  <span id="articleFindCount" aria-live="polite"></span>
+  <button type="button" class="btn" id="articleFindPrev" aria-label="{{T:articleFind.previous}}" title="{{T:articleFind.previous}}">↑</button>
+  <button type="button" class="btn" id="articleFindNext" aria-label="{{T:articleFind.next}}" title="{{T:articleFind.next}}">↓</button>
+</div>
+<dialog id="articleFindDialog" lang="{{T:locale}}" class="group-dialog panel-card" aria-labelledby="articleFindTitle">
+  <h2 id="articleFindTitle">{{T:articleFind.title}}<button type="button" class="btn" id="articleFindClose" aria-label="{{T:panel.close}}">✕</button></h2>
+  <label for="articleFindQuery">{{T:articleFind.query}}</label>
+  <input type="text" id="articleFindQuery" autocomplete="off" spellcheck="false">
+  <label class="article-find-mode" for="articleFindMode">{{T:articleFind.mode}}<select id="articleFindMode">
+    <option value="prefix">{{T:search.prefix}}</option><option value="exact">{{T:articleFind.exact}}</option><option value="contains" selected>{{T:dictUI.contains}}</option>
+  </select></label>
+  <label><input type="checkbox" id="articleFindCase">{{T:articleFind.case}}</label>
+  <label><input type="checkbox" id="articleFindAll" checked>{{T:articleFind.all}}</label>
+  <label><input type="checkbox" id="articleFindExamples">{{T:articleFind.examples}}</label>
+  <p id="articleFindHiddenHint" hidden>{{T:articleFind.hiddenHint}}</p>
+  <p id="articleFindStatus" role="status"></p>
+  <div class="article-find-actions"><button type="button" class="btn" id="articleFindDialogPrev">{{T:articleFind.previous}}</button><button type="button" class="btn" id="articleFindDialogNext">{{T:articleFind.next}}</button></div>
+</dialog>
 <dialog id="dictSettings" lang="{{T:locale}}" class="group-dialog panel-card" aria-labelledby="dictSettingsTitle">
   <h2 id="dictSettingsTitle">{{T:dictUI.title}} <button type="button" class="btn" id="closeDictSettings" aria-label="{{T:dictUI.close}}">✕</button></h2>
   <!-- Outside the scroller, so the one action stays reachable however far down
@@ -1464,6 +1487,7 @@ function articleRefresh(){
   if(userSheet)try{userSheet.replaceSync(presetArticleCSS+userArticleCSS)}
   catch(e){console.warn("custom article CSS:",e)}
   pushFrameCSS();
+  window.wudictArticleFind?.refresh();
 }
 function applyArticleCSS(css){
   userArticleCSS=STYLE_OFF?"":String(css||"");
@@ -4473,6 +4497,7 @@ function noIndexRow(el,out,info){
 }
 
 async function doSearch(ev){
+  window.wudictArticleFind?.stop();
   if(ev)ev.preventDefault();
   const q=$("q").value.trim();
   if(!q)return;
@@ -5568,6 +5593,7 @@ window.addEventListener("popstate",()=>{
   const q=p.get("q")||"";
   $("q").value=q;
   if(!q){ // back to the empty start: leave nothing stale on screen
+    window.wudictArticleFind?.stop();
     if(searchAC)searchAC.abort();
     $("out").innerHTML="";
     lastQuery="";
@@ -5623,6 +5649,7 @@ $("q").addEventListener("blur",()=>setTimeout(()=>{
   }else{
     if(searchAC)searchAC.abort();
     searchSeq++;
+    window.wudictArticleFind?.stop();
     lastQuery="";
     lastScope=null; // the answer is gone, and its scope goes with it
     syncChips();    // the chip was naming that scope (scopeLabel)
@@ -7375,5 +7402,6 @@ $("styler").addEventListener("keydown",e=>{
      article lines that hold nothing but examples, and the layer that folds
      them away (presets/examples/) is what does the hiding. See examples.js. -->
 <script src="/assets/examples.js?v={{EXAMPLESJS}}"></script>
+<script src="/assets/article-find.js?v={{ARTICLEFINDJS}}"></script>
 </body>
 </html>
