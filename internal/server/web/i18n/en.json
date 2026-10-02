@@ -1,4 +1,7 @@
 {
+  "errors.dslDefaults": "invalid DSL defaults",
+  "errors.dslIndexRequired": "select at least one DSL index: Original or GD compatible",
+  "errors.dslFeaturesRequireIndex": "DSL contains and full-text require index",
   "errors.collectionMissing": "no such dictionary in this collection",
   "errors.indexRemoved": "dictionary index was removed; create an index in Dictionary settings",
   "errors.collectionFileMissing": "no such file",

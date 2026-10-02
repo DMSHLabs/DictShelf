@@ -47,6 +47,9 @@
   // Unknown errors and English responses remain literal. New API families
   // should use stable error codes instead of expanding text matching.
   const errorKeys = [
+    "errors.dslDefaults",
+    "errors.dslIndexRequired",
+    "errors.dslFeaturesRequireIndex",
     "errors.sharePage",
     "errors.noLinks",
     "errors.siteSilent",
@@ -137,7 +140,10 @@
   function errorText(value) {
     const original = String(value ?? "");
     if (language === "en") return original;
-    const text = original.trim();
+    let text = original.trim();
+    // Some callers read JSON API failures as text. Unwrap only for matching;
+    // unknown responses and English mode still retain the original payload.
+    try { const body = JSON.parse(text); if (typeof body?.error === "string") text = body.error.trim(); } catch (_) {}
     for (const key of errorKeys) if (text === boot.fallback[key]) return t(key);
     for (const key of errorPrefixes) {
       const source = boot.fallback[key];

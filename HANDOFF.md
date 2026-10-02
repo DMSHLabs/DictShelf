@@ -1,5 +1,7 @@
 # Agent handoff — current state
 
+2026-10-02 localization follow-up: `dev` at `10eaec5`, clean at start. Completed Russian DSL validation, three defaults API errors, collection hint and bulk count wording; known JSON-wrapped errors translate without dropping unknown response diagnostics. Targeted Go/Node/diff checks pass; no APK/device check. Changes uncommitted; details in translation_todo.md.
+
 2026-10-02 first setup only: while the initial empty library is being configured in Edit Folders, selected Original/GD index defaults also set the global parser (one variant or Both). First dictionary discovery ends this persisted setup phase; subsequent defaults edits and launches never overwrite parser choice or clear checkboxes.
 
 2026-10-02 bulk index sections simplified to three actions each (index/contains/full-text). Candidates follow the header's DSL parser: Original/GD restrict DSL variants, Both includes both; non-DSL sources still included. Existing confirmations, status and Stop remain.
