@@ -5,6 +5,88 @@ Notable changes in **wuDict2**, the Android fork of
 version it was forked from. Fork release tags are prefixed `wudict2-`; one
 tagged line per release, newest first.
 
+## wudict2-v0.7.0 — 2026-10-03
+
+From `dev`. A release about keeping the data in step with the dictionaries —
+plus a second DSL reader, and a way to search what is already on the screen.
+
+### Rescan folders now clears what it no longer finds
+
+- **Prepared data for dictionaries that are no longer in the folders is deleted
+  when you rescan.** This is deliberate: change the dictionary set and the
+  app's data footprint follows it down instead of growing forever, and a
+  rebuild is quick and happens once. Your own files are never touched — the
+  dictionary, its audio and its images all survive; what goes is the prepared
+  and packed data derived from them.
+- **The same dialog maintains the indexes you keep.** Per dictionary you choose
+  Recreate (create again, including anything missing), Update (rebuild the
+  indexes it already has) or Delete; Keep preserves a removal across a restart,
+  and new dictionaries get the indexes the Edit Folders defaults ask for.
+  Unused indexes, duplicates and old packed media are removed either way.
+
+### Find in articles
+
+- **A magnifier on the status bar searches the articles already on screen.** It
+  walks what is loaded in reading order — collapsed dictionary sections
+  included — and the bottom strip's ↑ and ↓ step through the matches and
+  **loop**, saying "from the beginning" or "from the end" when they wrap.
+- Word-prefix, whole-word and contains matching, match case, highlight-all, and
+  a switch that lets the search look inside folded examples — only the current
+  match is unfolded, and it is folded back when find ends. The query and the
+  options persist, and dictionary markup, links and selections are left intact.
+
+### DSL: a second reader, and its fonts
+
+- **A DSL reader compatible with GoldenDict's**, alongside the original one.
+  It is a Go tree parser inspired by GoldenDict's `ArticleDom` — not a literal
+  port of every feature — carrying the formatting repairs GoldenDict Enhancer
+  2.3 is known for: crossed and unclosed tags, inline formatting inside margin
+  blocks, nested link labels, `~` in alternate headings, nested optional parts
+  (32-key ceiling) and the legacy Lingvo transcription table in `[t]`. Part of
+  the Enhancer's visual design came with it. How close its output is to
+  GoldenDict's own is checked against GoldenDict's source by a differential
+  harness, but visual parity is not device-verified.
+- **The two readers index separately**, because they parse DSL — headings
+  included — a little differently. With both enabled a dictionary is listed
+  twice: `NAME` from the original parser and `NAME GD` from the GD-compatible
+  one. Each owns its prepared database and search indexes; the DSL file and its
+  media are shared, and removing one leaves the other alone.
+- **Which reader, per installation**: Original, GD compatible, or Both, and the
+  index defaults for newly added DSL dictionaries are set on the setup page.
+- **The fonts the Enhancer's stylesheet assumes.** Its phonetic face is the
+  official **Quivira.otf**, bundled and used unmodified — the licence of the
+  cut-down "Quivira Phonetic" does not allow changing it. Its four Arial-based
+  faces **cannot ship**: they are built on proprietary fonts whose licence
+  permits neither modification nor redistribution, so the style falls back to
+  the system font. You can supply your own instead: add `wugd_Regular`,
+  `wugd_Bold`, `wugd_Italic` and `wugd_BoldItalic` as `.ttf` or `.otf` under
+  Settings → Custom CSS → Files, and they are used exactly where the Arial
+  family was.
+
+### Exit
+
+- **An Exit row in Settings.** It closes every app window and stops the server,
+  while a reader window hosting an external lookup is left alone. If a transfer
+  or demanded work is still running it asks rather than cutting it off, and
+  offers to exit when the work finishes. Exit ends this run only — a reading
+  app's dictionary button still starts wuDict2 again.
+
+### The Settings drawer
+
+- **Its sections fold independently** and remember which ones you left open.
+- **Language is a section of its own**, its row naming the language in force
+  ("Language — Русский"), and its dialog no longer inherits the mobile sheet's
+  stretching.
+
+### Also in this build: merged from upstream
+
+- **wudict markdown**: a setext heading — a line of text with `---` under it —
+  is content again rather than the start of an entry, only `## ` starts one,
+  and a `## ` swallowed by an HTML block is now reported with the line that ate
+  it instead of silently not becoming an entry.
+- **The share page's "Open in wuDict"** is an `intent://` link, so a messenger's
+  in-app browser hands the link to the app.
+
 ## wudict2-v0.6.0 — 2026-10-02
 
 The full build, from `dev`. Two things in it are new and worth testing: the
