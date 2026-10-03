@@ -55,6 +55,7 @@ narratives, so `git log` is a second copy.
 | Release wudict2-v0.3.0 (2026-09-27, this session) | 2026-09-27 | — (added after the split) |
 | Release wudict2-v0.4.0 (2026-09-27, this session) | 2026-09-27 | — (added after the split) |
 | Release wudict2-v0.5.0 (2026-09-28, this session) | 2026-09-28 | — (added after the split) |
+| Release wudict2-v0.7.1 (2026-10-04, this session) | 2026-10-04 | — (added after the split) |
 | Release wudict2-v0.7.0 (2026-10-03, this session) | 2026-10-03 | — (added after the split) |
 | Release wudict2-v0.6.0 (2026-10-02, this session) | 2026-10-02 | — (added after the split) |
 | Purging the Monotype fonts from history, and replacing the v0.6.0 asset (2026-10-02) | 2026-10-02 | — (added after the split) |
@@ -1744,6 +1745,39 @@ GitHub may serve unreachable objects by SHA for a while. The step that actually
 stops the distribution is replacing the release asset — which is why it was done
 in the same pass. The pre-rewrite repository survives as a mirror clone in
 `D:\tmp\wudict-backup.git`; it holds the fonts and every old SHA.
+
+## Release wudict2-v0.7.1 (2026-10-04, this session)
+
+A fixes-and-polish release from `dev`, cut at the user's request, ten commits past
+v0.7.0 and dominated by the two DSL readers settling in: the group editor and the
+Browse picker now follow the parser in force (`bc52cb5`), examples look the same
+in both readers (`c3acbb9`), the dictionary count stops doubling (`36d36f4`,
+which also makes article prose selectable whatever a dictionary's own CSS says),
+the Rescan dialog reports progress (`287d8d0`), and the third upstream sync
+arrived with the serve-time comment stripper.
+
+Same order as always: the changelog commit (`ad5c748`), `dev` pushed, the
+annotated tag `wudict2-v0.7.1` on it, pushed, then `build-android.cmd release`,
+then the REST create and the asset upload. aapt2: `versionName='wudict2-v0.7.1'`,
+versionCode 494, `locales: '--_--' 'ru'`, arm64 only, 8,848,889 bytes, sha256
+`5c7c36cc06da34b2646233774fe022d4bf09e5127d66d6a80cce5fb67778a99a`, the same
+signer certificate as every release. A normal release, so `latest` moved to it.
+https://github.com/DmShAl/wudict2/releases/tag/wudict2-v0.7.1
+
+**Verified:** `go build ./...` and `go vet ./...` clean, `go test -count=1
+./internal/server ./internal/store ./internal/format/dsl` green — the store and
+dsl packages matter here, since this cycle carried the upstream refactor of the
+store's ingest and reconciliation paths — the packaged `.so` unpacked and checked
+for `matchesDSLParser`, `wu-example-block`, the rescan progress strings,
+`articleSelectionCSS` and `stripComments` (and for **0**
+`Monotype`/`ArialPlus`/`QuiviraPhonetic`), the published asset downloaded back and
+hash-matched, and the body compared byte for byte with the changelog section. No
+device or emulator run; `make i18n-check-js` was not run — still no Node on this
+machine.
+
+Note for the next session: HANDOFF.md sits at 386 of its ~400 lines, and its
+2026-10-04 upstream-sync paragraph alone runs to roughly two thousand words —
+that is a session narrative the archive exists to hold.
 
 ## Release wudict2-v0.7.0 (2026-10-03, this session)
 
