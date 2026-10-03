@@ -6,6 +6,7 @@ package server
 import (
 	"bytes"
 	"encoding/json"
+	"io"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -14,6 +15,54 @@ import (
 
 	"github.com/wuweidict/wudict/internal/store"
 )
+
+func TestRescanStreamsDictionaryAndArticleProgress(t *testing.T) {
+	s := newTestServer(t)
+	preparedDSL(t, s)
+	req := newRequest("POST", "/api/rescan?stream=1", strings.NewReader(`{"new":{"index":true},"existing":{"index":"recreate"}}`))
+	req.RemoteAddr = "127.0.0.1:5555"
+	rec := httptest.NewRecorder()
+	s.ServeHTTP(rec, req)
+	if rec.Code != 200 || rec.Header().Get("Content-Type") != "application/x-ndjson" || !rec.Flushed {
+		t.Fatalf("stream response: %d %v", rec.Code, rec.Header())
+	}
+	decoder := json.NewDecoder(rec.Body)
+	var dictionary, articles, cleanup, completed bool
+	for {
+		var message struct {
+			Type string `json:"t"`
+			rescanIndexProgress
+			Failed []string `json:"failed"`
+		}
+		if err := decoder.Decode(&message); err == io.EOF {
+			break
+		} else if err != nil {
+			t.Fatal(err)
+		}
+		if completed {
+			t.Fatal("event after final result")
+		}
+		switch message.Type {
+		case "progress":
+			if message.Stage == "dictionary" {
+				if message.At < 1 || message.At > message.Total || message.Name == "" {
+					t.Fatalf("invalid progress: %+v", message)
+				}
+				dictionary = true
+				articles = articles || message.Done > 0
+			}
+			cleanup = cleanup || message.Stage == "cleanup"
+		case "done":
+			completed = true
+			if len(message.Failed) != 0 {
+				t.Fatal(message.Failed)
+			}
+		}
+	}
+	if !dictionary || !articles || !cleanup || !completed {
+		t.Fatalf("missing events: dictionary=%v articles=%v cleanup=%v completed=%v", dictionary, articles, cleanup, completed)
+	}
+}
 
 func TestBackgroundPreparationReusesAndDeduplicates(t *testing.T) {
 	for _, rebuild := range []bool{false, true} {

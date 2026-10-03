@@ -2833,12 +2833,23 @@ $("clearDatabaseGo").onclick=async()=>{
   dialog.oncancel=e=>e.preventDefault();
   $("clearDatabaseStatus").textContent=tx("database.working");
   try{
-    const response=await fetch("/api/rescan",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
-    if(!response.ok)throw new Error(await response.text());
-    const report=await response.json();
+    let report;
+    await fetchStream("/api/rescan?stream=1",msg=>{
+      if(msg.t==="done"){report=msg;return}
+      if(msg.t!=="progress")return;
+      let text=tx(msg.stage==="cleanup"?"database.cleaning":"database.working");
+      if(msg.stage==="dictionary"){
+        text=tx("database.progress",{at:msg.at,total:msg.total,name:msg.name});
+        if(msg.done||msg.entries)text+=" · "+tx("dictUI.entries",{number:msg.done.toLocaleString()})+(msg.entries?" / "+msg.entries.toLocaleString():"");
+      }
+      $("clearDatabaseStatus").textContent=text;
+      setStatus(esc(text));
+    },undefined,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+    if(!report)throw new Error(tx("database.incomplete"));
     $("clearDatabaseStatus").textContent=report.failed.length?tx("database.failed",{error:report.failed.map(window.wudictI18n.errorText).join("; ")}):tx("database.done");
     await loadDicts(false);await loadFolders();
-  }catch(e){$("clearDatabaseStatus").textContent=tx("database.failed",{error:window.wudictI18n.errorText(e.message)})}
+    setStatus(esc($("clearDatabaseStatus").textContent));
+  }catch(e){$("clearDatabaseStatus").textContent=tx("database.failed",{error:window.wudictI18n.errorText(e.message)});setStatus(esc($("clearDatabaseStatus").textContent))}
   finally{
     for(const box of dialog.querySelectorAll("input"))box.disabled=box.name==="index";
     paintRescanActions();
@@ -4200,8 +4211,8 @@ function setBusy(on){
 /* read a newline-delimited JSON response, invoking onMsg per record as it
    arrives — this is what lets each dictionary render the instant it is
    ready instead of waiting for the whole fan-out (progressive results). */
-async function fetchStream(url,onMsg,signal){
-  const resp=await fetch(url,signal?{signal}:undefined);
+async function fetchStream(url,onMsg,signal,options){
+  const resp=await fetch(url,{...options,...(signal?{signal}:{})});
   if(!resp.ok){let e;try{e=(await resp.json()).error}catch(_){}throw new Error(window.wudictI18n.errorText(e)||resp.statusText)}
   const reader=resp.body.getReader(),dec=new TextDecoder();let buf="";
   for(;;){

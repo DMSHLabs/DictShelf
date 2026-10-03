@@ -1,5 +1,7 @@
 # Localization: status and next tasks
 
+2026-10-03 Rescan progress: EN/RU dictionary position/name, cleanup and interrupted-connection messages added. Reuses localized article counters. Server catalogs and Node localization/syntax checks pass; phone verification pending.
+
 2026-10-03 Russian Rescan: explicit dialog language and consistently stacked equal-width actions fix mixed wrapping of longer Russian labels. Existing wording retained; EN layout unchanged. Chromium 320/360/390/1100px at 100/130% and targeted server checks pass; phone verification pending.
 
 2026-10-03 Dictionary settings layout: For all dictionaries / Для всех словарей heading added; table reuses existing Create/Delete and index labels. Node i18n, targeted catalogs and EN/RU Chromium 320/390/1100px layout probes pass; phone/text-scaling check pending.

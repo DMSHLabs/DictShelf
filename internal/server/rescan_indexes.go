@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"maps"
 	"net/http"
+	"time"
 
 	"github.com/wuweidict/wudict/internal/dict"
 	"github.com/wuweidict/wudict/internal/store"
@@ -22,6 +23,15 @@ type rescanIndexActions struct {
 type rescanIndexesRequest struct {
 	New      *dslIndexOptions   `json:"new,omitempty"`
 	Existing rescanIndexActions `json:"existing"`
+}
+
+type rescanIndexProgress struct {
+	Stage   string `json:"stage"`
+	At      int    `json:"at"`
+	Total   int    `json:"total"`
+	Name    string `json:"name"`
+	Done    int    `json:"done"`
+	Entries int    `json:"entries"`
 }
 
 func validRescanAction(action string, base bool) bool {
@@ -42,6 +52,29 @@ func (s *Server) handleRescanIndexes(w http.ResponseWriter, req *http.Request) {
 		httpErr(w, 400, "invalid index actions")
 		return
 	}
+	if req.URL.Query().Get("stream") == "1" {
+		flusher, ok := w.(http.Flusher)
+		if !ok {
+			httpErr(w, 500, "streaming unavailable")
+			return
+		}
+		w.Header().Set("Content-Type", "application/x-ndjson")
+		w.Header().Set("Cache-Control", "no-cache")
+		encoder := json.NewEncoder(w)
+		emit := func(message any) {
+			// Losing the connection must not interrupt index maintenance.
+			_ = encoder.Encode(message)
+			flusher.Flush()
+		}
+		failures := s.reg.updateDictionaryIndexesProgress(body, func(progress rescanIndexProgress) {
+			emit(struct {
+				Type string `json:"t"`
+				rescanIndexProgress
+			}{"progress", progress})
+		})
+		emit(map[string]any{"t": "done", "failed": failures})
+		return
+	}
 	failures := s.reg.updateDictionaryIndexes(body)
 	writeJSON(w, map[string]any{"failed": failures})
 }
@@ -49,6 +82,16 @@ func (s *Server) handleRescanIndexes(w http.ResponseWriter, req *http.Request) {
 // The automatic DSL worker must finish before taking the snapshot. Rescans
 // during this operation discover only; no background default can undo choices.
 func (r *Registry) updateDictionaryIndexes(req rescanIndexesRequest) []string {
+	return r.updateDictionaryIndexesProgress(req, nil)
+}
+
+func (r *Registry) updateDictionaryIndexesProgress(req rescanIndexesRequest, progress func(rescanIndexProgress)) []string {
+	report := func(p rescanIndexProgress) {
+		if progress != nil {
+			progress(p)
+		}
+	}
+	report(rescanIndexProgress{Stage: "scanning"})
 	r.dslAutoMu.Lock()
 	defer r.dslAutoMu.Unlock()
 	defer HoldActiveProcs()()
@@ -142,8 +185,18 @@ func (r *Registry) updateDictionaryIndexes(req rescanIndexesRequest) []string {
 	if err != nil {
 		return []string{err.Error()}
 	}
-	for _, t := range targets {
+	for i, t := range targets {
 		e := t.e
+		state := rescanIndexProgress{Stage: "dictionary", At: i + 1, Total: len(targets), Name: e.probeName()}
+		report(state)
+		last := time.Time{}
+		articleProgress := func(done, total int) {
+			state.Done, state.Entries = done, total
+			if time.Since(last) >= 200*time.Millisecond || done == total {
+				report(state)
+				last = time.Now()
+			}
+		}
 		if t.fresh && !t.options.Index {
 			if err := e.setIndexRemoved(true); err != nil {
 				failures = append(failures, err.Error())
@@ -164,7 +217,7 @@ func (r *Registry) updateDictionaryIndexes(req rescanIndexesRequest) []string {
 			}
 			continue
 		}
-		want := clearDatabaseRequest{}
+		want := clearDatabaseRequest{progress: articleProgress}
 		if t.fresh {
 			plan := store.Plan{Contains: t.options.Contains, FullText: t.options.FullText}
 			want.Index, want.plan = true, &plan
@@ -199,6 +252,7 @@ func (r *Registry) updateDictionaryIndexes(req rescanIndexesRequest) []string {
 			failures = append(failures, err.Error())
 		}
 	}
+	report(rescanIndexProgress{Stage: "cleanup", At: len(targets), Total: len(targets)})
 	if err := r.cleanupLibrary(); err != nil {
 		failures = append(failures, err.Error())
 	}

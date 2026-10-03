@@ -20,6 +20,7 @@ type clearDatabaseRequest struct {
 	FullText bool `json:"fullText"`
 	Obsolete bool `json:"obsolete"`
 	plan     *store.Plan
+	progress store.Progress
 }
 
 // cleanupLibrary retains only prepared folders belonging to discovered sources.
@@ -209,7 +210,7 @@ func (e *entry) clearDatabase(want clearDatabaseRequest) error {
 	}
 	if want.Index || (want.Obsolete && len(store.TextStale(text, e.Path)) > 0) {
 		// Rebuild atomically: a failed rebuild preserves the existing searchable data.
-		if err := e.rebuild(e.probeName(), text, plan, nil); err != nil {
+		if err := e.rebuild(e.probeName(), text, plan, want.progress); err != nil {
 			return err
 		}
 		if err := e.setIndexRemoved(false); err != nil {
