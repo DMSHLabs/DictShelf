@@ -13,12 +13,10 @@ import (
 	"github.com/wuweidict/wudict/internal/dict"
 )
 
-// Removing a prepared dictionary (D63). Until now the library could only grow
-// from inside the app: `clean` deletes orphans, the panel's switches drop an
-// index or a media.db, and everything else was left to the file manager. That
-// delegation has no counterparty on Android, where the library lives in
-// app-private external storage that no file manager may open - so the app is
-// the only process on the device that can free those bytes.
+// Removing a prepared dictionary (D63). The file manager is no answer on
+// Android, where the library lives in app-private external storage that no
+// file manager may open - so the app is the only process on the device that
+// can free those bytes.
 //
 // This is the whole file-deleting surface of that feature, kept in one place
 // and behind one guard: **the folder's parent must be the library root**.

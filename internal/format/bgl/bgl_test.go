@@ -88,7 +88,7 @@ func writeBGL(t *testing.T, dir string) string {
 	stream = append(stream, info3(0x07, []byte{0, 0, 0, 0})...) // sourceLang English
 	stream = append(stream, info3(0x08, []byte{0, 0, 0, 0})...) // targetLang English
 	// The header's own entry count, which every real file carries and which
-	// arrives before the entries. Counting it AND the entries doubled
+	// arrives before the entries. Counting it AND the entries would double
 	// EntryCount, so the fixture states it deliberately.
 	stream = append(stream, info3(0x0C, []byte{0, 0, 0, 2})...)
 	stream = append(stream, block(0, []byte{8, 0x42})...) // default charset cp1252

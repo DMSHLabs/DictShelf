@@ -19,12 +19,11 @@ import (
 
 // Orphaned prepared dictionaries (D156).
 //
-// D17 made a prepared folder whose source vanished untouchable, and D20 kept
-// it out of `clean`, on the theory that the folder is then the user's only
-// copy. For most users it is not a copy they want: they keep their original
-// dictionaries (other apps read those too), treat the library as a cache, and
-// a folder they deleted by hand left gigabytes behind that nothing offered to
-// remove. So an orphan is now simply this: a healthy prepared folder whose
+// A prepared folder whose source has vanished is, for most users, not a copy
+// they want: they keep their original dictionaries (other apps read those
+// too), treat the library as a cache, and a folder they deleted by hand would
+// leave gigabytes behind that nothing offers to remove. So an orphan is simply
+// this: a healthy prepared folder whose
 // recorded source is not on disk. No guessing about why - an unplugged drive
 // and a deleted folder look the same, and the user, not the app, decides.
 //

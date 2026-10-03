@@ -57,8 +57,8 @@ func idOf(t *testing.T, s *Server, base string) string {
 }
 
 // The desktop is where the user owns the files, so removal is offered there
-// too (D63 amended) - the presence of a file manager is no longer the test,
-// and Reveal is still offered beside it.
+// too (D63 amended) - the presence of a file manager is not the test, and
+// Reveal is offered beside it.
 func TestRemovalOfferedOnADesktop(t *testing.T) {
 	s := newTestServer(t)
 	restore := revealPossible
@@ -216,8 +216,8 @@ func TestRemoveEverything(t *testing.T) {
 // An import gives each dictionary a folder of its own. Removing the dictionary
 // therefore has to remove the folder too: an empty folder with a dictionary's
 // name is not inert, because intake reads a folder of that name as a name
-// already taken and used to announce the next import of the same bundle as an
-// UPDATE of something the user had just removed (D137).
+// already taken and would announce the next import of the same bundle as an
+// UPDATE of something the user has just removed (D137).
 func TestRemoveTakesTheEmptiedFolderWithIt(t *testing.T) {
 	s := newTestServer(t)
 	root := s.reg.Dirs()[0]

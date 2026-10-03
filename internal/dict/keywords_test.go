@@ -10,7 +10,7 @@ import (
 )
 
 // KeywordRange is the one place the (offset, n) contract is decided, so the
-// readings that used to differ between backends are pinned here: a negative n
+// readings every backend must share are pinned here: a negative n
 // means "everything" rather than a panic, and a huge n cannot overflow into a
 // negative slice bound.
 func TestKeywordRange(t *testing.T) {

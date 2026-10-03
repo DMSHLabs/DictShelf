@@ -182,7 +182,7 @@ func TestAboutNeverOpens(t *testing.T) {
 	if opened {
 		t.Error("/api/about opened the dictionary")
 	}
-	if _, prepared := preparedTextDB(e.Path); prepared {
+	if _, prepared := validPrepared(e.Path); prepared {
 		t.Error("/api/about ingested the dictionary")
 	}
 	// and it still answers: the sidecar is resolved from the source PATH, which

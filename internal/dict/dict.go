@@ -9,6 +9,7 @@
 package dict
 
 import (
+	"context"
 	"errors"
 	"html"
 	"io"
@@ -18,7 +19,7 @@ var (
 	// ErrNotFound is returned for a missing headword or resource.
 	ErrNotFound = errors.New("not found")
 	// ErrUnsupported is returned when a backend lacks a capability
-	// (e.g. fuzzy search on a direct backend).
+	// (e.g. contains search on a direct backend).
 	ErrUnsupported = errors.New("operation not supported by this backend")
 )
 
@@ -27,8 +28,8 @@ var (
 type Caps struct {
 	Exact    bool
 	Prefix   bool // starts-with (accent-insensitive on ingested backends)
-	Contains bool // substring/typo-tolerant headword match (FTS5 trigram) - ingested backend only
-	FTS      bool // FTS5 over headwords + article text - ingested backend only
+	Contains bool // substring/typo-tolerant headword match (FTS5 trigram) - Searcher only
+	FTS      bool // FTS5 over headwords + article text - Searcher only
 }
 
 // Meta describes one opened dictionary.
@@ -120,10 +121,8 @@ type Dictionary interface {
 	//	offset < 0 treated as 0
 	//	offset past the last headword: nil, never an error
 	//
-	// The three of those used to be unstated, and the implementations had
-	// drifted into disagreeing about all of them - two panicked on a negative
-	// n, a third silently capped every answer at 500. Use KeywordRange to
-	// resolve the window so a fourth backend cannot invent a fourth reading.
+	// Use KeywordRange to resolve the window, so every backend reads these
+	// three the same way.
 	Keywords(offset, n int) []string
 
 	// Resource streams a binary resource (image/audio/css) by its
@@ -140,32 +139,31 @@ type ResourceLister interface {
 	Resources() []string
 }
 
-// ContainsSearcher is implemented by backends with Caps.Contains: a
-// substring match over headwords (FTS5 trigram), accent/case-insensitive.
-type ContainsSearcher interface {
-	Contains(word string, limit int) ([]Result, error)
-}
-
-// FullTextSearcher is implemented by backends with Caps.FTS.
-type FullTextSearcher interface {
-	FullText(query string, limit int) ([]Result, error)
-}
-
-// FullTextPlanner is implemented by backends that can run a MATCH expression
-// the caller composed - the prepared SQLite store, and nothing else.
+// Searcher is the search surface of a prepared database - the only backend
+// that has one. Every query takes a context, and a cancelled context
+// interrupts it inside SQLite: the web UI abandons a search on every
+// keystroke, and an abandoned query that runs to completion is CPU spent on
+// output nobody reads. A direct-format backend has nothing to interrupt, so
+// it answers only Dictionary's Exact and Prefix.
 //
-// It exists because a full-text query has more than one reading. `Физика в
-// конспектах` is first a phrase, then a proximity, then a bag of words
-// (internal/ftsq), and only the caller knows which readings to try and in what
-// order; the backend's job is to run the one it is handed. A direct-format
-// backend has no query language to hand anything to, so it keeps answering
-// through FullText and its single reading.
-//
-// match is an FTS5 expression, and it is composed by internal/ftsq - never
-// assembled from user text anywhere else. Raw input reaching MATCH is how a
-// quote in a search box becomes a syntax error (FTS-audit #2).
-type FullTextPlanner interface {
-	FullTextMatch(match string, limit int) ([]Result, error)
+// ContainsContext needs Caps.Contains (the trigram index); FullTextContext
+// and FullTextMatch need Caps.FTS. Without them they return ErrUnsupported.
+type Searcher interface {
+	ExactContext(ctx context.Context, word string, limit int) ([]Result, error)
+	PrefixContext(ctx context.Context, word string, limit int) ([]Result, error)
+	// ContainsContext is a substring match over headwords (FTS5 trigram),
+	// accent/case-insensitive.
+	ContainsContext(ctx context.Context, word string, limit int) ([]Result, error)
+	// FullTextContext reads query as one bag of prefix words: the fallback
+	// when no composed reading could run.
+	FullTextContext(ctx context.Context, query string, limit int) ([]Result, error)
+	// FullTextMatch runs one reading of a full-text query. A query has more
+	// than one - `Физика в конспектах` is first a phrase, then a proximity,
+	// then a bag of words - and only the caller knows which to try in what
+	// order. match is an FTS5 expression composed by internal/ftsq, never
+	// assembled from user text anywhere else: raw input reaching MATCH is how
+	// a quote in a search box becomes a syntax error (FTS-audit #2).
+	FullTextMatch(ctx context.Context, match string, limit int) ([]Result, error)
 }
 
 // Letter is one chip of the browse strip: a run of headwords sharing an

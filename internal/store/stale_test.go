@@ -186,8 +186,8 @@ func TestPreparedForRejectsUnusable(t *testing.T) {
 		t.Errorf("KeptPlan of an unreadable db = %+v, want the default", got)
 	}
 	// the folder is still this source's: a rebuild lands in it
-	if tgt, err := PrepareTarget(src); err != nil || tgt != TextDBPath(dir) {
-		t.Errorf("PrepareTarget = %q, %v; want %q", tgt, err, TextDBPath(dir))
+	if got, err := ClaimDir(src); err != nil || got != dir {
+		t.Errorf("ClaimDir = %q, %v; want %q", got, err, dir)
 	}
 }
 
@@ -291,7 +291,7 @@ func TestTextStaleIgnoresMedia(t *testing.T) {
 	if got := Stale(textDB, src); !reflect.DeepEqual(got, []Reason{ReasonMedia}) {
 		t.Fatalf("Stale = %v, want [media]", got)
 	}
-	if got := TextStale(textDB, src); len(got) != 0 {
+	if got := Inspect(textDB).TextStale(src); len(got) != 0 {
 		t.Errorf("TextStale = %v, want none", got)
 	}
 }

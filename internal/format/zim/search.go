@@ -15,8 +15,8 @@ import (
 // on "binary-search / collation work" in a direct backend does not apply: that
 // rule exists to stop a backend GUESSING a collation and returning silently
 // wrong results. Byte order is not a guess - it is exact, it is what the file
-// was written with, and it was verified against every entry of a real
-// wiktionary before this was written.
+// is written with, and it is verified against every entry of a real
+// wiktionary.
 
 // lowerBound returns the first entry index whose key is >= key, or entryCount
 // when none is. ~21 preads on a 1.5M-entry file, no resident index.

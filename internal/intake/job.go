@@ -248,8 +248,8 @@ func (m *Manager) BeginURL(dest, raw string, f Fetcher) (Job, error) {
 		return Job{}, ErrNoDestination
 	}
 	// What was pasted may be one link, a share link wrapping one, or several
-	// links in a list or a sentence. One link is today's path exactly as
-	// pasted; several are a collection with nothing to fetch first.
+	// links in a list or a sentence. One link is fetched as pasted; several
+	// are a collection with nothing to fetch first.
 	raw = strings.TrimSpace(raw)
 	if IsSharePage(raw) {
 		return Job{}, ErrSharePage
@@ -741,8 +741,8 @@ func (m *Manager) extractAll(ctx context.Context, j *jobState, src Source, stage
 	a, err := openArchive(src.Path)
 	// The reader holds the SOURCE file open, and the tail below removes it:
 	// Windows refuses to remove an open file, so "delete the source
-	// afterwards" would silently keep it (POSIX unlinks open files, which is
-	// why only Windows ever showed this). closeArchive therefore runs
+	// afterwards" would silently keep it (POSIX unlinks open files; Windows
+	// does not). closeArchive therefore runs
 	// explicitly before the removals; the defer is only the backstop for a
 	// panic out of Extract, and closing twice is a no-op.
 	closeArchive := func() {}
@@ -1185,7 +1185,7 @@ func moveFile(src, dst string) error {
 
 // keepMedia moves the media of the dictionary being replaced (old) into its
 // replacement (sub) when the replacement arrived with none of its own. A user
-// who unticked a gigabyte of .mdd on a row that replaces their copy was saving
+// who unticks a gigabyte of .mdd on a row that replaces their copy is saving
 // the download, not asking for the copy they already have to be deleted - and
 // the swap in placeDict deletes whatever the new folder does not carry.
 //

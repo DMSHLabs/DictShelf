@@ -127,10 +127,9 @@ func (d *Dict) ensureFold() {
 // Prefix returns up to limit headwords starting with word, the exact matches
 // first (raw pass first, folded passes only when the raw pass is empty).
 //
-// An exact hit does not end the search. It did until a headword typed in full
-// was reported as hiding its own siblings - "starts with" answered a complete
-// headword with that one article and dropped every longer key under it - so it
-// now only takes precedence, not the whole answer. It is seeded from the
+// An exact hit does not end the search: "starts with" must not answer a
+// complete headword with that one article and drop every longer key under it,
+// so the exact hit takes precedence, not the whole answer. It is seeded from the
 // headword index rather than left to the scan because the scan walks the file
 // in storage order and stops at limit: under a prefix with more than `limit`
 // entries behind it, the word actually typed could be the one cut.
@@ -244,10 +243,10 @@ func (d *Dict) Keywords(offset, n int) []string {
 // ordinary refs with non-article content types).
 func (d *Dict) Resource(name string) (io.ReadCloser, string, error) {
 	// ensureExact/ensureFold, not a bare map read. Both indexes are built
-	// lazily on first use, and this read used to assume some earlier lookup
-	// had already triggered that - so on a Dict opened only to serve files it
-	// consulted two nil maps and reported every resource missing. That is the
-	// normal case for a PREPARED dictionary: searches are answered from
+	// lazily on first use, and a Dict opened only to serve files has had no
+	// earlier lookup to build them - a bare read would consult two nil maps and
+	// report every resource missing. That is the normal case for a PREPARED
+	// dictionary: searches are answered from
 	// text.db, and the slob is reopened solely as the resource fallback
 	// (registry.go's upgraded.src), where no lookup ever runs.
 	d.ensureExact()

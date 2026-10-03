@@ -403,7 +403,10 @@ function syncAct(total,checked,bad){
   $("save").textContent=checked>1?tx("pages.useFolders"):tx("pages.useFolder");
 }
 
-/* Save the selected source folders. */
+/* One act for both sources. Folders and the library are not alternatives —
+   they are two dimensions of one library — so the page commits once: a second
+   button would post without the paths, silently discarding whatever folders
+   had been typed above it. */
 async function save(){
   if(!await saveDSLDefaults())return;
   const q=paths().map(p=>"path="+encodeURIComponent(p)).join("&");

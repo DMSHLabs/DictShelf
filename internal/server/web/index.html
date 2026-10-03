@@ -154,13 +154,13 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
 <!-- The search controls start disabled and are released by setPhase() as soon
      as one dictionary is usable. Disabling in the markup (not from script)
      closes the window between first paint and the script running, which is
-     exactly when an eager "type and hit Enter" used to reach the search path
+     exactly when an eager "type and hit Enter" would reach the search path
      with an empty dictionary list. -->
 <form id="frm" class="col" role="search" aria-busy="true">
 <span class="brand">wu<small>Dict</small></span>
 <!-- The search pill. Above 600px it is display:contents, so the field and the
-     two selects are direct flex children of the form exactly as they always
-     were and the desktop bar is unchanged. Below it the pill becomes the row:
+     two selects are direct flex children of the form. Below it the pill
+     becomes the row:
      one border around field AND scope, so the field reads as large because it
      IS the row. Each chip carries the rendering; the <select> behind it stays
      real and keeps the native picker, the keyboard and the accessible name. -->
@@ -1495,8 +1495,7 @@ function applyArticleCSS(css){
   // replaceSync drops what it cannot parse rather than throwing, and @import
   // is part of what it drops: the rule is discarded with a console warning
   // from the engine, the rest of the sheet still applies, and nothing is
-  // raised here. (Measured, not assumed - an earlier comment here claimed it
-  // threw.) So an @import written in the Article box takes effect in iframe
+  // raised here (measured). So an @import written in the Article box takes effect in iframe
   // articles, which are real documents, and not in shadow-root ones; the
   // same is true of @font-face, which a constructed sheet ignores outright
   // while one declared in the App box reaches shadow content. The catch is
@@ -1729,8 +1728,8 @@ $("out").addEventListener("click",e=>{if(e.target.id==="retryBtn")loadDicts()});
 
    OPEN needs help only when the section sits so low that its content unfolds
    entirely below the fold: you asked to see something and saw nothing.
-   CLOSE needs help not to vanish, and that need is new — D37's sticky header
-   means a section can be collapsed from 3000px inside it, after which the
+   CLOSE needs help not to vanish — D37's sticky header means a section can
+   be collapsed from 3000px inside it, after which the
    document shrinks, the browser clamps the scroll position, and you land
    somewhere arbitrary. Returning to the row you just closed is not taking
    control away, it is honouring the place you were still standing in.
@@ -2252,10 +2251,9 @@ $("dict").onchange=e=>{const v=e.target.value;localStorage.setItem("wudict_dict"
   // — the single most expensive thing this app can be made to do — triggered
   // by one tap on a menu, before the user has typed anything at all.
   else if(v&&v!=="all"&&!v.startsWith("g:"))fetch("/api/demand?dict="+encodeURIComponent(v),{method:"POST"}).catch(()=>{})};
-/* Mode had no change handler at all: it took effect on the next submit. That
-   was survivable while a 🔍 button sat next to it, but the narrow bar has no
-   submit button, so picking a mode would have appeared to do nothing at all.
-   Made symmetric with #dict — re-run if there is something to re-run. */
+/* Mode re-runs the search on change, symmetric with #dict: the narrow bar has
+   no submit button, so a mode that waited for the next submit would appear to
+   do nothing at all. */
 $("mode").onchange=()=>{syncChips();if($("q").value.trim())doSearch()};
 syncChips(); // the markup ships empty chips; JS stays the single authority
 
@@ -2304,12 +2302,9 @@ function traits(d){
 
 function provenance(d){
   /* A row is a PATH with optional annotations around it — not a sentence.
-     They used to be one string ("db: /Users/…/Name (text.db + media.db +
-     info.txt)") that the click handler unpicked again with two regexes, and
-     the regexes did not cover what the builders actually produced: copying
-     that row put the prefix's siblings and the parenthesised file list on the
-     clipboard along with the path. The row now carries the path itself in
-     data-full, so copying reads a value instead of reconstructing one. */
+     The row carries the path itself in data-full, so copying reads a value
+     instead of reconstructing one from the text on screen, which would put
+     the annotations on the clipboard along with the path. */
   const label=(p,o)=>{
     o=o||{};
     return `<div class="prow${o.cls?" "+o.cls:""}">`+
@@ -2318,9 +2313,8 @@ function provenance(d){
       (o.post?` <span class="pfx">${esc(o.post)}</span>`:"")+
       `</div>`;
   };
-  /* A row that names no path at all. It used to be built by label(), so it
-     wore "Click to copy" and the .path affordance over a sentence — clicking
-     it put a fragment of that sentence on the clipboard. */
+  /* A row that names no path at all, so it carries no "Click to copy" and no
+     .path affordance: there is nothing to copy. */
   const note=t=>`<div class="prow">${esc(t)}</div>`;
   const base=p=>String(p).split(/[\\/]/).pop()||String(p); // also handles Windows paths
   let head,rows=[],full="";
@@ -2543,8 +2537,8 @@ function renderPanel(){
     const indexed=(d.dbSize||0)>0;
     /* What it would cost, on the ABSENT state only. A 2.9 M-entry dictionary
        is a gigabyte of disk and minutes of a phone's battery, and the chip
-       that starts that used to say nothing about either; O9 is the decision
-       that the size be shown before it is spent, not after.
+       that starts that says so first; O9 is the decision that the size be
+       shown before it is spent, not after.
 
        The estimate is calibrated on the user's own corpus, exactly as
        ftsAddedBytes is, and for the same reason: bytes-per-entry runs from 107
@@ -3250,10 +3244,10 @@ window.addEventListener("pageshow",e=>{
 /* Folders & configuration ------------------------------------------------ */
 let cfgInfo=null;
 
-/* Every path in this panel opened with the same /Users/<name>/ — eleven
+/* Every path in this panel would open with the same /Users/<name>/ — eleven
    characters of nothing, repeated on each row, holding the pixels the eye
    lands on first while the part that tells the rows APART (mdict, aard,
-   slob_Apple) was pushed right.
+   slob_Apple) is pushed right.
    The server sends {prefix,label} pairs (longest first) and this applies them
    without knowing what they mean: on a desktop that is the home directory as
    `~`, on Android the volume names the Files app uses. A label the page
@@ -3280,12 +3274,11 @@ function shortPath(p){
 function pathHTML(p){
   return esc(shortPath(p)).replace(/([^\\/])([\\/])/g,"$1$2<wbr>");
 }
-/* Split out of loadFolders because the dictionary cards need the aliases too,
-   and they are drawn long before anyone opens the Folders section. Fetching it
-   only on open meant every card showed a full path until something happened to
-   re-render it — the short form would appear at an arbitrary later moment,
-   which is worse than never having it. Errors are swallowed: no aliases means
-   full paths, which is a correct fallback, not a failure. */
+/* Separate from loadFolders because the dictionary cards need the aliases
+   too, and they are drawn long before anyone opens the Folders section; a
+   short form appearing at an arbitrary later moment is worse than never
+   having it. Errors are swallowed: no aliases means full paths, which is a
+   correct fallback, not a failure. */
 async function loadConfig(){
   try{ cfgInfo=await (await fetch("/api/config")).json() }catch(e){}
   return cfgInfo;
@@ -3355,17 +3348,13 @@ $("folderBody").addEventListener("click",e=>{
   navigator.clipboard?.writeText(p.dataset.full||p.textContent);
   p.style.color="var(--accent)";setTimeout(()=>{p.style.color=""},900);
 });
-/* Bulk full-text (D31). This used to be "⚡ index all", a prominent button in
-   the panel header — which was wrong twice over. It named our mechanism, not
-   the user's outcome, and it was a lie: every dictionary is *already* indexed
-   by headword on first open, so "index all" read as the button that repairs a
-   half-configured app. And the top-right of a sticky header is where a user
-   clicks to explore, while this is the one action that spends gigabytes of
-   disk and a long single-file CPU pass. Prominence must track value, not cost.
-   It now lives in the configuration drawer as quiet text, names what the user
-   gets, and prices itself before it can fire. The good discovery path is
-   elsewhere and already exists: a full-text search that meets a dictionary
-   lacking the index offers to add just that one, in context and motivated. */
+/* Bulk full-text (D31). It names what the user gets, not our mechanism -
+   every dictionary is already indexed by headword on first open - and it
+   spends gigabytes of disk and a long single-file CPU pass, so it lives in the
+   configuration drawer as quiet text and prices itself before it can fire:
+   prominence tracks value, not cost. The good discovery path is elsewhere: a
+   full-text search that meets a dictionary lacking the index offers to add
+   just that one, in context and motivated. */
 function ftsCandidates(){
   // a dictionary whose source file is gone cannot be re-indexed at all — the
   // prepared data is the only copy (same rule the per-card chips enforce, and
@@ -3627,7 +3616,7 @@ $("panelList").addEventListener("click",e=>{
   }
   const path=e.target.closest(".path");
   // The absolute path the row was built from — not the ~-shortened text on
-  // screen, and no longer a display string with its annotations cut back off.
+  // screen, and not a display string with its annotations cut back off.
   if(path){navigator.clipboard?.writeText(path.dataset.full||path.textContent);path.style.color="var(--accent)";return}
   const feat=e.target.closest(".feat");
   if(feat){
@@ -3652,10 +3641,9 @@ $("panelList").addEventListener("click",e=>{
     return;
   }
   /* The card's title IS the dictionary, so pressing it scopes the search to
-     that dictionary and gets out of the way. Until now the card was a page of
-     switches with no meaning attached to its own name, and the selector in the
-     bar was the only way to narrow a search - findable if you find it, and
-     nothing here says it exists. An accidental press costs one tap back: the
+     that dictionary and gets out of the way - otherwise the selector in the
+     bar would be the only way to narrow a search, findable only if you find
+     it. An accidental press costs one tap back: the
      selector's first option is "All dictionaries", and nothing was written.
      Title only, deliberately. A whole-card or double-click target would lie
      over the grip, four move buttons, a checkbox, the switches and Remove... -
@@ -3817,14 +3805,11 @@ function runIngest(id,opts,label){
   show(removing?tx("dictUI.removing"):verb+"…");
   label.classList.remove("act");label.classList.add("busy");
   label.style.textDecoration="none";label.style.cursor="default";
+  // A feature left out keeps its state; the index chip sends none, which
+  // prepares an unprepared dictionary at the cheapest level (handleIngest).
   const params=Object.entries(opts)
     .filter(([k])=>k==="contains"||k==="fts"||k==="media")
-    .map(([k,v])=>"&"+k+"="+(v?1:0)).join("")+
-    // level=headwords on a dictionary with no database is the one path that
-    // does NOT open the backend first (handleIngest): on the heavy dictionaries
-    // this chip exists for, opening it would hold a second copy of the index
-    // being built for the length of the build.
-    (opts.base?"&level=headwords":"");
+    .map(([k,v])=>"&"+k+"="+(v?1:0)).join("");
   return new Promise(resolve=>{
     const es=new EventSource("/api/ingest?dict="+id+params);
     es.addEventListener("progress",ev=>{
@@ -4196,11 +4181,11 @@ function clearStatusForResults(){
    glitch rather than as work. BUSY_DELAY (φ⁻³ s, one rung of --t-*) holds it
    back until a search is slow enough to be worth explaining.
 
-   There is deliberately NO minimum-display timer any more. The 382ms opacity
+   There is deliberately NO minimum-display timer. The 382ms opacity
    transition already is one: a spinner cancelled part-way through its fade-in
    reverses from wherever it reached, so it can never strobe — it can only
-   leave a ghost. Guaranteeing that in CSS rather than in a timer is what
-   removes the "wait for it to disappear" contract; the indicator is free to
+   leave a ghost. Guaranteeing that in CSS rather than in a timer removes any
+   "wait for it to disappear" contract; the indicator is free to
    go the instant the results are there, because it never arrived hard enough
    to owe the user a departure. */
 const BUSY_DELAY=236;
@@ -4347,7 +4332,7 @@ function loadDeferred(det,box,h,mode,q){
 /* ── Arrivals never land above what the user is reading (D73) ───────────
    The slots are already in the user's dictionary order before any result
    exists — the server sends the list on `begin` and every hit carries its
-   index — so nothing here ever REORDERS by rank. What used to move was the
+   index — so nothing here ever REORDERS by rank. What must not move is the
    open section and the reading position, which is a different problem wearing
    the same clothes.
 
@@ -4374,12 +4359,11 @@ function loadDeferred(det,box,h,mode,q){
    others. This is the Spotlight "Top Hit" / omnibox default-match shape — the
    item you are acting on is pinned, the ranked list follows.
 
-   Superseded: an earlier version cancelled the shift with a compensating
-   scrollBy. It could not help the commonest case (at scrollY 0 there is
-   nothing to scroll back to, yet that is exactly where a freshly opened
-   definition is read), and programmatic scrolling breaks workflows that are
-   none of our business. Reordering nothing-sized boxes costs nothing and needs
-   no browser to cooperate. Under expand-all there is no latch and so no
+   Not a compensating scrollBy: that cannot help the commonest case (at
+   scrollY 0 there is nothing to scroll back to, yet that is exactly where a
+   freshly opened definition is read), and programmatic scrolling breaks
+   workflows that are none of our business. Reordering nothing-sized boxes
+   costs nothing and needs no browser to cooperate. Under expand-all there is no latch and so no
    winner: nothing is promoted, and Chromium's native scroll anchoring is left
    to do what it already does. */
 let openedIdx=null;
@@ -4396,7 +4380,7 @@ let openedIdx=null;
    and this never fires; `deferred`, `error`, `skipped` and empty all resolve a
    slot instantly too. When it does fire the strategy degrades to the default —
    the best answer already in hand opens, and every later arrival is too late.
-   Worst case is therefore today plus 700ms, and never a blank screen: the
+   Worst case is therefore Fastest plus 700ms, and never a blank screen: the
    spinner is already spinning, so the hold needs no UI of its own (D102).
 
    Module scope, next to the latch it guards, because the summary-click handler
@@ -4577,9 +4561,10 @@ async function doSearch(ev){
     perDict=ids.length===1?25:5;
   }else{dictParam=dictSel;perDict=25}
   const out=$("out");
-  /* Never blank between two answers (D73/M2). Clearing on `begin` made every
-     keystroke-pause a full → empty → full flash: two motions where one will
-     do, and an empty results area reads as a failure followed by a recovery.
+  /* Never blank between two answers (D73/M2). Clearing on `begin` would make
+     every keystroke-pause a full → empty → full flash: two motions where one
+     will do, and an empty results area reads as a failure followed by a
+     recovery.
 
      So the new generation's boxes are appended BELOW the previous answer —
      they are empty divs, so nothing moves and nothing is visible — and the old
@@ -4589,7 +4574,7 @@ async function doSearch(ev){
      root's inline <style> has a null `.sheet` until it is connected to a
      document, so rendering an article off-document would silently drop every
      inline @font-face it declares (hoistShadowFonts). The box a slot renders
-     into is attached for its whole life here, exactly as before. */
+     into is attached for its whole life here. */
   let boxes=[],anyShown=false,anyResults=false,stale=null;
   /* The resolution frontier (D142). `resolved[i]` is set by the slot's wave-1
      hit whatever it said; `ready[i]` holds its <details> only if it actually
@@ -4663,11 +4648,11 @@ async function doSearch(ev){
            is never taken back: a dictionary that finishes later fills its own
            position, above, and stays shut.
 
-           This used to promote on `msg.i<openedIdx`, closing the section being
+           Promoting a higher-ranked latecomer would close the section being
            read — a definition would appear, be read into, and vanish under the
            reader because a slower dictionary was ranked higher. Ranking is a
            property of the query; a reading in progress is a commitment, and it
-           outranks it. Which dictionary wins the slot is now the user's to
+           outranks it. Which dictionary wins the slot is the user's to
            choose (D142) — soonest, or highest in their own list — but that
            invariant is not: whichever strategy is in force, nothing that opens
            here ever closes, moves or reopens under a reader.
@@ -4789,8 +4774,8 @@ function editable(el){
   return !!el&&(el.isContentEditable||/^(input|textarea|select)$/i.test(el.tagName));
 }
 /* Where a stray keystroke should go, or nothing. An open dialog is a place
-   the user is working in and keeps its keys — the old "/" handler tested only
-   `!== #q` and so stole the character out of the custom-CSS editor. */
+   the user is working in and keeps its keys — "/" must not steal a character
+   out of the custom-CSS editor. */
 function typeTarget(){
   if(document.querySelector("dialog[open]"))return null;
   if($("styler").classList.contains("show")||$("panel").classList.contains("show"))return null;
@@ -4846,7 +4831,7 @@ document.addEventListener("keydown",e=>{
 
 /* clicks inside shadow roots arrive via composedPath */
 /* ── Starting a search from something other than the search box ───────
-   TWO callers, opposite requirements, and conflating them was a real bug:
+   TWO callers, opposite requirements, never to be conflated:
 
    searchFor()       takes a term that is ALREADY EXACT — an author's link
                      target, a restored URL. It is used verbatim.
@@ -4854,10 +4839,10 @@ document.addEventListener("keydown",e=>{
                      carry a trailing comma, a footnote digit, or a whole
                      clause, and must be tidied into something lookup-shaped.
 
-   These used to be one function carrying lookupSelection's tidying, so
-   `entry://Artificial Intelligence Notes#note-1` was cut at the first space
-   and searched for "Artificial". A cleaner that is right for one caller is
-   silent corruption for the other; the fix is two functions, not a smarter
+   One function carrying lookupSelection's tidying would cut
+   `entry://Artificial Intelligence Notes#note-1` at the first space and search
+   for "Artificial". A cleaner that is right for one caller is silent
+   corruption for the other, so these are two functions, not a smarter
    regex. */
 function searchFor(term,opts){
   const t=String(term||"").trim();
@@ -4914,10 +4899,9 @@ function playAudio(url){
    dictionaries emit.
 
    Parsed ONCE, here, into a structured reference. Everything downstream reads
-   its fields; nothing re-parses an href and nothing re-cleans a term. The
-   previous shape — two half-parsers (`wordFromHref`, `fragFromHref`) plus
-   callers re-deriving the KIND from the shape of the word (null? empty?
-   leading "@"?) — is what let a term escape into the wrong cleaner.
+   its fields; nothing re-parses an href, nothing re-cleans a term, and no
+   caller re-derives the KIND from the shape of the word (null? empty? leading
+   "@"?) - which is how a term would escape into the wrong cleaner.
 
    kind:
      "lookup"  a headword, optionally with a #fragment inside the target
@@ -4971,9 +4955,9 @@ function anchorTarget(root,frag){
    the document is not yet taller than the viewport - a scrollTo past its
    extent CLAMPS, silently, to no movement at all. Then the dl renders, images
    and stylesheets land, iframe articles report their height, and the match
-   ends up thousands of pixels from wherever it was measured. Both halves of
-   the reported bug are that one fact: the search that did not scroll, and the
-   one that scrolled and snapped back to the top of the article.
+   ends up thousands of pixels from wherever it was measured: a search that
+   does not scroll, or one that scrolls and snaps back to the top of the
+   article.
 
    So the target is re-checked while the section is still growing. A
    ResizeObserver on the opened section delivers one callback immediately
@@ -5004,7 +4988,7 @@ function anchorTarget(root,frag){
    walked, only after a full-text answer that was actually marked, and rebuilt
    only when a frame in that section reports a new height - so an ordinary
    search, and every non-full-text mode, pays nothing at all. `checkVisibility`
-   filters the same phantom marks `revealFirstMark` learned about (a wiki's own
+   filters the same phantom marks `revealFirstMark` skips (a wiki's own
    collapsed table of contents), so the count and the walk agree with the eye.
 
    Hidden below two matches: with one there is nowhere to go, and a control
@@ -5192,8 +5176,7 @@ document.addEventListener("click",e=>{
     // nothing. In a srcdoc iframe the document URL is about:srcdoc while the
     // base URL is inherited from this page, so the browser resolves the
     // fragment against the WRONG one and navigates cross-document — frame.js
-    // handles it there for that reason (D51). The comment that used to sit
-    // here claimed iframes handled it natively; they never did.
+    // handles it there for that reason (D51).
     e.preventDefault();jumpInArticle(a,dd,decodeRef(href.slice(1)));
   }else if(href&&!/^([a-z][\w+.-]*:|\/|#|res\/|assets\/)/i.test(href)){
     // bare-word link (slob): also an author's reference, so also scoped
@@ -5255,19 +5238,18 @@ document.addEventListener("dblclick",e=>{
 /* Audio, in the CAPTURE phase and owned outright — the click never reaches the
    article. Covers both spellings: an <a> pointing at a media file (a speaker
    <img> wrapping a /res/ link included) and the GoldenDict-era
-   <object type="audio/…" data="…"> that DSL emitted before D81 and every
-   library folder prepared before it still stores.
+   <object type="audio/…" data="…"> still stored by library folders prepared
+   before D81.
 
    Capture, and stopped, because the article commonly plays the same file
    itself: LDOCE writes `<a onclick="new Audio(this.href).play(); return false;"
    href="…mp3">`, and an event-handler CONTENT attribute runs even in a shadow
-   root, which executes no <script> at all — so "this article has no scripts" was
-   never the same as "nothing here plays audio". preventDefault cannot stop a
-   handler, only a default action, so both elements played the same URL and each
-   started when its own load finished: audibly doubled on the first click, and
-   apparently fine on the next one once both start from cache together. Only
-   stopping the event on the way down keeps the anchor's own handler from
-   running. Losing that handler costs nothing here: playback is all it did, and
+   root, which executes no <script> at all — so "this article has no scripts" is
+   not the same as "nothing here plays audio". preventDefault cannot stop a
+   handler, only a default action, so both elements would play the same URL,
+   each starting when its own load finished: audibly doubled on the first
+   click. Only stopping the event on the way down keeps the anchor's own
+   handler from running. Losing that handler costs nothing here: playback is all it does, and
    the element that survives is the referenced one, which cannot be collected
    mid-load the way the article's unreferenced `new Audio(…)` can. */
 document.addEventListener("click",e=>{
@@ -5312,11 +5294,10 @@ measureBar();
 // publishes the top inset after the document has loaded (the Android shell does
 // it at onPageFinished, which is necessarily after this script) grows the bar's
 // padding and its border box while leaving its content box untouched. A
-// content-box observer sees nothing, so --barh kept the pre-inset height and
-// everything aimed at it landed one status bar too high: body's padding-top
-// below 600px, scroll-margin-top, and --stick — which is why the first stuck
-// summary sat clipped under the bar until the bar auto-hid and --stick went to
-// 0. Observing the box that is actually being published is the whole fix.
+// content-box observer sees nothing, so --barh would keep the pre-inset height
+// and everything aimed at it would land one status bar too high: body's
+// padding-top below 600px, scroll-margin-top, and --stick. Observing the box
+// that is actually being published is what keeps them right.
 // A border-box change is a superset of a content-box one here (nothing shrinks
 // the padding as the content grows), so the <select> case above still fires.
 new ResizeObserver(measureBar).observe($("bar"),{box:"border-box"});
@@ -5528,11 +5509,10 @@ let prevScroll=window.pageYOffset;
 addEventListener("scroll",()=>{
   const cur=window.pageYOffset;
   /* A scroll WE started is not the user scrolling away from the bar, and
-     treating it as one broke the ‹ n/N › walk (D118): each press scrolled
-     down, the bar hid, body.barhidden collapsed --stick to 0, and every
-     sticky summary — including the one holding the chevrons — slid up by the
-     bar's height, out from under the finger that was pressing them. The next
-     press landed on whatever had moved into that spot. prevScroll is still
+     treating it as one would break the ‹ n/N › walk (D118): each press scrolls
+     down, the bar hides, body.barhidden collapses --stick to 0, and every
+     sticky summary — including the one holding the chevrons — slides up by the
+     bar's height, out from under the finger pressing them. prevScroll is still
      tracked through the freeze so the user's next real gesture is measured
      from where they LANDED, not from where the jump began (which would spend
      that gesture on a spurious hide). When pinned, the bar never hides. */
@@ -5566,9 +5546,9 @@ let navRecord="replace"; // how the NEXT doSearch should record itself
    article is on screen. */
 let scopeOnce=null,anchorOnce=null,lastScope=null,widenedFrom=null;
 /* commitOnce is "I have finished the word". Live search runs 300 ms after
-   every keystroke pause, so without this flag `revealFirstMark` treated "прео"
-   as a finished query and threw the page at a match while the user was still
-   typing the next letter. Scrolling is navigation and navigation needs an
+   every keystroke pause, so without this flag `revealFirstMark` would treat
+   "прео" as a finished query and throw the page at a match while the user is
+   still typing the next letter. Scrolling is navigation and navigation needs an
    act: submit (Enter or the soft keyboard's search key), a ?q= link opened or
    restored, or a cross-reference followed. Typing renders in place and stays
    still — the ‹ n/N › control (D118) appears with the count, so the match is
@@ -5629,7 +5609,7 @@ window.addEventListener("popstate",()=>{
 $("frm").removeEventListener("submit",_doSearch);
 /* Enter on a query that has not changed since it was answered is the find
    bar's idiom, and it is free twice over: every browser's find bar walks its
-   matches with it, and the submit it replaces was re-running an identical
+   matches with it, and the submit it replaces would re-run an identical
    search over the network for an identical answer (doSearch has no repeat
    guard - `lastQuery` is written there and never compared).
    Strictly narrower than submit: the moment a character changes the query,
@@ -5932,11 +5912,10 @@ function stylerShowTab(tab){
 }
 
 /* ── the files tab ───────────────────────────────────────────────────
-   What the two stylesheets can point at. It exists because there was
-   nowhere for a reference to lead: file:// is refused by every browser as a
-   subresource of an http page, and the one writable-by-URL surface that
-   existed is addressed by a dictionary id the UI deliberately never shows
-   (D102). Uploading and referencing are one tab apart on purpose - a file is
+   What the two stylesheets can point at: file:// is refused by every browser
+   as a subresource of an http page, and the other writable-by-URL surface is
+   addressed by a dictionary id the UI deliberately never shows (D102).
+   Uploading and referencing are one tab apart on purpose - a file is
    put here in order to be named in CSS, and Insert writes that name where
    the caret is rather than leaving the reader to transcribe a path. */
 async function stylerFilesShow(){
@@ -6015,7 +5994,7 @@ function stylerFilesRender(msg){
   }
   stylerSync();
 }
-/* The button says what it is about to do, because for a font it is no longer
+/* The button says what it is about to do, because for a font it is not
    "write this where the caret is" - it writes two rules into two boxes. */
 function stylerFileTitle(f){
   const ext=stylerFileExt(f);

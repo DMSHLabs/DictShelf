@@ -9,6 +9,7 @@ package search
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"sync/atomic"
 
@@ -29,6 +30,29 @@ const (
 
 func (m Mode) String() string {
 	return [...]string{"exact", "prefix", "contains", "fts"}[m]
+}
+
+// ParseMode reads a mode by its API name. "" is prefix, the default; "fuzzy"
+// is the retired name of what prefix now does (D16) and is still accepted.
+func ParseMode(s string) (Mode, error) {
+	switch s {
+	case "", "prefix", "fuzzy":
+		return Prefix, nil
+	case "exact":
+		return Exact, nil
+	case "contains":
+		return Contains, nil
+	case "fts":
+		return FullText, nil
+	}
+	return 0, fmt.Errorf("unknown mode %q", s)
+}
+
+// Query searches one dictionary the way the fan-out searches each of its
+// members - the same plan, the same ladder, the same capability rules - so a
+// command-line lookup and the app cannot answer the same question differently.
+func Query(ctx context.Context, d dict.Dictionary, mode Mode, term string, limit int) Hit {
+	return query(ctx, d, mode, term, planFor(mode, term), limit)
 }
 
 // Hit is the result of one dictionary. Order of hits mirrors the input
@@ -84,59 +108,19 @@ func Workers() int {
 	return defaultWorkers
 }
 
-// All queries every dictionary with term, at most perDict results each.
-func All(ctx context.Context, dicts []dict.Dictionary, mode Mode, term string, perDict int) []Hit {
-	hits := make([]Hit, len(dicts))
-	plan := planFor(mode, term)
-	sem := make(chan struct{}, Workers())
-	var wg sync.WaitGroup
-	for i, d := range dicts {
-		wg.Add(1)
-		go func(i int, d dict.Dictionary) {
-			defer wg.Done()
-			select {
-			case sem <- struct{}{}:
-				defer func() { <-sem }()
-			case <-ctx.Done():
-				hits[i] = Hit{Meta: d.Meta(), Err: ctx.Err()}
-				return
-			}
-			if err := ctx.Err(); err != nil {
-				hits[i] = Hit{Meta: d.Meta(), Err: err}
-				return
-			}
-			hits[i] = runQuery(ctx, d, mode, term, plan, perDict)
-		}(i, d)
-	}
-	wg.Wait()
-	return hits
-}
-
-// Stream queries every dictionary concurrently (bounded) and invokes emit
-// once per dictionary as its query completes. emit calls are serialized
-// (safe to write to a shared response) but arrive in completion order, not
-// input order - i is the dictionary's index in dicts so the caller can
-// place each result in its preference-ordered slot. Blocks until done.
-func Stream(ctx context.Context, dicts []dict.Dictionary, mode Mode, term string, perDict int, emit func(i int, h Hit)) {
-	openers := make([]Opener, len(dicts))
-	for i, d := range dicts {
-		d := d
-		openers[i] = func() (dict.Dictionary, error) { return d, nil }
-	}
-	StreamOpen(ctx, openers, mode, term, perDict, emit)
-}
-
 // Opener lazily opens one dictionary. StreamOpen calls it inside the worker
 // goroutine so the caller can flush its "begin" line before paying any open
 // cost. On open failure the worker emits a Hit with Err set and a zero Meta -
 // the caller supplies the dictionary id out of band (by slot index).
 type Opener func() (dict.Dictionary, error)
 
-// StreamOpen is Stream with the per-dictionary open deferred into each worker.
-// This lets an HTTP handler emit its slot layout immediately (from cheap ids)
-// instead of serializing every cold open before the first byte: TTFB becomes
-// one open, not the sum of all of them. emit calls are serialized (safe for a
-// shared response) but arrive in completion order; i is the input index.
+// StreamOpen queries every dictionary concurrently (bounded by Workers) and
+// calls emit once per dictionary as its query completes. The open is deferred
+// into each worker, so an HTTP handler can emit its slot layout immediately
+// (from cheap ids) instead of serializing every cold open before the first
+// byte: TTFB becomes one open, not the sum of all of them. emit calls are
+// serialized (safe for a shared response) but arrive in completion order; i
+// is the input index, so the caller places each result in its slot.
 func StreamOpen(ctx context.Context, openers []Opener, mode Mode, term string, perDict int, emit func(i int, h Hit)) {
 	plan := planFor(mode, term)
 	sem := make(chan struct{}, Workers())
@@ -218,18 +202,17 @@ func StreamOpen(ctx context.Context, openers []Opener, mode Mode, term string, p
 // runQuery runs one dictionary's query and waits for it, unless the context
 // dies first - then the query is ABANDONED, not waited on.
 //
-// A context cannot reach into a backend's query: the dict interfaces take no
-// context (preview backends are plain parsers; the stores' queries are plain
-// SQL). Before the pre-open checks existed, that wedge held the whole
-// fan-out - wg.Wait() waited for every dictionary, so one crawling contains
-// search stalled every other result behind it, and the handler could do
-// nothing but hang with it. Abandoning bounds the wedge to one goroutine
-// holding one backend, which the janitor eventually closes underneath it;
-// the buffered send means the abandoned goroutine also ends without
-// blocking whenever its query finally does.
+// The context reaches a prepared database's query (dict.Searcher), which SQLite
+// then interrupts; it cannot reach a direct backend, which is a plain parser.
+// Waiting for a wedged one would hold the whole fan-out - wg.Wait() waits for
+// every dictionary, so one crawling search would stall every other result
+// behind it. Abandoning bounds the wedge to one goroutine holding one backend,
+// which the janitor eventually closes underneath it; the buffered send means
+// the abandoned goroutine also ends without blocking whenever its query
+// finally does.
 func runQuery(ctx context.Context, d dict.Dictionary, mode Mode, term string, plan []ftsq.Rung, perDict int) Hit {
 	done := make(chan Hit, 1)
-	go func() { done <- query(d, mode, term, plan, perDict) }()
+	go func() { done <- query(ctx, d, mode, term, plan, perDict) }()
 	select {
 	case h := <-done:
 		return h
@@ -280,7 +263,7 @@ func planFor(mode Mode, term string) []ftsq.Rung {
 // the HTTP handler did not create - so Go's rule that a panic can only be
 // recovered on its own goroutine means the handler's recover cannot see it and
 // the process dies. One bad file must cost one row, not the server.
-func query(d dict.Dictionary, mode Mode, term string, plan []ftsq.Rung, perDict int) (h Hit) {
+func query(ctx context.Context, d dict.Dictionary, mode Mode, term string, plan []ftsq.Rung, perDict int) (h Hit) {
 	defer func() {
 		if r := recover(); r != nil {
 			h.Err = dict.PanicError(h.Meta.Path, r)
@@ -289,41 +272,48 @@ func query(d dict.Dictionary, mode Mode, term string, plan []ftsq.Rung, perDict 
 	}()
 	h = Hit{Meta: d.Meta(), Term: term}
 	caps := d.Caps()
+	// A prepared database answers every mode through its context-aware
+	// surface; a direct backend has only Exact and Prefix, and no way to stop.
+	s, indexed := d.(dict.Searcher)
 	switch mode {
 	case Exact:
 		if !caps.Exact {
 			h.Skipped = true
 			return h
 		}
-		h.Results, h.Err = d.Exact(term, perDict)
+		if indexed {
+			h.Results, h.Err = s.ExactContext(ctx, term, perDict)
+		} else {
+			h.Results, h.Err = d.Exact(term, perDict)
+		}
 	case Prefix:
 		if !caps.Prefix {
 			h.Skipped = true
 			return h
 		}
-		h.Results, h.Err = d.Prefix(term, perDict)
+		if indexed {
+			h.Results, h.Err = s.PrefixContext(ctx, term, perDict)
+		} else {
+			h.Results, h.Err = d.Prefix(term, perDict)
+		}
 	case Contains:
-		f, ok := d.(dict.ContainsSearcher)
-		if !ok || !caps.Contains {
+		if !indexed || !caps.Contains {
 			h.Skipped = true
 			return h
 		}
-		h.Results, h.Err = f.Contains(term, perDict)
+		h.Results, h.Err = s.ContainsContext(ctx, term, perDict)
 	case FullText:
-		f, ok := d.(dict.FullTextSearcher)
-		if !ok || !caps.FTS {
+		if !indexed || !caps.FTS {
 			h.Skipped = true
 			return h
 		}
-		if p, ok := d.(dict.FullTextPlanner); ok && len(plan) > 0 {
-			if ran := runPlan(p, plan, perDict, &h); ran {
-				return h
-			}
-			// Every rung failed to execute. That is a defect in the lowering,
-			// not an answer, and the reader is better served by the backend's
-			// own single reading than by an error page.
+		if len(plan) > 0 && runPlan(ctx, s, plan, perDict, &h) {
+			return h
 		}
-		h.Results, h.Err = f.FullText(term, perDict)
+		// No plan (the query has no words), or every rung failed to execute -
+		// a defect in the lowering, not an answer. The store's own single
+		// reading serves the reader better than an error.
+		h.Results, h.Err = s.FullTextContext(ctx, term, perDict)
 		if h.Err == nil {
 			h.Rung = "words"
 		}
@@ -340,10 +330,10 @@ func query(d dict.Dictionary, mode Mode, term string, plan []ftsq.Rung, perDict 
 // mode this whole design exists to remove. An error is not emptiness either -
 // it means this reading was never tried, so the ladder keeps going and the
 // caller is told only if nothing ran.
-func runPlan(p dict.FullTextPlanner, plan []ftsq.Rung, perDict int, h *Hit) bool {
+func runPlan(ctx context.Context, s dict.Searcher, plan []ftsq.Rung, perDict int, h *Hit) bool {
 	ran := false
 	for _, r := range plan {
-		res, err := p.FullTextMatch(r.Match, perDict)
+		res, err := s.FullTextMatch(ctx, r.Match, perDict)
 		if err != nil {
 			h.Err = err
 			continue

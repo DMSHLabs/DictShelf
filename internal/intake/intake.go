@@ -123,10 +123,9 @@ type Candidate struct {
 	Missing []string `json:"missing,omitempty"`
 
 	// Existing is the library folder that ALREADY holds this dictionary, ""
-	// when none does. It exists because the alternative was silence: importing
-	// the same bundle twice used to produce a second numbered folder, which
-	// means doubled search results and a second full preparation pass, and the
-	// user was never told (D134).
+	// when none does. The alternative is silence: importing the same bundle
+	// twice into a second folder means doubled search results and a second
+	// full preparation pass, and the user is never told (D134).
 	Existing string `json:"existing,omitempty"`
 	// Unchanged says that folder holds the same files at the same sizes the
 	// archive declares - so installing would replace a dictionary with itself.

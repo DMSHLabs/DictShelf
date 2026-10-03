@@ -72,11 +72,10 @@ func ph(words ...string) Phrase {
 	return p
 }
 
-// A phrase is one span, not its words marked separately. This is the whole
-// point of the rewrite: `Физика в конспектах` asked about three adjacent
-// tokens, so three adjacent tokens are what gets painted - and the в that
-// drowned the article when every word was marked on its own is now pinned in
-// place by its neighbours.
+// A phrase is one span, not its words marked separately: `Физика в конспектах`
+// asks about three adjacent tokens, so three adjacent tokens are what gets
+// painted - and the в, which would drown the article if every word were marked
+// on its own, is pinned in place by its neighbours.
 func TestMarkPhrase(t *testing.T) {
 	for _, tc := range []struct {
 		name     string

@@ -359,6 +359,15 @@ func (u *UIPrefs) spoken() bool {
 	return u.SpeakOff
 }
 
+// The file-name rung of heal's identity ladder, from both sides. It is the
+// weakest rung and the only one that can guess wrong, so it fires only when
+// the name names exactly one thing in the registry AND exactly one thing in
+// the stored records. On the stored side, a library folder the user removes
+// leaves a record behind (kept on purpose - an
+// unplugged drive looks the same), every one of those records has a path
+// ending "text.db", and with one prepared dictionary left the dead record
+// would otherwise adopt the live one, taking its off switch and its place in
+// the order with it.
 func TestPrefsFileNameRungNeedsBothSidesUnique(t *testing.T) {
 	const live0, live1 = "live00000000", "live11111111"
 	lib := func(name string) string { return filepath.Join("/lib", name, "text.db") }

@@ -132,9 +132,9 @@ final class Storage {
                     // panel, not an icon in .headacts. That strip is chrome -
                     // theme and close - and a user scans it for "get me out of
                     // here", so the one function without which this app is
-                    // empty was the least findable thing in it. A glyph there
-                    // cost nothing to miss; the row costs one line of panel and
-                    // cannot be missed. It sits ABOVE .allrow so that row's
+                    // empty would be the least findable thing in it. A glyph
+                    // there costs nothing to miss; the row costs one line of
+                    // panel and cannot be missed. It sits ABOVE .allrow so that row's
                     // border-bottom still divides header from list, and so the
                     // master switch stays adjacent to the cards it governs.
                     + "var ph=document.querySelector('#panel .panel-head');"

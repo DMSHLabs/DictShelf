@@ -99,8 +99,8 @@ func Derive(in Input) []Group {
 // English Dictionary" and "Oxford English-Russian" both resolve to English -
 // so a dictionary with one hint and no pair joins no group here.
 //
-// It replaced a mono/bi "Type" facet (D149). "Bilingual" gathered every pair
-// into one choice nobody searches with; a pair is the unit a reader actually
+// Not a mono/bi "Type" facet (D149): "Bilingual" would gather every pair into
+// one choice nobody searches with; a pair is the unit a reader actually
 // picks by - the dictionaries that explain English in Russian. The pair is
 // UNDIRECTED: en-ru and ru-en are one value. Directed, each half is often a
 // single dictionary and the single-member rule would drop both; together they

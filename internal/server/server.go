@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path"
@@ -43,25 +44,32 @@ import (
 )
 
 //go:embed web/index.html
-var indexHTML []byte
+var indexHTMLSrc []byte
+var indexHTML = webAsset(indexHTMLSrc, htmlAsset)
 
 //go:embed web/setup.html
-var setupHTML string
+var setupHTMLSrc []byte
+var setupHTML = string(webAsset(setupHTMLSrc, htmlAsset))
 
 //go:embed web/lemmas.html
-var lemmasHTML []byte // the lemma-data installer (D91)
+var lemmasHTMLSrc []byte
+var lemmasHTML = webAsset(lemmasHTMLSrc, htmlAsset) // the lemma-data installer (D91)
 
 //go:embed web/browse.html
-var browseHTML []byte // the page-by-page headword view (browse.go)
+var browseHTMLSrc []byte
+var browseHTML = webAsset(browseHTMLSrc, htmlAsset) // the page-by-page headword view (browse.go)
 
 //go:embed web/setup.css
-var setupCSS []byte // palette and controls shared by setup.html and lemmas.html
+var setupCSSSrc []byte
+var setupCSS = webAsset(setupCSSSrc, cssAsset) // palette and controls shared by setup.html and lemmas.html
 
 //go:embed web/frame.js
-var frameJS []byte // bridge script for sandboxed article iframes
+var frameJSSrc []byte
+var frameJS = webAsset(frameJSSrc, jsAsset) // bridge script for sandboxed article iframes
 
 //go:embed web/pick.js
-var pickJS []byte // word-at-point for a double tap, loaded by both article surfaces
+var pickJSSrc []byte
+var pickJS = webAsset(pickJSSrc, jsAsset) // word-at-point for a double tap, loaded by both article surfaces
 
 //go:embed web/app.css
 var appCSS []byte // main page styles
@@ -84,7 +92,8 @@ var looksJS []byte // saved appearances: the Presets row, its menu and its windo
 //go:embed web/double-tap-probe.html
 var doubleTapProbe []byte // temporary Android gesture diagnostic
 //go:embed web/speak.js
-var speakJS []byte // read-aloud of selected article text, fetched on the first selection
+var speakJSSrc []byte
+var speakJS = webAsset(speakJSSrc, jsAsset) // read-aloud of selected article text, fetched on the first selection
 
 //go:embed web/article-find.js
 var articleFindJS []byte // search within loaded articles
@@ -613,12 +622,10 @@ func (s *Server) setUseCached(on bool) error {
 func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	raw := strings.TrimSpace(q.Get("path"))
-	save := q.Get("save") != ""
-	// tri-state: absent leaves the setting alone, "1" turns the library on,
-	// "0" turns it off. Without the off case the checkbox was write-only-true:
-	// clearing it could not undo an earlier "yes".
-	useCachedParam := q.Get("useCached")
-	useCached := useCachedParam == "1"
+	save, _ := queryFlag(q, "save")
+	// tri-state: absent leaves the setting alone, on turns the library on, off
+	// turns it off - clearing the checkbox must be able to undo an earlier yes
+	useCached, useCachedSent := queryFlag(q, "useCached")
 
 	if raw == "" {
 		if !save || !useCached {
@@ -695,7 +702,7 @@ func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
 					out["warning"] = "folders switched, but saving config failed: " + err.Error()
 				}
 			}
-			if useCachedParam != "" {
+			if useCachedSent {
 				out["useCached"] = useCached
 				if err := s.setUseCached(useCached); err != nil {
 					out["warning"] = "folders saved, but the previously imported dictionaries setting failed: " + err.Error()
@@ -739,17 +746,12 @@ func (s *Server) resolveDirs(raw []string) ([]string, int, error) {
 // currentFeatures reads what a dictionary has prepared right now, so a request
 // that names one feature leaves the others alone.
 func (s *Server) currentFeatures(e *entry) features {
-	f := features{}
-	textDB, ok := preparedTextDB(e.Path)
-	if !ok {
-		return f
+	p, ok := preparedInfo(e.Path)
+	if !ok || p.Meta == nil {
+		return features{}
 	}
-	if m, err := store.ReadMeta(textDB); err == nil {
-		f.FullText = m["ingest_level"] != string(store.LevelHeadwords)
-		f.Contains = m["has_trigram"] == "1"
-	}
-	f.Media = store.MediaPaired(textDB) // an unpaired media.db serves nothing
-	return f
+	// an unpaired media.db serves nothing, so it does not count as packed
+	return features{FullText: p.Plan.FullText, Contains: p.Plan.Contains, Media: p.MediaPaired()}
 }
 
 // dictInfo is the /api/dicts row.
@@ -817,10 +819,10 @@ type dictMsg struct {
 
 // handleDicts streams the dictionary list as newline-delimited JSON, for the
 // same reason handleSearch does (D12): the fan-out below resolves metadata in
-// parallel, but delivering it as one array made time-to-first-row the *sum* of
-// every dictionary's resolution instead of the slowest single one. With ~100
-// dictionaries that gap is the entire startup wait, during which the client
-// knew nothing at all - not even how many dictionaries were coming.
+// parallel, and delivering it as one array would make time-to-first-row the
+// *sum* of every dictionary's resolution instead of the slowest single one.
+// With ~100 dictionaries that gap is the entire startup wait, during which the
+// client would know nothing at all - not even how many dictionaries are coming.
 //
 // So `total` goes out first, from cheap entry ids with no opens at all: the
 // client can say "0 of 105" immediately and unblock search the instant the
@@ -902,19 +904,18 @@ func (s *Server) baseDictInfo(e *entry) dictInfo {
 	// probe, no direct open, and it works for every format (the library
 	// folder is located from the source PATH, so the name is not needed to
 	// find it).
-	if textDB, ok := preparedTextDB(e.Path); ok {
-		if meta, err := store.ReadMeta(textDB); err == nil {
-			ec, _ := strconv.Atoi(meta["entry_count"])
-			info := dictInfo{
-				ID: e.ID, Path: e.Path, Name: meta["name"], Format: meta["format"], Entries: ec,
-				Caps:          dict.Caps{Exact: true, Prefix: true, Contains: meta["has_trigram"] == "1", FTS: meta["ingest_level"] != string(store.LevelHeadwords)},
-				DBPath:        textDB,
-				ContainsStale: store.FoldStale(meta),
-				Outdated:      rebuildable(e.Path) && len(store.StaleMeta(meta, textDB, e.Path)) > 0,
-			}
-			s.langFacts(&info, meta["name"], meta["index_lang"], meta["contents_lang"])
-			return info
+	if p, ok := preparedInfo(e.Path); ok && p.Meta != nil {
+		meta := p.Meta
+		ec, _ := strconv.Atoi(meta["entry_count"])
+		info := dictInfo{
+			ID: e.ID, Path: e.Path, Name: meta["name"], Format: meta["format"], Entries: ec,
+			Caps:          dict.Caps{Exact: true, Prefix: true, Contains: p.Plan.Contains, FTS: p.Plan.FullText},
+			DBPath:        p.TextDB,
+			ContainsStale: store.FoldStale(meta),
+			Outdated:      rebuildable(e.Path) && len(p.Stale(e.Path)) > 0,
 		}
+		s.langFacts(&info, meta["name"], meta["index_lang"], meta["contents_lang"])
+		return info
 	}
 	// only probe formats with a real cheap prober - otherwise dict.Probe
 	// falls back to a full dict.Open outside the entry's memoization (and
@@ -956,7 +957,7 @@ func (s *Server) baseDictInfo(e *entry) dictInfo {
 	if cs, ok := d.(interface{ ContainsStale() bool }); ok {
 		info.ContainsStale = cs.ContainsStale()
 	}
-	if textDB, ok := preparedTextDB(e.Path); ok {
+	if textDB, ok := validPrepared(e.Path); ok {
 		info.DBPath = textDB
 	}
 	return info
@@ -965,9 +966,9 @@ func (s *Server) baseDictInfo(e *entry) dictInfo {
 // langFacts derives one row's picker groups and the language its articles are
 // read aloud in. It is called from every branch of baseDictInfo with whatever
 // that branch already read - no branch opens or reads anything extra for it,
-// which is the condition on which grouping was allowed into this path at all:
-// /api/dicts fans out across the whole library (see docs.local/PERF.md M1), and
-// a per-row cost here is paid a hundred times at startup.
+// which is the condition for grouping being in this path at all: /api/dicts
+// fans out across the whole library (see docs.local/PERF.md M1), and a per-row
+// cost here is paid a hundred times at startup.
 func (s *Server) langFacts(info *dictInfo, name, declared, contents string) {
 	in := facet.Input{
 		Name:     name,
@@ -986,22 +987,25 @@ func rebuildable(path string) bool {
 	return !store.IsTextDB(path) && fileExists(path) && fileExists(dict.SourceInput(path))
 }
 
-// dbPathOf is the prepared database path for an entry, or "" when it has none.
-func dbPathOf(e *entry) string {
-	if p, ok := preparedTextDB(e.Path); ok {
-		return p
+// validPrepared names the prepared database an entry answers from, checked:
+// the entry itself when it IS one, else its library folder when this build
+// can open it and it was built from the source as it is now. It reads the
+// folder's meta table; a path walked per resource or per rescan wants the
+// stat-only backingDB instead.
+func validPrepared(path string) (string, bool) {
+	if store.IsTextDB(path) {
+		return path, true
 	}
-	return ""
+	return store.PreparedFor(path)
 }
 
-// preparedTextDB locates the prepared database for a registry entry: the entry
-// itself when it IS one, else this source's library folder (when prepared and
-// still matching the source).
-func preparedTextDB(entryPath string) (string, bool) {
-	if store.IsTextDB(entryPath) {
-		return entryPath, true
+// preparedInfo is validPrepared with the meta table kept, for a caller that
+// goes on to ask the database something: the one read answers both.
+func preparedInfo(path string) (store.Prepared, bool) {
+	if store.IsTextDB(path) {
+		return store.Inspect(path), true
 	}
-	return store.PreparedFor(entryPath)
+	return store.FindPrepared(path)
 }
 
 // addProvenance fills the panel's "where did this come from" fields cheaply
@@ -1020,7 +1024,7 @@ func addProvenance(info *dictInfo, entryPath string) {
 	// DBPath from baseDictInfo, else the content-addressed cache name.
 	textDB := info.DBPath
 	if textDB == "" {
-		if p, ok := preparedTextDB(entryPath); ok {
+		if p, ok := validPrepared(entryPath); ok {
 			textDB = p
 		}
 	}
@@ -1072,22 +1076,6 @@ func (s *Server) handleRescan(w http.ResponseWriter, r *http.Request) {
 	}
 	s.reg.Warm()
 	s.handleDicts(w, r)
-}
-
-func parseMode(s string) (search.Mode, error) {
-	switch s {
-	case "", "prefix":
-		return search.Prefix, nil
-	case "exact":
-		return search.Exact, nil
-	case "contains":
-		return search.Contains, nil
-	case "fuzzy": // legacy alias: the old "fuzzy" behaviour is now part of prefix
-		return search.Prefix, nil
-	case "fts":
-		return search.FullText, nil
-	}
-	return 0, fmt.Errorf("unknown mode %q", s)
 }
 
 // streamSlot names one dictionary in the result layout (begin message).
@@ -1156,17 +1144,21 @@ type streamMsg struct {
 // catch a wedged backend, not to police a slow one.
 const demandSearchBudget = 5 * time.Minute
 
-// boolParam reads a query flag that is absent-means-off. Anything that is not
-// an explicit negation turns it on; "0", "false", "no" and "off" turn it off,
-// so a client templating the parameter can say off without having to omit it.
-// A valueless "?hl" is indistinguishable from an absent one in net/url, and is
-// therefore off - say "hl=1".
-func boolParam(v string) bool {
-	switch strings.ToLower(v) {
-	case "", "0", "false", "no", "off":
-		return false
+// queryFlag reads a boolean query parameter, and is where every one of them is
+// read, so a spelling means the same thing on every route. sent reports that
+// the parameter was given at all, for a caller that keeps a state the request
+// did not mention. "", "0", "false", "no" and "off" (any case) are off - so a
+// client templating the value can say off without omitting it, and a valueless
+// "?hl" is off too; say "hl=1" - and anything else is on.
+func queryFlag(q url.Values, name string) (on, sent bool) {
+	if !q.Has(name) {
+		return false, false
 	}
-	return true
+	switch strings.ToLower(strings.TrimSpace(q.Get(name))) {
+	case "", "0", "false", "no", "off":
+		return false, true
+	}
+	return true, true
 }
 
 // marker returns the per-hit highlighter for one request.
@@ -1226,7 +1218,7 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 400, "missing q parameter")
 		return
 	}
-	mode, err := parseMode(r.URL.Query().Get("mode"))
+	mode, err := search.ParseMode(r.URL.Query().Get("mode"))
 	if err != nil {
 		httpErr(w, 400, "%v", err)
 		return
@@ -1248,7 +1240,8 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 	// full-text mode: in exact, prefix or contains the match IS the headword
 	// the reader clicked, and marking it inside the article would mark the
 	// word they are already looking at, on every line it appears (D102).
-	marks := marker(mode == search.FullText && boolParam(r.URL.Query().Get("hl")))
+	hl, _ := queryFlag(r.URL.Query(), "hl")
+	marks := marker(mode == search.FullText && hl)
 	// Capped like the store's own maxLimit: the store clamps at its boundary,
 	// but a direct backend treats the limit as a stop sign only, and would
 	// materialize every match - article bodies included - before stopping.
@@ -1434,16 +1427,16 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 	// If nothing missed there is no second wave at all, and no lemma pack is
 	// loaded to serve a search that never happened.
 	//
-	// Per dictionary, not per search: this used to run only when the WHOLE
-	// collection came back empty, which made lemmatization depend on what
-	// unrelated dictionaries were installed beside the one being read. One
-	// Babylon glossary carrying "estuviera" as a hand-listed alias of "estar"
-	// was enough to suppress the lemma probe for every proper Spanish
-	// dictionary in the same search - each of which indexes lemmas only, and
-	// each of which would have answered. The cost of the wider gate is that a
-	// language's pack can now load on a search that already partly succeeded;
-	// it is still bounded by MORPH_CACHE, and the retry still goes only to
-	// dictionaries that returned nothing.
+	// Per dictionary, not per search (D89): a gate on the WHOLE collection
+	// coming back empty would make lemmatization depend on what unrelated
+	// dictionaries are installed beside the one being read. One Babylon
+	// glossary carrying "estuviera" as a hand-listed alias of "estar" would
+	// suppress the lemma probe for every proper Spanish dictionary in the same
+	// search - each of which indexes lemmas only, and each of which would
+	// answer. The cost of the wider gate is that a language's pack can load on
+	// a search that already partly succeeded; it is still bounded by
+	// MORPH_CACHE, and the retry still goes only to dictionaries that returned
+	// nothing.
 	missed := make([]bool, len(entries))
 	empty := 0
 	search.StreamOpen(ctx, openers, mode, q, n, func(i int, h search.Hit) {
@@ -1936,42 +1929,18 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// The panel sends the state it wants, not a verb: contains/fts/media each
-	// 1 or 0. A parameter left out keeps whatever that feature is now, so a
-	// caller toggling one thing cannot accidentally strip another.
+	// on or off. A parameter left out keeps whatever that feature is now, so a
+	// caller toggling one thing cannot accidentally strip another - and a
+	// request naming none prepares an unprepared dictionary at the cheapest
+	// level, which is the panel's index chip.
 	q := r.URL.Query()
 	want := s.currentFeatures(e)
 	for _, f := range []struct {
 		name string
 		to   *bool
 	}{{"contains", &want.Contains}, {"fts", &want.FullText}, {"media", &want.Media}} {
-		if v := q.Get(f.name); v != "" {
-			*f.to = v != "0" && !strings.EqualFold(v, "false")
-		}
-	}
-	if q.Get("full") != "" { // legacy: "full" meant full text + media
-		want.FullText, want.Media = true, true
-	}
-	if q.Get("level") == "headwords" {
-		want.FullText = false
-	}
-	// The cheapest possible preparation: headwords, for a dictionary that has
-	// no database at all. It is the panel's "index" chip, and it exists as its
-	// own path because setFeatures opens the direct backend before it starts
-	// (registry.go) - which builds the very in-RAM headword index the whole
-	// operation is about replacing, at 300-500 bytes per headword, and holds it
-	// for the length of the ingest. On the dictionaries this chip is FOR - the
-	// heavy ones a phone's search budget declined, which is why they are still
-	// unprepared - that doubled working set is the difference between preparing
-	// and being killed. ensureBaseIndex parses the file once and never opens
-	// the backend, so the chip takes that door instead.
-	//
-	// Only when nothing is prepared yet: `level=headwords` on a dictionary that
-	// already has a database keeps its old meaning (turn full text off), which
-	// is a rebuild and belongs in setFeatures.
-	base := false
-	if q.Get("level") == "headwords" && !want.Contains && !want.Media {
-		if textDB, ok := preparedTextDB(e.Path); !ok || !fileExists(textDB) {
-			base = true
+		if on, sent := queryFlag(q, f.name); sent {
+			*f.to = on
 		}
 	}
 
@@ -1999,6 +1968,27 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 			emit("progress", map[string]int{"done": done, "total": total})
 		}
 	}
+	// The cheapest possible preparation: headwords, for a dictionary that has
+	// no database at all. It is the panel's "index" chip, and it exists as its
+	// own path because setFeatures opens the direct backend before it starts
+	// (registry.go) - which builds the very in-RAM headword index the whole
+	// operation is about replacing, at 300-500 bytes per headword, and holds it
+	// for the length of the ingest. On the dictionaries this chip is FOR - the
+	// heavy ones a phone's search budget declined, which is why they are still
+	// unprepared - that doubled working set is the difference between preparing
+	// and being killed. ensureBaseIndex parses the file once and never opens
+	// the backend, so the chip takes that door instead.
+	//
+	// Only when nothing is prepared yet: `level=headwords` on a dictionary that
+	// already has a database keeps its old meaning (turn full text off), which
+	// is a rebuild and belongs in setFeatures.
+	base := false
+	if q.Get("level") == "headwords" && !want.Contains && !want.Media {
+		if textDB, ok := validPrepared(e.Path); !ok || !fileExists(textDB) {
+			base = true
+		}
+	}
+
 	if e.indexBlocked() {
 		err = e.restoreDSLIndex(store.Plan{FullText: want.FullText, Contains: want.Contains}, progress)
 		if err != nil {
@@ -2033,18 +2023,18 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	m := d.Meta()
+	dbPath, _ := validPrepared(e.Path)
 	emit("done", dictInfo{
 		ID: e.ID, Name: m.Name, Format: m.Format, Path: e.Path,
 		Entries: m.EntryCount, Caps: d.Caps(),
-		DBPath: dbPathOf(e),
+		DBPath: dbPath,
 	})
 }
 
 // assetTag is a short content hash, used as the ?v= of an embedded script so
 // its URL changes exactly when its bytes do. Content addressing rather than
 // the build version: a developer rebuild keeps Version at "dev", which would
-// leave a changed script behind a week-long cache under an unchanged URL -
-// the precise failure this replaces.
+// leave a changed script behind a week-long cache under an unchanged URL.
 func assetTag(b []byte) string {
 	sum := sha256.Sum256(b)
 	return hex.EncodeToString(sum[:])[:8]

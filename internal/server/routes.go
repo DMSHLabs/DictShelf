@@ -12,8 +12,8 @@ import "net/http"
 //
 //   - CORS is a security boundary (D69). Exactly three read-only routes may
 //     answer a browser extension; every other route is same-origin. As
-//     statements, that rule was enforced by remembering to write withCORS on
-//     three lines and not on a fourth.
+//     statements, that rule would be enforced only by remembering to write
+//     withCORS on three lines and not on a fourth.
 //   - Spec names the path this route is published as in web/openapi.yaml.
 //     openapi_test.go walks this table against that file in both directions,
 //     so an endpoint cannot be added, renamed or dropped without the document
@@ -46,14 +46,11 @@ var corsAllowed = map[string]bool{
 func (s *Server) routes() []route {
 	// Content-addressed: index.html asks for these with ?v=<hash of the file>,
 	// so the URL changes whenever the file does and a week-long cache is safe.
-	// It was NOT safe before. Both scripts are embedded in the same binary as
-	// index.html and are versioned with it, but the browser cached them
-	// SEPARATELY - index.html fresh from "/", frame.js up to a week stale -
-	// so any change to the protocol between the two broke silently and only
-	// for dictionaries rendered in an iframe. D41 renamed frame.js's lookup
-	// message from "lookup" to "ref"/"pick"; a cached frame.js kept posting
-	// the old name to an index.html that no longer listened for it, and every
-	// entry:// link in a script-bearing dictionary stopped responding.
+	// The scripts are embedded in the same binary as index.html and versioned
+	// with it, but the browser caches them SEPARATELY - index.html fresh from
+	// "/", frame.js up to a week stale - so without the hash any change to the
+	// protocol between the two (D41's message names, say) would break silently,
+	// and only for dictionaries rendered in an iframe.
 	serveAsset := func(mime string, body []byte) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", mime)

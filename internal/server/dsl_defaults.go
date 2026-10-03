@@ -135,7 +135,7 @@ func (r *Registry) queueNewDSL() error {
 		// A previously prepared family is not a newly added dictionary.
 		existing := false
 		for _, other := range family {
-			if _, ok := preparedFor(other.Path); ok {
+			if _, ok := validPrepared(other.Path); ok {
 				existing = true
 			}
 		}

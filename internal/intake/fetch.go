@@ -118,7 +118,7 @@ const maxLinkDepth = 8
 // "https://a.org/en/oxford.mdx" and "https://b.org/oxford.mdx" never meet.
 //
 // This is what lets a download be replaced without asking (D155 Am. 4). Two
-// different links can no longer share a file name, so the only file a
+// different links cannot share a file name, so the only file a
 // download can ever land on is an earlier download of the same place: an
 // older revision of itself, or a sibling from the same site folder. Neither
 // is a doubt worth a question. The dictionaries themselves are the user's
@@ -254,8 +254,8 @@ func readDone(sidecar, dir, raw string) (*doneMeta, string) {
 // Progress is how a download reports itself while it runs. The NAME is part of
 // the report and not an afterthought: the file a link turns out to name is
 // decided by the server (a redirect, a Content-Disposition), it is the one
-// thing a person watching a progress line actually wants to read, and until
-// this carried it the only honest thing a caller could say was the host.
+// thing a person watching a progress line actually wants to read; without it
+// the only honest thing a caller could say would be the host.
 type Progress func(name string, done, total int64)
 
 // Fetch downloads raw into dest's Downloads folder and describes the result as
@@ -357,8 +357,9 @@ func (f Fetcher) Fetch(ctx context.Context, dest, raw string, progress Progress)
 	//
 	// A file already under that name is REPLACED, never numbered beside: this
 	// folder belongs to this place on the web (LinkDir), so what is there is
-	// an older revision of this file, and a numbered "oxford (2).mdx" became a
-	// second dictionary called "oxford (2)" instead of an update of "oxford".
+	// an older revision of this file, and a numbered "oxford (2).mdx" would
+	// become a second dictionary called "oxford (2)" instead of an update of
+	// "oxford".
 	final := filepath.Join(dir, name)
 	if err := os.Rename(part, final); err != nil {
 		return Source{}, err
@@ -515,10 +516,10 @@ func (f Fetcher) do(ctx context.Context, u *url.URL, offset int64, prev partMeta
 	return f.client().Do(req)
 }
 
-// clients caches the one http.Client per distinct configuration. Building a
-// Transport per call meant a probe-then-download import did ~25 fresh TCP+TLS
+// clients caches the one http.Client per distinct configuration. A Transport
+// per call would cost a probe-then-download import ~25 fresh TCP+TLS
 // handshakes to the same host with no connection reuse, and abandoned
-// Transports sat on idle connections until GC. The two policies wired into
+// Transports would sit on idle connections until GC. The two policies wired into
 // the client - redirect re-validation and the connect-time address judgment -
 // depend only on the Fetcher's own settings, so equal settings share one
 // client safely; the Transport is safe for concurrent use.

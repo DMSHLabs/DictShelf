@@ -438,9 +438,9 @@ public class LookupActivity extends Activity {
     // A floating window is sized to its CONTENT - the decor measures the
     // content view with AT_MOST - so the size has to be stated in pixels on
     // the content view itself, not asked for with MATCH_PARENT and a
-    // Window.setLayout. Doing only the latter is what produced a window the
-    // height of the handoff row: the content wrapped, and the WebView, being
-    // `height=0, weight=1`, was handed the excess of a parent that had none.
+    // Window.setLayout. Doing only the latter yields a window the height of the
+    // handoff row: the content wraps, and the WebView, being `height=0,
+    // weight=1`, is handed the excess of a parent that has none.
     // setLayout stays as well, so the window agrees with what it contains.
     //
     // Floating windows are exempt from the forced edge-to-edge that

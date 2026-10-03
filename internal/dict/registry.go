@@ -24,8 +24,8 @@ var openers = map[string]opener{} // key: lowercase extension incl. dot, e.g. ".
 // formats whose main file has a fixed name inside a bundle directory (a
 // prepared-dictionary folder holds "text.db"). Suffix matching cannot express
 // this safely: a "text.db" suffix key would also swallow an unrelated
-// "context.db", and matching bare ".db" is exactly the greedy registration
-// that made a "media.db" sidecar open as a phantom dictionary.
+// "context.db", and matching bare ".db" would make a "media.db" sidecar open
+// as a phantom dictionary.
 var fileOpeners = map[string]opener{}
 
 // RegisterFormat wires a file extension to a format package. Called from
@@ -388,10 +388,10 @@ func recoverOpen(path string, err *error) {
 // PanicError is the conversion Open performs on a parser panic, exported so
 // that the OTHER paths which run the same parsers can perform it too. A
 // format backend is reached twice: once through Open, where the recover above
-// has always caught a slice-bounds panic on a corrupt file, and once per
-// lookup, where until now there was nothing - and a panic in a fan-out worker
-// goroutine is not recoverable by the HTTP handler that started it, so one
-// malformed dictionary killed the process rather than failing one row.
+// catches a slice-bounds panic on a corrupt file, and once per lookup - where a
+// panic in a fan-out worker goroutine is not recoverable by the HTTP handler
+// that started it, so without the same conversion one malformed dictionary
+// would kill the process rather than fail one row.
 //
 // It is a function rather than a second deferred recover helper because the
 // callers differ in where the error goes (an *error, a Hit, a channel); only

@@ -19,27 +19,19 @@ import (
 
 // Removing a dictionary from the running app (D63, amended).
 //
-// The first cut offered removal only where the app could not hand the user to
-// a file manager instead - `!(isLoopback && revealPossible())`, the exact
-// complement of Reveal, which in practice meant Android. That rule was wrong
-// in both directions. It withheld the operation from the desktop user sitting
-// at the keyboard, who owns these files and whose alternative was copying a
-// path into Finder; and, because "not loopback" is the branch where Reveal is
-// impossible, it *granted* the operation to every remote browser on the LAN -
-// the one caller acting on someone else's disk, and the one this endpoint
-// should be most careful with.
+// Who may: the rule every other machine-acting control uses (reveal, power) -
+// loopback is the trusted caller. This is a personal app managing a library
+// its user owns; managing includes throwing things away, and doing it from the
+// page you are already looking at beats copying a path into a file manager. A
+// remote browser is the one caller acting on someone else's disk, so it gets a
+// different answer: ALLOW_REMOTE_DELETE, off by default because that caller has
+// authenticated as nobody, on in one line for a server whose LAN its owner
+// trusts with an irreversible operation. Tying removal to Reveal instead -
+// offering it only where no file manager can be opened - would withhold it from
+// the desktop user at the keyboard and grant it to every browser on the LAN.
 //
-// The rule is now the same one every other machine-acting control uses
-// (reveal, power): loopback is the trusted caller. This is a personal app
-// managing a library its user owns; managing includes throwing things away,
-// and doing it from the page you are already looking at beats copying a path
-// into a file manager. A remote browser is a different question, so it gets a
-// different answer: ALLOW_REMOTE_DELETE, off by default because that caller
-// has authenticated as nobody, on in one line for a server whose LAN its owner
-// trusts with an irreversible operation.
-//
-// The primitive is unchanged and lives at every layer: DELETE /api/library,
-// `wudict rm`, and store.RemovePrepared as the single file-deleting surface.
+// The primitive lives at every layer: DELETE /api/library, `wudict rm`, and
+// store.RemovePrepared as the single file-deleting surface.
 //
 // Two objects, never conflated:
 //
@@ -201,9 +193,9 @@ func (r *Registry) Remove(id string, dropPrepared, dropSource bool) (removal, er
 // pruneEmptied removes the folder a removed dictionary's files were the whole
 // of. An import creates one folder per dictionary, so removing the dictionary
 // that lived there leaves an empty one behind - and an empty folder with a
-// dictionary's name is not inert: the next import of the same bundle used to
-// read it as an installation and offer to "update" something the user had just
-// removed (D137).
+// dictionary's name is not inert: the next import of the same bundle would
+// read it as an installation and offer to "update" something the user has
+// just removed (D137).
 //
 // Deliberately one level and no recursion, and never a scanned folder or the
 // download shelf: those are places the user put things, and this only unmakes
@@ -277,8 +269,11 @@ func (s *Server) handleRemoveLibrary(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 400, "missing dict parameter")
 		return
 	}
-	prepared := q.Get("prepared") != "0"
-	source := q.Get("source") != "0"
+	// both default on: Remove… deletes the whole dictionary unless told to keep a half
+	prepared, sent := queryFlag(q, "prepared")
+	prepared = prepared || !sent
+	source, sent := queryFlag(q, "source")
+	source = source || !sent
 	if source && !prepared && !s.reg.UseCached() {
 		// Its folder would survive but nothing would list it: the library is
 		// only enrolled when the user opted in (D19).

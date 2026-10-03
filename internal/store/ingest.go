@@ -17,6 +17,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/wuweidict/wudict/internal/dict"
@@ -28,16 +29,11 @@ type Progress func(done, total int)
 
 const batchSize = 5000
 
-// Level selects how much gets indexed for search.
-type Level string
-
+// The meta `ingest_level` values: whether article text was indexed for
+// full-text search. On-disk format - read only through PlanFromMeta.
 const (
-	// LevelText indexes headwords AND stripped article text: fuzzy +
-	// full-text search.
-	LevelText Level = "text"
-	// LevelHeadwords indexes headwords only: fuzzy search with a much
-	// smaller database, no full-text search.
-	LevelHeadwords Level = "headwords"
+	levelText      = "text"
+	levelHeadwords = "headwords"
 )
 
 // Report summarizes one completed ingest. Diagnostics are RETURNED, never
@@ -58,36 +54,10 @@ type Plan struct {
 	Contains bool // trigram over folded headwords, for substring search
 }
 
-// PlanOf maps a legacy Level onto a Plan. Contains is off: a trigram index
-// serves a mode most people never use, and it more than doubles the size of an
-// otherwise ~2 MB index.
-func PlanOf(level Level) Plan { return Plan{FullText: level != LevelHeadwords} }
-
-// Ingest scans r into a new text database at dbPath with full text
-// indexing (see IngestPlan).
-func Ingest(r dict.Reader, dbPath string, progress Progress) error {
-	return IngestLevel(r, dbPath, LevelText, progress)
-}
-
-// IngestLevel scans r into a new text database, discarding the Report.
-func IngestLevel(r dict.Reader, dbPath string, level Level, progress Progress) error {
-	_, err := IngestPlan(r, dbPath, PlanOf(level), progress)
-	return err
-}
-
-// IngestLevelReport is IngestPlan for a legacy Level.
-func IngestLevelReport(r dict.Reader, dbPath string, level Level, progress Progress) (Report, error) {
-	return IngestPlan(r, dbPath, PlanOf(level), progress)
-}
-
 // IngestPlan scans r into a new text database at dbPath (atomically: written
 // to a temp file, renamed on success). The FTS index is built inside the same
 // transaction as the data (FTS-audit #3).
 func IngestPlan(r dict.Reader, dbPath string, plan Plan, progress Progress) (rep Report, err error) {
-	level := LevelHeadwords
-	if plan.FullText {
-		level = LevelText
-	}
 	srcMeta := r.Meta()
 	// Decided before anything is written, while the database being replaced
 	// is still the one at dbPath (keptUUID, stale.go).
@@ -174,12 +144,12 @@ func IngestPlan(r dict.Reader, dbPath string, plan Plan, progress Progress) (rep
 
 	// Redirect resolution, on disk rather than on the heap.
 	//
-	// This used to be two Go maps of EVERY headword (raw and lowercased) plus a
-	// slice of every pending link, all held until the scan finished. On a
-	// 2.9M-entry dictionary that measured 805 MB of live heap - on a phone with
-	// 52 MB free, which is a kill by the low-memory killer, not a slow ingest.
+	// Two Go maps of EVERY headword (raw and lowercased) plus a slice of every
+	// pending link, held until the scan finishes, measured 805 MB of live heap on
+	// a 2.9M-entry dictionary (docs.local/PERF.md §9) - on a phone with 52 MB
+	// free, a kill by the low-memory killer rather than a slow ingest.
 	//
-	// Both are scratch tables now. wref is (headword, folded headword, id) per
+	// So both are scratch tables. wref is (headword, folded headword, id) per
 	// entry; plink is one row per unresolved redirect. TEMP means SQLite keeps
 	// them in its own temp file and discards them when the connection closes,
 	// so nothing here reaches the text.db that ships.
@@ -231,7 +201,7 @@ func IngestPlan(r dict.Reader, dbPath string, plan Plan, progress Progress) (rep
 			return rep, err
 		}
 		txt := ""
-		if level == LevelText {
+		if plan.FullText {
 			txt = StripHTML(body)
 		}
 		if _, err = insFts.Exec(id, hw, txt); err != nil {
@@ -299,7 +269,7 @@ func IngestPlan(r dict.Reader, dbPath string, plan Plan, progress Progress) (rep
 		"description":      srcMeta.Description,
 		"entry_count":      fmt.Sprint(id - int64(subEntries)),
 		"sub_entries":      fmt.Sprint(subEntries), // @-prefixed, hidden from browsing
-		"ingest_level":     string(level),
+		"ingest_level":     ingestLevel(plan),
 		"has_trigram":      boolMeta(plan.Contains),      // cheap-list flag; Open feature-detects the table
 		"fold_version":     fmt.Sprint(dict.FoldVersion), // which text folding built the trigram index
 		"markup_version":   fmt.Sprint(artmark.Version),  // which role markup the articles were written with
@@ -408,16 +378,14 @@ const linkPage = 10000
 // resolveLinks turns every pending redirect into an alias row and reports how
 // many had no target.
 //
-// It reproduces the two-map lookup it replaced EXACTLY: the old code tried the
-// raw headword first and fell back to the lowercased one, and in both cases
-// took the lowest entry id. One folded lookup covers both - a raw match implies
+// The rule: the raw headword first, else the lowercased one, and in both cases
+// the lowest entry id. One folded lookup covers both - a raw match implies
 // a folded match - so the candidates come back in id order and the first row
 // whose headword matches the target verbatim wins, else the first row at all.
 //
 // Folding is Go's strings.ToLower on both sides, not SQL. SQLite's NOCASE and
-// lower() are ASCII-only, so "ÁBACO" would stop resolving to "ábaco" the moment
-// this moved into the query - a silent regression on exactly the accented
-// languages this dictionary is written in.
+// lower() are ASCII-only, so in the query "ÁBACO" would not resolve to "ábaco" -
+// silently wrong on exactly the accented languages a dictionary is written in.
 // clampDone keeps a progress numerator inside the denominator the source
 // header supplied. A total of 0 means "unknown" throughout this file and is
 // reported as a bare count by the client, so it is left alone.
@@ -628,9 +596,26 @@ func Slug(name string) string {
 	return s
 }
 
-// DefaultDBDir is the cache directory for generated databases (D7).
-// WUDICT_DB_DIR overrides it.
+// dbDir is the library folder the configuration chose (SetDBDir); nil when
+// none was, which leaves the environment and the default to decide.
+var dbDir atomic.Pointer[string]
+
+// SetDBDir sets the library folder (config DB_DIR, already resolved through
+// flag > env > toml). "" clears it.
+func SetDBDir(dir string) {
+	if dir == "" {
+		dbDir.Store(nil)
+		return
+	}
+	dbDir.Store(&dir)
+}
+
+// DefaultDBDir is the library folder for prepared dictionaries (D7): the
+// configured one (SetDBDir), else $WUDICT_DB_DIR, else ~/.wudict/db.
 func DefaultDBDir() string {
+	if dir := dbDir.Load(); dir != nil {
+		return *dir
+	}
 	if dir := os.Getenv("WUDICT_DB_DIR"); dir != "" {
 		return dir
 	}

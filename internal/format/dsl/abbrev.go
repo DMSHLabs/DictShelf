@@ -43,8 +43,8 @@ const (
 // abbrevMap resolves a [p] label to its expansion. The exact spelling wins; the
 // case-folded map is the fallback, because a glossary keyed "Adj." is routinely
 // used from a "[p]adj.[/p]" label. A nil *abbrevMap resolves nothing, which is
-// how "no companion" is spelled - the transformer then emits exactly the bytes
-// it emitted before this existed.
+// how "no companion" is spelled - the transformer then emits each label as it
+// stands, with no expansion.
 type abbrevMap struct {
 	exact map[string]string
 	fold  map[string]string

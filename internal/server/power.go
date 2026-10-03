@@ -95,18 +95,18 @@ func SetActiveProcs(n int) {
 	runtime.GOMAXPROCS(n)
 }
 
-// demandHold counts operations a person is currently waiting on - today, a
-// demanded index (registry.go demandIndex). It is the one exemption from the
-// rule below, and it exists because the rule was punishing exactly the wrong
-// work: a user taps "index this dictionary", the screen dims thirty seconds
-// later, the shell reports PowerBackground, and the ingest they are waiting for
-// drops to a single thread for the rest of its run. The app is not idle; it is
-// doing the thing it was just asked to do.
+// demandHold counts operations a person is currently waiting on: a demanded
+// index, a feature change, a rebuild (HoldActiveProcs). It is the one exemption
+// from the rule below, which would otherwise punish exactly the wrong work: a
+// user taps "index this dictionary", the screen dims thirty seconds later, the
+// shell reports PowerBackground, and the ingest they are waiting for would drop
+// to a single thread for the rest of its run. The app is not idle; it is doing
+// the thing it was just asked to do.
 //
 // Note that this is the ONLY demotion that reaches the server on Android. The
 // Go process is exec'd by the shell (D52) and does not follow the app's cgroup
-// move - measured: the shell sat in /background while its child stayed in
-// /top-app - so nothing else was going to slow this down.
+// move - measured: the shell sits in /background while its child stays in
+// /top-app - so nothing else slows this down.
 var demandHold atomic.Int32
 
 // HoldActiveProcs marks user-waited work as running and returns the release.
@@ -151,8 +151,7 @@ var busyLines = os.Getenv("WUDICT_BUSY_LINES") == "1"
 // be confused with a log line.
 //
 // Fire-and-forget by design. A missed marker costs a foreground service that
-// was not started - exactly today's behaviour - so nothing here is worth an
-// error path.
+// is not started, so nothing here is worth an error path.
 func emitBusy(busy bool) {
 	if !busyLines {
 		return
@@ -243,7 +242,7 @@ func memoryPressure() bool {
 // work lasts, freeing nothing, which on a phone is the precise combination of
 // battery drain and heat this whole mechanism exists to prevent. Being killed
 // by the low-memory daemon is a better outcome than that, and staying under the
-// ceiling was never among the outcomes on offer.
+// ceiling is not among the outcomes on offer.
 //
 // So the ceiling yields. After relaxAfterPasses consecutive janitor passes that
 // began under pressure - by which point everything sheddable has been shed

@@ -11,10 +11,9 @@ import (
 
 // CORS for browser extensions (D69).
 //
-// The browser extension used to declare a host permission for
-// http://127.0.0.1:6888/*, which bought it two things at once: a scary install
-// prompt ("read your data on 127.0.0.1"), and a free pass through CORS. Dropping
-// the permission removes the prompt, so the pass has to be issued here instead.
+// The browser extension declares no host permission for the server: one would
+// buy a free pass through CORS at the price of a scary install prompt ("read
+// your data on 127.0.0.1"), so the pass is issued here instead.
 //
 // Why an extension origin may be trusted with it at all: `Origin` is set by the
 // browser and cannot be forged by page script - `fetch` refuses to let a page

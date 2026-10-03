@@ -178,9 +178,9 @@ final class SafImporter {
         File root = new File(AppDirs.appDicts(a), batch.folder);
         sweepPartials(root);
         // Only what is NOT already here counts against free space. Summing the
-        // whole batch made a re-import of a folder that is 95 % imported -
+        // whole batch would make a re-import of a folder that is 95 % imported -
         // the normal way a user adds one dictionary - refuse itself with "not
-        // enough space" for bytes it was never going to write.
+        // enough space" for bytes it is never going to write.
         long need = 0;
         for (Item it : batch.items) {
             if (it.size <= 0) continue;

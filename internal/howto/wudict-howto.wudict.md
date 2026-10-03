@@ -62,7 +62,7 @@ Open the dictionary panel <kbd>☰</kbd> to:
 
 - **Open first**: <kbd>My order</kbd> opens the first dictionary in your list that has a result; <kbd>Fastest</kbd> opens the dictionary that was the fastest to return a result.
 - **Sort dictionaries** controls the order used in the dictionary combobox, <kbd>Alphabetical</kbd> or <kbd>My order</kbd>.
-- **Text size**: <kbd>−</kbd> <kbd>15px</kbd> <kbd>+</kbd> in the ![](cog.svg) row; click the number to reset.
+- **Text size**: <kbd>−</kbd> <kbd>15px</kbd> <kbd>+</kbd> at the top of the panel; click the number to reset.
 - ![](rescan.svg) <kbd>Rescan folders</kbd> can be used to refresh the dictionary folders after adding or removing items.
 
 More: [search](<entry://wudict search>) · [full-text](<entry://wudict full-text>) · [panel](<entry://wudict panel>) · [index](<entry://wudict index>) · [styles](<entry://wudict styles>) · [links](<entry://wudict links>) · [📱 Android](<entry://wudict android>) · [💻 desktop](<entry://wudict desktop>) · [FAQ](<entry://wudict FAQ>)
@@ -152,7 +152,6 @@ Each language is a small download (under 2 MB) and is used only for dictionaries
 
 ### Settings ![](cog.svg)
 
-- <kbd>−</kbd> <kbd>15px</kbd> <kbd>+</kbd>: [text size](<entry://wudict text size>).
 - ![](folder.svg) <kbd>Edit folders…</kbd>: [add dictionaries](<entry://wudict add dictionaries>).
 - ![](rescan.svg) <kbd>Rescan folders</kbd>: find dictionaries added or removed since. If a dictionary's files are gone, it offers to delete its prepared data.
 - ![](lemmas.svg) <kbd>Lemmatization…</kbd>: [word forms](<entry://wudict lemmatization>).
@@ -177,7 +176,7 @@ Each language is a small download (under 2 MB) and is used only for dictionaries
 ## wudict font size
 ## wudict zoom
 
-In <kbd>☰</kbd> → ![](cog.svg) row → <kbd>−</kbd> <kbd>15px</kbd> <kbd>+</kbd>; click the number to reset. It sets the size of article text; the app keeps it.
+In <kbd>☰</kbd>, at the top of the panel: <kbd>−</kbd> <kbd>15px</kbd> <kbd>+</kbd>; click the number to reset. It sets the size of article text; the app keeps it.
 
 ## wudict add dictionaries
 ## wudict add

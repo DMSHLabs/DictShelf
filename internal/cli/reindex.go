@@ -160,34 +160,32 @@ func resolveFolder(arg string, folders []store.Folder) (store.Folder, error) {
 // outdated (or always, with force), then repacks media it had and no longer
 // serves.
 func reindexOne(f store.Folder, force bool) error {
-	textDB, mediaDB := store.TextDBPath(f.Dir), store.MediaDBPath(f.Dir)
-	hadMedia := fileExists(mediaDB)
 	name := folderLabel(f)
-	if reasons := store.TextStale(textDB, f.Source); force || len(reasons) > 0 {
-		if len(reasons) > 0 {
-			logx.V("%soutdated (%v)", logx.Dict(name), reasons)
-		}
-		r, err := dict.OpenReader(f.Source)
-		if err != nil {
-			return err
-		}
-		plan := store.KeptPlan(textDB)
-		start := time.Now()
-		rep, err := store.IngestPlan(r, textDB, plan, entryProgress)
-		r.Close()
-		logx.ClearLine()
-		if err != nil {
-			return err
-		}
+	t := store.Target{Dir: f.Dir, Rebuild: store.IfOutdated, Media: store.MediaKeep}
+	if force {
+		t.Rebuild, t.Media = store.Always, store.MediaRepack
+	}
+	var title string // the folder is what this command names, not the title
+	hooks, done := cliHooks(f.Source, &title)
+	res, err := store.Reconcile(f.Source, t, hooks)
+	done()
+	logx.ClearLine()
+	if err != nil {
+		return err
+	}
+	if len(res.Why) > 0 {
+		logx.V("%soutdated (%v)", logx.Dict(name), res.Why)
+	}
+	if res.Rebuilt {
 		fmt.Printf("%s%s indexed in %.1fs\n", logx.Dict(name),
-			plural(rep.Entries, "entry", "entries"), time.Since(start).Seconds())
+			plural(res.Report.Entries, "entry", "entries"), res.TextTime.Seconds())
 	}
-	if hadMedia && (force || !store.MediaPaired(textDB)) {
-		if err := packMedia(f.Source, textDB, name); err != nil {
-			return err
-		}
+	printMedia(name, res)
+	if !res.Changed() {
+		// the receipt is derived: a folder reindex visits is left with one
+		// this build writes, whether or not its data needed work
+		_ = store.WriteInfo(f.Dir)
 	}
-	_ = store.WriteInfo(f.Dir)
 	return nil
 }
 

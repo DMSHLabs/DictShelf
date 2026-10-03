@@ -14,10 +14,10 @@ import (
 
 const winPath = `C:\Users\name\Downloads\mdict`
 
-// The defect: DICT_DIR was written escaped ("C:\\Users\\…") and read back with
-// the escaping still in it, so the setup page's input showed a doubled
-// backslash for every separator - and on a platform where '\' is not a path
-// separator, the doubled path did not exist at all.
+// DICT_DIR is written escaped ("C:\\Users\\…") and must be read back without
+// the escaping: otherwise the setup page's input shows a doubled backslash for
+// every separator - and on a platform where '\' is not a path separator, the
+// doubled path does not exist at all.
 func TestWindowsPathRoundTrip(t *testing.T) {
 	for _, dirs := range [][]string{
 		{winPath},

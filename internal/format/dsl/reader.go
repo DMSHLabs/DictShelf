@@ -233,9 +233,8 @@ func (r *Reader) init(path string) error {
 		// re-parsed out of desc. Lingvo writes collation names here
 		// ("SpanishModernSort"), which internal/lang absorbs.
 		IndexLang: lang.FromDeclared(from),
-		// #CONTENTS_LANGUAGE is the other end of the pair, and until the About
-		// panel existed it survived only as the middle of the desc string
-		// above. Recorded as a code so a consumer never has to parse " → ".
+		// #CONTENTS_LANGUAGE is the other end of the pair. Recorded as a code,
+		// so a consumer never has to parse the " → " in the desc string above.
 		ContentsLang: lang.FromDeclared(to),
 	}
 	// Every other directive, in file order: the ones the name and the
@@ -362,7 +361,7 @@ func detectEncoding(br *bufio.Reader) (encoding.Encoding, error) {
 	// No refinement of the UTF-8 test can see that; only a more specific
 	// question asked earlier can.
 	//
-	// 64 KB rather than 4: the sample now has to carry the #SOURCE_CODE_PAGE
+	// 64 KB: the sample has to carry the #SOURCE_CODE_PAGE
 	// and #INDEX_LANGUAGE header lines to eightBitEncoding, and to hold enough
 	// text for decodesToLines to be able to find a line break in it.
 	sample, _ := br.Peek(1 << 16)
@@ -383,11 +382,11 @@ func detectEncoding(br *bufio.Reader) (encoding.Encoding, error) {
 		return unicode.UTF8, nil
 	}
 	// Neither Unicode form fits: a single-byte Windows code page, which the
-	// header names or the declared languages imply (codepage.go). The old
-	// unconditional UTF-16LE fallback is kept only for what it was ever right
-	// about - a file whose NUL pattern was too weak to call above - and only
-	// when it actually yields lines, because a single-byte file decoded as
-	// UTF-16 yields exactly one line the length of the dictionary.
+	// header names or the declared languages imply (codepage.go). UTF-16LE
+	// stays the fallback only for a file whose NUL pattern was too weak to
+	// call above, and only when it actually yields lines, because a
+	// single-byte file decoded as UTF-16 yields exactly one line the length of
+	// the dictionary.
 	cp := eightBitEncoding(sample)
 	if decodesToLines(cp, sample) || !bytes.ContainsRune(sample, 0) {
 		// Either the code page produces lines, or the file has no NUL in 64 KB
@@ -521,7 +520,7 @@ func stripLineComments(line string, in bool) (string, bool) {
 // Unicode space block are how a DSL author writes a blank line or an indent
 // that survives the space-collapsing rule (lingvo-ref "Об использовании
 // нестандартных пробелов"), so a line made of them is content, not emptiness -
-// strings.TrimSpace, which folds every Unicode space, deleted exactly the
+// strings.TrimSpace, which folds every Unicode space, would delete exactly the
 // paragraph breaks the author went out of their way to create.
 func blankLine(s string) bool { return strings.Trim(s, " \t\v\f\r") == "" }
 

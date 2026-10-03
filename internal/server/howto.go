@@ -20,7 +20,7 @@ import (
 // With restore=1 it brings the built-in guide back after the user removed it
 // (howto.MarkRemoved): installed again, listed again, and kept from then on.
 func (s *Server) handleHowtoCopy(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Query().Get("restore") == "1" {
+	if restore, _ := queryFlag(r.URL.Query(), "restore"); restore {
 		s.restoreHowto(w)
 		return
 	}

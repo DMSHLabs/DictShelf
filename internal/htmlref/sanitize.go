@@ -26,11 +26,10 @@ import (
 // the part worth having exactly once.
 //
 // Measured on the real corpus (q=speed, 9 heavy dictionaries, 748 KB of raw
-// article): `clean` is 1.9x smaller, `text` 2.6x. The first cut of `clean`
-// managed only 1.5x, because stripping attributes leaves the tag skeleton
-// standing - 3,237 of one LDOCE entry's 3,796 elements are <span>, and a
-// classless <span></span> is 13 bytes of nothing. Unwrapping those (Policy.Bare)
-// is what took LDOCE from 63% of raw to 41%.
+// article): `clean` is 1.9x smaller, `text` 2.6x. Stripping attributes alone
+// leaves the tag skeleton standing - 3,237 of one LDOCE entry's 3,796 elements
+// are <span>, and a classless <span></span> is 13 bytes of nothing - so those
+// are unwrapped (Policy.Bare), which takes LDOCE from 63% of raw to 41%.
 
 // TagAction says what Sanitize does with one element.
 type TagAction int

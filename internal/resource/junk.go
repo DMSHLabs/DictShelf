@@ -54,8 +54,8 @@ func junkComponent(c string) bool {
 	return junkNames[low]
 }
 
-// junkNames is the closed list: macOS first, because that is what the report
-// was about, then the two Windows equivalents that arrive in the same repacks.
+// junkNames is the closed list: macOS first, the commonest, then the two
+// Windows equivalents that arrive in the same repacks.
 // Every entry is a name an OS writes on its own, never one a dictionary author
 // types.
 var junkNames = map[string]bool{

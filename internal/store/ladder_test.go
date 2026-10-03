@@ -18,7 +18,7 @@ import (
 func run(t *testing.T, s *Store, q string) (string, []string) {
 	t.Helper()
 	for _, r := range ftsq.Parse(q).Rungs() {
-		res, err := s.FullTextMatch(r.Match, 10)
+		res, err := s.FullTextMatch(bg, r.Match, 10)
 		if err != nil {
 			t.Fatalf("query %q rung %s (%s): %v", q, r.Name, r.Match, err)
 		}
@@ -35,8 +35,8 @@ func run(t *testing.T, s *Store, q string) (string, []string) {
 }
 
 // The point of the ladder: the precise reading answers when it can, and only
-// then does the query relax. Before this, "órgano muscular" and "muscular
-// órgano" and "órgano ... anything ... muscular" were all the same query.
+// then does the query relax - "órgano muscular", "muscular órgano" and
+// "órgano ... anything ... muscular" are not the same query.
 func TestFullTextLadder(t *testing.T) {
 	s := testStore(t)
 	for _, tc := range []struct {
@@ -77,7 +77,7 @@ func TestOperatorQueriesAreLegalFTS5(t *testing.T) {
 			continue
 		}
 		for _, r := range rs {
-			if _, err := s.FullTextMatch(r.Match, 5); err != nil {
+			if _, err := s.FullTextMatch(bg, r.Match, 5); err != nil {
 				t.Errorf("query %q rung %s (%s): %v", q, r.Name, r.Match, err)
 			}
 		}
@@ -96,7 +96,7 @@ func TestLadderSurvivesHostileInput(t *testing.T) {
 		strings.Repeat("word ", 300),
 	} {
 		for _, r := range ftsq.Parse(q).Rungs() {
-			if _, err := s.FullTextMatch(r.Match, 5); err != nil {
+			if _, err := s.FullTextMatch(bg, r.Match, 5); err != nil {
 				t.Errorf("query %q rung %s (%s): %v", q, r.Name, r.Match, err)
 			}
 		}

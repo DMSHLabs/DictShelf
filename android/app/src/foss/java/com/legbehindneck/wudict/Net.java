@@ -11,7 +11,7 @@
 // cannot appear on its settings screen, and the string it would need is not
 // in its resources either (src/foss/res/values/strings.xml).
 //
-// WHY NOT 0.0.0.0, WHICH IS WHAT THIS USED TO PASS
+// WHY NOT 0.0.0.0?
 //
 // A wildcard bind is not "the LAN". Go resolves 0.0.0.0 to a DUAL-STACK [::]
 // listen (net.favoriteAddrFamily returns AF_INET6 with IPV6_V6ONLY off, and

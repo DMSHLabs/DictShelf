@@ -13,7 +13,7 @@ import (
 	"github.com/wuweidict/wudict/internal/dict"
 )
 
-type boomDict struct{ mode int }
+type boomDict struct{}
 
 func (b boomDict) Meta() dict.Meta { return dict.Meta{Name: "boom", Path: "/x/boom.mdx"} }
 func (b boomDict) Caps() dict.Caps { return dict.Caps{Exact: true, Prefix: true} }
@@ -40,7 +40,7 @@ func (o okDict) Exact(w string, n int) ([]dict.Result, error) {
 }
 
 func TestFanOutSurvivesParserPanic(t *testing.T) {
-	hits := All(context.Background(), []dict.Dictionary{boomDict{}, okDict{}}, Exact, "x", 5)
+	hits := all(context.Background(), []dict.Dictionary{boomDict{}, okDict{}}, Exact, "x", 5)
 	if hits[0].Err == nil {
 		t.Fatal("panicking dictionary produced no error")
 	}

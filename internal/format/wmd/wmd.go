@@ -10,15 +10,12 @@ package wmd
 
 import (
 	"compress/gzip"
-	"fmt"
 	"io"
 	"path/filepath"
 	"sort"
 	"sync"
-	"time"
 
 	"github.com/wuweidict/wudict/internal/dict"
-	"github.com/wuweidict/wudict/internal/logx"
 	"github.com/wuweidict/wudict/internal/resource"
 	"github.com/wuweidict/wudict/internal/store"
 )
@@ -96,30 +93,20 @@ type Dict struct {
 }
 
 func Open(path string) (*Dict, error) {
-	dbPath, prepared := store.PreparedFor(path)
-	if !prepared {
-		r, err := NewReader(path)
+	var r *Reader
+	defer func() {
+		if r != nil {
+			r.Close()
+		}
+	}()
+	s, err := store.OpenSelfPrepared(path, Format, func() (dict.Reader, error) {
+		var err error
+		r, err = NewReader(path)
 		if err != nil {
 			return nil, err
 		}
-		name := r.Meta().Name
-		if dbPath, err = store.PrepareTarget(path); err != nil {
-			r.Close()
-			return nil, err
-		}
-		start := time.Now()
-		logx.Status("%spreparing search index (%s, first open)…", logx.Dict(name), Format)
-		rep, ierr := store.IngestPlan(r, dbPath, store.KeptPlan(dbPath), func(done, total int) {
-			logx.Progress("  %d entries", done)
-		})
-		r.Close()
-		if ierr != nil {
-			logx.ClearLine()
-			return nil, fmt.Errorf("preparing %q: %w", name, ierr)
-		}
-		store.ReportPrepared(name, rep, time.Since(start))
-	}
-	s, err := store.Open(dbPath)
+		return r, nil
+	})
 	if err != nil {
 		return nil, err
 	}

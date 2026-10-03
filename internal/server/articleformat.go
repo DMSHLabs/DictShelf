@@ -265,7 +265,7 @@ func audioObject(base string) func(string, []html.Attribute) string {
 }
 
 // applyFormat reduces one article body. `raw` returns it untouched and costs
-// nothing, which is what keeps the desktop UI's path exactly as it was.
+// nothing, which keeps the desktop UI's path free.
 func applyFormat(body, format, base string, st htmlref.Styles) string {
 	switch format {
 	case formatClean:

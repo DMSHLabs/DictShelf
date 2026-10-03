@@ -29,7 +29,7 @@ func prepare(t *testing.T, srcPath, name string) string {
 		meta:    dict.Meta{Name: name, Format: "mdx", Path: srcPath},
 		entries: []dict.Entry{h("a", "<p>x</p>")},
 	}
-	if err := Ingest(r, TextDBPath(dir), nil); err != nil {
+	if err := ingestFull(r, TextDBPath(dir)); err != nil {
 		t.Fatal(err)
 	}
 	return dir
@@ -211,7 +211,7 @@ func TestOwnershipSurvivesBogusReaderPath(t *testing.T) {
 		meta:    dict.Meta{Name: "Real", Format: "mdx", Path: "real.mdx"},
 		entries: []dict.Entry{h("a", "<p>x</p>")},
 	}
-	if err := Ingest(r, TextDBPath(dir), nil); err != nil {
+	if err := ingestFull(r, TextDBPath(dir)); err != nil {
 		t.Fatal(err)
 	}
 	got, ok := PreparedFor(src)
@@ -410,10 +410,9 @@ func TestPrefix(t *testing.T) {
 }
 
 // A headword typed in full must not hide the keys it is a strict prefix of:
-// "starts with" used to return the exact article alone, so a DSL entry set
-// whose base headword is also the stem of its variants answered a full,
-// correctly-typed headword with one result and the same word mistyped with a
-// double space (which misses the exact pass) with all of them.
+// returning the exact article alone would answer a full, correctly-typed
+// headword with one result and the same word mistyped with a double space
+// (which misses the exact pass) with all of them.
 func TestPrefixDoesNotStopAtExact(t *testing.T) {
 	s := testStore(t)
 	res, err := s.Prefix("pregunta", 10)
@@ -460,7 +459,7 @@ func TestPrefixFoldedFallback(t *testing.T) {
 
 func TestFuzzyAccentInsensitive(t *testing.T) {
 	s := testStore(t)
-	res, err := s.Fuzzy("corazon", 10) // no accent
+	res, err := s.fuzzy(bg, "corazon", 10) // no accent
 	if err != nil || len(res) < 2 {
 		t.Fatalf("Fuzzy corazon: %d results, err=%v", len(res), err)
 	}
@@ -469,7 +468,7 @@ func TestFuzzyAccentInsensitive(t *testing.T) {
 func TestContains(t *testing.T) {
 	s := testStore(t)
 	// substring in the MIDDLE of a headword (trigram, ≥3 chars) - not a prefix
-	res, err := s.Contains("razon", 10)
+	res, err := s.ContainsContext(bg, "razon", 10)
 	if err != nil {
 		t.Fatalf("Contains razon: %v", err)
 	}
@@ -481,30 +480,30 @@ func TestContains(t *testing.T) {
 		t.Errorf("contains 'razon' should match corazón/corazonada, got %v", res)
 	}
 	// accent-insensitive: folded query matches accented headword
-	if r, _ := s.Contains("orazó", 10); len(r) == 0 {
+	if r, _ := s.ContainsContext(bg, "orazó", 10); len(r) == 0 {
 		t.Error("contains should be accent-insensitive")
 	}
 	// short (<3 char) query falls back to LIKE, still returns something
-	if r, _ := s.Contains("re", 10); len(r) == 0 {
+	if r, _ := s.ContainsContext(bg, "re", 10); len(r) == 0 {
 		t.Error("short contains query should fall back to LIKE and match 'pregunta'")
 	}
 }
 
 func TestFullText(t *testing.T) {
 	s := testStore(t)
-	res, err := s.FullText("muscular", 10)
+	res, err := s.FullTextContext(bg, "muscular", 10)
 	if err != nil || len(res) != 1 || res[0].Headword != "corazón" {
 		t.Fatalf("FullText muscular: %v %v", res, err)
 	}
 	// tag/script content must NOT be indexed (FTS-audit #1)
-	if res, _ := s.FullText("evil", 10); len(res) != 0 {
+	if res, _ := s.FullTextContext(bg, "evil", 10); len(res) != 0 {
 		t.Errorf("script content leaked into FTS: %v", res)
 	}
-	if res, _ := s.FullText("div", 10); len(res) != 0 {
+	if res, _ := s.FullTextContext(bg, "div", 10); len(res) != 0 {
 		t.Errorf("tag names leaked into FTS: %v", res)
 	}
 	// multi-token = implicit AND
-	res, err = s.FullText("órgano muscular", 10)
+	res, err = s.FullTextContext(bg, "órgano muscular", 10)
 	if err != nil || len(res) != 1 {
 		t.Fatalf("multi-token: %v %v", res, err)
 	}
@@ -518,13 +517,13 @@ func TestHostileFtsInput(t *testing.T) {
 		`"quoted"`, `""`, `co"ra`, "back\\slash", `emoji💡word`, `-`, `*`, `   `,
 	}
 	for _, q := range hostile {
-		if _, err := s.Fuzzy(q, 5); err != nil {
+		if _, err := s.fuzzy(bg, q, 5); err != nil {
 			t.Errorf("Fuzzy(%q) errored: %v", q, err)
 		}
-		if _, err := s.Contains(q, 5); err != nil {
+		if _, err := s.ContainsContext(bg, q, 5); err != nil {
 			t.Errorf("Contains(%q) errored: %v", q, err)
 		}
-		if _, err := s.FullText(q, 5); err != nil {
+		if _, err := s.FullTextContext(bg, q, 5); err != nil {
 			t.Errorf("FullText(%q) errored: %v", q, err)
 		}
 	}
@@ -535,7 +534,7 @@ func TestClampAndKeywords(t *testing.T) {
 	if _, err := s.Prefix("c", -5); err != nil {
 		t.Errorf("negative limit: %v", err)
 	}
-	if _, err := s.FullText("de", 1<<30); err != nil {
+	if _, err := s.FullTextContext(bg, "de", 1<<30); err != nil {
 		t.Errorf("huge limit: %v", err)
 	}
 	keys := s.Keywords(0, 3)
@@ -604,7 +603,7 @@ func TestStandaloneMediaPairing(t *testing.T) {
 	r := &fakeReader{meta: dict.Meta{Name: "m", Format: "test", Path: "/gone"},
 		entries: []dict.Entry{h("w", "<p>x</p>")}}
 	base := filepath.Join(t.TempDir(), "m")
-	if err := Ingest(r, base+".text.db", nil); err != nil {
+	if err := ingestFull(r, base+".text.db"); err != nil {
 		t.Fatal(err)
 	}
 	uuid, _ := ReadMetaValue(base+".text.db", "dict_uuid")
@@ -642,7 +641,7 @@ func TestHeadwordsOnlyLevel(t *testing.T) {
 		},
 	}
 	dbPath := filepath.Join(t.TempDir(), "hw.text.db")
-	if err := IngestLevel(r, dbPath, LevelHeadwords, nil); err != nil {
+	if _, err := IngestPlan(r, dbPath, Plan{}, nil); err != nil {
 		t.Fatal(err)
 	}
 	s, err := Open(dbPath)
@@ -654,17 +653,17 @@ func TestHeadwordsOnlyLevel(t *testing.T) {
 	if c.Contains || c.FTS {
 		t.Errorf("headwords level: want contains=false fts=false, got %+v", c)
 	}
-	// accent-insensitive prefix (the old "fuzzy" engine) still works
-	res, err := s.Fuzzy("corazon", 5)
+	// accent-insensitive prefix (the internal fuzzy engine) works
+	res, err := s.fuzzy(bg, "corazon", 5)
 	if err != nil || len(res) != 1 {
 		t.Fatalf("prefix-fold: %v %v", res, err)
 	}
 	// full-text is honestly unsupported
-	if _, err := s.FullText("muscular", 5); err != dict.ErrUnsupported {
+	if _, err := s.FullTextContext(bg, "muscular", 5); err != dict.ErrUnsupported {
 		t.Errorf("fulltext: want ErrUnsupported, got %v", err)
 	}
 	// article body must NOT be indexed even via fuzzy w: prefix trickery
-	if res, _ := s.Fuzzy("muscular", 5); len(res) != 0 {
+	if res, _ := s.fuzzy(bg, "muscular", 5); len(res) != 0 {
 		t.Errorf("body leaked into headwords index: %v", res)
 	}
 }
@@ -677,7 +676,7 @@ func TestBodyTextNormalization(t *testing.T) {
 		},
 	}
 	dbPath := filepath.Join(t.TempDir(), "p.text.db")
-	if err := Ingest(r, dbPath, nil); err != nil {
+	if err := ingestFull(r, dbPath); err != nil {
 		t.Fatal(err)
 	}
 	s, err := Open(dbPath)
@@ -709,7 +708,7 @@ func TestAdoptLoose(t *testing.T) {
 		meta:    dict.Meta{Name: "Espasa", Format: "mdx", Path: src},
 		entries: []dict.Entry{h("a", "<p>x</p>")},
 	}
-	if err := Ingest(r, loose, nil); err != nil {
+	if err := ingestFull(r, loose); err != nil {
 		t.Fatal(err)
 	}
 	looseMedia := strings.TrimSuffix(loose, ".text.db") + ".media.db"
@@ -722,7 +721,7 @@ func TestAdoptLoose(t *testing.T) {
 		meta:    dict.Meta{Name: "Spa-Cat", Format: "mdx", Path: orphanSrc},
 		entries: []dict.Entry{h("b", "<p>y</p>")},
 	}
-	if err := Ingest(r2, noSrc, nil); err != nil {
+	if err := ingestFull(r2, noSrc); err != nil {
 		t.Fatal(err)
 	}
 
@@ -787,7 +786,7 @@ func TestAdoptLooseKeepsExistingFolder(t *testing.T) {
 		meta:    dict.Meta{Name: "Dup", Format: "mdx", Path: src},
 		entries: []dict.Entry{h("a", "<p>x</p>")},
 	}
-	if err := Ingest(r, loose, nil); err != nil {
+	if err := ingestFull(r, loose); err != nil {
 		t.Fatal(err)
 	}
 	moved, err := AdoptLoose()
@@ -869,8 +868,8 @@ func TestSearchIdenticalWithAndWithoutCompression(t *testing.T) {
 		for _, q := range []func() ([]dict.Result, error){
 			func() ([]dict.Result, error) { return s.Exact("corazón", 10) },
 			func() ([]dict.Result, error) { return s.Prefix("cora", 10) },
-			func() ([]dict.Result, error) { return s.Contains("razon", 10) },
-			func() ([]dict.Result, error) { return s.FullText("definición", 10) },
+			func() ([]dict.Result, error) { return s.ContainsContext(bg, "razon", 10) },
+			func() ([]dict.Result, error) { return s.FullTextContext(bg, "definición", 10) },
 		} {
 			res, err := q()
 			if err != nil {
@@ -918,11 +917,11 @@ func TestDefaultPlanOmitsTrigram(t *testing.T) {
 		t.Cleanup(func() { s.Close() })
 		return s
 	}
-	def := mk(PlanOf(LevelText))
+	def := mk(Plan{FullText: true})
 	if def.Caps().Contains {
 		t.Error("the default plan must not build a trigram index")
 	}
-	if _, err := def.Contains("razon", 5); err == nil {
+	if _, err := def.ContainsContext(bg, "razon", 5); err == nil {
 		t.Error("contains must report itself unsupported, not silently return nothing")
 	}
 	if !def.Caps().FTS || !def.Caps().Exact || !def.Caps().Prefix {
@@ -930,7 +929,7 @@ func TestDefaultPlanOmitsTrigram(t *testing.T) {
 	}
 	// asked for, it works
 	on := mk(Plan{FullText: true, Contains: true})
-	res, err := on.Contains("razon", 5)
+	res, err := on.ContainsContext(bg, "razon", 5)
 	if err != nil || len(res) != 1 {
 		t.Fatalf("contains when asked for: %v %v", res, err)
 	}
@@ -984,8 +983,8 @@ func TestSubEntriesHiddenFromBrowsing(t *testing.T) {
 		}
 		return out
 	}
-	// contains: the mode where they used to drown everything
-	res, err := s.Contains("woman", 20)
+	// contains: the mode where they would drown everything
+	res, err := s.ContainsContext(bg, "woman", 20)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1001,7 +1000,7 @@ func TestSubEntriesHiddenFromBrowsing(t *testing.T) {
 	if res, _ := s.Prefix("wom", 20); len(res) != 2 {
 		t.Errorf("prefix wom = %v", names(res))
 	}
-	if res, _ := s.FullText("EXAMPLES", 20); len(res) != 0 {
+	if res, _ := s.FullTextContext(bg, "EXAMPLES", 20); len(res) != 0 {
 		t.Errorf("full-text reached a sub-entry: %v", names(res))
 	}
 	for _, k := range s.Keywords(0, 50) {
@@ -1038,7 +1037,7 @@ func TestReferencedAssets(t *testing.T) {
 			h("four", `<img src="../outside.png"><a href="#frag">f</a><img src="LDOCE6.css">`), // dup + traversal
 		},
 	}
-	if err := Ingest(r, p, nil); err != nil {
+	if err := ingestFull(r, p); err != nil {
 		t.Fatal(err)
 	}
 	got, err := ReferencedAssets(p)
@@ -1066,7 +1065,7 @@ func TestMediaLookupIsCaseInsensitive(t *testing.T) {
 		meta:    dict.Meta{Name: "M", Format: "mdx", Path: "/x.mdx"},
 		entries: []dict.Entry{h("w", `<link href="LDOCE6.css">`)},
 	}
-	if err := Ingest(r, textDB, nil); err != nil {
+	if err := ingestFull(r, textDB); err != nil {
 		t.Fatal(err)
 	}
 	uuid, _ := ReadMetaValue(textDB, "dict_uuid")
@@ -1181,7 +1180,7 @@ func TestStaleFoldDetectedOnOpen(t *testing.T) {
 	if !s2.Caps().Contains {
 		t.Error("contains was disabled: a stale index still answers, it is only offered a rebuild")
 	}
-	got, err := s2.Contains("razon", 10)
+	got, err := s2.ContainsContext(bg, "razon", 10)
 	if err != nil {
 		t.Fatalf("contains search on a stale index: %v", err)
 	}
@@ -1190,9 +1189,8 @@ func TestStaleFoldDetectedOnOpen(t *testing.T) {
 	}
 }
 
-// The prepared backend used to run every Keywords call through clamp(), which
-// capped it at maxLimit and turned "no limit" into 500. maxLimit bounds HTTP
-// SEARCH results (FTS-audit #7); Keywords is not reachable over HTTP.
+// Keywords is not clamped: maxLimit bounds HTTP SEARCH results (FTS-audit #7),
+// Keywords is not reachable over HTTP, and "no limit" must not become 500.
 func TestKeywordsHonoursTheNoLimitContract(t *testing.T) {
 	s := testStore(t)
 	all := s.Keywords(0, 0)
@@ -1226,7 +1224,7 @@ func TestMediaOpensLazily(t *testing.T) {
 	r := &fakeReader{meta: dict.Meta{Name: "m", Format: "test", Path: "/gone"},
 		entries: []dict.Entry{h("w", "<p>x</p>")}}
 	base := filepath.Join(t.TempDir(), "lazy")
-	if err := Ingest(r, base+".text.db", nil); err != nil {
+	if err := ingestFull(r, base+".text.db"); err != nil {
 		t.Fatal(err)
 	}
 	uuid, _ := ReadMetaValue(base+".text.db", "dict_uuid")
@@ -1270,7 +1268,7 @@ func TestForeignMediaRejectedOnce(t *testing.T) {
 	r := &fakeReader{meta: dict.Meta{Name: "m", Format: "test", Path: "/gone"},
 		entries: []dict.Entry{h("w", "<p>x</p>")}}
 	base := filepath.Join(dir, "own")
-	if err := Ingest(r, base+".text.db", nil); err != nil {
+	if err := ingestFull(r, base+".text.db"); err != nil {
 		t.Fatal(err)
 	}
 	// media packed against a different dictionary's uuid
@@ -1290,9 +1288,9 @@ func TestForeignMediaRejectedOnce(t *testing.T) {
 	}
 }
 
-// A redirect-heavy dictionary is the case the counter used to get wrong: its
-// rows land in the link-resolution pass, not in the scan, so a numerator that
-// counted only articles stopped at a few percent and then jumped to done. The
+// A redirect-heavy dictionary is the hard case for the counter: its rows land
+// in the link-resolution pass, not in the scan, so a numerator that counted
+// only articles would stop at a few percent and then jump to done. The
 // count must be monotone and must finish at the total the denominator promised.
 func TestIngestProgressCoversRedirects(t *testing.T) {
 	const links = 3 * linkPage // several pages, so the paging itself reports
@@ -1326,8 +1324,8 @@ func TestIngestProgressCoversRedirects(t *testing.T) {
 			t.Errorf("progress %d exceeds total %d", done, tot)
 		}
 		last = done
-		// Something must be reported from the middle of the link pass; before
-		// the fix the highest count seen was the 2 articles.
+		// Something must be reported from the middle of the link pass, not
+		// only the 2 articles.
 		if done > 2 && done < tot {
 			sawMid = true
 		}

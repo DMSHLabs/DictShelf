@@ -483,7 +483,7 @@ func cssRules(css string) []cssRulePair {
 			i = j
 		}
 	}
-	walk(stripComments(css))
+	walk(stripCSSComments(css))
 	return out
 }
 
@@ -518,7 +518,7 @@ func customProps(body string) []string {
 	return out
 }
 
-func stripComments(css string) string {
+func stripCSSComments(css string) string {
 	var b strings.Builder
 	for i := 0; i < len(css); i++ {
 		if css[i] == '/' && i+1 < len(css) && css[i+1] == '*' {

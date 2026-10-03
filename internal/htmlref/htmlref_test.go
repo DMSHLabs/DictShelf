@@ -34,8 +34,8 @@ func TestRoundTripPreservesWellFormedMarkup(t *testing.T) {
 		`<p>unterminated <b>bold`,
 		`<p>a &lt; b &gt; c</p>`,
 		`<td nowrap valign=top>x</td>`,
-		// a `>` inside a quoted value: the old <base\b[^>]*> and
-		// <style>(.*?)</style> patterns both mis-terminated on this
+		// a `>` inside a quoted value: <base\b[^>]*> and <style>(.*?)</style>
+		// patterns both mis-terminate on this
 		`<div title="a > b"><span>x</span></div>`,
 	}
 	for _, in := range cases {

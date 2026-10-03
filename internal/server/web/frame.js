@@ -90,7 +90,7 @@
 	// --- window.parent is a declared contract, not the app's namespace -----
 	// `parent` is [Replaceable] in the HTML spec's Window IDL, so assigning it
 	// replaces the accessor with a data property. What an article finds there
-	// is now a fixed, honest surface rather than ~100 of this application's
+	// is a fixed, honest surface rather than ~100 of this application's
 	// top-level names, which it was never designed to read and whose meanings
 	// are not the ones it assumes (ODE 2024 asks for `parent.$` expecting
 	// jQuery, gets our getElementById helper, and dies on the first line of
@@ -199,7 +199,8 @@
 	// and the viewport here IS the iframe the parent already sized from our last
 	// answer. Invisible while every article only ever gets taller; obvious the moment
 	// content can shrink in place — Cambridge's entry tabs switch from a long
-	// "English" panel to a short "American" one and left ~400px of blank frame below.
+	// "English" panel to a short "American" one, which would leave ~400px of blank
+	// frame below.
 	// So it is consulted only when it genuinely EXCEEDS the viewport, i.e. when it
 	// reports real overflow rather than the clamp.
 	//
@@ -440,15 +441,14 @@
 	// handlers inside the article — LDOCE6's entry.js calls stopPropagation()
 	// on the speaker <img> so a play click does not also toggle the accordion
 	// around it. A bubble-phase listener on `document` never sees those clicks,
-	// so the browser followed the link and replaced the article with a bare
+	// so the browser would follow the link and replace the article with a bare
 	// media player. Capture runs on the way down, before any of that.
 	document.addEventListener("click", function (e) {
 		var a = e.target && e.target.closest ? e.target.closest("a") : null;
 		if (!a) {
 			// GoldenDict-era pronunciation: <object type="audio/…" data="…">.
-			// DSL emits a link now (D81), but every library folder prepared
-			// before that still stores the object, and this renderer had no
-			// handler for it at all — the audio was simply dead here.
+			// DSL emits a link (D81), but library folders prepared before that
+			// still store the object, whose audio is otherwise dead here.
 			var o = e.target && e.target.closest ? e.target.closest("object") : null;
 			if (o && /^audio\//i.test(o.getAttribute("type") || "")) {
 				e.preventDefault();
@@ -512,11 +512,10 @@
 			//
 			// preventDefault here is therefore not a guess about one dictionary:
 			// the browser's default action is categorically wrong for every
-			// fragment link in every srcdoc article. D44 exempted "#" on the
-			// belief that "the browser follows those natively here" — true of an
-			// ordinary document, false of this one, and it is the single entry
-			// where this renderer and the shadow-DOM one genuinely differ, so
-			// mirroring index.html's exclusion list was bound to get it wrong.
+			// fragment link in every srcdoc article. "The browser follows those
+			// natively" is true of an ordinary document and false of this one,
+			// and it is the single entry where this renderer and the shadow-DOM
+			// one genuinely differ, so this list must not mirror index.html's.
 			//
 			// Propagation is deliberately NOT stopped. Unlike an entry:// link,
 			// this click belongs to the dictionary — Cambridge's English/American
@@ -548,16 +547,14 @@
 		} else if (href && !/^([a-z][\w+.-]*:|\/|#|res\/|assets\/)/i.test(href)) {
 			// A bare relative href with no scheme is a cross-reference: OALD10
 			// writes <a class="Ref" href="defendant">, and Aard/slob articles
-			// generally address their own headwords this way. index.html has
-			// handled it since D41; this file did not, so for every
-			// script-bearing dictionary — which is exactly the ones rendered
-			// in here — those links navigated the iframe to a relative URL
-			// under about:srcdoc and lost the article.
+			// generally address their own headwords this way (D41). Left to the
+			// browser, such a link navigates the iframe to a relative URL under
+			// about:srcdoc and loses the article.
 			//
 			// The exclusions are a real scheme, a rooted path, an in-page
 			// anchor and our own /res/ and /assets/ prefixes. Each of those
 			// has an owner above; "#" in particular must stay excluded HERE
-			// precisely because it now has its own branch — letting a fragment
+			// precisely because it has its own branch — letting a fragment
 			// fall through to this one would search "#dataset-british" as a
 			// headword.
 			e.preventDefault();

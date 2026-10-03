@@ -32,9 +32,9 @@ func looseSite(t *testing.T, files map[string]string) *httptest.Server {
 	return srv
 }
 
-// The bug that started this: a link to a bare .mdx was refused as "not an
-// archive". It is a dictionary, and it arrives with the companion the site
-// published beside it - offered, and installed because the user said so.
+// A link to a bare .mdx is not "not an archive": it is a dictionary, and it
+// arrives with the companion the site published beside it - offered, and
+// installed because the user said so.
 func TestURLImportOfALooseFile(t *testing.T) {
 	srv := looseSite(t, map[string]string{
 		"Oxford.mdx": "main file",

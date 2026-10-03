@@ -458,8 +458,7 @@ func (tr *transformer) processTag(tag string, attrs map[string]string) error {
 		}
 	case isMarginTag(tag):
 		// [mN] shifts the left margin by N; a bare [m] is a shift of zero
-		// (lingvo-ref "Тэг [m]···[/m]") - the 0.3em it used to emit was a
-		// pyglossary artifact. isMarginTag has already guaranteed the tail is
+		// (lingvo-ref "Тэг [m]···[/m]"). isMarginTag has already guaranteed the tail is
 		// digits, so nothing but a number can reach the custom property.
 		if n := tag[1:]; n != "" && n != "0" {
 			tr.addHTML(`<p class="wu-m" style=` + quoteAttr("--wd-m:"+n) + `>`)
@@ -656,7 +655,7 @@ var mediaExt = map[string]mediaKind{
 // rendered by kind, its name recorded for the resource set.
 //
 // Every kind renders something. Emitting nothing for an unrecognised extension
-// - which is what this did - loses the file silently: the article shows a gap
+// would lose the file silently: the article would show a gap
 // where the author put a video or a PDF, and no part of the pipeline
 // downstream can recover a reference that was never written.
 func (tr *transformer) lexTagS() {
@@ -669,9 +668,8 @@ func (tr *transformer) lexTagS() {
 		// A link, not GoldenDict's `<object type="audio/x-wav">`. That spelling
 		// is a plugin-era embedding vector: `clean` has to drop it as unsafe
 		// and rescue the URL back out (server/articleformat.go audioObject),
-		// the shadow-DOM renderer needs a handler that exists for this one
-		// element, and the iframe renderer has no such handler at all - so DSL
-		// pronunciation was simply dead there. An anchor needs none of it: the
+		// and both renderers need a handler that exists for this one element.
+		// An anchor needs none of it: the
 		// server's rewriter already recognises a media href on <a> and points
 		// it at /res/, both renderers already play such a link, `clean` keeps
 		// it as an ordinary link, and no inline handler is emitted (the

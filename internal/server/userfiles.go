@@ -18,14 +18,13 @@ import (
 // The user's own file store: whatever they need their custom CSS - or their
 // own hand-written dictionary - to be able to reference by URL.
 //
-// The problem it closes is narrow and was reported as a bug. Custom CSS
-// (style.go) can say background-image:url(...), but there was nothing a user
-// could put in those parentheses: file:// is refused by every browser as a
-// subresource of an http page, and the one writable-by-URL surface that
-// existed, the D59 res/ override, is addressed by a dictionary id the UI
-// deliberately never shows (D102) and disappears when that dictionary is
-// removed. So the store is global, lives beside the stylesheets it serves, and
-// is addressed by the name the user sees.
+// Custom CSS (style.go) can say background-image:url(...), and something has
+// to be able to go in those parentheses: file:// is refused by every browser as
+// a subresource of an http page, and the other writable-by-URL surface, the
+// D59 res/ override, is addressed by a dictionary id the UI deliberately never
+// shows (D102) and disappears when that dictionary is removed. So the store is
+// global, lives beside the stylesheets it serves, and is addressed by the name
+// the user sees.
 //
 // Deliberately NOT restricted by type. The store is "files the page can reach
 // by URL", not "images for backgrounds": fonts (@font-face), an imported
@@ -215,7 +214,7 @@ func (s *Server) handleFileUpload(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "no config directory: there is nowhere to save files", http.StatusConflict)
 		return
 	}
-	replace := r.URL.Query().Get("replace") == "1"
+	replace, _ := queryFlag(r.URL.Query(), "replace")
 
 	// The caps are measured against the store as it will be AFTER the write,
 	// so replacing an 8 MiB file with a smaller one is never refused for being

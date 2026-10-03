@@ -122,7 +122,7 @@ func loadAnn(srcPath string) (dict.About, bool) {
 		// prose and may well discuss languages. In a file that opens with
 		// #LANGUAGE, every later one splits, exactly as goldendict reads it.
 		//
-		// The separator matters: without it "#LANGUAGES SUPPORTED" opened a
+		// The separator matters: without it "#LANGUAGES SUPPORTED" would open a
 		// section named "SUPPORTED".
 		if isLangLine(line) && (len(secs) == 0 || secs[0].Lang != "") {
 			flush()

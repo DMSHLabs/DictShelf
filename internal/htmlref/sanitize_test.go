@@ -291,8 +291,8 @@ func TestTextAppliesStyles(t *testing.T) {
 			}
 		})
 	}
-	// The same input without a stylesheet is the old, wrong answer - asserted
-	// so the fixture cannot silently stop demonstrating the bug.
+	// The same input without a stylesheet gives the wrong answer - asserted
+	// so the fixture cannot silently stop demonstrating the difference.
 	if got := Text(`<span class="Sense">one</span><span class="Sense">two</span>`, nil); got != "onetwo" {
 		t.Errorf("unstyled Text = %q, want %q", got, "onetwo")
 	}

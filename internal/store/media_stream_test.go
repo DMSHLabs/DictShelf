@@ -24,7 +24,7 @@ func TestLargePackedResourceStreams(t *testing.T) {
 		meta:    dict.Meta{Name: "M", Format: "mdx", Path: "/x.mdx"},
 		entries: []dict.Entry{h("w", "body")},
 	}
-	if err := Ingest(r, textDB, nil); err != nil {
+	if _, err := IngestPlan(r, textDB, Plan{}, nil); err != nil {
 		t.Fatal(err)
 	}
 	uuid, _ := ReadMetaValue(textDB, "dict_uuid")

@@ -49,7 +49,7 @@ func TestReceiptMetaReadsACompleteReceipt(t *testing.T) {
 		"name":         "AHD5",
 		"format":       "mdx",
 		"has_trigram":  "1",
-		"ingest_level": string(LevelText),
+		"ingest_level": levelText,
 		"source_path":  `D:\dicts\ahd5.mdx`,
 		"created":      "2026-01-02T03:04:05Z",
 	}
@@ -65,7 +65,7 @@ func TestReceiptMetaReadsACompleteReceipt(t *testing.T) {
 	info = "name = Old\nformat = slob\nentries = 12\ncontains = 0\n" +
 		"index = headwords only (exact · prefix · contains)\n" +
 		"source = /dicts/old.slob\nimported = 2026-02-03T04:05:06Z\n"
-	if meta, ok = receiptMeta(dir, writeReceipt(t, dir, info)); !ok || meta["ingest_level"] != string(LevelHeadwords) ||
+	if meta, ok = receiptMeta(dir, writeReceipt(t, dir, info)); !ok || meta["ingest_level"] != levelHeadwords ||
 		meta["has_trigram"] != "0" {
 		t.Fatalf("headwords receipt = %v ok %v", meta, ok)
 	}

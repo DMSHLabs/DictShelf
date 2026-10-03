@@ -78,9 +78,9 @@ func probeHost(addr string) string {
 	host := addr
 	// A wildcard bind answers on loopback too, and loopback is the one
 	// interface guaranteed to be up - so ask there. Both spellings of
-	// "wildcard" have to be recognised: the string test this replaces knew
-	// "0.0.0.0" and missed "::" and "[::]", and on those a second launch got
-	// a bind error it could not explain instead of the running instance. A
+	// "wildcard" have to be recognised - "0.0.0.0", "::" and "[::]" - or a
+	// second launch gets a bind error it cannot explain instead of the
+	// running instance. A
 	// CONCRETE non-loopback bind is left alone on purpose: nothing is
 	// listening on loopback then.
 	if h, port, err := net.SplitHostPort(addr); err == nil {

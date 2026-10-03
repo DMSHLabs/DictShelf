@@ -11,11 +11,10 @@ import (
 )
 
 // index.html and frame.js are two halves of one protocol, shipped in one
-// binary - and the browser used to cache them independently, index.html fresh
-// from "/" and frame.js for a week at a fixed URL. Any change to the message
-// between them then broke silently, and only inside iframe-rendered
-// dictionaries. This pins the fix: the page names each script by a hash of its
-// own bytes, so the two can never be a version apart.
+// binary, and the browser caches them independently - index.html fresh from
+// "/", frame.js for a week. A change to the message between them would break
+// silently, inside iframe-rendered dictionaries only, so the page names each
+// script by a hash of its own bytes and the two can never be a version apart.
 func TestScriptsAreContentAddressed(t *testing.T) {
 	s := newTestServer(t)
 	s.Version = "1.2.3"

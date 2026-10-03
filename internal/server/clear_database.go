@@ -208,9 +208,11 @@ func (e *entry) clearDatabase(want clearDatabaseRequest) error {
 			return err
 		}
 	}
-	if want.Index || (want.Obsolete && len(store.TextStale(text, e.Path)) > 0) {
+	if want.Index || (want.Obsolete && len(store.Inspect(text).TextStale(e.Path)) > 0) {
 		// Rebuild atomically: a failed rebuild preserves the existing searchable data.
-		if err := e.rebuild(e.probeName(), text, plan, want.progress); err != nil {
+		if _, err := e.reconcileLocked(e.probeName(), store.Target{
+			FullText: &plan.FullText, Contains: &plan.Contains, Rebuild: store.Always,
+		}, want.progress); err != nil {
 			return err
 		}
 		if err := e.setIndexRemoved(false); err != nil {

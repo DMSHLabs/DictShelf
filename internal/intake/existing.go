@@ -24,8 +24,7 @@ import (
 //
 // Both possible mistakes are cheap by construction. A false "existing" offers
 // a replacement of a folder that turns out to hold something else, which the
-// user sees named and can untick; a false "not existing" installs beside it,
-// which is exactly what happened before this existed.
+// user sees named and can untick; a false "not existing" installs beside it.
 
 // markExisting annotates candidates with the library folder that already holds
 // them. dest may be empty - a server with no dictionary folder configured -
@@ -35,8 +34,8 @@ import (
 // configured folder. A candidate with no folder of its own in dest is looked
 // up there BY NAME, whatever format or source that dictionary came from: the
 // import folder is only the first configured folder, and a user who keeps
-// "en-eu-Elhuyar.mdx" loose in another one was otherwise told a second copy
-// was new and got one (D155 Am. 2).
+// "en-eu-Elhuyar.mdx" loose in another one must not be told a second copy is
+// new and get one (D155 Am. 2).
 func markExisting(dest string, lib []string, cands []Candidate) {
 	var byName map[string][]string
 	for i := range cands {
@@ -101,13 +100,11 @@ func elsewhere(dest string, byName map[string][]string, c Candidate) (folder str
 // happens to own that name is a collision the user must be told about anyway,
 // since the install would otherwise land beside it under a numbered name.
 // The folder's EXISTENCE is the collision and is always reported; whether it
-// holds a dictionary is a separate question, and conflating the two is what
-// produced the complaint this was rewritten for. Removing a dictionary unlinks
-// its files and used to leave its folder behind, so the next import of the
-// same bundle announced "installed, will be updated" about a dictionary the
-// user had just watched disappear (D137).
+// holds a dictionary is a separate question. A folder a removal emptied must
+// not be announced as "installed, will be updated" about a dictionary the
+// user has just watched disappear (D137).
 //
-// Reporting nothing in that case would have been the worse fix: the install
+// Reporting nothing in that case would be worse: the install
 // takes that folder name either way, so the user would lose whatever is in it
 // with no warning at all. The folder is named, and what it holds decides which
 // sentence is true about it.

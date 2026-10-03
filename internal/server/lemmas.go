@@ -23,8 +23,8 @@ import (
 
 // The lemma installer over HTTP (D91). `wudict lemmas` (D88) answers this for
 // anyone with a terminal; Android is a WebView over an exec'd binary and has
-// none, so on the platform where a 2 MB download matters most there was no way
-// to obtain one at all. The same page serves a desktop user who never opens a
+// none, so on the platform where a 2 MB download matters most this is the only
+// way to obtain one. The same page serves a desktop user who never opens a
 // shell.
 //
 // Everything below is plumbing: internal/lemmas already fetches, validates,
@@ -157,7 +157,8 @@ type lemmaInfo struct {
 }
 
 func (s *Server) handleLemmas(w http.ResponseWriter, r *http.Request) {
-	cat, cerr := s.catalog(r.Context(), r.URL.Query().Get("refresh") != "")
+	refresh, _ := queryFlag(r.URL.Query(), "refresh")
+	cat, cerr := s.catalog(r.Context(), refresh)
 	local, shadowed := lemmas.Installed(s.LemmaDir)
 
 	info := lemmaInfo{

@@ -111,8 +111,8 @@ const DefaultCSS = `
    query that was just typed, drawn on top of whatever the article happens to
    be, and an article that can erase it turns the feature off silently. DLE
    v23.8.1 ships a rule setting background-color:inherit on mark - one element
-   of specificity, enough to beat :where() - and the marks went invisible: the
-   ring drew, the fill did not. The doubled class plus !important survives that
+   of specificity, enough to beat :where() - which would leave the ring drawn
+   and the fill gone. The doubled class plus !important survives that
    and a dictionary's own !important too, while --wd-hl / --wd-hl-cur keep both
    colours themeable: the custom property is read, the cascade is not fought. */
 .wu-hl.wu-hl{background:var(--wd-hl,#ffe066)!important;color:inherit!important;border-radius:2px}

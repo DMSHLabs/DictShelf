@@ -98,10 +98,9 @@ func TestTransformMedia(t *testing.T) {
 	}
 }
 
-// TestTransformMediaKinds pins the whole media zone, kind by kind. The
-// regression it guards is silence: an unrecognised extension used to emit
-// nothing at all, so a [s]video.mp4[/s] card rendered as a blank gap with the
-// file name recorded but unreachable.
+// TestTransformMediaKinds pins the whole media zone, kind by kind. It guards
+// against silence: an extension that emits nothing renders a [s]video.mp4[/s]
+// card as a blank gap with the file name recorded but unreachable.
 func TestTransformMediaKinds(t *testing.T) {
 	cases := []struct {
 		in, want string
@@ -227,7 +226,7 @@ func TestTransformTitle(t *testing.T) {
 	// Unsorted `{...}` parts nest inside optional `(...)` parts. Stress marks
 	// are written this way (the tag goes in braces so it is not indexed, the
 	// stressed vowel stays outside so it is), and a paren scanner blind to `{`
-	// used to copy the braces straight into the lookup key.
+	// would copy the braces straight into the lookup key.
 	tr := transformTitle(`удар{[']}е{[/']}ние в загол{[']}о{[/']}вке (слов{[']}а{[/']}рной стать{[']}и{[/']})`)
 	if got := strings.Join(tr.Keys, "|"); got != "ударение в заголовке словарной статьи|ударение в заголовке" {
 		t.Errorf("accent in parens, keys: %q", got)
@@ -824,8 +823,8 @@ func TestRefDict(t *testing.T) {
 	}
 }
 
-// TestBodyCommands covers the body-level constructs the transformer used to
-// pass through as text: [br], the "^" case inverter and the "]]" escape.
+// TestBodyCommands covers body-level constructs that must not pass through as
+// text: [br], the "^" case inverter and the "]]" escape.
 func TestBodyCommands(t *testing.T) {
 	cases := []struct{ key, in, want string }{
 		// [br] is a hard break with no closing descriptor (Lingvo x5).
@@ -1037,11 +1036,11 @@ func TestBlankLine(t *testing.T) {
 	}
 }
 
-// TestReaderCommentOnlyLines covers the two placements that produced
+// TestReaderCommentOnlyLines covers the two placements that can produce
 // "entry block without headword": an indented {{...}} block standing between
 // two cards (a body-shaped run of lines belonging to no card), and a comment
-// zone sitting between the directives and the first headword, which the header
-// loop used to end on, turning the bare "{{" into a headword.
+// zone sitting between the directives and the first headword, where ending the
+// header loop would turn the bare "{{" into a headword.
 func TestReaderCommentOnlyLines(t *testing.T) {
 	p := writeDSL(t, "cc.dsl", []byte("#NAME\t\"CC\"\n"+
 		"#INDEX_LANGUAGE\t\"English\"\n"+

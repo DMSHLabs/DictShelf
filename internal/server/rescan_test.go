@@ -23,10 +23,10 @@ func entryState(e *entry) (d interface{}, err error, backing string) {
 
 // A library folder deleted from outside the app - a file manager, a cleanup
 // script - must survive "Rescan folders": the dictionary falls back to its
-// source in preview mode and prepares itself again. Before the rescan
-// revalidated what it kept, the entry went on holding a handle to the deleted
-// database and answered every search with SQLite's "unable to open database
-// file", with neither preparation lane willing to rebuild it.
+// source in preview mode and prepares itself again, rather than holding a
+// handle to the deleted database and answering every search with SQLite's
+// "unable to open database file", with neither preparation lane willing to
+// rebuild it.
 func TestRescanRecoversFromDeletedPreparedFolder(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("Windows refuses to delete a database the app holds open: the folder cannot vanish underneath it")
@@ -88,8 +88,7 @@ func TestRescanRecoversFromDeletedPreparedFolder(t *testing.T) {
 
 // entry.open memoizes failures on purpose (a fan-out must not retry a broken
 // file per keystroke), but the memo must not outlive a rescan: that button is
-// the user saying "look again", and before this it was the one thing that could
-// not be looked at again short of a restart. Set directly rather than provoked,
+// the user saying "look again". Set directly rather than provoked,
 // because what is under test is the lifetime of the memo, not any one failure.
 func TestRescanClearsMemoizedOpenError(t *testing.T) {
 	s, e := demandEntry(t)

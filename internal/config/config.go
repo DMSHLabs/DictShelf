@@ -49,9 +49,8 @@ type Config struct {
 	// be DOWNLOADED from. A host matches itself and its subdomains; an EMPTY
 	// list - the DEFAULT - is no restriction at all.
 	//
-	// It shipped as an allowlist of the three community sites and is now
-	// opt-in, because the allowlist was answering a question nobody asked
-	// (D139). A link reaches this server only because the user shared, pasted
+	// Opt-in, because an allowlist of community sites answers a question
+	// nobody asked (D139). A link reaches this server only because the user shared, pasted
 	// or tapped it: there is no path by which one arrives unbidden, so a list
 	// deciding which of the user's OWN links are permissible is not protecting
 	// them from anything - it is refusing the dictionary they went and found
@@ -60,8 +59,8 @@ type Config struct {
 	// local network are refused by the fetcher itself, and only ImportInsecure
 	// lifts those.
 	//
-	// Kept as a setting rather than deleted for the one case it is right for:
-	// a wudict reachable from a LAN, where an unauthenticated caller could
+	// A setting for the one case it is right for: a wudict reachable from a
+	// LAN, where an unauthenticated caller could
 	// otherwise point the download anywhere the host machine can reach.
 	ImportURLHosts []string // IMPORT_URL_HOSTS: comma-separated
 	// ImportInsecure (IMPORT_INSECURE=1) lifts the two refusals a download
@@ -212,7 +211,7 @@ func Load(configPath string, flags map[string]string) (Config, error) {
 	// getList is get for a key naming several folders. The file layer is the
 	// one that can spell it as a TOML array, and that array is taken as it was
 	// parsed rather than re-serialised and split again - see resolved.lists.
-	// The other layers hand over one string, which ParseList splits as before.
+	// The other layers hand over one string, which ParseList splits.
 	getList := func(key string) []string {
 		if v, ok := flags[key]; ok && v != "" {
 			cfg.Origins[key] = OriginFlag
@@ -335,13 +334,12 @@ func Load(configPath string, flags map[string]string) (Config, error) {
 	return cfg, nil
 }
 
-// Name is the configuration file, spelled the same in every location. It used
-// to be "config.toml" - the most generic filename there is, shared with Rust,
-// Hugo and half the checkouts on a developer's disk. The old bare "./config.toml"
-// candidate turned that collision into a live defect: running wudict from such
-// a directory parsed a stranger's file, suppressed creation of our own, and
-// pointed the setup page's SaveKey at it. A name nobody else uses cannot be
-// mistaken for anything, wherever it is copied to (D32).
+// Name is the configuration file, spelled the same in every location. Not
+// "config.toml" - the most generic filename there is, shared with Rust, Hugo
+// and half the checkouts on a developer's disk, where wudict would parse a
+// stranger's file, skip creating its own, and point the setup page's SaveKey
+// at it. A name nobody else uses cannot be mistaken for anything, wherever it
+// is copied to (D32).
 const Name = "wudict.toml"
 
 // systemDir is the machine-wide location; a variable so tests can point it
@@ -547,17 +545,14 @@ const configTemplate = `# wudict configuration  (~/.wudict/wudict.toml)
 // commented template on first run. It writes exactly one place -
 // ~/.wudict/wudict.toml - and never beside the executable.
 //
-// It used to prefer the executable's directory and fall back to the home
-// directory "if that is not writable". Writability was answering a question it
-// cannot answer: it was being read as "this directory is ours". It is not.
-// `go install` lands in ~/go/bin and Homebrew in /opt/homebrew/bin - both
-// user-writable, both shared with every other program on the machine - so the
-// probe succeeded exactly where it should have failed, and the fallback never
-// fired on the two most common installs. Guessing harder (matching /opt, /usr,
-// …) only lengthens a denylist that is incomplete by construction.
+// Not the executable's directory, even when it is writable: writability does
+// not mean "this directory is ours". `go install` lands in ~/go/bin and
+// Homebrew in /opt/homebrew/bin - both user-writable, both shared with every
+// other program on the machine - and guessing harder (matching /opt, /usr, …)
+// only lengthens a denylist that is incomplete by construction.
 //
-// So the rule is inverted, and now complete: portable mode is something the
-// user DECLARES, by putting a wudict.toml next to the binary. When they have,
+// So portable mode is something the user DECLARES, by putting a wudict.toml
+// next to the binary. When they have,
 // this function is never reached - the search found it and saves go there (D32).
 //
 // Returns the path and whether it was created now.
@@ -715,10 +710,9 @@ func writeFileAtomic(path string, data []byte, perm os.FileMode) error {
 // wudict.toml holds nothing but flat `KEY = value` lines, so this package
 // reads it itself rather than taking a TOML dependency. The one thing such a
 // reader must get right is quoting, because the character TOML gives a meaning
-// to - the backslash - is the character a Windows path is spelled with. This
-// used to strip the quotes and stop, so "C:\\Users\\me" (which is how the
-// writer, correctly, escapes C:\Users\me) was read back with both backslashes
-// still there.
+// to - the backslash - is the character a Windows path is spelled with: a
+// reader that only stripped the quotes would read "C:\\Users\\me" (how the
+// writer, correctly, escapes C:\Users\me) back with both backslashes doubled.
 
 // scanValue returns the text of the value starting at s, with any trailing
 // comment removed, and the bracket depth left open at the end of it. Quotes

@@ -276,7 +276,7 @@ an entry's other spellings are more `##` headings right under it. Resources go t
 ## ingest
 
 ``` sh title="prepare dictionaries from CLI"
-wudict ingest [-full] [-headwords] [-contains] [<dictfile|folder> …]
+wudict ingest [-full] [-fulltext] [-contains] [<dictfile|folder> …]
 ```
 
 Creates `<db-dir>/<dictionary name>/text.db` and `info.txt`. Given a folder, it
@@ -286,9 +286,9 @@ the environment or `wudict.toml`) and says which folders it used.
 
 | Flag | Effect |
 | --- | --- |
-| none | a new dictionary gets headword and full-text indexes; a prepared one keeps what it has |
-| `-headwords` | headword index only, much smaller |
-| `-headwords=false` | add full text to a headwords-only dictionary |
+| none | a new dictionary gets the headword index, as in the app; a prepared one keeps what it has |
+| `-fulltext` | add the full-text index, the largest one |
+| `-fulltext=false` | remove the full-text index (`-headwords` says the same) |
 | `-contains` | add the substring index, roughly doubling a headwords-only database |
 | `-contains=false` | remove the substring index |
 | `-full` | also pack media into `media.db` |

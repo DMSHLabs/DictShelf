@@ -187,8 +187,10 @@ func (e *entry) restoreDSLIndex(plan store.Plan, progress store.Progress) error 
 	}
 	textDB := store.TextDBPath(dir)
 	prepared, ready := store.PreparedFor(e.Path)
-	if !ready || prepared != textDB || len(store.TextStale(textDB, e.Path)) != 0 || store.KeptPlan(textDB) != plan {
-		if err := e.rebuild(e.probeName(), textDB, plan, progress); err != nil {
+	if !ready || prepared != textDB || len(store.Inspect(textDB).TextStale(e.Path)) != 0 || store.KeptPlan(textDB) != plan {
+		if _, err := e.reconcileLocked(e.probeName(), store.Target{
+			FullText: &plan.FullText, Contains: &plan.Contains, Rebuild: store.Always,
+		}, progress); err != nil {
 			return err
 		}
 	}

@@ -76,7 +76,7 @@ func TestReindexRebuildsOutdatedKeepingPlanAndMedia(t *testing.T) {
 	if st.Done != 1 || len(st.Failed) != 0 || st.Canceled {
 		t.Fatalf("finished: %+v, want 1 done, none failed", st)
 	}
-	textDB, ok := preparedTextDB(e.Path)
+	textDB, ok := validPrepared(e.Path)
 	if !ok {
 		t.Fatal("the dictionary is no longer prepared")
 	}

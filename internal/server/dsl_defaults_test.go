@@ -60,7 +60,7 @@ func TestDSLDefaultsNewDictionaries(t *testing.T) {
 				if reg.dslAvailable(e) != selected || e.indexBlocked() == selected {
 					t.Fatal("wrong variant availability", e.dslVariant)
 				}
-				_, prepared := preparedFor(e.Path)
+				_, prepared := validPrepared(e.Path)
 				if prepared != selected {
 					t.Fatal("wrong prepared variant", e.dslVariant)
 				}

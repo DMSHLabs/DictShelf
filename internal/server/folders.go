@@ -64,9 +64,9 @@ type configInfo struct {
 	// from the machine running wudict, whatever platform that is - the user at
 	// the keyboard owns those files, and managing a library includes throwing
 	// part of it away. From a remote browser it follows ALLOW_REMOTE_DELETE,
-	// which defaults to OFF. It used to be CanReveal's exact complement, which
-	// withheld the control from precisely the user who owns the files and
-	// handed it to every browser on the LAN.
+	// which defaults to OFF. It is not CanReveal's complement: that would
+	// withhold the control from precisely the user who owns the files and hand
+	// it to every browser on the LAN.
 	CanDelete bool `json:"canDelete"`
 
 	// PathAliases shorten the prefix that is identical on every row and

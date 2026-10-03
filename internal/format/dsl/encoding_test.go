@@ -24,9 +24,9 @@ import (
 
 // The sniff peeks a fixed 4096 bytes, which cuts mid-rune whenever the byte at
 // that boundary is not a rune start - roughly half the time for Cyrillic, which
-// is exactly the audience for BOM-less DSL. Validating the raw peek then said
-// "not UTF-8" and the whole dictionary was decoded as UTF-16LE: mojibake, no
-// error, no way for the user to tell why.
+// is exactly the audience for BOM-less DSL. Validating the raw peek would say
+// "not UTF-8" and decode the whole dictionary as UTF-16LE: mojibake, no error,
+// no way for the user to tell why.
 func TestDetectEncodingRuneSplitSample(t *testing.T) {
 	const peek = 1 << 12
 
@@ -125,13 +125,12 @@ func TestDetectEncodingRuneSplitSample(t *testing.T) {
 	}
 }
 
-// A single-byte Lingvo export must be recognised as such. Before code pages
-// were understood, a BOM-less Windows-1251 file fell through both Unicode
-// probes to the UTF-16LE fallback, where no LF byte survives decoding: the
-// scanner then saw the entire dictionary as one token and a large one failed
-// with "bufio.Scanner: token too long" - the error users reported against the
-// GoldenDict-era Multitran rebuilds - while a small one silently read as zero
-// entries.
+// A single-byte Lingvo export must be recognised as such. A BOM-less
+// Windows-1251 file that falls through both Unicode probes to the UTF-16LE
+// fallback keeps no LF byte after decoding: the scanner sees the entire
+// dictionary as one token, and a large one fails with "bufio.Scanner: token
+// too long" (as GoldenDict-era Multitran rebuilds do) while a small one
+// silently reads as zero entries.
 func TestDetectEncodingSingleByte(t *testing.T) {
 	body := func(header string) []byte {
 		var b strings.Builder

@@ -13,9 +13,9 @@
 //
 // English, and only English (D87). Every other language is a file the user
 // puts in LEMMA_DIR - see file.go, which is also what may replace the English
-// one. The six golem packs wudict used to compile in were 9 MB of an 11 MB
-// binary, charged to every user and every phone for languages most of them do
-// not read; the set of languages people keep dictionaries in has no end, and a
+// one. Compiled in, the six golem packs would be 9 MB of an 11 MB binary,
+// charged to every user and every phone for languages most of them do not
+// read; the set of languages people keep dictionaries in has no end, and a
 // folder is the only shape that scales to it.
 //
 // English is the exception because it is the language that is assumed when a

@@ -182,42 +182,18 @@ func (s *Server) runReindex(todo []*entry) {
 }
 
 // refresh rebuilds this dictionary's prepared data if, and only if, it is
-// outdated, and reports whether it did. The text is rebuilt with the plan it
-// already has (store.KeptPlan) - a rebuild the user asked for to bring data
-// current must not change what they chose to index - and a media.db that was
-// there before is repacked if the rebuild (or its own age) left it unpaired.
-// A dictionary never packed is not given media it did not have.
+// outdated, and reports whether anything changed. The text keeps the plan it
+// already has - a rebuild the user asked for to bring data current must not
+// change what they chose to index - and a media.db that was there before is
+// repacked if the rebuild (or its own age) left it unpaired. A dictionary
+// never packed is not given media it did not have.
 func (e *entry) refresh(progress store.Progress) (bool, error) {
-	e.ingestMu.Lock()
-	defer e.ingestMu.Unlock()
-	defer e.rebuilding.Store(false) // releasePrepared may have armed it
 	if !rebuildable(e.Path) {
 		return false, nil // no source: nothing to rebuild from
 	}
-	dir, ok := store.LookupDir(e.Path)
-	if !ok {
+	if _, ok := store.LookupDir(e.Path); !ok {
 		return false, nil // never prepared: nothing is outdated
 	}
-	textDB, mediaDB := store.TextDBPath(dir), store.MediaDBPath(dir)
-	if len(store.Stale(textDB, e.Path)) == 0 {
-		return false, nil // current - a concurrent rebuild got here first
-	}
-	name := e.probeName()
-	hadMedia := fileExists(mediaDB)
-	if stale := store.TextStale(textDB, e.Path); len(stale) > 0 {
-		logx.V("%sprepared data is outdated (%v) - rebuilding", logx.Dict(name), stale)
-		if err := e.rebuild(name, textDB, store.KeptPlan(textDB), progress); err != nil {
-			return true, err
-		}
-	}
-	if hadMedia && !store.MediaPaired(textDB) {
-		e.dMu.RLock()
-		cur := e.d
-		e.dMu.RUnlock()
-		if err := e.repackMedia(cur, textDB, mediaDB, progress); err != nil {
-			return true, err
-		}
-	}
-	_ = store.WriteInfo(dir)
-	return true, e.reopen()
+	out, err := e.reconcile(e.probeName(), store.Target{Rebuild: store.IfOutdated, Media: store.MediaKeep}, progress)
+	return out.Changed(), err
 }

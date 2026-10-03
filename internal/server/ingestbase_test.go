@@ -4,7 +4,10 @@
 
 package server
 
-import "testing"
+import (
+	"net/url"
+	"testing"
+)
 
 func TestRemovedNonDSLIndexRequiresExplicitIngest(t *testing.T) {
 	s, e := demandEntry(t)
@@ -39,23 +42,19 @@ func TestIngestBaseIndexesAnUnpreparedDictionary(t *testing.T) {
 		t.Fatal("setup: the fixture was supposed to be unprepared")
 	}
 
-	sse(t, s, "/api/ingest?dict="+e.ID+"&level=headwords")
+	sse(t, s, "/api/ingest?dict="+e.ID)
 
 	if !prepared(e) {
-		t.Fatal("level=headwords left the dictionary unprepared")
+		t.Fatal("the index chip left the dictionary unprepared")
 	}
 	if f := s.currentFeatures(e); f.FullText || f.Contains || f.Media {
 		t.Errorf("the cheap index built more than headwords: %+v", f)
 	}
 }
 
-// The same parameter keeps its old meaning on a dictionary that already HAS a
-// database: turn full text off. That is a rebuild, so it must go through
-// setFeatures - and this is the assertion that tells the two apart, because
-// ensureBaseIndex returns early at an already-prepared dictionary and would
-// leave full text exactly where it was. Contains survives: the panel sends
-// desired state, and a parameter left out changes nothing.
-func TestIngestHeadwordsStillStripsFullText(t *testing.T) {
+// A feature sent is a state, and one left out keeps its value: turning full
+// text off leaves contains where it was.
+func TestIngestFullTextOffKeepsContains(t *testing.T) {
 	s := newTestServer(t)
 	id := getDicts(t, s, "/api/dicts")[0].ID
 	e, err := s.reg.get(id)
@@ -67,13 +66,46 @@ func TestIngestHeadwordsStillStripsFullText(t *testing.T) {
 		t.Fatalf("setup: %+v, want full text and contains", f)
 	}
 
-	sse(t, s, "/api/ingest?dict="+id+"&level=headwords")
+	sse(t, s, "/api/ingest?dict="+id+"&fts=off")
 
 	f := s.currentFeatures(e)
 	if f.FullText {
-		t.Error("legacy level=headwords must remove full text")
+		t.Error("fts=off must remove full text")
 	}
 	if !f.Contains {
 		t.Error("a parameter that was not sent must keep its value")
 	}
+}
+
+// Every boolean parameter reads the same spellings, and "sent" is what lets a
+// caller keep a state the request did not mention.
+func TestQueryFlag(t *testing.T) {
+	for raw, want := range map[string]struct{ on, sent bool }{
+		"":           {false, false},
+		"x=1":        {true, true},
+		"x=true":     {true, true},
+		"x=yes":      {true, true},
+		"x=0":        {false, true},
+		"x=false":    {false, true},
+		"x=No":       {false, true},
+		"x=off":      {false, true},
+		"x":          {false, true},
+		"x=&y=1":     {false, true},
+		"y=1":        {false, false},
+		"x=%20on%20": {true, true},
+	} {
+		on, sent := queryFlag(mustQuery(t, raw), "x")
+		if on != want.on || sent != want.sent {
+			t.Errorf("%q: on=%v sent=%v, want %+v", raw, on, sent, want)
+		}
+	}
+}
+
+func mustQuery(t *testing.T, raw string) url.Values {
+	t.Helper()
+	q, err := url.ParseQuery(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return q
 }

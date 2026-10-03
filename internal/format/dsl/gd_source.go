@@ -71,7 +71,16 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		return openReader(p, r)
+		// Mirrors Open in dsl.go: the reader is opened whatever happens and its
+		// header is read at every open; store.OpenSelfPrepared does the
+		// prepare-or-open a self-preparing format needs.
+		defer r.Close()
+		src := r.Meta() // before the reader is consumed by an ingest
+		s, err := store.OpenSelfPrepared(p, "dsl", func() (dict.Reader, error) { return r, nil })
+		if err != nil {
+			return nil, err
+		}
+		return &Dict{Store: s, srcPath: r.path, src: src}, nil
 	})
 	dict.RegisterProber(".dslgd", func(p string) (dict.Meta, error) {
 		r, err := readGDSource(p)
