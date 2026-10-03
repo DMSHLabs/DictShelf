@@ -203,7 +203,7 @@ ANDROID_LIB  := android/app/src/main/jniLibs/arm64-v8a/libwudict.so
 # APK_VERSION is build.gradle's apkVersion: leading "v" dropped, "/" -> "_".
 GRADLE_VERSION := -PversionName="$(VERSION)"
 APK_VERSION  := $(subst /,_,$(patsubst v%,%,$(VERSION)))
-ANDROID_ABI  := arm64
+ANDROID_ABI  := arm64-v8a
 APK_OUT      := android/app/build/outputs/apk
 APK_FOSS           := $(APK_OUT)/foss/release/wudict2-android-$(ANDROID_ABI)-foss$(if $(KEYSTORE),,-unsigned).apk
 APK_FOSS_DEBUG     := $(APK_OUT)/foss/debug/wudict2-android-$(ANDROID_ABI)-foss-debug.apk
@@ -297,7 +297,7 @@ apk-foss-release: $(KEYSTORE_GUARD) android-go ## Build + sign the FOSS release 
 	@# nothing behind rather than something stale. Every version, not just
 	@# this one: the names now differ per commit, so yesterday's copy would
 	@# otherwise sit next to today's with a name just as plausible.
-	@rm -f dist/$(BINARY)-android-$(ANDROID_ABI)-foss-*.apk
+	@rm -f dist/wudict2-android-$(ANDROID_ABI)-foss-*.apk
 	cd android && ./gradlew assembleFossRelease $(GRADLE_VERSION)
 	@mkdir -p dist && cp "$(APK_FOSS)" dist/
 	@echo "dist/$(notdir $(APK_FOSS))"

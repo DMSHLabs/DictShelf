@@ -39,13 +39,14 @@ From Windows cmd, `build-android.cmd release` makes the FOSS release APK and
 `build-android.cmd debug` makes the FOSS debug APK. The second argument
 (`original` or `sh`) is retired and produces an error. Gradle's FOSS and Play
 tasks still work, including `assemblePlayRelease` and `bundlePlayRelease`.
-The APKs are named `wudict2-android-arm64-<flavour>[-debug|-unsigned].apk`.
+The APKs are named
+`wudict2-android-arm64-v8a-<flavour>[-debug|-unsigned].apk`.
 The Play bundle is `wudict2-play-release.aab`. Release builds without a
 configured keystore produce an unsigned APK; do not treat that as installable.
 
 `build-android.cmd debug intel` cross-compiles the server for x86_64 as well
 and ships both ABIs in one debug APK
-(`wudict2-android-arm64-x86_64-foss-debug.apk`), so it installs on an x86_64
+(`wudict2-android-arm64-v8a-x86_64-foss-debug.apk`), so it installs on an x86_64
 emulator and on arm64 hardware alike. This is not a convenience: the emulator's
 ARM translation runs ordinary arm64 binaries but crashes every Go binary, a
 hello-world included, so without an x86_64 server there is no way to run the

@@ -185,17 +185,19 @@ configurations.matching { it.name.contains('unified-test-platform') }.configureE
 // build-android.yml - which is why the workflow no longer copies the file to a
 // second name of its own. Two names for one artifact is the whole bug class.
 //
-//   wudict2-android-arm64-foss.apk            signed release
-//   wudict2-android-arm64-foss-unsigned.apk   release built without a keystore
-//   wudict2-android-arm64-foss-debug.apk      debug
-//   wudict2-android-arm64-play-*.apk          the same, Play flavour
-//   wudict2-android-arm64-x86_64-foss-debug.apk   debug built with -PemuX86=1
+//   wudict2-android-arm64-v8a-foss.apk                signed release
+//   wudict2-android-arm64-v8a-foss-unsigned.apk       release built without a keystore
+//   wudict2-android-arm64-v8a-foss-debug.apk          debug
+//   wudict2-android-arm64-v8a-play-*.apk              the same, Play flavour
+//   wudict2-android-arm64-v8a-x86_64-foss-debug.apk   debug built with -PemuX86=1
 //
 // The flavour token is not editorial: it is `variant.flavorName` verbatim, so a
 // third flavour names itself and nobody has to decide what to call it. The abi
 // token is the same bargain, per VARIANT: it names the ABIs that variant will
-// actually package, so an emulator APK never wears the plain arm64 name - and a
-// release APK never wears the emulator one.
+// actually package, spelled the way Android spells them (`arm64-v8a`, `x86_64`)
+// so the file name and `lib/<abi>/libwudict.so` inside it agree - an emulator
+// APK never wears the plain arm64-v8a name, and a release APK never wears the
+// emulator one.
 //
 // This is AGP's supported Variant API (VariantOutput.outputFileName, present in
 // 9.3.1) - no plugin, no dependency, no custom task. The earlier comment here
@@ -214,7 +216,7 @@ androidComponents {
         // -PemuX86=1 is inert and the name must not claim otherwise. (This hook
         // runs for EVERY variant, release ones included, even when only
         // assembleFossDebug was asked for - so it must never throw.)
-        def abi = emuX86 && variant.buildType == 'debug' ? 'arm64-x86_64' : 'arm64'
+        def abi = emuX86 && variant.buildType == 'debug' ? 'arm64-v8a-x86_64' : 'arm64-v8a'
         def suffix = variant.buildType == 'release'
                 ? (apkSigned ? '' : '-unsigned')
                 : "-${variant.buildType}"

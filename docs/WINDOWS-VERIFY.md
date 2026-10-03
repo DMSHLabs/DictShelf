@@ -102,7 +102,7 @@ them are in `docs/handoff-archive.md`.
   they would replace.
 - **`build-android.cmd debug intel` builds for the emulator.** It cross-builds
   the server for `GOARCH=amd64` too and ships both ABIs in
-  `wudict2-android-arm64-x86_64-foss-debug.apk`. The token may be written in
+  `wudict2-android-arm64-v8a-x86_64-foss-debug.apk`. The token may be written in
   either position (`intel debug` too, a bare `intel` means debug) and `release
   intel` is refused. The x86_64 lib lands in `android/app/src/emuX86/jniLibs/`
   — a default source dir for NO source set — and only `-PemuX86=1` (which

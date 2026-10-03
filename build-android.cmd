@@ -69,8 +69,11 @@ if defined ABI_TOKEN (
     set "EMU_X86=1"
 )
 
-set "APK_ABI=arm64"
-if defined EMU_X86 set "APK_ABI=arm64-x86_64"
+rem The ABI token is spelled the way Android spells it, so the APK's name and
+rem the lib/<abi>/ path inside it say the same thing. build.gradle composes the
+rem same string; this file only predicts the path to check the .so is in there.
+set "APK_ABI=arm64-v8a"
+if defined EMU_X86 set "APK_ABI=arm64-v8a-x86_64"
 
 echo.
 echo ============================================================

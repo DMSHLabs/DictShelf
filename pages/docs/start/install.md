@@ -99,7 +99,7 @@ For macOS you can also download a macOS bundle, for Windows a traditional setup 
 
 === "Android"
 
-    Build **`wudict2-android-arm64-foss.apk`** with
+    Build **`wudict2-android-arm64-v8a-foss.apk`** with
     `build-android.cmd release` on Windows, then install the signed APK with
     your file manager. Android asks you to allow *install unknown apps* once.
 

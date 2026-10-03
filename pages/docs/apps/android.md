@@ -24,7 +24,7 @@ sold since about 2017 should be able to run wudict.
 
 ## Install
 
-1.  Build **`wudict2-android-arm64-foss.apk`** (or the unsigned variant) with
+1.  Build **`wudict2-android-arm64-v8a-foss.apk`** (or the unsigned variant) with
     `build-android.cmd release` on Windows. Sign an unsigned APK before installing.
 2.  Open the file in your file manager or in the download notification.
 3.  Android asks once to allow *install unknown apps* for that file manager.
