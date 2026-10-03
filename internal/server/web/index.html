@@ -3885,6 +3885,12 @@ function resURL(dictID,ref){
    be a bug nobody would think to look for. */
 const ARTCSS=`{{ARTCSS}}`;
 
+/* Dictionary styles may disable selection. Keep article prose selectable on
+   both surfaces, including Android's long-press selection and Copy menu. */
+const articleSelectionCSS=`:host,html,body{user-select:text!important;-webkit-user-select:text!important}
+:is(:host,body) :not(button,input,textarea,select,option,audio,video,[contenteditable]){
+  user-select:text!important;-webkit-user-select:text!important;-webkit-touch-callout:default!important}`;
+
 const shadowBase=`<style>
 :host{all:initial;display:block;font-family:${"-apple-system,Helvetica,Arial,sans-serif"};
   font-size:var(--wd-fs,15px);font-weight:var(--wd-fw,400);
@@ -3985,7 +3991,7 @@ function renderArticle(dd,body,dictID,frag){
   const host=document.createElement("div");
   host.className="article";host.dataset.dict=dictID;
   const root=host.attachShadow({mode:"open"});
-  root.innerHTML=shadowBase+body;
+  root.innerHTML=shadowBase+body+'<style>'+articleSelectionCSS+'</style>';
   // After innerHTML, and last in the cascade: adopted sheets order after the
   // root's own, so the user's rules win ties against the dictionary's.
   if(userSheet)root.adoptedStyleSheets=[userSheet];
@@ -4033,7 +4039,7 @@ function frameDoc(content,fid,dark,dictID,frag){
        too. Nothing else is neutralised — an article may still make body a scroll
        container or paint it; only self-referential SIZING is refused.
        frame.js carries the matching backstop (D72). */
-    '<style>:root,:root>body{height:auto!important;min-height:0!important;max-height:none!important}</style>'+
+    '<style>:root,:root>body{height:auto!important;min-height:0!important;max-height:none!important}'+articleSelectionCSS+'</style>'+
     /* The user's own article stylesheet, last of all: after the backstop, and
        after the dictionary's <link>s, which live in the body. The element is
        always emitted even when empty — frame.js addresses it by id to carry

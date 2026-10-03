@@ -30,6 +30,9 @@ func TestDSLComparisonSearchAndResources(t *testing.T) {
 	if r.Count() != 2 {
 		t.Fatalf("count: %d", r.Count())
 	}
+	if r.UserCount() != 1 {
+		t.Fatalf("user dictionary count: %d, want 1", r.UserCount())
+	}
 	var original, alternative *entry
 	for _, e := range r.all() {
 		if e.Path == p {
@@ -97,6 +100,9 @@ func TestDSLComparisonSearchAndResources(t *testing.T) {
 	}
 	if r.Count() != 2 {
 		t.Fatalf("cached count: %d", r.Count())
+	}
+	if r.UserCount() != 1 {
+		t.Fatalf("cached user dictionary count: %d, want 1", r.UserCount())
 	}
 	if e, err := r.get(alternative.ID); err != nil || e.Path != alternative.Path {
 		t.Fatal(e, err)

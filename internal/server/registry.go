@@ -1127,18 +1127,22 @@ func (r *Registry) Count() int {
 	return len(r.entries)
 }
 
-// UserCount is Count without the dictionaries the app ships (Builtin): what
-// the user has, which is what "your library is empty" is about.
+// UserCount counts user dictionaries by source, excluding builtins and
+// collapsing Original/GD views of the same DSL dictionary.
 func (r *Registry) UserCount() int {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	n := 0
+	sources := make(map[string]struct{})
 	for _, e := range r.entries {
 		if !e.builtin {
-			n++
+			key := e.Path
+			if e.dslSource != "" {
+				key = e.dslSource
+			}
+			sources[key] = struct{}{}
 		}
 	}
-	return n
+	return len(sources)
 }
 
 // SetDirs re-points the registry at new dictionary folders and rescans
