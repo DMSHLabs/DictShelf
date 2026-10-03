@@ -171,7 +171,7 @@ function showExample(hit) {
   for (let el = hit.example; el; el = el.parentElement?.closest(".wu-xonly")) {
     if (el.ownerDocument.defaultView.getComputedStyle(el).display !== "none") continue;
     restored.push([el,el.style.getPropertyValue("display"),el.style.getPropertyPriority("display")]);
-    el.style.setProperty("display","block","important");
+    el.style.setProperty("display",el.classList.contains("wu-inline-example") ? "inline" : "block","important");
   }
 }
 function topOf(hit) {

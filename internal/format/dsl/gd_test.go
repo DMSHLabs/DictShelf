@@ -49,6 +49,37 @@ func TestGDMarkup(t *testing.T) {
 	}
 }
 
+func TestGDClosedMarginsWithTranslationWrapper(t *testing.T) {
+	body := `	[m2][trn][!trs]\[pɔt\][/!trs] [p]n[/p] ([i]for cooking, flowers[/i]) горш[']о[/']к[p]*[/p]; [b]([/b][i]also:[/i] [b]teapot)[/b] (зав[']а[/']рочный) ч[']а[/']йник; [b]([/b][i]also:[/i] [b]coffeepot)[/b] коф[']е[/']йник; ([i]bowl, container[/i]) б[']а[/']нка; ([p][i]inf[/i][/p]: [i]marijuana[/i]) план[/m]
+	[m2]◆ [p]vt[/p] ([i]plant[/i]) саж[']а[/']ть (посад[']и[/']ть[p]*[/p] [p][i]perf[/i][/p]);[/m]
+	[m1][b]a pot of tea[/b] ч[']а[/']йник ч[']а[/']я;[/m]
+	[m1][b]to go to pot[/b] ([p][i]inf[/i][/p]: [i]work, performance[/i]) разв[']а[/']ливаться (развал[']и[/']ться[p]*[/p] [p][i]perf[/i][/p]);[/m]
+	[m1][b]pots of[/b] ([p]BRIT[/p]: [p][i]inf[/i][/p]) к[']у[/']ча [i]+ [p]gen[/i][/p], [']у[/']йма [i]+ [p]gen[/i][/p][/m]
+	[m1][b]potash[/b] [!trs]\['pɔtжʃ\][/!trs] [p]n[/p] пот[']а[/']ш[/trn][/m]`
+	for _, enhance := range []bool{false, true} {
+		options := GDOptions{Enhance: enhance}
+		closed, _, err := transformGDWithOptions(body, "pot", nil, options)
+		if err != nil {
+			t.Fatal(err)
+		}
+		open, _, err := transformGDWithOptions(strings.ReplaceAll(body, "[/m]", ""), "pot", nil, options)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if closed != open || strings.Contains(closed, "<br") {
+			t.Fatalf("enhance=%v: closed %q; open %q", enhance, closed, open)
+		}
+		for _, separator := range []string{"[br]", "\\ \n"} {
+			got, _, err := transformGDWithOptions("[m1][trn]one[/m]"+separator+"[m1]two[/trn][/m]", "pot", nil, options)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if separator == "[br]" && !strings.Contains(got, "<br") || separator != "[br]" && !strings.Contains(got, "\u00a0") {
+				t.Fatalf("explicit separator lost: %q", got)
+			}
+		}
+	}
+}
 func TestGDMediaAndAbbrev(t *testing.T) {
 	ab := &abbrevMap{exact: map[string]string{"pl": "plural"}}
 	html, media, err := transformGDBody(`[p][b]pl[/b][/p] [s]sound.wav[/s] [s]image.png[/s]`, "key", ab)
@@ -294,8 +325,8 @@ func TestGDReaderGolden(t *testing.T) {
 		t.Fatal(err)
 	}
 	goldentest.Check(t, "dsl-gd", comparison, goldentest.Golden{
-		Versions: "reader=4 ingest=1 markup=2 fold=1",
-		Hash:     "b81ca516ad709bde4aaf4dac45fcfd4f7218a47fe60b63f7508cdfd8fa3aee1b",
+		Versions: "reader=6 ingest=1 markup=2 fold=1",
+		Hash:     "75103e7559a7977e011ea070bf1ce3e830e8d24399ec9b35c0e6310b703d0a9d",
 	})
 }
 

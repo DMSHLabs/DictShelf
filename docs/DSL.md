@@ -780,6 +780,27 @@ Only this exact application stylesheet URL bypasses dictionary resource rewrite.
 Styles/font asset version and GD reader version are 4; GD indexes need rebuilding.
 Tests and Chromium checks pass; physical Android/WebView remains unverified.
 
+GD reader v5 trims structural whitespace through reopened inline wrappers at
+margin boundaries. A [trn] spanning multiple explicitly closed [/m] blocks no
+longer inserts extra breaks. Empty reopened formatting spans are omitted too,
+preventing anonymous browser lines between blocks; explicit [br] and escaped-space
+blank lines remain.
+Existing GD indexes need rebuilding; the ordinary reader is unchanged.
+
+Shared examples.css and the browser marker distinguish whole example paragraphs from
+inline examples. Only paragraphs containing examples plus links/whitespace/
+punctuation/symbols receive a diamond and whole-paragraph translucent 8%-ink
+background. In mixed paragraphs, only wu-ex/dsl_ex fragments receive that tint
+and fold with Examples Show/Hide; the other text remains, and no marker is added.
+Author dots, squares, diamonds, stars, arrows, checkboxes and dashes are retained
+for copying while a single diamond is displayed. Article find temporarily reveals
+hidden inline examples as inline. Original and GD now share this presentation and folding behavior. GD reader v6 prepares all these classes and author-marker wrappers during ingest;
+data-wu-examples="1" on its wrapper makes the browser skip further processing.
+JS remains the fallback for Original and old GD indexes. Existing GD indexes
+need rebuilding to gain parser preparation; the zero-option oracle path is unchanged.
+This styling
+works on prepared GD articles without rebuilding; reload after updating the app.
+
 Closed in the spec-audit pass (this document's current revision):
 
 | Was | Now |

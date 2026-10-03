@@ -292,6 +292,7 @@ func transformGDBody(text, key string, ab *abbrevMap) (string, []string, error) 
 	if err := p.parse(norm.NFC.String(text)); err != nil {
 		return "", nil, err
 	}
+	gdTrimMarginWhitespace(&p.root)
 	var render func(*gdNode, bool) string
 	var children func(*gdNode, bool) string
 	children = func(n *gdNode, ipa bool) string {
@@ -407,9 +408,51 @@ func transformGDBody(text, key string, ab *abbrevMap) (string, []string, error) 
 		if opener == "" && closer == "" {
 			return unknown()
 		}
+		if content == "" {
+			return ""
+		}
 		return opener + content + closer
 	}
 	return children(&p.root, false), p.resources, nil
+}
+
+// Crossed inline tags may wrap the whitespace between two margin blocks.
+// Trim through those wrappers, but leave explicit breaks and escaped spaces.
+func gdTrimMarginWhitespace(n *gdNode) {
+	var trimEdge func(*gdNode, bool)
+	trimEdge = func(n *gdNode, left bool) {
+		if n.tag == "" && len(n.children) == 0 {
+			if left {
+				n.text = strings.TrimLeft(n.text, " \t\r\n")
+			} else {
+				n.text = strings.TrimRight(n.text, " \t\r\n")
+			}
+			return
+		}
+		if n.tag == "literal" || n.tag == "br" || n.tag == "media" {
+			return
+		}
+		for i := 0; i < len(n.children); i++ {
+			j := i
+			if !left {
+				j = len(n.children) - 1 - i
+			}
+			c := n.children[j]
+			trimEdge(c, left)
+			if c.tag != "" || c.text != "" {
+				break
+			}
+		}
+	}
+	for i, c := range n.children {
+		gdTrimMarginWhitespace(c)
+		if (i == 0 && isMarginTag(n.tag)) || (i > 0 && isMarginTag(n.children[i-1].tag)) {
+			trimEdge(c, true)
+		}
+		if (i == len(n.children)-1 && isMarginTag(n.tag)) || (i+1 < len(n.children) && isMarginTag(n.children[i+1].tag)) {
+			trimEdge(c, false)
+		}
+	}
 }
 
 // GoldenDict's normalizeHeadword collapses ASCII spaces, not arbitrary Unicode whitespace.

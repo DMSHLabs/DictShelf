@@ -1,0 +1,61 @@
+/**
+ * Copyright (C) 2026 DmShAl (Shepeta Dmitry)
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
+/* The tint must survive background presets clearing direct-root backgrounds:
+   Original paragraphs sit at that level, while GD paragraphs are nested. */
+/* Standalone examples: the article ink supplies both marker and soft tint. */
+.wu-example-block.wu-example-block
+{
+  position: relative;
+  margin-left: calc(var(--wd-m,0)*1em);
+  padding: .12em .35em .12em 1.1em;
+  border-radius: .2em;
+  background-color: rgba(128,128,128,.08) !important;
+  background-color: color-mix(in srgb, currentColor 8%, transparent) !important;
+}
+
+.wu-example-block:is(.wu-ex,.wu-xonly),
+.wu-example-block.wu-example-block.wu-example-block :is(.wu-ex,.dsl_ex,.wu-lang)
+{
+  color: inherit !important;
+}
+
+.wu-example-block::before
+{
+  content: "";
+  position: absolute;
+  left: .3em;
+  top: .929em;
+  top: calc(.12em + .5lh);
+  width: .5em;
+  height: .7em;
+  transform: translateY(-50%);
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+  background: currentColor;
+}
+
+.wu-example-block .wu-example-bullet
+{
+  position: absolute;
+  /* Keep the author's character for copying, while drawing one shared marker. */
+  font-size: 0;
+  line-height: 0;
+}
+
+.wu-inline-example.wu-inline-example
+{
+  padding: .08em .15em;
+  border-radius: .2em;
+  background-color: rgba(128,128,128,.08) !important;
+  background-color: color-mix(in srgb, currentColor 8%, transparent) !important;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  color: inherit !important;
+}
+
+.wu-inline-example.wu-inline-example.wu-inline-example .wu-lang
+{
+  color: inherit !important;
+}

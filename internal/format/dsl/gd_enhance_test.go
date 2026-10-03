@@ -14,7 +14,7 @@ func TestGDEnhancerCleanup(t *testing.T) {
 		{`<p></p>inline`, `<p></p>inline`},
 		{`a<span class="gde">b</span>c<span class="gde">d</span>`, `abcd`},
 		{`<span class="gde" title="keep">b</span>`, `<span class="gde" title="keep">b</span>`},
-		{`<div><span class="wu-ex">one</span></div>`, `<div class="wu-ex">one</div>`},
+		{`<div><span class="wu-ex">one</span></div>`, `<div class="wu-ex wu-inline-example wu-xonly">one</div>`},
 		{`<p><b>bold</b></p>`, `<p><b>bold</b></p>`},
 		{`<p><span lang="ru">one</span></p>`, `<p lang="ru">one</p>`},
 		{`<p lang="en"><span lang="ru">one</span></p>`, `<p lang="en"><span lang="ru">one</span></p>`},
@@ -44,7 +44,7 @@ func TestGDExamplesGenerated(t *testing.T) {
 	} {
 		for _, enhance := range []bool{false, true} {
 			got, _, err := transformGDWithOptions(c.body, "word", nil, GDOptions{Enhance: enhance, Styles: true})
-			if err != nil || strings.Contains(got, "wu-xonly") != c.mark {
+			if err != nil || strings.Contains(got, "wu-example-block") != c.mark {
 				t.Errorf("enhance=%v %s: %s (%v)", enhance, c.body, got, err)
 			}
 			if strings.Contains(got, "gde-hwbtn") || strings.Contains(got, "<button") || strings.Contains(got, "<script") {
@@ -74,6 +74,38 @@ func TestGDEnhancerDisabled(t *testing.T) {
 		r.Close()
 		if err != nil || strings.Contains(entry.Body, "wu-gd") != c.styled {
 			t.Fatal(entry.Body, err)
+		}
+	}
+}
+
+func TestGDPreparedExampleRoles(t *testing.T) {
+	for _, enhance := range []bool{false, true} {
+		for _, c := range []struct {
+			body                  string
+			block, inline, bullet bool
+		}{
+			{`[m1][ex]Example.[/ex][/m]`, true, false, false},
+			{`[m1]definition [ex]Example.[/ex] translation[/m]`, false, true, false},
+			{`[m1][ex]Example.[/ex] translation[/m]`, false, true, false},
+			{`[m1]◆ [ref]audio[/ref] [ex]Example.[/ex][/m]`, true, false, true},
+			{`[m1][ex][ex]Nested.[/ex][/ex] translation[/m]`, false, true, false},
+		} {
+			got, _, err := transformGDWithOptions(c.body, "word", nil, GDOptions{Enhance: enhance, Styles: true})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(got, `data-wu-examples="1"`) || strings.Contains(got, "wu-example-block") != c.block || strings.Contains(got, "wu-inline-example") != c.inline || strings.Contains(got, "wu-example-bullet") != c.bullet {
+				t.Fatalf("enhance=%v %s: %s", enhance, c.body, got)
+			}
+			if c.inline && strings.Count(got, "wu-inline-example") != 1 {
+				t.Fatal("nested example marked twice", got)
+			}
+		}
+		for _, marker := range []rune("•‣⁃⁌⁍∙·▪▫■□●○◆♦◇◊★☆☐☑☒❥❧➔➜➤➢→⇒*+-–—") {
+			got, _, err := transformGDWithOptions("[m1]"+string(marker)+" [ref]audio[/ref] [ex]Example.[/ex][/m]", "word", nil, GDOptions{Enhance: enhance, Styles: true})
+			if err != nil || strings.Count(got, "wu-example-bullet") != 1 || !strings.Contains(got, "wu-example-block") {
+				t.Fatalf("%c: %s (%v)", marker, got, err)
+			}
 		}
 	}
 }

@@ -35,7 +35,7 @@ const { chromium } = require('playwright');
       const root = host.shadowRoot;
       const marks = [...root.querySelectorAll('.wu-xonly')].map(p => p.textContent.trim());
       const optional = [...root.querySelectorAll('p')].find(p => p.textContent === 'Optional example.');
-      return { marks, family: getComputedStyle(root.querySelector('.wu-ipa')).fontFamily,
+      return { marks, bodyColor: getComputedStyle(root.querySelector('.wu-gd')).color, family: getComputedStyle(root.querySelector('.wu-ipa')).fontFamily,
         optionalStyle: { fontStyle: getComputedStyle(optional).fontStyle, color: getComputedStyle(optional).color },
         fonts: [...document.fonts].filter(f => f.family.startsWith('WuGD')).map(f => ({ family: f.family, status: f.status })),
         buttons: root.querySelectorAll('button,.gde-hwbtn').length };
@@ -43,7 +43,7 @@ const { chromium } = require('playwright');
     assert.equal(state.marks.length, 2);
     assert(state.marks.includes('Optional example.'));
     assert(state.family.includes('WuGD Phonetic'));
-    assert.deepEqual(state.optionalStyle, { fontStyle: 'italic', color: 'rgb(80, 80, 80)' });
+    assert.deepEqual(state.optionalStyle, { fontStyle: 'italic', color: state.bodyColor });
     assert(state.fonts.some(f => f.family.includes('Phonetic') && f.status === 'loaded'));
     assert.equal(state.buttons, 0);
     // Settings must affect already-prepared GD articles, including v4 imports.

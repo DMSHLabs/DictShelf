@@ -196,7 +196,7 @@ func entryRewriter(dictID string, text func(string) string) htmlref.Rewriter {
 		ref := r.URL
 		// Refresh cached GD styles in already-prepared articles without reindexing.
 		if ref == "/assets/presets/gd/article-style.css" || strings.HasPrefix(ref, "/assets/presets/gd/article-style.css?") {
-			return "/assets/presets/gd/article-style.css?v=7"
+			return "/assets/presets/gd/article-style.css?v=12"
 		}
 		switch {
 		case ref == "",

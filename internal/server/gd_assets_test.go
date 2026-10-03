@@ -34,7 +34,7 @@ func TestGDAssets(t *testing.T) {
 	if !strings.Contains(underline, "text-decoration: underline;") || strings.Contains(underline, "background-color:") || strings.Contains(underline, "border:") {
 		t.Fatal("GD underline must not become a highlighted box", underline)
 	}
-	if !strings.Contains(string(page), "/assets/presets/gd/article-style.css?v=7") {
+	if !strings.Contains(string(page), "/assets/presets/gd/article-style.css?v=12") {
 		t.Fatal("global font faces missing for shadow articles")
 	}
 	for _, name := range []string{"../Quivira.otf", `..\Quivira.otf`, "missing.ttf", "ArialPlus.ttf", "ArialPlusBold.ttf", "ArialItalic.ttf", "ArialBoldItalic.ttf", "QuiviraPhonetic.ttf"} {
@@ -49,7 +49,7 @@ func TestGDAssets(t *testing.T) {
 func TestGDStyleSurvivesResourceRewrite(t *testing.T) {
 	input := `<style>@import url("/assets/presets/gd/article-style.css?v=4");</style><div class="wu-gd"><img src="picture.png"></div>`
 	got := RewriteEntryHTML(input, "dictionary")
-	if !strings.Contains(got, `/assets/presets/gd/article-style.css?v=7`) || !strings.Contains(got, `src="/res/dictionary/picture.png"`) {
+	if !strings.Contains(got, `/assets/presets/gd/article-style.css?v=12`) || !strings.Contains(got, `src="/res/dictionary/picture.png"`) {
 		t.Fatal(got)
 	}
 }

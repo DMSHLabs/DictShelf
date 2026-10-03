@@ -202,7 +202,7 @@ func gdExampleOnly(block *html.Node) bool {
 		skipped = skipped || example || n.Type == html.ElementNode && n.Data == "a"
 		if n.Type == html.TextNode && !skipped {
 			for _, r := range n.Data {
-				if !unicode.IsSpace(r) && !strings.ContainsRune("▪•·-–—", r) {
+				if !unicode.IsSpace(r) && !unicode.IsPunct(r) && !unicode.IsSymbol(r) {
 					ownText = true
 				}
 			}
@@ -213,6 +213,105 @@ func gdExampleOnly(block *html.Node) bool {
 	}
 	visit(block, false)
 	return hasExample && !ownText
+}
+
+// Prepare presentation and folding once, while the article is indexed.
+func gdPrepareExamples(root *html.Node) {
+	var blocks, examples []*html.Node
+	nestedBlocks := make(map[*html.Node]bool)
+	var collect func(*html.Node)
+	collect = func(n *html.Node) {
+		if n.Type == html.ElementNode {
+			if n.Data == "p" || gdClass(n, "wu-m") {
+				blocks = append(blocks, n)
+				for p := n.Parent; p != nil && p != root; p = p.Parent {
+					if p.Data == "p" || gdClass(p, "wu-m") {
+						nestedBlocks[p] = true
+					}
+				}
+			}
+			if gdClass(n, "wu-ex") || gdClass(n, "dsl_ex") {
+				examples = append(examples, n)
+			}
+		}
+		for c := n.FirstChild; c != nil; c = c.NextSibling {
+			collect(c)
+		}
+	}
+	collect(root)
+	for _, block := range blocks {
+		if !gdExampleOnly(block) {
+			continue
+		}
+		gdAddClass(block, "wu-xonly")
+		if nestedBlocks[block] {
+			continue
+		}
+		gdAddClass(block, "wu-example-block")
+		var bullets []*html.Node
+		var lengths []int
+		stopped := false
+		var scan func(*html.Node)
+		scan = func(n *html.Node) {
+			if stopped || n.Type == html.ElementNode && n.Data == "a" {
+				return
+			}
+			if n.Type == html.TextNode {
+				end, marker := 0, false
+				for i, r := range n.Data {
+					if unicode.IsSpace(r) {
+						end = i + len(string(r))
+						continue
+					}
+					if gdExampleMarker(r) {
+						marker = true
+						end = i + len(string(r))
+						continue
+					}
+					break
+				}
+				if marker {
+					bullets = append(bullets, n)
+					lengths = append(lengths, end)
+				}
+				for _, r := range n.Data[end:] {
+					if !unicode.IsSpace(r) && !unicode.IsPunct(r) && !unicode.IsSymbol(r) {
+						stopped = true
+						break
+					}
+				}
+			}
+			for c := n.FirstChild; c != nil; c = c.NextSibling {
+				scan(c)
+			}
+		}
+		scan(block)
+		for i, n := range bullets {
+			span := &html.Node{Type: html.ElementNode, Data: "span", DataAtom: atom.Span}
+			gdAddClass(span, "wu-example-bullet")
+			span.AppendChild(&html.Node{Type: html.TextNode, Data: n.Data[:lengths[i]]})
+			n.Parent.InsertBefore(span, n)
+			n.Data = n.Data[lengths[i]:]
+			gdAddClass(block, "wu-author-bullet")
+		}
+	}
+	for _, ex := range examples {
+		nested := false
+		for p := ex; p != nil && p != root; p = p.Parent {
+			if gdClass(p, "wu-example-block") || p != ex && (gdClass(p, "wu-ex") || gdClass(p, "dsl_ex")) {
+				nested = true
+				break
+			}
+		}
+		if !nested {
+			gdAddClass(ex, "wu-inline-example")
+			gdAddClass(ex, "wu-xonly")
+		}
+	}
+}
+
+func gdExampleMarker(r rune) bool {
+	return r >= 0x25a0 && r <= 0x25ff || strings.ContainsRune("•‣⁃⁌⁍∙·♦★☆☐☑☒❥❧➔➜➤➢→⇒*+-–—", r)
 }
 
 func prepareGDHTML(body string, options GDOptions) (string, error) {
@@ -227,19 +326,10 @@ func prepareGDHTML(body string, options GDOptions) (string, error) {
 	if options.Enhance {
 		gdCleanup(root)
 	}
-	var mark func(*html.Node)
-	mark = func(n *html.Node) {
-		if n.Type == html.ElementNode && (n.Data == "p" || gdClass(n, "wu-m")) && gdExampleOnly(n) {
-			gdAddClass(n, "wu-xonly")
-		}
-		for c := n.FirstChild; c != nil; c = c.NextSibling {
-			mark(c)
-		}
-	}
-	mark(root)
+	gdPrepareExamples(root)
 	var out bytes.Buffer
 	if options.Styles {
-		out.WriteString(`<style>@import url("/assets/presets/gd/article-style.css?v=4");</style><div class="wu-gd">`)
+		out.WriteString(`<style>@import url("/assets/presets/gd/article-style.css?v=4");</style><div class="wu-gd" data-wu-examples="1">`)
 	}
 	for c := root.FirstChild; c != nil; c = c.NextSibling {
 		if err := html.Render(&out, c); err != nil {

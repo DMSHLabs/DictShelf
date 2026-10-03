@@ -28,7 +28,9 @@ const CLASS = "wu-xonly";
 // nothing about whether the line has content of its own. The no-break space is
 // in the class because a dictionary's own file may carry one where a plain
 // space was meant.
-const JUNK = /^[\s\u00a0▪•·\-–—]*$/;
+
+const JUNK = /^[\s\p{P}\p{S}]*$/u;
+const MARKER = /^\s*[•‣⁃⁌⁍∙·\u25a0-\u25ff♦★☆☐☑☒❥❧➔➜➤➢→⇒*+\-–—]+\s*/u;
 
 /* True when the paragraph holds at least one example and no text of its own.
    Text inside a link is skipped because the audio button lives there, and the
@@ -50,7 +52,43 @@ function exampleOnly(p) {
 
 function mark(root) {
   if (!root || !root.querySelectorAll) return;
-  for (const p of root.querySelectorAll("p,.wu-m")) if (exampleOnly(p)) p.classList.add(CLASS);
+  if (root.querySelector('.wu-gd[data-wu-examples="1"]')) return;
+  for (const p of root.querySelectorAll("p,.wu-m")) {
+    if (!exampleOnly(p)) continue;
+    p.classList.add(CLASS);
+    markExample(p);
+  }
+  for (const ex of root.querySelectorAll(".wu-ex,.dsl_ex")) {
+    if (ex.closest(".wu-example-block") || ex.parentElement.closest(".wu-ex,.dsl_ex")) continue;
+    ex.classList.add("wu-inline-example", CLASS);
+  }
+}
+function markExample(p) {
+  if (p.classList.contains("wu-example-block") || p.querySelector("p,.wu-m")) return;
+  const walker = document.createTreeWalker(p, NodeFilter.SHOW_TEXT);
+  const bullets = [];
+  for (let n; (n = walker.nextNode()); ) {
+    const text = n.textContent.trim();
+    if (!text || n.parentElement.closest("a")) continue;
+    const match = n.textContent.match(MARKER);
+    if (match) {
+      bullets.push({ node:n, length:match[0].length });
+      if (!n.textContent.slice(match[0].length).trim()) continue;
+    }
+    if (JUNK.test(text)) continue;
+    if (!n.parentElement.closest(".wu-ex,.dsl_ex")) return;
+    p.classList.add("wu-example-block");
+    for (const bullet of bullets) {
+      const range = document.createRange();
+      range.setStart(bullet.node, 0);
+      range.setEnd(bullet.node, bullet.length);
+      const span = document.createElement("span");
+      span.className = "wu-example-bullet";
+      range.surroundContents(span);
+      p.classList.add("wu-author-bullet");
+    }
+    return;
+  }
 }
 function markHost(el) {
   if (el.classList && el.classList.contains("article") && el.shadowRoot) mark(el.shadowRoot);

@@ -92,6 +92,9 @@ var articleFindJS []byte // search within loaded articles
 //go:embed web/examples.js
 var examplesJS []byte // example folding: marks the lines that hold nothing but examples
 
+//go:embed web/examples.css
+var examplesCSS string
+
 //go:embed web/favicon.svg
 var faviconSVG []byte // "Lookup" mark: magnifier over headword lines
 
@@ -425,7 +428,7 @@ func (s *Server) basePage() []byte {
 		// (internal/artmark). It is a floor under BOTH article surfaces, so
 		// it is substituted once here and index.html hands it to the shadow
 		// root and to the iframe from the same constant.
-		page = strings.ReplaceAll(page, "{{ARTCSS}}", artmark.DefaultCSS)
+		page = strings.ReplaceAll(page, "{{ARTCSS}}", artmark.DefaultCSS+examplesCSS)
 		s.indexBase = []byte(page)
 	})
 	return s.indexBase
