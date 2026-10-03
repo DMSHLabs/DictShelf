@@ -1190,6 +1190,11 @@ dialog.panel-card:not([open]){display:none}
 .pd .ord button{background:none;border:0;color:var(--label-quiet);cursor:pointer;
   font-size:12px;line-height:1;padding:.15em .2em;border-radius:4px}
 .pd .ord button:hover{color:var(--fg);background:var(--line-soft)}
+#dictSettings .pd .hd{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px}
+#dictSettings .pd .hd>b{grid-column:1 / -1;grid-row:1}
+#dictSettings .pd .grip{grid-column:1;grid-row:2;padding:.4em;align-self:center}
+#dictSettings .pd .ord{grid-column:2;grid-row:2;gap:8px;margin-left:0;justify-content:flex-end}
+#dictSettings .pd .ord button{min-width:30px;min-height:30px}
 .en{appearance:none;width:32px;height:18px;border-radius:9px;background:var(--line);
   position:relative;cursor:pointer;flex:none;transition:background .15s}
 .en:checked{background:var(--accent)}
@@ -1849,12 +1854,13 @@ dialog.panel-card:not([open]){display:none}
 .dsl-choices label{display:inline-flex;align-items:center;gap:5px;cursor:pointer}
 .dsl-choices input{margin:0;accent-color:var(--accent)}
 .dsl-unavailable .hd b{opacity:.55}
-.dsl-index-controls{display:flex;flex-direction:column;gap:6px;margin:8px 0}
-.dsl-index-row{display:grid;grid-template-columns:minmax(0,110px) minmax(0,1fr);align-items:start;gap:8px}
-.dsl-index-row>span{font-size:12px;padding-top:4px;overflow-wrap:anywhere}
+.dsl-index-controls{display:flex;flex-direction:column;gap:12px;margin:12px 0}
+.dsl-index-row{display:grid;grid-template-columns:minmax(0,1fr);align-items:start;gap:8px}
+.dsl-index-row+.dsl-index-row{border-top:1px solid var(--line);padding-top:12px}
+.dsl-index-row>span{font-size:12px;font-weight:500;overflow-wrap:anywhere}
 .dsl-index-tools{display:flex;flex-direction:column;align-items:flex-start;gap:6px;min-width:0}
 .dsl-feature-line{display:flex;flex-wrap:wrap;justify-content:flex-start;align-items:center;gap:6px;max-width:100%}
-.dsl-browse-line{grid-column:1 / -1;display:flex;justify-content:flex-start;padding-left:.7em}
+.dsl-browse-line{display:flex;justify-content:flex-start}
 .dsl-index-tools .feat{margin:0;max-width:100%;white-space:normal;overflow-wrap:anywhere;box-sizing:border-box}
 .dsl-index-row button{font:inherit;font-size:11px;cursor:pointer}
 .dsl-index-row .browse{display:inline-flex;align-items:center;gap:5px;font:inherit;font-size:11px;text-decoration:none}
@@ -1865,12 +1871,20 @@ dialog.panel-card:not([open]){display:none}
 .dsl-index-note{color:var(--fg);font-size:12px}
 #dslParserSection{flex:none}
 #dslParserSection h3{font-size:1em;margin:0 0 .5em}
-#dslParserMode{display:flex;flex-wrap:wrap}
-#dslParserMode button{font:inherit;color:var(--fg);background:transparent;border:1px solid var(--line);padding:.35em .6em;cursor:pointer}
+#dslParserMode{display:grid;grid-template-columns:minmax(0,1fr);gap:6px}
+#dslParserMode button{font:inherit;color:var(--fg);background:transparent;border:1px solid var(--line);border-radius:8px;padding:.55em .7em;min-height:40px;text-align:left;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:.5em}
+#dslParserMode button::after{content:"";width:1em;flex:none}
+#dslParserMode button.on::after{content:"✓";color:var(--accent)}
 #dslParserMode button.on{background:color-mix(in srgb,var(--accent) 18%,transparent);border-color:var(--accent)}
 .bulk-index-section{padding:8px 0 12px;border-bottom:1px solid var(--line)}
 .bulk-index-section h3{font-size:14px;margin:0 0 8px}
 .bulk-index-buttons{display:flex;flex-wrap:wrap;gap:6px}
+.bulk-index-table{width:100%;table-layout:fixed;border-collapse:separate;border-spacing:0 6px;font-size:12px}
+.bulk-index-table th{font-weight:500;text-align:left;overflow-wrap:anywhere}
+.bulk-index-table thead th:not(:first-child){text-align:center}
+.bulk-index-table th:first-child{width:36%;padding-right:8px}
+.bulk-index-table td{padding-left:6px}
+.bulk-index-table .btn{width:100%;min-height:40px;padding:.45em .3em;font:inherit;white-space:normal;overflow-wrap:anywhere}
 .bulk-index-row{display:grid;grid-template-columns:minmax(0,110px) minmax(0,1fr);gap:8px;align-items:start;margin:6px 0;font-size:12px}
 .bulk-index-row>span{padding-top:5px;overflow-wrap:anywhere}
 .bulk-index-row>div{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-start}

@@ -1,4 +1,5 @@
 {
+  "dictUI.allActions": "For all dictionaries",
   "panel.exit": "Exit",
   "database.createFullText": "Create full-text indexes",
   "database.createContains": "Create Contains indexes",

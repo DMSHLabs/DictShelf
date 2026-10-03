@@ -1,4 +1,5 @@
 {
+  "dictUI.allActions": "Для всех словарей",
   "panel.exit": "Выход",
   "database.createFullText": "Создать полнотекстовые индексы",
   "database.createContains": "Создать индексы «Содержит»",

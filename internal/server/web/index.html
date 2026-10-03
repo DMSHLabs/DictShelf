@@ -716,7 +716,7 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
 </dialog>
 
 <dialog id="bulkIndexDialog" class="group-dialog panel-card" aria-labelledby="bulkIndexDialogTitle"></dialog>
-<dialog id="clearDatabaseDialog" class="group-dialog panel-card" aria-labelledby="clearDatabaseTitle">
+<dialog id="clearDatabaseDialog" lang="{{T:locale}}" class="group-dialog panel-card" aria-labelledby="clearDatabaseTitle">
   <h2 id="clearDatabaseTitle">{{T:panel.rescan}} <button type="button" class="btn" id="clearDatabaseClose" aria-label="{{T:panel.close}}">✕</button></h2>
   <h3>{{T:database.new}}</h3>
   <label><input type="checkbox" name="index" checked disabled> {{T:database.createBase}}</label>
@@ -2438,6 +2438,7 @@ fetch("/api/reindex").then(r=>r.ok?r.json():null).then(st=>{
 
 let dslSaving=false;
 function selectedDSLParser(){return dicts.find(d=>d.dsl)?.dsl.parser||cfgInfo?.dslParser||"both"}
+function matchesDSLParser(d){const parser=selectedDSLParser();return !d.dsl||parser==="both"||d.dsl.variant===parser}
 $("dslParserMode").addEventListener("click",e=>{
   const button=e.target.closest("[data-parser]");
   if(button&&!bulkIndexBusy)setDSLMode("",button.dataset.parser,true);
@@ -2513,7 +2514,7 @@ function renderPanel(){
     button.setAttribute("aria-pressed",String(button.dataset.parser===parser));
     button.disabled=dslSaving;
   });
-  const ord=orderedDicts().filter(d=>!d.dsl||parser==="both"||d.dsl.variant===parser);
+  const ord=orderedDicts().filter(matchesDSLParser);
   for(const d of ord){
     const div=document.createElement("div");div.className="pd"+(d.unavailable?" dsl-unavailable":"");div.dataset.id=d.id;
     /* Only what varies AND can be changed. exact and prefix are true for every
@@ -3422,13 +3423,11 @@ function bulkIndexCandidates(scope,feat,remove){
 }
 function renderBulkIndexes(){
   if(bulkIndexBusy)return;
-  $("bulkIndexes").innerHTML=[false,true].map(remove=>{
-    const action=remove?"delete":"create";
-    return `<section class="bulk-index-section"><h3>${esc(tx(remove?"dictUI.deleteAllTitle":"dictUI.createAllTitle"))}</h3>`+
-        `<div class="bulk-index-buttons">`+
-        [["base","dictUI.indexPlain"],["contains","dictUI.contains"],["fts","dictUI.fts"]].map(([feat,label])=>
-          `<button type="button" class="btn" data-bulk-action="${action}" data-bulk-scope="selected" data-bulk-feat="${feat}"${remove&&feat==="base"&&!cfgInfo?.canDelete?" disabled":""}>${esc(tx(label))}</button>`).join("")+"</div></section>";
-  }).join("");
+  $("bulkIndexes").innerHTML='<section class="bulk-index-section"><h3>'+esc(tx("dictUI.allActions"))+'</h3><table class="bulk-index-table"><thead><tr><th scope="col"></th><th scope="col">'+esc(tx("dictUI.create"))+'</th><th scope="col">'+esc(tx("dictUI.delete"))+'</th></tr></thead><tbody>'+
+    [["base","dictUI.indexPlain"],["contains","dictUI.contains"],["fts","dictUI.fts"]].map(([feat,label])=>
+      '<tr><th scope="row">'+esc(tx(label))+'</th>'+[false,true].map(remove=>
+        '<td><button type="button" class="btn" data-bulk-action="'+(remove?'delete':'create')+'" data-bulk-scope="selected" data-bulk-feat="'+feat+'" aria-label="'+escAttr(tx(remove?"dictUI.delete":"dictUI.create")+' — '+tx(label))+'"'+(remove&&feat==='base'&&!cfgInfo?.canDelete?' disabled':'')+'>'+esc(tx(remove?"dictUI.delete":"dictUI.create"))+'</button></td>').join('')+'</tr>').join('')+'</tbody></table></section>';
+
 }
 $("bulkIndexes").addEventListener("click",async e=>{
   const button=e.target.closest("[data-bulk-action]");if(!button||bulkIndexBusy)return;

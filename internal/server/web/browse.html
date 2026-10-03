@@ -398,7 +398,10 @@ async function chooser(){
   for(const line of text.split("\n")){
     if(!line)continue;
     let m;try{m=JSON.parse(line)}catch(e){continue}
-    if(m.t==="dict"&&m.dict&&!m.dict.error)ds.push(m.dict);
+    if(m.t==="dict"&&m.dict&&!m.dict.error){
+      const d=m.dict,parser=d.dsl?.parser||"both";
+      if(!d.dsl||parser==="both"||d.dsl.variant===parser)ds.push(d);
+    }
   }
   ds.sort((x,y)=>(x.name||"").localeCompare(y.name||""));
   if(!ds.length)return card("<b>"+tx("browse.empty")+"</b><p>"+tx("browse.emptyBody")+

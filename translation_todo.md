@@ -1,5 +1,9 @@
 # Localization: status and next tasks
 
+2026-10-03 Russian Rescan: explicit dialog language and consistently stacked equal-width actions fix mixed wrapping of longer Russian labels. Existing wording retained; EN layout unchanged. Chromium 320/360/390/1100px at 100/130% and targeted server checks pass; phone verification pending.
+
+2026-10-03 Dictionary settings layout: For all dictionaries / Для всех словарей heading added; table reuses existing Create/Delete and index labels. Node i18n, targeted catalogs and EN/RU Chromium 320/390/1100px layout probes pass; phone/text-scaling check pending.
+
 2026-10-03 Exit: last Android Settings row and native busy/wait dialog localized in EN/RU using the selected interface language. Node i18n checks and FOSS/Play Java compilation pass; device layout/language verification pending.
 
 2026-10-03 article find: dialog/strip labels, modes, options, counts, wrap notices and hidden-example hint are catalog-backed in EN/RU. Node/catalog/asset and Chromium 320/390/1100px checks pass; no APK/device verification. Check Russian labels with the soft keyboard and increased text size, plus the strip count and example checkbox on the phone.

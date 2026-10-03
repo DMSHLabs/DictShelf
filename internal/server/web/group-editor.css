@@ -110,6 +110,9 @@ dialog#clearDatabaseDialog.group-dialog.panel-card{box-sizing:border-box;height:
 #clearDatabaseDialog .seg .btn:first-child{border-radius:5px 0 0 5px}
 #clearDatabaseDialog .seg .btn:last-child{border-radius:0 5px 5px 0}
 #clearDatabaseDialog .seg .btn.on{background:var(--accent);color:var(--bg);border-color:var(--accent)}
+#clearDatabaseDialog:lang(ru) .rescan-action{display:grid;grid-template-columns:minmax(0,1fr);gap:.4em;margin:.65em 0}
+#clearDatabaseDialog:lang(ru) .seg{display:flex;width:100%}
+#clearDatabaseDialog:lang(ru) .seg .btn{flex:1;min-width:0;white-space:normal;overflow-wrap:anywhere;text-align:center}
 #clearDatabaseDialog p{overflow-wrap:anywhere;margin:.5em 0;line-height:1.3;font-size:.85em}
 #clearDatabaseStatus:empty{display:none}
 @media(max-width:360px){dialog#clearDatabaseDialog.group-dialog.panel-card{font-size:.85em;padding:12px}#clearDatabaseDialog .seg .btn{padding:.25em .35em}}
