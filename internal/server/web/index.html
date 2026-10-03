@@ -3434,7 +3434,7 @@ function bulkIndexCandidates(scope,feat,remove){
 }
 function renderBulkIndexes(){
   if(bulkIndexBusy)return;
-  $("bulkIndexes").innerHTML='<section class="bulk-index-section"><h3>'+esc(tx("dictUI.allActions"))+'</h3><table class="bulk-index-table"><thead><tr><th scope="col"></th><th scope="col">'+esc(tx("dictUI.create"))+'</th><th scope="col">'+esc(tx("dictUI.delete"))+'</th></tr></thead><tbody>'+
+  $("bulkIndexes").innerHTML='<section class="bulk-index-section"><h3>'+esc(tx("dictUI.allActions"))+'</h3><table class="bulk-index-table"><tbody>'+
     [["base","dictUI.indexPlain"],["contains","dictUI.contains"],["fts","dictUI.fts"]].map(([feat,label])=>
       '<tr><th scope="row">'+esc(tx(label))+'</th>'+[false,true].map(remove=>
         '<td><button type="button" class="btn" data-bulk-action="'+(remove?'delete':'create')+'" data-bulk-scope="selected" data-bulk-feat="'+feat+'" aria-label="'+escAttr(tx(remove?"dictUI.delete":"dictUI.create")+' — '+tx(label))+'"'+(remove&&feat==='base'&&!cfgInfo?.canDelete?' disabled':'')+'>'+esc(tx(remove?"dictUI.delete":"dictUI.create"))+'</button></td>').join('')+'</tr>').join('')+'</tbody></table></section>';

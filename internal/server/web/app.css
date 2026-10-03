@@ -1876,12 +1876,11 @@ dialog.panel-card:not([open]){display:none}
 #dslParserMode button::after{content:"";width:1em;flex:none}
 #dslParserMode button.on::after{content:"✓";color:var(--accent)}
 #dslParserMode button.on{background:color-mix(in srgb,var(--accent) 18%,transparent);border-color:var(--accent)}
-.bulk-index-section{padding:8px 0 12px;border-bottom:1px solid var(--line)}
+.bulk-index-section{padding:12px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
 .bulk-index-section h3{font-size:14px;margin:0 0 8px}
 .bulk-index-buttons{display:flex;flex-wrap:wrap;gap:6px}
 .bulk-index-table{width:100%;table-layout:fixed;border-collapse:separate;border-spacing:0 6px;font-size:12px}
 .bulk-index-table th{font-weight:500;text-align:left;overflow-wrap:anywhere}
-.bulk-index-table thead th:not(:first-child){text-align:center}
 .bulk-index-table th:first-child{width:36%;padding-right:8px}
 .bulk-index-table td{padding-left:6px}
 .bulk-index-table .btn{width:100%;min-height:40px;padding:.45em .3em;font:inherit;white-space:normal;overflow-wrap:anywhere}

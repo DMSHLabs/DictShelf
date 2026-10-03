@@ -1,5 +1,7 @@
 # Agent handoff — current state
 
+2026-10-03 bulk actions layout follow-up: removed duplicate Create/Delete column headings; added a top separator before For all dictionaries. Action buttons and semantics unchanged. Node UI syntax/localization and targeted server appearance tests pass; no phone check.
+
 2026-10-03 Rescan progress: clean dev at start; maintenance POST optionally streams NDJSON while retaining its JSON API. Rescan dialog and main status show dictionary position/name and rebuild article counters, then cleanup and result. A disconnected browser does not interrupt maintenance. Targeted Rescan/ClearDatabase/I18n/Appearance tests, streamed-progress regression and Node localization/syntax checks pass. No APK/device verification.
 
 2026-10-03 DSL visibility follow-up: group editor and standalone Browse chooser filter by global parser, not index availability. Group hints/counts use visible dictionaries; drag/keyboard reorder skip hidden variants and replace visible slots only, preserving hidden membership/positions. Saved preference order still retains all dictionaries. Node group-parser regression and server Group/DSL/I18n tests pass; no APK/device check.
