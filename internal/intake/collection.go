@@ -337,9 +337,8 @@ func fetchListing(ctx context.Context, f Fetcher, raw string) (listing, error) {
 	if err != nil {
 		return listing{}, err
 	}
-	req.Header.Set("User-Agent", "wudict")
 	req.Header.Set("Accept", "text/html, text/plain;q=0.9, */*;q=0.1")
-	resp, err := f.client().Do(req)
+	resp, err := f.Client().Do(req)
 	if err != nil {
 		return listing{}, err
 	}
@@ -697,9 +696,8 @@ func (a *remoteArchive) Open(name string) (io.ReadCloser, error) {
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("User-Agent", "wudict")
 	req.Header.Set("Range", "bytes=0-"+strconv.Itoa(sniffHeadBytes-1))
-	resp, err := a.f.client().Do(req)
+	resp, err := a.f.Client().Do(req)
 	if err != nil {
 		return nil, err
 	}

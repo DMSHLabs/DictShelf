@@ -131,6 +131,12 @@ func (s *Server) routes() []route {
 		{"POST", "/api/reindex", s.handleReindex, "/api/reindex", false},
 		{"GET", "/api/reindex", s.handleReindexStatus, "/api/reindex", false},
 		{"DELETE", "/api/reindex", s.handleReindexCancel, "/api/reindex", false},
+		// the picker's groups (groups.go, D162): read, replace, reset to the
+		// default. Never CORS - the file is the user's, and two of the three
+		// write it.
+		{"GET", "/api/groups", s.handleGroups, "/api/groups", false},
+		{"PUT", "/api/groups", s.handleSaveGroups, "/api/groups", false},
+		{"DELETE", "/api/groups", s.handleResetGroups, "/api/groups", false},
 		// the user's own file store (userfiles.go): what their custom CSS,
 		// or a dictionary they wrote themselves, can reference by URL. Never
 		// CORS - the list names a folder on the user's disk, and the other
@@ -147,6 +153,9 @@ func (s *Server) routes() []route {
 		// the lemma installer, reached from setup and from the app's
 		// configuration disclosure
 		{"GET", "/lemmas", s.handleLemmasPage, "", false},
+		// the groups.ini editor, reached from the panel's configuration
+		// disclosure next to the folders
+		{"GET", "/groups", s.handleGroupsPage, "", false},
 		// reading the dictionary instead of querying it (browse.go), reached
 		// from the panel's action row and from each dictionary's own card
 		{"GET", "/browse", s.handleBrowsePage, "", false},

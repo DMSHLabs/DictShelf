@@ -24,6 +24,8 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+
+	"github.com/wuweidict/wudict/internal/fsx"
 )
 
 const (
@@ -103,7 +105,7 @@ func MarkRemoved(dir string) error {
 
 // Restore undoes MarkRemoved: the guide is installed again and stays.
 func Restore(dir string) (string, error) {
-	if err := os.Remove(filepath.Join(dir, removedMark)); err != nil && !errors.Is(err, fs.ErrNotExist) {
+	if err := fsx.RemoveIfExists(filepath.Join(dir, removedMark)); err != nil {
 		return "", err
 	}
 	return Install(dir)
@@ -146,26 +148,5 @@ func writeIfChanged(p string, b []byte) error {
 	if old, err := os.ReadFile(p); err == nil && bytes.Equal(old, b) {
 		return nil
 	}
-	tmp, err := os.CreateTemp(filepath.Dir(p), ".howto-*")
-	if err != nil {
-		return err
-	}
-	if _, err := tmp.Write(b); err != nil {
-		tmp.Close()
-		os.Remove(tmp.Name())
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		os.Remove(tmp.Name())
-		return err
-	}
-	if err := os.Chmod(tmp.Name(), 0o644); err != nil {
-		os.Remove(tmp.Name())
-		return err
-	}
-	if err := os.Rename(tmp.Name(), p); err != nil {
-		os.Remove(tmp.Name())
-		return err
-	}
-	return nil
+	return fsx.WriteAtomic(p, b, 0o644)
 }

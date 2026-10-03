@@ -29,6 +29,7 @@ import (
 
 	"github.com/wuweidict/wudict/internal/config"
 	"github.com/wuweidict/wudict/internal/dict"
+	"github.com/wuweidict/wudict/internal/fsx"
 	"github.com/wuweidict/wudict/internal/howto"
 	"github.com/wuweidict/wudict/internal/htmlref"
 	"github.com/wuweidict/wudict/internal/intake"
@@ -801,7 +802,7 @@ func dictFiles(arg string) []dictFile {
 	abs = dict.MainFile(abs)
 	var out []dictFile
 	add := func(kind, p string) {
-		if n := store.TreeSize(p); n > 0 || fileExists(p) {
+		if n := store.TreeSize(p); n > 0 || fsx.FileExists(p) {
 			out = append(out, dictFile{kind, p, n})
 		}
 	}
@@ -842,9 +843,9 @@ func printDictFiles(files []dictFile) {
 	fmt.Println("files:")
 	for _, f := range files {
 		total += f.size
-		fmt.Printf("  %-8s  %-*s  %10s\n", f.kind, w, f.path, humanSize(f.size))
+		fmt.Printf("  %-8s  %-*s  %10s\n", f.kind, w, f.path, logx.Size(f.size))
 	}
-	fmt.Printf("  %-8s  %-*s  %10s\n", "total", w, "", humanSize(total))
+	fmt.Printf("  %-8s  %-*s  %10s\n", "total", w, "", logx.Size(total))
 }
 
 func cmdQuery(mode string, args []string) error {
@@ -989,7 +990,7 @@ func cmdIngest(args []string) error {
 	}
 
 	if *out != "" {
-		if len(srcs) != 1 || isDir(srcs[0]) {
+		if len(srcs) != 1 || fsx.DirExists(srcs[0]) {
 			return fmt.Errorf("-o names the output of one dictionary file, not of %s", strings.Join(srcs, ", "))
 		}
 		if *full && store.MediaSibling(*out) == "" {
@@ -1000,13 +1001,13 @@ func cmdIngest(args []string) error {
 		return ingestOne(srcs[0], *out, *full, pf)
 	}
 	// a single file keeps its own errors, unprefixed by a [1/1] count
-	if len(srcs) == 1 && !isDir(srcs[0]) {
+	if len(srcs) == 1 && !fsx.DirExists(srcs[0]) {
 		return ingestOne(srcs[0], "", *full, pf)
 	}
 
 	var paths, dirs []string
 	for _, s := range srcs {
-		if isDir(s) {
+		if fsx.DirExists(s) {
 			dirs = append(dirs, s)
 		} else {
 			paths = append(paths, s)
@@ -1021,7 +1022,7 @@ func cmdIngest(args []string) error {
 		// stderr, as searchall does: once the folders come from a config file
 		// they are not on the command line to be seen
 		fmt.Fprintf(os.Stderr, "preparing %s from %s (%s)\n",
-			plural(len(found), "dictionary", "dictionaries"), strings.Join(dirs, ", "), origin)
+			logx.Plural(len(found), "dictionary", "dictionaries"), strings.Join(dirs, ", "), origin)
 	}
 	if len(paths) == 0 {
 		return fmt.Errorf("no dictionaries found under %s (%s)", strings.Join(srcs, ", "), origin)
@@ -1044,12 +1045,6 @@ func cmdIngest(args []string) error {
 // which keeps what a prepared dictionary already has.
 type planFlags struct{ fullText, contains *bool }
 
-// isDir reports that path names an existing directory.
-func isDir(path string) bool {
-	st, err := os.Stat(path)
-	return err == nil && st.IsDir()
-}
-
 // ingestOne prepares one dictionary into its library folder - or, with out,
 // into that database - by the rules every preparation follows
 // (store.Reconcile): the flags given change their index, the ones left out
@@ -1069,10 +1064,10 @@ func ingestOne(srcPath, out string, full bool, pf planFlags) error {
 	case res.Rebuilt:
 		// printed even when the media step after it failed: the text is done
 		fmt.Printf("%s%s indexed in %.1fs → %s\n",
-			logx.Dict(name), plural(res.Report.Entries, "entry", "entries"), res.TextTime.Seconds(), dir)
+			logx.Dict(name), logx.Plural(res.Report.Entries, "entry", "entries"), res.TextTime.Seconds(), dir)
 		if res.Report.UnresolvedLinks > 0 {
 			fmt.Printf("%s%s pointed at headwords not present in the source (skipped)\n",
-				logx.Dict(name), plural(res.Report.UnresolvedLinks, "redirect", "redirects"))
+				logx.Dict(name), logx.Plural(res.Report.UnresolvedLinks, "redirect", "redirects"))
 		}
 	case err == nil:
 		fmt.Printf("%salready prepared in %s - skipped\n", logx.Dict(name), dir)
@@ -1120,7 +1115,7 @@ func printMedia(name string, res store.Outcome) {
 		fmt.Printf("%sno media to pack\n", logx.Dict(name))
 	case res.Packed > 0:
 		fmt.Printf("%s%s packed in %.1fs\n",
-			logx.Dict(name), plural(res.Packed, "media file", "media files"), res.MediaTime.Seconds())
+			logx.Dict(name), logx.Plural(res.Packed, "media file", "media files"), res.MediaTime.Seconds())
 	}
 }
 
@@ -1380,16 +1375,15 @@ Hint: pick another port with --port, e.g.:  wudict --port %s
 	// beside the config file in effect, so a portable install carries both and
 	// --config re-points both. Loaded BEFORE the registry: Warm skips disabled
 	// dictionaries, and it starts inside NewRegistry.
-	regOpts := []server.Option{server.WithPrefs(server.LoadPrefs(statePath(cfgFile)))}
+	user := server.UserDir(userDir(cfgFile))
+	regOpts := []server.Option{server.WithPrefs(server.LoadPrefs(user.State()))}
 	// The wudict howto, the guide the app ships as a dictionary: written
 	// beside the config in effect (rewritten only when this build's guide
 	// differs), and listed with the user's dictionaries. Without a place to
 	// write it, the app starts without it.
 	// Once the user removed it, it is not written back until Setup restores it;
 	// the registry lists it only while its file exists either way.
-	howtoDir := ""
-	if d := userDir(cfgFile); d != "" {
-		howtoDir = filepath.Join(d, "builtin")
+	if howtoDir := user.Builtin(); howtoDir != "" {
 		if !howto.IsRemoved(howtoDir) {
 			if _, err := howto.Install(howtoDir); err != nil {
 				logx.Warn("the wudict howto is not available: %v", err)
@@ -1408,8 +1402,7 @@ Hint: pick another port with --port, e.g.:  wudict --port %s
 	}
 	srv := server.New(reg)
 	srv.ConfigPath = cfgFile
-	srv.HowtoDir = howtoDir
-	srv.StyleDir = stylePath(cfgFile)
+	srv.User = user
 	store.SetCompressBodies(!cfg.NoCompress)
 	server.SetIndexWorkers(cfg.IndexWorkers)
 	if cfg.MemoryLimit > 0 {
@@ -1424,6 +1417,7 @@ Hint: pick another port with --port, e.g.:  wudict --port %s
 	srv.Version = Version
 	srv.DictDirOrigin = cfg.Origin("DICT_DIR")
 	srv.DictDirEditable = cfg.EditableInFile("DICT_DIR")
+	srv.ConfigProblems = cfg.Problems
 	// What the tunable keys actually resolved to, for a shell that overrides
 	// them per device and needs to show what is in effect (D101).
 	srv.Effective = cfg.Effective()
@@ -1455,6 +1449,7 @@ Hint: pick another port with --port, e.g.:  wudict --port %s
 	// caller-chosen address would make the endpoint fetch whatever the host
 	// running wudict can reach.
 	srv.LemmaDir, srv.LemmaURL = cfg.LemmaDir, cfg.LemmaURL
+	useLemmaClient(cfg.LemmaURL, cfg.ImportInsecure)
 	srv.AllowRemoteDelete = cfg.AllowRemoteDelete
 	srv.BrowserExtensions = cfg.BrowserExtensions
 	srv.WebOrigins = cfg.WebOrigins
@@ -1649,11 +1644,6 @@ func portHolderCmd(port string) string {
 	return "lsof -i :" + port
 }
 
-func dirExists(p string) bool {
-	st, err := os.Stat(p)
-	return err == nil && st.IsDir()
-}
-
 // resolveSpeexdec locates the speexdec binary ONCE at startup (never at .spx
 // playback time). Precedence: an explicit SPEEXDEC override, then a binary
 // sitting next to the wudict executable, then $PATH. Returns the resolved
@@ -1771,27 +1761,6 @@ func userDir(cfgFile string) string {
 	return ""
 }
 
-// statePath places state.json next to the wudict.toml that is in effect, so a
-// portable install (D32) keeps its state on the same stick as its config and
-// --config points at both at once.
-func statePath(cfgFile string) string {
-	d := userDir(cfgFile)
-	if d == "" {
-		return ""
-	}
-	return filepath.Join(d, server.StateFile)
-}
-
-// stylePath places the user's global stylesheets beside that same file, for
-// the same reason (style.go).
-func stylePath(cfgFile string) string {
-	d := userDir(cfgFile)
-	if d == "" {
-		return ""
-	}
-	return filepath.Join(d, server.StyleDirName)
-}
-
 func printStartup(cfg config.Config, in startupInfo) {
 	// Not os.Stderr: in a GUI launch the whole channel has been moved to a
 	// log file, and the banner is the most useful thing in it (D74).
@@ -1805,7 +1774,7 @@ func printStartup(cfg config.Config, in startupInfo) {
 		if i > 0 {
 			label = "                "
 		}
-		note := plural(root.Count, "dictionary", "dictionaries")
+		note := logx.Plural(root.Count, "dictionary", "dictionaries")
 		switch {
 		case !root.Exists:
 			note = "folder not found"
@@ -1813,10 +1782,10 @@ func printStartup(cfg config.Config, in startupInfo) {
 			note = "no dictionaries found"
 		case root.Count == 0:
 			// overlapping folders: saying "none found" here would be a lie
-			note = plural(root.Total, "dictionary", "dictionaries") + ", already listed above"
+			note = logx.Plural(root.Total, "dictionary", "dictionaries") + ", already listed above"
 		case root.Total > root.Count:
 			note = fmt.Sprintf("%s (+%d already listed above)",
-				plural(root.Count, "dictionary", "dictionaries"), root.Total-root.Count)
+				logx.Plural(root.Count, "dictionary", "dictionaries"), root.Total-root.Count)
 		}
 		fmt.Fprintf(out, "%s%s  (%s)\n", label, root.Path, note)
 	}
@@ -1845,6 +1814,9 @@ func printStartup(cfg config.Config, in startupInfo) {
 	}
 	for _, p := range cfg.Shadowed {
 		fmt.Fprintf(out, "                %s  (ignored - lower priority)\n", p)
+	}
+	for _, p := range cfg.Problems {
+		fmt.Fprintf(out, "                ⚠ %s\n", p)
 	}
 	fmt.Fprintf(out, "  address       %s\n", in.url)
 	// The second address is not a detail: it is the one that keeps working
@@ -1886,23 +1858,23 @@ func printStartup(cfg config.Config, in startupInfo) {
 	}
 	fmt.Fprintf(out, "  indexing      %s\n", indexingSummary(cfg.AutoIndex))
 	fmt.Fprintf(out, "  index workers %s%s\n",
-		plural(cfg.IndexWorkers, "dictionary at a time", "dictionaries at a time"),
+		logx.Plural(cfg.IndexWorkers, "dictionary at a time", "dictionaries at a time"),
 		memLimitNote(cfg.MemoryLimit))
 	fmt.Fprintf(out, "  preview memory %s%s\n", budgetNote(cfg.PreviewMemory), searchBudgetNote(cfg.SearchMemory))
-	fmt.Fprintf(out, "  serving       %s\n", plural(in.total, "dictionary", "dictionaries"))
+	fmt.Fprintf(out, "  serving       %s\n", logx.Plural(in.total, "dictionary", "dictionaries"))
 
 	// what to do next, when there is something to do
 	switch {
 	case in.total == 0:
 		if in.prepared > 0 && !cfg.UseCached {
 			fmt.Fprintf(out, "\nopen %s - choose a dictionary folder, or use the %s already prepared\n",
-				in.url, plural(in.prepared, "dictionary", "dictionaries"))
+				in.url, logx.Plural(in.prepared, "dictionary", "dictionaries"))
 		} else {
 			fmt.Fprintf(out, "\nopen %s to choose your dictionary folder\n", in.url)
 		}
 	case in.prepared > 0 && !cfg.UseCached:
 		fmt.Fprintf(out, "\n%s previously imported - enable with --use-cached (or on the setup page)\n",
-			plural(in.prepared, "dictionary", "dictionaries"))
+			logx.Plural(in.prepared, "dictionary", "dictionaries"))
 	}
 	if in.speex == "" {
 		fmt.Fprintf(out, "\nnote: no .spx decoder available - Speex audio will not play.\n"+
@@ -1978,14 +1950,6 @@ func memLimitNote(limit int64) string {
 		return ""
 	}
 	return fmt.Sprintf("  ·  memory limit %.1f GB", float64(limit)/(1<<30))
-}
-
-// plural renders a count with the right noun: "1 dictionary", "55 dictionaries".
-func plural(n int, one, many string) string {
-	if n == 1 {
-		return fmt.Sprintf("%d %s", n, one)
-	}
-	return fmt.Sprintf("%d %s", n, many)
 }
 
 func indexingSummary(autoIndex string) string {
@@ -2086,7 +2050,7 @@ func cmdSearchAll(args []string) error {
 	// stderr, so stdout stays exactly the results: the folder searched is not
 	// obvious once it comes from a config file rather than the command line.
 	fmt.Fprintf(os.Stderr, "searching %s in %s (%s)\n",
-		plural(len(paths), "dictionary", "dictionaries"), strings.Join(dirs, ", "), origin)
+		logx.Plural(len(paths), "dictionary", "dictionaries"), strings.Join(dirs, ", "), origin)
 
 	// Opened inside the worker, closed as soon as that dictionary has answered:
 	// holding every one until the command exits would materialise a large
@@ -2189,10 +2153,10 @@ func cmdClean(args []string) error {
 		if o.IsDir {
 			kind = "folder"
 		}
-		fmt.Printf("%s  (%s, %s)\n  %s\n", o.Path, kind, humanSize(o.Size), o.Reason)
+		fmt.Printf("%s  (%s, %s)\n  %s\n", o.Path, kind, logx.Size(o.Size), o.Reason)
 	}
 	if len(leftovers) > 0 {
-		fmt.Printf("%d items, %s total\n", len(leftovers), humanSize(total))
+		fmt.Printf("%d items, %s total\n", len(leftovers), logx.Size(total))
 	}
 	var orphanTotal int64
 	if len(orphans) > 0 {
@@ -2202,9 +2166,9 @@ func cmdClean(args []string) error {
 		fmt.Println("orphans - prepared dictionaries whose source file is gone:")
 		for _, o := range orphans {
 			orphanTotal += o.Size
-			fmt.Printf("%s  (%s, %s)\n  source was %s\n", o.Dir, o.Name, humanSize(o.Size), o.Source)
+			fmt.Printf("%s  (%s, %s)\n  source was %s\n", o.Dir, o.Name, logx.Size(o.Size), o.Source)
 		}
-		fmt.Printf("%d orphans, %s total\n", len(orphans), humanSize(orphanTotal))
+		fmt.Printf("%d orphans, %s total\n", len(orphans), logx.Size(orphanTotal))
 	}
 	if !*force {
 		switch {
@@ -2301,7 +2265,7 @@ func cmdRes(args []string) error {
 			return fmt.Errorf("%s already exists: pass -f to overwrite, or -o to name the output", dest)
 		}
 	}
-	n, err := writeFileAtomic(dest, rc)
+	n, err := fsx.WriteAtomicFrom(dest, rc, 0o644)
 	if err != nil {
 		return err
 	}
@@ -2387,39 +2351,6 @@ func resBasename(name string) string {
 		}
 	}
 	return name
-}
-
-// writeFileAtomic copies src to path via a sibling temp file, creating parent
-// directories first. Nothing lands at the final name until the copy has fully
-// succeeded: a resource that fails to decompress halfway through must not
-// leave a truncated file that looks like a complete one.
-func writeFileAtomic(path string, src io.Reader) (int64, error) {
-	if dir := filepath.Dir(path); dir != "" && dir != "." {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			return 0, err
-		}
-	}
-	// Same directory as the destination, so the rename is on one filesystem.
-	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".part*")
-	if err != nil {
-		return 0, err
-	}
-	tmpName := tmp.Name()
-	defer func() {
-		tmp.Close()        // no-op after a successful Close below
-		os.Remove(tmpName) // no-op after a successful Rename
-	}()
-	n, err := io.Copy(tmp, src)
-	if err != nil {
-		return n, err
-	}
-	if err := tmp.Close(); err != nil {
-		return n, err
-	}
-	if err := os.Rename(tmpName, path); err != nil {
-		return n, err
-	}
-	return n, nil
 }
 
 // isTerminal reports whether f is a character device - the same test logx uses

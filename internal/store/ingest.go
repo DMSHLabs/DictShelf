@@ -12,13 +12,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/wuweidict/wudict/internal/artmark"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"time"
+
+	"github.com/wuweidict/wudict/internal/artmark"
 
 	"github.com/wuweidict/wudict/internal/dict"
 )

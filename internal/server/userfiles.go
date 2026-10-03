@@ -13,6 +13,8 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+
+	"github.com/wuweidict/wudict/internal/fsx"
 )
 
 // The user's own file store: whatever they need their custom CSS - or their
@@ -35,7 +37,7 @@ import (
 // else; what it is not is a place to smuggle content in from, which is why the
 // caps below are small and the name is not a path.
 const (
-	// assetsDirName sits under StyleDir, so the whole customisation surface -
+	// assetsDirName sits under User.Style(), so the whole customisation surface -
 	// two stylesheets and their files - is one folder to back up, sync or
 	// carry on a stick (D32).
 	assetsDirName = "assets"
@@ -65,10 +67,10 @@ func isUserFileName(n string) bool { return userFileRe.MatchString(n) }
 // same "no config file and no home directory" case that leaves state in
 // memory.
 func (s *Server) userFilesDir() string {
-	if s.StyleDir == "" {
+	if s.User.Style() == "" {
 		return ""
 	}
-	return filepath.Join(s.StyleDir, assetsDirName)
+	return filepath.Join(s.User.Style(), assetsDirName)
 }
 
 // userFilePath is one file's location, or "" when the name is not one this
@@ -181,7 +183,7 @@ func (s *Server) userFilesPayload() map[string]any {
 	return map[string]any{
 		"files":    files,
 		"dir":      s.userFilesDir(),
-		"writable": s.StyleDir != "",
+		"writable": s.User.Style() != "",
 		"total":    total,
 		"limits": map[string]any{
 			"file":  int64(maxUserFileBytes),
@@ -206,12 +208,12 @@ func (s *Server) handleFiles(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleFileUpload(w http.ResponseWriter, r *http.Request) {
 	name := r.URL.Query().Get("name")
 	if !isUserFileName(name) {
-		http.Error(w, "bad request: name must be 1-64 characters of A-Z a-z 0-9 . _ - and start with a letter or digit", http.StatusBadRequest)
+		httpErr(w, http.StatusBadRequest, "%s", "bad request: name must be 1-64 characters of A-Z a-z 0-9 . _ - and start with a letter or digit")
 		return
 	}
 	dir := s.userFilesDir()
 	if dir == "" {
-		http.Error(w, "no config directory: there is nowhere to save files", http.StatusConflict)
+		httpErr(w, http.StatusConflict, "%s", "no config directory: there is nowhere to save files")
 		return
 	}
 	replace, _ := queryFlag(r.URL.Query(), "replace")
@@ -231,11 +233,11 @@ func (s *Server) handleFileUpload(w http.ResponseWriter, r *http.Request) {
 		count++
 	}
 	if exists && !replace {
-		http.Error(w, "a file named "+name+" is already there", http.StatusConflict)
+		httpErr(w, http.StatusConflict, "%s", "a file named "+name+" is already there")
 		return
 	}
 	if count+1 > maxUserFiles {
-		http.Error(w, "too many files", http.StatusRequestEntityTooLarge)
+		httpErr(w, http.StatusRequestEntityTooLarge, "%s", "too many files")
 		return
 	}
 
@@ -246,60 +248,41 @@ func (s *Server) handleFileUpload(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		var mbe *http.MaxBytesError
 		if errors.As(err, &mbe) {
-			http.Error(w, "file is too large", http.StatusRequestEntityTooLarge)
+			httpErr(w, http.StatusRequestEntityTooLarge, "%s", "file is too large")
 			return
 		}
-		http.Error(w, "bad request: "+err.Error(), http.StatusBadRequest)
+		httpErr(w, http.StatusBadRequest, "%s", "bad request: "+err.Error())
 		return
 	}
 	if len(body) == 0 {
-		http.Error(w, "bad request: empty file", http.StatusBadRequest)
+		httpErr(w, http.StatusBadRequest, "%s", "bad request: empty file")
 		return
 	}
 	if len(body) > maxUserFileBytes {
-		http.Error(w, "file is too large", http.StatusRequestEntityTooLarge)
+		httpErr(w, http.StatusRequestEntityTooLarge, "%s", "file is too large")
 		return
 	}
 	if total+int64(len(body)) > maxUserFilesBytes {
-		http.Error(w, "not enough room: the files folder would be over its limit", http.StatusRequestEntityTooLarge)
+		httpErr(w, http.StatusRequestEntityTooLarge, "%s", "not enough room: the files folder would be over its limit")
 		return
 	}
 
 	if err := s.userFileWrite(name, body); err != nil {
-		http.Error(w, "could not save "+name+": "+err.Error(), http.StatusInternalServerError)
+		httpErr(w, http.StatusInternalServerError, "%s", "could not save "+name+": "+err.Error())
 		return
 	}
 	writeJSON(w, s.userFilesPayload())
 }
 
-// userFileWrite replaces one file, temp-file + rename like styleWrite: a crash
-// or a dropped connection mid-upload leaves the previous file intact rather
-// than a truncated one that the page would then render as a broken image.
+// userFileWrite replaces one file atomically (fsx.WriteAtomic): a crash or a
+// dropped connection mid-upload leaves the previous file intact rather than a
+// truncated one that the page would then render as a broken image.
 func (s *Server) userFileWrite(name string, body []byte) error {
 	p := s.userFilePath(name)
 	if p == "" {
 		return os.ErrPermission
 	}
-	dir := filepath.Dir(p)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return err
-	}
-	tmp, err := os.CreateTemp(dir, ".upload-*")
-	if err != nil {
-		return err
-	}
-	defer os.Remove(tmp.Name())
-	if _, err := tmp.Write(body); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	if err := os.Chmod(tmp.Name(), 0o644); err != nil {
-		return err
-	}
-	return os.Rename(tmp.Name(), p)
+	return fsx.WriteAtomic(p, body, 0o644)
 }
 
 // DELETE /api/files?name=<name>. Removing what is not there is a success: the
@@ -309,11 +292,11 @@ func (s *Server) handleFileDelete(w http.ResponseWriter, r *http.Request) {
 	name := r.URL.Query().Get("name")
 	p := s.userFilePath(name)
 	if p == "" {
-		http.Error(w, "bad request: unknown file name", http.StatusBadRequest)
+		httpErr(w, http.StatusBadRequest, "%s", "bad request: unknown file name")
 		return
 	}
-	if err := os.Remove(p); err != nil && !os.IsNotExist(err) {
-		http.Error(w, "could not remove "+name+": "+err.Error(), http.StatusInternalServerError)
+	if err := fsx.RemoveIfExists(p); err != nil {
+		httpErr(w, http.StatusInternalServerError, "%s", "could not remove "+name+": "+err.Error())
 		return
 	}
 	writeJSON(w, s.userFilesPayload())

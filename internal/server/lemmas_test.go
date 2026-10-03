@@ -79,7 +79,7 @@ func lemmaServer(t *testing.T, url string, cacheSize int) (*Server, string) {
 	s := New(reg)
 	// Installs outlive their request by design; they must not outlive the
 	// temp folders they are writing into.
-	t.Cleanup(func() { s.lemmas.wg.Wait() })
+	t.Cleanup(func() { s.jobs.wg.Wait() })
 	dir := t.TempDir()
 	s.LemmaDir, s.LemmaURL = dir, url
 	s.Morph = morph.New(cacheSize, dir)

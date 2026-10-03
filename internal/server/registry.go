@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/wuweidict/wudict/internal/dict"
+	"github.com/wuweidict/wudict/internal/fsx"
 	"github.com/wuweidict/wudict/internal/htmlref"
 	"github.com/wuweidict/wudict/internal/logx"
 	"github.com/wuweidict/wudict/internal/resource"
@@ -208,7 +209,7 @@ func (u *upgraded) media(prov resource.Provider) ([]resource.Source, *store.Link
 	}
 	if u.medLink == nil && !u.medTried && prov.Open != nil {
 		u.medTried = true
-		if path := store.LinkSibling(u.Store.Meta().Path); path != "" && fileExists(path) {
+		if path := store.LinkSibling(u.Store.Meta().Path); path != "" && fsx.FileExists(path) {
 			links, err := store.OpenLinks(path, u.Store.UUID())
 			if err != nil {
 				// The cache no longer describes the files it points into (or
@@ -236,7 +237,7 @@ func (u *upgraded) recordLinks(src dict.Dictionary) {
 		return
 	}
 	path := store.LinkSibling(u.Store.Meta().Path)
-	if path == "" || fileExists(path) {
+	if path == "" || fsx.FileExists(path) {
 		return
 	}
 	u.medBuild.Do(func() {
@@ -916,7 +917,7 @@ func openUpgradedOrDirect(path string) (dict.Dictionary, error) {
 		if err != nil {
 			return nil, err
 		}
-		if src := s.SourcePath(); src != "" && fileExists(src) {
+		if src := s.SourcePath(); src != "" && fsx.FileExists(src) {
 			return &upgraded{Store: s, srcPath: src}, nil
 		}
 		return &native{Store: s, path: path}, nil
@@ -1136,7 +1137,7 @@ func (r *Registry) Rescan() error {
 	}
 	roots := make([]Root, len(dirs))
 	for i, d := range dirs {
-		roots[i] = Root{Path: d, Count: perRoot[i].New, Total: perRoot[i].Total, Exists: dirExists(d)}
+		roots[i] = Root{Path: d, Count: perRoot[i].New, Total: perRoot[i].Total, Exists: fsx.DirExists(d)}
 	}
 	r.mu.RLock()
 	builtin := append([]Builtin(nil), r.builtin...)
@@ -1146,7 +1147,7 @@ func (r *Registry) Rescan() error {
 	var shipped []string           // every builtin's path, listed or standing down
 	for _, b := range builtin {
 		shipped = append(shipped, b.Path)
-		if !fileExists(b.Path) {
+		if !fsx.FileExists(b.Path) {
 			continue // removed by the user (howto.MarkRemoved), or never written
 		}
 		if copyPath, ok := fileNamed(paths, filepath.Base(b.Path)); ok {
@@ -1606,7 +1607,7 @@ func (e *entry) preparedDB() (string, bool) {
 // catches is the state that IS broken - the database the handle reads is gone.
 func backingDB(path string) string {
 	if store.IsTextDB(path) {
-		if fileExists(path) {
+		if fsx.FileExists(path) {
 			return path
 		}
 		return ""

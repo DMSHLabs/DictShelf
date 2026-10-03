@@ -45,6 +45,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/wuweidict/wudict/internal/lang"
@@ -309,18 +310,34 @@ func (s source) open(ctx context.Context, name string) (io.ReadCloser, error) {
 	return httpGet(ctx, &u)
 }
 
-// client uses the environment's proxy - wudict is frequently run inside a
-// network that has one, and a download that ignores it fails with a timeout
+// defaultClient uses the environment's proxy - wudict is frequently run inside
+// a network that has one, and a download that ignores it fails with a timeout
 // instead of a reason. The timeouts are per phase rather than one overall
 // deadline, because a slow 2 MB file on a slow connection is legitimate while
-// a server that accepts and then says nothing is not.
-var client = &http.Client{
+// a server that accepts and then says nothing is not. The app replaces it with
+// the import fetcher's client (SetClient), so lemma data and dictionaries are
+// downloaded under one policy.
+var defaultClient = &http.Client{
 	Transport: &http.Transport{
 		Proxy:                 http.ProxyFromEnvironment,
 		DialContext:           (&net.Dialer{Timeout: 15 * time.Second}).DialContext,
 		TLSHandshakeTimeout:   15 * time.Second,
 		ResponseHeaderTimeout: 30 * time.Second,
 	},
+}
+
+var clientOverride atomic.Pointer[http.Client]
+
+// SetClient makes every lemma download use c: the app passes the import
+// fetcher's client (internal/intake), which refuses addresses on the local
+// network unless the user lifted that, caps redirects and names wudict.
+func SetClient(c *http.Client) { clientOverride.Store(c) }
+
+func client() *http.Client {
+	if c := clientOverride.Load(); c != nil {
+		return c
+	}
+	return defaultClient
 }
 
 // httpGet does not retry. A failure here is one line the user can read and act
@@ -331,7 +348,7 @@ func httpGet(ctx context.Context, u *url.URL) (io.ReadCloser, error) {
 	if err != nil {
 		return nil, err
 	}
-	resp, err := client.Do(req)
+	resp, err := client().Do(req)
 	if err != nil {
 		return nil, err
 	}

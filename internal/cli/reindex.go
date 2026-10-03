@@ -18,6 +18,7 @@ import (
 
 	"github.com/wuweidict/wudict/internal/config"
 	"github.com/wuweidict/wudict/internal/dict"
+	"github.com/wuweidict/wudict/internal/fsx"
 	"github.com/wuweidict/wudict/internal/logx"
 	"github.com/wuweidict/wudict/internal/server"
 	"github.com/wuweidict/wudict/internal/store"
@@ -66,7 +67,7 @@ func cmdReindex(args []string) error {
 	current := 0
 	for _, f := range targets {
 		switch {
-		case f.Source == "" || !fileExists(f.Source):
+		case f.Source == "" || !fsx.FileExists(f.Source):
 			gone = append(gone, folderLabel(f))
 		case *all || len(store.Stale(store.TextDBPath(f.Dir), f.Source)) > 0:
 			todo = append(todo, f)
@@ -79,7 +80,7 @@ func cmdReindex(args []string) error {
 	}
 	if len(todo) == 0 {
 		if current > 0 {
-			fmt.Printf("%s up to date - nothing to rebuild\n", plural(current, "dictionary is", "dictionaries are"))
+			fmt.Printf("%s up to date - nothing to rebuild\n", logx.Plural(current, "dictionary is", "dictionaries are"))
 		} else if len(gone) == 0 {
 			fmt.Printf("nothing is prepared in %s\n", store.DefaultDBDir())
 		}
@@ -95,7 +96,7 @@ func cmdReindex(args []string) error {
 		}
 	}
 	if current > 0 {
-		fmt.Printf("%s already up to date\n", plural(current, "dictionary was", "dictionaries were"))
+		fmt.Printf("%s already up to date\n", logx.Plural(current, "dictionary was", "dictionaries were"))
 	}
 	if failed > 0 {
 		return fmt.Errorf("%d of %d dictionaries could not be rebuilt", failed, len(todo))
@@ -178,7 +179,7 @@ func reindexOne(f store.Folder, force bool) error {
 	}
 	if res.Rebuilt {
 		fmt.Printf("%s%s indexed in %.1fs\n", logx.Dict(name),
-			plural(res.Report.Entries, "entry", "entries"), res.TextTime.Seconds())
+			logx.Plural(res.Report.Entries, "entry", "entries"), res.TextTime.Seconds())
 	}
 	printMedia(name, res)
 	if !res.Changed() {
@@ -246,7 +247,7 @@ func handOffReindex(inst *runningInstance, addr string) error {
 		return nil
 	}
 	if started {
-		fmt.Printf("the server at http://%s/ is rebuilding %s\n", addr, plural(st.Total, "dictionary", "dictionaries"))
+		fmt.Printf("the server at http://%s/ is rebuilding %s\n", addr, logx.Plural(st.Total, "dictionary", "dictionaries"))
 	} else {
 		fmt.Printf("the server at http://%s/ is already rebuilding - following it\n", addr)
 	}
@@ -283,7 +284,7 @@ func handOffReindex(inst *runningInstance, addr string) error {
 		fmt.Fprintf(os.Stderr, "  failed: %s\n", f)
 	}
 	ok := st.Done - len(st.Failed)
-	fmt.Printf("rebuilt %d of %s", ok, plural(st.Total, "dictionary", "dictionaries"))
+	fmt.Printf("rebuilt %d of %s", ok, logx.Plural(st.Total, "dictionary", "dictionaries"))
 	if st.Canceled {
 		fmt.Print(" - stopped from the panel")
 	}

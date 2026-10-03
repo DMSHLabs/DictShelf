@@ -12,6 +12,8 @@ import (
 	"strings"
 
 	"github.com/wuweidict/wudict/internal/dict"
+	"github.com/wuweidict/wudict/internal/fsx"
+	"github.com/wuweidict/wudict/internal/logx"
 	"github.com/wuweidict/wudict/internal/store"
 )
 
@@ -57,7 +59,7 @@ func cmdRemove(args []string) error {
 			return fmt.Errorf("%q is not prepared, so deleting its files would delete the dictionary", name)
 		}
 		if len(allSources) > 0 && len(dict.CompanionMedia(allSources[0])) > 0 &&
-			!fileExists(store.MediaDBPath(preparedDir)) {
+			!fsx.FileExists(store.MediaDBPath(preparedDir)) {
 			return fmt.Errorf("pack media for %q first (wudict ingest -full) - its images and audio are still only in the original files", name)
 		}
 	}
@@ -80,14 +82,14 @@ func cmdRemove(args []string) error {
 	if prepared != "" {
 		n := store.TreeSize(prepared)
 		total += n
-		fmt.Printf("prepared  %s  (%s)\n", prepared, humanSize(n))
+		fmt.Printf("prepared  %s  (%s)\n", prepared, logx.Size(n))
 	}
 	for _, p := range sources {
 		n := store.TreeSize(p)
 		total += n
-		fmt.Printf("original  %s  (%s)\n", p, humanSize(n))
+		fmt.Printf("original  %s  (%s)\n", p, logx.Size(n))
 	}
-	fmt.Printf("%s - %s total\n", name, humanSize(total))
+	fmt.Printf("%s - %s total\n", name, logx.Size(total))
 
 	if !*force {
 		fmt.Println("dry run - re-run with -f to delete")
@@ -117,7 +119,7 @@ func cmdRemove(args []string) error {
 			fmt.Fprintf(os.Stderr, "warning: could not mark %s as kept: %v\n", preparedDir, err)
 		}
 	}
-	fmt.Printf("deleted - %s freed\n", humanSize(total))
+	fmt.Printf("deleted - %s freed\n", logx.Size(total))
 	if dropPrepared && !dropSource && len(allSources) > 0 {
 		fmt.Println("note: the original files are still in place, so this dictionary will be indexed again the next time it is searched")
 	}
@@ -177,25 +179,4 @@ func matchesEntry(e store.LibEntry, arg string) bool {
 		return true
 	}
 	return e.Source != "" && dict.SameDir(arg, e.Source)
-}
-
-func fileExists(p string) bool {
-	fi, err := os.Stat(p)
-	return err == nil && !fi.IsDir()
-}
-
-// humanSize is how every byte count the CLI shows a user is written. In MB
-// alone a 40 KB .files.zip and an empty file both read "0.0 MB", which is the
-// one thing an inventory must not do - it is printed so the user can tell what
-// is actually there.
-func humanSize(n int64) string {
-	switch {
-	case n < 1<<10:
-		return fmt.Sprintf("%d B", n)
-	case n < 1<<20:
-		return fmt.Sprintf("%.1f KB", float64(n)/(1<<10))
-	case n < 1<<30:
-		return fmt.Sprintf("%.1f MB", float64(n)/(1<<20))
-	}
-	return fmt.Sprintf("%.2f GB", float64(n)/(1<<30))
 }

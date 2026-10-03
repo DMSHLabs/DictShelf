@@ -8,6 +8,8 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"net"
+	"net/url"
 	"os"
 	"os/signal"
 	"sort"
@@ -15,8 +17,10 @@ import (
 	"text/tabwriter"
 
 	"github.com/wuweidict/wudict/internal/config"
+	"github.com/wuweidict/wudict/internal/intake"
 	"github.com/wuweidict/wudict/internal/lang"
 	"github.com/wuweidict/wudict/internal/lemmas"
+	"github.com/wuweidict/wudict/internal/logx"
 )
 
 // `wudict lemmas` - obtaining the lemma data LEMMA_DIR holds (D88).
@@ -71,6 +75,7 @@ func lemmaFlags(name string) (*flag.FlagSet, *string, *string) {
 
 func lemmaPaths(dir, url string) (string, string) {
 	cfg, err := config.Load("", nil)
+	insecure := false
 	if err == nil {
 		if dir == "" {
 			dir = cfg.LemmaDir
@@ -78,11 +83,31 @@ func lemmaPaths(dir, url string) (string, string) {
 		if url == "" {
 			url = cfg.LemmaURL
 		}
+		insecure = cfg.ImportInsecure
 	}
 	if url == "" {
 		url = config.DefaultLemmaURL
 	}
+	useLemmaClient(url, insecure)
 	return config.ExpandHome(dir), url
+}
+
+// useLemmaClient puts lemma downloads under the import fetcher's policy
+// (intake.Fetcher): https only and nothing on the local network, unless the
+// user lifted both (IMPORT_INSECURE) - or pointed the catalogue itself at
+// plain http or at this network, which is their own mirror saying the same.
+func useLemmaClient(catalog string, insecure bool) {
+	lemmas.SetClient(intake.Fetcher{Insecure: lemmaInsecure(catalog, insecure)}.Client())
+}
+
+func lemmaInsecure(catalog string, insecure bool) bool {
+	u, err := url.Parse(catalog)
+	if insecure || err != nil {
+		return insecure
+	}
+	h := u.Hostname()
+	ip := net.ParseIP(h)
+	return u.Scheme == "http" || h == "localhost" || (ip != nil && intake.IsLocal(ip))
 }
 
 // interruptible makes Ctrl-C stop a download at the byte it has reached rather
@@ -148,7 +173,7 @@ func cmdLemmasList(args []string) error {
 	for _, r := range rows {
 		size, ram := "", ""
 		if r.size > 0 {
-			size = humanSize(r.size)
+			size = logx.Size(r.size)
 		}
 		if r.ram > 0 {
 			ram = fmt.Sprintf("~%d MB RAM", r.ram)
@@ -285,7 +310,7 @@ func cmdLemmasDownload(args []string) error {
 		ram += int64(e.HeapMB)
 	}
 	if len(pending) > 1 {
-		fmt.Printf("%d languages, %s to download", len(pending), humanSize(bytes))
+		fmt.Printf("%d languages, %s to download", len(pending), logx.Size(bytes))
 		if ram > 0 {
 			fmt.Printf(" (~%d MB of memory when all are loaded at once)", ram)
 		}
@@ -297,7 +322,7 @@ func cmdLemmasDownload(args []string) error {
 		if err != nil {
 			return err
 		}
-		fmt.Printf("%-4s %-14s %9s  %s\n", e.Code, e.Name, humanSize(e.Size), path)
+		fmt.Printf("%-4s %-14s %9s  %s\n", e.Code, e.Name, logx.Size(e.Size), path)
 	}
 	// The CLI is not the running server, so it cannot tell that one to re-read
 	// the folder. Saying so is more useful than a silent partial effect.

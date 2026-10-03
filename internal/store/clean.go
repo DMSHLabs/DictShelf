@@ -10,6 +10,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/wuweidict/wudict/internal/fsx"
 )
 
 // Leftover is one deletable item in the db dir: an incomplete or unreadable
@@ -65,7 +67,7 @@ func FindLeftovers() ([]Leftover, error) {
 			// its text.db partner (if any) survived adoption, so it too is a
 			// superseded duplicate; alone, it has nothing to pair with.
 			reason = "media database with no dictionary to pair with"
-			if fileExists(strings.TrimSuffix(p, ".media.db") + ".text.db") {
+			if fsx.FileExists(strings.TrimSuffix(p, ".media.db") + ".text.db") {
 				reason = "paired with a superseded database"
 			}
 		}

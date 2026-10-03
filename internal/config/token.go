@@ -12,6 +12,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/wuweidict/wudict/internal/fsx"
 )
 
 // The capability token: the one secret wudict has.
@@ -64,7 +66,7 @@ func LoadToken(rotate bool) (string, error) {
 		return "", fmt.Errorf("no home directory: set AUTH_TOKEN instead")
 	}
 	if !rotate {
-		if b, err := os.ReadFile(p); err == nil {
+		if b, err := fsx.ReadBounded(p, 4<<10); err == nil {
 			if tok := strings.TrimSpace(string(b)); tok != "" {
 				return tok, nil
 			}
@@ -79,28 +81,10 @@ func LoadToken(rotate bool) (string, error) {
 	if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
 		return "", fmt.Errorf("creating %s: %w", filepath.Dir(p), err)
 	}
-	// Written through a temp file with the final mode from the start: an
-	// os.WriteFile that creates 0644 and chmods afterwards is readable for
-	// the width of that window, and a crash in between leaves it readable
-	// forever.
-	tmp, err := os.CreateTemp(filepath.Dir(p), ".token-*")
-	if err != nil {
-		return "", fmt.Errorf("creating token file: %w", err)
-	}
-	defer os.Remove(tmp.Name())
-	if err := tmp.Chmod(0o600); err != nil {
-		tmp.Close()
-		return "", fmt.Errorf("securing token file: %w", err)
-	}
-	if _, err := tmp.WriteString(tok + "\n"); err != nil {
-		tmp.Close()
+	// 0600 from the first byte (the temp file is created 0600) and whatever
+	// mode a previous token file had: a secret never inherits a wider one.
+	if err := fsx.WriteAtomicExact(p, []byte(tok+"\n"), 0o600); err != nil {
 		return "", fmt.Errorf("writing token file: %w", err)
-	}
-	if err := tmp.Close(); err != nil {
-		return "", fmt.Errorf("writing token file: %w", err)
-	}
-	if err := os.Rename(tmp.Name(), p); err != nil {
-		return "", fmt.Errorf("installing token file: %w", err)
 	}
 	return tok, nil
 }

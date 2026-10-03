@@ -47,11 +47,11 @@ func (s *Server) handleHowtoCopy(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) restoreHowto(w http.ResponseWriter) {
-	if s.HowtoDir == "" {
+	if s.User.Builtin() == "" {
 		httpErr(w, 409, "this wudict has no place to keep the wudict howto")
 		return
 	}
-	p, err := howto.Restore(s.HowtoDir)
+	p, err := howto.Restore(s.User.Builtin())
 	if err != nil {
 		httpErr(w, 500, "%v", err)
 		return

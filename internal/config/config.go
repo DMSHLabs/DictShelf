@@ -8,7 +8,9 @@
 package config
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"net"
 	"os"
 	"path/filepath"
@@ -17,6 +19,8 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/wuweidict/wudict/internal/fsx"
 )
 
 // Config holds all server settings.
@@ -132,6 +136,12 @@ type Config struct {
 	// edited it and nothing changed" - two binaries, two files, one silent winner.
 	Shadowed []string
 
+	// Problems are lines of the config file in effect that set nothing - not
+	// `KEY = value`, a key wudict does not know (a typo is otherwise silent),
+	// an array or a string left open. The rest of the file still applies;
+	// the CLI prints them at startup and the setup page shows them.
+	Problems []string
+
 	// Origins records which layer supplied each key: "flag", "env", "file" or
 	// "default". With four layers, "I edited wudict.toml and nothing changed"
 	// is the classic confusion - a flag or an environment variable outranks
@@ -190,7 +200,7 @@ func Load(configPath string, flags map[string]string) (Config, error) {
 		return cfg, err
 	}
 	fileVals, fileLists := r.vals, r.lists
-	cfg.Source, cfg.Portable, cfg.Shadowed = r.path, r.portable, r.shadowed
+	cfg.Source, cfg.Portable, cfg.Shadowed, cfg.Problems = r.path, r.portable, r.shadowed, r.problems
 	cfg.Origins = map[string]string{}
 	get := func(key string) string {
 		if v, ok := flags[key]; ok && v != "" {
@@ -402,25 +412,30 @@ type resolved struct {
 	// on, and it is the round trip through text that doubled every backslash.
 	lists    map[string][]string
 	path     string
+	problems []string
 	portable bool
 	shadowed []string
 }
+
+// maxConfigBytes bounds a wudict.toml, which a user edits by hand: far above
+// any real one, and a pipe or a device in its place is refused (fsx).
+const maxConfigBytes = 1 << 20
 
 // loadFile reads the first wudict.toml found. An explicit path is taken as
 // given and must exist - a typo there must fail loudly rather than fall back to
 // a different file. Missing candidates are not an error.
 func loadFile(explicit string) (resolved, error) {
 	if explicit != "" {
-		data, err := os.ReadFile(explicit)
+		data, err := fsx.ReadBounded(explicit, maxConfigBytes)
 		if err != nil {
 			return resolved{}, fmt.Errorf("config %s: %w", explicit, err)
 		}
 		vals, lists := parseTOML(string(data))
-		return resolved{vals: vals, lists: lists, path: explicit}, nil
+		return resolved{vals: vals, lists: lists, path: explicit, problems: checkTOML(string(data))}, nil
 	}
 	r := resolved{vals: map[string]string{}, lists: map[string][]string{}}
 	for _, p := range candidates() {
-		data, err := os.ReadFile(p)
+		data, err := fsx.ReadBounded(p, maxConfigBytes)
 		if err != nil {
 			continue
 		}
@@ -429,7 +444,7 @@ func loadFile(explicit string) (resolved, error) {
 			continue
 		}
 		r.vals, r.lists = parseTOML(string(data))
-		r.path = p
+		r.path, r.problems = p, checkTOML(string(data))
 	}
 	if d := exeDir(); d != "" && r.path != "" && r.path == filepath.Join(d, Name) {
 		r.portable = true
@@ -569,7 +584,7 @@ func EnsureConfigFile() (path string, created bool, err error) {
 	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 		return "", false, err
 	}
-	if err := writeFileAtomic(p, []byte(configTemplate), 0o644); err != nil {
+	if err := fsx.WriteAtomic(p, []byte(configTemplate), 0o644); err != nil {
 		return "", false, err
 	}
 	return p, true, nil
@@ -620,8 +635,8 @@ func hasControl(v string) bool {
 func SaveKeyRaw(path, key, raw string) error {
 	saveMu.Lock()
 	defer saveMu.Unlock()
-	data, err := os.ReadFile(path)
-	if err != nil && !os.IsNotExist(err) {
+	data, err := fsx.ReadBounded(path, maxConfigBytes)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return err
 	}
 	line := fmt.Sprintf("%s = %s", key, raw)
@@ -653,59 +668,13 @@ func SaveKeyRaw(path, key, raw string) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
-	return writeFileAtomic(path, []byte(s), 0o644)
+	return fsx.WriteAtomic(path, []byte(s), 0o644)
 }
 
 // saveMu serialises SaveKeyRaw's read-modify-write (the write itself is
 // atomic regardless); writeFileAtomic does not take it, because a nested
 // Lock would deadlock the one caller that already holds it.
 var saveMu sync.Mutex
-
-// writeFileAtomic replaces path with data: written to a temp file in the
-// config's own directory, flushed, then renamed over the target. The config
-// file is the only copy of its settings, so a crash mid-write must not leave
-// a truncated file behind - the same atomicity an ingest's temp+rename gives
-// a text.db. The temp sits beside the target because a rename across
-// devices is a copy, and a copy has exactly the torn-write window this
-// exists to close. Callers that read-modify-write must hold saveMu.
-//
-// What os.WriteFile left alone stays alone: a symlinked config (a dotfiles
-// checkout) is written at its target rather than replaced by a plain file,
-// and an existing file keeps its mode - perm is for a file this write creates.
-func writeFileAtomic(path string, data []byte, perm os.FileMode) error {
-	if real, err := filepath.EvalSymlinks(path); err == nil {
-		path = real
-	}
-	if fi, err := os.Stat(path); err == nil {
-		perm = fi.Mode().Perm()
-	}
-	tmp, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".tmp")
-	if err != nil {
-		return err
-	}
-	name := tmp.Name()
-	defer func() {
-		if err != nil {
-			os.Remove(name)
-		}
-	}()
-	if _, err = tmp.Write(data); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err = tmp.Sync(); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err = tmp.Close(); err != nil {
-		return err
-	}
-	if err = os.Chmod(name, perm); err != nil {
-		return err
-	}
-	err = os.Rename(name, path)
-	return err
-}
 
 // wudict.toml holds nothing but flat `KEY = value` lines, so this package
 // reads it itself rather than taking a TOML dependency. The one thing such a
@@ -831,6 +800,68 @@ func decodeArray(s string) ([]string, bool) {
 // returns scalars decoded, and separately the keys written as an array -
 // already split, so no caller has to reconstruct one from text. An array whose
 // bracket closes on a later line is gathered rather than ignored.
+// knownKeys are the settings wudict reads: every key configTemplate
+// documents (a test holds Load to that), and AUTH_TOKEN, which is meant for
+// the environment and so is kept out of the template.
+var knownKeys = func() map[string]bool {
+	keys := map[string]bool{"AUTH_TOKEN": true}
+	for _, line := range strings.Split(configTemplate, "\n") {
+		k, _, ok := strings.Cut(strings.TrimLeft(line, "# "), "=")
+		if k = strings.TrimSpace(k); ok && k != "" && strings.ToUpper(k) == k && !strings.ContainsAny(k, " ()") {
+			keys[k] = true
+		}
+	}
+	return keys
+}()
+
+// checkTOML lists the lines of a config file that set nothing (Config.Problems),
+// reading lines the way parseTOML does.
+func checkTOML(s string) []string {
+	var out []string
+	lines := strings.Split(s, "\n")
+	for i := 0; i < len(lines); i++ {
+		line := strings.TrimSpace(strings.TrimSuffix(lines[i], "\r"))
+		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, "[") {
+			continue
+		}
+		at := fmt.Sprintf("line %d: ", i+1)
+		k, v, ok := strings.Cut(line, "=")
+		k = strings.TrimSpace(k)
+		switch {
+		case !ok:
+			out = append(out, at+"not KEY = value: "+clipLine(line))
+			continue
+		case !knownKeys[k]:
+			out = append(out, at+"unknown setting "+clipLine(k))
+		}
+		raw, depth := scanValue(strings.TrimSpace(v), 0)
+		start := i
+		for depth > 0 && i+1 < len(lines) {
+			i++
+			_, depth = scanValue(strings.TrimSpace(strings.TrimSuffix(lines[i], "\r")), depth)
+		}
+		switch {
+		case depth > 0:
+			out = append(out, fmt.Sprintf("line %d: the list for %s is not closed with ]", start+1, k))
+		case open(raw, '"'), open(raw, '\''):
+			out = append(out, at+"the value of "+k+" is not closed with its quote")
+		}
+	}
+	return out
+}
+
+// open reports a value that starts with quote q and does not end with it.
+func open(raw string, q byte) bool {
+	return len(raw) > 0 && raw[0] == q && (len(raw) == 1 || raw[len(raw)-1] != q)
+}
+
+func clipLine(s string) string {
+	if r := []rune(s); len(r) > 60 {
+		return string(r[:60]) + "…"
+	}
+	return s
+}
+
 func parseTOML(s string) (map[string]string, map[string][]string) {
 	vals := map[string]string{}
 	lists := map[string][]string{}

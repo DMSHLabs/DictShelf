@@ -5,7 +5,6 @@
 package server
 
 import (
-	"encoding/json"
 	"net/http"
 	"path/filepath"
 
@@ -72,8 +71,7 @@ func (s *Server) handleResolveOrphans(w http.ResponseWriter, r *http.Request) {
 		Delete []string `json:"delete"`
 		Keep   []string `json:"keep"`
 	}
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&req); err != nil {
-		httpErr(w, 400, "bad request body: %v", err)
+	if !decodeJSON(w, r, &req, 1<<20) {
 		return
 	}
 	if len(req.Delete)+len(req.Keep) == 0 {

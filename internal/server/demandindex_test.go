@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/wuweidict/wudict/internal/fsx"
 )
 
 // demandEntry is one unprepared dictionary in an isolated library, with the
@@ -45,7 +47,7 @@ func waitUntil(t *testing.T, what string, cond func() bool) {
 
 func prepared(e *entry) bool {
 	p, ok := validPrepared(e.Path)
-	return ok && fileExists(p)
+	return ok && fsx.FileExists(p)
 }
 
 // A demand is a finger on the screen, so it does NOT consult the power state -

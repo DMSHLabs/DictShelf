@@ -58,7 +58,7 @@ func read(t *testing.T) (dict.Meta, []article, string) {
 }
 
 // appPages are the app's own pages the guide may link to.
-var appPages = map[string]bool{"/": true, "/browse": true, "/setup": true, "/lemmas": true}
+var appPages = map[string]bool{"/": true, "/browse": true, "/setup": true, "/lemmas": true, "/groups": true}
 
 // TestGuide: the guide is a dictionary like any other - it passes the
 // `wudict: 1` gate and reads without a warning - and it keeps its promises:

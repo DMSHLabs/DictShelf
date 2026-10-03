@@ -12,6 +12,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/wuweidict/wudict/internal/fsx"
 )
 
 // The names here come from real containers and from what a hostile one could
@@ -169,7 +171,7 @@ func TestWriteFileAtomic(t *testing.T) {
 	t.Run("creates parents and content", func(t *testing.T) {
 		dst := filepath.Join(dir, "a", "b", "c.bin")
 		want := bytes.Repeat([]byte{0xDE, 0xAD}, 4096)
-		n, err := writeFileAtomic(dst, bytes.NewReader(want))
+		n, err := fsx.WriteAtomicFrom(dst, bytes.NewReader(want), 0o644)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -188,7 +190,7 @@ func TestWriteFileAtomic(t *testing.T) {
 	t.Run("a failed copy leaves nothing behind", func(t *testing.T) {
 		dst := filepath.Join(dir, "partial.bin")
 		src := io.MultiReader(bytes.NewReader(bytes.Repeat([]byte{1}, 1024)), errReader{})
-		if _, err := writeFileAtomic(dst, src); err == nil {
+		if _, err := fsx.WriteAtomicFrom(dst, src, 0o644); err == nil {
 			t.Fatal("expected the read error to surface")
 		}
 		if _, err := os.Stat(dst); !os.IsNotExist(err) {
@@ -212,7 +214,7 @@ func TestWriteFileAtomic(t *testing.T) {
 		if err := os.WriteFile(dst, []byte("old and longer"), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := writeFileAtomic(dst, strings.NewReader("new")); err != nil {
+		if _, err := fsx.WriteAtomicFrom(dst, strings.NewReader("new"), 0o644); err != nil {
 			t.Fatal(err)
 		}
 		got, err := os.ReadFile(dst)

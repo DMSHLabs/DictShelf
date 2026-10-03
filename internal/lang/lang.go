@@ -37,6 +37,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/wuweidict/wudict/internal/dict"
 )
 
 var (
@@ -144,32 +146,12 @@ func FromPath(path string, roots []string) string {
 	return fromAncestors(path, roots)
 }
 
-// trimExt strips the format extension, and the compression extension in front
-// of it: "dict.dsl.dz" is one dictionary named "dict", not a file named
-// "dict.dsl". Only one format extension is removed, so "en.oxford.mdx" keeps
-// the dot that separates its two name tokens.
-func trimExt(base string) string {
-	for range 2 {
-		ext := filepath.Ext(base)
-		if ext == "" {
-			return base
-		}
-		base = base[:len(base)-len(ext)]
-		switch strings.ToLower(ext) {
-		case ".dz", ".gz", ".zip", ".bz2", ".xz":
-			continue // compression: the real extension is underneath
-		}
-		return base
-	}
-	return base
-}
-
 // fromStem reads the FIRST token of a file (or library folder) name.
 // "en-es-apresyan.mdx" and "eng_eng_apresyan.mdx" give English;
 // "russian-apresyan.mdx" gives Russian; "oxford-en.mdx" gives nothing,
 // because a language at the end is a target, a topic or a coincidence.
 func fromStem(base string) string {
-	stem := trimExt(base)
+	stem := dict.Name(base)
 	if i := strings.IndexAny(stem, "-_. "); i >= 0 {
 		stem = stem[:i]
 	}

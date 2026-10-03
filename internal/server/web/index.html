@@ -661,6 +661,11 @@ html:has(#panel.show) .bar{padding-right:var(--wd-sbw,0px)}
 #folders[open] .cog{transform:rotate(60deg)}
 /* Truncates rather than wrapping: this line must stay ONE line at 320px, and
    the count is the half that can afford to lose its tail. */
+/* groups.ini has lines the app skipped (D162): shown on the drawer, which is
+   always on screen, because the cost - a group that quietly matches nothing -
+   is otherwise invisible until someone opens the editor. */
+#folders .gwarn{flex:none;color:var(--danger);font-size:13px}
+#groupsLink.warn{color:var(--danger);border-color:var(--danger-line)}
 #folders .fsum{flex:1 1 auto;min-width:0;white-space:nowrap;overflow:hidden;
   text-overflow:ellipsis;color:var(--fg-faint)}
 /* ── article text size ──────────────────────────────────────────────
@@ -1130,7 +1135,8 @@ html:has(#panel.show) .bar{padding-right:var(--wd-sbw,0px)}
 <details id="folders">
   <summary title="Folders &amp; setup" aria-label="Folders and setup">
     <svg class="cog" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path fill="currentColor" fill-rule="evenodd" d="M6.56 1.05L9.44 1.05L9.07 2.81L10.91 3.57L11.90 2.07L13.93 4.10L12.43 5.09L13.19 6.93L14.95 6.56L14.95 9.44L13.19 9.07L12.43 10.91L13.93 11.90L11.90 13.93L10.91 12.43L9.07 13.19L9.44 14.95L6.56 14.95L6.93 13.19L5.09 12.43L4.10 13.93L2.07 11.90L3.57 10.91L2.81 9.07L1.05 9.44L1.05 6.56L2.81 6.93L3.57 5.09L2.07 4.10L4.10 2.07L5.09 3.57L6.93 2.81ZM5.50 8.00a2.50 2.50 0 1 0 5.00 0a2.50 2.50 0 1 0 -5.00 0Z"/></svg>
-    <span class="fsum" id="folderSummary"></span></summary>
+    <span class="fsum" id="folderSummary"></span>
+    <span class="gwarn" id="groupsWarn" hidden>⚠</span></summary>
   <!-- Monochrome inline SVG, never emoji, for the reason already stated on the
        cog above: a colour blob on one platform and flat on another, off its own
        baseline, and unable to inherit currentColor — so it cannot follow the
@@ -1157,6 +1163,11 @@ html:has(#panel.show) .bar{padding-right:var(--wd-sbw,0px)}
          meaning neither. No dictionary in the href on purpose; /browse with
          none asks which. -->
     <a class="act" id="browseLink" href="/browse" title="Read a dictionary A–Z, page by page"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M2.4 3.4a1.2 1.2 0 0 1 1.2-1.2h6.2a1.2 1.2 0 0 1 1.2 1.2v9.2a1.2 1.2 0 0 1-1.2 1.2H3.6a1.2 1.2 0 0 1-1.2-1.2z"/><path d="M11 5h2.6"/><path d="M11 8h2.6"/><path d="M11 11h2.6"/></svg>Browse A–Z…</a>
+    <!-- The picker's groups are a file the user owns (D162), so this row,
+         which holds the other things set up once and then left alone, is
+         where it is edited. A tag: a group is a label a dictionary wears,
+         and no other control here uses that glyph. -->
+    <a class="act" id="groupsLink" href="/groups" title="Choose the groups the dictionary picker offers"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M2.2 2.9v4.2l6.7 6.7 4.9-4.9-6.7-6.7z"/><circle cx="5.2" cy="5.7" r=".9"/></svg>Edit groups…</a>
     <!-- Reading appearance lives in this row, beside the size stepper in the
          summary above it. A brush, not a cog: the cog on the summary already
          means "folders and setup", and one glyph cannot mean two things
@@ -1310,8 +1321,16 @@ function savePrefs(now){
     .then(r=>{if(!r.ok)throw new Error("HTTP "+r.status)})
     .catch(e=>{prefsSent=null;setStatus("⚠ could not save dictionary settings: "+esc(e.message))});
 }
+/* What a failed API call says: every route answers {"error": "…"} (httpErr),
+   so the reason is read from there, and the status stands in when there is
+   none - a proxy's own error page, a dropped connection. */
+async function apiError(r){
+  try{const j=await r.json();if(j&&j.error)return j.error}catch(_){}
+  return "HTTP "+r.status;
+}
+/* a byte count in decimal units - the rule of logx.Size and the other pages */
+const mb=n=>n<1e3?n+" B":n<1e6?Math.round(n/1e3)+" kB":n<1e7?(n/1e6).toFixed(1)+" MB":n<1e9?Math.round(n/1e6)+" MB":(n/1e9).toFixed(1)+" GB";
 /* dictionaries in preference order: saved ones first, then unseen ones A→Z */
-const mb=b=>b>=1e9?(b/1e9).toFixed(1)+" GB":b>=1e6?Math.round(b/1e6)+" MB":Math.max(1,Math.round(b/1e3))+" kB";
 function orderedDicts(){
   const byId=new Map(dicts.map(d=>[d.id,d]));
   const out=[];
@@ -1328,10 +1347,9 @@ function enabledOrderedIds(){return orderedDicts().filter(d=>!disabled.has(d.id)
    same respect for the off switch, the same comma-separated dict= parameter.
    Nothing is asked of the server: the memberships arrived with the rows. */
 function groupIds(sel){
-  const i=sel.indexOf(":",2);
-  if(i<0)return [];
-  const f=sel.slice(2,i),v=sel.slice(i+1);
-  return orderedDicts().filter(d=>!disabled.has(d.id)&&(d.groups||[]).some(g=>g.f===f&&g.v===v)).map(d=>d.id);
+  // The whole value compared, never split: ids are the names a user wrote in
+  // groups.ini (D162), and a name may contain ":" itself.
+  return orderedDicts().filter(d=>!disabled.has(d.id)&&(d.groups||[]).some(g=>"g:"+g.f+":"+g.v===sel)).map(d=>d.id);
 }
 /* The label a group is shown under, for a message that has to name it. */
 function groupLabel(sel){
@@ -1568,6 +1586,10 @@ applySortOrder(false,false);
    device. Hiding never drops the group in force: that one option stays in the
    picker until the reader chooses something else, so switching a section off
    cannot silently turn their search into a different one. */
+/* Dictionaries whose index job this page is following (runIngest): a
+   re-render mid-job draws fresh chips, and a job must not be followed twice.
+   Declared up here because renderPanel reads it. */
+const following=new Set();
 let groupsOff=new Set();
 function applyGroupsOff(ids,save){
   const next=new Set(Array.isArray(ids)?ids.filter(x=>typeof x==="string"&&x):[]);
@@ -1871,12 +1893,10 @@ $("out").addEventListener("click",e=>{
    taxonomy at all: a row says which group it is in, what to head that group
    with and what to call it, and this only counts and orders.
 
-   Two suppressions, and they are what keeps the list honest rather than
-   tidy. A value with ONE member sorts nothing — the dictionary itself is in
-   the list below, one row further down. A facet with ONE value heads a group
-   that selects everything it heads. Both are dropped, so a library that
-   supports no grouping shows the plain list it always had, and a partly
-   labelled one shows only the groups that are worth a tap.
+   One suppression: a group holding EVERY dictionary is "All dictionaries"
+   under another name, so it is dropped, and a facet left with no groups goes
+   with it. A group of one is kept - "the one Oxford I have" is a choice the
+   user may have written into groups.ini on purpose (D162).
 
    The counts are over every member, disabled or not, for the same reason
    "All dictionaries" does not say "97 of 105": the groups are facts about
@@ -1884,7 +1904,7 @@ $("out").addEventListener("click",e=>{
    when the menu is drawn. */
 function facetGroups(){
   if(!dictsSettled)return []; // mid-stream counts would be wrong, then change
-  const byF=new Map();
+  const byF=new Map(),total=dicts.length;
   for(const d of dicts)for(const g of d.groups||[]){
     let f=byF.get(g.f);
     if(!f){f={id:g.f,label:g.fl,fo:g.fo,vals:new Map()};byF.set(g.f,f)}
@@ -1893,9 +1913,9 @@ function facetGroups(){
   }
   return [...byF.values()].sort((a,b)=>a.fo-b.fo)
     .map(f=>({id:f.id,label:f.label,
-      values:[...f.vals.values()].filter(v=>v.n>1)
+      values:[...f.vals.values()].filter(v=>v.n<total)
         .sort((a,b)=>b.n-a.n||a.label.localeCompare(b.label,undefined,{sensitivity:"base"}))}))
-    .filter(f=>f.values.length>1);
+    .filter(f=>f.values.length);
 }
 let refreshTimer=null;
 function refreshDictUI(now){
@@ -1952,6 +1972,17 @@ function refreshDictUI(now){
   renderPanel();
 }
 
+/* groups.ini lines or items the server skipped - an invalid regex, a line with
+   no "=" - mark the way to the editor, on the drawer and on its link. */
+function groupsTrouble(n){
+  const what=n?`groups.ini: ${n===1?"1 problem":n+" problems"} - open Edit groups…`:"";
+  $("groupsWarn").hidden=!n;$("groupsWarn").title=what;
+  const a=$("groupsLink");
+  a.classList.toggle("warn",!!n);
+  a.title=n?what:"Choose the groups the dictionary picker offers";
+  a.lastChild.textContent=n?`Edit groups… (${n})`:"Edit groups…";
+}
+
 /* Consumes the /api/dicts NDJSON stream, so search unblocks on the FIRST
    dictionary rather than the last one. Never throws: a failure here must
    still leave the user with a usable page. */
@@ -1975,6 +2006,7 @@ async function loadDicts(rescan){
     await fetchStream(rescan?"/api/rescan":"/api/dicts",msg=>{
       if(msg.t==="begin"){
         sawBegin=true;dictTotal=msg.total||0;
+        groupsTrouble(msg.groupsProblems||0);
         if(blocking)setStatus(esc(readyCount()),"load");
       }else if(msg.t==="dict"&&msg.dict){
         rows.push(msg.dict);
@@ -2174,11 +2206,10 @@ function mediaKind(list){
    Each one is also a way in: pressing a trait searches every dictionary that
    shares it, which is the picker's grouping reached from the dictionary in hand
    instead of from a menu — and it is how a reader finds out the grouping exists
-   at all. A trait the picker suppressed (its group has only this member, or it
-   is the only value of its kind, so selecting it would select the whole list)
-   is rendered as plain text: still true, but it leads nowhere the flat list
-   does not already go, and a control that does nothing is worse than no
-   control. */
+   at all. A trait the picker does not offer (its group holds every
+   dictionary, so selecting it would select the whole list) is rendered as
+   plain text: still true, but it leads nowhere "All dictionaries" does not
+   already go, and a control that does nothing is worse than no control. */
 function traits(d){
   const gs=(d.groups||[]).slice().sort((a,b)=>a.fo-b.fo||a.vl.localeCompare(b.vl));
   if(!gs.length)return "";
@@ -2366,6 +2397,13 @@ function renderPanel(){
     el.appendChild(div);
   }
   if(scroller)scroller.scrollTop=top;
+  // A change to a dictionary's indexes is the server's job, not this page's
+  // (jobs.go): one started before a reload or by another tab is in its row,
+  // and following it puts the progress back on its card.
+  for(const d of dicts){
+    const chip=d.job&&!following.has(d.id)&&el.querySelector(`.pd[data-id="${CSS.escape(d.id)}"] .feat`);
+    if(chip)runIngest(d.id,{},chip);
+  }
 }
 
 /* drag-to-reorder via the gripper (chevrons cover keyboard/precise moves) */
@@ -2662,8 +2700,8 @@ async function checkOrphans(){
   if(!n){closeOrphans();return}
   const box=$("orphanBox");
   box.innerHTML=
-    `<p><b>${n} ${n===1?"dictionary has":"dictionaries have"} lost ${n===1?"its":"their"} files</b>`+
-    ` — the prepared data still uses ${mb(j.size||0)}.</p>`+
+    `<p><b>${n} ${n===1?"dictionary has":"dictionaries have"} been deleted externally</b>`+
+    ` — leftover indexes detected ${mb(j.size||0)}.</p>`+
     (n>1?'<label class="oall"><input type="checkbox" id="orphAll" checked> all</label>':"")+
     "<ul>"+list.map(o=>
       `<li><label><input type="checkbox" class="orph" checked value="${escAttr(o.folder)}" data-size="${+o.size||0}">`+
@@ -2925,8 +2963,9 @@ document.addEventListener("click",e=>{
 });
 
 function runIngest(id,opts,label){
-  if(label.dataset.busy)return Promise.resolve(); // ignore repeat clicks
+  if(label.dataset.busy||following.has(id))return Promise.resolve(); // ignore repeat clicks
   label.dataset.busy="1";
+  following.add(id);
   const name=dictLabel(dicts.find(d=>d.id===id)||{path:""});
   /* Two lengths of the same message: the chip is one of four in a row inside
      a 420px panel, so "indexing… 2,395,000/2,965,310" wraps the row onto a
@@ -2965,7 +3004,7 @@ function runIngest(id,opts,label){
         verb+"… "+counts);
     });
     es.addEventListener("done",async()=>{
-      es.close();
+      es.close();following.delete(id);
       setStatus("✓ "+esc(name)+(removing?" — removed":" — ready"));
       if(!opts.quiet){await loadDicts();if(lastQuery)doSearch()}
       resolve(true);
@@ -2976,7 +3015,7 @@ function runIngest(id,opts,label){
        only thing that can say WHY - a full disk nine minutes into a prepare
        reads as a bare "failed" otherwise. The chip stays short either way;
        the reason goes to the status line, which has the room. */
-    es.addEventListener("error",ev=>{es.close();
+    es.addEventListener("error",ev=>{es.close();following.delete(id);
       let why="";
       try{if(ev&&ev.data){const d=JSON.parse(ev.data);if(d&&d.error)why=String(d.error)}}catch(_){}
       show("failed",why?"failed — "+why:"failed");
@@ -4839,10 +4878,15 @@ function stylerSetView(v){
   }
   stylerSync();
 }
+/* Why a stylesheet that exists is not applied (handleStyle's problems): it
+   arrives as an empty box, and the box must not read as an empty file. Kept
+   until a save clears it, so the default note shows it whenever it redraws. */
+let stylerWhy="";
 function stylerNote(msg){
   const n=$("stylerNote");
   n.textContent="";
   if(msg){n.textContent=msg;return}
+  if(stylerWhy){n.textContent="⚠ "+stylerWhy;return}
   if(STYLE_OFF){
     n.textContent="Preview is off (?style=off). You can still edit and save; reload without it to see the result.";
     return;
@@ -5090,7 +5134,7 @@ async function stylerFileDelete(f){
   stylerNote("Deleting…");
   try{
     const r=await fetch("/api/files?name="+encodeURIComponent(f.name),{method:"DELETE"});
-    if(!r.ok)throw new Error("HTTP "+r.status);
+    if(!r.ok)throw new Error(await apiError(r));
     stylerFilesTake(await r.json());
     stylerNote("Deleted "+f.name);setTimeout(stylerNote,1600);
   }catch(e){
@@ -5139,9 +5183,7 @@ async function stylerUpload(list){
       const r=await fetch("/api/files?name="+encodeURIComponent(name)+q,
         {method:"POST",headers:{"Content-Type":file.type||"application/octet-stream"},body:file});
       if(!r.ok){
-        let why="HTTP "+r.status;
-        try{const t=(await r.text()).trim();if(t)why=t}catch(_){}
-        throw new Error(why);
+        throw new Error(await apiError(r));
       }
       stylerFilesTake(await r.json());
       done++;
@@ -5205,6 +5247,7 @@ async function stylerOpen(){
       stylerSaved={...stylerText};
       stylerDir=j.writable?(j.dir||""):"";
       stylerLoaded=true;
+      stylerWhy=Object.values(j.problems||{}).join(" · ");
       // Alongside, not on first click of the Files tab: the dot that says
       // "there are files" has to be right the first time the sheet opens.
       await stylerFilesLoad();
@@ -5238,12 +5281,18 @@ async function stylerSave(){
   if(!Object.keys(body).length){stylerNote("No changes");setTimeout(stylerNote,1400);return}
   stylerNote("Saving…");
   try{
-    const r=await fetch("/api/style",{method:"PUT",
+    const put=q=>fetch("/api/style"+q,{method:"PUT",
       headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
-    if(!r.ok)throw new Error(r.status===409
-      ? "there is nowhere to save: no configuration folder"
-      : r.status===413 ? "that stylesheet is too large" : "HTTP "+r.status);
+    let r=await put("");
+    if(!r.ok){
+      const why=await apiError(r),told=why.replace(/ - replace=1 overwrites it$/,"");
+      // An unreadable file there is the user's: replaced only when asked.
+      if(!(r.status===409&&told!==why&&confirm(told+". Replace it?")))throw new Error(told);
+      r=await put("?replace=1");
+      if(!r.ok)throw new Error(await apiError(r));
+    }
     const j=await r.json();
+    stylerWhy=Object.values(j.problems||{}).join(" · ");
     stylerText={app:j.app||"",article:j.article||""};
     stylerSaved={...stylerText};
     $("stylerCSS").value=stylerText[stylerTab];

@@ -339,7 +339,7 @@ func TestUserFileListSkipsWhatItCannotAddress(t *testing.T) {
 // editor says so rather than failing to save, so the list has to answer and
 // the upload has to give it a status it can explain.
 func TestUserFilesWithoutConfigDir(t *testing.T) {
-	s := newTestServer(t) // StyleDir left empty
+	s := newTestServer(t) // User left empty: no folder to save in
 
 	var got filesResp
 	rec := getJSON(t, s, "/api/files", &got)

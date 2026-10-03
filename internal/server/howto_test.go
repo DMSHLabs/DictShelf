@@ -22,7 +22,8 @@ import (
 // POST /api/howto puts in the import folder, under the guide's id.
 func TestBuiltinGuide(t *testing.T) {
 	t.Setenv("WUDICT_DB_DIR", t.TempDir())
-	hdir := t.TempDir()
+	user := t.TempDir()
+	hdir := UserDir(user).Builtin()
 	guide, err := howto.Install(hdir)
 	if err != nil {
 		t.Fatal(err)
@@ -37,7 +38,7 @@ func TestBuiltinGuide(t *testing.T) {
 		t.Fatalf("the guide is not listed under %q: %v", howto.ID, err)
 	}
 	s := New(reg)
-	s.HowtoDir = hdir
+	s.User = UserDir(user)
 	if info := s.dictInfoFor(e); !info.Builtin || info.Name != "wudict howto" {
 		t.Errorf("row = builtin %v, name %q", info.Builtin, info.Name)
 	}

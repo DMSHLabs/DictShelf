@@ -45,6 +45,10 @@ type configInfo struct {
 	DictDirOrigin   string `json:"dictDirOrigin"`
 	DictDirEditable bool   `json:"dictDirEditable"`
 
+	// ConfigProblems are lines of wudict.toml that set nothing - a typo'd key
+	// is otherwise silent - as config.Config.Problems words them.
+	ConfigProblems []string `json:"configProblems,omitempty"`
+
 	// Effective is what every tunable config key currently resolves to, and
 	// which layer supplied it (config.Tunables). A platform shell overrides
 	// these for the device it runs on by writing the flag or environment layer
@@ -208,9 +212,10 @@ func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 		UseCached:       s.reg.UseCached(),
 		ConfigPath:      s.ConfigPath,
 		Total:           s.reg.UserCount(),
-		HowtoRemoved:    s.HowtoDir != "" && howto.IsRemoved(s.HowtoDir),
+		HowtoRemoved:    s.User.Builtin() != "" && howto.IsRemoved(s.User.Builtin()),
 		DictDirOrigin:   s.DictDirOrigin,
 		DictDirEditable: s.DictDirEditable,
+		ConfigProblems:  s.ConfigProblems,
 		Effective:       s.Effective,
 		RevealLabel:     revealLabel(),
 		// revealing opens a window on the machine running the server, which is

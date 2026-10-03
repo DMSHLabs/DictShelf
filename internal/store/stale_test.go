@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/wuweidict/wudict/internal/dict"
+	"github.com/wuweidict/wudict/internal/fsx"
 )
 
 // setMeta overwrites (or, with v == "", deletes) one meta key in place, the
@@ -268,7 +269,7 @@ func TestFolders(t *testing.T) {
 			t.Errorf("unexpected folder %q", f.Dir)
 			continue
 		}
-		if !sameSource(f.Source, src) {
+		if !fsx.SamePath(f.Source, src) {
 			t.Errorf("%s: Source = %q, want %q", filepath.Base(f.Dir), f.Source, src)
 		}
 	}
@@ -326,8 +327,8 @@ func TestSameSourceThroughSymlink(t *testing.T) {
 		{"empty", src, "", false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := sameSource(tc.a, tc.b); got != tc.want {
-				t.Errorf("sameSource(%q, %q) = %v, want %v", tc.a, tc.b, got, tc.want)
+			if got := fsx.SamePath(tc.a, tc.b); got != tc.want {
+				t.Errorf("fsx.SamePath(%q, %q) = %v, want %v", tc.a, tc.b, got, tc.want)
 			}
 		})
 	}

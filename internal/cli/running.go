@@ -143,7 +143,7 @@ func announceRunning(inst *runningInstance, url string, wantDirs []string, willO
 		fmt.Fprintf(out, "                    (it asks for an access key this launch did not have)\n")
 	}
 	if inst.Total > 0 {
-		fmt.Fprintf(out, "  dictionaries      %s\n", plural(inst.Total, "dictionary", "dictionaries"))
+		fmt.Fprintf(out, "  dictionaries      %s\n", logx.Plural(inst.Total, "dictionary", "dictionaries"))
 	}
 	for i, r := range inst.Roots {
 		label := "  from              "

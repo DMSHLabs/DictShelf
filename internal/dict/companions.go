@@ -9,6 +9,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/wuweidict/wudict/internal/fsx"
 )
 
 // A dictionary is rarely one file. MDX carries its resources in a sibling
@@ -41,6 +43,39 @@ func Stem(src string) string {
 		s = s[:len(s)-len(ext)]
 	}
 	return strings.TrimSuffix(s, filepath.Ext(s))
+}
+
+// Name is a dictionary's name as its file spells it: the base name without
+// its format suffix - the longest one in mainExts, so "x.dsl.dz" and
+// "x.wudict.md.gz" are both "x". A name with no such suffix is kept whole, so
+// a library folder named "Pocket.Encyclopedia" keeps its last word. Unlike
+// Stem, which is what companions are named after ("x.wudict" for
+// "x.wudict.md"), this is the name a person reads: the library folder, the
+// file-name hints for language and language pair.
+func Name(path string) string {
+	base := filepath.Base(path)
+	if n, ok := trimMainExt(base); ok {
+		return n
+	}
+	// a compressed spelling the list does not name ("notes.md.gz")
+	for _, z := range []string{".gz", ".dz"} {
+		if len(base) > len(z) && strings.EqualFold(base[len(base)-len(z):], z) {
+			if n, ok := trimMainExt(base[:len(base)-len(z)]); ok {
+				return n
+			}
+		}
+	}
+	return base
+}
+
+func trimMainExt(base string) (string, bool) {
+	lower := strings.ToLower(base)
+	for _, e := range mainExts {
+		if strings.HasSuffix(lower, e) {
+			return base[:len(base)-len(e)], true
+		}
+	}
+	return base, false
 }
 
 // mainExts are those spellings, longest first so ".dsl.dz" is answered before
@@ -78,14 +113,14 @@ func CompanionMedia(src string) []string {
 	switch MainExt(src) {
 	case ".mdx":
 		for _, f := range []string{base + ".mdd", base + ".1.mdd"} {
-			if fileExists(f) {
+			if fsx.FileExists(f) {
 				out = append(out, f)
 			}
 		}
 		// numbered parts run from .2.mdd upwards and stop at the first gap
 		for n := 2; ; n++ {
 			f := fmt.Sprintf("%s.%d.mdd", base, n)
-			if !fileExists(f) {
+			if !fsx.FileExists(f) {
 				break
 			}
 			out = append(out, f)
@@ -96,7 +131,7 @@ func CompanionMedia(src string) []string {
 		// or the shorter "x.files.zip".
 		uncompressed := strings.TrimSuffix(src, filepath.Ext(src)) // "x.dsl.dz" → "x.dsl"
 		for _, f := range []string{src + ".files.zip", uncompressed + ".files.zip", base + ".files.zip"} {
-			if fileExists(f) {
+			if fsx.FileExists(f) {
 				out = append(out, f)
 				break
 			}
@@ -109,20 +144,20 @@ func CompanionMedia(src string) []string {
 		// dictionary. Claim it only when this is the sole dictionary there;
 		// otherwise it is not ours to hand over.
 		if soleIfoInDir(dir) {
-			if d := filepath.Join(dir, "res"); dirExists(d) {
+			if d := filepath.Join(dir, "res"); fsx.DirExists(d) {
 				out = append(out, d)
 			}
-			if z := filepath.Join(dir, "res.zip"); fileExists(z) {
+			if z := filepath.Join(dir, "res.zip"); fsx.FileExists(z) {
 				out = append(out, z)
 			}
 		}
 	case ".wudict.md", ".wudict.md.gz", ".wudict.md.dz", ".md":
 		// "x.wudict.files/" or "x.wudict.files.zip" beside "x.wudict.md"
 		// (the Stem keeps ".wudict"); a plain "x.md" uses "x.files".
-		if z := base + ".files.zip"; fileExists(z) {
+		if z := base + ".files.zip"; fsx.FileExists(z) {
 			out = append(out, z)
 		}
-		if d := base + ".files"; dirExists(d) {
+		if d := base + ".files"; fsx.DirExists(d) {
 			out = append(out, d)
 		}
 	}
@@ -221,7 +256,7 @@ func AbbrevCompanion(src string) (string, bool) {
 	}
 	base := Stem(src)
 	for _, suf := range abbrevSuffixes {
-		if p := base + suf; !strings.EqualFold(p, src) && fileExists(p) {
+		if p := base + suf; !strings.EqualFold(p, src) && fsx.FileExists(p) {
 			return p, true
 		}
 	}
@@ -237,7 +272,7 @@ func IsAbbrevCompanion(path string) bool {
 	if base == "" {
 		return false
 	}
-	return fileExists(base+".dsl") || fileExists(base+".dsl.dz")
+	return fsx.FileExists(base+".dsl") || fsx.FileExists(base+".dsl.dz")
 }
 
 // abbrevParentStem strips the companion suffix, yielding the path its parent
@@ -288,7 +323,7 @@ func SourceFiles(src string) []string {
 	base := Stem(src)
 	for _, suf := range CompanionSuffixes(MainExt(src)) {
 		p := base + suf
-		if !strings.EqualFold(p, src) && fileExists(p) {
+		if !strings.EqualFold(p, src) && fsx.FileExists(p) {
 			add(p)
 		}
 	}
@@ -315,17 +350,4 @@ func soleIfoInDir(dir string) bool {
 		}
 	}
 	return n == 1
-}
-
-func fileExists(p string) bool {
-	if p == "" {
-		return false
-	}
-	fi, err := os.Stat(p)
-	return err == nil && !fi.IsDir()
-}
-
-func dirExists(p string) bool {
-	fi, err := os.Stat(p)
-	return err == nil && fi.IsDir()
 }

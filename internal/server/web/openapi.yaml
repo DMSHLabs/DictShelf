@@ -414,6 +414,13 @@ paths:
         whatever that feature is now, so toggling one thing cannot strip
         another, and a request naming none prepares an unprepared dictionary
         with its headword index only. Progress is emitted at most every 200 ms.
+
+        The change runs as the dictionary's job on the server, not inside the
+        request: a client that disconnects loses only the stream, and the work
+        goes on. While a change to a dictionary runs, its `/api/dicts` row
+        carries `job`, and a request for that dictionary follows the running
+        change instead of starting another - what it asked for is not queued,
+        and the `done` it receives carries what the dictionary now has.
       parameters:
         - name: dict
           in: query
@@ -1356,6 +1363,99 @@ paths:
         '500':
           description: A file could not be written.
 
+  /api/groups:
+    get:
+      tags: [internal]
+      operationId: getGroups
+      x-internal: true
+      summary: The groups the dictionary picker offers
+      description: >
+        `groups.ini`, beside the `wudict.toml` in effect: a `[Section]` line is
+        a "Group by" heading (at most 32, names of at most 64 bytes), and
+        `Name = text, text` a group under it that a dictionary joins when one
+        of the texts (at least 2 characters) is anywhere in its title or file
+        name, in any case. An
+        item between backticks is a regular expression (Go RE2,
+        case-insensitive), read verbatim and tested against the title and the
+        file name separately. `;` and `#` start a comment outside backticks. A
+        group line before any section belongs to `[My groups]`. While there is no file the built-in list is in effect
+        (`custom` false); once saved, the file is the whole list.
+
+
+        Ids are the names, trimmed and lower-cased: a dictionary row's
+        `groups[].f` and `groups[].v` (`GET /api/dicts`) are exactly these.
+        `problems` lists the lines and items that were skipped (an invalid
+        regular expression, a line with no `=`, a one-character item, more
+        than 500 regular expressions); the rest of the file still applies. At
+        most 100 are listed: a last entry with `more` stands for the rest.
+        `text` and `msg` are clipped to 200 bytes. `unusable` means the file exists but could not be read: the
+        built-in list is in effect, and `problems` has one entry, with no line,
+        saying why.
+      x-codeSamples:
+        - lang: Shell
+          label: curl
+          source: |
+            curl -s 'http://127.0.0.1:6888/api/groups' | jq -r .text
+      responses:
+        '200':
+          description: The file in effect.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Groups' }
+    put:
+      tags: [internal]
+      operationId: saveGroups
+      x-internal: true
+      summary: Replace groups.ini
+      description: >
+        The body is the whole file, as text. Lines that do not parse are
+        reported in `problems`, never refused. A body identical to the built-in
+        list removes the file instead, so an unchanged copy does not stop the
+        list from following the built-in one. Capped at 256 KiB. While the
+        current file is `unusable`, a save is refused unless `replace=1` is
+        given: the file is the user's, and the editor could not show it.
+      parameters:
+        - name: replace
+          in: query
+          required: false
+          description: 1 overwrites a groups.ini that exists but cannot be read.
+          schema: { type: string, enum: ['1'] }
+      requestBody:
+        required: true
+        content:
+          text/plain:
+            schema: { type: string }
+      responses:
+        '200':
+          description: The file in effect after the save.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Groups' }
+        '400':
+          description: The body is not UTF-8 text, or could not be read.
+        '409':
+          description: >
+            There is no config directory, so there is nowhere to save; or the
+            current file cannot be read and `replace=1` was not given.
+        '413':
+          description: The body is larger than 256 KiB.
+        '500':
+          description: The file could not be written.
+    delete:
+      tags: [internal]
+      operationId: resetGroups
+      x-internal: true
+      summary: Back to the built-in groups
+      description: Removes groups.ini; the built-in list is in effect again.
+      responses:
+        '200':
+          description: The built-in list, now in effect.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Groups' }
+        '500':
+          description: The file could not be removed.
+
   /api/files:
     get:
       tags: [internal]
@@ -2143,6 +2243,11 @@ components:
       properties:
         t: { const: begin }
         total: { type: integer, description: How many rows follow. }
+        groupsProblems:
+          type: integer
+          description: >
+            How many lines or items groups.ini skipped (`GET /api/groups` lists
+            them); absent when none.
       required: [t]
 
     DictsRow:
@@ -2156,6 +2261,14 @@ components:
       type: object
       description: One dictionary, as the list and the panel see it.
       properties:
+        job:
+          type: object
+          description: >
+            A change to this dictionary's indexes running now (`/api/ingest`
+            follows it); absent when none runs.
+          properties:
+            done: { type: integer }
+            total: { type: integer }
         id: { type: string, description: The value to pass as `dict` to /api/search. }
         name: { type: string }
         format:
@@ -2220,7 +2333,7 @@ components:
       properties:
         f: { type: string, description: 'Facet id: lang | pair | kind | pub.' }
         fl: { type: string, description: 'Facet label, heading the group in the picker.' }
-        fo: { type: integer, description: 'Facet rank, ascending.' }
+        fo: { type: integer, description: 'Facet rank, ascending; may be negative. The user''s own groups.ini sections rank above Language, the built-in ones after Language pair.' }
         v: { type: string, description: 'Value id, unique within the facet. For pair: two ISO 639-1 codes in code order, the same for either direction ("en-ru"), or one code for a stated monolingual pair ("es").' }
         vl: { type: string, description: 'Value label, naming the choice.' }
       required: [f, fl, fo, v, vl]
@@ -2305,6 +2418,13 @@ components:
         dictDirEditable:
           type: boolean
           description: False when a flag or environment variable outranks the config file.
+        configProblems:
+          type: array
+          items: { type: string }
+          description: >
+            Lines of the config file in effect that set nothing - not `KEY = value`,
+            a key wudict does not know (a misspelling), a list or a string left
+            open - as "line N: ...". The rest of the file applies. Absent when none.
         revealLabel:
           type: string
           description: The platform's own wording, such as "Reveal in Finder".
@@ -2375,10 +2495,60 @@ components:
           type: array
           items: { type: string }
           description: >
-            Facet ids (lang, pair, kind, pub) whose section the dictionary
-            picker hides. Absent or empty shows every section the library
-            supports. Stored de-duplicated and sorted; at most 16 ids of at
-            most 32 bytes each.
+            Facet ids (lang, pair, or a groups.ini section lower-cased, such
+            as content or publisher) whose section the dictionary picker
+            hides. Absent or empty shows every section the library supports.
+            Stored de-duplicated and sorted; at most 32 ids of at most 64
+            bytes each.
+
+    Groups:
+      type: object
+      description: The groups.ini in effect, what it defines, and the lines skipped.
+      required: [text, custom, unusable, file, writable, problems, facets]
+      properties:
+        text:
+          type: string
+          description: The file's text; the built-in list when there is no file, empty when the file cannot be read.
+        custom:
+          type: boolean
+          description: A groups.ini exists. False means the built-in list is in effect.
+        unusable:
+          type: boolean
+          description: The groups.ini that exists cannot be read; the built-in list is in effect.
+        file:
+          type: string
+          description: Where groups.ini is (or would be) kept; empty when there is no config directory.
+        writable:
+          type: boolean
+          description: False when there is no config directory, so nothing can be saved.
+        problems:
+          type: array
+          items:
+            type: object
+            properties:
+              line: { type: integer, description: 1-based; 0 when the file as a whole could not be used. }
+              text: { type: string, description: The line as written. }
+              msg: { type: string, description: Why it was skipped. }
+              more: { type: integer, description: 'On a last entry only: how many problems it stands for, not listed.' }
+        facets:
+          type: array
+          description: The sections and their groups, in file order.
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              label: { type: string }
+              groups:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id: { type: string }
+                    label: { type: string }
+                    items:
+                      type: array
+                      items: { type: string }
+                      description: What the group matches, as parsed - plain items lower-cased, regular expressions in backticks.
 
     Style:
       type: object

@@ -280,12 +280,12 @@ func TestLocalAddresses(t *testing.T) {
 		"127.0.0.1", "::1", "10.1.2.3", "192.168.0.5", "172.16.9.9",
 		"169.254.1.1", "0.0.0.0", "100.64.0.1", "100.127.255.255", "fe80::1",
 	} {
-		if !local(parseIP(t, s)) {
+		if !IsLocal(parseIP(t, s)) {
 			t.Errorf("%s should be treated as local", s)
 		}
 	}
 	for _, s := range []string{"8.8.8.8", "1.1.1.1", "100.63.255.255", "100.128.0.1", "2606:4700::1"} {
-		if local(parseIP(t, s)) {
+		if IsLocal(parseIP(t, s)) {
 			t.Errorf("%s should not be treated as local", s)
 		}
 	}
@@ -657,5 +657,23 @@ func TestLinkDir(t *testing.T) {
 		if err != nil || filepath.ToSlash(got) != tc.want {
 			t.Errorf("LinkDir(%s) = %s, want %s", tc.in, got, tc.want)
 		}
+	}
+}
+
+// Every request the fetcher's client makes names wudict - the transport sets
+// it, so no call site has to remember to.
+func TestClientUserAgent(t *testing.T) {
+	got := make(chan string, 1)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got <- r.Header.Get("User-Agent")
+	}))
+	defer srv.Close()
+	resp, err := Fetcher{Insecure: true}.Client().Get(srv.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if ua := <-got; ua != "wudict" {
+		t.Errorf("User-Agent = %q, want wudict", ua)
 	}
 }

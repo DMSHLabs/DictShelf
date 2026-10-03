@@ -18,8 +18,8 @@ import (
 func newStyleServer(t *testing.T) (*Server, string) {
 	t.Helper()
 	s := newTestServer(t)
-	s.StyleDir = filepath.Join(t.TempDir(), StyleDirName)
-	return s, s.StyleDir
+	s.User = UserDir(t.TempDir())
+	return s, s.User.Style()
 }
 
 // The <link> the server injects, as a needle. Not the bare path: the page's
@@ -156,7 +156,7 @@ func TestStyleFilesAreServedUncached(t *testing.T) {
 // settings in-memory. The feature must report that it cannot save rather than
 // writing a folder somewhere nobody asked for - or panicking.
 func TestStyleWithoutAConfigFolder(t *testing.T) {
-	s := newTestServer(t) // StyleDir left empty
+	s := newTestServer(t) // User left empty: no folder to save in
 	var got styleResp
 	getJSON(t, s, "/api/style", &got)
 	if got.Writable || got.Dir != "" {
@@ -239,5 +239,43 @@ func TestIndexTracksTheUserStylesheet(t *testing.T) {
 	off := get("?style=off")
 	if strings.Contains(off.Body.String(), userCSSLink) {
 		t.Error("?style=off still links the user stylesheet")
+	}
+}
+
+// A stylesheet that exists but cannot be applied says why, and is not
+// replaced from the editor's empty box unless the request says so.
+func TestStyleUnusableIsNotOverwritten(t *testing.T) {
+	s, dir := newStyleServer(t)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	big := strings.Repeat("a{}", maxUserCSSBytes)
+	if err := os.WriteFile(filepath.Join(dir, appCSSName), []byte(big), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var got struct {
+		App      string            `json:"app"`
+		Problems map[string]string `json:"problems"`
+	}
+	getJSON(t, s, "/api/style", &got)
+	if got.App != "" || got.Problems["app"] == "" {
+		t.Fatalf("an oversize app.css: %+v", got)
+	}
+	put := func(target string) int {
+		rec := httptest.NewRecorder()
+		s.ServeHTTP(rec, newRequest("PUT", target, strings.NewReader(`{"app":"body{}"}`)))
+		return rec.Code
+	}
+	if code := put("/api/style"); code != 409 {
+		t.Errorf("save over it: code %d, want 409", code)
+	}
+	if b, _ := os.ReadFile(filepath.Join(dir, appCSSName)); string(b) != big {
+		t.Fatal("a refused save changed the file")
+	}
+	if code := put("/api/style?replace=1"); code != 200 {
+		t.Errorf("replace=1: code %d", code)
+	}
+	if b, _ := os.ReadFile(filepath.Join(dir, appCSSName)); string(b) != "body{}" {
+		t.Errorf("not replaced: %.20q", b)
 	}
 }

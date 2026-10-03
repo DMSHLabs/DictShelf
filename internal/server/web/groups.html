@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<!--
+ Copyright (C) 2026 glowinthedark
+
+ SPDX-License-Identifier: GPL-3.0-or-later
+-->
+
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>wudict Groups</title>
+<link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
+<link rel="stylesheet" href="/assets/setup.css?v={{CSS}}">
+<style>
+/* Page-specific only; palette, card, buttons and typography are shared. The
+   card is wider than the other pages' and the box takes most of the screen:
+   this page is an editor, and the text is the whole of it. */
+.card{max-width:760px}
+textarea{display:block;width:100%;height:max(18em,58vh);margin:.618em 0 .2em;
+  font:13.5px/1.55 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:8px;
+  padding:.618em .8em;resize:vertical;outline:none;tab-size:4}
+textarea:focus{border-color:var(--focus);box-shadow:0 0 0 3px color-mix(in srgb,var(--focus) 25%,transparent)}
+.acts{display:flex;flex-wrap:wrap;gap:.5em;align-items:center}
+.acts .btn,.acts button{margin-top:.382em}
+.note{font-size:12.5px;color:var(--faint);margin:.2em 0 0;word-break:break-all}
+.probs{margin:.382em 0 0;padding:0;list-style:none;font-size:13px;color:var(--err)}
+.probs code{color:var(--fg);word-break:normal;overflow-wrap:anywhere} /* breaks between words, a long one only if it must */
+.quiet{color:var(--soft)}
+.quiet code{white-space:nowrap;word-break:normal}
+/* A phone: the text gets the width the card's padding would take, so a
+   comment line of groups.ini fits on one row instead of wrapping into two. */
+@media (max-width:520px){
+  body{padding:.5em}
+  .card{padding:1em .8em}
+  textarea{font-size:12.5px;padding:.5em .6em}
+}
+</style>
+</head>
+<body>
+<div class="card">
+<h1><b>wu</b>Dict Groups</h1>
+<p>Each line is a group the dictionary picker offers: a dictionary joins it when
+   one of the texts is anywhere in its title or file name, in any case. A
+   <code>[Section]</code> line starts a new heading under <i>Group by</i>.</p>
+<p class="quiet"><code>Mine = oxford, collins</code> &nbsp; <code>Mine = `^regex$`</code></p>
+
+<textarea id="text" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off"
+  aria-label="groups.ini"></textarea>
+<div id="msg" role="status" aria-live="polite"></div>
+<ul class="probs" id="probs"></ul>
+
+<div class="acts">
+  <button type="button" id="save">Save</button>
+  <button type="button" class="ghost" id="reset">Reset to default</button>
+  <a class="btn ghost" href="/" id="back">Back to dictionaries</a>
+</div>
+<p class="note" id="file"></p>
+
+<p class="about"><b>WuWei</b>Dict — search every dictionary you own, from one browser tab.
+  <a href="https://wuweidict.github.io/wudict" target="_blank" rel="noopener">Website</a>
+  · <a href="https://github.com/wuweidict/wudict" target="_blank" rel="noopener">Source</a></p>
+</div>
+<script>
+"use strict";
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+/* The server owns the file and parses it; this page shows its text, sends it
+   back, and says what the save produced. "saved" is the text as the textarea
+   itself returns it (it reads CRLF as LF, so a save writes LF), so a file
+   written on Windows is not "changed" on arrival; "facets" is the server's parse of it, which is what a
+   save is compared with. */
+let saved="",facets=[],writable=false,unusable=false,busy=false;
+const dirty=()=>$("text").value!==saved;
+
+function say(text,cls){$("msg").className=cls||"";$("msg").textContent=text}
+
+/* The groups a save added or changed - from the server's parse before and
+   after, never from re-reading the text here. */
+function edited(before,after){
+  const was=new Map();
+  for(const f of before)for(const g of f.groups)was.set(f.id+"\n"+g.id,g.items.join("\n"));
+  const out=[];
+  for(const f of after)for(const g of f.groups)
+    if(was.get(f.id+"\n"+g.id)!==g.items.join("\n"))out.push({f:f.id,g});
+  return out;
+}
+
+/* Of those, the ones no dictionary joined: a typo in a text or a regex looks
+   exactly like that. Groups left as they were are not listed - a library
+   without a Duden is not news. Counted on the same list the picker uses. */
+async function unmatched(changed){
+  if(!changed.length)return [];
+  const have=new Set();
+  try{
+    const t=await (await fetch("/api/dicts")).text();
+    for(const l of t.split("\n")){
+      if(!l.trim())continue;
+      const o=JSON.parse(l);
+      if(o.t==="dict")for(const g of o.dict.groups||[])have.add(g.f+"\n"+g.v);
+    }
+  }catch(e){return []}
+  return changed.filter(c=>!have.has(c.f+"\n"+c.g.id)).map(c=>c.g.label);
+}
+
+/* Problems are what the file means to the app and they are always shown: an
+   invalid regular expression or a skipped line costs a group, silently,
+   unless this list says so. */
+function problems(j){
+  $("probs").innerHTML=j.problems.map(p=>"<li>"+(p.line?"Line "+p.line+": ":"")+esc(p.msg)+
+    (p.text?" — <code>"+esc(p.text)+"</code>":"")+"</li>").join("");
+  if(j.unusable)return "The built-in groups are in effect until this file is replaced or reset.";
+  const n=j.problems.reduce((n,p)=>n+(p.more||1),0);
+  return n?(n===1?"1 problem":n+" problems")+" below - those lines or items are skipped.":"";
+}
+
+function show(j,keepText){
+  writable=j.writable;unusable=j.unusable;facets=j.facets;
+  if(!keepText){$("text").value=j.text;saved=$("text").value}
+  $("save").disabled=!writable;
+  $("reset").classList.toggle("hidden",!j.custom||!writable);
+  $("file").textContent=writable
+    ?(j.custom?"Saved in ":"Not customised yet - saving creates ")+j.file
+    :"There is no configuration folder, so the groups cannot be saved here.";
+  return problems(j);
+}
+
+async function call(method,body,query){
+  const r=await fetch("/api/groups"+(query||""),{method,body,headers:body==null?{}:{"Content-Type":"text/plain; charset=utf-8"}});
+  if(!r.ok){
+    let why="HTTP "+r.status;
+    try{const j=await r.json();if(j&&j.error)why=j.error}catch(_){}
+    throw new Error(why);
+  }
+  return r.json();
+}
+
+async function load(){
+  try{const p=show(await call("GET"));if(p)say(p,"err")}
+  catch(e){say("Cannot reach wuDict: "+e.message,"err")}
+}
+
+async function save(){
+  if(!writable||busy)return;
+  /* A file the app cannot read is still the user's: the box was empty
+     because it could not be shown, not because it is empty. */
+  if(unusable&&!confirm("Your groups.ini cannot be read (see below). Replace it with the text in the box?"))return;
+  busy=true;$("save").disabled=true;say("Saving…");
+  const sent=$("text").value,before=facets;
+  try{
+    const j=await call("PUT",sent,unusable?"?replace=1":"");
+    // typed while the save was in flight: keep it, it is not saved yet
+    const typed=$("text").value!==sent;
+    const p=show(j,typed);
+    saved=typed?sent:$("text").value;
+    const none=await unmatched(edited(before,j.facets));
+    const parts=["Saved."];
+    if(p)parts.push(p);
+    if(none.length)parts.push("No dictionary matches: "+none.join(", ")+".");
+    say(parts.join(" "),p||none.length?"err":"ok");
+  }catch(e){say("Not saved: "+e.message,"err")}
+  finally{busy=false;$("save").disabled=!writable}
+}
+
+$("save").onclick=save;
+$("reset").onclick=async()=>{
+  if(busy||!confirm("Replace your groups with the default list?"))return;
+  try{show(await call("DELETE"));say("Default restored.","ok")}
+  catch(e){say("Not reset: "+e.message,"err")}
+};
+$("text").addEventListener("input",()=>{if($("msg").className!=="err")say("")});
+addEventListener("keydown",e=>{
+  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="s"){e.preventDefault();save()}
+});
+addEventListener("beforeunload",e=>{if(dirty()){e.preventDefault();e.returnValue=""}});
+$("back").addEventListener("click",e=>{
+  if(dirty()&&!confirm("Leave without saving your changes?"))e.preventDefault();
+  else saved=$("text").value; // answered: do not ask again on the way out
+});
+load();
+</script>
+</body>
+</html>
