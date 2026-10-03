@@ -55,6 +55,7 @@ narratives, so `git log` is a second copy.
 | Release wudict2-v0.3.0 (2026-09-27, this session) | 2026-09-27 | — (added after the split) |
 | Release wudict2-v0.4.0 (2026-09-27, this session) | 2026-09-27 | — (added after the split) |
 | Release wudict2-v0.5.0 (2026-09-28, this session) | 2026-09-28 | — (added after the split) |
+| Release wudict2-v0.7.0 (2026-10-03, this session) | 2026-10-03 | — (added after the split) |
 | Release wudict2-v0.6.0 (2026-10-02, this session) | 2026-10-02 | — (added after the split) |
 | Purging the Monotype fonts from history, and replacing the v0.6.0 asset (2026-10-02) | 2026-10-02 | — (added after the split) |
 | Release wudict2-v0.6.0-ru.1 (2026-09-30, this session) | 2026-09-30 | — (added after the split, on the translation branch) |
@@ -1743,6 +1744,44 @@ GitHub may serve unreachable objects by SHA for a while. The step that actually
 stops the distribution is replacing the release asset — which is why it was done
 in the same pass. The pre-rewrite repository survives as a mirror clone in
 `D:\tmp\wudict-backup.git`; it holds the fonts and every old SHA.
+
+## Release wudict2-v0.7.0 (2026-10-03, this session)
+
+The next release from `dev`, cut at the user's request, and the first to carry the
+second upstream sync of 2026-10-02. Eleven commits past the v0.6.0 tag, of which
+five are the fork's own: the Rescan/index-maintenance rework (`ea3b66b`), Find in
+articles (`b99ba0f`), Exit (`ac7397f`) and the two drawer tunes (`52febec`,
+`cd150f4`).
+
+Same order as every time before: the changelog commit (`fb73c66`), `dev` pushed,
+the annotated tag `wudict2-v0.7.0` on it, pushed, then `build-android.cmd
+release`, then the REST create and the asset upload. aapt2:
+`versionName='wudict2-v0.7.0'`, versionCode 483, `locales: '--_--' 'ru'`, arm64
+only, 8,835,605 bytes, sha256
+`5ee146e040f33dff11dbb71301e6be8f3669e4a4a35d9370b0a693027ef78c7d`, the same
+signer certificate as every release. Normal release, not a pre-release, so
+`latest` moved to it.
+https://github.com/DmShAl/wudict2/releases/tag/wudict2-v0.7.0
+
+**The release notes were written from the user's own summary of three things**
+(shortened, reworked and put into English), with the rest found in the diff:
+the Rescan purge with index maintenance, Find in articles, the second DSL reader
+with its fonts, Exit, the foldable drawer, and the upstream merge. Each claim was
+checked against the code before being written — `cleanupLibrary()` retaining only
+prepared folders belonging to discovered sources and running from the plain
+`handleRescan` too, `NewGDReader`/`.dslgd` comparison sources with their own
+prepared data and indexes, the preset CSS's `Quivira.otf` face and the four
+`/files/wugd_*` faces falling back to `sans-serif`, and `#sbarFind` opening the
+find strip whose `go()` wraps with a "from the beginning/end" note.
+
+**Verified:** `go build ./...` clean, the server's
+`TestClearDatabase|TestRescan|TestI18n|TestAppearanceContract|TestGDAssets|DSL`
+green, the packaged `.so` unpacked and checked for the catalog, the Quivira font,
+the `wugd_*` hooks, the find asset, the clear-database route and the exit bridge
+(and for **0** `Monotype`/`ArialPlus`/`QuiviraPhonetic` strings), the published
+asset downloaded back and hash-matched, and the body compared byte for byte with
+the changelog section. No device or emulator run; `make i18n-check-js` was not run
+— still no Node on this machine.
 
 ## Release wudict2-v0.6.0 (2026-10-02, this session)
 
