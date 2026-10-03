@@ -1,4 +1,7 @@
 /wudict
+# The Windows desktop binary (build-windows.cmd): the same product `make build`
+# writes, with the extension Windows needs to exec it.
+/wudict.exe
 dist/**
 docs.local/
 *_NOTRACK.md
@@ -17,10 +20,17 @@ android/build/
 android/app/build/
 android/app/build-sh/
 android/app/src/main/jniLibs/
+# The x86_64 server for the emulator (build-android.cmd `intel`). It sits in a
+# source dir no variant reads unless build.gradle is told to, so it can never
+# reach an APK by accident - but it is still a 16 MB build product, not source.
+android/app/src/emuX86/jniLibs/
 android/local.properties
 /build-android.local.bat
 /CLAUDE.local.md
 code-review/
+# Local corpus for manual checks (real dictionaries: too big to ship, and not
+# ours to license). Point DICT_DIR at it for a representative preview.
+/test_data/
 
 # Play release (fastlane). The lanes and the listing ARE tracked -
 # fastlane/metadata/android/ is also the layout F-Droid reads. What must never
@@ -35,4 +45,18 @@ code-review/
 /fastlane/report.xml
 /fastlane/README.md
 /vendor/bundle/
-**/testdata/fuzz/*
+# Fuzz regression seeds under testdata/fuzz are source, not scratch outputs.
+
+# The local dictionary-comparison oracle (a Qt/CMake build kept outside the
+# project's own tooling): the build tree and the results it writes are products
+# of a hand-run tool, never source. Ignoring these leaves the directory itself
+# listable, so a future source file in it would still show up.
+/tools/dslcompare/build/
+/tools/dslcompare/results/
+# Bytecode of the Python tools in tools/ (csvorjson2wudict.py and friends).
+__pycache__/
+*.pyc
+
+# Agent tooling: plans and scratch written by coding sessions, never part of
+# the product (HANDOFF.md leaves it alone for the same reason).
+/.zcode/
