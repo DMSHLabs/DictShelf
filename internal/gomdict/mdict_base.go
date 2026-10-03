@@ -599,11 +599,11 @@ func (mdict *MdictBase) decodeKeyEntries(keyBlockDataCompressBuffer []byte) erro
 
 	// splitKeyBlock backfills each entry's end offset from its successor, but
 	// only WITHIN the block it was handed: the last entry of every key block
-	// kept the 0 sentinel, which locateByKeywordEntry reads as "to the end of
-	// the record block" - so one entry per key block used to hand back its own
-	// record plus everything filed after it in that block. Chaining across the
-	// seams is what fixes that; 0 stays the sentinel for the one entry that is
-	// genuinely open-ended, the last of the dictionary.
+	// keeps the 0 sentinel, which locateByKeywordEntry reads as "to the end of
+	// the record block" - so that entry would hand back its own record plus
+	// everything filed after it in that block. Hence the chaining across the
+	// seams; 0 stays the sentinel for the one entry that is genuinely
+	// open-ended, the last of the dictionary.
 	chainRecordEnds(keyBlockData.keyEntries, 0)
 
 	if keyBlockData.keyEntriesSize != mdict.keyBlockMeta.entriesNum {
@@ -877,9 +877,8 @@ func (mdict *MdictBase) decodeRecordBlockInfo(data []byte, startOffset, endOffse
 //
 // recordInfoList is built by readRecordBlockInfo in file order, so
 // deCompressAccumulatorOffset is sorted by construction and the offset can be
-// found by binary search. It used to be a linear scan, once per lookup - free
-// on the dozen-block dictionaries it was written against, and the second half
-// of the O(N*B) ingest cost on a large one.
+// found by binary search: a linear scan per lookup costs nothing on a
+// dozen-block dictionary and O(N*B) over the ingest of a large one.
 func (mdict *MdictBase) recordBlockAt(offset int64) *MdictRecordBlockInfoListItem {
 	list := mdict.recordBlockInfo.recordInfoList
 	i := sort.Search(len(list), func(i int) bool {

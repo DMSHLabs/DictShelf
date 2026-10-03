@@ -64,9 +64,10 @@ wudict ingest            # your dictionary folders
 wudict ingest ~/Dicts    # or one folder
 ```
 
-`ingest` skips what is already prepared. Add `-headwords` for the small index
-only, `-contains` for the substring index, and `-full` to pack media as well.
-A flag you leave out keeps what each prepared dictionary already has.
+`ingest` skips what is already prepared and, like the app, gives a new
+dictionary the headword index only. Add `-fulltext` for the full-text index,
+`-contains` for the substring index, and `-full` to pack media as well. A flag
+you leave out keeps what each prepared dictionary already has.
 
 ## Removing a dictionary
 

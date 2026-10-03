@@ -17,6 +17,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime/debug"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -127,12 +128,6 @@ func (u *upgraded) Meta() dict.Meta {
 	m.Path = u.srcPath
 	return m
 }
-
-func (u *upgraded) Caps() dict.Caps { return u.Store.Caps() }
-
-// ContainsStale delegates so the panel can offer a rebuild on a dictionary
-// reached through the upgraded view, not only through a bare Store.
-func (u *upgraded) ContainsStale() bool { return u.Store.ContainsStale() }
 
 // Resource resolves in three rungs, cheapest first (D2, extended by O8):
 //
@@ -337,18 +332,17 @@ type entry struct {
 	// none and was opened directly. Everything below (the memoized backend and
 	// error, autoTried, demanded, demandFail, abbrevTried) is a conclusion
 	// drawn from that resolution, and none of it survives the file it was drawn
-	// from: a library folder deleted from outside the app used to leave an
-	// entry serving a SQLite handle whose file was gone, and a rescan kept it
-	// because it kept the entry. Rescan now re-derives this and resets what
-	// disagrees (revalidate). dMu-guarded, like d and err.
+	// from: a library folder deleted from outside the app must not leave the
+	// entry serving a SQLite handle whose file is gone. Rescan re-derives this
+	// and resets what disagrees (revalidate). dMu-guarded, like d and err.
 	backing string
 
 	// srcSig is the source file's size and mtime as they were when the backend
 	// was opened (sourceSig), dMu-guarded like backing. Rescan compares it
 	// with the file now: a source replaced in place - a newer edition copied
 	// over the old one - leaves backing unchanged, so without this the entry
-	// kept serving the previous edition's headwords (preview) or kept routing
-	// to an index built from it (prepared) until the process restarted.
+	// would keep serving the previous edition's headwords (preview), or keep
+	// routing to an index built from it (prepared), until the process restarts.
 	srcSig string
 
 	// retired holds the backends this entry superseded or evicted while they
@@ -470,7 +464,7 @@ func (e *entry) maybeAutoIndex() {
 		// work that has happened. The gate still returns: ensureBaseIndex would
 		// no-op anyway, and a size ceiling has nothing to say about a library
 		// that already exists.
-		if _, prepared := preparedTextDB(e.Path); !prepared {
+		if _, prepared := validPrepared(e.Path); !prepared {
 			logx.V("auto-index %s: %d entries is over the %d automatic ceiling; "+
 				"select the dictionary to prepare it", e.Path, n, autoIndexMaxEntries)
 		}
@@ -516,11 +510,10 @@ func (e *entry) maybeAutoIndex() {
 // A FAILED demand is retried, unlike a failed auto-index. The once-per-process
 // flag exists to stop a search from re-queueing an ingest on every keystroke,
 // not to make one unwritable folder or one full disk permanent for the life of
-// the process - which is what it was doing, silently, because the deferred
-// section went on offering the same tap that could no longer do anything. The
-// flag is therefore released on failure and demandRetryAfter takes over the job
-// it was really doing: typing cannot re-queue anything, and a person who reads
-// the message and taps again gets a real second attempt.
+// the process while the deferred section goes on offering a tap that can no
+// longer do anything. The flag is therefore released on failure, and
+// demandRetryAfter does the flag's real job: typing cannot re-queue anything,
+// and a person who reads the message and taps again gets a real second attempt.
 //
 // No power check, deliberately, and this is the one place that omits one. Every
 // other expensive thing here starts on the program's initiative and must not
@@ -532,25 +525,13 @@ func (e *entry) maybeAutoIndex() {
 // waiting on.
 const demandRetryAfter = 30 * time.Second
 
-// prepared reports that this dictionary already has a library folder, so a
-// demanded ingest would have nothing to do. It is the lock-free form of the
-// two early returns in ensureBaseIndex, and it is advisory: a race only means
-// the demand proceeds and ensureBaseIndex returns nil, as it always did.
-func (e *entry) prepared() bool {
-	if store.IsTextDB(e.Path) {
-		return true
-	}
-	textDB, ok := store.PreparedFor(e.Path)
-	return ok && fileExists(textDB)
-}
-
 func (e *entry) demandIndex() {
 	// Nothing to prepare: return before anything is spent. Not an
 	// optimisation of a few milliseconds - the goroutine, the front slot and
 	// the power hold are all observable. HoldActiveProcs announces "work the
 	// user is waiting on" to the host (power.go), and on Android that hoists a
 	// foreground service for an ingest that ends 36 ms later.
-	if e.prepared() {
+	if _, ok := validPrepared(e.Path); ok {
 		e.demanded.Store(true) // ready, so the UI stops offering to prepare it
 		return
 	}
@@ -646,7 +627,7 @@ func (e *entry) open() (dict.Dictionary, error) {
 // fanout is one search's materialisation budget: how many bytes of *newly
 // opened* preview backends a single query may bring into memory.
 //
-// The preview budget cannot do this job and was never able to. It is enforced
+// The preview budget cannot do this job. It is enforced
 // by the janitor, between bursts, and it deliberately refuses to evict anything
 // used in the last minEvictIdle - which is every dictionary a `dict=all` search
 // just touched. Measured, that means a 64 MB budget coexisting with 6.3 GB held
@@ -753,7 +734,7 @@ func (e *entry) openWithin(f *fanout) (dict.Dictionary, error) {
 		// the refusal path to be certain, because declining one would drop
 		// results for no memory saved at all - and the refusal path is by
 		// definition the rare one.
-		if _, prepared := preparedFor(e.Path); !prepared {
+		if _, prepared := validPrepared(e.Path); !prepared {
 			return nil, tooHeavy{bytes: est}
 		}
 		est = 0 // admitted without a reservation: charge whatever it turns out to cost
@@ -787,10 +768,9 @@ func previewWeight(d dict.Dictionary, m dict.Meta) int64 {
 
 // selfWeighing is a backend that measures its own resident cost instead of
 // being estimated from a headword count. The estimate assumes an in-memory
-// headword index, which every format built until ZIM: that one searches its
-// own file with a binary search and keeps no map, so the estimate over-charged
-// it by two orders of magnitude and would have held it under permanent
-// eviction pressure for memory it never allocated.
+// headword index; ZIM searches its own file with a binary search and keeps no
+// map, so the estimate would over-charge it by two orders of magnitude and hold
+// it under permanent eviction pressure for memory it never allocated.
 type selfWeighing interface{ PreviewBytes() int64 }
 
 // selfIndexed is a backend whose own file already answers exact and prefix
@@ -887,8 +867,8 @@ func (e *entry) drop(force bool) (int64, bool) {
 
 // scheduleReclaim hands freed pages back to the OS shortly after a batch of
 // closes. Coalesced deliberately: FreeOSMemory is a stop-the-world collection
-// plus a scavenge, and shedding a hundred dictionaries at once used to mean a
-// hundred of them back to back - a CPU spike indistinguishable, from the
+// plus a scavenge, and shedding a hundred dictionaries at once would otherwise
+// mean a hundred of them back to back - a CPU spike indistinguishable, from the
 // platform's point of view, from the runaway work this whole mechanism exists
 // to avoid.
 var reclaimArmed atomic.Bool
@@ -1191,9 +1171,9 @@ func (r *Registry) Rescan() error {
 	r.mu.Lock()
 	seen := map[string]bool{}
 	// Rebuilt, not appended to: an id that no longer discovers to anything -
-	// a dictionary deleted (D63) or a drive unmounted - must stop resolving.
-	// Keeping it made `get` hand out an entry that is not in the list, so a
-	// removed dictionary stayed addressable by anyone still holding its id.
+	// a dictionary deleted (D63) or a drive unmounted - must stop resolving,
+	// or `get` would hand out an entry that is not in the list and a removed
+	// dictionary would stay addressable by anyone still holding its id.
 	byID := make(map[string]*entry, len(paths))
 	var entries, kept, replaced []*entry
 	for _, p := range paths {
@@ -1222,13 +1202,12 @@ func (r *Registry) Rescan() error {
 		byID[id] = e
 		entries = append(entries, e)
 	}
-	// Entries the scan no longer finds. Dropping them from the map is what
-	// stops them resolving; it is not what closes them, and until it did they
-	// leaked - a dictionary deleted or unmounted from outside the app left its
-	// backend open, holding descriptors and, in preview mode, a headword map of
-	// hundreds of bytes per entry, with nothing left in the registry able to
-	// reach it. The janitor sweeps r.entries, so an entry that has just left it
-	// is unreachable by design.
+	// Entries the scan no longer finds. Dropping them from the map stops them
+	// resolving but does not close them, and a dictionary deleted or unmounted
+	// from outside the app would otherwise keep its backend open - descriptors
+	// and, in preview mode, a headword map of hundreds of bytes per entry - with
+	// nothing left in the registry able to reach it: the janitor sweeps
+	// r.entries, which an entry that has just left it is no longer in.
 	gone := replaced
 	for id, e := range r.byID {
 		if !seen[id] {
@@ -1372,14 +1351,14 @@ func pathID(path string) string {
 // pay the open cost. It opens only the ones that are PREPARED - a SQLite handle
 // costing a few MB - and deliberately leaves unprepared ones alone: opening
 // those builds an in-memory headword index (measured 300–500 B per headword),
-// and doing it for a whole library was several GB of resident memory for
-// dictionaries nobody had searched yet (docs.local/PERF.md M2). An unprepared
+// and doing it for a whole library costs several GB of resident memory for
+// dictionaries nobody has searched yet (docs.local/PERF.md M2). An unprepared
 // dictionary is opened when something actually needs it: a search, or the
 // background indexer that is about to replace it with a prepared one.
 //
 // Disabled dictionaries are skipped. Turning one off is the user asking us to
 // stop spending on it, and a few MB of SQLite handle each is exactly the kind
-// of spending they meant; opening them anyway would have made the switch a
+// of spending they meant; opening them anyway would make the switch a
 // decoration. One that is turned back on opens on its next search.
 //
 // Not on a phone, and not while the app is away (warmEnabled, CurrentPower):
@@ -1399,7 +1378,7 @@ func (r *Registry) Warm() {
 		sem := make(chan struct{}, 4)
 		var wg sync.WaitGroup
 		for _, e := range entries {
-			if _, prepared := preparedFor(e.Path); !prepared {
+			if _, prepared := validPrepared(e.Path); !prepared {
 				continue
 			}
 			if prefs.Off(e.ID, e.Path) {
@@ -1590,17 +1569,9 @@ func (r *Registry) startJanitor() {
 	}()
 }
 
-// preparedFor reports whether a registry entry already has prepared data.
-func preparedFor(path string) (string, bool) {
-	if store.IsTextDB(path) {
-		return path, true
-	}
-	return store.PreparedFor(path)
-}
-
 // preparedDB names the prepared database for this entry: the resolution its
 // open was checked against when there is one, else backingDB's stat-and-
-// receipt answer. Deliberately NOT preparedTextDB, whose source-changed check
+// receipt answer. Deliberately NOT validPrepared, whose source-changed check
 // is a SQLite open per call - and /res/ lands here for every resource on a
 // page. Where the two disagree (the source was edited after indexing) the
 // answer is still the folder the user would have put an override into:
@@ -1626,14 +1597,13 @@ func (e *entry) preparedDB() (string, bool) {
 // checked against, so it answers from stat() and the folder's info.txt claim
 // only.
 //
-// Deliberately not preparedFor: that one also asks whether the SOURCE has
+// Deliberately not validPrepared: that one also asks whether the SOURCE has
 // changed since it was indexed, which reads the meta table out of every
 // candidate text.db - a SQLite open per dictionary, on a path a rescan walks
 // once per entry. The two disagree on exactly one state (source edited, index
 // still present), and there the cached open is stale but not broken: it serves
-// the previous edition's articles until something re-ingests it, which is what
-// it did before this check existed. What this catches is the state that IS
-// broken - the database the handle reads is gone.
+// the previous edition's articles until something re-ingests it. What this
+// catches is the state that IS broken - the database the handle reads is gone.
 func backingDB(path string) string {
 	if store.IsTextDB(path) {
 		if fileExists(path) {
@@ -1655,22 +1625,21 @@ func backingDB(path string) string {
 //
 // A memoized OPEN ERROR is always cleared. entry.open caches failures on
 // purpose - a fan-out over a hundred dictionaries must not retry a broken file
-// once per keystroke - but nothing ever cleared that cache, so a dictionary
-// that failed to open once stayed failed for the life of the process however
-// thoroughly the user fixed it. A rescan is the user asking for exactly that
-// retry, and paying for it once, here, is the whole point of the button.
+// once per keystroke - and a rescan is the one thing that clears that cache:
+// it is the user asking for exactly that retry, paid for once, here, however
+// thoroughly they have fixed the file in between.
 //
 // A backend resolved against a DIFFERENT database than the one now on disk is
 // dropped, along with the conclusions drawn from it: autoTried and demanded
 // both mean "this dictionary has been prepared, or has refused to be", and a
 // library folder that no longer exists refutes both. Without this, deleting a
-// prepared folder from the file manager left the entry holding a handle to it -
-// answering searches until SQLite needed a new connection, then failing every
-// one with "unable to open database file" - and neither preparation lane would
-// rebuild it, because both were already marked as done. It is also what makes
+// prepared folder from the file manager would leave the entry holding a handle
+// to it - answering searches until SQLite needs a new connection, then failing
+// every one with "unable to open database file" - and neither preparation lane
+// would rebuild it, because both would be marked as done. It is also what keeps
 // the in-app removal path honest: Remove closes the backend and says the
-// dictionary "will be indexed again the next time it is searched", which was
-// true only after a restart, since autoTried outlived the data it described.
+// dictionary "will be indexed again the next time it is searched", which holds
+// only because autoTried does not outlive the data it describes.
 //
 // The same holds for the SOURCE: a file replaced in place keeps its path and
 // its library folder, so backing alone cannot see it. Its size and mtime are
@@ -1755,9 +1724,6 @@ func (r *Registry) get(id string) (*entry, error) {
 	return e, nil
 }
 
-// ingest builds the text.db (and media.db when full) for one entry and
-// swaps its open view to the upgraded backend. A headwords-only db is
-// deleted and rebuilt when full-text level is requested later.
 // features is the state a dictionary's prepared data can be in. Finding a
 // headword is not among them: it needs no switch, costs ~2 MB, and every
 // backend can do it. These three are the ones that cost real disk, so each is
@@ -1768,11 +1734,99 @@ type features struct {
 	Media    bool
 }
 
+// reconcile brings this entry's prepared data to t (store.Reconcile) under the
+// entry's own rules: one ingest at a time per dictionary; the served databases
+// handed back, and opens barred, while they are replaced on Windows
+// (releasePrepared); and the result served the moment it exists. The lane and
+// the power hold are the caller's, because they depend on who is waiting.
+//
+// Nothing here opens the dictionary to rebuild its text: the ingest reader
+// parses the file itself, and holding the direct backend at the same time
+// doubles the working set of the largest thing in the process
+// (docs.local/PERF.md M3). Only a media pack needs a backend (mediaBackend).
+func (e *entry) reconcile(name string, t store.Target, progress store.Progress) (store.Outcome, error) {
+	e.ingestMu.Lock()
+	defer e.ingestMu.Unlock()
+	defer e.rebuilding.Store(false) // releasePrepared may have armed it
+	out, err := store.Reconcile(e.Path, t, store.Hooks{
+		Release:       func(textDB string) { releasePrepared(e, textDB) },
+		Backend:       e.mediaBackend,
+		Progress:      progress,
+		MediaProgress: progress,
+	})
+	if out.Rebuilt {
+		if len(out.Why) > 0 {
+			logx.V("%sprepared data was outdated (%v) - re-indexed", logx.Dict(name), out.Why)
+		}
+		logx.V("%s%d entries indexed (fullText=%v contains=%v)",
+			logx.Dict(name), out.Report.Entries, out.Plan.FullText, out.Plan.Contains)
+		if out.Report.UnresolvedLinks > 0 {
+			logx.V("%s%d redirects pointed at headwords not present in the source (skipped)",
+				logx.Dict(name), out.Report.UnresolvedLinks)
+		}
+	}
+	if out.Beside > 0 {
+		logx.V("%s%d referenced files are not in the dictionary's own container - packed from beside it",
+			logx.Dict(name), out.Beside)
+	}
+	switch {
+	case out.MediaEmpty:
+		e.setMediaEmpty(true) // the panel stops offering "pack media"
+	case out.MediaRemoved:
+		logx.V("%spacked media removed", logx.Dict(name))
+		e.setMediaEmpty(false)
+	}
+	// Serve what is on disk now. Also after a failure that came after a
+	// change - a media step failing behind a successful text rebuild - or the
+	// served handle would go on reading the replaced text.db.
+	e.dMu.RLock()
+	stale := e.d != nil && e.backing != out.TextDB
+	e.dMu.RUnlock()
+	var rerr error
+	if out.Changed() || (err == nil && stale) {
+		rerr = e.reopen()
+	}
+	if err != nil {
+		return out, fmt.Errorf("preparing %q: %w", name, err)
+	}
+	return out, rerr
+}
+
+func (e *entry) setMediaEmpty(v bool) {
+	e.dMu.Lock()
+	e.mediaEmpty = v
+	e.dMu.Unlock()
+}
+
+// mediaBackend is what a media pack reads resources from: the backend this
+// entry serves when there is one - for a prepared dictionary, its lazily opened
+// handle on the source - else a handle of the pack's own, closed after it. A
+// backend that releasePrepared took away for the rebuild is no longer in e.d,
+// so a closed one is never handed out.
+func (e *entry) mediaBackend() (dict.Dictionary, func(), error) {
+	e.dMu.RLock()
+	cur := e.d
+	e.dMu.RUnlock()
+	switch d := cur.(type) {
+	case nil:
+	case *upgraded:
+		src, err := d.source()
+		return src, func() {}, err
+	default:
+		return d, func() {}, nil
+	}
+	d, err := dict.Open(e.Path)
+	if err != nil {
+		return nil, nil, err
+	}
+	return d, func() { d.Close() }, nil
+}
+
 // setFeatures brings a dictionary's prepared data to the requested state:
-// rebuilding the index when the wanted indexes differ from the built ones,
-// packing media, or deleting media that is no longer wanted. Rebuilds are the
-// same atomic temp+rename as any ingest, so an interrupted change leaves the
-// previous data intact.
+// building or rebuilding the index when the wanted indexes differ from the
+// built ones or the data is outdated, packing media, or deleting media that is
+// no longer wanted. Rebuilds are the same atomic temp+rename as any ingest, so
+// an interrupted change leaves the previous data intact.
 //
 // Stripping is only ever offered while the SOURCE exists - that is what makes
 // it reversible, and it is why none of this needs a confirmation prompt. A
@@ -1781,135 +1835,32 @@ type features struct {
 func (e *entry) setFeatures(want features, progress store.Progress) error {
 	acquire(frontLimit) // the user is waiting: never queue behind background work
 	defer release(frontLimit)
-	// Same exemption demandIndex takes, for the same reason and with better
-	// evidence: this is the longest user-visible operation the app has, it is
-	// running because a person ticked a box and is watching a progress bar, and
-	// it used to be the one front-lane job that dropped to a single core the
-	// moment the screen dimmed - and the only one the Android shell was never
-	// told about, so the foreground service that exists to keep a long rebuild
-	// alive did not cover the rebuild most likely to be killed. Refcounted, so
-	// nesting with a concurrent demand is safe.
+	// The user ticked a box and is watching a progress bar: the longest
+	// user-visible operation the app has keeps every core it started with,
+	// and the Android shell keeps its foreground service up (power.go).
+	// Refcounted, so nesting with a concurrent demand is safe.
 	defer HoldActiveProcs()()
-	e.ingestMu.Lock()
-	defer e.ingestMu.Unlock()
-	// releasePrepared (below, or inside rebuild) may bar opens for the length
-	// of this work; this stage owns the exit either way.
-	defer e.rebuilding.Store(false)
-
-	cur, err := e.open()
-	if err != nil {
-		return err
-	}
-	name := cur.Meta().Name
+	name := e.probeName()
 	if store.IsTextDB(e.Path) {
 		return fmt.Errorf("%q is a prepared dictionary - its original files are gone, so its data cannot be rebuilt", name)
 	}
-	dir, err := store.ClaimDir(e.Path)
-	if err != nil {
-		return err
+	media := store.MediaOff
+	if want.Media {
+		media = store.MediaOn
 	}
-	textDB := store.TextDBPath(dir)
-	mediaDB := store.MediaDBPath(dir)
-
-	have := store.KeptPlan(textDB) // the default for a missing or unreadable one
-	plan := store.Plan{FullText: want.FullText, Contains: want.Contains}
-	switch stale := store.TextStale(textDB, e.Path); {
-	case !fileExists(textDB):
-		err = e.rebuild(name, textDB, plan, progress)
-	case len(stale) > 0:
-		// Whatever is baked in at ingest - the source's content, the
-		// abbreviation expansions, the article roles, the folding, the
-		// Reader's and IngestPlan's own rules - no longer matches what this
-		// build would write. A dictionary the user is already changing is
-		// brought current on the way; one they are not is left alone until
-		// they ask (the panel's Rebuild, wudict reindex).
-		logx.V("%sprepared data is outdated (%v) - re-indexing", logx.Dict(name), stale)
-		err = e.rebuild(name, textDB, plan, progress)
-	case have != plan:
-		err = e.rebuild(name, textDB, plan, progress)
-	}
-	if err != nil {
-		return err
-	}
-
-	// Judged AFTER the text: a rebuild from a changed source takes a new
-	// dict_uuid, which orphans the media.db packed from the old one. An
-	// orphan is invisible to the store, so it counts as not packed - and is
-	// replaced, not kept - when media is wanted.
-	haveMedia := fileExists(mediaDB)
-	switch {
-	case want.Media && !store.MediaPaired(textDB):
-		if err := e.repackMedia(cur, textDB, mediaDB, progress); err != nil {
-			return err
-		}
-	case !want.Media && haveMedia:
-		// the serving backend's store holds media.db open, and Windows
-		// refuses to remove an open file (registry_windows.go)
-		releasePrepared(e, textDB)
-		// the media can be packed again from the source it came from
-		if err := os.Remove(mediaDB); err != nil {
-			return fmt.Errorf("removing packed media for %q: %w", name, err)
-		}
-		logx.V("%spacked media removed", logx.Dict(name))
-		e.dMu.Lock()
-		e.mediaEmpty = false
-		e.dMu.Unlock()
-	}
-	_ = store.WriteInfo(dir)
-	return e.reopen()
-}
-
-// repackMedia packs media.db afresh over whatever is there. With no media.db
-// on disk nothing holds one and the pack's rename is legal everywhere, so the
-// backend keeps serving (and feeding the pack). Over an existing file - one
-// the text rebuild orphaned, or one an older IngestMedia wrote - the store
-// may hold it open, and Windows refuses a rename over an open file
-// (registry_windows.go); packMedia then reads from a handle of its own.
-//
-// A pack that finds nothing writes nothing, which would leave the old,
-// unpaired file behind to be reported outdated forever; it serves nothing
-// (Store.mediaDB refuses another dictionary's media), so it is removed.
-func (e *entry) repackMedia(cur dict.Dictionary, textDB, mediaDB string, progress store.Progress) error {
-	if fileExists(mediaDB) {
-		releasePrepared(e, textDB)
-	}
-	if err := e.packMedia(cur, textDB, mediaDB, progress); err != nil {
-		return err
-	}
-	if fileExists(mediaDB) && !store.MediaPaired(textDB) {
-		if err := os.Remove(mediaDB); err != nil {
-			return fmt.Errorf("removing unpaired media: %w", err)
-		}
-	}
-	return nil
-}
-
-// rebuild writes a fresh index for the requested plan.
-func (e *entry) rebuild(name, textDB string, plan store.Plan, progress store.Progress) error {
-	// The ingest finishes in a rename over textDB, which the serving backend
-	// holds open - fatal only on Windows, a no-op elsewhere (registry_windows.go).
-	releasePrepared(e, textDB)
-	rd, err := dict.OpenReader(e.Path)
-	if err != nil {
-		return err
-	}
-	rep, ierr := store.IngestPlan(rd, textDB, plan, progress)
-	rd.Close()
-	if ierr != nil {
-		return fmt.Errorf("preparing %q: %w", name, ierr)
-	}
-	logx.V("%s%d entries indexed (fullText=%v contains=%v)", logx.Dict(name), rep.Entries, plan.FullText, plan.Contains)
-	if rep.UnresolvedLinks > 0 {
-		logx.V("%s%d redirects pointed at headwords not present in the source (skipped)",
-			logx.Dict(name), rep.UnresolvedLinks)
-	}
-	return nil
+	// A dictionary the user is already changing is brought current on the
+	// way; one they are not is left alone until they ask (D151).
+	_, err := e.reconcile(name, store.Target{
+		FullText: &want.FullText, Contains: &want.Contains,
+		Media: media, Rebuild: store.IfOutdated,
+	}, progress)
+	return err
 }
 
 // reopen swaps in a view of the freshly written data and lets go of the old
 // one. The superseded handle is usually a DIRECT backend holding a headword map
-// worth hundreds of bytes per entry; leaving it for the garbage collector kept
-// that memory resident for the life of the process (docs.local/PERF.md M2). It is
+// worth hundreds of bytes per entry; left to the garbage collector, that memory
+// would stay resident for the life of the process (docs.local/PERF.md M2). It is
 // closed after a grace period so requests already reading from it finish first.
 func (e *entry) reopen() error {
 	sig := sourceSig(e.Path)
@@ -1995,59 +1946,6 @@ func (rs *retiring) closeAll() {
 	}
 }
 
-// packMedia writes the media.db for a dictionary, from whichever backend can
-// enumerate its resources.
-func (e *entry) packMedia(cur dict.Dictionary, textDB, mediaDB string, progress store.Progress) error {
-	e.dMu.RLock()
-	served := cur != nil && e.d == cur
-	e.dMu.RUnlock()
-	src := cur
-	if !served {
-		// A rebuild released cur (Windows, registry_windows.go): it is closed,
-		// and asking it for a source would reopen one that nothing closes.
-		// Or the caller has no backend at all (refresh). Either way: pack
-		// from a handle of our own; reopen() serves the result afterwards.
-		s, err := dict.Open(e.Path)
-		if err != nil {
-			return err
-		}
-		defer s.Close()
-		src = s
-	} else if u, ok := cur.(*upgraded); ok {
-		s, err := u.source() // lazily open the direct backend for resources
-		if err != nil {
-			return err
-		}
-		src = s
-	}
-	names, extra := store.MediaNames(src, textDB)
-	if extra > 0 {
-		logx.V("%s%d referenced files are not packed in the .mdd - packing them from beside it",
-			logx.Dict(src.Meta().Name), extra)
-	}
-	if len(names) == 0 {
-		// nothing to pack (text-only dictionary, or a format with no
-		// resources): remember it so the panel stops offering media.
-		e.dMu.Lock()
-		e.mediaEmpty = true
-		e.dMu.Unlock()
-		return nil
-	}
-	uuid, err := store.ReadMetaValue(textDB, "dict_uuid")
-	if err != nil {
-		return err
-	}
-	return store.IngestMedia(src, names, mediaDB, uuid, progress)
-}
-
-// abbrevStale reports that the abbreviation expansions baked into a prepared
-// dictionary no longer match the companion beside its source - added, edited,
-// or removed. A dictionary that never had one and recorded none is not stale.
-func abbrevStale(textDB, srcPath string) bool {
-	companion, _ := dict.AbbrevCompanion(srcPath)
-	return store.AbbrevChanged(textDB, companion)
-}
-
 // upgradeAbbrev re-indexes dictionaries prepared before their abbreviation
 // glossary could be absorbed. DSL bakes those expansions into the article HTML
 // at ingest, so there is no way to add them to data already on disk; the only
@@ -2092,15 +1990,14 @@ func (r *Registry) upgradeAbbrev() {
 				return
 			}
 			// Claimed HERE, not at collection. Marking the whole list up front
-			// and then abandoning it on a power transition left every entry
-			// behind this one flagged as tried and never tried at all - and
-			// the sweep runs only from NewRegistry/SetUseCached/SetDirs, so
-			// "attempted once per process" became "attempted never" for the
-			// tail. On a phone, where the screen goes off mid-ingest as a
-			// matter of course, that was the normal outcome rather than the
-			// edge one. Claiming at the start of the work also means a
-			// transient failure - a full disk - is not made permanent for the
-			// life of the process by an entry that never got its turn.
+			// and then abandoning it on a power transition would leave every
+			// entry behind this one flagged as tried and never tried - and the
+			// sweep runs only from NewRegistry/SetUseCached/SetDirs, so
+			// "attempted once per process" would become "attempted never" for
+			// the tail, which on a phone, where the screen goes off mid-ingest
+			// as a matter of course, is the normal case. Claiming at the start
+			// of the work also keeps a transient failure - a full disk - from
+			// being made permanent by an entry that never got its turn.
 			if !e.abbrevTried.CompareAndSwap(false, true) {
 				release(indexLimit)
 				continue
@@ -2115,64 +2012,40 @@ func (r *Registry) upgradeAbbrev() {
 }
 
 // reabsorbAbbrev rebuilds this dictionary's prepared data so its articles carry
-// the abbreviation glossary again. The plan is read back from what was already
-// built, so a dictionary the user gave full-text or contains keeps them instead
-// of silently dropping to headwords. The rebuild is the same atomic
-// temp+rename as any other, so an interrupted upgrade leaves the old data
-// intact and the next run tries again.
+// the abbreviation glossary again. DSL bakes the expansions into the article
+// HTML at ingest, so data already on disk cannot gain them; the only fix is to
+// build it again, with the plan it already has - full text and contains survive.
 func (e *entry) reabsorbAbbrev() error {
-	e.ingestMu.Lock()
-	defer e.ingestMu.Unlock()
-	defer e.rebuilding.Store(false) // rebuild's releasePrepared may have armed it
 	if store.IsTextDB(e.Path) {
 		return nil
 	}
 	dir, ok := store.LookupDir(e.Path)
 	if !ok {
-		return nil // not prepared yet: its first ingest will absorb the companion
+		return nil // not prepared yet: its first ingest absorbs the companion
 	}
-	textDB := store.TextDBPath(dir)
-	if !fileExists(textDB) || !abbrevStale(textDB, e.Path) {
+	companion, _ := dict.AbbrevCompanion(e.Path)
+	if !store.AbbrevChanged(store.TextDBPath(dir), companion) {
 		return nil
 	}
-	name := e.probeName()
-	logx.V("%sabbreviation glossary not yet absorbed - re-indexing", logx.Dict(name))
-	if err := e.rebuild(name, textDB, store.KeptPlan(textDB), nil); err != nil {
-		return err
-	}
-	_ = store.WriteInfo(dir)
-	return e.reopen()
+	_, err := e.reconcile(e.probeName(), store.Target{Rebuild: abbrevChanged}, nil)
+	return err
 }
+
+func abbrevChanged(why []store.Reason) bool { return slices.Contains(why, store.ReasonAbbrev) }
 
 // ensureBaseIndex builds the cheap find-only index when a dictionary has none
 // (D13's silent auto-index). It never strips: a dictionary that is "not
 // prepared" only because its source changed, or because its text.db is one
-// this build cannot open (store.PreparedFor), is rebuilt with the plan it
-// already had (store.KeptPlan) - the user's full text and contains are not
-// quietly demoted to headwords by a rebuild they did not ask for. Media is
-// left to the user: an orphaned media.db degrades to serving from the source,
-// and the dictionary is reported outdated until they rebuild it.
+// this build cannot open, is rebuilt with the plan it already had - the user's
+// full text and contains are not quietly demoted by a rebuild they did not ask
+// for. Media is left to the user: an orphaned media.db degrades to serving from
+// the source, and the dictionary is reported outdated until they rebuild it.
 func (e *entry) ensureBaseIndex(progress store.Progress) error {
-	e.ingestMu.Lock()
-	defer e.ingestMu.Unlock()
-	defer e.rebuilding.Store(false) // rebuild's releasePrepared may have armed it
-	if e.prepared() {
-		return nil // a text.db of its own, or already prepared at whatever level the user chose
+	if _, ok := validPrepared(e.Path); ok {
+		return nil // prepared already, at whatever level its owner chose
 	}
-	dir, err := store.ClaimDir(e.Path)
-	if err != nil {
-		return err
-	}
-	// Deliberately NOT e.open(): the ingest reader parses the file itself, and
-	// holding the direct backend at the same time doubles the working set of
-	// the largest thing in the process (docs.local/PERF.md M3). The name comes from
-	// a header-only probe, or from the reader once it is open.
-	textDB := store.TextDBPath(dir)
-	if err := e.rebuild(e.probeName(), textDB, store.KeptPlan(textDB), progress); err != nil {
-		return err
-	}
-	_ = store.WriteInfo(dir)
-	return e.reopen()
+	_, err := e.reconcile(e.probeName(), store.Target{}, progress)
+	return err
 }
 
 // probeName is a display name for log lines, read from the file header when

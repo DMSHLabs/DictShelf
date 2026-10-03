@@ -366,9 +366,9 @@ func TestCollectionOfNothingIsRefused(t *testing.T) {
 	}
 }
 
-// The report that led here: the dictionaries were already in the library, in
-// another configured folder, loose - and the import folder is only the first
-// one. A dictionary of the same NAME anywhere in the library is reported, and
+// The dictionaries are already in the library, in another configured folder,
+// loose - and the import folder is only the first one. A dictionary of the
+// same NAME anywhere in the library is reported, and
 // the same files at the same sizes are told apart from a different copy.
 func TestCollectionKnowsTheWholeLibrary(t *testing.T) {
 	s := &colSite{files: map[string]string{

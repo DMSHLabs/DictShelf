@@ -147,9 +147,9 @@ func TestMDDIsNotDiscovered(t *testing.T) {
 // companionMdds is filename logic and nothing else, so it is tested as such:
 // no .mdx or .mdd here is a real file, only a real NAME.
 //
-// The case that motivated the rewrite is "gap": a set numbered .1 .3 .4 used to
-// stop dead at the missing .2, and every resource in the later files vanished
-// with no error anywhere - the dictionary simply looked as though it had none.
+// The case that matters is "gap": a set numbered .1 .3 .4 must not stop dead at
+// the missing .2, or every resource in the later files vanishes with no error
+// anywhere - the dictionary simply looks as though it has none.
 func TestCompanionMdds(t *testing.T) {
 	for _, tc := range []struct {
 		name  string

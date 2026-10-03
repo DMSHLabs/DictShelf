@@ -187,8 +187,7 @@ func TestSyntheticSlob(t *testing.T) {
 		t.Fatalf("Prefix: %v %v", res, err)
 	}
 	// A headword typed in full is the first result, not the only one: the
-	// keys it is a strict prefix of must follow it (the "starts with" mode
-	// used to answer an exact hit with that article alone).
+	// keys it is a strict prefix of must follow it.
 	res, err = d.Prefix("corazón", 10)
 	if err != nil || len(res) != 2 {
 		t.Fatalf("Prefix(corazón): %v %v", res, err)

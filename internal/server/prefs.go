@@ -323,8 +323,8 @@ func (p *Prefs) heal(r *Registry) []DictPref {
 		b := strings.ToLower(filepath.Base(e.Path))
 		base[b] = append(base[b], e)
 	}
-	// The other half of the file-name rung's guard, and the half that was
-	// missing: the name has to be unique among the STORED records too. One
+	// The other half of the file-name rung's guard: the name has to be unique
+	// among the STORED records too. One
 	// prepared dictionary and a handful of dead "…/text.db" records - the
 	// residue of library folders the user has since removed - is the shape
 	// where counting only the registry side lets a dead record adopt the live

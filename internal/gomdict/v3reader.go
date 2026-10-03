@@ -207,11 +207,11 @@ func (mdict *MdictBase) readKeyEntriesV3() error {
 //	  [compressed_size bytes] block data (decoded via decodeBlockV3)
 //
 // Nothing in that layout says where block k begins - the only way to know is to
-// add up the k-1 headers before it. locateByKeywordEntryV3 used to do exactly
-// that on EVERY lookup, reading each preceding block's payload in full merely to
-// get past it: O(N*B) reads and N whole-block decompressions for an N-entry
-// ingest. On a 2.9M-entry dictionary that is 66.9 GB of read() against a 26.6 MB
-// file, and it does not finish.
+// add up the k-1 headers before it. Doing that on EVERY lookup, reading each
+// preceding block's payload in full merely to get past it, costs O(N*B) reads
+// and N whole-block decompressions for an N-entry ingest: on a 2.9M-entry
+// dictionary, 66.9 GB of read() against a 26.6 MB file (docs.local/PERF.md §9),
+// and it does not finish.
 //
 // The chain is walked ONCE instead, seeking over payloads rather than reading
 // them (one 8-byte header read per block, no decompression), and the result is
@@ -341,8 +341,8 @@ func (mdict *MdictBase) locateByKeywordEntryV3(entry *MDictKeywordEntry) ([]byte
 	if start < 0 {
 		return nil, fmt.Errorf("v3 record: negative start offset %d", start)
 	}
-	// The same predicate the old linear walk used - first block whose
-	// decompressed range ends past the offset - decided in O(log B).
+	// The first block whose decompressed range ends past the offset, decided
+	// in O(log B).
 	i := sort.Search(len(tbl), func(i int) bool {
 		return tbl[i].decompAcc+tbl[i].decompSize > start
 	})
@@ -374,9 +374,9 @@ func (mdict *MdictBase) locateByKeywordEntryV3(entry *MDictKeywordEntry) ([]byte
 		return blk[lo:hi], nil
 	}
 
-	// A record straddling a block boundary. The old code silently truncated it
-	// at the block edge; the table makes stitching it back together trivial, so
-	// it is stitched. Bounded by `end`, which is already clamped to the total.
+	// A record straddling a block boundary is stitched back together, not
+	// truncated at the block edge: the table makes that trivial. Bounded by
+	// `end`, which is already clamped to the total.
 	out := make([]byte, 0, end-start)
 	for j := i; j < len(tbl) && tbl[j].decompAcc < end; j++ {
 		blk, err := mdict.blockV3(&tbl[j])

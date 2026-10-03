@@ -6,7 +6,6 @@ package bgl
 
 import (
 	"bytes"
-	"fmt"
 	"io"
 	"mime"
 	"path"
@@ -14,10 +13,7 @@ import (
 	"strings"
 	"sync"
 
-	"time"
-
 	"github.com/wuweidict/wudict/internal/dict"
-	"github.com/wuweidict/wudict/internal/logx"
 	"github.com/wuweidict/wudict/internal/store"
 )
 
@@ -56,38 +52,11 @@ func Open(path string) (*Dict, error) {
 	if err != nil {
 		return nil, err
 	}
-	src := r.Meta()
-	name := src.Name
-
-	dbPath, prepared := store.PreparedFor(path)
-	if !prepared {
-		dbPath, err = store.PrepareTarget(path)
-		if err != nil {
-			r.Close()
-			return nil, err
-		}
-		start := time.Now()
-		const format = "bgl"
-		logx.Status("%spreparing search index (%s, first open)…", logx.Dict(name), format)
-		// Headwords only, like every other format's automatic index (D24):
-		// bgl has no native index, so it must store its article text to be
-		// readable at all - but indexing that text for full-text search is
-		// the user's choice, not a toll for opening the file. A REbuild (the
-		// source changed, or the text.db is one this build cannot open)
-		// keeps whatever the user chose for it (store.KeptPlan).
-		rep, ierr := store.IngestPlan(r, dbPath, store.KeptPlan(dbPath), func(done, _ int) {
-			logx.Progress("  %d entries", done)
-		})
-		if ierr != nil {
-			logx.ClearLine()
-			r.Close()
-			return nil, fmt.Errorf("preparing %q: %w", name, ierr)
-		}
-		store.ReportPrepared(name, rep, time.Since(start))
-	}
-	r.Close()
-
-	s, err := store.Open(dbPath)
+	// The reader is opened whatever happens: the source's own header is
+	// read at every open.
+	defer r.Close()
+	src := r.Meta() // before the reader is consumed by an ingest
+	s, err := store.OpenSelfPrepared(path, "bgl", func() (dict.Reader, error) { return r, nil })
 	if err != nil {
 		return nil, err
 	}

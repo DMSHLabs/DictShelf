@@ -95,51 +95,92 @@ func Outdated(m map[string]string) []Reason {
 	return out
 }
 
-// Stale reports every reason the prepared text.db for srcPath no longer
-// matches what this build would prepare from it now. Empty means current.
-// srcPath may be "" or gone: the reasons that need the source are then
-// skipped, and the rest still reported - a caller that wants to rebuild checks
-// the source itself.
-func Stale(textDB, srcPath string) []Reason {
-	m, schema, err := ReadMetaSchema(textDB)
-	if err != nil || schema != schemaVersion {
-		return []Reason{ReasonSchema}
-	}
-	return StaleMeta(m, textDB, srcPath)
+// Prepared is one prepared database read once. Every question asked about a
+// prepared dictionary - can this build use it, what was it built with, is it
+// outdated, does its media pair with it - is answered from one of these, so a
+// caller asking several of them pays for one read of the meta table, not one
+// per question.
+type Prepared struct {
+	TextDB string
+	Meta   map[string]string // nil: missing, or not a readable database
+	Schema int               // PRAGMA user_version; meaningful only with Meta
+	Plan   Plan              // what it was built with; zero when Meta is nil
+	Media  bool              // a media.db lies beside it (paired or not)
 }
 
-// StaleMeta is Stale for a text.db whose meta the caller has already read
-// successfully (and whose schema it has therefore already accepted).
-func StaleMeta(m map[string]string, textDB, srcPath string) []Reason {
-	var out []Reason
-	if srcPath != "" {
-		if sourceChangedMeta(m, srcPath) {
-			out = append(out, ReasonSource)
-		}
-		companion, _ := dict.AbbrevCompanion(srcPath)
-		if abbrevChangedMeta(m, companion) {
-			out = append(out, ReasonAbbrev)
-		}
+// Inspect reads textDB's meta table and notes whether a media.db lies beside
+// it. A missing or unreadable file is a Prepared with no Meta, never an error:
+// to every caller that is simply "not prepared".
+func Inspect(textDB string) Prepared {
+	p := Prepared{TextDB: textDB}
+	if m, schema, err := ReadMetaSchema(textDB); err == nil {
+		p.Meta, p.Schema, p.Plan = m, schema, PlanFromMeta(m)
 	}
-	out = append(out, Outdated(m)...)
-	if sib := MediaSibling(textDB); sib != "" && fileExists(sib) && mediaStale(sib, m["dict_uuid"]) {
+	if sib := MediaSibling(textDB); sib != "" && fileExists(sib) {
+		p.Media = true
+	}
+	return p
+}
+
+// Usable reports that this build can open it: readable, and this schema.
+func (p Prepared) Usable() bool { return p.Meta != nil && p.Schema == schemaVersion }
+
+// Current reports that it is usable and was built from srcPath as the file is
+// now. A missing source is not a change: the prepared data stands on its own.
+func (p Prepared) Current(srcPath string) bool {
+	return p.Usable() && !sourceChangedMeta(p.Meta, srcPath)
+}
+
+// MediaPaired reports that the media.db beside it serves it: readable, packed
+// by the current IngestMedia, and stamped with this text.db's dict_uuid. An
+// unpaired media.db is invisible to Store.mediaDB, so for every purpose that
+// matters it is not packed. Reads the media.db's meta; ask once.
+func (p Prepared) MediaPaired() bool {
+	return p.Media && p.Meta != nil && !mediaStale(MediaSibling(p.TextDB), p.Meta["dict_uuid"])
+}
+
+// Stale reports every reason it no longer matches what this build would
+// prepare from srcPath now; empty means current. srcPath may be "" or gone:
+// the reasons that need the source are then skipped and the rest reported.
+func (p Prepared) Stale(srcPath string) []Reason {
+	out := p.TextStale(srcPath)
+	if p.Usable() && p.Media && !p.MediaPaired() {
 		out = append(out, ReasonMedia)
 	}
 	return out
 }
 
-// TextStale is Stale for the text.db alone: the reasons a rebuild of the
-// text answers. Media staleness is the pack's business, judged after the text
-// is current (a text rebuild can be what unpairs it).
-func TextStale(textDB, srcPath string) []Reason {
+// TextStale is Stale for the text.db alone: the reasons a rebuild of the text
+// answers. Media is judged after the text is current, because a text rebuild
+// can be what unpairs it.
+func (p Prepared) TextStale(srcPath string) []Reason {
+	if !p.Usable() {
+		return []Reason{ReasonSchema}
+	}
 	var out []Reason
-	for _, r := range Stale(textDB, srcPath) {
-		if r != ReasonMedia {
-			out = append(out, r)
+	if srcPath != "" {
+		if sourceChangedMeta(p.Meta, srcPath) {
+			out = append(out, ReasonSource)
+		}
+		companion, _ := dict.AbbrevCompanion(srcPath)
+		if abbrevChangedMeta(p.Meta, companion) {
+			out = append(out, ReasonAbbrev)
 		}
 	}
-	return out
+	return append(out, Outdated(p.Meta)...)
 }
+
+// Stale is Inspect(textDB).Stale(srcPath).
+func Stale(textDB, srcPath string) []Reason { return Inspect(textDB).Stale(srcPath) }
+
+// KeptPlan is the Plan to REBUILD an existing text.db with: whatever it was
+// built with, so a rebuild the user did not ask to change never changes it.
+// An unreadable or missing database gets the default (headwords only, D24),
+// which is also what a dictionary never prepared gets.
+func KeptPlan(textDB string) Plan { return Inspect(textDB).Plan }
+
+// MediaPaired is Inspect(textDB).MediaPaired().
+func MediaPaired(textDB string) bool { return Inspect(textDB).MediaPaired() }
 
 // ReadMetaSchema reads a wudict database's meta table together with its schema
 // version (PRAGMA user_version). An error means the file cannot be read as a
@@ -165,40 +206,20 @@ func ReadMetaSchema(dbPath string) (map[string]string, int, error) {
 }
 
 // PlanFromMeta is the Plan a prepared database was built with, read back from
-// its meta - the same two facts Store.Open and the library listing read.
+// its meta. The one reader of `ingest_level` and `has_trigram`.
 func PlanFromMeta(m map[string]string) Plan {
 	return Plan{
-		FullText: m["ingest_level"] != string(LevelHeadwords),
+		FullText: m["ingest_level"] != levelHeadwords,
 		Contains: m["has_trigram"] == "1",
 	}
 }
 
-// KeptPlan is the Plan to REBUILD an existing text.db with: whatever it was
-// built with, so a rebuild the user did not ask to change never changes it.
-// Without this, every automatic rebuild - of a changed source, an outdated
-// build, an unreadable file - quietly dropped the full-text and contains
-// indexes the user had switched on. An unreadable database has no plan to
-// keep, and gets the default (headwords only), which is also what a
-// dictionary never prepared gets.
-func KeptPlan(textDB string) Plan {
-	m, err := ReadMeta(textDB)
-	if err != nil {
-		return Plan{}
+// ingestLevel is PlanFromMeta's inverse for `ingest_level`.
+func ingestLevel(p Plan) string {
+	if p.FullText {
+		return levelText
 	}
-	return PlanFromMeta(m)
-}
-
-// MediaPaired reports that the media.db beside textDB is usable with it: it
-// opens, carries the current media version, and names the text.db's
-// dict_uuid. A media.db that is present but not paired is invisible to
-// Store.mediaDB, so for every purpose that matters it is not packed.
-func MediaPaired(textDB string) bool {
-	sib := MediaSibling(textDB)
-	if sib == "" || !fileExists(sib) {
-		return false
-	}
-	uuid, err := ReadMetaValue(textDB, "dict_uuid")
-	return err == nil && !mediaStale(sib, uuid)
+	return levelHeadwords
 }
 
 // mediaStale reports that a media.db cannot serve the text.db stamped with

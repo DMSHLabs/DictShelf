@@ -58,9 +58,9 @@ func TestSaveKeyRawConcurrentSavesKeepEveryKey(t *testing.T) {
 	}
 }
 
-// TestSaveKeyRawKeepsWhatWriteFileKept: the atomic replace must not change
-// what the plain write it replaced left alone - a symlinked config stays a
-// link (the save lands in its target), and an existing file keeps its mode.
+// TestSaveKeyRawKeepsWhatWriteFileKept: the atomic replace must leave alone
+// what a plain write would - a symlinked config stays a link (the save lands
+// in its target), and an existing file keeps its mode.
 func TestSaveKeyRawKeepsWhatWriteFileKept(t *testing.T) {
 	dir := t.TempDir()
 	target := filepath.Join(dir, "dotfiles.toml")

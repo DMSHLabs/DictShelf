@@ -13,37 +13,9 @@ import (
 	"github.com/wuweidict/wudict/internal/store"
 )
 
-// A flag given sets its half of the plan; a flag left out keeps what the
-// database already has, and a dictionary never prepared gets the default.
-func TestPlanFlags(t *testing.T) {
-	yes, no := true, false
-	headwords := &store.Plan{}
-	both := &store.Plan{FullText: true, Contains: true}
-	for _, tc := range []struct {
-		name string
-		pf   planFlags
-		have *store.Plan
-		want store.Plan
-	}{
-		{"never prepared, no flags", planFlags{}, nil, store.Plan{FullText: true}},
-		{"never prepared, -headwords -contains", planFlags{&no, &yes}, nil, store.Plan{Contains: true}},
-		{"no flags keep headwords only", planFlags{}, headwords, store.Plan{}},
-		{"no flags keep full text and contains", planFlags{}, both, *both},
-		{"-contains adds to what is there", planFlags{contains: &yes}, headwords, store.Plan{Contains: true}},
-		{"-contains=false drops only contains", planFlags{contains: &no}, both, store.Plan{FullText: true}},
-		{"-headwords drops only full text", planFlags{fullText: &no}, both, store.Plan{Contains: true}},
-		{"-headwords=false adds full text", planFlags{fullText: &yes}, headwords, store.Plan{FullText: true}},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := tc.pf.plan(tc.have); got != tc.want {
-				t.Errorf("got %+v, want %+v", got, tc.want)
-			}
-		})
-	}
-}
-
-// `wudict ingest` with no path prepares the configured DICT_DIR, and a run
-// over the whole library with no flags changes no dictionary's plan.
+// `wudict ingest` with no path prepares the configured DICT_DIR, a dictionary
+// never prepared starts from headwords only as it does in the app (D152), and
+// a run over the whole library with no flags changes no dictionary's plan.
 func TestIngestConfiguredLibrary(t *testing.T) {
 	home, srcDir, dbDir := t.TempDir(), t.TempDir(), t.TempDir()
 	// isolate from the user's own wudict.toml and library: the environment
@@ -96,9 +68,9 @@ func TestIngestConfiguredLibrary(t *testing.T) {
 		path string
 		want store.Plan
 	}{
-		{withContains, store.Plan{FullText: true, Contains: true}},
+		{withContains, store.Plan{Contains: true}},
 		{headwordsOnly, store.Plan{}},
-		{fresh, store.Plan{FullText: true}},
+		{fresh, store.Plan{}},
 	} {
 		if got := store.KeptPlan(textDB(tc.path)); got != tc.want {
 			t.Errorf("%s: plan %+v, want %+v", filepath.Base(tc.path), got, tc.want)
@@ -113,11 +85,19 @@ func TestIngestConfiguredLibrary(t *testing.T) {
 	if err := cmdIngest([]string{"-contains=false"}); err != nil {
 		t.Fatal(err)
 	}
-	if got := store.KeptPlan(textDB(withContains)); got != (store.Plan{FullText: true}) {
-		t.Errorf("-contains=false: %+v, want full text kept and contains dropped", got)
+	if got := store.KeptPlan(textDB(withContains)); got != (store.Plan{}) {
+		t.Errorf("-contains=false: %+v, want contains dropped", got)
 	}
 	if got := store.KeptPlan(textDB(headwordsOnly)); got != (store.Plan{}) {
 		t.Errorf("-contains=false: %+v, want headwords only kept", got)
+	}
+
+	// -fulltext adds full text, and leaves contains as it is
+	if err := cmdIngest([]string{"-fulltext", fresh}); err != nil {
+		t.Fatal(err)
+	}
+	if got := store.KeptPlan(textDB(fresh)); got != (store.Plan{FullText: true}) {
+		t.Errorf("-fulltext: %+v, want full text added", got)
 	}
 
 	for _, tc := range []struct {

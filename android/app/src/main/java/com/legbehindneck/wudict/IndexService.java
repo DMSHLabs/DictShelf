@@ -41,10 +41,10 @@ import android.util.Log;
  *
  * <p>From API 33 that notification is posted only if the user has allowed
  * notifications, and an app that never asks has the appop pinned to
- * {@code ignore}: the service came up, enqueued, and the system dropped every
- * one of them. The protection was never affected - it comes from the service
- * record, not the shade - but the receipt was invisible, so the ask now happens
- * at the one moment it is meaningful ({@link Notif}).
+ * {@code ignore}: the service comes up and the system drops every notification.
+ * The protection is not affected - it comes from the service record, not the
+ * shade - but the receipt would be invisible, so the ask happens at the one
+ * moment it is meaningful ({@link Notif}).
  *
  * <p>Started and stopped from {@link ServerProcess}, off the server's own
  * "@wudict busy" markers: the server is an exec'd child (D52) and the only part
@@ -73,15 +73,14 @@ import android.util.Log;
  * applies to the service's own escape hatch: if {@code startForeground} throws,
  * {@code stopSelf} is not a retreat, it is the fatal call again from the other
  * side. Nor is giving up: a record that still owes the call is killed with
- * {@code RemoteServiceException} when the platform's window closes, which is
- * exactly the crash this app was seeing. So a failure retries for as long as
+ * {@code RemoteServiceException} when the platform's window closes. So a
+ * failure retries for as long as
  * the record exists, and the only ways out are succeeding and being destroyed.
  *
  * <p>Every call is fail-open. From API 31 a foreground service may not be
  * started while the app is in the background, which is a state this can legally
  * be reached from - a demanded ingest outlives the screen it was started from.
- * The throw is caught and the ingest simply runs unprotected, as it did before
- * this class existed.
+ * The throw is caught and the ingest simply runs unprotected.
  */
 public final class IndexService extends Service {
 
@@ -370,9 +369,8 @@ public final class IndexService extends Service {
      * none, and a retry is a better answer than {@code stopSelf} - which is not
      * a retreat but the fatal bring-down again, this time self-inflicted.
      *
-     * <p>It is also a better answer than stopping. This used to try four times
-     * over 2.1 s and then return, having spent a fifth of the platform's window
-     * and discharged nothing: the record still owed {@code startForeground},
+     * <p>It is also a better answer than stopping: giving up after a few
+     * tries discharges nothing - the record still owes {@code startForeground},
      * and the platform's reply to that is to kill the process. Eligibility
      * failures here are transient by nature - a background start racing the app
      * coming to the foreground - so retrying is the one exit that can succeed,

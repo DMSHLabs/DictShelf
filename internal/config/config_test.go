@@ -251,8 +251,8 @@ func TestWebOriginsConfig(t *testing.T) {
 	}
 }
 
-// AUTO_INDEX is on|off since the "fuzzy" search mode it was named after was
-// retired - but an existing wudict.toml saying "fuzzy" must keep working.
+// AUTO_INDEX is on|off, and an existing wudict.toml saying "fuzzy" (the
+// retired search mode it was named after) must keep working.
 func TestAutoIndexValues(t *testing.T) {
 	for _, c := range []struct {
 		in   string
@@ -571,10 +571,9 @@ func TestAddrBracketsIPv6(t *testing.T) {
 	}
 }
 
-// Six boolean keys used to be parsed six different ways, and four of them read
-// "no"/"off" as YES. They all read through isOff now; this asserts every key
-// against every spelling a person actually writes, so a future key added with
-// an inline `v != "0"` fails here rather than in a bug report.
+// Every boolean key reads through isOff; this asserts every key against every
+// spelling a person actually writes, so a key added with an inline `v != "0"`
+// (which reads "no"/"off" as YES) fails here rather than in a bug report.
 func TestBooleanKeysAgree(t *testing.T) {
 	keys := map[string]func(Config) bool{
 		"NO_BROWSER":          func(c Config) bool { return c.NoBrowser },

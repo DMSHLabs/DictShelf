@@ -233,7 +233,7 @@ func NewReader(path string) (*Reader, error) {
 	// <br> line breaks. It is flattened to one line: `wudict info` prints it
 	// and info.txt stores it as one `key = value`, neither of which survives an
 	// embedded newline. Only when the file carries none does the language pair
-	// stand in - which is what every BGL used to show, description or not.
+	// stand in.
 	desc := plainInfo(r.targetEncoding, r.desc)
 	var header []dict.Field
 	for _, f := range []struct {

@@ -39,33 +39,9 @@ func (w wedgedDict) Close() error { return nil }
 
 // A query that never finishes must not hold the fan-out: cancelling while it
 // runs ends the request with an error in that slot, and the abandoned query
-// drains when it is released.
-//
-// Only the wedged slot is asserted. Whether the healthy slot lands its result
-// or reports the cancellation is a scheduler race this test cannot pin - the
-// cancel and the healthy query's send compete, and either outcome is honest.
-// StreamOpen's test pins the finished-result case properly, through its emit.
-func TestAllAbandonsAWedgedQueryOnCancel(t *testing.T) {
-	started := make(chan struct{}, 1)
-	release := make(chan struct{})
-	wedged := wedgedDict{started: started, release: release}
-
-	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan []Hit, 1)
-	go func() { done <- All(ctx, []dict.Dictionary{okDict{}, wedged}, Exact, "w", 5) }()
-	<-started
-	cancel()
-	select {
-	case hits := <-done:
-		if !errors.Is(hits[1].Err, context.Canceled) {
-			t.Fatalf("wedged slot = %+v, want a cancellation", hits[1])
-		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("All stayed wedged behind a query that cannot finish")
-	}
-	close(release)
-}
-
+// drains when it is released. Only the wedged slot is asserted: whether the
+// healthy slot lands its result or reports the cancellation is a scheduler
+// race, and either outcome is honest.
 func TestStreamOpenAbandonsAWedgedQueryOnCancel(t *testing.T) {
 	started := make(chan struct{}, 1)
 	release := make(chan struct{})

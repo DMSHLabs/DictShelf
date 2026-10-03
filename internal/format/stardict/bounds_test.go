@@ -26,8 +26,8 @@ func (r readerAtThatObjects) ReadAt([]byte, int64) (int, error) {
 
 // TestReadRangeRejectsRangesPastTheExtent: (offset,size) comes out of the
 // .idx, and a size reaching past the chunk table's extent names bytes the
-// file cannot contain. Before the extent check, an oversized size sent the
-// chunk loop inflating every chunk to the end of the file into one buffer.
+// file cannot contain. Without the extent check, an oversized size would send
+// the chunk loop inflating every chunk to the end of the file into one buffer.
 func TestReadRangeRejectsRangesPastTheExtent(t *testing.T) {
 	raw := makeDictzip(t, []byte("abcdefgh"), 4) // two chunks of four
 	d, err := newDzReader(bytes.NewReader(raw), int64(len(raw)))

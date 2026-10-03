@@ -12,7 +12,7 @@ package server
 // SQLite opens without FILE_SHARE_DELETE - so a held database would otherwise
 // burn a minutes-long rebuild at its very last step with "Access is denied".
 // Where the rename is legal this is a no-op (registry_other.go) and the entry
-// serves its prepared view mid-rebuild, exactly as before.
+// serves its prepared view mid-rebuild.
 //
 // The holder is whichever backend this entry currently serves, and it is not
 // always the upgraded wrapper: dsl and bgl embed their own store (they are the
@@ -52,15 +52,15 @@ func releasePrepared(e *entry, textDB string) {
 //
 // The second: the files of a prepared dsl dictionary are deleted, the rescan
 // drops the entry, and its retired backend - dsl embeds its own store - keeps
-// the library's text.db open through closeGrace. Removing that folder as an
-// orphan in those seconds failed with "being used by another process". The
+// the library's text.db open through closeGrace, so removing that folder as an
+// orphan in those seconds would fail with "being used by another process". The
 // entry has left the registry, so no request can still be reading through it.
 //
 // The first: the source is edited, a rescan sees it (revalidate) and retires
 // the backend opened against the old edition, and the next open runs the
 // format's own first-open ingest (dsl, bgl, wudict markdown), which ends in a
 // rename over the text.db that retired backend still has open. Windows refuses
-// that rename ("Access is denied"); rebuild never met it because it goes
+// that rename ("Access is denied"); a rebuild does not meet it because it goes
 // through releasePrepared, which closes the retired set first. Here nothing is
 // lost by closing early: the entry is opening because it has no backend, so a
 // retired one can only be serving a request that began before the change - on

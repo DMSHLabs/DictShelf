@@ -340,9 +340,9 @@ func TestMediaSourcesFromPathAlone(t *testing.T) {
 // any data. This is a real writer bug, seen on a 10 MB Polish dictionary: XLEN
 // sized the field for the chunks actually emitted, SLEN and CHCNT for one more.
 //
-// It is worth a fixture because of HOW it failed. `sub := extra[4 : 4+slen]`
-// did not panic - extra is a window into a 64 KiB header buffer, so slicing
-// past its length is still inside its capacity - and the panic landed two
+// It is worth a fixture because of HOW it fails. `sub := extra[4 : 4+slen]`
+// does not panic - extra is a window into a 64 KiB header buffer, so slicing
+// past its length is still inside its capacity - and the panic lands two
 // statements later on `extra = extra[4+slen:]`, where the implied high bound is
 // len(extra): "slice bounds out of range [372:370]", once per query, for every
 // word in the dictionary.
@@ -386,8 +386,8 @@ func TestDictzipSubfieldOverrunsXLEN(t *testing.T) {
 
 // TestCompressedCompanions: .idx and .syn are read through their dictzip
 // spelling. Whole dictionaries ship as `dictzip *`, which leaves .idx.dz and
-// .syn.dz beside the .dict.dz; probing only ".gz" reported those as having no
-// index at all while the index was sitting right there.
+// .syn.dz beside the .dict.dz; probing only ".gz" would report those as having
+// no index at all while the index sits right there.
 func TestCompressedCompanions(t *testing.T) {
 	for _, suffix := range []string{".gz", ".dz"} {
 		t.Run(suffix, func(t *testing.T) {

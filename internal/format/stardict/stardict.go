@@ -415,10 +415,9 @@ func (d *Dict) ensureFold() {
 // Prefix returns up to limit headwords starting with word, the exact matches
 // first (raw pass first, folded passes only when the raw pass is empty).
 //
-// An exact hit does not end the search. It did until a headword typed in full
-// was reported as hiding its own siblings - "starts with" answered a complete
-// headword with that one article and dropped every longer key under it - so it
-// now only takes precedence, not the whole answer. It is seeded from the
+// An exact hit does not end the search: "starts with" must not answer a
+// complete headword with that one article and drop every longer key under it,
+// so the exact hit takes precedence, not the whole answer. It is seeded from the
 // headword index rather than left to the scan because the scan walks the file
 // in storage order and stops at limit: under a prefix with more than `limit`
 // entries behind it, the word actually typed could be the one cut.

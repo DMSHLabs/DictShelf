@@ -311,8 +311,8 @@ func TestRestoreWaitsForRoom(t *testing.T) {
 // A raised ceiling is unfinished business: the janitor must keep taking passes
 // until it can hand it back, even when there is nothing left to reclaim and no
 // pressure to report. Measured on a phone (PERF §8.5) that is precisely the
-// state the passes stopped in - one heavy search raised the ceiling to 6 GB,
-// the heap then drained, and nothing ever asked for the configured 384 MB back.
+// state passes would stop in - one heavy search raises the ceiling to 6 GB,
+// the heap drains, and nothing asks for the configured 384 MB back.
 func TestJanitorKeepsGoingWhileTheCeilingIsRaised(t *testing.T) {
 	restorePower(t)
 	r := &Registry{}

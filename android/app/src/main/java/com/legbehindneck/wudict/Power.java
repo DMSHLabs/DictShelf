@@ -9,10 +9,8 @@
 // callbacks each pushing its own state would make the last event win rather
 // than the strictest condition.
 //
-// It became a class of its own with D67: the lookup popup is a SECOND window
-// that can be visible, which turns MainActivity's `visible` boolean into a
-// count. With only MainActivity running the computed state is what it always
-// was.
+// A class of its own because of D67: the lookup popup is a SECOND window that
+// can be visible, so visibility is a count, not MainActivity's boolean.
 //
 // The battery and power-save inputs are SAMPLED here rather than watched with
 // broadcast receivers: a receiver is a wakeup the app would not otherwise take,

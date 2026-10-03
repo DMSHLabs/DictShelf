@@ -44,12 +44,10 @@ var soundOrFile = regexp.MustCompile(`(?i)^(?:sound|file)://`)
 // BUNDLES - something the browser will fetch - as opposed to a cross-reference
 // the user may follow.
 //
-// This is the question the old regexes could not even ask. They matched
-// `href="…"` with no idea which element it sat on, so every relative href
-// became /res/{dict}/…, and `<a href="defendant">` - a headword in a slob
-// dictionary, the plainest cross-reference there is - was turned into a
-// resource fetch that could only 404. Element and attribute together are what
-// make the answer decidable:
+// Element and attribute together are what make the answer decidable. A
+// pattern that sees only `href="…"` turns `<a href="defendant">` - a headword
+// in a slob dictionary, the plainest cross-reference there is - into a resource
+// fetch that can only 404:
 //
 //	SITE                          | RESOURCE? | WHY
 //	------------------------------|-----------|---------------------------------
@@ -75,7 +73,7 @@ var soundOrFile = regexp.MustCompile(`(?i)^(?:sound|file)://`)
 //
 // The last row is an allowlist on purpose: the fetching elements are a short,
 // closed set, while the elements a dictionary might hang its own href on are
-// not. Guessing the other way around is what produced /res/{dict}/defendant.
+// not. Guessing the other way around produces /res/{dict}/defendant.
 // dict.IsAssetName draws the remaining line - `defendant` and
 // `defendant__gb_1.ogg` are told apart by extension and nothing else.
 func isResourceRef(r htmlref.Ref) bool {
@@ -107,7 +105,7 @@ func attrBase(name string) string {
 // The walk is a real HTML tokenizer (internal/htmlref) rather than a set of
 // regular expressions, which is what lets it see unquoted and malformed
 // attributes - `<a href=plaintiff__gb_1.ogg">` is ordinary in repacked
-// dictionaries and was previously invisible - and what keeps it from rewriting
+// dictionaries - and what keeps it from rewriting
 // `src="…"` written inside a <script> string or inside prose.
 //
 // The result is a root-absolute URL (/res/{dictID}/…). wudict is served
@@ -147,10 +145,10 @@ func RewriteEntryHTML(html, dictID string) string {
 // RewriteEntryHTML.
 //
 // The marking costs no pass of its own: it rides the tokenizer walk this
-// function was already doing, as the Rewriter's Text hook. That fusion is the
-// whole design - a separate highlighting pass would double the parse of every
-// article in a full-text fan-out, and a client-side one (mark.js, removed)
-// paid for a DOM walk and a layout invalidation per article on top of that.
+// function does anyway, as the Rewriter's Text hook. That fusion is the whole
+// design - a separate highlighting pass would double the parse of every
+// article in a full-text fan-out, and a client-side one would pay for a DOM
+// walk and a layout invalidation per article on top of that.
 //
 // The one thing marking cannot share is the fast path above. That test asks
 // "has this article any rewritable reference", and an article of pure prose -

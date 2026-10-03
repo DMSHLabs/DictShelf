@@ -13,7 +13,7 @@ import (
 )
 
 // A block header nibble below 4 hands the reader a length field of n+1 bytes;
-// four of them name up to 4 GiB. Before maxBlockBytes that length went
+// four of them name up to 4 GiB. Without maxBlockBytes that length would go
 // straight into make - an OOM abort on a hostile or truncated file, which no
 // recover converts.
 func TestReadBlockStreamRefusesHugeLength(t *testing.T) {

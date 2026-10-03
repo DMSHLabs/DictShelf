@@ -70,21 +70,6 @@ func bigEndianBinToUTF8(bytes []byte, offset int, length int) string {
 	return string(cbytes)
 }
 
-func binSlice(srcByte []byte, offset int, length int, distByte []byte) int {
-	srcByteLen := len(srcByte)
-	if offset < 0 || offset > srcByteLen-1 {
-		return -1
-	}
-	if offset+length > srcByteLen {
-		return -2
-	}
-	for i := 0; i < length; i++ {
-		distByte[i] = srcByte[i+offset]
-	}
-
-	return 0
-}
-
 func beBinToU64(bin []byte) uint64 {
 	var n uint64 = 0
 	for i := 0; i < 7; i++ {
@@ -128,8 +113,8 @@ func beBinToU8(bin []byte) uint8 {
 //
 // io.ReadFull, not one Read, for a second reason that is a correctness bug
 // rather than a robustness one: a single Read returns what it got with a nil
-// error, so a short read left the tail of data zero-filled and the parser then
-// decompressed article bytes the file never contained.
+// error, so a short read would leave the tail of data zero-filled and the
+// parser would decompress article bytes the file never contained.
 func readFileFromPos(file *os.File, start, n int64) ([]byte, error) {
 	if start < 0 || n < 0 {
 		return nil, fmt.Errorf("invalid read (offset %d, %d bytes)", start, n)

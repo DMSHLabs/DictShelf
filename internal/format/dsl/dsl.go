@@ -5,17 +5,13 @@
 package dsl
 
 import (
-	"fmt"
 	"io"
 	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
 
-	"time"
-
 	"github.com/wuweidict/wudict/internal/dict"
-	"github.com/wuweidict/wudict/internal/logx"
 	"github.com/wuweidict/wudict/internal/resource"
 	"github.com/wuweidict/wudict/internal/store"
 )
@@ -66,39 +62,11 @@ func Open(path string) (*Dict, error) {
 	if err != nil {
 		return nil, err
 	}
-	src := r.Meta()
-	name := src.Name
-
-	dbPath, prepared := store.PreparedFor(path)
-	if !prepared {
-		dbPath, err = store.PrepareTarget(path)
-		if err != nil {
-			r.Close()
-			return nil, err
-		}
-		start := time.Now()
-		const format = "dsl"
-		logx.Status("%spreparing search index (%s, first open)…", logx.Dict(name), format)
-		// Headwords only, like every other format's automatic index (D24):
-		// dsl has no native index, so it must store its article text to be
-		// readable at all - but indexing that text for full-text search is
-		// the user's choice, not a toll for opening the file. A REbuild (the
-		// source changed, or the text.db is one this build cannot open)
-		// keeps whatever the user chose for it (store.KeptPlan).
-		rep, ierr := store.IngestPlan(r, dbPath, store.KeptPlan(dbPath), func(done, total int) {
-			logx.Progress("  %d entries", done)
-		})
-		r.Close()
-		if ierr != nil {
-			logx.ClearLine()
-			return nil, fmt.Errorf("preparing %q: %w", name, ierr)
-		}
-		store.ReportPrepared(name, rep, time.Since(start))
-	} else {
-		r.Close()
-	}
-
-	s, err := store.Open(dbPath)
+	// The reader is opened whatever happens: the source's own header is
+	// read at every open (see src above).
+	defer r.Close()
+	src := r.Meta() // before the reader is consumed by an ingest
+	s, err := store.OpenSelfPrepared(path, "dsl", func() (dict.Reader, error) { return r, nil })
 	if err != nil {
 		return nil, err
 	}
@@ -174,8 +142,8 @@ func (d *Dict) loadSources() {
 // MediaSources builds the resource containers of a DSL from its PATH alone -
 // no parsing, no headwords, nothing opened but the archives themselves.
 //
-// A prepared DSL used to reach its images by opening the whole .dsl again
-// (registry.go's resource fallback), which for a large one means parsing
+// Without it a prepared DSL would reach its images by opening the whole .dsl
+// again (the registry's resource fallback), which for a large one means parsing
 // hundreds of megabytes of text to serve a thumbnail. Everything below is
 // derived from the file name, so the prepared folder - which records the source
 // path - can do it directly. Registered as the format's O8 provider; the method

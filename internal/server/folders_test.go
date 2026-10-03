@@ -242,9 +242,8 @@ func TestRegistryDedupesFolders(t *testing.T) {
 }
 
 // The "keep my previously imported dictionaries" checkbox must work in BOTH
-// directions. It used to send its state only when checked, so the server only
-// ever turned the library ON: clearing the box could not undo an earlier yes,
-// and the page always rendered it unchecked regardless of the real setting.
+// directions: clearing the box must undo an earlier yes, and the page must
+// render the real setting.
 func TestUseCachedIsTwoWay(t *testing.T) {
 	isolatedDBDir(t)
 	dicts := t.TempDir()
@@ -366,7 +365,7 @@ func TestFeatureTogglesBothWays(t *testing.T) {
 		t.Fatal(err)
 	}
 	r := &stubReader{meta: dict.Meta{Name: "Orphan", Format: "mdx", Path: src}}
-	if err := store.Ingest(r, store.TextDBPath(odir), nil); err != nil {
+	if err := ingestFull(r, store.TextDBPath(odir)); err != nil {
 		t.Fatal(err)
 	}
 	reg2, err := NewRegistry([]string{t.TempDir()}, true)
@@ -412,10 +411,10 @@ func init() {
 	dict.RegisterReader(".slow", func(p string) (dict.Reader, error) { return &slowReader{}, nil })
 }
 
-// Background indexing must respect INDEX_WORKERS. Before this bound existed, a
-// single "all dictionaries" search started one ingest per dictionary - measured
-// at 500 MB and 424 % CPU for four real dictionaries, extrapolating to 18 GB
-// for a 100-dictionary library (docs.local/PERF.md M1).
+// Background indexing must respect INDEX_WORKERS. Unbounded, a single "all
+// dictionaries" search starts one ingest per dictionary - measured at 500 MB
+// and 424 % CPU for four real dictionaries, extrapolating to 18 GB for a
+// 100-dictionary library (docs.local/PERF.md M1).
 func TestIndexingConcurrencyIsBounded(t *testing.T) {
 	isolatedDBDir(t)
 	dir := t.TempDir()
@@ -441,7 +440,7 @@ func TestIndexingConcurrencyIsBounded(t *testing.T) {
 		for time.Now().Before(deadline) {
 			var prepared int
 			for _, e := range reg.all() {
-				if _, ok := preparedFor(e.Path); ok {
+				if _, ok := validPrepared(e.Path); ok {
 					prepared++
 				}
 			}

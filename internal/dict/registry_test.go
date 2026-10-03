@@ -129,10 +129,9 @@ func TestBundleFileNameAndSidecars(t *testing.T) {
 // TestOpenPreparedFolder: the folder IS the dictionary (D20 - "copy, move or
 // zip it as a unit"), so it is the name every listing shows and the name a
 // user types. Dispatch is by file name and extension, which a folder has
-// neither of usefully: a real library folder called
-// "es_es_DLE_v23.8_1_RealAcademia2026" was rejected with "unsupported
-// dictionary format: .8_1_RealAcademia2026", filepath.Ext having read the
-// version number as an extension.
+// neither of usefully: filepath.Ext reads the version number in a library
+// folder called "es_es_DLE_v23.8_1_RealAcademia2026" as an extension
+// (".8_1_RealAcademia2026"), and the folder must still open.
 func TestOpenPreparedFolder(t *testing.T) {
 	RegisterFileName("text.db", func(path string) (Dictionary, error) { return fakeDict{}, nil })
 
@@ -273,7 +272,7 @@ func TestDiscoverAllDedupe(t *testing.T) {
 }
 
 // A symlinked dictionary folder must work: filepath.WalkDir lstats its root,
-// so before this was resolved a symlinked folder yielded nothing at all.
+// so an unresolved symlinked folder would yield nothing at all.
 func TestDiscoverFollowsSymlinkedRoot(t *testing.T) {
 	RegisterFormat(".linktest", func(path string) (Dictionary, error) { return fakeDict{}, nil })
 	real := t.TempDir()

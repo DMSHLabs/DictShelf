@@ -28,7 +28,7 @@ import (
 // through the Archive interface: a plainArchive lists the file the user named
 // plus the siblings that belong to it, and everything downstream - the
 // grouping rule, the completeness check, the "already installed" marking, the
-// staging and the atomic rename - is the code that was already there.
+// staging and the atomic rename - is the archive code, unchanged.
 //
 // The siblings are found by dict's own rule, the same one a folder scan uses:
 // same directory, same stem. That is what makes an .mdx arrive with its .mdd

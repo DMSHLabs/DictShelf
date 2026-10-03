@@ -34,10 +34,9 @@ package store
 // from the meta. No library-wide manifest exists, and none should: that would
 // be a genuine second source of truth.
 //
-// The folder replaces the old `<slug>-<hash8>.text.db` flat naming. The hash
-// used to key the cache to the source content; that job now belongs to the
-// meta (source_size/source_mtime/source_sha256_1M via SourceChanged), which
-// re-indexes a changed source *in place* instead of piling up stale files.
+// Whether a folder still matches its source is the meta's business
+// (source_size/source_mtime/source_sha256_1M via SourceChanged), so a changed
+// source is re-indexed *in place* instead of piling up stale files.
 
 import (
 	"fmt"
@@ -305,8 +304,7 @@ func writeClaim(dir, srcPath string) error {
 }
 
 // SourceChanged reports whether a source file no longer matches what its
-// prepared text.db was built from - the job the old content-hash file name
-// used to do. Cheap first (size + mtime), and only when those differ does it
+// prepared text.db was built from. Cheap first (size + mtime), and only when those differ does it
 // re-hash the first 1 MiB, so a mere touch or copy does not force a re-index.
 // A missing source is NOT "changed": the prepared dictionary stands on its own.
 func SourceChanged(textDB, srcPath string) bool {
@@ -397,29 +395,22 @@ func abbrevChangedMeta(meta map[string]string, companionPath string) bool {
 // rebuilt with is KeptPlan's, which falls back to the default when the meta
 // itself is what is unreadable.
 func PreparedFor(srcPath string) (string, bool) {
-	dir, ok := LookupDir(srcPath)
-	if !ok {
-		return "", false
-	}
-	textDB := TextDBPath(dir)
-	meta, schema, err := ReadMetaSchema(textDB)
-	if err != nil || schema != schemaVersion {
-		return "", false // unusable by this build: rebuilt like a missing one
-	}
-	if sourceChangedMeta(meta, srcPath) {
-		return "", false // source edited/replaced: re-index overwrites in place
-	}
-	return textDB, true
+	p, ok := FindPrepared(srcPath)
+	return p.TextDB, ok
 }
 
-// PrepareTarget claims the library folder for a source file and returns the
-// text.db path to ingest into.
-func PrepareTarget(srcPath string) (string, error) {
-	dir, err := ClaimDir(srcPath)
-	if err != nil {
-		return "", err
+// FindPrepared is PreparedFor with the database's meta in hand, for a caller
+// that goes on to ask it something: the one read answers both.
+func FindPrepared(srcPath string) (Prepared, bool) {
+	dir, ok := LookupDir(srcPath)
+	if !ok {
+		return Prepared{}, false
 	}
-	return TextDBPath(dir), nil
+	p := Inspect(TextDBPath(dir))
+	if !p.Current(srcPath) {
+		return Prepared{}, false
+	}
+	return p, true
 }
 
 // LibEntry is one prepared dictionary folder.
@@ -470,14 +461,15 @@ func Library() ([]LibEntry, error) {
 			}
 			name = dict.DisplayText(meta["name"]) // as store.Open: repair an over-escaped title without a re-ingest
 		}
+		plan := PlanFromMeta(meta)
 		e := LibEntry{
 			Dir:      dir,
 			TextDB:   textDB,
 			Name:     name,
 			Format:   meta["format"],
 			Source:   meta["source_path"],
-			FullText: meta["ingest_level"] != string(LevelHeadwords),
-			Contains: meta["has_trigram"] == "1",
+			FullText: plan.FullText,
+			Contains: plan.Contains,
 			Created:  meta["created"],
 		}
 		if e.Name == "" {
@@ -598,12 +590,13 @@ func writeInfo(dir, source string) error {
 	fmt.Fprintf(&b, "entries = %s\n", meta["entry_count"])
 	// Machine-read as well as human-read: the library listing takes this file
 	// as its fast source, so the level is spelled both ways here.
-	level := "headwords only (exact · prefix · contains)"
-	contains := "0"
-	if meta["ingest_level"] != string(LevelHeadwords) {
-		level = "full text (exact · prefix · contains · full-text)"
+	plan := PlanFromMeta(meta)
+	level := "headwords only (exact · prefix)"
+	if plan.FullText {
+		level = "full text (exact · prefix · full-text)"
 	}
-	if meta["has_trigram"] == "1" {
+	contains := "0"
+	if plan.Contains {
 		contains = "1"
 	}
 	fmt.Fprintf(&b, "index = %s\n", level)
@@ -674,9 +667,9 @@ func receiptMeta(dir, textDB string) (map[string]string, bool) {
 	if err != nil {
 		return nil, false
 	}
-	level := string(LevelText)
+	level := levelText
 	if strings.HasPrefix(info["index"], "headwords") {
-		level = string(LevelHeadwords)
+		level = levelHeadwords
 	}
 	out := map[string]string{
 		"name":         info["name"],

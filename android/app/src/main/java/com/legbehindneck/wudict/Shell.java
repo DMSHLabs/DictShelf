@@ -151,8 +151,8 @@ final class Shell {
 
     // The file picker <input type="file"> needs (D123: the styler's "Add…"
     // button). A WebView answers a file input with nothing whatsoever unless a
-    // WebChromeClient implements onShowFileChooser - the page was never the
-    // problem, the shell simply had no ear for it.
+    // WebChromeClient implements onShowFileChooser - the shell's job, not the
+    // page's.
     //
     // Distinct from Storage.REQ_TREE: both flavours' onActivityResult and this
     // one are called for every result the activity receives.

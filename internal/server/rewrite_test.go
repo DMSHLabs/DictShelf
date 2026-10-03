@@ -10,11 +10,10 @@ import (
 	"github.com/wuweidict/wudict/internal/dict"
 )
 
-// The cases are whole ELEMENTS, not bare `href="…"` fragments as they once
-// were. That is not cosmetic: the rewriter parses a document now instead of
-// matching text in it, so an attribute has to be attached to something. The
-// old shape was itself a symptom - a pattern that matches `href="…"` anywhere
-// also matches it in prose, in a comment and inside a <script> string, and did.
+// The cases are whole ELEMENTS, not bare `href="…"` fragments: the rewriter
+// parses a document instead of matching text in it, so an attribute has to be
+// attached to something. A pattern that matches `href="…"` anywhere would also
+// match it in prose, in a comment and inside a <script> string.
 func TestRewriteEntryHTML(t *testing.T) {
 	const id = "001598b628f5"
 	R := "/res/" + id + "/"
@@ -32,11 +31,11 @@ func TestRewriteEntryHTML(t *testing.T) {
 		{"dot relative", `<link href="./LAAD3.css">`, `<link href="` + R + `LAAD3.css">`},
 		{"object data", `<object data="ame/abet.mp3"></object>`, `<object data="` + R + `ame/abet.mp3"></object>`},
 
-		// ── the reported bug: a dropped opening quote ───────────────────────
+		// ── a dropped opening quote ─────────────────────────────────────────
 		// The tokenizer reads this exactly as a browser does - unquoted value,
 		// ending at whitespace, stray quote included - and Clean removes the
-		// quote, which RFC 3986 forbids in a URI anyway. The old regex, which
-		// required a quoted value, could not see the attribute at all.
+		// quote, which RFC 3986 forbids in a URI anyway. A pattern requiring a
+		// quoted value would not see the attribute at all.
 		{"unquoted with dropped opening quote (OALD10)",
 			`<a onclick="new Audio(this.href).play()" href=plaintiff__gb_1.ogg" class="pron">`,
 			`<a onclick="new Audio(this.href).play()" href="` + R + `plaintiff__gb_1.ogg" class="pron">`},
@@ -44,8 +43,8 @@ func TestRewriteEntryHTML(t *testing.T) {
 		{"spaces around equals", `<img src = "a.png">`, `<img src="` + R + `a.png">`},
 
 		// ── element-aware: a link is not a resource ─────────────────────────
-		// <a href="defendant"> is a headword in a slob dictionary. The old
-		// regex turned it into /res/{dict}/defendant, which could only 404.
+		// <a href="defendant"> is a headword in a slob dictionary, not
+		// /res/{dict}/defendant, which could only 404.
 		{"bare cross-reference on <a> untouched", `<a href="defendant">defendant</a>`, `<a href="defendant">defendant</a>`},
 		{"pathy cross-reference on <a> untouched", `<a href="collocations/plaintiff">c</a>`, `<a href="collocations/plaintiff">c</a>`},
 		{"audio on <a> IS a resource", `<a href="plaintiff__gb_1.ogg">p</a>`, `<a href="` + R + `plaintiff__gb_1.ogg">p</a>`},
@@ -99,7 +98,7 @@ func TestRewriteEntryHTML(t *testing.T) {
 		{"style block data-uri untouched", `<style>.y{background:url(data:image/gif;base64,AA)}</style>`, `<style>.y{background:url(data:image/gif;base64,AA)}</style>`},
 
 		// ── things that only LOOK like references ───────────────────────────
-		// Each of these was rewritten by the regex, because it matched text.
+		// A pattern over the text would rewrite each of these.
 		{"src inside a script string", `<script>var a='src="x.png"';</script>`, `<script>var a='src="x.png"';</script>`},
 		{"href inside a comment", `<!-- <img src="old.png"> --><b>x</b>`, `<!-- <img src="old.png"> --><b>x</b>`},
 		{"href written in prose", `<p>write src="a.png" to embed</p>`, `<p>write src="a.png" to embed</p>`},

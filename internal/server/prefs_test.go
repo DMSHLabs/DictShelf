@@ -401,8 +401,8 @@ func (u *UIPrefs) sorted() bool {
 // The file-name rung of heal's identity ladder, from both sides. It is the
 // weakest rung and the only one that can guess wrong, so it fires only when
 // the name names exactly one thing in the registry AND exactly one thing in
-// the stored records. The stored side is the half that was missing: a library
-// folder the user removes leaves a record behind (kept on purpose - an
+// the stored records. On the stored side, a library folder the user removes
+// leaves a record behind (kept on purpose - an
 // unplugged drive looks the same), every one of those records has a path
 // ending "text.db", and with one prepared dictionary left the dead record
 // would otherwise adopt the live one, taking its off switch and its place in

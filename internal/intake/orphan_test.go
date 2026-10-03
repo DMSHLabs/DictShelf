@@ -61,9 +61,9 @@ func waitState(t *testing.T, m *Manager, want string) Job {
 	return Job{}
 }
 
-// The defect: a download whose watcher died - an app process killed while the
-// server it started lives on - held the one import slot, and every link opened
-// afterwards was refused as "an import is already running".
+// A download whose watcher died - an app process killed while the server it
+// started lives on - must not hold the one import slot, refusing every link
+// opened afterwards as "an import is already running".
 func TestAbandonedDownloadIsReplaced(t *testing.T) {
 	srv := hangingSite(t)
 	dest := t.TempDir()

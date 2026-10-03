@@ -11,16 +11,15 @@ import (
 
 	"github.com/wuweidict/wudict/internal/dict"
 	"github.com/wuweidict/wudict/internal/htmlref"
-	"github.com/wuweidict/wudict/internal/store"
 )
 
-// What a dictionary says about itself. Six formats already parse a description
-// out of their header and until now it reached only `wudict info`; DSL ships
-// one in a sidecar the dictionary never sees (internal/format/dsl/ann.go). This
-// is the one place the two are composed, normalised and handed to a client.
+// What a dictionary says about itself. Six formats parse a description out of
+// their header, and DSL ships one in a sidecar the dictionary never sees
+// (internal/format/dsl/ann.go). This is the one place the two are composed,
+// normalised and handed to a client.
 //
-// Deliberately NOT a field on dictInfo: /api/dicts is built from store.ReadMeta
-// or dict.Probe without opening anything (server.go:616), and an annotation of
+// Deliberately NOT a field on dictInfo: /api/dicts is built from the prepared
+// meta or dict.Probe without opening anything (baseDictInfo), and an annotation of
 // arbitrary size has no business on every row of that list. It is its own lazy
 // endpoint, fetched when a reader opens the disclosure - and it opens nothing
 // either, which is a property of aboutSourceFor and not an accident of which
@@ -49,18 +48,17 @@ type aboutSource struct {
 }
 
 func (s *Server) aboutSourceFor(e *entry) aboutSource {
-	if textDB, ok := preparedTextDB(e.Path); ok {
-		if m, err := store.ReadMeta(textDB); err == nil {
-			src := m["source_path"]
-			if src == "" {
-				src = e.Path
-			}
-			return aboutSource{
-				name: dict.DisplayText(m["name"]), format: m["format"],
-				desc:      dict.DisplayText(m["description"]),
-				srcPath:   src,
-				indexLang: m["index_lang"], contentsLang: m["contents_lang"],
-			}
+	if p, ok := preparedInfo(e.Path); ok && p.Meta != nil {
+		m := p.Meta
+		src := m["source_path"]
+		if src == "" {
+			src = e.Path
+		}
+		return aboutSource{
+			name: dict.DisplayText(m["name"]), format: m["format"],
+			desc:      dict.DisplayText(m["description"]),
+			srcPath:   src,
+			indexLang: m["index_lang"], contentsLang: m["contents_lang"],
 		}
 	}
 	if dict.HasProber(e.Path) {
@@ -71,13 +69,12 @@ func (s *Server) aboutSourceFor(e *entry) aboutSource {
 			}
 		}
 	}
-	// PEEK, never open. This used to call e.open(), which reads as harmless
-	// and is not: only .mdx and .ifo register probers, so every DSL, slob and
-	// bgl reached this line - and dsl.Open INGESTS on first open. A GET that
-	// wanted one paragraph of blurb could therefore run a multi-minute,
-	// multi-hundred-megabyte library build inside the request, on a phone,
-	// with nothing on screen to say why. An About is a disclosure triangle; it
-	// has no business starting work.
+	// PEEK, never open. e.open() reads as harmless and is not: only .mdx and
+	// .ifo register probers, so every DSL, slob and bgl reaches this line - and
+	// dsl.Open INGESTS on first open. A GET that wants one paragraph of blurb
+	// would run a multi-minute, multi-hundred-megabyte library build inside the
+	// request, on a phone, with nothing on screen to say why. An About is a
+	// disclosure triangle; it has no business starting work.
 	//
 	// A dictionary that is already open costs nothing to ask, so it is still
 	// asked. One that is not answers from its path, which is what the sidecar

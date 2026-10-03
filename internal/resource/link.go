@@ -8,15 +8,15 @@ import "sync"
 
 // Serving a dictionary's media WITHOUT opening the dictionary (O8).
 //
-// A prepared dictionary answers searches from its text.db, but its images and
-// audio used to come from `upgraded.source()` - a full direct backend, opened
-// solely so that one .ogg could be read out of it. That open decompresses every
-// key block and decodes every headword of the .mdx AND of each companion .mdd,
-// at a few hundred bytes per entry: hundreds of megabytes and seconds of CPU
-// to serve eight kilobytes, on a handle the janitor then evicts, so the next
-// article pays it again.
+// A prepared dictionary answers searches from its text.db, but without this
+// its images and audio would come from `upgraded.source()` - a full direct
+// backend, opened solely so that one .ogg could be read out of it. That open
+// decompresses every key block and decodes every headword of the .mdx AND of
+// each companion .mdd, at a few hundred bytes per entry: hundreds of megabytes
+// and seconds of CPU to serve eight kilobytes, on a handle the janitor then
+// evicts, so the next article pays it again.
 //
-// Two things replace it, both keyed on the format name:
+// Two things stand in front of it, both keyed on the format name:
 //
 //   - Sources: containers that need no dictionary at all. A StarDict `res/`
 //     folder, a DSL `.files.zip`, a file lying loose beside the .mdx. These are
@@ -90,7 +90,7 @@ func Register(format string, p Provider) {
 }
 
 // Get returns the provider for a format name ("mdx", "dsl", …), and whether
-// one is registered. A format with none simply keeps the old fallback.
+// one is registered. A format with none falls back to opening the source.
 func Get(format string) (Provider, bool) {
 	provMu.RLock()
 	defer provMu.RUnlock()

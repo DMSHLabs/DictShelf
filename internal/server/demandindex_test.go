@@ -44,7 +44,7 @@ func waitUntil(t *testing.T, what string, cond func() bool) {
 }
 
 func prepared(e *entry) bool {
-	p, ok := preparedFor(e.Path)
+	p, ok := validPrepared(e.Path)
 	return ok && fileExists(p)
 }
 

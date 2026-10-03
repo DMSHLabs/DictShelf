@@ -14,8 +14,8 @@ import (
 
 // Article bodies dominate a prepared dictionary: measured on a 40k-entry
 // dictionary, the HTML in `entry.m` was 69 MB of a 72 MB database - the search
-// indexes themselves were 2 MB. Storing that text verbatim is why a text.db
-// could be several times the size of the file it came from.
+// indexes themselves were 2 MB. Stored verbatim, that text makes a text.db
+// several times the size of the file it came from.
 //
 // So bodies are DEFLATE-compressed per row. Per row, rather than in shared
 // blocks like MDX/SLOB do, because a row must stay independently readable

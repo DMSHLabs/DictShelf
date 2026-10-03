@@ -25,8 +25,8 @@ import (
 // file is saved in ANSI" - which is exactly when this file is consulted, since
 // the compiler itself ignores the directive on a UTF-16 source.
 //
-// Getting this wrong is not a cosmetic failure. The old fallback here was
-// "assume UTF-16LE", and a single-byte file read as UTF-16 produces no U+000A
+// Getting this wrong is not a cosmetic failure: a single-byte file read as
+// UTF-16 produces no U+000A
 // at all - every LF is paired with the byte next to it into some other rune -
 // so the scanner sees the whole dictionary as ONE line and dies with
 // "bufio.Scanner: token too long" on a large file, or silently yields zero

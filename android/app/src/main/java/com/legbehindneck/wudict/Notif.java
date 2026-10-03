@@ -21,11 +21,11 @@ import java.lang.ref.WeakReference;
  * <p>Until API 33 a foreground service's notification was posted because the
  * service existed. From 33 it is posted only if {@code POST_NOTIFICATIONS} is
  * granted, and an app that never declares it has the appop set to
- * {@code ignore} for its whole life: {@link IndexService} came up foreground,
- * enqueued its notification, and the system dropped it - measured on an API 37
+ * {@code ignore} for its whole life: {@link IndexService} comes up foreground,
+ * enqueues its notification, and the system drops it - measured on an API 37
  * emulator as {@code numEnqueuedByApp=7, numPostedByApp=0} with no
- * {@code startForeground} failure anywhere in the log. Nothing was broken; the
- * receipt was simply invisible, which is indistinguishable from "the app is
+ * {@code startForeground} failure anywhere in the log. Nothing is broken; the
+ * receipt is simply invisible, which is indistinguishable from "the app is
  * doing nothing" to the person who started a ten-minute import.
  *
  * <p>This does not affect whether the work SURVIVES. A foreground service
@@ -48,10 +48,9 @@ import java.lang.ref.WeakReference;
  *
  * <p>Recorded after the first ask and never repeated: the platform silently
  * no-ops a re-request once the user has decided, so a second dialog would be a
- * dialog the user never sees refusing to be dismissed. A denial leaves the app
- * exactly as it shipped before this class existed - the service still runs,
- * still protects the ingest, and the user can still see and stop it from the
- * system's Active apps list.
+ * dialog the user never sees refusing to be dismissed. A denial changes nothing
+ * else - the service still runs, still protects the ingest, and the user can
+ * still see and stop it from the system's Active apps list.
  *
  * <p>Every path here is best-effort. No started activity (the import outlived
  * the screen it began on) means no ask and, deliberately, no record of one:

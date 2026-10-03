@@ -11,7 +11,7 @@ import (
 )
 
 // What a dictionary says about ITSELF - the editorial blurb, the copyright, the
-// edition. Six formats already parse one into Meta.Description; some ship it in
+// edition. Six formats parse one into Meta.Description; some ship it in
 // a sidecar beside the file instead (Lingvo's "<stem>.ann"), which no opened
 // dictionary can hand back because it was never part of the dictionary.
 //
@@ -101,10 +101,10 @@ func AboutFor(format, srcPath string) (About, bool) {
 // first usable answer, for the caller that has a path and no reliable format
 // name for it.
 //
-// That caller is the server's About endpoint. Naming the format there used to
-// mean opening the dictionary to ask it, and opening is not free in either
-// direction: a DSL that has never been opened INGESTS on its first open, so a
-// GET that only wanted a blurb paid for a whole library. A provider is already
+// That caller is the server's About endpoint. Naming the format there would
+// mean opening the dictionary to ask it, and opening is not free: a DSL that
+// has never been opened INGESTS on its first open, so a GET that only wants a
+// blurb would pay for a whole library. A provider is already
 // required to decide from the path alone and to report false rather than fail
 // (AboutProvider), and the one that exists rejects anything that is not its own
 // suffix - so asking all of them costs a handful of stats and no open at all.

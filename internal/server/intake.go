@@ -227,9 +227,8 @@ func (s *Server) intakeConfirm(w http.ResponseWriter, r *http.Request) {
 		req.Pick = parsePick(r.URL.Query().Get("pick"))
 	}
 	if req.Keep == nil {
-		if v := r.URL.Query().Get("keep"); v != "" {
-			b := v != "0" && !strings.EqualFold(v, "false") && !strings.EqualFold(v, "no")
-			req.Keep = &b
+		if keep, sent := queryFlag(r.URL.Query(), "keep"); sent {
+			req.Keep = &keep
 		}
 	}
 	dest := s.importDir()

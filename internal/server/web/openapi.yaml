@@ -25,6 +25,9 @@ info:
     `/api/ingest` streams Server-Sent Events instead, because it reports
     progress rather than results.
 
+    **Switches.** Every boolean query parameter reads the same spellings: off
+    for `0`, `false`, `no`, `off` or an empty value, on for anything else.
+
     **Two surfaces.** Three read-only endpoints answer a browser extension
     cross-origin: `/api/dicts`, `/api/search` and `/res/`. Everything else is
     same-origin, is marked `internal` below, and may change between releases.
@@ -377,8 +380,8 @@ paths:
         - name: restore
           in: query
           required: false
-          schema: { type: string, enum: ['1'] }
-          description: Bring the removed built-in guide back instead of copying it.
+          schema: { type: string }
+          description: Bring the removed built-in guide back instead of copying it. A switch.
       responses:
         '200':
           description: Copied; `path` is the new file.
@@ -409,7 +412,8 @@ paths:
 
         Each switch is a state, not a verb: a parameter you leave out keeps
         whatever that feature is now, so toggling one thing cannot strip
-        another. Progress is emitted at most every 200 ms.
+        another, and a request naming none prepares an unprepared dictionary
+        with its headword index only. Progress is emitted at most every 200 ms.
       parameters:
         - name: dict
           in: query
@@ -418,26 +422,16 @@ paths:
           schema: { type: string }
         - name: contains
           in: query
-          description: Trigram substring index over headwords. `0` or `false` turns it off.
-          schema: { type: string, enum: ['0', '1', 'true', 'false'] }
+          description: Trigram substring index over headwords. A switch.
+          schema: { type: string }
         - name: fts
           in: query
-          description: Full-text index over article text - the largest one.
-          schema: { type: string, enum: ['0', '1', 'true', 'false'] }
+          description: Full-text index over article text - the largest one. A switch.
+          schema: { type: string }
         - name: media
           in: query
-          description: Pack the dictionary's media into media.db.
-          schema: { type: string, enum: ['0', '1', 'true', 'false'] }
-        - name: full
-          in: query
-          description: Legacy. Any value means full text plus media.
-          deprecated: true
+          description: Pack the dictionary's media into media.db. A switch.
           schema: { type: string }
-        - name: level
-          in: query
-          description: Legacy. `headwords` turns full text off.
-          deprecated: true
-          schema: { type: string, enum: [headwords] }
       x-codeSamples:
         - lang: Shell
           label: curl
@@ -515,11 +509,11 @@ paths:
           schema: { type: string }
         - name: prepared
           in: query
-          description: Delete the prepared library folder. `0` keeps it.
+          description: Delete the prepared library folder; off keeps it. A switch, on when absent.
           schema: { type: string, default: '1' }
         - name: source
           in: query
-          description: Delete the original dictionary files. `0` keeps them.
+          description: Delete the original dictionary files; off keeps them. A switch, on when absent.
           schema: { type: string, default: '1' }
       x-codeSamples:
         - lang: Shell
@@ -1168,13 +1162,13 @@ paths:
           schema: { type: string }
         - name: save
           in: query
-          description: Any value persists the folders to the config file.
+          description: On persists the folders to the config file. A switch.
           schema: { type: string }
         - name: useCached
           in: query
           description: >
-            `1` enrolls the previously prepared dictionaries and persists
-            USE_CACHED; `0` turns that off; absent leaves it alone.
+            On enrolls the previously prepared dictionaries and persists
+            USE_CACHED; off turns that off; absent leaves it alone. A switch.
           schema: { type: string, enum: ['0', '1'] }
       x-codeSamples:
         - lang: Shell
@@ -1418,7 +1412,7 @@ paths:
           schema: { type: string }
         - name: replace
           in: query
-          description: Set to `1` to overwrite a file that is already there.
+          description: Overwrite a file that is already there. A switch.
           schema: { type: string }
       requestBody:
         required: true
@@ -1521,7 +1515,7 @@ paths:
           description: >
             `1` when the user asked for something only the index can serve
             (browsing). Prepares even when `AUTO_INDEX` is off.
-          schema: { type: string, enum: ["1"] }
+          schema: { type: string }
       x-codeSamples:
         - lang: Shell
           label: curl

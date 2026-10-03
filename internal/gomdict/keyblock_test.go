@@ -43,10 +43,10 @@ func keyBlockUTF16(keys ...string) []byte {
 	return out
 }
 
-// The terminator width follows the encoding, not the file type. Getting this
-// from fileType==MDD was a real defect: v3 MDD key lists are UTF-8, and scanning
-// them two bytes at a time steps over every single-byte NUL, then reads one past
-// the end of the block (or slices backwards from a stale end index).
+// The terminator width follows the encoding, not the file type: v3 MDD key
+// lists are UTF-8, and scanning them two bytes at a time steps over every
+// single-byte NUL, then reads one past the end of the block (or slices
+// backwards from a stale end index).
 func TestSplitKeyBlock(t *testing.T) {
 	mdd := []string{"/caldera.jpg", "/audio/es000023-11.mp3", "/.DS_Store"}
 	tests := []struct {

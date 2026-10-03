@@ -38,11 +38,10 @@ func craft(t *testing.T, storeOffset uint64) string {
 	return path
 }
 
-// TestCraftedStoreOffsetAllocatesNothing is the regression for the class of
-// bug where a file-declared offset becomes an allocation size. 1<<31 asked for
-// 2 GiB before the span checks; 1<<62 exceeded makeslice and panicked. Neither
-// is a survivable failure - the first is a runtime OOM abort, which no recover
-// converts.
+// TestCraftedStoreOffsetAllocatesNothing guards the class of bug where a
+// file-declared offset becomes an allocation size. Unchecked, 1<<31 asks for
+// 2 GiB and 1<<62 exceeds makeslice and panics. Neither is a survivable
+// failure - the first is a runtime OOM abort, which no recover converts.
 func TestCraftedStoreOffsetAllocatesNothing(t *testing.T) {
 	for _, off := range []uint64{1 << 31, 1 << 40, 1 << 62, ^uint64(0)} {
 		path := craft(t, off)
@@ -72,11 +71,10 @@ func TestCraftedStoreOffsetInsideFile(t *testing.T) {
 	}
 }
 
-// TestItemContentTypeAllocatesNothingOnAHugeHeader is the regression for the
-// lookup-path twin: itemContentType reads a bin's content-type id count
-// straight into make, and a header naming 0xFFFFFFFF ids asked for a 4 GiB
-// allocation in a media listing. The span check the lookup path always had
-// now stands on this path too.
+// TestItemContentTypeAllocatesNothingOnAHugeHeader guards the lookup-path
+// twin: itemContentType reads a bin's content-type id count, and a header
+// naming 0xFFFFFFFF ids would ask for a 4 GiB allocation in a media listing.
+// The same span check stands on this path as on the lookup path.
 func TestItemContentTypeAllocatesNothingOnAHugeHeader(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "hostile.slob")
 	bin := bytes.Repeat([]byte{0xff}, 64) // every count and offset maximal

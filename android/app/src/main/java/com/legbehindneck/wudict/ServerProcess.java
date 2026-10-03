@@ -53,7 +53,7 @@ class ServerProcess {
 
     // The port is fixed per install rather than per launch (D52: UI prefs live
     // in localStorage, which is keyed by origin, so a random port would forget
-    // them every time), but it is no longer a constant: a device where
+    // them every time), but it is not a constant: a device where
     // something else already holds 6888 can override it (D101).
     //
     // portCache exists for PowerSignal, which is entirely static and has no
@@ -87,13 +87,11 @@ class ServerProcess {
     // One server per app process, shared across activity recreation: the child
     // holds port 6888, so a second spawn would lose the port to it.
     //
-    // This used to be a `private static ServerProcess` inside MainActivity,
-    // started in onCreate and read back as "non-null means ready". D67 made
-    // that untrue in two ways at once: a lookup popup must work with
-    // MainActivity dead, and two activities can now ask at the same time -
-    // during which non-null means *starting*. So the field lives here as a
-    // state machine with a waiting list, and a start in flight is joined
-    // rather than duplicated.
+    // Not a static inside MainActivity read back as "non-null means ready": a
+    // lookup popup must work with MainActivity dead (D67), and two activities
+    // can ask at the same time - during which non-null means *starting*. So
+    // the field lives here as a state machine with a waiting list, and a start
+    // in flight is joined rather than duplicated.
     private static final int IDLE = 0, STARTING = 1, READY = 2, FAILED = 3;
 
     private static int state = IDLE;
@@ -511,7 +509,7 @@ class ServerProcess {
      * there to stop. This is the one operation the ordinary lifecycle cannot
      * do: a child reparented to init and later ADOPTED has {@code process ==
      * null}, so {@link #stop()} would find nothing to kill and the settings
-     * screen could only ever say "next time".
+     * screen could only say "next time".
      *
      * <p>The caller is responsible for the guard - no live windows, no ingest
      * in flight; see SettingsActivity. A hard kill is safe for the same reason

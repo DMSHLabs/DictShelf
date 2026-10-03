@@ -376,7 +376,7 @@ func TestLooseAssetsAreCarriedNotImported(t *testing.T) {
 // downloading - the extras are fetched before the set is re-sniffed with them
 // in it - and only then installs. A poller that reads any non-installing state
 // as "the job is gone" reports nothing was added over an import that is still
-// running and about to succeed, which is exactly what the Android shell did.
+// running and about to succeed.
 //
 // Observed by HOLDING the companion's response open rather than by sampling,
 // so the assertion does not depend on a thousand bytes over loopback taking

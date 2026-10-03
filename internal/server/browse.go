@@ -65,7 +65,7 @@ func (s *Server) handleBrowse(w http.ResponseWriter, r *http.Request) {
 	// materialises its entire direct backend - up to a gigabyte of headword
 	// map on the big ones - and that is a ruinous price for the answer "not
 	// yet".
-	if _, ok := preparedTextDB(e.Path); !ok {
+	if _, ok := validPrepared(e.Path); !ok {
 		browseUnprepared(w, e)
 		return
 	}

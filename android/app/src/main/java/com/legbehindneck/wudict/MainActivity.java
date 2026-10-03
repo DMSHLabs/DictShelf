@@ -178,7 +178,7 @@ public class MainActivity extends Activity {
     // ── handing the insets to the page (EDGE_NONE only) ──────────────────
     // Published as CSS custom properties the stylesheet reads with a 0px
     // fallback, so an un-injected page - and every other mode, which publishes
-    // zeroes - is exactly the layout that shipped before this existed.
+    // zeroes - gets the plain inset layout.
     //
     // COALESCING IS NOT AN OPTIMISATION. A transient bar swipe delivers an
     // inset callback on every frame of its animation; without the comparison
@@ -229,8 +229,8 @@ public class MainActivity extends Activity {
     // The colour comes from ShellPrefs.edgeColor - the OS day/night setting,
     // the page's own theme, black, or a colour the user picked - and the icon
     // polarity from the contrast arithmetic on that same value, never from
-    // uiMode. A page-dark strip under a light OS used to get light icons on a
-    // dark strip; that mismatch is the defect this replaces.
+    // uiMode, which would give a page-dark strip under a light OS the wrong
+    // icons.
     //
     // Cheap enough to re-run on every report: two setters and a resource read.
     private void applyEdges() {
@@ -460,8 +460,8 @@ public class MainActivity extends Activity {
 
     // Back. Apps targeting API 35+ get predictive back enabled by default, and
     // for those onBackPressed() is NO LONGER CALLED - the plain override below
-    // is dead code on any modern device, which would have made the button exit
-    // the app instead of walking the SPA's history. Registering the callback
+    // is dead code on any modern device, which would make the button exit the
+    // app instead of walking the SPA's history. Registering the callback
     // only while there is history to walk keeps the system's own
     // predictive-back-to-home animation for the last press.
     private void syncBackCallback() {

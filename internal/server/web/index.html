@@ -93,13 +93,9 @@ body{margin:0;padding-top:calc(4.236em + var(--wd-inset-top,0px));
   font-family:var(--font);line-height:var(--fi)}
 /* ── the content column ─────────────────────────────────────────────
    One geometry, worn by the toolbar and the results alike, so their edges
-   cannot drift apart. They used to be described separately: both capped at
-   800px, but the cards sit φ⁻¹em inside that box (their own gutter) while the
-   toolbar had no gutter of its own — below the cap .bar's padding stood in for
-   one, above it nothing did. So the bar was wider than the content at every
-   width over 600px, and invisibly so for as long as justify-content kept the
-   controls away from their own boundary. Add a button, the cluster reaches the
-   boundary, and the boundary turns out to be in the wrong place. */
+   cannot drift apart: the cards sit φ⁻¹em inside the 800px box (their own
+   gutter), and the toolbar takes the same gutter, so the bar is never wider
+   than the content it heads. */
 .col{width:92%;max-width:800px;margin:0 auto;
   padding-left:var(--sp-2);padding-right:var(--sp-2);
   transition:max-width .25s ease} /* on .col so the bar eases with the cards */
@@ -162,10 +158,10 @@ input[type=search]:focus{border-color:var(--focus);box-shadow:0 0 0 3px color-mi
    than being spent on a non-event. SPEED: see below. */
 /* Explicit box, and margin:0 restated at THIS specificity. The shared .spin
    below carries margin-right:.4em for its inline uses, and it is declared
-   later with the same specificity as .qled>*, so its margin wins there. That
-   was harmless while the width was explicit — over-constrained absolute
-   positioning simply drops `right` — but with width:auto the solver SPENDS
-   the margin: 14 − 2 − 2 − 6.4 = 3.6px, a box too small to see. Never size an
+   later with the same specificity as .qled>*, so its margin wins there. With
+   an explicit width that is harmless - over-constrained absolute positioning
+   simply drops `right` - but with width:auto the solver SPENDS the margin:
+   14 − 2 − 2 − 6.4 = 3.6px, a box too small to see. Never size an
    absolutely positioned box from insets alone when a shared class may put a
    margin on it.
    The arc is --fg-soft rather than the ⌕'s --fg-faint on purpose: a 1.5px
@@ -205,17 +201,14 @@ select{font-size:13px;color:var(--fg-soft);background:var(--bg-card);
 .btn:focus-visible,select:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
 
 /* ── results ───────────────────────────────────────────────────────── */
-/* Costs nothing until it has something to say. The old rule reserved
-   16.1px of padding plus an 18.2px min-height — 34.3px above the first
-   result, permanently, at every viewport, for a line that is empty for
-   almost the whole session. (That min-height:1.4em was also the one number
-   in this stylesheet off the φ ladder, and redundant: line-height is already
-   φ, so 13px × 1.618 = 21.03px sizes the open state by itself.)
+/* Costs nothing until it has something to say: a line that is empty for
+   almost the whole session must not reserve height above the first result.
+   line-height is φ, so 13px × 1.618 = 21.03px sizes the open state by itself.
    grid-template-rows 0fr→1fr animates real height with no measurement and no
    magic number — and the padding sits INSIDE .txt, within the clipped row,
-   so the closed state is 0px and not 0px-plus-padding. Progress no longer
-   comes through here at all: "Searching…" is the field's own glyph now, so
-   this opens only for statements worth reading. */
+   so the closed state is 0px and not 0px-plus-padding. Progress does not come
+   through here: "Searching…" is the field's own glyph, so this opens only for
+   statements worth reading. */
 #status{display:grid;grid-template-rows:0fr;color:var(--fg-soft);font-size:13px;
   opacity:0;transition:grid-template-rows .28s ease,opacity .3s ease}
 #status>.msg{overflow:hidden;min-height:0}
@@ -299,7 +292,7 @@ summary .jserr{margin-left:6px;font-weight:400;color:var(--accent);font-size:12p
    it is an offer rather than a status, not underlined because the target is the
    whole summary and not these two words, and never wrapped: it sits opposite a
    dictionary name that already wraps, and a two-line hint beside a three-line
-   name is the layout in the bug report this replaced. */
+   name is a broken layout. */
 summary .count.hint{color:var(--link);white-space:nowrap}
 summary .more{font-weight:400;font-size:12px;color:var(--link);cursor:pointer;
   text-decoration:underline;text-underline-offset:2px;margin-left:var(--sp-2)}
@@ -369,26 +362,25 @@ body.styling{padding-bottom:var(--styler-h)}
 /* One row, at every width. nowrap is load-bearing and not a preference:
    flex decides WRAPPING from an item's hypothetical size and only then
    shrinks what is on the line, so a <select> sized by its longest option
-   jumps to a second row before it is ever asked to give width back - which
-   is how ✕ ended up alone under Save. With nowrap the menu is asked first,
+   jumps to a second row before it is ever asked to give width back, leaving
+   ✕ alone under Save. With nowrap the menu is asked first,
    and it is the only item that can answer: basis 0 means it takes free space
    rather than claiming its content width, and the cap keeps it from sprawling
    on a desktop. */
 #styler .row{display:flex;align-items:center;gap:.4em;flex-wrap:nowrap}
 #styler .grow{flex:1 1 auto;min-width:0}
 /* ...and nowrap alone only converts a second row into an overflow: the row
-   still needs somewhere for the excess to GO, in a stated order. Everything
-   here was rigid except the menu, which had a 3.5em floor and - the real trap
-   - a flex-basis of 0, and shrink weight is the shrink factor times the BASE
-   size, so a basis of 0 absorbs nothing however large its factor. Past that
-   floor the line simply ran off the screen, and the item at the end of it is
-   the one that closes the sheet.
+   still needs somewhere for the excess to GO, in a stated order. Shrink weight
+   is the shrink factor times the BASE size, so a flex-basis of 0 absorbs
+   nothing however large its factor, and the line would run off the screen -
+   taking with it the item at its end, the one that closes the sheet.
    So: ✕ and its neighbours stay rigid, because a button labelled "S..." is
    not a button; the menu gives up its width first, from a real basis, down to
    a floor you can still see and tap; only then do the tabs ellipsize. Flex
    shrinks every eligible item AT ONCE and in proportion, so "only then" has
-   to be bought: at an equal factor the tabs gave up their last half-pixel to
-   a menu that still had 50px to give, and half a pixel is a whole "Arti...".
+   to be bought: at an equal factor the tabs would give up their last
+   half-pixel to a menu with 50px still to give, and half a pixel is a whole
+   "Arti...".
    A hundredth of a factor puts that share below the pixel grid, and once the
    menu freezes at its floor the tabs are the only items left unfrozen and
    take the whole remainder however small their factor is.
@@ -456,9 +448,9 @@ body.styling{padding-bottom:var(--styler-h)}
 #panel{position:fixed;inset:0;z-index:200;display:none;background:color-mix(in srgb,var(--fg) 24%,transparent)}
 #panel.show{display:block}
 /* A modal owns the wheel. Open, the page behind it is inert — its links are
-   under a scrim, a click there closes the panel — yet it kept its scrollbar,
-   so the screen showed two parallel bars and a wheel over the scrim moved a
-   page nobody could read. One visible thing to scroll, one scrollbar. Locked
+   under a scrim, a click there closes the panel — so it must not keep its
+   scrollbar: two parallel bars, and a wheel over the scrim moving a page
+   nobody can read. One visible thing to scroll, one scrollbar. Locked
    on the root, not body: the root is the viewport's scroller. The scroll
    offset survives untouched — overflow:hidden keeps scrollTop, it only refuses
    input.
@@ -468,7 +460,7 @@ body.styling{padding-bottom:var(--styler-h)}
    as padding to the two boxes sized by the viewport: body for the flow, .bar
    for the fixed toolbar. Not scrollbar-gutter:stable — that holds the strip
    open as dead space beside the drawer, and on every page too short to scroll.
-   The scrim, being inset:0, now covers the strip the bar used to occupy. With
+   The scrim, being inset:0, covers the strip the bar occupied. With
    overlay scrollbars (macOS default, Android, iOS) the measure is 0 and
    nothing moves. The styler is deliberately not here: it is a docked sheet
    whose purpose is scrolling the article it restyles. */
@@ -479,8 +471,8 @@ html:has(#panel.show) .bar{padding-right:var(--wd-sbw,0px)}
   background:var(--bg);border-left:1px solid var(--line);box-shadow:var(--shadow);
   padding:0 var(--sp-3);
   /* position:fixed;inset:0 under it, so this card is the one element that
-     spans both insets by itself — but only the TOP inset stays here. The card
-     no longer scrolls (.panel-scroll does), and a bottom pad on a box that does
+     spans both insets by itself — but only the TOP inset is here. The card
+     does not scroll (.panel-scroll does), and a bottom pad on a box that does
      not scroll would hold the gap open above the nav bar instead of letting the
      last card slide out from under it. */
   padding-top:var(--wd-inset-top,0px);
@@ -497,23 +489,24 @@ html:has(#panel.show) .bar{padding-right:var(--wd-sbw,0px)}
   padding-bottom:calc(var(--sp-3) + var(--wd-inset-bottom,0px))}
 .panel-card h2{margin:0 0 var(--sp-2);font-size:16px;color:var(--fg);
   display:flex;align-items:center}
-.panel-card h2 .headacts{margin-left:auto;display:flex;gap:var(--sp-1)}
+.panel-card h2 .headacts{display:flex;gap:var(--sp-1)}
+/* The one item in the head row that may give: at 320px the title, the text
+   size and ◐ ✕ do not all fit, and the controls are the part that must stay
+   whole. */
+.panel-card h2 .ttl{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* the theme button only exists here on narrow screens, where the bar has no
    room for it; see the responsive block */
 #panelTheme{display:none}
-/* Identity and the close button, and nothing else (D143). With 55 dictionaries
-   the ✕ must not be somewhere up the page, so this row never scrolls. Nothing
-   that spends disk or CPU belongs in it: top-right is the most-clicked real
-   estate in the panel, which is exactly why bulk full-text was moved out of it
-   (D31). The master switch left this row in the other direction — down, to the
-   list it actually scopes. */
+/* Identity, the text size and the close button, and nothing else (D143). With
+   55 dictionaries the ✕ must not be somewhere up the page, so this row never
+   scrolls. Nothing that spends disk or CPU belongs in it: top-right is the
+   most-clicked real estate in the panel (D31). */
 .panel-head{flex:none;background:var(--bg);padding:var(--sp-3) 0 0}
 /* The master switch sits in the same right-hand column as the per-card ones,
    so the column reads as one control surface instead of a stray toggle
-   (right padding = card padding + its 1px border). It now sits DIRECTLY above
+   (right padding = card padding + its 1px border). It sits DIRECTLY above
    the first card with nothing of another domain in between (D143): alignment
-   across an interruption is a far weaker cue than adjacency, and the drawer
-   used to interrupt the column at exactly the x the eye seeks. Sticky at the
+   across an interruption is a far weaker cue than adjacency. Sticky at the
    top of the scroller, so adjacency and persistence stop competing — the cards
    pass underneath the control that scopes them, which is why the background
    must be opaque. */
@@ -535,8 +528,8 @@ html:has(#panel.show) .bar{padding-right:var(--wd-sbw,0px)}
   line-height:1;letter-spacing:-.15em;padding-right:.15em}
 .pd .grip:active{cursor:grabbing}
 /* The title is a control (see the panel's click handler), so it has to look
-   like one on the way to being pressed rather than only after. flex:1 was
-   already there for the layout and doubles as a generous target. */
+   like one on the way to being pressed rather than only after. flex:1 serves
+   the layout and doubles as a generous target. */
 .pd b{color:var(--fg);font-size:14px;word-break:break-word;flex:1;cursor:pointer}
 .pd b:hover{color:var(--link);text-decoration:underline;text-underline-offset:2px}
 .pd b:focus-visible{outline:2px solid var(--focus);outline-offset:2px;border-radius:3px}
@@ -666,41 +659,36 @@ html:has(#panel.show) .bar{padding-right:var(--wd-sbw,0px)}
 #folders .cog{width:14px;height:14px;flex:none;transition:transform .2s}
 #folders>summary:hover .cog{transform:rotate(30deg)}
 #folders[open] .cog{transform:rotate(60deg)}
-/* Takes the slack so the stepper is always hard right, and truncates rather
-   than wrapping: this line must stay ONE line at 320px, and the count is the
-   half that can afford to lose its tail. */
+/* Truncates rather than wrapping: this line must stay ONE line at 320px, and
+   the count is the half that can afford to lose its tail. */
 #folders .fsum{flex:1 1 auto;min-width:0;white-space:nowrap;overflow:hidden;
   text-overflow:ellipsis;color:var(--fg-faint)}
 /* ── article text size ──────────────────────────────────────────────
-   On the settings LINE, not inside the drawer it opens: this is adjusted
-   while reading, and a control you must first open a configuration panel to
-   reach is a control that stops being used. No "Font size" label either —
-   "17px" already says what the number is, and a word here would cost the
-   row the ~50px it needs to survive a 320px phone beside a count like
-   "12 folders · 1613 dictionaries".
-   The buttons are never `disabled` at the bounds, only dimmed: a disabled
-   button receives no pointer event, so the press would fall through to the
-   <summary> and toggle the whole panel — a dead control that does something
-   else instead is worse than one that does nothing. Clamping in applyFS is
-   what actually holds the range; .lim only says so. */
-#folders .fs{flex:none;display:flex;align-items:center;gap:2px}
-#folders .fs button{font:inherit;line-height:1;margin:0;padding:0;cursor:pointer;
+   In the panel's head row, pushed right, and held 40px - more than a button's
+   width - clear of the ◐/✕ cluster, so a press meant for the size cannot land
+   on the close button. No "Font size" label: "17px" already says what the
+   number is. The buttons are dimmed at the bounds, never disabled; clamping
+   in applyFS is what holds the range, .lim only says so. */
+/* The font is set on the group and the buttons inherit it (font:inherit): it
+   sits inside the h2, whose bold and 16px are the title's, not the control's. */
+.panel-head .fs{margin-left:auto;margin-right:40px;flex:none;display:flex;align-items:center;gap:2px;
+  font-weight:400;font-size:12px;font-variant-numeric:tabular-nums}
+.panel-head .fs button{font:inherit;line-height:1;margin:0;padding:0;cursor:pointer;
   display:flex;align-items:center;justify-content:center;
   color:var(--fg-soft);background:var(--bg-card);border:1px solid var(--line);
-  border-radius:6px;transition:color .12s,border-color .12s,opacity .12s}
-#folders .fs button:hover{color:var(--fg);border-color:var(--fg-faint)}
-#folders .fs button:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
-#folders .fsbtn{width:22px;height:22px;font-size:13px}
-#folders .fsbtn.lim{opacity:.3}
-/* min-width holds "32px" — the widest value — so the two buttons never move
-   as the number changes; tabular-nums holds the digits still within it. */
-#folders .fsval{height:22px;min-width:34px;padding:0 3px;font-size:11px;
-  color:var(--fg-faint);font-variant-numeric:tabular-nums}
+  border-radius:8px;transition:color .12s,border-color .12s,opacity .12s}
+.panel-head .fs button:hover{color:var(--fg);border-color:var(--fg-faint)}
+.panel-head .fs button:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
+.panel-head .fsbtn{width:28px;height:28px}
+.panel-head .fsbtn.lim{opacity:.3}
+/* min-width holds "32px" - the widest value - so the two buttons never move
+   as the number changes; tabular-nums (on .fs) holds the digits still within it. */
+.panel-head .fsval{height:28px;min-width:40px;padding:0 3px}
 #folders .grp{margin:.5em 0 .2em;color:var(--fg-faint);font-size:11px;
   text-transform:uppercase;letter-spacing:.05em}
-/* One row = a path (long, variable) beside its facts (short, fixed). The old
-   layout let ONLY the path shrink, so the path always lost and broke mid-word.
-   Here the path refuses to go under 24ch and the facts travel as ONE unit, so
+/* One row = a path (long, variable) beside its facts (short, fixed). If ONLY
+   the path could shrink it would always lose and break mid-word, so the path
+   refuses to go under 24ch and the facts travel as ONE unit, so
    when the row runs out of room that unit drops to a line of its own and the
    path takes the full width. One line when it fits, two when it must — no
    media query, and no doubled height on rows that never needed it. */
@@ -715,15 +703,15 @@ html:has(#panel.show) .bar{padding-right:var(--wd-sbw,0px)}
 #folders .rv{color:var(--fg-faint);font-size:11px;cursor:pointer}
 #folders .rv:hover{color:var(--link);text-decoration:underline}
 #folders .frow:hover .rv{color:var(--fg-soft)}
-/* Not peers, and no longer drawn as peers. These three are frequent controls
-   and wear a bounded hit region: on the web an affordance is a BOUNDARY, not a
-   pictograph beside a word — a border is what says "aim here", which is the one
-   thing the emoji that used to sit here never said. Quietest possible bounding
+/* Not peers, and not drawn as peers. These three are frequent controls and
+   wear a bounded hit region: on the web an affordance is a BOUNDARY, not a
+   pictograph beside a word — a border is what says "aim here", which an emoji
+   never says. Quietest possible bounding
    in this system: --line (the faintest rule) over --bg-card, which on --bg is
    barely a tint, so the edge does all the work and no colour is spent — and
    colour is load-bearing here (--accent means "on"), so a row of saturated
-   glyphs was spending the one pre-attentive channel the design reserves.
-   font-family:inherit is not optional: #rescanBtn is a real <button> now, and a
+   glyphs would spend the one pre-attentive channel the design reserves.
+   font-family:inherit is not optional: #rescanBtn is a real <button>, and a
    button that does not ask for it renders in the UA stack, not var(--font). */
 .facts{display:flex;flex-wrap:wrap;gap:.45em;align-items:center;margin-top:.7em}
 /* The reading strip's row. Same left edge as the drawer beneath it (#folders'
@@ -792,7 +780,7 @@ html:has(#panel.show) .bar{padding-right:var(--wd-sbw,0px)}
    control needs both. The marker is driven by aria-expanded, which
    openFtsAll/closeFtsAll already maintain, so there is no second source of
    truth to drift from #ftsAllBox.hidden. The accent while open is the tie
-   between the trigger and the panel it opened, since the panel is no longer
+   between the trigger and the panel it opened, since the panel is not
    adjacent to it once the row wraps. */
 .facts .act.disc::before{content:"▸";color:var(--fg-faint);font-size:9px;
   display:inline-block;width:.8em;flex:none;text-align:center}
@@ -850,18 +838,17 @@ html:has(#panel.show) .bar{padding-right:var(--wd-sbw,0px)}
 .pd .prov[open]>summary::before{content:"▾"}
 .pd .fmt{color:var(--fg-soft);text-transform:uppercase;font-size:9px;letter-spacing:.04em}
 /* companion media count ("+ 2 mdd"): part of the summary text, not a control.
-   It used to carry class "more", which collided with the search-results
-   "more…" link — that link's document handler matched it, cancelled the
-   disclosure toggle with preventDefault and then threw looking for a
-   details.dict that does not exist here. */
+   Not class "more": the search-results "more…" link's document handler would
+   match it, cancel the disclosure toggle and throw looking for a details.dict
+   that does not exist here. */
 .pd .companions{color:var(--fg-soft)}
 .pd .provbody{margin:.2em 0 0 1em;display:flex;flex-direction:column;gap:.1em}
 /* "About" — what the dictionary says about ITSELF (/api/about). Same
    disclosure MECHANICS as .prov above, one size up, because this one is prose
    to be read rather than a path to be copied — but deliberately not the same
-   chrome. It was a byte-for-byte clone, and two identical carets stacked one
-   row apart read as a single list split by accident rather than as two things.
-   The hairline moves this into the card's footer register, below the file
+   chrome: two identical carets stacked one row apart read as a single list
+   split by accident rather than as two things. The hairline puts this in the
+   card's footer register, below the file
    facts, where a description belongs. The body is fetched on first open: an
    annotation can be a page long and there is one per dictionary. */
 .pd .about{font-size:11px;color:var(--fg-faint);overflow-wrap:break-word;
@@ -902,9 +889,9 @@ html:has(#panel.show) .bar{padding-right:var(--wd-sbw,0px)}
 /* ── responsive ────────────────────────────────────────────────────── */
 @media (max-width:600px){
   /* ── one row, one pill, one escape hatch ───────────────────────────
-     The bar used to wrap nine controls as equals, which cost an entire
-     second row — 5.6em of permanent height on the device with the least of
-     it. They are not equals: #q is the app, mode and dictionary are scope
+     Nine controls as equals would cost an entire second row — 5.6em of
+     permanent height on the device with the least of it. They are not
+     equals: #q is the app, mode and dictionary are scope
      the user CONSULTS rather than operates, and the rest are view settings
      that the ☰ panel already houses. So the field takes the row and the
      scope rides inside it. */
@@ -922,6 +909,10 @@ html:has(#panel.show) .bar{padding-right:var(--wd-sbw,0px)}
      it is gone at every width, see the form markup.) */
   #wideBtn,#expandBtn,#frm .themeBtn{display:none}
   #panelTheme{display:block}
+  /* ◐ joins the head row here, between the text size and ✕: it is the
+     clearance that keeps a press meant for + off the close button, so the
+     row gives back the margin it needs on a phone. */
+  .panel-head .fs{margin-right:var(--sp-3)}
 
   .pill{display:flex;flex:1;min-width:0;align-items:center;gap:.25em;
     background:var(--bg-card);border:1px solid var(--line);border-radius:10px;
@@ -979,7 +970,7 @@ html:has(#panel.show) .bar{padding-right:var(--wd-sbw,0px)}
   /* The Custom styles sheet gives up the same gutter the column does, for the
      same reason, and its toolbar gives up the desktop gap and the desktop
      padding on top of that: at full metrics the nine controls want 352px of
-     the 328px a 360px phone offers, and the 24px that did not fit were ✕.
+     the 328px a 360px phone offers, and the 24px that do not fit are ✕.
      The shrink order above keeps the sheet closable at any width; this is
      what keeps it from ever having to use it. */
   #styler{padding-left:var(--sp-1);padding-right:var(--sp-1)}
@@ -1000,13 +991,13 @@ html:has(#panel.show) .bar{padding-right:var(--wd-sbw,0px)}
 <!-- The search controls start disabled and are released by setPhase() as soon
      as one dictionary is usable. Disabling in the markup (not from script)
      closes the window between first paint and the script running, which is
-     exactly when an eager "type and hit Enter" used to reach the search path
+     exactly when an eager "type and hit Enter" would reach the search path
      with an empty dictionary list. -->
 <form id="frm" class="col" role="search" aria-busy="true">
 <span class="brand">wu<small>Dict</small></span>
 <!-- The search pill. Above 600px it is display:contents, so the field and the
-     two selects are direct flex children of the form exactly as they always
-     were and the desktop bar is unchanged. Below it the pill becomes the row:
+     two selects are direct flex children of the form. Below it the pill
+     becomes the row:
      one border around field AND scope, so the field reads as large because it
      IS the row. Each chip carries the rendering; the <select> behind it stays
      real and keeps the native picker, the keyboard and the accessible name. -->
@@ -1047,8 +1038,7 @@ html:has(#panel.show) .bar{padding-right:var(--wd-sbw,0px)}
      submits under the HTML spec's no-submit-button clause and the submit
      listener below runs unchanged — and anything two characters or longer
      never waits for a keypress at all, because the input handler searches
-     as you type. The button's only remaining ground was a magnifier next
-     to a magnifier. -->
+     as you type. A button would be a magnifier next to a magnifier. -->
 <button type="button" class="btn tools themeBtn" title="Theme" aria-label="Toggle theme">◐</button>
 <button type="button" class="btn" id="wideBtn" title="Toggle wide layout" aria-label="Toggle wide layout">⇔</button>
 <button type="button" class="btn" id="expandBtn" title="Expand all results" aria-label="Expand all results" aria-pressed="false">⊞</button>
@@ -1066,7 +1056,15 @@ html:has(#panel.show) .bar{padding-right:var(--wd-sbw,0px)}
 
 <div id="panel" role="dialog" aria-label="Dictionaries">
 <div class="panel-card">
-<div class="panel-head"><h2>Dictionaries
+<div class="panel-head"><h2><span class="ttl">Dictionaries</span>
+<!-- Article text size, adjusted while reading: in the one row that never
+     scrolls, as near the top-right corner as it can sit without crowding the
+     close button (D143 Amendment 2). -->
+<span class="fs" id="fsCtl">
+  <button type="button" class="fsbtn" id="fsDown" aria-label="Smaller article text">&#8722;</button>
+  <button type="button" class="fsval" id="fsVal" title="Article text size — click to reset" aria-label="Article text size; click to reset">15px</button>
+  <button type="button" class="fsbtn" id="fsUp" aria-label="Larger article text">+</button>
+</span>
 <span class="headacts">
 <!-- The theme control's narrow-viewport home. Not a second control: both
      elements carry .themeBtn and one handler drives the pair, the way the
@@ -1132,16 +1130,7 @@ html:has(#panel.show) .bar{padding-right:var(--wd-sbw,0px)}
 <details id="folders">
   <summary title="Folders &amp; setup" aria-label="Folders and setup">
     <svg class="cog" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path fill="currentColor" fill-rule="evenodd" d="M6.56 1.05L9.44 1.05L9.07 2.81L10.91 3.57L11.90 2.07L13.93 4.10L12.43 5.09L13.19 6.93L14.95 6.56L14.95 9.44L13.19 9.07L12.43 10.91L13.93 11.90L11.90 13.93L10.91 12.43L9.07 13.19L9.44 14.95L6.56 14.95L6.93 13.19L5.09 12.43L4.10 13.93L2.07 11.90L3.57 10.91L2.81 9.07L1.05 9.44L1.05 6.56L2.81 6.93L3.57 5.09L2.07 4.10L4.10 2.07L5.09 3.57L6.93 2.81ZM5.50 8.00a2.50 2.50 0 1 0 5.00 0a2.50 2.50 0 1 0 -5.00 0Z"/></svg>
-    <span class="fsum" id="folderSummary"></span>
-    <!-- Inside the <summary> on purpose. Every handler below calls
-         preventDefault(), which is what actually stops the details from
-         toggling: the toggle is the click's DEFAULT ACTION, so cancelling it
-         is the fix, and stopPropagation alone would not have worked. -->
-    <span class="fs" id="fsCtl">
-      <button type="button" class="fsbtn" id="fsDown" aria-label="Smaller article text">&#8722;</button>
-      <button type="button" class="fsval" id="fsVal" title="Article text size — click to reset" aria-label="Article text size; click to reset">15px</button>
-      <button type="button" class="fsbtn" id="fsUp" aria-label="Larger article text">+</button>
-    </span></summary>
+    <span class="fsum" id="folderSummary"></span></summary>
   <!-- Monochrome inline SVG, never emoji, for the reason already stated on the
        cog above: a colour blob on one platform and flat on another, off its own
        baseline, and unable to inherit currentColor — so it cannot follow the
@@ -1179,15 +1168,14 @@ html:has(#panel.show) .bar{padding-right:var(--wd-sbw,0px)}
          not below the folder list: a reader opens this drawer to act, and the
          panel's most expensive action was the one buried furthest from the
          other four (D143).
-         The shouted version ("ENABLE … GLOBALLY!") gave the panel's least-used
-         action its loudest voice, which is the hierarchy upside down; every
-         word it was shouting is stated precisely, one click away, in the panel
-         this opens. "Full-text" and not a friendlier paraphrase: it is the term
+         Quiet, because it is the panel's least-used action; everything there is
+         to say about it is stated precisely, one click away, in the panel this
+         opens. "Full-text" and not a friendlier paraphrase: it is the term
          the mode dropdown, the per-dictionary switch and the result summaries
          all use, and this action's whole job is to flip that switch in bulk.
          "every dictionary" and not "globally": the scope is the one thing a
          reader must not misread here, and "dictionaries" is the unit this panel
-         already counts in. The verb went to the button inside the panel, which
+         already counts in. The verb is on the button inside the panel, which
          is the thing that actually indexes — a trigger that only reveals a
          choice must not be named for the choice. -->
     <button type="button" class="act disc" id="ftsAllBtn" aria-expanded="false" aria-controls="ftsAllBox"
@@ -1437,13 +1425,6 @@ function applyFS(px,save){
   // Debounced inside savePrefs, so holding + costs one PUT and not twenty.
   if(save&&moved)savePrefs();
 }
-/* Suppression on the CONTAINER, action on the buttons. Toggling is the
-   click's default action, so preventDefault is the whole fix — and putting it
-   on the wrapper also catches the 2px gaps between the three buttons, which
-   are still inside the <summary> and would otherwise open the panel. It runs
-   on the way back up, which is in time: the default action is taken after
-   dispatch, not during it. */
-$("fsCtl").addEventListener("click",e=>{e.preventDefault();e.stopPropagation()});
 /* Full-text match marking (?hl=). Server-side: the words you searched for come
    back already wrapped in <mark class="wu-hl">, so nothing walks the article
    here — no mark.js, no DOM pass, no work at all on the phone that has to
@@ -1684,8 +1665,7 @@ function applyArticleCSS(css){
   // replaceSync drops what it cannot parse rather than throwing, and @import
   // is part of what it drops: the rule is discarded with a console warning
   // from the engine, the rest of the sheet still applies, and nothing is
-  // raised here. (Measured, not assumed - an earlier comment here claimed it
-  // threw.) So an @import written in the Article box takes effect in iframe
+  // raised here (measured). So an @import written in the Article box takes effect in iframe
   // articles, which are real documents, and not in shadow-root ones; the
   // same is true of @font-face, which a constructed sheet ignores outright
   // while one declared in the App box reaches shadow content. The catch is
@@ -1732,7 +1712,10 @@ $("expandBtn").onclick=()=>{
   // including them here would turn one click into a dozen simultaneous opens —
   // precisely the burst the fan-out cap deferred them to avoid. They stay a
   // per-dictionary decision.
-  for(const d of $("out").querySelectorAll("details.dict:not([data-deferred]):not(.noindex)"))d.open=expandAll;
+  for(const d of $("out").querySelectorAll("details.dict:not([data-deferred]):not(.noindex)")){
+    d.open=expandAll;
+    if(expandAll)fillSection(d);
+  }
 };
 
 function cycleTheme(){
@@ -1764,12 +1747,10 @@ function dictIDByName(name){
   return null;
 }
 
-/* Readiness (D30). An empty `dicts` used to mean two different things —
-   "still loading" and "you disabled them all" — and the search path could not
-   tell them apart, so a slow startup accused the user of disabling a list that
-   was merely late. It cannot happen now: the server serves this page only when
-   the registry is non-empty (handleIndex falls back to /setup otherwise), so
-   here an empty list ALWAYS means "not ready yet".
+/* Readiness (D30). An empty `dicts` must never be read as "you disabled them
+   all" while it may only mean "still loading": the server serves this page
+   only when the registry is non-empty (handleIndex falls back to /setup
+   otherwise), so here an empty list ALWAYS means "not ready yet".
      boot    — nothing usable: form inert, spinner, no warnings of any kind
      partial — ≥1 dictionary in: fully interactive, more still arriving
      ready   — the list is complete
@@ -1851,8 +1832,8 @@ $("out").addEventListener("click",e=>{if(e.target.id==="retryBtn")loadDicts()});
 
    OPEN needs help only when the section sits so low that its content unfolds
    entirely below the fold: you asked to see something and saw nothing.
-   CLOSE needs help not to vanish, and that need is new — D37's sticky header
-   means a section can be collapsed from 3000px inside it, after which the
+   CLOSE needs help not to vanish — D37's sticky header means a section can
+   be collapsed from 3000px inside it, after which the
    document shrinks, the browser clamps the scroll position, and you land
    somewhere arbitrary. Returning to the row you just closed is not taking
    control away, it is honouring the place you were still standing in.
@@ -1870,7 +1851,7 @@ $("out").addEventListener("click",e=>{
   const det=sum.parentElement,opening=!det.open; // the toggle lands after us
   // The walk follows attention: it belongs to the section being read, and one
   // section at a time is also why nothing is counted for the other 154.
-  if(opening){if(markedAnswer)navAttach(det)}else if(det===navDet)navDetach();
+  if(opening){fillSection(det);if(markedAnswer)navAttach(det)}else if(det===navDet)navDetach();
   openedIdx=-1; // the user decided; no arrival may take the slot back (D73)
   clearTimeout(barrier);barrier=null; // nor may the deadline, mid-hold (D142)
   requestAnimationFrame(()=>{  // measure the section at its new height
@@ -2164,10 +2145,9 @@ $("dict").onchange=e=>{const v=e.target.value;localStorage.setItem("wudict_dict"
   // — the single most expensive thing this app can be made to do — triggered
   // by one tap on a menu, before the user has typed anything at all.
   else if(v&&v!=="all"&&!v.startsWith("g:"))fetch("/api/demand?dict="+encodeURIComponent(v),{method:"POST"}).catch(()=>{})};
-/* Mode had no change handler at all: it took effect on the next submit. That
-   was survivable while a 🔍 button sat next to it, but the narrow bar has no
-   submit button, so picking a mode would have appeared to do nothing at all.
-   Made symmetric with #dict — re-run if there is something to re-run. */
+/* Mode re-runs the search on change, symmetric with #dict: the narrow bar has
+   no submit button, so a mode that waited for the next submit would appear to
+   do nothing at all. */
 $("mode").onchange=()=>{syncChips();if($("q").value.trim())doSearch()};
 syncChips(); // the markup ships empty chips; JS stays the single authority
 
@@ -2215,12 +2195,9 @@ function traits(d){
 
 function provenance(d){
   /* A row is a PATH with optional annotations around it — not a sentence.
-     They used to be one string ("db: /Users/…/Name (text.db + media.db +
-     info.txt)") that the click handler unpicked again with two regexes, and
-     the regexes did not cover what the builders actually produced: copying
-     that row put the prefix's siblings and the parenthesised file list on the
-     clipboard along with the path. The row now carries the path itself in
-     data-full, so copying reads a value instead of reconstructing one. */
+     The row carries the path itself in data-full, so copying reads a value
+     instead of reconstructing one from the text on screen, which would put
+     the annotations on the clipboard along with the path. */
   const label=(p,o)=>{
     o=o||{};
     return `<div class="prow${o.cls?" "+o.cls:""}">`+
@@ -2229,9 +2206,8 @@ function provenance(d){
       (o.post?` <span class="pfx">${esc(o.post)}</span>`:"")+
       `</div>`;
   };
-  /* A row that names no path at all. It used to be built by label(), so it
-     wore "Click to copy" and the .path affordance over a sentence — clicking
-     it put a fragment of that sentence on the clipboard. */
+  /* A row that names no path at all, so it carries no "Click to copy" and no
+     .path affordance: there is nothing to copy. */
   const note=t=>`<div class="prow">${esc(t)}</div>`;
   const base=p=>String(p).split(/[\\/]/).pop()||String(p); // also handles Windows paths
   let head,rows=[],full="";
@@ -2318,8 +2294,8 @@ function renderPanel(){
        dictionary only has two: "🚀 index" while there is none — it is searched
        the slow way through its own format until there is — and the size once
        there is one. A size rather than a tick: a number is what the reader can
-       act on, and it is the same number that was in the meta line above until
-       now (the word "indexed" stays there). The done state is .locked, so the
+       act on (the word "indexed" stays in the meta line). The done state is
+       .locked, so the
        click handler leaves it alone: it is a fact, not a switch. Removing an
        index is Remove… → "index only", which asks first, as deleting should.
        No chip at all when the source is gone — a prepared-only dictionary
@@ -2327,8 +2303,8 @@ function renderPanel(){
     const indexed=(d.dbSize||0)>0;
     /* What it would cost, on the ABSENT state only. A 2.9 M-entry dictionary
        is a gigabyte of disk and minutes of a phone's battery, and the chip
-       that starts that used to say nothing about either; O9 is the decision
-       that the size be shown before it is spent, not after.
+       that starts that says so first; O9 is the decision that the size be
+       shown before it is spent, not after.
 
        The estimate is calibrated on the user's own corpus, exactly as
        ftsAddedBytes is, and for the same reason: bytes-per-entry runs from 107
@@ -2460,10 +2436,10 @@ $("rescanBtn").onclick=()=>{loadDicts(true).then(loadFolders).then(checkOrphans)
 /* Folders & configuration ------------------------------------------------ */
 let cfgInfo=null;
 
-/* Every path in this panel opened with the same /Users/<name>/ — eleven
+/* Every path in this panel would open with the same /Users/<name>/ — eleven
    characters of nothing, repeated on each row, holding the pixels the eye
    lands on first while the part that tells the rows APART (mdict, aard,
-   slob_Apple) was pushed right.
+   slob_Apple) is pushed right.
    The server sends {prefix,label} pairs (longest first) and this applies them
    without knowing what they mean: on a desktop that is the home directory as
    `~`, on Android the volume names the Files app uses. A label the page
@@ -2490,12 +2466,11 @@ function shortPath(p){
 function pathHTML(p){
   return esc(shortPath(p)).replace(/([^\\/])([\\/])/g,"$1$2<wbr>");
 }
-/* Split out of loadFolders because the dictionary cards need the aliases too,
-   and they are drawn long before anyone opens the Folders section. Fetching it
-   only on open meant every card showed a full path until something happened to
-   re-render it — the short form would appear at an arbitrary later moment,
-   which is worse than never having it. Errors are swallowed: no aliases means
-   full paths, which is a correct fallback, not a failure. */
+/* Separate from loadFolders because the dictionary cards need the aliases
+   too, and they are drawn long before anyone opens the Folders section; a
+   short form appearing at an arbitrary later moment is worse than never
+   having it. Errors are swallowed: no aliases means full paths, which is a
+   correct fallback, not a failure. */
 async function loadConfig(){
   try{ cfgInfo=await (await fetch("/api/config")).json() }catch(e){}
   return cfgInfo;
@@ -2546,16 +2521,16 @@ async function loadFolders(){
     w.textContent="⚠ set by "+how+" — it overrides the config file";
     b.appendChild(w);
   }
-  // "(library)" was the heading explaining itself, and "prepared dictionaries"
-  // is restated one line down by the row's own note — the same rule that keeps
-  // the format prefix off a file name ending in ".mdx" (see provenance above).
+  // No "(library)" suffix: the row's own note one line down says "prepared
+  // dictionaries" — the same rule that keeps the format prefix off a file name
+  // ending in ".mdx" (see provenance above).
   grp("library");
   row(c.libDir,`${c.prepared} prepared`+(c.useCached?" · in use":c.prepared?" · not in use":""),false);
   // Likewise "file": the row shows a path ending in ".toml".
   if(c.configPath){grp("config file");row(c.configPath,"",false)}
 }
-// cfgInfo is fetched at boot now, so "have we loaded?" is no longer the same
-// question as "has this section been drawn?" — ask the one that is meant.
+// cfgInfo is fetched at boot, so "have we loaded?" is not the same question as
+// "has this section been drawn?" — ask the one that is meant.
 //
 // Whether the setup drawer is open is view state for THIS browser, like the
 // wide toggle and the theme: it is not a property of the person or of the
@@ -2572,17 +2547,13 @@ $("folderBody").addEventListener("click",e=>{
   navigator.clipboard?.writeText(p.dataset.full||p.textContent);
   p.style.color="var(--accent)";setTimeout(()=>{p.style.color=""},900);
 });
-/* Bulk full-text (D31). This used to be "⚡ index all", a prominent button in
-   the panel header — which was wrong twice over. It named our mechanism, not
-   the user's outcome, and it was a lie: every dictionary is *already* indexed
-   by headword on first open, so "index all" read as the button that repairs a
-   half-configured app. And the top-right of a sticky header is where a user
-   clicks to explore, while this is the one action that spends gigabytes of
-   disk and a long single-file CPU pass. Prominence must track value, not cost.
-   It now lives in the configuration drawer as quiet text, names what the user
-   gets, and prices itself before it can fire. The good discovery path is
-   elsewhere and already exists: a full-text search that meets a dictionary
-   lacking the index offers to add just that one, in context and motivated. */
+/* Bulk full-text (D31). It names what the user gets, not our mechanism -
+   every dictionary is already indexed by headword on first open - and it
+   spends gigabytes of disk and a long single-file CPU pass, so it lives in the
+   configuration drawer as quiet text and prices itself before it can fire:
+   prominence tracks value, not cost. The good discovery path is elsewhere: a
+   full-text search that meets a dictionary lacking the index offers to add
+   just that one, in context and motivated. */
 function ftsCandidates(){
   // a dictionary whose source file is gone cannot be re-indexed at all — the
   // prepared data is the only copy (same rule the per-card chips enforce, and
@@ -2800,7 +2771,7 @@ $("panelList").addEventListener("click",e=>{
   }
   const path=e.target.closest(".path");
   // The absolute path the row was built from — not the ~-shortened text on
-  // screen, and no longer a display string with its annotations cut back off.
+  // screen, and not a display string with its annotations cut back off.
   if(path){navigator.clipboard?.writeText(path.dataset.full||path.textContent);path.style.color="var(--accent)";return}
   const feat=e.target.closest(".feat");
   if(feat){
@@ -2825,10 +2796,9 @@ $("panelList").addEventListener("click",e=>{
     return;
   }
   /* The card's title IS the dictionary, so pressing it scopes the search to
-     that dictionary and gets out of the way. Until now the card was a page of
-     switches with no meaning attached to its own name, and the selector in the
-     bar was the only way to narrow a search - findable if you find it, and
-     nothing here says it exists. An accidental press costs one tap back: the
+     that dictionary and gets out of the way - otherwise the selector in the
+     bar would be the only way to narrow a search, findable only if you find
+     it. An accidental press costs one tap back: the
      selector's first option is "All dictionaries", and nothing was written.
      Title only, deliberately. A whole-card or double-click target would lie
      over the grip, four move buttons, a checkbox, the switches and Remove... -
@@ -2880,8 +2850,8 @@ $("panelList").addEventListener("keydown",e=>{
    Vocabulary: these are "the dictionary files", never "the originals". On the
    Play flavour the file this deletes is itself a COPY the importer made, and
    the import dialog uses "originals" for the user's own files on shared
-   storage — one word for two different files, in one app, is the confusion
-   that made the import's keep/delete question unanswerable. */
+   storage — one word for two different files, in one app, would make the
+   import's keep/delete question unanswerable. */
 function askRemoval(pd){
   const d=dicts.find(x=>x.id===pd.dataset.id);if(!d)return;
   // The confirmation replaces the trigger where it stands - at the foot of the
@@ -2976,14 +2946,11 @@ function runIngest(id,opts,label){
   show(removing?"removing…":verb+"…");
   label.classList.remove("act");label.classList.add("busy");
   label.style.textDecoration="none";label.style.cursor="default";
+  // A feature left out keeps its state; the index chip sends none, which
+  // prepares an unprepared dictionary at the cheapest level (handleIngest).
   const params=Object.entries(opts)
     .filter(([k])=>k==="contains"||k==="fts"||k==="media")
-    .map(([k,v])=>"&"+k+"="+(v?1:0)).join("")+
-    // level=headwords on a dictionary with no database is the one path that
-    // does NOT open the backend first (handleIngest): on the heavy dictionaries
-    // this chip exists for, opening it would hold a second copy of the index
-    // being built for the length of the build.
-    (opts.base?"&level=headwords":"");
+    .map(([k,v])=>"&"+k+"="+(v?1:0)).join("");
   return new Promise(resolve=>{
     const es=new EventSource("/api/ingest?dict="+id+params);
     es.addEventListener("progress",ev=>{
@@ -3303,8 +3270,8 @@ addEventListener("message",e=>{
 const STATUS_MIN=1200;
 let statusTs=0,statusTimer=null,statusPending,statusOwner=null;
 /* `owner` lets a long-running writer retract its own message without
-   clobbering whatever spoke after it — the dictionary loader used to key that
-   on `lastQuery`, which is why a stale warning could sit there unretracted. */
+   clobbering whatever spoke after it, so a stale warning cannot sit there
+   unretracted. */
 function setStatus(html,owner){
   statusPending=html;
   statusOwner=html?(owner??""):null;
@@ -3329,11 +3296,11 @@ function clearStatus(owner){if(statusOwner===owner)setStatus("")}
    glitch rather than as work. BUSY_DELAY (φ⁻³ s, one rung of --t-*) holds it
    back until a search is slow enough to be worth explaining.
 
-   There is deliberately NO minimum-display timer any more. The 382ms opacity
+   There is deliberately NO minimum-display timer. The 382ms opacity
    transition already is one: a spinner cancelled part-way through its fade-in
    reverses from wherever it reached, so it can never strobe — it can only
-   leave a ghost. Guaranteeing that in CSS rather than in a timer is what
-   removes the "wait for it to disappear" contract; the indicator is free to
+   leave a ghost. Guaranteeing that in CSS rather than in a timer removes any
+   "wait for it to disappear" contract; the indicator is free to
    go the instant the results are there, because it never arrived hard enough
    to owe the user a departure. */
 const BUSY_DELAY=236;
@@ -3440,7 +3407,7 @@ function loadDeferred(det,box,h,mode,q){
     if(msg.t!=="hit"||!box.isConnected)return;
     shown=renderSlot(box,msg,mode,q,25).shown;
     const nd=box.querySelector("details.dict");
-    if(nd)nd.open=true; // it was open when they asked; it stays open
+    if(nd){nd.open=true;fillSection(nd)} // it was open when they asked; it stays open
   },searchAC&&searchAC.signal).then(()=>{
     if(shown||!box.isConnected)return;
     // Answered, and the answer is "not in this one". Saying so is the whole
@@ -3468,7 +3435,7 @@ function loadDeferred(det,box,h,mode,q){
 /* ── Arrivals never land above what the user is reading (D73) ───────────
    The slots are already in the user's dictionary order before any result
    exists — the server sends the list on `begin` and every hit carries its
-   index — so nothing here ever REORDERS by rank. What used to move was the
+   index — so nothing here ever REORDERS by rank. What must not move is the
    open section and the reading position, which is a different problem wearing
    the same clothes.
 
@@ -3495,12 +3462,11 @@ function loadDeferred(det,box,h,mode,q){
    others. This is the Spotlight "Top Hit" / omnibox default-match shape — the
    item you are acting on is pinned, the ranked list follows.
 
-   Superseded: an earlier version cancelled the shift with a compensating
-   scrollBy. It could not help the commonest case (at scrollY 0 there is
-   nothing to scroll back to, yet that is exactly where a freshly opened
-   definition is read), and programmatic scrolling breaks workflows that are
-   none of our business. Reordering nothing-sized boxes costs nothing and needs
-   no browser to cooperate. Under expand-all there is no latch and so no
+   Not a compensating scrollBy: that cannot help the commonest case (at
+   scrollY 0 there is nothing to scroll back to, yet that is exactly where a
+   freshly opened definition is read), and programmatic scrolling breaks
+   workflows that are none of our business. Reordering nothing-sized boxes
+   costs nothing and needs no browser to cooperate. Under expand-all there is no latch and so no
    winner: nothing is promoted, and Chromium's native scroll anchoring is left
    to do what it already does. */
 let openedIdx=null;
@@ -3517,7 +3483,7 @@ let openedIdx=null;
    and this never fires; `deferred`, `error`, `skipped` and empty all resolve a
    slot instantly too. When it does fire the strategy degrades to the default —
    the best answer already in hand opens, and every later arrival is too late.
-   Worst case is therefore today plus 700ms, and never a blank screen: the
+   Worst case is therefore Fastest plus 700ms, and never a blank screen: the
    spinner is already spinning, so the hold needs no UI of its own (D102).
 
    Module scope, next to the latch it guards, because the summary-click handler
@@ -3590,28 +3556,41 @@ function renderSlot(box,h,mode,q,perDict,group){
   const rung=mode==="fts"&&/\s/.test(q||"")&&(h.rung==="near"||h.rung==="words")
     ?`<span class="rung">phrase not found · ${h.rung==="near"?"words proximity":"words anywhere"} · </span>`:"";
   det.innerHTML=`<summary>${esc(h.name)}<span class="count">${rung}${h.results.length}${more?"+":""} result${h.results.length===1?"":"s"}</span>${more}</summary>`;
-  const dl=document.createElement("dl"),roots=[];
-  for(const r of h.results){
-    const dt=document.createElement("dt");dt.textContent=r.Headword;
-    const dd=document.createElement("dd");dd.dataset.dict=h.dict;
-    roots.push(renderArticle(dd,r.Body,h.dict,
-      anchorOnce&&anchorOnce.dict===h.dict&&r===h.results[0]?anchorOnce.frag:""));
-    dl.appendChild(dt);dl.appendChild(dd);
-  }
-  det.open=expandAll;
-  det.appendChild(dl);box.appendChild(det);
-  // An `entry://Word#frag` link: now that the article is in the document, put
-  // the fragment on screen. Shadow-DOM articles can be measured immediately
-  // (next frame, once laid out); iframe ones jump themselves — frameDoc has
-  // already been handed the fragment below.
-  if(anchorOnce&&anchorOnce.dict===h.dict){
-    const frag=anchorOnce.frag;anchorOnce=null;
-    if(roots[0])requestAnimationFrame(()=>{
-      const el=anchorTarget(roots[0],frag);
+  const anchor=anchorOnce&&anchorOnce.dict===h.dict?anchorOnce:null;
+  if(anchor)anchorOnce=null;
+  det.wuFill=()=>{
+    const dl=document.createElement("dl"),roots=[];
+    det.appendChild(dl); // connected before rendering: see hoistShadowFonts
+    for(const r of h.results){
+      const dt=document.createElement("dt");dt.textContent=r.Headword;
+      const dd=document.createElement("dd");dd.dataset.dict=h.dict;
+      dl.appendChild(dt);dl.appendChild(dd);
+      roots.push(renderArticle(dd,r.Body,h.dict,anchor&&r===h.results[0]?anchor.frag:""));
+    }
+    // An `entry://Word#frag` link: put the fragment on screen. Shadow-DOM
+    // articles are measured next frame, once laid out; iframe ones jump
+    // themselves - frameDoc has already been handed the fragment.
+    if(anchor&&roots[0])requestAnimationFrame(()=>{
+      const el=anchorTarget(roots[0],anchor.frag);
       if(el){det.open=true;revealAt(el.getBoundingClientRect().top,det)}
     });
-  }
+  };
+  det.addEventListener("toggle",()=>{if(det.open)fillSection(det)});
+  det.open=expandAll;
+  box.appendChild(det);
+  if(det.open||anchor)fillSection(det);
   return{shown:true,results:true};
+}
+/* A section's articles are rendered the first time it opens, not when its
+   results arrive. In an "All dictionaries" answer the closed sections are most
+   of the answer, and rendering them on arrival paid for a shadow root or an
+   iframe per article - their stylesheets, images and dictionary scripts - on
+   every search, for sections nobody opened. Every path that opens a section
+   calls this synchronously, before anything measures or walks what is inside;
+   the toggle listener catches any other. */
+function fillSection(det){
+  const f=det&&det.wuFill;
+  if(f){det.wuFill=null;f()}
 }
 
 /* One line for every dictionary the mode could not search, built as they
@@ -3689,9 +3668,10 @@ async function doSearch(ev){
     perDict=ids.length===1?25:5;
   }else{dictParam=dictSel;perDict=25}
   const out=$("out");
-  /* Never blank between two answers (D73/M2). Clearing on `begin` made every
-     keystroke-pause a full → empty → full flash: two motions where one will
-     do, and an empty results area reads as a failure followed by a recovery.
+  /* Never blank between two answers (D73/M2). Clearing on `begin` would make
+     every keystroke-pause a full → empty → full flash: two motions where one
+     will do, and an empty results area reads as a failure followed by a
+     recovery.
 
      So the new generation's boxes are appended BELOW the previous answer —
      they are empty divs, so nothing moves and nothing is visible — and the old
@@ -3701,7 +3681,7 @@ async function doSearch(ev){
      root's inline <style> has a null `.sheet` until it is connected to a
      document, so rendering an article off-document would silently drop every
      inline @font-face it declares (hoistShadowFonts). The box a slot renders
-     into is attached for its whole life here, exactly as before. */
+     into is attached for its whole life here. */
   let boxes=[],anyShown=false,anyResults=false,stale=null;
   /* The resolution frontier (D142). `resolved[i]` is set by the slot's wave-1
      hit whatever it said; `ready[i]` holds its <details> only if it actually
@@ -3711,7 +3691,7 @@ async function doSearch(ev){
   const openSlot=i=>{
     const det=ready[i];
     if(!det)return false;
-    det.open=true;openedIdx=i;promote(boxes,i);
+    det.open=true;fillSection(det);openedIdx=i;promote(boxes,i);
     clearTimeout(barrier);barrier=null;
     if(markedAnswer)navAttach(det);
     // Not deferred to a frame: it observes its own timing, because the section
@@ -3769,11 +3749,11 @@ async function doSearch(ev){
            is never taken back: a dictionary that finishes later fills its own
            position, above, and stays shut.
 
-           This used to promote on `msg.i<openedIdx`, closing the section being
+           Promoting a higher-ranked latecomer would close the section being
            read — a definition would appear, be read into, and vanish under the
            reader because a slower dictionary was ranked higher. Ranking is a
            property of the query; a reading in progress is a commitment, and it
-           outranks it. Which dictionary wins the slot is now the user's to
+           outranks it. Which dictionary wins the slot is the user's to
            choose (D142) — soonest, or highest in their own list — but that
            invariant is not: whichever strategy is in force, nothing that opens
            here ever closes, moves or reopens under a reader.
@@ -3866,7 +3846,7 @@ document.addEventListener("click",e=>{
   const det=more.closest("details.dict"),box=det.parentElement,id=more.dataset.id,mode=$("mode").value;
   more.textContent="…";
   fetchStream("/api/search?q="+encodeURIComponent(lastQuery)+"&mode="+mode+"&hl="+(hlOn?1:0)+"&dict="+id+"&n=100",msg=>{
-    if(msg.t==="hit"){renderSlot(box,msg,mode,lastQuery,1e9);const nd=box.querySelector("details.dict");if(nd)nd.open=true}
+    if(msg.t==="hit"){renderSlot(box,msg,mode,lastQuery,1e9);const nd=box.querySelector("details.dict");if(nd){nd.open=true;fillSection(nd)}}
   }).catch(()=>{more.textContent="more…"});
 });
 
@@ -3893,8 +3873,8 @@ function editable(el){
   return !!el&&(el.isContentEditable||/^(input|textarea|select)$/i.test(el.tagName));
 }
 /* Where a stray keystroke should go, or nothing. An open dialog is a place
-   the user is working in and keeps its keys — the old "/" handler tested only
-   `!== #q` and so stole the character out of the custom-CSS editor. */
+   the user is working in and keeps its keys — "/" must not steal a character
+   out of the custom-CSS editor. */
 function typeTarget(){
   if($("styler").classList.contains("show")||$("panel").classList.contains("show"))return null;
   if(document.activeElement===$("q")||editable(document.activeElement))return null;
@@ -3948,7 +3928,7 @@ document.addEventListener("keydown",e=>{
 
 /* clicks inside shadow roots arrive via composedPath */
 /* ── Starting a search from something other than the search box ───────
-   TWO callers, opposite requirements, and conflating them was a real bug:
+   TWO callers, opposite requirements, never to be conflated:
 
    searchFor()       takes a term that is ALREADY EXACT — an author's link
                      target, a restored URL. It is used verbatim.
@@ -3956,10 +3936,10 @@ document.addEventListener("keydown",e=>{
                      carry a trailing comma, a footnote digit, or a whole
                      clause, and must be tidied into something lookup-shaped.
 
-   These used to be one function carrying lookupSelection's tidying, so
-   `entry://Artificial Intelligence Notes#note-1` was cut at the first space
-   and searched for "Artificial". A cleaner that is right for one caller is
-   silent corruption for the other; the fix is two functions, not a smarter
+   One function carrying lookupSelection's tidying would cut
+   `entry://Artificial Intelligence Notes#note-1` at the first space and search
+   for "Artificial". A cleaner that is right for one caller is silent
+   corruption for the other, so these are two functions, not a smarter
    regex. */
 function searchFor(term,opts){
   const t=String(term||"").trim();
@@ -4014,10 +3994,9 @@ function playAudio(url){
    dictionaries emit.
 
    Parsed ONCE, here, into a structured reference. Everything downstream reads
-   its fields; nothing re-parses an href and nothing re-cleans a term. The
-   previous shape — two half-parsers (`wordFromHref`, `fragFromHref`) plus
-   callers re-deriving the KIND from the shape of the word (null? empty?
-   leading "@"?) — is what let a term escape into the wrong cleaner.
+   its fields; nothing re-parses an href, nothing re-cleans a term, and no
+   caller re-derives the KIND from the shape of the word (null? empty? leading
+   "@"?) - which is how a term would escape into the wrong cleaner.
 
    kind:
      "lookup"  a headword, optionally with a #fragment inside the target
@@ -4071,9 +4050,9 @@ function anchorTarget(root,frag){
    the document is not yet taller than the viewport - a scrollTo past its
    extent CLAMPS, silently, to no movement at all. Then the dl renders, images
    and stylesheets land, iframe articles report their height, and the match
-   ends up thousands of pixels from wherever it was measured. Both halves of
-   the reported bug are that one fact: the search that did not scroll, and the
-   one that scrolled and snapped back to the top of the article.
+   ends up thousands of pixels from wherever it was measured: a search that
+   does not scroll, or one that scrolls and snaps back to the top of the
+   article.
 
    So the target is re-checked while the section is still growing. A
    ResizeObserver on the opened section delivers one callback immediately
@@ -4104,7 +4083,7 @@ function anchorTarget(root,frag){
    walked, only after a full-text answer that was actually marked, and rebuilt
    only when a frame in that section reports a new height - so an ordinary
    search, and every non-full-text mode, pays nothing at all. `checkVisibility`
-   filters the same phantom marks `revealFirstMark` learned about (a wiki's own
+   filters the same phantom marks `revealFirstMark` skips (a wiki's own
    collapsed table of contents), so the count and the walk agree with the eye.
 
    Hidden below two matches: with one there is nowhere to go, and a control
@@ -4292,8 +4271,7 @@ document.addEventListener("click",e=>{
     // nothing. In a srcdoc iframe the document URL is about:srcdoc while the
     // base URL is inherited from this page, so the browser resolves the
     // fragment against the WRONG one and navigates cross-document — frame.js
-    // handles it there for that reason (D51). The comment that used to sit
-    // here claimed iframes handled it natively; they never did.
+    // handles it there for that reason (D51).
     e.preventDefault();jumpInArticle(a,dd,decodeRef(href.slice(1)));
   }else if(href&&!/^([a-z][\w+.-]*:|\/|#|res\/|assets\/)/i.test(href)){
     // bare-word link (slob): also an author's reference, so also scoped
@@ -4345,19 +4323,18 @@ document.addEventListener("dblclick",e=>{
 /* Audio, in the CAPTURE phase and owned outright — the click never reaches the
    article. Covers both spellings: an <a> pointing at a media file (a speaker
    <img> wrapping a /res/ link included) and the GoldenDict-era
-   <object type="audio/…" data="…"> that DSL emitted before D81 and every
-   library folder prepared before it still stores.
+   <object type="audio/…" data="…"> still stored by library folders prepared
+   before D81.
 
    Capture, and stopped, because the article commonly plays the same file
    itself: LDOCE writes `<a onclick="new Audio(this.href).play(); return false;"
    href="…mp3">`, and an event-handler CONTENT attribute runs even in a shadow
-   root, which executes no <script> at all — so "this article has no scripts" was
-   never the same as "nothing here plays audio". preventDefault cannot stop a
-   handler, only a default action, so both elements played the same URL and each
-   started when its own load finished: audibly doubled on the first click, and
-   apparently fine on the next one once both start from cache together. Only
-   stopping the event on the way down keeps the anchor's own handler from
-   running. Losing that handler costs nothing here: playback is all it did, and
+   root, which executes no <script> at all — so "this article has no scripts" is
+   not the same as "nothing here plays audio". preventDefault cannot stop a
+   handler, only a default action, so both elements would play the same URL,
+   each starting when its own load finished: audibly doubled on the first
+   click. Only stopping the event on the way down keeps the anchor's own
+   handler from running. Losing that handler costs nothing here: playback is all it does, and
    the element that survives is the referenced one, which cannot be collected
    mid-load the way the article's unreferenced `new Audio(…)` can. */
 document.addEventListener("click",e=>{
@@ -4402,11 +4379,10 @@ measureBar();
 // publishes the top inset after the document has loaded (the Android shell does
 // it at onPageFinished, which is necessarily after this script) grows the bar's
 // padding and its border box while leaving its content box untouched. A
-// content-box observer sees nothing, so --barh kept the pre-inset height and
-// everything aimed at it landed one status bar too high: body's padding-top
-// below 600px, scroll-margin-top, and --stick — which is why the first stuck
-// summary sat clipped under the bar until the bar auto-hid and --stick went to
-// 0. Observing the box that is actually being published is the whole fix.
+// content-box observer sees nothing, so --barh would keep the pre-inset height
+// and everything aimed at it would land one status bar too high: body's
+// padding-top below 600px, scroll-margin-top, and --stick. Observing the box
+// that is actually being published is what keeps them right.
 // A border-box change is a superset of a content-box one here (nothing shrinks
 // the padding as the content grows), so the <select> case above still fires.
 new ResizeObserver(measureBar).observe($("bar"),{box:"border-box"});
@@ -4414,11 +4390,10 @@ let prevScroll=window.pageYOffset;
 addEventListener("scroll",()=>{
   const cur=window.pageYOffset;
   /* A scroll WE started is not the user scrolling away from the bar, and
-     treating it as one broke the ‹ n/N › walk (D118): each press scrolled
-     down, the bar hid, body.barhidden collapsed --stick to 0, and every
-     sticky summary — including the one holding the chevrons — slid up by the
-     bar's height, out from under the finger that was pressing them. The next
-     press landed on whatever had moved into that spot. prevScroll is still
+     treating it as one would break the ‹ n/N › walk (D118): each press scrolls
+     down, the bar hides, body.barhidden collapses --stick to 0, and every
+     sticky summary — including the one holding the chevrons — slides up by the
+     bar's height, out from under the finger pressing them. prevScroll is still
      tracked through the freeze so the user's next real gesture is measured
      from where they LANDED, not from where the jump began (which would spend
      that gesture on a spurious hide). */
@@ -4452,9 +4427,9 @@ let navRecord="replace"; // how the NEXT doSearch should record itself
    article is on screen. */
 let scopeOnce=null,anchorOnce=null,lastScope=null,widenedFrom=null;
 /* commitOnce is "I have finished the word". Live search runs 300 ms after
-   every keystroke pause, so without this flag `revealFirstMark` treated "прео"
-   as a finished query and threw the page at a match while the user was still
-   typing the next letter. Scrolling is navigation and navigation needs an
+   every keystroke pause, so without this flag `revealFirstMark` would treat
+   "прео" as a finished query and throw the page at a match while the user is
+   still typing the next letter. Scrolling is navigation and navigation needs an
    act: submit (Enter or the soft keyboard's search key), a ?q= link opened or
    restored, or a cross-reference followed. Typing renders in place and stays
    still — the ‹ n/N › control (D118) appears with the count, so the match is
@@ -4512,7 +4487,7 @@ window.addEventListener("popstate",()=>{
 $("frm").removeEventListener("submit",_doSearch);
 /* Enter on a query that has not changed since it was answered is the find
    bar's idiom, and it is free twice over: every browser's find bar walks its
-   matches with it, and the submit it replaces was re-running an identical
+   matches with it, and the submit it replaces would re-run an identical
    search over the network for an identical answer (doSearch has no repeat
    guard - `lastQuery` is written there and never compared).
    Strictly narrower than submit: the moment a character changes the query,
@@ -4781,9 +4756,9 @@ let stylerTab="app",
     stylerFileLimits=null,
     // Which stylesheet the textarea is currently SHOWING, "" until it has
     // shown one. stylerCommit folds the box back into the pair, and before
-    // the first render the box mirrors nothing: committing an empty textarea
-    // as the app sheet is how a freshly loaded app.css was erased the moment
-    // the editor opened.
+    // the first render the box mirrors nothing, and committing an empty
+    // textarea as the app sheet would erase a freshly loaded app.css the moment
+    // the editor opens.
     stylerBox="";
 
 /* The app half of the preview, and it has to OWN the app layer, not merely
@@ -4918,11 +4893,10 @@ function stylerShowTab(tab){
 }
 
 /* ── the files tab ───────────────────────────────────────────────────
-   What the two stylesheets can point at. It exists because there was
-   nowhere for a reference to lead: file:// is refused by every browser as a
-   subresource of an http page, and the one writable-by-URL surface that
-   existed is addressed by a dictionary id the UI deliberately never shows
-   (D102). Uploading and referencing are one tab apart on purpose - a file is
+   What the two stylesheets can point at: file:// is refused by every browser
+   as a subresource of an http page, and the other writable-by-URL surface is
+   addressed by a dictionary id the UI deliberately never shows (D102).
+   Uploading and referencing are one tab apart on purpose - a file is
    put here in order to be named in CSS, and Insert writes that name where
    the caret is rather than leaving the reader to transcribe a path. */
 async function stylerFilesShow(){
@@ -4996,7 +4970,7 @@ function stylerFilesRender(msg){
   }
   stylerSync();
 }
-/* The button says what it is about to do, because for a font it is no longer
+/* The button says what it is about to do, because for a font it is not
    "write this where the caret is" - it writes two rules into two boxes. */
 function stylerFileTitle(f){
   const ext=stylerFileExt(f);

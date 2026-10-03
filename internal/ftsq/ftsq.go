@@ -7,11 +7,11 @@
 // # Why this package exists
 //
 // A full-text search and its highlighting are the same question asked twice.
-// When they are computed separately they drift, and the drift is visible: a
-// query for `Физика в конспектах` matched on three independent prefixes marked
-// every word in the article beginning with в, because the matcher's idea of the
-// query and the highlighter's idea of the query were built by different code
-// from different inputs. So there is exactly ONE parse here, and it is lowered
+// Computed separately they drift, and the drift is visible: a query for
+// `Физика в конспектах` matched on three independent prefixes would mark every
+// word in the article beginning with в, because the matcher's idea of the
+// query and the highlighter's would be built by different code from different
+// inputs. So there is exactly ONE parse here, and it is lowered
 // into both an FTS5 MATCH expression and the hilite.Phrase set that paints the
 // result. They cannot disagree, because they are the same tree.
 //

@@ -36,12 +36,12 @@ var assetExt = map[string]bool{
 
 // IsAssetName reports whether a reference names a bundled file by extension.
 //
-// Two callers need the same answer and used to hold two lists. The MDX backend
+// Two callers need the same answer, from one list. The MDX backend
 // uses it to decide what may be served from beside the .mdx (a security
 // allowlist), and the article rewriter uses it to tell a pronunciation link
 // from a cross-reference - `<a href="defendant">` is a headword, while
 // `<a href="defendant__gb_1.ogg">` is audio, and only the extension separates
-// them. One list, so the two can never drift into disagreeing.
+// them. One list, so the two cannot drift into disagreeing.
 //
 // Any query or fragment is discarded first: "spkr.png?v=2" is still a PNG.
 func IsAssetName(ref string) bool {

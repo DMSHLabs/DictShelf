@@ -397,8 +397,8 @@ final class Intake {
      * The share link with nothing after "#": wudict's page of dictionary links
      * itself (legbehindneck.com/wudict), not a link to any dictionary. The App
      * Link claims it like any share link, so a tap on it - in the howto, in a
-     * messenger - lands here, and it used to be "imported" as a folder page
-     * that lists nothing. It is a page to look at, so it goes to a browser.
+     * messenger - lands here. It is a page to look at, not a folder page to
+     * import, so it goes to a browser.
      */
     static boolean isSharePage(Uri u) {
         String host = u.getHost(), path = u.getPath(), frag = u.getEncodedFragment();
@@ -835,8 +835,8 @@ final class Intake {
             // A confirmed job with companions ticked goes back to DOWNLOADING
             // before it installs: the extras are fetched first, then the set is
             // re-sniffed with them in it. Reading that as "cancelled elsewhere"
-            // is what once made the shell report "nothing was added" over an
-            // import that was still running and went on to succeed.
+            // would report "nothing was added" over an import that is still
+            // running and about to succeed.
             if ("downloading".equals(state)) {
                 ui(a, dialog, downloadLine(a, j));
                 mirror(app, j, true);

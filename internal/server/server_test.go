@@ -73,7 +73,7 @@ func TestLibraryIsOptIn(t *testing.T) {
 	}
 	r := &stubReader{meta: dict.Meta{Name: "Naturalized", Format: "mdx", Path: src}}
 	dbPath := store.TextDBPath(dir)
-	if err := store.Ingest(r, dbPath, nil); err != nil {
+	if err := ingestFull(r, dbPath); err != nil {
 		t.Fatal(err)
 	}
 	if filepath.Base(dir) != "x" {
@@ -484,7 +484,7 @@ func TestIngestSSEAndMedia(t *testing.T) {
 	id := dicts[0].ID
 
 	rec := httptest.NewRecorder()
-	s.ServeHTTP(rec, newRequest("GET", "/api/ingest?dict="+id+"&full=1", nil))
+	s.ServeHTTP(rec, newRequest("GET", "/api/ingest?dict="+id+"&fts=1&media=1", nil))
 	if ct := rec.Header().Get("Content-Type"); ct != "text/event-stream" {
 		t.Fatalf("not SSE: %q body=%s", ct, rec.Body.String())
 	}
@@ -570,7 +570,7 @@ func TestSetupFlow(t *testing.T) {
 	// "/" now serves the app
 	rec = httptest.NewRecorder()
 	s.ServeHTTP(rec, newRequest("GET", "/", nil))
-	if !strings.Contains(rec.Body.String(), "design tokens") {
+	if !strings.Contains(rec.Body.String(), `id="panelBtn"`) {
 		t.Errorf("app page not served after setup")
 	}
 	// nonexistent path errors cleanly
@@ -602,7 +602,7 @@ func TestMediaDBIsNeverADictionary(t *testing.T) {
 		t.Fatal(err)
 	}
 	r := &stubReader{meta: dict.Meta{Name: "AHD5", Format: "slob", Path: src}}
-	if err := store.Ingest(r, store.TextDBPath(dir), nil); err != nil {
+	if err := ingestFull(r, store.TextDBPath(dir)); err != nil {
 		t.Fatal(err)
 	}
 	uuid, err := store.ReadMetaValue(store.TextDBPath(dir), "dict_uuid")
@@ -610,7 +610,7 @@ func TestMediaDBIsNeverADictionary(t *testing.T) {
 		t.Fatal(err)
 	}
 	// a real packed media.db: same user_version + meta table as a text.db,
-	// which is exactly why bare ".db" registration used to open it.
+	// which is exactly why bare ".db" registration would open it.
 	if err := store.IngestMedia(&resDict{}, []string{"a.mp3"}, store.MediaDBPath(dir), uuid, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -670,7 +670,7 @@ func TestSetupConsentFlow(t *testing.T) {
 		t.Fatal(err)
 	}
 	r := &stubReader{meta: dict.Meta{Name: "Prepared", Format: "mdx", Path: "/gone/Prepared.mdx"}}
-	if err := store.Ingest(r, store.TextDBPath(dir), nil); err != nil {
+	if err := ingestFull(r, store.TextDBPath(dir)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -940,7 +940,7 @@ func TestResourceOverrideFromLibraryFolder(t *testing.T) {
 	if err := e.setFeatures(features{}, nil); err != nil {
 		t.Fatalf("ingest: %v", err)
 	}
-	textDB, ok := preparedTextDB(e.Path)
+	textDB, ok := validPrepared(e.Path)
 	if !ok {
 		t.Fatal("no library folder after preparing")
 	}
@@ -1008,7 +1008,7 @@ func TestResourceOverrideRejectsEscapes(t *testing.T) {
 	if err := e.setFeatures(features{}, nil); err != nil {
 		t.Fatal(err)
 	}
-	textDB, _ := preparedTextDB(e.Path)
+	textDB, _ := validPrepared(e.Path)
 	lib := filepath.Dir(textDB)
 	// a real, readable file one level above the override dir - the exact
 	// thing a traversal would be reaching for
@@ -1182,4 +1182,11 @@ func closeBackends(t *testing.T, reg *Registry) {
 			e.ingestMu.Unlock()
 		}
 	})
+}
+
+// ingestFull prepares with headwords and full text, the plan these tests
+// assert against.
+func ingestFull(r dict.Reader, dbPath string) error {
+	_, err := store.IngestPlan(r, dbPath, store.Plan{FullText: true}, nil)
+	return err
 }

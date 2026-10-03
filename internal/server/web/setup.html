@@ -323,9 +323,9 @@ function syncAct(total,checked,bad){
 }
 
 /* One act for both sources. Folders and the library are not alternatives —
-   they are two dimensions of one library — so the page commits once. A second
-   "use these dictionaries" button was not just redundant: it posted without
-   the paths, silently discarding whatever folders had been typed above it. */
+   they are two dimensions of one library — so the page commits once: a second
+   button would post without the paths, silently discarding whatever folders
+   had been typed above it. */
 async function save(){
   const q=paths().map(p=>"path="+encodeURIComponent(p)).join("&");
   const keepOn=libraryOffered()&&$("keep").checked;
@@ -451,8 +451,8 @@ function showCandidates(j){
     else if(!ok)row.appendChild(el("span","why","needs "+miss.join(", ")));
     // A folder of that name holding no dictionary — one a removal left behind,
     // or one the user made — is taken over like any other, and said so. What it
-    // is not is an installation: calling it one told the user a dictionary they
-    // had just removed was still there (D137).
+    // is not is an installation: calling it one would tell the user a
+    // dictionary they have just removed is still there (D137).
     else if(c.stale)row.appendChild(el("span","have","takes over a folder of this name"));
     else if(c.existing)row.appendChild(el("span","have",c.unchanged?"already installed":"replaces your copy"));
     // In another folder of the library, from wherever it came: named, so the

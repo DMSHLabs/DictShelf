@@ -34,8 +34,7 @@ type titlePart struct {
 // them to turn one line into millions of index rows. Six is far past anything
 // a lexicographer writes (`(пре)вращать(ся)` is two) and bounds one line at 64
 // keys; past it the line falls back to the two extremes - everything in and
-// everything out - which is what the old two-variant parser produced for every
-// line, so no dictionary loses ground.
+// everything out.
 const maxOptionalParts = 6
 
 // transformTitle parses one headword line. The three constructs are

@@ -11,11 +11,13 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/wuweidict/wudict/internal/dict"
 )
 
-// fake is a minimal Dictionary; fuzzy support is toggled per instance.
+// fake is a minimal prepared-style backend (a dict.Searcher); the contains
+// capability is toggled per instance.
 type fake struct {
 	name        string
 	words       []string
@@ -53,8 +55,32 @@ func (f *fake) Exact(w string, n int) ([]dict.Result, error) {
 func (f *fake) Prefix(w string, n int) ([]dict.Result, error) {
 	return f.match(func(x string) bool { return strings.HasPrefix(x, w) }, n)
 }
-func (f *fake) Contains(w string, n int) ([]dict.Result, error) {
+func (f *fake) ExactContext(_ context.Context, w string, n int) ([]dict.Result, error) {
+	return f.Exact(w, n)
+}
+func (f *fake) PrefixContext(_ context.Context, w string, n int) ([]dict.Result, error) {
+	return f.Prefix(w, n)
+}
+func (f *fake) ContainsContext(_ context.Context, w string, n int) ([]dict.Result, error) {
 	return f.match(func(x string) bool { return strings.Contains(x, w) }, n)
+}
+func (f *fake) FullTextContext(context.Context, string, int) ([]dict.Result, error) {
+	return nil, dict.ErrUnsupported
+}
+func (f *fake) FullTextMatch(context.Context, string, int) ([]dict.Result, error) {
+	return nil, dict.ErrUnsupported
+}
+
+// all runs the fan-out over dictionaries that are already open and returns
+// the hits in input order.
+func all(ctx context.Context, dicts []dict.Dictionary, mode Mode, term string, n int) []Hit {
+	openers := make([]Opener, len(dicts))
+	for i, d := range dicts {
+		openers[i] = func() (dict.Dictionary, error) { return d, nil }
+	}
+	hits := make([]Hit, len(dicts))
+	StreamOpen(ctx, openers, mode, term, n, func(i int, h Hit) { hits[i] = h })
+	return hits
 }
 
 func TestStreamCoversAllSlots(t *testing.T) {
@@ -64,7 +90,11 @@ func TestStreamCoversAllSlots(t *testing.T) {
 		&fake{name: "C", err: errors.New("boom")},
 	}
 	seen := make([]*Hit, len(dicts))
-	Stream(context.Background(), dicts, Prefix, "cas", 10, func(i int, h Hit) {
+	openers := make([]Opener, len(dicts))
+	for i, d := range dicts {
+		openers[i] = func() (dict.Dictionary, error) { return d, nil }
+	}
+	StreamOpen(context.Background(), openers, Prefix, "cas", 10, func(i int, h Hit) {
 		hc := h
 		seen[i] = &hc
 	})
@@ -98,13 +128,13 @@ func TestStreamOpenSurfacesOpenError(t *testing.T) {
 	}
 }
 
-func TestAllOrderAndModes(t *testing.T) {
+func TestFanOutOrderAndModes(t *testing.T) {
 	dicts := []dict.Dictionary{
 		&fake{name: "A", words: []string{"casa", "casona"}},
 		&fake{name: "B", words: []string{"casa"}, hasContains: true},
 		&fake{name: "C", err: errors.New("boom")},
 	}
-	hits := All(context.Background(), dicts, Prefix, "cas", 10)
+	hits := all(context.Background(), dicts, Prefix, "cas", 10)
 	if len(hits) != 3 || hits[0].Meta.Name != "A" || hits[1].Meta.Name != "B" || hits[2].Meta.Name != "C" {
 		t.Fatalf("order not preserved: %+v", hits)
 	}
@@ -116,7 +146,7 @@ func TestAllOrderAndModes(t *testing.T) {
 	}
 
 	// contains: A lacks the capability -> skipped; B serves
-	hits = All(context.Background(), dicts[:2], Contains, "as", 10)
+	hits = all(context.Background(), dicts[:2], Contains, "as", 10)
 	if !hits[0].Skipped {
 		t.Error("A should be skipped for contains")
 	}
@@ -125,22 +155,22 @@ func TestAllOrderAndModes(t *testing.T) {
 	}
 }
 
-func TestAllPerDictLimit(t *testing.T) {
+func TestFanOutPerDictLimit(t *testing.T) {
 	d := &fake{name: "A", words: []string{"a1", "a2", "a3"}}
-	hits := All(context.Background(), []dict.Dictionary{d}, Prefix, "a", 2)
+	hits := all(context.Background(), []dict.Dictionary{d}, Prefix, "a", 2)
 	if len(hits[0].Results) != 2 {
 		t.Errorf("perDict limit ignored: %d", len(hits[0].Results))
 	}
 }
 
-func TestAllCancelledContext(t *testing.T) {
+func TestFanOutCancelledContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	dicts := make([]dict.Dictionary, 30)
 	for i := range dicts {
 		dicts[i] = &fake{name: "X", words: []string{"w"}}
 	}
-	hits := All(ctx, dicts, Exact, "w", 1)
+	hits := all(ctx, dicts, Exact, "w", 1)
 	if len(hits) != 30 {
 		t.Fatalf("want 30 hits, got %d", len(hits))
 	}
@@ -212,5 +242,54 @@ func TestWorkers(t *testing.T) {
 		if got := Workers(); got != 3 {
 			t.Errorf("SetWorkers(%d) must be ignored, got %d", n, got)
 		}
+	}
+}
+
+// A prepared backend is handed the request's context, so cancelling a search
+// stops its query inside SQLite instead of letting it run to completion for
+// output nobody reads. ctxDict stands in for the store: its query ends only
+// when its context does.
+type ctxDict struct{ fake }
+
+func (c *ctxDict) ExactContext(ctx context.Context, _ string, _ int) ([]dict.Result, error) {
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
+func TestQueryHandsTheContextToTheBackend(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	d := &ctxDict{fake{name: "S"}}
+	done := make(chan Hit, 1)
+	go func() { done <- Query(ctx, d, Exact, "w", 5) }()
+	cancel()
+	select {
+	case h := <-done:
+		if !errors.Is(h.Err, context.Canceled) {
+			t.Fatalf("want the backend's cancellation, got %+v", h)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("the backend never saw the cancellation")
+	}
+}
+
+// A direct backend has no index for contains or full-text; Query reports it
+// skipped rather than failing, exactly as the fan-out does.
+func TestQuerySkipsWhatADirectBackendCannotDo(t *testing.T) {
+	for _, m := range []Mode{Contains, FullText} {
+		if h := Query(context.Background(), okDict{}, m, "w", 5); !h.Skipped {
+			t.Errorf("%v on a direct backend: %+v, want skipped", m, h)
+		}
+	}
+}
+
+func TestParseMode(t *testing.T) {
+	for in, want := range map[string]Mode{"": Prefix, "prefix": Prefix, "fuzzy": Prefix,
+		"exact": Exact, "contains": Contains, "fts": FullText} {
+		if got, err := ParseMode(in); err != nil || got != want {
+			t.Errorf("ParseMode(%q) = %v, %v; want %v", in, got, err, want)
+		}
+	}
+	if _, err := ParseMode("regex"); err == nil {
+		t.Error("an unknown mode must be refused")
 	}
 }

@@ -38,4 +38,6 @@ The reference projects this was built from (`mdict-go-web`, `draego`, `pyglossar
   internals map 1:1 to a control, most must not surface at all. A mechanism reaches
   the UI only when the user must *decide* or *act* on it — never as an explanation of
   how the app works. Applies to every label, hint and message.
-- Each format package implements both `Lookuper` (direct runtime lookup) and `Reader` (sequential ingest scan) — parsing logic written once, shared by both. Ingesters are one-shot batch paths.
+- Each format package implements both `Dictionary` (direct runtime lookup) and `Reader` (sequential ingest scan) — parsing logic written once, shared by both. Ingesters are one-shot batch paths.
+- **Comments state the present (D161).** Invariants, reasons, measurements and D/P/§ citations; never "used to" narratives - history belongs in the decision log.
+- **Prepared data changes only through `store.Reconcile` (D157).** A new way to prepare, rebuild or pack states a `store.Target`; it never calls `IngestPlan`/`IngestMedia` itself, and it judges a prepared database through one `store.Inspect` read. A dictionary never prepared starts from headwords only everywhere — the app, `wudict ingest`, the self-preparing formats (D24, D152 Am. 1).

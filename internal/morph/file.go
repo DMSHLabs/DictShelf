@@ -20,9 +20,9 @@ import (
 
 // Lemma data from a folder (LEMMA_DIR, D87).
 //
-// This is how wudict gets every language but English. Compiling them in was
-// the wrong shape: the six golem packs were 9 MB of an 11 MB binary, charged
-// to every user and every phone whether or not they read those languages, and
+// This is how wudict gets every language but English. Compiling them in is
+// the wrong shape: the six golem packs would be 9 MB of an 11 MB binary,
+// charged to every user and every phone whether or not they read those languages, and
 // the list of languages people keep dictionaries in does not end at six. A
 // folder of files is what hunspell does, and it lets someone who wants Polish
 // have Polish without anyone else carrying it.

@@ -14,6 +14,7 @@
 package store
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -30,10 +31,10 @@ import (
 func init() {
 	// A prepared dictionary is a FOLDER whose main file is `text.db`
 	// (see library.go); `<name>.text.db` is the same database copied out of
-	// its folder. Registering bare ".db" - as this once did - made every
-	// internal sidecar a public dictionary type: a `media.db` opened as a
-	// phantom dictionary, because for uuid pairing it carries the same
-	// user_version and meta table as a text.db.
+	// its folder. Registering bare ".db" would make every internal sidecar a
+	// public dictionary type: a `media.db` would open as a phantom dictionary,
+	// because for uuid pairing it carries the same user_version and meta table
+	// as a text.db.
 	open := func(path string) (dict.Dictionary, error) { return Open(path) }
 	dict.RegisterFileName(TextDBName, open)
 	dict.RegisterFormat(".text.db", open)
@@ -43,6 +44,8 @@ func init() {
 const maxLimit = 500
 
 const schemaVersion = 1
+
+var _ dict.Searcher = (*Store)(nil)
 
 // Store is one opened .text.db. Safe for concurrent readers.
 type Store struct {
@@ -106,8 +109,8 @@ func FoldStale(m map[string]string) bool {
 
 // markupVersionOf reads the article-markup version a database records. Absent
 // means zero: it was built before internal/artmark existed, so its articles
-// carry the presentation the transformer used to inline (<font color>, a
-// hard-coded padding-left) and no role a reader could restyle.
+// carry inline presentation (<font color>, a hard-coded padding-left) and no
+// role a reader could restyle.
 func markupVersionOf(m map[string]string) int {
 	if s := m["markup_version"]; s != "" {
 		if n, err := strconv.Atoi(s); err == nil {
@@ -124,7 +127,7 @@ func markupVersionOf(m map[string]string) int {
 // changing its mind about class names cannot reach it.
 //
 // The articles are frozen bytes, so - exactly as with an abbreviation glossary
-// (server/registry.go abbrevStale) - the only repair is to build them again.
+// (AbbrevChanged) - the only repair is to build them again.
 // This is a fact about the data, not a fault: a stale article still renders,
 // it simply does not answer to Custom styles. Callers rebuild on a dictionary
 // the user is already changing and leave the rest alone; there is deliberately
@@ -172,7 +175,7 @@ func Open(path string) (*Store, error) {
 		ContentsLang: m["contents_lang"], // DSL and BGL only, and absent from older libraries
 		Header:       headerOf(m),
 	}
-	s.ftsOK = m["ingest_level"] != string(LevelHeadwords)
+	s.ftsOK = PlanFromMeta(m).FullText
 	s.srcPath = m["source_path"]
 	// feature-detect the trigram "contains" index rather than gating on
 	// schema version, so older .text.db (and standalone native dicts whose
@@ -326,9 +329,20 @@ func (s *Store) collect(rows *sql.Rows, err error) ([]dict.Result, error) {
 	return out, rows.Err()
 }
 
-// Exact returns entries (and alias targets) whose headword equals word;
-// when the case-sensitive pass is empty it retries COLLATE NOCASE.
+// Exact and Prefix are the dict.Dictionary forms, for callers with no context
+// to give; the search fan-out uses the Context forms (dict.Searcher), so that
+// a query whose request has gone is interrupted inside SQLite.
 func (s *Store) Exact(word string, limit int) ([]dict.Result, error) {
+	return s.ExactContext(context.Background(), word, limit)
+}
+
+func (s *Store) Prefix(word string, limit int) ([]dict.Result, error) {
+	return s.PrefixContext(context.Background(), word, limit)
+}
+
+// ExactContext returns entries (and alias targets) whose headword equals word;
+// when the case-sensitive pass is empty it retries COLLATE NOCASE.
+func (s *Store) ExactContext(ctx context.Context, word string, limit int) ([]dict.Result, error) {
 	word = strings.TrimSpace(word)
 	if word == "" {
 		return nil, nil
@@ -345,11 +359,11 @@ func (s *Store) Exact(word string, limit int) ([]dict.Result, error) {
 		UNION ALL
 		SELECT e.w, e.m FROM alias a JOIN entry e ON e.id = a.entry_id WHERE a.w = ?1 COLLATE NOCASE %[2]s
 		LIMIT ?2`
-	res, err := s.collect(s.db.Query(fmt.Sprintf(q, "AND e.w = ?1", "AND a.w = ?1"), word, n))
+	res, err := s.collect(s.db.QueryContext(ctx, fmt.Sprintf(q, "AND e.w = ?1", "AND a.w = ?1"), word, n))
 	if err != nil || len(res) > 0 {
 		return res, err
 	}
-	res, err = s.collect(s.db.Query(fmt.Sprintf(q, "", ""), word, n))
+	res, err = s.collect(s.db.QueryContext(ctx, fmt.Sprintf(q, "", ""), word, n))
 	if err != nil || len(res) > 0 {
 		return res, err
 	}
@@ -357,15 +371,12 @@ func (s *Store) Exact(word string, limit int) ([]dict.Result, error) {
 	// over the diacritic-stripping tokenizer, then keep only whole-headword
 	// folded matches.
 	//
-	// Not parity, but not for the reason this comment used to give. It claimed
-	// dict.Fold reaches the letters carrying their stroke or slash INSIDE the
-	// codepoint (o/, d-, l/, h-) where FTS5's remove_diacritics does not, and
-	// offered "dansk" finding "đansk" as the difference. dict.Fold is
+	// Not parity. Stroke letters are not the difference: dict.Fold is
 	// ToLower + NFD + drop-Mn (dict/fold.go), and đ has no canonical
-	// decomposition - so Fold("đansk") is "đansk", neither side finds it, and
-	// the direct backends, which call the same Fold, do not find it either.
+	// decomposition - so Fold("đansk") is "đansk", and neither this path nor
+	// the direct backends, which call the same Fold, find it from "dansk".
 	//
-	// What actually differs is narrower: FTS5 tokenizes and folds with its own
+	// What differs is narrower: FTS5 tokenizes and folds with its own
 	// unicode61 rules, this filter re-checks with dict.Fold, and the two agree
 	// on combining marks but need not agree on every token boundary. Closing
 	// even that would mean a second folded column in the schema, and folding
@@ -375,7 +386,7 @@ func (s *Store) Exact(word string, limit int) ([]dict.Result, error) {
 	if match == "" {
 		return nil, nil
 	}
-	res, err = s.collect(s.db.Query(`
+	res, err = s.collect(s.db.QueryContext(ctx, `
 		SELECT e.w, e.m FROM entry_fts f JOIN entry e ON e.id = f.rowid
 		WHERE entry_fts MATCH ?1 ORDER BY e.w LIMIT ?2`, match, n))
 	if err != nil {
@@ -422,13 +433,11 @@ func buildExactMatch(input, column string) string {
 	return strings.Join(parts, " ")
 }
 
-// Prefix returns every headword starting with word, ordered by headword, the
+// PrefixContext returns every headword starting with word, ordered by headword, the
 // exact match first (LIKE input escaped - FTS-audit #5).
 //
-// The exact match is NOT a short-circuit, though it was until a headword typed
-// in full was reported as hiding its own siblings: "starts with" answered a
-// complete headword with that one article and dropped every longer key under
-// it, while the same word mistyped with a double space returned all of them.
+// The exact match is NOT a short-circuit: "starts with" must not answer a
+// complete headword with that one article and drop every longer key under it.
 // The LIKE pattern already contains the exact row - a string is a prefix of
 // itself - and ORDER BY w puts it first, because a proper prefix sorts before
 // everything it prefixes. Exact survives one step lower, as the fallback whose
@@ -448,9 +457,9 @@ func buildExactMatch(input, column string) string {
 // rows that survive it. Selecting `m` into the sorted subquery instead pulls
 // every matching article into the temp b-tree: measured on the 879k-entry OED
 // (docs.local/PERF.md), a one-letter prefix cost 1.1 s ("a") and 2.4 s ("s")
-// that way against 95 ms and 120 ms this way - and with the short-circuit gone,
-// one-letter prefixes are no longer a rare path but every first keystroke.
-func (s *Store) Prefix(word string, limit int) ([]dict.Result, error) {
+// that way against 95 ms and 120 ms this way - and one-letter prefixes are not
+// a rare path but every first keystroke.
+func (s *Store) PrefixContext(ctx context.Context, word string, limit int) ([]dict.Result, error) {
 	word = strings.TrimSpace(word)
 	if word == "" {
 		return nil, nil
@@ -459,7 +468,7 @@ func (s *Store) Prefix(word string, limit int) ([]dict.Result, error) {
 	pat := escapeLike(word) + "%"
 	// GROUP BY id, not UNION: an entry its own headword AND an alias match is
 	// one article, filed under the earlier of the two keys.
-	res, err := s.collect(s.db.Query(`
+	res, err := s.collect(s.db.QueryContext(ctx, `
 		SELECT e.w, e.m FROM entry e JOIN (
 			SELECT id, min(k) AS k FROM (
 				SELECT e2.id AS id, e2.w AS k FROM entry e2
@@ -477,32 +486,31 @@ func (s *Store) Prefix(word string, limit int) ([]dict.Result, error) {
 	// diacritic-insensitive prefix over the FTS `w` column, so `corazon`
 	// typed without the ó still prefix-matches `corazón…`.
 	// entry_fts always indexes `w`, even at headwords level.
-	if res, err := s.Exact(word, limit); err != nil || len(res) > 0 {
+	if res, err := s.ExactContext(ctx, word, limit); err != nil || len(res) > 0 {
 		return res, err
 	}
-	return s.Fuzzy(word, n)
+	return s.fuzzy(ctx, word, n)
 }
 
-// Fuzzy is the accent/case-insensitive prefix-phrase engine (FTS5 unicode61
-// remove_diacritics tokenizer, ordered by headword). It is no longer a
-// standalone search mode - its behaviour is folded into Prefix, which calls
-// it as the accent-insensitive fallback (FTS-audit #4).
-func (s *Store) Fuzzy(word string, limit int) ([]dict.Result, error) {
+// fuzzy is the accent/case-insensitive prefix-phrase engine (FTS5 unicode61
+// remove_diacritics tokenizer, ordered by headword): Prefix's last fallback
+// (FTS-audit #4).
+func (s *Store) fuzzy(ctx context.Context, word string, limit int) ([]dict.Result, error) {
 	match := buildMatch(word, "w")
 	if match == "" {
 		return nil, nil
 	}
-	return s.collect(s.db.Query(`
+	return s.collect(s.db.QueryContext(ctx, `
 		SELECT e.w, e.m FROM entry_fts f JOIN entry e ON e.id = f.rowid
 		WHERE entry_fts MATCH ?1`+subEntryFilter("e.w")+`ORDER BY e.w LIMIT ?2`, match, clamp(limit)))
 }
 
-// Contains is the substring/typo-tolerant headword mode, backed by the FTS5
+// ContainsContext is the substring/typo-tolerant headword mode, backed by the FTS5
 // trigram index over accent/case-folded headwords. The trigram tokenizer
 // needs at least 3 characters; shorter queries fall back to a folded LIKE.
 // Ordered by headword. Requires a trigram-indexed database (re-ingest older
 // ones); unsupported otherwise.
-func (s *Store) Contains(word string, limit int) ([]dict.Result, error) {
+func (s *Store) ContainsContext(ctx context.Context, word string, limit int) ([]dict.Result, error) {
 	word = strings.TrimSpace(word)
 	if word == "" {
 		return nil, nil
@@ -517,7 +525,7 @@ func (s *Store) Contains(word string, limit int) ([]dict.Result, error) {
 	n := clamp(limit)
 	if len([]rune(folded)) >= 3 {
 		phrase := `"` + strings.ReplaceAll(folded, `"`, `""`) + `"`
-		res, err := s.collect(s.db.Query(`
+		res, err := s.collect(s.db.QueryContext(ctx, `
 			SELECT e.w, e.m FROM entry_trigram t JOIN entry e ON e.id = t.rowid
 			WHERE entry_trigram MATCH ?1`+subEntryFilter("e.w")+`ORDER BY e.w LIMIT ?2`, phrase, n))
 		if err != nil || len(res) > 0 {
@@ -526,20 +534,19 @@ func (s *Store) Contains(word string, limit int) ([]dict.Result, error) {
 	}
 	// short query (< 3 chars) or trigram miss: LIKE substring on the raw
 	// headword (accent-sensitive - acceptable for the <3-char contains edge).
-	return s.collect(s.db.Query(`
+	return s.collect(s.db.QueryContext(ctx, `
 		SELECT e.w, e.m FROM entry e WHERE e.w LIKE ?1 ESCAPE '\'`+subEntryFilter("e.w")+`ORDER BY e.w LIMIT ?2`,
 		"%"+escapeLike(word)+"%", n))
 }
 
-// FullText searches headwords and article text, ordered by BM25 rank. It reads
-// the input as a bag of prefix words - the last rung of the ladder - and is the
-// path for callers that do not plan (dict.FullTextPlanner is the one that
-// does).
-func (s *Store) FullText(query string, limit int) ([]dict.Result, error) {
-	return s.FullTextMatch(buildMatch(query, ""), limit)
+// FullTextContext searches headwords and article text, ordered by BM25 rank,
+// reading the input as a bag of prefix words: the single reading, for when no
+// internal/ftsq plan could run.
+func (s *Store) FullTextContext(ctx context.Context, query string, limit int) ([]dict.Result, error) {
+	return s.FullTextMatch(ctx, buildMatch(query, ""), limit)
 }
 
-// FullTextMatch runs a composed FTS5 expression (dict.FullTextPlanner).
+// FullTextMatch runs a composed FTS5 expression (internal/ftsq).
 //
 // BM25 ranking here is IDF and term frequency only: the table is declared
 // columnsize=0, which discards the per-row token counts bm25() needs for length
@@ -547,14 +554,14 @@ func (s *Store) FullText(query string, limit int) ([]dict.Result, error) {
 // a 200-document probe, that reorders the middle of a result list but not its
 // head. Restoring it means re-indexing every prepared dictionary to gain a
 // column of token counts, which is not worth it (D115).
-func (s *Store) FullTextMatch(match string, limit int) ([]dict.Result, error) {
+func (s *Store) FullTextMatch(ctx context.Context, match string, limit int) ([]dict.Result, error) {
 	if !s.ftsOK {
 		return nil, dict.ErrUnsupported
 	}
 	if match == "" {
 		return nil, nil
 	}
-	return s.collect(s.db.Query(`
+	return s.collect(s.db.QueryContext(ctx, `
 		SELECT e.w, e.m FROM entry_fts f JOIN entry e ON e.id = f.rowid
 		WHERE entry_fts MATCH ?1`+subEntryFilter("e.w")+`ORDER BY f.rank LIMIT ?2`, match, clamp(limit)))
 }
@@ -564,9 +571,8 @@ func (s *Store) Keywords(offset, n int) []string {
 		offset = 0
 	}
 	// n<=0 is "no limit" (dict.Keywords), which SQLite spells as a negative
-	// LIMIT. This used to pass clamp(n), capping every browse at 500 and
-	// turning "no limit" into "500" - maxLimit exists to bound HTTP SEARCH
-	// results (FTS-audit #7), and Keywords is not reachable over HTTP at all.
+	// LIMIT. Not clamp(n): maxLimit bounds HTTP SEARCH results (FTS-audit #7),
+	// and Keywords is not reachable over HTTP at all.
 	limit := n
 	if limit <= 0 {
 		limit = -1

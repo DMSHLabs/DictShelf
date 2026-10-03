@@ -108,12 +108,10 @@ type readSeekNopCloser struct{ *bytes.Reader }
 func (readSeekNopCloser) Close() error { return nil }
 
 // References are found with the shared HTML tokenizer (internal/htmlref), not
-// a pattern over the markup. The regex this replaced accepted quoted values
-// only - its own comment claimed "unquoted attributes are rare in dictionary
-// markup", which is simply untrue: OALD10 writes `href=plaintiff__gb_1.ogg"`
-// on every pronunciation link, and every such asset was silently left out of
-// the pack. It also matched inside <script> strings and comments, packing
-// files no article ever loads.
+// a pattern over the markup. Unquoted attributes are common - OALD10 writes
+// `href=plaintiff__gb_1.ogg"` on every pronunciation link - and a quoted-only
+// pattern would leave every such asset out of the pack, while matching inside
+// <script> strings and comments packs files no article ever loads.
 
 // ReferencedAssets returns the relative resource names an already-prepared
 // dictionary's articles refer to. Packing uses it to include files that live
@@ -286,7 +284,7 @@ func IngestMedia(d dict.Dictionary, names []string, dbPath, dictUUID string, pro
 	if err = os.Rename(tmp, dbPath); err != nil {
 		return err
 	}
-	// the receipt now has media to describe (best-effort, see IngestLevel).
+	// the receipt now has media to describe (best-effort, as in IngestPlan).
 	if strings.EqualFold(filepath.Base(dbPath), MediaDBName) {
 		_ = WriteInfo(filepath.Dir(dbPath))
 	}

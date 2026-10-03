@@ -132,7 +132,7 @@ func TestLoadAnnSections(t *testing.T) {
 	}
 
 	// The tag needs a separator after it. Without one, a file opening with
-	// "#LANGUAGES SUPPORTED" was read as a section named "SUPPORTED".
+	// "#LANGUAGES SUPPORTED" would read as a section named "SUPPORTED".
 	a3, ok := loadAnn(writeAnn(t, "D.dsl", "D.ann", []byte("#LANGUAGES SUPPORTED\nEnglish, Russian.\n")))
 	if !ok {
 		t.Fatal("no annotation")

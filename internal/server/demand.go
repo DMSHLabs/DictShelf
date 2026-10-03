@@ -9,19 +9,19 @@ import "net/http"
 // handleDemand prepares one dictionary because the user chose it, before there
 // is anything to search.
 //
-// Choosing a dictionary in the selector IS the demand (D92). Until now the only
-// thing that carried that signal to the server was a search of one dictionary
-// (handleSearch's `demand`), so a person who picked a dictionary and then
-// thought about what to type sat in front of an unprepared one, and the first
-// query they eventually ran paid the whole preview cost - on a 2.9 M-entry
+// Choosing a dictionary in the selector IS the demand (D92). Without this the
+// only thing carrying that signal to the server would be a search of one
+// dictionary (handleSearch's `demand`): a person who picks a dictionary and
+// then thinks about what to type would sit in front of an unprepared one, and
+// the first query they ran would pay the whole preview cost - on a 2.9 M-entry
 // dictionary, longer than any search budget. The selection alone is enough
 // evidence; there is no reason to make them type first.
 //
 // The work itself is entirely demandIndex's: one front-lane slot, no power
 // gate, cooldown on failure, idempotent under repeated selection. This handler
 // only translates a dictionary id into that call and returns immediately - the
-// ingest outlives the request, and the client learns it finished the same way
-// it always has, from /api/dicts.
+// ingest outlives the request, and the client learns it finished from
+// /api/dicts.
 //
 // Same-origin only, deliberately absent from corsAllowed (D69): it starts work
 // and writes to the user's library folder, which is not what the read-only
@@ -38,7 +38,7 @@ func (s *Server) handleDemand(w http.ResponseWriter, r *http.Request) {
 	// other kind of demand: the user asked for something only the index can
 	// serve (browsing, which has no direct-backend path), so the request IS
 	// the trigger AUTO_INDEX off reserves for them.
-	if s.AutoIndex || r.URL.Query().Get("explicit") == "1" {
+	if explicit, _ := queryFlag(r.URL.Query(), "explicit"); s.AutoIndex || explicit {
 		e.demandIndex()
 	}
 	// `indexing` means "work is in flight", and e.indexing() alone does not:
@@ -46,6 +46,6 @@ func (s *Server) handleDemand(w http.ResponseWriter, r *http.Request) {
 	// which is harmless for the search path - a prepared dictionary is never
 	// deferred again - but would make this endpoint answer "true" for a
 	// dictionary prepared an hour ago, forever. One stat settles it.
-	_, prepared := preparedTextDB(e.Path)
+	_, prepared := validPrepared(e.Path)
 	writeJSON(w, map[string]bool{"indexing": e.indexing() && !prepared})
 }

@@ -105,9 +105,7 @@ func TestFetchDownloads(t *testing.T) {
 		t.Fatalf("progress ended at %d/%d, want %d/%d", lastDone, lastTotal, len(body), len(body))
 	}
 	// The name the server decided, carried by the progress report itself: it
-	// is the only place a caller can learn it before the download finishes,
-	// and a progress line that could not name the file was the reason
-	// Progress grew the parameter.
+	// is the only place a caller can learn it before the download finishes.
 	if lastName != "bundle.zip" {
 		t.Fatalf("progress name = %q, want bundle.zip", lastName)
 	}
@@ -540,7 +538,7 @@ func TestFetchReusesOnSizeWhenThereIsNoValidator(t *testing.T) {
 }
 
 // The other half of the rule: a file that DID change is fetched, and replaces
-// the older revision of itself. Never a numbered one beside it: that became a
+// the older revision of itself. Never a numbered one beside it: that would be a
 // second dictionary called "bundle (2)" instead of an update (D155 Am. 4).
 func TestFetchReplacesAChangedDownload(t *testing.T) {
 	bodies := []string{strings.Repeat("a", 2048), strings.Repeat("b", 4096)}
