@@ -5,6 +5,51 @@ Notable changes in **wuDict2**, the Android fork of
 version it was forked from. Fork release tags are prefixed `wudict2-`; one
 tagged line per release, newest first.
 
+## wudict2-v0.7.1 — 2026-10-04
+
+From `dev`. Mostly a settling release: the two DSL readers from v0.7.0 reach the
+windows that list and group dictionaries, examples in those articles get one
+look for both readers, and the second upstream sync landed.
+
+### The two DSL readers reach the rest of the app
+
+- **The group editor and the Browse picker follow the parser in force.** With
+  one parser selected they list that variant alone; with both, both. A hidden
+  variant keeps its membership and its position, so reordering the visible
+  dictionaries no longer disturbs it, and a variant you selected whose index is
+  missing stays visible instead of vanishing.
+- **The dictionary count no longer doubles** when both readers are on — it
+  counts DSL sources, not the views of them.
+
+### Examples in DSL articles
+
+- **Both readers show examples the same way**: one tint, one diamond, no
+  duplicates, and inline examples hidden as intended. The GD reader now emits
+  ready-made example markup instead of leaving it to the page, the marker
+  scales with the text rather than sitting at a fixed size, and the Original
+  reader's own background is fixed alongside.
+
+### Rescan folders
+
+- **The dialog reports progress** — "Dictionary 3 of 12: Oxford…" while it
+  works, a line while it cleans up and refreshes the list, and a message if the
+  connection drops before the result arrives, instead of appearing to hang.
+
+### Reading
+
+- **Article text is always selectable.** A dictionary's own stylesheet could
+  switch selection off, which on Android also removed the long-press Copy menu;
+  prose is selectable on both surfaces now, whatever the dictionary says.
+
+### Also in this build: merged from upstream
+
+- **Comments no longer reach the browser.** The server strips them from every
+  page, stylesheet and script as it serves them, so the pages are smaller;
+  preset files are served as they are and keep theirs.
+- The rest of that upstream commit is internal — the store's ingest and
+  reconciliation paths were renamed and restructured, and this fork's own code
+  was adapted to the new names.
+
 ## wudict2-v0.7.0 — 2026-10-03
 
 From `dev`. A release about keeping the data in step with the dictionaries —
