@@ -5,7 +5,7 @@ the results in the browser at [localhost:6888](http://localhost:6888). One
 executable, no dependencies; runs on macOS, Linux (including Raspberry Pi),
 Windows and Android.
 
-📖 User Guide: [wudict.legbehindneck.com](https://wudict.legbehindneck.com/)
+📖 User Guide: [wuweidict.github.io/wudict](https://wuweidict.github.io/wudict)
 
 ## Android
 
@@ -33,20 +33,23 @@ Windows and Android.
 DICT_DIR = ["~/Dictionaries", "/Volumes/Data/Dicts"]
 ```
 
+> [!TIP]
+> <sup>If you don't have yet a local dictionary collection you can download some FOSS dictionaries from the [links here](https://legbehindneck.com/wudict/).</sup>
+
 ## Features
 - Formats: MDict, StarDict, Aard2, DSL, Babylon, ZIM, wuDict markdown (a plain-text dictionary you can write in a text editor)
 - Instant search across all dictionaries with four modes: prefix, exact, contains, and full-text search
-- Dictionaries are automatically grouped by language, publisher, direction, etc.
+- Dictionaries are automatically grouped by language, publisher, direction, or [your own custom groups](https://wudict.legbehindneck.com/dictionaries/groups/).
 - Adjust the font size via the <kbd>☰</kbd> → <kbd><b>+/-</b></kbd> widget
-- Custom lemmatization (word-form morphology) for 24 languages, configurable via <kbd>☰</kbd> → <kbd>⚙️</kbd> → <kbd>**Lemmatization**</kdb>; English lemmatization comes pre-installed
+- [Custom lemmatization](https://wudict.legbehindneck.com/start/search/#inflected-words) (word-form morphology) for 24 languages, configurable via <kbd>☰</kbd> → <kbd>⚙️</kbd> → <kbd>**Lemmatization**</kdb>; English lemmatization comes pre-installed
 - Browse **all headwords** in a dictionary via <kbd>☰</kbd> → <kbd>**Browse**</kbd>
-- Apply custom CSS styles and fonts via the embedded Styler: <kbd>☰</kbd> → <kbd>⚙️</kbd> → <kbd>**Custom Style**</kbd>
+- Apply custom CSS styles and fonts via the [embedded Styler](https://wudict.legbehindneck.com/dictionaries/styles/#custom-styles): <kbd>☰</kbd> → <kbd>⚙️</kbd> → <kbd>**Custom Style**</kbd>
 - 📱 Double-tap / 💻 double-click any word in a wudict dictionary article to instantly look up its definition
 - 📱 Immersive mode (full screen), with an option to draw content edge-to-edge, including the camera cutout area; enable by long-tapping the wudict icon in the launcher → <kbd>**Settings**</kbd>
 - 📱 Select text in any app and pick → <kbd>wuDict</kbd> from the context menu
 - 📱 Import dictionaries into wudict directly from your file manager: tap a .mdx/.dsl/.bgl/.zim/.slob/.zip/.7z file → <kbd>**Share**</kbd> → <kbd>**wuDict**</kbd>
 - 📱 Long-tap a dictionary download link on any web page (.mdx/.slob/.dsl/.zip/.7z) and pick Share → <kbd>**wuDict**</kbd> to install it locally
-- Install multiple dictionaries via [wudict magic links 🔗](https://legbehindneck.com/wudict/)
+- Install multiple dictionaries via [wudict magic links 🔗](https://legbehindneck.com/wudict/) 
 
 # Supported formats
 
