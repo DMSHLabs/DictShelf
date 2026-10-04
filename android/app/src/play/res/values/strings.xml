@@ -16,7 +16,7 @@
      <string name="import_title">Import dictionaries</string>
      <string name="import_message">Choose the folder holding your dictionaries. wuDict copies it
           into its own storage, keeping the folder layout — an .mdx needs its .mdd beside it, a
-          StarDict its .idx and .dict, a DSL its res folder. Afterwards it offers to delete the
+          StarDict its .idx and .dict, a DSL its .dsl.files.zip. Afterwards it offers to delete the
           files it imported from, so your collection is not stored twice.</string>
      <string name="import_choose">Choose folder</string>
      <string name="import_later">Later</string>

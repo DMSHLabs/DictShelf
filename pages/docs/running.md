@@ -1,119 +1,83 @@
 ---
 title: Run at startup
-description: Start WuWeiDict automatically when you log in - a macOS LaunchAgent, a Linux systemd user unit, or the Windows Startup folder.
+description: Start wudict at login - a macOS LaunchAgent, a Linux systemd user unit, or the Windows Startup folder.
 ---
 
 # Run at startup
 
-**Goal:** WuWeiDict answers at [localhost:6888](http://localhost:6888) from the
-moment you log in, without you starting it.
-
-All this is optional and is just convenience to have `wudict` running as service even after you reboot,
-so that you don't need to start it manually every time you need it.
+The macOS and Linux setups use `make` targets in a clone of the
+[source repository](https://github.com/wuweidict/wudict).
 
 === "macOS"
 
     ## LaunchAgent
 
-    macOS starts a LaunchAgent when you log in. The Makefile in a source clone
-    generates and manages it.
-
-    | Command | What it does |
+    | Command | Action |
     | --- | --- |
-    | `make mac-agent-install` | generate the plist and register the agent |
-    | `make mac-agent-start` | start it now |
-    | `make mac-agent-stop` | stop it |
-    | `make mac-agent-restart` | rebuild the binary, then restart |
-    | `make mac-agent-status` | show its state, including the process id |
-    | `make mac-agent-uninstall` | stop it and delete the plist |
+    | `make mac-agent-install` | build `wudict`, generate the LaunchAgent plist, and register it; runs `wudict serve --no-browser` (`AGENT_BIN=<path>` for another binary) |
+    | `make mac-agent-start` | load and start the agent |
+    | `make mac-agent-stop` | stop and unload the agent |
+    | `make mac-agent-restart` | rebuild, then restart the agent |
+    | `make mac-agent-status` | show the agent's state and process id |
+    | `make mac-agent-uninstall` | stop the agent and delete the plist |
 
-    ### Verify
+    Check with `make mac-agent-status`, then open
+    [localhost:6888](http://localhost:6888).
 
-    ``` sh title="the agent's state"
-    make mac-agent-status
-    ```
-
-    Then open [localhost:6888](http://localhost:6888).
-
-    ## Or use the app instead
-
-    **wuDict.app** does the same job on demand. It shows a menu-bar icon that
-    reports whether the server runs, opens it, rescans dictionaries and quits
-    it. The LaunchAgent shows nothing.
-
-    Choose the agent to have WuWeiDict always there. Choose the app to start and
-    stop it yourself.
-
-    [The macOS app](apps/macos.md){ .md-button }
+    [wuDict.app](apps/macos.md) is the alternative that starts when you open
+    it and shows a menu-bar icon. Use one of the two.
 
 === "Linux"
 
     ## systemd user unit
 
-    The service runs as your user. Only the binary needs `sudo`, because it
-    goes to `/usr/local/bin`.
+    The unit runs as your user. Only installing the binary to
+    `/usr/local/bin` needs `sudo`.
 
-    | Command | What it does |
+    | Command | Action |
     | --- | --- |
-    | `make linux-service-install` | install the binary with sudo, then create the user unit |
-    | `make linux-service-start` | enable and start it now |
-    | `make linux-service-stop` | disable and stop it |
-    | `make linux-service-restart` | rebuild, reinstall, restart |
+    | `make linux-service-install` | install the binary (sudo), then create the user unit |
+    | `make linux-service-start` | enable and start the unit |
+    | `make linux-service-stop` | stop the unit |
+    | `make linux-service-restart` | rebuild, reinstall the binary, restart |
     | `make linux-service-status` | show the unit's state |
-    | `make linux-service-uninstall` | remove the unit and keep the binary |
+    | `make linux-service-uninstall` | disable and remove the unit; the binary stays |
 
-    The unit expects the binary at `/usr/local/bin/wudict`.
+    The unit runs `/usr/local/bin/wudict`. `make linux-install` installs only
+    the binary; `PREFIX=/opt/wudict` changes the location.
 
-    To install only the binary, run `make linux-install`. Set
-    `PREFIX=/opt/foo` to put it elsewhere.
+    A user unit is managed with `systemctl --user`, e.g.
+    `systemctl --user status wudict`. To keep it running after logout:
 
-    ### Keep it running after you log out
-
-    ``` sh title="allow your services to outlive the session"
+    ``` sh
     sudo loginctl enable-linger "$(id -un)"
     ```
 
-    ### Verify
-
-    ``` sh title="state now, logs live"
-    make linux-service-status
-    journalctl --user -u wudict -f
-    ```
+    Logs: `journalctl --user -u wudict -f`.
 
 === "Windows"
 
-    ## The installer does it
+    ## Installer
 
-    The setup wizard has a **start at sign-in** option. Switch it on during
-    installation and it places the launcher in your **Startup** folder, with
-    `--no-browser` already set. See
-    [the Windows installer](apps/windows.md).
+    The installer's *Start wuDict at sign-in* task puts a shortcut to
+    `wudict.exe --no-browser` in the Startup folder. See
+    [Windows installer](apps/windows.md).
 
     ## By hand
 
-    1. Put `wudict.exe` in a folder of your choice, for example
-       `C:\tools\wudict\`.
-    2. Press <kbd>Win</kbd>+<kbd>R</kbd> and enter `shell:startup`.
-    3. Put a shortcut to `wudict.exe` in the folder that opens.
+    1. Put `wudict.exe` in a folder, e.g. `C:\tools\wudict\`.
+    2. <kbd>Win</kbd>+<kbd>R</kbd>, enter `shell:startup`.
+    3. Create a shortcut to `wudict.exe` in that folder, and add
+       `--no-browser` to its target.
 
-    Add `--no-browser` to the shortcut's command line if you do not want a
-    browser tab at every sign-in.
-
-    ### What you get
-
-    Started by Windows or from Explorer, `wudict.exe` shows a **tray icon** in
-    the notification area instead of a console window with log messages. It logs to
-    `%LOCALAPPDATA%\wudict\wudict.log`.
-
-    ### Verify
-
-    Sign out and back in, then open
+    Started this way, `wudict.exe` shows a tray icon and logs to
+    `%LOCALAPPDATA%\wudict\wudict.log`. Sign out and in, then open
     [localhost:6888](http://localhost:6888).
 
-## Useful settings for a background server
+## Settings for a background server
 
-| Setting | Why |
+| Setting | Effect |
 | --- | --- |
-| [`NO_BROWSER`](reference/configuration.md#no_browser) | do not open a browser tab at every start |
-| [`TRAY`](reference/configuration.md#tray) | force the tray or menu-bar icon on or off |
-| [`VERBOSE`](reference/configuration.md#verbose) | log requests and dictionary opens while you diagnose |
+| [`NO_BROWSER`](reference/configuration.md#no_browser) | no browser tab at startup |
+| [`TRAY`](reference/configuration.md#tray) | tray or menu-bar icon on or off |
+| [`VERBOSE`](reference/configuration.md#verbose) | log requests, dictionary opens, indexing and audio conversion |

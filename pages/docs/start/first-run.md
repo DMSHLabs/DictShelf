@@ -1,50 +1,44 @@
 ---
 title: First run
-description: Start wudict and configure folders with dictionaries.
+description: Start wudict, set the dictionary folders, and check that the dictionaries are found.
 ---
 
-# Quick start
-1. Download wudict for your OS from https://github.com/wuweidict/wudict/releases/latest
+# First run
 
-
-**Goal:** Get wuDict running in your browser at
-[localhost:6888](http://localhost:6888).
-
-**You need:** a working `wudict` command, and a folder holding dictionary
-files.
+Requires `wudict` installed ([Install](install.md)) and a folder of
+dictionary files.
 
 ## 1. Start the server
 
-``` sh title="start WuWeiDict"
+``` sh
 wudict
 ```
 
-WuWeiDict prints the address it listens on, the dictionary folder it scans, and
-the config file in effect. Then it opens your browser.
+wudict prints the address it listens on, the dictionary folders it reads and
+the config file in effect, then opens the browser at
+[localhost:6888](http://localhost:6888). A binary in the current folder is
+started with `./wudict`.
 
-To start a copy you built in the current folder, run `./wudict`.
+The **wudict howto**, a guide built in as a dictionary, is always available:
+search for `wudict` to list its topics.
 
-wudict comes with its own guide, **wudict howto**, a small dictionary built into the app. With no dictionaries of
-your own yet, the main page opens on it. Search `wudict` any time to list its topics.
+## 2. Set the dictionary folders
 
-## 2. Set the folders with dictionaries
+The default dictionary folder is `~/Dictionaries`, subfolders included. If it
+is missing or empty, the main page shows the howto with a link to the setup
+page, [localhost:6888/setup](http://localhost:6888/setup).
 
-wuDict looks for dictionaries under **`~/Dictionaries`** by default, including subfolders.
+On the setup page, enter the path of a folder with dictionary files (`~` is
+allowed). The page checks the path as you type and shows how many dictionaries
+it contains. <kbd>Use this folder</kbd> saves it to `~/.wudict/wudict.toml`;
+no restart is needed.
 
-If the default folder is missing or empty, the main page shows the guide with **Add dictionaries** above it, which
-opens the setup page at [localhost:6888/setup](http://localhost:6888/setup), where you can set the custom folders
-with your dictionaries. 
-Paste the folder path to your dictionaries folder (can contain `~`). The page validates the path while you type and
-counts displays the number of total dictionaries found.
+To open the setup page later: <kbd>☰</kbd> → folder summary →
+<kbd>Edit folders…</kbd>.
 
-The setup page writes your choice to `~/.wudict/wudict.toml`. No restart is
-needed. To open the setup page from the browser click the hamburger icon and then 
-under the cogwheel icon <kbd>⚙️</kbd> pick <kdb>**✏️ Edit folders...**</kdb>.
+The folders can also be set without the setup page:
 
-To set the folder yourself, pick one of these three ways.
-
-
-=== "Config file (preferred)"
+=== "Config file"
 
     ``` toml title="~/.wudict/wudict.toml"
     DICT_DIR = ["~/Dictionaries", "/Volumes/Data/Dicts"]
@@ -58,52 +52,47 @@ To set the folder yourself, pick one of these three ways.
 
 === "Environment variable"
 
-    ``` sh title="separate folders with : - use ; on Windows"
+    ``` sh title="separate folders with : (; on Windows)"
     DICT_DIR="~/Dictionaries:/Volumes/Data/Dicts" wudict
     ```
 
+A command-line flag overrides the environment variable, which overrides
+`wudict.toml`. The setup page shows when a folder list is overridden.
 
-A command-line flag overrides the env var, which in turn overrides the value in `wudict.toml`. If you
-edit the file while a flag sets the same value, the setup page will indicate that an override is active.
+[All settings](../reference/configuration.md){ .md-button }
 
-[All 17 settings](../reference/configuration.md){ .md-button }
+## 3. Check
 
-## 3. Verify
+The main page lists one section per dictionary that has a result. Search for a
+word you know is in one of them.
 
-The page lists one section per dictionary. Type a word you know is in one of
-them and press ++enter++.
+From a terminal:
 
-From the terminal, check the same thing without a browser:
-
-``` sh title="what WuWeiDict sees in a folder"
+``` sh title="the dictionaries wudict finds in a folder"
 wudict list ~/Dictionaries
 ```
 
-Each line is one dictionary that WuWeiDict can read.
+Each line is one dictionary wudict can read.
 
-## What happens next, on its own
+## Indexing
 
-The first search opens each dictionary through its own format. Exact and prefix
-lookups work at once.
+Exact and prefix search work at once, through each dictionary's own format.
+On the first search, wudict indexes each dictionary's headwords in the
+background, one dictionary at a time, into the library (`~/.wudict/db`).
+Indexed dictionaries are searched faster and use less memory. Search works
+during indexing.
 
-In the background, WuWeiDict then **prepares** each dictionary: it builds a
-headword index of a few megabytes and stores it in the library folder. Prepared
-dictionaries search faster and use far less memory.
+[The library](../dictionaries/library.md){ .md-button }
 
-Preparation runs one dictionary at a time by default, so it never takes the
-machine away from you. Search keeps working the whole time.
+## Problems
 
-[What preparation does](../dictionaries/library.md){ .md-button }
-
-## If something went wrong
-
-| What you see | Go to |
+| Symptom | See |
 | --- | --- |
-| No dictionaries listed | [Dictionaries do not appear](../help/troubleshooting.md#no-dictionaries) |
-| `address already in use` | [Port 6888 is taken](../help/troubleshooting.md#port-taken) |
-| No browser tab opened | [Nothing opens](../help/troubleshooting.md#no-browser) |
-| Pronunciation stays silent | [Audio does not play](../help/troubleshooting.md#audio) |
+| No dictionaries listed | [No dictionaries appear](../help/troubleshooting.md#no-dictionaries) |
+| `address already in use` | [Port 6888 is in use](../help/troubleshooting.md#port-taken) |
+| No browser tab opens | [No browser tab opens](../help/troubleshooting.md#no-browser) |
+| No sound | [No sound](../help/troubleshooting.md#audio) |
 
 ## Next
 
-[Search: the four modes and the shortcuts](search.md){ .md-button .md-button--primary }
+[Search](search.md){ .md-button .md-button--primary }

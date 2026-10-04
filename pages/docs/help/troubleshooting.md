@@ -1,187 +1,154 @@
 ---
 title: Troubleshooting
-description: Symptoms and their causes - missing dictionaries, port already taken, silent audio, slow first searches, disk space.
+description: Symptoms, causes and fixes - missing dictionaries, port in use, no sound, broken articles, slow first searches, disk use, Android.
 ---
 
 # Troubleshooting
 
-Find your symptom. Each entry names the cause first.
-
 ## No dictionaries appear { #no-dictionaries }
 
-Check these four in order.
+| Cause | Fix |
+| --- | --- |
+| The files are not in a dictionary folder | Compare the folders printed at startup, or shown in the folder summary, with where the files are |
+| A file is missing | A StarDict `.dict.dz` needs its `.ifo` and `.idx`; see [Formats](../dictionaries/formats.md) |
+| The files were added while wudict was running | <kbd>☰</kbd> → folder summary → <kbd>Rescan folders</kbd> |
+| Wrong separator in `DICT_DIR` (environment) | `:` on macOS and Linux, `;` on Windows |
 
-1. **The folder is not the one WuWeiDict scans.** Startup prints the folder in
-   effect. Compare it with where your files are.
-2. **The file is not recognised as a dictionary.** A StarDict `.dict.dz` needs
-   its `.ifo` file beside it. `.dsl.dz` counts as one whole extension.
-   Subfolders are scanned, so depth is not the problem.
-3. **You copied files in while WuWeiDict was running.** Open the <kbd>☰</kbd> panel and click
-   <kbd>**Rescan folders**</kbd>. No restart needed.
-4. **Windows separators.** In the environment, `DICT_DIR` folders are separated
-   by `;` on Windows, not `:`.
-
-``` sh title="ask WuWeiDict what it sees"
+``` sh title="the dictionaries wudict finds in a folder"
 wudict list ~/Dictionaries
 ```
 
-## WuWeiDict refuses to start: the dictionary folder is the library folder
+## wudict does not start: DICT_DIR and DB_DIR are the same folder
 
-`DICT_DIR` and `DB_DIR` must be different folders. WuWeiDict stops rather than
-scan its own output. Normally, you'll only need to set `DICT_DIR`, and let wuDict use its default `DB_DIR`.
+The library ([`DB_DIR`](../reference/configuration.md#db_dir)) must be a
+different folder from every dictionary folder. Usually only `DICT_DIR` needs
+setting; the library defaults to `~/.wudict/db`.
 
-Set one of them somewhere else. See
-[`DB_DIR`](../reference/configuration.md#db_dir).
+## Port 6888 is in use { #port-taken }
 
-## Port 6888 is already in use { #port-taken }
+Another program uses the port; startup reports it. Choose another port:
 
-Another program holds the port. Pick a different one.
-
-``` sh title="this session"
+``` sh title="for one run"
 wudict --port 9090
 ```
 
-``` toml title="~/.wudict/wudict.toml, permanently"
-SERVER_PORT = 9090
+``` toml title="~/.wudict/wudict.toml"
+SERVER_PORT = "9090"
 ```
 
-Then open `localhost:9090`. WuWeiDict prints a hint when it finds the port busy.
+Then open `localhost:9090`.
 
 ## No browser tab opens { #no-browser }
 
-Open [localhost:6888](http://localhost:6888) yourself.
+Open [localhost:6888](http://localhost:6888). A tab is not opened when
+[`NO_BROWSER`](../reference/configuration.md#no_browser) is set.
 
-If the tab should never open, that is a setting, not a fault. See
-[`NO_BROWSER`](../reference/configuration.md#no_browser).
+Started without a console, wudict shows an icon instead of output: on Windows
+in the notification area (log: `%LOCALAPPDATA%\wudict\wudict.log`), on macOS in
+the menu bar (log: `~/Library/Logs/wudict.log`).
 
-On Windows, a double-clicked `wudict.exe` has no console. Look for its **tray
-icon** in the notification area. Its log is
-`%LOCALAPPDATA%\wudict\wudict.log`. On macOS, wuDict.app puts an icon in the
-**menu bar** and logs to `~/Library/Logs/wudict.log`.
+## No sound { #audio }
 
-## Pronunciation stays silent { #audio }
+`.mp3`, `.ogg` and `.wav` play in the browser. Speex (`.spx`) is converted to
+WAV first: by the built-in decoder in `-cgo` builds, by the external
+`speexdec` program in `-purego` builds.
 
-Most `.mp3` or `.wav` files play directly. The problem is almost always
-Speex.
-
-Browsers cannot play `.spx`, so WuWeiDict converts it to WAV first. A `-cgo` build
-converts inside the process. A `-purego` build needs the external program:
-
-``` sh title="install the external decoder"
+``` sh title="install speexdec"
 brew install speex     # macOS
-apt install speex      # Debian and Ubuntu
+apt install speex      # Debian, Ubuntu
 ```
 
-Point at a specific program with `--speexdec`, or
-[`SPEEXDEC`](../reference/configuration.md#speexdec). WuWeiDict prints which
-decoder it resolved at startup, or an install hint when it found none.
+[`SPEEXDEC`](../reference/configuration.md#speexdec) (`--speexdec`) sets its
+path. Startup prints the decoder in use, or how to install one.
 
-One exception: a `.spx` file you placed in a `res/` folder is served as it is,
-not converted. Supply `.mp3` or `.wav` there instead.
+A `.spx` file in a `res/` folder is not converted: use `.mp3` or `.wav` there.
 
-## An article looks broken, or its buttons do nothing
+## An article is broken, or its buttons do nothing
 
-The dictionary might come with a faulty .js or .css file. Its own scripts usually load one library
-first, so a single bad file disables everything interactive in every article.
+A dictionary's stylesheet or script is damaged or missing. wudict logs a
+warning when it serves a text resource that contains NUL bytes, with the
+`res/` path that would override it. A ⚠ in the dictionary's result header
+marks a script error.
 
-WuWeiDict warns at startup when it serves a text file containing a NUL byte, and
-names the path that would replace it.
+[Resource overrides](../dictionaries/override.md){ .md-button }
 
-[Replace the file](../dictionaries/override.md){ .md-button }
+## An image or sound is missing
 
-## An image or a sound is missing
+In the browser's network panel, find the failing request to
+`/res/<dictionary id>/<path>`. A `404` means the dictionary lacks the file;
+`<path>` is where a [resource override](../dictionaries/override.md) goes.
 
-Open your browser's network panel and look for a failing request to
-`/res/<dictionary>/<name>`. A `404` there is the missing file, and `<name>` is
-the path you must mirror in the dictionary's `res/` folder.
+## The first searches are slow, and the CPU is busy
 
-## The first searches are slow, and the machine is busy
+wudict is indexing the dictionaries, once each, one at a time, in the
+background. Indexing one dictionary uses one CPU core.
+[`INDEX_WORKERS`](../reference/configuration.md#index_workers) indexes several
+at once; [`AUTO_INDEX = "off"`](../reference/configuration.md#auto_index)
+turns indexing off.
 
-WuWeiDict is preparing your dictionaries. That happens once per dictionary,
-one at a time, in the background.
+## Some dictionaries are reported as not searched
 
-Preparing one dictionary uses a whole processor core. To let it use more, raise
-[`INDEX_WORKERS`](../reference/configuration.md#index_workers). To stop
-preparing entirely, set
-[`AUTO_INDEX`](../reference/configuration.md#auto_index) to `off`.
+The search reached [`SEARCH_MEMORY`](../reference/configuration.md#search_memory)
+and did not open the remaining dictionaries that are not indexed. Choose one of
+them in the picker to search it alone. The limit is off by default on the
+desktop and on by default on Android.
 
-## Some dictionaries report "not searched"
+## Contains search misses a headword
 
-The search reached its memory cap and declined to open the rest. They are not
-broken. Search the specific dictionary you need from the dropdown and it will work.
+- Contains matches the query as a literal substring, ignoring case and
+  accents; it does not correct spelling.
+- The contains index is outdated: its switch in the dictionary panel says so.
+  Click it to rebuild the index.
 
-This memory limits off by default on the desktop, and on by default on android. See
-[`SEARCH_MEMORY`](../reference/configuration.md#search_memory).
+## The library uses too much disk space
 
-## Contains search misses a word it should find
+The dictionary panel shows each index's size; click a switch to remove that
+index. <kbd>Rescan folders</kbd> lists [orphans](../dictionaries/library.md#orphans),
+library folders whose dictionary files are gone, and deletes the ones you
+tick.
 
-Two possible causes.
-
-- **The word is not a literal piece of the headword.** Contains matches your
-  text exactly, ignoring case and accents. It does not correct spelling.
-- **The index is old.** When the <kbd>☰</kbd> panel marks a dictionary's substring index
-  as out of date, rebuild it there. It was built with older text folding and
-  may miss words whose folded form changed.
-
-## The library uses too much disk
-
-The <kbd>☰</kbd> panel shows how much space each index takes, per dictionary, and every switch turns
-off again.
-
-``` sh title="find leftovers"
-wudict clean        # list broken or interrupted items
-wudict clean -f     # delete them
+``` sh title="from a terminal"
+wudict clean              # list broken library folders and orphans
+wudict clean -f           # delete the broken ones
+wudict clean -f -orphans  # and the orphans
 ```
-
-Removal is offered while the original dictionary file is still on disk. When
-the original is gone, the prepared data is the only copy, and its switches
-lock.
-
-If you deleted the dictionary files yourself, click <kbd>**Rescan folders**</kbd>
-in the <kbd>☰</kbd> panel. wuDict lists every prepared dictionary whose file is
-gone and offers to delete it. `wudict clean -f -orphans` does the same from the
-terminal.
 
 ## The Android app shows no dictionaries { #android-no-dictionaries }
 
-1. **Storage access was refused.** <kbd>Settings</kbd> ▸ <kbd>Apps</kbd> ▸ <kbd>wuDict</kbd>▸ <kbd>Permissions</kbd>,
-   or Android's *All files access* list. Turn it on, then reopen the app.
-2. **The folder name is wrong.** It must be *Internal storage ▸ Dictionaries*,
-   at the top level, not inside *Documents* or *Download*.
-3. **The files arrived while the app ran.** Open <kbd>☰</kbd> and tap
-   **<kbd>♻️ Rescan folders</kbd>**.
+FOSS build:
 
-An SD card is not scanned. Copy the files to internal storage.
+1. **No storage access.** *Settings → Apps → wuDict → Permissions*, or
+   Android's *All files access* list: allow it, then reopen the app.
+2. **Wrong folder.** The folder is *Internal storage → Dictionaries*, at the
+   top level, not inside *Documents* or *Download*.
+3. **Files added while the app was open.** <kbd>☰</kbd> → folder summary →
+   <kbd>Rescan folders</kbd>.
 
-## The Android app pauses while it is not on screen
+Google Play build: dictionaries must be imported; see
+[Add dictionaries](../apps/android.md#add-dictionaries).
 
-That is deliberate. With screen off on android the server indexes nothing and closes what it
-can, in order to preserve battery life. Prepared dictionaries stay
-open, so returning is instant.
+## The Android app while it is not on screen
 
-Preparing a new dictionary therefore needs the app on screen. Leave it open the
-first time you add a large dictionary. See
-[the Android app](../apps/android.md).
+When the app is not visible, the server starts no new indexing and closes the
+dictionaries it can reopen. Indexed dictionaries stay open. Indexing,
+downloads and rebuilds already running continue in a foreground service, with
+a progress notification. See [Android app](../apps/android.md#battery-and-memory).
 
-## I edited wudict.toml and nothing changed
+## A change to wudict.toml has no effect
 
-A command-line flag or an environment variable sets the same value, and both
-will override the values in `wudict.toml`.
+A command-line flag or an environment variable sets the same key and takes
+precedence. The setup page and `/api/config` show where each value comes from.
 
-Check the current process: http://localhost:6888/api/config shows the effective settings
-and where they came from. The setup page shows the same, and warns when a value
-cannot be changed from the file.
+[Priority](../reference/configuration.md#priority){ .md-button }
 
-[Priority rules](../reference/configuration.md#priority){ .md-button }
+## Anything else
 
-## Nothing above matches
+Start wudict with `--verbose`: it logs every request, dictionary open, indexing
+step and audio conversion.
 
-Start WuWeiDict with `--verbose`. It then logs every request, dictionary open,
-preparation step and audio conversion.
-
-``` sh title="verbose logging"
+``` sh
 wudict --verbose
 ```
 
-Then [open an issue](https://github.com/wuweidict/wudict/issues) with that
-output and your `wudict --version`.
+[Open an issue](https://github.com/wuweidict/wudict/issues) with that output
+and the output of `wudict --version`.

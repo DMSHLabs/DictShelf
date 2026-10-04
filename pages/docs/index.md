@@ -1,22 +1,21 @@
 ---
 title: Home
-description: wuDict — instant search in MDict (.mdx/.mdd), AARD2 (.slob), Stardict (.ifo), Babylon (.bgl), ZIM (.zim) dictionaries in your browser.
+description: wudict searches MDict, StarDict, Aard 2, Lingvo DSL, Babylon, ZIM and wudict markdown dictionaries in the browser, on macOS, Linux, Windows and Android.
 ---
 
 # All your dictionaries, in your browser
 
-**WuWeiDict** (the program is called `wudict`) searches all your local dictionaries using your browser. 
-It runs on at [localhost:6888](http://localhost:6888).
-
-`wudict` is a single standalone executable file. Native, no dependencies. 
+**WuWeiDict** (`wudict`) searches all your local dictionaries at once and shows
+the results in the browser, at [localhost:6888](http://localhost:6888). It is a
+single executable with no dependencies.
 
 [Install](start/install.md){ .md-button .md-button--primary }
-[Quick Start](start/first-run.md){ .md-button }
-[Chrome/Firefox Extension](extension.md){ .md-button }
+[First run](start/first-run.md){ .md-button }
+[Browser extension](extension.md){ .md-button }
 
 ---
 
-## Supported dictionary formats
+## Formats
 
 <div class="grid cards" markdown>
 
@@ -24,87 +23,95 @@ It runs on at [localhost:6888](http://localhost:6888).
 
     ---
 
-    `.mdx` plus `.mdd`. A widely used format, with articles in HTML, and resources (audio, .css, .js) in .mdd packs.
+    `.mdx` and `.mdd`. HTML articles; resources (audio, CSS, scripts) in `.mdd` archives.
 
 -   :fontawesome-solid-book-bookmark:{ .lg .middle } **StarDict**
 
     ---
 
-    `.ifo`, `.idx`, `.dict`. Synonym files, images and dictzip compression are
-    all read in place.
+    `.ifo`, `.idx`, `.dict`. Synonym files, resources and dictzip compression
+    are supported.
 
 -   :fontawesome-solid-layer-group:{ .lg .middle } **Aard 2**
 
     ---
 
-    `.slob`. Single binary with text, images, audio, scripts and styling.
+    `.slob`. One file with articles, images, audio, scripts and stylesheets.
 
 -   :fontawesome-solid-language:{ .lg .middle } **Lingvo DSL**
 
     ---
 
-    `.dsl` and `.dsl.dz`. Legacy, still common in Eastern Europe.
+    `.dsl` and `.dsl.dz`, with `.dsl.files.zip` resources.
 
 -   :fontawesome-solid-earth-americas:{ .lg .middle } **Babylon**
 
     ---
 
-    `.bgl`. Character sets are detected automatically, resources are read from
-    inside the file.
+    `.bgl`. Character sets detected automatically; resources read from the file.
 
 -   :fontawesome-solid-globe:{ .lg .middle } **ZIM**
 
     ---
 
-    `.zim`. Kiwix and Wikimedia archives, searched straight from the file.
+    `.zim`. Kiwix and Wikimedia archives, searched in place.
 
--   :fontawesome-solid-box-archive:{ .lg .middle } **wuDict library**
+-   :fontawesome-solid-file-lines:{ .lg .middle } **wudict markdown**
 
     ---
 
-    `text.db`. wuDict's own SQLite-based format: one folder per dictionary with optional `media.db`, portable across machines.
+    `.wudict.md`. A dictionary as one CommonMark file, readable and editable
+    in any text editor.
+
+-   :fontawesome-solid-box-archive:{ .lg .middle } **wudict library**
+
+    ---
+
+    `text.db`. wudict's SQLite format: one folder per dictionary, with an optional `media.db`; portable between machines.
 
 </div>
 
-[All format details](dictionaries/formats.md){ .md-button }
+[Formats](dictionaries/formats.md){ .md-button }
 
 ---
 
-## How you search
+## Search
 
-`wuDict` searches all your dictionaries at once. Results are streamed as soon as they are available, so you get the first hit
-while the other dictionaries are still being searched.
+All dictionaries are searched at once, and each dictionary's results are shown
+as soon as it answers.
 
-| Mode | Results | Available |
+| Mode | Matches | Needs |
 | --- | --- | --- |
-| **Exact** | the headword itself, ignoring case and accents - `corazon` finds `corazón` | always |
-| **Prefix** | every headword that starts with your text | always |
-| **Contains** | your text anywhere inside a headword | on-demand per dictionary |
-| **Full-text** | words inside the article text, ranked by relevance | on-demand per dictionary |
+| **exact** | the headword, ignoring case and accents: `corazon` finds *corazón* | |
+| **prefix** | headwords that start with the query | |
+| **contains** | headwords that contain the query anywhere | contains index |
+| **full-text** | words in the article text, ranked by relevance | full-text index |
 
-`exact` and `prefix` modes work instantly. Contains and full-text need an extra index which can be 
-enabled on a per-dictionary basis. 
-The <kbd>☰</kbd> panel offers each one as a switch and shows the estimated index size, e.g. `42MB`.
+The contains and full-text indexes are added per dictionary in the dictionary
+panel (<kbd>☰</kbd>), which shows each index's size.
 
-Lemmatization (morphology) allows `wudict` to find *understand*
-when you search for **understood**, searching for *estuviera* will land on **estar**. English is built in; other
-languages can be installed via <kbd>☰</kbd> → <kbd>⚙️</kbd>  → <kbd>Lemmatization…</kbd> (see also [Lemmas](reference/configuration/#lemmatization))
+With lemma data, a search for an inflected form finds the lemma: *understood*
+finds **understand**, *estuviera* finds **estar**. English is built in; other
+languages are installed from <kbd>☰</kbd> → folder summary →
+<kbd>Lemmatization…</kbd>.
 
-[How search works](start/search.md){ .md-button }
+[Search](start/search.md){ .md-button }
 
 ---
 
-## Supported Platforms
+## Platforms
 
-| |                                                                                                     |
-| --- |-----------------------------------------------------------------------------------------------------|
-| **macOS** | CLI and macOS app bundle [wuDict.app](apps/macos.md) with a menu-bar icon                           |
-| **Windows** | CLI and [GUI Inno Installer](apps/windows.md) with a tray icon                                      |
-| **Linux** | CLI with optional systemd unit for [startup](running.md)                                            |
-| **Android** | [Android APK](apps/android.md) with extra intents for Share, text selection context menus, and more |
+| Platform | |
+| --- | --- |
+| **macOS** | command line, and [wuDict.app](apps/macos.md) with a menu-bar icon |
+| **Windows** | command line, and an [installer](apps/windows.md); tray icon |
+| **Linux** | command line, with an optional systemd user unit ([Run at startup](running.md)) |
+| **Android** | [app](apps/android.md), with lookup from the text selection and share menus and from reading apps |
 
 ---
 
 ## Privacy
 
-- No data is sent anywhere, no account, no cookies, no profiling, no telemetry, no analytics and no crash reporting.
+No account, no telemetry, no analytics, no crash reporting. wudict connects to
+the internet only to download what you ask for. See the
+[Privacy Policy](privacy_policy.md).

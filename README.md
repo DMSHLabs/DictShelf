@@ -1,418 +1,120 @@
-# WuWeiDict - desktop and mobile dictionary app
+# WuDict - desktop and mobile dictionary app
 
-Fast, _native_, self-contained, multi-format dictionary server that runs in your
-browser at [http://localhost:6888](http://localhost:6888). 
+WuDict (`wudict`) searches all your local dictionaries at once and shows
+the results in the browser at [localhost:6888](http://localhost:6888). One
+executable, no dependencies; runs on macOS, Linux (including Raspberry Pi),
+Windows and Android.
 
-Runs on Android, macOS, Linux, Windows.
+📖 User Guide: [wudict.legbehindneck.com](https://wudict.legbehindneck.com/)
 
-One native golang binary, no dependencies and minimum configuration — just set the folders with your `.mdx/.slob/.bgl/.zim/.ifo` dictionary collections, and you are good to go.
+## Android
 
-Runs natively on [android](https://wuweidict.github.io/wudict/apps/android/), [mac](https://wuweidict.github.io/wudict/apps/macos/), [windows](https://wuweidict.github.io/wudict/apps/windows/), [linux](https://wudict.legbehindneck.com/running/#__tabbed_1_2), and even raspberry pi.
-
-**Supported formats**
-
-| Format          | Files                               | Notes |
-|-----------------|-------------------------------------|---|
-| MDict           | `.mdx` + `.mdd`                     | companion `*.mdd`, `*.1.mdd`, … resource archives; built-in `.spx` audio decoding |
-| StarDict        | `.ifo` + `.idx(.gz)` + `.dict(.dz)` | `.syn` synonyms, `res/` folder or `res.zip` resources |
-| Aard2           | `.slob`                             | zlib/bz2/lzma2; embedded images/audio/css |
-| Lingvo DSL      | `.dsl`, `.dsl.dz`                   | UTF-8/16/32 auto-detected; `*.dsl.files.zip` resources; auto-indexed |
-| Babylon         | `.bgl`                              | gzip block stream; source/target charset auto-detected (Latin / Cyrillic / CJK code pages); embedded images; indexed automatically on first open |
-| ZIM             | `.zim`                              | Kiwix/Wikimedia offline archives; see https://library.kiwix.org
-| wudict markdown | `.wudict.md` or `.md`, `.wudict.md.gz` | plain CommonMark, readable and editable in any editor; a dictionary only when its first two lines are `# Title` and `wudict: 1`, whatever the name; `<name>.wudict.files/` resources; auto-indexed; written by `wudict dump -format md` |
-| wudict          | cache folder (`text.db`)            | wuDict's own SQLite-based format (see *Sharing*, below) |
-
-## wuDict for Android
 <div class="badges">
 <a href="https://github.com/wuweidict/wudict/releases/latest"><img src="https://raw.githubusercontent.com/Kunzisoft/Github-badge/master/get-it-on-github.png" alt="Get it on GitHub" height="80"></a> <a href="https://apps.obtainium.imranr.dev/redirect?r=obtainium://app/%7B%22id%22:%22com.legbehindneck.wudict%22,%22url%22:%22https://github.com/wuweidict/wudict%22,%22author%22:%22wuweidict%22,%22name%22:%22wudict%22%7D"><img src="https://raw.githubusercontent.com/ImranR98/Obtainium/main/assets/graphics/badge_obtainium.png" alt="Get it on Obtainium" height="80"></a> <a href="https://play.google.com/store/apps/details?id=com.legbehindneck.wudict"><img src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png" alt="Get it on Google Play" height="80"></a>
 </div>
 
-## wuDict for Desktop
+## Desktop
 
-1. Download the standalone binary for your OS from
-   [releases](https://github.com/wuweidict/wudict/releases), rename to `wudict`, 
-   `chmod +x wudict` (macOS/Linux) and move to a folder in `$PATH`, e.g. `/usr/local/bin`.
-2. Run `wudict` or `./wudict` if the file is in the current folder. For windows you can either use the installer [`wudict-windows-x64-setup-<x.y.z>.exe`](https://github.com/wuweidict/wudict/releases/latest), or download the standalone executable `wudict-windows-amd64-cgo.exe` and then double-click to run. For macOS an app bundle is provided  (it is not signed with a commercial Apple Developer Certificate, macOS flags it as unverified, and extra steps are needed to de-quarantine the app as described in the [manual](https://wuweidict.github.io/wudict/apps/macos/)).
-3. By default `wudict` searches for dictionaries under `~/Dictionaries` (including subfolders); 
-   if the dictionary folder is missing or empty, a setup page opens where you can configure your dictionary folders.
+1.  Download the binary for your system from
+    [releases](https://github.com/wuweidict/wudict/releases/latest), rename it
+    to `wudict`, make it executable (`chmod +x wudict`) and move it to a folder
+    in `PATH`, e.g. `/usr/local/bin`.
+    -   Windows: the installer `wudict-windows-x64-setup-<version>.exe`, or
+        `wudict-windows-amd64-cgo.exe`.
+    -   macOS: `wudict-macos-universal-app-<version>.zip` contains
+        **wuDict.app**, with a menu-bar icon. It is signed ad hoc: see
+        [macOS app](https://wudict.legbehindneck.com/apps/macos/) for the first launch.
+2.  Run `wudict`. The browser opens at [localhost:6888](http://localhost:6888).
+3.  The default dictionary folder is `~/Dictionaries`. If it is missing or
+    empty, the setup page ([localhost:6888/setup](http://localhost:6888/setup))
+    sets the folders, and imports dictionaries from a file or a link.
 
-## Adding dictionaries 
-With wuDict running, dictionary folders can be configured from [http://localhost:6888/setup](http://localhost:6888/setup). The browser setup page is a convenience 
-for writing `DICT_DIR` in the configuration file at `~/.wudict/wudict.toml` and other actions, such as configuring lemmatization (morphology), installing dictionaries from a URL via drag-n-drop from the system file manager.
-
-### Multiple dictionary folders
-
-You can configure the dictionary folders from
-the console via cli args, env vars or by directly editing the config file at `~/.wudict/wudict.toml` (recommended):
-```sh
-# as one or more CLI args (for example, as a temporary override of the current `wudict.toml`):
-wudict --dict-dir ~/Dictionaries --dict-dir /Volumes/Data/Dicts   # repeat the flag
-
-# or via an env var:
-DICT_DIR="~/Dictionaries:/Volumes/Data/Dicts" wudict              # separate multiple folders with ":" on linux/mac and ";" on Windows
-```
-
-in `wudict.toml` (the recommended way):
-```toml
+``` toml title="~/.wudict/wudict.toml"
 DICT_DIR = ["~/Dictionaries", "/Volumes/Data/Dicts"]
 ```
 
-## Searching
+## Features
+- Formats: MDict, StarDict, Aard2, DSL, Babylon, ZIM, wuDict markdown (a plain-text dictionary you can write in a text editor)
+- Instant search across all dictionaries with four modes: prefix, exact, contains, and full-text search
+- Dictionaries are automatically grouped by language, publisher, direction, etc.
+- Adjust the font size via the <kbd>☰</kbd> → <kbd><b>+/-</b></kbd> widget
+- Custom lemmatization (word-form morphology) for 24 languages, configurable via <kbd>☰</kbd> → <kbd>⚙️</kbd> → <kbd>**Lemmatization**</kdb>; English lemmatization comes pre-installed
+- Browse **all headwords** in a dictionary via <kbd>☰</kbd> → <kbd>**Browse**</kbd>
+- Apply custom CSS styles and fonts via the embedded Styler: <kbd>☰</kbd> → <kbd>⚙️</kbd> → <kbd>**Custom Style**</kbd>
+- 📱 Double-tap / 💻 double-click any word in a wudict dictionary article to instantly look up its definition
+- 📱 Immersive mode (full screen), with an option to draw content edge-to-edge, including the camera cutout area; enable by long-tapping the wudict icon in the launcher → <kbd>**Settings**</kbd>
+- 📱 Select text in any app and pick → <kbd>wuDict</kbd> from the context menu
+- 📱 Import dictionaries into wudict directly from your file manager: tap a .mdx/.dsl/.bgl/.zim/.slob/.zip/.7z file → <kbd>**Share**</kbd> → <kbd>**wuDict**</kbd>
+- 📱 Long-tap a dictionary download link on any web page (.mdx/.slob/.dsl/.zip/.7z) and pick Share → <kbd>**wuDict**</kbd> to install it locally
+- Install multiple dictionaries via [wudict magic links 🔗](https://legbehindneck.com/wudict/)
 
-| Mode | What it does | Needs indexing? |
+# Supported formats
+
+| Format | Files | Notes                                                          |
+|---|---|----------------------------------------------------------------|
+| MDict | `.mdx` + `.mdd` | `.mdd`, `.1.mdd`, … resource archives; Speex audio decoded     |
+| StarDict | `.ifo` + `.idx(.gz)` + `.dict(.dz)` | `.syn` synonyms; `res/` folder or `res.zip`                    |
+| Aard 2 | `.slob` | zlib, bz2, LZMA2                                               |
+| Lingvo DSL | `.dsl`, `.dsl.dz` | `.dsl.files.zip` resources; UTF-8/16/32 detected               |
+| Babylon | `.bgl` | character sets detected                                        |
+| ZIM | `.zim` | Kiwix and Wikimedia archives                                   |
+| wudict markdown | `.wudict.md`, `.wudict.md.gz`, `.md` | Markdown (CommonMark) as generated by `wudict dump -format md` |
+| wudict library | `text.db` | wudict's SQLite format, one folder per dictionary              |
+
+## Search
+
+| Mode | Matches | Needs |
 |---|---|---|
-| **starts with** | exact matches, else headwords starting with the term (accent/case-insensitive) | no |
-| **exact** | exact headword (accent/case-fold fallback: `corazon` → `corazón`) | no |
-| **contains** | substring / typo-tolerant headword match, anywhere in the word (FTS5 trigram) | ad-hoc |
-| **full-text** | search inside article text, ranked by relevance | yes |
+| **exact** | the headword, ignoring case and accents | |
+| **prefix** | headwords that start with the query | |
+| **contains** | headwords that contain the query | contains index |
+| **full-text** | words in the article text, ranked by relevance; phrases, `AND`, `OR`, `NOT`, `NEAR` | full-text index |
 
-Every dictionary works immediately for _starts-with_ and _exact_ lookups using
-the native index. The first time you search **a small headword index
-is prepared in the background** — a couple of MB — so accent-insensitive
-lookups (*corazon* → *corazón*) work seamlessly (disable with `AUTO_INDEX=off`).
-
-***Full-text*** (searching inside article text) and ***contains*** 
- (substring search) are not enabled by default as they consume more disk space. 
-Click the <kbd>☰</kbd> button and enable them as needed.
-For each dictionary the index size is displayed; *⚡ index all* adds full-text for all dictionaries
-at once, and `wudict ingest [-fulltext] [-contains] [<file-or-folder>]` does the
-same from the command line.
-
-Results stream live as each dictionary responds — the top one opens
-automatically. In the <kbd>☰</kbd> panel you can **reorder** dictionaries (drag the
-⠿ handle or use the ▲▼⏫⏬ buttons) to set your preferred result order, and
-**enable/disable** each one (the switch) to include or exclude it from
-*All dictionaries* searches; both are remembered.
-A dictionary that was disabled for *All dictionaries* searches can still 
-be searched by selecting it in the dictionary dropdown.
+Each dictionary's headwords are indexed in the background on its first search.
+The contains and full-text indexes are added per dictionary in the dictionary
+panel (<kbd>☰</kbd>), or with `wudict ingest -contains -fulltext`. With lemma
+data, an inflected form finds its lemma: *understood* → **understand**.
 
 > [!TIP]
-> - Pressing <kbd>`/`</kbd> focuses the search box
-> - double-click any word in an article to look it up
-> - click links inside articles to follow cross-references
-> - <kbd>⊞</kbd> expands all results (<kbd>⊟</kbd> closes them again — for the current page only, state not persistent)
-> - <kbd>⇔</kbd> toggles a wide layout
-> - <kbd>◐</kbd> cycles auto/light/dark theme. Search URLs are bookmarkable
+> - <kbd>/</kbd> focuses the search box
+> - double-click a word in an article to search for it
+> - <kbd>⊞</kbd> expands all results, <kbd>⇔</kbd> widens the layout, <kbd>◐</kbd> cycles the theme
+> - the address bar holds the search, so a search can be bookmarked
 
-## Run as an app (macOS)
+## Documentation
 
-For macOS you can either run the `wudict` binary from a terminal, or use the **`wudict-macos-universal-app-<version>.zip`** from [releases](https://github.com/wuweidict/wudict/releases) which wraps `wudict` into a macOS app bundle.
+| | |
+|---|---|
+| [Install](https://wudict.legbehindneck.com/start/install/), [First run](https://wudict.legbehindneck.com/start/first-run/) | download, folders |
+| [Search](https://wudict.legbehindneck.com/start/search/), [Full-text query syntax](https://wudict.legbehindneck.com/reference/fts-syntax/) | modes, lemmatization, the dictionary panel |
+| [Add dictionaries](https://wudict.legbehindneck.com/dictionaries/add/), [The library](https://wudict.legbehindneck.com/dictionaries/library/) | import, indexing, removal |
+| [Picker groups](https://wudict.legbehindneck.com/dictionaries/groups/), [Custom styles](https://wudict.legbehindneck.com/dictionaries/styles/), [Resource overrides](https://wudict.legbehindneck.com/dictionaries/override/) | customization |
+| [Android](https://wudict.legbehindneck.com/apps/android/), [macOS](https://wudict.legbehindneck.com/apps/macos/), [Windows](https://wudict.legbehindneck.com/apps/windows/), [Run at startup](https://wudict.legbehindneck.com/running/) | platforms |
+| [Access from other devices](https://wudict.legbehindneck.com/access/), [Browser extension](https://wudict.legbehindneck.com/extension/) | network |
+| [Configuration](https://wudict.legbehindneck.com/reference/configuration/), [Command line](https://wudict.legbehindneck.com/reference/cli/), [HTTP API](https://wudict.legbehindneck.com/reference/api/), [text.db](https://wudict.legbehindneck.com/reference/text-db/) | reference |
 
-> [!WARNING]
-> The macOS bundle is signed with an ad-hoc certificate therefore on first run the bundle has be de-quarantined with `/usr/bin/xattr -cr /Applications/wuDict.app` and then launched via righ-click → <kbd>**Open**</kbd>.
+## Build from source
 
-## Run wudict as a service (macOS)
+Requires [Go](https://go.dev/doc/install); the default `-cgo` build also needs
+a C compiler.
 
-`wudict` can be installed as a `launchctl` LaunchAgent using Makefile targets:
-
-```sh
-# run from project root
-make mac-agent-install   # generate the plist from launchctl/*.plist.in, then:
-make mac-agent-start     # launchctl bootstrap gui/$UID <plist>
-make mac-agent-stop      # launchctl bootout   gui/$UID/com.legbehindneck.wudict
-make mac-agent-restart   # rebuild, then launchctl kickstart -k gui/$UID/<label>
-make mac-agent-status    # launchctl print    gui/$UID/<label>
-make mac-agent-uninstall # stop it and delete the plist
+``` sh
+make build          # ./wudict (cgo SQLite, built-in Speex decoder)
+make check          # tidy, vet, tests
+make cross          # -purego binaries for every release platform
+make help           # every target
 ```
 
-## Run as an app (Windows)
+Without `make`:
 
-In windows `wudict` runs from `cmd` or PowerShell as an ordinary
-command-line program. When double-clicked, started from a shortcut, or by double-clicking 
-a dictionary file, it hides the  console window, and shows a **tray icon** instead, logging to
-`%LOCALAPPDATA%\wudict\wudict.log`. See also [running on windows](https://wuweidict.github.io/wudict/apps/windows/).
-
-
-## Run as a service (Linux)
-
-On linux `wudict` can be installed as a **systemd user unit** — only copying the binary into
-`/usr/local/bin` needs sudo, the service itself runs with user permissions and start/stop does not require sudo.
-Unlike system services which are managed via `systemd start|stop|status <service-name>`, a user systemd service 
-additionally requires the `--user` key, e.g. `systemd --user start|stop|status wudict`.
-
-```sh
-# from project root
-make linux-service-install   # sudo-installs /usr/local/bin/wudict, then writes the user unit
-make linux-service-start     # systemctl --user enable --now wudict.service
-make linux-service-stop
-make linux-service-restart   # rebuild, reinstall the binary, restart
-make linux-service-status
-make linux-service-uninstall # disable + remove the unit (keeps the binary)
-
-make linux-install     # just the binary  (PREFIX=/opt/foo to relocate)
-make linux-uninstall
+``` sh
+go install -tags sqlite_fts5 github.com/wuweidict/wudict@latest   # cgo
+go install github.com/wuweidict/wudict@latest                     # pure Go
 ```
 
-The systemd unit assumes the executable is at `/usr/local/bin/wudict`.
-
-To keep the service running when you are not logged in:
-
-```sh
-sudo loginctl enable-linger "$(id -un)"
-```
-
-## Configuration
-
-Priority: **CLI flag > environment variable > wudict.toml > default**.
-A commented `~/.wudict/wudict.toml` is generated on first run, and the
-config file path is printed on startup.
-
-| Flag | env / toml key | Default                       |
-|---|---|-------------------------------|
-| `--dict-dir` | `DICT_DIR` | `~/Dictionaries`              |
-| `--db-dir` | `DB_DIR` | `~/.wudict/db`                |
-| `--ip` | `SERVER_IP` | `127.0.0.1`                   |
-| `--port` | `SERVER_PORT` | `6888`                        |
-| `--config` | `CONFIG_PATH` | auto-detect                   |
-| `--no-browser` | `NO_BROWSER=1` | open browser                  |
-| `--verbose` | `VERBOSE=1` | detailed logging              |
-| `--speexdec` | `SPEEXDEC` | found on `PATH`               |
-| `--use-cached` | `USE_CACHED` | off                           |
-| — | `AUTO_INDEX` | `on` (`off` to disable)       |
-| `--no-compress` | `NO_COMPRESS` | off (article text compressed) |
-| — | `BROWSER_EXTENSIONS` | any extension may look words up |
-
-**`BROWSER_EXTENSIONS`** sets which browser extensions may use the `wudict` server. 
-Blank (the default) lets any installed extension reach the read-only dictionary API — `/api/dicts`, `/api/search`,
-`/res/`.
-
-Restrict to only allow specific extensions:
-
-```toml
-BROWSER_EXTENSIONS = ["chrome-extension://bknaaoffefipfnpefmkbipcdemljbhjh"]
-```
-
-(Firefox generates a fresh `moz-extension://` id for every installation, so
-there is no stable origin to pin there.)
-
-See also: [chrome/firefox browser extension](https://wuweidict.github.io/wudict/extension/)
-
-Config file search order: `--config` / `CONFIG_PATH`, then
-`<exe-dir>/wudict.toml`, `~/.wudict/wudict.toml`,
-`/etc/wudict/wudict.toml`.
-
-**Portable mode.** A `wudict.toml` can also be placed in the same folder as the `wudict` (or `wudict.exe`) executable.
-
-**`~/.wudict/state.json`** stores dictionary search order and enabled/disable state. 
-
-## Command line
-
-Run `wudict --help` for the full reference. 
-
-> Examples:
-
-```sh
-wudict                                   # start the server (default command)
-
-# start server with custom options
-wudict --dict-dir ~/Dicts --port 9090    
-wudict --dict-dir ~/Dicts --dict-dir /Volumes/Ext/Dicts   # several folders
-
-# search for a word in a specific dictionary; plain text to stdout 
-# optional, request specific format with: "-format=raw|clean|text"
-wudict lookup ~/Dicts/Oxford.mdx water
-
-# search ALL dictionaries in folder; plain text to stdout
-wudict searchall -dict-dir /path/to/dicts flight
-
-# index every dictionary in your configured folders (DICT_DIR), as the app does
-wudict ingest
-
-# index every dictionary in a given folder
-wudict ingest ~/Dicts                    
-
-# index + pack media
-wudict ingest -full ~/Dicts/Oxford.mdx   
-
-# clean leftover files
-wudict clean
-
-# list removable library items (-f deletes)
-
-# list headwords (or keys) in a specific dictionary
-wudict keys ~/Dicts/Oxford.mdx
-wudict keys ~/Dicts/Oxford.mdd
-
-# extract a resource (pass the key shown by `wudict keys ...`)
-wudict res ~/Dicts/Oxford.mdd audio/a.mp3
-```
-
-For more on command line usage see the manual:
-- [wuDict Command Line](https://wudict.legbehindneck.com/reference/cli/)
-
-## Sharing dictionaries (one folder each)
-
-Indexing a dictionary creates a corresponding folder under
-`~/.wudict/db/` — the **library**:
-
-```
-~/.wudict/db/
-  Oxford/
-    text.db     articles + search indexes
-    media.db    audio/images (only after "pack media")
-    info.txt    what this is, where it came from
-    res/        optional — files that override the dictionary's own original resources
-```
-
-A dictionary is one folder, so it moves as one thing: **copy, move or zip
-it and share**. On the other machine, drop it into a dictionary
-folder and it works — no original source files needed. a `text.db`
-without its `media.db` still works (with no media). 
-To generate the media pack click the <kbd>media</kbd> 
-in the dictionary panel.
-
-The <kbd>☰</kbd> panel shows each dictionary's provenance: the source file it came
-from, and — expanded — the library folder holding its SQLite database files.
-Click a path to copy it to clipboard.
-
-At the foot of the panel, **Folders & configuration** shows which folders
-are being scanned (with per-folder counts), where indexed dictionaries
-are located, and which `wudict.toml` is in effect — with *Reveal in Finder* /
-*Show in File Explorer* / *Open Containing Folder*, depending on your
-system. <kbd>**Edit folders…**</kbd> opens the dictionary folders editor.
-
-## Patching dictionary's files
-
-Dictionaries can include their own stylesheets, scripts, images and audio. 
-You can provide your own 'patched' versions 
-by placing files in the `res/` subfolder in 
-wudict's DB folder at `~/.wudict/db/<some-dict-name/res`. Files from `./res` 
-take precedence over the original files from `.mdd`, `.slob`, `.dsl.files.zip` etc.
-
-```
-~/.wudict/db/Cambridge English Dictionary Online/
-  text.db
-  res/
-    jquery.js          ← replaces the dictionary's own (damaged) copy
-    js/entry.js        ← supplies one the dictionary never contained
-    css/style.css
-```
-
-Subfolders must follow the same hierarchy as the original resources.
-E.g. intermediary folders like `js/…` and `css/…` must mirror the path the article is referencing.
-
-One exception: a `.spx` audio file placed in `res/` is served as-is,
-**not** transcoded to WAV the way a `.spx` inside the dictionary is. Use `.mp3` or `.wav` instead.
-
-## Custom styles
-
-`res/` patches one file of one dictionary. To restyle **everything** — wudict
-itself and every article — put your own CSS in two optional files beside the
-`wudict.toml` in effect, usually `~/.wudict/style/`:
-
-```
-~/.wudict/style/
-  app.css       wudict itself — its colours, its own layout
-  article.css   what dictionaries render, in every article
-```
-
-The <kbd>☰</kbd> panel's **Custom styles…** opens an editor for app and article styles, docked at the
-bottom of the page so you get live preview of your CSS changes as you type. 
-A few presets are included — a compact mobile view, sepia, high contrast, true-black OLED, 
-a wider column, justified text, normalized tables.
-
-```css
-/* app.css — sepia in light mode, page and definitions together */
-html:not([data-dark]){
-  --bg:#f4ecd8; --bg-card:#faf3e3;
-  --fg:#3b3229; --line:#e0d5bd;
-  --wd-article-bg:#faf3e3; --wd-article-fg:#3b3229;
-}
-```
-
-```css
-/* article.css — reclaim the side space a desktop dictionary reserves */
-@media (max-width: 700px){
-  :host, :root > body         { margin-inline:0 !important; padding-inline:0 !important }
-  :host > *, :root > body > * { margin-inline:0 !important; padding-inline:0 !important }
-}
-```
-
-To undo changes use <kbd>⌘</kbd> + <kbd>Z</kbd> 
-(on windows <kbd>Ctrl</kbd> + <kbd>Z</kbd>).
-A dot on a tab means that box has unsaved changes. If a rogue CSS rule makes the app UI to disappear, append `/?style=off` in the URL
-and the page is served with default styles.
-
-## Disk use
-
-A prepared dictionary is usually **smaller than the original dictionary file**:
-article bodies are compressed, and _full-text search_ and _contains_ indexes are only built on-demand.
-
-| index type                                         | cost (40k-entry dictionary, 45.6 MB source) |
-|----------------------------------------------------|---|
-| regular search — exact, prefix, accent-insensitive | ~2 MB, always on |
-| full-text search                                   | ~12 MB, one click |
-| contains (substring)                               | ~2.4 MB, one click |
-| packed media                                       | as large as the images/audio |
-
-The <kbd>☰</kbd> panel shows these as switches per dictionary, with their real sizes —
-click to add, click again to remove.
-
-You can set in `~/.wudict/wudict.toml` the option `NO_COMPRESS = "1"` (or pass `--no-compress` from the CLI) to disable compression of article bodies —
-this will make the indexes roughly 3x larger, and provide slightly faster reads. 
-By default (e.g. `NO_COMPRESS = "0"`) article bodies are compressed with gzip.
-
-## Speex audio (.spx)
-
-Browsers cannot play Speex. wuDict internally transcodes
-`.spx` audio to WAV and caches the result. 
-If wuDict was built without the internal speex decoder (the purego flavours) 
-then the external `speexdec` utility can be used (for mac: `brew install speex`, 
-linux: `apt install speex`, etc).
-
-## Building from source
-
-Requires [Go](https://go.dev/doc/install) (and a C compiler for the
-default cgo build):
-
-```sh
-make build          # native build (cgo sqlite, fastest) → ./wudict
-make install        # install the binary into GOBIN
-make check          # tidy + vet + tests
-make cross          # all release platforms (pure-Go sqlite, no C toolchain)
-make help           # every available target
-```
-
-`make` is preinstalled on macOS/linux, for windows get the `make-X.Y.Z-without-guile-w32-bin.zip` e.g. from 
-[sourceforge.net](https://sourceforge.net/projects/ezwinports/files/) and extract `make.exe` to a folder in `%PATH%`.
-
-Or with the Go toolchain alone:
-
-```sh
-# recommended flavour, the fastest (cgo sqlite + built-in speex), needs a C compiler
-go install -tags sqlite_fts5 github.com/wuweidict/wudict@latest
-
-# no C compiler? drop the tag — pure-Go sqlite, .spx audio via external speexdec
-go install github.com/wuweidict/wudict@latest
-```
-
-Both produce a working `wudict`; the tag only chooses the SQLite driver.
-Passing `-tags sqlite_fts5` on a machine without a C toolchain quietly
-falls back to the pure-Go build rather than failing.
-
-CI builds are generated with github actions — [`.github/workflows/build-cgo.yml`](.github/workflows/build-cgo.yml)
-for the cgo flavour with internal speex decoder and optimized sqlite3, and
-[`.github/workflows/build-purego.yml`](.github/workflows/build-purego.yml) for purego builds.
-Supported OS's: macOS (arm64/amd64), Linux (amd64/arm64/armv7/armv6) and Windows
-(amd64/arm64).
-
-More details: https://wudict.legbehindneck.com/reference/building/
-
-### Building the macOS bundle from source
-
-> 💡A golang environment is required. See [Build from source](#build-from-source) above.
-
-Run `make mac-app-install` from project root to build **wuDict.app** and install it to
-`~/Applications` (no sudo, no admin prompt):
-
-```sh
-make mac-app            # dist/wuDict.app — universal-ready, ad-hoc signed
-make mac-app-install    # copy it to ~/Applications (APP_DEST= to relocate)
-```
-
-The bundle is the same binary as console `wudict` which spawns no terminal window, and 
-additionally adds a **menu-bar icon** with common actions. See more about [running on macOS](https://wuweidict.github.io/wudict/apps/macos/).
-
+On Windows, `make` is available as `make-<version>-without-guile-w32-bin.zip`
+from [ezwinports](https://sourceforge.net/projects/ezwinports/files/); put
+`make.exe` in a folder in `PATH`. More: [Building](https://wudict.legbehindneck.com/reference/building/).
 
 ## Acknowledgements
 
@@ -444,8 +146,7 @@ on dictionaries and tools to read, write and convert data in these formats.
 - **[SQLite](https://sqlite.org/)** and its
   **[FTS5](https://sqlite.org/fts5.html)** extension — the entire prepared
   library: storage, headword index, and full-text search across a hundred
-  dictionaries at once. **FTS5** made this project possible. 
-- Public domain, and maintained at that standard for twenty-five years.
+  dictionaries at once. Public domain.
 - **[mattn/go-sqlite3](https://github.com/mattn/go-sqlite3)** — cgo SQLite
   driver; the default optimized build.
 - **[modernc.org/sqlite](https://gitlab.com/cznic/sqlite)** — SQLite translated
@@ -477,12 +178,12 @@ on dictionaries and tools to read, write and convert data in these formats.
 - **[Inno Setup](https://jrsoftware.org/isinfo.php)** by Jordan Russell — the
   Windows installer: small, scriptable, and free for as long as Windows has had
   installers.
-- **[Go](https://go.dev/)** — the stack that lets us cross-compiles a static binary for
-  eight platforms from one machine, including android.
+- **[Go](https://go.dev/)** — cross-compiles a static binary for eight platforms, Android
+  included, from one machine.
 
 Not affiliated with, or endorsed by, any of the above.
 
-## License
+## Licence
 
 GPL-3.0-or-later — see [LICENSE](LICENSE).
 
@@ -491,7 +192,7 @@ the same text is in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
 
 Third-party code included in this repository:
 
-| Component | Origin | License |
+| Component | Origin | Licence |
 |---|---|---|
 | `internal/gomdict` (MDX/MDD parser) | [medict](https://github.com/terasum/medict), © 2023 Quan Chen | GPL-3.0-or-later |
 | `internal/format/bgl` (BGL parser) | ported from [pyglossary](https://github.com/ilius/pyglossary)'s `babylon_bgl` | GPL-3.0-or-later |

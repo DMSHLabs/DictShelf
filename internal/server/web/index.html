@@ -1027,7 +1027,7 @@ html:has(#panel.show) .bar{padding-right:var(--wd-sbw,0px)}
 <span class="seg">
 <span class="chip" id="modeChip" aria-hidden="true"></span>
 <select id="mode" aria-label="Search mode" disabled>
-<option value="prefix">starts with</option>
+<option value="prefix">prefix</option>
 <option value="exact">exact</option>
 <option value="contains">contains</option>
 <option value="fts">full-text</option>
@@ -1145,7 +1145,7 @@ html:has(#panel.show) .bar{padding-right:var(--wd-sbw,0px)}
     <a class="act" id="editFolders" href="/setup"><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path fill="currentColor" d="M1.6 4a1 1 0 0 1 1-1h3.3l1.5 1.7h6a1 1 0 0 1 1 1v6.3a1 1 0 0 1-1 1H2.6a1 1 0 0 1-1-1z"/></svg>Edit folders…</a>
     <!-- A real <button>, not a <span>: as a span with no tabindex this action
          could not be reached by keyboard at all. -->
-    <button type="button" class="act" id="rescanBtn" title="Re-scan every folder and re-open the dictionaries found (takes a moment)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M13.3 8a5.3 5.3 0 1 1-1.7-3.9"/><path d="M13.6 2v3h-3"/></svg>Rescan folders</button>
+    <button type="button" class="act" id="rescanBtn" title="Re-scan dictionary folders"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M13.3 8a5.3 5.3 0 1 1-1.7-3.9"/><path d="M13.6 2v3h-3"/></svg>Rescan folders</button>
     <!-- Word-form data is installed long after first run - "why does estuviera
          find nothing?" is a question asked while searching, not while choosing
          folders - so the link lives here as well as on the setup page.
@@ -1153,7 +1153,7 @@ html:has(#panel.show) .bar{padding-right:var(--wd-sbw,0px)}
          its label and its title. Nothing conventional means "inflection", and
          borrowing the book from the top bar would make that glyph mean two
          things, which is to say neither. -->
-    <a class="act" id="lemmaLink" href="/lemmas" title="Install the word-form data that lets an inflected word find its dictionary entry"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M2.2 8h2.6"/><path d="M4.8 8V5a1.4 1.4 0 0 1 1.4-1.4h4.4"/><path d="M4.8 8v3a1.4 1.4 0 0 0 1.4 1.4h4.4"/></svg>Lemmatization…</a>
+    <a class="act" id="lemmaLink" href="/lemmas" title="Install lemma data, so that an inflected form finds its lemma"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M2.2 8h2.6"/><path d="M4.8 8V5a1.4 1.4 0 0 1 1.4-1.4h4.4"/><path d="M4.8 8v3a1.4 1.4 0 0 0 1.4 1.4h4.4"/></svg>Lemmatization…</a>
     <!-- Reading the library instead of asking it something. It is in this row
          and not in the top bar because it is a destination, not a mode of the
          search: the search box answers a question, and this opens a dictionary
@@ -1190,7 +1190,7 @@ html:has(#panel.show) .bar{padding-right:var(--wd-sbw,0px)}
          is the thing that actually indexes — a trigger that only reveals a
          choice must not be named for the choice. -->
     <button type="button" class="act disc" id="ftsAllBtn" aria-expanded="false" aria-controls="ftsAllBox"
-      title="Optional. Every dictionary can already be searched by headword; full-text search also looks inside article text, and uses noticeably more disk space.">Full-text for every dictionary…</button>
+      title="Add the full-text index to every dictionary: search inside article text. Uses more disk space.">Full-text for every dictionary…</button>
   </div>
   <div id="ftsAllBox" class="bulkbox" hidden></div>
   <!-- Prepared dictionaries whose files are gone (D156). Filled only after
@@ -2099,7 +2099,7 @@ function renderReindex(){
   }
   const n=dicts.filter(d=>d.outdated).length,failed=st&&st.failed||[];
   if(!n&&!failed.length){box.hidden=true;box.innerHTML="";return}
-  box.innerHTML=(n?`<p>${n} ${n===1?"dictionary was":"dictionaries were"} prepared by an older version `+
+  box.innerHTML=(n?`<p>${n} ${n===1?"dictionary has":"dictionaries have"} outdated indexes `+
       '<button type="button" class="btn" id="reindexGo">Rebuild</button></p>':"")+
     (failed.length?'<p class="cost">Could not rebuild: '+failed.map(esc).join("; ")+"</p>":"");
   box.hidden=false;
@@ -2146,11 +2146,13 @@ $("enAll").addEventListener("change",e=>setAllEnabled(e.target.checked));
    the selects stay the single source of truth, so this never has to be
    consulted before reading a value — only called after one changes.
 
-   "starts with" shortens to "starts" and the others keep their words: those
-   words are the ones the mode dropdown, the per-dictionary switch and the
-   result summaries all use, and a chip that renamed "full-text" would sever
-   the link to every other place it appears. */
-const MODE_SHORT={prefix:"starts",exact:"exact",contains:"contains",fts:"full-text"};
+   Every chip keeps its mode's word: the words the mode dropdown, the
+   per-dictionary switch and the result summaries all use, so a chip never
+   names a mode differently from the rest of the page. */
+/* The user-facing name of each index switch (docs/STYLE.md), shared by the
+   switch tooltips, the in-results offer and its collected line. */
+const FEAT_NAME={contains:"contains index",fts:"full-text index",media:"media pack"};
+const MODE_SHORT={prefix:"prefix",exact:"exact",contains:"contains",fts:"full-text"};
 function syncChips(){
   const m=$("mode"),d=$("dict");
   $("modeChip").textContent=MODE_SHORT[m.value]||m.value;
@@ -2261,7 +2263,7 @@ function provenance(d){
     for(const m of ms)rows.push(label(m,{cls:"sub"}));
   }else{
     full=d.folder||d.textDB||d.path||"";
-    head=`<span class="fmt">prepared</span>: ${esc(base(full))}`;
+    head=`<span class="fmt">library</span>: ${esc(base(full))}`;
     if(full)rows.push(label(full)); // same rule: the full path lives in the body
     if(d.folder)rows.push(note("contains: text.db"+(d.mediaDB?" + media.db":"")+" + info.txt"));
     else if(d.mediaDB)rows.push(label(d.mediaDB,{pre:"media:"}));
@@ -2349,9 +2351,9 @@ function renderPanel(){
        clicking, the size is a fact about what a click already produced. */
     const est=indexed?0:baseIndexBytes(d);
     let caps=indexed
-      ? `<span class="feat on locked" title="Indexed - ${mb(d.dbSize)} on disk">${mb(d.dbSize)}</span>`
+      ? `<span class="feat on locked" title="Indexed: ${mb(d.dbSize)} on disk">${mb(d.dbSize)}</span>`
       : canToggle
-        ? `<span class="feat" data-feat="base" title="Build this dictionary's index - until then it is searched the slow way, through its own format.${est?` Not indexed: the ~${mb(est)} is an estimate of what indexing WOULD use, worked out from your dictionaries that already have an index - not a measurement of this one.`:""}">🚀 index${est?` · est. ~${mb(est)}`:""}</span>`
+        ? `<span class="feat" data-feat="base" title="Not indexed: searched through its own format, slower and with more memory. Click to index${est?` (about ${mb(est)}, estimated from your indexed dictionaries)`:""}.">🚀 index${est?` · est. ~${mb(est)}`:""}</span>`
         : "";
     for(const[key,label,on,bytes]of feats){
       if(key==="media"&&!on&&!d.hasMedia)continue; // nothing to pack
@@ -2360,9 +2362,10 @@ function renderPanel(){
          rules, so it can only miss words whose folding changed. So it is
          marked, not disabled, and the click rebuilds instead of removing. */
       const stale=key==="contains"&&on&&d.containsStale;
-      const tip=!canToggle?"The dictionary files are gone — this is the only copy, so it cannot be changed":
-        stale?"Built with older text-folding rules — click to rebuild":
-        on?"Click to remove":"Click to add";
+      const what=FEAT_NAME[key];
+      const tip=!canToggle?"Locked: the dictionary files are gone, and this is the only copy":
+        stale?`Outdated ${what}: click to rebuild`:
+        (on?"Remove the ":"Add the ")+what;
       caps+=`<span class="feat${on?" on":""}${stale?" stale":""}${canToggle?"":" locked"}"`+
         ` data-feat="${key}" data-on="${on?1:0}"${stale?' data-stale="1"':""}`+
         ` title="${tip}">${label}${size}${stale?" ⟳":""}</span>`;
@@ -2563,7 +2566,7 @@ async function loadFolders(){
   // dictionaries" — the same rule that keeps the format prefix off a file name
   // ending in ".mdx" (see provenance above).
   grp("library");
-  row(c.libDir,`${c.prepared} prepared`+(c.useCached?" · in use":c.prepared?" · not in use":""),false);
+  row(c.libDir,`${c.prepared} indexed`+(c.useCached?" · in use":c.prepared?" · not in use":""),false);
   // Likewise "file": the row shows a path ending in ".toml".
   if(c.configPath){grp("config file");row(c.configPath,"",false)}
 }
@@ -2640,18 +2643,16 @@ function closeFtsAll(){
 function openFtsAll(){
   const box=$("ftsAllBox"),todo=ftsCandidates(),plural=n=>n===1?"dictionary":"dictionaries";
   if(!todo.length){
-    box.innerHTML="<p>Every dictionary that can be indexed already has full-text search.</p>";
+    box.innerHTML="<p>Every dictionary that can be indexed already has the full-text index.</p>";
   }else{
     const entries=todo.reduce((n,d)=>n+(d.entries||0),0);
     const now=dicts.reduce((n,d)=>n+(d.dbSize||0),0),added=ftsAddedBytes(todo);
     box.innerHTML=
-      "<p>Full-text search finds words <em>inside</em> article text. Every dictionary "+
-      "is already searchable by headword — only enable if you have sufficient disk space.</p>"+
-      `<p class="cost">Indexes <b>${todo.length}</b> ${plural(todo.length)}`+
+      `<p class="cost">Add full-text index, for searching in article text, to <b>${todo.length}</b> ${plural(todo.length)}`+
         (entries?` (${entries.toLocaleString()} entries)`:"")+
-        ", one at a time — on a large collection that takes a long while."+
-        (now?` Prepared data uses ${mb(now)} today`+(added?`; expect roughly ${mb(added)} more`:"")+".":"")+
-        " You can remove it from any dictionary afterwards.</p>"+
+        ", one at a time; a large collection can take hours."+
+        (now?` The library uses ${mb(now)}`+(added?`; expect about ${mb(added)} more`:"")+".":"")+
+        " An index can be removed afterwards.</p>"+
       `<p><button type="button" class="btn" id="ftsAllGo">Index ${todo.length} ${plural(todo.length)}</button>`+
       '<button type="button" class="btn" id="ftsAllNo">Cancel</button></p>';
   }
@@ -2675,7 +2676,7 @@ $("ftsAllBox").addEventListener("click",async e=>{
     await runIngest(d.id,{fts:1,quiet:true,statusPrefix:`${n}/${todo.length} · `},label);
   }
   closeFtsAll();
-  setStatus(`✓ full-text search enabled on ${todo.length} ${todo.length===1?"dictionary":"dictionaries"}`);
+  setStatus(`✓ Full-text index added to ${todo.length} ${todo.length===1?"dictionary":"dictionaries"}`);
   await loadDicts();if(lastQuery)doSearch();
 });
 /* Orphans (D156): prepared dictionaries whose files are gone - deleted by hand,
@@ -2700,8 +2701,7 @@ async function checkOrphans(){
   if(!n){closeOrphans();return}
   const box=$("orphanBox");
   box.innerHTML=
-    `<p><b>${n} ${n===1?"dictionary has":"dictionaries have"} been deleted externally</b>`+
-    ` — leftover indexes detected ${mb(j.size||0)}.</p>`+
+    `<p><b>${n}</b> orphan indexes from externally deleted dictionaries  (${mb(j.size||0)}).</p>`+
     (n>1?'<label class="oall"><input type="checkbox" id="orphAll" checked> all</label>':"")+
     "<ul>"+list.map(o=>
       `<li><label><input type="checkbox" class="orph" checked value="${escAttr(o.folder)}" data-size="${+o.size||0}">`+
@@ -2709,7 +2709,7 @@ async function checkOrphans(){
       `<span class="was">was ${pathHTML(o.source||"")}</span></span></label></li>`).join("")+"</ul>"+
     '<p><button type="button" class="btn" id="orphGo"></button>'+
     '<button type="button" class="btn" id="orphNo">Not now</button></p>'+
-    "<p class=\"cost\">Unticked ones are kept and won't be asked about again. Deleting can't be undone.</p>";
+    "<p class=\"cost\">Unticked ones are kept and not listed again. Deletion is permanent.</p>";
   box.hidden=false;
   orphLabel();
 }
@@ -2978,11 +2978,7 @@ function runIngest(id,opts,label){
     setStatus('<span class="spin"></span>'+(opts.statusPrefix||"")+esc(name)+" — "+esc(long||t));
   };
   const removing=Object.values(opts).some(v=>v===0);
-  // "indexing" for the index chip, because that is the word every other
-  // dictionary app uses for this and the chip says it too; "preparing" stays
-  // for the feature switches, which add to an index that already exists.
-  const verb=opts.base?"indexing":"preparing";
-  show(removing?"removing…":verb+"…");
+  show(removing?"removing…":"indexing…");
   label.classList.remove("act");label.classList.add("busy");
   label.style.textDecoration="none";label.style.cursor="default";
   // A feature left out keeps its state; the index chip sends none, which
@@ -3424,7 +3420,7 @@ const TAPS=matchMedia("(pointer:coarse)").matches;
    this dictionary alone, which the server does not cap, and which also puts it
    in line to be prepared — so the same tap answers the question now and stops
    it being asked again. */
-/* The label a deferred section wears. "preparing…" means the server already
+/* The label a deferred section wears. "indexing…" means the server already
    has this dictionary in its front ingest queue because something asked for it
    by name — it is NOT a disabled state, and the section stays tappable: the
    uncapped single-dictionary search answers in seconds while the ingest behind
@@ -3432,7 +3428,7 @@ const TAPS=matchMedia("(pointer:coarse)").matches;
    over at a dictionary that is already doing the work, which reads as the first
    tap having done nothing. */
 function deferLabel(indexing){
-  return indexing?"preparing…":(TAPS?"tap":"click")+" to search";
+  return indexing?"indexing…":(TAPS?"tap":"click")+" to search";
 }
 function loadDeferred(det,box,h,mode,q){
   if(det.dataset.loading)return;
@@ -3580,9 +3576,8 @@ function renderSlot(box,h,mode,q,perDict,group){
          link-scoped search keeps its own `shown`, and with it the guard that
          stops a scoped miss from silently widening. */
       if(group)return{shown:true,noIndex:{dict:h.dict,name:h.name,feat}};
-      const what=feat==="fts"?"full-text search":"substring search";
       box.innerHTML=`<details class="dict"><summary>${esc(h.name)}`+
-        `<span class="upgrade" data-id="${h.dict}" data-feat="${feat}">enable ${what} for this dictionary</span></summary></details>`;
+        `<span class="upgrade" data-id="${h.dict}" data-feat="${feat}">add the ${FEAT_NAME[feat]} to this dictionary</span></summary></details>`;
       return{shown:true};
     }
     return{};
@@ -3646,12 +3641,11 @@ function noIndexRow(el,out,info){
   }
   const list=el.lastElementChild,row=document.createElement("div");
   row.innerHTML=`<span>${esc(info.name)}</span>`+
-    `<span class="upgrade" data-id="${info.dict}" data-feat="${info.feat}">enable</span>`;
+    `<span class="upgrade" data-id="${info.dict}" data-feat="${info.feat}">add</span>`;
   list.appendChild(row);
   const n=list.childElementCount;
   el.firstElementChild.textContent=
-    `${n} dictionar${n===1?"y has":"ies have"} no `+
-    (info.feat==="fts"?"full-text":"substring")+" index";
+    `${n} dictionar${n===1?"y has":"ies have"} no `+FEAT_NAME[info.feat];
   return el;
 }
 
@@ -5369,8 +5363,7 @@ function welcome(){
   if(!$("welcome")){
     const w=document.createElement("div");
     w.id="welcome";
-    w.innerHTML='No dictionaries found. Tap <a href="/setup">Add more dictionaries</a> to configure your collection. '+
-      'Or, browse wudict\u2019s howto guide below.';
+    w.innerHTML='No dictionaries found. <a href="/setup">Add dictionaries</a>, or read the wudict howto below.';
     $("out").before(w);
   }
   searchFor("wudict welcome",{scope:guide.id,record:"replace"});

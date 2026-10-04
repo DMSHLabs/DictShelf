@@ -113,9 +113,8 @@ label.keep em{font-style:normal;color:var(--faint);font-size:12.5px}
 <h1><b>wu</b>Dict Configuration</h1>
 <p>{{INTRO}}</p>
 
-<h2>Point wuDict at your dictionaries</h2>
-<p>Paste the full path of a folder that holds your dictionary files (subfolders are scanned too).
-   Click ➕ to add more folders</p>
+<h2>Dictionary folders</h2>
+<p>Enter the path of a folder with dictionary files; subfolders are included.</p>
 <div id="rows"></div>
 <button type="button" id="addRow" class="link">+ add another folder</button>
 <div id="origin" class="warn hidden"></div>
@@ -124,17 +123,17 @@ label.keep em{font-style:normal;color:var(--faint);font-size:12.5px}
 <div id="addSection" class="hidden">
   <hr class="sep">
   <h2>Add dictionaries</h2>
-  <p>Drag-n-drop a link to a packed dictionary (<code>.zip</code>/ <code>.7z</code>) or unpacked (<code>.mdx</code>,
-    <code>.ifo</code>, <code>.dsl/.dsl.dz</code>, <code>.slob</code>,
-     <code>.bgl</code>, <code>.zim</code> or <code>.wudict.md</code>). Or paste a link to one, to a web folder of them or to a list, and the dictionaries will be installed into
-     <code id="addDir"></code> — .mdd assets are auto-discovered.</p>
+  <p>Drop a dictionary file (<code>.mdx</code>, <code>.ifo</code>, <code>.dsl</code>, <code>.dsl.dz</code>,
+    <code>.slob</code>, <code>.bgl</code>, <code>.zim</code>, <code>.wudict.md</code>) or an archive
+    (<code>.zip</code>, <code>.7z</code>), or a link to a file, a web folder or a list. Dictionaries
+    are installed into <code id="addDir"></code>; <code>.mdd</code> files are auto-detected.</p>
   <div id="drop">
     <input type="file" id="file" accept=".zip,.7z,.mdx,.mdd,.ifo,.idx,.dict,.dz,.syn,.dsl,.slob,.bgl,.zim,.md,.gz" hidden>
     <button type="button" id="choose" class="link">Choose a file…</button>
     <span class="hint">or drop one here</span>
   </div>
   <div id="urlRow">
-    <input type="text" id="url" placeholder="…or paste a link: a dictionary, a folder or a list"
+    <input type="text" id="url" placeholder="…or paste a link: a dictionary, a web folder or a list"
            autocomplete="off" spellcheck="false" inputmode="url">
     <button type="button" id="fetch" class="btn ghost">Download</button>
   </div>
@@ -158,12 +157,12 @@ label.keep em{font-style:normal;color:var(--faint);font-size:12.5px}
 
 <div id="libSection" class="hidden">
   <hr class="sep">
-  <h2>Previously imported dictionaries</h2>
-  <p><b id="libN">0</b> prepared earlier and kept in <code id="libDir"></code>.
-     They work even if the dictionary files are removed.</p>
+  <h2>Library</h2>
+  <p><b id="libN">0</b> indexed dictionaries in <code id="libDir"></code>.
+     They still work without the original dictionary files.</p>
   <label class="keep" id="keepWrap"><input type="checkbox" id="keep" checked>
     <span>Keep using them
-    <em id="keepHint">— unchecking only hides them; nothing is deleted</em></span></label>
+    <em id="keepHint">— unticking hides them; nothing is deleted</em></span></label>
   <div id="lib"></div>
 </div>
 
@@ -171,19 +170,18 @@ label.keep em{font-style:normal;color:var(--faint);font-size:12.5px}
 <div id="msg"></div>
 <button id="save" disabled>Use this folder</button>
 <a id="cancel" class="btn ghost hidden" href="/">Back to dictionaries</a>
-<!-- A control, not a footnote: installing word-form data is a thing the user
+<!-- A control, not a footnote: installing lemma data is a thing the user
      DOES on this page, like choosing a folder, so it stands with the other
      two rather than reading as prose about them. -->
 <a id="lemmas" class="btn ghost" href="/lemmas"
-   title="Install the word-form data that lets an inflected word find its dictionary entry">🔤 Lemmatization</a>
+   title="Install lemma data, so that an inflected form finds its lemma">🔤 Lemmatization</a>
 
-<p class="formats">Lemmatization installs the word-form data that lets
-   <i>understood</i> find <i>understand</i>.</p>
+<p class="formats">Lemmatization: with lemma data, <i>understood</i> finds <i>understand</i>.</p>
 
 <!-- Shown only after the user removed the built-in guide (D154 Am. 5). -->
 <p class="formats hidden" id="howtoBackRow"><a href="#" id="howtoBack">Bring back the wudict howto</a>
    — wudict's own guide, built into the app.</p>
-<p class="formats">Supported: MDict (.mdx + .mdd) · StarDict (.ifo) · Aard2 (.slob) · Lingvo DSL (.dsl, .dsl.dz) · Babylon (.bgl) · ZIM (.zim) · wudict markdown (.wudict.md, .md) · prepared dictionary folders</p>
+<p class="formats">Supported: MDict (.mdx + .mdd) · StarDict (.ifo) · Aard2 (.slob) · Lingvo DSL (.dsl, .dsl.dz) · Babylon (.bgl) · ZIM (.zim) · wudict markdown (.wudict.md, .md) · library folders</p>
 <!-- First run is the one moment the app has the user's full attention and
      nothing else to say; one line is the whole budget. -->
 <p class="about"><b>wu</b>Dict — search every dictionary you own, from one browser tab.
@@ -312,7 +310,7 @@ function syncAct(total,checked,bad){
     const parts=[];
     if(total>0)parts.push(total.toLocaleString()+" dictionar"+(total===1?"y":"ies")+
       (checked>1?" in "+checked+" folders":""));
-    if(lib>0)parts.push(lib.toLocaleString()+" previously imported");
+    if(lib>0)parts.push(lib.toLocaleString()+" in the library");
     msg.textContent="✓ "+parts.join(" + ");
   }else{msg.className="err";msg.textContent="✕ No dictionaries found"}
   // either source is enough to proceed
@@ -492,7 +490,7 @@ function showExtras(j){
   box.classList.toggle("hidden",!list.length);
   if(!list.length)return;
   box.appendChild(el("p","head",
-    j.collection?"Pictures and sound for the dictionaries above:"
+    j.collection?"Media for the dictionaries above:"
     :list.length===1?"One more file belongs with this dictionary:"
                    :list.length+" more files belong with this dictionary:"));
   list.forEach((x,i)=>{
@@ -502,7 +500,7 @@ function showExtras(j){
     row.appendChild(el("span","nm",x.name));
     if(x.size)row.appendChild(el("span","n",sizeMB(x.size)));
     const why=x.need==="needed"?"needed — it will not work without this"
-             :x.need==="media"?"images and sounds"
+             :x.need==="media"?"images and audio"
                               :"optional";
     row.appendChild(el("span","need"+(x.need==="needed"?" req":""),why));
     box.appendChild(row);

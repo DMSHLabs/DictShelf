@@ -36,7 +36,7 @@ import (
 const lemmasUsage = `usage: wudict lemmas <command>
 
   list                    show installed and available languages
-  download <lang…>        install one or more ("pl ru", "polish russian")
+  download <lang…>        install one or more ("ru sk", "russian slovak")
   download -all           install every language in the catalogue
   remove <lang…>          delete installed lemma data
 
@@ -190,8 +190,8 @@ func cmdLemmasList(args []string) error {
 	w.Flush()
 
 	fmt.Println()
-	fmt.Println("  wudict lemmas download pl ru    install       [x] ready   [ ] not installed")
-	fmt.Println("  wudict lemmas remove pl         delete        [!] installed, differs from the catalogue")
+	fmt.Println("  wudict lemmas download ru sk    install       [x] ready   [ ] not installed")
+	fmt.Println("  wudict lemmas remove sk         delete        [!] installed, differs from the catalogue")
 
 	for _, s := range shadowed {
 		fmt.Fprintln(os.Stderr, "warning:", s)
@@ -256,7 +256,7 @@ func cmdLemmasDownload(args []string) error {
 		}
 	}
 	if len(bad) > 0 {
-		return fmt.Errorf("not a language: %s (use a code like \"pl\" or a name like \"polish\")",
+		return fmt.Errorf("not a language: %s (use a code like \"sk\" or a name like \"slovak\")",
 			strings.Join(bad, ", "))
 	}
 

@@ -1,94 +1,78 @@
 ---
 title: macOS app
-description: wuDict.app is native macOS app bundle which gives you a menu-bar icon, no Dock icon, no terminal.
+description: wuDict.app - the wudict server as a macOS app bundle, with a menu-bar icon and no Dock icon or terminal.
 ---
 
 # macOS app
 
-**Goal:** run WuWeiDict from the Applications folder, without a terminal.
-
-`wuDict.app` is the same server as the command-line build, packed into a macOS app bundle. 
-Unlike the CLI version, it adds a **menu-bar icon**, so you can see when it is running and quit via the icon.
+`wuDict.app` is the command-line `wudict` packaged as a macOS app bundle. It runs
+without a terminal and shows a **menu-bar icon**.
 
 ## Install
 
 1.  Download **`wudict-macos-universal-app-<version>.zip`** from
-    [the releases page](https://github.com/wuweidict/wudict/releases).
-    It is universal — one file for Apple Silicon and Intel.
-2.  Unzip it. Drag **wuDict.app** to *Applications*.
-3.  Control-click the app and choose **Open**. Confirm **Open** in the dialog.
-4.  If you get a warning that Apple cannot verify this app, and you should move it to trash, 
-    then retry step 3 after removing the extended attribute quarantine bits:
+    [the releases page](https://github.com/wuweidict/wudict/releases). It is a
+    universal binary, for Apple silicon and Intel.
+2.  Unzip it and move **wuDict.app** to *Applications*.
+3.  Open the app. macOS blocks the first launch ("Apple could not verify…"):
+    click **Done**, open *System Settings → Privacy & Security*, and click
+    **Open Anyway**. On macOS 14 and earlier, Control-click the app and choose
+    **Open** instead.
 
-```sh  title="stripping macOS extended attributes"
-/usr/bin/xattr -cr /Applications/wudict.app
+The app is signed with an ad-hoc certificate, not with an Apple Developer ID, so Gatekeeper blocks
+it on first launch. Removing the quarantine attribute before the first launch
+has the same effect as step 3:
 
-# or if you copied the bundle to user's Application folder:
-/usr/bin/xattr -cr ~/Applications/wudict.app
+``` sh
+/usr/bin/xattr -cr /Applications/wuDict.app
 ```
 
-The app is signed with an ad-hoc certificate, so macOS treats it as
-software from an unidentified developer. A normal double-click is refused, and
-the Control-click menu is the workaround.
+The menu bar then shows the wuDict icon, and the browser opens
+[localhost:6888](http://localhost:6888).
 
-**Verify:** the menu bar gains a small dictionary icon, and your browser opens
-at [localhost:6888](http://localhost:6888).
+## Menu-bar icon
 
-## The menu-bar icon
-
-The icon is the whole interface. Click it:
-
-| Entry | Does |
+| Entry | Action |
 | --- | --- |
-| *wuDict `<version>`* | nothing; it tells you the server runs, and which build |
-| **Open wuDict** | opens the page in your browser |
-| **Rescan dictionaries** | re-reads your dictionary folders, for files added since |
-| **Open dictionary folder** | reveals that folder in Finder |
-| **Quit wuDict** | stops the server |
+| *wuDict `<version>`* | none; shows the running version |
+| **Open wuDict** | open the page in the browser |
+| **Rescan dictionaries** | re-read the dictionary folders |
+| **Open dictionary folder** | show the dictionary folder in Finder |
+| **Quit wuDict** | stop the server |
 
-There is no Dock icon and no window of its own. Closing the browser tab leaves
-the server running; **Quit** is what stops it.
+The app has no Dock icon and no window. Closing the browser tab does not stop
+the server; **Quit wuDict** does. The log is `~/Library/Logs/wudict.log`.
 
-The app prints nothing. Its log is `~/Library/Logs/wudict.log`.
+Launching the app while the wudict server is already running just opens the page in the
+browser.
 
-## Opening it a second time
+## macOS app bundle vs LaunchAgent
 
-Opening the app while it already runs does not start a second server. It opens
-the page in your browser and exits.
-
-## App, or LaunchAgent?
-
-Both keep WuWeiDict available. They differ in when it runs.
-
-| | `wuDict.app` | LaunchAgent |
+| | `wuDict.app` | [LaunchAgent](../running.md) |
 | --- | --- | --- |
-| Starts | when you open it | at every login |
+| Starts | when you open it | at login |
 | Visible | menu-bar icon | nothing |
-| Stops | **Quit** | `make mac-agent-stop`, or logout |
+| Stops | **Quit wuDict** | `make mac-agent-stop`, or logout |
 
-Use the app if you want a visible switch. Use
-[a LaunchAgent](../running.md) if you want the server to always be available even after reboot. 
-Do not use both: the second one to start finds the port taken.
+Use one or the other.
 
-## Using the same binary from a terminal
+## The binary inside the bundle
 
-The real executable sits inside the bundle, so a shell can call it:
-
-``` sh title="the app's own binary, from the command line"
+``` sh
 /Applications/wuDict.app/Contents/MacOS/wudict --version
-/Applications/wuDict.app/Contents/MacOS/wudict lookup serendipity
+/Applications/wuDict.app/Contents/MacOS/wudict lookup ~/Dictionaries/Oxford.mdx serendipity
 ```
 
-Started that way it behaves as the command-line build: it prints, and it shows
-no menu-bar icon. The icon appears only when macOS launches the bundle.
+Started from a terminal, it behaves as the command-line `wudict`: output goes
+to the terminal and no menu-bar icon appears.
 
 ## Uninstall
 
 1.  **Quit wuDict** from the menu bar.
-2.  Move the app to the Bin.
-3.  Optional: delete `~/.wudict` (config, and the prepared library unless you
-    moved it) and `~/Library/Logs/wudict.log`.
+2.  Move `wuDict.app` to the Bin.
+3.  Optionally delete `~/.wudict` (settings and library, unless `DB_DIR` points
+    elsewhere) and `~/Library/Logs/wudict.log`.
 
 ## Next
 
-[Quick Start: Configure WuWeiDict dictionary folders](../start/first-run.md){ .md-button }
+[Set the dictionary folders](../start/first-run.md){ .md-button }

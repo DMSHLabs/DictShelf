@@ -46,9 +46,9 @@
 <body>
 <div class="card">
 <h1><b>wu</b>Dict Lemmatization</h1>
-<p>When a word is not in a dictionary, wuDict can look up its dictionary form and
-   try again — so <i>understood</i> finds <i>understand</i>, and <i>geese</i> finds <i>goose</i>.
-   Each language needs its word list installed here.</p>
+<p>When a single word is not found in a dictionary, wudict searches that dictionary again
+   for the word's lemma: <i>understood</i> finds <i>understand</i>, <i>geese</i> finds <i>goose</i>.
+   Install the lemma data for each language here.</p>
 
 <div id="banner" class="banner hidden"></div>
 
@@ -81,7 +81,7 @@ let polling=false;
 async function load(){
   let j;
   try{ j=await (await fetch("/api/lemmas")).json() }
-  catch(e){ $("banner").className="banner warn";$("banner").textContent="Cannot reach wuDict.";return null }
+  catch(e){ $("banner").className="banner warn";$("banner").textContent="The wudict server does not respond.";return null }
   render(j);
   return j;
 }
@@ -101,8 +101,8 @@ function render(j){
   const b=$("banner");
   if(!j.enabled){
     b.className="banner warn";
-    b.innerHTML="Lemmatization is switched off (<code>MORPH_CACHE = 0</code>). "+
-      "Anything installed here will sit on disk unused until it is switched back on.";
+    b.innerHTML="Lemmatization is off (<code>MORPH_CACHE = 0</code>): installed lemma data "+
+      "is not used until it is turned on.";
   }else if(j.error){
     b.className="banner warn";
     b.textContent="Could not read the catalogue: "+j.error+
@@ -181,7 +181,7 @@ async function toggle(l,cb){
     try{
       const r=await fetch("/api/lemmas?code="+encodeURIComponent(l.code),{method:"POST"});
       if(!r.ok){ const j=await r.json().catch(()=>({}));fail(cb,j.error||("HTTP "+r.status));return }
-    }catch(e){ fail(cb,"cannot reach wuDict");return }
+    }catch(e){ fail(cb,"the wudict server does not respond");return }
     poll();
     return;
   }
@@ -193,7 +193,7 @@ async function toggle(l,cb){
   try{
     const r=await fetch("/api/lemmas?code="+encodeURIComponent(l.code),{method:"DELETE"});
     if(!r.ok){ const j=await r.json().catch(()=>({}));fail(cb,j.error||("HTTP "+r.status));return }
-  }catch(e){ fail(cb,"cannot reach wuDict");return }
+  }catch(e){ fail(cb,"the wudict server does not respond");return }
   load();
 }
 

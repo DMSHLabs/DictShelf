@@ -1,9 +1,9 @@
 ---
-title: License
-description: WuWeiDict is free software under the GPL, version 3 or later, and this is what it includes from other projects.
+title: Licence
+description: WuWeiDict is free software under the GNU GPL, version 3 or later; the third-party code it includes.
 ---
 
-# License
+# Licence
 
 **WuWeiDict** is free software. You may redistribute it and change it under the
 terms of the **GNU General Public License**, as published by the Free Software
@@ -16,12 +16,17 @@ for a particular purpose.
 
 The full text is in the repository at `LICENSE`, and at the
 [Free Software Foundation](https://www.gnu.org/licenses/gpl-3.0.html).
+`wudict licenses` prints it with the notices for all third-party code.
 
-## What WuWeiDict includes
+## Third-party code
 
-| Component | Origin                                                                                                                                                                     | License |
-| --- |----------------------------------------------------------------------------------------------------------------------------------------------------------------------------| --- |
-| MDX and MDD parser | [go-mdict](https://github.com/terasum/go-mdict), forked and patched as `internal/gomdict`                                                                                  | GPL-3.0 |
-| BGL parser | [pyglossary](https://github.com/ilius/pyglossary)'s `babylon_bgl` plugin, ported to Go; streaming modelled on [GoldenDict NG](https://github.com/xiaoyifang/goldendict-ng) | GPL-3.0 |
-| Format knowledge | the original reverse engineering by **Raul Fernandes** and **Karl Grill**, which both parsers trace back to                                                                | - |
-| libspeex | [Speex](https://speex.org/), decoder only, vendored at `internal/speex/clib`                                                                                               | BSD-3-Clause |
+| Component | Origin | Licence |
+| --- | --- | --- |
+| MDX and MDD parser (`internal/gomdict`) | [medict](https://github.com/terasum/medict) (formerly go-mdict), © 2023 Quan Chen | GPL-3.0-or-later |
+| BGL parser (`internal/format/bgl`) | ported from [pyglossary](https://github.com/ilius/pyglossary)'s `babylon_bgl` plugin; streaming modelled on [goldendict-ng](https://github.com/xiaoyifang/goldendict-ng) | GPL-3.0-or-later |
+| Speex decoder (`internal/speex/clib`) | [Speex](https://www.speex.org/), © Jean-Marc Valin, Xiph.Org, Analog Devices | BSD-3-Clause |
+| `kiss_fft` (`internal/speex/clib`) | [kissfft](https://github.com/mborgerding/kissfft), © Mark Borgerding | BSD-3-Clause |
+
+The BGL format was reverse-engineered by Raul Fernandes and Karl Grill. The
+notices for all dependencies are in
+[THIRD-PARTY-NOTICES.md](https://github.com/wuweidict/wudict/blob/master/THIRD-PARTY-NOTICES.md).

@@ -9,7 +9,7 @@
 [project]
 
 site_name = "WuWeiDict"
-site_description = "WuWeiDict (wudict) is a native app for macOS, Linux, Windows and Android that reads MDX/MDD, StarDict, Slob, DSL and BGL dictionaries."
+site_description = "WuWeiDict (wudict) searches MDict, StarDict, Aard 2, Lingvo DSL, Babylon, ZIM and wudict markdown dictionaries in the browser, on macOS, Linux, Windows and Android."
 site_author = "The WuWeiDict contributors"
 site_url = "https://wudict.legbehindneck.com"
 
@@ -46,7 +46,9 @@ nav = [
   ] },
   { "Dictionaries" = [
     "dictionaries/formats.md",
+    "dictionaries/add.md",
     "dictionaries/library.md",
+    "dictionaries/groups.md",
     "dictionaries/override.md",
     "dictionaries/styles.md",
   ] },
@@ -56,9 +58,13 @@ nav = [
   { "Run at startup" = [
     "running.md",
   ] },
+  { "Access from other devices" = [
+    "access.md",
+  ] },
   { "Reference" = [
     "reference/configuration.md",
     "reference/cli.md",
+    "reference/fts-syntax.md",
     "reference/api.md",
     "reference/text-db.md",
     "reference/building.md",

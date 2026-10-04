@@ -1,53 +1,44 @@
 ---
 title: Formats
-description: Every dictionary format wuDict reads, the files each one needs, and what it does with media.
+description: The dictionary formats wudict reads, the files each needs, and how each is indexed.
 ---
 
 # Formats
 
-wuDict reads six common dictionary formats, its own plain-text markdown format, and its own SQLite3-based files.
+| Format | Files | Resources and notes                                                     |
+| --- | --- |-------------------------------------------------------------------------|
+| **MDict** | `.mdx` | `.mdd`, `.1.mdd`, … archives; `.spx` audio auto-converted to WAV        |
+| **StarDict** | `.ifo` + `.idx` or `.idx.gz` + `.dict` or `.dict.dz` | `.syn` synonyms; `res/` folder or `res.zip`                             |
+| **Aard 2** | `.slob` | everything in the file; zlib, bz2 and LZMA2 compression                 |
+| **Lingvo DSL** | `.dsl` or `.dsl.dz` | `.dsl.files.zip`; `.ann` annotations; UTF-8, UTF-16 and UTF-32 detected |
+| **Babylon** | `.bgl` | everything in the file; source and target character sets detected       |
+| **ZIM** | `.zim` | everything in the file (Kiwix, Wikipedia, Wiktionary)                   |
+| **wudict markdown** | `.wudict.md`, `.wudict.md.gz`, `.wudict.md.dz`, or `.md` | `<name>.wudict.files` folder or `<name>.wudict.files.zip`               |
+| **wudict library** | `text.db` | `media.db` in the same folder                                           |
 
-| Format              | Extensions                                                  | Media                                                                                         |
-|---------------------|-------------------------------------------------------------|-----------------------------------------------------------------------------------------------|
-| **MDict**           | `.mdx`                                                      | companion `dict.mdd`, `dict.1.mdd`, … archives; `.spx` audio is auto-converted                |
-| **StarDict**        | `.ifo` plus `.idx` or `.idx.gz`, plus `.dict` or `.dict.dz` | `.syn` synonyms; a `res/` folder or a `res.zip`                                               |
-| **Aard 2**          | `.slob`                                                     | standalone binary with text, images, audio and CSS, etc using zlib, bz2 and lzma2 compression |
-| **Lingvo DSL**      | `.dsl` or `.dsl.dz`                                         | `dict.dsl.files.zip`; UTF-8, UTF-16 and UTF-32 are detected automatically                     |
-| **Babylon**         | `.bgl`                                                      | resources are inside the file; source and target character sets are detected automatically    |
-| **ZIM**             | `.zim`                                                      | everything is inside the file: articles, images, audio and CSS (Kiwix, Wikipedia, Wiktionary)  |
-| **wudict markdown** | `.wudict.md` or `.md`, also `.wudict.md.gz`              | a `name.wudict.files` folder or `name.wudict.files.zip` beside the file                       |
-| **wuDict library**  | `text.db`                                                   | optional `media.db` in the same folder                                                        |
+## Indexing
 
-## How wuDict works
+Every dictionary is searchable as soon as wudict finds it: exact and prefix
+search use the dictionary's own index. wudict then indexes it in the
+background into the library, which is faster, uses less memory, and enables
+the optional _contains_ and _full-text_ searches.
 
-A dictionary is available for search the moment wuDict finds it. It reads the
-dictionary's own index for exact and prefix lookups.
+- **Lingvo DSL, Babylon, wudict markdown** are indexed when first opened: they
+  have no index of their own.
+- **ZIM** is never indexed automatically. Its own index answers exact and
+  prefix search with little memory, and an indexed copy is several times the
+  size of the file. Index it from the dictionary panel for _contains_, _full-text_
+  or a media pack — adding a headword index for ZIM dictionaries is not necessary.
 
-Afterwards wuDict **indexes** the dictionary in the background: it copies the
-articles and builds its own indexes into a library folder. Prepared
-dictionaries search faster, support more modes and use much less memory.
-
-DSL, BGL and wudict markdown are prepared as soon as they are opened. None
-of them has an index of its own, so there is nothing to search until wuDict has
-indexed it.
-
-ZIM is the opposite case and is **never** indexed automatically. Its own index
-already answers exact and prefix searches straight from the file, using almost
-no memory even for a whole Wiktionary, and a ZIM is packed far more tightly than
-a library folder can be - indexing one would take several times the disk the
-file itself uses. Index it from the dictionary panel when you want *contains*,
-full-text or packed media; nothing else changes.
-
-[wuDict's internal library](library.md){ .md-button }
+[The library](library.md){ .md-button }
 
 ## wudict markdown
 
-A dictionary as one markdown file that any text editor opens and any markdown
-viewer shows. Its first line is `# ` and the dictionary's title, and its second
-line must be `wudict: 1` - that line is what makes the file a dictionary, so a
-`README.md` next to your dictionaries is never taken for one. Each entry is a
-`## headword` heading followed by its text; other spellings of the headword are
-more `##` headings right under the first.
+A dictionary as one [Markdown (CommonMark)](https://commonmark.org) file. The first line
+is `# ` which is the title; the second line is `wudict: 1`, which is a marker for a
+wudict dictionary, so other `.md` files in a dictionary folder are ignored. Each
+entry is a `## headword` heading followed by its text; further `##` headings
+directly below it are alternative headwords.
 
 ``` markdown
 # My Glossary
@@ -59,17 +50,15 @@ wudict: 1
 The property of an object that depends on the light it reflects.
 ```
 
-`wudict dump -format md` writes any dictionary wuDict reads in this format.
+`wudict dump -format md` writes any dictionary readable by wudict in this format.
 
-[The full specification](https://github.com/wuweidict/wudict/blob/master/docs/WUDICT-MARKDOWN.md){ .md-button }
-[wudict dump](../reference/cli.md){ .md-button }
+[Specification](https://github.com/wuweidict/wudict/blob/master/docs/WUDICT-MARKDOWN.md){ .md-button }
+[wudict dump](../reference/cli.md#dump){ .md-button }
 
 ## Audio
 
-Most pronunciation audio is `.mp3`, `.ogg`, or `.wav`, and plays directly in the browser.
+`.mp3`, `.ogg` and `.wav` play in the browser. Browsers cannot play Speex
+(`.spx`), so wudict converts it to WAV: `-cgo` builds and the Android app with
+a built-in decoder, `-purego` builds with the external `speexdec` program.
 
-Speex audio (`.spx`) cannot be played by browsers, so wuDict automatically converts it to
-WAV format. The `-cgo` builds do this without external dependencies. The
-`-purego` flavours need the external `speexdec` cli utility, which must be installed.
-
-[How to fix audio not working](../help/troubleshooting.md#audio){ .md-button }
+[No sound](../help/troubleshooting.md#audio){ .md-button }

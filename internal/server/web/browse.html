@@ -185,7 +185,7 @@ async function show(opts,record){
   if(opts.at)u.set("at",opts.at);else u.set("p",String(opts.p||1));
   let r;
   try{r=await fetch("/api/browse?"+u.toString())}
-  catch(e){return card("<b>No answer</b><p>The app stopped responding. Reload this page once it is running again.</p>")}
+  catch(e){return card("<b>No answer</b><p>The wudict server does not respond. Reload this page when it runs again.</p>")}
   if(r.status===409)return unprepared(await r.json().catch(()=>({})));
   if(!r.ok){const j=await r.json().catch(()=>({}));
     return card("<b>Cannot browse this dictionary</b><p>"+esc(j.error||("Error "+r.status))+"</p>"+
@@ -274,7 +274,7 @@ async function unprepared(j){
     card(building);
     poll=setTimeout(()=>show(last,"none"),2500);
   }else{
-    card("<b>Could not build the index</b><p>Preparing this dictionary for browsing failed. "+
+    card("<b>Could not index</b><p>Indexing this dictionary failed. "+
       'Reload this page to try again, or <a href="/browse">choose another…</a></p>');
   }
 }
@@ -284,7 +284,7 @@ async function unprepared(j){
    dictionary that opens is offered: choosing one that has no index yet
    builds it (unprepared). */
 async function chooser(){
-  card("<b>Browse a dictionary</b><p>Reading it word by word, A to Z.</p>");
+  card("<b>Browse a dictionary</b><p>headwords in alphabetical order, page by page.</p>");
   let text="";
   try{text=await(await fetch("/api/dicts")).text()}catch(e){}
   const ds=[];
@@ -294,9 +294,9 @@ async function chooser(){
     if(m.t==="dict"&&m.dict&&!m.dict.error)ds.push(m.dict);
   }
   ds.sort((x,y)=>(x.name||"").localeCompare(y.name||""));
-  if(!ds.length)return card("<b>Nothing to browse yet</b><p>No dictionaries are loaded. "+
+  if(!ds.length)return card("<b>Nothing to browse</b><p>No dictionaries are loaded. "+
     'Open <a href="/">the app</a> to add some.</p>');
-  card("<b>Browse a dictionary</b><p>Reading it word by word, A to Z.</p><div class='picks'>"+
+  card("<b>Browse a dictionary</b><p>headwords in alphabetical order, page by page.</p><div class='picks'>"+
     ds.map(d=>'<a href="?dict='+encodeURIComponent(d.id)+'">'+esc(d.name||d.id)+
       (d.entries?"<span>"+num(d.entries)+" entries</span>":"")+"</a>").join("")+"</div>");
 }

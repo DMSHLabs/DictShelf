@@ -139,7 +139,7 @@ async function call(method,body,query){
 
 async function load(){
   try{const p=show(await call("GET"));if(p)say(p,"err")}
-  catch(e){say("Cannot reach wuDict: "+e.message,"err")}
+  catch(e){say("wudict unreachable: "+e.message,"err")}
 }
 
 async function save(){

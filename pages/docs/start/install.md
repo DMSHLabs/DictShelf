@@ -1,27 +1,22 @@
 ---
 title: Install
-description: Download and run wudict on macOS, Linux, Windows or Android. One executable, no dependencies.
+description: Download and run wudict on macOS, Linux, Windows or Android - one executable, no dependencies.
 ---
 
 # Install
 
-`wudict` is one executable per platform. Needs no runtime, no database
-server, just some minimal configuration. Download the file, make it executable, start it, 
-set your dictionary folders and your are done.
+`wudict` is one executable per platform, with no runtime or database server to
+install. macOS also has an app bundle, Windows an installer, Android an APK.
 
-For macOS you can also download a macOS bundle, for Windows a traditional setup wizard is available.
+[Releases](https://github.com/wuweidict/wudict/releases/latest){ .md-button .md-button--primary }
 
-[Download page](https://github.com/wuweidict/wudict/releases/latest){ .md-button .md-button--primary }
-
-## Pick your system
+## Download and run
 
 === "macOS"
 
-    Apple Silicon Macs (M1 to M4) use `arm64`. Older Intel Macs use `amd64`.
+    Apple silicon Macs (M-series) use `arm64`, Intel Macs `amd64`.
 
-    ``` sh title="Apple Silicon (arm64)"
-    # Assuming file was downloaded to ~/Downloads
-
+    ``` sh title="Apple silicon (arm64), downloaded to ~/Downloads"
     chmod +x ~/Downloads/wudict-darwin-arm64-cgo
     mv ~/Downloads/wudict-darwin-arm64-cgo /usr/local/bin/wudict
     wudict
@@ -33,136 +28,103 @@ For macOS you can also download a macOS bundle, for Windows a traditional setup 
     wudict
     ```
 
-    macOS shows a Gatekeeper warning the first time. Click **Open** once.
+    If macOS blocks the first run ("Apple could not verify…"), open *System
+    Settings → Privacy & Security* and click **Open Anyway**, or remove the
+    quarantine attribute: `xattr -d com.apple.quarantine /usr/local/bin/wudict`.
 
-    ??? tip "Looking for a macOS app bundle?"
-
-        The same release contains `wudict-macos-universal-app-<version>.zip`. It unzips to
-        **wuDict.app**: the identical server, built universal, with a menu-bar
-        icon instead of a terminal. See [the macOS app](../apps/macos.md).
+    The app bundle `wudict-macos-universal-app-<version>.zip` contains
+    **wuDict.app**: the same program, universal, with a menu-bar icon instead
+    of a terminal. See [macOS app](../apps/macos.md).
 
 === "Linux"
 
-    ``` sh title="Linux (amd64)"
+    ``` sh title="amd64"
     chmod +x wudict-linux-amd64-cgo
     sudo mv wudict-linux-amd64-cgo /usr/local/bin/wudict
     wudict
     ```
 
     ``` sh title="Raspberry Pi"
-    # Pi 3, 4 and 5      -> wudict-linux-arm64-cgo
-    # Pi 1, 2 and Zero   -> wudict-linux-arm-v7-purego  (v6 for the first models)
+    # Pi 3, 4, 5, Zero 2 W, 64-bit OS  -> wudict-linux-arm64-cgo
+    # Pi 2; Pi 3, 4, 5 on a 32-bit OS   -> wudict-linux-arm-v7-purego
+    # Pi 1, Zero, Zero W                -> wudict-linux-arm-v6-purego
     chmod +x wudict-linux-arm64-cgo
     sudo mv wudict-linux-arm64-cgo /usr/local/bin/wudict
     wudict
     ```
 
 === "Windows"
-    ??? tip "Prefer an installer?"
 
-        The release includes `wudict-windows-x64-setup-<version>.exe`. It adds a
-        Start-menu entry, an uninstaller, `PATH`, and *Open with* for dictionary
-        files. See [the Windows installer](../apps/windows.md).
-
-    ``` cmd title="Windows CMD"
+    ``` cmd title="cmd"
     ren wudict-windows-amd64-cgo.exe wudict.exe
-    
-    # show help
-    wudict.exe --help
-
-    # run it
     wudict.exe
     ```
-    ``` pwsh title="Windows PowerShell"
+
+    ``` pwsh title="PowerShell"
     Rename-Item wudict-windows-amd64-cgo.exe wudict.exe
-    wudict.exe
+    .\wudict.exe
     ```
 
-    Any folder works. On Arm-based Windows PCs take
-    `wudict-windows-arm64-purego.exe` instead.
+    On Arm64 Windows use `wudict-windows-arm64-purego.exe`.
 
-    Windows Defender stops an unsigned program on its first run. Choose
-    **More info**, then **Run anyway**, once.
+    The file is not code-signed, so Windows Defender SmartScreen stops its
+    first run: choose **More info**, then **Run anyway**.
 
+    Started from `cmd` or PowerShell, `wudict.exe` is a console program.
+    Started by double-click, from a shortcut or by opening a dictionary file,
+    it runs without a console, shows a tray icon and logs to
+    `%LOCALAPPDATA%\wudict\wudict.log`.
 
-    ??? info "One executable, two behaviours"
-
-        There is one `wudict.exe`, and how you start it decides what it does.
-
-        Started from PowerShell or `cmd`, it is an ordinary command-line
-        program: it prints, it pipes, it returns an exit code.
-
-        Double-clicked, started from a shortcut, or started by opening a
-        dictionary file, it detaches from the console and adds a **tray icon**
-        in the notification area. In this scenario instead of the stdout it logs to
-        `%LOCALAPPDATA%\wudict\wudict.log`.
+    The installer `wudict-windows-x64-setup-<version>.exe` adds a Start menu
+    entry, an uninstaller, `PATH` and *Open with*. See
+    [Windows installer](../apps/windows.md).
 
 === "Android"
 
-    Download **`wudict-android-arm64.apk`** and install it with your file
-    manager. Android asks you to allow *install unknown apps* once.
+    Download **`wudict-android-arm64-foss-<version>.apk`** and open it from the
+    file manager; Android asks once to allow *Install unknown apps*. The
+    Google Play build is on Google Play. See [Android app](../apps/android.md).
 
-    The app then asks for storage access, and reads your dictionaries from
-    *Internal storage ▸ Dictionaries*. It can also look up a word you selected
-    in any other app.
+## Check
 
-    [The Android app: storage, lookup, battery](../apps/android.md){ .md-button }
-
-## Command line help
-
-``` sh title="wudict cli help"
-wudict --help
-```
-
-## Verify
-
-``` sh title="the version, then the server"
+``` sh
 wudict --version
 wudict
 ```
 
-`wudict` prints the address it listens on and opens your browser at
-[localhost:6888](http://localhost:6888).
+`wudict` prints the address it listens on and opens the browser at
+[localhost:6888](http://localhost:6888). `wudict --help` lists every command
+and setting.
 
-Windows users who double-click the file see the tray icon instead of the
-printed lines. Android users see the app window.
+## -cgo or -purego
 
-## Which flavour to download
+Most platforms have a **`-cgo`** and a **`-purego`** build. They differ in two
+components:
 
-Most downloads come as a **`-cgo`** file and a **`-purego`** file. Both are
-complete products. They differ in two internals only.
+| | `-cgo` | `-purego` |
+| --- | --- | --- |
+| SQLite driver | mattn/go-sqlite3 (C) | modernc.org/sqlite (Go); slightly slower |
+| Speex `.spx` audio | built-in decoder | needs `speexdec` (`brew install speex`, `apt install speex`) |
 
-| | `-cgo`                                      | `-purego` |
-| --- |---------------------------------------------| --- |
-| SQLite driver | mattn, written in C, fastest                | modernc, pure Go |
-| `.spx` audio | built-in native decoding | needs the external `speexdec` program |
-
-Take **`-cgo`** where it exists: macOS, Linux on amd64 and arm64, and Windows
-on x64. Take **`-purego`** for the rest — 32-bit Raspberry Pi boards, and
-Windows on Arm. `-purego` searches slightly slower and needs `speexdec`
-installed for Speex audio (`brew install speex`, or `apt install speex`).
-
-A C compiler is only needed to
-[build the `-cgo` flavour yourself](../reference/building.md).
+Use `-cgo` where it exists: macOS, Linux on amd64 and arm64, Windows on x64.
+Use `-purego` for 32-bit Raspberry Pi and Arm64 Windows. Building `-cgo`
+yourself needs a C compiler; see [Building](../reference/building.md).
 
 ## Update
 
-Download the new file and put it over the old one. Stop the server first on
-Windows, which refuses to replace a running program.
+Replace the executable with the new one; on Windows, stop the server first.
+The config file, the library and the dictionary files are kept, and the new
+version reads them. Indexes built by an older version are reported as
+[outdated](../dictionaries/library.md#outdated-indexes).
 
-Nothing else changes: your config file, your prepared library and your
-dictionary files stay where they are, and the new binary reads them.
-
-The packaged apps update themselves the same way — a new
-[installer](../apps/windows.md) over the old install, a new
-[`wuDict.app`](../apps/macos.md) over the old app, a new
-[APK](../apps/android.md) over the old app.
+The installer, `wuDict.app` and the APK are updated by installing the new
+version over the old one.
 
 ## Uninstall
 
-Delete the executable. To remove all the data and configurations delete
-`~/.wudict` — the config file, the state file and the indexed library.
+Delete the executable. `~/.wudict` holds the settings and the library; delete
+it as well to remove everything.
 
-> Next
+## Next
 
 [Set the dictionary folders](first-run.md){ .md-button .md-button--primary }

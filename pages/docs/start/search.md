@@ -1,323 +1,209 @@
 ---
 title: Search
-description: The four search modes, streaming results, and search configs.
+description: Search modes, full-text search, lemmatization, result order, links to a search, and search from the terminal.
 ---
 
 # Search
 
-wuDict's main page consists of a search box and a list of results, one accordion section per dictionary.
+The main page has a search box, the dictionary picker, and the results: one
+collapsible section per dictionary.
 
-## The four modes
+## Search modes
 
-There are four search type available to pick from the dropdown.
+Choose the mode in the drop-down next to the search box.
 
-| Mode | It matches | Use it when |
+| Mode | Matches | Needs |
 | --- | --- | --- |
-| **Exact** | the headword itself, ignoring case and accents | you know the word |
-| **Prefix** *(default)* | every headword that starts with your text | you know how it begins |
-| **Contains** | your text anywhere inside a headword | you know the middle, not the start |
-| **Full-text** | words inside the article text, ranked by relevance | you remember the meaning, not the word |
+| **exact** | the headword; if there is none, the headword ignoring case and accents | |
+| **prefix** (default) | the headword, then headwords that start with the query; case and accents ignored | |
+| **contains** | headwords that contain the query anywhere | contains index |
+| **full-text** | words in the article text, ranked by relevance | full-text index |
 
-Exact and prefix work immediately, through the dictionary's own index.
+Exact and prefix work on every dictionary, indexed or not. Contains and
+full-text search only dictionaries that have the index; any other dictionary
+shows a link that adds it.
 
-Contains and full-text index are not generated automatically. 
-You can enable them for specific dictionaries via
-the <kbd>☰</kbd> panel, or generate full-text-search indexes for all dictionaries by clicking 
-the cogwheel <kbd>⚙️</kbd> in the dictionary panel and then in the expanded box clicking 
-<kbd>**⚡️ Enable full-text search for every dictionary…**</kbd>.
+To add an index to one dictionary, click its <kbd>contains</kbd> or
+<kbd>full-text</kbd> switch in the dictionary panel. To add the full-text index
+to all dictionaries: <kbd>☰</kbd> → folder summary →
+<kbd>Full-text for every dictionary…</kbd>.
 
-!!! info "Accents and case are ignored, spelling mistakes are not"
+## Case, accents and spelling
 
-    `corazon` finds `corazón`, and `OXFORD` finds `Oxford`, in every mode.
+All four modes ignore case and accents: `corazon` finds *corazón*, `OXFORD`
+finds *Oxford*.
 
-    No mode corrects a typo. Contains looks for your text as a literal piece of
-    a headword: `orre` finds *correr*, `corer` finds nothing.
+No mode corrects spelling. Contains matches the query as a literal substring:
+`orre` finds *correr*, `corer` finds nothing.
 
-??? info "Approximate index size for on a 40,000-entry dictionary"
+A contains query shorter than 3 characters cannot use the index and is
+answered by scanning all headwords, which is slower.
 
-    | Index | Size | Enables |
-    | --- | --- | --- |
-    | Headword | about 2 MB | exact and prefix, accent-insensitive |
-    | Contains | about 2.4 MB | substring headword search |
-    | Full-text | about 12 MB | search inside article text |
+## Index sizes
 
-    The headword index is built automatically. `Contain` and `Full-text` are optional,
-    per dictionary. The <kbd>☰</kbd> panel shows the real numbers for your own files, not
-    these examples.
+For a dictionary of 40,000 entries:
 
-    An indexed wuDict dictionary is usually **smaller** than the file it came from,
-    because article text is compressed.
-
-??? info "How contains works, and its one limit"
-
-    Contains is an FTS5 trigram index over folded headwords. A trigram index
-    needs at least three characters. wuDict searches shorter text with a plain
-    scan, which is correct but slower.
-
-    Folded means lower case with accents removed. The index stores the folded
-    form, so searching for words with accented characters works as expected.
-
-## Full-text search syntax
-
-Full-text mode searches in article *text* and has its own
-query language. Exact, prefix and contains treat whatever you type as literal
-text. The FTS syntax only applies to full-text search and not to other modes.
-
-Full-text needs the full-text index switched on for the dictionary (the
-<kbd>☰</kbd> panel). Dictionaries without it are skipped.
-
-### Several words mean a phrase
-
-When you do a full-text search for e.g. `no pun intended` wuDict reads adjacent 
-words the way a lexicographer writes them: **as a phrase, in that specific order**.
-
-_If_ the phrase finds nothing, wudict falls back to proximity search, one step at a
-time, and it stops at the first step that has any results:
-
-| Step | What is searched | Example: `no pun intended` finds |
+| Index | Size | Built |
 | --- | --- | --- |
-| **1 phrase** | the words, adjacent, in that order | *…and, **no pun intended**, he resigned* |
-| **2 proximity** | the same words close together, any order | *…clearly **intended** as a **pun**…* |
-| **3 words** | the same words anywhere in the article | *…**pun**… (200 words) …**intended**…* |
+| headword | about 2 MB | automatically |
+| contains | about 2.4 MB | on request |
+| full-text | about 12 MB | on request |
 
-The widening is never silent. When a dictionary did not find an exact match, its result
-header says **phrase not found · words proximity** or **phrase not found ·
-words anywhere**, so you always know which FTS mode is used.
+The dictionary panel shows each index's size for your own dictionaries. An
+indexed dictionary is usually smaller than its dictionary files, because
+article text is stored compressed.
 
-### Full-text search query language
+## Full-text search
 
-When you need to search for an exact phrase only with no fallbacks to proximity search enclose the text in single or double quotes.
-**A query containing an operator is run exactly as written and is never widened.**
+Full-text search matches words in the article text of dictionaries that have a
+full-text index. Its query has its own syntax
+([Full-text query syntax](../reference/fts-syntax.md)); in the other modes the
+query is literal text.
 
-wuDict switches to this exact reading only when your input contains a quote, a
-bare **UPPERCASE** `AND`, `OR`, `NOT`, or `NEAR(`. Lower-case `and`
-is an ordinary word in most languages, and `(coll.)` is ordinary dictionary
-notation, so neither changes how a query is read.
+### Unquoted queries
 
-Quotes may be `"double"`, `'single'`, or the typographic “double” and
-‘single’ pairs your word processor produces when you paste from a
-document — all five mean the same thing. An apostrophe is still a letter:
-`don't cry`, `l'année` and `dogs' lives` are read as ordinary words, because
-a single quote opens a phrase only when it stands at the *start* of a word and
-its partner at the *end* of one.
+A query of several words, without quotes or operators, is matched in up to
+three stages. Each dictionary stops at the first stage that returns results.
 
-| You type | You get                                                                                             |
-| --- |-----------------------------------------------------------------------------------------------------|
-| `"no pun intended"` | that exact literal phrase — **no** prefix on the last word, and **no** fallback if it finds nothing |
-| `'no pun intended'` | the same — single quotes are quotes                                                                 |
-| `"no pun intended"*` | the same phrase with the last word left open — also *…no pun intendedly*                            |
-| `pun` | every word starting with *pun* — a bare word is always a prefix                                     |
-| `"pun"` | the word *pun* only                                                                                 |
-| `pun intended` *(inside an operator query)* | both words, anywhere in the article                                                                 |
-| `pun AND intended` | the same thing, written out                                                                         |
-| `pun OR intended` | either one                                                                                          |
-| `pun NOT intended` | *pun*, in articles that do not contain *intended*                                                   |
-| `NEAR("pun" "intended", 5)` | the two words within 5 words of each other, any order                                               |
-| `NEAR("pun" "intended")` | the same with the default distance of 10                                                            |
-| `(pun OR joke) AND intended` | grouping, to any depth                                                                              |
+| Stage | Matches | `no pun intended` finds |
+| --- | --- | --- |
+| **phrase** | the words adjacent, in the given order | *…and, **no pun intended**, he resigned* |
+| **proximity** | all words, at most 10 words between them, in any order | *…clearly **intended** as a **pun**…* |
+| **anywhere** | all words anywhere in the article | *…**pun** … **intended**…* |
 
-`NOT` has highest priority, followed by `AND`, then `OR`; two operands side by side mean
-`AND`. Use parentheses when you want another grouping.
-
-??? example "Examples for `no pun intended`"
-
-    | Goal | Query |
-    | --- | --- |
-    | That phrase, and only that phrase | `"no pun intended"` or `'no pun intended'` |
-    | The phrase, but allow fallback to proximity search if nothing found | `no pun intended` |
-    | *pun* and *intended* near each other, either order | `NEAR("pun" "intended", 10)` |
-    | *pun* and *intended* in the same article, however far apart | `"pun" AND "intended"` |
-    | Either *pun* or *joke*, with *intended* | `(pun OR joke) intended` |
-    | *pun* articles that are not about punctuation | `pun NOT punctuation` |
-
-??? example "Patterns that come up in real lexicographic work"
-
-    | Goal | Query |
-    | --- | --- |
-    | A fixed expression, verbatim | `"faux ami"` |
-    | …but not in the linguistics articles | `"faux ami" NOT linguistics` |
-    | Two spellings of one term | `"colour blind" OR "color blind"` |
-    | A word used with another word, not merely present | `NEAR("bank" "river", 4)` |
-    | A definition fragment you half remember | `sudden fear of` |
-    | An abbreviation and its expansion in one article | `NEAR("i.e." "that is", 6)` |
-    | Every derivative of a stem, exactly | `"lexicograph"*` |
-    | Exclude a sense you keep hitting | `crane NOT bird` |
-    | Two conditions, one of them loose | `"phrasal verb" AND (idiom OR colloquial)` |
-
-!!! info "Accents, case and the tokenizer"
-
-    Accents and case are ignored here exactly as in the other modes, so
-    `"corazon"` finds *corazón* and `"OXFORD"` finds *Oxford*.
-
-    The operators themselves are the exception: they are recognised only in
-    capitals. `wage NOT minimum` excludes *minimum*; `wage not minimum`
-    searches for the three words *wage*, *not* and *minimum*, which is what
-    someone writing in English, Dutch or Latin needs it to do.
-
-    Punctuation inside a quoted phrase is not searched for; it is split on the
-    same word boundaries as the text, so `"i.e."` matches *i.e.* and
-    `"no-pun-intended"` behaves like `"no pun intended"`.
-
-### What is deliberately not there
-
--   **No field or column filters.** There is no `headword:` or `definition:`
-    prefix; full-text searches the article. `title:foo` is read as the two
-    words *title* and *foo*.
--   **No `-word` negation and no leading `NOT`.** `NOT` needs something on its
-    left: write `wage NOT minimum`, not `NOT minimum`.
--   **No wildcard inside or at the start of a word.** The star only works at
-    the end — `wage*`, `"no pun intended"*`. `*age` and `w*ge` are literal text.
--   **No spelling correction.** Full-text finds the words you typed, and their
-    prefixes. A misspelt word finds nothing; [inflected forms](#inflected-words)
-    are handled separately, by the lemmatizer.
--   **No regular expressions.**
-
-!!! info "A query never fails"
-
-    Anything wuDict cannot parse — a stray quote, an unbalanced bracket, an
-    operator with nothing to operate on — is read as plain words instead of
-    refused. You never get a syntax error; at worst you get the ordinary
-    three-step search. This is also how you search for the word *OR* itself.
-
-    Very long queries are cut at 128 words, and nesting at 24 brackets deep.
+The result header of a dictionary answered at the second or third stage shows
+*phrase not found · words proximity* or *phrase not found · words anywhere*.
 
 ## Inflected words
 
-A search that finds nothing anywhere is not over. wuDict looks the word up in
-its list of word forms and searches again for what it finds — *knew* becomes
-**know**, *estuviera* becomes **estar** — and a banner says which word it
-switched to.
+When a single-word query returns nothing in a dictionary, wudict looks up the
+word's lemma and searches that dictionary again: *knew* → **know**,
+*estuviera* → **estar**. A banner names the lemma.
 
-The retry is per dictionary and per language. A dictionary that already
-answered is never second-guessed, and a dictionary is only offered its own
-language's word forms: Spanish *sale* → **salir** is never asked of an English
-dictionary.
+The retry goes only to dictionaries that returned nothing, and only with lemma
+data for the dictionary's language: *sale* → **salir** is never searched in an
+English dictionary. How the language is detected:
+[Configuration → Lemmatization](../reference/configuration.md#lemmatization).
 
-**Only English is built in.** Every other language is a small data file you
-install, and there are two ways to do it:
+English lemma data is built in. To install another language:
 
--   Click <kbd>**🔤 Lemmatization**</kbd> — in the ⚙ box of the <kbd>☰</kbd> dictionary panel, or on
-    the settings page — tick a language, and it downloads. It works in the next
-    search; nothing needs restarting. This is the only route on Android.
--   From a terminal, [`wudict lemmas download ru`](../reference/cli.md#lemmas).
+-   <kbd>☰</kbd> → folder summary → <kbd>Lemmatization…</kbd>, or
+    <kbd>🔤 Lemmatization</kbd> on the setup page, and tick the language. It
+    applies from the next search. This is the only way on Android.
+-   In a terminal: [`wudict lemmas download ru`](../reference/cli.md#lemmas).
+    A running server uses it after a restart.
 
-??? info "What a language costs, and how to switch this off"
+Untick a language to delete its lemma data.
 
-    The page lists each language's download size (a few hundred KB to 2 MB) and
-    the memory it uses while loaded (7 MB for English, 90 MB for Slovak) —
-    measured, not estimated. Nothing is loaded until a search needs it, and
-    only [`MORPH_CACHE`](../reference/configuration.md#morph_cache) languages
-    stay in memory at once — 2 on a desktop, 1 on Android.
+A language's lemma data is loaded on the first search that needs it and uses
+1 MB (Persian) to 90 MB (Slovak) of memory; the Lemmatization page lists each
+figure. At most [`MORPH_CACHE`](../reference/configuration.md#morph_cache)
+languages stay loaded: 2 on a desktop, 1 on Android. `MORPH_CACHE = "0"` turns
+lemmatization off.
 
-    `MORPH_CACHE = "0"` switches the whole thing off, which is what you want if
-    you would rather a failed search simply stay failed. The lemmatization page
-    tells you when it is off rather than letting you download data nothing will
-    read.
+## Result order
 
-    Untick a language to delete its file.
+Results appear in the order of the dictionary panel. The section that opens
+first is placed above dictionaries that have not answered yet. **Open first**
+in the dictionary panel decides which section that is: the first dictionary in
+your order that has a result (*My order*, the default), or the first to answer
+(*Fastest*).
 
-## Dictionary search order
-
-The results appear in the order you have defined in the dictionary panel
-with the exception that the first dictionary to return a result always maintains 
-its first position in the result list.
-
-A **more…** link expands one dictionary to the full entry, with the
-dictionary's own layout, fonts, styles and scripts. Nothing is reflowed or
-rewritten.
+A search of several dictionaries shows up to 5 results per dictionary; a search
+of one dictionary, up to 25. <kbd>more…</kbd> in a section header shows up to
+100 results from that dictionary.
 
 ## Cross-references
 
-Click a link inside an article to follow it. wuDict looks in the dictionary you
-are reading first, and widens the search to all dictionaries only when that
-dictionary has no such entry.
+A link in an article is looked up in the same dictionary first. If that
+dictionary has no such headword, all dictionaries are searched, and a banner
+says so.
 
+## Keys and buttons
 
-## Shortcuts
+| Key or button | Action |
+| --- | --- |
+| <kbd>/</kbd> | focus the search box |
+| <kbd>Esc</kbd> | close the dictionary panel |
+| double-click a word in an article | search for it |
+| <kbd>⊞</kbd> / <kbd>⊟</kbd> | expand / collapse all results |
+| <kbd>⇔</kbd> | wide layout on or off |
+| <kbd>◐</kbd> | theme: auto, light, dark |
 
-| Key or click | Action                                        |
-| --- |-----------------------------------------------|
-| <kbd>/</kbd> | focus the search box, from anywhere on the page |
-| <kbd>Esc</kbd> | close the <kbd>☰</kbd> panel                              |
-| double-click a word in an article | look up selected word                         |
-| <kbd>⊞</kbd> | expand / collapse results                     |
-| <kbd>⇔</kbd> | switch to a wide layout                 |
-| <kbd>◐</kbd> | cycle light, dark and automatic theme         |
+## Dictionary panel
 
-## The <kbd>☰</kbd> dictionary panel
+<kbd>☰</kbd> opens it.
 
-This is where you configure your dictionaries.
+| Control | Effect |
+| --- | --- |
+| <kbd>−</kbd> <kbd>15px</kbd> <kbd>+</kbd> | article text size; click the size to reset |
+| <kbd>Highlight matches</kbd> | mark the query's words in articles (full-text only); on by default |
+| <kbd>Read aloud</kbd> | offer to read selected article text aloud; on by default |
+| **Open first**: *My order*, *Fastest* | which result section opens first |
+| **Sort dictionaries**: *Alphabetical* (default), *My order* | the order of the picker |
+| **Group by** | the groups the picker offers |
+| folder summary <kbd>⚙ 2 folders · 105 dictionaries</kbd> | folders, library and config file in effect; <kbd>Edit folders…</kbd>, <kbd>Rescan folders</kbd>, <kbd>Lemmatization…</kbd>, <kbd>Browse A–Z…</kbd>, <kbd>Edit groups…</kbd>, <kbd>Custom styles…</kbd>, <kbd>Full-text for every dictionary…</kbd> |
 
-- **Sort** your dictionaries by dragging the <kbd>⠿</kbd> handle, or with the ▲ ▼ ⏫ ⏬
-  buttons. Results stream in that order, and the order is remembered.
-- **Enable or disable** a dictionary to be included in the 'All dictionaries' search. 
-If you disable a dictionary you can still use it by selecting it from the dropdown. 
-- **Toggle** `contains` or `full-text` per dictionary, and pack media.
-- **Rescan folders** re-reads every dictionary folder without a restart. Use it
-  after adding new dictionaries.
+Each dictionary row:
 
-## Link straight to a search
+-   <kbd>⠿</kbd> (drag) or ⏫ ▲ ▼ ⏬: reorder. Results follow this order.
+-   checkbox: enabled for *All dictionaries* searches. A disabled dictionary
+    can still be chosen in the picker.
+-   name: search this dictionary only.
+-   switches: <kbd>🚀 index</kbd> (then the index size), <kbd>contains</kbd>,
+    <kbd>full-text</kbd>, <kbd>media</kbd>. Click to add or remove.
+-   file row (e.g. `Oxford.mdx`): the dictionary files, the library folder, and
+    <kbd>🗑 Remove…</kbd>.
+-   **About this dictionary**: its groups and its own description.
 
-The address bar URL includes the search term and search mode, so any result is a link you can bookmark,
-share on the same machine, or open from a script.
+<kbd>Rescan folders</kbd> re-reads the dictionary folders; use it after adding
+or deleting dictionary files.
+
+## Link to a search
+
+The address holds the query, the mode and the dictionary selection, so a search
+can be bookmarked or opened from a script. Back and Forward step through
+searches.
 
 ```
-http://localhost:6888/?q=serendipity&mode=prefix&dict=<dictionary_hash>
+http://localhost:6888/?q=serendipity&mode=prefix&dict=all
 ```
 
 | Parameter | Value |
 | --- | --- |
-| `q` | the word to search |
+| `q` | the query |
 | `mode` | `exact`, `prefix`, `contains` or `fts` |
-| `dict` | dictionary id, or `all` — [/api/dicts](../reference/api.md) lists the ids |
-| `theme` | `light` or `dark`, remembered from then on |
+| `dict` | `all`, a dictionary id ([`/api/dicts`](../reference/api.md) lists them), or a group, e.g. `g:lang:en` |
+| `theme` | `auto`, `light` or `dark`; kept for later visits |
 
-Back and Forward work as expected and preserve navigation history. On Android, the same link works
-as `wudict://lookup?q=serendipity` — see [the Android app](../apps/android.md).
+On Android, `wudict://lookup?q=serendipity` opens the same search; see
+[the Android app](../apps/android.md).
 
-## Searching from the console
+## Search from the terminal
 
-
-``` sh title="search in ALL dictionaries"
-wudict searchall phubbing
-
-# search in a custom folder
-wudict searchall -dict-dir=/another/dir/Babylon phubbing
-
-# return full raw HTML
-wudict searchall -format=raw phubbing
-
-# return cleaned-up HTML
-wudict searchall -format=clean phubbing
+``` sh title="all dictionaries"
+wudict searchall phubbing                              # all dictionaries in DICT_DIR
+wudict searchall -dict-dir ~/Dictionaries/es phubbing  # one folder
+wudict searchall -format raw phubbing                  # the dictionaries' own HTML
+wudict searchall -format clean phubbing                # HTML without scripts and styles
 ```
 
-``` sh title="search in a single dictionary in the terminal"
-wudict lookup   ~/Dicts/Oxford.mdx phubbing
-wudict prefix   ~/Dicts/Oxford.mdx phubb
-wudict contains ~/Dicts/Oxford.mdx phub
-wudict fts      ~/Dicts/Oxford.mdx "sudden fear"
+``` sh title="one dictionary"
+wudict lookup   ~/Dictionaries/Oxford.mdx phubbing
+wudict prefix   ~/Dictionaries/Oxford.mdx phubb
+wudict contains ~/.wudict/db/Oxford phub
+wudict fts      ~/.wudict/db/Oxford "sudden fear"
 ```
 
-`contains` and `fts` need a prepared dictionary. `lookup` and `prefix` work on
-any file.
+`contains` and `fts` need an indexed dictionary: pass its library folder.
+`lookup` and `prefix` work on any dictionary file. `searchall` uses exact mode
+unless `-mode` says otherwise.
 
-!!! warning "The syntax above belongs to `searchall`, not to `fts`"
+Full-text queries run as in the web UI. The shell removes quotes before wudict
+sees them; wrap the query in single quotes to keep double quotes:
 
-    `wudict searchall -mode=fts "no pun intended"` is the same search the web UI
-    runs: the phrase-first ladder and every operator apply, and `-format` only
-    changes how the article is printed.
+``` sh
+wudict searchall -mode fts '"faux ami" NOT linguistics'
+```
 
-    `wudict fts <file> <term>` is the single-file, single-question form. It
-    reads the term as plain words — the ladder and the operators are not
-    applied there, so `"no pun intended"` and `no pun intended` mean the same thing to
-    it: articles containing all three words.
-
-    Remember that your shell eats quotes before wuDict sees them. Wrap the
-    whole query in single quotes to pass double quotes through:
-
-    ``` sh
-    wudict searchall -mode=fts '"faux ami" NOT linguistics'
-    wudict searchall -mode=fts 'NEAR("bank" "river", 4)'
-    ```
-
-[All commands](../reference/cli.md){ .md-button }
+[Command line reference](../reference/cli.md){ .md-button }

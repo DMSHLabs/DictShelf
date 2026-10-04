@@ -69,320 +69,285 @@ var Notices string
 const (
 	ProductName = "wuDict"
 	Tagline     = "Search every dictionary you own, from one browser tab."
-	SiteURL     = "https://wuweidict.github.io/wudict"
+	SiteURL     = "https://wudict.legbehindneck.com"
 	RepoURL     = "https://github.com/wuweidict/wudict"
 )
 
 func usage() string {
-	return fmt.Sprintf(`WuWeiDict %s - multi-format dictionary server
-MDict (.mdx/.mdd) · StarDict (.ifo) · Aard2 (.slob) · Lingvo DSL (.dsl/.dsl.dz) · openZIM (.zim) · WuWeiDict (.text.db)
+	return fmt.Sprintf(`WuWeiDict %s - dictionary server for the browser
+MDict (.mdx/.mdd) · StarDict (.ifo) · Aard 2 (.slob) · Lingvo DSL (.dsl/.dsl.dz) · Babylon (.bgl) · ZIM (.zim) · wudict markdown (.wudict.md) · wudict library (text.db)
 
 USAGE
   wudict [command] [flags] [args]
 
-  Running wudict with no arguments (or with only flags) starts the
-  HTTP server - the same as the "serve" command.
+  With no command, or with flags only, wudict starts the server ("serve").
 
-  wudict <dictfile>                       Serve the folder that holds that file
-                                          and open it in the browser. This is what
-                                          double-clicking a dictionary does.
+  wudict <dictfile>                       Serve the folder of that file and open it
+                                          in the browser; this is what opening a
+                                          dictionary file with wudict does.
 
 COMMANDS
-  serve                                   Start the HTTP server (the default command)
-  list   <dir> [dir…]                     Discover dictionaries under one or more folders
-  info   <dictfile>                       Show dictionary metadata, capabilities, and every file
-                                          on disk that belongs to it, with sizes
-  lookup [-n max] <dictfile> <word>       Exact lookup (accent-fold fallback); HTML to stdout
-                                          By default uses -format=raw, pass -format=text for plain text
-  prefix [-n max] <dictfile> <word>       Exact-else-prefix lookup (accent-insensitive); HTML to stdout
-  contains [-n max] <dictfile> <word>     Substring headword search (FTS5 trigram; ingested dicts only)
-  fts    [-n max] <dictfile> <query>      Full-text search (prepared dicts only): the words as
-                                          a phrase, else near each other, else anywhere - as in the app
-                                          All four take -format raw|clean|text, the same
-                                          three the HTTP API offers: raw is the dictionary's
-                                          own HTML (the default), clean drops scripts, styles
-                                          and presentation, text drops all markup.
-  keys   [-offset N] [-n count] <dictfile>  List headwords (all by default).
-                                          On an .mdd, lists the files it holds -
-                                          the same key/value format, so the same
-                                          command. No .mdx needed.
-  res    [-o out] [-f] <dictfile> <name>  Extract one resource (e.g. "audio/word.mp3").
-                                          Takes an .mdd directly too; any name
-                                          that keys printed is one this accepts.
-                                          Piped or redirected, the bytes go to stdout.
-                                          On a terminal they are written to a file
-                                          named after the resource instead (-f to
-                                          overwrite). -o names the output: a path
-                                          (parents created), a directory, or "-"
-                                          for stdout.
+  serve                                   Start the server (the default command)
+  list   <dir> [dir…]                     List the dictionaries in the folders
+  info   <dictfile>                       Show a dictionary's metadata, search modes,
+                                          language, and its files with their sizes
+  lookup   [-n max] <dictfile> <word>     Exact search; accent-folded if nothing matches
+  prefix   [-n max] <dictfile> <word>     Exact, then prefix; case and accents ignored
+  contains [-n max] <dictfile> <word>     Headwords containing <word> (contains index)
+  fts      [-n max] <dictfile> <query>    Full-text query, read as in the app
+                                          (full-text index)
+                                          All four print to standard output and take
+                                          -format raw (the dictionary's HTML; default),
+                                          clean (no scripts, stylesheets or
+                                          presentation) or text (no markup). contains
+                                          and fts need an indexed dictionary: pass its
+                                          library folder.
+  keys   [-offset N] [-n count] <dictfile>  List headwords, all by default; for an
+                                          .mdd, the files it contains
+  res    [-o out] [-f] <dictfile> <name>  Extract one resource, e.g. "audio/word.mp3";
+                                          <name> as keys prints it; an .mdd works
+                                          directly. Piped or redirected: to standard
+                                          output. On a terminal: to a file named after
+                                          the resource (-f overwrites). -o: a file
+                                          (missing folders are created), a folder,
+                                          or "-" for standard output.
   dump   [-format csv|md] [-mode html|clean] [-compress gz] [-resources all|text|none] -o <outdir> <dictfile>
-                                          Write the whole dictionary out. csv (the
-                                          default) is pyglossary's import/export
-                                          layout, so any format its converter writes
-                                          is reachable from here; resources are
-                                          unpacked beside it into <name>.csv_res.
-                                          md writes WuWeiDict markdown,
+                                          Export a dictionary. csv (default):
+                                          pyglossary's CSV layout, resources in
+                                          <name>.csv_res. md: wudict markdown,
                                           <name>.wudict.md, resources in
-                                          <name>.wudict.files: -mode html (default)
-                                          keeps each article's HTML; -mode clean
-                                          keeps only what markdown can write (lossy),
-                                          and stops at an article it cannot. -compress gz
-                                          writes <name>.wudict.md.gz. -resources
-                                          text keeps only .css, .js and other text
-                                          files; none writes the articles alone.
-                                          -output is the long form of -o.
+                                          <name>.wudict.files; -mode html (default)
+                                          keeps each article's HTML, -mode clean
+                                          keeps what markdown expresses and stops at
+                                          the first article it cannot convert;
+                                          -compress gz writes <name>.wudict.md.gz.
+                                          -resources text: text files only (.css,
+                                          .js, …); none: no resources. -output is
+                                          the long form of -o.
   ingest [-full] [-fulltext] [-contains] [<dictfile|folder…>]
-                                          Prepare dictionaries into the library:
-                                          <db-dir>/<dictionary name>/text.db (+ info.txt).
-                                          With no path, prepares the configured dictionary
-                                          folders (DICT_DIR); a folder prepares everything
-                                          in it, skipping what is already done. A new
-                                          dictionary gets the headword index, as in the app;
-                                          -fulltext adds the full-text index (the largest),
-                                          -contains adds the substring index (roughly
-                                          doubles a headwords-only db), and -full also packs
-                                          media.db into the same folder. A flag left out
-                                          keeps what a prepared dictionary has;
-                                          -fulltext=false and -contains=false take away
-                                          (-headwords is -fulltext=false).
+                                          Index dictionaries into the library:
+                                          <DB_DIR>/<name>/text.db and info.txt.
+                                          No path: the dictionary folders (DICT_DIR).
+                                          Indexed dictionaries are skipped. A new
+                                          dictionary gets the headword index, as in
+                                          the app; -contains and -fulltext add those
+                                          indexes, -full also the media pack
+                                          (media.db). -contains=false and
+                                          -fulltext=false (-headwords) remove them.
+                                          A flag left out keeps what a dictionary has.
   searchall [-mode m] [-n perDict] [-format f] [<dir>] <term>
-                                          Concurrent search across every dictionary, printed as
-                                          each one answers. Without <dir> it searches the
-                                          configured DICT_DIR (--dict-dir, env, or wudict.toml);
-                                          <dir> may be a "a:b" list, as in DICT_DIR.
-                                          -format text (default) prints the definitions;
-                                          clean|raw print them as markup, as in lookup;
-                                          list prints headwords only.
+                                          Search every dictionary in the folders and
+                                          print each one's results as it answers.
+                                          Default: DICT_DIR; <dir> may be an "a:b"
+                                          list. -format text (default), clean, raw,
+                                          or list (headwords only).
   lemmas list | download <lang…> | remove <lang…>
-                                          Manage the lemma data that lets a search for an
-                                          inflected word find its dictionary form ("knew" ->
-                                          "know"). English is built in; every other language
-                                          is a file in LEMMA_DIR. "list" marks the installed
-                                          ones; "download pl ru" or "download polish russian"
-                                          installs them from LEMMA_URL; "remove pl" deletes.
-  token [-rotate]                         Print the link that carries this server's access key
-                                          - the one a browser on another machine needs when
-                                          wudict listens on the network. -rotate replaces the
-                                          key, and every browser and script holding the old
-                                          one stops working until it is opened again.
-  clean  [-f [-orphans]]                  List removable items in the library: incomplete or
-                                          unreadable folders, interrupted ingests, leftovers
-                                          from the old flat layout - and, separately, orphans:
-                                          prepared dictionaries whose source file is gone (a
-                                          source moved within a dictionary folder is re-linked
-                                          instead; one kept on purpose is never listed).
-                                          -f deletes the items; -f -orphans the orphans too.
-                                          Dry run by default.
+                                          Lemma data, so that an inflected form finds
+                                          its lemma ("knew" -> "know"). English is
+                                          built in. list: installed and available
+                                          languages; "download ru sk" or "download
+                                          russian slovak": install from LEMMA_URL;
+                                          "remove sk": delete.
+  token [-rotate]                         Print the link that carries the access key,
+                                          for a browser on another device. -rotate
+                                          replaces the key; browsers and scripts
+                                          with the old key then need the new link.
+  clean  [-f [-orphans]]                  List broken library folders (incomplete,
+                                          unreadable, interrupted indexing, an older
+                                          layout) and orphans (library folders whose
+                                          dictionary files are gone). -f deletes the
+                                          broken ones; -f -orphans also the orphans.
+                                          A dictionary moved within the dictionary
+                                          folders is linked to its new place; one
+                                          kept with -keep-index is not listed.
   rm [-f] [-keep-source|-keep-index] <name|path>
-                                          Remove one dictionary: its prepared folder in the
-                                          library AND its original files. The argument is a
-                                          library name, a folder, a text.db or the path of an
-                                          original dictionary file. -keep-source deletes only
-                                          the prepared folder (it will be prepared again on
-                                          the next search if the original is still in a
-                                          scanned folder); -keep-index deletes only the
-                                          originals, and refuses while media is unpacked.
-                                          Lists what it would delete; -f deletes it.
-  reindex [-all] [<name|path>…]           Rebuild prepared dictionaries that are outdated:
-                                          prepared by an older version of wudict, from an
-                                          original that has since changed, or unreadable.
-                                          Each keeps its indexes and packed media. Names limit
-                                          it to those dictionaries; -all rebuilds current ones
-                                          too. One whose original is gone is named and kept.
-                                          While a server is using the library, the plain form
-                                          asks it to do the rebuild and follows its progress.
-  licenses                                This program's licence, and the notices for the
-                                          third-party code built into it.
+                                          Remove a dictionary: its library folder
+                                          and its dictionary files. <name|path>: a
+                                          library name or folder, a text.db, or a
+                                          dictionary file. -keep-source deletes only
+                                          the library folder (indexed again on the
+                                          next search if the files are still in a
+                                          dictionary folder); -keep-index only the
+                                          dictionary files, refused while media is
+                                          not in a media pack. Without -f, rm lists
+                                          what it would delete.
+  reindex [-all] [<name|path>…]           Rebuild outdated indexes: built by an older
+                                          version of wudict, from dictionary files
+                                          changed since, or unreadable. Indexes and
+                                          media pack are kept. Names limit it to those
+                                          dictionaries; -all rebuilds current ones
+                                          too. A dictionary whose files are gone is
+                                          reported and kept. While a server uses the
+                                          library, the server runs the rebuild.
+  licenses                                Print the licence and third-party notices
 
-SERVE FLAGS
-  --dict-dir     <path>   Folder with dictionary files (scanned recursively).
+SETTINGS
+  Each setting is a flag, an environment variable, or a wudict.toml key;
+  "(env/toml only)" marks those without a flag.
+
+  --dict-dir     <path>   Folder with dictionary files, subfolders included.
                           Repeat the flag for several folders:
                             --dict-dir ~/Dictionaries --dict-dir /Volumes/Ext/Dicts
                           env: DICT_DIR       toml: DICT_DIR
                             DICT_DIR="~/Dictionaries:/Volumes/Ext/Dicts"   (";" on Windows)
                             DICT_DIR = ["~/Dictionaries", "/Volumes/Ext/Dicts"]
-                          A dictionary found in two folders is listed once (the
-                          first folder wins); a missing folder is reported and
-                          the others still work.
+                          A dictionary in two folders is listed once, from the
+                          first; a missing folder is reported.
                           default: ~/Dictionaries
 
-  --db-dir       <path>   Library folder: one subfolder per cached dictionary,
-                          holding text.db (+ media.db, info.txt). Must not be the
-                          same folder as --dict-dir.
+  --db-dir       <path>   The library: one library folder per indexed dictionary
+                          (text.db, media.db, info.txt). Must not be a
+                          dictionary folder.
                           env: DB_DIR         toml: DB_DIR
                           default: ~/.wudict/db
 
   (env/toml only)
-  AUTO_INDEX = "on"       On first search, a dictionary prepares its own headword
-                          index in the background (exact, prefix, accent-insensitive;
-                          a couple of MB). "off" leaves dictionaries to be searched
-                          through their own format. Contains, full-text and media
-                          stay per-dictionary choices either way.
+  AUTO_INDEX = "on"       Index each dictionary's headwords in the background on
+                          its first search. "off": dictionaries stay not indexed
+                          and are searched through their own format. Contains,
+                          full-text and media pack are per-dictionary choices
+                          either way.
                           env: AUTO_INDEX     toml: AUTO_INDEX
                           default: on
 
   (env/toml only)
-  IMPORT_KEEP = "ask"     What becomes of an archive after the dictionaries inside
-                          it have been installed: "ask" puts the choice on the
-                          page each time, "keep" and "delete" answer it once. An
-                          import that FAILED always keeps it, whatever this says.
+  IMPORT_KEEP = "ask"     What happens to an archive after its dictionaries are
+                          installed: "ask" each time, "keep", or "delete". A
+                          failed import keeps it.
                           env: IMPORT_KEEP    toml: IMPORT_KEEP
                           default: ask
 
-  --index-workers <n>     How many dictionaries may be prepared at once. Preparing
-                          one saturates a core and holds a few hundred bytes per
-                          headword, so the default is 1 - background work must not
-                          take the machine away from you. "auto" (or 0) = every core.
+  (env/toml only)
+  IMPORT_URL_HOSTS        Hosts an archive may be downloaded from: an array in
+                          wudict.toml, comma-separated in the environment; a
+                          host matches its subdomains too. Set it
+                          when the server listens on the network, or a client
+                          there can make this machine download from any address
+                          it reaches.
+                          env: IMPORT_URL_HOSTS  toml: IMPORT_URL_HOSTS
+                          default: any host
+
+  (env/toml only)
+  IMPORT_INSECURE = "0"   "1": also plain http:// links and local-network hosts.
+                          env: IMPORT_INSECURE  toml: IMPORT_INSECURE
+                          default: 0 (https only, public hosts only)
+
+  --index-workers <n>     How many dictionaries are indexed at once. Each uses
+                          a CPU core and a few hundred bytes per headword.
+                          "auto" (or 0): one per CPU core.
                           env: INDEX_WORKERS  toml: INDEX_WORKERS
                           default: 1
 
   (env/toml only)
-  PREVIEW_MEMORY = "1GB"  How much RAM dictionaries that are not yet prepared may
-                          hold open (~350 bytes per headword each). The least
-                          recently used are closed above this; prepared ones
-                          answer from disk and are never evicted. "0" = no limit.
+  PREVIEW_MEMORY = "1GB"  Memory that dictionaries not yet indexed may hold open,
+                          about 350 bytes per headword. Above it, the least
+                          recently used are closed; indexed dictionaries do not
+                          count. "0": no limit.
                           env: PREVIEW_MEMORY toml: PREVIEW_MEMORY
-                          default: 1GB (Android: a third of MEMORY_LIMIT,
-                          64-128MB by device RAM)
+                          default: 1GB (Android: a third of MEMORY_LIMIT)
 
-  SEARCH_MEMORY = "512MB" How much RAM ONE search may bring into memory by opening
-                          dictionaries that are not yet prepared. Past it, the
-                          remaining ones are reported as not searched instead of
-                          opened - the only setting here that changes what a
-                          search returns, and it never applies to prepared
-                          dictionaries, which cost nothing to search. "0" = no cap.
+  SEARCH_MEMORY = "512MB" Memory one search may use to open dictionaries that are
+                          not indexed. Past it, the rest are reported as not
+                          searched. Indexed dictionaries and a search of one
+                          dictionary are not limited. "0": no limit.
                           env: SEARCH_MEMORY  toml: SEARCH_MEMORY
-                          default: none (Android: the memory limit)
+                          default: none (Android: MEMORY_LIMIT)
 
-  MORPH_CACHE = "2"       How many lemma packs stay in memory. When a search finds
-                          nothing in any dictionary, wudict looks the word's
-                          dictionary form up instead - "knew" finds "know" - in
-                          dictionaries whose language it can tell. English is
-                          built in; every other language is a file you install
-                          (see LEMMA_DIR). Each loaded language costs 7-65 MB;
-                          the least recently used is dropped above this.
-                          "0" = never lemmatize and load nothing.
+  MORPH_CACHE = "2"       How many languages of lemma data stay in memory. A
+                          single-word search that finds nothing in a dictionary
+                          is retried there with the lemma ("knew" -> "know"),
+                          using lemma data for the dictionary's language. A
+                          language uses 1-90 MB. "0": lemmatization off.
                           env: MORPH_CACHE    toml: MORPH_CACHE
                           default: 2 (Android: 1)
 
   LEMMA_DIR = "~/.wudict/lemmas"
-                          Folder of installed lemma files. Every language except
-                          English comes from here - Spanish, Russian, Polish and
-                          the rest are downloaded, not built in. One file per
-                          language, named after it: "pl.txt", "pol.tsv",
-                          "polish.txt.gz". Each line is
-                          a lemma followed by its forms, tab-separated and lower
-                          case - the format of the lists at
-                          github.com/michmech/lemmatization-lists, which work as
-                          downloaded. An "en" file replaces the built-in English.
-                          Read once at startup.
+                          Installed lemma data; English is built in. One file
+                          per language, named by code or English name: "pl.txt",
+                          "pol.tsv", "polish.txt.gz". Each line is a lemma, then
+                          its forms, tab-separated, in lower case, as in
+                          github.com/michmech/lemmatization-lists. An "en" file
+                          replaces the built-in English. Read at startup, and
+                          after each install or removal on the Lemmatization
+                          page.
                           env: LEMMA_DIR      toml: LEMMA_DIR
                           default: ~/.wudict/lemmas
 
   LEMMA_URL = "https://…/manifest.json"
-                          Where "wudict lemmas" looks for installable languages.
-                          A static catalogue naming each language, its size and
-                          its sha256 - not a code-hosting API, whose 60-requests-
-                          per-hour-per-IP limit would break "lemmas list" for
-                          anyone behind a shared address. May be a path to a
-                          manifest.json on disk instead, to install with no
-                          network at all; every check still applies, because the
-                          hashes are what is trusted, not the transport.
+                          The lemma data catalogue: languages, sizes, SHA-256
+                          digests. A path to a local manifest.json installs
+                          without a network.
                           env: LEMMA_URL      toml: LEMMA_URL
                           default: the published catalogue
 
-  MEMORY_LIMIT = "4GB"    Soft heap ceiling: Go collects harder - and drops its
-                          caches - rather than growing past it. "0" = none.
+  MEMORY_LIMIT = "4GB"    Soft memory limit: near it, Go collects garbage more
+                          often and wudict drops its caches. "0": none.
                           env: MEMORY_LIMIT   toml: MEMORY_LIMIT
-                          default: none (Android: a fraction of device RAM)
+                          default: none (Android: 1/16 of RAM, 192-384 MiB)
 
-  --no-compress           Store article text uncompressed. Prepared databases are
-                          roughly 3x larger; reads are marginally faster. Only
-                          worth it with plenty of disk to spare.
+  --no-compress           Store article text uncompressed: the library is about
+                          3 times larger; reads are slightly faster.
                           env: NO_COMPRESS    toml: NO_COMPRESS
-                          default: off (article text is compressed)
+                          default: off (article text is DEFLATE-compressed)
 
-  --use-cached            Also serve the previously imported dictionaries kept in
-                          the library, whether or not their original files are still
-                          present. Normally set by clicking "Use these dictionaries"
-                          on the first-run setup page.
+  --use-cached            Also list indexed dictionaries whose dictionary files
+                          are gone. "Use these dictionaries" on the setup page
+                          sets it.
                           env: USE_CACHED     toml: USE_CACHED
                           default: off
 
   (env/toml only)
-  BROWSER_EXTENSIONS      Which browser extensions may look words up in this
-                          server from the pages they run in. Blank = any
-                          installed extension; it reaches the dictionary API
-                          (/api/dicts, /api/search, /res/) and nothing else -
-                          never your settings, preferences or library. Pin it
-                          to exact origins to allow only those:
+  BROWSER_EXTENSIONS      Browser extensions allowed to call the server. Blank:
+                          any installed extension. Extensions reach /api/dicts,
+                          /api/search and /res/ only.
                             BROWSER_EXTENSIONS = ["chrome-extension://abc…"]
-                          (Firefox regenerates moz-extension:// per install,
-                          so there is no stable origin to pin there.)
+                          Firefox assigns a new moz-extension:// origin to each
+                          installation, so a Firefox extension cannot be listed.
                           env: BROWSER_EXTENSIONS  toml: BROWSER_EXTENSIONS
                           default: any extension
 
-  WEB_ORIGINS             Which web pages may look words up in this server with
-                          JavaScript. Blank = none, and a page in a browser
-                          cannot reach wudict at all. List the exact origins of
-                          your own pages - scheme, host and port, no path - to
-                          let them read the same three endpoints an extension
-                          reaches, and nothing else:
+  WEB_ORIGINS             Web page origins allowed to call the server from
+                          JavaScript: scheme, host and port, no path. They reach
+                          the same three endpoints as extensions.
                             WEB_ORIGINS = ["http://localhost:3000"]
-                          "*" allows every site you visit: useful while
-                          developing, a standing invitation otherwise.
-                          (Scripts outside a browser - curl, Node, your own
-                          program - are not affected by any of this.)
+                          "*": every site you visit can read your dictionaries;
+                          for development only. Programs outside a browser are
+                          not affected.
                           env: WEB_ORIGINS    toml: WEB_ORIGINS
-                          default: no web page
+                          default: none
 
-  TRUSTED_HOSTS           Which host NAMES this server answers to, besides
-                          "localhost". Any IP address is always accepted, so
-                          this is needed only when something reaches wudict
-                          through a name - a reverse proxy, or a hostname you
-                          gave the machine:
+  TRUSTED_HOSTS           Host names the server answers to besides "localhost";
+                          IP addresses are always accepted. Needed behind a
+                          reverse proxy or for a host name you gave the machine:
                             TRUSTED_HOSTS = ["wudict.lan"]
-                          A request naming anything else is refused. That is
-                          what stops a page you visit from pointing its own
-                          domain at your machine and reading the server
-                          through it, which no same-origin or CORS rule can.
+                          Other names are refused, which blocks DNS rebinding.
                           "*" turns the check off.
                           env: TRUSTED_HOSTS  toml: TRUSTED_HOSTS
-                          default: addresses and localhost only
+                          default: IP addresses and localhost
 
-  AUTH                    Must a request carry the access key? "auto" - the
-                          default - asks for it whenever this server listens
-                          on the network, and never when it listens on
-                          127.0.0.1, where nothing but this machine can
-                          reach it. "on" always, "off" never. "off" on a
-                          network address serves your library, your settings
-                          and your folder names to anyone who can reach the
-                          port, so it is a choice, not a shortcut.
-                          The key is a random string kept in ~/.wudict/token,
-                          readable only by you; "wudict token" prints the
-                          link that carries it.
+  AUTH                    Whether a request needs the access key. "auto": when
+                          the server listens on a network address (not
+                          127.0.0.1); "on": always; "off": never. "off" on a
+                          network address gives anyone who can reach the port
+                          your library, settings and folder names.
+                          The key is in ~/.wudict/token, readable only by you;
+                          "wudict token" prints the link that carries it.
                           env: AUTH           toml: AUTH
                           default: auto
 
-  AUTH_TOKEN              The key itself, when it should come from somewhere
-                          other than the key file - a password manager, a
-                          container secret, an app that generated its own.
-                          Overrides the file; never written back to it.
+  AUTH_TOKEN              The access key from elsewhere: a password manager, a
+                          container secret. Overrides ~/.wudict/token and is not
+                          written to it.
                           env: AUTH_TOKEN     toml: AUTH_TOKEN
                           default: the contents of ~/.wudict/token
 
   --allow-remote-delete <0|1>
-                          May a browser on ANOTHER machine delete a
-                          dictionary? Deleting from the machine running
-                          wudict is always allowed - it is your library and
-                          your disk. This governs the remote case only, and
-                          matters when SERVER_IP is not 127.0.0.1: on a
-                          shared network, "0" leaves every other machine able
-                          to read and search, and unable to delete.
+                          Allow clients on other hosts to delete dictionaries.
+                          Requests from this machine can always delete.
                           env: ALLOW_REMOTE_DELETE  toml: ALLOW_REMOTE_DELETE
                           default: 0
 
-  --ip           <addr>   Listen IP address
+  --ip           <addr>   Listen address; 0.0.0.0 for the network (AUTH applies)
                           env: SERVER_IP      toml: SERVER_IP
                           default: 127.0.0.1
 
@@ -390,113 +355,84 @@ SERVE FLAGS
                           env: SERVER_PORT    toml: SERVER_PORT
                           default: 6888
 
-  --config       <path>   Path to wudict.toml (overrides auto-detect)
+  --config       <path>   The wudict.toml to read, instead of the search order
                           env: CONFIG_PATH
 
-  --no-browser            Do not open a browser tab on startup
+  --no-browser            Do not open a browser tab at startup
                           env/toml: NO_BROWSER=1
 
-  --verbose               Verbose logging (requests, dictionary opens,
-                          ingest, transcodes) for easy debugging
-                          env/toml: VERBOSE=1  (works for all commands)
+  --tray, --no-tray       Tray icon (Windows) or menu-bar icon (macOS): always,
+                          or never. Default: only when started from the desktop.
+                          env/toml: TRAY=1 or TRAY=0
 
-  --speexdec     <path>   Path to speexdec binary (.spx audio is
-                          transcoded to WAV - browsers cannot play Speex)
+  --verbose               Log requests, dictionary opens, indexing and audio
+                          conversion; applies to every command
+                          env/toml: VERBOSE=1
+
+  --speexdec     <path>   The speexdec program, which converts Speex (.spx)
+                          audio to WAV in -purego builds
                           env: SPEEXDEC       toml: SPEEXDEC
-                          default: speexdec found on PATH, else /usr/bin/speexdec
+                          default: speexdec on PATH, else /usr/bin/speexdec
 
-  -v, --version           Show version and exit  (verbose is --verbose)
-  -h, --help              Show this help and exit
+  (env/toml only)
+  SPEEX_BACKEND           "internal" (built-in decoder, -cgo builds) or
+                          "external" (speexdec)
+                          env: SPEEX_BACKEND  toml: SPEEX_BACKEND
+                          default: internal
 
-CONFIG FILE SEARCH ORDER
-  1. --config flag / CONFIG_PATH env var
-  2. <executable-dir>/wudict.toml   (portable mode - see below)
-  3. ~/.wudict/wudict.toml
+  -v, --version           Print the version
+  -h, --help              Print this help
+
+CONFIG FILE
+  The first found of:
+  1. --config / CONFIG_PATH
+  2. wudict.toml next to the executable (portable mode: takes precedence
+     and receives the settings saved from the setup page; never created by
+     wudict)
+  3. ~/.wudict/wudict.toml (created, commented out, by the first "serve")
   4. /etc/wudict/wudict.toml
-  On the first "serve" run a fully commented ~/.wudict/wudict.toml is
-  generated, and the file in effect is printed at every startup.
+  Each start prints the file in effect.
 
-PORTABLE MODE
-  Put a wudict.toml next to the executable and it wins, and is where
-  settings are saved - for a USB stick or a self-contained folder.
-  wudict never creates that file on its own: an executable directory is
-  usually somebody else's (~/go/bin, /opt/homebrew/bin), not ours.
+  Priority, highest first: flag, environment variable, wudict.toml, default.
 
-PRIORITY (highest → lowest)
-  CLI flag  >  environment variable  >  wudict.toml  >  built-in default
+SETUP PAGE
+  If the dictionary folder is missing or empty, the page links to the
+  setup page, which sets the folders (saved to wudict.toml, no restart)
+  and imports dictionaries from a file or a link.
 
-FIRST RUN
-  If the dictionary folder is missing or empty, the web UI shows a setup
-  page: paste a folder path, it is validated live, and the choice is
-  saved to wudict.toml - no restart needed.
+LIBRARY
+  Indexing creates <DB_DIR>/<name>/ with text.db, media.db (media pack)
+  and info.txt: one library folder per dictionary, which can be copied
+  to another machine.
 
-LIBRARY FOLDER
-  Preparing a dictionary creates <DB_DIR>/<name>/ holding text.db,
-  media.db and info.txt - one folder per dictionary, the unit you copy
-  or hand over.
-
-  A res/ subfolder there replaces - or supplies - the files a dictionary
-  ships. Articles load their stylesheets, scripts and media from inside
-  the dictionary file; res/ is consulted FIRST, so a file there is used
-  whether or not the dictionary has one of that name:
+  A file in its res/ subfolder overrides the dictionary's resource of
+  the same path, or supplies a missing one:
 
     <DB_DIR>/Cambridge English Dictionary Online/res/jquery.js
     <DB_DIR>/Stanford Encyclopedia/res/js/entry.js
 
-  Subfolders work, and articles routinely use them (js/…, css/…), so
-  mirror the path the article asks for. That path is the one in the
-  /res/<id>/<name> URL seen in the browser's network panel - a 404 there
-  is the "missing resource" case. Overrides are served uncached, so a
-  reload picks up an edit. Nothing inside the dictionary is modified;
-  delete the file to go back. One exception: a .spx in res/ is served
-  as-is rather than transcoded to WAV, so supply .mp3 or .wav instead.
-
-  This exists because a dictionary can ship a DAMAGED file, and since
-  its own scripts usually load a library first, one bad file can
-  silently disable every interactive part of its articles. wudict warns
-  when it serves a .js/.css/.html/.json/.xml/.svg/.txt containing a NUL
-  byte - impossible in those formats, so proof the stored copy is
-  broken - and names the res/ path that would override it. The bytes
-  themselves are always served exactly as stored.
+  The path is the one in the /res/<id>/<path> request in the browser's
+  network panel. Overrides are served with no-cache. A .spx override is
+  not converted to WAV. wudict logs a warning, with the res/ path, when
+  it serves a .js/.css/.html/.json/.xml/.svg/.txt resource containing
+  NUL bytes.
 
 CUSTOM STYLES
-  Two CSS files beside the wudict.toml in effect, both optional:
+  <config folder>/style/app.css      wudict's page
+  <config folder>/style/article.css  every dictionary article
 
-    <config folder>/style/app.css      the app itself
-    <config folder>/style/article.css  what dictionaries render
-
-  app.css styles the page - its colours and its own layout. Custom
-  properties it sets on :root reach articles too, because they inherit
-  across the article sandbox, so one sepia block recolours everything:
+  Custom properties set on :root in app.css also apply to articles:
 
     html:not([data-dark]){ --bg:#f4ecd8; --wd-article-bg:#faf3e3 }
 
-  article.css styles dictionary content, in both article flavours. It is
-  ADDED after the dictionary's own CSS rather than replacing it (that is
-  what res/ above is for), and it is where a desktop dictionary's side
-  padding gets reclaimed on a phone.
-
-  The editor's examples know which of the two files they belong in; the
-  ones that need both - a colour a dictionary paints over, a width a
-  dictionary caps - insert a half into each.
-
-  [data-dark] is set on the app, on an article and inside a frame
-  whenever the theme resolves to dark, whether by choice or by the
-  system setting - it is the one spelling that works in all three.
-
-  Both files are served uncached, so an external edit lands on reload;
-  the panel's "Custom styles..." editor writes the same files and
-  previews as you type. There, Clear then Save deletes a file, and
-  closing the editor discards anything not saved. Deleting a file by
-  hand is equivalent. If a rule ever hides the app, open
-
-    http://<host>:<port>/?style=off
-
-  which serves the page with neither file applied.
+  article.css is added after each dictionary's own CSS. [data-dark] is
+  set on the page, on each article and in each article frame when the
+  theme is dark. Both files are served with no-cache. The editor:
+  dictionary panel -> folder summary -> "Custom styles…".
+  http://<host>:<port>/?style=off loads the page without either file.
 
 EXAMPLE wudict.toml
-  DICT_DIR    = "/data/dicts"
-  DB_DIR      = "~/.wudict/db"
+  DICT_DIR    = ["~/Dictionaries", "/data/dicts"]
   SERVER_IP   = "0.0.0.0"
   SERVER_PORT = "9000"
   NO_BROWSER  = "1"
@@ -504,9 +440,12 @@ EXAMPLE wudict.toml
 EXAMPLES
   wudict
   wudict --dict-dir ~/Books/Dicts --port 9090 --no-browser
-  wudict lookup ~/Dicts/Oxford.mdx serendipity
-  wudict ingest -full ~/Dicts/Oxford.mdx
+  wudict lookup ~/Dictionaries/Oxford.mdx serendipity
+  wudict ingest -full ~/Dictionaries/Oxford.mdx
   SERVER_PORT=9000 wudict
+
+MANUAL
+  https://wudict.legbehindneck.com
 
 ABOUT
   %s - %s
