@@ -1,247 +1,177 @@
 ---
 title: HTTP API
-description: The endpoints wuDict serves - the streaming search API, the dictionary list, resource files, and the OpenAPI document that defines them.
+description: The wudict HTTP API - who may call it, streaming search results, the dictionary list, resources, errors, and the OpenAPI document.
 ---
 
 # HTTP API
 
-[OpenAPI compatible API Reference](https://wudict.legbehindneck.com/api/){ .md-button }
+The web page, the browser extension and the Android app use this API; so can
+your own programs. The server answers on `http://127.0.0.1:6888` by default.
 
-The web page is one client of this API. The browser extension is another. Your
-own script can be a third.
+[API reference (OpenAPI)](../api/index.html){ .md-button }
 
-The server answers on `http://127.0.0.1:6888` by default. There is no
-authentication, because there is no network exposure: the server binds to the
-loopback address unless you change
-[`SERVER_IP`](configuration.md#server_ip-and-server_port).
+## Access
 
-Three endpoints are read-only and open to other origins: `/api/dicts`,
-`/api/search` and `/res/`. Everything else is same-origin, so neither an
-extension nor a web page can reach it.
-
-## Who can call it
-
-| Client | Reaches |
+| Client | Can call |
 | --- | --- |
-| A program - `curl`, Node, Python, an Electron main process, a native app | everything, with no configuration |
-| The WuWeiDict page itself | everything; it is same-origin |
-| A browser extension | the three read-only endpoints, unless [`BROWSER_EXTENSIONS`](configuration.md#browser_extensions) narrows it |
-| A web page in a browser | the three read-only endpoints, but **only** if [`WEB_ORIGINS`](configuration.md#web_origins) names its origin |
+| a program on the same machine (curl, Python, Node, an application) | every endpoint |
+| the wudict page | every endpoint |
+| a browser extension | `/api/dicts`, `/api/search`, `/res/`; [`BROWSER_EXTENSIONS`](configuration.md#browser_extensions) can restrict which extensions |
+| a web page | the same three endpoints, if [`WEB_ORIGINS`](configuration.md#web_origins) lists its origin |
+| a client on another host | every endpoint with the access key; the three endpoints without it |
 
-CORS is a rule a browser applies to pages. It is not a lock on the server:
-anything that is not a browser page never sends an `Origin` header, and so is
-neither checked nor limited. What keeps the server private is
-[`SERVER_IP`](configuration.md#server_ip-and-server_port) binding it to
-loopback.
+When the server listens on the network, every endpoint except the three needs
+the access key ([`AUTH`](configuration.md#auth)): a program sends
+`Authorization: Bearer <key>`; a browser receives it as a cookie from the link
+`wudict token` prints. Deleting dictionaries from another host also needs
+[`ALLOW_REMOTE_DELETE`](configuration.md#allow_remote_delete).
 
-### Calling it from your own page
+CORS (`WEB_ORIGINS`, `BROWSER_EXTENSIONS`) applies only to pages and
+extensions in a browser; other programs send no `Origin` header and are not
+affected by it.
 
-Add the page's origin to the config file and restart:
+## Calling the API from a web page
+
+List the page's origin and restart wudict:
 
 ``` toml title="~/.wudict/wudict.toml"
 WEB_ORIGINS = ["http://localhost:3000"]
 ```
 
-``` js title="then, from a page served at http://localhost:3000"
-const url = 'http://127.0.0.1:6888/api/search?q=flight&mode=exact&format=clean&n=3';
-const res = await fetch(url);            // no credentials, no custom headers
-for (const line of (await res.text()).split('\n')) {
-  if (!line) continue;
-  const msg = JSON.parse(line);
-  if (msg.t === 'hit') console.log(msg.name, msg.results);
-}
-```
+-   The origin must match exactly: scheme, host and port.
+-   Send no credentials and no custom headers. The server never sends
+    `Access-Control-Allow-Credentials`, so `credentials: 'include'` fails. A
+    plain `GET` needs no preflight.
+-   A `file://` page sends `Origin: null`, which is never allowed. Serve the
+    page over `http://`, also during development.
+-   Chrome preflights requests from a non-local page to `127.0.0.1` (local
+    network access). wudict answers the preflight for listed origins; a Chrome
+    policy or another extension can still block the request.
 
-Read the stream with a `ReadableStream` reader instead of `await res.text()` if
-you want each dictionary to appear as it answers - that is the point of the
-format, and it is described [below](#streaming).
+A refused request appears in the browser console as a CORS error, not as an
+HTTP status.
 
-Three things to know before you debug a failure:
+## OpenAPI document
 
--   **The origin must match exactly.** Scheme, host and port. A page on
-    `https://localhost:3000` is not the page on `http://localhost:3000`.
--   **Do not send credentials or custom headers.** The server never answers
-    `Access-Control-Allow-Credentials`, so `credentials: 'include'` fails the
-    check. A plain `GET` needs no preflight.
--   **Chrome treats `127.0.0.1` as a private address** and preflights every
-    request to it from a page that is not itself local. WuWeiDict answers that
-    preflight for allowed origins, so this normally just works - but a Chrome
-    policy or another extension can still block local network access.
+Every endpoint, parameter, field and status code is defined in one OpenAPI 3.1
+document. A test checks it against the server's routes in both directions.
 
-A `null` origin is never allowed: that is what a `file://` page sends, and
-every one of them sends the same value. Serve your page over `http://` while
-developing, even locally.
+| Where | |
+| --- | --- |
+| `http://127.0.0.1:6888/api/openapi.yaml` | served by the running server |
+| [`internal/server/web/openapi.yaml`](https://github.com/wuweidict/wudict/blob/master/internal/server/web/openapi.yaml) | in the repository |
+| [API reference](../api/index.html) | rendered, with a `curl` example per endpoint |
+| `make api-ui` | rendered to `dist/api-explorer.html`, for offline use |
 
-## The contract
-
-Every parameter, every field and every status code lives in one OpenAPI 3.1
-document. This page explains the parts a schema cannot state.
-
-| Where | What for                                                                                                                                  |
-| --- |-------------------------------------------------------------------------------------------------------------------------------------------|
-| `http://127.0.0.1:6888/api/openapi.yaml` | the running server describes itself; feed the downloaded .yml file to any OpenAPI compatible tool such as e.g. https://editor.swagger.io/ |
-| [`internal/server/web/openapi.yaml`](https://github.com/wuweidict/wudict/blob/master/internal/server/web/openapi.yaml) | the same file, in the repository                                                                                                          |
-| `make api-ui` | renders it into `dist/api-explorer.html`, one offline page                                                                                |
-| [ API explorer](../api/index.html) | the same document, rendered and browsable, with a `curl` example on every endpoint                        |
-
-A test walks that document against the server's route table in both
-directions, so an endpoint cannot be added, renamed or dropped without the
-document following it.
+Endpoints tagged `internal` serve the wudict page and the Android app and may
+change between releases.
 
 ## Streaming
 
-`/api/dicts`, `/api/search` and `/api/rescan` answer with **NDJSON**: one JSON
-object per line, sent as soon as it is ready.
+`/api/dicts`, `/api/search` and `/api/rescan` answer in **NDJSON**: one JSON
+object per line, sent as soon as it is ready. Every stream starts with a
+`begin` line and ends with an `end` line. Read it line by line: the first
+dictionary's results arrive while others are still searching.
 
-Read it line by line. Do not wait for the whole body. That is the entire point:
-the first dictionary's results arrive while the slowest one is still reading.
+`/api/ingest` sends Server-Sent Events: progress, not results.
 
-Every stream starts with a `begin` line and ends with an `end` line.
+## Search
 
-`/api/ingest` streams Server-Sent Events instead, because it reports progress
-rather than results.
-
-## Reading a search stream
-
-``` text title="request"
+``` text
 GET /api/search?q=flight&mode=prefix&format=clean&n=5
 ```
 
-``` json title="one line per object, in arrival order"
+``` json title="lines in arrival order"
 {"t":"begin","i":0,"slots":[{"dict":"oxford","name":"oxford"},{"dict":"webster","name":"webster"}]}
 {"t":"hit","i":1,"dict":"webster","name":"Webster's Revised Unabridged","results":[{"Headword":"flight","Body":"<div>…</div>"}]}
 {"t":"hit","i":0,"dict":"oxford","name":"Oxford Advanced Learner's","results":[]}
 {"t":"end","i":0}
 ```
 
-The `begin` line lists every dictionary that will answer, in your preferred
-order. Draw the layout from it at once.
+`begin` lists the dictionaries that will answer, in the user's order. Each
+`hit` carries `i`, its position in `slots`; hits arrive in completion order.
 
-Each `hit` line carries `i`, the position of that dictionary in the `slots`
-array. Fill that slot. Lines arrive in completion order, not in slot order.
+A `hit` may carry one of these instead of results:
 
-A `hit` can report `skipped`, `deferred` or `error` instead of results:
+| Field | Meaning |
+| --- | --- |
+| `skipped` | the dictionary does not support the mode; `caps` in `/api/dicts` lists the supported modes |
+| `deferred` | not opened: the search reached [`SEARCH_MEMORY`](configuration.md#search_memory). A search of that dictionary alone answers it and moves it to the front of the indexing queue |
+| `indexing` | with `deferred`: the dictionary is being indexed |
+| `error` | this dictionary failed; the others still answer |
 
--   **`skipped`** - this dictionary does not support the requested mode. Ask
-    `/api/dicts` for `caps` before offering a mode.
--   **`deferred`** - this dictionary was not opened, because the search reached
-    its memory cap. Not an error. Asking for that dictionary alone answers it -
-    and that request also puts it at the front of the queue to be prepared, so
-    the deferral stops recurring. See
-    [`SEARCH_MEMORY`](configuration.md#search_memory).
--   **`indexing`** - only alongside `deferred`: that preparation is already
-    under way, so a client should say "preparing" rather than offer the same
-    request again.
--   **`error`** - this dictionary failed. The others still answered.
-
-A search is cancelled after 30 seconds.
-
-`fuzzy` is accepted as an old value for `mode`. It now means `prefix`.
+A search ends after 30 seconds. `mode=fuzzy` is read as `prefix`.
 
 ### Article formats
 
-`format` decides how much of the dictionary's own markup you get back.
-
-| `format` | What you get | Relative size |
+| `format` | Content | Size |
 | --- | --- | --- |
-| `raw` | the dictionary's HTML, untouched | 1.0 |
-| `clean` | structure, emphasis and media; no scripts, styles or presentation | about 0.5 |
-| `text` | no markup at all | about 0.4 |
+| `raw` | the dictionary's HTML | 1 |
+| `clean` | structure, emphasis and media; no scripts, stylesheets or presentation | about 0.5 |
+| `text` | text only | about 0.4 |
 
-Ask for `clean` unless you render the article with the dictionary's own
-stylesheet. It also removes every stylesheet and script request the article
-would otherwise cause - 82 of them for one entry in a large dictionary.
+`clean` also rewrites root-relative links such as `/res/…` to absolute URLs,
+so the article works in a page served from elsewhere. Use it unless you render
+articles with the dictionaries' own stylesheets.
 
-`clean` rewrites root-absolute links such as `/res/…` to full URLs, so the
-payload works in a page served from somewhere else.
-
-## Reading the dictionary list
+## Dictionary list
 
 ``` json title="GET /api/dicts"
 {"t":"begin","total":2}
-{"t":"dict","dict":{"id":"oxford","name":"Oxford Advanced Learner's","format":"mdx","path":"/Users/me/Dicts/oald.mdx","entries":184000,"caps":{"Exact":true,"Prefix":true,"Contains":false,"FTS":false}}}
+{"t":"dict","dict":{"id":"oxford","name":"Oxford Advanced Learner's","format":"mdx","path":"/Users/me/Dictionaries/oald.mdx","entries":184000,"caps":{"Exact":true,"Prefix":true,"Contains":false,"FTS":false}}}
 {"t":"end"}
 ```
 
-> curl
-```sh
-curl -s 'http://127.0.0.1:6888/api/dicts' | jq 
+`total` is sent first, before any dictionary is opened. `id` is the value for
+`dict` in `/api/search`. `caps` lists the supported modes: `Contains` and `FTS`
+are true once the dictionary has the contains or full-text index. The other
+fields (files, library folder, sizes) are listed in the OpenAPI document.
+
+``` sh
+curl -s http://127.0.0.1:6888/api/dicts | jq
 ```
 
-`total` arrives first, from dictionary ids alone. Show a count before anything
-is opened.
+## Resources
 
-`id` is the value to pass as `dict` to `/api/search`. `caps` is the authority
-on which modes to offer: `Contains` and `FTS` stay false until that dictionary
-is prepared with those indexes.
-
-Each row also carries where the dictionary's data lives - the source file, the
-prepared databases, their sizes. The <kbd>☰</kbd> panel is built from those fields; the
-[document](https://github.com/wuweidict/wudict/blob/master/internal/server/web/openapi.yaml)
-lists them.
-
-## Resource files
-
-``` text title="resource request"
+``` text
 GET /res/oxford/audio/flight__gb.mp3
 ```
 
-The path after the dictionary id is the path the article asks for, subfolders
-included. A `404` means the dictionary does not hold that file.
-
-Speex audio is converted to WAV and answered as `audio/wav`. A `.spx` file that
-cannot be converted, or one you supplied in a
-[`res/` folder](../dictionaries/override.md), is answered as it is, with the
-type `audio/ogg`.
-
-Files you supplied in a `res/` folder are served without caching, so an edit
-takes effect on reload.
+The path after the dictionary id is the path the article requests. `404`: the
+dictionary has no such file. Speex audio is converted to WAV and served as
+`audio/wav`; a `.spx` that cannot be converted, or one in a
+[resource override](../dictionaries/override.md), is served as `audio/ogg`.
+Resource overrides are served with `Cache-Control: no-cache`.
 
 ## Errors
 
-Every failing request answers with `{"error":"…"}` and an HTTP status.
+A failed request answers `{"error":"…"}` with an HTTP status. A failure in one
+dictionary during a search is reported in that dictionary's `hit`, and the
+request succeeds.
 
-A failure inside one dictionary during a search is not an error status. It
-arrives as an `error` field on that dictionary's `hit` line, and the other
-dictionaries still answer.
+## Example
 
-## Same-origin endpoints
-
-The rest of the surface serves the web page and the Android shell: rescan,
-ingest, the library, the settings, the preferences, the lemma data, the power
-state. They are
-not reachable from an extension or a web page - `WEB_ORIGINS` does not widen
-that set, only who may call the three read-only endpoints - and they may change
-between releases.
-
-They are tagged `internal` in the document. Read them there rather than here,
-so there is one description only.
-
-## A working example
-
-The same search three ways: read the response NDJSON stream line by line, print every headword
-and its article.
+Search, then print each headword and article as it arrives.
 
 === "Shell"
 
-    ``` sh title="with curl and jq which supports NDJSON natively"
+    ``` sh title="curl and jq"
     curl -sN 'http://127.0.0.1:6888/api/search?q=phubbing&mode=exact&format=text&n=3' |
       jq -r --unbuffered 'select(.t == "hit") | .name as $d | (.results // [])[]
              | "\($d) | \(.Headword)", ("=" * 70), (.Body // "")'
 
-    # same as above but limit to a specific dictionary by its id (4112242f8cf1)
+    # one dictionary, by its id
     curl -sN 'http://127.0.0.1:6888/api/search?q=flight&mode=exact&format=text&n=3&dict=4112242f8cf1' |
           jq -r --unbuffered 'select(.t == "hit") | .name as $d | (.results // [])[]
                  | "\($d) | \(.Headword)", ("=" * 70), (.Body // "")'
     ```
 
-    `-N` prevents curl from buffering and `--unbuffered` prevents buffering for jq, so
-    results are printed eagerly. `(.results // [])` skips the
-    dictionaries that don't have the search term.
+    `curl -N` and `jq --unbuffered` print each dictionary's results as they
+    arrive. `(.results // [])` skips dictionaries without results.
 
 === "Python"
 
-    ``` py title="search every dictionary, print the headwords + definitions"
+    ``` py title="Python standard library"
     import json, urllib.request
 
     url = "http://127.0.0.1:6888/api/search?q=flight&mode=exact&format=text&n=3"
@@ -255,13 +185,11 @@ and its article.
                     print("=" * 70)
                     print(r.get("Body", ""))
     ```
-    To limit result to one specific dictionary only append the dict=<DICTIONARY-ID> to the URL.
-
-    A program sends no `Origin` header, so nothing has to be configured.
+    `&dict=<id>` limits the search to one dictionary.
 
 === "JavaScript"
 
-    ``` js title="the same, from a page in a browser - needs WEB_ORIGINS, see below"
+    ``` js title="from a page in a browser; needs WEB_ORIGINS"
     const url = "http://127.0.0.1:6888/api/search?q=flight&mode=exact&format=text&n=3";
     const res = await fetch(url);           // no credentials, no custom headers
     const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
@@ -285,40 +213,3 @@ and its article.
       }
     }
     ```
-
-NOTE: 
-
-All three read the stream as it arrives rather than waiting for the body, which
-is the whole point of the format: the first dictionary prints data while the slowest
-one is still searching.
-
-### The JavaScript version needs WEB_ORIGINS
-
-A page in a browser reaches the API only if
-[`WEB_ORIGINS`](configuration.md#web_origins) names the origin it was served
-from. Unset - the default - every page is refused, and the failure appears in
-the console as a CORS error, not as an HTTP status you can read.
-
-``` toml title="~/.wudict/wudict.toml - pick ONE of these"
-# One dev server on your own machine.
-WEB_ORIGINS = ["http://localhost:3000"]
-
-# Several origins. Scheme, host and port, exactly as the browser sends them;
-# :80 and :443 are the defaults and may be left off.
-WEB_ORIGINS = ["http://localhost:3000", "http://127.0.0.1:8080", "https://notes.example.com"]
-
-# Every site you visit. Convenient while experimenting, and it means any page
-# you happen to open can read your dictionaries.
-WEB_ORIGINS = ["*"]
-```
-
-Restart WuWeiDict after editing the file.
-
-The grant is still only the three read-only endpoints - search, the dictionary
-list, and resource files. `*` does not widen that set; it widens who may call
-it. And it never reaches a `file://` page: those send `Origin: null`, which
-every one of them sends, so it can never be allowlisted. Serve your page over
-`http://` while developing, even locally.
-
-A program - `curl`, Node, Deno, Bun, Python - sends no `Origin` and needs none
-of this. The shell and Python tabs above work against a stock installation.

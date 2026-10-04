@@ -294,6 +294,60 @@ func TestAutoIndexValues(t *testing.T) {
 // IMPORT_KEEP decides the fate of an imported archive. Anything unrecognised
 // must land on "ask": the two mistakes are not symmetric, and a typo that
 // resolved to "delete" would remove a file the user may have no other copy of.
+func TestParseHostList(t *testing.T) {
+	for _, c := range []struct {
+		in   string
+		want []string
+	}{
+		{"", nil},
+		{"example.org", []string{"example.org"}},
+		{"Example.org, *.cloud.example.net , .dl.example.com", []string{"example.org", "cloud.example.net", "dl.example.com"}},
+		{"https://example.org/dicts/, example.net:8443", []string{"example.org", "example.net"}},
+		// wudict.toml spells lists as arrays; the raw text arrives here.
+		{`["example.org", "cloud.example.net"]`, []string{"example.org", "cloud.example.net"}},
+		{"[\n  'example.org',\n  \"cloud.example.net\",\n]", []string{"example.org", "cloud.example.net"}},
+		{"[]", nil},
+	} {
+		got := ParseHostList(c.in)
+		if strings.Join(got, "|") != strings.Join(c.want, "|") {
+			t.Errorf("ParseHostList(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
+// IMPORT_URL_HOSTS in its two wudict.toml spellings, and from the environment.
+func TestImportURLHostsConfig(t *testing.T) {
+	want := []string{"example.org", "cloud.example.net"}
+	for _, body := range []string{
+		"IMPORT_URL_HOSTS = [\"example.org\", \"cloud.example.net\"]\n",
+		"IMPORT_URL_HOSTS = \"example.org, cloud.example.net\"\n",
+	} {
+		p := filepath.Join(t.TempDir(), Name)
+		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		cfg, err := Load(p, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Join(cfg.ImportURLHosts, "|") != strings.Join(want, "|") {
+			t.Errorf("%s→ %q, want %q", body, cfg.ImportURLHosts, want)
+		}
+	}
+	p := filepath.Join(t.TempDir(), Name)
+	if err := os.WriteFile(p, []byte("SERVER_PORT = \"1\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("IMPORT_URL_HOSTS", "example.org,cloud.example.net")
+	cfg, err := Load(p, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(cfg.ImportURLHosts, "|") != strings.Join(want, "|") {
+		t.Errorf("env → %q, want %q", cfg.ImportURLHosts, want)
+	}
+}
+
 func TestImportKeepValues(t *testing.T) {
 	for _, c := range []struct{ in, want string }{
 		{"", ImportKeepAsk}, // unset → default

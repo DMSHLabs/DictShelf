@@ -1,41 +1,37 @@
 ---
 title: About
-description: What is WuWeiDict, wudict, the functions, design, and capabilities.
+description: WuWeiDict (wudict) - what it is, its HTTP API, resource overrides, the name and the licence.
 ---
 
 # About WuWeiDict
 
-WuWeiDict (or `wudict` for brevity) is a modern dictionary frontend optimized for speed that runs in your browser. It lets you quickly search
-in all your dictionaries at once.
+WuWeiDict (`wudict`) is a dictionary program that runs as a local web server
+and is used in the browser. It searches all your dictionaries at once, in
+several dictionary formats, and keeps an indexed copy of each in its library.
 
+## HTTP API
 
-## You can repair a dictionary
+The web page, the browser extension and the Android app all use the same HTTP
+API, and so can your own programs.
 
-Some dictionaries contain broken files. A damaged script inside a dictionary can
-break the interactive part or the styling of all articles, and you cannot edit the
-dictionary file.
+[HTTP API](reference/api.md){ .md-button }
 
-WuWeiDict reads a `res/` folder inside the dictionary's library folder first. Put
-a file there and it replaces the dictionary's built-in file.
+## Resource overrides
 
-[How to override a file](dictionaries/override.md){ .md-button }
+A dictionary with a broken stylesheet, script or image can be repaired without
+changing the dictionary file: a file in the dictionary's library folder
+replaces the dictionary's own.
 
-## Everything the app does, the API does
-
-The web page is one client for a compact HTTP REST API. The browser extension
-uses the same REST API. Your own code can also use the same REST API and 
-there are working code sample in the link below.
-
-[HTTP API reference](reference/api.md){ .md-button }
+[Resource overrides](dictionaries/override.md){ .md-button }
 
 ## The name
 
-*Wú wéi* (無為) is the classical Chinese term for effortless action/no action. The project
-is called WuWeiDict because a good tool should work effortlessly. The
-program is called `wudict` because it's shorter, and easier to type and pronounce.
+*Wú wéi* (無為) is the classical Chinese term for effortless action, or
+non-action. The program is called `wudict` for short.
 
-## License
+## Licence
 
-WuWeiDict is free software under the GPL, version 3 or later.
+WuWeiDict is free software under the GNU General Public License, version 3 or
+later.
 
-[License and attribution](help/license.md){ .md-button }
+[Licence and attribution](help/license.md){ .md-button }

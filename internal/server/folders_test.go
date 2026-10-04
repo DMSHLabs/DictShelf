@@ -176,7 +176,7 @@ func TestConfigEndpointAndSetupPage(t *testing.T) {
 	// the setup page is served on demand, not only while the registry is empty
 	rec := httptest.NewRecorder()
 	s.ServeHTTP(rec, newRequest("GET", "/setup", nil))
-	if rec.Code != 200 || !strings.Contains(rec.Body.String(), "Point wuDict at your dictionaries") {
+	if rec.Code != 200 || !strings.Contains(rec.Body.String(), "<title>Edit Folders</title>") {
 		t.Fatalf("/setup not served: %d", rec.Code)
 	}
 	if !strings.Contains(rec.Body.String(), "Serving 1 dictionary from 2 folders") {

@@ -1,76 +1,61 @@
 ---
 title: Custom styles
-description: Two CSS files of your own — one for wuDict itself, one for what dictionaries render — with examples for sepia, dark mode and a compact mobile layout.
+description: Your own CSS for wudict and for dictionary articles - the editor, the examples, dark mode and a compact phone layout.
 ---
 
 # Custom styles
 
-**Goal:** make wuDict look the way you want it, and make every dictionary
-respect that — a sepia page, a wider column, or a phone layout that is not
-half empty margin.
+Two optional CSS files:
 
-Two files, both optional, both plain CSS:
+| File | Applies to |
+| --- | --- |
+| `app.css` | wudict's own page: colours, layout |
+| `article.css` | every dictionary article |
 
-| File | Styles |
-|---|---|
-| `app.css` | wuDict itself — its colours, its own layout |
-| `article.css` | what dictionaries render, in every article |
+They are in the `style/` folder beside the `wudict.toml` in effect, usually
+`~/.wudict/style/`, created on the first save, up to 256 KiB each.
 
-They live in a `style/` folder beside the `wudict.toml` in effect, usually
-`~/.wudict/style/`. Nothing is created until you save something.
+## Editor
 
-## The editor
+<kbd>☰</kbd> → folder summary → <kbd>Custom styles…</kbd> opens the editor,
+docked at the bottom; the page above previews the CSS as you type.
 
-Open the <kbd>☰</kbd> panel, then <kbd>**Custom styles…</kbd>** under the folder summary. It is a
-sheet docked at the bottom rather than a window over the page, so the article
-you are adjusting stays visible and reflows as you type.
+-   **App** and **Article** edit the two files. A dot on a tab marks unsaved
+    changes.
+-   <kbd>Examples…</kbd> inserts a preset at the cursor as editable text. A
+    preset that needs both files inserts a part into each. Inserting the same
+    preset twice adds it once.
+-   <kbd>Save</kbd> writes the files.
+-   **Files** holds files the CSS can reference, such as fonts and images.
+    <kbd>Add…</kbd> uploads one: up to 8 MiB each, 64 files, 64 MiB in total,
+    stored in `style/assets/` and served at `/files/<name>`.
+    <kbd>Insert</kbd> writes a rule that uses the file: for a font, the
+    `@font-face` and font rules in both stylesheets; for an image, a background
+    for every article; otherwise `url("/files/<name>")` at the cursor.
 
-- Two tabs over one box: **App** and **Article**.
-- **Examples…** drops a working snippet at the cursor. It is text, not
-  a switch — edit it, keep half of it, delete it. One menu serves both tabs:
-  each example knows which box it belongs in, and a few need both (a colour a
-  dictionary paints over, a width a dictionary caps). Those insert two halves
-  and the view follows the second one, so nothing arrives unseen. Picking the
-  same example twice does not duplicate it.
-- Typing previews. **Save** writes the files.
-- A dot on a tab means that box holds something.
+## Undo and disable
 
-## Undo, remove, disable
+| To | Do |
+| --- | --- |
+| undo typing or an inserted example | <kbd>⌘ Z</kbd> / <kbd>Ctrl Z</kbd> in the box |
+| discard changes since the last save | close the editor; the page returns to the saved files, the unsaved text stays in the box |
+| delete a file | <kbd>Clear</kbd>, then <kbd>Save</kbd> |
+| load the page once without either file | open `/?style=off` |
 
-| You want | Do this |
-|---|---|
-| Take back what you just typed or inserted | <kbd>⌘Z</kbd> / <kbd>Ctrl</kbd>+<kbd>Z</kbd> in the box, as in any text field |
-| Discard everything since the last Save | Close the sheet — the page goes back to what the files say, and your text is still in the box when you reopen |
-| Delete a customization for good | **Clear**, then **Save**. The file is removed, not left empty |
-| Turn everything off for one page load | Open `/?style=off` |
+The files can be edited in any text editor; they are served with `no-cache`,
+so a reload applies the change.
 
-**Clear** appears only when the box has something in it, — **Save** writes the change, and <kbd>⌘Z</kbd> 
-(<kbd>Ctrl + Z</kbd> on windows) undos changes.
+## App or Article
 
-You can edit the same two files in any text editor instead. They are served
-uncached, so an external edit takes effect on the next reload.
+`article.css` styles dictionary markup and cannot reach wudict's page.
 
-## Which box
+| Rule | File |
+| --- | --- |
+| a custom property (`--token`) | `app.css`: properties set on `:root` are inherited by articles |
+| a selector for wudict's elements (`.col`, `details.dict`) | `app.css` |
+| a selector for dictionary markup (`body`, `p`, `table`) | `article.css` |
 
-> **App** is the page. **Article** is what dictionaries render.
-
-The split is not bookkeeping. `body`, `p`, `a` and `table` are exactly the
-selectors you reach for when styling a definition — and every one of them would
-also hit wuDict's own interface. Two boxes make that impossible.
-
-The rule that decides every example we ship, and every rule you write:
-
-| What you are writing | Box |
-|---|---|
-| A `--token` | **App** — custom properties are the one thing that crosses into an article, so one line recolours the page and the definitions together |
-| A selector naming wuDict's own furniture (`.col`, `details.dict`) | **App** |
-| A selector naming dictionary markup (`body`, `p`, `table`) | **Article** — where it cannot reach the interface |
-| A look that needs both | one example, **two halves** |
-
-Colours are the common case, and they need no duplication: custom properties
-set on `:root` in **App** are inherited by articles as well.
-
-``` css title="App — one block, both layers"
+``` css title="app.css — sepia"
 html:not([data-dark]){
   --bg:#f4ecd8; --bg-card:#faf3e3; --bg-bar:rgba(244,236,216,.92);
   --fg:#3b3229; --fg-soft:#6b5f4e; --line:#e0d5bd; --line-soft:#ebe2cf;
@@ -78,21 +63,20 @@ html:not([data-dark]){
 }
 ```
 
-`--wd-article-bg` and `--wd-article-fg` are the article surface; the rest are
-wuDict's own tokens.
+`--wd-article-bg` and `--wd-article-fg` are the article surface; the others are
+wudict's own tokens.
 
-Some dictionaries paint their own white background over that, and no token can
-reach a colour a dictionary set on its own markup. That is the second half the
-colour examples insert:
+A dictionary that sets its own background on its markup is not reached by the
+tokens. The colour examples therefore also insert into `article.css`:
 
-``` css title="Article — let the app's colours through"
+``` css title="article.css — let the app's colours through"
 :host, :root > body,
 :host > *, :root > body > * { background:none !important }
 ```
 
-Two levels deep only, so a coloured box inside an entry keeps its colour.
+Two levels deep only: a coloured box inside an entry keeps its colour.
 
-## What the examples do
+## Examples
 
 | Example | Box | For |
 |---|---|---|
@@ -106,49 +90,37 @@ Two levels deep only, so a coloured box inside an entry keeps its colour.
 | Roomier lines | Article | prose leading and air between paragraphs |
 | Serif font | App + Article | one family everywhere, over the dictionary's own |
 | Bolder text | App + Article | synthetic weight where the type looks washed out |
-| Justified text | Article | justification with hyphens, so it opens no rivers |
+| Justified text | Article | justified, with hyphenation |
 | Wide tables | Article | conjugation tables scroll inside themselves |
+| Dictionary roles | Article | colours and fonts for the labelled parts of Lingvo DSL and XDXF articles: part of speech, example, transcription, comment, stress |
+| Quiet examples | Article | examples in the text colour, one size smaller |
+| Tighter indents | Article | half the indentation of DSL articles; `0` flattens them |
 
 ## Dark mode
 
-wuDict is dark when you choose dark, and when you leave it on *auto* and your
-system is dark. You do not have to write that twice:
+`[data-dark]` is set on the page, on each article and inside each article frame
+whenever the theme is dark, chosen or from the system:
 
 ``` css
-html[data-dark]      { /* dark, however it got there */ }
+html[data-dark]      { /* dark */ }
 html:not([data-dark]){ /* light */ }
 ```
 
-`[data-dark]` is set on the page, on an article and inside a script-bearing
-article's frame, so it means the same thing in both boxes. In **Article**,
-match both flavours at once:
+In `article.css`: `:host([data-dark]), html[data-dark] { … }`.
 
-``` css
-:host([data-dark]), html[data-dark] { … }
-```
+In dark mode wudict inverts each article's colours: dictionary stylesheets have
+no dark variant. Write article colours for light mode, and use `[data-dark]` in
+`article.css` only to exempt an element from the inversion. The article tokens
+under `html[data-dark]` in `app.css` are also values before inversion:
+`--wd-article-bg:#fff` gives a near-black article, `--wd-article-fg:#000` white
+text. Hue is preserved.
 
-!!! note "Article colours are written for light"
+## Compact layout on a phone
 
-    In dark mode wuDict inverts the whole article rather than recolouring it,
-    because a dictionary's own stylesheet has no dark variant to use. So write
-    article colours for light and let dark be derived. `[data-dark]` in the
-    Article box is for exempting something from that inversion, not for
-    picking dark colours.
+Dictionaries designed for a desktop window reserve side padding and fix their
+widths. The *Compact* example removes both below a width of 700px:
 
-    The same goes for the two article tokens under `html[data-dark]` in the
-    App box: they are the value *before* the flip. `--wd-article-bg:#fff`
-    there is what gives you a near-black article, and `--wd-article-fg:#000`
-    is what gives you white text. Hue survives, so a warm off-white lands as
-    a warm near-black.
-
-## Reclaim the margins on a phone
-
-The common complaint: a dictionary designed for a desktop window reserves side
-padding that leaves a phone with a narrow column of text between two empty
-strips. There is no way to *clamp* an unknown padding, so remove it below a
-width you choose.
-
-``` css title="Article — compact view"
+``` css title="article.css — compact"
 @media (max-width: 700px){
   :host, :root > body { margin-inline:0 !important; padding-inline:0 !important }
   div, section, article, main, header, footer, aside, nav,
@@ -174,55 +146,31 @@ width you choose.
 }
 ```
 
-`:host` is the root of a plain article; `:root > body` is the root of one that
-came with scripts and therefore renders in its own frame. Writing both covers
-every dictionary.
+`:host` is the root of an article without scripts; `:root > body` the root of
+one rendered in a frame. Only the root needs these prefixes; other selectors in
+`article.css` reach only article markup. The `app.css` part of *Compact*
+removes wudict's own padding around the article.
 
-Only the *root* needs that prefix. Everything below it can be named plainly —
-this box only ever reaches article markup, so a bare `div` here cannot touch
-wuDict's interface.
+??? info "What each part does"
 
-Lists are the side space people notice last: a browser indents `ul`, `ol` and
-`dd` by 40px of its own, on top of anything the dictionary adds. `1.1em` is
-what keeps the bullet inside the article instead of clipped off its edge; for
-flush text use `0` together with `list-style-position:inside`. Table cells hide
-width the same way.
+    -   Margins and padding are removed from block elements. Lists keep
+        `1.1em`, so bullets stay visible (`0` with `list-style-position:inside`
+        for flush lists); table cells keep `.25em`.
+    -   No element keeps its own width or exceeds its container, and long words
+        break. `box-sizing:border-box` keeps padded boxes within 100%. Widths in
+        `em` grow with the font size, so without this an article scrolls
+        sideways more at larger text sizes.
+    -   Tables and code blocks scroll inside themselves; table cells are exempt
+        from the width limit.
 
-The second half is what makes the result actually *fit*. Removing padding is
-not enough on its own: a stylesheet written for a desktop window also states
-widths the phone does not have, and it states them in `em` as often as in `px`
-— which is why the sideways drag gets **worse** as you raise the font size, a
-40em column being 40em wide whatever the screen is. So nothing is allowed to
-declare its own width, nothing may exceed the box it is in, and long words
-break instead of pushing. `box-sizing:border-box` is what makes those two
-agree, since a padded 100% box is wider than 100% under the `content-box`
-default a dictionary may have set.
+## Custom styles and resource overrides
 
-Two things genuinely need their own width and scroll inside themselves
-instead: a table of forms and a block of code. The table's own box stays at
-100% — it is the window — while its cells are let back out of the clamp, or a
-ten-column table becomes ten slivers rather than a table you can push
-sideways.
+A [resource override](override.md) replaces one file of one dictionary. Custom
+styles are added after each dictionary's own CSS, for all dictionaries;
+`!important` resolves a conflict.
 
-The example's other half zeroes wuDict's own gutter around the article — the
-column padding, the definition list and the card — because on a phone that is
-the same complaint.
+## If a rule hides the page
 
-## How it relates to `res/`
-
-[Patching a dictionary](override.md) *replaces* one file a single dictionary
-ships. Custom styles are *added* after whatever the dictionary brought, for
-every dictionary at once. Both can be in effect; yours is applied last, and
-`!important` settles anything it still loses.
-
-## If a rule hides the app
-
-`* { display:none }` in the App box hides the editor that would undo it. Open
-
-``` text
-http://127.0.0.1:6888/?style=off
-```
-
-and wuDict serves the page with neither file applied. The editor still works
-there — it saves, but does not preview — so you can fix the rule and reload
-normally.
+Open `http://127.0.0.1:6888/?style=off`: the page loads without either file.
+The editor saves there without previewing; fix the rule and reload without
+`?style=off`.

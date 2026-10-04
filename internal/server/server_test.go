@@ -530,7 +530,7 @@ func TestSetupFlow(t *testing.T) {
 	// missing folder → setup page, not the app
 	rec := httptest.NewRecorder()
 	s.ServeHTTP(rec, newRequest("GET", "/", nil))
-	if rec.Code != 200 || !strings.Contains(rec.Body.String(), "Point wuDict at your dictionaries") {
+	if rec.Code != 200 || !strings.Contains(rec.Body.String(), "<title>Edit Folders</title>") {
 		t.Fatalf("expected setup page, got %d", rec.Code)
 	}
 	if !strings.Contains(rec.Body.String(), "does not exist") {
@@ -687,7 +687,7 @@ func TestSetupConsentFlow(t *testing.T) {
 
 	rec := httptest.NewRecorder()
 	s.ServeHTTP(rec, newRequest("GET", "/", nil))
-	if !strings.Contains(rec.Body.String(), "Point wuDict at your dictionaries") {
+	if !strings.Contains(rec.Body.String(), "<title>Edit Folders</title>") {
 		t.Fatal("prepared dictionaries must not suppress the setup page")
 	}
 

@@ -63,6 +63,19 @@ prefix for a parallel implementation) behind `/api/user-groups`. Settings
 links to the upstream rules editor at `/groups` as **Edit filters**. Its EN/RU
 interface edits the same rules file and retains the upstream API.
 
+### One word per concept: filters, not groups
+
+Upstream's writing guide (`docs/STYLE.md`) calls the `groups.ini` sets
+**groups** and forbids "facet", "category" and "tag". This fork deliberately
+deviates on one word: they are **filters**, because here "group" is already the
+reader's own curated set (the editor this page documents), and the two are
+different things. The app's words follow the deviation consistently — *Edit
+filters*, the editor's *Filter* control, *Uncategorized* — while everything
+else follows the guide (index / indexed / indexing, contains index, full-text
+index, media pack, lemma data, exact / prefix / contains / full-text, orphan).
+Anyone bringing upstream wording in should keep that one word different rather
+than "fixing" it back to "group".
+
 ## Verification
 
 `go test ./internal/server -run 'TestGroup|TestPrefs|TestOpenAPI|TestRoutes|TestCORSBoundary'`

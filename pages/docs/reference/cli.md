@@ -1,50 +1,49 @@
 ---
 title: Command line
-description: Every wudict command, flags and args.
+description: Every wudict command, its flags and arguments.
 ---
 
 # Command line
 
-``` text title="the command structure"
+``` text
 wudict [command] [flags] [args]
 ```
 
-User `wudict --help` for complete reference, `wudict --version` prints the
-version.
+`wudict --help` prints the full reference; `wudict --version` (`-v`) prints the
+version. `--verbose` applies to every command. Flags may be written with one
+or two dashes.
 
 ## Commands
 
-| Command | What it does                                                       |
-| --- |--------------------------------------------------------------------|
-| [`serve`](#serve) | start the HTTP server; the default                                 |
-| [`lookup`](#search-commands) | exact lookup                                                       |
-| [`prefix`](#search-commands) | exact, then prefix lookup                                          |
-| [`contains`](#search-commands) | substring headword search, needs the contain index                 |
-| [`searchall`](#searchall) | search every dictionary in a folder at once (default -format=text) |
-| [`list`](#list) | show the dictionaries under one or more folders                    |
-| [`info`](#info) | show one dictionary's metadata and capabilities                    |
-| [`fts`](#search-commands) | full-text search, needs the FTS index                              |
-| [`keys`](#keys) | list headwords, or the contents of an `.mdd`                       |
-| [`res`](#res) | extract one resource file                                          |
-| [`dump`](#dump) | export a dictionary to a pyglossary-compatible CSV file            |
-| [`ingest`](#ingest) | trigger indexing of dictionaries                                   |
-| [`lemmas`](#lemmas) | list, install and remove lemmatization data                        |
-| [`clean`](#clean) | list or delete broken library items and orphans                    |
-| [`rm`](#rm) | remove a dictionary                                                |
+| Command | Action |
+| --- | --- |
+| [`serve`](#serve) | start the server (the default command) |
+| [`list`](#list) | list the dictionaries in one or more folders |
+| [`info`](#info) | show a dictionary's metadata, search modes and files |
+| [`lookup`, `prefix`, `contains`, `fts`](#lookup-prefix-contains-fts) | search one dictionary |
+| [`searchall`](#searchall) | search all dictionaries in the dictionary folders |
+| [`keys`](#keys) | list headwords, or the files in an `.mdd` |
+| [`res`](#res) | extract one resource |
+| [`dump`](#dump) | export a dictionary to CSV or wudict markdown |
+| [`ingest`](#ingest) | index dictionaries |
+| [`reindex`](#reindex) | rebuild outdated indexes |
+| [`lemmas`](#lemmas) | list, install and remove lemma data |
+| [`clean`](#clean) | list or delete broken library folders and orphans |
+| [`rm`](#rm) | remove a dictionary |
+| [`token`](#token) | print the access-key link, or replace the key |
+| [`licenses`](#licenses) | print the licence and third-party notices |
 
-`--verbose` works with every command.
+A command that takes a dictionary path also accepts a library folder:
+`wudict info ~/.wudict/db/Oxford` and `wudict info ~/.wudict/db/Oxford/text.db`
+are equivalent.
 
 ## serve
 
-`serve` is the default command, so `wudict` and `wudict serve` do exactly the same.
-
-``` sh title="starting the wudict server"
+``` sh
 wudict
 wudict serve --port 9090 --no-browser
-wudict ~/Dicts/Oxford.mdx     # serve that file's folder and open it
+wudict ~/Dictionaries/Oxford.mdx     # serve that file's folder and open it
 ```
-
-Every flag has a corresponding environment variable and a `wudict.toml` key.
 
 | Flag | Setting |
 | --- | --- |
@@ -56,162 +55,129 @@ Every flag has a corresponding environment variable and a `wudict.toml` key.
 | `--use-cached` | [`USE_CACHED`](configuration.md#use_cached) |
 | `--no-compress` | [`NO_COMPRESS`](configuration.md#no_compress) |
 | `--index-workers <n>` | [`INDEX_WORKERS`](configuration.md#index_workers) |
+| `--allow-remote-delete <0\|1>` | [`ALLOW_REMOTE_DELETE`](configuration.md#allow_remote_delete) |
 | `--speexdec <path>` | [`SPEEXDEC`](configuration.md#speexdec) |
 | `--tray`, `--no-tray` | [`TRAY`](configuration.md#tray) |
 | `--config <path>` | [`CONFIG_PATH`](configuration.md#config_path) |
 | `--verbose` | [`VERBOSE`](configuration.md#verbose) |
 
-Three settings have no flag, because they are not things you change per run:
-[`BROWSER_EXTENSIONS`](configuration.md#browser_extensions) and
-[`WEB_ORIGINS`](configuration.md#web_origins), which decide who may call the
-[HTTP API](api.md) from a browser, and
-[`AUTO_INDEX`](configuration.md#auto_index).
-
-[All settings, with defaults](configuration.md){ .md-button }
+The other settings have no flag; they are set in the environment or in
+`wudict.toml`. [Configuration](configuration.md) lists them all.
 
 ## list
 
-``` sh title="what WuWeiDict can read in these folders"
+``` sh
 wudict list ~/Dictionaries /Volumes/Ext/Dicts
 ```
 
-One line per dictionary found. Use it to check a folder before starting the
-server.
+Prints one line per dictionary found in the folders, subfolders included.
 
 ## info
 
-``` sh title="metadata and capabilities of one dictionary"
-wudict info ~/Dicts/Oxford.mdx
+``` sh
+wudict info ~/Dictionaries/Oxford.mdx
 ```
 
-Shows name, format, entry count and supported search modes, and occupied disk space (`.mdd` media,
-`.files.zip`, `.idx`/`.dict.dz`), and the index folder.
+Prints the name, format, number of entries, search modes, language and its
+source, description, and the files with their sizes: the dictionary files and
+the library folder.
 
-``` title="the file list"
+``` text
 files:
-  original  /Dicts/Oxford.mdx        41.2 MB
-  original  /Dicts/Oxford.mdd       301.7 MB
-  prepared  ~/.wudict/db/Oxford      63.4 MB
-  total                             406.3 MB
+  original  ~/Dictionaries/Oxford.mdx    41.2 MB
+  original  ~/Dictionaries/Oxford.mdd   301.7 MB
+  prepared  ~/.wudict/db/Oxford          63.4 MB
+  total                                 406.3 MB
 ```
 
-Every command that takes a dictionary path accepts a **prepared folder** as
-readily as a file — `wudict info ~/.wudict/db/Oxford` and `wudict info
-~/.wudict/db/Oxford/text.db` are the same request. The folder is the unit you
-copy, move and zip, so it is the name the library lists, and it is a name you
-can type.
+## lookup, prefix, contains, fts
 
-
-## Search commands
-
-The four commands match the four modes in the app.
-
-``` sh title="the four modes"
-wudict lookup   [-n max] <dictfile> <word>     # exact, with an accent-folded fallback
-wudict prefix   [-n max] <dictfile> <word>     # exact, else prefix; accent-insensitive
-wudict contains [-n max] <dictfile> <word>     # substring headword search
-wudict fts      [-n max] <dictfile> <query>    # full text of the articles
+``` sh
+wudict lookup   [-n max] <dictfile> <word>    # exact; accent-folded if nothing matches
+wudict prefix   [-n max] <dictfile> <word>    # exact, then prefix; accents ignored
+wudict contains [-n max] <dictfile> <word>    # headwords containing <word>
+wudict fts      [-n max] <dictfile> <query>   # full-text query, as in the app
 ```
 
-By default, each prints the raw article HTML to standard output. 
-You can pass `-format=text` to print a plain text version. `-n` limits the number of results.
+| Flag | Effect |
+| --- | --- |
+| `-n` | maximum number of results; default `20` |
+| `-format` | `raw` (default): the dictionary's HTML; `clean`: structure, emphasis and media, without scripts, stylesheets and presentation; `text`: no markup |
+| `-base <url>` | prefix for the `/res/…` references in `clean` output |
 
+`contains` and `fts` need an indexed dictionary: pass its library folder.
+`fts` reads the query as the app does
+([Full-text query syntax](fts-syntax.md)). The exit status is `1` when nothing
+matches.
 
-### Article format
-
-`lookup`, `prefix`, `contains`, `fts` all accept the `-format` flag,
-same as the [REST API](api.md#article-formats).
-
-``` sh title="available CLI output formats"
-wudict lookup -format raw   <dictfile> <word>   # raw HTML (the default)
-wudict lookup -format clean <dictfile> <word>   # structure, emphasis and media only
-wudict lookup -format text  <dictfile> <word>   # no markup at all
+``` sh title="an article as an HTML file whose images load from the server"
+wudict lookup -format clean -base http://127.0.0.1:6888 ~/Dictionaries/Oxford.mdx flight > flight.html
 ```
-
-`clean` drops scripts, stylesheets and presentation and keeps semantic formatting; 
-`text` keeps text only.
-
-`-base` prefixes the `/res/…` references generated by `-format=clean`, 
-so an article can point at a running server:
-
-``` sh title="dump an article to and HTML file with links working"
-wudict lookup -format clean -base http://127.0.0.1:6888 ~/Dicts/Oxford.mdx flight > flight.html
-```
-
-[What each mode matches](../start/search.md){ .md-button }
 
 ## searchall
 
-``` sh title="search all dictionaries, live streaming"
-wudict searchall [-mode m] [-n perDict] [-format f] [-dict-dir /path/to/dicts] <term>
+``` sh
+wudict searchall [-mode m] [-n perDict] [-format f] [-dict-dir <dir>] [<dir>] <term>
 ```
 
-`-mode` takes `exact` (the default), `prefix`, `contains` or `fts`. `-n` limits
-results per dictionary.
+Searches every dictionary in the folders and prints each dictionary's results
+as it answers, so `| head` works on a large library. Each dictionary is opened
+for the search and closed when it has answered.
 
-**Search folders** If `-dict-dir` is not specified
-the currently configured `DICT_DIR` is used, resolved through the same chain: `--dict-dir` (repeatable), then the
-`DICT_DIR` environment variable, then `wudict.toml`.
+| Flag | Effect |
+| --- | --- |
+| `-mode` | `exact` (default), `prefix`, `contains`, `fts` |
+| `-n` | results per dictionary; default `10` |
+| `-format` | `text` (default), `clean`, `raw` as for `lookup`; `list`: headwords only |
+| `-base <url>` | as for `lookup` |
+| `-dict-dir <dir>` | folder to search, repeatable; or a `<dir>` argument, which may be a `:`-separated list. Default: `DICT_DIR` |
+| `-config <file>` | the `wudict.toml` to read `DICT_DIR` from |
 
-**Output modes** The definitions, as plain text - `-format text` is the
-default. `clean` and `raw` print them as markup, in the
-[same forms](#article-format) `lookup` produces, and `-base` applies to both.
-`-format list` only lists the dictionaries that contain the search term _without_ the definitions.
-
-Results are streaming live as they are available, so
-`| head` and a piped reader work on a large library. Dictionaries are opened
-inside the search and closed as soon as they have answered, so the cost is the
-few being read at once rather than the whole library at once.
-
-Exit status is 1 when no dictionary matched, as with `lookup`.
-
-!!! note "CLI search mode"
-
-    `searchall` reads each dictionary in its original format (`.mdx`, `.slob`, `.bgl`, etc)
-    and does not use the SQLite indexes.
+`searchall` opens each dictionary through its own format. Contains and
+full-text therefore return results only for dictionaries that index themselves
+(Lingvo DSL, Babylon, wudict markdown) and for library folders in the searched
+folders. The exit status is `1` when no dictionary matches.
 
 ## keys
 
-``` sh title="list headwords, or an archive's contents"
+``` sh
 wudict keys [-offset N] [-n count] <dictfile>
 ```
 
-On a dictionary, `keys` lists the headwords.
-
-On an `.mdd` file, it lists the contained file names.
+Lists the headwords, all by default. For an `.mdd` file, lists the files it
+contains.
 
 ## res
 
-``` sh title="pull one file out of a dictionary"
+``` sh
 wudict res [-o out] [-f] <dictfile> <name>
-
-# Example:
-wudict res ~/Dicts/Oxford.mdd audio/word.mp3
+wudict res ~/Dictionaries/Oxford.mdd audio/word.mp3
 ```
 
-where `<name>` is the name that was printed with the `keys` command. 
+Extracts one resource. `<name>` is a name `keys` prints; an `.mdd` can be given
+directly.
 
-Where the binary output goes depends on how the command is invoked.
-
-- Piped or redirected: to standard output.
-- On a terminal: to a file named after the resource. Use `-f` overwrite a file.
-- `-o` sets a custom file name (can contain slashes, missing intermediate folders will be created); 
-a folder; the special placeholder `-` (`-o -`) to dump the file output to standard output.
+| Output | Where |
+| --- | --- |
+| piped or redirected | standard output |
+| on a terminal | a file named after the resource; `-f` overwrites |
+| `-o <path>` | that file (missing folders are created), that folder, or `-` for standard output |
 
 ## dump
 
-``` sh title="export a dictionary to CSV"
-wudict dump -o <outdir> <dictfile>
-
-# Example:
-wudict dump -o ~/exports ~/Dicts/Oxford.mdx
+``` sh
+wudict dump [-format csv|md] [-mode html|clean] [-compress gz] [-resources all|text|none] -o <outdir> <dictfile>
 ```
 
-Writes `<outdir>/<name>.csv` in 
-[pyglossary](https://github.com/ilius/pyglossary)-compatible .CSV format:
+### CSV
 
-The CSV file is RFC 4180 compliant. The leading rows are `"#key","value"` metadata, and
-every row after them is one entry:
+``` sh
+wudict dump -o ~/exports ~/Dictionaries/Oxford.mdx
+```
+
+Writes `<outdir>/<name>.csv` in the layout [pyglossary](https://github.com/ilius/pyglossary)
+reads and writes (RFC 4180). The first rows are `"#key","value"` metadata; each
+following row is one entry: headword, article, alternative headwords.
 
 ``` csv
 "#name","Cambridge English Dictionary"
@@ -220,185 +186,177 @@ every row after them is one entry:
 "aardvark","medium-sized, burrowing, nocturnal mammal","ant bear,earth pig"
 ```
 
-**Resources.** If the dictionary has images, audio, .css, .js files, they are
-unpacked into `<name>.csv_res` beside the CSV, derived from the file's name. 
-The folder structure inside the
-container is preserved, so an article's `src="audio/word.mp3"` still resolves
-after the conversion. Resource file names that are invalid for the filesystem are normalized;
-if normalization fails the resource is skipped and reported, and so is a resource that fails to read, rather
-than aborting the operation.
+Resources are written to `<name>.csv_res` beside the CSV, with their folder
+structure, so `src="audio/word.mp3"` still resolves. A resource name that is
+invalid on the file system is normalized; a resource that cannot be normalized
+or read is reported and skipped.
 
-**Indexed dictionaries vs. source dictoinaries.** A dictionary that has been indexed in the library
-can be dumped either way, and the two differ in one respect: dumping the
-source writes an MDX `@@@LINK` redirect as its own row pointing at
-`entry://target`, while dumping the prepared folder writes it as an alternate
-headword on the target's row, because that is what ingest resolved it into.
-Both are valid and accepted by [pyglossary](https://github.com/ilius/pyglossary).
+An MDX `@@@LINK` redirect is written as its own row pointing at
+`entry://target` when dumping the dictionary file, and as an alternative
+headword of the target when dumping the library folder. pyglossary accepts
+both.
 
-**Only some resources.** `-resources` chooses what goes beside the dump, for either format:
+### wudict markdown
 
-- `all` (the default): every resource.
-- `text`: only files an article loads as text: `.css`, `.js`, `.mjs`, `.json`, `.html`, `.htm`, `.xml`, `.txt`. Images, audio, video and fonts are left out.
-- `none`: the articles only; no resource folder is written.
-
-``` sh title="articles and their stylesheets, no media"
-wudict dump -resources text -o ~/exports ~/Dicts/Oxford.mdx
+``` sh
+wudict dump -format md -o ~/exports ~/Dictionaries/Oxford.mdx
+wudict dump -format md -mode clean -compress gz -o ~/exports ~/Dictionaries/Oxford.mdx
 ```
 
-If the output folder already exists, `dump` warns before overwritting. 
-Files left by an earlier dump under a different name are **not** deleted.
-
-To read a prepared dictionary directly instead of converting it, its SQLite
-tables are documented in [The text.db format](text-db.md).
-
-### As markdown
-
-``` sh title="export a dictionary to WuWeiDict markdown"
-wudict dump -format md -o <outdir> <dictfile>
-
-# Keep every article's own HTML, and compress:
-wudict dump -format md -mode html -compress gz -o ~/exports ~/Dicts/Oxford.mdx
-```
-
-Writes `<outdir>/<name>.wudict.md`: plain markdown that any editor opens and any markdown viewer
-shows, and that WuWeiDict reads back as a dictionary. Each entry is a `## headword` heading;
-an entry's other spellings are more `##` headings right under it. Resources go to
-`<name>.wudict.files` beside it.
-
-- `-mode html` (the default) keeps each article's HTML exactly, so nothing is lost and it
-  looks as it did; the file is then less pleasant to edit by hand.
-- `-mode clean` keeps only what markdown writes natively: paragraphs, bold and italic,
-  links, images, lists, tables, headings. Styling and anything else is left behind. If an
-  article cannot be written this way, the dump stops, prints the article, and gives the
-  command for `-mode html`.
-- `-compress gz` writes `<name>.wudict.md.gz`.
-
-## ingest
-
-``` sh title="prepare dictionaries from CLI"
-wudict ingest [-full] [-fulltext] [-contains] [<dictfile|folder> …]
-```
-
-Creates `<db-dir>/<dictionary name>/text.db` and `info.txt`. Given a folder, it
-prepares everything inside and skips what is already indexed. Given no path, it
-does the same for your dictionary folders (`DICT_DIR`, from the command line,
-the environment or `wudict.toml`) and says which folders it used.
+Writes `<outdir>/<name>.wudict.md` ([wudict markdown](../dictionaries/formats.md#wudict-markdown)),
+resources in `<name>.wudict.files`.
 
 | Flag | Effect |
 | --- | --- |
-| none | a new dictionary gets the headword index, as in the app; a prepared one keeps what it has |
-| `-fulltext` | add the full-text index, the largest one |
-| `-fulltext=false` | remove the full-text index (`-headwords` says the same) |
-| `-contains` | add the substring index, roughly doubling a headwords-only database |
-| `-contains=false` | remove the substring index |
-| `-full` | also pack media into `media.db` |
-| `-o <file>` | write one dictionary file's database to this path instead of the library |
-| `-config <file>` | read `DICT_DIR` from this `wudict.toml` |
+| `-mode html` (default) | each article's HTML, unchanged |
+| `-mode clean` | only what markdown expresses: paragraphs, bold, italic, links, images, lists, tables, headings. Stops at the first article it cannot convert and prints the `-mode html` command |
+| `-compress gz` | write `<name>.wudict.md.gz` |
 
-A flag you leave out changes nothing about a dictionary already prepared, so
-`wudict ingest` over the whole library never removes an index you switched on.
+### Both formats
+
+| Flag | Effect |
+| --- | --- |
+| `-resources all` (default) | every resource |
+| `-resources text` | `.css`, `.js`, `.mjs`, `.json`, `.html`, `.htm`, `.xml`, `.txt` only |
+| `-resources none` | no resource folder |
+| `-o`, `-output` | the output folder |
+
+`dump` asks before overwriting an existing output folder. Files left there by
+an earlier dump under other names are not deleted. The library's SQLite schema
+is documented in [The text.db format](text-db.md).
+
+## ingest
+
+``` sh
+wudict ingest [-full] [-fulltext] [-contains] [<dictfile|folder> …]
+```
+
+Indexes dictionaries into `<DB_DIR>/<name>/` (`text.db`, `info.txt`). Without a
+path, the dictionary folders (`DICT_DIR`); with a folder, everything in it.
+Dictionaries already indexed are skipped.
+
+| Flag | Effect |
+| --- | --- |
+| none | a new dictionary gets the headword index, as in the app |
+| `-contains` | add the contains index |
+| `-contains=false` | remove the contains index |
+| `-fulltext` | add the full-text index |
+| `-fulltext=false`, `-headwords` | remove the full-text index |
+| `-full` | also add the media pack (`media.db`) |
+| `-o <file>` | write one dictionary's `text.db` to this path instead of the library |
+| `-config <file>` | the `wudict.toml` to read `DICT_DIR` from |
+
+A flag left out keeps what each dictionary has.
+
+## reindex
+
+``` sh
+wudict reindex [-all] [<name|path> …]
+```
+
+Rebuilds outdated indexes: built by an older version of wudict, from dictionary
+files that changed since, or unreadable. Each dictionary keeps its indexes and
+media pack. Names limit the rebuild to those dictionaries; `-all` rebuilds
+current ones too. A dictionary whose files are gone is reported and kept. While
+a server uses the library, `reindex` has the server run the rebuild and shows
+its progress.
 
 ## lemmas
 
-``` sh title="install lemma data for another language"
-wudict lemmas list                  # what is installed, and what is available
-wudict lemmas download hu fr pt ru  # install, by code or by name
+``` sh
+wudict lemmas list                  # installed and available languages
+wudict lemmas download hu fr pt ru  # install, by code or English name
 wudict lemmas remove ru             # delete
 ```
-
-WuWeiDict recognises inflected forms — searching *knew* finds **know** — and
-only English is built into the program. Every other language is a data file,
-and this is how you get one:
 
 ```
 Lemma files in ~/.wudict/lemmas
 1 installed, 24 available
 
-  [x] en  English                    ~7 MB RAM   built in
-  [ ] fr  French       1.1 MB       ~28 MB RAM
-  [x] hu  Hungarian     238 KB       ~6 MB RAM
-  [ ] ru  Russian       1.9 MB      ~65 MB RAM
+  [x]  en   English          187 kB  ~7 MB RAM  built in
+  [ ]  fr   French           661 kB  ~27 MB RAM
+  [x]  hu   Hungarian        187 kB  ~5 MB RAM
+  [ ]  ru   Russian          1.9 MB  ~63 MB RAM
   ...
 
-  wudict lemmas download pl ru    install       [x] ready   [ ] not installed
-  wudict lemmas remove pl         delete        [!] installed, differs from the catalogue
+  wudict lemmas download ru sk    install       [x] ready   [ ] not installed
+  wudict lemmas remove sk         delete        [!] installed, differs from the catalogue
 ```
 
-The **RAM** column is what that language costs while it is loaded, measured
-rather than estimated. Only [`MORPH_CACHE`](configuration.md#morph_cache)
-languages are held at once, and none is loaded until a search needs it.
+The RAM column is the memory a language uses while loaded; at most
+[`MORPH_CACHE`](configuration.md#morph_cache) languages are loaded, and only
+when a search needs them.
 
-`download` takes codes or English names — `ru` and `russian` are the same
-request — and checks every argument before it downloads anything, so a typo
-fails the whole command instead of installing three languages out of four.
-`-all` installs the entire catalogue; there is no way to do that by accident.
-`-f` re-downloads a language that is already up to date.
+`download` accepts codes or English names (`ru`, `russian`) and checks every
+argument before downloading, so one invalid name fails the whole command.
+`-all` installs every language; `-f` downloads a language again although it is
+current. Each file is checked against its SHA-256 digest in the catalogue and
+written atomically. Files go to [`LEMMA_DIR`](configuration.md#lemma_dir); the
+catalogue is [`LEMMA_URL`](configuration.md#lemma_url), which may be a local
+`manifest.json`. `list` works offline and reports why the catalogue could not
+be read.
 
-Every file is verified against a SHA-256 digest published in the catalogue and
-written atomically, so an interrupted download leaves nothing behind. Files land
-in [`LEMMA_DIR`](configuration.md#lemma_dir); the catalogue they come from is
-[`LEMMA_URL`](configuration.md#lemma_url), which may also be a folder on disk
-for an installation with no network.
-
-`list` still works offline — it prints what is installed and says why it could
-not reach the catalogue.
-
-A server that is already running keeps the languages it started with; restart it
-to pick up one installed this way.
-
-!!! tip "The same thing without a terminal"
-
-    **🔤 Lemmatization**, in the ⚙ box of the <kbd>☰</kbd> dictionary panel and on the
-    settings page, lists the same catalogue with a checkbox per language. It
-    installs into the same folder from the same catalogue, and the running
-    server picks a language up immediately — it re-reads the folder itself,
-    so there is no restart. It is the only route on Android, which has no
-    shell.
+A running server reads languages installed this way after a restart. The
+Lemmatization page (<kbd>☰</kbd> → folder summary → <kbd>Lemmatization…</kbd>)
+installs from the same catalogue without a restart, and is the only way on
+Android.
 
 ## clean
 
-``` sh title="find and remove library leftovers"
-wudict clean                # list what could be removed
-wudict clean -f             # remove the leftovers
-wudict clean -f -orphans    # remove the orphans as well
+``` sh
+wudict clean                # list
+wudict clean -f             # delete broken library folders
+wudict clean -f -orphans    # and orphans
 ```
 
-Lists incomplete or unreadable folders, interrupted preparations, and leftovers
-from an older layout. It is a dry run until you add `-f` (to force).
-
-It also lists **orphans**: prepared dictionaries whose original file is gone.
-`-f` leaves them alone; `-f -orphans` deletes them too. A dictionary file you
-moved to another place in your dictionary folders is not an orphan: `clean`
-reconnects its prepared data to the new place instead. One you chose to keep
-(**keep** in the panel, or `rm -keep-index`) is never listed.
+Lists incomplete or unreadable library folders, interrupted indexing, and
+leftovers of an older library layout; `-f` deletes them. Also lists
+[orphans](../dictionaries/library.md#orphans), library folders whose dictionary
+files are gone; `-f -orphans` deletes those too. A dictionary moved within the
+dictionary folders is not an orphan: its library folder is linked to the new
+location. A library folder kept with *dictionary files only* or
+`rm -keep-index` is not listed.
 
 ## rm
 
-``` sh title="remove one dictionary"
+``` sh
 wudict rm [-f] [-keep-source | -keep-index] <name|path>
 ```
 
-By default this deletes **both** the prepared folder in the library and the
-original dictionary files.
-
-The argument may be a library name, a folder, a `text.db`, or the path of an
-original dictionary file.
+Removes one dictionary: its library folder and its dictionary files. The
+argument is a library name, a library folder, a `text.db`, or a dictionary
+file.
 
 | Flag | Effect |
 | --- | --- |
-| `-keep-source` | delete only the prepared folder |
-| `-keep-index` | delete only the original files |
-| `-f` | actually delete; without it, `rm` only lists |
+| `-f` | delete; without it, `rm` only lists |
+| `-keep-source` | delete only the library folder |
+| `-keep-index` | delete only the dictionary files; refused while the dictionary has media not in a media pack |
 
-With `-keep-source`, the dictionary is prepared again on the next search if its
-original file is still in a scanned folder. `-keep-index` refuses to run while
-media is unpacked.
+After `-keep-source`, a dictionary still in a dictionary folder is indexed
+again on its next search.
+
+## token
+
+``` sh
+wudict token           # print the link that carries the access key
+wudict token -rotate   # replace the key
+```
+
+A browser on another device opens the link once when the server listens on the
+network. After `-rotate`, every browser and script holding the old key needs
+the new link. See [`AUTH`](configuration.md#auth).
+
+## licenses
+
+Prints the program's licence and the notices for the third-party code built
+into it.
 
 ## Examples
 
-``` sh title="everyday commands"
+``` sh
 wudict --dict-dir ~/Books/Dicts --port 9090 --no-browser
-wudict lookup ~/Dicts/Oxford.mdx serendipity
-wudict ingest -full ~/Dicts/Oxford.mdx
+wudict lookup ~/Dictionaries/Oxford.mdx serendipity
+wudict ingest -full ~/Dictionaries/Oxford.mdx
 SERVER_PORT=9000 wudict
 ```

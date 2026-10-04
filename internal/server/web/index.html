@@ -2223,11 +2223,14 @@ function moveDict(id,where){
    the selects stay the single source of truth, so this never has to be
    consulted before reading a value — only called after one changes.
 
-   "starts with" shortens to "starts" and the others keep their words: those
-   words are the ones the mode dropdown, the per-dictionary switch and the
-   result summaries all use, and a chip that renamed "full-text" would sever
-   the link to every other place it appears. */
+   Every chip keeps its mode's word: the words the mode dropdown, the
+   per-dictionary switch and the result summaries all use, so a chip never
+   names a mode differently from the rest of the page. */
 const MODE_SHORT={prefix:tx("search.prefixShort"),exact:tx("search.exact"),contains:tx("dictUI.contains"),fts:tx("dictUI.fts")};
+/* The user-facing name of each index switch (docs/STYLE.md), shared by the
+   switch tooltips, the in-results offer and its collected line: a switch is
+   named for the index it adds, never for the mechanism. */
+const FEAT_NAME={contains:tx("dictUI.containsIndex"),fts:tx("dictUI.ftsIndex"),media:tx("dictUI.packedMedia")};
 /* There was a SCOPE_SHORT map here, holding one entry: all → "All". It existed
    because the chip had to live in the search FIELD, where its cap of 11ch could
    not be widened without taking the room the reader types in — a chip wide
@@ -2345,7 +2348,7 @@ function provenance(d){
     for(const m of ms)rows.push(label(m,{cls:"sub"}));
   }else{
     full=d.folder||d.textDB||d.path||"";
-    head=`<span class="fmt">${esc(tx("dictUI.prepared"))}</span>: ${esc(base(full))}`;
+    head=`<span class="fmt">${esc(tx("dictUI.library"))}</span>: ${esc(base(full))}`;
     if(full)rows.push(label(full)); // same rule: the full path lives in the body
     if(d.folder)rows.push(note("contains: text.db"+(d.mediaDB?" + media.db":"")+" + info.txt"));
     else if(d.mediaDB)rows.push(label(d.mediaDB,{pre:"media:"}));
@@ -2472,7 +2475,8 @@ function dslIndexControls(d){
       : `<button type="button" class="feat${disabled?" locked":""}" data-feat="base" data-target="${escAttr(target?.id||"")}"${disabled?" disabled":""}>${esc(tx("dictUI.index"))}</button>`;
     for(const [key,name,on] of [["contains","dictUI.contains",target?.caps?.Contains],["fts","dictUI.fts",target?.caps?.FTS]]){
       const stale=key==="contains"&&on&&target?.containsStale;
-      controls+=`<button type="button" class="feat${on?" on":""}${stale?" stale":""}${disabled?" locked":""}" data-feat="${key}" data-target="${escAttr(target?.id||"")}" data-on="${on?1:0}"${stale?' data-stale="1"':""} aria-pressed="${!!on}" title="${escAttr(tx(stale?"dictUI.stale":on?"dictUI.removeHint":"dictUI.addHint"))}"${disabled?" disabled":""}>${esc(tx(name))}</button>`;
+      const what=FEAT_NAME[key];
+      controls+=`<button type="button" class="feat${on?" on":""}${stale?" stale":""}${disabled?" locked":""}" data-feat="${key}" data-target="${escAttr(target?.id||"")}" data-on="${on?1:0}"${stale?' data-stale="1"':""} aria-pressed="${!!on}" title="${escAttr(tx(stale?"dictUI.stale":on?"dictUI.removeHint":"dictUI.addHint",{what}))}"${disabled?" disabled":""}>${esc(tx(name))}</button>`;
     }
     const icon=`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.4 3.4a1.2 1.2 0 0 1 1.2-1.2h6.2a1.2 1.2 0 0 1 1.2 1.2v9.2a1.2 1.2 0 0 1-1.2 1.2H3.6a1.2 1.2 0 0 1-1.2-1.2z"/><path d="M11 5h2.6M11 8h2.6M11 11h2.6"/></svg>`;
     const browse=indexed
@@ -2573,9 +2577,10 @@ function renderPanel(){
          rules, so it can only miss words whose folding changed. So it is
          marked, not disabled, and the click rebuilds instead of removing. */
       const stale=key==="contains"&&on&&d.containsStale;
+      const what=FEAT_NAME[key];
       const tip=!canToggle?tx("dictUI.onlyCopy"):
-        stale?tx("dictUI.stale"):
-        on?tx("dictUI.removeHint"):tx("dictUI.addHint");
+        stale?tx("dictUI.stale",{what}):
+        on?tx("dictUI.removeHint",{what}):tx("dictUI.addHint",{what});
       caps+=`<span class="feat${on?" on":""}${stale?" stale":""}${canToggle?"":" locked"}"`+
         ` data-feat="${key}" data-on="${on?1:0}"${stale?' data-stale="1"':""}`+
         ` title="${escAttr(tip)}">${esc(label)}${size}${stale?" ⟳":""}</span>`;
@@ -3476,7 +3481,7 @@ $("bulkIndexes").addEventListener("click",async e=>{
     $("bulkIndexes").querySelectorAll("button,select").forEach(b=>b.disabled=true);
     const queued=new Map(todo.map(job=>[job,bulkFeatureLabels(job.d,job.feat).map(label=>({label,text:label.textContent}))]));
     for(const [job,fields] of queued)for(const {label} of fields){
-      label.textContent=tx(job.remove?"dictUI.removing":"dictUI.preparing");
+      label.textContent=tx(job.remove?"dictUI.removing":"dictUI.indexing");
       label.classList.add("busy");
     }
     let succeeded=0,report="";
@@ -3833,10 +3838,10 @@ function runIngest(id,opts,label){
     setIndexStatus('<span class="spin"></span>'+(opts.statusPrefix||"")+esc(name)+" — "+esc(long||t));
   };
   const removing=Object.values(opts).some(v=>v===0);
-  // tx("dictUI.indexing") for the index chip, because that is the word every other
-  // dictionary app uses for this and the chip says it too; tx("dictUI.preparing") stays
-  // for the feature switches, which add to an index that already exists.
-  const verb=opts.base&&!opts.labels?tx("dictUI.indexing"):tx("dictUI.preparing");
+  // One verb for both doors (docs/STYLE.md): the index chip and the feature
+  // switches both build an index, and naming them apart told the reader they
+  // were different acts.
+  const verb=tx("dictUI.indexing");
   show(removing?tx("dictUI.removing"):verb+"…");
   label.classList.remove("act");label.classList.add("busy");
   label.style.textDecoration="none";label.style.cursor="default";
@@ -4473,9 +4478,9 @@ function renderSlot(box,h,mode,q,perDict,group){
          link-scoped search keeps its own `shown`, and with it the guard that
          stops a scoped miss from silently widening. */
       if(group)return{shown:true,noIndex:{dict:h.dict,name:h.name,feat}};
-      const what=feat==="fts"?tx("search.fullText"):tx("search.substring");
+      const what=FEAT_NAME[feat];
       box.innerHTML=`<details class="dict"><summary>${esc(h.name)}`+
-        `<span class="upgrade" data-id="${h.dict}" data-feat="${feat}">${esc(tx("search.enableMode",{mode:what}))}</span></summary></details>`;
+        `<span class="upgrade" data-id="${h.dict}" data-feat="${feat}">${esc(tx("search.enableMode",{what}))}</span></summary></details>`;
       return{shown:true};
     }
     return{};
@@ -4530,7 +4535,7 @@ function noIndexRow(el,out,info){
   list.appendChild(row);
   const n=list.childElementCount;
   el.firstElementChild.textContent=
-    tx(info.feat==="fts"?"search.noFTS":"search.noSubstring",{count:n,number:window.wudictI18n.number(n)});
+    tx("search.noIndex",{count:n,number:window.wudictI18n.number(n),what:FEAT_NAME[info.feat]});
   return el;
 }
 

@@ -1,100 +1,109 @@
 ---
 title: Privacy Policy
-description: wuDict2 collects nothing, sends nothing and has no account. This page states exactly what that means, and the one exception.
+description: wuDict2 collects no data about you and has no account. It connects to the internet only to download what you ask for.
 ---
 
 # Privacy Policy
 
-**Effective 30 August 2026.**
+**Effective 3 October 2026.**
 
 This policy covers the **wuDict2** Android app (`com.dmshepeta.wudict2`) and
 the `wudict` program it is built from, on every platform.
 
-## The short version
+## Summary
 
-**wuDict2 collects no data about you, and sends none anywhere.**
+**wuDict2 collects no data about you.**
 
-There is no account, no sign-in, no cloud, no analytics, no advertising, no
-crash reporting and no third-party SDK of any kind. The app has no server to
-talk to. Your dictionaries, your searches and your settings never leave your
-device.
+There is no account, no sign-in, no cloud service, no analytics, no advertising,
+no crash reporting and no third-party SDK. Your dictionaries, your searches and
+your settings stay on your device.
 
-This is a property of how the program is built rather than a promise about how
-we behave: wuDict2 runs a small web server *inside the app itself*, bound to
-`127.0.0.1`, and shows its pages in a WebView. The `INTERNET` permission you see
-in the Play listing exists so the app can reach that server on your own device.
-It is the only permission this build declares.
+wuDict2 runs a web server inside the app, bound to `127.0.0.1`, and shows its
+pages in a WebView. The app connects to the internet only to download something
+you asked for: lemma data, or a dictionary from a link you provide. See
+[Network requests](#network-requests).
 
 ## What the app stores, and where
 
-Everything the app keeps is written to storage that belongs to the app and to no
-one else:
-
 | What | Where |
 | --- | --- |
-| Dictionary files you import | The app's own external files directory |
-| The prepared search index built from them | The same place |
-| Your settings and search history | The same place |
+| Dictionary files | FOSS build: *Internal storage → Dictionaries*, a folder you manage. Google Play build: the app's own external files directory |
+| The search indexes built from them | The app's own external files directory |
+| Downloaded lemma data | The same place |
+| Your settings | The same place |
 
-Nothing is encrypted or uploaded, because nothing leaves the device.
+Nothing is uploaded.
 
 The app declares `allowBackup="false"`, so none of it is copied into Google's
-Auto Backup either. **Uninstalling the app deletes all of it.** You can also
-clear it at any time from Android's *Settings ▸ Apps ▸ wuDict2 ▸ Storage ▸ Clear
-storage*, which removes the whole library, the imported dictionaries and the
-settings in one step.
+Auto Backup. **Uninstalling the app deletes everything in its own directory.**
+You can also clear it at any time from Android's *Settings → Apps → wuDict2 →
+Storage → Clear storage*. In the FOSS build, *Internal storage → Dictionaries*
+is yours and is not deleted.
 
 ## Permissions
 
-This build declares four permissions, none of which grants access to anything
-about you:
+Both builds declare:
 
-- **`INTERNET`** — used solely to connect to the wuDict2 server running inside
-  the app on `127.0.0.1`.
-- **`FOREGROUND_SERVICE`** and **`FOREGROUND_SERVICE_DATA_SYNC`** — granted at
-  install time, with no prompt. They let preparing a dictionary keep running
-  while you are in another app, instead of being killed halfway through.
-- **`POST_NOTIFICATIONS`** — the only one you are ever asked about, and only the
-  first time a dictionary is prepared. It shows the progress notification for
-  that work. Decline it and everything still works; you simply will not see the
-  progress.
+- **`INTERNET`**: to connect to the wuDict2 server inside the app on
+  `127.0.0.1`, and for the downloads listed under
+  [Network requests](#network-requests).
+- **`FOREGROUND_SERVICE`** and **`FOREGROUND_SERVICE_DATA_SYNC`**: granted at
+  install time, with no prompt. They keep indexing or a download running
+  while you use another app.
+- **`POST_NOTIFICATIONS`**: the only permission you are asked for, and only the
+  first time a dictionary is indexed. It shows the progress notification for
+  that work. If you decline, everything still works without the notification.
 
-It declares **no storage permission at all**. Dictionaries are imported through
-Android's system file picker (the Storage Access Framework), which gives the app
-access to the one file you chose and nothing else. The app cannot read, list or
-scan your storage.
+The FOSS build (GitHub, Obtainium) also declares:
 
-It requests no location, no contacts, no camera, no microphone, no phone state
-and no identifiers. It does not read the clipboard, and it does not use the
+- **`MANAGE_EXTERNAL_STORAGE`** (*All files access*): to read dictionaries from
+  *Internal storage → Dictionaries*. `READ_EXTERNAL_STORAGE` (Android 12 and
+  older) and `WRITE_EXTERNAL_STORAGE` (Android 10 and older) are the older
+  forms of the same access.
+
+The Google Play build declares no storage permission. Dictionaries are imported
+through Android's system file picker (the Storage Access Framework), which
+grants access to the one file you choose. The app cannot read, list or scan
+your storage.
+
+Neither build requests location, contacts, camera, microphone, phone state or
+device identifiers. The app does not read the clipboard and does not use the
 Advertising ID.
 
-## The one exception: dictionary content
+## Network requests { #network-requests }
 
-Dictionary files are authored by third parties, and an article inside one can
-contain a link or a reference to something on the internet.
+wuDict2 makes a network request only in these cases:
 
-- **Links.** Tapping an external link hands it to your browser. wuDict2 does
-  not open it and does not follow it.
-- **Embedded remote resources.** If a dictionary's article references an image,
-  font or script by an `http://` or `https://` address instead of bundling it,
-  your device will request that address while the article is displayed, and the
-  server at the other end will see your IP address the way any web request does.
+- **Lemma data.** The Lemmatization page reads the language catalogue from
+  `raw.githubusercontent.com/wuweidict/lemmas`, and installing a language
+  downloads its file from there.
+- **Dictionaries from a link.** A link you paste, drop or share into the app,
+  pointing to a dictionary, an archive, a web folder or a Nextcloud share, is
+  downloaded from the server it names.
+- **Dictionary content.** Dictionaries are authored by third parties. If an
+  article references an image, font or script by an `http://` or `https://`
+  address instead of bundling it, the WebView requests that address while the
+  article is displayed. This is uncommon: most dictionary files bundle their
+  media.
 
-This is the dictionary's doing, not the app's, and it is uncommon — a
-self-contained dictionary file bundles its own media. If it matters to you, the
-app works fully with the network turned off; only such embedded references will
-fail to load.
+A tapped external link opens in your browser; wuDict2 does not follow it.
+
+The server at the other end of each request sees your IP address, as with any
+web request. wuDict2's own requests identify themselves as `wudict` and carry
+nothing else about you or your device.
+
+With the network turned off, everything except these downloads works.
 
 ## Data collected by Google Play
 
 Distributing through Google Play means Google collects information about
 installs, and receives crash and ANR reports from Android itself, under
 [Google's own privacy policy](https://policies.google.com/privacy). We can see
-that only as aggregate statistics in the Play Console — install counts, device
+that only as aggregate statistics in the Play Console: install counts, device
 and country breakdowns, stack traces. It is not collected by the app, we cannot
 connect it to you, and it does not include anything you looked up.
 
-If you install the FOSS build from GitHub instead, none of this applies.
+None of this applies to the FOSS build from GitHub.
 
 ## Children
 
@@ -105,25 +114,24 @@ and contains no advertising and no in-app purchases.
 
 Regulations such as the GDPR and the CCPA give you rights to access, correct,
 export and delete the personal data a service holds about you. **We hold none.**
-There is no account to close, no profile to export and no record to delete,
-because none was ever created. Every byte the app produced is on your device and
-under your control.
+There is no account to close, no profile to export and no record to delete.
+Everything the app produces is on your device.
 
 ## Open source
 
-wuDict2 is free software under the GPL-3.0-or-later. The claims on this page
-are checkable: the source is public, and so is the build.
+wuDict2 is free software under the GPL-3.0-or-later. The source is public, so
+every statement on this page can be checked.
 
 - Source: [github.com/wuweidict/wudict](https://github.com/wuweidict/wudict)
 
 ## Changes to this policy
 
-If this policy ever changes, the effective date at the top changes with it and
-the previous text stays in the repository's history. A change that affected what
-the app collects would arrive with an app update, not quietly.
+If this policy changes, the effective date at the top changes with it, and the
+previous text stays in the repository's history. A change to what the app
+collects would arrive with an app update.
 
 ## Contact
 
-Questions about this policy, or about anything on this page:
+Questions about this policy:
 
 - [Open an issue](https://github.com/wuweidict/wudict/issues)

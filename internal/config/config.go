@@ -66,7 +66,7 @@ type Config struct {
 	// A setting for the one case it is right for: a wudict reachable from a
 	// LAN, where an unauthenticated caller could
 	// otherwise point the download anywhere the host machine can reach.
-	ImportURLHosts []string // IMPORT_URL_HOSTS: comma-separated
+	ImportURLHosts []string // IMPORT_URL_HOSTS: comma-separated, or a TOML array
 	// ImportInsecure (IMPORT_INSECURE=1) lifts the two refusals a download
 	// makes on its own: plain http, and a host that resolves to a private,
 	// loopback or link-local address. The second matters because this server
@@ -1006,14 +1006,23 @@ func normalizeImportKeep(v string) string {
 	}
 }
 
-// ParseHostList splits a comma-separated host list into the spelling the
-// matcher compares against: lower-cased, trimmed, no empty entries, and with
-// any leading dot or "*." removed - both are how a person writes "and its
-// subdomains", which is what a bare host already means here.
+// ParseHostList splits a host list into the spelling the matcher compares
+// against: lower-cased, trimmed, no empty entries, and with any leading dot or
+// "*." removed - both are how a person writes "and its subdomains", which is
+// what a bare host already means here. It accepts a comma-separated string
+// (the environment, or a TOML string) and the TOML array wudict.toml spells
+// lists with, which reaches here as its raw text, brackets and quotes
+// included - as ParseOrigins does for the origin lists.
 func ParseHostList(v string) []string {
+	v = strings.TrimSpace(v)
+	if strings.HasPrefix(v, "[") {
+		v = strings.Trim(v, "[]")
+	}
 	var out []string
-	for _, f := range strings.Split(v, ",") {
-		h := strings.ToLower(strings.TrimSpace(f))
+	for _, f := range strings.FieldsFunc(v, func(r rune) bool {
+		return r == ',' || r == ';' || r == ' ' || r == '\t' || r == '\n' || r == '\r'
+	}) {
+		h := strings.ToLower(strings.Trim(f, "\"'`"))
 		h = strings.TrimPrefix(h, "*.")
 		h = strings.Trim(h, ".")
 		// A pasted origin rather than a host: take the host out of it instead

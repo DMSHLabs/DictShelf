@@ -1,188 +1,184 @@
 ---
 title: Android app
-description: Install WuWeiDict on Android, point it at your Dictionaries folder, and look up a selected word from inside any other app.
+description: wuDict2 for Android - the two builds, adding dictionaries, looking up a word from another app, settings, battery and memory.
 ---
 
 # Android app
 
-<style>
-.md-typeset .badges{display:flex;flex-wrap:wrap;gap:.6rem;align-items:center;justify-content:center}
-.md-typeset .badges img{height:80px;width:auto;max-width:none}
-</style>
-
 wuDict2 is an Android fork of [WuWeiDict](https://github.com/wuweidict/wudict)
 with a separate application ID, `com.dmshepeta.wudict2`.
 
-Search your `.mdx` `.slob` `.bgl` `.dsl` `.ifo` `.zim` dictionaries on the phone.
+wuDict2 searches `.mdx`, `.ifo`, `.slob`, `.dsl`, `.bgl`, `.zim` and `.wudict.md`
+dictionaries on the phone. The app runs the wudict server on the phone's
+loopback address and shows its pages; network use is listed in the
+[Privacy Policy](../privacy_policy.md#network-requests).
 
-The app is a small window around the same server the desktop runs. There is no
-account, no upload and no network traffic: the server listens on the phone's
-own loopback address, and the window reads from there.
+Requires Android 8.0 or later on a 64-bit ARM (`arm64`) device.
 
-**You need** Android 8.0 or newer on a 64-bit (`arm64`) device. Every phone
-sold since about 2017 should be able to run wudict.
+## Builds
 
-## Install
+| | FOSS build (GitHub, Obtainium) | Google Play build |
+| --- | --- | --- |
+| Dictionary folder | *Internal storage → Dictionaries* | none: dictionaries are imported into the app |
+| Storage permission | *All files access* | none |
+| Reachable from other devices (testing) | optional, in Settings | no |
 
-1.  Build **`wudict2-android-arm64-v8a-foss.apk`** (or the unsigned variant) with
-    `build-android.cmd release` on Windows. Sign an unsigned APK before installing.
-2.  Open the file in your file manager or in the download notification.
-3.  Android asks once to allow *install unknown apps* for that file manager.
-    Allow it, then confirm the install.
+## Install the FOSS build
 
-## Grant the storage access (wudict FOSS version only)
+1.  Build **`wudict2-android-arm64-v8a-foss.apk`** with
+    `build-android.cmd release` on Windows. Sign an unsigned APK before
+    installing.
+2.  Open it from the file manager or the download notification. Android asks
+    once to allow *Install unknown apps* for that app.
+3.  On first start, choose <kbd>Grant access</kbd>, then turn on
+    <kbd>All files access</kbd>. With <kbd>Later</kbd> the app starts without
+    dictionaries and asks again on the next start.
 
-The app asks for storage access on first run. Choose <kbd>**Grant access**</kbd>,
-then turn on <kbd>**All files access**</kbd> on the next screen.
+## Add dictionaries
 
-The app reads dictionaries from a folder that is not its own — *Internal
-storage ▸ Dictionaries* — and Android requires a special 
-permission in this case (the google play flavour uses [SAF](https://developer.android.com/guide/topics/providers/document-provider) instead).
+### FOSS build
 
-Choosing **Later** is safe. The server still starts, and reports an empty
-dictionary folder. The app asks again the next time you open it.
+Copy the dictionary files to *Internal storage → Dictionaries* with a file
+manager, over USB, or with `adb push`. Subfolders are read. Then
+<kbd>☰</kbd> → folder summary → <kbd>Rescan folders</kbd>.
 
-## Copy your dictionaries (Android FOSS version only)
+Copy every file of a dictionary:
 
-Put the dictionary files, for example, in **Internal storage ▸ Dictionaries**. Use a file manager, a USB
-cable, or `adb push`.
+| Format | Files |
+| --- | --- |
+| MDict | `*.mdx`, and `*.mdd` if present |
+| StarDict | `*.ifo`, `*.idx`, `*.dict` or `*.dict.dz`, `*.syn` if present |
+| Aard 2 | `*.slob` |
+| Lingvo DSL | `*.dsl` or `*.dsl.dz`, and `*.dsl.files.zip` if present |
+| Babylon | `*.bgl` |
+| ZIM | `*.zim` |
 
-Subfolders are read too so you can organize the folders according to your needs.
+A subfolder named by a language code, such as `es/`, sets the language of the
+dictionaries in it, which lemmatization needs when a dictionary declares none
+([language detection](../reference/configuration.md#lemmatization)).
 
-**IMPORTANT**: The folder structure can be used for lemmatization — for dictionary formats that do not specify the headword language
-and which do not contain a valid language prefix in their file name, such as e.g. `es-fr-larousse.slob`, a parent folder
-such as `es` can serve as a language hint for lemmatization.
+### Google Play build
 
-Copy every part of a dictionary, not only the main file:
+On first start, <kbd>Import dictionaries</kbd> → <kbd>Choose folder</kbd>
+copies a folder's dictionaries into the app, then offers to delete the
+originals. Dictionaries in `Android/data/com.dmshepeta.wudict2/files/Dictionaries`
+on a microSD card are read without importing.
 
-| Format | Copy                                                          |
-| --- |---------------------------------------------------------------|
-| MDX | `*.mdx`, and `*.mdd` if there is one                          |
-| StarDict | `*.ifo`, `*.dict` (or `.dict.dz`), `*.idx`, `*.syn`           |
-| Slob | `*.slob`                                                      |
-| DSL | `*.dsl` (or `.dsl.dz`), and the `*.files.zip` if there is one |
-| BGL | `*.bgl`                                                       |
+### Both builds
 
-Open the app, open the <kbd>**☰**</kbd> panel and tap <kbd>**♻️ Rescan folders**</kbd>. New
-dictionaries appear in the list.
-
-**Verify:** the dictionary list in the <kbd>☰</kbd> panel names your files..
+Share a dictionary file, an archive or a link to wuDict2, or open one with
+wuDict2: the **Add dictionaries** dialog lists what it contains and installs the
+ones you tick. The setup page's **Add dictionaries** does the same for a file
+or a pasted link.
 
 ## Look up a word from another app
 
-You do not have to switch apps to read a definition. Four ways in, all
-producing the same floating window over what you were reading:
+-   **Text selection menu**: select a word; the menu shows **wuDict2** next to
+    *Copy*.
+-   **Share menu**: <kbd>Share</kbd> → <kbd>wuDict2</kbd>, for apps without the
+    selection menu entry or for a longer passage.
+-   **A reading app's dictionary button**: see the table below.
+-   **A `wudict://lookup?q=word` link**: from automation apps, note apps and
+    scripts.
 
--   **Select the word you want to look up** — the selection toolbar should have a <kbd>**wuDict2**</kbd> entry, next
-    to *Copy* and *Translate*.
--   **Share the selection.** Use <kbd>**Share**</kbd> → <kbd>**wuDict2**</kbd> when an app hides the
-    toolbar, or when the passage spans several paragraphs.
--   **Use your reading app's dictionary button.** Set wuDict as the reader's
-    dictionary once, as described in the next section.
--   **Open a `wudict://lookup?q=word` link.** For automation apps, note apps
-    and scripts.
-
-Back, or a tap outside the window, returns to the original screen. The window is not
-kept in the recents list.
+The lookup opens in a floating window. Back, or a tap outside it, closes it;
+it is not listed in Recents. Settings → *Look up in the full app* opens the
+full app instead, per source.
 
 ``` sh title="from Termux or Tasker"
 am start -a android.intent.action.VIEW -d "wudict://lookup?q=phubbing"
 ```
 
 The link also takes `mode=exact|prefix|contains|fts`, `dict=<name>`, and
-`full=1` to open the full app, or `full=0` to force the popup.
+`full=1` (full app) or `full=0` (floating window).
 
-## Use wuDict as a reading app's dictionary
+## Reading apps
 
 | Reader | What to choose |
 | --- | --- |
-| **Moon+ Reader** | *ColorDict3* (listed as ColorDict/BlueDict/GoldenDict), *Lingvo*, *Fora* or *YunCi*; or *Customized*, with the URL `wudict://lookup?q=%s`; or wuDict from its list of installed apps |
-| **ReadEra** | wuDict, from its list of dictionary and translator apps |
-| **Librera Reader** | wuDict, from its dictionary list; it is listed more than once, and any of the entries works |
+| **Moon+ Reader** | *ColorDict3* (listed as ColorDict/BlueDict/GoldenDict), *Lingvo*, *Fora* or *YunCi*; or *Customized*, with the URL `wudict://lookup?q=%s`; or wuDict2 from its list of installed apps |
+| **ReadEra** | wuDict2, from its list of dictionary and translator apps |
+| **Librera Reader** | wuDict2, from its dictionary list; it is listed more than once, and any of the entries works |
 | **FBReader** | *ColorDict 3*, *ABBYY Lingvo* or *Dictan* |
 | **KnownReader** | *ColorDict new / GoldenDict (minicard)* for the popup, *ColorDict new / GoldenDict* for the full app; *Aard 2* and *Dictan* also work, even when listed as not installed |
-| **Prestigio eReader** | *ColorDict* or *ABBYY Lingvo*, then wuDict |
-| **Readest, Book's Story, Lithium, Aldiko** | wuDict; these list the apps of the selection menu |
+| **Prestigio eReader** | *ColorDict* or *ABBYY Lingvo*, then wuDict2 |
+| **Readest, Book's Story, Lithium, Aldiko** | wuDict2; these list the apps of the selection menu |
 | **KOReader** | see below |
 | **CoolReader** | *ColorDict new / GoldenDict*, *Aard 2 Dictionary* or *Dictan* |
 | **Kindle, Google Play Books, Kobo** | none: they offer no outside dictionary |
 
 If the app a reader names (GoldenDict, Aard2, Lingvo, Fora, QuickDic, YunCi,
 Dictan) is also installed, Android asks which app to use the first time;
-choose wuDict and *Always*.
+choose wuDict2 and *Always*.
 
 **KOReader** reads its list of outside dictionaries from a file you can
 replace. Create `koreader/dictionaries.lua` in internal storage:
 
 ``` lua title="koreader/dictionaries.lua"
 return {
-    { "wudict", "wuDict", false, "com.legbehindneck.wudict", "search" },
+    { "wudict", "wuDict2", false, "com.dmshepeta.wudict2", "search" },
 }
 ```
 
 The file replaces KOReader's built-in list, so add back any dictionary app you
 still use. Then, in KOReader: *Dictionary settings* → check *Use external
-dictionary* → *Dictionary: wuDict*.
+dictionary* → *Dictionary: wuDict2*.
 
-## Where the app keeps its files
+## Settings
 
-| What | Where |
+Long-press the app icon → **Settings**.
+
+| Section | Settings |
 | --- | --- |
-| Your dictionaries | *Internal storage ▸ Dictionaries* |
-| Config file, prepared library | `Android/data/com.dmshepeta.wudict2/files` |
+| Look up in the full app | per source: text selection menu, share menu, a reading app's dictionary button, links and automation |
+| Screen | what fills the screen edges (margin colour), which system bars hide while you read |
+| Access | *Only this app may change your dictionaries*: other apps on the phone can look words up but not import, index, remove or change settings |
+| Advanced | uncompressed storage, memory one search may use, memory for dictionaries not indexed, dictionaries indexed at once, server port; FOSS build: *Reachable from other devices (testing only)* |
 
-The second folder is app-owned. It survives updates and is deleted when you
-uninstall the app; your *Dictionaries* folder stays intact.
+## Files
 
-??? info "Reaching the app folder to edit `wudict.toml`"
+| File types                                           | Location                                      |
+|------------------------------------------------------|-----------------------------------------------|
+| Dictionaries, FOSS build                             | *Internal storage → Dictionaries*             |
+| Imported dictionaries, settings, library, lemma data | `Android/data/com.dmshepeta.wudict2/files` |
 
-    Android 11 and newer hide `Android/data` from other file managers. Two
-    routes still work:
+Uninstalling the app deletes `Android/data/com.dmshepeta.wudict2`;
+*Internal storage → Dictionaries* remains. Android 11 and later hide
+`Android/data` from other file managers: reach it over USB (*File transfer*)
+or with `adb pull` and `adb push`. The dictionary panel and Settings cover the
+usual settings, so `wudict.toml` rarely needs editing; all keys are in
+[Configuration](../reference/configuration.md).
 
-    -   a USB cable, with the phone set to *File transfer*;
-    -   `adb pull` and `adb push` over USB debugging.
+## Remove dictionaries
 
-    Most settings do not require adb. The <kbd>☰</kbd> panel writes what a phone user normally
-    changes, and the full key list is in
-    [Configuration](../reference/configuration.md).
-
-## Removing dictionaries
-
-Click or tap <kbd>**☰**</kbd>, find the dictionary, and tap its **file row** (e.g. `Oxford.mdx`) to expand it —
-this will reveal <kbd>**🗑 Remove…**</kbd>. The panel
-shows how much disk space the dictionary takes on your phone. There is no way to undo the <kbd>Delete all</kbd> action! — see
-[Removing a dictionary](../dictionaries/library.md#removing-a-dictionary) for details.
-
+<kbd>☰</kbd> → the dictionary's file row (e.g. `Oxford.mdx`) →
+<kbd>🗑 Remove…</kbd>. The file row shows the disk space the dictionary uses.
+See [Remove a dictionary](../dictionaries/library.md#remove-a-dictionary).
 
 ## Battery and memory
 
-The app is built to preserve battery and minimize resource usage.
+-   While the app is not visible, the server uses one CPU core, starts no new
+    indexing, and closes the dictionaries it can reopen; indexed dictionaries
+    stay open. Indexing, downloads and rebuilds already running continue in a
+    foreground service with a notification.
+-   Android memory defaults are lower than on a desktop:
+    [`MEMORY_LIMIT`](../reference/configuration.md#memory_limit) is 1/16 of the
+    device's RAM (192–384 MiB),
+    [`PREVIEW_MEMORY`](../reference/configuration.md#preview_memory) a third of
+    it, [`SEARCH_MEMORY`](../reference/configuration.md#search_memory) equal to
+    it, and [`MORPH_CACHE`](../reference/configuration.md#morph_cache) `1`.
+-   The keyboard hides when you scroll an article.
 
--   Off screen, the server uses one core instead of all of them.
--   [`MEMORY_LIMIT`](../reference/configuration.md#memory_limit) is set on
-    Android - a sixteenth of the device's RAM, between 192 MB and 384 MB - and
-    unset on a desktop, where the machine manages its own memory.
--   [`PREVIEW_MEMORY`](../reference/configuration.md#preview_memory), what
-    dictionaries that are not yet prepared may hold open between searches, is a
-    third of that (**64-128 MB**) against 1 GB on a desktop.
--   [`MORPH_CACHE`](../reference/configuration.md#morph_cache) is **1** on
-    Android against 2 on a desktop: one language of
-    [word-form data](../start/search.md#inflected-words) is held at a time, and
-    a second language displaces it rather than adding to it.
--   The keyboard hides as soon as you scroll an article, which gives the
-    definition the full screen.
+## Differences from the desktop
 
-
-## What is different from the desktop
-
-| | Desktop                                                  | Android |
-| --- |----------------------------------------------------------| --- |
-| Dictionary folder | anywhere you choose                                      | *Internal storage ▸ Dictionaries* |
-| Speex `.spx` audio | works                                                    | works in the released build |
-| Browser extension | yes                                                      | no; the selection toolbar replaces it |
-| Command line | yes                                                      | no |
-| Word forms for other languages | the <kbd>🔤 Lemmatization</kbd> page, or `wudict lemmas` | the page only |
+| | Desktop | Android |
+| --- | --- | --- |
+| Dictionary folders | any, set on the setup page | FOSS: *Internal storage → Dictionaries*; Play: imported |
+| Speex `.spx` audio | `-cgo` builds; `-purego` with `speexdec` | built in |
+| Browser extension | yes | no; the text selection menu replaces it |
+| Command line | yes | no |
+| Lemma data | Lemmatization page or `wudict lemmas` | Lemmatization page |
 
 ## Next
 
-[Search: search types](../start/search.md){ .md-button }
+[Search](../start/search.md){ .md-button }

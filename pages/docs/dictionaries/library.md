@@ -1,141 +1,132 @@
 ---
 title: The library
-description: How wuDict prepares a dictionary, what a library folder contains, and how to move, copy or remove one.
+description: Indexing, library folders, moving a dictionary, outdated indexes, and removing dictionaries, indexes and orphans.
 ---
 
 # The library
 
-**The library** is where wuDict keeps its own indexes.
-Its default folder is `~/.wudict/db`.
+The **library** (`~/.wudict/db`, [`DB_DIR`](../reference/configuration.md#db_dir))
+holds wudict's indexed copy of each dictionary: one library folder per
+dictionary.
 
-## The three stages
+## Indexing
 
-| Stage | What wuDict uses                       | What works |
-| --- |----------------------------------------| --- |
-| **Preview** | the dictionary's own file and index    | exact and prefix search |
-| **Prepared** | `text.db` in the library folder        | exact and prefix, faster, with far less memory |
-| **Extended** | the same `text.db`, with extra indexes | contains and full-text as well |
+| State | Searched via               | Modes |
+| --- |----------------------------| --- |
+| not indexed | the dictionary files       | exact, prefix |
+| indexed | `text.db` (headword index) | exact, prefix; faster, less memory |
+| + contains index | the same `text.db`         | + contains |
+| + full-text index | the same `text.db`         | + full-text |
 
-Preview starts the moment wuDict finds the file. Preparation starts on the
-first search and runs in the background. Full-text and `contains` search indexes can be enabled on-demand 
-only for the dictionaries where you need them, via the <kbd>☰</kbd> dictionary panel.
+A dictionary is searchable as soon as wudict finds it. On its first search
+wudict indexes its headwords in the background
+([`AUTO_INDEX`](../reference/configuration.md#auto_index)), one dictionary at a
+time ([`INDEX_WORKERS`](../reference/configuration.md#index_workers)). With
+`AUTO_INDEX = off`, dictionaries stay not indexed and use more memory and CPU.
 
-Headword indexing is automatic by default. Set
-[`AUTO_INDEX`](../reference/configuration.md#auto_index) to `off` if you want to disable auto-indexing 
-(not recommenced — while it might save a few megabytes of disk space this will cause higher CPU and RAM usage).
+Lingvo DSL, Babylon and wudict markdown are indexed when first opened: they
+have no index of their own. ZIM is never indexed automatically: its own index
+answers exact and prefix search with little memory, and an indexed copy is
+several times the size of the file. Index a ZIM from the dictionary panel to
+use contains, full-text or a media pack.
 
-By default only one dictionary is indexed at a time to preserve RAM and CPU. You can increase the number of
-parallel indexing threads via the
-[`INDEX_WORKERS`](../reference/configuration.md#index_workers) parameter.
+The contains index, the full-text index and the media pack are added per
+dictionary with its switches in the dictionary panel, or with
+[`wudict ingest`](#index-from-the-terminal).
 
-## What a library folder holds
+## Library folder
 
-``` text title="~/.wudict/db"
-~/.wudict/db/
-  Webster/
-    text.db     articles and the search indexes
-    media.db    audio and images - only if you clicked "pack media"
-    info.txt    what this is and where it came from
-    res/        optional: your replacement files
+``` text title="~/.wudict/db/Oxford/"
+text.db     articles and indexes
+media.db    media pack, if added
+info.txt    source and build details
+res/        resource overrides (optional)
 ```
 
-`text.db` alone is a complete dictionary. Without `media.db`, audio and images
-are read from the original files if they are present.
+`text.db` alone is a complete dictionary. Without `media.db`, images and audio
+are read from the dictionary files, if present. Both are SQLite databases;
+[The text.db format](../reference/text-db.md) documents the schema.
 
-Both are ordinary SQLite databases, and the database schemas are documented in
-[The text.db format](../reference/text-db.md).
-
-Article text is compressed, so a prepared folder is usually smaller than the
-file it came from. Set
-[`NO_COMPRESS`](../reference/configuration.md#no_compress) to disable compression
-for the definitions stored in the SQLite3 database. That makes the database roughly three times larger.
+Article text is DEFLATE-compressed, so an indexed dictionary is usually smaller
+than its dictionary files.
+[`NO_COMPRESS`](../reference/configuration.md#no_compress) stores it
+uncompressed, about 3 times larger.
 
 ## Move a dictionary to another machine
 
-1. Copy the whole folder, for example `~/.wudict/db/Oxford`.
-2. Put it in the other machine's library folder, or in any folder that machine
-   scans.
-3. Search. The original dictionary file is not needed.
+1. Copy the library folder, e.g. `~/.wudict/db/Oxford`.
+2. Put it in the other machine's library, or in one of its dictionary folders.
+3. Search. The dictionary files are not needed; without `media.db` there are no
+   images or audio.
 
-## Prepare from the terminal
+## Index from the terminal
 
-``` sh title="prepare everything, no browser"
-wudict ingest            # your dictionary folders
-wudict ingest ~/Dicts    # or one folder
+``` sh
+wudict ingest                    # the dictionary folders (DICT_DIR)
+wudict ingest ~/Dictionaries/es  # one folder
 ```
 
-`ingest` skips what is already prepared and, like the app, gives a new
-dictionary the headword index only. Add `-fulltext` for the full-text index,
-`-contains` for the substring index, and `-full` to pack media as well. A flag
-you leave out keeps what each prepared dictionary already has.
+`ingest` skips dictionaries already indexed and gives a new dictionary the
+headword index only, as the app does. `-contains` and `-fulltext` add those
+indexes, `-full` also adds the media pack, `-contains=false` and
+`-fulltext=false` remove them. A flag left out keeps what each dictionary has.
+See [`ingest`](../reference/cli.md#ingest).
 
-## Removing a dictionary
+## Outdated indexes
 
-Open the <kbd>☰</kbd> panel and find the dictionary. Click the **file row** (e.g. `oald10.mdx`), 
-just above <kbd>*About this dictionary*</kbd> — to expand it. It
-lists every path that belongs to this dictionary, and the <kbd>**🗑 Remove…**</kbd> button.
+An index is outdated when an older version of wudict built it, or when the
+dictionary files changed since. The dictionary panel then shows *N dictionaries have outdated indexes* and <kbd>Rebuild</kbd>;
+[`wudict reindex`](../reference/cli.md#reindex) does the same from a terminal.
+A rebuild keeps each dictionary's indexes and media pack. <kbd>Stop</kbd> ends
+it after the current dictionary.
 
-Clicking it turns the row into a confirmation that names what each choice
-takes:
+## Remove a dictionary
 
-| Choice                               | What goes |
-|--------------------------------------| --- |
-| <kbd>**💥 delete everything**</kbd>  | the prepared index *and* the dictionary files |
-| <kbd>**index only**</kbd>            | the library folder; the dictionary files stay and can be prepared again |
-| <kbd>**dictionary files only**</kbd> | the source files, once the prepared copy can stand alone (media packed) |
+<kbd>☰</kbd> → the dictionary's file row (e.g. `oald10.mdx`) →
+<kbd>🗑 Remove…</kbd>. The confirmation offers:
 
-Deleting everything is the default on purpose. With
-[`AUTO_INDEX`](../reference/configuration.md#auto_index) on, deleting only the
-index of a dictionary whose file is still in a scanned folder frees the space
-until the next search rebuilds it.
+| Choice | Deletes |
+| --- | --- |
+| <kbd>💥 delete everything</kbd> | the library folder and the dictionary files |
+| <kbd>index only</kbd> | the library folder; the dictionary files stay |
+| <kbd>dictionary files only</kbd> | the dictionary files; offered when the library folder is complete (media pack added, or no media) |
 
-**↩ cancel** backs out and puts the file list back as it was.
+After *index only*, a dictionary still in a dictionary folder is indexed again
+on its next search ([`AUTO_INDEX`](../reference/configuration.md#auto_index)).
 
-!!! danger "There is no undo"
+!!! warning "Deletion is permanent"
 
-    Files are unlinked, not moved to the Trash or the Recycle Bin. wuDict
-    cannot bring them back, and neither can the panel.
+    Files are unlinked, not moved to the Trash or the Recycle Bin.
 
-This is available on every platform. Deleting from another machine over the
-network is a separate switch —
-[`ALLOW_REMOTE_DELETE`](../reference/configuration.md#allow_remote_delete),
-OFF by default.
+When running wudict on a LAN, from another host, removal needs
+[`ALLOW_REMOTE_DELETE`](../reference/configuration.md#allow_remote_delete).
 
-## Removing FTS and contains indexes
+## Remove an index
 
-Turn an index off with the same <kbd>☰</kbd> panel switch that turned it on.
+Click the corresponding switch in the dictionary panel. When the dictionary files are gone,
+the switches are locked: the library folder is the only copy.
 
-``` sh title="two commands that delete"
-wudict clean            # list broken or leftover library items, and orphans
-wudict clean -f         # delete the leftovers
-wudict clean -f -orphans # and the orphans too
-wudict rm Webster        # list what removing "Webster" would delete
-wudict rm -f Webster     # delete the library folder AND the original files
+## Orphans
+
+An **orphan** is a library folder whose original dictionary files are gone.
+<kbd>Rescan folders</kbd> lists orphans with their sizes: ticked ones are
+deleted, unticked ones are kept and not listed again. A dictionary file moved
+within the dictionary folders is not an orphan; its library folder follows it.
+A library folder kept with *dictionary files only* is never listed.
+[`USE_CACHED`](../reference/configuration.md#use_cached) lists orphans as
+ordinary dictionaries.
+
+## From the terminal
+
+``` sh
+wudict clean               # list broken or incomplete library folders, and orphans
+wudict clean -f            # delete the broken ones
+wudict clean -f -orphans   # and the orphans
+wudict rm Oxford           # list what removing Oxford would delete
+wudict rm -f Oxford        # delete the library folder and the dictionary files
 ```
 
-Both commands list what they would do and delete nothing until you add `-f`.
+`rm -keep-source` deletes only the library folder, `rm -keep-index` only the
+dictionary files. Neither command deletes anything without `-f`.
 
-`rm` takes `-keep-source` to delete only the prepared folder, or `-keep-index`
-to delete only the originals.
-
-[Full CLI reference](../reference/cli.md){ .md-button }
-
-## Dictionaries whose originals are gone
-
-When you delete a dictionary's files via the system file manager or CLI
-their indexes still remain in the wudict database.
-To identify orphan indexes whose source files are gone, open the dictionary panel <kbd>☰</kbd>  
-and click <kbd>**Rescan folders**</kbd>, and
-wuDict will lists all internal databases whose sources don't exist anymore.
-
-A dictionary file you **moved** to another place in your dictionary folders is
-not listed. The rescan detects it was moved and not deletex, so it is
-not re-indexed.
-
-Deleting only the dictionary files with **dictionary files only** keeps the
-prepared data on purpose, so that dictionary is never listed either.
-
-wuDict lists a prepared dictionary only when its original file is still in a
-scanned folder. To list every prepared dictionary regardless, switch
-[`USE_CACHED`](../reference/configuration.md#use_cached) on, or click **Use
-these dictionaries** on the setup page.
+[Command line reference](../reference/cli.md){ .md-button }

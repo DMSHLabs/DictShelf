@@ -1,77 +1,65 @@
 ---
-title: Repair a dictionary
-description: Replace a dictionary's broken script, style or media file by putting your own file in its res/ folder.
+title: Resource overrides
+description: Serve your own copy of a dictionary's stylesheet, script, image or audio file from its library folder.
 ---
 
-# Patch a dictionary
+# Resource overrides
 
-**Goal:** replace a file a dictionary ships broken, or supply missing files.
+A **resource override** is a file in a library folder's `res/` subfolder.
+wudict serves it in place of the dictionary's own resource at the same path, or
+in addition, if the dictionary lacks it. Use it to replace a broken stylesheet
+or script, or to supply a missing image.
 
-wuDict looks in the `~/.wudict/db/<dict_dir>/res/` folder
-inside that dictionary's library folder **first**, and uses your file if one is
-there.
+The dictionary files are not modified. Delete the override to restore the
+dictionary's own resource.
 
-## When a resource patch might be needed 
+## Create an override
 
-A dictionary carries its own styles, scripts, images and audio. Some files can be missing of incorrect content. 
+1. Find the library folder: <kbd>☰</kbd> → the dictionary's file row lists its
+   path.
+2. Create `res/` inside it.
+3. Put the file at the path the article requests.
 
-Because a dictionary's own scripts usually load first,
-one bad .js or .css file can distort all articles in that dictionary.
-
-wuDict warns you when it finds a `.js`, `.css`, `.html`, `.json`, `.xml`, `.svg`
-or `.txt` file containing NUL bytes — this byte is not legal in these types of files,
-so it indicates the stored copy is broken.
-
-## How to patch dictionary files
-
-1. Find the dictionary's library folder. The <kbd>☰</kbd> panel shows the path.
-2. Create a `res/` folder inside it.
-3. Put your file there, under **the same path the article asks for**.
-
-``` text title="two replacements and one addition"
-~/.wudict/db/Cambridge English Dictionary Online/
-  text.db
-  res/
-    jquery.js      replaces the dictionary's own copy
-    js/entry.js    supplies a file the dictionary never had
-    css/style.css  replaces the dictionary's stylesheet
+``` text title="~/.wudict/db/Cambridge English Dictionary Online/"
+text.db
+res/
+  jquery.js      replaces the dictionary's copy
+  js/entry.js    supplies a file the dictionary lacks
+  css/style.css  replaces the dictionary's stylesheet
 ```
 
-Subfolders matter. Articles routinely use folders like `js/…` and `css/…` for assets so mirror
-that path exactly.
+The path below `res/` is the path the article requests: an article that loads
+`js/entry.js` needs `res/js/entry.js`.
 
-## Find the resource path
+## Find the requested path
 
-Open your browser's network panel and look for a request to
-`/res/<dictionary_id>/<name>`. The `<name>` part is the path you must mirror. A
-404 there is the missing file.
+In the browser's network panel, a resource request reads
+`/res/<dictionary id>/<path>`. `<path>` is the path to use under `res/`; a `404`
+marks a missing resource.
 
-## Verify
+wudict logs a warning when it serves a `.js`, `.css`, `.html`, `.json`, `.xml`,
+`.svg` or `.txt` resource that contains NUL bytes, which these formats cannot
+contain, and names the `res/` path that would override it.
 
-Reload the article. Override files are served without caching, so an edit takes
-effect on the next reload.
+## Serving
 
-To go back to the original, delete your file. Nothing inside the dictionary was
-ever changed.
+Overrides are served with `Cache-Control: no-cache`: a reload shows a changed
+file.
 
-## What a dictionary's scripts can see
+A `.spx` file in `res/` is served as is, not converted to WAV. Browsers cannot
+play Speex: use `.mp3` or `.wav`.
 
-A dictionary that ships scripts runs them in a sandboxed frame of its own. The
-article gets its own document, its own styles and its own scripts, and it cannot
-reach wuDict's page - `parent` is a small fixed surface, not wuDict's own code.
+## Dictionary scripts
 
-Many MDict dictionaries ask their host what it is, usually to detect MDict's
-preview pane. wuDict answers honestly: it is none of them. Any host feature the
-dictionary then asks for reads as empty rather than failing, so the rest of the
-article still works.
+An article that contains scripts is rendered in a sandboxed frame with its own
+document, styles and scripts. Its scripts cannot reach wudict's page; `parent`
+exposes only a small fixed interface.
 
-If a dictionary's own script throws, wuDict marks that dictionary's row with a
-`⚠` - hover it for the message - and writes one line to the browser console. The
-article still renders; the parts that script would have driven do not run. That
-is usually a broken or missing `.js` file, which is what a `res/` override
-fixes.
+Scripts that test for a host application, as many MDict dictionaries do, find
+none. Host functions they call return empty values, and the rest of the article
+works.
 
-## The one exception
-
-A `.spx` file placed in `res/` is served as it is, not converted to WAV.
-Browsers cannot play Speex, so supply `.mp3` or `.wav` instead.
+If a dictionary's script raises an error, the dictionary's result header shows
+⚠ (the tooltip holds the message) and the browser console logs one line. The
+article is displayed without what the script would have done. The usual cause
+is a broken or missing `.js` resource, which an override fixes.

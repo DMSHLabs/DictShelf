@@ -1,104 +1,92 @@
 ---
 title: Windows installer
-description: What the WuWeiDict installer puts on a Windows PC - install modes, the four optional tasks, the tray icon, silent install and uninstall.
+description: The wudict installer for Windows - install modes, optional tasks, the tray icon, upgrades, silent install and uninstall.
 ---
 
 # Windows installer
 
-**Goal:** install WuWeiDict on Windows without deciding where to put a file.
+The installer is optional. It installs the same `wudict.exe` that is offered as
+a separate download, and adds a Start menu entry, an uninstaller and four
+optional actions.
 
-The installer is optional. It carries the same single `wudict.exe` you can
-download on its own; what it adds is a Start-menu entry, an uninstaller, and
-four choices you would otherwise make by hand.
-
-**You need** 64-bit Windows on an x64 processor. The installer refuses to run
-on 32-bit Windows and on Arm64 Windows 10, because that binary cannot execute
-there. For Arm, use the `wudict-windows-arm64-purego.exe` build.
+It runs on 64-bit Windows on x64, and on Arm64 Windows 11 (x64 emulation). On
+other Arm64 systems use `wudict-windows-arm64-purego.exe`.
 
 ## Install
 
 1.  Download **`wudict-windows-x64-setup-<version>.exe`** from
     [the releases page](https://github.com/wuweidict/wudict/releases).
-2.  Run it. Windows shows *Windows protected your PC*, because the file is not
-    signed. Choose **More info**, then **Run anyway**.
+2.  Run it. The file is not code-signed, so Windows shows *Windows protected
+    your PC*: choose **More info**, then **Run anyway**.
 3.  Choose an install mode:
 
     | Mode | Needs | Installs to |
     | --- | --- | --- |
-    | **For all users** (preselected) | administrator rights | `C:\Program Files\wuDict` |
-    | **For me only** | nothing | `%LOCALAPPDATA%\Programs\wuDict` |
+    | **For all users** (default) | administrator rights | `C:\Program Files\wuDict` |
+    | **For me only** | | `%LOCALAPPDATA%\Programs\wuDict` |
 
-4.  Choose which of the four extras you want (next section).
-5.  Finish. Tick **Start wuDict now** to launch it.
+4.  Select the options.
+5.  Finish. **Start wuDict now** starts the server.
 
-**Verify:** the browser opens at [localhost:6888](http://localhost:6888), and a
-**wuDict** icon appears in the notification area.
+The browser opens [localhost:6888](http://localhost:6888), and the **wuDict**
+icon appears in the notification area.
 
-## The four optional tasks
+## Options
 
-| Task | Default | Effect |
-| --- | --- | --- |
-| Create a desktop shortcut | off | an icon on the desktop |
-| Start wuDict at sign-in | off | a Startup entry that runs it with `--no-browser` |
-| Add wuDict to my `PATH` | **on** | `wudict` works in PowerShell and `cmd` |
-| Offer wuDict in *Open with* | **on** | for `.mdx`, `.dsl`, `.slob`, `.bgl` and `.zim` files |
+| Task                        | Default | Effect                                                        |
+|-----------------------------| --- |---------------------------------------------------------------|
+| Create a desktop shortcut   | off | a desktop shortcut                                            |
+| Start wuDict at sign-in     | off | a Startup folder shortcut that runs `wudict.exe --no-browser` |
+| Add wuDict to `%PATH%`      | on | makes `wudict` command available in PowerShell and `cmd`   |
+| Offer wuDict in *Open with* | on | for `.mdx`, `.dsl`, `.slob`, `.bgl` and `.zim` files          |
 
-Every one of them is reversible. Re-run the installer, or clear it by hand; the
-uninstaller removes all four.
+The uninstaller removes all four. *Start wuDict at sign-in* is the same as the
+manual Startup folder shortcut in [Run at startup](../running.md); use one of
+the two.
 
-!!! tip "Start at sign-in is the whole autostart story on Windows"
+## Console or tray
 
-    Ticking that box does what the manual Startup-folder shortcut in
-    [Run at startup](../running.md) does. Do one or the other, not both.
+Started from PowerShell or `cmd`, `wudict.exe` is a console program: it outputs
+to the console and returns an exit code.
 
-## One executable, two behaviours
-
-There is one `wudict.exe`, and how you start it decides what it does.
-
-Started from PowerShell or `cmd`, it is an ordinary command-line program. It
-prints, it pipes, and it returns an exit code.
-
-Started from the Start menu, a shortcut, the desktop icon, or by opening a
-dictionary file, it detaches from the console and shows a **tray icon** in the
-notification area instead. Its log then goes to
+Started from the Start menu, a shortcut, or by opening a dictionary file, wudict
+runs without a console and shows a **tray icon**. The log is written to
 `%LOCALAPPDATA%\wudict\wudict.log`.
 
-The tray icon opens the page, rescans your dictionary folders, opens that
-folder in Explorer, and quits the server.
+| Tray menu | Action |
+| --- | --- |
+| **Open wuDict** | open the page in the browser |
+| **Rescan dictionaries** | re-read the dictionary folders |
+| **Open dictionary folder** | show the dictionary folder in Explorer |
+| **Quit wuDict** | stop the server |
 
-## Upgrading
+## Upgrade
 
-Run the newer installer over the old one. It keeps the install mode you chose
-the first time, and it asks Windows to close a running `wudict.exe` rather than
-failing on a file-in-use error. It does not start the server again afterwards.
-
-Your dictionaries, your config file and the prepared library are untouched by
-an upgrade.
+[Download](https://github.com/wuweidict/wudict/releases/latest) and run the latest installer.
+It keeps the install mode, closes a running
+`wudict.exe`, and does not restart unless asked. Existing dictionary files, `wudict.toml` and the
+library are not changed.
 
 ## Silent install
 
-``` pwsh title="unattended, for all users"
-.\wudict-windows-x64-setup-1.0.0.exe /ALLUSERS /VERYSILENT /NORESTART
+``` pwsh title="all users"
+.\wudict-windows-x64-setup-<version>.exe /ALLUSERS /VERYSILENT /NORESTART
 ```
 
-``` pwsh title="unattended, current user only"
-.\wudict-windows-x64-setup-1.0.0.exe /CURRENTUSER /VERYSILENT /NORESTART
+``` pwsh title="current user"
+.\wudict-windows-x64-setup-<version>.exe /CURRENTUSER /VERYSILENT /NORESTART
 ```
 
-`/ALLUSERS` and `/CURRENTUSER` skip the mode page. A silent install does not
-launch the server at the end.
+`/ALLUSERS` and `/CURRENTUSER` skip the install mode page. A silent install
+does not start the server.
 
 ## Uninstall
 
-Use *Settings ▸ Apps ▸ Installed apps ▸ wuDict ▸ Uninstall*.
-
-It removes the program, the shortcuts, the `PATH` entry and the *Open with*
-associations.
-
-It leaves your data: the dictionary files, `wudict.toml`, the prepared library
-and the log. Delete `%USERPROFILE%\.wudict` yourself if you want those gone
-too.
+<kbd>Settings</kbd> → <kbd>Apps</kbd> → <kbd>Installed apps</kbd> → <kbd>wuDict</kbd> → <kbd>Uninstall</kbd> removes the program,
+the shortcuts, the `PATH` entry and the *Open with* entries. Dictionary files,
+`%USERPROFILE%\.wudict` (settings and library) and the log remain; delete them
+by hand if you no longer need them.
 
 ## Next
 
-[Quick Start: Configure WuWeiDict dictionary folders](../start/first-run.md){ .md-button }
+[Set the dictionary folders](../start/first-run.md){ .md-button }

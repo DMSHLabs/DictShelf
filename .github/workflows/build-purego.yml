@@ -32,8 +32,8 @@ jobs:
           # ── Linux ──────────────────────────────────────────────
           - { goos: linux, goarch: amd64 }
           - { goos: linux, goarch: arm64 }
-          - { goos: linux, goarch: arm, goarm: "7" } # Pi1, Pi2, Zero, Zero W
-          - { goos: linux, goarch: arm, goarm: "6" }
+          - { goos: linux, goarch: arm, goarm: "7" } # Pi2; Pi3+ on a 32-bit OS
+          - { goos: linux, goarch: arm, goarm: "6" } # Pi1, Zero, Zero W
           - { goos: linux, goarch: arm64 } # Pi3, Pi3B+, Zero2, Pi4, Pi5
           # ── Windows ────────────────────────────────────────────
           - { goos: windows, goarch: amd64, ext: ".exe" }

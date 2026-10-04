@@ -6,11 +6,11 @@
     <string name="lookup_starting">Поиск «%1$s»…</string>
     <string name="lookup_empty">Нет текста для поиска</string>
     <string name="lookup_open_app">Открыть в wuDict2</string>
-    <string name="index_channel">Подготовка словарей</string>
-    <string name="index_title">Подготовка словаря</string>
-    <string name="index_text">Создание поискового индекса. Это может занять несколько минут.</string>
+    <string name="index_channel">Индексация словарей</string>
+    <string name="index_title">Индексация словаря</string>
+    <string name="index_text">Создаётся поисковый индекс. Работа продолжится, пока вы пользуетесь другими приложениями.</string>
     <string name="index_import_title">Добавление словарей</string>
-    <string name="index_import_text">Копирование в библиотеку. Это может занять несколько минут.</string>
+    <string name="index_import_text">Копирование во внутреннее хранилище приложения. Продолжится, пока вы пользуетесь другими приложениями.</string>
     <string name="index_download_title">Загрузка словаря</string>
     <string name="index_download_text">Загрузка продолжится, пока вы пользуетесь другими приложениями.</string>
     <string name="settings_short_label">Настройки</string>
@@ -21,13 +21,13 @@
     <string name="found_dictionaries_title">Найденные словари</string>
     <string name="found_dictionaries_empty">Статьи словарей ещё не показаны.</string>
     <string name="settings_no_compress">Хранить словари без сжатия</string>
-    <string name="settings_no_compress_hint">Базы данных станут примерно втрое больше: словарь на 100 МБ займёт около 300 МБ. Чтение немного ускорится — обычно на несколько процентов. Применяется к словарям, подготовленным после изменения настройки. По умолчанию выключено.</string>
+    <string name="settings_no_compress_hint">Проиндексированные словари станут примерно в 3 раза больше: 100 МБ — около 300 МБ. Чтение ускорится на несколько процентов. Действует для словарей, индексируемых с этого момента. По умолчанию: выключено.</string>
     <string name="settings_search_memory">Память для одного поиска</string>
-    <string name="settings_search_memory_hint">Ограничивает память при открытии неподготовленных словарей. Остальные будут отмечены как не просмотренные. Подготовленные словари не ограничиваются. 0 снимает ограничение: поиск в большой неподготовленной библиотеке может занять несколько гигабайт, и Android завершит приложение.</string>
-    <string name="settings_preview_memory">Память для неподготовленных словарей</string>
-    <string name="settings_preview_memory_hint">Память между поисками: примерно 350 байт на заголовочное слово, то есть около 180 000 слов на 64 МБ. При превышении лимита давно не используемые словари закрываются и открываются снова по необходимости. Больший лимит уменьшает число повторных открытий, но увеличивает расход памяти.</string>
-    <string name="settings_index_workers">Словарей для одновременной подготовки</string>
-    <string name="settings_index_workers_hint">Каждый словарь занимает одно ядро и несколько сотен байт памяти на заголовочное слово. Большее число ускоряет подготовку и сильнее нагревает устройство. Для телефона подходит 1.</string>
+    <string name="settings_search_memory_hint">Память, которую поиск может занять на открытие непроиндексированных словарей; сверх неё остальные отмечаются как не проверенные. Проиндексированные словари не ограничены. 0 снимает предел: один поиск по большой непроиндексированной библиотеке занимал 6,3 ГБ, что на телефоне завершает приложение.</string>
+    <string name="settings_preview_memory">Память для непроиндексированных словарей</string>
+    <string name="settings_preview_memory_hint">Непроиндексированные словари остаются открытыми между поисками — около 350 байт на заголовок: 64 МБ вмещают примерно 180 000 заголовков. Сверх предела самые давно не использованные закрываются и открываются заново при необходимости. Больше: меньше переоткрытий, больше памяти.</string>
+    <string name="settings_index_workers">Словарей индексируется одновременно</string>
+    <string name="settings_index_workers_hint">Каждый использует ядро процессора и несколько сотен байт памяти на заголовок во время индексации. Больше — быстрее, но выше расход энергии и нагрев. По умолчанию: 1.</string>
     <string name="settings_server_port">Порт сервера</string>
     <string name="settings_server_port_hint">Меняйте только если порт 6889 уже занят на устройстве. Тема и состояние панели сохраняются для каждого адреса отдельно: при смене порта они сбросятся. По умолчанию: 6889.</string>
     <string name="settings_range">От %1$d до %2$d.</string>
@@ -39,7 +39,7 @@
     <string name="settings_applied">Сервер остановлен. Новые настройки применятся при следующем поиске.</string>
     <string name="settings_close">Закрыть</string>
     <string name="settings_restore">Восстановить настройки</string>
-    <string name="settings_restore_confirm">Сбросить все расширенные настройки и вернуться к значениям из файла настроек?</string>
+    <string name="settings_restore_confirm">Сбросить все дополнительные настройки и использовать значения из wudict.toml?</string>
     <string name="settings_restore_done">Расширенные настройки сброшены.</string>
     <string name="settings_cancel">Отмена</string>
     <string name="intake_title">Добавить словари</string>
@@ -52,7 +52,7 @@
     <string name="intake_needs_found">%1$s — требуется %2$s, найден ниже</string>
     <string name="intake_update">%1$s — заменит вашу копию</string>
     <string name="intake_same">%1$s — уже установлен</string>
-    <string name="intake_stale">%1$s — займёт папку с таким именем</string>
+    <string name="intake_stale">%1$s — установится в существующую пустую папку с этим именем</string>
     <string name="intake_install">Добавить</string>
     <string name="intake_cancel">Отмена</string>
     <string name="intake_connecting">Подключение…</string>
@@ -63,7 +63,7 @@
     <string name="intake_extra">%1$s · %2$s — %3$s</string>
     <string name="intake_extra_nosize">%1$s — %2$s</string>
     <string name="intake_extra_needed">обязательно</string>
-    <string name="intake_extra_media">изображения и звуки</string>
+    <string name="intake_extra_media">изображения и аудио</string>
     <string name="intake_extra_other">необязательно</string>
     <string name="intake_installing">Добавление… %1$d%%</string>
     <string name="intake_done">Добавлено: %1$s.</string>
@@ -91,4 +91,8 @@
     <string name="exit_title">Выход</string>
     <string name="exit_busy">Работа ещё выполняется. Выйти после её завершения?</string>
     <string name="exit_wait">Выйти после завершения</string>
+    <string name="settings_edge_hint">Что заполняет поля вокруг страницы: полоса за камерой сверху и полоса над панелью навигации снизу.</string>
+    <string name="settings_edge_none_hint">Страница уходит под часы и панель навигации. Поле поиска не заходит под камеру.</string>
+    <string name="settings_access_key_hint">Другие приложения на этом телефоне могут обращаться к серверу словаря. С этой опцией они могут искать слова, но не менять ничего — ни импортировать, ни индексировать, ни удалять словари, ни менять настройки. Отключите, если другим приложениям тоже нужно менять настройки. Действует при следующем запуске wuDict2.</string>
+    <string name="settings_advanced_hint">Настройки сервера словаря. Пустое поле — значение из wudict.toml.</string>
 </resources>

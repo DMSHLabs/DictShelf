@@ -1,75 +1,74 @@
 ---
 title: Configuration
-description: Every wuDict setting - the flag, the environment variable, the TOML key, and the default.
+description: Every wudict setting - flag, environment variable, wudict.toml key, values and default.
 ---
 
 # Configuration
 
-Every setting has up to three spellings: a command-line flag, an environment
-variable, and a key in `wudict.toml`. The name is the same in the environment
-and in the file.
+Each setting can be given as a command-line flag, an environment variable or a
+key in `wudict.toml`. The variable and the key have the same name.
 
 ## Priority
 
-**Flag beats environment. Environment beats the config file. The file beats the
-built-in default.**
+Highest first: command-line flag, environment variable, `wudict.toml`, built-in
+default. The setup page shows which values a flag or variable overrides.
 
-This is the answer to "I edited `wudict.toml` and nothing changed": something
-above it sets the same value. wuDict knows where each value came from, and the
-setup page refuses to pretend that saving to the file will take effect.
+## Config file
 
-## Where the config file lives
+wudict reads the first of:
 
-wuDict reads the first file it finds.
-
-1. the `--config` flag, or the `CONFIG_PATH` environment variable
-2. `wudict.toml` next to the executable - see [portable mode](#portable-mode)
+1. `--config` or `CONFIG_PATH`
+2. `wudict.toml` next to the executable ([portable mode](#portable-mode))
 3. `~/.wudict/wudict.toml`
 4. `/etc/wudict/wudict.toml`
 
-The first `serve` run creates `~/.wudict/wudict.toml`, fully commented. Every
-start prints the file in effect.
-
-`~/.wudict/state.json` holds your dictionary order and your on/off switches.
-That file is written by the app, not by you.
-
-### Every file wuDict owns
-
-| What | macOS and Linux | Windows | Android |
-| --- | --- | --- | --- |
-| Config | `~/.wudict/wudict.toml` | `%USERPROFILE%\.wudict\wudict.toml` | `Android/data/com.dmshepeta.wudict2/files/wudict.toml` |
-| Installed lemma data | `~/.wudict/lemmas` | `%USERPROFILE%\.wudict\lemmas` | `Android/data/com.dmshepeta.wudict2/files/lemmas` |
-| Prepared library | `~/.wudict/db` | `%USERPROFILE%\.wudict\db` | `Android/data/com.dmshepeta.wudict2/files/db` |
-| State (order, switches) | `~/.wudict/state.json` | `%USERPROFILE%\.wudict\state.json` | as above |
-| Log, when there is no console | `~/Library/Logs/wudict.log` on macOS, `~/.wudict/wudict.log` on Linux | `%LOCALAPPDATA%\wudict\wudict.log` | Android's own log |
-
-Your dictionary files are not in this list. wuDict reads them where they are
-and leaves them alone until you ask it not to — the only thing that touches
-them is **Remove**, which deletes what it says it deletes.
-[`DB_DIR`](#db_dir) moves the library; the rest of the table follows the config
-file.
+The first `wudict serve` creates `~/.wudict/wudict.toml` with every setting
+commented out. Each start prints the file in effect. An unknown key is reported
+at startup and on the setup page.
 
 ### Portable mode
 
-Put a `wudict.toml` next to the executable. It then wins over every user
-location, and settings are saved back to it. Use this for a USB stick or a
-self-contained folder.
+A `wudict.toml` next to the executable takes precedence over
+`~/.wudict/wudict.toml` and receives the settings saved from the setup page.
+wudict never creates it.
 
-wuDict never creates that file by itself. An executable's folder usually
-belongs to someone else, such as `~/go/bin` or `/opt/homebrew/bin`.
+## Files
+
+| Platform | Config folder |
+| --- | --- |
+| macOS, Linux | `~/.wudict` |
+| Windows | `%USERPROFILE%\.wudict` |
+| Android | `Android/data/com.dmshepeta.wudict2/files` |
+
+| In the config folder | Contents |
+| --- | --- |
+| `wudict.toml` | settings |
+| `state.json` | dictionary order, enabled dictionaries, display preferences; written by wudict |
+| `groups.ini` | picker groups, once edited |
+| `style/` | custom styles |
+| `token` | the access key |
+| `lemmas/` | installed lemma data ([`LEMMA_DIR`](#lemma_dir)) |
+| `db/` | the library ([`DB_DIR`](#db_dir)) |
+
+Log when there is no console: macOS `~/Library/Logs/wudict.log`, Linux
+`~/.wudict/wudict.log`, Windows `%LOCALAPPDATA%\wudict\wudict.log`, Android
+logcat.
+
+wudict does not modify dictionary files. Only <kbd>🗑 Remove…</kbd> and
+`wudict rm` delete them.
 
 ## Everyday settings
 
 ### DICT_DIR
 
-Folders holding your dictionary files, scanned including every subfolder.
+Folders with dictionary files, subfolders included.
 
 | | |
 | --- | --- |
-| Flag | `--dict-dir <path>`, repeat for several folders |
+| Flag | `--dict-dir <path>`, repeated for several folders |
 | Default | `~/Dictionaries` |
 
-``` sh title="three ways to name two folders"
+``` sh title="two folders, from the command line and the environment"
 wudict --dict-dir ~/Dictionaries --dict-dir /Volumes/Ext/Dicts
 DICT_DIR="~/Dictionaries:/Volumes/Ext/Dicts" wudict     # ";" on Windows
 ```
@@ -78,23 +77,20 @@ DICT_DIR="~/Dictionaries:/Volumes/Ext/Dicts" wudict     # ";" on Windows
 DICT_DIR = ["~/Dictionaries", "/Volumes/Ext/Dicts"]
 ```
 
-The config file spells several folders as an array. The `:` and `;` separators
-belong to the environment only, where they follow the convention of `PATH`.
-
-A dictionary found in two folders is listed once, and the first folder wins. A
-missing folder is reported, and the others still work.
+In `wudict.toml` several folders are an array; in the environment they are
+separated by `:` (`;` on Windows). A dictionary found in two folders is listed
+once, from the first. A missing folder is reported; the others are still read.
 
 ### DB_DIR
 
-The library folder: one subfolder per prepared dictionary.
+The library: one library folder per indexed dictionary.
 
 | | |
 | --- | --- |
 | Flag | `--db-dir <path>` |
 | Default | `~/.wudict/db` |
 
-It must not be the same folder as `DICT_DIR`. wuDict refuses to start when they
-are the same.
+Must not be a `DICT_DIR` folder; wudict does not start if it is.
 
 ### SERVER_IP and SERVER_PORT
 
@@ -104,10 +100,9 @@ are the same.
 | Defaults | `127.0.0.1`, `6888` |
 
 `127.0.0.1` is the loopback address, reachable from your machine only. Set
-`0.0.0.0` to accept connections from your network. Only do that on a network
-you trust; wuDict has no login. Deleting a dictionary is the one thing those
-visitors cannot do — [`ALLOW_REMOTE_DELETE`](#allow_remote_delete) is off
-unless you turn it on.
+`0.0.0.0` to accept connections from your network. Requests from the network
+then need the access key ([`AUTH`](#auth)), and deleting a dictionary from
+another host also needs [`ALLOW_REMOTE_DELETE`](#allow_remote_delete).
 
 ### NO_BROWSER
 
@@ -116,11 +111,11 @@ Do not open a browser tab at startup.
 | | |
 | --- | --- |
 | Flag | `--no-browser` |
-| Default | off, a tab opens |
+| Default | off: a tab opens |
 
 ### AUTO_INDEX
 
-Prepare each dictionary in the background on its first search.
+Index each dictionary's headwords in the background on its first search.
 
 | | |
 | --- | --- |
@@ -128,57 +123,50 @@ Prepare each dictionary in the background on its first search.
 | Values | `on`, `off` |
 | Default | `on` |
 
-`off` leaves every dictionary in preview, searched through its own format.
-Contains, full-text and media stay per-dictionary choices either way.
+`off`: dictionaries stay not indexed and are searched through their own format.
+The contains index, full-text index and media pack are per-dictionary choices
+either way.
 
-[What preparation does](../dictionaries/library.md){ .md-button }
+[The library](../dictionaries/library.md){ .md-button }
 
 ### USE_CACHED
 
-Also list prepared dictionaries whose original files are gone.
+Also list indexed dictionaries whose dictionary files are gone.
 
 | | |
 | --- | --- |
 | Flag | `--use-cached` |
 | Default | off |
 
-The setup page sets this when you click **Use these dictionaries**.
+The setup page sets it with <kbd>Use these dictionaries</kbd>.
 
 ### ALLOW_REMOTE_DELETE
 
-Whether a browser on **another machine** may delete a dictionary.
+Allows clients on other hosts to delete dictionaries (<kbd>🗑 Remove…</kbd>,
+`DELETE /api/library`).
 
-| |                                |
-| --- |--------------------------------|
+| | |
+| --- | --- |
 | Flag | `--allow-remote-delete <0\|1>` |
-| Default | off                            |
+| Default | `0` |
 
-Deleting from the machine running wuDict is always allowed — it is your
-library and your disk, and <kbd>**🗑 Remove…**</kbd> in the <kbd>☰</kbd> panel is how you do it.
-This setting is only about the other case: a browser somewhere else on the
-network.
+Requests from the loopback address can always delete.
 
-With [`SERVER_IP`](#server_ip-and-server_port) set to `0.0.0.0` anyone who can
-reach the port can use the page. Set `ALLOW_REMOTE_DELETE = "1"` if you
-want to allow LAN users to delete dictionaries.
+!!! warning "Deletion is permanent"
 
-!!! warning "There is no undo"
-
-    Removal is irreversible! The files do not go to the Trash or the Recycle Bin, and
-    nothing in wuDict brings them back. `wudict rm` without `-f` prints
-    exactly what would go, which is the way to check before committing.
+    Deleted files are unlinked, not moved to the Trash or the Recycle Bin.
+    `wudict rm` without `-f` lists what it would delete.
 
 ### VERBOSE
 
-Log requests, dictionary opens, preparation and audio conversion.
+Log requests, dictionary opens, indexing and audio conversion.
 
 | | |
 | --- | --- |
 | Flag | `--verbose` |
 | Default | off |
 
-`--verbose` works for every command, not only `serve`. The short `-v` means
-`--version`.
+Applies to every command. `-v` is `--version`.
 
 ## Audio
 
@@ -192,342 +180,359 @@ Which decoder converts `.spx` audio to WAV.
 | Values | `internal` (built-in libspeex), `external` (the `speexdec` program) |
 | Default | `internal` |
 
-`internal` needs a `-cgo` build. A `-purego` build always uses the external
-program.
+`internal` needs a `-cgo` build; a `-purego` build always uses `external`.
 
 ### SPEEXDEC
 
-Path to the external `speexdec` program.
+Path to the `speexdec` program.
 
 | | |
 | --- | --- |
 | Flag | `--speexdec <path>` |
-| Default | found next to the executable, then on `PATH` |
+| Default | next to the executable, then on `PATH` |
 
-wuDict prints which decoder it resolved at startup, or an install hint when it
-found none.
+The decoder in use is printed at startup.
 
 ## Desktop integration
 
 ### TRAY
 
-Show a tray icon on Windows, or a menu-bar icon on macOS.
+Tray icon (Windows) or menu-bar icon (macOS).
 
 | | |
 | --- | --- |
 | Flags | `--tray`, `--no-tray` |
 | Values | `1` always, `0` never, unset for automatic |
-| Default | unset: an icon appears only when started from the desktop |
+| Default | unset: shown only when started from the desktop |
 
-Given both flags, `--no-tray` wins. Between two contradictory instructions, the
-one that changes nothing about the process is the safe reading.
+Given both flags, `--no-tray` applies.
 
 ## Tuning
 
-These change speed and memory, never results - with one marked exception. The
-defaults are right for a desktop. Open a section only if you want to change it.
+These settings change speed and memory use. Only `SEARCH_MEMORY` changes search
+results.
 
 ### INDEX_WORKERS
 
-How many dictionaries may be prepared at once.
+How many dictionaries are indexed at the same time.
 
-??? info "Values, default, and when to raise it"
+| | |
+| --- | --- |
+| Flag | `--index-workers <n>` |
+| Values | a number; `auto` or `0`: one per CPU core |
+| Default | `1` |
 
-    | | |
-    | --- | --- |
-    | Flag | `--index-workers <n>` |
-    | Values | a number, or `auto` (also `0`) for every core |
-    | Default | `1` |
-
-    Preparing one dictionary saturates one core and holds a few hundred bytes
-    per headword. The default is one, so background work never takes the
-    machine away from you.
-
-    Raise it when you want a large collection prepared quickly and do not mind
-    the machine being slow while it happens.
+Indexing one dictionary fully uses one CPU core and a few hundred bytes of
+memory per headword.
 
 ### PREVIEW_MEMORY
 
-How much RAM dictionaries that are not yet prepared may hold open.
+Memory that dictionaries not yet indexed may hold open.
 
-??? info "Values, default, and what it does not apply to"
+| | |
+| --- | --- |
+| Flag | none, environment and file only |
+| Values | a size such as `1GB`; `0`: no limit |
+| Default | `1GB`; Android: a third of [`MEMORY_LIMIT`](#memory_limit) |
 
-    | | |
-    | --- | --- |
-    | Flag | none, environment and file only |
-    | Values | a size such as `1GB`, or `0` for no limit |
-    | Default | `1GB`; on Android a third of [`MEMORY_LIMIT`](#memory_limit), which is `64MB` on a small device and `128MB` on a large one |
-
-    Each dictionary in preview holds about 350 bytes per headword open. Above
-    this limit, the least recently used are closed.
-
-    Prepared dictionaries answer from disk. They cost nothing here and are
-    never closed for this reason.
+An open dictionary that is not indexed holds about 350 bytes per headword.
+Above the limit, the least recently used are closed. Indexed dictionaries are
+read from disk and do not count.
 
 ### SEARCH_MEMORY
 
-How much RAM one search may claim by opening dictionaries that are not yet
-prepared.
+Memory one search may use to open dictionaries that are not indexed.
 
-??? info "Values, default, and the results it can change"
+| | |
+| --- | --- |
+| Flag | none, environment and file only |
+| Values | a size such as `512MB`; `0`: no limit |
+| Default | `0`; Android: the value of `MEMORY_LIMIT` |
 
-    | | |
-    | --- | --- |
-    | Flag | none, environment and file only |
-    | Values | a size such as `512MB`, or `0` for no cap |
-    | Default | no cap; on Android, the value of `MEMORY_LIMIT` |
-
-    This is the one setting here that changes what a search returns. Past the
-    cap, the remaining dictionaries are reported as not searched instead of
-    being opened. They are not errors, and asking for one of them by itself
-    still answers.
-
-    It never applies to prepared dictionaries, which cost nothing to search,
-    and never to a search naming a single dictionary.
+Past the limit, the remaining dictionaries are reported as *not searched*.
+Indexed dictionaries and a search of one dictionary are not limited.
 
 ### MEMORY_LIMIT
 
-A soft ceiling for the whole process.
+A soft memory limit for the whole process.
 
-??? info "Values and default"
+| | |
+| --- | --- |
+| Flag | none, environment and file only |
+| Values | a size such as `4GB`; `0`: none |
+| Default | none; Android: 1/16 of the device's RAM, between 192 MiB and 384 MiB |
 
-    | | |
-    | --- | --- |
-    | Flag | none, environment and file only |
-    | Values | a size such as `4GB`, or `0` for none |
-    | Default | none; on Android, a fraction of the device's RAM |
-
-    Go collects more often, and drops its caches, rather than growing past
-    this. It is a ceiling, not a hard limit.
+Near the limit, the Go runtime collects garbage more often and wudict drops its
+caches; the process can still exceed it.
 
 ### NO_COMPRESS
 
-Store article text plain instead of compressed.
+Store article text uncompressed.
 
-??? info "Values and what it costs"
+| | |
+| --- | --- |
+| Flag | `--no-compress` |
+| Default | off: article text is DEFLATE-compressed |
 
-    | | |
-    | --- | --- |
-    | Flag | `--no-compress` |
-    | Default | off, text is compressed |
-
-    Prepared databases become roughly three times larger. Reads get marginally
-    faster. Worth it only with disk to spare.
+The library becomes about 3 times larger; reads are slightly faster.
 
 ## Lemmatization
 
-When you enable lemmatization for a language wuDict will be able to find inflected forms,
-for example search for `knew` will find *know*, `fuiste` will find *ser*, `идет` will find *идти*. 
+With lemma data for a language, a search for an inflected form finds the lemma:
+`knew` → *know*, `fuiste` → *ser*, `идет` → *идти*. See
+[Search → Inflected words](../start/search.md#inflected-words).
 
-???+ danger "IMPORTANT"
-    For lemmatization to work, wuDict _must_ be able to detect the dictionary language.
-    Babylon (.bgl) contains data about the headword language, which is sufficient.
-    Most other dictionaries do no declare any headword language metadata.
-    wuDict applies a best guess strategy in the given order:
+**Lemmatization needs the dictionary's language.** wudict takes the first it
+finds of:
 
-    - if the dictionary file starts with e.g. `es-es` or `spa-eng` (for example, spa-eng-oxford.mdx)
-    then the first language code will be used for lemmatization
-    - if the dictionary **title** contains a valid language code then that is used 
-    - if the dictionary parent folder is a valid language 
-    code such as `es` or `spa` then this will be used as the lemmatization language.
-    - if none of the previous checks found a language code then English is used by default, 
-    which means that for English dictionaries you do not need to rename your files or the parent 
-    subfolders to match `en` or `eng`.
+1. the language the dictionary declares: Lingvo DSL (`#INDEX_LANGUAGE`),
+   Babylon, ZIM, wudict markdown;
+2. a language code or English language name at the start of the file name:
+   `es-en-collins.mdx`, `spa-eng-oxford.mdx`, `spanish-collins.mdx`;
+3. a folder inside a dictionary folder whose whole name is a language code or
+   English language name: `es/`, `Spanish/`;
+4. a language named in the dictionary's title: *Dahl's Russian Dictionary*,
+   *(Ru-Ru)*;
+5. otherwise English.
 
+English dictionaries therefore need no renaming.
 
 ### MORPH_CACHE
 
 How many languages of lemma data stay in memory.
 
-??? info "Values, default, and what a language costs"
+| | |
+| --- | --- |
+| Flag | none, environment and file only |
+| Values | a number; `0` turns lemmatization off |
+| Default | `2`; Android: `1` |
 
-    | | |
-    | --- | --- |
-    | Flag | none, environment and file only |
-    | Values | a count, or `0` to switch lemmatization off entirely |
-    | Default | `2`; `1` on Android |
-
-    English is built in. Every other language is a file you install — see
-    [`LEMMA_DIR`](#lemma_dir). Nothing is loaded at startup: a language is read
-    on the first search that needs it, and the least recently used is dropped
-    above this count.
-
-    A loaded language costs from 7 MB (English) to 65 MB (Russian). `0` never
-    loads any lemmatizers, and disables lemmatization.
+A language is loaded on the first search that needs it; above the limit the
+least recently used is unloaded. A loaded language uses 1 MB (Persian) to 90 MB
+(Slovak); English 7 MB. `wudict lemmas list` shows each.
 
 ### LEMMA_DIR
 
-The folder where lemmatization files are stored 
-(except English which is embedded OOTB into the binary).
+The folder of installed lemma data. English is built in.
 
-??? info "Values, default, and the file format"
+| | |
+| --- | --- |
+| Flag | none, environment and file only |
+| Values | a folder |
+| Default | `~/.wudict/lemmas` |
 
-    | | |
-    | --- | --- |
-    | Flag | none, environment and file only |
-    | Values | a folder path |
-    | Default | `~/.wudict/lemmas` |
+Install languages with <kbd>Lemmatization…</kbd> (dictionary panel → folder
+summary) or [`wudict lemmas download`](cli.md#lemmas). The folder is read at
+startup and after each install or removal on the Lemmatization page; a file
+added by hand or with `wudict lemmas` is read after a restart.
 
+??? info "Lemma data file format"
 
-    You do not have to fill this folder by hand. Open **🔤 Lemmatization** on
-    the settings page (or in the ⚙ panel beside the search box) and tick a
-    language: it downloads, installs, and takes effect immediately — no
-    restart. That page is the only route on Android, which has no shell. From
-    a terminal, `wudict lemmas download fr de es it ru` does the same; see
-    [the `lemmas` command](cli.md#lemmas). 
-
-    One file per language, named after the language: `pl.txt`, `pol.tsv`,
-    `polish.txt.gz`. The extension must be `.txt` or `.tsv`, optionally
-    `.gz`-compressed; anything else in the folder is ignored.
-
-    Each line is a lemma followed by its forms, separated by tabs and written
-    in lower case:
+    One file per language, named by its code or English name: `pl.txt`,
+    `pol.tsv`, `polish.txt.gz`. Extension `.txt` or `.tsv`, optionally
+    gzip-compressed; other files are ignored. Each line is a lemma followed by
+    its forms, tab-separated, in lower case:
 
     ```
     kot	kota	kotu	kotem	koty	kotów
     pies	psa	psu	psem	psy	psów
     ```
 
-    The lists at
+    The lists of
     [michmech/lemmatization-lists](https://github.com/michmech/lemmatization-lists)
-    are already in this shape — one `lemma`/form pair per line — and work as
-    downloaded. Blank or malformed lines are skipped rather than failing the
-    file.
-
-    An `en.txt` replaces the English wuDict ships, if you have a better
-    list than the one built in.
-
-    The folder is indexed at startup and again whenever the lemmatization page
-    installs or removes something, so a language installed via the web ui
-    is already enabled; if you place a file manually it will be picked up after wuDict is restarted.
+    (one lemma–form pair per line) work as downloaded. Malformed lines are
+    skipped. An `en` file replaces the built-in English.
 
 ### LEMMA_URL
 
-By default wuDict installs lemmatization languages from https://github.com/wuweidict/lemmas.
+The catalogue lemma data is installed from.
 
-??? info "Values, default, and using your own"
+| | |
+| --- | --- |
+| Flag | `-url` on the `wudict lemmas` commands |
+| Values | a URL, or the path of a `manifest.json` |
+| Default | `https://raw.githubusercontent.com/wuweidict/lemmas/main/manifest.json` |
 
-    | | |
-    | --- | --- |
-    | Flag | `-url` on the `lemmas` commands |
-    | Used by | `wudict lemmas`, and the 🔤 Lemmatization page |
-    | Values | a URL, or the path of a `manifest.json` on disk |
-    | Default | the published wuDict lemma catalogue |
+Used by `wudict lemmas` and the Lemmatization page. A local path installs
+without a network, e.g. from a copy of the catalogue repository:
 
-    The `-url` parameter can be used to override the lemmas source and can point
-    either to a custom URL e.g. https://example.com/manifest.json
-    OR to a local folder such as `/path/to/lemmas/manifest.json`.
+``` sh
+wudict lemmas download -url /media/usb/lemmas/manifest.json ru sk
+```
 
-    So, for example, if you cloned the lemmas site locally you can use:
+Each file is checked against the SHA-256 digest in the catalogue.
 
-    ``` sh title="using an offline lemmas repository"
-    wudict lemmas download -url /media/usb/lemmas/manifest.json ru pl
-    ```
+The lemma data is published under the
+[ODbL](https://opendatacommons.org/licenses/odbl/1-0/) and derived from
+[michmech/lemmatization-lists](https://github.com/michmech/lemmatization-lists);
+see `ATTRIBUTION.txt` in the catalogue repository.
 
-    The lemma data itself is published under the
-    [ODbL](https://opendatacommons.org/licenses/odbl/1-0/) and derived from
-    [michmech/lemmatization-lists](https://github.com/michmech/lemmatization-lists);
-    see `ATTRIBUTION.txt` in the default lemmas site.
+## Import
+
+Settings for installing dictionaries from a file or a link on the setup page.
+
+### IMPORT_KEEP
+
+What happens to an archive after its dictionaries are installed.
+
+| | |
+| --- | --- |
+| Flag | none, environment and file only |
+| Values | `ask`, `keep`, `delete` |
+| Default | `ask` |
+
+A failed import always keeps the archive.
+
+### IMPORT_URL_HOSTS
+
+The hosts an archive may be downloaded from. A host matches itself and its
+subdomains.
+
+| | |
+| --- | --- |
+| Flag | none, environment and file only |
+| Default | blank: any host |
+
+``` toml
+IMPORT_URL_HOSTS = ["example.org", "cloud.example.net"]
+```
+
+In the environment the hosts are comma-separated.
+
+Set it when the server listens on the network: otherwise a client there can
+make this machine download from any address it can reach.
+
+### IMPORT_INSECURE
+
+Also allow plain `http://` links and hosts on the local network.
+
+| | |
+| --- | --- |
+| Flag | none, environment and file only |
+| Values | `0`, `1` |
+| Default | `0`: `https://` only, public hosts only |
 
 ## Access
 
+### AUTH
+
+Whether a request must carry the access key.
+
+| | |
+| --- | --- |
+| Flag | none, environment and file only |
+| Values | `auto`, `on`, `off` |
+| Default | `auto`: required when [`SERVER_IP`](#server_ip-and-server_port) is not `127.0.0.1` |
+
+The key is a random string stored in `~/.wudict/token`, readable only by your
+user. `wudict token` prints a link that carries it
+(`http://<address>:<port>/?k=<key>`); opening the link once stores the key in
+that browser as a cookie. Scripts send `Authorization: Bearer <key>`.
+`wudict token -rotate` replaces the key, and every browser and script holding
+the old one must be given the new link.
+
+The three endpoints open to browser extensions (`/api/dicts`, `/api/search`,
+`/res/`) do not need the key.
+
+`off` on a network address gives anyone who can reach the port your library,
+your settings and your folder names.
+
+### AUTH_TOKEN
+
+The access key itself, when it comes from elsewhere: a password manager, a
+container secret. Overrides `~/.wudict/token` and is never written to it.
+
+| | |
+| --- | --- |
+| Flag | none, environment and file only |
+| Default | the contents of `~/.wudict/token` |
+
+### TRUSTED_HOSTS
+
+Host names the server answers to, in addition to `localhost`. Requests to an IP
+address are always accepted.
+
+| | |
+| --- | --- |
+| Flag | none, environment and file only |
+| Default | blank: IP addresses and `localhost` only |
+
+``` toml
+TRUSTED_HOSTS = ["wudict.lan"]
+```
+
+A request naming any other host is refused with `421 Misdirected Request`. This
+blocks DNS rebinding: a web page that points its own domain at your machine
+cannot read the server through it. Set it for a reverse proxy or a host name
+you gave the machine; `"*"` turns the check off.
+
 ### BROWSER_EXTENSIONS
 
-Configures browser extensions that can access the wuDict server.
+Browser extensions allowed to call the server.
 
 | | |
 | --- | --- |
 | Flag | none, environment and file only |
 | Default | blank: any installed extension |
 
-``` toml title="allow two named extensions only"
+``` toml title="allow one extension only"
 BROWSER_EXTENSIONS = ["chrome-extension://abcdefghijklmnopabcdefghijklmnop"]
 ```
 
-An extension can access three read-only endpoints: `/api/dicts`, `/api/search` and
-`/res/`. It cannot access wuDicts settings, and wuDict internal endpoints.
-
-Firefox generates a new `moz-extension://` origin per installation, so there is
-no stable origin to list there.
+An extension can call three read-only endpoints: `/api/dicts`, `/api/search`
+and `/res/`. Firefox assigns a new `moz-extension://` origin to each
+installation, so a list cannot name a Firefox extension in advance.
 
 ### WEB_ORIGINS
 
-Which **web pages** may look words up in this server with JavaScript.
+Web page origins allowed to call the server from JavaScript.
 
-| |                                                  |
-| --- |--------------------------------------------------|
-| Flag | none, environment and file only                  |
-| Default | blank: CORS restrictions enforced all any domain |
+| | |
+| --- | --- |
+| Flag | none, environment and file only |
+| Default | blank: none |
 
-``` toml title="whitelisting CORS domains"
+``` toml title="allow two origins"
 WEB_ORIGINS = ["http://localhost:3000", "https://notes.example.com"]
 ```
 
-Whitelisted domain only read only operations are allowed -
-`/api/dicts`, `/api/search` and `/res/`. No access to
-settings, library internals, or operations that modify state.
+A listed origin can call the same three endpoints as an extension.
 
-#### Writing an origin
+An origin is a scheme (`http` or `https`), a host and a port, without a path:
+`http://localhost:3000`, not `http://localhost:3000/app` or `localhost:3000`. A
+different scheme or port is a different origin. A default port may be omitted:
+`https://x.example` equals `https://x.example:443`.
 
-An origin is a scheme, a host and a port. Nothing else.
-
-``` toml
-WEB_ORIGINS = ["http://localhost:3000"]     # correct
-WEB_ORIGINS = ["http://localhost:3000/app"] # wrong: a path is not part of an origin
-WEB_ORIGINS = ["localhost:3000"]            # wrong: no scheme
-```
-
-`http://` and `https://` are the only schemes accepted. A different port is a
-different origin, and so is a different scheme: `http://localhost:3000` does not
-allow `https://localhost:3000`. The default port may be written or left out -
-`https://x.example` and `https://x.example:443` mean the same thing, because
-that is what the browser means by them.
-
-#### The wildcard
-
-``` toml
-WEB_ORIGINS = "*"
-```
-
-With `*` every site you visit may read every dictionary you have, when wuDict serveris running. That is useful while you are developing a page and know
-what is open in the browser. Only use it if know what you are doing.
-
-The server prints the setting on every start:
+`"*"` allows every origin: any page you visit can read your dictionaries while
+the server runs. Use it only while developing; the startup output shows it:
 
 ``` text
-  address       http://127.0.0.1:6888
   web origins   any website may read your dictionaries (WEB_ORIGINS = "*")
 ```
 
-#### What this does not cover
-
-Anything that is not a browser page ignores all of it. `curl`, a Node or Python
-script, an Electron main process, a native app: none of them send an `Origin`
-header, none of them enforce CORS, and all of them can already reach every
-endpoint. CORS is a rule browsers apply to pages, not a lock on the server. The
-lock is [`SERVER_IP`](#server_ip-and-server_port), which keeps the server on the
-loopback address.
+Programs outside a browser (curl, scripts, applications) are not subject to
+this setting. What limits them is [`SERVER_IP`](#server_ip-and-server_port) and
+the access key ([`AUTH`](#auth)).
 
 ## CONFIG_PATH
 
-The config file to read, instead of searching the four locations.
+The config file to read, instead of the search order under
+[Config file](#config-file).
 
 | | |
 | --- | --- |
 | Flag | `--config <path>` |
 | Default | unset |
 
-This one exists as a flag and an environment variable only.
+A flag and an environment variable only; not a key in `wudict.toml`.
 
-## A complete example
+## Example
 
 ``` toml title="~/.wudict/wudict.toml"
-DICT_DIR    = ["/data/dicts", "~/Dictionaries"]
-DB_DIR      = "~/.wudict/db"
-SERVER_IP   = "127.0.0.1"
-SERVER_PORT = "9000"
-NO_BROWSER  = "1"
-AUTO_INDEX  = "on"
-ALLOW_REMOTE_DELETE = "0"
-WEB_ORIGINS = ["http://localhost:3000"]
+DICT_DIR      = ["~/Dictionaries", "/data/dicts"]
+SERVER_IP     = "0.0.0.0"          # listen on the network: AUTH applies
+SERVER_PORT   = "9000"
+NO_BROWSER    = "1"
+TRUSTED_HOSTS = ["wudict.lan"]
+WEB_ORIGINS   = ["http://localhost:3000"]
 ```
