@@ -11,6 +11,8 @@
   position: relative;
   margin-left: calc(var(--wd-m,0)*1em);
   padding: .12em .35em .12em 1.1em;
+  /* Compact removes paragraph padding; keep the space occupied by the marker. */
+  padding-inline-start: 1.1em !important;
   border-radius: .2em;
   background-color: rgba(128,128,128,.08) !important;
   background-color: color-mix(in srgb, currentColor 8%, transparent) !important;

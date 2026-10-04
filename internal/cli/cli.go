@@ -1398,6 +1398,7 @@ Hint: pick another port with --port, e.g.:  wudict --port %s
 		logx.V("search memory budget: %d MB per query", cfg.SearchMemory>>20)
 	}
 	srv := server.New(reg)
+	srv.UseUserGroups()
 	srv.ConfigPath = cfgFile
 	srv.User = user
 	store.SetCompressBodies(!cfg.NoCompress)

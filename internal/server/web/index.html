@@ -2385,6 +2385,7 @@ function rmTrigger(d){
    lives on the server, so the page just follows it: a reload or an Android
    rotation mid-rebuild picks it up again from the poll. */
 let reindexSt=null,reindexTimer=0,reindexStopping=false;
+const following=new Set();
 function renderReindex(){
   const box=$("reindexLine"),st=reindexSt;
   if(st&&st.running){
@@ -2609,6 +2610,7 @@ function renderPanel(){
     el.appendChild(div);
   }
   if(scroller)scroller.scrollTop=top;
+  renderReindex();
   // A change to a dictionary's indexes is the server's job, not this page's
   // (jobs.go): one started before a reload or by another tab is in its row,
   // and following it puts the progress back on its card.

@@ -154,8 +154,9 @@ type Server struct {
 	styledPage []byte
 	styledETag string
 
-	groups ownedFile[*facet.Rules]         // groups.ini (groups.go)
-	styles map[string]*ownedFile[styleCSS] // app.css, article.css (style.go)
+	groups         ownedFile[*facet.Rules]         // groups.ini (groups.go)
+	userGroupsOnly bool                            // fork picker uses curated membership, not upstream facets
+	styles         map[string]*ownedFile[styleCSS] // app.css, article.css (style.go)
 
 	// DictDirOrigin / DictDirEditable describe where the dictionary folders
 	// came from (config layering), so the UI can warn that a flag or an
@@ -868,7 +869,7 @@ func (s *Server) handleDicts(w http.ResponseWriter, r *http.Request) {
 	// the workers below write concurrently; stream serialises them
 	writeLine := func(m dictMsg) { st.line(m) }
 
-	writeLine(dictMsg{T: "begin", Total: len(entries), GroupsProblems: facet.CountProblems(s.groupsNow().problems)})
+	writeLine(dictMsg{T: "begin", Total: len(entries), GroupsProblems: s.pickerGroupsProblems()})
 
 	// same width as a search fan-out, and for the same reason: this is the
 	// other place the whole library is touched at once (search.Workers)
@@ -993,10 +994,9 @@ func (s *Server) langFacts(info *dictInfo, name, declared, contents string) {
 		Roots:    s.reg.Dirs(),
 		Declared: declared,
 		Contents: contents,
-		Rules:    s.groupsNow().val,
 		File:     filepath.Base(langPath(info.Path)),
 	}
-	info.Groups = facet.Derive(in)
+	info.Groups = s.pickerGroups(in)
 	info.ArticleLang = facet.ArticleLang(in)
 }
 

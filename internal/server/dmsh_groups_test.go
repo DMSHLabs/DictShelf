@@ -14,6 +14,29 @@ import (
 	"testing"
 )
 
+func TestUserGroupsExcludeUpstreamRules(t *testing.T) {
+	s := newGroupsServer(t)
+	s.UseUserGroups()
+	if _, code := callGroups(t, s, "PUT", "Upstream = server\nBroken = `(`\n"); code != 200 {
+		t.Fatal(code)
+	}
+	if got := rowGroups(t, s); len(got) != 0 {
+		t.Fatalf("upstream groups reached fork rows: %v", got)
+	}
+	if got := s.pickerGroupsProblems(); got != 0 {
+		t.Fatalf("upstream diagnostics reached fork: %d", got)
+	}
+	info := dictInfo{Path: "English.dsl"}
+	s.langFacts(&info, "English", "English", "")
+	if info.ArticleLang == "" {
+		t.Fatal("disabling groups disabled article language")
+	}
+	s.userGroupsOnly = false
+	if got := rowGroups(t, s); !got["my groups/upstream"] {
+		t.Fatalf("upstream implementation no longer works: %v", got)
+	}
+}
+
 func groupCall(t *testing.T, s *Server, method, path string, body any, status int) []byte {
 	t.Helper()
 	b, _ := json.Marshal(body)

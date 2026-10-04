@@ -33,4 +33,13 @@ for(const preset of ['sepia_article.css','background_image_article.css']){
  for(const color of colors)assert.notEqual(color,'rgba(0, 0, 0, 0)',preset);
 }
 console.log('Original direct-root background survives sepia/image presets');
+const compactCSS=fs.readFileSync('internal/server/web/presets/compact/compact_article.css','utf8');
+await p.setViewportSize({width:390,height:950});
+for(const size of [15,20,30]){
+ await p.evaluate(({sharedCSS,compactCSS,size})=>{const host=document.createElement('div');host.id='compact-example-test';const r=host.attachShadow({mode:'open'});r.innerHTML='<style>:host{display:block;font:'+size+'px/1.618 Arial}'+sharedCSS+compactCSS+'</style><p class="wu-example-block">A lobster pot.</p>';document.body.append(host)},{sharedCSS,compactCSS,size});
+ const geometry=await p.evaluate(()=>{const host=document.querySelector('#compact-example-test');const n=host.shadowRoot.querySelector('p');const style=getComputedStyle(n),marker=getComputedStyle(n,'::before');const range=document.createRange();range.selectNodeContents(n);const result={textLeft:range.getBoundingClientRect().left-n.getBoundingClientRect().left,markerRight:parseFloat(marker.left)+parseFloat(marker.width),padding:parseFloat(style.paddingInlineStart)};host.remove();return result});
+ assert.ok(geometry.textLeft>geometry.markerRight,JSON.stringify({size,...geometry}));
+ assert.ok(Math.abs(geometry.padding-size*1.1)<.1);
+}
+console.log('Compact keeps example text clear of the diamond at 15/20/30px');
 await p.screenshot({path:'tools/dslcompare/results/gd-examples-preview.png',fullPage:true});console.log(JSON.stringify(report.map(({text,...r})=>r)));await b.close()})().catch(e=>{console.error(e);process.exit(1)});

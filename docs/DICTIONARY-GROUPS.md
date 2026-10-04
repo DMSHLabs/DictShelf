@@ -42,15 +42,18 @@ Upstream's own groups feature lives beside this one and is a different thing:
 `groups.ini`, the RULES that derive a group from a dictionary's own name, path
 and language (`internal/facet/rules.go`), edited through `GET/PUT/DELETE
 /api/groups` and the `/groups` page. It computes; this editor curates. A
-dictionary can be in a group by rule and by membership at once, and the picker
-shows both.
+dictionary can have both classifications in storage, but the fork's picker
+uses only curated membership. The CLI selects this behavior with
+`Server.UseUserGroups()` at startup; upstream facets and their diagnostics do
+not enter the fork's `/api/dicts` rows. Article-language detection is retained.
 
 The two are deliberately kept apart so upstream's half can be taken verbatim on
 every sync: its API keeps the `/api/groups` path and its file keeps the
 `groups.go` name, while this one lives in `dmsh_groups.go` (the fork's `dmsh_`
 prefix for a parallel implementation) behind `/api/user-groups`. The fork's UI
-does not expose the rules editor — the file is edited by hand — so nothing in
-the app links to `/groups`.
+does not expose the rules editor, so nothing in the app links to `/groups`.
+Its page and API remain available by direct URL for compatibility, and the
+upstream implementation and its tests remain intact.
 
 ## Verification
 

@@ -3,15 +3,13 @@
 
 // The reader's own dictionary groups: named sets they curate by hand, one
 // dictionary at a time, stored in state.json. This is the fork's half of the
-// two "groups" a picker can offer.
+// membership picker selected by the fork's CLI.
 //
 // Upstream's half is groups.go beside this file: groups.ini, the RULES that
-// derive a group from a dictionary's own name, path and language. The two are
-// complementary and deliberately separate - rules cannot express "these two
-// similar dictionaries belong to different sets", and membership cannot
-// express "every future Oxford, without anyone assigning it". The API paths
-// differ for the same reason (/api/user-groups here, /api/groups there), so
-// upstream's file can be taken verbatim on every sync.
+// derive a group from a dictionary's own name, path and language. It stays
+// available through its own API but does not feed the fork's picker. Separate
+// API paths (/api/user-groups here, /api/groups there) let upstream's file be
+// taken verbatim on every sync.
 //
 // The `dmsh_` prefix on this file's name is the fork's convention for a
 // parallel implementation: upstream's file keeps its own name and merges
@@ -28,10 +26,31 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/wuweidict/wudict/internal/facet"
 	"github.com/wuweidict/wudict/internal/fsx"
 )
 
 const allDictionariesGroup = "all"
+
+// UseUserGroups selects the fork's membership picker at server startup.
+// Upstream's rules editor and API stay available for synchronization, but its
+// rules and diagnostics do not enter the fork's dictionary rows.
+func (s *Server) UseUserGroups() { s.userGroupsOnly = true }
+
+func (s *Server) pickerGroups(in facet.Input) []facet.Group {
+	if s.userGroupsOnly {
+		return nil
+	}
+	in.Rules = s.groupsNow().val
+	return facet.Derive(in)
+}
+
+func (s *Server) pickerGroupsProblems() int {
+	if s.userGroupsOnly {
+		return 0
+	}
+	return facet.CountProblems(s.groupsNow().problems)
+}
 
 // DictionaryGroup is collection metadata in state.json. Membership is stored
 // on DictPref so the existing identity repair also repairs group membership.

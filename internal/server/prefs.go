@@ -316,7 +316,7 @@ func (p *Prefs) saveRecord(f prefsFile) error {
 func (p *Prefs) mutate(fn func(*prefsFile)) error {
 	p.write.Lock()
 	defer p.write.Unlock()
-	f := p.file.fresh().val
+	f := p.file.fresh().val.clone()
 	fn(&f)
 	return p.saveRecord(f)
 }
@@ -421,7 +421,7 @@ func (p *Prefs) heal(r *Registry) []DictPref {
 			}
 		}
 		p.write.Lock()
-		f := p.file.fresh().val
+		f := p.file.fresh().val.clone()
 		f.Dicts = out
 		for i := range f.Groups {
 			g := f.Groups[i]
