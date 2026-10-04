@@ -5,6 +5,54 @@ Notable changes in **wuDict2**, the Android fork of
 version it was forked from. Fork release tags are prefixed `wudict2-`; one
 tagged line per release, newest first.
 
+## wudict2-v0.8.0 — 2026-10-04
+
+From `dev`. The dictionary list can be sorted by rules now, index maintenance
+became one table with one button, and the words the app uses were overhauled
+across both languages.
+
+### Filters: the rules behind a dictionary list
+
+- **Settings → Edit filters** opens the rules editor. Each line matches text in
+  dictionary titles or file names, ignoring case, and puts what it matches into
+  a named set the rest of the app can use. The page is in English and Russian,
+  saves to the same `groups.ini` the app reads, offers **Reset to default**,
+  names the file it writes, and reports the lines it cannot use instead of
+  failing quietly. The built-in list stays in force until you replace or reset
+  the file, and a `groups.ini` that cannot be read is offered for replacement
+  rather than ignored.
+- **The word is deliberate: these are *filters*, not "groups".** In this app a
+  group already means the set you curate by hand (Settings → Edit dictionary
+  groups); a filter is a rule that computes one. The interface follows that
+  distinction everywhere.
+- **The group editor gained a Filter control** while Show All is on: it narrows
+  the dictionaries you can add — by language, by language pair, or by the rules
+  above — and Untagged for dictionaries no rule classifies. Current members stay
+  visible whatever the filter says, and adding one moves it above the control.
+
+### Index maintenance
+
+- **One table, one Start.** The dictionary settings window lists the three kinds
+  of index — the headword index, the contains index and the full-text index —
+  each with a single choice: Do not change, Create missing, Update existing,
+  Recreate all, Delete. **Start** first shows what will happen and to how many
+  dictionaries; deleting the headword index disables the other two rows, because
+  it takes them with it.
+- **Index state reads the way a reader thinks**: "Not indexed" with a click to
+  index it, "Indexed: 41 MB on disk", "Outdated contains index: click to
+  rebuild", an estimate for a dictionary you have not indexed yet — and
+  "Locked: the dictionary files are gone, and this is the only copy" when a
+  prepared database is all that is left.
+
+### One word per concept, in both languages (merged from upstream)
+
+- Upstream's wording overhaul is in: *index / indexed / indexing*, *contains
+  index*, *full-text index*, *media pack*, *lemma data*, *orphan*, and *exact /
+  prefix / contains / full-text* as the four match kinds. The setup, Browse and
+  lemma pages use the same vocabulary and gained the sentences that explain what
+  they do — what a dictionary folder is, what the library holds, what indexing
+  buys, and when lemma data helps.
+
 ## wudict2-v0.7.1 — 2026-10-04
 
 From `dev`. Mostly a settling release: the two DSL readers from v0.7.0 reach the
