@@ -1,4 +1,12 @@
 {
+  "dictUI.bulkAction.keep": "Не менять",
+  "dictUI.bulkAction.create": "Создать недостающие",
+  "dictUI.bulkAction.update": "Обновить имеющиеся",
+  "dictUI.bulkAction.recreate": "Пересоздать все",
+  "dictUI.bulkAction.delete": "Удалить",
+  "dictUI.bulkDeleteHint": "Удаление основного индекса также удаляет Contains, Full-text и упакованные медиа. Исходные файлы сохраняются.",
+  "dictUI.dslOriginalShort": "Ориг.",
+  "dictUI.bulkStart": "Начать",
   "dictUI.allActions": "Для всех словарей",
   "panel.exit": "Выход",
   "database.createFullText": "Создать полнотекстовые индексы",

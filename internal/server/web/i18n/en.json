@@ -1,4 +1,12 @@
 {
+  "dictUI.bulkAction.keep": "Do not change",
+  "dictUI.bulkAction.create": "Create missing",
+  "dictUI.bulkAction.update": "Update existing",
+  "dictUI.bulkAction.recreate": "Recreate all",
+  "dictUI.bulkAction.delete": "Delete",
+  "dictUI.bulkDeleteHint": "Deleting the main index also removes Contains, Full-text and packed media. Source files are kept.",
+  "dictUI.dslOriginalShort": "Original",
+  "dictUI.bulkStart": "Start",
   "dictUI.allActions": "For all dictionaries",
   "panel.exit": "Exit",
   "database.createFullText": "Create full-text indexes",

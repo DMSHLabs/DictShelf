@@ -135,7 +135,7 @@ for (const language of ['en', 'ru']) {
   vm.runInNewContext(script,noNames);
   assert.equal(noNames.window.wudictI18n.facetLabels(enGroup).vl,'English');
   const frameContext={tx:t,esc:attrEscape,escAttr:attrEscape,articleFS:18,articleFW:400,
-    ARTCSS:'',speakOn:true,frameCSS:()=>'',styleSafe:s=>s};
+    ARTCSS:'',articleSelectionCSS:'',speakOn:true,frameCSS:()=>'',styleSafe:s=>s};
   vm.runInNewContext(main.match(/function frameDoc\(content,fid,dark,dictID,frag\)\{[\s\S]*?\n}/)[0],frameContext);
   const article='<p lang="en">Close {name} — original dictionary content</p>';
   const frameHTML=frameContext.frameDoc(article,'frame-1',false,'dict-1','');
@@ -282,14 +282,16 @@ for (const language of ['en', 'ru']) {
     {id:'gd',source:'b.dslgd',dbSize:0,dsl:{variant:'gd',sourceAvailable:true},caps:{}},
     {id:'only-copy',dbSize:40,caps:{}},
   ];
-  vm.runInNewContext(main.match(/function bulkIndexCandidates\(scope,feat,remove\)\{[\s\S]*?\n\}/)[0],cardContext);
-  assert.equal(cardContext.bulkIndexCandidates('original','fts',false).map(d=>d.id).join(','),'ordinary');
-  assert.equal(cardContext.bulkIndexCandidates('gd','base',false).map(d=>d.id).join(','),'gd');
-  assert.equal(cardContext.bulkIndexCandidates('all','base',true).map(d=>d.id).join(','),'ordinary,original');
+  vm.runInNewContext(main.match(/function bulkIndexCandidates\(scope,feat,action\)\{[\s\S]*?\n\}/)[0],cardContext);
+  assert.equal(cardContext.bulkIndexCandidates('original','fts','create').map(d=>d.id).join(','),'ordinary');
+  assert.equal(cardContext.bulkIndexCandidates('gd','base','create').map(d=>d.id).join(','),'gd');
+  assert.equal(cardContext.bulkIndexCandidates('all','base','delete').map(d=>d.id).join(','),'ordinary,original');
   cardContext.cfgInfo={dslParser:'gd'};
-  assert.equal(cardContext.bulkIndexCandidates('selected','base',true).map(d=>d.id).join(','),'ordinary');
+  assert.equal(cardContext.bulkIndexCandidates('selected','base','delete').map(d=>d.id).join(','),'ordinary');
   cardContext.cfgInfo={dslParser:'original'};
-  assert.equal(cardContext.bulkIndexCandidates('selected','base',true).map(d=>d.id).join(','),'ordinary,original');
+  assert.equal(cardContext.bulkIndexCandidates('selected','base','delete').map(d=>d.id).join(','),'ordinary,original');
+  assert.equal(cardContext.bulkIndexCandidates('all','base','update').map(d=>d.id).join(','),'ordinary,original');
+  assert.equal(cardContext.bulkIndexCandidates('all','base','recreate').map(d=>d.id).join(','),'ordinary,original,gd');
   for (const g of manifest.groups) {
     assert.equal(fallback['layers.group.' + g.dir], g.title);
     assert.ok(messages['layers.group.' + g.dir]);

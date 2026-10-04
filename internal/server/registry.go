@@ -1930,7 +1930,7 @@ func (e *entry) mediaBackend() (dict.Dictionary, func(), error) {
 // it reversible, and it is why none of this needs a confirmation prompt. A
 // dictionary whose source is gone carries the only copy of its own text, so
 // its features are locked rather than dangerous.
-func (e *entry) setFeatures(want features, progress store.Progress) error {
+func (e *entry) setFeatures(want features, progress store.Progress, force ...bool) error {
 	acquire(frontLimit) // the user is waiting: never queue behind background work
 	defer release(frontLimit)
 	// The user ticked a box and is watching a progress bar: the longest
@@ -1948,9 +1948,13 @@ func (e *entry) setFeatures(want features, progress store.Progress) error {
 	}
 	// A dictionary the user is already changing is brought current on the
 	// way; one they are not is left alone until they ask (D151).
+	rebuild := store.IfOutdated
+	if len(force) > 0 && force[0] {
+		rebuild = store.Always
+	}
 	_, err := e.reconcile(name, store.Target{
 		FullText: &want.FullText, Contains: &want.Contains,
-		Media: media, Rebuild: store.IfOutdated,
+		Media: media, Rebuild: rebuild,
 	}, progress)
 	return err
 }

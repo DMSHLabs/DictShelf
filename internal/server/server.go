@@ -1974,7 +1974,7 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		if err := e.setFeatures(want, progress); err != nil {
+		if err := e.setFeatures(want, progress, q.Get("rebuild") == "1"); err != nil {
 			j.update(func(js *jobStatus) { js.Err = err.Error() })
 			return
 		}

@@ -1,5 +1,9 @@
 # Localization: status and next tasks
 
+2026-10-04 bulk dropdowns: EN/RU Keep/Create missing/Update existing/Recreate all/Delete labels and main-deletion note added. Defaults and action plans checked in Chromium on both languages; catalog/JS checks pass. Device check pending.
+
+2026-10-04 Dictionary settings: short Original/Ориг. label and Start/Начать added; GD and Both/Оба complete the single-row parser selector. Chrome 320px EN/RU and localization checks pass; phone verification pending.
+
 2026-10-03 Rescan progress: EN/RU dictionary position/name, cleanup and interrupted-connection messages added. Reuses localized article counters. Server catalogs and Node localization/syntax checks pass; phone verification pending.
 
 2026-10-03 Russian Rescan: explicit dialog language and consistently stacked equal-width actions fix mixed wrapping of longer Russian labels. Existing wording retained; EN layout unchanged. Chromium 320/360/390/1100px at 100/130% and targeted server checks pass; phone verification pending.
