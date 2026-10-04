@@ -305,7 +305,7 @@ final class Shell {
     static final String DICTIONARY_PICKER_JS = """
             (() => {
               function installPickers() {
-              for (const select of document.querySelectorAll('#dict, #mode, #articleFindMode, #stylerPreset, #groupSelect, #bulkIndexes select')) {
+              for (const select of document.querySelectorAll('#dict, #mode, #articleFindMode, #stylerPreset, #groupSelect, #groupAvailableFilter, #bulkIndexes select')) {
               const id = select.id || 'bulkIndexAction';
               if (!select || select.dataset.shellPicker) continue;
               select.dataset.shellPicker = '1';
@@ -381,6 +381,8 @@ final class Shell {
               // Bulk action selects are recreated when dictionary settings refresh.
               const bulk = document.getElementById('bulkIndexes');
               if (bulk) new MutationObserver(installPickers).observe(bulk, {childList:true, subtree:true});
+              const groupRows = document.getElementById('groupRows');
+              if (groupRows) new MutationObserver(installPickers).observe(groupRows, {childList:true, subtree:true});
             })();
             """;
 

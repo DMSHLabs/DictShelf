@@ -31,6 +31,9 @@ func TestUserGroupsExcludeUpstreamRules(t *testing.T) {
 	if info.ArticleLang == "" {
 		t.Fatal("disabling groups disabled article language")
 	}
+	if len(info.Filters) == 0 || len(info.Groups) != 0 {
+		t.Fatalf("editor filters must be separate from picker groups: %+v", info)
+	}
 	s.userGroupsOnly = false
 	if got := rowGroups(t, s); !got["my groups/upstream"] {
 		t.Fatalf("upstream implementation no longer works: %v", got)

@@ -1,5 +1,9 @@
 # Localization: status and next tasks
 
+2026-10-04 Edit filters: upstream rules editor now translated and linked from Settings. Hints describe filters in the membership editor; save/reset/unsaved-change and diagnostics labels localized. EN/RU browser load/save and catalog checks pass; raw server parser diagnostic details retained. Device background check pending.
+
+2026-10-04 membership filters: Filter/Uncategorized/empty-result labels added in EN/RU; categories reuse facet translations. Browser checks on both languages and localization checks pass; Android picker appearance needs a rebuilt APK/device check.
+
 2026-10-04 bulk dropdowns: EN/RU Keep/Create missing/Update existing/Recreate all/Delete labels and main-deletion note added. Defaults and action plans checked in Chromium on both languages; catalog/JS checks pass. Device check pending.
 
 2026-10-04 Dictionary settings: short Original/Ориг. label and Start/Начать added; GD and Both/Оба complete the single-row parser selector. Chrome 320px EN/RU and localization checks pass; phone verification pending.

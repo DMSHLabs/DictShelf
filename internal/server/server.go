@@ -802,7 +802,8 @@ type dictInfo struct {
 	// choices ("English", "Encyclopedias") instead of a hundred names. Derived
 	// from this row's own name, path and declared language and never stored -
 	// see internal/facet, which also says why absence never becomes a value.
-	Groups []facet.Group `json:"groups,omitempty"`
+	Groups  []facet.Group `json:"groups,omitempty"`
+	Filters []facet.Group `json:"filters,omitempty"`
 
 	// Job is the change to this dictionary's indexes running now (an ingest
 	// job, jobs.go), so a page loaded mid-way shows it and follows it with
@@ -997,6 +998,10 @@ func (s *Server) langFacts(info *dictInfo, name, declared, contents string) {
 		File:     filepath.Base(langPath(info.Path)),
 	}
 	info.Groups = s.pickerGroups(in)
+	if s.userGroupsOnly {
+		in.Rules = s.groupsNow().val
+		info.Filters = facet.Derive(in)
+	}
 	info.ArticleLang = facet.ArticleLang(in)
 }
 

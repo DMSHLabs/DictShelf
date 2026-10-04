@@ -6,6 +6,14 @@ Turn on **Show All** to add dictionaries using the checkboxes; turn it off to
 see only members. Members appear first, followed by nonmembers, each in the
 existing dictionary order. A dictionary can belong to several groups.
 
+While editing membership with Show All enabled, a Filter dropdown separates
+current members from dictionaries available to add. It filters only the latter,
+using upstream language, language-pair and rules-based classifications. All
+dictionaries is the default; Uncategorized means no inferred classifications.
+Current members stay visible, and adding a dictionary moves it above the filter.
+Empty categories are omitted, including Uncategorized. If adding a dictionary
+empties the selected category, the filter returns to All dictionaries.
+
 **All Dictionaries** always includes the current collection, including newly
 added dictionaries. Its checkboxes cannot be cleared. Removing a dictionary
 from a user group does not remove its files; it only changes which group
@@ -44,16 +52,16 @@ and language (`internal/facet/rules.go`), edited through `GET/PUT/DELETE
 /api/groups` and the `/groups` page. It computes; this editor curates. A
 dictionary can have both classifications in storage, but the fork's picker
 uses only curated membership. The CLI selects this behavior with
-`Server.UseUserGroups()` at startup; upstream facets and their diagnostics do
-not enter the fork's `/api/dicts` rows. Article-language detection is retained.
+`Server.UseUserGroups()` at startup; upstream facets are returned separately as
+`filters` in `/api/dicts` for the membership editor, while `groups` and upstream
+diagnostics stay out of the fork's search picker. Article-language detection is retained.
 
 The two are deliberately kept apart so upstream's half can be taken verbatim on
 every sync: its API keeps the `/api/groups` path and its file keeps the
 `groups.go` name, while this one lives in `dmsh_groups.go` (the fork's `dmsh_`
-prefix for a parallel implementation) behind `/api/user-groups`. The fork's UI
-does not expose the rules editor, so nothing in the app links to `/groups`.
-Its page and API remain available by direct URL for compatibility, and the
-upstream implementation and its tests remain intact.
+prefix for a parallel implementation) behind `/api/user-groups`. Settings
+links to the upstream rules editor at `/groups` as **Edit filters**. Its EN/RU
+interface edits the same rules file and retains the upstream API.
 
 ## Verification
 

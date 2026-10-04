@@ -5,14 +5,89 @@
  SPDX-License-Identifier: GPL-3.0-or-later
 -->
 
-<html lang="en">
+<html lang="{{T:locale}}">
 <head>
 <meta charset="utf-8">
+{{I18N}}
+<script>
+// An optional host background, the same hook setup.html carries: the Android
+// host paints the chosen image (or colour) behind a transparent WebView, and
+// this is what tells the page it is there, before the first paint.
+// Session storage preserves it across page reloads; an explicit empty URL
+// value withdraws it on the next launch.
+window.wudictShellBackground = function (color, image, imageName, paper) {
+  var root = document.documentElement;
+  root.toggleAttribute('data-shell-image', !!image);
+  // The paper an enabled PRESET paints, handed here by the app page: that page
+  // paints this paper with its own layer and does not wear it as a shell
+  // colour, while this document - no layers of its own - has nothing but the
+  // host to give it a ground. It arrives with every call, and it is also kept
+  // in wudict_shell_paper, because this page is reached by tapping a link and
+  // so carries no shell parameters of its own. The READER's own colour wins
+  // when there is one: that is the colour the app page paints as well.
+  if (!/^#[0-9a-f]{6}$/i.test(color) && /^#[0-9a-f]{6}$/i.test(paper || '')) color = paper;
+  var valid = /^#[0-9a-f]{6}$/i.test(color);
+  root.toggleAttribute('data-shell-custom', valid || !!image);
+  if (valid) {
+    var rgb = color.slice(1).match(/../g).map(function (v) { return parseInt(v, 16); });
+    root.setAttribute('data-shell-tone', rgb[0] * .299 + rgb[1] * .587 + rgb[2] * .114 > 160 ? 'light' : 'dark');
+  } else root.removeAttribute('data-shell-tone');
+  if (valid) root.style.setProperty('--bg', color, 'important');
+  else root.style.removeProperty('--bg');
+  try {
+    if (image) sessionStorage.setItem('wudict_shell_image', '1');
+    else sessionStorage.removeItem('wudict_shell_image');
+    if (valid) sessionStorage.setItem('wudict_shell_bg', color);
+    else sessionStorage.removeItem('wudict_shell_bg');
+    if (/^#[0-9a-f]{6}$/i.test(paper || '')) sessionStorage.setItem('wudict_shell_paper', paper);
+    else sessionStorage.removeItem('wudict_shell_paper');
+  } catch (_) {}
+};
+(function () {
+  var params = new URLSearchParams(location.search);
+  var color = params.get('shell_bg');
+  var image = params.get('shell_image');
+  var paper = params.get('shell_paper');
+  if (params.has('shell_bg') || params.has('shell_paper') || params.has('shell_image')) {
+    params.delete('shell_bg');
+    params.delete('shell_paper');
+    params.delete('shell_image');
+    var query = params.toString();
+    history.replaceState(history.state, '', location.pathname + (query ? '?' + query : '') + location.hash);
+  }
+  if (color === null) {
+    try { color = sessionStorage.getItem('wudict_shell_bg'); } catch (_) {}
+  }
+  if (image === null) {
+    try { image = sessionStorage.getItem('wudict_shell_image'); } catch (_) {}
+  }
+  if (paper === null) {
+    try { paper = sessionStorage.getItem('wudict_shell_paper'); } catch (_) {}
+  }
+  window.wudictShellBackground(color || '', image === '1', undefined, paper || '');
+})();
+</script>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>wudict Groups</title>
+<title>{{T:filters.title}}</title>
 <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
 <link rel="stylesheet" href="/assets/setup.css?v={{CSS}}">
+{{PRESETS}}
 <style>
+/* Follow the host palette and let its wallpaper show through the editor. */
+html[data-shell-image], html[data-shell-image] body { background:transparent !important; }
+html[data-shell-custom] .card { background:rgba(255,255,255,.14); }
+html[data-shell-custom] textarea,
+html[data-shell-custom] code { background:rgba(255,255,255,.18); }
+html[data-shell-custom] .acts button,
+html[data-shell-custom] .acts .btn { background:rgba(255,255,255,.18);color:var(--fg);border:1px solid var(--line); }
+html[data-shell-tone="light"] {
+  color-scheme:light; --fg:#2b2a28; --soft:#625b4d; --faint:#766e60;
+  --line:rgba(89,75,56,.4); --accent:#865000; --ok:#38603c; --err:#a3322c;
+}
+html[data-shell-tone="dark"] {
+  color-scheme:dark; --fg:#f4f1eb; --soft:#ded8cc; --faint:#c6beaf;
+  --line:rgba(230,220,201,.4); --accent:#ffc773; --ok:#aad3ad; --err:#ffb3ad;
+}
 /* Page-specific only; palette, card, buttons and typography are shared. The
    card is wider than the other pages' and the box takes most of the screen:
    this page is an editor, and the text is the whole of it. */
@@ -40,10 +115,11 @@ textarea:focus{border-color:var(--focus);box-shadow:0 0 0 3px color-mix(in srgb,
 </head>
 <body>
 <div class="card">
-<h1><b>wu</b>Dict Groups</h1>
-<p>Each line is a group the dictionary picker offers: a dictionary joins it when
-   one of the texts is anywhere in its title or file name, in any case. A
-   <code>[Section]</code> line starts a new heading under <i>Group by</i>.</p>
+<div class="top">
+<h1>{{T:filters.title}}</h1>
+<button type="button" class="x" id="closePage" aria-label="{{T:pages.close}}">✕</button>
+</div>
+<p>{{T:filters.hint}}</p>
 <p class="quiet"><code>Mine = oxford, collins</code> &nbsp; <code>Mine = `^regex$`</code></p>
 
 <textarea id="text" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off"
@@ -52,18 +128,17 @@ textarea:focus{border-color:var(--focus);box-shadow:0 0 0 3px color-mix(in srgb,
 <ul class="probs" id="probs"></ul>
 
 <div class="acts">
-  <button type="button" id="save">Save</button>
-  <button type="button" class="ghost" id="reset">Reset to default</button>
-  <a class="btn ghost" href="/" id="back">Back to dictionaries</a>
+  <button type="button" id="save">{{T:filters.save}}</button>
+  <button type="button" class="ghost" id="reset">{{T:filters.reset}}</button>
+  <a class="btn ghost" href="/" id="back">{{T:filters.back}}</a>
 </div>
 <p class="note" id="file"></p>
 
-<p class="about"><b>WuWei</b>Dict — search every dictionary you own, from one browser tab.
-  <a href="https://wuweidict.github.io/wudict" target="_blank" rel="noopener">Website</a>
-  · <a href="https://github.com/wuweidict/wudict" target="_blank" rel="noopener">Source</a></p>
+
 </div>
 <script>
 "use strict";
+const tx=window.wudictI18n.t;
 const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 
@@ -99,7 +174,7 @@ async function unmatched(changed){
     for(const l of t.split("\n")){
       if(!l.trim())continue;
       const o=JSON.parse(l);
-      if(o.t==="dict")for(const g of o.dict.groups||[])have.add(g.f+"\n"+g.v);
+      if(o.t==="dict")for(const g of o.dict.filters||o.dict.groups||[])have.add(g.f+"\n"+g.v);
     }
   }catch(e){return []}
   return changed.filter(c=>!have.has(c.f+"\n"+c.g.id)).map(c=>c.g.label);
@@ -109,11 +184,11 @@ async function unmatched(changed){
    invalid regular expression or a skipped line costs a group, silently,
    unless this list says so. */
 function problems(j){
-  $("probs").innerHTML=j.problems.map(p=>"<li>"+(p.line?"Line "+p.line+": ":"")+esc(p.msg)+
+  $("probs").innerHTML=j.problems.map(p=>"<li>"+(p.line?tx("filters.line",{number:p.line})+": ":"")+esc(p.msg)+
     (p.text?" — <code>"+esc(p.text)+"</code>":"")+"</li>").join("");
-  if(j.unusable)return "The built-in groups are in effect until this file is replaced or reset.";
+  if(j.unusable)return tx("filters.fallback");
   const n=j.problems.reduce((n,p)=>n+(p.more||1),0);
-  return n?(n===1?"1 problem":n+" problems")+" below - those lines or items are skipped.":"";
+  return n?tx("filters.problems",{number:n}):"";
 }
 
 function show(j,keepText){
@@ -122,8 +197,8 @@ function show(j,keepText){
   $("save").disabled=!writable;
   $("reset").classList.toggle("hidden",!j.custom||!writable);
   $("file").textContent=writable
-    ?(j.custom?"Saved in ":"Not customised yet - saving creates ")+j.file
-    :"There is no configuration folder, so the groups cannot be saved here.";
+    ?tx(j.custom?"filters.savedIn":"filters.createFile",{file:j.file})
+    :tx("filters.noFolder");
   return problems(j);
 }
 
@@ -139,15 +214,15 @@ async function call(method,body,query){
 
 async function load(){
   try{const p=show(await call("GET"));if(p)say(p,"err")}
-  catch(e){say("Cannot reach wuDict: "+e.message,"err")}
+  catch(e){say(tx("filters.unreachable",{error:e.message}),"err")}
 }
 
 async function save(){
   if(!writable||busy)return;
   /* A file the app cannot read is still the user's: the box was empty
      because it could not be shown, not because it is empty. */
-  if(unusable&&!confirm("Your groups.ini cannot be read (see below). Replace it with the text in the box?"))return;
-  busy=true;$("save").disabled=true;say("Saving…");
+  if(unusable&&!confirm(tx("filters.replace")))return;
+  busy=true;$("save").disabled=true;say(tx("filters.saving"));
   const sent=$("text").value,before=facets;
   try{
     const j=await call("PUT",sent,unusable?"?replace=1":"");
@@ -156,19 +231,19 @@ async function save(){
     const p=show(j,typed);
     saved=typed?sent:$("text").value;
     const none=await unmatched(edited(before,j.facets));
-    const parts=["Saved."];
+    const parts=[tx("filters.saved")];
     if(p)parts.push(p);
-    if(none.length)parts.push("No dictionary matches: "+none.join(", ")+".");
+    if(none.length)parts.push(tx("filters.unmatched",{names:none.join(", ")}));
     say(parts.join(" "),p||none.length?"err":"ok");
-  }catch(e){say("Not saved: "+e.message,"err")}
+  }catch(e){say(tx("filters.saveFailed",{error:e.message}),"err")}
   finally{busy=false;$("save").disabled=!writable}
 }
 
 $("save").onclick=save;
 $("reset").onclick=async()=>{
-  if(busy||!confirm("Replace your groups with the default list?"))return;
-  try{show(await call("DELETE"));say("Default restored.","ok")}
-  catch(e){say("Not reset: "+e.message,"err")}
+  if(busy||!confirm(tx("filters.resetConfirm")))return;
+  try{show(await call("DELETE"));say(tx("filters.restored"),"ok")}
+  catch(e){say(tx("filters.resetFailed",{error:e.message}),"err")}
 };
 $("text").addEventListener("input",()=>{if($("msg").className!=="err")say("")});
 addEventListener("keydown",e=>{
@@ -176,9 +251,15 @@ addEventListener("keydown",e=>{
 });
 addEventListener("beforeunload",e=>{if(dirty()){e.preventDefault();e.returnValue=""}});
 $("back").addEventListener("click",e=>{
-  if(dirty()&&!confirm("Leave without saving your changes?"))e.preventDefault();
+  if(dirty()&&!confirm(tx("filters.leave")))e.preventDefault();
   else saved=$("text").value; // answered: do not ask again on the way out
 });
+$("closePage").onclick=()=>{
+  if(dirty()&&!confirm(tx("filters.leave")))return;
+  saved=$("text").value;
+  if(history.length>1)history.back();
+  else location.href="/";
+};
 load();
 </script>
 </body>

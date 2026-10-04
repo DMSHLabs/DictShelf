@@ -34,7 +34,7 @@ const allDictionariesGroup = "all"
 
 // UseUserGroups selects the fork's membership picker at server startup.
 // Upstream's rules editor and API stay available for synchronization, but its
-// rules and diagnostics do not enter the fork's dictionary rows.
+// rules are separate editor filters; diagnostics do not enter the fork picker.
 func (s *Server) UseUserGroups() { s.userGroupsOnly = true }
 
 func (s *Server) pickerGroups(in facet.Input) []facet.Group {

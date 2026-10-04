@@ -7,6 +7,30 @@
 
 // Group membership never writes disabled, prefOrder or the search selector.
 let userGroups=[], selectedGroup="all", groupSaving=false, groupShowAllPreferred=false;
+let groupAvailableFilter="all";
+function availableMatchesFilter(d){
+  const filters=d.filters||[];
+  return groupAvailableFilter==="all"||(groupAvailableFilter==="uncategorized"?filters.length===0:filters.some(g=>JSON.stringify([g.f,g.v])===groupAvailableFilter));
+}
+function appendAvailableFilter(rows,ordered){
+  const bar=document.createElement('label');bar.className='group-available-filter';
+  const title=document.createElement('span');title.textContent=tx('dictUI.availableFilter');
+  const select=document.createElement('select');select.id='groupAvailableFilter';select.disabled=groupSaving;
+  select.add(new Option(tx('panel.allDictionaries'),'all'));
+  const categories=new Map();
+  for(const d of ordered)for(const g of d.filters||[])categories.set(JSON.stringify([g.f,g.v]),g);
+  let section=null,lastFacet=null;
+  for(const [key,g] of [...categories].sort((a,b)=>a[1].fo-b[1].fo||a[1].f.localeCompare(b[1].f)||a[1].vl.localeCompare(b[1].vl))){
+    const labels=window.wudictI18n.facetLabels(g);
+    if(lastFacet!==g.f){section=document.createElement('optgroup');section.label=labels.fl;select.append(section);lastFacet=g.f}
+    section.append(new Option(labels.vl,key));
+  }
+  if(ordered.some(d=>!(d.filters||[]).length))select.add(new Option(tx('dictUI.uncategorized'),'uncategorized'));
+  if(![...select.options].some(option=>option.value===groupAvailableFilter))groupAvailableFilter='all';
+  select.value=groupAvailableFilter;
+  select.onchange=()=>{groupAvailableFilter=select.value;renderGroupRows();$('groupAvailableFilter').focus()};
+  bar.append(title,select);rows.append(bar);
+}
 let pickerGroup=localStorage.getItem("wudict_picker_group")||"all";
 async function loadPickerGroups(){
   try{userGroups=await groupRequest("/api/user-groups","GET");
@@ -51,11 +75,17 @@ function renderGroupRows(){
   const ordered=orderedDicts().filter(matchesDSLParser), members=new Set(group.readonly?ordered.map(d=>d.id):group.members);
   const inside=group.readonly?ordered:orderedGroupDicts(group,ordered);
   const outside=group.readonly?[]:ordered.filter(d=>!members.has(d.id));
-  const visible=showAll.checked?inside.concat(outside):inside;
+  const filtering=showAll.checked&&!group.readonly;
+  // Offer only categories containing dictionaries still available to add.
+  const filterHost=document.createElement('div');
+  if(filtering)appendAvailableFilter(filterHost,outside);
+  const filteredOutside=filtering?outside.filter(availableMatchesFilter):outside;
+  const visible=showAll.checked?inside.concat(filteredOutside):inside;
   $("groupHint").textContent=groupHint(group,showAll.checked,ordered);
+  let filterInserted=false;
   for(const d of visible){
+    if(filtering&&!members.has(d.id)&&!filterInserted){rows.append(...filterHost.childNodes);filterInserted=true}
     const label=document.createElement(!group.readonly&&showAll.checked?"label":"div");label.className="group-row";
-    if(showAll.checked&&inside.length&&d===outside[0])label.classList.add("group-other-first");
     label.dataset.dict=d.id;
     const name=document.createElement("span");name.textContent=dictLabel(d);
     if(group.readonly||!showAll.checked){
@@ -70,7 +100,7 @@ function renderGroupRows(){
       $("closeGroups").disabled=true;$("groupSelect").disabled=true;showAll.disabled=true;
       rows.querySelectorAll("input").forEach(input=>input.disabled=true);
       try{
-        await groupRequest("/api/groups/member","PUT",{group:group.id,dict:d.id,member});
+        await groupRequest("/api/user-groups/member","PUT",{group:group.id,dict:d.id,member});
         group.members=group.members.filter(id=>id!==d.id);if(member)group.members.push(d.id);
         refreshLivePicker();if(group.id===pickerGroup&&$("q").value.trim())doSearch();
       }catch(error){$("groupError").textContent=error.message}
@@ -81,6 +111,8 @@ function renderGroupRows(){
       }
     });
   }
+  if(filtering&&!filterInserted)rows.append(...filterHost.childNodes);
+  if(filtering&&!filteredOutside.length){const empty=document.createElement('p');empty.className='group-filter-empty';empty.textContent=tx('dictUI.filterEmpty');rows.append(empty)}
 }
 async function saveGroupOrder(ids,focusId){
   if(groupSaving)return;
@@ -96,7 +128,7 @@ async function saveGroupOrder(ids,focusId){
     if(group.readonly){
       prefOrder=ids;savePrefs(true);refreshDictUI(true);
     }else{
-      await groupRequest("/api/groups/order","PUT",{group:group.id,members:ids});
+      await groupRequest("/api/user-groups/order","PUT",{group:group.id,members:ids});
       group.members=ids;
     }
     refreshLivePicker();
@@ -173,6 +205,7 @@ $("groupRows").addEventListener("keydown",event=>{
   event.preventDefault();ids.splice(from,1);ids.splice(to,0,id);saveGroupOrder(ids,id);
 });
 $("editGroups").addEventListener("click",async()=>{
+  groupAvailableFilter="all";
   const button=$("editGroups");button.disabled=true;
   $("groupError").textContent="";$("groupHint").textContent=tx("panel.loading");$("groupRows").replaceChildren();
   $("groupSelect").disabled=true;$("groupEditor").showModal();
