@@ -5,13 +5,12 @@
 package server
 
 import (
-	"encoding/json"
+	"fmt"
 	"net/http"
-	"os"
 	"path/filepath"
 	"strings"
 
-	"github.com/wuweidict/wudict/internal/logx"
+	"github.com/wuweidict/wudict/internal/facet"
 )
 
 // Global user styling: two CSS files the user owns, applied to everything.
@@ -92,80 +91,73 @@ func isStyleName(n string) bool {
 // which is the same "no config file and no home directory" case that makes
 // state in-memory rather than scattering a file somewhere nobody asked for.
 func (s *Server) stylePath(name string) string {
-	if s.StyleDir == "" || !isStyleName(name) {
+	if s.User.Style() == "" || !isStyleName(name) {
 		return ""
 	}
-	return filepath.Join(s.StyleDir, name)
+	return filepath.Join(s.User.Style(), name)
+}
+
+// styleCSS is one stylesheet as served: its bytes and their content tag,
+// computed once per change rather than on every page load.
+type styleCSS struct {
+	body []byte
+	tag  string // "" for no stylesheet
+}
+
+func parseCSS(text string) (styleCSS, []facet.Problem) {
+	if text == "" {
+		return styleCSS{}, nil
+	}
+	b := []byte(text)
+	return styleCSS{body: b, tag: assetTag(b)}, nil
+}
+
+// initStyles makes each stylesheet an ownedFile (ownedfile.go): bounded,
+// cached by content, written atomically, an unreadable one kept until the
+// user says to replace it.
+func (s *Server) initStyles() {
+	s.styles = map[string]*ownedFile[styleCSS]{}
+	for _, n := range styleNames {
+		s.styles[n] = &ownedFile[styleCSS]{
+			name: n, path: func() string { return s.stylePath(n) }, max: maxUserCSSBytes, perm: 0o644,
+			parse: parseCSS, absent: func() styleCSS { return styleCSS{} },
+		}
+	}
 }
 
 // styleRead returns the file's bytes, or nil. It never fails: absent is the
 // normal case, and an unreadable file must not stop the app from serving
 // dictionaries - the worst outcome is unstyled, which is where everyone
-// starts.
-func (s *Server) styleRead(name string) []byte {
-	p := s.stylePath(name)
-	if p == "" {
-		return nil
-	}
-	b, err := os.ReadFile(p)
-	if err != nil {
-		if !os.IsNotExist(err) {
-			logx.Warn("could not read %s: %v", p, err)
-		}
-		return nil
-	}
-	if len(b) > maxUserCSSBytes {
-		logx.Warn("%s is larger than %d bytes and is being ignored", p, maxUserCSSBytes)
-		return nil
-	}
-	return b
-}
+// starts. Why it is unreadable is in the editor (handleStyle).
+func (s *Server) styleRead(name string) []byte { return s.styles[name].now().val.body }
 
-// styleWrite replaces one file, temp-file + rename so a crash mid-save leaves
-// the previous stylesheet intact rather than a truncated one. Empty content
-// REMOVES the file: "I cleared the box" and "there is a file here containing
-// nothing" must not be two different states, or the next reader has to
-// explain the difference to somebody.
+// styleWrite stores one stylesheet's text, or removes the file when the text
+// is empty - the rule PUT /api/style applies, for the callers that are not
+// that handler (the Appearance sheet's saved looks).
 func (s *Server) styleWrite(name, body string) error {
-	p := s.stylePath(name)
-	if p == "" {
-		return os.ErrPermission
+	f, ok := s.styles[name]
+	if !ok {
+		return fmt.Errorf("unknown stylesheet %q", name)
 	}
 	if body == "" {
-		if err := os.Remove(p); err != nil && !os.IsNotExist(err) {
-			return err
-		}
-		return nil
-	}
-	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		_, err := f.remove()
 		return err
 	}
-	tmp, err := os.CreateTemp(filepath.Dir(p), ".style-*.css")
-	if err != nil {
-		return err
-	}
-	defer os.Remove(tmp.Name())
-	if _, err := tmp.WriteString(body); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	return os.Rename(tmp.Name(), p)
+	_, err := f.save(body, true)
+	return err
 }
 
 // appStyleTag is the content hash index.html stamps into its <link>, or "" when
 // there is no stylesheet under that name. Same content addressing as
 // assetTag's other callers (D45): the URL changes exactly when the bytes do.
 // One name per call, because the day and night pairs are hashed separately -
-// editing the day sheet must not invalidate the night one's cache entry.
+// editing the day sheet must not invalidate the night one's cache entry. The
+// hash is the one parseCSS computed, so a tag costs no re-read.
 func (s *Server) appStyleTag(name string) string {
-	b := s.styleRead(name)
-	if len(b) == 0 {
-		return ""
+	if f, ok := s.styles[name]; ok {
+		return f.now().val.tag
 	}
-	return assetTag(b)
+	return ""
 }
 
 // styleOff reports the escape hatch. app.css can hide its own editor - one
@@ -207,13 +199,22 @@ func (s *Server) handleUserCSS(w http.ResponseWriter, r *http.Request) {
 // black box, and the point of using files was that an external editor works
 // too.
 func (s *Server) handleStyle(w http.ResponseWriter, r *http.Request) {
+	// a stylesheet that exists but is not applied (too large, not a file)
+	// says why, so the editor's empty box is not mistaken for an empty file
+	problems := map[string]string{}
+	for _, n := range styleNames {
+		if st := s.styles[n].now(); st.unusable() {
+			problems[strings.TrimSuffix(n, ".css")] = st.why
+		}
+	}
 	writeJSON(w, map[string]any{
 		"app":          string(s.styleRead(appCSSName)),
 		"article":      string(s.styleRead(articleCSSName)),
 		"appNight":     string(s.styleRead(appNightCSSName)),
 		"articleNight": string(s.styleRead(articleNightCSSName)),
-		"dir":          s.StyleDir,
-		"writable":     s.StyleDir != "",
+		"dir":          s.User.Style(),
+		"writable":     s.User.Style() != "",
+		"problems":     problems,
 	})
 }
 
@@ -230,28 +231,46 @@ func (s *Server) handleSaveStyle(w http.ResponseWriter, r *http.Request) {
 		Article *string `json:"article"`
 		Theme   string  `json:"theme"`
 	}
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4*maxUserCSSBytes+(1<<12))).Decode(&req); err != nil {
-		http.Error(w, "bad request: "+err.Error(), http.StatusBadRequest)
+	if !decodeJSON(w, r, &req, 4*maxUserCSSBytes+(1<<12)) {
 		return
 	}
-	if s.StyleDir == "" {
-		http.Error(w, "no config directory: there is nowhere to save custom styles", http.StatusConflict)
+	if s.User.Style() == "" {
+		httpErr(w, http.StatusConflict, "%s", "no config directory: there is nowhere to save custom styles")
 		return
 	}
 	appName, articleName := styleNamesFor(req.Theme)
-	for _, f := range []struct {
+	files := []struct {
 		name string
 		body *string
-	}{{appName, req.App}, {articleName, req.Article}} {
+	}{{appName, req.App}, {articleName, req.Article}}
+	replace := r.URL.Query().Get("replace") == "1"
+	// Both checked before either is written: a request that saves one file
+	// and is refused on the other would leave the editor out of step.
+	for _, f := range files {
 		if f.body == nil {
 			continue
 		}
 		if len(*f.body) > maxUserCSSBytes {
-			http.Error(w, f.name+" is too large", http.StatusRequestEntityTooLarge)
+			httpErr(w, http.StatusRequestEntityTooLarge, "%s", f.name+" is too large")
 			return
 		}
-		if err := s.styleWrite(f.name, *f.body); err != nil {
-			http.Error(w, "could not save "+f.name+": "+err.Error(), http.StatusInternalServerError)
+		if st := s.styles[f.name].fresh(); st.unusable() && !replace {
+			httpErr(w, http.StatusConflict, "%s", st.why+" - replace=1 overwrites it")
+			return
+		}
+	}
+	for _, f := range files {
+		if f.body == nil {
+			continue
+		}
+		var err error
+		if *f.body == "" {
+			_, err = s.styles[f.name].remove()
+		} else {
+			_, err = s.styles[f.name].save(*f.body, true)
+		}
+		if err != nil {
+			httpErr(w, http.StatusInternalServerError, "%s", "could not save "+f.name+": "+err.Error())
 			return
 		}
 	}

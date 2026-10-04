@@ -92,12 +92,14 @@ func TestBackgroundPreparationReusesAndDeduplicates(t *testing.T) {
 			if err := e.setIndexRemoved(true); err != nil {
 				t.Fatal(err)
 			}
-			s.reg.prefs.mu.Lock()
-			if s.reg.prefs.dslPending == nil {
-				s.reg.prefs.dslPending = make(map[string]dslIndexOptions)
+			if err := s.reg.prefs.mutate(func(f *prefsFile) {
+				if f.DSLPending == nil {
+					f.DSLPending = make(map[string]dslIndexOptions)
+				}
+				f.DSLPending[e.indexRemovalKey()] = dslIndexOptions{Index: true, Contains: plan.Contains, FullText: plan.FullText}
+			}); err != nil {
+				t.Fatal(err)
 			}
-			s.reg.prefs.dslPending[e.indexRemovalKey()] = dslIndexOptions{Index: true, Contains: plan.Contains, FullText: plan.FullText}
-			s.reg.prefs.mu.Unlock()
 			s.reg.prepareNewDSL()
 			if e.indexBlocked() {
 				t.Fatal("background preparation did not finish")
@@ -188,7 +190,11 @@ func TestRescanNewDictionariesUseOnlySelectedIndexes(t *testing.T) {
 				}
 				s := New(reg)
 				// Previously queued defaults must not leak into the requested result.
-				reg.prefs.dslDefaults = &dslDefaults{Original: dslIndexOptions{Index: true, Contains: true, FullText: true}}
+				if err := reg.prefs.mutate(func(f *prefsFile) {
+					f.DSLDefaults = &dslDefaults{Original: dslIndexOptions{Index: true, Contains: true, FullText: true}}
+				}); err != nil {
+					t.Fatal(err)
+				}
 				if err := os.WriteFile(filepath.Join(dir, "new.dsl"), []byte(sampleDSL), 0600); err != nil {
 					t.Fatal(err)
 				}

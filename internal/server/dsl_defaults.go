@@ -24,10 +24,9 @@ type dslDefaults struct {
 }
 
 func (p *Prefs) newDSLDefaults() dslDefaults {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
-	if p.dslDefaults != nil {
-		return *p.dslDefaults
+	f, _ := p.data()
+	if f.DSLDefaults != nil {
+		return *f.DSLDefaults
 	}
 	return dslDefaults{Original: dslIndexOptions{Index: true}}
 }
@@ -50,37 +49,34 @@ func (s *Server) handleDSLDefaults(w http.ResponseWriter, r *http.Request) {
 	}
 	entries := s.reg.all()
 	p := s.reg.prefs
+	// One read-decide-write under editMu: the record is a local copy, so a
+	// failed save leaves the file as it was - no rollback to spell out.
 	p.editMu.Lock()
 	defer p.editMu.Unlock()
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	old, known, existed := p.dslDefaults, p.dslKnown, p.exists
-	oldParser, oldInitial := p.dslParser, p.dslInitialSetup
-	if old == nil && len(entries) == 0 && len(p.dsl) == 0 && len(known) == 0 && p.dslParser == "" {
-		p.dslInitialSetup = true
+	f, _ := p.data()
+	if f.DSLDefaults == nil && len(entries) == 0 && len(f.DSL) == 0 && len(f.DSLKnown) == 0 && f.DSLParser == "" {
+		f.DSLInitialSetup = true
 	}
-	if p.dslInitialSetup && len(entries) == 0 {
-		p.dslParser = "both"
+	if f.DSLInitialSetup && len(entries) == 0 {
+		f.DSLParser = "both"
 		if !next.GD.Index {
-			p.dslParser = "original"
+			f.DSLParser = "original"
 		} else if !next.Original.Index {
-			p.dslParser = "gd"
+			f.DSLParser = "gd"
 		}
 	}
-	p.dslKnown = maps.Clone(known)
-	if p.dslKnown == nil {
-		p.dslKnown = map[string]bool{}
+	f.DSLKnown = maps.Clone(f.DSLKnown)
+	if f.DSLKnown == nil {
+		f.DSLKnown = map[string]bool{}
 	}
 	// Activating the policy never changes dictionaries already in the registry.
 	for _, e := range entries {
 		if e.dslSource != "" {
-			p.dslKnown[e.dslSource] = true
+			f.DSLKnown[e.dslSource] = true
 		}
 	}
-	p.dslDefaults, p.exists = &next, true
-	if err := p.saveLocked(); err != nil {
-		p.dslDefaults, p.dslKnown, p.exists = old, known, existed
-		p.dslParser, p.dslInitialSetup = oldParser, oldInitial
+	f.DSLDefaults = &next
+	if err := p.store(f); err != nil {
 		httpErr(w, 500, "%v", err)
 		return
 	}
@@ -98,39 +94,36 @@ func (r *Registry) queueNewDSL() error {
 	p := r.prefs
 	p.editMu.Lock()
 	defer p.editMu.Unlock()
-	p.mu.Lock()
-	defer p.mu.Unlock()
+	f, _ := p.data()
 	// Existing installations retain their choices until defaults are saved.
-	if p.dslDefaults == nil {
+	if f.DSLDefaults == nil {
 		return nil
 	}
-	known, pending, removed, modes, existed := p.dslKnown, p.dslPending, p.dslRemoved, p.dsl, p.exists
-	initial := p.dslInitialSetup
-	p.dslKnown = maps.Clone(known)
-	if p.dslKnown == nil {
-		p.dslKnown = map[string]bool{}
+	f.DSLKnown = maps.Clone(f.DSLKnown)
+	if f.DSLKnown == nil {
+		f.DSLKnown = map[string]bool{}
 	}
-	p.dslPending = maps.Clone(pending)
-	if p.dslPending == nil {
-		p.dslPending = map[string]dslIndexOptions{}
+	f.DSLPending = maps.Clone(f.DSLPending)
+	if f.DSLPending == nil {
+		f.DSLPending = map[string]dslIndexOptions{}
 	}
-	p.dslRemoved = maps.Clone(removed)
-	if p.dslRemoved == nil {
-		p.dslRemoved = map[string]bool{}
+	f.DSLRemoved = maps.Clone(f.DSLRemoved)
+	if f.DSLRemoved == nil {
+		f.DSLRemoved = map[string]bool{}
 	}
-	p.dsl = maps.Clone(modes)
-	if p.dsl == nil {
-		p.dsl = map[string]string{}
+	f.DSL = maps.Clone(f.DSL)
+	if f.DSL == nil {
+		f.DSL = map[string]string{}
 	}
-	changed := initial && len(entries) > 0
+	changed := f.DSLInitialSetup && len(entries) > 0
 	if changed {
-		p.dslInitialSetup = false
+		f.DSLInitialSetup = false
 	}
 	for source, family := range families {
-		if p.dslKnown[source] {
+		if f.DSLKnown[source] {
 			continue
 		}
-		p.dslKnown[source] = true
+		f.DSLKnown[source] = true
 		changed = true
 		// A previously prepared family is not a newly added dictionary.
 		existing := false
@@ -143,35 +136,29 @@ func (r *Registry) queueNewDSL() error {
 			continue
 		}
 		mode := "both"
-		if !p.dslDefaults.GD.Index {
+		if !f.DSLDefaults.GD.Index {
 			mode = "original"
-		} else if !p.dslDefaults.Original.Index {
+		} else if !f.DSLDefaults.Original.Index {
 			mode = "gd"
 		}
-		p.dsl[source] = mode
+		f.DSL[source] = mode
 		for _, other := range family {
-			v := p.dslDefaults.Original
+			v := f.DSLDefaults.Original
 			if other.dslVariant == "gd" {
-				v = p.dslDefaults.GD
+				v = f.DSLDefaults.GD
 			}
 			key := other.indexRemovalKey()
 			// Block implicit preparation until the selected plan finishes.
-			p.dslRemoved[key] = true
+			f.DSLRemoved[key] = true
 			if v.Index {
-				p.dslPending[key] = v
+				f.DSLPending[key] = v
 			}
 		}
 	}
 	if !changed {
 		return nil
 	}
-	p.exists = true
-	if err := p.saveLocked(); err != nil {
-		p.dslKnown, p.dslPending, p.dslRemoved, p.dsl, p.exists = known, pending, removed, modes, existed
-		p.dslInitialSetup = initial
-		return err
-	}
-	return nil
+	return p.store(f)
 }
 
 func (r *Registry) prepareNewDSL() {
@@ -180,9 +167,8 @@ func (r *Registry) prepareNewDSL() {
 	for _, e := range r.all() {
 		key := e.indexRemovalKey()
 		p := r.prefs
-		p.mu.RLock()
-		v, ok := p.dslPending[key]
-		p.mu.RUnlock()
+		f, _ := p.data()
+		v, ok := f.DSLPending[key]
 		if !ok {
 			continue
 		}
@@ -191,13 +177,10 @@ func (r *Registry) prepareNewDSL() {
 			continue
 		}
 		p.editMu.Lock()
-		p.mu.Lock()
-		delete(p.dslPending, key)
-		if err := p.saveLocked(); err != nil {
-			p.dslPending[key] = v
+		err := p.mutate(func(f *prefsFile) { delete(f.DSLPending, key) })
+		p.editMu.Unlock()
+		if err != nil {
 			logx.Warn("saving new DSL preparation: %v", err)
 		}
-		p.mu.Unlock()
-		p.editMu.Unlock()
 	}
 }

@@ -94,10 +94,9 @@ func shareListing(ctx context.Context, f Fetcher, u *url.URL) (l listing, ok boo
 	if err != nil {
 		return listing{}, false, nil
 	}
-	req.Header.Set("User-Agent", "wudict")
 	req.Header.Set("Depth", "1")
 	req.Header.Set("Content-Type", "application/xml; charset=utf-8")
-	resp, err := f.client().Do(req)
+	resp, err := f.Client().Do(req)
 	if err != nil {
 		if ctx.Err() != nil {
 			return listing{}, true, ctx.Err()

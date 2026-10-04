@@ -31,6 +31,7 @@ import (
 	"github.com/wuweidict/wudict/internal/config"
 	"github.com/wuweidict/wudict/internal/dict"
 	"github.com/wuweidict/wudict/internal/facet"
+	"github.com/wuweidict/wudict/internal/fsx"
 	"github.com/wuweidict/wudict/internal/ftsq"
 	"github.com/wuweidict/wudict/internal/hilite"
 	"github.com/wuweidict/wudict/internal/htmlref"
@@ -50,6 +51,10 @@ var indexHTML = webAsset(indexHTMLSrc, htmlAsset)
 //go:embed web/setup.html
 var setupHTMLSrc []byte
 var setupHTML = string(webAsset(setupHTMLSrc, htmlAsset))
+
+//go:embed web/groups.html
+var groupsHTMLSrc []byte
+var groupsHTML = webAsset(groupsHTMLSrc, htmlAsset) // the groups.ini editor (D162)
 
 //go:embed web/lemmas.html
 var lemmasHTMLSrc []byte
@@ -117,9 +122,9 @@ type Server struct {
 	// even when the folder came from a CLI flag or the file is read-only.
 	ConfigPath string
 
-	// HowtoDir is where the built-in wudict howto lives (internal/howto), and
-	// where its removal is recorded; "" when this wudict has no such place.
-	HowtoDir string
+	// User is the folder beside the wudict.toml in effect, holding what the
+	// user owns besides it (userdir.go). Empty: none of it can be saved.
+	User UserDir
 
 	// Version identifies this build in the Server response header. A second
 	// launch uses that header to recognise an already-running wudict on
@@ -149,17 +154,18 @@ type Server struct {
 	styledPage []byte
 	styledETag string
 
-	// StyleDir is where the user's global stylesheets live (style.go) - beside
-	// the wudict.toml in effect, resolved by the CLI the same way state.json's
-	// directory is. Empty disables the feature rather than inventing a
-	// location, and the editor says so instead of failing to save.
-	StyleDir string
+	groups ownedFile[*facet.Rules]         // groups.ini (groups.go)
+	styles map[string]*ownedFile[styleCSS] // app.css, article.css (style.go)
 
 	// DictDirOrigin / DictDirEditable describe where the dictionary folders
 	// came from (config layering), so the UI can warn that a flag or an
 	// environment variable will override anything saved to the file.
 	DictDirOrigin   string
 	DictDirEditable bool
+
+	// ConfigProblems are the config file's lines that set nothing
+	// (config.Config.Problems), shown on the setup page.
+	ConfigProblems []string
 
 	// Effective is every tunable key's resolved value and origin, published by
 	// /api/config for shells that override them per device (D101).
@@ -267,18 +273,20 @@ type Server struct {
 	intake     intake.Manager
 	intakeOnce sync.Once
 
-	// reindex is the panel's Rebuild of outdated dictionaries (reindex.go).
-	// The zero value is usable.
-	reindex reindexJob
+	// jobs is the long-running work (jobs.go): the panel's Rebuild, lemma
+	// downloads, index changes. The zero value is usable.
+	jobs jobTable
 
-	// lemmas holds the installer's state: the running jobs, the cached
-	// catalogue and the cached file digests. Built on first use so a Server
+	// lemmas holds the installer's caches - the catalogue and the file
+	// digests; its downloads are jobs (jobs). Built on first use so a Server
 	// made directly in a test needs no constructor.
 	lemmas lemmaState
 }
 
 func New(reg *Registry) *Server {
 	s := &Server{reg: reg, mux: http.NewServeMux(), AllowRemoteDelete: false}
+	s.initGroups()
+	s.initStyles()
 	// The surface is a table (routes.go), so it can be asserted about: the
 	// CORS boundary and the OpenAPI document are both checked against it.
 	for _, rt := range s.routes() {
@@ -351,6 +359,22 @@ func writeJSON(w http.ResponseWriter, v any) {
 	enc := json.NewEncoder(w)
 	enc.SetEscapeHTML(false)
 	_ = enc.Encode(v)
+}
+
+// decodeJSON reads a JSON request body of at most limit bytes into v. On
+// failure it has already answered - 413 for a body over the limit, 400 for
+// anything else - and the caller only returns.
+func decodeJSON(w http.ResponseWriter, r *http.Request, v any, limit int64) bool {
+	err := json.NewDecoder(http.MaxBytesReader(w, r.Body, limit)).Decode(v)
+	switch {
+	case err == nil:
+		return true
+	case errors.As(err, new(*http.MaxBytesError)):
+		httpErr(w, http.StatusRequestEntityTooLarge, "the request is larger than %d bytes", limit)
+	default:
+		httpErr(w, http.StatusBadRequest, "bad request: %v", err)
+	}
+	return false
 }
 
 func httpErr(w http.ResponseWriter, code int, format string, args ...any) {
@@ -505,7 +529,7 @@ func setupPage(dirs []string, serving int, presetLinks string, language string) 
 	switch {
 	case serving > 0:
 		intro = fmt.Sprintf("Serving %s from %s.",
-			plural(serving, "dictionary", "dictionaries"), plural(len(dirs), "folder", "folders"))
+			logx.Plural(serving, "dictionary", "dictionaries"), logx.Plural(len(dirs), "folder", "folders"))
 	case len(dirs) == 1:
 		state := "contains no dictionaries yet"
 		if _, err := os.Stat(dirs[0]); err != nil {
@@ -554,17 +578,11 @@ func (s *Server) handleLemmasPage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache")
 	// {{PRESETS}} is the same courtesy setup.html gets: the app halves of the
-	// presets that asked to be on this page too (presets.go).
+	// presets that asked to be on this page too (presets.go). Rendered per
+	// request rather than precomputed: the page carries {{T:…}} keys and is
+	// served in the reader's language.
 	page := bytes.ReplaceAll(lemmasHTML, []byte("{{CSS}}"), []byte(cssTag))
 	_, _ = io.WriteString(w, renderUI(string(bytes.ReplaceAll(page, []byte("{{PRESETS}}"), []byte(s.pagePresetLinks()))), s.reg.prefs.Language()))
-}
-
-// plural renders a count with the right noun ("1 folder", "3 folders").
-func plural(n int, one, many string) string {
-	if n == 1 {
-		return fmt.Sprintf("%d %s", n, one)
-	}
-	return fmt.Sprintf("%d %s", n, many)
 }
 
 func htmlEscape(s string) string {
@@ -785,6 +803,11 @@ type dictInfo struct {
 	// see internal/facet, which also says why absence never becomes a value.
 	Groups []facet.Group `json:"groups,omitempty"`
 
+	// Job is the change to this dictionary's indexes running now (an ingest
+	// job, jobs.go), so a page loaded mid-way shows it and follows it with
+	// /api/ingest; absent when none runs.
+	Job *jobProgress `json:"job,omitempty"`
+
 	// ArticleLang: the ISO 639-1 language the articles are written in, the
 	// default voice for reading a selection aloud (facet.ArticleLang). Derived
 	// alongside Groups from the same evidence; "" when nothing says.
@@ -815,6 +838,10 @@ type dictMsg struct {
 	T     string    `json:"t"`
 	Total int       `json:"total,omitempty"`
 	Dict  *dictInfo `json:"dict,omitempty"`
+	// GroupsProblems counts what groups.ini skipped (groups.go), on "begin":
+	// a hand edit with a broken regex is otherwise invisible until someone
+	// opens the editor, so the page marks the way to it.
+	GroupsProblems int `json:"groupsProblems,omitempty"`
 }
 
 // handleDicts streams the dictionary list as newline-delimited JSON, for the
@@ -834,27 +861,14 @@ type dictMsg struct {
 func (s *Server) handleDicts(w http.ResponseWriter, r *http.Request) {
 	entries := s.reg.all()
 
-	fl, ok := w.(http.Flusher)
+	st, ok := newStream(w, "application/x-ndjson; charset=utf-8")
 	if !ok {
-		httpErr(w, 500, "streaming unsupported")
 		return
 	}
-	w.Header().Set("Content-Type", "application/x-ndjson; charset=utf-8")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("X-Accel-Buffering", "no") // disable proxy buffering (Caddy/nginx)
-	enc := json.NewEncoder(w)
-	enc.SetEscapeHTML(false)
-	// unlike handleSearch, whose callback is serialized by StreamOpen, the
-	// workers below write concurrently - so this one needs the mutex.
-	var mu sync.Mutex
-	writeLine := func(m dictMsg) {
-		mu.Lock()
-		defer mu.Unlock()
-		_ = enc.Encode(m) // Encode appends '\n' → one NDJSON record
-		fl.Flush()
-	}
+	// the workers below write concurrently; stream serialises them
+	writeLine := func(m dictMsg) { st.line(m) }
 
-	writeLine(dictMsg{T: "begin", Total: len(entries)})
+	writeLine(dictMsg{T: "begin", Total: len(entries), GroupsProblems: facet.CountProblems(s.groupsNow().problems)})
 
 	// same width as a search fan-out, and for the same reason: this is the
 	// other place the whole library is touched at once (search.Workers)
@@ -893,6 +907,9 @@ func (s *Server) dictInfoFor(e *entry) dictInfo {
 	}
 	addProvenance(&info, e.Path)
 	info.Builtin = e.builtin
+	if js, ok := s.jobs.status(ingestKey(e.ID)); ok && js.Running {
+		info.Job = &jobProgress{Done: js.Done, Total: js.Total}
+	}
 	if e.noPackableMedia() {
 		info.HasMedia = false // a prior pack found nothing - stop offering it
 	}
@@ -976,6 +993,8 @@ func (s *Server) langFacts(info *dictInfo, name, declared, contents string) {
 		Roots:    s.reg.Dirs(),
 		Declared: declared,
 		Contents: contents,
+		Rules:    s.groupsNow().val,
+		File:     filepath.Base(langPath(info.Path)),
 	}
 	info.Groups = facet.Derive(in)
 	info.ArticleLang = facet.ArticleLang(in)
@@ -984,7 +1003,10 @@ func (s *Server) langFacts(info *dictInfo, name, declared, contents string) {
 // rebuildable reports that an entry has a source to prepare from: not a
 // standalone text.db, and the file still on disk.
 func rebuildable(path string) bool {
-	return !store.IsTextDB(path) && fileExists(path) && fileExists(dict.SourceInput(path))
+	// The source input as well as the path: a dictionary whose file is there but
+	// whose actual input (a .dsl.dz beside a descriptor, the fork's GD work)
+	// is gone has nothing to rebuild from.
+	return !store.IsTextDB(path) && fsx.FileExists(path) && fsx.FileExists(dict.SourceInput(path))
 }
 
 // validPrepared names the prepared database an entry answers from, checked:
@@ -1015,7 +1037,7 @@ func preparedInfo(path string) (store.Prepared, bool) {
 // native dictionary (which has no source).
 func addProvenance(info *dictInfo, entryPath string) {
 	native := store.IsTextDB(entryPath)
-	if !native && fileExists(entryPath) {
+	if !native && fsx.FileExists(entryPath) {
 		info.Source = entryPath
 		info.MediaSrc = dict.CompanionMedia(dict.SourceInput(entryPath))
 	}
@@ -1028,12 +1050,12 @@ func addProvenance(info *dictInfo, entryPath string) {
 			textDB = p
 		}
 	}
-	if fileExists(textDB) {
+	if fsx.FileExists(textDB) {
 		info.TextDB = textDB
 		if fi, err := os.Stat(textDB); err == nil {
 			info.DBSize = fi.Size()
 		}
-		if mediaDB := store.MediaSibling(textDB); fileExists(mediaDB) {
+		if mediaDB := store.MediaSibling(textDB); fsx.FileExists(mediaDB) {
 			info.MediaDB = mediaDB
 			if fi, err := os.Stat(mediaDB); err == nil {
 				info.MediaSz = fi.Size()
@@ -1050,19 +1072,6 @@ func addProvenance(info *dictInfo, entryPath string) {
 	// SLOB (which embeds resources - not cheaply enumerable, so assume it may).
 	info.HasMedia = info.MediaDB != "" || len(info.MediaSrc) > 0 ||
 		(info.Source != "" && strings.HasSuffix(strings.ToLower(info.Source), ".slob"))
-}
-
-func fileExists(p string) bool {
-	if p == "" {
-		return false
-	}
-	fi, err := os.Stat(p)
-	return err == nil && !fi.IsDir()
-}
-
-func dirExists(p string) bool {
-	fi, err := os.Stat(p)
-	return err == nil && fi.IsDir()
 }
 
 func (s *Server) handleRescan(w http.ResponseWriter, r *http.Request) {
@@ -1280,20 +1289,11 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fl, ok := w.(http.Flusher)
+	st, ok := newStream(w, "application/x-ndjson; charset=utf-8")
 	if !ok {
-		httpErr(w, 500, "streaming unsupported")
 		return
 	}
-	w.Header().Set("Content-Type", "application/x-ndjson; charset=utf-8")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("X-Accel-Buffering", "no") // disable proxy buffering (Caddy/nginx)
-	enc := json.NewEncoder(w)
-	enc.SetEscapeHTML(false)
-	writeLine := func(m streamMsg) {
-		_ = enc.Encode(m) // Encode appends '\n' → one NDJSON record
-		fl.Flush()
-	}
+	writeLine := func(m streamMsg) { st.line(m) }
 
 	// Emit the slot layout FIRST, from cheap entry ids only - no opens on the
 	// request path. The client paints the empty accordion immediately; each
@@ -1944,91 +1944,91 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	fl, ok := w.(http.Flusher)
+	st, ok := newStream(w, "text/event-stream")
 	if !ok {
-		httpErr(w, 500, "streaming unsupported")
 		return
 	}
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
-
-	emit := func(event string, v any) {
-		var buf strings.Builder
-		enc := json.NewEncoder(&buf)
-		enc.SetEscapeHTML(false)
-		_ = enc.Encode(v) // Encode appends \n - harmless before the blank line
-		fmt.Fprintf(w, "event: %s\ndata: %s\n", event, buf.String())
-		fl.Flush()
-	}
-
-	last := time.Now()
-	progress := func(done, total int) {
-		if time.Since(last) > 200*time.Millisecond {
+	// The change runs as the dictionary's job (jobs.go), not inside this
+	// request: a page that closes or reloads mid-way loses nothing, and the
+	// next one finds the job in /api/dicts and follows it here again. While
+	// one runs, a request for the same dictionary follows that one - what it
+	// asked for is not queued behind it, and the "done" it gets carries what
+	// the dictionary now has.
+	key := ingestKey(e.ID)
+	s.jobs.start(key, 0, jobStatus{}, func(j *job) {
+		last := time.Time{}
+		progress := func(done, total int) {
+			if time.Since(last) < 200*time.Millisecond {
+				return
+			}
 			last = time.Now()
-			emit("progress", map[string]int{"done": done, "total": total})
+			j.update(func(js *jobStatus) { js.Done, js.Total = int64(done), int64(total) })
 		}
-	}
-	// The cheapest possible preparation: headwords, for a dictionary that has
-	// no database at all. It is the panel's "index" chip, and it exists as its
-	// own path because setFeatures opens the direct backend before it starts
-	// (registry.go) - which builds the very in-RAM headword index the whole
-	// operation is about replacing, at 300-500 bytes per headword, and holds it
-	// for the length of the ingest. On the dictionaries this chip is FOR - the
-	// heavy ones a phone's search budget declined, which is why they are still
-	// unprepared - that doubled working set is the difference between preparing
-	// and being killed. ensureBaseIndex parses the file once and never opens
-	// the backend, so the chip takes that door instead.
-	//
-	// Only when nothing is prepared yet: `level=headwords` on a dictionary that
-	// already has a database keeps its old meaning (turn full text off), which
-	// is a rebuild and belongs in setFeatures.
-	base := false
-	if q.Get("level") == "headwords" && !want.Contains && !want.Media {
-		if textDB, ok := validPrepared(e.Path); !ok || !fileExists(textDB) {
-			base = true
+		// A dictionary whose index was removed from the library (the fork's
+		// GD/DSL work) is restored by an explicit ingest, before the feature
+		// change: this is the door the panel's chip and the DSL settings use
+		// to bring a removed index back.
+		if e.indexBlocked() {
+			if err := e.restoreDSLIndex(store.Plan{FullText: want.FullText, Contains: want.Contains}, progress); err != nil {
+				j.update(func(js *jobStatus) { js.Err = err.Error() })
+				return
+			}
 		}
-	}
-
-	if e.indexBlocked() {
-		err = e.restoreDSLIndex(store.Plan{FullText: want.FullText, Contains: want.Contains}, progress)
-		if err != nil {
-			emit("error", map[string]string{"error": err.Error()})
+		if err := e.setFeatures(want, progress); err != nil {
+			j.update(func(js *jobStatus) { js.Err = err.Error() })
 			return
 		}
-	}
-	if base {
-		// setFeatures takes both of these itself; ensureBaseIndex takes
-		// neither, because its other caller (demandIndex) chooses its own
-		// lane. The power hold matters as much as the lane: this chip is the
-		// phone-facing ingest, so it is exactly the work that must not be
-		// mistaken for idleness and throttled while the user waits on it.
-		defer HoldActiveProcs()()
-		// Released by defer, not inline: ensureBaseIndex runs third-party
-		// parsers, and a panic here - which the recover above answers with a
-		// 500 - would otherwise consume the lane's only slot and block every
-		// front ingest from then on.
-		acquire(frontLimit)
-		defer release(frontLimit)
-		err = e.ensureBaseIndex(progress)
-	} else {
-		err = e.setFeatures(want, progress)
-	}
-	if err != nil {
-		emit("error", map[string]string{"error": err.Error()})
-		return
-	}
-	d, err := e.open()
-	if err != nil {
-		emit("error", map[string]string{"error": err.Error()})
-		return
-	}
-	m := d.Meta()
-	dbPath, _ := validPrepared(e.Path)
-	emit("done", dictInfo{
-		ID: e.ID, Name: m.Name, Format: m.Format, Path: e.Path,
-		Entries: m.EntryCount, Caps: d.Caps(),
-		DBPath: dbPath,
+		d, err := e.open()
+		if err != nil {
+			j.update(func(js *jobStatus) { js.Err = err.Error() })
+			return
+		}
+		m := d.Meta()
+		dbPath, _ := validPrepared(e.Path)
+		info := dictInfo{
+			ID: e.ID, Name: m.Name, Format: m.Format, Path: e.Path,
+			Entries: m.EntryCount, Caps: d.Caps(),
+			DBPath: dbPath,
+		}
+		j.update(func(js *jobStatus) { js.Result = info })
 	})
+	s.followIngest(r.Context(), st, key)
+}
+
+// jobProgress is a running job as a list row carries it.
+type jobProgress struct {
+	Done  int64 `json:"done"`
+	Total int64 `json:"total"`
+}
+
+// ingestKey is one dictionary's index change, as a job.
+func ingestKey(id string) string { return "ingest:" + id }
+
+// followIngest streams the job under key until it ends or the client leaves:
+// "progress" on each change, then "done" with the dictionary as it now is, or
+// "error" with why.
+func (s *Server) followIngest(ctx context.Context, st *respStream, key string) {
+	for {
+		js, next, ok := s.jobs.watch(key)
+		switch {
+		case !ok:
+			st.event("error", map[string]string{"error": "no such job"})
+			return
+		case !js.Running && js.Err != "":
+			st.event("error", map[string]string{"error": js.Err})
+			return
+		case !js.Running:
+			st.event("done", js.Result)
+			return
+		case js.Done > 0 || js.Total > 0:
+			st.event("progress", map[string]int64{"done": js.Done, "total": js.Total})
+		}
+		select {
+		case <-next:
+		case <-ctx.Done():
+			return // the client left; the job goes on
+		}
+	}
 }
 
 // assetTag is a short content hash, used as the ?v= of an embedded script so

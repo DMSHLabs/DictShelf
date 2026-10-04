@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/wuweidict/wudict/internal/dict"
+	"github.com/wuweidict/wudict/internal/fsx"
 )
 
 // listingSrc is a source with one packable resource.
@@ -107,7 +108,7 @@ func TestReconcile(t *testing.T) {
 	if !out.Rebuilt || out.Packed != 1 || !MediaPaired(out.TextDB) {
 		t.Errorf("edited source, MediaKeep: %+v", out)
 	}
-	if out = run(Target{Media: MediaOff}); !out.MediaRemoved || fileExists(MediaSibling(out.TextDB)) {
+	if out = run(Target{Media: MediaOff}); !out.MediaRemoved || fsx.FileExists(MediaSibling(out.TextDB)) {
 		t.Errorf("MediaOff: %+v", out)
 	}
 

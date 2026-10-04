@@ -155,10 +155,10 @@ type looksFile struct {
 }
 
 func (s *Server) looksPath() string {
-	if s.StyleDir == "" {
+	if s.User.Style() == "" {
 		return ""
 	}
-	return filepath.Join(s.StyleDir, "looks.json")
+	return filepath.Join(s.User.Style(), "looks.json")
 }
 
 func (s *Server) looksRead() looksFile {
@@ -450,7 +450,7 @@ func normalizeLayers(ids []string) []string {
 // over its bridge - so a failure past this point leaves the page and the
 // shell disagreeing, which the page reports rather than hiding.
 func (s *Server) applyLook(l look) error {
-	if s.StyleDir == "" {
+	if s.User.Style() == "" {
 		return errors.New("no configuration folder to write to")
 	}
 	// One write for the settings, so the two that live in state.json can
@@ -502,7 +502,7 @@ func (s *Server) lookPayload() map[string]any {
 		rows = append(rows, map[string]any{"id": l.ID, "name": l.Name, "builtin": false})
 	}
 	return map[string]any{
-		"writable": s.StyleDir != "",
+		"writable": s.User.Style() != "",
 		"current":  f.Current,
 		"looks":    rows,
 	}
@@ -556,7 +556,7 @@ func (s *Server) handleLookSave(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad request: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	if s.StyleDir == "" {
+	if s.User.Style() == "" {
 		http.Error(w, "no configuration folder: there is nowhere to save a look", http.StatusConflict)
 		return
 	}
@@ -595,7 +595,7 @@ func (s *Server) handleLookUpdate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad request: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	if s.StyleDir == "" {
+	if s.User.Style() == "" {
 		http.Error(w, "no configuration folder: there is nowhere to save a look", http.StatusConflict)
 		return
 	}
@@ -679,7 +679,7 @@ func (s *Server) handleLookApply(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad request: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	if s.StyleDir == "" {
+	if s.User.Style() == "" {
 		http.Error(w, "no configuration folder: there is nowhere to remember this", http.StatusConflict)
 		return
 	}

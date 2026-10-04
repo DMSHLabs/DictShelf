@@ -19,6 +19,7 @@ import (
 
 	"github.com/wuweidict/wudict/internal/dict"
 	"github.com/wuweidict/wudict/internal/format/wmd"
+	"github.com/wuweidict/wudict/internal/fsx"
 	"github.com/wuweidict/wudict/internal/htmlref"
 	"github.com/wuweidict/wudict/internal/logx"
 	"github.com/wuweidict/wudict/internal/resource"
@@ -106,7 +107,7 @@ func cmdDump(args []string) error {
 	// Said before anything is written, because after it is too late to be a
 	// warning. Named files, not a general caution: "will be overwritten" is
 	// only useful if you can tell whether it means yours.
-	if dirExists(out) {
+	if fsx.DirExists(out) {
 		if scope == resNone {
 			fmt.Fprintf(os.Stderr, "%s already exists - %s will be overwritten\n", out, filepath.Base(path))
 		} else {
@@ -141,14 +142,14 @@ func cmdDump(args []string) error {
 		return err
 	}
 	size, _ := fileSize(path)
-	fmt.Printf("%s → %s (%s)\n", plural(n, "entry", "entries"), path, humanSize(size))
+	fmt.Printf("%s → %s (%s)\n", logx.Plural(n, "entry", "entries"), path, logx.Size(size))
 
 	files, bytes, err := dumpResources(src, resDir, scope)
 	if err != nil {
 		return err
 	}
 	if files > 0 {
-		fmt.Printf("%s → %s (%s)\n", plural(files, "resource", "resources"), resDir, humanSize(bytes))
+		fmt.Printf("%s → %s (%s)\n", logx.Plural(files, "resource", "resources"), resDir, logx.Size(bytes))
 	}
 	return nil
 }

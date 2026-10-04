@@ -6,6 +6,8 @@
 
 package server
 
+import "github.com/wuweidict/wudict/internal/fsx"
+
 // releasePrepared hands back the prepared databases an ingest is about to
 // replace. A rebuild ends in os.Rename over the existing text.db (and media
 // packing over media.db), and Windows refuses a rename over an open file -
@@ -26,7 +28,7 @@ package server
 // database about to be replaced. Every caller holds ingestMu, so the janitor
 // cannot drop or reopen anything here either.
 func releasePrepared(e *entry, textDB string) {
-	if !fileExists(textDB) {
+	if !fsx.FileExists(textDB) {
 		return // nothing on disk to rename over: a first ingest creates it
 	}
 	e.rebuilding.Store(true)

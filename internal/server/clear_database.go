@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 
 	"github.com/wuweidict/wudict/internal/dict"
+	"github.com/wuweidict/wudict/internal/fsx"
 	"github.com/wuweidict/wudict/internal/store"
 )
 
@@ -89,7 +90,7 @@ func (r *Registry) cleanupLibrary() error {
 			// Media packing is no longer offered in this fork. These copies
 			// are redundant; resources continue to come from the source files.
 			media := store.MediaDBPath(f.Dir)
-			if fileExists(media) {
+			if fsx.FileExists(media) {
 				if e := r.entryAt(store.TextDBPath(f.Dir)); e != nil {
 					e.closeNow()
 				}

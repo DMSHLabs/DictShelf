@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/wuweidict/wudict/internal/dict"
+	"github.com/wuweidict/wudict/internal/fsx"
 	"github.com/wuweidict/wudict/internal/htmlref"
 )
 
@@ -111,7 +112,7 @@ func (s *Server) aboutOf(e *entry, base string) (aboutInfo, bool) {
 	// A source that has been moved away or deleted still leaves a working
 	// library behind (D2/D9); its sidecar is simply gone, and the description
 	// copied at ingest is then all there is.
-	if src.srcPath != "" && fileExists(src.srcPath) {
+	if src.srcPath != "" && fsx.FileExists(src.srcPath) {
 		// With a format name, ask that format's provider; without one - the
 		// dictionary is neither prepared, nor probeable, nor already open -
 		// ask them all, which is a handful of stats and still no open.

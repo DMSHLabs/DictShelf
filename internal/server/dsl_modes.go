@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/wuweidict/wudict/internal/dict"
+	"github.com/wuweidict/wudict/internal/fsx"
 	"github.com/wuweidict/wudict/internal/store"
 )
 
@@ -48,11 +49,10 @@ func dslIdentity(path string) (source, variant string) {
 }
 
 func (p *Prefs) dslMode(source string) string {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
-	mode := p.dsl[source]
-	if p.dslParser == "original" || p.dslParser == "gd" || p.dslParser == "both" {
-		return p.dslParser
+	f, _ := p.data()
+	mode := f.DSL[source]
+	if f.DSLParser == "original" || f.DSLParser == "gd" || f.DSLParser == "both" {
+		return f.DSLParser
 	}
 	if mode == "original" || mode == "gd" {
 		return mode
@@ -61,10 +61,9 @@ func (p *Prefs) dslMode(source string) string {
 }
 
 func (p *Prefs) parserSelection() string {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
-	if p.dslParser == "original" || p.dslParser == "gd" {
-		return p.dslParser
+	f, _ := p.data()
+	if f.DSLParser == "original" || f.DSLParser == "gd" {
+		return f.DSLParser
 	}
 	return "both"
 }
@@ -74,14 +73,13 @@ func (r *Registry) dslView(e *entry) *dslView {
 		return nil
 	}
 	v := &dslView{Source: e.dslSource, Variant: e.dslVariant, Mode: r.prefs.dslMode(e.dslSource)}
-	r.prefs.mu.RLock()
-	v.Parser = r.prefs.dslParser
+	f, _ := r.prefs.data()
+	v.Parser = f.DSLParser
 	v.GlobalParser = v.Parser != ""
-	r.prefs.mu.RUnlock()
 	if v.Parser == "" {
 		v.Parser = "both"
 	}
-	v.SourceAvailable = fileExists(e.dslSource)
+	v.SourceAvailable = fsx.FileExists(e.dslSource)
 	v.IndexRemoved = e.indexBlocked()
 	for _, other := range r.all() {
 		if other.dslSource != e.dslSource {
@@ -125,10 +123,8 @@ func (e *entry) indexBlocked() bool {
 	if e.reg == nil {
 		return false
 	}
-	p := e.reg.prefs
-	p.mu.RLock()
-	defer p.mu.RUnlock()
-	return p.dslRemoved[e.indexRemovalKey()]
+	f, _ := e.reg.prefs.data()
+	return f.DSLRemoved[e.indexRemovalKey()]
 }
 
 func (e *entry) indexRemovalKey() string {
@@ -145,29 +141,17 @@ func (e *entry) setIndexRemoved(removed bool) error {
 	p := e.reg.prefs
 	p.editMu.Lock()
 	defer p.editMu.Unlock()
-	p.mu.Lock()
-	defer p.mu.Unlock()
 	key := e.indexRemovalKey()
-	old, exists := p.dslRemoved[key], p.exists
-	if p.dslRemoved == nil {
-		p.dslRemoved = make(map[string]bool)
-	}
-	if removed {
-		p.dslRemoved[key] = true
-	} else {
-		delete(p.dslRemoved, key)
-	}
-	p.exists = true
-	if err := p.saveLocked(); err != nil {
-		if old {
-			p.dslRemoved[key] = true
-		} else {
-			delete(p.dslRemoved, key)
+	return p.mutate(func(f *prefsFile) {
+		if f.DSLRemoved == nil {
+			f.DSLRemoved = make(map[string]bool)
 		}
-		p.exists = exists
-		return err
-	}
-	return nil
+		if removed {
+			f.DSLRemoved[key] = true
+		} else {
+			delete(f.DSLRemoved, key)
+		}
+	})
 }
 
 // Only an explicit ingest request may restore a deliberately removed index.
@@ -255,14 +239,12 @@ func (s *Server) handleDSLMode(w http.ResponseWriter, req *http.Request) {
 	p := s.reg.prefs
 	p.editMu.Lock()
 	defer p.editMu.Unlock()
-	p.mu.Lock()
-	old, oldExists := p.dsl, p.exists
-	oldParser := p.dslParser
+	f, _ := p.data()
 	if body.Global {
-		p.dslParser = body.Mode
+		f.DSLParser = body.Mode
 	}
-	next := make(map[string]string, len(old)+len(entries))
-	for k, v := range old {
+	next := make(map[string]string, len(f.DSL)+len(entries))
+	for k, v := range f.DSL {
 		next[k] = v
 	}
 	for _, e := range entries {
@@ -270,14 +252,8 @@ func (s *Server) handleDSLMode(w http.ResponseWriter, req *http.Request) {
 			next[e.dslSource] = body.Mode
 		}
 	}
-	p.dsl, p.exists = next, true
-	err := p.saveLocked()
-	if err != nil {
-		p.dsl, p.exists = old, oldExists
-		p.dslParser = oldParser
-	}
-	p.mu.Unlock()
-	if err != nil {
+	f.DSL = next
+	if err := p.store(f); err != nil {
 		httpErr(w, 500, "%v", err)
 		return
 	}

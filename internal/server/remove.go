@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/wuweidict/wudict/internal/dict"
+	"github.com/wuweidict/wudict/internal/fsx"
 	"github.com/wuweidict/wudict/internal/howto"
 	"github.com/wuweidict/wudict/internal/logx"
 	"github.com/wuweidict/wudict/internal/store"
@@ -114,7 +115,7 @@ func (r *Registry) Remove(id string, dropPrepared, dropSource bool) (removal, er
 		// D24 §4, read in the other direction. Media that is not packed lives
 		// only in the original, and the prepared text.db would keep serving
 		// articles whose images and audio had been deleted.
-		packed := prepared != "" && fileExists(store.MediaDBPath(prepared))
+		packed := prepared != "" && fsx.FileExists(store.MediaDBPath(prepared))
 		if !packed && !e.noPackableMedia() {
 			return rep, fmt.Errorf(
 				"pack media for %q first - its images and audio are still only in the original files", rep.Name)
@@ -286,10 +287,10 @@ func (s *Server) handleRemoveLibrary(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 400, "%v", err)
 		return
 	}
-	if builtin && s.HowtoDir != "" {
+	if builtin && s.User.Builtin() != "" {
 		// Recorded, so the next start does not write it back; Setup's
 		// "Bring back the wudict howto" undoes it (POST /api/howto?restore=1).
-		if err := howto.MarkRemoved(s.HowtoDir); err != nil {
+		if err := howto.MarkRemoved(s.User.Builtin()); err != nil {
 			rep.Note = "it will be back at the next start: " + err.Error()
 		}
 	}

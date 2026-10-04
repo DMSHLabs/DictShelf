@@ -5,8 +5,10 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 // newPrefsServer builds a server over two dictionaries with a real state file,
@@ -338,6 +340,41 @@ func TestPrefsSpeakOff(t *testing.T) {
 	}
 }
 
+// groupsOff (D149) is a set of opaque facet ids: bounded, de-duplicated and
+// sorted on the way in, left alone by a write that does not mention it, and
+// cleared only by one that sends it empty.
+func TestPrefsGroupsOff(t *testing.T) {
+	s, state := newPrefsServer(t)
+	long := strings.Repeat("x", 65)
+	for _, tc := range []struct {
+		name, body string
+		want       []string
+	}{
+		{"absent shows everything", `{"ui":{"fontSize":24}}`, nil},
+		{"hidden, cleaned", `{"ui":{"groupsOff":["publisher"," my groups ","publisher","","` + long + `"]}}`, []string{"my groups", "publisher"}},
+		{"a dicts-only write keeps it", `{"dicts":[]}`, []string{"my groups", "publisher"}},
+		{"empty shows everything again", `{"ui":{"groupsOff":[]}}`, nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			putPrefs(t, s, tc.body)
+			var got []string
+			if ui := LoadPrefs(state).UI(); ui != nil {
+				got = ui.GroupsOff
+			}
+			if !slices.Equal(got, tc.want) {
+				t.Fatalf("groupsOff = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func (u *UIPrefs) spoken() bool {
+	if u == nil {
+		return false
+	}
+	return u.SpeakOff
+}
+
 func (u *UIPrefs) size() int {
 	if u == nil {
 		return 0
@@ -350,13 +387,6 @@ func (u *UIPrefs) flags() (hlOff, fastFirst bool) {
 		return false, false
 	}
 	return u.HLOff, u.FastFirst
-}
-
-func (u *UIPrefs) spoken() bool {
-	if u == nil {
-		return false
-	}
-	return u.SpeakOff
 }
 
 // The file-name rung of heal's identity ladder, from both sides. It is the
@@ -434,5 +464,49 @@ func TestPrefsFileNameRungNeedsBothSidesUnique(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// A JSON body over the limit is 413, a malformed one 400, and both answer in
+// the API's JSON error shape (decodeJSON).
+func TestDecodeJSONStatus(t *testing.T) {
+	s, _ := newPrefsServer(t)
+	for _, tc := range []struct {
+		name string
+		body string
+		code int
+	}{
+		{"malformed", "{", 400},
+		{"over the limit", `{"dicts":[` + strings.Repeat(`{"id":"x"},`, 120_000) + `{"id":"x"}]}`, 413},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			s.ServeHTTP(rec, newRequest("PUT", "/api/prefs", strings.NewReader(tc.body)))
+			if rec.Code != tc.code || !strings.Contains(rec.Body.String(), `"error"`) {
+				t.Errorf("code %d body %.80s, want %d with a JSON error", rec.Code, rec.Body.String(), tc.code)
+			}
+		})
+	}
+}
+
+// A hand edit to state.json made while the app runs is adopted, and the next
+// save builds on it instead of writing it away: a save that does not mention
+// the text size keeps the size the user just typed into the file.
+func TestPrefsHandEditSurvivesASave(t *testing.T) {
+	s, state := newPrefsServer(t)
+	putPrefs(t, s, `{"dicts":[],"ui":{"fontSize":14}}`)
+	if err := os.WriteFile(state, []byte(`{"version":1,"ui":{"fontSize":21},"dicts":[]}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	putPrefs(t, s, `{"dicts":[]}`) // the list only
+	if ui := LoadPrefs(state).UI(); ui == nil || ui.FontSize != 21 {
+		t.Errorf("the hand-edited size was written away: %+v", ui)
+	}
+	// and it is what the app now reports, not only what the file holds
+	s.reg.prefs.file.mu.Lock()
+	s.reg.prefs.file.checked = time.Time{}
+	s.reg.prefs.file.mu.Unlock()
+	if ui := s.reg.prefs.UI(); ui == nil || ui.FontSize != 21 {
+		t.Errorf("the running app does not see the hand edit: %+v", ui)
 	}
 }

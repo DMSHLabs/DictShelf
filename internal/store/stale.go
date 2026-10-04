@@ -9,6 +9,7 @@ import (
 	"strconv"
 
 	"github.com/wuweidict/wudict/internal/dict"
+	"github.com/wuweidict/wudict/internal/fsx"
 )
 
 // A prepared dictionary is frozen output of the code that built it. When that
@@ -116,7 +117,7 @@ func Inspect(textDB string) Prepared {
 	if m, schema, err := ReadMetaSchema(textDB); err == nil {
 		p.Meta, p.Schema, p.Plan = m, schema, PlanFromMeta(m)
 	}
-	if sib := MediaSibling(textDB); sib != "" && fileExists(sib) {
+	if sib := MediaSibling(textDB); sib != "" && fsx.FileExists(sib) {
 		p.Media = true
 	}
 	return p
@@ -244,7 +245,7 @@ func keptUUID(dbPath, srcPath string) string {
 	if err != nil || schema != schemaVersion || srcPath == "" {
 		return ""
 	}
-	if !sameSource(m["source_path"], srcPath) || sourceChangedMeta(m, srcPath) {
+	if !fsx.SamePath(m["source_path"], srcPath) || sourceChangedMeta(m, srcPath) {
 		return ""
 	}
 	return m["dict_uuid"]

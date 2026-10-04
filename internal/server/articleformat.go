@@ -6,9 +6,10 @@ package server
 
 import (
 	"fmt"
-	"github.com/wuweidict/wudict/internal/artmark"
 	"net/http"
 	"strings"
+
+	"github.com/wuweidict/wudict/internal/artmark"
 
 	"golang.org/x/net/html"
 

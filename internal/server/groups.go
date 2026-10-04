@@ -1,265 +1,133 @@
-// Copyright (C) 2026 DmShAl (Shepeta Dmitry)
+// Copyright (C) 2026 glowinthedark
+//
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 package server
 
 import (
-	"crypto/rand"
-	"encoding/hex"
-	"encoding/json"
+	"bytes"
+	"errors"
+	"io"
 	"net/http"
-	"slices"
 	"strings"
-	"unicode"
+	"time"
+	"unicode/utf8"
+
+	"github.com/wuweidict/wudict/internal/facet"
 )
 
-const allDictionariesGroup = "all"
+// The dictionary picker's groups after language and language pair come from
+// groups.ini beside the wudict.toml in effect (D162), edited on the /groups
+// page or in any text editor. While there is no such file the embedded one is
+// in effect, so a library that never customised anything follows the built-in
+// list as it improves; the first save makes the user's copy the whole truth.
 
-// DictionaryGroup is collection metadata in state.json. Membership is stored
-// on DictPref so the existing identity repair also repairs group membership.
-type DictionaryGroup struct {
-	ID    string   `json:"id"`
-	Name  string   `json:"name"`
-	Order []string `json:"order,omitempty"` // member IDs; independent of the global dictionary order
+const (
+	// GroupsFileName is the file, beside wudict.toml.
+	GroupsFileName = "groups.ini"
+	// A list of items, not a document: far above any real file, far below
+	// anything that would cost a reader.
+	maxGroupsBytes = 256 << 10
+)
+
+// groupsNow is groups.ini in effect (userfile.go): the rules, re-read at most
+// once a second.
+func (s *Server) groupsNow() fileState[*facet.Rules] { return s.groups.now() }
+
+func (s *Server) initGroups() {
+	s.groups = ownedFile[*facet.Rules]{
+		// a closure, not the method value s.User.Groups: that would copy the
+		// folder as it is now, before the CLI sets it
+		name: GroupsFileName, path: func() string { return s.User.Groups() }, max: maxGroupsBytes, perm: 0o644,
+		recheck: time.Second,
+		parse:   facet.Parse, absent: facet.Default,
+	}
 }
 
-type groupView struct {
-	DictionaryGroup
-	Members  []string `json:"members"`
-	Readonly bool     `json:"readonly"`
-}
-
+// GET /api/groups - the file in effect, what it defines, and what was skipped.
 func (s *Server) handleGroups(w http.ResponseWriter, r *http.Request) {
-	s.reg.prefs.heal(s.reg)
-	entries := s.reg.all()
-	p := s.reg.prefs
-	p.mu.RLock()
-	defer p.mu.RUnlock()
-	all := groupView{DictionaryGroup: DictionaryGroup{ID: allDictionariesGroup, Name: "All Dictionaries"}, Members: []string{}, Readonly: true}
-	views := []groupView{all}
-	for _, g := range p.groups {
-		views = append(views, groupView{DictionaryGroup: g, Members: []string{}})
-	}
-	for _, e := range entries {
-		views[0].Members = append(views[0].Members, e.ID)
-		for _, d := range p.dicts {
-			if d.ID != e.ID {
-				continue
-			}
-			for i := 1; i < len(views); i++ {
-				if slices.Contains(d.Groups, views[i].ID) {
-					views[i].Members = append(views[i].Members, e.ID)
-				}
-			}
-			break
-		}
-	}
-	for i := 1; i < len(views); i++ {
-		rank := make(map[string]int, len(views[i].Order))
-		for n, id := range views[i].Order {
-			rank[id] = n
-		}
-		slices.SortStableFunc(views[i].Members, func(a, b string) int {
-			ai, aok := rank[a]
-			bi, bok := rank[b]
-			if aok && bok {
-				return ai - bi
-			}
-			if aok {
-				return -1
-			}
-			if bok {
-				return 1
-			}
-			return 0
-		})
-	}
-	writeJSON(w, views)
+	writeGroups(w, s.User.Groups(), s.groupsNow())
 }
 
-func (s *Server) handleCreateGroup(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Name string `json:"name"`
+func writeGroups(w http.ResponseWriter, file string, st fileState[*facet.Rules]) {
+	probs := st.problems
+	if probs == nil {
+		probs = []facet.Problem{}
 	}
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&req); err != nil {
-		http.Error(w, "Invalid group name", 400)
-		return
+	text := st.text
+	if !st.exists {
+		text = facet.DefaultText // what is in effect, offered for editing
 	}
-	name := strings.TrimSpace(req.Name)
-	if name == "" || len([]rune(name)) > 100 || strings.ContainsFunc(name, unicode.IsControl) {
-		http.Error(w, "Enter a group name (1–100 characters, without control characters).", 400)
-		return
-	}
-	p := s.reg.prefs
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	if strings.EqualFold(name, "All Dictionaries") {
-		http.Error(w, "All Dictionaries is a reserved group name.", 409)
-		return
-	}
-	for _, g := range p.groups {
-		if strings.EqualFold(g.Name, name) {
-			http.Error(w, "A group with this name already exists.", 409)
-			return
-		}
-	}
-	var id [16]byte
-	if _, err := rand.Read(id[:]); err != nil {
-		http.Error(w, "Could not create group", 500)
-		return
-	}
-	g := DictionaryGroup{ID: hex.EncodeToString(id[:]), Name: name}
-	old := p.groups
-	p.groups = append(slices.Clone(p.groups), g)
-	if err := p.saveLocked(); err != nil {
-		p.groups = old
-		http.Error(w, "Could not save group: "+err.Error(), 500)
-		return
-	}
-	writeJSON(w, groupView{DictionaryGroup: g, Members: []string{}})
+	writeJSON(w, map[string]any{
+		"text":     text,
+		"custom":   st.exists,
+		"unusable": st.unusable(),
+		"file":     file,
+		"writable": file != "",
+		"problems": probs,
+		"facets":   st.val.Facets(),
+	})
 }
 
-// Set one membership, avoiding lost updates from clients editing other rows.
-func (s *Server) handleGroupMember(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Group  string `json:"group"`
-		Dict   string `json:"dict"`
-		Member *bool  `json:"member"`
-	}
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&req); err != nil || req.Member == nil {
-		http.Error(w, "Invalid membership", 400)
+// PUT /api/groups - replace the file with the request body. What does not
+// parse is reported, never refused: the rest of the file still applies, and
+// the editor shows what was skipped. A body that IS the default removes the
+// file instead, so an unchanged copy does not stop the list from following
+// the built-in one. A file that exists but cannot be used is the user's and
+// is not replaced unless the request says so (?replace=1): the editor showed
+// an empty box for it, and a save from there would otherwise destroy it.
+func (s *Server) handleSaveGroups(w http.ResponseWriter, r *http.Request) {
+	if s.User.Groups() == "" {
+		httpErr(w, http.StatusConflict, "%s", "no config directory: there is nowhere to save groups")
 		return
 	}
-	if req.Group == allDictionariesGroup {
-		http.Error(w, "All Dictionaries always contains every dictionary.", 400)
-		return
-	}
-	e, err := s.reg.get(req.Dict)
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxGroupsBytes))
 	if err != nil {
-		http.Error(w, "Dictionary no longer available", 404)
-		return
-	}
-	p := s.reg.prefs
-	p.editMu.Lock()
-	defer p.editMu.Unlock()
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	if !slices.ContainsFunc(p.groups, func(g DictionaryGroup) bool { return g.ID == req.Group }) {
-		http.Error(w, "Group not found", 404)
-		return
-	}
-	old, oldGroups := p.dicts, p.groups
-	p.dicts = slices.Clone(old)
-	i := slices.IndexFunc(p.dicts, func(d DictPref) bool { return d.ID == e.ID || samePath(d.Path, e.Path) })
-	if i < 0 {
-		p.dicts = append(p.dicts, DictPref{ID: e.ID, Path: e.Path})
-		i = len(p.dicts) - 1
-	}
-	if slices.Contains(p.dicts[i].Groups, req.Group) == *req.Member {
-		p.dicts = old
-		writeJSON(w, map[string]bool{"saved": true})
-		return
-	}
-	groups := slices.Clone(p.dicts[i].Groups)
-	groups = slices.DeleteFunc(groups, func(id string) bool { return id == req.Group })
-	if *req.Member {
-		groups = append(groups, req.Group)
-	}
-	p.dicts[i].Groups = groups
-	p.groups = slices.Clone(oldGroups)
-	gi := slices.IndexFunc(p.groups, func(g DictionaryGroup) bool { return g.ID == req.Group })
-	g := p.groups[gi]
-	order := slices.Clone(g.Order)
-	for _, d := range old {
-		if slices.Contains(d.Groups, req.Group) && !slices.Contains(order, d.ID) {
-			order = append(order, d.ID)
+		if errors.As(err, new(*http.MaxBytesError)) {
+			httpErr(w, http.StatusRequestEntityTooLarge, "%s", GroupsFileName+" is larger than 256 KB")
+		} else {
+			httpErr(w, http.StatusBadRequest, "%s", "reading the request: "+err.Error())
 		}
-	}
-	g.Order = slices.DeleteFunc(order, func(id string) bool { return id == e.ID })
-	if *req.Member {
-		g.Order = append(g.Order, e.ID)
-	}
-	p.groups[gi] = g
-	if err := p.saveLocked(); err != nil {
-		p.dicts, p.groups = old, oldGroups
-		http.Error(w, "Could not save membership: "+err.Error(), 500)
 		return
 	}
-	writeJSON(w, map[string]bool{"saved": true})
+	if !utf8.Valid(body) {
+		httpErr(w, http.StatusBadRequest, "%s", "not UTF-8 text")
+		return
+	}
+	text := strings.ReplaceAll(string(body), "\r\n", "\n")
+	var st fileState[*facet.Rules]
+	if text == facet.DefaultText {
+		st, err = s.groups.remove()
+	} else {
+		st, err = s.groups.save(text, r.URL.Query().Get("replace") == "1")
+	}
+	switch {
+	case errors.Is(err, errUnusable):
+		httpErr(w, http.StatusConflict, "%s", err.Error()+" - replace=1 overwrites it")
+		return
+	case err != nil:
+		httpErr(w, http.StatusInternalServerError, "%s", "could not save "+GroupsFileName+": "+err.Error())
+		return
+	}
+	writeGroups(w, s.User.Groups(), st)
 }
 
-// Reorder only the currently available members. Unavailable dictionaries keep
-// their membership and follow the visible rows until they reappear.
-func (s *Server) handleGroupOrder(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Group   string   `json:"group"`
-		Members []string `json:"members"`
-	}
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&req); err != nil || req.Members == nil || req.Group == allDictionariesGroup {
-		http.Error(w, "Invalid group order", 400)
+// DELETE /api/groups - back to the embedded default.
+func (s *Server) handleResetGroups(w http.ResponseWriter, r *http.Request) {
+	st, err := s.groups.remove()
+	if err != nil {
+		httpErr(w, http.StatusInternalServerError, "%s", "could not remove "+GroupsFileName+": "+err.Error())
 		return
 	}
-	p := s.reg.prefs
-	p.heal(s.reg)
-	entries := s.reg.all()
-	p.editMu.Lock()
-	defer p.editMu.Unlock()
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	gi := slices.IndexFunc(p.groups, func(g DictionaryGroup) bool { return g.ID == req.Group })
-	if gi < 0 {
-		http.Error(w, "Group not found", 404)
-		return
-	}
-	visible := make(map[string]bool)
-	for _, e := range entries {
-		for _, d := range p.dicts {
-			if d.ID == e.ID && slices.Contains(d.Groups, req.Group) {
-				visible[e.ID] = true
-				break
-			}
-		}
-	}
-	if len(req.Members) != len(visible) {
-		http.Error(w, "Group membership changed; reload the list", 409)
-		return
-	}
-	seen := make(map[string]bool, len(req.Members))
-	for _, id := range req.Members {
-		if !visible[id] || seen[id] {
-			http.Error(w, "Invalid group order", 400)
-			return
-		}
-		seen[id] = true
-	}
-	old := p.groups
-	p.groups = slices.Clone(old)
-	g := p.groups[gi]
-	order := slices.Clone(req.Members)
-	storedMembers := make(map[string]bool)
-	for _, d := range p.dicts {
-		if slices.Contains(d.Groups, req.Group) {
-			storedMembers[d.ID] = true
-		}
-	}
-	for _, id := range g.Order {
-		if storedMembers[id] && !seen[id] {
-			order = append(order, id)
-			seen[id] = true
-		}
-	}
-	for _, d := range p.dicts {
-		if slices.Contains(d.Groups, req.Group) && !seen[d.ID] {
-			order = append(order, d.ID)
-			seen[d.ID] = true
-		}
-	}
-	g.Order = order
-	p.groups[gi] = g
-	if err := p.saveLocked(); err != nil {
-		p.groups = old
-		http.Error(w, "Could not save group order: "+err.Error(), 500)
-		return
-	}
-	writeJSON(w, map[string]bool{"saved": true})
+	writeGroups(w, s.User.Groups(), st)
+}
+
+// groupsPage is the editor as served. Like the lemma installer, nothing is
+// baked in: the page asks /api/groups for everything it shows.
+var groupsPage = bytes.ReplaceAll(groupsHTML, []byte("{{CSS}}"), []byte(cssTag))
+
+func (s *Server) handleGroupsPage(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-cache")
+	_, _ = w.Write(groupsPage)
 }

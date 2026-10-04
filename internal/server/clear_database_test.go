@@ -211,9 +211,9 @@ func TestCleanupKeepsInactiveDSLVariant(t *testing.T) {
 	if len(paths) != 2 {
 		t.Fatalf("expected two variants: %v", paths)
 	}
-	reg.prefs.mu.Lock()
-	reg.prefs.dslParser = "original"
-	reg.prefs.mu.Unlock()
+	if err := reg.prefs.mutate(func(f *prefsFile) { f.DSLParser = "original" }); err != nil {
+		t.Fatal(err)
+	}
 	if err := reg.cleanupLibrary(); err != nil {
 		t.Fatal(err)
 	}

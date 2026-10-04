@@ -800,9 +800,9 @@ cosmetic sibling-inconsistency, not a gap in this flow.
 
 The proposal was a group named after a dictionary, holding that one dictionary, added on
 demand. It buys nothing the URL cannot already say, and it costs a persisted entity: groups
-live in `state.json` (`DictPref.Groups`), are served by `GET /api/groups`, and are editable
+live in `state.json` (`DictPref.Groups`), are served by `GET /api/user-groups`, and are editable
 in the group editor — so a transient one would appear in the picker's group spinner (rebuilt
-from `/api/groups` on every open), raise "who deletes it, and when", and duplicate a scope
+from `/api/user-groups` on every open), raise "who deletes it, and when", and duplicate a scope
 that is already addressable. It is worth building only if such a group must be **stored** —
 visible in the editor, kept across restarts, hand-edited — which is a different feature from
 "show this word in this dictionary".
@@ -812,7 +812,7 @@ visible in the editor, kept across restarts, hand-edited — which is a differen
 Built 2026-09-21, derived rather than scoped: `scopedDictionary()` (`index.html`) reads the
 standing scope and, when it is one dictionary, contributes `{id:"d:<id>", name:<dictionary
 label>}` to the picker payload's `groups`, spliced under "All dictionaries" and used as the
-payload's current `group`. Nothing else changes: no `state.json`, no `/api/groups`, no group
+payload's current `group`. Nothing else changes: no `state.json`, no `/api/user-groups`, no group
 editor, nothing in localStorage, and — this is the correction to the sketch — **no `d:` case in
 `doSearch`'s `dictSel` branch**. The sketch assumed the picker would need to *set* a one-dictionary
 scope, which would have required resolving `d:<id>` to `[id]`; but the entry only ever exists

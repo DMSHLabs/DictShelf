@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/wuweidict/wudict/internal/fsx"
 )
 
 func TestDSLGlobalParser(t *testing.T) {
@@ -183,7 +185,7 @@ func TestDSLModeSingleVariantAndSaveFailure(t *testing.T) {
 	if err := os.WriteFile(state, []byte("file"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	s.reg.prefs.path = filepath.Join(state, "state.json")
+	s.reg.prefs.file.path = func() string { return filepath.Join(state, "state.json") }
 	groupCall(t, s, "PUT", "/api/dsl-mode", map[string]string{"mode": "both"}, 500)
 	if s.reg.prefs.dslMode(e.dslSource) != "gd" {
 		t.Fatal("failed save changed selection")
@@ -243,16 +245,16 @@ func TestDSLIndexRemovalRequiresExplicitRebuild(t *testing.T) {
 	if err := os.WriteFile(blocked, []byte("file"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	reg.prefs.path = filepath.Join(blocked, StateFile)
+	reg.prefs.file.path = func() string { return filepath.Join(blocked, StateFile) }
 	failed := entries[0]
 	failedDB := s.dictInfoFor(failed).TextDB
 	if rec := deleteReq(t, s, "/api/library?dict="+failed.ID+"&prepared=1&source=0"); rec.Code != 400 {
 		t.Fatalf("failed state save: %d %s", rec.Code, rec.Body.String())
 	}
-	if !fileExists(failedDB) || failed.indexBlocked() {
+	if !fsx.FileExists(failedDB) || failed.indexBlocked() {
 		t.Fatal("failed state save deleted or disabled index")
 	}
-	reg.prefs.path = state
+	reg.prefs.file.path = func() string { return state }
 	for _, removed := range entries {
 		var other *entry
 		for _, e := range entries {

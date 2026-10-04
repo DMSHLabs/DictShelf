@@ -14,10 +14,8 @@ func waitDSLDefaults(t *testing.T, r *Registry) {
 	t.Helper()
 	deadline := time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
-		r.prefs.mu.RLock()
-		n := len(r.prefs.dslPending)
-		r.prefs.mu.RUnlock()
-		if n == 0 {
+		rec, _ := r.prefs.data()
+		if len(rec.DSLPending) == 0 {
 			return
 		}
 		time.Sleep(10 * time.Millisecond)
@@ -83,7 +81,8 @@ func TestDSLDefaultsNewDictionaries(t *testing.T) {
 				}
 			}
 			loaded := LoadPrefs(state)
-			if !loaded.newDSLDefaults().GD.Index || !loaded.dslKnown[cleanAbs(path)] {
+			rec, _ := loaded.data()
+			if !loaded.newDSLDefaults().GD.Index || !rec.DSLKnown[cleanAbs(path)] {
 				t.Fatal("defaults/discovery not persisted")
 			}
 		})
@@ -141,7 +140,8 @@ func TestDSLFirstSetupParserSelection(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitDSLDefaults(t, r)
-	if LoadPrefs(state).dslInitialSetup {
+	rec, _ := LoadPrefs(state).data()
+	if rec.DSLInitialSetup {
 		t.Fatal("initial setup not completed")
 	}
 	groupCall(t, s, "PUT", "/api/dsl-mode", map[string]any{"global": true, "mode": "gd"}, 200)

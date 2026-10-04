@@ -228,6 +228,7 @@ label.keep em{font-style:normal;color:var(--label-quiet);font-size:12.5px}
 <div id="rows"></div>
 <button type="button" id="addRow" class="link">{{T:pages.addFolder}}</button>
 <div id="origin" class="warn hidden"></div>
+<div id="cfgProblems" class="warn hidden"></div>
 
 <div id="addSection" class="hidden">
   <hr class="sep">
@@ -426,8 +427,8 @@ async function save(){
    what is copied where) stays here (D102): the page asks for a file and shows
    dictionaries. */
 let impTimer=null,impBusy=false;
-const sizeMB=n=>n>=1048576?(n/1048576).toFixed(n>=104857600?0:1)+" MB"
-                          :Math.max(1,Math.round(n/1024))+" KB";
+// decimal, the rule of index.html's mb and the server's logx.Size
+const sizeMB=n=>n<1e3?n+" B":n<1e6?Math.round(n/1e3)+" kB":n<1e7?(n/1e6).toFixed(1)+" MB":n<1e9?Math.round(n/1e6)+" MB":(n/1e9).toFixed(1)+" GB";
 
 function impSay(text,cls){const m=$("impMsg");m.textContent=text;m.className=cls||""}
 
@@ -754,6 +755,13 @@ async function start(){
     const how=cfg.dictDirOrigin==="flag"?"--dict-dir":"DICT_DIR";
     $("origin").textContent=tx("pages.origin",{source:how});
     $("origin").classList.remove("hidden");
+  }
+  // Lines of wudict.toml that set nothing: a misspelt key is otherwise a
+  // setting that silently does not exist.
+  if(cfg&&cfg.configProblems&&cfg.configProblems.length){
+    const p=$("cfgProblems");
+    p.textContent="⚠ wudict.toml"+(cfg.configPath?" ("+cfg.configPath+")":"")+": "+cfg.configProblems.join("; ");
+    p.classList.remove("hidden");
   }
   if(dirs.length)validateAll(); else rowInputs()[0].focus();
   // The importer needs somewhere to install into, and a job may already be

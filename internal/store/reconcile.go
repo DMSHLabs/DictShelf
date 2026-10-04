@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/wuweidict/wudict/internal/dict"
+	"github.com/wuweidict/wudict/internal/fsx"
 	"github.com/wuweidict/wudict/internal/logx"
 )
 
@@ -164,7 +165,7 @@ func Reconcile(src string, t Target, h Hooks) (out Outcome, err error) {
 	mediaDB := MediaSibling(textDB)
 	switch t.Media {
 	case MediaOff:
-		if mediaDB != "" && fileExists(mediaDB) {
+		if mediaDB != "" && fsx.FileExists(mediaDB) {
 			release()
 			if err := os.Remove(mediaDB); err != nil {
 				return out, fmt.Errorf("removing packed media: %w", err)
@@ -280,7 +281,7 @@ func pack(src, textDB, mediaDB string, h Hooks, out *Outcome) error {
 	if mediaDB == "" {
 		return fmt.Errorf("media is packed beside a text.db, and %s is not one", textDB)
 	}
-	if fileExists(mediaDB) && h.Release != nil {
+	if fsx.FileExists(mediaDB) && h.Release != nil {
 		h.Release(textDB) // the pack renames over it
 	}
 	var d dict.Dictionary
@@ -298,7 +299,7 @@ func pack(src, textDB, mediaDB string, h Hooks, out *Outcome) error {
 	names, beside := MediaNames(d, textDB)
 	if len(names) == 0 {
 		out.MediaEmpty = true
-		if fileExists(mediaDB) {
+		if fsx.FileExists(mediaDB) {
 			if err := os.Remove(mediaDB); err != nil {
 				return fmt.Errorf("removing unpaired media: %w", err)
 			}

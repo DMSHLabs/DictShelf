@@ -26,7 +26,7 @@ Type `wudict help` in the search box for quick access, and [browse](/browse?dict
 
 - Formats: MDict (`.mdx/.mdd`), StarDict (`.ifo/.idx/.dict/.dz`), Aard2 (`.slob`), Lingvo DSL (`.dsl/.dsl.dz`), Babylon (`.bgl`), ZIM (`.zim`), and Wudict Markdown (`.wudict.md`)
 - Instant search across all dictionaries with four [search modes](<entry://wudict search>): prefix, exact, contains, and full-text search
-- Dictionaries are automatically grouped by language, publisher, direction, type.
+- Dictionaries are automatically grouped by language, language pair, content and publisher; add your own groups in <kbd>☰</kbd> → ![](cog.svg) → [Edit groups](/groups).
 - Double-tap any word in a wudict dictionary article to instantly look up its definition
 - Adjust the font size via the <kbd>☰</kbd> → <kbd>−</kbd> <kbd>+</kbd> widget
 - Custom [lemmatization (word-form morphology)](<entry://wudict lemmatization>) for 24 languages, configurable via <kbd>☰</kbd> → <kbd>⚙️</kbd> → **Lemmatization**; English lemmatization comes pre-installed
@@ -144,7 +144,7 @@ Each language is a small download (under 2 MB) and is used only for dictionaries
 - ![](highlight.svg) <kbd>Highlight matches</kbd>: mark the words a [full-text](<entry://wudict full-text>) search found.
 - ![](speak.svg) <kbd>Read aloud</kbd>: select text in an article to speak it using the OS's Text-to-speech engine. You can pick your preferred voice via the chevron next to the speaker icon (when the OS provides multiple voices for the detected language), see more details under [wudict Text-to-speech](<entry://wudict Text-to-speech>)
 - **Open first**, **Sort dictionaries**: see [wudict welcome](<entry://wudict welcome>).
-- **Group by**: which groups the dictionary picker offers (language, language pair, publisher, …).
+- **Group by**: which groups the dictionary picker offers (language, language pair, content, publisher). [Edit groups](/groups) changes them or adds your own: one line per group, `MyGroup = text, other text`, and a dictionary joins it when one of the texts is anywhere in its title or file name. Between backticks, a regular expression: `` MyGroup = `^the\b` ``.
 
 ***
 

@@ -9,7 +9,7 @@
 let userGroups=[], selectedGroup="all", groupSaving=false, groupShowAllPreferred=false;
 let pickerGroup=localStorage.getItem("wudict_picker_group")||"all";
 async function loadPickerGroups(){
-  try{userGroups=await groupRequest("/api/groups","GET");
+  try{userGroups=await groupRequest("/api/user-groups","GET");
     if(!userGroups.some(g=>g.id===pickerGroup))pickerGroup="all";
   }catch(e){console.warn("could not load dictionary groups:",e);pickerGroup="all"}
   // The panel's drop-down and the status bar's chip both name the group in
@@ -177,7 +177,7 @@ $("editGroups").addEventListener("click",async()=>{
   $("groupError").textContent="";$("groupHint").textContent=tx("panel.loading");$("groupRows").replaceChildren();
   $("groupSelect").disabled=true;$("groupEditor").showModal();
   try{
-    userGroups=await groupRequest("/api/groups","GET");refreshLivePicker();
+    userGroups=await groupRequest("/api/user-groups","GET");refreshLivePicker();
     if(!userGroups.some(g=>g.id===selectedGroup))selectedGroup="all";
     renderGroupOptions();renderGroupRows();$("groupSelect").disabled=false;
   }catch(error){$("groupError").textContent=error.message;$("groupHint").textContent=""}
@@ -199,7 +199,7 @@ $("newGroupForm").onsubmit=async event=>{
   event.preventDefault();if($("createGroup").disabled)return;
   $("createGroup").disabled=true;$("cancelGroup").disabled=true;$("newGroupError").textContent="";
   try{
-    const group=await groupRequest("/api/groups","POST",{name:$("groupName").value});
+    const group=await groupRequest("/api/user-groups","POST",{name:$("groupName").value});
     userGroups.push(group);selectedGroup=group.id;renderGroupOptions();renderGroupRows();refreshLivePicker();$("newGroupDialog").close();
   }catch(error){$("newGroupError").textContent=error.message}
   finally{$("createGroup").disabled=false;$("cancelGroup").disabled=false}

@@ -147,6 +147,16 @@ them are in `docs/handoff-archive.md`.
     only practical way to reach it without the launcher's long-press menu.
 - Known Windows test failures: **none, in a checkout made after the 2026-10-02
   merge.** What used to be listed here is accounted for:
+  - The fourth upstream sync (2026-10-04) rechecked the whole suite in its fresh
+    LF worktree: `go build`, `go vet`, `gofmt -l` clean and `go test -count=1
+    ./...` green, 0 failures. Its one Windows-relevant change is upstream's
+    `TestSamePath` fix (`internal/fsx/fsx_test.go`: `filepath.Rel` from the
+    working directory fails across volumes, so the test `t.Chdir`s first — this
+    machine's checkout is on D: and TempDir on C:). Trap that bit twice here: a
+    smoke server started with only `--dict-dir` prepares the test dictionary
+    into the REAL `~/.wudict/db`; isolate with `--db-dir` **and** `--config`
+    (or a throwaway `USERPROFILE`), or clean the leftovers out of the library
+    afterwards.
   - The third upstream sync (2026-10-04) rechecked the whole suite in its fresh
     LF worktree: `go build`, `go vet` and `go test -count=1 ./...` green, 0
     failures. New trap of that round: served pages and assets now have their

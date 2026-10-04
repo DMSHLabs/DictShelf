@@ -492,7 +492,6 @@ func (f Fetcher) do(ctx context.Context, u *url.URL, offset int64, prev partMeta
 	}
 	// Identify honestly. Several of these sites answer a blank agent with a
 	// challenge page, which would arrive here as "not an archive".
-	req.Header.Set("User-Agent", "wudict")
 	req.Header.Set("Accept", "*/*")
 	if offset > 0 {
 		req.Header.Set("Range", "bytes="+strconv.FormatInt(offset, 10)+"-")
@@ -513,7 +512,7 @@ func (f Fetcher) do(ctx context.Context, u *url.URL, offset int64, prev partMeta
 			req.Header.Set("If-Modified-Since", reuse.Modified)
 		}
 	}
-	return f.client().Do(req)
+	return f.Client().Do(req)
 }
 
 // clients caches the one http.Client per distinct configuration. A Transport
@@ -528,12 +527,14 @@ var clients struct {
 	m map[string]*http.Client
 }
 
-// client returns the http.Client this Fetcher's configuration uses. Two policies are wired
+// Client returns the http.Client this Fetcher's configuration uses - also for
+// downloads that are not imports (lemma data), so every file wudict fetches
+// from the internet goes through one policy. Two policies are wired
 // into it rather than checked afterwards, because "afterwards" is too late for
 // both: a redirect is re-validated before it is followed, and the address a
 // name resolves to is judged at connect time, which is the only place a DNS
 // answer that points somewhere else on the second lookup cannot slip past.
-func (f Fetcher) client() *http.Client {
+func (f Fetcher) Client() *http.Client {
 	key := strconv.FormatBool(f.Insecure) + "\x00" + strings.Join(f.Hosts, "\x00")
 	clients.Lock()
 	c := clients.m[key]
@@ -564,7 +565,7 @@ func (f Fetcher) buildClient() *http.Client {
 				return err
 			}
 			ip := net.ParseIP(host)
-			if ip == nil || local(ip) {
+			if ip == nil || IsLocal(ip) {
 				// This server may be listening on a LAN, where the caller is
 				// somebody else's browser. Without this, "download that for
 				// me" is a way to reach hosts only this machine can see.
@@ -574,7 +575,7 @@ func (f Fetcher) buildClient() *http.Client {
 		}
 	}
 	return &http.Client{
-		Transport: &http.Transport{
+		Transport: userAgent{&http.Transport{
 			DialContext:           d.DialContext,
 			TLSHandshakeTimeout:   20 * time.Second,
 			ResponseHeaderTimeout: 60 * time.Second,
@@ -584,7 +585,7 @@ func (f Fetcher) buildClient() *http.Client {
 			// an idle keep-alive must not outlive the import that opened it -
 			// http.DefaultTransport's figure.
 			IdleConnTimeout: 90 * time.Second,
-		},
+		}},
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if len(via) >= maxRedirects {
 				return errors.New("that link redirects too many times")
@@ -600,7 +601,9 @@ func (f Fetcher) buildClient() *http.Client {
 
 // local reports an address this server should not be talked into reaching on
 // somebody else's behalf.
-func local(ip net.IP) bool {
+// IsLocal reports an address on this machine or its local network - what the
+// fetcher refuses to connect to unless Insecure.
+func IsLocal(ip net.IP) bool {
 	if ip.IsLoopback() || ip.IsPrivate() || ip.IsUnspecified() ||
 		ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() ||
 		ip.IsInterfaceLocalMulticast() {
@@ -846,4 +849,16 @@ func dispositionName(h http.Header) string {
 		return ""
 	}
 	return name
+}
+
+// userAgent names wudict on every request the fetcher's client makes, unless
+// the request already names itself.
+type userAgent struct{ rt http.RoundTripper }
+
+func (u userAgent) RoundTrip(r *http.Request) (*http.Response, error) {
+	if r.Header.Get("User-Agent") == "" {
+		r = r.Clone(r.Context())
+		r.Header.Set("User-Agent", "wudict")
+	}
+	return u.rt.RoundTrip(r)
 }

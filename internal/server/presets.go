@@ -281,10 +281,10 @@ func presetPaperSet(groups []*presetGroup, enabled []string) map[string]string {
 // StyleDir means the feature has nowhere to remember anything, and the pane
 // says so instead of failing silently.
 func (s *Server) presetStatePath() string {
-	if s.StyleDir == "" {
+	if s.User.Style() == "" {
 		return ""
 	}
-	return filepath.Join(s.StyleDir, "presets.json")
+	return filepath.Join(s.User.Style(), "presets.json")
 }
 
 // presetEnabled reads the enabled list. An unknown id (a preset this build
@@ -470,7 +470,7 @@ func (s *Server) presetPayload() map[string]any {
 		out = append(out, map[string]any{"dir": g.Dir, "title": g.Title, "presets": presets})
 	}
 	return map[string]any{
-		"writable": s.StyleDir != "",
+		"writable": s.User.Style() != "",
 		"enabled":  enabled,
 		"groups":   out,
 		// The paper the ENABLED set paints, per theme, resolved here rather
@@ -502,7 +502,7 @@ func (s *Server) handlePresetSave(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad request: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	if s.StyleDir == "" {
+	if s.User.Style() == "" {
 		http.Error(w, "no config directory: there is nowhere to remember preset choices", http.StatusConflict)
 		return
 	}

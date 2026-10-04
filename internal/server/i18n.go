@@ -49,9 +49,8 @@ func uiLanguage(code string) string {
 }
 
 func (p *Prefs) Language() string {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
-	return uiLanguage(p.language)
+	f, _ := p.data()
+	return uiLanguage(f.Language)
 }
 
 // A dedicated update avoids an old tab's full UI preferences overwriting a
@@ -59,15 +58,7 @@ func (p *Prefs) Language() string {
 func (p *Prefs) setLanguage(code string) error {
 	p.editMu.Lock()
 	defer p.editMu.Unlock()
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	old := p.language
-	p.language = code
-	if err := p.saveLocked(); err != nil {
-		p.language = old
-		return err
-	}
-	return nil
+	return p.mutate(func(f *prefsFile) { f.Language = code })
 }
 
 func (s *Server) handleLanguage(w http.ResponseWriter, r *http.Request) {

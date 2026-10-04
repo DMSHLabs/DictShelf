@@ -25,15 +25,32 @@ All Dictionaries is computed from the registry and is never stored as a list.
 
 Private, authenticated, same-origin endpoints:
 
-- `GET /api/groups`: array of `{id, name, members, readonly}`.
-- `POST /api/groups`: `{name}` creates an empty group and returns it.
-- `PUT /api/groups/member`: `{group, dict, member}` changes one membership.
+- `GET /api/user-groups`: array of `{id, name, members, readonly}`.
+- `POST /api/user-groups`: `{name}` creates an empty group and returns it.
+- `PUT /api/user-groups/member`: `{group, dict, member}` changes one membership.
 
 Names are trimmed, limited to 100 characters, and checked case-insensitively
 against existing names and the reserved All Dictionaries name. Empty names and
-control characters are rejected. Saves serialize read/merge/write operations,
-write and sync a temporary file, then rename it. A failed save restores memory
-and is reported in the editor. Membership never writes the search `off` flag.
+control characters are rejected. Saves serialize read/merge/write operations
+and go through `state.json`'s owned file (`ownedfile.go`): written atomically,
+and a failed save leaves the file — and the value in effect — as they were.
+Membership never writes the search `off` flag.
+
+### Two kinds of "groups"
+
+Upstream's own groups feature lives beside this one and is a different thing:
+`groups.ini`, the RULES that derive a group from a dictionary's own name, path
+and language (`internal/facet/rules.go`), edited through `GET/PUT/DELETE
+/api/groups` and the `/groups` page. It computes; this editor curates. A
+dictionary can be in a group by rule and by membership at once, and the picker
+shows both.
+
+The two are deliberately kept apart so upstream's half can be taken verbatim on
+every sync: its API keeps the `/api/groups` path and its file keeps the
+`groups.go` name, while this one lives in `dmsh_groups.go` (the fork's `dmsh_`
+prefix for a parallel implementation) behind `/api/user-groups`. The fork's UI
+does not expose the rules editor — the file is edited by hand — so nothing in
+the app links to `/groups`.
 
 ## Verification
 

@@ -32,6 +32,7 @@ import (
 	"golang.org/x/text/transform"
 
 	"github.com/wuweidict/wudict/internal/dict"
+	"github.com/wuweidict/wudict/internal/fsx"
 	gomdict "github.com/wuweidict/wudict/internal/gomdict"
 	"github.com/wuweidict/wudict/internal/logx"
 )
@@ -233,7 +234,7 @@ func companionMdds(mdxPath string) []string {
 	if err != nil {
 		// An unreadable folder still has one name worth trying: the .mdx opened,
 		// so its own directory entry exists even if the listing was refused.
-		if f := strings.TrimSuffix(mdxPath, filepath.Ext(mdxPath)) + ".mdd"; isFile(f) {
+		if f := strings.TrimSuffix(mdxPath, filepath.Ext(mdxPath)) + ".mdd"; fsx.FileExists(f) {
 			return []string{f}
 		}
 		return nil
@@ -626,11 +627,6 @@ func substituteStylesheet(txt string, stylesheet map[string][2]string) string {
 		}
 	}
 	return b.String()
-}
-
-func isFile(p string) bool {
-	st, err := os.Stat(p)
-	return err == nil && !st.IsDir()
 }
 
 // headerFields is the MDX header minus what Meta already carries (Title,

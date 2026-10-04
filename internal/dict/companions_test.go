@@ -250,3 +250,22 @@ func TestSourceFilesMDXLooseAssets(t *testing.T) {
 		filepath.Join(dir, "LDOCE6.mdd"),
 	})
 }
+
+func TestName(t *testing.T) {
+	for _, tc := range []struct{ in, want string }{
+		{"/d/x.dsl.dz", "x"},
+		{"/d/x.DSL", "x"},
+		{"/d/x.wudict.md.gz", "x"},
+		{"/d/x.wudict.md", "x"},
+		{"/d/notes.md.gz", "notes"},
+		{"/d/en.oxford.mdx", "en.oxford"},
+		{"/d/a.ifo", "a"},
+		{"/lib/Pocket.Encyclopedia", "Pocket.Encyclopedia"},
+		{"/d/archive.zip", "archive.zip"},
+		{"/d/.mdx", ""}, // the suffix alone: no name (FolderName says "dictionary")
+	} {
+		if got := Name(tc.in); got != tc.want {
+			t.Errorf("Name(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}

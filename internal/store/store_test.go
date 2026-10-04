@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/wuweidict/wudict/internal/dict"
+	"github.com/wuweidict/wudict/internal/fsx"
 )
 
 // prepare ingests a minimal real dictionary into a library folder for srcPath.
@@ -734,19 +735,19 @@ func TestAdoptLoose(t *testing.T) {
 	}
 	// the recorded-source one lands where a fresh ingest of that source would
 	want := filepath.Join(db, "Espasa")
-	if !fileExists(TextDBPath(want)) {
+	if !fsx.FileExists(TextDBPath(want)) {
 		t.Fatalf("expected %s/text.db after adoption", want)
 	}
-	if !fileExists(MediaDBPath(want)) {
+	if !fsx.FileExists(MediaDBPath(want)) {
 		t.Error("the paired media.db should move with its dictionary")
 	}
-	if fileExists(loose) || fileExists(looseMedia) {
+	if fsx.FileExists(loose) || fsx.FileExists(looseMedia) {
 		t.Error("adoption should move the files, not copy them")
 	}
 	if got, ok := PreparedFor(src); !ok || got != TextDBPath(want) {
 		t.Errorf("adopted dictionary not resolvable from its source: %q %v", got, ok)
 	}
-	if !fileExists(filepath.Join(db, "spa-cat-index", TextDBName)) {
+	if !fsx.FileExists(filepath.Join(db, "spa-cat-index", TextDBName)) {
 		t.Error("a source-less database should be named after its file, hash suffix dropped")
 	}
 
@@ -796,10 +797,10 @@ func TestAdoptLooseKeepsExistingFolder(t *testing.T) {
 	if len(moved) != 0 {
 		t.Fatalf("must not adopt over an existing folder: %+v", moved)
 	}
-	if !fileExists(loose) {
+	if !fsx.FileExists(loose) {
 		t.Fatal("the loose file must be left in place, not deleted")
 	}
-	if !fileExists(TextDBPath(dir)) {
+	if !fsx.FileExists(TextDBPath(dir)) {
 		t.Fatal("the existing prepared folder must be untouched")
 	}
 	orph, err := FindLeftovers()

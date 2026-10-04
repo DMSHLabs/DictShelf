@@ -5,12 +5,13 @@
 package mdx
 
 import (
-	"github.com/wuweidict/wudict/internal/dict"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/wuweidict/wudict/internal/dict"
 )
 
 func TestFold(t *testing.T) {

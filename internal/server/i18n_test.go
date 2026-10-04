@@ -64,17 +64,19 @@ func TestI18nDefaultAndWriteFailure(t *testing.T) {
 			t.Fatal("missing/unsupported language must default to English")
 		}
 	}
-	p := LoadPrefs("")
-	if err := p.setLanguage("ru"); err != nil {
+	p := LoadPrefs(path)
+	if err := os.WriteFile(path, []byte(`{"version":1,"language":"ru"}`), 0600); err != nil {
 		t.Fatal(err)
 	}
-	// The parent is a regular file: saving must fail and leave memory unchanged.
-	p.path = filepath.Join(path, "state.json")
+	// The parent is a regular file: saving must fail and leave the file - and
+	// the value in effect - unchanged.
+	p.file.path = func() string { return filepath.Join(path, "state.json") }
 	if err := p.setLanguage("en"); err == nil {
 		t.Fatal("expected save failure")
 	}
-	if p.Language() != "ru" {
-		t.Fatal("failed save changed in-memory language")
+	p.file.path = func() string { return path }
+	if v := p.file.fresh().val; uiLanguage(v.Language) != "ru" {
+		t.Fatal("failed save changed the language")
 	}
 }
 

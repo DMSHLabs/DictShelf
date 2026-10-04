@@ -70,9 +70,9 @@ func TestReindexRebuildsOutdatedKeepingPlanAndMedia(t *testing.T) {
 	if code != 202 || st.Total != 1 {
 		t.Fatalf("start: got %d %+v, want 202 over 1 dictionary", code, st)
 	}
-	waitUntil(t, "the rebuild to finish", func() bool { return !s.reindex.status().Running })
+	waitUntil(t, "the rebuild to finish", func() bool { return !s.reindexStatus().Running })
 
-	st = s.reindex.status()
+	st = s.reindexStatus()
 	if st.Done != 1 || len(st.Failed) != 0 || st.Canceled {
 		t.Fatalf("finished: %+v, want 1 done, none failed", st)
 	}
@@ -91,52 +91,6 @@ func TestReindexRebuildsOutdatedKeepingPlanAndMedia(t *testing.T) {
 	}
 	if code, st := reindexCall(t, s, "POST"); code != 200 || st.Running {
 		t.Errorf("second start: got %d %+v, want 200 and nothing running", code, st)
-	}
-}
-
-// The job's own rules, without a rebuild behind them.
-func TestReindexJobStates(t *testing.T) {
-	for _, tc := range []struct {
-		name  string
-		steps func(j *reindexJob) bool
-		want  bool
-	}{
-		{"starts when idle", func(j *reindexJob) bool { return j.start(2) }, true},
-		{"one job at a time", func(j *reindexJob) bool { j.start(2); return j.start(3) }, false},
-		{"restarts after finishing", func(j *reindexJob) bool {
-			j.start(1)
-			j.update(func(st *ReindexStatus) { st.Running = false })
-			return j.start(1)
-		}, true},
-		{"stop marks a running job", func(j *reindexJob) bool { j.start(1); j.stop(); return j.canceled() }, true},
-		{"stop without a job is nothing", func(j *reindexJob) bool { j.stop(); return j.canceled() }, false},
-		{"a new job forgets the old stop", func(j *reindexJob) bool {
-			j.start(1)
-			j.stop()
-			j.update(func(st *ReindexStatus) { st.Running = false })
-			j.start(1)
-			return j.canceled()
-		}, false},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			var j reindexJob
-			if got := tc.steps(&j); got != tc.want {
-				t.Errorf("got %v, want %v", got, tc.want)
-			}
-		})
-	}
-}
-
-// status hands out a copy: a caller encoding it while the job appends a
-// failure must not share the slice.
-func TestReindexStatusIsACopy(t *testing.T) {
-	var j reindexJob
-	j.start(2)
-	j.update(func(st *ReindexStatus) { st.Failed = append(st.Failed, "a: x") })
-	st := j.status()
-	st.Failed[0] = "changed"
-	if j.status().Failed[0] != "a: x" {
-		t.Error("status shares Failed with the job")
 	}
 }
 

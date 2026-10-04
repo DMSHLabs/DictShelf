@@ -3,12 +3,14 @@ package server
 import (
 	"encoding/json"
 	"net/http"
-	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
+	"time"
 
+	"github.com/wuweidict/wudict/internal/facet"
+	"github.com/wuweidict/wudict/internal/fsx"
 	"github.com/wuweidict/wudict/internal/logx"
 )
 
@@ -106,6 +108,14 @@ type UIPrefs struct {
 	// are whatever the device in front of them has installed, so that choice
 	// stays in that browser's localStorage.
 	SpeakOff bool `json:"speakOff,omitempty"`
+
+	// GroupsOff lists the picker sections the person has hidden, by facet id:
+	// "lang", "pair", or a groups.ini section lower-cased (internal/facet).
+	// Negated for the same reason as the flags above: every section the
+	// library supports is shown unless the person said otherwise, and a facet
+	// added tomorrow appears without a migration. Ids are kept opaque here - the server never groups anything,
+	// and an id no facet uses any more simply hides nothing.
+	GroupsOff []string `json:"groupsOff,omitempty"`
 }
 
 // Article text-size bounds. The ceiling is deliberately past what the layout
@@ -127,8 +137,34 @@ func (u *UIPrefs) normalize() {
 	if u.FontSize != 0 {
 		u.FontSize = max(FontSizeMin, min(FontSizeMax, u.FontSize))
 	}
+	u.GroupsOff = facetIDs(u.GroupsOff)
 }
 
+// facetIDs bounds a hand-edited or hostile groupsOff to what a facet id can
+// be: short, non-blank, unique, sorted so an unchanged set writes an unchanged
+// file. Always a fresh slice, so a stored record never shares its backing
+// array with the request it came from.
+func facetIDs(in []string) []string {
+	const maxIDs, maxLen = 32, 64 // ids are section names the user writes (D162)
+	var out []string
+	for _, id := range in {
+		id = strings.TrimSpace(id)
+		if id == "" || len(id) > maxLen || slices.Contains(out, id) {
+			continue
+		}
+		if out = append(out, id); len(out) == maxIDs {
+			break
+		}
+	}
+	slices.Sort(out)
+	return out
+}
+
+// prefsFile is the file as written. The DSL and language fields are the
+// fork's: the DSL parser choice and its per-source defaults are installation
+// state for the fork's two DSL readers, and the interface language is the
+// person's, so all of it lives here rather than in localStorage for the
+// reasons stated on StateFile.
 type prefsFile struct {
 	DSLInitialSetup bool                       `json:"dslInitialSetup,omitempty"`
 	DSLParser       string                     `json:"dslParser,omitempty"`
@@ -145,71 +181,72 @@ type prefsFile struct {
 	Dicts   []DictPref        `json:"dicts"` // array ORDER is the user's order
 }
 
-// Prefs is the state file, loaded once and written on change. A Prefs with an
-// empty path is in-memory only: it answers questions and forgets on exit,
-// which is what tests and a home-less environment need.
+// Prefs is the state file (state.json), an ownedFile (ownedfile.go): read
+// bounded and re-read when it changes on disk, so a hand edit made while the
+// app runs is adopted - including by the next save, which re-reads first and
+// so builds on it instead of writing it away. A Prefs with an empty path is
+// in-memory only: it answers questions and forgets on exit, which is what
+// tests and a home-less environment need.
 type Prefs struct {
-	dslInitialSetup bool
-	dslParser       string
-	dslDefaults     *dslDefaults
-	dslKnown        map[string]bool
-	dslPending      map[string]dslIndexOptions
-	dslRemoved      map[string]bool
-	dsl             map[string]string
-	language        string // installation-wide UI choice; independent of /api/prefs replacements
+	file  ownedFile[prefsFile]
+	write sync.Mutex // a save's read-modify-write, whole
 
-	editMu sync.Mutex // serialize read/merge/write operations, including identity healing
-	groups []DictionaryGroup
-	path   string
-	mu     sync.RWMutex
-	exists bool // a file was there when we started: no state to adopt otherwise
-	dicts  []DictPref
-	ui     *UIPrefs // nil until the user has set something; every field optional
+	// editMu serializes a whole read-decide-write sequence that spans more
+	// than one call: heal() reads the records, decides, and writes them back,
+	// and the DSL writers and /api/prefs do the same. The write lock inside
+	// update()/mutate() only makes each WRITE atomic; this is what keeps two
+	// such sequences from interleaving and losing one of them.
+	editMu sync.Mutex
 }
+
+// maxPrefsBytes bounds state.json: thousands of dictionaries' worth, and a
+// pipe or a device in its place is refused (fsx).
+const maxPrefsBytes = 4 << 20
 
 // LoadPrefs reads the state file. It never fails: a missing file is the normal
 // first run, and an unreadable or corrupt one must not stop the app from
 // serving dictionaries - the worst case is that the user re-curates a list.
 func LoadPrefs(path string) *Prefs {
-	p := &Prefs{path: path}
-	if path == "" {
-		return p
+	p := &Prefs{}
+	p.file = ownedFile[prefsFile]{
+		name: StateFile, path: func() string { return path }, max: maxPrefsBytes,
+		recheck: time.Second, perm: 0o600, parse: parsePrefs,
+		absent: func() prefsFile { return prefsFile{} },
 	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		if !os.IsNotExist(err) {
-			logx.Warn("could not read %s: %v", path, err)
-		}
-		return p
+	if st := p.file.now(); st.unusable() {
+		logx.Warn("ignoring %s: %s", path, st.why)
 	}
+	return p
+}
+
+// parsePrefs reads a state file. A malformed one is announced (once per
+// content: it is parsed only when it changed) and treated as no state - the
+// next save writes over it, so this warning is the user's chance to notice.
+func parsePrefs(text string) (prefsFile, []facet.Problem) {
 	var f prefsFile
-	if err := json.Unmarshal(data, &f); err != nil {
-		// Loud, because the next save overwrites it: the user gets one chance
-		// to notice their hand-edit was rejected.
-		logx.Warn("ignoring malformed %s: %v", path, err)
-		return p
+	if err := json.Unmarshal([]byte(text), &f); err != nil {
+		logx.Warn("ignoring malformed %s: %v", StateFile, err)
+		return prefsFile{}, []facet.Problem{{Msg: "malformed: " + err.Error()}}
 	}
 	f.UI.normalize()
-	p.exists, p.dicts, p.ui = true, f.Dicts, f.UI
-	p.groups = f.Groups
-	p.dsl = f.DSL
-	p.dslParser = f.DSLParser
-	p.dslInitialSetup = f.DSLInitialSetup
-	p.dslRemoved = f.DSLRemoved
-	p.dslDefaults, p.dslKnown, p.dslPending = f.DSLDefaults, f.DSLKnown, f.DSLPending
-	p.language = uiLanguage(f.Language)
-	return p
+	return f, nil
+}
+
+// data is the record in effect and whether it is a real one: a usable,
+// well-formed file, or one this process wrote.
+func (p *Prefs) data() (prefsFile, bool) {
+	st := p.file.now()
+	return st.val, st.exists && !st.unusable() && len(st.problems) == 0
 }
 
 // UI returns a copy of the UI record, or nil when nothing has been set. A copy
 // because the caller marshals it while other requests may be writing.
 func (p *Prefs) UI() *UIPrefs {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
-	if p.ui == nil {
+	f, _ := p.data()
+	if f.UI == nil {
 		return nil
 	}
-	u := *p.ui
+	u := *f.UI
 	return &u
 }
 
@@ -217,25 +254,23 @@ func (p *Prefs) UI() *UIPrefs {
 // It matches on id first and path second, so a record written before a move
 // still speaks for the dictionary it was written about.
 func (p *Prefs) Off(id, path string) bool {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
-	for _, d := range p.dicts {
-		if d.ID == id || (d.Path != "" && samePath(d.Path, path)) {
+	f, _ := p.data()
+	for _, d := range f.Dicts {
+		if d.ID == id || (d.Path != "" && fsx.SamePath(d.Path, path)) {
 			return d.Off
 		}
 	}
 	return false
 }
 
-// Snapshot returns the records and whether a state file existed at startup.
+// Snapshot returns the records and whether a state file exists.
 func (p *Prefs) Snapshot() (dicts []DictPref, exists bool) {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
-	return append([]DictPref(nil), p.dicts...), p.exists
+	f, ok := p.data()
+	return append([]DictPref(nil), f.Dicts...), ok
 }
 
-// Replace stores a new list and writes it. The write is temp-file + rename, so
-// a crash mid-save leaves the previous state intact rather than a truncated
+// Replace stores a new list and writes it, atomically (fsx.WriteAtomic): a
+// crash mid-save leaves the previous state intact rather than a truncated
 // file that reads as "nothing was ever configured".
 func (p *Prefs) Replace(dicts []DictPref) error { return p.update(dicts, nil) }
 
@@ -243,67 +278,58 @@ func (p *Prefs) Replace(dicts []DictPref) error { return p.update(dicts, nil) }
 // and leaves the stored one untouched: the client that reorders dictionaries
 // and the client that changes text size are the same client, but they need not
 // send both, and a request that omits a field must never be read as clearing
-// it. One write, not two, so the two settings can never disagree on disk.
+// it. One write, not two, so the two settings can never disagree on disk. It
+// starts from the file as it is NOW (fresh): a hand edit made a moment ago is
+// kept wherever this update does not speak.
 func (p *Prefs) update(dicts []DictPref, ui *UIPrefs) error {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	oldDicts, oldUI, oldExists := p.dicts, p.ui, p.exists
-	p.dicts, p.exists = append([]DictPref(nil), dicts...), true
+	p.write.Lock()
+	defer p.write.Unlock()
+	f := p.file.fresh().val
+	f.Version, f.Dicts = prefsVersion, append([]DictPref(nil), dicts...)
 	if ui != nil {
 		u := *ui
 		u.normalize()
-		p.ui = &u
+		f.UI = &u
 	}
-	if err := p.saveLocked(); err != nil {
-		p.dicts, p.ui, p.exists = oldDicts, oldUI, oldExists
-		return err
-	}
-	return nil
+	return p.saveRecord(f)
 }
 
-// Keep the lock through rename: concurrent writes must reach disk in order.
-func (p *Prefs) saveLocked() error {
-	path := p.path
-	data, err := json.MarshalIndent(prefsFile{Version: prefsVersion, UI: p.ui, Dicts: p.dicts, Groups: p.groups, Language: p.language, DSL: p.dsl, DSLRemoved: p.dslRemoved, DSLDefaults: p.dslDefaults, DSLKnown: p.dslKnown, DSLPending: p.dslPending, DSLParser: p.dslParser, DSLInitialSetup: p.dslInitialSetup}, "", "  ")
-	if err != nil || path == "" {
-		return err
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
-	tmp, err := os.CreateTemp(filepath.Dir(path), ".state-*.json")
+// saveRecord writes a whole record, atomically, and installs it as the value
+// in effect: the next read sees it without going back to the disk, and a
+// concurrent writer's file is not overwritten by a stale copy (the caller
+// starts from fresh()).
+func (p *Prefs) saveRecord(f prefsFile) error {
+	f.Version = prefsVersion
+	data, err := json.MarshalIndent(f, "", "  ")
 	if err != nil {
 		return err
 	}
-	defer os.Remove(tmp.Name())
-	if _, err := tmp.Write(append(data, '\n')); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err := tmp.Sync(); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	return os.Rename(tmp.Name(), path)
+	_, err = p.file.save(string(data)+"\n", true)
+	return err
 }
 
-// samePath compares two dictionary paths the way the filesystem would be asked
-// to: absolute and cleaned. Case is kept significant - macOS and Windows would
-// disagree, and a false match is worse than a missed one here.
-func samePath(a, b string) bool {
-	if a == "" || b == "" {
-		return false
-	}
-	if aa, err := filepath.Abs(a); err == nil {
-		a = aa
-	}
-	if bb, err := filepath.Abs(b); err == nil {
-		b = bb
-	}
-	return filepath.Clean(a) == filepath.Clean(b)
+// mutate applies fn to the record in effect and saves the result. The record
+// is a COPY: a caller that changes its mind simply does not save, and a failed
+// save leaves the file - and the next read - exactly as they were, so the
+// rollback every DSL writer used to spell out by hand is now the only possible
+// outcome. Callers that read, decide and then write back must hold editMu.
+func (p *Prefs) mutate(fn func(*prefsFile)) error {
+	p.write.Lock()
+	defer p.write.Unlock()
+	f := p.file.fresh().val
+	fn(&f)
+	return p.saveRecord(f)
+}
+
+// store writes a record the caller built from data() while holding editMu.
+// The lock covers the whole read-decide-write sequence, so replacing the
+// record wholesale cannot lose a change another writer made in between - the
+// alternative, mutate(), re-reads the file and is for changes that need no
+// decision.
+func (p *Prefs) store(f prefsFile) error {
+	p.write.Lock()
+	defer p.write.Unlock()
+	return p.saveRecord(f)
 }
 
 // heal re-attaches stored records to the dictionaries as they exist NOW and
@@ -385,30 +411,33 @@ func (p *Prefs) heal(r *Registry) []DictPref {
 		changed = true
 	}
 	if changed {
+		// The group orders are keyed by dictionary id, so a re-attached
+		// record has to carry its memberships' ids with it or a group would
+		// quietly lose the dictionary it was holding.
 		remap := make(map[string]string)
 		for i, d := range stored {
 			if d.ID != out[i].ID {
 				remap[d.ID] = out[i].ID
 			}
 		}
-		p.mu.Lock()
-		oldDicts, oldGroups, oldExists := p.dicts, p.groups, p.exists
-		p.dicts, p.groups, p.exists = out, slices.Clone(p.groups), true
-		for i := range p.groups {
-			g := p.groups[i]
+		p.write.Lock()
+		f := p.file.fresh().val
+		f.Dicts = out
+		for i := range f.Groups {
+			g := f.Groups[i]
 			g.Order = slices.Clone(g.Order)
 			for j, id := range g.Order {
 				if replacement, ok := remap[id]; ok {
 					g.Order[j] = replacement
 				}
 			}
-			p.groups[i] = g
+			f.Groups[i] = g
 		}
-		if err := p.saveLocked(); err != nil {
-			p.dicts, p.groups, p.exists = oldDicts, oldGroups, oldExists
-			logx.Warn("could not save %s: %v", p.path, err)
+		err := p.saveRecord(f)
+		p.write.Unlock()
+		if err != nil {
+			logx.Warn("could not save %s: %v", p.file.path(), err)
 		}
-		p.mu.Unlock()
 	}
 	return out
 }
@@ -437,7 +466,7 @@ func (p *Prefs) merge(r *Registry, want []DictPref) []DictPref {
 		// The legacy preferences endpoint cannot change group membership.
 		d.Groups = nil
 		for _, old := range stored {
-			if old.ID == d.ID || samePath(old.Path, d.Path) {
+			if old.ID == d.ID || fsx.SamePath(old.Path, d.Path) {
 				d.Groups = append([]string(nil), old.Groups...)
 				break
 			}
@@ -480,15 +509,16 @@ func (s *Server) handleSavePrefs(w http.ResponseWriter, r *http.Request) {
 		Dicts []DictPref `json:"dicts"`
 		UI    *UIPrefs   `json:"ui"` // pointer: absent and empty are different
 	}
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&req); err != nil {
-		http.Error(w, "bad request: "+err.Error(), http.StatusBadRequest)
+	if !decodeJSON(w, r, &req, 1<<20) {
 		return
 	}
+	// merge reads the stored records and update writes them back: the pair is
+	// one read-modify-write, so it is serialized as one.
 	s.reg.prefs.editMu.Lock()
 	defer s.reg.prefs.editMu.Unlock()
 	merged := s.reg.prefs.merge(s.reg, req.Dicts)
 	if err := s.reg.prefs.update(merged, req.UI); err != nil {
-		http.Error(w, "could not save: "+err.Error(), http.StatusInternalServerError)
+		httpErr(w, http.StatusInternalServerError, "%s", "could not save: "+err.Error())
 		return
 	}
 	writeJSON(w, map[string]any{"exists": true, "dicts": merged, "ui": s.reg.prefs.UI()})

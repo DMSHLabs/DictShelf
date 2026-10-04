@@ -266,12 +266,11 @@ func probe(ctx context.Context, f Fetcher, u *url.URL, method, rng string) (h he
 	if err != nil {
 		return head{}, true
 	}
-	req.Header.Set("User-Agent", "wudict")
 	req.Header.Set("Accept", "*/*")
 	if rng != "" {
 		req.Header.Set("Range", rng)
 	}
-	resp, err := f.client().Do(req)
+	resp, err := f.Client().Do(req)
 	if err != nil {
 		return head{}, true // unreachable is not "ask again differently"
 	}

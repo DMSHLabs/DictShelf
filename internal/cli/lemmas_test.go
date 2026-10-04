@@ -167,3 +167,26 @@ func TestLemmasUnknownSubcommand(t *testing.T) {
 		}
 	}
 }
+
+// A public https catalogue keeps the fetcher's guard; a catalogue the user
+// pointed at plain http or at this network is their own mirror, trusted as
+// IMPORT_INSECURE would be.
+func TestLemmaInsecure(t *testing.T) {
+	for _, tc := range []struct {
+		url      string
+		insecure bool
+		want     bool
+	}{
+		{"https://example.org/lemmas.json", false, false},
+		{"https://example.org/lemmas.json", true, true},
+		{"http://example.org/lemmas.json", false, true},
+		{"https://localhost:8443/l.json", false, true},
+		{"https://192.168.1.10/l.json", false, true},
+		{"https://10.0.0.2/l.json", false, true},
+		{"/home/me/lemmas.json", false, false},
+	} {
+		if got := lemmaInsecure(tc.url, tc.insecure); got != tc.want {
+			t.Errorf("lemmaInsecure(%q, %v) = %v, want %v", tc.url, tc.insecure, got, tc.want)
+		}
+	}
+}

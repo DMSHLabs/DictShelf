@@ -18,11 +18,13 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"github.com/wuweidict/wudict/internal/artmark"
 	"io"
 	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/wuweidict/wudict/internal/artmark"
+	"github.com/wuweidict/wudict/internal/fsx"
 
 	"github.com/wuweidict/wudict/internal/dict"
 	"github.com/wuweidict/wudict/internal/logx"
@@ -192,7 +194,7 @@ func Open(path string) (*Store, error) {
 	// the uuid pairing is verified when it is first opened, which is when a
 	// resource actually needs it.
 	s.uuid = m["dict_uuid"]
-	if sib := MediaSibling(path); sib != "" && fileExists(sib) {
+	if sib := MediaSibling(path); sib != "" && fsx.FileExists(sib) {
 		s.mediaPath = sib
 	}
 	return s, nil

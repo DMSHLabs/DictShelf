@@ -48,6 +48,8 @@ import (
 	"time"
 
 	"github.com/wuweidict/wudict/internal/dict"
+	"github.com/wuweidict/wudict/internal/fsx"
+	"github.com/wuweidict/wudict/internal/logx"
 )
 
 // Names of the files inside a prepared-dictionary folder.
@@ -90,19 +92,7 @@ func MediaSibling(textDB string) string {
 // Spaces and case are preserved - the point is that the folder is recognizably
 // the dictionary the user already knows.
 func FolderName(srcPath string) string {
-	name := filepath.Base(srcPath)
-	ext := strings.ToLower(filepath.Ext(name))
-	name = strings.TrimSuffix(name, filepath.Ext(name))
-	if ext == ".dz" || ext == ".gz" {
-		ext = strings.ToLower(filepath.Ext(name))
-		name = strings.TrimSuffix(name, filepath.Ext(name))
-	}
-	// x.wudict.md (.gz, .dz) is x, as x.dsl.dz is x
-	if ext == ".md" {
-		if n := len(name) - len(".wudict"); n >= 0 && strings.EqualFold(name[n:], ".wudict") {
-			name = name[:n]
-		}
-	}
+	name := dict.Name(srcPath) // x.dsl.dz and x.wudict.md.gz are both x
 	var b strings.Builder
 	for _, r := range name {
 		switch {
@@ -181,29 +171,6 @@ func dirOwner(dir string) (owner string, hasDB, exists bool) {
 	return "", hasDB, true
 }
 
-// sameSource compares two source paths as filesystem locations: the same
-// spelling, or - where both exist - the same file reached by another one.
-// Discovery resolves a symlinked dictionary folder (dict.Discover) while a
-// path typed on the command line does not, so one file arrives under two
-// spellings; compared as strings, the second claimed a new "<name> (fmt)"
-// folder beside the one already prepared for it.
-func sameSource(a, b string) bool {
-	if a == "" || b == "" {
-		return false
-	}
-	if a == b {
-		return true
-	}
-	ca, err1 := filepath.Abs(a)
-	cb, err2 := filepath.Abs(b)
-	if err1 == nil && err2 == nil && filepath.Clean(ca) == filepath.Clean(cb) {
-		return true
-	}
-	sa, err1 := os.Stat(a)
-	sb, err2 := os.Stat(b)
-	return err1 == nil && err2 == nil && os.SameFile(sa, sb)
-}
-
 // LookupDir returns the library folder already prepared for a source file.
 // It never creates anything: read paths (dictionary list, open, provenance)
 // use this, so browsing dictionaries cannot litter the library with empty
@@ -216,7 +183,7 @@ func LookupDir(srcPath string) (string, bool) {
 		if !exists {
 			continue
 		}
-		if hasDB && sameSource(owner, srcPath) {
+		if hasDB && fsx.SamePath(owner, srcPath) {
 			return cand, true
 		}
 	}
@@ -248,7 +215,7 @@ func claimFrom(candidates []string, claim string) (string, error) {
 	// Reuse the existing owner before considering any free name.
 	for _, cand := range candidates {
 		owner, _, exists := dirOwner(cand)
-		if exists && sameSource(owner, claim) {
+		if exists && fsx.SamePath(owner, claim) {
 			return cand, nil
 		}
 	}
@@ -264,7 +231,7 @@ func claimFrom(candidates []string, claim string) (string, error) {
 			return cand, nil
 		case os.IsExist(err):
 			owner, hasDB, _ := dirOwner(cand)
-			if sameSource(owner, claim) {
+			if fsx.SamePath(owner, claim) {
 				return cand, nil
 			}
 			if owner == "" && !hasDB && olderThan(cand, claimGrace) {
@@ -300,7 +267,7 @@ func SourceFolders(src string) ([]string, error) {
 		}
 		dir := filepath.Join(DefaultDBDir(), item.Name())
 		owner, _, _ := dirOwner(dir)
-		if sameSource(owner, src) {
+		if fsx.SamePath(owner, src) {
 			dirs = append(dirs, dir)
 		}
 	}
@@ -589,7 +556,7 @@ func writeInfo(dir, source string) error {
 	}
 	media := "not packed - resources come from the original files"
 	if fi, err := os.Stat(MediaDBPath(dir)); err == nil {
-		media = fmt.Sprintf("%s (%s)", MediaDBName, humanSize(fi.Size()))
+		media = fmt.Sprintf("%s (%s)", MediaDBName, logx.Size(fi.Size()))
 	}
 	// The claim written by ClaimDir is the ownership record and wins here: it
 	// is the path this folder was prepared FROM, while meta's source_path is
@@ -720,17 +687,4 @@ func receiptMeta(dir, textDB string) (map[string]string, bool) {
 		}
 	}
 	return out, true
-}
-
-func humanSize(n int64) string {
-	const unit = 1024
-	if n < unit {
-		return fmt.Sprintf("%d B", n)
-	}
-	div, exp := int64(unit), 0
-	for m := n / unit; m >= unit; m /= unit {
-		div *= unit
-		exp++
-	}
-	return fmt.Sprintf("%.1f %cB", float64(n)/float64(div), "KMGT"[exp])
 }

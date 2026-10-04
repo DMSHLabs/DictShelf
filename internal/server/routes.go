@@ -98,10 +98,13 @@ func (s *Server) routes() []route {
 		{"PUT", "/api/language", s.handleLanguage, "/api/language", false},
 		{"GET", "/assets/i18n.js", serveAsset("application/javascript; charset=utf-8", i18nJS), "", false},
 		{"GET", "/assets/i18n.css", serveAsset("text/css; charset=utf-8", i18nCSS), "", false},
-		{"GET", "/api/groups", s.handleGroups, "/api/groups", false},
-		{"POST", "/api/groups", s.handleCreateGroup, "/api/groups", false},
-		{"PUT", "/api/groups/member", s.handleGroupMember, "/api/groups/member", false},
-		{"PUT", "/api/groups/order", s.handleGroupOrder, "/api/groups/order", false},
+		// The reader's OWN groups (dmsh_groups.go): named sets they curate by
+		// hand, as opposed to the derived facets and the rules file upstream's
+		// /api/groups edits. A separate path so the two never collide.
+		{"GET", "/api/user-groups", s.handleUserGroups, "/api/user-groups", false},
+		{"POST", "/api/user-groups", s.handleCreateGroup, "/api/user-groups", false},
+		{"PUT", "/api/user-groups/member", s.handleGroupMember, "/api/user-groups/member", false},
+		{"PUT", "/api/user-groups/order", s.handleGroupOrder, "/api/user-groups/order", false},
 		{"PUT", "/api/prefs", s.handleSavePrefs, "/api/prefs", false},
 		{"PUT", "/api/dsl-mode", s.handleDSLMode, "/api/dsl-mode", false},
 		{"PUT", "/api/dsl-defaults", s.handleDSLDefaults, "/api/dsl-defaults", false},
@@ -160,6 +163,12 @@ func (s *Server) routes() []route {
 		{"POST", "/api/reindex", s.handleReindex, "/api/reindex", false},
 		{"GET", "/api/reindex", s.handleReindexStatus, "/api/reindex", false},
 		{"DELETE", "/api/reindex", s.handleReindexCancel, "/api/reindex", false},
+		// the picker's groups (groups.go, D162): read, replace, reset to the
+		// default. Never CORS - the file is the user's, and two of the three
+		// write it.
+		{"GET", "/api/groups", s.handleGroups, "/api/groups", false},
+		{"PUT", "/api/groups", s.handleSaveGroups, "/api/groups", false},
+		{"DELETE", "/api/groups", s.handleResetGroups, "/api/groups", false},
 		// the user's own file store (userfiles.go): what their custom CSS,
 		// or a dictionary they wrote themselves, can reference by URL. Never
 		// CORS - the list names a folder on the user's disk, and the other
@@ -181,6 +190,9 @@ func (s *Server) routes() []route {
 		// the lemma installer, reached from setup and from the app's
 		// configuration disclosure
 		{"GET", "/lemmas", s.handleLemmasPage, "", false},
+		// the groups.ini editor, reached from the panel's configuration
+		// disclosure next to the folders
+		{"GET", "/groups", s.handleGroupsPage, "", false},
 		// reading the dictionary instead of querying it (browse.go), reached
 		// from the panel's action row and from each dictionary's own card
 		{"GET", "/browse", s.handleBrowsePage, "", false},

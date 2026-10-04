@@ -7,7 +7,6 @@ package server
 import (
 	"net/http"
 	"path/filepath"
-	"sync"
 	"time"
 
 	"github.com/wuweidict/wudict/internal/logx"
@@ -52,51 +51,17 @@ type ReindexStatus struct {
 	Canceled bool `json:"canceled,omitempty"`
 }
 
-// reindexJob owns the single rebuild job. The zero value is usable.
-type reindexJob struct {
-	mu     sync.Mutex
-	st     ReindexStatus
-	cancel bool
-}
+// reindexKey is the rebuild's job (jobs.go): one at a time.
+const reindexKey = "reindex"
 
-func (j *reindexJob) status() ReindexStatus {
-	j.mu.Lock()
-	defer j.mu.Unlock()
-	st := j.st
-	st.Failed = append([]string(nil), j.st.Failed...)
-	return st
-}
-
-// start claims the job for todo, or reports false when one is already running.
-func (j *reindexJob) start(todo int) bool {
-	j.mu.Lock()
-	defer j.mu.Unlock()
-	if j.st.Running {
-		return false
+// reindexStatus is the rebuild job as the page and `wudict reindex` poll it.
+func (s *Server) reindexStatus() ReindexStatus {
+	st, _ := s.jobs.status(reindexKey)
+	return ReindexStatus{
+		Running: st.Running, Done: int(st.Done), Total: int(st.Total),
+		Current: st.Current, CurrentDone: int(st.CurrentDone), CurrentTotal: int(st.CurrentTotal),
+		Failed: st.Failed, Canceled: st.Canceled,
 	}
-	j.st, j.cancel = ReindexStatus{Running: true, Total: todo}, false
-	return true
-}
-
-// stop asks a running job to end after the dictionary in hand.
-func (j *reindexJob) stop() {
-	j.mu.Lock()
-	defer j.mu.Unlock()
-	if j.st.Running {
-		j.cancel = true
-	}
-}
-
-func (j *reindexJob) canceled() bool {
-	j.mu.Lock()
-	defer j.mu.Unlock()
-	return j.cancel
-}
-
-func (j *reindexJob) update(f func(*ReindexStatus)) {
-	j.mu.Lock()
-	defer j.mu.Unlock()
-	f(&j.st)
 }
 
 // entryOutdated is the per-dictionary test the job selects by. It agrees with
@@ -121,42 +86,45 @@ func (s *Server) handleReindex(w http.ResponseWriter, r *http.Request) {
 			todo = append(todo, e)
 		}
 	}
-	if len(todo) == 0 || !s.reindex.start(len(todo)) {
-		writeJSON(w, s.reindex.status())
+	if len(todo) == 0 {
+		writeJSON(w, s.reindexStatus())
 		return
 	}
-	go s.runReindex(todo)
+	if _, started := s.jobs.start(reindexKey, 0, jobStatus{Total: int64(len(todo))},
+		func(j *job) { s.runReindex(j, todo) }); !started {
+		writeJSON(w, s.reindexStatus())
+		return
+	}
 	w.WriteHeader(http.StatusAccepted)
-	writeJSON(w, s.reindex.status())
+	writeJSON(w, s.reindexStatus())
 }
 
 // handleReindexStatus is the poll. Never fails, as the import poll never does.
 func (s *Server) handleReindexStatus(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, s.reindex.status())
+	writeJSON(w, s.reindexStatus())
 }
 
 // handleReindexCancel stops the job after the dictionary in hand.
 func (s *Server) handleReindexCancel(w http.ResponseWriter, r *http.Request) {
-	s.reindex.stop()
-	writeJSON(w, s.reindex.status())
+	s.jobs.cancel(reindexKey)
+	writeJSON(w, s.reindexStatus())
 }
 
-func (s *Server) runReindex(todo []*entry) {
-	defer HoldActiveProcs()()
-	defer s.reindex.update(func(st *ReindexStatus) {
-		st.Running, st.Current, st.CurrentDone, st.CurrentTotal = false, "", 0, 0
+func (s *Server) runReindex(j *job, todo []*entry) {
+	defer j.update(func(st *jobStatus) {
+		st.Current, st.CurrentDone, st.CurrentTotal = "", 0, 0
 	})
 	for _, e := range todo {
 		acquire(indexLimit)
 		// the lane is FIFO and a rebuild takes minutes: the cancel may have
 		// arrived while this slot was being waited for
-		if s.reindex.canceled() {
+		if j.canceled() {
 			release(indexLimit)
-			s.reindex.update(func(st *ReindexStatus) { st.Canceled = true })
+			j.update(func(st *jobStatus) { st.Canceled = true })
 			return
 		}
 		name := e.probeName()
-		s.reindex.update(func(st *ReindexStatus) {
+		j.update(func(st *jobStatus) {
 			st.Current, st.CurrentDone, st.CurrentTotal = name, 0, 0
 		})
 		last := time.Time{}
@@ -165,11 +133,11 @@ func (s *Server) runReindex(todo []*entry) {
 				return
 			}
 			last = time.Now()
-			s.reindex.update(func(st *ReindexStatus) { st.CurrentDone, st.CurrentTotal = done, total })
+			j.update(func(st *jobStatus) { st.CurrentDone, st.CurrentTotal = int64(done), int64(total) })
 		}
 		_, err := e.refresh(progress)
 		release(indexLimit)
-		s.reindex.update(func(st *ReindexStatus) {
+		j.update(func(st *jobStatus) {
 			st.Done++
 			if err != nil {
 				st.Failed = append(st.Failed, name+": "+err.Error())

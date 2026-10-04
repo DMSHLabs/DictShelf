@@ -217,8 +217,7 @@ type intakeConfirmReq struct {
 func (s *Server) intakeConfirm(w http.ResponseWriter, r *http.Request) {
 	var req intakeConfirmReq
 	if r.ContentLength != 0 {
-		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&req); err != nil {
-			httpErr(w, http.StatusBadRequest, "bad request: %v", err)
+		if !decodeJSON(w, r, &req, 1<<20) {
 			return
 		}
 	}

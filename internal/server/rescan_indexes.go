@@ -119,14 +119,13 @@ func (r *Registry) updateDictionaryIndexesProgress(req rescanIndexesRequest, pro
 	}
 	targets := []target{}
 	p := r.prefs
+	rec, _ := p.data()
 	for _, e := range r.all() {
 		if e.builtin || store.IsTextDB(e.Path) {
 			continue
 		}
 		_, prepared := store.LookupDir(e.Path)
-		p.mu.RLock()
-		_, pending := p.dslPending[e.indexRemovalKey()]
-		p.mu.RUnlock()
+		_, pending := rec.DSLPending[e.indexRemovalKey()]
 		fresh := pending || (!prepared && (!previous[dict.CanonPath(e.Path)] || !e.indexBlocked()))
 		options := dslIndexOptions{Index: true}
 		options.Contains = defaults.Original.Index && defaults.Original.Contains || defaults.GD.Index && defaults.GD.Contains
@@ -145,42 +144,33 @@ func (r *Registry) updateDictionaryIndexesProgress(req rescanIndexesRequest, pro
 	// Save desired pending plans before touching files; a retry/restart uses the
 	// requested features, never the older queued plan.
 	p.editMu.Lock()
-	p.mu.Lock()
-	oldDefaults, oldKnown, oldPending, oldRemoved, oldExists := p.dslDefaults, p.dslKnown, p.dslPending, p.dslRemoved, p.exists
-	p.dslKnown = maps.Clone(p.dslKnown)
-	p.dslPending = map[string]dslIndexOptions{}
-	p.dslRemoved = maps.Clone(p.dslRemoved)
-	if p.dslKnown == nil {
-		p.dslKnown = map[string]bool{}
+	f, _ := p.data()
+	f.DSLKnown = maps.Clone(f.DSLKnown)
+	if f.DSLKnown == nil {
+		f.DSLKnown = map[string]bool{}
 	}
-	if p.dslPending == nil {
-		p.dslPending = map[string]dslIndexOptions{}
+	f.DSLPending = map[string]dslIndexOptions{}
+	f.DSLRemoved = maps.Clone(f.DSLRemoved)
+	if f.DSLRemoved == nil {
+		f.DSLRemoved = map[string]bool{}
 	}
-	if p.dslRemoved == nil {
-		p.dslRemoved = map[string]bool{}
-	}
-	p.dslDefaults = &defaults
-	p.exists = true
+	f.DSLDefaults = &defaults
 	for _, t := range targets {
 		key := t.e.indexRemovalKey()
 		source := cleanAbs(t.e.Path)
 		if t.e.dslSource != "" {
 			source = t.e.dslSource
 		}
-		p.dslKnown[source] = true
-		delete(p.dslPending, key)
+		f.DSLKnown[source] = true
+		delete(f.DSLPending, key)
 		if t.fresh {
-			p.dslRemoved[key] = true
+			f.DSLRemoved[key] = true
 			if t.options.Index {
-				p.dslPending[key] = t.options
+				f.DSLPending[key] = t.options
 			}
 		}
 	}
-	err := p.saveLocked()
-	if err != nil {
-		p.dslDefaults, p.dslKnown, p.dslPending, p.dslRemoved, p.exists = oldDefaults, oldKnown, oldPending, oldRemoved, oldExists
-	}
-	p.mu.Unlock()
+	err := p.store(f)
 	p.editMu.Unlock()
 	if err != nil {
 		return []string{err.Error()}
@@ -243,10 +233,7 @@ func (r *Registry) updateDictionaryIndexesProgress(req rescanIndexesRequest, pro
 			continue
 		}
 		p.editMu.Lock()
-		p.mu.Lock()
-		delete(p.dslPending, e.indexRemovalKey())
-		err = p.saveLocked()
-		p.mu.Unlock()
+		err = p.mutate(func(f *prefsFile) { delete(f.DSLPending, e.indexRemovalKey()) })
 		p.editMu.Unlock()
 		if err != nil {
 			failures = append(failures, err.Error())

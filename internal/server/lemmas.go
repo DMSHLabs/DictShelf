@@ -45,17 +45,11 @@ type lemmaJob struct {
 	Err   string `json:"error,omitempty"`
 }
 
-// lemmaState is the installer's whole memory. Two locks, deliberately: a
-// catalogue fetch holds catMu for as long as the network takes, and progress
-// updates must not queue behind it.
+// lemmaState is the installer's caches; its downloads are jobs (jobs.go). Two
+// locks, deliberately: a catalogue fetch holds catMu for as long as the
+// network takes, and the digest cache must not queue behind it.
 type lemmaState struct {
-	mu   sync.Mutex
-	jobs map[string]*lemmaJob
-	// wg counts the install goroutines. Nothing in the server waits on it -
-	// an install is meant to outlive its request - but a TEST must, because a
-	// download still writing when the test returns writes into a t.TempDir()
-	// that cleanup is already removing.
-	wg sync.WaitGroup
+	mu sync.Mutex
 	// hashes memoizes lemmas.Hash keyed by path, size and mtime. Without it a
 	// polling page would re-read every installed file - up to 21 MB - once per
 	// second to decide whether to draw one "differs from the catalogue" mark.
@@ -264,35 +258,21 @@ func (s *Server) lemmaHash(l lemmas.Local) (string, error) {
 	return h, nil
 }
 
-func (s *Server) job(code string) *lemmaJob {
-	st := &s.lemmas
-	st.mu.Lock()
-	defer st.mu.Unlock()
-	if j, ok := st.jobs[code]; ok {
-		c := *j // copied under the lock: the goroutine writes Done as it goes
-		return &c
-	}
-	return nil
-}
+// lemmaKey is a download's job (jobs.go): one per language.
+func lemmaKey(code string) string { return "lemma:" + code }
 
-// claim registers a download for code, or reports that one is already running.
-// The check and the registration are one operation because two taps on one
-// checkbox, or two open tabs, would otherwise start two downloads of the same
-// file into the same folder.
-func (s *Server) claim(code string, total int64) (started bool) {
-	st := &s.lemmas
-	st.mu.Lock()
-	defer st.mu.Unlock()
-	if st.jobs == nil {
-		st.jobs = map[string]*lemmaJob{}
+// job is the download of code as the page shows it, or nil: a download that
+// succeeded is not a job any more, only an installed file.
+func (s *Server) job(code string) *lemmaJob {
+	st, ok := s.jobs.status(lemmaKey(code))
+	if !ok {
+		return nil
 	}
-	if j, ok := st.jobs[code]; ok && j.State == "downloading" {
-		return false
+	j := &lemmaJob{State: "downloading", Done: st.Done, Total: st.Total, Err: st.Err}
+	if !st.Running {
+		j.State = "error"
 	}
-	// A previous FAILED job is replaced here: asking again is how a user
-	// retries, and the old error must not outlive the retry.
-	st.jobs[code] = &lemmaJob{State: "downloading", Total: total}
-	return true
+	return j
 }
 
 func (s *Server) handleLemmaInstall(w http.ResponseWriter, r *http.Request) {
@@ -315,18 +295,11 @@ func (s *Server) handleLemmaInstall(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 400, "the catalogue has no lemma data for %s", code)
 		return
 	}
-	if !s.claim(code, e.Size) {
-		// Already running: the same answer as starting it, because the caller
-		// wanted this language downloaded and it is being downloaded.
-		w.WriteHeader(http.StatusAccepted)
-		writeJSON(w, map[string]string{"code": code, "state": "downloading"})
-		return
-	}
-	s.lemmas.wg.Add(1)
-	go func() {
-		defer s.lemmas.wg.Done()
-		s.install(cat, e)
-	}()
+	// Already running is the same answer as starting it: the caller wanted
+	// this language downloaded and it is being downloaded. A FAILED job is
+	// replaced: asking again is how a user retries, and the old error must
+	// not outlive the retry.
+	s.jobs.start(lemmaKey(code), installTimeout, jobStatus{Total: e.Size}, func(j *job) { s.install(j, cat, e) })
 
 	w.WriteHeader(http.StatusAccepted)
 	writeJSON(w, map[string]string{"code": code, "state": "downloading"})
@@ -336,31 +309,16 @@ func (s *Server) handleLemmaInstall(w http.ResponseWriter, r *http.Request) {
 // for it. On success the job is DELETED rather than marked done: the file is
 // then simply installed, which is a fact about the folder and not a fact about
 // this process, and a page loaded tomorrow must not be told about a download.
-func (s *Server) install(cat *lemmas.Catalog, e lemmas.Entry) {
-	ctx, cancel := context.WithTimeout(context.Background(), installTimeout)
-	defer cancel()
-
-	st := &s.lemmas
-	dst, err := cat.Install(ctx, s.LemmaDir, e, func(done int64) {
-		st.mu.Lock()
-		if j, ok := st.jobs[e.Code]; ok {
-			j.Done = done
-		}
-		st.mu.Unlock()
+func (s *Server) install(j *job, cat *lemmas.Catalog, e lemmas.Entry) {
+	dst, err := cat.Install(j.ctx, s.LemmaDir, e, func(done int64) {
+		j.update(func(st *jobStatus) { st.Done = done })
 	})
-
-	st.mu.Lock()
 	if err != nil {
-		st.jobs[e.Code] = &lemmaJob{State: "error", Total: e.Size, Err: err.Error()}
-	} else {
-		delete(st.jobs, e.Code)
-	}
-	st.mu.Unlock()
-
-	if err != nil {
+		j.update(func(st *jobStatus) { st.Err = err.Error() })
 		logx.Warn("lemma download failed: %v", err)
 		return
 	}
+	j.dropWhenDone()
 	// The whole reason this can be done from a page rather than from a restart
 	// (D88 left Rescan here for exactly this).
 	s.Morph.Rescan()
@@ -385,10 +343,7 @@ func (s *Server) handleLemmaRemove(w http.ResponseWriter, r *http.Request) {
 	// A failed job for this language is cleared too: the user has just said
 	// they do not want it, and an error message about a download they have
 	// abandoned is noise.
-	st := &s.lemmas
-	st.mu.Lock()
-	delete(st.jobs, code)
-	st.mu.Unlock()
+	s.jobs.forget(lemmaKey(code))
 
 	s.Morph.Rescan()
 	writeJSON(w, map[string]any{"code": code, "removed": gone, "builtin": code == "en"})

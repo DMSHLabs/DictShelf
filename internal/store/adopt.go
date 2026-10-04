@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/wuweidict/wudict/internal/fsx"
 )
 
 // hashSuffix matches the content hash the pre-folder layout appended to a
@@ -93,7 +95,7 @@ func adoptOne(textDB string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if fileExists(TextDBPath(dir)) {
+	if fsx.FileExists(TextDBPath(dir)) {
 		// this dictionary already has a prepared folder: leave the loose copy
 		// alone rather than overwrite either of them.
 		return "", nil
@@ -101,16 +103,11 @@ func adoptOne(textDB string) (string, error) {
 	if err := os.Rename(textDB, TextDBPath(dir)); err != nil {
 		return "", err
 	}
-	if media := strings.TrimSuffix(textDB, ".text.db") + ".media.db"; fileExists(media) {
+	if media := strings.TrimSuffix(textDB, ".text.db") + ".media.db"; fsx.FileExists(media) {
 		if err := os.Rename(media, MediaDBPath(dir)); err != nil {
 			return dir, err
 		}
 	}
 	_ = WriteInfo(dir) // receipt is derived; a failure must not undo the move
 	return dir, nil
-}
-
-func fileExists(p string) bool {
-	fi, err := os.Stat(p)
-	return err == nil && !fi.IsDir()
 }

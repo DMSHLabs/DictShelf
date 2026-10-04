@@ -71,6 +71,7 @@ var authFree = map[string]bool{
 	"GET /":                   true,
 	"GET /setup":              true,
 	"GET /lemmas":             true,
+	"GET /groups":             true,
 	"GET /assets/frame.js":    true,
 	"GET /assets/pick.js":     true,
 	"GET /assets/speak.js":    true,
