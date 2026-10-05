@@ -240,6 +240,7 @@ class ServerProcess {
     }
 
     private void run(Listener listener) {
+        SystemLog.record("server startup requested");
         // A previous run's child can outlive the app process: Android kills
         // the app, but an exec'd child is reparented to init and keeps
         // running - still holding this app's port, still serving the same library. Only
@@ -252,6 +253,7 @@ class ServerProcess {
         // as with the port above.
         ShellPrefs.token(app);
         if (adoptRunningServer(app, port)) {
+            SystemLog.record("server adopted port=" + port);
             Log.i(TAG, "adopted a wudict server already listening on " + port);
             synchronized (this) {
                 if (stopped) return;
@@ -263,6 +265,7 @@ class ServerProcess {
 
         String bin = app.getApplicationInfo().nativeLibraryDir + "/" + BINARY;
         if (!new File(bin).canExecute()) {
+            SystemLog.record("server startup failed: binary unavailable " + bin);
             listener.onFailed("server binary not extracted: " + bin);
             return;
         }
@@ -324,12 +327,14 @@ class ServerProcess {
                 process = pb.start();
             }
         } catch (IOException e) {
+            SystemLog.warn(TAG, "server process start failed", e);
             listener.onFailed(String.valueOf(e.getMessage()));
             return;
         }
         logOutput(process.getInputStream());
 
         if (awaitPort(app, process, port)) {
+            SystemLog.record("server ready port=" + port);
             synchronized (this) {
                 if (stopped) return;
                 livePort = port; // and the one this child was exec'd with
@@ -356,12 +361,14 @@ class ServerProcess {
             // A hard kill is safe for the same reason it is in stop():
             // SQLite commits are transactional.
             process.destroy();
+            SystemLog.record("server startup failed: port " + port + " never opened");
             listener.onFailed("port " + port + " never opened");
         } else {
             // The child is gone, so its last line of output is the diagnosis -
             // a bad --db-dir, a port already held, a permission refusal. Saying
             // "port never opened" instead would send the user hunting for a
             // network problem that does not exist.
+            SystemLog.record("server startup failed exit=" + process.exitValue() + " last=" + lastLine);
             listener.onFailed(lastLine == null
                     ? "server exited immediately (" + process.exitValue() + ")"
                     : lastLine);
@@ -408,7 +415,7 @@ class ServerProcess {
         } catch (IOException e) {
             // Not fatal: the server falls back to $HOME/Dictionaries, which is
             // appPrivate - reachable, just without the shared folder.
-            Log.w(TAG, "could not seed " + cfg, e);
+            SystemLog.warn(TAG, "could not seed " + cfg, e);
         }
     }
 
@@ -491,11 +498,15 @@ class ServerProcess {
     private static final String BUSY_OFF = "@wudict busy 0";
 
     private void logOutput(InputStream in) {
+        Process loggedProcess = process;
         Thread t = new Thread(() -> {
+            int fatalLines = 0;
             try (BufferedReader r = new BufferedReader(new InputStreamReader(in))) {
                 for (String line; (line = r.readLine()) != null; ) {
                     Log.d(TAG, line);
                     String marker = line.trim();
+                    if (marker.startsWith("panic:") || marker.startsWith("fatal error:")) fatalLines = 40;
+                    if (fatalLines > 0) { SystemLog.record("server fatal: " + line); fatalLines--; }
                     if (BUSY_ON.equals(marker) || BUSY_OFF.equals(marker)) {
                         IndexService.busy(app, BUSY_ON.equals(marker));
                         continue; // a marker is not a diagnosis; keep lastLine
@@ -504,6 +515,12 @@ class ServerProcess {
                 }
             } catch (IOException ignored) {
                 // process ended; nothing more to log
+            }
+            try {
+                SystemLog.record("server process exited code=" + loggedProcess.waitFor());
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                SystemLog.record("server exit monitor interrupted");
             }
         }, "wudict-log");
         t.setDaemon(true);

@@ -379,6 +379,9 @@ func decodeJSON(w http.ResponseWriter, r *http.Request, v any, limit int64) bool
 }
 
 func httpErr(w http.ResponseWriter, code int, format string, args ...any) {
+	if code >= 500 {
+		logx.System("HTTP failure status=%d error=%q", code, fmt.Sprintf(format, args...))
+	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(code)
 	enc := json.NewEncoder(w)
@@ -1405,6 +1408,9 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 		case h.Err != nil:
 			m.Error = h.Err.Error()
 		}
+		if m.Error != "" && !errors.Is(h.Err, context.Canceled) {
+			logx.System("search failure dictionary=%q source=%q mode=%q error=%q", name, entries[i].Path, mode, m.Error)
+		}
 		return m
 	}
 
@@ -1961,6 +1967,11 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 	// the dictionary now has.
 	key := ingestKey(e.ID)
 	s.jobs.start(key, 0, jobStatus{}, func(j *job) {
+		store.IndexDiagnostic("request start dictionary=%q source=%q contains=%v fulltext=%v media=%v rebuild=%v build=%q", e.probeName(), e.Path, want.Contains, want.FullText, want.Media, q.Get("rebuild") == "1", s.Version)
+		defer func() {
+			js, _ := s.jobs.status(key)
+			store.IndexDiagnostic("request finish source=%q error=%q", e.Path, js.Err)
+		}()
 		last := time.Time{}
 		progress := func(done, total int) {
 			if time.Since(last) < 200*time.Millisecond {

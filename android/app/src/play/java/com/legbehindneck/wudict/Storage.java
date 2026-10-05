@@ -94,7 +94,7 @@ final class Storage {
                     tree, Intent.FLAG_GRANT_READ_URI_PERMISSION
                             | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
         } catch (SecurityException e) {
-            Log.w(TAG, "no persistable grant for " + tree, e); // the copy still works now
+            SystemLog.warn(TAG, "no persistable grant for " + tree, e); // the copy still works now
         }
         SafImporter.importTree(a, tree);
     }
@@ -213,7 +213,7 @@ final class Storage {
         } catch (ActivityNotFoundException e) {
             // A device with no documents provider at all. Nothing to fall back
             // to - say so rather than fail silently.
-            Log.w(TAG, "no document picker on this device", e);
+            SystemLog.warn(TAG, "no document picker on this device", e);
             new BackgroundDialogBuilder(a)
                     .setMessage(R.string.import_no_picker)
                     .setPositiveButton(android.R.string.ok, null)

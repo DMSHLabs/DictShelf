@@ -88,7 +88,7 @@ final class AppDirs {
             vols = c.getExternalFilesDirs(null);
         } catch (RuntimeException e) {
             // Some OEM builds throw rather than return null on an odd volume set.
-            Log.w(TAG, "cannot enumerate external volumes", e);
+            SystemLog.warn(TAG, "cannot enumerate external volumes", e);
         }
         if (vols != null) {
             for (File vol : vols) {
@@ -143,7 +143,7 @@ final class AppDirs {
         }
         File external = externalRoot(c);
         if (external == null) {
-            Log.w(TAG, "no external files dir (storage not mounted): using " + internal);
+            SystemLog.warn(TAG, "no external files dir (storage not mounted): using " + internal);
             return internal;
         }
         migrateConfig(internal, external);
@@ -174,11 +174,11 @@ final class AppDirs {
             Files.createDirectories(dst.getParentFile().toPath());
             Files.copy(old.toPath(), dst.toPath());
             if (!old.delete()) {
-                Log.w(TAG, "copied but could not remove the old config: " + old);
+                SystemLog.warn(TAG, "copied but could not remove the old config: " + old);
             }
             Log.i(TAG, "moved wudict.toml to " + dst);
         } catch (IOException e) {
-            Log.w(TAG, "could not move " + old + " to " + dst, e);
+            SystemLog.warn(TAG, "could not move " + old + " to " + dst, e);
         }
     }
 

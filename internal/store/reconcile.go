@@ -254,7 +254,11 @@ func reconcileText(src string, t Target, h Hooks, out *Outcome) (p Prepared, dir
 }
 
 // ingest writes the text.db from the source.
-func ingest(src, textDB string, plan Plan, h Hooks, out *Outcome) error {
+func ingest(src, textDB string, plan Plan, h Hooks, out *Outcome) (resultErr error) {
+	IndexDiagnostic("open reader source=%q target=%q contains=%v fulltext=%v", src, textDB, plan.Contains, plan.FullText)
+	defer func() {
+		IndexDiagnostic("text result source=%q target=%q error=%q", src, textDB, fmt.Sprint(resultErr))
+	}()
 	var r dict.Reader
 	var err error
 	if h.Reader != nil {
@@ -277,7 +281,11 @@ func ingest(src, textDB string, plan Plan, h Hooks, out *Outcome) error {
 // pack writes the media.db from the source's resources and the loose files
 // its articles reference. Nothing to pack leaves no media.db: one that does not
 // pair serves nothing and would be reported outdated forever.
-func pack(src, textDB, mediaDB string, h Hooks, out *Outcome) error {
+func pack(src, textDB, mediaDB string, h Hooks, out *Outcome) (resultErr error) {
+	IndexDiagnostic("media start source=%q target=%q", src, mediaDB)
+	defer func() {
+		IndexDiagnostic("media result source=%q target=%q error=%q", src, mediaDB, fmt.Sprint(resultErr))
+	}()
 	if mediaDB == "" {
 		return fmt.Errorf("media is packed beside a text.db, and %s is not one", textDB)
 	}
@@ -312,6 +320,17 @@ func pack(src, textDB, mediaDB string, h Hooks, out *Outcome) error {
 		return err
 	}
 	start := time.Now()
+	last := time.Time{}
+	callerProgress := h.MediaProgress
+	h.MediaProgress = func(done, total int) {
+		if time.Since(last) >= 10*time.Second {
+			last = time.Now()
+			IndexDiagnostic("media progress source=%q progress=%d/%d elapsed=%s", src, done, total, time.Since(start).Round(time.Millisecond))
+		}
+		if callerProgress != nil {
+			callerProgress(done, total)
+		}
+	}
 	if err := IngestMedia(d, names, mediaDB, uuid, h.MediaProgress); err != nil {
 		return err
 	}

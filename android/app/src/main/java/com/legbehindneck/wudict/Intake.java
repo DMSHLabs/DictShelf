@@ -250,7 +250,7 @@ final class Intake {
         try {
             a.startActivityForResult(i, REQ_PICK);
         } catch (Exception e) {
-            Log.w(TAG, "no document picker on this device", e);
+            SystemLog.warn(TAG, "no document picker on this device", e);
             say(a, a.getString(R.string.intake_no_picker));
         }
     }
@@ -278,7 +278,7 @@ final class Intake {
         try {
             mime = c.getContentResolver().getType(u);
         } catch (Exception e) {
-            Log.w(TAG, "no type for " + u, e);
+            SystemLog.warn(TAG, "no type for " + u, e);
         }
         if (mime == null && intent != null) mime = intent.getType();
         if (mime != null) {
@@ -440,7 +440,7 @@ final class Intake {
                     .setPackage(pkg)
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
         } catch (Exception e) {
-            Log.w(TAG, "could not open " + page + " in " + pkg, e);
+            SystemLog.warn(TAG, "could not open " + page + " in " + pkg, e);
             say(a, a.getString(R.string.intake_no_browser, page.toString()));
         }
     }
@@ -495,7 +495,7 @@ final class Intake {
             try {
                 summary = run(a, app, uris, dialog);
             } catch (Exception e) {
-                Log.w(TAG, "intake failed", e);
+                SystemLog.warn(TAG, "intake failed", e);
                 summary = a.getString(R.string.intake_failed, String.valueOf(e.getMessage()));
             } finally {
                 running = false;
@@ -564,7 +564,7 @@ final class Intake {
             try {
                 summary = runURL(a, app, url, dialog);
             } catch (Exception e) {
-                Log.w(TAG, "download failed", e);
+                SystemLog.warn(TAG, "download failed", e);
                 summary = a.getString(R.string.intake_failed, String.valueOf(e.getMessage()));
             } finally {
                 running = false;
@@ -1196,7 +1196,7 @@ final class Intake {
 
             @Override
             public void onFailed(String message) {
-                Log.w(TAG, "server not available for intake: " + message);
+                SystemLog.warn(TAG, "server not available for intake: " + message);
                 latch.countDown();
             }
         });
@@ -1228,7 +1228,7 @@ final class Intake {
             }
             return read(h);
         } catch (Exception e) {
-            Log.w(TAG, "intake request failed: " + path, e);
+            SystemLog.warn(TAG, "intake request failed: " + path, e);
             return error(String.valueOf(e.getMessage()));
         } finally {
             if (h != null) h.disconnect();
@@ -1274,7 +1274,7 @@ final class Intake {
             }
             return read(h);
         } catch (Exception e) {
-            Log.w(TAG, "upload failed: " + u, e);
+            SystemLog.warn(TAG, "upload failed: " + u, e);
             return error(String.valueOf(e.getMessage()));
         } finally {
             if (h != null) h.disconnect();
@@ -1358,7 +1358,7 @@ final class Intake {
                 }
             }
         } catch (Exception e) {
-            Log.w(TAG, "cannot resolve " + u, e);
+            SystemLog.warn(TAG, "cannot resolve " + u, e);
         }
         // MediaStore still reports a real path for files on primary storage.
         // Deprecated, and asked for last precisely because it is: the answer
@@ -1367,7 +1367,7 @@ final class Intake {
                 u, new String[]{MediaStore.MediaColumns.DATA}, null, null, null)) {
             if (cur != null && cur.moveToFirst() && !cur.isNull(0)) return readable(cur.getString(0));
         } catch (Exception e) {
-            Log.w(TAG, "no path column for " + u, e);
+            SystemLog.warn(TAG, "no path column for " + u, e);
         }
         return null;
     }
@@ -1385,7 +1385,7 @@ final class Intake {
                 null, null, null)) {
             if (c != null && c.moveToFirst() && !c.isNull(0)) return c.getString(0);
         } catch (Exception e) {
-            Log.w(TAG, "no display name for " + u, e);
+            SystemLog.warn(TAG, "no display name for " + u, e);
         }
         String last = u.getLastPathSegment();
         if (last == null) return null;
@@ -1398,7 +1398,7 @@ final class Intake {
         try (Cursor c = cr.query(u, new String[]{OpenableColumns.SIZE}, null, null, null)) {
             if (c != null && c.moveToFirst() && !c.isNull(0)) return c.getLong(0);
         } catch (Exception e) {
-            Log.w(TAG, "no size for " + u, e);
+            SystemLog.warn(TAG, "no size for " + u, e);
         }
         return 0;
     }

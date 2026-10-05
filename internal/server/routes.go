@@ -84,6 +84,7 @@ func (s *Server) routes() []route {
 		{"POST", "/api/clear-database", s.handleClearDatabase, "/api/clear-database", false},
 		{"POST", "/api/howto", s.handleHowtoCopy, "/api/howto", false},
 		{"GET", "/api/ingest", s.handleIngest, "/api/ingest", false},
+		{"GET", "/api/system-log", s.handleIndexLog, "/api/system-log", false},
 		{"GET", "/api/setup", s.handleSetup, "/api/setup", false},
 		{"GET", "/api/library", s.handleLibrary, "/api/library", false},
 		{"DELETE", "/api/library", s.handleRemoveLibrary, "/api/library", false},

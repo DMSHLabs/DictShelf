@@ -122,7 +122,7 @@ final class PowerSignal {
             c.setReadTimeout(900);
             int code = c.getResponseCode();
             if (code != 200) {
-                Log.w(TAG, "power " + state + ": HTTP " + code);
+                SystemLog.warn(TAG, "power " + state + ": HTTP " + code);
                 return false;
             }
             return true;

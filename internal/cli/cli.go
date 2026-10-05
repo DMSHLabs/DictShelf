@@ -1184,6 +1184,8 @@ func cmdServe(args []string) (err error) {
 	logx.V("config: source=%q dictDirs=%v dbDir=%q addr=%s speexdec=%s",
 		cfg.Source, cfg.DictDirs, cfg.DBDir, cfg.Addr(), cfg.Speexdec)
 	store.SetDBDir(cfg.DBDir)
+	logx.System("server start build=%q runtime=%s platform=%s/%s", Version, runtime.Version(), runtime.GOOS, runtime.GOARCH)
+	defer func() { logx.System("server exit error=%q", fmt.Sprint(err)) }()
 
 	// The library (DB_DIR) is wudict's own working area, never a folder of
 	// user dictionaries. Using it as DICT_DIR is a
@@ -1424,6 +1426,7 @@ Hint: pick another port with --port, e.g.:  wudict --port %s
 	var stopOnce sync.Once
 	stop := func() {
 		stopOnce.Do(func() {
+			logx.System("server shutdown requested")
 			logx.Status("\nshutting down…")
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()

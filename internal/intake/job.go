@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/wuweidict/wudict/internal/dict"
+	"github.com/wuweidict/wudict/internal/logx"
 )
 
 // One import at a time, everywhere, and the reasons are not only about RAM.
@@ -923,6 +924,9 @@ func (m *Manager) runCollection(ctx context.Context, j *jobState, plan []planRow
 		j.pub.State, j.pub.Error = StateDone, strings.Join(problems, "; ")
 	}
 	j.pub.Source = ""
+	if j.pub.Error != "" {
+		logx.System("import result state=%q error=%q", j.pub.State, j.pub.Error)
+	}
 	m.mu.Unlock()
 	if len(installed) > 0 && m.Installed != nil {
 		m.Installed()
@@ -1391,5 +1395,6 @@ func errorText(err error) string {
 	if errors.Is(err, context.Canceled) {
 		return "cancelled"
 	}
+	logx.System("import error=%q", err.Error())
 	return err.Error()
 }

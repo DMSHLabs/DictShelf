@@ -85,6 +85,7 @@ func V(format string, args ...any) {
 // Warn reports a degradation the user should see (a media file that cannot be
 // read, a dictionary that failed to open) without stopping anything.
 func Warn(format string, args ...any) {
+	System("warning: "+format, args...)
 	fmt.Fprintf(dest(), "warning: "+format+"\n", args...)
 }
 

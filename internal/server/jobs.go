@@ -8,6 +8,8 @@ import (
 	"context"
 	"sync"
 	"time"
+
+	"github.com/wuweidict/wudict/internal/logx"
 )
 
 // The server's long-running work - rebuilding outdated dictionaries, a lemma
@@ -86,6 +88,12 @@ func (t *jobTable) start(key string, timeout time.Duration, init jobStatus, fn f
 	t.jobs[key] = j
 	t.wg.Add(1)
 	go func() {
+		defer func() {
+			if p := recover(); p != nil {
+				logx.System("job=%q panic=%v", key, p)
+				panic(p)
+			}
+		}()
 		defer t.wg.Done()
 		defer HoldActiveProcs()()
 		defer j.end(key)
@@ -97,11 +105,19 @@ func (t *jobTable) start(key string, timeout time.Duration, init jobStatus, fn f
 func (j *job) end(key string) {
 	j.cancel()
 	j.t.mu.Lock()
-	defer j.t.mu.Unlock()
 	j.st.Running = false
 	j.signalLocked()
+	errText := j.st.Err
+	failures := append([]string(nil), j.st.Failed...)
 	if j.drop && j.t.jobs[key] == j {
 		delete(j.t.jobs, key)
+	}
+	j.t.mu.Unlock()
+	if errText != "" {
+		logx.System("job=%q error=%q", key, errText)
+	}
+	for _, failure := range failures {
+		logx.System("job=%q failure=%q", key, failure)
 	}
 }
 

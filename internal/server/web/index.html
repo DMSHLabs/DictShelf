@@ -632,6 +632,7 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
        from anything of its own. -->
   <div class="facts">
     <button type="button" class="mrow door" id="editSysSettings" title="{{T:panel.systemHint}}">{{T:panel.systemDoor}}</button>
+    <a class="mrow door" id="saveSystemLog" href="/api/system-log" download>{{T:panel.saveSystemLog}}</a>
   </div>
 </details>
 
@@ -966,6 +967,12 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
 "use strict";
 const $=id=>document.getElementById(id);
 const tx=window.wudictI18n.t;
+$("saveSystemLog").addEventListener("click",event=>{
+  if(!window.wudictNativeShell)return;
+  event.preventDefault();
+  const result=prompt("wudict:system-log","");
+  if(result&&result!=="ok")alert(result);
+});
 document.querySelector("[data-ui-language]").textContent="Language — "+(window.wudictI18n.language==="ru"?"Русский":"English");
 window.wuSearchHistory.setSearch(word=>searchFor(word));
 window.wuSearchHistory.setSuggest((q,onHit,signal)=>{

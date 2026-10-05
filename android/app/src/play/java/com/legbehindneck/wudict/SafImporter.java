@@ -155,7 +155,7 @@ final class SafImporter {
             try {
                 summary = copy(a, plan.build(), dialog);
             } catch (Exception e) {
-                Log.w(TAG, "import failed", e);
+                SystemLog.warn(TAG, "import failed", e);
                 summary = a.getString(R.string.import_failed, String.valueOf(e.getMessage()));
             } finally {
                 running = false;
@@ -258,7 +258,7 @@ final class SafImporter {
     private static boolean copyOne(ContentResolver cr, Uri src, File dst) {
         File parent = dst.getParentFile();
         if (parent != null && !parent.isDirectory() && !parent.mkdirs()) {
-            Log.w(TAG, "cannot create " + parent);
+            SystemLog.warn(TAG, "cannot create " + parent);
             return false;
         }
         File part = new File(dst.getPath() + ".part");
@@ -274,7 +274,7 @@ final class SafImporter {
                 out.write(buf, 0, n);
             }
         } catch (IOException | SecurityException | IllegalArgumentException e) {
-            Log.w(TAG, "copy failed: " + src, e);
+            SystemLog.warn(TAG, "copy failed: " + src, e);
             part.delete();
             return false;
         }
@@ -338,7 +338,7 @@ final class SafImporter {
                                         if (it.size > 0) back += it.size;
                                     }
                                 } catch (Exception e) {
-                                    Log.w(TAG, "could not delete " + it.src, e);
+                                    SystemLog.warn(TAG, "could not delete " + it.src, e);
                                 }
                             }
                             final int n = gone;
@@ -373,7 +373,7 @@ final class SafImporter {
                 if (f.isDirectory()) {
                     stack.push(f);
                 } else if (f.getName().endsWith(".part") && !f.delete()) {
-                    Log.w(TAG, "stale partial left behind: " + f);
+                    SystemLog.warn(TAG, "stale partial left behind: " + f);
                 }
             }
         }
@@ -415,7 +415,7 @@ final class SafImporter {
                     }
                 }
             } catch (Exception e) {
-                Log.w(TAG, "cannot list " + cur[0], e); // one unreadable folder is not fatal
+                SystemLog.warn(TAG, "cannot list " + cur[0], e); // one unreadable folder is not fatal
             }
         }
     }
@@ -425,7 +425,7 @@ final class SafImporter {
                 null, null, null)) {
             if (c != null && c.moveToFirst() && !c.isNull(0)) return c.getString(0);
         } catch (Exception e) {
-            Log.w(TAG, "no display name for " + uri, e);
+            SystemLog.warn(TAG, "no display name for " + uri, e);
         }
         String last = uri.getLastPathSegment();
         if (last == null) return null;
@@ -437,7 +437,7 @@ final class SafImporter {
         try (Cursor c = cr.query(uri, new String[]{OpenableColumns.SIZE}, null, null, null)) {
             if (c != null && c.moveToFirst() && !c.isNull(0)) return c.getLong(0);
         } catch (Exception e) {
-            Log.w(TAG, "no size for " + uri, e);
+            SystemLog.warn(TAG, "no size for " + uri, e);
         }
         return -1;
     }
@@ -463,7 +463,7 @@ final class SafImporter {
         try {
             String base = root.getCanonicalPath() + File.separator;
             if (!dst.getCanonicalPath().startsWith(base)) {
-                Log.w(TAG, "refusing to write outside " + root + ": " + rel);
+                SystemLog.warn(TAG, "refusing to write outside " + root + ": " + rel);
                 return null;
             }
         } catch (IOException e) {
@@ -486,7 +486,7 @@ final class SafImporter {
             ShellPrefs.authorize(c);   // /api/rescan writes to the library, so it is gated
             c.getResponseCode();
         } catch (Exception e) {
-            Log.w(TAG, "rescan after import failed", e); // the next launch picks it up
+            SystemLog.warn(TAG, "rescan after import failed", e); // the next launch picks it up
         } finally {
             if (c != null) c.disconnect();
         }

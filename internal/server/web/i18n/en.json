@@ -1,4 +1,5 @@
 {
+  "panel.saveSystemLog": "Save System Log…",
   "panel.editFilters": "Edit filters",
   "filters.title": "Edit filters",
   "filters.hint": "Each line defines a filter matching text in dictionary titles or file names, ignoring case. [Section] creates a category. These filters help find available dictionaries in your group editor.",

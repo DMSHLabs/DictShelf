@@ -60,6 +60,22 @@ type Plan struct {
 // transaction as the data (FTS-audit #3).
 func IngestPlan(r dict.Reader, dbPath string, plan Plan, progress Progress) (rep Report, err error) {
 	srcMeta := r.Meta()
+	trace := newIndexTrace(srcMeta.Path, dbPath, plan)
+	defer func() {
+		if p := recover(); p != nil {
+			trace.finish(fmt.Errorf("panic: %v", p))
+			panic(p)
+		}
+		trace.finish(err)
+	}()
+	IndexDiagnostic("job=%s dictionary=%q format=%q reader_version=%d", trace.id, srcMeta.Name, srcMeta.Format, dict.ReaderVersion(srcMeta.Format))
+	callerProgress := progress
+	progress = func(done, total int) {
+		trace.progress(done, total)
+		if callerProgress != nil {
+			callerProgress(done, total)
+		}
+	}
 	// Decided before anything is written, while the database being replaced
 	// is still the one at dbPath (keptUUID, stale.go).
 	uuid := keptUUID(dbPath, srcMeta.Path)
@@ -118,11 +134,7 @@ func IngestPlan(r dict.Reader, dbPath string, plan Plan, progress Progress) (rep
 	if err != nil {
 		return rep, err
 	}
-	defer func() {
-		if err != nil {
-			_ = tx.Rollback()
-		}
-	}()
+	defer tx.Rollback() // also release the connection if a reader panics
 
 	insEntry, err := tx.Prepare("INSERT INTO entry(id, w, m) VALUES(?, ?, ?)")
 	if err != nil {
@@ -171,6 +183,7 @@ func IngestPlan(r dict.Reader, dbPath string, plan Plan, progress Progress) (rep
 	var id, subEntries, linkCount int64
 	total := srcMeta.EntryCount
 
+	trace.phase("scan articles: headwords, fulltext and contains per plan")
 	for {
 		e, rerr := r.Next()
 		if errors.Is(rerr, io.EOF) {
@@ -235,6 +248,7 @@ func IngestPlan(r dict.Reader, dbPath string, plan Plan, progress Progress) (rep
 	}
 
 	unresolved := 0
+	trace.phase("resolve redirects")
 	// records whose row has landed, in the unit `total` counts (see below).
 	donerec := clampDone(int(id), total)
 	if linkCount > 0 {
@@ -329,23 +343,28 @@ func IngestPlan(r dict.Reader, dbPath string, plan Plan, progress Progress) (rep
 		}
 	}
 
+	trace.phase("headword index")
 	if _, err = tx.Exec("CREATE INDEX idx_entry_w ON entry(w COLLATE NOCASE)"); err != nil {
 		return rep, err
 	}
 	if _, err = tx.Exec("CREATE INDEX idx_alias_w ON alias(w COLLATE NOCASE)"); err != nil {
 		return rep, err
 	}
+	trace.phase("commit")
 	if err = tx.Commit(); err != nil {
 		return rep, err
 	}
+	trace.phase("optimize fulltext index")
 	if _, err = db.Exec("INSERT INTO entry_fts(entry_fts) VALUES('optimize')"); err != nil {
 		return rep, err
 	}
 	if plan.Contains {
+		trace.phase("optimize contains index")
 		if _, err = db.Exec("INSERT INTO entry_trigram(entry_trigram) VALUES('optimize')"); err != nil {
 			return rep, err
 		}
 	}
+	trace.phase("optimize database")
 	if _, err = db.Exec("ANALYZE; PRAGMA optimize;"); err != nil {
 		return rep, err
 	}
@@ -358,6 +377,7 @@ func IngestPlan(r dict.Reader, dbPath string, plan Plan, progress Progress) (rep
 		progress(donerec, total)
 	}
 	rep = Report{Entries: int(id), UnresolvedLinks: unresolved}
+	trace.phase("save database")
 	syncFile(tmp)
 	if err = os.Rename(tmp, dbPath); err != nil {
 		return rep, err

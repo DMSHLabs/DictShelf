@@ -3,3 +3,20 @@
    entry keeps its colour — widen to ":host *" if one still shows white. */
 :host, :root > body,
 :host > *, :root > body > * { background:none !important }
+
+/* =========================================================
+   MAKE WHITE IMAGE BACKGROUNDS LOOK TRANSPARENT
+   ========================================================= */
+
+/*
+   JPEG has no real transparency, and multiply is what makes a white
+   background read as the paper instead of as a white box:
+
+       white × paper = paper
+
+   LIGHT PAPER ONLY, and that is not a leftover: multiply against a near-black
+   paper gives near-black, so at night this would crush the picture into the
+   background rather than lift it onto it. A dark paper wants the image as it
+   is, which is what leaving the rule off does.
+*/
+

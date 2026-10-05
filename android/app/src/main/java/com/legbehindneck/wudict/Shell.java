@@ -446,7 +446,7 @@ final class Shell {
             a.startActivity(new Intent(Intent.ACTION_VIEW, uri)
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
         } catch (ActivityNotFoundException | SecurityException e) {
-            Log.w(TAG, "no app can open " + uri, e);
+            SystemLog.warn(TAG, "no app can open " + uri, e);
         }
         return true;
     }
@@ -511,6 +511,7 @@ final class Shell {
      * parseResult handles single, multiple (clipData) and cancel alike.
      */
     static void onActivityResult(Activity a, int requestCode, int resultCode, Intent data) {
+        SystemLogExport.result(a, requestCode, resultCode, data);
         if (requestCode == REQ_FILES) {
             settleFiles(WebChromeClient.FileChooserParams.parseResult(resultCode, data));
             return;
@@ -548,7 +549,7 @@ final class Shell {
             // A microSD card, whose volume id IS its mount name.
             return readableDir("/storage/" + volume + "/" + rel);
         } catch (Exception e) {
-            Log.w(TAG, "cannot resolve " + tree, e);
+            SystemLog.warn(TAG, "cannot resolve " + tree, e);
             return null;
         }
     }
@@ -566,6 +567,15 @@ final class Shell {
             public boolean onJsPrompt(WebView view, String url, String message,
                                       String defaultValue, android.webkit.JsPromptResult result) {
                 if (!ownPage(a, url)) return false;
+                if ("wudict:system-log".equals(message)) {
+                    try {
+                        SystemLogExport.start(a);
+                        result.confirm("ok");
+                    } catch (RuntimeException e) {
+                        result.confirm(e.getMessage());
+                    }
+                    return true;
+                }
                 if ("wudict:exit".equals(message)) {
                     result.confirm("ok");
                     a.runOnUiThread(() -> AppExit.request(a));
@@ -746,7 +756,7 @@ final class Shell {
                     try {
                         a.startActivityForResult(i, REQ_DIR);
                     } catch (ActivityNotFoundException | SecurityException e) {
-                        Log.w(TAG, "no folder picker on this device", e);
+                        SystemLog.warn(TAG, "no folder picker on this device", e);
                         pendingDir = null;
                         result.cancel();
                     }
@@ -802,7 +812,7 @@ final class Shell {
                     // flag the page asked for, so the picker matches the markup.
                     a.startActivityForResult(params.createIntent(), REQ_FILES);
                 } catch (ActivityNotFoundException | SecurityException e) {
-                    Log.w(TAG, "no file picker on this device", e);
+                    SystemLog.warn(TAG, "no file picker on this device", e);
                     settleFiles(null);
                 }
                 // True either way: the callback is ours now, and it has already

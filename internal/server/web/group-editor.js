@@ -238,7 +238,10 @@ $("newGroupForm").onsubmit=async event=>{
   finally{$("createGroup").disabled=false;$("cancelGroup").disabled=false}
 };
 $("newGroupDialog").addEventListener("cancel",event=>{if($("createGroup").disabled)event.preventDefault()});
-Promise.all([loadPrefs(),loadConfig(),loadUserCSS(),loadPickerGroups()]).then(loadDicts).then(applyURL);
+// Promise.all resolves to an array: passing it to loadDicts would enable
+// rescan and wait for index maintenance instead of listing dictionaries.
+Promise.all([loadPrefs(),loadConfig(),loadUserCSS(),loadPickerGroups()])
+  .then(()=>loadDicts()).then(applyURL).catch(error=>bootFailed(error.message));
 // The preset layers are independent of the boot chain: their app halves are
 // server-injected <link>s and their article halves join the article sheet
 // whenever this answer lands, which is why this is fire-and-forget rather

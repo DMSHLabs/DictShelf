@@ -155,7 +155,7 @@ final class Speech {
             }
         } catch (RuntimeException e) {
             // an engine is another app's code; its failure must not become ours
-            Log.w(TAG, "speech " + op + " failed", e);
+            SystemLog.warn(TAG, "speech " + op + " failed", e);
         }
         Map<String, String> h = new HashMap<>();
         h.put("Cache-Control", "no-store");
@@ -286,7 +286,7 @@ final class Speech {
             out.put("ready", t != null || initDone());
             out.put("voices", list);
         } catch (JSONException e) {
-            Log.w(TAG, "speech voices", e);
+            SystemLog.warn(TAG, "speech voices", e);
         }
         return out.toString();
     }
@@ -428,7 +428,7 @@ final class Speech {
         try {
             activity.startActivity(new Intent(TextToSpeech.Engine.ACTION_INSTALL_TTS_DATA));
         } catch (ActivityNotFoundException | SecurityException e) {
-            Log.w(TAG, "no speech settings to open", e);
+            SystemLog.warn(TAG, "no speech settings to open", e);
         }
     }
 

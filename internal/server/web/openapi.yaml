@@ -79,6 +79,18 @@ tags:
       Documented for completeness; not a stable contract.
 
 paths:
+  /api/system-log:
+    get:
+      summary: Download persistent server diagnostics, including the previous rotation
+      responses:
+        '200':
+          description: Plain-text System Log with build, warnings, server and import failures, indexing plans, stages and progress. URL queries are redacted.
+          content:
+            text/plain:
+              schema:
+                type: string
+        '500':
+          description: Could not read the log
   /api/search:
     get:
       tags: [search]

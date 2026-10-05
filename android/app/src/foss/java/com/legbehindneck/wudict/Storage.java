@@ -131,7 +131,7 @@ final class Storage {
         try {
             a.startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE), REQ_DIR);
         } catch (ActivityNotFoundException | SecurityException e) {
-            Log.w(TAG, "no folder picker on this device", e);
+            SystemLog.warn(TAG, "no folder picker on this device", e);
         }
     }
 
