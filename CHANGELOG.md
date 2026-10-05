@@ -5,6 +5,40 @@ Notable changes in **wuDict2**, the Android fork of
 version it was forked from. Fork release tags are prefixed `wudict2-`; one
 tagged line per release, newest first.
 
+## wudict2-v0.9.1 — 2026-10-06
+
+From `dev`. Mostly the tail of v0.9.0's parser change — and one thing about it
+has to come first.
+
+> ### ❗ Rebuild your DSL indexes after updating
+>
+> **The DSL reader changed in v0.9.0, so an index prepared by an older version no
+> longer matches what the reader produces.** Rebuild it: **Settings → Edit
+> Dictionary settings**, and in the **Dictionary settings** window set **index**
+> to *Update existing* — or to *Recreate all* if you would rather rebuild
+> everything. **Do the same for contains and full-text if you have them.**
+>
+> The app points at it too: dictionaries whose index is out of date are marked
+> *Outdated …: click to rebuild*, and a notice above the results says how many
+> dictionaries are affected with a **Rebuild** button. The bulk table in
+> Dictionary settings is the way to do them all at once.
+>
+> Nothing else is touched by this: your dictionary files, media, styles and
+> settings stay exactly as they are.
+
+### The second reader: the last traces
+
+- **Nothing in the interface mentions the second DSL reader any more.** The
+  per-family scopes are gone from the bulk index table, the setup page no longer
+  has a "DSL Dictionaries Parser" section, and no row in the settings speaks of
+  parser variants — one reader, one set of indexes.
+- **Reindexing a DSL dictionary that has an `_abrv.dsl` companion no longer gets
+  stuck** (upstream's fix): the rebuild finishes and the dictionary opens again.
+- The page's start-up watchdog now aborts its request and reports what happened
+  instead of waiting on a silent server.
+- Upstream also taught `wudict dump` to show progress while exporting — that is
+  the desktop CLI, not the app.
+
 ## wudict2-v0.9.0 — 2026-10-06
 
 From `dev`. The two DSL readers became one, index work became visible and
