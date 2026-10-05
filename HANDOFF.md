@@ -1,5 +1,11 @@
 # Agent handoff — current state
 
+2026-10-05 Rescan empty result: System Log's successful index jobs and the UI error identify nil `jobStatus.Failed` becoming JSON null after status copying; the dialog then read `report.failed.length`. Preserve nonnil empty failure slices across job copies and make the client treat missing failures as empty. No new checks run per instruction.
+
+2026-10-05 Sepia article images: added local article-colour backdrops and multiply blending, including Oxford enlargeable images, to the day-only Sepia article layer. Chromium pixel checks confirm white pixels become the Sepia article colour in shadow and iframe articles and hidden full-size images stay hidden; targeted preset/assets/appearance tests pass. No APK/device verification. Existing Android cache edits preserved; no commit.
+
+2026-10-05 Android WebView cache: MainActivity and floating LookupActivity now clear the app-wide WebView resource cache once when the APK version code differs from the saved code, before creating their page WebView. First launch with no saved code also clears once; normal reader lookups do not. FOSS debug Java compilation and `git diff --check` pass; no APK/device test.
+
 2026-10-05 progress panel visual repair: the Android screenshot showed the new spinner/text but no border or stripes. The full-width opaque `::before` backing was painting over its parent panel; it is now a separate sibling below the panel. All CSS is assembled before appending its `<style>`. Targeted Playwright light/dark palette and mobile/desktop modal/Stop checks pass; Android rebuild/device screenshot still needed.
 
 2026-10-05 Rescan window: removed its legacy duplicate `workNotice`/Stop path; the persistent shared footer is the only progress and Stop control. Closing/backing out of the Rescan dialog no longer blocks or cancels the server-owned rescan. The supplied 15:49 log confirms Stop requests were accepted and the active dictionary finished cleanly before the queue stopped; no Android retest.

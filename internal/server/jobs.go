@@ -210,7 +210,9 @@ func (t *jobTable) forget(key string) {
 }
 
 func (st jobStatus) copy() jobStatus {
-	st.Failed = append([]string(nil), st.Failed...)
+	if st.Failed != nil {
+		st.Failed = append([]string{}, st.Failed...)
+	}
 	st.Indexes = append([]string(nil), st.Indexes...)
 	return st
 }

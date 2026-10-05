@@ -2840,7 +2840,8 @@ $("clearDatabaseGo").onclick=async()=>{
       $("clearDatabaseStatus").textContent=text;
     },undefined,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
     if(!report)throw new Error(tx("database.incomplete"));
-    $("clearDatabaseStatus").textContent=report.failed.length?tx("database.failed",{error:report.failed.map(window.wudictI18n.errorText).join("; ")}):report.canceled?tx("database.stopped"):tx("database.done");
+    const failed=report.failed||[];
+    $("clearDatabaseStatus").textContent=failed.length?tx("database.failed",{error:failed.map(window.wudictI18n.errorText).join("; ")}):report.canceled?tx("database.stopped"):tx("database.done");
     await loadDicts(false);await loadFolders();
     setStatus(esc($("clearDatabaseStatus").textContent));
   }catch(e){$("clearDatabaseStatus").textContent=tx("database.failed",{error:window.wudictI18n.errorText(e.message)});setStatus(esc($("clearDatabaseStatus").textContent))}

@@ -64,6 +64,7 @@ public class MainActivity extends Activity {
         // normal day/night theme and the saved background from the first frame.
         setTheme(R.style.Theme_WuWeiDict);
         super.onCreate(savedInstanceState);
+        Shell.clearWebCacheAfterUpdate(this);
 
         // Paint before setContentView, including the optional Sepia override.
         getWindow().setBackgroundDrawable(WindowBackground.drawable(this, ShellPrefs.pageBg(this)));

@@ -4,3 +4,32 @@
 :host, :root > body,
 :host > *, :root > body > * { background:none !important }
 
+/* A local article-colour backdrop lets white pixels blend into Sepia even
+   when the dictionary puts the image in an opaque or isolated wrapper. */
+:host :is(p, div, figure, td, span):has(> img),
+:root > body :is(p, div, figure, td, span):has(> img),
+:host :is(p, div, figure, td, span):has(> a > img),
+:root > body :is(p, div, figure, td, span):has(> a > img) {
+  background:var(--wd-article-bg) !important;
+  isolation:isolate;
+}
+
+:host img, :root > body img {
+  background:transparent !important;
+  mix-blend-mode:multiply !important;
+}
+
+/* Oxford owns thumbnail/full-size visibility; keep its display switching. */
+:host #ox-enlarge > a.topic,
+:root > body #ox-enlarge > a.topic {
+  display:inline-block !important;
+  padding:0 !important;margin:0 !important;border:0 !important;
+  line-height:0 !important;font-size:0 !important;
+  background:var(--wd-article-bg) !important;
+  isolation:isolate;
+}
+:host #ox-enlarge img:is(.thumb, .fullsize),
+:root > body #ox-enlarge img:is(.thumb, .fullsize) {
+  vertical-align:top !important;
+  border:0 !important;
+}

@@ -229,6 +229,15 @@ final class Shell {
         probe.destroy();
     }
 
+    /** Clear cached pages once for each installed APK version, before a page loads. */
+    static synchronized void clearWebCacheAfterUpdate(Context c) {
+        android.content.SharedPreferences prefs = c.getSharedPreferences("shell", Context.MODE_PRIVATE);
+        int version = BuildConfig.VERSION_CODE;
+        if (prefs.getInt("web_cache_version", -1) == version) return;
+        clearWebCache(c);
+        prefs.edit().putInt("web_cache_version", version).commit();
+    }
+
     /**
      * The app page's System window: every row of the shell's own settings
      * screen, as the page draws them (index.html, #sysSettings).

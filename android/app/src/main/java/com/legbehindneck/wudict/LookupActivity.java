@@ -174,6 +174,7 @@ public class LookupActivity extends Activity {
             forward();
             return;
         }
+        Shell.clearWebCacheAfterUpdate(this);
 		final int pageBg = ShellPrefs.pageBg(this);
 		getWindow().setBackgroundDrawable(WindowBackground.dialogDrawable(this, pageBg));
         sizeWindow();
