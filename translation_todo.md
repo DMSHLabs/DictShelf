@@ -1,5 +1,7 @@
 # Localization: status and next tasks
 
+2026-10-05 launcher Settings: added Save System Log… / Сохранить System Log… before Restore defaults. Screen buttons preserve resource casing instead of Android all-caps. FOSS/Play Java compilation passes; phone layout/save check outstanding.
+
 2026-10-05 Appearance: added EN/RU checkbox below Examples for also hiding examples without [*]. Server-persisted, default off, effective only with Hide. Node i18n and Go catalog checks pass; Android wrapping/touch check outstanding.
 
 2026-10-05 shared index progress now shows processed entries “of” total when the indexer supplies a total; EN/RU catalog keys added. No device check.

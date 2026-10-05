@@ -11,7 +11,7 @@
 // and the reader asked for the copies here to go, so that there is one place
 // per setting instead of two views to keep in step.
 //
-// Three things are left, and each for its own reason:
+// These controls remain here, each for its own reason:
 //
 //   * The listen PORT, which is a row in the page's System window too. It is
 //     here because of the one case the page cannot cover: a port that will not
@@ -21,6 +21,8 @@
 //     would be the only instrument. Both copies write the same key through the
 //     same validator, and this screen is also the one that can apply the change
 //     on the spot (Restart server now below).
+//   * Save System Log also works when the app page cannot load; the export
+//     retains Android diagnostics if the server is unavailable.
 //   * Restore defaults, DUPLICATED on the reader's word. It is the last line of
 //     defence: a config row the app cannot start with - a port held by another
 //     app, say - is undone from here, with no page and no server in the way.
@@ -141,11 +143,17 @@ public class SettingsActivity extends Activity {
         // keep the app from starting at all (see the class comment).
         col.addView(portRow());
 
+        Button saveLog = new Button(this);
+        styleBackgroundButton(saveLog);
+        saveLog.setText(R.string.system_log_save);
+        saveLog.setOnClickListener(v -> SystemLogExport.start(this));
+        col.addView(saveLog, wide(SP_6));
+
         // Restore defaults, duplicated on the reader's word: it is the one bulk
         // action, and it is worth having when the app page is not reachable
         // (see the class comment). Both copies confirm and both clear the same
         // overrides.
-        col.addView(restoreButton());
+        col.addView(restoreButton(), wide(SP_4));
 
         // What the running server was started with, and the one way to change
         // it without reopening the app. The notice is built from /api/config's
@@ -168,7 +176,7 @@ public class SettingsActivity extends Activity {
         styleBackgroundButton(close);
         close.setText(R.string.settings_close);
         close.setOnClickListener(v -> finish());
-        col.addView(close, wide(SP_6));
+        col.addView(close, wide(SP_4));
 
         ScrollView scroll = new ScrollView(this);
         scroll.addView(col, new ViewGroup.LayoutParams(
@@ -192,6 +200,12 @@ public class SettingsActivity extends Activity {
         super.onDestroy();
     }
 
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, android.content.Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        SystemLogExport.result(this, requestCode, resultCode, data);
+    }
+
     // ── the window ───────────────────────────────────────────────────────
 
     private void applySepiaWindow() {
@@ -201,6 +215,9 @@ public class SettingsActivity extends Activity {
     }
 
     private void styleBackgroundButton(Button button) {
+        button.setAllCaps(false);
+        button.setMinHeight(dp(ROW_MIN));
+        button.setMinimumHeight(dp(ROW_MIN));
         android.graphics.drawable.Drawable original = button.getBackground();
         android.content.res.ColorStateList originalText = button.getTextColors();
         android.animation.StateListAnimator originalAnimator = button.getStateListAnimator();
@@ -385,7 +402,7 @@ public class SettingsActivity extends Activity {
                     recheck();
                 })
                 .show());
-        return wrap(b, SP_6);
+        return b;
     }
 
     @Override
@@ -547,15 +564,6 @@ public class SettingsActivity extends Activity {
         t.setAlpha(0.7f);
         t.setPadding(0, dp(topDp), 0, dp(bottomDp));
         return t;
-    }
-
-    private View wrap(View v, int topDp) {
-        LinearLayout box = new LinearLayout(this);
-        box.setOrientation(LinearLayout.VERTICAL);
-        box.setPadding(0, dp(topDp), 0, 0);
-        box.addView(v, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        return box;
     }
 
     private LinearLayout.LayoutParams wide(int topDp) {

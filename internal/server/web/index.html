@@ -992,6 +992,13 @@ const esc=s=>String(s??"").replace(/&/g,"&amp;").replace(/</g,"&lt;");
    attribute and turns the rest of the path into markup. */
 const escAttr=s=>esc(s).replace(/"/g,"&quot;");
 let dicts=[],lastQuery=null,searchSeq=0,searchAC=null;
+let scopeOnce=null,anchorOnce=null,lastScope=null,widenedFrom=null;
+let PRESETS=null;
+const PRESET_ROWS=[
+  ["compactRow","compact"],
+  ["examplesRow","hide_examples"],
+  ["sbarExamples","hide_examples","toggle"],
+];
 
 /* Preference order (ids). New dictionaries not yet in the saved order fall in
    alphabetically after the ordered ones.
@@ -5673,7 +5680,6 @@ let navRecord="replace"; // how the NEXT doSearch should record itself
 
    anchorOnce is the #fragment such a link carried, revealed once the target
    article is on screen. */
-let scopeOnce=null,anchorOnce=null,lastScope=null,widenedFrom=null;
 /* commitOnce is "I have finished the word". Live search runs 300 ms after
    every keystroke pause, so without this flag `revealFirstMark` would treat
    "прео" as a finished query and throw the page at a match while the user is
@@ -5901,16 +5907,15 @@ let stylerTab="app",
     // The last state the shell reported. The Files tab reads it to warn when
     // a delete takes out the image the Background strip has selected.
     appearanceState=null,
-    // True between a tap on the strip's "+" tile and the upload it starts.
-    // The one <input type=file> serves both that tile and the Files tab, and
-    // only a pick made for the strip may promote its image to the background.
-    stylerPickForBackground=false,
     // The preset registry, as /api/presets answered it: groups with their
     // presets and inline contents, plus what is enabled. The app half of an
     // enabled preset is a <link> the server injected at page render; the
     // article half is composed on the page - its text lives in
     // presetArticleCSS, declared beside the article plumbing above.
-    PRESETS=null;
+    // True between a tap on the strip's "+" tile and the upload it starts.
+    // The one <input type=file> serves both that tile and the Files tab, and
+    // only a pick made for the strip may promote its image to the background.
+    stylerPickForBackground=false;
 
 /* The app half of the preview, and it has to OWN the app layer, not merely
    sit on top of it. Winning on order is enough to ADD a rule and nowhere near
@@ -6486,11 +6491,6 @@ async function presetToggle(id,on,notify){
    where both states are the same control - flips whatever it is now
    ("toggle"). Painting is the same for both: it follows the payload, never the
    press. */
-const PRESET_ROWS=[
-  ["compactRow","compact"],
-  ["examplesRow","hide_examples"],
-  ["sbarExamples","hide_examples","toggle"],
-];
 /* The buttons one entry drives. A row in the drawer holds a PAIR; the reading
    bar's handle is a single button wearing the same data-layer, which is why
    this returns the element itself when it is one - same painter, same payload,

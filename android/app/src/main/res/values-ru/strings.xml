@@ -91,6 +91,7 @@
     <string name="exit_title">Выход</string>
     <string name="exit_busy">Работа ещё выполняется. Выйти после её завершения?</string>
     <string name="exit_wait">Выйти после завершения</string>
+    <string name="system_log_save">Сохранить System Log…</string>
     <string name="system_log_saving">Сохраняем System Log…</string>
     <string name="system_log_saved">System Log сохранён</string>
     <string name="system_log_failed">Не удалось сохранить System Log: %1$s</string>
