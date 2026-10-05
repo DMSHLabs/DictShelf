@@ -12,11 +12,49 @@ for(const r of folding){assert.equal(r.blockHidden,false);assert.equal(r.inlineH
 const markers=['•','‣','⁃','⁌','⁍','∙','·','▪','▫','■','□','●','○','◆','♦','◇','◊','★','☆','☐','☑','☒','❥','❧','➔','➜','➤','➢','→','⇒','*','+','-','–','—'];
 const optionalState=await p.evaluate(hideCSS=>[...document.querySelectorAll('.article')].map(host=>{const r=host.shadowRoot;const style=document.createElement('style');style.textContent=hideCSS;r.append(style);const hidden=getComputedStyle(r.querySelector('#optional')).display==='none';style.remove();return hidden}),hideCSS);
 assert(optionalState.every(Boolean));
-await p.evaluate(markers=>{const host=document.createElement('div');host.className='article';const r=host.attachShadow({mode:'open'});r.innerHTML='<div class="wu-gd">'+markers.map(m=>'<p class="wu-m">'+m+' <a href="#">audio</a> <span class="wu-ex">Example.</span></p>').join('')+'</div>';document.querySelector('#out').append(host)},markers);
+await p.evaluate(markers=>{const host=document.createElement('div');host.className='article';const r=host.attachShadow({mode:'open'});r.innerHTML='<div class="wu-gd">'+markers.map(m=>'<p class="wu-m">'+m+' <a class="wu-audio" href="#">audio</a> <span class="wu-ex">Example.</span></p>').join('')+'</div>';document.querySelector('#out').append(host)},markers);
 await p.addScriptTag({content:js});
 const markerState=await p.evaluate(()=>{const r=[...document.querySelectorAll('.article')].at(-1).shadowRoot;return [...r.querySelectorAll('p')].map(n=>({block:n.classList.contains('wu-example-block'),hidden:n.classList.contains('wu-xonly'),markers:n.querySelectorAll('.wu-example-bullet').length}))});
 for(const r of markerState){assert.equal(r.block,true);assert.equal(r.hidden,false);assert.equal(r.markers,1)}
 console.log('Inline folding/restore and '+markers.length+' marker variants passed');
+const main=fs.readFileSync('internal/server/web/index.html','utf8');
+const extraCSSFunction=main.match(/function extraExampleCSS\(\)\{[\s\S]*?\n\}/)[0];
+const extraApplyFunction=main.match(/function applyHideUnmarkedExamples\(on,persist=true\)\{[\s\S]*?\n\}/)[0];
+const extraRow=main.match(/<label id="examplesExtraRow"[^\n]+/)[0];
+await p.evaluate(({extraApplyFunction,extraRow})=>{
+  const row=document.createElement('div');row.innerHTML=extraRow;document.body.append(row);
+  window.$=id=>document.getElementById(id);window.articleRefresh=()=>{};window.preferenceSaves=0;window.savePrefs=()=>window.preferenceSaves++;
+  window.eval(extraApplyFunction);applyHideUnmarkedExamples(true,false);
+  if(!document.getElementById('hideUnmarkedExamples').checked||window.preferenceSaves!==0)throw new Error('Loaded preference not restored');
+  applyHideUnmarkedExamples(false);
+  if(document.getElementById('hideUnmarkedExamples').checked||window.preferenceSaves!==1)throw new Error('Changed preference not saved');
+  row.remove();
+},{extraApplyFunction,extraRow});
+await p.evaluate(({extraCSSFunction,hideCSS})=>{
+  window.STYLE_OFF=false;window.hideUnmarkedExamples=false;window.PRESETS={enabled:['hide_examples']};
+  window.eval(extraCSSFunction);
+  window.testHideCSS=hideCSS;
+  const h=document.createElement('div');h.id='extra-examples-test';h.className='article';
+  const r=h.attachShadow({mode:'open'});
+  r.innerHTML='<div class="wu-gd" data-wu-examples="2"><p id="whole">◆ <a class="wu-audio">sound</a><span class="wu-ex">example</span><img alt="picture"></p><p id="mixed"><span class="wu-ex">example</span> translation</p><p id="link"><a>definition</a><span class="wu-ex">example</span></p><p><span class="wu-sec">optional</span></p></div>';
+  document.querySelector('#out').append(h);
+},{extraCSSFunction,hideCSS});
+await p.addScriptTag({content:js});
+const extra=await p.evaluate(()=>{
+  const h=document.querySelector('#extra-examples-test'),r=h.shadowRoot,style=document.createElement('style');r.append(style);
+  const states=[];
+  for(const [hide,on] of [[true,false],[true,true],[false,true],[true,true]]){
+    window.PRESETS.enabled=hide?['hide_examples']:[];window.hideUnmarkedExamples=on;
+    style.textContent=(hide?window.testHideCSS:'')+extraExampleCSS();
+    states.push({whole:getComputedStyle(r.querySelector('#whole')).display==='none',fragment:getComputedStyle(r.querySelector('#mixed .wu-ex')).display==='none',mixed:getComputedStyle(r.querySelector('#mixed')).display!=='none',link:getComputedStyle(r.querySelector('#link')).display!=='none',optional:getComputedStyle(r.querySelector('.wu-sec')).display==='none'});
+  }
+  h.remove();return states;
+});
+assert.deepEqual(extra.map(s=>s.whole),[false,true,false,true]);
+assert.deepEqual(extra.map(s=>s.fragment),[false,true,false,true]);
+assert.deepEqual(extra.map(s=>s.optional),[true,true,false,true]);
+assert(extra.every(s=>s.mixed&&s.link));
+console.log('Optional [ex] folding: v2 fallback, whole paragraph/media, mixed text, definition links and Show/Hide passed');
 await p.evaluate(()=>[...document.querySelectorAll('.article')].at(-1).remove());
 for(const size of [15,20,30])for(const lineHeight of [1.3,1.618,2]){
  const geometry=await p.evaluate(({size,lineHeight})=>[...document.querySelectorAll('.article')].filter(h=>h.shadowRoot.querySelector('.wu-gd')).map(h=>{h.style.fontSize=size+'px';const el=h.shadowRoot.querySelector('#generated');el.style.fontSize=size+'px';el.style.lineHeight=String(lineHeight);const style=getComputedStyle(el);const marker=getComputedStyle(el,'::before');return {size:parseFloat(style.fontSize),line:parseFloat(style.lineHeight),padding:parseFloat(style.paddingTop),top:parseFloat(marker.top),width:parseFloat(marker.width),height:parseFloat(marker.height)}}),{size,lineHeight});
@@ -24,7 +62,7 @@ for(const size of [15,20,30])for(const lineHeight of [1.3,1.618,2]){
 }
 await p.evaluate(()=>{for(const h of document.querySelectorAll('.article')){h.style.removeProperty('font-size');const el=h.shadowRoot.querySelector('#generated');if(el){el.style.removeProperty('font-size');el.style.removeProperty('line-height')}}});
 console.log('Diamond size/first-line centre passed at 15/20/30px and three line heights');
-await p.evaluate(()=>{const host=document.createElement('div');host.id='prepared-gd-test';host.className='article';const r=host.attachShadow({mode:'open'});r.innerHTML='<div class="wu-gd" data-wu-examples="2"><p class="wu-ex wu-example-block wu-xonly">Prepared example.</p><p>Definition <span class="wu-ex wu-inline-example wu-xonly">Inline example.</span></p></div>';r.savedHTML=r.innerHTML;r.scanCalls=0;const original=r.querySelectorAll.bind(r);r.querySelectorAll=(...args)=>{r.scanCalls++;return original(...args)};document.querySelector('#out').append(host)});
+await p.evaluate(()=>{const host=document.createElement('div');host.id='prepared-gd-test';host.className='article';const r=host.attachShadow({mode:'open'});r.innerHTML='<div class="wu-gd" data-wu-examples="3"><p class="wu-ex wu-example-block wu-xonly">Prepared example.</p><p>Definition <span class="wu-ex wu-inline-example wu-xonly">Inline example.</span></p></div>';r.savedHTML=r.innerHTML;r.scanCalls=0;const original=r.querySelectorAll.bind(r);r.querySelectorAll=(...args)=>{r.scanCalls++;return original(...args)};document.querySelector('#out').append(host)});
 await p.addScriptTag({content:js});
 const skip=await p.evaluate(()=>{const h=document.querySelector('#prepared-gd-test');const r=h.shadowRoot;const result={calls:r.scanCalls,unchanged:r.innerHTML===r.savedHTML};h.remove();return result});assert.equal(skip.calls,0);assert.equal(skip.unchanged,true);console.log('Prepared GD bypass passed: no paragraph/example scans');
 for(const preset of ['sepia_article.css','background_image_article.css']){

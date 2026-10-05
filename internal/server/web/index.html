@@ -106,7 +106,7 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
 })();
 </script>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>wudict</title>
+<title>wuDict2</title>
 <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
 <link rel="stylesheet" href="/assets/app.css?v={{APPCSS}}">
 <link rel="stylesheet" href="/assets/history.css?v={{HISTORYCSS}}">
@@ -551,6 +551,7 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
       <button type="button" class="act" data-layer="on" id="examplesOff" aria-pressed="false" title="{{T:panel.examplesOff}}">{{T:panel.hide}}</button>
     </span>
   </div>
+  <label id="examplesExtraRow" class="examples-extra" hidden><input type="checkbox" id="hideUnmarkedExamples"> {{T:panel.hideUnmarkedExamples}}</label>
   <!-- Whether the status bar is there at all. It is the bar's only door, so it
        has to be findable by someone who has just hidden it - hence a row here,
        in the drawer, beside the controls the bar duplicates, rather than in the
@@ -652,10 +653,10 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
   <div id="folderBody"></div>
   <!-- The app's identity, last. -->
   <div class="about">
-    <span class="brand">wu<small>Dict</small></span> <span class="ver">{{VERSION}}</span>
+    <span class="brand">wu<small>Dict2</small></span> <span class="ver">{{VERSION}}</span>
     <p>{{T:panel.about}}</p>
-    <p><a href="https://wuweidict.github.io/wudict" target="_blank" rel="noopener">{{T:panel.website}}</a>
-       · <a href="https://github.com/wuweidict/wudict" target="_blank" rel="noopener">{{T:panel.source}}</a></p>
+    <p><a href="https://github.com/DmShAl/wudict2/" target="_blank" rel="noopener">wuDict2</a> ({{T:panel.forkNote}}: <a href="https://wuweidict.github.io/wudict" target="_blank" rel="noopener">{{T:panel.website}}</a>
+       · <a href="https://github.com/wuweidict/wudict" target="_blank" rel="noopener">{{T:panel.source}}</a>)</p>
   </div>
 </details>
 <div id="exitSection" class="sect" hidden><div class="facts"><button type="button" class="mrow" id="exitApp">{{T:panel.exit}}</button></div></div>
@@ -1040,7 +1041,7 @@ async function loadPrefs(){
        reader in a strategy with nothing on screen to explain or change it -
        the same call the removed `sortMine` got. The field is still WRITTEN
        (below, always false), because it is upstream's. */
-    if(st.ui){applyFS(st.ui.fontSize,false);applyFW(st.ui.fontWeight,false);applyHL(!st.ui.hlOff,false);applySpeak(!st.ui.speakOff,false)}
+    if(st.ui){applyFS(st.ui.fontSize,false);applyFW(st.ui.fontWeight,false);applyHL(!st.ui.hlOff,false);applySpeak(!st.ui.speakOff,false);applyHideUnmarkedExamples(!!st.ui.hideUnmarkedExamples,false)}
     if(!st.exists){adoptLocalPrefs();return} // first run: keep whatever we had
     prefOrder=rows.map(d=>d.id);
   }catch(e){
@@ -1064,7 +1065,7 @@ function savePrefs(now){
   // omitempty zero value), which is what retires a flag set by the switches
   // that no longer exist.
   const body=JSON.stringify({dicts:orderedDicts().map(d=>({id:d.id,name:dictLabel(d)})),
-    ui:{fontSize:articleFS,fontWeight:articleFW,hlOff:!hlOn,speakOff:!speakOn,fastFirst:!orderFirst}});
+    ui:{fontSize:articleFS,fontWeight:articleFW,hlOff:!hlOn,speakOff:!speakOn,fastFirst:!orderFirst,hideUnmarkedExamples}});
   if(body===prefsSent)return;
   prefsSent=body;
   fetch("/api/prefs",{method:"PUT",headers:{"Content-Type":"application/json"},body})
@@ -1472,6 +1473,18 @@ let userArticleCSS="";
 // frameCSS() reads this - a declaration further down would be a TDZ
 // ReferenceError that kills the whole script before anything binds.
 let presetArticleCSS="";
+let hideUnmarkedExamples=false;
+function extraExampleCSS(){
+  return !STYLE_OFF&&hideUnmarkedExamples&&typeof PRESETS!=="undefined"&&PRESETS?.enabled?.includes("hide_examples")
+    ? ".wu-exonly,.wu-ex,.dsl_ex{display:none}" : "";
+}
+function applyHideUnmarkedExamples(on,persist=true){
+  hideUnmarkedExamples=!!on;
+  $("hideUnmarkedExamples").checked=hideUnmarkedExamples;
+  articleRefresh();
+  if(persist)savePrefs();
+}
+$("hideUnmarkedExamples").addEventListener("change",e=>applyHideUnmarkedExamples(e.target.checked));
 // Constructable stylesheets are the mechanism; on a browser too old for them
 // articles simply keep the dictionary's own styling rather than the page
 // failing to script at all.
@@ -1488,7 +1501,7 @@ function articleTokens(){
          ";--paper-bg:"+v("--paper-bg",v("--bg","transparent"))+
          ";--paper-bk-image:"+v("--paper-bk-image","none")+"}\n";
 }
-function frameCSS(){return articleTokens()+presetArticleCSS+userArticleCSS}
+function frameCSS(){return articleTokens()+presetArticleCSS+extraExampleCSS()+userArticleCSS}
 function pushFrameCSS(){
   const css=frameCSS();
   for(const f of document.querySelectorAll("iframe.article"))
@@ -1499,7 +1512,7 @@ function pushFrameCSS(){
    with the user text UNCHANGED, which is the whole point of layers: nothing
    in the box moves when a switch flips. */
 function articleRefresh(){
-  if(userSheet)try{userSheet.replaceSync(presetArticleCSS+userArticleCSS)}
+  if(userSheet)try{userSheet.replaceSync(presetArticleCSS+extraExampleCSS()+userArticleCSS)}
   catch(e){console.warn("custom article CSS:",e)}
   pushFrameCSS();
   window.wudictArticleFind?.refresh();
@@ -2482,7 +2495,7 @@ function dslIndexControls(d){
     }
     const icon=`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.4 3.4a1.2 1.2 0 0 1 1.2-1.2h6.2a1.2 1.2 0 0 1 1.2 1.2v9.2a1.2 1.2 0 0 1-1.2 1.2H3.6a1.2 1.2 0 0 1-1.2-1.2z"/><path d="M11 5h2.6M11 8h2.6M11 11h2.6"/></svg>`;
     const browse=indexed
-      ? `<a class="browse btn" href="/browse?dict=${encodeURIComponent(target.id)}" title="${escAttr(tx("dictUI.browseHint"))}">${icon}${esc(tx("dictUI.browse"))}<span aria-hidden="true">▸</span></a>`
+      ? `<a class="browse btn" href="/browse?dict=${encodeURIComponent(target.id)}" title="${escAttr(tx("dictUI.browseHint"))}">${icon}${esc(tx("dictUI.browse"))}</a>`
       : "";
     return `<div class="dsl-index-row"><div class="dsl-index-tools"><div class="dsl-feature-line">${controls}</div></div><div class="dsl-browse-line">${browse}</div></div>`;
   })()+(empty?`<div class="dsl-index-warning"><b aria-hidden="true">!</b> ${esc(tx("dictUI.dslNeedsIndex"))}</div>`:"")+"</div>";
@@ -2571,7 +2584,7 @@ function renderPanel(){
        it, and the browse page asks for it and opens the list when it is ready.
        This is the card for one dictionary, so unlike the row above it carries
        the id. */
-    else acts=`<a class="browse" href="/browse?dict=${encodeURIComponent(d.id)}" title="${escAttr(tx("dictUI.browseHint"))}"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M2.4 3.4a1.2 1.2 0 0 1 1.2-1.2h6.2a1.2 1.2 0 0 1 1.2 1.2v9.2a1.2 1.2 0 0 1-1.2 1.2H3.6a1.2 1.2 0 0 1-1.2-1.2z"/><path d="M11 5h2.6"/><path d="M11 8h2.6"/><path d="M11 11h2.6"/></svg>${esc(tx("dictUI.browse"))}</a>`;
+    else acts=`<a class="browse btn" href="/browse?dict=${encodeURIComponent(d.id)}" title="${escAttr(tx("dictUI.browseHint"))}"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M2.4 3.4a1.2 1.2 0 0 1 1.2-1.2h6.2a1.2 1.2 0 0 1 1.2 1.2v9.2a1.2 1.2 0 0 1-1.2 1.2H3.6a1.2 1.2 0 0 1-1.2-1.2z"/><path d="M11 5h2.6"/><path d="M11 8h2.6"/><path d="M11 11h2.6"/></svg>${esc(tx("dictUI.browse"))}</a>`;
     if(d.unavailable||d.dsl&&!d.error)acts="";
     div.innerHTML=`<div class="hd">
         <span class="grip" draggable="true" title="${escAttr(tx("dictUI.drag"))}">⠿</span>
@@ -6502,6 +6515,7 @@ function presetRowsPaint(){
     for(const b of layerButtons(row))
       b.setAttribute("aria-pressed",(b.dataset.layer==="on")===on?"true":"false");
   }
+  $("examplesExtraRow").hidden=$("examplesRow").hidden;
 }
 for(const [rowId,id,kind] of PRESET_ROWS){
   const row=$(rowId);

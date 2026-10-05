@@ -253,6 +253,7 @@ func gdPrepareExamples(root *html.Node) {
 		if !gdExampleOnly(block) {
 			continue
 		}
+		gdAddClass(block, "wu-exonly")
 		if nestedBlocks[block] {
 			continue
 		}
@@ -337,7 +338,7 @@ func prepareGDHTML(body string, options GDOptions) (string, error) {
 	gdPrepareExamples(root)
 	var out bytes.Buffer
 	if options.Styles {
-		out.WriteString(`<style>@import url("/assets/presets/gd/article-style.css?v=4");</style><div class="wu-gd" data-wu-examples="2">`)
+		out.WriteString(`<style>@import url("/assets/presets/gd/article-style.css?v=4");</style><div class="wu-gd" data-wu-examples="3">`)
 	}
 	for c := root.FirstChild; c != nil; c = c.NextSibling {
 		if err := html.Render(&out, c); err != nil {

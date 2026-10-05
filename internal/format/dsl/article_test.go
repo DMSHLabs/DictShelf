@@ -110,6 +110,25 @@ func TestArticleSecondaryFolding(t *testing.T) {
 	}
 }
 
+func TestArticleExampleFoldingRoles(t *testing.T) {
+	for _, enhance := range []bool{false, true} {
+		for _, c := range []struct {
+			input string
+			whole bool
+		}{
+			{`[m3][ex]a lazy [i]dog[/i][/ex][/m]`, true},
+			{`[m3]◆ [s]dog.wav[/s] [ex]a lazy dog[/ex] [s]dog.png[/s][/m]`, true},
+			{`[m3][ex]a lazy dog[/ex] translation[/m]`, false},
+			{`[m3][ref]definition[/ref] [ex]a lazy dog[/ex][/m]`, false},
+		} {
+			got, _, err := transformArticleWithOptions(c.input, "dog", nil, ArticleOptions{Enhance: enhance, Styles: true})
+			if err != nil || strings.Contains(got, "wu-exonly") != c.whole || strings.Contains(got, "wu-xonly") {
+				t.Fatalf("enhance=%v %s: %s (%v)", enhance, c.input, got, err)
+			}
+		}
+	}
+}
+
 func FuzzArticleBody(f *testing.F) {
 	for _, seed := range []string{`[b][i]x[/b]y[/i]`, `[m1][ex]example[/ex][/m]`, `[ref]a[s]x.wav[/s]b[/ref]`, `[t]ma3[/t]`, `[sic]`} {
 		f.Add(seed)

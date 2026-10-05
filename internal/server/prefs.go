@@ -79,6 +79,9 @@ type UIPrefs struct {
 	// inheriting a preference set in somebody's browser.
 	HLOff bool `json:"hlOff,omitempty"`
 
+	// Also fold [ex] zones when the Examples Hide layer is enabled.
+	HideUnmarkedExamples bool `json:"hideUnmarkedExamples,omitempty"`
+
 	// FastFirst expands whichever dictionary answers first, instead of the
 	// first dictionary in the user's own order that has a result (D73, D142;
 	// default flipped in D144).

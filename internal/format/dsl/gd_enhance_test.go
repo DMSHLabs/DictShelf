@@ -94,7 +94,7 @@ func TestGDPreparedExampleRoles(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if !strings.Contains(got, `data-wu-examples="2"`) || strings.Contains(got, "wu-example-block") != c.block || strings.Contains(got, "wu-inline-example") != c.inline || strings.Contains(got, "wu-example-bullet") != c.bullet {
+			if !strings.Contains(got, `data-wu-examples="3"`) || strings.Contains(got, "wu-example-block") != c.block || strings.Contains(got, "wu-inline-example") != c.inline || strings.Contains(got, "wu-example-bullet") != c.bullet {
 				t.Fatalf("enhance=%v %s: %s", enhance, c.body, got)
 			}
 			if c.inline && strings.Count(got, "wu-inline-example") != 1 {

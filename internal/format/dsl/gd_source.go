@@ -17,7 +17,7 @@ import (
 	"github.com/wuweidict/wudict/internal/store"
 )
 
-const GDReaderVersion = 9
+const GDReaderVersion = 10
 
 type gdFileStamp struct {
 	size  int64

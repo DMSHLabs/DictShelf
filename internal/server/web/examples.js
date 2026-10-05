@@ -43,7 +43,7 @@ function exampleOnly(p) {
   if (!p.matches(".wu-ex,.dsl_ex") && !p.querySelector(".wu-ex,.dsl_ex")) return false;
   const walker = document.createTreeWalker(p, NodeFilter.SHOW_TEXT);
   for (let n; (n = walker.nextNode()); ) {
-    if (n.parentElement.closest("a,.wu-ex,.dsl_ex")) continue;
+    if (n.parentElement.closest(".wu-audio,.wu-file,.wu-ex,.dsl_ex")) continue;
     if (JUNK.test(n.textContent)) continue;
     return false;
   }
@@ -62,11 +62,13 @@ function secondaryOnly(p) {
 
 function mark(root) {
   if (!root || !root.querySelectorAll) return;
-  if (root.querySelector('.wu-gd[data-wu-examples="2"]')) return;
-  for (const n of root.querySelectorAll(".wu-xonly")) n.classList.remove(CLASS);
+  if (root.querySelector('.wu-gd[data-wu-examples="3"]')) return;
+  const prepared = !!root.querySelector('.wu-gd[data-wu-examples="2"]');
+  if (!prepared) for (const n of root.querySelectorAll(".wu-xonly")) n.classList.remove(CLASS);
   for (const p of root.querySelectorAll("p,.wu-m")) {
-    if (secondaryOnly(p)) p.classList.add(CLASS);
+    if (!prepared && secondaryOnly(p)) p.classList.add(CLASS);
     if (!exampleOnly(p)) continue;
+    p.classList.add("wu-exonly");
     markExample(p);
   }
   for (const ex of root.querySelectorAll(".wu-ex,.dsl_ex")) {

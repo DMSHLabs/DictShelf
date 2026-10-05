@@ -108,6 +108,24 @@ func TestPrefsRoundTrip(t *testing.T) {
 	}
 }
 
+func TestPrefsHideUnmarkedExamples(t *testing.T) {
+	s, state := newPrefsServer(t)
+	for _, on := range []bool{true, false} {
+		value := "false"
+		if on {
+			value = "true"
+		}
+		got := putPrefs(t, s, `{"ui":{"hideUnmarkedExamples":`+value+`}}`)
+		if got.UI == nil || got.UI.HideUnmarkedExamples != on {
+			t.Fatalf("response lost example folding setting: %+v", got.UI)
+		}
+		ui := LoadPrefs(state).UI()
+		if ui == nil || ui.HideUnmarkedExamples != on {
+			t.Fatalf("reload lost example folding setting: %+v", ui)
+		}
+	}
+}
+
 func TestPrefsKeepsUnseenDictionaries(t *testing.T) {
 	s, state := newPrefsServer(t)
 	a := s.reg.all()[0].ID

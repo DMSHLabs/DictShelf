@@ -325,8 +325,8 @@ func TestGDReaderGolden(t *testing.T) {
 		t.Fatal(err)
 	}
 	goldentest.Check(t, "dsl-gd", comparison, goldentest.Golden{
-		Versions: "reader=9 ingest=1 markup=2 fold=1",
-		Hash:     "06d96cd1944cfc40c71580c7d6876065e36b407d1b715523f52215ad66fdb078",
+		Versions: "reader=10 ingest=1 markup=2 fold=1",
+		Hash:     "a47a694580da48d7f1e5d3a3cb7be4a711507a90ecf2af2e1961984aee696127",
 	})
 }
 
