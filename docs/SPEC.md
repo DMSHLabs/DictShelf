@@ -151,14 +151,16 @@ in that folder would otherwise be an OOM with no diagnostic.
 `wudict lemmas list | download | remove` is how a user obtains those files (D88,
 `internal/lemmas`, `internal/cli/lemmas.go`). `make lemma-files` is not: it needs a Go toolchain
 and a populated module cache, and someone who downloaded a release binary has neither. The client
-knows exactly one URL — `LEMMA_URL`, a `manifest.json` listing each language's file name, byte
+knows one configured URL — `LEMMA_URL`, a `manifest.json` listing each language's file name, byte
 size, sha256 and *measured* heap cost — and every asset sits beside it, named by a bare file name.
 sha256 is the entire trust model, so the transport is interchangeable: a mirror, a proxy or a
 folder on a USB stick all work, and nothing pins a host. Every manifest field is treated as
 hostile — the code must survive `lang.Normalize`, the file name must be a plain base name with a
 known extension, the declared size must be within `morph.MaxPackBytes`, the manifest body is read
 through a 1 MB limit, and the **local** name is constructed as `<code><ext>` rather than taken
-from the catalogue, so a broken or malicious manifest cannot choose where wudict writes. A
+from the catalogue, so a broken or malicious manifest cannot choose where wudict writes. The
+built-in upstream catalogue is tried first and `DmShAl/lemmas` is the fallback for both the
+manifest and its assets; a custom `LEMMA_URL` is used on its own. A
 download streams to a dot-prefixed temporary in the destination folder — a name `scanDir` cannot
 match — and is renamed only after its length and digest both agree, so an interrupted install is
 invisible rather than half-applied. Enumerating a repository through a code-hosting API was

@@ -11,7 +11,9 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -20,6 +22,20 @@ import (
 
 // asset is the body of one published language, and its digest.
 var asset = []byte("kutya\tkutyák\tkutyát\n")
+
+type rewriteTransport struct{ target string }
+
+func (r rewriteTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	copyReq := req.Clone(req.Context())
+	u, _ := url.Parse(r.target)
+	if req.URL.Path == "/wuweidict/lemmas/main/manifest.json" || req.URL.Path == "/DmShAl/lemmas/main/manifest.json" {
+		u.Path = "/lemmas/manifest.json"
+	} else {
+		u.Path = "/lemmas/" + path.Base(req.URL.Path)
+	}
+	copyReq.URL = u
+	return http.DefaultTransport.RoundTrip(copyReq)
+}
 
 func digest(b []byte) string {
 	s := sha256.Sum256(b)
@@ -102,6 +118,70 @@ func TestFetchMissing(t *testing.T) {
 	}
 	if _, err := Fetch(context.Background(), ""); err == nil {
 		t.Fatal("Fetch of an empty source must fail")
+	}
+}
+
+func TestFetchUsesMirror(t *testing.T) {
+	good := digest(asset)
+	primary := httptest.NewServer(http.NotFoundHandler())
+	t.Cleanup(primary.Close)
+	backup := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/lemmas/manifest.json" {
+			fmt.Fprint(w, manifestFor("hu.tsv.gz", int64(len(asset)), good))
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	t.Cleanup(backup.Close)
+	old := MirrorURLs
+	MirrorURLs = []string{"https://raw.githubusercontent.com/DmShAl/lemmas/main/manifest.json"}
+	oldClient := clientOverride.Load()
+	SetClient(&http.Client{Transport: rewriteTransport{target: backup.URL}})
+	t.Cleanup(func() { clientOverride.Store(oldClient) })
+	t.Cleanup(func() { MirrorURLs = old })
+	cat, err := Fetch(context.Background(), defaultLemmaURL)
+	if err != nil || cat == nil {
+		t.Fatalf("Fetch = %v, %v", cat, err)
+	}
+}
+
+func TestInstallUsesMirrorAsset(t *testing.T) {
+	good := digest(asset)
+	primary := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/lemmas/manifest.json" {
+			fmt.Fprint(w, manifestFor("hu.tsv.gz", int64(len(asset)), good))
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	t.Cleanup(primary.Close)
+	backup := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/lemmas/hu.tsv.gz" {
+			w.Write(asset)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	t.Cleanup(backup.Close)
+	old := MirrorURLs
+	MirrorURLs = []string{"https://raw.githubusercontent.com/DmShAl/lemmas/main/manifest.json"}
+	oldClient := clientOverride.Load()
+	SetClient(&http.Client{Transport: rewriteTransport{target: backup.URL}})
+	t.Cleanup(func() { MirrorURLs = old })
+	t.Cleanup(func() { clientOverride.Store(oldClient) })
+	cat := &Catalog{Version: Version, Languages: []Entry{{Code: "hu", Name: "Hungarian", File: "hu.tsv.gz", Size: int64(len(asset)), SHA256: good}}}
+	u, _ := url.Parse(primary.URL + "/lemmas/manifest.json")
+	u.Host = "raw.githubusercontent.com"
+	u.Path = "/wuweidict/lemmas/main/manifest.json"
+	cat.src = source{manifest: u}
+	e, _ := cat.Find("hu")
+	dst, err := cat.Install(context.Background(), t.TempDir(), e, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(dst)
+	if err != nil || string(got) != string(asset) {
+		t.Fatalf("asset = %q, %v", got, err)
 	}
 }
 

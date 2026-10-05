@@ -58,6 +58,19 @@ import (
 // future one would mean installing bytes on the strength of a field that may
 // have changed meaning.
 const Version = 1
+const defaultLemmaURL = "https://raw.githubusercontent.com/wuweidict/lemmas/main/manifest.json"
+
+// MirrorURLs are checked after the primary catalogue host. Keep the mirror
+// list explicit: fallback is part of the published data policy, not discovery.
+var MirrorURLs = []string{"https://raw.githubusercontent.com/DmShAl/lemmas/main/manifest.json"}
+
+func manifestURLs(primary string) []string {
+	urls := []string{primary}
+	if primary == defaultLemmaURL {
+		urls = append(urls, MirrorURLs...)
+	}
+	return urls
+}
 
 // maxManifest bounds the manifest body. It is JSON describing a few dozen
 // languages; anything larger is a wrong URL, and reading it into memory to
@@ -108,6 +121,18 @@ func Fetch(ctx context.Context, src string) (*Catalog, error) {
 	if strings.TrimSpace(src) == "" {
 		return nil, fmt.Errorf("no lemma catalogue configured (LEMMA_URL)")
 	}
+	var errs []string
+	for _, candidate := range manifestURLs(src) {
+		cat, err := fetchOne(ctx, candidate)
+		if err == nil {
+			return cat, nil
+		}
+		errs = append(errs, fmt.Sprintf("%s: %v", candidate, err))
+	}
+	return nil, fmt.Errorf("%s", strings.Join(errs, "; "))
+}
+
+func fetchOne(ctx context.Context, src string) (*Catalog, error) {
 	s, err := parseSource(src)
 	if err != nil {
 		return nil, err
@@ -308,6 +333,25 @@ func (s source) open(ctx context.Context, name string) (io.ReadCloser, error) {
 		u.Path = path.Join(path.Dir(u.Path), name)
 	}
 	return httpGet(ctx, &u)
+}
+
+// fallbackURLs maps a published upstream asset URL to the same path on the
+// user's mirror. It applies only to the built-in upstream host.
+func (s source) fallbackURLs(name string) []string {
+	if s.manifest == nil || s.manifest.Scheme != "https" || s.manifest.Host != "raw.githubusercontent.com" || s.manifest.Path != "/wuweidict/lemmas/main/manifest.json" || name == "" {
+		return nil
+	}
+	urls := make([]string, 0, len(MirrorURLs))
+	for _, raw := range MirrorURLs {
+		p, err := parseSource(raw)
+		if err != nil || p.manifest == nil || p.manifest.Host != "raw.githubusercontent.com" {
+			continue
+		}
+		u := *p.manifest
+		u.Path = path.Join(path.Dir(u.Path), name)
+		urls = append(urls, u.String())
+	}
+	return urls
 }
 
 // defaultClient uses the environment's proxy - wudict is frequently run inside

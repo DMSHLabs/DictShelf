@@ -10,6 +10,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -106,7 +107,19 @@ func (c *Catalog) Install(ctx context.Context, dir string, e Entry, progress fun
 	}
 	rc, err := c.src.open(ctx, e.File)
 	if err != nil {
-		return "", fmt.Errorf("%s: %w", e.Code, err)
+		for _, fallback := range c.src.fallbackURLs(e.File) {
+			u, parseErr := url.Parse(fallback)
+			if parseErr != nil {
+				continue
+			}
+			rc, err = httpGet(ctx, u)
+			if err == nil {
+				break
+			}
+		}
+		if err != nil {
+			return "", fmt.Errorf("%s: %w", e.Code, err)
+		}
 	}
 	defer rc.Close()
 
@@ -125,6 +138,53 @@ func (c *Catalog) Install(ctx context.Context, dir string, e Entry, progress fun
 	// LimitReader at Size+1 so "longer than declared" is caught as a mismatch
 	// rather than by filling the disk with whatever the server felt like sending.
 	n, err := io.Copy(w, io.LimitReader(rc, e.Size+1))
+	rc.Close()
+	valid := err == nil && n == e.Size && hex.EncodeToString(h.Sum(nil)) == e.SHA256
+	if !valid {
+		var primaryErr error
+		switch {
+		case err != nil:
+			primaryErr = err
+		case n != e.Size:
+			primaryErr = fmt.Errorf("expected %d bytes, got %d", e.Size, n)
+		default:
+			primaryErr = fmt.Errorf("checksum mismatch (expected %s, got %s)", e.SHA256, hex.EncodeToString(h.Sum(nil)))
+		}
+		valid = false
+		for _, fallback := range c.src.fallbackURLs(e.File) {
+			u, parseErr := url.Parse(fallback)
+			if parseErr != nil {
+				continue
+			}
+			backup, fetchErr := httpGet(ctx, u)
+			if fetchErr != nil {
+				continue
+			}
+			if _, seekErr := f.Seek(0, io.SeekStart); seekErr != nil {
+				backup.Close()
+				continue
+			}
+			if truncErr := f.Truncate(0); truncErr != nil {
+				backup.Close()
+				continue
+			}
+			h = sha256.New()
+			w = io.MultiWriter(f, h)
+			if progress != nil {
+				w = io.MultiWriter(f, h, &counter{f: progress})
+			}
+			n, err = io.Copy(w, io.LimitReader(backup, e.Size+1))
+			backup.Close()
+			valid = err == nil && n == e.Size && hex.EncodeToString(h.Sum(nil)) == e.SHA256
+			if valid {
+				break
+			}
+		}
+		if !valid {
+			f.Close()
+			return "", fmt.Errorf("%s: %w", e.Code, primaryErr)
+		}
+	}
 	if err != nil {
 		f.Close()
 		return "", fmt.Errorf("%s: %w", e.Code, err)
@@ -135,12 +195,6 @@ func (c *Catalog) Install(ctx context.Context, dir string, e Entry, progress fun
 	}
 	if err := f.Close(); err != nil {
 		return "", err
-	}
-	if n != e.Size {
-		return "", fmt.Errorf("%s: expected %d bytes, got %d", e.Code, e.Size, n)
-	}
-	if got := hex.EncodeToString(h.Sum(nil)); got != e.SHA256 {
-		return "", fmt.Errorf("%s: checksum mismatch (expected %s, got %s)", e.Code, e.SHA256, got)
 	}
 	if err := os.Chmod(tmp, 0o644); err != nil {
 		return "", err
