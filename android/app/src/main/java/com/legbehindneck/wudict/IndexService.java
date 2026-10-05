@@ -279,6 +279,7 @@ public final class IndexService extends Service {
             arm(app);
         } else {
             disarm(app);
+            ServerProcess.workFinished();
         }
     }
 

@@ -213,6 +213,11 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
 </form>
 </header>
 
+<div id="workNotice" class="work-notice" role="status" aria-live="polite" hidden>
+  <div id="workNoticeText" class="work-notice-text"></div>
+  <button type="button" class="btn" id="workNoticeStop"></button>
+</div>
+
 <main class="col container">
 <!-- Three levels, one job each: #status is the collapsing grid, .msg is the
      clipped row, and .txt carries the padding INSIDE the clip so the closed
@@ -2161,6 +2166,11 @@ async function loadDicts(rescan){
   // A rescan happens in an app that already works — it must not black the UI
   // out. Only the first load (or a retry after a failure) blocks.
   const blocking=phase==="boot"||phase==="failed";
+  const controller=blocking?new AbortController():null;
+  if(blocking){
+    setGlobalStop(()=>controller.abort(),tx("dictUI.stop"));
+    showWorkNotice('<span class="spin"></span>'+esc(readyCount()));
+  }
   // A first load has no groups to show until the last row has resolved. A
   // RESCAN keeps the ones it has: the list on screen is already the previous
   // one being replaced row by row, and blanking the groups under it would
@@ -2177,7 +2187,7 @@ async function loadDicts(rescan){
     await fetchStream(rescan?"/api/rescan":"/api/dicts",msg=>{
       if(msg.t==="begin"){
         sawBegin=true;dictTotal=msg.total||0;
-        if(blocking)syncBootStatus();
+        if(blocking){syncBootStatus();showWorkNotice('<span class="spin"></span>'+esc(readyCount()))}
       }else if(msg.t==="dict"&&msg.dict){
         rows.push(msg.dict);
         if(!published){
@@ -2187,16 +2197,18 @@ async function loadDicts(rescan){
           if(phase==="failed")$("out").innerHTML=""; // a slow stream beat the watchdog
           setPhase("partial");
         }
-        if(blocking)syncBootStatus();
+        if(blocking){syncBootStatus();showWorkNotice('<span class="spin"></span>'+esc(readyCount()))}
         refreshDictUI();
       }
-    });
+    },controller&&controller.signal);
   }catch(err){
-    if(blocking)bootFailed(err.message);
+    if(blocking&&controller&&controller.signal.aborted)bootFailed(tx("search.bootStopped"));
+    else if(blocking)bootFailed(err.message);
     else setStatus("⚠ "+esc(err.message));
     return;
   }finally{
     clearTimeout(watchdog);
+    if(blocking)clearGlobalStop();
   }
   dicts=rows;dictTotal=rows.length;
   // normalize the saved preference order to the current dictionary set
@@ -2418,7 +2430,8 @@ function pollReindex(){
     reindexSt=st;
     if(st.running){
       const at=Math.min(st.done+1,st.total),pct=st.currentTotal?` (${Math.min(100,Math.floor(st.currentDone/st.currentTotal*100))}%)`:"";
-      setStatus(esc(tx("dictUI.rebuilding",{at,total:st.total})+(st.current?` · ${st.current}${pct}`:"")));
+      const message=esc(tx("dictUI.rebuilding",{at,total:st.total})+(st.current?` · ${st.current}${pct}`:""));
+      setStatus(message);showWorkNotice(message);
       setGlobalStop(requestReindexStop,reindexStopping?tx("dictUI.stopping"):tx("dictUI.stop"));renderReindex();pollReindex();return
     }
     reindexStopping=false;
@@ -2450,7 +2463,7 @@ $("reindexLine").addEventListener("click",async e=>{
   else loadDicts(); // nothing was outdated any more: the list was behind
 });
 fetch("/api/reindex").then(r=>r.ok?r.json():null).then(st=>{
-  if(st&&st.running){reindexSt=st;setStatus(esc(tx("dictUI.rebuilding",{at:Math.min(st.done+1,st.total),total:st.total})+(st.current?` · ${st.current}`:"")));setGlobalStop(requestReindexStop);renderReindex();pollReindex()}
+  if(st&&st.running){reindexSt=st;const message=esc(tx("dictUI.rebuilding",{at:Math.min(st.done+1,st.total),total:st.total})+(st.current?` · ${st.current}`:""));setStatus(message);setGlobalStop(requestReindexStop);showWorkNotice(message);renderReindex();pollReindex()}
 }).catch(()=>{});
 
 function dslIndexControls(d){
@@ -2819,6 +2832,7 @@ function pollRescanStatus(){
       if(st.stopRequested)text+=" · "+tx("dictUI.bulkStopping");
       setStatus(esc(text));
       setGlobalStop(requestRescanStop,st.stopRequested?tx("dictUI.bulkStopping"):tx("dictUI.stop"));
+      showWorkNotice(esc(text));
       pollRescanStatus();return;
     }
   },1000);
@@ -2845,6 +2859,7 @@ $("clearDatabaseGo").onclick=async()=>{
   $("clearDatabaseProgress").hidden=true;$("clearDatabaseProgress").removeAttribute("value");
   dialog.oncancel=e=>e.preventDefault();
   $("clearDatabaseStatus").textContent=tx("database.working");
+  showWorkNotice('<span class="spin"></span>'+esc(tx("database.working")));
   try{
     let report;
     await fetchStream("/api/rescan?stream=1",msg=>{
@@ -2861,6 +2876,7 @@ $("clearDatabaseGo").onclick=async()=>{
         }else{$("clearDatabaseProgress").hidden=true}
       }
       $("clearDatabaseStatus").textContent=text;
+      showWorkNotice('<span class="spin"></span>'+esc(text));
       setStatus(esc(text));
     },undefined,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
     if(!report)throw new Error(tx("database.incomplete"));
@@ -4222,15 +4238,30 @@ function setIndexStatus(html){
   const box=$("bulkIndexConfirm");
   $("bulkIndexStatus").hidden=!html;
   box.innerHTML=html;
+  if(globalStopAction)showWorkNotice(html);
   setStatus(html);
 }
 let globalStopAction=null,globalStopLabel="";
+let workNoticeHTML="";
+function renderWorkNotice(){
+  const box=$("workNotice"),button=$("workNoticeStop");
+  box.hidden=!workNoticeHTML;
+  if(box.hidden)return;
+  $("workNoticeText").innerHTML=workNoticeHTML;
+  button.hidden=!globalStopAction;
+  button.textContent=globalStopLabel||tx("dictUI.stop");
+  button.disabled=globalStopLabel===tx("dictUI.bulkStopping");
+}
+function showWorkNotice(html){workNoticeHTML=html;renderWorkNotice()}
+$("workNoticeStop").addEventListener("click",()=>{if(globalStopAction)globalStopAction()});
 function setGlobalStop(action,label){
   globalStopAction=action;globalStopLabel=label||tx("dictUI.stop");
+  renderWorkNotice();
   if(statusBase)setStatus(statusBase,statusOwner);
 }
 function clearGlobalStop(){
   globalStopAction=null;globalStopLabel="";
+  workNoticeHTML="";renderWorkNotice();
   if(statusBase)setStatus(statusBase,statusOwner);
 }
 $("status").addEventListener("click",e=>{

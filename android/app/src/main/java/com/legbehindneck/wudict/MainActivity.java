@@ -807,11 +807,11 @@ public class MainActivity extends Activity {
     protected void onDestroy() {
         gone = true;
         unwatchThermal();
-        // The server is bound to the app's lifetime (D52): finishing kills
-        // it; swiping the task away kills the process group, which includes
-        // the child. Recreation keeps it - and so does a lookup popup that is
-        // still up, which is why the decision is ServerProcess's and not this
-        // activity's (D67).
+        // The server is bound to the app's windows (D52): finishing the last
+        // window stops it unless demanded work is active, in which case
+        // ServerProcess stops it after the foreground work hold ends.
+        // Recreation keeps it - and so does a lookup popup that is still up,
+        // which is why the decision is ServerProcess's (D67).
         ServerProcess.release(isFinishing());
         if (web.getParent() != null) {
             ((FrameLayout) web.getParent()).removeView(web);

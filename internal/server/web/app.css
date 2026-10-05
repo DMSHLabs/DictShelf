@@ -1653,6 +1653,19 @@ dialog.panel-card:not([open]){display:none}
 .bulkbox p:last-child{margin-bottom:0}
 .bulkbox .cost{color:var(--label-quiet)}
 .bulkbox .btn{font-size:11.5px;padding:.25em .6em;margin-right:.4em}
+.work-notice{position:fixed;z-index:300;top:calc(var(--barh,3.1em) + var(--sp-2));left:50%;
+  transform:translateX(-50%);width:calc(100% - 2*var(--sp-2));max-width:720px;
+  display:flex;align-items:center;gap:.6em;padding:.45em .55em;
+  border:1px solid var(--accent);border-radius:8px;background:var(--accent-soft);
+  background-image:repeating-linear-gradient(-45deg,
+    color-mix(in srgb,var(--accent) 8%,transparent) 0 6px,
+    transparent 6px 14px);
+  box-shadow:var(--shadow);font-size:12px;line-height:1.35;color:var(--label);
+  pointer-events:none}
+.work-notice[hidden]{display:none}
+body.barhidden .work-notice{top:calc(var(--wd-inset-top,0px) + var(--sp-2))}
+.work-notice-text{flex:1;min-width:0;overflow-wrap:anywhere}
+.work-notice .btn{flex:none;font-size:11.5px;padding:.25em .6em;pointer-events:auto}
 /* The orphan review (D156) is a bulkbox like the full-text one: a situation to
    decide on, not an alarm. Only the delete button wears the danger colour,
    and only while it would delete something - "Keep all" is not dangerous.

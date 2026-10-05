@@ -195,6 +195,10 @@ label.keep em{font-style:normal;color:var(--label-quiet);font-size:12.5px}
 </style>
 </head>
 <body>
+<div id="workNotice" class="work-notice" role="status" aria-live="polite" hidden>
+  <div id="workNoticeText" class="work-notice-text"></div>
+  <button type="button" class="btn ghost" id="workNoticeStop" hidden></button>
+</div>
 <div class="card">
 <!-- The page's closer (@see setup.css). It goes back rather than to "/": the
      page behind is restored as it was, and the entry this page took is spent,
@@ -299,6 +303,18 @@ function saveIndexDefaults(){
 }
 $("indexDefaults").addEventListener("change",()=>{saveIndexDefaults()});
 let timer=null,lastOK=false;
+let validationController=null,validationRun=0;
+
+function setSetupNotice(text,stop){
+  const box=$("workNotice"),button=$("workNoticeStop");
+  box.hidden=!text;
+  if(!text)return;
+  $("workNoticeText").textContent=text;
+  button.hidden=typeof stop!=="function";
+  button.textContent=tx("dictUI.stop");
+  button.disabled=false;
+  button.onclick=typeof stop==="function"?stop:null;
+}
 
 const fmtN=n=>window.wudictI18n.number(n);
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
@@ -344,32 +360,56 @@ function rowInputs(){return [...document.querySelectorAll("#rows input")]}
 function paths(){return rowInputs().map(i=>i.value.trim()).filter(Boolean)}
 
 async function validateAll(){
+  const run=++validationRun;
+  if(validationController)validationController.abort();
+  const controller=new AbortController();
+  validationController=controller;
+  const stop=()=>{
+    controller.abort();
+    if(validationRun!==run)return;
+    validationRun++;
+    validationController=null;
+    setSetupNotice("");
+  };
   const inputs=rowInputs();
   let total=0,bad=0,checked=0;
+  const folderTotal=inputs.filter(input=>input.value.trim()).length;
+  let folderDone=0;
+  const reportFolder=()=>{
+    folderDone++;
+    setSetupNotice(tx("pages.checkingFoldersProgress",{number:folderDone,total:folderTotal}),stop);
+  };
+  if(folderTotal)setSetupNotice(tx("pages.checkingFoldersProgress",{number:0,total:folderTotal}),stop);
   await Promise.all(inputs.map(async input=>{
     const st=input.parentElement.querySelector(".st");
     const p=input.value.trim();
     if(!p){st.className="st";st.textContent="";return}
     checked++;
     let j;
-    try{ j=await (await fetch("/api/setup?path="+encodeURIComponent(p))).json() }
-    catch(e){ st.className="st err";st.textContent=tx("pages.unreachable");bad++;return }
-    if(j.error){st.className="st err";st.textContent="✕ "+window.wudictI18n.errorText(j.error);bad++;return}
-    if(!j.found){st.className="st err";st.textContent=tx("pages.noneFound");bad++;return}
+    try{ j=await (await fetch("/api/setup?path="+encodeURIComponent(p),{signal:controller.signal})).json() }
+    catch(e){ if(controller.signal.aborted||run!==validationRun)return;st.className="st err";st.textContent=tx("pages.unreachable");bad++;reportFolder();return }
+    if(run!==validationRun)return;
+    if(j.error){st.className="st err";st.textContent="✕ "+window.wudictI18n.errorText(j.error);bad++;reportFolder();return}
+    if(!j.found){st.className="st err";st.textContent=tx("pages.noneFound");bad++;reportFolder();return}
     st.className="st ok";st.textContent=tx("pages.found",{number:fmtN(j.found)});
     total+=j.found;
+    reportFolder();
   }));
+  if(run!==validationRun)return;
   // folders may overlap, so the honest total is the server's deduplicated
   // count, not the sum of the rows
   const list=paths();
   if(list.length>1&&total>0){
     try{
       const q=list.map(p=>"path="+encodeURIComponent(p)).join("&");
-      const agg=await (await fetch("/api/setup?"+q)).json();
+      const agg=await (await fetch("/api/setup?"+q,{signal:controller.signal})).json();
       if(typeof agg.found==="number")total=agg.found;
-    }catch(e){}
+    }catch(e){if(controller.signal.aborted||run!==validationRun)return}
   }
+  if(run!==validationRun)return;
   syncAct(total,checked,bad);
+  if(validationController===controller)validationController=null;
+  setSetupNotice("");
 }
 
 /* The footer reports dictionaries found in the selected folders. */
@@ -396,9 +436,14 @@ async function save(){
   if(!await saveIndexDefaults())return;
   const q=paths().map(p=>"path="+encodeURIComponent(p)).join("&");
   if(!q)return;
+  if(validationController){validationRun++;validationController.abort();validationController=null}
   const url="/api/setup?"+q+"&save=1";
-  const j=await (await fetch(url)).json();
-  if(j.error){$("msg").className="err";$("msg").textContent="✕ "+window.wudictI18n.errorText(j.error);return}
+  $("save").disabled=true;
+  setSetupNotice(tx("pages.savingFolders"));
+  let j;
+  try{j=await (await fetch(url)).json()}
+  catch(e){$("msg").className="err";$("msg").textContent="✕ "+window.wudictI18n.errorText(e.message);setSetupNotice("");validateAll();return}
+  if(j.error){$("msg").className="err";$("msg").textContent="✕ "+window.wudictI18n.errorText(j.error);setSetupNotice("");$("save").disabled=false;return}
   if(j.saved)location.href="/";
 }
 

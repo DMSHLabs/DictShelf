@@ -148,6 +148,7 @@ class ServerProcess {
     private static final List<Listener> waiting = new ArrayList<>();
     private static int holders;    // live windows retaining the server
     private static int generation; // invalidates callbacks from a child we stopped
+    private static boolean stopWhenIdle;
 
     /**
      * Runs {@code l} against a ready server, starting one if needed. A second
@@ -202,6 +203,7 @@ class ServerProcess {
     /** A window that needs the server is alive. Paired with {@link #release}. */
     static synchronized void retain() {
         holders++;
+        stopWhenIdle = false;
     }
 
     /**
@@ -215,6 +217,23 @@ class ServerProcess {
     static synchronized void release(boolean mayStop) {
         if (holders > 0) holders--;
         if (!mayStop || holders > 0) return;
+        // A task swipe finishes its activities just like an explicit exit.
+        // Keep the server child alive while its foreground service protects
+        // work, then stop it when the final busy marker (or import hold) ends.
+        if (IndexService.hasWork()) {
+            stopWhenIdle = true;
+            return;
+        }
+        stopOwnedServer();
+    }
+
+    static synchronized void workFinished() {
+        if (!stopWhenIdle || holders > 0 || IndexService.hasWork()) return;
+        stopOwnedServer();
+    }
+
+    private static void stopOwnedServer() {
+        stopWhenIdle = false;
         generation++; // any callback still in flight from this child is now stale
         if (shared != null) shared.stop();
         shared = null;
@@ -577,6 +596,7 @@ class ServerProcess {
      * it is in {@link #stop()}: SQLite commits are transactional.
      */
     static synchronized boolean stopAny(Context ctx) {
+        stopWhenIdle = false;
         generation++;   // any callback still in flight from this child is stale
         boolean owned = shared != null && shared.process != null;
         if (shared != null) shared.stop();

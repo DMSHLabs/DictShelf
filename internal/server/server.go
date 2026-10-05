@@ -883,8 +883,15 @@ func (s *Server) handleDicts(w http.ResponseWriter, r *http.Request) {
 		wg.Add(1)
 		go func(e *entry) {
 			defer wg.Done()
-			sem <- struct{}{}
+			select {
+			case sem <- struct{}{}:
+			case <-r.Context().Done():
+				return
+			}
 			defer func() { <-sem }()
+			if r.Context().Err() != nil {
+				return
+			}
 			info := s.dictInfoFor(e)
 			writeLine(dictMsg{T: "dict", Dict: &info})
 		}(e)
