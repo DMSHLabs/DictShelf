@@ -48,7 +48,9 @@
 //	wu-ex    example               (DSL [ex], XDXF <ex>)
 //	wu-com   editorial comment     (DSL [com], XDXF <co>)
 //	wu-lang  foreign-language zone (DSL [lang]); carries lang= when known
-//	wu-sec   secondary / optional zone (DSL [*])
+//	wu-sec   secondary zone (DSL [*]): what the UI's brief view hides. Grey,
+//	         as Lingvo draws it in every version, so the full view shows
+//	         what the brief one leaves out
 //	wu-acc   stress mark           (DSL ['])
 //	wu-c     author-coloured run   (--wd-c)
 //	wu-m     author-indented block (--wd-m, in em)
@@ -92,7 +94,8 @@ const DefaultCSS = `
 :where(.wu-ex){color:var(--wd-ex,#4682b4)}
 :where(.wu-ipa){font-family:var(--wd-ipa,"Charis SIL","Doulos SIL","Gentium Plus",Helvetica,sans-serif)}
 :where(.wu-acc){text-decoration:underline}
-:where(.wu-sec){opacity:.85}
+:where(.wu-sec){color:var(--wd-sec,gray)}
+:where(.wu-sec .wu-ex){color:inherit}
 :where(.wu-gr){font-style:italic;opacity:.75}
 :where(.wu-com){opacity:.8}
 :where(.wu-k){font-weight:600}

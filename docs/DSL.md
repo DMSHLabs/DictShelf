@@ -373,9 +373,9 @@ custom properties `--wd-c` / `--wd-m`, so a reader's own stylesheet wins without
 | `^` | invert the case of the next character ("перевёртыш", 6.0+), chiefly as `^~` | rune-aware case flip; `^~` flips the first letter of the mirrored headword; `^` before markup or at EOF disappears | `[V]` |
 | `[p]` | grammatical/usage label | buffered, then `<span class="wu-p">`, wrapped in `<abbr title="…">` when the `_abrv` companion knows it (§1.1) | `[V]` |
 | `[t]` | phonetic transcription | `<span class="wu-ipa">` / `</span>`; a zone written in the legacy transcription font is mapped to IPA (§6.0) | `[V]` |
-| `[*]` | secondary/optional zone, hidden behind Lingvo's toggle | `<span class="wu-sec">` / `</span>` (always shown) | `[V]` |
+| `[*]` | secondary zone: shown or hidden at the reader's request (a button, Ctrl+\*), grey | `<span class="wu-sec">` / `</span>`, hidden in the brief view (§6.6) | `[V]` |
 | `@` | sub-card | see §4 | `[V]` |
-| `[ex]` | example | `<span class="wu-ex">` / `</span>` | `[V]` |
+| `[ex]` | example: an indexing zone (search by examples), with no look of its own | `<span class="wu-ex">` / `</span>` | `[V]` |
 | `[com]` | editorial comment | `<span class="wu-com">` / `</span>` | `[V]` |
 | `[trn]` `[!trn]` `[trs]` `[!trs]` | include/exclude from translation/transcription indexing | `<span class="wu-trn">`, `wu-trn-not`, `wu-trs`, `wu-trs-not` | `[V]` |
 | `[trn1]` | x5 variant of `[trn]` | unknown tag, paired → unwrapped, content kept (same visible result) | `[V]` |
@@ -595,6 +595,42 @@ is what the compiler does too; an escaped `\{\{` opens nothing.
 | Headword length is 246 characters, spaces included, except spaces past the 246th non-space character | «Заголовок статьи» | `[V]` not enforced (§5) |
 | One "word" — a run of non-space characters — is capped at 255 in a body (tags and `\` excluded); GoldenDict has no limit | «Тело статьи» | `[V]` not enforced; a longer run renders, as in GoldenDict |
 
+### 6.6 The secondary zone `[*]` and the brief view
+
+Lingvo, from lingvo-ref «Тэг [*]···[/*]» and the manual's screenshots of the
+card and the Options dialog, 6.0 to x6: `[D]`
+
+- The zone is shown or hidden at the reader's request: a button on the card
+  (x3–x5 a toolbar icon, x6 the text button **Full card**) and **Ctrl+\***. A
+  part of a headword inside `[*]` hides with it.
+- How a card opens is an option, *Display example sentences and related words*
+  (x3–x6). *Expand all entries automatically* is a different option: it opens
+  dictionaries, not zones.
+- The zone is drawn in one colour, grey by default. The Options dialog calls
+  that colour *Examples* (x3–x6; *Optional Text* in 6.0–8.0), but it colours
+  `[*]`, not `[ex]`: `[ex]` is an indexing zone with no look of its own, and an
+  `[ex]` outside `[*]` is always shown. `[c]` has no effect inside or around
+  `[*]`; `[p]` labels and links keep their colours.
+- Dictionaries write examples as `[*][ex]…[/ex][/*]`, often with `[i]`; ABBYY's
+  own dictionaries put every `@` sub-card block in `[*]`.
+
+wudict: `[V]`
+
+| Lingvo | wudict |
+| --- | --- |
+| a button per card, Ctrl+\* | a switch at the right end of a dictionary's section header in the results, present only when its articles hold a `wu-sec`; Ctrl+\* switches the section being read (`index.html` `fullInit`, `fullSet`, `fullKey`). The brief view is one attribute on the article host, `:host([data-brief]) .wu-sec{display:none}`: no re-render |
+| the open-state option | the reader's last press on any switch, stored as `ui.full` in `/api/prefs` (absent: brief). Sections already on screen keep their state. A full-text match or a `#fragment` target inside the zone opens that section full and leaves the stored choice alone |
+| grey | `wu-sec` is grey (`--wd-sec`, `internal/artmark`), and a `wu-ex` inside it takes the grey; a `[c]` inside keeps its colour (§8) |
+
+**Line breaks.** A line that is secondary from end to end carries the break
+that follows it (`absorbBreaks`, `balance.go`), so the brief view removes the
+line whole instead of leaving a blank line:
+`sense<br/><span class="wu-sec">example<br/></span>next`. A run of such lines
+takes every break but the one before the run; a break a paragraph swallows
+(`[m]` on the next line) has nothing to give. An `[m]` line needs nothing: its
+`<p>` has no height once its content is hidden. Only the DSL reader writes
+`wu-sec`, so only DSL articles have the switch.
+
 ## 7. The media zone in depth
 
 Syntax rules, all `[D]` from lingvo-ref «Тэг [s]···[/s]» unless marked:
@@ -667,7 +703,7 @@ Design points that are not obvious and should not be "simplified" away:
 | `[ref]` target matching | case-sensitive | case-insensitive, through the store index | forgiving in the direction that can only find more |
 | `#SOURCE_CODE_PAGE` casing | exact, errors otherwise | case-insensitive | the alternative to accepting it is mojibake, not a diagnostic |
 | `.ann` `#LANGUAGE` | one section by UI language | all sections | see §1.2 |
-| `[*]` secondary zone | hidden behind a toggle | always shown | `[V]` gap, listed in §11 |
+| `[c]` inside `[*]` | no effect: the zone is grey | the author's colour | a colour the author wrote is shown everywhere else too; the grey is a default a reader's style can change |
 | body lines belonging to no headword | compile error, no dictionary | the block is skipped with a warning (first three only), the scan continues | the file is already on the user's disk; one stray run of lines must not cost them the whole dictionary (`errOrphanBlock`, `Reader.Next`) |
 
 `dslEscape` (`reader.go`) escapes `\ [ ] ~ < > @` when a sub-entry key is embedded
@@ -717,8 +753,9 @@ them would be wrong in one direction or the other. `TestDslEscapeRoundTrip` and
 the stylesheet. It is **2** as of the pass that added `wu-xref`, the full optional-part
 expansion and the `#INCLUDE`/`^`/`[br]` handling: articles prepared by an older
 build are reported as stale (a rebuild offered, never forced). `[V]` The DSL
-reader's own version is **4** since the zone balancer (§6.0, D165): a DSL library
-prepared earlier is reported stale the same way. `[V]`
+reader's own version is **5**: the zone balancer (§6.0, D165) and the line break
+a secondary line carries (§6.6). A DSL library prepared by an earlier reader is
+reported stale the same way. `[V]`
 
 Seekability matters end to end: `resource.Dir` returns an `*os.File` (seekable), a zip
 entry is **not** seekable, and `store.Media.Resource` returns
@@ -767,6 +804,7 @@ Closed in the spec-audit pass (this document's current revision):
 | a `{{…}}` block between the directives and the first card, or a comment-only line at column 0, aborted preparation with "entry block without headword" | every zone is removed from the raw line before classification, in the header scan and the entry scan alike, and a headword-less block is a skip, not a failure (§6.4, §8) |
 | a body line made of non-standard spaces (the «отбивка» blank line) was dropped as empty | `blankLine` folds ASCII space and tab only (§6.5) |
 | `\` at end of line — the blank-line idiom after an editor trimmed the trailing space — ate the line break and rendered nothing | `&nbsp;` plus the break (§6.5) |
+| `[*]` always shown | hidden in the brief view: a switch per section, Ctrl+\*, the last choice remembered; grey when shown (§6.6) |
 
 Closed earlier: `@` recognition (`@heading`, `[m1]@ heading`, piled headings),
 one back-reference per expanded key, `dslEscape` double-escaping, the media-zone
@@ -777,7 +815,6 @@ Open, with what correct behaviour would be:
 
 | Gap | Correct behaviour |
 | --- | --- |
-| `[*]` secondary zone | Lingvo hides it behind a toggle; we always render it. A `details`-like control would match the format's intent. `[V]` gap |
 | `[trn1]` | falls through as an unknown tag; harmless today, but it belongs with the other search-processing wrappers so the intent is explicit. `[V]` gap |
 | `[']` inside a link zone | forbidden by the spec; we render it. Harmless, listed for completeness. `[V]` |
 | 246-character headword limit | Lingvo drops the entry; we index it. Deliberate — a longer key costs nothing here. `[V]` |

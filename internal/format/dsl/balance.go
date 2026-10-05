@@ -147,6 +147,7 @@ func (tr *transformer) resolve() {
 		tr.zones[block].end = int32(len(toks))
 	}
 	tr.stack = stack[:0]
+	tr.absorbBreaks()
 
 	tr.endHead = slices.Grow(tr.endHead[:0], len(toks)+1)[:len(toks)+1]
 	for i := range tr.endHead {
@@ -175,6 +176,73 @@ func (tr *transformer) resolve() {
 			tr.markLegacyIPA(z)
 		}
 	}
+}
+
+// absorbBreaks gives a line that is secondary from end to end - every piece of
+// its content inside a [*] zone - the line break that follows it. The UI's
+// brief view hides wu-sec (lingvo-ref "Тэг [*]···[/*]": shown or hidden at the
+// reader's request); a hidden line that left both of its breaks behind would
+// leave a blank line in its place. With the break inside, the line goes whole:
+//
+//	sense<br/><span class="wu-sec">example<br/></span>next
+//
+// A line's preceding break stays outside, so a run of such lines each takes
+// one break and the run as a whole takes all of them but the first. A break
+// that a paragraph swallows (s == "") has nothing to give, and a line inside
+// a [*] zone that already runs past its break needs nothing.
+//
+// Linear: zones are created in the order they open, and the same-name bound
+// (maxSameName) keeps the set of [*] zones open at any token to three.
+func (tr *transformer) absorbBreaks() {
+	toks, zones := tr.toks, tr.zones
+	next := slices.IndexFunc(zones, func(z zone) bool { return z.name == "*" })
+	if next < 0 {
+		return
+	}
+	var open []int32   // [*] zones covering token i, oldest first
+	cover := int32(-1) // the outermost one covering the line's last content
+	whole := true      // every content token of the line so far is covered
+	for i := range toks {
+		t := &toks[i]
+		open = slices.DeleteFunc(open, func(x int32) bool { return zones[x].end <= int32(i) })
+		for ; next < len(zones) && zones[next].open < int32(i); next++ {
+			if z := &zones[next]; z.name == "*" && z.end > int32(i) {
+				open = append(open, int32(next))
+			}
+		}
+		if t.kind == tkBreak {
+			if whole && cover >= 0 && t.s != "" && zones[cover].end <= int32(i) {
+				zones[cover].end = int32(i) + 1
+			}
+			cover, whole = -1, true
+			continue
+		}
+		if !whole || !tr.isContent(t) {
+			continue
+		}
+		if len(open) == 0 {
+			whole = false
+			continue
+		}
+		cover = open[0]
+	}
+}
+
+// isContent reports whether a token puts something on the page: text other
+// than the line's own blanks, a literal, an element, or an unknown tag that
+// nobody closed and is therefore printed as written.
+func (tr *transformer) isContent(t *token) bool {
+	switch t.kind {
+	case tkText:
+		return strings.Trim(tr.input[t.a:t.b], " \t") != ""
+	case tkLit:
+		return t.s != ""
+	case tkHTML:
+		return true
+	case tkOpen:
+		return t.rng >= 0 && tr.zones[t.rng].def.kind == kUnknown && !tr.zones[t.rng].closed
+	}
+	return false
 }
 
 // oldestNamed is the stack index of the oldest open zone named name when

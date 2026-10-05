@@ -2500,6 +2500,13 @@ components:
             hides. Absent or empty shows every section the library supports.
             Stored de-duplicated and sorted; at most 32 ids of at most 64
             bytes each.
+        full:
+          type: boolean
+          description: >
+            Opens the secondary text of an article - Lingvo DSL's [*] zone,
+            usually its examples - shown rather than hidden. Absent is the
+            brief view, Lingvo's own default. Remembered state for wudict's
+            own UI - the search endpoint never reads it.
 
     Groups:
       type: object

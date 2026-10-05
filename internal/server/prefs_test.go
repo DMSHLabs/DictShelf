@@ -371,6 +371,39 @@ func TestPrefsGroupsOff(t *testing.T) {
 	}
 }
 
+// full (the brief/full view of wu-sec) is spelled positively, so absent is
+// Lingvo's brief view; it survives the file and the flags beside it.
+func TestPrefsFull(t *testing.T) {
+	s, state := newPrefsServer(t)
+	for _, tc := range []struct {
+		name, body string
+		want, hl   bool
+	}{
+		{"absent is brief", `{"ui":{"fontSize":24}}`, false, false},
+		{"full", `{"ui":{"full":true}}`, true, false},
+		{"full beside highlighting off", `{"ui":{"full":true,"hlOff":true}}`, true, true},
+		{"brief again, highlighting still off", `{"ui":{"hlOff":true}}`, false, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := putPrefs(t, s, tc.body)
+			if got.UI.full() != tc.want {
+				t.Fatalf("PUT echoed full=%v, want %v", got.UI.full(), tc.want)
+			}
+			ui := LoadPrefs(state).UI()
+			if hl, _ := ui.flags(); ui.full() != tc.want || hl != tc.hl {
+				t.Fatalf("reloaded full=%v hlOff=%v, want %v/%v", ui.full(), hl, tc.want, tc.hl)
+			}
+		})
+	}
+}
+
+func (u *UIPrefs) full() bool {
+	if u == nil {
+		return false
+	}
+	return u.Full
+}
+
 func (u *UIPrefs) spoken() bool {
 	if u == nil {
 		return false

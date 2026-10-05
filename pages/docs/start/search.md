@@ -119,6 +119,21 @@ A link in an article is looked up in the same dictionary first. If that
 dictionary has no such headword, all dictionaries are searched, and a banner
 says so.
 
+## Brief and full view
+
+Lingvo DSL dictionaries mark part of an article as **secondary text**: usually
+the examples, often the links to sub-entries. It is hidden when an article
+opens. The button at the right end of a dictionary's header shows it; its icon
+draws the hidden line dotted. Shown, secondary text is grey.
+
+- The next result opens the way you left the last one. The choice is stored
+  with your other settings, so every browser and the Android app that use the
+  same wudict share it.
+- A full-text match inside secondary text, or a link to a place inside it,
+  shows it for that result only.
+- <kbd>Ctrl</kbd>+<kbd>\*</kbd> shows or hides it in the section you are
+  reading (desktop).
+
 ## Keys and buttons
 
 | Key or button | Action |
@@ -129,6 +144,7 @@ says so.
 | <kbd>⊞</kbd> / <kbd>⊟</kbd> | expand / collapse all results |
 | <kbd>⇔</kbd> | wide layout on or off |
 | <kbd>◐</kbd> | theme: auto, light, dark |
+| <kbd>Ctrl</kbd>+<kbd>\*</kbd> | show or hide secondary text in the section you are reading |
 
 ## Dictionary panel
 

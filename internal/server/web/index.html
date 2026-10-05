@@ -279,6 +279,7 @@ summary .rung{color:var(--accent)}
    pushes it to a second line. */
 summary .mnav{display:flex;align-items:center;gap:1px;margin-left:auto;font-weight:400}
 summary .mnav~.count{margin-left:var(--sp-1)} /* two auto margins would split the row */
+summary .mnav[hidden]{display:none} /* display:flex above outranks the attribute */
 summary .mbtn{cursor:pointer;color:var(--fg-soft);font-size:16px;line-height:1;
   padding:9px 7px;margin:-9px 0;border-radius:5px;user-select:none;
   -webkit-tap-highlight-color:transparent}
@@ -286,6 +287,22 @@ summary .mbtn:hover{color:var(--fg);background:var(--bg)}
 summary .mbtn:active{color:var(--accent)}
 summary .mpos{font-size:11px;color:var(--fg-faint);min-width:2.8em;text-align:center;
   font-variant-numeric:tabular-nums}
+/* Brief and full view (fullSet): the toggle for Lingvo's secondary zone, DSL
+   [*], which the article carries as wu-sec. It sits LAST in the row because
+   that is the one place nothing else moves it - the match walker comes and
+   goes, the count changes width - and the one a right thumb reaches without
+   looking. The glyph is the article in miniature: two sense lines and an
+   indented example between them, dotted while it is hidden, solid while it is
+   shown. Same touch-target trick as the chevrons, grown on a touch screen to
+   the 44px a fingertip needs. */
+summary .fbtn{flex:0 0 auto;display:inline-flex;cursor:pointer;color:var(--fg-soft);
+  padding:9px 7px;margin:-9px -4px -9px 0;border-radius:5px;user-select:none;
+  -webkit-tap-highlight-color:transparent}
+summary .fbtn svg{width:16px;height:16px;display:block}
+summary .fbtn:hover{color:var(--fg);background:var(--bg)}
+summary .fbtn[aria-pressed="true"]{color:var(--accent)}
+summary .fbtn[aria-pressed="true"] .brief,summary .fbtn[aria-pressed="false"] .full{display:none}
+@media (pointer:coarse){summary .fbtn{padding:14px 12px;margin:-14px -8px -14px 0}}
 /* a dictionary's own script threw; the article is intact but inert */
 summary .jserr{margin-left:6px;font-weight:400;color:var(--accent);font-size:12px;cursor:help}
 /* A deferred dictionary's hint (renderSlot, h.deferred). Link-coloured because
@@ -1284,6 +1301,7 @@ function adoptLocalPrefs(){
   return true;
 }
 let prefsReady=false;
+let fullOn=false; // brief or full view for the next section that opens (fullInit)
 async function loadPrefs(){
   try{
     const r=await fetch("/api/prefs");
@@ -1292,7 +1310,7 @@ async function loadPrefs(){
     prefsReady=true;
     // Read before the exists branch below returns: on a first run there is no
     // ui record, but there is also nothing here that can go wrong.
-    if(st.ui){applyFS(st.ui.fontSize,false);applyHL(!st.ui.hlOff,false);applySpeak(!st.ui.speakOff,false);applyOpenOrder(!st.ui.fastFirst,false);applySortOrder(st.ui.sortMine,false);applyGroupsOff(st.ui.groupsOff,false)}
+    if(st.ui){applyFS(st.ui.fontSize,false);applyHL(!st.ui.hlOff,false);applySpeak(!st.ui.speakOff,false);applyOpenOrder(!st.ui.fastFirst,false);applySortOrder(st.ui.sortMine,false);applyGroupsOff(st.ui.groupsOff,false);fullOn=!!st.ui.full}
     if(!st.exists){adoptLocalPrefs();return} // first run: keep whatever we had
     prefOrder=rows.map(d=>d.id);
     disabled=new Set(rows.filter(d=>d.off).map(d=>d.id));
@@ -1314,7 +1332,7 @@ function savePrefs(now){
   if(!prefsReady){setStatus("⚠ settings are not being saved — reload the page");return}
   if(!now){prefsTimer=setTimeout(()=>savePrefs(true),400);return}
   const body=JSON.stringify({dicts:orderedDicts().map(d=>({id:d.id,name:dictLabel(d),off:disabled.has(d.id)})),
-    ui:{fontSize:articleFS,hlOff:!hlOn,speakOff:!speakOn,fastFirst:!orderFirst,sortMine:sortOwn,groupsOff:[...groupsOff].sort()}});
+    ui:{fontSize:articleFS,hlOff:!hlOn,speakOff:!speakOn,fastFirst:!orderFirst,sortMine:sortOwn,groupsOff:[...groupsOff].sort(),full:fullOn}});
   if(body===prefsSent)return;
   prefsSent=body;
   fetch("/api/prefs",{method:"PUT",headers:{"Content-Type":"application/json"},body})
@@ -1869,7 +1887,7 @@ $("out").addEventListener("click",e=>{
   if(!sum)return; // the no-index group is not an answer: opening it decides nothing
   // these live inside the summary, run their own handlers and preventDefault
   // the toggle — but not before this listener, which is nearer the target
-  if(e.target.closest(".more,.upgrade,.mnav"))return;
+  if(e.target.closest(".more,.upgrade,.mnav,.fbtn"))return;
   const det=sum.parentElement,opening=!det.open; // the toggle lands after us
   // The walk follows attention: it belongs to the section being read, and one
   // section at a time is also why nothing is counted for the other 154.
@@ -3053,6 +3071,7 @@ table{max-width:100%;border-collapse:collapse}
 :host([data-dark]) :is(img,picture,video,svg,canvas,iframe,embed,object,[data-noinvert]){
   filter:invert(1) hue-rotate(180deg)}
 ${ARTCSS}
+:host([data-brief]) .wu-sec{display:none}
 </style>`;
 
 /* ── @font-face hoisting ─────────────────────────────────────────────────
@@ -3256,6 +3275,8 @@ addEventListener("message",e=>{
       if(navWalkable())navGo(d.k==="ArrowRight"?1:-1);
       return;
     }
+    if(d.k==="full"){fullKey();return} // Ctrl+* pressed inside a frame
+
     const qi=$("q");
     if(qi.disabled)return;
     if(d.k==="/"){qi.focus();qi.select();return}
@@ -3601,12 +3622,13 @@ function renderSlot(box,h,mode,q,perDict,group){
       dl.appendChild(dt);dl.appendChild(dd);
       roots.push(renderArticle(dd,r.Body,h.dict,anchor&&r===h.results[0]?anchor.frag:""));
     }
+    fullInit(det);
     // An `entry://Word#frag` link: put the fragment on screen. Shadow-DOM
     // articles are measured next frame, once laid out; iframe ones jump
     // themselves - frameDoc has already been handed the fragment.
     if(anchor&&roots[0])requestAnimationFrame(()=>{
       const el=anchorTarget(roots[0],anchor.frag);
-      if(el){det.open=true;revealAt(el.getBoundingClientRect().top,det)}
+      if(el){det.open=true;fullReveal(det,el);revealAt(el.getBoundingClientRect().top,det)}
     });
   };
   det.addEventListener("toggle",()=>{if(det.open)fillSection(det)});
@@ -3949,6 +3971,12 @@ document.addEventListener("keydown",e=>{
      !$("styler").classList.contains("show")&&!$("panel").classList.contains("show")){
     e.preventDefault();navGo(e.key==="ArrowRight"?1:-1);return;
   }
+  /* Lingvo's own chord for the same switch (lingvo-ref "Тэг [*]···[/*]"). It
+     acts on the section being read, so it needs no focus and no pointer. */
+  if((e.ctrlKey||e.metaKey)&&!e.altKey&&e.key==="*"){
+    if(fullKey())e.preventDefault();
+    return;
+  }
   if(e.ctrlKey||e.metaKey||e.altKey||e.isComposing)return;
   const q=typeTarget();if(!q)return;
   if(e.key==="/"){e.preventDefault();q.focus();q.select();return}
@@ -4104,6 +4132,127 @@ function anchorTarget(root,frag){
    by adding the frame's own offset - no postMessage round trip, and no reason
    to treat frames as the rare case they are not (a wiki slob renders every
    article that way). */
+/* ── Brief and full view ─────────────────────────────────────────────
+   Lingvo hides its secondary zone, DSL [*], until the reader asks for it
+   (lingvo-ref "Тэг [*]···[/*]"): one switch per card, Ctrl+* on the keyboard,
+   and an option for how a card opens. In practice the zone holds the
+   examples and the links to sub-entries. The article carries it as wu-sec,
+   and the brief view is one attribute on the article host
+   (:host([data-brief]) .wu-sec in shadowBase), so a switch costs no render.
+
+   The switch is per SECTION, and it is shown only in a section that holds a
+   zone (D102). A section opens in whatever the reader chose last (`fullOn`,
+   the `full` ui pref; absent is brief, as in Lingvo), and pressing it sets
+   that choice; the sections already on screen keep theirs, so nothing jumps
+   above the place being read. A section that is opened for a reason the
+   reader did not choose - a full-text match or a #fragment inside the zone -
+   opens full without changing that choice.
+
+   Only shadow-DOM articles take part: wu-sec is written by the DSL reader
+   alone, and DSL escapes `<`, so an article carrying it never has a script
+   and never renders in a frame. */
+const FULL_SVG='<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true" focusable="false">'+
+  '<path d="M2 3.5h12M2 12.5h12"/><path class="brief" d="M5.5 8h8.5" stroke-dasharray="0 2.8"/><path class="full" d="M5.5 8h8.5"/></svg>';
+function fullRoots(det){
+  const out=[];
+  for(const host of det.querySelectorAll(".article"))if(host.shadowRoot)out.push(host);
+  return out;
+}
+/* A freshly filled section (or one a sub-entry was just added to): give it
+   the switch if it now holds a zone, and its articles the section's state. */
+function fullInit(det){
+  if(!det)return;
+  const hosts=fullRoots(det);
+  if(!hosts.some(h=>h.shadowRoot.querySelector(".wu-sec")))return;
+  if(det.wuFull===undefined)det.wuFull=fullOn;
+  for(const h of hosts)h.toggleAttribute("data-brief",!det.wuFull);
+  const sum=det.querySelector(":scope>summary");
+  let b=sum&&sum.querySelector(".fbtn");
+  if(sum&&!b){
+    b=document.createElement("span");
+    b.className="fbtn";b.setAttribute("role","button");b.tabIndex=0;
+    b.setAttribute("aria-label","Show examples and other secondary text");
+    b.title="Show examples and other secondary text (Ctrl+*)";
+    b.innerHTML=FULL_SVG;
+    const hit=e=>{
+      // inside a <summary>: the default action would fold the section
+      e.preventDefault();e.stopPropagation();
+      fullSet(det,!det.wuFull,true);
+    };
+    b.addEventListener("click",hit);
+    b.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" ")hit(e)});
+    b.addEventListener("pointerdown",freezeBar); // the row must not slide away mid-tap
+    sum.appendChild(b);
+  }
+  if(b)b.setAttribute("aria-pressed",det.wuFull?"true":"false");
+  // A full-text match inside the zone is the reason this article is here.
+  if(!det.wuFull&&hosts.some(h=>h.shadowRoot.querySelector(".wu-sec .wu-hl")))fullSet(det,true,false);
+}
+/* Switch one section. `chosen` is the reader's own press, which also becomes
+   the state the next section opens in. */
+function fullSet(det,full,chosen){
+  if(chosen&&fullOn!==full){fullOn=full;savePrefs()}
+  if(!det||det.wuFull===undefined||det.wuFull===full)return;
+  const keep=fullAnchor(det,full);
+  det.wuFull=full;
+  for(const h of fullRoots(det))h.toggleAttribute("data-brief",!full);
+  det.querySelector(":scope>summary .fbtn")?.setAttribute("aria-pressed",full?"true":"false");
+  if(keep){
+    const top=fullTop(keep.node),d=top===null?0:top-keep.top;
+    if(d){freezeBar();scrollBy(0,d)}
+  }
+  if(det===navDet)navRefresh(); // a mark inside the zone appears or goes
+}
+/* A target inside the zone: show the zone before scrolling to it. */
+function fullReveal(det,el){
+  if(det&&det.wuFull===false&&el.closest(".wu-sec"))fullSet(det,true,false);
+}
+/* Keeping the place being read. Showing or hiding a zone above the line
+   being read would push that line off screen, so the first line of text at
+   or below the sticky header that survives the switch is measured before and
+   put back after. Text nodes are walked rather than hit-tested: a DSL line
+   with no paragraph of its own is a bare text node of the shadow root, which
+   elementFromPoint answers with the host. Measured, not left to CSS scroll
+   anchoring, which Android WebViews of different ages do differently. */
+function fullAnchor(det,full){
+  const sum=det.querySelector(":scope>summary");
+  if(!sum)return null;
+  const y=sum.getBoundingClientRect().bottom+4;
+  if(det.getBoundingClientRect().top>=y)return null; // starts below the line: nothing above it moves
+  for(const host of fullRoots(det)){
+    if(host.getBoundingClientRect().bottom<y)continue;
+    const w=document.createTreeWalker(host.shadowRoot,NodeFilter.SHOW_TEXT);
+    for(let t=w.nextNode();t;t=w.nextNode()){
+      if(!t.data.trim()||t.parentNode.nodeName==="STYLE")continue;
+      // parentElement is null for a line straight under the shadow root
+      if(!full&&t.parentElement?.closest(".wu-sec"))continue; // about to hide
+      const top=fullTop(t);
+      if(top!==null&&top>=y)return{node:t,top};
+    }
+  }
+  return null;
+}
+function fullTop(node){
+  const rg=document.createRange();rg.selectNodeContents(node);
+  const rs=rg.getClientRects();
+  return rs.length?rs[0].top:null;
+}
+/* Ctrl+*: the section under the line being read, else the first one on
+   screen that has the switch. */
+function fullKey(){
+  const line=barH()+40;
+  let pick=null;
+  for(const det of document.querySelectorAll("#out details.dict[open]")){
+    if(!det.querySelector(":scope>summary .fbtn"))continue;
+    const r=det.getBoundingClientRect();
+    if(r.top<=line&&r.bottom>line){pick=det;break}
+    if(!pick&&r.bottom>0&&r.top<innerHeight)pick=det;
+  }
+  if(!pick)return false;
+  fullSet(pick,!pick.wuFull,true);
+  return true;
+}
+
 /* ── walking the marks ───────────────────────────────────────────────
    `revealFirstMark` puts you on the first match; this is the rest of them.
    Scope is ONE section - the one the arrival latch opened, or the one you
@@ -4315,8 +4464,8 @@ document.addEventListener("click",e=>{
    on the shadow root when the link lives inside one; `dd` is the article host,
    which is in the light DOM and can find the section to offset against. */
 function jumpInArticle(a,dd,frag){
-  const el=anchorTarget(a.getRootNode(),frag);
-  if(el)revealAt(el.getBoundingClientRect().top,dd?.closest("details.dict"));
+  const el=anchorTarget(a.getRootNode(),frag),det=dd?.closest("details.dict");
+  if(el){fullReveal(det,el);revealAt(el.getBoundingClientRect().top,det)}
 }
 /* Sub-entry inlining for shadow-DOM (script-free) articles — the iframe path
    does the same in frame.js. Inserted next to the link, toggled off by a second
@@ -4339,6 +4488,7 @@ async function toggleSub(link,word,dictID){
     if(html===null){box.textContent="(not in this dictionary)";return}
     box.innerHTML=`<span class="wu-sub-close" title="Close">✕</span>`+html.replace(/<link\b[^>]*>/gi,"");
     box.querySelector(".wu-sub-close").addEventListener("click",()=>toggleSub(link,word,dictID));
+    fullInit(link.getRootNode().host?.closest("details.dict")); // it may bring a zone the section lacked
   }catch(_){box.textContent="(could not load)"}
 }
 
@@ -4745,7 +4895,8 @@ body{-webkit-text-stroke:.2px currentColor}`,article:
 .wu-p   { color:#2e7d32; font-style:italic }   /* label, part of speech */
 .wu-ex  { color:#4682b4 }                      /* example */
 .wu-ipa { font-family:"Charis SIL","Doulos SIL",serif }  /* transcription */
-.wu-sec { opacity:.85 }                        /* secondary, optional */
+.wu-sec { color:gray }                         /* secondary: what brief view hides */
+.wu-sec .wu-ex { color:inherit }               /* an example in it takes its grey */
 .wu-com { opacity:.8 }                         /* editorial comment */
 .wu-gr  { font-style:italic; opacity:.75 }     /* grammar note */
 .wu-acc { text-decoration:underline }          /* stress mark */

@@ -618,6 +618,15 @@
 	// An editable target inside the article keeps its keys: a dictionary is
 	// allowed to ship a form, and Space stays a scroll key for reading.
 	document.addEventListener("keydown", function (e) {
+		// Ctrl+* switches the brief and full view of the section being read
+		// (index.html fullKey) - the app's chord, so it travels like the others.
+		if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key === "*") {
+			e.preventDefault();
+			try {
+				HOST.postMessage({ t: "key", k: "full" }, "*");
+			} catch (err) { /* the app is gone */ }
+			return;
+		}
 		if (e.ctrlKey || e.metaKey || e.altKey || e.isComposing) return;
 		var t = e.target;
 		if (t && (t.isContentEditable ||

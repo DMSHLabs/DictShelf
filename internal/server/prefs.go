@@ -116,6 +116,13 @@ type UIPrefs struct {
 	// added tomorrow appears without a migration. Ids are kept opaque here - the server never groups anything,
 	// and an id no facet uses any more simply hides nothing.
 	GroupsOff []string `json:"groupsOff,omitempty"`
+
+	// Full opens an article's secondary zone (DSL [*], wu-sec: examples and
+	// links to sub-entries) shown instead of hidden. Spelled positively, like
+	// SortMine: the brief view is Lingvo's own default, so the zero value
+	// keeps it. It is the reader's last choice on a section's switch, and
+	// sets how the next section opens; the server never reads it.
+	Full bool `json:"full,omitempty"`
 }
 
 // Article text-size bounds. The ceiling is deliberately past what the layout

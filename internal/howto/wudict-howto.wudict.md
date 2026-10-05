@@ -260,6 +260,17 @@ Every search has its own address, so you can bookmark it: `/?q=word&mode=exact`.
 
 - [index](/browse?dict=wudict-howto)
 
+## wudict examples
+## wudict brief view
+## wudict full view
+## wudict secondary text
+
+**Press ![](full.svg) at the right of a dictionary's header to show its examples**; press again to hide them. Lingvo DSL dictionaries mark examples, sub-entry links and other secondary text, and an article opens with it hidden: the dotted line in the icon is the hidden text. Shown, it is grey. The next result opens the way you left the last one. A [full-text](<entry://wudict full-text>) match inside secondary text shows it for that result. 💻 <kbd>Ctrl</kbd>+<kbd>\*</kbd> switches the section you are reading.
+
+***
+
+- [index](/browse?dict=wudict-howto)
+
 ## wudict read aloud
 ## wudict speak
 ## wudict pronunciation
