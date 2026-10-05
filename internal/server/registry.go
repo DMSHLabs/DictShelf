@@ -306,9 +306,15 @@ func SetIndexWorkers(n int) {
 	indexLimit = make(chan struct{}, n)
 }
 
-// acquire blocks until a slot is free.
-func acquire(sem chan struct{}) { sem <- struct{}{} }
-func release(sem chan struct{}) { <-sem }
+// acquire blocks until a slot of sem is free and returns what frees it. The
+// release is bound to the channel the slot was taken from, never re-read from
+// the variable: SetIndexWorkers replaces indexLimit, and a slot handed back to
+// a lane it did not come from takes another holder's slot, whose own release
+// then waits forever.
+func acquire(sem chan struct{}) (release func()) {
+	sem <- struct{}{}
+	return func() { <-sem }
+}
 
 // entry is one discovered dictionary, opened lazily.
 type entry struct {
@@ -472,8 +478,7 @@ func (e *entry) maybeAutoIndex() {
 		return
 	}
 	go func() {
-		acquire(indexLimit) // at most INDEX_WORKERS of these run at once
-		defer release(indexLimit)
+		defer acquire(indexLimit)() // at most INDEX_WORKERS of these run at once
 		// the queue is FIFO and an ingest takes minutes, so the state that
 		// permitted this may be long gone by the time the slot is ours
 		if CurrentPower() != PowerActive {
@@ -543,8 +548,7 @@ func (e *entry) demandIndex() {
 		return
 	}
 	go func() {
-		acquire(frontLimit)
-		defer release(frontLimit)
+		defer acquire(frontLimit)()
 		// Someone is waiting on this one, so it keeps every core it was
 		// started with even if the screen goes off mid-ingest (power.go
 		// HoldActiveProcs). The background lane deliberately gets no such
@@ -1834,8 +1838,7 @@ func (e *entry) mediaBackend() (dict.Dictionary, func(), error) {
 // dictionary whose source is gone carries the only copy of its own text, so
 // its features are locked rather than dangerous.
 func (e *entry) setFeatures(want features, progress store.Progress) error {
-	acquire(frontLimit) // the user is waiting: never queue behind background work
-	defer release(frontLimit)
+	defer acquire(frontLimit)() // the user is waiting: never queue behind background work
 	// The user ticked a box and is watching a progress bar: the longest
 	// user-visible operation the app has keeps every core it started with,
 	// and the Android shell keeps its foreground service up (power.go).
@@ -1983,11 +1986,11 @@ func (r *Registry) upgradeAbbrev() {
 	}
 	go func() {
 		for _, e := range todo {
-			acquire(indexLimit)
+			release := acquire(indexLimit)
 			// the queue is FIFO and an ingest takes minutes, so the state that
 			// permitted this may be long gone by the time the slot is ours
 			if CurrentPower() != PowerActive {
-				release(indexLimit)
+				release()
 				return
 			}
 			// Claimed HERE, not at collection. Marking the whole list up front
@@ -2000,11 +2003,11 @@ func (r *Registry) upgradeAbbrev() {
 			// of the work also keeps a transient failure - a full disk - from
 			// being made permanent by an entry that never got its turn.
 			if !e.abbrevTried.CompareAndSwap(false, true) {
-				release(indexLimit)
+				release()
 				continue
 			}
 			err := e.reabsorbAbbrev()
-			release(indexLimit)
+			release()
 			if err != nil {
 				logx.Warn("could not re-index %s for abbreviations: %v", filepath.Base(e.Path), err)
 			}

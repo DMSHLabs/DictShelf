@@ -247,7 +247,10 @@ func dumpEntries(src, outDir, csvPath string) (int, error) {
 	w := csv.NewWriter(f) // buffered internally
 
 	n := 0
+	m := newMeter("entries", meta.EntryCount, entryEvery)
+	defer m.Clear()
 	row := func(words []string, body string) error {
+		m.Add(1)
 		if len(words) == 0 || words[0] == "" {
 			return nil // a row pyglossary would drop: never written
 		}
@@ -367,13 +370,16 @@ func dumpResources(src, resDir string, scope resScope) (files int, written int64
 		return 0, 0, err
 	}
 	var failed int
-	for i, name := range names {
-		if i%256 == 0 {
-			logx.Progress("  %d/%d resources", i, len(names))
-		}
+	m := newMeter("resources", len(names), resourceEvery)
+	if m != nil {
+		m.bytes = true
+	}
+	for _, name := range names {
 		n, err := dumpOneResource(d, resDir, name)
+		m.AddBytes(n)
+		m.Add(1)
 		if err != nil {
-			logx.ClearLine()
+			m.Clear()
 			fmt.Fprintf(os.Stderr, "  %s: %v\n", name, err)
 			failed++
 			continue
@@ -381,7 +387,7 @@ func dumpResources(src, resDir string, scope resScope) (files int, written int64
 		files++
 		written += n
 	}
-	logx.ClearLine()
+	m.Clear()
 	if failed > 0 {
 		fmt.Fprintf(os.Stderr, "  %d of %d resources could not be extracted\n", failed, len(names))
 	}

@@ -1330,6 +1330,9 @@ Hint: pick another port with --port, e.g.:  wudict --port %s
 		}
 		regOpts = append(regOpts, server.WithBuiltin(server.Builtin{ID: howto.ID, Path: filepath.Join(howtoDir, howto.FileName)}))
 	}
+	// Sized before the registry exists: NewRegistry can already start
+	// background work on this lane (the abbreviation sweep).
+	server.SetIndexWorkers(cfg.IndexWorkers)
 	reg, err := server.NewRegistry(cfg.DictDirs, cfg.UseCached, regOpts...)
 	if err != nil {
 		return fmt.Errorf("scanning %s: %w", strings.Join(cfg.DictDirs, ", "), err)
@@ -1343,7 +1346,6 @@ Hint: pick another port with --port, e.g.:  wudict --port %s
 	srv.ConfigPath = cfgFile
 	srv.User = user
 	store.SetCompressBodies(!cfg.NoCompress)
-	server.SetIndexWorkers(cfg.IndexWorkers)
 	if cfg.MemoryLimit > 0 {
 		// A soft ceiling: Go collects harder instead of growing past it. Set it
 		// through the server rather than debug directly, because a ceiling on

@@ -192,8 +192,10 @@ func dumpMarkdown(src, outDir, path, stem string, mode wmd.Mode, gz bool) (r mdD
 	w.Styles = styles
 
 	index := 0
+	m := newMeter("entries read", meta.EntryCount, entryEvery)
 	err = each(func(names []string, body, see string) error {
 		index++
+		m.Add(1)
 		if see != "" {
 			w.Redirect(names, see)
 			return nil
@@ -207,8 +209,13 @@ func dumpMarkdown(src, outDir, path, stem string, mode wmd.Mode, gz bool) (r mdD
 		}
 		return nil
 	})
+	m.Clear()
 	if err != nil {
 		return r, err
+	}
+	if m := newMeter("entries written", w.Entries(), entryEvery); m != nil {
+		w.Progress = m.Set
+		defer m.Clear()
 	}
 
 	tmp := path + ".tmp"

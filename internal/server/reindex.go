@@ -115,11 +115,11 @@ func (s *Server) runReindex(j *job, todo []*entry) {
 		st.Current, st.CurrentDone, st.CurrentTotal = "", 0, 0
 	})
 	for _, e := range todo {
-		acquire(indexLimit)
+		release := acquire(indexLimit)
 		// the lane is FIFO and a rebuild takes minutes: the cancel may have
 		// arrived while this slot was being waited for
 		if j.canceled() {
-			release(indexLimit)
+			release()
 			j.update(func(st *jobStatus) { st.Canceled = true })
 			return
 		}
@@ -136,7 +136,7 @@ func (s *Server) runReindex(j *job, todo []*entry) {
 			j.update(func(st *jobStatus) { st.CurrentDone, st.CurrentTotal = int64(done), int64(total) })
 		}
 		_, err := e.refresh(progress)
-		release(indexLimit)
+		release()
 		j.update(func(st *jobStatus) {
 			st.Done++
 			if err != nil {
