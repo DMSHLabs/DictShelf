@@ -14,6 +14,7 @@ import (
 )
 
 const SystemLogLimit = 2 * 1024 * 1024
+const SystemLogFiles = 5
 const maxSystemRecord = 16 * 1024
 
 var systemMu sync.Mutex
@@ -74,8 +75,13 @@ func System(format string, args ...any) {
 	record := []byte(time.Now().UTC().Format(time.RFC3339Nano) + " " + message + "\n")
 	path := filepath.Join(root, "system.log")
 	if st, err := os.Stat(path); err == nil && st.Size()+int64(len(record)) > SystemLogLimit {
-		if err := os.Remove(path + ".1"); err != nil && !os.IsNotExist(err) {
+		if err := os.Remove(fmt.Sprintf("%s.%d", path, SystemLogFiles-1)); err != nil && !os.IsNotExist(err) {
 			return
+		}
+		for i := SystemLogFiles - 2; i >= 1; i-- {
+			if err := os.Rename(fmt.Sprintf("%s.%d", path, i), fmt.Sprintf("%s.%d", path, i+1)); err != nil && !os.IsNotExist(err) {
+				return
+			}
 		}
 		if os.Rename(path, path+".1") != nil {
 			return
@@ -90,7 +96,7 @@ func System(format string, args ...any) {
 	_ = f.Sync()
 }
 
-// SystemSnapshot copies both rotations under the writer's mutex. The caller
+// SystemSnapshot copies retained rotations under the writer's mutex. The caller
 // sends the independent bytes after releasing it; slow exports cannot hold it.
 func SystemSnapshot() ([]byte, error) {
 	systemMu.Lock()
@@ -108,7 +114,11 @@ func SystemSnapshot() ([]byte, error) {
 	}
 	defer unlock()
 	var result []byte
-	for _, name := range []string{"system.log.1", "system.log"} {
+	for i := SystemLogFiles - 1; i >= 0; i-- {
+		name := "system.log"
+		if i > 0 {
+			name = fmt.Sprintf("%s.%d", name, i)
+		}
 		b, err := os.ReadFile(filepath.Join(root, name))
 		if err != nil && !os.IsNotExist(err) {
 			return nil, err

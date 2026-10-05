@@ -729,7 +729,6 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
   <p>{{T:database.sources}}</p>
   <p id="clearDatabaseStatus" role="status"></p>
   <progress id="clearDatabaseProgress" max="100" value="0" hidden></progress>
-  <button type="button" class="btn" id="clearDatabaseStop" hidden>{{T:dictUI.stop}}</button>
   <div><button type="button" class="btn" id="clearDatabaseGo">{{T:database.clear}}</button> <button type="button" class="btn" id="clearDatabaseCancel" autofocus>{{T:panel.cancel}}</button></div>
 </dialog>
 
@@ -2431,7 +2430,7 @@ function pollReindex(){
     if(st.running){
       const at=Math.min(st.done+1,st.total),pct=st.currentTotal?` (${Math.min(100,Math.floor(st.currentDone/st.currentTotal*100))}%)`:"";
       const message=esc(tx("dictUI.rebuilding",{at,total:st.total})+(st.current?` · ${st.current}${pct}`:""));
-      setStatus(message);showWorkNotice(message);
+      showWorkNotice(message);
       setGlobalStop(requestReindexStop,reindexStopping?tx("dictUI.stopping"):tx("dictUI.stop"));renderReindex();pollReindex();return
     }
     reindexStopping=false;
@@ -2816,50 +2815,13 @@ $("rescanBtn").onclick=()=>{
   dialog.scrollTop=0;
 };
 $("clearDatabaseClose").onclick=$("clearDatabaseCancel").onclick=()=>$("clearDatabaseDialog").close();
-let rescanStopping=false;
-let rescanAttached=false,rescanStatusTimer=0;
-function pollRescanStatus(){
-  clearTimeout(rescanStatusTimer);
-  if(rescanAttached)return;
-  rescanStatusTimer=setTimeout(async()=>{
-    let st=null;
-    try{const r=await fetch("/api/rescan?status=1");if(r.ok)st=await r.json()}catch(_){}
-    if(st?.running){
-      const featureNames=(st.indexes||[]).map(key=>tx(key==="index"?"dictUI.indexPlain":key==="contains"?"dictUI.contains":"dictUI.fts"));
-      const verb=tx(st.action==="remove"?"database.actionRemove":st.action==="recreate"?"database.actionRecreate":st.action==="update"?"database.actionUpdate":"database.actionCreate");
-      let text=st.stage==="cleanup"?tx("database.cleaning"):st.stage==="dictionary"?tx("database.progress",{at:st.at,total:st.total,name:st.name})+" · "+verb+(featureNames.length?" "+featureNames.join(" · "):""):tx("database.working");
-      if(st.entries)text+=" · "+tx("dictUI.entries",{number:st.done.toLocaleString()})+" / "+st.entries.toLocaleString()+" ("+st.percent+"%)";
-      if(st.stopRequested)text+=" · "+tx("dictUI.bulkStopping");
-      setStatus(esc(text));
-      setGlobalStop(requestRescanStop,st.stopRequested?tx("dictUI.bulkStopping"):tx("dictUI.stop"));
-      showWorkNotice(esc(text));
-      pollRescanStatus();return;
-    }
-  },1000);
-}
-pollRescanStatus();
-function requestRescanStop(){
-  if(rescanStopping)return;
-  rescanStopping=true;
-  $("clearDatabaseStop").disabled=true;
-  $("clearDatabaseStop").textContent=tx("dictUI.bulkStopping");
-  setGlobalStop(requestRescanStop,tx("dictUI.bulkStopping"));
-  fetch("/api/rescan",{method:"DELETE"}).catch(()=>{});
-}
-$("clearDatabaseStop").onclick=requestRescanStop;
 $("clearDatabaseGo").onclick=async()=>{
   const dialog=$("clearDatabaseDialog"),body={new:{index:true},existing:{...rescanExisting}};
   for(const box of dialog.querySelectorAll("input")){body.new[box.name]=box.checked;box.disabled=true}
   for(const button of $("rescanActions").querySelectorAll("button"))button.disabled=true;
-  $("clearDatabaseGo").disabled=true;$("clearDatabaseCancel").disabled=true;$("clearDatabaseClose").disabled=true;
-  rescanStopping=false;
-  rescanAttached=true;
-  setGlobalStop(requestRescanStop);
-  $("clearDatabaseStop").hidden=false;$("clearDatabaseStop").disabled=false;$("clearDatabaseStop").textContent=tx("dictUI.stop");
+  $("clearDatabaseGo").disabled=true;
   $("clearDatabaseProgress").hidden=true;$("clearDatabaseProgress").removeAttribute("value");
-  dialog.oncancel=e=>e.preventDefault();
   $("clearDatabaseStatus").textContent=tx("database.working");
-  showWorkNotice('<span class="spin"></span>'+esc(tx("database.working")));
   try{
     let report;
     await fetchStream("/api/rescan?stream=1",msg=>{
@@ -2876,8 +2838,6 @@ $("clearDatabaseGo").onclick=async()=>{
         }else{$("clearDatabaseProgress").hidden=true}
       }
       $("clearDatabaseStatus").textContent=text;
-      showWorkNotice('<span class="spin"></span>'+esc(text));
-      setStatus(esc(text));
     },undefined,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
     if(!report)throw new Error(tx("database.incomplete"));
     $("clearDatabaseStatus").textContent=report.failed.length?tx("database.failed",{error:report.failed.map(window.wudictI18n.errorText).join("; ")}):report.canceled?tx("database.stopped"):tx("database.done");
@@ -2887,12 +2847,8 @@ $("clearDatabaseGo").onclick=async()=>{
   finally{
     for(const box of dialog.querySelectorAll("input"))box.disabled=box.name==="index";
     paintRescanActions();
-    $("clearDatabaseGo").disabled=false;$("clearDatabaseCancel").disabled=false;$("clearDatabaseClose").disabled=false;dialog.oncancel=null;
-    $("clearDatabaseStop").hidden=true;$("clearDatabaseStop").disabled=false;$("clearDatabaseStop").textContent=tx("dictUI.stop");
-    clearGlobalStop();
+    $("clearDatabaseGo").disabled=false;
     $("clearDatabaseProgress").hidden=true;
-    rescanAttached=false;
-    pollRescanStatus();
   }
 };
 
@@ -4240,7 +4196,6 @@ function setIndexStatus(html){
   $("bulkIndexStatus").hidden=!html;
   box.innerHTML=html;
   if(globalStopAction)showWorkNotice(html);
-  setStatus(html);
 }
 let globalStopAction=null,globalStopLabel="";
 let workNoticeHTML="";

@@ -567,6 +567,7 @@
   "pages.dslDefaultsFailed": "Не удалось сохранить настройки индексов DSL: {error}",
     "dictUI.bulkStop": "Стоп",
     "dictUI.activeJobs": "Активных операций: {number}",
+    "dictUI.progressOf": "из {total}",
     "errors.workBusy": "Идёт обработка словарей; дождитесь завершения или остановите её",
   "dictUI.bulkStopping": "Останавливаемся: завершаем текущий словарь…",
   "dictUI.bulkStopped": "Остановлено после {number} операций с индексами; остальные операции не запускались.",

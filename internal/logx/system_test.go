@@ -97,6 +97,40 @@ func TestSystemLogWarningsRedactionAndUnavailableStorage(t *testing.T) {
 	System("%s", fmt.Sprint("original failure"))
 }
 
+func TestSystemLogKeepsFiveFilesAcrossRestart(t *testing.T) {
+	root := isolatedSystemLog(t)
+	if err := os.MkdirAll(root, 0700); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(root, "system.log")
+	for generation := 0; generation < 7; generation++ {
+		marker := fmt.Sprintf("generation=%d\n", generation)
+		content := marker + strings.Repeat("x", SystemLogLimit-len(marker))
+		if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+			t.Fatal(err)
+		}
+		System("rotation=%d", generation)
+	}
+	for i := 1; i < SystemLogFiles; i++ {
+		content, err := os.ReadFile(fmt.Sprintf("%s.%d", path, i))
+		if err != nil || !strings.HasPrefix(string(content), fmt.Sprintf("generation=%d\n", 7-i)) {
+			t.Fatalf("archive %d: %v", i, err)
+		}
+	}
+	if _, err := os.Stat(path + ".5"); !os.IsNotExist(err) {
+		t.Fatalf("unexpected sixth file: %v", err)
+	}
+	SetSystemLogRoot(func() string { return strings.TrimSuffix(root, ".logs") })
+	System("after restart")
+	snapshot, err := SystemSnapshot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(snapshot), "generation=3") || !strings.Contains(string(snapshot), "rotation=6") || !strings.Contains(string(snapshot), "after restart") {
+		t.Fatal("restart or export lost retained history")
+	}
+}
+
 func TestSystemLogProcessWriter(t *testing.T) {
 	root := os.Getenv("WUDICT_TEST_SYSTEM_LOG")
 	if root == "" {

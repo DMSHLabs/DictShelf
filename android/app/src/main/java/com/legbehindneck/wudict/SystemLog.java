@@ -16,6 +16,7 @@ import java.time.Instant;
 final class SystemLog {
     private static final Object LOCK = new Object();
     private static final int LIMIT = 1024 * 1024;
+    private static final int FILES = 5;
     private static File root;
 
     static void initialize(Context app) {
@@ -55,9 +56,13 @@ final class SystemLog {
                 if (!root.isDirectory() && !root.mkdirs()) return;
                 File current = new File(root, "android.log");
                 if (current.length() + bytes.length > LIMIT) {
-                    File previous = new File(root, "android.log.1");
-                    if (previous.exists() && !previous.delete()) return;
-                    if (!current.renameTo(previous)) return;
+                    File oldest = new File(root, "android.log." + (FILES - 1));
+                    if (oldest.exists() && !oldest.delete()) return;
+                    for (int i = FILES - 2; i >= 1; i--) {
+                        File previous = new File(root, "android.log." + i);
+                        if (previous.exists() && !previous.renameTo(new File(root, "android.log." + (i + 1)))) return;
+                    }
+                    if (!current.renameTo(new File(root, "android.log.1"))) return;
                 }
                 try (FileOutputStream out = new FileOutputStream(current, true)) {
                     out.write(bytes);
@@ -73,7 +78,8 @@ final class SystemLog {
         synchronized (LOCK) {
             ByteArrayOutputStream bytes = new ByteArrayOutputStream();
             if (root == null) return bytes.toByteArray();
-            for (String name : new String[]{"android.log.1", "android.log"}) {
+            for (int i = FILES - 1; i >= 0; i--) {
+                String name = "android.log" + (i == 0 ? "" : "." + i);
                 File file = new File(root, name);
                 if (!file.exists()) continue;
                 try (FileInputStream in = new FileInputStream(file)) {

@@ -1,5 +1,7 @@
 # Localization: status and next tasks
 
+2026-10-05 shared index progress now shows processed entries “of” total when the indexer supplies a total; EN/RU catalog keys added. No device check.
+
 2026-10-05 operation admission: EN/RU active-operation count and conflicting-operation error added to the shared progress/locking UI; device verification outstanding.
 
 2026-10-05 System Log: save action renamed to Save System Log… / Сохранить System Log… in the System section, directly below System settings. Native success/failure labels retain System Log as requested; dated filenames use device-local time. Catalog/server checks and FOSS/Play Java compilation pass. Phone save dialog/toasts/layout remain unverified; no APK built. Existing Node i18n harness still fails in its renderSlot sandbox (missing FEAT_NAME, also on HEAD).

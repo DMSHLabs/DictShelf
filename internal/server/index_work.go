@@ -123,6 +123,7 @@ func (s *Server) handleIndexWork(w http.ResponseWriter, r *http.Request) {
 			}
 			s.jobs.mu.Unlock()
 			for _, candidate := range keys {
+				store.IndexDiagnostic("safe stop requested job=%q", candidate)
 				s.jobs.requestStop(candidate)
 				if candidate == reindexKey {
 					s.jobs.cancel(candidate)
