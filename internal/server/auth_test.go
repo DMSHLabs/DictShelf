@@ -55,7 +55,7 @@ func TestAuthFreeMatchesRoutes(t *testing.T) {
 	// into authFree, not merely when the count changes.
 	for _, op := range []string{
 		"GET /api/config", "GET /api/prefs", "PUT /api/prefs", "GET /api/library",
-		"DELETE /api/library", "GET /api/rescan", "GET /api/ingest", "GET /api/setup",
+		"DELETE /api/library", "GET /api/rescan", "GET /api/ingest", "GET /api/system-log", "GET /api/setup",
 		"GET /api/reveal", "POST /api/demand", "GET /api/about", "POST /api/power",
 		"GET /api/lemmas", "POST /api/lemmas", "DELETE /api/lemmas",
 		// The user's file store, and the files themselves: both name and
@@ -125,6 +125,15 @@ func TestGatedRouteAcceptsEveryCarrier(t *testing.T) {
 	}
 	if c := rec.Header().Get("Set-Cookie"); !strings.Contains(c, cookieName+"=") {
 		t.Errorf("?k= set no cookie: %q", c)
+	}
+}
+
+func TestSystemLogRequiresBearer(t *testing.T) {
+	s := authServer(t)
+	req := newRequest("GET", "/api/system-log", nil)
+	req.Header.Set("Authorization", "Bearer "+s.AuthToken)
+	if rec := serve(s, req); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "wuDict2 System Log") {
+		t.Fatalf("authorized system-log request: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 }
 

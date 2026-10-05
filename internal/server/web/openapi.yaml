@@ -79,6 +79,22 @@ tags:
       Documented for completeness; not a stable contract.
 
 paths:
+  /api/index-work:
+    get:
+      summary: Read the active dictionary indexing progress across pages.
+      responses:
+        '200':
+          description: Current job snapshot.
+    post:
+      summary: Start a server-owned sequence of index operations.
+      responses:
+        '202':
+          description: Queue accepted; navigation does not stop it.
+    delete:
+      summary: Stop after completing the current index operation safely.
+      responses:
+        '200':
+          description: Stop requested.
   /api/system-log:
     get:
       summary: Download persistent server diagnostics, including the previous rotation
@@ -1295,7 +1311,9 @@ paths:
         folder holds, which is what live typing needs. With `save=1` it switches
         the registry over and writes DICT_DIR. Repeat `path` for several
         folders; `found` is then the deduplicated total across all of them,
-        because overlapping folders must not be counted twice.
+        because overlapping folders must not be counted twice. Saving runs as
+        a server-owned job and survives closing the page. With `async=1`, poll
+        `/api/index-work?id=folder-setup` for progress and the retained result.
       parameters:
         - name: path
           in: query
@@ -1305,6 +1323,10 @@ paths:
           in: query
           description: On persists the folders to the config file. A switch.
           schema: { type: string }
+        - name: async
+          in: query
+          description: With save=1, return immediately after starting the job.
+          schema: { type: string, enum: ['0', '1'] }
         - name: useCached
           in: query
           description: >
@@ -1329,6 +1351,10 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/SetupResult' }
+        '202':
+          description: Folder save accepted; poll the index-work endpoint.
+        '409':
+          description: Another folder save is already running.
         '400':
           $ref: '#/components/responses/BadRequest'
 

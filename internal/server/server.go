@@ -276,7 +276,8 @@ type Server struct {
 
 	// jobs is the long-running work (jobs.go): the panel's Rebuild, lemma
 	// downloads, index changes. The zero value is usable.
-	jobs *jobTable
+	jobs      *jobTable
+	admission workAdmission
 
 	// lemmas holds the installer's caches - the catalogue and the file
 	// digests; its downloads are jobs (jobs). Built on first use so a Server
@@ -285,13 +286,17 @@ type Server struct {
 }
 
 func New(reg *Registry) *Server {
-	s := &Server{reg: reg, mux: http.NewServeMux(), AllowRemoteDelete: false, jobs: &reg.jobs}
+	jobs := &jobTable{}
+	if reg != nil {
+		jobs = &reg.jobs
+	}
+	s := &Server{reg: reg, mux: http.NewServeMux(), AllowRemoteDelete: false, jobs: jobs}
 	s.initGroups()
 	s.initStyles()
 	// The surface is a table (routes.go), so it can be asserted about: the
 	// CORS boundary and the OpenAPI document are both checked against it.
 	for _, rt := range s.routes() {
-		h := rt.Handler
+		h := s.withWorkAdmission(rt.Handler)
 		if rt.CORS {
 			h = s.withCORS(h)
 		}
@@ -641,7 +646,7 @@ func (s *Server) setUseCached(on bool) error {
 // dictionaries (persisting USE_CACHED) - on its own, or together with a
 // folder. Clicking a Use button IS the "don't ask again": the setup page only
 // appears while the registry is empty.
-func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleSetupSync(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	raw := strings.TrimSpace(q.Get("path"))
 	save, _ := queryFlag(q, "save")
@@ -1101,8 +1106,10 @@ func (s *Server) handleRescan(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 403, "deleting from another machine is off")
 		return
 	}
-	if failures := s.reg.updateDictionaryIndexes(rescanIndexesRequest{}); len(failures) > 0 {
-		httpErr(w, 500, "rescan: %v", failures)
+	s.startRescanIndexes(rescanIndexesRequest{})
+	status := s.jobs.wait("rescan-indexes")
+	if len(status.Failed) > 0 {
+		httpErr(w, 500, "rescan: %v", status.Failed)
 		return
 	}
 	s.reg.Warm()
@@ -1990,7 +1997,7 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 		store.IndexDiagnostic("request start dictionary=%q source=%q contains=%v fulltext=%v media=%v rebuild=%v build=%q", e.probeName(), e.Path, want.Contains, want.FullText, want.Media, q.Get("rebuild") == "1", s.Version)
 		defer func() {
 			js, _ := s.jobs.status(key)
-			store.IndexDiagnostic("request finish source=%q error=%q", e.Path, js.Err)
+			store.IndexDiagnostic("request finish source=%q error=%q canceled=%v stop_requested=%v", e.Path, js.Err, js.Canceled, js.StopRequested)
 		}()
 		last := time.Time{}
 		progress := func(done, total int) {

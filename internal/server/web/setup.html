@@ -437,11 +437,15 @@ async function save(){
   const q=paths().map(p=>"path="+encodeURIComponent(p)).join("&");
   if(!q)return;
   if(validationController){validationRun++;validationController.abort();validationController=null}
-  const url="/api/setup?"+q+"&save=1";
+  const url="/api/setup?"+q+"&save=1&async=1";
   $("save").disabled=true;
   setSetupNotice(tx("pages.savingFolders"));
   let j;
-  try{j=await (await fetch(url)).json()}
+  try{
+    const response=await fetch(url);
+    j=await response.json();
+    if(response.status===202){const finished=await window.wudictWork.wait('folder-setup');j=finished.result||{error:finished.error};}
+  }
   catch(e){$("msg").className="err";$("msg").textContent="✕ "+window.wudictI18n.errorText(e.message);setSetupNotice("");validateAll();return}
   if(j.error){$("msg").className="err";$("msg").textContent="✕ "+window.wudictI18n.errorText(j.error);setSetupNotice("");$("save").disabled=false;return}
   if(j.saved)location.href="/";

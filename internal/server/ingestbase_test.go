@@ -172,7 +172,7 @@ func TestIngestIsAJobAPageCanFollow(t *testing.T) {
 	attached := make(chan struct{})
 	go func() {
 		rec := &signalRecorder{ResponseRecorder: httptest.NewRecorder(), first: attached}
-		s.ServeHTTP(rec, newRequest("GET", "/api/ingest?dict="+id+"&fts=1", nil))
+		s.ServeHTTP(rec, newRequest("GET", "/api/ingest?dict="+id, nil))
 		got <- rec.Body.String()
 	}()
 	<-attached // it has the running job's progress: it is following that job

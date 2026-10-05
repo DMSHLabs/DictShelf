@@ -25,6 +25,9 @@ var i18nJS []byte
 //go:embed web/i18n.css
 var i18nCSS []byte
 
+//go:embed web/work-progress.js
+var workProgressJS []byte
+
 var uiCatalogs = func() map[string]map[string]any {
 	out := make(map[string]map[string]any)
 	for _, code := range []string{"en", "ru"} {
@@ -110,5 +113,6 @@ func renderUI(page, code string) string {
 	assets := `<script id="wudict-i18n" type="application/json">` + string(boot) + `</script>` +
 		`<script src="/assets/i18n.js?v=` + assetTag(i18nJS) + `"></script>` +
 		`<link rel="stylesheet" href="/assets/i18n.css?v=` + assetTag(i18nCSS) + `">`
+	assets += `<script defer src="/assets/work-progress.js?v=` + assetTag(workProgressJS) + `"></script>`
 	return strings.ReplaceAll(page, "{{I18N}}", assets)
 }

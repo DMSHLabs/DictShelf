@@ -66,6 +66,24 @@ func validRescanAction(action string, base bool) bool {
 	return action == "" || action == "keep" || (base && action == "recreate") || (!base && (action == "update" || action == "delete"))
 }
 
+func (s *Server) startRescanIndexes(body rescanIndexesRequest) {
+	key := "rescan-indexes"
+	s.jobs.start(key, 0, jobStatus{}, func(j *job) {
+		failures := s.reg.updateDictionaryIndexesCancelable(body, func(progress rescanIndexProgress) {
+			j.update(func(st *jobStatus) {
+				st.Stage, st.Current, st.Action = progress.Stage, progress.Name, progress.Action
+				st.Done, st.Total = int64(progress.At), int64(progress.Total)
+				st.CurrentDone, st.CurrentTotal = int64(progress.Done), int64(progress.Entries)
+				st.Result = progress
+			})
+		}, func() bool {
+			st, _ := s.jobs.status(key)
+			return st.StopRequested
+		})
+		j.update(func(st *jobStatus) { st.Failed, st.Canceled = failures, st.StopRequested })
+	})
+}
+
 func (s *Server) handleRescanIndexes(w http.ResponseWriter, req *http.Request) {
 	if !s.removalOffered(req) {
 		httpErr(w, 403, "deleting from another machine is off")
@@ -94,20 +112,7 @@ func (s *Server) handleRescanIndexes(w http.ResponseWriter, req *http.Request) {
 			flusher.Flush()
 		}
 		key := "rescan-indexes"
-		s.jobs.start(key, 0, jobStatus{}, func(j *job) {
-			failures := s.reg.updateDictionaryIndexesCancelable(body, func(progress rescanIndexProgress) {
-				j.update(func(st *jobStatus) {
-					st.Stage, st.Current, st.Action = progress.Stage, progress.Name, progress.Action
-					st.Done, st.Total = int64(progress.At), int64(progress.Total)
-					st.CurrentDone, st.CurrentTotal = int64(progress.Done), int64(progress.Entries)
-					st.Result = progress
-				})
-			}, func() bool {
-				st, _ := s.jobs.status(key)
-				return st.StopRequested
-			})
-			j.update(func(st *jobStatus) { st.Failed, st.Canceled = failures, st.StopRequested })
-		})
+		s.startRescanIndexes(body)
 		for {
 			st, changed, ok := s.jobs.watch(key)
 			if !ok {
@@ -131,8 +136,9 @@ func (s *Server) handleRescanIndexes(w http.ResponseWriter, req *http.Request) {
 		}
 		return
 	}
-	failures := s.reg.updateDictionaryIndexes(body)
-	writeJSON(w, map[string]any{"failed": failures})
+	s.startRescanIndexes(body)
+	status := s.jobs.wait("rescan-indexes")
+	writeJSON(w, map[string]any{"failed": status.Failed, "canceled": status.Canceled})
 }
 
 // The automatic DSL worker must finish before taking the snapshot. Rescans

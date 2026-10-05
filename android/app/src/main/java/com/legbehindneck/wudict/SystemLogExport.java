@@ -24,6 +24,7 @@ final class SystemLogExport {
     private static final Object EXPORT_LOCK = new Object();
 
     static void start(Activity a) {
+        SystemLog.record("System Log export picker opened");
         String name = "wuDict2_SystemLog_" + new SimpleDateFormat("yyyy_MM_dd-HH-mm", Locale.ROOT).format(new Date()) + ".log";
         Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT)
                 .addCategory(Intent.CATEGORY_OPENABLE)
@@ -38,6 +39,8 @@ final class SystemLogExport {
     static void result(Activity a, int request, int code, Intent data) {
         if (request != REQUEST || code != Activity.RESULT_OK || data == null || data.getData() == null) return;
         Uri destination = data.getData();
+        SystemLog.record("System Log export destination selected");
+        Toast.makeText(a, UiLanguage.resources(a, a.getResources()).getString(R.string.system_log_saving), Toast.LENGTH_SHORT).show();
         new Thread(() -> {
             // Serialize exports, including an accidental repeated result for one URI.
             // Neither logger's writer lock is held during network or provider I/O.
@@ -52,10 +55,21 @@ final class SystemLogExport {
                     }
                     snapshot.write("\n--- Android (UTC) ---\n".getBytes(StandardCharsets.UTF_8));
                     snapshot.write(SystemLog.snapshot());
+                    byte[] output = snapshot.toByteArray();
+                    if (output.length == 0) throw new java.io.IOException("Diagnostic snapshot is empty");
                     try (OutputStream out = a.getContentResolver().openOutputStream(destination, "wt")) {
                         if (out == null) throw new java.io.IOException("Cannot open destination");
-                        snapshot.writeTo(out);
+                        out.write(output);
+                        out.flush();
                     }
+                    long stored = 0;
+                    try (InputStream in = a.getContentResolver().openInputStream(destination)) {
+                        if (in == null) throw new java.io.IOException("Cannot verify destination");
+                        byte[] buffer = new byte[8192];
+                        for (int n; (n = in.read(buffer)) != -1;) stored += n;
+                    }
+                    if (stored != output.length) throw new java.io.IOException("Saved " + stored + " of " + output.length + " bytes");
+                    SystemLog.record("System Log export completed bytes=" + stored);
                     a.runOnUiThread(() -> Toast.makeText(a, UiLanguage.resources(a, a.getResources()).getString(R.string.system_log_saved), Toast.LENGTH_LONG).show());
                 } catch (Exception e) {
                     SystemLog.warn("wudict", "System Log export failed", e);
@@ -70,6 +84,8 @@ final class SystemLogExport {
         try {
             connection.setConnectTimeout(5000);
             connection.setReadTimeout(15000);
+            ShellPrefs.token(a);
+            ShellPrefs.authorize(connection);
             if (connection.getResponseCode() != 200) throw new java.io.IOException("HTTP " + connection.getResponseCode());
             ByteArrayOutputStream bytes = new ByteArrayOutputStream();
             try (InputStream in = connection.getInputStream()) {

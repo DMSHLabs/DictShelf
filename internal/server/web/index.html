@@ -3445,8 +3445,11 @@ let bulkIndexBusy=false;
 let bulkIndexStopRequested=false;
 let activeIngestID=null;
 function requestIndexStop(){
-	if(bulkIndexBusy){bulkIndexStopRequested=true;}
-	else if(activeIngestID){fetch(`/api/ingest?dict=${encodeURIComponent(activeIngestID)}`,{method:"DELETE"}).catch(()=>{});}
+	if(bulkIndexBusy){
+    bulkIndexStopRequested=true;
+    window.wudictWork.stop().catch(()=>{});
+	}
+	else if(activeIngestID){window.wudictWork.stop().catch(()=>{});}
 	else return;
 	$("bulkIndexStop").disabled=true;
 	$("bulkIndexStop").textContent=tx("dictUI.bulkStopping");
@@ -3511,31 +3514,10 @@ $("bulkIndexes").addEventListener("click",async e=>{
     }
     let succeeded=0,report="";
     try{
-      for(const job of todo){
-        const {d,feat,remove,action}=job;
-        if(bulkIndexStopRequested)break;
-        button.textContent=`${succeeded+1}/${todo.length}`;
-        if(remove&&feat==="base"){
-          setIndexStatus('<span class="spin"></span>'+`${succeeded+1}/${todo.length} · `+esc(tx("dictUI.deletingName",{name:dictLabel(d)})));
-          const r=await fetch(`/api/library?dict=${encodeURIComponent(d.id)}&prepared=1&source=0`,{method:"DELETE"});
-          if(!r.ok)throw new Error(await r.text());
-        }else{
-          const labels=queued.get(job).map(field=>field.label);
-          const label=labels[0]||document.createElement("span");
-          const refreshing=action==="update"||action==="recreate";
-          if(refreshing&&feat!=="base"){
-            const removed=await runIngest(d.id,{[feat]:0,quiet:true,labels},label);
-            if(!removed)throw new Error(tx("dictUI.failed"));
-          }
-          const ok=await runIngest(d.id,{[feat]:remove?0:1,rebuild:refreshing&&feat==="base",quiet:true,labels,statusPrefix:`${succeeded+1}/${todo.length} · `},label);
-          if(!ok)throw new Error(tx("dictUI.failed"));
-        }
-        for(const {label,text} of queued.get(job)){
-          label.textContent=text;label.classList.toggle("on",!remove);
-        }
-        succeeded++;
-      }
-      report=tx(bulkIndexStopRequested?"dictUI.bulkStopped":"dictUI.bulkFinished",{number:succeeded});
+      const result=await window.wudictWork.start(todo.map(({d,feat,action})=>({dict:d.id,feature:feat,action})));
+      succeeded=result.done;
+      if(result.error)throw new Error(result.error);
+      report=tx(result.canceled||result.stopRequested?"dictUI.bulkStopped":"dictUI.bulkFinished",{number:succeeded});
     }catch(err){report=tx("dictUI.bulkFailed",{number:succeeded,error:window.wudictI18n.errorText(err.message)})}
     finally{
       bulkIndexBusy=false;
@@ -3819,9 +3801,15 @@ async function runRemove(id,kind,node){
     "&prepared="+(kind==="source"?0:1)+"&source="+(kind==="index"?0:1);
   let rep;
   try{
+    if(kind==="index"){
+      const result=await window.wudictWork.start([{dict:id,feature:"base",action:"delete"}],true);
+      if(result.error)throw new Error(result.error);
+      rep=result.result||{};
+    }else{
     const r=await fetch(q,{method:"DELETE"});
     rep=await r.json();
     if(!r.ok)throw new Error(window.wudictI18n.errorText(rep&&rep.error)||("HTTP "+r.status));
+    }
   }catch(err){
     node.classList.remove("busy");delete node.dataset.busy;
     node.textContent=tx("dictUI.failed");
@@ -3909,6 +3897,7 @@ function runIngest(id,opts,label){
     });
     es.addEventListener("stopped",async()=>{
       es.close();following.delete(id);activeIngestID=null;
+      delete label.dataset.busy;
       $("bulkIndexStop").hidden=bulkIndexBusy;$("bulkIndexStop").disabled=false;
       if(!bulkIndexBusy)clearGlobalStop();
       setIndexStatus("✓ "+esc(name)+tx("dictUI.bulkStopped"));
@@ -3917,6 +3906,7 @@ function runIngest(id,opts,label){
     });
     es.addEventListener("done",async()=>{
       es.close();following.delete(id);activeIngestID=null;
+      delete label.dataset.busy;
       $("bulkIndexStop").hidden=bulkIndexBusy;$("bulkIndexStop").disabled=false;
       if(!bulkIndexBusy)clearGlobalStop();
       setIndexStatus("✓ "+esc(name)+(removing?tx("dictUI.removed"):tx("dictUI.ready")));
@@ -3929,10 +3919,21 @@ function runIngest(id,opts,label){
        only thing that can say WHY - a full disk nine minutes into a prepare
        reads as a bare tx("dictUI.failed") otherwise. The chip stays short either way;
        the reason goes to the status line, which has the room. */
-    es.addEventListener("error",ev=>{es.close();following.delete(id);activeIngestID=null;$("bulkIndexStop").hidden=bulkIndexBusy;$("bulkIndexStop").disabled=false;if(!bulkIndexBusy)clearGlobalStop();
+    es.addEventListener("error",ev=>{
       let why="";
       try{if(ev&&ev.data){const d=JSON.parse(ev.data);if(d&&d.error)why=window.wudictI18n.errorText(d.error)}}catch(_){}
-      show(tx("dictUI.failed"),why?tx("dictUI.failedReason",{error:why}):tx("dictUI.failed"));
+      // EventSource reconnects after a transport interruption. Keep following
+      // the server-owned job unless it has actually closed or sent a terminal
+      // error event; closing on the first transient error turns recovery into
+      // a false indexing failure.
+      if(!why&&es.readyState!==EventSource.CLOSED){
+        show(action,tx("dictUI.reconnecting"));
+        return;
+      }
+      es.close();following.delete(id);activeIngestID=null;$("bulkIndexStop").hidden=bulkIndexBusy;$("bulkIndexStop").disabled=false;if(!bulkIndexBusy)clearGlobalStop();
+      delete label.dataset.busy;
+      if(!why)why=tx("dictUI.connectionLost");
+      show(tx("dictUI.failed"),tx("dictUI.failedReason",{error:why}));
       label.classList.add("err");resolve(false)});
   });
 }
@@ -4244,13 +4245,15 @@ function setIndexStatus(html){
 let globalStopAction=null,globalStopLabel="";
 let workNoticeHTML="";
 function renderWorkNotice(){
+  if(document.documentElement.classList.contains("server-work-active"))return;
   const box=$("workNotice"),button=$("workNoticeStop");
   box.hidden=!workNoticeHTML;
-  if(box.hidden)return;
+  if(box.hidden){document.documentElement.style.setProperty("--workh","0px");return}
   $("workNoticeText").innerHTML=workNoticeHTML;
   button.hidden=!globalStopAction;
   button.textContent=globalStopLabel||tx("dictUI.stop");
   button.disabled=globalStopLabel===tx("dictUI.bulkStopping");
+  requestAnimationFrame(()=>document.documentElement.style.setProperty("--workh",box.offsetHeight+"px"));
 }
 function showWorkNotice(html){workNoticeHTML=html;renderWorkNotice()}
 $("workNoticeStop").addEventListener("click",()=>{if(globalStopAction)globalStopAction()});
@@ -4264,6 +4267,42 @@ function clearGlobalStop(){
   workNoticeHTML="";renderWorkNotice();
   if(statusBase)setStatus(statusBase,statusOwner);
 }
+new ResizeObserver(()=>{
+  if(document.documentElement.classList.contains("server-work-active"))return;
+  const box=$("workNotice");
+  document.documentElement.style.setProperty("--workh",box.hidden?"0px":box.offsetHeight+"px");
+}).observe($("workNotice"),{box:"border-box"});
+let serverBulkWasRunning=false;
+window.addEventListener("wudict-work",event=>{
+  const s=event.detail;
+  if(s.id!=="bulk-indexes")return;
+  if(s.running){
+    serverBulkWasRunning=true;bulkIndexBusy=true;
+    $("bulkIndexes").querySelectorAll("button,select").forEach(el=>el.disabled=true);
+    $("bulkIndexStop").hidden=false;$("bulkIndexStop").disabled=s.stopRequested;
+    $("bulkIndexStop").textContent=tx(s.stopRequested?"dictUI.bulkStopping":"dictUI.stop");
+    setIndexStatus(esc(s.text));
+    const current=dicts.find(d=>d.id===s.dict);
+    if(current)for(const feature of s.indexes||[]){
+      const feat=feature==="index"?"base":feature==="fullText"?"fts":feature;
+      for(const label of bulkFeatureLabels(current,feat)){
+        label.textContent=tx(s.action==="remove"?"dictUI.removing":"dictUI.indexing")+(s.currentDone?' '+s.currentDone.toLocaleString():'');
+        label.classList.add("busy");
+      }
+    }
+  }else if(serverBulkWasRunning){
+    serverBulkWasRunning=false;bulkIndexBusy=false;$("bulkIndexStop").hidden=true;
+    const report=tx(s.error?"dictUI.bulkFailed":s.canceled||s.stopRequested?"dictUI.bulkStopped":"dictUI.bulkFinished",{number:s.done,error:s.error});
+    setIndexStatus(esc(report));loadDicts().then(renderBulkIndexes);
+  }
+});
+function fitBottomChrome(){
+  const vv=window.visualViewport;
+  const overlap=vv?Math.max(0,window.innerHeight-vv.height-vv.offsetTop):0;
+  document.documentElement.style.setProperty("--wd-vv-bottom",overlap+"px");
+}
+fitBottomChrome();
+if(window.visualViewport){visualViewport.addEventListener("resize",fitBottomChrome);visualViewport.addEventListener("scroll",fitBottomChrome)}
 $("status").addEventListener("click",e=>{
   if(!e.target.closest("[data-global-stop]")||!globalStopAction)return;
   e.preventDefault();globalStopAction();

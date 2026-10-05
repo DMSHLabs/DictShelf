@@ -139,18 +139,15 @@ body.wide .col{max-width:min(1280px,96vw)}
    bar (--sbarh, which already includes the inset it wears) or, when the bar is
    away, the host's inset by itself. Written as a fallback chain rather than a
    sum, so a bar standing on the gesture bar is not counted twice. */
-.container{padding-bottom:calc(var(--sp-5) + var(--sbarh,var(--wd-inset-bottom,0px)) + var(--article-find-height,0px))}
+.container{padding-bottom:calc(var(--sp-5) + var(--sbarh,var(--wd-inset-bottom,0px)) + var(--workh,0px) + var(--article-find-height,0px))}
 
 .bar{position:fixed;top:0;left:0;right:0;z-index:100;background:var(--bg-bar);
   backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
   /* no horizontal padding: the bar is full-bleed and the gutter belongs to
      .col, which the form wears. Two insets would inset the form twice. */
   border-bottom:1px solid var(--line);padding:var(--sp-1) 0;
-  /* The bar wears the top inset rather than the page doing it: its blurred
-     background then fills the strip behind a camera cutout and the form sits
-     clear below it. And since .bar.hidden translates the element - padding and
-     all - scrolling the bar away really does hand that strip back to the
-     article, with no second rule to keep in step. */
+  /* The top bar wears the system inset so its background covers the status
+     area and the search controls begin below it. */
   padding-top:calc(var(--sp-1) + var(--wd-inset-top,0px));
   transition:transform .28s ease}
 .bar.hidden{transform:translateY(-100%)}
@@ -201,7 +198,7 @@ body.barpinned{--stick:var(--barh)}
    reader switched it off) - stated as a rule because `display:flex` here would
    outvote the user-agent's [hidden]{display:none}, the trap #styler has a rule
    for too. */
-.sbar{position:fixed;left:0;right:0;bottom:0;z-index:100;
+.sbar{position:fixed;left:0;right:0;bottom:calc(var(--workh,0px) + var(--wd-vv-bottom,0px));z-index:100;
   display:flex;align-items:center;justify-content:flex-start;
   background:var(--bg-bar);backdrop-filter:blur(10px);
   -webkit-backdrop-filter:blur(10px);
@@ -209,7 +206,7 @@ body.barpinned{--stick:var(--barh)}
   padding-bottom:calc(var(--sp-1) + var(--wd-inset-bottom,0px))}
 .sbar[hidden]{display:none}
 #sbarFind{flex:none;display:flex;align-items:center;justify-content:center}
-#articleFindStrip{position:fixed;left:0;right:0;bottom:var(--sbarh,var(--wd-inset-bottom,0px));
+#articleFindStrip{position:fixed;left:0;right:0;bottom:calc(var(--sbarh,var(--wd-inset-bottom,0px)) + var(--workh,0px) + var(--wd-vv-bottom,0px));
   z-index:101;display:flex;align-items:center;gap:var(--sp-1);padding:var(--sp-1) var(--sp-2);
   background:var(--bg-bar);color:var(--fg);border-top:1px solid var(--line);backdrop-filter:blur(10px)}
 #articleFindStrip[hidden]{display:none}
@@ -597,7 +594,7 @@ html{--styler-h:min(45vh,420px)}
 /* --styler-bottom is normally 0; the page's visualViewport handler sets both
    vars while the sheet is open and the soft keyboard covers part of the
    window - see stylerFit in index.html. */
-#styler{position:fixed;left:0;right:0;bottom:var(--styler-bottom,0);z-index:210;
+#styler{position:fixed;left:0;right:0;bottom:calc(var(--sbarh,var(--wd-inset-bottom,0px)) + var(--article-find-height,0px) + var(--workh,0px) + var(--styler-bottom,0px));z-index:210;
   display:none;
   /* The sheet is its OWN height, whatever subject it is showing: a subject with
      two rows gives a short sheet rather than the full one standing half empty,
@@ -1653,17 +1650,17 @@ dialog.panel-card:not([open]){display:none}
 .bulkbox p:last-child{margin-bottom:0}
 .bulkbox .cost{color:var(--label-quiet)}
 .bulkbox .btn{font-size:11.5px;padding:.25em .6em;margin-right:.4em}
-.work-notice{position:fixed;z-index:300;top:calc(var(--barh,3.1em) + var(--sp-2));left:50%;
+.work-notice{position:fixed;z-index:330;top:auto;bottom:var(--wd-vv-bottom,0px);left:50%;
   transform:translateX(-50%);width:calc(100% - 2*var(--sp-2));max-width:720px;
   display:flex;align-items:center;gap:.6em;padding:.45em .55em;
   border:1px solid var(--accent);border-radius:8px;background:var(--accent-soft);
   background-image:repeating-linear-gradient(-45deg,
     color-mix(in srgb,var(--accent) 8%,transparent) 0 6px,
     transparent 6px 14px);
+  padding-bottom:calc(.45em + var(--wd-inset-bottom,0px));
   box-shadow:var(--shadow);font-size:12px;line-height:1.35;color:var(--label);
   pointer-events:none}
 .work-notice[hidden]{display:none}
-body.barhidden .work-notice{top:calc(var(--wd-inset-top,0px) + var(--sp-2))}
 .work-notice-text{flex:1;min-width:0;overflow-wrap:anywhere}
 .work-notice .btn{flex:none;font-size:11.5px;padding:.25em .6em;pointer-events:auto}
 /* The orphan review (D156) is a bulkbox like the full-text one: a situation to
@@ -1767,7 +1764,7 @@ body.barhidden .work-notice{top:calc(var(--wd-inset-top,0px) + var(--sp-2))}
      the phone's first section sits one --sp-2 below the bar, exactly like
      every other section, instead of two. */
   .col{width:auto;padding-left:var(--sp-1);padding-right:var(--sp-1)}
-  .container{padding-bottom:calc(var(--sp-4) + var(--sbarh,var(--wd-inset-bottom,0px)))}
+  .container{padding-bottom:calc(var(--sp-4) + var(--sbarh,var(--wd-inset-bottom,0px)) + var(--workh,0px) + var(--article-find-height,0px))}
   /* Scoped to the top bar: the About wordmark inside the panel must survive
      on narrow screens — that is where the app says what it is. */
   .bar .brand{display:none}

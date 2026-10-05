@@ -47,6 +47,7 @@
   // Unknown errors and English responses remain literal. New API families
   // should use stable error codes instead of expanding text matching.
   const errorKeys = [
+    "errors.workBusy",
     "errors.dslDefaults",
     "errors.dslIndexRequired",
     "errors.dslFeaturesRequireIndex",

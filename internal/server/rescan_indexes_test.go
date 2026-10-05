@@ -5,6 +5,7 @@ package server
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"net/http/httptest"
@@ -15,6 +16,24 @@ import (
 
 	"github.com/wuweidict/wudict/internal/store"
 )
+
+func TestRescanSurvivesClosedProgressStream(t *testing.T) {
+	s := newTestServer(t)
+	preparedDSL(t, s)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	req := newRequest("POST", "/api/rescan?stream=1", strings.NewReader(`{"new":{"index":true},"existing":{"index":"recreate"}}`)).WithContext(ctx)
+	req.RemoteAddr = "127.0.0.1:5555"
+	s.ServeHTTP(httptest.NewRecorder(), req)
+	status := s.jobs.wait("rescan-indexes")
+	if status.Canceled || len(status.Failed) > 0 {
+		t.Fatalf("stream departure stopped work: %+v", status)
+	}
+	p, ok := status.Result.(rescanIndexProgress)
+	if !ok || p.Stage != "cleanup" {
+		t.Fatalf("rescan did not finish: %+v", status)
+	}
+}
 
 func TestRescanStreamsDictionaryAndArticleProgress(t *testing.T) {
 	s := newTestServer(t)
