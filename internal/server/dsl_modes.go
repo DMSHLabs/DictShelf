@@ -92,8 +92,7 @@ func (e *entry) setIndexRemoved(removed bool) error {
 
 // Only an explicit ingest request may restore a deliberately removed index.
 func (e *entry) restoreDSLIndex(plan store.Plan, progress store.Progress) error {
-	acquire(frontLimit)
-	defer release(frontLimit)
+	defer acquire(frontLimit)()
 	defer HoldActiveProcs()()
 	e.ingestMu.Lock()
 	defer e.ingestMu.Unlock()

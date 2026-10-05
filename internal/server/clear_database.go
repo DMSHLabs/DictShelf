@@ -163,8 +163,7 @@ func (s *Server) handleClearDatabase(w http.ResponseWriter, req *http.Request) {
 }
 
 func (e *entry) clearDatabase(want clearDatabaseRequest) error {
-	acquire(frontLimit)
-	defer release(frontLimit)
+	defer acquire(frontLimit)()
 	e.ingestMu.Lock()
 	defer e.ingestMu.Unlock()
 	dir, ok := store.LookupDir(e.Path)

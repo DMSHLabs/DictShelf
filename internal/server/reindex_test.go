@@ -150,3 +150,31 @@ func TestRescanSeesEditedSource(t *testing.T) {
 		t.Error("still outdated after it was prepared again")
 	}
 }
+
+// A slot taken before SetIndexWorkers replaces the lane goes back to the lane
+// it came from. The startup abbreviation sweep takes one before the CLI sizes
+// the lane; a release that re-read indexLimit took the next holder's slot
+// instead - the first Rebuild of the session - and that holder's own release
+// then blocked forever, with the job stuck at "Rebuilding 1 of N".
+func TestLaneReleaseAcrossResize(t *testing.T) {
+	saved := indexLimit
+	t.Cleanup(func() { indexLimit = saved })
+	SetIndexWorkers(1)
+	sweep := acquire(indexLimit)
+	SetIndexWorkers(1) // the lane is replaced while the sweep holds a slot
+	rebuild := acquire(indexLimit)
+	done := make(chan struct{})
+	go func() {
+		sweep()
+		rebuild()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("a release blocked: a slot went back to the wrong lane")
+	}
+	if n := len(indexLimit); n != 0 {
+		t.Fatalf("lane holds %d slots after every holder released", n)
+	}
+}

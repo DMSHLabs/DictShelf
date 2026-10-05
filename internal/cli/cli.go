@@ -1329,6 +1329,8 @@ Hint: pick another port with --port, e.g.:  wudict --port %s
 	// guide itself stay in the tree, unwired, for a host that wants them
 	// back - and the package is still imported for isHowtoSource, which keeps
 	// a guide file that does exist from being treated as an orphan.
+	// Registry discovery can start the background abbreviation sweep.
+	server.SetIndexWorkers(cfg.IndexWorkers)
 	reg, err := server.NewRegistry(cfg.DictDirs, cfg.UseCached, regOpts...)
 	if err != nil {
 		return fmt.Errorf("scanning %s: %w", strings.Join(cfg.DictDirs, ", "), err)
@@ -1343,7 +1345,6 @@ Hint: pick another port with --port, e.g.:  wudict --port %s
 	srv.ConfigPath = cfgFile
 	srv.User = user
 	store.SetCompressBodies(!cfg.NoCompress)
-	server.SetIndexWorkers(cfg.IndexWorkers)
 	if cfg.MemoryLimit > 0 {
 		// A soft ceiling: Go collects harder instead of growing past it. Set it
 		// through the server rather than debug directly, because a ceiling on

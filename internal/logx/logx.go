@@ -29,6 +29,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"unicode/utf8"
 )
 
 // Enabled turns V output on. Set from the CLI flag or environment.
@@ -46,6 +47,11 @@ var (
 	out        io.Writer = os.Stderr
 	redirected bool
 	logger     = log.New(os.Stderr, "", log.Ltime|log.Lmicroseconds)
+
+	// width is how many characters the in-place counter on screen holds, so
+	// a shorter line overwrites all of a longer one and ClearLine blanks it
+	// all. The callers draw from one goroutine at a time; mu guards it anyway.
+	width int
 )
 
 // SetOutput sends every logx line to w. A nil w restores stderr.
@@ -113,19 +119,35 @@ func Interactive() bool {
 
 // Progress writes an in-place counter, or nothing when stderr is not a
 // terminal. Follow it with ClearLine before printing anything else.
+//
+// A line shorter than the one it replaces is padded with blanks, so a counter
+// that drops its denominator ("10/10 entries" → "11 entries") leaves no
+// stale characters.
 func Progress(format string, args ...any) {
-	if Interactive() {
-		fmt.Fprintf(dest(), "\r"+format, args...)
+	if !Interactive() {
+		return
 	}
+	line := fmt.Sprintf(format, args...)
+	n := utf8.RuneCountInString(line)
+	mu.Lock()
+	pad := max(width-n, 0)
+	width = n
+	mu.Unlock()
+	fmt.Fprint(dest(), "\r"+line+strings.Repeat(" ", pad))
 }
 
 // ClearLine erases an in-place progress counter ("\r1234 entries") so the
 // line that follows starts clean. Blanks rather than an ANSI escape, to keep
 // working on consoles that do not interpret them.
 func ClearLine() {
-	if Interactive() {
-		fmt.Fprint(dest(), "\r"+strings.Repeat(" ", 48)+"\r")
+	if !Interactive() {
+		return
 	}
+	mu.Lock()
+	n := max(width, 48)
+	width = 0
+	mu.Unlock()
+	fmt.Fprint(dest(), "\r"+strings.Repeat(" ", n)+"\r")
 }
 
 // Dict formats the standard "which dictionary is this about" prefix.

@@ -73,6 +73,10 @@ type Writer struct {
 	// the next article on; nil when the dictionary has no stylesheet.
 	Styles htmlref.Styles
 
+	// Progress, when set, is called by WriteTo with the entries written so
+	// far, of Entries.
+	Progress func(done int)
+
 	Articles int // articles written
 	Empty    int // articles dropped for an empty body
 	Nameless int // entries dropped without a name
@@ -87,6 +91,10 @@ func NewWriter(h Head, mode Mode, dir string) (*Writer, error) {
 	}
 	return &Writer{mode: mode, head: h, spool: f}, nil
 }
+
+// Entries is the number of entries WriteTo goes through: every article and
+// redirect added and kept.
+func (w *Writer) Entries() int { return len(w.recs) }
 
 // Close removes the spool.
 func (w *Writer) Close() error {
@@ -339,6 +347,9 @@ func (w *Writer) WriteTo(out io.Writer) (int64, error) {
 	w.Articles = 0
 	buf := make([]byte, 0, 4096)
 	for i, r := range w.recs {
+		if w.Progress != nil {
+			w.Progress(i + 1)
+		}
 		if r.see != "" && !dangling[i] {
 			continue
 		}
