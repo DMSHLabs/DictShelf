@@ -93,7 +93,7 @@ html[data-shell-tone="dark"] {
   --line:rgba(230,220,201,.4); --accent:#ffc773; --ok:#aad3ad; --err:#ffb3ad;
 }
 /* Page-specific only; palette, card, buttons and typography are shared. */
-.card{max-width:640px}
+.card{max-width:640px;min-width:0;overflow-wrap:anywhere}
 #list{margin:.618em 0 0;border:1px solid var(--line);border-radius:8px;overflow:hidden}
 .lrow{display:flex;flex-wrap:wrap;align-items:center;gap:.5em;
   padding:.5em .618em;border-bottom:1px solid var(--line);font-size:13.5px}
@@ -102,12 +102,12 @@ html[data-shell-tone="dark"] {
    square); this only holds the row's spacing. `width:auto` used to be how a
    platform checkbox kept its size against input{width:100%}. */
 .lrow input[type=checkbox]{margin:0;flex:none}
-.lrow .nm{flex:1 1 8em;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lrow .nm{flex:1 1 8em;min-width:0}
 .lrow .cost{flex:none;color:var(--label);font-size:12px;font-variant-numeric:tabular-nums}
 /* The indicator is the row's second line on a phone and its right edge on a
    desktop: order:1 with a full basis wraps it below everything else, and the
    media query is what decides whether that basis applies. */
-.lrow .st{flex:none;min-width:9em;text-align:right;font-size:12px;color:var(--label)}
+.lrow .st{flex:0 1 auto;min-width:min(9em,100%);max-width:100%;text-align:right;font-size:12px;color:var(--label)}
 .lrow .st.ok{color:var(--ok)}
 .lrow .st.err{color:var(--err)}
 .lrow .st.busy{color:var(--accent)}
