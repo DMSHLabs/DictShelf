@@ -19,9 +19,10 @@ import (
 // A DSL dictionary is often shipped with a "<name>_abrv.dsl" beside it. That
 // file is not a dictionary: it is the expansion map ABBYY Lingvo shows on hover
 // over a [p] label - "pl" over which the reader sees "plural". The parent
-// absorbs it here, at ingest, and closeLabel bakes the expansion into the
-// article as a title= attribute; discovery hides the companion itself
-// (dict.IsAbbrevCompanion), which is what Lingvo does with it too.
+// absorbs it here, at ingest, and the [p] zone (balance.go) bakes the
+// expansion into the article as a title= attribute; discovery hides the
+// companion itself (dict.IsAbbrevCompanion), which is what Lingvo does with it
+// too.
 //
 // Baking rather than looking up at read time is what makes this free
 // everywhere: the tooltip works the same in the built-in UI, in a sandboxed

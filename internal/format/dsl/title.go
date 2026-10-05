@@ -44,7 +44,13 @@ const maxOptionalParts = 6
 // part, and a paren loop that did not know about `{` would copy the braces
 // verbatim into the lookup key and make the entry unfindable.
 func transformTitle(line string) titleResult {
-	var display, cur strings.Builder
+	// display is the HTML of a title without markup. A title with an unsorted
+	// part is rendered from src instead, the whole line as one DSL fragment:
+	// its tags open in one part and close in another (`удар{[']}е{[/']}ние`),
+	// so no part is well formed on its own. Only a line with a `{` can have
+	// one, so only such a line pays for src.
+	var display, src, cur strings.Builder
+	markup, needSrc := false, strings.IndexByte(line, '{') >= 0
 	var parts []titlePart
 	pos := 0
 	inParen := false
@@ -77,6 +83,13 @@ func transformTitle(line string) titleResult {
 	add := func(c byte) {
 		cur.WriteByte(c)
 		escByte(&display, c)
+		if !needSrc {
+			return
+		}
+		if strings.IndexByte(`\[]~^<>{}`, c) >= 0 {
+			src.WriteByte('\\')
+		}
+		src.WriteByte(c)
 	}
 
 	for pos < len(line) {
@@ -102,6 +115,9 @@ func transformTitle(line string) titleResult {
 			flush(false)
 			inParen = true
 			display.WriteByte(c)
+			if needSrc {
+				src.WriteByte(c)
+			}
 		case ')':
 			if !inParen {
 				add(c)
@@ -110,6 +126,9 @@ func transformTitle(line string) titleResult {
 			flush(true)
 			inParen = false
 			display.WriteByte(c)
+			if needSrc {
+				src.WriteByte(c)
+			}
 		case '{':
 			// `{{...}}` is a comment even in a headword: consume, emit nothing.
 			if pos < len(line) && line[pos] == '{' {
@@ -140,16 +159,21 @@ func transformTitle(line string) titleResult {
 			if depth == 0 {
 				inner = line[start : pos-1]
 			}
-			// Fragment, not body: the space in `{headword } suffix` is the word
-			// separator and must be preserved.
-			if html, _, err := transformFragment(inner, ""); err == nil {
-				display.WriteString(html)
-			}
+			src.WriteString(inner)
+			markup = true
 		default:
 			add(c)
 		}
 	}
 	flush(inParen) // an unterminated '(' still ends a run
+	if markup {
+		// Fragment, not body: the space in `{headword } suffix` is the word
+		// separator and must be preserved until the final trim.
+		display.Reset()
+		if html, _, err := transformFragment(src.String(), ""); err == nil {
+			display.WriteString(html)
+		}
+	}
 
 	return titleResult{
 		// Keys get their interior whitespace collapsed (in expandOptional), the

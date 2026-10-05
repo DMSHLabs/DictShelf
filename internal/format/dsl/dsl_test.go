@@ -57,13 +57,13 @@ func TestTransformBody(t *testing.T) {
 		// A comment alone on its line takes the line with it: keeping the
 		// line would put a blank line in front of the next one whenever
 		// that line does not open with [m].
-		{"[m1]a\n\t{{note}}\n\tb", `<p class="wu-m" style="--wd-m:1">a<br/>b`},
-		{"[m1]a\n\t{{note}}\n\t[m2]b", `<p class="wu-m" style="--wd-m:1">a<p class="wu-m" style="--wd-m:2">b`},
+		{"[m1]a\n\t{{note}}\n\tb", `<p class="wu-m" style="--wd-m:1">a<br/>b</p>`},
+		{"[m1]a\n\t{{note}}\n\t[m2]b", `<p class="wu-m" style="--wd-m:1">a</p><p class="wu-m" style="--wd-m:2">b</p>`},
 		// ... including on the last line, where the newline it takes is the
 		// one that ended the line before it.
-		{"[m1]a\n\t{{note}}", `<p class="wu-m" style="--wd-m:1">a`},
+		{"[m1]a\n\t{{note}}", `<p class="wu-m" style="--wd-m:1">a</p>`},
 		// A line that keeps content keeps its line break too.
-		{"[m1]a {{note}}\n\tb", `<p class="wu-m" style="--wd-m:1">a <br/>b`},
+		{"[m1]a {{note}}\n\tb", `<p class="wu-m" style="--wd-m:1">a <br/>b</p>`},
 	}
 	for _, c := range cases {
 		got, _, err := transformBody(c.in, "KEY")
@@ -214,7 +214,7 @@ func TestTransformTitle(t *testing.T) {
 	if d := transformTitle(`word {{a note}} two`).Display; d != "word  two" {
 		t.Errorf("title comment display: %q", d)
 	}
-	if d := transformTitle(`abc {[b]def`).Display; d != "abc <b>def" {
+	if d := transformTitle(`abc {[b]def`).Display; d != "abc <b>def</b>" {
 		t.Errorf("unterminated curly display: %q", d)
 	}
 	for _, line := range []string{`{to }go away from`, `{to} go away from`} {
