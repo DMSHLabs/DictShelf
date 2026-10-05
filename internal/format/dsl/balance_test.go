@@ -174,6 +174,37 @@ func flatContent(text, key string) string {
 	return b.String()
 }
 
+// TestSecondaryLineBreak pins absorbBreaks: a line that is [*] from end to
+// end carries the break that follows it, so hiding wu-sec (the UI's brief
+// view) takes the whole line away and leaves no blank line behind.
+func TestSecondaryLineBreak(t *testing.T) {
+	sec := `<span class="wu-sec">`
+	m1 := `<p class="wu-m" style="--wd-m:1">`
+	for _, tc := range []struct{ name, in, want string }{
+		{"between two lines", "a\n\t[*][i][ex]x[/ex][/i][/*]\n\tb",
+			`a<br/>` + sec + `<i><span class="wu-ex">x</span></i><br/></span>b`},
+		{"first line", "[*]x[/*]\nb", sec + `x<br/></span>b`},
+		{"last line keeps none", "a\n[*]x[/*]", `a<br/>` + sec + `x</span>`},
+		{"a run, one break each", "a\n[*]x[/*]\n[*]y[/*]\nb",
+			`a<br/>` + sec + `x<br/></span>` + sec + `y<br/></span>b`},
+		{"one zone over two lines", "a\n[*]x\ny[/*]\nb", `a<br/>` + sec + `x<br/>y<br/></span>b`},
+		{"inside another zone", "a\n[i][*]x[/*][/i]\nb", `a<br/>` + sec + `<i>x</i><br/></span>b`},
+		{"left open", "a\n[*]x\nb", `a<br/>` + sec + `x<br/></span>b`},
+		{"blanks around it", "a\n [*]x[/*] \nb", `a<br/>` + sec + `x <br/></span>b`},
+		{"a paragraph follows: no break to take", "a\n[*]x[/*]\n[m1]b[/m]", `a<br/>` + sec + `x</span>` + m1 + `b</p>`},
+		{"partly secondary: untouched", "a [*]x[/*]\nb", `a ` + sec + `x</span><br/>b`},
+		{"text after the zone: untouched", "[*]x[/*] y\nb", sec + `x</span> y<br/>b`},
+		{"an unknown tag printed as text counts", "[*]x[/*] [1]\nb", sec + `x</span> [1]<br/>b`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, _, _ := transformBody(tc.in, "K")
+			if got != tc.want {
+				t.Fatalf("\nin:   %q\ngot:  %s\nwant: %s", tc.in, got, tc.want)
+			}
+		})
+	}
+}
+
 // FuzzTransformBody holds invariants I2 (well formed) and I3 (content kept,
 // in order, once) for any input.
 func FuzzTransformBody(f *testing.F) {
@@ -182,6 +213,7 @@ func FuzzTransformBody(f *testing.F) {
 		"[b][i]x[/b]y[/i]", "[ref]a [ref]b[/ref] c[/ref]", "<<a [b]x>> y[/b]",
 		"[m1][c]x\n\t[m2]y[/c]", "[ref]a [s]x.wav[/s] b[/ref]", "[t]Џэp[/t] [sic] [1]",
 		"[i][i][i][i]x[/i]", "[/[m1]x [ b [b]y", "[c red]a\\ b\\\nc~^d[/c]", "[s]x.pdf[/s][url]a[/url]",
+		"a\n[*][i]x[/*]\n[*]y[/i][/*]\nb",
 	} {
 		f.Add(s)
 	}
@@ -219,6 +251,7 @@ func TestTransformLinear(t *testing.T) {
 		"crossing":        strings.Repeat("[b]a[i]b[/b]c[/i]", n/4),
 		"paragraphs":      strings.Repeat("[m1][c][i]x\n", n/4),
 		"labels":          strings.Repeat("[p]a", n),
+		"secondary lines": strings.Repeat("[*][*][*]x[/*][/*][/*]\n", n/4),
 		"unknown, nested": strings.Repeat("[sic]", n) + strings.Repeat("[/sic]", n),
 	} {
 		start := time.Now()

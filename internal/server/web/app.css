@@ -508,6 +508,7 @@ summary .rung{color:var(--accent)}
    holds a dictionary name that is allowed to wrap and this must never be what
    pushes it to a second line. */
 summary .mnav{display:flex;align-items:center;gap:1px;margin-left:auto;font-weight:400}
+summary .mnav[hidden]{display:none}
 summary .mnav~.count{margin-left:var(--sp-1)} /* two auto margins would split the row */
 summary .mbtn{cursor:pointer;color:var(--label);font-size:16px;line-height:1;
   padding:9px 7px;margin:-9px 0;border-radius:5px;user-select:none;

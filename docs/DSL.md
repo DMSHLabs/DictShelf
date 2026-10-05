@@ -372,26 +372,80 @@ custom properties `--wd-c` / `--wd-m`, so a reader's own stylesheet wins without
 | `[br]` | line break, **no closing descriptor** (x5+); in a headword it must be wrapped in `{…}` | `<br/>` | `[V]` |
 | `^` | invert the case of the next character ("перевёртыш", 6.0+), chiefly as `^~` | rune-aware case flip; `^~` flips the first letter of the mirrored headword; `^` before markup or at EOF disappears | `[V]` |
 | `[p]` | grammatical/usage label | buffered, then `<span class="wu-p">`, wrapped in `<abbr title="…">` when the `_abrv` companion knows it (§1.1) | `[V]` |
-| `[t]` | phonetic transcription | `<span class="wu-ipa">` / `</span>` | `[V]` |
-| `[*]` | secondary/optional zone, hidden behind Lingvo's toggle | `<span class="wu-sec">` / `</span>` (always shown) | `[V]` |
+| `[t]` | phonetic transcription | `<span class="wu-ipa">` / `</span>`; a zone written in the legacy transcription font is mapped to IPA (§6.0) | `[V]` |
+| `[*]` | secondary zone: shown or hidden at the reader's request (a button, Ctrl+\*), grey | `<span class="wu-sec">` / `</span>`, hidden in the brief view (§6.6) | `[V]` |
 | `@` | sub-card | see §4 | `[V]` |
-| `[ex]` | example | `<span class="wu-ex">` / `</span>` | `[V]` |
+| `[ex]` | example: an indexing zone (search by examples), with no look of its own | `<span class="wu-ex">` / `</span>` | `[V]` |
 | `[com]` | editorial comment | `<span class="wu-com">` / `</span>` | `[V]` |
 | `[trn]` `[!trn]` `[trs]` `[!trs]` | include/exclude from translation/transcription indexing | `<span class="wu-trn">`, `wu-trn-not`, `wu-trs`, `wu-trs-not` | `[V]` |
-| `[trn1]` | x5 variant of `[trn]` | unknown tag → dropped, content kept (same visible result) | `[V]` |
+| `[trn1]` | x5 variant of `[trn]` | unknown tag, paired → unwrapped, content kept (same visible result) | `[V]` |
 | `[lang id=…]`, `[lang name="…"]` | mark a language span; the id is a Lingvo language code | `<span class="wu-lang" data-lang="<raw>" lang="<BCP-47>">` when the code or name is known (`lang.go`) | `[V]` |
 | `[s]` | **multimedia zone** — image, sound or video | see §7 | `[V]` |
 | `[video]` | undocumented x5 synonym of `[s]` | identical to `[s]` | `[V]` |
 | `[preview]` | undocumented, legal only inside `[s]`/`[video]`, no effect | consumed inside the media zone, dropped outside | `[V]` |
 | `[ref]`, `[ref dict="…"]` | link to a headword in this or **another** dictionary | see §6.1 | `[V]` |
-| `<<…>>` | inline form of `[ref]`, no attributes | same as a bare `[ref]` | `[V]` |
+| `<<…>>` | inline form of `[ref]`, no attributes | same as a bare `[ref]`; `[<<]` is not a spelling of it but an unknown tag | `[V]` |
 | `[url]` | external link (`http://`, `https://`, `www.`, or mail) | `<a href="…">`, `http://` prefixed when the value has no `://` | `[V]` |
 | `{{…}}` | comment, removed before compilation; may span lines | §6.4 | `[V]` |
-| unknown tag | compile error in Lingvo | **dropped, content kept** — pyglossary logs a warning, we do not | `[V]` |
+| unknown tag | compile error in Lingvo | closed by its own closing tag: **unwrapped, content kept**; an inline tag (`[b]`, `[c]`, `[trn]`, …) or `[p]` in the wrong case (`[B]…[/B]`) is that tag, any other known name in the wrong case (`[REF]`, `[M1]`) is unknown. Left open: **literal text** (`[1]`, `[sic]`, `[Persona]`) — §6.0 | `[V]` |
 
-Nesting is by output only: we emit open and close markup as tags arrive and never
-build a tree, so unbalanced DSL yields unbalanced HTML rather than an error. `[V]`
-The renderers parse into a shadow root or an iframe, where the browser closes it.
+### 6.0 Zones and malformed markup (D165) `[V]`
+
+A DSL tag marks a **zone** of text, not a tree node: Lingvo's compiler rejects a
+tag nested in itself and a tag left unclosed, never two tags of different kinds
+that overlap (lingvo-ref, compiler messages). `[p][trn]общ.[/p] разговор[/trn]`
+is two overlapping zones. Hundreds of circulating dictionaries do not compile at
+all, and GoldenDict renders them anyway; so does wudict, and the HTML it writes
+is always well formed. Nothing downstream would repair it: the browser fixes
+misnesting for `b`/`i`/`u` only (a stray `</span>` closes whichever span is
+open, and every role is a span), `-format clean` is a tokenizer, and the markdown
+export assigns spans the way the browser does.
+
+`transformer` works in three stages over one token slice (`transform.go`,
+`balance.go`):
+
+1. **Lex.** A construct that fails costs only itself: a `[` with no `]` on its
+   line, or with a second `[` inside, is a literal `[`; a `[/` directly followed
+   by a tag (`[/[m1]`) is a closing tag that lost its name and is dropped; a `<<` with no `>>` on its line is literal. Lexing
+   resumes right after it, so a broken construct never swallows the markup that
+   follows.
+2. **Resolve.** A closing tag ends the nearest open zone of its name, wherever it
+   sits; the zones opened inside it stay open. Then:
+   - a closing tag with no open zone of its name is dropped;
+   - a known tag never closed ends at the end of **its own line**; a paragraph
+     (`[m]`) ends at the next `[m]` or the end of the article;
+   - an unknown tag is judged by its pairing (closed → markup, unwrapped; open →
+     text, printed as written);
+   - a link opened inside a link ends the outer one, as an `<a>` start tag does
+     in HTML;
+   - past 3 open zones of one name or 64 in all, the **oldest** zone in the way
+     ends (HTML's Noah's Ark clause), never the new one.
+3. **Emit.** A paragraph is always outermost. When a closing tag ends a zone
+   with others open inside it, they close with it and reopen at the next
+   content; reopening is lazy, so a repair never writes an empty element (an
+   empty element the author wrote stays). Zones waiting to open nest by where
+   they end, the longer-lasting outside: `[p][trn]a[/p] b[/trn]` becomes
+   `trn > p` with no split, and a split happens only where two zones truly
+   cross. An audio or file link inside a link closes the link around it.
+
+Input whose tags already nest renders as before the balancer existed, except
+where that output was wrong: a paragraph left open (closing `[m]` is optional)
+ends with `</p>`, and a link runs to its own closing tag through the tags inside
+it, so `[ref]a [b]x[/b][/ref]` links to *a x* where it linked to *a* and left
+*x* outside. Over 2.11 M articles in 38 DSL files, 1.16 M malformed articles
+changed. The tests hold the output well formed and its
+text unchanged for any input (`FuzzTransformBody`), and the time linear
+(`TestTransformLinear`).
+
+**Legacy-font transcriptions.** Old Lingvo dictionaries wrote `[t]` in a font
+whose IPA glyphs sat on cp1251 code points (`k‡t` for *kæt*). GoldenDict maps
+those back in every `[t]` zone, which also rewrites modern ones (pinyin `ma3`
+becomes `maĩ`). wudict maps a zone only when all of it is in the font's
+alphabet, ASCII and the code points the font reused, and it shows the font: a
+symbol no transcription contains (`§ © ® ° ± µ ¶ ¤ ¦ ¬ † ‡ € ‰ ‚ „ ‹`), or a
+reused Cyrillic code point next to a Latin letter. A zone holding real IPA, a
+typographic quote or any other Cyrillic letter was written in Unicode and is
+left as written, so are a Cyrillic-letter transcription and pinyin (`ipa.go`).
 
 ### 6.1 `[ref]` and the cross-dictionary link `[V]`
 
@@ -453,7 +507,7 @@ Square brackets have a second escape: **doubling**. `[[…]]` is a literal pair,
 but a doubled bracket may not be followed by a tag — `[[[t]` is a compile error;
 write `[[ [t]` or `\[[t]`. `[V]` We fold `[[` → `[` and `]]` → `]`.
 
-### 6.3 Character-level rules (`transformer.run`) `[V]`
+### 6.3 Character-level rules (`transformer.lex`) `[V]`
 
 | Input | Result |
 | --- | --- |
@@ -467,13 +521,18 @@ write `[[ [t]` or `\[[t]`. `[V]` We fold `[[` → `[` and `]]` → `]`.
 | `^` before `[` or `\`, or at EOF | dropped — it has nothing to act on |
 | `[[` / `]]` | literal `[` / `]` |
 | lone `]` with no opening `[` | passed through as-is (pyglossary parity) |
-| `[` never closed | the rest of the input as literal text |
+| `[` that opens no tag (no `]` on its line, a second `[` before it, no name) | literal `[`; lexing resumes after it (§6.0) |
+| `[ b]` | `[b]` when the name after the blank is a known tag (GoldenDict parity); otherwise literal |
+| `[/` directly followed by a tag (`[/[m1]`): a closing tag that lost its name | dropped |
 | `[]`, `[ ]`, `[/]` | literal text (real articles contain `([ ])`) |
-| newline | leading spaces/tabs of the next line are skipped, then `<br/>` — **unless** the next thing is `[m`, whose `<p>` provides the break |
+| newline | leading spaces/tabs of the next line are skipped, then `<br/>` — **unless** a paragraph tag (`[m]`, `[mN]`) opens the next line, whose `<p>` provides the break; `[me]` is no paragraph tag |
 | `<` not followed by `<` | `&lt;` |
+| `<<` with no `>>` on its line | literal `&lt;&lt;` |
+| inside `[ref]`, `[url]`, `<<…>>` | text is verbatim (`^`, `]`, `<` are themselves; `~` and `^~` are the headword, as everywhere, which is GoldenDict's reading too; `\` only escapes, and `\` before a line break is the blank-line idiom, not link text), tags still open and close; the zone's text, its blanks trimmed and collapsed, is the target (a `target=` value too) |
 
-Attribute lexing accepts quoted (`'`/`"`) and unquoted values, backslash escapes
-inside them, and is EOF-tolerant. A bare attribute with no `=` is recorded with an
+Attribute lexing accepts quoted (`'`/`"`) and unquoted values, and backslash
+escapes inside them; a tag whose attributes reach a line break, an unescaped `[`
+or the end of input opens nothing. A bare attribute with no `=` is recorded with an
 empty value — which is how `[c red]` finds its colour. `[V]`
 
 ### 6.4 `{{…}}` comments `[V]`
@@ -535,6 +594,49 @@ is what the compiler does too; an escaped `\{\{` opens nothing.
 | The compiler inserts a space **before** `[*]`, **after** `[/com]`, and **before** `[/lang]` | «Тэг [*]», «Тэг [com]», «Тэг [lang]» | `[V]` **not reproduced**. It is a quirk the manual itself tells authors to work around, GoldenDict does not do it, and adding a space to every such zone is visible damage in the far more common case where the author already wrote one |
 | Headword length is 246 characters, spaces included, except spaces past the 246th non-space character | «Заголовок статьи» | `[V]` not enforced (§5) |
 | One "word" — a run of non-space characters — is capped at 255 in a body (tags and `\` excluded); GoldenDict has no limit | «Тело статьи» | `[V]` not enforced; a longer run renders, as in GoldenDict |
+
+### 6.6 The secondary zone `[*]` and the brief view
+
+**wuDict2 fork:** the status bar's **Examples** control and the matching
+Settings control show or hide `[*]` zones globally through the existing
+`hide_examples` layer. `[ex]` controls example styling and does not by itself
+hide content. The fork retains its example colours and has no per-section
+brief/full button, `full` preference or Ctrl+* binding. The UI description
+below refers to upstream wudict; the shared DSL zone parser applies to both.
+
+Lingvo, from lingvo-ref «Тэг [*]···[/*]» and the manual's screenshots of the
+card and the Options dialog, 6.0 to x6: `[D]`
+
+- The zone is shown or hidden at the reader's request: a button on the card
+  (x3–x5 a toolbar icon, x6 the text button **Full card**) and **Ctrl+\***. A
+  part of a headword inside `[*]` hides with it.
+- How a card opens is an option, *Display example sentences and related words*
+  (x3–x6). *Expand all entries automatically* is a different option: it opens
+  dictionaries, not zones.
+- The zone is drawn in one colour, grey by default. The Options dialog calls
+  that colour *Examples* (x3–x6; *Optional Text* in 6.0–8.0), but it colours
+  `[*]`, not `[ex]`: `[ex]` is an indexing zone with no look of its own, and an
+  `[ex]` outside `[*]` is always shown. `[c]` has no effect inside or around
+  `[*]`; `[p]` labels and links keep their colours.
+- Dictionaries write examples as `[*][ex]…[/ex][/*]`, often with `[i]`; ABBYY's
+  own dictionaries put every `@` sub-card block in `[*]`.
+
+wudict: `[V]`
+
+| Lingvo | wudict |
+| --- | --- |
+| a button per card, Ctrl+\* | a switch at the right end of a dictionary's section header in the results, present only when its articles hold a `wu-sec`; Ctrl+\* switches the section being read (`index.html` `fullInit`, `fullSet`, `fullKey`). The brief view is one attribute on the article host, `:host([data-brief]) .wu-sec{display:none}`: no re-render |
+| the open-state option | the reader's last press on any switch, stored as `ui.full` in `/api/prefs` (absent: brief). Sections already on screen keep their state. A full-text match or a `#fragment` target inside the zone opens that section full and leaves the stored choice alone |
+| grey | `wu-sec` is grey (`--wd-sec`, `internal/artmark`), and a `wu-ex` inside it takes the grey; a `[c]` inside keeps its colour (§8) |
+
+**Line breaks.** A line that is secondary from end to end carries the break
+that follows it (`absorbBreaks`, `balance.go`), so the brief view removes the
+line whole instead of leaving a blank line:
+`sense<br/><span class="wu-sec">example<br/></span>next`. A run of such lines
+takes every break but the one before the run; a break a paragraph swallows
+(`[m]` on the next line) has nothing to give. An `[m]` line needs nothing: its
+`<p>` has no height once its content is hidden. Only the DSL reader writes
+`wu-sec`, so only DSL articles have the switch.
 
 ## 7. The media zone in depth
 
@@ -600,12 +702,15 @@ Design points that are not obvious and should not be "simplified" away:
 | mandatory `#NAME`/`#INDEX_LANGUAGE`/`#CONTENTS_LANGUAGE` | compile error when missing | defaults | refusing a file the user already has loses a dictionary, and gains nothing |
 | malformed/empty tag (`[ ]`) | drops the entry | literal text | real articles contain `([ ])` |
 | headword variants | XML-escaped (pyglossary) | raw | they are lookup keys; escaping breaks matching |
-| unknown tag | compile error / warning logged | silently unwrapped | a warning per article is noise at 100+ dictionaries scale |
+| unknown tag | compile error / warning logged | paired: silently unwrapped; unpaired: literal text | a warning per article is noise at 100+ dictionaries scale; an unpaired `[Persona]` is the author's text |
+| overlapping zones | accepted (GoldenDict: the inner zone is cut at the outer's end and lost) | nested by where they end; split only at a true crossing (§6.0) | the zones are what the author wrote |
+| unclosed tag | compile error (GoldenDict: runs to the end of the article) | ends at the end of its line | one typo costs one line |
+| stray closing tag | compile error (GoldenDict: ignored) | dropped | a stray `</p>` would render an empty paragraph |
 | unterminated `{{` | consumes the rest of the file | same across lines, literal within one line | a stray `{{` in one body line is a typo, not a request to delete the entry |
 | `[ref]` target matching | case-sensitive | case-insensitive, through the store index | forgiving in the direction that can only find more |
 | `#SOURCE_CODE_PAGE` casing | exact, errors otherwise | case-insensitive | the alternative to accepting it is mojibake, not a diagnostic |
 | `.ann` `#LANGUAGE` | one section by UI language | all sections | see §1.2 |
-| `[*]` secondary zone | hidden behind a toggle | always shown | `[V]` gap, listed in §11 |
+| `[c]` inside `[*]` | no effect: the zone is grey | the author's colour | a colour the author wrote is shown everywhere else too; the grey is a default a reader's style can change |
 | body lines belonging to no headword | compile error, no dictionary | the block is skipped with a warning (first three only), the scan continues | the file is already on the user's disk; one stray run of lines must not cost them the whole dictionary (`errOrphanBlock`, `Reader.Next`) |
 
 `dslEscape` (`reader.go`) escapes `\ [ ] ~ < > @` when a sub-entry key is embedded
@@ -654,7 +759,10 @@ them would be wrong in one direction or the other. `TestDslEscapeRoundTrip` and
 `internal/artmark.Version` is the markup contract between an ingested article and
 the stylesheet. It is **2** as of the pass that added `wu-xref`, the full optional-part
 expansion and the `#INCLUDE`/`^`/`[br]` handling: articles prepared by an older
-build are reported as stale (a rebuild offered, never forced). `[V]`
+build are reported as stale (a rebuild offered, never forced). `[V]` The DSL
+reader's own version is **5**: the zone balancer (§6.0, D165) and the line break
+a secondary line carries (§6.6). A DSL library prepared by an earlier reader is
+reported stale the same way. `[V]`
 
 Seekability matters end to end: `resource.Dir` returns an `*os.File` (seekable), a zip
 entry is **not** seekable, and `store.Media.Resource` returns
@@ -818,6 +926,7 @@ Closed in the spec-audit pass (this document's current revision):
 | a `{{…}}` block between the directives and the first card, or a comment-only line at column 0, aborted preparation with "entry block without headword" | every zone is removed from the raw line before classification, in the header scan and the entry scan alike, and a headword-less block is a skip, not a failure (§6.4, §8) |
 | a body line made of non-standard spaces (the «отбивка» blank line) was dropped as empty | `blankLine` folds ASCII space and tab only (§6.5) |
 | `\` at end of line — the blank-line idiom after an editor trimmed the trailing space — ate the line break and rendered nothing | `&nbsp;` plus the break (§6.5) |
+| `[*]` always shown | hidden in the brief view: a switch per section, Ctrl+\*, the last choice remembered; grey when shown (§6.6) |
 
 Closed earlier: `@` recognition (`@heading`, `[m1]@ heading`, piled headings),
 one back-reference per expanded key, `dslEscape` double-escaping, the media-zone
@@ -828,7 +937,6 @@ Open, with what correct behaviour would be:
 
 | Gap | Correct behaviour |
 | --- | --- |
-| `[*]` secondary zone | Lingvo hides it behind a toggle; we always render it. A `details`-like control would match the format's intent. `[V]` gap |
 | `[trn1]` | falls through as an unknown tag; harmless today, but it belongs with the other search-processing wrappers so the intent is explicit. `[V]` gap |
 | `[']` inside a link zone | forbidden by the spec; we render it. Harmless, listed for completeness. `[V]` |
 | 246-character headword limit | Lingvo drops the entry; we index it. Deliberate — a longer key costs nothing here. `[V]` |
