@@ -110,7 +110,7 @@ function scan(host, root, regex) {
       const a = points[start], b = points[end-1];
       if (!a || !b) continue;
       const range = doc.createRange(); range.setStart(a.node,a.start); range.setEnd(b.endNode,b.end);
-      matches.push({host,range,example:a.node.parentElement?.closest(".wu-xonly") || null});
+      matches.push({host,range,example:a.node.parentElement?.closest(".wu-xonly,.wu-sec,.dsl_opt") || null});
     }
     text = ""; points = [];
   }
@@ -131,7 +131,7 @@ function scan(host, root, regex) {
       const css = win.getComputedStyle(el);
       if (css.visibility === "hidden" || css.visibility === "collapse" || el.hidden) { excluded = true; break; }
       if (css.display === "none") {
-        if (el.matches(".wu-xonly")) {
+        if (el.matches(".wu-xonly,.wu-sec,.dsl_opt")) {
           hiddenExamples = true;
           if (options.examples) continue;
         }
@@ -168,10 +168,10 @@ function rebuild() {
   paint();
 }
 function showExample(hit) {
-  for (let el = hit.example; el; el = el.parentElement?.closest(".wu-xonly")) {
+  for (let el = hit.example; el; el = el.parentElement?.closest(".wu-xonly,.wu-sec,.dsl_opt")) {
     if (el.ownerDocument.defaultView.getComputedStyle(el).display !== "none") continue;
     restored.push([el,el.style.getPropertyValue("display"),el.style.getPropertyPriority("display")]);
-    el.style.setProperty("display",el.classList.contains("wu-inline-example") ? "inline" : "block","important");
+    el.style.setProperty("display",el.matches("span,.wu-inline-example") ? "inline" : "block","important");
   }
 }
 function topOf(hit) {

@@ -82,6 +82,34 @@ func TestArticleDefinitionLinkIsNotHiddenAsExample(t *testing.T) {
 	}
 }
 
+func TestArticleSecondaryFolding(t *testing.T) {
+	for _, enhance := range []bool{false, true} {
+		for _, c := range []struct {
+			input string
+			whole bool
+		}{
+			{`[m1][ex]visible example[/ex][/m]`, false},
+			{`[m1][*]optional text[/*][/m]`, true},
+			{`[m1][*][ex]example[/ex] translation[/*][/m]`, true},
+			{`[m1]definition [*]optional[/*][/m]`, false},
+			{`[m1][ref]definition[/ref] [*]optional[/*][/m]`, false},
+			{`[m1][*][b]crossed[/*] visible[/b][/m]`, false},
+		} {
+			got, _, err := transformArticleWithOptions(c.input, "key", nil, ArticleOptions{Enhance: enhance, Styles: true})
+			if err != nil || strings.Contains(got, "wu-xonly") != c.whole {
+				t.Fatalf("enhance=%v %s: %s (%v)", enhance, c.input, got, err)
+			}
+			if err := checkWellFormed(got); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	got, _, err := transformArticleBody("sense\n[*]optional[/*]\nnext", "key", nil)
+	if err != nil || got != `sense<br/><span class="wu-sec">optional<br/></span>next` {
+		t.Fatalf("secondary line break: %s (%v)", got, err)
+	}
+}
+
 func FuzzArticleBody(f *testing.F) {
 	for _, seed := range []string{`[b][i]x[/b]y[/i]`, `[m1][ex]example[/ex][/m]`, `[ref]a[s]x.wav[/s]b[/ref]`, `[t]ma3[/t]`, `[sic]`} {
 		f.Add(seed)

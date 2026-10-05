@@ -4,11 +4,11 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-// Example folding: MARK the lines that hold nothing but examples, so the
+// Secondary folding: MARK the lines covered by DSL [*] zones, so the
 // "Examples: Show | Hide" layer can fold them away with one CSS rule.
 //
 // It marks and never hides. The class says a FACT about the line - there is
-// nothing here but examples - and the hiding is that layer's article half
+// nothing here but optional content - and the hiding is that layer's article half
 // (presets/examples/hide_examples_article.css), which exists in the article
 // sheet only while the layer is on. That split is what keeps this file
 // stateless: it knows nothing about the toggle, is never told about it, needs
@@ -50,17 +50,28 @@ function exampleOnly(p) {
   return true;
 }
 
+function secondaryOnly(p) {
+  if (!p.matches(".wu-sec,.dsl_opt") && !p.querySelector(".wu-sec,.dsl_opt")) return false;
+  const walker = document.createTreeWalker(p, NodeFilter.SHOW_TEXT);
+  for (let n; (n = walker.nextNode()); ) {
+    if (n.parentElement.closest(".wu-sec,.dsl_opt,.wu-audio,.wu-file")) continue;
+    if (!JUNK.test(n.textContent)) return false;
+  }
+  return true;
+}
+
 function mark(root) {
   if (!root || !root.querySelectorAll) return;
-  if (root.querySelector('.wu-gd[data-wu-examples="1"]')) return;
+  if (root.querySelector('.wu-gd[data-wu-examples="2"]')) return;
+  for (const n of root.querySelectorAll(".wu-xonly")) n.classList.remove(CLASS);
   for (const p of root.querySelectorAll("p,.wu-m")) {
+    if (secondaryOnly(p)) p.classList.add(CLASS);
     if (!exampleOnly(p)) continue;
-    p.classList.add(CLASS);
     markExample(p);
   }
   for (const ex of root.querySelectorAll(".wu-ex,.dsl_ex")) {
     if (ex.closest(".wu-example-block") || ex.parentElement.closest(".wu-ex,.dsl_ex")) continue;
-    ex.classList.add("wu-inline-example", CLASS);
+    ex.classList.add("wu-inline-example");
   }
 }
 function markExample(p) {

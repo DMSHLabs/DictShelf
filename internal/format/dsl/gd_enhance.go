@@ -195,10 +195,14 @@ func gdMergeable(child, parent *html.Node) bool {
 // translations keep the paragraph visible. Include the block's own example
 // role because cleanup may have moved the class out of its span.
 func gdExampleOnly(block *html.Node) bool {
+	return gdRoleOnly(block, "wu-ex", "dsl_ex")
+}
+
+func gdRoleOnly(block *html.Node, role, legacy string) bool {
 	hasExample, ownText := false, false
 	var visit func(*html.Node, bool)
 	visit = func(n *html.Node, skipped bool) {
-		example := gdClass(n, "wu-ex") || gdClass(n, "dsl_ex")
+		example := gdClass(n, role) || gdClass(n, legacy)
 		hasExample = hasExample || example
 		skipped = skipped || example || gdClass(n, "wu-audio") || gdClass(n, "wu-file")
 		if n.Type == html.TextNode && !skipped {
@@ -241,10 +245,14 @@ func gdPrepareExamples(root *html.Node) {
 	}
 	collect(root)
 	for _, block := range blocks {
+		if gdRoleOnly(block, "wu-sec", "dsl_opt") {
+			gdAddClass(block, "wu-xonly")
+		}
+	}
+	for _, block := range blocks {
 		if !gdExampleOnly(block) {
 			continue
 		}
-		gdAddClass(block, "wu-xonly")
 		if nestedBlocks[block] {
 			continue
 		}
@@ -306,7 +314,6 @@ func gdPrepareExamples(root *html.Node) {
 		}
 		if !nested {
 			gdAddClass(ex, "wu-inline-example")
-			gdAddClass(ex, "wu-xonly")
 		}
 	}
 }
@@ -330,7 +337,7 @@ func prepareGDHTML(body string, options GDOptions) (string, error) {
 	gdPrepareExamples(root)
 	var out bytes.Buffer
 	if options.Styles {
-		out.WriteString(`<style>@import url("/assets/presets/gd/article-style.css?v=4");</style><div class="wu-gd" data-wu-examples="1">`)
+		out.WriteString(`<style>@import url("/assets/presets/gd/article-style.css?v=4");</style><div class="wu-gd" data-wu-examples="2">`)
 	}
 	for c := root.FirstChild; c != nil; c = c.NextSibling {
 		if err := html.Render(&out, c); err != nil {

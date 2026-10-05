@@ -1,5 +1,7 @@
 # Agent handoff — current state
 
+2026-10-05 dev2 DSL folding: [ex] keeps example styling but no longer marks content for hiding; [*]/wu-sec is the folding role. Restored master's absorbBreaks range handling. Prepared marker v2 separates presentation and folding; browser fallback repairs v1/legacy marks. Article find includes secondary zones. DSL reader v10, legacy GD reader v9. DSL/server suites, JS syntax, diff check and Chromium light/dark/paper styling/folding checks pass. Android verification outstanding.
+
 2026-10-05 Rescan empty result: System Log's successful index jobs and the UI error identify nil `jobStatus.Failed` becoming JSON null after status copying; the dialog then read `report.failed.length`. Preserve nonnil empty failure slices across job copies and make the client treat missing failures as empty. No new checks run per instruction.
 
 2026-10-05 Sepia article images: added local article-colour backdrops and multiply blending, including Oxford enlargeable images, to the day-only Sepia article layer. Chromium pixel checks confirm white pixels become the Sepia article colour in shadow and iframe articles and hidden full-size images stay hidden; targeted preset/assets/appearance tests pass. No APK/device verification. Existing Android cache edits preserved; no commit.

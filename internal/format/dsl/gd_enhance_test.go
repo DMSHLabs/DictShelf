@@ -14,7 +14,7 @@ func TestGDEnhancerCleanup(t *testing.T) {
 		{`<p></p>inline`, `<p></p>inline`},
 		{`a<span class="gde">b</span>c<span class="gde">d</span>`, `abcd`},
 		{`<span class="gde" title="keep">b</span>`, `<span class="gde" title="keep">b</span>`},
-		{`<div><span class="wu-ex">one</span></div>`, `<div class="wu-ex wu-inline-example wu-xonly">one</div>`},
+		{`<div><span class="wu-ex">one</span></div>`, `<div class="wu-ex wu-inline-example">one</div>`},
 		{`<p><b>bold</b></p>`, `<p><b>bold</b></p>`},
 		{`<p><span lang="ru">one</span></p>`, `<p lang="ru">one</p>`},
 		{`<p lang="en"><span lang="ru">one</span></p>`, `<p lang="en"><span lang="ru">one</span></p>`},
@@ -94,7 +94,7 @@ func TestGDPreparedExampleRoles(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if !strings.Contains(got, `data-wu-examples="1"`) || strings.Contains(got, "wu-example-block") != c.block || strings.Contains(got, "wu-inline-example") != c.inline || strings.Contains(got, "wu-example-bullet") != c.bullet {
+			if !strings.Contains(got, `data-wu-examples="2"`) || strings.Contains(got, "wu-example-block") != c.block || strings.Contains(got, "wu-inline-example") != c.inline || strings.Contains(got, "wu-example-bullet") != c.bullet {
 				t.Fatalf("enhance=%v %s: %s", enhance, c.body, got)
 			}
 			if c.inline && strings.Count(got, "wu-inline-example") != 1 {
