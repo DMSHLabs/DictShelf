@@ -55,6 +55,7 @@ narratives, so `git log` is a second copy.
 | Release wudict2-v0.3.0 (2026-09-27, this session) | 2026-09-27 | — (added after the split) |
 | Release wudict2-v0.4.0 (2026-09-27, this session) | 2026-09-27 | — (added after the split) |
 | Release wudict2-v0.5.0 (2026-09-28, this session) | 2026-09-28 | — (added after the split) |
+| Release wudict2-v0.9.0 (2026-10-06, this session) | 2026-10-06 | — (added after the split) |
 | Release wudict2-v0.8.0 (2026-10-04, this session) | 2026-10-04 | — (added after the split) |
 | The 2026-09-29/30 sessions: the wumark sync and the translation slices | 2026-09-29/30 | — (added after the split) |
 | The 2026-10-04 upstream syncs (third, fourth and fifth) | 2026-10-04 | — (added after the split) |
@@ -1748,6 +1749,42 @@ GitHub may serve unreachable objects by SHA for a while. The step that actually
 stops the distribution is replacing the release asset — which is why it was done
 in the same pass. The pre-rewrite repository survives as a mirror clone in
 `D:\tmp\wudict-backup.git`; it holds the fonts and every old SHA.
+
+## Release wudict2-v0.9.0 (2026-10-06, this session)
+
+The release that folded the fork's second DSL reader back into upstream's, cut at
+the user's request. Twenty-two commits past v0.8.0, and most of them are that:
+upstream's reader became lenient (`dca92e8`), so the fork dropped its
+GD-compatible parser and the Original/GD/Both selector (`df13f65`), added a
+migration (`dsl_migration.go`) that collapses a source's two entries into one and
+rewrites preferences, and took upstream's collapsed secondary zone (`8ebe38f`).
+The rest is the fork's own: the task notice with Stop and reconnection
+(`75c75b0`, `ff09907`, `6f514c6`, `1f2c175`, `d6960dd`), the rotating System Log
+(`c920c4b`, `c88a857`) with `work_guard.go` and `store/indexlog.go`, the lemma
+installer's manifest work (`47c0efb`, `1729e16`) and the page-startup fix
+(`6f09753`).
+
+Same order as always: the changelog commit (`6984e86`), `dev` pushed, the
+annotated tag `wudict2-v0.9.0` on it, pushed, then `build-android.cmd release`,
+then the REST create and the asset upload. aapt2: `versionName='wudict2-v0.9.0'`,
+versionCode 538, `locales: '--_--' 'ru'`, arm64 only, 8,952,897 bytes, sha256
+`1ea8e0535f7401500ffb7739922a1fdde31b136fa975b32de0651647c2ef6809`, the same
+signer certificate as every release. A normal release, so `latest` moved to it.
+https://github.com/DmShAl/wudict2/releases/tag/wudict2-v0.9.0
+
+**Verified:** `go build ./...` and `go vet ./...` clean; `go test -count=1` green
+for `internal/format/dsl`, `internal/server`, `internal/store`, `internal/logx`
+and `internal/lemmas` — the five packages this cycle touched, the parser and store
+ones mattering most, since it rewrote the DSL transform path and added the index
+log; the packaged `.so` unpacked and checked for `/api/system-log`, the work
+notice, the unmarked-examples switch, the DSL migration and the busy guard (and
+for **0** `Monotype`/`ArialPlus`/`QuiviraPhonetic`); the published asset
+downloaded back and hash-matched; the body compared byte for byte with the
+changelog section. No device or emulator run; `make i18n-check-js` was not run —
+still no Node on this machine.
+
+Still open, unchanged by this release: the `wudict2-v0.7.1` release remains a
+draft carrying eight desktop assets.
 
 ## Release wudict2-v0.8.0 (2026-10-04, this session)
 
