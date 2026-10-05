@@ -5,6 +5,61 @@ Notable changes in **wuDict2**, the Android fork of
 version it was forked from. Fork release tags are prefixed `wudict2-`; one
 tagged line per release, newest first.
 
+## wudict2-v0.9.0 — 2026-10-06
+
+From `dev`. The two DSL readers became one, index work became visible and
+stoppable, and the app can hand you its own log.
+
+### One DSL reader again
+
+- **The GD-compatible reader is gone**, and with it the Original / GD
+  compatible / Both choice. It existed because the original reader could not
+  cope with malformed DSL; upstream's reader now can, so the second one has no
+  reason to be here.
+- **A dictionary that was listed twice is listed once.** With both readers on, a
+  DSL dictionary appeared as `NAME` and `NAME GD`; the migration collapses that
+  pair back to the dictionary itself, rebuilt with the lenient reader. It
+  changes preferences only — your source files and the prepared data are never
+  touched, and an old comparison receipt stays readable while its source is
+  gone.
+- Upstream's reader brings its own work: crossed and unclosed tags,
+  transcription, and Lingvo's **secondary zone** (`[*]`), which is now
+  **collapsed when a section opens**. Reveal it by tapping the icon — or Ctrl+*
+  on a desktop — and a section opens in whichever state you chose last, except
+  when a full-text match sits inside the zone, because that match is the reason
+  the article is there at all.
+
+### Index work you can see and stop
+
+- **Running index operations are shown in one place**: a notice at the bottom of
+  the screen with a spinner, "Active operations: 2", "3 of 12" and what it is
+  doing — Creating, Recreating, Updating, Removing — plus a **Stop** that stops
+  after the current dictionary rather than interrupting a write. When it stops,
+  it tells you how far it got.
+- **A dropped connection reconnects** and says so, instead of leaving a spinner
+  you cannot trust.
+- **While work runs, the server refuses work that would collide with it**
+  ("dictionary operations are running; wait for completion or stop them") and
+  the page locks the controls that would fight it, so the two halves cannot
+  disagree about what is happening.
+
+### A log you can hand over
+
+- **Save System Log** — from Settings → System in the page, and from the shell's
+  own settings screen as well, where it still works when the page cannot load
+  and keeps the Android diagnostics. The log rotates (2 MB, five files), and
+  index operations are recorded in it.
+
+### Smaller things
+
+- **Examples gained a second switch**: "Also hide examples without [*]", beside
+  the Examples row, for dictionaries whose examples are not marked as such.
+- **The folder and lemma dialogs report progress** — "Checking folders — 3 of
+  12…", "Applying folder changes…" — instead of appearing to hang, and the lemma
+  dialog wraps its text rather than clipping it.
+- Fixed: the page could throw while starting up, because some of its code read
+  variables before they were defined.
+
 ## wudict2-v0.8.0 — 2026-10-04
 
 From `dev`. The dictionary list can be sorted by rules now, index maintenance
