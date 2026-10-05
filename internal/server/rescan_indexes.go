@@ -103,14 +103,9 @@ func (r *Registry) updateDictionaryIndexesProgress(req rescanIndexesRequest, pro
 	if err := r.rescan(false); err != nil {
 		return []string{err.Error()}
 	}
-	defaults := r.prefs.newDSLDefaults()
+	defaults := r.prefs.newIndexDefaults()
 	if req.New != nil {
-		if defaults.Original.Index {
-			defaults.Original.Contains, defaults.Original.FullText = req.New.Contains, req.New.FullText
-		}
-		if defaults.GD.Index {
-			defaults.GD.Contains, defaults.GD.FullText = req.New.Contains, req.New.FullText
-		}
+		defaults = *req.New
 	}
 	type target struct {
 		e       *entry
@@ -127,18 +122,7 @@ func (r *Registry) updateDictionaryIndexesProgress(req rescanIndexesRequest, pro
 		_, prepared := store.LookupDir(e.Path)
 		_, pending := rec.DSLPending[e.indexRemovalKey()]
 		fresh := pending || (!prepared && (!previous[dict.CanonPath(e.Path)] || !e.indexBlocked()))
-		options := dslIndexOptions{Index: true}
-		options.Contains = defaults.Original.Index && defaults.Original.Contains || defaults.GD.Index && defaults.GD.Contains
-		options.FullText = defaults.Original.Index && defaults.Original.FullText || defaults.GD.Index && defaults.GD.FullText
-		if req.New != nil {
-			options = *req.New
-		}
-		if e.dslSource != "" {
-			options = defaults.Original
-			if e.dslVariant == "gd" {
-				options = defaults.GD
-			}
-		}
+		options := defaults
 		targets = append(targets, target{e, fresh, options})
 	}
 	// Save desired pending plans before touching files; a retry/restart uses the
@@ -154,7 +138,7 @@ func (r *Registry) updateDictionaryIndexesProgress(req rescanIndexesRequest, pro
 	if f.DSLRemoved == nil {
 		f.DSLRemoved = map[string]bool{}
 	}
-	f.DSLDefaults = &defaults
+	f.IndexDefaults = &defaults
 	for _, t := range targets {
 		key := t.e.indexRemovalKey()
 		source := cleanAbs(t.e.Path)
@@ -223,10 +207,6 @@ func (r *Registry) updateDictionaryIndexesProgress(req rescanIndexesRequest, pro
 			want.Index = req.Existing.Index == "recreate" || (req.Existing.Contains == "update" && have.Contains) || (req.Existing.FullText == "update" && have.FullText)
 			want.Contains = req.Existing.Contains == "delete"
 			want.FullText = req.Existing.FullText == "delete"
-			// Recreating a selected parser must not revive a disabled sibling.
-			if e.indexBlocked() && e.dslSource != "" && r.prefs.parserSelection() != "both" && r.prefs.parserSelection() != e.dslVariant {
-				continue
-			}
 		}
 		if err := e.clearDatabase(want); err != nil {
 			failures = append(failures, fmt.Sprintf("%s: %v", e.Path, err))

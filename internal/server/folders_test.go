@@ -223,8 +223,8 @@ func TestRegistryDedupesFolders(t *testing.T) {
 	if roots := reg.Roots(); len(roots) != 1 {
 		t.Fatalf("four spellings of one folder gave %d rows: %+v", len(roots), roots)
 	}
-	if reg.Count() != 2 {
-		t.Errorf("dictionaries served = %d, want 2 (DSL and GD)", reg.Count())
+	if reg.Count() != 1 {
+		t.Errorf("dictionaries served = %d, want 1 (DSL)", reg.Count())
 	}
 
 	// and through the setup save path, which also persists the list

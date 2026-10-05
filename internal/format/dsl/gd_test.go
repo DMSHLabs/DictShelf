@@ -250,7 +250,7 @@ func TestGDIndependentPreparation(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "image.png"), []byte("asset"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	comparison, err := dict.ComparisonSource(p)
+	comparison, err := gdComparison(p)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -288,7 +288,7 @@ func TestGDIndependentPreparation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	again, err := dict.ComparisonSource(p)
+	again, err := gdComparison(p)
 	if err != nil || again != comparison {
 		t.Fatal(again, err)
 	}
@@ -299,7 +299,7 @@ func TestGDIndependentPreparation(t *testing.T) {
 	if err := os.WriteFile(p, []byte("#NAME \"Test\"\ngive\n~ away\n\tchanged\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := dict.ComparisonSource(p); err != nil {
+	if _, err := gdComparison(p); err != nil {
 		t.Fatal(err)
 	}
 	if !store.SourceChanged(store.TextDBPath(b), comparison) {

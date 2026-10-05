@@ -1522,18 +1522,16 @@ paths:
         '500':
           description: The state file could not be written.
 
-  /api/dsl-defaults:
+  /api/index-defaults:
     put:
       tags: [internal]
-      operationId: saveDSLDefaults
+      operationId: saveIndexDefaults
       x-internal: true
-      summary: Set automatic indexes for newly discovered DSL dictionaries
+      summary: Set automatic indexes for newly added dictionaries of any format
       description: >
-        Defaults are Original index only. At least one variant must have index
-        enabled; contains and fullText require that variant's index. Existing
-        families are not changed. New families are prepared asynchronously on
-        discovery, with pending plans persisted for retry after restart.
-        The current defaults are returned by GET /api/config as dslDefaults.
+        Index is always enabled. Existing dictionaries are not changed.
+        Pending preparation plans survive restart. GET /api/config returns
+        these defaults as indexDefaults.
       requestBody:
         required: true
         content:
@@ -1541,68 +1539,18 @@ paths:
             schema:
               type: object
               properties:
-                original:
-                  type: object
-                  properties:
-                    index: { type: boolean }
-                    contains: { type: boolean }
-                    fullText: { type: boolean }
-                gd:
-                  type: object
-                  properties:
-                    index: { type: boolean }
-                    contains: { type: boolean }
-                    fullText: { type: boolean }
+                index: { type: boolean }
+                contains: { type: boolean }
+                fullText: { type: boolean }
       responses:
         '200':
-          description: Defaults saved.
+          description: Defaults saved; index is true.
         '400':
-          description: Invalid JSON, missing index selection or dependent feature without index.
+          description: Invalid JSON.
         '500':
           description: State file could not be written; previous defaults retained.
 
-  /api/dsl-mode:
-    put:
-      tags: [internal]
-      operationId: saveDSLMode
-      x-internal: true
-      summary: Select original, GD-compatible or both DSL variants
-      description: >
-        Pass either variant's dictionary id for a single family, or omit dict
-        for all currently registered DSL families. Selection persists in server
-        state without deleting or rebuilding indexes. Unavailable variants stay
-        in /api/dicts for settings but are omitted from search, including explicit
-        id scopes. The last surviving variant stays available.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [mode]
-              properties:
-                dict: { type: string }
-                mode: { type: string, enum: [original, gd, both] }
-                global:
-                  type: boolean
-                  description: Persist an installation-wide parser choice, including future DSL families; no indexes deleted.
-      responses:
-        '200':
-          description: Selection saved.
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  ok: { type: boolean }
-        '400':
-          description: Invalid JSON, mode or non-DSL dictionary.
-        '404':
-          description: Unknown dictionary id.
-        '409':
-          description: Requested variant is missing.
-        '500':
-          description: Could not save selection; previous state retained.
+
 
   /api/style:
     get:
@@ -2829,16 +2777,12 @@ components:
           enum: [mdx, stardict, slob, dsl, dsl-gd, bgl, zim, wmd, wudict]
         unavailable:
           type: boolean
-          description: Disabled DSL variant, retained in settings but not searched.
+          description: Dictionary with a deliberately removed index; retained in settings but not searched.
         dsl:
           type: object
-          description: Shared DSL family and effective variant selection.
+          description: DSL source and index availability.
           properties:
             source: { type: string }
-            variant: { type: string, enum: [original, gd] }
-            mode: { type: string, enum: [original, gd, both] }
-            original: { type: boolean, description: Original variant exists. }
-            gd: { type: boolean, description: GD variant exists. }
             sourceAvailable: { type: boolean, description: Shared DSL source exists and can rebuild deleted indexes. }
             indexRemoved: { type: boolean, description: Explicitly removed index stays unavailable until explicit ingest; persists across restart. }
         path:

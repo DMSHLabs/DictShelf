@@ -9,9 +9,9 @@ const {chromium}=require('playwright');
  const page=await browser.newPage({viewport:{width:320,height:800}});
  for(const lang of ['en','ru']){
   const catalog=JSON.parse(fs.readFileSync('internal/server/web/i18n/'+lang+'.json','utf8'));
-  await page.setContent('<style>'+fs.readFileSync('internal/server/web/app.css','utf8')+'</style><div style="width:280px"><div id="dslParserMode"><button>'+catalog['dictUI.dslOriginalShort']+'</button><button>GD</button><button>'+catalog['dictUI.dslBoth']+'</button></div><div id="bulkIndexes"></div></div><button id="bulkIndexStop"></button><div id="bulkIndexConfirm"></div><dialog id="bulkIndexDialog"></dialog>');
+  await page.setContent('<style>'+fs.readFileSync('internal/server/web/app.css','utf8')+'</style><div style="width:280px"><div id="bulkIndexes"></div></div><button id="bulkIndexStop"></button><div id="bulkIndexConfirm"></div><dialog id="bulkIndexDialog"></dialog>');
   await page.evaluate(({source,catalog})=>{
-   window.$=id=>document.getElementById(id);window.tx=(key,args={})=>String(catalog[key]||key).replace(/\{(\w+)\}/g,(_,k)=>args[k]??k);window.esc=window.escAttr=s=>String(s);window.cfgInfo={canDelete:true};window.selectedDSLParser=()=>"both";
+   window.$=id=>document.getElementById(id);window.tx=(key,args={})=>String(catalog[key]||key).replace(/\{(\w+)\}/g,(_,k)=>args[k]??k);window.esc=window.escAttr=s=>String(s);window.cfgInfo={canDelete:true};
    window.dicts=[{id:'one',source:true,dbSize:1,caps:{Contains:true,FTS:false}}];window.calls=[];window.setIndexStatus=s=>{window.status=s};window.runIngest=async(id,opts)=>{calls.push({id,opts});return true};window.loadDicts=async()=>{};window.lastScope=window.lastQuery=null;window.wudictI18n={errorText:s=>s};window.dictLabel=d=>d.id;
    eval(source+';renderBulkIndexes();');
   },{source,catalog});
@@ -23,7 +23,6 @@ const {chromium}=require('playwright');
   await page.locator('[data-bulk-start]').click();assert.equal(await page.evaluate(()=>calls.length),0);
   await page.locator('[data-bulk-go]').click();await page.waitForFunction(()=>calls.length===2&&!document.getElementById('bulkIndexStop').offsetParent);
   const calls=await page.evaluate(()=>window.calls);assert.equal(calls[0].opts.contains,0);assert.equal(calls[1].opts.fts,1);
-  const fits=await page.evaluate(()=>[...document.querySelectorAll('#dslParserMode button')].every(b=>b.scrollWidth<=b.clientWidth));assert.ok(fits,lang);
   await page.locator('[data-bulk-feat="base"]').selectOption('delete');assert.equal(await page.locator('[data-bulk-feat="fts"]').isDisabled(),true);
   assert.equal(await page.locator('[data-bulk-feat="fts"]').inputValue(),'keep');
   await page.locator('[data-bulk-feat="base"]').selectOption('update');

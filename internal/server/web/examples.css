@@ -4,7 +4,7 @@
  */
 
 /* The tint must survive background presets clearing direct-root backgrounds:
-   Original paragraphs sit at that level, while GD paragraphs are nested. */
+   Legacy paragraphs sit at that level; enhanced paragraphs can be nested. */
 /* Standalone examples: the article ink supplies both marker and soft tint. */
 .wu-example-block.wu-example-block
 {

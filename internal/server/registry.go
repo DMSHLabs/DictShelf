@@ -312,10 +312,9 @@ func release(sem chan struct{}) { <-sem }
 
 // entry is one discovered dictionary, opened lazily.
 type entry struct {
-	ID         string
-	Path       string
-	dslSource  string
-	dslVariant string
+	ID        string
+	Path      string
+	dslSource string
 	// builtin: a dictionary the app ships (Builtin), not one the user added.
 	builtin bool
 
@@ -959,16 +958,15 @@ func openUpgradedOrDirect(path string) (dict.Dictionary, error) {
 // non-empty registry. Opting in is a deliberate, remembered choice made on the
 // setup page ("Use these dictionaries").
 type Registry struct {
-	dslAutoMu   sync.Mutex
-	mu          sync.RWMutex
-	dictDirs    []string // dictionary folders: .mdx/.slob/.ifo/.dsl/.bgl sources
-	useCached   bool     // include prepared dictionaries from the library (USE_CACHED)
-	comparisons bool
-	entries     []*entry
-	byID        map[string]*entry
-	fromLib     int    // how many entries came from the library, not a dict folder
-	roots       []Root // per-folder status, for the startup summary and setup page
-	builtin     []Builtin
+	dslAutoMu sync.Mutex
+	mu        sync.RWMutex
+	dictDirs  []string // dictionary folders: .mdx/.slob/.ifo/.dsl/.bgl sources
+	useCached bool     // include prepared dictionaries from the library (USE_CACHED)
+	entries   []*entry
+	byID      map[string]*entry
+	fromLib   int    // how many entries came from the library, not a dict folder
+	roots     []Root // per-folder status, for the startup summary and setup page
+	builtin   []Builtin
 
 	// previewBudget caps the memory unprepared dictionaries may hold open
 	// (PREVIEW_MEMORY; 0 = unlimited). Prepared ones answer from disk and are
@@ -1030,9 +1028,9 @@ func WithPrefs(p *Prefs) Option {
 	}
 }
 
-// WithComparisons controls alternative parser views; enabled by default.
+// WithComparisons is retained as a no-op for upstream call-site compatibility.
 func WithComparisons(on bool) Option {
-	return func(r *Registry) { r.comparisons = on }
+	return func(r *Registry) {}
 }
 
 // Root is one dictionary folder and what it contributed. A folder that is
@@ -1047,12 +1045,11 @@ type Root struct {
 
 func NewRegistry(dictDirs []string, useCached bool, opts ...Option) (*Registry, error) {
 	r := &Registry{
-		dictDirs:    dict.DedupeDirs(dictDirs),
-		useCached:   useCached,
-		comparisons: true,
-		byID:        map[string]*entry{},
-		prefs:       LoadPrefs(""),
-		wake:        make(chan struct{}, 1),
+		dictDirs:  dict.DedupeDirs(dictDirs),
+		useCached: useCached,
+		byID:      map[string]*entry{},
+		prefs:     LoadPrefs(""),
+		wake:      make(chan struct{}, 1),
 	}
 	for _, o := range opts {
 		o(r)
@@ -1109,7 +1106,7 @@ func (r *Registry) Count() int {
 }
 
 // UserCount counts user dictionaries by source, excluding builtins and
-// collapsing Original/GD views of the same DSL dictionary.
+// treating cached receipts as the same source dictionary.
 func (r *Registry) UserCount() int {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -1151,7 +1148,6 @@ func (r *Registry) rescan(prepare bool) error {
 	r.mu.RLock()
 	dirs := append([]string(nil), r.dictDirs...)
 	useCached := r.useCached
-	comparisons := r.comparisons
 	r.mu.RUnlock()
 	paths, perRoot, err := dict.DiscoverAll(dirs)
 	if err != nil {
@@ -1189,52 +1185,28 @@ func (r *Registry) rescan(prepare bool) error {
 		shippedBy[b.Path] = true
 		paths = append(paths, b.Path)
 	}
-	fromLib := 0
-	// Comparison views have their own source receipts and registry identities.
-	for _, p := range append([]string(nil), paths...) {
-		if !comparisons {
-			break
-		}
-		if alternative, err := dict.ComparisonSource(p); err != nil {
-			logx.Warn("comparison for %s: %v", filepath.Base(p), err)
-		} else if alternative != "" {
-			paths = append(paths, alternative)
+	discovered := map[string]bool{}
+	for _, p := range paths {
+		discovered[dict.CanonPath(p)] = true
+		if source, _ := dslIdentity(p); source != "" {
+			discovered[source] = true
 		}
 	}
 	if useCached {
 		// A builtin's library folder is never listed on its own: it belongs
 		// to the builtin, or to nothing while the user's copy stands in.
 		lib := libraryPaths(append(paths, shipped...))
-		fromLib = len(lib)
 		paths = append(paths, lib...)
-		if comparisons {
-			known := make(map[string]bool, len(paths))
-			for _, p := range paths {
-				known[p] = true
-			}
-			for _, p := range lib {
-				source := dict.SourceInput(p)
-				if store.IsTextDB(p) {
-					value, err := store.ReadMetaValue(p, "source_path")
-					if err != nil {
-						continue
-					}
-					source = dict.SourceInput(value)
-				}
-				if !fsx.FileExists(source) {
-					continue
-				}
-				alternative, err := dict.ComparisonSource(source)
-				if err != nil {
-					logx.Warn("comparison for %s: %v", filepath.Base(source), err)
-					continue
-				}
-				if alternative != "" && !known[alternative] {
-					paths = append(paths, alternative)
-					known[alternative] = true
-					fromLib++
-				}
-			}
+	}
+	paths, err = r.singleDSLPaths(paths)
+	if err != nil {
+		return err
+	}
+	fromLib := 0
+	for _, p := range paths {
+		source, _ := dslIdentity(p)
+		if !discovered[dict.CanonPath(p)] && !discovered[source] {
+			fromLib++
 		}
 	}
 	r.mu.Lock()
@@ -1265,7 +1237,7 @@ func (r *Registry) rescan(prepare bool) error {
 		}
 		if !ok {
 			e = &entry{ID: id, Path: p, builtin: builtin, reg: r}
-			e.dslSource, e.dslVariant = dslIdentity(p)
+			e.dslSource, _ = dslIdentity(p)
 		} else {
 			kept = append(kept, e)
 		}
@@ -1305,9 +1277,16 @@ func (r *Registry) rescan(prepare bool) error {
 		e.revalidate()
 	}
 	for _, e := range gone {
-		if _, dropped := e.drop(true); dropped {
-			logx.V("rescan: %s is gone; closed it", filepath.Base(e.Path))
-		}
+		// A removed comparison entry must release its file even when a
+		// janitor or ingest held ingestMu at discovery. drop's TryLock may
+		// otherwise leave an unlisted backend holding the database on Windows.
+		e.rebuilding.Store(true)
+		e.ingestMu.Lock()
+		e.openMu.Lock()
+		e.closeNow()
+		e.rebuilding.Store(true)
+		e.openMu.Unlock()
+		e.ingestMu.Unlock()
 		// Nothing can reach a gone entry again, so its grace protects no one -
 		// while on Windows the handle it would keep for closeGrace blocks
 		// deleting the library folder it held (an orphan removed right after
@@ -1374,7 +1353,12 @@ func libraryPaths(discovered []string) []string {
 			}
 		}
 		if dict.SourceInput(e.Source) != e.Source && fsx.FileExists(e.Source) {
-			out = append(out, e.Source)
+			input := dict.SourceInput(e.Source)
+			if fsx.FileExists(input) {
+				out = append(out, input)
+			} else {
+				out = append(out, e.TextDB)
+			}
 		} else {
 			out = append(out, e.TextDB)
 		}

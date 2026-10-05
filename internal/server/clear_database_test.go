@@ -187,7 +187,7 @@ func TestClearDatabasePreservesExplicitDatabaseSource(t *testing.T) {
 	}
 }
 
-func TestCleanupKeepsInactiveDSLVariant(t *testing.T) {
+func TestCleanupKeepsSingleDSLIndex(t *testing.T) {
 	isolatedDBDir(t)
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "demo.dsl"), []byte(sampleDSL), 0600); err != nil {
@@ -208,11 +208,8 @@ func TestCleanupKeepsInactiveDSLVariant(t *testing.T) {
 		}
 		paths = append(paths, store.TextDBPath(prepared))
 	}
-	if len(paths) != 2 {
-		t.Fatalf("expected two variants: %v", paths)
-	}
-	if err := reg.prefs.mutate(func(f *prefsFile) { f.DSLParser = "original" }); err != nil {
-		t.Fatal(err)
+	if len(paths) != 1 {
+		t.Fatalf("expected one DSL index: %v", paths)
 	}
 	if err := reg.cleanupLibrary(); err != nil {
 		t.Fatal(err)

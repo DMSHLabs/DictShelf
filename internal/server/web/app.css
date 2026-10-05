@@ -1850,14 +1850,9 @@ dialog.panel-card:not([open]){display:none}
 .dsl-all button[aria-pressed="true"]{color:var(--accent);border-color:var(--accent)}
 .dsl-all button:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
 .dsl-all button:disabled{opacity:.55;cursor:wait}
-.dsl-choices{display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px;margin:8px 0}
-.dsl-choices label{display:inline-flex;align-items:center;gap:5px;cursor:pointer}
-.dsl-choices input{margin:0;accent-color:var(--accent)}
 .dsl-unavailable .hd b{opacity:.55}
 .dsl-index-controls{display:flex;flex-direction:column;gap:12px;margin:12px 0}
 .dsl-index-row{display:grid;grid-template-columns:minmax(0,1fr);align-items:start;gap:8px}
-.dsl-index-row+.dsl-index-row{border-top:1px solid var(--line);padding-top:12px}
-.dsl-index-row>span{font-size:12px;font-weight:500;overflow-wrap:anywhere}
 .dsl-index-tools{display:flex;flex-direction:column;align-items:flex-start;gap:6px;min-width:0}
 .dsl-feature-line{display:flex;flex-wrap:wrap;justify-content:flex-start;align-items:center;gap:6px;max-width:100%}
 .dsl-browse-line{display:flex;justify-content:flex-start}
@@ -1868,15 +1863,6 @@ dialog.panel-card:not([open]){display:none}
 .dsl-index-row .browse:hover:not(:disabled){color:var(--accent)}
 .dsl-index-row .browse:disabled{color:var(--label-quiet);cursor:default}
 .dsl-index-warning{color:var(--danger);font-size:12px}
-.dsl-index-note{color:var(--fg);font-size:12px}
-#dslParserSection{flex:none}
-#dslParserSection h3{font-size:1em;margin:0 0 .5em}
-#dslParserMode{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
-#dslParserMode button{font:inherit;color:var(--fg);background:transparent;border:1px solid var(--line);border-radius:8px;padding:.55em .7em;min-height:40px;text-align:left;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:.5em}
-#dslParserMode button{justify-content:center;padding:.55em .25em;white-space:nowrap}
-#dslParserMode button::after{display:none}
-#dslParserMode button.on::after{content:"✓";color:var(--accent)}
-#dslParserMode button.on{background:color-mix(in srgb,var(--accent) 18%,transparent);border-color:var(--accent)}
 .bulk-index-section{padding:12px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
 .bulk-index-section h3{font-size:14px;margin:0 0 8px}
 .bulk-index-buttons{display:flex;flex-wrap:wrap;gap:6px}

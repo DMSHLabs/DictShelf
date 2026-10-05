@@ -901,6 +901,9 @@ func (s *Server) handleDicts(w http.ResponseWriter, r *http.Request) {
 func (s *Server) dictInfoFor(e *entry) dictInfo {
 	info := s.baseDictInfo(e)
 	info.DSL = s.reg.dslView(e)
+	if _, variant := dslIdentity(e.Path); variant == "gd" {
+		info.Name = strings.TrimSuffix(info.Name, " GD")
+	}
 	info.Unavailable = !s.reg.dslAvailable(e)
 	// a library folder that exists but is not prepared-for-this-source (an
 	// unreadable or other-schema text.db, or a source edited since) is

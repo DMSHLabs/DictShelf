@@ -72,7 +72,7 @@ function renderGroupRows(){
   showAll.disabled=group.readonly;
   showAll.checked=group.readonly||groupShowAllPreferred;
   showAll.parentElement.classList.toggle("group-control-disabled",group.readonly);
-  const ordered=orderedDicts().filter(matchesDSLParser), members=new Set(group.readonly?ordered.map(d=>d.id):group.members);
+  const ordered=orderedDicts(), members=new Set(group.readonly?ordered.map(d=>d.id):group.members);
   const inside=group.readonly?ordered:orderedGroupDicts(group,ordered);
   const outside=group.readonly?[]:ordered.filter(d=>!members.has(d.id));
   const filtering=showAll.checked&&!group.readonly;
@@ -119,7 +119,7 @@ async function saveGroupOrder(ids,focusId){
   const group=userGroups.find(g=>g.id===selectedGroup);
   if(!group||(!group.readonly&&$("groupShowAll").checked))return;
   const visible=new Set(ids), reordered=ids.slice();
-  // Replace visible slots only; hidden variants keep membership and position.
+  // Replace visible slots only; temporarily unavailable dictionaries keep membership and position.
   ids=(group.readonly?orderedIds():group.members).map(id=>visible.has(id)?reordered.shift():id);
   const rows=$("groupRows"),top=rows.scrollTop;
   groupSaving=true;$("groupError").textContent="";
@@ -184,7 +184,7 @@ function finishGroupDrag(event,cancel){
   const drag=groupDrag;groupDrag=null;cancelAnimationFrame(drag.raf);clearGroupDrop();
   if(cancel||!drag.target)return;
   const group=userGroups.find(g=>g.id===selectedGroup);if(!group)return;
-  const visible=new Set(orderedDicts().filter(matchesDSLParser).map(d=>d.id));
+  const visible=new Set(orderedDicts().map(d=>d.id));
   const current=(group.readonly?orderedIds():group.members).filter(id=>visible.has(id));
   const ids=current.slice(),from=ids.indexOf(drag.id);if(from<0)return;
   ids.splice(from,1);
@@ -198,7 +198,7 @@ $("groupRows").addEventListener("pointercancel",event=>finishGroupDrag(event,tru
 $("groupRows").addEventListener("keydown",event=>{
   if(!event.target.classList.contains("group-grip")||!(["ArrowUp","ArrowDown"].includes(event.key)))return;
   const group=userGroups.find(g=>g.id===selectedGroup);if(!group||groupSaving)return;
-  const visible=new Set(orderedDicts().filter(matchesDSLParser).map(d=>d.id));
+  const visible=new Set(orderedDicts().map(d=>d.id));
   const id=event.target.closest(".group-row").dataset.dict,ids=(group.readonly?orderedIds():group.members).filter(id=>visible.has(id)),from=ids.indexOf(id);
   const to=from+(event.key==="ArrowUp"?-1:1);
   if(from<0||to<0||to>=ids.length)return;

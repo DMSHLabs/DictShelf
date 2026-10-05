@@ -160,12 +160,11 @@ func facetIDs(in []string) []string {
 	return out
 }
 
-// prefsFile is the file as written. The DSL and language fields are the
-// fork's: the DSL parser choice and its per-source defaults are installation
-// state for the fork's two DSL readers, and the interface language is the
-// person's, so all of it lives here rather than in localStorage for the
-// reasons stated on StateFile.
+// prefsFile stores collection state. Legacy parser selection fields are read
+// only by the single-parser migration and cleared on the next migration save.
 type prefsFile struct {
+	IndexDefaults   *dslIndexOptions           `json:"indexDefaults,omitempty"`
+	IndexMigrated   map[string]bool            `json:"indexMigrated,omitempty"` // completed legacy receipt migrations, per source
 	DSLInitialSetup bool                       `json:"dslInitialSetup,omitempty"`
 	DSLParser       string                     `json:"dslParser,omitempty"`
 	DSLDefaults     *dslDefaults               `json:"dslDefaults,omitempty"`

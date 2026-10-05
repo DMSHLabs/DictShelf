@@ -23,6 +23,49 @@ type dslDefaults struct {
 	GD       dslIndexOptions `json:"gd"`
 }
 
+func (p *Prefs) newIndexDefaults() dslIndexOptions {
+	f, _ := p.data()
+	if f.IndexDefaults != nil {
+		v := *f.IndexDefaults
+		v.Index = true
+		return v
+	}
+	old := p.newDSLDefaults()
+	return dslIndexOptions{Index: true,
+		Contains: old.Original.Index && old.Original.Contains || old.GD.Index && old.GD.Contains,
+		FullText: old.Original.Index && old.Original.FullText || old.GD.Index && old.GD.FullText}
+}
+
+func (s *Server) handleIndexDefaults(w http.ResponseWriter, req *http.Request) {
+	var next dslIndexOptions
+	if err := json.NewDecoder(http.MaxBytesReader(w, req.Body, 4096)).Decode(&next); err != nil {
+		httpErr(w, 400, "invalid index defaults")
+		return
+	}
+	next.Index = true
+	p := s.reg.prefs
+	p.editMu.Lock()
+	defer p.editMu.Unlock()
+	f, _ := p.data()
+	f.IndexDefaults = &next
+	f.DSLKnown = maps.Clone(f.DSLKnown)
+	if f.DSLKnown == nil {
+		f.DSLKnown = map[string]bool{}
+	}
+	for _, e := range s.reg.all() {
+		source := cleanAbs(e.Path)
+		if e.dslSource != "" {
+			source = e.dslSource
+		}
+		f.DSLKnown[source] = true
+	}
+	if err := p.store(f); err != nil {
+		httpErr(w, 500, "%v", err)
+		return
+	}
+	writeJSON(w, next)
+}
+
 func (p *Prefs) newDSLDefaults() dslDefaults {
 	f, _ := p.data()
 	if f.DSLDefaults != nil {
@@ -31,64 +74,15 @@ func (p *Prefs) newDSLDefaults() dslDefaults {
 	return dslDefaults{Original: dslIndexOptions{Index: true}}
 }
 
-func (s *Server) handleDSLDefaults(w http.ResponseWriter, r *http.Request) {
-	var next dslDefaults
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&next); err != nil {
-		httpErr(w, 400, "invalid DSL defaults")
-		return
-	}
-	if !next.Original.Index && !next.GD.Index {
-		httpErr(w, 400, "select at least one DSL index: Original or GD compatible")
-		return
-	}
-	for _, v := range []dslIndexOptions{next.Original, next.GD} {
-		if !v.Index && (v.Contains || v.FullText) {
-			httpErr(w, 400, "DSL contains and full-text require index")
-			return
-		}
-	}
-	entries := s.reg.all()
-	p := s.reg.prefs
-	// One read-decide-write under editMu: the record is a local copy, so a
-	// failed save leaves the file as it was - no rollback to spell out.
-	p.editMu.Lock()
-	defer p.editMu.Unlock()
-	f, _ := p.data()
-	if f.DSLDefaults == nil && len(entries) == 0 && len(f.DSL) == 0 && len(f.DSLKnown) == 0 && f.DSLParser == "" {
-		f.DSLInitialSetup = true
-	}
-	if f.DSLInitialSetup && len(entries) == 0 {
-		f.DSLParser = "both"
-		if !next.GD.Index {
-			f.DSLParser = "original"
-		} else if !next.Original.Index {
-			f.DSLParser = "gd"
-		}
-	}
-	f.DSLKnown = maps.Clone(f.DSLKnown)
-	if f.DSLKnown == nil {
-		f.DSLKnown = map[string]bool{}
-	}
-	// Activating the policy never changes dictionaries already in the registry.
-	for _, e := range entries {
-		if e.dslSource != "" {
-			f.DSLKnown[e.dslSource] = true
-		}
-	}
-	f.DSLDefaults = &next
-	if err := p.store(f); err != nil {
-		httpErr(w, 500, "%v", err)
-		return
-	}
-	writeJSON(w, next)
-}
-
 func (r *Registry) queueNewDSL() error {
 	entries := r.all()
+	current, _ := r.prefs.data()
 	families := make(map[string][]*entry)
 	for _, e := range entries {
 		if e.dslSource != "" {
 			families[e.dslSource] = append(families[e.dslSource], e)
+		} else if current.IndexDefaults != nil && !e.builtin && !store.IsTextDB(e.Path) {
+			families[cleanAbs(e.Path)] = append(families[cleanAbs(e.Path)], e)
 		}
 	}
 	p := r.prefs
@@ -96,7 +90,7 @@ func (r *Registry) queueNewDSL() error {
 	defer p.editMu.Unlock()
 	f, _ := p.data()
 	// Existing installations retain their choices until defaults are saved.
-	if f.DSLDefaults == nil {
+	if f.IndexDefaults == nil {
 		return nil
 	}
 	f.DSLKnown = maps.Clone(f.DSLKnown)
@@ -111,14 +105,7 @@ func (r *Registry) queueNewDSL() error {
 	if f.DSLRemoved == nil {
 		f.DSLRemoved = map[string]bool{}
 	}
-	f.DSL = maps.Clone(f.DSL)
-	if f.DSL == nil {
-		f.DSL = map[string]string{}
-	}
-	changed := f.DSLInitialSetup && len(entries) > 0
-	if changed {
-		f.DSLInitialSetup = false
-	}
+	changed := false
 	for source, family := range families {
 		if f.DSLKnown[source] {
 			continue
@@ -131,22 +118,16 @@ func (r *Registry) queueNewDSL() error {
 			if _, ok := validPrepared(other.Path); ok {
 				existing = true
 			}
+			// Explicit removals and migration plans must survive import defaults.
+			if f.DSLRemoved[other.indexRemovalKey()] {
+				existing = true
+			}
 		}
 		if existing {
 			continue
 		}
-		mode := "both"
-		if !f.DSLDefaults.GD.Index {
-			mode = "original"
-		} else if !f.DSLDefaults.Original.Index {
-			mode = "gd"
-		}
-		f.DSL[source] = mode
 		for _, other := range family {
-			v := f.DSLDefaults.Original
-			if other.dslVariant == "gd" {
-				v = f.DSLDefaults.GD
-			}
+			v := *f.IndexDefaults
 			key := other.indexRemovalKey()
 			// Block implicit preparation until the selected plan finishes.
 			f.DSLRemoved[key] = true

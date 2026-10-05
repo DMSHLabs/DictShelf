@@ -19,11 +19,11 @@ import (
 // ReaderVersion is the behaviour version of this format's Reader (see
 // dict.RegisterReaderVersion). Bump it in the same commit as any change to
 // what the Reader yields, and update the golden in reader_golden_test.go.
-const ReaderVersion = 4
+const ReaderVersion = 9
 
 func init() {
 	openFn := func(path string) (dict.Dictionary, error) { return Open(path) }
-	readFn := func(path string) (dict.Reader, error) { return NewReader(path) }
+	readFn := func(path string) (dict.Reader, error) { return NewArticleReader(path) }
 	dict.RegisterFormat(".dsl", openFn)
 	dict.RegisterReader(".dsl", readFn)
 	// Compressed DSL. Registered as the full ".dsl.dz" suffix (not bare ".dz")
@@ -57,8 +57,19 @@ type Dict struct {
 	resMu   sync.Mutex // guards res against a concurrent Close
 }
 
-func Open(path string) (*Dict, error) {
+// NewArticleReader is the application reader. NewReader retains the upstream
+// implementation for merge compatibility and reference tests only.
+func NewArticleReader(path string) (*Reader, error) {
 	r, err := NewReader(path)
+	if err == nil {
+		r.gd = true
+		r.gdOptions = ArticleOptions{Enhance: true, Styles: true}
+	}
+	return r, err
+}
+
+func Open(path string) (*Dict, error) {
+	r, err := NewArticleReader(path)
 	if err != nil {
 		return nil, err
 	}

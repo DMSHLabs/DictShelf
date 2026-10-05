@@ -82,7 +82,12 @@ func (r *Registry) Remove(id string, dropPrepared, dropSource bool) (removal, er
 	// folder a rebuild is writing into would leave the rebuild finishing into
 	// nowhere.
 	e.ingestMu.Lock()
-	defer e.ingestMu.Unlock()
+	ingestLocked := true
+	defer func() {
+		if ingestLocked {
+			e.ingestMu.Unlock()
+		}
+	}()
 
 	rep.Name = e.probeName()
 	native := store.IsTextDB(e.Path)
@@ -132,7 +137,12 @@ func (r *Registry) Remove(id string, dropPrepared, dropSource bool) (removal, er
 	e.rebuilding.Store(true)
 	defer e.rebuilding.Store(false)
 	e.openMu.Lock()
-	defer e.openMu.Unlock()
+	openLocked := true
+	defer func() {
+		if openLocked {
+			e.openMu.Unlock()
+		}
+	}()
 	e.closeNow()
 	if dropSource && !native {
 		if err := dict.RemoveComparison(e.Path); err != nil {
@@ -184,6 +194,12 @@ func (r *Registry) Remove(id string, dropPrepared, dropSource bool) (removal, er
 		}
 	}
 
+	// Rescan synchronously closes entries that have left the collection. It
+	// takes their locks itself; all file operations above are already finished.
+	e.openMu.Unlock()
+	openLocked = false
+	e.ingestMu.Unlock()
+	ingestLocked = false
 	if err := r.Rescan(); err != nil {
 		logx.V("rescan after removing %s: %v", rep.Name, err)
 	}

@@ -11,6 +11,11 @@ import (
 // clone detaches every mutable field from the record currently being served.
 // Writers can edit this copy without exposing partial changes or failed saves.
 func (f prefsFile) clone() prefsFile {
+	if f.IndexDefaults != nil {
+		v := *f.IndexDefaults
+		f.IndexDefaults = &v
+	}
+	f.IndexMigrated = maps.Clone(f.IndexMigrated)
 	f.DSLKnown = maps.Clone(f.DSLKnown)
 	f.DSLPending = maps.Clone(f.DSLPending)
 	f.DSLRemoved = maps.Clone(f.DSLRemoved)

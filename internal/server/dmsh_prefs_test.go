@@ -12,7 +12,9 @@ import (
 func TestPrefsFailedMutationKeepsActiveRecord(t *testing.T) {
 	p := LoadPrefs("")
 	original := prefsFile{
-		DSLKnown: map[string]bool{"source": true}, DSLPending: map[string]dslIndexOptions{"source": {Index: true}},
+		IndexDefaults: &dslIndexOptions{Index: true, Contains: true},
+		IndexMigrated: map[string]bool{"source": true},
+		DSLKnown:      map[string]bool{"source": true}, DSLPending: map[string]dslIndexOptions{"source": {Index: true}},
 		DSLRemoved: map[string]bool{"source": true}, DSL: map[string]string{"source": "gd"},
 		DSLDefaults: &dslDefaults{Original: dslIndexOptions{Index: true}},
 		UI:          &UIPrefs{GroupsOff: []string{"lang"}},
@@ -39,6 +41,8 @@ func TestPrefsFailedMutationKeepsActiveRecord(t *testing.T) {
 		return blocked
 	}
 	err := p.mutate(func(f *prefsFile) {
+		f.IndexDefaults.Contains = false
+		delete(f.IndexMigrated, "source")
 		delete(f.DSLKnown, "source")
 		delete(f.DSLPending, "source")
 		delete(f.DSLRemoved, "source")

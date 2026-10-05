@@ -207,20 +207,14 @@ label.keep em{font-style:normal;color:var(--label-quiet);font-size:12.5px}
 </div>
 <p>{{INTRO}}</p>
 
-<section id="dslDefaults">
-  <h2>{{T:pages.dslParser}}</h2>
-  <p>{{T:pages.dslParserHint}}</p>
-  <div class="dsl-default-row"><span>{{T:dictUI.dslOriginal}}:</span><div>
-    <label><input type="checkbox" id="dslOriginalIndex" checked>{{T:dictUI.indexPlain}}</label>
-    <label><input type="checkbox" id="dslOriginalContains">{{T:dictUI.contains}}</label>
-    <label><input type="checkbox" id="dslOriginalFullText">{{T:dictUI.fts}}</label>
+<section id="indexDefaults">
+  <p>{{T:pages.indexDefaultsHint}}</p>
+  <div class="dsl-default-row"><div>
+    <label><input type="checkbox" id="newIndexIndex" checked disabled>{{T:dictUI.indexPlain}}</label>
+    <label><input type="checkbox" id="newIndexContains">{{T:dictUI.contains}}</label>
+    <label><input type="checkbox" id="newIndexFullText">{{T:dictUI.fts}}</label>
   </div></div>
-  <div class="dsl-default-row"><span>{{T:dictUI.dslGD}}:</span><div>
-    <label><input type="checkbox" id="dslGDIndex">{{T:dictUI.indexPlain}}</label>
-    <label><input type="checkbox" id="dslGDContains">{{T:dictUI.contains}}</label>
-    <label><input type="checkbox" id="dslGDFullText">{{T:dictUI.fts}}</label>
-  </div></div>
-  <p id="dslDefaultsError" class="err" role="alert" hidden></p>
+  <p id="indexDefaultsError" class="err" role="alert" hidden></p>
 </section>
 
 <h2>{{T:pages.point}}</h2>
@@ -280,40 +274,30 @@ label.keep em{font-style:normal;color:var(--label-quiet);font-size:12.5px}
 "use strict";
 const $=id=>document.getElementById(id);
 const tx=window.wudictI18n.t;
-let dslDefaultsWrite=Promise.resolve(true);
+let indexDefaultsWrite=Promise.resolve(true);
 function syncDSLDefaults(){
-  for(const prefix of ["dslOriginal","dslGD"]){
-    for(const suffix of ["Contains","FullText"]){
-      const field=$(prefix+suffix);
-      field.disabled=!$(prefix+"Index").checked;
-      if(field.disabled)field.checked=false;
-    }
-  }
-  const valid=$("dslOriginalIndex").checked||$("dslGDIndex").checked;
-  $("dslDefaultsError").hidden=valid;
-  if(!valid)$("dslDefaultsError").textContent=tx("pages.dslIndexRequired");
-  return valid;
+  $("newIndexIndex").checked=true;
+  $("newIndexIndex").disabled=true;
+  $("indexDefaultsError").hidden=true;
+  return true;
 }
-function saveDSLDefaults(){
+function saveIndexDefaults(){
   if(!syncDSLDefaults())return Promise.resolve(false);
-  const body={};
-  for(const [variant,prefix] of [["original","dslOriginal"],["gd","dslGD"]]){
-    body[variant]={index:$(prefix+"Index").checked,contains:$(prefix+"Contains").checked,fullText:$(prefix+"FullText").checked};
-  }
-  dslDefaultsWrite=dslDefaultsWrite.then(async()=>{
+  const body={index:true,contains:$("newIndexContains").checked,fullText:$("newIndexFullText").checked};
+  indexDefaultsWrite=indexDefaultsWrite.then(async()=>{
     try{
-      const r=await fetch("/api/dsl-defaults",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+      const r=await fetch("/api/index-defaults",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
       if(!r.ok)throw new Error(await r.text());
       return true;
     }catch(e){
-      $("dslDefaultsError").hidden=false;
-      $("dslDefaultsError").textContent=tx("pages.dslDefaultsFailed",{error:window.wudictI18n.errorText(e.message)});
+      $("indexDefaultsError").hidden=false;
+      $("indexDefaultsError").textContent=tx("pages.indexDefaultsFailed",{error:window.wudictI18n.errorText(e.message)});
       return false;
     }
   });
-  return dslDefaultsWrite;
+  return indexDefaultsWrite;
 }
-$("dslDefaults").addEventListener("change",()=>{saveDSLDefaults()});
+$("indexDefaults").addEventListener("change",()=>{saveIndexDefaults()});
 let timer=null,lastOK=false;
 
 const fmtN=n=>window.wudictI18n.number(n);
@@ -409,7 +393,7 @@ function syncAct(total,checked,bad){
    button would post without the paths, silently discarding whatever folders
    had been typed above it. */
 async function save(){
-  if(!await saveDSLDefaults())return;
+  if(!await saveIndexDefaults())return;
   const q=paths().map(p=>"path="+encodeURIComponent(p)).join("&");
   if(!q)return;
   const url="/api/setup?"+q+"&save=1";
@@ -587,7 +571,7 @@ function showExtras(j){
 }
 
 async function impInstall(){
-  if(!await saveDSLDefaults())return;
+  if(!await saveIndexDefaults())return;
   const pick=[...document.querySelectorAll("#cands input:checked")].map(i=>+i.value);
   const extras=[...document.querySelectorAll("#extras input:checked")].map(i=>+i.value);
   if(!pick.length)return;
@@ -735,13 +719,11 @@ $("save").addEventListener("click",save);
 async function start(){
   let cfg=null;
   try{ cfg=await (await fetch("/api/config")).json() }catch(e){}
-  for(const [variant,prefix] of [["original","dslOriginal"],["gd","dslGD"]]){
-    for(const [feature,suffix] of [["index","Index"],["contains","Contains"],["fullText","FullText"]]){
-      $(prefix+suffix).checked=!!(cfg?.dslDefaults?.[variant]?.[feature]??(variant==="original"&&feature==="index"));
-    }
+  for(const [feature,suffix] of [["contains","Contains"],["fullText","FullText"]]){
+    $("newIndex"+suffix).checked=!!cfg?.indexDefaults?.[feature];
   }
   syncDSLDefaults();
-  await saveDSLDefaults();
+  await saveIndexDefaults();
   const dirs=(cfg&&cfg.roots||[]).map(r=>r.path);
   if(dirs.length)dirs.forEach(d=>addRow(d)); else addRow("");
   /* howtoRemoved is a fact about the host: it stays false while the builtin

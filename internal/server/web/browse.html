@@ -399,8 +399,7 @@ async function chooser(){
     if(!line)continue;
     let m;try{m=JSON.parse(line)}catch(e){continue}
     if(m.t==="dict"&&m.dict&&!m.dict.error){
-      const d=m.dict,parser=d.dsl?.parser||"both";
-      if(!d.dsl||parser==="both"||d.dsl.variant===parser)ds.push(d);
+      ds.push(m.dict);
     }
   }
   ds.sort((x,y)=>(x.name||"").localeCompare(y.name||""));

@@ -3,9 +3,7 @@
 package dsl
 
 import (
-	"bytes"
 	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -29,8 +27,7 @@ type gdFileStamp struct {
 
 var gdStamps sync.Map
 
-// The descriptor gives two views of one file independent library ownership.
-// Only this small reference is duplicated; DSL and media remain in place.
+// Legacy descriptor retained for reading old prepared dictionaries only.
 type gdSource struct {
 	Source string `json:"source"`
 	Stamp  string `json:"stamp"`
@@ -63,8 +60,7 @@ func init() {
 		}
 		return stamp, nil
 	})
-	dict.RegisterComparison(".dsl", gdComparison)
-	dict.RegisterComparison(".dsl.dz", gdComparison)
+	// Read legacy descriptors, but never generate a second runtime dictionary.
 	dict.RegisterReader(".dslgd", func(p string) (dict.Reader, error) { return readGDSource(p) })
 	dict.RegisterFormat(".dslgd", func(p string) (dict.Dictionary, error) {
 		r, err := readGDSource(p)
@@ -136,56 +132,6 @@ func gdStamp(p string) (string, error) {
 	return value, nil
 }
 
-func gdComparison(p string) (string, error) {
-	p = dict.CanonPath(p)
-	stamp, err := gdStamp(p)
-	if err != nil {
-		return "", err
-	}
-	s := gdSource{Source: p, Stamp: stamp}
-	if ab, ok := dict.AbbrevCompanion(p); ok {
-		s.Abbrev, err = gdStamp(ab)
-		if err != nil {
-			return "", err
-		}
-	}
-	data, err := json.Marshal(s)
-	if err != nil {
-		return "", err
-	}
-	id := sha256.Sum256([]byte(p))
-	name := store.FolderName(p) + " GD-" + hex.EncodeToString(id[:6]) + ".dslgd"
-	dir := filepath.Join(store.DefaultDBDir(), ".dsl-gd")
-	target := filepath.Join(dir, name)
-	if _, err := os.Stat(target + ".disabled"); err == nil {
-		return "", nil
-	}
-	if previous, err := os.ReadFile(target); err == nil && bytes.Equal(previous, data) {
-		return target, nil
-	}
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return "", err
-	}
-	f, err := os.CreateTemp(dir, ".comparison-*")
-	if err != nil {
-		return "", err
-	}
-	tmp := f.Name()
-	defer os.Remove(tmp)
-	_, writeErr := f.Write(data)
-	closeErr := f.Close()
-	if writeErr != nil {
-		return "", writeErr
-	}
-	if closeErr != nil {
-		return "", closeErr
-	}
-	if err := os.Rename(tmp, target); err != nil {
-		return "", err
-	}
-	return target, nil
-}
-
 func loadGDSource(p string) (gdSource, error) {
 	f, err := os.Open(p)
 	if err != nil {
@@ -200,8 +146,8 @@ func loadGDSource(p string) (gdSource, error) {
 	return s, err
 }
 
-// NewGDReader retains the existing variant identity for the UI. Its article
-// pipeline now uses range repair plus our heading, cleanup and example handling.
+// NewGDReader reads legacy comparison receipts and serves reference tests.
+// New DSL sources use NewArticleReader without a generated name or descriptor.
 func NewGDReader(p string) (*Reader, error) {
 	return NewGDReaderWithOptions(p, GDOptions{Enhance: true, Styles: true})
 }

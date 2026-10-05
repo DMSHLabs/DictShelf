@@ -1,79 +1,12 @@
 # DSL differential comparison
 
-This is a development tool, not part of the Android build. It runs the original
-GoldenDict C++ `ArticleDom` and heading functions against the experimental Go GD
-parser. No source dictionaries or application indexes are modified.
+This is a development-only GoldenDict reference comparison tool, not part of the Android build. Production uses one enhanced Go DSL reader for native DSL sources; the upstream Go implementation and GoldenDict oracle remain available for regression checks.
 
-## Scope
+## Application Integration
 
-GD typography follows Settings size/weight via inheritance. Headword/IPA sizes
-use the original relative proportions, not fixed px; bold/italic markup stays.
-The serving resource rewriter upgrades stored v4 stylesheet imports to v5 to
-avoid immutable CSS caches, so existing GD indexes need no rebuild for this fix.
-verify_enhancer.cjs checks live 15/24px and 400/500/700 weights on prepared HTML.
+DSL dictionaries have one registry entry and one index, with independent contains and full-text indexes. No parser selection endpoint or second dictionary is generated. Existing comparison receipts are accepted only for migration and cached-only reading. Migration merges dictionary group membership and order, preserves removal decisions, and carries optional index plans into the native dictionary. Source and media files are not modified.
 
-### Dictionary settings selection
-
-Each DSL family offers `Original` and `GD compatible` checkboxes; at least one
-available variant stays selected. `Both` keeps the ordinary and `GD` entries
-in the search picker. The bulk three-way control applies to currently registered
-DSL families, not to other formats or newly added dictionaries (default: both).
-Selection is installation-wide `state.json` metadata, keyed by original source
-path and independent of order, group membership and UI preferences. Moving the
-source to a different path starts with the default selection.
-
-`PUT /api/dsl-mode` accepts `{dict: <either variant id>, mode: "original"|"gd"|"both"}`;
-omit `dict` to apply to every registered DSL family. `/api/dicts` still reports
-both settings cards, adds `dsl` pairing/selection metadata and `unavailable`.
-Search omits unavailable variants even for explicit comma-separated API scopes;
-an explicit scope containing only unavailable variants returns 404. Prepared
-databases and descriptors are never deleted or rebuilt by selection. Missing
-indexes use the existing preparation workflow; inactive DSL settings metadata
-does not initiate preparation. If only one copy survives, it stays available.
-
-The expanded file disclosure has two right-aligned delete-index shortcuts next
-to Remove. Either card can target either family member. Confirmation deletes
-only that member's prepared folder (text index and packed media cache), leaving
-the shared DSL/media sources, descriptor and other prepared variant intact.
-Missing indexes and variants without a rebuildable source have disabled buttons.
-Removal persists in independent `state.json` `dslRemoved` metadata, keyed by
-shared source and variant. Removed variants are unavailable in picker/search,
-including explicit scopes and after rescan/restart; implicit opens and demand
-indexing cannot restore them. Explicit Index or Full text actions restore that
-variant and clear its marker only after successful preparation. Each card has
-separate original/GD full-text toggles; turning one off keeps its base index and
-does not change the other variant. Bulk full text skips unavailable variants.
-If both indexes are removed, both cards show a red warning to create an index.
-Opening settings refreshes index sizes; deletion refreshes the current query.
-Each Original/GD row owns its index size/create control and contains/full-text
-switches, left aligned in a responsive control column. Only absent indexes show
-the rocket; clicking a prepared size confirms deletion of the entire variant
-index, including contains/full text. Separate delete-index shortcuts are gone.
-Browse has its book icon and button styling on a separate line below the switches,
-disabled until that variant has an index. Preparing/removing and article counts
-are shown on the buttons and in status. Controls may grow/wrap during progress;
-their control column remains left aligned.
-
-Bulk settings now have Create/Delete sections with All dictionaries, Original
-only (all non-GD formats) and GD compatible only scopes. Each offers index,
-contains and full text. Confirmation snapshots only missing/present features;
-source-less or non-rebuildable dictionaries are skipped. Jobs run sequentially,
-stop on first error and report completed count.
-Queued card fields show preparing/removing; the active dictionary's fields
-show article counts too, mirrored across both cards of a DSL family. Finished
-fields are restored when the batch's final metadata refresh completes.
-Index deletion includes contains/FTS/cache, never source files; removal guards
-now cover non-DSL too.
-Explicit bulk creation may restore removed or inactive variants, without
-changing selection. Per-family checkboxes remain; old bulk mode/FTS controls
-are removed. The mode regression uses the API for collection-wide selection.
-Browser regression: `node tools/dslcompare/verify_index_removal.cjs` against the
-isolated fixture on port 6910, including cross-card targeting and cancel.
-
-Checks: `go test ./internal/server -run TestDSLMode`, `node tools/i18n-test.cjs`,
-and `node tools/dslcompare/verify_modes.cjs http://127.0.0.1:6908` against the isolated
-enhancer preview fixture. The browser check exercises bulk/per-family selection,
-persistence, failure rollback, result refresh and EN/RU layouts at 320/390/1100px.
+Checks: `go test ./internal/server ./internal/format/dsl`, `node tools/i18n-test.cjs`, `node tools/own-parser-test.cjs`, and `node tools/group-parser-test.cjs`.
 
 ### Reference parser
 
@@ -105,9 +38,9 @@ visual or full-index parity; complex media payloads still need dedicated cases.
 
 ## Optional Enhancer (2026-10-02)
 
-Production GD reader v4 enables a separate HTML preparation pass after the base
+The production article reader enables a separate HTML preparation pass after the base
 parser. `GDOptions{}` / `NewGDReaderWithOptions` disables it for direct reading;
-ordinary DSL is unchanged. `compare.py` and every corpus/reference comparison
+Native DSL uses the same enhanced pipeline. `compare.py` and every corpus/reference comparison
 default to OFF regardless of inherited environment. Add `--enhance` to compare
 the optional Go output; the original C++ oracle never runs the Enhancer.
 Both the selected mode and raw outputs are recorded. `--enhance` does not add
@@ -128,7 +61,7 @@ existing CSS-layer command; no control or script is embedded in an article.
 The browser marker stays as an idempotent fallback for ordinary/older articles.
 
 Bundled GD presentation uses scoped `wu-gd` selectors and unique font families,
-with TTF files from `internal/server/web/fonts` served at `/assets/gd/fonts/`.
+with Quivira and optional user-supplied wugd font faces.
 The original CSS's Android `file://` paths are replaced by application URLs.
 The main document registers font faces for Shadow DOM; generated GD HTML imports
 the scoped stylesheet. Its application URL is exempt from dictionary resource
@@ -139,7 +72,7 @@ tests, not by changing the production index configuration.
 
 Verified: GD and ordinary DSL package tests, targeted server asset/resource/style
 tests, baseline 19-case HTML comparison with cleanup OFF, and 19-case tree
-comparison with cleanup ON. Chromium at 1100/390px loads all five font faces,
+comparison with cleanup ON. Chromium verification covers font loading,
 applies italic/gray optional-example styles even after wrapper merging, and the
 actual existing Examples commands hide/restore only example lines. Browser
 report/screenshots are local ignored outputs in `results/enhancer-preview`.

@@ -203,9 +203,9 @@ func TestRescanNewDictionariesUseOnlySelectedIndexes(t *testing.T) {
 					t.Helper()
 					for _, e := range r.all() {
 						_, ok := store.LookupDir(e.Path)
-						selected := e.dslVariant == "original"
+						selected := true
 						if ok != selected {
-							t.Fatalf("variant %s prepared=%v", e.dslVariant, ok)
+							t.Fatalf("dictionary %s prepared=%v", e.Path, ok)
 						}
 						if selected {
 							path, _ := store.LookupDir(e.Path)
@@ -273,7 +273,7 @@ func TestRescanKeepDoesNotRestoreRemovedBase(t *testing.T) {
 	}
 }
 
-func TestRescanDeletesUnselectedPreparedVariant(t *testing.T) {
+func TestRescanDeletesRemovedPreparedIndex(t *testing.T) {
 	isolatedDBDir(t)
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "demo.dsl"), []byte(sampleDSL), 0600); err != nil {
@@ -289,7 +289,7 @@ func TestRescanDeletesUnselectedPreparedVariant(t *testing.T) {
 		if _, err := e.open(); err != nil {
 			t.Fatal(err)
 		}
-		if e.dslVariant == "gd" {
+		if e.dslSource != "" {
 			path, _ := store.LookupDir(e.Path)
 			unwanted = path
 			if err := e.setIndexRemoved(true); err != nil {

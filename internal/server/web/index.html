@@ -700,13 +700,6 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
        rather than to a card, and moved to the panel's Dictionaries section,
        where a reader who has just added a folder can see what arrived. -->
   <div id="reindexLine" class="bulkbox" hidden aria-live="polite"></div>
-  <section id="dslParserSection"><h3>{{T:dictUI.dslParser}}</h3>
-    <div class="seg" id="dslParserMode" role="group" aria-label="{{T:dictUI.dslParser}}">
-      <button type="button" data-parser="original" title="{{T:dictUI.dslOriginal}}">{{T:dictUI.dslOriginalShort}}</button>
-      <button type="button" data-parser="gd" title="{{T:dictUI.dslGD}}">GD</button>
-      <button type="button" data-parser="both">{{T:dictUI.dslBoth}}</button>
-    </div>
-  </section>
   <div class="panel-scroll" id="dictSettingsScroll">
     <div id="bulkIndexes"></div>
     <div id="bulkIndexStatus" hidden class="bulkbox">
@@ -2449,36 +2442,15 @@ fetch("/api/reindex").then(r=>r.ok?r.json():null).then(st=>{
   if(st&&st.running){reindexSt=st;renderReindex();pollReindex()}
 }).catch(()=>{});
 
-let dslSaving=false;
-function selectedDSLParser(){return dicts.find(d=>d.dsl)?.dsl.parser||cfgInfo?.dslParser||"both"}
-function matchesDSLParser(d){const parser=selectedDSLParser();return !d.dsl||parser==="both"||d.dsl.variant===parser}
-$("dslParserMode").addEventListener("click",e=>{
-  const button=e.target.closest("[data-parser]");
-  if(button&&!bulkIndexBusy)setDSLMode("",button.dataset.parser,true);
-});
-function dslControls(d){
-  if(!d.dsl)return "";
-  const v=d.dsl;
-  const controls=[["original",tx("dictUI.dslOriginal"),v.original],["gd",tx("dictUI.dslGD"),v.gd]];
-  return `<div class="dsl-choices" role="group" aria-label="${escAttr(tx("dictUI.dslAtLeastOne"))}">`+
-    controls.map(([key,label,exists])=>{
-      const on=exists&&(v.mode==="both"||v.mode===key||!d.unavailable&&v.variant===key);
-      const last=on&&(v.mode!=="both"||!v.original||!v.gd);
-      return `<label title="${escAttr(last?tx("dictUI.dslAtLeastOne"):label)}"><input type="checkbox" data-dsl-mode="${key}"${on?" checked":""}${dslSaving||!exists||last?" disabled":""}>${esc(label)}</label>`;
-    }).join("")+(d.unavailable?`<span class="meta">${esc(tx("dictUI.dslUnavailable"))}</span>`:"")+"</div>";
-}
 function dslIndexControls(d){
   if(!d.dsl)return "";
-  const mode=selectedDSLParser();
-  const family=dicts.filter(x=>x.dsl?.source===d.dsl.source&&(mode==="both"||x.dsl.variant===mode));
-  const empty=family.every(x=>!x.dbSize);
-  return `<div class="dsl-index-controls">`+(mode==="both"?["original","gd"]:[mode]).map(variant=>{
-    const target=family.find(x=>x.dsl.variant===variant);
+  const target=d;
+  const empty=!target?.dbSize;
+  return `<div class="dsl-index-controls">`+(()=>{
     const disabled=!target||!d.dsl.sourceAvailable;
     const indexed=!!target?.dbSize;
-    const label=tx(variant==="original"?"dictUI.dslOriginal":"dictUI.dslGD");
     let controls=indexed
-      ? `<button type="button" class="feat on${disabled?" locked":""}" data-delete-index="${variant}" data-target="${escAttr(target.id)}" title="${escAttr(tx(variant==="original"?"dictUI.deleteOriginalIndex":"dictUI.deleteGDIndex"))}"${disabled?" disabled":""}>${mb(target.dbSize)}</button>`
+      ? `<button type="button" class="feat on${disabled?" locked":""}" data-delete-index="1" data-target="${escAttr(target.id)}" title="${escAttr(tx("dictUI.deleteIndex"))}"${disabled?" disabled":""}>${mb(target.dbSize)}</button>`
       : `<button type="button" class="feat${disabled?" locked":""}" data-feat="base" data-target="${escAttr(target?.id||"")}"${disabled?" disabled":""}>${esc(tx("dictUI.index"))}</button>`;
     for(const [key,name,on] of [["contains","dictUI.contains",target?.caps?.Contains],["fts","dictUI.fts",target?.caps?.FTS]]){
       const stale=key==="contains"&&on&&target?.containsStale;
@@ -2488,31 +2460,10 @@ function dslIndexControls(d){
     const icon=`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.4 3.4a1.2 1.2 0 0 1 1.2-1.2h6.2a1.2 1.2 0 0 1 1.2 1.2v9.2a1.2 1.2 0 0 1-1.2 1.2H3.6a1.2 1.2 0 0 1-1.2-1.2z"/><path d="M11 5h2.6M11 8h2.6M11 11h2.6"/></svg>`;
     const browse=indexed
       ? `<a class="browse btn" href="/browse?dict=${encodeURIComponent(target.id)}" title="${escAttr(tx("dictUI.browseHint"))}">${icon}${esc(tx("dictUI.browse"))}<span aria-hidden="true">▸</span></a>`
-      : empty?"":`<span class="dsl-index-note">${esc(tx(target?.dsl.indexRemoved?"dictUI.dslVariantNeedsIndex":"dictUI.dslNeedsIndex"))}</span>`;
-    return `<div class="dsl-index-row"><span>${esc(label)}</span><div class="dsl-index-tools"><div class="dsl-feature-line">${controls}</div></div><div class="dsl-browse-line">${browse}</div></div>`;
-  }).join("")+(empty?`<div class="dsl-index-warning"><b aria-hidden="true">!</b> ${esc(tx("dictUI.dslNeedsIndex"))}</div>`:"")+"</div>";
+      : "";
+    return `<div class="dsl-index-row"><div class="dsl-index-tools"><div class="dsl-feature-line">${controls}</div></div><div class="dsl-browse-line">${browse}</div></div>`;
+  })()+(empty?`<div class="dsl-index-warning"><b aria-hidden="true">!</b> ${esc(tx("dictUI.dslNeedsIndex"))}</div>`:"")+"</div>";
 }
-async function setDSLMode(id,mode,global=false){
-  if(dslSaving)return;
-  dslSaving=true;
-  document.querySelectorAll('.dsl-choices input').forEach(el=>el.disabled=true);
-  try{
-    const r=await fetch("/api/dsl-mode",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({dict:id,mode,global})});
-    if(!r.ok)throw new Error(await r.text());
-    await loadDicts();
-    await loadFolders();
-    if(lastScope&&dicts.some(d=>d.id===lastScope&&d.unavailable)){
-      lastScope=null;scopeOnce=null;refreshDictUI(true);
-    }
-  }catch(e){setStatus(esc(tx("dictUI.dslSaveFailed",{error:window.wudictI18n.errorText(e.message)})))}
-  finally{dslSaving=false;renderPanel()}
-}
-$("panelList").addEventListener("change",e=>{
-  const input=e.target.closest("input[data-dsl-mode]");if(!input)return;
-  const pd=input.closest(".pd"),checked=[...pd.querySelectorAll("input[data-dsl-mode]:checked")];
-  if(!checked.length){renderPanel();return}
-  setDSLMode(pd.dataset.id,checked.length===2?"both":checked[0].dataset.dslMode);
-});
 function renderPanel(){
   const el=$("panelList");
   /* Every card is replaced, so the scroll offset has to be carried over by
@@ -2522,13 +2473,7 @@ function renderPanel(){
      moment they were waiting to see it finish. */
   const scroller=el.closest(".panel-scroll"), top=scroller?scroller.scrollTop:0;
   el.innerHTML="";
-  const parser=selectedDSLParser();
-  document.querySelectorAll('#dslParserMode [data-parser]').forEach(button=>{
-    button.classList.toggle("on",button.dataset.parser===parser);
-    button.setAttribute("aria-pressed",String(button.dataset.parser===parser));
-    button.disabled=dslSaving;
-  });
-  const ord=orderedDicts().filter(matchesDSLParser);
+  const ord=orderedDicts();
   for(const d of ord){
     const div=document.createElement("div");div.className="pd"+(d.unavailable?" dsl-unavailable":"");div.dataset.id=d.id;
     /* Only what varies AND can be changed. exact and prefix are true for every
@@ -2835,9 +2780,9 @@ $("rescanActions").onclick=e=>{
 };
 $("rescanBtn").onclick=()=>{
   const dialog=$("clearDatabaseDialog");
-  const defaults=cfgInfo?.dslDefaults||{original:{index:true},gd:{index:false}};
+  const defaults=cfgInfo?.indexDefaults||{index:true};
   for(const feature of ["contains","fullText"]){
-    dialog.querySelector(`input[name="${feature}"]`).checked=[defaults.original,defaults.gd].some(v=>v?.index&&v[feature]);
+    dialog.querySelector(`input[name="${feature}"]`).checked=!!defaults[feature];
   }
   rescanExisting={index:"keep",contains:"keep",fullText:"keep"};
   paintRescanActions();
@@ -3439,11 +3384,7 @@ function bulkFeatureLabels(d,feat){
   return card?[...card.querySelectorAll(feat==="base"?'.feat[data-feat="base"],.feat.on.locked:not([data-feat])':selector)]:[];
 }
 function bulkIndexCandidates(scope,feat,action){
-  const parser=selectedDSLParser();
   return dicts.filter(d=>{
-    if(scope==="selected"&&d.dsl&&parser!=="both"&&d.dsl.variant!==parser)return false;
-    if(scope==="gd"&&d.dsl?.variant!=="gd")return false;
-    if(scope==="original"&&d.dsl?.variant==="gd")return false;
     if(d.builtin||!d.source||d.dsl&&!d.dsl.sourceAvailable)return false;
     const have=feat==="base"?!!d.dbSize:feat==="contains"?!!d.caps?.Contains:!!d.caps?.FTS;
     return action==="recreate"||((action==="delete"||action==="update")?have:!have);
@@ -3746,7 +3687,7 @@ $("panelList").addEventListener("keydown",e=>{
    that made the import's keep/delete question unanswerable. */
 function askDSLIndexRemoval(button){
   const pd=button.closest(".pd"),d=dicts.find(x=>x.id===pd.dataset.id);
-  const target=dicts.find(x=>x.dsl?.source===d?.dsl?.source&&x.dsl?.variant===button.dataset.deleteIndex);
+  const target=dicts.find(x=>x.id===button.dataset.target);
   if(!target?.dbSize||!d.dsl.sourceAvailable)return;
   pd.querySelector("details.prov").open=true;
   const name=dictLabel(target),size=mb((target.dbSize||0)+(target.mediaSize||0));
@@ -3754,8 +3695,8 @@ function askDSLIndexRemoval(button){
   if(target.caps?.Contains)features.push(tx("dictUI.contains"));
   if(target.caps?.FTS)features.push(tx("dictUI.fts"));
   if(target.mediaDB||target.mediaSize)features.push(tx("dictUI.packedMedia"));
-  pd.querySelector(".rmwrap").innerHTML=`<span class="rmq">${esc(tx("dictUI.deleteVariantIndexConfirm",{name,size,features:features.join(" · ")}))}<br>`+
-    `<button type="button" class="rmgo" data-rm="variant-index" data-target="${escAttr(target.id)}">${esc(tx("panel.delete"))}</button>`+
+  pd.querySelector(".rmwrap").innerHTML=`<span class="rmq">${esc(tx("dictUI.deleteIndexConfirm",{name,size,features:features.join(" · ")}))}<br>`+
+    `<button type="button" class="rmgo" data-rm="index" data-target="${escAttr(target.id)}">${esc(tx("panel.delete"))}</button>`+
     `<button type="button" class="rmno">${esc(tx("panel.cancel"))}</button></span>`;
 }
 function askRemoval(pd){
@@ -3797,7 +3738,7 @@ async function runRemove(id,kind,node){
   node.textContent=tx("dictUI.deleting");
   setIndexStatus('<span class="spin"></span>'+esc(tx("dictUI.deletingName",{name})));
   const q="/api/library?dict="+encodeURIComponent(id)+
-    "&prepared="+(kind==="source"?0:1)+"&source="+(kind==="index"||kind==="variant-index"?0:1);
+    "&prepared="+(kind==="source"?0:1)+"&source="+(kind==="index"?0:1);
   let rep;
   try{
     const r=await fetch(q,{method:"DELETE"});

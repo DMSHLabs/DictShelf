@@ -7,10 +7,10 @@ import "testing"
 
 func TestUserCountCollapsesParserVariants(t *testing.T) {
 	r := &Registry{entries: []*entry{
-		{Path: "first.dsl", dslSource: "first.dsl", dslVariant: "original"},
-		{Path: "first.dslgd", dslSource: "first.dsl", dslVariant: "gd"},
-		{Path: "cached/text.db", dslSource: "second.dsl", dslVariant: "gd"},
-		{Path: "other/first.dsl", dslSource: "other/first.dsl", dslVariant: "original"},
+		{Path: "first.dsl", dslSource: "first.dsl"},
+		{Path: "first.dslgd", dslSource: "first.dsl"},
+		{Path: "cached/text.db", dslSource: "second.dsl"},
+		{Path: "other/first.dsl", dslSource: "other/first.dsl"},
 		{Path: "standalone.db"},
 		{Path: "guide.wmd", builtin: true},
 	}}

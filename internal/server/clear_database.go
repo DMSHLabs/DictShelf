@@ -25,7 +25,7 @@ type clearDatabaseRequest struct {
 }
 
 // cleanupLibrary retains only prepared folders belonging to discovered sources.
-// Discovery must succeed before any deletion; disabled DSL variants still count.
+// Discovery must succeed before any deletion.
 func (r *Registry) cleanupLibrary() error {
 	// Stop preparation and first-open auto-ingestion while inspecting debris.
 	// Otherwise a claimed but incomplete folder could be an active ingest.
@@ -44,7 +44,6 @@ func (r *Registry) cleanupLibrary() error {
 	}()
 	r.mu.RLock()
 	dirs := append([]string(nil), r.dictDirs...)
-	comparisons := r.comparisons
 	r.mu.RUnlock()
 	paths, _, err := dict.DiscoverAll(dirs)
 	if err != nil {
@@ -68,15 +67,6 @@ func (r *Registry) cleanupLibrary() error {
 	}
 	for _, p := range paths {
 		addActive(p)
-		if comparisons {
-			alt, err := dict.ComparisonSource(p)
-			if err != nil {
-				return err
-			}
-			if alt != "" {
-				addActive(alt)
-			}
-		}
 	}
 	folders, err := store.Folders()
 	if err != nil {

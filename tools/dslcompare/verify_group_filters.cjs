@@ -11,7 +11,7 @@ const {chromium}=require('playwright');
   await p.evaluate(({source,catalog})=>{
    window.$=id=>document.getElementById(id);window.tx=key=>catalog[key]||key;Object.defineProperty(window,'localStorage',{value:{getItem:()=>null},configurable:true});window.wudictI18n={facetLabels:g=>({fl:g.fl,vl:g.vl})};window.requests=[];window.fetch=async(url,opts)=>{requests.push({url,body:JSON.parse(opts.body)});return {ok:true,json:async()=>({})}};
    const ox={f:'pub',fl:'Publisher',fo:4,v:'oxford',vl:'Oxford'};
-   window.dicts=[{id:'member',name:'Current member',filters:[]},{id:'ox',name:'Oxford',filters:[ox]},{id:'other',name:'Other',filters:[{...ox,v:'collins',vl:'Collins'}]},{id:'none',name:'Unclassified',filters:[]}];window.orderedDicts=()=>dicts;window.matchesDSLParser=()=>true;window.orderedGroupDicts=(g,ds)=>ds.filter(d=>g.members.includes(d.id));window.dictLabel=d=>d.name;window.refreshLivePicker=()=>{};
+   window.dicts=[{id:'member',name:'Current member',filters:[]},{id:'ox',name:'Oxford',filters:[ox]},{id:'other',name:'Other',filters:[{...ox,v:'collins',vl:'Collins'}]},{id:'none',name:'Unclassified',filters:[]}];window.orderedDicts=()=>dicts;window.orderedGroupDicts=(g,ds)=>ds.filter(d=>g.members.includes(d.id));window.dictLabel=d=>d.name;window.refreshLivePicker=()=>{};
    eval(source+';userGroups=[{id:"custom",members:["member"]}];selectedGroup="custom";groupShowAllPreferred=true;renderGroupRows();');
   },{source,catalog});
   assert.equal(await p.locator('#groupAvailableFilter').inputValue(),'all');assert.equal(await p.locator('.group-row').count(),4);
