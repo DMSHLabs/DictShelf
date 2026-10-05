@@ -416,8 +416,8 @@
   "panel.switchCustom": "Оформление настроено вручную. Переход к «{target}» заменит текущие настройки. Сохранить их?",
   "panel.applied": "Применено оформление «{name}»",
   "panel.applyFailed": "⚠ Не удалось применить оформление: {error}",
-  "panel.lookClean": "Чистое",
-  "panel.lookWarm": "Тёплое",
+  "panel.lookClean": "Чистый",
+  "panel.lookWarm": "Тёплый",
   "panel.lookOldPaper": "Старая бумага",
   "panel.folders": {
     "one": "{number} папка",
