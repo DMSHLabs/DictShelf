@@ -723,6 +723,8 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
   <p>{{T:database.obsoleteHint}}</p>
   <p>{{T:database.sources}}</p>
   <p id="clearDatabaseStatus" role="status"></p>
+  <progress id="clearDatabaseProgress" max="100" value="0" hidden></progress>
+  <button type="button" class="btn" id="clearDatabaseStop" hidden>{{T:dictUI.stop}}</button>
   <div><button type="button" class="btn" id="clearDatabaseGo">{{T:database.clear}}</button> <button type="button" class="btn" id="clearDatabaseCancel" autofocus>{{T:panel.cancel}}</button></div>
 </dialog>
 
@@ -2414,18 +2416,27 @@ function pollReindex(){
     try{const r=await fetch("/api/reindex");if(r.ok)st=await r.json()}catch(_){}
     if(!st){pollReindex();return} // a missed poll is not the end of the job
     reindexSt=st;
-    if(st.running){renderReindex();pollReindex();return}
+    if(st.running){
+      const at=Math.min(st.done+1,st.total),pct=st.currentTotal?` (${Math.min(100,Math.floor(st.currentDone/st.currentTotal*100))}%)`:"";
+      setStatus(esc(tx("dictUI.rebuilding",{at,total:st.total})+(st.current?` · ${st.current}${pct}`:"")));
+      setGlobalStop(requestReindexStop,reindexStopping?tx("dictUI.stopping"):tx("dictUI.stop"));renderReindex();pollReindex();return
+    }
     reindexStopping=false;
+    clearGlobalStop();
     const ok=st.done-(st.failed||[]).length;
     setStatus((st.failed&&st.failed.length?"":"✓ ")+esc(tx("dictUI.rebuilt",{done:ok,total:st.total}))+(st.canceled?esc(tx("dictUI.stopped")):""));
     await loadDicts();
     renderReindex();
   },1000);
 }
+function requestReindexStop(){
+  if(reindexStopping)return;
+  reindexStopping=true;setGlobalStop(requestReindexStop,tx("dictUI.stopping"));renderReindex();
+  fetch("/api/reindex",{method:"DELETE"}).catch(()=>{});
+}
 $("reindexLine").addEventListener("click",async e=>{
   if(e.target.id==="reindexStop"){
-    reindexStopping=true;renderReindex();
-    fetch("/api/reindex",{method:"DELETE"}).catch(()=>{});
+    requestReindexStop();
     return;
   }
   if(e.target.id!=="reindexGo")return;
@@ -2435,11 +2446,11 @@ $("reindexLine").addEventListener("click",async e=>{
     if(!r.ok)throw new Error("HTTP "+r.status);
     reindexSt=await r.json();reindexStopping=false;
   }catch(err){e.target.disabled=false;setStatus(esc(tx("dictUI.rebuildStartFailed",{error:err.message})));return}
-  if(reindexSt.running){renderReindex();pollReindex()}
+  if(reindexSt.running){setGlobalStop(requestReindexStop);renderReindex();pollReindex()}
   else loadDicts(); // nothing was outdated any more: the list was behind
 });
 fetch("/api/reindex").then(r=>r.ok?r.json():null).then(st=>{
-  if(st&&st.running){reindexSt=st;renderReindex();pollReindex()}
+  if(st&&st.running){reindexSt=st;setStatus(esc(tx("dictUI.rebuilding",{at:Math.min(st.done+1,st.total),total:st.total})+(st.current?` · ${st.current}`:"")));setGlobalStop(requestReindexStop);renderReindex();pollReindex()}
 }).catch(()=>{});
 
 function dslIndexControls(d){
@@ -2574,7 +2585,7 @@ function renderPanel(){
   // and following it puts the progress back on its card.
   for(const d of dicts){
     const chip=d.job&&!following.has(d.id)&&el.querySelector(`.pd[data-id="${CSS.escape(d.id)}"] .feat`);
-    if(chip)runIngest(d.id,{},chip);
+    if(chip)runIngest(d.id,{actionCode:d.job.action,indexCodes:d.job.indexes},chip);
   }
 }
 
@@ -2792,11 +2803,46 @@ $("rescanBtn").onclick=()=>{
   dialog.scrollTop=0;
 };
 $("clearDatabaseClose").onclick=$("clearDatabaseCancel").onclick=()=>$("clearDatabaseDialog").close();
+let rescanStopping=false;
+let rescanAttached=false,rescanStatusTimer=0;
+function pollRescanStatus(){
+  clearTimeout(rescanStatusTimer);
+  if(rescanAttached)return;
+  rescanStatusTimer=setTimeout(async()=>{
+    let st=null;
+    try{const r=await fetch("/api/rescan?status=1");if(r.ok)st=await r.json()}catch(_){}
+    if(st?.running){
+      const featureNames=(st.indexes||[]).map(key=>tx(key==="index"?"dictUI.indexPlain":key==="contains"?"dictUI.contains":"dictUI.fts"));
+      const verb=tx(st.action==="remove"?"database.actionRemove":st.action==="recreate"?"database.actionRecreate":st.action==="update"?"database.actionUpdate":"database.actionCreate");
+      let text=st.stage==="cleanup"?tx("database.cleaning"):st.stage==="dictionary"?tx("database.progress",{at:st.at,total:st.total,name:st.name})+" · "+verb+(featureNames.length?" "+featureNames.join(" · "):""):tx("database.working");
+      if(st.entries)text+=" · "+tx("dictUI.entries",{number:st.done.toLocaleString()})+" / "+st.entries.toLocaleString()+" ("+st.percent+"%)";
+      if(st.stopRequested)text+=" · "+tx("dictUI.bulkStopping");
+      setStatus(esc(text));
+      setGlobalStop(requestRescanStop,st.stopRequested?tx("dictUI.bulkStopping"):tx("dictUI.stop"));
+      pollRescanStatus();return;
+    }
+  },1000);
+}
+pollRescanStatus();
+function requestRescanStop(){
+  if(rescanStopping)return;
+  rescanStopping=true;
+  $("clearDatabaseStop").disabled=true;
+  $("clearDatabaseStop").textContent=tx("dictUI.bulkStopping");
+  setGlobalStop(requestRescanStop,tx("dictUI.bulkStopping"));
+  fetch("/api/rescan",{method:"DELETE"}).catch(()=>{});
+}
+$("clearDatabaseStop").onclick=requestRescanStop;
 $("clearDatabaseGo").onclick=async()=>{
   const dialog=$("clearDatabaseDialog"),body={new:{index:true},existing:{...rescanExisting}};
   for(const box of dialog.querySelectorAll("input")){body.new[box.name]=box.checked;box.disabled=true}
   for(const button of $("rescanActions").querySelectorAll("button"))button.disabled=true;
   $("clearDatabaseGo").disabled=true;$("clearDatabaseCancel").disabled=true;$("clearDatabaseClose").disabled=true;
+  rescanStopping=false;
+  rescanAttached=true;
+  setGlobalStop(requestRescanStop);
+  $("clearDatabaseStop").hidden=false;$("clearDatabaseStop").disabled=false;$("clearDatabaseStop").textContent=tx("dictUI.stop");
+  $("clearDatabaseProgress").hidden=true;$("clearDatabaseProgress").removeAttribute("value");
   dialog.oncancel=e=>e.preventDefault();
   $("clearDatabaseStatus").textContent=tx("database.working");
   try{
@@ -2806,14 +2852,19 @@ $("clearDatabaseGo").onclick=async()=>{
       if(msg.t!=="progress")return;
       let text=tx(msg.stage==="cleanup"?"database.cleaning":"database.working");
       if(msg.stage==="dictionary"){
-        text=tx("database.progress",{at:msg.at,total:msg.total,name:msg.name});
-        if(msg.done||msg.entries)text+=" · "+tx("dictUI.entries",{number:msg.done.toLocaleString()})+(msg.entries?" / "+msg.entries.toLocaleString():"");
+        const featureNames=(msg.indexes||[]).map(key=>tx(key==="index"?"dictUI.indexPlain":key==="contains"?"dictUI.contains":"dictUI.fts"));
+        const verb=tx(msg.action==="remove"?"database.actionRemove":msg.action==="recreate"?"database.actionRecreate":msg.action==="update"?"database.actionUpdate":"database.actionCreate");
+        text=tx("database.progress",{at:msg.at,total:msg.total,name:msg.name})+" · "+verb+(featureNames.length?" "+featureNames.join(" · "):"");
+        if(msg.entries){
+          text+=" · "+tx("dictUI.entries",{number:msg.done.toLocaleString()})+" / "+msg.entries.toLocaleString()+" ("+msg.percent+"%)";
+          $("clearDatabaseProgress").hidden=false;$("clearDatabaseProgress").value=msg.percent;
+        }else{$("clearDatabaseProgress").hidden=true}
       }
       $("clearDatabaseStatus").textContent=text;
       setStatus(esc(text));
     },undefined,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
     if(!report)throw new Error(tx("database.incomplete"));
-    $("clearDatabaseStatus").textContent=report.failed.length?tx("database.failed",{error:report.failed.map(window.wudictI18n.errorText).join("; ")}):tx("database.done");
+    $("clearDatabaseStatus").textContent=report.failed.length?tx("database.failed",{error:report.failed.map(window.wudictI18n.errorText).join("; ")}):report.canceled?tx("database.stopped"):tx("database.done");
     await loadDicts(false);await loadFolders();
     setStatus(esc($("clearDatabaseStatus").textContent));
   }catch(e){$("clearDatabaseStatus").textContent=tx("database.failed",{error:window.wudictI18n.errorText(e.message)});setStatus(esc($("clearDatabaseStatus").textContent))}
@@ -2821,6 +2872,11 @@ $("clearDatabaseGo").onclick=async()=>{
     for(const box of dialog.querySelectorAll("input"))box.disabled=box.name==="index";
     paintRescanActions();
     $("clearDatabaseGo").disabled=false;$("clearDatabaseCancel").disabled=false;$("clearDatabaseClose").disabled=false;dialog.oncancel=null;
+    $("clearDatabaseStop").hidden=true;$("clearDatabaseStop").disabled=false;$("clearDatabaseStop").textContent=tx("dictUI.stop");
+    clearGlobalStop();
+    $("clearDatabaseProgress").hidden=true;
+    rescanAttached=false;
+    pollRescanStatus();
   }
 };
 
@@ -3371,12 +3427,16 @@ function baseIndexBytes(d){
 }
 let bulkIndexBusy=false;
 let bulkIndexStopRequested=false;
-$("bulkIndexStop").onclick=()=>{
-  if(!bulkIndexBusy)return;
-  bulkIndexStopRequested=true;
-  $("bulkIndexStop").disabled=true;
-  $("bulkIndexStop").textContent=tx("dictUI.bulkStopping");
-};
+let activeIngestID=null;
+function requestIndexStop(){
+	if(bulkIndexBusy){bulkIndexStopRequested=true;}
+	else if(activeIngestID){fetch(`/api/ingest?dict=${encodeURIComponent(activeIngestID)}`,{method:"DELETE"}).catch(()=>{});}
+	else return;
+	$("bulkIndexStop").disabled=true;
+	$("bulkIndexStop").textContent=tx("dictUI.bulkStopping");
+	setGlobalStop(requestIndexStop,tx("dictUI.bulkStopping"));
+}
+$("bulkIndexStop").onclick=requestIndexStop;
 function bulkFeatureLabels(d,feat){
   const selector=feat==="base"?'[data-feat="base"],[data-delete-index]':`[data-feat="${feat}"]`;
   if(d.dsl)return [...document.querySelectorAll(selector)].filter(el=>el.dataset.target===d.id);
@@ -3423,6 +3483,7 @@ $("bulkIndexes").addEventListener("click",async e=>{
     dialog.close();
     bulkIndexBusy=true;
     bulkIndexStopRequested=false;
+    setGlobalStop(requestIndexStop);
     $("bulkIndexStop").hidden=false;
     $("bulkIndexStop").disabled=false;
     $("bulkIndexStop").textContent=tx("dictUI.bulkStop");
@@ -3462,6 +3523,7 @@ $("bulkIndexes").addEventListener("click",async e=>{
     }catch(err){report=tx("dictUI.bulkFailed",{number:succeeded,error:window.wudictI18n.errorText(err.message)})}
     finally{
       bulkIndexBusy=false;
+      clearGlobalStop();
       $("bulkIndexStop").hidden=true;
       await loadDicts();renderBulkIndexes();
       setIndexStatus(esc(report));
@@ -3774,6 +3836,9 @@ function runIngest(id,opts,label){
   if(label.dataset.busy||following.has(id))return Promise.resolve(); // ignore repeat clicks
   label.dataset.busy="1";
   following.add(id);
+  activeIngestID=id;
+  $("bulkIndexStop").hidden=false;$("bulkIndexStop").disabled=false;$("bulkIndexStop").textContent=tx("dictUI.stop");
+  setGlobalStop(requestIndexStop);
   const name=dictLabel(dicts.find(d=>d.id===id)||{path:""});
   /* Two lengths of the same message: the chip is one of four in a row inside
      a 420px panel, so "indexing… 2,395,000/2,965,310" wraps the row onto a
@@ -3789,8 +3854,15 @@ function runIngest(id,opts,label){
   // One verb for both doors (docs/STYLE.md): the index chip and the feature
   // switches both build an index, and naming them apart told the reader they
   // were different acts.
-  const verb=tx("dictUI.indexing");
-  show(removing?tx("dictUI.removing"):verb+"…");
+  const featureNames=(opts.indexCodes||[]).map(key=>tx(key==="index"?"dictUI.indexPlain":key==="contains"?"dictUI.contains":key==="fullText"?"dictUI.fts":"dictUI.media"));
+  if(opts.contains!==undefined)featureNames.push(tx("dictUI.contains"));
+  if(opts.fts!==undefined)featureNames.push(tx("dictUI.fts"));
+  if(opts.media!==undefined)featureNames.push(tx("dictUI.media"));
+  if(!featureNames.length)featureNames.push(tx("dictUI.indexPlain"));
+  const actionVerb=code=>code==="remove"?tx("dictUI.removing"):code==="update"?tx("database.actionUpdate"):tx("dictUI.indexing");
+  const initialAction=opts.actionCode||(removing?"remove":"create");
+  let action=actionVerb(initialAction)+(initialAction==="update"?" ":"… ")+featureNames.join(" · ");
+  show(action);
   label.classList.remove("act");label.classList.add("busy");
   label.style.textDecoration="none";label.style.cursor="default";
   // A feature left out keeps its state; the index chip sends none, which
@@ -3802,19 +3874,35 @@ function runIngest(id,opts,label){
     const es=new EventSource("/api/ingest?dict="+id+params);
     es.addEventListener("progress",ev=>{
       const p=JSON.parse(ev.data);
+      if(p.action){
+        const names=(p.indexes||[]).map(key=>tx(key==="index"?"dictUI.indexPlain":key==="contains"?"dictUI.contains":key==="fullText"?"dictUI.fts":"dictUI.media"));
+        action=actionVerb(p.action)+(p.action==="update"?" ":"… ")+names.join(" · ");
+      }
       const counts=p.done.toLocaleString()+(p.total?"/"+p.total.toLocaleString():"");
       /* The steps after the counted work - two CREATE INDEXes, the commit,
          ANALYZE - are one opaque SQLite call each and can report nothing; on a
          redirect-heavy dictionary they are ~15% of the wall time. Naming that
          tx("dictUI.finishing") beats a percentage parked at 100. */
       const pct=p.total?Math.min(100,Math.floor(p.done/p.total*100)):-1;
-      const action=removing?tx("dictUI.removing"):verb+"…";
-      const amount=opts.labels||label.closest(".dsl-index-tools")?counts:
-        pct<0?p.done.toLocaleString():pct>=100?tx("dictUI.finishing"):pct+"%";
-      show(action+" "+amount,action+" "+counts);
+      const amount=pct<0?counts:pct>=100?tx("dictUI.finishing"):pct+"%";
+      show(action+" "+amount,action+" "+counts+(pct>=0?" ("+pct+"%)":""));
+    });
+    es.addEventListener("stopping",()=>{
+      $("bulkIndexStop").disabled=true;$("bulkIndexStop").textContent=tx("dictUI.bulkStopping");
+      show(tx("dictUI.bulkStopping"),tx("dictUI.bulkStopping"));
+    });
+    es.addEventListener("stopped",async()=>{
+      es.close();following.delete(id);activeIngestID=null;
+      $("bulkIndexStop").hidden=bulkIndexBusy;$("bulkIndexStop").disabled=false;
+      if(!bulkIndexBusy)clearGlobalStop();
+      setIndexStatus("✓ "+esc(name)+tx("dictUI.bulkStopped"));
+      if(!opts.quiet){await loadDicts();if(lastQuery)doSearch()}
+      resolve(true);
     });
     es.addEventListener("done",async()=>{
-      es.close();following.delete(id);
+      es.close();following.delete(id);activeIngestID=null;
+      $("bulkIndexStop").hidden=bulkIndexBusy;$("bulkIndexStop").disabled=false;
+      if(!bulkIndexBusy)clearGlobalStop();
       setIndexStatus("✓ "+esc(name)+(removing?tx("dictUI.removed"):tx("dictUI.ready")));
       if(!opts.quiet){await loadDicts();if(lastQuery)doSearch()}
       resolve(true);
@@ -3825,7 +3913,7 @@ function runIngest(id,opts,label){
        only thing that can say WHY - a full disk nine minutes into a prepare
        reads as a bare tx("dictUI.failed") otherwise. The chip stays short either way;
        the reason goes to the status line, which has the room. */
-    es.addEventListener("error",ev=>{es.close();following.delete(id);
+    es.addEventListener("error",ev=>{es.close();following.delete(id);activeIngestID=null;$("bulkIndexStop").hidden=bulkIndexBusy;$("bulkIndexStop").disabled=false;if(!bulkIndexBusy)clearGlobalStop();
       let why="";
       try{if(ev&&ev.data){const d=JSON.parse(ev.data);if(d&&d.error)why=window.wudictI18n.errorText(d.error)}}catch(_){}
       show(tx("dictUI.failed"),why?tx("dictUI.failedReason",{error:why}):tx("dictUI.failed"));
@@ -4126,7 +4214,7 @@ addEventListener("message",e=>{
    current one immediately, but clearing waits until the message has been
    readable for STATUS_MIN ms */
 const STATUS_MIN=1200;
-let statusTs=0,statusTimer=null,statusPending,statusOwner=null;
+let statusTs=0,statusTimer=null,statusPending,statusBase="",statusOwner=null;
 /* `owner` lets a long-running writer retract its own message without
    clobbering whatever spoke after it — the dictionary loader used to key that
    on `lastQuery`, which is why a stale warning could sit there unretracted. */
@@ -4136,8 +4224,22 @@ function setIndexStatus(html){
   box.innerHTML=html;
   setStatus(html);
 }
+let globalStopAction=null,globalStopLabel="";
+function setGlobalStop(action,label){
+  globalStopAction=action;globalStopLabel=label||tx("dictUI.stop");
+  if(statusBase)setStatus(statusBase,statusOwner);
+}
+function clearGlobalStop(){
+  globalStopAction=null;globalStopLabel="";
+  if(statusBase)setStatus(statusBase,statusOwner);
+}
+$("status").addEventListener("click",e=>{
+  if(!e.target.closest("[data-global-stop]")||!globalStopAction)return;
+  e.preventDefault();globalStopAction();
+});
 function setStatus(html,owner){
-  statusPending=html;
+  statusBase=html;
+  statusPending=html&&globalStopAction?html+'<button type="button" class="btn" data-global-stop'+(globalStopLabel===tx("dictUI.bulkStopping")?' disabled':'')+'>'+esc(globalStopLabel)+'</button>':html;
   statusOwner=html?(owner??""):null;
   clearTimeout(statusTimer);
   const el=$("status");
@@ -4157,7 +4259,7 @@ function clearStatus(owner){if(statusOwner===owner)setStatus("")}
 // minimum display time or its collapsing-row transition.
 function clearStatusForResults(){
   clearTimeout(statusTimer);statusTimer=null;
-  statusPending="";statusOwner=null;statusTs=0;
+  statusPending="";statusBase="";statusOwner=null;statusTs=0;
   const el=$("status");
   el.hidden=true;el.classList.remove("show");
   $("statusMsg").textContent="";

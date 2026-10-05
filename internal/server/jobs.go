@@ -35,11 +35,17 @@ type jobStatus struct {
 	// Current is the item in hand, with its own progress.
 	Current                   string
 	CurrentDone, CurrentTotal int64
+	Stage                     string
 	// Failed names each item that could not be done, with why.
 	Failed   []string
 	Err      string // the job as a whole failed
 	Canceled bool
-	Result   any // what a successful job produced, for its watchers
+	// StopRequested is a soft stop: finish the current atomic dictionary
+	// operation, then leave the remaining queue untouched.
+	StopRequested bool
+	Action        string
+	Indexes       []string
+	Result        any // what a successful job produced, for its watchers
 }
 
 // jobTable is every job, running or last run, by key. The zero value is
@@ -165,6 +171,16 @@ func (t *jobTable) watch(key string) (jobStatus, <-chan struct{}, bool) {
 	return jobStatus{}, nil, false
 }
 
+func (t *jobTable) wait(key string) jobStatus {
+	for {
+		st, changed, ok := t.watch(key)
+		if !ok || !st.Running {
+			return st
+		}
+		<-changed
+	}
+}
+
 // cancel asks the job under key to stop. A job checks between its items, so
 // what is in hand finishes.
 func (t *jobTable) cancel(key string) {
@@ -172,6 +188,15 @@ func (t *jobTable) cancel(key string) {
 	defer t.mu.Unlock()
 	if j, ok := t.jobs[key]; ok && j.st.Running {
 		j.cancel()
+	}
+}
+
+func (t *jobTable) requestStop(key string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if j, ok := t.jobs[key]; ok && j.st.Running && !j.st.StopRequested {
+		j.st.StopRequested = true
+		j.signalLocked()
 	}
 }
 
@@ -186,5 +211,6 @@ func (t *jobTable) forget(key string) {
 
 func (st jobStatus) copy() jobStatus {
 	st.Failed = append([]string(nil), st.Failed...)
+	st.Indexes = append([]string(nil), st.Indexes...)
 	return st
 }

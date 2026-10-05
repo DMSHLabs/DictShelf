@@ -276,7 +276,7 @@ type Server struct {
 
 	// jobs is the long-running work (jobs.go): the panel's Rebuild, lemma
 	// downloads, index changes. The zero value is usable.
-	jobs jobTable
+	jobs *jobTable
 
 	// lemmas holds the installer's caches - the catalogue and the file
 	// digests; its downloads are jobs (jobs). Built on first use so a Server
@@ -285,7 +285,7 @@ type Server struct {
 }
 
 func New(reg *Registry) *Server {
-	s := &Server{reg: reg, mux: http.NewServeMux(), AllowRemoteDelete: false}
+	s := &Server{reg: reg, mux: http.NewServeMux(), AllowRemoteDelete: false, jobs: &reg.jobs}
 	s.initGroups()
 	s.initStyles()
 	// The surface is a table (routes.go), so it can be asserted about: the
@@ -916,7 +916,7 @@ func (s *Server) dictInfoFor(e *entry) dictInfo {
 	addProvenance(&info, e.Path)
 	info.Builtin = e.builtin
 	if js, ok := s.jobs.status(ingestKey(e.ID)); ok && js.Running {
-		info.Job = &jobProgress{Done: js.Done, Total: js.Total}
+		info.Job = &jobProgress{Done: js.Done, Total: js.Total, StopRequested: js.StopRequested, Canceled: js.Canceled, Action: js.Action, Indexes: js.Indexes}
 	}
 	if e.noPackableMedia() {
 		info.HasMedia = false // a prior pack found nothing - stop offering it
@@ -1086,6 +1086,10 @@ func addProvenance(info *dictInfo, entryPath string) {
 }
 
 func (s *Server) handleRescan(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Query().Get("status") == "1" {
+		s.handleRescanIndexesStatus(w, r)
+		return
+	}
 	if !s.removalOffered(r) {
 		httpErr(w, 403, "deleting from another machine is off")
 		return
@@ -1937,6 +1941,12 @@ func (s *Server) externalSpxToWav(raw []byte) ([]byte, error) {
 //	event: done      data: {dictInfo}
 //	event: error     data: {"error":"..."}
 func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
+	key := ingestKey(r.URL.Query().Get("dict"))
+	if r.Method == http.MethodDelete {
+		s.jobs.requestStop(key)
+		writeJSON(w, map[string]bool{"stopping": true})
+		return
+	}
 	e, err := s.reg.get(r.URL.Query().Get("dict"))
 	if err != nil {
 		httpErr(w, 404, "%v", err)
@@ -1957,6 +1967,7 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 			*f.to = on
 		}
 	}
+	action, indexes := ingestAction(e, q)
 
 	st, ok := newStream(w, "text/event-stream")
 	if !ok {
@@ -1968,8 +1979,7 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 	// one runs, a request for the same dictionary follows that one - what it
 	// asked for is not queued behind it, and the "done" it gets carries what
 	// the dictionary now has.
-	key := ingestKey(e.ID)
-	s.jobs.start(key, 0, jobStatus{}, func(j *job) {
+	s.jobs.start(key, 0, jobStatus{Action: action, Indexes: indexes}, func(j *job) {
 		store.IndexDiagnostic("request start dictionary=%q source=%q contains=%v fulltext=%v media=%v rebuild=%v build=%q", e.probeName(), e.Path, want.Contains, want.FullText, want.Media, q.Get("rebuild") == "1", s.Version)
 		defer func() {
 			js, _ := s.jobs.status(key)
@@ -1992,9 +2002,17 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 				j.update(func(js *jobStatus) { js.Err = err.Error() })
 				return
 			}
+			if status, _ := s.jobs.status(key); status.StopRequested {
+				j.update(func(js *jobStatus) { js.Canceled = true })
+				return
+			}
 		}
 		if err := e.setFeatures(want, progress, q.Get("rebuild") == "1"); err != nil {
 			j.update(func(js *jobStatus) { js.Err = err.Error() })
+			return
+		}
+		if status, _ := s.jobs.status(key); status.StopRequested {
+			j.update(func(js *jobStatus) { js.Canceled = true })
 			return
 		}
 		d, err := e.open()
@@ -2016,8 +2034,45 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 
 // jobProgress is a running job as a list row carries it.
 type jobProgress struct {
-	Done  int64 `json:"done"`
-	Total int64 `json:"total"`
+	Done          int64    `json:"done"`
+	Total         int64    `json:"total"`
+	StopRequested bool     `json:"stopRequested,omitempty"`
+	Canceled      bool     `json:"canceled,omitempty"`
+	Action        string   `json:"action,omitempty"`
+	Indexes       []string `json:"indexes,omitempty"`
+}
+
+func ingestAction(e *entry, q url.Values) (string, []string) {
+	indexes := []string{}
+	action := "create"
+	if q.Get("rebuild") == "1" {
+		action = "update"
+		indexes = append(indexes, "index")
+	}
+	for _, item := range []struct{ query, key string }{{"contains", "contains"}, {"fts", "fullText"}} {
+		if _, sent := q[item.query]; sent {
+			indexes = append(indexes, item.key)
+			if q.Get(item.query) == "0" {
+				action = "remove"
+			}
+		}
+	}
+	if e.indexBlocked() {
+		found := false
+		for _, key := range indexes {
+			found = found || key == "index"
+		}
+		if !found {
+			indexes = append([]string{"index"}, indexes...)
+		}
+	}
+	if len(indexes) == 0 {
+		indexes = append(indexes, "index")
+		if !e.indexBlocked() {
+			action = "update"
+		}
+	}
+	return action, indexes
 }
 
 // ingestKey is one dictionary's index change, as a job.
@@ -2027,6 +2082,7 @@ func ingestKey(id string) string { return "ingest:" + id }
 // "progress" on each change, then "done" with the dictionary as it now is, or
 // "error" with why.
 func (s *Server) followIngest(ctx context.Context, st *respStream, key string) {
+	stopAnnounced, progressAnnounced := false, false
 	for {
 		js, next, ok := s.jobs.watch(key)
 		switch {
@@ -2037,10 +2093,19 @@ func (s *Server) followIngest(ctx context.Context, st *respStream, key string) {
 			st.event("error", map[string]string{"error": js.Err})
 			return
 		case !js.Running:
-			st.event("done", js.Result)
+			if js.Canceled {
+				st.event("stopped", js.Result)
+			} else {
+				st.event("done", js.Result)
+			}
 			return
-		case js.Done > 0 || js.Total > 0:
-			st.event("progress", map[string]int64{"done": js.Done, "total": js.Total})
+		case js.Done > 0 || js.Total > 0 || !progressAnnounced && js.Action != "":
+			st.event("progress", map[string]any{"done": js.Done, "total": js.Total, "action": js.Action, "indexes": js.Indexes})
+			progressAnnounced = true
+		}
+		if js.StopRequested && !stopAnnounced {
+			st.event("stopping", map[string]bool{"stopping": true})
+			stopAnnounced = true
 		}
 		select {
 		case <-next:

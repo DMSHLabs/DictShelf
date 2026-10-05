@@ -145,7 +145,8 @@ func (r *Registry) queueNewDSL() error {
 func (r *Registry) prepareNewDSL() {
 	r.dslAutoMu.Lock()
 	defer r.dslAutoMu.Unlock()
-	for _, e := range r.all() {
+	entries := r.all()
+	for i, e := range entries {
 		key := e.indexRemovalKey()
 		p := r.prefs
 		f, _ := p.data()
@@ -153,15 +154,54 @@ func (r *Registry) prepareNewDSL() {
 		if !ok {
 			continue
 		}
-		if err := e.restoreDSLIndex(store.Plan{Contains: v.Contains, FullText: v.FullText}, nil); err != nil {
-			logx.Warn("preparing new DSL %s: %v", e.Path, err)
-			continue
+		jobKey := ingestKey(e.ID)
+		indexes := []string{"index"}
+		if v.Contains {
+			indexes = append(indexes, "contains")
 		}
-		p.editMu.Lock()
-		err := p.mutate(func(f *prefsFile) { delete(f.DSLPending, key) })
-		p.editMu.Unlock()
-		if err != nil {
-			logx.Warn("saving new DSL preparation: %v", err)
+		if v.FullText {
+			indexes = append(indexes, "fullText")
+		}
+		_, started := r.jobs.start(jobKey, 0, jobStatus{Action: "create", Indexes: indexes}, func(j *job) {
+			progress := func(done, total int) {
+				j.update(func(st *jobStatus) { st.Done, st.Total = int64(done), int64(total) })
+			}
+			if err := e.restoreDSLIndex(store.Plan{Contains: v.Contains, FullText: v.FullText}, progress); err != nil {
+				j.update(func(st *jobStatus) { st.Err = err.Error() })
+				logx.Warn("preparing new dictionary %s: %v", e.Path, err)
+				return
+			}
+			if st, _ := r.jobs.status(jobKey); st.StopRequested {
+				p.editMu.Lock()
+				err := p.mutate(func(f *prefsFile) { delete(f.DSLPending, key) })
+				p.editMu.Unlock()
+				if err != nil {
+					j.update(func(st *jobStatus) { st.Err = err.Error() })
+				}
+				j.update(func(st *jobStatus) { st.Canceled = true })
+				return
+			}
+			p.editMu.Lock()
+			err := p.mutate(func(f *prefsFile) { delete(f.DSLPending, key) })
+			p.editMu.Unlock()
+			if err != nil {
+				j.update(func(st *jobStatus) { st.Err = err.Error() })
+				logx.Warn("saving index preparation state: %v", err)
+			}
+		})
+		st := r.jobs.wait(jobKey)
+		if st.Canceled || st.StopRequested {
+			p.editMu.Lock()
+			_ = p.mutate(func(f *prefsFile) {
+				for _, skipped := range entries[i+1:] {
+					delete(f.DSLPending, skipped.indexRemovalKey())
+				}
+			})
+			p.editMu.Unlock()
+			return
+		}
+		if !started && st.Err != "" {
+			logx.Warn("new dictionary index job did not complete: %s: %s", e.Path, st.Err)
 		}
 	}
 }

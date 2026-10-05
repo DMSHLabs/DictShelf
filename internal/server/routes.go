@@ -81,9 +81,11 @@ func (s *Server) routes() []route {
 		// ---- same-origin: what the web page and the platform shell use.
 		{"GET", "/api/rescan", s.handleRescan, "/api/rescan", false},
 		{"POST", "/api/rescan", s.handleRescanIndexes, "/api/rescan", false},
+		{"DELETE", "/api/rescan", s.handleStopRescanIndexes, "/api/rescan", false},
 		{"POST", "/api/clear-database", s.handleClearDatabase, "/api/clear-database", false},
 		{"POST", "/api/howto", s.handleHowtoCopy, "/api/howto", false},
 		{"GET", "/api/ingest", s.handleIngest, "/api/ingest", false},
+		{"DELETE", "/api/ingest", s.handleIngest, "/api/ingest", false},
 		{"GET", "/api/system-log", s.handleIndexLog, "/api/system-log", false},
 		{"GET", "/api/setup", s.handleSetup, "/api/setup", false},
 		{"GET", "/api/library", s.handleLibrary, "/api/library", false},

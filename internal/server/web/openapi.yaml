@@ -386,7 +386,6 @@ paths:
           description: Invalid request or no option selected.
         '403':
           description: Removal permission denied.
-
   /api/rescan:
     post:
       tags: [internal]
@@ -433,17 +432,37 @@ paths:
           description: Invalid index actions.
         '403':
           description: Removal permission denied.
+    delete:
+      tags: [internal]
+      operationId: stopDictionaryIndexUpdate
+      x-internal: true
+      summary: Finish the current dictionary operation and stop the remaining rescan queue
+      description: >
+        Stop is cooperative. The active dictionary reaches a consistent state,
+        then unstarted dictionaries are skipped and cleanup and registry refresh finish.
+      responses:
+        '200':
+          description: Stop requested; the active dictionary operation will finish.
+        '403':
+          description: Removal permission denied.
     get:
       tags: [internal]
       operationId: rescan
       x-internal: true
-      summary: Re-scan the dictionary folders, then list
+      summary: Re-scan dictionary folders or read index-update status
       description: >
-        Reads the dictionary folders again, warms the registry, and then answers
+        With `status=1`, returns live progress for the server-owned index job.
+        Otherwise reads the dictionary folders again, warms the registry, and answers
         exactly as /api/dicts does. Removes unused prepared folders (including
         previously kept caches), abandoned indexes and packed media. Source
         files and both discovered DSL variants are preserved. Requires removal
         permission, like POST /api/clear-database.
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema: { type: string, enum: ['1'] }
+          description: Return current index-update status instead of rescanning.
       x-codeSamples:
         - lang: Shell
           label: curl
@@ -560,6 +579,19 @@ paths:
           $ref: '#/components/responses/NotFound'
         '500':
           $ref: '#/components/responses/ServerError'
+    delete:
+      tags: [internal]
+      operationId: stopIngest
+      x-internal: true
+      summary: Finish the current dictionary index change and report it as stopped
+      parameters:
+        - name: dict
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Stop requested; the current dictionary operation is not interrupted mid-transaction.
 
   /api/library:
     get:

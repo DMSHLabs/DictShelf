@@ -26,12 +26,40 @@ type rescanIndexesRequest struct {
 }
 
 type rescanIndexProgress struct {
-	Stage   string `json:"stage"`
-	At      int    `json:"at"`
-	Total   int    `json:"total"`
-	Name    string `json:"name"`
-	Done    int    `json:"done"`
-	Entries int    `json:"entries"`
+	Stage   string   `json:"stage"`
+	At      int      `json:"at"`
+	Total   int      `json:"total"`
+	Name    string   `json:"name"`
+	Action  string   `json:"action"`
+	Indexes []string `json:"indexes,omitempty"`
+	Done    int      `json:"done"`
+	Entries int      `json:"entries"`
+	Percent int      `json:"percent"`
+}
+
+func (s *Server) handleStopRescanIndexes(w http.ResponseWriter, req *http.Request) {
+	if !s.removalOffered(req) {
+		httpErr(w, 403, "deleting from another machine is off")
+		return
+	}
+	s.jobs.requestStop("rescan-indexes")
+	writeJSON(w, map[string]bool{"stopping": true})
+}
+
+func (s *Server) handleRescanIndexesStatus(w http.ResponseWriter, req *http.Request) {
+	st, ok := s.jobs.status("rescan-indexes")
+	if !ok {
+		writeJSON(w, map[string]any{"running": false})
+		return
+	}
+	progress, _ := st.Result.(rescanIndexProgress)
+	writeJSON(w, map[string]any{
+		"running": st.Running, "stage": progress.Stage, "at": progress.At,
+		"total": progress.Total, "name": progress.Name, "action": progress.Action,
+		"indexes": progress.Indexes, "done": progress.Done, "entries": progress.Entries,
+		"percent": progress.Percent, "stopRequested": st.StopRequested,
+		"canceled": st.Canceled, "failed": st.Failed,
+	})
 }
 
 func validRescanAction(action string, base bool) bool {
@@ -62,17 +90,45 @@ func (s *Server) handleRescanIndexes(w http.ResponseWriter, req *http.Request) {
 		w.Header().Set("Cache-Control", "no-cache")
 		encoder := json.NewEncoder(w)
 		emit := func(message any) {
-			// Losing the connection must not interrupt index maintenance.
 			_ = encoder.Encode(message)
 			flusher.Flush()
 		}
-		failures := s.reg.updateDictionaryIndexesProgress(body, func(progress rescanIndexProgress) {
-			emit(struct {
-				Type string `json:"t"`
-				rescanIndexProgress
-			}{"progress", progress})
+		key := "rescan-indexes"
+		s.jobs.start(key, 0, jobStatus{}, func(j *job) {
+			failures := s.reg.updateDictionaryIndexesCancelable(body, func(progress rescanIndexProgress) {
+				j.update(func(st *jobStatus) {
+					st.Stage, st.Current, st.Action = progress.Stage, progress.Name, progress.Action
+					st.Done, st.Total = int64(progress.At), int64(progress.Total)
+					st.CurrentDone, st.CurrentTotal = int64(progress.Done), int64(progress.Entries)
+					st.Result = progress
+				})
+			}, func() bool {
+				st, _ := s.jobs.status(key)
+				return st.StopRequested
+			})
+			j.update(func(st *jobStatus) { st.Failed, st.Canceled = failures, st.StopRequested })
 		})
-		emit(map[string]any{"t": "done", "failed": failures})
+		for {
+			st, changed, ok := s.jobs.watch(key)
+			if !ok {
+				break
+			}
+			if !st.Running {
+				emit(map[string]any{"t": "done", "failed": st.Failed, "canceled": st.Canceled})
+				break
+			}
+			if progress, ok := st.Result.(rescanIndexProgress); ok {
+				emit(struct {
+					Type string `json:"t"`
+					rescanIndexProgress
+				}{"progress", progress})
+			}
+			select {
+			case <-changed:
+			case <-req.Context().Done():
+				return
+			}
+		}
 		return
 	}
 	failures := s.reg.updateDictionaryIndexes(body)
@@ -86,6 +142,10 @@ func (r *Registry) updateDictionaryIndexes(req rescanIndexesRequest) []string {
 }
 
 func (r *Registry) updateDictionaryIndexesProgress(req rescanIndexesRequest, progress func(rescanIndexProgress)) []string {
+	return r.updateDictionaryIndexesCancelable(req, progress, nil)
+}
+
+func (r *Registry) updateDictionaryIndexesCancelable(req rescanIndexesRequest, progress func(rescanIndexProgress), stop func() bool) []string {
 	report := func(p rescanIndexProgress) {
 		if progress != nil {
 			progress(p)
@@ -160,12 +220,57 @@ func (r *Registry) updateDictionaryIndexesProgress(req rescanIndexesRequest, pro
 		return []string{err.Error()}
 	}
 	for i, t := range targets {
+		if stop != nil && stop() {
+			p.editMu.Lock()
+			stopErr := p.mutate(func(f *prefsFile) {
+				for _, skipped := range targets[i:] {
+					delete(f.DSLPending, skipped.e.indexRemovalKey())
+				}
+			})
+			p.editMu.Unlock()
+			if stopErr != nil {
+				failures = append(failures, "could not clear queued index plans after stop: "+stopErr.Error())
+			}
+			break
+		}
 		e := t.e
 		state := rescanIndexProgress{Stage: "dictionary", At: i + 1, Total: len(targets), Name: e.probeName()}
+		if t.fresh {
+			state.Action = "create"
+			state.Indexes = append(state.Indexes, "index")
+			if t.options.Contains {
+				state.Indexes = append(state.Indexes, "contains")
+			}
+			if t.options.FullText {
+				state.Indexes = append(state.Indexes, "fullText")
+			}
+		} else if req.Existing.Index == "recreate" {
+			state.Action = "recreate"
+			state.Indexes = append(state.Indexes, "index")
+		} else if req.Existing.Contains == "delete" || req.Existing.FullText == "delete" {
+			state.Action = "remove"
+			if req.Existing.Contains == "delete" {
+				state.Indexes = append(state.Indexes, "contains")
+			}
+			if req.Existing.FullText == "delete" {
+				state.Indexes = append(state.Indexes, "fullText")
+			}
+		} else {
+			state.Action = "update"
+			if req.Existing.Contains == "update" {
+				state.Indexes = append(state.Indexes, "contains")
+			}
+			if req.Existing.FullText == "update" {
+				state.Indexes = append(state.Indexes, "fullText")
+			}
+		}
 		report(state)
 		last := time.Time{}
 		articleProgress := func(done, total int) {
 			state.Done, state.Entries = done, total
+			if total > 0 {
+				state.Percent = min(100, done*100/total)
+			}
 			if time.Since(last) >= 200*time.Millisecond || done == total {
 				report(state)
 				last = time.Now()

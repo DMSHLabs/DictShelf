@@ -138,3 +138,28 @@ func TestSingleDSLCachedReceiptThenSourceReturns(t *testing.T) {
 		t.Fatal("source return lost optional indexes", info)
 	}
 }
+
+func TestSingleDSLMigrationPreservesSourceName(t *testing.T) {
+	isolatedDBDir(t)
+	source, descriptor := legacyDSL(t)
+	for _, path := range []string{source, descriptor} {
+		p := LoadPrefs(filepath.Join(t.TempDir(), StateFile))
+		if err := p.mutate(func(f *prefsFile) {
+			f.Dicts = []DictPref{{ID: pathID(path), Path: path, Name: "Dictionary GD"}}
+		}); err != nil {
+			t.Fatal(err)
+		}
+		r := &Registry{prefs: p}
+		if err := r.migrateDSLPreferences(map[string]string{cleanAbs(source): source}); err != nil {
+			t.Fatal(err)
+		}
+		want := "Dictionary GD"
+		if path == descriptor {
+			want = "Dictionary"
+		}
+		f, _ := p.data()
+		if len(f.Dicts) != 1 || f.Dicts[0].Name != want {
+			t.Fatalf("migration changed source name: %+v, want %q", f.Dicts, want)
+		}
+	}
+}

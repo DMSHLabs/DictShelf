@@ -958,6 +958,7 @@ func openUpgradedOrDirect(path string) (dict.Dictionary, error) {
 // non-empty registry. Opting in is a deliberate, remembered choice made on the
 // setup page ("Use these dictionaries").
 type Registry struct {
+	jobs jobTable
 	dslAutoMu sync.Mutex
 	mu        sync.RWMutex
 	dictDirs  []string // dictionary folders: .mdx/.slob/.ifo/.dsl/.bgl sources

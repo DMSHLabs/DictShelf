@@ -113,7 +113,7 @@ func (r *Registry) migrateDSLPreferences(selected map[string]string) error {
 	merged := []DictPref{}
 	positions := map[string]int{}
 	for _, pref := range f.Dicts {
-		source, _ := dslIdentity(pref.Path)
+		source, variant := dslIdentity(pref.Path)
 		if path, ok := selected[source]; ok {
 			id := pathID(path)
 			remap[pref.ID] = id
@@ -121,7 +121,11 @@ func (r *Registry) migrateDSLPreferences(selected map[string]string) error {
 				changed = true
 			}
 			pref.ID, pref.Path = id, path
-			pref.Name = strings.TrimSuffix(pref.Name, " GD")
+			if variant == "gd" {
+				name := strings.TrimSuffix(pref.Name, " GD")
+				changed = changed || name != pref.Name
+				pref.Name = name
+			}
 		} else {
 			merged = append(merged, pref)
 			continue
