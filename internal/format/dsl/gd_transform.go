@@ -121,7 +121,7 @@ func gdTag(text string, pos int) (tag string, attrs map[string]string, next int,
 	if text[i] == ']' {
 		return tag, nil, i + 1, true
 	}
-	tr := transformer{input: text, pos: i}
+	tr := gdLexer{input: text, pos: i}
 	tr.skipAny(" \t")
 	attrs = tr.lexAttrs()
 	if tr.pos == 0 || text[tr.pos-1] != ']' {
@@ -182,17 +182,24 @@ func (p *gdParser) parse(text string) error {
 				}
 				if tag == "s" || tag == "video" {
 					start := i
-					tr := transformer{input: text, pos: i}
+					tr := gdLexer{input: text, pos: i}
 					name := tr.collectMediaName()
 					i = tr.pos
-					media := transformer{input: gdMediaText(name, p.key) + "[/s]"}
-					media.lexTagS()
+					media := transformer{}
+					filename := strings.TrimSpace(gdMediaText(name, p.key))
+					if filename != "" {
+						media.media(filename)
+					}
 					p.resources = append(p.resources, media.resFiles...)
 					payload := text[start:i]
 					if end := strings.Index(payload, "[/"+tag+"]"); end >= 0 {
 						payload = payload[:end]
 					}
-					p.append(&gdNode{tag: "media", text: media.out.String(), mediaTag: tag, mediaPayload: gdMediaText(payload, p.key)})
+					markup := ""
+					if len(media.toks) > 0 {
+						markup = media.toks[0].s
+					}
+					p.append(&gdNode{tag: "media", text: markup, mediaTag: tag, mediaPayload: gdMediaText(payload, p.key)})
 					continue
 				}
 				p.open(tag, attrs).rawAttrs = strings.TrimLeft(text[start+1+len(tag):next-1], " \t")
@@ -399,12 +406,13 @@ func transformGDBody(text, key string, ab *abbrevMap) (string, []string, error) 
 		if isMarginTag(n.tag) && content == "" {
 			return ""
 		}
-		tr := transformer{}
-		_ = tr.processTag(n.tag, n.attrs)
-		opener := tr.out.String()
-		tr.out.Reset()
-		tr.closeTag(n.tag)
-		closer := tr.out.String()
+		def, _ := lookupTag(n.tag)
+		opener, closer := def.open, def.close
+		if isMarginTag(n.tag) {
+			opener = marginOpen(n.tag)
+		} else if n.tag == "c" {
+			opener = colourOpen(n.attrs)
+		}
 		if opener == "" && closer == "" {
 			return unknown()
 		}

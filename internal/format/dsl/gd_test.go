@@ -74,7 +74,7 @@ func TestGDClosedMarginsWithTranslationWrapper(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if separator == "[br]" && !strings.Contains(got, "<br") || separator != "[br]" && !strings.Contains(got, "\u00a0") {
+			if separator == "[br]" && !strings.Contains(got, "<br") || separator != "[br]" && !strings.Contains(visibleText(got), "\u00a0") {
 				t.Fatalf("explicit separator lost: %q", got)
 			}
 		}
@@ -325,7 +325,7 @@ func TestGDReaderGolden(t *testing.T) {
 		t.Fatal(err)
 	}
 	goldentest.Check(t, "dsl-gd", comparison, goldentest.Golden{
-		Versions: "reader=6 ingest=1 markup=2 fold=1",
+		Versions: "reader=8 ingest=1 markup=2 fold=1",
 		Hash:     "75103e7559a7977e011ea070bf1ce3e830e8d24399ec9b35c0e6310b703d0a9d",
 	})
 }

@@ -11,14 +11,15 @@ import (
 	"golang.org/x/net/html/atom"
 )
 
-// GDOptions keeps the reference parser separate from optional HTML cleanup.
-// The zero value disables cleanup and bundled presentation for oracle tests.
-type GDOptions struct {
-	Enhance bool
-	Styles  bool
-}
+// GDOptions is retained while the UI and source descriptors still use GD names.
+type GDOptions = ArticleOptions
 
 func transformGDWithOptions(text, key string, ab *abbrevMap, options GDOptions) (string, []string, error) {
+	return transformArticleWithOptions(text, key, ab, options)
+}
+
+// Only comparison tests use GoldenDict's historical rendering rules.
+func transformGDReferenceWithOptions(text, key string, ab *abbrevMap, options GDOptions) (string, []string, error) {
 	body, media, err := transformGDBody(text, key, ab)
 	if err != nil || (!options.Enhance && !options.Styles) {
 		return body, media, err
@@ -190,7 +191,7 @@ func gdMergeable(child, parent *html.Node) bool {
 	return true
 }
 
-// Same text rule as examples.js. Links and examples are skipped; plain
+// Media controls and examples are skipped; definition links and plain
 // translations keep the paragraph visible. Include the block's own example
 // role because cleanup may have moved the class out of its span.
 func gdExampleOnly(block *html.Node) bool {
@@ -199,7 +200,7 @@ func gdExampleOnly(block *html.Node) bool {
 	visit = func(n *html.Node, skipped bool) {
 		example := gdClass(n, "wu-ex") || gdClass(n, "dsl_ex")
 		hasExample = hasExample || example
-		skipped = skipped || example || n.Type == html.ElementNode && n.Data == "a"
+		skipped = skipped || example || gdClass(n, "wu-audio") || gdClass(n, "wu-file")
 		if n.Type == html.TextNode && !skipped {
 			for _, r := range n.Data {
 				if !unicode.IsSpace(r) && !unicode.IsPunct(r) && !unicode.IsSymbol(r) {

@@ -757,7 +757,7 @@ func (r *Reader) title(line string) titleResult {
 
 func (r *Reader) body(text, key string) (string, []string, error) {
 	if r.gd {
-		return transformGDWithOptions(text, key, r.abbrevs(), r.gdOptions)
+		return transformArticleWithOptions(text, key, r.abbrevs(), r.gdOptions)
 	}
 	return transformBodyAbbrev(text, key, r.abbrevs())
 }

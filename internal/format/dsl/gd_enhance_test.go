@@ -36,7 +36,7 @@ func TestGDExamplesGenerated(t *testing.T) {
 	}{
 		{`[m1][ex]Example.[/ex][/m]`, true},
 		{`[m1]▪ [s]one.wav[/s] [ex]Example.[/ex][/m]`, true},
-		{`[m1][ref]word[/ref] [ex]Example.[/ex][/m]`, true},
+		{`[m1][ref]word[/ref] [ex]Example.[/ex][/m]`, false},
 		{`[m1][ex]Example.[/ex] translation[/m]`, false},
 		{`[m1]definition [ex]Example.[/ex][/m]`, false},
 		{`[m1]definition[/m]`, false},
@@ -56,7 +56,7 @@ func TestGDExamplesGenerated(t *testing.T) {
 
 func TestGDEnhancerDisabled(t *testing.T) {
 	body := `[m1][ex]Example.[/ex][/m]`
-	want, _, _ := transformGDBody(body, "word", nil)
+	want, _, _ := transformArticleBody(body, "word", nil)
 	got, _, err := transformGDWithOptions(body, "word", nil, GDOptions{})
 	if err != nil || got != want {
 		t.Fatalf("disabled mode: %q %v; want %q", got, err, want)
@@ -87,7 +87,7 @@ func TestGDPreparedExampleRoles(t *testing.T) {
 			{`[m1][ex]Example.[/ex][/m]`, true, false, false},
 			{`[m1]definition [ex]Example.[/ex] translation[/m]`, false, true, false},
 			{`[m1][ex]Example.[/ex] translation[/m]`, false, true, false},
-			{`[m1]◆ [ref]audio[/ref] [ex]Example.[/ex][/m]`, true, false, true},
+			{`[m1]◆ [s]audio.wav[/s] [ex]Example.[/ex][/m]`, true, false, true},
 			{`[m1][ex][ex]Nested.[/ex][/ex] translation[/m]`, false, true, false},
 		} {
 			got, _, err := transformGDWithOptions(c.body, "word", nil, GDOptions{Enhance: enhance, Styles: true})
@@ -102,7 +102,7 @@ func TestGDPreparedExampleRoles(t *testing.T) {
 			}
 		}
 		for _, marker := range []rune("•‣⁃⁌⁍∙·▪▫■□●○◆♦◇◊★☆☐☑☒❥❧➔➜➤➢→⇒*+-–—") {
-			got, _, err := transformGDWithOptions("[m1]"+string(marker)+" [ref]audio[/ref] [ex]Example.[/ex][/m]", "word", nil, GDOptions{Enhance: enhance, Styles: true})
+			got, _, err := transformGDWithOptions("[m1]"+string(marker)+" [s]audio.wav[/s] [ex]Example.[/ex][/m]", "word", nil, GDOptions{Enhance: enhance, Styles: true})
 			if err != nil || strings.Count(got, "wu-example-bullet") != 1 || !strings.Contains(got, "wu-example-block") {
 				t.Fatalf("%c: %s (%v)", marker, got, err)
 			}

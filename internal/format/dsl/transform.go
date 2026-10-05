@@ -11,12 +11,11 @@ package dsl
 import (
 	"path"
 	"strings"
+	"sync"
 	"unicode"
 	"unicode/utf8"
 
 	"github.com/wuweidict/wudict/internal/artmark"
-	"github.com/wuweidict/wudict/internal/htmlref"
-	"github.com/wuweidict/wudict/internal/store"
 )
 
 // stripComments removes `{{...}}` comments. A comment may itself contain a
@@ -28,7 +27,7 @@ import (
 //
 // A comment that stood alone on its line takes the line with it. Deleting
 // only the braces leaves the line's indentation and its newline behind, and
-// run() turns that leftover empty line into a <br/>.
+// the lexer turns that leftover empty line into a <br/>.
 
 func stripComments(text string) string {
 	if !strings.Contains(text, "{{") {
@@ -84,18 +83,38 @@ func stripComments(text string) string {
 	return string(out)
 }
 
-// transformer converts one entry body from DSL markup to HTML.
-// State-machine port of pyglossary's Transformer/lexRoot family.
+// transformer converts one entry body from DSL markup to HTML in three
+// stages over one token slice (D165): lex (this file), resolve and emit
+// (balance.go). DSL tags are zones over the text, not a tree - Lingvo rejects
+// a tag nested in itself, never two tags of different kinds that overlap - so
+// the token stream is read as zones first and only the emitter decides how
+// they nest. That is what keeps the HTML well formed whatever the source
+// does: no consumer repairs it downstream (the browser repairs b/i/u only, a
+// stray </span> closes whichever span is open; `clean` is a tokenizer).
 type transformer struct {
 	input      string
-	pos        int
-	out        strings.Builder
-	label      strings.Builder
-	labelOpen  bool
 	currentKey string
-	resFiles   []string
 	abbrev     *abbrevMap
+	resFiles   []string
+
+	toks []token
+
+	// lexer state
+	raw         string // link zone being read verbatim: "ref", "url", inlineLink, or ""
+	noLinkUntil int    // a `<<` before this offset has no `>>` on its line
+
+	// resolve and emit state (balance.go)
+	zones   []zone
+	stack   []int32
+	fresh   []int32
+	reopen  []int32
+	pend    []int32
+	lineEnd []int32
+	endHead []int32
+	out     strings.Builder
 }
+
+var transformers = sync.Pool{New: func() any { return new(transformer) }}
 
 // transformBody renders a whole DSL entry body to HTML. currentKey replaces
 // `~`. The surrounding whitespace is the file's own indentation, not content,
@@ -122,284 +141,121 @@ func transformFragment(text, currentKey string) (html string, resFiles []string,
 }
 
 func transformFragmentAbbrev(text, currentKey string, ab *abbrevMap) (html string, resFiles []string, err error) {
-	tr := &transformer{
-		input:      stripComments(text),
-		currentKey: currentKey,
-		abbrev:     ab,
-	}
-	if err := tr.run(); err != nil {
-		return "", nil, err
-	}
-	if tr.labelOpen {
-		tr.closeLabel()
-	}
-	return tr.out.String(), tr.resFiles, nil
+	tr := transformers.Get().(*transformer)
+	tr.reset(stripComments(text), currentKey, ab)
+	tr.lex()
+	tr.resolve()
+	tr.emit()
+	html, resFiles = tr.out.String(), tr.resFiles
+	tr.reset("", "", nil) // the pool must not pin this article's strings
+	transformers.Put(tr)
+	return html, resFiles, nil
 }
 
-func (tr *transformer) end() bool  { return tr.pos >= len(tr.input) }
-func (tr *transformer) next() byte { c := tr.input[tr.pos]; tr.pos++; return c }
-
-func (tr *transformer) follows(s string) bool {
-	return strings.HasPrefix(tr.input[tr.pos:], s)
+func (tr *transformer) reset(input, currentKey string, ab *abbrevMap) {
+	tr.input, tr.currentKey, tr.abbrev, tr.resFiles = input, currentKey, ab, nil
+	clear(tr.toks)
+	clear(tr.zones)
+	tr.toks, tr.zones = tr.toks[:0], tr.zones[:0]
+	tr.stack, tr.fresh, tr.reopen, tr.pend = tr.stack[:0], tr.fresh[:0], tr.reopen[:0], tr.pend[:0]
+	tr.lineEnd, tr.endHead = tr.lineEnd[:0], tr.endHead[:0]
+	tr.raw, tr.noLinkUntil = "", 0
+	tr.out = strings.Builder{}
+	tr.out.Grow(len(input) + len(input)/4)
 }
 
-func (tr *transformer) skipAny(chars string) {
-	for tr.pos < len(tr.input) && strings.IndexByte(chars, tr.input[tr.pos]) >= 0 {
-		tr.pos++
-	}
-}
+// tokKind classifies one lexed token.
+type tokKind uint8
 
-func (tr *transformer) addHTML(s string) {
-	if tr.labelOpen {
-		tr.label.WriteString(s)
-	} else {
-		tr.out.WriteString(s)
-	}
-}
-
-func (tr *transformer) addText(s string) { tr.addHTML(escape(s)) }
-
-// addTextByte appends one raw input byte (escaped when HTML-special).
-// Bytes of multi-byte UTF-8 sequences pass through untouched - the
-// builder reassembles them; converting via string(c) would mangle them.
-func (tr *transformer) addTextByte(c byte) {
-	switch c {
-	case '&':
-		tr.addHTML("&amp;")
-	case '<':
-		tr.addHTML("&lt;")
-	case '>':
-		tr.addHTML("&gt;")
-	default:
-		if tr.labelOpen {
-			tr.label.WriteByte(c)
-		} else {
-			tr.out.WriteByte(c)
-		}
-	}
-}
-
-var (
-	textEscaper = strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;")
-	attrEscaper = strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;", `"`, "&quot;")
+const (
+	tkText  tokKind = iota // input[a:b], escaped on output
+	tkLit                  // s, escaped on output
+	tkHTML                 // s, written as it is
+	tkBreak                // a source line break; s is its markup, "" when [m] follows
+	tkOpen                 // [name attrs]; input[a:b] is the whole tag, s the name
+	tkClose                // [/name]; s the name
 )
 
-func escape(s string) string { return textEscaper.Replace(s) }
-
-// quoteAttr renders a value as a complete double-quoted attribute. Every
-// attribute built from dictionary content must go through this and not
-// escape(): a `"` inside a colour name or a media file name would otherwise
-// close the attribute and start a new one.
-func quoteAttr(s string) string { return `"` + attrEscaper.Replace(s) + `"` }
-
-// closeLabel flushes a [p] label. When the dictionary's abbreviation companion
-// knows this label, the whole coloured run is wrapped in an <abbr> carrying the
-// expansion: the browser draws its own tooltip, no client code is involved, and
-// both the element and the title= survive `-format clean`. The label itself is
-// a role (wu-p, internal/artmark) and carries no colour of its own.
-func (tr *transformer) closeLabel() {
-	label := tr.label.String()
-	tr.out.WriteString(`<span class="wu-p">`)
-	if exp, ok := tr.abbrev.lookup(collapseSpace(store.StripHTML(label))); ok {
-		tr.out.WriteString(`<abbr class="wu-abbr" title=` + quoteAttr(exp) + `>` + label + `</abbr>`)
-	} else {
-		tr.out.WriteString(label)
-	}
-	tr.out.WriteString("</span>")
-	tr.label.Reset()
-	tr.labelOpen = false
+type token struct {
+	s      string
+	attrs  map[string]string
+	a, b   int32
+	rng    int32 // tkOpen: the zone it starts, -1 for none
+	kind   tokKind
+	ipa    bool // tkText inside a legacy-font [t] zone (ipa.go)
+	anchor bool // tkHTML: a media element drawn as <a>, which may not sit in a link
 }
 
-// run is the lexRoot loop.
-func (tr *transformer) run() error {
-	for !tr.end() {
-		c := tr.next()
-		switch c {
-		case '\\':
-			if tr.end() {
-				tr.addTextByte(c)
-				return nil
-			}
-			if tr.follows("\n") {
-				// `\` with the line break right behind it is the escaped space
-				// of the blank-line idiom (lingvo-ref "Тело статьи": an empty
-				// line between paragraphs is written as a body line holding
-				// one escaped space). Editors strip the trailing space, so the
-				// backslash is usually all that is left of it. The newline is
-				// NOT consumed: the break it produces is the other half of the
-				// blank line.
-				tr.addHTML("&nbsp;")
-				break
-			}
-			e := tr.next()
-			switch {
-			case e == ' ':
-				tr.addHTML("&nbsp;")
-			case (e == '<' || e == '>') && tr.follows(string(e)):
-				tr.next()
-				tr.addText(string(e) + string(e))
-			default:
-				tr.addTextByte(e)
-			}
-		case '[':
-			if err := tr.lexTag(); err != nil {
-				return err
-			}
-		case ']':
-			// "]]" is an escaped literal "]", the mirror of the "[[" that
-			// lexTag folds (lingvo-ref "Удвоение квадратных скобок"); a lone
-			// one is emitted as-is (pyglossary parity).
-			if tr.follows("]") {
-				tr.next()
-			}
-			tr.addText("]")
-		case '~':
-			tr.addText(tr.currentKey)
-		case '^':
-			// "^" inverts the case of the character that follows it
-			// (lingvo-ref "Команда ^"). Its one real use is "^~": a dictionary
-			// whose headwords are capitalised mirrors them into running text
-			// lower-cased. "^" before markup or at end of input has nothing to
-			// act on and disappears, which is what the compiler does with it.
-			switch {
-			case tr.end():
-			case tr.follows("~"):
-				tr.next()
-				tr.addText(flipCaseFirst(tr.currentKey))
-			case tr.follows("["), tr.follows("\\"):
-			default:
-				r, size := utf8.DecodeRuneInString(tr.input[tr.pos:])
-				tr.pos += size
-				tr.addText(flipCaseFirst(string(r)))
-			}
-		case '\n':
-			tr.skipAny(" \t")
-			if !tr.follows("[m") {
-				tr.addHTML("<br/>")
-			}
-		case '<':
-			if tr.follows("<") {
-				tr.next()
-				tr.lexRefText(nil)
-			} else {
-				tr.addTextByte(c)
-			}
-		default:
-			tr.addTextByte(c)
-		}
-	}
-	return nil
+// tagKind is what a tag does to the text it covers.
+type tagKind uint8
+
+const (
+	kUnknown tagKind = iota
+	kInline          // a zone with fixed or attribute-built markup
+	kLabel           // [p]: a zone whose text selects its markup (the abbreviation)
+	kLink            // [ref], [url], <<…>>: a zone whose text is also its target
+	kBlock           // [m], [mN]: a paragraph; never inside an inline zone
+	kVoid            // [br]: markup with no zone
+	kMedia           // [s], [video]: the zone's text is a file name, replaced by an element
+	kIgnore          // [preview] outside a media zone: accepted, no effect
+)
+
+type tagDef struct {
+	kind        tagKind
+	open, close string // fixed markup; empty open = built from the zone (zoneMarkup)
 }
 
-// lexTag parses "[...]": tag name, optional attributes, then dispatch.
-// Malformed tags (unclosed, empty - e.g. a literal "[ ]" in article
-// text) degrade to literal text instead of failing the entry.
-func (tr *transformer) lexTag() error {
-	open := tr.pos - 1 // position of '['
-	start := tr.pos
-	var attrs map[string]string
-	var tag string
-	for {
-		if tr.end() { // unclosed '[': emit the rest literally
-			tr.addText(tr.input[open:])
-			return nil
-		}
-		c := tr.next()
-		if c == '[' && tr.pos-1 == start { // "[[" is a literal '['
-			tr.addHTML("[")
-			return nil
-		}
-		if c == ' ' || c == '\t' {
-			tag = tr.input[start : tr.pos-1]
-			tr.skipAny(" \t")
-			attrs = tr.lexAttrs()
-			break
-		}
-		if c == ']' {
-			tag = tr.input[start : tr.pos-1]
-			break
-		}
-	}
-	if strings.TrimSpace(tag) == "" || tag == "/" {
-		tr.addText(tr.input[open:tr.pos])
-		return nil
-	}
-	return tr.processTag(tag, attrs)
+// tagDefs is every tag Lingvo or GoldenDict accepts in a body. Every role is
+// one <span> from the internal/artmark vocabulary.
+var tagDefs = map[string]tagDef{
+	"b":    {kInline, "<b>", "</b>"},
+	"i":    {kInline, "<i>", "</i>"},
+	"u":    {kInline, "<u>", "</u>"},
+	"sup":  {kInline, "<sup>", "</sup>"},
+	"sub":  {kInline, "<sub>", "</sub>"},
+	"*":    {kInline, `<span class="wu-sec">`, "</span>"},
+	"ex":   {kInline, `<span class="wu-ex">`, "</span>"},
+	"t":    {kInline, `<span class="wu-ipa">`, "</span>"},
+	"'":    {kInline, `<span class="wu-acc">`, "</span>"},
+	"trn":  {kInline, `<span class="wu-trn">`, "</span>"},
+	"!trn": {kInline, `<span class="wu-trn-not">`, "</span>"},
+	"trs":  {kInline, `<span class="wu-trs">`, "</span>"},
+	"!trs": {kInline, `<span class="wu-trs-not">`, "</span>"},
+	"com":  {kInline, `<span class="wu-com">`, "</span>"},
+	"c":    {kInline, "", "</span>"},
+	"lang": {kInline, "", "</span>"},
+	"p":    {kLabel, "", ""},
+	"ref":  {kLink, "", "</a>"},
+	"url":  {kLink, "", "</a>"},
+	// Undocumented but compiled since Lingvo x5 (lingvo-ref "Тэг [br]"): a
+	// hard line break with no closing descriptor.
+	"br": {kVoid, "<br/>", ""},
+	"s":  {kMedia, "", ""},
+	// [video] is an undocumented exact synonym of [s], accepted by the Lingvo
+	// x5 compiler (lingvo-ref "Тэги мультимедиа"): same syntax, same effect.
+	"video": {kMedia, "", ""},
+	// [preview] is legal only INSIDE [s]/[video], where lexMedia consumes it;
+	// the compiler accepts it and it has no effect (lingvo-ref "Тэг
+	// [preview]···[/preview]"), so a stray one is dropped rather than printed.
+	"preview": {kIgnore, "", ""},
 }
 
-// lexAttrs parses attributes up to (and including) the closing ']'.
-// EOF-tolerant: returns what was collected.
-func (tr *transformer) lexAttrs() map[string]string {
-	attrs := map[string]string{}
-	name := ""
-	for {
-		if tr.end() {
-			if name != "" {
-				attrs[name] = ""
-			}
-			return attrs
-		}
-		c := tr.next()
-		if c == ']' {
-			if name != "" {
-				attrs[name] = ""
-			}
-			return attrs
-		}
-		if c == '=' {
-			tr.skipAny(" \t")
-			attrs[name] = tr.lexAttrValue()
-			name = ""
-			continue
-		}
-		if c == ' ' || c == '\t' {
-			if name != "" {
-				attrs[name] = ""
-				name = ""
-			}
-			tr.skipAny(" \t")
-			continue
-		}
-		name += tr.input[tr.pos-1 : tr.pos]
-	}
-}
+// inlineLink names the <<…>> zone. It holds a blank, which no tag name read
+// by lexTag can, so no [tag] spelling opens or closes it.
+const inlineLink = "<< >>"
 
-func (tr *transformer) lexAttrValue() string {
-	if tr.end() {
-		return ""
+// lookupTag resolves a tag name. [mN] shifts the left margin by N; a bare [m]
+// is a shift of zero (lingvo-ref "Тэг [m]···[/m]"), and [/m2] closes the same
+// paragraph as [/m].
+func lookupTag(name string) (tagDef, bool) {
+	if isMarginTag(name) {
+		return tagDef{kind: kBlock, close: "</p>"}, true
 	}
-	c := tr.next()
-	quote := byte(0)
-	var val strings.Builder
-	if c == '\'' || c == '"' {
-		quote = c
-	} else {
-		val.WriteByte(c)
+	if name == inlineLink {
+		return tagDef{kind: kLink, close: "</a>"}, true
 	}
-	for {
-		if tr.end() {
-			return val.String()
-		}
-		c = tr.next()
-		if c == '\\' {
-			if tr.end() {
-				return val.String()
-			}
-			val.WriteByte(tr.next())
-			continue
-		}
-		if c == ']' {
-			tr.pos--
-			return val.String()
-		}
-		if quote != 0 && c == quote {
-			return val.String()
-		}
-		if quote == 0 && (c == ' ' || c == '\t') {
-			return val.String()
-		}
-		val.WriteByte(c)
-	}
+	d, ok := tagDefs[name]
+	return d, ok
 }
 
 // isMarginTag reports whether tag is [m] or [m] followed only by digits.
@@ -415,152 +271,374 @@ func isMarginTag(tag string) bool {
 	return true
 }
 
-func (tr *transformer) processTag(tag string, attrs map[string]string) error {
-	if tag[0] == '/' {
-		tr.closeTag(tag[1:])
-		return nil
-	}
-	tag = strings.SplitN(tag, " ", 2)[0]
+func (tr *transformer) push(t token) { tr.toks = append(tr.toks, t) }
 
-	switch {
-	case tag == "ref":
-		tr.lexRefText(attrs)
-	case tag == "url":
-		tr.lexURLText(attrs)
-	case tag == "s", tag == "video":
-		// [video] is an undocumented exact synonym of [s], accepted by the
-		// Lingvo x5 compiler (lingvo-ref "Тэги мультимедиа"): same syntax, same
-		// effect, so the same lexer - not a second one that could drift.
-		tr.lexTagS()
-	case tag == "c":
-		// The author's colour is a PARAMETER, not a decision: it rides as
-		// --wd-c and internal/artmark's rule turns it into a colour, so a
-		// reader who sets .wu-c{color:...} beats it without !important.
-		// A bare [c] is green (lingvo-ref), which is the rule's fallback and
-		// so costs no attribute at all.
-		color := ""
-		for k, v := range attrs {
-			if v == "" {
-				color = k
-				break
+func (tr *transformer) text(a, b int) {
+	tr.push(token{kind: tkText, a: int32(a), b: int32(b), rng: -1})
+}
+
+func (tr *transformer) lit(s string)  { tr.push(token{kind: tkLit, s: s, rng: -1}) }
+func (tr *transformer) html(s string) { tr.push(token{kind: tkHTML, s: s, rng: -1}) }
+
+// lex is the character loop. A construct that fails to parse - a `[` with no
+// `]` on its line, a `<<` with no `>>` on its line - yields its first
+// character as text, and lexing resumes right after it: a broken construct
+// can never swallow the markup that follows it.
+func (tr *transformer) lex() {
+	in := tr.input
+	i, run := 0, 0 // run: start of the pending stretch of plain text
+	flush := func() {
+		if i > run {
+			tr.text(run, i)
+		}
+	}
+	for i < len(in) {
+		c := in[i]
+		if tr.raw != "" {
+			// A link's text is its target, so it is read verbatim: `^`, `]` and
+			// `<` are themselves there, and `\` only escapes. `~` and `^~` are
+			// the headword, as everywhere: GoldenDict expands them in the whole
+			// article before parsing it. Tags still open and close inside it.
+			switch {
+			case c == '~':
+				flush()
+				tr.lit(tr.currentKey)
+				i++
+				run = i
+			case c == '^' && i+1 < len(in) && in[i+1] == '~':
+				flush()
+				tr.lit(flipCaseFirst(tr.currentKey))
+				i += 2
+				run = i
+			case c == '\\':
+				flush()
+				if i+1 < len(in) && in[i+1] == '\n' {
+					// The blank-line idiom's backslash: the line break that
+					// follows is markup, never link text.
+					i++
+				} else if i+1 < len(in) {
+					n := 1 + runeLen(in[i+1:])
+					tr.text(i+1, i+n)
+					i += n
+				} else {
+					i++
+				}
+				run = i
+			case c == '[':
+				flush()
+				i = tr.lexTag(i)
+				run = i
+			case c == '\n':
+				// A link does not continue onto the next line; the line break
+				// is read again below, in the normal mode.
+				flush()
+				tr.raw = ""
+				run = i
+			case c == '>' && tr.raw == inlineLink && i+1 < len(in) && in[i+1] == '>':
+				flush()
+				tr.push(token{kind: tkClose, s: inlineLink, rng: -1})
+				tr.raw = ""
+				i += 2
+				run = i
+			default:
+				i++
+			}
+			continue
+		}
+		switch c {
+		case '\\':
+			flush()
+			switch {
+			case i+1 >= len(in):
+				tr.text(i, i+1) // a trailing backslash is itself
+				i++
+			case in[i+1] == '\n':
+				// `\` with the line break right behind it is the escaped space
+				// of the blank-line idiom (lingvo-ref "Тело статьи": an empty
+				// line between paragraphs is written as a body line holding
+				// one escaped space). Editors strip the trailing space, so the
+				// backslash is usually all that is left of it. The newline is
+				// NOT consumed: the break it produces is the other half of the
+				// blank line.
+				tr.html("&nbsp;")
+				i++
+			case in[i+1] == ' ':
+				tr.html("&nbsp;")
+				i += 2
+			case (in[i+1] == '<' || in[i+1] == '>') && i+2 < len(in) && in[i+2] == in[i+1]:
+				tr.text(i+1, i+3)
+				i += 3
+			default:
+				n := runeLen(in[i+1:])
+				tr.text(i+1, i+1+n)
+				i += 1 + n
+			}
+			run = i
+		case '[':
+			flush()
+			i = tr.lexTag(i)
+			run = i
+		case ']':
+			// "]]" is an escaped literal "]", the mirror of the "[[" that
+			// lexTag folds (lingvo-ref "Удвоение квадратных скобок"); a lone
+			// one is text (pyglossary parity).
+			if i+1 < len(in) && in[i+1] == ']' {
+				flush()
+				tr.text(i, i+1)
+				i += 2
+				run = i
+			} else {
+				i++
+			}
+		case '~':
+			flush()
+			tr.lit(tr.currentKey)
+			i++
+			run = i
+		case '^':
+			// "^" inverts the case of the character that follows it
+			// (lingvo-ref "Команда ^"). Its one real use is "^~": a dictionary
+			// whose headwords are capitalised mirrors them into running text
+			// lower-cased. "^" before markup or at end of input has nothing to
+			// act on and disappears, which is what the compiler does with it.
+			flush()
+			i++
+			switch {
+			case i >= len(in):
+			case in[i] == '~':
+				tr.lit(flipCaseFirst(tr.currentKey))
+				i++
+			case in[i] == '[', in[i] == '\\':
+			default:
+				r, size := utf8.DecodeRuneInString(in[i:])
+				tr.lit(flipCaseFirst(string(r)))
+				i += size
+			}
+			run = i
+		case '\n':
+			// Leading whitespace of a continuation line is the file's
+			// indentation. The break is markup unless [m] follows, whose <p>
+			// already breaks the line.
+			flush()
+			i++
+			for i < len(in) && (in[i] == ' ' || in[i] == '\t') {
+				i++
+			}
+			// a: where the next line's content starts; a paragraph opening
+			// there blanks s (lexTag).
+			tr.push(token{kind: tkBreak, s: "<br/>", a: int32(i), rng: -1})
+			run = i
+		case '<':
+			if i+1 < len(in) && in[i+1] == '<' && tr.linkCloses(i+2) {
+				flush()
+				tr.push(token{kind: tkOpen, s: inlineLink, a: int32(i), b: int32(i + 2), rng: -1})
+				tr.raw = inlineLink
+				i += 2
+				run = i
+			} else {
+				i++
+			}
+		default:
+			i++
+		}
+	}
+	flush()
+}
+
+// linkCloses reports whether a `<<` whose text starts at i has its `>>` on the
+// same line. A miss is remembered up to the line's end, so a line full of
+// `<<` is scanned once, not once per `<<`.
+func (tr *transformer) linkCloses(i int) bool {
+	if i < tr.noLinkUntil {
+		return false
+	}
+	in := tr.input
+	for i < len(in) {
+		switch in[i] {
+		case '\\':
+			if i+1 < len(in) && in[i+1] != '\n' {
+				i += 2
+				continue
+			}
+		case '\n':
+			tr.noLinkUntil = i
+			return false
+		case '>':
+			if i+1 < len(in) && in[i+1] == '>' {
+				return true
 			}
 		}
-		if !artmark.IsColor(color) {
-			// A name or a #hex, or nothing. Dictionary content reaching a
-			// style attribute is an injection site, and a value like
-			// `red;position:fixed` would be exactly that.
-			color = ""
+		i++
+	}
+	tr.noLinkUntil = len(in)
+	return false
+}
+
+// runeLen is the byte length of the rune s starts with, at least 1, so an
+// escaped character is one token even when it is not ASCII.
+func runeLen(s string) int {
+	_, n := utf8.DecodeRuneInString(s)
+	return max(n, 1)
+}
+
+// lexTag reads the tag at in[i] == '[' and returns where lexing resumes. A
+// tag must end on its own line and contain no second `[` (Lingvo: "Repeated
+// symbol [ is not allowed"); whitespace after the `[` is accepted only before
+// a name this package knows (GoldenDict reads `[ b]` as [b]). Anything else
+// is a literal `[`.
+func (tr *transformer) lexTag(i int) int {
+	in := tr.input
+	j := i + 1
+	if j < len(in) && in[j] == '[' { // "[[" is a literal '['
+		tr.text(i, i+1)
+		return i + 2
+	}
+	k := j
+	for k < len(in) && (in[k] == ' ' || in[k] == '\t') {
+		k++
+	}
+	n := k
+	for n < len(in) && in[n] != ']' && in[n] != ' ' && in[n] != '\t' && in[n] != '\n' && in[n] != '[' {
+		n++
+	}
+	if n >= len(in) || in[n] == '\n' || in[n] == '[' {
+		return tr.bracket(i)
+	}
+	name := in[k:n]
+	base := strings.TrimPrefix(name, "/")
+	closing := len(base) < len(name)
+	if base == "" {
+		return tr.bracket(i)
+	}
+	def, known := lookupTag(base)
+	if k > j && !known {
+		return tr.bracket(i)
+	}
+	var attrs map[string]string
+	end := n + 1
+	if in[n] != ']' {
+		var ok bool
+		if attrs, end, ok = scanAttrs(in, n); !ok {
+			return tr.bracket(i)
 		}
-		if color == "" {
-			tr.addHTML(`<span class="wu-c">`)
-		} else {
-			tr.addHTML(`<span class="wu-c" style=` + quoteAttr("--wd-c:"+color) + `>`)
+	}
+	switch {
+	case closing:
+		switch def.kind {
+		case kVoid, kMedia, kIgnore: // no zone to close
+		default:
+			tr.push(token{kind: tkClose, s: base, rng: -1})
+			if base == tr.raw {
+				tr.raw = ""
+			}
 		}
-	case isMarginTag(tag):
-		// [mN] shifts the left margin by N; a bare [m] is a shift of zero
-		// (lingvo-ref "Тэг [m]···[/m]"). isMarginTag has already guaranteed the tail is
-		// digits, so nothing but a number can reach the custom property.
-		if n := tag[1:]; n != "" && n != "0" {
-			tr.addHTML(`<p class="wu-m" style=` + quoteAttr("--wd-m:"+n) + `>`)
-		} else {
-			tr.addHTML(`<p class="wu-m">`)
-		}
-	case tag == "br":
-		// Undocumented but compiled since Lingvo x5 (lingvo-ref "Тэг [br]"):
-		// a hard line break with no closing descriptor.
-		tr.addHTML("<br/>")
-	case tag == "p":
-		tr.labelOpen = true
-	case tag == "*":
-		tr.addHTML(`<span class="wu-sec">`)
-	case tag == "ex":
-		tr.addHTML(`<span class="wu-ex">`)
-	case tag == "t":
-		tr.addHTML(`<span class="wu-ipa">`)
-	case tag == "i":
-		tr.addHTML("<i>")
-	case tag == "b":
-		tr.addHTML("<b>")
-	case tag == "u":
-		tr.addHTML("<u>")
-	case tag == "'":
-		tr.addHTML(`<span class="wu-acc">`)
-	case tag == "sup":
-		tr.addHTML("<sup>")
-	case tag == "sub":
-		tr.addHTML("<sub>")
-	case tag == "trn":
-		tr.addHTML(`<span class="wu-trn">`)
-	case tag == "!trn":
-		tr.addHTML(`<span class="wu-trn-not">`)
-	case tag == "trs":
-		tr.addHTML(`<span class="wu-trs">`)
-	case tag == "!trs":
-		tr.addHTML(`<span class="wu-trs-not">`)
-	case tag == "com":
-		tr.addHTML(`<span class="wu-com">`)
-	case tag == "lang":
-		tr.addHTML(`<span class="wu-lang"` + langAttrs(attrs) + `>`)
-	case tag == "preview":
-		// [preview] is legal only INSIDE [s]/[video], where lexTagS consumes
-		// it; the compiler accepts it and it has no effect (lingvo-ref "Тэг
-		// [preview]···[/preview]"), so a stray one outside a media zone is
-		// dropped rather than printed.
+	case def.kind == kVoid:
+		tr.html(def.open)
+	case def.kind == kIgnore:
+	case def.kind == kMedia:
+		return tr.lexMedia(end)
 	default:
-		// unknown tag: dropped, content kept (pyglossary logs a warning)
+		if n := len(tr.toks); def.kind == kBlock && n > 0 && tr.toks[n-1].kind == tkBreak && tr.toks[n-1].a == int32(i) {
+			tr.toks[n-1].s = "" // the paragraph breaks the line
+		}
+		tr.push(token{kind: tkOpen, s: base, attrs: attrs, a: int32(i), b: int32(end), rng: -1})
+		if def.kind == kLink {
+			tr.raw = base // a link ends the one it opens in (resolve)
+		}
 	}
-	return nil
+	return end
 }
 
-func (tr *transformer) closeTag(tag string) {
-	// [/m2] is as common in the wild as [/m], and both close the same <p>: the
-	// digit belongs to the margin, not to the element. Matching only "m" left
-	// the paragraph open, so every following line inherited the indent to the
-	// end of the article.
-	if isMarginTag(tag) {
-		tr.addHTML("</p>")
-		return
+// bracket is a `[` that opens no tag: text, unless it is the `[/` of a
+// closing tag that lost its name to the next tag (`[/[m1]`), which is dropped.
+func (tr *transformer) bracket(i int) int {
+	if in := tr.input; i+2 < len(in) && in[i+1] == '/' && in[i+2] == '[' {
+		return i + 2
 	}
-	switch tag {
-	case "b":
-		tr.addHTML("</b>")
-	case "u":
-		tr.addHTML("</u>")
-	case "i":
-		tr.addHTML("</i>")
-	case "sup":
-		tr.addHTML("</sup>")
-	case "sub":
-		tr.addHTML("</sub>")
-	case "p":
-		tr.closeLabel()
-	case "'", "c", "t", "*", "ex", "trn", "!trn", "trs", "!trs", "com", "lang":
-		// Every role is one <span>, whatever its opener had to decide.
-		tr.addHTML("</span>")
-	}
+	tr.text(i, i+1)
+	return i + 1
 }
 
-// lexRefText handles [ref]...[/ref] and <<...>>: an in-dictionary link.
-func (tr *transformer) lexRefText(attrs map[string]string) {
-	text := tr.collectRefText(true)
-	target := attrs["target"]
-	if target == "" {
-		target = text
+// scanAttrs parses the attributes of a tag from in[i] (the blank after the
+// name) through the closing ']'. Values may be quoted ('…' or "…") or bare,
+// and `\` escapes inside them; a bare attribute with no `=` is recorded with
+// an empty value - which is how `[c red]` names its colour. It fails, and the
+// tag with it, at a line break, an unescaped `[`, or the end of input.
+func scanAttrs(in string, i int) (map[string]string, int, bool) {
+	attrs := map[string]string{}
+	name := -1 // start of the attribute name being read
+	flushName := func() {
+		if name >= 0 {
+			attrs[in[name:i]] = ""
+			name = -1
+		}
 	}
-	href := quoteAttr(htmlref.EntryHref(target))
-	// dict="..." names ANOTHER dictionary by its #NAME, and the link is meant
-	// to land there rather than in this one (lingvo-ref "Тэг [ref]···[/ref]").
-	// Lingvo draws that name as the hover tooltip, so it rides in `title` -
-	// which is also the only attribute besides href that the article sanitiser
-	// keeps on an <a> (internal/server/articleformat.go); data-dict is the
-	// machine-readable copy the live UI resolves to a dictionary id, and a
-	// name that resolves to nothing degrades to an unscoped search.
-	if d := strings.TrimSpace(attrs["dict"]); d != "" {
-		tr.addHTML(`<a class="wu-xref" data-dict=` + quoteAttr(d) + ` title=` + quoteAttr(d) +
-			" href=" + href + ">" + escape(text) + "</a>")
-		return
+	for i < len(in) {
+		switch c := in[i]; c {
+		case '\n', '[':
+			return nil, 0, false
+		case ']':
+			flushName()
+			return attrs, i + 1, true
+		case ' ', '\t':
+			flushName()
+			i++
+		case '=':
+			key := ""
+			if name >= 0 {
+				key = in[name:i]
+				name = -1
+			}
+			i++
+			for i < len(in) && (in[i] == ' ' || in[i] == '\t') {
+				i++
+			}
+			v, next, ok := scanAttrValue(in, i)
+			if !ok {
+				return nil, 0, false
+			}
+			attrs[key] = v
+			i = next
+		default:
+			if name < 0 {
+				name = i
+			}
+			i++
+		}
 	}
-	tr.addHTML("<a href=" + href + ">" + escape(text) + "</a>")
+	return nil, 0, false
+}
+
+func scanAttrValue(in string, i int) (string, int, bool) {
+	quote := byte(0)
+	if i < len(in) && (in[i] == '\'' || in[i] == '"') {
+		quote = in[i]
+		i++
+	}
+	var v strings.Builder
+	for i < len(in) {
+		c := in[i]
+		switch {
+		case c == '\\':
+			if i+1 >= len(in) || in[i+1] == '\n' {
+				return "", 0, false
+			}
+			v.WriteByte(in[i+1])
+			i += 2
+		case c == ']':
+			return v.String(), i, true
+		case c == '\n', c == '[':
+			return "", 0, false
+		case quote != 0 && c == quote:
+			return v.String(), i + 1, true
+		case quote == 0 && (c == ' ' || c == '\t'):
+			return v.String(), i, true
+		default:
+			v.WriteByte(c)
+			i++
+		}
+	}
+	return "", 0, false
 }
 
 // flipCaseFirst inverts the case of the first rune of s, the "перевёртыш"
@@ -577,41 +655,48 @@ func flipCaseFirst(s string) string {
 	return string(f) + s[size:]
 }
 
-func (tr *transformer) lexURLText(attrs map[string]string) {
-	text := tr.collectRefText(false)
-	target := attrs["target"]
-	if target == "" {
-		target = text
+var (
+	textEscaper = strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;")
+	attrEscaper = strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;", `"`, "&quot;")
+)
+
+func escape(s string) string { return textEscaper.Replace(s) }
+
+// quoteAttr renders a value as a complete double-quoted attribute. Every
+// attribute built from dictionary content must go through this and not
+// escape(): a `"` inside a colour name or a media file name would otherwise
+// close the attribute and start a new one.
+func quoteAttr(s string) string { return `"` + attrEscaper.Replace(s) + `"` }
+
+// colourOpen is the [c] markup. The author's colour is a PARAMETER, not a
+// decision: it rides as --wd-c and internal/artmark's rule turns it into a
+// colour, so a reader who sets .wu-c{color:...} beats it without !important.
+// A bare [c] is green (lingvo-ref), which is the rule's fallback and so costs
+// no attribute at all.
+func colourOpen(attrs map[string]string) string {
+	color := ""
+	for k, v := range attrs {
+		if v == "" {
+			color = k
+			break
+		}
 	}
-	if !strings.Contains(target, "://") {
-		target = "http://" + target
+	if !artmark.IsColor(color) {
+		// A name or a #hex, or nothing. Dictionary content reaching a style
+		// attribute is an injection site, and a value like
+		// `red;position:fixed` would be exactly that.
+		return `<span class="wu-c">`
 	}
-	tr.addHTML("<a href=" + quoteAttr(target) + ">" + escape(text) + "</a>")
+	return `<span class="wu-c" style=` + quoteAttr("--wd-c:"+color) + `>`
 }
 
-// collectRefText gathers text until '[', '>>' (when doubleAngle) or EOF.
-func (tr *transformer) collectRefText(doubleAngle bool) string {
-	var b strings.Builder
-	for !tr.end() {
-		c := tr.next()
-		if c == '\\' {
-			if tr.end() {
-				break
-			}
-			b.WriteByte(tr.next())
-			continue
-		}
-		if c == '[' {
-			tr.pos--
-			break
-		}
-		if doubleAngle && c == '>' && tr.follows(">") {
-			tr.next()
-			break
-		}
-		b.WriteByte(c)
+// marginOpen is the [mN] markup. isMarginTag has already guaranteed the tail
+// is digits, so nothing but a number can reach the custom property.
+func marginOpen(tag string) string {
+	if n := tag[1:]; n != "" && n != "0" {
+		return `<p class="wu-m" style=` + quoteAttr("--wd-m:"+n) + `>`
 	}
-	return b.String()
+	return `<p class="wu-m">`
 }
 
 // mediaKind is what a browser can do with one [s] payload.
@@ -651,18 +736,46 @@ var mediaExt = map[string]mediaKind{
 	"mov": mediaVideo, "m4v": mediaVideo, "3gp": mediaVideo,
 }
 
-// lexTagS handles [s]file[/s] (and its [video] synonym): one media file,
-// rendered by kind, its name recorded for the resource set.
-//
-// Every kind renders something. Emitting nothing for an unrecognised extension
-// would lose the file silently: the article would show a gap
-// where the author put a video or a PDF, and no part of the pipeline
-// downstream can recover a reference that was never written.
-func (tr *transformer) lexTagS() {
-	fname := tr.collectMediaName()
-	if fname == "" {
-		return
+// lexMedia reads the file name filling a media zone ([s] or [video]) from
+// in[i] and emits one element for it, its name recorded for the resource set.
+// Only a bare name with an extension is legal there - no path, no nested
+// tags, no spaces around it (lingvo-ref) - so the scan stops at the first `[`
+// or line break, and the one tag the compiler does accept inside is skipped:
+// [preview] was rejected during x5's development and has no effect, but a
+// dictionary written against that compiler still contains it, and reading it
+// as part of the name would ask the container for a file called
+// "[preview]x.avi". The [/s] that follows closes no zone and is dropped.
+func (tr *transformer) lexMedia(i int) int {
+	in := tr.input
+	var b strings.Builder
+	for i < len(in) {
+		if strings.HasPrefix(in[i:], "[preview]") {
+			i += len("[preview]")
+			continue
+		}
+		if strings.HasPrefix(in[i:], "[/preview]") {
+			i += len("[/preview]")
+			continue
+		}
+		if in[i] == '[' || in[i] == '\n' {
+			break
+		}
+		b.WriteByte(in[i])
+		i++
 	}
+	if fname := strings.TrimSpace(b.String()); fname != "" {
+		tr.media(fname)
+	}
+	return i
+}
+
+// media emits the element for one media file. Every kind renders something.
+// Emitting nothing for an unrecognised extension would lose the file
+// silently: the article would show a gap where the author put a video or a
+// PDF, and no part of the pipeline downstream can recover a reference that
+// was never written.
+func (tr *transformer) media(fname string) {
+	t := token{kind: tkHTML, rng: -1}
 	switch mediaExt[strings.TrimPrefix(strings.ToLower(path.Ext(fname)), ".")] {
 	case mediaAudio:
 		// A link, not GoldenDict's `<object type="audio/x-wav">`. That spelling
@@ -676,16 +789,16 @@ func (tr *transformer) lexTagS() {
 		// sanitiser strips every on* attribute, by design).
 		//
 		// [s] carries no link text of its own, so the glyph is the affordance.
-		tr.addHTML(`<a class="wu-audio" href=` + quoteAttr(fname) + `>&#128266;</a>`)
+		t.s, t.anchor = `<a class="wu-audio" href=`+quoteAttr(fname)+`>&#128266;</a>`, true
 	case mediaImage:
-		tr.addHTML(`<img align="top" src=` + quoteAttr(fname) + ` alt=` + quoteAttr(fname) + ` />`)
+		t.s = `<img align="top" src=` + quoteAttr(fname) + ` alt=` + quoteAttr(fname) + ` />`
 	case mediaVideo:
 		// preload="none" is what makes this affordable: a card may carry
 		// several videos of tens of megabytes each, and nothing is fetched
 		// until the reader presses play. src is a fetch site, so the article
 		// rewriter points it at /res/{dict}/ with no special case, and `clean`
 		// already keeps <video src|controls> (server/articleformat.go).
-		tr.addHTML(`<video class="wu-video" controls preload="none" src=` + quoteAttr(fname) + `></video>`)
+		t.s = `<video class="wu-video" controls preload="none" src=` + quoteAttr(fname) + `></video>`
 	default:
 		// Anything else - a PDF, a document, one of Lingvo's own formats no
 		// browser handles. The `file://` pseudo-scheme is the author saying
@@ -697,36 +810,9 @@ func (tr *transformer) lexTagS() {
 		//
 		// The file name is the link text because it is all there is: [s] has no
 		// text of its own, and a bare glyph would not say what it opens.
-		tr.addHTML(`<a class="wu-file" href=` + quoteAttr("file://"+fname) +
-			`>&#128196; ` + escape(fname) + `</a>`)
+		t.s, t.anchor = `<a class="wu-file" href=`+quoteAttr("file://"+fname)+
+			`>&#128196; `+escape(fname)+`</a>`, true
 	}
+	tr.push(t)
 	tr.resFiles = append(tr.resFiles, fname)
-}
-
-// collectMediaName reads the file name filling the media zone. Only a bare
-// name with an extension is legal there - no path, no nested tags, no spaces
-// around it (lingvo-ref) - so the scan stops at the first `[`, and the one tag
-// the compiler does accept inside is skipped: [preview] was rejected during
-// x5's development and has no effect, but a dictionary written against that
-// compiler still contains it, and reading it as part of the name would ask the
-// container for a file called "[preview]x.avi".
-func (tr *transformer) collectMediaName() string {
-	var b strings.Builder
-	for !tr.end() {
-		if tr.follows("[preview]") {
-			tr.pos += len("[preview]")
-			continue
-		}
-		if tr.follows("[/preview]") {
-			tr.pos += len("[/preview]")
-			continue
-		}
-		c := tr.next()
-		if c == '[' {
-			tr.pos--
-			break
-		}
-		b.WriteByte(c)
-	}
-	return strings.TrimSpace(b.String())
 }

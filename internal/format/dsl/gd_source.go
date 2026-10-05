@@ -19,7 +19,7 @@ import (
 	"github.com/wuweidict/wudict/internal/store"
 )
 
-const GDReaderVersion = 6
+const GDReaderVersion = 8
 
 type gdFileStamp struct {
 	size  int64
@@ -200,8 +200,8 @@ func loadGDSource(p string) (gdSource, error) {
 	return s, err
 }
 
-// NewGDReader shares file decoding and entry boundaries with the current reader,
-// but uses an independent tree parser and heading expansion.
+// NewGDReader retains the existing variant identity for the UI. Its article
+// pipeline now uses range repair plus our heading, cleanup and example handling.
 func NewGDReader(p string) (*Reader, error) {
 	return NewGDReaderWithOptions(p, GDOptions{Enhance: true, Styles: true})
 }

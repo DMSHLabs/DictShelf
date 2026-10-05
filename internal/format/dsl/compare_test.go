@@ -63,7 +63,7 @@ func TestGDCompareDump(t *testing.T) {
 		if c.Abbreviations != nil {
 			ab = &abbrevMap{exact: c.Abbreviations}
 		}
-		rendered, _, err := transformGDWithOptions(c.Body, c.Key, ab, GDOptions{Enhance: os.Getenv("WUDICT_DSL_COMPARE_ENHANCE") == "1"})
+		rendered, _, err := transformGDReferenceWithOptions(c.Body, c.Key, ab, GDOptions{Enhance: os.Getenv("WUDICT_DSL_COMPARE_ENHANCE") == "1"})
 		if err != nil {
 			t.Fatal(err)
 		}
