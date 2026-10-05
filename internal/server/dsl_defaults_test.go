@@ -12,7 +12,7 @@ import (
 	_ "github.com/wuweidict/wudict/internal/format/wmd"
 )
 
-func waitDSLDefaults(t *testing.T, r *Registry) {
+func waitIndexPreparation(t *testing.T, r *Registry) {
 	t.Helper()
 	deadline := time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
@@ -35,7 +35,7 @@ func TestIndexDefaultsApplyToNewDSLAndMarkdownOnly(t *testing.T) {
 	}
 	s := New(reg)
 	// Index cannot be disabled, even by an older or malformed client.
-	groupCall(t, s, "PUT", "/api/index-defaults", dslIndexOptions{Contains: true, FullText: true}, 200)
+	groupCall(t, s, "PUT", "/api/index-defaults", indexOptions{Contains: true, FullText: true}, 200)
 	if got := LoadPrefs(state).newIndexDefaults(); !got.Index || !got.Contains || !got.FullText {
 		t.Fatalf("defaults not persisted: %+v", got)
 	}
@@ -50,7 +50,7 @@ func TestIndexDefaultsApplyToNewDSLAndMarkdownOnly(t *testing.T) {
 	if err := reg.Rescan(); err != nil {
 		t.Fatal(err)
 	}
-	waitDSLDefaults(t, reg)
+	waitIndexPreparation(t, reg)
 	seen := 0
 	for _, e := range reg.all() {
 		if got := s.currentFeatures(e); !got.Contains || !got.FullText || e.indexBlocked() {
@@ -61,11 +61,11 @@ func TestIndexDefaultsApplyToNewDSLAndMarkdownOnly(t *testing.T) {
 	if seen != 2 {
 		t.Fatalf("expected DSL and Markdown, got %d", seen)
 	}
-	groupCall(t, s, "PUT", "/api/index-defaults", dslIndexOptions{Index: true}, 200)
+	groupCall(t, s, "PUT", "/api/index-defaults", indexOptions{Index: true}, 200)
 	if err := reg.Rescan(); err != nil {
 		t.Fatal(err)
 	}
-	waitDSLDefaults(t, reg)
+	waitIndexPreparation(t, reg)
 	for _, e := range reg.all() {
 		if got := s.currentFeatures(e); !got.Contains || !got.FullText {
 			t.Fatal("existing dictionary changed", e.Path, got)

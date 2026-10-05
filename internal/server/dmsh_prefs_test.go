@@ -12,14 +12,13 @@ import (
 func TestPrefsFailedMutationKeepsActiveRecord(t *testing.T) {
 	p := LoadPrefs("")
 	original := prefsFile{
-		IndexDefaults: &dslIndexOptions{Index: true, Contains: true},
+		IndexDefaults: &indexOptions{Index: true, Contains: true},
 		IndexMigrated: map[string]bool{"source": true},
-		DSLKnown:      map[string]bool{"source": true}, DSLPending: map[string]dslIndexOptions{"source": {Index: true}},
-		DSLRemoved: map[string]bool{"source": true}, DSL: map[string]string{"source": "gd"},
-		DSLDefaults: &dslDefaults{Original: dslIndexOptions{Index: true}},
-		UI:          &UIPrefs{GroupsOff: []string{"lang"}},
-		Groups:      []DictionaryGroup{{ID: "g", Name: "Reading", Order: []string{"d"}}},
-		Dicts:       []DictPref{{ID: "d", Groups: []string{"g"}}},
+		DSLKnown:      map[string]bool{"source": true}, DSLPending: map[string]indexOptions{"source": {Index: true}},
+		DSLRemoved: map[string]bool{"source": true},
+		UI:         &UIPrefs{GroupsOff: []string{"lang"}},
+		Groups:     []DictionaryGroup{{ID: "g", Name: "Reading", Order: []string{"d"}}},
+		Dicts:      []DictPref{{ID: "d", Groups: []string{"g"}}},
 	}
 	if err := p.store(original); err != nil {
 		t.Fatal(err)
@@ -46,8 +45,6 @@ func TestPrefsFailedMutationKeepsActiveRecord(t *testing.T) {
 		delete(f.DSLKnown, "source")
 		delete(f.DSLPending, "source")
 		delete(f.DSLRemoved, "source")
-		f.DSL["source"] = "original"
-		f.DSLDefaults.Original.Index = false
 		f.UI.GroupsOff[0] = "pair"
 		f.Groups[0].Name = "Changed"
 		f.Groups[0].Order[0] = "other"

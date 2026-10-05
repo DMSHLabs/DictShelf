@@ -88,6 +88,7 @@ function renderGroupRows(){
     const label=document.createElement(!group.readonly&&showAll.checked?"label":"div");label.className="group-row";
     label.dataset.dict=d.id;
     const name=document.createElement("span");name.textContent=dictLabel(d);
+    if(d.unavailable)name.append(" — ",tx("dictUI.dslUnavailable"));
     if(group.readonly||!showAll.checked){
       const grip=document.createElement("button");grip.type="button";grip.className="group-grip";
       grip.textContent="≡";grip.setAttribute("aria-label",tx("dictUI.dragNamed",{name:dictLabel(d)}));
@@ -241,7 +242,7 @@ $("newGroupDialog").addEventListener("cancel",event=>{if($("createGroup").disabl
 // Promise.all resolves to an array: passing it to loadDicts would enable
 // rescan and wait for index maintenance instead of listing dictionaries.
 Promise.all([loadPrefs(),loadConfig(),loadUserCSS(),loadPickerGroups()])
-  .then(()=>loadDicts()).then(applyURL).catch(error=>bootFailed(error.message));
+  .then(()=>loadDicts()).then(ok=>{if(ok)applyURL()}).catch(error=>bootFailed(error.message));
 // The preset layers are independent of the boot chain: their app halves are
 // server-injected <link>s and their article halves join the article sheet
 // whenever this answer lands, which is why this is fire-and-forget rather

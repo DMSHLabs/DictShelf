@@ -12,32 +12,24 @@ import (
 	"github.com/wuweidict/wudict/internal/store"
 )
 
-type dslIndexOptions struct {
+type indexOptions struct {
 	Index    bool `json:"index"`
 	Contains bool `json:"contains"`
 	FullText bool `json:"fullText"`
 }
 
-type dslDefaults struct {
-	Original dslIndexOptions `json:"original"`
-	GD       dslIndexOptions `json:"gd"`
-}
-
-func (p *Prefs) newIndexDefaults() dslIndexOptions {
+func (p *Prefs) newIndexDefaults() indexOptions {
 	f, _ := p.data()
 	if f.IndexDefaults != nil {
 		v := *f.IndexDefaults
 		v.Index = true
 		return v
 	}
-	old := p.newDSLDefaults()
-	return dslIndexOptions{Index: true,
-		Contains: old.Original.Index && old.Original.Contains || old.GD.Index && old.GD.Contains,
-		FullText: old.Original.Index && old.Original.FullText || old.GD.Index && old.GD.FullText}
+	return indexOptions{Index: true}
 }
 
 func (s *Server) handleIndexDefaults(w http.ResponseWriter, req *http.Request) {
-	var next dslIndexOptions
+	var next indexOptions
 	if err := json.NewDecoder(http.MaxBytesReader(w, req.Body, 4096)).Decode(&next); err != nil {
 		httpErr(w, 400, "invalid index defaults")
 		return
@@ -66,14 +58,6 @@ func (s *Server) handleIndexDefaults(w http.ResponseWriter, req *http.Request) {
 	writeJSON(w, next)
 }
 
-func (p *Prefs) newDSLDefaults() dslDefaults {
-	f, _ := p.data()
-	if f.DSLDefaults != nil {
-		return *f.DSLDefaults
-	}
-	return dslDefaults{Original: dslIndexOptions{Index: true}}
-}
-
 func (r *Registry) queueNewDSL() error {
 	entries := r.all()
 	current, _ := r.prefs.data()
@@ -99,7 +83,7 @@ func (r *Registry) queueNewDSL() error {
 	}
 	f.DSLPending = maps.Clone(f.DSLPending)
 	if f.DSLPending == nil {
-		f.DSLPending = map[string]dslIndexOptions{}
+		f.DSLPending = map[string]indexOptions{}
 	}
 	f.DSLRemoved = maps.Clone(f.DSLRemoved)
 	if f.DSLRemoved == nil {

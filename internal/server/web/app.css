@@ -1657,6 +1657,8 @@ dialog.panel-card:not([open]){display:none}
 .bulkbox p:last-child{margin-bottom:0}
 .bulkbox .cost{color:var(--label-quiet)}
 .bulkbox .btn{font-size:11.5px;padding:.25em .6em;margin-right:.4em}
+.outdated-notice{margin:var(--sp-2) 0 var(--sp-3);font-size:14px}
+.outdated-notice .btn{font-size:inherit}
 .work-notice{position:fixed;z-index:330;top:auto;bottom:var(--wd-vv-bottom,0px);left:50%;
   transform:translateX(-50%);width:calc(100% - 2*var(--sp-2));max-width:720px;
   display:flex;align-items:center;gap:.6em;padding:.45em .55em;

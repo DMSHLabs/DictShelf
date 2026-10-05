@@ -1,5 +1,9 @@
 # Localization: status and next tasks
 
+2026-10-06 single DSL parser cleanup: removed unused Original/GD/both selector labels and retired selection error translations from both catalogs and the error matcher. Go catalog checks pass. The full Node i18n harness still stops at the existing `Чистый` versus `Чистое` assertion at line 226, before its later checks.
+
+2026-10-06 dictionary-list recovery: EN/RU messages added for an interrupted list and for a group with members that are all unavailable for search. Group editor reuses its existing unavailable label. Go catalog checks pass; phone check after rebuild remains.
+
 2026-10-05 launcher Settings: added Save System Log… / Сохранить System Log… before Restore defaults. Screen buttons preserve resource casing instead of Android all-caps. FOSS/Play Java compilation passes; phone layout/save check outstanding.
 
 2026-10-05 Appearance: added EN/RU checkbox below Examples for also hiding examples without [*]. Server-persisted, default off, effective only with Hide. Node i18n and Go catalog checks pass; Android wrapping/touch check outstanding.

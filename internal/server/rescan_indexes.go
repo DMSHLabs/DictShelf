@@ -21,7 +21,7 @@ type rescanIndexActions struct {
 }
 
 type rescanIndexesRequest struct {
-	New      *dslIndexOptions   `json:"new,omitempty"`
+	New      *indexOptions      `json:"new,omitempty"`
 	Existing rescanIndexActions `json:"existing"`
 }
 
@@ -176,7 +176,7 @@ func (r *Registry) updateDictionaryIndexesCancelable(req rescanIndexesRequest, p
 	type target struct {
 		e       *entry
 		fresh   bool
-		options dslIndexOptions
+		options indexOptions
 	}
 	targets := []target{}
 	p := r.prefs
@@ -199,7 +199,7 @@ func (r *Registry) updateDictionaryIndexesCancelable(req rescanIndexesRequest, p
 	if f.DSLKnown == nil {
 		f.DSLKnown = map[string]bool{}
 	}
-	f.DSLPending = map[string]dslIndexOptions{}
+	f.DSLPending = map[string]indexOptions{}
 	f.DSLRemoved = maps.Clone(f.DSLRemoved)
 	if f.DSLRemoved == nil {
 		f.DSLRemoved = map[string]bool{}

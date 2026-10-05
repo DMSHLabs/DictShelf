@@ -28,13 +28,13 @@ import (
 // otherwise visible only on the terminal at startup, which a user who opened
 // the app in a browser never sees.
 type configInfo struct {
-	IndexDefaults dslIndexOptions `json:"indexDefaults"`
-	Roots         []Root          `json:"roots"`
-	LibDir        string          `json:"libDir"`
-	Prepared      int             `json:"prepared"`
-	UseCached     bool            `json:"useCached"`
-	ConfigPath    string          `json:"configPath"`
-	Total         int             `json:"total"`
+	IndexDefaults indexOptions `json:"indexDefaults"`
+	Roots         []Root       `json:"roots"`
+	LibDir        string       `json:"libDir"`
+	Prepared      int          `json:"prepared"`
+	UseCached     bool         `json:"useCached"`
+	ConfigPath    string       `json:"configPath"`
+	Total         int          `json:"total"`
 	// HowtoRemoved: the user removed the built-in wudict howto; the setup
 	// page offers it back.
 	HowtoRemoved bool `json:"howtoRemoved,omitempty"`

@@ -54,8 +54,8 @@ for (const language of ['en', 'ru']) {
       :`${n} ${n===1?'dictionary has lost its':'dictionaries have lost their'} files`);
   }
   const errorText = context.window.wudictI18n.errorText;
-  const defaultsError=JSON.stringify({error:'select at least one DSL index: Original or GD compatible'});
-  assert.equal(errorText(defaultsError),language==='en'?defaultsError:t('errors.dslIndexRequired'));
+  const busyError=JSON.stringify({error:'dictionary operations are running; wait for completion or stop them'});
+  assert.equal(errorText(busyError),language==='en'?busyError:t('errors.workBusy'));
   const unknownResponse=JSON.stringify({error:'Unknown failure <file> {name}',detail:'keep this'});
   assert.equal(errorText(unknownResponse),unknownResponse);
   assert.equal(errorText('{broken JSON'),'{broken JSON');

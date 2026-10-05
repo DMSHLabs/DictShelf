@@ -278,14 +278,14 @@ label.keep em{font-style:normal;color:var(--label-quiet);font-size:12.5px}
 const $=id=>document.getElementById(id);
 const tx=window.wudictI18n.t;
 let indexDefaultsWrite=Promise.resolve(true);
-function syncDSLDefaults(){
+function syncIndexDefaults(){
   $("newIndexIndex").checked=true;
   $("newIndexIndex").disabled=true;
   $("indexDefaultsError").hidden=true;
   return true;
 }
 function saveIndexDefaults(){
-  if(!syncDSLDefaults())return Promise.resolve(false);
+  if(!syncIndexDefaults())return Promise.resolve(false);
   const body={index:true,contains:$("newIndexContains").checked,fullText:$("newIndexFullText").checked};
   indexDefaultsWrite=indexDefaultsWrite.then(async()=>{
     try{
@@ -770,7 +770,7 @@ async function start(){
   for(const [feature,suffix] of [["contains","Contains"],["fullText","FullText"]]){
     $("newIndex"+suffix).checked=!!cfg?.indexDefaults?.[feature];
   }
-  syncDSLDefaults();
+  syncIndexDefaults();
   await saveIndexDefaults();
   const dirs=(cfg&&cfg.roots||[]).map(r=>r.path);
   if(dirs.length)dirs.forEach(d=>addRow(d)); else addRow("");

@@ -223,6 +223,7 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
      clipped row, and .txt carries the padding INSIDE the clip so the closed
      state is truly 0px rather than 0px plus padding. -->
 <div id="status" role="status" aria-live="polite"><div class="msg"><div class="txt" id="statusMsg"></div></div></div>
+<div id="outdatedNotice" class="bulkbox outdated-notice" role="status" hidden></div>
 <div id="out"></div>
 </main>
 
@@ -1750,7 +1751,7 @@ function bootFailed(msg){
     `<p>${esc(msg||tx("search.unknown"))}</p>`+
     `<p><button type="button" class="btn" id="retryBtn">${esc(tx("search.retry"))}</button></p></div>`;
 }
-$("out").addEventListener("click",e=>{if(e.target.id==="retryBtn")loadDicts()});
+$("out").addEventListener("click",e=>{if(e.target.id==="retryBtn")loadDicts().then(ok=>{if(ok)applyURL()})});
 
 /* Two asymmetric corrections, because opening and closing fail differently.
    Scrolling every opened section to the top would be wrong: the summary you
@@ -2179,15 +2180,16 @@ function refreshDictUI(now){
 }
 
 /* Consumes the /api/dicts NDJSON stream, so search unblocks on the FIRST
-   dictionary rather than the last one. Never throws: a failure here must
-   still leave the user with a usable page. */
+   dictionary rather than the last one. Returns whether the full list arrived;
+   a failure here must still leave the user with a usable page. */
 async function loadDicts(rescan){
   // A rescan happens in an app that already works — it must not black the UI
   // out. Only the first load (or a retry after a failure) blocks.
   const blocking=phase==="boot"||phase==="failed";
   const controller=blocking?new AbortController():null;
+  const stopBoot=blocking?()=>controller.abort():null;
   if(blocking){
-    setGlobalStop(()=>controller.abort(),tx("dictUI.stop"));
+    setGlobalStop(stopBoot,tx("dictUI.stop"));
     showWorkNotice('<span class="spin"></span>'+esc(readyCount()));
   }
   // A first load has no groups to show until the last row has resolved. A
@@ -2198,10 +2200,17 @@ async function loadDicts(rescan){
   if(blocking){setPhase("boot");startBootScreen();dictTotal=0;syncBootStatus()}
   else setStatus('<span class="spin"></span>'+esc(tx("search.loading")),"load");
   const rows=[];
-  let published=false,sawBegin=false;
+  let published=false,sawBegin=false,sawEnd=false;
   // "begin" costs the server no opens at all, so its absence means the server
   // is not answering — never leave the form inert waiting on a hang.
-  const watchdog=blocking?setTimeout(()=>{if(!sawBegin)bootFailed(tx("search.serverSilent"))},20000):null;
+  let timedOut=false;
+  const watchdog=blocking?setTimeout(()=>{
+    if(sawBegin)return;
+    timedOut=true;
+    controller.abort();
+    if(globalStopAction===stopBoot)clearGlobalStop();
+    bootFailed(tx("search.serverSilent"));
+  },20000):null;
   try{
     await fetchStream(rescan?"/api/rescan":"/api/dicts",msg=>{
       if(msg.t==="begin"){
@@ -2218,16 +2227,21 @@ async function loadDicts(rescan){
         }
         if(blocking){syncBootStatus();showWorkNotice('<span class="spin"></span>'+esc(readyCount()))}
         refreshDictUI();
+      }else if(msg.t==="end"){
+        sawEnd=true;
       }
     },controller&&controller.signal);
+    if(!sawBegin||!sawEnd||rows.length!==dictTotal)
+      throw new Error(tx("search.incompleteDictList"));
   }catch(err){
-    if(blocking&&controller&&controller.signal.aborted)bootFailed(tx("search.bootStopped"));
+    if(blocking&&timedOut)bootFailed(tx("search.serverSilent"));
+    else if(blocking&&controller&&controller.signal.aborted)bootFailed(tx("search.bootStopped"));
     else if(blocking)bootFailed(err.message);
     else setStatus("⚠ "+esc(err.message));
-    return;
+    return false;
   }finally{
     clearTimeout(watchdog);
-    if(blocking)clearGlobalStop();
+    if(blocking&&globalStopAction===stopBoot)clearGlobalStop();
   }
   dicts=rows;dictTotal=rows.length;
   // normalize the saved preference order to the current dictionary set
@@ -2240,6 +2254,7 @@ async function loadDicts(rescan){
   clearStatus("load");
   // a search run against a half-loaded list is now answerable in full
   if(staleSearch&&lastQuery){staleSearch=false;doSearch()}
+  return true;
 }
 /* reorder helpers operate on the preference-ordered id list */
 function moveDict(id,where){
@@ -2425,6 +2440,8 @@ let reindexSt=null,reindexTimer=0,reindexStopping=false;
 const following=new Set();
 function renderReindex(){
   const box=$("reindexLine"),st=reindexSt;
+  const notice=$("outdatedNotice");
+  notice.hidden=true;
   if(st&&st.running){
     const at=Math.min(st.done+1,st.total),
       pct=st.currentTotal?` ${Math.min(100,Math.floor(st.currentDone/st.currentTotal*100))}%`:"";
@@ -2439,6 +2456,10 @@ function renderReindex(){
   box.innerHTML=(n?`<p>${esc(tx("dictUI.outdated",{number:n}))} <button type="button" class="btn" id="reindexGo">${esc(tx("dictUI.rebuild"))}</button></p>`:"")+
     (failed.length?`<p class="cost">${esc(tx("dictUI.rebuildFailed",{errors:failed.join("; ")}))}</p>`:"");
   box.hidden=false;
+  if(n&&dictsSettled){
+    notice.innerHTML=`<p>${esc(tx("dictUI.outdated",{number:n}))} <button type="button" class="btn" id="reindexMainGo">${esc(tx("dictUI.rebuild"))}</button></p>`;
+    notice.hidden=false;
+  }
 }
 function pollReindex(){
   clearTimeout(reindexTimer);
@@ -2466,12 +2487,12 @@ function requestReindexStop(){
   reindexStopping=true;setGlobalStop(requestReindexStop,tx("dictUI.stopping"));renderReindex();
   fetch("/api/reindex",{method:"DELETE"}).catch(()=>{});
 }
-$("reindexLine").addEventListener("click",async e=>{
+async function reindexClick(e){
   if(e.target.id==="reindexStop"){
     requestReindexStop();
     return;
   }
-  if(e.target.id!=="reindexGo")return;
+  if(e.target.id!=="reindexGo"&&e.target.id!=="reindexMainGo")return;
   e.target.disabled=true;
   try{
     const r=await fetch("/api/reindex",{method:"POST"});
@@ -2480,7 +2501,9 @@ $("reindexLine").addEventListener("click",async e=>{
   }catch(err){e.target.disabled=false;setStatus(esc(tx("dictUI.rebuildStartFailed",{error:err.message})));return}
   if(reindexSt.running){setGlobalStop(requestReindexStop);renderReindex();pollReindex()}
   else loadDicts(); // nothing was outdated any more: the list was behind
-});
+}
+$("reindexLine").addEventListener("click",reindexClick);
+$("outdatedNotice").addEventListener("click",reindexClick);
 fetch("/api/reindex").then(r=>r.ok?r.json():null).then(st=>{
   if(st&&st.running){reindexSt=st;const message=esc(tx("dictUI.rebuilding",{at:Math.min(st.done+1,st.total),total:st.total})+(st.current?` · ${st.current}`:""));setStatus(message);setGlobalStop(requestReindexStop);showWorkNotice(message);renderReindex();pollReindex()}
 }).catch(()=>{});
@@ -4679,16 +4702,20 @@ async function doSearch(ev){
       // while dozens are still on their way. So the statement waits for a
       // settled, non-empty list, and until then this reads as what it is —
       // still loading — and re-runs itself when the rest lands (D30).
-      const settled=(phase==="ready"||phase==="failed")&&dicts.length>0;
+      const settled=dictsSettled;
       const lbl=dictSel==="all"?(pickerGroup==="all"?"":userGroups.find(g=>g.id===pickerGroup)?.name||""):groupLabel(dictSel);
+      const groupHasMembers=dictSel==="all"&&pickerGroup!=="all"&&
+        !!userGroups.find(g=>g.id===pickerGroup)?.members.length;
+      if(phase==="failed"&&!settled){livePickerSearching=false;setBusy(false);return}
       $("out").replaceChildren();liveSearchBoxes=null;refreshLivePicker();
       livePickerSearching=false;
       setBusy(false); // nothing was ever sent; both branches below are statements
       setStatus(settled
-        ?(lbl?esc(tx("search.groupEmpty",{name:lbl}))
+        ?(groupHasMembers?esc(tx("search.groupUnavailable",{name:lbl}))
+             :lbl?esc(tx("search.groupEmpty",{name:lbl}))
              :esc(tx("search.noDicts")))
         :'<span class="spin"></span>'+esc(readyCount()));
-      if(!settled)staleSearch=true;
+      if(!settled&&phase!=="failed")staleSearch=true;
       return;
     }
     dictParam=ids.join(",");

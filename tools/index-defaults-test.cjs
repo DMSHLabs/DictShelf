@@ -23,7 +23,7 @@ const context = {
   window: {wudictI18n: {errorText: s => s}},
   fetch: async (url, options) => {writes.push({url, body: JSON.parse(options.body)}); return {ok: true};}
 };
-vm.runInNewContext('let indexDefaultsWrite=Promise.resolve(true);\n' + ['syncDSLDefaults', 'saveIndexDefaults'].map(name => html.match(new RegExp('function ' + name + '\\(\\)\\{[\\s\\S]*?\\n}'))[0]).join('\n'), context);
+vm.runInNewContext('let indexDefaultsWrite=Promise.resolve(true);\n' + ['syncIndexDefaults', 'saveIndexDefaults'].map(name => html.match(new RegExp('function ' + name + '\\(\\)\\{[\\s\\S]*?\\n}'))[0]).join('\n'), context);
 (async () => {
   assert.equal(await context.saveIndexDefaults(), true);
   assert.equal(fields.newIndexIndex.checked, true);

@@ -72,9 +72,17 @@ func (r *Registry) migrateDSLPreferences(selected map[string]string) error {
 	p := r.prefs
 	p.editMu.Lock()
 	defer p.editMu.Unlock()
-	f, _ := p.data()
+	f, exists := p.data()
 	f = f.clone()
-	changed := false
+	// Rewriting a v1 record through the current schema drops ignored parser
+	// selection fields without interpreting their old values.
+	changed := exists && f.Version < prefsVersion
+	if changed && f.IndexDefaults == nil {
+		// The single index is mandatory for new dictionaries. Old split
+		// Original/GD defaults do not choose contains or full-text for it.
+		defaults := indexOptions{Index: true}
+		f.IndexDefaults = &defaults
+	}
 	enhanced := map[string]bool{}
 	plans := map[string]store.Plan{}
 	for _, pref := range f.Dicts {
@@ -97,19 +105,6 @@ func (r *Registry) migrateDSLPreferences(selected map[string]string) error {
 		}
 	}
 	remap := map[string]string{}
-	preferredOff := map[string]bool{}
-	for _, pref := range f.Dicts {
-		source, variant := dslIdentity(pref.Path)
-		mode := f.DSLParser
-		if mode == "" {
-			mode = f.DSL[source]
-		}
-		if variant == mode && (mode == "gd" || mode == "original") {
-			if path, ok := selected[source]; ok {
-				preferredOff[pathID(path)] = pref.Off
-			}
-		}
-	}
 	merged := []DictPref{}
 	positions := map[string]int{}
 	for _, pref := range f.Dicts {
@@ -117,10 +112,12 @@ func (r *Registry) migrateDSLPreferences(selected map[string]string) error {
 		if path, ok := selected[source]; ok {
 			id := pathID(path)
 			remap[pref.ID] = id
-			if pref.ID != id || pref.Path != path {
+			if pref.ID != id || pref.Path != path || pref.Off {
 				changed = true
 			}
-			pref.ID, pref.Path = id, path
+			// The old parser selection and its Off flag cannot hide the only
+			// remaining DSL entry; the current UI has no Off control either.
+			pref.ID, pref.Path, pref.Off = id, path, false
 			if variant == "gd" {
 				name := strings.TrimSuffix(pref.Name, " GD")
 				changed = changed || name != pref.Name
@@ -137,15 +134,9 @@ func (r *Registry) migrateDSLPreferences(selected map[string]string) error {
 					merged[at].Groups = append(merged[at].Groups, group)
 				}
 			}
-			merged[at].Off = merged[at].Off && pref.Off
 		} else {
 			positions[pref.ID] = len(merged)
 			merged = append(merged, pref)
-		}
-	}
-	for i := range merged {
-		if off, ok := preferredOff[merged[i].ID]; ok {
-			merged[i].Off = off
 		}
 	}
 	f.Dicts = merged
@@ -166,13 +157,15 @@ func (r *Registry) migrateDSLPreferences(selected map[string]string) error {
 	}
 	for source, path := range selected {
 		key := source + "\noriginal"
+		gdKey := source + "\ngd"
 		firstMigration := !f.IndexMigrated[source]
+		gdRemoved := f.DSLRemoved[gdKey]
 		// Prefer the enhanced variant's explicit removal decision if it existed.
-		if f.DSLRemoved[source+"\ngd"] || firstMigration && enhanced[source] {
+		if gdRemoved || firstMigration && enhanced[source] {
 			if f.DSLRemoved == nil {
 				f.DSLRemoved = map[string]bool{}
 			}
-			removed := f.DSLRemoved[source+"\ngd"]
+			removed := gdRemoved
 			if f.DSLRemoved[key] != removed {
 				changed = true
 			}
@@ -181,8 +174,25 @@ func (r *Registry) migrateDSLPreferences(selected map[string]string) error {
 			} else {
 				delete(f.DSLRemoved, key)
 			}
-			delete(f.DSLRemoved, source+"\ngd")
+			delete(f.DSLRemoved, gdKey)
 			changed = true
+		}
+		// A successful explicit removal deletes its prepared folder. A current
+		// native index still present behind a removal flag is the old variant's
+		// stale state, so make that usable again. Pending work keeps its block.
+		if firstMigration && f.DSLRemoved[key] && !gdRemoved && path == source {
+			_, nativePending := f.DSLPending[key]
+			_, gdPending := f.DSLPending[gdKey]
+			if !nativePending && !gdPending {
+				if prepared, ok := store.FindPrepared(source); ok && len(prepared.TextStale(source)) == 0 {
+					delete(f.DSLRemoved, key)
+					if f.IndexMigrated == nil {
+						f.IndexMigrated = map[string]bool{}
+					}
+					f.IndexMigrated[source] = true
+					changed = true
+				}
+			}
 		}
 		needsNative := false
 		if enhanced[source] && path == source {
@@ -191,12 +201,12 @@ func (r *Registry) migrateDSLPreferences(selected map[string]string) error {
 		}
 		if plan, ok := plans[source]; ok && enhanced[source] && (firstMigration || needsNative) && path == source && !f.DSLRemoved[key] {
 			if f.DSLPending == nil {
-				f.DSLPending = map[string]dslIndexOptions{}
+				f.DSLPending = map[string]indexOptions{}
 			}
 			if f.DSLRemoved == nil {
 				f.DSLRemoved = map[string]bool{}
 			}
-			f.DSLPending[key] = dslIndexOptions{Index: true, Contains: plan.Contains, FullText: plan.FullText}
+			f.DSLPending[key] = indexOptions{Index: true, Contains: plan.Contains, FullText: plan.FullText}
 			f.DSLRemoved[key] = true
 			changed = true
 		}
@@ -212,17 +222,6 @@ func (r *Registry) migrateDSLPreferences(selected map[string]string) error {
 			f.IndexMigrated[source] = true
 			changed = true
 		}
-	}
-	if f.DSLParser != "" || f.DSLDefaults != nil || len(f.DSL) > 0 || f.DSLInitialSetup {
-		if f.IndexDefaults == nil {
-			v := p.newIndexDefaults()
-			f.IndexDefaults = &v
-		}
-		f.DSLParser = ""
-		f.DSLDefaults = nil
-		f.DSL = nil
-		f.DSLInitialSetup = false
-		changed = true
 	}
 	if !changed {
 		return nil

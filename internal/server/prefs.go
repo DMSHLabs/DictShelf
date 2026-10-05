@@ -37,7 +37,7 @@ const StateFile = "state.json"
 
 // prefsVersion is written to the file so a future format change can be
 // recognised rather than guessed at.
-const prefsVersion = 1
+const prefsVersion = 2
 
 // DictPref is one dictionary's remembered state. The path is what makes this
 // survivable: ids are sha256(path)[:12] (see pathID), so moving a dictionary
@@ -163,19 +163,15 @@ func facetIDs(in []string) []string {
 	return out
 }
 
-// prefsFile stores collection state. Legacy parser selection fields are read
-// only by the single-parser migration and cleared on the next migration save.
+// prefsFile stores collection state. Unknown legacy parser-selection fields
+// are ignored by JSON decoding and disappear on the next save.
 type prefsFile struct {
-	IndexDefaults   *dslIndexOptions           `json:"indexDefaults,omitempty"`
-	IndexMigrated   map[string]bool            `json:"indexMigrated,omitempty"` // completed legacy receipt migrations, per source
-	DSLInitialSetup bool                       `json:"dslInitialSetup,omitempty"`
-	DSLParser       string                     `json:"dslParser,omitempty"`
-	DSLDefaults     *dslDefaults               `json:"dslDefaults,omitempty"`
-	DSLKnown        map[string]bool            `json:"dslKnown,omitempty"`
-	DSLPending      map[string]dslIndexOptions `json:"dslPending,omitempty"`
-	DSLRemoved      map[string]bool            `json:"dslRemoved,omitempty"`
-	DSL             map[string]string          `json:"dsl,omitempty"`
-	Language        string                     `json:"language,omitempty"` // explicit interface language, never the dictionary language
+	IndexDefaults *indexOptions           `json:"indexDefaults,omitempty"`
+	IndexMigrated map[string]bool         `json:"indexMigrated,omitempty"` // completed legacy receipt migrations, per source
+	DSLKnown      map[string]bool         `json:"dslKnown,omitempty"`
+	DSLPending    map[string]indexOptions `json:"dslPending,omitempty"`
+	DSLRemoved    map[string]bool         `json:"dslRemoved,omitempty"`
+	Language      string                  `json:"language,omitempty"` // explicit interface language, never the dictionary language
 
 	Groups  []DictionaryGroup `json:"groups,omitempty"`
 	Version int               `json:"version"`
