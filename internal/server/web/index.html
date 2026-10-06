@@ -110,6 +110,31 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
 <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
 <link rel="stylesheet" href="/assets/app.css?v={{APPCSS}}">
 <link rel="stylesheet" href="/assets/history.css?v={{HISTORYCSS}}">
+<script>
+/* Apply the reader's Settings font scale before the drawer can paint. */
+window.wudictFontScale=(function(){
+  const key="wudict_settings_fonts",clamp=(v,lo,hi)=>Math.min(hi,Math.max(lo,v));
+  const clean=(v,fallback)=>{v=Number(v);return Number.isFinite(v)?clamp(v,.5,2):fallback};
+  const values={base:1,section:1.05,title:1.1,addition:.9,hint:.8,controlHeight:2.2,mainControlHeight:1.05,mainControlFont:1.05};
+  try{const saved=JSON.parse(localStorage.getItem(key)||"null");
+    if(saved){for(const name of Object.keys(values))values[name]=clean(saved[name],values[name])}}catch(_){}
+  function apply(next){
+    for(const name of Object.keys(values))values[name]=clean(next[name],values[name]);
+    const root=document.documentElement.style;
+    root.setProperty("--ui-font-base",values.base+"rem");
+    root.setProperty("--ui-font-section",values.section+"rem");
+    root.setProperty("--ui-font-title",values.title+"rem");
+    root.setProperty("--ui-font-addition",values.addition+"rem");
+    root.setProperty("--ui-hint-font-size",values.hint+"rem");
+    root.setProperty("--ui-control-height",String(values.controlHeight));
+    root.setProperty("--ui-main-control-height",String(values.mainControlHeight));
+    root.setProperty("--ui-main-control-font",String(values.mainControlFont));
+    return values;
+  }
+  apply(values);
+  return {key,values,apply};
+})();
+</script>
 <!-- The user's own stylesheet for the app itself, injected by the server as a
      <link> only when the file exists. Last in <head> on purpose: the enabled
      presets (spliced in at this same spot, ahead of it) and the app's own
@@ -591,6 +616,69 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
     <button type="button" class="mrow door" data-styler="bg" title="{{T:panel.backgroundHint}}">{{T:panel.backgroundDoor}}</button>
     <button type="button" class="mrow door" data-styler="presets" title="{{T:panel.layersHint}}">{{T:panel.layersDoor}}</button>
     <button type="button" class="mrow door" data-styler="css" title="{{T:panel.cssHint}}">{{T:panel.cssDoor}}</button>
+  </div>
+</details>
+
+<details class="sect" data-panel-section="fonts" open>
+  <summary class="sect-h">{{T:panel.fonts}}</summary>
+  <div class="facts font-scale-row">
+    <label class="font-scale-setting"><code>--ui-font-base:</code>
+      <button type="button" class="font-scale-step" data-font-scale="fontScaleBase" data-delta="-0.05" aria-label="{{T:panel.decrease}} {{T:panel.fontBase}}">−</button>
+      <input id="fontScaleBase" type="number" min="0.5" max="2" step="0.01" inputmode="decimal" aria-label="{{T:panel.fontBase}}">
+      <button type="button" class="font-scale-step" data-font-scale="fontScaleBase" data-delta="0.05" aria-label="{{T:panel.increase}} {{T:panel.fontBase}}">+</button>
+    </label>
+  </div>
+  <div class="facts font-scale-row">
+    <label class="font-scale-setting"><code>--ui-font-title:</code>
+      <button type="button" class="font-scale-step" data-font-scale="fontScaleTitle" data-delta="-0.05" aria-label="{{T:panel.decrease}} {{T:panel.fontTitle}}">−</button>
+      <input id="fontScaleTitle" type="number" min="0.5" max="2" step="0.01" inputmode="decimal" aria-label="{{T:panel.fontTitle}}">
+      <button type="button" class="font-scale-step" data-font-scale="fontScaleTitle" data-delta="0.05" aria-label="{{T:panel.increase}} {{T:panel.fontTitle}}">+</button>
+    </label>
+  </div>
+  <div class="facts font-scale-row">
+    <label class="font-scale-setting"><code>--ui-font-addition:</code>
+      <button type="button" class="font-scale-step" data-font-scale="fontScaleAddition" data-delta="-0.05" aria-label="{{T:panel.decrease}} {{T:panel.fontAddition}}">−</button>
+      <input id="fontScaleAddition" type="number" min="0.5" max="2" step="0.01" inputmode="decimal" aria-label="{{T:panel.fontAddition}}">
+      <button type="button" class="font-scale-step" data-font-scale="fontScaleAddition" data-delta="0.05" aria-label="{{T:panel.increase}} {{T:panel.fontAddition}}">+</button>
+    </label>
+  </div>
+  <div class="facts font-scale-row">
+    <label class="font-scale-setting"><code>--ui-hint-font-size:</code>
+      <button type="button" class="font-scale-step" data-font-scale="fontScaleHint" data-delta="-0.05" aria-label="{{T:panel.decrease}} {{T:panel.fontHint}}">−</button>
+      <input id="fontScaleHint" type="number" min="0.5" max="2" step="0.01" inputmode="decimal" aria-label="{{T:panel.fontHint}}">
+      <button type="button" class="font-scale-step" data-font-scale="fontScaleHint" data-delta="0.05" aria-label="{{T:panel.increase}} {{T:panel.fontHint}}">+</button>
+    </label>
+  </div>
+  <div class="facts font-scale-row">
+    <label class="font-scale-setting"><code>--ui-control-height:</code>
+      <button type="button" class="font-scale-step" data-font-scale="fontScaleControlHeight" data-delta="-0.05" aria-label="{{T:panel.decrease}} {{T:panel.controlHeight}}">−</button>
+      <input id="fontScaleControlHeight" type="number" min="1" max="4" step="0.01" inputmode="decimal" aria-label="{{T:panel.controlHeight}}">
+      <button type="button" class="font-scale-step" data-font-scale="fontScaleControlHeight" data-delta="0.05" aria-label="{{T:panel.increase}} {{T:panel.controlHeight}}">+</button>
+    </label>
+  </div>
+  <div class="facts font-scale-row">
+    <label class="font-scale-setting"><code>--ui-main-control-height:</code>
+      <button type="button" class="font-scale-step" data-font-scale="fontScaleMainControlHeight" data-delta="-0.05" aria-label="{{T:panel.decrease}} {{T:panel.mainControlHeight}}">−</button>
+      <input id="fontScaleMainControlHeight" type="number" min="0.5" max="2" step="0.01" inputmode="decimal" aria-label="{{T:panel.mainControlHeight}}">
+      <button type="button" class="font-scale-step" data-font-scale="fontScaleMainControlHeight" data-delta="0.05" aria-label="{{T:panel.increase}} {{T:panel.mainControlHeight}}">+</button>
+    </label>
+  </div>
+  <div class="facts font-scale-row">
+    <label class="font-scale-setting"><code>--ui-main-control-font:</code>
+      <button type="button" class="font-scale-step" data-font-scale="fontScaleMainControlFont" data-delta="-0.05" aria-label="{{T:panel.decrease}} {{T:panel.mainControlFont}}">−</button>
+      <input id="fontScaleMainControlFont" type="number" min="0.5" max="2" step="0.01" inputmode="decimal" aria-label="{{T:panel.mainControlFont}}">
+      <button type="button" class="font-scale-step" data-font-scale="fontScaleMainControlFont" data-delta="0.05" aria-label="{{T:panel.increase}} {{T:panel.mainControlFont}}">+</button>
+    </label>
+  </div>
+  <div class="facts font-scale-row">
+    <label class="font-scale-setting"><code>--ui-font-section:</code>
+      <button type="button" class="font-scale-step" data-font-scale="fontScaleSection" data-delta="-0.05" aria-label="{{T:panel.decrease}} {{T:panel.fontSection}}">−</button>
+      <input id="fontScaleSection" type="number" min="0.5" max="2" step="0.01" inputmode="decimal" aria-label="{{T:panel.fontSection}}">
+      <button type="button" class="font-scale-step" data-font-scale="fontScaleSection" data-delta="0.05" aria-label="{{T:panel.increase}} {{T:panel.fontSection}}">+</button>
+    </label>
+  </div>
+  <div class="facts font-scale-actions">
+    <button type="button" class="act" id="applyFontScale">{{T:panel.apply}}</button>
   </div>
 </details>
 
@@ -2768,11 +2856,54 @@ function panelRowColumns(){
         .reduce((sum,el)=>sum+el.getBoundingClientRect().width,0);
       if(col+gap+ctl>row.clientWidth)row.style.setProperty("--rlcol","auto")}
     hid.forEach(row=>{row.hidden=true})}
+  fontScaleColumns();
+}
+function fontScaleColumns(){
+  const sect=$('panel').querySelector('details[data-panel-section="fonts"]');
+  if(!sect||!sect.open)return;
+  let width=0;
+  for(const label of sect.querySelectorAll('.font-scale-setting code')){
+    const range=document.createRange();range.selectNodeContents(label);
+    width=Math.max(width,range.getBoundingClientRect().width);
+  }
+  if(width)sect.style.setProperty('--font-label-width',Math.ceil(width)+'px');
 }
 /* The column, and each row's own fallback, are facts about the drawer's width
    as well as its words - so they are taken again when the window changes,
    while the panel is open, which is the only time either is visible. */
 window.addEventListener("resize",()=>{if($("panel").classList.contains("show"))panelRowColumns()});
+const fontScale=window.wudictFontScale;
+[["fontScaleBase","base"],["fontScaleSection","section"],["fontScaleTitle","title"],
+  ["fontScaleAddition","addition"],["fontScaleHint","hint"],["fontScaleControlHeight","controlHeight"],
+  ["fontScaleMainControlHeight","mainControlHeight"],["fontScaleMainControlFont","mainControlFont"]]
+  .forEach(([id,key])=>$(id).value=fontScale.values[key]);
+$("applyFontScale").onclick=()=>{
+  const next={};
+  for(const [id,key] of [["fontScaleBase","base"],["fontScaleSection","section"],["fontScaleTitle","title"],
+    ["fontScaleAddition","addition"],["fontScaleHint","hint"],["fontScaleControlHeight","controlHeight"],
+    ["fontScaleMainControlHeight","mainControlHeight"],["fontScaleMainControlFont","mainControlFont"]]){
+    const input=$(id),value=Number(input.value),min=Number(input.min),max=Number(input.max);
+    if(!Number.isFinite(value)||value<min||value>max){input.reportValidity();return}
+    next[key]=value;
+  }
+  fontScale.apply(next);
+  for(const [id,key] of [["fontScaleBase","base"],["fontScaleSection","section"],["fontScaleTitle","title"],
+    ["fontScaleAddition","addition"],["fontScaleHint","hint"],["fontScaleControlHeight","controlHeight"],
+    ["fontScaleMainControlHeight","mainControlHeight"],["fontScaleMainControlFont","mainControlFont"]])$(id).value=fontScale.values[key];
+  try{localStorage.setItem(fontScale.key,JSON.stringify(fontScale.values))}catch(_){}
+  if($("panel").classList.contains("show"))panelRowColumns();
+};
+document.querySelectorAll(".font-scale-step").forEach(button=>button.addEventListener("click",()=>{
+  const input=$(button.dataset.fontScale),key={fontScaleBase:"base",fontScaleSection:"section",fontScaleTitle:"title",
+    fontScaleAddition:"addition",fontScaleHint:"hint",fontScaleControlHeight:"controlHeight",
+    fontScaleMainControlHeight:"mainControlHeight",fontScaleMainControlFont:"mainControlFont"}[input.id];
+  const value=Math.min(Number(input.max),Math.max(Number(input.min),Number(input.value)+Number(button.dataset.delta)));
+  const next={...fontScale.values,[key]:Math.round(value*100)/100};
+  fontScale.apply(next);
+  input.value=fontScale.values[key];
+  try{localStorage.setItem(fontScale.key,JSON.stringify(fontScale.values))}catch(_){}
+  if($("panel").classList.contains("show"))panelRowColumns();
+}));
 function showPanel(){panelSnap=panelState();  /* before the lock: once the root stops scrolling the bar is gone to measure */
   document.documentElement.style.setProperty("--wd-sbw",
     Math.max(0,innerWidth-document.documentElement.clientWidth)+"px");
