@@ -5,6 +5,55 @@ Notable changes in **wuDict2**, the Android fork of
 version it was forked from. Fork release tags are prefixed `wudict2-`; one
 tagged line per release, newest first.
 
+## wudict2-v0.10.0 — 2026-10-07
+
+From `dev`. The dictionary list gained groups you curate yourself, Settings
+gained a Fonts section that sizes the whole interface, and the search mode is
+remembered.
+
+### Your own dictionary groups
+
+- **Settings → Edit dictionary groups** is the editor: **New Group**,
+  **Rename**, **Delete**, and membership editing behind **Edit membership**.
+- **A group is a set you curate by hand**, one dictionary at a time — as
+  opposed to a filter, which is a rule that computes one. The two work
+  together: a group can be **created from a filter** and left **linked** to it,
+  so it starts from the filter's current members and new matches append
+  automatically, while its order stays yours. Unlinking keeps the membership it
+  had, and a group whose filter disappears detaches the same way. Linking a
+  group that already has members asks first, because the filter's members
+  replace them.
+- **Membership editing is one draft.** Search the available list, **Add All**
+  adds everything the current search and filter show, drag ≡ to reorder, and a
+  **long press** selects several names for the four move buttons — to either
+  end, or one place at a time. The member panel's ✓ writes the whole draft in
+  one go; ✕ asks before discarding it.
+- **Deleting a group never deletes the dictionaries.** They stay in the
+  collection; only the group goes.
+- The **Dictionaries** row in Settings picks which group the reader means by
+  *All dictionaries* — its members, in its order.
+
+### Fonts: the interface sizes itself
+
+- **Settings → Fonts** adjusts what the app page is drawn with: the base,
+  section heading, title, additional and hint text sizes; the height of its
+  controls and of the main header controls, and the main controls' font size;
+  and five spacing values — before and after a section heading, between rows,
+  around additional text, and between controls.
+- Every value has **−/+** buttons that step by 0.05 and apply immediately;
+  typed values go through **Apply**. The choice is kept with the reader's other
+  settings and survives reloads.
+
+### Smaller things
+
+- **The search mode is remembered** — prefix, exact, contains or full-text
+  survives a reload and the browser's back button, including the switch back to
+  prefix that an article link makes when you were in full-text.
+- **Native dialogs dim the page behind them**, so the search-mode picker and
+  the other app-owned dialogs read as dialogs.
+- Fixed: **Exit** could reopen the app, because Android restored the launcher
+  task while a floating window of it was still being closed.
+
 ## wudict2-v0.9.1 — 2026-10-06
 
 From `dev`. Mostly the tail of v0.9.0's parser change — and one thing about it
