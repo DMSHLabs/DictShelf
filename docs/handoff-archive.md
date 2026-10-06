@@ -67,6 +67,7 @@ narratives, so `git log` is a second copy.
 | Release wudict2-v0.6.0-ru.1 (2026-09-30, this session) | 2026-09-30 | — (added after the split, on the translation branch) |
 | The third session: five changes in the panel, the bar and the paper (2026-09-27/28) | 2026-09-27/28 | — (added after the split) |
 | The 09-26 upstream sync into `dev2` (2026-09-26) | 2026-09-26 | — (added after the split) |
+| Release wudict2-v0.10.0 (2026-10-07, this session) | 2026-10-07 | — (added after the split) |
 
 ## The preset-switch "crash" was a TDZ cascade (2026-09-25, diagnosis only)
 
@@ -3071,3 +3072,79 @@ the MAIN checkout is switched to `master_build` (a worktree has no
 local.bat — copy it there first). After each upstream `master` sync,
 repeat this small overlay (two files) or merge `master` into
 `master_build` when the naming/emuX86 code still applies.
+
+## Release wudict2-v0.10.0 (2026-10-07, this session)
+
+Released at the user's request from `dev`. The cycle it carries — the fork's own
+dictionary groups with their editor, the Settings **Fonts** section, the
+remembered search mode, the dimmed native dialogs and the Exit/launcher fix —
+was committed by the user as `a857aa8`, `7685d31`, `d4ed5b1` and `1339ba1`
+("Interface tune"); this session added only the changelog and the tag.
+
+**The release:** annotated tag `wudict2-v0.10.0` on `f8d0535` (the changelog
+commit; `dev` and the tag pushed), APK from `build-android.cmd release`:
+`versionName='wudict2-v0.10.0'`, versionCode 551, arm64 only, 8,990,441 bytes,
+sha256 `ab67edd1597abf9f234543e66c79b6745669228088d801375208d0b88ac2ee54`, the
+same signing certificate as every release (`b7ddc95d…`), so it upgrades an
+installed wuDict2 in place. A normal release, so `latest` moved to it. It was
+created as a DRAFT, the asset uploaded, and the draft flipped — the ~30 s
+asset-less window the earlier release records complained about is gone.
+
+**Checked before publishing** (the tree was clean at `1339ba1`, whose content is
+what the tag carries): `git diff --check` clean, `go build ./...` and
+`go vet ./...` clean, and the FULL suite `go test -count=1 ./...` green — 0
+failures. Both catalogs parse (926 keys each) and the changed JavaScript/CSS
+diff was read hunk by hunk. The packaged `lib/arm64-v8a/libwudict.so` was
+unpacked and confirmed to carry this cycle's work — `/api/user-groups`,
+`/api/user-groups/name`, `/api/user-groups/membership`, `wudict_search_mode`,
+`--ui-section-space-before`, `group-editor.js`, `dictUI.emptyGroup`,
+`panel.fonts` — with the earlier cycles' routes still in (`/api/index-work`,
+`/api/system-log`, `Quivira.otf`) and **0** hits for `Monotype`, `ArialPlus`,
+`QuiviraPhonetic` and `dictUI.dslParser`. The published asset was downloaded
+back and hash-matched, and the release body is byte-identical to the changelog
+section.
+
+**The UI was also checked in a real browser**, which is how this machine's "no
+Node" state was worked around; the recipe is now in `docs/WINDOWS-VERIFY.md`. A
+freshly built `wudict.exe` ran on port 6925 with an isolated `-config`/`-db-dir`
+and `-auth off`, and the ZCode in-app browser loaded it: the page booted with
+all six `test_data` dictionaries and no console errors; Settings → Fonts showed
+all thirteen values with the new defaults and the `:root` tokens matched; the
+search-mode select set to `exact` survived a reload (`wudict_search_mode`); the
+group editor opened, created a group through the inline name field, showed the
+empty-group hint with its gear arrow HIDDEN for the freshly created group, and
+its available-filter chooser counted from the draft (all six dictionaries); a
+search for "test" in the remembered exact mode answered from three
+dictionaries — again with no errors. **No device or emulator run**, and
+`make i18n-check-js` was not run — still no Node on this machine.
+
+The cycle's narrative, condensed from the HANDOFF blocks this record replaces:
+
+- **Dictionary groups** (`internal/server/dmsh_groups.go`, `group-editor.js`):
+  named sets the reader curates by hand, stored in `state.json` (membership on
+  `DictPref`, so the existing identity repair repairs it too), served by
+  `/api/user-groups` plus the `/name`, `/membership`, `/order`, `/link` and
+  delete routes documented in OpenAPI. Filters (upstream-derived facets and
+  `groups.ini` rules) stay separate; a group may be COPIED from a filter or
+  stay LINKED to it — linked members follow the filter, only the order is
+  editable, the last known membership is kept when a filter disappears, and
+  linking a nonempty ordinary group warns first. The editor stages every
+  membership change in one draft (search with highlight, Add All over the
+  visible matches, drag ≡ reorder, long-press multi-select with four block
+  moves) and writes it in ONE server update; ✕ asks before discarding. Delete
+  offers a trash icon and removes only the group. The reader's Dictionaries row
+  picks which group *All dictionaries* means — sent to the server as an
+  explicit id list, because the server has no notion of a group.
+- **Fonts** (`index.html`'s `wudictFontScale`, `app.css`): thirteen values —
+  base/section/title/addition/hint sizes, `--ui-control-height`,
+  `--ui-main-control-height`, `--ui-main-control-font` and five spacing tokens —
+  each with −/+ (0.05) buttons, manual entry through Apply, persisted in
+  `localStorage` under `wudict_settings_fonts`. Control heights are unitless
+  tokens consumed as `calc(token * 1em)`, because an `em` resolving at `:root`
+  plus a min-height was what pinned the controls to their old size. The default
+  values are the ones read off the connected Power Armor 18T's own panel.
+- **Smaller:** the search mode persists in `wudict_search_mode` (written on
+  change, on URL/back navigation and on the full-text→prefix switch an article
+  link makes); `BackgroundDialogBuilder` dims its caller by 42%;
+  `AppExit.isExiting` stops MainActivity from restarting the server when Android
+  restores the launcher task while a floating window of it is being closed.

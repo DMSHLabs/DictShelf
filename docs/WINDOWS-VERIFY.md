@@ -81,9 +81,25 @@ them are in `docs/handoff-archive.md`.
 - Android Java: from `android/`,
   `ANDROID_HOME="$LOCALAPPDATA/Android/Sdk" ./gradlew.bat :app:compileFossDebugJavaWithJavac --offline`.
   No ANDROID_HOME in the bash environment by default.
-- No `node` in this shell: JS syntax checks by hand/`vm`. **`-race` runs here
-  now** (2026-09-28): it needs cgo, and a compiler exists — point CC at it the
-  way `build-windows.cmd` does, e.g.
+- No `node` in this shell: JS syntax checks by hand/`vm`, and — since
+  2026-10-07 — the ZCode in-app browser (the `browser-use` skill's
+  `control-browser`) against a local preview, which is the way to check the
+  page actually runs: build the server with `go build -o <tmp>/wudict.exe .`,
+  start it with isolated dirs and no auth —
+  `wudict.exe serve -dict-dir <test_data> -db-dir <tmp>/lib -config <tmp>/wudict.toml
+  -port 6925 -auth off -no-browser -no-tray` (the `-config` file must EXIST,
+  even empty) — then load `http://127.0.0.1:6925/` in the browser and read the
+  page's own state with `evaluate` (tokens, `localStorage`, element `hidden`
+  flags) while installing `window.__errs` listeners to catch page errors. This
+  is how v0.10.0's Fonts tokens, search-mode persistence, group-editor
+  create/hint/filter paths and a real search were verified with no console
+  errors; a device run is still owed. Two traps: this shell's `grep` is
+  `ugrep`, whose `-c`/`-a` do not count binary matches — count strings in a
+  packaged `.so` with `python3` (`data.count(b"...")`); and `go build -o
+  /tmp/x.exe` writes where MSYS/Win32 disagree about `/tmp` — pass
+  `"$(cygpath -w /tmp/x.exe)"`.
+- **`-race` runs here now** (2026-09-28): it needs cgo, and a compiler exists —
+  point CC at it the way `build-windows.cmd` does, e.g.
   `CC="C:/Qt/Tools/mingw1310_64/bin/gcc.exe" CGO_ENABLED=1 go test -race …`,
   which passed for `internal/lang`, `facet`, `hilite` and `artmark` in about
   eight seconds together.
