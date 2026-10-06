@@ -1385,13 +1385,13 @@ paths:
     get:
       operationId: getDictionaryGroups
       summary: List user groups and the automatic All Dictionaries group
-      description: Private collection API. Members are current dictionary IDs, including globally disabled dictionaries. Unavailable dictionaries retain their stored membership for later rescans.
+      description: Private collection API. Members are current dictionary IDs, including globally disabled dictionaries. A linked group's membership follows its filter while its order remains editable; new matches append. If the filter disappears, the last saved membership becomes an ordinary editable group.
       responses:
         '200':
           description: Array of groups with id, name, ordered members (dictionary IDs), and readonly.
     post:
       operationId: createDictionaryGroup
-      summary: Create an empty user dictionary group
+      summary: Create a user dictionary group, optionally from a filter
       requestBody:
         required: true
         content:
@@ -1401,15 +1401,42 @@ paths:
               required: [name]
               properties:
                 name: { type: string, minLength: 1, maxLength: 100 }
+                filter:
+                  type: object
+                  properties:
+                    facet: { type: string }
+                    value: { type: string }
+                linked: { type: boolean }
       responses:
         '200':
-          description: Created group with empty members.
+          description: Created group with its initial members.
         '400':
           description: Empty, overlong or invalid name.
         '409':
           description: Duplicate or reserved name (case insensitive).
         '500':
           description: State could not be saved; no group created.
+    delete:
+      operationId: deleteDictionaryGroup
+      summary: Delete a user group without deleting dictionaries
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [group]
+              properties:
+                group: { type: string }
+      responses:
+        '200':
+          description: Group and its memberships removed.
+        '400':
+          description: Invalid group or attempt to delete All Dictionaries.
+        '404':
+          description: Group not found.
+        '500':
+          description: State could not be saved.
 
   /api/user-groups/member:
     put:
@@ -1433,14 +1460,44 @@ paths:
           description: Invalid request or attempt to edit All Dictionaries.
         '404':
           description: Group or dictionary no longer exists.
+        '409':
+          description: A linked group's membership cannot be edited.
         '500':
           description: State could not be saved; membership unchanged.
+
+  /api/user-groups/members:
+    put:
+      operationId: addDictionaryGroupMembers
+      summary: Add several dictionaries to a user group in one update
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [group, members]
+              properties:
+                group: { type: string }
+                members:
+                  type: array
+                  items: { type: string }
+      responses:
+        '200':
+          description: Memberships saved; existing members kept.
+        '400':
+          description: Invalid request or attempt to edit All Dictionaries.
+        '404':
+          description: Group or dictionary not found.
+        '409':
+          description: Linked group cannot be edited.
+        '500':
+          description: State could not be saved.
 
   /api/user-groups/order:
     put:
       operationId: reorderDictionaryGroup
       summary: Save the order of currently available members of one user group
-      description: Unavailable members remain in the group and keep their relative order after the submitted members. Does not change global dictionary order or membership.
+      description: Unavailable members remain in the group and keep their relative order after the submitted members. Linked groups can also be reordered; later filter matches append. Does not change global dictionary order or membership.
       requestBody:
         required: true
         content:
@@ -1464,6 +1521,36 @@ paths:
           description: Membership changed; reload before reordering.
         '500':
           description: State could not be saved; order unchanged.
+
+  /api/user-groups/link:
+    put:
+      operationId: linkDictionaryGroup
+      summary: Link a user group to a filter, change its filter, or detach it
+      description: A null filter detaches the group and keeps its current membership and selected filter for later relinking.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [group, filter]
+              properties:
+                group: { type: string }
+                filter:
+                  type: object
+                  nullable: true
+                  properties:
+                    facet: { type: string }
+                    value: { type: string }
+      responses:
+        '200':
+          description: Link saved.
+        '400':
+          description: Filter not found or All Dictionaries cannot be linked.
+        '404':
+          description: Group not found.
+        '500':
+          description: State could not be saved.
 
   /api/language:
     get:

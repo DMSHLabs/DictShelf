@@ -1844,7 +1844,7 @@ function scopedDictionary(){
    back to it, for the reason the scope does. */
 function pickerGroupName(id){
   const g=userGroups.find(x=>x.id===(id||pickerGroup));
-  return g&&g.id!=="all"?g.name:tx("panel.allDictionaries");
+  return g&&g.id!=="all"?(g.filter?"🔗 ":"")+g.name:tx("panel.allDictionaries");
 }
 /* The panel's group drop-down: the bar names the group in force, the card lists
    the reader's groups with the chosen one ticked. Its own helper rather than
@@ -1971,7 +1971,7 @@ function livePickerPayload(kind){
      (no radio circles, no chosen one) and a tap is a jump. There is no other
      kind of picker left to tell it apart from. */
   const scoped=scopedDictionary();
-  const groups=userGroups.map(g=>({id:g.id,name:g.name}));
+  const groups=userGroups.map(g=>({id:g.id,name:pickerGroupName(g.id)}));
   if(scoped)groups.splice(1,0,scoped); // under "All dictionaries": the same axis, narrower
   return {kind,groups,group:scoped?scoped.id:pickerGroup,
     found:true,rows:livePickerRows(),
@@ -2244,6 +2244,7 @@ async function loadDicts(rescan){
     if(blocking&&globalStopAction===stopBoot)clearGlobalStop();
   }
   dicts=rows;dictTotal=rows.length;
+  await loadPickerGroups();
   // normalize the saved preference order to the current dictionary set
   // (appends newly-added dicts A→Z, drops removed ones). ONLY on the complete
   // set — doing it mid-stream would drop the ids that had not arrived yet.
@@ -7517,19 +7518,41 @@ $("styler").addEventListener("keydown",e=>{
 </script>
 <link rel="stylesheet" href="/assets/group-editor.css?v={{GROUPCSS}}">
 <dialog id="groupEditor" lang="{{T:locale}}" class="group-dialog panel-card" aria-labelledby="groupTitle">
-  <h2 id="groupTitle">{{T:panel.groups}} <button type="button" class="btn" id="closeGroups" aria-label="{{T:dictUI.closeGroups}}">✕</button></h2>
-  <div class="group-toolbar"><select id="groupSelect" aria-label="{{T:dictUI.group}}"></select><label><input id="groupShowAll" type="checkbox"> {{T:dictUI.showAll}}</label></div>
-  <p id="groupError" class="group-error" role="alert"></p>
-  <p id="groupHint" role="status"></p>
-  <div id="groupRows"></div>
+  <div id="groupControls" class="group-section">
+    <h2 id="groupTitle">{{T:panel.groups}} <button type="button" class="btn" id="closeGroups" aria-label="{{T:dictUI.closeGroups}}">✕</button></h2>
+    <div class="group-toolbar"><select id="groupSelect" aria-label="{{T:dictUI.group}}"></select><label><input id="groupShowAll" type="checkbox"> {{T:dictUI.edit}}</label></div>
+    <div id="groupLinkControls" class="group-link-controls"><label><input id="groupLink" type="checkbox"> {{T:dictUI.linkFilter}}</label><button type="button" class="btn" id="groupLinkFilter"></button></div>
+    <button type="button" class="btn" id="deleteGroup"><svg class="group-delete-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 4h4m-8 3 1 13h10l1-13M10 11v5m4-5v5"/></svg>{{T:dictUI.deleteGroup}}</button>
+    <p id="groupError" class="group-error" role="alert"></p>
+    <p id="groupHint" role="status"></p>
+  </div>
+  <div id="groupLists"><div id="groupRows" class="group-section"></div><div id="groupAvailable" class="group-section" hidden><div id="groupAvailableFilterHost"></div><button type="button" class="btn" id="groupAddAll">{{T:dictUI.addAll}}</button><div id="groupOtherRows"></div></div></div>
+</dialog>
+<dialog id="linkGroupDialog" lang="{{T:locale}}" class="group-dialog panel-card" aria-labelledby="linkGroupTitle">
+  <h2 id="linkGroupTitle">{{T:dictUI.linkFilter}}</h2>
+  <p>{{T:dictUI.linkGroupConfirm}}</p>
+  <div class="group-toolbar"><button type="button" class="btn" id="linkGroupGo">{{T:dictUI.linkFilter}}</button><button type="button" class="btn" id="linkGroupCancel">{{T:panel.cancel}}</button></div>
+</dialog>
+<dialog id="deleteGroupDialog" lang="{{T:locale}}" class="group-dialog panel-card" aria-labelledby="deleteGroupTitle">
+  <h2 id="deleteGroupTitle">{{T:dictUI.deleteGroup}}</h2>
+  <p id="deleteGroupQuestion"></p><p id="deleteGroupError" class="group-error" role="alert"></p>
+  <div class="group-toolbar"><button type="button" class="btn" id="deleteGroupGo">{{T:dictUI.deleteGroup}}</button><button type="button" class="btn" id="deleteGroupCancel">{{T:panel.cancel}}</button></div>
 </dialog>
 <dialog id="newGroupDialog" lang="{{T:locale}}" class="group-dialog panel-card" aria-labelledby="newGroupTitle">
   <h2 id="newGroupTitle">{{T:dictUI.newGroup}}</h2>
   <form id="newGroupForm">
     <label for="groupName">{{T:dictUI.groupName}}</label><input type="text" id="groupName" maxlength="100" autocomplete="off">
+    <label><input id="newGroupFromFilter" type="checkbox"> {{T:dictUI.fromFilter}}</label>
+    <button type="button" class="btn" id="newGroupFilter" disabled>{{T:dictUI.chooseFilter}}</button>
+    <label><input id="newGroupLink" type="checkbox" disabled> {{T:dictUI.linkFilter}}</label>
     <p id="newGroupError" class="group-error" role="alert"></p>
     <div class="group-toolbar"><button type="submit" class="btn" id="createGroup">{{T:dictUI.create}}</button><button type="button" class="btn" id="cancelGroup">{{T:panel.cancel}}</button></div>
   </form>
+</dialog>
+<dialog id="groupFilterDialog" lang="{{T:locale}}" class="group-dialog panel-card" aria-label="{{T:dictUI.chooseFilter}}">
+  <div id="groupFilterToggle"></div>
+  <div id="groupFilterChoices" class="group-filter-choices"></div>
+  <div class="group-filter-actions"><button type="button" class="btn" id="cancelGroupFilter">{{T:panel.cancel}}</button></div>
 </dialog>
 <!-- Saving a look, and the question asked before a switch that would throw
      away changes nobody has saved. Both are the group editor's window: one

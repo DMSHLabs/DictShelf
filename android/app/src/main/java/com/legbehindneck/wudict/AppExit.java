@@ -18,6 +18,7 @@ public final class AppExit extends Application implements Application.ActivityLi
     private final Handler main = new Handler(Looper.getMainLooper());
     private boolean pending;
     private boolean closing;
+    private boolean exited;
 
     @Override public void onCreate() {
         super.onCreate();
@@ -28,8 +29,13 @@ public final class AppExit extends Application implements Application.ActivityLi
     static void request(Activity activity) {
         AppExit app = (AppExit) activity.getApplication();
         if (app.pending) return;
+        app.exited = false;
         app.pending = true;
         app.check(activity, false);
+    }
+
+    static boolean isExiting(Activity activity) {
+        return ((AppExit) activity.getApplication()).exited;
     }
 
     private void check(Activity owner, boolean waiting) {
@@ -39,6 +45,7 @@ public final class AppExit extends Application implements Application.ActivityLi
                 if (!pending) return;
                 if (!busy) {
                     closing = true;
+                    exited = true;
                     // Finish every window before stopping its connection. Removing a task
                     // while its other windows are still live can bring one back to the top.
                     for (Activity window : new ArrayList<>(windows)) {
@@ -74,6 +81,7 @@ public final class AppExit extends Application implements Application.ActivityLi
         if (closing) {
             closing = false;
             pending = false;
+            exited = false;
         }
     }
     @Override public void onActivityDestroyed(Activity a) {

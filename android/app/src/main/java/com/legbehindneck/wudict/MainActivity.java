@@ -64,6 +64,14 @@ public class MainActivity extends Activity {
         // normal day/night theme and the saved background from the first frame.
         setTheme(R.style.Theme_WuWeiDict);
         super.onCreate(savedInstanceState);
+        // Exit may finish the launcher while a floating Settings window is
+        // still being removed from the same task. Android can then recreate
+        // the launcher from that task's base intent; do not start the server
+        // again for that restoration.
+        if (AppExit.isExiting(this)) {
+            finishAndRemoveTask();
+            return;
+        }
         Shell.clearWebCacheAfterUpdate(this);
 
         // Paint before setContentView, including the optional Sepia override.

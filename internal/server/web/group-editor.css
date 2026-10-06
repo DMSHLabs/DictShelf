@@ -117,7 +117,21 @@ dialog#clearDatabaseDialog.group-dialog.panel-card{box-sizing:border-box;height:
 #clearDatabaseStatus:empty{display:none}
 @media(max-width:360px){dialog#clearDatabaseDialog.group-dialog.panel-card{font-size:.85em;padding:12px}#clearDatabaseDialog .seg .btn{padding:.25em .35em}}
 .group-dialog h2 button{margin-left:auto}
+#groupLists{flex:1;display:flex;flex-direction:column;min-height:0}
+#groupEditor{gap:.65em}
+#groupControls{display:flex;flex-direction:column;gap:.65em;flex:none}
+.group-section{border:1px solid var(--line);border-radius:12px;background:var(--bg-card,var(--bg));padding:.8em;box-shadow:var(--shadow)}
+#groupLists{gap:.65em}
+#deleteGroup{align-self:flex-end;display:inline-flex;align-items:center;gap:.4em}
+#deleteGroup .group-delete-icon{width:1.15em;height:1.15em;flex:none}
+#deleteGroup[hidden]{display:none}
 #groupRows{flex:1;overflow:auto;min-height:0;overscroll-behavior:contain}
+#groupLists.editing #groupRows{flex:0 1 auto;max-height:var(--group-top-limit,50%)}
+#groupAvailable{flex:1;display:flex;flex-direction:column;min-height:0;overflow:hidden}
+#groupAvailable[hidden]{display:none}
+#groupAvailableFilterHost{flex:none}
+#groupAddAll{align-self:flex-end;flex:none;margin:.3em 0}
+#groupOtherRows{flex:1;overflow:auto;min-height:0;overscroll-behavior:contain}
 .group-row{display:flex;align-items:center;gap:.7em;min-height:44px;padding:.5em 0;overflow-wrap:anywhere}
 .group-grip{flex:none;width:32px;height:40px;border:0;background:none;color:var(--label);font:24px/1 sans-serif;cursor:grab;touch-action:none;user-select:none}
 .group-grip:active{cursor:grabbing}
@@ -126,8 +140,11 @@ dialog#clearDatabaseDialog.group-dialog.panel-card{box-sizing:border-box;height:
 .group-row.drop-after{box-shadow:inset 0 -3px var(--accent)}
 .group-row.group-other-first{border-top:1px solid var(--line);margin-top:.5em;padding-top:1em}
 .group-available-filter{display:flex;align-items:center;gap:.6em;border-top:1px solid var(--line);margin-top:.5em;padding:1em 0 .5em}
-.group-available-filter select{flex:1;min-width:0;max-width:100%;min-height:40px;font:inherit;color:var(--fg);background:var(--bg-card);border:1px solid var(--line);border-radius:6px}
+.group-available-filter button{flex:1;min-width:0;text-align:left}
 .group-filter-empty{color:var(--fg);font-size:.9em}
+#deleteGroupDialog{width:min(440px,94vw);height:fit-content}
+#deleteGroupDialog::backdrop,html[data-shell-image] #deleteGroupDialog::backdrop{background:transparent}
+#deleteGroupDialog p{margin:.4em 0}
 .group-dialog input[type=checkbox]{appearance:none;-webkit-appearance:none;flex:none;width:20px;height:20px;margin:0 5px 0 0;border:1.5px solid var(--fg);border-radius:4px;background-color:var(--paper-bg,var(--bg));position:relative;vertical-align:middle;cursor:pointer}
 .group-dialog input[type=checkbox]:checked::after{content:"";position:absolute;left:5px;top:1px;width:5px;height:10px;border:solid var(--fg);border-width:0 2px 2px 0;transform:rotate(45deg)}
 .group-dialog input[type=checkbox]:disabled{background-color:var(--fg-soft);border-color:var(--fg-soft);opacity:.8;cursor:default}
@@ -150,6 +167,26 @@ dialog#articleFindDialog.group-dialog.panel-card{box-sizing:border-box;inset:0;m
 .group-error{color:var(--danger);margin:0;overflow-wrap:anywhere}
 #groupHint{color:var(--label);margin:0}
 #newGroupForm{display:flex;flex-direction:column;gap:.8em}
+.group-link-controls{display:flex;align-items:center;gap:.6em;flex-wrap:wrap}
+.group-link-controls[hidden]{display:none}
+.group-link-controls button{flex:1;min-width:0;text-align:left}
+#newGroupFilter{text-align:left}
+#groupFilterDialog{display:flex;flex-direction:column;height:min(650px,85dvh);overflow:hidden}
+#groupFilterDialog:not([open]){display:none}
+.group-filter-choices{flex:1;min-height:0;overflow:auto}
+#groupFilterToggle{flex:none}
+#groupFilterToggle:empty{display:none}
+.group-filter-choice{display:flex;align-items:center;justify-content:space-between;gap:1em;width:100%;min-height:48px;padding:.5em .35em;border:0;background:none;color:var(--fg);font:inherit;text-align:left;cursor:pointer}
+.group-filter-choice-end{display:flex;align-items:center;gap:.8em;flex:none}
+.group-filter-count{font-variant-numeric:tabular-nums;color:var(--label)}
+.group-filter-radio{width:22px;height:22px;border:2px solid var(--fg);border-radius:50%;box-sizing:border-box}
+.group-filter-choice[aria-checked=true] .group-filter-radio{border-color:var(--accent);box-shadow:inset 0 0 0 4px var(--bg);background:var(--accent)}
+.group-filter-section{margin:.55em 0}
+.group-filter-section summary{padding:.5em .35em;font-weight:600;cursor:pointer}
+.group-filter-section .group-filter-choice{padding-left:2.4em}
+.group-filter-toggle{display:flex;align-items:center;gap:.5em;min-height:48px}
+.group-filter-actions{display:flex;justify-content:flex-end;padding-top:.6em}
+@media(max-width:600px){#groupFilterDialog{height:auto;max-height:none}}
 /* The preset windows are the same shape: a label over its field, and the
    buttons under it. Without this the label and the input share a line and the
    field stretches - which is what the reader saw. */

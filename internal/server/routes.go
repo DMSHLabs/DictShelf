@@ -109,7 +109,10 @@ func (s *Server) routes() []route {
 		// /api/groups edits. A separate path so the two never collide.
 		{"GET", "/api/user-groups", s.handleUserGroups, "/api/user-groups", false},
 		{"POST", "/api/user-groups", s.handleCreateGroup, "/api/user-groups", false},
+		{"DELETE", "/api/user-groups", s.handleDeleteGroup, "/api/user-groups", false},
 		{"PUT", "/api/user-groups/member", s.handleGroupMember, "/api/user-groups/member", false},
+		{"PUT", "/api/user-groups/members", s.handleAddGroupMembers, "/api/user-groups/members", false},
+		{"PUT", "/api/user-groups/link", s.handleLinkGroup, "/api/user-groups/link", false},
 		{"PUT", "/api/user-groups/order", s.handleGroupOrder, "/api/user-groups/order", false},
 		{"PUT", "/api/prefs", s.handleSavePrefs, "/api/prefs", false},
 		{"PUT", "/api/index-defaults", s.handleIndexDefaults, "/api/index-defaults", false},
