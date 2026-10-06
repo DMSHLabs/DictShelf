@@ -159,6 +159,7 @@ dialog#groupEditor.group-dialog.panel-card{gap:.65em;padding:0;border:0;backgrou
 #groupEmptyHint[hidden]{display:none}
 #groupEmptyHint span{max-width:100%;padding-right:1.1em;font-size:var(--ui-hint-font-size);line-height:1.25}
 #groupEmptyHint svg{position:absolute;top:0;right:-1.8em;width:2.2em;height:2.5em;overflow:visible;stroke:var(--accent);stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}
+#groupEmptyHint svg[hidden]{display:none}
 #groupNewAction{flex:none;display:grid;place-items:center;min-width:2.7em;height:2.7em;padding:.4em}
 #groupNewAction .group-new-icon{width:1.5em;height:1.5em}
 #groupNewAction[hidden]{display:none}

@@ -5,6 +5,8 @@ package com.legbehindneck.wudict;
 
 import android.app.AlertDialog;
 import android.content.Context;
+import android.view.Window;
+import android.view.WindowManager;
 
 /** Shared surface for app-owned dialogs, including those shown via create(). */
 final class BackgroundDialogBuilder extends AlertDialog.Builder {
@@ -19,8 +21,10 @@ final class BackgroundDialogBuilder extends AlertDialog.Builder {
 
     @Override public AlertDialog create() {
         AlertDialog dialog = super.create();
-        dialog.getWindow().setBackgroundDrawable(
-                WindowBackground.dialogDrawable(context, ShellPrefs.pageBg(context)));
+        Window window = dialog.getWindow();
+        window.setBackgroundDrawable(WindowBackground.dialogDrawable(context, ShellPrefs.pageBg(context)));
+        window.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
+        window.setDimAmount(.42f);
         return dialog;
     }
 }

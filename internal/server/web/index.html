@@ -114,12 +114,14 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
 /* Apply the reader's Settings font scale before the drawer can paint. */
 window.wudictFontScale=(function(){
   const key="wudict_settings_fonts",clamp=(v,lo,hi)=>Math.min(hi,Math.max(lo,v));
-  const clean=(v,fallback)=>{v=Number(v);return Number.isFinite(v)?clamp(v,.5,2):fallback};
-  const values={base:1,section:1.05,title:1.1,addition:.9,hint:.8,controlHeight:2.2,mainControlHeight:1.05,mainControlFont:1.05};
+  const spacing=new Set(["sectionBefore","sectionAfter","rowGap","additionGap","controlGap"]);
+  const clean=(v,fallback,name)=>{v=Number(v);return Number.isFinite(v)?clamp(v,spacing.has(name)?0:.5,2):fallback};
+  const values={base:1,section:1,title:1.15,addition:.9,hint:.8,controlHeight:1.6,mainControlHeight:1.6,mainControlFont:1.05,
+    sectionBefore:0,sectionAfter:.45,rowGap:.6,additionGap:.5,controlGap:.25};
   try{const saved=JSON.parse(localStorage.getItem(key)||"null");
-    if(saved){for(const name of Object.keys(values))values[name]=clean(saved[name],values[name])}}catch(_){}
+    if(saved){for(const name of Object.keys(values))values[name]=clean(saved[name],values[name],name)}}catch(_){}
   function apply(next){
-    for(const name of Object.keys(values))values[name]=clean(next[name],values[name]);
+    for(const name of Object.keys(values))values[name]=clean(next[name],values[name],name);
     const root=document.documentElement.style;
     root.setProperty("--ui-font-base",values.base+"rem");
     root.setProperty("--ui-font-section",values.section+"rem");
@@ -129,6 +131,11 @@ window.wudictFontScale=(function(){
     root.setProperty("--ui-control-height",String(values.controlHeight));
     root.setProperty("--ui-main-control-height",String(values.mainControlHeight));
     root.setProperty("--ui-main-control-font",String(values.mainControlFont));
+    root.setProperty("--ui-section-space-before",String(values.sectionBefore));
+    root.setProperty("--ui-section-space-after",String(values.sectionAfter));
+    root.setProperty("--ui-row-gap",String(values.rowGap));
+    root.setProperty("--ui-addition-gap",String(values.additionGap));
+    root.setProperty("--ui-control-gap",String(values.controlGap));
     return values;
   }
   apply(values);
@@ -675,6 +682,41 @@ window.wudictFontScale=(function(){
       <button type="button" class="font-scale-step" data-font-scale="fontScaleSection" data-delta="-0.05" aria-label="{{T:panel.decrease}} {{T:panel.fontSection}}">−</button>
       <input id="fontScaleSection" type="number" min="0.5" max="2" step="0.01" inputmode="decimal" aria-label="{{T:panel.fontSection}}">
       <button type="button" class="font-scale-step" data-font-scale="fontScaleSection" data-delta="0.05" aria-label="{{T:panel.increase}} {{T:panel.fontSection}}">+</button>
+    </label>
+  </div>
+  <div class="facts font-scale-row">
+    <label class="font-scale-setting"><code>--ui-section-space-before:</code>
+      <button type="button" class="font-scale-step" data-font-scale="fontScaleSectionBefore" data-delta="-0.05" aria-label="{{T:panel.decrease}} {{T:panel.sectionBefore}}">−</button>
+      <input id="fontScaleSectionBefore" type="number" min="0" max="2" step="0.01" inputmode="decimal" aria-label="{{T:panel.sectionBefore}}">
+      <button type="button" class="font-scale-step" data-font-scale="fontScaleSectionBefore" data-delta="0.05" aria-label="{{T:panel.increase}} {{T:panel.sectionBefore}}">+</button>
+    </label>
+  </div>
+  <div class="facts font-scale-row">
+    <label class="font-scale-setting"><code>--ui-section-space-after:</code>
+      <button type="button" class="font-scale-step" data-font-scale="fontScaleSectionAfter" data-delta="-0.05" aria-label="{{T:panel.decrease}} {{T:panel.sectionAfter}}">−</button>
+      <input id="fontScaleSectionAfter" type="number" min="0" max="2" step="0.01" inputmode="decimal" aria-label="{{T:panel.sectionAfter}}">
+      <button type="button" class="font-scale-step" data-font-scale="fontScaleSectionAfter" data-delta="0.05" aria-label="{{T:panel.increase}} {{T:panel.sectionAfter}}">+</button>
+    </label>
+  </div>
+  <div class="facts font-scale-row">
+    <label class="font-scale-setting"><code>--ui-row-gap:</code>
+      <button type="button" class="font-scale-step" data-font-scale="fontScaleRowGap" data-delta="-0.05" aria-label="{{T:panel.decrease}} {{T:panel.rowGap}}">−</button>
+      <input id="fontScaleRowGap" type="number" min="0" max="2" step="0.01" inputmode="decimal" aria-label="{{T:panel.rowGap}}">
+      <button type="button" class="font-scale-step" data-font-scale="fontScaleRowGap" data-delta="0.05" aria-label="{{T:panel.increase}} {{T:panel.rowGap}}">+</button>
+    </label>
+  </div>
+  <div class="facts font-scale-row">
+    <label class="font-scale-setting"><code>--ui-addition-gap:</code>
+      <button type="button" class="font-scale-step" data-font-scale="fontScaleAdditionGap" data-delta="-0.05" aria-label="{{T:panel.decrease}} {{T:panel.additionGap}}">−</button>
+      <input id="fontScaleAdditionGap" type="number" min="0" max="2" step="0.01" inputmode="decimal" aria-label="{{T:panel.additionGap}}">
+      <button type="button" class="font-scale-step" data-font-scale="fontScaleAdditionGap" data-delta="0.05" aria-label="{{T:panel.increase}} {{T:panel.additionGap}}">+</button>
+    </label>
+  </div>
+  <div class="facts font-scale-row">
+    <label class="font-scale-setting"><code>--ui-control-gap:</code>
+      <button type="button" class="font-scale-step" data-font-scale="fontScaleControlGap" data-delta="-0.05" aria-label="{{T:panel.decrease}} {{T:panel.controlGap}}">−</button>
+      <input id="fontScaleControlGap" type="number" min="0" max="2" step="0.01" inputmode="decimal" aria-label="{{T:panel.controlGap}}">
+      <button type="button" class="font-scale-step" data-font-scale="fontScaleControlGap" data-delta="0.05" aria-label="{{T:panel.increase}} {{T:panel.controlGap}}">+</button>
     </label>
   </div>
   <div class="facts font-scale-actions">
@@ -2364,6 +2406,13 @@ function moveDict(id,where){
    per-dictionary switch and the result summaries all use, so a chip never
    names a mode differently from the rest of the page. */
 const MODE_SHORT={prefix:tx("search.prefixShort"),exact:tx("search.exact"),contains:tx("dictUI.contains"),fts:tx("dictUI.fts")};
+const SEARCH_MODE_KEY="wudict_search_mode";
+function setSearchMode(mode){
+  if(!Object.prototype.hasOwnProperty.call(MODE_SHORT,mode))return;
+  $("mode").value=mode;
+  try{localStorage.setItem(SEARCH_MODE_KEY,mode)}catch(_){}
+}
+try{setSearchMode(localStorage.getItem(SEARCH_MODE_KEY))}catch(_){}
 /* The user-facing name of each index switch (docs/STYLE.md), shared by the
    switch tooltips, the in-results offer and its collected line: a switch is
    named for the index it adds, never for the mechanism. */
@@ -2403,7 +2452,7 @@ $("dict").onchange=e=>{const v=e.target.value;localStorage.setItem("wudict_dict"
 /* Mode re-runs the search on change, symmetric with #dict: the narrow bar has
    no submit button, so a mode that waited for the next submit would appear to
    do nothing at all. */
-$("mode").onchange=()=>{syncChips();if($("q").value.trim())doSearch()};
+$("mode").onchange=()=>{setSearchMode($("mode").value);syncChips();if($("q").value.trim())doSearch()};
 syncChips(); // the markup ships empty chips; JS stays the single authority
 
 /* provenance: the collapsed line says where the dictionary came from (its
@@ -2875,13 +2924,17 @@ window.addEventListener("resize",()=>{if($("panel").classList.contains("show"))p
 const fontScale=window.wudictFontScale;
 [["fontScaleBase","base"],["fontScaleSection","section"],["fontScaleTitle","title"],
   ["fontScaleAddition","addition"],["fontScaleHint","hint"],["fontScaleControlHeight","controlHeight"],
-  ["fontScaleMainControlHeight","mainControlHeight"],["fontScaleMainControlFont","mainControlFont"]]
+  ["fontScaleMainControlHeight","mainControlHeight"],["fontScaleMainControlFont","mainControlFont"],
+  ["fontScaleSectionBefore","sectionBefore"],["fontScaleSectionAfter","sectionAfter"],["fontScaleRowGap","rowGap"],
+  ["fontScaleAdditionGap","additionGap"],["fontScaleControlGap","controlGap"]]
   .forEach(([id,key])=>$(id).value=fontScale.values[key]);
 $("applyFontScale").onclick=()=>{
   const next={};
   for(const [id,key] of [["fontScaleBase","base"],["fontScaleSection","section"],["fontScaleTitle","title"],
     ["fontScaleAddition","addition"],["fontScaleHint","hint"],["fontScaleControlHeight","controlHeight"],
-    ["fontScaleMainControlHeight","mainControlHeight"],["fontScaleMainControlFont","mainControlFont"]]){
+    ["fontScaleMainControlHeight","mainControlHeight"],["fontScaleMainControlFont","mainControlFont"],
+    ["fontScaleSectionBefore","sectionBefore"],["fontScaleSectionAfter","sectionAfter"],["fontScaleRowGap","rowGap"],
+    ["fontScaleAdditionGap","additionGap"],["fontScaleControlGap","controlGap"]]){
     const input=$(id),value=Number(input.value),min=Number(input.min),max=Number(input.max);
     if(!Number.isFinite(value)||value<min||value>max){input.reportValidity();return}
     next[key]=value;
@@ -2889,14 +2942,18 @@ $("applyFontScale").onclick=()=>{
   fontScale.apply(next);
   for(const [id,key] of [["fontScaleBase","base"],["fontScaleSection","section"],["fontScaleTitle","title"],
     ["fontScaleAddition","addition"],["fontScaleHint","hint"],["fontScaleControlHeight","controlHeight"],
-    ["fontScaleMainControlHeight","mainControlHeight"],["fontScaleMainControlFont","mainControlFont"]])$(id).value=fontScale.values[key];
+    ["fontScaleMainControlHeight","mainControlHeight"],["fontScaleMainControlFont","mainControlFont"],
+    ["fontScaleSectionBefore","sectionBefore"],["fontScaleSectionAfter","sectionAfter"],["fontScaleRowGap","rowGap"],
+    ["fontScaleAdditionGap","additionGap"],["fontScaleControlGap","controlGap"]])$(id).value=fontScale.values[key];
   try{localStorage.setItem(fontScale.key,JSON.stringify(fontScale.values))}catch(_){}
   if($("panel").classList.contains("show"))panelRowColumns();
 };
 document.querySelectorAll(".font-scale-step").forEach(button=>button.addEventListener("click",()=>{
   const input=$(button.dataset.fontScale),key={fontScaleBase:"base",fontScaleSection:"section",fontScaleTitle:"title",
     fontScaleAddition:"addition",fontScaleHint:"hint",fontScaleControlHeight:"controlHeight",
-    fontScaleMainControlHeight:"mainControlHeight",fontScaleMainControlFont:"mainControlFont"}[input.id];
+    fontScaleMainControlHeight:"mainControlHeight",fontScaleMainControlFont:"mainControlFont",
+    fontScaleSectionBefore:"sectionBefore",fontScaleSectionAfter:"sectionAfter",fontScaleRowGap:"rowGap",
+    fontScaleAdditionGap:"additionGap",fontScaleControlGap:"controlGap"}[input.id];
   const value=Math.min(Number(input.max),Math.max(Number(input.min),Number(input.value)+Number(button.dataset.delta)));
   const next={...fontScale.values,[key]:Math.round(value*100)/100};
   fontScale.apply(next);
@@ -5145,7 +5202,7 @@ function searchFor(term,opts){
   window.wuSearchHistory.record(t);
   window.wuSearchHistory.hide();
   $("q").value=t;                       // verbatim: no trimming, ever
-  if($("mode").value==="fts")$("mode").value="prefix";
+  if($("mode").value==="fts")setSearchMode("prefix");
   const scope=opts?.scope||null,frag=opts?.frag||"";
   scopeOnce=scope;
   // the fragment addresses a place in the SCOPED article; renderSlot matches
@@ -5852,7 +5909,7 @@ let commitOnce=false;
 function applyURL(){
   const p=new URLSearchParams(location.search);
   if(p.get("theme")){localStorage.setItem("wudict_theme",p.get("theme"));applyTheme(p.get("theme"))}
-  if(p.get("mode"))$("mode").value=p.get("mode");
+  if(p.get("mode"))setSearchMode(p.get("mode"));
   if(p.get("dict"))$("dict").value=p.get("dict");
   syncChips();
   if(p.get("q")){$("q").value=p.get("q");scopeOnce=p.get("from")||null;commitOnce=true;doSearch()}
@@ -5880,7 +5937,7 @@ doSearch=function(ev){
    recorded — the browser already moved the cursor within the stack. */
 window.addEventListener("popstate",()=>{
   const p=new URLSearchParams(location.search);
-  if(p.get("mode"))$("mode").value=p.get("mode");
+  if(p.get("mode"))setSearchMode(p.get("mode"));
   if(p.get("dict"))$("dict").value=p.get("dict");
   syncChips();
   const q=p.get("q")||"";

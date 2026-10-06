@@ -8,11 +8,12 @@
 // Group membership never writes disabled, prefOrder or the search selector.
 let userGroups=[], selectedGroup="all", groupSaving=false, groupShowAllPreferred=false;
 let configuredGroupFilters=[];
-let groupAvailableFilter="all",groupAvailableDicts=[];
+let groupAvailableFilter="all";
 let groupActivePanel=null;
 let newGroupSelectedFilter=null,groupFilterMode="",groupFilterShowAll=false,groupFilterCollapsed=new Set();
 let groupEditorMode="",groupDraftMembers=new Set(),groupDraftFilter=null,groupDraftLinked=false,groupSavedEditPreference=false,groupDraftChooseForLink=false;
 let groupMemberDraft=null;
+let justCreatedGroup=null;
 let groupOrderSelection=null,groupOrderLongPress=null,groupOrderSuppressClick=false;
 function availableMatchesFilter(d){
   const filters=d.filters||[];
@@ -118,7 +119,6 @@ for(const [searchId,panel] of [['groupMembersSearch','members'],['groupAvailable
   $(searchId).addEventListener('blur',()=>requestAnimationFrame(updateGroupSplit));
 }
 function appendAvailableFilter(rows,available){
-  groupAvailableDicts=available;
   if(groupAvailableFilter!=='all'&&!available.some(availableMatchesFilter))groupAvailableFilter='all';
   const bar=document.createElement('div');bar.className='group-available-filter';
   const title=document.createElement('span');title.textContent=tx('dictUI.availableFilter');
@@ -126,6 +126,12 @@ function appendAvailableFilter(rows,available){
   button.textContent=filterChoiceLabel(groupAvailableFilter);button.disabled=groupSaving;
   button.onclick=()=>openGroupFilterDialog('available');
   bar.append(title,button);rows.append(bar);
+}
+function remainingGroupDicts(){
+  const group=userGroups.find(g=>g.id===selectedGroup);
+  if(!group||group.readonly||group.filter)return [];
+  const members=groupMemberDraft?.groupId===group.id?groupMemberDraft.members:new Set(group.members);
+  return orderedDicts().filter(d=>!members.has(d.id));
 }
 let pickerGroup=localStorage.getItem("wudict_picker_group")||"all";
 async function loadPickerGroups(){
@@ -192,7 +198,8 @@ function filterChoiceRow(label,key,count,checked,onClick){
 function renderGroupFilterDialog(){
   const host=$('groupFilterChoices'),toggleHost=$('groupFilterToggle');host.replaceChildren();toggleHost.replaceChildren();
   const available=groupFilterMode==='available';
-  const ordered=available?groupAvailableDicts:orderedDicts();
+  const ordered=available?remainingGroupDicts():orderedDicts();
+  if(available&&groupAvailableFilter!=='all'&&!ordered.some(availableMatchesFilter))groupAvailableFilter='all';
   const counts=filterCounts(ordered);
   const linked=userGroups.find(g=>g.id===selectedGroup);
   const chosen=groupFilterMode==='draft'?groupDraftFilter:groupFilterMode==='new'?newGroupSelectedFilter:linked?.filter||linked?.selectedFilter;
@@ -435,6 +442,7 @@ function renderGroupRows(){
   $("groupHint").hidden=true;
   $("groupHint").textContent='';
   $('groupEmptyHint').hidden=!showEmptyHint;
+  $('groupEmptyHint').querySelector('svg').hidden=group.id===justCreatedGroup;
   $('groupEmptyHintText').textContent=showEmptyHint?tx('dictUI.emptyGroup'):'';
   for(const d of filtering?inside.concat(filteredOutside):inside){
     const label=document.createElement(selecting||(!locked&&showAll.checked)?"label":"div");label.className="group-row";
@@ -652,6 +660,7 @@ $("closeGroups").onclick=()=>{
 };
 $("groupEditor").addEventListener("close",()=>{
   cancelGroupOrderLongPress();groupOrderSelection=null;groupOrderSuppressClick=false;
+  justCreatedGroup=null;
   if(groupEditorMode){groupEditorMode='';groupShowAllPreferred=groupSavedEditPreference;groupDraftMembers.clear();groupDraftFilter=null;groupDraftLinked=false;$('groupNameInline').value='';}
   $('editGroups').focus();
 });
@@ -826,7 +835,7 @@ async function saveGroupNameEdit(){
       const filter=groupDraftFilter?{facet:groupDraftFilter.facet,value:groupDraftFilter.value}:null;
       const body={name:$('groupNameInline').value,filter,linked:!!filter&&groupDraftLinked};
       if(!groupDraftLinked)body.members=[...groupDraftMembers];
-      const group=await groupRequest('/api/user-groups','POST',body);selectedGroup=group.id;
+      const group=await groupRequest('/api/user-groups','POST',body);selectedGroup=group.id;justCreatedGroup=group.id;
     }else await groupRequest('/api/user-groups/name','PUT',{group:selectedGroup,name:$('groupNameInline').value,filter:groupDraftFilter,linked:groupDraftLinked});
     userGroups=await groupRequest('/api/user-groups','GET');
     groupEditorMode='';groupDraftMembers.clear();groupDraftFilter=null;groupDraftLinked=false;groupShowAllPreferred=false;
@@ -848,6 +857,7 @@ $('groupSelect').onchange=()=>{
 };
 function groupSelectChanged(){
   cancelGroupOrderLongPress();groupOrderSelection=null;groupOrderSuppressClick=false;
+  justCreatedGroup=null;
   groupShowAllPreferred=false;groupActivePanel=null;
   $('groupControls').classList.remove('active');$('groupMembers').classList.remove('active');$('groupAvailable').classList.remove('active');
   $('groupAvailableSearch').value='';$('groupMembersSearch').value='';$('groupError').textContent='';renderGroupRows();

@@ -7,13 +7,18 @@ html[data-shell-image], html[data-shell-image] body { background:transparent !im
   /* Settings text scale, named from its shared 100% base so the drawer uses
      one consistent ladder instead of unrelated pixel sizes. */
   --ui-font-base:1rem;
-  --ui-font-section:1.05rem;
-  --ui-font-title:1.1rem;
+  --ui-font-section:1rem;
+  --ui-font-title:1.15rem;
   --ui-font-addition:.9rem;
   --ui-hint-font-size:.8rem;
-  --ui-control-height:2.2;
-  --ui-main-control-height:1.05;
+  --ui-control-height:1.6;
+  --ui-main-control-height:1.6;
   --ui-main-control-font:1.05;
+  --ui-section-space-before:0;
+  --ui-section-space-after:.45;
+  --ui-row-gap:.6;
+  --ui-addition-gap:.5;
+  --ui-control-gap:.25;
   --sp-1:.382em; --sp-2:.618em; --sp-3:1em; --sp-4:1.618em; --sp-5:2.618em;
   /* The same φ progression in the time domain. Geometric rather than linear
      for a reason that is not decorative: perceived duration grows roughly
@@ -382,7 +387,9 @@ select{font-size:13px;color:var(--label);background:var(--bg-card);
 .btn{font-size:15px;background:var(--bg-card);color:var(--label);
   border:1px solid var(--line);border-radius:8px;padding:.3em .55em;cursor:pointer;line-height:1.2}
 .btn:hover{color:var(--fg);border-color:var(--fg-faint)}
-.examples-extra{display:flex;align-items:flex-start;gap:.4em;margin:.35em 0 .7em;padding-left:.4em;font-size:var(--ui-font-addition);overflow-wrap:anywhere}
+#panel .examples-extra{display:flex;align-items:flex-start;gap:calc(var(--ui-control-gap) * 1em);
+  margin:calc(var(--ui-addition-gap) * 1em) 0;padding-left:.4em;font-size:var(--ui-font-addition);overflow-wrap:anywhere}
+#panel .examples-extra[hidden]{display:none}
 .examples-extra[hidden]{display:none}
 .examples-extra input{flex:none;margin-top:.2em;accent-color:var(--accent)}
 #pinBtn{color:var(--pin);border:none;background:none;padding:.3em .4em;font-size:16px;line-height:1;cursor:pointer;display:inline-flex;align-items:center}
@@ -1167,7 +1174,7 @@ dialog.panel-card:not([open]){display:none}
 #panel .panel-head .headacts .btn{height:calc(var(--ui-main-control-height,1.05) * 1em);box-sizing:border-box;
   font-size:calc(var(--ui-main-control-font,1.05) * 1rem);
   padding:0 .55em;line-height:1}
-.panel-card h2 .headacts{margin-left:auto;display:flex;gap:var(--sp-1)}
+.panel-card h2 .headacts{margin-left:auto;display:flex;gap:calc(var(--ui-control-gap) * 1em)}
 /* The theme control is TWO buttons - Auto, and the state it resolves to - and
    it has two mount points: the bar's pair above 600px, the panel's below it,
    where the bar has no room. This is the wide-screen half of that rule; the
@@ -1175,7 +1182,7 @@ dialog.panel-card:not([open]){display:none}
    The RING marks which of the two is in force, and that is the one thing a
    single cycling button could not say: following the phone and pinning a theme
    are different KINDS of answer, and only the accent tells them apart. */
-.themeSwitch{display:inline-flex;align-items:center;gap:.25em}
+.themeSwitch{display:inline-flex;align-items:center;gap:calc(var(--ui-control-gap) * 1em)}
 #panel .themeSwitch{display:none}
 .themeSwitch .themeAuto[aria-pressed="true"],
 .themeSwitch .themeFlip[aria-pressed="true"]{color:var(--accent);border-color:var(--accent)}
@@ -1361,12 +1368,13 @@ dialog.panel-card:not([open]){display:none}
    14.8/11.8/17.5 and 17.7/14.1/20.9. */
 .sect{margin:0 var(--sp-2) var(--sp-1);padding-bottom:var(--sp-1);
   border-bottom:1px solid color-mix(in srgb,var(--fg) 22%,transparent)}
+#panel .sect{padding-top:calc(var(--ui-section-space-before) * 1em)}
 .sect:last-child{border-bottom:0;margin-bottom:0}
-.sect-h{margin:0;font-size:var(--ui-font-section);font-weight:700;color:var(--label)}
+.sect-h{margin:0 0 calc(var(--ui-section-space-after) * 1em);font-size:var(--ui-font-section);font-weight:700;color:var(--label)}
 #panel details[data-panel-section="info"]>.sect-h{font-size:var(--ui-font-section)}
-#panel .font-scale-row{font-size:var(--ui-font-base);margin:.2em 0}
+#panel .font-scale-row{font-size:var(--ui-font-base);margin:0}
 #panel .font-scale-setting{display:grid;grid-template-columns:var(--font-label-width,max-content) 1.65em 2.665em 1.65em;
-  align-items:center;column-gap:.22em;row-gap:0;width:max-content;max-width:100%;box-sizing:border-box}
+  align-items:center;column-gap:calc(var(--ui-control-gap) * 1em);row-gap:0;width:max-content;max-width:100%;box-sizing:border-box}
 #panel .font-scale-setting code{font:inherit;white-space:nowrap}
 #panel .font-scale-step{box-sizing:border-box;width:1.65em;height:calc(var(--ui-control-height) * 1em);padding:0;
   font:inherit;line-height:1;color:var(--label);background:var(--bg-card);border:1px solid var(--line);border-radius:6px}
@@ -1376,7 +1384,7 @@ dialog.panel-card:not([open]){display:none}
   padding:0 .25em;font:inherit;text-align:right;color:var(--fg);background:var(--bg-card);
   border:1px solid var(--line);border-radius:6px}
 #panel .font-scale-setting input:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
-#panel .font-scale-actions{margin-top:.35em}
+#panel .font-scale-actions{margin-top:calc(var(--ui-row-gap) * 1em)}
 #panel details.sect>summary{cursor:pointer;list-style:none;border-radius:4px}
 #panel details.sect>summary::-webkit-details-marker{display:none}
 #panel details.sect>summary::before{content:"▶";display:inline-block;width:1em;
@@ -1390,7 +1398,7 @@ dialog.panel-card:not([open]){display:none}
    colour, because colour in this system means "on" and is not spent on edges —
    but at a row's height rather than a button's, and full width whatever it
    shares a .facts container with. */
-.facts .mrow{display:flex;align-items:center;gap:.5em;width:100%;
+.facts .mrow{display:flex;align-items:center;gap:calc(var(--ui-control-gap) * 1em);width:100%;
   box-sizing:border-box;height:calc(var(--ui-control-height,2.2) * 1em);text-align:left;text-decoration:none;cursor:pointer;
   font-family:inherit;font-size:var(--ui-font-base);line-height:1;padding:0 .65em;margin:0;
   color:var(--label);background:var(--bg-card);
@@ -1487,6 +1495,7 @@ dialog.panel-card:not([open]){display:none}
    answer on one line, so it takes the width of the ANSWER - the current look's
    name - and never less than the longest of the built-in ones. */
 .facts .choice-btn{font-size:var(--ui-font-base)}
+#panel .facts .choice-btn{gap:calc(var(--ui-control-gap) * 1em)}
 .facts:has(>#looksChoice)>#looksChoice{width:auto;flex:0 1 auto;min-width:6.5em}
 /* The row's three actions: square, drawn marks. The app's other icon-sized
    controls are 22px and these are 32, because they are the only way to save,
@@ -1496,12 +1505,12 @@ dialog.panel-card:not([open]){display:none}
    They are one flex item, so the row's wrap takes all three to the second line
    together instead of parting them. The gap is the row's own .45em, so on one
    line the trio is spaced exactly as loose siblings were. */
-.facts:has(>#looksChoice)>.iconrow{display:flex;align-items:center;gap:.45em;
+#panel .facts:has(>#looksChoice)>.iconrow{display:flex;align-items:center;gap:calc(var(--ui-control-gap) * 1em);
   flex:none}
 .facts:has(>#looksChoice)>.iconrow>.icon-btn{width:calc(var(--ui-control-height) * 2em);height:calc(var(--ui-control-height) * 1em);padding:0;
   display:flex;align-items:center;justify-content:center}
 .facts:has(>#looksChoice)>.iconrow>.icon-btn svg{width:16px;height:16px}
-#fsCtl,#fwCtl{flex:none;display:flex;align-items:center;gap:2px}
+#fsCtl,#fwCtl{flex:none;display:flex;align-items:center;gap:calc(var(--ui-control-gap) * 1em)}
 #fsCtl button,#fwCtl button{font:inherit;line-height:1;margin:0;padding:0;cursor:pointer;
   display:flex;align-items:center;justify-content:center;
   color:var(--label);background:var(--bg-card);border:1px solid var(--line);
@@ -1553,12 +1562,15 @@ dialog.panel-card:not([open]){display:none}
    font-family:inherit is not optional: these controls are real <button>s, and a
    button that does not ask for it renders in the UA stack, not var(--font). */
 .facts{display:flex;flex-wrap:wrap;gap:.45em;align-items:center;margin-top:.7em}
+#panel .facts{gap:calc(var(--ui-control-gap) * 1em);margin-top:0}
+#panel .facts:has(> .mrow){row-gap:calc(var(--ui-row-gap) * 1em)}
+#panel .sect>.facts+.facts,#panel .sect>.counts+.facts{margin-top:calc(var(--ui-row-gap) * 1em)}
 /* The reading strip's rows. Same left edge as the section that holds it (its
    .sect's own inline margin), so the row reads as part of the section and not
    as a control floating above one. One setting per LINE, not wrapped: the
    controls are meant to be compared, and a wrap put whichever two happened to
    fit beside each other. */
-.facts.reading{flex-direction:column;align-items:flex-start;margin:.6em 0 var(--sp-1)}
+#panel .facts.reading{flex-direction:column;align-items:flex-start;margin:0;gap:calc(var(--ui-row-gap) * 1em)}
 /* The reading strip's rows carry their label INSIDE the seg (they are label
    and pair in one control), and a seg is shrink-to-fit. A box sized from its
    content asks its items for their max-content size, not for their
@@ -1569,12 +1581,12 @@ dialog.panel-card:not([open]){display:none}
    strip's content is left-aligned either way, so nothing but the pairs' own
    starting point moves. */
 .facts.reading>.seg{align-self:stretch}
-.facts .history-controls{display:flex;align-items:center;flex-wrap:wrap;gap:.45em;
+.facts .history-controls{display:flex;align-items:center;flex-wrap:wrap;gap:calc(var(--ui-control-gap) * 1em);
   font-size:var(--ui-font-base)}
-.facts .history-setting{display:inline-flex;align-items:center;gap:.45em;font-size:var(--ui-font-base)}
+.facts .history-setting{display:inline-flex;align-items:center;gap:calc(var(--ui-control-gap) * 1em);font-size:var(--ui-font-base)}
 #historyLength{box-sizing:border-box;width:4.5em;height:calc(var(--ui-control-height) * 1em);
   padding:0 .4em;font:inherit;line-height:1}
-.facts .act{display:inline-flex;align-items:center;gap:.4em;height:calc(var(--ui-control-height) * 1em);box-sizing:border-box;
+.facts .act{display:inline-flex;align-items:center;gap:calc(var(--ui-control-gap) * 1em);height:calc(var(--ui-control-height) * 1em);box-sizing:border-box;
   font-family:inherit;font-size:var(--ui-font-base);line-height:1;padding:0 .6em;margin:0;
   color:var(--label);background:var(--bg-card);
   border:1px solid var(--line);border-radius:8px;
@@ -1587,7 +1599,7 @@ dialog.panel-card:not([open]){display:none}
    made of buttons, and one native control among them would read as a different
    kind of thing. The span is a different element type from the buttons, so
    :first/:last-of-type below address the two halves and never the label. */
-.facts .seg{display:inline-flex;align-items:center;justify-content:flex-start;gap:.4em}
+#panel .facts .seg{display:inline-flex;align-items:center;justify-content:flex-start;gap:calc(var(--ui-control-gap) * 1em)}
 /* The narrowest phones only. The label is a fixed column and the two halves
    never shrink (their equal widths ARE the column), so below ~345px the pair
    has nowhere to go but the next line. It is a media query rather than a
@@ -1625,7 +1637,7 @@ dialog.panel-card:not([open]){display:none}
    from was one button carrying both, which is exactly what kept it out of the
    column the other two rows are read down. */
 .facts .seg>span svg{width:14px;height:14px;flex:none;color:var(--label-quiet);
-  vertical-align:-2px;margin-right:.4em}
+  vertical-align:-2px;margin-right:calc(var(--ui-control-gap) * 1em)}
 #speakSeg>span svg{width:1em;height:1em;vertical-align:-.15em}
 /* Both halves of every pair are as wide as the widest word in the section, so
    the six buttons make ONE column and the edge the halves share falls at the
@@ -1728,10 +1740,10 @@ dialog.panel-card:not([open]){display:none}
    Scoped to .sect on purpose: `.about` is ALSO the class of a card's "About this
    dictionary" disclosure further down, which carries its own rules — a bare
    `.about a` here would restyle that card's links. */
-.sect .about{margin-top:.2em}
+#panel .sect .about{margin-top:0}
 .sect .about .brand{font-size:var(--ui-font-base);margin-right:.4em}
 .sect .about .ver{font-size:var(--ui-hint-font-size);color:var(--label-quiet);font-variant-numeric:tabular-nums}
-.sect .about p{margin:.35em 0 0;font-size:var(--ui-hint-font-size);color:var(--label-quiet);line-height:1.45}
+#panel .sect .about p{margin:calc(var(--ui-addition-gap) * 1em) 0 0;font-size:var(--ui-hint-font-size);color:var(--label-quiet);line-height:1.45}
 .sect .about a{color:var(--label);text-decoration:none;border-bottom:1px solid var(--line)}
 .sect .about a:hover{color:var(--link);border-bottom-color:currentColor}
 .pd .prov,.pd .prov1{font-size:10.5px;color:var(--label-quiet);overflow-wrap:break-word;margin-top:.15em}
