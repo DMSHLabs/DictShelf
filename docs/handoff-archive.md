@@ -55,6 +55,7 @@ narratives, so `git log` is a second copy.
 | Release wudict2-v0.3.0 (2026-09-27, this session) | 2026-09-27 | — (added after the split) |
 | Release wudict2-v0.4.0 (2026-09-27, this session) | 2026-09-27 | — (added after the split) |
 | Release wudict2-v0.5.0 (2026-09-28, this session) | 2026-09-28 | — (added after the split) |
+| The 2026-10-02 Original/GD entries (and two records the archive already had) | 2026-10-02 | — (added after the split) |
 | Release wudict2-v0.9.0 (2026-10-06, this session) | 2026-10-06 | — (added after the split) |
 | Release wudict2-v0.8.0 (2026-10-04, this session) | 2026-10-04 | — (added after the split) |
 | The 2026-09-29/30 sessions: the wumark sync and the translation slices | 2026-09-29/30 | — (added after the split) |
@@ -1749,6 +1750,30 @@ GitHub may serve unreachable objects by SHA for a while. The step that actually
 stops the distribution is replacing the release asset — which is why it was done
 in the same pass. The pre-rewrite repository survives as a mirror clone in
 `D:\tmp\wudict-backup.git`; it holds the fonts and every old SHA.
+
+## The 2026-10-02 Original/GD entries
+
+Moved out of HANDOFF.md on 2026-10-06. They describe the fork's second DSL reader and
+the per-family parser control — machinery REMOVED in v0.9.0, when upstream's reader
+became lenient and the fork dropped its own. Kept because they are the only record of
+how that feature worked, and because any install migrated from it may still raise the
+questions they answer.
+
+2026-10-02 first setup only: while the initial empty library is being configured in Edit Folders, selected Original/GD index defaults also set the global parser (one variant or Both). First dictionary discovery ends this persisted setup phase; subsequent defaults edits and launches never overwrite parser choice or clear checkboxes.
+
+2026-10-02 bulk index sections simplified to three actions each (index/contains/full-text). Candidates follow the header's DSL parser: Original/GD restrict DSL variants, Both includes both; non-DSL sources still included. Existing confirmations, status and Stop remain.
+
+2026-10-02 global DSL parser: Dictionary settings header Original/GD/Both controls persisted installation-wide search selection and card visibility. Single mode shows only that variant's card/index row; missing selected index is red even if hidden sibling is prepared. Both shows both cards/rows. Per-family checkboxes removed from cards; legacy API kept. Switching never deletes indexes or changes new-index creation defaults.
+
+2026-10-02 missing-index UI: missing variant Browse is hidden; if its sibling index exists, show a normal-colour note in that Browse row. Both indexes missing: no Browse buttons/individual notes, only shared red create-index warning.
+
+2026-10-02 follow-up: per-variant index deletion keeps the red striped inline confirmation; lists only existing index/contains/FTS/packed media, uses Delete/Cancel. Shared source audio/images and other variant survive; packed media is variant-local. Contains/FTS remain enabled without base and explicitly restore it (user reaffirmed; do not disable them in Dictionary settings).
+
+**Rechecked 2026-10-02 (fonts purged from history, release replaced):** the licence problem described in the paragraph below is CLOSED. `a195d5d` had already replaced the four Monotype faces and `QuiviraPhonetic.ttf` with the author's own `Quivira.otf` (free for any purpose, public domain from 2019); what remained was purging the old files from the commits that carried them. That was done as a **narrow** rewrite: 13 commits on `dev`/`GD_DSL` were re-created without those five paths, with a per-commit assertion that the only change is those deletions and `git diff a195d5d dev` coming out empty. Force-pushed: `dev` → `56a6057b`, `GD_DSL` → `c6809a0e`, tag `wudict2-v0.6.0` → `ca726dd` (now on `56a6057b`). **`master`, the other fourteen branches and the six older tags did not move** — verified against a recorded before-list, and `master` must stay untouched for upstream syncs. **`git filter-repo` is the wrong tool here**: it strips the `gpgsig` header, this repo's upstream-sync merges are GitHub-signed, and un-signing them re-hashes every commit descended from the first of them — the whole repository, all 16 branches and all 7 tags, which would have cost the `master`↔`dev` common history and forced re-pointing all 7 releases. That was run once and fully rolled back (the restore was checked ref by ref). The pre-rewrite repo is saved as a mirror clone in `D:\tmp\wudict-backup.git` (147 MB, every old SHA) — delete it once the rewrite is trusted. The local `.git` is 18 MB and the five blobs are pruned; one stale codex `turn-diffs` checkpoint ref held a copy of them and was deleted (local tooling scratch, present in the backup mirror). The release was then rebuilt and its asset REPLACED: 8,809,885 bytes, versionCode 471, sha256 `e0281deac8a40f77710ad428722ccd3ed9befdaefd5be262c8eff2f4a122e8f0`, same signer, and the packaged `.so` now reports **0** `Monotype` hits against 2 `Quivira.otf`. The release survived the tag update, staying published and not a draft.
+
+**Rechecked 2026-10-02 (release):** published `dev`, at the user's request, as a **normal** release — `wudict2-v0.6.0`, tag on `bc04112`, APK from `build-android.cmd release`: `versionName='wudict2-v0.6.0'`, versionCode 468, `locales: '--_--' 'ru'`, 10,071,197 bytes, sha256 `934f8113c040179b9edb0cd4b169b0ba06473a3a3031ac1287c027a0cfc4f44f`, the same signing certificate as every release so far. Not a pre-release this time: the ru.1 preview announced this line, so v0.6.0 is that line finished and `latest` moves to it. Checked before publishing: `go test ./internal/format/dsl` green (it carries the GD parser tests) and the server's `TestGDAssets|TestGDStyle|TestI18n|TestAppearanceContract|DSL` green; the packaged `.so` was unpacked and confirmed to contain `web/i18n/ru.json`, the GD font and preset paths and the GD parser sources. No device or emulator run, and `make i18n-check-js` was not run — there is still no Node here. **Open licence question, surfaced and NOT resolved:** the five TTFs under `internal/server/web/fonts/` ship in the APK and are served to the page, four of them carry `Monotype` / `The Monotype Corporation` in their own metadata, and `THIRD-PARTY-NOTICES.md` has no font entry at all (`grep -ic 'font|ttf'` = 0). Whoever owns the licence should add the notices or swap the faces before this APK is distributed widely.
+
+**DSL facts carried forward:** per-family Original/GD/Both selection persists separately from order/groups, defaults both; bulk affects registered families only. Both indexes remain, inactive variants excluded from picker/search even explicit scopes; inactive metadata cannot auto-prepare. Last surviving copy stays available; moving source paths resets selection. GD reader v4 production Enhancer/styles ON, GDOptions{} OFF for oracle; generated wu-xonly preserves mixed translations, native bold/italic/metadata retained, Examples commands unchanged/no GD article buttons. Five embedded fonts/scoped CSS v4 and stylesheet rewrite exemption; pre-v4 GD indexes need rebuild, ordinary parser unchanged. Prior full key/tree corpus: 28 files/3,259,925 cards; Stage 1 HTML sample: 27,002 cards (2,335 media excluded), only spacing differences. Native scanner/index bytes and full visual GD parity NOT proven. Details: docs/DSL.md section 11 and tools/dslcompare/README.md.
 
 ## Release wudict2-v0.9.0 (2026-10-06, this session)
 
