@@ -72,7 +72,9 @@
       const action = t(s.action === 'remove' ? 'dictUI.removing' : s.action === 'update' ? 'database.actionUpdate' : 'dictUI.indexing');
       const indexes = (s.indexes || []).map(f => t(f === 'index' ? 'dictUI.indexPlain' : f === 'contains' ? 'dictUI.contains' : 'dictUI.fts')).join(', ');
       const count = s.currentTotal > 0 ? ` ${window.wudictI18n.number(s.currentDone)} ${t('dictUI.progressOf',{total:window.wudictI18n.number(s.currentTotal)})}` : s.currentDone > 0 ? ` ${window.wudictI18n.number(s.currentDone)}` : '';
-      text.textContent = s.id==='starting' ? t('database.working') : s.id==='folder-setup' ? t('pages.savingFolders') : `${Math.min(s.done+1,s.total)}/${s.total} · ${s.current || ''} — ${action} ${indexes}${count}`;
+      const queueCount = s.id==='bulk-indexes' || s.id==='rescan-indexes' || s.id==='reindex' || s.id==='setup-work';
+      const position = queueCount && s.total > 1 ? `${Math.min(s.done+1,s.total)}/${s.total} · ` : '';
+      text.textContent = s.id==='starting' ? t('database.working') : s.id==='folder-setup' ? t('pages.savingFolders') : `${position}${s.current || ''} — ${action} ${indexes}${count}`;
       if(s.id==='rescan-indexes' && s.stage!=='dictionary')text.textContent=t(s.stage==='cleanup'?'database.cleaning':'database.working');
       if((s.busyDicts||[]).length>1)text.textContent=t('dictUI.activeJobs',{number:s.busyDicts.length})+' · '+text.textContent;
       button.disabled = s.stopRequested || pending || starting;

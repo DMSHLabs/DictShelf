@@ -217,11 +217,12 @@ func (s *Server) syncLinkedGroups(entries []*entry) error {
 
 func (s *Server) handleCreateGroup(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Name   string       `json:"name"`
-		Filter *groupFilter `json:"filter"`
-		Linked bool         `json:"linked"`
+		Name    string       `json:"name"`
+		Filter  *groupFilter `json:"filter"`
+		Linked  bool         `json:"linked"`
+		Members []string     `json:"members"`
 	}
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&req); err != nil {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&req); err != nil {
 		http.Error(w, "Invalid group name", 400)
 		return
 	}
@@ -264,6 +265,22 @@ func (s *Server) handleCreateGroup(w http.ResponseWriter, r *http.Request) {
 			g.Filter = req.Filter
 		}
 	}
+	if !req.Linked && req.Members != nil {
+		members = make([]string, 0, len(req.Members))
+		seen := make(map[string]bool, len(req.Members))
+		for _, id := range req.Members {
+			if seen[id] {
+				continue
+			}
+			seen[id] = true
+			if _, err := s.reg.get(id); err != nil {
+				http.Error(w, "Dictionary no longer available", 404)
+				return
+			}
+			members = append(members, id)
+		}
+		g.Order = slices.Clone(members)
+	}
 	if err := p.mutate(func(f *prefsFile) {
 		f.Groups = append(slices.Clone(f.Groups), g)
 		for _, id := range members {
@@ -284,6 +301,67 @@ func (s *Server) handleCreateGroup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, groupView{DictionaryGroup: g, Members: append([]string{}, members...)})
+}
+
+func (s *Server) handleRenameGroup(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Group  string       `json:"group"`
+		Name   string       `json:"name"`
+		Filter *groupFilter `json:"filter"`
+		Linked *bool        `json:"linked"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&req); err != nil || req.Group == "" || req.Group == allDictionariesGroup {
+		http.Error(w, "Invalid group", 400)
+		return
+	}
+	name := strings.TrimSpace(req.Name)
+	if name == "" || len([]rune(name)) > 100 || strings.ContainsFunc(name, unicode.IsControl) {
+		http.Error(w, "Enter a group name (1–100 characters, without control characters).", 400)
+		return
+	}
+	if req.Linked != nil && *req.Linked && (req.Filter == nil || !s.filterExists(*req.Filter)) {
+		http.Error(w, "Filter not found", 400)
+		return
+	}
+	p := s.reg.prefs
+	p.editMu.Lock()
+	defer p.editMu.Unlock()
+	f, _ := p.data()
+	index := slices.IndexFunc(f.Groups, func(g DictionaryGroup) bool { return g.ID == req.Group })
+	if index < 0 {
+		http.Error(w, "Group not found", 404)
+		return
+	}
+	if strings.EqualFold(name, "All Dictionaries") {
+		http.Error(w, "All Dictionaries is a reserved group name.", 409)
+		return
+	}
+	for _, g := range f.Groups {
+		if g.ID != req.Group && strings.EqualFold(g.Name, name) {
+			http.Error(w, "A group with this name already exists.", 409)
+			return
+		}
+	}
+	if err := p.mutate(func(f *prefsFile) {
+		g := &f.Groups[index]
+		g.Name = name
+		if req.Linked != nil {
+			if req.Filter != nil {
+				g.SelectedFilter = req.Filter
+			} else if g.SelectedFilter == nil {
+				g.SelectedFilter = g.Filter
+			}
+			if *req.Linked {
+				g.Filter = req.Filter
+			} else {
+				g.Filter = nil
+			}
+		}
+	}); err != nil {
+		http.Error(w, "Could not save group: "+err.Error(), 500)
+		return
+	}
+	writeJSON(w, map[string]string{"name": name})
 }
 
 // Delete only the selected user group. Dictionary records and their other
@@ -485,6 +563,93 @@ func (s *Server) handleGroupMember(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, map[string]bool{"saved": true})
 }
+
+// ReplaceGroupMembership applies a group's staged membership and visible order
+// in one preference write. Members that disappeared from the registry while
+// the editor was open are retained, so a rescan cannot erase hidden entries.
+func (s *Server) handleReplaceGroupMembership(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Group   string   `json:"group"`
+		Members []string `json:"members"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&req); err != nil || req.Group == allDictionariesGroup || req.Members == nil {
+		http.Error(w, "Invalid group membership", 400)
+		return
+	}
+	p := s.reg.prefs
+	entries := s.reg.all()
+	p.editMu.Lock()
+	defer p.editMu.Unlock()
+	f, _ := p.data()
+	gi := slices.IndexFunc(f.Groups, func(g DictionaryGroup) bool { return g.ID == req.Group })
+	if gi < 0 {
+		http.Error(w, "Group not found", 404)
+		return
+	}
+	if f.Groups[gi].Filter != nil {
+		http.Error(w, "Linked group cannot be edited", 409)
+		return
+	}
+	available := make(map[string]*entry, len(entries))
+	stored := make(map[string]bool)
+	for _, dict := range f.Dicts {
+		if slices.Contains(dict.Groups, req.Group) {
+			stored[dict.ID] = true
+		}
+	}
+	for _, entry := range entries {
+		available[entry.ID] = entry
+	}
+	desired := make(map[string]bool, len(req.Members))
+	for _, id := range req.Members {
+		if _, ok := available[id]; !ok && !stored[id] || desired[id] {
+			http.Error(w, "Invalid group membership", 400)
+			return
+		}
+		desired[id] = true
+	}
+	dicts := slices.Clone(f.Dicts)
+	for i := range dicts {
+		if _, ok := available[dicts[i].ID]; !ok {
+			continue
+		}
+		groups := slices.DeleteFunc(slices.Clone(dicts[i].Groups), func(id string) bool { return id == req.Group })
+		if desired[dicts[i].ID] {
+			groups = append(groups, req.Group)
+		}
+		dicts[i].Groups = groups
+	}
+	for _, entry := range entries {
+		if desired[entry.ID] && !stored[entry.ID] {
+			dicts = append(dicts, DictPref{ID: entry.ID, Path: entry.Path, Groups: []string{req.Group}})
+		}
+	}
+	order := slices.Clone(req.Members)
+	seen := make(map[string]bool, len(order))
+	for _, id := range order {
+		seen[id] = true
+	}
+	for _, id := range f.Groups[gi].Order {
+		if stored[id] && !availableID(available, id) && !seen[id] {
+			order = append(order, id)
+			seen[id] = true
+		}
+	}
+	for id := range stored {
+		if !availableID(available, id) && !seen[id] {
+			order = append(order, id)
+		}
+	}
+	groupList := slices.Clone(f.Groups)
+	groupList[gi].Order = order
+	if err := p.mutate(func(dst *prefsFile) { dst.Dicts, dst.Groups = dicts, groupList }); err != nil {
+		http.Error(w, "Could not save group membership: "+err.Error(), 500)
+		return
+	}
+	writeJSON(w, map[string]bool{"saved": true})
+}
+
+func availableID(entries map[string]*entry, id string) bool { _, ok := entries[id]; return ok }
 
 // Reorder only the currently available members. Unavailable dictionaries keep
 // their membership and follow the visible rows until they reappear.

@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+:root{--ui-hint-font-size:.7em}
 dialog.group-dialog.panel-card{position:fixed;inset:0;margin:auto;width:min(560px,94vw);height:fit-content;max-height:85vh;max-height:85dvh;padding:1em;border:1px solid var(--line);border-radius:12px;color:var(--fg);background-color:var(--bg);box-shadow:var(--shadow);overflow:auto;z-index:300}
 #groupEditor{height:min(650px,85vh);height:min(650px,85dvh)}
 /* The dictionary list is the long one — a real library is a hundred cards — so
@@ -31,7 +32,7 @@ dialog.group-dialog.panel-card{position:fixed;inset:0;margin:auto;width:min(560p
   dialog.group-dialog.panel-card{
     inset:calc(1em + var(--wd-inset-top,0px)) 1em calc(1em + var(--wd-inset-bottom,0px));
     width:auto;max-width:none;height:auto;max-height:none;padding:1.618em}
-  #groupEditor{height:auto}
+  dialog#groupEditor.group-dialog.panel-card{inset:calc(.5em + var(--wd-inset-top,0px)) .5em calc(.5em + var(--wd-inset-bottom,0px));height:auto}
   #dictSettings{height:auto}
   /* The colour window is short by nature - three sliders, a preview and one
      button - so it keeps its own height and centres itself in the same
@@ -60,34 +61,20 @@ dialog.group-dialog.panel-card{position:fixed;inset:0;margin:auto;width:min(560p
    the rule with the windows it belongs to; neither may be dropped alone. */
 dialog.group-dialog:not([open]){display:none}
 dialog.group-dialog[open]{display:flex;flex-direction:column;gap:.8em}
-/* What is visible AROUND a window: the same background the Edit Folders and
-   Lemmatization pages show around their cards, not the app dimmed behind it.
-   The pages are transparent over the background the Android host paints (a
-   colour, and the wallpaper image when one is set), which is why nothing of the
-   app shows up beside them; a modal's backdrop is above the page and has to
-   paint that background itself: --paper-bg is the host's colour and
-   --paper-bk-image is the wallpaper the page serves from /files (both set by
-   wudictShellBackground — the recipe #styler and .color-history already use).
-   Stretched, not tiled: the host stretches the image across the window. With no
-   host background at all, var(--bg) is what the pages sit on. */
-/* ...except the three preset windows. The backdrop above exists so a window
-   looks like it lies ON the page's paper - and it does that by painting the
-   paper over the page, app and all. For a list you came to edit that is fine.
-   For these three it is not: what they are ABOUT is the page - the reader is
-   looking at the look they are saving, questioning or deleting - so their
-   backdrop stays clear and the window floats over what it speaks for, the way
-   every menu in this app does. */
-#lookSaveDialog::backdrop,#lookAskDialog::backdrop,#lookDeleteDialog::backdrop{
-  background:transparent}
-.group-dialog::backdrop{background:var(--paper-bg,var(--bg))}
-html[data-shell-image] .group-dialog::backdrop{
+/* Compact modal windows keep their caller visible, but dimmed. Full settings
+   sheets still cover the reader with the host's paper and optional wallpaper. */
+.group-dialog::backdrop,html[data-shell-image] .group-dialog::backdrop{
+  background:rgba(0,0,0,.42);background-image:none}
+#groupEditor::backdrop,#dictSettings::backdrop,#sysSettings::backdrop{
+  background:var(--paper-bg,var(--bg))}
+html[data-shell-image] #groupEditor::backdrop,
+html[data-shell-image] #dictSettings::backdrop,
+html[data-shell-image] #sysSettings::backdrop{
   background-color:var(--paper-bg,var(--bg));
   background-image:var(--paper-bk-image);
   background-size:100% 100%;
   background-position:center;
   background-repeat:no-repeat}
-#bulkIndexDialog::backdrop,
-html[data-shell-image] #bulkIndexDialog::backdrop{background:transparent}
 /* A confirmation floats over its caller, unlike the full-height settings sheet. */
 dialog#bulkIndexDialog.group-dialog.panel-card{
   inset:0;margin:auto;box-sizing:border-box;
@@ -95,9 +82,14 @@ dialog#bulkIndexDialog.group-dialog.panel-card{
   height:fit-content;max-height:80vh;max-height:80dvh;padding:1em}
 #bulkIndexDialog h2{font-size:1.1em}
 #bulkIndexDialog p{margin:0;overflow-wrap:anywhere}
+dialog#linkGroupDialog.group-dialog.panel-card,dialog#discardGroupDraftDialog.group-dialog.panel-card{inset:0;margin:auto;box-sizing:border-box;width:min(420px,calc(100vw - 64px));max-width:none;height:fit-content;max-height:80dvh;padding:1em}
+#linkGroupDialog p,#discardGroupDraftDialog p{margin:0;overflow-wrap:anywhere}
 .group-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:.8em}
 .group-toolbar select{flex:1;min-width:0;max-width:100%;width:12em}
-.group-dialog select,.group-dialog input[type=text]{font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:.6em}
+.group-toolbar #groupNameInline{flex:1;min-width:0;width:auto;box-sizing:border-box}
+.group-actions{display:flex;align-items:center;justify-content:space-between;gap:.5em;flex:none;flex-wrap:wrap}
+.group-actions[hidden]{display:none}
+.group-dialog select,.group-dialog input[type=text],.group-dialog input[type=search]{font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:.6em}
 .group-dialog h2{display:flex;align-items:center;gap:1em;margin:0}
 dialog#clearDatabaseDialog.group-dialog.panel-card{box-sizing:border-box;height:fit-content;max-height:calc(100dvh - 24px);width:min(480px,calc(100vw - 24px));inset:0;margin:auto;padding:14px;font-size:.9em}
 #clearDatabaseDialog label{margin-top:.4em;display:flex;align-items:flex-start;gap:.3em}
@@ -117,33 +109,102 @@ dialog#clearDatabaseDialog.group-dialog.panel-card{box-sizing:border-box;height:
 #clearDatabaseStatus:empty{display:none}
 @media(max-width:360px){dialog#clearDatabaseDialog.group-dialog.panel-card{font-size:.85em;padding:12px}#clearDatabaseDialog .seg .btn{padding:.25em .35em}}
 .group-dialog h2 button{margin-left:auto}
+#groupTitle{gap:.5em}
+#groupTitle #groupNameApply,#groupTitle #closeGroups{box-sizing:border-box;display:grid;place-items:center;flex:none;width:2.7em;height:2.7em;padding:.35em;font-size:var(--group-action-font-size,inherit)}
+#groupTitle #groupNameApply{margin-left:auto}
+#groupTitle #closeGroups{margin-left:0}
+#groupTitle #groupNameApply[hidden]{display:none}
+#groupTitle #groupNameApply[hidden]+#closeGroups{margin-left:auto}
+#groupNameApply svg{width:1.5em;height:1.5em}
+#groupEditor #groupNameCancel{box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;height:2.7em;margin-left:auto;padding:.35em .65em;font-size:var(--group-action-font-size,inherit)}
+#groupEditor #groupNameCancel[hidden]{display:none}
 #groupLists{flex:1;display:flex;flex-direction:column;min-height:0}
-#groupEditor{gap:.65em}
+dialog#groupEditor.group-dialog.panel-card{gap:.65em;padding:0;border:0;background:transparent;box-shadow:none;overflow:hidden}
+#groupEditor .btn,#newGroupDialog .btn,#groupFilterDialog .btn,#linkGroupDialog .btn,#discardGroupDraftDialog .btn,#deleteGroupDialog .btn{font-size:inherit}
 #groupControls{display:flex;flex-direction:column;gap:.65em;flex:none}
 .group-section{border:1px solid var(--line);border-radius:12px;background:var(--bg-card,var(--bg));padding:.8em;box-shadow:var(--shadow)}
+#groupControls,#groupMembers,#groupAvailable{border:2px solid transparent}
 #groupLists{gap:.65em}
 #deleteGroup{align-self:flex-end;display:inline-flex;align-items:center;gap:.4em}
 #deleteGroup .group-delete-icon{width:1.15em;height:1.15em;flex:none}
 #deleteGroup[hidden]{display:none}
+#groupMembers{position:relative;flex:1 1 0;display:flex;flex-direction:column;min-height:0;overflow:hidden}
+#groupMemberDraftActions{position:absolute;z-index:2;top:.35em;right:.35em;display:flex;gap:.35em}
+#groupMemberDraftActions[hidden]{display:none}
+#groupMemberDraftActions .group-edit-toggle{display:flex;align-items:center;gap:.4em;height:2.5em;padding:.25em .65em;color:var(--fg);font-size:inherit}
+#groupMemberDraftActions .group-edit-label{font-size:.75em}
+#groupMemberDraftActions .group-draft-icon{display:grid;place-items:center;width:2.5em;height:2.5em;padding:.25em;color:var(--accent)}
+#groupMemberDraftActions svg{width:1.35em;height:1.35em;flex:none}
+#groupMemberDraftActions button[hidden]{display:none}
+#groupMembers:has(#groupMemberDraftActions:not([hidden])) #groupRows{padding-top:2.5em;box-sizing:border-box}
+#groupMemberHint{display:flex;align-items:center;flex:none;min-height:2.7em;margin-bottom:.3em;padding-right:6em;border-bottom:1px solid var(--line)}
+#groupMemberHint[hidden]{display:none}
+#groupMemberHint span{font-size:var(--ui-hint-font-size);line-height:1.25}
+#groupMembers:has(#groupMemberHint:not([hidden])) #groupRows{padding-top:0}
+#groupOrderToolbar{position:relative;z-index:1;display:flex;align-items:center;flex:none;min-height:2.7em;margin-bottom:.3em;border-bottom:1px solid var(--line)}
+#groupOrderToolbar[hidden],#groupOrderHint[hidden],#groupOrderControls[hidden]{display:none}
+#groupMembers:has(#groupMemberDraftActions:not([hidden])) #groupOrderToolbar{padding-right:9em}
+#groupOrderHint{font-size:var(--ui-hint-font-size);line-height:1.25}
+#groupOrderControls{display:grid;grid-template-columns:minmax(1.2em,auto) repeat(4,minmax(1.7em,1fr)) minmax(2.5em,auto);align-items:center;width:100%;gap:.1em}
+#groupOrderCount{padding:.1em}
+#groupOrderToolbar button{display:grid;place-items:center;min-width:0;height:2.5em;padding:.15em;border:0;background:transparent;color:var(--fg);font:inherit;cursor:pointer}
+#groupOrderToolbar button svg{width:1.25em;height:1.25em}
+#groupOrderToolbar button:disabled{opacity:.35;cursor:default}
+#groupOrderTop,#groupOrderBottom{color:var(--accent)!important}
+#groupOrderToolbar .group-order-exit{box-sizing:border-box;width:2.5em;border:1px solid var(--line);border-radius:.5em;font-size:inherit}
+#groupMembers:has(#groupOrderToolbar:not([hidden])) #groupRows{padding-top:0}
+#groupMembers:has(#groupOrderToolbar:not([hidden])) .group-dictionary-name{user-select:none;-webkit-user-select:none;touch-action:pan-y}
+#groupMembers.order-selecting .group-row{cursor:pointer}
+#groupEditor input.group-order-select{margin:0 6px}
+#groupEmptyHint{position:absolute;z-index:1;top:.55em;left:.8em;right:3.2em;display:flex;align-items:flex-start;min-height:2.35em;color:var(--label);pointer-events:none}
+#groupEmptyHint[hidden]{display:none}
+#groupEmptyHint span{max-width:100%;padding-right:1.1em;font-size:var(--ui-hint-font-size);line-height:1.25}
+#groupEmptyHint svg{position:absolute;top:0;right:-1.8em;width:2.2em;height:2.5em;overflow:visible;stroke:var(--accent);stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}
+#groupNewAction{flex:none;display:grid;place-items:center;min-width:2.7em;height:2.7em;padding:.4em}
+#groupNewAction .group-new-icon{width:1.5em;height:1.5em}
+#groupNewAction[hidden]{display:none}
+@media(max-width:380px){#groupEditToggle .group-edit-label{display:none}#groupMemberDraftActions .group-edit-toggle{width:2.5em;justify-content:center;padding:.25em}#groupMembers:has(#groupMemberDraftActions:not([hidden])) #groupOrderToolbar{padding-right:3em}}
 #groupRows{flex:1;overflow:auto;min-height:0;overscroll-behavior:contain}
-#groupLists.editing #groupRows{flex:0 1 auto;max-height:var(--group-top-limit,50%)}
-#groupAvailable{flex:1;display:flex;flex-direction:column;min-height:0;overflow:hidden}
+#groupLists.hide-members #groupMembers{display:none}
+#groupLists.members-sized #groupMembers{box-sizing:border-box;flex:0 0 var(--group-members-height)}
+#groupEditor.compact-controls #groupControls{display:none}
+#groupEditor.edit-members #groupControls{display:none}
+#groupEditor.name-mode #groupMembers,#groupEditor.name-mode #groupAvailable{opacity:.42;pointer-events:none}
+#groupHint[hidden]{display:none}
+#groupMembers.active,#groupAvailable.active,#groupControls.active{border-color:var(--accent)}
+#groupMembers.search-collapsed .group-search-bar,#groupAvailable.search-collapsed .group-search-bar{display:none}
+#groupAvailable{flex:1 1 0;display:flex;flex-direction:column;min-height:0;overflow:hidden}
 #groupAvailable[hidden]{display:none}
 #groupAvailableFilterHost{flex:none}
-#groupAddAll{align-self:flex-end;flex:none;margin:.3em 0}
+#groupAddToolbar{display:flex;align-items:center;justify-content:space-between;gap:.5em;flex:none;margin:.3em 0}
+#groupAddHint{flex:1;min-width:0;font-size:var(--ui-hint-font-size);line-height:1.25}
+#groupAddAll{flex:none}
 #groupOtherRows{flex:1;overflow:auto;min-height:0;overscroll-behavior:contain}
+.group-search-bar{display:flex;align-items:center;gap:.5em;flex:none;margin-top:.5em}
+.group-search-field{position:relative;display:flex;align-items:center;flex:1;min-width:0}
+#groupAvailableSearch,#groupMembersSearch{flex:1;box-sizing:border-box;width:100%;min-width:0;padding-left:2.5em;padding-right:2.5em}
+#groupAvailableSearch::-webkit-search-cancel-button,#groupMembersSearch::-webkit-search-cancel-button{-webkit-appearance:none;appearance:none;display:none}
+.group-search-icon{position:absolute;left:.75em;width:1.2em;height:1.2em;color:var(--label);pointer-events:none}
+.group-search-clear{position:absolute;right:.45em;display:grid;place-items:center;width:2em;height:2em;padding:0;border:0;border-radius:50%;background:transparent;color:var(--label);cursor:pointer}
+.group-search-clear[hidden]{display:none}
+.group-search-clear svg{width:1.15em;height:1.15em}
+.group-search-clear:hover{color:var(--fg)}
+.group-keyboard-toggle{flex:none;display:grid;place-items:center;width:2.8em;height:2.8em;padding:.25em;color:var(--fg)}
+.group-keyboard-icon{width:1.7em;height:1.8em}
+.group-keyboard-toggle[data-keyboard="show"] .icon-hide,.group-keyboard-toggle[data-keyboard="hide"] .icon-show{display:none}
+#groupAvailableSearch::placeholder,#groupMembersSearch::placeholder{color:var(--label)}
+.group-search-match{background:var(--accent);color:var(--bg);border-radius:.15em}
 .group-row{display:flex;align-items:center;gap:.7em;min-height:44px;padding:.5em 0;overflow-wrap:anywhere}
+.group-row[hidden]{display:none}
 .group-grip{flex:none;width:32px;height:40px;border:0;background:none;color:var(--label);font:24px/1 sans-serif;cursor:grab;touch-action:none;user-select:none}
 .group-grip:active{cursor:grabbing}
 .group-row.dragging{opacity:.45}
 .group-row.drop-before{box-shadow:inset 0 3px var(--accent)}
 .group-row.drop-after{box-shadow:inset 0 -3px var(--accent)}
-.group-row.group-other-first{border-top:1px solid var(--line);margin-top:.5em;padding-top:1em}
-.group-available-filter{display:flex;align-items:center;gap:.6em;border-top:1px solid var(--line);margin-top:.5em;padding:1em 0 .5em}
+.group-available-filter{display:flex;align-items:center;gap:.6em;padding:0 0 .5em}
 .group-available-filter button{flex:1;min-width:0;text-align:left}
 .group-filter-empty{color:var(--fg);font-size:.9em}
 #deleteGroupDialog{width:min(440px,94vw);height:fit-content}
-#deleteGroupDialog::backdrop,html[data-shell-image] #deleteGroupDialog::backdrop{background:transparent}
 #deleteGroupDialog p{margin:.4em 0}
 .group-dialog input[type=checkbox]{appearance:none;-webkit-appearance:none;flex:none;width:20px;height:20px;margin:0 5px 0 0;border:1.5px solid var(--fg);border-radius:4px;background-color:var(--paper-bg,var(--bg));position:relative;vertical-align:middle;cursor:pointer}
 .group-dialog input[type=checkbox]:checked::after{content:"";position:absolute;left:5px;top:1px;width:5px;height:10px;border:solid var(--fg);border-width:0 2px 2px 0;transform:rotate(45deg)}
@@ -156,7 +217,6 @@ dialog#clearDatabaseDialog.group-dialog.panel-card{box-sizing:border-box;height:
 .group-dialog input[type=checkbox]:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 dialog#articleFindDialog.group-dialog.panel-card{box-sizing:border-box;inset:0;margin:auto;
   width:min(480px,calc(100vw - 24px));height:fit-content;max-height:calc(100dvh - 24px);padding:14px}
-#articleFindDialog::backdrop{background:transparent}
 #articleFindDialog>label{display:flex;align-items:center;gap:.4em}
 #articleFindDialog input[type=text]{width:100%;box-sizing:border-box;min-width:0}
 #articleFindDialog .article-find-mode{flex-wrap:wrap;justify-content:space-between}
@@ -165,16 +225,21 @@ dialog#articleFindDialog.group-dialog.panel-card{box-sizing:border-box;inset:0;m
 #articleFindStatus:empty{display:none}
 #articleFindDialog .article-find-actions{display:flex;flex-wrap:wrap;gap:.5em;justify-content:flex-end}
 .group-error{color:var(--danger);margin:0;overflow-wrap:anywhere}
-#groupHint{color:var(--label);margin:0}
+#groupHint{color:var(--label);margin:0;font-size:var(--ui-hint-font-size)}
 #newGroupForm{display:flex;flex-direction:column;gap:.8em}
 .group-link-controls{display:flex;align-items:center;gap:.6em;flex-wrap:wrap}
 .group-link-controls[hidden]{display:none}
-.group-link-controls button{flex:1;min-width:0;text-align:left}
+.group-link-filter-host{display:flex;flex:1;min-width:0}
+.group-link-filter-host.can-link{cursor:pointer}
+.group-link-filter-host button{width:100%;min-width:0;text-align:left}
+.group-link-filter-host button:disabled{pointer-events:none;opacity:.6}
 #newGroupFilter{text-align:left}
 #groupFilterDialog{display:flex;flex-direction:column;height:min(650px,85dvh);overflow:hidden}
 #groupFilterDialog:not([open]){display:none}
+#groupFilterHeader{display:flex;align-items:center;gap:.5em;flex:none}
+#closeGroupFilter{display:grid;place-items:center;flex:none;width:2.5em;height:2.5em;padding:.25em}
 .group-filter-choices{flex:1;min-height:0;overflow:auto}
-#groupFilterToggle{flex:none}
+#groupFilterToggle{flex:1;min-width:0}
 #groupFilterToggle:empty{display:none}
 .group-filter-choice{display:flex;align-items:center;justify-content:space-between;gap:1em;width:100%;min-height:48px;padding:.5em .35em;border:0;background:none;color:var(--fg);font:inherit;text-align:left;cursor:pointer}
 .group-filter-choice-end{display:flex;align-items:center;gap:.8em;flex:none}

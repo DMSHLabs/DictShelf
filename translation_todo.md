@@ -1,5 +1,7 @@
 # Localization: status and next tasks
 
+2026-10-06 group editor: EN/RU labels for inline New Group/Rename/Save controls and group-name placeholder added alongside the dictionary search and keyboard labels. Phone layout and keyboard check remain.
+
 2026-10-06 single DSL parser cleanup: removed unused Original/GD/both selector labels and retired selection error translations from both catalogs and the error matcher. Go catalog checks pass. The full Node i18n harness still stops at the existing `Чистый` versus `Чистое` assertion at line 226, before its later checks.
 
 2026-10-06 dictionary-list recovery: EN/RU messages added for an interrupted list and for a group with members that are all unavailable for search. Group editor reuses its existing unavailable label. Go catalog checks pass; phone check after rebuild remains.

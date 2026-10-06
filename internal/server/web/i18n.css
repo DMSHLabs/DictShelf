@@ -7,9 +7,8 @@
 dialog#uiLanguageDialog.group-dialog.panel-card{box-sizing:border-box;position:fixed;inset:0;margin:auto;
   width:min(360px,92vw);height:fit-content;max-height:85vh;max-height:85dvh;min-height:0;gap:0;overflow:auto;
   background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:12px;padding:20px;font:inherit}
-.ui-language-dialog::backdrop{background:var(--paper-bg,var(--bg))}
-html[data-shell-image] .ui-language-dialog::backdrop{background-image:var(--paper-bk-image,none);
-  background-size:100% 100%;background-repeat:no-repeat}
+.ui-language-dialog::backdrop,html[data-shell-image] .ui-language-dialog::backdrop{
+  background:rgba(0,0,0,.42);background-image:none}
 .ui-language-dialog h2{margin:0 0 12px;font-size:18px}
 .ui-language-dialog p:empty{display:none}
 .ui-language-dialog p{margin:0 0 12px;color:var(--label,var(--fg));white-space:normal}

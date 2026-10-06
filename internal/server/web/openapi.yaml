@@ -1438,6 +1438,42 @@ paths:
         '500':
           description: State could not be saved.
 
+  /api/user-groups/name:
+    put:
+      operationId: renameDictionaryGroup
+      summary: Rename a user group and optionally update its filter link
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [group, name]
+              properties:
+                group: { type: string }
+                name: { type: string }
+                filter:
+                  description: Selected filter retained for later relinking.
+                  nullable: true
+                  type: object
+                  properties:
+                    facet: { type: string }
+                    value: { type: string }
+                linked:
+                  description: Whether to link the group to filter; omit to change only the name.
+                  type: boolean
+      responses:
+        '200':
+          description: Name and optional filter link saved.
+        '400':
+          description: Invalid or reserved group name.
+        '404':
+          description: Group not found.
+        '409':
+          description: Group name is already in use.
+        '500':
+          description: State could not be saved.
+
   /api/user-groups/member:
     put:
       operationId: setDictionaryGroupMember
@@ -1462,6 +1498,35 @@ paths:
           description: Group or dictionary no longer exists.
         '409':
           description: A linked group's membership cannot be edited.
+        '500':
+          description: State could not be saved; membership unchanged.
+
+  /api/user-groups/membership:
+    put:
+      operationId: replaceDictionaryGroupMembership
+      summary: Apply a group's staged membership and dictionary order atomically
+      description: Dictionaries that have disappeared from the registry are retained.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [group, members]
+              properties:
+                group: { type: string }
+                members:
+                  type: array
+                  items: { type: string }
+      responses:
+        '200':
+          description: Membership and order saved.
+        '400':
+          description: Invalid membership or attempt to edit All Dictionaries.
+        '404':
+          description: Group not found.
+        '409':
+          description: Linked group cannot be edited.
         '500':
           description: State could not be saved; membership unchanged.
 
