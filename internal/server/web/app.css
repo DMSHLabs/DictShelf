@@ -1195,8 +1195,8 @@ dialog.panel-card:not([open]){display:none}
    and then the panel altogether, for the Dictionary settings window that list
    lives in now. */
 .panel-head{flex:none;background:var(--bg);padding:var(--sp-3) 0 0}
-.pd{border:0;border-radius:0;background:transparent;
-  padding:0;margin-bottom:calc(var(--ui-row-gap) * 1em);font-size:var(--ui-font-base)}
+.pd{border:1px solid var(--line);border-radius:12px;background:var(--bg-card,var(--bg));
+  padding:.8em;margin-bottom:calc(var(--ui-row-gap) * 1em);font-size:var(--ui-font-base)}
 .pd.dragging{opacity:.45}
 .pd.drop-before{box-shadow:0 -2px 0 var(--accent)}
 .pd.drop-after{box-shadow:0 2px 0 var(--accent)}
@@ -1216,10 +1216,10 @@ dialog.panel-card:not([open]){display:none}
   font-size:var(--ui-font-base);line-height:1;padding:.15em .2em;border-radius:4px}
 .pd .ord button:hover{color:var(--fg);background:var(--line-soft)}
 #dictSettings .pd .hd{display:grid;grid-template-columns:auto minmax(0,1fr);gap:calc(var(--ui-control-gap,.25) * 1em)}
-#dictSettings .pd .hd{box-sizing:border-box;padding:.45em .6em;border-radius:8px;background:var(--bg-card)}
+#dictSettings .pd .hd{box-sizing:border-box;padding:0;border-radius:0;background:transparent}
 #dictSettings .pd .hd>b{grid-column:1 / -1;grid-row:1}
 #dictSettings .pd .grip{grid-column:1;grid-row:2;padding:.4em;align-self:center}
-#dictSettings .pd .ord{grid-column:2;grid-row:2;gap:calc(var(--ui-control-gap,.25) * 1em);margin-left:0;justify-content:flex-end}
+#dictSettings .pd .ord{grid-column:2;grid-row:2;gap:calc(var(--ui-control-gap,.25) * 2.5em);margin-left:0;justify-content:flex-end}
 #dictSettings .pd .ord button{box-sizing:border-box;min-width:calc(var(--ui-control-height,1.6) * 1em);width:calc(var(--ui-control-height,1.6) * 1em);height:calc(var(--ui-control-height,1.6) * 1em);min-height:calc(var(--ui-control-height,1.6) * 1em);padding:0}
 .en{appearance:none;width:32px;height:18px;border-radius:9px;background:var(--line);
   position:relative;cursor:pointer;flex:none;transition:background .15s}
@@ -1814,7 +1814,7 @@ dialog.panel-card:not([open]){display:none}
 /* Dictionary settings follows the same type scale as the reader's Settings
    panel. Keep these overrides scoped to this window: the card stylesheet also
    serves a few shared dialogs, whose text has its own hierarchy. */
-#dictSettings>h2{box-sizing:border-box;display:flex;align-items:center;gap:calc(var(--ui-control-gap,.25) * 1em);flex:none;margin:0;padding:.45em .6em;border-radius:8px;background:var(--bg-card);font-size:var(--ui-font-title)}
+#dictSettings>h2{box-sizing:border-box;display:flex;align-items:center;gap:calc(var(--ui-control-gap,.25) * 1em);flex:none;margin:0;padding:.8em 1em;border:1px solid var(--line);border-bottom:0;border-radius:12px 12px 0 0;background:var(--bg-card,var(--bg));font-size:var(--ui-font-title)}
 #dictSettings>h2 .btn{box-sizing:border-box;display:grid;place-items:center;width:calc(var(--ui-main-control-height,1.05) * 1em);height:calc(var(--ui-main-control-height,1.05) * 1em);min-height:calc(var(--ui-main-control-height,1.05) * 1em);padding:0;
   font-size:calc(var(--ui-main-control-font,1.05) * 1rem);line-height:1}
 #dictSettings .bulkbox{font-size:var(--ui-hint-font-size)}
@@ -1947,15 +1947,28 @@ dialog.panel-card:not([open]){display:none}
 .dsl-index-row .browse:hover:not(:disabled){color:var(--accent)}
 .dsl-index-row .browse:disabled{color:var(--label-quiet);cursor:default}
 .dsl-index-warning{color:var(--danger);font-size:var(--ui-hint-font-size)}
-.bulk-index-section{padding:0;margin:0 0 calc(var(--ui-row-gap,.6) * 1em);border:0;font-size:var(--ui-font-base)}
-.bulk-index-section h3{box-sizing:border-box;padding:.45em .6em;border-radius:8px;background:var(--line-soft);font-size:var(--ui-font-section);margin:0 0 calc(var(--ui-row-gap,.6) * 1em)}
+.bulk-index-section{box-sizing:border-box;padding:.8em 1em;margin:0 0 calc(var(--ui-row-gap,.6) * 1em);border:1px solid var(--line);border-radius:0 0 12px 12px;background:var(--bg-card,var(--bg));font-size:var(--ui-font-base)}
+.bulk-index-section h3{font-size:var(--ui-font-section);margin:0 0 .6em}
 .bulk-index-section .btn{font-size:var(--ui-font-base);min-height:calc(var(--ui-control-height,1.6) * 1em);box-sizing:border-box}
 .bulk-index-buttons{display:flex;flex-wrap:wrap;gap:calc(var(--ui-control-gap,.25) * 1em)}
 .bulk-index-table{display:flex;flex-direction:column;gap:calc(var(--ui-row-gap,.6) * 1em);font-size:var(--ui-font-base)}
-.bulk-index-setting{box-sizing:border-box;display:grid;grid-template-columns:minmax(0,36%) minmax(0,1fr);align-items:center;column-gap:calc(var(--ui-control-gap,.25) * 1em);min-width:0;min-height:calc(var(--ui-control-height,1.6) * 1em);padding:.25em .5em;border:1px solid var(--line);border-radius:8px;background:var(--bg-card);cursor:pointer}
+.bulk-index-setting{box-sizing:border-box;display:grid;grid-template-columns:minmax(0,36%) minmax(0,1fr);align-items:center;column-gap:calc(var(--ui-control-gap,.25) * 1em);min-width:0;min-height:calc(var(--ui-control-height,1.6) * 1em);cursor:pointer}
 .bulk-index-setting>span{min-width:0;font-weight:500;overflow-wrap:anywhere}
 .bulk-index-setting select{box-sizing:border-box;width:100%;min-width:0;height:calc(var(--ui-control-height,1.6) * 1em);font:inherit;line-height:1;color:var(--fg);background:var(--bg-card);border:1px solid var(--line);border-radius:6px;padding:0 .4em}
+.bulk-index-section>[data-bulk-start]{display:block;margin:.6em 0 0 auto}
 .bulk-index-row{display:grid;grid-template-columns:minmax(0,110px) minmax(0,1fr);gap:calc(var(--ui-control-gap,.25) * 1em);align-items:start;margin:calc(var(--ui-row-gap,.6) * 1em) 0;font-size:var(--ui-font-base)}
 .bulk-index-row>span{padding-top:5px;overflow-wrap:anywhere}
 .bulk-index-row>div{display:flex;flex-wrap:wrap;gap:calc(var(--ui-control-gap,.25) * 1em);justify-content:flex-start}
 .bulk-index-row .btn{box-sizing:border-box;font-size:var(--ui-font-base);min-height:calc(var(--ui-control-height,1.6) * 1em);padding:4px 6px;max-width:100%;white-space:normal}
+.list-search-dock{box-sizing:border-box;display:flex;align-items:center;gap:calc(var(--ui-control-gap,.25) * 1em);flex:none;padding:.5em .7em;border-top:1px solid var(--line);background:var(--bg);font-size:var(--ui-font-base)}
+.list-search-icon{display:grid;place-items:center;flex:none;width:1.25em;height:1.25em;color:var(--label-quiet)}
+.list-search-icon svg{display:block;width:100%;height:100%}
+.list-search-input{box-sizing:border-box;flex:1 1 auto;min-width:0;width:0;margin:0;font-size:var(--ui-font-base)}
+.list-search-count{flex:none;min-width:2.5em;text-align:center;font-size:var(--ui-font-addition);font-variant-numeric:tabular-nums;white-space:nowrap}
+.list-search-step,.list-search-filter{box-sizing:border-box;display:grid;place-items:center;flex:none;width:calc(var(--ui-control-height,1.6) * 1em);height:calc(var(--ui-control-height,1.6) * 1em);min-height:calc(var(--ui-control-height,1.6) * 1em);margin:0;padding:0;border:1px solid var(--line);border-radius:6px;background:var(--bg-card);color:var(--fg);font:inherit;line-height:1;cursor:pointer}
+.list-search-step:disabled{opacity:.45;cursor:default}
+.list-search-filter svg{width:1.1em;height:1.1em}
+.list-search-filter.is-on{border-color:var(--accent);background:var(--accent);color:var(--bg)}
+.list-search-match{outline:2px solid var(--accent);outline-offset:-2px}
+.list-search-current{background-color:color-mix(in srgb,var(--accent) 14%,var(--bg-card,var(--bg)))}
+.list-search-filtered-out{display:none!important}

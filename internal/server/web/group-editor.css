@@ -11,14 +11,12 @@ dialog.group-dialog.panel-card{position:fixed;inset:0;margin:auto;width:min(560p
    the list scrolls inside it under a fixed toolbar. On a phone that fixed
    height is what the media query below lifts: see it for why. */
 #dictSettings{height:min(650px,85vh);height:min(650px,85dvh)}
-/* On a phone the window IS the pages' card: a 1em margin on every side and
-   1.618em of padding inside it, which is exactly what Edit Folders and
-   Lemmatization wear (`.card` inside a `body` with 1em of padding). Measured
-   against that page: its card starts 1em below the top and its title 43px down;
-   the window now does the same, where a flush-to-the-edge card with a 2.618em
-   top padding put the title too far in and left no band at all — both reported
-   from the phone, in that order.
-   The box is written as `inset` + `auto` sizes so it STRETCHES to that rect:
+/* The selector section and each dictionary own their visible card borders;
+   the dialog itself only provides the window surface and padding. */
+#dictSettings.group-dialog.panel-card{padding:0;border:0;box-shadow:none}
+/* On a phone, app windows use a fixed 16px page gutter, matching the default
+   Lemmatization page gutter regardless of the app's text scale. The box is
+   written as `inset` + `auto` sizes so it STRETCHES to that rect:
    any viewport unit would be wrong here, and `dvh` demonstrably was — after a
    trip to Edit Folders the Android WebView reported a dynamic viewport ~145px
    shorter than the window, and the reopened window came back small and centred
@@ -29,8 +27,8 @@ dialog.group-dialog.panel-card{position:fixed;inset:0;margin:auto;width:min(560p
    monitor. */
 @media (max-width:600px){
   dialog.group-dialog.panel-card{
-    inset:calc(1em + var(--wd-inset-top,0px)) 1em calc(1em + var(--wd-inset-bottom,0px));
-    width:auto;max-width:none;height:auto;max-height:none;padding:1.618em}
+    inset:calc(16px + var(--wd-inset-top,0px)) 16px calc(16px + var(--wd-inset-bottom,0px));
+    width:auto;max-width:none;height:auto;max-height:none;padding:16px}
   dialog#groupEditor.group-dialog.panel-card{inset:calc(.5em + var(--wd-inset-top,0px)) .5em calc(.5em + var(--wd-inset-bottom,0px));height:auto}
   #dictSettings{height:auto}
   /* The colour window is short by nature - three sliders, a preview and one
@@ -52,7 +50,7 @@ dialog.group-dialog.panel-card{position:fixed;inset:0;margin:auto;width:min(560p
 #dictSettings #ftsAllBox{flex:none;margin:0}
 /* Scrolling past the end of the list must not move the page under the modal:
    the same guard the group rows carry. */
-#dictSettings .panel-scroll{overscroll-behavior:contain}
+#dictSettings .panel-scroll{overscroll-behavior:contain;padding-bottom:var(--sp-3)}
 /* Closed windows are not drawn. This sheet is linked at the END of <body>, so
    it arrives after the windows have already been parsed - the guard that
    actually keeps them off the page is the twin of this one in app.css, beside
@@ -60,6 +58,9 @@ dialog.group-dialog.panel-card{position:fixed;inset:0;margin:auto;width:min(560p
    the rule with the windows it belongs to; neither may be dropped alone. */
 dialog.group-dialog:not([open]){display:none}
 dialog.group-dialog[open]{display:flex;flex-direction:column;gap:calc(var(--ui-row-gap,.6) * 1em)}
+/* The fixed Dictionary settings title is the top slice of the bulk-settings
+   card; the scrollable selector block supplies its lower slice. */
+#dictSettings.group-dialog[open]{gap:0}
 /* Compact modal windows keep their caller visible, but dimmed. Full settings
    sheets still cover the reader with the host's paper and optional wallpaper. */
 .group-dialog::backdrop,html[data-shell-image] .group-dialog::backdrop{

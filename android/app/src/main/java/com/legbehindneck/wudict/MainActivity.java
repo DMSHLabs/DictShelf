@@ -51,6 +51,7 @@ public class MainActivity extends Activity {
     private Speech speech;           // read-aloud (D148); binds no engine until asked
 
     private volatile boolean gone;   // onDestroy ran: late server callbacks must not touch the views
+    private boolean serverRetained;
     private Object backCallback;     // OnBackInvokedCallback (API 33+), registered only while canGoBack()
     private boolean wantAutoFocus;   // this load is a cold start onto an empty screen
     private String pendingQuery;     // arrived from LookupActivity (D67, D100)
@@ -139,6 +140,7 @@ public class MainActivity extends Activity {
         takeQuery(launch);
 
         ServerProcess.retain();
+        serverRetained = true;
         ServerProcess.ensure(this, new ServerProcess.Listener() {
             @Override public void onReady() { showPage(); }
             @Override public void onFailed(String message) { showFailure(message); }
@@ -461,7 +463,7 @@ public class MainActivity extends Activity {
         super.onWindowFocusChanged(hasFocus);
         // Only on gain: asking while the window is losing focus is asking on
         // behalf of whatever is taking it.
-        if (hasFocus) {
+        if (hasFocus && web != null) {
             applyBars();
             // The settings window is another activity, so a changed edge mode
             // arrives as a focus gain and nothing else. Re-asking for the
@@ -767,7 +769,7 @@ public class MainActivity extends Activity {
 
     /** url null = reload in place. Queued when a load is already in flight. */
     private void navigate(String url) {
-        if (gone || web.getParent() == null) return;
+        if (gone || web == null || web.getParent() == null) return;
         if (pageLoading) {
             if (url == null) pageReloadQueued = true;
             else pageLoadQueued = url;
@@ -821,12 +823,14 @@ public class MainActivity extends Activity {
         // ServerProcess stops it after the foreground work hold ends.
         // Recreation keeps it - and so does a lookup popup that is still up,
         // which is why the decision is ServerProcess's (D67).
-        ServerProcess.release(isFinishing());
-        if (web.getParent() != null) {
-            ((FrameLayout) web.getParent()).removeView(web);
+        if (serverRetained) ServerProcess.release(isFinishing());
+        if (web != null) {
+            if (web.getParent() != null) {
+                ((FrameLayout) web.getParent()).removeView(web);
+            }
+            if (speech != null) speech.shutdown(); // before the WebView goes: its callbacks post into it
+            web.destroy();
         }
-        speech.shutdown(); // before the WebView goes: its callbacks post into it
-        web.destroy();
         super.onDestroy();
     }
 }

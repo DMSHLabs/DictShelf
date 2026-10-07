@@ -845,6 +845,7 @@ window.wudictFontScale=(function(){
     </div>
     <div id="panelList"></div>
   </div>
+  <div id="dictSettingsSearch" class="list-search-dock" role="search" aria-label="{{T:dictUI.listSearchLabel}}"></div>
 </dialog>
 
 <dialog id="bulkIndexDialog" class="group-dialog panel-card" aria-labelledby="bulkIndexDialogTitle"></dialog>
@@ -2772,6 +2773,7 @@ function renderPanel(){
     el.appendChild(div);
   }
   if(scroller)scroller.scrollTop=top;
+  window.dictSettingsListSearch?.refresh();
   renderReindex();
   // A change to a dictionary's indexes is the server's job, not this page's
   // (jobs.go): one started before a reload or by another tab is in its row,
@@ -2998,6 +3000,7 @@ $("panel").onclick=e=>{if(e.target.id==="panel")hidePanel()};
    pointer handler and disclosure below reaches the elements it always did. */
 function showDictSettings(){
   renderBulkIndexes();
+  window.dictSettingsListSearch?.refresh();
   if(panelSnap===null)panelSnap=panelState();
   $("dictSettings").showModal();
   // The drawer remembered the reader's place by simply staying in the DOM.
@@ -7794,5 +7797,6 @@ $("styler").addEventListener("keydown",e=>{
      them away (presets/examples/) is what does the hiding. See examples.js. -->
 <script src="/assets/examples.js?v={{EXAMPLESJS}}"></script>
 <script src="/assets/article-find.js?v={{ARTICLEFINDJS}}"></script>
+<script src="/assets/list-search.js?v={{LISTSEARCHJS}}"></script>
 </body>
 </html>

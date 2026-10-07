@@ -103,6 +103,9 @@ var speakJS = webAsset(speakJSSrc, jsAsset) // read-aloud of selected article te
 //go:embed web/article-find.js
 var articleFindJS []byte // search within loaded articles
 
+//go:embed web/list-search.js
+var listSearchJS []byte // reusable search and filter controls for lists
+
 //go:embed web/examples.js
 var examplesJS []byte // example folding: marks the lines that hold nothing but examples
 
@@ -466,6 +469,7 @@ func (s *Server) basePage() []byte {
 		page = strings.ReplaceAll(page, "{{SPEAKJS}}", assetTag(speakJS))
 		page = strings.ReplaceAll(page, "{{EXAMPLESJS}}", assetTag(examplesJS))
 		page = strings.ReplaceAll(page, "{{ARTICLEFINDJS}}", assetTag(articleFindJS))
+		page = strings.ReplaceAll(page, "{{LISTSEARCHJS}}", assetTag(listSearchJS))
 		// The role stylesheet for articles wudict writes itself
 		// (internal/artmark). It is a floor under BOTH article surfaces, so
 		// it is substituted once here and index.html hands it to the shadow
