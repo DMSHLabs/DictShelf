@@ -1337,9 +1337,9 @@ function syncAutoDark(){
   if(skinDark!==null&&skinDark!==dark)presetApplyAll();
   // The window's background is per theme too, so the sheet has to re-read: a
   // colour and a wallpaper that are not the ones on screen are worse than no
-  // window at all. Guarded like Shell.applyBackground guards it, because this
-  // also runs at boot, before the appearance layer exists.
-  if(typeof appearanceRead==="function")appearanceRead();
+  // window at all. The first call is still boot: the appearance state is
+  // declared later in this script and must not be read until a theme changes.
+  if(skinDark!==null&&typeof appearanceRead==="function")appearanceRead();
   skinDark=dark;
   document.querySelectorAll(".article").forEach(el=>{
     if(el.tagName==="IFRAME"){
@@ -2122,7 +2122,16 @@ function livePickerPayload(kind){
   if(scoped)groups.splice(1,0,scoped); // under "All dictionaries": the same axis, narrower
   return {kind,groups,group:scoped?scoped.id:pickerGroup,
     found:true,rows:livePickerRows(),
-    empty:livePickerSearching?tx("search.searching"):scoped?tx("search.emptyDict"):tx("search.emptyGroup")};
+    empty:livePickerSearching?tx("search.searching"):scoped?tx("search.emptyDict"):tx("search.emptyGroup"),
+    listSearch:{
+      placeholder:tx("dictUI.listSearchPlaceholder"),search:tx("dictUI.listSearchLabel"),
+      filter:tx("dictUI.listSearchFilter"),previous:tx("dictUI.listSearchPrevious"),
+      next:tx("dictUI.listSearchNext"),
+      count:tx("dictUI.listSearchCount",{current:"{current}",total:"{total}"}),
+      height:(parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--ui-edit_control-height"))||1.8)*1.5*(parseFloat(getComputedStyle(document.documentElement).fontSize)||16),
+      font:(parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--ui-edit_control-font"))||1)*(parseFloat(getComputedStyle(document.documentElement).fontSize)||16),
+      accent:getComputedStyle(document.documentElement).getPropertyValue("--accent").trim()
+    }};
 }
 function refreshLivePicker(){
   if(!livePickerOpen)return;
