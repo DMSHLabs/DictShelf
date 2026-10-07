@@ -228,6 +228,7 @@ func (s *Server) routes() []route {
 		{"GET", "/assets/group-editor.css", serveAsset("text/css; charset=utf-8", groupEditorCSS), "", false},
 		{"GET", "/assets/group-editor.js", serveAsset("application/javascript; charset=utf-8", groupEditorJS), "", false},
 		{"GET", "/assets/article-find.js", serveAsset("application/javascript; charset=utf-8", articleFindJS), "", false},
+		{"GET", "/assets/list-search.js", serveAsset("application/javascript; charset=utf-8", listSearchJS), "", false},
 		{"GET", "/assets/work-progress.js", serveAsset("application/javascript; charset=utf-8", workProgressJS), "", false},
 		{"GET", "/assets/examples.js", serveAsset("application/javascript; charset=utf-8", examplesJS), "", false},
 		{"GET", "/assets/looks.js", serveAsset("application/javascript; charset=utf-8", looksJS), "", false},

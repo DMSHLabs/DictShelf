@@ -23,6 +23,7 @@ public final class AppExit extends Application implements Application.ActivityLi
     @Override public void onCreate() {
         super.onCreate();
         SystemLog.initialize(this);
+        ProcessExitDiagnostics.recordRecent(this);
         registerActivityLifecycleCallbacks(this);
     }
 

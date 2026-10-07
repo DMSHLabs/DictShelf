@@ -20,6 +20,7 @@ import android.view.View;
 import android.view.WindowInsets;
 import android.view.WindowInsetsController;
 import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceError;
 import android.webkit.WebResourceResponse;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -461,9 +462,11 @@ public class MainActivity extends Activity {
     @Override
     public void onWindowFocusChanged(boolean hasFocus) {
         super.onWindowFocusChanged(hasFocus);
+        SystemLog.record("main focus=" + hasFocus);
         // Only on gain: asking while the window is losing focus is asking on
         // behalf of whatever is taking it.
         if (hasFocus && web != null) {
+            WebViewDiagnostics.install(web);
             applyBars();
             // The settings window is another activity, so a changed edge mode
             // arrives as a focus gain and nothing else. Re-asking for the
@@ -523,6 +526,7 @@ public class MainActivity extends Activity {
         @Override
         public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
             pageLoading = true;
+            WebViewDiagnostics.page("main", "started", url);
             // Where the bridge's prompts will come from: the address a stored
             // port change can move out from under them (Shell.pageOrigin).
             Shell.notePageUrl(url);
@@ -531,6 +535,8 @@ public class MainActivity extends Activity {
         @Override
         public void onPageFinished(WebView view, String url) {
             pageLoading = false;
+            WebViewDiagnostics.page("main", "finished", url);
+            WebViewDiagnostics.install(view);
             // The navigation that arrived while this one was in flight, now
             // that nothing is being cut off.
             if (pageLoadQueued != null) {
@@ -565,6 +571,16 @@ public class MainActivity extends Activity {
                 wantAutoFocus = false;
                 Ime.showWhenPageFocuses(view);
             }
+        }
+
+        @Override
+        public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
+            WebViewDiagnostics.error("main", request, error);
+        }
+
+        @Override
+        public void onReceivedHttpError(WebView view, WebResourceRequest request, WebResourceResponse response) {
+            WebViewDiagnostics.httpError("main", request, response.getStatusCode());
         }
     }
 
@@ -816,6 +832,8 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        SystemLog.record("main destroy finishing=" + isFinishing() + " web=" + (web != null)
+                + " serverRetained=" + serverRetained);
         gone = true;
         unwatchThermal();
         // The server is bound to the app's windows (D52): finishing the last

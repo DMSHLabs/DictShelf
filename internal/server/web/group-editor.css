@@ -4,21 +4,19 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-dialog.group-dialog.panel-card{position:fixed;inset:0;margin:auto;width:min(560px,94vw);height:fit-content;max-height:85vh;max-height:85dvh;padding:1em;border:1px solid var(--line);border-radius:12px;color:var(--fg);background-color:var(--bg);box-shadow:var(--shadow);overflow:auto;z-index:300}
+dialog.group-dialog.panel-card{position:fixed;inset:0;margin:auto;width:min(560px,94vw);height:fit-content;max-height:85vh;max-height:85dvh;padding:1em;border:1px solid var(--line);border-radius:12px;color:var(--fg);background-color:var(--bg);box-shadow:var(--shadow);overflow:auto;z-index:300;font-size:var(--ui-font-base)}
 #groupEditor{height:min(650px,85vh);height:min(650px,85dvh)}
 /* The dictionary list is the long one — a real library is a hundred cards — so
    Dictionary settings takes the same fixed height rather than fit-content, and
    the list scrolls inside it under a fixed toolbar. On a phone that fixed
    height is what the media query below lifts: see it for why. */
 #dictSettings{height:min(650px,85vh);height:min(650px,85dvh)}
-/* On a phone the window IS the pages' card: a 1em margin on every side and
-   1.618em of padding inside it, which is exactly what Edit Folders and
-   Lemmatization wear (`.card` inside a `body` with 1em of padding). Measured
-   against that page: its card starts 1em below the top and its title 43px down;
-   the window now does the same, where a flush-to-the-edge card with a 2.618em
-   top padding put the title too far in and left no band at all — both reported
-   from the phone, in that order.
-   The box is written as `inset` + `auto` sizes so it STRETCHES to that rect:
+/* The selector section and each dictionary own their visible card borders;
+   the dialog itself only provides the window surface and padding. */
+#dictSettings.group-dialog.panel-card{padding:0;border:0;box-shadow:none}
+/* On a phone, app windows use a fixed 16px page gutter, matching the default
+   Lemmatization page gutter regardless of the app's text scale. The box is
+   written as `inset` + `auto` sizes so it STRETCHES to that rect:
    any viewport unit would be wrong here, and `dvh` demonstrably was — after a
    trip to Edit Folders the Android WebView reported a dynamic viewport ~145px
    shorter than the window, and the reopened window came back small and centred
@@ -29,8 +27,8 @@ dialog.group-dialog.panel-card{position:fixed;inset:0;margin:auto;width:min(560p
    monitor. */
 @media (max-width:600px){
   dialog.group-dialog.panel-card{
-    inset:calc(1em + var(--wd-inset-top,0px)) 1em calc(1em + var(--wd-inset-bottom,0px));
-    width:auto;max-width:none;height:auto;max-height:none;padding:1.618em}
+    inset:calc(16px + var(--wd-inset-top,0px)) 16px calc(16px + var(--wd-inset-bottom,0px));
+    width:auto;max-width:none;height:auto;max-height:none;padding:16px}
   dialog#groupEditor.group-dialog.panel-card{inset:calc(.5em + var(--wd-inset-top,0px)) .5em calc(.5em + var(--wd-inset-bottom,0px));height:auto}
   #dictSettings{height:auto}
   /* The colour window is short by nature - three sliders, a preview and one
@@ -52,14 +50,17 @@ dialog.group-dialog.panel-card{position:fixed;inset:0;margin:auto;width:min(560p
 #dictSettings #ftsAllBox{flex:none;margin:0}
 /* Scrolling past the end of the list must not move the page under the modal:
    the same guard the group rows carry. */
-#dictSettings .panel-scroll{overscroll-behavior:contain}
+#dictSettings .panel-scroll{overscroll-behavior:contain;padding-bottom:var(--sp-3)}
 /* Closed windows are not drawn. This sheet is linked at the END of <body>, so
    it arrives after the windows have already been parsed - the guard that
    actually keeps them off the page is the twin of this one in app.css, beside
    the .panel-card rule whose display:flex would paint them. This copy keeps
    the rule with the windows it belongs to; neither may be dropped alone. */
 dialog.group-dialog:not([open]){display:none}
-dialog.group-dialog[open]{display:flex;flex-direction:column;gap:.8em}
+dialog.group-dialog[open]{display:flex;flex-direction:column;gap:calc(var(--ui-row-gap,.6) * 1em)}
+/* The fixed Dictionary settings title is the top slice of the bulk-settings
+   card; the scrollable selector block supplies its lower slice. */
+#dictSettings.group-dialog[open]{gap:0}
 /* Compact modal windows keep their caller visible, but dimmed. Full settings
    sheets still cover the reader with the host's paper and optional wallpaper. */
 .group-dialog::backdrop,html[data-shell-image] .group-dialog::backdrop{
@@ -78,23 +79,26 @@ html[data-shell-image] #sysSettings::backdrop{
 dialog#bulkIndexDialog.group-dialog.panel-card{
   inset:0;margin:auto;box-sizing:border-box;
   width:min(420px,calc(100% - 64px));max-width:none;
-  height:fit-content;max-height:80vh;max-height:80dvh;padding:1em}
-#bulkIndexDialog h2{font-size:1.1em}
+  height:fit-content;max-height:80vh;max-height:80dvh;padding:1em;font-size:var(--ui-font-base)}
+#bulkIndexDialog h2{font-size:var(--ui-font-title)}
+#bulkIndexDialog .btn{font-size:var(--ui-font-base);min-height:calc(var(--ui-control-height,1.6) * 1em);box-sizing:border-box}
 #bulkIndexDialog p{margin:0;overflow-wrap:anywhere}
 dialog#linkGroupDialog.group-dialog.panel-card,dialog#discardGroupDraftDialog.group-dialog.panel-card{inset:0;margin:auto;box-sizing:border-box;width:min(420px,calc(100vw - 64px));max-width:none;height:fit-content;max-height:80dvh;padding:1em}
 #linkGroupDialog p,#discardGroupDraftDialog p{margin:0;overflow-wrap:anywhere}
-.group-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:.8em}
+.group-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:calc(var(--ui-control-gap,.25) * 1em)}
 .group-toolbar select{flex:1;min-width:0;max-width:100%;width:12em}
 .group-toolbar #groupNameInline{flex:1;min-width:0;width:auto;box-sizing:border-box}
-.group-actions{display:flex;align-items:center;justify-content:space-between;gap:.5em;flex:none;flex-wrap:wrap}
+.group-actions{display:flex;align-items:center;justify-content:space-between;gap:calc(var(--ui-control-gap,.25) * 1em);flex:none;flex-wrap:wrap}
 .group-actions[hidden]{display:none}
-.group-dialog select,.group-dialog input[type=text],.group-dialog input[type=search]{font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:.6em}
-.group-dialog h2{display:flex;align-items:center;gap:1em;margin:0}
-dialog#clearDatabaseDialog.group-dialog.panel-card{box-sizing:border-box;height:fit-content;max-height:calc(100dvh - 24px);width:min(480px,calc(100vw - 24px));inset:0;margin:auto;padding:14px;font-size:.9em}
+.group-dialog select,.group-dialog input[type=text],.group-dialog input[type=search]{box-sizing:border-box;height:calc(var(--ui-control-height,1.6) * 1em);min-height:calc(var(--ui-control-height,1.6) * 1em);font:inherit;font-size:var(--ui-font-base);line-height:1;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:0 .4em}
+.group-dialog .btn{box-sizing:border-box;min-height:calc(var(--ui-control-height,1.6) * 1em);line-height:1;padding:0 .55em}
+.group-dialog h2{display:flex;align-items:center;gap:calc(var(--ui-control-gap,.25) * 1em);margin:0;font-size:var(--ui-font-title)}
+.group-dialog h2 .btn{box-sizing:border-box;height:calc(var(--ui-main-control-height,1.05) * 1em);min-height:calc(var(--ui-main-control-height,1.05) * 1em);font-size:calc(var(--ui-main-control-font,1.05) * 1rem);line-height:1}
+dialog#clearDatabaseDialog.group-dialog.panel-card{box-sizing:border-box;height:fit-content;max-height:calc(100dvh - 24px);width:min(480px,calc(100vw - 24px));inset:0;margin:auto;padding:14px}
 #clearDatabaseDialog label{margin-top:.4em;display:flex;align-items:flex-start;gap:.3em}
 #clearDatabaseDialog input{margin-top:.15em}
-#clearDatabaseDialog h2{font-size:1.1em;display:flex;align-items:center;justify-content:space-between;gap:.5em;margin:0 0 .5em}
-#clearDatabaseDialog h3{font-size:1em;margin:.65em 0 .3em}
+#clearDatabaseDialog h2{font-size:var(--ui-font-title);display:flex;align-items:center;justify-content:space-between;gap:calc(var(--ui-control-gap,.25) * 1em);margin:0 0 .5em}
+#clearDatabaseDialog h3{font-size:var(--ui-font-section);margin:.65em 0 .3em}
 #clearDatabaseDialog .rescan-action{margin:.4em 0;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:.25em}
 #clearDatabaseDialog .seg{display:inline-flex;flex-wrap:nowrap;gap:0}
 #clearDatabaseDialog .seg .btn{padding:.3em .45em;border-radius:0}
@@ -104,23 +108,29 @@ dialog#clearDatabaseDialog.group-dialog.panel-card{box-sizing:border-box;height:
 #clearDatabaseDialog:lang(ru) .rescan-action{display:grid;grid-template-columns:minmax(0,1fr);gap:.4em;margin:.65em 0}
 #clearDatabaseDialog:lang(ru) .seg{display:flex;width:100%}
 #clearDatabaseDialog:lang(ru) .seg .btn{flex:1;min-width:0;white-space:normal;overflow-wrap:anywhere;text-align:center}
-#clearDatabaseDialog p{overflow-wrap:anywhere;margin:.5em 0;line-height:1.3;font-size:.85em}
+#clearDatabaseDialog p{overflow-wrap:anywhere;margin:.5em 0;line-height:1.3;font-size:var(--ui-hint-font-size)}
 #clearDatabaseStatus:empty{display:none}
-@media(max-width:360px){dialog#clearDatabaseDialog.group-dialog.panel-card{font-size:.85em;padding:12px}#clearDatabaseDialog .seg .btn{padding:.25em .35em}}
+@media(max-width:360px){dialog#clearDatabaseDialog.group-dialog.panel-card{padding:12px}#clearDatabaseDialog .seg .btn{padding:.25em .35em}}
 .group-dialog h2 button{margin-left:auto}
-#groupTitle{gap:.5em}
-#groupTitle #groupNameApply,#groupTitle #closeGroups{box-sizing:border-box;display:grid;place-items:center;flex:none;width:2.7em;height:2.7em;padding:.35em;font-size:var(--group-action-font-size,inherit)}
+#groupTitle{gap:calc(var(--ui-control-gap,.25) * 1em)}
+#groupTitle #groupNameApply,#groupTitle #closeGroups{box-sizing:border-box;display:grid;place-items:center;flex:none;width:calc(var(--ui-main-control-height,1.05) * 1em);height:calc(var(--ui-main-control-height,1.05) * 1em);min-height:calc(var(--ui-main-control-height,1.05) * 1em);padding:0;font-size:calc(var(--ui-main-control-font,1.05) * 1rem)}
 #groupTitle #groupNameApply{margin-left:auto}
 #groupTitle #closeGroups{margin-left:0}
 #groupTitle #groupNameApply[hidden]{display:none}
 #groupTitle #groupNameApply[hidden]+#closeGroups{margin-left:auto}
 #groupNameApply svg{width:1.5em;height:1.5em}
-#groupEditor #groupNameCancel{box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;height:2.7em;margin-left:auto;padding:.35em .65em;font-size:var(--group-action-font-size,inherit)}
+#groupEditor #groupNameCancel{box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;height:calc(var(--ui-edit_control-height,1.8) * 1.5rem);min-height:calc(var(--ui-edit_control-height,1.8) * 1.5rem);margin-left:auto;padding:.35em .65em;font-size:inherit}
 #groupEditor #groupNameCancel[hidden]{display:none}
 #groupLists{flex:1;display:flex;flex-direction:column;min-height:0}
 dialog#groupEditor.group-dialog.panel-card{gap:.65em;padding:0;border:0;background:transparent;box-shadow:none;overflow:hidden}
 #groupEditor .btn,#newGroupDialog .btn,#groupFilterDialog .btn,#linkGroupDialog .btn,#discardGroupDraftDialog .btn,#deleteGroupDialog .btn{font-size:inherit}
 #groupControls{display:flex;flex-direction:column;gap:.65em;flex:none}
+#groupControls :is(.group-toolbar,.group-link-controls,.group-actions){font-size:calc(var(--ui-edit_control-font,1) * 1rem)}
+#groupControls :is(.group-toolbar,.group-link-controls,.group-actions) :is(select,input[type=text],button){box-sizing:border-box;height:calc(var(--ui-edit_control-height,1.8) * 1.5rem);min-height:calc(var(--ui-edit_control-height,1.8) * 1.5rem);font-size:inherit}
+#groupControls .group-link-controls label{display:inline-flex;align-items:center;min-height:calc(var(--ui-edit_control-height,1.8) * 1.5rem)}
+#groupControls #groupLink{width:1.25em;height:1.25em;margin:0 .3em 0 0;font:inherit}
+#groupControls #groupLink:checked::after{left:.32em;top:.06em;width:.31em;height:.63em;border-width:0 .125em .125em 0}
+#groupControls #groupNewAction{width:calc(var(--ui-edit_control-height,1.8) * 1.5rem);min-width:calc(var(--ui-edit_control-height,1.8) * 1.5rem);padding:0}
 .group-section{border:1px solid var(--line);border-radius:12px;background:var(--bg-card,var(--bg));padding:.8em;box-shadow:var(--shadow)}
 #groupControls,#groupMembers,#groupAvailable{border:2px solid transparent}
 #groupLists{gap:.65em}
@@ -130,10 +140,11 @@ dialog#groupEditor.group-dialog.panel-card{gap:.65em;padding:0;border:0;backgrou
 #groupMembers{position:relative;flex:1 1 0;display:flex;flex-direction:column;min-height:0;overflow:hidden}
 #groupMemberDraftActions{position:absolute;z-index:2;top:.35em;right:.35em;display:flex;gap:.35em}
 #groupMemberDraftActions[hidden]{display:none}
-#groupMemberDraftActions .group-edit-toggle{display:flex;align-items:center;gap:.4em;height:2.5em;padding:.25em .65em;color:var(--fg);font-size:inherit}
-#groupMemberDraftActions .group-edit-label{font-size:.75em}
+#groupMemberDraftActions .group-edit-toggle{display:flex;align-items:center;gap:.4em;height:calc(var(--ui-main-control-height,1.05) * 1em);min-height:calc(var(--ui-main-control-height,1.05) * 1em);padding:0 .55em;color:var(--fg);font-size:calc(var(--ui-main-control-font,1.05) * 1rem)}
+#groupMemberDraftActions .group-edit-label{font-size:inherit;transform:translateY(-1px)}
 #groupMemberDraftActions .group-draft-icon{display:grid;place-items:center;width:2.5em;height:2.5em;padding:.25em;color:var(--accent)}
 #groupMemberDraftActions svg{width:1.35em;height:1.35em;flex:none}
+#groupMemberDraftActions .group-edit-toggle svg{width:.9em;height:.9em}
 #groupMemberDraftActions button[hidden]{display:none}
 #groupMembers:has(#groupMemberDraftActions:not([hidden])) #groupRows{padding-top:2.5em;box-sizing:border-box}
 #groupMemberHint{display:flex;align-items:center;flex:none;min-height:2.7em;margin-bottom:.3em;padding-right:6em;border-bottom:1px solid var(--line)}
@@ -142,7 +153,7 @@ dialog#groupEditor.group-dialog.panel-card{gap:.65em;padding:0;border:0;backgrou
 #groupMembers:has(#groupMemberHint:not([hidden])) #groupRows{padding-top:0}
 #groupOrderToolbar{position:relative;z-index:1;display:flex;align-items:center;flex:none;min-height:2.7em;margin-bottom:.3em;border-bottom:1px solid var(--line)}
 #groupOrderToolbar[hidden],#groupOrderHint[hidden],#groupOrderControls[hidden]{display:none}
-#groupMembers:has(#groupMemberDraftActions:not([hidden])) #groupOrderToolbar{padding-right:9em}
+#groupMembers:has(#groupMemberDraftActions:not([hidden])) #groupOrderToolbar{padding-right:calc(var(--ui-main-control-font,1.05) * 9em)}
 #groupOrderHint{font-size:var(--ui-hint-font-size);line-height:1.25}
 #groupOrderControls{display:grid;grid-template-columns:minmax(1.2em,auto) repeat(4,minmax(1.7em,1fr)) minmax(2.5em,auto);align-items:center;width:100%;gap:.1em}
 #groupOrderCount{padding:.1em}
@@ -163,7 +174,7 @@ dialog#groupEditor.group-dialog.panel-card{gap:.65em;padding:0;border:0;backgrou
 #groupNewAction{flex:none;display:grid;place-items:center;min-width:2.7em;height:2.7em;padding:.4em}
 #groupNewAction .group-new-icon{width:1.5em;height:1.5em}
 #groupNewAction[hidden]{display:none}
-@media(max-width:380px){#groupEditToggle .group-edit-label{display:none}#groupMemberDraftActions .group-edit-toggle{width:2.5em;justify-content:center;padding:.25em}#groupMembers:has(#groupMemberDraftActions:not([hidden])) #groupOrderToolbar{padding-right:3em}}
+@media(max-width:380px){#groupEditToggle .group-edit-label{display:none}#groupMemberDraftActions .group-edit-toggle{width:calc(var(--ui-main-control-height,1.05) * 1em);justify-content:center;padding:0}#groupMembers:has(#groupMemberDraftActions:not([hidden])) #groupOrderToolbar{padding-right:3em}}
 #groupRows{flex:1;overflow:auto;min-height:0;overscroll-behavior:contain}
 #groupLists.hide-members #groupMembers{display:none}
 #groupLists.members-sized #groupMembers{box-sizing:border-box;flex:0 0 var(--group-members-height)}
@@ -172,7 +183,7 @@ dialog#groupEditor.group-dialog.panel-card{gap:.65em;padding:0;border:0;backgrou
 #groupEditor.name-mode #groupMembers,#groupEditor.name-mode #groupAvailable{opacity:.42;pointer-events:none}
 #groupHint[hidden]{display:none}
 #groupMembers.active,#groupAvailable.active,#groupControls.active{border-color:var(--accent)}
-#groupMembers.search-collapsed .group-search-bar,#groupAvailable.search-collapsed .group-search-bar{display:none}
+#groupMembers.search-collapsed .list-search-dock,#groupAvailable.search-collapsed .list-search-dock{display:none}
 #groupAvailable{flex:1 1 0;display:flex;flex-direction:column;min-height:0;overflow:hidden}
 #groupAvailable[hidden]{display:none}
 #groupAvailableFilterHost{flex:none}
@@ -180,21 +191,14 @@ dialog#groupEditor.group-dialog.panel-card{gap:.65em;padding:0;border:0;backgrou
 #groupAddHint{flex:1;min-width:0;font-size:var(--ui-hint-font-size);line-height:1.25}
 #groupAddAll{flex:none}
 #groupOtherRows{flex:1;overflow:auto;min-height:0;overscroll-behavior:contain}
-.group-search-bar{display:flex;align-items:center;gap:.5em;flex:none;margin-top:.5em}
-.group-search-field{position:relative;display:flex;align-items:center;flex:1;min-width:0}
-#groupAvailableSearch,#groupMembersSearch{flex:1;box-sizing:border-box;width:100%;min-width:0;padding-left:2.5em;padding-right:2.5em}
-#groupAvailableSearch::-webkit-search-cancel-button,#groupMembersSearch::-webkit-search-cancel-button{-webkit-appearance:none;appearance:none;display:none}
-.group-search-icon{position:absolute;left:.75em;width:1.2em;height:1.2em;color:var(--label);pointer-events:none}
-.group-search-clear{position:absolute;right:.45em;display:grid;place-items:center;width:2em;height:2em;padding:0;border:0;border-radius:50%;background:transparent;color:var(--label);cursor:pointer}
-.group-search-clear[hidden]{display:none}
-.group-search-clear svg{width:1.15em;height:1.15em}
-.group-search-clear:hover{color:var(--fg)}
-.group-keyboard-toggle{flex:none;display:grid;place-items:center;width:2.8em;height:2.8em;padding:.25em;color:var(--fg)}
-.group-keyboard-icon{width:1.7em;height:1.8em}
-.group-keyboard-toggle[data-keyboard="show"] .icon-hide,.group-keyboard-toggle[data-keyboard="hide"] .icon-show{display:none}
+#groupEditor .list-search-dock{margin-top:.5em}
+#groupEditor .list-search-input{height:calc(var(--ui-edit_control-height,1.8) * 1.5rem);min-height:0;font:inherit}
 #groupAvailableSearch::placeholder,#groupMembersSearch::placeholder{color:var(--label)}
-.group-search-match{background:var(--accent);color:var(--bg);border-radius:.15em}
 .group-row{display:flex;align-items:center;gap:.7em;min-height:44px;padding:.5em 0;overflow-wrap:anywhere}
+.group-dictionary-name{font-size:var(--ui-font-base)}
+.group-row.list-search-match{position:relative;outline:none}
+.group-row.list-search-match::before{content:"";position:absolute;inset:1px 0;border:2px solid var(--accent);border-radius:16px;pointer-events:none}
+.group-row.list-search-current{border-radius:16px}
 .group-row[hidden]{display:none}
 .group-grip{flex:none;width:32px;height:40px;border:0;background:none;color:var(--label);font:24px/1 sans-serif;cursor:grab;touch-action:none;user-select:none}
 .group-grip:active{cursor:grabbing}

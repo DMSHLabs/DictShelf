@@ -1,5 +1,7 @@
 # Localization: status and next tasks
 
+2026-10-07 Dictionary Groups search: EN/RU labels for the two new Fonts controls (`--ui-edit_control-height`, `--ui-edit_control-font`) added. Group list docks reuse existing localized search/filter labels. Catalog and targeted server checks pass; phone layout and keyboard behavior remain to verify.
+
 2026-10-06 group editor: EN/RU labels for inline New Group/Rename/Save controls and group-name placeholder added alongside the dictionary search and keyboard labels. Phone layout and keyboard check remain.
 
 2026-10-06 single DSL parser cleanup: removed unused Original/GD/both selector labels and retired selection error translations from both catalogs and the error matcher. Go catalog checks pass. The full Node i18n harness still stops at the existing `Чистый` versus `Чистое` assertion at line 226, before its later checks.
