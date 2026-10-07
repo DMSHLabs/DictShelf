@@ -1225,7 +1225,7 @@ func cmdServe(args []string) (err error) {
 				// With the key, when this launch has one: the instance
 				// already running was started from the same configuration,
 				// so the key that would have been ours is the key it wants.
-				browserCmd(keyURL(url, token))
+				browserCmd(browseURL(url, token))
 			}
 			return nil
 		}
@@ -1406,7 +1406,7 @@ Hint: pick another port with --port, e.g.:  wudict --port %s
 		keyURL: keyURL(url, token),
 	})
 	if !cfg.NoBrowser {
-		go openBrowser(keyURL(url, token))
+		go openBrowser(browseURL(url, token))
 	}
 
 	// No WriteTimeout: /api/search (NDJSON) and /api/ingest (SSE) stream for
@@ -1852,6 +1852,22 @@ func keyURL(url, token string) string {
 		sep = "&"
 	}
 	return url + sep + "k=" + token
+}
+
+// browseURL is the address a browser is opened on: the link carrying the access
+// key when this launch has one, and the plain server URL when it does not.
+//
+// keyURL is empty for "no key required" on purpose - it also feeds the startup
+// block, which prints nothing in that case - and that empty string must never
+// reach a browser, because an empty address is not a no-op. On Windows
+// rundll32 url.dll,FileProtocolHandler "" opens File Explorer at This PC
+// instead of a browser tab, which is what a launch with no key configured (the
+// default) did on every desktop build. Measured 2026-10-07.
+func browseURL(url, token string) string {
+	if keyed := keyURL(url, token); keyed != "" {
+		return keyed
+	}
+	return url
 }
 
 // webOriginsNote renders WEB_ORIGINS for the startup block. A wildcard is

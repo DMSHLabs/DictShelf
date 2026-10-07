@@ -58,6 +58,17 @@ them are in `docs/handoff-archive.md`.
   FTS5 inside the artifact; tags, CGO flag and driver are read back out of it
   with `go version -m`); its imports are KERNEL32 and msvcrt only, so no mingw
   DLL has to sit beside it.
+- **An unkeyed desktop launch opened File Explorer at "This PC" instead of a
+  browser — measured and fixed 2026-10-07.** With no access key configured (the
+  default) `keyURL` answers `""` on purpose — it also feeds the startup banner,
+  which prints nothing for it — and the two browser-opening call sites in
+  `internal/cli/cli.go` handed that empty address straight to the opener.
+  Windows makes it loud: `rundll32 url.dll,FileProtocolHandler ""` is not a
+  no-op, it opens This PC. `browseURL` now falls back to the plain server URL,
+  with `internal/cli/browser_test.go` guarding it. Verified on the desktop
+  build: the launch leaves the Explorer window count at 0 and opens the setup
+  page in Edge (window title "Edit Folders"). The other platforms have the same
+  defect with `xdg-open ""` / `open ""`, where the browser never opens at all.
 - **The Windows installer (`release`) builds — with Inno Setup 7, pinned at the
   top of the script.** Neither compiler on this machine is in the uninstall
   registry, so `tools\make-installer.ps1 -Locate` finds neither of them, and

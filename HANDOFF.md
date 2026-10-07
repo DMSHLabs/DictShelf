@@ -246,9 +246,9 @@ System Settings window: current work"; emulator/Bash recipes:
 
 Facts that are not derivable from the code (still standing):
 - **The fork gained a Windows desktop build on 2026-09-28: `build-windows.cmd`**
-  (uncommitted at the time of writing, in the working tree). It builds
-  upstream's product — `wudict.exe`, wuDict, port 6888, its own config and
-  library — not the Android app, in the cgo flavour when it can find a C
+  (committed; the fork's own files carry the fork's copyright since `8a759b3`).
+  It builds upstream's product — `wudict.exe`, wuDict, port 6888, its own config
+  and library — not the Android app, in the cgo flavour when it can find a C
   compiler; on this machine it finds Qt's mingw-w64 GCC
   (`C:\Qt\Tools\mingw1310_64\bin\gcc.exe`) on its own, which is also the first
   time cgo — and with it `-race` — is available here. All its machine paths sit
@@ -258,7 +258,16 @@ Facts that are not derivable from the code (still standing):
   copy on this machine is in the uninstall registry, so nothing is found
   automatically — and the 5 that sits there too cannot read the .iss at all).
   That installer's numeric version reads 0.0.0, since fork tags are `wudict2-v…`
-  and upstream's parser wants `v1.2.3`. Recipes: `docs/WINDOWS-VERIFY.md`.
+  and upstream's parser wants `v1.2.3`.
+- **An unkeyed desktop launch opened File Explorer at "This PC" in place of the
+  browser — an upstream bug, fixed in `browseURL` on 2026-10-07.** With no
+  access key configured (the default) `keyURL` answers `""` on purpose, and the
+  two browser-opening call sites in `internal/cli/cli.go` handed that empty
+  address straight to the opener; `rundll32 url.dll,FileProtocolHandler ""`
+  opens This PC. The other platforms have the same defect with `xdg-open ""` /
+  `open ""`, where the browser simply never opens — worth carrying upstream.
+  Guarded by `internal/cli/browser_test.go`; the measurement is in
+  `docs/WINDOWS-VERIFY.md`.
 - **The setup page's 📁 is now a host capability, not our prompt.** The page
   calls `wudictPickFolder` and shows the button only while the host has set
   `data-folder-picker` (foss `Storage.java`, reached through `MainActivity` →
