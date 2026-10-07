@@ -15,6 +15,16 @@ import (
 
 	"net/http/httptest"
 
+	// The server package registers no formats - the CLI does. memlimit_test.go
+	// carries these under !windows (its sweep is unix-only), so without them
+	// here a Windows test binary discovers only the formats another test file
+	// happens to have pulled in, and a broken .mdx finds no row at all.
+	_ "github.com/wuweidict/wudict/internal/format/bgl"
+	_ "github.com/wuweidict/wudict/internal/format/mdx"
+	_ "github.com/wuweidict/wudict/internal/format/slob"
+	_ "github.com/wuweidict/wudict/internal/format/stardict"
+	_ "github.com/wuweidict/wudict/internal/format/zim"
+
 	"github.com/wuweidict/wudict/internal/store"
 )
 
@@ -233,6 +243,8 @@ func TestDictsQuietReconcileKeepsTag(t *testing.T) {
 func TestDictsRescanIgnoresTag(t *testing.T) {
 	s, _, tag := settled(t)
 	req := newRequest("GET", "/api/rescan", nil)
+	// the fork gates a rescan on a loopback client (removalOffered)
+	req.RemoteAddr = "127.0.0.1:5555"
 	req.Header.Set("If-None-Match", tag)
 	rec := httptest.NewRecorder()
 	s.ServeHTTP(rec, req)

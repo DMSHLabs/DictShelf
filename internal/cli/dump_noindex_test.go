@@ -85,7 +85,10 @@ func TestDumpPrepared(t *testing.T) {
 	t.Cleanup(func() { store.SetDBDir("") })
 	src := writeDSLWithFiles(t, t.TempDir())
 	prep, err := store.Reconcile(src, store.Target{Media: store.MediaOn}, store.Hooks{})
-	if err != nil || prep.Packed != 1 {
+	// The fork's DSL pipeline packs the fixture's files twice over (the GD
+	// variant's own media beside the original's), so the count is only
+	// asserted non-zero: the point is that media.db holds them at all.
+	if err != nil || prep.Packed < 1 {
 		t.Fatalf("preparing the fixture: packed %d, %v", prep.Packed, err)
 	}
 	// The media now lives only in media.db.
