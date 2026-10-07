@@ -281,6 +281,8 @@
   "panel.controlHeight": "Control height",
   "panel.mainControlHeight": "Main control height",
   "panel.mainControlFont": "Main control font size",
+  "panel.editControlHeight": "List search control height",
+  "panel.editControlFont": "List search font size",
   "panel.sectionBefore": "Space before section heading",
   "panel.sectionAfter": "Space after section heading",
   "panel.rowGap": "Space between rows",

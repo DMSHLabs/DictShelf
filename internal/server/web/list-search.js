@@ -20,7 +20,7 @@
       root, itemSelector, dock, scrollContainer = root,
       getItems = () => [...root.querySelectorAll(itemSelector)],
       getText = item => item.innerText || item.textContent || "",
-      labels = {}, initiallyFiltering = false, highlightSelector = null
+      labels = {}, initiallyFiltering = false, highlightSelector = null, onUpdate = null, inputId = null
     } = options;
     if (!root || !dock || typeof getItems !== "function")
       throw new TypeError("list search needs a root, a dock and an item getter");
@@ -32,6 +32,7 @@
       `<button class="list-search-step" type="button" data-step="-1"></button>` +
       `<button class="list-search-step" type="button" data-step="1"></button>`;
     const input = dock.querySelector(".list-search-input");
+    if (inputId) input.id = inputId;
     const count = dock.querySelector(".list-search-count");
     const [previous, next] = dock.querySelectorAll(".list-search-step");
     const mode = dock.querySelector(".list-search-mode");
@@ -104,6 +105,7 @@
         for (const item of items) item.classList.remove("list-search-current");
         if (activeIndex >= 0 && matches[activeIndex]) matches[activeIndex].classList.add("list-search-current");
       }
+      onUpdate?.({query, filtering, visible: items.filter(item => !item.classList.contains("list-search-filtered-out")).length});
     }
     function scrollToCurrent() {
       const item = matches[activeIndex];
@@ -157,6 +159,9 @@
     return {
       refresh: paint,
       focus: () => input.focus(),
+      input,
+      visibleItems: () => items.filter(item => !item.classList.contains("list-search-filtered-out")),
+      clear() { input.value = ""; onInput(); },
       destroy() {
         input.removeEventListener("input", onInput);
         input.removeEventListener("keydown", onKeyDown);

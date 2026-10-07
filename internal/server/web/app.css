@@ -14,6 +14,8 @@ html[data-shell-image], html[data-shell-image] body { background:transparent !im
   --ui-control-height:1.6;
   --ui-main-control-height:1.05;
   --ui-main-control-font:1.05;
+  --ui-edit_control-height:1.8;
+  --ui-edit_control-font:1;
   --ui-section-space-before:0;
   --ui-section-space-after:.45;
   --ui-row-gap:.6;
@@ -1960,10 +1962,10 @@ dialog.panel-card:not([open]){display:none}
 .bulk-index-row>span{padding-top:5px;overflow-wrap:anywhere}
 .bulk-index-row>div{display:flex;flex-wrap:wrap;gap:calc(var(--ui-control-gap,.25) * 1em);justify-content:flex-start}
 .bulk-index-row .btn{box-sizing:border-box;font-size:var(--ui-font-base);min-height:calc(var(--ui-control-height,1.6) * 1em);padding:4px 6px;max-width:100%;white-space:normal}
-.list-search-dock{box-sizing:border-box;display:flex;align-items:center;gap:calc(var(--ui-control-gap,.25) * 1em);flex:none;padding:.5em .35em;border-top:1px solid color-mix(in srgb,var(--fg) 30%,var(--bg));background:var(--bg);font-size:var(--ui-font-base)}
-.list-search-input{box-sizing:border-box;flex:1 1 auto;min-width:0;width:0;margin:0;font-size:var(--ui-font-base)}
-.list-search-count{flex:none;min-width:2.5em;text-align:center;font-size:var(--ui-font-addition);font-variant-numeric:tabular-nums;white-space:nowrap}
-.list-search-mode,.list-search-step{box-sizing:border-box;display:grid;place-items:center;flex:none;width:44px;height:44px;margin:0;padding:0;border:1px solid var(--line);border-radius:6px;background:var(--bg-card);color:var(--fg);font:inherit;line-height:1;cursor:pointer}
+.list-search-dock{box-sizing:border-box;display:flex;align-items:center;gap:calc(var(--ui-control-gap,.25) * 1em);flex:none;padding:.5em .35em;border-top:1px solid color-mix(in srgb,var(--fg) 30%,var(--bg));background:var(--bg);font-size:calc(var(--ui-edit_control-font,1) * 1rem)}
+.list-search-input{box-sizing:border-box;flex:1 1 auto;min-width:0;width:0;height:calc(var(--ui-edit_control-height,1.8) * 1.5rem);min-height:0;margin:0;font:inherit}
+.list-search-count{flex:none;min-width:2.5em;text-align:center;font-size:inherit;font-variant-numeric:tabular-nums;white-space:nowrap}
+.list-search-mode,.list-search-step{box-sizing:border-box;display:grid;place-items:center;flex:none;width:calc(var(--ui-edit_control-height,1.8) * 1.5rem);height:calc(var(--ui-edit_control-height,1.8) * 1.5rem);margin:0;padding:0;border:1px solid var(--line);border-radius:6px;background:var(--bg-card);color:var(--fg);font:inherit;line-height:1;cursor:pointer}
 .list-search-step+.list-search-step{margin-left:.5em}
 .list-search-step:disabled{opacity:.45;cursor:default}
 .list-search-mode svg{display:block;width:1.1em;height:1.1em}

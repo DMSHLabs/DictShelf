@@ -115,8 +115,8 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
 window.wudictFontScale=(function(){
   const key="wudict_settings_fonts",clamp=(v,lo,hi)=>Math.min(hi,Math.max(lo,v));
   const spacing=new Set(["sectionBefore","sectionAfter","rowGap","additionGap","controlGap"]);
-  const clean=(v,fallback,name)=>{v=Number(v);return Number.isFinite(v)?clamp(v,spacing.has(name)?0:.5,2):fallback};
-  const values={base:1,section:1,title:1.15,addition:.9,hint:.8,controlHeight:1.6,mainControlHeight:1.05,mainControlFont:1.05,
+  const clean=(v,fallback,name)=>{v=Number(v);return Number.isFinite(v)?clamp(v,spacing.has(name)?0:.5,name==="editControlHeight"?4:2):fallback};
+  const values={base:1,section:1,title:1.15,addition:.9,hint:.8,controlHeight:1.6,mainControlHeight:1.05,mainControlFont:1.05,editControlHeight:1.8,editControlFont:1,
     sectionBefore:0,sectionAfter:.45,rowGap:.6,additionGap:.5,controlGap:.25};
   try{const saved=JSON.parse(localStorage.getItem(key)||"null");
     if(saved){for(const name of Object.keys(values))values[name]=clean(saved[name],values[name],name)}}catch(_){}
@@ -131,6 +131,8 @@ window.wudictFontScale=(function(){
     root.setProperty("--ui-control-height",String(values.controlHeight));
     root.setProperty("--ui-main-control-height",String(values.mainControlHeight));
     root.setProperty("--ui-main-control-font",String(values.mainControlFont));
+    root.setProperty("--ui-edit_control-height",String(values.editControlHeight));
+    root.setProperty("--ui-edit_control-font",String(values.editControlFont));
     root.setProperty("--ui-section-space-before",String(values.sectionBefore));
     root.setProperty("--ui-section-space-after",String(values.sectionAfter));
     root.setProperty("--ui-row-gap",String(values.rowGap));
@@ -675,6 +677,20 @@ window.wudictFontScale=(function(){
       <button type="button" class="font-scale-step" data-font-scale="fontScaleMainControlFont" data-delta="-0.05" aria-label="{{T:panel.decrease}} {{T:panel.mainControlFont}}">−</button>
       <input id="fontScaleMainControlFont" type="number" min="0.5" max="2" step="0.01" inputmode="decimal" aria-label="{{T:panel.mainControlFont}}">
       <button type="button" class="font-scale-step" data-font-scale="fontScaleMainControlFont" data-delta="0.05" aria-label="{{T:panel.increase}} {{T:panel.mainControlFont}}">+</button>
+    </label>
+  </div>
+  <div class="facts font-scale-row">
+    <label class="font-scale-setting"><code>--ui-edit_control-height:</code>
+      <button type="button" class="font-scale-step" data-font-scale="fontScaleEditControlHeight" data-delta="-0.05" aria-label="{{T:panel.decrease}} {{T:panel.editControlHeight}}">−</button>
+      <input id="fontScaleEditControlHeight" type="number" min="0.5" max="4" step="0.01" inputmode="decimal" aria-label="{{T:panel.editControlHeight}}">
+      <button type="button" class="font-scale-step" data-font-scale="fontScaleEditControlHeight" data-delta="0.05" aria-label="{{T:panel.increase}} {{T:panel.editControlHeight}}">+</button>
+    </label>
+  </div>
+  <div class="facts font-scale-row">
+    <label class="font-scale-setting"><code>--ui-edit_control-font:</code>
+      <button type="button" class="font-scale-step" data-font-scale="fontScaleEditControlFont" data-delta="-0.05" aria-label="{{T:panel.decrease}} {{T:panel.editControlFont}}">−</button>
+      <input id="fontScaleEditControlFont" type="number" min="0.5" max="2" step="0.01" inputmode="decimal" aria-label="{{T:panel.editControlFont}}">
+      <button type="button" class="font-scale-step" data-font-scale="fontScaleEditControlFont" data-delta="0.05" aria-label="{{T:panel.increase}} {{T:panel.editControlFont}}">+</button>
     </label>
   </div>
   <div class="facts font-scale-row">
@@ -2927,6 +2943,7 @@ const fontScale=window.wudictFontScale;
 [["fontScaleBase","base"],["fontScaleSection","section"],["fontScaleTitle","title"],
   ["fontScaleAddition","addition"],["fontScaleHint","hint"],["fontScaleControlHeight","controlHeight"],
   ["fontScaleMainControlHeight","mainControlHeight"],["fontScaleMainControlFont","mainControlFont"],
+    ["fontScaleEditControlHeight","editControlHeight"],["fontScaleEditControlFont","editControlFont"],
   ["fontScaleSectionBefore","sectionBefore"],["fontScaleSectionAfter","sectionAfter"],["fontScaleRowGap","rowGap"],
   ["fontScaleAdditionGap","additionGap"],["fontScaleControlGap","controlGap"]]
   .forEach(([id,key])=>$(id).value=fontScale.values[key]);
@@ -2935,6 +2952,7 @@ $("applyFontScale").onclick=()=>{
   for(const [id,key] of [["fontScaleBase","base"],["fontScaleSection","section"],["fontScaleTitle","title"],
     ["fontScaleAddition","addition"],["fontScaleHint","hint"],["fontScaleControlHeight","controlHeight"],
     ["fontScaleMainControlHeight","mainControlHeight"],["fontScaleMainControlFont","mainControlFont"],
+    ["fontScaleEditControlHeight","editControlHeight"],["fontScaleEditControlFont","editControlFont"],
     ["fontScaleSectionBefore","sectionBefore"],["fontScaleSectionAfter","sectionAfter"],["fontScaleRowGap","rowGap"],
     ["fontScaleAdditionGap","additionGap"],["fontScaleControlGap","controlGap"]]){
     const input=$(id),value=Number(input.value),min=Number(input.min),max=Number(input.max);
@@ -2945,6 +2963,7 @@ $("applyFontScale").onclick=()=>{
   for(const [id,key] of [["fontScaleBase","base"],["fontScaleSection","section"],["fontScaleTitle","title"],
     ["fontScaleAddition","addition"],["fontScaleHint","hint"],["fontScaleControlHeight","controlHeight"],
     ["fontScaleMainControlHeight","mainControlHeight"],["fontScaleMainControlFont","mainControlFont"],
+  ["fontScaleEditControlHeight","editControlHeight"],["fontScaleEditControlFont","editControlFont"],
     ["fontScaleSectionBefore","sectionBefore"],["fontScaleSectionAfter","sectionAfter"],["fontScaleRowGap","rowGap"],
     ["fontScaleAdditionGap","additionGap"],["fontScaleControlGap","controlGap"]])$(id).value=fontScale.values[key];
   try{localStorage.setItem(fontScale.key,JSON.stringify(fontScale.values))}catch(_){}
@@ -2954,6 +2973,7 @@ document.querySelectorAll(".font-scale-step").forEach(button=>button.addEventLis
   const input=$(button.dataset.fontScale),key={fontScaleBase:"base",fontScaleSection:"section",fontScaleTitle:"title",
     fontScaleAddition:"addition",fontScaleHint:"hint",fontScaleControlHeight:"controlHeight",
     fontScaleMainControlHeight:"mainControlHeight",fontScaleMainControlFont:"mainControlFont",
+    fontScaleEditControlHeight:"editControlHeight",fontScaleEditControlFont:"editControlFont",
     fontScaleSectionBefore:"sectionBefore",fontScaleSectionAfter:"sectionAfter",fontScaleRowGap:"rowGap",
     fontScaleAdditionGap:"additionGap",fontScaleControlGap:"controlGap"}[input.id];
   const value=Math.min(Number(input.max),Math.max(Number(input.min),Number(input.value)+Number(button.dataset.delta)));
@@ -7717,13 +7737,7 @@ $("styler").addEventListener("keydown",e=>{
     <p id="groupError" class="group-error" role="alert"></p>
     <p id="groupHint" role="status"></p>
   </div>
-  <div id="groupLists"><div id="groupMembers" class="group-section"><div id="groupMemberDraftActions" hidden><button type="button" class="btn group-edit-toggle" id="groupEditToggle" aria-label="{{T:dictUI.editGroupMembers}}" title="{{T:dictUI.editGroupMembers}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.8 1.8 0 0 1-2.5 2.5 1.8 1.8 0 0 0-3 1.1 1.8 1.8 0 0 1-3.6 0 1.8 1.8 0 0 0-3-1.1A1.8 1.8 0 0 1 4.8 15a1.8 1.8 0 0 0-1.1-3 1.8 1.8 0 0 1 0-3.6 1.8 1.8 0 0 0 1.1-3A1.8 1.8 0 0 1 7.3 2.9a1.8 1.8 0 0 0 3-1.1 1.8 1.8 0 0 1 3.6 0 1.8 1.8 0 0 0 3 1.1 1.8 1.8 0 0 1 2.5 2.5 1.8 1.8 0 0 0 1.1 3 1.8 1.8 0 0 1 0 3.6 1.8 1.8 0 0 0-1.1 3Z"/></svg><span class="group-edit-label">{{T:dictUI.editGroupMembers}}</span></button><button type="button" class="btn group-draft-icon" id="groupMemberApply" aria-label="{{T:dictUI.applyGroupChanges}}" title="{{T:dictUI.applyGroupChanges}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg></button><button type="button" class="btn group-draft-icon" id="groupMemberCancel" aria-label="{{T:dictUI.discardGroupChanges}}" title="{{T:dictUI.discardGroupChanges}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><div id="groupMemberHint" hidden><span>{{T:dictUI.memberEditHint}}</span></div><div id="groupOrderToolbar" hidden><span id="groupOrderHint">{{T:dictUI.longPressSelect}}</span><div id="groupOrderControls" hidden><output id="groupOrderCount" aria-live="polite">0</output><button type="button" class="group-order-button" id="groupOrderTop" aria-label="{{T:dictUI.moveSelectedTop}}" title="{{T:dictUI.moveSelectedTop}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 3h16"/><path d="m12 5-7 8h14zM12 12l-7 8h14z" fill="currentColor" stroke="none"/></svg></button><button type="button" class="group-order-button" id="groupOrderUp" aria-label="{{T:dictUI.moveSelectedUp}}" title="{{T:dictUI.moveSelectedUp}}">▲</button><button type="button" class="group-order-button" id="groupOrderDown" aria-label="{{T:dictUI.moveSelectedDown}}" title="{{T:dictUI.moveSelectedDown}}">▼</button><button type="button" class="group-order-button" id="groupOrderBottom" aria-label="{{T:dictUI.moveSelectedBottom}}" title="{{T:dictUI.moveSelectedBottom}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 21h16"/><path d="m5 4 7 8 7-8zM5 11l7 8 7-8z" fill="currentColor" stroke="none"/></svg></button><button type="button" class="btn group-order-exit" id="groupOrderExit" aria-label="{{T:dictUI.exitSelection}}" title="{{T:dictUI.exitSelection}}">✕</button></div></div><div id="groupEmptyHint" role="status" hidden><span id="groupEmptyHintText"></span><svg viewBox="0 0 40 44" fill="none" aria-hidden="true"><path d="M2 42C11 29 17 20 34 7m-10 0 10 0-2 10"/></svg></div><div id="groupRows"></div><div class="group-search-bar"><div class="group-search-field"><svg class="group-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 5 5"/></svg><input id="groupMembersSearch" type="search" placeholder="{{T:dictUI.searchAvailable}}" aria-label="{{T:dictUI.searchAvailable}}" autocomplete="off" enterkeyhint="done"><button type="button" class="group-search-clear" id="groupMembersSearchClear" aria-label="{{T:dictUI.clearSearch}}" title="{{T:dictUI.clearSearch}}" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><button type="button" class="btn group-keyboard-toggle" id="groupMembersKeyboard" data-keyboard="show" aria-label="{{T:dictUI.showKeyboard}}" title="{{T:dictUI.showKeyboard}}">
-    <svg class="group-keyboard-icon icon-hide" viewBox="0 0 28 30" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="2" width="22" height="17" rx="2"/><path d="M7 7h1m4 0h1m4 0h1m4 0h1M7 11h1m4 0h1m4 0h1m4 0h1M9 15h10M9 23l5 5 5-5"/></svg>
-    <svg class="group-keyboard-icon icon-show" viewBox="0 0 28 30" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 7l5-5 5 5"/><rect x="3" y="11" width="22" height="17" rx="2"/><path d="M7 16h1m4 0h1m4 0h1m4 0h1M7 20h1m4 0h1m4 0h1m4 0h1M9 24h10"/></svg>
-  </button></div></div><div id="groupAvailable" class="group-section" hidden><div id="groupAvailableFilterHost"></div><div id="groupAddToolbar"><span id="groupAddHint">{{T:dictUI.availableEditHint}}</span><button type="button" class="btn" id="groupAddAll">{{T:dictUI.addAll}}</button></div><div id="groupOtherRows"></div><div class="group-search-bar"><div class="group-search-field"><svg class="group-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 5 5"/></svg><input id="groupAvailableSearch" type="search" placeholder="{{T:dictUI.searchAvailable}}" aria-label="{{T:dictUI.searchAvailable}}" autocomplete="off" enterkeyhint="done"><button type="button" class="group-search-clear" id="groupAvailableSearchClear" aria-label="{{T:dictUI.clearSearch}}" title="{{T:dictUI.clearSearch}}" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><button type="button" class="btn group-keyboard-toggle" id="groupSearchDone" data-keyboard="show" aria-label="{{T:dictUI.showKeyboard}}" title="{{T:dictUI.showKeyboard}}">
-    <svg class="group-keyboard-icon icon-hide" viewBox="0 0 28 30" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="2" width="22" height="17" rx="2"/><path d="M7 7h1m4 0h1m4 0h1m4 0h1M7 11h1m4 0h1m4 0h1m4 0h1M9 15h10M9 23l5 5 5-5"/></svg>
-    <svg class="group-keyboard-icon icon-show" viewBox="0 0 28 30" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 7l5-5 5 5"/><rect x="3" y="11" width="22" height="17" rx="2"/><path d="M7 16h1m4 0h1m4 0h1m4 0h1M7 20h1m4 0h1m4 0h1m4 0h1M9 24h10"/></svg>
-  </button></div></div></div>
+  <div id="groupLists"><div id="groupMembers" class="group-section"><div id="groupMemberDraftActions" hidden><button type="button" class="btn group-edit-toggle" id="groupEditToggle" aria-label="{{T:dictUI.editGroupMembers}}" title="{{T:dictUI.editGroupMembers}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.8 1.8 0 0 1-2.5 2.5 1.8 1.8 0 0 0-3 1.1 1.8 1.8 0 0 1-3.6 0 1.8 1.8 0 0 0-3-1.1A1.8 1.8 0 0 1 4.8 15a1.8 1.8 0 0 0-1.1-3 1.8 1.8 0 0 1 0-3.6 1.8 1.8 0 0 0 1.1-3A1.8 1.8 0 0 1 7.3 2.9a1.8 1.8 0 0 0 3-1.1 1.8 1.8 0 0 1 3.6 0 1.8 1.8 0 0 0 3 1.1 1.8 1.8 0 0 1 2.5 2.5 1.8 1.8 0 0 0 1.1 3 1.8 1.8 0 0 1 0 3.6 1.8 1.8 0 0 0-1.1 3Z"/></svg><span class="group-edit-label">{{T:dictUI.editGroupMembers}}</span></button><button type="button" class="btn group-draft-icon" id="groupMemberApply" aria-label="{{T:dictUI.applyGroupChanges}}" title="{{T:dictUI.applyGroupChanges}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg></button><button type="button" class="btn group-draft-icon" id="groupMemberCancel" aria-label="{{T:dictUI.discardGroupChanges}}" title="{{T:dictUI.discardGroupChanges}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><div id="groupMemberHint" hidden><span>{{T:dictUI.memberEditHint}}</span></div><div id="groupOrderToolbar" hidden><span id="groupOrderHint">{{T:dictUI.longPressSelect}}</span><div id="groupOrderControls" hidden><output id="groupOrderCount" aria-live="polite">0</output><button type="button" class="group-order-button" id="groupOrderTop" aria-label="{{T:dictUI.moveSelectedTop}}" title="{{T:dictUI.moveSelectedTop}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 3h16"/><path d="m12 5-7 8h14zM12 12l-7 8h14z" fill="currentColor" stroke="none"/></svg></button><button type="button" class="group-order-button" id="groupOrderUp" aria-label="{{T:dictUI.moveSelectedUp}}" title="{{T:dictUI.moveSelectedUp}}">▲</button><button type="button" class="group-order-button" id="groupOrderDown" aria-label="{{T:dictUI.moveSelectedDown}}" title="{{T:dictUI.moveSelectedDown}}">▼</button><button type="button" class="group-order-button" id="groupOrderBottom" aria-label="{{T:dictUI.moveSelectedBottom}}" title="{{T:dictUI.moveSelectedBottom}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 21h16"/><path d="m5 4 7 8 7-8zM5 11l7 8 7-8z" fill="currentColor" stroke="none"/></svg></button><button type="button" class="btn group-order-exit" id="groupOrderExit" aria-label="{{T:dictUI.exitSelection}}" title="{{T:dictUI.exitSelection}}">✕</button></div></div><div id="groupEmptyHint" role="status" hidden><span id="groupEmptyHintText"></span><svg viewBox="0 0 40 44" fill="none" aria-hidden="true"><path d="M2 42C11 29 17 20 34 7m-10 0 10 0-2 10"/></svg></div><div id="groupRows"></div><div id="groupMembersSearchDock" class="list-search-dock" role="search"></div></div><div id="groupAvailable" class="group-section" hidden><div id="groupAvailableFilterHost"></div><div id="groupAddToolbar"><span id="groupAddHint">{{T:dictUI.availableEditHint}}</span><button type="button" class="btn" id="groupAddAll">{{T:dictUI.addAll}}</button></div><div id="groupOtherRows"></div><div id="groupAvailableSearchDock" class="list-search-dock" role="search"></div></div></div>
 </dialog>
 <dialog id="linkGroupDialog" lang="{{T:locale}}" class="group-dialog panel-card" aria-labelledby="linkGroupTitle">
   <h2 id="linkGroupTitle">{{T:dictUI.linkFilter}}</h2>
@@ -7790,6 +7804,7 @@ $("styler").addEventListener("keydown",e=>{
     <button type="button" class="btn" id="lookAskCancel">{{T:panel.cancel}}</button>
   </div>
 </dialog>
+<script src="/assets/list-search.js?v={{LISTSEARCHJS}}"></script>
 <script src="/assets/group-editor.js?v={{GROUPJS}}"></script>
 <script src="/assets/looks.js?v={{LOOKSJS}}"></script>
 <!-- Last, so the results' container is there to watch: this file marks the
@@ -7797,6 +7812,5 @@ $("styler").addEventListener("keydown",e=>{
      them away (presets/examples/) is what does the hiding. See examples.js. -->
 <script src="/assets/examples.js?v={{EXAMPLESJS}}"></script>
 <script src="/assets/article-find.js?v={{ARTICLEFINDJS}}"></script>
-<script src="/assets/list-search.js?v={{LISTSEARCHJS}}"></script>
 </body>
 </html>

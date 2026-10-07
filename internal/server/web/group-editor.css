@@ -176,7 +176,7 @@ dialog#groupEditor.group-dialog.panel-card{gap:.65em;padding:0;border:0;backgrou
 #groupEditor.name-mode #groupMembers,#groupEditor.name-mode #groupAvailable{opacity:.42;pointer-events:none}
 #groupHint[hidden]{display:none}
 #groupMembers.active,#groupAvailable.active,#groupControls.active{border-color:var(--accent)}
-#groupMembers.search-collapsed .group-search-bar,#groupAvailable.search-collapsed .group-search-bar{display:none}
+#groupMembers.search-collapsed .list-search-dock,#groupAvailable.search-collapsed .list-search-dock{display:none}
 #groupAvailable{flex:1 1 0;display:flex;flex-direction:column;min-height:0;overflow:hidden}
 #groupAvailable[hidden]{display:none}
 #groupAvailableFilterHost{flex:none}
@@ -184,20 +184,9 @@ dialog#groupEditor.group-dialog.panel-card{gap:.65em;padding:0;border:0;backgrou
 #groupAddHint{flex:1;min-width:0;font-size:var(--ui-hint-font-size);line-height:1.25}
 #groupAddAll{flex:none}
 #groupOtherRows{flex:1;overflow:auto;min-height:0;overscroll-behavior:contain}
-.group-search-bar{display:flex;align-items:center;gap:.5em;flex:none;margin-top:.5em}
-.group-search-field{position:relative;display:flex;align-items:center;flex:1;min-width:0}
-#groupAvailableSearch,#groupMembersSearch{flex:1;box-sizing:border-box;width:100%;min-width:0;padding-left:2.5em;padding-right:2.5em}
-#groupAvailableSearch::-webkit-search-cancel-button,#groupMembersSearch::-webkit-search-cancel-button{-webkit-appearance:none;appearance:none;display:none}
-.group-search-icon{position:absolute;left:.75em;width:1.2em;height:1.2em;color:var(--label);pointer-events:none}
-.group-search-clear{position:absolute;right:.45em;display:grid;place-items:center;width:2em;height:2em;padding:0;border:0;border-radius:50%;background:transparent;color:var(--label);cursor:pointer}
-.group-search-clear[hidden]{display:none}
-.group-search-clear svg{width:1.15em;height:1.15em}
-.group-search-clear:hover{color:var(--fg)}
-.group-keyboard-toggle{flex:none;display:grid;place-items:center;width:2.8em;height:2.8em;padding:.25em;color:var(--fg)}
-.group-keyboard-icon{width:1.7em;height:1.8em}
-.group-keyboard-toggle[data-keyboard="show"] .icon-hide,.group-keyboard-toggle[data-keyboard="hide"] .icon-show{display:none}
+#groupEditor .list-search-dock{margin-top:.5em}
+#groupEditor .list-search-input{height:calc(var(--ui-edit_control-height,1.8) * 1.5rem);min-height:0;font:inherit}
 #groupAvailableSearch::placeholder,#groupMembersSearch::placeholder{color:var(--label)}
-.group-search-match{background:var(--accent);color:var(--bg);border-radius:.15em}
 .group-row{display:flex;align-items:center;gap:.7em;min-height:44px;padding:.5em 0;overflow-wrap:anywhere}
 .group-row[hidden]{display:none}
 .group-grip{flex:none;width:32px;height:40px;border:0;background:none;color:var(--label);font:24px/1 sans-serif;cursor:grab;touch-action:none;user-select:none}

@@ -285,6 +285,8 @@
   "panel.controlHeight": "Высота элементов управления",
   "panel.mainControlHeight": "Высота основных элементов управления",
   "panel.mainControlFont": "Размер текста основных элементов управления",
+  "panel.editControlHeight": "Высота поиска по списку",
+  "panel.editControlFont": "Размер шрифта поиска по списку",
   "panel.sectionBefore": "Отступ до заголовка секции",
   "panel.sectionAfter": "Отступ после заголовка секции",
   "panel.rowGap": "Расстояние между строками",
