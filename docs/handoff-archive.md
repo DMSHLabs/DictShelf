@@ -67,6 +67,8 @@ narratives, so `git log` is a second copy.
 | Release wudict2-v0.6.0-ru.1 (2026-09-30, this session) | 2026-09-30 | — (added after the split, on the translation branch) |
 | The third session: five changes in the panel, the bar and the paper (2026-09-27/28) | 2026-09-27/28 | — (added after the split) |
 | The 09-26 upstream sync into `dev2` (2026-09-26) | 2026-09-26 | — (added after the split) |
+| Release wudict2-v0.11.0 (2026-10-08, this session) | 2026-10-08 | — (added after the split) |
+| The 2026-10-05 transient repairs | 2026-10-05 | — (added after the split) |
 | Release wudict2-v0.10.0 (2026-10-07, this session) | 2026-10-07 | — (added after the split) |
 
 ## The preset-switch "crash" was a TDZ cascade (2026-09-25, diagnosis only)
@@ -3072,6 +3074,66 @@ the MAIN checkout is switched to `master_build` (a worktree has no
 local.bat — copy it there first). After each upstream `master` sync,
 repeat this small overlay (two files) or merge `master` into
 `master_build` when the naming/emuX86 code still applies.
+
+## Release wudict2-v0.11.0 (2026-10-08, this session)
+
+Cut at the user's request, 27 commits past the published v0.10.0. The fork's own work is
+the list search and the settings tuning (`845d1c7`, `1c0a3da`, `e0c0f94`, `42e392b`,
+`55ed179`, `63330d1`, `e31c06e`, `f0f96b2`), upstream's open-count behaviour taken as
+state alone (`cd4a4aa`) and the Android teardown fix (`2a80ab6`); the rest is upstream's
+etag caching, tray paths, CLI dump work and fastlane metadata.
+
+Same order as always: the changelog commit (`b83ade1`), `dev` pushed, the annotated tag
+`wudict2-v0.11.0` on it, pushed, then `build-android.cmd release`, then the REST create
+and the asset upload. aapt2: `versionName='wudict2-v0.11.0'`, versionCode 579,
+`locales: '--_--' 'ru'`, arm64 only, 9,020,753 bytes, sha256
+`4bf786925048e27809aa452c5148b2c5206dffb55e7126c25ecd9279b65bfd89`, the same signer
+certificate as every release. A normal release, so `latest` moved to it.
+https://github.com/DmShAl/wudict2/releases/tag/wudict2-v0.11.0
+
+**Verified:** `go build ./...` and `go vet ./...` clean; `go test -count=1` green for
+`internal/server`, `internal/store`, `internal/cli`, `internal/format/dsl`; the packaged
+`.so` unpacked and checked for `list-search.js`, the list-search keys, the two new Fonts
+values and `openN`/`openAll`; the dex checked for `WebViewDiagnostics`, `wudict-diag` and
+`SystemLogExport`; **0** `Monotype`/`ArialPlus`/`QuiviraPhonetic`; the published asset
+downloaded back and hash-matched; the body compared byte for byte with the changelog
+section. No device or emulator run; `make i18n-check-js` was not run — still no Node on
+this machine.
+
+Still open, unchanged: the `wudict2-v0.7.1` release remains a draft carrying eight
+desktop assets.
+
+## The 2026-10-05 transient repairs
+
+Moved out of HANDOFF.md on 2026-10-08. Each of these narrates a bug that a session
+found in the emulator log and fixed the same day — the progress footer's appearance,
+the Rescan window's duplicate path, a startup regression, a failing System Log export.
+Nothing here is a standing mechanism; what remains live is in HANDOFF.md and
+`docs/ANDROID-UI-HANDOFF.md`.
+
+2026-10-05 optional [ex] folding: current dev had unrelated UI edits, preserved. Appearance checkbox below Examples saves hideUnmarkedExamples in server UI prefs; default off, effective only with Hide. Whole-example paragraphs get independent wu-exonly marks including outside media; translations/definition links keep paragraphs visible. Prepared marker v3, DSL reader v11/legacy GD v10; v1/v2 browser fallback works without reindex. Article find reveals either folding role. DSL/server suites, preference restart/localization checks, Node i18n and Chromium presentation/folding checks pass; no APK/device check or commit.
+
+2026-10-05 Rescan empty result: System Log's successful index jobs and the UI error identify nil `jobStatus.Failed` becoming JSON null after status copying; the dialog then read `report.failed.length`. Preserve nonnil empty failure slices across job copies and make the client treat missing failures as empty. No new checks run per instruction.
+
+2026-10-05 progress panel visual repair: the Android screenshot showed the new spinner/text but no border or stripes. The full-width opaque `::before` backing was painting over its parent panel; it is now a separate sibling below the panel. All CSS is assembled before appending its `<style>`. Targeted Playwright light/dark palette and mobile/desktop modal/Stop checks pass; Android rebuild/device screenshot still needed.
+
+2026-10-05 Rescan window: removed its legacy duplicate `workNotice`/Stop path; the persistent shared footer is the only progress and Stop control. Closing/backing out of the Rescan dialog no longer blocks or cancels the server-owned rescan. The supplied 15:49 log confirms Stop requests were accepted and the active dictionary finished cleanly before the queue stopped; no Android retest.
+
+2026-10-05 duplicate progress: removed index/rescan/reindex live-progress forwarding to the main article status row; retain window-local progress and the shared footer. Bulk/single-delete queue submission now displays the footer synchronously before awaiting POST, retaining it through an initial no-job poll. Browser regression checks delayed-POST visibility. The 15:22 export confirms historical Android logs survive restarts. No APK/device retest.
+
+2026-10-05 emulator progress follow-up: long stopping text squeezed the footer's progress column because the flex row did not wrap; footer now wraps its button and bounds text/button widths. New pages restore the last running snapshot from sessionStorage while awaiting a fresh server status; status/Stop requests have a 10s response timeout so a pending request cannot halt polling forever. Safe-stop requests now log targeted job IDs. Targeted server and mobile/desktop modal/layout tests pass. The reported post-swipe/Stop server hang is not diagnosed: need the user's System Log to distinguish finishing the large Webster index from a stalled server. No APK/device reproduction.
+
+2026-10-05 progress/navigation repair: the 11:35 emulator log stopped after four dictionaries because navigating to Lemmatization/Edit Folders destroyed the client-owned bulk queue. Bulk operations now run as a server-owned job (`/api/index-work`), surviving page departures; Stop completes the current operation and skips the rest. Every UI page loads the shared bottom progress/Stop script, polling bulk/rescan/reindex/ingest jobs. Notices move into the latest modal dialog's top layer so dialogs cannot obscure them or disable Stop. Search stays at the top. Dictionary settings follows live progress and clears Stop on completion. Go server suite/build, Node ingest/i18n checks, queue-disconnect/safe-stop tests and Chromium desktop/mobile nested-modal checks pass. No APK built/installed or emulator retest.
+
+2026-10-05 bulk Recreate follow-up: emulator log at 11:03 shows ten successful forced base rebuilds followed by Collins optional Contains removal. `runIngest` retained the chip's busy flag after completion, so the immediately following optional creation was suppressed and the bulk queue reported generic failed. Terminal done/stopped/error now release the flag. Node regression uses the same chip for remove/create and retries, covering transient reconnect and stop; Go build and diff-check pass. No APK built/installed; emulator retest needed.
+
+2026-10-05 lemma page wrapping: `dev` HEAD `ff09907`; uncommitted CSS fix lets long catalogue URLs, installation paths, language names and download errors wrap within the card. Targeted lemma/assets/appearance/page-preset tests and Chromium layout checks at 320/390/502/1100px pass. No APK build/install or phone check. Existing untracked Charis-Regular.ttf preserved.
+
+2026-10-05 emulator follow-up: bulk action counts were mislabeled as dictionaries even though the counter counts per-index operations; translated messages now say operations. A transient EventSource disconnect no longer immediately fails indexing; the stream reconnects to the server-owned job, and Stop now asks the active dictionary job to stop cooperatively before skipping later operations. Ingest completion diagnostics record error/canceled/stop state. Native System Log export announces saving, records picker/export diagnostics, and verifies written byte count before success. Go build, targeted server/index-log tests, Node i18n/inline-JS checks and FOSS Java compile pass. The later 0-byte report was traced to missing Bearer auth; its fix and required emulator retest follow below.
+
+2026-10-05 System Log export diagnosis: the supplied emulator log reported HTTP 401 for `/api/system-log`; native `SystemLogExport.serverSnapshot` omitted the shell's Bearer token. It now primes and attaches `ShellPrefs` authorization. Added auth coverage for the protected system-log endpoint. Targeted server auth/index-log tests, Go build and FOSS Java compilation pass; rebuilt APK/emulator retest still needed.
+
+2026-10-05 startup regression: v0.8.0 passes Promise.all's resolved array directly to loadDicts(rescan), accidentally selecting /api/rescan and waiting for index maintenance before listing dictionaries. Reproduced in full Chromium startup with an isolated library (stayed in boot); changed callback to call loadDicts() without arguments and added rejection handling through bootFailed. Full-page EN/RU regression tools/dslcompare/verify_boot.cjs verifies ready and /api/dicts, rejects any /api/rescan request; Go build and targeted server/group/i18n tests pass. User's older-APK installation failure remains unexplained pending exact Android message/version. No APK built/installed or commit made.
 
 ## Release wudict2-v0.10.0 (2026-10-07, this session)
 
