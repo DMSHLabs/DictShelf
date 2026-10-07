@@ -1195,12 +1195,12 @@ dialog.panel-card:not([open]){display:none}
    and then the panel altogether, for the Dictionary settings window that list
    lives in now. */
 .panel-head{flex:none;background:var(--bg);padding:var(--sp-3) 0 0}
-.pd{border:1px solid var(--line);border-radius:8px;background:var(--bg-card);
-  padding:var(--sp-1) var(--sp-2);margin-bottom:calc(var(--ui-row-gap) * 1em);font-size:var(--ui-font-base)}
+.pd{border:0;border-radius:0;background:transparent;
+  padding:0;margin-bottom:calc(var(--ui-row-gap) * 1em);font-size:var(--ui-font-base)}
 .pd.dragging{opacity:.45}
 .pd.drop-before{box-shadow:0 -2px 0 var(--accent)}
 .pd.drop-after{box-shadow:0 2px 0 var(--accent)}
-.pd .hd{display:flex;align-items:center;gap:.35em}
+.pd .hd{display:flex;align-items:center;gap:calc(var(--ui-control-gap,.25) * 1em)}
 .pd .grip{cursor:grab;color:var(--label-quiet);user-select:none;font-size:var(--ui-font-base);
   line-height:1;letter-spacing:-.15em;padding-right:.15em}
 .pd .grip:active{cursor:grabbing}
@@ -1216,6 +1216,7 @@ dialog.panel-card:not([open]){display:none}
   font-size:var(--ui-font-base);line-height:1;padding:.15em .2em;border-radius:4px}
 .pd .ord button:hover{color:var(--fg);background:var(--line-soft)}
 #dictSettings .pd .hd{display:grid;grid-template-columns:auto minmax(0,1fr);gap:calc(var(--ui-control-gap,.25) * 1em)}
+#dictSettings .pd .hd{box-sizing:border-box;padding:.45em .6em;border-radius:8px;background:var(--bg-card)}
 #dictSettings .pd .hd>b{grid-column:1 / -1;grid-row:1}
 #dictSettings .pd .grip{grid-column:1;grid-row:2;padding:.4em;align-self:center}
 #dictSettings .pd .ord{grid-column:2;grid-row:2;gap:calc(var(--ui-control-gap,.25) * 1em);margin-left:0;justify-content:flex-end}
@@ -1813,8 +1814,8 @@ dialog.panel-card:not([open]){display:none}
 /* Dictionary settings follows the same type scale as the reader's Settings
    panel. Keep these overrides scoped to this window: the card stylesheet also
    serves a few shared dialogs, whose text has its own hierarchy. */
-#dictSettings>h2{font-size:var(--ui-font-title)}
-#dictSettings>h2 .btn{box-sizing:border-box;height:calc(var(--ui-main-control-height,1.05) * 1em);min-height:calc(var(--ui-main-control-height,1.05) * 1em);
+#dictSettings>h2{box-sizing:border-box;display:flex;align-items:center;gap:calc(var(--ui-control-gap,.25) * 1em);flex:none;margin:0;padding:.45em .6em;border-radius:8px;background:var(--bg-card);font-size:var(--ui-font-title)}
+#dictSettings>h2 .btn{box-sizing:border-box;display:grid;place-items:center;width:calc(var(--ui-main-control-height,1.05) * 1em);height:calc(var(--ui-main-control-height,1.05) * 1em);min-height:calc(var(--ui-main-control-height,1.05) * 1em);padding:0;
   font-size:calc(var(--ui-main-control-font,1.05) * 1rem);line-height:1}
 #dictSettings .bulkbox{font-size:var(--ui-hint-font-size)}
 #dictSettings .bulkbox .btn{font-size:var(--ui-font-base)}
@@ -1946,12 +1947,12 @@ dialog.panel-card:not([open]){display:none}
 .dsl-index-row .browse:hover:not(:disabled){color:var(--accent)}
 .dsl-index-row .browse:disabled{color:var(--label-quiet);cursor:default}
 .dsl-index-warning{color:var(--danger);font-size:var(--ui-hint-font-size)}
-.bulk-index-section{padding:12px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line);font-size:var(--ui-font-base)}
-.bulk-index-section h3{font-size:var(--ui-font-section);margin:0 0 8px}
+.bulk-index-section{padding:0;margin:0 0 calc(var(--ui-row-gap,.6) * 1em);border:0;font-size:var(--ui-font-base)}
+.bulk-index-section h3{box-sizing:border-box;padding:.45em .6em;border-radius:8px;background:var(--line-soft);font-size:var(--ui-font-section);margin:0 0 calc(var(--ui-row-gap,.6) * 1em)}
 .bulk-index-section .btn{font-size:var(--ui-font-base);min-height:calc(var(--ui-control-height,1.6) * 1em);box-sizing:border-box}
 .bulk-index-buttons{display:flex;flex-wrap:wrap;gap:calc(var(--ui-control-gap,.25) * 1em)}
 .bulk-index-table{display:flex;flex-direction:column;gap:calc(var(--ui-row-gap,.6) * 1em);font-size:var(--ui-font-base)}
-.bulk-index-setting{display:grid;grid-template-columns:minmax(0,36%) minmax(0,1fr);align-items:center;column-gap:calc(var(--ui-control-gap,.25) * 1em);min-width:0;cursor:pointer}
+.bulk-index-setting{box-sizing:border-box;display:grid;grid-template-columns:minmax(0,36%) minmax(0,1fr);align-items:center;column-gap:calc(var(--ui-control-gap,.25) * 1em);min-width:0;min-height:calc(var(--ui-control-height,1.6) * 1em);padding:.25em .5em;border:1px solid var(--line);border-radius:8px;background:var(--bg-card);cursor:pointer}
 .bulk-index-setting>span{min-width:0;font-weight:500;overflow-wrap:anywhere}
 .bulk-index-setting select{box-sizing:border-box;width:100%;min-width:0;height:calc(var(--ui-control-height,1.6) * 1em);font:inherit;line-height:1;color:var(--fg);background:var(--bg-card);border:1px solid var(--line);border-radius:6px;padding:0 .4em}
 .bulk-index-row{display:grid;grid-template-columns:minmax(0,110px) minmax(0,1fr);gap:calc(var(--ui-control-gap,.25) * 1em);align-items:start;margin:calc(var(--ui-row-gap,.6) * 1em) 0;font-size:var(--ui-font-base)}

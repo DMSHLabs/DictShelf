@@ -111,8 +111,8 @@ dialog#clearDatabaseDialog.group-dialog.panel-card{box-sizing:border-box;height:
 #clearDatabaseStatus:empty{display:none}
 @media(max-width:360px){dialog#clearDatabaseDialog.group-dialog.panel-card{padding:12px}#clearDatabaseDialog .seg .btn{padding:.25em .35em}}
 .group-dialog h2 button{margin-left:auto}
-#groupTitle{gap:.5em}
-#groupTitle #groupNameApply,#groupTitle #closeGroups{box-sizing:border-box;display:grid;place-items:center;flex:none;width:2.7em;height:2.7em;padding:.35em;font-size:var(--group-action-font-size,inherit)}
+#groupTitle{gap:calc(var(--ui-control-gap,.25) * 1em)}
+#groupTitle #groupNameApply,#groupTitle #closeGroups{box-sizing:border-box;display:grid;place-items:center;flex:none;width:calc(var(--ui-main-control-height,1.05) * 1em);height:calc(var(--ui-main-control-height,1.05) * 1em);min-height:calc(var(--ui-main-control-height,1.05) * 1em);padding:0;font-size:calc(var(--ui-main-control-font,1.05) * 1rem)}
 #groupTitle #groupNameApply{margin-left:auto}
 #groupTitle #closeGroups{margin-left:0}
 #groupTitle #groupNameApply[hidden]{display:none}
