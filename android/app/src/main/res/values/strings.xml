@@ -265,7 +265,11 @@
     <string name="exit_title">Exit</string>
     <string name="exit_busy">Work is still in progress. Exit after it finishes?</string>
     <string name="exit_wait">Exit when finished</string>
-    <string name="system_log_save">Save System Log…</string>
+    <string name="system_log_section">Log file</string>
+    <string name="system_log_enable">Enable log file</string>
+    <string name="system_log_base_events">Log base events</string>
+    <string name="system_log_web_events">Log WebView actions</string>
+    <string name="system_log_save">Save log file…</string>
     <string name="system_log_saving">Saving System Log…</string>
     <string name="system_log_saved">System Log saved</string>
     <string name="system_log_failed">Could not save System Log: %1$s</string>

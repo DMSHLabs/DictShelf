@@ -573,6 +573,11 @@ final class Shell {
     static WebChromeClient windows(Activity a) {
         return new WebChromeClient() {
             @Override
+            public boolean onConsoleMessage(android.webkit.ConsoleMessage message) {
+                return WebViewDiagnostics.console(message);
+            }
+
+            @Override
             public boolean onJsPrompt(WebView view, String url, String message,
                                       String defaultValue, android.webkit.JsPromptResult result) {
                 if (!ownPage(a, url)) return false;

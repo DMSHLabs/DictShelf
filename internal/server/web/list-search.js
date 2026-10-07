@@ -20,22 +20,21 @@
       root, itemSelector, dock, scrollContainer = root,
       getItems = () => [...root.querySelectorAll(itemSelector)],
       getText = item => item.innerText || item.textContent || "",
-      labels = {}, initiallyFiltering = false
+      labels = {}, initiallyFiltering = false, highlightSelector = null
     } = options;
     if (!root || !dock || typeof getItems !== "function")
       throw new TypeError("list search needs a root, a dock and an item getter");
 
     dock.classList.add("list-search-bar");
-    dock.innerHTML = `<span class="list-search-icon">${icons.search}</span>` +
+    dock.innerHTML = `<button class="list-search-mode" type="button">${icons.search}</button>` +
       `<input class="list-search-input" type="search" autocomplete="off" enterkeyhint="search">` +
       `<output class="list-search-count" aria-live="polite">0/0</output>` +
       `<button class="list-search-step" type="button" data-step="-1"></button>` +
-      `<button class="list-search-step" type="button" data-step="1"></button>` +
-      `<button class="list-search-filter" type="button">${icons.filter}</button>`;
+      `<button class="list-search-step" type="button" data-step="1"></button>`;
     const input = dock.querySelector(".list-search-input");
     const count = dock.querySelector(".list-search-count");
     const [previous, next] = dock.querySelectorAll(".list-search-step");
-    const filter = dock.querySelector(".list-search-filter");
+    const mode = dock.querySelector(".list-search-mode");
     input.placeholder = labels.placeholder || "Search…";
     input.setAttribute("aria-label", labels.search || input.placeholder);
     previous.textContent = "▲";
@@ -44,27 +43,51 @@
     next.setAttribute("aria-label", labels.next || "Next match");
     previous.title = previous.getAttribute("aria-label");
     next.title = next.getAttribute("aria-label");
-    filter.setAttribute("aria-label", labels.filter || "Filter list");
-    filter.title = labels.filter || "Filter list";
     let filtering = !!initiallyFiltering;
     let activeIndex = -1;
     let items = [];
     let matches = [];
 
     const normalize = value => String(value).normalize("NFKC").trim().toLowerCase();
+    function highlight(item, query) {
+      if (!highlightSelector) return;
+      const name = item.querySelector(highlightSelector);
+      if (!name) return;
+      const title = name.textContent;
+      const needle = query.trim().toLowerCase();
+      if (!needle) { name.textContent = title; return; }
+      const folded = title.toLowerCase();
+      const parts = [];
+      let from = 0, at;
+      while ((at = folded.indexOf(needle, from)) !== -1) {
+        if (at > from) parts.push(document.createTextNode(title.slice(from, at)));
+        const mark = document.createElement("mark");
+        mark.className = "list-search-name-match";
+        mark.textContent = title.slice(at, at + needle.length);
+        parts.push(mark);
+        from = at + needle.length;
+      }
+      if (!parts.length) { name.textContent = title; return; }
+      if (from < title.length) parts.push(document.createTextNode(title.slice(from)));
+      name.replaceChildren(...parts);
+    }
     function paint() {
       const query = normalize(input.value);
       items = getItems();
       matches = [];
       for (const item of items) {
         const matched = !query || normalize(getText(item)).includes(query);
+        highlight(item, input.value);
         item.classList.toggle("list-search-match", !!query && matched && !filtering);
         item.classList.toggle("list-search-current", !!query && matched && !filtering && matches.length === activeIndex);
         item.classList.toggle("list-search-filtered-out", filtering && !matched);
         if (query && matched) matches.push(item);
       }
-      filter.setAttribute("aria-pressed", String(filtering));
-      filter.classList.toggle("is-on", filtering);
+      mode.setAttribute("aria-pressed", String(filtering));
+      mode.setAttribute("aria-label", filtering ? (labels.search || "Search list") : (labels.filter || "Filter list"));
+      mode.title = mode.getAttribute("aria-label");
+      mode.innerHTML = filtering ? icons.filter : icons.search;
+      mode.classList.toggle("is-on", filtering);
       if (filtering) {
         const visible = items.filter(item => !item.classList.contains("list-search-filtered-out")).length;
         count.value = `${visible}/${visible}`;
@@ -128,7 +151,7 @@
     input.addEventListener("keydown", onKeyDown);
     previous.addEventListener("click", onStep);
     next.addEventListener("click", onStep);
-    filter.addEventListener("click", toggleFilter);
+    mode.addEventListener("click", toggleFilter);
     paint();
 
     return {
@@ -139,8 +162,11 @@
         input.removeEventListener("keydown", onKeyDown);
         previous.removeEventListener("click", onStep);
         next.removeEventListener("click", onStep);
-        filter.removeEventListener("click", toggleFilter);
-        for (const item of getItems()) item.classList.remove("list-search-match", "list-search-current", "list-search-filtered-out");
+        mode.removeEventListener("click", toggleFilter);
+        for (const item of getItems()) {
+          item.classList.remove("list-search-match", "list-search-current", "list-search-filtered-out");
+          highlight(item, "");
+        }
         dock.replaceChildren();
         dock.classList.remove("list-search-bar");
       }
@@ -153,7 +179,7 @@
   const root = document.getElementById("panelList");
   if (dock && root && t) {
     window.dictSettingsListSearch = create({
-      root, itemSelector: ".pd", dock,
+      root, itemSelector: ".pd", dock, highlightSelector: ".hd > b",
       scrollContainer: document.getElementById("dictSettingsScroll"),
       labels: {
         placeholder: t("dictUI.listSearchPlaceholder"),

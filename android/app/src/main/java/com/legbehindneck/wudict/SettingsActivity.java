@@ -77,6 +77,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.widget.Button;
+import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
@@ -142,6 +143,31 @@ public class SettingsActivity extends Activity {
         // The port, first among the controls because it is the one that can
         // keep the app from starting at all (see the class comment).
         col.addView(portRow());
+
+        TextView logTitle = new TextView(this);
+        logTitle.setText(R.string.system_log_section);
+        logTitle.setTextSize(TypedValue.COMPLEX_UNIT_SP, TEXT_LABEL);
+        logTitle.setTypeface(null, android.graphics.Typeface.BOLD);
+        col.addView(logTitle, wide(SP_6));
+
+        CheckBox logEnabled = logOption(R.string.system_log_enable, SystemLog.enabled());
+        CheckBox baseEvents = logOption(R.string.system_log_base_events, SystemLog.baseEvents());
+        CheckBox webEvents = logOption(R.string.system_log_web_events, SystemLog.detailedEvents());
+        baseEvents.setEnabled(logEnabled.isChecked());
+        webEvents.setEnabled(logEnabled.isChecked());
+        logEnabled.setOnCheckedChangeListener((button, checked) -> {
+            SystemLog.configure(this, checked, baseEvents.isChecked(), webEvents.isChecked());
+            baseEvents.setEnabled(checked);
+            webEvents.setEnabled(checked);
+            if (checked) ProcessExitDiagnostics.recordRecent(this);
+        });
+        baseEvents.setOnCheckedChangeListener((button, checked) ->
+                SystemLog.configure(this, logEnabled.isChecked(), checked, webEvents.isChecked()));
+        webEvents.setOnCheckedChangeListener((button, checked) ->
+                SystemLog.configure(this, logEnabled.isChecked(), baseEvents.isChecked(), checked));
+        col.addView(logEnabled);
+        col.addView(baseEvents);
+        col.addView(webEvents);
 
         Button saveLog = new Button(this);
         styleBackgroundButton(saveLog);
@@ -555,6 +581,16 @@ public class SettingsActivity extends Activity {
     }
 
     // ── the ladder ───────────────────────────────────────────────────────
+
+    private CheckBox logOption(int label, boolean checked) {
+        CheckBox option = new CheckBox(this);
+        option.setText(label);
+        option.setChecked(checked);
+        option.setTextSize(TypedValue.COMPLEX_UNIT_SP, TEXT_LABEL);
+        option.setMinHeight(dp(ROW_MIN));
+        option.setMinimumHeight(dp(ROW_MIN));
+        return option;
+    }
 
     private TextView caption(String text, int topDp, int bottomDp) {
         TextView t = new TextView(this);
