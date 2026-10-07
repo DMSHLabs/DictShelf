@@ -12,7 +12,7 @@ html[data-shell-image], html[data-shell-image] body { background:transparent !im
   --ui-font-addition:.9rem;
   --ui-hint-font-size:.8rem;
   --ui-control-height:1.6;
-  --ui-main-control-height:1.6;
+  --ui-main-control-height:1.05;
   --ui-main-control-font:1.05;
   --ui-section-space-before:0;
   --ui-section-space-after:.45;
@@ -246,7 +246,7 @@ body.barpinned{--stick:var(--barh)}
 .sbar .seg{display:flex;position:relative;flex:0 1 auto;align-self:stretch;
   align-items:center;justify-content:center;min-width:0}
 .sbar .seg select{position:absolute;inset:0;width:100%;height:100%;margin:0;
-  padding:0;border:0;max-width:none;opacity:0;-webkit-appearance:none;
+  min-height:0;padding:0;border:0;max-width:none;opacity:0;-webkit-appearance:none;
   appearance:none}
 .sbar .seg:has(select:focus-visible) .chip{outline:2px solid var(--focus);outline-offset:1px}
 .sbar .seg:has(select:disabled){opacity:.55}
@@ -350,8 +350,8 @@ input[type=search]:focus{border-color:var(--focus);box-shadow:0 0 0 3px color-mi
    moving, demanding nothing. A fast spinner makes a promise — "wait for me to
    stop"; this one only reports. */
 @media (prefers-reduced-motion:reduce){.qled .spin{animation:none}}
-select{font-size:13px;color:var(--label);background:var(--bg-card);
-  border:1px solid var(--line);border-radius:8px;padding:.3em .4em;max-width:180px}
+select{box-sizing:border-box;font-size:var(--ui-font-base);min-height:calc(var(--ui-control-height,1.6) * 1em);
+  color:var(--label);background:var(--bg-card);border:1px solid var(--line);border-radius:8px;padding:.3em .4em;max-width:180px}
 /* The pill is INERT above 600px: display:contents leaves the field and the two
    selects as direct flex children of the form, which is the layout the bar has
    always had, and the chips are simply not rendered. The whole mobile
@@ -384,8 +384,9 @@ select{font-size:13px;color:var(--label);background:var(--bg-card);
 .chip .lbl{overflow:hidden;text-overflow:ellipsis}
 .chip .bk{width:14px;height:14px;flex:none}
 .bar .chip{display:none}
-.btn{font-size:15px;background:var(--bg-card);color:var(--label);
-  border:1px solid var(--line);border-radius:8px;padding:.3em .55em;cursor:pointer;line-height:1.2}
+.btn{box-sizing:border-box;font-size:var(--ui-font-base);min-height:calc(var(--ui-control-height,1.6) * 1em);
+  background:var(--bg-card);color:var(--label);border:1px solid var(--line);border-radius:8px;
+  padding:.3em .55em;cursor:pointer;line-height:1.2}
 .btn:hover{color:var(--fg);border-color:var(--fg-faint)}
 #panel .examples-extra{display:flex;align-items:flex-start;gap:calc(var(--ui-control-gap) * 1em);
   margin:calc(var(--ui-addition-gap) * 1em) 0;padding-left:.4em;font-size:var(--ui-font-addition);overflow-wrap:anywhere}
@@ -663,7 +664,7 @@ body.styling{padding-bottom:var(--styler-shown,var(--styler-h))}
    names is the whole sheet and the list behind it is how the reader moves to
    another subject without leaving (the bars used to do that). */
 #stylerHead .choice-btn{width:auto;background:none;border:0;padding:.1em 0;
-  gap:.35em;font-size:14px;font-weight:600}
+  gap:calc(var(--ui-control-gap,.25) * 1em);font-size:var(--ui-font-title);font-weight:600}
 #stylerHead .choice-btn:hover{border:0;color:var(--fg)}
 #stylerHead .choice-btn:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
 /* THE SETTINGS AREA, and it is the sheet's whole scroll. The three sections
@@ -699,14 +700,14 @@ body.styling{padding-bottom:var(--styler-shown,var(--styler-h))}
 .appearance-row{display:flex;align-items:center;gap:.5em;min-height:2.5em}
 /* One narrow label column for both rows - "Color" and "Image" say enough
    under the section heading, and every em here is strip width. */
-.appearance-row label,.appearance-row .appearance-label{flex:0 0 4.2em;font-size:13px}
+.appearance-row label,.appearance-row .appearance-label{flex:0 0 4.2em;font-size:var(--ui-font-base)}
 /* The field is the same field wherever its box rides: it hangs off the
    Window-background row and off the Screen option that uses it, and the rule
    that gives it a width has to name both or the second one collapses to the
    pipette's own size with nowhere left to type a hex value. */
 .appearance-row input[type=text],
 .radio-row input[type=text]{width:7.5em;max-width:100%;min-width:0;
-  font:inherit;font-size:13px;
+  box-sizing:border-box;min-height:calc(var(--ui-control-height,1.6) * 1em);font:inherit;font-size:var(--ui-font-base);
   background:var(--bg-card);color:var(--fg);border:1px solid var(--line);border-radius:5px;padding:.25em}
 /* The color box wraps the input, the picker AND the dropdown, so the 35% row
    cap moved here: a percentage on the input would resolve against the box and
@@ -725,9 +726,9 @@ body.styling{padding-bottom:var(--styler-shown,var(--styler-h))}
    shows what it offers, and inert, because a value nothing is using is not a
    value. The dim is the same the Clear button uses for its disabled state. */
 .radio-row .color-box:has(input:disabled){opacity:.45}
-.color-pick{flex:none;display:flex;align-items:center;justify-content:center;
-  width:2em;height:2em;padding:0;cursor:pointer;
-  font-size:13px;background:var(--bg-card);color:var(--label);
+.color-pick{box-sizing:border-box;flex:none;display:flex;align-items:center;justify-content:center;
+  width:calc(var(--ui-control-height,1.6) * 1em);height:calc(var(--ui-control-height,1.6) * 1em);padding:0;cursor:pointer;
+  font-size:var(--ui-font-base);background:var(--bg-card);color:var(--label);
   border:1px solid var(--line);border-radius:5px}
 .color-pick svg{width:1.05em;height:1.05em;display:block}
 /* Hover only reaches a pipette with no colour on it: once the button wears a
@@ -793,7 +794,7 @@ body.styling{padding-bottom:var(--styler-shown,var(--styler-h))}
    four of them, which made it grey in BOTH looks, the one thing the register
    exists to prevent). The greys are LEFT to things the reader cannot act on,
    which in this window is nothing: no row here can be disabled. */
-#sysSettings h3.sys-head{margin:1.2em 0 .2em;font-size:14px;font-weight:600;color:var(--label)}
+#sysSettings h3.sys-head{margin:1.2em 0 .2em;font-size:var(--ui-font-section);font-weight:600;color:var(--label)}
 #sysSettings h3.sys-head:first-child{margin-top:0}
 /* The one group that folds, wearing the heading it replaces: same type, same
    spacing, plus the ▸/▾ this app uses everywhere it means "there is more
@@ -813,11 +814,11 @@ body.styling{padding-bottom:var(--styler-shown,var(--styler-h))}
    chose the ratio is written there) - a `--line` rule was the thing that read
    as invisible on a phone in the two light looks, and this window wears the
    same paper. */
-#sysSettings .sys-fold{display:flex;align-items:center;gap:.45em;width:100%;
-  margin:1.4em 0 .2em;padding:.8em 0 0;border:0;background:none;text-align:left;
-  font:inherit;font-size:14px;font-weight:600;color:var(--fg);cursor:pointer;
+#sysSettings .sys-fold{display:flex;align-items:center;gap:calc(var(--ui-control-gap,.25) * 1em);width:100%;
+  margin:calc(var(--ui-row-gap,.6) * 1em) 0 .2em;padding:.8em 0 0;border:0;background:none;text-align:left;
+  font:inherit;font-size:var(--ui-font-section);font-weight:600;color:var(--fg);cursor:pointer;
   border-top:1px solid color-mix(in srgb,var(--fg) 22%,transparent)}
-#sysSettings .sys-fold::before{content:"▸";color:var(--label);font-size:13px;
+#sysSettings .sys-fold::before{content:"▸";color:var(--label);font-size:1em;
   line-height:1;display:inline-block;width:.9em;flex:none;text-align:center}
 #sysSettings .sys-fold[aria-expanded="true"]::before{content:"▾";color:var(--accent)}
 #sysSettings .sys-fold:hover::before{color:var(--fg)}
@@ -827,13 +828,13 @@ body.styling{padding-bottom:var(--styler-shown,var(--styler-h))}
    rather than a margin on the button: the rows above it end in whatever the
    shell's table ends with, and this keeps the separation the same whatever that
    is. */
-#sysSettings .sys-gap{height:1.2em}
-#sysSettings .sys-hint{margin:0;font-size:12.5px;line-height:1.618;color:var(--label)}
+#sysSettings .sys-gap{height:calc(var(--ui-row-gap,.6) * 1em)}
+#sysSettings .sys-hint{margin:0;font-size:var(--ui-hint-font-size);line-height:1.618;color:var(--label)}
 #sysSettings .sys-item{margin:.5em 0 .2em}
-#sysSettings .sys-row{display:flex;align-items:center;gap:.6em;min-height:44px;cursor:pointer}
+#sysSettings .sys-row{display:flex;align-items:center;gap:calc(var(--ui-control-gap,.25) * 1em);min-height:calc(var(--ui-control-height,1.6) * 1em);cursor:pointer}
 #sysSettings .sys-row.sys-num{cursor:default}
-#sysSettings .sys-label{flex:1 1 auto;color:var(--label);min-width:0;font-size:14px;overflow-wrap:anywhere}
-#sysSettings .sys-num input{flex:none;width:6.5em;font:inherit;font-size:14px;text-align:right;
+#sysSettings .sys-label{flex:1 1 auto;color:var(--label);min-width:0;font-size:var(--ui-font-base);overflow-wrap:anywhere}
+#sysSettings .sys-num input{box-sizing:border-box;flex:none;width:6.5em;min-height:calc(var(--ui-control-height,1.6) * 1em);font:inherit;font-size:var(--ui-font-base);text-align:right;
   color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:.5em .6em}
 #sysSettings .sys-num input:focus{outline:none;border-color:var(--focus);
   box-shadow:0 0 0 3px color-mix(in srgb,var(--focus) 25%,transparent)}
@@ -841,14 +842,14 @@ body.styling{padding-bottom:var(--styler-shown,var(--styler-h))}
    input can hold nothing else - so this is the only thing that says what the
    number is OF. Muted and pulled back against its field, so the row reads as
    one control rather than as a field with a word beside it. */
-#sysSettings .sys-unit{flex:none;margin-left:-.35em;font-size:12.5px;
+#sysSettings .sys-unit{flex:none;margin-left:-.35em;font-size:var(--ui-font-addition);
   color:var(--label);font-variant-numeric:tabular-nums}
 /* The window's two voices. The stale note is a state of the MACHINE - the
    server is still running with the settings it was started with - so it is a
    boxed sentence where this app's other notes are plain text; the line under it
    answers a refusal, and is quiet because it is not a control. An empty one
    takes no room, and both exist from the moment the window opens. */
-#sysSettings .sys-note{margin:.9em 0 0;font-size:12.5px;line-height:1.618;color:var(--label)}
+#sysSettings .sys-note{margin:calc(var(--ui-addition-gap,.5) * 1em) 0 0;font-size:var(--ui-hint-font-size);line-height:1.618;color:var(--label)}
 #sysSettings .sys-note:empty{margin:0}
 #sysSettings #sysStale{border:1px solid var(--line);border-radius:8px;padding:.5em .7em}
 /* The Background-color checkbox wears the groups editor's square - one
@@ -883,9 +884,9 @@ html[data-shell-image] .menu-card{
   background-image:linear-gradient(#ffffff24,#ffffff24),var(--paper-bk-image);
   background-size:100% 100%}
 .menu-card[hidden]{display:none}
-.menu-card button{display:flex;align-items:center;gap:.6em;width:100%;
+.menu-card button{box-sizing:border-box;display:flex;align-items:center;gap:calc(var(--ui-control-gap,.25) * 1em);width:100%;min-height:calc(var(--ui-control-height,1.6) * 1em);
   padding:.45em .7em;border:0;background:none;color:var(--fg);
-  text-align:left;font:inherit;font-size:13px;cursor:pointer}
+  text-align:left;font:inherit;font-size:var(--ui-font-base);cursor:pointer}
 .menu-card button:hover,.menu-card button:focus-visible{
   background:var(--line-soft);outline:none}
 /* The recent colors: the swatch IS the label's subject, so it leads. */
@@ -897,9 +898,9 @@ html[data-shell-image] .menu-card{
    answer means - the shape the shell's own settings screen gives these two
    rows, which is where they came from. */
 .screen-row{padding:.2em 0 .45em}
-.screen-title{font-size:13px;font-weight:600;color:var(--label);margin-bottom:.25em}
-.choice-btn{display:flex;align-items:center;gap:.4em;width:100%;height:calc(var(--ui-control-height,2.2) * 1em);
-  font:inherit;font-size:13px;color:var(--fg);
+.screen-title{font-size:var(--ui-font-section);font-weight:600;color:var(--label);margin-bottom:.25em}
+.choice-btn{box-sizing:border-box;display:flex;align-items:center;gap:calc(var(--ui-control-gap,.25) * 1em);width:100%;height:calc(var(--ui-control-height,1.6) * 1em);
+  font:inherit;font-size:var(--ui-font-base);color:var(--fg);
   background:var(--bg-card);border:1px solid var(--line);border-radius:5px;
   padding:0 .55em;line-height:1;text-align:left;cursor:pointer}
 .choice-btn::after{content:"";flex:none;margin-left:auto;width:0;height:0;
@@ -912,8 +913,8 @@ html[data-shell-image] .menu-card{
    our own - so they follow the theme and the paper the same way. The ROW is the
    target; 44px is the floor the rest of the app's rows sit on. */
 .radio-group{display:flex;flex-direction:column;gap:.05em}
-.radio-row{display:flex;align-items:center;gap:.55em;min-height:44px;
-  flex-wrap:wrap;cursor:pointer;font-size:13px;color:var(--fg)}
+.radio-row{display:flex;align-items:center;gap:calc(var(--ui-control-gap,.25) * 1em);min-height:44px;
+  flex-wrap:wrap;cursor:pointer;font-size:var(--ui-font-base);color:var(--fg)}
 .radio-row input{appearance:none;-webkit-appearance:none;flex:none;
   width:20px;height:20px;margin:0;border:1.5px solid var(--fg);border-radius:50%;
   background-color:var(--paper-bg,var(--bg));position:relative;cursor:pointer}
@@ -925,7 +926,7 @@ html[data-shell-image] .menu-card{
 .choice-menu .choice-item::before{content:"";flex:none;width:1em;
   color:var(--accent);font-weight:400}
 .choice-menu .choice-item[aria-selected="true"]::before{content:"✓"}
-#appearanceBackground small,.screen-row small{display:block;font-size:11px;
+#appearanceBackground small,.screen-row small{display:block;font-size:var(--ui-hint-font-size);
   line-height:1.4;color:var(--label-quiet)}
 .screen-row small{margin-top:.25em}
 /* The picker is the pictures themselves: a scrollable row of thumbnails, the
@@ -1026,7 +1027,7 @@ html[data-native-appearance]{--styler-h:min(65vh,560px)}
    Distinctions stay only where they teach: the selected tab's accent, the
    hover border. */
 #styler .tab,#styler .btn{
-  font:inherit;font-size:12.5px;line-height:1.2;padding:.34em .55em;
+  font:inherit;font-size:var(--ui-font-base);line-height:1.2;padding:.34em .55em;
   color:var(--label);background:var(--bg-card);
   border:1px solid var(--line);border-radius:8px;cursor:pointer}
 #styler .tab{padding:.34em .7em}
@@ -1083,7 +1084,7 @@ html[data-native-appearance]{--styler-h:min(65vh,560px)}
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #stylerFiles .n s{display:block;text-decoration:none;font-size:11px;color:var(--label-quiet)}
 #stylerFiles .n:hover b{color:var(--accent)}
-#stylerFiles .btn{flex:0 0 auto;font-size:12px;padding:.25em .55em}
+#stylerFiles .btn{flex:0 0 auto;font-size:var(--ui-font-base);padding:.25em .55em}
 /* The presets pane wears the Files pane's box, because they are the same
    kind of thing - a list of rows in the textarea's place - and the reader
    should not have to learn a second surface. The rows differ in what leads
@@ -1109,7 +1110,7 @@ html[data-native-appearance]{--styler-h:min(65vh,560px)}
 #stylerPresetsPane .n s{display:block;text-decoration:none;font-size:11px;
   color:var(--label-quiet);overflow-wrap:anywhere}
 #stylerPresetsPane .n u{ text-decoration:none;color:var(--accent);font-size:11px}
-#stylerPresetsPane .btn{flex:0 0 auto;font-size:12px;padding:.25em .55em}
+#stylerPresetsPane .btn{flex:0 0 auto;font-size:var(--ui-font-base);padding:.25em .55em}
 
 /* ── dictionaries panel ────────────────────────────────────────────── */
 #panel{position:fixed;inset:0;z-index:200;display:none;background:color-mix(in srgb,var(--fg) 24%,transparent)}
@@ -1171,7 +1172,7 @@ dialog.panel-card:not([open]){display:none}
   display:flex;align-items:center}
 #panel .panel-head h2{font-size:var(--ui-font-title)}
 #panel .panel-head h2 .btn{font-size:100%}
-#panel .panel-head .headacts .btn{height:calc(var(--ui-main-control-height,1.05) * 1em);box-sizing:border-box;
+#panel .panel-head .headacts .btn{height:calc(var(--ui-main-control-height,1.05) * 1em);min-height:calc(var(--ui-main-control-height,1.05) * 1em);box-sizing:border-box;
   font-size:calc(var(--ui-main-control-font,1.05) * 1rem);
   padding:0 .55em;line-height:1}
 .panel-card h2 .headacts{margin-left:auto;display:flex;gap:calc(var(--ui-control-gap) * 1em)}
@@ -1195,7 +1196,7 @@ dialog.panel-card:not([open]){display:none}
    lives in now. */
 .panel-head{flex:none;background:var(--bg);padding:var(--sp-3) 0 0}
 .pd{border:1px solid var(--line);border-radius:8px;background:var(--bg-card);
-  padding:var(--sp-1) var(--sp-2);margin-bottom:var(--sp-1);font-size:var(--ui-font-base)}
+  padding:var(--sp-1) var(--sp-2);margin-bottom:calc(var(--ui-row-gap) * 1em);font-size:var(--ui-font-base)}
 .pd.dragging{opacity:.45}
 .pd.drop-before{box-shadow:0 -2px 0 var(--accent)}
 .pd.drop-after{box-shadow:0 2px 0 var(--accent)}
@@ -1218,7 +1219,7 @@ dialog.panel-card:not([open]){display:none}
 #dictSettings .pd .hd>b{grid-column:1 / -1;grid-row:1}
 #dictSettings .pd .grip{grid-column:1;grid-row:2;padding:.4em;align-self:center}
 #dictSettings .pd .ord{grid-column:2;grid-row:2;gap:calc(var(--ui-control-gap,.25) * 1em);margin-left:0;justify-content:flex-end}
-#dictSettings .pd .ord button{box-sizing:border-box;min-width:calc(var(--ui-control-height,1.6) * 1em);min-height:calc(var(--ui-control-height,1.6) * 1em)}
+#dictSettings .pd .ord button{box-sizing:border-box;min-width:calc(var(--ui-control-height,1.6) * 1em);width:calc(var(--ui-control-height,1.6) * 1em);height:calc(var(--ui-control-height,1.6) * 1em);min-height:calc(var(--ui-control-height,1.6) * 1em);padding:0}
 .en{appearance:none;width:32px;height:18px;border-radius:9px;background:var(--line);
   position:relative;cursor:pointer;flex:none;transition:background .15s}
 .en:checked{background:var(--accent)}
@@ -1236,8 +1237,8 @@ dialog.panel-card:not([open]){display:none}
 .btn:disabled{opacity:.45;cursor:default}
 .en:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
 .pd .meta{color:var(--label-quiet);font-size:var(--ui-font-addition);margin:.15em 0 .3em}
-.pd .feat{display:inline-block;border:1px solid var(--line);border-radius:99px;
-  padding:.05em .55em;margin:.15em .25em .15em 0;font-size:var(--ui-font-base);color:var(--label-quiet);
+.pd .feat{box-sizing:border-box;display:inline-flex;align-items:center;height:calc(var(--ui-control-height,1.6) * 1em);border:1px solid var(--line);border-radius:99px;
+  padding:0 .55em;margin:.15em calc(var(--ui-control-gap,.25) * 1em) .15em 0;font-size:var(--ui-font-base);line-height:1;color:var(--label-quiet);
   cursor:pointer;user-select:none;transition:color .12s,border-color .12s,background .12s}
 .pd .feat:hover{border-color:var(--accent);color:var(--accent)}
 .pd .feat.on{border-color:var(--accent);color:#fff;background:var(--accent)}
@@ -1335,8 +1336,8 @@ dialog.panel-card:not([open]){display:none}
 .pd .err{color:var(--danger)}
 /* Not a .feat: those chips are switches that spend disk, and this one only
    opens a page. Same muted register as the provenance rows under it. */
-.pd .acts a.browse{display:inline-flex;align-items:center;gap:calc(var(--ui-control-gap,.25) * 1em);width:100%;box-sizing:border-box;
-  margin:0;font:inherit;font-size:var(--ui-font-base);line-height:1.2;color:var(--label-quiet);text-decoration:none}
+.pd .acts a.browse{display:inline-flex;align-items:center;gap:calc(var(--ui-control-gap,.25) * 1em);width:100%;box-sizing:border-box;min-height:calc(var(--ui-control-height,1.6) * 1em);
+  padding:0 .65em;margin:0;font:inherit;font-size:var(--ui-font-base);line-height:1.2;color:var(--label-quiet);text-decoration:none}
 .pd .acts a.browse::after,.dsl-index-row .browse::after{content:"›";margin-left:auto;color:var(--label-quiet);
   font-size:1em;line-height:1;flex:none}
 .pd .acts a.browse:hover{color:var(--accent)}
@@ -1698,17 +1699,17 @@ dialog.panel-card:not([open]){display:none}
    says in words — so it borrows the accent, the colour this design already
    uses for "on". Loud enough to find after the row wraps, never loud enough to
    read as a warning. */
-.bulkbox{margin-top:.6em;padding:.6em .7em;border:1px solid var(--accent);
+.bulkbox{margin-top:calc(var(--ui-row-gap,.6) * 1em);padding:.6em .7em;border:1px solid var(--accent);
   border-radius:8px;background:var(--accent-soft);
   background-image:repeating-linear-gradient(-45deg,
     color-mix(in srgb,var(--accent) 8%,transparent) 0 6px,
     transparent 6px 14px);
-  font-size:11.5px;color:var(--label);line-height:1.5}
+  font-size:var(--ui-hint-font-size);color:var(--label);line-height:1.5}
 .bulkbox p{margin:0 0 .5em}
 .bulkbox p:last-child{margin-bottom:0}
 .bulkbox .cost{color:var(--label-quiet)}
 .bulkbox .btn{font-size:inherit;padding:.25em .6em;margin-right:.4em}
-.outdated-notice{margin:var(--sp-2) 0 var(--sp-3);font-size:14px}
+.outdated-notice{margin:var(--sp-2) 0 var(--sp-3);font-size:var(--ui-font-base)}
 .outdated-notice .btn{font-size:inherit}
 .work-notice{position:fixed;z-index:330;top:auto;bottom:var(--wd-vv-bottom,0px);left:50%;
   transform:translateX(-50%);width:calc(100% - 2*var(--sp-2));max-width:720px;
@@ -1718,11 +1719,11 @@ dialog.panel-card:not([open]){display:none}
     color-mix(in srgb,var(--accent) 8%,transparent) 0 6px,
     transparent 6px 14px);
   padding-bottom:calc(.45em + var(--wd-inset-bottom,0px));
-  box-shadow:var(--shadow);font-size:12px;line-height:1.35;color:var(--label);
+  box-shadow:var(--shadow);font-size:var(--ui-hint-font-size);line-height:1.35;color:var(--label);
   pointer-events:none}
 .work-notice[hidden]{display:none}
 .work-notice-text{flex:1;min-width:0;overflow-wrap:anywhere}
-.work-notice .btn{flex:none;font-size:11.5px;padding:.25em .6em;pointer-events:auto}
+.work-notice .btn{flex:none;font-size:var(--ui-font-base);padding:.25em .6em;pointer-events:auto}
 /* The orphan review (D156) is a bulkbox like the full-text one: a situation to
    decide on, not an alarm. Only the delete button wears the danger colour,
    and only while it would delete something - "Keep all" is not dangerous.
@@ -1813,7 +1814,7 @@ dialog.panel-card:not([open]){display:none}
    panel. Keep these overrides scoped to this window: the card stylesheet also
    serves a few shared dialogs, whose text has its own hierarchy. */
 #dictSettings>h2{font-size:var(--ui-font-title)}
-#dictSettings>h2 .btn{box-sizing:border-box;height:calc(var(--ui-main-control-height,1.6) * 1em);
+#dictSettings>h2 .btn{box-sizing:border-box;height:calc(var(--ui-main-control-height,1.05) * 1em);min-height:calc(var(--ui-main-control-height,1.05) * 1em);
   font-size:calc(var(--ui-main-control-font,1.05) * 1rem);line-height:1}
 #dictSettings .bulkbox{font-size:var(--ui-hint-font-size)}
 #dictSettings .bulkbox .btn{font-size:var(--ui-font-base)}
@@ -1922,7 +1923,7 @@ dialog.panel-card:not([open]){display:none}
      what keeps it from ever having to use it. */
   #styler{padding-left:var(--sp-1);padding-right:var(--sp-1)}
   #styler .row{gap:.25em}
-  #styler .tab,#styler .btn{font-size:11.5px;padding:.32em .5em}
+  #styler .tab,#styler .btn{font-size:var(--ui-font-base);padding:.32em .5em}
 }
 .dsl-all{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--line)}
 .dsl-all[hidden]{display:none}
@@ -1949,13 +1950,10 @@ dialog.panel-card:not([open]){display:none}
 .bulk-index-section h3{font-size:var(--ui-font-section);margin:0 0 8px}
 .bulk-index-section .btn{font-size:var(--ui-font-base);min-height:calc(var(--ui-control-height,1.6) * 1em);box-sizing:border-box}
 .bulk-index-buttons{display:flex;flex-wrap:wrap;gap:calc(var(--ui-control-gap,.25) * 1em)}
-.bulk-index-table{width:100%;table-layout:fixed;border-collapse:separate;border-spacing:0 calc(var(--ui-row-gap,.6) * 1em);font-size:var(--ui-font-base)}
-.bulk-index-table th{font-weight:500;text-align:left;overflow-wrap:anywhere}
-.bulk-index-table th:first-child{width:36%;padding-right:8px}
-.bulk-index-table td{padding-left:6px}
-.bulk-index-table .btn{box-sizing:border-box;width:100%;min-height:calc(var(--ui-control-height,1.6) * 1em);padding:.45em .3em;font:inherit;white-space:normal;overflow-wrap:anywhere}
-.bulk-index-table label{display:flex;align-items:center;gap:calc(var(--ui-control-gap,.25) * 1em);min-height:calc(var(--ui-control-height,1.6) * 1em);cursor:pointer;white-space:nowrap}
-.bulk-index-table select{box-sizing:border-box;width:100%;min-width:0;min-height:calc(var(--ui-control-height,1.6) * 1em);font:inherit;color:var(--fg);background:var(--bg-card);border:1px solid var(--line);border-radius:6px;padding:4px}
+.bulk-index-table{display:flex;flex-direction:column;gap:calc(var(--ui-row-gap,.6) * 1em);font-size:var(--ui-font-base)}
+.bulk-index-setting{display:grid;grid-template-columns:minmax(0,36%) minmax(0,1fr);align-items:center;column-gap:calc(var(--ui-control-gap,.25) * 1em);min-width:0;cursor:pointer}
+.bulk-index-setting>span{min-width:0;font-weight:500;overflow-wrap:anywhere}
+.bulk-index-setting select{box-sizing:border-box;width:100%;min-width:0;height:calc(var(--ui-control-height,1.6) * 1em);font:inherit;line-height:1;color:var(--fg);background:var(--bg-card);border:1px solid var(--line);border-radius:6px;padding:0 .4em}
 .bulk-index-row{display:grid;grid-template-columns:minmax(0,110px) minmax(0,1fr);gap:calc(var(--ui-control-gap,.25) * 1em);align-items:start;margin:calc(var(--ui-row-gap,.6) * 1em) 0;font-size:var(--ui-font-base)}
 .bulk-index-row>span{padding-top:5px;overflow-wrap:anywhere}
 .bulk-index-row>div{display:flex;flex-wrap:wrap;gap:calc(var(--ui-control-gap,.25) * 1em);justify-content:flex-start}

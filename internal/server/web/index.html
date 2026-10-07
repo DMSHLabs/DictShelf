@@ -116,7 +116,7 @@ window.wudictFontScale=(function(){
   const key="wudict_settings_fonts",clamp=(v,lo,hi)=>Math.min(hi,Math.max(lo,v));
   const spacing=new Set(["sectionBefore","sectionAfter","rowGap","additionGap","controlGap"]);
   const clean=(v,fallback,name)=>{v=Number(v);return Number.isFinite(v)?clamp(v,spacing.has(name)?0:.5,2):fallback};
-  const values={base:1,section:1,title:1.15,addition:.9,hint:.8,controlHeight:1.6,mainControlHeight:1.6,mainControlFont:1.05,
+  const values={base:1,section:1,title:1.15,addition:.9,hint:.8,controlHeight:1.6,mainControlHeight:1.05,mainControlFont:1.05,
     sectionBefore:0,sectionAfter:.45,rowGap:.6,additionGap:.5,controlGap:.25};
   try{const saved=JSON.parse(localStorage.getItem(key)||"null");
     if(saved){for(const name of Object.keys(values))values[name]=clean(saved[name],values[name],name)}}catch(_){}
@@ -3664,9 +3664,9 @@ function bulkActionLabel(action){
 }
 function renderBulkIndexes(){
   if(bulkIndexBusy)return;
-  $("bulkIndexes").innerHTML='<section class="bulk-index-section"><h3>'+esc(tx("dictUI.allActions"))+'</h3><table class="bulk-index-table"><tbody>'+
+  $("bulkIndexes").innerHTML='<section class="bulk-index-section"><h3>'+esc(tx("dictUI.allActions"))+'</h3><div class="bulk-index-table" role="group">'+
     [["base","dictUI.indexPlain"],["contains","dictUI.contains"],["fts","dictUI.fts"]].map(([feat,label])=>
-      '<tr><th scope="row">'+esc(tx(label))+'</th><td><select data-bulk-feat="'+feat+'" aria-label="'+escAttr(tx(label))+'">'+["keep","create","update","recreate","delete"].map(action=>'<option value="'+action+'"'+(action==='delete'&&feat==='base'&&!cfgInfo?.canDelete?' disabled':'')+'>'+esc(bulkActionLabel(action))+'</option>').join('')+'</select></td></tr>').join('')+'</tbody></table><button type="button" class="btn" data-bulk-start disabled>'+esc(tx("dictUI.bulkStart"))+'</button></section>';
+      '<label class="bulk-index-setting"><span>'+esc(tx(label))+'</span><select data-bulk-feat="'+feat+'" aria-label="'+escAttr(tx(label))+'">'+["keep","create","update","recreate","delete"].map(action=>'<option value="'+action+'"'+(action==='delete'&&feat==='base'&&!cfgInfo?.canDelete?' disabled':'')+'>'+esc(bulkActionLabel(action))+'</option>').join('')+'</select></label>').join('')+'</div><button type="button" class="btn" data-bulk-start disabled>'+esc(tx("dictUI.bulkStart"))+'</button></section>';
 
 }
 $("bulkIndexes").addEventListener("change",e=>{
