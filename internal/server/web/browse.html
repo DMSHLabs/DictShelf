@@ -316,10 +316,14 @@ function render(){
   $("top").hidden=false;$("foot").hidden=false;
   $("name").textContent=d.name;
   const a=unesc(d.words[0]||""),z=unesc(d.words[d.words.length-1]||"");
+  /* `from`, not `dict`: a headword picked here is a link followed inside this
+     dictionary, so the app answers it from this dictionary alone, says so,
+     and offers the rest - while the reader's own choice in the dictionary
+     picker stays theirs. */
   $("sub").textContent=d.total?a+" — "+z+"  ·  "+t("browse.words",{count:d.total,number:num(d.total)}):t("browse.emptyWords");
   $("list").innerHTML=d.words.map(w=>{
     const e=esc(unesc(w));
-    return '<a href="/?q='+encodeURIComponent(w)+"&dict="+encodeURIComponent(d.dict)+
+    return '<a href="/?q='+encodeURIComponent(w)+"&from="+encodeURIComponent(d.dict)+
       '&mode=exact" title="'+e+'">'+e+"</a>";
   }).join("");
 

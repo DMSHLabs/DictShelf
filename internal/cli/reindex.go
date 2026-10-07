@@ -42,7 +42,8 @@ import (
 // the job to that server - the same job its panel starts - and follows the
 // progress; -all and named dictionaries, which that job does not offer, are
 // refused. Only the configured address is asked: a server started on another
-// port with other flags is not found, as `wudict rm` does not look for one.
+// port with other flags is not found (refuseUnderServer, which `wudict rm`,
+// `ingest` and `clean` use, asks the same address).
 
 func cmdReindex(args []string) error {
 	applyLibrarySettings()
@@ -217,6 +218,18 @@ func libraryServer() (*runningInstance, string, bool) {
 		return nil, "", false
 	}
 	return inst, addr, true
+}
+
+// refuseUnderServer stops a command that would replace or delete prepared
+// files while a server on this library has them open. On Windows the rename or
+// delete of an open file fails, so `wudict rm` would end half done and an
+// ingest would fail at its last step; elsewhere the server would go on serving
+// the replaced data. instead names what the user can do in the panel.
+func refuseUnderServer(instead string) error {
+	if _, addr, ok := libraryServer(); ok {
+		return fmt.Errorf("a wudict server is using this library at http://%s/ - stop it first, or %s", addr, instead)
+	}
+	return nil
 }
 
 // handOffReindex starts (or joins) the running server's rebuild and follows

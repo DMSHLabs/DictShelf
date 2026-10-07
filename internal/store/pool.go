@@ -7,6 +7,7 @@ package store
 import (
 	"database/sql"
 	"runtime"
+	"strings"
 	"time"
 )
 
@@ -53,3 +54,12 @@ func openRO(path string) (*sql.DB, error) {
 	db.SetConnMaxIdleTime(idleConnTTL)
 	return db, nil
 }
+
+// uriPath makes a file path safe inside a "file:" DSN. Both drivers open with
+// SQLITE_OPEN_URI, so SQLite reads the name as a URI: "?" starts the query,
+// "#" a fragment, and "%XX" is decoded - unescaped, a dictionary folder named
+// "C#" or "100%" opens, or creates, some other file. Those three are the only
+// bytes special in the path part.
+func uriPath(p string) string { return uriEscaper.Replace(p) }
+
+var uriEscaper = strings.NewReplacer("%", "%25", "?", "%3f", "#", "%23")

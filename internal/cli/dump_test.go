@@ -150,12 +150,12 @@ func TestDumpEntriesPrepared(t *testing.T) {
 	}
 	out := filepath.Join(t.TempDir(), "dump")
 	csvPath := filepath.Join(out, dumpBase(dbPath)+".csv")
-	n, err := dumpEntries(dbPath, out, csvPath)
+	res, err := dumpEntries(dbPath, out, csvPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if n != 2 {
-		t.Fatalf("wrote %d entries, want 2 (the redirect is an alias)", n)
+	if res.rows != 2 {
+		t.Fatalf("wrote %d entries, want 2 (the redirect is an alias)", res.rows)
 	}
 	if filepath.Base(csvPath) != "Test Dict.csv" {
 		t.Fatalf("csv name = %q", filepath.Base(csvPath))
@@ -193,6 +193,33 @@ func TestDumpEntriesPrepared(t *testing.T) {
 	}
 	if rows[4][0] != "know" || len(rows[4]) != 3 || rows[4][2] != "knew" {
 		t.Errorf("redirect target row = %q, want know with alternate \"knew\"", rows[4])
+	}
+}
+
+// An entry without a headword is left out of the CSV and counted, so the
+// command can say so; an empty first headword drops the entry with its
+// alternates, as pyglossary's reader would.
+func TestDumpEntriesNameless(t *testing.T) {
+	dict.RegisterReader(".namelesstest", func(string) (dict.Reader, error) {
+		return &fakeReader{meta: dict.Meta{Name: "N"}, entries: []dict.Entry{
+			{Headwords: []string{"a"}, Body: "x", Kind: dict.BodyText},
+			{Headwords: nil, Body: "y", Kind: dict.BodyText},
+			{Headwords: []string{"", "alt"}, Body: "z", Kind: dict.BodyText},
+			{Headwords: []string{"b"}, Body: "w", Kind: dict.BodyText},
+		}}, nil
+	})
+	dir := t.TempDir()
+	src := filepath.Join(dir, "n.namelesstest")
+	if err := os.WriteFile(src, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out := filepath.Join(dir, "out")
+	r, err := dumpEntries(src, out, filepath.Join(out, "n.csv"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.rows != 2 || r.nameless != 2 {
+		t.Errorf("wrote %d, left out %d; want 2 and 2", r.rows, r.nameless)
 	}
 }
 

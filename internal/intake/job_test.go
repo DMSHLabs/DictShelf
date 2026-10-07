@@ -430,4 +430,8 @@ func TestSafeDirName(t *testing.T) {
 	if got := safeDirName(strings.Repeat("é", 300)); len(got) > 200 {
 		t.Errorf("long name not truncated: %d bytes", len(got))
 	}
+	// the cut can land just after a space, which Windows would then strip
+	if got, want := safeDirName(strings.Repeat("a", 199)+" tail"), strings.Repeat("a", 199); got != want {
+		t.Errorf("cut name ends in %q, want no trailing space", got[len(got)-3:])
+	}
 }

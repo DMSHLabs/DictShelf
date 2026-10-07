@@ -463,7 +463,13 @@ func (s *Server) applyLook(l look) error {
 		ui = *cur
 	}
 	ui.FontSize, ui.FontWeight = l.State.FontSize, l.State.FontWeight
-	err := s.reg.prefs.update(dicts, &ui)
+	// update takes a UI patch as raw JSON now: the whole record is sent, which
+	// under the patch rule changes every key it names - the same end state the
+	// old whole-record replace produced.
+	raw, err := json.Marshal(ui)
+	if err == nil {
+		err = s.reg.prefs.update(dicts, raw)
+	}
 	s.reg.prefs.editMu.Unlock()
 	if err != nil {
 		return err

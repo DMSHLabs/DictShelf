@@ -201,7 +201,7 @@ func (s *Server) withCORS(h http.HandlerFunc) http.HandlerFunc {
 func (s *Server) handlePreflight(w http.ResponseWriter, r *http.Request) {
 	if s.setCORS(w, r) {
 		w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "accept, content-type")
+		w.Header().Set("Access-Control-Allow-Headers", "accept, content-type, if-none-match")
 		w.Header().Set("Access-Control-Max-Age", "600")
 		// Private Network Access: 127.0.0.1 is a private address, so Chrome
 		// preflights a request to it from any page that is not itself local -

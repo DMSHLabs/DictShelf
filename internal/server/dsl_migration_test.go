@@ -67,7 +67,9 @@ func TestSingleDSLMigratesGroupsAndRemoval(t *testing.T) {
 				t.Fatal("wrong source/removal state", e.Path, e.indexBlocked())
 			}
 			if !removed {
-				info := New(r).dictInfoFor(e)
+				srv := New(r)
+				global := srv.rowsGlobal(srv.groupsNow())
+				info, _ := srv.dictInfoFor(e, global, rowKey(e, global))
 				if !info.Caps.Contains || !info.Caps.FTS {
 					t.Fatal("lost optional indexes")
 				}
@@ -112,7 +114,9 @@ func TestSingleDSLCachedReceiptThenSourceReturns(t *testing.T) {
 	if r.Count() != 1 {
 		t.Fatal("cached receipt lost")
 	}
-	info := New(r).dictInfoFor(r.all()[0])
+	srv := New(r)
+	global := srv.rowsGlobal(srv.groupsNow())
+	info, _ := srv.dictInfoFor(r.all()[0], global, rowKey(r.all()[0], global))
 	if info.DSL.SourceAvailable || info.Unavailable || !info.Caps.FTS || !info.Caps.Contains {
 		t.Fatal("cached receipt unavailable", info)
 	}
@@ -126,7 +130,9 @@ func TestSingleDSLCachedReceiptThenSourceReturns(t *testing.T) {
 	if r.Count() != 1 || r.all()[0].Path != source {
 		t.Fatal("source return duplicated dictionary")
 	}
-	info = New(r).dictInfoFor(r.all()[0])
+	srv = New(r)
+	global = srv.rowsGlobal(srv.groupsNow())
+	info, _ = srv.dictInfoFor(r.all()[0], global, rowKey(r.all()[0], global))
 	if !info.Caps.FTS || !info.Caps.Contains || info.Unavailable {
 		t.Fatal("source return lost optional indexes", info)
 	}

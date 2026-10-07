@@ -25,6 +25,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/wuweidict/wudict/internal/artmark"
@@ -116,6 +117,9 @@ var faviconSVG []byte // "Lookup" mark: magnifier over headword lines
 type Server struct {
 	reg *Registry
 	mux *http.ServeMux
+
+	// dictRows keeps /api/dicts rows between requests (dictrows.go).
+	dictRows rowCache
 
 	// ConfigPath, when set, is where the first-run setup flow persists
 	// DICT_DIR. In-memory state is updated regardless, so setup works
@@ -843,7 +847,7 @@ type dictInfo struct {
 //
 //	{"t":"begin","total":N}   how many rows follow - known from the registry alone
 //	{"t":"dict","dict":{…}}   one resolved row, in completion order
-//	{"t":"end"}               every row sent
+//	{"t":"end","etag":"…"}    every row sent; etag when the answer may be kept
 type dictMsg struct {
 	T     string    `json:"t"`
 	Total int       `json:"total,omitempty"`
@@ -852,6 +856,11 @@ type dictMsg struct {
 	// a hand edit with a broken regex is otherwise invisible until someone
 	// opens the editor, so the page marks the way to it.
 	GroupsProblems int `json:"groupsProblems,omitempty"`
+	// ETag, on "end", validates this whole answer: sent back as If-None-Match
+	// it gets a 304 while nothing in the list has changed. Absent when the
+	// answer must not be kept - a row carries an error or a running job, or
+	// what a row was derived from changed while it was derived.
+	ETag string `json:"etag,omitempty"`
 }
 
 // handleDicts streams the dictionary list as newline-delimited JSON, for the
@@ -865,11 +874,32 @@ type dictMsg struct {
 // client can say "0 of 105" immediately and unblock search the instant the
 // first row lands, rather than guessing from an empty list (D30).
 //
-// The cheap path per row (header-only probe + text.db meta read) avoids
-// building the heavy in-memory index; only non-probeable formats fall back
-// to a full open.
+// Every row is keyed by stat calls first (rowKey). The keys make the list's
+// validator, so a client that still holds the previous answer is told so with
+// a 304 before any row is derived; and a row whose key is unchanged comes from
+// the row cache. Only a changed row pays the header probe, meta read or open.
+//
+// The validator goes out on `end`, never as an ETag header: whether the answer
+// may be kept is known only once every row is in (an error or a running job
+// says no), and a header would let the browser's own cache revalidate and
+// replay a body that carried one.
 func (s *Server) handleDicts(w http.ResponseWriter, r *http.Request) {
 	entries := s.reg.all()
+	groups := s.groupsNow()
+	problems := facet.CountProblems(groups.problems)
+	global := s.rowsGlobal(groups)
+	keys := rowKeys(entries, global)
+	ids := make(map[string]bool, len(entries))
+	for _, e := range entries {
+		ids[e.ID] = true
+	}
+	s.dictRows.keep(ids)
+	tag := s.listTag(entries, keys, problems)
+	if inm := r.Header.Get("If-None-Match"); inm != "" && matchesTag(inm, tag) {
+		w.Header().Set("Cache-Control", "no-cache")
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
 
 	st, ok := newStream(w, "application/x-ndjson; charset=utf-8")
 	if !ok {
@@ -878,15 +908,17 @@ func (s *Server) handleDicts(w http.ResponseWriter, r *http.Request) {
 	// the workers below write concurrently; stream serialises them
 	writeLine := func(m dictMsg) { st.line(m) }
 
-	writeLine(dictMsg{T: "begin", Total: len(entries), GroupsProblems: s.pickerGroupsProblems()})
+	writeLine(dictMsg{T: "begin", Total: len(entries), GroupsProblems: problems})
 
 	// same width as a search fan-out, and for the same reason: this is the
 	// other place the whole library is touched at once (search.Workers)
 	sem := make(chan struct{}, search.Workers())
 	var wg sync.WaitGroup
-	for _, e := range entries {
+	var keepable atomic.Bool
+	keepable.Store(true)
+	for i, e := range entries {
 		wg.Add(1)
-		go func(e *entry) {
+		go func(e *entry, key string) {
 			defer wg.Done()
 			select {
 			case sem <- struct{}{}:
@@ -897,20 +929,51 @@ func (s *Server) handleDicts(w http.ResponseWriter, r *http.Request) {
 			if r.Context().Err() != nil {
 				return
 			}
-			info := s.dictInfoFor(e)
+			info, held := s.dictInfoFor(e, global, key)
+			if !held || info.Error != "" || info.Job != nil {
+				keepable.Store(false)
+			}
 			writeLine(dictMsg{T: "dict", Dict: &info})
-		}(e)
+		}(e, keys[i])
 	}
 	wg.Wait()
-	writeLine(dictMsg{T: "end"})
+	end := dictMsg{T: "end"}
+	if keepable.Load() {
+		end.ETag = tag
+	}
+	writeLine(end)
 }
 
-// dictInfoFor resolves one dictionary's list row cheaply when possible:
-// a header-only Probe locates a content-matched text.db and reads its
-// meta (name/entry_count/ingest_level) without opening the direct
-// backend; a probeable format with no cache reports direct caps
-// (exact+prefix); everything else falls back to a full open for real caps.
-func (s *Server) dictInfoFor(e *entry) dictInfo {
+// dictInfoFor resolves one dictionary's list row: from the row cache while
+// key still describes the files, else cheaply when possible - a header-only
+// Probe locates a content-matched text.db and reads its meta
+// (name/entry_count/ingest_level) without opening the direct backend; a
+// probeable format with no cache reports direct caps (exact+prefix);
+// everything else falls back to a full open for real caps.
+//
+// A derived row is kept only under a key that held across its derivation, and
+// held reports whether it did. Deriving can change what it reads - a full
+// open prepares a DSL, BGL or wudict markdown file on the spot - and a row
+// describing the prepared state, filed under the key from before it, would be
+// served again the day that state is removed and the old key comes back. The
+// list validator is built from the same keys, so an answer holding such a row
+// is not offered for keeping either (handleDicts).
+func (s *Server) dictInfoFor(e *entry, global, key string) (info dictInfo, held bool) {
+	info, held = s.dictRows.get(e.ID, key)
+	if !held {
+		info = s.diskDictInfo(e)
+		held = rowKey(e, global) == key
+		if held && info.Error == "" {
+			s.dictRows.put(e.ID, key, info)
+		}
+	}
+	s.rowState(e, &info)
+	return info, held
+}
+
+// diskDictInfo is the part of a row derived from files, which the row cache
+// keeps.
+func (s *Server) diskDictInfo(e *entry) dictInfo {
 	info := s.baseDictInfo(e)
 	info.DSL = s.reg.dslView(e)
 	if _, variant := dslIdentity(e.Path); variant == "gd" {
@@ -926,13 +989,6 @@ func (s *Server) dictInfoFor(e *entry) dictInfo {
 		}
 	}
 	addProvenance(&info, e.Path)
-	info.Builtin = e.builtin
-	if js, ok := s.jobs.status(ingestKey(e.ID)); ok && js.Running {
-		info.Job = &jobProgress{Done: js.Done, Total: js.Total, StopRequested: js.StopRequested, Canceled: js.Canceled, Action: js.Action, Indexes: js.Indexes}
-	}
-	if e.noPackableMedia() {
-		info.HasMedia = false // a prior pack found nothing - stop offering it
-	}
 	return info
 }
 
@@ -1113,6 +1169,13 @@ func (s *Server) handleRescan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.reg.Warm()
+	// The button is the user asking for everything to be looked at again,
+	// including what neither the stat keys nor gen can see (a permission
+	// change moves neither size nor mtime).
+	s.dictRows.flush()
+	// and is answered in full: a 304 here would vouch for the copy a client
+	// holds without the rows the flush re-derives ever reaching it
+	r.Header.Del("If-None-Match")
 	s.handleDicts(w, r)
 }
 

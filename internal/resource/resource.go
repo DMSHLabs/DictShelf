@@ -49,6 +49,23 @@ type Source interface {
 	Close() error
 }
 
+// ListAll is what srcs hold together: each name once, compared by Key, in the
+// spelling of the first source that holds it, sorted.
+func ListAll(srcs []Source) []string {
+	var out []string
+	seen := map[string]bool{}
+	for _, src := range srcs {
+		for _, n := range src.List() {
+			if k := Key(n); k != "" && !seen[k] {
+				seen[k] = true
+				out = append(out, n)
+			}
+		}
+	}
+	slices.Sort(out)
+	return out
+}
+
 // MIME is the content type implied by a resource name's extension.
 func MIME(name string) string { return mime.TypeByExtension(path.Ext(name)) }
 

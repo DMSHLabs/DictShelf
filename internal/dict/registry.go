@@ -11,6 +11,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 )
@@ -417,6 +418,17 @@ var excludedDirs []string
 // was carried in on.
 const DownloadDirName = "Downloads"
 
+// IsDownloadDir reports whether a folder name is the download shelf. Where the
+// filesystem ignores case (Windows, macOS) intake's MkdirAll reuses an existing
+// "downloads", so that spelling is the shelf too; on Linux it is a different
+// folder, and the user's own.
+func IsDownloadDir(name string) bool {
+	if runtime.GOOS == "windows" || runtime.GOOS == "darwin" {
+		return strings.EqualFold(name, DownloadDirName)
+	}
+	return name == DownloadDirName
+}
+
 // ExcludeDir marks dir as never-walked by Discover.
 func ExcludeDir(dir string) {
 	if c := CanonPath(dir); c != "" {
@@ -590,7 +602,7 @@ func Discover(root string) ([]string, error) {
 			// inside a scan root, because that is the only place intake writes
 			// one: a "Downloads" folder somebody made three levels down is
 			// theirs, and skipping it would lose real dictionaries.
-			if filepath.Dir(p) == root && d.Name() == DownloadDirName {
+			if filepath.Dir(p) == root && IsDownloadDir(d.Name()) {
 				return fs.SkipDir
 			}
 			return nil

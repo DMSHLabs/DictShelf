@@ -136,19 +136,21 @@ func safeDirName(name string) string {
 			b.WriteRune(r)
 		}
 	}
-	// Leading dots hide the folder from the scan that is supposed to find it;
-	// trailing dots and spaces are silently stripped by Windows, which turns
-	// "a." and "a" into a collision the caller cannot see coming.
-	out := strings.TrimRight(strings.TrimLeft(b.String(), ". "), ". ")
-	if i := strings.IndexByte(out, '.'); windowsReserved[strings.ToLower(out)] ||
-		(i > 0 && windowsReserved[strings.ToLower(out[:i])]) {
-		out = "_" + out
-	}
 	// Bytes, not runes: the limit every filesystem here enforces is 255 bytes
 	// per component. Cut on a rune boundary so the name stays printable.
+	out := strings.TrimLeft(b.String(), ". ")
 	for len(out) > 200 {
 		_, n := utf8.DecodeLastRuneInString(out)
 		out = out[:len(out)-n]
+	}
+	// Leading dots hide the folder from the scan that is supposed to find it;
+	// trailing dots and spaces are silently stripped by Windows, which turns
+	// "a." and "a" into a collision the caller cannot see coming. Trimmed
+	// after the cut, which can expose either.
+	out = strings.TrimRight(out, ". ")
+	if i := strings.IndexByte(out, '.'); windowsReserved[strings.ToLower(out)] ||
+		(i > 0 && windowsReserved[strings.ToLower(out[:i])]) {
+		out = "_" + out
 	}
 	if out == "" {
 		return "dictionary"

@@ -279,6 +279,12 @@ func absPath(p string) string {
 // including file's own folder, which is where a dictionary that was copied off
 // its author's machine actually keeps its parts; an absolute "c:\Lingvo\..."
 // reaches that fallback and nothing else.
+//
+// Every candidate stays inside the including file's folder (filepath.IsLocal).
+// The value is data from a downloaded file: an absolute path would read any
+// file on the machine into the index, and on Windows "//host/share/x.dsl" is a
+// UNC path whose mere stat opens an SMB session to that host - and hands it
+// the user's NTLM credentials.
 func (r *Reader) queueInclude(from, value string) {
 	if value == "" {
 		return
@@ -286,12 +292,12 @@ func (r *Reader) queueInclude(from, value string) {
 	p := strings.ReplaceAll(strings.ReplaceAll(value, `\\`, `\`), `\`, "/")
 	dir := filepath.Dir(from)
 	var cand []string
-	if filepath.IsAbs(p) {
-		cand = append(cand, filepath.Clean(p))
-	} else {
-		cand = append(cand, filepath.Join(dir, filepath.FromSlash(p)))
+	if rel := filepath.FromSlash(p); filepath.IsLocal(rel) {
+		cand = append(cand, filepath.Join(dir, rel))
 	}
-	cand = append(cand, filepath.Join(dir, path.Base(p)))
+	if base := path.Base(p); filepath.IsLocal(base) {
+		cand = append(cand, filepath.Join(dir, base))
+	}
 	for _, c := range cand {
 		if st, err := os.Stat(c); err == nil && !st.IsDir() {
 			r.includes = append(r.includes, c)

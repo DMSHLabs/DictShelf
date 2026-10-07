@@ -12,7 +12,6 @@ import (
 	"compress/gzip"
 	"io"
 	"path/filepath"
-	"sort"
 	"sync"
 
 	"github.com/wuweidict/wudict/internal/dict"
@@ -144,18 +143,7 @@ func (d *Dict) Resource(name string) (io.ReadCloser, string, error) {
 // folder the file sits in contributes nothing, since an exact-path source
 // lists nothing (see dsl.Dict.Resources).
 func (d *Dict) Resources() []string {
-	var out []string
-	seen := map[string]bool{}
-	for _, src := range d.sources() {
-		for _, n := range src.List() {
-			if k := resource.Key(n); k != "" && !seen[k] {
-				seen[k] = true
-				out = append(out, n)
-			}
-		}
-	}
-	sort.Strings(out)
-	return out
+	return resource.ListAll(d.sources())
 }
 
 func (d *Dict) sources() []resource.Source {

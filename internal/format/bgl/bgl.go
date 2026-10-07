@@ -9,11 +9,11 @@ import (
 	"io"
 	"mime"
 	"path"
-	"sort"
 	"strings"
 	"sync"
 
 	"github.com/wuweidict/wudict/internal/dict"
+	"github.com/wuweidict/wudict/internal/resource"
 	"github.com/wuweidict/wudict/internal/store"
 )
 
@@ -42,8 +42,7 @@ type Dict struct {
 	src dict.Meta
 
 	resOnce sync.Once
-	res     map[string][]byte
-	resList []string
+	res     *Embedded
 	resErr  error
 }
 
@@ -76,30 +75,65 @@ func (d *Dict) Close() error { return d.Store.Close() }
 // loadRes scans the source BGL for its embedded resource blocks. Kept lazy so
 // a dictionary that never serves an image never pays the decompression.
 func (d *Dict) loadRes() {
-	d.res, d.resList, d.resErr = scanResources(d.srcPath)
+	d.res, d.resErr = ReadEmbedded(d.srcPath)
 }
 
 // Resource streams one embedded resource (image/HTML) by name,
 // case-insensitively.
 func (d *Dict) Resource(name string) (io.ReadCloser, string, error) {
-	norm := strings.ToLower(strings.TrimLeft(path.Clean(name), "/"))
-	if norm == "" || norm == "." || strings.HasPrefix(norm, "..") {
-		return nil, "", dict.ErrNotFound
-	}
 	d.resOnce.Do(d.loadRes)
 	if d.resErr != nil {
 		return nil, "", d.resErr
 	}
-	if b, ok := d.res[norm]; ok {
-		return io.NopCloser(bytes.NewReader(b)), mime.TypeByExtension(path.Ext(norm)), nil
+	rc, err := d.res.Open(name)
+	if err != nil {
+		return nil, "", err
 	}
-	return nil, "", dict.ErrNotFound
+	return rc, mime.TypeByExtension(path.Ext(name)), nil
 }
 
 // Resources lists the embedded resource names (for full-ingest media packing).
 func (d *Dict) Resources() []string {
 	d.resOnce.Do(d.loadRes)
-	out := append([]string(nil), d.resList...)
-	sort.Strings(out)
-	return out
+	if d.resErr != nil {
+		return nil
+	}
+	return d.res.List()
 }
+
+// Embedded is the resources a BGL file carries inside it, read into memory by
+// one pass over the file. It is a resource.Source, and reading it opens no
+// dictionary and prepares nothing: `wudict dump` writes a BGL's resources
+// through it.
+type Embedded struct {
+	data  map[string][]byte // by lowercased name
+	names []string          // sorted, in the file's spelling
+}
+
+var _ resource.Source = (*Embedded)(nil)
+
+// ReadEmbedded reads the resources embedded in the BGL file at path.
+func ReadEmbedded(path string) (*Embedded, error) {
+	data, names, err := scanResources(path)
+	if err != nil {
+		return nil, err
+	}
+	return &Embedded{data: data, names: names}, nil
+}
+
+// Open returns one resource by name, case-insensitively, or dict.ErrNotFound.
+func (e *Embedded) Open(name string) (io.ReadCloser, error) {
+	norm := strings.ToLower(strings.TrimLeft(path.Clean(name), "/"))
+	if norm == "" || norm == "." || strings.HasPrefix(norm, "..") {
+		return nil, dict.ErrNotFound
+	}
+	if b, ok := e.data[norm]; ok {
+		return io.NopCloser(bytes.NewReader(b)), nil
+	}
+	return nil, dict.ErrNotFound
+}
+
+// List returns the resource names, sorted.
+func (e *Embedded) List() []string { return append([]string(nil), e.names...) }
+
+func (e *Embedded) Close() error { return nil }

@@ -133,6 +133,13 @@ type Dictionary interface {
 	Close() error
 }
 
+// ResourceOpener is Dictionary's Resource alone, for code that reads a
+// dictionary's files without its index: `wudict dump` reaches a DSL's, BGL's
+// or wudict markdown file's resources through one without preparing it.
+type ResourceOpener interface {
+	Resource(name string) (io.ReadCloser, string, error)
+}
+
 // ResourceLister is implemented by backends that can enumerate their
 // binary resources (used by full ingest to pack a media.db).
 type ResourceLister interface {
