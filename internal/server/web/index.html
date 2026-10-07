@@ -1196,7 +1196,7 @@ async function loadPrefs(){
        reader in a strategy with nothing on screen to explain or change it -
        the same call the removed `sortMine` got. The field is still WRITTEN
        (below, always false), because it is upstream's. */
-    if(st.ui){applyFS(st.ui.fontSize,false);applyFW(st.ui.fontWeight,false);applyHL(!st.ui.hlOff,false);applySpeak(!st.ui.speakOff,false);applyHideUnmarkedExamples(!!st.ui.hideUnmarkedExamples,false)}
+    if(st.ui){applyFS(st.ui.fontSize,false);applyFW(st.ui.fontWeight,false);applyHL(!st.ui.hlOff,false);applySpeak(!st.ui.speakOff,false);applyHideUnmarkedExamples(!!st.ui.hideUnmarkedExamples,false);openN=st.ui.openN||1;openAll=!!st.ui.openAll}
     if(!st.exists){adoptLocalPrefs();return} // first run: keep whatever we had
     prefOrder=rows.map(d=>d.id);
   }catch(e){
@@ -1573,6 +1573,14 @@ function applyOpenOrder(on,save){
   if(save&&moved)savePrefs();
   return moved;
 }
+/* How many sections a search opens by itself: the first openN in the reader's
+   own order that have a result, or every one that has one. Upstream's "Open"
+   choice (fixes #23), taken as STATE and not as a control for now — there is
+   no menu in this fork's panel yet, so the values live in state.json
+   (`ui.openN`, `ui.openAll`) and are set by hand; savePrefs does not send
+   them, and the server patches only the keys it is sent, so a hand-set count
+   survives every save this page makes. Absent is one, Lingvo's own default. */
+let openN=1,openAll=false;
 /* There was a control here, and a stored setting behind it: how the PICKER
    lists the library — A→Z, which is what it had always done, or the reader's
    own arrangement. The choice is gone and only the arrangement is left (see
@@ -4965,12 +4973,17 @@ async function doSearch(ev){
      hit whatever it said; `ready[i]` holds its <details> only if it actually
      produced RESULTS, so a deferred, errored or skipped section can never be
      the one that opens. `frontier` is the lowest index still unheard from. */
-  let resolved=[],ready=[],frontier=0;
+  let resolved=[],ready=[],frontier=0,limit=1,opened=0;
   const openSlot=i=>{
     const det=ready[i];
-    if(!det)return false;
+    if(!det||det.open)return false;
     det.open=true;openedIdx=i;promote(boxes,i);
-    clearTimeout(barrier);barrier=null;
+    // The hold ends when the count is reached, not at the first open: until
+    // then the frontier keeps the later sections in the reader's order.
+    if(++opened>=limit){clearTimeout(barrier);barrier=null}
+    // The mark walk and the jump to the first mark belong to the FIRST section
+    // only: repeated for a second one they would pull the reader away from it.
+    if(opened>1)return true;
     if(markedAnswer)navAttach(det);
     // Not deferred to a frame: it observes its own timing, because the section
     // it was just handed is not laid out yet.
@@ -4978,22 +4991,21 @@ async function doSearch(ev){
     return true;
   };
   /* Both strategies, one function — which is why they cannot drift apart. In
-     "My order" (the default) the hold walks the prefix and stops at the first
-     slot that has not spoken; once the deadline has passed (barrier===null) or
-     the prefix is exhausted it falls through to the walk at the bottom and
-     takes the best answer in hand. In "Fastest" `barrier` is always null, so
-     that walk runs from the first hit, where `ready` holds exactly one entry:
-     that one opens, which is byte-for-byte what this app did before D142. */
+     the reader's own order (the only strategy this fork keeps, and for any
+     count) the hold walks the prefix, opening what has a result, and stops at
+     the first slot that has not spoken; once the deadline has passed
+     (barrier===null) or the prefix is exhausted it falls through to the walk
+     at the bottom and takes the best answers in hand, up to the count. */
   const settle=()=>{
-    if(expandAll||openedIdx!==null)return; // latched, or the user decided (-1)
+    if(expandAll||openedIdx===-1||opened>=limit)return; // the count, or the user decided (-1)
     if(orderFirst&&barrier!==null&&frontier<boxes.length){
       while(frontier<boxes.length&&resolved[frontier]){
-        if(openSlot(frontier))return;
+        if(openSlot(frontier)&&opened>=limit)return;
         frontier++;
       }
       return;
     }
-    for(let i=0;i<boxes.length;i++)if(openSlot(i))return;
+    for(let i=0;i<boxes.length&&opened<limit;i++)openSlot(i);
   };
   // Not part of `anyShown`: these are the dictionaries that were NOT searched,
   // and the empty state below has to be able to tell the difference.
@@ -5011,9 +5023,10 @@ async function doSearch(ev){
         liveSearchBoxes=boxes;
         openedIdx=null; // re-arm the latch: a new generation, a new decision
         resolved=boxes.map(()=>false);ready=boxes.map(()=>null);frontier=0;
+        limit=openAll?Infinity:openN;opened=0;
         clearTimeout(barrier);barrier=null;
-        // Only where it can bite: one slot satisfies any prefix immediately,
-        // and under expand-all there is no latch to hold back.
+        // Only where it can bite: the count is satisfied by any prefix
+        // immediately, and under expand-all there is no latch to hold back.
         if(orderFirst&&!expandAll&&boxes.length>1)
           barrier=setTimeout(()=>{barrier=null;if(seq===searchSeq)settle()},OPEN_BARRIER_MS);
         clearStatusForResults();
@@ -5029,8 +5042,9 @@ async function doSearch(ev){
         else if(res.shown)anyShown=true;
         if(res.results)anyResults=true;
         refreshLivePicker();
-        /* The latch (D73/M3). ONE section opens itself per generation and it
-           is never taken back: a dictionary that finishes later fills its own
+        /* The latch (D73/M3). Up to `limit` sections open themselves per
+           generation (one unless the reader set a larger count) and none is
+           taken back: a dictionary that finishes later fills its own
            position, above, and stays shut.
 
            Promoting a higher-ranked latecomer would close the section being

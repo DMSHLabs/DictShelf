@@ -532,6 +532,7 @@ func TestPrefsHandEditSurvivesASave(t *testing.T) {
 		t.Errorf("the running app does not see the hand edit: %+v", ui)
 	}
 }
+
 // full (the brief/full view of wu-sec) is spelled positively, so absent is
 // Lingvo's brief view; it survives the file and the flags beside it.
 func TestPrefsFull(t *testing.T) {
