@@ -18,6 +18,8 @@ import (
 	"strings"
 
 	"github.com/wuweidict/wudict/internal/dict"
+	"github.com/wuweidict/wudict/internal/format/bgl"
+	"github.com/wuweidict/wudict/internal/format/dsl"
 	"github.com/wuweidict/wudict/internal/format/wmd"
 	"github.com/wuweidict/wudict/internal/fsx"
 	"github.com/wuweidict/wudict/internal/htmlref"
@@ -88,7 +90,10 @@ func cmdDump(args []string) error {
 		return fmt.Errorf("-mode and -compress are for -format md")
 	}
 	applyLibrarySettings()
-	src := fs.Arg(0)
+	// A prepared dictionary is a folder, and the folder is the name a user
+	// types for it: resolved to its text.db here, once, so every stage below
+	// reads the same file.
+	src := dict.MainFile(fs.Arg(0))
 
 	base := dumpBase(src)
 	if base == "" {
@@ -116,6 +121,7 @@ func cmdDump(args []string) error {
 		}
 	}
 	var n int
+	var srcFormat string // the format the entries were read as
 	if md {
 		r, err := dumpMarkdown(src, out, path, base+".wudict", mode, gz)
 		if err != nil {
@@ -125,26 +131,22 @@ func cmdDump(args []string) error {
 			}
 			return err
 		}
-		n = r.articles
-		for _, c := range []struct {
-			n    int
-			what string
-		}{
-			{r.empty, "article with an empty body left out"},
-			{r.nameless, "entry without a headword left out"},
-			{r.repaired, "name or header value repaired (control characters, invalid UTF-8)"},
-		} {
-			if c.n > 0 {
-				fmt.Fprintf(os.Stderr, "  %d %s\n", c.n, c.what)
-			}
+		n, srcFormat = r.articles, r.format
+		dumpNote(r.empty, "article with an empty body SKIPPED")
+		dumpNote(r.nameless, "entry without a headword SKIPPED")
+		dumpNote(r.repaired, "name or header value repaired (control characters, invalid UTF-8)")
+	} else {
+		r, err := dumpEntries(src, out, path)
+		if err != nil {
+			return err
 		}
-	} else if n, err = dumpEntries(src, out, path); err != nil {
-		return err
+		n, srcFormat = r.rows, r.format
+		dumpNote(r.nameless, "entry without a headword SKIPPED")
 	}
 	size, _ := fileSize(path)
 	fmt.Printf("%s → %s (%s)\n", logx.Plural(n, "entry", "entries"), path, logx.Size(size))
 
-	files, bytes, err := dumpResources(src, resDir, scope)
+	files, bytes, err := dumpResources(src, srcFormat, resDir, scope)
 	if err != nil {
 		return err
 	}
@@ -152,6 +154,13 @@ func cmdDump(args []string) error {
 		fmt.Printf("%s → %s (%s)\n", logx.Plural(files, "resource", "resources"), resDir, logx.Size(bytes))
 	}
 	return nil
+}
+
+// dumpNote reports, when n > 0, what the dump changed on the way out.
+func dumpNote(n int, what string) {
+	if n > 0 {
+		fmt.Fprintf(os.Stderr, "  %d %s\n", n, what)
+	}
 }
 
 // resScope is which resources a dump writes (-resources).
@@ -201,6 +210,13 @@ func dumpBase(src string) string {
 	return store.FolderName(src)
 }
 
+// csvDump is what a CSV dump wrote.
+type csvDump struct {
+	rows     int    // entries written
+	nameless int    // entries left out for having no headword
+	format   string // the format the entries were read as (dict.Meta.Format)
+}
+
 // dumpEntries writes the CSV. The ingest Reader is preferred wherever a format
 // has one: it is a single sequential pass that yields each entry's aliases with
 // it, where the query interface would have to be walked headword by headword
@@ -210,7 +226,7 @@ func dumpBase(src string) string {
 //
 // The source is opened BEFORE the output folder is created, so a dictionary
 // that cannot be read leaves nothing behind.
-func dumpEntries(src, outDir, csvPath string) (int, error) {
+func dumpEntries(src, outDir, csvPath string) (r csvDump, err error) {
 	var meta dict.Meta
 	var each func(row func([]string, string) error) error
 	var closeSrc func() error
@@ -218,7 +234,7 @@ func dumpEntries(src, outDir, csvPath string) (int, error) {
 	if store.IsTextDB(src) {
 		s, err := store.Open(src)
 		if err != nil {
-			return 0, err
+			return r, err
 		}
 		meta, closeSrc = s.Meta(), s.Close
 		each = func(row func([]string, string) error) error {
@@ -227,31 +243,32 @@ func dumpEntries(src, outDir, csvPath string) (int, error) {
 			})
 		}
 	} else {
-		r, err := dict.OpenReader(src)
+		rd, err := dict.OpenReader(src)
 		if err != nil {
-			return 0, err
+			return r, err
 		}
-		meta, closeSrc = r.Meta(), r.Close
-		each = func(row func([]string, string) error) error { return readAll(r, row) }
+		meta, closeSrc = rd.Meta(), rd.Close
+		each = func(row func([]string, string) error) error { return readAll(rd, row) }
 	}
 	defer closeSrc()
+	r.format = meta.Format
 
 	if err := os.MkdirAll(outDir, 0o755); err != nil {
-		return 0, err
+		return r, err
 	}
 	f, err := os.Create(csvPath)
 	if err != nil {
-		return 0, err
+		return r, err
 	}
 	defer f.Close()
 	w := csv.NewWriter(f) // buffered internally
 
-	n := 0
 	m := newMeter("entries", meta.EntryCount, entryEvery)
 	defer m.Clear()
 	row := func(words []string, body string) error {
 		m.Add(1)
 		if len(words) == 0 || words[0] == "" {
+			r.nameless++
 			return nil // a row pyglossary would drop: never written
 		}
 		rec := []string{words[0], body}
@@ -260,21 +277,21 @@ func dumpEntries(src, outDir, csvPath string) (int, error) {
 			// pyglossary's reader splits this column on.
 			rec = append(rec, strings.Join(words[1:], ","))
 		}
-		n++
+		r.rows++
 		return w.Write(rec)
 	}
 
 	if err := writeInfoRows(w, meta); err != nil {
-		return n, err
+		return r, err
 	}
 	if err := each(row); err != nil {
-		return n, err
+		return r, err
 	}
 	w.Flush()
 	if err := w.Error(); err != nil {
-		return n, err
+		return r, err
 	}
-	return n, f.Close()
+	return r, f.Close()
 }
 
 // readAll drains a format Reader into row(), rendering each body exactly as an
@@ -336,29 +353,22 @@ func writeInfoRows(w *csv.Writer, m dict.Meta) error {
 
 // dumpResources unpacks every resource the dictionary holds into resDir,
 // preserving the folder structure the names carry so that an article's
-// `src="audio/x.mp3"` still resolves after the conversion.
+// `src="audio/x.mp3"` still resolves after the conversion. format is the
+// format the entries were read as (openResources).
 //
 // A resource that cannot be read is reported and skipped rather than ending
 // the dump: the names come from a container that may be truncated or lying,
 // and 40,000 good files are not worth losing to one bad record.
-func dumpResources(src, resDir string, scope resScope) (files int, written int64, err error) {
+func dumpResources(src, format, resDir string, scope resScope) (files int, written int64, err error) {
 	if scope == resNone {
-		return 0, 0, nil // not even opened: for some formats that would mean preparing
+		return 0, 0, nil
 	}
-	d, err := dict.Open(src)
+	d, err := openResources(src, format)
 	if err != nil {
 		return 0, 0, err
 	}
 	defer d.Close()
-	var names []string
-	switch t := d.(type) {
-	case *store.Store:
-		names = t.MediaNames() // packed media.db, if this library folder has one
-	default:
-		if l, ok := d.(dict.ResourceLister); ok {
-			names = l.Resources()
-		}
-	}
+	names := d.list()
 	names = resource.Filter(names) // a dump is for humans; .DS_Store is not
 	if scope == resText {
 		names = slices.DeleteFunc(names, func(n string) bool { return !isTextResource(n) })
@@ -394,7 +404,84 @@ func dumpResources(src, resDir string, scope resScope) (files int, written int64
 	return files, written, nil
 }
 
-func dumpOneResource(d dict.Dictionary, resDir, name string) (int64, error) {
+// dumpRes is a dictionary opened for its resources alone.
+type dumpRes struct {
+	dict.ResourceOpener
+	list  func() []string // every resource name
+	close func() error
+}
+
+func (d *dumpRes) Close() error { return d.close() }
+
+// selfPrepared holds the formats whose Dictionary prepares a library folder
+// when opened (store.OpenSelfPrepared), each with the containers its resources
+// are in. A dump reads these formats' resources from the containers and opens
+// no Dictionary, so it never indexes what it dumps (D157).
+var selfPrepared = map[string]func(path string) ([]resource.Source, error){
+	"dsl":      func(p string) ([]resource.Source, error) { return dsl.MediaSources(p), nil },
+	wmd.Format: func(p string) ([]resource.Source, error) { return wmd.MediaSources(p), nil },
+	"bgl": func(p string) ([]resource.Source, error) {
+		e, err := bgl.ReadEmbedded(p)
+		if err != nil {
+			return nil, err
+		}
+		return []resource.Source{e}, nil
+	},
+}
+
+// openResources opens src for its resources, given the format its entries
+// were read as. A self-preparing format is read from its containers; any
+// other source - a format with an index of its own, a library folder's
+// text.db - opens as the Dictionary it is, which prepares nothing.
+func openResources(src, format string) (*dumpRes, error) {
+	if read, ok := selfPrepared[format]; ok && !store.IsTextDB(src) {
+		srcs, err := read(dict.MainFile(src))
+		if err != nil {
+			return nil, err
+		}
+		set := sourceSet(srcs)
+		return &dumpRes{ResourceOpener: set, list: func() []string { return resource.ListAll(srcs) }, close: set.Close}, nil
+	}
+	d, err := dict.Open(src)
+	if err != nil {
+		return nil, err
+	}
+	list := func() []string {
+		switch t := d.(type) {
+		case *store.Store:
+			return t.MediaNames() // packed media.db, if this library folder has one
+		case dict.ResourceLister:
+			return t.Resources()
+		}
+		return nil
+	}
+	return &dumpRes{ResourceOpener: d, list: list, close: d.Close}, nil
+}
+
+// sourceSet serves a name from the first container that holds it, in the
+// order the format's Dictionary searches them.
+type sourceSet []resource.Source
+
+func (s sourceSet) Resource(name string) (io.ReadCloser, string, error) {
+	for _, src := range s {
+		if rc, err := src.Open(name); err == nil {
+			return rc, resource.MIME(name), nil
+		}
+	}
+	return nil, "", dict.ErrNotFound
+}
+
+func (s sourceSet) Close() error {
+	var first error
+	for _, src := range s {
+		if err := src.Close(); err != nil && first == nil {
+			first = err
+		}
+	}
+	return first
+}
+
+func dumpOneResource(d dict.ResourceOpener, resDir, name string) (int64, error) {
 	dest := resFilePath(resDir, name)
 	if dest == "" {
 		return 0, fmt.Errorf("no usable file name")

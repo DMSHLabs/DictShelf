@@ -28,6 +28,7 @@ import (
 // mdDump is what a markdown dump wrote.
 type mdDump struct {
 	articles, empty, nameless, repaired int
+	format                              string // the format the entries were read as
 }
 
 // cleanFailure is a body -mode clean could not write (spec R6.8): the dump
@@ -130,7 +131,7 @@ var errProbed = errors.New("probed")
 // converted alike. Nil when there is none, or it cannot be read - which is
 // what the server does too.
 func dumpStyles(src string) (htmlref.Styles, error) {
-	_, each, closeSrc, err := openEntries(src)
+	meta, each, closeSrc, err := openEntries(src)
 	if err != nil {
 		return nil, err
 	}
@@ -155,7 +156,7 @@ func dumpStyles(src string) (htmlref.Styles, error) {
 	if len(names) == 0 {
 		return nil, nil
 	}
-	d, err := dict.Open(src)
+	d, err := openResources(src, meta.Format)
 	if err != nil {
 		return nil, nil
 	}
@@ -250,5 +251,5 @@ func dumpMarkdown(src, outDir, path, stem string, mode wmd.Mode, gz bool) (r mdD
 	if err := os.Rename(tmp, path); err != nil {
 		return r, err
 	}
-	return mdDump{articles: w.Articles, empty: w.Empty, nameless: w.Nameless, repaired: w.Repaired}, nil
+	return mdDump{articles: w.Articles, empty: w.Empty, nameless: w.Nameless, repaired: w.Repaired, format: meta.Format}, nil
 }

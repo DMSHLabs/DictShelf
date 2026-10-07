@@ -111,3 +111,8 @@ func Alert(title, body string) {
 
 // stopHint completes "To stop it, ..." for this platform.
 const stopHint = "end wudict.exe in Task Manager"
+
+// killCmd is the command that stops process %d from a terminal here. /F is not
+// optional: without it taskkill only posts WM_CLOSE, and a wudict whose tray
+// failed has no window to receive it ("can only be terminated forcefully").
+const killCmd = "taskkill /F /PID %d"

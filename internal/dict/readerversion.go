@@ -4,7 +4,12 @@
 
 package dict
 
-import "sync"
+import (
+	"fmt"
+	"sort"
+	"strings"
+	"sync"
+)
 
 // A format's Reader decides what a prepared dictionary CONTAINS: which records
 // become entries, how a body is decoded, which headwords become aliases. The
@@ -44,4 +49,22 @@ func ReaderVersion(format string) int {
 	readerVersionMu.RLock()
 	defer readerVersionMu.RUnlock()
 	return readerVersions[format]
+}
+
+// ReaderVersionsSig names every registered reader version in one string,
+// format order: a cache of conclusions drawn from them (the server's
+// /api/dicts rows, whose "outdated" depends on them) keys on it.
+func ReaderVersionsSig() string {
+	readerVersionMu.RLock()
+	defer readerVersionMu.RUnlock()
+	formats := make([]string, 0, len(readerVersions))
+	for f := range readerVersions {
+		formats = append(formats, f)
+	}
+	sort.Strings(formats)
+	var b strings.Builder
+	for _, f := range formats {
+		fmt.Fprintf(&b, "%s=%d,", f, readerVersions[f])
+	}
+	return b.String()
 }

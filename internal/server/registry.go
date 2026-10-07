@@ -72,6 +72,7 @@ type upgraded struct {
 	medLink  *store.Links     // nil when there is no usable locator
 	medFet   resource.Fetcher // opened with the locator, over its containers
 	medTried bool             // locator open attempted and failed; cleared by a rebuild
+	medRetry time.Time        // a stale locator could not be deleted: not asked again before this
 	medBuild sync.Once        // one enumeration per process, however many misses
 }
 
@@ -207,7 +208,7 @@ func (u *upgraded) media(prov resource.Provider) ([]resource.Source, *store.Link
 			u.medSrc = prov.Sources(u.srcPath)
 		}
 	}
-	if u.medLink == nil && !u.medTried && prov.Open != nil {
+	if u.medLink == nil && !u.medTried && prov.Open != nil && !time.Now().Before(u.medRetry) {
 		u.medTried = true
 		if path := store.LinkSibling(u.Store.Meta().Path); path != "" && fsx.FileExists(path) {
 			links, err := store.OpenLinks(path, u.Store.UUID())
@@ -216,7 +217,14 @@ func (u *upgraded) media(prov resource.Provider) ([]resource.Source, *store.Link
 				// never did). Serving from it would hand back whatever now sits
 				// at those offsets, so it is deleted rather than distrusted.
 				logx.V("discarding %s: %v", filepath.Base(path), err)
-				_ = os.Remove(path)
+				if rerr := os.Remove(path); rerr != nil {
+					// Still open in a backend sitting out its closeGrace, and
+					// Windows refuses to delete an open file. Left as it was,
+					// the stale file would also stop recordLinks from writing
+					// a new one for the life of the process: asked again once
+					// that grace has run out.
+					u.medTried, u.medRetry = false, time.Now().Add(closeGrace)
+				}
 			} else if fet, ferr := prov.Open(links.Parts()); ferr != nil {
 				links.Close()
 			} else {
@@ -389,6 +397,17 @@ type entry struct {
 	// abbrevTried marks this dictionary as already considered by the
 	// abbreviation upgrade sweep, so a rescan does not re-queue it.
 	abbrevTried atomic.Bool
+
+	// gen moves whenever what this entry's /api/dicts row was derived from
+	// changes under the app's own hand: a prepare, rebuild or pack
+	// (entry.reconcile), and a backend or prepared folder a rescan finds
+	// changed (revalidate) - removing prepared data and every Rescan caller
+	// land there. Keyed into the row cache (dictrows.go), it catches what a
+	// coarse filesystem clock, or a row derived from a still-open backend,
+	// would hide from the stat keys. It starts at 0 in every process, so a
+	// validator kept across a restart can outlive a change only the stats
+	// missed; that is accepted (304s survive restarts), and Rescan clears it.
+	gen atomic.Uint64
 
 	// rebuilding bars opens for the length of an ingest that will rename over
 	// the prepared database (Windows only; set with the backend handback in
@@ -1667,6 +1686,9 @@ func (e *entry) revalidate() {
 	if !changed {
 		return
 	}
+	// what this entry's /api/dicts row was derived from - a backend, or a
+	// prepared folder - is not what is there now (dictrows.go)
+	e.gen.Add(1)
 	if open {
 		if _, dropped := e.drop(true); !dropped {
 			// An ingest holds this entry. It ends in reopen(), which resolves
@@ -1790,6 +1812,14 @@ func (e *entry) reconcile(name string, t store.Target, progress store.Progress) 
 	var rerr error
 	if out.Changed() || (err == nil && stale) {
 		rerr = e.reopen()
+	}
+	// What this entry's /api/dicts row is derived from moved - or may have,
+	// on a failure - and is served afresh: after the reopen, so the row
+	// describes the result (dictrows.go). A reconcile that found everything
+	// as wanted, as the startup abbreviation sweep usually does, leaves the
+	// kept row and the client's validator standing.
+	if out.Changed() || stale || err != nil {
+		e.gen.Add(1)
 	}
 	if err != nil {
 		return out, fmt.Errorf("preparing %q: %w", name, err)

@@ -14,6 +14,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/wuweidict/wudict/internal/dict"
 	"github.com/wuweidict/wudict/internal/fsx"
@@ -68,6 +69,47 @@ func TestFolderName(t *testing.T) {
 	}
 	if got := FolderName("/d/" + strings.Repeat("x", 200) + ".mdx"); len(got) > 80 {
 		t.Errorf("FolderName did not cap length: %d", len(got))
+	}
+	// Cyrillic is two bytes a letter, so byte 80 can fall inside one
+	long := "/d/x" + strings.Repeat("ж", 60) + ".dsl"
+	if got := FolderName(long); len(got) > 80 || !utf8.ValidString(got) {
+		t.Errorf("FolderName(%q) = %q (%d bytes, valid UTF-8 %v)", long, got, len(got), utf8.ValidString(got))
+	}
+}
+
+// A folder on disk under the byte-cut spelling of a long name (byte 80 inside
+// a character) is still the source's: found, re-claimed, never doubled.
+func TestByteCutFolderStillFound(t *testing.T) {
+	db := t.TempDir()
+	t.Setenv("WUDICT_DB_DIR", db)
+	src := writeSrc(t, filepath.Join(t.TempDir(), "x"+strings.Repeat("ж", 60)+".mdx"), "m")
+	old := byteCutName(src)
+	if old == "" || old == FolderName(src) {
+		t.Fatalf("byteCutName(%q) = %q: the test name must split a character", src, old)
+	}
+	dir := filepath.Join(db, old)
+	if err := os.Mkdir(dir, 0o755); err != nil {
+		t.Skipf("this filesystem refuses a name that is not UTF-8: %v", err)
+	}
+	if err := writeClaim(dir, src); err != nil {
+		t.Fatal(err)
+	}
+	r := &fakeReader{meta: dict.Meta{Name: "Long", Format: "mdx", Path: src},
+		entries: []dict.Entry{h("a", "<p>x</p>")}}
+	if err := ingestFull(r, TextDBPath(dir)); err != nil {
+		t.Fatal(err)
+	}
+	if got, ok := LookupDir(src); !ok || got != dir {
+		t.Errorf("LookupDir = %q,%v; want %q", got, ok, dir)
+	}
+	if got, err := ClaimDir(src); err != nil || got != dir {
+		t.Errorf("ClaimDir = %q,%v; want %q", got, err, dir)
+	}
+	if des, _ := os.ReadDir(db); len(des) != 1 {
+		t.Errorf("library holds %d folders, want the one", len(des))
+	}
+	if byteCutName(filepath.Join(filepath.Dir(src), "short.mdx")) != "" {
+		t.Error("byteCutName of a short name must be empty")
 	}
 }
 
@@ -339,6 +381,42 @@ func testStore(t *testing.T) *Store {
 	}
 	t.Cleanup(func() { s.Close() })
 	return s
+}
+
+// A path is not a URI: "#" and "%" are ordinary in a folder name ("C#",
+// "100%"), and SQLite must open the file they name, not a truncated or decoded
+// spelling of it.
+func TestIngestPathWithURICharacters(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "C# 100%41 x")
+	if err := os.Mkdir(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	dbPath := TextDBPath(dir)
+	r := &fakeReader{meta: dict.Meta{Name: "Sharp", Format: "mdx", Path: "/nonexistent/sharp.mdx"},
+		entries: []dict.Entry{h("alpha", "<p>a</p>")}}
+	if _, err := IngestPlan(r, dbPath, Plan{}, nil); err != nil {
+		t.Fatal(err)
+	}
+	s, err := Open(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if s.Meta().Name != "Sharp" {
+		t.Errorf("name = %q", s.Meta().Name)
+	}
+	// nothing was written anywhere but the folder named
+	ents, err := os.ReadDir(filepath.Dir(dir))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ents) != 1 {
+		var names []string
+		for _, e := range ents {
+			names = append(names, e.Name())
+		}
+		t.Errorf("files beside the folder: %q", names)
+	}
 }
 
 func TestIngestAndMeta(t *testing.T) {

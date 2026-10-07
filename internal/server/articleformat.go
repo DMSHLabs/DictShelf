@@ -328,7 +328,7 @@ func ArticleStylesheets(body string) []string {
 }
 
 // DictStyles is the display table of d's stylesheets names.
-func DictStyles(d dict.Dictionary, names []string) htmlref.Styles { return stylesFrom(d, names) }
+func DictStyles(d dict.ResourceOpener, names []string) htmlref.Styles { return stylesFrom(d, names) }
 
 // stylesLinked reads the stylesheets body, already rewritten for id, links.
 func stylesLinked(d dict.Dictionary, body, id string) htmlref.Styles {

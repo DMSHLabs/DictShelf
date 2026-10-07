@@ -7,7 +7,6 @@ package dsl
 import (
 	"io"
 	"path/filepath"
-	"sort"
 	"strings"
 	"sync"
 
@@ -111,18 +110,7 @@ func (d *Dict) Resource(name string) (io.ReadCloser, string, error) {
 // and their assets, and packing them would copy a neighbour's media into this
 // dictionary's library folder.
 func (d *Dict) Resources() []string {
-	var out []string
-	seen := map[string]bool{}
-	for _, src := range d.sources() {
-		for _, n := range src.List() {
-			if k := resource.Key(n); k != "" && !seen[k] {
-				seen[k] = true
-				out = append(out, n)
-			}
-		}
-	}
-	sort.Strings(out)
-	return out
+	return resource.ListAll(d.sources())
 }
 
 func (d *Dict) sources() []resource.Source {

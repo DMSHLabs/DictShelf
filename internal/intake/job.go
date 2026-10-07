@@ -164,6 +164,12 @@ type Manager struct {
 	// dictionary. It is how the library learns to look again; this package
 	// deliberately knows nothing about registries.
 	Installed func()
+
+	// Release, when set, is called with a folder just before an install
+	// replaces what is in it, so the library closes every dictionary it holds
+	// open there. Windows refuses to rename an open file, or a folder holding
+	// one, so without it updating a dictionary that has been searched fails.
+	Release func(dir string)
 }
 
 // jobState is the mutable job: the public copy plus what only the installer
@@ -772,7 +778,7 @@ func (m *Manager) extractAll(ctx context.Context, j *jobState, src Source, stage
 			break
 		}
 		var name string
-		if name, err = placeDict(j.dest, stage, i, c, sub); err != nil {
+		if name, err = placeDict(j.dest, stage, i, c, sub, m.Release); err != nil {
 			break
 		}
 		installed = append(installed, name)
@@ -1036,21 +1042,27 @@ func (m *Manager) installRow(ctx context.Context, j *jobState, src Source, opts 
 // still has what they had. Only once the new folder is in place is the old one
 // removed - by the stage teardown, which runs whatever happened.
 //
-// A directory rename with files open inside it is fine on POSIX and can fail
-// on Windows, where the error surfaces as the import's error rather than being
-// papered over: a half-swapped library is not something to recover silently.
+// A directory rename with files open inside it is fine on POSIX and fails on
+// Windows, so release hands the folder to the library to close first. An open
+// that races in between still fails the rename, and that error surfaces as the
+// import's error rather than being papered over: a half-swapped library is not
+// something to recover silently.
 //
 // Nothing is ever installed under a numbered name (D155 Am. 4). A dictionary
 // of the same name is either replaced - its folder here, or its files in
 // place wherever else in the library it lives - or, when the user unticked
 // it, not installed at all. Two of one dictionary is never the outcome of a
 // default. The name returned is what the user sees in "Installed".
-func placeDict(dest, stage string, i int, c Candidate, sub string) (string, error) {
+func placeDict(dest, stage string, i int, c Candidate, sub string, release func(string)) (string, error) {
+	if release == nil {
+		release = func(string) {}
+	}
 	name, _, _ := existingDict(dest, c)
 	if name == "" && c.elsewhereMain != "" {
 		// Asked again at write time, like the folder above: minutes of the
 		// user's and the download's time sit between the screen and here.
 		if fi, err := os.Stat(c.elsewhereMain); err == nil && fi.Mode().IsRegular() {
+			release(filepath.Dir(c.elsewhereMain))
 			if err := replaceIn(filepath.Dir(c.elsewhereMain), sub); err != nil {
 				return "", err
 			}
@@ -1072,6 +1084,7 @@ func placeDict(dest, stage string, i int, c Candidate, sub string) (string, erro
 
 	final := filepath.Join(dest, name)
 	away := filepath.Join(stage, "replaced-"+strconv.Itoa(i))
+	release(final)
 	if err := os.Rename(final, away); err != nil {
 		return "", err
 	}

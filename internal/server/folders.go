@@ -341,7 +341,7 @@ func reveal(path string) error {
 		allowForeground()
 		// explorer exits with a non-zero status even on success, so Start()
 		// (which does not wait) is both correct and simpler here
-		return exec.Command("explorer", "/select,"+filepath.Clean(path)).Start()
+		return explorerSelect(filepath.Clean(path)).Start()
 	default:
 		dir := path
 		if fi, err := os.Stat(path); err == nil && !fi.IsDir() {

@@ -514,11 +514,25 @@ html:has(#panel.show) .bar{padding-right:var(--wd-sbw,0px)}
 /* the theme button only exists here on narrow screens, where the bar has no
    room for it; see the responsive block */
 #panelTheme{display:none}
-/* Identity, the text size and the close button, and nothing else (D143). With
-   55 dictionaries the ✕ must not be somewhere up the page, so this row never
-   scrolls. Nothing that spends disk or CPU belongs in it: top-right is the
-   most-clicked real estate in the panel (D31). */
+/* Identity, the text size, the close button and the dictionary filter, and
+   nothing else (D143 Am. 1). With 55 dictionaries the ✕ must not be somewhere
+   up the page, so this row never scrolls. Nothing that spends disk or starts
+   work on the server belongs in it: top-right is the most-clicked real estate
+   in the panel (D31). The filter only hides cards in this page. */
 .panel-head{flex:none;background:var(--bg);padding:var(--sp-3) 0 0}
+/* Finding one dictionary among a hundred. In the row that never scrolls, so
+   the field stays where it was typed into while the list under it shrinks.
+   Same field as the search box: the global input[type=search] rule, its ⌕ in
+   the left padding, and the native ✕ at the trailing edge. */
+.pfind{position:relative;display:flex;margin:0 0 var(--sp-2)}
+.pfind svg{position:absolute;left:.62em;top:50%;margin-top:-7px;width:14px;height:14px;
+  color:var(--fg-faint);pointer-events:none}
+/* ▲ ▼ and the drag handle place a card against neighbours in the WHOLE list,
+   which a filtered list does not show, so they leave. ⏫ ⏬ keep meaning the
+   same thing. */
+#panelList.filtered .ord [data-mv=up],#panelList.filtered .ord [data-mv=down],
+#panelList.filtered .grip{display:none}
+#panelList .nofind{margin:var(--sp-2);color:var(--fg-faint);font-size:12px}
 /* The master switch sits in the same right-hand column as the per-card ones,
    so the column reads as one control surface instead of a stray toggle
    (right padding = card padding + its 1px border). It sits DIRECTLY above
@@ -736,10 +750,10 @@ html:has(#panel.show) .bar{padding-right:var(--wd-sbw,0px)}
    font-family:inherit is not optional: #rescanBtn is a real <button>, and a
    button that does not ask for it renders in the UA stack, not var(--font). */
 .facts{display:flex;flex-wrap:wrap;gap:.45em;align-items:center;margin-top:.7em}
-/* The reading strip's row. Same left edge as the drawer beneath it (#folders'
-   own inline margin), so the two lines read as one block and not as a control
-   floating above a section. */
-.facts.reading{margin:.6em var(--sp-2) var(--sp-1)}
+/* The reading row: the first thing under the cog, apart from the setup row
+   below it by a little more than a row's own gap. Its left edge is #folders'
+   own inline margin. */
+.facts.reading{margin:.7em 0 .9em}
 .facts .act[hidden]{display:none}
 .facts .act{display:inline-flex;align-items:center;gap:.4em;
   font-family:inherit;font-size:11.5px;line-height:1.2;padding:.28em .6em;margin:0;
@@ -784,6 +798,10 @@ html:has(#panel.show) .bar{padding-right:var(--wd-sbw,0px)}
 .facts .seg.multi .act[aria-pressed="true"] svg{color:var(--accent)}
 .facts .seg.multi .act[aria-pressed="false"] .tick{display:none}
 .facts .seg[hidden]{display:none}
+/* As wide as the choice it shows, not its longest option: "3" in a box sized
+   for "1, first to show a result" reads as an empty field. Where the browser
+   does not size a select to its content, the longest option sets the width. */
+.facts .seg select{font:inherit;font-size:11.5px;line-height:1.2;padding:.25em .4em;max-width:none;field-sizing:content}
 /* One step fainter than the label, so the glyph reads as a mark on the control
    rather than as a second word. Both idioms below (fill and stroke) resolve
    through currentColor, so this one declaration colours all three — and they
@@ -1063,7 +1081,7 @@ html:has(#panel.show) .bar{padding-right:var(--wd-sbw,0px)}
      as you type. A button would be a magnifier next to a magnifier. -->
 <button type="button" class="btn tools themeBtn" title="Theme" aria-label="Toggle theme">◐</button>
 <button type="button" class="btn" id="wideBtn" title="Toggle wide layout" aria-label="Toggle wide layout">⇔</button>
-<button type="button" class="btn" id="expandBtn" title="Expand all results" aria-label="Expand all results" aria-pressed="false">⊞</button>
+<button type="button" class="btn" id="expandBtn" title="Open all results" aria-label="Open all results" aria-pressed="false">⊞</button>
 <button type="button" class="btn" id="panelBtn" title="Dictionaries" aria-label="Manage dictionaries">☰</button>
 </form>
 </header>
@@ -1092,68 +1110,81 @@ html:has(#panel.show) .bar{padding-right:var(--wd-sbw,0px)}
      elements carry .themeBtn and one handler drives the pair, the way the
      wordmark has two mount points selected by media query. -->
 <button type="button" class="btn themeBtn" id="panelTheme" title="Theme" aria-label="Toggle theme">◐</button>
-<button class="btn" id="closePanel" aria-label="Close">✕</button></span></h2></div>
+<button class="btn" id="closePanel" aria-label="Close">✕</button></span></h2>
+<!-- Not in a form: Enter has nothing to submit, it only puts the keyboard away. -->
+<label class="pfind"><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" d="M7.1 2.4a4.7 4.7 0 1 0 0 9.4 4.7 4.7 0 0 0 0-9.4zm3.6 8.3l3 3"/></svg>
+<input type="search" id="panelFind" placeholder="title or group" autocomplete="off" enterkeyhint="done" aria-label="Find a dictionary by title or group"></label></div>
 <div class="panel-scroll">
-<!-- The reading strip (D143). Two controls, admitted by one rule: nothing here
-     spends disk, CPU or navigation. They are what a reader reaches for WHILE
-     READING, so they are visible without opening anything; everything that
-     configures the machine is one click down, in the drawer below. No heading
-     over them — the controls name themselves (D102), and a third line of chrome
-     would cost more than it explains. -->
-<div class="facts reading">
-  <!-- Not in the top bar: a control that only bites in ONE search mode has no
-       business taking width away from the four that are used constantly (D102).
-       A highlighter pen, and aria-pressed rather than a checkbox, because the
-       row it joins is made of buttons and a lone checkbox would read as a
-       different kind of thing. -->
-  <button type="button" class="act" id="hlBtn" aria-pressed="true" title="Mark the words you searched for inside the article — full-text search only"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9.4 1.9l4.7 4.7-5.6 5.6H3.8V7.5z"/><path d="M1.9 14.4h12.2"/></svg>Highlight matches</button>
-  <!-- Selecting text in an article offers a speaker that reads it aloud in a
-       system voice (D148). Here because it costs nothing until a reader
-       selects something, and a reader who never wants it should be able to
-       make the offer stop appearing. Hidden where the browser cannot speak. -->
-  <button type="button" class="act" id="speakBtn" aria-pressed="true" title="Offer to read selected article text aloud"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M2.5 6h2.5l3.5-3v10l-3.5-3H2.5z"/><path class="wave" d="M11 5.8a3 3 0 0 1 0 4.4"/><path class="wave" d="M12.9 3.9a5.8 5.8 0 0 1 0 8.2"/></svg>Read aloud</button>
-  <!-- Which section unfolds itself once the answers start arriving (D142).
-       A pair rather than one toggle, because neither choice is an "off":
-       both are strategies, and an unpressed pen cannot say which of the two
-       is in force. Named by what the user gets, not by the mechanism behind
-       it (D102) — "My order" is the top of the dictionary list they arranged
-       below, "Fastest" is whichever answer arrives soonest. The default is
-       first and pressed: the list a reader arranged IS their answer to "which
-       of these do I want", and a race winner is not that answer (D144). -->
-  <span class="seg" role="group" aria-label="Which dictionary opens first">
-    <span>Open first</span>
-    <button type="button" class="act" id="openOrder" aria-pressed="true" title="Expand the first dictionary in your list that has a result — waits briefly for the ones above it">My order</button>
-    <button type="button" class="act" id="openFast" aria-pressed="false" title="Expand whichever dictionary answers first — the quickest definition on screen">Fastest</button>
-  </span>
-  <!-- How the dictionary PICKER lists the library. A pair for the same reason
-       as the one above: both halves are orders, and neither is an "off".
-       It moves the picker and nothing else — this list below stays in the
-       user's own order because this is where that order is made, by dragging,
-       and a list that re-sorted itself under the drag could not express one.
-       Alphabetical is first and pressed: it is what the picker has always
-       done, so nothing moves for anyone who never touches this. -->
-  <span class="seg" role="group" aria-label="How the dictionary list is ordered">
-    <span>Sort dictionaries</span>
-    <button type="button" class="act" id="sortAZ" aria-pressed="true" title="List the dictionaries A→Z in the picker, whatever order you arranged them in here">Alphabetical</button>
-    <button type="button" class="act" id="sortOwn" aria-pressed="false" title="List the dictionaries in the picker the way you arranged them below">My order</button>
-  </span>
-  <!-- Which sections the picker offers above the names (D149). One switch per
-       section rather than one for all: a native <select> cannot fold a
-       section, so every open pays the full length, and what is worth that
-       length differs by reader - a one-language library has no use for
-       Publisher, a learner lives in Language pair. Independent toggles, so
-       not joined into one control like the pairs above. The buttons are
-       made from the sections the library actually yields; with none, the
-       row is hidden rather than offering switches that change nothing. -->
-  <span class="seg multi" id="groupSeg" role="group" aria-label="Sections the dictionary picker offers" hidden>
-    <span>Group by</span><span class="chips"></span>
-  </span>
-</div>
 <details id="folders">
-  <summary title="Folders &amp; setup" aria-label="Folders and setup">
+  <summary title="Settings and folders" aria-label="Settings and folders">
     <svg class="cog" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path fill="currentColor" fill-rule="evenodd" d="M6.56 1.05L9.44 1.05L9.07 2.81L10.91 3.57L11.90 2.07L13.93 4.10L12.43 5.09L13.19 6.93L14.95 6.56L14.95 9.44L13.19 9.07L12.43 10.91L13.93 11.90L11.90 13.93L10.91 12.43L9.07 13.19L9.44 14.95L6.56 14.95L6.93 13.19L5.09 12.43L4.10 13.93L2.07 11.90L3.57 10.91L2.81 9.07L1.05 9.44L1.05 6.56L2.81 6.93L3.57 5.09L2.07 4.10L4.10 2.07L5.09 3.57L6.93 2.81ZM5.50 8.00a2.50 2.50 0 1 0 5.00 0a2.50 2.50 0 1 0 -5.00 0Z"/></svg>
     <span class="fsum" id="folderSummary"></span>
     <span class="gwarn" id="groupsWarn" hidden>⚠</span></summary>
+  <!-- The reading row (D143 Am. 1). Settings a reader sets once and then
+       leaves: they live under the cog with the rest, so the dictionary list
+       starts right under the header. No heading over them — the controls name
+       themselves (D102). -->
+  <div class="facts reading">
+    <!-- Not in the top bar: a control that only bites in ONE search mode has no
+         business taking width away from the four that are used constantly (D102).
+         A highlighter pen, and aria-pressed rather than a checkbox, because the
+         row it joins is made of buttons and a lone checkbox would read as a
+         different kind of thing. -->
+    <button type="button" class="act" id="hlBtn" aria-pressed="true" title="Mark the words you searched for inside the article — full-text search only"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9.4 1.9l4.7 4.7-5.6 5.6H3.8V7.5z"/><path d="M1.9 14.4h12.2"/></svg>Highlight matches</button>
+    <!-- Selecting text in an article offers a speaker that reads it aloud in a
+         system voice (D148). Here because it costs nothing until a reader
+         selects something, and a reader who never wants it should be able to
+         make the offer stop appearing. Hidden where the browser cannot speak. -->
+    <button type="button" class="act" id="speakBtn" aria-pressed="true" title="Offer to read selected article text aloud"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M2.5 6h2.5l3.5-3v10l-3.5-3H2.5z"/><path class="wave" d="M11 5.8a3 3 0 0 1 0 4.4"/><path class="wave" d="M12.9 3.9a5.8 5.8 0 0 1 0 8.2"/></svg>Read aloud</button>
+    <!-- Which sections unfold themselves once the answers start arriving
+         (D142). One question - what opens? - so one control. The count is of
+         dictionaries that HAVE a result, taken from the top of the list the
+         reader arranged below, so the same ones open in the same places every
+         time; 1 is the default (D144). "1, first to show a result" is the race
+         of D73, and only as a single section: several race winners would open
+         scattered down the list. A native <select> because the answer is one of
+         a closed set: nothing to check, the system picker on a phone, and it
+         does not look like the text-size −/+ (an amount, not a choice).
+         Up to 5 because that is about what a reader can compare at once, then
+         All, with no limit: the reader may trade speed for it. A larger number
+         set by hand in state.json is shown as its own choice. Wording in
+         ASD-STE100. -->
+    <label class="seg">
+      <span>Open</span>
+      <select id="openSel" title="These dictionaries open automatically, in the sequence of your list. Many open dictionaries can make the page slow.">
+        <option value="fast">1, first to show a result</option>
+        <option value="1">1</option>
+        <option value="2">2</option>
+        <option value="3">3</option>
+        <option value="4">4</option>
+        <option value="5">5</option>
+        <option value="all">All</option>
+      </select>
+    </label>
+    <!-- How the dictionary PICKER lists the library. A pair for the same reason
+         as the one above: both halves are orders, and neither is an "off".
+         It moves the picker and nothing else — this list below stays in the
+         user's own order because this is where that order is made, by dragging,
+         and a list that re-sorted itself under the drag could not express one.
+         Alphabetical is first and pressed: it is what the picker has always
+         done, so nothing moves for anyone who never touches this. -->
+    <span class="seg" role="group" aria-label="How the dictionary list is ordered">
+      <span>Sort dictionaries</span>
+      <button type="button" class="act" id="sortAZ" aria-pressed="true" title="List the dictionaries A→Z in the picker, whatever order you arranged them in here">Alphabetical</button>
+      <button type="button" class="act" id="sortOwn" aria-pressed="false" title="List the dictionaries in the picker the way you arranged them below">My order</button>
+    </span>
+    <!-- Which sections the picker offers above the names (D149). One switch per
+         section rather than one for all: a native <select> cannot fold a
+         section, so every open pays the full length, and what is worth that
+         length differs by reader - a one-language library has no use for
+         Publisher, a learner lives in Language pair. Independent toggles, so
+         not joined into one control like the pairs above. The buttons are
+         made from the sections the library actually yields; with none, the
+         row is hidden rather than offering switches that change nothing. -->
+    <span class="seg multi" id="groupSeg" role="group" aria-label="Sections the dictionary picker offers" hidden>
+      <span>Group by</span><span class="chips"></span>
+    </span>
+  </div>
   <!-- Monochrome inline SVG, never emoji, for the reason already stated on the
        cog above: a colour blob on one platform and flat on another, off its own
        baseline, and unable to inherit currentColor — so it cannot follow the
@@ -1302,15 +1333,32 @@ function adoptLocalPrefs(){
 }
 let prefsReady=false;
 let fullOn=false; // brief or full view for the next section that opens (fullInit)
+/* The search mode the reader last PICKED, which is what is saved - not what
+   #mode shows. A link, Back/Forward and searchFor set #mode too, and the next
+   save of any other setting would otherwise store their choice as the
+   reader's. Only the select's own change event moves this. */
+let modePref="prefix";
+/* #mode takes only a value it has an <option> for: any other value (a
+   hand-typed ?mode=fuzzy) would leave the select blank and search with an
+   empty mode. Reports whether it took the value. */
+function setMode(v){
+  const ok=[...$("mode").options].some(o=>o.value===v);
+  if(ok)$("mode").value=v;
+  return ok;
+}
 async function loadPrefs(){
   try{
     const r=await fetch("/api/prefs");
     if(!r.ok)throw new Error("HTTP "+r.status);
     const st=await r.json(),rows=st.dicts||[];
-    prefsReady=true;
     // Read before the exists branch below returns: on a first run there is no
     // ui record, but there is also nothing here that can go wrong.
-    if(st.ui){applyFS(st.ui.fontSize,false);applyHL(!st.ui.hlOff,false);applySpeak(!st.ui.speakOff,false);applyOpenOrder(!st.ui.fastFirst,false);applySortOrder(st.ui.sortMine,false);applyGroupsOff(st.ui.groupsOff,false);fullOn=!!st.ui.full}
+    if(st.ui){applyFS(st.ui.fontSize,false);applyHL(!st.ui.hlOff,false);applySpeak(!st.ui.speakOff,false);applyOpen(st.ui.fastFirst?"fast":st.ui.openAll?"all":String(st.ui.openN||1),false);applySortOrder(st.ui.sortMine,false);applyGroupsOff(st.ui.groupsOff,false);fullOn=!!st.ui.full;modePref=st.ui.mode||"prefix";setMode(modePref)}
+    uiBase=uiNow();
+    dictsBase=rows.map(d=>({id:d.id,name:d.name||"",off:!!d.off}));
+    // Last, so that a page whose baselines are not both in hand never saves:
+    // savePrefs diffs against them.
+    prefsReady=true;
     if(!st.exists){adoptLocalPrefs();return} // first run: keep whatever we had
     prefOrder=rows.map(d=>d.id);
     disabled=new Set(rows.filter(d=>d.off).map(d=>d.id));
@@ -1320,9 +1368,26 @@ async function loadPrefs(){
     console.warn("could not load settings:",e);
   }
 }
+/* The ui record as this page holds it, and as it last read or wrote it. A save
+   sends only the keys that differ from uiBase, and the server changes only the
+   keys it is sent (prefs.go, update): another page on the same server - a
+   second tab, or the Android app beside its lookup popup - may have changed a
+   setting since this one loaded, and a full record would carry this page's
+   stale copy of it back over the newer choice. uiBase moves only on a save
+   that succeeded, and only by what was sent, so a failed key goes again with
+   the next save. */
+let uiBase=null;
+/* The same rule for the dictionary list, whole: it is one ordering, so it is
+   sent entire or not at all. Compared over the dictionaries this page can see,
+   because the server keeps the records of the ones it cannot (an unmounted
+   drive) and this page cannot speak for them. */
+let dictsBase=null;
+function uiNow(){
+  return{fontSize:articleFS,hlOff:!hlOn,speakOff:!speakOn,fastFirst:!orderFirst,openN:openN>1?openN:0,openAll,sortMine:sortOwn,groupsOff:[...groupsOff].sort(),full:fullOn,mode:modePref==="prefix"?"":modePref};
+}
 /* Debounced, and silent when nothing actually changed — dragging a card emits
-   a move per hovered row, and startup normalisation re-sends a list that is
-   usually identical to the one we just read. */
+   a move per hovered row, and startup normalisation usually yields the list
+   we just read, which is then not sent at all. */
 let prefsTimer=null,prefsSent=null;
 function savePrefs(now){
   clearTimeout(prefsTimer);
@@ -1331,12 +1396,21 @@ function savePrefs(now){
   // it would destroy the real one.
   if(!prefsReady){setStatus("⚠ settings are not being saved — reload the page");return}
   if(!now){prefsTimer=setTimeout(()=>savePrefs(true),400);return}
-  const body=JSON.stringify({dicts:orderedDicts().map(d=>({id:d.id,name:dictLabel(d),off:disabled.has(d.id)})),
-    ui:{fontSize:articleFS,hlOff:!hlOn,speakOff:!speakOn,fastFirst:!orderFirst,sortMine:sortOwn,groupsOff:[...groupsOff].sort(),full:fullOn}});
+  const ui=uiNow(),patch={};
+  for(const k in ui)if(JSON.stringify(ui[k])!==JSON.stringify(uiBase[k]))patch[k]=ui[k];
+  const rows=orderedDicts().map(d=>({id:d.id,name:dictLabel(d),off:disabled.has(d.id)})),
+    seen=new Set(rows.map(d=>d.id)),req={};
+  if(JSON.stringify(rows)!==JSON.stringify(dictsBase.filter(d=>seen.has(d.id))))req.dicts=rows;
+  if(Object.keys(patch).length)req.ui=patch;
+  if(!req.dicts&&!req.ui)return;
+  const body=JSON.stringify(req);
   if(body===prefsSent)return;
   prefsSent=body;
   fetch("/api/prefs",{method:"PUT",headers:{"Content-Type":"application/json"},body})
-    .then(r=>{if(!r.ok)throw new Error("HTTP "+r.status)})
+    .then(r=>{if(!r.ok)throw new Error("HTTP "+r.status);uiBase={...uiBase,...patch};if(req.dicts)dictsBase=rows;
+      // a body is a diff against the baselines just moved, so the same text
+      // later means a different change: dedupe only what is in flight
+      if(prefsSent===body)prefsSent=null})
     .catch(e=>{prefsSent=null;setStatus("⚠ could not save dictionary settings: "+esc(e.message))});
 }
 /* What a failed API call says: every route answers {"error": "…"} (httpErr),
@@ -1558,20 +1632,26 @@ function applySpeak(on,save){
 }
 $("speakBtn").addEventListener("click",()=>applySpeak(!speakOn,true));
 applySpeak(true,false);
-/* Which section auto-expands: the first dictionary in the user's own order
-   that has a result (D142, and the default since D144), or the one that
-   ANSWERS first (D73, now the opt-out). Stored as `fastFirst`, so an absent
-   key is the default here too.
+/* Which sections auto-expand: the first `openN` dictionaries in the user's
+   own order that have a result (D142; 1, the default since D144), all of them
+   (`openAll`), or the single one that ANSWERS first (D73, `fastFirst`). Three
+   fields so that each one's absent key is its default; the menu sets all
+   three at once, so no contradictory mix can build up.
    Server state like the two above, not localStorage: it is a reading habit,
    not a property of this browser, so it follows the person across ports and
    hosts. /api/search never learns of it — which section a reader unfolds is a
    property of the reader, not of the answer. */
-let orderFirst=true;
-function applyOpenOrder(on,save){
-  const v=!!on,moved=v!==orderFirst;
-  orderFirst=v;
-  for(const [id,want] of [["openFast",false],["openOrder",true]])
-    $(id).setAttribute("aria-pressed",v===want?"true":"false");
+let orderFirst=true,openN=1,openAll=false;
+const openValue=()=>!orderFirst?"fast":openAll?"all":String(openN);
+function applyOpen(v,save){
+  const before=openValue(),n=parseInt(v,10);
+  orderFirst=v!=="fast";openAll=v==="all";openN=n>1?n:1;
+  const sel=$("openSel"),now=openValue();
+  // a count set by hand in state.json: shown as its own choice, before All,
+  // rather than leaving the select blank
+  if(![...sel.options].some(o=>o.value===now))sel.add(new Option(now,now),sel.options[sel.length-1]);
+  sel.value=now;
+  const moved=now!==before;
   if(save&&moved)savePrefs();
   return moved;
 }
@@ -1648,11 +1728,10 @@ function renderGroupSeg(fs){
    until the next query reads as broken — and pressing the half that is already
    in force is not a change, so it must not throw the answer away and rebuild
    it identically. */
-for(const [id,want] of [["openFast",false],["openOrder",true]])
-  $(id).addEventListener("click",()=>{
-    if(applyOpenOrder(want,true)&&$("q").value.trim())doSearch();
-  });
-applyOpenOrder(true,false);
+$("openSel").addEventListener("change",e=>{
+  if(applyOpen(e.target.value,true)&&$("q").value.trim())doSearch();
+});
+applyOpen("1",false);
 for(const [id,step] of [["fsDown",-1],["fsUp",1],["fsVal",0]])
   $(id).addEventListener("click",()=>applyFS(step?articleFS+step:FS_DEF,true));
 applyFS(FS_DEF,false);   // paints --wd-fs and the .lim state before any load
@@ -1723,13 +1802,13 @@ async function loadUserCSS(){
   }catch(e){console.warn("could not load custom article CSS:",e)}
 }
 
-/* Expand all results — a view toggle that is deliberately NOT remembered.
+/* Open all results — a view toggle that is deliberately NOT remembered.
    It lives for the page and nothing else: no localStorage, no state.json.
    Persisting it would mean enabling it once on a wide screen and meeting an
    inexplicably different app on a laptop three weeks later, with nothing on
    screen to explain why. Reloading always returns to the default, which stays
-   "open the top-preference dictionary" — that is what gets you reading with no
-   scrolling, and it is right for almost every search.
+   the reader's own "Open" choice in the panel, which IS remembered and works
+   at every width; this button is for one deep look at one answer.
    A toggle rather than a one-shot action because the two directions are
    symmetric: expanding is one click, and collapsing again by hand would be
    one click per dictionary. */
@@ -1737,7 +1816,7 @@ let expandAll=false;
 function applyExpand(){
   const b=$("expandBtn");
   b.textContent=expandAll?"⊟":"⊞";
-  b.title=expandAll?"Collapse all results":"Expand all results";
+  b.title=expandAll?"Close all results":"Open all results";
   b.setAttribute("aria-label",b.title);
   b.setAttribute("aria-pressed",expandAll?"true":"false");
   b.style.color=expandAll?"var(--accent)":"";
@@ -1768,7 +1847,7 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change",syncAutoDar
 applyTheme(localStorage.getItem("wudict_theme")||"auto");
 
 /* ── dictionaries ──────────────────────────────────────────────────── */
-function dictLabel(d){return d.name||d.path.split("/").pop()}
+function dictLabel(d){return d.name||d.path.split(/[\\/]/).pop()}
 /* A DSL [ref dict="..."] names another dictionary by its #NAME, which is what
    dictLabel shows, so the name is matched against the label as well as the
    stored name - a dictionary whose file carries no #NAME is known here by its
@@ -1797,6 +1876,13 @@ function dictIDByName(name){
      failed  — the stream broke: interactive anyway, with a retry
    Only partial/ready may say anything about what the user has disabled. */
 let phase="boot",dictTotal=0,staleSearch=false;
+/* Whether the last search's dictionaries came FROM the list ("all" or a
+   group) rather than naming one: only such a search can be made incomplete by
+   a list still loading, or wrong by a list that has changed since. */
+let lastFromList=false;
+/* The widening a search deferred for the list (doSearch), handed to its re-run
+   by loadDicts and to nothing else: a query typed in between drops it. */
+let staleWidened=null;
 function setPhase(p){
   if(phase===p)return;
   const wasBoot=phase==="boot";
@@ -1946,6 +2032,7 @@ function refreshDictUI(now){
   // last row is in — and then only the remembered one still names the choice.
   const sel=$("dict"),saved=localStorage.getItem("wudict_dict");
   const prev=sel.value&&sel.value!=="all"?sel.value:(saved||sel.value||"all");
+  const pend=sel.selectedOptions[0]?.dataset.pending?sel.selectedOptions[0]:null; // selectDict
   sel.innerHTML='<option value="all">All dictionaries</option>';
   /* <optgroup> and nothing more: the heading is the facet and is NOT
      selectable, which is exactly the required behaviour for a section label,
@@ -1986,6 +2073,9 @@ function refreshDictUI(now){
     host.appendChild(o);
   }
   if([...sel.options].some(o=>o.value===prev))sel.value=prev;
+  // a link's dictionary whose row is still on its way keeps its placeholder;
+  // once the list is complete, a row that never came is not there to choose
+  else if(pend&&!dictsSettled){sel.appendChild(pend);sel.value=prev}
   syncChips(); // the option list just changed under the chip
   renderPanel();
 }
@@ -2001,52 +2091,101 @@ function groupsTrouble(n){
   a.lastChild.textContent=n?`Edit groups… (${n})`:"Edit groups…";
 }
 
+/* The last complete /api/dicts answer and its validator (the `end` frame's
+   etag), so a load draws the list at once and only asks whether it changed.
+   Per browser and disposable: the server owns the list, a 304 vouches for
+   this copy, and anything unreadable here is simply no copy. An answer the
+   server offered no validator for (a row with an error or a running job) is
+   not kept. */
+const DICTS_KEY="wudict_dicts";
+function readDictCache(){
+  try{
+    const c=JSON.parse(localStorage.getItem(DICTS_KEY));
+    return c&&c.v===1&&c.etag&&Array.isArray(c.rows)&&c.rows.length?c:null;
+  }catch(e){return null}
+}
+function writeDictCache(etag,rows,gp){
+  try{
+    if(etag)localStorage.setItem(DICTS_KEY,JSON.stringify({v:1,etag,gp,rows}));
+    else localStorage.removeItem(DICTS_KEY);
+  }catch(e){
+    // a full store must not leave the previous copy to be vouched for
+    try{localStorage.removeItem(DICTS_KEY)}catch(_){}
+  }
+}
+/* What a search over the list depends on: which dictionaries, which modes
+   each can answer, and which groups each is in. A revalidation that changes
+   only sizes or paths leaves an answer on screen as true as it was. */
+const listShape=()=>dicts.map(d=>d.id+":"+JSON.stringify(d.caps)+":"+JSON.stringify(d.groups||[])).sort().join();
+
 /* Consumes the /api/dicts NDJSON stream, so search unblocks on the FIRST
    dictionary rather than the last one. Never throws: a failure here must
-   still leave the user with a usable page. */
-async function loadDicts(rescan){
+   still leave the user with a usable page.
+
+   opts.etag revalidates a list already on screen (bootFromCache): nothing
+   changes until the whole answer is in, then everything at once, and a 304
+   changes nothing at all. opts.silent loads under an answer the page gave
+   before the list (bootEarly), where a loading line would describe nothing
+   the reader is waiting for.
+
+   Resolves true when the list on screen is the server's (a 304, or a whole
+   answer), false when it could not be had. */
+async function loadDicts(rescan,opts={}){
   // A rescan happens in an app that already works — it must not black the UI
   // out. Only the first load (or a retry after a failure) blocks.
   const blocking=phase==="boot"||phase==="failed";
+  const quiet=!!opts.etag;
   // A first load has no groups to show until the last row has resolved. A
   // RESCAN keeps the ones it has: the list on screen is already the previous
   // one being replaced row by row, and blanking the groups under it would
   // drop a group the user currently has selected.
   if(blocking)dictsSettled=false;
   if(blocking){setPhase("boot");startBootScreen();dictTotal=0;setStatus(esc(readyCount()),"load")}
-  else setStatus('<span class="spin"></span>Loading dictionaries…',"load");
+  else if(!quiet&&!opts.silent)setStatus('<span class="spin"></span>Loading dictionaries…',"load");
   const rows=[];
-  let published=false,sawBegin=false;
+  let published=false,sawBegin=false,tag="",gp=0;
   // "begin" costs the server no opens at all, so its absence means the server
-  // is not answering — never leave the form inert waiting on a hang.
-  const watchdog=blocking?setTimeout(()=>{if(!sawBegin)bootFailed("the server is not responding")},20000):null;
+  // is not answering — never leave the form inert waiting on a hang. Under an
+  // early answer (silent) the answer stays: only the list is reported missing.
+  const failed=msg=>{
+    if(blocking)bootFailed(msg);
+    else if(opts.silent){setPhase("failed");syncPanelHeader();setStatus("⚠ Could not load your dictionaries: "+esc(msg),"dicts")}
+    else setStatus("⚠ "+esc(msg));
+  };
+  const watchdog=blocking||opts.silent?setTimeout(()=>{if(!sawBegin)failed("the server is not responding")},20000):null;
   try{
-    await fetchStream(rescan?"/api/rescan":"/api/dicts",msg=>{
+    const fresh=await fetchStream(rescan?"/api/rescan":"/api/dicts",msg=>{
       if(msg.t==="begin"){
-        sawBegin=true;dictTotal=msg.total||0;
-        groupsTrouble(msg.groupsProblems||0);
+        sawBegin=true;gp=msg.groupsProblems||0;
+        groupsTrouble(gp);
+        if(quiet)return;
+        dictTotal=msg.total||0;
         if(blocking)setStatus(esc(readyCount()),"load");
       }else if(msg.t==="dict"&&msg.dict){
         rows.push(msg.dict);
+        if(quiet)return;
         if(!published){
           // swap the old list out only now: a rescan keeps showing the
           // previous dictionaries until replacements start arriving
           published=true;dicts=rows;
-          if(phase==="failed")$("out").innerHTML=""; // a slow stream beat the watchdog
+          // a slow stream beat the watchdog: take its notice down, not an answer
+          if(phase==="failed"&&$("retryBtn"))$("out").innerHTML="";
           setPhase("partial");
         }
         if(blocking)setStatus(esc(readyCount()),"load");
         refreshDictUI();
-      }
-    });
+      }else if(msg.t==="end")tag=msg.etag||"";
+    },null,opts.etag);
+    if(!fresh)return true; // 304: the list on screen is the list
   }catch(err){
-    if(blocking)bootFailed(err.message);
-    else setStatus("⚠ "+esc(err.message));
-    return;
+    failed(err.message);
+    return false;
   }finally{
     clearTimeout(watchdog);
   }
+  const shape=quiet&&listShape();
   dicts=rows;dictTotal=rows.length;
+  writeDictCache(tag,rows,gp);
   // normalize the saved preference order to the current dictionary set
   // (appends newly-added dicts A→Z, drops removed ones). ONLY on the complete
   // set — doing it mid-stream would drop the ids that had not arrived yet.
@@ -2054,9 +2193,12 @@ async function loadDicts(rescan){
   dictsSettled=true; // every row is in; the groups can be counted
   refreshDictUI(true);
   setPhase("ready");
-  clearStatus("load");
+  clearStatus("load");clearStatus("dicts");
   // a search run against a half-loaded list is now answerable in full
-  if(staleSearch&&lastQuery){staleSearch=false;doSearch()}
+  if(staleSearch&&lastQuery){staleSearch=false;widenedFrom=staleWidened;doSearch()}
+  // and one run against the kept list, if the list it searched has changed
+  else if(quiet&&lastFromList&&lastQuery&&listShape()!==shape)doSearch();
+  return true;
 }
 /* reorder helpers operate on the preference-ordered id list */
 function moveDict(id,where){
@@ -2078,24 +2220,26 @@ function toggleDict(id){
    It only ever changes which dictionaries "All dictionaries" searches; it
    never touches a dictionary or its files. */
 function setAllEnabled(on){
-  disabled.clear();
-  if(!on)for(const d of dicts)disabled.add(d.id);
+  for(const d of scopeDicts())on?disabled.delete(d.id):disabled.add(d.id);
   savePrefs();renderPanel();
 }
 function syncPanelHeader(){
-  const total=dicts.length,on=dicts.filter(d=>!disabled.has(d.id)).length;
+  const scope=scopeDicts(),filtered=scope!==dicts,
+    total=scope.length,on=scope.filter(d=>!disabled.has(d.id)).length;
   const box=$("enAll");
   box.checked=total>0&&on===total;
   box.indeterminate=on>0&&on<total;
   box.disabled=total===0;
-  const label=on===total?"All dictionaries are searched":
-    on===0?"No dictionaries are searched":`${on} of ${total} dictionaries are searched`;
+  const shown=filtered?" shown":"",
+    label=on===total?`All dictionaries${shown} are searched`:
+    on===0?`No dictionaries${shown} are searched`:`${on} of ${total} dictionaries${shown} are searched`;
   // an empty list before the stream finishes is "not here yet", not "none" —
   // the panel must not contradict the boot screen (D30)
   $("enAllLabel").textContent=!total?
-      (phase==="boot"?"Still loading…":phase==="failed"?"Could not load":"No dictionaries"):
+      (filtered?"None shown":phase==="failed"?"Could not load":dictsSettled?"No dictionaries":"Still loading…"):
     on===total?"All enabled":on===0?"None enabled":`${on} of ${total} enabled`;
   box.title=label;
+  box.setAttribute("aria-label",`Enable all dictionaries${shown}`);
   renderReindex();
 }
 /* The Rebuild line (server/reindex.go): one line, shown only while some
@@ -2200,7 +2344,7 @@ $("dict").onchange=e=>{const v=e.target.value;localStorage.setItem("wudict_dict"
 /* Mode re-runs the search on change, symmetric with #dict: the narrow bar has
    no submit button, so a mode that waited for the next submit would appear to
    do nothing at all. */
-$("mode").onchange=()=>{syncChips();if($("q").value.trim())doSearch()};
+$("mode").onchange=()=>{modePref=$("mode").value;savePrefs();syncChips();if($("q").value.trim())doSearch()};
 syncChips(); // the markup ships empty chips; JS stays the single authority
 
 /* provenance: the collapsed line says where the dictionary came from (its
@@ -2317,7 +2461,6 @@ function rmTrigger(){
   return `<span class="rm" title="Delete this dictionary and its files — permanently, with no undo">🗑 Remove…</span>`;
 }
 function renderPanel(){
-  syncPanelHeader();
   const el=$("panelList");
   /* Every card is replaced, so the scroll offset has to be carried over by
      hand. Measured on a phone: an ingest that ran for nine minutes ends in a
@@ -2330,6 +2473,7 @@ function renderPanel(){
   for(const d of ord){
     const off=disabled.has(d.id);
     const div=document.createElement("div");div.className="pd"+(off?" off":"");div.dataset.id=d.id;
+    div.dataset.find=findKey(d);
     /* Only what varies AND can be changed. exact and prefix are true for every
        dictionary and cost nothing, so showing them was decoration; contains,
        full-text and media each cost real disk, so each is a switch.
@@ -2417,6 +2561,7 @@ function renderPanel(){
       <details class="about"><summary>About this dictionary</summary>${traits(d)}<div class="aboutbody">…</div></details>`;
     el.appendChild(div);
   }
+  findDicts(); // also syncs the master switch, which follows the filter
   if(scroller)scroller.scrollTop=top;
   // A change to a dictionary's indexes is the server's job, not this page's
   // (jobs.go): one started before a reload or by another tab is in its row,
@@ -2451,6 +2596,43 @@ $("panelList").addEventListener("drop",e=>{
   let to=ids.indexOf(pd.dataset.id);if(after)to++;
   ids.splice(to,0,dragId);prefOrder=ids;savePrefs();clearDrop();dragId=null;renderPanel();
 });
+/* Finding a dictionary in the panel. Every word typed must occur, case and
+   accents ignored, in the title or in one of the dictionary's groups, and the
+   list keeps its own order. Cards are hidden, never rebuilt: a keystroke is
+   one pass over the rows, and a card's open details and running progress
+   survive it. The master switch acts on the cards shown, so it is
+   synced on every pass. */
+function findFold(s){return s.normalize("NFD").replace(/\p{M}/gu,"").toLowerCase()}
+function findKey(d){return findFold([dictLabel(d),...(d.groups||[]).map(g=>g.vl)].join("\n"))}
+function findWords(){return findFold($("panelFind").value).split(/\s+/).filter(Boolean)}
+// `dicts` itself when nothing is typed, so callers can test for a filter by identity
+function scopeDicts(){
+  const words=findWords();if(!words.length)return dicts;
+  return dicts.filter(d=>{const k=findKey(d);return words.every(w=>k.includes(w))});
+}
+function findDicts(){
+  const el=$("panelList"),words=findWords();
+  let shown=0;
+  for(const pd of el.querySelectorAll(".pd")){
+    const hit=words.every(w=>pd.dataset.find.includes(w));
+    pd.hidden=!hit;if(hit)shown++;
+  }
+  el.classList.toggle("filtered",words.length>0);
+  let none=el.querySelector(".nofind");
+  if(words.length&&!shown){
+    if(!none)el.appendChild(none=Object.assign(document.createElement("p"),{className:"nofind"}));
+    none.textContent="No dictionary matches";
+  }else if(none)none.remove();
+  syncPanelHeader();
+}
+$("panelFind").addEventListener("input",findDicts);
+$("panelFind").addEventListener("keydown",e=>{
+  // Esc empties the field first and closes the panel only from an empty one
+  if(e.key==="Escape"&&e.target.value){e.preventDefault();e.stopPropagation();e.target.value="";findDicts()}
+  // nothing to submit: Enter puts the phone keyboard away so the list shows
+  else if(e.key==="Enter"){e.preventDefault();e.target.blur()}
+});
+
 /* The panel is a full-height overlay OVER the results, and every switch in it
    — enable/disable, the master switch, drag-reorder — changes what an "All
    dictionaries" search answers with and in what order. Re-running per click
@@ -2471,10 +2653,15 @@ function showPanel(){panelSnap=panelState();
   // before the lock: once the root stops scrolling the bar is gone to measure
   document.documentElement.style.setProperty("--wd-sbw",
     Math.max(0,innerWidth-document.documentElement.clientWidth)+"px");
-  $("panel").classList.add("show");loadFolders()}
+  $("panel").classList.add("show");loadFolders();
+  // A touch keyboard would cover half the list it is meant to narrow, so on
+  // a touch screen the field waits for a tap.
+  if(!TAPS)$("panelFind").focus()}
 function hidePanel(){
   if(!$("panel").classList.contains("show"))return;
   $("panel").classList.remove("show");
+  // every opening starts from the whole list
+  if($("panelFind").value){$("panelFind").value="";findDicts()}
   const was=panelSnap;panelSnap=null;
   /* Only an "All dictionaries" answer is built from the enabled set. A view
      scoped to one dictionary — by the selector, or one-shot by an entry:// link
@@ -3372,10 +3559,17 @@ function setBusy(on){
 
 /* read a newline-delimited JSON response, invoking onMsg per record as it
    arrives — this is what lets each dictionary render the instant it is
-   ready instead of waiting for the whole fan-out (progressive results). */
-async function fetchStream(url,onMsg,signal){
-  const resp=await fetch(url,signal?{signal}:undefined);
-  if(!resp.ok){let e;try{e=(await resp.json()).error}catch(_){}throw new Error(e||resp.statusText)}
+   ready instead of waiting for the whole fan-out (progressive results).
+   `etag` makes it a revalidation: false back means 304, the answer the caller
+   already holds still stands. A conditional header set by the page turns the
+   browser's own cache off for the request (Fetch), so the 304 reaches us. */
+async function fetchStream(url,onMsg,signal,etag){
+  const init={};
+  if(signal)init.signal=signal;
+  if(etag){init.headers={"If-None-Match":etag};init.cache="no-store"}
+  const resp=await fetch(url,init);
+  if(etag&&resp.status===304)return false;
+  if(!resp.ok){let e;try{e=(await resp.json()).error}catch(_){}throw Object.assign(new Error(e||resp.statusText),{status:resp.status})}
   const reader=resp.body.getReader(),dec=new TextDecoder();let buf="";
   for(;;){
     const{value,done}=await reader.read();
@@ -3388,10 +3582,14 @@ async function fetchStream(url,onMsg,signal){
     }
   }
   buf=buf.trim();if(buf)onMsg(JSON.parse(buf));
+  return true;
 }
+/* The names the search answers carried, for a dictionary the list has not
+   delivered yet: a link is answered before the list is in (bootEarly). */
+const hitNames=new Map();
 function dictName(id){
   const d=dicts.find(x=>x.id===id);
-  return d?dictLabel(d):id;
+  return d?dictLabel(d):hitNames.get(id)||id;
 }
 /* Says what was searched and offers the way out, placed under the results
    rather than in the status line: the scope is a property of what is on
@@ -3680,6 +3878,7 @@ async function doSearch(ev){
   const scope=scopeOnce;scopeOnce=null;lastScope=scope;
   const commit=commitOnce;commitOnce=false; // this query was asked for, not typed
   const widened=widenedFrom;widenedFrom=null; // set by the fallback below
+  staleWidened=null; // any search but the deferred re-run (loadDicts) drops it
   // ||"all" is the floor under a selection that no longer exists: assigning
   // an id the <select> does not have leaves .value empty, and a saved id or a
   // ?dict= from an older library can do exactly that.
@@ -3700,6 +3899,7 @@ async function doSearch(ev){
   // "all": the server has no notion of a group, and giving it one would mean
   // versioning a taxonomy across two processes to save a join over 105 rows.
   const ids=dictSel==="all"?enabledOrderedIds():dictSel.startsWith("g:")?groupIds(dictSel):null;
+  lastFromList=!!ids;
   if(ids){
     if(!ids.length){
       // "You disabled them all" is only knowable once the list is complete:
@@ -3714,7 +3914,8 @@ async function doSearch(ev){
         ?(lbl?`⚠ Nothing enabled under “${esc(lbl)}” — enable some in the ☰ panel`
              :"⚠ All dictionaries are disabled — enable some in the ☰ panel")
         :'<span class="spin"></span>'+esc(readyCount()));
-      if(!settled)staleSearch=true;
+      // the re-run is still the widening this search was, and says so
+      if(!settled){staleSearch=true;staleWidened=widened}
       return;
     }
     dictParam=ids.join(",");
@@ -3742,35 +3943,44 @@ async function doSearch(ev){
      hit whatever it said; `ready[i]` holds its <details> only if it actually
      produced RESULTS, so a deferred, errored or skipped section can never be
      the one that opens. `frontier` is the lowest index still unheard from. */
-  let resolved=[],ready=[],frontier=0;
+  /* `limit` is how many sections this generation may open by itself (the
+     reader's "Open" choice, fixed on `begin`); `opened` counts them. */
+  let resolved=[],ready=[],frontier=0,limit=1,opened=0;
   const openSlot=i=>{
     const det=ready[i];
-    if(!det)return false;
+    if(!det||det.open)return false;
     det.open=true;fillSection(det);openedIdx=i;promote(boxes,i);
-    clearTimeout(barrier);barrier=null;
+    // The hold ends when the count is reached, not at the first open: until
+    // then the frontier keeps the later sections in the reader's order.
+    if(++opened>=limit){clearTimeout(barrier);barrier=null}
+    // The walk and the jump to the first mark belong to the FIRST section
+    // only: repeated for a second one they would pull the reader away from it.
+    if(opened>1)return true;
     if(markedAnswer)navAttach(det);
     // Not deferred to a frame: it observes its own timing, because the section
     // it was just handed is not laid out yet.
     if(commit&&mode==="fts"&&hlOn&&!anchorOnce)revealFirstMark(det);
     return true;
   };
-  /* Both strategies, one function — which is why they cannot drift apart. In
-     "My order" (the default) the hold walks the prefix and stops at the first
-     slot that has not spoken; once the deadline has passed (barrier===null) or
-     the prefix is exhausted it falls through to the walk at the bottom and
-     takes the best answer in hand. In "Fastest" `barrier` is always null, so
-     that walk runs from the first hit, where `ready` holds exactly one entry:
-     that one opens, which is byte-for-byte what this app did before D142. */
+  /* All strategies, one function — which is why they cannot drift apart. In
+     "My order" (every count) the hold walks the prefix, opening what has a
+     result, and stops at the first slot that has not spoken; once the
+     deadline has passed (barrier===null) or the prefix is exhausted it falls
+     through to the walk at the bottom and takes the best answers in hand. In
+     "Fastest" `barrier` is always null and `limit` is 1, so that walk runs
+     from the first hit, where `ready` holds exactly one entry: that one
+     opens, which is byte-for-byte what this app did before D142. */
   const settle=()=>{
-    if(expandAll||openedIdx!==null)return; // latched, or the user decided (-1)
+    // the count is reached, or the user decided (-1)
+    if(expandAll||openedIdx===-1||opened>=limit)return;
     if(orderFirst&&barrier!==null&&frontier<boxes.length){
       while(frontier<boxes.length&&resolved[frontier]){
-        if(openSlot(frontier))return;
+        if(openSlot(frontier)&&opened>=limit)return;
         frontier++;
       }
       return;
     }
-    for(let i=0;i<boxes.length;i++)if(openSlot(i))return;
+    for(let i=0;i<boxes.length&&opened<limit;i++)openSlot(i);
   };
   // Not part of `anyShown`: these are the dictionaries that were NOT searched,
   // and the empty state below has to be able to tell the difference.
@@ -3787,22 +3997,28 @@ async function doSearch(ev){
         boxes=(msg.slots||[]).map(()=>{const b=document.createElement("div");out.appendChild(b);return b});
         openedIdx=null; // re-arm the latch: a new generation, a new decision
         resolved=boxes.map(()=>false);ready=boxes.map(()=>null);frontier=0;
+        limit=!orderFirst?1:openAll?Infinity:openN;opened=0;
         clearTimeout(barrier);barrier=null;
         // Only where it can bite: one slot satisfies any prefix immediately,
         // and under expand-all there is no latch to hold back.
         if(orderFirst&&!expandAll&&boxes.length>1)
           barrier=setTimeout(()=>{barrier=null;if(seq===searchSeq)settle()},OPEN_BARRIER_MS);
-        setStatus("");
+        // a list that could not be loaded under an early answer (loadDicts)
+        // is still not loaded: an answer arriving does not take that back
+        if(statusOwner!=="dicts")setStatus("");
       }else if(msg.t==="hit"){
         const box=boxes[msg.i];if(!box)return;
+        if(msg.name)hitNames.set(msg.dict,msg.name);
+        namePending(msg);
         const res=renderSlot(box,msg,mode,q,perDict,boxes.length>1);
         if(res.shown)swap(); // including the grouped line: it is this generation's first paint
         if(res.noIndex){noIdx=noIndexRow(noIdx,out,res.noIndex);noIdxCount++}
         else if(res.shown)anyShown=true;
         if(res.results)anyResults=true;
-        /* The latch (D73/M3). ONE section opens itself per generation and it
-           is never taken back: a dictionary that finishes later fills its own
-           position, above, and stays shut.
+        /* The latch (D73/M3). Up to `limit` sections open themselves per
+           generation (one unless the reader chose more) and none is taken
+           back: a dictionary that finishes later fills its own position and
+           stays shut.
 
            Promoting a higher-ranked latecomer would close the section being
            read — a definition would appear, be read into, and vanish under the
@@ -3878,13 +4094,27 @@ async function doSearch(ev){
         else if(widened)out.appendChild(widenNote(widened,q));
         // Searched a list that is still filling up: say so rather than let an
         // incomplete answer look complete, and re-run when the rest lands.
-        if(phase==="partial"){
+        // Not a search of one named dictionary, which is complete already -
+        // and whose re-run would carry no scope and so search everything.
+        if(phase==="partial"&&ids){
           staleSearch=true;
           setStatus(`searched ${dicts.length} of ${dictTotal||dicts.length} dictionaries — still loading…`);
         }
       }
     },signal);
-  }catch(err){if(err.name==="AbortError")return;if(seq===searchSeq)setStatus("⚠ "+esc(err.message))}
+  }catch(err){
+    if(err.name==="AbortError")return;
+    if(seq!==searchSeq)return;
+    // A link's dictionary that the server does not know (removed, moved, or
+    // an id from another library) is what an unknown option always was: the
+    // floor under it is "all". Only a placeholder (selectDict) can get here -
+    // a real option names a dictionary the list has.
+    const o=$("dict").selectedOptions[0];
+    if(err.status===404&&o&&o.dataset.pending&&o.value===dictParam){
+      o.remove();$("dict").value="all";syncChips();doSearch();return;
+    }
+    setStatus("⚠ "+esc(err.message));
+  }
   finally{
     // Only the newest search may stop the glyph. An aborted one has already
     // been superseded by a search that is still running, and clearing here
@@ -4619,11 +4849,44 @@ let scopeOnce=null,anchorOnce=null,lastScope=null,widenedFrom=null;
    one tap away rather than one yank away. Same one-shot idiom as navRecord:
    set by the act, consumed by the next doSearch. */
 let commitOnce=false;
+/* A link can name a dictionary the <select> has no option for yet: the page
+   answers it before the list is in (bootEarly), or from a kept list that
+   predates it (bootFromCache). A <select> cannot hold a value it has no
+   option for - assigning one leaves "" and the search falls back to "all" -
+   so the id gets a placeholder option, named by the first answer from that
+   dictionary (namePending). refreshDictUI rebuilds the options and keeps the
+   selection when the real one arrives. A group cannot be named this way: a
+   group is only known from the whole list. */
+function selectDict(v){
+  const sel=$("dict");
+  if(v!=="all"&&!v.startsWith("g:")&&![...sel.options].some(o=>o.value===v)){
+    const o=document.createElement("option");
+    o.value=v;o.textContent="…";o.dataset.pending="1";
+    sel.appendChild(o);
+  }
+  sel.value=v;
+}
+function namePending(h){
+  const o=$("dict").selectedOptions[0];
+  if(o&&o.dataset.pending&&o.value===h.dict&&h.name){o.textContent=h.name;syncChips()}
+}
+/* One dictionary named by the link, answerable before the list is in: `from`
+   (a link followed inside a dictionary, or a headword picked in Browse), else
+   a `dict` that is one id. */
+function linkNamesOne(){
+  const p=new URLSearchParams(location.search);
+  const one=v=>!!v&&v!=="all"&&!v.startsWith("g:")&&!v.includes(",");
+  return !!p.get("q")&&(p.get("from")?one(p.get("from")):one(p.get("dict")));
+}
 function applyURL(){
   const p=new URLSearchParams(location.search);
   if(p.get("theme")){localStorage.setItem("wudict_theme",p.get("theme"));applyTheme(p.get("theme"))}
-  if(p.get("mode"))$("mode").value=p.get("mode");
-  if(p.get("dict"))$("dict").value=p.get("dict");
+  // A word handed over with no usable mode (another app, the Android popup,
+  // the extension, a bookmark) is a headword lookup, as a followed link is in
+  // searchFor: a remembered full-text mode does not apply to it. The page's
+  // own addresses always carry the mode.
+  if(!setMode(p.get("mode"))&&p.get("q")&&$("mode").value==="fts")setMode("prefix");
+  if(p.get("dict"))selectDict(p.get("dict"));
   syncChips();
   if(p.get("q")){$("q").value=p.get("q");scopeOnce=p.get("from")||null;commitOnce=true;doSearch()}
 }
@@ -4634,7 +4897,11 @@ doSearch=function(ev){
   const r=_doSearch(ev);
   const q=$("q").value.trim();
   if(q&&record!=="none"){
-    const params={q,mode:$("mode").value,dict:$("dict").value};
+    const params={q,mode:$("mode").value};
+    // The picker, once it is known. Before the list (bootEarly) it holds only
+    // "all", which is not the reader's choice but the absence of it - written
+    // here, Back would later put "all" over the choice they saved.
+    if(dictsSettled||$("dict").value!=="all")params.dict=$("dict").value;
     // `from` is the one-shot cross-reference scope; `dict` stays the user's
     // own selector, so restoring a link-followed view never rewrites it
     if(lastScope)params.from=lastScope;
@@ -4650,8 +4917,8 @@ doSearch=function(ev){
    recorded — the browser already moved the cursor within the stack. */
 window.addEventListener("popstate",()=>{
   const p=new URLSearchParams(location.search);
-  if(p.get("mode"))$("mode").value=p.get("mode");
-  if(p.get("dict"))$("dict").value=p.get("dict");
+  if(p.get("mode"))setMode(p.get("mode"));
+  if(p.get("dict"))selectDict(p.get("dict"));
   syncChips();
   const q=p.get("q")||"";
   $("q").value=q;
@@ -5519,7 +5786,51 @@ function welcome(){
   }
   searchFor("wudict welcome",{scope:guide.id,record:"replace"});
 }
-Promise.all([loadPrefs(),loadConfig(),loadUserCSS()]).then(loadDicts).then(()=>{applyURL();welcome()});
+/* Three ways to start, chosen by what is at hand when the settings are in.
+
+   A kept list (bootFromCache): draw it, answer the link, and only then ask the
+   server whether the list has changed - a 304 in the usual case, which costs
+   the server a stat per dictionary and no opens.
+
+   No kept list, but a link that names one dictionary (bootEarly): /api/search
+   resolves a dictionary by id and needs no list, so the answer goes out now
+   and the list loads under it. A word picked in Browse is exactly this.
+
+   Neither: the list first, as it must be - "all" and a group are both defined
+   by it.
+
+   The query reaches the field before the boot phase ends, so setPhase never
+   sees an empty field and focuses it (a host shell reads that focus as "raise
+   the keyboard"). welcome() waits for the list the server confirms: "your
+   library is empty" must not be said from a copy.
+
+   A page load never rescans the folders (/api/rescan): files added on disk
+   arrive by "Rescan folders" or the next start of the app, which is when the
+   server discovers them. */
+function urlQuery(){$("q").value=new URLSearchParams(location.search).get("q")||""}
+function bootFromCache(c){
+  dicts=c.rows;dictTotal=c.rows.length;dictsSettled=true;
+  groupsTrouble(c.gp||0);
+  refreshDictUI(true);
+  // ready BEFORE the search, which judges "nothing enabled" by the phase;
+  // the query is in the field first, so the phase change does not focus it
+  urlQuery();
+  setPhase("ready");
+  applyURL();
+  return loadDicts(false,{etag:c.etag});
+}
+function bootEarly(){
+  urlQuery();
+  setPhase("partial");
+  applyURL();
+  return loadDicts(false,{silent:true});
+}
+Promise.all([loadPrefs(),loadConfig(),loadUserCSS()]).then(()=>{
+  const c=readDictCache();
+  if(c)return bootFromCache(c).then(ok=>{if(ok)welcome()});
+  if(linkNamesOne())return bootEarly();
+  return loadDicts().then(()=>{applyURL();welcome()});
+});
 </script>
 </body>
 </html>

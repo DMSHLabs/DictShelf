@@ -31,3 +31,6 @@ func Alert(string, string) {}
 
 // stopHint completes "To stop it, ..." for this platform.
 const stopHint = "press Ctrl-C in its terminal"
+
+// killCmd is the command that stops process %d from a terminal here.
+const killCmd = "kill %d"

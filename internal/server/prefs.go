@@ -87,6 +87,16 @@ type UIPrefs struct {
 	// reader unfolds is a property of the reader, not of the answer.
 	FastFirst bool `json:"fastFirst,omitempty"`
 
+	// OpenN is how many sections open by themselves under the reader's own
+	// order: the first OpenN dictionaries in that order that have a result.
+	// 0 (absent) and 1 are both the default, one; there is no upper limit,
+	// because the reader may trade speed for it. OpenAll opens every one that
+	// has a result. The page's menu sets these and FastFirst together, and
+	// FastFirst, which opens a single section, wins if a hand edit sets both.
+	// Remembered state for the UI, like FastFirst: the server never reads it.
+	OpenN   int  `json:"openN,omitempty"`
+	OpenAll bool `json:"openAll,omitempty"`
+
 	// SortMine lists the dictionary PICKER in the user's own panel order
 	// instead of A->Z. Spelled positively, unlike the two above: alphabetical
 	// is what the picker has always done, so the zero value has to keep doing
@@ -123,6 +133,14 @@ type UIPrefs struct {
 	// keeps it. It is the reader's last choice on a section's switch, and
 	// sets how the next section opens; the server never reads it.
 	Full bool `json:"full,omitempty"`
+
+	// Mode is the search mode the reader last picked: "exact", "contains" or
+	// "fts". Empty is prefix, the default, so an absent key keeps it. It is the
+	// reader's habit, and which modes answer at all is a fact about this
+	// server's library, so it lives here and not in the browser. The page
+	// writes it only when the reader picks a mode, never when a link or the
+	// history sets one; the server never reads it.
+	Mode string `json:"mode,omitempty"`
 }
 
 // Article text-size bounds. The ceiling is deliberately past what the layout
@@ -145,6 +163,14 @@ func (u *UIPrefs) normalize() {
 		u.FontSize = max(FontSizeMin, min(FontSizeMax, u.FontSize))
 	}
 	u.GroupsOff = facetIDs(u.GroupsOff)
+	if u.OpenN <= 1 {
+		u.OpenN = 0 // one, the default, is stored as absent
+	}
+	switch u.Mode {
+	case "exact", "contains", "fts":
+	default: // prefix, and what a hand edit may carry (the retired "fuzzy", D16)
+		u.Mode = ""
+	}
 }
 
 // facetIDs bounds a hand-edited or hostile groupsOff to what a facet id can
@@ -259,20 +285,40 @@ func (p *Prefs) Snapshot() (dicts []DictPref, exists bool) {
 // file that reads as "nothing was ever configured".
 func (p *Prefs) Replace(dicts []DictPref) error { return p.update(dicts, nil) }
 
-// update is Replace plus an optional UI record. A nil ui means "not mentioned"
-// and leaves the stored one untouched: the client that reorders dictionaries
-// and the client that changes text size are the same client, but they need not
-// send both, and a request that omits a field must never be read as clearing
-// it. One write, not two, so the two settings can never disagree on disk. It
+// update is Replace plus an optional UI patch: the JSON object of the UI
+// fields to change. A nil dicts keeps the stored list, decided here under the
+// write lock rather than by the caller re-sending a snapshot it read before,
+// which a save from another page could land between. Absent or null means "not mentioned" and leaves the stored
+// record untouched, and inside the object the rule is the same per field - a
+// key that is not sent keeps its stored value, and only a key sent as false,
+// 0 or [] clears one. Two pages on one server (two tabs, or the Android app and
+// its lookup popup, each a WebView of its own) each hold a copy of these
+// settings read when they loaded; a page that sends only what it changed
+// cannot carry its stale copy of the others back over a newer choice.
+//
+// One write, not two, so the two settings can never disagree on disk. It
 // starts from the file as it is NOW (fresh): a hand edit made a moment ago is
 // kept wherever this update does not speak.
-func (p *Prefs) update(dicts []DictPref, ui *UIPrefs) error {
+func (p *Prefs) update(dicts []DictPref, ui json.RawMessage) error {
 	p.write.Lock()
 	defer p.write.Unlock()
 	f := p.file.fresh().val
-	f.Version, f.Dicts = prefsVersion, append([]DictPref(nil), dicts...)
-	if ui != nil {
-		u := *ui
+	f.Version = prefsVersion
+	if dicts != nil {
+		f.Dicts = append([]DictPref(nil), dicts...)
+	}
+	if mentioned(ui) {
+		var u UIPrefs
+		if f.UI != nil {
+			u = *f.UI
+			// json decodes an array into the slice it finds, in place: without
+			// the clone the patch would write into the record the file cache
+			// still holds
+			u.GroupsOff = slices.Clone(u.GroupsOff)
+		}
+		if err := json.Unmarshal(ui, &u); err != nil {
+			return err
+		}
 		u.normalize()
 		f.UI = &u
 	}
@@ -405,6 +451,12 @@ func (p *Prefs) merge(r *Registry, want []DictPref) []DictPref {
 	return out
 }
 
+// mentioned reports whether a request carried a UI patch: an absent key and
+// an explicit null both leave the stored record alone.
+func mentioned(ui json.RawMessage) bool {
+	return len(ui) > 0 && string(ui) != "null"
+}
+
 func cleanAbs(p string) string {
 	if abs, err := filepath.Abs(p); err == nil {
 		return filepath.Clean(abs)
@@ -422,19 +474,37 @@ func (s *Server) handlePrefs(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]any{"exists": exists, "dicts": dicts, "ui": s.reg.prefs.UI()})
 }
 
-// PUT /api/prefs - replace the order and enabled set.
+// PUT /api/prefs - replace the order and enabled set when the request sends
+// them, and change the UI fields it names (update). An absent or null dicts
+// keeps the stored list: a page that changed only a UI setting must not carry
+// its stale copy of the order back over another page's newer one.
 func (s *Server) handleSavePrefs(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Dicts []DictPref `json:"dicts"`
-		UI    *UIPrefs   `json:"ui"` // pointer: absent and empty are different
+		Dicts []DictPref      `json:"dicts"`
+		UI    json.RawMessage `json:"ui"` // raw: which keys are present is the patch
 	}
 	if !decodeJSON(w, r, &req, 1<<20) {
 		return
 	}
-	merged := s.reg.prefs.merge(s.reg, req.Dicts)
+	// A wrongly typed field is the caller's mistake (400), found before the
+	// save rather than inside it, where it would read as the server's (500).
+	if mentioned(req.UI) {
+		if err := json.Unmarshal(req.UI, new(UIPrefs)); err != nil {
+			httpErr(w, http.StatusBadRequest, "bad request: %v", err)
+			return
+		}
+	}
+	var merged []DictPref
+	if req.Dicts != nil {
+		merged = s.reg.prefs.merge(s.reg, req.Dicts)
+	}
 	if err := s.reg.prefs.update(merged, req.UI); err != nil {
 		httpErr(w, http.StatusInternalServerError, "%s", "could not save: "+err.Error())
 		return
 	}
-	writeJSON(w, map[string]any{"exists": true, "dicts": merged, "ui": s.reg.prefs.UI()})
+	dicts, _ := s.reg.prefs.Snapshot()
+	if dicts == nil {
+		dicts = []DictPref{} // [] on the wire, as before, never null
+	}
+	writeJSON(w, map[string]any{"exists": true, "dicts": dicts, "ui": s.reg.prefs.UI()})
 }

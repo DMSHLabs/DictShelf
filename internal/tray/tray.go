@@ -356,8 +356,8 @@ func runSafely(p platform) (err error) {
 // that opened at startup is then the only liveness indicator left, which is why
 // preflight refuses early rather than letting Starting fail silently.
 func degrade(cfg Config, why string) {
-	logx.Warn("tray unavailable (%s) - serving anyway at %s; press Ctrl-C or run 'kill %d' to stop",
-		why, cfg.URL, os.Getpid())
+	logx.Warn("tray unavailable (%s) - serving anyway at %s; press Ctrl-C or run '%s' to stop",
+		why, cfg.URL, fmt.Sprintf(killCmd, os.Getpid()))
 	// A GUI launch has nowhere else to look: no console (Windows closed its
 	// own before this could be called), no Dock icon (LSUIElement), and a log
 	// file nobody is watching. The server is up and the user cannot tell - so

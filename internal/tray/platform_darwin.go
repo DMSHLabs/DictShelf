@@ -61,6 +61,9 @@ func Alert(title, body string) {
 // stopHint completes "To stop it, ..." for this platform.
 const stopHint = `quit "wudict" from Activity Monitor`
 
+// killCmd is the command that stops process %d from a terminal here.
+const killCmd = "kill %d"
+
 // appleQuote renders s as an AppleScript string literal. Three characters can
 // end or corrupt one - the escape, the quote, and a raw newline, which
 // AppleScript does not accept inside a literal at all.

@@ -189,14 +189,19 @@ func (r *Registry) Remove(id string, dropPrepared, dropSource bool) (removal, er
 // what an install made. A folder that still holds anything at all - a note, a
 // licence, the other half of something - is left exactly as it is.
 func (r *Registry) pruneEmptied(removed []string) {
+	// Canonical on both sides: a removed file's path comes from discovery,
+	// which walks the canonical root (dict.Discover), while a root keeps the
+	// user's spelling - "c:\dicts" for C:\Dicts on Windows, a symlink
+	// anywhere. Compared as typed, the root would not be recognised, and
+	// emptying it would delete it.
 	roots := make(map[string]bool)
 	for _, d := range r.Dirs() {
-		roots[filepath.Clean(d)] = true
+		roots[canonDir(d)] = true
 	}
 	seen := make(map[string]bool, len(removed))
 	for _, p := range removed {
 		dir := filepath.Clean(filepath.Dir(p))
-		if seen[dir] || roots[dir] || filepath.Base(dir) == dict.DownloadDirName {
+		if seen[dir] || roots[canonDir(dir)] || dict.IsDownloadDir(filepath.Base(dir)) {
 			continue
 		}
 		seen[dir] = true
@@ -208,6 +213,33 @@ func (r *Registry) pruneEmptied(removed []string) {
 			// Nothing to report: the dictionary is gone either way, and an
 			// empty folder is not a failure the user can act on (D102).
 			logx.V("could not remove emptied folder %s: %v", dir, err)
+		}
+	}
+}
+
+// canonDir is dir's canonical spelling, or its cleaned one when it cannot be
+// resolved (a root on an unmounted drive).
+func canonDir(dir string) string {
+	if c := dict.CanonPath(dir); c != "" {
+		return c
+	}
+	return filepath.Clean(dir)
+}
+
+// closeUnder closes, now, every dictionary whose main file is in dir or below
+// it - its companions sit beside it: an import is about to rename them aside,
+// and Windows refuses to rename an open file or a folder holding one. The next
+// request reopens whatever is still there.
+//
+// dir is canonicalised for the reason pruneEmptied's roots are: an import's
+// folder is spelled from the configured root, a dictionary's path from the
+// canonical walk, and a junction, symlink or 8.3 name between the two would
+// otherwise close nothing - and the rename fail.
+func (r *Registry) closeUnder(dir string) {
+	dir = canonDir(dir)
+	for _, e := range r.all() {
+		if !e.builtin && within(dir, e.Path) {
+			e.closeNow()
 		}
 	}
 }

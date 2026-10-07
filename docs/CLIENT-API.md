@@ -70,7 +70,7 @@ Lists what is available. Call it **once at startup**, not per lookup.
                     "format":"bgl","entries":129224,
                     "caps":{"Exact":true,"Prefix":true,"Contains":false,"FTS":false}}}
 …
-{"t":"end"}
+{"t":"end","etag":"\"ac4fd9fecabd8ec4cf544212\""}
 ```
 
 - `id` — opaque, stable while the dictionary stays in place. **Persist the id**,
@@ -83,6 +83,18 @@ Lists what is available. Call it **once at startup**, not per lookup.
   that cannot be described is omitted, so `total` is an upper bound on the rows
   you will actually receive. Do not wait for a count that may never arrive —
   wait for `end`.
+- `etag` on `end` — keep it with the rows. On the next start, use the rows you
+  kept at once and send `If-None-Match: <etag>`: an unchanged list answers
+  `304` with no body, and the server decides that without opening a single
+  dictionary. A `200` is the new list, with a new `etag`. No `etag` means do
+  not keep this answer (a row carried an error, an index was being built, or a
+  dictionary was being prepared as it was listed). `/api/rescan` always
+  answers in full.
+  It is on `end`, not in an `ETag` header, because whether an answer may be
+  kept is known only after its last row.
+- `/api/dicts` lists the dictionaries the server has already found; it does not
+  look in the folders again. Files added on disk appear after a rescan (the
+  app's "Rescan folders", `GET /api/rescan`) or a restart of the server.
 
 ---
 
@@ -305,7 +317,8 @@ and no `/res/` fetches once the dictionary's own CSS/JS are stripped.
 **Keep `n` at 1–3 for hover.** `n` is per dictionary; `n=25` across ten
 dictionaries is megabytes.
 
-**Do not poll `/api/dicts`.** Once at startup, and again only when the user asks.
+**Do not poll `/api/dicts`.** Once at startup, and again only when the user
+asks — and at startup, conditionally, with the `etag` you kept (§2).
 
 **One request in flight per lookup.** The server already parallelises across
 dictionaries (8 at a time), so client-side concurrency buys nothing and costs
@@ -426,8 +439,9 @@ what the popup deliberately threw away. The global link answers a different
 question — *"who else defines this?"* — so it belongs in the fixed header,
 reachable no matter how far the user has scrolled into one long entry.
 
-Timing is safe: the page runs `applyURL` only after `/api/dicts` has finished,
-so a valid `dict` id is always in the dropdown by the time it is assigned.
+Timing is safe: a link that names one dictionary is answered at once, without
+waiting for the dictionary list, and the dropdown shows that dictionary even
+before the list has arrived.
 
 Open with `chrome.tabs.create({url})`, or reuse a remembered tab id with
 `chrome.tabs.update` and fall back to `create` when it has been closed — one

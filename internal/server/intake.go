@@ -37,7 +37,7 @@ import (
 // Dictionary bundles of several gigabytes are real, so it is generous.
 const maxIntakeUpload = 16 << 30
 
-// importer returns the manager, wiring its one hook on first use. Not done in
+// importer returns the manager, wiring its hooks on first use. Not done in
 // New because a Server built directly in a test is a supported shape, and a
 // nil hook would be the difference between the two.
 func (s *Server) importer() *intake.Manager {
@@ -52,6 +52,7 @@ func (s *Server) importer() *intake.Manager {
 			// is not the one that pays for opening it.
 			s.reg.Warm()
 		}
+		s.intake.Release = s.reg.closeUnder
 	})
 	return &s.intake
 }

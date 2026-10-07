@@ -5,12 +5,14 @@
 package cli
 
 import (
+	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -105,5 +107,43 @@ func TestSameFolders(t *testing.T) {
 	}
 	if !sameFolders([]string{link}, inst(a)) {
 		t.Error("a symlink to the same folder must compare equal")
+	}
+}
+
+// A command that replaces or deletes prepared files stops while a server on
+// this library has them open (Windows refuses both), and only for a server on
+// THIS library: one serving another library holds none of these files.
+func TestRefuseUnderServer(t *testing.T) {
+	home, dbDir := t.TempDir(), t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	t.Setenv("CONFIG_PATH", "")
+	t.Setenv("DB_DIR", dbDir)
+	t.Setenv("WUDICT_DB_DIR", dbDir)
+	applyLibrarySettings()
+
+	libDir := dbDir
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Server", "wudict/v1.2.3")
+		b, _ := json.Marshal(map[string]string{"libDir": libDir})
+		w.Write(b)
+	}))
+	defer srv.Close()
+	host, port, err := net.SplitHostPort(hostOf(t, srv.URL))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("SERVER_IP", host)
+	t.Setenv("SERVER_PORT", port)
+
+	if err := refuseUnderServer("x"); err == nil || !strings.Contains(err.Error(), "stop it first") {
+		t.Errorf("a server on this library: err = %v, want a refusal", err)
+	}
+	if err := cmdClean(nil); err == nil {
+		t.Error("clean ran under a server using the library")
+	}
+	libDir = t.TempDir()
+	if err := refuseUnderServer("x"); err != nil {
+		t.Errorf("a server on another library: %v", err)
 	}
 }

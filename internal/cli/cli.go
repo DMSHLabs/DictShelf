@@ -939,6 +939,9 @@ func cmdIngest(args []string) error {
 		}
 		return ingestOne(srcs[0], *out, *full, pf)
 	}
+	if err := refuseUnderServer("use its dictionary panel"); err != nil {
+		return err
+	}
 	// a single file keeps its own errors, unprefixed by a [1/1] count
 	if len(srcs) == 1 && !fsx.DirExists(srcs[0]) {
 		return ingestOne(srcs[0], "", *full, pf)
@@ -2063,6 +2066,10 @@ func cmdClean(args []string) error {
 	force := fs.Bool("f", false, "actually delete (default: dry run, list only)")
 	withOrphans := fs.Bool("orphans", false, "with -f, also delete prepared dictionaries whose source file is gone")
 	fs.Parse(args)
+	// Before the relink below, which moves prepared folders too.
+	if err := refuseUnderServer("leave the tidying to it"); err != nil {
+		return err
+	}
 
 	// A source that was moved inside a dictionary folder takes its prepared
 	// folder with it, exactly as a server rescan does - so a move is never
