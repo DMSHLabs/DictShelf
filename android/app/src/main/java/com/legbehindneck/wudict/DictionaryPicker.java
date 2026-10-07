@@ -63,8 +63,6 @@ final class DictionaryPicker {
                     WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN);
             picker.dialog.getWindow().setBackgroundDrawable(
                     WindowBackground.dialogDrawable(activity, ShellPrefs.pageBg(activity)));
-            picker.dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(
-                    ShellPrefs.darkIcons(ShellPrefs.pageBg(activity)) ? 0xDE000000 : 0xFFFFFFFF);
             result.confirm("open");
         } catch (JSONException bad) { result.cancel(); }
     }
@@ -87,7 +85,8 @@ final class DictionaryPicker {
         final TextView searchCount;
         final Button previous, next;
         final JSONObject searchLabels;
-        final int textColor, accent;
+        final Activity activity;
+        final int backgroundColor, textColor, accent;
         final List<Integer> shownRows = new ArrayList<>(), matchingRows = new ArrayList<>();
         JSONArray rows = new JSONArray();
         JSONArray groupValues = new JSONArray();
@@ -99,12 +98,14 @@ final class DictionaryPicker {
         String groupId = "all";
 
         Live(Activity activity, WebView web, String payload) throws JSONException {
+            this.activity = activity;
             this.web = web;
             JSONObject initial = new JSONObject(payload);
             found = initial.optBoolean("found");
             searchLabels = initial.optJSONObject("listSearch") == null
                     ? new JSONObject() : initial.optJSONObject("listSearch");
             int color = ShellPrefs.pageBg(activity);
+            backgroundColor = color;
             textColor = ShellPrefs.darkIcons(color) ? 0xDE000000 : 0xFFFFFFFF;
             int parsedAccent;
             try { parsedAccent = Color.parseColor(searchLabels.optString("accent", "#e08600")); }
@@ -130,7 +131,17 @@ final class DictionaryPicker {
             };
             groupAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
             groups.setAdapter(groupAdapter);
-            body.addView(groups);
+            LinearLayout heading = new LinearLayout(activity);
+            heading.setOrientation(LinearLayout.HORIZONTAL);
+            heading.setGravity(Gravity.CENTER_VERTICAL);
+            heading.addView(groups, new LinearLayout.LayoutParams(0,
+                    ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+            Button close = searchStep(activity, "✕", 20, color, textColor);
+            close.setContentDescription(activity.getString(android.R.string.cancel));
+            LinearLayout.LayoutParams closeLayout = new LinearLayout.LayoutParams(dp(activity, 40), dp(activity, 40));
+            closeLayout.leftMargin = dp(activity, 8);
+            heading.addView(close, closeLayout);
+            body.addView(heading);
             View separator = new View(activity);
             separator.setBackgroundColor((textColor & 0x00FFFFFF) | 0x33000000);
             LinearLayout.LayoutParams separatorLayout = new LinearLayout.LayoutParams(
@@ -161,12 +172,13 @@ final class DictionaryPicker {
                         }
                         text.setText(highlighted);
                     }
-                    boolean current = !filtering && !query.isEmpty() && activeMatch >= 0
+                    boolean match = !filtering && !query.isEmpty() && matchingRows.contains(source);
+                    boolean current = match && activeMatch >= 0
                             && activeMatch < matchingRows.size()
                             && source == matchingRows.get(activeMatch);
-                    if (current) {
+                    if (match) {
                         GradientDrawable outline = new GradientDrawable();
-                        outline.setColor(Color.TRANSPARENT);
+                        outline.setColor(current ? mix(backgroundColor, accent, 14) : Color.TRANSPARENT);
                         outline.setStroke(dp(activity, 2), accent);
                         outline.setCornerRadius(dp(activity, 8));
                         text.setBackground(outline);
@@ -197,10 +209,12 @@ final class DictionaryPicker {
             int control = dp(activity, (float)searchLabels.optDouble("height", 43.2));
             float font = (float)searchLabels.optDouble("font", 16);
             int gap = dp(activity, 4);
+            int iconPadding = Math.min(dp(activity, 9), control / 5);
             searchMode = new ImageButton(activity);
             searchMode.setBackground(controlBackground(activity, color, false, accent));
-            searchMode.setImageDrawable(new SearchModeIcon(textColor, dp(activity, 22)));
-            searchMode.setPadding(dp(activity, 9), dp(activity, 9), dp(activity, 9), dp(activity, 9));
+            searchMode.setImageDrawable(new SearchModeIcon(textColor,
+                    Math.min(dp(activity, 22), Math.max(1, control - iconPadding * 2))));
+            searchMode.setPadding(iconPadding, iconPadding, iconPadding, iconPadding);
             dock.addView(searchMode, new LinearLayout.LayoutParams(control, control));
             searchInput = new EditText(activity);
             searchInput.setSingleLine(true);
@@ -234,8 +248,9 @@ final class DictionaryPicker {
             next.setContentDescription(searchLabels.optString("next", "Next matching dictionary"));
             dialog = new BackgroundDialogBuilder(activity)
                     .setView(body)
-                    .setNegativeButton(android.R.string.cancel, (d, which) -> {})
                     .create();
+            dialog.setCanceledOnTouchOutside(true);
+            close.setOnClickListener(v -> dialog.dismiss());
             dialog.setOnDismissListener(d -> {
                 if (live.get(web) == this) {
                     live.remove(web);
@@ -373,7 +388,9 @@ final class DictionaryPicker {
                     .replace("{total}", Integer.toString(total)));
             previous.setEnabled(!filtering && matchingRows.size() > 1);
             next.setEnabled(!filtering && matchingRows.size() > 1);
-            searchMode.setImageDrawable(new SearchModeIcon(filtering ? accent : textColor,
+            searchMode.setBackground(controlBackground(activity,
+                    filtering ? accent : backgroundColor, filtering, accent));
+            searchMode.setImageDrawable(new SearchModeIcon(filtering ? backgroundColor : textColor,
                     searchMode.getDrawable().getIntrinsicWidth(), filtering));
             searchMode.setContentDescription(searchLabels.optString(filtering ? "search" : "filter",
                     filtering ? "Search dictionary list" : "Filter matching dictionaries"));
@@ -382,6 +399,13 @@ final class DictionaryPicker {
 
     private static int dp(Activity activity, float value) {
         return Math.max(1, Math.round(value * activity.getResources().getDisplayMetrics().density));
+    }
+
+    private static int mix(int base, int accent, int percent) {
+        int other = 100 - percent;
+        return Color.rgb((Color.red(base) * other + Color.red(accent) * percent) / 100,
+                (Color.green(base) * other + Color.green(accent) * percent) / 100,
+                (Color.blue(base) * other + Color.blue(accent) * percent) / 100);
     }
 
     private static GradientDrawable controlBackground(Activity activity, int color,

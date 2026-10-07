@@ -2120,6 +2120,7 @@ function livePickerPayload(kind){
   const scoped=scopedDictionary();
   const groups=userGroups.map(g=>({id:g.id,name:pickerGroupName(g.id)}));
   if(scoped)groups.splice(1,0,scoped); // under "All dictionaries": the same axis, narrower
+  const style=getComputedStyle(document.documentElement),rem=parseFloat(style.fontSize)||16;
   return {kind,groups,group:scoped?scoped.id:pickerGroup,
     found:true,rows:livePickerRows(),
     empty:livePickerSearching?tx("search.searching"):scoped?tx("search.emptyDict"):tx("search.emptyGroup"),
@@ -2128,9 +2129,9 @@ function livePickerPayload(kind){
       filter:tx("dictUI.listSearchFilter"),previous:tx("dictUI.listSearchPrevious"),
       next:tx("dictUI.listSearchNext"),
       count:tx("dictUI.listSearchCount",{current:"{current}",total:"{total}"}),
-      height:(parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--ui-edit_control-height"))||1.8)*1.5*(parseFloat(getComputedStyle(document.documentElement).fontSize)||16),
-      font:(parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--ui-edit_control-font"))||1)*(parseFloat(getComputedStyle(document.documentElement).fontSize)||16),
-      accent:getComputedStyle(document.documentElement).getPropertyValue("--accent").trim()
+      height:Math.max(12,Math.min(120,(parseFloat(style.getPropertyValue("--ui-edit_control-height"))||1.8)*1.5*rem)),
+      font:Math.max(8,Math.min(64,(parseFloat(style.getPropertyValue("--ui-edit_control-font"))||1)*rem)),
+      accent:style.getPropertyValue("--accent").trim()
     }};
 }
 function refreshLivePicker(){
