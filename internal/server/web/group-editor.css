@@ -78,8 +78,9 @@ html[data-shell-image] #sysSettings::backdrop{
 dialog#bulkIndexDialog.group-dialog.panel-card{
   inset:0;margin:auto;box-sizing:border-box;
   width:min(420px,calc(100% - 64px));max-width:none;
-  height:fit-content;max-height:80vh;max-height:80dvh;padding:1em}
-#bulkIndexDialog h2{font-size:1.1em}
+  height:fit-content;max-height:80vh;max-height:80dvh;padding:1em;font-size:var(--ui-font-base)}
+#bulkIndexDialog h2{font-size:var(--ui-font-title)}
+#bulkIndexDialog .btn{font-size:var(--ui-font-base);min-height:calc(var(--ui-control-height,1.6) * 1em);box-sizing:border-box}
 #bulkIndexDialog p{margin:0;overflow-wrap:anywhere}
 dialog#linkGroupDialog.group-dialog.panel-card,dialog#discardGroupDraftDialog.group-dialog.panel-card{inset:0;margin:auto;box-sizing:border-box;width:min(420px,calc(100vw - 64px));max-width:none;height:fit-content;max-height:80dvh;padding:1em}
 #linkGroupDialog p,#discardGroupDraftDialog p{margin:0;overflow-wrap:anywhere}

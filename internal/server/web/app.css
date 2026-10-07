@@ -1195,29 +1195,30 @@ dialog.panel-card:not([open]){display:none}
    lives in now. */
 .panel-head{flex:none;background:var(--bg);padding:var(--sp-3) 0 0}
 .pd{border:1px solid var(--line);border-radius:8px;background:var(--bg-card);
-  padding:var(--sp-1) var(--sp-2);margin-bottom:var(--sp-1);font-size:13px}
+  padding:var(--sp-1) var(--sp-2);margin-bottom:var(--sp-1);font-size:var(--ui-font-base)}
 .pd.dragging{opacity:.45}
 .pd.drop-before{box-shadow:0 -2px 0 var(--accent)}
 .pd.drop-after{box-shadow:0 2px 0 var(--accent)}
 .pd .hd{display:flex;align-items:center;gap:.35em}
-.pd .grip{cursor:grab;color:var(--label-quiet);user-select:none;font-size:14px;
+.pd .grip{cursor:grab;color:var(--label-quiet);user-select:none;font-size:var(--ui-font-base);
   line-height:1;letter-spacing:-.15em;padding-right:.15em}
 .pd .grip:active{cursor:grabbing}
 /* The title is a control (see the panel's click handler), so it has to look
    like one on the way to being pressed rather than only after. flex:1 was
    already there for the layout and doubles as a generous target. */
-.pd b{color:var(--fg);font-size:14px;word-break:break-word;flex:1;cursor:pointer}
+.pd b{color:var(--fg);word-break:break-word;flex:1;cursor:pointer}
+#dictSettings .pd .hd>b{font-size:var(--ui-font-section)}
 .pd b:hover{color:var(--link);text-decoration:underline;text-underline-offset:2px}
 .pd b:focus-visible{outline:2px solid var(--focus);outline-offset:2px;border-radius:3px}
 .pd .ord{display:flex;gap:.1em;margin-left:auto}
 .pd .ord button{background:none;border:0;color:var(--label-quiet);cursor:pointer;
-  font-size:12px;line-height:1;padding:.15em .2em;border-radius:4px}
+  font-size:var(--ui-font-base);line-height:1;padding:.15em .2em;border-radius:4px}
 .pd .ord button:hover{color:var(--fg);background:var(--line-soft)}
-#dictSettings .pd .hd{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px}
+#dictSettings .pd .hd{display:grid;grid-template-columns:auto minmax(0,1fr);gap:calc(var(--ui-control-gap,.25) * 1em)}
 #dictSettings .pd .hd>b{grid-column:1 / -1;grid-row:1}
 #dictSettings .pd .grip{grid-column:1;grid-row:2;padding:.4em;align-self:center}
-#dictSettings .pd .ord{grid-column:2;grid-row:2;gap:8px;margin-left:0;justify-content:flex-end}
-#dictSettings .pd .ord button{min-width:30px;min-height:30px}
+#dictSettings .pd .ord{grid-column:2;grid-row:2;gap:calc(var(--ui-control-gap,.25) * 1em);margin-left:0;justify-content:flex-end}
+#dictSettings .pd .ord button{box-sizing:border-box;min-width:calc(var(--ui-control-height,1.6) * 1em);min-height:calc(var(--ui-control-height,1.6) * 1em)}
 .en{appearance:none;width:32px;height:18px;border-radius:9px;background:var(--line);
   position:relative;cursor:pointer;flex:none;transition:background .15s}
 .en:checked{background:var(--accent)}
@@ -1234,9 +1235,9 @@ dialog.panel-card:not([open]){display:none}
    watching it appear. */
 .btn:disabled{opacity:.45;cursor:default}
 .en:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
-.pd .meta{color:var(--label-quiet);font-size:11.5px;margin:.15em 0 .3em}
+.pd .meta{color:var(--label-quiet);font-size:var(--ui-font-addition);margin:.15em 0 .3em}
 .pd .feat{display:inline-block;border:1px solid var(--line);border-radius:99px;
-  padding:.05em .55em;margin:.15em .25em .15em 0;font-size:10.5px;color:var(--label-quiet);
+  padding:.05em .55em;margin:.15em .25em .15em 0;font-size:var(--ui-font-base);color:var(--label-quiet);
   cursor:pointer;user-select:none;transition:color .12s,border-color .12s,background .12s}
 .pd .feat:hover{border-color:var(--accent);color:var(--accent)}
 .pd .feat.on{border-color:var(--accent);color:#fff;background:var(--accent)}
@@ -1262,7 +1263,7 @@ dialog.panel-card:not([open]){display:none}
    "provisional" without the alarm of an error colour */
 .pd .feat.on.stale{border-style:dotted;border-color:var(--fg-faint)}
 .pd .tag{display:inline-block;border:1px solid var(--line);border-radius:5px;
-  padding:0 .4em;font-size:10.5px;color:var(--label);margin-right:.25em}
+  padding:0 .4em;font-size:var(--ui-font-addition);color:var(--label);margin-right:.25em}
 .pd .tag.on{color:var(--accent);border-color:var(--accent)}
 .act{color:var(--link);cursor:pointer;text-decoration:underline;
   text-underline-offset:2px;font-size:12px;margin-right:var(--sp-2)}
@@ -1275,7 +1276,7 @@ dialog.panel-card:not([open]){display:none}
    choices still name what they delete, and cancel is still the quiet one. */
 /* A rule of its own above the control: the paths end, the danger begins. */
 .pd .rmwrap{margin-top:.45em;padding-top:.4em;border-top:1px dashed var(--line)}
-.pd .rm{display:inline-block;color:var(--danger);cursor:pointer;font-size:11px;
+.pd .rm{display:inline-block;color:var(--danger);cursor:pointer;font-size:var(--ui-hint-font-size);
   font-weight:600;letter-spacing:.02em;border:1px solid var(--danger-line);
   border-radius:99px;padding:.1em .6em;background:var(--danger-soft);
   user-select:none;transition:background var(--t-1),color var(--t-1)}
@@ -1283,7 +1284,7 @@ dialog.panel-card:not([open]){display:none}
 /* The confirmation is a hazard panel, not a sentence: diagonal stripes in the
    danger colour at low alpha, so it reads as cordoned-off area at a glance and
    still passes contrast for the text on top of it. */
-.pd .rmq{display:block;font-size:11.5px;color:var(--label);line-height:1.7;
+.pd .rmq{display:block;font-size:var(--ui-hint-font-size);color:var(--label);line-height:1.7;
   border:1px solid var(--danger);border-radius:8px;padding:.5em .6em;
   margin-top:.2em;background:var(--danger-soft);
   background-image:repeating-linear-gradient(-45deg,
@@ -1291,9 +1292,9 @@ dialog.panel-card:not([open]){display:none}
     transparent 6px 14px)}
 .pd .rmq b{color:var(--fg)}
 .pd .rmq .rmwarn{display:block;color:var(--danger);font-weight:700;
-  font-size:12px;letter-spacing:.01em;margin-bottom:.15em}
+  font-size:var(--ui-font-addition);letter-spacing:.01em;margin-bottom:.15em}
 .pd .rmgo{display:inline-block;border:1px solid var(--danger);border-radius:99px;
-  padding:.1em .6em;margin:.35em .3em .1em 0;font-size:10.5px;font-weight:600;
+  padding:.1em .6em;margin:.35em .3em .1em 0;font-size:var(--ui-font-base);font-weight:600;
   color:var(--danger);background:var(--bg-card);cursor:pointer;user-select:none}
 .pd .rmgo:hover{background:var(--danger);color:#fff}
 /* The irreversible one is filled in, and breathes. Everything else on this
@@ -1319,7 +1320,7 @@ dialog.panel-card:not([open]){display:none}
    not equal pull. Green also carries the meaning by itself, which matters on a
    phone where the labels are small and the thumb is fast. */
 .pd .rmno{display:inline-block;border:1px solid var(--safe-line);border-radius:99px;
-  padding:.1em .6em;margin:.35em .3em .1em .15em;font-size:10.5px;font-weight:600;
+  padding:.1em .6em;margin:.35em .3em .1em .15em;font-size:var(--ui-font-base);font-weight:600;
   color:var(--safe);background:var(--safe-soft);cursor:pointer;user-select:none;
   transition:background var(--t-1),color var(--t-1)}
 .pd .rmno:hover{background:var(--safe);border-color:var(--safe);color:#fff}
@@ -1327,17 +1328,17 @@ dialog.panel-card:not([open]){display:none}
    elements rather than composed into one sentence — the path carries what it
    copies in data-full, so nothing downstream has to take a display string
    apart again to find it (see D49). */
-.pd .prow{font-size:10.5px;color:var(--label-quiet);overflow-wrap:break-word}
+.pd .prow{font-size:var(--ui-hint-font-size);color:var(--label-quiet);overflow-wrap:break-word}
 .pd .prow.sub{opacity:.8}
 .pd .pfx{color:var(--label)}
 .pd .path{color:var(--label-quiet);cursor:pointer}
 .pd .err{color:var(--danger)}
 /* Not a .feat: those chips are switches that spend disk, and this one only
    opens a page. Same muted register as the provenance rows under it. */
-.pd .acts a.browse{display:inline-flex;align-items:center;gap:5px;width:100%;box-sizing:border-box;
-  margin:0;font:inherit;font-size:11px;line-height:1.2;color:var(--label-quiet);text-decoration:none}
+.pd .acts a.browse{display:inline-flex;align-items:center;gap:calc(var(--ui-control-gap,.25) * 1em);width:100%;box-sizing:border-box;
+  margin:0;font:inherit;font-size:var(--ui-font-base);line-height:1.2;color:var(--label-quiet);text-decoration:none}
 .pd .acts a.browse::after,.dsl-index-row .browse::after{content:"›";margin-left:auto;color:var(--label-quiet);
-  font-size:15px;line-height:1;flex:none}
+  font-size:1em;line-height:1;flex:none}
 .pd .acts a.browse:hover{color:var(--accent)}
 .pd .acts a.browse:hover::after,.dsl-index-row .browse:hover::after{color:var(--label)}
 .pd .acts a.browse svg{width:13px;height:13px;flex:none}
@@ -1706,7 +1707,7 @@ dialog.panel-card:not([open]){display:none}
 .bulkbox p{margin:0 0 .5em}
 .bulkbox p:last-child{margin-bottom:0}
 .bulkbox .cost{color:var(--label-quiet)}
-.bulkbox .btn{font-size:11.5px;padding:.25em .6em;margin-right:.4em}
+.bulkbox .btn{font-size:inherit;padding:.25em .6em;margin-right:.4em}
 .outdated-notice{margin:var(--sp-2) 0 var(--sp-3);font-size:14px}
 .outdated-notice .btn{font-size:inherit}
 .work-notice{position:fixed;z-index:330;top:auto;bottom:var(--wd-vv-bottom,0px);left:50%;
@@ -1746,7 +1747,7 @@ dialog.panel-card:not([open]){display:none}
 #panel .sect .about p{margin:calc(var(--ui-addition-gap) * 1em) 0 0;font-size:var(--ui-hint-font-size);color:var(--label-quiet);line-height:1.45}
 .sect .about a{color:var(--label);text-decoration:none;border-bottom:1px solid var(--line)}
 .sect .about a:hover{color:var(--link);border-bottom-color:currentColor}
-.pd .prov,.pd .prov1{font-size:10.5px;color:var(--label-quiet);overflow-wrap:break-word;margin-top:.15em}
+.pd .prov,.pd .prov1{font-size:var(--ui-hint-font-size);color:var(--label-quiet);overflow-wrap:break-word;margin-top:.15em}
 /* The whole summary toggles, so the whole summary is the affordance: hover
    the row, not a fragment of it. Nothing in here is underlined — on the web an
    underline promises a link that goes somewhere else, and this goes nowhere. */
@@ -1755,16 +1756,16 @@ dialog.panel-card:not([open]){display:none}
 .pd .prov>summary:hover{color:var(--label);background:var(--line-soft)}
 .pd .prov>summary:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
 .pd .prov>summary::-webkit-details-marker{display:none}
-.pd .prov>summary::before{content:"▶";color:var(--label);display:inline-block;width:1em;margin-right:.4em;font-size:12px;line-height:1}
+.pd .prov>summary::before{content:"▶";color:var(--label);display:inline-block;width:1em;margin-right:.4em;font-size:var(--ui-font-addition);line-height:1}
 .pd .prov[open]>summary::before{content:"▼"}
-.pd .fmt{color:var(--label);text-transform:uppercase;font-size:9px;letter-spacing:.04em}
+.pd .fmt{color:var(--label);text-transform:uppercase;font-size:var(--ui-font-addition);letter-spacing:.04em}
 /* companion media count ("+ 2 mdd"): part of the summary text, not a control.
    It used to carry class "more", which collided with the search-results
    "more…" link — that link's document handler matched it, cancelled the
    disclosure toggle with preventDefault and then threw looking for a
    details.dict that does not exist here. */
 .pd .companions{color:var(--label)}
-.pd .provbody{margin:.2em 0 0 1em;display:flex;flex-direction:column;gap:.1em}
+.pd .provbody{margin:.2em 0 0 1em;display:flex;flex-direction:column;gap:calc(var(--ui-addition-gap,.5) * 1em)}
 /* "About" — what the dictionary says about ITSELF (/api/about). Same
    disclosure MECHANICS as .prov above, one size up, because this one is prose
    to be read rather than a path to be copied — but deliberately not the same
@@ -1773,18 +1774,18 @@ dialog.panel-card:not([open]){display:none}
    The hairline moves this into the card's footer register, below the file
    facts, where a description belongs. The body is fetched on first open: an
    annotation can be a page long and there is one per dictionary. */
-.pd .about{font-size:11px;color:var(--label-quiet);overflow-wrap:break-word;
+.pd .about{font-size:var(--ui-hint-font-size);color:var(--label-quiet);overflow-wrap:break-word;
   margin-top:.45em;padding-top:.4em;border-top:1px solid var(--line-soft)}
 .pd .about>summary{cursor:pointer;list-style:none;color:var(--label-quiet);
   border-radius:4px;padding:.05em .15em;margin-left:-.15em;transition:background .12s,color .12s}
 .pd .about>summary:hover{color:var(--label);background:var(--line-soft)}
 .pd .about>summary:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
 .pd .about>summary::-webkit-details-marker{display:none}
-.pd .about>summary::before{content:"▶";color:var(--label);display:inline-block;width:1em;margin-right:.4em;font-size:12px;line-height:1}
+.pd .about>summary::before{content:"▶";color:var(--label);display:inline-block;width:1em;margin-right:.4em;line-height:1}
 .pd .about[open]>summary::before{content:"▼"}
 .pd .aboutbody{margin:.2em 0 0 1em;line-height:1.45}
 .pd .aboutbody p{margin:.25em 0}
-.pd .aboutbody h4{margin:.5em 0 .1em;font-size:10px;text-transform:uppercase;
+.pd .aboutbody h4{margin:.5em 0 .1em;font-size:var(--ui-hint-font-size);text-transform:uppercase;
   letter-spacing:.04em;color:var(--label);font-weight:600}
 .pd .aboutbody h4:first-child{margin-top:0}
 .pd .aboutbody a{color:var(--label);text-decoration:none;border-bottom:1px solid var(--line)}
@@ -1798,15 +1799,26 @@ dialog.panel-card:not([open]){display:none}
    above the value says which kind of fact it is without a legend, and the ones
    that are also a way in (the picker has that section) gain a border on hover;
    the rest sit quiet. */
-.pd .traits{display:flex;flex-wrap:wrap;gap:.3em;margin:0 0 .5em 1em}
+.pd .traits{display:flex;flex-wrap:wrap;gap:calc(var(--ui-control-gap,.25) * 1em);margin:0 0 .5em 1em}
 .pd .trait{display:inline-flex;flex-direction:column;align-items:flex-start;
-  font:inherit;font-size:11px;line-height:1.3;color:var(--label);text-align:left;
+  font:inherit;font-size:var(--ui-font-base);line-height:1.3;color:var(--label);text-align:left;
   background:var(--line-soft);border:1px solid transparent;border-radius:5px;padding:.15em .5em}
-.pd .trait .tk{font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:var(--label-quiet)}
+.pd .trait .tk{font-size:var(--ui-font-addition);text-transform:uppercase;letter-spacing:.05em;color:var(--label-quiet)}
 .pd button.trait{cursor:pointer;transition:color .12s,border-color .12s,background .12s}
 .pd button.trait:hover{color:var(--accent);border-color:var(--accent);background:transparent}
 .pd button.trait:hover .tk{color:var(--accent)}
 .pd button.trait:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
+
+/* Dictionary settings follows the same type scale as the reader's Settings
+   panel. Keep these overrides scoped to this window: the card stylesheet also
+   serves a few shared dialogs, whose text has its own hierarchy. */
+#dictSettings>h2{font-size:var(--ui-font-title)}
+#dictSettings>h2 .btn{box-sizing:border-box;height:calc(var(--ui-main-control-height,1.6) * 1em);
+  font-size:calc(var(--ui-main-control-font,1.05) * 1rem);line-height:1}
+#dictSettings .bulkbox{font-size:var(--ui-hint-font-size)}
+#dictSettings .bulkbox .btn{font-size:var(--ui-font-base)}
+#dictSettings .pd .companions,
+#dictSettings .pd .prov>summary{font-size:var(--ui-font-addition)}
 
 /* ── responsive ────────────────────────────────────────────────────── */
 @media (max-width:600px){
@@ -1920,30 +1932,31 @@ dialog.panel-card:not([open]){display:none}
 .dsl-all button:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
 .dsl-all button:disabled{opacity:.55;cursor:wait}
 .dsl-unavailable .hd b{opacity:.55}
-.dsl-index-controls{display:flex;flex-direction:column;gap:12px;margin:12px 0}
-.dsl-index-row{display:grid;grid-template-columns:minmax(0,1fr);align-items:start;gap:8px}
-.dsl-index-tools{display:flex;flex-direction:column;align-items:flex-start;gap:6px;min-width:0}
-.dsl-feature-line{display:flex;flex-wrap:wrap;justify-content:flex-start;align-items:center;gap:6px;max-width:100%}
+.dsl-index-controls{display:flex;flex-direction:column;gap:calc(var(--ui-row-gap,.6) * 1em);margin:calc(var(--ui-row-gap,.6) * 1em) 0}
+.dsl-index-row{display:grid;grid-template-columns:minmax(0,1fr);align-items:start;gap:calc(var(--ui-row-gap,.6) * 1em)}
+.dsl-index-tools{display:flex;flex-direction:column;align-items:flex-start;gap:calc(var(--ui-control-gap,.25) * 1em);min-width:0}
+.dsl-feature-line{display:flex;flex-wrap:wrap;justify-content:flex-start;align-items:center;gap:calc(var(--ui-control-gap,.25) * 1em);max-width:100%}
 .dsl-browse-line{display:flex;justify-content:flex-start}
 .dsl-index-tools .feat{margin:0;max-width:100%;white-space:normal;overflow-wrap:anywhere;box-sizing:border-box}
-.dsl-index-row button{font:inherit;font-size:11px;cursor:pointer}
-.dsl-feature-line .feat{font-size:11px;line-height:1.2;padding:.3em .55em}
-.dsl-index-row .browse{display:inline-flex;align-items:center;gap:5px;width:100%;box-sizing:border-box;font:inherit;font-size:11px;line-height:1.2;text-decoration:none}
+.dsl-index-row button{font:inherit;font-size:var(--ui-font-base);cursor:pointer}
+.dsl-feature-line .feat{font-size:var(--ui-font-base);line-height:1.2;padding:.3em .55em}
+.dsl-index-row .browse{display:inline-flex;align-items:center;gap:calc(var(--ui-control-gap,.25) * 1em);width:100%;box-sizing:border-box;font:inherit;font-size:var(--ui-font-base);line-height:1.2;text-decoration:none}
 .dsl-index-row .browse svg{width:13px;height:13px;flex:none}
 .dsl-index-row .browse:hover:not(:disabled){color:var(--accent)}
 .dsl-index-row .browse:disabled{color:var(--label-quiet);cursor:default}
-.dsl-index-warning{color:var(--danger);font-size:12px}
-.bulk-index-section{padding:12px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
-.bulk-index-section h3{font-size:14px;margin:0 0 8px}
-.bulk-index-buttons{display:flex;flex-wrap:wrap;gap:6px}
-.bulk-index-table{width:100%;table-layout:fixed;border-collapse:separate;border-spacing:0 6px;font-size:12px}
+.dsl-index-warning{color:var(--danger);font-size:var(--ui-hint-font-size)}
+.bulk-index-section{padding:12px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line);font-size:var(--ui-font-base)}
+.bulk-index-section h3{font-size:var(--ui-font-section);margin:0 0 8px}
+.bulk-index-section .btn{font-size:var(--ui-font-base);min-height:calc(var(--ui-control-height,1.6) * 1em);box-sizing:border-box}
+.bulk-index-buttons{display:flex;flex-wrap:wrap;gap:calc(var(--ui-control-gap,.25) * 1em)}
+.bulk-index-table{width:100%;table-layout:fixed;border-collapse:separate;border-spacing:0 calc(var(--ui-row-gap,.6) * 1em);font-size:var(--ui-font-base)}
 .bulk-index-table th{font-weight:500;text-align:left;overflow-wrap:anywhere}
 .bulk-index-table th:first-child{width:36%;padding-right:8px}
 .bulk-index-table td{padding-left:6px}
-.bulk-index-table .btn{width:100%;min-height:40px;padding:.45em .3em;font:inherit;white-space:normal;overflow-wrap:anywhere}
-.bulk-index-table label{display:flex;align-items:center;gap:4px;min-height:40px;cursor:pointer;white-space:nowrap}
-.bulk-index-table select{width:100%;min-width:0;min-height:40px;font:inherit;color:var(--fg);background:var(--bg-card);border:1px solid var(--line);border-radius:6px;padding:4px}
-.bulk-index-row{display:grid;grid-template-columns:minmax(0,110px) minmax(0,1fr);gap:8px;align-items:start;margin:6px 0;font-size:12px}
+.bulk-index-table .btn{box-sizing:border-box;width:100%;min-height:calc(var(--ui-control-height,1.6) * 1em);padding:.45em .3em;font:inherit;white-space:normal;overflow-wrap:anywhere}
+.bulk-index-table label{display:flex;align-items:center;gap:calc(var(--ui-control-gap,.25) * 1em);min-height:calc(var(--ui-control-height,1.6) * 1em);cursor:pointer;white-space:nowrap}
+.bulk-index-table select{box-sizing:border-box;width:100%;min-width:0;min-height:calc(var(--ui-control-height,1.6) * 1em);font:inherit;color:var(--fg);background:var(--bg-card);border:1px solid var(--line);border-radius:6px;padding:4px}
+.bulk-index-row{display:grid;grid-template-columns:minmax(0,110px) minmax(0,1fr);gap:calc(var(--ui-control-gap,.25) * 1em);align-items:start;margin:calc(var(--ui-row-gap,.6) * 1em) 0;font-size:var(--ui-font-base)}
 .bulk-index-row>span{padding-top:5px;overflow-wrap:anywhere}
-.bulk-index-row>div{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-start}
-.bulk-index-row .btn{font-size:11px;padding:4px 6px;max-width:100%;white-space:normal}
+.bulk-index-row>div{display:flex;flex-wrap:wrap;gap:calc(var(--ui-control-gap,.25) * 1em);justify-content:flex-start}
+.bulk-index-row .btn{box-sizing:border-box;font-size:var(--ui-font-base);min-height:calc(var(--ui-control-height,1.6) * 1em);padding:4px 6px;max-width:100%;white-space:normal}
