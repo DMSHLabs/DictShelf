@@ -463,10 +463,11 @@ func (s *Server) applyLook(l look) error {
 		ui = *cur
 	}
 	ui.FontSize, ui.FontWeight = l.State.FontSize, l.State.FontWeight
-	// update takes a UI patch as raw JSON now: the whole record is sent, which
-	// under the patch rule changes every key it names - the same end state the
-	// old whole-record replace produced.
-	raw, err := json.Marshal(ui)
+	// update takes a UI patch as raw JSON now. The look governs the font
+	// alone, and both keys go out EXPLICITLY: a zero is the default here, and
+	// an omitempty Marshal of the record would swallow it - the patch could
+	// never say "back to the default".
+	raw, err := json.Marshal(map[string]any{"fontSize": ui.FontSize, "fontWeight": ui.FontWeight})
 	if err == nil {
 		err = s.reg.prefs.update(dicts, raw)
 	}
