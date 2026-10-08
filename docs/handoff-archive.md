@@ -67,6 +67,8 @@ narratives, so `git log` is a second copy.
 | Release wudict2-v0.6.0-ru.1 (2026-09-30, this session) | 2026-09-30 | — (added after the split, on the translation branch) |
 | The third session: five changes in the panel, the bar and the paper (2026-09-27/28) | 2026-09-27/28 | — (added after the split) |
 | The 09-26 upstream sync into `dev2` (2026-09-26) | 2026-09-26 | — (added after the split) |
+| Release wudict2-v0.11.1 (2026-10-08, this session) | 2026-10-08 | — (added after the split) |
+| The 2026-10-03 article-find wording and snapshots | 2026-10-03 | — (added after the split) |
 | Release wudict2-v0.11.0 (2026-10-08, this session) | 2026-10-08 | — (added after the split) |
 | The 2026-10-05 transient repairs | 2026-10-05 | — (added after the split) |
 | Release wudict2-v0.10.0 (2026-10-07, this session) | 2026-10-07 | — (added after the split) |
@@ -3074,6 +3076,45 @@ the MAIN checkout is switched to `master_build` (a worktree has no
 local.bat — copy it there first). After each upstream `master` sync,
 repeat this small overlay (two files) or merge `master` into
 `master_build` when the naming/emuX86 code still applies.
+
+## Release wudict2-v0.11.1 (2026-10-08, this session)
+
+Cut at the user's request, eight commits past v0.11.0: the A–Z headword find and the
+browse page's rework (`53878d2`, `a98ee6a`, `c38c55e`, `f785f2b`), the interface passes
+(`a4ee3d0`, `53878d2`), and the Exit teardown fix with its test (`d8b2672`, `cd082e1`,
+`30f052f`).
+
+Same order as always: the changelog commit (`96c63c4`), `dev` pushed, the annotated tag
+`wudict2-v0.11.1` on it, pushed, then `build-android.cmd release`, then the REST create
+and the asset upload. aapt2: `versionName='wudict2-v0.11.1'`, versionCode 589,
+`locales: '--_--' 'ru'`, arm64 only, 9,031,641 bytes, sha256
+`1886ed8ab42be581ed1bb24e45224e56e1d015a090c0e3265aa328e70c635b85`, the same signer
+certificate as every release. A normal release, so `latest` moved to it.
+https://github.com/DmShAl/wudict2/releases/tag/wudict2-v0.11.1
+
+**Verified:** `go build ./...` and `go vet ./...` clean; `go test -count=1` green for
+`internal/server`, `internal/store`, `internal/dict`; the packaged `.so` unpacked and
+checked for `/api/browse/find`, the headword-search labels, the new Fonts values and
+`search.backToWords`; the dex checked for `exit suppressed launcher`, `WebViewDiagnostics`
+and `SystemLogExport`; **0** `Monotype`/`ArialPlus`/`QuiviraPhonetic`; the published asset
+downloaded back and hash-matched; the body compared byte for byte with the changelog
+section. No device or emulator run; `make i18n-check-js` was not run — still no Node on
+this machine.
+
+Still open, unchanged: the `wudict2-v0.7.1` release remains a draft carrying eight
+desktop assets.
+
+## The 2026-10-03 article-find wording and snapshots
+
+Moved out of HANDOFF.md on 2026-10-08: two wording approvals (`exact`/`точно`, *Search in hidden examples*) that the interface now simply carries, and two session snapshots whose "this slice is uncommitted" framing went stale when the work shipped in v0.7.0. The measurements and the touch-target rule from the same day STAYED in HANDOFF, because they describe the current strip.
+
+2026-10-03 wording: user approved lowercase **exact / точно** for the article-find exact mode, retaining whole-word/whole-phrase matching. EN/RU labels updated; Node localization checks pass.
+
+2026-10-03 wording: user approved **Search in hidden examples** for the article-find checkbox; English catalog updated, Node localization checks pass.
+
+2026-10-03 Exit: current checkout `dev` HEAD `b99ba0f`, clean at start; this slice uncommitted. Android-only Exit / Выход is the last separate Settings row. Application lifecycle registry closes all app windows, preserving a reader task hosting Lookup; stops owned/adopted server without disabling future external intents. Active native transfers or demanded server work offer wait-until-finished or Cancel. GET /api/power reports demanded work (also for an adopted child); cancelled startup cannot spawn later. Full Go tests/build, Node i18n and FOSS/Play Java compilation pass. No APK/device verification: check ordinary Exit, multiple popup windows, busy wait/Cancel, adopted server and immediate reader lookup after Exit. Earlier search/UI changes below are included in b99ba0f; their commit-state notes are historical.
+
+2026-10-03 article find: `dev` HEAD `cd150f4`, clean at start; this slice uncommitted. Magnifier after dictionary arrows opens Find in articles; word-prefix/whole-word/contains, case, highlight-all and hidden-example search, no regex. Next/previous leave a bottom navigation strip; matches span loaded articles in reading order, including collapsed dictionary sections. Only the current hidden example is temporarily shown; leaving it/ending find restores its display. Query/options persist locally; main search/clearing finishes article find. Shadow and same-origin iframe articles preserve markup and selections (older browsers select the current match). Full Go suite/build/vet, targeted asset/i18n and Chromium EN/RU 320/390/1100px checks pass. Module tidy reports only pre-existing go.sum CRLF/LF differences. No APK/device check; soft keyboard, hidden examples and bottom insets remain for the phone.
 
 ## Release wudict2-v0.11.0 (2026-10-08, this session)
 
