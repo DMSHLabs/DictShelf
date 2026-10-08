@@ -5,6 +5,54 @@ Notable changes in **wuDict2**, the Android fork of
 version it was forked from. Fork release tags are prefixed `wudict2-`; one
 tagged line per release, newest first.
 
+## wudict2-v0.11.1 — 2026-10-08
+
+From `dev`. The word lists can be searched, the interface got a pass of tuning,
+and Exit stops coming back.
+
+### The A–Z page can find headwords
+
+- **A word list is searchable now**: type in *Find headwords…* and the list shows
+  the entries that match, with previous and next to step through them, **Show all
+  headwords** to go back to the full list, and *No matching headwords* when
+  there are none. A dictionary whose headwords cannot be read says so instead of
+  looking empty.
+- **Long lists page and scroll**: *‹ Previous page* / *Next page ›*, and the
+  letter chips at the side scroll with arrows of their own rather than being cut
+  off.
+- **Its dictionary chooser uses the same search as everywhere else** (*Find
+  dictionaries…*, *Filter dictionaries…*), and an article opened from a word
+  list now offers **← Words** to get back to the list it came from.
+- The page's title gained a ✕ to close it.
+
+### Fonts
+
+- **Two more values**: *Control font size* and *Hint control height*, beside the
+  ones already there — and a line saying what the numbers are: all of them are
+  unitless multipliers, with font sizes taken against `rem` and heights and
+  spacing in `em` or `rem` where they apply.
+
+### Exit
+
+- **Exit now stays exited.** Android's launcher can send a fresh MAIN intent in a
+  *new task* while the old window is still closing; that request used to revoke
+  the shutdown and bring the app back. It is now recognised as part of the exit
+  and refused — the System Log records *exit suppressed launcher during
+  teardown* — so the shutdown finishes. An external lookup still revives the app,
+  which is the one case where something genuinely wants it.
+- The exit coordinator is **covered by a test that needs no emulator**: the real
+  `AppExit` is compiled against a small Android lifecycle double and driven
+  through the first-request, window-order, fresh-lookup and busy-cancel cases
+  (`tools/test-app-exit.ps1`).
+
+### Tidying
+
+- The About block's *Website* and *Source* pair and the *fork of wuDict* line are
+  one link to this repository now, and the setup page dropped its duplicate
+  tagline.
+- Wording: *Existing indexes* and *Create contain indexes* in the index dialogs;
+  a pass over the group editor, setup, lemma and browse pages' styling.
+
 ## wudict2-v0.11.0 — 2026-10-08
 
 From `dev`. The dictionary lists can be searched, the settings window got a pass
