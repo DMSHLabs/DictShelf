@@ -153,22 +153,33 @@ header{position:sticky;top:0;z-index:5;background:var(--bar);
 /* The title block takes the row on a wide screen and yields it on a narrow
    one: flex-wrap does the whole responsive job, with no media query to keep
    in step with the column count below. */
-.title{flex:1 1 13rem;min-width:0}
-.title b{display:block;font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.title{display:flex;align-items:center;gap:.5rem;flex:1 1 13rem;min-width:0}
+.title-copy{flex:1;min-width:0}
+.title b{display:block;font-size:var(--ui-font-title);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 /* The running head, exactly as a printed page carries it: the first and last
    word ON THIS PAGE. It is the one thing that tells a reader where they are
    without counting. */
-.title span{display:block;font-size:11.5px;color:var(--label-quiet);white-space:nowrap;
+.title span{display:block;font-size:var(--ui-hint-font-size);color:var(--label-quiet);white-space:nowrap;
   overflow:hidden;text-overflow:ellipsis}
-#jump{flex:0 1 12rem;min-width:7rem;font:inherit;font-size:13px;color:var(--fg);background:var(--bg);
-  border:1px solid var(--line);border-radius:99px;padding:.3rem .8rem;outline:none;-webkit-appearance:none}
+.title button{box-sizing:border-box;display:grid;place-items:center;flex:none;
+  width:calc(var(--ui-main-control-height) * 1em);
+  height:calc(var(--ui-main-control-height) * 1em);padding:0;
+  font-size:calc(var(--ui-main-control-font) * 1rem);line-height:1;
+  color:var(--fg);background:transparent;border:1px solid var(--line);border-radius:7px;cursor:pointer}
+#jump{box-sizing:border-box;flex:1 1 12rem;min-width:7rem;
+  height:calc(var(--ui-edit_control-height) * 1.5rem);
+  font-family:inherit;font-size:calc(var(--ui-edit_control-font) * 1rem);
+  color:var(--fg);background:var(--bg);border:1px solid var(--line);
+  border-radius:6px;padding:0 .4em;outline:none;-webkit-appearance:none}
 #jump:focus{border-color:var(--focus);box-shadow:0 0 0 3px color-mix(in srgb,var(--focus) 22%,transparent)}
-.nav{display:flex;align-items:center;gap:.35rem;font-size:12.5px;color:var(--label);white-space:nowrap}
-.nav button{font:inherit;font-size:13px;background:none;border:1px solid var(--line);color:var(--label);
-  border-radius:8px;min-width:2.1rem;height:1.95rem;padding:0 .55rem;cursor:pointer}
+.nav{display:flex;align-items:center;gap:.35rem;font-size:var(--ui-font-addition);color:var(--label);white-space:nowrap}
+.nav button{box-sizing:border-box;font-family:inherit;
+  font-size:calc(var(--ui-edit_control-font) * 1rem);background:none;border:1px solid var(--line);color:var(--label);
+  border-radius:8px;min-width:calc(var(--ui-edit_control-height) * 1.5rem);
+  height:calc(var(--ui-edit_control-height) * 1.5rem);padding:0 .55rem;cursor:pointer}
 .nav button:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}
 .nav button:disabled{opacity:.3;cursor:default}
-.nav b{font-weight:600;color:var(--fg);font-variant-numeric:tabular-nums}
+.nav b{font-size:var(--ui-font-addition);font-weight:600;color:var(--fg);font-variant-numeric:tabular-nums}
 
 /* One row, scrolled sideways rather than wrapped: wrapping a Cyrillic+Latin
    alphabet is four rows of chrome above every page, on the screen that can
@@ -176,7 +187,7 @@ header{position:sticky;top:0;z-index:5;background:var(--bar);
    never scrolled to a place the reader is not. */
 .strip{display:flex;gap:.1rem;overflow-x:auto;padding:0 .9rem .4rem;scrollbar-width:thin;
   overscroll-behavior-x:contain}
-.strip button{font:inherit;font-size:12.5px;line-height:1;background:none;border:0;color:var(--label);
+.strip button{font:inherit;font-size:var(--ui-font-addition);line-height:1;background:none;border:0;color:var(--label);
   cursor:pointer;padding:.36rem .5rem;border-radius:7px;flex:0 0 auto;min-width:1.85rem;text-align:center}
 .strip button:hover{background:var(--line-soft);color:var(--fg)}
 .strip button[aria-current=true]{background:var(--accent);color:#fff}
@@ -186,13 +197,13 @@ header{position:sticky;top:0;z-index:5;background:var(--bar);
    holds and drops to one when it holds one. Nothing to recompute on resize. */
 .words{columns:14rem;column-gap:2.2rem;column-rule:1px solid var(--line-soft);
   max-width:1700px;margin:0 auto;padding:.9rem 1rem 2rem}
-.words a{display:block;color:var(--link);text-decoration:none;padding:.16rem .3rem;
+.words a{display:block;font-size:var(--ui-font-addition);color:var(--link);text-decoration:none;padding:.16rem .3rem;
   border-radius:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;break-inside:avoid}
 .words a:hover{background:var(--line-soft);color:var(--fg)}
 .words a:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 
 footer{display:flex;justify-content:center;padding:0 1rem 2.2rem}
-footer .nav button{height:2.3rem;padding:0 1rem}
+footer .nav button{padding:0 1rem}
 
 .msg{max-width:34rem;margin:4rem auto;padding:1.4rem 1.6rem;background:var(--bg);
   border:1px solid var(--line);border-radius:12px}
@@ -222,15 +233,18 @@ footer .nav button{height:2.3rem;padding:0 1rem}
 <script>
 /* The chooser shares the reader's saved Fonts values. */
 (function () {
-  const defaults={base:1,title:1.15,hint:.8,mainControlHeight:1.05,mainControlFont:1.05};
-  const names={base:'--ui-font-base',title:'--ui-font-title',hint:'--ui-hint-font-size',
-    mainControlHeight:'--ui-main-control-height',mainControlFont:'--ui-main-control-font'};
+  const defaults={base:1,title:1.15,addition:.9,hint:.8,editControlHeight:1.8,editControlFont:1,
+    mainControlHeight:1.05,mainControlFont:1.05};
+  const names={base:'--ui-font-base',title:'--ui-font-title',addition:'--ui-font-addition',
+    hint:'--ui-hint-font-size',editControlHeight:'--ui-edit_control-height',
+    editControlFont:'--ui-edit_control-font',mainControlHeight:'--ui-main-control-height',
+    mainControlFont:'--ui-main-control-font'};
   let saved={};
   try { saved=JSON.parse(localStorage.getItem('wudict_settings_fonts')||'null')||{}; } catch (_) {}
   for(const [key,fallback] of Object.entries(defaults)){
-    const value=Number(saved[key]),scale=Number.isFinite(value)?Math.min(2,Math.max(.5,value)):fallback;
+    const value=Number(saved[key]),scale=Number.isFinite(value)?Math.min(key==='editControlHeight'?4:2,Math.max(.5,value)):fallback;
     document.documentElement.style.setProperty(names[key],
-      ['base','title','hint'].includes(key)?scale+'rem':String(scale));
+      ['base','title','addition','hint'].includes(key)?scale+'rem':String(scale));
   }
 })();
 </script>
@@ -238,7 +252,7 @@ footer .nav button{height:2.3rem;padding:0 1rem}
 <header id="top" hidden>
   <div class="bar">
     <a class="back" href="/" title="{{T:browse.back}}" aria-label="{{T:browse.back}}"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="7" cy="7" r="4.3"/><path d="M10.2 10.2 14 14"/></svg></a>
-    <div class="title"><b id="name"></b><span id="sub"></span></div>
+    <div class="title"><div class="title-copy"><b id="name"></b><span id="sub"></span></div><button type="button" id="closeBrowse" aria-label="{{T:pages.close}}">✕</button></div>
     <input id="jump" type="search" placeholder="{{T:browse.jump}}" spellcheck="false" autocomplete="off"
            autocapitalize="off" enterkeyhint="go" aria-label="{{T:browse.jumpWord}}">
     <div class="nav">
@@ -440,6 +454,10 @@ async function chooser(){
 }
 
 document.addEventListener("click",e=>{
+  if(e.target.closest("#closeBrowse")){
+    if(history.length>1)history.back();else location.href="/";
+    return;
+  }
   if(e.target.closest("#closeBrowseChooser")){
     if(history.length>1)history.back();else location.href="/";
     return;

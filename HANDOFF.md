@@ -1,5 +1,7 @@
 # Agent handoff — current state
 
+**2026-10-08 Browse dictionary view:** On `dev`, `/browse?dict=...` now uses saved Fonts values for the dictionary title, running head, jump input, both navigation rows, page counter, alphabet strip and word links. The jump input grows to fill the space left by the navigation controls. A main-control-sized close button beside the dictionary name goes back through history (or `/` when directly opened). The chooser's earlier styling remains. Targeted server/i18n/asset tests and diff check pass; no device or APK check. Work is uncommitted.
+
 **2026-10-08 Browse chooser UI:** The `/browse` dictionary chooser reads saved Fonts values before paint: heading uses title, explanatory line and entry counts use hint, dictionary names use base. It has a main-control-sized close button that returns through browser history, with `/` as direct-open fallback; `/browse?dict=...` keeps its existing reading controls. Targeted server/i18n/asset tests and diff check pass; no device or APK check. Work is uncommitted on `dev`.
 
 **2026-10-08 Lemmatization footer:** Removed the divider below the installed-path text, hid the attribution block when it is empty, and reduced card bottom padding to 1em. License attribution still appears when supplied. `git diff --check` passes; no phone or APK check. Uncommitted on `dev`.
