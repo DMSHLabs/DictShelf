@@ -169,6 +169,7 @@ header{position:sticky;top:0;z-index:5;background:var(--bar);
   height:calc(var(--ui-main-control-height) * 1em);padding:0;
   font-size:calc(var(--ui-main-control-font) * 1rem);line-height:1;
   color:var(--fg);background:transparent;border:1px solid var(--line);border-radius:7px;cursor:pointer}
+.title button svg,.chooser-head button svg{display:block;width:1.3em;height:1.3em}
 .nav{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;
   gap:.35rem;width:100%;flex:1 0 100%;font-size:calc(var(--ui-font-addition) * 1rem);color:var(--label)}
 .nav button{box-sizing:border-box;font-family:inherit;
@@ -306,7 +307,7 @@ footer .browse-search-dock button:disabled{opacity:.45;cursor:default}
 <header id="top" hidden>
   <div class="bar">
     <a class="back" href="/" title="{{T:browse.back}}" aria-label="{{T:browse.back}}"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="7" cy="7" r="4.3"/><path d="M10.2 10.2 14 14"/></svg></a>
-    <div class="title"><div class="title-copy"><b id="name"></b><span id="sub"></span></div><button type="button" id="closeBrowse" aria-label="{{T:pages.close}}">✕</button></div>
+    <div class="title"><div class="title-copy"><b id="name"></b><span id="sub"></span></div><button type="button" id="closeBrowse" aria-label="{{T:pages.close}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div>
     <div class="nav">
       <button type="button" data-go="prev" title="{{T:browse.previousTitle}}">{{T:browse.previousPage}}</button>
       <b data-pos></b>
@@ -672,7 +673,7 @@ async function unprepared(j){
    dictionary that opens is offered: choosing one that has no index yet
    builds it (unprepared). */
 async function chooser(){
-  const heading='<div class="chooser-head"><b>'+tx("browse.choose")+'</b><button type="button" id="closeBrowseChooser" aria-label="'+tx("pages.close")+'">✕</button></div><p class="chooser-hint">'+tx("browse.chooseHint")+'</p>';
+  const heading='<div class="chooser-head"><b>'+tx("browse.choose")+'</b><button type="button" id="closeBrowseChooser" aria-label="'+tx("pages.close")+'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><p class="chooser-hint">'+tx("browse.chooseHint")+'</p>';
   card(heading);
   let text="";
   try{const response=await fetch("/api/dicts");if(!response.ok)throw new Error("load");

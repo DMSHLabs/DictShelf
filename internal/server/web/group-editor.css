@@ -98,7 +98,8 @@ dialog#linkGroupDialog.group-dialog.panel-card,dialog#discardGroupDraftDialog.gr
 #dictSettings input.list-search-input{height:calc(var(--ui-edit_control-height,1.8) * 1.5rem);min-height:0;font-size:calc(var(--ui-edit_control-font,1) * 1rem)}
 .group-dialog .btn{box-sizing:border-box;min-height:calc(var(--ui-control-height,1.6) * 1em);line-height:1;padding:0 .55em}
 .group-dialog h2{display:flex;align-items:center;gap:calc(var(--ui-control-gap,.25) * 1em);margin:0;font-size:calc(var(--ui-font-title) * 1rem)}
-.group-dialog h2 .btn{box-sizing:border-box;height:calc(var(--ui-main-control-height,1.05) * 1em);min-height:calc(var(--ui-main-control-height,1.05) * 1em);font-size:calc(var(--ui-main-control-font,1.05) * 1rem);line-height:1}
+.group-dialog h2 .btn{box-sizing:border-box;display:grid;place-items:center;flex:none;width:calc(var(--ui-main-control-height,1.05) * 1em);height:calc(var(--ui-main-control-height,1.05) * 1em);min-height:calc(var(--ui-main-control-height,1.05) * 1em);padding:0;font-size:calc(var(--ui-main-control-font,1.05) * 1rem);line-height:1}
+.group-dialog h2 .icon-close{display:block;width:1.3em;height:1.3em;flex:none}
 dialog#clearDatabaseDialog.group-dialog.panel-card{box-sizing:border-box;height:fit-content;max-height:calc(100dvh - 24px);width:min(480px,calc(100vw - 24px));inset:0;margin:auto;padding:14px}
 #clearDatabaseDialog>h2{flex:none}
 #clearDatabaseDialog .rescan-scroll{min-height:0;overflow:auto;overscroll-behavior:contain}
@@ -143,6 +144,7 @@ dialog#clearDatabaseDialog.group-dialog.panel-card{box-sizing:border-box;height:
 @media(max-width:360px){dialog#clearDatabaseDialog.group-dialog.panel-card{padding:12px}#clearDatabaseDialog .seg .btn{padding:.25em .35em}}
 .group-dialog h2 button{margin-left:auto}
 #groupTitle{gap:calc(var(--ui-control-gap,.25) * 1em)}
+#groupTitle .icon-close{width:1.4em;height:1.4em}
 #groupTitle #groupNameApply,#groupTitle #closeGroups{box-sizing:border-box;display:grid;place-items:center;flex:none;width:calc(var(--ui-main-control-height,1.05) * 1em);height:calc(var(--ui-main-control-height,1.05) * 1em);min-height:calc(var(--ui-main-control-height,1.05) * 1em);padding:0;font-size:calc(var(--ui-main-control-font,1.05) * 1rem)}
 #groupTitle #groupNameApply{margin-left:auto}
 #groupTitle #closeGroups{margin-left:0}
@@ -270,8 +272,15 @@ dialog#articleFindDialog.group-dialog.panel-card{box-sizing:border-box;inset:0;m
 #newGroupFilter{text-align:left}
 #groupFilterDialog{display:flex;flex-direction:column;height:min(650px,85dvh);overflow:hidden}
 #groupFilterDialog:not([open]){display:none}
-#groupFilterHeader{display:flex;align-items:center;gap:.5em;flex:none}
-#closeGroupFilter{display:grid;place-items:center;flex:none;width:2.5em;height:2.5em;padding:.25em}
+#groupFilterHeader{position:relative;display:flex;align-items:flex-start;gap:.5em;flex:none;
+  min-height:calc(var(--ui-main-control-height,1.05) * 1em);
+  padding-right:calc(var(--ui-main-control-height,1.05) * 1em + .5em)}
+#closeGroupFilter{position:absolute;top:0;right:0;display:grid;place-items:center;flex:none;
+  box-sizing:border-box;width:calc(var(--ui-main-control-height,1.05) * 1em);
+  height:calc(var(--ui-main-control-height,1.05) * 1em);
+  min-height:calc(var(--ui-main-control-height,1.05) * 1em);padding:0;
+  font-size:calc(var(--ui-main-control-font,1.05) * 1rem)}
+.group-dialog .icon-close{display:block;width:1.3em;height:1.3em}
 .group-filter-choices{flex:1;min-height:0;overflow:auto}
 #groupFilterToggle{flex:1;min-width:0}
 #groupFilterToggle:empty{display:none}

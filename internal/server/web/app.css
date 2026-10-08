@@ -394,6 +394,7 @@ select{box-sizing:border-box;font-size:calc(var(--ui-font-base) * 1rem);min-heig
   background:var(--bg-card);color:var(--label);border:1px solid var(--line);border-radius:8px;
   padding:.3em .55em;cursor:pointer;line-height:1.2}
 .btn:hover{color:var(--fg);border-color:var(--fg-faint)}
+.icon-close{display:block;width:1.3em;height:1.3em}
 #panel .examples-extra{display:flex;align-items:flex-start;gap:calc(var(--ui-control-gap) * 1em);
   margin:calc(var(--ui-addition-gap) * 1em) 0;padding-left:.4em;font-size:calc(var(--ui-font-addition) * 1rem);overflow-wrap:anywhere}
 #panel .examples-extra[hidden]{display:none}
@@ -1827,6 +1828,7 @@ dialog.panel-card:not([open]){display:none}
 #dictSettings>h2{box-sizing:border-box;display:flex;align-items:center;gap:calc(var(--ui-control-gap,.25) * 1em);flex:none;margin:0;padding:.8em 1em;border:1px solid var(--line);border-bottom:0;border-radius:12px 12px 0 0;background:var(--bg-card,var(--bg));font-size:calc(var(--ui-font-title) * 1rem)}
 #dictSettings>h2 .btn{box-sizing:border-box;display:grid;place-items:center;width:calc(var(--ui-main-control-height,1.05) * 1em);height:calc(var(--ui-main-control-height,1.05) * 1em);min-height:calc(var(--ui-main-control-height,1.05) * 1em);padding:0;
   font-size:calc(var(--ui-main-control-font,1.05) * 1rem);line-height:1}
+#dictSettings>h2 .icon-close{width:1.4em;height:1.4em}
 #dictSettings .bulkbox{font-size:calc(var(--ui-hint-font-size) * 1rem)}
 #dictSettings .bulkbox .btn{font-size:calc(var(--ui-font-base) * 1rem)}
 #dictSettings .pd .companions,
