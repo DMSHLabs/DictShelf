@@ -71,7 +71,14 @@ final class Intake {
     // One at a time here as well as in the server. The server's claim is the
     // real one; this one exists so a second share is answered immediately
     // instead of after a multi-gigabyte upload that is going to be refused.
-    private static volatile boolean running;
+    //
+    // Held as WHAT is being imported and the dialog showing it, because one act
+    // of the user can arrive as two intents: Telegram answers the share page's
+    // "Open in wuDict" with the page's App Link and the intent: link's target,
+    // 12 ms apart (see admit). Main thread only: set by admit, cleared where
+    // the dialog goes.
+    private static String running;
+    private static AlertDialog runningDialog;
     private static volatile boolean cancelled;
 
     /**
@@ -401,12 +408,53 @@ final class Intake {
      * import, so it goes to a browser.
      */
     static boolean isSharePage(Uri u) {
-        String host = u.getHost(), path = u.getPath(), frag = u.getEncodedFragment();
+        String frag = u.getEncodedFragment();
+        return isShareAddress(u) && (frag == null || frag.trim().isEmpty());
+    }
+
+    /** legbehindneck.com/wudict, with or without a link after "#". */
+    private static boolean isShareAddress(Uri u) {
+        String host = u.getHost(), path = u.getPath();
         if (host == null) return false;
         host = host.toLowerCase(Locale.US);
         return (host.equals("legbehindneck.com") || host.equals("www.legbehindneck.com"))
-                && ("/wudict".equals(path) || "/wudict/".equals(path))
-                && (frag == null || frag.trim().isEmpty());
+                && ("/wudict".equals(path) || "/wudict/".equals(path));
+    }
+
+    /**
+     * What a link asks for. A share link is the link after "#", decoded: its
+     * App Link and its intent: link carry it in two encodings (a URI fragment,
+     * an extra the browser has unescaped), and "/wudict/#" is "/wudict#".
+     */
+    private static String requestKey(String link) {
+        String v = link.trim();
+        Uri u = Uri.parse(v);
+        String frag = u.getFragment();
+        return frag != null && isShareAddress(u) ? frag.trim() : v;
+    }
+
+    /**
+     * Whether to start a request. The import on screen, asked for again - one
+     * tap delivered twice - passes without a word; anything else while an
+     * import runs is told so, including the same request once its dialog is
+     * gone (cancelled, or its window lost), because then nothing answers it.
+     */
+    private static boolean admit(Activity a, String key) {
+        if (running == null) {
+            running = key;
+            return true;
+        }
+        if (!running.equals(key) || !runningDialog.isShowing()) {
+            say(a, a.getString(R.string.intake_busy));
+        }
+        return false;
+    }
+
+    /** The import is over: the next request starts afresh. Main thread. */
+    private static void finished(AlertDialog dialog) {
+        if (runningDialog != dialog) return;
+        running = null;
+        runningDialog = null;
     }
 
     /**
@@ -466,11 +514,7 @@ final class Intake {
     }
 
     private static void start(Activity a, List<Uri> uris) {
-        if (running) {
-            say(a, a.getString(R.string.intake_busy));
-            return;
-        }
-        running = true;
+        if (!admit(a, uris.toString())) return;
         cancelled = false;
 
         AlertDialog dialog = new BackgroundDialogBuilder(a)
@@ -480,6 +524,7 @@ final class Intake {
                 .setNegativeButton(R.string.intake_cancel, (d, w) -> cancelled = true)
                 .create();
         dialog.show();
+        runningDialog = dialog;
 
         // Held for exactly the reasons SafImporter holds it: this is minutes
         // of work in a process the platform reads as idle, and a kill strands
@@ -498,12 +543,12 @@ final class Intake {
                 SystemLog.warn(TAG, "intake failed", e);
                 summary = a.getString(R.string.intake_failed, String.valueOf(e.getMessage()));
             } finally {
-                running = false;
                 IndexService.release(app);
                 ServerProcess.release(true);
             }
             final String msg = summary;
             a.runOnUiThread(() -> {
+                finished(dialog);
                 if (a.isFinishing() || a.isDestroyed()) return;
                 dialog.dismiss();
                 if (a instanceof MainActivity) ((MainActivity) a).reloadPage();
@@ -541,11 +586,7 @@ final class Intake {
      * not bound by the app's network security config (D52, D130).
      */
     private static void startURL(Activity a, String url) {
-        if (running) {
-            say(a, a.getString(R.string.intake_busy));
-            return;
-        }
-        running = true;
+        if (!admit(a, requestKey(url))) return;
         cancelled = false;
 
         AlertDialog dialog = new BackgroundDialogBuilder(a)
@@ -555,6 +596,7 @@ final class Intake {
                 .setNegativeButton(R.string.intake_cancel, (d, w) -> cancelled = true)
                 .create();
         dialog.show();
+        runningDialog = dialog;
 
         Context app = a.getApplicationContext();
         ServerProcess.retain();
@@ -567,12 +609,12 @@ final class Intake {
                 SystemLog.warn(TAG, "download failed", e);
                 summary = a.getString(R.string.intake_failed, String.valueOf(e.getMessage()));
             } finally {
-                running = false;
                 IndexService.release(app);
                 ServerProcess.release(true);
             }
             final String msg = summary;
             a.runOnUiThread(() -> {
+                finished(dialog);
                 if (a.isFinishing() || a.isDestroyed()) return;
                 dialog.dismiss();
                 if (a instanceof MainActivity) ((MainActivity) a).reloadPage();
