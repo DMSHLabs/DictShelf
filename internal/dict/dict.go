@@ -215,6 +215,12 @@ type Browser interface {
 	Alphabet() ([]Letter, error)
 }
 
+// BrowseFinder searches headwords across the entire prepared dictionary.
+// Results are returned in browse order, independently of the current page.
+type BrowseFinder interface {
+	FindHeadwords(ctx context.Context, query string, offset, limit int) ([]string, int, error)
+}
+
 // Entry is one dictionary article as produced by a format Reader during
 // an ingest scan. When LinkTo is non-empty the entry is a pure redirect
 // (e.g. MDX @@@LINK): Body is ignored and Headwords become aliases of the

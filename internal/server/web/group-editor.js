@@ -20,7 +20,8 @@ function availableMatchesFilter(d){
   return groupAvailableFilter==="all"||(groupAvailableFilter==="uncategorized"?filters.length===0:filters.some(g=>JSON.stringify([g.f,g.v])===groupAvailableFilter));
 }
 const groupSearchLabels={
-  placeholder:tx('dictUI.searchAvailable'),search:tx('dictUI.listSearchLabel'),
+  placeholder:tx('dictUI.listSearchPlaceholder'),filterPlaceholder:tx('dictUI.listFilterPlaceholder'),
+  search:tx('dictUI.listSearchLabel'),
   previous:tx('dictUI.listSearchPrevious'),next:tx('dictUI.listSearchNext'),
   filter:tx('dictUI.listSearchFilter'),
   count:tx('dictUI.listSearchCount',{current:'{current}',total:'{total}'})

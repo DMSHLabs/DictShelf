@@ -36,7 +36,7 @@
     const count = dock.querySelector(".list-search-count");
     const [previous, next] = dock.querySelectorAll(".list-search-step");
     const mode = dock.querySelector(".list-search-mode");
-    input.placeholder = labels.placeholder || "Search…";
+    input.placeholder = labels.placeholder || "Find…";
     input.setAttribute("aria-label", labels.search || input.placeholder);
     previous.textContent = "▲";
     next.textContent = "▼";
@@ -74,6 +74,8 @@
     }
     function paint() {
       const query = normalize(input.value);
+      input.placeholder = filtering ? (labels.filterPlaceholder || "Filter…") : (labels.placeholder || "Find…");
+      input.setAttribute("aria-label", input.placeholder);
       items = getItems();
       matches = [];
       for (const item of items) {
@@ -188,6 +190,7 @@
       scrollContainer: document.getElementById("dictSettingsScroll"),
       labels: {
         placeholder: t("dictUI.listSearchPlaceholder"),
+        filterPlaceholder: t("dictUI.listFilterPlaceholder"),
         search: t("dictUI.listSearchLabel"),
         previous: t("dictUI.listSearchPrevious"),
         next: t("dictUI.listSearchNext"),

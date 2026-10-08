@@ -18,7 +18,9 @@ public final class AppExit extends Application implements Application.ActivityLi
     private final Handler main = new Handler(Looper.getMainLooper());
     private boolean pending;
     private boolean closing;
-    private boolean exited;
+    // Android may restore the base activity of a task whose other windows
+    // are closing. Suppress only those tasks, never a later launcher task.
+    private final Set<Integer> exitedTasks = new HashSet<>();
 
     @Override public void onCreate() {
         super.onCreate();
@@ -30,13 +32,12 @@ public final class AppExit extends Application implements Application.ActivityLi
     static void request(Activity activity) {
         AppExit app = (AppExit) activity.getApplication();
         if (app.pending) return;
-        app.exited = false;
         app.pending = true;
         app.check(activity, false);
     }
 
-    static boolean isExiting(Activity activity) {
-        return ((AppExit) activity.getApplication()).exited;
+    static boolean shouldSuppressRestart(Activity activity) {
+        return ((AppExit) activity.getApplication()).exitedTasks.contains(activity.getTaskId());
     }
 
     private void check(Activity owner, boolean waiting) {
@@ -46,7 +47,9 @@ public final class AppExit extends Application implements Application.ActivityLi
                 if (!pending) return;
                 if (!busy) {
                     closing = true;
-                    exited = true;
+                    for (Activity window : windows) {
+                        if (window instanceof MainActivity) exitedTasks.add(window.getTaskId());
+                    }
                     // Finish every window before stopping its connection. Removing a task
                     // while its other windows are still live can bring one back to the top.
                     for (Activity window : new ArrayList<>(windows)) {
@@ -77,12 +80,13 @@ public final class AppExit extends Application implements Application.ActivityLi
 
     @Override public void onActivityCreated(Activity a, Bundle state) {
         windows.add(a);
-        // A genuinely new external lookup revokes shutdown; its onCreate has
-        // already retained/started the server. Old closing windows must not stop it.
-        if (closing) {
+        // super.onCreate dispatches this callback before MainActivity's restart
+        // guard. A restored closing task must not revoke its own shutdown.
+        // A new launcher task or external lookup does revoke it, so the old
+        // windows' destruction cannot stop the new window's server.
+        if (closing && !(a instanceof MainActivity && shouldSuppressRestart(a))) {
             closing = false;
             pending = false;
-            exited = false;
         }
     }
     @Override public void onActivityDestroyed(Activity a) {

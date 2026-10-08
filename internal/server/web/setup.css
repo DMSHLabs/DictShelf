@@ -30,6 +30,9 @@ body{margin:0;background:var(--bg);color:var(--fg);
   line-height:1.618;display:flex;min-height:100vh;align-items:center;justify-content:center;padding:1em}
 .card{background:var(--card);border:1px solid var(--line);border-radius:12px;
   box-shadow:0 4px 20px rgba(0,0,0,.08);max-width:560px;width:100%;padding:1.618em}
+.card.scroll-card{display:flex;flex-direction:column;max-height:calc(100dvh - 2em);overflow:hidden}
+.scroll-card>.top{flex:none}
+.card-scroll{min-height:0;overflow:auto;overscroll-behavior:contain}
 .work-notice{position:fixed;z-index:300;top:12px;left:50%;transform:translateX(-50%);
   width:calc(100% - 24px);max-width:720px;display:flex;align-items:center;gap:.6em;
   padding:.45em .55em;border:1px solid var(--accent);border-radius:8px;

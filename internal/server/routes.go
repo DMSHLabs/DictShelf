@@ -149,6 +149,7 @@ func (s *Server) routes() []route {
 		// one page of the headword list (browse.go). Never CORS: the D69
 		// grant is lookup, and this dumps a dictionary a page at a time.
 		{"GET", "/api/browse", s.handleBrowse, "/api/browse", false},
+		{"GET", "/api/browse/find", s.handleBrowseFind, "/api/browse/find", false},
 		// what the platform is doing to us (D64) - the Android shell's channel
 		// for onStop / onTrimMemory / thermal / battery-saver, which the
 		// exec'd server has no other way of learning.

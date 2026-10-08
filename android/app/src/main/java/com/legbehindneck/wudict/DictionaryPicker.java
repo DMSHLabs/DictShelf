@@ -219,7 +219,7 @@ final class DictionaryPicker {
             searchInput = new EditText(activity);
             searchInput.setSingleLine(true);
             searchInput.setImeOptions(EditorInfo.IME_ACTION_SEARCH);
-            searchInput.setHint(searchLabels.optString("placeholder", "Search dictionaries…"));
+            searchInput.setHint(searchLabels.optString("placeholder", "Find dictionaries…"));
             searchInput.setContentDescription(searchLabels.optString("search", "Search dictionary list"));
             searchInput.setTextColor(textColor);
             searchInput.setHintTextColor((textColor & 0x00FFFFFF) | 0x88000000);
@@ -379,6 +379,10 @@ final class DictionaryPicker {
         }
 
         void updateSearchControls() {
+            String hint = searchLabels.optString(filtering ? "filterPlaceholder" : "placeholder",
+                    filtering ? "Filter dictionaries…" : "Find dictionaries…");
+            searchInput.setHint(hint);
+            searchInput.setContentDescription(hint);
             int total = filtering ? shownRows.size() : matchingRows.size();
             if (rows.length() == 0) total = 0;
             int current = filtering ? total : activeMatch < 0 ? 0 : activeMatch + 1;

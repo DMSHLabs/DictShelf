@@ -5,12 +5,50 @@
 package store
 
 import (
+	"context"
 	"database/sql"
+	"strings"
 	"unicode"
 	"unicode/utf8"
 
 	"github.com/wuweidict/wudict/internal/dict"
 )
+
+// FindHeadwords uses the always-present FTS headword index. A token-prefix
+// match finds a word at the start or after a separator, wherever it occurs in
+// a multiword title; article text is excluded by the w: column filter.
+func (s *Store) FindHeadwords(ctx context.Context, query string, offset, limit int) ([]string, int, error) {
+	query = strings.TrimSpace(query)
+	if query == "" || limit <= 0 || !strings.ContainsFunc(query, func(r rune) bool { return unicode.IsLetter(r) || unicode.IsNumber(r) }) {
+		return []string{}, 0, nil
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	match := buildMatch(query, "w")
+	var total int
+	err := s.db.QueryRowContext(ctx, `SELECT COUNT(DISTINCT e.w) FROM entry_fts f
+		JOIN entry e ON e.id=f.rowid WHERE entry_fts MATCH ? AND e.w NOT LIKE '@_%'`, match).Scan(&total)
+	if err != nil {
+		return nil, 0, err
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT DISTINCT e.w FROM entry_fts f
+		JOIN entry e ON e.id=f.rowid WHERE entry_fts MATCH ? AND e.w NOT LIKE '@_%'`+
+		` ORDER BY e.w COLLATE NOCASE LIMIT ? OFFSET ?`, match, limit, offset)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+	words := make([]string, 0, limit)
+	for rows.Next() {
+		var word string
+		if err := rows.Scan(&word); err != nil {
+			return nil, 0, err
+		}
+		words = append(words, word)
+	}
+	return words, total, rows.Err()
+}
 
 // browseWhere hides the internal entries from every browse read. `@_%` is an
 // MDX redirect stub (`@@@LINK=`), not a word anybody looks up, and the filter

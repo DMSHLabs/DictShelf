@@ -88,8 +88,7 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
   try { saved=JSON.parse(localStorage.getItem('wudict_settings_fonts')||'null')||{}; } catch (_) {}
   for(const [key,fallback] of Object.entries(defaults)){
     const value=Number(saved[key]),scale=Number.isFinite(value)?Math.min(key==='controlHeight'?4:2,Math.max(.5,value)):fallback;
-    document.documentElement.style.setProperty(names[key],
-      ['base','title','section','addition','hint'].includes(key)?scale+'rem':String(scale));
+    document.documentElement.style.setProperty(names[key],String(scale));
   }
 })();
 </script>
@@ -144,16 +143,16 @@ html[data-shell-tone="dark"] {
 #credit{margin:.4em 0 0}
 #credit:empty{display:none}
 /* Lemmatization uses the same saved type and control scale as Settings. */
-body{font-size:var(--ui-font-base)}
-.top h1{font-size:var(--ui-font-title)}
+body{font-size:calc(var(--ui-font-base) * 1rem)}
+.top h1{font-size:calc(var(--ui-font-title) * 1rem)}
 .top button.x{box-sizing:border-box;display:grid;place-items:center;flex:none;
   width:calc(var(--ui-main-control-height) * 1em);height:calc(var(--ui-main-control-height) * 1em);
   min-height:calc(var(--ui-main-control-height) * 1em);padding:0;
   font-size:calc(var(--ui-main-control-font) * 1rem);line-height:1}
 .card>p:first-of-type,.banner,.note,.lrow :is(.cost,.st),
-.card>p.formats{font-size:var(--ui-hint-font-size)}
-.head h2{font-size:var(--ui-font-section)}
-.head #summary{font-size:var(--ui-font-addition)}
+.card>p.formats{font-size:calc(var(--ui-hint-font-size) * 1rem)}
+.head h2{font-size:calc(var(--ui-font-section) * 1rem)}
+.head #summary{font-size:calc(var(--ui-font-addition) * 1rem)}
 .lrow{min-height:calc(var(--ui-control-height) * 1em);
   font-size:calc(var(--ui-control-font) * 1rem)}
 .lrow input[type=checkbox]{width:calc(var(--ui-control-height) * 1em);
@@ -163,7 +162,7 @@ body{font-size:var(--ui-font-base)}
 </style>
 </head>
 <body>
-<div class="card">
+<div class="card scroll-card">
 <!-- The page's closer (@see setup.css), same control as the configuration
      page's: back rather than a link to "/", so the page behind comes back as
      it was and the back gesture does not walk into this page again. Hidden on
@@ -172,6 +171,7 @@ body{font-size:var(--ui-font-base)}
 <h1>{{T:pages.lemmas}}</h1>
 <button type="button" class="x" id="closePage" aria-label="{{T:pages.close}}">✕</button>
 </div>
+<div class="card-scroll">
 <p>{{T:pages.lemmaIntro}}</p>
 
 <div id="banner" class="banner hidden"></div>
@@ -182,6 +182,7 @@ body{font-size:var(--ui-font-base)}
 <div id="shadow" class="banner warn hidden"></div>
 
 <p class="formats" id="credit"></p>
+</div>
 </div>
 <script>
 "use strict";

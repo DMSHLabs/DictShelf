@@ -85,7 +85,7 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
   try { saved=JSON.parse(localStorage.getItem('wudict_settings_fonts')||'null')||{}; } catch (_) {}
   for(const [key,fallback] of Object.entries(defaults)){
     const value=Number(saved[key]),scale=Number.isFinite(value)?Math.min(key==='editControlHeight'||key==='controlHeight'?4:2,Math.max(.5,value)):fallback;
-    document.documentElement.style.setProperty(names[key],key==='title'||key==='addition'||key==='hint'?scale+'rem':String(scale));
+    document.documentElement.style.setProperty(names[key],String(scale));
   }
 })();
 </script>
@@ -110,16 +110,16 @@ html[data-shell-tone="dark"] {
    this page is an editor, and the text is the whole of it. */
 .card{max-width:760px}
 /* The editor uses the same saved type and control scale as Settings. */
-.top h1{font-size:var(--ui-font-title)}
+.top h1{font-size:calc(var(--ui-font-title) * 1rem)}
 .top button.x{box-sizing:border-box;display:grid;place-items:center;flex:none;
   width:calc(var(--ui-main-control-height) * 1em);height:calc(var(--ui-main-control-height) * 1em);
   min-height:calc(var(--ui-main-control-height) * 1em);padding:0;
   font-size:calc(var(--ui-main-control-font) * 1rem);line-height:1}
-.card>p:not(.note){font-size:var(--ui-font-addition)}
+.card>p:not(.note){font-size:calc(var(--ui-font-addition) * 1rem)}
 .quiet code{box-sizing:border-box;display:inline-flex;align-items:center;
-  min-height:calc(var(--ui-hint-control-height) * 1em);font-size:var(--ui-hint-font-size)}
+  min-height:calc(var(--ui-hint-control-height) * 1em);font-size:calc(var(--ui-hint-font-size) * 1rem)}
 textarea{display:block;width:100%;height:max(18em,58vh);margin:.618em 0 0;
-  font:var(--ui-font-addition)/1.55 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  font:calc(var(--ui-font-addition) * 1rem)/1.55 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
   color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:8px;
   padding:.618em .8em;resize:vertical;outline:none;tab-size:4}
 textarea:focus{border-color:var(--focus);box-shadow:0 0 0 3px color-mix(in srgb,var(--focus) 25%,transparent)}
@@ -127,12 +127,12 @@ textarea:focus{border-color:var(--focus);box-shadow:0 0 0 3px color-mix(in srgb,
   margin-top:calc(var(--ui-edit_control-height) * .75rem)}
 .acts button{box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;
   height:calc(var(--ui-control-height) * 1em);min-height:calc(var(--ui-control-height) * 1em);
-  margin-top:0;padding:0 1.2em;font-size:var(--ui-font-addition)}
+  margin-top:0;padding:0 1.2em;font-size:calc(var(--ui-font-addition) * 1rem)}
 .acts #save{order:1;margin-left:auto;
   height:calc(var(--ui-edit_control-height) * 1.5rem);
   min-height:calc(var(--ui-edit_control-height) * 1.5rem);
   font-size:calc(var(--ui-edit_control-font) * 1rem)}
-#msg,.probs,.note{font-size:var(--ui-hint-font-size)}
+#msg,.probs,.note{font-size:calc(var(--ui-hint-font-size) * 1rem)}
 #msg:empty,.probs:empty{display:none}
 .note{color:var(--faint);margin:.2em 0 0;word-break:break-all}
 .probs{margin:.382em 0 0;padding:0;list-style:none;color:var(--err)}

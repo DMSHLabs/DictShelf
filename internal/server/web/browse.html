@@ -75,16 +75,17 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
  SPDX-License-Identifier: GPL-3.0-or-later
 
  The reading view: a dictionary as a list of its own words, turned a page at a
- time, the way one is read on paper. index.html answers queries; this page
- answers none - it has no search, no modes, no article bodies and no registry.
+ time, the way one is read on paper. Its bottom search uses the prepared
+ headword index and can navigate the full list or filter it into result pages.
  That is why it is a separate page rather than a mode of the app: everything
  the app carries to make an answer possible is dead weight here, and the one
  thing this needs (a stable address for a PLACE in the list) the app has no
  spelling for.
 
- Its whole state is the URL - ?dict=<id>&p=<n> - so the page the reader is on
- is bookmarkable, shareable and walkable with Back, and the same three
- properties come from the same fact rather than from three mechanisms.
+ The ordinary reading position is in the URL - ?dict=<id>&p=<n> - so its
+ pages remain bookmarkable and walkable with Back. The chooser adds
+ chooser=1, which gives Close a stable destination after page turns. The
+ bottom search is a temporary view over the same headword index.
 
  It is deliberately not a client of setup.css: that stylesheet centres a single
  card in the viewport, which is the opposite of a full-bleed list.
@@ -126,7 +127,7 @@ html[data-shell-image], html[data-shell-image] body { background:transparent !im
    turns into a white stripe lying on a dark paper. */
 html[data-shell-custom] { --bar:rgba(255,255,255,.14); --line-soft:rgba(255,255,255,.2); }
 html[data-shell-custom] .msg { background:rgba(255,255,255,.14); }
-html[data-shell-custom] #jump { background:rgba(255,255,255,.18); }
+html[data-shell-custom] .browse-search-input { background:rgba(255,255,255,.18); }
 /* html:root, not a bare html: alone it is (0,1,1) and a bare :root[tone] is
    (0,2,0) — either ties or loses against the two dark blocks above, and the
    tone MUST win, because it describes the surface the text actually sits on.
@@ -155,39 +156,45 @@ header{position:sticky;top:0;z-index:5;background:var(--bar);
    in step with the column count below. */
 .title{display:flex;align-items:center;gap:.5rem;flex:1 1 13rem;min-width:0}
 .title-copy{flex:1;min-width:0}
-.title b{display:block;font-size:var(--ui-font-title);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.title b{display:block;font-size:calc(var(--ui-font-title) * 1rem);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.title b.two-line{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;
+  white-space:normal;overflow-wrap:anywhere}
 /* The running head, exactly as a printed page carries it: the first and last
    word ON THIS PAGE. It is the one thing that tells a reader where they are
    without counting. */
-.title span{display:block;font-size:var(--ui-hint-font-size);color:var(--label-quiet);white-space:nowrap;
+.title span{display:block;font-size:calc(var(--ui-hint-font-size) * 1rem);color:var(--label-quiet);white-space:nowrap;
   overflow:hidden;text-overflow:ellipsis}
 .title button{box-sizing:border-box;display:grid;place-items:center;flex:none;
   width:calc(var(--ui-main-control-height) * 1em);
   height:calc(var(--ui-main-control-height) * 1em);padding:0;
   font-size:calc(var(--ui-main-control-font) * 1rem);line-height:1;
   color:var(--fg);background:transparent;border:1px solid var(--line);border-radius:7px;cursor:pointer}
-#jump{box-sizing:border-box;flex:1 1 12rem;min-width:7rem;
-  height:calc(var(--ui-edit_control-height) * 1.5rem);
-  font-family:inherit;font-size:calc(var(--ui-edit_control-font) * 1rem);
-  color:var(--fg);background:var(--bg);border:1px solid var(--line);
-  border-radius:6px;padding:0 .4em;outline:none;-webkit-appearance:none}
-#jump:focus{border-color:var(--focus);box-shadow:0 0 0 3px color-mix(in srgb,var(--focus) 22%,transparent)}
-.nav{display:flex;align-items:center;gap:.35rem;font-size:var(--ui-font-addition);color:var(--label);white-space:nowrap}
+.nav{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;
+  gap:.35rem;width:100%;flex:1 0 100%;font-size:calc(var(--ui-font-addition) * 1rem);color:var(--label)}
 .nav button{box-sizing:border-box;font-family:inherit;
-  font-size:calc(var(--ui-edit_control-font) * 1rem);background:none;border:1px solid var(--line);color:var(--label);
-  border-radius:8px;min-width:calc(var(--ui-edit_control-height) * 1.5rem);
-  height:calc(var(--ui-edit_control-height) * 1.5rem);padding:0 .55rem;cursor:pointer}
+  font-size:calc(var(--ui-control-font) * 1rem);background:none;border:1px solid var(--line);color:var(--label);
+  border-radius:8px;min-height:calc(var(--ui-control-height) * 1em);
+  max-width:100%;padding:.2em .55em;line-height:1.1;cursor:pointer}
+.nav button:first-child{justify-self:start}
+.nav button:last-child{justify-self:end}
 .nav button:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}
 .nav button:disabled{opacity:.3;cursor:default}
-.nav b{font-size:var(--ui-font-addition);font-weight:600;color:var(--fg);font-variant-numeric:tabular-nums}
+.nav b{justify-self:center;font-size:calc(var(--ui-font-addition) * 1rem);font-weight:600;color:var(--fg);
+  font-variant-numeric:tabular-nums;white-space:nowrap}
 
 /* One row, scrolled sideways rather than wrapped: wrapping a Cyrillic+Latin
    alphabet is four rows of chrome above every page, on the screen that can
    least afford it. The active chip is scrolled into view, so the strip is
    never scrolled to a place the reader is not. */
-.strip{display:flex;gap:.1rem;overflow-x:auto;padding:0 .9rem .4rem;scrollbar-width:thin;
+.strip-wrap{display:flex;align-items:stretch;gap:.1rem;padding:0 .35rem .4rem}
+.strip{display:flex;flex:1;min-width:0;gap:.1rem;overflow-x:auto;padding:0;scrollbar-width:none;
   overscroll-behavior-x:contain}
-.strip button{font:inherit;font-size:var(--ui-font-addition);line-height:1;background:none;border:0;color:var(--label);
+.strip::-webkit-scrollbar{display:none}
+.strip-nav{box-sizing:border-box;display:grid;place-items:center;flex:none;width:2rem;min-height:calc(var(--ui-control-height) * 1em);padding:0;border:0;background:transparent;color:var(--fg);cursor:pointer}
+.strip-nav svg{display:block;width:1.35rem;height:1.35rem}
+.strip-nav:disabled{opacity:.3;cursor:default}
+.strip-nav:not(:disabled):hover{color:var(--accent)}
+.strip button{font:inherit;font-size:calc(var(--ui-font-addition) * 1rem);line-height:1;background:none;border:0;color:var(--label);
   cursor:pointer;padding:.36rem .5rem;border-radius:7px;flex:0 0 auto;min-width:1.85rem;text-align:center}
 .strip button:hover{background:var(--line-soft);color:var(--fg)}
 .strip button[aria-current=true]{background:var(--accent);color:#fff}
@@ -197,13 +204,33 @@ header{position:sticky;top:0;z-index:5;background:var(--bar);
    holds and drops to one when it holds one. Nothing to recompute on resize. */
 .words{columns:14rem;column-gap:2.2rem;column-rule:1px solid var(--line-soft);
   max-width:1700px;margin:0 auto;padding:.9rem 1rem 2rem}
-.words a{display:block;font-size:var(--ui-font-addition);color:var(--link);text-decoration:none;padding:.16rem .3rem;
+.words a{display:block;font-size:calc(var(--ui-font-addition) * 1rem);color:var(--link);text-decoration:none;padding:.16rem .3rem;
   border-radius:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;break-inside:avoid}
 .words a:hover{background:var(--line-soft);color:var(--fg)}
 .words a:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 
-footer{display:flex;justify-content:center;padding:0 1rem 2.2rem}
-footer .nav button{padding:0 1rem}
+main{padding-bottom:5rem}
+footer{position:fixed;bottom:0;left:0;right:0;z-index:6;display:flex;justify-content:center;
+  padding:.5rem .9rem max(.5rem,env(safe-area-inset-bottom));background:var(--bar);
+  backdrop-filter:saturate(1.6) blur(8px);border-top:1px solid var(--line)}
+footer .browse-search-dock{display:flex;align-items:center;gap:.25em;width:100%;max-width:54rem;
+  font-size:calc(var(--ui-edit_control-font) * 1rem)}
+footer .browse-search-input{box-sizing:border-box;flex:1 1 auto;min-width:0;width:0;
+  height:calc(var(--ui-edit_control-height) * 1.5rem);margin:0;padding:0 .4em;
+  font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);
+  border-radius:6px;outline:none;-webkit-appearance:none}
+footer .browse-search-count{flex:none;min-width:2.5em;text-align:center;
+  font-size:calc(var(--ui-font-addition) * 1rem);font-variant-numeric:tabular-nums;white-space:nowrap}
+footer .browse-search-dock button{box-sizing:border-box;display:grid;place-items:center;flex:none;
+  width:calc(var(--ui-edit_control-height) * 1.5rem);
+  height:calc(var(--ui-edit_control-height) * 1.5rem);padding:0;border:1px solid var(--line);
+  border-radius:6px;background:var(--bg);color:var(--fg);font:inherit;line-height:1;cursor:pointer}
+footer .browse-search-mode svg{display:block;width:1.1em;height:1.1em}
+footer .browse-search-mode.is-on{border-color:var(--accent);background:var(--accent);color:var(--bg)}
+footer .browse-search-dock button:disabled{opacity:.45;cursor:default}
+.words a.browse-match{outline:2px solid var(--accent);outline-offset:-2px}
+.words a.browse-current{background:var(--line-soft)}
+.words mark.browse-letter-match{background:var(--accent);color:var(--bg);border-radius:.15em}
 
 .msg{max-width:34rem;margin:4rem auto;padding:1.4rem 1.6rem;background:var(--bg);
   border:1px solid var(--line);border-radius:12px}
@@ -215,15 +242,15 @@ footer .nav button{padding:0 1rem}
 .picks a:hover{background:var(--line-soft);color:var(--fg)}
 .picks span{color:var(--label-quiet)}
 .chooser-head{display:flex;align-items:center;gap:.5em}
-.msg .chooser-head b{flex:1;min-width:0;margin:0;font-size:var(--ui-font-title)}
+.msg .chooser-head b{flex:1;min-width:0;margin:0;font-size:calc(var(--ui-font-title) * 1rem)}
 .chooser-head button{box-sizing:border-box;display:grid;place-items:center;flex:none;
   width:calc(var(--ui-main-control-height) * 1em);
   height:calc(var(--ui-main-control-height) * 1em);padding:0;
   font-size:calc(var(--ui-main-control-font) * 1rem);line-height:1;
   color:var(--fg);background:transparent;border:1px solid var(--line);border-radius:7px;cursor:pointer}
-.msg .chooser-hint{font-size:var(--ui-hint-font-size)}
-.picks a{display:flex;align-items:baseline;gap:.4em;font-size:var(--ui-font-base)}
-.picks span{flex:none;margin-left:auto;font-size:var(--ui-hint-font-size)}
+.msg .chooser-hint{font-size:calc(var(--ui-hint-font-size) * 1rem)}
+.picks a{display:flex;align-items:baseline;gap:.4em;font-size:calc(var(--ui-font-base) * 1rem)}
+.picks span{flex:none;margin-left:auto;font-size:calc(var(--ui-hint-font-size) * 1rem)}
 .picks .pick-name{flex:1;min-width:0;margin:0;font-size:inherit;overflow-wrap:anywhere}
 .msg.chooser-list{box-sizing:border-box;display:flex;flex-direction:column;
   margin:1rem auto;max-height:calc(100dvh - 2rem)}
@@ -236,7 +263,7 @@ footer .nav button{padding:0 1rem}
   font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);
   border-radius:6px;outline:none;-webkit-appearance:none}
 .chooser-list .list-search-count{flex:none;min-width:2.5em;text-align:center;
-  font-size:var(--ui-font-addition);font-variant-numeric:tabular-nums;white-space:nowrap}
+  font-size:calc(var(--ui-font-addition) * 1rem);font-variant-numeric:tabular-nums;white-space:nowrap}
 .chooser-list :is(.list-search-mode,.list-search-step){box-sizing:border-box;display:grid;
   place-items:center;flex:none;width:calc(var(--ui-edit_control-height) * 1.5rem);
   height:calc(var(--ui-edit_control-height) * 1.5rem);padding:0;border:1px solid var(--line);
@@ -259,18 +286,19 @@ footer .nav button{padding:0 1rem}
 <script>
 /* The chooser shares the reader's saved Fonts values. */
 (function () {
-  const defaults={base:1,title:1.15,addition:.9,hint:.8,editControlHeight:1.8,editControlFont:1,
+  const defaults={base:1,title:1.15,addition:.9,hint:.8,controlHeight:1.6,controlFont:.9,
+    editControlHeight:1.8,editControlFont:1,
     mainControlHeight:1.05,mainControlFont:1.05};
   const names={base:'--ui-font-base',title:'--ui-font-title',addition:'--ui-font-addition',
-    hint:'--ui-hint-font-size',editControlHeight:'--ui-edit_control-height',
+    hint:'--ui-hint-font-size',controlHeight:'--ui-control-height',controlFont:'--ui-control-font',
+    editControlHeight:'--ui-edit_control-height',
     editControlFont:'--ui-edit_control-font',mainControlHeight:'--ui-main-control-height',
     mainControlFont:'--ui-main-control-font'};
   let saved={};
   try { saved=JSON.parse(localStorage.getItem('wudict_settings_fonts')||'null')||{}; } catch (_) {}
   for(const [key,fallback] of Object.entries(defaults)){
-    const value=Number(saved[key]),scale=Number.isFinite(value)?Math.min(key==='editControlHeight'?4:2,Math.max(.5,value)):fallback;
-    document.documentElement.style.setProperty(names[key],
-      ['base','title','addition','hint'].includes(key)?scale+'rem':String(scale));
+    const value=Number(saved[key]),scale=Number.isFinite(value)?Math.min(key.endsWith('Height')?4:2,Math.max(.5,value)):fallback;
+    document.documentElement.style.setProperty(names[key],String(scale));
   }
 })();
 </script>
@@ -279,15 +307,17 @@ footer .nav button{padding:0 1rem}
   <div class="bar">
     <a class="back" href="/" title="{{T:browse.back}}" aria-label="{{T:browse.back}}"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="7" cy="7" r="4.3"/><path d="M10.2 10.2 14 14"/></svg></a>
     <div class="title"><div class="title-copy"><b id="name"></b><span id="sub"></span></div><button type="button" id="closeBrowse" aria-label="{{T:pages.close}}">✕</button></div>
-    <input id="jump" type="search" placeholder="{{T:browse.jump}}" spellcheck="false" autocomplete="off"
-           autocapitalize="off" enterkeyhint="go" aria-label="{{T:browse.jumpWord}}">
     <div class="nav">
-      <button type="button" data-go="prev" title="{{T:browse.previousTitle}}">‹</button>
+      <button type="button" data-go="prev" title="{{T:browse.previousTitle}}">{{T:browse.previousPage}}</button>
       <b data-pos></b>
-      <button type="button" data-go="next" title="{{T:browse.nextTitle}}">›</button>
+      <button type="button" data-go="next" title="{{T:browse.nextTitle}}">{{T:browse.nextPage}}</button>
     </div>
   </div>
-  <nav class="strip" id="strip" aria-label="{{T:browse.jumpLetter}}"></nav>
+  <div class="strip-wrap" id="stripWrap">
+    <button type="button" class="strip-nav" id="stripPrev" aria-label="{{T:browse.scrollLettersLeft}}" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 4-8 8 8 8"/></svg></button>
+    <nav class="strip" id="strip" aria-label="{{T:browse.jumpLetter}}"></nav>
+    <button type="button" class="strip-nav" id="stripNext" aria-label="{{T:browse.scrollLettersRight}}" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 4 8 8-8 8"/></svg></button>
+  </div>
 </header>
 
 <main>
@@ -295,12 +325,14 @@ footer .nav button{padding:0 1rem}
   <div class="words" id="list"></div>
 </main>
 <footer id="foot" hidden>
-  <div class="nav">
-    <button type="button" data-go="first" title="{{T:browse.firstTitle}}">«</button>
-    <button type="button" data-go="prev" title="{{T:browse.previousTitle}}">{{T:browse.previous}}</button>
-    <b data-pos></b>
-    <button type="button" data-go="next" title="{{T:browse.nextTitle}}">{{T:browse.next}}</button>
-    <button type="button" data-go="last" title="{{T:browse.lastTitle}}">»</button>
+  <div class="browse-search-dock" role="search">
+    <button class="browse-search-mode" type="button" id="findMode" aria-label="{{T:browse.filterWords}}">⌕</button>
+    <input class="browse-search-input" id="findInput" type="search" placeholder="{{T:browse.findWords}}"
+           spellcheck="false" autocomplete="off" autocapitalize="off" enterkeyhint="search"
+           aria-label="{{T:browse.findWords}}">
+    <output class="browse-search-count" id="findCount" aria-live="polite">0/0</output>
+    <button type="button" id="findPrev" aria-label="{{T:browse.previousMatch}}">▲</button>
+    <button type="button" id="findNext" aria-label="{{T:browse.nextMatch}}">▼</button>
   </div>
 </footer>
 
@@ -339,6 +371,22 @@ try{const t=localStorage.getItem("wudict_theme");
   if(t&&t!=="auto")document.documentElement.setAttribute("data-theme",t)}catch(e){}
 
 let dictId="",state=null,last={p:1},poll=0,stripFor="",demanded=false,chooserSearch=null;
+function updateStripArrows(){
+  const strip=$("strip"),end=Math.max(0,strip.scrollWidth-strip.clientWidth);
+  $("stripPrev").disabled=strip.scrollLeft<=1;
+  $("stripNext").disabled=strip.scrollLeft>=end-1;
+}
+function scrollStrip(direction){
+  const strip=$("strip");
+  strip.scrollBy({left:direction*Math.max(80,strip.clientWidth*.75),behavior:"smooth"});
+}
+$("stripPrev").addEventListener("click",()=>scrollStrip(-1));
+$("stripNext").addEventListener("click",()=>scrollStrip(1));
+$("strip").addEventListener("scroll",updateStripArrows,{passive:true});
+new ResizeObserver(updateStripArrows).observe($("strip"));
+let findResult=null,findIndex=-1,findFilter=false,findTimer=0,findAbort=null,findSeq=0,browseSeq=0;
+const findIcons={search:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 5 5"/></svg>',
+  filter:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h18l-7 8v5l-4 2v-7z"/></svg>'};
 
 function card(html,chooserList=false){chooserSearch?.destroy();chooserSearch=null;
   $("msg").classList.toggle("chooser-list",chooserList);
@@ -350,12 +398,14 @@ function card(html,chooserList=false){chooserSearch?.destroy();chooserSearch=nul
    sequence against the first. */
 async function show(opts,record){
   clearTimeout(poll);
+  const seq=++browseSeq;
   last=opts;
   const u=new URLSearchParams({dict:dictId});
   if(opts.at)u.set("at",opts.at);else u.set("p",String(opts.p||1));
   let r;
   try{r=await fetch("/api/browse?"+u.toString())}
   catch(e){return card("<b>"+tx("browse.noAnswer")+"</b><p>"+tx("browse.noAnswerBody")+"</p>")}
+  if(seq!==browseSeq)return;
   if(r.status===409)return unprepared(await r.json().catch(()=>({})));
   if(!r.ok){const j=await r.json().catch(()=>({}));
     return card("<b>"+tx("browse.cannotBrowse")+"</b><p>"+
@@ -370,34 +420,188 @@ async function show(opts,record){
   $("msg").classList.remove("chooser-list");
   $("msg").hidden=true;
   render();
-  const url="?dict="+encodeURIComponent(dictId)+"&p="+state.page;
+  const url="?dict="+encodeURIComponent(dictId)+"&p="+state.page+
+    (new URLSearchParams(location.search).get("chooser")==="1"?"&chooser=1":"");
   if(record==="push"&&url!==location.search)history.pushState(null,"",url);
   else if(record!=="none")history.replaceState(null,"",url);
   /* A page turn is a new page: start it at the top, the way turning one
      does. Without this the reader lands in the middle of the new page at
      whatever depth they had scrolled the old one. */
   if(record!=="none")scrollTo(0,0);
+  if(findResult&&!findFilter&&findIndex>=0)scrollToCurrentWord();
+}
+
+function currentFoundWord(){
+  if(!findResult||findIndex<0)return "";
+  return findResult.words[findIndex-(findResult.page-1)*findResult.size]||"";
+}
+const foldFind=s=>s.normalize("NFD").replace(/\p{M}/gu,"").toLowerCase();
+function matchingLetters(word){
+  const parts=($("findInput").value.match(/[\p{L}\p{N}\p{M}]+/gu)||[]).map(foldFind).filter(Boolean);
+  if(!parts.length)return null;
+  const ranges=[],seen=new Set();
+  for(const token of word.matchAll(/[\p{L}\p{N}\p{M}]+/gu)){
+    const raw=token[0],folded=foldFind(raw);
+    for(const [i,part] of parts.entries()){
+      if(!folded.startsWith(part))continue;
+      seen.add(i);
+      let used="",end=0;
+      for(const char of raw){
+        used+=foldFind(char);end+=char.length;
+        if(used.length>=part.length)break;
+      }
+      while(end<raw.length&&/\p{M}/u.test(raw[end]))end++;
+      ranges.push([token.index,token.index+end]);
+    }
+  }
+  if(seen.size!==parts.length)return null;
+  ranges.sort((a,b)=>a[0]-b[0]||a[1]-b[1]);
+  const merged=[];
+  for(const [start,end] of ranges){
+    if(merged.length&&start<=merged[merged.length-1][1])
+      merged[merged.length-1][1]=Math.max(end,merged[merged.length-1][1]);
+    else merged.push([start,end]);
+  }
+  return merged;
+}
+function highlightedWord(word,ranges){
+  if(!ranges)return esc(word);
+  let from=0,html="";
+  for(const [start,end] of ranges){
+    html+=esc(word.slice(from,start))+'<mark class="browse-letter-match">'+esc(word.slice(start,end))+"</mark>";
+    from=end;
+  }
+  return html+esc(word.slice(from));
+}
+function scrollToCurrentWord(){
+  $("list").querySelector(".browse-current")?.scrollIntoView({block:"center"});
+}
+function fitTitle(){
+  const name=$("name");
+  if(!name.textContent||!name.clientWidth)return;
+  const root=getComputedStyle(document.documentElement);
+  const rem=parseFloat(root.fontSize)||16;
+  const title=(parseFloat(root.getPropertyValue("--ui-font-title"))||1.15)*rem;
+  const addition=(parseFloat(root.getPropertyValue("--ui-font-addition"))||.9)*rem;
+  const minimum=Math.min(title,addition);
+  name.classList.remove("two-line");
+  name.style.fontSize=title+"px";
+  if(name.scrollWidth<=name.clientWidth+1)return;
+  let size=Math.min(title,title*name.clientWidth/name.scrollWidth);
+  if(size>=minimum){
+    name.style.fontSize=size+"px";
+    while(name.scrollWidth>name.clientWidth+1&&size>minimum){
+      size=Math.max(minimum,size-.25);
+      name.style.fontSize=size+"px";
+    }
+    if(name.scrollWidth<=name.clientWidth+1)return;
+  }
+  name.style.fontSize=minimum+"px";
+  name.classList.add("two-line");
+}
+addEventListener("resize",fitTitle);
+document.fonts?.ready.then(fitTitle);
+function updateFindControls(){
+  const filtering=findFilter;
+  $("findInput").placeholder=t(filtering?"browse.filterPlaceholder":"browse.findWords");
+  $("findInput").setAttribute("aria-label",$("findInput").placeholder);
+  $("findMode").innerHTML=filtering?findIcons.filter:findIcons.search;
+  $("findMode").classList.toggle("is-on",filtering);
+  $("findMode").setAttribute("aria-pressed",String(filtering));
+  $("findMode").setAttribute("aria-label",t(filtering?"browse.searchWords":"browse.filterWords"));
+  const total=findResult?.total||(filtering&&!$("findInput").value.trim()?state?.total||0:0);
+  $("findCount").textContent=filtering?total+"/"+total:(findIndex<0?0:findIndex+1)+"/"+total;
+  $("findPrev").disabled=$("findNext").disabled=filtering||!total;
+}
+async function fetchFound(page,target=0,record="replace"){
+  findAbort?.abort();
+  const controller=new AbortController();findAbort=controller;
+  const seq=++findSeq,query=$("findInput").value.trim();
+  const u=new URLSearchParams({dict:dictId,q:query,p:String(page)});
+  try{
+    const r=await fetch("/api/browse/find?"+u,{signal:controller.signal});
+    if(!r.ok)throw new Error("find");
+    const result=await r.json();
+    if(seq!==findSeq)return;
+    findResult=result;
+    findIndex=findFilter||!result.total?-1:Math.min(target,result.total-1);
+    updateFindControls();
+    if(findFilter){render();scrollTo(0,0)}
+    else if(findIndex>=0)await show({at:currentFoundWord()},record);
+    else render();
+  }catch(e){
+    if(e.name==="AbortError"||seq!==findSeq)return;
+    findResult=null;findIndex=-1;
+    $("findCount").textContent="!";$("findCount").title=t("browse.findFailed");
+    render();
+  }
+}
+function findChanged(){
+  clearTimeout(findTimer);findAbort?.abort();findSeq++;
+  browseSeq++;
+  findResult=null;findIndex=-1;
+  if(!$("findInput").value.trim()){updateFindControls();render();return}
+  $("findCount").textContent="…";
+  findTimer=setTimeout(()=>fetchFound(1,0,"replace"),300);
+}
+function findMove(delta){
+  if(findFilter||!findResult?.total)return;
+  const target=(findIndex+delta+findResult.total)%findResult.total;
+  const page=Math.floor(target/findResult.size)+1;
+  if(page!==findResult.page)fetchFound(page,target,"push");
+  else{findIndex=target;updateFindControls();show({at:currentFoundWord()},"push")}
+}
+function toggleFindFilter(){
+  findFilter=!findFilter;
+  updateFindControls();
+  if(!$("findInput").value.trim())return;
+  if(findResult){
+    if(findFilter){findIndex=-1;fetchFound(1,0,"replace")}
+    else{findIndex=(findResult.page-1)*findResult.size;show({at:currentFoundWord()},"replace")}
+  }
+}
+
+function browseReturnURL(){
+  const url=new URL(location.href);
+  const query=$("findInput").value.trim();
+  if(query){
+    url.searchParams.set("find",query);
+    if(findFilter)url.searchParams.set("filter","1");
+    if(findResult){url.searchParams.set("fp",String(findResult.page));url.searchParams.set("fi",String(Math.max(0,findIndex)))}
+  }
+  url.searchParams.set("y",String(Math.round(scrollY)));
+  return url.pathname+url.search;
 }
 
 function render(){
   const d=state;
+  if(!d)return;
   document.title=t("browse.pageTitle",{name:d.name});
   $("top").hidden=false;$("foot").hidden=false;
   $("name").textContent=d.name;
-  const a=unesc(d.words[0]||""),z=unesc(d.words[d.words.length-1]||"");
+  fitTitle();
+  const filtering=findFilter&&!!$("findInput").value.trim()&&findResult;
+  const words=filtering?findResult.words:d.words;
+  const total=filtering?findResult.total:d.total;
+  const a=unesc(words[0]||""),z=unesc(words[words.length-1]||"");
   /* `from`, not `dict`: a headword picked here is a link followed inside this
      dictionary, so the app answers it from this dictionary alone, says so,
      and offers the rest - while the reader's own choice in the dictionary
      picker stays theirs. */
-  $("sub").textContent=d.total?a+" — "+z+"  ·  "+t("browse.words",{count:d.total,number:num(d.total)}):t("browse.emptyWords");
-  $("list").innerHTML=d.words.map(w=>{
-    const e=esc(unesc(w));
-    return '<a href="/?q='+encodeURIComponent(w)+"&from="+encodeURIComponent(d.dict)+
-      '&mode=exact" title="'+e+'">'+e+"</a>";
-  }).join("");
+  $("sub").textContent=total?a+" — "+z+"  ·  "+t("browse.words",{count:total,number:num(total)}):t(filtering?"browse.noMatches":"browse.emptyWords");
+  const returnTo=encodeURIComponent(browseReturnURL());
+  $("list").innerHTML=words.map(w=>{
+    const title=unesc(w),e=esc(title);
+    const ranges=findResult?.total?matchingLetters(title):null;
+    const matched=!filtering&&!!ranges;
+    const current=matched&&w===currentFoundWord();
+    return '<a class="'+(matched?"browse-match ":"")+(current?"browse-current":"")+'" href="/?q='+encodeURIComponent(w)+"&from="+encodeURIComponent(d.dict)+
+      '&mode=exact&browse='+returnTo+'" title="'+e+'">'+highlightedWord(title,ranges)+"</a>";
+  }).join("")||(filtering?'<p class="browse-empty">'+tx("browse.noMatches")+'</p>':"");
 
   /* The strip belongs to the dictionary, not to the page, so it is built once
      and only its current chip moves. */
+  $("stripWrap").hidden=!!filtering;
   if(stripFor!==d.dict){
     stripFor=d.dict;
     $("strip").innerHTML=d.alphabet.map(l=>{
@@ -421,16 +625,22 @@ function render(){
       b.scrollIntoView({block:"nearest",inline:"center"})}
     else b.removeAttribute("aria-current");
   });
+  requestAnimationFrame(updateStripArrows);
 
-  document.querySelectorAll("[data-pos]").forEach(el=>el.textContent=d.page+" / "+(d.pages||1));
-  const ends={first:d.page<=1,prev:d.page<=1,next:d.page>=d.pages,last:d.page>=d.pages};
+  const page=filtering?findResult.page:d.page,pages=filtering?findResult.pages:d.pages;
+  document.querySelectorAll("[data-pos]").forEach(el=>el.textContent=page+"/"+(pages||1));
+  const ends={first:page<=1,prev:page<=1,next:page>=pages,last:page>=pages};
   document.querySelectorAll("[data-go]").forEach(b=>{b.disabled=!!ends[b.dataset.go]});
 }
 
 function turn(where){
   if(!state)return;
-  const p=where==="prev"?state.page-1:where==="next"?state.page+1:where==="first"?1:state.pages;
-  if(p>=1&&p<=state.pages&&p!==state.page)show({p},"push");
+  const filtered=findFilter&&findResult&&$("findInput").value.trim();
+  const page=filtered?findResult.page:state.page,pages=filtered?findResult.pages:state.pages;
+  const p=where==="prev"?page-1:where==="next"?page+1:where==="first"?1:pages;
+  if(p>=1&&p<=pages&&p!==page){
+    if(filtered)fetchFound(p,0,"replace");else show({p},"push");
+  }
 }
 
 /* The one state with no list to draw. Asking to browse IS asking for the
@@ -479,7 +689,7 @@ async function chooser(){
   if(!ds.length)return card(heading+"<b>"+tx("browse.empty")+"</b><p>"+tx("browse.emptyBody")+
     '</p><p><a href="/">'+tx("browse.openApp")+"</a></p>");
   card(heading+"<div class='picks'>"+
-    ds.map(d=>'<a href="?dict='+encodeURIComponent(d.id)+'"><span class="pick-name">'+esc(d.name||d.id)+'</span>'+
+    ds.map(d=>'<a href="?dict='+encodeURIComponent(d.id)+'&chooser=1"><span class="pick-name">'+esc(d.name||d.id)+'</span>'+
       (d.entries?'<span class="pick-count">'+tx("browse.entries",{count:d.entries,number:num(d.entries)})+"</span>":"")+"</a>").join("")+"</div>"+
     '<div class="list-search-dock" role="search"></div>',true);
   const picks=$("msg").querySelector(".picks");
@@ -487,7 +697,8 @@ async function chooser(){
     root:picks,itemSelector:"a",dock:$("msg").querySelector(".list-search-dock"),
     scrollContainer:picks,getText:item=>item.querySelector(".pick-name")?.textContent||"",
     highlightSelector:".pick-name",labels:{
-      placeholder:t("dictUI.listSearchPlaceholder"),search:t("dictUI.listSearchLabel"),
+      placeholder:t("dictUI.listSearchPlaceholder"),filterPlaceholder:t("dictUI.listFilterPlaceholder"),
+      search:t("dictUI.listSearchLabel"),
       previous:t("dictUI.listSearchPrevious"),next:t("dictUI.listSearchNext"),
       filter:t("dictUI.listSearchFilter"),
       count:t("dictUI.listSearchCount",{current:"{current}",total:"{total}"})
@@ -496,12 +707,19 @@ async function chooser(){
 }
 
 document.addEventListener("click",e=>{
+  const wordLink=e.target.closest(".words a");
+  if(wordLink){
+    const url=new URL(wordLink.href);
+    url.searchParams.set("browse",browseReturnURL());
+    wordLink.href=url.pathname+url.search;
+    return;
+  }
   if(e.target.closest("#closeBrowse")){
-    if(history.length>1)history.back();else location.href="/";
+    location.href=new URLSearchParams(location.search).get("chooser")==="1"?"/browse":"/";
     return;
   }
   if(e.target.closest("#closeBrowseChooser")){
-    if(history.length>1)history.back();else location.href="/";
+    location.href="/";
     return;
   }
   const g=e.target.closest("[data-go]");
@@ -510,29 +728,36 @@ document.addEventListener("click",e=>{
   if(c&&state){const o=Number(c.dataset.o);show({p:Math.floor(o/state.size)+1,o:o},"push")}
 });
 
-/* Enter jumps to the word. It is not a search - nothing is matched, nothing
-   is scored: the list is simply put down at the place that word occupies in
-   it, which is the one thing searching cannot do. */
-$("jump").addEventListener("keydown",e=>{
-  if(e.key!=="Enter")return;
-  e.preventDefault();
-  const v=e.target.value.trim();
-  if(v){e.target.blur();show({at:v},"push")}
+$("findInput").addEventListener("input",findChanged);
+$("findInput").addEventListener("keydown",e=>{
+  if(e.key==="Tab"&&!e.shiftKey){e.preventDefault();toggleFindFilter()}
+  else if(e.key==="ArrowUp"){e.preventDefault();findMove(-1)}
+  else if(e.key==="ArrowDown"||e.key==="Enter"){
+    e.preventDefault();findMove(e.shiftKey?-1:1)
+  }
 });
+$("findMode").addEventListener("click",toggleFindFilter);
+$("findPrev").addEventListener("click",()=>findMove(-1));
+$("findNext").addEventListener("click",()=>findMove(1));
+updateFindControls();
 
 addEventListener("keydown",e=>{
   if(e.metaKey||e.ctrlKey||e.altKey)return;
-  if(e.target.tagName==="INPUT"){if(e.key==="Escape"){e.target.value="";e.target.blur()}return}
+  if(e.target.tagName==="INPUT"){
+    if(e.key==="Escape"){
+      e.target.value="";
+      if(e.target===$("findInput"))findChanged();
+      e.target.blur();
+    }
+    return;
+  }
   switch(e.key){
     case"ArrowLeft":case"PageUp":e.preventDefault();return turn("prev");
     case"ArrowRight":case"PageDown":e.preventDefault();return turn("next");
     case"Home":e.preventDefault();return turn("first");
     case"End":e.preventDefault();return turn("last");
   }
-  /* A typed letter is the start of a word, not a shortcut for its letter:
-     the strip is one tap away and a reader who types "zy" means zygote.
-     Focus moves on keydown, so the character itself lands in the field. */
-  if(e.key.length===1&&e.key.trim()&&state)$("jump").focus();
+  if(e.key.length===1&&e.key.trim()&&state)$("findInput").focus();
 });
 
 addEventListener("popstate",()=>{
@@ -546,6 +771,15 @@ addEventListener("popstate",()=>{
   const p=new URLSearchParams(location.search);
   dictId=p.get("dict")||"";
   if(!dictId)return chooser();
-  show({p:Number(p.get("p"))||1},"replace");
+  show({p:Number(p.get("p"))||1},"replace").then(async()=>{
+    if(!state)return;
+    const query=p.get("find")||"";
+    if(query){
+      $("findInput").value=query;findFilter=p.get("filter")==="1";
+      updateFindControls();
+      await fetchFound(Math.max(1,Number(p.get("fp"))||1),Math.max(0,Number(p.get("fi"))||0),"none");
+    }
+    if(p.has("y"))scrollTo(0,Math.max(0,Number(p.get("y"))||0));
+  });
 })();
 </script>

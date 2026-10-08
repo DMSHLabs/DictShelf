@@ -88,8 +88,7 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
   for(const [key,fallback] of Object.entries(defaults)){
     const value=Number(saved[key]),spacing=key==='sectionBefore'||key==='sectionAfter';
     const scale=Number.isFinite(value)?Math.min(key==='editControlHeight'?4:2,Math.max(spacing?0:.5,value)):fallback;
-    document.documentElement.style.setProperty(names[key],
-      ['base','title','section','addition','hint'].includes(key)?scale+'rem':String(scale));
+    document.documentElement.style.setProperty(names[key],String(scale));
   }
 })();
 </script>
@@ -214,15 +213,15 @@ label.keep em{font-style:normal;color:var(--label-quiet);font-size:12.5px}
 #impMsg{font-size:13px;margin-top:.618em}
 #impMsg.ok{color:var(--ok)}#impMsg.err{color:var(--err)}
 /* Edit Folders follows the same saved scale as the Settings dialogs. */
-body{font-size:var(--ui-font-base)}
-.top h1{font-size:var(--ui-font-title)}
+body{font-size:calc(var(--ui-font-base) * 1rem)}
+.top h1{font-size:calc(var(--ui-font-title) * 1rem)}
 .top button.x{box-sizing:border-box;display:grid;place-items:center;flex:none;
   width:calc(var(--ui-main-control-height) * 1em);height:calc(var(--ui-main-control-height) * 1em);
   min-height:calc(var(--ui-main-control-height) * 1em);padding:0;
   font-size:calc(var(--ui-main-control-font) * 1rem);line-height:1}
 .card>p:first-of-type,#indexDefaults>p,#addSection>p,#addSection .formats,
-#origin,#cfgProblems{font-size:var(--ui-font-addition)}
-.card h2{font-size:var(--ui-font-section);
+#origin,#cfgProblems{font-size:calc(var(--ui-font-addition) * 1rem)}
+.card h2{font-size:calc(var(--ui-font-section) * 1rem);
   margin-top:calc(var(--ui-section-space-before) * 1em);
   margin-bottom:calc(var(--ui-section-space-after) * 1em)}
 #indexDefaults .dsl-default-row label{min-height:calc(var(--ui-edit_control-height) * 1em);
@@ -240,12 +239,12 @@ body{font-size:var(--ui-font-base)}
   height:calc(var(--ui-edit_control-height) * 1.5rem);
   padding:0;font-size:calc(var(--ui-edit_control-font) * 1rem)}
 html:not([data-folder-picker]) #rows .frow .pick{display:none}
-#rows .frow .st,#msg,#indexDefaultsError{font-size:var(--ui-hint-font-size)}
-#addRow{font-size:var(--ui-font-addition)}
+#rows .frow .st,#msg,#indexDefaultsError{font-size:calc(var(--ui-hint-font-size) * 1rem)}
+#addRow{font-size:calc(var(--ui-font-addition) * 1rem)}
 #addSection>p code{font-size:inherit;padding:0 .3em}
 #drop{box-sizing:border-box;display:flex;flex-wrap:wrap;align-items:center;justify-content:center;
   gap:.3em;min-height:calc(var(--ui-edit_control-height) * 3em);
-  padding:.4em .8em;font-size:var(--ui-font-addition)}
+  padding:.4em .8em;font-size:calc(var(--ui-font-addition) * 1rem)}
 #drop .hint,#drop #choose{font-size:inherit}
 #drop #choose{margin:0}
 #urlRow :is(input,button){box-sizing:border-box;
@@ -253,7 +252,7 @@ html:not([data-folder-picker]) #rows .frow .pick{display:none}
   font-size:calc(var(--ui-edit_control-font) * 1rem)}
 #urlRow button{display:inline-flex;align-items:center;justify-content:center;
   margin:0;padding:0 .7em}
-#impMsg,.formats,#howtoBackRow{font-size:var(--ui-font-addition)}
+#impMsg,.formats,#howtoBackRow{font-size:calc(var(--ui-font-addition) * 1rem)}
 #save{box-sizing:border-box;min-height:calc(var(--ui-edit_control-height) * 1.5rem);
   font-size:calc(var(--ui-edit_control-font) * 1rem)}
 </style>
@@ -263,7 +262,7 @@ html:not([data-folder-picker]) #rows .frow .pick{display:none}
   <div id="workNoticeText" class="work-notice-text"></div>
   <button type="button" class="btn ghost" id="workNoticeStop" hidden></button>
 </div>
-<div class="card">
+<div class="card scroll-card">
 <!-- The page's closer (@see setup.css). It goes back rather than to "/": the
      page behind is restored as it was, and the entry this page took is spent,
      so the phone's back gesture does not reopen what was just closed.
@@ -273,6 +272,7 @@ html:not([data-folder-picker]) #rows .frow .pick{display:none}
 <h1>{{T:pages.folders}}</h1>
 <button type="button" class="x" id="closePage" aria-label="{{T:pages.close}}">✕</button>
 </div>
+<div class="card-scroll">
 <p>{{INTRO}}</p>
 
 <section id="indexDefaults">
@@ -332,6 +332,7 @@ html:not([data-folder-picker]) #rows .frow .pick{display:none}
 <p class="formats hidden" id="howtoBackRow"><a href="#" id="howtoBack">{{T:pages.restoreHowto}}</a>
    {{T:pages.restoreHint}}</p>
 <p class="formats">{{T:pages.supported}}</p>
+</div>
 </div>
 <script>
 "use strict";
