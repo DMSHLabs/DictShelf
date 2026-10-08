@@ -3,6 +3,8 @@
 
 # Compile the real exit coordinator against a small Android lifecycle double.
 # Requires javac/java on PATH; no emulator or APK installation.
+param([string]$SourceFile = (Join-Path $PSScriptRoot '../android/app/src/main/java/com/legbehindneck/wudict/AppExit.java'))
+
 $ErrorActionPreference = 'Stop'
 $testRoot = Join-Path ([IO.Path]::GetTempPath()) ('wudict-exit-' + [guid]::NewGuid())
 $null = New-Item -ItemType Directory -Path $testRoot
@@ -180,7 +182,7 @@ try {
         $null = New-Item -ItemType Directory -Path (Split-Path $path) -Force
         [IO.File]::WriteAllText($path, $entry.Value)
     }
-    Copy-Item -LiteralPath (Join-Path $PSScriptRoot '../android/app/src/main/java/com/legbehindneck/wudict/AppExit.java') -Destination (Join-Path $testRoot 'com/legbehindneck/wudict/AppExit.java')
+    Copy-Item -LiteralPath $SourceFile -Destination (Join-Path $testRoot 'com/legbehindneck/wudict/AppExit.java')
     $javaFiles = @(Get-ChildItem -LiteralPath $testRoot -Filter '*.java' -Recurse | ForEach-Object FullName)
     & javac -d $testRoot @javaFiles
     if ($LASTEXITCODE -ne 0) { throw 'Exit test compilation failed' }

@@ -1,6 +1,6 @@
 # Agent handoff — current state
 
-**2026-10-08 launcher diagnosis:** `dev` at `a98ee6a`, existing uncommitted UI/Browse work preserved. Emulator-5554 runs x86_64 debug versionCode 584 (`wudict2-v0.11.0-5-ga98ee6a-dirty`). After Exit, launcher attempts immediately finish before creating WebView or retaining the server; repeated `main destroy finishing=true web=false serverRetained=false` records reproduce this. The process-local exited latch remains set after shutdown completes, so MainActivity rejects subsequent launcher starts. Force-stopping only this app and launching again restored the foreground activity, server readiness and page load. Permanent lifecycle fix remains outstanding; no code change, APK build/install or data clearing in this diagnostic session.
+**2026-10-08 Exit/relaunch fix:** `dev` advanced externally to `d8b2672` during this session, including the lifecycle fix/test; no agent commit. Emulator debug 584 (`a98ee6a-dirty`) reproduced immediate launcher closure after Exit; force-stop/relaunch restored it without clearing data. Shutdown suppression now identifies the exited Android tasks, allowing new launcher tasks while rejecting old base-activity restoration, including during teardown. FOSS/Play Java compilation and `tools/test-app-exit.ps1` pass: repeated Exit/relaunch, both destruction orders, early/late restoration, fresh launch/external lookup during teardown, busy Cancel/Wait. The same harness against `a98ee6a` fails with `fresh launcher blocked`. APK build/install and real-device regression remain outstanding; installed emulator APK still has the old bug. Harness source override and this note are uncommitted.
 
 **2026-10-08 UI dialogs, fonts, Browse return and arrows:** Settings Fonts fields are 15% wider (2.665em → 3.065em). All UI scale tokens store unitless multipliers; CSS applies rem/em at use sites and standalone pages load saved values. Dictionary Groups rows use .25em vertical padding and retain a 44px minimum; its filter picker uses section/addition typography and shared spacing tokens. Edit Folders and Lemmatization scroll beneath fixed titles; Rescan Folders has a fixed title, inner scroller, and paper backdrop. Browse word links carry page/search/filter/scroll return state into article URLs; the status bar shows Back to Words in the hidden dictionary-arrow slot for that context, with a bold centered SVG arrow. Dictionary arrows scroll to the first article but highlight the dictionary summary with a constant-width outline and matching rounded top corners, clamping short final articles to the page bottom. Browse's alphabet strip has left/right scroll buttons that disable at the ends. Uncommitted on `dev`.
 
@@ -207,9 +207,7 @@ Four files conflicted, and two of the resolutions carry a decision worth knowing
   "bring back the howto" row and the `d.builtin` branch in `askRemoval` are
   kept whole but can never fire (`HowtoRemoved` is false while `HowtoDir` is
   empty).
-- **The share/reader intents are ported into the fork's structures.** The
-  toggle is a fourth `sys-row` in the web System pane (`#sysReader`, with its
-  state sync and listener in index.html) and travels over the existing
+- **The share/reader intents are ported into the fork's structures.** The toggle is a fourth `sys-row` in the web System pane (`#sysReader`, with its state sync and listener in index.html) and travels over the existing
   `wudict:system` bridge — `Shell.systemState` puts `reader`, the set handler
   writes `ShellPrefs.READER`. Upstream's row in `SettingsActivity` is NOT
   taken: this fork draws those rows in the page (the file's own D100 note).
