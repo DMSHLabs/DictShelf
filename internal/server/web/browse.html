@@ -224,12 +224,38 @@ footer .nav button{padding:0 1rem}
 .msg .chooser-hint{font-size:var(--ui-hint-font-size)}
 .picks a{display:flex;align-items:baseline;gap:.4em;font-size:var(--ui-font-base)}
 .picks span{flex:none;margin-left:auto;font-size:var(--ui-hint-font-size)}
+.picks .pick-name{flex:1;min-width:0;margin:0;font-size:inherit;overflow-wrap:anywhere}
+.msg.chooser-list{box-sizing:border-box;display:flex;flex-direction:column;
+  margin:1rem auto;max-height:calc(100dvh - 2rem)}
+.chooser-list .picks{min-height:0;overflow-y:auto;overscroll-behavior:contain}
+.chooser-list .list-search-dock{box-sizing:border-box;display:flex;align-items:center;
+  gap:.25em;flex:none;margin-top:.5em;padding:.5em 0 0;border-top:1px solid var(--line);
+  font-size:calc(var(--ui-edit_control-font) * 1rem)}
+.chooser-list .list-search-input{box-sizing:border-box;flex:1 1 auto;min-width:0;width:0;
+  height:calc(var(--ui-edit_control-height) * 1.5rem);margin:0;padding:0 .4em;
+  font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);
+  border-radius:6px;outline:none;-webkit-appearance:none}
+.chooser-list .list-search-count{flex:none;min-width:2.5em;text-align:center;
+  font-size:var(--ui-font-addition);font-variant-numeric:tabular-nums;white-space:nowrap}
+.chooser-list :is(.list-search-mode,.list-search-step){box-sizing:border-box;display:grid;
+  place-items:center;flex:none;width:calc(var(--ui-edit_control-height) * 1.5rem);
+  height:calc(var(--ui-edit_control-height) * 1.5rem);padding:0;border:1px solid var(--line);
+  border-radius:6px;background:var(--bg);color:var(--fg);font:inherit;line-height:1;cursor:pointer}
+.chooser-list .list-search-mode svg{display:block;width:1.1em;height:1.1em}
+.chooser-list .list-search-mode.is-on{border-color:var(--accent);background:var(--accent);color:var(--bg)}
+.chooser-list .list-search-step:disabled{opacity:.45;cursor:default}
+.chooser-list .list-search-match{outline:2px solid var(--accent);outline-offset:-2px}
+.chooser-list .list-search-current{background:var(--line-soft)}
+.chooser-list .list-search-name-match{background:var(--accent);color:var(--bg);border-radius:.15em}
+.chooser-list .list-search-filtered-out{display:none!important}
+@media(max-width:520px){.msg.chooser-list{padding:1em}}
 </style>
 <!-- The app halves of any preset that asked to be on this page too (manifest
      "pages" — Quiet labels is the one): attached by the server, after this
      page's own sheet so their token overrides win the tie, and empty
      otherwise. -->
 {{PRESETS}}
+<script src="/assets/list-search.js?v={{LISTSEARCHJS}}"></script>
 <script>
 /* The chooser shares the reader's saved Fonts values. */
 (function () {
@@ -312,9 +338,11 @@ function unesc(s){
 try{const t=localStorage.getItem("wudict_theme");
   if(t&&t!=="auto")document.documentElement.setAttribute("data-theme",t)}catch(e){}
 
-let dictId="",state=null,last={p:1},poll=0,stripFor="",demanded=false;
+let dictId="",state=null,last={p:1},poll=0,stripFor="",demanded=false,chooserSearch=null;
 
-function card(html){$("msg").innerHTML=html;$("msg").hidden=false;
+function card(html,chooserList=false){chooserSearch?.destroy();chooserSearch=null;
+  $("msg").classList.toggle("chooser-list",chooserList);
+  $("msg").innerHTML=html;$("msg").hidden=false;
   $("top").hidden=true;$("foot").hidden=true;$("list").innerHTML=""}
 
 /* One request per page turn, and the answer carries everything the chrome
@@ -338,6 +366,8 @@ async function show(opts,record){
   /* What the reader asked for, which the strip highlights by: the chip they
      clicked, or - for a typed jump - the row the server located. */
   state.mark=opts.o!=null?opts.o:state.at;
+  chooserSearch?.destroy();chooserSearch=null;
+  $("msg").classList.remove("chooser-list");
   $("msg").hidden=true;
   render();
   const url="?dict="+encodeURIComponent(dictId)+"&p="+state.page;
@@ -449,8 +479,20 @@ async function chooser(){
   if(!ds.length)return card(heading+"<b>"+tx("browse.empty")+"</b><p>"+tx("browse.emptyBody")+
     '</p><p><a href="/">'+tx("browse.openApp")+"</a></p>");
   card(heading+"<div class='picks'>"+
-    ds.map(d=>'<a href="?dict='+encodeURIComponent(d.id)+'">'+esc(d.name||d.id)+
-      (d.entries?"<span>"+tx("browse.entries",{count:d.entries,number:num(d.entries)})+"</span>":"")+"</a>").join("")+"</div>");
+    ds.map(d=>'<a href="?dict='+encodeURIComponent(d.id)+'"><span class="pick-name">'+esc(d.name||d.id)+'</span>'+
+      (d.entries?'<span class="pick-count">'+tx("browse.entries",{count:d.entries,number:num(d.entries)})+"</span>":"")+"</a>").join("")+"</div>"+
+    '<div class="list-search-dock" role="search"></div>',true);
+  const picks=$("msg").querySelector(".picks");
+  chooserSearch=window.wudictListSearch.create({
+    root:picks,itemSelector:"a",dock:$("msg").querySelector(".list-search-dock"),
+    scrollContainer:picks,getText:item=>item.querySelector(".pick-name")?.textContent||"",
+    highlightSelector:".pick-name",labels:{
+      placeholder:t("dictUI.listSearchPlaceholder"),search:t("dictUI.listSearchLabel"),
+      previous:t("dictUI.listSearchPrevious"),next:t("dictUI.listSearchNext"),
+      filter:t("dictUI.listSearchFilter"),
+      count:t("dictUI.listSearchCount",{current:"{current}",total:"{total}"})
+    }
+  });
 }
 
 document.addEventListener("click",e=>{

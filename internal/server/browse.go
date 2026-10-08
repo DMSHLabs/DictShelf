@@ -167,12 +167,12 @@ func browseUnprepared(w http.ResponseWriter, e *entry) {
 // bytes serve every dictionary and the browser caches nothing that can go
 // stale against the library.
 //
-// The one substitution is {{PRESETS}} - the app halves of the presets that
-// asked to be on the standalone pages too (presets.go's pagePresetLinks). This
-// page has a palette of its own and no layer machinery, so that link is how a
-// "Quiet labels" choice reaches it.
+// Preset links carry the standalone-page palette, and the list search script
+// uses its content hash so a cached chooser cannot keep stale search behavior.
 func (s *Server) handleBrowsePage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache")
-	_, _ = w.Write([]byte(renderUI(string(bytes.ReplaceAll(browseHTML, []byte("{{PRESETS}}"), []byte(s.pagePresetLinks()))), s.reg.prefs.Language())))
+	page := bytes.ReplaceAll(browseHTML, []byte("{{PRESETS}}"), []byte(s.pagePresetLinks()))
+	page = bytes.ReplaceAll(page, []byte("{{LISTSEARCHJS}}"), []byte(assetTag(listSearchJS)))
+	_, _ = w.Write([]byte(renderUI(string(page), s.reg.prefs.Language())))
 }
