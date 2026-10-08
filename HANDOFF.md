@@ -1,5 +1,9 @@
 # Agent handoff — current state
 
+**2026-10-08 Browse chooser UI:** The `/browse` dictionary chooser reads saved Fonts values before paint: heading uses title, explanatory line and entry counts use hint, dictionary names use base. It has a main-control-sized close button that returns through browser history, with `/` as direct-open fallback; `/browse?dict=...` keeps its existing reading controls. Targeted server/i18n/asset tests and diff check pass; no device or APK check. Work is uncommitted on `dev`.
+
+**2026-10-08 Lemmatization footer:** Removed the divider below the installed-path text, hid the attribution block when it is empty, and reduced card bottom padding to 1em. License attribution still appears when supplied. `git diff --check` passes; no phone or APK check. Uncommitted on `dev`.
+
 **2026-10-08 footer copy:** The "Search every dictionary…" footer was removed from Edit Folders and Lemmatization. Settings keeps the sentence and wuDict2 link but drops the parenthetical fork/website/source line; unused EN/RU catalog keys and dead standalone-page footer CSS were removed. Targeted server/i18n/asset tests and diff check pass; no device check. Uncommitted on `dev`.
 
 **2026-10-08 Lemmatization UI:** On `dev`, `lemmas.html` now reads saved Fonts values before paint and uses title/main-close, section, addition and hint scales; language checkbox rows use `--ui-control-height` with new `--ui-control-font` (default .9, editable in Settings Fonts). The right-side state/size text and all lower notes use hint size. Standalone page readers accept the full 4× range for control heights. Targeted server/i18n/asset tests and diff check pass; no device or APK check. Work is uncommitted.

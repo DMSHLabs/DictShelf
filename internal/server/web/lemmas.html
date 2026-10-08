@@ -111,7 +111,7 @@ html[data-shell-tone="dark"] {
   --line:rgba(230,220,201,.4); --accent:#ffc773; --ok:#aad3ad; --err:#ffb3ad;
 }
 /* Page-specific only; palette, card, buttons and typography are shared. */
-.card{max-width:640px;min-width:0;overflow-wrap:anywhere}
+.card{max-width:640px;min-width:0;overflow-wrap:anywhere;padding-bottom:1em}
 #list{margin:.618em 0 0;border:1px solid var(--line);border-radius:8px;overflow:hidden}
 .lrow{display:flex;flex-wrap:wrap;align-items:center;gap:.5em;
   padding:.5em .618em;border-bottom:1px solid var(--line);font-size:13.5px}
@@ -141,6 +141,8 @@ html[data-shell-tone="dark"] {
 .head{display:flex;justify-content:space-between;align-items:baseline;gap:.5em;flex-wrap:wrap}
 .formats a{color:var(--accent);text-decoration:none}
 .formats a:hover{text-decoration:underline}
+#credit{margin:.4em 0 0}
+#credit:empty{display:none}
 /* Lemmatization uses the same saved type and control scale as Settings. */
 body{font-size:var(--ui-font-base)}
 .top h1{font-size:var(--ui-font-title)}
@@ -179,7 +181,6 @@ body{font-size:var(--ui-font-base)}
 <p class="note" id="dir"></p>
 <div id="shadow" class="banner warn hidden"></div>
 
-<hr class="sep">
 <p class="formats" id="credit"></p>
 </div>
 <script>

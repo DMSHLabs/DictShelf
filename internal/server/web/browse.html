@@ -202,13 +202,38 @@ footer .nav button{height:2.3rem;padding:0 1rem}
 .picks{display:flex;flex-direction:column;gap:.1rem;margin-top:.8rem}
 .picks a{color:var(--link);text-decoration:none;padding:.3rem .4rem;border-radius:6px}
 .picks a:hover{background:var(--line-soft);color:var(--fg)}
-.picks span{color:var(--label-quiet);font-size:12px;margin-left:.4rem}
+.picks span{color:var(--label-quiet)}
+.chooser-head{display:flex;align-items:center;gap:.5em}
+.msg .chooser-head b{flex:1;min-width:0;margin:0;font-size:var(--ui-font-title)}
+.chooser-head button{box-sizing:border-box;display:grid;place-items:center;flex:none;
+  width:calc(var(--ui-main-control-height) * 1em);
+  height:calc(var(--ui-main-control-height) * 1em);padding:0;
+  font-size:calc(var(--ui-main-control-font) * 1rem);line-height:1;
+  color:var(--fg);background:transparent;border:1px solid var(--line);border-radius:7px;cursor:pointer}
+.msg .chooser-hint{font-size:var(--ui-hint-font-size)}
+.picks a{display:flex;align-items:baseline;gap:.4em;font-size:var(--ui-font-base)}
+.picks span{flex:none;margin-left:auto;font-size:var(--ui-hint-font-size)}
 </style>
 <!-- The app halves of any preset that asked to be on this page too (manifest
      "pages" — Quiet labels is the one): attached by the server, after this
      page's own sheet so their token overrides win the tie, and empty
      otherwise. -->
 {{PRESETS}}
+<script>
+/* The chooser shares the reader's saved Fonts values. */
+(function () {
+  const defaults={base:1,title:1.15,hint:.8,mainControlHeight:1.05,mainControlFont:1.05};
+  const names={base:'--ui-font-base',title:'--ui-font-title',hint:'--ui-hint-font-size',
+    mainControlHeight:'--ui-main-control-height',mainControlFont:'--ui-main-control-font'};
+  let saved={};
+  try { saved=JSON.parse(localStorage.getItem('wudict_settings_fonts')||'null')||{}; } catch (_) {}
+  for(const [key,fallback] of Object.entries(defaults)){
+    const value=Number(saved[key]),scale=Number.isFinite(value)?Math.min(2,Math.max(.5,value)):fallback;
+    document.documentElement.style.setProperty(names[key],
+      ['base','title','hint'].includes(key)?scale+'rem':String(scale));
+  }
+})();
+</script>
 
 <header id="top" hidden>
   <div class="bar">
@@ -393,11 +418,11 @@ async function unprepared(j){
    dictionary that opens is offered: choosing one that has no index yet
    builds it (unprepared). */
 async function chooser(){
-  const heading="<b>"+tx("browse.choose")+"</b><p>"+tx("browse.chooseHint")+"</p>";
+  const heading='<div class="chooser-head"><b>'+tx("browse.choose")+'</b><button type="button" id="closeBrowseChooser" aria-label="'+tx("pages.close")+'">✕</button></div><p class="chooser-hint">'+tx("browse.chooseHint")+'</p>';
   card(heading);
   let text="";
   try{const response=await fetch("/api/dicts");if(!response.ok)throw new Error("load");
-    text=await response.text()}catch(e){return card("<b>"+tx("browse.noAnswer")+"</b><p>"+tx("browse.loadFailed")+"</p>")}
+    text=await response.text()}catch(e){return card(heading+"<b>"+tx("browse.noAnswer")+"</b><p>"+tx("browse.loadFailed")+"</p>")}
   const ds=[];
   for(const line of text.split("\n")){
     if(!line)continue;
@@ -407,7 +432,7 @@ async function chooser(){
     }
   }
   ds.sort((x,y)=>(x.name||"").localeCompare(y.name||""));
-  if(!ds.length)return card("<b>"+tx("browse.empty")+"</b><p>"+tx("browse.emptyBody")+
+  if(!ds.length)return card(heading+"<b>"+tx("browse.empty")+"</b><p>"+tx("browse.emptyBody")+
     '</p><p><a href="/">'+tx("browse.openApp")+"</a></p>");
   card(heading+"<div class='picks'>"+
     ds.map(d=>'<a href="?dict='+encodeURIComponent(d.id)+'">'+esc(d.name||d.id)+
@@ -415,6 +440,10 @@ async function chooser(){
 }
 
 document.addEventListener("click",e=>{
+  if(e.target.closest("#closeBrowseChooser")){
+    if(history.length>1)history.back();else location.href="/";
+    return;
+  }
   const g=e.target.closest("[data-go]");
   if(g)return turn(g.dataset.go);
   const c=e.target.closest(".strip button");
