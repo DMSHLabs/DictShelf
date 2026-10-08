@@ -9,6 +9,17 @@ $ErrorActionPreference = 'Stop'
 $testRoot = Join-Path ([IO.Path]::GetTempPath()) ('wudict-exit-' + [guid]::NewGuid())
 $null = New-Item -ItemType Directory -Path $testRoot
 $sources = @{
+    'android/content/Intent.java' = @'
+package android.content;
+public class Intent {
+    public static final String ACTION_MAIN = "android.intent.action.MAIN";
+    public static final String CATEGORY_LAUNCHER = "android.intent.category.LAUNCHER";
+    public String action = ACTION_MAIN;
+    public boolean launcher = true;
+    public String getAction() { return action; }
+    public boolean hasCategory(String c) { return launcher && CATEGORY_LAUNCHER.equals(c); }
+}
+'@
     'android/os/Bundle.java' = 'package android.os; public class Bundle {}'
     'android/os/Looper.java' = 'package android.os; public class Looper { public static Looper getMainLooper() { return new Looper(); } }'
     'android/os/Handler.java' = @'
@@ -49,6 +60,8 @@ public class Activity {
     public Application app;
     public int task;
     public boolean finished;
+    public android.content.Intent intent = new android.content.Intent();
+    public android.content.Intent getIntent() { return intent; }
     public Application getApplication() { return app; }
     public int getTaskId() { return task; }
     public void finish() { finished = true; }
@@ -60,7 +73,7 @@ public class Activity {
 package com.legbehindneck.wudict;
 import android.app.*;
 class MainActivity extends Activity {}
-class SystemLog { static void initialize(Application a) {} }
+class SystemLog { static void initialize(Application a) {} static void record(String s) {} }
 class ProcessExitDiagnostics { static void recordRecent(Application a) {} }
 class ServerProcess {
     static int stops;
@@ -141,15 +154,38 @@ public class ExitTest {
         app.onActivityDestroyed(restored);
         check(ServerProcess.stops == before + 1, "restoration prevented shutdown");
 
-        // A new launcher or external reader lookup can arrive during teardown.
-        // Destroying the old windows must not stop the new window's server.
-        for (boolean lookup : new boolean[] {false, true}) {
+        // Observed on the emulator: the launcher sends MAIN in a NEW task
+        // 40-50ms after Exit, before the old window's destruction callback.
+        // Reject that overlap, including repeated requests, then allow a tap
+        // after shutdown has completed. Test both destruction orders.
+        for (boolean oldFirst : new boolean[] {false, true}) {
             app = new AppExit();
             main = create(app, new MainActivity(), 20);
             before = ServerProcess.stops;
             exit(main);
-            Activity fresh = create(app, lookup ? new Activity() : new MainActivity(), lookup ? 20 : 21);
-            if (!lookup) check(!AppExit.shouldSuppressRestart(fresh), "new launcher rejected during Exit");
+            MainActivity overlap = create(app, new MainActivity(), 21);
+            check(AppExit.shouldSuppressRestart(overlap), "overlapping launcher revoked Exit");
+            MainActivity second = create(app, new MainActivity(), 22);
+            check(AppExit.shouldSuppressRestart(second), "second overlapping launcher accepted");
+            app.onActivityDestroyed(second);
+            app.onActivityDestroyed(oldFirst ? main : overlap);
+            check(ServerProcess.stops == before, "stopped before final window destruction");
+            app.onActivityDestroyed(oldFirst ? overlap : main);
+            check(ServerProcess.stops == before + 1, "overlapping launcher prevented shutdown");
+            check(!AppExit.shouldSuppressRestart(create(app, new MainActivity(), 23)), "launcher blocked after Exit completed");
+        }
+        // External lookup, including a direct MainActivity handoff, can
+        // revoke shutdown without the old windows stopping its server.
+        for (boolean direct : new boolean[] {false, true}) {
+            app = new AppExit();
+            main = create(app, new MainActivity(), 30);
+            before = ServerProcess.stops;
+            exit(main);
+            Activity fresh = direct ? new MainActivity() : new Activity();
+            fresh.intent.action = "android.intent.action.PROCESS_TEXT";
+            fresh.intent.launcher = false;
+            create(app, fresh, 31);
+            if (direct) check(!AppExit.shouldSuppressRestart(fresh), "external main lookup rejected");
             app.onActivityDestroyed(main);
             app.onActivityDestroyed(fresh);
             check(ServerProcess.stops == before, "old Exit stopped a fresh window's server");
@@ -171,7 +207,7 @@ public class ExitTest {
         check(main.finished, "Wait did not finish after work");
         app.onActivityDestroyed(main);
         check(!AppExit.shouldSuppressRestart(create(app, new MainActivity(), 31)), "launch after Wait blocked");
-        System.out.println("PASS: repeated Exit/relaunch, both window orders, early/late restoration, fresh launch/lookup during teardown, busy Cancel/Wait");
+        System.out.println("PASS: repeated Exit/relaunch, both window orders, early/late restoration, overlapping NEW-task launcher, external lookup during teardown, busy Cancel/Wait");
     }
 }
 '@

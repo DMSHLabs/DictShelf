@@ -69,7 +69,8 @@ public class MainActivity extends Activity {
         // Exit may finish the launcher while a floating Settings window is
         // still being removed from the same task. Android can then recreate
         // the launcher from that task's base intent; do not start the server
-        // again for that restoration. A new launcher task remains allowed.
+        // again for that restoration or an overlapping launcher request.
+        // A new launcher task is allowed once teardown completes.
         if (AppExit.shouldSuppressRestart(this)) {
             finishAndRemoveTask();
             return;
