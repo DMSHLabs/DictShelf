@@ -12,6 +12,8 @@ html[data-shell-image], html[data-shell-image] body { background:transparent !im
   --ui-font-addition:.9rem;
   --ui-hint-font-size:.8rem;
   --ui-control-height:1.6;
+  --ui-control-font:.9;
+  --ui-hint-control-height:1;
   --ui-main-control-height:1.05;
   --ui-main-control-font:1.05;
   --ui-edit_control-height:1.8;

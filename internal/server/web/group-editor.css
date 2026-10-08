@@ -91,6 +91,7 @@ dialog#linkGroupDialog.group-dialog.panel-card,dialog#discardGroupDraftDialog.gr
 .group-actions{display:flex;align-items:center;justify-content:space-between;gap:calc(var(--ui-control-gap,.25) * 1em);flex:none;flex-wrap:wrap}
 .group-actions[hidden]{display:none}
 .group-dialog select,.group-dialog input[type=text],.group-dialog input[type=search]{box-sizing:border-box;height:calc(var(--ui-control-height,1.6) * 1em);min-height:calc(var(--ui-control-height,1.6) * 1em);font:inherit;font-size:var(--ui-font-base);line-height:1;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:0 .4em}
+#dictSettings input.list-search-input{height:calc(var(--ui-edit_control-height,1.8) * 1.5rem);min-height:0;font-size:calc(var(--ui-edit_control-font,1) * 1rem)}
 .group-dialog .btn{box-sizing:border-box;min-height:calc(var(--ui-control-height,1.6) * 1em);line-height:1;padding:0 .55em}
 .group-dialog h2{display:flex;align-items:center;gap:calc(var(--ui-control-gap,.25) * 1em);margin:0;font-size:var(--ui-font-title)}
 .group-dialog h2 .btn{box-sizing:border-box;height:calc(var(--ui-main-control-height,1.05) * 1em);min-height:calc(var(--ui-main-control-height,1.05) * 1em);font-size:calc(var(--ui-main-control-font,1.05) * 1rem);line-height:1}
@@ -109,6 +110,26 @@ dialog#clearDatabaseDialog.group-dialog.panel-card{box-sizing:border-box;height:
 #clearDatabaseDialog:lang(ru) .seg{display:flex;width:100%}
 #clearDatabaseDialog:lang(ru) .seg .btn{flex:1;min-width:0;white-space:normal;overflow-wrap:anywhere;text-align:center}
 #clearDatabaseDialog p{overflow-wrap:anywhere;margin:.5em 0;line-height:1.3;font-size:var(--ui-hint-font-size)}
+#clearDatabaseDialog h2 .btn{width:calc(var(--ui-main-control-height,1.05) * 1em);
+  height:calc(var(--ui-main-control-height,1.05) * 1em);
+  min-height:calc(var(--ui-main-control-height,1.05) * 1em);
+  padding:0;font-size:calc(var(--ui-main-control-font,1.05) * 1rem)}
+#clearDatabaseDialog>label{align-items:center;
+  min-height:calc(var(--ui-edit_control-height,1.8) * 1.5rem);
+  font-size:calc(var(--ui-edit_control-font,1) * 1rem)}
+#clearDatabaseDialog>label input[type=checkbox]{flex:none;
+  width:calc(var(--ui-edit_control-height,1.8) * 1em);
+  height:calc(var(--ui-edit_control-height,1.8) * 1em);margin:0}
+#clearDatabaseDialog>label input[type=checkbox]:checked::after{
+  left:35%;top:20%;width:25%;height:50%}
+#clearDatabaseDialog .rescan-action{min-height:calc(var(--ui-edit_control-height,1.8) * 1.5rem);
+  font-size:calc(var(--ui-edit_control-font,1) * 1rem)}
+#clearDatabaseDialog .seg .btn,#clearDatabaseDialog .rescan-footer .btn{
+  box-sizing:border-box;min-height:calc(var(--ui-edit_control-height,1.8) * 1.5rem);
+  font-size:calc(var(--ui-edit_control-font,1) * 1rem)}
+#clearDatabaseDialog .rescan-footer{display:flex;align-items:center;
+  gap:calc(var(--ui-control-gap,.25) * 1em)}
+#clearDatabaseDialog #clearDatabaseCancel{margin-left:auto}
 #clearDatabaseStatus:empty{display:none}
 @media(max-width:360px){dialog#clearDatabaseDialog.group-dialog.panel-card{padding:12px}#clearDatabaseDialog .seg .btn{padding:.25em .35em}}
 .group-dialog h2 button{margin-left:auto}

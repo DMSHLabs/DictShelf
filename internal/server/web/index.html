@@ -116,7 +116,7 @@ window.wudictFontScale=(function(){
   const key="wudict_settings_fonts",clamp=(v,lo,hi)=>Math.min(hi,Math.max(lo,v));
   const spacing=new Set(["sectionBefore","sectionAfter","rowGap","additionGap","controlGap"]);
   const clean=(v,fallback,name)=>{v=Number(v);return Number.isFinite(v)?clamp(v,spacing.has(name)?0:.5,name==="editControlHeight"?4:2):fallback};
-  const values={base:1,section:1,title:1.15,addition:.9,hint:.8,controlHeight:1.6,mainControlHeight:1.05,mainControlFont:1.05,editControlHeight:1.8,editControlFont:1,
+  const values={base:1,section:1,title:1.15,addition:.9,hint:.8,controlHeight:1.6,controlFont:.9,hintControlHeight:1,mainControlHeight:1.05,mainControlFont:1.05,editControlHeight:1.8,editControlFont:1,
     sectionBefore:0,sectionAfter:.45,rowGap:.6,additionGap:.5,controlGap:.25};
   try{const saved=JSON.parse(localStorage.getItem(key)||"null");
     if(saved){for(const name of Object.keys(values))values[name]=clean(saved[name],values[name],name)}}catch(_){}
@@ -129,6 +129,8 @@ window.wudictFontScale=(function(){
     root.setProperty("--ui-font-addition",values.addition+"rem");
     root.setProperty("--ui-hint-font-size",values.hint+"rem");
     root.setProperty("--ui-control-height",String(values.controlHeight));
+    root.setProperty("--ui-control-font",String(values.controlFont));
+    root.setProperty("--ui-hint-control-height",String(values.hintControlHeight));
     root.setProperty("--ui-main-control-height",String(values.mainControlHeight));
     root.setProperty("--ui-main-control-font",String(values.mainControlFont));
     root.setProperty("--ui-edit_control-height",String(values.editControlHeight));
@@ -666,6 +668,20 @@ window.wudictFontScale=(function(){
     </label>
   </div>
   <div class="facts font-scale-row">
+    <label class="font-scale-setting"><code>--ui-control-font:</code>
+      <button type="button" class="font-scale-step" data-font-scale="fontScaleControlFont" data-delta="-0.05" aria-label="{{T:panel.decrease}} {{T:panel.controlFont}}">−</button>
+      <input id="fontScaleControlFont" type="number" min="0.5" max="2" step="0.01" inputmode="decimal" aria-label="{{T:panel.controlFont}}">
+      <button type="button" class="font-scale-step" data-font-scale="fontScaleControlFont" data-delta="0.05" aria-label="{{T:panel.increase}} {{T:panel.controlFont}}">+</button>
+    </label>
+  </div>
+  <div class="facts font-scale-row">
+    <label class="font-scale-setting"><code>--ui-hint-control-height:</code>
+      <button type="button" class="font-scale-step" data-font-scale="fontScaleHintControlHeight" data-delta="-0.05" aria-label="{{T:panel.decrease}} {{T:panel.hintControlHeight}}">−</button>
+      <input id="fontScaleHintControlHeight" type="number" min="0.5" max="2" step="0.01" inputmode="decimal" aria-label="{{T:panel.hintControlHeight}}">
+      <button type="button" class="font-scale-step" data-font-scale="fontScaleHintControlHeight" data-delta="0.05" aria-label="{{T:panel.increase}} {{T:panel.hintControlHeight}}">+</button>
+    </label>
+  </div>
+  <div class="facts font-scale-row">
     <label class="font-scale-setting"><code>--ui-main-control-height:</code>
       <button type="button" class="font-scale-step" data-font-scale="fontScaleMainControlHeight" data-delta="-0.05" aria-label="{{T:panel.decrease}} {{T:panel.mainControlHeight}}">−</button>
       <input id="fontScaleMainControlHeight" type="number" min="0.5" max="2" step="0.01" inputmode="decimal" aria-label="{{T:panel.mainControlHeight}}">
@@ -802,8 +818,7 @@ window.wudictFontScale=(function(){
   <div class="about">
     <span class="brand">wu<small>Dict2</small></span> <span class="ver">{{VERSION}}</span>
     <p>{{T:panel.about}}</p>
-    <p><a href="https://github.com/DmShAl/wudict2/" target="_blank" rel="noopener">wuDict2</a> ({{T:panel.forkNote}}: <a href="https://wuweidict.github.io/wudict" target="_blank" rel="noopener">{{T:panel.website}}</a>
-       · <a href="https://github.com/wuweidict/wudict" target="_blank" rel="noopener">{{T:panel.source}}</a>)</p>
+    <p><a href="https://github.com/DmShAl/wudict2/" target="_blank" rel="noopener">wuDict2</a></p>
   </div>
 </details>
 <div id="exitSection" class="sect" hidden><div class="facts"><button type="button" class="mrow" id="exitApp">{{T:panel.exit}}</button></div></div>
@@ -878,7 +893,7 @@ window.wudictFontScale=(function(){
   <p>{{T:database.sources}}</p>
   <p id="clearDatabaseStatus" role="status"></p>
   <progress id="clearDatabaseProgress" max="100" value="0" hidden></progress>
-  <div><button type="button" class="btn" id="clearDatabaseGo">{{T:database.clear}}</button> <button type="button" class="btn" id="clearDatabaseCancel" autofocus>{{T:panel.cancel}}</button></div>
+  <div class="rescan-footer"><button type="button" class="btn" id="clearDatabaseGo">{{T:database.clear}}</button><button type="button" class="btn" id="clearDatabaseCancel" autofocus>{{T:panel.cancel}}</button></div>
 </dialog>
 
 <!-- System: the shell's own settings, drawn by the page. It is the second view
@@ -2959,7 +2974,7 @@ function fontScaleColumns(){
 window.addEventListener("resize",()=>{if($("panel").classList.contains("show"))panelRowColumns()});
 const fontScale=window.wudictFontScale;
 [["fontScaleBase","base"],["fontScaleSection","section"],["fontScaleTitle","title"],
-  ["fontScaleAddition","addition"],["fontScaleHint","hint"],["fontScaleControlHeight","controlHeight"],
+  ["fontScaleAddition","addition"],["fontScaleHint","hint"],["fontScaleControlHeight","controlHeight"],["fontScaleControlFont","controlFont"],["fontScaleHintControlHeight","hintControlHeight"],
   ["fontScaleMainControlHeight","mainControlHeight"],["fontScaleMainControlFont","mainControlFont"],
     ["fontScaleEditControlHeight","editControlHeight"],["fontScaleEditControlFont","editControlFont"],
   ["fontScaleSectionBefore","sectionBefore"],["fontScaleSectionAfter","sectionAfter"],["fontScaleRowGap","rowGap"],
@@ -2968,7 +2983,7 @@ const fontScale=window.wudictFontScale;
 $("applyFontScale").onclick=()=>{
   const next={};
   for(const [id,key] of [["fontScaleBase","base"],["fontScaleSection","section"],["fontScaleTitle","title"],
-    ["fontScaleAddition","addition"],["fontScaleHint","hint"],["fontScaleControlHeight","controlHeight"],
+    ["fontScaleAddition","addition"],["fontScaleHint","hint"],["fontScaleControlHeight","controlHeight"],["fontScaleControlFont","controlFont"],["fontScaleHintControlHeight","hintControlHeight"],
     ["fontScaleMainControlHeight","mainControlHeight"],["fontScaleMainControlFont","mainControlFont"],
     ["fontScaleEditControlHeight","editControlHeight"],["fontScaleEditControlFont","editControlFont"],
     ["fontScaleSectionBefore","sectionBefore"],["fontScaleSectionAfter","sectionAfter"],["fontScaleRowGap","rowGap"],
@@ -2979,7 +2994,7 @@ $("applyFontScale").onclick=()=>{
   }
   fontScale.apply(next);
   for(const [id,key] of [["fontScaleBase","base"],["fontScaleSection","section"],["fontScaleTitle","title"],
-    ["fontScaleAddition","addition"],["fontScaleHint","hint"],["fontScaleControlHeight","controlHeight"],
+    ["fontScaleAddition","addition"],["fontScaleHint","hint"],["fontScaleControlHeight","controlHeight"],["fontScaleControlFont","controlFont"],["fontScaleHintControlHeight","hintControlHeight"],
     ["fontScaleMainControlHeight","mainControlHeight"],["fontScaleMainControlFont","mainControlFont"],
   ["fontScaleEditControlHeight","editControlHeight"],["fontScaleEditControlFont","editControlFont"],
     ["fontScaleSectionBefore","sectionBefore"],["fontScaleSectionAfter","sectionAfter"],["fontScaleRowGap","rowGap"],
@@ -2989,7 +3004,7 @@ $("applyFontScale").onclick=()=>{
 };
 document.querySelectorAll(".font-scale-step").forEach(button=>button.addEventListener("click",()=>{
   const input=$(button.dataset.fontScale),key={fontScaleBase:"base",fontScaleSection:"section",fontScaleTitle:"title",
-    fontScaleAddition:"addition",fontScaleHint:"hint",fontScaleControlHeight:"controlHeight",
+    fontScaleAddition:"addition",fontScaleHint:"hint",fontScaleControlHeight:"controlHeight",fontScaleControlFont:"controlFont",fontScaleHintControlHeight:"hintControlHeight",
     fontScaleMainControlHeight:"mainControlHeight",fontScaleMainControlFont:"mainControlFont",
     fontScaleEditControlHeight:"editControlHeight",fontScaleEditControlFont:"editControlFont",
     fontScaleSectionBefore:"sectionBefore",fontScaleSectionAfter:"sectionAfter",fontScaleRowGap:"rowGap",
