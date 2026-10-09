@@ -19,90 +19,42 @@ function availableMatchesFilter(d){
   const filters=d.filters||[];
   return groupAvailableFilter==="all"||(groupAvailableFilter==="uncategorized"?filters.length===0:filters.some(g=>JSON.stringify([g.f,g.v])===groupAvailableFilter));
 }
-function availableSearchText(){return $('groupAvailableSearch').value.trim().toLocaleLowerCase()}
-function availableMatchesSearch(d){return dictLabel(d).toLocaleLowerCase().includes(availableSearchText())}
-function highlightGroupSearch(row,query){
-  const name=row.querySelector('.group-dictionary-name');if(!name)return;
-  const text=name.dataset.fullText||name.textContent;name.dataset.fullText=text;
-  const value=query.trim();if(!value){name.textContent=text;return}
-  const lower=text.toLocaleLowerCase(),needle=value.toLocaleLowerCase();let from=0,at;
-  const parts=[];
-  while((at=lower.indexOf(needle,from))!==-1){
-    if(at>from)parts.push(document.createTextNode(text.slice(from,at)));
-    const mark=document.createElement('mark');mark.className='group-search-match';mark.textContent=text.slice(at,at+value.length);parts.push(mark);from=at+value.length;
+const groupSearchLabels={
+  placeholder:tx('dictUI.listSearchPlaceholder'),filterPlaceholder:tx('dictUI.listFilterPlaceholder'),
+  search:tx('dictUI.listSearchLabel'),
+  previous:tx('dictUI.listSearchPrevious'),next:tx('dictUI.listSearchNext'),
+  filter:tx('dictUI.listSearchFilter'),
+  count:tx('dictUI.listSearchCount',{current:'{current}',total:'{total}'})
+};
+function updateMemberSearch(){groupMemberListSearch.refresh()}
+function updateAvailableSearch(){groupAvailableListSearch.refresh()}
+const groupMemberListSearch=window.wudictListSearch.create({
+  root:$('groupRows'),itemSelector:'.group-row',dock:$('groupMembersSearchDock'),
+  scrollContainer:$('groupRows'),inputId:'groupMembersSearch',
+  highlightSelector:'.group-dictionary-name',initiallyFiltering:true,labels:groupSearchLabels,
+  onUpdate:({query,filtering,visible})=>{
+    const rows=$('groupRows');rows.querySelector('.group-filter-empty')?.remove();
+    if(filtering&&query&&!visible){
+      const empty=document.createElement('p');empty.className='group-filter-empty';
+      empty.textContent=tx('dictUI.memberSearchEmpty');rows.append(empty);
+    }
+    requestAnimationFrame(updateGroupSplit);
   }
-  if(from===0){name.textContent=text;return}
-  if(from<text.length)parts.push(document.createTextNode(text.slice(from)));
-  name.replaceChildren(...parts);
-}
-function updateMemberSearch(){
-  const rows=$('groupRows'),search=$('groupMembersSearch').value.trim().toLocaleLowerCase();
-  let visible=0;
-  for(const row of rows.querySelectorAll('.group-row')){
-    row.hidden=!row.dataset.search.includes(search);
-    highlightGroupSearch(row,search);
-    if(!row.hidden)visible++;
-  }
-  rows.querySelector('.group-filter-empty')?.remove();
-  if(!visible&&search){
-    const empty=document.createElement('p');empty.className='group-filter-empty';
-    empty.textContent=tx('dictUI.memberSearchEmpty');rows.append(empty);
-  }
-  requestAnimationFrame(updateGroupSplit);
-}
-function updateAvailableSearch(){
-  const rows=$('groupOtherRows'),search=availableSearchText();
-  let visible=0;
-  for(const row of rows.querySelectorAll('.group-row')){
-    row.hidden=!row.dataset.search.includes(search);
-    highlightGroupSearch(row,search);
-    if(!row.hidden)visible++;
-  }
-  rows.querySelector('.group-filter-empty')?.remove();
-  if(!visible){
-    const empty=document.createElement('p');empty.className='group-filter-empty';
-    empty.textContent=tx(search?'dictUI.searchEmpty':'dictUI.filterEmpty');rows.append(empty);
-  }
-  $('groupAddAll').disabled=groupSaving||groupAvailableFilter==='all'||!visible;
-  requestAnimationFrame(updateGroupSplit);
-}
-$('groupAvailableSearch').addEventListener('input',updateAvailableSearch);
-$('groupMembersSearch').addEventListener('input',updateMemberSearch);
-for(const [searchId,clearId] of [['groupAvailableSearch','groupAvailableSearchClear'],['groupMembersSearch','groupMembersSearchClear']]){
-  const search=$(searchId),clear=$(clearId);
-  search.addEventListener('input',()=>{clear.hidden=!search.value});
-  clear.addEventListener('pointerdown',event=>event.preventDefault());
-  clear.addEventListener('click',()=>{
-    if(!search.value)return;
-    search.value='';search.dispatchEvent(new Event('input',{bubbles:true}));search.focus();
-  });
-}
-for(const id of ['groupAvailableSearch','groupMembersSearch'])$(id).addEventListener('keydown',event=>{
-  if(event.key==='Enter'){event.preventDefault();event.currentTarget.blur()}
 });
-function groupSearchKeyboardOpen(){
-  const height=window.visualViewport?.height||window.innerHeight;
-  return ['groupAvailableSearch','groupMembersSearch'].some(id=>document.activeElement===$(id))&&height<groupEditorFullViewportHeight-100;
-}
-function updateGroupKeyboardToggle(){
-  for(const [buttonId,searchId] of [['groupSearchDone','groupAvailableSearch'],['groupMembersKeyboard','groupMembersSearch']]){
-    const button=$(buttonId),open=groupSearchKeyboardOpen()&&document.activeElement===$(searchId);
-    button.dataset.keyboard=open?'hide':'show';
-    button.setAttribute('aria-label',tx(open?'dictUI.hideKeyboard':'dictUI.showKeyboard'));
-    button.title=button.getAttribute('aria-label');
+const groupAvailableListSearch=window.wudictListSearch.create({
+  root:$('groupOtherRows'),itemSelector:'.group-row',dock:$('groupAvailableSearchDock'),
+  scrollContainer:$('groupOtherRows'),inputId:'groupAvailableSearch',
+  highlightSelector:'.group-dictionary-name',initiallyFiltering:true,labels:groupSearchLabels,
+  onUpdate:({query,filtering,visible})=>{
+    const rows=$('groupOtherRows');rows.querySelector('.group-filter-empty')?.remove();
+    if(!visible){
+      const empty=document.createElement('p');empty.className='group-filter-empty';
+      empty.textContent=tx(filtering&&query?'dictUI.searchEmpty':'dictUI.filterEmpty');rows.append(empty);
+    }
+    $('groupAddAll').disabled=groupSaving||groupAvailableFilter==='all'||!visible;
+    requestAnimationFrame(updateGroupSplit);
   }
-}
-for(const [buttonId,searchId] of [['groupSearchDone','groupAvailableSearch'],['groupMembersKeyboard','groupMembersSearch']]){
-  let wasOpen=null;
-  $(buttonId).addEventListener('pointerdown',()=>{wasOpen=groupSearchKeyboardOpen()&&document.activeElement===$(searchId)});
-  $(buttonId).onclick=()=>{
-    const search=$(searchId),open=wasOpen??(groupSearchKeyboardOpen()&&document.activeElement===search);
-    wasOpen=null;
-    if(open)search.blur();
-    else{search.blur();search.focus()}
-    requestAnimationFrame(updateGroupKeyboardToggle);
-  };
-}
+});
 function activateGroupPanel(panel){
   if(groupEditorMode&&panel!=='controls')return;
   groupActivePanel=panel;
@@ -279,17 +231,12 @@ function renderGroupLink(group){
   $("groupLinkFilter").textContent=selected?filterChoiceLabel(JSON.stringify([selected.facet,selected.value])):tx('dictUI.chooseFilter');
   $('groupLinkFilterHost').classList.toggle('can-link',!linked&&!selected&&!groupSaving&&groupEditorMode!=='rename');
 }
-let groupEditorFullViewportHeight=0;
 function updateGroupSplit(){
   const editor=$('groupEditor'),lists=$('groupLists');
   editor.classList.remove('compact-controls');lists.classList.remove('hide-members','members-sized');
   const members=$('groupMembers'),available=$('groupAvailable');
   members.classList.remove('search-collapsed');available.classList.remove('search-collapsed');
   if(!editor.open)return;
-  const viewportHeight=window.visualViewport?.height||window.innerHeight;
-  if(!['groupAvailableSearch','groupMembersSearch'].some(id=>document.activeElement===$(id)))groupEditorFullViewportHeight=viewportHeight;
-  else groupEditorFullViewportHeight=Math.max(groupEditorFullViewportHeight,viewportHeight);
-  updateGroupKeyboardToggle();
   if(!lists.classList.contains('editing')){
     if(groupActivePanel!=='members'&&$('groupRows').clientHeight<4*groupRowHeight('groupRows'))members.classList.add('search-collapsed');
     return;
@@ -327,7 +274,7 @@ function groupPanelChromeHeight(panel,rows,withoutSearch=false){
   const style=getComputedStyle(panel);
   let height=['borderTopWidth','borderBottomWidth','paddingTop','paddingBottom'].reduce((sum,key)=>sum+(parseFloat(style[key])||0),0);
   for(const child of panel.children){
-    if(child===rows||child.hidden||(withoutSearch&&child.classList.contains('group-search-bar')))continue;
+    if(child===rows||child.hidden||(withoutSearch&&child.classList.contains('list-search-dock')))continue;
     const childStyle=getComputedStyle(child);
     if(childStyle.display==='none')continue;
     height+=child.getBoundingClientRect().height+(parseFloat(childStyle.marginTop)||0)+(parseFloat(childStyle.marginBottom)||0);
@@ -641,7 +588,6 @@ $("editGroups").addEventListener("click",async()=>{
   cancelGroupOrderLongPress();groupOrderSelection=null;groupOrderSuppressClick=false;
   groupAvailableFilter="all";
   groupActivePanel=null;$('groupControls').classList.remove('active');$('groupMembers').classList.remove('active');$('groupAvailable').classList.remove('active');
-  groupEditorFullViewportHeight=0;
   const button=$("editGroups");button.disabled=true;
   $("groupError").textContent="";$("groupHint").hidden=false;$("groupHint").textContent=tx("panel.loading");$("groupRows").replaceChildren();
   $("groupSelect").disabled=true;$("groupEditor").showModal();
@@ -723,8 +669,7 @@ $('deleteGroupGo').onclick=async()=>{
 $('groupAddAll').onclick=async()=>{
   const group=userGroups.find(g=>g.id===selectedGroup);
   if(!group||group.readonly||group.filter||groupSaving||groupAvailableFilter==='all')return;
-  const members=groupMemberDraft?.groupId===group.id?groupMemberDraft.members:new Set(group.members);
-  const ids=orderedDicts().filter(d=>!members.has(d.id)&&availableMatchesFilter(d)&&availableMatchesSearch(d)).map(d=>d.id);
+  const ids=groupAvailableListSearch.visibleItems().map(row=>row.dataset.dict);
   if(!ids.length)return;
   if(groupMemberDraft?.groupId===group.id){for(const id of ids){groupMemberDraft.members.add(id);groupMemberDraft.order.push(id)}renderGroupRows();return}
   groupSaving=true;$('groupError').textContent='';
@@ -813,7 +758,7 @@ function beginGroupNameEdit(mode){
     groupDraftFilter=group.filter||group.selectedFilter||null;groupDraftLinked=!!group.filter;
     $('groupNameInline').value=group.name;
   }
-  for(const id of ['groupMembersSearch','groupAvailableSearch']){$(id).value='';$(id).dispatchEvent(new Event('input',{bubbles:true}))}
+  groupMemberListSearch.clear();groupAvailableListSearch.clear();
   groupActivePanel='controls';$('groupControls').classList.add('active');$('groupMembers').classList.remove('active');$('groupAvailable').classList.remove('active');
   $('groupError').textContent='';renderGroupRows();$('groupNameInline').focus();requestAnimationFrame(updateGroupSplit);
 }
@@ -860,7 +805,7 @@ function groupSelectChanged(){
   justCreatedGroup=null;
   groupShowAllPreferred=false;groupActivePanel=null;
   $('groupControls').classList.remove('active');$('groupMembers').classList.remove('active');$('groupAvailable').classList.remove('active');
-  $('groupAvailableSearch').value='';$('groupMembersSearch').value='';$('groupError').textContent='';renderGroupRows();
+  groupAvailableListSearch.clear();groupMemberListSearch.clear();$('groupError').textContent='';renderGroupRows();
 }// Promise.all resolves to an array: passing it to loadDicts would enable
 // rescan and wait for index maintenance instead of listing dictionaries.
 Promise.all([loadPrefs(),loadConfig(),loadUserCSS(),loadPickerGroups()])

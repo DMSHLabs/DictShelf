@@ -9,9 +9,74 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/wuweidict/wudict/internal/dict"
 )
+
+type browseFindResp struct {
+	Words []string `json:"words"`
+	Total int      `json:"total"`
+	Page  int      `json:"page"`
+	Pages int      `json:"pages"`
+	Size  int      `json:"size"`
+}
+
+// handleBrowseFind searches the complete headword index, then pages the
+// matches; the browser never has to load or scan the entire dictionary.
+func (s *Server) handleBrowseFind(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	query := strings.TrimSpace(q.Get("q"))
+	if len(query) > 256 {
+		httpErr(w, 400, "search text is too long")
+		return
+	}
+	e, err := s.reg.get(q.Get("dict"))
+	if err != nil {
+		httpErr(w, 404, "%v", err)
+		return
+	}
+	if _, ok := validPrepared(e.Path); !ok {
+		browseUnprepared(w, e)
+		return
+	}
+	d, err := e.open()
+	if err != nil {
+		httpErr(w, 500, "%v", err)
+		return
+	}
+	finder, ok := d.(dict.BrowseFinder)
+	if !ok {
+		browseUnprepared(w, e)
+		return
+	}
+	page, _ := strconv.Atoi(q.Get("p"))
+	if page < 1 {
+		page = 1
+	}
+	// A stale or malformed bookmark cannot drive unbounded OFFSET work.
+	if page > 10000000 {
+		page = 10000000
+	}
+	words, total, err := finder.FindHeadwords(r.Context(), query, (page-1)*browsePageSize, browsePageSize)
+	if err != nil {
+		if r.Context().Err() != nil {
+			return
+		}
+		httpErr(w, 500, "searching %s: %v", e.ID, err)
+		return
+	}
+	pages := (total + browsePageSize - 1) / browsePageSize
+	if pages > 0 && page > pages {
+		page = pages
+		words, _, err = finder.FindHeadwords(r.Context(), query, (page-1)*browsePageSize, browsePageSize)
+		if err != nil {
+			httpErr(w, 500, "searching %s: %v", e.ID, err)
+			return
+		}
+	}
+	writeJSON(w, browseFindResp{Words: words, Total: total, Page: page, Pages: pages, Size: browsePageSize})
+}
 
 // browsePageSize is how many headwords one browse page holds, and it is a
 // constant rather than a parameter on purpose: the page number is the whole
@@ -167,12 +232,12 @@ func browseUnprepared(w http.ResponseWriter, e *entry) {
 // bytes serve every dictionary and the browser caches nothing that can go
 // stale against the library.
 //
-// The one substitution is {{PRESETS}} - the app halves of the presets that
-// asked to be on the standalone pages too (presets.go's pagePresetLinks). This
-// page has a palette of its own and no layer machinery, so that link is how a
-// "Quiet labels" choice reaches it.
+// Preset links carry the standalone-page palette, and the list search script
+// uses its content hash so a cached chooser cannot keep stale search behavior.
 func (s *Server) handleBrowsePage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache")
-	_, _ = w.Write([]byte(renderUI(string(bytes.ReplaceAll(browseHTML, []byte("{{PRESETS}}"), []byte(s.pagePresetLinks()))), s.reg.prefs.Language())))
+	page := bytes.ReplaceAll(browseHTML, []byte("{{PRESETS}}"), []byte(s.pagePresetLinks()))
+	page = bytes.ReplaceAll(page, []byte("{{LISTSEARCHJS}}"), []byte(assetTag(listSearchJS)))
+	_, _ = w.Write([]byte(renderUI(string(page), s.reg.prefs.Language())))
 }

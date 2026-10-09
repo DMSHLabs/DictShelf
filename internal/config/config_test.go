@@ -98,6 +98,20 @@ func TestExpandHome(t *testing.T) {
 	if got := ExpandHome("/abs"); got != "/abs" {
 		t.Errorf("abs untouched: %q", got)
 	}
+	if got := ExpandHome("~"); got != home {
+		t.Errorf("bare ~: %q", got)
+	}
+	if got := ExpandHome("~user/x"); got != "~user/x" {
+		t.Errorf("~user untouched: %q", got)
+	}
+	// "~\x" is a home-relative path only where the backslash separates
+	want := `~\x`
+	if filepath.Separator == '\\' {
+		want = filepath.Join(home, "x")
+	}
+	if got := ExpandHome(`~\x`); got != want {
+		t.Errorf("ExpandHome(~\\x) = %q, want %q", got, want)
+	}
 }
 
 // DICT_DIR accepts one folder or several, in every layer's own spelling.

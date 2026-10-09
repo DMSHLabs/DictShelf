@@ -644,6 +644,11 @@ func TestStaleFoldIsReportedAndRebuildable(t *testing.T) {
 		t.Fatal(err)
 	}
 	db.Close()
+	// An outside edit is seen through the row cache's stat keys, which on a
+	// filesystem with coarse mtime ticks (1-2 s) can miss a same-size
+	// in-place write; a rescan is the documented recovery and empties the
+	// cache (dictrows.go).
+	s.dictRows.flush()
 
 	row = getDicts(t, s, "/api/dicts")[0]
 	if !row.ContainsStale {

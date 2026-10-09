@@ -5,6 +5,114 @@ Notable changes in **wuDict2**, the Android fork of
 version it was forked from. Fork release tags are prefixed `wudict2-`; one
 tagged line per release, newest first.
 
+## wudict2-v0.11.1 — 2026-10-08
+
+From `dev`. The word lists can be searched, the interface got a pass of tuning,
+and Exit stops coming back.
+
+### The A–Z page can find headwords
+
+- **A word list is searchable now**: type in *Find headwords…* and the list shows
+  the entries that match, with previous and next to step through them, **Show all
+  headwords** to go back to the full list, and *No matching headwords* when
+  there are none. A dictionary whose headwords cannot be read says so instead of
+  looking empty.
+- **Long lists page and scroll**: *‹ Previous page* / *Next page ›*, and the
+  letter chips at the side scroll with arrows of their own rather than being cut
+  off.
+- **Its dictionary chooser uses the same search as everywhere else** (*Find
+  dictionaries…*, *Filter dictionaries…*), and an article opened from a word
+  list now offers **← Words** to get back to the list it came from.
+- The page's title gained a ✕ to close it.
+
+### Fonts
+
+- **Two more values**: *Control font size* and *Hint control height*, beside the
+  ones already there — and a line saying what the numbers are: all of them are
+  unitless multipliers, with font sizes taken against `rem` and heights and
+  spacing in `em` or `rem` where they apply.
+
+### Exit
+
+- **Exit now stays exited.** Android's launcher can send a fresh MAIN intent in a
+  *new task* while the old window is still closing; that request used to revoke
+  the shutdown and bring the app back. It is now recognised as part of the exit
+  and refused — the System Log records *exit suppressed launcher during
+  teardown* — so the shutdown finishes. An external lookup still revives the app,
+  which is the one case where something genuinely wants it.
+- The exit coordinator is **covered by a test that needs no emulator**: the real
+  `AppExit` is compiled against a small Android lifecycle double and driven
+  through the first-request, window-order, fresh-lookup and busy-cancel cases
+  (`tools/test-app-exit.ps1`).
+
+### Tidying
+
+- The About block's *Website* and *Source* pair and the *fork of wuDict* line are
+  one link to this repository now, and the setup page dropped its duplicate
+  tagline.
+- Wording: *Existing indexes* and *Create contain indexes* in the index dialogs;
+  a pass over the group editor, setup, lemma and browse pages' styling.
+
+## wudict2-v0.11.0 — 2026-10-08
+
+From `dev`. The dictionary lists can be searched, the settings window got a pass
+of tuning, and upstream's change to how a search opens dictionaries came in as
+behaviour.
+
+### Search inside the lists
+
+- **The dictionary picker has a search box**, docked at the bottom of the
+  dialog: type to narrow the list, step through the matches with previous and
+  next, keep only the matches with the filter, and read "{current} of {total}
+  matching dictionaries". It is at the bottom of the list you are already
+  looking at, so there is nothing to open first.
+- **Dictionary settings and the group editor use the same search**, from one
+  shared component: the settings list, and both the member and the available
+  lists in the group editor. A list search therefore behaves and looks the same
+  wherever it appears.
+- **Settings → Fonts grew two values for it**: *List search control height* and
+  *List search font size*, stepped by 0.05 like the rest.
+
+### Dictionary settings, tidied
+
+- The bulk index rows are label-and-dropdown rows now instead of a table, and
+  the window's spacing, the group editor's lists and the row layout were evened
+  out over several rounds of tuning.
+
+### How many dictionaries a search opens
+
+- **It is a value now: the first N dictionaries in your own order that have a
+  result, or all of them** (upstream's "Open" choice). Reaching the count ends
+  the wait for the rest, and the full-text mark walk and the jump to the first
+  match belong to the first dictionary opened alone — repeated for a second one
+  they would pull you away from what you are reading.
+- **This build has no control for it yet**: the value lives in `state.json` as
+  `ui.openN` and `ui.openAll` and is set by hand. Absent means one, which is
+  Lingvo's own default, and a count you set is not written away by the app's own
+  saves.
+- The ⊞ button now says what it does and shows its state: *Expand all results*,
+  then *Collapse all results* with ⊟.
+
+### Android
+
+- **The app no longer crashes while a window is closing**: the WebView is
+  null-guarded through the activity's teardown, and a window releases only the
+  server it actually held, so an adopted server is not stopped by a window that
+  never started it.
+- **The System Log records WebView breadcrumbs** — a bounded, value-free note of
+  what was tapped and navigated — so a WebView process crash still leaves
+  something to read afterwards.
+
+### Also in this build: merged from upstream
+
+- **The dictionary list is cached**: the page keeps the rows and the `etag` it
+  was given, and an unchanged list answers 304 before the server derives a single
+  row.
+- Windows: the desktop tray's paths and folder handling were corrected.
+- `wudict dump` reports entries without a headword in `csv` as it already did in
+  `md`, and the dump and ingest paths were de-duplicated — CLI, not the app.
+- The share page and the F-Droid listing metadata were updated.
+
 ## wudict2-v0.10.0 — 2026-10-07
 
 From `dev`. The dictionary list gained groups you curate yourself, Settings

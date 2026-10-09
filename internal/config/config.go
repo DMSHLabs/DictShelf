@@ -967,12 +967,16 @@ func FormatList(dirs []string) string {
 	return "[" + strings.Join(quoted, ", ") + "]"
 }
 
-// ExpandHome expands a leading ~ to the user home directory.
+// ExpandHome expands a leading ~ to the user home directory. "~\" counts too
+// on Windows, where it is how a path is written - and how the panel itself
+// shows one (pathAliases); elsewhere a backslash is part of a file name.
 func ExpandHome(p string) string {
-	if p == "~" || strings.HasPrefix(p, "~/") {
-		if home, err := os.UserHomeDir(); err == nil {
-			return filepath.Join(home, strings.TrimPrefix(strings.TrimPrefix(p, "~"), "/"))
-		}
+	rest, ok := strings.CutPrefix(p, "~")
+	if !ok || (rest != "" && rest[0] != '/' && rest[0] != filepath.Separator) {
+		return p
+	}
+	if home, err := os.UserHomeDir(); err == nil {
+		return filepath.Join(home, rest[min(len(rest), 1):])
 	}
 	return p
 }

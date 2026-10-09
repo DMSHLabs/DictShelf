@@ -96,10 +96,11 @@ func (e *entry) readStyles(body string) htmlref.Styles {
 	return stylesFrom(d, names)
 }
 
-// stylesFrom reads the named stylesheets out of an already-open backend. Split
-// from the entry method so a caller with no registry - the CLI, which opens one
-// dictionary by path - derives the same table from the same code.
-func stylesFrom(d dict.Dictionary, names []string) htmlref.Styles {
+// stylesFrom reads the named stylesheets out of an already-open backend, or
+// out of a dictionary's resource containers alone. Split from the entry method
+// so a caller with no registry - the CLI, which opens one dictionary by path -
+// derives the same table from the same code.
+func stylesFrom(d dict.ResourceOpener, names []string) htmlref.Styles {
 	budget := maxStyleBytes
 	var st htmlref.Styles
 	for _, n := range names {

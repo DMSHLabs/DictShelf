@@ -39,7 +39,7 @@ func TestBuiltinGuide(t *testing.T) {
 	}
 	s := New(reg)
 	s.User = UserDir(user)
-	if info := s.dictInfoFor(e); !info.Builtin || info.Name != "wudict howto" {
+	if info, _ := s.dictInfoFor(e, "", ""); !info.Builtin || info.Name != "wudict howto" {
 		t.Errorf("row = builtin %v, name %q", info.Builtin, info.Name)
 	}
 	if reg.UserCount() != 0 {

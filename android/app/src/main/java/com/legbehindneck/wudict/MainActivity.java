@@ -20,6 +20,7 @@ import android.view.View;
 import android.view.WindowInsets;
 import android.view.WindowInsetsController;
 import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceError;
 import android.webkit.WebResourceResponse;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -51,6 +52,7 @@ public class MainActivity extends Activity {
     private Speech speech;           // read-aloud (D148); binds no engine until asked
 
     private volatile boolean gone;   // onDestroy ran: late server callbacks must not touch the views
+    private boolean serverRetained;
     private Object backCallback;     // OnBackInvokedCallback (API 33+), registered only while canGoBack()
     private boolean wantAutoFocus;   // this load is a cold start onto an empty screen
     private String pendingQuery;     // arrived from LookupActivity (D67, D100)
@@ -67,8 +69,9 @@ public class MainActivity extends Activity {
         // Exit may finish the launcher while a floating Settings window is
         // still being removed from the same task. Android can then recreate
         // the launcher from that task's base intent; do not start the server
-        // again for that restoration.
-        if (AppExit.isExiting(this)) {
+        // again for that restoration or an overlapping launcher request.
+        // A new launcher task is allowed once teardown completes.
+        if (AppExit.shouldSuppressRestart(this)) {
             finishAndRemoveTask();
             return;
         }
@@ -139,6 +142,7 @@ public class MainActivity extends Activity {
         takeQuery(launch);
 
         ServerProcess.retain();
+        serverRetained = true;
         ServerProcess.ensure(this, new ServerProcess.Listener() {
             @Override public void onReady() { showPage(); }
             @Override public void onFailed(String message) { showFailure(message); }
@@ -459,9 +463,11 @@ public class MainActivity extends Activity {
     @Override
     public void onWindowFocusChanged(boolean hasFocus) {
         super.onWindowFocusChanged(hasFocus);
+        SystemLog.record("main focus=" + hasFocus);
         // Only on gain: asking while the window is losing focus is asking on
         // behalf of whatever is taking it.
-        if (hasFocus) {
+        if (hasFocus && web != null) {
+            WebViewDiagnostics.install(web);
             applyBars();
             // The settings window is another activity, so a changed edge mode
             // arrives as a focus gain and nothing else. Re-asking for the
@@ -521,6 +527,7 @@ public class MainActivity extends Activity {
         @Override
         public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
             pageLoading = true;
+            WebViewDiagnostics.page("main", "started", url);
             // Where the bridge's prompts will come from: the address a stored
             // port change can move out from under them (Shell.pageOrigin).
             Shell.notePageUrl(url);
@@ -529,6 +536,8 @@ public class MainActivity extends Activity {
         @Override
         public void onPageFinished(WebView view, String url) {
             pageLoading = false;
+            WebViewDiagnostics.page("main", "finished", url);
+            WebViewDiagnostics.install(view);
             // The navigation that arrived while this one was in flight, now
             // that nothing is being cut off.
             if (pageLoadQueued != null) {
@@ -563,6 +572,16 @@ public class MainActivity extends Activity {
                 wantAutoFocus = false;
                 Ime.showWhenPageFocuses(view);
             }
+        }
+
+        @Override
+        public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
+            WebViewDiagnostics.error("main", request, error);
+        }
+
+        @Override
+        public void onReceivedHttpError(WebView view, WebResourceRequest request, WebResourceResponse response) {
+            WebViewDiagnostics.httpError("main", request, response.getStatusCode());
         }
     }
 
@@ -767,7 +786,7 @@ public class MainActivity extends Activity {
 
     /** url null = reload in place. Queued when a load is already in flight. */
     private void navigate(String url) {
-        if (gone || web.getParent() == null) return;
+        if (gone || web == null || web.getParent() == null) return;
         if (pageLoading) {
             if (url == null) pageReloadQueued = true;
             else pageLoadQueued = url;
@@ -814,6 +833,8 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        SystemLog.record("main destroy finishing=" + isFinishing() + " web=" + (web != null)
+                + " serverRetained=" + serverRetained);
         gone = true;
         unwatchThermal();
         // The server is bound to the app's windows (D52): finishing the last
@@ -821,12 +842,14 @@ public class MainActivity extends Activity {
         // ServerProcess stops it after the foreground work hold ends.
         // Recreation keeps it - and so does a lookup popup that is still up,
         // which is why the decision is ServerProcess's (D67).
-        ServerProcess.release(isFinishing());
-        if (web.getParent() != null) {
-            ((FrameLayout) web.getParent()).removeView(web);
+        if (serverRetained) ServerProcess.release(isFinishing());
+        if (web != null) {
+            if (web.getParent() != null) {
+                ((FrameLayout) web.getParent()).removeView(web);
+            }
+            if (speech != null) speech.shutdown(); // before the WebView goes: its callbacks post into it
+            web.destroy();
         }
-        speech.shutdown(); // before the WebView goes: its callbacks post into it
-        web.destroy();
         super.onDestroy();
     }
 }

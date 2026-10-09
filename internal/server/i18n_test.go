@@ -46,7 +46,12 @@ func TestI18nPersistenceAndIsolation(t *testing.T) {
 	}
 	after := serve(s, newRequest("GET", "/api/dicts", nil)).Body.String()
 	// NDJSON dictionaries are streamed concurrently; compare records, not order.
+	// `end` now carries the answer's etag (dictrows.go): the first list of a
+	// self-preparing DSL is not keepable and carries none, a later one does -
+	// the rows are what must not move with the interface language.
 	a, b := strings.Split(strings.TrimSpace(before), "\n"), strings.Split(strings.TrimSpace(after), "\n")
+	a = slices.DeleteFunc(a, func(l string) bool { return strings.HasPrefix(l, `{"t":"end"`) })
+	b = slices.DeleteFunc(b, func(l string) bool { return strings.HasPrefix(l, `{"t":"end"`) })
 	slices.Sort(a)
 	slices.Sort(b)
 	if !reflect.DeepEqual(a, b) {
@@ -221,7 +226,7 @@ func TestI18nCatalogs(t *testing.T) {
 	// This checks explicit translation references, not arbitrary new English
 	// upstream literals. Those still need review when merging upstream changes.
 	refs := regexp.MustCompile(`\b(?:t|tx)\("([a-zA-Z0-9_.]+)"`)
-	for _, file := range []string{"web/index.html", "web/setup.html", "web/lemmas.html", "web/browse.html", "web/i18n.js", "web/looks.js", "web/group-editor.js", "web/speak.js"} {
+	for _, file := range []string{"web/index.html", "web/setup.html", "web/lemmas.html", "web/browse.html", "web/i18n.js", "web/looks.js", "web/group-editor.js", "web/speak.js", "web/list-search.js"} {
 		data, err := os.ReadFile(file)
 		if err != nil {
 			t.Fatal(err)

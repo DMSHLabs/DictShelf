@@ -36,10 +36,10 @@ func cacheClause() string {
 
 // dsnRO is a read-only, query-only connection string (modernc pragma syntax).
 func dsnRO(path string) string {
-	return "file:" + path + "?mode=ro&_pragma=query_only(1)&_pragma=busy_timeout(5000)" + cacheClause()
+	return "file:" + uriPath(path) + "?mode=ro&_pragma=query_only(1)&_pragma=busy_timeout(5000)" + cacheClause()
 }
 
 // dsnIngest is a throwaway-safe bulk-write connection string.
 func dsnIngest(path string) string {
-	return "file:" + path + "?_pragma=journal_mode(OFF)&_pragma=synchronous(OFF)"
+	return "file:" + uriPath(path) + "?_pragma=journal_mode(OFF)&_pragma=synchronous(OFF)"
 }

@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -244,6 +245,109 @@ func TestRemoveTakesTheEmptiedFolderWithIt(t *testing.T) {
 	// even when the removal empties it.
 	if _, err := os.Stat(root); err != nil {
 		t.Fatalf("the scanned folder went with it: %v", err)
+	}
+}
+
+// The scanned folder is recognised however it was spelled. Discovery walks the
+// canonical root, so a root configured through a symlink - or, on Windows, as
+// "c:\dicts" for C:\Dicts - must still be the root when its last dictionary is
+// removed, or emptying it deletes it.
+func TestRemoveKeepsARootSpelledAnotherWay(t *testing.T) {
+	spellings := []struct {
+		name  string
+		spell func(t *testing.T, real string) string
+	}{
+		{"symlink", func(t *testing.T, real string) string {
+			link := filepath.Join(filepath.Dir(real), "link")
+			if err := os.Symlink(real, link); err != nil {
+				t.Skipf("symlinks unavailable: %v", err)
+			}
+			return link
+		}},
+		{"case", func(t *testing.T, real string) string {
+			if runtime.GOOS != "windows" {
+				t.Skip("a path's case is significant, or kept by canonicalisation, here")
+			}
+			return strings.ToUpper(real)
+		}},
+	}
+	for _, sp := range spellings {
+		t.Run(sp.name, func(t *testing.T) {
+			real := filepath.Join(t.TempDir(), "real")
+			if err := os.Mkdir(real, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			root := sp.spell(t, real)
+			if err := os.WriteFile(filepath.Join(real, "only.dsl"), []byte(sampleDSL), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			isolatedDBDir(t)
+			reg, err := NewRegistry([]string{root}, false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			closeBackends(t, reg)
+			s := New(reg)
+			id := idOf(t, s, "only.dsl")
+
+			if rec := deleteReq(t, s, "/api/library?dict="+id); rec.Code != 200 {
+				t.Fatalf("DELETE = %d: %s", rec.Code, rec.Body.String())
+			}
+			if _, err := os.Stat(filepath.Join(real, "only.dsl")); !os.IsNotExist(err) {
+				t.Fatalf("the dictionary was not removed: %v", err)
+			}
+			if _, err := os.Stat(real); err != nil {
+				t.Fatalf("the scanned folder went with its last dictionary: %v", err)
+			}
+		})
+	}
+}
+
+// An import about to swap a folder aside closes the dictionaries open in it
+// (Windows refuses to rename an open file) and nothing outside it.
+func TestCloseUnderClosesOnlyThatFolder(t *testing.T) {
+	s := newTestServer(t)
+	root := s.reg.Dirs()[0]
+	own := filepath.Join(root, "Imported")
+	if err := os.MkdirAll(own, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(own, "imported.dsl"), []byte(sampleDSL), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.reg.Rescan(); err != nil {
+		t.Fatal(err)
+	}
+	inside, err := s.reg.get(idOf(t, s, "imported.dsl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	outside, err := s.reg.get(idOf(t, s, "test.dsl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range []*entry{inside, outside} {
+		if _, err := e.open(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// spelled through a link where one can be made: the import names the
+	// folder from the configured root, discovery from the canonical one
+	spelled := filepath.Join(t.TempDir(), "link")
+	if err := os.Symlink(own, spelled); err != nil {
+		spelled = own
+	}
+	s.reg.closeUnder(spelled)
+	isOpen := func(e *entry) bool {
+		e.dMu.RLock()
+		defer e.dMu.RUnlock()
+		return e.d != nil
+	}
+	if isOpen(inside) {
+		t.Error("the dictionary in the folder is still open")
+	}
+	if !isOpen(outside) {
+		t.Error("a dictionary outside the folder was closed")
 	}
 }
 

@@ -1,0 +1,11 @@
+• Edit dictionary groups
+• Expand collapsed DSL sections when needed
+• See export progress during dictionary export
+• Limit the number of open dictionaries
+• Search dictionaries by title or group
+• Remember your last search type
+• Improved support for incorrect DSL markup
+• Fixed dictionary sharing and Wudict links
+• Fixed reindexing for DSL dictionaries
+• Improved caching for unchanged data
+• Updated pages, labels, and documentation 

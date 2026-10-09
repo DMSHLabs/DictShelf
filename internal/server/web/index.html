@@ -115,22 +115,26 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
 window.wudictFontScale=(function(){
   const key="wudict_settings_fonts",clamp=(v,lo,hi)=>Math.min(hi,Math.max(lo,v));
   const spacing=new Set(["sectionBefore","sectionAfter","rowGap","additionGap","controlGap"]);
-  const clean=(v,fallback,name)=>{v=Number(v);return Number.isFinite(v)?clamp(v,spacing.has(name)?0:.5,2):fallback};
-  const values={base:1,section:1,title:1.15,addition:.9,hint:.8,controlHeight:1.6,mainControlHeight:1.6,mainControlFont:1.05,
+  const clean=(v,fallback,name)=>{v=Number(v);return Number.isFinite(v)?clamp(v,spacing.has(name)?0:.5,name==="editControlHeight"?4:2):fallback};
+  const values={base:1,section:1,title:1.15,addition:.9,hint:.8,controlHeight:1.6,controlFont:.9,hintControlHeight:1,mainControlHeight:1.05,mainControlFont:1.05,editControlHeight:1.8,editControlFont:1,
     sectionBefore:0,sectionAfter:.45,rowGap:.6,additionGap:.5,controlGap:.25};
   try{const saved=JSON.parse(localStorage.getItem(key)||"null");
     if(saved){for(const name of Object.keys(values))values[name]=clean(saved[name],values[name],name)}}catch(_){}
   function apply(next){
     for(const name of Object.keys(values))values[name]=clean(next[name],values[name],name);
     const root=document.documentElement.style;
-    root.setProperty("--ui-font-base",values.base+"rem");
-    root.setProperty("--ui-font-section",values.section+"rem");
-    root.setProperty("--ui-font-title",values.title+"rem");
-    root.setProperty("--ui-font-addition",values.addition+"rem");
-    root.setProperty("--ui-hint-font-size",values.hint+"rem");
+    root.setProperty("--ui-font-base",String(values.base));
+    root.setProperty("--ui-font-section",String(values.section));
+    root.setProperty("--ui-font-title",String(values.title));
+    root.setProperty("--ui-font-addition",String(values.addition));
+    root.setProperty("--ui-hint-font-size",String(values.hint));
     root.setProperty("--ui-control-height",String(values.controlHeight));
+    root.setProperty("--ui-control-font",String(values.controlFont));
+    root.setProperty("--ui-hint-control-height",String(values.hintControlHeight));
     root.setProperty("--ui-main-control-height",String(values.mainControlHeight));
     root.setProperty("--ui-main-control-font",String(values.mainControlFont));
+    root.setProperty("--ui-edit_control-height",String(values.editControlHeight));
+    root.setProperty("--ui-edit_control-font",String(values.editControlFont));
     root.setProperty("--ui-section-space-before",String(values.sectionBefore));
     root.setProperty("--ui-section-space-after",String(values.sectionAfter));
     root.setProperty("--ui-row-gap",String(values.rowGap));
@@ -291,6 +295,7 @@ window.wudictFontScale=(function(){
   <button type="button" class="btn" id="sbarPrev" aria-label="{{T:search.previousDict}}" title="{{T:search.jumpAbove}}">▲</button>
   <span class="rpad arrow-gap" aria-hidden="true"></span>
   <button type="button" class="btn" id="sbarNext" aria-label="{{T:search.nextDict}}" title="{{T:search.jumpBelow}}">▼</button>
+  <a class="btn" id="sbarBackWords" href="/browse" aria-label="{{T:search.backToWords}}" title="{{T:search.backToWords}}" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M19 12H5m6-6-6 6 6 6"/></svg><span>{{T:search.words}}</span></a>
   <span class="rpad floor find-gap" aria-hidden="true"></span>
   <button type="button" class="btn" id="sbarFind" aria-label="{{T:articleFind.title}}" title="{{T:articleFind.title}}"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><circle cx="8" cy="8" r="5.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="m12 12 5 5" stroke="currentColor" stroke-width="1.8"/></svg></button>
   <!-- The dictionary scope, moved here from the search field (2026-09-27, the
@@ -336,7 +341,7 @@ window.wudictFontScale=(function(){
      mounts hold the same two buttons, and one pair of handlers drives them the
      way the wordmark has two mount points selected by media query. -->
 <span class="themeSwitch"><button type="button" class="btn themeAuto" aria-pressed="false" title="{{T:panel.themeAuto}}">{{T:panel.auto}}</button><button type="button" class="btn themeFlip" aria-pressed="true" title="{{T:panel.themeNight}}">☀☾</button></span>
-<button class="btn" id="closePanel" aria-label="{{T:panel.close}}">✕</button></span></h2></div>
+<button class="btn" id="closePanel" aria-label="{{T:panel.close}}"><svg class="icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></span></h2></div>
 <div class="panel-scroll">
 <!-- Five sections, one subject each, in the order a reader arrives: what the
      collection is and the doors that change it, how an answer is shown, how it
@@ -628,6 +633,7 @@ window.wudictFontScale=(function(){
 
 <details class="sect" data-panel-section="fonts" open>
   <summary class="sect-h">{{T:panel.fonts}}</summary>
+  <p class="font-scale-hint">{{T:panel.fontsUnits}}</p>
   <div class="facts font-scale-row">
     <label class="font-scale-setting"><code>--ui-font-base:</code>
       <button type="button" class="font-scale-step" data-font-scale="fontScaleBase" data-delta="-0.05" aria-label="{{T:panel.decrease}} {{T:panel.fontBase}}">−</button>
@@ -664,6 +670,20 @@ window.wudictFontScale=(function(){
     </label>
   </div>
   <div class="facts font-scale-row">
+    <label class="font-scale-setting"><code>--ui-control-font:</code>
+      <button type="button" class="font-scale-step" data-font-scale="fontScaleControlFont" data-delta="-0.05" aria-label="{{T:panel.decrease}} {{T:panel.controlFont}}">−</button>
+      <input id="fontScaleControlFont" type="number" min="0.5" max="2" step="0.01" inputmode="decimal" aria-label="{{T:panel.controlFont}}">
+      <button type="button" class="font-scale-step" data-font-scale="fontScaleControlFont" data-delta="0.05" aria-label="{{T:panel.increase}} {{T:panel.controlFont}}">+</button>
+    </label>
+  </div>
+  <div class="facts font-scale-row">
+    <label class="font-scale-setting"><code>--ui-hint-control-height:</code>
+      <button type="button" class="font-scale-step" data-font-scale="fontScaleHintControlHeight" data-delta="-0.05" aria-label="{{T:panel.decrease}} {{T:panel.hintControlHeight}}">−</button>
+      <input id="fontScaleHintControlHeight" type="number" min="0.5" max="2" step="0.01" inputmode="decimal" aria-label="{{T:panel.hintControlHeight}}">
+      <button type="button" class="font-scale-step" data-font-scale="fontScaleHintControlHeight" data-delta="0.05" aria-label="{{T:panel.increase}} {{T:panel.hintControlHeight}}">+</button>
+    </label>
+  </div>
+  <div class="facts font-scale-row">
     <label class="font-scale-setting"><code>--ui-main-control-height:</code>
       <button type="button" class="font-scale-step" data-font-scale="fontScaleMainControlHeight" data-delta="-0.05" aria-label="{{T:panel.decrease}} {{T:panel.mainControlHeight}}">−</button>
       <input id="fontScaleMainControlHeight" type="number" min="0.5" max="2" step="0.01" inputmode="decimal" aria-label="{{T:panel.mainControlHeight}}">
@@ -675,6 +695,20 @@ window.wudictFontScale=(function(){
       <button type="button" class="font-scale-step" data-font-scale="fontScaleMainControlFont" data-delta="-0.05" aria-label="{{T:panel.decrease}} {{T:panel.mainControlFont}}">−</button>
       <input id="fontScaleMainControlFont" type="number" min="0.5" max="2" step="0.01" inputmode="decimal" aria-label="{{T:panel.mainControlFont}}">
       <button type="button" class="font-scale-step" data-font-scale="fontScaleMainControlFont" data-delta="0.05" aria-label="{{T:panel.increase}} {{T:panel.mainControlFont}}">+</button>
+    </label>
+  </div>
+  <div class="facts font-scale-row">
+    <label class="font-scale-setting"><code>--ui-edit_control-height:</code>
+      <button type="button" class="font-scale-step" data-font-scale="fontScaleEditControlHeight" data-delta="-0.05" aria-label="{{T:panel.decrease}} {{T:panel.editControlHeight}}">−</button>
+      <input id="fontScaleEditControlHeight" type="number" min="0.5" max="4" step="0.01" inputmode="decimal" aria-label="{{T:panel.editControlHeight}}">
+      <button type="button" class="font-scale-step" data-font-scale="fontScaleEditControlHeight" data-delta="0.05" aria-label="{{T:panel.increase}} {{T:panel.editControlHeight}}">+</button>
+    </label>
+  </div>
+  <div class="facts font-scale-row">
+    <label class="font-scale-setting"><code>--ui-edit_control-font:</code>
+      <button type="button" class="font-scale-step" data-font-scale="fontScaleEditControlFont" data-delta="-0.05" aria-label="{{T:panel.decrease}} {{T:panel.editControlFont}}">−</button>
+      <input id="fontScaleEditControlFont" type="number" min="0.5" max="2" step="0.01" inputmode="decimal" aria-label="{{T:panel.editControlFont}}">
+      <button type="button" class="font-scale-step" data-font-scale="fontScaleEditControlFont" data-delta="0.05" aria-label="{{T:panel.increase}} {{T:panel.editControlFont}}">+</button>
     </label>
   </div>
   <div class="facts font-scale-row">
@@ -786,8 +820,7 @@ window.wudictFontScale=(function(){
   <div class="about">
     <span class="brand">wu<small>Dict2</small></span> <span class="ver">{{VERSION}}</span>
     <p>{{T:panel.about}}</p>
-    <p><a href="https://github.com/DmShAl/wudict2/" target="_blank" rel="noopener">wuDict2</a> ({{T:panel.forkNote}}: <a href="https://wuweidict.github.io/wudict" target="_blank" rel="noopener">{{T:panel.website}}</a>
-       · <a href="https://github.com/wuweidict/wudict" target="_blank" rel="noopener">{{T:panel.source}}</a>)</p>
+    <p><a href="https://github.com/DmShAl/wudict2/" target="_blank" rel="noopener">wuDict2</a></p>
   </div>
 </details>
 <div id="exitSection" class="sect" hidden><div class="facts"><button type="button" class="mrow" id="exitApp">{{T:panel.exit}}</button></div></div>
@@ -807,14 +840,14 @@ window.wudictFontScale=(function(){
      and disclosure that already worked on it works here; only the box it sits
      in changed. -->
 <div id="articleFindStrip" lang="{{T:locale}}" role="group" aria-label="{{T:articleFind.title}}" hidden>
-  <button type="button" class="btn" id="articleFindStop" aria-label="{{T:articleFind.finish}}" title="{{T:articleFind.finish}}">✕</button>
+  <button type="button" class="btn" id="articleFindStop" aria-label="{{T:articleFind.finish}}" title="{{T:articleFind.finish}}"><svg class="icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
   <button type="button" class="btn" id="articleFindLabel" aria-label="{{T:articleFind.settings}}"></button>
   <span id="articleFindCount" aria-live="polite"></span>
   <button type="button" class="btn" id="articleFindPrev" aria-label="{{T:articleFind.previous}}" title="{{T:articleFind.previous}}">↑</button>
   <button type="button" class="btn" id="articleFindNext" aria-label="{{T:articleFind.next}}" title="{{T:articleFind.next}}">↓</button>
 </div>
 <dialog id="articleFindDialog" lang="{{T:locale}}" class="group-dialog panel-card" aria-labelledby="articleFindTitle">
-  <h2 id="articleFindTitle">{{T:articleFind.title}}<button type="button" class="btn" id="articleFindClose" aria-label="{{T:panel.close}}">✕</button></h2>
+  <h2 id="articleFindTitle">{{T:articleFind.title}}<button type="button" class="btn" id="articleFindClose" aria-label="{{T:panel.close}}"><svg class="icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></h2>
   <label for="articleFindQuery">{{T:articleFind.query}}</label>
   <input type="text" id="articleFindQuery" autocomplete="off" spellcheck="false">
   <label class="article-find-mode" for="articleFindMode">{{T:articleFind.mode}}<select id="articleFindMode">
@@ -828,7 +861,7 @@ window.wudictFontScale=(function(){
   <div class="article-find-actions"><button type="button" class="btn" id="articleFindDialogPrev">{{T:articleFind.previous}}</button><button type="button" class="btn" id="articleFindDialogNext">{{T:articleFind.next}}</button></div>
 </dialog>
 <dialog id="dictSettings" lang="{{T:locale}}" class="group-dialog panel-card" aria-labelledby="dictSettingsTitle">
-  <h2 id="dictSettingsTitle">{{T:dictUI.title}} <button type="button" class="btn" id="closeDictSettings" aria-label="{{T:dictUI.close}}">✕</button></h2>
+  <h2 id="dictSettingsTitle">{{T:dictUI.title}} <button type="button" class="btn" id="closeDictSettings" aria-label="{{T:dictUI.close}}"><svg class="icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></h2>
   <!-- Outside the scroller, so the one action stays reachable however far down
        a hundred cards the reader has gone. It is the only one left here: it is
        the bulk form of the per-dictionary switches on the cards below, so it
@@ -845,11 +878,13 @@ window.wudictFontScale=(function(){
     </div>
     <div id="panelList"></div>
   </div>
+  <div id="dictSettingsSearch" class="list-search-dock" role="search" aria-label="{{T:dictUI.listSearchLabel}}"></div>
 </dialog>
 
 <dialog id="bulkIndexDialog" class="group-dialog panel-card" aria-labelledby="bulkIndexDialogTitle"></dialog>
 <dialog id="clearDatabaseDialog" lang="{{T:locale}}" class="group-dialog panel-card" aria-labelledby="clearDatabaseTitle">
-  <h2 id="clearDatabaseTitle">{{T:panel.rescan}} <button type="button" class="btn" id="clearDatabaseClose" aria-label="{{T:panel.close}}">✕</button></h2>
+  <h2 id="clearDatabaseTitle">{{T:panel.rescan}} <button type="button" class="btn" id="clearDatabaseClose" aria-label="{{T:panel.close}}"><svg class="icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></h2>
+  <div class="rescan-scroll">
   <h3>{{T:database.new}}</h3>
   <label><input type="checkbox" name="index" checked disabled> {{T:database.createBase}}</label>
   <label><input type="checkbox" name="contains"> {{T:database.createContains}}</label>
@@ -861,7 +896,8 @@ window.wudictFontScale=(function(){
   <p>{{T:database.sources}}</p>
   <p id="clearDatabaseStatus" role="status"></p>
   <progress id="clearDatabaseProgress" max="100" value="0" hidden></progress>
-  <div><button type="button" class="btn" id="clearDatabaseGo">{{T:database.clear}}</button> <button type="button" class="btn" id="clearDatabaseCancel" autofocus>{{T:panel.cancel}}</button></div>
+  <div class="rescan-footer"><button type="button" class="btn" id="clearDatabaseGo">{{T:database.clear}}</button><button type="button" class="btn" id="clearDatabaseCancel" autofocus>{{T:panel.cancel}}</button></div>
+  </div>
 </dialog>
 
 <!-- System: the shell's own settings, drawn by the page. It is the second view
@@ -887,7 +923,7 @@ window.wudictFontScale=(function(){
      A browser has no such bridge, so the door that opens this window is not
      drawn there; the window itself is only reachable through that door. -->
 <dialog id="sysSettings" lang="{{T:locale}}" class="group-dialog panel-card" aria-labelledby="sysSettingsTitle">
-  <h2 id="sysSettingsTitle">{{T:system.title}} <button type="button" class="btn" id="closeSysSettings" aria-label="{{T:system.close}}">✕</button></h2>
+  <h2 id="sysSettingsTitle">{{T:system.title}} <button type="button" class="btn" id="closeSysSettings" aria-label="{{T:system.close}}"><svg class="icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></h2>
   <div class="panel-scroll" id="sysScroll">
     <h3 class="sys-head">{{T:system.lookup}}</h3>
     <p class="sys-hint">{{T:system.lookupHint}}</p>
@@ -971,7 +1007,7 @@ window.wudictFontScale=(function(){
     <button type="button" class="choice-btn" id="stylerSubject" aria-haspopup="listbox" aria-expanded="false" aria-label="{{T:panel.subjectLabel}}"></button>
     <div class="choice-menu menu-card" id="stylerSubjectMenu" role="listbox" data-w="anchor" hidden></div>
     <span class="grow"></span>
-    <button type="button" class="btn" id="stylerClose" aria-label="{{T:panel.close}}">✕</button>
+    <button type="button" class="btn" id="stylerClose" aria-label="{{T:panel.close}}"><svg class="icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
   </div>
   <!-- The sheet's subjects, one at a time, in ONE scroller. The panel's four
        doors open a subject each and the head's menu moves between them, so
@@ -1079,7 +1115,7 @@ window.wudictFontScale=(function(){
      opened at black while its own swatch showed the colour. Same frame as the
      other windows (dialog.group-dialog.panel-card), so it wears what they wear. -->
 <dialog id="colorDialog" lang="{{T:locale}}" class="group-dialog panel-card" aria-labelledby="colorDialogTitle">
-  <h2 id="colorDialogTitle">{{T:panel.colour}} <button type="button" class="btn" id="closeColorDialog" aria-label="{{T:panel.closeColor}}">✕</button></h2>
+  <h2 id="colorDialogTitle">{{T:panel.colour}} <button type="button" class="btn" id="closeColorDialog" aria-label="{{T:panel.closeColor}}"><svg class="icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></h2>
   <div class="pick-preview"><span class="pick-swatch" id="colorPreviewSwatch" aria-hidden="true"></span><b id="colorPreviewHex"></b></div>
   <div class="pick-rows">
     <label class="pick-row"><span class="pick-key">R</span><input type="range" id="pickR" min="0" max="255" step="1"><output id="pickROut" for="pickR">0</output></label>
@@ -1179,7 +1215,7 @@ async function loadPrefs(){
        reader in a strategy with nothing on screen to explain or change it -
        the same call the removed `sortMine` got. The field is still WRITTEN
        (below, always false), because it is upstream's. */
-    if(st.ui){applyFS(st.ui.fontSize,false);applyFW(st.ui.fontWeight,false);applyHL(!st.ui.hlOff,false);applySpeak(!st.ui.speakOff,false);applyHideUnmarkedExamples(!!st.ui.hideUnmarkedExamples,false)}
+    if(st.ui){applyFS(st.ui.fontSize,false);applyFW(st.ui.fontWeight,false);applyHL(!st.ui.hlOff,false);applySpeak(!st.ui.speakOff,false);applyHideUnmarkedExamples(!!st.ui.hideUnmarkedExamples,false);openN=st.ui.openN||1;openAll=!!st.ui.openAll}
     if(!st.exists){adoptLocalPrefs();return} // first run: keep whatever we had
     prefOrder=rows.map(d=>d.id);
   }catch(e){
@@ -1320,9 +1356,9 @@ function syncAutoDark(){
   if(skinDark!==null&&skinDark!==dark)presetApplyAll();
   // The window's background is per theme too, so the sheet has to re-read: a
   // colour and a wallpaper that are not the ones on screen are worse than no
-  // window at all. Guarded like Shell.applyBackground guards it, because this
-  // also runs at boot, before the appearance layer exists.
-  if(typeof appearanceRead==="function")appearanceRead();
+  // window at all. The first call is still boot: the appearance state is
+  // declared later in this script and must not be read until a theme changes.
+  if(skinDark!==null&&typeof appearanceRead==="function")appearanceRead();
   skinDark=dark;
   document.querySelectorAll(".article").forEach(el=>{
     if(el.tagName==="IFRAME"){
@@ -1556,6 +1592,14 @@ function applyOpenOrder(on,save){
   if(save&&moved)savePrefs();
   return moved;
 }
+/* How many sections a search opens by itself: the first openN in the reader's
+   own order that have a result, or every one that has one. Upstream's "Open"
+   choice (fixes #23), taken as STATE and not as a control for now — there is
+   no menu in this fork's panel yet, so the values live in state.json
+   (`ui.openN`, `ui.openAll`) and are set by hand; savePrefs does not send
+   them, and the server patches only the keys it is sent, so a hand-set count
+   survives every save this page makes. Absent is one, Lingvo's own default. */
+let openN=1,openAll=false;
 /* There was a control here, and a stored setting behind it: how the PICKER
    lists the library — A→Z, which is what it had always done, or the reader's
    own arrangement. The choice is gone and only the arrangement is left (see
@@ -2103,9 +2147,20 @@ function livePickerPayload(kind){
   const scoped=scopedDictionary();
   const groups=userGroups.map(g=>({id:g.id,name:pickerGroupName(g.id)}));
   if(scoped)groups.splice(1,0,scoped); // under "All dictionaries": the same axis, narrower
+  const style=getComputedStyle(document.documentElement),rem=parseFloat(style.fontSize)||16;
   return {kind,groups,group:scoped?scoped.id:pickerGroup,
     found:true,rows:livePickerRows(),
-    empty:livePickerSearching?tx("search.searching"):scoped?tx("search.emptyDict"):tx("search.emptyGroup")};
+    empty:livePickerSearching?tx("search.searching"):scoped?tx("search.emptyDict"):tx("search.emptyGroup"),
+    listSearch:{
+      placeholder:tx("dictUI.listSearchPlaceholder"),
+      filterPlaceholder:tx("dictUI.listFilterPlaceholder"),search:tx("dictUI.listSearchLabel"),
+      filter:tx("dictUI.listSearchFilter"),previous:tx("dictUI.listSearchPrevious"),
+      next:tx("dictUI.listSearchNext"),
+      count:tx("dictUI.listSearchCount",{current:"{current}",total:"{total}"}),
+      height:Math.max(12,Math.min(120,(parseFloat(style.getPropertyValue("--ui-edit_control-height"))||1.8)*1.5*rem)),
+      font:Math.max(8,Math.min(64,(parseFloat(style.getPropertyValue("--ui-edit_control-font"))||1)*rem)),
+      accent:style.getPropertyValue("--accent").trim()
+    }};
 }
 function refreshLivePicker(){
   if(!livePickerOpen)return;
@@ -2163,8 +2218,21 @@ function jumpToSection(det){
   sbarAimed=det;
   det.open=true;openedIdx=-1;clearTimeout(barrier);barrier=null;
   if(markedAnswer)navAttach(det);
-  requestAnimationFrame(()=>det.scrollIntoView({block:"start",behavior:"auto"}));
+  sbarTarget?.classList.remove("sbar-target");
+  sbarTarget=det.querySelector(":scope > summary");
+  sbarTarget?.classList.add("sbar-target");
+  requestAnimationFrame(()=>scrollToSectionArticle(det));
   sbarSettleStart(det);
+}
+let sbarTarget=null;
+function scrollToSectionArticle(det){
+  const title=det.querySelector(":scope > dl > dt");
+  if(!title){det.scrollIntoView({block:"start",behavior:"instant"});return}
+  const summary=det.querySelector(":scope > summary");
+  const top=(parseFloat(getComputedStyle(summary).top)||0)+summary.getBoundingClientRect().height;
+  const wanted=scrollY+title.getBoundingClientRect().top-top;
+  const max=Math.max(0,document.documentElement.scrollHeight-innerHeight);
+  scrollTo({top:Math.max(0,Math.min(wanted,max)),behavior:"instant"});
 }
 /* The landing is re-aligned for a moment after the jump, because the page it
    lands on is still growing: the scroll is aimed at a document that does not
@@ -2183,10 +2251,15 @@ function sbarSettleStart(det){
   sbarSettle=setInterval(()=>{
     const stop=()=>{clearInterval(sbarSettle);sbarSettle=null};
     if(sbarAimed!==det||!det.isConnected||performance.now()-t0>1500)return stop();
-    const line=parseFloat(getComputedStyle(det).scrollMarginTop)||0;
-    if(Math.abs(det.getBoundingClientRect().top-line)>2){
+    const title=det.querySelector(":scope > dl > dt");
+    const summary=det.querySelector(":scope > summary");
+    const line=title?(parseFloat(getComputedStyle(summary).top)||0)+summary.getBoundingClientRect().height
+      :(parseFloat(getComputedStyle(det).scrollMarginTop)||0);
+    const actual=(title||det).getBoundingClientRect().top;
+    const atEnd=scrollY>=document.documentElement.scrollHeight-innerHeight-2;
+    if(Math.abs(actual-line)>2&&!atEnd){
       good=0;
-      det.scrollIntoView({block:"start",behavior:"auto"});
+      scrollToSectionArticle(det);
       return;
     }
     if(++good>=2)stop();
@@ -2772,6 +2845,7 @@ function renderPanel(){
     el.appendChild(div);
   }
   if(scroller)scroller.scrollTop=top;
+  window.dictSettingsListSearch?.refresh();
   renderReindex();
   // A change to a dictionary's indexes is the server's job, not this page's
   // (jobs.go): one started before a reload or by another tab is in its row,
@@ -2923,16 +2997,18 @@ function fontScaleColumns(){
 window.addEventListener("resize",()=>{if($("panel").classList.contains("show"))panelRowColumns()});
 const fontScale=window.wudictFontScale;
 [["fontScaleBase","base"],["fontScaleSection","section"],["fontScaleTitle","title"],
-  ["fontScaleAddition","addition"],["fontScaleHint","hint"],["fontScaleControlHeight","controlHeight"],
+  ["fontScaleAddition","addition"],["fontScaleHint","hint"],["fontScaleControlHeight","controlHeight"],["fontScaleControlFont","controlFont"],["fontScaleHintControlHeight","hintControlHeight"],
   ["fontScaleMainControlHeight","mainControlHeight"],["fontScaleMainControlFont","mainControlFont"],
+    ["fontScaleEditControlHeight","editControlHeight"],["fontScaleEditControlFont","editControlFont"],
   ["fontScaleSectionBefore","sectionBefore"],["fontScaleSectionAfter","sectionAfter"],["fontScaleRowGap","rowGap"],
   ["fontScaleAdditionGap","additionGap"],["fontScaleControlGap","controlGap"]]
   .forEach(([id,key])=>$(id).value=fontScale.values[key]);
 $("applyFontScale").onclick=()=>{
   const next={};
   for(const [id,key] of [["fontScaleBase","base"],["fontScaleSection","section"],["fontScaleTitle","title"],
-    ["fontScaleAddition","addition"],["fontScaleHint","hint"],["fontScaleControlHeight","controlHeight"],
+    ["fontScaleAddition","addition"],["fontScaleHint","hint"],["fontScaleControlHeight","controlHeight"],["fontScaleControlFont","controlFont"],["fontScaleHintControlHeight","hintControlHeight"],
     ["fontScaleMainControlHeight","mainControlHeight"],["fontScaleMainControlFont","mainControlFont"],
+    ["fontScaleEditControlHeight","editControlHeight"],["fontScaleEditControlFont","editControlFont"],
     ["fontScaleSectionBefore","sectionBefore"],["fontScaleSectionAfter","sectionAfter"],["fontScaleRowGap","rowGap"],
     ["fontScaleAdditionGap","additionGap"],["fontScaleControlGap","controlGap"]]){
     const input=$(id),value=Number(input.value),min=Number(input.min),max=Number(input.max);
@@ -2941,8 +3017,9 @@ $("applyFontScale").onclick=()=>{
   }
   fontScale.apply(next);
   for(const [id,key] of [["fontScaleBase","base"],["fontScaleSection","section"],["fontScaleTitle","title"],
-    ["fontScaleAddition","addition"],["fontScaleHint","hint"],["fontScaleControlHeight","controlHeight"],
+    ["fontScaleAddition","addition"],["fontScaleHint","hint"],["fontScaleControlHeight","controlHeight"],["fontScaleControlFont","controlFont"],["fontScaleHintControlHeight","hintControlHeight"],
     ["fontScaleMainControlHeight","mainControlHeight"],["fontScaleMainControlFont","mainControlFont"],
+  ["fontScaleEditControlHeight","editControlHeight"],["fontScaleEditControlFont","editControlFont"],
     ["fontScaleSectionBefore","sectionBefore"],["fontScaleSectionAfter","sectionAfter"],["fontScaleRowGap","rowGap"],
     ["fontScaleAdditionGap","additionGap"],["fontScaleControlGap","controlGap"]])$(id).value=fontScale.values[key];
   try{localStorage.setItem(fontScale.key,JSON.stringify(fontScale.values))}catch(_){}
@@ -2950,8 +3027,9 @@ $("applyFontScale").onclick=()=>{
 };
 document.querySelectorAll(".font-scale-step").forEach(button=>button.addEventListener("click",()=>{
   const input=$(button.dataset.fontScale),key={fontScaleBase:"base",fontScaleSection:"section",fontScaleTitle:"title",
-    fontScaleAddition:"addition",fontScaleHint:"hint",fontScaleControlHeight:"controlHeight",
+    fontScaleAddition:"addition",fontScaleHint:"hint",fontScaleControlHeight:"controlHeight",fontScaleControlFont:"controlFont",fontScaleHintControlHeight:"hintControlHeight",
     fontScaleMainControlHeight:"mainControlHeight",fontScaleMainControlFont:"mainControlFont",
+    fontScaleEditControlHeight:"editControlHeight",fontScaleEditControlFont:"editControlFont",
     fontScaleSectionBefore:"sectionBefore",fontScaleSectionAfter:"sectionAfter",fontScaleRowGap:"rowGap",
     fontScaleAdditionGap:"additionGap",fontScaleControlGap:"controlGap"}[input.id];
   const value=Math.min(Number(input.max),Math.max(Number(input.min),Number(input.value)+Number(button.dataset.delta)));
@@ -2998,6 +3076,7 @@ $("panel").onclick=e=>{if(e.target.id==="panel")hidePanel()};
    pointer handler and disclosure below reaches the elements it always did. */
 function showDictSettings(){
   renderBulkIndexes();
+  window.dictSettingsListSearch?.refresh();
   if(panelSnap===null)panelSnap=panelState();
   $("dictSettings").showModal();
   // The drawer remembered the reader's place by simply staying in the DOM.
@@ -3044,7 +3123,7 @@ $("rescanBtn").onclick=()=>{
   $("clearDatabaseGo").disabled=false;
   $("clearDatabaseStatus").textContent="";
   dialog.showModal();
-  dialog.scrollTop=0;
+  dialog.querySelector('.rescan-scroll').scrollTop=0;
 };
 $("clearDatabaseClose").onclick=$("clearDatabaseCancel").onclick=()=>$("clearDatabaseDialog").close();
 $("clearDatabaseGo").onclick=async()=>{
@@ -3664,9 +3743,9 @@ function bulkActionLabel(action){
 }
 function renderBulkIndexes(){
   if(bulkIndexBusy)return;
-  $("bulkIndexes").innerHTML='<section class="bulk-index-section"><h3>'+esc(tx("dictUI.allActions"))+'</h3><table class="bulk-index-table"><tbody>'+
+  $("bulkIndexes").innerHTML='<section class="bulk-index-section"><h3>'+esc(tx("dictUI.allActions"))+'</h3><div class="bulk-index-table" role="group">'+
     [["base","dictUI.indexPlain"],["contains","dictUI.contains"],["fts","dictUI.fts"]].map(([feat,label])=>
-      '<tr><th scope="row">'+esc(tx(label))+'</th><td><select data-bulk-feat="'+feat+'" aria-label="'+escAttr(tx(label))+'">'+["keep","create","update","recreate","delete"].map(action=>'<option value="'+action+'"'+(action==='delete'&&feat==='base'&&!cfgInfo?.canDelete?' disabled':'')+'>'+esc(bulkActionLabel(action))+'</option>').join('')+'</select></td></tr>').join('')+'</tbody></table><button type="button" class="btn" data-bulk-start disabled>'+esc(tx("dictUI.bulkStart"))+'</button></section>';
+      '<label class="bulk-index-setting"><span>'+esc(tx(label))+'</span><select data-bulk-feat="'+feat+'" aria-label="'+escAttr(tx(label))+'">'+["keep","create","update","recreate","delete"].map(action=>'<option value="'+action+'"'+(action==='delete'&&feat==='base'&&!cfgInfo?.canDelete?' disabled':'')+'>'+esc(bulkActionLabel(action))+'</option>').join('')+'</select></label>').join('')+'</div><button type="button" class="btn" data-bulk-start disabled>'+esc(tx("dictUI.bulkStart"))+'</button></section>';
 
 }
 $("bulkIndexes").addEventListener("change",e=>{
@@ -4932,12 +5011,17 @@ async function doSearch(ev){
      hit whatever it said; `ready[i]` holds its <details> only if it actually
      produced RESULTS, so a deferred, errored or skipped section can never be
      the one that opens. `frontier` is the lowest index still unheard from. */
-  let resolved=[],ready=[],frontier=0;
+  let resolved=[],ready=[],frontier=0,limit=1,opened=0;
   const openSlot=i=>{
     const det=ready[i];
-    if(!det)return false;
+    if(!det||det.open)return false;
     det.open=true;openedIdx=i;promote(boxes,i);
-    clearTimeout(barrier);barrier=null;
+    // The hold ends when the count is reached, not at the first open: until
+    // then the frontier keeps the later sections in the reader's order.
+    if(++opened>=limit){clearTimeout(barrier);barrier=null}
+    // The mark walk and the jump to the first mark belong to the FIRST section
+    // only: repeated for a second one they would pull the reader away from it.
+    if(opened>1)return true;
     if(markedAnswer)navAttach(det);
     // Not deferred to a frame: it observes its own timing, because the section
     // it was just handed is not laid out yet.
@@ -4945,22 +5029,21 @@ async function doSearch(ev){
     return true;
   };
   /* Both strategies, one function — which is why they cannot drift apart. In
-     "My order" (the default) the hold walks the prefix and stops at the first
-     slot that has not spoken; once the deadline has passed (barrier===null) or
-     the prefix is exhausted it falls through to the walk at the bottom and
-     takes the best answer in hand. In "Fastest" `barrier` is always null, so
-     that walk runs from the first hit, where `ready` holds exactly one entry:
-     that one opens, which is byte-for-byte what this app did before D142. */
+     the reader's own order (the only strategy this fork keeps, and for any
+     count) the hold walks the prefix, opening what has a result, and stops at
+     the first slot that has not spoken; once the deadline has passed
+     (barrier===null) or the prefix is exhausted it falls through to the walk
+     at the bottom and takes the best answers in hand, up to the count. */
   const settle=()=>{
-    if(expandAll||openedIdx!==null)return; // latched, or the user decided (-1)
+    if(expandAll||openedIdx===-1||opened>=limit)return; // the count, or the user decided (-1)
     if(orderFirst&&barrier!==null&&frontier<boxes.length){
       while(frontier<boxes.length&&resolved[frontier]){
-        if(openSlot(frontier))return;
+        if(openSlot(frontier)&&opened>=limit)return;
         frontier++;
       }
       return;
     }
-    for(let i=0;i<boxes.length;i++)if(openSlot(i))return;
+    for(let i=0;i<boxes.length&&opened<limit;i++)openSlot(i);
   };
   // Not part of `anyShown`: these are the dictionaries that were NOT searched,
   // and the empty state below has to be able to tell the difference.
@@ -4978,9 +5061,10 @@ async function doSearch(ev){
         liveSearchBoxes=boxes;
         openedIdx=null; // re-arm the latch: a new generation, a new decision
         resolved=boxes.map(()=>false);ready=boxes.map(()=>null);frontier=0;
+        limit=openAll?Infinity:openN;opened=0;
         clearTimeout(barrier);barrier=null;
-        // Only where it can bite: one slot satisfies any prefix immediately,
-        // and under expand-all there is no latch to hold back.
+        // Only where it can bite: the count is satisfied by any prefix
+        // immediately, and under expand-all there is no latch to hold back.
         if(orderFirst&&!expandAll&&boxes.length>1)
           barrier=setTimeout(()=>{barrier=null;if(seq===searchSeq)settle()},OPEN_BARRIER_MS);
         clearStatusForResults();
@@ -4996,8 +5080,9 @@ async function doSearch(ev){
         else if(res.shown)anyShown=true;
         if(res.results)anyResults=true;
         refreshLivePicker();
-        /* The latch (D73/M3). ONE section opens itself per generation and it
-           is never taken back: a dictionary that finishes later fills its own
+        /* The latch (D73/M3). Up to `limit` sections open themselves per
+           generation (one unless the reader set a larger count) and none is
+           taken back: a dictionary that finishes later fills its own
            position, above, and stays shut.
 
            Promoting a higher-ranked latecomer would close the section being
@@ -5670,6 +5755,15 @@ new ResizeObserver(measureBar).observe($("bar"),{box:"border-box"});
    the app's default, which is on. */
 const RBAR_KEY="wudict_sbar";
 let sbarWant=localStorage.getItem(RBAR_KEY)!=="0";
+function browseReturnFromURL(){
+  const raw=new URLSearchParams(location.search).get("browse");
+  if(!raw)return "";
+  try{const url=new URL(raw,location.origin);
+    return url.origin===location.origin&&url.pathname==="/browse"&&url.searchParams.has("dict")
+      ?url.pathname+url.search:"";
+  }catch(_){return ""}
+}
+let browseReturn=browseReturnFromURL();
 /* The sections the arrows walk. `.noindex` is not one of them: that row is the
    list of dictionaries this search could not run at all, a reference with an
    offer on it, not a place to read. A deferred section IS one - it is a
@@ -5722,6 +5816,8 @@ function sbarPaint(){
   // nowhere to walk, and the arrows are what would lie about it. Where an arrow
   // can act but has run out of list, it is dimmed instead - see sbarEndsPaint.
   $("sbarPrev").hidden=$("sbarNext").hidden=n<2;
+  $("sbarBackWords").hidden=!browseReturn||n>=2;
+  if(browseReturn)$("sbarBackWords").href=browseReturn;
   $("sbarOn").setAttribute("aria-pressed",sbarWant?"true":"false");
   $("sbarOff").setAttribute("aria-pressed",sbarWant?"false":"true");
   placeDictSeg();
@@ -5777,14 +5873,6 @@ $("sbarOff").onclick=()=>sbarSet(false);
 let sbarAimed=null;
 function sbarAt(list){
   if(sbarAimed&&list.includes(sbarAimed))return list.indexOf(sbarAimed);
-  // At the bottom of the page the reader is at the last dictionary, whatever
-  // the line says - every section below is behind them, and a short page (all
-  // of them collapsed) never brings its last header up to the line at all. Read
-  // the other way round it left the down arrow looking live at the end of the
-  // answer. It takes a SCROLLED page to say that: a page that fits the screen
-  // is at its bottom and its top at once, and there the top is the truth.
-  const doc=document.documentElement;
-  if(scrollY>0&&scrollY+innerHeight>=doc.scrollHeight-2)return list.length-1;
   // The sections' own scroll-margin-top is the line a jump lands them on - NOT
   // barH(), which reads 0 while the top bar is auto-hidden, and a jump downward
   // is exactly the scroll that hides it.
@@ -5836,9 +5924,10 @@ function sbarEndsChanged(){
    it is also what moves the ends. A press inside the bar does neither: that is
    the same reader asking for the next dictionary, not moving the page under our
    feet. */
+function clearSbarAim(){sbarAimed=null;sbarTarget?.classList.remove("sbar-target");sbarTarget=null;sbarEndsChanged()}
 for(const ev of ["wheel","touchmove"])
-  addEventListener(ev,()=>{sbarAimed=null;sbarEndsChanged()},{passive:true});
-addEventListener("pointerdown",e=>{if(!e.target.closest?.("#sbar")){sbarAimed=null;sbarEndsChanged()}},{passive:true});
+  addEventListener(ev,clearSbarAim,{passive:true});
+addEventListener("pointerdown",e=>{if(!e.target.closest?.("#sbar"))clearSbarAim()},{passive:true});
 addEventListener("scroll",sbarEndsChanged,{passive:true});
 /* Sections stream in, a new search replaces them all, and highlighting
    re-renders what it touched - so the bar follows the DOM rather than the
@@ -5925,6 +6014,7 @@ doSearch=function(ev){
     // `from` is the one-shot cross-reference scope; `dict` stays the user's
     // own selector, so restoring a link-followed view never rewrites it
     if(lastScope)params.from=lastScope;
+    if(browseReturn)params.browse=browseReturn;
     const url="?"+new URLSearchParams(params).toString();
     // clicking the same word twice must not stack identical entries
     if(record==="push"&&url!==location.search)history.pushState(null,"",url);
@@ -5937,6 +6027,7 @@ doSearch=function(ev){
    recorded — the browser already moved the cursor within the stack. */
 window.addEventListener("popstate",()=>{
   const p=new URLSearchParams(location.search);
+  browseReturn=browseReturnFromURL();sbarPaint();
   if(p.get("mode"))setSearchMode(p.get("mode"));
   if(p.get("dict"))$("dict").value=p.get("dict");
   syncChips();
@@ -7707,20 +7798,14 @@ $("styler").addEventListener("keydown",e=>{
 <link rel="stylesheet" href="/assets/group-editor.css?v={{GROUPCSS}}">
 <dialog id="groupEditor" lang="{{T:locale}}" class="group-dialog panel-card" aria-labelledby="groupTitle">
   <div id="groupControls" class="group-section">
-    <h2 id="groupTitle">{{T:panel.groups}} <button type="button" class="btn" id="groupNameApply" aria-label="{{T:panel.save}}" title="{{T:panel.save}}" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg></button><button type="button" class="btn" id="closeGroups" aria-label="{{T:dictUI.closeGroups}}">✕</button></h2>
+    <h2 id="groupTitle">{{T:panel.groups}} <button type="button" class="btn" id="groupNameApply" aria-label="{{T:panel.save}}" title="{{T:panel.save}}" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg></button><button type="button" class="btn" id="closeGroups" aria-label="{{T:dictUI.closeGroups}}"><svg class="icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></h2>
     <div class="group-toolbar"><select id="groupSelect" aria-label="{{T:dictUI.group}}"></select><input type="text" id="groupNameInline" maxlength="100" autocomplete="off" placeholder="{{T:dictUI.enterGroupName}}" aria-label="{{T:dictUI.groupName}}" hidden><button type="button" class="btn group-new-action" id="groupNewAction" aria-label="{{T:dictUI.newGroup}}" title="{{T:dictUI.newGroup}}"><svg class="group-new-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button></div>
     <div id="groupLinkControls" class="group-link-controls"><label><input id="groupLink" type="checkbox"> {{T:dictUI.linkFilter}}</label><span id="groupLinkFilterHost" class="group-link-filter-host"><button type="button" class="btn" id="groupLinkFilter"></button></span></div>
     <div class="group-actions"><button type="button" class="btn" id="groupRenameAction">{{T:dictUI.renameGroup}}</button><button type="button" class="btn" id="deleteGroup"><svg class="group-delete-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 4h4m-8 3 1 13h10l1-13M10 11v5m4-5v5"/></svg>{{T:dictUI.deleteGroup}}</button><button type="button" class="btn" id="groupNameCancel" hidden>{{T:panel.cancel}}</button></div>
     <p id="groupError" class="group-error" role="alert"></p>
     <p id="groupHint" role="status"></p>
   </div>
-  <div id="groupLists"><div id="groupMembers" class="group-section"><div id="groupMemberDraftActions" hidden><button type="button" class="btn group-edit-toggle" id="groupEditToggle" aria-label="{{T:dictUI.editGroupMembers}}" title="{{T:dictUI.editGroupMembers}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.8 1.8 0 0 1-2.5 2.5 1.8 1.8 0 0 0-3 1.1 1.8 1.8 0 0 1-3.6 0 1.8 1.8 0 0 0-3-1.1A1.8 1.8 0 0 1 4.8 15a1.8 1.8 0 0 0-1.1-3 1.8 1.8 0 0 1 0-3.6 1.8 1.8 0 0 0 1.1-3A1.8 1.8 0 0 1 7.3 2.9a1.8 1.8 0 0 0 3-1.1 1.8 1.8 0 0 1 3.6 0 1.8 1.8 0 0 0 3 1.1 1.8 1.8 0 0 1 2.5 2.5 1.8 1.8 0 0 0 1.1 3 1.8 1.8 0 0 1 0 3.6 1.8 1.8 0 0 0-1.1 3Z"/></svg><span class="group-edit-label">{{T:dictUI.editGroupMembers}}</span></button><button type="button" class="btn group-draft-icon" id="groupMemberApply" aria-label="{{T:dictUI.applyGroupChanges}}" title="{{T:dictUI.applyGroupChanges}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg></button><button type="button" class="btn group-draft-icon" id="groupMemberCancel" aria-label="{{T:dictUI.discardGroupChanges}}" title="{{T:dictUI.discardGroupChanges}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><div id="groupMemberHint" hidden><span>{{T:dictUI.memberEditHint}}</span></div><div id="groupOrderToolbar" hidden><span id="groupOrderHint">{{T:dictUI.longPressSelect}}</span><div id="groupOrderControls" hidden><output id="groupOrderCount" aria-live="polite">0</output><button type="button" class="group-order-button" id="groupOrderTop" aria-label="{{T:dictUI.moveSelectedTop}}" title="{{T:dictUI.moveSelectedTop}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 3h16"/><path d="m12 5-7 8h14zM12 12l-7 8h14z" fill="currentColor" stroke="none"/></svg></button><button type="button" class="group-order-button" id="groupOrderUp" aria-label="{{T:dictUI.moveSelectedUp}}" title="{{T:dictUI.moveSelectedUp}}">▲</button><button type="button" class="group-order-button" id="groupOrderDown" aria-label="{{T:dictUI.moveSelectedDown}}" title="{{T:dictUI.moveSelectedDown}}">▼</button><button type="button" class="group-order-button" id="groupOrderBottom" aria-label="{{T:dictUI.moveSelectedBottom}}" title="{{T:dictUI.moveSelectedBottom}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 21h16"/><path d="m5 4 7 8 7-8zM5 11l7 8 7-8z" fill="currentColor" stroke="none"/></svg></button><button type="button" class="btn group-order-exit" id="groupOrderExit" aria-label="{{T:dictUI.exitSelection}}" title="{{T:dictUI.exitSelection}}">✕</button></div></div><div id="groupEmptyHint" role="status" hidden><span id="groupEmptyHintText"></span><svg viewBox="0 0 40 44" fill="none" aria-hidden="true"><path d="M2 42C11 29 17 20 34 7m-10 0 10 0-2 10"/></svg></div><div id="groupRows"></div><div class="group-search-bar"><div class="group-search-field"><svg class="group-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 5 5"/></svg><input id="groupMembersSearch" type="search" placeholder="{{T:dictUI.searchAvailable}}" aria-label="{{T:dictUI.searchAvailable}}" autocomplete="off" enterkeyhint="done"><button type="button" class="group-search-clear" id="groupMembersSearchClear" aria-label="{{T:dictUI.clearSearch}}" title="{{T:dictUI.clearSearch}}" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><button type="button" class="btn group-keyboard-toggle" id="groupMembersKeyboard" data-keyboard="show" aria-label="{{T:dictUI.showKeyboard}}" title="{{T:dictUI.showKeyboard}}">
-    <svg class="group-keyboard-icon icon-hide" viewBox="0 0 28 30" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="2" width="22" height="17" rx="2"/><path d="M7 7h1m4 0h1m4 0h1m4 0h1M7 11h1m4 0h1m4 0h1m4 0h1M9 15h10M9 23l5 5 5-5"/></svg>
-    <svg class="group-keyboard-icon icon-show" viewBox="0 0 28 30" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 7l5-5 5 5"/><rect x="3" y="11" width="22" height="17" rx="2"/><path d="M7 16h1m4 0h1m4 0h1m4 0h1M7 20h1m4 0h1m4 0h1m4 0h1M9 24h10"/></svg>
-  </button></div></div><div id="groupAvailable" class="group-section" hidden><div id="groupAvailableFilterHost"></div><div id="groupAddToolbar"><span id="groupAddHint">{{T:dictUI.availableEditHint}}</span><button type="button" class="btn" id="groupAddAll">{{T:dictUI.addAll}}</button></div><div id="groupOtherRows"></div><div class="group-search-bar"><div class="group-search-field"><svg class="group-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 5 5"/></svg><input id="groupAvailableSearch" type="search" placeholder="{{T:dictUI.searchAvailable}}" aria-label="{{T:dictUI.searchAvailable}}" autocomplete="off" enterkeyhint="done"><button type="button" class="group-search-clear" id="groupAvailableSearchClear" aria-label="{{T:dictUI.clearSearch}}" title="{{T:dictUI.clearSearch}}" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><button type="button" class="btn group-keyboard-toggle" id="groupSearchDone" data-keyboard="show" aria-label="{{T:dictUI.showKeyboard}}" title="{{T:dictUI.showKeyboard}}">
-    <svg class="group-keyboard-icon icon-hide" viewBox="0 0 28 30" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="2" width="22" height="17" rx="2"/><path d="M7 7h1m4 0h1m4 0h1m4 0h1M7 11h1m4 0h1m4 0h1m4 0h1M9 15h10M9 23l5 5 5-5"/></svg>
-    <svg class="group-keyboard-icon icon-show" viewBox="0 0 28 30" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 7l5-5 5 5"/><rect x="3" y="11" width="22" height="17" rx="2"/><path d="M7 16h1m4 0h1m4 0h1m4 0h1M7 20h1m4 0h1m4 0h1m4 0h1M9 24h10"/></svg>
-  </button></div></div></div>
+  <div id="groupLists"><div id="groupMembers" class="group-section"><div id="groupMemberDraftActions" hidden><button type="button" class="btn group-edit-toggle" id="groupEditToggle" aria-label="{{T:dictUI.editGroupMembers}}" title="{{T:dictUI.editGroupMembers}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.8 1.8 0 0 1-2.5 2.5 1.8 1.8 0 0 0-3 1.1 1.8 1.8 0 0 1-3.6 0 1.8 1.8 0 0 0-3-1.1A1.8 1.8 0 0 1 4.8 15a1.8 1.8 0 0 0-1.1-3 1.8 1.8 0 0 1 0-3.6 1.8 1.8 0 0 0 1.1-3A1.8 1.8 0 0 1 7.3 2.9a1.8 1.8 0 0 0 3-1.1 1.8 1.8 0 0 1 3.6 0 1.8 1.8 0 0 0 3 1.1 1.8 1.8 0 0 1 2.5 2.5 1.8 1.8 0 0 0 1.1 3 1.8 1.8 0 0 1 0 3.6 1.8 1.8 0 0 0-1.1 3Z"/></svg><span class="group-edit-label">{{T:dictUI.editGroupMembers}}</span></button><button type="button" class="btn group-draft-icon" id="groupMemberApply" aria-label="{{T:dictUI.applyGroupChanges}}" title="{{T:dictUI.applyGroupChanges}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg></button><button type="button" class="btn group-draft-icon" id="groupMemberCancel" aria-label="{{T:dictUI.discardGroupChanges}}" title="{{T:dictUI.discardGroupChanges}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><div id="groupMemberHint" hidden><span>{{T:dictUI.memberEditHint}}</span></div><div id="groupOrderToolbar" hidden><span id="groupOrderHint">{{T:dictUI.longPressSelect}}</span><div id="groupOrderControls" hidden><output id="groupOrderCount" aria-live="polite">0</output><button type="button" class="group-order-button" id="groupOrderTop" aria-label="{{T:dictUI.moveSelectedTop}}" title="{{T:dictUI.moveSelectedTop}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 3h16"/><path d="m12 5-7 8h14zM12 12l-7 8h14z" fill="currentColor" stroke="none"/></svg></button><button type="button" class="group-order-button" id="groupOrderUp" aria-label="{{T:dictUI.moveSelectedUp}}" title="{{T:dictUI.moveSelectedUp}}">▲</button><button type="button" class="group-order-button" id="groupOrderDown" aria-label="{{T:dictUI.moveSelectedDown}}" title="{{T:dictUI.moveSelectedDown}}">▼</button><button type="button" class="group-order-button" id="groupOrderBottom" aria-label="{{T:dictUI.moveSelectedBottom}}" title="{{T:dictUI.moveSelectedBottom}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 21h16"/><path d="m5 4 7 8 7-8zM5 11l7 8 7-8z" fill="currentColor" stroke="none"/></svg></button><button type="button" class="btn group-order-exit" id="groupOrderExit" aria-label="{{T:dictUI.exitSelection}}" title="{{T:dictUI.exitSelection}}"><svg class="icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div></div><div id="groupEmptyHint" role="status" hidden><span id="groupEmptyHintText"></span><svg viewBox="0 0 40 44" fill="none" aria-hidden="true"><path d="M2 42C11 29 17 20 34 7m-10 0 10 0-2 10"/></svg></div><div id="groupRows"></div><div id="groupMembersSearchDock" class="list-search-dock" role="search"></div></div><div id="groupAvailable" class="group-section" hidden><div id="groupAvailableFilterHost"></div><div id="groupAddToolbar"><span id="groupAddHint">{{T:dictUI.availableEditHint}}</span><button type="button" class="btn" id="groupAddAll">{{T:dictUI.addAll}}</button></div><div id="groupOtherRows"></div><div id="groupAvailableSearchDock" class="list-search-dock" role="search"></div></div></div>
 </dialog>
 <dialog id="linkGroupDialog" lang="{{T:locale}}" class="group-dialog panel-card" aria-labelledby="linkGroupTitle">
   <h2 id="linkGroupTitle">{{T:dictUI.linkFilter}}</h2>
@@ -7749,7 +7834,7 @@ $("styler").addEventListener("keydown",e=>{
   </form>
 </dialog>
 <dialog id="groupFilterDialog" lang="{{T:locale}}" class="group-dialog panel-card" aria-label="{{T:dictUI.chooseFilter}}">
-  <div id="groupFilterHeader"><div id="groupFilterToggle"></div><button type="button" class="btn" id="closeGroupFilter" aria-label="{{T:panel.cancel}}" title="{{T:panel.cancel}}">✕</button></div>
+  <div id="groupFilterHeader"><div id="groupFilterToggle"></div><button type="button" class="btn" id="closeGroupFilter" aria-label="{{T:panel.cancel}}" title="{{T:panel.cancel}}"><svg class="icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div>
   <div id="groupFilterChoices" class="group-filter-choices"></div>
   <div class="group-filter-actions"><button type="button" class="btn" id="cancelGroupFilter">{{T:panel.cancel}}</button></div>
 </dialog>
@@ -7787,6 +7872,7 @@ $("styler").addEventListener("keydown",e=>{
     <button type="button" class="btn" id="lookAskCancel">{{T:panel.cancel}}</button>
   </div>
 </dialog>
+<script src="/assets/list-search.js?v={{LISTSEARCHJS}}"></script>
 <script src="/assets/group-editor.js?v={{GROUPJS}}"></script>
 <script src="/assets/looks.js?v={{LOOKSJS}}"></script>
 <!-- Last, so the results' container is there to watch: this file marks the

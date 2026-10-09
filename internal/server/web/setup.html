@@ -72,6 +72,26 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
      "pages" — Quiet labels is the one): attached by the server, after
      setup.css so their token overrides win the tie, and empty otherwise. -->
 {{PRESETS}}
+<script>
+/* Apply the reader's saved Fonts settings before this standalone page paints. */
+(function () {
+  const defaults={base:1,title:1.15,section:1,addition:.9,hint:.8,
+    editControlHeight:1.8,editControlFont:1,mainControlHeight:1.05,mainControlFont:1.05,
+    sectionBefore:0,sectionAfter:.45};
+  const names={base:'--ui-font-base',title:'--ui-font-title',section:'--ui-font-section',
+    addition:'--ui-font-addition',hint:'--ui-hint-font-size',
+    editControlHeight:'--ui-edit_control-height',editControlFont:'--ui-edit_control-font',
+    mainControlHeight:'--ui-main-control-height',mainControlFont:'--ui-main-control-font',
+    sectionBefore:'--ui-section-space-before',sectionAfter:'--ui-section-space-after'};
+  let saved={};
+  try { saved=JSON.parse(localStorage.getItem('wudict_settings_fonts')||'null')||{}; } catch (_) {}
+  for(const [key,fallback] of Object.entries(defaults)){
+    const value=Number(saved[key]),spacing=key==='sectionBefore'||key==='sectionAfter';
+    const scale=Number.isFinite(value)?Math.min(key==='editControlHeight'?4:2,Math.max(spacing?0:.5,value)):fallback;
+    document.documentElement.style.setProperty(names[key],String(scale));
+  }
+})();
+</script>
 <style>
 /* The Android host paints the selected image behind the transparent WebView. */
 html[data-shell-image], html[data-shell-image] body { background:transparent !important; }
@@ -192,6 +212,49 @@ label.keep em{font-style:normal;color:var(--label-quiet);font-size:12.5px}
    than something the user decides on (D102). */
 #impMsg{font-size:13px;margin-top:.618em}
 #impMsg.ok{color:var(--ok)}#impMsg.err{color:var(--err)}
+/* Edit Folders follows the same saved scale as the Settings dialogs. */
+body{font-size:calc(var(--ui-font-base) * 1rem)}
+.top h1{font-size:calc(var(--ui-font-title) * 1rem)}
+.top button.x{box-sizing:border-box;display:grid;place-items:center;flex:none;
+  width:calc(var(--ui-main-control-height) * 1em);height:calc(var(--ui-main-control-height) * 1em);
+  min-height:calc(var(--ui-main-control-height) * 1em);padding:0;
+  font-size:calc(var(--ui-main-control-font) * 1rem);line-height:1}
+.card>p:first-of-type,#indexDefaults>p,#addSection>p,#addSection .formats,
+#origin,#cfgProblems{font-size:calc(var(--ui-font-addition) * 1rem)}
+.card h2{font-size:calc(var(--ui-font-section) * 1rem);
+  margin-top:calc(var(--ui-section-space-before) * 1em);
+  margin-bottom:calc(var(--ui-section-space-after) * 1em)}
+#indexDefaults .dsl-default-row label{min-height:calc(var(--ui-edit_control-height) * 1em);
+  font-size:calc(var(--ui-edit_control-font) * 1rem)}
+#indexDefaults .dsl-default-row input[type=checkbox]{flex:none;
+  width:calc(var(--ui-edit_control-height) * 1em);
+  height:calc(var(--ui-edit_control-height) * 1em)}
+#indexDefaults .dsl-default-row input[type=checkbox]:checked::after{
+  left:35%;top:20%;width:25%;height:50%}
+#rows .frow input{box-sizing:border-box;flex:1 1 0;
+  height:calc(var(--ui-edit_control-height) * 1.5rem);min-height:0;
+  font-size:calc(var(--ui-edit_control-font) * 1rem)}
+#rows .frow :is(.pick,.rm){box-sizing:border-box;display:grid;place-items:center;
+  width:calc(var(--ui-edit_control-height) * 1.5rem);
+  height:calc(var(--ui-edit_control-height) * 1.5rem);
+  padding:0;font-size:calc(var(--ui-edit_control-font) * 1rem)}
+html:not([data-folder-picker]) #rows .frow .pick{display:none}
+#rows .frow .st,#msg,#indexDefaultsError{font-size:calc(var(--ui-hint-font-size) * 1rem)}
+#addRow{font-size:calc(var(--ui-font-addition) * 1rem)}
+#addSection>p code{font-size:inherit;padding:0 .3em}
+#drop{box-sizing:border-box;display:flex;flex-wrap:wrap;align-items:center;justify-content:center;
+  gap:.3em;min-height:calc(var(--ui-edit_control-height) * 3em);
+  padding:.4em .8em;font-size:calc(var(--ui-font-addition) * 1rem)}
+#drop .hint,#drop #choose{font-size:inherit}
+#drop #choose{margin:0}
+#urlRow :is(input,button){box-sizing:border-box;
+  height:calc(var(--ui-edit_control-height) * 1.5rem);min-height:0;
+  font-size:calc(var(--ui-edit_control-font) * 1rem)}
+#urlRow button{display:inline-flex;align-items:center;justify-content:center;
+  margin:0;padding:0 .7em}
+#impMsg,.formats,#howtoBackRow{font-size:calc(var(--ui-font-addition) * 1rem)}
+#save{box-sizing:border-box;min-height:calc(var(--ui-edit_control-height) * 1.5rem);
+  font-size:calc(var(--ui-edit_control-font) * 1rem)}
 </style>
 </head>
 <body>
@@ -199,7 +262,7 @@ label.keep em{font-style:normal;color:var(--label-quiet);font-size:12.5px}
   <div id="workNoticeText" class="work-notice-text"></div>
   <button type="button" class="btn ghost" id="workNoticeStop" hidden></button>
 </div>
-<div class="card">
+<div class="card scroll-card">
 <!-- The page's closer (@see setup.css). It goes back rather than to "/": the
      page behind is restored as it was, and the entry this page took is spent,
      so the phone's back gesture does not reopen what was just closed.
@@ -207,8 +270,9 @@ label.keep em{font-style:normal;color:var(--label-quiet);font-size:12.5px}
      straight here, so this page IS the app — and the ✕ is hidden for it. -->
 <div class="top">
 <h1>{{T:pages.folders}}</h1>
-<button type="button" class="x" id="closePage" aria-label="{{T:pages.close}}">✕</button>
+<button type="button" class="x" id="closePage" aria-label="{{T:pages.close}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
 </div>
+<div class="card-scroll">
 <p>{{INTRO}}</p>
 
 <section id="indexDefaults">
@@ -268,10 +332,7 @@ label.keep em{font-style:normal;color:var(--label-quiet);font-size:12.5px}
 <p class="formats hidden" id="howtoBackRow"><a href="#" id="howtoBack">{{T:pages.restoreHowto}}</a>
    {{T:pages.restoreHint}}</p>
 <p class="formats">{{T:pages.supported}}</p>
-<!-- First run is the one moment the app has the user's full attention and
-     nothing else to say; one line is the whole budget. -->
-<p class="about">{{T:pages.about}} <a href="https://github.com/DmShAl/wudict2/" target="_blank" rel="noopener">wuDict2</a> ({{T:pages.forkNote}}: <a href="https://wuweidict.github.io/wudict" target="_blank" rel="noopener">{{T:pages.website}}</a>
-  · <a href="https://github.com/wuweidict/wudict" target="_blank" rel="noopener">{{T:pages.source}}</a>)</p>
+</div>
 </div>
 <script>
 "use strict";

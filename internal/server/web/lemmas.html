@@ -75,6 +75,23 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
      "pages" — Quiet labels is the one): attached by the server, after
      setup.css so their token overrides win the tie, and empty otherwise. -->
 {{PRESETS}}
+<script>
+/* Apply the reader's saved Fonts settings before this standalone page paints. */
+(function () {
+  const defaults={base:1,title:1.15,section:1,addition:.9,hint:.8,
+    controlHeight:1.6,controlFont:.9,mainControlHeight:1.05,mainControlFont:1.05};
+  const names={base:'--ui-font-base',title:'--ui-font-title',section:'--ui-font-section',
+    addition:'--ui-font-addition',hint:'--ui-hint-font-size',
+    controlHeight:'--ui-control-height',controlFont:'--ui-control-font',
+    mainControlHeight:'--ui-main-control-height',mainControlFont:'--ui-main-control-font'};
+  let saved={};
+  try { saved=JSON.parse(localStorage.getItem('wudict_settings_fonts')||'null')||{}; } catch (_) {}
+  for(const [key,fallback] of Object.entries(defaults)){
+    const value=Number(saved[key]),scale=Number.isFinite(value)?Math.min(key==='controlHeight'?4:2,Math.max(.5,value)):fallback;
+    document.documentElement.style.setProperty(names[key],String(scale));
+  }
+})();
+</script>
 <style>
 /* The host background, spelled exactly as setup.html spells it: the WebView is
    transparent over the wallpaper, the card floats on it, and the palette
@@ -93,7 +110,7 @@ html[data-shell-tone="dark"] {
   --line:rgba(230,220,201,.4); --accent:#ffc773; --ok:#aad3ad; --err:#ffb3ad;
 }
 /* Page-specific only; palette, card, buttons and typography are shared. */
-.card{max-width:640px;min-width:0;overflow-wrap:anywhere}
+.card{max-width:640px;min-width:0;overflow-wrap:anywhere;padding-bottom:1em}
 #list{margin:.618em 0 0;border:1px solid var(--line);border-radius:8px;overflow:hidden}
 .lrow{display:flex;flex-wrap:wrap;align-items:center;gap:.5em;
   padding:.5em .618em;border-bottom:1px solid var(--line);font-size:13.5px}
@@ -123,18 +140,38 @@ html[data-shell-tone="dark"] {
 .head{display:flex;justify-content:space-between;align-items:baseline;gap:.5em;flex-wrap:wrap}
 .formats a{color:var(--accent);text-decoration:none}
 .formats a:hover{text-decoration:underline}
+#credit{margin:.4em 0 0}
+#credit:empty{display:none}
+/* Lemmatization uses the same saved type and control scale as Settings. */
+body{font-size:calc(var(--ui-font-base) * 1rem)}
+.top h1{font-size:calc(var(--ui-font-title) * 1rem)}
+.top button.x{box-sizing:border-box;display:grid;place-items:center;flex:none;
+  width:calc(var(--ui-main-control-height) * 1em);height:calc(var(--ui-main-control-height) * 1em);
+  min-height:calc(var(--ui-main-control-height) * 1em);padding:0;
+  font-size:calc(var(--ui-main-control-font) * 1rem);line-height:1}
+.card>p:first-of-type,.banner,.note,.lrow :is(.cost,.st),
+.card>p.formats{font-size:calc(var(--ui-hint-font-size) * 1rem)}
+.head h2{font-size:calc(var(--ui-font-section) * 1rem)}
+.head #summary{font-size:calc(var(--ui-font-addition) * 1rem)}
+.lrow{min-height:calc(var(--ui-control-height) * 1em);
+  font-size:calc(var(--ui-control-font) * 1rem)}
+.lrow input[type=checkbox]{width:calc(var(--ui-control-height) * 1em);
+  height:calc(var(--ui-control-height) * 1em)}
+.lrow input[type=checkbox]:checked::after{left:35%;top:20%;width:25%;height:50%}
+.lrow .nm{font-size:inherit}
 </style>
 </head>
 <body>
-<div class="card">
+<div class="card scroll-card">
 <!-- The page's closer (@see setup.css), same control as the configuration
      page's: back rather than a link to "/", so the page behind comes back as
      it was and the back gesture does not walk into this page again. Hidden on
      a first run, where "/" is served as /setup and there is nothing behind. -->
 <div class="top">
 <h1>{{T:pages.lemmas}}</h1>
-<button type="button" class="x" id="closePage" aria-label="{{T:pages.close}}">✕</button>
+<button type="button" class="x" id="closePage" aria-label="{{T:pages.close}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
 </div>
+<div class="card-scroll">
 <p>{{T:pages.lemmaIntro}}</p>
 
 <div id="banner" class="banner hidden"></div>
@@ -144,10 +181,8 @@ html[data-shell-tone="dark"] {
 <p class="note" id="dir"></p>
 <div id="shadow" class="banner warn hidden"></div>
 
-<hr class="sep">
 <p class="formats" id="credit"></p>
-<p class="about">{{T:pages.about}} <a href="https://github.com/DmShAl/wudict2/" target="_blank" rel="noopener">wuDict2</a> ({{T:pages.forkNote}}: <a href="https://wuweidict.github.io/wudict" target="_blank" rel="noopener">{{T:pages.website}}</a>
-  · <a href="https://github.com/wuweidict/wudict" target="_blank" rel="noopener">{{T:pages.source}}</a>)</p>
+</div>
 </div>
 <script>
 "use strict";

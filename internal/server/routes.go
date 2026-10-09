@@ -149,6 +149,7 @@ func (s *Server) routes() []route {
 		// one page of the headword list (browse.go). Never CORS: the D69
 		// grant is lookup, and this dumps a dictionary a page at a time.
 		{"GET", "/api/browse", s.handleBrowse, "/api/browse", false},
+		{"GET", "/api/browse/find", s.handleBrowseFind, "/api/browse/find", false},
 		// what the platform is doing to us (D64) - the Android shell's channel
 		// for onStop / onTrimMemory / thermal / battery-saver, which the
 		// exec'd server has no other way of learning.
@@ -228,6 +229,7 @@ func (s *Server) routes() []route {
 		{"GET", "/assets/group-editor.css", serveAsset("text/css; charset=utf-8", groupEditorCSS), "", false},
 		{"GET", "/assets/group-editor.js", serveAsset("application/javascript; charset=utf-8", groupEditorJS), "", false},
 		{"GET", "/assets/article-find.js", serveAsset("application/javascript; charset=utf-8", articleFindJS), "", false},
+		{"GET", "/assets/list-search.js", serveAsset("application/javascript; charset=utf-8", listSearchJS), "", false},
 		{"GET", "/assets/work-progress.js", serveAsset("application/javascript; charset=utf-8", workProgressJS), "", false},
 		{"GET", "/assets/examples.js", serveAsset("application/javascript; charset=utf-8", examplesJS), "", false},
 		{"GET", "/assets/looks.js", serveAsset("application/javascript; charset=utf-8", looksJS), "", false},

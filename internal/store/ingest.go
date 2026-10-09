@@ -538,8 +538,12 @@ func bodyEncoding() string {
 // synchronous=OFF for speed, so pages may linger in the OS cache; fsyncing
 // before the atomic rename ensures an interrupted shutdown cannot leave a
 // torn database at the final path. Best-effort - failures are non-fatal.
+//
+// Opened for writing, not os.Open: on Windows Sync is FlushFileBuffers, which
+// requires write access and fails with "Access is denied" on a read-only
+// handle - an error ignored here would make the flush silently nothing.
 func syncFile(path string) {
-	if f, err := os.Open(path); err == nil {
+	if f, err := os.OpenFile(path, os.O_RDWR, 0); err == nil {
 		_ = f.Sync()
 		_ = f.Close()
 	}

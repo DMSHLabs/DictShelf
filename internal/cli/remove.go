@@ -95,6 +95,9 @@ func cmdRemove(args []string) error {
 		fmt.Println("dry run - re-run with -f to delete")
 		return nil
 	}
+	if err := refuseUnderServer("remove it in its dictionary panel"); err != nil {
+		return err
+	}
 
 	var failed int
 	if prepared != "" {

@@ -40,11 +40,11 @@ func cacheClause() string {
 
 // dsnRO is a read-only, query-only connection string.
 func dsnRO(path string) string {
-	return "file:" + path + "?mode=ro&_query_only=1&_busy_timeout=5000" + cacheClause()
+	return "file:" + uriPath(path) + "?mode=ro&_query_only=1&_busy_timeout=5000" + cacheClause()
 }
 
 // dsnIngest is a throwaway-safe bulk-write connection string (the ingest
 // target is a temp file renamed on success, so durability is pointless).
 func dsnIngest(path string) string {
-	return "file:" + path + "?_journal_mode=OFF&_synchronous=OFF"
+	return "file:" + uriPath(path) + "?_journal_mode=OFF&_synchronous=OFF"
 }

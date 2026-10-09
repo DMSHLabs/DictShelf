@@ -41,6 +41,7 @@ import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.ViewGroup;
 import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceError;
 import android.webkit.WebResourceResponse;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -211,6 +212,7 @@ public class LookupActivity extends Activity {
         web.setWebViewClient(new WebViewClient() {
             @Override
             public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
+                WebViewDiagnostics.page("lookup", "started", url);
                 // Where the bridge's prompts will come from: the address a
                 // stored port change can move out from under them, and the
                 // popup hosts the same page (Shell.pageOrigin).
@@ -219,6 +221,8 @@ public class LookupActivity extends Activity {
 
             @Override
             public void onPageFinished(WebView view, String url) {
+                WebViewDiagnostics.page("lookup", "finished", url);
+                WebViewDiagnostics.install(view);
                 Shell.applyBackground(view);
                 // Per document, the same rule as the app window: the WebView's
                 // own speechSynthesis has no voices, so the shell supplies one.
@@ -233,6 +237,16 @@ public class LookupActivity extends Activity {
             @Override
             public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest req) {
                 return speech.intercept(req.getUrl()); // null: the WebView's own business
+            }
+
+            @Override
+            public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
+                WebViewDiagnostics.error("lookup", request, error);
+            }
+
+            @Override
+            public void onReceivedHttpError(WebView view, WebResourceRequest request, WebResourceResponse response) {
+                WebViewDiagnostics.httpError("lookup", request, response.getStatusCode());
             }
         });
         web.setWebChromeClient(Shell.windows(this));
@@ -256,6 +270,7 @@ public class LookupActivity extends Activity {
     public void onWindowFocusChanged(boolean focused) {
         super.onWindowFocusChanged(focused);
         if (!focused || root == null || web == null) return;
+        WebViewDiagnostics.install(web);
         int color = ShellPrefs.pageBg(this);
         getWindow().setBackgroundDrawable(WindowBackground.dialogDrawable(this, color));
         root.setBackground(WindowBackground.dialogDrawable(this, color));
@@ -589,6 +604,7 @@ public class LookupActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        SystemLog.record("lookup destroy finishing=" + isFinishing() + " web=" + (web != null));
         gone = true;
         // false, always: a popup closing never stops the server (D67). It goes
         // to BACKGROUND via Power, the Go side sheds caches and threads, and

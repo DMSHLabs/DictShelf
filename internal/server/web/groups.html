@@ -72,6 +72,23 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
 <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
 <link rel="stylesheet" href="/assets/setup.css?v={{CSS}}">
 {{PRESETS}}
+<script>
+/* Standalone editor: read the font values saved by the reader's Settings. */
+(function () {
+  const defaults={title:1.15,addition:.9,hint:.8,controlHeight:1.6,hintControlHeight:1,
+    editControlHeight:1.8,editControlFont:1,mainControlHeight:1.05,mainControlFont:1.05};
+  const names={title:'--ui-font-title',addition:'--ui-font-addition',hint:'--ui-hint-font-size',
+    controlHeight:'--ui-control-height',hintControlHeight:'--ui-hint-control-height',
+    editControlHeight:'--ui-edit_control-height',editControlFont:'--ui-edit_control-font',
+    mainControlHeight:'--ui-main-control-height',mainControlFont:'--ui-main-control-font'};
+  let saved={};
+  try { saved=JSON.parse(localStorage.getItem('wudict_settings_fonts')||'null')||{}; } catch (_) {}
+  for(const [key,fallback] of Object.entries(defaults)){
+    const value=Number(saved[key]),scale=Number.isFinite(value)?Math.min(key==='editControlHeight'||key==='controlHeight'?4:2,Math.max(.5,value)):fallback;
+    document.documentElement.style.setProperty(names[key],String(scale));
+  }
+})();
+</script>
 <style>
 /* Follow the host palette and let its wallpaper show through the editor. */
 html[data-shell-image], html[data-shell-image] body { background:transparent !important; }
@@ -92,16 +109,34 @@ html[data-shell-tone="dark"] {
    card is wider than the other pages' and the box takes most of the screen:
    this page is an editor, and the text is the whole of it. */
 .card{max-width:760px}
-textarea{display:block;width:100%;height:max(18em,58vh);margin:.618em 0 .2em;
-  font:13.5px/1.55 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+/* The editor uses the same saved type and control scale as Settings. */
+.top h1{font-size:calc(var(--ui-font-title) * 1rem)}
+.top button.x{box-sizing:border-box;display:grid;place-items:center;flex:none;
+  width:calc(var(--ui-main-control-height) * 1em);height:calc(var(--ui-main-control-height) * 1em);
+  min-height:calc(var(--ui-main-control-height) * 1em);padding:0;
+  font-size:calc(var(--ui-main-control-font) * 1rem);line-height:1}
+.card>p:not(.note){font-size:calc(var(--ui-font-addition) * 1rem)}
+.quiet code{box-sizing:border-box;display:inline-flex;align-items:center;
+  min-height:calc(var(--ui-hint-control-height) * 1em);font-size:calc(var(--ui-hint-font-size) * 1rem)}
+textarea{display:block;width:100%;height:max(18em,58vh);margin:.618em 0 0;
+  font:calc(var(--ui-font-addition) * 1rem)/1.55 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
   color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:8px;
   padding:.618em .8em;resize:vertical;outline:none;tab-size:4}
 textarea:focus{border-color:var(--focus);box-shadow:0 0 0 3px color-mix(in srgb,var(--focus) 25%,transparent)}
-.acts{display:flex;flex-wrap:wrap;gap:.5em;align-items:center}
-.acts .btn,.acts button{margin-top:.382em}
-.note{font-size:12.5px;color:var(--faint);margin:.2em 0 0;word-break:break-all}
-.probs{margin:.382em 0 0;padding:0;list-style:none;font-size:13px;color:var(--err)}
-.probs code{color:var(--fg);word-break:normal;overflow-wrap:anywhere} /* breaks between words, a long one only if it must */
+.acts{display:flex;flex-wrap:wrap;gap:.5em;align-items:center;
+  margin-top:calc(var(--ui-edit_control-height) * .75rem)}
+.acts button{box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;
+  height:calc(var(--ui-control-height) * 1em);min-height:calc(var(--ui-control-height) * 1em);
+  margin-top:0;padding:0 1.2em;font-size:calc(var(--ui-font-addition) * 1rem)}
+.acts #save{order:1;margin-left:auto;
+  height:calc(var(--ui-edit_control-height) * 1.5rem);
+  min-height:calc(var(--ui-edit_control-height) * 1.5rem);
+  font-size:calc(var(--ui-edit_control-font) * 1rem)}
+#msg,.probs,.note{font-size:calc(var(--ui-hint-font-size) * 1rem)}
+#msg:empty,.probs:empty{display:none}
+.note{color:var(--faint);margin:.2em 0 0;word-break:break-all}
+.probs{margin:.382em 0 0;padding:0;list-style:none;color:var(--err)}
+.probs code{color:var(--fg);font-size:inherit;word-break:normal;overflow-wrap:anywhere} /* breaks between words, a long one only if it must */
 .quiet{color:var(--soft)}
 .quiet code{white-space:nowrap;word-break:normal}
 /* A phone: the text gets the width the card's padding would take, so a
@@ -109,7 +144,7 @@ textarea:focus{border-color:var(--focus);box-shadow:0 0 0 3px color-mix(in srgb,
 @media (max-width:520px){
   body{padding:.5em}
   .card{padding:1em .8em}
-  textarea{font-size:12.5px;padding:.5em .6em}
+  textarea{padding:.5em .6em}
 }
 </style>
 </head>
@@ -117,7 +152,7 @@ textarea:focus{border-color:var(--focus);box-shadow:0 0 0 3px color-mix(in srgb,
 <div class="card">
 <div class="top">
 <h1>{{T:filters.title}}</h1>
-<button type="button" class="x" id="closePage" aria-label="{{T:pages.close}}">✕</button>
+<button type="button" class="x" id="closePage" aria-label="{{T:pages.close}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
 </div>
 <p>{{T:filters.hint}}</p>
 <p class="quiet"><code>Mine = oxford, collins</code> &nbsp; <code>Mine = `^regex$`</code></p>
@@ -130,7 +165,6 @@ textarea:focus{border-color:var(--focus);box-shadow:0 0 0 3px color-mix(in srgb,
 <div class="acts">
   <button type="button" id="save">{{T:filters.save}}</button>
   <button type="button" class="ghost" id="reset">{{T:filters.reset}}</button>
-  <a class="btn ghost" href="/" id="back">{{T:filters.back}}</a>
 </div>
 <p class="note" id="file"></p>
 
@@ -250,10 +284,6 @@ addEventListener("keydown",e=>{
   if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="s"){e.preventDefault();save()}
 });
 addEventListener("beforeunload",e=>{if(dirty()){e.preventDefault();e.returnValue=""}});
-$("back").addEventListener("click",e=>{
-  if(dirty()&&!confirm(tx("filters.leave")))e.preventDefault();
-  else saved=$("text").value; // answered: do not ask again on the way out
-});
 $("closePage").onclick=()=>{
   if(dirty()&&!confirm(tx("filters.leave")))return;
   saved=$("text").value;

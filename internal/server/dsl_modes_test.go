@@ -32,7 +32,9 @@ func TestSingleDSLIndexRemoval(t *testing.T) {
 	if err := e.setFeatures(features{Contains: true, FullText: true}, nil); err != nil {
 		t.Fatal(err)
 	}
-	db := s.dictInfoFor(e).TextDB
+	global := s.rowsGlobal(s.groupsNow())
+	info, _ := s.dictInfoFor(e, global, rowKey(e, global))
+	db := info.TextDB
 	blocked := filepath.Join(t.TempDir(), "not-a-directory")
 	if err := os.WriteFile(blocked, []byte("file"), 0600); err != nil {
 		t.Fatal(err)
@@ -62,7 +64,7 @@ func TestSingleDSLIndexRemoval(t *testing.T) {
 		t.Fatal("restart restored index")
 	}
 	groupCall(t, s, "GET", "/api/ingest?dict="+e.ID+"&fts=1", nil, 200)
-	if info := s.dictInfoFor(e); !info.Caps.FTS || info.Caps.Contains || e.indexBlocked() {
+	if info, _ := s.dictInfoFor(e, global, rowKey(e, global)); !info.Caps.FTS || info.Caps.Contains || e.indexBlocked() {
 		t.Fatal("explicit restore failed")
 	}
 	if body, err := os.ReadFile(source); err != nil || string(body) != sampleDSL {

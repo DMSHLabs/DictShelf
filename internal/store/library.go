@@ -46,6 +46,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/wuweidict/wudict/internal/dict"
 	"github.com/wuweidict/wudict/internal/fsx"
@@ -91,7 +92,22 @@ func MediaSibling(textDB string) string {
 // it too, so "big.dsl.dz" → "big"), sanitized for every platform we build for.
 // Spaces and case are preserved - the point is that the folder is recognizably
 // the dictionary the user already knows.
-func FolderName(srcPath string) string {
+func FolderName(srcPath string) string { return folderName(srcPath, true) }
+
+// byteCutName is FolderName cut at byte 80 whatever character that splits:
+// the name of library folders already on disk for such sources (Windows holds
+// the split character as U+FFFD, Linux the raw bytes; macOS refuses the name).
+// Lookups still find a folder by it, so its dictionary keeps its prepared data
+// and plan rather than starting over from headwords beside it. Empty when it
+// is FolderName.
+func byteCutName(srcPath string) string {
+	if b := folderName(srcPath, false); b != FolderName(srcPath) {
+		return b
+	}
+	return ""
+}
+
+func folderName(srcPath string, runeCut bool) string {
 	name := dict.Name(srcPath) // x.dsl.dz and x.wudict.md.gz are both x
 	var b strings.Builder
 	for _, r := range name {
@@ -106,8 +122,15 @@ func FolderName(srcPath string) string {
 	}
 	// trailing dots and spaces are illegal in Windows directory names
 	out := strings.TrimRight(strings.TrimSpace(b.String()), " .")
+	// 80 bytes, cut on a rune boundary: a cut through a character leaves bytes
+	// that are not UTF-8 - Windows stores them as U+FFFD, and elsewhere the
+	// folder's name no longer matches the path the panel shows for it.
 	if len(out) > 80 {
-		out = strings.TrimRight(strings.TrimSpace(out[:80]), " .")
+		cut := 80
+		for runeCut && cut > 0 && !utf8.RuneStart(out[cut]) {
+			cut--
+		}
+		out = strings.TrimRight(strings.TrimSpace(out[:cut]), " .")
 	}
 	if out == "" {
 		return "dictionary"
@@ -134,8 +157,12 @@ func formatTag(srcPath string) string {
 
 // candidateDirs lists the folder names a source may occupy, in order.
 func candidateDirs(srcPath string) []string {
+	return namedDirs(FolderName(srcPath), srcPath)
+}
+
+// namedDirs is candidateDirs for the folder name base.
+func namedDirs(base, srcPath string) []string {
 	root := DefaultDBDir()
-	base := FolderName(srcPath)
 	tag := formatTag(srcPath)
 	out := []string{filepath.Join(root, base)}
 	out = append(out, filepath.Join(root, fmt.Sprintf("%s (%s)", base, tag)))
@@ -178,7 +205,15 @@ func dirOwner(dir string) (owner string, hasDB, exists bool) {
 // same-named dictionary in another format can never be served from the wrong
 // folder.
 func LookupDir(srcPath string) (string, bool) {
-	for _, cand := range candidateDirs(srcPath) {
+	if dir, ok := ownedDir(candidateDirs(srcPath), srcPath); ok {
+		return dir, true
+	}
+	return byteCutDir(srcPath)
+}
+
+// ownedDir is the first of cands holding a text.db prepared from srcPath.
+func ownedDir(cands []string, srcPath string) (string, bool) {
+	for _, cand := range cands {
 		owner, hasDB, exists := dirOwner(cand)
 		if !exists {
 			continue
@@ -186,6 +221,14 @@ func LookupDir(srcPath string) (string, bool) {
 		if hasDB && fsx.SamePath(owner, srcPath) {
 			return cand, true
 		}
+	}
+	return "", false
+}
+
+// byteCutDir is the folder prepared for srcPath under its byteCutName.
+func byteCutDir(srcPath string) (string, bool) {
+	if base := byteCutName(srcPath); base != "" {
+		return ownedDir(namedDirs(base, srcPath), srcPath)
 	}
 	return "", false
 }
@@ -200,7 +243,14 @@ func LookupDir(srcPath string) (string, bool) {
 // exactly like the empty leftover of an interrupted claim, which the loser
 // would otherwise adopt - putting both ingests in one folder. claimFrom closes
 // that window with claimGrace below.
+//
+// The folder LookupDir finds is asked first, so the two always agree - and a
+// folder prepared under the byteCutName, which claimFrom never walks, is kept
+// rather than prepared again beside it.
 func ClaimDir(srcPath string) (string, error) {
+	if dir, ok := LookupDir(srcPath); ok {
+		return dir, nil
+	}
 	return claimFrom(candidateDirs(srcPath), srcPath)
 }
 

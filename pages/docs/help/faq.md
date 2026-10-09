@@ -1,6 +1,6 @@
 ---
 title: FAQ
-description: Privacy, files on disk, moving the library, updating, disk space, the terminal, Android, network access, lemmatization.
+description: Privacy, working offline, licence, getting dictionaries, files on disk, moving the library, updating, disk space, the terminal, Android builds and requirements, export, Termux, searching several dictionaries, custom styles, network access, lemmatization.
 ---
 
 # FAQ
@@ -10,14 +10,53 @@ For problems, see [Troubleshooting](troubleshooting.md).
 ??? question "Is any of my data sent anywhere?"
 
     No. wudict listens on the loopback address `127.0.0.1` and has no account,
-    telemetry, analytics or crash reporting. It connects to the internet only to
+    no telemetry, no analytics or crash reporting. It connects to the internet only to
     download what you ask for: lemma data, or a dictionary from a link you
     provide. See the [Privacy Policy](../privacy_policy.md).
+
+??? question "Does wudict work offline?"
+
+    Yes. Search, lookup and indexing need no network. This is also true for
+    the Android app. Only these need the network:
+
+    -   A download of lemma data. English lemma data is built in.
+    -   An import from a link.
+    -   An article that refers to an image, font or script at an `http://` or
+        `https://` address. Most dictionaries include their resources.
+    -   <kbd>Read aloud</kbd> with a voice that the browser gets from the
+        network. The voices of the operating system need no network.
 
 ??? question "Why two names, WuWeiDict and wudict?"
 
     *Wú wéi* (無為) is the classical Chinese term for effortless action, or
     non-action. `wudict` is the short form, used for the program.
+
+??? question "Is wudict free?"
+
+    Yes. wudict is free software under the GNU General Public License,
+    version 3 or later. You can use, change and redistribute it under that
+    licence. The source code is on
+    [GitHub](https://github.com/wuweidict/wudict). See [Licence](license.md).
+
+    The licence applies to wudict only. Each dictionary has its own licence.
+
+??? question "Where can I get dictionaries?"
+
+    Use your own dictionary files, or get free dictionaries:
+
+    -   [legbehindneck.com/wudict](https://legbehindneck.com/wudict/): free
+        dictionaries as [share links](../dictionaries/add.md#share-links). On
+        Android, a share link starts the import in wuDict. On a desktop, paste
+        the link on the setup page.
+    -   [Kiwix](https://library.kiwix.org): Wikipedia, Wiktionary and other
+        reference works as `.zim` files.
+    -   Your own dictionary: write it as a
+        [wudict markdown](../dictionaries/formats.md#wudict-markdown) file in
+        a text editor.
+
+    wudict reads MDict, StarDict, Aard 2, Lingvo DSL, Babylon, ZIM and wudict
+    markdown: see [Formats](../dictionaries/formats.md). To install the files:
+    [Add dictionaries](../dictionaries/add.md).
 
 ??? question "Where are wudict's files?"
 
@@ -58,14 +97,16 @@ For problems, see [Troubleshooting](troubleshooting.md).
 
 ??? question "Can I use wudict without a browser?"
 
-    Yes. The commands work without a running server:
+    Yes, you can use wudict in the terminal:
 
     ``` sh
-    wudict lookup ~/Dictionaries/Oxford.mdx flight   # the article as HTML
-    wudict keys   ~/Dictionaries/Oxford.mdx          # every headword
+    wudict lookup -format text Oxford.mdx flight     # show definitions as plain text
+    wudict keys   ~/Dictionaries/Oxford.mdx          # list all headwords
     wudict ingest                                    # index the dictionary folders
     wudict clean                                     # list removable library folders
     ```
+
+    See `wudict --help` in terminal.
 
     [Command line](../reference/cli.md)
 
@@ -75,6 +116,112 @@ For problems, see [Troubleshooting](troubleshooting.md).
     word from the text selection menu of other apps. There is no iOS app.
 
     [Android app](../apps/android.md)
+
+??? question "What's the difference between Android FOSS build vs Google Play build?"
+
+    **Short answer.** Both versions are built from the same open-source repository. Search,
+    lookup and indexing are the same. The builds are different in the way they access your dictionary files. 
+    Use the FOSS build if you want to freely access dictionary folders in your device storage in whatever folder you indicate. 
+    Use the Google Play if you need automatic updates and if you are concerned about granting full disk access to wudict. You can still select specific folders to import from, but a different mechanism is used (the scoped storage introduced by Android in API 30). A limitation of the play storage version is that all wudict data is located under  `/sdcard/Android/data/com.legbehindneck.wudict/files/Dictionaries` and in recent versions of Android this folder is not easily accessible from a file manager.
+
+    **Differences.**
+
+    | | FOSS build | Google Play build |
+    | --- | --- | --- |
+    | Source | GitHub, Obtainium | Google Play |
+    | Dictionary files | *Internal storage → Dictionaries*, a folder you manage | `Android/data/com.legbehindneck.wudict/files/Dictionaries`; you import the files |
+    | Storage permission | *All files access* | none |
+    | Updates | Obtainium, or a download from GitHub | Google Play |
+    | Signing certificate | the wudict developers | Google |
+    | Reachable from other devices (testing) | optional toggle in wudict settings, OFF by default | no |
+    | Install and crash data to Google | no | yes |
+
+    **Disk space.**
+
+    -   FOSS build: the dictionary files stay where you put them. One copy of
+        each dictionary exists.
+    -   Google Play build: an import copies the dictionary files into the app.
+        Two copies exist until the import ends. The import does not start if
+        the free space is less than the size of the files.
+    -   Google Play build: after the import, the app offers to delete the
+        originals. If you keep them, the dictionaries use two times the disk
+        space.
+    -   Google Play build: dictionary files in
+        `Android/data/com.legbehindneck.wudict/files/Dictionaries` on a microSD
+        card are read there. They use no internal storage and need no import.
+    -   Both builds: the library adds the indexes and the media packs. It is in
+        `Android/data/com.legbehindneck.wudict/files/db`.
+
+    **Uninstall.** Android deletes `Android/data/com.legbehindneck.wudict`:
+    the library, the settings and the lemma data.
+
+    -   FOSS build: *Internal storage → Dictionaries* stays. After a new
+        install, the indexes are built again.
+    -   Google Play build: the imported dictionary files are in
+        `Android/data`. Android deletes them too.
+
+    **Advantages of the FOSS build.**
+
+    -   The dictionary folder is a usual folder. A file manager or a computer
+        can add, change and delete files in it.
+    -   To add a dictionary, copy its files. There is no import and no second
+        copy.
+    -   An uninstall does not delete your dictionary files.
+    -   Google gets no install or crash data.
+    -   Other devices on your network can connect, for testing:
+        [Access](../access.md#android).
+
+    **Disadvantages of the Google Play build.**
+
+    -   Each dictionary must be imported. During the import, it needs two times
+        its size in free space.
+    -   Android 11 and later hide `Android/data` from file managers. To get the
+        imported files, use USB (*File transfer*), `adb pull` or `adb push`.
+    -   An uninstall deletes the imported dictionary files. Copy them before
+        you uninstall.
+    -   Google collects install and crash data:
+        [Privacy Policy](../privacy_policy.md#data-collected-by-google-play).
+    -   Other devices cannot connect.
+
+    The Google Play build has these advantages: it asks for no storage
+    permission, and Google Play installs the updates.
+
+    **Signing certificate collision.** The two builds have the same package
+    name, `com.legbehindneck.wudict`, and different signing certificates.
+    Android does not install an update with a different certificate:
+
+    -   You cannot install the two builds on one device at the same time.
+    -   You cannot install one build over the other. Android shows an error.
+    -   Obtainium cannot update the Google Play build. Google Play cannot
+        update the FOSS build.
+
+    To change to the other build:
+
+    1.  From Google Play to FOSS only: copy
+        `Android/data/com.legbehindneck.wudict/files/Dictionaries` to a
+        computer, over USB or with `adb pull`.
+    2.  Uninstall the current build. Android deletes the library, the settings
+        and the lemma data.
+    3.  Install the other build.
+    4.  FOSS build: put the dictionary files in *Internal storage →
+        Dictionaries*. Google Play build: <kbd>Import dictionaries</kbd> →
+        <kbd>Choose folder</kbd>.
+    5.  Download the lemma data again. Make your settings again.
+
+??? question "Why can't I install the Android app?"
+
+    The app needs:
+
+    -   Android 8.0 or later.
+    -   A 64-bit ARM (`arm64`) processor. There is no build for 32-bit ARM or
+        x86 devices.
+
+    FOSS build, other causes:
+
+    -   Android blocks the APK. Allow *Install unknown apps* for the app that
+        opens the APK: the browser or the file manager.
+    -   The Google Play build is installed. Android cannot install one build
+        over the other: see the question on the two builds above.
 
 ??? question "Can other computers on my network use it?"
 
@@ -92,6 +239,128 @@ For problems, see [Troubleshooting](troubleshooting.md).
     [resource override](../dictionaries/override.md). Only
     <kbd>🗑 Remove…</kbd> and `wudict rm` delete dictionary files.
 
+??? question "Can I convert or export a dictionary?"
+
+    Yes, from the command line. `wudict dump` can export a dictionary as CSV or as
+    [wudict markdown](../dictionaries/formats.md#wudict-markdown):
+
+    ``` sh
+    wudict dump -o ~/exports ~/Dictionaries/Oxford.mdx              # CSV
+    wudict dump -format md -o ~/exports ~/Dictionaries/Oxford.mdx   # wudict markdown
+    ```
+
+    For more details see: `wudict dump --help`
+
+    The images, audio and other resources are exported to a folder next to the output.
+    The CSV is compatible with [pyglossary](https://github.com/ilius/pyglossary),
+    and thus can be converted to other formats, such as StarDict.
+    See [wudict dump](../reference/cli.md#dump).
+
+    The Android app has no command line, but it is possible to build and run 
+    the desktop version of wudict on Android in the Termux environment.
+    See *Can I use wudict in Termux?* below.
+
+??? question "Can I use wudict in Termux?"
+
+    Yes. Build wudict from the source code in
+    [Termux](https://termux.dev). The server and all commands work, as on a
+    desktop.
+
+    1.  Install Termux from F-Droid or from
+        [GitHub](https://github.com/termux/termux-app/releases).
+    2.  Install the build tools:
+
+        ``` sh
+        pkg upgrade
+        pkg install golang clang git make
+        ```
+
+        `go version` must show 1.26.5 or later.
+
+    3.  Get the source code and build wudict:
+
+        ``` sh
+        git clone https://github.com/wuweidict/wudict
+        cd wudict
+        make build                            # cgo: fast SQLite, built-in Speex decoder
+        install -m 755 wudict $PREFIX/bin/
+        ```
+
+        The first build compiles SQLite. This can take some minutes.
+
+        Without `clang`, use `make build-purego` in place of `make build`.
+        SQLite is then slower, and `.spx` audio needs the `speexdec` program.
+
+    4.  Give Termux access to the shared storage:
+
+        ``` sh
+        termux-setup-storage
+        ```
+
+        *Internal storage* is then `~/storage/shared`.
+
+    5.  Write the settings:
+
+        ``` sh
+        mkdir -p ~/.wudict
+        cat >> ~/.wudict/wudict.toml <<'EOF'
+        DICT_DIR    = "~/storage/shared/Dictionaries"
+        SERVER_PORT = "6889"
+        NO_BROWSER  = "1"
+        EOF
+        ```
+
+        `~/storage/shared/Dictionaries` is also the folder of the wuDict FOSS
+        build. The two use the same dictionary files. Each has its own library.
+        The wuDict app uses port 6888, so wudict in Termux uses 6889.
+
+    6.  Start the server:
+
+        ``` sh
+        wudict
+        ```
+
+    7.  Open `http://127.0.0.1:6889` in a browser on the phone.
+    8.  To keep the server running when the screen is off:
+
+        ``` sh
+        termux-wake-lock
+        ```
+
+    To update: in the `wudict` folder, run `git pull`, `make build` and the `install` command again.
+
+??? question "Can I search several dictionaries at once?"
+
+    Yes. *All dictionaries* in the dictionary picker searches every enabled
+    dictionary.
+
+    -   To remove a dictionary from *All dictionaries*, clear its checkbox in
+        the dictionary panel.
+    -   To search one dictionary, choose it in the picker.
+    -   To search a set of dictionaries, choose a group in the picker: a
+        language, a language pair, or your own group.
+    -   To change the order of the results, drag <kbd>⠿</kbd> in the
+        dictionary panel.
+
+    See [Picker groups](../dictionaries/groups.md) and
+    [Dictionary panel](../start/search.md#dictionary-panel).
+
+??? question "Can I change the look of wudict and of the articles?"
+
+    Yes.
+
+    -   Theme: <kbd>◐</kbd> chooses auto, light or dark.
+    -   Text size: <kbd>☰</kbd> → <kbd>−</kbd> <kbd>15px</kbd> <kbd>+</kbd>.
+    -   Your own CSS: <kbd>☰</kbd> → folder summary →
+        <kbd>Custom styles…</kbd>. **App** changes the wudict page. **Article**
+        changes every dictionary article. <kbd>Examples…</kbd> inserts ready
+        styles, such as sepia, true black, a serif font, and a compact layout
+        for phones. **Files** adds fonts and images.
+    -   One dictionary only: a [resource override](../dictionaries/override.md).
+
+    If a rule hides the page, open `http://127.0.0.1:6888/?style=off`.
+    See [Custom styles](../dictionaries/styles.md).
+
 ??? question "Why does *estuviera* find nothing?"
 
     Spanish lemma data is not installed, or wudict cannot tell that the
@@ -106,10 +375,10 @@ For problems, see [Troubleshooting](troubleshooting.md).
     named by the code (`es/`). English is assumed when nothing else is found.
     See [language detection](../reference/configuration.md#lemmatization).
 
-??? question "-cgo or -purego?"
+??? question "What's the difference and between -cgo or -purego flavours and which should I use?"
 
-    `-cgo` where it exists: faster SQLite, and a built-in Speex decoder.
-    `-purego` elsewhere; it needs `speexdec` for Speex audio.
+    Prefer `-cgo` for platform where it is available: you get a faster SQLite engine, and the built-in Speex decoder.
+    `-purego` is the fallback mode for environments where C-code cannot be compiled; A `-purego` build needs the external command line `speexdec` utility for Speex audio decoding.
     See [-cgo or -purego](../start/install.md#-cgo-or-purego).
 
 ??? question "How do I stop the browser tab opening at startup?"

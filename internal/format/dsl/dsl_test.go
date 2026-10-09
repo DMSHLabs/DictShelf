@@ -930,6 +930,53 @@ func TestReaderDirectives(t *testing.T) {
 	}
 }
 
+// An #INCLUDE never leaves the including file's folder: an absolute path, a
+// UNC path (on Windows a stat of one opens an SMB session) and a climbing
+// relative one are each resolved by base name beside the main file, or not at
+// all - never at the place they name.
+func TestReaderIncludeStaysInFolder(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "dict")
+	if err := os.Mkdir(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	outside := filepath.Join(root, "secret.dsl")
+	if err := os.WriteFile(outside, []byte("leaked\n\t[m1]x[/m]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "near.dsl"), []byte("near\n\t[m1]x[/m]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	main := filepath.Join(dir, "main.dsl")
+	if err := os.WriteFile(main, []byte(
+		"#NAME\t\"D\"\n"+
+			"#INCLUDE\t\""+filepath.ToSlash(outside)+"\"\n"+
+			"#INCLUDE\t\"..\\\\secret.dsl\"\n"+
+			"#INCLUDE\t\"\\\\\\\\host\\\\share\\\\near.dsl\"\n"+
+			"alpha\n\t[m1]a[/m]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	r, err := NewReader(main)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+	var heads []string
+	for {
+		e, err := r.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		heads = append(heads, e.Headwords[0])
+	}
+	if got := strings.Join(heads, ","); got != "alpha,near" {
+		t.Errorf("entries = %q, want %q", got, "alpha,near")
+	}
+}
+
 // A "#" line that is not a known directive is still not an entry: Lingvo
 // reserves column-0 "#" for the preprocessor, and treating one as a headword
 // indexes the directive text itself.

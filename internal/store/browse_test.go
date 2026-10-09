@@ -5,12 +5,35 @@
 package store
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 	"testing"
 
 	"github.com/wuweidict/wudict/internal/dict"
 )
+
+func TestBrowseFindHeadwordsAcrossPages(t *testing.T) {
+	s := browseStore(t, []string{"apple", "blue house", "house", "house boat", "house boat", "warehouse", "white house", "@_hidden"})
+	words, total, err := s.FindHeadwords(context.Background(), "hou", 0, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total != 4 || fmt.Sprint(words) != "[blue house house]" {
+		t.Fatalf("first result page = %v of %d", words, total)
+	}
+	words, total, err = s.FindHeadwords(context.Background(), "hou", 2, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total != 4 || fmt.Sprint(words) != "[house boat white house]" {
+		t.Fatalf("second result page = %v of %d", words, total)
+	}
+	words, total, err = s.FindHeadwords(context.Background(), "ware", 0, 2)
+	if err != nil || total != 1 || fmt.Sprint(words) != "[warehouse]" {
+		t.Fatalf("whole-title prefix = %v of %d, %v", words, total, err)
+	}
+}
 
 // browseStore ingests a headword-only fixture: browsing reads the index and
 // nothing else, so no fixture here needs an article, a trigram table or FTS.

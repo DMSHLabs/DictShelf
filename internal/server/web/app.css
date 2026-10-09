@@ -4,16 +4,19 @@ html[data-shell-image], html[data-shell-image] body { background:transparent !im
 /* ── design tokens ─────────────────────────────────────────────────── */
 :root{
   --fi:1.618;                     /* φ */
-  /* Settings text scale, named from its shared 100% base so the drawer uses
-     one consistent ladder instead of unrelated pixel sizes. */
-  --ui-font-base:1rem;
-  --ui-font-section:1rem;
-  --ui-font-title:1.15rem;
-  --ui-font-addition:.9rem;
-  --ui-hint-font-size:.8rem;
+  /* UI scale values are unitless factors; each rule applies rem or em. */
+  --ui-font-base:1;
+  --ui-font-section:1;
+  --ui-font-title:1.15;
+  --ui-font-addition:.9;
+  --ui-hint-font-size:.8;
   --ui-control-height:1.6;
-  --ui-main-control-height:1.6;
+  --ui-control-font:.9;
+  --ui-hint-control-height:1;
+  --ui-main-control-height:1.05;
   --ui-main-control-font:1.05;
+  --ui-edit_control-height:1.8;
+  --ui-edit_control-font:1;
   --ui-section-space-before:0;
   --ui-section-space-after:.45;
   --ui-row-gap:.6;
@@ -220,6 +223,9 @@ body.barpinned{--stick:var(--barh)}
   border-top:1px solid var(--line);padding:var(--sp-1) 0;
   padding-bottom:calc(var(--sp-1) + var(--wd-inset-bottom,0px))}
 .sbar[hidden]{display:none}
+#sbarBackWords{display:inline-flex;align-items:center;justify-content:center;gap:.35em;flex:none;margin-right:.35em;white-space:nowrap;text-decoration:none;font-size:calc(var(--ui-font-addition) * 1rem);line-height:1}
+#sbarBackWords svg{display:block;flex:none;width:1.15em;height:1.15em}
+#sbarBackWords[hidden]{display:none}
 #sbarFind{flex:none;display:flex;align-items:center;justify-content:center}
 #articleFindStrip{position:fixed;left:0;right:0;bottom:calc(var(--sbarh,var(--wd-inset-bottom,0px)) + var(--workh,0px) + var(--wd-vv-bottom,0px));
   z-index:101;display:flex;align-items:center;gap:var(--sp-1);padding:var(--sp-1) var(--sp-2);
@@ -246,7 +252,7 @@ body.barpinned{--stick:var(--barh)}
 .sbar .seg{display:flex;position:relative;flex:0 1 auto;align-self:stretch;
   align-items:center;justify-content:center;min-width:0}
 .sbar .seg select{position:absolute;inset:0;width:100%;height:100%;margin:0;
-  padding:0;border:0;max-width:none;opacity:0;-webkit-appearance:none;
+  min-height:0;padding:0;border:0;max-width:none;opacity:0;-webkit-appearance:none;
   appearance:none}
 .sbar .seg:has(select:focus-visible) .chip{outline:2px solid var(--focus);outline-offset:1px}
 .sbar .seg:has(select:disabled){opacity:.55}
@@ -263,7 +269,7 @@ body.barpinned{--stick:var(--barh)}
    145px, the cap is not reached); at 320px the row has no free space left, the
    seg shrinks and the name is cut, with Examples still 43px off the right
    edge. */
-.sbar #dictChip{max-width:min(30ch,60vw);min-width:0}
+.sbar #dictChip{max-width:min(30ch,60vw);min-width:0;font-size:calc(var(--ui-font-addition) * 1rem)}
 /* An arrow that has run out of list: dimmed, not gone and not `disabled` - the
    same call the font steppers make at their bounds (`.fsbtn.lim`), for the same
    reason: a control that stops taking presses reads as broken, and a press at
@@ -275,7 +281,7 @@ body.barpinned{--stick:var(--barh)}
    which is the layer being off. That is the panel pair's Show half, and the
    colour says the same thing here: accent is "this is what you are looking
    at", never "the thing is switched off". */
-.sbar #sbarExamples{font-weight:600}
+.sbar #sbarExamples{font-size:calc(var(--ui-font-addition) * 1rem);font-weight:400}
 .sbar #sbarExamples[aria-pressed="true"]{color:var(--accent);border-color:var(--accent)}
 /* The fold's handle wears TWO lengths, and it is the one control in this row
    that may give up width without giving up meaning - the reader said so
@@ -350,8 +356,8 @@ input[type=search]:focus{border-color:var(--focus);box-shadow:0 0 0 3px color-mi
    moving, demanding nothing. A fast spinner makes a promise — "wait for me to
    stop"; this one only reports. */
 @media (prefers-reduced-motion:reduce){.qled .spin{animation:none}}
-select{font-size:13px;color:var(--label);background:var(--bg-card);
-  border:1px solid var(--line);border-radius:8px;padding:.3em .4em;max-width:180px}
+select{box-sizing:border-box;font-size:calc(var(--ui-font-base) * 1rem);min-height:calc(var(--ui-control-height,1.6) * 1em);
+  color:var(--label);background:var(--bg-card);border:1px solid var(--line);border-radius:8px;padding:.3em .4em;max-width:180px}
 /* The pill is INERT above 600px: display:contents leaves the field and the two
    selects as direct flex children of the form, which is the layout the bar has
    always had, and the chips are simply not rendered. The whole mobile
@@ -384,11 +390,13 @@ select{font-size:13px;color:var(--label);background:var(--bg-card);
 .chip .lbl{overflow:hidden;text-overflow:ellipsis}
 .chip .bk{width:14px;height:14px;flex:none}
 .bar .chip{display:none}
-.btn{font-size:15px;background:var(--bg-card);color:var(--label);
-  border:1px solid var(--line);border-radius:8px;padding:.3em .55em;cursor:pointer;line-height:1.2}
+.btn{box-sizing:border-box;font-size:calc(var(--ui-font-base) * 1rem);min-height:calc(var(--ui-control-height,1.6) * 1em);
+  background:var(--bg-card);color:var(--label);border:1px solid var(--line);border-radius:8px;
+  padding:.3em .55em;cursor:pointer;line-height:1.2}
 .btn:hover{color:var(--fg);border-color:var(--fg-faint)}
+.icon-close{display:block;width:1.3em;height:1.3em}
 #panel .examples-extra{display:flex;align-items:flex-start;gap:calc(var(--ui-control-gap) * 1em);
-  margin:calc(var(--ui-addition-gap) * 1em) 0;padding-left:.4em;font-size:var(--ui-font-addition);overflow-wrap:anywhere}
+  margin:calc(var(--ui-addition-gap) * 1em) 0;padding-left:.4em;font-size:calc(var(--ui-font-addition) * 1rem);overflow-wrap:anywhere}
 #panel .examples-extra[hidden]{display:none}
 .examples-extra[hidden]{display:none}
 .examples-extra input{flex:none;margin-top:.2em;accent-color:var(--accent)}
@@ -465,6 +473,7 @@ details.dict{margin-top:var(--sp-2);background:var(--bg-card);border:1px solid v
 details.dict>summary{position:sticky;top:var(--stick);z-index:2;
   background:var(--bg-card);
   cursor:pointer;padding:var(--sp-1) .62rem;font-weight:600;
+  outline:2px solid transparent;outline-offset:-2px;border-radius:9px 9px 0 0;
   color:var(--label);list-style:none;display:flex;align-items:center;gap:var(--sp-1);
   /* `top` is deliberately NOT in this list, and the reason is the reader's
      report that scrolling UP tucked the header a couple of pixels under the
@@ -506,6 +515,8 @@ details.dict>summary::before{content:"›";color:var(--label-quiet);
   transition:transform .18s ease;font-weight:400}
 details.dict[open]>summary::before{transform:rotate(90deg)}
 details.dict[open]>summary{border-bottom:1px solid var(--line-soft)}
+details.dict>summary.sbar-target{outline-color:var(--accent)}
+details.dict>summary:focus-visible{outline-color:var(--focus)}
 /* Expand-all can put a hundred dictionaries' articles on screen at once.
    Articles are built eagerly either way (renderSlot appends them all; the
    accordion only hides them), so the cost of opening is layout and paint —
@@ -663,7 +674,7 @@ body.styling{padding-bottom:var(--styler-shown,var(--styler-h))}
    names is the whole sheet and the list behind it is how the reader moves to
    another subject without leaving (the bars used to do that). */
 #stylerHead .choice-btn{width:auto;background:none;border:0;padding:.1em 0;
-  gap:.35em;font-size:14px;font-weight:600}
+  gap:calc(var(--ui-control-gap,.25) * 1em);font-size:calc(var(--ui-font-title) * 1rem);font-weight:600}
 #stylerHead .choice-btn:hover{border:0;color:var(--fg)}
 #stylerHead .choice-btn:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
 /* THE SETTINGS AREA, and it is the sheet's whole scroll. The three sections
@@ -699,14 +710,14 @@ body.styling{padding-bottom:var(--styler-shown,var(--styler-h))}
 .appearance-row{display:flex;align-items:center;gap:.5em;min-height:2.5em}
 /* One narrow label column for both rows - "Color" and "Image" say enough
    under the section heading, and every em here is strip width. */
-.appearance-row label,.appearance-row .appearance-label{flex:0 0 4.2em;font-size:13px}
+.appearance-row label,.appearance-row .appearance-label{flex:0 0 4.2em;font-size:calc(var(--ui-font-base) * 1rem)}
 /* The field is the same field wherever its box rides: it hangs off the
    Window-background row and off the Screen option that uses it, and the rule
    that gives it a width has to name both or the second one collapses to the
    pipette's own size with nowhere left to type a hex value. */
 .appearance-row input[type=text],
 .radio-row input[type=text]{width:7.5em;max-width:100%;min-width:0;
-  font:inherit;font-size:13px;
+  box-sizing:border-box;min-height:calc(var(--ui-control-height,1.6) * 1em);font:inherit;font-size:calc(var(--ui-font-base) * 1rem);
   background:var(--bg-card);color:var(--fg);border:1px solid var(--line);border-radius:5px;padding:.25em}
 /* The color box wraps the input, the picker AND the dropdown, so the 35% row
    cap moved here: a percentage on the input would resolve against the box and
@@ -725,9 +736,9 @@ body.styling{padding-bottom:var(--styler-shown,var(--styler-h))}
    shows what it offers, and inert, because a value nothing is using is not a
    value. The dim is the same the Clear button uses for its disabled state. */
 .radio-row .color-box:has(input:disabled){opacity:.45}
-.color-pick{flex:none;display:flex;align-items:center;justify-content:center;
-  width:2em;height:2em;padding:0;cursor:pointer;
-  font-size:13px;background:var(--bg-card);color:var(--label);
+.color-pick{box-sizing:border-box;flex:none;display:flex;align-items:center;justify-content:center;
+  width:calc(var(--ui-control-height,1.6) * 1em);height:calc(var(--ui-control-height,1.6) * 1em);padding:0;cursor:pointer;
+  font-size:calc(var(--ui-font-base) * 1rem);background:var(--bg-card);color:var(--label);
   border:1px solid var(--line);border-radius:5px}
 .color-pick svg{width:1.05em;height:1.05em;display:block}
 /* Hover only reaches a pipette with no colour on it: once the button wears a
@@ -793,7 +804,7 @@ body.styling{padding-bottom:var(--styler-shown,var(--styler-h))}
    four of them, which made it grey in BOTH looks, the one thing the register
    exists to prevent). The greys are LEFT to things the reader cannot act on,
    which in this window is nothing: no row here can be disabled. */
-#sysSettings h3.sys-head{margin:1.2em 0 .2em;font-size:14px;font-weight:600;color:var(--label)}
+#sysSettings h3.sys-head{margin:1.2em 0 .2em;font-size:calc(var(--ui-font-section) * 1rem);font-weight:600;color:var(--label)}
 #sysSettings h3.sys-head:first-child{margin-top:0}
 /* The one group that folds, wearing the heading it replaces: same type, same
    spacing, plus the ▸/▾ this app uses everywhere it means "there is more
@@ -813,11 +824,11 @@ body.styling{padding-bottom:var(--styler-shown,var(--styler-h))}
    chose the ratio is written there) - a `--line` rule was the thing that read
    as invisible on a phone in the two light looks, and this window wears the
    same paper. */
-#sysSettings .sys-fold{display:flex;align-items:center;gap:.45em;width:100%;
-  margin:1.4em 0 .2em;padding:.8em 0 0;border:0;background:none;text-align:left;
-  font:inherit;font-size:14px;font-weight:600;color:var(--fg);cursor:pointer;
+#sysSettings .sys-fold{display:flex;align-items:center;gap:calc(var(--ui-control-gap,.25) * 1em);width:100%;
+  margin:calc(var(--ui-row-gap,.6) * 1em) 0 .2em;padding:.8em 0 0;border:0;background:none;text-align:left;
+  font:inherit;font-size:calc(var(--ui-font-section) * 1rem);font-weight:600;color:var(--fg);cursor:pointer;
   border-top:1px solid color-mix(in srgb,var(--fg) 22%,transparent)}
-#sysSettings .sys-fold::before{content:"▸";color:var(--label);font-size:13px;
+#sysSettings .sys-fold::before{content:"▸";color:var(--label);font-size:1em;
   line-height:1;display:inline-block;width:.9em;flex:none;text-align:center}
 #sysSettings .sys-fold[aria-expanded="true"]::before{content:"▾";color:var(--accent)}
 #sysSettings .sys-fold:hover::before{color:var(--fg)}
@@ -827,13 +838,13 @@ body.styling{padding-bottom:var(--styler-shown,var(--styler-h))}
    rather than a margin on the button: the rows above it end in whatever the
    shell's table ends with, and this keeps the separation the same whatever that
    is. */
-#sysSettings .sys-gap{height:1.2em}
-#sysSettings .sys-hint{margin:0;font-size:12.5px;line-height:1.618;color:var(--label)}
+#sysSettings .sys-gap{height:calc(var(--ui-row-gap,.6) * 1em)}
+#sysSettings .sys-hint{margin:0;font-size:calc(var(--ui-hint-font-size) * 1rem);line-height:1.618;color:var(--label)}
 #sysSettings .sys-item{margin:.5em 0 .2em}
-#sysSettings .sys-row{display:flex;align-items:center;gap:.6em;min-height:44px;cursor:pointer}
+#sysSettings .sys-row{display:flex;align-items:center;gap:calc(var(--ui-control-gap,.25) * 1em);min-height:calc(var(--ui-control-height,1.6) * 1em);cursor:pointer}
 #sysSettings .sys-row.sys-num{cursor:default}
-#sysSettings .sys-label{flex:1 1 auto;color:var(--label);min-width:0;font-size:14px;overflow-wrap:anywhere}
-#sysSettings .sys-num input{flex:none;width:6.5em;font:inherit;font-size:14px;text-align:right;
+#sysSettings .sys-label{flex:1 1 auto;color:var(--label);min-width:0;font-size:calc(var(--ui-font-base) * 1rem);overflow-wrap:anywhere}
+#sysSettings .sys-num input{box-sizing:border-box;flex:none;width:6.5em;min-height:calc(var(--ui-control-height,1.6) * 1em);font:inherit;font-size:calc(var(--ui-font-base) * 1rem);text-align:right;
   color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:.5em .6em}
 #sysSettings .sys-num input:focus{outline:none;border-color:var(--focus);
   box-shadow:0 0 0 3px color-mix(in srgb,var(--focus) 25%,transparent)}
@@ -841,14 +852,14 @@ body.styling{padding-bottom:var(--styler-shown,var(--styler-h))}
    input can hold nothing else - so this is the only thing that says what the
    number is OF. Muted and pulled back against its field, so the row reads as
    one control rather than as a field with a word beside it. */
-#sysSettings .sys-unit{flex:none;margin-left:-.35em;font-size:12.5px;
+#sysSettings .sys-unit{flex:none;margin-left:-.35em;font-size:calc(var(--ui-font-addition) * 1rem);
   color:var(--label);font-variant-numeric:tabular-nums}
 /* The window's two voices. The stale note is a state of the MACHINE - the
    server is still running with the settings it was started with - so it is a
    boxed sentence where this app's other notes are plain text; the line under it
    answers a refusal, and is quiet because it is not a control. An empty one
    takes no room, and both exist from the moment the window opens. */
-#sysSettings .sys-note{margin:.9em 0 0;font-size:12.5px;line-height:1.618;color:var(--label)}
+#sysSettings .sys-note{margin:calc(var(--ui-addition-gap,.5) * 1em) 0 0;font-size:calc(var(--ui-hint-font-size) * 1rem);line-height:1.618;color:var(--label)}
 #sysSettings .sys-note:empty{margin:0}
 #sysSettings #sysStale{border:1px solid var(--line);border-radius:8px;padding:.5em .7em}
 /* The Background-color checkbox wears the groups editor's square - one
@@ -883,9 +894,9 @@ html[data-shell-image] .menu-card{
   background-image:linear-gradient(#ffffff24,#ffffff24),var(--paper-bk-image);
   background-size:100% 100%}
 .menu-card[hidden]{display:none}
-.menu-card button{display:flex;align-items:center;gap:.6em;width:100%;
+.menu-card button{box-sizing:border-box;display:flex;align-items:center;gap:calc(var(--ui-control-gap,.25) * 1em);width:100%;min-height:calc(var(--ui-control-height,1.6) * 1em);
   padding:.45em .7em;border:0;background:none;color:var(--fg);
-  text-align:left;font:inherit;font-size:13px;cursor:pointer}
+  text-align:left;font:inherit;font-size:calc(var(--ui-font-base) * 1rem);cursor:pointer}
 .menu-card button:hover,.menu-card button:focus-visible{
   background:var(--line-soft);outline:none}
 /* The recent colors: the swatch IS the label's subject, so it leads. */
@@ -897,9 +908,9 @@ html[data-shell-image] .menu-card{
    answer means - the shape the shell's own settings screen gives these two
    rows, which is where they came from. */
 .screen-row{padding:.2em 0 .45em}
-.screen-title{font-size:13px;font-weight:600;color:var(--label);margin-bottom:.25em}
-.choice-btn{display:flex;align-items:center;gap:.4em;width:100%;height:calc(var(--ui-control-height,2.2) * 1em);
-  font:inherit;font-size:13px;color:var(--fg);
+.screen-title{font-size:calc(var(--ui-font-section) * 1rem);font-weight:600;color:var(--label);margin-bottom:.25em}
+.choice-btn{box-sizing:border-box;display:flex;align-items:center;gap:calc(var(--ui-control-gap,.25) * 1em);width:100%;height:calc(var(--ui-control-height,1.6) * 1em);
+  font:inherit;font-size:calc(var(--ui-font-base) * 1rem);color:var(--fg);
   background:var(--bg-card);border:1px solid var(--line);border-radius:5px;
   padding:0 .55em;line-height:1;text-align:left;cursor:pointer}
 .choice-btn::after{content:"";flex:none;margin-left:auto;width:0;height:0;
@@ -912,8 +923,8 @@ html[data-shell-image] .menu-card{
    our own - so they follow the theme and the paper the same way. The ROW is the
    target; 44px is the floor the rest of the app's rows sit on. */
 .radio-group{display:flex;flex-direction:column;gap:.05em}
-.radio-row{display:flex;align-items:center;gap:.55em;min-height:44px;
-  flex-wrap:wrap;cursor:pointer;font-size:13px;color:var(--fg)}
+.radio-row{display:flex;align-items:center;gap:calc(var(--ui-control-gap,.25) * 1em);min-height:44px;
+  flex-wrap:wrap;cursor:pointer;font-size:calc(var(--ui-font-base) * 1rem);color:var(--fg)}
 .radio-row input{appearance:none;-webkit-appearance:none;flex:none;
   width:20px;height:20px;margin:0;border:1.5px solid var(--fg);border-radius:50%;
   background-color:var(--paper-bg,var(--bg));position:relative;cursor:pointer}
@@ -925,7 +936,7 @@ html[data-shell-image] .menu-card{
 .choice-menu .choice-item::before{content:"";flex:none;width:1em;
   color:var(--accent);font-weight:400}
 .choice-menu .choice-item[aria-selected="true"]::before{content:"✓"}
-#appearanceBackground small,.screen-row small{display:block;font-size:11px;
+#appearanceBackground small,.screen-row small{display:block;font-size:calc(var(--ui-hint-font-size) * 1rem);
   line-height:1.4;color:var(--label-quiet)}
 .screen-row small{margin-top:.25em}
 /* The picker is the pictures themselves: a scrollable row of thumbnails, the
@@ -1026,7 +1037,7 @@ html[data-native-appearance]{--styler-h:min(65vh,560px)}
    Distinctions stay only where they teach: the selected tab's accent, the
    hover border. */
 #styler .tab,#styler .btn{
-  font:inherit;font-size:12.5px;line-height:1.2;padding:.34em .55em;
+  font:inherit;font-size:calc(var(--ui-font-base) * 1rem);line-height:1.2;padding:.34em .55em;
   color:var(--label);background:var(--bg-card);
   border:1px solid var(--line);border-radius:8px;cursor:pointer}
 #styler .tab{padding:.34em .7em}
@@ -1083,7 +1094,7 @@ html[data-native-appearance]{--styler-h:min(65vh,560px)}
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #stylerFiles .n s{display:block;text-decoration:none;font-size:11px;color:var(--label-quiet)}
 #stylerFiles .n:hover b{color:var(--accent)}
-#stylerFiles .btn{flex:0 0 auto;font-size:12px;padding:.25em .55em}
+#stylerFiles .btn{flex:0 0 auto;font-size:calc(var(--ui-font-base) * 1rem);padding:.25em .55em}
 /* The presets pane wears the Files pane's box, because they are the same
    kind of thing - a list of rows in the textarea's place - and the reader
    should not have to learn a second surface. The rows differ in what leads
@@ -1109,7 +1120,7 @@ html[data-native-appearance]{--styler-h:min(65vh,560px)}
 #stylerPresetsPane .n s{display:block;text-decoration:none;font-size:11px;
   color:var(--label-quiet);overflow-wrap:anywhere}
 #stylerPresetsPane .n u{ text-decoration:none;color:var(--accent);font-size:11px}
-#stylerPresetsPane .btn{flex:0 0 auto;font-size:12px;padding:.25em .55em}
+#stylerPresetsPane .btn{flex:0 0 auto;font-size:calc(var(--ui-font-base) * 1rem);padding:.25em .55em}
 
 /* ── dictionaries panel ────────────────────────────────────────────── */
 #panel{position:fixed;inset:0;z-index:200;display:none;background:color-mix(in srgb,var(--fg) 24%,transparent)}
@@ -1169,9 +1180,9 @@ dialog.panel-card:not([open]){display:none}
   -webkit-overflow-scrolling:touch}
 .panel-card h2{margin:0 0 var(--sp-2);font-size:16px;color:var(--fg);
   display:flex;align-items:center}
-#panel .panel-head h2{font-size:var(--ui-font-title)}
+#panel .panel-head h2{font-size:calc(var(--ui-font-title) * 1rem)}
 #panel .panel-head h2 .btn{font-size:100%}
-#panel .panel-head .headacts .btn{height:calc(var(--ui-main-control-height,1.05) * 1em);box-sizing:border-box;
+#panel .panel-head .headacts .btn{height:calc(var(--ui-main-control-height,1.05) * 1em);min-height:calc(var(--ui-main-control-height,1.05) * 1em);box-sizing:border-box;
   font-size:calc(var(--ui-main-control-font,1.05) * 1rem);
   padding:0 .55em;line-height:1}
 .panel-card h2 .headacts{margin-left:auto;display:flex;gap:calc(var(--ui-control-gap) * 1em)}
@@ -1194,30 +1205,32 @@ dialog.panel-card:not([open]){display:none}
    and then the panel altogether, for the Dictionary settings window that list
    lives in now. */
 .panel-head{flex:none;background:var(--bg);padding:var(--sp-3) 0 0}
-.pd{border:1px solid var(--line);border-radius:8px;background:var(--bg-card);
-  padding:var(--sp-1) var(--sp-2);margin-bottom:var(--sp-1);font-size:13px}
+.pd{border:1px solid var(--line);border-radius:12px;background:var(--bg-card,var(--bg));
+  padding:.8em;margin-bottom:calc(var(--ui-row-gap) * 1em);font-size:calc(var(--ui-font-base) * 1rem)}
 .pd.dragging{opacity:.45}
 .pd.drop-before{box-shadow:0 -2px 0 var(--accent)}
 .pd.drop-after{box-shadow:0 2px 0 var(--accent)}
-.pd .hd{display:flex;align-items:center;gap:.35em}
-.pd .grip{cursor:grab;color:var(--label-quiet);user-select:none;font-size:14px;
+.pd .hd{display:flex;align-items:center;gap:calc(var(--ui-control-gap,.25) * 1em)}
+.pd .grip{cursor:grab;color:var(--label-quiet);user-select:none;font-size:calc(var(--ui-font-base) * 1rem);
   line-height:1;letter-spacing:-.15em;padding-right:.15em}
 .pd .grip:active{cursor:grabbing}
 /* The title is a control (see the panel's click handler), so it has to look
    like one on the way to being pressed rather than only after. flex:1 was
    already there for the layout and doubles as a generous target. */
-.pd b{color:var(--fg);font-size:14px;word-break:break-word;flex:1;cursor:pointer}
+.pd b{color:var(--fg);word-break:break-word;flex:1;cursor:pointer}
+#dictSettings .pd .hd>b{font-size:calc(var(--ui-font-section) * 1rem)}
 .pd b:hover{color:var(--link);text-decoration:underline;text-underline-offset:2px}
 .pd b:focus-visible{outline:2px solid var(--focus);outline-offset:2px;border-radius:3px}
 .pd .ord{display:flex;gap:.1em;margin-left:auto}
 .pd .ord button{background:none;border:0;color:var(--label-quiet);cursor:pointer;
-  font-size:12px;line-height:1;padding:.15em .2em;border-radius:4px}
+  font-size:calc(var(--ui-font-base) * 1rem);line-height:1;padding:.15em .2em;border-radius:4px}
 .pd .ord button:hover{color:var(--fg);background:var(--line-soft)}
-#dictSettings .pd .hd{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px}
+#dictSettings .pd .hd{display:grid;grid-template-columns:auto minmax(0,1fr);gap:calc(var(--ui-control-gap,.25) * 1em)}
+#dictSettings .pd .hd{box-sizing:border-box;padding:0;border-radius:0;background:transparent}
 #dictSettings .pd .hd>b{grid-column:1 / -1;grid-row:1}
 #dictSettings .pd .grip{grid-column:1;grid-row:2;padding:.4em;align-self:center}
-#dictSettings .pd .ord{grid-column:2;grid-row:2;gap:8px;margin-left:0;justify-content:flex-end}
-#dictSettings .pd .ord button{min-width:30px;min-height:30px}
+#dictSettings .pd .ord{grid-column:2;grid-row:2;gap:calc(var(--ui-control-gap,.25) * 2.5em);margin-left:0;justify-content:flex-end}
+#dictSettings .pd .ord button{box-sizing:border-box;min-width:calc(var(--ui-control-height,1.6) * 1em);width:calc(var(--ui-control-height,1.6) * 1em);height:calc(var(--ui-control-height,1.6) * 1em);min-height:calc(var(--ui-control-height,1.6) * 1em);padding:0}
 .en{appearance:none;width:32px;height:18px;border-radius:9px;background:var(--line);
   position:relative;cursor:pointer;flex:none;transition:background .15s}
 .en:checked{background:var(--accent)}
@@ -1234,9 +1247,9 @@ dialog.panel-card:not([open]){display:none}
    watching it appear. */
 .btn:disabled{opacity:.45;cursor:default}
 .en:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
-.pd .meta{color:var(--label-quiet);font-size:11.5px;margin:.15em 0 .3em}
-.pd .feat{display:inline-block;border:1px solid var(--line);border-radius:99px;
-  padding:.05em .55em;margin:.15em .25em .15em 0;font-size:10.5px;color:var(--label-quiet);
+.pd .meta{color:var(--label-quiet);font-size:calc(var(--ui-font-addition) * 1rem);margin:.15em 0 .3em}
+.pd .feat{box-sizing:border-box;display:inline-flex;align-items:center;height:calc(var(--ui-control-height,1.6) * 1em);border:1px solid var(--line);border-radius:99px;
+  padding:0 .55em;margin:.15em calc(var(--ui-control-gap,.25) * 1em) .15em 0;font-size:calc(var(--ui-font-base) * 1rem);line-height:1;color:var(--label-quiet);
   cursor:pointer;user-select:none;transition:color .12s,border-color .12s,background .12s}
 .pd .feat:hover{border-color:var(--accent);color:var(--accent)}
 .pd .feat.on{border-color:var(--accent);color:#fff;background:var(--accent)}
@@ -1262,7 +1275,7 @@ dialog.panel-card:not([open]){display:none}
    "provisional" without the alarm of an error colour */
 .pd .feat.on.stale{border-style:dotted;border-color:var(--fg-faint)}
 .pd .tag{display:inline-block;border:1px solid var(--line);border-radius:5px;
-  padding:0 .4em;font-size:10.5px;color:var(--label);margin-right:.25em}
+  padding:0 .4em;font-size:calc(var(--ui-font-addition) * 1rem);color:var(--label);margin-right:.25em}
 .pd .tag.on{color:var(--accent);border-color:var(--accent)}
 .act{color:var(--link);cursor:pointer;text-decoration:underline;
   text-underline-offset:2px;font-size:12px;margin-right:var(--sp-2)}
@@ -1275,7 +1288,7 @@ dialog.panel-card:not([open]){display:none}
    choices still name what they delete, and cancel is still the quiet one. */
 /* A rule of its own above the control: the paths end, the danger begins. */
 .pd .rmwrap{margin-top:.45em;padding-top:.4em;border-top:1px dashed var(--line)}
-.pd .rm{display:inline-block;color:var(--danger);cursor:pointer;font-size:11px;
+.pd .rm{display:inline-block;color:var(--danger);cursor:pointer;font-size:calc(var(--ui-hint-font-size) * 1rem);
   font-weight:600;letter-spacing:.02em;border:1px solid var(--danger-line);
   border-radius:99px;padding:.1em .6em;background:var(--danger-soft);
   user-select:none;transition:background var(--t-1),color var(--t-1)}
@@ -1283,7 +1296,7 @@ dialog.panel-card:not([open]){display:none}
 /* The confirmation is a hazard panel, not a sentence: diagonal stripes in the
    danger colour at low alpha, so it reads as cordoned-off area at a glance and
    still passes contrast for the text on top of it. */
-.pd .rmq{display:block;font-size:11.5px;color:var(--label);line-height:1.7;
+.pd .rmq{display:block;font-size:calc(var(--ui-hint-font-size) * 1rem);color:var(--label);line-height:1.7;
   border:1px solid var(--danger);border-radius:8px;padding:.5em .6em;
   margin-top:.2em;background:var(--danger-soft);
   background-image:repeating-linear-gradient(-45deg,
@@ -1291,9 +1304,9 @@ dialog.panel-card:not([open]){display:none}
     transparent 6px 14px)}
 .pd .rmq b{color:var(--fg)}
 .pd .rmq .rmwarn{display:block;color:var(--danger);font-weight:700;
-  font-size:12px;letter-spacing:.01em;margin-bottom:.15em}
+  font-size:calc(var(--ui-font-addition) * 1rem);letter-spacing:.01em;margin-bottom:.15em}
 .pd .rmgo{display:inline-block;border:1px solid var(--danger);border-radius:99px;
-  padding:.1em .6em;margin:.35em .3em .1em 0;font-size:10.5px;font-weight:600;
+  padding:.1em .6em;margin:.35em .3em .1em 0;font-size:calc(var(--ui-font-base) * 1rem);font-weight:600;
   color:var(--danger);background:var(--bg-card);cursor:pointer;user-select:none}
 .pd .rmgo:hover{background:var(--danger);color:#fff}
 /* The irreversible one is filled in, and breathes. Everything else on this
@@ -1319,7 +1332,7 @@ dialog.panel-card:not([open]){display:none}
    not equal pull. Green also carries the meaning by itself, which matters on a
    phone where the labels are small and the thumb is fast. */
 .pd .rmno{display:inline-block;border:1px solid var(--safe-line);border-radius:99px;
-  padding:.1em .6em;margin:.35em .3em .1em .15em;font-size:10.5px;font-weight:600;
+  padding:.1em .6em;margin:.35em .3em .1em .15em;font-size:calc(var(--ui-font-base) * 1rem);font-weight:600;
   color:var(--safe);background:var(--safe-soft);cursor:pointer;user-select:none;
   transition:background var(--t-1),color var(--t-1)}
 .pd .rmno:hover{background:var(--safe);border-color:var(--safe);color:#fff}
@@ -1327,17 +1340,17 @@ dialog.panel-card:not([open]){display:none}
    elements rather than composed into one sentence — the path carries what it
    copies in data-full, so nothing downstream has to take a display string
    apart again to find it (see D49). */
-.pd .prow{font-size:10.5px;color:var(--label-quiet);overflow-wrap:break-word}
+.pd .prow{font-size:calc(var(--ui-hint-font-size) * 1rem);color:var(--label-quiet);overflow-wrap:break-word}
 .pd .prow.sub{opacity:.8}
 .pd .pfx{color:var(--label)}
 .pd .path{color:var(--label-quiet);cursor:pointer}
 .pd .err{color:var(--danger)}
 /* Not a .feat: those chips are switches that spend disk, and this one only
    opens a page. Same muted register as the provenance rows under it. */
-.pd .acts a.browse{display:inline-flex;align-items:center;gap:5px;width:100%;box-sizing:border-box;
-  margin:0;font:inherit;font-size:11px;line-height:1.2;color:var(--label-quiet);text-decoration:none}
+.pd .acts a.browse{display:inline-flex;align-items:center;gap:calc(var(--ui-control-gap,.25) * 1em);width:100%;box-sizing:border-box;min-height:calc(var(--ui-control-height,1.6) * 1em);
+  padding:0 .65em;margin:0;font:inherit;font-size:calc(var(--ui-font-base) * 1rem);line-height:1.2;color:var(--label-quiet);text-decoration:none}
 .pd .acts a.browse::after,.dsl-index-row .browse::after{content:"›";margin-left:auto;color:var(--label-quiet);
-  font-size:15px;line-height:1;flex:none}
+  font-size:1em;line-height:1;flex:none}
 .pd .acts a.browse:hover{color:var(--accent)}
 .pd .acts a.browse:hover::after,.dsl-index-row .browse:hover::after{color:var(--label)}
 .pd .acts a.browse svg{width:13px;height:13px;flex:none}
@@ -1370,17 +1383,18 @@ dialog.panel-card:not([open]){display:none}
   border-bottom:1px solid color-mix(in srgb,var(--fg) 22%,transparent)}
 #panel .sect{padding-top:calc(var(--ui-section-space-before) * 1em)}
 .sect:last-child{border-bottom:0;margin-bottom:0}
-.sect-h{margin:0 0 calc(var(--ui-section-space-after) * 1em);font-size:var(--ui-font-section);font-weight:700;color:var(--label)}
-#panel details[data-panel-section="info"]>.sect-h{font-size:var(--ui-font-section)}
-#panel .font-scale-row{font-size:var(--ui-font-base);margin:0}
-#panel .font-scale-setting{display:grid;grid-template-columns:var(--font-label-width,max-content) 1.65em 2.665em 1.65em;
+.sect-h{margin:0 0 calc(var(--ui-section-space-after) * 1em);font-size:calc(var(--ui-font-section) * 1rem);font-weight:700;color:var(--label)}
+#panel details[data-panel-section="info"]>.sect-h{font-size:calc(var(--ui-font-section) * 1rem)}
+#panel .font-scale-hint{font-size:calc(var(--ui-hint-font-size) * 1rem);color:var(--label);line-height:1.4;margin:0 0 calc(var(--ui-addition-gap) * 1em)}
+#panel .font-scale-row{font-size:calc(var(--ui-font-base) * 1rem);margin:0}
+#panel .font-scale-setting{display:grid;grid-template-columns:var(--font-label-width,max-content) 1.65em 3.065em 1.65em;
   align-items:center;column-gap:calc(var(--ui-control-gap) * 1em);row-gap:0;width:max-content;max-width:100%;box-sizing:border-box}
 #panel .font-scale-setting code{font:inherit;white-space:nowrap}
 #panel .font-scale-step{box-sizing:border-box;width:1.65em;height:calc(var(--ui-control-height) * 1em);padding:0;
   font:inherit;line-height:1;color:var(--label);background:var(--bg-card);border:1px solid var(--line);border-radius:6px}
 #panel .font-scale-step:hover{border-color:var(--fg-faint);color:var(--fg)}
 #panel .font-scale-step:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
-#panel .font-scale-setting input{box-sizing:border-box;width:2.665em;min-width:0;height:calc(var(--ui-control-height) * 1em);
+#panel .font-scale-setting input{box-sizing:border-box;width:3.065em;min-width:0;height:calc(var(--ui-control-height) * 1em);
   padding:0 .25em;font:inherit;text-align:right;color:var(--fg);background:var(--bg-card);
   border:1px solid var(--line);border-radius:6px}
 #panel .font-scale-setting input:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
@@ -1400,7 +1414,7 @@ dialog.panel-card:not([open]){display:none}
    shares a .facts container with. */
 .facts .mrow{display:flex;align-items:center;gap:calc(var(--ui-control-gap) * 1em);width:100%;
   box-sizing:border-box;height:calc(var(--ui-control-height,2.2) * 1em);text-align:left;text-decoration:none;cursor:pointer;
-  font-family:inherit;font-size:var(--ui-font-base);line-height:1;padding:0 .65em;margin:0;
+  font-family:inherit;font-size:calc(var(--ui-font-base) * 1rem);line-height:1;padding:0 .65em;margin:0;
   color:var(--label);background:var(--bg-card);
   border:1px solid var(--line);border-radius:8px;
   transition:color .12s,border-color .12s}
@@ -1432,7 +1446,7 @@ dialog.panel-card:not([open]){display:none}
 .facts:has(>#pickerGroupBtn)>#pickerGroupBtn{width:auto;flex:1 1 0;min-width:0}
 #pickerGroupBtn>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* A label for the control on its row, in the register the segs' labels use. */
-.facts .rowlabel{font-size:var(--ui-font-base);line-height:1.2;color:var(--label-quiet)}
+.facts .rowlabel{font-size:calc(var(--ui-font-base) * 1rem);line-height:1.2;color:var(--label-quiet)}
 /* The collection's count, on its own line under the heading: the answer to "is
    it looking where I think?", and the number a reader opens this drawer to
    check. Text and nothing else — it is not a control, so it is not drawn as one
@@ -1441,7 +1455,7 @@ dialog.panel-card:not([open]){display:none}
    The count truncates rather than wrapping: this line must stay ONE line at
    320px, and the count is the half that can afford to lose its tail. */
 .counts{display:flex;align-items:center;gap:.5em;padding:.15em 0 var(--sp-2);
-  color:var(--label-quiet);font-size:var(--ui-hint-font-size)}
+  color:var(--label-quiet);font-size:calc(var(--ui-hint-font-size) * 1rem)}
 .counts .fsum{flex:1 1 auto;min-width:0;white-space:nowrap;overflow:hidden;
   text-overflow:ellipsis}
 /* ── article text size ──────────────────────────────────────────────
@@ -1494,7 +1508,7 @@ dialog.panel-card:not([open]){display:none}
    and so carries the sheet's `width:100%`: here the row is a label and an
    answer on one line, so it takes the width of the ANSWER - the current look's
    name - and never less than the longest of the built-in ones. */
-.facts .choice-btn{font-size:var(--ui-font-base)}
+.facts .choice-btn{font-size:calc(var(--ui-font-base) * 1rem)}
 #panel .facts .choice-btn{gap:calc(var(--ui-control-gap) * 1em)}
 .facts:has(>#looksChoice)>#looksChoice{width:auto;flex:0 1 auto;min-width:6.5em}
 /* The row's three actions: square, drawn marks. The app's other icon-sized
@@ -1517,13 +1531,13 @@ dialog.panel-card:not([open]){display:none}
   border-radius:6px;transition:color .12s,border-color .12s,opacity .12s}
 #fsCtl button:hover,#fwCtl button:hover{color:var(--fg);border-color:var(--fg-faint)}
 #fsCtl button:focus-visible,#fwCtl button:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
-#fsCtl .fsbtn,#fwCtl .fsbtn{width:calc(var(--ui-control-height) * 1em);height:calc(var(--ui-control-height) * 1em);font-size:var(--ui-font-base)}
+#fsCtl .fsbtn,#fwCtl .fsbtn{width:calc(var(--ui-control-height) * 1em);height:calc(var(--ui-control-height) * 1em);font-size:calc(var(--ui-font-base) * 1rem)}
 #fsCtl .fsbtn.lim,#fwCtl .fsbtn.lim{opacity:.3}
 /* min-width holds the widest value of EACH stepper, so that neither the
    buttons nor the other row moves as the value changes: "32px" is the widest
    size, "Medium" the widest weight, and both boxes take the wider of the two.
    tabular-nums holds the digits still within it. */
-#fsCtl .fsval,#fwCtl .fsval{height:calc(var(--ui-control-height) * 1em);min-width:3.5em;padding:0 .2em;font-size:var(--ui-font-base);
+#fsCtl .fsval,#fwCtl .fsval{height:calc(var(--ui-control-height) * 1em);min-width:3.5em;padding:0 .2em;font-size:calc(var(--ui-font-base) * 1rem);
   color:var(--label-quiet);font-variant-numeric:tabular-nums}
 /* A group's name over the rows it heads — "Dictionary folders", "Library",
    "Config file". Sentence case and a heavier weight, NOT the uppercase+tracking
@@ -1531,8 +1545,8 @@ dialog.panel-card:not([open]){display:none}
    in a section made of quiet reference text reads as a different kind of thing.
    Weight is what separates it from the paths below, which are the same size and
    colour. */
-#folderBody{font-size:var(--ui-hint-font-size)}
-#folderBody .grp{margin:.7em 0 .15em;color:var(--label);font-size:var(--ui-hint-font-size);
+#folderBody{font-size:calc(var(--ui-hint-font-size) * 1rem)}
+#folderBody .grp{margin:.7em 0 .15em;color:var(--label);font-size:calc(var(--ui-hint-font-size) * 1rem);
   font-weight:700}
 #folderBody>.grp:first-child{margin-top:0}
 /* One row = a path (long, variable) beside its facts (short, fixed). The old
@@ -1544,12 +1558,12 @@ dialog.panel-card:not([open]){display:none}
 #folderBody .frow{display:flex;flex-wrap:wrap;align-items:baseline;
   column-gap:.6em;padding:.15em 0}
 #folderBody .frow .p{flex:1 1 auto;min-width:min(24ch,100%);overflow-wrap:break-word;
-  color:var(--label);font-size:var(--ui-hint-font-size);cursor:pointer}
+  color:var(--label);font-size:calc(var(--ui-hint-font-size) * 1rem);cursor:pointer}
 #folderBody .frow .meta{margin-left:auto;display:flex;align-items:baseline;gap:.9em;
   white-space:nowrap}
-#folderBody .frow .n{color:var(--label-quiet);font-size:var(--ui-hint-font-size)}
+#folderBody .frow .n{color:var(--label-quiet);font-size:calc(var(--ui-hint-font-size) * 1rem)}
 #folderBody .frow .n.bad{color:var(--danger)}
-#folderBody .rv{color:var(--label-quiet);font-size:var(--ui-hint-font-size);cursor:pointer}
+#folderBody .rv{color:var(--label-quiet);font-size:calc(var(--ui-hint-font-size) * 1rem);cursor:pointer}
 #folderBody .rv:hover{color:var(--link);text-decoration:underline}
 #folderBody .frow:hover .rv{color:var(--label)}
 /* The rows. An affordance on the web is a BOUNDARY, not a pictograph beside a
@@ -1582,12 +1596,12 @@ dialog.panel-card:not([open]){display:none}
    starting point moves. */
 .facts.reading>.seg{align-self:stretch}
 .facts .history-controls{display:flex;align-items:center;flex-wrap:wrap;gap:calc(var(--ui-control-gap) * 1em);
-  font-size:var(--ui-font-base)}
-.facts .history-setting{display:inline-flex;align-items:center;gap:calc(var(--ui-control-gap) * 1em);font-size:var(--ui-font-base)}
+  font-size:calc(var(--ui-font-base) * 1rem)}
+.facts .history-setting{display:inline-flex;align-items:center;gap:calc(var(--ui-control-gap) * 1em);font-size:calc(var(--ui-font-base) * 1rem)}
 #historyLength{box-sizing:border-box;width:4.5em;height:calc(var(--ui-control-height) * 1em);
   padding:0 .4em;font:inherit;line-height:1}
 .facts .act{display:inline-flex;align-items:center;gap:calc(var(--ui-control-gap) * 1em);height:calc(var(--ui-control-height) * 1em);box-sizing:border-box;
-  font-family:inherit;font-size:var(--ui-font-base);line-height:1;padding:0 .6em;margin:0;
+  font-family:inherit;font-size:calc(var(--ui-font-base) * 1rem);line-height:1;padding:0 .6em;margin:0;
   color:var(--label);background:var(--bg-card);
   border:1px solid var(--line);border-radius:8px;
   text-decoration:none;cursor:pointer;transition:color .12s,border-color .12s}
@@ -1630,7 +1644,7 @@ dialog.panel-card:not([open]){display:none}
    column itself - and a page whose script never ran falls back to the label's
    own text. */
 .facts .seg>span{flex:0 1 var(--rlcol,96px);min-width:0;white-space:nowrap;overflow:hidden;
-  text-overflow:ellipsis;font-size:var(--ui-font-base);line-height:1.2;color:var(--label-quiet)}
+  text-overflow:ellipsis;font-size:calc(var(--ui-font-base) * 1rem);line-height:1.2;color:var(--label-quiet)}
 /* A mark may ride in the label, as the speaker does. It is drawn at the same
    size and in the same faint colour as the marks that ride ON a control, but
    it sits in the label column with the words it belongs to: the row it came
@@ -1697,17 +1711,17 @@ dialog.panel-card:not([open]){display:none}
    says in words — so it borrows the accent, the colour this design already
    uses for "on". Loud enough to find after the row wraps, never loud enough to
    read as a warning. */
-.bulkbox{margin-top:.6em;padding:.6em .7em;border:1px solid var(--accent);
+.bulkbox{margin-top:calc(var(--ui-row-gap,.6) * 1em);padding:.6em .7em;border:1px solid var(--accent);
   border-radius:8px;background:var(--accent-soft);
   background-image:repeating-linear-gradient(-45deg,
     color-mix(in srgb,var(--accent) 8%,transparent) 0 6px,
     transparent 6px 14px);
-  font-size:11.5px;color:var(--label);line-height:1.5}
+  font-size:calc(var(--ui-hint-font-size) * 1rem);color:var(--label);line-height:1.5}
 .bulkbox p{margin:0 0 .5em}
 .bulkbox p:last-child{margin-bottom:0}
 .bulkbox .cost{color:var(--label-quiet)}
-.bulkbox .btn{font-size:11.5px;padding:.25em .6em;margin-right:.4em}
-.outdated-notice{margin:var(--sp-2) 0 var(--sp-3);font-size:14px}
+.bulkbox .btn{font-size:inherit;padding:.25em .6em;margin-right:.4em}
+.outdated-notice{margin:var(--sp-2) 0 var(--sp-3);font-size:calc(var(--ui-font-base) * 1rem)}
 .outdated-notice .btn{font-size:inherit}
 .work-notice{position:fixed;z-index:330;top:auto;bottom:var(--wd-vv-bottom,0px);left:50%;
   transform:translateX(-50%);width:calc(100% - 2*var(--sp-2));max-width:720px;
@@ -1717,11 +1731,11 @@ dialog.panel-card:not([open]){display:none}
     color-mix(in srgb,var(--accent) 8%,transparent) 0 6px,
     transparent 6px 14px);
   padding-bottom:calc(.45em + var(--wd-inset-bottom,0px));
-  box-shadow:var(--shadow);font-size:12px;line-height:1.35;color:var(--label);
+  box-shadow:var(--shadow);font-size:calc(var(--ui-hint-font-size) * 1rem);line-height:1.35;color:var(--label);
   pointer-events:none}
 .work-notice[hidden]{display:none}
 .work-notice-text{flex:1;min-width:0;overflow-wrap:anywhere}
-.work-notice .btn{flex:none;font-size:11.5px;padding:.25em .6em;pointer-events:auto}
+.work-notice .btn{flex:none;font-size:calc(var(--ui-font-base) * 1rem);padding:.25em .6em;pointer-events:auto}
 /* The orphan review (D156) is a bulkbox like the full-text one: a situation to
    decide on, not an alarm. Only the delete button wears the danger colour,
    and only while it would delete something - "Keep all" is not dangerous.
@@ -1732,7 +1746,7 @@ dialog.panel-card:not([open]){display:none}
 .orphbox input{margin:.2em 0 0;flex:none}
 .orphbox .was{color:var(--label-quiet);overflow-wrap:anywhere}
 .bulkbox .btn.danger{color:#fff;background:var(--danger);border-color:var(--danger)}
-#folderBody .warn{color:var(--danger);font-size:var(--ui-hint-font-size);margin:.3em 0}
+#folderBody .warn{color:var(--danger);font-size:calc(var(--ui-hint-font-size) * 1rem);margin:.3em 0}
 /* Info: quiet by construction — one accent word, everything else the muted
    text colour. It is an identity card, not a call to action, and it is the last
    section in the drawer, so the hairline between sections and its own heading
@@ -1741,12 +1755,12 @@ dialog.panel-card:not([open]){display:none}
    dictionary" disclosure further down, which carries its own rules — a bare
    `.about a` here would restyle that card's links. */
 #panel .sect .about{margin-top:0}
-.sect .about .brand{font-size:var(--ui-font-base);margin-right:.4em}
-.sect .about .ver{font-size:var(--ui-hint-font-size);color:var(--label-quiet);font-variant-numeric:tabular-nums}
-#panel .sect .about p{margin:calc(var(--ui-addition-gap) * 1em) 0 0;font-size:var(--ui-hint-font-size);color:var(--label-quiet);line-height:1.45}
+.sect .about .brand{font-size:calc(var(--ui-font-base) * 1rem);margin-right:.4em}
+.sect .about .ver{font-size:calc(var(--ui-hint-font-size) * 1rem);color:var(--label-quiet);font-variant-numeric:tabular-nums}
+#panel .sect .about p{margin:calc(var(--ui-addition-gap) * 1em) 0 0;font-size:calc(var(--ui-hint-font-size) * 1rem);color:var(--label-quiet);line-height:1.45}
 .sect .about a{color:var(--label);text-decoration:none;border-bottom:1px solid var(--line)}
 .sect .about a:hover{color:var(--link);border-bottom-color:currentColor}
-.pd .prov,.pd .prov1{font-size:10.5px;color:var(--label-quiet);overflow-wrap:break-word;margin-top:.15em}
+.pd .prov,.pd .prov1{font-size:calc(var(--ui-hint-font-size) * 1rem);color:var(--label-quiet);overflow-wrap:break-word;margin-top:.15em}
 /* The whole summary toggles, so the whole summary is the affordance: hover
    the row, not a fragment of it. Nothing in here is underlined — on the web an
    underline promises a link that goes somewhere else, and this goes nowhere. */
@@ -1755,16 +1769,16 @@ dialog.panel-card:not([open]){display:none}
 .pd .prov>summary:hover{color:var(--label);background:var(--line-soft)}
 .pd .prov>summary:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
 .pd .prov>summary::-webkit-details-marker{display:none}
-.pd .prov>summary::before{content:"▶";color:var(--label);display:inline-block;width:1em;margin-right:.4em;font-size:12px;line-height:1}
+.pd .prov>summary::before{content:"▶";color:var(--label);display:inline-block;width:1em;margin-right:.4em;font-size:calc(var(--ui-font-addition) * 1rem);line-height:1}
 .pd .prov[open]>summary::before{content:"▼"}
-.pd .fmt{color:var(--label);text-transform:uppercase;font-size:9px;letter-spacing:.04em}
+.pd .fmt{color:var(--label);text-transform:uppercase;font-size:calc(var(--ui-font-addition) * 1rem);letter-spacing:.04em}
 /* companion media count ("+ 2 mdd"): part of the summary text, not a control.
    It used to carry class "more", which collided with the search-results
    "more…" link — that link's document handler matched it, cancelled the
    disclosure toggle with preventDefault and then threw looking for a
    details.dict that does not exist here. */
 .pd .companions{color:var(--label)}
-.pd .provbody{margin:.2em 0 0 1em;display:flex;flex-direction:column;gap:.1em}
+.pd .provbody{margin:.2em 0 0 1em;display:flex;flex-direction:column;gap:calc(var(--ui-addition-gap,.5) * 1em)}
 /* "About" — what the dictionary says about ITSELF (/api/about). Same
    disclosure MECHANICS as .prov above, one size up, because this one is prose
    to be read rather than a path to be copied — but deliberately not the same
@@ -1773,18 +1787,18 @@ dialog.panel-card:not([open]){display:none}
    The hairline moves this into the card's footer register, below the file
    facts, where a description belongs. The body is fetched on first open: an
    annotation can be a page long and there is one per dictionary. */
-.pd .about{font-size:11px;color:var(--label-quiet);overflow-wrap:break-word;
+.pd .about{font-size:calc(var(--ui-hint-font-size) * 1rem);color:var(--label-quiet);overflow-wrap:break-word;
   margin-top:.45em;padding-top:.4em;border-top:1px solid var(--line-soft)}
 .pd .about>summary{cursor:pointer;list-style:none;color:var(--label-quiet);
   border-radius:4px;padding:.05em .15em;margin-left:-.15em;transition:background .12s,color .12s}
 .pd .about>summary:hover{color:var(--label);background:var(--line-soft)}
 .pd .about>summary:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
 .pd .about>summary::-webkit-details-marker{display:none}
-.pd .about>summary::before{content:"▶";color:var(--label);display:inline-block;width:1em;margin-right:.4em;font-size:12px;line-height:1}
+.pd .about>summary::before{content:"▶";color:var(--label);display:inline-block;width:1em;margin-right:.4em;line-height:1}
 .pd .about[open]>summary::before{content:"▼"}
 .pd .aboutbody{margin:.2em 0 0 1em;line-height:1.45}
 .pd .aboutbody p{margin:.25em 0}
-.pd .aboutbody h4{margin:.5em 0 .1em;font-size:10px;text-transform:uppercase;
+.pd .aboutbody h4{margin:.5em 0 .1em;font-size:calc(var(--ui-hint-font-size) * 1rem);text-transform:uppercase;
   letter-spacing:.04em;color:var(--label);font-weight:600}
 .pd .aboutbody h4:first-child{margin-top:0}
 .pd .aboutbody a{color:var(--label);text-decoration:none;border-bottom:1px solid var(--line)}
@@ -1798,15 +1812,27 @@ dialog.panel-card:not([open]){display:none}
    above the value says which kind of fact it is without a legend, and the ones
    that are also a way in (the picker has that section) gain a border on hover;
    the rest sit quiet. */
-.pd .traits{display:flex;flex-wrap:wrap;gap:.3em;margin:0 0 .5em 1em}
+.pd .traits{display:flex;flex-wrap:wrap;gap:calc(var(--ui-control-gap,.25) * 1em);margin:0 0 .5em 1em}
 .pd .trait{display:inline-flex;flex-direction:column;align-items:flex-start;
-  font:inherit;font-size:11px;line-height:1.3;color:var(--label);text-align:left;
+  font:inherit;font-size:calc(var(--ui-font-base) * 1rem);line-height:1.3;color:var(--label);text-align:left;
   background:var(--line-soft);border:1px solid transparent;border-radius:5px;padding:.15em .5em}
-.pd .trait .tk{font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:var(--label-quiet)}
+.pd .trait .tk{font-size:calc(var(--ui-font-addition) * 1rem);text-transform:uppercase;letter-spacing:.05em;color:var(--label-quiet)}
 .pd button.trait{cursor:pointer;transition:color .12s,border-color .12s,background .12s}
 .pd button.trait:hover{color:var(--accent);border-color:var(--accent);background:transparent}
 .pd button.trait:hover .tk{color:var(--accent)}
 .pd button.trait:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
+
+/* Dictionary settings follows the same type scale as the reader's Settings
+   panel. Keep these overrides scoped to this window: the card stylesheet also
+   serves a few shared dialogs, whose text has its own hierarchy. */
+#dictSettings>h2{box-sizing:border-box;display:flex;align-items:center;gap:calc(var(--ui-control-gap,.25) * 1em);flex:none;margin:0;padding:.8em 1em;border:1px solid var(--line);border-bottom:0;border-radius:12px 12px 0 0;background:var(--bg-card,var(--bg));font-size:calc(var(--ui-font-title) * 1rem)}
+#dictSettings>h2 .btn{box-sizing:border-box;display:grid;place-items:center;width:calc(var(--ui-main-control-height,1.05) * 1em);height:calc(var(--ui-main-control-height,1.05) * 1em);min-height:calc(var(--ui-main-control-height,1.05) * 1em);padding:0;
+  font-size:calc(var(--ui-main-control-font,1.05) * 1rem);line-height:1}
+#dictSettings>h2 .icon-close{width:1.4em;height:1.4em}
+#dictSettings .bulkbox{font-size:calc(var(--ui-hint-font-size) * 1rem)}
+#dictSettings .bulkbox .btn{font-size:calc(var(--ui-font-base) * 1rem)}
+#dictSettings .pd .companions,
+#dictSettings .pd .prov>summary{font-size:calc(var(--ui-font-addition) * 1rem)}
 
 /* ── responsive ────────────────────────────────────────────────────── */
 @media (max-width:600px){
@@ -1910,7 +1936,7 @@ dialog.panel-card:not([open]){display:none}
      what keeps it from ever having to use it. */
   #styler{padding-left:var(--sp-1);padding-right:var(--sp-1)}
   #styler .row{gap:.25em}
-  #styler .tab,#styler .btn{font-size:11.5px;padding:.32em .5em}
+  #styler .tab,#styler .btn{font-size:calc(var(--ui-font-base) * 1rem);padding:.32em .5em}
 }
 .dsl-all{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--line)}
 .dsl-all[hidden]{display:none}
@@ -1920,30 +1946,41 @@ dialog.panel-card:not([open]){display:none}
 .dsl-all button:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
 .dsl-all button:disabled{opacity:.55;cursor:wait}
 .dsl-unavailable .hd b{opacity:.55}
-.dsl-index-controls{display:flex;flex-direction:column;gap:12px;margin:12px 0}
-.dsl-index-row{display:grid;grid-template-columns:minmax(0,1fr);align-items:start;gap:8px}
-.dsl-index-tools{display:flex;flex-direction:column;align-items:flex-start;gap:6px;min-width:0}
-.dsl-feature-line{display:flex;flex-wrap:wrap;justify-content:flex-start;align-items:center;gap:6px;max-width:100%}
+.dsl-index-controls{display:flex;flex-direction:column;gap:calc(var(--ui-row-gap,.6) * 1em);margin:calc(var(--ui-row-gap,.6) * 1em) 0}
+.dsl-index-row{display:grid;grid-template-columns:minmax(0,1fr);align-items:start;gap:calc(var(--ui-row-gap,.6) * 1em)}
+.dsl-index-tools{display:flex;flex-direction:column;align-items:flex-start;gap:calc(var(--ui-control-gap,.25) * 1em);min-width:0}
+.dsl-feature-line{display:flex;flex-wrap:wrap;justify-content:flex-start;align-items:center;gap:calc(var(--ui-control-gap,.25) * 1em);max-width:100%}
 .dsl-browse-line{display:flex;justify-content:flex-start}
 .dsl-index-tools .feat{margin:0;max-width:100%;white-space:normal;overflow-wrap:anywhere;box-sizing:border-box}
-.dsl-index-row button{font:inherit;font-size:11px;cursor:pointer}
-.dsl-feature-line .feat{font-size:11px;line-height:1.2;padding:.3em .55em}
-.dsl-index-row .browse{display:inline-flex;align-items:center;gap:5px;width:100%;box-sizing:border-box;font:inherit;font-size:11px;line-height:1.2;text-decoration:none}
+.dsl-index-row button{font:inherit;font-size:calc(var(--ui-font-base) * 1rem);cursor:pointer}
+.dsl-feature-line .feat{font-size:calc(var(--ui-font-base) * 1rem);line-height:1.2;padding:.3em .55em}
+.dsl-index-row .browse{display:inline-flex;align-items:center;gap:calc(var(--ui-control-gap,.25) * 1em);width:100%;box-sizing:border-box;font:inherit;font-size:calc(var(--ui-font-base) * 1rem);line-height:1.2;text-decoration:none}
 .dsl-index-row .browse svg{width:13px;height:13px;flex:none}
 .dsl-index-row .browse:hover:not(:disabled){color:var(--accent)}
 .dsl-index-row .browse:disabled{color:var(--label-quiet);cursor:default}
-.dsl-index-warning{color:var(--danger);font-size:12px}
-.bulk-index-section{padding:12px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
-.bulk-index-section h3{font-size:14px;margin:0 0 8px}
-.bulk-index-buttons{display:flex;flex-wrap:wrap;gap:6px}
-.bulk-index-table{width:100%;table-layout:fixed;border-collapse:separate;border-spacing:0 6px;font-size:12px}
-.bulk-index-table th{font-weight:500;text-align:left;overflow-wrap:anywhere}
-.bulk-index-table th:first-child{width:36%;padding-right:8px}
-.bulk-index-table td{padding-left:6px}
-.bulk-index-table .btn{width:100%;min-height:40px;padding:.45em .3em;font:inherit;white-space:normal;overflow-wrap:anywhere}
-.bulk-index-table label{display:flex;align-items:center;gap:4px;min-height:40px;cursor:pointer;white-space:nowrap}
-.bulk-index-table select{width:100%;min-width:0;min-height:40px;font:inherit;color:var(--fg);background:var(--bg-card);border:1px solid var(--line);border-radius:6px;padding:4px}
-.bulk-index-row{display:grid;grid-template-columns:minmax(0,110px) minmax(0,1fr);gap:8px;align-items:start;margin:6px 0;font-size:12px}
+.dsl-index-warning{color:var(--danger);font-size:calc(var(--ui-hint-font-size) * 1rem)}
+.bulk-index-section{box-sizing:border-box;padding:.8em 1em;margin:0 0 calc(var(--ui-row-gap,.6) * 1em);border:1px solid var(--line);border-radius:0 0 12px 12px;background:var(--bg-card,var(--bg));font-size:calc(var(--ui-font-base) * 1rem)}
+.bulk-index-section h3{font-size:calc(var(--ui-font-section) * 1rem);margin:0 0 .6em}
+.bulk-index-section .btn{font-size:calc(var(--ui-font-base) * 1rem);min-height:calc(var(--ui-control-height,1.6) * 1em);box-sizing:border-box}
+.bulk-index-buttons{display:flex;flex-wrap:wrap;gap:calc(var(--ui-control-gap,.25) * 1em)}
+.bulk-index-table{display:flex;flex-direction:column;gap:calc(var(--ui-row-gap,.6) * 1em);font-size:calc(var(--ui-font-base) * 1rem)}
+.bulk-index-setting{box-sizing:border-box;display:grid;grid-template-columns:minmax(0,36%) minmax(0,1fr);align-items:center;column-gap:calc(var(--ui-control-gap,.25) * 1em);min-width:0;min-height:calc(var(--ui-control-height,1.6) * 1em);cursor:pointer}
+.bulk-index-setting>span{min-width:0;font-weight:500;overflow-wrap:anywhere}
+.bulk-index-setting select{box-sizing:border-box;width:100%;min-width:0;height:calc(var(--ui-control-height,1.6) * 1em);font:inherit;line-height:1;color:var(--fg);background:var(--bg-card);border:1px solid var(--line);border-radius:6px;padding:0 .4em}
+.bulk-index-section>[data-bulk-start]{display:block;margin:.6em 0 0 auto}
+.bulk-index-row{display:grid;grid-template-columns:minmax(0,110px) minmax(0,1fr);gap:calc(var(--ui-control-gap,.25) * 1em);align-items:start;margin:calc(var(--ui-row-gap,.6) * 1em) 0;font-size:calc(var(--ui-font-base) * 1rem)}
 .bulk-index-row>span{padding-top:5px;overflow-wrap:anywhere}
-.bulk-index-row>div{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-start}
-.bulk-index-row .btn{font-size:11px;padding:4px 6px;max-width:100%;white-space:normal}
+.bulk-index-row>div{display:flex;flex-wrap:wrap;gap:calc(var(--ui-control-gap,.25) * 1em);justify-content:flex-start}
+.bulk-index-row .btn{box-sizing:border-box;font-size:calc(var(--ui-font-base) * 1rem);min-height:calc(var(--ui-control-height,1.6) * 1em);padding:4px 6px;max-width:100%;white-space:normal}
+.list-search-dock{box-sizing:border-box;display:flex;align-items:center;gap:calc(var(--ui-control-gap,.25) * 1em);flex:none;padding:.5em .35em;border-top:1px solid color-mix(in srgb,var(--fg) 30%,var(--bg));background:var(--bg);font-size:calc(var(--ui-edit_control-font,1) * 1rem)}
+.list-search-input{box-sizing:border-box;flex:1 1 auto;min-width:0;width:0;height:calc(var(--ui-edit_control-height,1.8) * 1.5rem);min-height:0;margin:0;font:inherit}
+.list-search-count{flex:none;min-width:2.5em;text-align:center;font-size:inherit;font-variant-numeric:tabular-nums;white-space:nowrap}
+.list-search-mode,.list-search-step{box-sizing:border-box;display:grid;place-items:center;flex:none;width:calc(var(--ui-edit_control-height,1.8) * 1.5rem);height:calc(var(--ui-edit_control-height,1.8) * 1.5rem);margin:0;padding:0;border:1px solid var(--line);border-radius:6px;background:var(--bg-card);color:var(--fg);font:inherit;line-height:1;cursor:pointer}
+.list-search-step+.list-search-step{margin-left:.5em}
+.list-search-step:disabled{opacity:.45;cursor:default}
+.list-search-mode svg{display:block;width:1.1em;height:1.1em}
+.list-search-mode.is-on{border-color:var(--accent);background:var(--accent);color:var(--bg)}
+.list-search-match{outline:2px solid var(--accent);outline-offset:-2px}
+.list-search-current{background-color:color-mix(in srgb,var(--accent) 14%,var(--bg-card,var(--bg)))}
+.list-search-name-match{background:var(--accent);color:var(--bg);border-radius:.15em}
+.list-search-filtered-out{display:none!important}
