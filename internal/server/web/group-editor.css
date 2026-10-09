@@ -5,12 +5,34 @@
  */
 
 dialog.group-dialog.panel-card{position:fixed;inset:0;margin:auto;width:min(560px,94vw);height:fit-content;max-height:85vh;max-height:85dvh;padding:1em;border:1px solid var(--line);border-radius:12px;color:var(--fg);background-color:var(--bg);box-shadow:var(--shadow);overflow:auto;z-index:300;font-size:calc(var(--ui-font-base) * 1rem)}
-#groupEditor{height:min(650px,85vh);height:min(650px,85dvh)}
+#groupEditor{height:calc(100dvh - 32px);max-height:calc(100dvh - 32px)}
 /* The dictionary list is the long one — a real library is a hundred cards — so
    Dictionary settings takes the same fixed height rather than fit-content, and
    the list scrolls inside it under a fixed toolbar. On a phone that fixed
    height is what the media query below lifts: see it for why. */
-#dictSettings{height:min(650px,85vh);height:min(650px,85dvh)}
+#dictSettings{height:calc(100dvh - 32px);max-height:calc(100dvh - 32px)}
+#desktopSysSettings{height:min(520px,85dvh)}
+#desktopSysSettings .panel-scroll{overflow-wrap:anywhere}
+#desktopSysSettings h3{font-size:calc(var(--ui-font-section) * 1rem);color:var(--label)}
+#desktopSysSettings .sys-hint{margin:0;font-size:calc(var(--ui-hint-font-size) * 1rem);color:var(--label)}
+#desktopSysSettings .sys-desktop-path{font-family:monospace;user-select:text}
+.sys-desktop-values{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:.4em .8em}
+.sys-desktop-values dt{color:var(--label)}
+.sys-desktop-values dd{margin:0;overflow-wrap:anywhere}
+#webDictionaryPicker.group-dialog.panel-card{display:none;flex-direction:column;gap:0;
+  width:min(480px,calc(100vw - 32px));height:min(650px,calc(100dvh - 32px));padding:12px;overflow:hidden}
+#webDictionaryPicker.group-dialog.panel-card[open]{display:flex}
+.web-picker-head{box-sizing:border-box;display:grid;grid-template-columns:minmax(0,1fr) 40px;
+  align-items:center;gap:8px;flex:none;width:100%;padding-bottom:12px;
+  border-bottom:1px solid var(--line)}
+.web-picker-head select{width:100%;min-width:0;max-width:none}
+.web-picker-head .btn{display:grid;place-items:center;justify-self:end;width:40px;height:40px;padding:0}
+.web-picker-rows{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;padding:6px 0}
+.web-picker-row{display:block;width:100%;padding:.7em .5em;border:0;border-radius:8px;
+  background:transparent;color:var(--fg);font:inherit;text-align:left;cursor:pointer}
+.web-picker-row:hover,.web-picker-row:focus-visible{background:var(--bg-card);outline:2px solid var(--accent);outline-offset:-2px}
+.web-picker-rows>p{margin:.7em .5em;color:var(--label)}
+#webPickerSearch{padding-bottom:0}
 /* The selector section and each dictionary own their visible card borders;
    the dialog itself only provides the window surface and padding. */
 #dictSettings.group-dialog.panel-card{padding:0;border:0;box-shadow:none}
@@ -22,15 +44,14 @@ dialog.group-dialog.panel-card{position:fixed;inset:0;margin:auto;width:min(560p
    shorter than the window, and the reopened window came back small and centred
    with the bands the user had already complained about. `max-width:none` and
    `width:auto` undo the UA cap and the desktop width so the insets alone decide
-   the box. Desktop keeps the centred 650px window: there the page beside it is
-   the point, and a 100-card list must not become a full-height sheet on a 1440p
-   monitor. */
+   the box. Desktop keeps the centred width, while the list windows fill the
+   viewport height with a 16px gutter. */
 @media (max-width:600px){
   dialog.group-dialog.panel-card{
     inset:calc(16px + var(--wd-inset-top,0px)) 16px calc(16px + var(--wd-inset-bottom,0px));
     width:auto;max-width:none;height:auto;max-height:none;padding:16px}
-  dialog#groupEditor.group-dialog.panel-card{inset:calc(.5em + var(--wd-inset-top,0px)) .5em calc(.5em + var(--wd-inset-bottom,0px));height:auto}
-  #dictSettings{height:auto}
+  dialog#groupEditor.group-dialog.panel-card{inset:calc(.5em + var(--wd-inset-top,0px)) .5em calc(.5em + var(--wd-inset-bottom,0px));height:auto;max-height:none}
+  #dictSettings{height:auto;max-height:none}
   /* The colour window is short by nature - three sliders, a preview and one
      button - so it keeps its own height and centres itself in the same
      card-wide column, rather than stretching to the full card the way a list

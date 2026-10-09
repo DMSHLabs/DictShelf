@@ -18,6 +18,11 @@
 window.wudictShellBackground = function (color, image, imageName, paper) {
   var root = document.documentElement;
   root.toggleAttribute('data-shell-image', !!image);
+  var file = imageName;
+  if (file === undefined) try { file = sessionStorage.getItem('wudict_shell_image_name'); } catch (_) {}
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(file || '')) file = '';
+  root.style.setProperty('--paper-bk-image', image && file ? 'url("/files/' + file + '")' : 'none');
+  try { root.toggleAttribute('data-desktop-image', !!image && !!file && sessionStorage.getItem('wudict_desktop_image') === '1'); } catch (_) {}
   // The paper an enabled PRESET paints, handed here by the app page: that page
   // paints this paper with its own layer and does not wear it as a shell
   // colour, while this document - no layers of its own - has nothing but the
@@ -92,6 +97,7 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
 <style>
 /* Follow the host palette and let its wallpaper show through the editor. */
 html[data-shell-image], html[data-shell-image] body { background:transparent !important; }
+html[data-desktop-image] { background-color:var(--bg) !important;background-image:var(--paper-bk-image) !important;background-size:100% 100% !important;background-attachment:fixed !important; }
 html[data-shell-custom] .card { background:rgba(255,255,255,.14); }
 html[data-shell-custom] textarea,
 html[data-shell-custom] code { background:rgba(255,255,255,.18); }
@@ -108,7 +114,7 @@ html[data-shell-tone="dark"] {
 /* Page-specific only; palette, card, buttons and typography are shared. The
    card is wider than the other pages' and the box takes most of the screen:
    this page is an editor, and the text is the whole of it. */
-.card{max-width:760px}
+.card{max-width:760px;height:calc(100dvh - 2em);min-height:0;display:flex;flex-direction:column;overflow:auto}
 /* The editor uses the same saved type and control scale as Settings. */
 .top h1{font-size:calc(var(--ui-font-title) * 1rem)}
 .top button.x{box-sizing:border-box;display:grid;place-items:center;flex:none;
@@ -118,7 +124,7 @@ html[data-shell-tone="dark"] {
 .card>p:not(.note){font-size:calc(var(--ui-font-addition) * 1rem)}
 .quiet code{box-sizing:border-box;display:inline-flex;align-items:center;
   min-height:calc(var(--ui-hint-control-height) * 1em);font-size:calc(var(--ui-hint-font-size) * 1rem)}
-textarea{display:block;width:100%;height:max(18em,58vh);margin:.618em 0 0;
+textarea{display:block;flex:1 1 auto;min-height:10em;width:100%;height:auto;margin:.618em 0 0;
   font:calc(var(--ui-font-addition) * 1rem)/1.55 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
   color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:8px;
   padding:.618em .8em;resize:vertical;outline:none;tab-size:4}
@@ -143,7 +149,7 @@ textarea:focus{border-color:var(--focus);box-shadow:0 0 0 3px color-mix(in srgb,
    comment line of groups.ini fits on one row instead of wrapping into two. */
 @media (max-width:520px){
   body{padding:.5em}
-  .card{padding:1em .8em}
+  .card{height:calc(100dvh - 1em);padding:1em .8em}
   textarea{padding:.5em .6em}
 }
 </style>

@@ -16,6 +16,7 @@
 window.wudictShellBackground = function (color, image, imageName, paper) {
   var root = document.documentElement;
   root.toggleAttribute('data-shell-image', !!image);
+  root.toggleAttribute('data-desktop-image', !!image && !!window.wudictDesktopAppearance);
   var valid = /^#[0-9a-f]{6}$/i.test(color);
   root.toggleAttribute('data-shell-sepia', valid);
   root.style.setProperty('--paper-bg', valid ? color : 'var(--bg)');
@@ -791,11 +792,9 @@ window.wudictFontScale=(function(){
        sections, below the search field's own memory (the reader's placement,
        2026-09-28: the drawer is read top-down for things one reaches for
        often, and this is where one reaches rarely).
-       The section exists only where a shell answers, which is the flag the
-       shell injects at onPageFinished: every row behind that door is a fact
-       about THIS window - where a lookup from another app lands, and whether
-       this app's own view may spend the machine's cache - and a browser has
-       no such window to decide anything about.
+       The section appears for the Android shell or a local Windows server.
+       Each host opens its own System window: Android owns lookup and WebView
+       choices; Windows reports the running server settings and config file.
        A door and not the rows themselves: what is behind it is a window of
        this app (the same frame, paper and wallpaper as Dictionary settings),
        and the Advanced rows are a table only the SHELL holds - a flavour
@@ -879,6 +878,14 @@ window.wudictFontScale=(function(){
     <div id="panelList"></div>
   </div>
   <div id="dictSettingsSearch" class="list-search-dock" role="search" aria-label="{{T:dictUI.listSearchLabel}}"></div>
+</dialog>
+<dialog id="webDictionaryPicker" lang="{{T:locale}}" class="group-dialog panel-card" aria-label="{{T:search.dictionary}}">
+  <div class="web-picker-head">
+    <select id="webPickerGroup" aria-label="{{T:search.dictionary}}"></select>
+    <button type="button" class="btn" id="webPickerClose" aria-label="{{T:panel.close}}"><svg class="icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+  </div>
+  <div id="webPickerRows" class="web-picker-rows"></div>
+  <div id="webPickerSearch" class="list-search-dock" role="search" aria-label="{{T:dictUI.listSearchLabel}}"></div>
 </dialog>
 
 <dialog id="bulkIndexDialog" class="group-dialog panel-card" aria-labelledby="bulkIndexDialogTitle"></dialog>
@@ -983,6 +990,10 @@ window.wudictFontScale=(function(){
     <p class="sys-note" id="sysStale" hidden></p>
     <p class="sys-note" id="sysNote" aria-live="polite"></p>
   </div>
+</dialog>
+<dialog id="desktopSysSettings" lang="{{T:locale}}" class="group-dialog panel-card" aria-labelledby="desktopSysTitle">
+  <h2 id="desktopSysTitle">{{T:system.title}} <button type="button" class="btn" id="desktopSysClose" aria-label="{{T:system.close}}"><svg class="icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></h2>
+  <div id="desktopSysBody" class="panel-scroll"></div>
 </dialog>
 
 <!-- Hidden until asked for, and #styler is outside #panel deliberately: opening
@@ -2163,6 +2174,7 @@ function livePickerPayload(kind){
     }};
 }
 function refreshLivePicker(){
+  if($('webDictionaryPicker').open)paintWebDictionaryPicker();
   if(!livePickerOpen)return;
   clearTimeout(livePickerTimer);
   livePickerTimer=setTimeout(()=>window.prompt("wudict:dictionary-picker",
@@ -2180,6 +2192,65 @@ window.wudictNativeDictionaryPicker=async function(){
   }catch(e){setStatus(esc(tx("search.groupFailed",{error:window.wudictI18n.errorText(e.message)})))}
   finally{livePickerOpening=false}
 };
+let webPickerSearch=null;
+function paintWebDictionaryPicker(){
+  const group=$('webPickerGroup'),current=scopedDictionary();
+  const selected=current?current.id:pickerGroup;
+  const choices=userGroups.map(g=>({id:g.id,name:pickerGroupName(g.id)}));
+  if(current)choices.splice(1,0,current);
+  group.replaceChildren(...choices.map(g=>new Option(g.name,g.id)));
+  group.value=selected;
+  const rows=livePickerRows(),list=$('webPickerRows');
+  list.replaceChildren(...rows.map(row=>{
+    const button=document.createElement('button');
+    button.type='button';button.className='web-picker-row';button.dataset.dict=row.id;
+    const name=document.createElement('span');name.textContent=row.label;
+    button.append(name);
+    button.onclick=()=>{ $('webDictionaryPicker').close();window.wudictPickerDictionarySelected(row.id) };
+    return button;
+  }));
+  if(!rows.length){
+    const empty=document.createElement('p');
+    empty.textContent=livePickerSearching?tx('search.searching'):current?tx('search.emptyDict'):tx('search.emptyGroup');
+    list.append(empty);
+  }
+  webPickerSearch?.refresh();
+}
+async function openWebDictionaryPicker(){
+  const dialog=$('webDictionaryPicker');
+  if(dialog.open)return;
+  try{
+    userGroups=await groupRequest('/api/user-groups','GET');
+    if(!userGroups.some(g=>g.id===pickerGroup))pickerGroup='all';
+    paintWebDictionaryPicker();
+    dialog.showModal();
+    if(!webPickerSearch){
+      webPickerSearch=window.wudictListSearch.create({
+        root:$('webPickerRows'),itemSelector:'.web-picker-row',dock:$('webPickerSearch'),
+        scrollContainer:$('webPickerRows'),highlightSelector:'span',
+        labels:{placeholder:tx('dictUI.listSearchPlaceholder'),filterPlaceholder:tx('dictUI.listFilterPlaceholder'),
+          search:tx('dictUI.listSearchLabel'),filter:tx('dictUI.listSearchFilter'),
+          previous:tx('dictUI.listSearchPrevious'),next:tx('dictUI.listSearchNext'),
+          count:tx('dictUI.listSearchCount',{current:'{current}',total:'{total}'})}
+      });
+    }
+    webPickerSearch.clear();
+  }catch(e){setStatus(esc(tx('search.groupFailed',{error:window.wudictI18n.errorText(e.message)})))}
+}
+$('webPickerClose').onclick=()=>$('webDictionaryPicker').close();
+$('webPickerGroup').onchange=e=>{wudictPickerGroupChanged(e.target.value);paintWebDictionaryPicker()};
+$('dict').addEventListener('pointerdown',e=>{
+  if(window.wudictNativeShell||$('dict').disabled)return;
+  e.preventDefault();openWebDictionaryPicker();
+});
+$('dict').addEventListener('click',e=>{
+  if(window.wudictNativeShell||$('dict').disabled)return;
+  e.preventDefault();openWebDictionaryPicker();
+});
+$('dict').addEventListener('keydown',e=>{
+  if(window.wudictNativeShell||$('dict').disabled||!['Enter',' ','ArrowDown','ArrowUp'].includes(e.key))return;
+  e.preventDefault();if(!e.repeat)openWebDictionaryPicker();
+});
 window.wudictPickerClosed=()=>{livePickerOpen=false;clearTimeout(livePickerTimer)};
 window.wudictPickerGroupChanged=id=>{
   /* Compared against what the SPINNER is showing, not against pickerGroup: in
@@ -3047,10 +3118,8 @@ $("speakSeg").hidden=!speakCan();$("panel").classList.add("show");
   // known before the reader sees them: measured here, in the same frame the
   // drawer is opened in, so nothing paints between the two.
   panelRowColumns();loadFolders();
-  // The System door exists only where a shell answers - the flag it injects at
-  // onPageFinished - because every row behind it is a fact about this window.
-  // Asked here rather than at load: the flag arrives after this script has run,
-  // and the drawer is opened by the reader long afterwards.
+  // Android injects its shell flag after this script runs. The Windows server
+  // reports its local Exit capability in /api/config, read by loadFolders.
   if(window.wudictNativeShell){$("sysSection").hidden=false;$("exitSection").hidden=false;}
   // Another window can switch a layer; the panel's layer rows are repainted
   // from the registry in hand whenever the drawer opens, the way the Presets
@@ -3186,7 +3255,16 @@ $("clearDatabaseGo").onclick=async()=>{
 let sysState=null;   // the shell's last answer: the switches, the rows, the address
 let sysCfg=null;     // the server's last /api/config answer, or null when it did not
 const sysRows=[];    // one entry per Advanced row: {row, field, hint}
-$("exitApp").addEventListener("click",()=>{if(window.wudictNativeShell)window.prompt("wudict:exit","");});
+$("exitApp").addEventListener("click",async()=>{
+  if(window.wudictNativeShell){window.prompt("wudict:exit","");return}
+  if(!cfgInfo?.canExit)return;
+  const button=$("exitApp");button.disabled=true;
+  try{
+    const r=await fetch("/api/exit",{method:"POST"});
+    if(!r.ok)throw new Error(await apiError(r));
+    button.textContent=tx("system.desktopStopped");
+  }catch(e){button.disabled=false;setStatus(esc(tx("system.desktopExitFailed",{error:window.wudictI18n.errorText(e.message)})))}
+});
 
 function sysRequest(request){
   if(!window.wudictNativeShell)return null;
@@ -3476,7 +3554,40 @@ $("sysAdvBar").onclick=()=>{
   $("sysAdvBody").hidden=!open;
   $("sysAdvBar").setAttribute("aria-expanded",open?"true":"false");
 };
-$("editSysSettings").onclick=showSysSettings;
+async function showDesktopSysSettings(){
+  const dialog=$("desktopSysSettings"),body=$("desktopSysBody");
+  dialog.showModal();
+  body.replaceChildren();
+  const c=await loadConfig();
+  if(!c){body.textContent=tx("system.desktopLoadFailed");return}
+  const hint=document.createElement("p");hint.className="sys-hint";
+  hint.textContent=tx("system.desktopHint");body.append(hint);
+  if(c.configPath){
+    const path=document.createElement("p");path.className="sys-desktop-path";
+    path.textContent=c.configPath;body.append(path);
+    if(c.canReveal){
+      const reveal=document.createElement("button");reveal.type="button";reveal.className="btn";
+      reveal.textContent=c.revealLabel;
+      reveal.onclick=async()=>{
+        const r=await fetch("/api/reveal?path="+encodeURIComponent(c.configPath));
+        if(!r.ok)setStatus(esc(await apiError(r)));
+      };
+      body.append(reveal);
+    }
+  }
+  const heading=document.createElement("h3");heading.className="sys-head";
+  heading.textContent=tx("system.desktopEffective");body.append(heading);
+  const table=document.createElement("dl");table.className="sys-desktop-values";
+  for(const [key,setting] of Object.entries(c.effective||{})){
+    const name=document.createElement("dt"),value=document.createElement("dd");
+    name.textContent=key;value.textContent=setting.value;
+    table.append(name,value);
+  }
+  body.append(table);
+}
+$("editSysSettings").onclick=()=>window.wudictNativeShell?showSysSettings():showDesktopSysSettings();
+$("desktopSysClose").onclick=()=>$("desktopSysSettings").close();
+$("desktopSysSettings").addEventListener("close",()=>$("editSysSettings").focus());
 $("closeSysSettings").onclick=()=>$("sysSettings").close();
 $("sysSettings").addEventListener("close",()=>$("editSysSettings").focus());
 $("sysToolbar").addEventListener("change",e=>sysSwitch("toolbar",e.target.checked));
@@ -3594,11 +3705,19 @@ function pathHTML(p){
    correct fallback, not a failure. */
 async function loadConfig(){
   try{ cfgInfo=await (await fetch("/api/config")).json() }catch(e){}
+  if(cfgInfo&&cfgInfo.canExit&&!window.wudictNativeShell){
+    window.wudictDesktopAppearance=true;
+    appearanceRequest({action:"get"});
+  }
   return cfgInfo;
 }
 async function loadFolders(){
   if(!await loadConfig())return;
   const c=cfgInfo,b=$("folderBody");
+  if(c.canExit){
+    $("sysSection").hidden=false;$("exitSection").hidden=false;
+    $("editSysSettings").title=tx("panel.desktopSystemHint");
+  }
   $("rescanBtn").disabled=!c.canDelete;
   const n=(c.roots||[]).length;
   $("folderSummary").textContent=tx("panel.folders",{count:n,number:n})+" · "+tx("panel.dictionaryCount",{count:c.total,number:c.total});
@@ -6374,6 +6493,7 @@ function stylerFilesTake(j){
   stylerFileRows=j.files||[];
   stylerFileLimits=j.limits||null;
   stylerFilesRender();
+  if(window.wudictDesktopAppearance)appearanceRead();
 }
 async function stylerFilesLoad(){
   try{
@@ -7270,6 +7390,8 @@ function colorFieldWire(input,menu,apply){
   return ctl;
 }
 function appearanceRequest(request){
+  if(window.wudictDesktopAppearance&&!window.wudictNativeShell)
+    return desktopAppearanceRequest(request);
   if(!window.wudictNativeShell)return null;
   try{
     // Which THEME this round trip is about. The sheet shows the ACTIVE theme's
@@ -7286,6 +7408,31 @@ function appearanceRequest(request){
     const answer=window.prompt("wudict:appearance",JSON.stringify(request));
     return answer===null?null:JSON.parse(answer);
   }catch(e){console.warn("appearance bridge:",e);return null}
+}
+function desktopAppearanceRequest(request){
+  const night=request.night===undefined?themeIsDark():!!request.night;
+  const key="wudict_desktop_appearance_"+(night?"dark":"light");
+  let saved={};
+  try{saved=JSON.parse(localStorage.getItem(key)||"null")||{}}catch(_){}
+  if(request.action==="set"){
+    if(request.field==="image"){
+      if(request.value&&!/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(request.value))return null;
+      saved.image=request.value||"";
+    }else if(request.field==="color"){
+      if(!/^#?[0-9a-f]{6}$/i.test(request.value))return null;
+      saved.color="#"+String(request.value).replace(/^#/,"");
+    }else if(request.field==="colorEnabled")saved.colorEnabled=!!request.value;
+    try{localStorage.setItem(key,JSON.stringify(saved))}catch(_){}
+  }
+  const state={colorEnabled:!!saved.colorEnabled,color:saved.color||"#F4ECD8",
+    image:saved.image||"",images:(stylerFileRows||[]).filter(f=>/^image\//.test(f.type||"")).map(f=>f.name),
+    edgeMode:0,edgeColor:"#F4ECD8",bars:0};
+  if(night===themeIsDark()){
+    try{sessionStorage.setItem("wudict_desktop_image",state.image?"1":"0")}catch(_){}
+    window.wudictShellBackground(state.colorEnabled?state.color:"",!!state.image,state.image);
+    document.documentElement.toggleAttribute("data-desktop-image",!!state.image);
+  }
+  return state;
 }
 function appearanceRender(state){
   if(!state)return;
@@ -7454,6 +7601,7 @@ function stylePairFrom(j,night){
 async function stylerOpen(subject){
   hidePanel();
   $("styler").classList.add("show");
+  if(!cfgInfo)await loadConfig();
   appearanceRead();
   document.body.classList.add("styling");
   if(!stylerLoaded){
@@ -7875,6 +8023,7 @@ $("styler").addEventListener("keydown",e=>{
 <script src="/assets/list-search.js?v={{LISTSEARCHJS}}"></script>
 <script src="/assets/group-editor.js?v={{GROUPJS}}"></script>
 <script src="/assets/looks.js?v={{LOOKSJS}}"></script>
+<script>loadConfig();</script>
 <!-- Last, so the results' container is there to watch: this file marks the
      article lines that hold nothing but examples, and the layer that folds
      them away (presets/examples/) is what does the hiding. See examples.js. -->

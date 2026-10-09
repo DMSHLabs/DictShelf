@@ -71,6 +71,7 @@ type configInfo struct {
 	// withhold the control from precisely the user who owns the files and hand
 	// it to every browser on the LAN.
 	CanDelete bool `json:"canDelete"`
+	CanExit   bool `json:"canExit"`
 
 	// PathAliases shorten the prefix that is identical on every row and
 	// therefore carries no information: {prefix, label} pairs, first match
@@ -230,6 +231,7 @@ func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 		// Deleting, unlike revealing, is something this app can always do
 		// itself - so the question is only WHO is asking (D63 amended).
 		CanDelete: s.removalOffered(r),
+		CanExit:   s.DesktopExit != nil && isLoopback(r) && localExitHost(r.Host),
 	}
 	if info.DictDirOrigin == "" {
 		info.DictDirOrigin = config.OriginDefault

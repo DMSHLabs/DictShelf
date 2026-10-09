@@ -59,7 +59,7 @@ function looksNow() {
    them in separate slots; the answer that comes back for the theme on screen
    also carries the margins and the bars, which are not per theme. */
 function looksShellNow() {
-  if (!window.wudictNativeShell) return null;
+  if (!window.wudictNativeShell && !window.wudictDesktopAppearance) return null;
   const day = appearanceRequest({ action: "get", night: false }) || {};
   const night = appearanceRequest({ action: "get", night: true }) || {};
   const half = (s) => ({
@@ -87,7 +87,7 @@ function looksShellNow() {
    theme's colour where it is. Nothing reads it anyway - the checkbox beside it
    is what says whether the colour is in use. */
 function looksPushShell(half) {
-  if (!half || !window.wudictNativeShell) return;
+  if (!half || (!window.wudictNativeShell && !window.wudictDesktopAppearance)) return;
   // Each half goes to the slot it belongs to, NOT to whichever theme happens
   // to be on screen: a look applied at night was writing its LIGHT half into
   // the night slot, which is how Sepia came to have the colour checkbox ticked

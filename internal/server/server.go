@@ -140,6 +140,10 @@ type Server struct {
 	// worse than an error message.
 	Version string
 
+	// DesktopExit asks the owning desktop process to stop its HTTP server and
+	// tray. Nil for Android, tests, and hosts without a desktop Exit action.
+	DesktopExit func()
+
 	// indexOnce caches the substitutions index.html needs that never change
 	// after startup ({{VERSION}} in the About box, the {{FRAMEJS}}, {{PICKJS}} and {{SPEAKJS}} hashes,
 	// {{ARTCSS}}).

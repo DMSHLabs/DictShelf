@@ -1347,6 +1347,7 @@ Hint: pick another port with --port, e.g.:  wudict --port %s
 	srv.UseUserGroups()
 	srv.ConfigPath = cfgFile
 	srv.User = user
+	srv.InstallDesktopBackgrounds()
 	store.SetCompressBodies(!cfg.NoCompress)
 	if cfg.MemoryLimit > 0 {
 		// A soft ceiling: Go collects harder instead of growing past it. Set it
@@ -1437,6 +1438,9 @@ Hint: pick another port with --port, e.g.:  wudict --port %s
 			_ = httpSrv.Shutdown(ctx)
 			close(idle)
 		})
+	}
+	if runtime.GOOS == "windows" {
+		srv.DesktopExit = stop
 	}
 	go func() {
 		sig := make(chan os.Signal, 1)

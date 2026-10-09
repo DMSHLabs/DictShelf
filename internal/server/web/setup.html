@@ -15,6 +15,11 @@
 window.wudictShellBackground = function (color, image, imageName, paper) {
   var root = document.documentElement;
   root.toggleAttribute('data-shell-image', !!image);
+  var file = imageName;
+  if (file === undefined) try { file = sessionStorage.getItem('wudict_shell_image_name'); } catch (_) {}
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(file || '')) file = '';
+  root.style.setProperty('--paper-bk-image', image && file ? 'url("/files/' + file + '")' : 'none');
+  try { root.toggleAttribute('data-desktop-image', !!image && !!file && sessionStorage.getItem('wudict_desktop_image') === '1'); } catch (_) {}
   // The paper an enabled PRESET paints, handed here by the app page: that page
   // paints this paper with its own layer and does not wear it as a shell
   // colour, while this document - no layers of its own - has nothing but the
@@ -95,6 +100,7 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
 <style>
 /* The Android host paints the selected image behind the transparent WebView. */
 html[data-shell-image], html[data-shell-image] body { background:transparent !important; }
+html[data-desktop-image] { background-color:var(--bg) !important;background-image:var(--paper-bk-image) !important;background-size:100% 100% !important;background-attachment:fixed !important; }
 html[data-shell-custom] .card { background:rgba(255,255,255,.14); }
 html[data-shell-custom] input,
 html[data-shell-custom] code { background:rgba(255,255,255,.18); }

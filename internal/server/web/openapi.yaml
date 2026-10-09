@@ -79,6 +79,16 @@ tags:
       Documented for completeness; not a stable contract.
 
 paths:
+  /api/exit:
+    post:
+      summary: Stop the local Windows desktop server and exit the process
+      responses:
+        '202':
+          description: Graceful shutdown requested.
+        '403':
+          description: The caller is not a local browser on the server machine.
+        '404':
+          description: This server has no desktop Exit action.
   /api/index-work:
     get:
       summary: Read the active dictionary indexing progress across pages.
@@ -3235,6 +3245,9 @@ components:
           type: string
           description: The platform's own wording, such as "Reveal in Finder".
         canReveal: { type: boolean }
+        canExit:
+          type: boolean
+          description: The local Windows desktop process can be stopped from this browser.
         canDelete:
           type: boolean
           description: >
