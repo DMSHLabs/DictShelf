@@ -64,7 +64,7 @@ For problems, see [Troubleshooting](troubleshooting.md).
     ~/.wudict/
       wudict.toml     settings
       state.json      dictionary order, enabled dictionaries, display preferences
-      groups.ini      picker groups, once edited
+      groups.ini      picker groups, only created after manually edited
       style/          custom styles
       lemmas/         installed lemma data
       db/             the library; db/spxcache/ holds converted Speex audio
@@ -73,19 +73,13 @@ For problems, see [Troubleshooting](troubleshooting.md).
 
     Windows and Android: [Configuration → Files](../reference/configuration.md#files).
 
-??? question "Can I move a dictionary to another machine?"
-
-    Yes. Copy its library folder, e.g. `~/.wudict/db/Oxford`, into the other
-    machine's library or one of its dictionary folders. The dictionary files are
-    not needed; images and audio come from `media.db` if the media pack was
-    added. See [The library](../dictionaries/library.md#move-a-dictionary-to-another-machine).
-
 ??? question "How do I update wudict?"
 
     Replace the executable, or run the new installer, `wuDict.app` or APK over
     the old one. Settings and the library are kept. Indexes built by an older
     version are reported as [outdated](../dictionaries/library.md#outdated-indexes)
-    and rebuilt with <kbd>Rebuild</kbd> or `wudict reindex`.
+    and rebuilt with <kbd>Rebuild</kbd> or `wudict reindex`. 
+    Use [Obtainium](https://obtainium.imranr.dev/) to automatically update the Android FOSS version of wudict. 
 
 ??? question "How do I free the disk space an index uses?"
 
@@ -117,12 +111,19 @@ For problems, see [Troubleshooting](troubleshooting.md).
 
     [Android app](../apps/android.md)
 
-??? question "What's the difference between Android FOSS build vs Google Play build?"
+??? question "What's the difference between the Android FOSS build and the Google Play build?"
 
-    **Short answer.** Both versions are built from the same open-source repository. Search,
-    lookup and indexing are the same. The builds are different in the way they access your dictionary files. 
-    Use the FOSS build if you want to freely access dictionary folders in your device storage in whatever folder you indicate. 
-    Use the Google Play if you need automatic updates and if you are concerned about granting full disk access to wudict. You can still select specific folders to import from, but a different mechanism is used (the scoped storage introduced by Android in API 30). A limitation of the play storage version is that all wudict data is located under  `/sdcard/Android/data/com.legbehindneck.wudict/files/Dictionaries` and in recent versions of Android this folder is not easily accessible from a file manager.
+    **Short answer.** Both builds are compiled from the same open-source repository and provide the same search, lookup, and indexing functionality. The primary difference is how they access dictionary files.
+    
+    **FOSS build.** Choose this build if you need unrestricted access to dictionary files in device storage. It allows you to select dictionary folders from locations of your choice, subject to Android's storage permissions and restrictions.
+    
+    **Google Play build.** Choose this build if you prefer distribution through Google Play and automatic app updates, or if you want to avoid granting the app broad storage access. It uses Android's Storage Access Framework (SAF), which lets you grant access to specific folders without granting general access to device storage.
+    
+    The Google Play build stores its app-managed dictionary data in:
+    
+    `/sdcard/Android/data/com.legbehindneck.wudict/files/Dictionaries`
+    
+    On recent Android versions, this directory is generally inaccessible through standard file managers. This can make it more difficult to manage or transfer dictionary files manually.
 
     **Differences.**
 
@@ -262,7 +263,7 @@ For problems, see [Troubleshooting](troubleshooting.md).
 
 ??? question "Can I use wudict in Termux?"
 
-    Yes. Build wudict from the source code in
+    Yes, you can build wudict from the source code in
     [Termux](https://termux.dev). The server and all commands work, as on a
     desktop.
 
@@ -375,7 +376,7 @@ For problems, see [Troubleshooting](troubleshooting.md).
     named by the code (`es/`). English is assumed when nothing else is found.
     See [language detection](../reference/configuration.md#lemmatization).
 
-??? question "What's the difference and between -cgo or -purego flavours and which should I use?"
+??? question "What's the difference between -cgo and -purego flavours and which should I choose?"
 
     Prefer `-cgo` for platform where it is available: you get a faster SQLite engine, and the built-in Speex decoder.
     `-purego` is the fallback mode for environments where C-code cannot be compiled; A `-purego` build needs the external command line `speexdec` utility for Speex audio decoding.
