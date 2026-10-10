@@ -5,6 +5,24 @@ and the wudict howto. The app is intended for general public as well as lexicogr
 translators, linguists, developers. They want the exact term, the exact condition and
 the exact default, and nothing that stands between them and the fact.
 
+## Base: ASD-STE100
+
+The base style is [ASD-STE100 Simplified Technical English](https://www.asd-ste100.org).
+This guide extends it. Where the two differ, this guide takes precedence.
+
+The STE rules applied most often:
+
+- Procedural sentences: 20 words or fewer. Descriptive sentences: 25 words or fewer.
+- One instruction per sentence. Instructions are imperative.
+- Active voice. Simple tenses: present, past, future.
+- Keep the articles (*a*, *an*, *the*). Noun clusters of 3 words or fewer.
+- A vertical list in place of a long sentence with many items.
+- Each word has one meaning. Use the approved meaning, not a synonym.
+
+The [Terms](#terms) table is this project's set of STE technical names and technical
+verbs: they are permitted, and only with the meaning given there. [Spelling](#form)
+(rule 15) is Oxford English, also where an STE word list uses a different spelling.
+
 ## Terms
 
 One name per concept, in every text the user reads. A different word tells the reader
