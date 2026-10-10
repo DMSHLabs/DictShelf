@@ -160,7 +160,7 @@ mac-app-install: mac-app ## Install that .app into ~/Applications (per-user, no 
 # path flavour that make believes in - C:/... from GnuWin32 make, /c/... from
 # an MSYS one, and PowerShell can resolve only the first. The script derives
 # every path from its own location instead, which is native by construction.
-# Pass overrides through ARGS: make win-installer ARGS="-Exe C:\src\wudict.exe"
+# Pass overrides through ARGS: make win-installer ARGS="-Exe C:\src\wuDict2.exe"
 #
 # powershell.exe (Windows PowerShell 5.1) is on every Windows; pwsh is an
 # optional install, so it is not the default. PWSH=pwsh works if you have it.

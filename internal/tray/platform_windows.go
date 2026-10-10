@@ -11,29 +11,40 @@ import (
 	"unsafe"
 )
 
-// Windows decides "console or no console" in the PE header, at link time, so
-// the obvious way to ship a GUI launch is a second `-H windowsgui` binary.
-// **One wudict.exe, and the launch is read at runtime instead (D76).**
+// The desktop artifact is linked with the GUI PE subsystem, so Windows does
+// not allocate a console before Go starts. The companion wuDict2-cli.exe uses
+// the console subsystem for commands that need normal terminal I/O.
 //
 // GetConsoleProcessList reports how many processes are attached to this
-// process's console. Typed into cmd, PowerShell or Windows Terminal the shell
-// is attached too, so the count is >= 2. Double-clicked from Explorer, started
-// from a Start-menu or Startup shortcut, or opened through a file
-// association, Windows creates a console for this process ALONE and the count
-// is exactly 1. No console at all (a service, a detached parent) returns 0.
-//
-// That is the only signal on Windows that separates the two launches, and
-// unlike DISPLAY it cannot be inherited by a background process that has no
-// business showing an icon.
+// process's console. A terminal-launched CLI has its shell attached too (>=2);
+// a desktop process has no console (0), and a console process started by a
+// desktop shell owns its console alone (1).
+
 var (
 	kernel32                  = syscall.NewLazyDLL("kernel32.dll")
 	user32                    = syscall.NewLazyDLL("user32.dll")
 	procGetConsoleProcessList = kernel32.NewProc("GetConsoleProcessList")
+	procGetConsoleWindow      = kernel32.NewProc("GetConsoleWindow")
 	procFreeConsole           = kernel32.NewProc("FreeConsole")
 	procProcessIdToSessionId  = kernel32.NewProc("ProcessIdToSessionId")
 	procGetCurrentProcessId   = kernel32.NewProc("GetCurrentProcessId")
 	procMessageBoxW           = user32.NewProc("MessageBoxW")
+	procShowWindow            = user32.NewProc("ShowWindow")
+	consoleWindowHidden       bool
 )
+
+func init() {
+	// Explorer starts this console-subsystem executable with a console of its
+	// own. Hide it before CLI startup does configuration and server work; the
+	// main WebView2 window is created and shown independently.
+	if GUILaunched() {
+		if hwnd, _, _ := procGetConsoleWindow.Call(); hwnd != 0 {
+			const swHide = 0
+			procShowWindow.Call(hwnd, swHide)
+			consoleWindowHidden = true
+		}
+	}
+}
 
 // preflight refuses only where there is no desktop to put an icon on.
 // Shell_NotifyIconW is part of the OS on every supported Windows, so there is
@@ -56,17 +67,12 @@ func sessionZero() bool {
 	return ok != 0 && session == 0
 }
 
-// GUILaunched reports whether this process owns its console - see above.
-//
-// It must be read BEFORE DetachConsole, and its answer carried in Config.GUI:
-// once the console is gone the same call reports false.
+// GUILaunched reports a desktop-style launch: no console, or one owned by
+// this process. A console shared with a shell belongs to the user.
 func GUILaunched() bool {
-	// The buffer only has to separate 1 from more. When it is too small the
-	// call returns the required element count, which is the number we want
-	// either way, so a console with a crowd on it is never mistaken for ours.
 	var pids [8]uint32
 	n, _, _ := procGetConsoleProcessList.Call(uintptr(unsafe.Pointer(&pids[0])), uintptr(len(pids)))
-	return n == 1
+	return n < 2
 }
 
 // DetachConsole closes the console Windows created for this process alone, so
@@ -81,6 +87,18 @@ func DetachConsole() {
 		return
 	}
 	_, _, _ = procFreeConsole.Call()
+}
+
+// ShowConsole restores the hidden startup console if headless logging could
+// not be opened. A terminal-owned console is never hidden or shown here.
+func ShowConsole() {
+	if consoleWindowHidden {
+		if hwnd, _, _ := procGetConsoleWindow.Call(); hwnd != 0 {
+			const swShow = 5
+			procShowWindow.Call(hwnd, swShow)
+		}
+		consoleWindowHidden = false
+	}
 }
 
 // Alert shows a modal message box. It is the last channel a GUI launch has:
@@ -110,7 +128,7 @@ func Alert(title, body string) {
 }
 
 // stopHint completes "To stop it, ..." for this platform.
-const stopHint = "end wudict.exe in Task Manager"
+const stopHint = "end wuDict2.exe in Task Manager"
 
 // killCmd is the command that stops process %d from a terminal here. /F is not
 // optional: without it taskkill only posts WM_CLOSE, and a wudict whose tray

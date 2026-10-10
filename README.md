@@ -47,7 +47,7 @@ Runs natively on [android](https://wuweidict.github.io/wudict/apps/android/), [m
 1. Download the standalone binary for your OS from
    [releases](https://github.com/wuweidict/wudict/releases), rename to `wudict`, 
    `chmod +x wudict` (macOS/Linux) and move to a folder in `$PATH`, e.g. `/usr/local/bin`.
-2. Run `wudict` or `./wudict` if the file is in the current folder. For windows you can either use the installer [`wudict-windows-x64-setup-<x.y.z>.exe`](https://github.com/wuweidict/wudict/releases/latest), or download the standalone executable `wudict-windows-amd64-cgo.exe` and then double-click to run. For macOS an app bundle is provided  (it is not signed with a commercial Apple Developer Certificate, macOS flags it as unverified, and extra steps are needed to de-quarantine the app as described in the [manual](https://wuweidict.github.io/wudict/apps/macos/)).
+2. Run `wudict` or `./wudict` if the file is in the current folder. For Windows, use the `wudict2-windows-x64-setup-<version>.exe` installer or the `wuDict2.exe` desktop build. For macOS an app bundle is provided (it is not signed with a commercial Apple Developer Certificate, macOS flags it as unverified, and extra steps are needed to de-quarantine the app as described in the [manual](https://wuweidict.github.io/wudict/apps/macos/)).
 3. By default `wudict` searches for dictionaries under `~/Dictionaries` (including subfolders); 
    if the dictionary folder is missing or empty, a setup page opens where you can configure your dictionary folders.
 
@@ -133,12 +133,12 @@ make mac-agent-uninstall # stop it and delete the plist
 
 ## Run as an app (Windows)
 
-In Windows, `wudict` runs from `cmd` or PowerShell as an ordinary command-line
-program. When started from Explorer or a shortcut, it opens a dedicated window
-using WebView2 and shows a tray icon; closing the window leaves the server in
-the tray. **Exit** in Settings or **Quit** in the tray stops the server. The
-window and server are in one `wudict.exe`. If the WebView2 Runtime is absent,
-it opens the default browser instead. Logs go to
+On Windows, `wuDict2.exe` opens the WebView2 desktop window without a console
+window. It also shows a tray icon; closing the window leaves the server running
+in the tray. **Exit** in Settings or **Quit** in the tray stops the server. If
+the WebView2 Runtime is absent, it opens the default browser instead. For
+terminal commands, use `wuDict2-cli.exe` (for example,
+`wuDict2-cli.exe --help`). Logs go to
 `%LOCALAPPDATA%\wudict\wudict.log`. See also [running on Windows](https://wuweidict.github.io/wudict/apps/windows/).
 
 
@@ -210,7 +210,7 @@ Config file search order: `--config` / `CONFIG_PATH`, then
 `<exe-dir>/wudict.toml`, `~/.wudict/wudict.toml`,
 `/etc/wudict/wudict.toml`.
 
-**Portable mode.** A `wudict.toml` can also be placed in the same folder as the `wudict` (or `wudict.exe`) executable.
+**Portable mode.** A `wudict.toml` can also be placed in the same folder as the `wudict` (or `wuDict2.exe`) executable.
 
 **`~/.wudict/state.json`** stores dictionary search order and enabled/disable state. 
 

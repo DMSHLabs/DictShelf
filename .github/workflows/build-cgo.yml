@@ -133,7 +133,7 @@ jobs:
           APP_BIN="$PWD/wudict" BUILD_DIR="$PWD/dist" sh tools/make-app.sh
           # ditto, not zip: it is the only archiver Apple guarantees keeps the
           # bundle's symlinks, xattrs and code signature intact.
-          # Versioned like every other asset (wudict-windows-x64-setup-3.7.5.exe),
+          # Versioned like every other asset (wudict2-windows-x64-setup-3.7.5.exe),
           # from the binary's own --version via the same helper make-app.sh
           # used, so the zip and the bundle inside it cannot disagree. Same
           # file-name rules as the APK: leading "v" dropped, "/" -> "_".
@@ -148,11 +148,11 @@ jobs:
           path: wudict-macos-universal-app-*.zip
           if-no-files-found: warn
 
-  # One Windows executable carries the CLI/server and its WebView2 window.
+  # Windows desktop and console CLI binaries are built separately.
   windows-installer:
     name: Windows desktop and installer
     # Build on the native Windows runner through the same entry point used
-    # locally. That embeds the fork's WebView2 window in wudict.exe before the
+    # locally. That embeds the fork's WebView2 window in wuDict2.exe before the
     # installer packages it; packaging the upstream-style CLI artifact from
     # the matrix build would omit the desktop shell.
     runs-on: windows-2022
@@ -171,13 +171,20 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: wudict2-windows-x64
-          path: wudict.exe
+          path: wuDict2.exe
+
+      - name: Upload command-line executable
+        uses: actions/upload-artifact@v7
+        with:
+          name: wudict2-windows-cli-x64
+          path: wuDict2-cli.exe
+          if-no-files-found: error
 
       - name: Upload installer
         uses: actions/upload-artifact@v7
         with:
           name: wudict2-windows-installer
-          path: dist/wudict-windows-x64-setup*.exe
+          path: dist/wudict2-windows-x64-setup*.exe
           if-no-files-found: error
 
   release:

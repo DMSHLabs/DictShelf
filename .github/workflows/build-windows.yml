@@ -53,12 +53,19 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: wudict2-windows-x64
-          path: wudict.exe
+          path: wuDict2.exe
+          if-no-files-found: error
+
+      - name: Upload command-line executable
+        uses: actions/upload-artifact@v7
+        with:
+          name: wudict2-windows-cli-x64
+          path: wuDict2-cli.exe
           if-no-files-found: error
 
       - name: Upload installer
         uses: actions/upload-artifact@v7
         with:
           name: wudict2-windows-installer
-          path: dist/wudict-windows-x64-setup*.exe
+          path: dist/wudict2-windows-x64-setup*.exe
           if-no-files-found: error

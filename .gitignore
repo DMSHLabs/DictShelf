@@ -2,6 +2,10 @@
 # The Windows desktop binary (build-windows.cmd): the same product `make build`
 # writes, with the extension Windows needs to exec it.
 /wudict.exe
+# Windows builds produced by build-windows.cmd. These are local build products;
+# the installer and CI artifacts are handled separately.
+/wuDict2.exe
+/wuDict2-cli.exe
 dist/**
 docs.local/
 *_NOTRACK.md

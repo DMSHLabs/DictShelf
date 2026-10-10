@@ -455,13 +455,11 @@ ABOUT
 }
 
 // Main is the CLI entry point, called by the module-root main package.
-// guiDetached records that this process gave up its console (a double-clicked
-// wudict.exe, D76) and headlessLog where its output went instead. Set once, in
-// cmdServe, and read only by fail: after the detach, stderr is a hole in the
-// ground, so a fatal error has to be shown some other way or the user sees a
-// window flash and nothing else.
+// guiLaunch marks desktop-style launches whose stderr is not visible; a
+// fatal error must be shown in a dialog. headlessLog records where runtime
+// output went instead.
 var (
-	guiDetached bool
+	guiLaunch   bool
 	headlessLog string
 )
 
@@ -472,17 +470,33 @@ func fail(err error) {
 		return
 	}
 	fmt.Fprintln(os.Stderr, "error:", err)
-	if guiDetached {
+	if guiLaunch {
 		msg := err.Error()
 		if headlessLog != "" {
 			msg += "\n\nDetails: " + headlessLog
 		}
-		tray.Alert(ProductName, msg)
+		title := ProductName
+		if runtime.GOOS == "windows" {
+			title = "wuDict2"
+		}
+		tray.Alert(title, msg)
 	}
 	os.Exit(1)
 }
 
 func Main() {
+	guiLaunch = tray.GUILaunched()
+	if !informationalCommand(os.Args[1:]) {
+		release, err := acquireProcessLock()
+		if err != nil {
+			fail(err)
+			return
+		}
+		if release != nil {
+			defer release()
+		}
+	}
+
 	if len(os.Args) < 2 {
 		// no arguments: start the server (documented default)
 		fail(cmdServe(nil))
@@ -543,6 +557,18 @@ func Main() {
 		os.Exit(2)
 	}
 	fail(err)
+}
+
+func informationalCommand(args []string) bool {
+	if len(args) == 0 {
+		return false
+	}
+	switch args[0] {
+	case "-h", "--help", "help", "-v", "--version", "version", "licenses", "license", "notices":
+		return true
+	default:
+		return false
+	}
 }
 
 // cmdLicenses prints the program's own licence line and then the embedded
@@ -1074,6 +1100,11 @@ func displayName(path string) string {
 }
 
 func cmdServe(args []string) (err error) {
+	// A GUI-subsystem Windows build has no stderr console. Mark a desktop launch
+	// before config loading so fatal startup errors still reach Alert.
+	gui := tray.GUILaunched()
+	guiLaunch = gui
+
 	fs := flag.NewFlagSet("serve", flag.ExitOnError)
 	var dictDirs multiFlag
 	fs.Var(&dictDirs, "dict-dir", "folder with dictionaries; repeat for several (env/toml: DICT_DIR)")
@@ -1151,26 +1182,19 @@ func cmdServe(args []string) (err error) {
 		}
 	}
 
-	// Machine C (D74). A terminal launch keeps today's behaviour byte for
-	// byte; only a GUI launch - a macOS .app, a double-clicked wudict.exe -
-	// moves the message channel, because there stderr points at nothing a
-	// human will ever read. A console is never taken from a user who has one.
-	//
-	// Read once and carried: on Windows GUILaunched asks who else is attached
-	// to this console, and DetachConsole below makes the same question answer
-	// differently (D76).
-	gui := tray.GUILaunched()
+	// Desktop launches have no useful stderr. Runtime messages go to a log,
+	// while fatal startup errors are shown in a dialog. Terminal launches keep
+	// their normal console output.
 	trayWanted := gui
 	if cfg.Tray != nil {
 		trayWanted = *cfg.Tray
 	}
-	if trayWanted && gui {
-		// Order matters. Take the log first and give up the console second: if
-		// the log cannot be opened, keeping an ugly black window is worth more
-		// than a server that runs in total silence.
+	if gui {
+		// Open the log before redirecting runtime output. A console-owned
+		// helper can still restore its window if opening the log fails.
 		if f, ferr := openHeadlessLog(); ferr == nil {
 			logx.SetOutput(f)
-			guiDetached, headlessLog = true, f.Name()
+			guiLaunch, headlessLog = true, f.Name()
 			// Whatever ends this run is written to the log while the file is
 			// still open - the restore below is what closes it, and Main's
 			// stderr is dead by then. The dialog Main raises says where to
@@ -1183,6 +1207,9 @@ func cmdServe(args []string) (err error) {
 				f.Close()
 			}()
 			tray.DetachConsole()
+		} else {
+			// Restore a hidden console-subsystem helper if the log is unavailable.
+			tray.ShowConsole()
 		}
 	}
 	logx.V("config: source=%q dictDirs=%v dbDir=%q addr=%s speexdec=%s",
@@ -1225,6 +1252,10 @@ func cmdServe(args []string) (err error) {
 		// and answers the question that actually matters.
 		if inst, ok := probeRunning(cfg.Addr()); ok {
 			announceRunning(inst, url, cfg.DictDirs, !cfg.NoBrowser)
+			if gui {
+				tray.Alert("wuDict2", "wuDict2 is already running. Close it before starting another copy.")
+				return nil
+			}
 			if !cfg.NoBrowser {
 				// With the key, when this launch has one: the instance
 				// already running was started from the same configuration,

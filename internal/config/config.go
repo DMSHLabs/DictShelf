@@ -33,7 +33,7 @@ type Config struct {
 
 	// Tray is tri-state, so it is a pointer rather than a bool: unset means
 	// "decide from how the app was launched" - a GUI launch (a macOS .app, the
-	// double-clicked wudict.exe) gets an icon, a terminal or a service does not.
+	// double-clicked wuDict2.exe) gets an icon, a terminal or a service does not.
 	// TRAY=1 or TRAY=0 overrides that decision in either direction (D74).
 	Tray         *bool  // TRAY
 	Verbose      bool   // VERBOSE=1: verbose logging

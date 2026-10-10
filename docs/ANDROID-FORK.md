@@ -91,7 +91,7 @@ merge merely to resume this work.
 | Port and saved override | `android/app/src/main/java/com/legbehindneck/wudict/ShellPrefs.java`: `DEFAULT_PORT`, `SERVER_PORT`, `port(Context)`; the settings hint is in `src/main/res/values/strings.xml` |
 | Child Go process, adoption, readiness | `android/app/src/main/java/com/legbehindneck/wudict/ServerProcess.java`: `run`, `adoptRunningServer`, `awaitPort`; `AppDirs.java` provides the app-specific library directory |
 | Shared Go protocol | `internal/server/server.go` defines the `wudict` Server header; `internal/server/folders.go` provides `/api/config.libDir`; `internal/cli/running.go` probes an occupied port. No Go identity rename is needed for separate ports. |
-| Build entry points | `build-android.cmd` (Windows, rebuilds Go and FOSS APK), `build-windows.cmd` (Windows desktop: `wudict.exe`, plus the Inno Setup installer under `release`), `Makefile`, `.github/workflows/build-android.yml`, `fastlane/Appfile` |
+| Build entry points | `build-android.cmd` (Windows, rebuilds Go and FOSS APK), `build-windows.cmd` (Windows desktop: GUI `wuDict2.exe`, console `wuDict2-cli.exe` and Inno Setup installer under `release`), `Makefile`, `.github/workflows/build-android.yml`, `fastlane/Appfile` |
 
 The device's loopback interface is shared across apps. The old shell accepted
 any listening socket as startup success and could adopt another wuDict server.

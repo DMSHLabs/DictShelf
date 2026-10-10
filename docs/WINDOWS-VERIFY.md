@@ -32,17 +32,17 @@ them are in `docs/handoff-archive.md`.
   `-db-dir /tmp/foo/db` (or export a throwaway `USERPROFILE`) and nothing of
   the user's is touched; a run that forgot is cleaned up from the setup page's
   library list, not by hand.
-- **Kill EVERY `wudict.exe` before starting a preview server** —
-  `taskkill /F /IM wudict.exe`. A stale instance keeps port 6899 and the new one
+- **Kill EVERY `wuDict2.exe` before starting a preview server** —
+  `taskkill /F /IM wuDict2.exe`. A stale instance keeps port 6899 and the new one
   exits with "stop the running instance first", so the browser goes on being
   served by the OLD binary's embedded assets (the log looks fine: the config
   summary is printed before the bind). Cost an hour of chasing a CSS change that
-  was never served; `tasklist //FI "IMAGENAME eq wudict.exe"` should show one
+  was never served; `tasklist //FI "IMAGENAME eq wuDict2.exe"` should show one
   process after a restart. The page also caches its CSS by the `?v=` hash, so
   the browser must be reloaded after the server is really new.
 - Go: `go build ./...`; targeted `go test ./internal/<pkg> -run '...' -count=1`.
 - **`build-windows.cmd [debug|release] [installer] [purego]`** — the fork's desktop build
-  (added 2026-09-28, beside `build-android.cmd`): `wudict.exe` in the repo root,
+  (added 2026-09-28, beside `build-android.cmd`): `wuDict2.exe` (GUI subsystem) and `wuDict2-cli.exe` (console) in the repo root,
   upstream's product (wuDict, port 6888, its own config and library), NOT the
   Android app. **Every machine path it needs is in one block at the top of the
   file** — `GCC_PATH` (pinned to Qt's mingw-w64 GCC; empty falls back to `%CC%`,
@@ -58,7 +58,7 @@ them are in `docs/handoff-archive.md`.
   FTS5 inside the artifact; tags, CGO flag and driver are read back out of it
   with `go version -m`); its imports are KERNEL32 and msvcrt only, so no mingw
   DLL has to sit beside it.
-- The same `wudict.exe` now hosts its WebView2 window on a locked Windows UI
+- `wuDict2.exe` now hosts its WebView2 window on a locked Windows UI
   thread when launched from Explorer or Start; terminal launches retain the
   browser. It keeps a separate profile under `%LOCALAPPDATA%\wuDict\WebView2`
   and falls back to the browser when the Runtime is missing. Closing the
@@ -81,8 +81,8 @@ them are in `docs/handoff-archive.md`.
   registry, so `tools\make-installer.ps1 -Locate` finds neither of them, and
   `ISCC_PATH` in `build-windows.cmd` is pinned to
   `D:\ProgSoft\InnoSetup7\ISCC.exe`. Verified 2026-09-28: `build-windows.cmd
-  release` builds the cgo `wudict.exe` and then the setup program,
-  `dist\wudict-windows-x64-setup-0.0.0.exe` (7.3 MB, ProductName wuDict,
+  release` builds the cgo `wuDict2.exe` and then the setup program,
+  `dist\wudict2-windows-x64-setup-0.0.0.exe` (7.3 MB, ProductName wuDict2,
   FileDescription "wuDict Setup"); Inno Setup 7 still accepts the legacy
   `/D<name>=<value>` defines `make-installer.ps1` passes it. The **5** that is
   also on this machine (`D:\ProgSoft\InnoSetup5\`) cannot read the script at all
@@ -98,9 +98,9 @@ them are in `docs/handoff-archive.md`.
 - No `node` in this shell: JS syntax checks by hand/`vm`, and — since
   2026-10-07 — the ZCode in-app browser (the `browser-use` skill's
   `control-browser`) against a local preview, which is the way to check the
-  page actually runs: build the server with `go build -o <tmp>/wudict.exe .`,
+  page actually runs: build the server with `go build -o <tmp>/wuDict2.exe .`,
   start it with isolated dirs and no auth —
-  `wudict.exe serve -dict-dir <test_data> -db-dir <tmp>/lib -config <tmp>/wudict.toml
+  `wuDict2-cli.exe serve -dict-dir <test_data> -db-dir <tmp>/lib -config <tmp>/wudict.toml
   -port 6925 -auth off -no-browser -no-tray` (the `-config` file must EXIST,
   even empty) — then load `http://127.0.0.1:6925/` in the browser and read the
   page's own state with `evaluate` (tokens, `localStorage`, element `hidden`

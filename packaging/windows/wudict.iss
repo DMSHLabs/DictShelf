@@ -4,19 +4,19 @@
 ;
 ; The Windows installer (P86 / D76). Compiled by tools\make-installer.ps1,
 ; which locates ISCC.exe and fills the defines below in from the built binary
-; (`wudict --version`), so nothing here carries a second copy of the product
+; (`wuDict2-cli --version`), so the version is read from the binary:
 ; name or the version:
 ;
-;   .\tools\make-installer.ps1 -Exe .\wudict.exe -OutDir .\dist
+;   .\tools\make-installer.ps1 -Exe .\wuDict2.exe -CliExe .\wuDict2-cli.exe -OutDir .\dist
 ;
 ; or `make win-installer`. Every define has a default, so opening this file in
 ; the Inno Setup IDE and pressing Compile also works.
 ;
-; One executable is installed: wudict.exe hosts both the CLI/server and the
-; WebView2 window when launched from the desktop.
+; The GUI-subsystem wuDict2.exe opens WebView2 without a console flash.
+; wuDict2-cli.exe retains normal console input, output and exit status.
 
 #ifndef AppName
-  #define AppName "wuDict"
+  #define AppName "wuDict2"
 #endif
 #ifndef AppVersion
   #define AppVersion "dev"
@@ -25,7 +25,10 @@
   #define NumVersion "0.0.0"
 #endif
 #ifndef SourceExe
-  #define SourceExe "..\..\wudict.exe"
+  #define SourceExe "..\..\wuDict2.exe"
+#endif
+#ifndef SourceCliExe
+  #define SourceCliExe "..\..\wuDict2-cli.exe"
 #endif
 #ifndef OutputDir
   #define OutputDir "..\..\dist"
@@ -87,7 +90,7 @@ UsedUserAreasWarning=no
 DefaultGroupName={#AppName}
 DisableProgramGroupPage=yes
 
-; The running server holds wudict.exe open, so an upgrade cannot replace it
+; The running server holds wuDict2.exe open, so an upgrade cannot replace it
 ; while it runs. Restart Manager is told to close it: the alternative is a
 ; "file in use" dialog in the middle of an install the user just asked for.
 ; Safe to force — SQLite's journal makes an abrupt exit recoverable by design —
@@ -108,7 +111,7 @@ ChangesEnvironment=yes
 ChangesAssociations=yes
 
 SetupIconFile=wudict.ico
-UninstallDisplayIcon={app}\wudict.exe,0
+UninstallDisplayIcon={app}\wuDict2.exe,0
 ; Not "modern dynamic", which is what every example in issrc now uses: the
 ; dynamic appearance mode follows the system light/dark setting but arrived in
 ; Inno Setup 6.6 (2025-11-11). The floor is 6.3 because correctness needs it;
@@ -118,7 +121,7 @@ WizardStyle=modern
 Compression=lzma2/max
 SolidCompression=yes
 OutputDir={#OutputDir}
-OutputBaseFilename=wudict-windows-x64-setup-{#NumVersion}
+OutputBaseFilename=wudict2-windows-x64-setup-{#NumVersion}
 LicenseFile=..\..\LICENSE
 
 [Languages]
@@ -127,19 +130,24 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 [Tasks]
 Name: "desktopicon";  Description: "Create a &desktop shortcut"; Flags: unchecked
 Name: "startup";      Description: "Start {#AppName} at sign-in"; Flags: unchecked
-Name: "addtopath";    Description: "Add {#AppName} to my &PATH (so `wudict` works in a terminal)"
+Name: "addtopath";    Description: "Add {#AppName} to my &PATH (so `wuDict2-cli` works in a terminal)"
 Name: "associate";    Description: "Offer {#AppName} in ""Open with"" for dictionary files"
 
 [Files]
-Source: "{#SourceExe}"; DestDir: "{app}"; DestName: "wudict.exe"; Flags: ignoreversion
+Source: "{#SourceExe}"; DestDir: "{app}"; DestName: "wuDict2.exe"; Flags: ignoreversion
+Source: "{#SourceCliExe}"; DestDir: "{app}"; DestName: "wuDict2-cli.exe"; Flags: ignoreversion
 Source: "wudict.ico";   DestDir: "{app}"; Flags: ignoreversion
 ; The third-party notices, beside the exe as well as inside it (`wudict
 ; licenses`): several of them require their text to accompany a binary.
 Source: "..\..\THIRD-PARTY-NOTICES.md"; DestDir: "{app}"; Flags: ignoreversion
 
+[InstallDelete]
+; Remove the previous executable when upgrading an existing wuDict install.
+Type: files; Name: "{app}\wudict.exe"
+
 [Icons]
-Name: "{group}\{#AppName}";       Filename: "{app}\wudict.exe"; IconFilename: "{app}\wudict.ico"; Comment: "Open your dictionaries"
-Name: "{autodesktop}\{#AppName}"; Filename: "{app}\wudict.exe"; IconFilename: "{app}\wudict.ico"; Tasks: desktopicon
+Name: "{group}\{#AppName}";       Filename: "{app}\wuDict2.exe"; IconFilename: "{app}\wudict.ico"; Comment: "Open your dictionaries"
+Name: "{autodesktop}\{#AppName}"; Filename: "{app}\wuDict2.exe"; IconFilename: "{app}\wudict.ico"; Tasks: desktopicon
 ; A Startup-folder shortcut rather than a Run registry key: it is the one place
 ; a user can find and delete an autostart entry without a tool. {autostartup},
 ; so an all-users install starts it for whoever signs in and a per-user install
@@ -148,7 +156,7 @@ Name: "{autodesktop}\{#AppName}"; Filename: "{app}\wudict.exe"; IconFilename: "{
 ; which may not be the person installing. --no-browser because a tab that opens
 ; itself at every sign-in is a nuisance; the tray icon is the liveness
 ; indicator there (D74).
-Name: "{autostartup}\{#AppName}"; Filename: "{app}\wudict.exe"; Parameters: "--no-browser"; IconFilename: "{app}\wudict.ico"; Tasks: startup
+Name: "{autostartup}\{#AppName}"; Filename: "{app}\wuDict2.exe"; Parameters: "--no-browser"; IconFilename: "{app}\wudict.ico"; Tasks: startup
 
 [Registry]
 ; PATH. Which variable this is depends on the install mode, and the two do not
@@ -179,7 +187,7 @@ Root: HKA; Subkey: "Software\Classes\{#ProgId}"; ValueType: string; ValueName: "
 Root: HKA; Subkey: "Software\Classes\{#ProgId}\DefaultIcon"; ValueType: string; ValueName: ""; \
     ValueData: "{app}\wudict.ico,0"; Tasks: associate
 Root: HKA; Subkey: "Software\Classes\{#ProgId}\shell\open\command"; ValueType: string; ValueName: ""; \
-    ValueData: """{app}\wudict.exe"" ""%1"""; Tasks: associate
+    ValueData: """{app}\wuDict2.exe"" ""%1"""; Tasks: associate
 
 Root: HKA; Subkey: "Software\Classes\.mdx\OpenWithProgids";  ValueType: string; ValueName: "{#ProgId}"; ValueData: ""; Flags: uninsdeletevalue; Tasks: associate
 Root: HKA; Subkey: "Software\Classes\.dsl\OpenWithProgids";  ValueType: string; ValueName: "{#ProgId}"; ValueData: ""; Flags: uninsdeletevalue; Tasks: associate
@@ -192,7 +200,7 @@ Root: HKA; Subkey: "Software\Classes\.zim\OpenWithProgids";  ValueType: string; 
 ; an elevated install: the server must come up as the person who installed it,
 ; not as the administrator whose credentials the UAC prompt took, or it would
 ; read that account's dictionaries and write that account's config.
-Filename: "{app}\wudict.exe"; Description: "Start {#AppName} now"; Flags: nowait postinstall runasoriginaluser skipifsilent
+Filename: "{app}\wuDict2.exe"; Description: "Start {#AppName} now"; Flags: nowait postinstall runasoriginaluser skipifsilent
 
 [Code]
 const

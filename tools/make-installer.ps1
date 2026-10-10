@@ -21,7 +21,7 @@
 #
 # Everything that decides what the installer DOES lives in
 # packaging\windows\wudict.iss. This only locates the compiler and derives the
-# product identity from the binary.
+# release version from the binary.
 #
 # Run it with no arguments from the repository root, which is what
 # `make win-installer` and the CI job both do:
@@ -30,11 +30,13 @@
 #
 # Every path it needs is derived from $PSScriptRoot, so it is always a native
 # Windows path — the one thing a caller cannot be relied on to supply. -Exe and
-# -OutDir override the defaults (repo root \ wudict.exe, repo root \ dist).
+# -OutDir override the defaults (repo root \ wuDict2.exe, repo root \ dist).
 [CmdletBinding()]
 param(
-    # The wudict.exe to package.
+    # The wuDict2.exe to package.
     [string] $Exe,
+    # The console-subsystem wuDict2-cli.exe packaged beside the desktop app.
+    [string] $CliExe,
     # Where the setup .exe is written.
     [string] $OutDir,
     # ISCC.exe, if it is somewhere non-standard.
@@ -49,7 +51,8 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $root = Split-Path -Parent $PSScriptRoot
-if (-not $Exe)    { $Exe    = Join-Path $root 'wudict.exe' }
+if (-not $Exe)    { $Exe    = Join-Path $root 'wuDict2.exe' }
+if (-not $CliExe) { $CliExe = Join-Path $root 'wuDict2-cli.exe' }
 if (-not $OutDir) { $OutDir = Join-Path $root 'dist' }
 $iss = Join-Path $root 'packaging\windows\wudict.iss'
 $ico = Join-Path $root 'packaging\windows\wudict.ico'
@@ -113,7 +116,7 @@ if (-not (Test-Path -LiteralPath $Exe -PathType Leaf)) {
     throw @"
 make-installer: no binary at $Exe
   Build it first, from the repository root:
-    go build -tags sqlite_fts5 -ldflags "-s -w" -o wudict.exe .
+    go build -tags sqlite_fts5 -ldflags "-s -w" -o wuDict2.exe .
   (make build is a POSIX recipe and does not run on Windows; it would also
   write an extension-less "wudict", which Windows cannot execute.)
 "@
@@ -142,20 +145,17 @@ make-installer: Inno Setup 6 not found.
     $Iscc = $hit.Path
 }
 
-# Identity from the binary, so the name and version exist once — in
-# internal/cli — rather than being copied into the build system. Same source as
-# tools/version.sh feeds the macOS bundle; only the four lines that parse
-# "<ProductName> <Version>" are stated twice, once per host shell.
-$name = 'wuDict'
+# The Windows app has its own fork name (wuDict2); read its version from the
+# binary so the installer version follows the same release source as the app.
+$name = 'wuDict2'
 $version = 'dev'
 try {
-    $line = (& $Exe '--version' 2>$null | Select-Object -First 1)
-    if ($line -match '^(?<n>[A-Za-z0-9._-]+)\s+(?<v>\S+)') {
-        $name = $Matches['n']
+    $line = (& $CliExe '--version' 2>$null | Select-Object -First 1)
+    if ($line -match '^[A-Za-z0-9._-]+\s+(?<v>\S+)') {
         $version = $Matches['v']
     }
 } catch {
-    Write-Warning "make-installer: $Exe would not run — stamping the installer $name $version"
+    Write-Warning "make-installer: $CliExe would not run — stamping the installer $name $version"
 }
 
 # CFBundleShortVersionString's Windows twin: VersionInfoVersion must be
@@ -174,13 +174,14 @@ $isccArgs = @(
     "/DAppVersion=$version"
     "/DNumVersion=$num"
     "/DSourceExe=$((Resolve-Path -LiteralPath $Exe).Path)"
+    "/DSourceCliExe=$((Resolve-Path -LiteralPath $CliExe).Path)"
     "/DOutputDir=$((Resolve-Path -LiteralPath $OutDir).Path)"
     $iss
 )
 & $Iscc @isccArgs
 if ($LASTEXITCODE -ne 0) { throw "make-installer: iscc exited $LASTEXITCODE" }
 
-$setup = Join-Path $OutDir "wudict-windows-x64-setup-$num.exe"
+$setup = Join-Path $OutDir "wudict2-windows-x64-setup-$num.exe"
 if (-not (Test-Path -LiteralPath $setup -PathType Leaf)) {
     throw "make-installer: iscc reported success but $setup is missing"
 }

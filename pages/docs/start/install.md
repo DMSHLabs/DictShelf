@@ -56,26 +56,24 @@ install. macOS also has an app bundle, Windows an installer, Android an APK.
 === "Windows"
 
     ``` cmd title="cmd"
-    ren wudict-windows-amd64-cgo.exe wudict.exe
-    wudict.exe
+    wuDict2.exe
     ```
 
     ``` pwsh title="PowerShell"
-    Rename-Item wudict-windows-amd64-cgo.exe wudict.exe
-    .\wudict.exe
+    .\wuDict2.exe
     ```
 
-    On Arm64 Windows use `wudict-windows-arm64-purego.exe`.
+    On Arm64 Windows use `wudict-windows-arm64-purego.exe` where available.
 
     The file is not code-signed, so Windows Defender SmartScreen stops its
     first run: choose **More info**, then **Run anyway**.
 
-    Started from `cmd` or PowerShell, `wudict.exe` is a console program.
-    Started by double-click, from a shortcut or by opening a dictionary file,
-    it runs without a console, shows a tray icon and logs to
+    `wuDict2.exe` is a Windows app and opens without a console window. For
+    terminal commands, use `wuDict2-cli.exe`; it writes to the terminal and
+    returns an exit code. Desktop launches show a tray icon and log to
     `%LOCALAPPDATA%\wudict\wudict.log`.
 
-    The installer `wudict-windows-x64-setup-<version>.exe` adds a Start menu
+    The installer `wudict2-windows-x64-setup-<version>.exe` adds a Start menu
     entry, an uninstaller, `PATH` and *Open with*. See
     [Windows installer](../apps/windows.md).
 
