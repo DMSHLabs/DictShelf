@@ -74,6 +74,7 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{{T:browse.title}}</title>
 <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
+{{UI_SCALE_DEFAULTS}}
 <!--
  Copyright (C) 2026 glowinthedark
 
@@ -240,6 +241,7 @@ footer .browse-search-dock button{box-sizing:border-box;display:grid;place-items
   width:calc(var(--ui-edit_control-height) * 1.5rem);
   height:calc(var(--ui-edit_control-height) * 1.5rem);padding:0;border:1px solid var(--line);
   border-radius:6px;background:var(--bg);color:var(--fg);font:inherit;line-height:1;cursor:pointer}
+html[data-desktop-image] footer .browse-search-dock button:not(.is-on){background:transparent}
 footer .browse-search-mode svg{display:block;width:1.1em;height:1.1em}
 footer .browse-search-mode.is-on{border-color:var(--accent);background:var(--accent);color:var(--bg)}
 footer .browse-search-dock button:disabled{opacity:.45;cursor:default}
@@ -273,6 +275,10 @@ footer .browse-search-dock button:disabled{opacity:.45;cursor:default}
 .chooser-list .list-search-dock{box-sizing:border-box;display:flex;align-items:center;
   gap:.25em;flex:none;margin-top:.5em;padding:.5em 0 0;border-top:1px solid var(--line);
   font-size:calc(var(--ui-edit_control-font) * 1rem)}
+html[data-desktop-image] .chooser-list .chooser-hint{
+  padding-bottom:.75em;border-bottom:1px solid color-mix(in srgb,var(--fg) 28%,transparent)}
+html[data-desktop-image] .chooser-list .list-search-dock{
+  border-top-color:color-mix(in srgb,var(--fg) 28%,transparent)}
 .chooser-list .list-search-input{box-sizing:border-box;flex:1 1 auto;min-width:0;width:0;
   height:calc(var(--ui-edit_control-height) * 1.5rem);margin:0;padding:0 .4em;
   font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);
@@ -283,6 +289,8 @@ footer .browse-search-dock button:disabled{opacity:.45;cursor:default}
   place-items:center;flex:none;width:calc(var(--ui-edit_control-height) * 1.5rem);
   height:calc(var(--ui-edit_control-height) * 1.5rem);padding:0;border:1px solid var(--line);
   border-radius:6px;background:var(--bg);color:var(--fg);font:inherit;line-height:1;cursor:pointer}
+html:is([data-shell-sepia],[data-shell-image]) .chooser-list :is(.list-search-dock,.list-search-input,.list-search-step,.list-search-mode:not(.is-on)){background-color:var(--paper-bg,var(--bg))}
+html[data-desktop-image] .chooser-list :is(.list-search-dock,.list-search-input,.list-search-step,.list-search-mode:not(.is-on)){background:transparent}
 .chooser-list .list-search-mode svg{display:block;width:1.1em;height:1.1em}
 .chooser-list .list-search-mode.is-on{border-color:var(--accent);background:var(--accent);color:var(--bg)}
 .chooser-list .list-search-step:disabled{opacity:.45;cursor:default}
@@ -301,9 +309,6 @@ footer .browse-search-dock button:disabled{opacity:.45;cursor:default}
 <script>
 /* The chooser shares the reader's saved Fonts values. */
 (function () {
-  const defaults={base:1,title:1.15,addition:.9,hint:.8,controlHeight:1.6,controlFont:.9,
-    editControlHeight:1.8,editControlFont:1,
-    mainControlHeight:1.05,mainControlFont:1.05};
   const names={base:'--ui-font-base',title:'--ui-font-title',addition:'--ui-font-addition',
     hint:'--ui-hint-font-size',controlHeight:'--ui-control-height',controlFont:'--ui-control-font',
     editControlHeight:'--ui-edit_control-height',
@@ -311,9 +316,11 @@ footer .browse-search-dock button:disabled{opacity:.45;cursor:default}
     mainControlFont:'--ui-main-control-font'};
   let saved={};
   try { saved=JSON.parse(localStorage.getItem('wudict_settings_fonts')||'null')||{}; } catch (_) {}
-  for(const [key,fallback] of Object.entries(defaults)){
-    const value=Number(saved[key]),scale=Number.isFinite(value)?Math.min(key.endsWith('Height')?4:2,Math.max(.5,value)):fallback;
-    document.documentElement.style.setProperty(names[key],String(scale));
+  for(const [key,property] of Object.entries(names)){
+    if(!Object.hasOwn(saved,key))continue;
+    const value=Number(saved[key]);if(!Number.isFinite(value))continue;
+    const scale=Math.min(key.endsWith('Height')?4:2,Math.max(.5,value));
+    document.documentElement.style.setProperty(property,String(scale));
   }
 })();
 </script>

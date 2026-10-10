@@ -1,0 +1,5 @@
+// Copyright (C) 2026 DmShAl (Shepeta Dmitry)
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+// Regenerate wudict.syso with windres -F pe-x86-64 -i packaging/windows/wudict.rc -o wudict.syso.
+101 ICON "packaging/windows/wudict.ico"

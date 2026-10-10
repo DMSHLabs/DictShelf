@@ -25,7 +25,7 @@ for (const language of ['en', 'ru']) {
   const catalogKeys=[...catalogSource.matchAll(/^  "([^"\n]+)":/gm)].map(m=>m[1]);
   assert.equal(new Set(catalogKeys).size,catalogKeys.length,'Duplicate top-level catalog key: '+language);
   const messages = JSON.parse(fs.readFileSync(path.join(web, `i18n/${language}.json`), 'utf8'));
-  delete messages['language.cancel'];
+  delete messages['language.saveFailed'];
   const context = {Intl, window: {}, document: {
     getElementById: () => ({textContent: JSON.stringify({language, messages, fallback})}),
     addEventListener: () => {}
@@ -277,7 +277,7 @@ for (const language of ['en', 'ru']) {
     assert.equal(t('panel.folders', {count, number:count}), `${count} ${language === 'ru' ? folders : count === 1 ? 'folder' : 'folders'}`);
     assert.equal(t('panel.dictionaryCount', {count, number:count}), `${count} ${language === 'ru' ? dictionaries : count === 1 ? 'dictionary' : 'dictionaries'}`);
   }
-  assert.equal(t('language.cancel'), 'Cancel');
+  assert.equal(t('language.saveFailed'), 'Could not save the language. Try again.');
   assert.equal(t('missing.key'), 'missing.key');
   assert.equal(t('browse.pageTitle', {name: '<b>{name}</b>'}),
     language === 'ru' ? '<b>{name}</b> · Просмотр словаря' : '<b>{name}</b> · Browse');

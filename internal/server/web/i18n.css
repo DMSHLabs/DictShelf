@@ -4,22 +4,6 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-dialog#uiLanguageDialog.group-dialog.panel-card{box-sizing:border-box;position:fixed;inset:0;margin:auto;
-  width:min(360px,92vw);height:fit-content;max-height:85vh;max-height:85dvh;min-height:0;gap:0;overflow:auto;
-  background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:12px;padding:20px;font:inherit}
-.ui-language-dialog::backdrop,html[data-shell-image] .ui-language-dialog::backdrop{
-  background:rgba(0,0,0,.42);background-image:none}
-.ui-language-dialog h2{margin:0 0 12px;font-size:18px}
-.ui-language-dialog p:empty{display:none}
-.ui-language-dialog p{margin:0 0 12px;color:var(--label,var(--fg));white-space:normal}
-.ui-language-dialog fieldset{border:0;margin:0 0 12px;padding:0}
-.ui-language-dialog legend{margin-bottom:8px}
-.ui-language-dialog label{display:flex;align-items:center;gap:12px;padding:10px 0;cursor:pointer}
-.ui-language-dialog input{accent-color:var(--accent)}
-.ui-language-actions{display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap}
-.ui-language-dialog button{font:inherit;white-space:normal;color:var(--fg);background:var(--bg);
-  border:1px solid var(--line);border-radius:7px;padding:8px 12px;cursor:pointer}
-.ui-language-dialog button:disabled{opacity:.5;cursor:default}
 /* This asked the drawer's row labels to WRAP inside their old fixed 60px
    column, which was the column's fault and not the words': a Russian label
    split mid-word ("Оформлен|ия") in a drawer with room to spare. The labels

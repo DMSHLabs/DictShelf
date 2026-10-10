@@ -14,6 +14,8 @@ const block = "p,div,li,dt,dd,td,th,h1,h2,h3,h4,h5,h6,blockquote,pre,.wu-m";
 let options = {query:"", mode:"contains", matchCase:false, all:true, examples:false};
 try { Object.assign(options, JSON.parse(localStorage.getItem("wudict_article_find") || "{}")); } catch (_) {}
 let matches = [], index = -1, active = false, restored = [], docs = new Set(), timer;
+let settle = null;
+let laidOutList = null;
 const fallbackSelections = new Map();
 const watched = new WeakSet();
 const highlightCSS = "::highlight(wudict-find-all){background:#ffe082;color:#171717}::highlight(wudict-find-current){background:#ff9800;color:#171717;text-decoration:underline}";
@@ -164,8 +166,26 @@ function rebuild() {
     }
   }
   index = previous ? matches.findIndex(hit => hit.range.startContainer === previous.range.startContainer && hit.range.startOffset === previous.range.startOffset) : -1;
+  if (index < 0 && !window.wudictNativeShell) forceLayout(null);
   if (index >= 0) showExample(matches[index]);
   paint();
+  if (index >= 0 && active && !strip.hidden && !dialog.open && !window.wudictNativeShell) {
+    const det = matches[index].host.closest("details.dict");
+    forceLayout(det);
+    settleOn(matches[index],det);
+  }
+}
+function forceLayout(det) {
+  const dl = det?.querySelector(":scope>dl") || null;
+  if (laidOutList?.element === dl) return;
+  if (laidOutList) {
+    const {element,value,priority} = laidOutList;
+    value ? element.style.setProperty("content-visibility",value,priority) : element.style.removeProperty("content-visibility");
+    laidOutList = null;
+  }
+  if (!dl) return;
+  laidOutList = {element:dl,value:dl.style.getPropertyValue("content-visibility"),priority:dl.style.getPropertyPriority("content-visibility")};
+  dl.style.setProperty("content-visibility","visible");
 }
 function showExample(hit) {
   for (let el = hit.example; el; el = el.parentElement?.closest(".wu-xonly,.wu-sec,.dsl_opt,.wu-exonly,.wu-ex,.dsl_ex")) {
@@ -175,7 +195,48 @@ function showExample(hit) {
   }
 }
 function topOf(hit) {
-  return hit.range.getBoundingClientRect().top + (hit.host.shadowRoot ? 0 : hit.host.getBoundingClientRect().top);
+  const rect = hit.range.getBoundingClientRect();
+  // WebView2 can defer layout inside a closed dictionary's content-visibility
+  // subtree. Until the text has a box, its dictionary is the safe target.
+  if (!window.wudictNativeShell && !rect.width && !rect.height)
+    return (hit.host.closest("details.dict") || hit.host).getBoundingClientRect().top;
+  return rect.top + (hit.host.shadowRoot ? 0 : hit.host.getBoundingClientRect().top);
+}
+function settleOn(hit, det) {
+  if (settle) settle();
+  let moves = 0, stable = 0, pending = 0, frame = 0;
+  const quit = ["wheel","touchstart","pointerdown","keydown"];
+  const stopSettle = () => {
+    clearTimeout(pending); clearTimeout(timeout); cancelAnimationFrame(frame);
+    for (const event of quit) removeEventListener(event,stopSettle);
+    if (settle === stopSettle) settle = null;
+  };
+  const align = () => {
+    if (!active || matches[index] !== hit || !hit.host.isConnected) return stopSettle();
+    const rect = hit.range.getBoundingClientRect(), laidOut = !!(rect.width || rect.height);
+    const top = topOf(hit), bottom = top + rect.height;
+    const ceiling = barH() + (det?.querySelector(":scope>summary")?.offsetHeight || 0);
+    const floor = innerHeight - strip.offsetHeight - 8;
+    // Expanded dictionaries above this one can change height without resizing
+    // the selected dictionary. Keep checking until the match stays on screen.
+    if (laidOut && top >= ceiling && top < floor && Math.min(bottom,top+24) <= floor) {
+      if (++stable >= 5) return stopSettle();
+    } else {
+      stable = 0;
+      if (++moves > 30) return stopSettle();
+      if (!laidOut) {
+        // A zero-sized Range inside content-visibility:auto has no useful
+        // page coordinates. Scrolling its text node into view makes WebView2
+        // lay out that part of a shadow article or iframe first.
+        hit.range.startContainer.parentElement?.scrollIntoView({block:"center",behavior:"instant"});
+      } else revealAt(top,det,true);
+    }
+    pending = setTimeout(align,80);
+  };
+  for (const event of quit) addEventListener(event,stopSettle,{passive:true});
+  const timeout = setTimeout(stopSettle,4000);
+  settle = stopSettle;
+  frame = requestAnimationFrame(align);
 }
 function go(step) {
   if (dialog.open || !active) { clearTimeout(timer); readOptions(); active = !!options.query; rebuild(); }
@@ -195,6 +256,7 @@ function go(step) {
   restoreExamples();
   const hit = matches[index], det = hit.host.closest("details.dict");
   if (det) det.open = true;
+  if (!window.wudictNativeShell) forceLayout(det);
   showExample(hit); paint();
   if (wrapped) $("articleFindCount").textContent += " · " + t(step > 0 ? "articleFind.fromStart" : "articleFind.fromEnd");
   if (!hit.range.startContainer.ownerDocument.defaultView.CSS?.highlights) {
@@ -203,13 +265,21 @@ function go(step) {
     fallbackSelections.set(doc,hit.range);
   }
   freezeBar();
-  requestAnimationFrame(() => {
-    revealAt(topOf(hit),det,true);
-    // An iframe may need a height report after revealing an example.
-    setTimeout(() => { if (active && matches[index] === hit && hit.host.isConnected) revealAt(topOf(hit),det,true); },120);
-  });
+  if (window.wudictNativeShell) {
+    requestAnimationFrame(() => {
+      revealAt(topOf(hit),det,true);
+      setTimeout(() => { if (active && matches[index] === hit && hit.host.isConnected) revealAt(topOf(hit),det,true); },120);
+    });
+    return;
+  }
+  // Bring the opened dictionary into view first so WebView2 lays out its
+  // article before the Range supplies the match's final coordinates.
+  if (det) revealAt(det.getBoundingClientRect().top,det,true);
+  settleOn(hit,det);
 }
 function stop() {
+  if (settle) settle();
+  forceLayout(null);
   active = false; clearTimeout(timer); restoreExamples(); clearPaint(); matches = []; index = -1;
   docs.clear();
   if (dialog.open) dialog.close();

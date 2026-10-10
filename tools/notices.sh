@@ -2,7 +2,7 @@
 # Regenerate THIRD-PARTY-NOTICES.md - the notices that must travel WITH the
 # binaries, not merely with the source tree.
 #
-# Every third-party licence here (BSD-3, BSD-2, MIT, Apache-2.0) obliges us to
+# Every third-party licence here (BSD-3, BSD-2, MIT, ISC, Apache-2.0) obliges us to
 # reproduce its text "in the documentation or other materials provided with the
 # distribution" of a BINARY. A release is a bare executable, so the file is
 # embedded into it: `wudict licenses` prints exactly what this script wrote.

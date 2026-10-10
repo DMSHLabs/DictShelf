@@ -323,7 +323,7 @@ if defined SETUP (
 )
 
 echo Run it:
-echo   wudict.exe                    serve the configured folders, open the browser
+echo   wudict.exe                    open the app from Explorer, browser from cmd
 echo   wudict.exe --help             every command and flag
 echo.
 
@@ -478,16 +478,13 @@ if not defined SETUP (
     exit /b 1
 )
 
-rem Upstream's numeric-version parser wants "v1.2.3" and reads nothing else;
-rem this fork's release tags are prefixed `wudict2-` (CHANGELOG.md), so the
-rem numeric field comes out 0.0.0 - in the file name and in the version Windows
-rem will show. The wizard and the installed entry still carry %VERSION%.
-rem Said out loud, because a file named 0.0.0 otherwise reads as a broken build.
-echo %VERSION% | findstr /r /c:"^v[0-9]" >nul
+rem Both v1.2.3 and this fork's wudict2-v1.2.3 tags provide the numeric
+rem installer version. Unversioned development builds still read 0.0.0.
+echo %VERSION% | findstr /r /c:"^v[0-9]" /c:"^wudict2-v[0-9]" >nul
 if errorlevel 1 (
     echo.
     echo Note: the installer's file name and numeric version read 0.0.0 because
-    echo   "%VERSION%" is not the v1.2.3 shape upstream's parser understands.
+    echo   "%VERSION%" has no release version number.
     echo   Everything shown inside the wizard still carries the real version.
 )
 

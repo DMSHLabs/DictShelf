@@ -105,6 +105,7 @@ func uiText(code, key string) string {
 // escaping, so a translated </script> cannot terminate the bootstrap element.
 func renderUI(page, code string) string {
 	code = uiLanguage(code)
+	page = strings.ReplaceAll(page, "{{UI_SCALE_DEFAULTS}}", uiScaleDefaultsStyle)
 	page = uiTextSlot.ReplaceAllStringFunc(page, func(slot string) string {
 		key := uiTextSlot.FindStringSubmatch(slot)[1]
 		return html.EscapeString(uiText(code, key))

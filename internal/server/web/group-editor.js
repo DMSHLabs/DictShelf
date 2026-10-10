@@ -110,6 +110,7 @@ function renderGroupOptions(){
   const select=$("groupSelect");select.replaceChildren();
   for(const group of userGroups)select.add(new Option(pickerGroupName(group.id),group.id));
   select.value=selectedGroup;
+  window.wudictThemedSelects?.group?.sync();
 }
 function groupFilters(){
   const found=new Map();
@@ -252,19 +253,29 @@ function updateGroupSplit(){
     const fullLimit=listsHeight-gap-availableChrome-availableRow;
     if(memberNatural>fullLimit)available.classList.add('search-collapsed');
     const availableReserve=groupPanelChromeHeight(available,availableRows,available.classList.contains('search-collapsed'))+availableRow;
-    const memberHeight=Math.max(0,Math.min(memberNatural,listsHeight-gap-availableReserve));
+    const wanted=window.wudictNativeShell?memberNatural:Math.max(memberNatural,listsHeight*.7);
+    const memberHeight=Math.max(0,Math.min(wanted,listsHeight-gap-availableReserve));
     lists.style.setProperty('--group-members-height',Math.ceil(memberHeight)+'px');
     lists.classList.add('members-sized');
   }else if(groupActivePanel==='available'){
     editor.classList.add('compact-controls');
     const listsHeight=lists.clientHeight;
-    const memberMin=groupPanelChromeHeight(members,memberRows,true)+groupRowsCapacityHeight(memberRows,3);
-    const availableMin=availableChrome+groupRowsCapacityHeight(availableRows,5);
-    if(memberMin+availableMin+gap<=listsHeight){
-      const memberHeight=Math.max(memberMin,Math.min(memberNatural,listsHeight-availableMin-gap));
+    if(window.wudictNativeShell){
+      const memberMin=groupPanelChromeHeight(members,memberRows,true)+groupRowsCapacityHeight(memberRows,3);
+      const availableMin=availableChrome+groupRowsCapacityHeight(availableRows,5);
+      if(memberMin+availableMin+gap<=listsHeight){
+        const memberHeight=Math.max(memberMin,Math.min(memberNatural,listsHeight-availableMin-gap));
+        lists.style.setProperty('--group-members-height',Math.ceil(memberHeight)+'px');
+        lists.classList.add('members-sized');
+      }else lists.classList.add('hide-members');
+    }else{
+      const memberMin=groupPanelChromeHeight(members,memberRows,true)+groupRowsCapacityHeight(memberRows,1);
+      const availableMin=availableChrome+groupRowsCapacityHeight(availableRows,1);
+      const memberHeight=Math.min(memberNatural,
+        Math.max(memberMin,Math.min(listsHeight*.3,listsHeight-availableMin-gap)));
       lists.style.setProperty('--group-members-height',Math.ceil(memberHeight)+'px');
       lists.classList.add('members-sized');
-    }else lists.classList.add('hide-members');
+    }
   }
   if(groupActivePanel!=='members'&&$('groupRows').clientHeight<4*groupRowHeight('groupRows'))members.classList.add('search-collapsed');
   if(groupActivePanel!=='available'&&$('groupOtherRows').clientHeight<4*groupRowHeight('groupOtherRows'))available.classList.add('search-collapsed');
@@ -766,7 +777,8 @@ function cancelGroupNameEdit(){
   if(!groupEditorMode||groupSaving)return;
   groupEditorMode='';groupShowAllPreferred=groupSavedEditPreference;groupDraftMembers.clear();groupDraftFilter=null;groupDraftLinked=false;groupDraftChooseForLink=false;
   groupActivePanel=null;$('groupControls').classList.remove('active');$('groupMembers').classList.remove('active');$('groupAvailable').classList.remove('active');
-  $('groupNameInline').value='';$('groupError').textContent='';renderGroupRows();$('groupSelect').focus();
+  $('groupNameInline').value='';$('groupError').textContent='';renderGroupRows();
+  (window.wudictThemedSelects?.group?.button||$('groupSelect')).focus();
 }
 async function saveGroupNameEdit(){
   if(!groupEditorMode||groupSaving)return;
@@ -797,10 +809,11 @@ $('groupNameCancel').onclick=cancelGroupNameEdit;
 $('groupNameInline').addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();saveGroupNameEdit()}else if(event.key==='Escape'){event.preventDefault();cancelGroupNameEdit()}});
 $('groupSelect').onchange=()=>{
   const next=$('groupSelect').value;
-  if(groupMemberDraftDirty()){const previous=selectedGroup;$('groupSelect').value=previous;confirmDiscardGroupDraft(()=>{groupMemberDraft=null;selectedGroup=next;$('groupSelect').value=next;groupSelectChanged()});return}
+  if(groupMemberDraftDirty()){const previous=selectedGroup;$('groupSelect').value=previous;window.wudictThemedSelects?.group?.sync();confirmDiscardGroupDraft(()=>{groupMemberDraft=null;selectedGroup=next;$('groupSelect').value=next;groupSelectChanged()});return}
   groupMemberDraft=null;selectedGroup=next;groupSelectChanged();
 };
 function groupSelectChanged(){
+  window.wudictThemedSelects?.group?.sync();
   cancelGroupOrderLongPress();groupOrderSelection=null;groupOrderSuppressClick=false;
   justCreatedGroup=null;
   groupShowAllPreferred=false;groupActivePanel=null;

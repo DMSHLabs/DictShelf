@@ -117,33 +117,29 @@ window.wudictFontScale=(function(){
   const key="wudict_settings_fonts",clamp=(v,lo,hi)=>Math.min(hi,Math.max(lo,v));
   const spacing=new Set(["sectionBefore","sectionAfter","rowGap","additionGap","controlGap"]);
   const clean=(v,fallback,name)=>{v=Number(v);return Number.isFinite(v)?clamp(v,spacing.has(name)?0:.5,name==="editControlHeight"?4:2):fallback};
-  const values={base:1,section:1,title:1.15,addition:.9,hint:.8,controlHeight:1.6,controlFont:.9,hintControlHeight:1,mainControlHeight:1.05,mainControlFont:1.05,editControlHeight:1.8,editControlFont:1,
-    sectionBefore:0,sectionAfter:.45,rowGap:.6,additionGap:.5,controlGap:.25};
+  const names={base:"--ui-font-base",section:"--ui-font-section",title:"--ui-font-title",
+    addition:"--ui-font-addition",hint:"--ui-hint-font-size",controlHeight:"--ui-control-height",
+    controlFont:"--ui-control-font",hintControlHeight:"--ui-hint-control-height",
+    mainControlHeight:"--ui-main-control-height",mainControlFont:"--ui-main-control-font",
+    editControlHeight:"--ui-edit_control-height",editControlFont:"--ui-edit_control-font",
+    sectionBefore:"--ui-section-space-before",sectionAfter:"--ui-section-space-after",
+    rowGap:"--ui-row-gap",additionGap:"--ui-addition-gap",controlGap:"--ui-control-gap"};
+  const root=document.documentElement,style=getComputedStyle(root);
+  const values=Object.fromEntries(Object.entries(names).map(([name,property])=>{
+    const raw=style.getPropertyValue(property).trim(),value=Number(raw);
+    if(!raw||!Number.isFinite(value))throw new Error("missing UI scale token "+property);
+    return [name,value];
+  }));
   try{const saved=JSON.parse(localStorage.getItem(key)||"null");
-    if(saved){for(const name of Object.keys(values))values[name]=clean(saved[name],values[name],name)}}catch(_){}
+    if(saved){for(const name of Object.keys(names))if(Object.hasOwn(saved,name)){
+      values[name]=clean(saved[name],values[name],name);
+      root.style.setProperty(names[name],String(values[name]));
+    }}}catch(_){}
   function apply(next){
     for(const name of Object.keys(values))values[name]=clean(next[name],values[name],name);
-    const root=document.documentElement.style;
-    root.setProperty("--ui-font-base",String(values.base));
-    root.setProperty("--ui-font-section",String(values.section));
-    root.setProperty("--ui-font-title",String(values.title));
-    root.setProperty("--ui-font-addition",String(values.addition));
-    root.setProperty("--ui-hint-font-size",String(values.hint));
-    root.setProperty("--ui-control-height",String(values.controlHeight));
-    root.setProperty("--ui-control-font",String(values.controlFont));
-    root.setProperty("--ui-hint-control-height",String(values.hintControlHeight));
-    root.setProperty("--ui-main-control-height",String(values.mainControlHeight));
-    root.setProperty("--ui-main-control-font",String(values.mainControlFont));
-    root.setProperty("--ui-edit_control-height",String(values.editControlHeight));
-    root.setProperty("--ui-edit_control-font",String(values.editControlFont));
-    root.setProperty("--ui-section-space-before",String(values.sectionBefore));
-    root.setProperty("--ui-section-space-after",String(values.sectionAfter));
-    root.setProperty("--ui-row-gap",String(values.rowGap));
-    root.setProperty("--ui-addition-gap",String(values.additionGap));
-    root.setProperty("--ui-control-gap",String(values.controlGap));
+    for(const [name,property] of Object.entries(names))root.style.setProperty(property,String(values[name]));
     return values;
   }
-  apply(values);
   return {key,values,apply};
 })();
 </script>
@@ -194,7 +190,7 @@ window.wudictFontScale=(function(){
      exactly when an eager "type and hit Enter" would reach the search path
      with an empty dictionary list. -->
 <form id="frm" class="col" role="search" aria-busy="true">
-<span class="brand">wu<small>Dict</small></span>
+<span class="brand">wu<small>Dict2</small></span>
 <!-- The search pill. Above 600px it is display:contents, so the field and the
      two selects are direct flex children of the form. Below it the pill
      becomes the row:
@@ -229,6 +225,8 @@ window.wudictFontScale=(function(){
 <option value="contains">{{T:dictUI.contains}}</option>
 <option value="fts">{{T:dictUI.fts}}</option>
 </select>
+<button type="button" class="choice-btn themed-select-btn" id="modeMenuBtn" aria-haspopup="listbox" aria-expanded="false" aria-label="{{T:search.mode}}" disabled></button>
+<span class="choice-menu menu-card themed-select-menu" id="modeMenu" role="listbox" aria-label="{{T:search.mode}}" data-w="anchor" hidden></span>
 </span>
 <!-- The dictionary scope's seg is NOT here in the markup: it lives in the
      status bar while that bar is on screen and is moved back to this exact spot
@@ -625,7 +623,7 @@ window.wudictFontScale=(function(){
        adjusted; the app's own colour window escapes that only by carrying a
        swatch of its own. -->
   <div class="facts">
-    <button type="button" class="mrow door" data-styler="screen" title="{{T:panel.edgesHint}}">{{T:panel.edgesDoor}}</button>
+    <button type="button" class="mrow door" data-styler="screen" title="{{T:panel.edgesHint}}" hidden>{{T:panel.edgesDoor}}</button>
     <button type="button" class="mrow door" data-styler="bg" title="{{T:panel.backgroundHint}}">{{T:panel.backgroundDoor}}</button>
     <button type="button" class="mrow door" data-styler="presets" title="{{T:panel.layersHint}}">{{T:panel.layersDoor}}</button>
     <button type="button" class="mrow door" data-styler="css" title="{{T:panel.cssHint}}">{{T:panel.cssDoor}}</button>
@@ -777,8 +775,11 @@ window.wudictFontScale=(function(){
 <details class="sect" data-panel-section="language" open>
   <summary class="sect-h">Language</summary>
   <div class="facts">
-    <button type="button" class="mrow door" data-ui-language>Language</button>
+    <span class="rowlabel" id="languageLabel">Language</span>
+    <button type="button" class="choice-btn" id="languageBtn" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="languageLabel"></button>
+    <div class="choice-menu menu-card" id="languageMenu" role="listbox" aria-label="Language" data-w="anchor" hidden></div>
   </div>
+  <p id="languageError" role="alert" hidden></p>
 </details>
 
 <details class="sect" id="sysSection" hidden data-panel-section="system" open>
@@ -882,6 +883,8 @@ window.wudictFontScale=(function(){
 <dialog id="webDictionaryPicker" lang="{{T:locale}}" class="group-dialog panel-card" aria-label="{{T:search.dictionary}}">
   <div class="web-picker-head">
     <select id="webPickerGroup" aria-label="{{T:search.dictionary}}"></select>
+    <button type="button" class="choice-btn themed-select-btn" id="webPickerGroupBtn" aria-haspopup="listbox" aria-expanded="false" aria-label="{{T:search.dictionary}}"></button>
+    <span class="choice-menu menu-card themed-select-menu" id="webPickerGroupMenu" role="listbox" aria-label="{{T:search.dictionary}}" data-w="anchor" hidden></span>
     <button type="button" class="btn" id="webPickerClose" aria-label="{{T:panel.close}}"><svg class="icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
   </div>
   <div id="webPickerRows" class="web-picker-rows"></div>
@@ -1151,7 +1154,6 @@ $("saveSystemLog").addEventListener("click",event=>{
   const result=prompt("wudict:system-log","");
   if(result&&result!=="ok")alert(result);
 });
-document.querySelector("[data-ui-language]").textContent="Language — "+(window.wudictI18n.language==="ru"?"Русский":"English");
 window.wuSearchHistory.setSearch(word=>searchFor(word));
 window.wuSearchHistory.setSuggest((q,onHit,signal)=>{
   const mode=$("mode").value,sel=$("dict").value||"all";
@@ -2200,6 +2202,7 @@ function paintWebDictionaryPicker(){
   if(current)choices.splice(1,0,current);
   group.replaceChildren(...choices.map(g=>new Option(g.name,g.id)));
   group.value=selected;
+  window.wudictThemedSelects?.pickerGroup.sync();
   const rows=livePickerRows(),list=$('webPickerRows');
   list.replaceChildren(...rows.map(row=>{
     const button=document.createElement('button');
@@ -2571,6 +2574,7 @@ const FEAT_NAME={contains:tx("dictUI.containsIndex"),fts:tx("dictUI.ftsIndex"),m
 function syncChips(){
   const m=$("mode");
   $("modeChip").textContent=MODE_SHORT[m.value]||m.value;
+  window.wudictThemedSelects?.mode.sync();
   // The scope chip's label is its own function now (scopeLabel): the all-scope
   // is no longer the shorthand "All" but the name of the group it resolves to -
   // reported from the phone, where the chip said "All" whichever group was in
@@ -3113,6 +3117,7 @@ document.querySelectorAll(".font-scale-step").forEach(button=>button.addEventLis
 function showPanel(){panelSnap=panelState();  /* before the lock: once the root stops scrolling the bar is gone to measure */
   document.documentElement.style.setProperty("--wd-sbw",
     Math.max(0,innerWidth-document.documentElement.clientWidth)+"px");
+document.querySelector('[data-styler="screen"]').hidden=!window.wudictNativeShell;
 $("speakSeg").hidden=!speakCan();$("panel").classList.add("show");
   // The rows are read down one column per section, so its width has to be
   // known before the reader sees them: measured here, in the same frame the
@@ -3558,6 +3563,7 @@ async function showDesktopSysSettings(){
   const dialog=$("desktopSysSettings"),body=$("desktopSysBody");
   dialog.showModal();
   body.replaceChildren();
+  body.scrollTop=0;
   const c=await loadConfig();
   if(!c){body.textContent=tx("system.desktopLoadFailed");return}
   const hint=document.createElement("p");hint.className="sys-hint";
@@ -3577,11 +3583,22 @@ async function showDesktopSysSettings(){
   }
   const heading=document.createElement("h3");heading.className="sys-head";
   heading.textContent=tx("system.desktopEffective");body.append(heading);
-  const table=document.createElement("dl");table.className="sys-desktop-values";
+  const table=document.createElement("div");table.className="sys-desktop-values";
   for(const [key,setting] of Object.entries(c.effective||{})){
-    const name=document.createElement("dt"),value=document.createElement("dd");
-    name.textContent=key;value.textContent=setting.value;
-    table.append(name,value);
+    const row=document.createElement("div");row.className="sys-desktop-row";
+    const name=document.createElement("div"),value=document.createElement("span");
+    const label=document.createElement("span"),configKey=document.createElement("code");
+    label.className="sys-desktop-label";
+    label.textContent=tx("system.desktop."+key);
+    configKey.textContent=key;
+    name.append(label,configKey);
+    value.className="sys-desktop-value";
+    const raw=String(setting.value);
+    value.textContent=key==="NO_COMPRESS"?(raw==="0"?tx("system.desktop.no"):raw==="1"?tx("system.desktop.yes"):raw)
+      :["MEMORY_LIMIT","PREVIEW_MEMORY","SEARCH_MEMORY"].includes(key)&&raw==="0"
+        ?tx("system.desktop.unlimited"):raw;
+    row.append(name,value);
+    table.append(row);
   }
   body.append(table);
 }
@@ -3862,15 +3879,17 @@ function bulkActionLabel(action){
 }
 function renderBulkIndexes(){
   if(bulkIndexBusy)return;
+  window.wudictThemedSelects?.bulk?.forEach(control=>control.destroy());
   $("bulkIndexes").innerHTML='<section class="bulk-index-section"><h3>'+esc(tx("dictUI.allActions"))+'</h3><div class="bulk-index-table" role="group">'+
     [["base","dictUI.indexPlain"],["contains","dictUI.contains"],["fts","dictUI.fts"]].map(([feat,label])=>
       '<label class="bulk-index-setting"><span>'+esc(tx(label))+'</span><select data-bulk-feat="'+feat+'" aria-label="'+escAttr(tx(label))+'">'+["keep","create","update","recreate","delete"].map(action=>'<option value="'+action+'"'+(action==='delete'&&feat==='base'&&!cfgInfo?.canDelete?' disabled':'')+'>'+esc(bulkActionLabel(action))+'</option>').join('')+'</select></label>').join('')+'</div><button type="button" class="btn" data-bulk-start disabled>'+esc(tx("dictUI.bulkStart"))+'</button></section>';
-
+  window.wudictThemedSelects.bulk=[...$("bulkIndexes").querySelectorAll("select[data-bulk-feat]")].map(themedSelectCreate);
 }
 $("bulkIndexes").addEventListener("change",e=>{
   const input=e.target.closest("select[data-bulk-feat]");if(!input)return;
   const deletingBase=$("bulkIndexes").querySelector('[data-bulk-feat="base"]').value==="delete";
   $("bulkIndexes").querySelectorAll('select:not([data-bulk-feat="base"])').forEach(other=>{other.disabled=deletingBase;if(deletingBase)other.value="keep"});
+  window.wudictThemedSelects?.bulk?.forEach(control=>control.sync());
   $("bulkIndexes").querySelector("[data-bulk-start]").disabled=![...$("bulkIndexes").querySelectorAll("select")].some(select=>select.value!=="keep");
 });
 $("bulkIndexes").addEventListener("click",async e=>{
@@ -7158,6 +7177,7 @@ const stylerPanes={
 };
 let stylerSubject="presets";
 function stylerSubjectSet(name){
+  if(name==="screen"&&!window.wudictNativeShell)name="bg";
   if(!stylerPanes[name])name="presets";
   stylerSubject=name;
   for(const id in stylerPanes)stylerPanes[id].hidden=id!==name;
@@ -7250,6 +7270,122 @@ function sheetMenuNew(anchor,menu,fill){
   return ctl;
 }
 function sheetMenusFollow(){for(const m of sheetMenus)if(m.isOpen())m.place()}
+const languageNames=[["en","English"],["ru","Русский"]];
+const languageButton=$("languageBtn"),languageMenu=$("languageMenu"),languageError=$("languageError");
+languageButton.textContent=languageNames.find(([code])=>code===window.wudictI18n.language)?.[1]||"English";
+const languageChoice=sheetMenuNew(languageButton,languageMenu,()=>{
+  languageMenu.replaceChildren(...languageNames.map(([code,name])=>{
+    const option=document.createElement("button");
+    option.type="button";option.className="choice-item";option.role="option";
+    option.lang=code;option.textContent=name;
+    option.setAttribute("aria-selected",String(code===window.wudictI18n.language));
+    option.onclick=async()=>{
+      languageChoice.hide();
+      if(code===window.wudictI18n.language){languageButton.focus();return}
+      languageButton.disabled=true;languageError.hidden=true;
+      try{await window.wudictI18n.saveLanguage(code);location.reload()}
+      catch(_){
+        languageButton.disabled=false;
+        languageError.textContent=tx("language.saveFailed");
+        languageError.hidden=false;languageButton.focus();
+      }
+    };
+    return option;
+  }));
+  return true;
+});
+const languageShow=languageChoice.show,languageHide=languageChoice.hide;
+languageChoice.show=()=>{languageShow();languageButton.setAttribute("aria-expanded","true")};
+languageChoice.hide=()=>{languageHide();languageButton.setAttribute("aria-expanded","false")};
+languageButton.onclick=()=>languageChoice.toggle();
+languageButton.onkeydown=e=>{
+  if(e.key==="Escape"&&languageChoice.isOpen()){
+    e.preventDefault();e.stopPropagation();languageChoice.hide();return;
+  }
+  if(e.key==="ArrowDown"||e.key==="ArrowUp"){
+    e.preventDefault();languageChoice.show();
+    languageMenu.querySelector('[aria-selected="true"]')?.focus();
+  }
+};
+languageMenu.onkeydown=e=>{
+  const options=Array.from(languageMenu.querySelectorAll("button"));
+  const index=options.indexOf(document.activeElement);
+  if(e.key==="Escape"){
+    e.preventDefault();e.stopPropagation();languageChoice.hide();languageButton.focus();
+  }else if(e.key==="ArrowDown"||e.key==="ArrowUp"){
+    e.preventDefault();options[(index+(e.key==="ArrowDown"?1:options.length-1))%options.length]?.focus();
+  }
+};
+function themedSelect(select,button,menu){
+  const ctl=sheetMenuNew(button,menu,()=>{
+    menu.replaceChildren(...Array.from(select.options,option=>{
+      const item=document.createElement("button");
+      item.type="button";item.className="choice-item";item.role="option";
+      item.setAttribute("aria-selected",String(option.selected));
+      item.disabled=option.disabled;item.textContent=option.textContent;
+      item.onclick=()=>{
+        select.value=option.value;
+        ctl.hide();select.dispatchEvent(new Event("change",{bubbles:true}));
+        sync();button.focus();
+      };
+      return item;
+    }));
+    return !!menu.children.length;
+  });
+  const show=ctl.show,hide=ctl.hide;
+  ctl.show=()=>{if(button.disabled)return;show();button.setAttribute("aria-expanded",String(ctl.isOpen()))};
+  ctl.hide=()=>{hide();button.setAttribute("aria-expanded","false")};
+  function sync(){
+    button.textContent=select.selectedOptions[0]?.textContent||"";
+    button.disabled=select.disabled;
+    button.hidden=select.hidden;
+    if(button.disabled||button.hidden)ctl.hide();
+  }
+  button.onclick=()=>ctl.toggle();
+  button.onkeydown=e=>{
+    if(e.key==="Escape"&&ctl.isOpen()){
+      e.preventDefault();e.stopPropagation();ctl.hide();return;
+    }
+    if(e.key==="ArrowDown"||e.key==="ArrowUp"){
+      e.preventDefault();if(!ctl.isOpen())ctl.show();
+      const items=Array.from(menu.querySelectorAll("button:not(:disabled)"));
+      (items.find(item=>item.getAttribute("aria-selected")==="true")||items[0])?.focus();
+    }
+  };
+  menu.onkeydown=e=>{
+    const items=Array.from(menu.querySelectorAll("button:not(:disabled)"));
+    const i=items.indexOf(document.activeElement);
+    if(e.key==="Escape"){
+      e.preventDefault();e.stopPropagation();ctl.hide();button.focus();
+    }else if(e.key==="ArrowDown"||e.key==="ArrowUp"){
+      e.preventDefault();items[(i+(e.key==="ArrowDown"?1:items.length-1))%items.length]?.focus();
+    }
+  };
+  select.addEventListener("change",sync);
+  const observer=new MutationObserver(sync);
+  observer.observe(select,{attributes:true,attributeFilter:["disabled","hidden"],childList:true,subtree:true});
+  sync();return {button,sync,hide:ctl.hide,destroy(){ctl.hide();observer.disconnect();
+    const index=sheetMenus.indexOf(ctl);if(index>=0)sheetMenus.splice(index,1)}};
+}
+function themedSelectCreate(select){
+  const button=document.createElement("button"),menu=document.createElement("span");
+  button.type="button";button.className="choice-btn themed-select-btn";
+  button.dataset.themedSelect="";button.setAttribute("aria-haspopup","listbox");
+  button.setAttribute("aria-expanded","false");
+  button.setAttribute("aria-label",select.getAttribute("aria-label")||"");
+  menu.className="choice-menu menu-card themed-select-menu";
+  menu.setAttribute("role","listbox");menu.setAttribute("aria-label",button.getAttribute("aria-label"));
+  menu.dataset.w="anchor";menu.hidden=true;
+  select.classList.add("themed-select-native");
+  select.after(button,menu);
+  return themedSelect(select,button,menu);
+}
+window.wudictThemedSelects={
+  mode:themedSelect($("mode"),$("modeMenuBtn"),$("modeMenu")),
+  pickerGroup:themedSelect($("webPickerGroup"),$("webPickerGroupBtn"),$("webPickerGroupMenu"))
+};
+$("webDictionaryPicker").addEventListener("close",()=>window.wudictThemedSelects.pickerGroup.hide());
+document.documentElement.dataset.styledSelects="";
 window.addEventListener("scroll",sheetMenusFollow,true);
 window.addEventListener("resize",sheetMenusFollow);
 document.addEventListener("pointerdown",e=>{
@@ -7273,11 +7409,12 @@ const EDGE_CUSTOM=3,EDGE_NONE=4;
 /* A bar with the answer written on it and the alternatives under it. The
    selected row is ticked rather than left out, so the menu says what the
    choice is as well as what it could be. */
-function screenChoice(bar,menu,options,onPick){
+function screenChoice(bar,menu,options,onPick,available=()=>true){
   let value=0;
   const ctl=sheetMenuNew(bar,menu,()=>{
     menu.replaceChildren();
     options.forEach((label,i)=>{
+      if(!available(i))return;
       const b=document.createElement("button");
       b.type="button";b.className="choice-item";b.setAttribute("role","option");
       b.setAttribute("aria-selected",String(i===value));
@@ -7359,7 +7496,8 @@ const screenBars=radioGroup($("barsChoice"),SCREEN_BARS_OPTIONS,
    SUBJECT_ORDER, so a door's words and this menu's rows are the same words. */
 stylerSubjectChoice=screenChoice($("stylerSubject"),$("stylerSubjectMenu"),
   SUBJECT_ORDER.map(id=>STYLER_SUBJECTS[id]),
-  i=>stylerSubjectSet(SUBJECT_ORDER[i]));
+  i=>stylerSubjectSet(SUBJECT_ORDER[i]),
+  i=>SUBJECT_ORDER[i]!=="screen"||!!window.wudictNativeShell);
 /* One colour field's behaviour, wired twice (the window background and the
    margin colour). Both remember what they have been given - one list, the
    sheet's own, because a colour this reader likes is a colour this reader
@@ -8022,6 +8160,8 @@ $("styler").addEventListener("keydown",e=>{
 </dialog>
 <script src="/assets/list-search.js?v={{LISTSEARCHJS}}"></script>
 <script src="/assets/group-editor.js?v={{GROUPJS}}"></script>
+<script>window.wudictThemedSelects.group=themedSelectCreate(document.getElementById("groupSelect"));
+document.getElementById("groupEditor").addEventListener("close",()=>window.wudictThemedSelects.group.hide());</script>
 <script src="/assets/looks.js?v={{LOOKSJS}}"></script>
 <script>loadConfig();</script>
 <!-- Last, so the results' container is there to watch: this file marks the

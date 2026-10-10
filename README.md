@@ -133,10 +133,13 @@ make mac-agent-uninstall # stop it and delete the plist
 
 ## Run as an app (Windows)
 
-In windows `wudict` runs from `cmd` or PowerShell as an ordinary
-command-line program. When double-clicked, started from a shortcut, or by double-clicking 
-a dictionary file, it hides the  console window, and shows a **tray icon** instead, logging to
-`%LOCALAPPDATA%\wudict\wudict.log`. See also [running on windows](https://wuweidict.github.io/wudict/apps/windows/).
+In Windows, `wudict` runs from `cmd` or PowerShell as an ordinary command-line
+program. When started from Explorer or a shortcut, it opens a dedicated window
+using WebView2 and shows a tray icon; closing the window leaves the server in
+the tray. **Exit** in Settings or **Quit** in the tray stops the server. The
+window and server are in one `wudict.exe`. If the WebView2 Runtime is absent,
+it opens the default browser instead. Logs go to
+`%LOCALAPPDATA%\wudict\wudict.log`. See also [running on Windows](https://wuweidict.github.io/wudict/apps/windows/).
 
 
 ## Run as a service (Linux)
@@ -180,7 +183,7 @@ config file path is printed on startup.
 | `--ip` | `SERVER_IP` | `127.0.0.1`                   |
 | `--port` | `SERVER_PORT` | `6888`                        |
 | `--config` | `CONFIG_PATH` | auto-detect                   |
-| `--no-browser` | `NO_BROWSER=1` | open browser                  |
+| `--no-browser` | `NO_BROWSER=1` | open the app window or browser |
 | `--verbose` | `VERBOSE=1` | detailed logging              |
 | `--speexdec` | `SPEEXDEC` | found on `PATH`               |
 | `--use-cached` | `USE_CACHED` | off                           |

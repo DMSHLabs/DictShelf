@@ -151,9 +151,7 @@ jobs:
           path: wudict-macos-universal-app-*.zip
           if-no-files-found: warn
 
-  # The Windows installer (D76). Per-user, no admin prompt, and ONE wudict.exe:
-  # the binary decides at runtime whether a person or a shell started it, so
-  # there is no second GUI-subsystem artifact to build or to choose between.
+  # One Windows executable carries the CLI/server and its WebView2 window.
   windows-installer:
     name: Windows installer
     needs: build

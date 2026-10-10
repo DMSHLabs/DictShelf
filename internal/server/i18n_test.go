@@ -111,8 +111,8 @@ func TestI18nPagesAndCache(t *testing.T) {
 		if path == "/browse" && !strings.Contains(body, `<title>Просмотр словаря</title>`) {
 			t.Fatal("static UI was not translated")
 		}
-		if path != "/" && strings.Contains(body, "data-ui-language") {
-			t.Errorf("temporary language button remains on %s", path)
+		if path != "/" && strings.Contains(body, `id="languageBtn"`) {
+			t.Errorf("temporary language selector remains on %s", path)
 		}
 		for route, title := range map[string]string{"/setup": "Папки словарей", "/lemmas": "Словоформы"} {
 			if path == route && !strings.Contains(body, "<title>"+title+"</title>") {

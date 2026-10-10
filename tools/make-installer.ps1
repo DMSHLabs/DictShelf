@@ -59,7 +59,7 @@ $ico = Join-Path $root 'packaging\windows\wudict.ico'
 # installs found below, so the padding rule is stated once.
 function Get-PaddedVersion {
     param([string] $Text)
-    $m = [regex]::Match([string]$Text, '^[vV]?(\d+(?:\.\d+)*)')
+    $m = [regex]::Match([string]$Text, '^(?:wudict2-)?[vV]?(\d+(?:\.\d+)*)')
     if (-not $m.Success) { return '0.0.0' }
     $parts = $m.Groups[1].Value.Split('.')
     return (0..2 | ForEach-Object { if ($_ -lt $parts.Count) { $parts[$_] } else { '0' } }) -join '.'

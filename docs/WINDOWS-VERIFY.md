@@ -58,6 +58,13 @@ them are in `docs/handoff-archive.md`.
   FTS5 inside the artifact; tags, CGO flag and driver are read back out of it
   with `go version -m`); its imports are KERNEL32 and msvcrt only, so no mingw
   DLL has to sit beside it.
+- The same `wudict.exe` now hosts its WebView2 window on a locked Windows UI
+  thread when launched from Explorer or Start; terminal launches retain the
+  browser. It keeps a separate profile under `%LOCALAPPDATA%\wuDict\WebView2`
+  and falls back to the browser when the Runtime is missing. Closing the
+  window leaves the tray server running; Settings → Exit and tray Quit stop it.
+  Recheck a rebuilt release installer on a desktop before claiming visual
+  verification.
 - **An unkeyed desktop launch opened File Explorer at "This PC" instead of a
   browser — measured and fixed 2026-10-07.** With no access key configured (the
   default) `keyURL` answers `""` on purpose — it also feeds the startup banner,
@@ -82,13 +89,9 @@ them are in `docs/handoff-archive.md`.
   — no `x64compatible`, no `PrivilegesRequiredOverridesAllowed` — and fails
   without a usable error: no text a redirect can capture, and either a failure
   or a success that wrote no file. Do not point `ISCC_PATH` at it.
-- The setup file is named `…-setup-0.0.0.exe` and Windows shows version 0.0.0,
-  because the numeric-version rule both packagers use (`tools\make-installer.ps1`
-  and `tools\version.sh`) wants `v1.2.3`, and fork tags are `wudict2-v…`. What
-  the wizard and the installed-programs entry read is the real tag
-  (`wudict2-v0.5.0-2-gfffb163-dirty` at that date). Making the name right means
-  either stripping the fork prefix when stamping the binary or teaching those
-  two tools a numeric override — neither is done.
+- The Windows installer's numeric version recognises both `v1.2.3` and this
+  fork's `wudict2-v1.2.3` tags. Earlier setup files named `0.0.0` predate
+  this fix; unversioned builds still use that fallback.
 - Android Java: from `android/`,
   `ANDROID_HOME="$LOCALAPPDATA/Android/Sdk" ./gradlew.bat :app:compileFossDebugJavaWithJavac --offline`.
   No ANDROID_HOME in the bash environment by default.

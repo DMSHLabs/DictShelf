@@ -16,9 +16,13 @@ dialog.group-dialog.panel-card{position:fixed;inset:0;margin:auto;width:min(560p
 #desktopSysSettings h3{font-size:calc(var(--ui-font-section) * 1rem);color:var(--label)}
 #desktopSysSettings .sys-hint{margin:0;font-size:calc(var(--ui-hint-font-size) * 1rem);color:var(--label)}
 #desktopSysSettings .sys-desktop-path{font-family:monospace;user-select:text}
-.sys-desktop-values{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:.4em .8em}
-.sys-desktop-values dt{color:var(--label)}
-.sys-desktop-values dd{margin:0;overflow-wrap:anywhere}
+#desktopSysSettings .sys-desktop-values{display:grid;margin-top:calc(var(--ui-row-gap) * 1em)}
+#desktopSysSettings .sys-desktop-row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:1em;
+  padding:.55em 0;border-bottom:1px solid var(--line)}
+#desktopSysSettings .sys-desktop-label{display:block;color:var(--label);font-size:calc(var(--ui-font-base) * 1rem)}
+#desktopSysSettings .sys-desktop-row code{display:block;color:var(--label);font-size:calc(var(--ui-hint-font-size) * 1rem);
+  font-weight:400;overflow-wrap:anywhere}
+#desktopSysSettings .sys-desktop-value{font-size:calc(var(--ui-font-base) * 1rem);text-align:right;overflow-wrap:anywhere}
 #webDictionaryPicker.group-dialog.panel-card{display:none;flex-direction:column;gap:0;
   width:min(480px,calc(100vw - 32px));height:min(650px,calc(100dvh - 32px));padding:12px;overflow:hidden}
 #webDictionaryPicker.group-dialog.panel-card[open]{display:flex}
@@ -26,6 +30,7 @@ dialog.group-dialog.panel-card{position:fixed;inset:0;margin:auto;width:min(560p
   align-items:center;gap:8px;flex:none;width:100%;padding-bottom:12px;
   border-bottom:1px solid var(--line)}
 .web-picker-head select{width:100%;min-width:0;max-width:none}
+.web-picker-head .themed-select-btn{width:100%;min-width:0}
 .web-picker-head .btn{display:grid;place-items:center;justify-self:end;width:40px;height:40px;padding:0}
 .web-picker-rows{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;padding:6px 0}
 .web-picker-row{display:block;width:100%;padding:.7em .5em;border:0;border-radius:8px;
@@ -78,7 +83,7 @@ dialog.group-dialog.panel-card{position:fixed;inset:0;margin:auto;width:min(560p
    the .panel-card rule whose display:flex would paint them. This copy keeps
    the rule with the windows it belongs to; neither may be dropped alone. */
 dialog.group-dialog:not([open]){display:none}
-dialog.group-dialog[open]{display:flex;flex-direction:column;gap:calc(var(--ui-row-gap,.6) * 1em)}
+dialog.group-dialog[open]{display:flex;flex-direction:column;gap:calc(var(--ui-row-gap) * 1em)}
 /* The fixed Dictionary settings title is the top slice of the bulk-settings
    card; the scrollable selector block supplies its lower slice. */
 #dictSettings.group-dialog[open]{gap:0}
@@ -106,20 +111,27 @@ dialog#bulkIndexDialog.group-dialog.panel-card{
   width:min(420px,calc(100% - 64px));max-width:none;
   height:fit-content;max-height:80vh;max-height:80dvh;padding:1em;font-size:calc(var(--ui-font-base) * 1rem)}
 #bulkIndexDialog h2{font-size:calc(var(--ui-font-title) * 1rem)}
-#bulkIndexDialog .btn{font-size:calc(var(--ui-font-base) * 1rem);min-height:calc(var(--ui-control-height,1.6) * 1em);box-sizing:border-box}
+#bulkIndexDialog .btn{font-size:calc(var(--ui-font-base) * 1rem);min-height:calc(var(--ui-control-height) * 1em);box-sizing:border-box}
 #bulkIndexDialog p{margin:0;overflow-wrap:anywhere}
 dialog#linkGroupDialog.group-dialog.panel-card,dialog#discardGroupDraftDialog.group-dialog.panel-card{inset:0;margin:auto;box-sizing:border-box;width:min(420px,calc(100vw - 64px));max-width:none;height:fit-content;max-height:80dvh;padding:1em}
 #linkGroupDialog p,#discardGroupDraftDialog p{margin:0;overflow-wrap:anywhere}
-.group-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:calc(var(--ui-control-gap,.25) * 1em)}
+.group-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:calc(var(--ui-control-gap) * 1em)}
 .group-toolbar select{flex:1;min-width:0;max-width:100%;width:12em}
+.group-toolbar .themed-select-btn{flex:1;min-width:0;width:12em}
 .group-toolbar #groupNameInline{flex:1;min-width:0;width:auto;box-sizing:border-box}
-.group-actions{display:flex;align-items:center;justify-content:space-between;gap:calc(var(--ui-control-gap,.25) * 1em);flex:none;flex-wrap:wrap}
+.group-actions{display:flex;align-items:center;justify-content:space-between;gap:calc(var(--ui-control-gap) * 1em);flex:none;flex-wrap:wrap}
 .group-actions[hidden]{display:none}
-.group-dialog select,.group-dialog input[type=text],.group-dialog input[type=search]{box-sizing:border-box;height:calc(var(--ui-control-height,1.6) * 1em);min-height:calc(var(--ui-control-height,1.6) * 1em);font:inherit;font-size:calc(var(--ui-font-base) * 1rem);line-height:1;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:0 .4em}
-#dictSettings input.list-search-input{height:calc(var(--ui-edit_control-height,1.8) * 1.5rem);min-height:0;font-size:calc(var(--ui-edit_control-font,1) * 1rem)}
-.group-dialog .btn{box-sizing:border-box;min-height:calc(var(--ui-control-height,1.6) * 1em);line-height:1;padding:0 .55em}
-.group-dialog h2{display:flex;align-items:center;gap:calc(var(--ui-control-gap,.25) * 1em);margin:0;font-size:calc(var(--ui-font-title) * 1rem)}
-.group-dialog h2 .btn{box-sizing:border-box;display:grid;place-items:center;flex:none;width:calc(var(--ui-main-control-height,1.05) * 1em);height:calc(var(--ui-main-control-height,1.05) * 1em);min-height:calc(var(--ui-main-control-height,1.05) * 1em);padding:0;font-size:calc(var(--ui-main-control-font,1.05) * 1rem);line-height:1}
+.group-dialog select,.group-dialog input[type=text],.group-dialog input[type=search]{box-sizing:border-box;height:calc(var(--ui-control-height) * 1em);min-height:calc(var(--ui-control-height) * 1em);font:inherit;font-size:calc(var(--ui-font-base) * 1rem);line-height:1;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:0 .4em}
+html:is([data-shell-sepia],[data-shell-image]) .group-dialog input.list-search-input{background-color:var(--paper-bg,var(--bg))}
+/* The dialog already paints the wallpaper; its search controls show that same surface. */
+html[data-shell-image] .group-dialog .list-search-dock,
+html[data-shell-image] .group-dialog .list-search-mode:not(.is-on),
+html[data-shell-image] .group-dialog .list-search-step,
+html[data-shell-image] .group-dialog input.list-search-input{background:transparent}
+#dictSettings input.list-search-input{height:calc(var(--ui-edit_control-height) * 1.5rem);min-height:0;font-size:calc(var(--ui-edit_control-font) * 1rem)}
+.group-dialog .btn{box-sizing:border-box;min-height:calc(var(--ui-control-height) * 1em);line-height:1;padding:0 .55em}
+.group-dialog h2{display:flex;align-items:center;gap:calc(var(--ui-control-gap) * 1em);margin:0;font-size:calc(var(--ui-font-title) * 1rem)}
+.group-dialog h2 .btn{box-sizing:border-box;display:grid;place-items:center;flex:none;width:calc(var(--ui-main-control-height) * 1em);height:calc(var(--ui-main-control-height) * 1em);min-height:calc(var(--ui-main-control-height) * 1em);padding:0;font-size:calc(var(--ui-main-control-font) * 1rem);line-height:1}
 .group-dialog h2 .icon-close{display:block;width:1.3em;height:1.3em;flex:none}
 dialog#clearDatabaseDialog.group-dialog.panel-card{box-sizing:border-box;height:fit-content;max-height:calc(100dvh - 24px);width:min(480px,calc(100vw - 24px));inset:0;margin:auto;padding:14px}
 #clearDatabaseDialog>h2{flex:none}
@@ -129,7 +141,7 @@ dialog#clearDatabaseDialog.group-dialog.panel-card{box-sizing:border-box;height:
   width:auto;max-width:none;height:auto;max-height:none;margin:auto;padding:16px}}
 #clearDatabaseDialog label{margin-top:.4em;display:flex;align-items:flex-start;gap:.3em}
 #clearDatabaseDialog input{margin-top:.15em}
-#clearDatabaseDialog h2{font-size:calc(var(--ui-font-title) * 1rem);display:flex;align-items:center;justify-content:space-between;gap:calc(var(--ui-control-gap,.25) * 1em);margin:0 0 .5em}
+#clearDatabaseDialog h2{font-size:calc(var(--ui-font-title) * 1rem);display:flex;align-items:center;justify-content:space-between;gap:calc(var(--ui-control-gap) * 1em);margin:0 0 .5em}
 #clearDatabaseDialog h3{font-size:calc(var(--ui-font-section) * 1rem);margin:.65em 0 .3em}
 #clearDatabaseDialog .rescan-action{margin:.4em 0;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:.25em}
 #clearDatabaseDialog .seg{display:inline-flex;flex-wrap:nowrap;gap:0}
@@ -141,49 +153,49 @@ dialog#clearDatabaseDialog.group-dialog.panel-card{box-sizing:border-box;height:
 #clearDatabaseDialog:lang(ru) .seg{display:flex;width:100%}
 #clearDatabaseDialog:lang(ru) .seg .btn{flex:1;min-width:0;white-space:normal;overflow-wrap:anywhere;text-align:center}
 #clearDatabaseDialog p{overflow-wrap:anywhere;margin:.5em 0;line-height:1.3;font-size:calc(var(--ui-hint-font-size) * 1rem)}
-#clearDatabaseDialog h2 .btn{width:calc(var(--ui-main-control-height,1.05) * 1em);
-  height:calc(var(--ui-main-control-height,1.05) * 1em);
-  min-height:calc(var(--ui-main-control-height,1.05) * 1em);
-  padding:0;font-size:calc(var(--ui-main-control-font,1.05) * 1rem)}
+#clearDatabaseDialog h2 .btn{width:calc(var(--ui-main-control-height) * 1em);
+  height:calc(var(--ui-main-control-height) * 1em);
+  min-height:calc(var(--ui-main-control-height) * 1em);
+  padding:0;font-size:calc(var(--ui-main-control-font) * 1rem)}
 #clearDatabaseDialog .rescan-scroll>label{align-items:center;
-  min-height:calc(var(--ui-edit_control-height,1.8) * 1.5rem);
-  font-size:calc(var(--ui-edit_control-font,1) * 1rem)}
+  min-height:calc(var(--ui-edit_control-height) * 1.5rem);
+  font-size:calc(var(--ui-edit_control-font) * 1rem)}
 #clearDatabaseDialog .rescan-scroll>label input[type=checkbox]{flex:none;
-  width:calc(var(--ui-edit_control-height,1.8) * 1em);
-  height:calc(var(--ui-edit_control-height,1.8) * 1em);margin:0}
+  width:calc(var(--ui-edit_control-height) * 1em);
+  height:calc(var(--ui-edit_control-height) * 1em);margin:0}
 #clearDatabaseDialog .rescan-scroll>label input[type=checkbox]:checked::after{
   left:35%;top:20%;width:25%;height:50%}
-#clearDatabaseDialog .rescan-action{min-height:calc(var(--ui-edit_control-height,1.8) * 1.5rem);
-  font-size:calc(var(--ui-edit_control-font,1) * 1rem)}
+#clearDatabaseDialog .rescan-action{min-height:calc(var(--ui-edit_control-height) * 1.5rem);
+  font-size:calc(var(--ui-edit_control-font) * 1rem)}
 #clearDatabaseDialog .seg .btn,#clearDatabaseDialog .rescan-footer .btn{
-  box-sizing:border-box;min-height:calc(var(--ui-edit_control-height,1.8) * 1.5rem);
-  font-size:calc(var(--ui-edit_control-font,1) * 1rem)}
+  box-sizing:border-box;min-height:calc(var(--ui-edit_control-height) * 1.5rem);
+  font-size:calc(var(--ui-edit_control-font) * 1rem)}
 #clearDatabaseDialog .rescan-footer{display:flex;align-items:center;
-  gap:calc(var(--ui-control-gap,.25) * 1em)}
+  gap:calc(var(--ui-control-gap) * 1em)}
 #clearDatabaseDialog #clearDatabaseCancel{margin-left:auto}
 #clearDatabaseStatus:empty{display:none}
 @media(max-width:360px){dialog#clearDatabaseDialog.group-dialog.panel-card{padding:12px}#clearDatabaseDialog .seg .btn{padding:.25em .35em}}
 .group-dialog h2 button{margin-left:auto}
-#groupTitle{gap:calc(var(--ui-control-gap,.25) * 1em)}
+#groupTitle{gap:calc(var(--ui-control-gap) * 1em)}
 #groupTitle .icon-close{width:1.4em;height:1.4em}
-#groupTitle #groupNameApply,#groupTitle #closeGroups{box-sizing:border-box;display:grid;place-items:center;flex:none;width:calc(var(--ui-main-control-height,1.05) * 1em);height:calc(var(--ui-main-control-height,1.05) * 1em);min-height:calc(var(--ui-main-control-height,1.05) * 1em);padding:0;font-size:calc(var(--ui-main-control-font,1.05) * 1rem)}
+#groupTitle #groupNameApply,#groupTitle #closeGroups{box-sizing:border-box;display:grid;place-items:center;flex:none;width:calc(var(--ui-main-control-height) * 1em);height:calc(var(--ui-main-control-height) * 1em);min-height:calc(var(--ui-main-control-height) * 1em);padding:0;font-size:calc(var(--ui-main-control-font) * 1rem)}
 #groupTitle #groupNameApply{margin-left:auto}
 #groupTitle #closeGroups{margin-left:0}
 #groupTitle #groupNameApply[hidden]{display:none}
 #groupTitle #groupNameApply[hidden]+#closeGroups{margin-left:auto}
 #groupNameApply svg{width:1.5em;height:1.5em}
-#groupEditor #groupNameCancel{box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;height:calc(var(--ui-edit_control-height,1.8) * 1.5rem);min-height:calc(var(--ui-edit_control-height,1.8) * 1.5rem);margin-left:auto;padding:.35em .65em;font-size:inherit}
+#groupEditor #groupNameCancel{box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;height:calc(var(--ui-edit_control-height) * 1.5rem);min-height:calc(var(--ui-edit_control-height) * 1.5rem);margin-left:auto;padding:.35em .65em;font-size:inherit}
 #groupEditor #groupNameCancel[hidden]{display:none}
 #groupLists{flex:1;display:flex;flex-direction:column;min-height:0}
 dialog#groupEditor.group-dialog.panel-card{gap:.65em;padding:0;border:0;background:transparent;box-shadow:none;overflow:hidden}
 #groupEditor .btn,#newGroupDialog .btn,#groupFilterDialog .btn,#linkGroupDialog .btn,#discardGroupDraftDialog .btn,#deleteGroupDialog .btn{font-size:inherit}
 #groupControls{display:flex;flex-direction:column;gap:.65em;flex:none}
-#groupControls :is(.group-toolbar,.group-link-controls,.group-actions){font-size:calc(var(--ui-edit_control-font,1) * 1rem)}
-#groupControls :is(.group-toolbar,.group-link-controls,.group-actions) :is(select,input[type=text],button){box-sizing:border-box;height:calc(var(--ui-edit_control-height,1.8) * 1.5rem);min-height:calc(var(--ui-edit_control-height,1.8) * 1.5rem);font-size:inherit}
-#groupControls .group-link-controls label{display:inline-flex;align-items:center;min-height:calc(var(--ui-edit_control-height,1.8) * 1.5rem)}
+#groupControls :is(.group-toolbar,.group-link-controls,.group-actions){font-size:calc(var(--ui-edit_control-font) * 1rem)}
+#groupControls :is(.group-toolbar,.group-link-controls,.group-actions) :is(select,input[type=text],button){box-sizing:border-box;height:calc(var(--ui-edit_control-height) * 1.5rem);min-height:calc(var(--ui-edit_control-height) * 1.5rem);font-size:inherit}
+#groupControls .group-link-controls label{display:inline-flex;align-items:center;min-height:calc(var(--ui-edit_control-height) * 1.5rem)}
 #groupControls #groupLink{width:1.25em;height:1.25em;margin:0 .3em 0 0;font:inherit}
 #groupControls #groupLink:checked::after{left:.32em;top:.06em;width:.31em;height:.63em;border-width:0 .125em .125em 0}
-#groupControls #groupNewAction{width:calc(var(--ui-edit_control-height,1.8) * 1.5rem);min-width:calc(var(--ui-edit_control-height,1.8) * 1.5rem);padding:0}
+#groupControls #groupNewAction{width:calc(var(--ui-edit_control-height) * 1.5rem);min-width:calc(var(--ui-edit_control-height) * 1.5rem);padding:0}
 .group-section{border:1px solid var(--line);border-radius:12px;background:var(--bg-card,var(--bg));padding:.8em;box-shadow:var(--shadow)}
 #groupControls,#groupMembers,#groupAvailable{border:2px solid transparent}
 #groupLists{gap:.65em}
@@ -193,7 +205,7 @@ dialog#groupEditor.group-dialog.panel-card{gap:.65em;padding:0;border:0;backgrou
 #groupMembers{position:relative;flex:1 1 0;display:flex;flex-direction:column;min-height:0;overflow:hidden}
 #groupMemberDraftActions{position:absolute;z-index:2;top:.35em;right:.35em;display:flex;gap:.35em}
 #groupMemberDraftActions[hidden]{display:none}
-#groupMemberDraftActions .group-edit-toggle{display:flex;align-items:center;gap:.4em;height:calc(var(--ui-main-control-height,1.05) * 1em);min-height:calc(var(--ui-main-control-height,1.05) * 1em);padding:0 .55em;color:var(--fg);font-size:calc(var(--ui-main-control-font,1.05) * 1rem)}
+#groupMemberDraftActions .group-edit-toggle{display:flex;align-items:center;gap:.4em;height:calc(var(--ui-main-control-height) * 1em);min-height:calc(var(--ui-main-control-height) * 1em);padding:0 .55em;color:var(--fg);font-size:calc(var(--ui-main-control-font) * 1rem)}
 #groupMemberDraftActions .group-edit-label{font-size:inherit;transform:translateY(-1px)}
 #groupMemberDraftActions .group-draft-icon{display:grid;place-items:center;width:2.5em;height:2.5em;padding:.25em;color:var(--accent)}
 #groupMemberDraftActions svg{width:1.35em;height:1.35em;flex:none}
@@ -206,7 +218,7 @@ dialog#groupEditor.group-dialog.panel-card{gap:.65em;padding:0;border:0;backgrou
 #groupMembers:has(#groupMemberHint:not([hidden])) #groupRows{padding-top:0}
 #groupOrderToolbar{position:relative;z-index:1;display:flex;align-items:center;flex:none;min-height:2.7em;margin-bottom:.3em;border-bottom:1px solid var(--line)}
 #groupOrderToolbar[hidden],#groupOrderHint[hidden],#groupOrderControls[hidden]{display:none}
-#groupMembers:has(#groupMemberDraftActions:not([hidden])) #groupOrderToolbar{padding-right:calc(var(--ui-main-control-font,1.05) * 9em)}
+#groupMembers:has(#groupMemberDraftActions:not([hidden])) #groupOrderToolbar{padding-right:calc(var(--ui-main-control-font) * 9em)}
 #groupOrderHint{font-size:calc(var(--ui-hint-font-size) * 1rem);line-height:1.25}
 #groupOrderControls{display:grid;grid-template-columns:minmax(1.2em,auto) repeat(4,minmax(1.7em,1fr)) minmax(2.5em,auto);align-items:center;width:100%;gap:.1em}
 #groupOrderCount{padding:.1em}
@@ -227,7 +239,7 @@ dialog#groupEditor.group-dialog.panel-card{gap:.65em;padding:0;border:0;backgrou
 #groupNewAction{flex:none;display:grid;place-items:center;min-width:2.7em;height:2.7em;padding:.4em}
 #groupNewAction .group-new-icon{width:1.5em;height:1.5em}
 #groupNewAction[hidden]{display:none}
-@media(max-width:380px){#groupEditToggle .group-edit-label{display:none}#groupMemberDraftActions .group-edit-toggle{width:calc(var(--ui-main-control-height,1.05) * 1em);justify-content:center;padding:0}#groupMembers:has(#groupMemberDraftActions:not([hidden])) #groupOrderToolbar{padding-right:3em}}
+@media(max-width:380px){#groupEditToggle .group-edit-label{display:none}#groupMemberDraftActions .group-edit-toggle{width:calc(var(--ui-main-control-height) * 1em);justify-content:center;padding:0}#groupMembers:has(#groupMemberDraftActions:not([hidden])) #groupOrderToolbar{padding-right:3em}}
 #groupRows{flex:1;overflow:auto;min-height:0;overscroll-behavior:contain}
 #groupLists.hide-members #groupMembers{display:none}
 #groupLists.members-sized #groupMembers{box-sizing:border-box;flex:0 0 var(--group-members-height)}
@@ -245,7 +257,7 @@ dialog#groupEditor.group-dialog.panel-card{gap:.65em;padding:0;border:0;backgrou
 #groupAddAll{flex:none}
 #groupOtherRows{flex:1;overflow:auto;min-height:0;overscroll-behavior:contain}
 #groupEditor .list-search-dock{margin-top:.5em}
-#groupEditor .list-search-input{height:calc(var(--ui-edit_control-height,1.8) * 1.5rem);min-height:0;font:inherit}
+#groupEditor .list-search-input{height:calc(var(--ui-edit_control-height) * 1.5rem);min-height:0;font:inherit}
 #groupAvailableSearch::placeholder,#groupMembersSearch::placeholder{color:var(--label)}
 .group-row{display:flex;align-items:center;gap:.7em;min-height:44px;padding:.25em 0;overflow-wrap:anywhere}
 .group-dictionary-name{font-size:calc(var(--ui-font-base) * 1rem)}
@@ -264,6 +276,7 @@ dialog#groupEditor.group-dialog.panel-card{gap:.65em;padding:0;border:0;backgrou
 #deleteGroupDialog{width:min(440px,94vw);height:fit-content}
 #deleteGroupDialog p{margin:.4em 0}
 .group-dialog input[type=checkbox]{appearance:none;-webkit-appearance:none;flex:none;width:20px;height:20px;margin:0 5px 0 0;border:1.5px solid var(--fg);border-radius:4px;background-color:var(--paper-bg,var(--bg));position:relative;vertical-align:middle;cursor:pointer}
+html[data-desktop-image] #groupEditor input[type=checkbox]{background:transparent}
 .group-dialog input[type=checkbox]:checked::after{content:"";position:absolute;left:5px;top:1px;width:5px;height:10px;border:solid var(--fg);border-width:0 2px 2px 0;transform:rotate(45deg)}
 .group-dialog input[type=checkbox]:disabled{background-color:var(--fg-soft);border-color:var(--fg-soft);opacity:.8;cursor:default}
 .group-dialog input[type=checkbox]:disabled:checked::after{border-color:var(--bg)}
@@ -276,6 +289,7 @@ dialog#articleFindDialog.group-dialog.panel-card{box-sizing:border-box;inset:0;m
   width:min(480px,calc(100vw - 24px));height:fit-content;max-height:calc(100dvh - 24px);padding:14px}
 #articleFindDialog>label{display:flex;align-items:center;gap:.4em}
 #articleFindDialog input[type=text]{width:100%;box-sizing:border-box;min-width:0}
+html[data-shell-image] #articleFindDialog :is(input[type=text],input[type=checkbox]){background:transparent}
 #articleFindDialog .article-find-mode{flex-wrap:wrap;justify-content:space-between}
 #articleFindDialog select{max-width:100%;min-width:0}
 #articleFindDialog p{margin:0}
@@ -294,26 +308,26 @@ dialog#articleFindDialog.group-dialog.panel-card{box-sizing:border-box;inset:0;m
 #groupFilterDialog{display:flex;flex-direction:column;height:min(650px,85dvh);overflow:hidden}
 #groupFilterDialog:not([open]){display:none}
 #groupFilterHeader{position:relative;display:flex;align-items:flex-start;gap:.5em;flex:none;
-  min-height:calc(var(--ui-main-control-height,1.05) * 1em);
-  padding-right:calc(var(--ui-main-control-height,1.05) * 1em + .5em)}
+  min-height:calc(var(--ui-main-control-height) * 1em);
+  padding-right:calc(var(--ui-main-control-height) * 1em + .5em)}
 #closeGroupFilter{position:absolute;top:0;right:0;display:grid;place-items:center;flex:none;
-  box-sizing:border-box;width:calc(var(--ui-main-control-height,1.05) * 1em);
-  height:calc(var(--ui-main-control-height,1.05) * 1em);
-  min-height:calc(var(--ui-main-control-height,1.05) * 1em);padding:0;
-  font-size:calc(var(--ui-main-control-font,1.05) * 1rem)}
+  box-sizing:border-box;width:calc(var(--ui-main-control-height) * 1em);
+  height:calc(var(--ui-main-control-height) * 1em);
+  min-height:calc(var(--ui-main-control-height) * 1em);padding:0;
+  font-size:calc(var(--ui-main-control-font) * 1rem)}
 .group-dialog .icon-close{display:block;width:1.3em;height:1.3em}
 .group-filter-choices{flex:1;min-height:0;overflow:auto}
 #groupFilterToggle{flex:1;min-width:0}
 #groupFilterToggle:empty{display:none}
 .group-filter-choice{box-sizing:border-box;display:flex;align-items:center;justify-content:space-between;gap:1em;width:100%;min-height:44px;padding:0 .35em;border:0;background:none;color:var(--fg);font:inherit;font-size:calc(var(--ui-font-addition) * 1rem);text-align:left;cursor:pointer}
-.group-filter-choice + .group-filter-choice{margin-top:calc(var(--ui-row-gap,.6) * 1em)}
+.group-filter-choice + .group-filter-choice{margin-top:calc(var(--ui-row-gap) * 1em)}
 .group-filter-choice-end{display:flex;align-items:center;gap:.8em;flex:none}
 .group-filter-count{font-variant-numeric:tabular-nums;color:var(--label)}
 .group-filter-radio{width:22px;height:22px;border:2px solid var(--fg);border-radius:50%;box-sizing:border-box}
 .group-filter-choice[aria-checked=true] .group-filter-radio{border-color:var(--accent);box-shadow:inset 0 0 0 4px var(--bg);background:var(--accent)}
-.group-filter-section{margin:calc(var(--ui-section-space-before,0) * 1em) 0 calc(var(--ui-section-space-after,.45) * 1em)}
+.group-filter-section{margin:calc(var(--ui-section-space-before) * 1em) 0 calc(var(--ui-section-space-after) * 1em)}
 .group-filter-section summary{padding:0 .35em;font-size:calc(var(--ui-font-section) * 1rem);font-weight:600;cursor:pointer}
-.group-filter-section[open] summary{margin-bottom:calc(var(--ui-row-gap,.6) * 1em)}
+.group-filter-section[open] summary{margin-bottom:calc(var(--ui-row-gap) * 1em)}
 .group-filter-section .group-filter-choice{padding-left:2.4em}
 .group-filter-toggle{display:flex;align-items:center;gap:.5em;min-height:48px}
 .group-filter-actions{display:flex;justify-content:flex-end;padding-top:.6em}

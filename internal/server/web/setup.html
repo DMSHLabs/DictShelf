@@ -73,6 +73,7 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
 <title>{{T:pages.folders}}</title>
 <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
 <link rel="stylesheet" href="/assets/setup.css?v={{CSS}}">
+{{UI_SCALE_DEFAULTS}}
 <!-- The app halves of any preset that asked to be on this page too (manifest
      "pages" — Quiet labels is the one): attached by the server, after
      setup.css so their token overrides win the tie, and empty otherwise. -->
@@ -80,9 +81,6 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
 <script>
 /* Apply the reader's saved Fonts settings before this standalone page paints. */
 (function () {
-  const defaults={base:1,title:1.15,section:1,addition:.9,hint:.8,
-    editControlHeight:1.8,editControlFont:1,mainControlHeight:1.05,mainControlFont:1.05,
-    sectionBefore:0,sectionAfter:.45};
   const names={base:'--ui-font-base',title:'--ui-font-title',section:'--ui-font-section',
     addition:'--ui-font-addition',hint:'--ui-hint-font-size',
     editControlHeight:'--ui-edit_control-height',editControlFont:'--ui-edit_control-font',
@@ -90,10 +88,12 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
     sectionBefore:'--ui-section-space-before',sectionAfter:'--ui-section-space-after'};
   let saved={};
   try { saved=JSON.parse(localStorage.getItem('wudict_settings_fonts')||'null')||{}; } catch (_) {}
-  for(const [key,fallback] of Object.entries(defaults)){
+  for(const [key,property] of Object.entries(names)){
+    if(!Object.hasOwn(saved,key))continue;
     const value=Number(saved[key]),spacing=key==='sectionBefore'||key==='sectionAfter';
-    const scale=Number.isFinite(value)?Math.min(key==='editControlHeight'?4:2,Math.max(spacing?0:.5,value)):fallback;
-    document.documentElement.style.setProperty(names[key],String(scale));
+    if(!Number.isFinite(value))continue;
+    const scale=Math.min(key==='editControlHeight'?4:2,Math.max(spacing?0:.5,value));
+    document.documentElement.style.setProperty(property,String(scale));
   }
 })();
 </script>

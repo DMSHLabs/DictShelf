@@ -88,7 +88,7 @@ Continue to commit, merge into `dev`, and publish only when requested; do not in
 - [x] Read-aloud menu: read/stop, voice, unavailable voice, language names, and navigation to system speech settings.
 - [x] Identified remaining UI strings: preference-saving and audio errors, stylesheet-file hints, file-replacement confirmation, and layer-switch errors.
 - [x] In-article iframe windows: close label and two error states through a small host → frame contract.
-- [x] Temporary Language buttons on Browse and Folders removed; the regular Settings button retained.
+- [x] Temporary Language buttons on Browse and Folders removed; the Settings selector is a drop-down.
 - [x] Settings label columns measured from rendered content; Results labels no longer use the old fixed width. Browser verification is recorded above; phone verification remains below.
 
 A checkmark means implemented in code, **not** exhaustively tested on a phone.
@@ -128,7 +128,7 @@ Do not treat intentional `Language`, `English`, `Русский`, English iframe
 
 ## 4. Device and appearance — verification still required
 
-The user confirmed that the Language dialog worked and Browse changed language at an early stage. This does not confirm every subsequent screen.
+The user confirmed that the former Language dialog worked and Browse changed language at an early stage. The Settings control is now a drop-down and needs a fresh device check.
 
 - [ ] Reopen the search-mode picker and “All dictionaries” in an APK with the fixed `UiLanguage.context()`. Earlier logs confirmed `BadTokenException`; the fix compiled, but do not assume final user verification of a new build without their report.
 - [ ] Switch English → Русский → English; check new pages, reload, application restart, and persistence of the choice.
@@ -150,7 +150,7 @@ Do not run these actions automatically in the emulator: the user has currently t
 - [ ] **Sentence fragments:** the Folders page and saved-path hint still have separate text fragments around DOM nodes. If the next language needs a different word order, move to a safe template with DOM parameters; do not insert unchecked HTML from the catalog.
 - [ ] **Simplifying knowledge storage:** `docs/I18N.md` contains early stage history; rules now live in `translation.md`, and remaining work lives here. Do not maintain three independent TODO lists. Preserve verification facts during future cleanup without presenting them as new checks.
 - [ ] **Key names:** do not rename working `panel.*`/`pages.*` and other namespaces in bulk without a reason. If a key is misleading, change it together with every reference and check.
-- [ ] **A new language:** this is a separate task. The en/ru allowlist is currently repeated in the Go loader and normalization/validation, JS dialog, Android `UiLanguage`, checks, and `/api/language` schemas in `internal/server/web/openapi.yaml`. One new JSON file is not enough; Android resources, plural forms, fallback, and tests are needed. Keep static-slot keys as strings and check dynamic key sets too. Do not enable automatic system-language selection.
+- [ ] **A new language:** this is a separate task. The en/ru allowlist is currently repeated in the Go loader and normalization/validation, Settings drop-down, Android `UiLanguage`, checks, and `/api/language` schemas in `internal/server/web/openapi.yaml`. One new JSON file is not enough; Android resources, plural forms, fallback, and tests are needed. Keep static-slot keys as strings and check dynamic key sets too. Do not enable automatic system-language selection.
 - [ ] **RTL:** not implemented. Direction, CSS, and menus require separate verification; do not promise Arabic/Hebrew support after adding only a catalog.
 - [ ] **Main-page `html lang`:** do not switch it before separating the article-segmentation fallback from the UI language. Retaining `en` is currently intentional. This is an accessibility/language-architecture task, not a mechanical attribute replacement.
 

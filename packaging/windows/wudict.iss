@@ -12,10 +12,8 @@
 ; or `make win-installer`. Every define has a default, so opening this file in
 ; the Inno Setup IDE and pressing Compile also works.
 ;
-; ONE executable is installed, not two (D76). wudict.exe is a console-subsystem
-; binary that decides at runtime whether a person or a shell started it, so the
-; Start-menu shortcut below opens no black window and the same file still pipes
-; and reports an exit code from cmd.exe.
+; One executable is installed: wudict.exe hosts both the CLI/server and the
+; WebView2 window when launched from the desktop.
 
 #ifndef AppName
   #define AppName "wuDict"
@@ -140,7 +138,7 @@ Source: "wudict.ico";   DestDir: "{app}"; Flags: ignoreversion
 Source: "..\..\THIRD-PARTY-NOTICES.md"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{group}\{#AppName}";       Filename: "{app}\wudict.exe"; IconFilename: "{app}\wudict.ico"; Comment: "Serve your dictionaries in the browser"
+Name: "{group}\{#AppName}";       Filename: "{app}\wudict.exe"; IconFilename: "{app}\wudict.ico"; Comment: "Open your dictionaries"
 Name: "{autodesktop}\{#AppName}"; Filename: "{app}\wudict.exe"; IconFilename: "{app}\wudict.ico"; Tasks: desktopicon
 ; A Startup-folder shortcut rather than a Run registry key: it is the one place
 ; a user can find and delete an autostart entry without a tool. {autostartup},

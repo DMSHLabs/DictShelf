@@ -80,6 +80,19 @@ var pickJS = webAsset(pickJSSrc, jsAsset) // word-at-point for a double tap, loa
 //go:embed web/app.css
 var appCSS []byte // main page styles
 
+// uiScaleDefaultsStyle lets standalone pages use the same token defaults as
+// app.css without loading the main page's layout rules or copying values.
+var uiScaleDefaultsStyle = func() string {
+	const start, end = "/* ui-scale-defaults:start */", "/* ui-scale-defaults:end */"
+	css := string(appCSS)
+	from := strings.Index(css, start)
+	to := strings.Index(css, end)
+	if from < 0 || to <= from {
+		panic("app.css UI scale defaults block missing")
+	}
+	return "<style>:root{" + css[from+len(start):to] + "}</style>"
+}()
+
 //go:embed web/history.css
 var historyCSS []byte // search history styles
 

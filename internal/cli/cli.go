@@ -15,6 +15,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -1228,6 +1229,8 @@ func cmdServe(args []string) (err error) {
 				// With the key, when this launch has one: the instance
 				// already running was started from the same configuration,
 				// so the key that would have been ours is the key it wants.
+				// This duplicate process exits immediately; a WebView owned by it
+				// would disappear with it. Open the existing server in the browser.
 				browserCmd(browseURL(url, token))
 			}
 			return nil
@@ -1409,10 +1412,6 @@ Hint: pick another port with --port, e.g.:  wudict --port %s
 		speex:  speexSummary(useExternalSpeex, sxPath, sxSource),
 		keyURL: keyURL(url, token),
 	})
-	if !cfg.NoBrowser {
-		go openBrowser(browseURL(url, token))
-	}
-
 	// No WriteTimeout: /api/search (NDJSON) and /api/ingest (SSE) stream for
 	// a long time - a write deadline would sever them. ReadHeaderTimeout +
 	// IdleTimeout + MaxHeaderBytes harden against slowloris without touching
@@ -1441,6 +1440,9 @@ Hint: pick another port with --port, e.g.:  wudict --port %s
 	}
 	if runtime.GOOS == "windows" {
 		srv.DesktopExit = stop
+	}
+	if !cfg.NoBrowser {
+		go openBrowser(browseURL(url, token), gui, stop)
 	}
 	go func() {
 		sig := make(chan os.Signal, 1)
@@ -1484,7 +1486,7 @@ Hint: pick another port with --port, e.g.:  wudict --port %s
 		GUI:      gui,
 		Version:  Version,
 		URL:      url,
-		Open:     func() { browserCmd(url) },
+		Open:     func() { openUI(browseURL(url, token), gui, stop) },
 		Rescan:   trayRescan(reg),
 		OpenDir:  trayOpenDir(reg.Dirs()),
 		Shutdown: stop,
@@ -1923,9 +1925,27 @@ func indexingSummary(autoIndex string) string {
 	return "on - a headword index is prepared on first search; contains, full-text and media on request"
 }
 
-func openBrowser(url string) {
+func openBrowser(url string, gui bool, onWindowClose func()) {
 	time.Sleep(300 * time.Millisecond) // let our own server finish binding
-	browserCmd(url)
+	openUI(url, gui, onWindowClose)
+}
+
+func openUI(address string, gui bool, onWindowClose func()) {
+	if gui && runtime.GOOS == "windows" {
+		if local, err := desktopWindowURL(address); err == nil && openDesktopWindow(local, onWindowClose) {
+			return
+		}
+	}
+	browserCmd(address)
+}
+
+func desktopWindowURL(address string) (string, error) {
+	u, err := url.Parse(address)
+	if err != nil || u.Scheme != "http" || u.Port() == "" || u.User != nil {
+		return "", fmt.Errorf("invalid local server address")
+	}
+	u.Host = net.JoinHostPort("127.0.0.1", u.Port())
+	return u.String(), nil
 }
 
 func browserCmd(url string) {

@@ -9,10 +9,10 @@ Project rules remain in [AGENTS.md](AGENTS.md), [CLAUDE.md](CLAUDE.md), [HANDOFF
 ## 1. User decisions — do not reconsider by default
 
 - Translate **only the interface**. The language of a dictionary, article, search, and pronunciation is independent of the interface language.
-- The language is selected manually: **Settings → Language → English / Русский → apply and reload**. English is the default.
+- The language is selected manually: **Settings → Language → English / Русский**. Choosing a different language saves it and reloads the page. English is the default.
 - Do not infer the interface language from the system, Android Locale, `navigator.language`, `Accept-Language`, region, or dictionary.
 - Live switching is not required. Reloading the page is the intended way to apply the choice. Restarting Go is not required.
-- The `Language` button stays in Settings. Its English label and the self-names `English` / `Русский` are intentional: readers must be able to find the selector even in an unfamiliar language. Temporary buttons on Browse and the Folders page were removed at the user's request; do not restore them for testing convenience.
+- The `Language` drop-down stays in Settings. Its English label and the self-names `English` / `Русский` are intentional: readers must be able to find the selector even in an unfamiliar language. Temporary buttons on Browse and the Folders page were removed at the user's request; do not restore them for testing convenience.
 - The setting is shared by the server installation, not separate for each browser. Already open pages change language after reloading.
 - The user currently builds the APK and checks it on a device themselves. Do not routinely build an APK, install it, or operate the emulator without a new request. Lightweight local checks are allowed. Earlier installation permission from a previous stage is not a request to install every new version.
 - Work on the currently selected branch and preserve uncommitted changes. When this document was created, that branch was `translation`; this name is not an instruction to switch branches. `dev` is for integration; `master` is for upstream. Commit, merge, and publish only at the user's request.
@@ -24,8 +24,8 @@ Project rules remain in [AGENTS.md](AGENTS.md), [CLAUDE.md](CLAUDE.md), [HANDOFF
 | Web interface catalogs | `internal/server/web/i18n/en.json`, `ru.json`: flat semantic keys, each holding a string or an object of plural forms |
 | Server infrastructure | `internal/server/i18n.go`: embedding, catalog loading, fallback, `renderUI`, GET/PUT `/api/language` |
 | Persisting the choice | `internal/server/prefs.go`: top-level `language` field in `state.json`, separate from `ui` |
-| Client infrastructure | `internal/server/web/i18n.js`: `window.wudictI18n`, selection dialog, saving, and reload |
-| Shared presentation rules | `internal/server/web/i18n.css`: language dialog and CSS editor control wrapping (`#styler:lang(ru) #stylerDock`). This file no longer adjusts translated label layout (see “Label widths and layout”) |
+| Client infrastructure | `internal/server/web/i18n.js`: `window.wudictI18n` and language saving; `web/index.html`: Settings drop-down and reload |
+| Shared presentation rules | `internal/server/web/i18n.css`: CSS editor control wrapping (`#styler:lang(ru) #stylerDock`). This file no longer adjusts translated label layout (see “Label widths and layout”) |
 | Main screen | `internal/server/web/index.html`: search, results, Settings, system settings, and appearance |
 | Standalone pages | `web/setup.html`, `lemmas.html`, `browse.html`; handlers in `internal/server` |
 | Groups and looks | `web/group-editor.js`, `looks.js`; display names separate from stored names |
