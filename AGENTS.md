@@ -15,6 +15,30 @@
 - Before creating a branch, verify the base and working-tree status. Do not silently switch, reset, rebase, stash, or discard existing work to enforce this policy. Existing task branches are not retroactively rebased. If `dev` is missing or its intended state is unclear, clarify rather than falling back to `master`.
 - When a task is ready, its integration target is `dev`; committing, merging, publishing, and upstream synchronization still require the user request specified above.
 
+## Dead upstream code
+
+Upstream features this fork deliberately keeps but does not wire are dead code:
+take their side verbatim on every upstream sync, never wire them, and record a
+new decision here when one appears. The mirror convention is the fork's
+`dmsh_` file prefix: a fork-owned parallel implementation of an upstream
+surface is named `dmsh_<feature>` beside upstream's file (e.g. `dmsh_groups.go`
+beside `groups.go`), so the two never merge and upstream's file is taken
+verbatim. The registry:
+
+- **The panel's pinned sorting** (upstream `a00be12`, D166): skipped. This
+  fork's picker order is its own — the reader's arrangement, edited per group
+  in Dictionary Groups with its own pin mode (`dmsh_groups.go`) — while
+  upstream's model is pinned-first + A–Z and declares the saved array order no
+  longer an order, which this fork's search order (D142) is built on. It lives
+  inside shared files (`prefs.go`, `index.html`), so a sync resolves those to
+  this fork's side for anything pin-related.
+- **`internal/howto/`** — the built-in howto, kept unwired (see
+  `internal/cli/cli.go`); revive by wiring `server.WithBuiltin`.
+- **`ext/server/`** — upstream's share-link hosting asset; this fork's server
+  does not serve it.
+
+Files kept verbatim stay verbatim: the marker is this section, not the files.
+
 ## License and copyright
 
 - The licence is **GPL-3.0-or-later** everywhere, and the `SPDX-License-Identifier: GPL-3.0-or-later` line belongs in every file that carries a header at all. Never edit the text of `LICENSE`.
