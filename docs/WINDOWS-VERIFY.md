@@ -229,7 +229,10 @@ them are in `docs/handoff-archive.md`.
     TestSetupMultipleFolders and `internal/format/dsl`'s
     TestMediaSourcesEveryZipSpelling all pass on the tag-less/pure-Go build now.
   - Flaky everywhere: TestFailedDemandIsRetried (TempDir cleanup races the
-    ingest goroutine; failed 4/5 on clean HEAD once).
+    ingest goroutine; failed 4/5 on clean HEAD once), and TestPreviewEviction
+    (a sweep measured against a live heap: seen once in a loaded full-suite run
+    as "still 1050 bytes of preview open after the sweep", while passing 5/5 in
+    isolation and in the runs either side of it — re-run before believing it).
   - `internal/intake`: TestJobDisposesSource and
     TestSpooledSourceIsAlwaysRemoved USED to fail here (dispose ran before
     the archive reader closed, so Windows kept the "delete the source"

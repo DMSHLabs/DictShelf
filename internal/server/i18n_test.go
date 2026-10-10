@@ -233,8 +233,28 @@ func TestI18nCatalogs(t *testing.T) {
 		}
 		for _, re := range []*regexp.Regexp{refs, uiTextSlot} {
 			for _, match := range re.FindAllStringSubmatch(string(data), -1) {
-				if _, ok := uiCatalogs["en"][match[1]]; !ok {
-					t.Errorf("%s: unknown key %s", file, match[1])
+				key := match[1]
+				// A key that ends in "." is a PREFIX, not a key: the System
+				// Settings readout builds `system.desktop.<CONFIG_KEY>` at
+				// call time from the settings the server reports, so the
+				// capture stops at the literal's own closing quote. Any key
+				// carrying the prefix answers it; a prefix no key carries is
+				// still a mistake (a typo, or a rename that missed a file).
+				if strings.HasSuffix(key, ".") {
+					found := false
+					for k := range uiCatalogs["en"] {
+						if strings.HasPrefix(k, key) {
+							found = true
+							break
+						}
+					}
+					if !found {
+						t.Errorf("%s: no key begins with %s", file, key)
+					}
+					continue
+				}
+				if _, ok := uiCatalogs["en"][key]; !ok {
+					t.Errorf("%s: unknown key %s", file, key)
 				}
 			}
 		}
