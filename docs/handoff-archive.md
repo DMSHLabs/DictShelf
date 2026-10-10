@@ -72,6 +72,7 @@ narratives, so `git log` is a second copy.
 | Release wudict2-v0.11.0 (2026-10-08, this session) | 2026-10-08 | — (added after the split) |
 | The 2026-10-05 transient repairs | 2026-10-05 | — (added after the split) |
 | Release wudict2-v0.10.0 (2026-10-07, this session) | 2026-10-07 | — (added after the split) |
+| The 2026-10-10 upstream docs round (eighth sync) | 2026-10-10 | — (added after the split) |
 
 ## The preset-switch "crash" was a TDZ cascade (2026-09-25, diagnosis only)
 
@@ -3251,3 +3252,31 @@ The cycle's narrative, condensed from the HANDOFF blocks this record replaces:
   link makes); `BackgroundDialogBuilder` dims its caller by 42%;
   `AppExit.isExiting` stops MainActivity from restarting the server when Android
   restores the launcher task while a floating window of it is being closed.
+
+## The 2026-10-10 upstream docs round (eighth sync)
+
+Upstream's `00aded9` (`chore(faq): docs cleanup`) with the typo commits
+`9c32796` and `645e034`, merged into `dev2` as `2bf136c` — no conflicted file at
+all. The whole round is documentation:
+
+- `pages/docs/help/faq.md`: typo fixes ("Yes, you can build wudict …", "-cgo
+  and -purego flavours and which should I choose?", `groups.ini` "only created
+  after manually edited", plus an Obtainium pointer for the Android FOSS
+  build), the question "Can I move a dictionary to another machine?" removed,
+  and the FOSS-vs-Play answer rewritten around Android's Storage Access
+  Framework with the Play build's data path called out.
+- `docs/STYLE.md`: a new "Base: ASD-STE100" section — Simplified Technical
+  English as the base style, this guide extending it, the STE rules used most
+  often, and a note that the Terms table is the project's permitted set of
+  technical names and verbs.
+- DELETED: `docs/ANDROID-PLAY-STORAGE.md` and `docs/ANDROID-LAN-SHARING.md` —
+  both upstream's files, which this fork never edited. The storage content they
+  held survives in `pages/docs/apps/android.md` and the FAQ; the LAN-sharing
+  verdict stays in `docs/OPEN.md` §O10. The fork's own
+  `docs/ANDROID-UI-HANDOFF.md` cited both, and that line now points at the
+  surviving pages. `docs/OPEN.md` §O10 still cites the deleted LAN document —
+  upstream left the same dangling reference in its own tree, so it is left as
+  upstream's text and is worth a line upstream.
+- Docs only, so nothing was built, installed or published: `go build`,
+  `go vet` and the whole Go suite re-ran green in the worktree, and `dev2` was
+  fast-forwarded in the user's checkout. Not pushed.

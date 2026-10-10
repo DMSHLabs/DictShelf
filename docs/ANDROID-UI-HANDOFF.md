@@ -22,7 +22,7 @@ Find next/previous close settings and leave a strip with query, count, previous/
 
 Browser verification: `tools/article-find-test.cjs` against an isolated preview, EN/RU at 320/390/1100px, including inline phrases, Cyrillic boundaries, iframe content, hidden examples, wrapping, late articles, markup preservation, reset/reopen, persistence and native-selection fallback. Owed on a phone: soft-keyboard Enter, dialog sizing with the keyboard open, bottom insets, example reveal/restore with real dictionaries and text scaling. No APK built or installed for this slice.
 
-General architecture/conventions: `CLAUDE.md`, `docs/SPEC.md`. Android usage: `pages/docs/apps/android.md`. Storage distinctions: `docs/ANDROID-PLAY-STORAGE.md`; LAN behavior: `docs/ANDROID-LAN-SHARING.md`. This note covers local UI additions and Windows workflow, not the whole project.
+General architecture/conventions: `CLAUDE.md`, `docs/SPEC.md`. Android usage: `pages/docs/apps/android.md`. Storage distinctions: `pages/docs/apps/android.md` and the FAQ entry on the FOSS and Play builds. The `docs/ANDROID-PLAY-STORAGE.md` and `docs/ANDROID-LAN-SHARING.md` notes this line used to cite were removed upstream on 2026-10-09; the LAN-sharing verdict stays in `docs/OPEN.md` §O10. This note covers local UI additions and Windows workflow, not the whole project.
 
 ## Build and checks
 
