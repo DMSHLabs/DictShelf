@@ -49,6 +49,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
+          ref: releases
           fetch-depth: 0 # versionName and versionCode both come from git history
 
       - name: Setup Go
