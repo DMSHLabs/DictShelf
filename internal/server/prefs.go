@@ -35,9 +35,14 @@ import (
 // dictionaries are enabled" is a fact about the set, not about any member.
 const StateFile = "state.json"
 
-// prefsVersion is written to the file so a future format change can be
-// recognised rather than guessed at.
-const prefsVersion = 1
+// prefsVersion is written to the file so a format change can be recognised
+// rather than guessed at. Version 2 is the pinned list (D166): DictPref.Pin
+// marks the dictionaries the user placed, and every other record's position
+// is no longer an order. A version-1 list is ordered whole, and only the page
+// converts it - it is the page that compares names (dictionary titles, in its
+// own collation), so the server keeps the version it read until the page has
+// sent a list of its own.
+const prefsVersion = 2
 
 // DictPref is one dictionary's remembered state. The path is what makes this
 // survivable: ids are sha256(path)[:12] (see pathID), so moving a dictionary
@@ -48,6 +53,9 @@ type DictPref struct {
 	Path string `json:"path"`
 	Name string `json:"name,omitempty"` // display name, for a readable file
 	Off  bool   `json:"off,omitempty"`  // excluded from "All dictionaries"
+	// Pin places the dictionary at the head of the list, in the order of
+	// the pinned records; the others are listed A-Z (D166).
+	Pin bool `json:"pin,omitempty"`
 }
 
 // UIPrefs is the part of the reading experience that belongs to the PERSON
@@ -97,21 +105,6 @@ type UIPrefs struct {
 	OpenN   int  `json:"openN,omitempty"`
 	OpenAll bool `json:"openAll,omitempty"`
 
-	// SortMine lists the dictionary PICKER in the user's own panel order
-	// instead of A->Z. Spelled positively, unlike the two above: alphabetical
-	// is what the picker has always done, so the zero value has to keep doing
-	// it. The rule both spellings obey is that an absent key is the standing
-	// default - not that the word is always a negation.
-	//
-	// It reorders the picker and nothing else. The panel keeps listing the
-	// user's own order whatever this says, because the panel is where that
-	// order is EDITED by dragging, and a list that re-sorted itself
-	// alphabetically under the drag could not express one. "All dictionaries"
-	// is likewise searched in the user's order either way (D142): which
-	// dictionary answers first is a property of the collection, not of how a
-	// menu happens to be sorted.
-	SortMine bool `json:"sortMine,omitempty"`
-
 	// SpeakOff turns OFF the read-aloud button that appears over a text
 	// selection in an article. Negated like HLOff: the feature is on unless
 	// the person said otherwise. Which VOICE reads is not here - the voices
@@ -128,9 +121,10 @@ type UIPrefs struct {
 	GroupsOff []string `json:"groupsOff,omitempty"`
 
 	// Full opens an article's secondary zone (DSL [*], wu-sec: examples and
-	// links to sub-entries) shown instead of hidden. Spelled positively, like
-	// SortMine: the brief view is Lingvo's own default, so the zero value
-	// keeps it. It is the reader's last choice on a section's switch, and
+	// links to sub-entries) shown instead of hidden. Spelled positively: the
+	// brief view is Lingvo's own default, so the zero value keeps it - the
+	// rule every flag here obeys is that an absent key is the standing
+	// default, not that the word is always a negation. It is the reader's last choice on a section's switch, and
 	// sets how the next section opens; the server never reads it.
 	Full bool `json:"full,omitempty"`
 
@@ -283,7 +277,7 @@ func (p *Prefs) Snapshot() (dicts []DictPref, exists bool) {
 // Replace stores a new list and writes it, atomically (fsx.WriteAtomic): a
 // crash mid-save leaves the previous state intact rather than a truncated
 // file that reads as "nothing was ever configured".
-func (p *Prefs) Replace(dicts []DictPref) error { return p.update(dicts, nil) }
+func (p *Prefs) Replace(dicts []DictPref) error { return p.update(dicts, nil, false) }
 
 // update is Replace plus an optional UI patch: the JSON object of the UI
 // fields to change. A nil dicts keeps the stored list, decided here under the
@@ -299,13 +293,21 @@ func (p *Prefs) Replace(dicts []DictPref) error { return p.update(dicts, nil) }
 // One write, not two, so the two settings can never disagree on disk. It
 // starts from the file as it is NOW (fresh): a hand edit made a moment ago is
 // kept wherever this update does not speak.
-func (p *Prefs) update(dicts []DictPref, ui json.RawMessage) error {
+//
+// The version moves to prefsVersion only with a list the PAGE sent (page),
+// or when there is no list to be in an older format. A list the server
+// repaired itself (heal) keeps the version it was read with: that list is
+// still in the old format, and stamping it would tell the page it has
+// nothing to convert.
+func (p *Prefs) update(dicts []DictPref, ui json.RawMessage, page bool) error {
 	p.write.Lock()
 	defer p.write.Unlock()
 	f := p.file.fresh().val
-	f.Version = prefsVersion
 	if dicts != nil {
 		f.Dicts = append([]DictPref(nil), dicts...)
+	}
+	if (page && dicts != nil) || len(f.Dicts) == 0 {
+		f.Version = prefsVersion
 	}
 	if mentioned(ui) {
 		var u UIPrefs
@@ -417,13 +419,16 @@ func (p *Prefs) heal(r *Registry) []DictPref {
 
 // merge folds the client's ordered list into the stored one. The client can
 // only speak for the dictionaries it can see, so records it did not mention
-// are RETAINED at the end rather than deleted: an unmounted drive must not
-// cost the user the settings for everything on it.
+// are RETAINED rather than deleted: an unmounted drive must not cost the user
+// the settings for everything on it. A retained record keeps its place: it
+// follows the record it followed before, or leads when nothing the client
+// sent stood before it - so a pinned dictionary on a drive that is away is
+// back at its rank when the drive is (D166).
 func (p *Prefs) merge(r *Registry, want []DictPref) []DictPref {
 	stored, _ := p.Snapshot()
-	out := make([]DictPref, 0, len(want)+len(stored))
+	sent := make([]DictPref, 0, len(want))
 	seenID := map[string]bool{}
-	seenPath := map[string]bool{}
+	seenPath := map[string]string{} // cleaned path -> the id it was sent under
 	for _, d := range want {
 		if d.ID == "" || seenID[d.ID] {
 			continue
@@ -438,15 +443,37 @@ func (p *Prefs) merge(r *Registry, want []DictPref) []DictPref {
 		}
 		seenID[d.ID] = true
 		if d.Path != "" {
-			seenPath[cleanAbs(d.Path)] = true
+			seenPath[cleanAbs(d.Path)] = d.ID
 		}
-		out = append(out, d)
+		sent = append(sent, d)
 	}
+	// after[id] holds the retained records that followed the sent record id
+	// in the stored order; lead holds those that no sent record preceded.
+	after := map[string][]DictPref{}
+	var lead []DictPref
+	prev := ""
 	for _, d := range stored {
-		if seenID[d.ID] || (d.Path != "" && seenPath[cleanAbs(d.Path)]) {
+		if seenID[d.ID] {
+			prev = d.ID
 			continue
 		}
+		if d.Path != "" {
+			if id, ok := seenPath[cleanAbs(d.Path)]; ok {
+				prev = id // the client sent it under its current id
+				continue
+			}
+		}
+		if prev == "" {
+			lead = append(lead, d)
+		} else {
+			after[prev] = append(after[prev], d)
+		}
+	}
+	out := make([]DictPref, 0, len(sent)+len(stored))
+	out = append(out, lead...)
+	for _, d := range sent {
 		out = append(out, d)
+		out = append(out, after[d.ID]...)
 	}
 	return out
 }
@@ -467,11 +494,12 @@ func cleanAbs(p string) string {
 // GET /api/prefs - the enabled set and the order, healed against the
 // dictionaries that exist right now. "exists" is false on a first run, which
 // is the client's cue to adopt whatever an older build left in localStorage
-// (once) instead of starting the user over.
+// (once) instead of starting the user over. "version" below prefsVersion is
+// its cue to convert the list (D166).
 func (s *Server) handlePrefs(w http.ResponseWriter, r *http.Request) {
 	dicts := s.reg.prefs.heal(s.reg)
-	_, exists := s.reg.prefs.Snapshot()
-	writeJSON(w, map[string]any{"exists": exists, "dicts": dicts, "ui": s.reg.prefs.UI()})
+	f, exists := s.reg.prefs.data()
+	writeJSON(w, map[string]any{"exists": exists, "version": f.Version, "dicts": dicts, "ui": s.reg.prefs.UI()})
 }
 
 // PUT /api/prefs - replace the order and enabled set when the request sends
@@ -498,7 +526,7 @@ func (s *Server) handleSavePrefs(w http.ResponseWriter, r *http.Request) {
 	if req.Dicts != nil {
 		merged = s.reg.prefs.merge(s.reg, req.Dicts)
 	}
-	if err := s.reg.prefs.update(merged, req.UI); err != nil {
+	if err := s.reg.prefs.update(merged, req.UI, true); err != nil {
 		httpErr(w, http.StatusInternalServerError, "%s", "could not save: "+err.Error())
 		return
 	}

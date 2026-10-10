@@ -153,16 +153,22 @@ draws the hidden line dotted. Shown, secondary text is grey.
 | Control | Effect |
 | --- | --- |
 | <kbd>−</kbd> <kbd>15px</kbd> <kbd>+</kbd> | article text size; click the size to reset |
+| <kbd>A–Z</kbd> (beside the find field) | unpin all dictionaries; it asks first. Shown while a dictionary is pinned |
 | <kbd>Highlight matches</kbd> | mark the query's words in articles (full-text only); on by default |
 | <kbd>Read aloud</kbd> | offer to read selected article text aloud; on by default |
 | **Open first**: *My order*, *Fastest* | which result section opens first |
-| **Sort dictionaries**: *Alphabetical* (default), *My order* | the order of the picker |
 | **Group by** | the groups the picker offers |
 | folder summary <kbd>⚙ 2 folders · 105 dictionaries</kbd> | folders, library and config file in effect; <kbd>Edit folders…</kbd>, <kbd>Rescan folders</kbd>, <kbd>Lemmatization…</kbd>, <kbd>Browse A–Z…</kbd>, <kbd>Edit groups…</kbd>, <kbd>Custom styles…</kbd>, <kbd>Full-text for every dictionary…</kbd> |
 
 Each dictionary row:
 
--   <kbd>⠿</kbd> (drag) or ⏫ ▲ ▼ ⏬: reorder. Results follow this order.
+-   pin: add the dictionary to the pinned ones, after the others. Pinned
+    dictionaries come first, in your order; all the others follow A–Z.
+    Results and the picker follow this order.
+-   ⏫: make the dictionary the first in the list. An unpinned dictionary is
+    pinned.
+-   ▲ ▼, or <kbd>⠿</kbd> (drag, desktop): move a pinned dictionary among the
+    pinned ones.
 -   checkbox: enabled for *All dictionaries* searches. A disabled dictionary
     can still be chosen in the picker.
 -   name: search this dictionary only.

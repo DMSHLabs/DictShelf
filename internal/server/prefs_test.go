@@ -31,9 +31,10 @@ func newPrefsServer(t *testing.T) (*Server, string) {
 }
 
 type prefsResp struct {
-	Exists bool       `json:"exists"`
-	Dicts  []DictPref `json:"dicts"`
-	UI     *UIPrefs   `json:"ui"`
+	Exists  bool       `json:"exists"`
+	Version int        `json:"version"`
+	Dicts   []DictPref `json:"dicts"`
+	UI      *UIPrefs   `json:"ui"`
 }
 
 func putPrefs(t *testing.T, s *Server, body string) prefsResp {
@@ -126,9 +127,104 @@ func TestPrefsKeepsUnseenDictionaries(t *testing.T) {
 	if len(got.Dicts) != 2 {
 		t.Fatalf("the unmounted dictionary was forgotten: %+v", got.Dicts)
 	}
-	last := got.Dicts[len(got.Dicts)-1]
-	if last.Path != "/Volumes/Stick/Big.mdx" || !last.Off {
-		t.Errorf("retained record was altered: %+v", last)
+	i := slices.IndexFunc(got.Dicts, func(d DictPref) bool { return d.ID == "deadbeef0000" })
+	if i < 0 || got.Dicts[i].Path != "/Volumes/Stick/Big.mdx" || !got.Dicts[i].Off {
+		t.Errorf("retained record was altered: %+v", got.Dicts)
+	}
+}
+
+// A record the page could not send keeps its place in the stored order, and
+// its pin: a pinned dictionary on a drive that is away is back at its rank
+// when the drive is (D166).
+func TestPrefsMergeKeepsUnseenInPlace(t *testing.T) {
+	r := &Registry{}
+	for _, id := range []string{"a", "b", "c"} {
+		r.entries = append(r.entries, &entry{ID: id, Path: "/d/" + id + ".dsl"})
+	}
+	r.byID = map[string]*entry{}
+	for _, e := range r.entries {
+		r.byID[e.ID] = e
+	}
+	ids := func(ds []DictPref) []string {
+		var out []string
+		for _, d := range ds {
+			out = append(out, d.ID)
+		}
+		return out
+	}
+	for _, tc := range []struct {
+		name   string
+		stored []DictPref
+		sent   []DictPref
+		want   []string
+	}{{
+		name:   "between two sent records",
+		stored: []DictPref{{ID: "a", Pin: true}, {ID: "x", Pin: true}, {ID: "b", Pin: true}, {ID: "c"}},
+		sent:   []DictPref{{ID: "a", Pin: true}, {ID: "b", Pin: true}, {ID: "c"}},
+		want:   []string{"a", "x", "b", "c"},
+	}, {
+		name:   "first of all",
+		stored: []DictPref{{ID: "x", Pin: true}, {ID: "a", Pin: true}, {ID: "b"}},
+		sent:   []DictPref{{ID: "a", Pin: true}, {ID: "b"}},
+		want:   []string{"x", "a", "b"},
+	}, {
+		name:   "follows its neighbour when the neighbour moves",
+		stored: []DictPref{{ID: "a", Pin: true}, {ID: "x", Pin: true}, {ID: "y"}, {ID: "b"}},
+		sent:   []DictPref{{ID: "b", Pin: true}, {ID: "a", Pin: true}},
+		want:   []string{"b", "a", "x", "y"},
+	}, {
+		name:   "a record sent under its new id anchors the next",
+		stored: []DictPref{{ID: "old", Path: "/d/a.dsl", Pin: true}, {ID: "x", Pin: true}, {ID: "b"}},
+		sent:   []DictPref{{ID: "b"}, {ID: "a", Pin: true}},
+		want:   []string{"b", "a", "x"},
+	}} {
+		t.Run(tc.name, func(t *testing.T) {
+			p := LoadPrefs("")
+			if err := p.Replace(tc.stored); err != nil {
+				t.Fatal(err)
+			}
+			got := p.merge(r, tc.sent)
+			if !slices.Equal(ids(got), tc.want) {
+				t.Fatalf("order %v, want %v", ids(got), tc.want)
+			}
+			if x := slices.IndexFunc(got, func(d DictPref) bool { return d.ID == "x" }); x >= 0 && !got[x].Pin {
+				t.Error("the retained record lost its pin")
+			}
+		})
+	}
+}
+
+// The version tells the page whether the list is still in the order-only
+// format of version 1 (D166). Only a list the page sent moves it: a repair
+// the server makes itself, or a save of UI settings alone, leaves an old list
+// marked old, or the page would never convert it.
+func TestPrefsVersionMovesWithThePagesList(t *testing.T) {
+	s, state := newPrefsServer(t)
+	live := s.reg.all()[0]
+	old := `{"version":1,"dicts":[{"id":"0000stale000","path":"` +
+		filepath.ToSlash(filepath.Join("/elsewhere", filepath.Base(live.Path))) + `","name":"Alpha"}]}`
+	if err := os.WriteFile(state, []byte(old), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s.reg.prefs = LoadPrefs(state)
+
+	var got prefsResp
+	getJSON(t, s, "/api/prefs", &got) // heals: the record is re-attached and written
+	if len(got.Dicts) != 1 || got.Dicts[0].ID != live.ID {
+		t.Fatalf("not healed: %+v", got.Dicts)
+	}
+	if got.Version != 1 {
+		t.Fatalf("version %d after a repair, want 1", got.Version)
+	}
+	putPrefs(t, s, `{"ui":{"fontSize":20}}`)
+	getJSON(t, s, "/api/prefs", &got)
+	if got.Version != 1 {
+		t.Fatalf("version %d after a UI-only save, want 1", got.Version)
+	}
+	putPrefs(t, s, `{"dicts":[{"id":"`+live.ID+`","pin":true}]}`)
+	getJSON(t, s, "/api/prefs", &got)
+	if got.Version != prefsVersion || !got.Dicts[0].Pin {
+		t.Fatalf("version %d pin %v after the page's list, want %d and true", got.Version, got.Dicts[0].Pin, prefsVersion)
 	}
 }
 
@@ -271,10 +367,10 @@ func TestPrefsUI(t *testing.T) {
 
 // Every UI boolean has the standing default as its ZERO value - two of them by
 // negating the feature (hlOff, fastFirst), the third by naming the non-default
-// list order (sortMine) - so what is checked here is that "absent means the
-// default" survives a round trip through the file for each of them, that
-// setting one never silently clears another or the font size beside them, and
-// that only a key sent as false clears one.
+// view (full) - so what is checked here is that "absent means the default"
+// survives a round trip through the file for each of them, that setting one
+// never silently clears another or the font size beside them, and that only a
+// key sent as false clears one.
 func TestPrefsUIFlags(t *testing.T) {
 	s, state := newPrefsServer(t)
 
@@ -282,34 +378,34 @@ func TestPrefsUIFlags(t *testing.T) {
 		name            string
 		body            string
 		hlOff, wantFast bool
-		wantSort        bool
+		wantFull        bool
 	}{
 		{"absent is the default", `{"ui":{"fontSize":24}}`, false, false, false},
 		{"fastest on", `{"ui":{"fontSize":24,"fastFirst":true}}`, false, true, false},
 		{"and highlighting off beside it", `{"ui":{"fontSize":24,"hlOff":true,"fastFirst":true}}`, true, true, false},
 		{"back to my order, highlighting still off", `{"ui":{"fastFirst":false}}`, true, false, false},
-		{"my own list order, nothing else moved", `{"ui":{"sortMine":true}}`, true, false, true},
-		{"all three at once", `{"ui":{"hlOff":true,"fastFirst":true,"sortMine":true}}`, true, true, true},
+		{"the full view, nothing else moved", `{"ui":{"full":true}}`, true, false, true},
+		{"all three at once", `{"ui":{"hlOff":true,"fastFirst":true,"full":true}}`, true, true, true},
 		{"an empty patch keeps them all", `{"ui":{}}`, true, true, true},
-		{"false clears them", `{"ui":{"hlOff":false,"fastFirst":false,"sortMine":false}}`, false, false, false},
+		{"false clears them", `{"ui":{"hlOff":false,"fastFirst":false,"full":false}}`, false, false, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			got := putPrefs(t, s, tc.body)
-			if hl, ff := got.UI.flags(); hl != tc.hlOff || ff != tc.wantFast || got.UI.sorted() != tc.wantSort {
-				t.Fatalf("PUT echoed hlOff=%v fastFirst=%v sortMine=%v, want %v/%v/%v",
-					hl, ff, got.UI.sorted(), tc.hlOff, tc.wantFast, tc.wantSort)
+			if hl, ff := got.UI.flags(); hl != tc.hlOff || ff != tc.wantFast || got.UI.full() != tc.wantFull {
+				t.Fatalf("PUT echoed hlOff=%v fastFirst=%v full=%v, want %v/%v/%v",
+					hl, ff, got.UI.full(), tc.hlOff, tc.wantFast, tc.wantFull)
 			}
 			var back prefsResp
 			getJSON(t, s, "/api/prefs", &back)
-			if hl, ff := back.UI.flags(); hl != tc.hlOff || ff != tc.wantFast || back.UI.sorted() != tc.wantSort {
-				t.Fatalf("GET returned hlOff=%v fastFirst=%v sortMine=%v, want %v/%v/%v",
-					hl, ff, back.UI.sorted(), tc.hlOff, tc.wantFast, tc.wantSort)
+			if hl, ff := back.UI.flags(); hl != tc.hlOff || ff != tc.wantFast || back.UI.full() != tc.wantFull {
+				t.Fatalf("GET returned hlOff=%v fastFirst=%v full=%v, want %v/%v/%v",
+					hl, ff, back.UI.full(), tc.hlOff, tc.wantFast, tc.wantFull)
 			}
 			// and it is on disk, not merely in memory
 			ui := LoadPrefs(state).UI()
-			if hl, ff := ui.flags(); hl != tc.hlOff || ff != tc.wantFast || ui.sorted() != tc.wantSort {
-				t.Fatalf("reloaded hlOff=%v fastFirst=%v sortMine=%v, want %v/%v/%v",
-					hl, ff, ui.sorted(), tc.hlOff, tc.wantFast, tc.wantSort)
+			if hl, ff := ui.flags(); hl != tc.hlOff || ff != tc.wantFast || ui.full() != tc.wantFull {
+				t.Fatalf("reloaded hlOff=%v fastFirst=%v full=%v, want %v/%v/%v",
+					hl, ff, ui.full(), tc.hlOff, tc.wantFast, tc.wantFull)
 			}
 		})
 	}
@@ -542,13 +638,6 @@ func (u *UIPrefs) flags() (hlOff, fastFirst bool) {
 		return false, false
 	}
 	return u.HLOff, u.FastFirst
-}
-
-func (u *UIPrefs) sorted() bool {
-	if u == nil {
-		return false
-	}
-	return u.SortMine
 }
 
 // The file-name rung of heal's identity ladder, from both sides. It is the

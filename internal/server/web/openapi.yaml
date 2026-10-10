@@ -1266,8 +1266,9 @@ paths:
       x-internal: true
       summary: Replace the order and the enabled set, change UI settings
       description: >
-        Array order is the user's order. Entries record the path as well as the
-        id, because ids are derived from the path: moving a dictionary folder
+        Array order is the order of the pinned entries (`pin`); the others are
+        listed A-Z. Entries record the path as well as the id, because ids are
+        derived from the path: moving a dictionary folder
         changes every id at once, and the path is what re-attaches the state
         instead of resetting it. Body is capped at 1 MiB.
       requestBody:
@@ -1281,7 +1282,7 @@ paths:
                   type: array
                   items: { $ref: '#/components/schemas/DictPref' }
                   description: >
-                    The whole list, in the user's order. Omit it (or send null)
+                    The whole list, pinned entries in the user's order. Omit it (or send null)
                     to keep the stored list untouched, as when only a UI
                     setting changed.
                 ui:
@@ -1296,12 +1297,12 @@ paths:
         - lang: Shell
           label: curl
           source: |
-            # Replaces the whole list: array order IS the user's order, and any
-            # dictionary you leave out loses its place. Read /api/prefs first and
+            # Replaces the whole list: array order IS the order of the pinned
+            # entries, and any dictionary you leave out loses its place. Read /api/prefs first and
             # send back an edited copy.
             curl -s -X PUT 'http://127.0.0.1:6888/api/prefs' \
               -H 'content-type: application/json' \
-              -d '{"dicts":[{"id":"oxford","path":"/Users/me/Dicts/oald.mdx"},
+              -d '{"dicts":[{"id":"oxford","path":"/Users/me/Dicts/oald.mdx","pin":true},
                           {"id":"webster","path":"/Users/me/Dicts/webster.slob","off":true}]}'
       responses:
         '200':
@@ -2490,6 +2491,12 @@ components:
         path: { type: string, description: Recorded so the state survives a moved folder. }
         name: { type: string }
         off: { type: boolean, description: Excluded from "All dictionaries". }
+        pin:
+          type: boolean
+          description: >
+            Pinned: listed and searched before the others, in the order of the
+            pinned entries. Every entry without it is listed A-Z, whatever its
+            place in the array.
 
     UIPrefs:
       type: object
@@ -2682,9 +2689,18 @@ components:
         exists:
           type: boolean
           description: False when no state file has been written yet.
+        version:
+          type: integer
+          description: >
+            The state file's format. Below 2, `dicts` is an order of the whole
+            library saved before `pin` existed; wudict's own page converts it
+            to pins and saves it back, which moves the file to 2. In the GET
+            answer only.
         dicts:
           type: array
-          description: Array order is the user's order.
+          description: >
+            Array order is the order of the pinned entries; the others are
+            listed A-Z.
           items: { $ref: '#/components/schemas/DictPref' }
         ui:
           allOf: [{ $ref: '#/components/schemas/UIPrefs' }]

@@ -53,6 +53,7 @@ header{position:sticky;top:0;z-index:5;background:var(--bar);
 .back{display:inline-flex;color:var(--soft);padding:.25rem;border-radius:7px;text-decoration:none}
 .back:hover{color:var(--accent);background:var(--line-soft)}
 .back svg{width:18px;height:18px}
+#top.bare .title,#top.bare #jump,#top.bare .nav,#top.bare .strip{display:none}
 /* The title block takes the row on a wide screen and yields it on a narrow
    one: flex-wrap does the whole responsive job, with no media query to keep
    in step with the column count below. */
@@ -172,8 +173,11 @@ try{const t=localStorage.getItem("wudict_theme");
 
 let dictId="",state=null,last={p:1},poll=0,stripFor="",demanded=false;
 
+/* A card keeps the header's way back to search, in the place it has on a
+   page of words; only what belongs to a page of words is hidden. */
 function card(html){$("msg").innerHTML=html;$("msg").hidden=false;
-  $("top").hidden=true;$("foot").hidden=true;$("list").innerHTML=""}
+  $("top").hidden=false;$("top").classList.add("bare");
+  $("foot").hidden=true;$("list").innerHTML=""}
 
 /* One request per page turn, and the answer carries everything the chrome
    needs (name, total, strip) so there is never a second round trip to
@@ -208,7 +212,7 @@ async function show(opts,record){
 function render(){
   const d=state;
   document.title=d.name+" · Browse";
-  $("top").hidden=false;$("foot").hidden=false;
+  $("top").hidden=false;$("top").classList.remove("bare");$("foot").hidden=false;
   $("name").textContent=d.name;
   const a=unesc(d.words[0]||""),z=unesc(d.words[d.words.length-1]||"");
   $("sub").textContent=d.total?a+" — "+z+"  ·  "+num(d.total)+" words":"no headwords";

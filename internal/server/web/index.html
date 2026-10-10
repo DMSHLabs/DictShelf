@@ -524,14 +524,39 @@ html:has(#panel.show) .bar{padding-right:var(--wd-sbw,0px)}
    the field stays where it was typed into while the list under it shrinks.
    Same field as the search box: the global input[type=search] rule, its ⌕ in
    the left padding, and the native ✕ at the trailing edge. */
-.pfind{position:relative;display:flex;margin:0 0 var(--sp-2)}
+.pfrow{display:flex;gap:var(--sp-1);margin:0 0 var(--sp-2)}
+.pfind{position:relative;display:flex;flex:1;min-width:0}
 .pfind svg{position:absolute;left:.62em;top:50%;margin-top:-7px;width:14px;height:14px;
   color:var(--fg-faint);pointer-events:none}
+/* The head row's own button shape (.fs), at the field's full height. */
+#azBtn{flex:none;font:inherit;font-size:12px;padding:0 .7em;cursor:pointer;
+  color:var(--fg-soft);background:var(--bg-card);border:1px solid var(--line);border-radius:8px;
+  transition:color var(--t-1),border-color var(--t-1)}
+#azBtn:hover,#azBtn[aria-expanded=true]{color:var(--fg);border-color:var(--accent)}
+#azBtn:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
+/* Unpinning everything loses an order the user made, and asks first - in
+   place, under the button, the way Remove… asks on its card. Amber and not
+   the removal's hazard stripes: the order can be made again, the files that
+   Remove… deletes cannot, and a warning that looks like that one for less
+   would teach readers to stop reading it. */
+.azq{font-size:12px;color:var(--fg-soft);line-height:1.6;margin:0 0 var(--sp-2);
+  border:1px solid var(--accent);border-radius:8px;padding:.5em .6em;background:var(--accent-soft)}
+.azq b{color:var(--fg)}
+.azgo{display:inline-block;font:inherit;font-size:10.5px;font-weight:600;cursor:pointer;
+  border:1px solid var(--accent);border-radius:99px;padding:.1em .6em;margin:.35em .3em .1em 0;
+  color:#1f1a12;background:var(--accent)}
+.azgo:hover{filter:brightness(1.08)}
 /* ▲ ▼ and the drag handle place a card against neighbours in the WHOLE list,
-   which a filtered list does not show, so they leave. ⏫ ⏬ keep meaning the
-   same thing. */
+   which a filtered list does not show, so they leave. ⏫ and the pin keep
+   meaning the same thing. */
 #panelList.filtered .ord [data-mv=up],#panelList.filtered .ord [data-mv=down],
 #panelList.filtered .grip{display:none}
+/* Between the pinned dictionaries and the rest, which are always A–Z (D166).
+   Shown only when both sides of it are. */
+#panelList .pdiv{display:flex;align-items:center;gap:var(--sp-2);margin:var(--sp-2) 0;
+  color:var(--fg-faint);font-size:11px;letter-spacing:.05em}
+#panelList .pdiv::before,#panelList .pdiv::after{content:"";flex:1;border-top:1px solid var(--line)}
+#panelList .pdiv[hidden]{display:none}
 #panelList .nofind{margin:var(--sp-2);color:var(--fg-faint);font-size:12px}
 /* The master switch sits in the same right-hand column as the per-card ones,
    so the column reads as one control surface instead of a stray toggle
@@ -568,6 +593,19 @@ html:has(#panel.show) .bar{padding-right:var(--wd-sbw,0px)}
 .pd .ord button{background:none;border:0;color:var(--fg-faint);cursor:pointer;
   font-size:12px;line-height:1;padding:.15em .2em;border-radius:4px}
 .pd .ord button:hover{color:var(--fg);background:var(--line-soft)}
+.pd .ord button:disabled{opacity:.3;cursor:default;background:none}
+.pd .ord .pin svg{width:14px;height:14px;display:block}
+.pd .ord .pin path{fill:none;stroke:currentColor;stroke-width:1.4;stroke-linejoin:round;stroke-linecap:round}
+.pd .ord .pin[aria-pressed=true]{color:var(--accent)}
+.pd .ord .pin[aria-pressed=true] .head{fill:currentColor}
+/* HTML drag and drop does not start from a touch, so on a touch screen the
+   handle would be a promise nothing keeps; ▲ ▼ order the pinned there. The
+   move buttons grow to a thumb's size without growing the row: the padding
+   is the target, the negative margin gives the height back. */
+@media (pointer:coarse){
+  .pd .grip{display:none}
+  .pd .ord button{min-width:34px;padding:11px 6px;margin:-11px 0}
+}
 .en{appearance:none;width:32px;height:18px;border-radius:9px;background:var(--line);
   position:relative;cursor:pointer;flex:none;transition:background .15s}
 .en:checked{background:var(--accent)}
@@ -649,11 +687,11 @@ html:has(#panel.show) .bar{padding-right:var(--wd-sbw,0px)}
    outlined where the irreversible one is filled and pulsing: equal standing,
    not equal pull. Green also carries the meaning by itself, which matters on a
    phone where the labels are small and the thumb is fast. */
-.pd .rmno{display:inline-block;border:1px solid var(--safe-line);border-radius:99px;
-  padding:.1em .6em;margin:.35em .3em .1em .15em;font-size:10.5px;font-weight:600;
+.rmno{display:inline-block;border:1px solid var(--safe-line);border-radius:99px;
+  padding:.1em .6em;margin:.35em .3em .1em .15em;font-family:inherit;font-size:10.5px;font-weight:600;
   color:var(--safe);background:var(--safe-soft);cursor:pointer;user-select:none;
   transition:background var(--t-1),color var(--t-1)}
-.pd .rmno:hover{background:var(--safe);border-color:var(--safe);color:#fff}
+.rmno:hover{background:var(--safe);border-color:var(--safe);color:#fff}
 /* A provenance row is a PATH plus optional annotations, held as separate
    elements rather than composed into one sentence — the path carries what it
    copies in data-full, so nothing downstream has to take a display string
@@ -1111,9 +1149,15 @@ html:has(#panel.show) .bar{padding-right:var(--wd-sbw,0px)}
      wordmark has two mount points selected by media query. -->
 <button type="button" class="btn themeBtn" id="panelTheme" title="Theme" aria-label="Toggle theme">◐</button>
 <button class="btn" id="closePanel" aria-label="Close">✕</button></span></h2>
-<!-- Not in a form: Enter has nothing to submit, it only puts the keyboard away. -->
-<label class="pfind"><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" d="M7.1 2.4a4.7 4.7 0 1 0 0 9.4 4.7 4.7 0 0 0 0-9.4zm3.6 8.3l3 3"/></svg>
-<input type="search" id="panelFind" placeholder="title or group" autocomplete="off" enterkeyhint="done" aria-label="Find a dictionary by title or group"></label></div>
+<!-- Not in a form: Enter has nothing to submit, it only puts the keyboard away.
+     A–Z sits beside the field and not inside it: the field's own ✕ holds its
+     trailing edge, and a control inside a search field reads as an option of
+     the search. It acts on the list the field narrows, so it shows only while
+     the field is empty and something is pinned (D166). -->
+<div class="pfrow"><label class="pfind"><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" d="M7.1 2.4a4.7 4.7 0 1 0 0 9.4 4.7 4.7 0 0 0 0-9.4zm3.6 8.3l3 3"/></svg>
+<input type="search" id="panelFind" placeholder="title or group" autocomplete="off" enterkeyhint="done" aria-label="Find a dictionary by title or group"></label>
+<button type="button" id="azBtn" aria-expanded="false" aria-controls="azAsk" title="Unpin all dictionaries and list them A–Z" hidden>A–Z</button></div>
+<div class="azq" id="azAsk" hidden></div></div>
 <div class="panel-scroll">
 <details id="folders">
   <summary title="Settings and folders" aria-label="Settings and folders">
@@ -1161,18 +1205,6 @@ html:has(#panel.show) .bar{padding-right:var(--wd-sbw,0px)}
         <option value="all">All</option>
       </select>
     </label>
-    <!-- How the dictionary PICKER lists the library. A pair for the same reason
-         as the one above: both halves are orders, and neither is an "off".
-         It moves the picker and nothing else — this list below stays in the
-         user's own order because this is where that order is made, by dragging,
-         and a list that re-sorted itself under the drag could not express one.
-         Alphabetical is first and pressed: it is what the picker has always
-         done, so nothing moves for anyone who never touches this. -->
-    <span class="seg" role="group" aria-label="How the dictionary list is ordered">
-      <span>Sort dictionaries</span>
-      <button type="button" class="act" id="sortAZ" aria-pressed="true" title="List the dictionaries A→Z in the picker, whatever order you arranged them in here">Alphabetical</button>
-      <button type="button" class="act" id="sortOwn" aria-pressed="false" title="List the dictionaries in the picker the way you arranged them below">My order</button>
-    </span>
     <!-- Which sections the picker offers above the names (D149). One switch per
          section rather than one for all: a native <select> cannot fold a
          section, so every open pays the full length, and what is worth that
@@ -1304,8 +1336,8 @@ const esc=s=>String(s??"").replace(/&/g,"&amp;").replace(/</g,"&lt;");
 const escAttr=s=>esc(s).replace(/"/g,"&quot;");
 let dicts=[],lastQuery=null,searchSeq=0,searchAC=null;
 
-/* Preference order (ids) + disabled set. New dictionaries not yet in the saved
-   order fall in alphabetically after the ordered ones.
+/* Preference order (ids) + disabled set. The order speaks only for the pinned
+   dictionaries; every other one, a new one included, takes its A–Z place.
 
    These two live on the SERVER (~/.wudict/state.json), unlike the theme, the
    wide toggle and the dropdown selection, which stay in localStorage. The line
@@ -1316,6 +1348,15 @@ let dicts=[],lastQuery=null,searchSeq=0,searchAC=null;
    dictionaries, is also the only thing that can act on the answer (it skips
    disabled ones when warming up). */
 let prefOrder=[],disabled=new Set();
+/* The pinned dictionaries (D166): they lead the list in prefOrder's order, and
+   every other one follows A–Z, so one order serves both what answers first
+   and finding a name. The panel, the picker, "All dictionaries" and the
+   groups all list orderedDicts(). Server state with the order it shapes. */
+let pinned=new Set();
+/* Set while the saved list is an order of the whole library from before pins
+   (version 1): its labels as saved, by id. convertOrder turns it into pins
+   once the complete list of dictionaries is in. */
+let convertNames=null;
 /* Set when /api/dicts has delivered its last row. The picker's groups are
    counted over the complete list or not shown at all. */
 let dictsSettled=false;
@@ -1353,15 +1394,18 @@ async function loadPrefs(){
     const st=await r.json(),rows=st.dicts||[];
     // Read before the exists branch below returns: on a first run there is no
     // ui record, but there is also nothing here that can go wrong.
-    if(st.ui){applyFS(st.ui.fontSize,false);applyHL(!st.ui.hlOff,false);applySpeak(!st.ui.speakOff,false);applyOpen(st.ui.fastFirst?"fast":st.ui.openAll?"all":String(st.ui.openN||1),false);applySortOrder(st.ui.sortMine,false);applyGroupsOff(st.ui.groupsOff,false);fullOn=!!st.ui.full;modePref=st.ui.mode||"prefix";setMode(modePref)}
+    if(st.ui){applyFS(st.ui.fontSize,false);applyHL(!st.ui.hlOff,false);applySpeak(!st.ui.speakOff,false);applyOpen(st.ui.fastFirst?"fast":st.ui.openAll?"all":String(st.ui.openN||1),false);applyGroupsOff(st.ui.groupsOff,false);fullOn=!!st.ui.full;modePref=st.ui.mode||"prefix";setMode(modePref)}
     uiBase=uiNow();
-    dictsBase=rows.map(d=>({id:d.id,name:d.name||"",off:!!d.off}));
+    dictsBase=rows.map(prefRow);
     // Last, so that a page whose baselines are not both in hand never saves:
     // savePrefs diffs against them.
     prefsReady=true;
-    if(!st.exists){adoptLocalPrefs();return} // first run: keep whatever we had
+    // first run: keep whatever we had; an order from localStorage has no pins
+    if(!st.exists){if(adoptLocalPrefs())convertNames=new Map();return}
     prefOrder=rows.map(d=>d.id);
     disabled=new Set(rows.filter(d=>d.off).map(d=>d.id));
+    pinned=new Set(rows.filter(d=>d.pin).map(d=>d.id));
+    if((st.version||0)<2)convertNames=new Map(rows.map(d=>[d.id,d.name||""]));
   }catch(e){
     // A page that cannot read its settings must still search: fall back to
     // "everything enabled, alphabetical" rather than refusing to start.
@@ -1383,7 +1427,14 @@ let uiBase=null;
    drive) and this page cannot speak for them. */
 let dictsBase=null;
 function uiNow(){
-  return{fontSize:articleFS,hlOff:!hlOn,speakOff:!speakOn,fastFirst:!orderFirst,openN:openN>1?openN:0,openAll,sortMine:sortOwn,groupsOff:[...groupsOff].sort(),full:fullOn,mode:modePref==="prefix"?"":modePref};
+  return{fontSize:articleFS,hlOff:!hlOn,speakOff:!speakOn,fastFirst:!orderFirst,openN:openN>1?openN:0,openAll,groupsOff:[...groupsOff].sort(),full:fullOn,mode:modePref==="prefix"?"":modePref};
+}
+/* One dictionary's record as it is sent and compared: pin only when set, as
+   the server stores it. */
+function prefRow(d){
+  const r={id:d.id,name:d.name||"",off:!!d.off};
+  if(d.pin)r.pin=true;
+  return r;
 }
 /* Debounced, and silent when nothing actually changed — dragging a card emits
    a move per hovered row, and startup normalisation usually yields the list
@@ -1398,7 +1449,7 @@ function savePrefs(now){
   if(!now){prefsTimer=setTimeout(()=>savePrefs(true),400);return}
   const ui=uiNow(),patch={};
   for(const k in ui)if(JSON.stringify(ui[k])!==JSON.stringify(uiBase[k]))patch[k]=ui[k];
-  const rows=orderedDicts().map(d=>({id:d.id,name:dictLabel(d),off:disabled.has(d.id)})),
+  const rows=orderedDicts().map(d=>prefRow({id:d.id,name:dictLabel(d),off:disabled.has(d.id),pin:pinned.has(d.id)})),
     seen=new Set(rows.map(d=>d.id)),req={};
   if(JSON.stringify(rows)!==JSON.stringify(dictsBase.filter(d=>seen.has(d.id))))req.dicts=rows;
   if(Object.keys(patch).length)req.ui=patch;
@@ -1422,13 +1473,36 @@ async function apiError(r){
 }
 /* a byte count in decimal units - the rule of logx.Size and the other pages */
 const mb=n=>n<1e3?n+" B":n<1e6?Math.round(n/1e3)+" kB":n<1e7?(n/1e6).toFixed(1)+" MB":n<1e9?Math.round(n/1e6)+" MB":(n/1e9).toFixed(1)+" GB";
-/* dictionaries in preference order: saved ones first, then unseen ones A→Z */
+const collate=(a,b)=>a.localeCompare(b,undefined,{sensitivity:"base"});
+/* The one order (D166): the pinned dictionaries as the user placed them, then
+   every other one A→Z. */
 function orderedDicts(){
   const byId=new Map(dicts.map(d=>[d.id,d]));
   const out=[];
-  for(const id of prefOrder){if(byId.has(id)){out.push(byId.get(id));byId.delete(id)}}
-  const rest=[...byId.values()].sort((a,b)=>dictLabel(a).localeCompare(dictLabel(b),undefined,{sensitivity:"base"}));
+  for(const id of prefOrder){if(pinned.has(id)&&byId.has(id)){out.push(byId.get(id));byId.delete(id)}}
+  const rest=[...byId.values()].sort((a,b)=>collate(dictLabel(a),dictLabel(b)));
   return out.concat(rest);
+}
+/* A list saved before pins is an order of the whole library: the user's
+   arrangement on top, and under it the run of dictionaries the page appended
+   A→Z as they arrived. The longest A→Z run at its end becomes the A–Z part
+   and everything above it is pinned, which lists every dictionary exactly
+   where it was. Compared by the labels the list was saved with, because those
+   are what it was sorted by; dictionaries the list does not name (new ones,
+   or all of them on a first run) are A–Z already. Reports whether it ran, so
+   the caller saves the converted list - sent whole, which is what tells the
+   server the list is converted. */
+function convertOrder(){
+  if(!convertNames)return false;
+  const names=convertNames;convertNames=null;
+  const byId=new Map(dicts.map(d=>[d.id,d]));
+  const ids=prefOrder.filter(id=>byId.has(id));
+  const name=id=>names.get(id)||dictLabel(byId.get(id));
+  let k=ids.length-1;
+  while(k>0&&collate(name(ids[k-1]),name(ids[k]))<=0)k--;
+  pinned=new Set(ids.slice(0,Math.max(k,0)));
+  dictsBase=[];
+  return true;
 }
 function orderedIds(){return orderedDicts().map(d=>d.id)}
 function enabledOrderedIds(){return orderedDicts().filter(d=>!disabled.has(d.id)).map(d=>d.id)}
@@ -1655,32 +1729,8 @@ function applyOpen(v,save){
   if(save&&moved)savePrefs();
   return moved;
 }
-/* How the PICKER lists the library: A→Z (what it has always done, and so the
-   zero value) or the reader's own arrangement. Server state like the three
-   above, because the arrangement it follows is server state.
-
-   It touches the picker alone. The panel keeps listing the user's order
-   whatever this says — the panel is where that order is made, by dragging, and
-   a list that re-sorted itself under the drag could not express one. "All
-   dictionaries" is searched in the user's order either way (D142): which
-   dictionary answers first is a property of the collection, not of how a menu
-   is sorted. So nothing here re-runs a query; only the menu is rebuilt. */
-let sortOwn=false;
-function applySortOrder(on,save){
-  const v=!!on,moved=v!==sortOwn;
-  sortOwn=v;
-  for(const [id,want] of [["sortAZ",false],["sortOwn",true]])
-    $(id).setAttribute("aria-pressed",v===want?"true":"false");
-  // Nothing to rebuild before the first row arrives; loadDicts draws it.
-  if(moved&&dicts.length)refreshDictUI(true);
-  if(save&&moved)savePrefs();
-  return moved;
-}
-for(const [id,want] of [["sortAZ",false],["sortOwn",true]])
-  $(id).addEventListener("click",()=>applySortOrder(want,true));
-applySortOrder(false,false);
 /* Which picker sections are hidden, by facet id (D149). Server state like the
-   sort order, because it describes how this person reads the library, not the
+   pins, because it describes how this person reads the library, not the
    device. Hiding never drops the group in force: that one option stays in the
    picker until the reader chooses something else, so switching a section off
    cannot silently turn their search into a different one. */
@@ -2034,6 +2084,19 @@ function refreshDictUI(now){
   const prev=sel.value&&sel.value!=="all"?sel.value:(saved||sel.value||"all");
   const pend=sel.selectedOptions[0]?.dataset.pending?sel.selectedOptions[0]:null; // selectDict
   sel.innerHTML='<option value="all">All dictionaries</option>';
+  /* The menu lists the panel's order (D166): the pinned first, nearest the
+     top of the menu where a reach is shortest, then the groups, then every
+     other dictionary A–Z. */
+  const ord=orderedDicts(),np=ord.findIndex(d=>!pinned.has(d.id)),
+    pins=np<0?ord:ord.slice(0,np),rest=np<0?[]:ord.slice(np);
+  const addDicts=(host,list)=>{
+    for(const d of list){
+      const o=document.createElement("option");
+      o.value=d.id;o.textContent=dictLabel(d);
+      host.appendChild(o);
+    }
+  };
+  if(pins.length)addDicts(sel.appendChild(Object.assign(document.createElement("optgroup"),{label:"Pinned"})),pins);
   /* <optgroup> and nothing more: the heading is the facet and is NOT
      selectable, which is exactly the required behaviour for a section label,
      and every row under it is an ordinary <option> the native picker already
@@ -2059,19 +2122,12 @@ function refreshDictUI(now){
     }
     sel.appendChild(og);
   }
-  // The whole library last, and under a heading only when there is something
-  // above it to be distinguished from: the groups are scrolled PAST once, the
-  // names are scrolled THROUGH looking for one.
-  const host=groups.length
+  // The rest of the library last, and under a heading only when there is
+  // something above it to be distinguished from: the groups are scrolled PAST
+  // once, the names are scrolled THROUGH looking for one.
+  if(rest.length)addDicts(groups.length||pins.length
     ?sel.appendChild(Object.assign(document.createElement("optgroup"),{label:"Dictionaries"}))
-    :sel;
-  // A→Z by default, for quick name lookup; the reader's own arrangement when
-  // they asked for it (and the panel below always shows that arrangement).
-  for(const d of (sortOwn?orderedDicts():dicts)){
-    const o=document.createElement("option");
-    o.value=d.id;o.textContent=dictLabel(d);
-    host.appendChild(o);
-  }
+    :sel,rest);
   if([...sel.options].some(o=>o.value===prev))sel.value=prev;
   // a link's dictionary whose row is still on its way keeps its placeholder;
   // once the list is complete, a row that never came is not there to choose
@@ -2187,8 +2243,10 @@ async function loadDicts(rescan,opts={}){
   dicts=rows;dictTotal=rows.length;
   writeDictCache(tag,rows,gp);
   // normalize the saved preference order to the current dictionary set
-  // (appends newly-added dicts A→Z, drops removed ones). ONLY on the complete
-  // set — doing it mid-stream would drop the ids that had not arrived yet.
+  // (newly-added dicts take their A→Z place, removed ones drop). ONLY on the
+  // complete set — doing it mid-stream would drop the ids that had not
+  // arrived yet, and convert an order it cannot see whole.
+  convertOrder();
   prefOrder=orderedIds();savePrefs(true);
   dictsSettled=true; // every row is in; the groups can be counted
   refreshDictUI(true);
@@ -2200,17 +2258,39 @@ async function loadDicts(rescan,opts={}){
   else if(quiet&&lastFromList&&lastQuery&&listShape()!==shape)doSearch();
   return true;
 }
-/* reorder helpers operate on the preference-ordered id list */
-function moveDict(id,where){
-  const ids=orderedIds(),i=ids.indexOf(id);
-  if(i<0)return;
-  ids.splice(i,1);
-  if(where==="up")ids.splice(Math.max(0,i-1),0,id);
-  else if(where==="down")ids.splice(Math.min(ids.length,i+1),0,id);
-  else if(where==="top")ids.unshift(id);
-  else ids.push(id); // bottom
-  prefOrder=ids;savePrefs();renderPanel();
+/* Changing the order (D166 Am. 1). The pin says WHETHER a dictionary leads
+   the list and adds it after the other pinned ones, so pinning never changes
+   which dictionary answers first; ⏫ makes one first, pinning it if it is not;
+   ▲ ▼ and the drag move one among the pinned. Each result is one action, so
+   where a new pin lands is not a setting. Nothing moves an unpinned
+   dictionary: its place is its title's. Each change redraws the picker with
+   the panel, because the two list one order. */
+function orderChanged(){savePrefs();refreshDictUI(true)}
+function pinDict(id,on){
+  const ids=orderedIds().filter(x=>x!==id);
+  if(on)ids.splice(ids.filter(x=>pinned.has(x)).length,0,id);
+  on?pinned.add(id):pinned.delete(id);
+  prefOrder=ids;orderChanged();
 }
+function topDict(id){
+  pinned.add(id);
+  prefOrder=[id,...orderedIds().filter(x=>x!==id)];orderChanged();
+}
+// One step within the pinned dictionaries, never across the A–Z line.
+function moveDict(id,step){
+  const ids=orderedIds(),i=ids.indexOf(id),j=i+step;
+  if(i<0||j<0||!pinned.has(id)||!pinned.has(ids[j]))return;
+  [ids[i],ids[j]]=[ids[j],ids[i]];
+  prefOrder=ids;orderChanged();
+}
+/* Unpinning every dictionary this page can see. One on a drive that is away
+   keeps its pin: the page speaks only for the dictionaries it lists, as
+   every save does (prefs.go, merge). */
+function unpinAll(){
+  for(const d of dicts)pinned.delete(d.id);
+  prefOrder=orderedIds();orderChanged();
+}
+function pinnedShown(){return dicts.filter(d=>pinned.has(d.id))}
 function toggleDict(id){
   disabled.has(id)?disabled.delete(id):disabled.add(id);
   savePrefs();renderPanel();
@@ -2223,7 +2303,35 @@ function setAllEnabled(on){
   for(const d of scopeDicts())on?disabled.delete(d.id):disabled.add(d.id);
   savePrefs();renderPanel();
 }
+/* A–Z unpins everything, so it is offered while something is pinned, and not
+   over a filtered list, which would hide some of what it unpins. Its question
+   goes with it. */
+function syncAZ(){
+  const off=!pinnedShown().length||!!findWords().length;
+  $("azBtn").hidden=off;
+  if(off)askAZ(false);
+}
+function askAZ(open){
+  const box=$("azAsk"),btn=$("azBtn");
+  btn.setAttribute("aria-expanded",open?"true":"false");
+  if(!open){box.hidden=true;box.textContent="";return}
+  const p=pinnedShown();
+  // one pinned dictionary is named, and has no order among the pinned to lose
+  box.innerHTML=(p.length===1?`<b>Unpin ${esc(dictLabel(p[0]))}?</b> The list becomes A–Z.`
+    :`<b>Unpin all ${p.length}?</b> The list becomes A–Z. The order of the pinned dictionaries is lost.`)+
+    `<br><button type="button" class="azgo">${p.length===1?"Unpin":"Unpin all"}</button>`+
+    `<button type="button" class="rmno">↩ cancel</button>`;
+  box.hidden=false;
+  box.querySelector(".rmno").focus({preventScroll:true});
+}
+$("azBtn").addEventListener("click",()=>askAZ($("azAsk").hidden));
+$("azAsk").addEventListener("click",e=>{
+  // the button that was pressed is gone with the pins: focus goes to the field
+  if(e.target.closest(".azgo")){askAZ(false);unpinAll();if(!TAPS)$("panelFind").focus();return}
+  if(e.target.closest(".rmno")){askAZ(false);$("azBtn").focus({preventScroll:true})}
+});
 function syncPanelHeader(){
+  syncAZ();
   const scope=scopeDicts(),filtered=scope!==dicts,
     total=scope.length,on=scope.filter(d=>!disabled.has(d.id)).length;
   const box=$("enAll");
@@ -2469,9 +2577,11 @@ function renderPanel(){
      moment they were waiting to see it finish. */
   const scroller=el.closest(".panel-scroll"), top=scroller?scroller.scrollTop:0;
   el.innerHTML="";
-  const ord=orderedDicts();
-  for(const d of ord){
-    const off=disabled.has(d.id);
+  const ord=orderedDicts(),np=ord.filter(d=>pinned.has(d.id)).length;
+  for(const [i,d] of ord.entries()){
+    const off=disabled.has(d.id),pin=i<np;
+    // the A–Z line, between the pinned and the rest when there are both
+    if(i===np&&np>0)el.appendChild(Object.assign(document.createElement("div"),{className:"pdiv",textContent:"A–Z"}));
     const div=document.createElement("div");div.className="pd"+(off?" off":"");div.dataset.id=d.id;
     div.dataset.find=findKey(d);
     /* Only what varies AND can be changed. exact and prefix are true for every
@@ -2544,14 +2654,19 @@ function renderPanel(){
        This is the card for one dictionary, so unlike the row above it carries
        the id. */
     else acts=`<a class="browse" href="/browse?dict=${encodeURIComponent(d.id)}" title="Read this dictionary A–Z, page by page"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M2.4 3.4a1.2 1.2 0 0 1 1.2-1.2h6.2a1.2 1.2 0 0 1 1.2 1.2v9.2a1.2 1.2 0 0 1-1.2 1.2H3.6a1.2 1.2 0 0 1-1.2-1.2z"/><path d="M11 5h2.6"/><path d="M11 8h2.6"/><path d="M11 11h2.6"/></svg>Browse</a>`;
+    /* ⏫ and the pin are on every card: ⏫ means first in the list wherever
+       it is pressed, and the pin is the one way in or out of the pinned list.
+       ▲ ▼ and the handle exist only where there is a place to choose, among
+       the pinned. An outline pin, filled once pinned: a pin predicts the move
+       up that a star or a heart would not. */
     div.innerHTML=`<div class="hd">
-        <span class="grip" draggable="true" title="Drag to reorder">⠿</span>
+        ${pin?`<span class="grip" draggable="true" title="Drag to reorder">⠿</span>`:""}
         <b tabindex="0" role="button" title="Search only this dictionary">${esc(dictLabel(d))}</b>
         <span class="ord">
-          <button data-mv="top" title="Move to top">⏫</button>
-          <button data-mv="up" title="Move up">▲</button>
-          <button data-mv="down" title="Move down">▼</button>
-          <button data-mv="bottom" title="Move to bottom">⏬</button>
+          <button type="button" data-mv="top" title="${pin?"Move to the top":"Pin and move to the top"}" aria-label="Move to the top"${i===0?" disabled":""}>⏫</button>
+          ${pin?`<button type="button" data-mv="up" title="Move up" aria-label="Move up"${i===0?" disabled":""}>▲</button>
+          <button type="button" data-mv="down" title="Move down" aria-label="Move down"${i===np-1?" disabled":""}>▼</button>`:""}
+          <button type="button" class="pin" aria-pressed="${pin}" title="${pin?"Unpin":"Pin after the other pinned dictionaries"}" aria-label="Pin ${escAttr(dictLabel(d))}"><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path class="head" d="M6 2h4l-.6 4.2L12 8.5v1H4v-1l2.6-2.3z"/><path d="M8 9.5v4.8"/></svg></button>
         </span>
         <input type="checkbox" class="en" ${off?"":"checked"} title="${off?"Disabled — excluded from All dictionaries":"Enabled"}">
       </div>
@@ -2572,7 +2687,9 @@ function renderPanel(){
   }
 }
 
-/* drag-to-reorder via the gripper (chevrons cover keyboard/precise moves) */
+/* drag-to-reorder via the gripper (chevrons cover keyboard/precise moves).
+   The handle is on pinned cards only, and only a pinned card takes the drop:
+   the A–Z part has no place to drop into (D166). */
 let dragId=null;
 function clearDrop(){document.querySelectorAll(".pd.drop-before,.pd.drop-after").forEach(p=>p.classList.remove("drop-before","drop-after"))}
 $("panelList").addEventListener("dragstart",e=>{
@@ -2583,18 +2700,21 @@ $("panelList").addEventListener("dragend",()=>{
   document.querySelectorAll(".pd.dragging").forEach(p=>p.classList.remove("dragging"));clearDrop();dragId=null;
 });
 $("panelList").addEventListener("dragover",e=>{
-  if(!dragId)return;e.preventDefault();
-  const pd=e.target.closest(".pd");if(!pd||pd.dataset.id===dragId)return;
+  if(!dragId)return;
+  const pd=e.target.closest(".pd");
+  if(!pd||!pinned.has(pd.dataset.id)){clearDrop();return}
+  e.preventDefault();if(pd.dataset.id===dragId)return;
   const r=pd.getBoundingClientRect(),after=e.clientY>r.top+r.height/2;
   clearDrop();pd.classList.add(after?"drop-after":"drop-before");
 });
 $("panelList").addEventListener("drop",e=>{
   if(!dragId)return;e.preventDefault();
-  const pd=e.target.closest(".pd");if(!pd||pd.dataset.id===dragId){clearDrop();return}
+  const pd=e.target.closest(".pd");
+  if(!pd||pd.dataset.id===dragId||!pinned.has(pd.dataset.id)||!pinned.has(dragId)){clearDrop();return}
   const r=pd.getBoundingClientRect(),after=e.clientY>r.top+r.height/2;
   const ids=orderedIds(),from=ids.indexOf(dragId);ids.splice(from,1);
   let to=ids.indexOf(pd.dataset.id);if(after)to++;
-  ids.splice(to,0,dragId);prefOrder=ids;savePrefs();clearDrop();dragId=null;renderPanel();
+  ids.splice(to,0,dragId);prefOrder=ids;clearDrop();dragId=null;orderChanged();
 });
 /* Finding a dictionary in the panel. Every word typed must occur, case and
    accents ignored, in the title or in one of the dictionary's groups, and the
@@ -2612,11 +2732,15 @@ function scopeDicts(){
 }
 function findDicts(){
   const el=$("panelList"),words=findWords();
-  let shown=0;
-  for(const pd of el.querySelectorAll(".pd")){
-    const hit=words.every(w=>pd.dataset.find.includes(w));
-    pd.hidden=!hit;if(hit)shown++;
+  let shown=0,line=null,above=false,below=false;
+  for(const n of el.querySelectorAll(".pd,.pdiv")){
+    if(n.classList.contains("pdiv")){line=n;continue}
+    const hit=words.every(w=>n.dataset.find.includes(w));
+    n.hidden=!hit;
+    if(hit){shown++;if(line)below=true;else above=true}
   }
+  // the A–Z line parts what is shown, so it needs a card on either side
+  if(line)line.hidden=!(above&&below);
   el.classList.toggle("filtered",words.length>0);
   let none=el.querySelector(".nofind");
   if(words.length&&!shown){
@@ -2660,6 +2784,7 @@ function showPanel(){panelSnap=panelState();
 function hidePanel(){
   if(!$("panel").classList.contains("show"))return;
   $("panel").classList.remove("show");
+  askAZ(false);
   // every opening starts from the whole list
   if($("panelFind").value){$("panelFind").value="";findDicts()}
   const was=panelSnap;panelSnap=null;
@@ -2996,8 +3121,22 @@ function aboutLangs(j){
   return `<div class="aboutlangs">${parts.join(" · ")}</div>`;
 }
 $("panelList").addEventListener("click",e=>{
-  const mv=e.target.closest("[data-mv]");
-  if(mv){moveDict(mv.closest(".pd").dataset.id,mv.dataset.mv);return}
+  /* A move redraws the panel, so a keyboard user's focus is put back on the
+     same control of the same card, wherever it went (detail 0 is a click
+     made by a key). A pointer user's view stays where it was. */
+  const mv=e.target.closest("[data-mv]"),pn=e.target.closest(".pin");
+  if(mv||pn){
+    const id=(mv||pn).closest(".pd").dataset.id,key=e.detail===0;
+    if(!mv)pinDict(id,!pinned.has(id));
+    else if(mv.dataset.mv==="top")topDict(id);
+    else moveDict(id,mv.dataset.mv==="up"?-1:1);
+    if(key){
+      const card=$("panelList").querySelector(`.pd[data-id="${CSS.escape(id)}"]`);
+      const want=mv?card?.querySelector(`[data-mv="${mv.dataset.mv}"]:not(:disabled)`):null;
+      (want||card?.querySelector(".pin"))?.focus();
+    }
+    return;
+  }
   /* A trait is a scope, taken the same way the card title takes one (D109):
      through the <select> and its change event, so it is persisted, chipped,
      re-run and — because it is a group — demands no index (PERF.md M1). The
@@ -3044,7 +3183,7 @@ $("panelList").addEventListener("click",e=>{
      it. An accidental press costs one tap back: the
      selector's first option is "All dictionaries", and nothing was written.
      Title only, deliberately. A whole-card or double-click target would lie
-     over the grip, four move buttons, a checkbox, the switches and Remove... -
+     over the grip, the pin and move buttons, a checkbox, the switches and Remove... -
      misfires beside a destructive control - and it would teach nobody
      anything, since no one double-clicks white space on the chance that it
      does something. On a phone that gesture does not exist at all. */
@@ -4166,6 +4305,7 @@ function typeTarget(){
   return $("q").disabled?null:$("q");
 }
 document.addEventListener("keydown",e=>{
+  if(e.key==="Escape"&&!$("azAsk").hidden){askAZ(false);$("azBtn").focus({preventScroll:true});return}
   if(e.key==="Escape"){
     // Focus return (D102 is about labels, this is the same courtesy for the
     // caret): dismissing an overlay from the keyboard must not drop focus
@@ -5810,6 +5950,8 @@ function welcome(){
 function urlQuery(){$("q").value=new URLSearchParams(location.search).get("q")||""}
 function bootFromCache(c){
   dicts=c.rows;dictTotal=c.rows.length;dictsSettled=true;
+  // the list is whole, and a 304 below would not reach loadDicts' own call
+  if(convertOrder()){prefOrder=orderedIds();savePrefs()}
   groupsTrouble(c.gp||0);
   refreshDictUI(true);
   // ready BEFORE the search, which judges "nothing enabled" by the phase;
