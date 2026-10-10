@@ -15,6 +15,27 @@ let groupEditorMode="",groupDraftMembers=new Set(),groupDraftFilter=null,groupDr
 let groupMemberDraft=null;
 let justCreatedGroup=null;
 let groupOrderSelection=null,groupOrderLongPress=null,groupOrderSuppressClick=false;
+let groupPinEditing=null,groupPinCutoff=null;
+const groupOrderActions=document.createElement('div');groupOrderActions.id='groupOrderActions';
+for(const [id,label,text] of [['groupOrderAlpha','dictUI.sortAlphabetically',window.wudictI18n.language==='ru'?'А→Я':'A→Z'],['groupPinStart','dictUI.pinTop','📌']]){
+  const button=document.createElement('button');button.type='button';button.className='group-order-button';button.id=id;
+  if(id==='groupPinStart'){
+    const pin=document.createElementNS('http://www.w3.org/2000/svg','svg');pin.setAttribute('viewBox','0 0 16 16');pin.setAttribute('aria-hidden','true');pin.setAttribute('focusable','false');
+    pin.innerHTML='<path d="M4.2 2.2h7.6a1 1 0 0 1 1 1v.4a1 1 0 0 1-1 1h-1.4v3.9l1.8 2.3a.7.7 0 0 1-.55 1.15H8.7v3.35a.7.7 0 0 1-1.4 0V11.95H4.35a.7.7 0 0 1-.55-1.15l1.8-2.3V4.6H4.2a1 1 0 0 1-1-1v-.4a1 1 0 0 1 1-1z"/>';
+    button.append(pin);
+  }else button.textContent=text;
+  button.title=tx(label);button.setAttribute('aria-label',tx(label));groupOrderActions.append(button);
+}
+const groupPinControls=document.createElement('div');groupPinControls.id='groupPinControls';groupPinControls.hidden=true;
+const groupPinHint=document.createElement('span');groupPinHint.id='groupPinHint';groupPinControls.append(groupPinHint);
+for(const [id,key] of [['groupPinApply','dictUI.applyPinned'],['groupPinClear','dictUI.unpinAll'],['groupPinCancel','dictUI.cancelPin']]){
+  const button=document.createElement('button');button.type='button';button.className='group-order-button';button.id=id;
+  button.textContent=tx(key);button.title=tx(key);button.setAttribute('aria-label',tx(key));groupPinControls.append(button);
+}
+$('groupOrderToolbar').append(groupOrderActions,groupPinControls);
+// The membership toggle shares the ordering row so its width is part of the
+// layout instead of an overlay that can cover the pin or squeeze the hint.
+$('groupOrderToolbar').append($('groupEditToggle'));
 function availableMatchesFilter(d){
   const filters=d.filters||[];
   return groupAvailableFilter==="all"||(groupAvailableFilter==="uncategorized"?filters.length===0:filters.some(g=>JSON.stringify([g.f,g.v])===groupAvailableFilter));
@@ -315,6 +336,7 @@ function groupMemberDraftDirty(){
 function visibleGroupOrder(group){
   return group.readonly?orderedIds():orderedGroupDicts(group,orderedDicts()).map(d=>d.id);
 }
+function groupPinnedIds(group){return group.readonly?prefPinned:(group.pinned||[])}
 function movedGroupSelection(order,selection,direction){
   const picked=order.filter(id=>selection.has(id));
   if(!picked.length)return order;
@@ -327,12 +349,24 @@ function movedGroupSelection(order,selection,direction){
 }
 function updateGroupOrderToolbar(group,inside,filtering,nameMode){
   if(groupOrderSelection&&(groupOrderSelection.groupId!==group.id||filtering||nameMode))groupOrderSelection=null;
+  if(groupPinEditing&&(groupPinEditing.groupId!==group.id||filtering||nameMode))groupPinEditing=null;
   const visible=!filtering&&!nameMode&&inside.length>0;
   const selecting=visible&&!!groupOrderSelection;
   $('groupOrderToolbar').hidden=!visible;
-  $('groupOrderHint').hidden=selecting;
+  $('groupOrderHint').hidden=selecting||groupPinEditing;
+  $('groupOrderActions').hidden=selecting||!!groupPinEditing;
+  $('groupPinStart').hidden=false;
+  $('groupPinControls').hidden=!groupPinEditing;
+  $('groupMemberDraftActions').classList.toggle('pin-editing',!!groupPinEditing);
   $('groupOrderControls').hidden=!selecting;
-  $('groupMembers').classList.toggle('order-selecting',selecting);
+  $('groupMembers').classList.toggle('order-selecting',selecting||!!groupPinEditing);
+  $('groupMembers').classList.toggle('pin-selecting',!!groupPinEditing);
+  if(groupPinEditing){
+    $('groupPinHint').textContent=tx('dictUI.pinChooseBoundary');
+    $('groupPinApply').disabled=groupSaving||!groupPinCutoff;
+    $('groupPinClear').disabled=groupSaving||!groupPinnedIds(group).length;
+    $('groupPinCancel').disabled=groupSaving;
+  }
   if(selecting){
     const order=visibleGroupOrder(group),selected=groupOrderSelection.ids;
     for(const id of [...selected])if(!order.includes(id))selected.delete(id);
@@ -388,7 +422,7 @@ function renderGroupRows(){
   $('groupEditor').classList.toggle('edit-members',filtering&&!nameMode);
   $('groupMemberDraftActions').hidden=!!(locked||nameMode||selecting);
   $('groupMemberHint').hidden=!filtering||nameMode;
-  $('groupEditToggle').hidden=filtering;$('groupEditToggle').disabled=groupSaving;
+  $('groupEditToggle').hidden=locked||nameMode||filtering||selecting||!!groupPinEditing;$('groupEditToggle').disabled=groupSaving;
   $('groupMemberApply').hidden=!filtering;$('groupMemberCancel').hidden=!filtering;
   $('groupMemberApply').disabled=groupSaving||!groupMemberDraftDirty();
   $('groupMemberCancel').disabled=groupSaving;
@@ -407,6 +441,10 @@ function renderGroupRows(){
     label.dataset.dict=d.id;label.dataset.search=dictLabel(d).toLocaleLowerCase();
     const name=document.createElement("span");name.className='group-dictionary-name';name.textContent=dictLabel(d);
     if(d.unavailable)name.append(" — ",tx("dictUI.dslUnavailable"));
+    const pinned=groupPinnedIds(group).includes(d.id);
+    const previewPinned=!!groupPinEditing&&groupPinEditing.groupId===group.id&&groupPinCutoff&&visibleGroupOrder(group).indexOf(d.id)<=visibleGroupOrder(group).indexOf(groupPinCutoff);
+    if((pinned&&!groupPinEditing)||previewPinned){const marker=document.createElement('span');marker.className='group-pin-marker';marker.textContent='📌';marker.setAttribute('aria-label',tx('dictUI.pinned'));name.prepend(marker)}
+    if(groupPinEditing&&groupPinEditing.groupId===group.id){label.classList.toggle('pin-boundary',d.id===groupPinCutoff);label.append(name);rows.append(label);continue}
     if(selecting){
       const checkbox=document.createElement('input');checkbox.type='checkbox';checkbox.className='group-order-select';
       checkbox.checked=groupOrderSelection.ids.has(d.id);checkbox.disabled=groupSaving;
@@ -452,7 +490,7 @@ function renderGroupRows(){
   if(filtering)updateAvailableSearch();
   requestAnimationFrame(updateGroupSplit);
 }
-async function saveGroupOrder(ids,focusId){
+async function saveGroupOrder(ids,focusId,pinned){
   if(groupSaving)return;
   const group=userGroups.find(g=>g.id===selectedGroup);
   if(!group||(!group.readonly&&groupShowAllPreferred&&!groupMemberDraft))return;
@@ -467,8 +505,10 @@ async function saveGroupOrder(ids,focusId){
     if(group.readonly){
       prefOrder=ids;savePrefs(true);refreshDictUI(true);
     }else{
-      await groupRequest("/api/user-groups/order","PUT",{group:group.id,members:ids});
+      const body={group:group.id,members:ids};if(pinned!==undefined)body.pinned=pinned;
+      await groupRequest("/api/user-groups/order","PUT",body);
       group.members=ids;
+      if(pinned!==undefined)group.pinned=pinned;
     }
     refreshLivePicker();
     if(group.id===pickerGroup&&$("q").value.trim())doSearch();
@@ -550,7 +590,7 @@ function cancelGroupOrderLongPress(){
 $('groupRows').addEventListener('pointerdown',event=>{
   if(groupOrderSelection)groupOrderSuppressClick=false;
   const name=event.target.closest('.group-dictionary-name');
-  if(!name||event.button!==0||groupSaving||groupOrderSelection||$('groupOrderToolbar').hidden)return;
+  if(!name||event.button!==0||groupSaving||groupOrderSelection||groupPinEditing||$('groupOrderToolbar').hidden)return;
   const row=name.closest('.group-row');if(!row)return;
   cancelGroupOrderLongPress();
   const press={pointerId:event.pointerId,x:event.clientX,y:event.clientY,timer:null};
@@ -589,6 +629,49 @@ $('groupOrderExit').addEventListener('click',()=>{
   const rows=$('groupRows'),top=rows.scrollTop;
   groupOrderSelection=null;renderGroupRows();rows.scrollTop=top;
 });
+function beginGroupPinEdit(){
+  const group=userGroups.find(g=>g.id===selectedGroup);
+  if(!group||groupSaving)return;
+  const order=visibleGroupOrder(group),pinned=new Set(groupPinnedIds(group));
+  groupPinEditing={groupId:group.id};groupPinCutoff=order.filter(id=>pinned.has(id)).at(-1)||null;
+  renderGroupRows();
+}
+async function saveGroupPins(pinned){
+  const group=userGroups.find(g=>g.id===selectedGroup);
+  if(!group||groupSaving)return;
+  const order=visibleGroupOrder(group);
+  groupSaving=true;$('groupError').textContent='';
+  try{
+    if(group.readonly){prefPinned=pinned;savePrefs(true);refreshDictUI(true)}
+    else{
+      await groupRequest('/api/user-groups/order','PUT',{group:group.id,members:order,pinned});
+      group.pinned=pinned;group.members=order;
+    }
+    groupPinEditing=null;groupPinCutoff=null;renderGroupRows();
+  }catch(error){$('groupError').textContent=error.message}
+  finally{groupSaving=false;renderGroupRows()}
+}
+$('groupOrderAlpha').addEventListener('click',()=>{
+  const group=userGroups.find(g=>g.id===selectedGroup);if(!group||groupSaving)return;
+  const order=visibleGroupOrder(group),pinnedSet=new Set(groupPinnedIds(group)),dicts=new Map(orderedDicts().map(d=>[d.id,d]));
+  const fixed=order.filter(id=>pinnedSet.has(id)),rest=order.filter(id=>!pinnedSet.has(id));
+  const collator=new Intl.Collator(window.wudictI18n.language,{sensitivity:'base',numeric:true});
+  rest.sort((a,b)=>collator.compare(dictLabel(dicts.get(a)||{id:a}),dictLabel(dicts.get(b)||{id:b}))||a.localeCompare(b));
+  const next=fixed.concat(rest);if(next.some((id,i)=>id!==order[i]))saveGroupOrder(next);
+});
+$('groupPinStart').addEventListener('click',beginGroupPinEdit);
+$('groupPinApply').addEventListener('click',()=>{
+  if(!groupPinEditing||!groupPinCutoff)return;
+  const order=visibleGroupOrder(userGroups.find(g=>g.id===selectedGroup));
+  saveGroupPins(order.slice(0,order.indexOf(groupPinCutoff)+1));
+});
+$('groupPinClear').addEventListener('click',()=>saveGroupPins([]));
+$('groupPinCancel').addEventListener('click',()=>{groupPinEditing=null;groupPinCutoff=null;renderGroupRows()});
+$('groupRows').addEventListener('click',event=>{
+  if(!groupPinEditing)return;
+  const row=event.target.closest('.group-row');if(!row||!$('groupRows').contains(row))return;
+  event.preventDefault();groupPinCutoff=row.dataset.dict;renderGroupRows();
+},true);
 function matchGroupFontsToSettings(){
   const size=getComputedStyle($('editGroups')).fontSize;
   for(const id of ['groupEditor','newGroupDialog','groupFilterDialog','linkGroupDialog','deleteGroupDialog','discardGroupDraftDialog'])$(id).style.fontSize=size;
@@ -596,7 +679,7 @@ function matchGroupFontsToSettings(){
 }
 $("editGroups").addEventListener("click",async()=>{
   matchGroupFontsToSettings();
-  cancelGroupOrderLongPress();groupOrderSelection=null;groupOrderSuppressClick=false;
+  cancelGroupOrderLongPress();groupOrderSelection=null;groupOrderSuppressClick=false;groupPinEditing=null;groupPinCutoff=null;
   groupAvailableFilter="all";
   groupActivePanel=null;$('groupControls').classList.remove('active');$('groupMembers').classList.remove('active');$('groupAvailable').classList.remove('active');
   const button=$("editGroups");button.disabled=true;
@@ -610,13 +693,17 @@ $("editGroups").addEventListener("click",async()=>{
   }catch(error){$("groupError").textContent=error.message;$("groupHint").hidden=true;$("groupHint").textContent=""}
   finally{button.disabled=false}
 });
+$("dictSettingsGroupsLink").addEventListener("click",event=>{
+  event.preventDefault();selectedGroup="all";groupShowAllPreferred=false;
+  $("dictSettings").close();setTimeout(()=>$("editGroups").click(),0);
+});
 $("closeGroups").onclick=()=>{
   if(groupEditorMode){cancelGroupNameEdit();return}
   if(groupMemberDraftDirty()){confirmDiscardGroupDraft(()=>{groupMemberDraft=null;$("groupEditor").close()});return}
   groupMemberDraft=null;$("groupEditor").close();
 };
 $("groupEditor").addEventListener("close",()=>{
-  cancelGroupOrderLongPress();groupOrderSelection=null;groupOrderSuppressClick=false;
+  cancelGroupOrderLongPress();groupOrderSelection=null;groupOrderSuppressClick=false;groupPinEditing=null;groupPinCutoff=null;
   justCreatedGroup=null;
   if(groupEditorMode){groupEditorMode='';groupShowAllPreferred=groupSavedEditPreference;groupDraftMembers.clear();groupDraftFilter=null;groupDraftLinked=false;$('groupNameInline').value='';}
   $('editGroups').focus();
@@ -814,7 +901,7 @@ $('groupSelect').onchange=()=>{
 };
 function groupSelectChanged(){
   window.wudictThemedSelects?.group?.sync();
-  cancelGroupOrderLongPress();groupOrderSelection=null;groupOrderSuppressClick=false;
+  cancelGroupOrderLongPress();groupOrderSelection=null;groupOrderSuppressClick=false;groupPinEditing=null;groupPinCutoff=null;
   justCreatedGroup=null;
   groupShowAllPreferred=false;groupActivePanel=null;
   $('groupControls').classList.remove('active');$('groupMembers').classList.remove('active');$('groupAvailable').classList.remove('active');

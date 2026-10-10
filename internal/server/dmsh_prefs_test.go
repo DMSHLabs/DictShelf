@@ -17,7 +17,7 @@ func TestPrefsFailedMutationKeepsActiveRecord(t *testing.T) {
 		DSLKnown:      map[string]bool{"source": true}, DSLPending: map[string]indexOptions{"source": {Index: true}},
 		DSLRemoved: map[string]bool{"source": true},
 		UI:         &UIPrefs{GroupsOff: []string{"lang"}},
-		Groups:     []DictionaryGroup{{ID: "g", Name: "Reading", Order: []string{"d"}}},
+		Groups:     []DictionaryGroup{{ID: "g", Name: "Reading", Order: []groupOrder{{ID: "d"}}}},
 		Dicts:      []DictPref{{ID: "d", Groups: []string{"g"}}},
 	}
 	if err := p.store(original); err != nil {
@@ -47,7 +47,7 @@ func TestPrefsFailedMutationKeepsActiveRecord(t *testing.T) {
 		delete(f.DSLRemoved, "source")
 		f.UI.GroupsOff[0] = "pair"
 		f.Groups[0].Name = "Changed"
-		f.Groups[0].Order[0] = "other"
+		f.Groups[0].Order[0].ID = "other"
 		f.Dicts[0].Groups[0] = "other"
 	})
 	p.file.path = func() string { return "" }
@@ -64,7 +64,7 @@ func TestPrefsFailedHealKeepsGroupOrder(t *testing.T) {
 	s, _ := newPrefsServer(t)
 	p := s.reg.prefs
 	e := s.reg.all()[0]
-	if err := p.store(prefsFile{Dicts: []DictPref{{ID: "old", Path: e.Path, Groups: []string{"g"}}}, Groups: []DictionaryGroup{{ID: "g", Order: []string{"old"}}}}); err != nil {
+	if err := p.store(prefsFile{Dicts: []DictPref{{ID: "old", Path: e.Path, Groups: []string{"g"}}}, Groups: []DictionaryGroup{{ID: "g", Order: []groupOrder{{ID: "old"}}}}}); err != nil {
 		t.Fatal(err)
 	}
 	blocked := t.TempDir()
@@ -79,7 +79,7 @@ func TestPrefsFailedHealKeepsGroupOrder(t *testing.T) {
 	p.heal(s.reg)
 	p.file.path = func() string { return "" }
 	f, _ := p.data()
-	if f.Dicts[0].ID != "old" || f.Groups[0].Order[0] != "old" {
+	if f.Dicts[0].ID != "old" || f.Groups[0].Order[0].ID != "old" {
 		t.Fatalf("failed heal changed active state: %+v", f)
 	}
 }

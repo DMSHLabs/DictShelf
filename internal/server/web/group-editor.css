@@ -11,6 +11,9 @@ dialog.group-dialog.panel-card{position:fixed;inset:0;margin:auto;width:min(560p
    the list scrolls inside it under a fixed toolbar. On a phone that fixed
    height is what the media query below lifts: see it for why. */
 #dictSettings{height:calc(100dvh - 32px);max-height:calc(100dvh - 32px)}
+#dictSettingsOrderHint{margin:.35em 0 .8em;font-size:calc(var(--ui-hint-font-size) * 1rem);line-height:1.35;color:var(--label)}
+#dictSettingsGroupsLink{color:var(--link);text-decoration:underline;text-underline-offset:2px;cursor:pointer}
+#dictSettingsGroupsLink:hover{color:var(--link-hover)}
 #desktopSysSettings{height:min(520px,85dvh)}
 #desktopSysSettings .panel-scroll{overflow-wrap:anywhere}
 #desktopSysSettings h3{font-size:calc(var(--ui-font-section) * 1rem);color:var(--label)}
@@ -205,25 +208,38 @@ dialog#groupEditor.group-dialog.panel-card{gap:.65em;padding:0;border:0;backgrou
 #groupMembers{position:relative;flex:1 1 0;display:flex;flex-direction:column;min-height:0;overflow:hidden}
 #groupMemberDraftActions{position:absolute;z-index:2;top:.35em;right:.35em;display:flex;gap:.35em}
 #groupMemberDraftActions[hidden]{display:none}
-#groupMemberDraftActions .group-edit-toggle{display:flex;align-items:center;gap:.4em;height:calc(var(--ui-main-control-height) * 1em);min-height:calc(var(--ui-main-control-height) * 1em);padding:0 .55em;color:var(--fg);font-size:calc(var(--ui-main-control-font) * 1rem)}
-#groupMemberDraftActions .group-edit-label{font-size:inherit;transform:translateY(-1px)}
+#groupMemberDraftActions:empty{display:none}
+#groupEditToggle{display:flex;align-items:center;gap:.4em;height:calc(var(--ui-main-control-height) * 1em);min-height:calc(var(--ui-main-control-height) * 1em);padding:0 .55em;color:var(--fg);font-size:calc(var(--ui-main-control-font) * 1rem)}
+#groupEditToggle .group-edit-label{font-size:inherit;transform:translateY(-1px)}
 #groupMemberDraftActions .group-draft-icon{display:grid;place-items:center;width:2.5em;height:2.5em;padding:.25em;color:var(--accent)}
 #groupMemberDraftActions svg{width:1.35em;height:1.35em;flex:none}
 #groupMemberDraftActions .group-edit-toggle svg{width:.9em;height:.9em}
 #groupMemberDraftActions button[hidden]{display:none}
-#groupMembers:has(#groupMemberDraftActions:not([hidden])) #groupRows{padding-top:2.5em;box-sizing:border-box}
+#groupMembers:has(#groupMemberDraftActions:not([hidden])) #groupRows{padding-top:0}
 #groupMemberHint{display:flex;align-items:center;flex:none;min-height:2.7em;margin-bottom:.3em;padding-right:6em;border-bottom:1px solid var(--line)}
 #groupMemberHint[hidden]{display:none}
 #groupMemberHint span{font-size:calc(var(--ui-hint-font-size) * 1rem);line-height:1.25}
 #groupMembers:has(#groupMemberHint:not([hidden])) #groupRows{padding-top:0}
 #groupOrderToolbar{position:relative;z-index:1;display:flex;align-items:center;flex:none;min-height:2.7em;margin-bottom:.3em;border-bottom:1px solid var(--line)}
 #groupOrderToolbar[hidden],#groupOrderHint[hidden],#groupOrderControls[hidden]{display:none}
-#groupMembers:has(#groupMemberDraftActions:not([hidden])) #groupOrderToolbar{padding-right:calc(var(--ui-main-control-font) * 9em)}
-#groupOrderHint{font-size:calc(var(--ui-hint-font-size) * 1rem);line-height:1.25}
+#groupOrderActions{display:flex;align-items:center;gap:.35em;margin-left:.35em;flex:none;order:2}
+#groupOrderActions[hidden],#groupPinControls[hidden]{display:none}
+#groupPinControls{display:flex;align-items:center;justify-content:flex-end;gap:.35em;width:100%;margin-left:.35em}
+#groupPinHint{flex:1;min-width:0;font-size:calc(var(--ui-hint-font-size) * 1rem);line-height:1.2;overflow-wrap:anywhere}
+#groupPinControls button{white-space:nowrap;padding-inline:.45em}
+#groupMemberDraftActions.pin-editing{display:none}
+#groupEditToggle{order:3;flex:none;margin-left:.3em}
+#groupOrderToolbar #groupEditToggle{display:flex;padding:0 .55em;border:1px solid var(--line);border-radius:.5em;background:var(--bg)}
+#groupOrderToolbar #groupEditToggle[hidden]{display:none}
+#groupOrderToolbar #groupEditToggle svg{width:.9em;height:.9em}
+#groupOrderHint{flex:1 1 auto;min-width:0;font-size:calc(var(--ui-hint-font-size) * 1rem);line-height:1.25}
 #groupOrderControls{display:grid;grid-template-columns:minmax(1.2em,auto) repeat(4,minmax(1.7em,1fr)) minmax(2.5em,auto);align-items:center;width:100%;gap:.1em}
 #groupOrderCount{padding:.1em}
 #groupOrderToolbar button{display:grid;place-items:center;min-width:0;height:2.5em;padding:.15em;border:0;background:transparent;color:var(--fg);font:inherit;cursor:pointer}
 #groupOrderToolbar button svg{width:1.25em;height:1.25em}
+#groupOrderActions #groupPinStart{color:var(--pin)}
+#groupOrderActions #groupPinStart:hover{color:var(--pin-hover)}
+#groupOrderActions #groupPinStart svg{fill:currentColor}
 #groupOrderToolbar button:disabled{opacity:.35;cursor:default}
 #groupOrderTop,#groupOrderBottom{color:var(--accent)!important}
 #groupOrderToolbar .group-order-exit{box-sizing:border-box;width:2.5em;border:1px solid var(--line);border-radius:.5em;font-size:inherit}
@@ -231,6 +247,10 @@ dialog#groupEditor.group-dialog.panel-card{gap:.65em;padding:0;border:0;backgrou
 #groupMembers:has(#groupOrderToolbar:not([hidden])) .group-dictionary-name{user-select:none;-webkit-user-select:none;touch-action:pan-y}
 #groupMembers.order-selecting .group-row{cursor:pointer}
 #groupEditor input.group-order-select{margin:0 6px}
+.group-pin-marker{display:inline-block;margin-right:.45em;color:var(--pin);font-size:.9em}
+#groupMembers.pin-selecting .group-row{cursor:pointer}
+#groupMembers.pin-selecting .group-row:active{background:color-mix(in srgb,var(--accent) 12%,transparent)}
+#groupMembers.pin-selecting .group-row.pin-boundary{outline:2px solid var(--accent);outline-offset:-2px}
 #groupEmptyHint{position:absolute;z-index:1;top:.55em;left:.8em;right:3.2em;display:flex;align-items:flex-start;min-height:2.35em;color:var(--label);pointer-events:none}
 #groupEmptyHint[hidden]{display:none}
 #groupEmptyHint span{max-width:100%;padding-right:1.1em;font-size:calc(var(--ui-hint-font-size) * 1rem);line-height:1.25}
@@ -239,7 +259,8 @@ dialog#groupEditor.group-dialog.panel-card{gap:.65em;padding:0;border:0;backgrou
 #groupNewAction{flex:none;display:grid;place-items:center;min-width:2.7em;height:2.7em;padding:.4em}
 #groupNewAction .group-new-icon{width:1.5em;height:1.5em}
 #groupNewAction[hidden]{display:none}
-@media(max-width:380px){#groupEditToggle .group-edit-label{display:none}#groupMemberDraftActions .group-edit-toggle{width:calc(var(--ui-main-control-height) * 1em);justify-content:center;padding:0}#groupMembers:has(#groupMemberDraftActions:not([hidden])) #groupOrderToolbar{padding-right:3em}}
+@media(max-width:380px){#groupEditToggle .group-edit-label{display:none}#groupEditToggle{width:calc(var(--ui-main-control-height) * 1em);justify-content:center;padding:0}}
+@media(max-width:380px){#groupPinControls{flex-wrap:wrap}#groupPinHint{flex-basis:100%}}
 #groupRows{flex:1;overflow:auto;min-height:0;overscroll-behavior:contain}
 #groupLists.hide-members #groupMembers{display:none}
 #groupLists.members-sized #groupMembers{box-sizing:border-box;flex:0 0 var(--group-members-height)}

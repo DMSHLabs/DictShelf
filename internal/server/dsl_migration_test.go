@@ -46,7 +46,7 @@ func TestSingleDSLMigratesGroupsAndRemoval(t *testing.T) {
 			if err := p.mutate(func(f *prefsFile) {
 				f.DSLRemoved = map[string]bool{cleanAbs(source) + "\ngd": removed, cleanAbs(source) + "\noriginal": true}
 				f.Dicts = []DictPref{{ID: pathID(source), Path: source, Groups: []string{"a"}, Off: true}, {ID: pathID(descriptor), Path: descriptor, Groups: []string{"b"}}}
-				f.Groups = []DictionaryGroup{{ID: "a", Order: []string{pathID(descriptor), pathID(source)}}}
+				f.Groups = []DictionaryGroup{{ID: "a", Order: []groupOrder{{ID: pathID(descriptor)}, {ID: pathID(source)}}}}
 			}); err != nil {
 				t.Fatal(err)
 			}
@@ -78,7 +78,7 @@ func TestSingleDSLMigratesGroupsAndRemoval(t *testing.T) {
 			if len(f.Dicts) != 1 || !reflect.DeepEqual(f.Dicts[0].Groups, []string{"a", "b"}) || f.Dicts[0].Off {
 				t.Fatal("lost preferences", f.Dicts)
 			}
-			if !reflect.DeepEqual(f.Groups[0].Order, []string{pathID(source)}) {
+			if !reflect.DeepEqual(f.Groups[0].Order, []groupOrder{{ID: pathID(source)}}) {
 				t.Fatal("lost group order", f.Groups)
 			}
 			if !removed {

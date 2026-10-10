@@ -876,6 +876,7 @@ window.wudictFontScale=(function(){
       <div id="bulkIndexConfirm" role="status" aria-live="polite"></div>
       <button type="button" class="btn" id="bulkIndexStop" hidden>{{T:dictUI.bulkStop}}</button>
     </div>
+    <p id="dictSettingsOrderHint"><span>{{T:dictUI.orderHint}}</span> <a href="#" id="dictSettingsGroupsLink">{{T:panel.groups}}</a></p>
     <div id="panelList"></div>
   </div>
   <div id="dictSettingsSearch" class="list-search-dock" role="search" aria-label="{{T:dictUI.listSearchLabel}}"></div>
@@ -1199,7 +1200,7 @@ const PRESET_ROWS=[
    and the file converges on "nothing off". The field itself stays in the
    schema: it is the server's (`prefs.Off` skips a dictionary when warming up),
    shared with the upstream project, and nothing here needs it deleted. */
-let prefOrder=[];
+let prefOrder=[],prefPinned=[];
 /* Set when /api/dicts has delivered its last row. The picker's groups are
    counted over the complete list or not shown at all. */
 let dictsSettled=false;
@@ -1230,7 +1231,7 @@ async function loadPrefs(){
        (below, always false), because it is upstream's. */
     if(st.ui){applyFS(st.ui.fontSize,false);applyFW(st.ui.fontWeight,false);applyHL(!st.ui.hlOff,false);applySpeak(!st.ui.speakOff,false);applyHideUnmarkedExamples(!!st.ui.hideUnmarkedExamples,false);openN=st.ui.openN||1;openAll=!!st.ui.openAll}
     if(!st.exists){adoptLocalPrefs();return} // first run: keep whatever we had
-    prefOrder=rows.map(d=>d.id);
+    prefOrder=rows.map(d=>d.id);prefPinned=rows.filter(d=>d.pinned).map(d=>d.id);
   }catch(e){
     // A page that cannot read its settings must still search: fall back to
     // "everything, alphabetical" rather than refusing to start.
@@ -1251,7 +1252,7 @@ function savePrefs(now){
   // No `off` in the body: the server's field falls back to false (its
   // omitempty zero value), which is what retires a flag set by the switches
   // that no longer exist.
-  const body=JSON.stringify({dicts:orderedDicts().map(d=>({id:d.id,name:dictLabel(d)})),
+  const body=JSON.stringify({dicts:orderedDicts().map(d=>({id:d.id,name:dictLabel(d),pinned:prefPinned.includes(d.id)})),
     ui:{fontSize:articleFS,fontWeight:articleFW,hlOff:!hlOn,speakOff:!speakOn,fastFirst:!orderFirst,hideUnmarkedExamples}});
   if(body===prefsSent)return;
   prefsSent=body;
@@ -2534,17 +2535,6 @@ async function loadDicts(rescan){
   if(staleSearch&&lastQuery){staleSearch=false;doSearch()}
   return true;
 }
-/* reorder helpers operate on the preference-ordered id list */
-function moveDict(id,where){
-  const ids=orderedIds(),i=ids.indexOf(id);
-  if(i<0)return;
-  ids.splice(i,1);
-  if(where==="up")ids.splice(Math.max(0,i-1),0,id);
-  else if(where==="down")ids.splice(Math.min(ids.length,i+1),0,id);
-  else if(where==="top")ids.unshift(id);
-  else ids.push(id); // bottom
-  prefOrder=ids;savePrefs();renderPanel();
-}
 /* The narrow-viewport chips. They render the two <select>s and nothing more:
    the selects stay the single source of truth, so this never has to be
    consulted before reading a value — only called after one changes.
@@ -2903,14 +2893,7 @@ function renderPanel(){
     else acts=`<a class="browse btn" href="/browse?dict=${encodeURIComponent(d.id)}" title="${escAttr(tx("dictUI.browseHint"))}"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M2.4 3.4a1.2 1.2 0 0 1 1.2-1.2h6.2a1.2 1.2 0 0 1 1.2 1.2v9.2a1.2 1.2 0 0 1-1.2 1.2H3.6a1.2 1.2 0 0 1-1.2-1.2z"/><path d="M11 5h2.6"/><path d="M11 8h2.6"/><path d="M11 11h2.6"/></svg>${esc(tx("dictUI.browse"))}</a>`;
     if(d.unavailable||d.dsl&&!d.error)acts="";
     div.innerHTML=`<div class="hd">
-        <span class="grip" draggable="true" title="${escAttr(tx("dictUI.drag"))}">⠿</span>
         <b tabindex="${d.unavailable?-1:0}" role="button" aria-disabled="${!!d.unavailable}" title="${escAttr(tx(d.unavailable?"dictUI.dslUnavailable":"dictUI.searchOnly"))}">${esc(dictLabel(d))}</b>
-        <span class="ord">
-          <button data-mv="top" title="${escAttr(tx("dictUI.top"))}">⏫</button>
-          <button data-mv="up" title="${escAttr(tx("dictUI.up"))}">▲</button>
-          <button data-mv="down" title="${escAttr(tx("dictUI.down"))}">▼</button>
-          <button data-mv="bottom" title="${escAttr(tx("dictUI.bottom"))}">⏬</button>
-        </span>
       </div>
       <div class="meta">${esc(d.format||"?")}${d.entries?" · "+esc(tx("dictUI.entries",{number:window.wudictI18n.number(d.entries)})):""}${d.dbSize?tx("dictUI.indexed"):""}</div>
       ${dslIndexControls(d)}
@@ -2931,30 +2914,6 @@ function renderPanel(){
   }
 }
 
-/* drag-to-reorder via the gripper (chevrons cover keyboard/precise moves) */
-let dragId=null;
-function clearDrop(){document.querySelectorAll(".pd.drop-before,.pd.drop-after").forEach(p=>p.classList.remove("drop-before","drop-after"))}
-$("panelList").addEventListener("dragstart",e=>{
-  const pd=e.target.closest(".pd");if(!pd||!e.target.classList.contains("grip"))return;
-  dragId=pd.dataset.id;pd.classList.add("dragging");e.dataTransfer.effectAllowed="move";
-});
-$("panelList").addEventListener("dragend",()=>{
-  document.querySelectorAll(".pd.dragging").forEach(p=>p.classList.remove("dragging"));clearDrop();dragId=null;
-});
-$("panelList").addEventListener("dragover",e=>{
-  if(!dragId)return;e.preventDefault();
-  const pd=e.target.closest(".pd");if(!pd||pd.dataset.id===dragId)return;
-  const r=pd.getBoundingClientRect(),after=e.clientY>r.top+r.height/2;
-  clearDrop();pd.classList.add(after?"drop-after":"drop-before");
-});
-$("panelList").addEventListener("drop",e=>{
-  if(!dragId)return;e.preventDefault();
-  const pd=e.target.closest(".pd");if(!pd||pd.dataset.id===dragId){clearDrop();return}
-  const r=pd.getBoundingClientRect(),after=e.clientY>r.top+r.height/2;
-  const ids=orderedIds(),from=ids.indexOf(dragId);ids.splice(from,1);
-  let to=ids.indexOf(pd.dataset.id);if(after)to++;
-  ids.splice(to,0,dragId);prefOrder=ids;savePrefs();clearDrop();dragId=null;renderPanel();
-});
 /* The panel is a full-height overlay OVER the results, and the one thing that
    changes what an "All dictionaries" search answers with — the preference order
    the cards are dragged into, in the Dictionary settings window one layer
@@ -4051,8 +4010,6 @@ function aboutLangs(j){
 $("panelList").addEventListener("click",e=>{
   const index=e.target.closest("[data-delete-index]");
   if(index){if(!index.disabled&&!index.classList.contains("busy"))askDSLIndexRemoval(index);return}
-  const mv=e.target.closest("[data-mv]");
-  if(mv){moveDict(mv.closest(".pd").dataset.id,mv.dataset.mv);return}
   /* A trait is a scope, taken the same way the card title takes one (D109):
      through the <select> and its change event, so it is persisted, chipped,
      re-run and — because it is a group — demands no index (PERF.md M1). The

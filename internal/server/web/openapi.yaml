@@ -1413,10 +1413,10 @@ paths:
     get:
       operationId: getDictionaryGroups
       summary: List user groups and the automatic All Dictionaries group
-      description: Private collection API. Members are current dictionary IDs, including globally disabled dictionaries. A linked group's membership follows its filter while its order remains editable; new matches append. If the filter disappears, the last saved membership becomes an ordinary editable group.
+      description: Private collection API. Members are current dictionary IDs, including globally disabled dictionaries. A linked group's membership follows its filter while its order remains editable; new matches append. If the filter disappears, the last saved membership becomes an ordinary editable group. In state.json, each ordered member stores its own pinned flag; the pinned ID list in this response is derived from those entries.
       responses:
         '200':
-          description: Array of groups with id, name, ordered members (dictionary IDs), and readonly.
+          description: Array of groups with id, name, ordered member IDs, a derived list of pinned member IDs, and readonly.
     post:
       operationId: createDictionaryGroup
       summary: Create a user dictionary group, optionally from a filter
@@ -1590,7 +1590,7 @@ paths:
     put:
       operationId: reorderDictionaryGroup
       summary: Save the order of currently available members of one user group
-      description: Unavailable members remain in the group and keep their relative order after the submitted members. Linked groups can also be reordered; later filter matches append. Does not change global dictionary order or membership.
+      description: Unavailable members remain in the group and keep their relative order after the submitted members. Linked groups can also be reordered; later filter matches append. Optional pinned IDs update the per-member pinned flags stored alongside each member's order. Does not change global dictionary order or membership.
       requestBody:
         required: true
         content:
@@ -1601,6 +1601,9 @@ paths:
               properties:
                 group: { type: string }
                 members:
+                  type: array
+                  items: { type: string }
+                pinned:
                   type: array
                   items: { type: string }
       responses:
@@ -3272,6 +3275,7 @@ components:
         path: { type: string, description: Recorded so the state survives a moved folder. }
         name: { type: string }
         off: { type: boolean, description: Excluded from "All dictionaries". }
+        pinned: { type: boolean, description: Kept at the top when All Dictionaries is sorted; stored with the dictionary preference. }
 
     UIPrefs:
       type: object

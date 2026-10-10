@@ -143,13 +143,43 @@ func TestGroupOrderIsIndependentAndPersistent(t *testing.T) {
 	// (fresh, so the recheck window does not serve the temp path's empty view).
 	s.reg.prefs.file.path = func() string { return state }
 	rec := s.reg.prefs.file.fresh().val
-	if !slices.Equal(rec.Groups[0].Order[:2], order) {
+	if !slices.Equal(groupOrderIDs(rec.Groups[0].Order[:2]), order) {
 		t.Fatal("failed save changed group order")
 	}
 	groupCall(t, s, "PUT", "/api/user-groups/member", map[string]any{"group": a.ID, "dict": entries[1].ID, "member": false}, 200)
 	getJSON(t, s, "/api/user-groups", &groups)
 	if !slices.Equal(groups[1].Members, []string{entries[0].ID}) || !slices.Equal(groups[2].Members, []string{entries[0].ID, entries[1].ID}) {
 		t.Fatalf("membership changed other order: %+v", groups)
+	}
+}
+
+func TestGroupOrderStoresPinWithMemberAndReadsLegacyOrder(t *testing.T) {
+	var legacy DictionaryGroup
+	if err := json.Unmarshal([]byte(`{"id":"g","order":["d1","d2"]}`), &legacy); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(groupOrderIDs(legacy.Order), []string{"d1", "d2"}) || len(groupPinnedIDs(legacy.Order)) != 0 {
+		t.Fatalf("legacy order was not read: %+v", legacy.Order)
+	}
+
+	group := DictionaryGroup{ID: "g", Order: []groupOrder{{ID: "d1", Pinned: true}, {ID: "d2"}}}
+	data, err := json.Marshal(group)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var stored map[string]json.RawMessage
+	if err := json.Unmarshal(data, &stored); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := stored["pinned"]; ok {
+		t.Fatalf("pin state was serialized separately: %s", data)
+	}
+	var order []map[string]json.RawMessage
+	if err := json.Unmarshal(stored["order"], &order); err != nil {
+		t.Fatal(err)
+	}
+	if len(order) != 2 || string(order[0]["id"]) != `"d1"` || string(order[0]["pinned"]) != "true" || string(order[1]["id"]) != `"d2"` {
+		t.Fatalf("member pin state was not stored alongside its ID: %s", data)
 	}
 }
 
@@ -209,7 +239,7 @@ func TestGroupsHealAndRetainUnavailable(t *testing.T) {
 	e := s.reg.all()[0]
 	g := createTestGroup(t, s, "Essential")
 	orderedGroup := g.DictionaryGroup
-	orderedGroup.Order = []string{"offline", "old-id"}
+	orderedGroup.Order = []groupOrder{{ID: "offline"}, {ID: "old-id"}}
 	seed := prefsFile{Version: 1, Groups: []DictionaryGroup{orderedGroup}, Dicts: []DictPref{
 		{ID: "old-id", Path: filepath.Join("/old", filepath.Base(e.Path)), Off: true, Groups: []string{g.ID}},
 		{ID: "offline", Path: "/offline/large.mdx", Groups: []string{g.ID}},
@@ -226,7 +256,7 @@ func TestGroupsHealAndRetainUnavailable(t *testing.T) {
 	}
 	p := LoadPrefs(state)
 	rec, _ := p.data()
-	if len(rec.Dicts) != 2 || rec.Dicts[0].ID != e.ID || !rec.Dicts[0].Off || !slices.Contains(rec.Dicts[0].Groups, g.ID) || !slices.Contains(rec.Dicts[1].Groups, g.ID) || !slices.Equal(rec.Groups[0].Order, []string{"offline", e.ID}) {
+	if len(rec.Dicts) != 2 || rec.Dicts[0].ID != e.ID || !rec.Dicts[0].Off || !slices.Contains(rec.Dicts[0].Groups, g.ID) || !slices.Contains(rec.Dicts[1].Groups, g.ID) || !slices.Equal(groupOrderIDs(rec.Groups[0].Order), []string{"offline", e.ID}) {
 		t.Fatalf("healing lost state: %+v", rec.Dicts)
 	}
 }

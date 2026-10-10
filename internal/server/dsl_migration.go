@@ -129,6 +129,10 @@ func (r *Registry) migrateDSLPreferences(selected map[string]string) error {
 		}
 		if at, ok := positions[pref.ID]; ok {
 			changed = true
+			if pref.Pinned != nil && *pref.Pinned {
+				pinned := true
+				merged[at].Pinned = &pinned
+			}
 			for _, group := range pref.Groups {
 				if !slices.Contains(merged[at].Groups, group) {
 					merged[at].Groups = append(merged[at].Groups, group)
@@ -141,13 +145,17 @@ func (r *Registry) migrateDSLPreferences(selected map[string]string) error {
 	}
 	f.Dicts = merged
 	for i := range f.Groups {
-		order := []string{}
-		for _, id := range f.Groups[i].Order {
-			if next, ok := remap[id]; ok {
-				id = next
+		order := []groupOrder{}
+		positions := make(map[string]int)
+		for _, item := range f.Groups[i].Order {
+			if next, ok := remap[item.ID]; ok {
+				item.ID = next
 			}
-			if !slices.Contains(order, id) {
-				order = append(order, id)
+			if at, ok := positions[item.ID]; ok {
+				order[at].Pinned = order[at].Pinned || item.Pinned
+			} else {
+				positions[item.ID] = len(order)
+				order = append(order, item)
 			}
 		}
 		if !slices.Equal(order, f.Groups[i].Order) {

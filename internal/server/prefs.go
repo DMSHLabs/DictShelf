@@ -47,8 +47,9 @@ type DictPref struct {
 	Groups []string `json:"groups,omitempty"` // user group IDs; independent of Off
 	ID     string   `json:"id"`
 	Path   string   `json:"path"`
-	Name   string   `json:"name,omitempty"` // display name, for a readable file
-	Off    bool     `json:"off,omitempty"`  // excluded from "All dictionaries"
+	Name   string   `json:"name,omitempty"`   // display name, for a readable file
+	Off    bool     `json:"off,omitempty"`    // excluded from "All dictionaries"
+	Pinned *bool    `json:"pinned,omitempty"` // fixed at the top when All Dictionaries is sorted
 }
 
 // UIPrefs is the part of the reading experience that belongs to the PERSON
@@ -477,9 +478,9 @@ func (p *Prefs) heal(r *Registry) []DictPref {
 		for i := range f.Groups {
 			g := f.Groups[i]
 			g.Order = slices.Clone(g.Order)
-			for j, id := range g.Order {
-				if replacement, ok := remap[id]; ok {
-					g.Order[j] = replacement
+			for j, item := range g.Order {
+				if replacement, ok := remap[item.ID]; ok {
+					g.Order[j].ID = replacement
 				}
 			}
 			f.Groups[i] = g
@@ -519,6 +520,9 @@ func (p *Prefs) merge(r *Registry, want []DictPref) []DictPref {
 		for _, old := range stored {
 			if old.ID == d.ID || fsx.SamePath(old.Path, d.Path) {
 				d.Groups = append([]string(nil), old.Groups...)
+				if d.Pinned == nil {
+					d.Pinned = old.Pinned
+				}
 				break
 			}
 		}

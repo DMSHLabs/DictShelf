@@ -57,9 +57,60 @@ func (s *Server) pickerGroupsProblems() int {
 type DictionaryGroup struct {
 	ID             string       `json:"id"`
 	Name           string       `json:"name"`
-	Order          []string     `json:"order,omitempty"` // member IDs; independent of the global dictionary order
+	Order          []groupOrder `json:"order,omitempty"` // member IDs and their pin state; independent of global order
 	Filter         *groupFilter `json:"filter,omitempty"`
 	SelectedFilter *groupFilter `json:"selectedFilter,omitempty"` // retained when the link is switched off
+}
+
+type groupOrder struct {
+	ID     string `json:"id"`
+	Pinned bool   `json:"pinned,omitempty"`
+}
+
+// Older state files stored order as a string array. Accept those entries and
+// write the combined ID/pin record from here on.
+func (o *groupOrder) UnmarshalJSON(data []byte) error {
+	if len(data) > 0 && data[0] == '"' {
+		return json.Unmarshal(data, &o.ID)
+	}
+	type record groupOrder
+	return json.Unmarshal(data, (*record)(o))
+}
+
+func groupOrderIDs(order []groupOrder) []string {
+	ids := make([]string, len(order))
+	for i, item := range order {
+		ids[i] = item.ID
+	}
+	return ids
+}
+
+func groupOrderEntries(ids []string, pinned map[string]bool) []groupOrder {
+	order := make([]groupOrder, len(ids))
+	for i, id := range ids {
+		order[i] = groupOrder{ID: id, Pinned: pinned[id]}
+	}
+	return order
+}
+
+func groupPinnedIDs(order []groupOrder) []string {
+	var ids []string
+	for _, item := range order {
+		if item.Pinned {
+			ids = append(ids, item.ID)
+		}
+	}
+	return ids
+}
+
+func groupPinnedSet(order []groupOrder) map[string]bool {
+	pinned := make(map[string]bool)
+	for _, item := range order {
+		if item.Pinned {
+			pinned[item.ID] = true
+		}
+	}
+	return pinned
 }
 
 type groupFilter struct {
@@ -69,8 +120,14 @@ type groupFilter struct {
 
 type groupView struct {
 	DictionaryGroup
+	Order   []string `json:"order,omitempty"`
+	Pinned  []string `json:"pinned,omitempty"` // derived API view; persistence keeps the flag beside each ordered ID
 	Members  []string `json:"members"`
 	Readonly bool     `json:"readonly"`
+}
+
+func viewGroup(group DictionaryGroup, members []string, readonly bool) groupView {
+	return groupView{DictionaryGroup: group, Order: groupOrderIDs(group.Order), Pinned: groupPinnedIDs(group.Order), Members: members, Readonly: readonly}
 }
 
 func (s *Server) handleUserGroups(w http.ResponseWriter, r *http.Request) {
@@ -81,10 +138,10 @@ func (s *Server) handleUserGroups(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	f, _ := s.reg.prefs.data()
-	all := groupView{DictionaryGroup: DictionaryGroup{ID: allDictionariesGroup, Name: "All Dictionaries"}, Members: []string{}, Readonly: true}
+	all := viewGroup(DictionaryGroup{ID: allDictionariesGroup, Name: "All Dictionaries"}, []string{}, true)
 	views := []groupView{all}
 	for _, g := range f.Groups {
-		views = append(views, groupView{DictionaryGroup: g, Members: []string{}})
+		views = append(views, viewGroup(g, []string{}, false))
 	}
 	for _, e := range entries {
 		views[0].Members = append(views[0].Members, e.ID)
@@ -197,10 +254,10 @@ func (s *Server) syncLinkedGroups(entries []*entry) error {
 			dicts = append(dicts, DictPref{ID: e.ID, Path: e.Path, Groups: []string{g.ID}})
 			changed = true
 		}
-		order := slices.DeleteFunc(slices.Clone(g.Order), func(id string) bool { return !want[id] })
+		order := slices.DeleteFunc(slices.Clone(g.Order), func(item groupOrder) bool { return !want[item.ID] })
 		for _, id := range members {
-			if !slices.Contains(order, id) {
-				order = append(order, id)
+			if !slices.ContainsFunc(order, func(item groupOrder) bool { return item.ID == id }) {
+				order = append(order, groupOrder{ID: id})
 			}
 		}
 		if !slices.Equal(order, g.Order) {
@@ -260,7 +317,7 @@ func (s *Server) handleCreateGroup(w http.ResponseWriter, r *http.Request) {
 	var members []string
 	if req.Filter != nil {
 		members = s.filterMembers(*req.Filter, s.reg.all())
-		g.Order = slices.Clone(members)
+		g.Order = groupOrderEntries(members, nil)
 		if req.Linked {
 			g.Filter = req.Filter
 		}
@@ -279,7 +336,7 @@ func (s *Server) handleCreateGroup(w http.ResponseWriter, r *http.Request) {
 			}
 			members = append(members, id)
 		}
-		g.Order = slices.Clone(members)
+		g.Order = groupOrderEntries(members, nil)
 	}
 	if err := p.mutate(func(f *prefsFile) {
 		f.Groups = append(slices.Clone(f.Groups), g)
@@ -300,7 +357,7 @@ func (s *Server) handleCreateGroup(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Could not save group: "+err.Error(), 500)
 		return
 	}
-	writeJSON(w, groupView{DictionaryGroup: g, Members: append([]string{}, members...)})
+	writeJSON(w, viewGroup(g, append([]string{}, members...), false))
 }
 
 func (s *Server) handleRenameGroup(w http.ResponseWriter, r *http.Request) {
@@ -433,8 +490,8 @@ func (s *Server) handleAddGroupMembers(w http.ResponseWriter, r *http.Request) {
 	if err := p.mutate(func(f *prefsFile) {
 		g := &f.Groups[gi]
 		for _, d := range f.Dicts {
-			if slices.Contains(d.Groups, req.Group) && !slices.Contains(g.Order, d.ID) {
-				g.Order = append(g.Order, d.ID)
+			if slices.Contains(d.Groups, req.Group) && !slices.ContainsFunc(g.Order, func(item groupOrder) bool { return item.ID == d.ID }) {
+				g.Order = append(g.Order, groupOrder{ID: d.ID})
 			}
 		}
 		for _, id := range req.Members {
@@ -448,8 +505,8 @@ func (s *Server) handleAddGroupMembers(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			f.Dicts[i].Groups = append(f.Dicts[i].Groups, req.Group)
-			if !slices.Contains(g.Order, id) {
-				g.Order = append(g.Order, id)
+			if !slices.ContainsFunc(g.Order, func(item groupOrder) bool { return item.ID == id }) {
+				g.Order = append(g.Order, groupOrder{ID: id})
 			}
 		}
 	}); err != nil {
@@ -544,16 +601,19 @@ func (s *Server) handleGroupMember(w http.ResponseWriter, r *http.Request) {
 	dicts[i].Groups = groups
 	groupList := slices.Clone(f.Groups)
 	g := groupList[gi]
-	order := slices.Clone(g.Order)
+	order := groupOrderIDs(g.Order)
+	pinned := groupPinnedSet(g.Order)
 	for _, d := range f.Dicts {
 		if slices.Contains(d.Groups, req.Group) && !slices.Contains(order, d.ID) {
 			order = append(order, d.ID)
 		}
 	}
-	g.Order = slices.DeleteFunc(order, func(id string) bool { return id == e.ID })
+	order = slices.DeleteFunc(order, func(id string) bool { return id == e.ID })
+	delete(pinned, e.ID)
 	if *req.Member {
-		g.Order = append(g.Order, e.ID)
+		order = append(order, e.ID)
 	}
+	g.Order = groupOrderEntries(order, pinned)
 	groupList[gi] = g
 	if err := p.mutate(func(f *prefsFile) {
 		f.Dicts, f.Groups = dicts, groupList
@@ -629,7 +689,8 @@ func (s *Server) handleReplaceGroupMembership(w http.ResponseWriter, r *http.Req
 	for _, id := range order {
 		seen[id] = true
 	}
-	for _, id := range f.Groups[gi].Order {
+	for _, item := range f.Groups[gi].Order {
+		id := item.ID
 		if stored[id] && !availableID(available, id) && !seen[id] {
 			order = append(order, id)
 			seen[id] = true
@@ -641,7 +702,13 @@ func (s *Server) handleReplaceGroupMembership(w http.ResponseWriter, r *http.Req
 		}
 	}
 	groupList := slices.Clone(f.Groups)
-	groupList[gi].Order = order
+	pinned := groupPinnedSet(groupList[gi].Order)
+	for id := range pinned {
+		if !desired[id] && (availableID(available, id) || !stored[id]) {
+			delete(pinned, id)
+		}
+	}
+	groupList[gi].Order = groupOrderEntries(order, pinned)
 	if err := p.mutate(func(dst *prefsFile) { dst.Dicts, dst.Groups = dicts, groupList }); err != nil {
 		http.Error(w, "Could not save group membership: "+err.Error(), 500)
 		return
@@ -657,6 +724,7 @@ func (s *Server) handleGroupOrder(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Group   string   `json:"group"`
 		Members []string `json:"members"`
+		Pinned  []string `json:"pinned"`
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&req); err != nil || req.Members == nil || req.Group == allDictionariesGroup {
 		http.Error(w, "Invalid group order", 400)
@@ -697,13 +765,15 @@ func (s *Server) handleGroupOrder(w http.ResponseWriter, r *http.Request) {
 	groupList := slices.Clone(f.Groups)
 	g := groupList[gi]
 	order := slices.Clone(req.Members)
+	pinned := groupPinnedSet(g.Order)
 	storedMembers := make(map[string]bool)
 	for _, d := range f.Dicts {
 		if slices.Contains(d.Groups, req.Group) {
 			storedMembers[d.ID] = true
 		}
 	}
-	for _, id := range g.Order {
+	for _, item := range g.Order {
+		id := item.ID
 		if storedMembers[id] && !seen[id] {
 			order = append(order, id)
 			seen[id] = true
@@ -715,7 +785,17 @@ func (s *Server) handleGroupOrder(w http.ResponseWriter, r *http.Request) {
 			seen[d.ID] = true
 		}
 	}
-	g.Order = order
+	if req.Pinned != nil {
+		pinned = make(map[string]bool, len(req.Pinned))
+		for _, id := range req.Pinned {
+			if !storedMembers[id] || pinned[id] {
+				http.Error(w, "Invalid group order", 400)
+				return
+			}
+			pinned[id] = true
+		}
+	}
+	g.Order = groupOrderEntries(order, pinned)
 	groupList[gi] = g
 	if err := p.mutate(func(f *prefsFile) {
 		f.Groups = groupList

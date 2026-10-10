@@ -1,5 +1,8 @@
 // Copyright (C) 2026 DmShAl (Shepeta Dmitry)
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-// Regenerate wudict.syso with windres -F pe-x86-64 -i packaging/windows/wudict.rc -o wudict.syso.
+// The _windows_amd64 suffix makes cmd/go link the object ONLY for that
+// GOOS/GOARCH pair; an unsuffixed .syso is linked into every target, where
+// the Android ELF linker rejects it ("unknown file type").
+// Regenerate with windres -F pe-x86-64 -i packaging/windows/wudict.rc -o wudict_windows_amd64.syso.
 101 ICON "packaging/windows/wudict.ico"
