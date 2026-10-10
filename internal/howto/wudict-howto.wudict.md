@@ -53,7 +53,7 @@ Type `wudict help` in the search box for quick access, and [browse](/browse?dict
 
 1. [Add dictionaries](<entry://wudict add dictionaries>): MDict, StarDict, Slob, DSL, Babylon, ZIM, and [more](<entry://wudict formats>).
 2. Search. Double-click a word in an article (📱 double-tap) to look it up.
-3. In <kbd>☰</kbd>, drag the <kbd>⠿</kbd> handle to set your search priority order.
+3. In <kbd>☰</kbd>, pin ![](pin.svg) the dictionaries you use most. Pinned dictionaries come first in the results and in the picker.
 4. Install morphology files for your languages: ![](lemmas.svg) [Lemmatization](/lemmas). English is built in.
 
 ### Options
@@ -62,11 +62,11 @@ At the top of the dictionary panel <kbd>☰</kbd>:
 
 - **Text size**: <kbd>−</kbd> <kbd>15px</kbd> <kbd>+</kbd>. Click the number to reset.
 - **Find a dictionary**: type part of its title or group. Only the dictionaries that match stay in the list, and the switch above the list changes only these dictionaries. When you close the panel, the field becomes empty.
+- <kbd>A–Z</kbd>, beside the field: unpin all dictionaries, so that the whole list is A–Z. It asks first. It shows while a dictionary is pinned and the field is empty.
 
 In <kbd>☰</kbd> → ![](cog.svg):
 
 - **Open** sets the number of dictionaries that open automatically. They open in the sequence of your list and only when they have a result. <kbd>1, first to show a result</kbd> opens the dictionary that shows a result first. <kbd>All</kbd> opens all dictionaries that have a result; many open dictionaries can make the page slow.
-- **Sort dictionaries** controls the order used in the dictionary combobox, <kbd>Alphabetical</kbd> or <kbd>My order</kbd>.
 - ![](rescan.svg) <kbd>Rescan folders</kbd> can be used to refresh the dictionary folders after adding or removing items.
 
 More: [search](<entry://wudict search>) · [full-text](<entry://wudict full-text>) · [panel](<entry://wudict panel>) · [index](<entry://wudict index>) · [styles](<entry://wudict styles>) · [links](<entry://wudict links>) · [📱 Android](<entry://wudict android>) · [💻 desktop](<entry://wudict desktop>) · [FAQ](<entry://wudict FAQ>)
@@ -151,7 +151,7 @@ In <kbd>☰</kbd> → ![](cog.svg):
 
 - ![](highlight.svg) <kbd>Highlight matches</kbd>: mark the words a [full-text](<entry://wudict full-text>) search found.
 - ![](speak.svg) <kbd>Read aloud</kbd>: select text in an article to speak it using the OS's Text-to-speech engine. You can pick your preferred voice via the chevron next to the speaker icon (when the OS provides multiple voices for the detected language), see more details under [wudict Text-to-speech](<entry://wudict Text-to-speech>)
-- **Open**, **Sort dictionaries**: see [wudict welcome](<entry://wudict welcome>).
+- **Open**: see [wudict welcome](<entry://wudict welcome>).
 - **Group by**: which groups the dictionary picker offers (language, language pair, content, publisher). [Edit groups](/groups) changes them or adds your own: one line per group, `MyGroup = text, other text`, and a dictionary joins it when one of the texts is anywhere in its title or file name. Between backticks, a regular expression: `` MyGroup = `^the\b` ``.
 
 ***
@@ -173,7 +173,9 @@ In <kbd>☰</kbd> → ![](cog.svg):
 
 ### Per dictionary
 
-- <kbd>⠿</kbd> drag, or <kbd>⏫</kbd> <kbd>▲</kbd> <kbd>▼</kbd> <kbd>⏬</kbd>: its place in your list.
+- ![](pin.svg) pin: add the dictionary to the pinned ones, after the others. Pinned dictionaries come first, in your order; all the others follow A–Z. The results and the picker use this order.
+- <kbd>⏫</kbd>: make the dictionary the first in the list. An unpinned dictionary is pinned.
+- <kbd>▲</kbd> <kbd>▼</kbd>, or 💻 drag <kbd>⠿</kbd>: move a pinned dictionary among the pinned ones.
 - the checkbox: include/exclude from *All dictionaries* search, even when <kbd>OFF</kbd> a dictionary is still searchable when selected explicitly in the combobox.
 - click or tap the dictionary name: search only this dictionary.
 - <kbd>contains</kbd> <kbd>full-text</kbd> <kbd>media</kbd>: optional [indexes](<entry://wudict index>), with their size.
