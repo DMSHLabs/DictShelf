@@ -7,8 +7,9 @@ name: Build+Release (cgo)
 # workflow artifacts only - it does not create a GitHub Release, so it never
 # collides with the purego release assets.
 #
-# C toolchains are preinstalled on all these GitHub-hosted images
-# (actions/runner-images): Ubuntu → gcc, macOS → Xcode/clang, Windows → gcc.
+# C toolchains are preinstalled on the Linux and macOS GitHub-hosted images
+# (actions/runner-images): Ubuntu → gcc, macOS → Xcode/clang. Windows is built
+# separately through build-windows.cmd so its artifacts include WebView2.
 
 on:
   workflow_dispatch:
@@ -36,8 +37,6 @@ jobs:
   build:
     name: ${{ matrix.goos }}-${{ matrix.goarch }}
     runs-on: ${{ matrix.runner }}
-    # windows/arm64 (experimental cgo path) may fail without sinking the run.
-    continue-on-error: ${{ matrix.experimental || false }}
     strategy:
       fail-fast: false
       matrix:
@@ -53,10 +52,6 @@ jobs:
               goarch: amd64,
               cc: "clang -arch x86_64",
             }
-          # ── Windows (amd64 native mingw gcc; arm64 via clang) ─
-          - { runner: windows-2022, goos: windows, goarch: amd64, ext: ".exe" }
-          # - { runner: windows-11-arm,   goos: windows, goarch: arm64, ext: ".exe", cc: "clang", experimental: true }
-
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -92,11 +87,6 @@ jobs:
           go build -trimpath -tags sqlite_fts5 \
             -ldflags="-s -w -X github.com/wuweidict/wudict/internal/cli.Version=${VERSION}" \
             -o "${BINARY}" .
-
-      - name: Warn on experimental build failure
-        if: failure() && matrix.experimental
-        shell: bash
-        run: echo "::warning title=Experimental target failed::${{ matrix.goos }}/${{ matrix.goarch }} (cgo) failed to build - continuing. Use the purego build-release.yml binary for this target."
 
       - name: Upload artifact
         if: success()

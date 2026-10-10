@@ -35,9 +35,8 @@ jobs:
           - { goos: linux, goarch: arm, goarm: "7" } # Pi2; Pi3+ on a 32-bit OS
           - { goos: linux, goarch: arm, goarm: "6" } # Pi1, Zero, Zero W
           - { goos: linux, goarch: arm64 } # Pi3, Pi3B+, Zero2, Pi4, Pi5
-          # ── Windows ────────────────────────────────────────────
-          - { goos: windows, goarch: amd64, ext: ".exe" }
-          - { goos: windows, goarch: arm64, ext: ".exe" }
+          # Windows artifacts are built separately with the fork's WebView2
+          # desktop shell by build-windows.cmd.
           # ── Android (requires cgo) ────────────────────────────────────────────
     #           - { goos: android, goarch: arm64 }              # arm64-v8a - all devices sold since ~2017
     #           - { goos: android, goarch: arm,    goarm: "7" } # armeabi-v7a - legacy/budget 32-bit
