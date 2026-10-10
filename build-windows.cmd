@@ -4,11 +4,12 @@ rem SPDX-License-Identifier: GPL-3.0-or-later
 setlocal EnableExtensions DisableDelayedExpansion
 
 rem ============================================================
-rem wuDict Windows desktop build: [debug|release] [purego]
+rem wuDict Windows desktop build: [debug|release] [installer] [purego]
 rem
 rem   debug    (default)  build wudict.exe in the repository root
-rem   release             the same wudict.exe plus the per-user installer,
-rem                       compiled into dist\ (needs Inno Setup 6.3+)
+rem   release             alias for installer: build wudict.exe plus the
+rem                       per-user installer in dist\ (needs Inno Setup 6.3+)
+rem   installer            build wudict.exe plus the per-user installer
 rem   purego              force the pure-Go flavour (see below)
 rem
 rem Tokens may be written in either order, the way build-android.cmd takes
@@ -71,17 +72,21 @@ rem ------------------------------------------------------------
 
 set "BUILD_TYPE="
 set "FLAVOUR="
+set "MAKE_INSTALLER="
 
 if not "%~1"=="" for %%A in (%*) do (
     if /i "%%A"=="debug" (
         set "BUILD_TYPE=debug"
-    ) else if /i "%%A"=="release" (
-        set "BUILD_TYPE=release"
     ) else if /i "%%A"=="purego" (
         set "FLAVOUR=purego"
+    ) else if /i "%%A"=="installer" (
+        set "MAKE_INSTALLER=1"
+    ) else if /i "%%A"=="release" (
+        set "BUILD_TYPE=release"
+        set "MAKE_INSTALLER=1"
     ) else (
         echo ERROR: unknown option "%%A".
-        echo Usage: build-windows.cmd [debug^|release] [purego]
+        echo Usage: build-windows.cmd [debug^|release] [installer] [purego]
         exit /b 1
     )
 )
@@ -159,13 +164,13 @@ if /i "%FLAVOUR%"=="cgo" (
 )
 
 rem ------------------------------------------------------------
-rem Installer: Inno Setup is only needed by `release`, and tools\make-installer.ps1
+rem Installer: Inno Setup is only needed when requested, and tools\make-installer.ps1
 rem is the one place that knows where it lives - `-Locate` is the installer
 rem script's own search. Asked BEFORE the Go build, so a missing compiler costs
 rem two seconds instead of the length of a full build.
 rem ------------------------------------------------------------
 
-if /i "%BUILD_TYPE%"=="release" (
+if defined MAKE_INSTALLER (
     call :find_iscc
     if errorlevel 1 exit /b 1
 )
@@ -298,10 +303,10 @@ echo OK: built as asked - -tags %GO_TAGS%, CGO_ENABLED=%CGO%, %WANT_DEP%
 echo.
 
 rem ------------------------------------------------------------
-rem Installer (release only)
+rem Installer (release or installer)
 rem ------------------------------------------------------------
 
-if /i "%BUILD_TYPE%"=="release" (
+if defined MAKE_INSTALLER (
     call :make_installer
     if errorlevel 1 exit /b 1
 )

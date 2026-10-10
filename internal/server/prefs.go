@@ -131,6 +131,11 @@ type UIPrefs struct {
 	// and an id no facet uses any more simply hides nothing.
 	GroupsOff []string `json:"groupsOff,omitempty"`
 
+	// False sorts the unpinned All Dictionaries tail alphabetically; true
+	// preserves manual order and appends new dictionaries alphabetically. Nil
+	// marks older state, whose mode the page infers from its saved order.
+	CustomOrder *bool `json:"customOrder,omitempty"`
+
 	// Full opens an article's secondary zone (DSL [*], wu-sec: examples and
 	// links to sub-entries) shown instead of hidden. Spelled positively, like
 	// SortMine: the brief view is Lingvo's own default, so the zero value

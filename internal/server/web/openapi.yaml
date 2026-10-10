@@ -1413,7 +1413,7 @@ paths:
     get:
       operationId: getDictionaryGroups
       summary: List user groups and the automatic All Dictionaries group
-      description: Private collection API. Members are current dictionary IDs, including globally disabled dictionaries. A linked group's membership follows its filter while its order remains editable; new matches append. If the filter disappears, the last saved membership becomes an ordinary editable group. In state.json, each ordered member stores its own pinned flag; the pinned ID list in this response is derived from those entries.
+      description: Private collection API. Members are current dictionary IDs, including globally disabled dictionaries. A linked group's membership follows its filter; new matches enter its alphabetical unpinned tail or append alphabetically after a manually arranged list. If the filter disappears, the last saved membership becomes an ordinary editable group. Each group's customOrder flag records the mode; false means alphabetical. In state.json, each ordered member stores its own pinned flag; the pinned ID list in this response is derived from those entries.
       responses:
         '200':
           description: Array of groups with id, name, ordered member IDs, a derived list of pinned member IDs, and readonly.
@@ -1533,7 +1533,7 @@ paths:
     put:
       operationId: replaceDictionaryGroupMembership
       summary: Apply a group's staged membership and dictionary order atomically
-      description: Dictionaries that have disappeared from the registry are retained.
+      description: Dictionaries that have disappeared from the registry are retained. customOrder selects alphabetical or manual order; manualOrder records an explicit rearrangement in this edit. Optional pinned IDs update the pinned members together with the order.
       requestBody:
         required: true
         content:
@@ -1546,6 +1546,11 @@ paths:
                 members:
                   type: array
                   items: { type: string }
+                pinned:
+                  type: array
+                  items: { type: string }
+                customOrder: { type: boolean }
+                manualOrder: { type: boolean }
       responses:
         '200':
           description: Membership and order saved.
@@ -1590,7 +1595,7 @@ paths:
     put:
       operationId: reorderDictionaryGroup
       summary: Save the order of currently available members of one user group
-      description: Unavailable members remain in the group and keep their relative order after the submitted members. Linked groups can also be reordered; later filter matches append. Optional pinned IDs update the per-member pinned flags stored alongside each member's order. Does not change global dictionary order or membership.
+      description: Unavailable members remain in the group. Linked groups can also be reordered. New members enter the alphabetical unpinned tail when customOrder is false; otherwise they append alphabetically. Optional pinned IDs update the per-member pinned flags stored alongside each member's order. Does not change global dictionary order or membership.
       requestBody:
         required: true
         content:
@@ -1606,6 +1611,7 @@ paths:
                 pinned:
                   type: array
                   items: { type: string }
+                customOrder: { type: boolean, description: False sorts the unpinned tail alphabetically; true preserves manual order. }
       responses:
         '200':
           description: Group order saved.
@@ -3338,6 +3344,9 @@ components:
             hides. Absent or empty shows every section the library supports.
             Stored de-duplicated and sorted; at most 32 ids of at most 64
             bytes each.
+        customOrder:
+          type: boolean
+          description: False sorts the unpinned All Dictionaries tail alphabetically; true preserves manual order and appends new dictionaries alphabetically.
         full:
           type: boolean
           description: >

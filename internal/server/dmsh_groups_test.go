@@ -63,6 +63,128 @@ func createTestGroup(t *testing.T, s *Server, name string) groupView {
 	return g
 }
 
+func TestGroupOrderModesKeepPinsAndPlaceNewMembers(t *testing.T) {
+	names := map[string]string{"a": "Alpha", "b": "Bravo", "c": "Charlie", "d": "Delta", "y": "Yankee", "z": "Zulu"}
+	compare := groupOrderCompare(names, "en")
+	alphabetical, manual := false, true
+	cases := []struct {
+		name  string
+		group DictionaryGroup
+		add   []string
+		want  []string
+		mode  bool
+	}{
+		{"new alphabetical group", DictionaryGroup{}, []string{"d", "a", "c"}, []string{"a", "c", "d"}, false},
+		{"alphabetical tail below pin", DictionaryGroup{Order: []groupOrder{{ID: "b", Pinned: true}, {ID: "d"}, {ID: "c"}}, CustomOrder: &alphabetical}, []string{"a"}, []string{"b", "a", "c", "d"}, false},
+		{"manual list appends new names alphabetically", DictionaryGroup{Order: []groupOrder{{ID: "b", Pinned: true}, {ID: "d"}, {ID: "c"}}, CustomOrder: &manual}, []string{"z", "a", "y"}, []string{"b", "d", "c", "a", "y", "z"}, true},
+		{"legacy manual order survives", DictionaryGroup{Order: []groupOrder{{ID: "d"}, {ID: "c"}}}, []string{"a"}, []string{"d", "c", "a"}, true},
+		{"legacy alphabetical order accepts insertion", DictionaryGroup{Order: []groupOrder{{ID: "a"}, {ID: "d"}}}, []string{"c"}, []string{"a", "c", "d"}, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			addGroupOrderMembers(&tc.group, tc.add, compare)
+			if got := groupOrderIDs(tc.group.Order); !slices.Equal(got, tc.want) || tc.group.CustomOrder == nil || *tc.group.CustomOrder != tc.mode {
+				t.Fatalf("order=%v customOrder=%v, want %v/%v", got, tc.group.CustomOrder, tc.want, tc.mode)
+			}
+		})
+	}
+}
+
+func TestGroupOrderModePersistsThroughAPI(t *testing.T) {
+	s, state := newPrefsServer(t)
+	entries := s.reg.all()
+	group := createTestGroup(t, s, "Reading")
+	for _, e := range entries[:2] {
+		groupCall(t, s, "PUT", "/api/user-groups/member", map[string]any{"group": group.ID, "dict": e.ID, "member": true}, 200)
+	}
+	var groups []groupView
+	getJSON(t, s, "/api/user-groups", &groups)
+	if groups[1].CustomOrder == nil || *groups[1].CustomOrder {
+		t.Fatal("new group did not start in alphabetical mode")
+	}
+	order := slices.Clone(groups[1].Members)
+	slices.Reverse(order)
+	groupCall(t, s, "PUT", "/api/user-groups/order", map[string]any{"group": group.ID, "members": order, "customOrder": true}, 200)
+	s.reg.prefs = LoadPrefs(state)
+	getJSON(t, s, "/api/user-groups", &groups)
+	if !slices.Equal(groups[1].Members, order) || groups[1].CustomOrder == nil || !*groups[1].CustomOrder {
+		t.Fatalf("manual order or mode was lost: %+v", groups[1])
+	}
+	groupCall(t, s, "PUT", "/api/user-groups/order", map[string]any{"group": group.ID, "members": order, "customOrder": false}, 200)
+	getJSON(t, s, "/api/user-groups", &groups)
+	f, _ := s.reg.prefs.data()
+	names := groupOrderNames(f.Dicts, entries)
+	for _, entry := range entries {
+		names[entry.ID] = s.baseDictInfo(entry).Name
+	}
+	expected := groupOrderIDs(sortedGroupOrder(groupOrderEntries(order, nil), groupOrderCompare(names, f.Language)))
+	if groups[1].CustomOrder == nil || *groups[1].CustomOrder || !slices.Equal(groups[1].Members, expected) {
+		t.Fatalf("A-Z did not restore alphabetical mode: %+v", groups[1])
+	}
+}
+
+func TestLinkedGroupRescanInsertsAlphabeticallyBelowPins(t *testing.T) {
+	dir := t.TempDir()
+	writeDSL := func(name string) {
+		t.Helper()
+		body := "#NAME \"" + name + "\"\n#INDEX_LANGUAGE \"English\"\n#CONTENTS_LANGUAGE \"Russian\"\n\nword\n\tmeaning\n"
+		if err := os.WriteFile(filepath.Join(dir, name+".dsl"), []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	writeDSL("Bravo")
+	writeDSL("Delta")
+	isolate := filepath.Join(t.TempDir(), StateFile)
+	isolatedDBDir(t)
+	reg, err := NewRegistry([]string{dir}, false, WithPrefs(LoadPrefs(isolate)), WithComparisons(false))
+	if err != nil {
+		t.Fatal(err)
+	}
+	closeBackends(t, reg)
+	s := New(reg)
+	s.UseUserGroups()
+	var group groupView
+	if err := json.Unmarshal(groupCall(t, s, "POST", "/api/user-groups", map[string]any{"name": "English", "filter": map[string]string{"facet": "lang", "value": "en"}, "linked": true}, 200), &group); err != nil {
+		t.Fatal(err)
+	}
+	nameOrder := func(ids []string) []string {
+		byID := make(map[string]string)
+		for _, e := range s.reg.all() {
+			byID[e.ID] = s.baseDictInfo(e).Name
+		}
+		out := make([]string, len(ids))
+		for i, id := range ids {
+			out[i] = byID[id]
+		}
+		return out
+	}
+	if got := nameOrder(group.Members); !slices.Equal(got, []string{"Bravo", "Delta"}) {
+		t.Fatalf("initial linked order: %v", got)
+	}
+	bravo := group.Members[0]
+	groupCall(t, s, "PUT", "/api/user-groups/order", map[string]any{"group": group.ID, "members": group.Members, "pinned": []string{bravo}, "customOrder": false}, 200)
+	writeDSL("Alpha")
+	if err := s.reg.Rescan(); err != nil {
+		t.Fatal(err)
+	}
+	var groups []groupView
+	getJSON(t, s, "/api/user-groups", &groups)
+	if got := nameOrder(groups[1].Members); !slices.Equal(got, []string{"Bravo", "Alpha", "Delta"}) || groups[1].CustomOrder == nil || *groups[1].CustomOrder {
+		t.Fatalf("new linked member was not inserted below pin: %v, mode=%v", got, groups[1].CustomOrder)
+	}
+	manual := slices.Clone(groups[1].Members)
+	manual[1], manual[2] = manual[2], manual[1]
+	groupCall(t, s, "PUT", "/api/user-groups/order", map[string]any{"group": group.ID, "members": manual, "pinned": []string{bravo}, "customOrder": true}, 200)
+	writeDSL("Charlie")
+	if err := s.reg.Rescan(); err != nil {
+		t.Fatal(err)
+	}
+	getJSON(t, s, "/api/user-groups", &groups)
+	if got := nameOrder(groups[1].Members); !slices.Equal(got, []string{"Bravo", "Delta", "Alpha", "Charlie"}) || groups[1].CustomOrder == nil || !*groups[1].CustomOrder {
+		t.Fatalf("new linked member did not append after manual order: %v, mode=%v", got, groups[1].CustomOrder)
+	}
+}
+
 func TestGroupsPersistenceAndCollection(t *testing.T) {
 	s, state := newPrefsServer(t)
 	e := s.reg.all()[0]

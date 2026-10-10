@@ -1200,7 +1200,7 @@ const PRESET_ROWS=[
    and the file converges on "nothing off". The field itself stays in the
    schema: it is the server's (`prefs.Off` skips a dictionary when warming up),
    shared with the upstream project, and nothing here needs it deleted. */
-let prefOrder=[],prefPinned=[];
+let prefOrder=[],prefPinned=[],prefCustomOrder=false,prefOrderModeKnown=false;
 /* Set when /api/dicts has delivered its last row. The picker's groups are
    counted over the complete list or not shown at all. */
 let dictsSettled=false;
@@ -1229,7 +1229,7 @@ async function loadPrefs(){
        reader in a strategy with nothing on screen to explain or change it -
        the same call the removed `sortMine` got. The field is still WRITTEN
        (below, always false), because it is upstream's. */
-    if(st.ui){applyFS(st.ui.fontSize,false);applyFW(st.ui.fontWeight,false);applyHL(!st.ui.hlOff,false);applySpeak(!st.ui.speakOff,false);applyHideUnmarkedExamples(!!st.ui.hideUnmarkedExamples,false);openN=st.ui.openN||1;openAll=!!st.ui.openAll}
+    if(st.ui){applyFS(st.ui.fontSize,false);applyFW(st.ui.fontWeight,false);applyHL(!st.ui.hlOff,false);applySpeak(!st.ui.speakOff,false);applyHideUnmarkedExamples(!!st.ui.hideUnmarkedExamples,false);openN=st.ui.openN||1;openAll=!!st.ui.openAll;prefOrderModeKnown=typeof st.ui.customOrder==="boolean";prefCustomOrder=!!st.ui.customOrder}
     if(!st.exists){adoptLocalPrefs();return} // first run: keep whatever we had
     prefOrder=rows.map(d=>d.id);prefPinned=rows.filter(d=>d.pinned).map(d=>d.id);
   }catch(e){
@@ -1253,7 +1253,7 @@ function savePrefs(now){
   // omitempty zero value), which is what retires a flag set by the switches
   // that no longer exist.
   const body=JSON.stringify({dicts:orderedDicts().map(d=>({id:d.id,name:dictLabel(d),pinned:prefPinned.includes(d.id)})),
-    ui:{fontSize:articleFS,fontWeight:articleFW,hlOff:!hlOn,speakOff:!speakOn,fastFirst:!orderFirst,hideUnmarkedExamples}});
+    ui:{fontSize:articleFS,fontWeight:articleFW,hlOff:!hlOn,speakOff:!speakOn,fastFirst:!orderFirst,hideUnmarkedExamples,customOrder:prefCustomOrder}});
   if(body===prefsSent)return;
   prefsSent=body;
   fetch("/api/prefs",{method:"PUT",headers:{"Content-Type":"application/json"},body})
@@ -1272,15 +1272,42 @@ async function apiError(r){
 }
 /* a byte count in decimal units - the rule of logx.Size and the other pages */
 const mb=n=>n<1e3?n+" B":n<1e6?Math.round(n/1e3)+" kB":n<1e7?(n/1e6).toFixed(1)+" MB":n<1e9?Math.round(n/1e6)+" MB":(n/1e9).toFixed(1)+" GB";
-/* dictionaries in preference order: saved ones first, then unseen ones A→Z */
+function sortedDictionaryIds(ids,pinned,byId){
+  const fixed=ids.filter(id=>pinned.has(id)),tail=ids.filter(id=>!pinned.has(id));
+  const collator=new Intl.Collator(window.wudictI18n.language,{sensitivity:"base",numeric:true});
+  tail.sort((a,b)=>collator.compare(dictLabel(byId.get(a)),dictLabel(byId.get(b)))||a.localeCompare(b));
+  return fixed.concat(tail);
+}
+function dictionaryOrderIsAlphabetical(ids,pinned,byId){
+  const sorted=sortedDictionaryIds(ids,pinned,byId);
+  return sorted.every((id,i)=>id===ids[i]);
+}
+function resolvePrefOrderMode(){
+  if(prefOrderModeKnown)return;
+  const byId=new Map(dicts.map(d=>[d.id,d]));
+  const saved=prefOrder.filter(id=>byId.has(id));
+  prefCustomOrder=!dictionaryOrderIsAlphabetical(saved,new Set(prefPinned),byId);
+  prefOrderModeKnown=true;
+}
+/* In alphabetical mode the whole unpinned tail is sorted; a manual list only
+   sorts newly discovered dictionaries before appending them. */
 function orderedDicts(){
   const byId=new Map(dicts.map(d=>[d.id,d]));
   const out=[];
   for(const id of prefOrder){if(byId.has(id)){out.push(byId.get(id));byId.delete(id)}}
-  const rest=[...byId.values()].sort((a,b)=>dictLabel(a).localeCompare(dictLabel(b),undefined,{sensitivity:"base"}));
-  return out.concat(rest);
+  const rest=[...byId.values()],all=out.concat(rest),lookup=new Map(all.map(d=>[d.id,d]));
+  if(prefCustomOrder){
+    const added=sortedDictionaryIds(rest.map(d=>d.id),new Set(),lookup);
+    return out.concat(added.map(id=>lookup.get(id)));
+  }
+  return sortedDictionaryIds(all.map(d=>d.id),new Set(prefPinned),lookup).map(id=>lookup.get(id));
 }
 function orderedIds(){return orderedDicts().map(d=>d.id)}
+function rememberVisibleOrder(){
+  const visible=orderedIds(),present=new Set(visible),remembered=new Set(prefOrder);
+  const known=visible.filter(id=>remembered.has(id));
+  prefOrder=prefOrder.map(id=>present.has(id)?known.shift():id).concat(visible.filter(id=>!remembered.has(id)));
+}
 function userGroupOrderedDicts(){
   if(pickerGroup==="all")return orderedDicts();
   const group=userGroups.find(g=>g.id===pickerGroup);
@@ -2522,11 +2549,13 @@ async function loadDicts(rescan){
     if(blocking&&globalStopAction===stopBoot)clearGlobalStop();
   }
   dicts=rows;dictTotal=rows.length;
+  resolvePrefOrderMode();
   await loadPickerGroups();
-  // normalize the saved preference order to the current dictionary set
-  // (appends newly-added dicts A→Z, drops removed ones). ONLY on the complete
-  // set — doing it mid-stream would drop the ids that had not arrived yet.
-  prefOrder=orderedIds();savePrefs(true);
+  const allGroup=userGroups.find(group=>group.id==="all");if(allGroup)allGroup.customOrder=prefCustomOrder;
+  // Remember new dictionaries only after the full stream. Missing IDs stay in
+  // their old slots so a temporarily unavailable pinned dictionary keeps its
+  // place if its folder returns during this session.
+  rememberVisibleOrder();savePrefs(true);
   dictsSettled=true; // every row is in; the groups can be counted
   refreshDictUI(true);
   setPhase("ready");
@@ -8048,7 +8077,7 @@ $("styler").addEventListener("keydown",e=>{
     <p id="groupError" class="group-error" role="alert"></p>
     <p id="groupHint" role="status"></p>
   </div>
-  <div id="groupLists"><div id="groupMembers" class="group-section"><div id="groupMemberDraftActions" hidden><button type="button" class="btn group-edit-toggle" id="groupEditToggle" aria-label="{{T:dictUI.editGroupMembers}}" title="{{T:dictUI.editGroupMembers}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.8 1.8 0 0 1-2.5 2.5 1.8 1.8 0 0 0-3 1.1 1.8 1.8 0 0 1-3.6 0 1.8 1.8 0 0 0-3-1.1A1.8 1.8 0 0 1 4.8 15a1.8 1.8 0 0 0-1.1-3 1.8 1.8 0 0 1 0-3.6 1.8 1.8 0 0 0 1.1-3A1.8 1.8 0 0 1 7.3 2.9a1.8 1.8 0 0 0 3-1.1 1.8 1.8 0 0 1 3.6 0 1.8 1.8 0 0 0 3 1.1 1.8 1.8 0 0 1 2.5 2.5 1.8 1.8 0 0 0 1.1 3 1.8 1.8 0 0 1 0 3.6 1.8 1.8 0 0 0-1.1 3Z"/></svg><span class="group-edit-label">{{T:dictUI.editGroupMembers}}</span></button><button type="button" class="btn group-draft-icon" id="groupMemberApply" aria-label="{{T:dictUI.applyGroupChanges}}" title="{{T:dictUI.applyGroupChanges}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg></button><button type="button" class="btn group-draft-icon" id="groupMemberCancel" aria-label="{{T:dictUI.discardGroupChanges}}" title="{{T:dictUI.discardGroupChanges}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><div id="groupMemberHint" hidden><span>{{T:dictUI.memberEditHint}}</span></div><div id="groupOrderToolbar" hidden><span id="groupOrderHint">{{T:dictUI.longPressSelect}}</span><div id="groupOrderControls" hidden><output id="groupOrderCount" aria-live="polite">0</output><button type="button" class="group-order-button" id="groupOrderTop" aria-label="{{T:dictUI.moveSelectedTop}}" title="{{T:dictUI.moveSelectedTop}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 3h16"/><path d="m12 5-7 8h14zM12 12l-7 8h14z" fill="currentColor" stroke="none"/></svg></button><button type="button" class="group-order-button" id="groupOrderUp" aria-label="{{T:dictUI.moveSelectedUp}}" title="{{T:dictUI.moveSelectedUp}}">▲</button><button type="button" class="group-order-button" id="groupOrderDown" aria-label="{{T:dictUI.moveSelectedDown}}" title="{{T:dictUI.moveSelectedDown}}">▼</button><button type="button" class="group-order-button" id="groupOrderBottom" aria-label="{{T:dictUI.moveSelectedBottom}}" title="{{T:dictUI.moveSelectedBottom}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 21h16"/><path d="m5 4 7 8 7-8zM5 11l7 8 7-8z" fill="currentColor" stroke="none"/></svg></button><button type="button" class="btn group-order-exit" id="groupOrderExit" aria-label="{{T:dictUI.exitSelection}}" title="{{T:dictUI.exitSelection}}"><svg class="icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div></div><div id="groupEmptyHint" role="status" hidden><span id="groupEmptyHintText"></span><svg viewBox="0 0 40 44" fill="none" aria-hidden="true"><path d="M2 42C11 29 17 20 34 7m-10 0 10 0-2 10"/></svg></div><div id="groupRows"></div><div id="groupMembersSearchDock" class="list-search-dock" role="search"></div></div><div id="groupAvailable" class="group-section" hidden><div id="groupAvailableFilterHost"></div><div id="groupAddToolbar"><span id="groupAddHint">{{T:dictUI.availableEditHint}}</span><button type="button" class="btn" id="groupAddAll">{{T:dictUI.addAll}}</button></div><div id="groupOtherRows"></div><div id="groupAvailableSearchDock" class="list-search-dock" role="search"></div></div></div>
+  <div id="groupLists"><div id="groupMembers" class="group-section"><div id="groupMemberDraftActions" hidden><button type="button" class="btn group-edit-toggle" id="groupEditToggle" aria-label="{{T:dictUI.editGroupMembers}}" title="{{T:dictUI.editGroupMembers}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M10 2h4l.5 2.4 1.8.8 2.1-1.3 1.7 1.7-1.3 2.1.8 1.8L22 10v4l-2.4.5-.8 1.8 1.3 2.1-1.7 1.7-2.1-1.3-1.8.8L14 22h-4l-.5-2.4-1.8-.8-2.1 1.3-1.7-1.7 1.3-2.1-.8-1.8L2 14v-4l2.4-.5.8-1.8-1.3-2.1 1.7-1.7 2.1 1.3 1.8-.8Z"/></svg><span class="group-edit-label">{{T:dictUI.editGroupMembers}}</span></button><button type="button" class="btn group-draft-icon" id="groupMemberApply" aria-label="{{T:dictUI.applyGroupChanges}}" title="{{T:dictUI.applyGroupChanges}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg></button><button type="button" class="btn group-draft-icon" id="groupMemberCancel" aria-label="{{T:dictUI.discardGroupChanges}}" title="{{T:dictUI.discardGroupChanges}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><div id="groupMemberHint" hidden><span>{{T:dictUI.memberEditHint}}</span></div><div id="groupOrderToolbar" hidden><span id="groupOrderHint">{{T:dictUI.longPressSelect}}</span><div id="groupOrderControls" hidden><output id="groupOrderCount" aria-live="polite">0</output><button type="button" class="group-order-button" id="groupOrderTop" aria-label="{{T:dictUI.moveSelectedTop}}" title="{{T:dictUI.moveSelectedTop}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 3h16"/><path d="m12 5-7 8h14zM12 12l-7 8h14z" fill="currentColor" stroke="none"/></svg></button><button type="button" class="group-order-button" id="groupOrderUp" aria-label="{{T:dictUI.moveSelectedUp}}" title="{{T:dictUI.moveSelectedUp}}">▲</button><button type="button" class="group-order-button" id="groupOrderDown" aria-label="{{T:dictUI.moveSelectedDown}}" title="{{T:dictUI.moveSelectedDown}}">▼</button><button type="button" class="group-order-button" id="groupOrderBottom" aria-label="{{T:dictUI.moveSelectedBottom}}" title="{{T:dictUI.moveSelectedBottom}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 21h16"/><path d="m5 4 7 8 7-8zM5 11l7 8 7-8z" fill="currentColor" stroke="none"/></svg></button><button type="button" class="btn group-order-exit" id="groupOrderExit" aria-label="{{T:dictUI.exitSelection}}" title="{{T:dictUI.exitSelection}}"><svg class="icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div></div><div id="groupEmptyHint" role="status" hidden><span id="groupEmptyHintText"></span><svg viewBox="0 0 40 44" fill="none" aria-hidden="true"><path d="M2 42C11 29 17 20 34 7m-10 0 10 0-2 10"/></svg></div><div id="groupRows"></div><div id="groupMembersSearchDock" class="list-search-dock" role="search"></div></div><div id="groupAvailable" class="group-section" hidden><div id="groupAvailableFilterHost"></div><div id="groupAddToolbar"><span id="groupAddHint">{{T:dictUI.availableEditHint}}</span><button type="button" class="btn" id="groupAddAll">{{T:dictUI.addAll}}</button></div><div id="groupOtherRows"></div><div id="groupAvailableSearchDock" class="list-search-dock" role="search"></div></div></div>
 </dialog>
 <dialog id="linkGroupDialog" lang="{{T:locale}}" class="group-dialog panel-card" aria-labelledby="linkGroupTitle">
   <h2 id="linkGroupTitle">{{T:dictUI.linkFilter}}</h2>

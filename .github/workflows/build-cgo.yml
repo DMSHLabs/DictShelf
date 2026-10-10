@@ -153,54 +153,34 @@ jobs:
 
   # One Windows executable carries the CLI/server and its WebView2 window.
   windows-installer:
-    name: Windows installer
-    needs: build
+    name: Windows desktop and installer
+    # Build on the native Windows runner through the same entry point used
+    # locally. That embeds the fork's WebView2 window in wudict.exe before the
+    # installer packages it; packaging the upstream-style CLI artifact from
+    # the matrix build would omit the desktop shell.
     runs-on: windows-2022
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-
-      - name: Download the windows binary
-        uses: actions/download-artifact@v8
         with:
-          path: artifacts
-          pattern: wudict-windows-*-cgo
-          merge-multiple: true
+          fetch-depth: 0
 
-      - name: Ensure Inno Setup 6
-        shell: pwsh
-        run: |
-          # Preinstalled on the windows-2022 image, but pinning the run to that
-          # promise would make an image change a release outage. -Locate is the
-          # script's own compiler search, so CI carries no second copy of where
-          # Inno Setup might live.
-          Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
-          $iscc = .\tools\make-installer.ps1 -Locate
-          if ($iscc) { Write-Host "Inno Setup: $iscc" } else { choco install innosetup -y --no-progress }
+      - name: Build WebView2 desktop executable and installer
+        shell: cmd
+        run: build-windows.cmd release
 
-      - name: Compile the installer
-        shell: pwsh
-        run: |
-          $exe = 'artifacts\wudict-windows-amd64-cgo.exe'
-          if (-not (Test-Path -LiteralPath $exe)) {
-            Write-Host "::warning title=No installer::the windows/amd64 build did not produce a binary - skipping"
-            exit 0
-          }
-          # wudict.exe and dist\ in the repository root are exactly what the
-          # script defaults to, so it is called with no arguments - the same
-          # invocation `make win-installer` uses, and one less thing to drift.
-          Copy-Item -LiteralPath $exe -Destination 'wudict.exe' -Force
-          # Process-scoped, so a runner image whose default policy tightens
-          # cannot turn "the script is right there" into a release outage.
-          Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
-          .\tools\make-installer.ps1
-
-      - name: Upload artifact
+      - name: Upload desktop executable
         uses: actions/upload-artifact@v7
         with:
-          name: wudict-windows-installer
+          name: wudict2-windows-x64
+          path: wudict.exe
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v7
+        with:
+          name: wudict2-windows-installer
           path: dist/wudict-windows-x64-setup*.exe
-          if-no-files-found: warn
+          if-no-files-found: error
 
   release:
     needs: [build, macos-app, windows-installer]

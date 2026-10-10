@@ -41,7 +41,7 @@ them are in `docs/handoff-archive.md`.
   process after a restart. The page also caches its CSS by the `?v=` hash, so
   the browser must be reloaded after the server is really new.
 - Go: `go build ./...`; targeted `go test ./internal/<pkg> -run '...' -count=1`.
-- **`build-windows.cmd [debug|release] [purego]`** — the fork's desktop build
+- **`build-windows.cmd [debug|release] [installer] [purego]`** — the fork's desktop build
   (added 2026-09-28, beside `build-android.cmd`): `wudict.exe` in the repo root,
   upstream's product (wuDict, port 6888, its own config and library), NOT the
   Android app. **Every machine path it needs is in one block at the top of the
@@ -76,7 +76,7 @@ them are in `docs/handoff-archive.md`.
   build: the launch leaves the Explorer window count at 0 and opens the setup
   page in Edge (window title "Edit Folders"). The other platforms have the same
   defect with `xdg-open ""` / `open ""`, where the browser never opens at all.
-- **The Windows installer (`release`) builds — with Inno Setup 7, pinned at the
+- **The Windows installer (`installer`, or `release` as an alias) builds — with Inno Setup 7, pinned at the
   top of the script.** Neither compiler on this machine is in the uninstall
   registry, so `tools\make-installer.ps1 -Locate` finds neither of them, and
   `ISCC_PATH` in `build-windows.cmd` is pinned to

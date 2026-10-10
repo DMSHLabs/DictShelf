@@ -202,15 +202,17 @@ dialog#groupEditor.group-dialog.panel-card{gap:.65em;padding:0;border:0;backgrou
 .group-section{border:1px solid var(--line);border-radius:12px;background:var(--bg-card,var(--bg));padding:.8em;box-shadow:var(--shadow)}
 #groupControls,#groupMembers,#groupAvailable{border:2px solid transparent}
 #groupLists{gap:.65em}
+#groupEditor:has(#groupOrderToolbar:not([hidden])){gap:.2em}
 #deleteGroup{align-self:flex-end;display:inline-flex;align-items:center;gap:.4em}
 #deleteGroup .group-delete-icon{width:1.15em;height:1.15em;flex:none}
 #deleteGroup[hidden]{display:none}
 #groupMembers{position:relative;flex:1 1 0;display:flex;flex-direction:column;min-height:0;overflow:hidden}
+#groupMembers:has(#groupOrderToolbar:not([hidden])){padding-top:.2em}
 #groupMemberDraftActions{position:absolute;z-index:2;top:.35em;right:.35em;display:flex;gap:.35em}
 #groupMemberDraftActions[hidden]{display:none}
 #groupMemberDraftActions:empty{display:none}
 #groupEditToggle{display:flex;align-items:center;gap:.4em;height:calc(var(--ui-main-control-height) * 1em);min-height:calc(var(--ui-main-control-height) * 1em);padding:0 .55em;color:var(--fg);font-size:calc(var(--ui-main-control-font) * 1rem)}
-#groupEditToggle .group-edit-label{font-size:inherit;transform:translateY(-1px)}
+#groupEditToggle .group-edit-label{min-width:0;font-size:inherit;overflow-wrap:anywhere;transform:translateY(-1px)}
 #groupMemberDraftActions .group-draft-icon{display:grid;place-items:center;width:2.5em;height:2.5em;padding:.25em;color:var(--accent)}
 #groupMemberDraftActions svg{width:1.35em;height:1.35em;flex:none}
 #groupMemberDraftActions .group-edit-toggle svg{width:.9em;height:.9em}
@@ -220,7 +222,7 @@ dialog#groupEditor.group-dialog.panel-card{gap:.65em;padding:0;border:0;backgrou
 #groupMemberHint[hidden]{display:none}
 #groupMemberHint span{font-size:calc(var(--ui-hint-font-size) * 1rem);line-height:1.25}
 #groupMembers:has(#groupMemberHint:not([hidden])) #groupRows{padding-top:0}
-#groupOrderToolbar{position:relative;z-index:1;display:flex;align-items:center;flex:none;min-height:2.7em;margin-bottom:.3em;border-bottom:1px solid var(--line)}
+#groupOrderToolbar{position:relative;z-index:1;display:flex;align-self:flex-start;align-items:center;box-sizing:border-box;width:fit-content;max-width:100%;flex:none;margin-bottom:.3em;border-bottom:1px solid var(--line)}
 #groupOrderToolbar[hidden],#groupOrderHint[hidden],#groupOrderControls[hidden]{display:none}
 #groupOrderActions{display:flex;align-items:center;gap:.35em;margin-left:.35em;flex:none;order:2}
 #groupOrderActions[hidden],#groupPinControls[hidden]{display:none}
@@ -229,13 +231,13 @@ dialog#groupEditor.group-dialog.panel-card{gap:.65em;padding:0;border:0;backgrou
 #groupPinControls button{white-space:nowrap;padding-inline:.45em}
 #groupMemberDraftActions.pin-editing{display:none}
 #groupEditToggle{order:3;flex:none;margin-left:.3em}
-#groupOrderToolbar #groupEditToggle{display:flex;padding:0 .55em;border:1px solid var(--line);border-radius:.5em;background:var(--bg)}
+#groupOrderToolbar #groupEditToggle{display:flex;flex:0 1 auto;min-width:2.5em;height:auto;padding:0 .55em;border:1px solid var(--line);border-radius:.5em;background:var(--bg)}
 #groupOrderToolbar #groupEditToggle[hidden]{display:none}
-#groupOrderToolbar #groupEditToggle svg{width:.9em;height:.9em}
-#groupOrderHint{flex:1 1 auto;min-width:0;font-size:calc(var(--ui-hint-font-size) * 1rem);line-height:1.25}
+#groupOrderToolbar #groupEditToggle svg{display:block;width:1.1em;height:1.1em;min-width:1.1em;min-height:1.1em;flex:0 0 1.1em}
+#groupOrderHint{flex:0 1 auto;min-width:0;font-size:calc(var(--ui-hint-font-size) * 1rem);line-height:1.25}
 #groupOrderControls{display:grid;grid-template-columns:minmax(1.2em,auto) repeat(4,minmax(1.7em,1fr)) minmax(2.5em,auto);align-items:center;width:100%;gap:.1em}
 #groupOrderCount{padding:.1em}
-#groupOrderToolbar button{display:grid;place-items:center;min-width:0;height:2.5em;padding:.15em;border:0;background:transparent;color:var(--fg);font:inherit;cursor:pointer}
+#groupOrderToolbar button{display:grid;place-items:center;min-width:0;height:2em;padding:.15em;border:0;background:transparent;color:var(--fg);font:inherit;cursor:pointer}
 #groupOrderToolbar button svg{width:1.25em;height:1.25em}
 #groupOrderActions #groupPinStart{color:var(--pin)}
 #groupOrderActions #groupPinStart:hover{color:var(--pin-hover)}
@@ -259,7 +261,7 @@ dialog#groupEditor.group-dialog.panel-card{gap:.65em;padding:0;border:0;backgrou
 #groupNewAction{flex:none;display:grid;place-items:center;min-width:2.7em;height:2.7em;padding:.4em}
 #groupNewAction .group-new-icon{width:1.5em;height:1.5em}
 #groupNewAction[hidden]{display:none}
-@media(max-width:380px){#groupEditToggle .group-edit-label{display:none}#groupEditToggle{width:calc(var(--ui-main-control-height) * 1em);justify-content:center;padding:0}}
+@media(max-width:380px){#groupEditToggle .group-edit-label{display:none}#groupEditToggle{width:calc(var(--ui-main-control-height) * 1em);justify-content:center;padding:0}#groupOrderToolbar #groupEditToggle{flex:none;width:2.5em;min-width:2.5em;padding:0}}
 @media(max-width:380px){#groupPinControls{flex-wrap:wrap}#groupPinHint{flex-basis:100%}}
 #groupRows{flex:1;overflow:auto;min-height:0;overscroll-behavior:contain}
 #groupLists.hide-members #groupMembers{display:none}
