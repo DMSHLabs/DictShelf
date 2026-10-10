@@ -28,6 +28,10 @@ on:
         description: "Create the release as a draft (nothing is downloadable until it is published)"
         type: boolean
         default: false
+      publish_release:
+        description: "Publish the APK to a GitHub Release (otherwise keep it as an Actions artifact)"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -169,8 +173,14 @@ jobs:
       #     name: ${{ env.APK }}
       #     path: ${{ env.APK }}
 
+      - name: Upload APK for testing
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.signing.outputs.enabled == 'true' && 'wudict2-android-signed-test' || 'wudict2-android-debug-test' }}
+          path: ${{ env.APK }}
+
       - name: Create git tag if missing
-        if: ${{ steps.signing.outputs.enabled == 'true' }}
+        if: ${{ inputs.publish_release && steps.signing.outputs.enabled == 'true' }}
         run: |
           # --exit-code with the full ref, not `| grep -q "$TAG"`: an unanchored
           # grep for "v0.1" matches an existing "v0.10" and silently skips
@@ -186,7 +196,7 @@ jobs:
           fi
 
       - name: Create or update GitHub release
-        if: ${{ steps.signing.outputs.enabled == 'true' }}
+        if: ${{ inputs.publish_release && steps.signing.outputs.enabled == 'true' }}
         # The two dispatch checkboxes. They apply when the release is CREATED;
         # on one that already exists they are only ever ADDED, never cleared.
         # Three workflows publish into the same tag, so the second to arrive

@@ -24,6 +24,10 @@ on:
         description: "Create the release as a draft (nothing is downloadable until it is published)"
         type: boolean
         default: false
+      publish_release:
+        description: "Publish build assets to a GitHub Release (otherwise keep them as Actions artifacts)"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -187,6 +191,7 @@ jobs:
           if-no-files-found: error
 
   release:
+    if: ${{ inputs.publish_release }}
     needs: [build, macos-app, windows-installer]
     runs-on: ubuntu-latest
     env:
