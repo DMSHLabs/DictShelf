@@ -14,9 +14,24 @@ on:
           - dev
         default: releases
         required: true
+      tag:
+        description: "Tag for the release (e.g., v0.1); blank = use latest tag"
+        required: false
+      prerelease:
+        description: "Mark the release as a pre-release"
+        type: boolean
+        default: false
+      draft:
+        description: "Create the release as a draft (nothing is downloadable until it is published)"
+        type: boolean
+        default: false
+      publish_release:
+        description: "Publish build assets to a GitHub Release (otherwise keep them as Actions artifacts)"
+        type: boolean
+        default: false
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -69,3 +84,54 @@ jobs:
           name: wudict2-windows-installer
           path: dist/wudict2-windows-x64-setup*.exe
           if-no-files-found: error
+
+  release:
+    if: ${{ inputs.publish_release }}
+    needs: build
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Checkout releases branch
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.branch }}
+          fetch-depth: 0
+
+      - name: Resolve tag
+        id: tag
+        shell: bash
+        run: |
+          TAG="${{ inputs.tag }}"
+          [ -z "$TAG" ] && TAG="$(git describe --tags --abbrev=0 2>/dev/null || true)"
+          if [ -z "$TAG" ]; then
+            echo "::error::No tag input and no existing git tag to fall back on." >&2
+            exit 1
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Create or update GitHub release
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          FLAGS=()
+          [ "${{ inputs.prerelease }}" = "true" ] && FLAGS+=(--prerelease)
+          [ "${{ inputs.draft }}" = "true" ] && FLAGS+=(--draft)
+          if gh release view "${TAG}" > /dev/null 2>&1; then
+            echo "Release ${TAG} exists - replacing Windows assets."
+            gh release upload "${TAG}" artifacts/* --clobber
+            if [ ${#FLAGS[@]} -gt 0 ]; then
+              gh release edit "${TAG}" "${FLAGS[@]}"
+            fi
+          else
+            echo "Creating release ${TAG}."
+            gh release create "${TAG}" artifacts/* \
+              --title "${{ github.event.repository.name }} ${TAG}" \
+              --generate-notes "${FLAGS[@]}"
+          fi
