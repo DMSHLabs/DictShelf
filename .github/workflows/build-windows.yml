@@ -1,0 +1,55 @@
+# Copyright (C) 2026 DmShAl (Shepeta Dmitry)
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+name: Build Windows Desktop
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: WebView2 desktop and installer
+    runs-on: windows-2022
+    steps:
+      - name: Checkout releases branch
+        uses: actions/checkout@v6
+        with:
+          ref: releases
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Ensure Inno Setup
+        shell: pwsh
+        run: |
+          Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
+          $iscc = .\tools\make-installer.ps1 -Locate
+          if ($iscc) {
+            Write-Host "Inno Setup: $iscc"
+          } else {
+            choco install innosetup -y --no-progress
+          }
+
+      - name: Build executable and installer
+        shell: cmd
+        run: build-windows.cmd installer
+
+      - name: Upload WebView2 executable
+        uses: actions/upload-artifact@v7
+        with:
+          name: wudict2-windows-x64
+          path: wudict.exe
+          if-no-files-found: error
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v7
+        with:
+          name: wudict2-windows-installer
+          path: dist/wudict-windows-x64-setup*.exe
+          if-no-files-found: error
