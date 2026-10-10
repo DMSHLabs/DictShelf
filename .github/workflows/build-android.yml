@@ -17,6 +17,14 @@ name: Build Android APK
 on:
   workflow_dispatch:
     inputs:
+      branch:
+        description: "Source branch to build"
+        type: choice
+        options:
+          - releases
+          - dev
+        default: releases
+        required: true
       tag:
         description: "Tag for the release (e.g., v0.1) or use latest tag if empty"
         required: false
@@ -53,7 +61,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          ref: releases
+          ref: ${{ inputs.branch }}
           fetch-depth: 0 # versionName and versionCode both come from git history
 
       - name: Setup Go

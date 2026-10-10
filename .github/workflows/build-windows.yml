@@ -5,6 +5,15 @@ name: Build Windows Desktop
 
 on:
   workflow_dispatch:
+    inputs:
+      branch:
+        description: "Source branch to build"
+        type: choice
+        options:
+          - releases
+          - dev
+        default: releases
+        required: true
 
 permissions:
   contents: read
@@ -17,7 +26,7 @@ jobs:
       - name: Checkout releases branch
         uses: actions/checkout@v6
         with:
-          ref: releases
+          ref: ${{ inputs.branch }}
           fetch-depth: 0
 
       - name: Setup Go
