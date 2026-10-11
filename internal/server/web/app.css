@@ -1211,9 +1211,9 @@ dialog.panel-card:not([open]){display:none}
   display:flex;align-items:center}
 #panel .panel-head h2{font-size:calc(var(--ui-font-title) * 1rem)}
 #panel .panel-head h2 .btn{font-size:100%}
-#panel .panel-head .headacts .btn{height:calc(var(--ui-main-control-height) * 1em);min-height:calc(var(--ui-main-control-height) * 1em);box-sizing:border-box;
-  font-size:calc(var(--ui-main-control-font) * 1rem);
-  padding:0 .55em;line-height:1}
+#panel .panel-head .headacts .btn{width:calc(var(--ui-main-control-height) * 1em);height:calc(var(--ui-main-control-height) * 1em);min-width:calc(var(--ui-main-control-height) * 1em);min-height:calc(var(--ui-main-control-height) * 1em);box-sizing:border-box;display:grid;place-items:center;padding:0;
+  font-size:calc(var(--ui-main-control-font) * 1rem);line-height:1}
+#panel .panel-head #closePanel .icon-close{width:1.4em;height:1.4em}
 .panel-card h2 .headacts{margin-left:auto;display:flex;gap:calc(var(--ui-control-gap) * 1em)}
 /* The theme control is TWO buttons - Auto, and the state it resolves to - and
    it has two mount points: the bar's pair above 600px, the panel's below it,
