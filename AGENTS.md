@@ -36,6 +36,11 @@ verbatim. The registry:
   `internal/cli/cli.go`); revive by wiring `server.WithBuiltin`.
 - **`ext/server/`** — upstream's share-link hosting asset; this fork's server
   does not serve it.
+- **Upstream wildcard search** (`internal/wildcard/`, `internal/store/wildcard.go`,
+  D167): kept unwired. This fork's Mask mode uses a paged headword list with
+  Unicode case-insensitive matching and dictionary order; its index-range
+  optimization lives separately in `internal/store/dmsh_mask_ranges.go`.
+  Upstream's removal of Contains and its trigram index is not adopted.
 
 Files kept verbatim stay verbatim: the marker is this section, not the files.
 

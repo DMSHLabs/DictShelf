@@ -78,39 +78,47 @@ func (s *Store) FindHeadwordsMaskWithin(ctx context.Context, query, within strin
 		}
 	}
 	matchTerms := dict.HeadwordTermMatcher(within)
-	rows, err := s.db.QueryContext(ctx, `SELECT DISTINCT w FROM entry WHERE `+browseWhere+browseOrder)
-	if err != nil {
-		return nil, 0, nil, nil, err
-	}
-	defer rows.Close()
 	words := make([]string, 0, limit)
 	positions := make([]int, 0, limit)
 	total, basePosition := 0, 0
 	var sections dict.MaskSections
-	for rows.Next() {
-		if err := ctx.Err(); err != nil {
+	for _, span := range maskIndexSpans(query) {
+		rows, err := s.db.QueryContext(ctx, `SELECT DISTINCT w FROM entry WHERE `+browseWhere+span.where+browseOrder, span.args...)
+		if err != nil {
 			return nil, 0, nil, nil, err
 		}
-		var word string
-		if err := rows.Scan(&word); err != nil {
+		for rows.Next() {
+			if err := ctx.Err(); err != nil {
+				rows.Close()
+				return nil, 0, nil, nil, err
+			}
+			var word string
+			if err := rows.Scan(&word); err != nil {
+				rows.Close()
+				return nil, 0, nil, nil, err
+			}
+			if !re.MatchString(word) {
+				continue
+			}
+			position := basePosition
+			basePosition++
+			if within != "" && (withinMask && !withinRE.MatchString(word) || !withinMask && !matchTerms(word)) {
+				continue
+			}
+			sections.Add(word)
+			if total >= offset && len(words) < limit {
+				words = append(words, word)
+				positions = append(positions, position)
+			}
+			total++
+		}
+		err = rows.Err()
+		rows.Close()
+		if err != nil {
 			return nil, 0, nil, nil, err
 		}
-		if !re.MatchString(word) {
-			continue
-		}
-		position := basePosition
-		basePosition++
-		if within != "" && (withinMask && !withinRE.MatchString(word) || !withinMask && !matchTerms(word)) {
-			continue
-		}
-		sections.Add(word)
-		if total >= offset && len(words) < limit {
-			words = append(words, word)
-			positions = append(positions, position)
-		}
-		total++
 	}
-	return words, total, sections.Finish(), positions, rows.Err()
+	return words, total, sections.Finish(), positions, nil
 }
 
 // browseWhere hides the internal entries from every browse read. `@_%` is an

@@ -366,11 +366,15 @@ func TestCompressed(t *testing.T) {
 	if err := os.WriteFile(big, gz(t, doc+strings.Repeat("x", 4096)), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	saved := maxMarkdown
-	maxMarkdown = 1024
-	defer func() { maxMarkdown = saved }()
-	if _, err := NewReader(big); !errors.As(err, &fe) || fe.Code != "E-format" {
+	savedMax, savedRatio := maxMarkdown, unpackRatio
+	maxMarkdown, unpackRatio = 1024, 1
+	defer func() { maxMarkdown, unpackRatio = savedMax, savedRatio }()
+	_, err := NewReader(big)
+	if !errors.As(err, &fe) || fe.Code != "E-format" {
 		t.Errorf("over the bound: %v", err)
+	}
+	if !errors.Is(err, dict.ErrTooLarge) || !errors.Is(err, dict.ErrUnreadable) {
+		t.Errorf("over the bound is not ErrTooLarge and ErrUnreadable: %v", err)
 	}
 }
 
