@@ -220,6 +220,7 @@ type Browser interface {
 // Results are returned in browse order, independently of the current page.
 type BrowseFinder interface {
 	FindHeadwords(ctx context.Context, query string, offset, limit int) ([]string, int, error)
+	FindHeadwordsMask(ctx context.Context, query string, offset, limit int) ([]string, int, error)
 }
 
 // Entry is one dictionary article as produced by a format Reader during

@@ -244,6 +244,7 @@
   "browse.filterPlaceholder": "Filter headwords…",
   "browse.searchWords": "Show all headwords",
   "browse.filterWords": "Show only matching headwords",
+  "browse.maskSearch": "Use ? for one character and * for any number of characters",
   "browse.previousMatch": "Previous matching headword",
   "browse.nextMatch": "Next matching headword",
   "browse.noMatches": "No matching headwords",

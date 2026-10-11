@@ -541,6 +541,7 @@ details.dict>summary:focus-visible{outline-color:var(--focus)}
    which this hands back by skipping both for sections nobody has scrolled to.
    The size hint keeps the scrollbar from jumping as they are rendered. */
 details.dict[open]>dl{content-visibility:auto;contain-intrinsic-size:0 400px}
+details.dict>dl>dt mark.wu-hl{background:var(--accent);color:var(--bg);border-radius:.15em}
 summary .count{margin-left:auto;font-weight:400;color:var(--label-quiet);font-size:12px}
 /* The relaxation note (renderSlot, h.rung). A full-text search asks for the
    words as a phrase first; when no article had them adjacent the server answers

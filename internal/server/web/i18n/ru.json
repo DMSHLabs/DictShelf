@@ -244,6 +244,7 @@
   "browse.filterPlaceholder": "Фильтр заголовков…",
   "browse.searchWords": "Показать все заголовки",
   "browse.filterWords": "Показать только найденные заголовки",
+  "browse.maskSearch": "Использовать ? для одного символа и * для любого количества символов",
   "browse.previousMatch": "Предыдущий найденный заголовок",
   "browse.nextMatch": "Следующий найденный заголовок",
   "browse.noMatches": "Заголовки не найдены",
