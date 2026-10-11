@@ -1357,10 +1357,10 @@ let prefOrder=[],disabled=new Set();
    and finding a name. The panel, the picker, "All dictionaries" and the
    groups all list orderedDicts(). Server state with the order it shapes. */
 let pinned=new Set();
-/* Set while the saved list is an order of the whole library from before pins
-   (version 1): its labels as saved, by id. convertOrder turns it into pins
-   once the complete list of dictionaries is in. */
-let convertNames=null;
+/* The state.json format this page writes its lists in, sent with every list:
+   the server keeps the stored pins for a list without it, which is what a
+   page older than the format sends (prefs.go, handleSavePrefs). */
+const LIST_FORMAT=Number("{{PREFSV}}");
 /* Set when /api/dicts has delivered its last row. The picker's groups are
    counted over the complete list or not shown at all. */
 let dictsSettled=false;
@@ -1404,12 +1404,10 @@ async function loadPrefs(){
     // Last, so that a page whose baselines are not both in hand never saves:
     // savePrefs diffs against them.
     prefsReady=true;
-    // first run: keep whatever we had; an order from localStorage has no pins
-    if(!st.exists){if(adoptLocalPrefs())convertNames=new Map();return}
+    if(!st.exists){adoptLocalPrefs();return} // first run: keep whatever we had
     prefOrder=rows.map(d=>d.id);
     disabled=new Set(rows.filter(d=>d.off).map(d=>d.id));
     pinned=new Set(rows.filter(d=>d.pin).map(d=>d.id));
-    if((st.version||0)<2)convertNames=new Map(rows.map(d=>[d.id,d.name||""]));
   }catch(e){
     // A page that cannot read its settings must still search: fall back to
     // "everything enabled, alphabetical" rather than refusing to start.
@@ -1455,7 +1453,7 @@ function savePrefs(now){
   for(const k in ui)if(JSON.stringify(ui[k])!==JSON.stringify(uiBase[k]))patch[k]=ui[k];
   const rows=orderedDicts().map(d=>prefRow({id:d.id,name:dictLabel(d),off:disabled.has(d.id),pin:pinned.has(d.id)})),
     seen=new Set(rows.map(d=>d.id)),req={};
-  if(JSON.stringify(rows)!==JSON.stringify(dictsBase.filter(d=>seen.has(d.id))))req.dicts=rows;
+  if(JSON.stringify(rows)!==JSON.stringify(dictsBase.filter(d=>seen.has(d.id)))){req.dicts=rows;req.version=LIST_FORMAT}
   if(Object.keys(patch).length)req.ui=patch;
   if(!req.dicts&&!req.ui)return;
   const body=JSON.stringify(req);
@@ -1509,27 +1507,6 @@ function setOrder(ids){
   }
   prefOrder=lead;
   for(const id of ids)prefOrder.push(id,...(after.get(id)||[]));
-}
-/* A list saved before pins is an order of the whole library: the user's
-   arrangement on top, and under it the run of dictionaries the page appended
-   A→Z as they arrived. The longest A→Z run at its end becomes the A–Z part
-   and everything above it is pinned, which lists every dictionary exactly
-   where it was. Compared by the labels the list was saved with, because those
-   are what it was sorted by; dictionaries the list does not name (new ones,
-   or all of them on a first run) are A–Z already. Reports whether it ran, so
-   the caller saves the converted list - sent whole, which is what tells the
-   server the list is converted. */
-function convertOrder(){
-  if(!convertNames)return false;
-  const names=convertNames;convertNames=null;
-  const byId=new Map(dicts.map(d=>[d.id,d]));
-  const ids=prefOrder.filter(id=>byId.has(id));
-  const name=id=>names.get(id)||dictLabel(byId.get(id));
-  let k=ids.length-1;
-  while(k>0&&collate(name(ids[k-1]),name(ids[k]))<=0)k--;
-  pinned=new Set(ids.slice(0,Math.max(k,0)));
-  dictsBase=[];
-  return true;
 }
 function orderedIds(){return orderedDicts().map(d=>d.id)}
 function enabledOrderedIds(){return orderedDicts().filter(d=>!disabled.has(d.id)).map(d=>d.id)}
@@ -2272,8 +2249,7 @@ async function loadDicts(rescan,opts={}){
   // normalize the saved preference order to the current dictionary set
   // (newly-added dicts take their A→Z place, removed ones drop). ONLY on the
   // complete set — doing it mid-stream would drop the ids that had not
-  // arrived yet, and convert an order it cannot see whole.
-  convertOrder();
+  // arrived yet.
   setOrder(orderedIds());savePrefs(true);
   dictsSettled=true; // every row is in; the groups can be counted
   refreshDictUI(true);
@@ -5987,8 +5963,6 @@ function welcome(){
 function urlQuery(){$("q").value=new URLSearchParams(location.search).get("q")||""}
 function bootFromCache(c){
   dicts=c.rows;dictTotal=c.rows.length;dictsSettled=true;
-  // the list is whole, and a 304 below would not reach loadDicts' own call
-  if(convertOrder()){setOrder(orderedIds());savePrefs()}
   groupsTrouble(c.gp||0);
   refreshDictUI(true);
   // ready BEFORE the search, which judges "nothing enabled" by the phase;

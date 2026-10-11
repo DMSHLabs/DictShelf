@@ -109,7 +109,7 @@ type Server struct {
 
 	// indexOnce caches the substitutions index.html needs that never change
 	// after startup ({{VERSION}} in the About box, the {{FRAMEJS}}, {{PICKJS}} and {{SPEAKJS}} hashes,
-	// {{ARTCSS}}).
+	// {{ARTCSS}}, {{PREFSV}}).
 	// Version is assigned after the Server is built, so this cannot be done at
 	// embed time; doing it per request would re-copy the whole page on every
 	// load. {{USERCSS}} is deliberately left standing here - see pageFor.
@@ -417,6 +417,8 @@ func (s *Server) basePage() []byte {
 		page = strings.ReplaceAll(page, "{{FRAMEJS}}", assetTag(frameJS))
 		page = strings.ReplaceAll(page, "{{PICKJS}}", assetTag(pickJS))
 		page = strings.ReplaceAll(page, "{{SPEAKJS}}", assetTag(speakJS))
+		// the state.json format the page writes its lists in (handleSavePrefs)
+		page = strings.ReplaceAll(page, "{{PREFSV}}", strconv.Itoa(prefsVersion))
 		// The role stylesheet for articles wudict writes itself
 		// (internal/artmark). It is a floor under BOTH article surfaces, so
 		// it is substituted once here and index.html hands it to the shadow

@@ -1285,6 +1285,12 @@ paths:
                     The whole list, pinned entries in the user's order. Omit it (or send null)
                     to keep the stored list untouched, as when only a UI
                     setting changed.
+                version:
+                  type: integer
+                  description: >
+                    The format `dicts` is written in: 3. Without it, the list
+                    is taken as one from a client older than pins, and every
+                    dictionary it sends keeps the pin it has stored.
                 ui:
                   allOf: [{ $ref: '#/components/schemas/UIPrefs' }]
                   description: >
@@ -1302,7 +1308,7 @@ paths:
             # send back an edited copy.
             curl -s -X PUT 'http://127.0.0.1:6888/api/prefs' \
               -H 'content-type: application/json' \
-              -d '{"dicts":[{"id":"oxford","path":"/Users/me/Dicts/oald.mdx","pin":true},
+              -d '{"version":3,"dicts":[{"id":"oxford","path":"/Users/me/Dicts/oald.mdx","pin":true},
                           {"id":"webster","path":"/Users/me/Dicts/webster.slob","off":true}]}'
       responses:
         '200':
@@ -2692,10 +2698,13 @@ components:
         version:
           type: integer
           description: >
-            The state file's format. Below 2, `dicts` is an order of the whole
-            library saved before `pin` existed; wudict's own page converts it
-            to pins and saves it back, which moves the file to 2. In the GET
-            answer only.
+            The format of `dicts`, 3. A list saved in an older one is migrated
+            when it is first read. With more than five of the user's
+            dictionaries present, the first five of them in its order stay
+            pinned: of its pinned dictionaries, or of its whole order if it is
+            older than pins. All others are listed A-Z. With five or fewer,
+            none is pinned. A dictionary that is not present when the list is
+            migrated is not counted and not pinned. In the GET answer only.
         dicts:
           type: array
           description: >
