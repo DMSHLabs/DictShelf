@@ -141,6 +141,17 @@ input[type=search]{width:100%;min-width:0;font-size:16px;
   color:var(--fg);background:var(--bg-card);border:1px solid var(--line);
   border-radius:8px;padding:.35em .7em .35em 2em;outline:none;appearance:none}
 input[type=search]:focus{border-color:var(--focus);box-shadow:0 0 0 3px color-mix(in srgb,var(--focus) 25%,transparent)}
+/* --fg-soft is 5.4:1 light, 5.1:1 dark; opacity:1 undoes Firefox's own 0.54,
+   so every browser draws the same colour. */
+input[type=search]::placeholder{color:var(--fg-soft);opacity:1}
+/* #q's placeholder is a query (MODE_HINT) and is never seen beside typed
+   text, so it must read as "not typed" on its own. Lightness cannot carry
+   that: it is read, so it keeps >= 4.5:1, which leaves it near enough to --fg
+   to pass for it (D172). The shape carries it: the → in front (syncChips) and
+   a fixed-width face, which is how a manual sets text to type. The styler's
+   stack; .875em because a monospace face looks larger than --font at the
+   same size, and it keeps "→ word for word" inside a narrow field. */
+#q::placeholder{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.875em}
 /* ⌕ and spinner share ONE 14px box and crossfade, so going busy is a change
    of identity in an occupied box rather than an element arriving — the least
    intrusive transition available, and the only one that costs no layout.
@@ -1105,7 +1116,7 @@ html:has(#panel.show) .bar{padding-right:var(--wd-sbw,0px)}
 <!-- enterkeyhint is declared, not inferred: type=search happens to label the
      soft key "Search" on most Android builds, but that is a browser default
      and not a contract. -->
-<input type="search" id="q" placeholder="Search…" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="search" autofocus aria-label="Search term" disabled>
+<input type="search" id="q" placeholder="→ start…" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="search" autofocus aria-label="Search term" disabled>
 </span>
 <span class="seg">
 <span class="chip" id="modeChip" aria-hidden="true"></span>
@@ -2477,9 +2488,10 @@ fetch("/api/reindex").then(r=>r.ok?r.json():null).then(st=>{
 // clicking an indeterminate checkbox sets checked=true, so "mixed → all"
 // needs no special case.
 $("enAll").addEventListener("change",e=>setAllEnabled(e.target.checked));
-/* The narrow-viewport chips. They render the two <select>s and nothing more:
-   the selects stay the single source of truth, so this never has to be
-   consulted before reading a value — only called after one changes.
+/* The narrow-viewport chips, and #q's placeholder. They render the two
+   <select>s and nothing more: the selects stay the single source of truth, so
+   this never has to be consulted before reading a value — only called after
+   one changes.
 
    Every chip keeps its mode's word: the words the mode dropdown, the
    per-dictionary switch and the result summaries all use, so a chip never
@@ -2488,9 +2500,20 @@ $("enAll").addEventListener("change",e=>setAllEnabled(e.target.checked));
    switch tooltips, the in-results offer and its collected line. */
 const FEAT_NAME={base:"headword index",fts:"full-text index",media:"media pack"};
 const MODE_SHORT={prefix:"prefix",exact:"exact",wildcard:"wildcard",fts:"full-text"};
+/* #q's placeholder per mode. Each is a query that runs in its mode and also
+   reads as a description of it: start… continues, whole stops (wholesale and
+   wholesome do not match), *ending matches by the end, word for word is found
+   as a phrase inside articles. The chip already names the mode, so this shows
+   its use instead. It changes only with the mode, never on its own: a fixed
+   text stops being noticed, and the reader's own switch is what brings it
+   back. The markup carries the prefix one for the paint before this runs.
+   The → is added here and not in the map, so the map stays the queries
+   themselves: a glyph with no key reads as drawn by the app, not typed. */
+const MODE_HINT={prefix:"start…",exact:"whole",wildcard:"*ending",fts:"word for word"};
 function syncChips(){
   const m=$("mode"),d=$("dict");
   $("modeChip").textContent=MODE_SHORT[m.value]||m.value;
+  $("q").placeholder="→ "+(MODE_HINT[m.value]||MODE_HINT.prefix);
   $("modeChip").classList.toggle("dflt",m.value==="prefix");
   // No option selected is the default too, not a nameless scope: a saved id
   // is written to .value before /api/dicts has put that option in the list,
