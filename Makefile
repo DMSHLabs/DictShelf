@@ -126,6 +126,17 @@ APP_DEST    ?= $(HOME)/Applications
 MACOS_MIN   ?= 12.0
 CODESIGN_ID ?= -
 
+# The cgo flavour links through clang, which stamps the HOST's macOS as the
+# binary's minimum unless told otherwise, and Finder enforces that stamp over
+# LSMinimumSystemVersion. The flags carry the target as well as the variable:
+# the go build cache keys on CGO_CFLAGS, not on MACOSX_DEPLOYMENT_TARGET, and
+# would otherwise reuse C objects compiled for the host.
+ifeq ($(shell uname),Darwin)
+build: export MACOSX_DEPLOYMENT_TARGET = $(MACOS_MIN)
+build: export CGO_CFLAGS ?= -O2 -g -mmacosx-version-min=$(MACOS_MIN)
+build: export CGO_LDFLAGS ?= -O2 -g -mmacosx-version-min=$(MACOS_MIN)
+endif
+
 .PHONY: mac-app
 mac-app: build ## Build the double-clickable macOS .app into dist/ (menu-bar icon, no Dock icon)
 	@APP_BIN="$(APP_BIN)" APP_ID="$(APP_ID)" MACOS_MIN="$(MACOS_MIN)" BUILD_DIR="$(BUILD_DIR)" \

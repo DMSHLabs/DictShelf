@@ -84,6 +84,15 @@ jobs:
             *) echo "::warning title=Unversioned build::no usable tag found - stamping '$VERSION'; installers will be named 0.0.0" ;;
           esac
           echo "version: $VERSION"
+          # clang stamps the runner's macOS as the binary's minimum and Finder
+          # enforces it; pin it to the Makefile's MACOS_MIN instead. The flags
+          # carry it too because the build cache (setup-go restores one) keys
+          # on CGO_CFLAGS, not on MACOSX_DEPLOYMENT_TARGET.
+          if [ "${{ matrix.goos }}" = darwin ]; then
+            export MACOSX_DEPLOYMENT_TARGET=12.0
+            export CGO_CFLAGS="-O2 -g -mmacosx-version-min=$MACOSX_DEPLOYMENT_TARGET"
+            export CGO_LDFLAGS="$CGO_CFLAGS"
+          fi
           go build -trimpath -tags sqlite_fts5 \
             -ldflags="-s -w -X github.com/wuweidict/wudict/internal/cli.Version=${VERSION}" \
             -o "${BINARY}" .
