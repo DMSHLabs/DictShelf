@@ -877,6 +877,7 @@
   "search.boot4": "Маринуем определения…",
   "search.boot5": "Пробуем, хватает ли специй…",
   "search.prefixShort": "префикс",
+  "search.mask": "маска",
   "search.loading": "Загрузка словарей…",
   "search.ready": "Загрузка словарей — готово {number} из {total}…",
   "search.bootFailed": "⚠ Не удалось загрузить словари.",

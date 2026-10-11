@@ -156,6 +156,7 @@ type ResourceLister interface {
 // ContainsContext needs Caps.Contains (the trigram index); FullTextContext
 // and FullTextMatch need Caps.FTS. Without them they return ErrUnsupported.
 type Searcher interface {
+	MaskContext(ctx context.Context, pattern string, limit int) ([]Result, error)
 	ExactContext(ctx context.Context, word string, limit int) ([]Result, error)
 	PrefixContext(ctx context.Context, word string, limit int) ([]Result, error)
 	// ContainsContext is a substring match over headwords (FTS5 trigram),

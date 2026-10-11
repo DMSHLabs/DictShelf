@@ -5,6 +5,7 @@
 package store
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"io"
@@ -485,6 +486,18 @@ func TestPrefix(t *testing.T) {
 	}
 	if res, _ := s.Prefix("%", 10); len(res) != 0 {
 		t.Errorf("bare %% must match nothing, got %d", len(res))
+	}
+}
+
+func TestMaskContext(t *testing.T) {
+	s := testStore(t)
+	rows, err := s.MaskContext(context.Background(), "coraz?n", 20)
+	if err != nil || len(rows) != 1 || rows[0].Headword != "corazón" {
+		t.Fatalf("MaskContext coraz?n = %#v, %v", rows, err)
+	}
+	rows, err = s.MaskContext(context.Background(), "pregunt*", 20)
+	if err != nil || len(rows) != 2 {
+		t.Fatalf("MaskContext pregunt* = %#v, %v", rows, err)
 	}
 }
 

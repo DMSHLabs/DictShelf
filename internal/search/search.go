@@ -10,6 +10,8 @@ package search
 import (
 	"context"
 	"fmt"
+	"regexp"
+	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -26,9 +28,13 @@ const (
 	Prefix
 	Contains
 	FullText
+	Mask
 )
 
 func (m Mode) String() string {
+	if m == Mask {
+		return "mask"
+	}
 	return [...]string{"exact", "prefix", "contains", "fts"}[m]
 }
 
@@ -44,6 +50,8 @@ func ParseMode(s string) (Mode, error) {
 		return Contains, nil
 	case "fts":
 		return FullText, nil
+	case "mask":
+		return Mask, nil
 	}
 	return 0, fmt.Errorf("unknown mode %q", s)
 }
@@ -53,6 +61,67 @@ func ParseMode(s string) (Mode, error) {
 // command-line lookup and the app cannot answer the same question differently.
 func Query(ctx context.Context, d dict.Dictionary, mode Mode, term string, limit int) Hit {
 	return query(ctx, d, mode, term, planFor(mode, term), limit)
+}
+
+// HasMask reports whether term contains either supported wildcard.
+func HasMask(term string) bool { return strings.ContainsAny(term, "?*") }
+
+func maskHeadwords(ctx context.Context, d dict.Dictionary, term string, limit int) ([]dict.Result, error) {
+	limit = min(max(limit, 1), 500)
+	var out []dict.Result
+	for offset := 0; ; offset += 256 {
+		if err := ctx.Err(); err != nil {
+			return out, err
+		}
+		words := d.Keywords(offset, 256)
+		if len(words) == 0 {
+			break
+		}
+		for _, word := range words {
+			matched, err := MatchMask(term, word)
+			if err != nil {
+				return nil, err
+			}
+			if !matched {
+				continue
+			}
+			rows, err := d.Exact(word, 1)
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, rows...)
+			if len(out) >= limit {
+				return out, nil
+			}
+		}
+		if len(words) < 256 {
+			break
+		}
+	}
+	return out, nil
+}
+
+// MatchMask matches a headword case-insensitively; ? consumes one rune and *
+// consumes any number of runes.
+func MatchMask(pattern, word string) (bool, error) {
+	var b strings.Builder
+	b.WriteString("(?i)^")
+	for _, r := range pattern {
+		switch r {
+		case '?':
+			b.WriteString(".")
+		case '*':
+			b.WriteString(".*")
+		default:
+			b.WriteString(regexp.QuoteMeta(string(r)))
+		}
+	}
+	b.WriteString("$")
+	re, err := regexp.Compile(b.String())
+	if err != nil {
+		return false, err
+	}
+	return re.MatchString(word), nil
 }
 
 // Hit is the result of one dictionary. Order of hits mirrors the input
@@ -281,7 +350,13 @@ func query(ctx context.Context, d dict.Dictionary, mode Mode, term string, plan 
 			h.Skipped = true
 			return h
 		}
-		if indexed {
+		if HasMask(term) {
+			if indexed {
+				h.Results, h.Err = s.MaskContext(ctx, term, perDict)
+			} else {
+				h.Results, h.Err = maskHeadwords(ctx, d, term, perDict)
+			}
+		} else if indexed {
 			h.Results, h.Err = s.ExactContext(ctx, term, perDict)
 		} else {
 			h.Results, h.Err = d.Exact(term, perDict)
@@ -291,18 +366,32 @@ func query(ctx context.Context, d dict.Dictionary, mode Mode, term string, plan 
 			h.Skipped = true
 			return h
 		}
-		if indexed {
+		if HasMask(term) {
+			if indexed {
+				h.Results, h.Err = s.MaskContext(ctx, term, perDict)
+			} else {
+				h.Results, h.Err = maskHeadwords(ctx, d, term, perDict)
+			}
+		} else if indexed {
 			h.Results, h.Err = s.PrefixContext(ctx, term, perDict)
 		} else {
 			h.Results, h.Err = d.Prefix(term, perDict)
 		}
 	case Contains:
-		if !indexed || !caps.Contains {
+		if !indexed || (!caps.Contains && !HasMask(term)) {
 			h.Skipped = true
 			return h
 		}
-		h.Results, h.Err = s.ContainsContext(ctx, term, perDict)
+		if HasMask(term) {
+			h.Results, h.Err = s.MaskContext(ctx, term, perDict)
+		} else {
+			h.Results, h.Err = s.ContainsContext(ctx, term, perDict)
+		}
 	case FullText:
+		if HasMask(term) {
+			h.Skipped = true
+			return h
+		}
 		if !indexed || !caps.FTS {
 			h.Skipped = true
 			return h
@@ -316,6 +405,18 @@ func query(ctx context.Context, d dict.Dictionary, mode Mode, term string, plan 
 		h.Results, h.Err = s.FullTextContext(ctx, term, perDict)
 		if h.Err == nil {
 			h.Rung = "words"
+		}
+	case Mask:
+		if indexed {
+			if ms, ok := d.(interface {
+				MaskContext(context.Context, string, int) ([]dict.Result, error)
+			}); ok {
+				h.Results, h.Err = ms.MaskContext(ctx, term, perDict)
+			} else {
+				h.Err = dict.ErrUnsupported
+			}
+		} else {
+			h.Results, h.Err = maskHeadwords(ctx, d, term, perDict)
 		}
 	}
 	return h

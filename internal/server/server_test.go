@@ -1133,6 +1133,15 @@ func TestSearchFormats(t *testing.T) {
 	}
 }
 
+func TestMaskSearchMode(t *testing.T) {
+	s := newTestServer(t)
+	rec := httptest.NewRecorder()
+	s.ServeHTTP(rec, newRequest("GET", "/api/search?q=coraz?n&mode=mask&n=10", nil))
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"Headword":"corazón"`) {
+		t.Fatalf("mask search status=%d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
 // The reduction is the whole point, so assert it actually reduces - on markup
 // shaped like a real dictionary article rather than on a toy string.
 func TestCleanFormatStripsChromeAndScripts(t *testing.T) {
