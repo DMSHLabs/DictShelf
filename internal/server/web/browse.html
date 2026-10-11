@@ -349,6 +349,7 @@ html[data-desktop-image] .chooser-list :is(.list-search-dock,.list-search-input,
 <footer id="foot" hidden>
   <div class="browse-search-dock" role="search">
     <button class="browse-search-mode" type="button" id="findMode" aria-label="{{T:browse.filterWords}}">⌕</button>
+  <button class="browse-search-mode" type="button" id="maskMode" aria-label="{{T:browse.maskSearch}}" aria-pressed="false">*</button>
     <input class="browse-search-input" id="findInput" type="search" placeholder="{{T:browse.findWords}}"
            spellcheck="false" autocomplete="off" autocapitalize="off" enterkeyhint="search"
            aria-label="{{T:browse.findWords}}">
@@ -406,7 +407,7 @@ $("stripPrev").addEventListener("click",()=>scrollStrip(-1));
 $("stripNext").addEventListener("click",()=>scrollStrip(1));
 $("strip").addEventListener("scroll",updateStripArrows,{passive:true});
 new ResizeObserver(updateStripArrows).observe($("strip"));
-let findResult=null,findIndex=-1,findFilter=false,findTimer=0,findAbort=null,findSeq=0,browseSeq=0;
+let findResult=null,findIndex=-1,findFilter=false,findTimer=0,findAbort=null,findSeq=0,browseSeq=0,findMask=false;
 const findIcons={search:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 5 5"/></svg>',
   filter:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h18l-7 8v5l-4 2v-7z"/></svg>'};
 
@@ -459,6 +460,7 @@ function currentFoundWord(){
 }
 const foldFind=s=>s.normalize("NFD").replace(/\p{M}/gu,"").toLowerCase();
 function matchingLetters(word){
+  if(findMask)return maskRanges(word,$("findInput").value);
   const parts=($("findInput").value.match(/[\p{L}\p{N}\p{M}]+/gu)||[]).map(foldFind).filter(Boolean);
   if(!parts.length)return null;
   const ranges=[],seen=new Set();
@@ -482,6 +484,37 @@ function matchingLetters(word){
   for(const [start,end] of ranges){
     if(merged.length&&start<=merged[merged.length-1][1])
       merged[merged.length-1][1]=Math.max(end,merged[merged.length-1][1]);
+    else merged.push([start,end]);
+  }
+  return merged;
+}
+function maskRanges(word,pattern){
+  const w=Array.from(word),p=Array.from(pattern),starts=[];
+  let at=0;for(const ch of w){starts.push(at);at+=ch.length}
+  const failed=new Set();
+  function walk(pi,wi){
+    const key=pi+":"+wi;if(failed.has(key))return null;
+    if(pi===p.length)return wi===w.length?[]:null;
+    if(p[pi]==="*"){
+      for(let end=wi;end<=w.length;end++){
+        const tail=walk(pi+1,end);if(tail)return tail;
+      }
+    }else if(wi<w.length){
+      const matches=p[pi]==="?"||foldFind(p[pi])===foldFind(w[wi]);
+      const tail=matches?walk(pi+1,wi+1):null;
+      if(tail){
+        if(p[pi]==="?")return tail;
+        return [[starts[wi],starts[wi]+w[wi].length],...tail];
+      }
+    }
+    failed.add(key);return null;
+  }
+  const ranges=walk(0,0);
+  if(!ranges)return null;
+  ranges.sort((a,b)=>a[0]-b[0]);
+  const merged=[];
+  for(const [start,end] of ranges){
+    if(merged.length&&start<=merged[merged.length-1][1])merged[merged.length-1][1]=Math.max(end,merged[merged.length-1][1]);
     else merged.push([start,end]);
   }
   return merged;
@@ -531,6 +564,8 @@ function updateFindControls(){
   $("findMode").classList.toggle("is-on",filtering);
   $("findMode").setAttribute("aria-pressed",String(filtering));
   $("findMode").setAttribute("aria-label",t(filtering?"browse.searchWords":"browse.filterWords"));
+  $("maskMode").classList.toggle("is-on",findMask);
+  $("maskMode").setAttribute("aria-pressed",String(findMask));
   const total=findResult?.total||(filtering&&!$("findInput").value.trim()?state?.total||0:0);
   $("findCount").textContent=filtering?total+"/"+total:(findIndex<0?0:findIndex+1)+"/"+total;
   $("findPrev").disabled=$("findNext").disabled=filtering||!total;
@@ -539,7 +574,7 @@ async function fetchFound(page,target=0,record="replace"){
   findAbort?.abort();
   const controller=new AbortController();findAbort=controller;
   const seq=++findSeq,query=$("findInput").value.trim();
-  const u=new URLSearchParams({dict:dictId,q:query,p:String(page)});
+  const u=new URLSearchParams({dict:dictId,q:query,p:String(page),mask:findMask?"1":"0"});
   try{
     const r=await fetch("/api/browse/find?"+u,{signal:controller.signal});
     if(!r.ok)throw new Error("find");
@@ -589,6 +624,7 @@ function browseReturnURL(){
   if(query){
     url.searchParams.set("find",query);
     if(findFilter)url.searchParams.set("filter","1");
+    if(findMask)url.searchParams.set("mask","1");
     if(findResult){url.searchParams.set("fp",String(findResult.page));url.searchParams.set("fi",String(Math.max(0,findIndex)))}
   }
   url.searchParams.set("y",String(Math.round(scrollY)));
@@ -759,6 +795,9 @@ $("findInput").addEventListener("keydown",e=>{
   }
 });
 $("findMode").addEventListener("click",toggleFindFilter);
+$("maskMode").addEventListener("click",()=>{
+  findMask=!findMask;updateFindControls();findChanged();
+});
 $("findPrev").addEventListener("click",()=>findMove(-1));
 $("findNext").addEventListener("click",()=>findMove(1));
 updateFindControls();
@@ -797,7 +836,7 @@ addEventListener("popstate",()=>{
     if(!state)return;
     const query=p.get("find")||"";
     if(query){
-      $("findInput").value=query;findFilter=p.get("filter")==="1";
+      $("findInput").value=query;findFilter=p.get("filter")==="1";findMask=p.get("mask")==="1";
       updateFindControls();
       await fetchFound(Math.max(1,Number(p.get("fp"))||1),Math.max(0,Number(p.get("fi"))||0),"none");
     }

@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/wuweidict/wudict/internal/dict"
@@ -32,6 +33,23 @@ func TestBrowseFindHeadwordsAcrossPages(t *testing.T) {
 	words, total, err = s.FindHeadwords(context.Background(), "ware", 0, 2)
 	if err != nil || total != 1 || fmt.Sprint(words) != "[warehouse]" {
 		t.Fatalf("whole-title prefix = %v of %d, %v", words, total, err)
+	}
+}
+
+func TestBrowseFindHeadwordsMask(t *testing.T) {
+	s := browseStore(t, []string{"corazón", "corazonada", "casa", "@_hidden"})
+	words, total, err := s.FindHeadwordsMask(context.Background(), "coraz?n", 0, 10)
+	if err != nil || total != 1 || len(words) != 1 || words[0] != "corazón" {
+		t.Fatalf("mask find = %v, %d, %v", words, total, err)
+	}
+	words, total, err = s.FindHeadwordsMask(context.Background(), "*", 0, 10)
+	if err != nil || total != 3 || len(words) != 3 {
+		t.Fatalf("broad mask should return visible words only: %v, %d, %v", words, total, err)
+	}
+	for _, word := range words {
+		if strings.HasPrefix(word, "@") {
+			t.Fatalf("internal headword leaked: %q", word)
+		}
 	}
 }
 

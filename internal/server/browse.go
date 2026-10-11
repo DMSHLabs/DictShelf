@@ -31,6 +31,7 @@ func (s *Server) handleBrowseFind(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 400, "search text is too long")
 		return
 	}
+	mask := q.Get("mask") == "1"
 	e, err := s.reg.get(q.Get("dict"))
 	if err != nil {
 		httpErr(w, 404, "%v", err)
@@ -58,7 +59,11 @@ func (s *Server) handleBrowseFind(w http.ResponseWriter, r *http.Request) {
 	if page > 10000000 {
 		page = 10000000
 	}
-	words, total, err := finder.FindHeadwords(r.Context(), query, (page-1)*browsePageSize, browsePageSize)
+	find := finder.FindHeadwords
+	if mask {
+		find = finder.FindHeadwordsMask
+	}
+	words, total, err := find(r.Context(), query, (page-1)*browsePageSize, browsePageSize)
 	if err != nil {
 		if r.Context().Err() != nil {
 			return
@@ -69,7 +74,7 @@ func (s *Server) handleBrowseFind(w http.ResponseWriter, r *http.Request) {
 	pages := (total + browsePageSize - 1) / browsePageSize
 	if pages > 0 && page > pages {
 		page = pages
-		words, _, err = finder.FindHeadwords(r.Context(), query, (page-1)*browsePageSize, browsePageSize)
+		words, _, err = find(r.Context(), query, (page-1)*browsePageSize, browsePageSize)
 		if err != nil {
 			httpErr(w, 500, "searching %s: %v", e.ID, err)
 			return

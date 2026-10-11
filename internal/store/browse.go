@@ -7,6 +7,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"regexp"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -46,6 +47,44 @@ func (s *Store) FindHeadwords(ctx context.Context, query string, offset, limit i
 			return nil, 0, err
 		}
 		words = append(words, word)
+	}
+	return words, total, rows.Err()
+}
+
+// FindHeadwordsMask scans the existing headword index and pages mask matches.
+func (s *Store) FindHeadwordsMask(ctx context.Context, query string, offset, limit int) ([]string, int, error) {
+	if offset < 0 {
+		offset = 0
+	}
+	if limit <= 0 {
+		return []string{}, 0, nil
+	}
+	re, err := regexp.Compile("(?i)^" + wildcardRegexp(query) + "$")
+	if err != nil {
+		return nil, 0, err
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT DISTINCT w FROM entry WHERE `+browseWhere+browseOrder)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+	words := make([]string, 0, limit)
+	total := 0
+	for rows.Next() {
+		if err := ctx.Err(); err != nil {
+			return nil, 0, err
+		}
+		var word string
+		if err := rows.Scan(&word); err != nil {
+			return nil, 0, err
+		}
+		if !re.MatchString(word) {
+			continue
+		}
+		if total >= offset && len(words) < limit {
+			words = append(words, word)
+		}
+		total++
 	}
 	return words, total, rows.Err()
 }
