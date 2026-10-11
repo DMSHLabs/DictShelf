@@ -82,20 +82,15 @@ func (s *Store) FindHeadwordsMaskWithin(ctx context.Context, query, within strin
 	positions := make([]int, 0, limit)
 	total, basePosition := 0, 0
 	var sections dict.MaskSections
-	for _, span := range maskIndexSpans(query) {
-		rows, err := s.db.QueryContext(ctx, `SELECT DISTINCT w FROM entry WHERE `+browseWhere+span.where+browseOrder, span.args...)
-		if err != nil {
-			return nil, 0, nil, nil, err
-		}
+	visit := func(rows *sql.Rows) error {
+		defer rows.Close()
 		for rows.Next() {
 			if err := ctx.Err(); err != nil {
-				rows.Close()
-				return nil, 0, nil, nil, err
+				return err
 			}
 			var word string
 			if err := rows.Scan(&word); err != nil {
-				rows.Close()
-				return nil, 0, nil, nil, err
+				return err
 			}
 			if !re.MatchString(word) {
 				continue
@@ -112,10 +107,32 @@ func (s *Store) FindHeadwordsMaskWithin(ctx context.Context, query, within strin
 			}
 			total++
 		}
-		err = rows.Err()
-		rows.Close()
+		return rows.Err()
+	}
+
+	// Use the optional trigram index as a candidate source when the mask has
+	// a sufficiently long literal run. The complete mask still verifies every
+	// candidate. Otherwise, retain the regular headword-index scan.
+	if literal := maskTrigramLiteral(query); s.hasTrigram && !s.staleFold && literal != "" && !maskHasASCIILead(query) {
+		phrase := `"` + strings.ReplaceAll(literal, `"`, `""`) + `"`
+		rows, err := s.db.QueryContext(ctx, `SELECT DISTINCT e.w FROM entry_trigram t
+			JOIN entry e ON e.id=t.rowid WHERE entry_trigram MATCH ? AND `+browseWhere+
+			` ORDER BY e.w COLLATE NOCASE`, phrase)
 		if err != nil {
 			return nil, 0, nil, nil, err
+		}
+		if err := visit(rows); err != nil {
+			return nil, 0, nil, nil, err
+		}
+	} else {
+		for _, span := range maskIndexSpans(query) {
+			rows, err := s.db.QueryContext(ctx, `SELECT DISTINCT w FROM entry WHERE `+browseWhere+span.where+browseOrder, span.args...)
+			if err != nil {
+				return nil, 0, nil, nil, err
+			}
+			if err := visit(rows); err != nil {
+				return nil, 0, nil, nil, err
+			}
 		}
 	}
 	return words, total, sections.Finish(), positions, nil
