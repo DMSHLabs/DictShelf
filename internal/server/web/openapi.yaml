@@ -2570,6 +2570,12 @@ paths:
         through the always-present prepared headword index. Returns distinct
         matching headwords in browse order, in fixed-size result pages.
         Search is over the entire dictionary, not the current browse page.
+        With mask=1, q is a whole-headword mask (? for one Unicode character,
+        * for any number); this path can scan a prepared or direct dictionary
+        and also returns alphabet sections for matching headwords.
+        With mask=1, within further limits those matches to the bottom list
+        control's token-prefix search or whole-headword mask. Positions then
+        address each returned word in the unfiltered mask result.
         Same-origin only.
       parameters:
         - name: dict
@@ -2583,6 +2589,18 @@ paths:
         - name: p
           in: query
           schema: { type: integer, minimum: 1, default: 1 }
+        - name: mask
+          in: query
+          description: Set to 1 to interpret q as a headword mask.
+          schema: { type: string, enum: ['1'] }
+        - name: within
+          in: query
+          description: Additional headword search inside q's mask results.
+          schema: { type: string, maxLength: 256 }
+        - name: withinMask
+          in: query
+          description: Set to 1 to interpret within as a whole-headword mask.
+          schema: { type: string, enum: ['1'] }
       responses:
         '200':
           description: One page of matches and the total match count.
@@ -2595,6 +2613,19 @@ paths:
                   words:
                     type: array
                     items: { type: string }
+                  alphabet:
+                    type: array
+                    description: Initial-letter sections of the mask matches; present when mask=1.
+                    items:
+                      type: object
+                      properties:
+                        l: { type: string }
+                        o: { type: integer }
+                        n: { type: integer }
+                  positions:
+                    type: array
+                    description: Offsets in the unfiltered mask list, when within is set.
+                    items: { type: integer }
                   total: { type: integer }
                   page: { type: integer }
                   pages: { type: integer }

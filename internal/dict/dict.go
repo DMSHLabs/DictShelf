@@ -174,8 +174,8 @@ type Searcher interface {
 	FullTextMatch(ctx context.Context, match string, limit int) ([]Result, error)
 }
 
-// Letter is one chip of the browse strip: a run of headwords sharing an
-// initial, and where that run begins in browse order.
+// Letter is one chip of a headword strip: a run of browse headwords sharing
+// an initial, or a mask result page labelled by its first headword.
 //
 // Offset is a position in the SAME sequence Browser.Page pages through, so a
 // chip becomes a page by integer division and nothing has to agree about page
@@ -220,7 +220,7 @@ type Browser interface {
 // Results are returned in browse order, independently of the current page.
 type BrowseFinder interface {
 	FindHeadwords(ctx context.Context, query string, offset, limit int) ([]string, int, error)
-	FindHeadwordsMask(ctx context.Context, query string, offset, limit int) ([]string, int, error)
+	FindHeadwordsMask(ctx context.Context, query string, offset, limit int) ([]string, int, []Letter, error)
 }
 
 // Entry is one dictionary article as produced by a format Reader during

@@ -52,41 +52,65 @@ func (s *Store) FindHeadwords(ctx context.Context, query string, offset, limit i
 }
 
 // FindHeadwordsMask scans the existing headword index and pages mask matches.
-func (s *Store) FindHeadwordsMask(ctx context.Context, query string, offset, limit int) ([]string, int, error) {
+func (s *Store) FindHeadwordsMask(ctx context.Context, query string, offset, limit int) ([]string, int, []dict.Letter, error) {
+	words, total, letters, _, err := s.FindHeadwordsMaskWithin(ctx, query, "", false, offset, limit)
+	return words, total, letters, err
+}
+
+// FindHeadwordsMaskWithin intersects the main mask with the bottom Browse
+// control. Positions address the unfiltered mask list for match navigation.
+func (s *Store) FindHeadwordsMaskWithin(ctx context.Context, query, within string, withinMask bool, offset, limit int) ([]string, int, []dict.Letter, []int, error) {
 	if offset < 0 {
 		offset = 0
 	}
 	if limit <= 0 {
-		return []string{}, 0, nil
+		return []string{}, 0, nil, nil, nil
 	}
 	re, err := regexp.Compile("(?i)^" + wildcardRegexp(query) + "$")
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, nil, nil, err
 	}
+	var withinRE *regexp.Regexp
+	if within != "" && withinMask {
+		withinRE, err = regexp.Compile("(?i)^" + wildcardRegexp(within) + "$")
+		if err != nil {
+			return nil, 0, nil, nil, err
+		}
+	}
+	matchTerms := dict.HeadwordTermMatcher(within)
 	rows, err := s.db.QueryContext(ctx, `SELECT DISTINCT w FROM entry WHERE `+browseWhere+browseOrder)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, nil, nil, err
 	}
 	defer rows.Close()
 	words := make([]string, 0, limit)
-	total := 0
+	positions := make([]int, 0, limit)
+	total, basePosition := 0, 0
+	var sections dict.MaskSections
 	for rows.Next() {
 		if err := ctx.Err(); err != nil {
-			return nil, 0, err
+			return nil, 0, nil, nil, err
 		}
 		var word string
 		if err := rows.Scan(&word); err != nil {
-			return nil, 0, err
+			return nil, 0, nil, nil, err
 		}
 		if !re.MatchString(word) {
 			continue
 		}
+		position := basePosition
+		basePosition++
+		if within != "" && (withinMask && !withinRE.MatchString(word) || !withinMask && !matchTerms(word)) {
+			continue
+		}
+		sections.Add(word)
 		if total >= offset && len(words) < limit {
 			words = append(words, word)
+			positions = append(positions, position)
 		}
 		total++
 	}
-	return words, total, rows.Err()
+	return words, total, sections.Finish(), positions, rows.Err()
 }
 
 // browseWhere hides the internal entries from every browse read. `@_%` is an

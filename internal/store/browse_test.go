@@ -38,11 +38,11 @@ func TestBrowseFindHeadwordsAcrossPages(t *testing.T) {
 
 func TestBrowseFindHeadwordsMask(t *testing.T) {
 	s := browseStore(t, []string{"corazón", "corazonada", "casa", "@_hidden"})
-	words, total, err := s.FindHeadwordsMask(context.Background(), "coraz?n", 0, 10)
+	words, total, _, err := s.FindHeadwordsMask(context.Background(), "coraz?n", 0, 10)
 	if err != nil || total != 1 || len(words) != 1 || words[0] != "corazón" {
 		t.Fatalf("mask find = %v, %d, %v", words, total, err)
 	}
-	words, total, err = s.FindHeadwordsMask(context.Background(), "*", 0, 10)
+	words, total, _, err = s.FindHeadwordsMask(context.Background(), "*", 0, 10)
 	if err != nil || total != 3 || len(words) != 3 {
 		t.Fatalf("broad mask should return visible words only: %v, %d, %v", words, total, err)
 	}
