@@ -28,12 +28,12 @@ const (
 	Prefix
 	Contains
 	FullText
-	Mask
+	Wildcards
 )
 
 func (m Mode) String() string {
-	if m == Mask {
-		return "mask"
+	if m == Wildcards {
+		return "wildcards"
 	}
 	return [...]string{"exact", "prefix", "contains", "fts"}[m]
 }
@@ -50,8 +50,8 @@ func ParseMode(s string) (Mode, error) {
 		return Contains, nil
 	case "fts":
 		return FullText, nil
-	case "mask":
-		return Mask, nil
+	case "wildcards", "mask":
+		return Wildcards, nil
 	}
 	return 0, fmt.Errorf("unknown mode %q", s)
 }
@@ -391,7 +391,7 @@ func query(ctx context.Context, d dict.Dictionary, mode Mode, term string, plan 
 		if h.Err == nil {
 			h.Rung = "words"
 		}
-	case Mask:
+	case Wildcards:
 		if indexed {
 			if ms, ok := d.(interface {
 				MaskContext(context.Context, string, int) ([]dict.Result, error)
