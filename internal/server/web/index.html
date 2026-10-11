@@ -215,7 +215,7 @@ window.wudictFontScale=(function(){
      soft key "Search" on most Android builds, but that is a browser default
      and not a contract. -->
 <input type="search" id="q" placeholder="{{T:search.input}}" autocomplete="off" enterkeyhint="search" autofocus aria-label="{{T:search.term}}" disabled>
-<button type="submit" id="maskSubmit" aria-label="{{T:search.maskRun}}" title="{{T:search.maskRun}}" hidden>✓</button>
+<button type="submit" id="maskSubmit" aria-label="{{T:search.wildcardsRun}}" title="{{T:search.wildcardsRun}}" hidden>✓</button>
 <span id="searchHistory" class="search-history" role="group" aria-label="{{T:search.history}}" hidden></span>
 </span>
 <span class="seg">
@@ -225,7 +225,7 @@ window.wudictFontScale=(function(){
 <option value="exact">{{T:search.exact}}</option>
 <option value="contains">{{T:dictUI.contains}}</option>
 <option value="fts">{{T:dictUI.fts}}</option>
-<option value="mask">{{T:search.mask}}</option>
+<option value="wildcards">{{T:search.wildcards}}</option>
 </select>
 <button type="button" class="choice-btn themed-select-btn" id="modeMenuBtn" aria-haspopup="listbox" aria-expanded="false" aria-label="{{T:search.mode}}" disabled></button>
 <span class="choice-menu menu-card themed-select-menu" id="modeMenu" role="listbox" aria-label="{{T:search.mode}}" data-w="anchor" hidden></span>
@@ -262,11 +262,11 @@ window.wudictFontScale=(function(){
 <div id="status" role="status" aria-live="polite"><div class="msg"><div class="txt" id="statusMsg"></div></div></div>
 <div id="outdatedNotice" class="bulkbox outdated-notice" role="status" hidden></div>
 <div id="out"></div>
-<section id="maskView" aria-label="{{T:search.maskResults}}" hidden>
+<section id="maskView" aria-label="{{T:search.wildcardsResults}}" hidden>
   <header class="mask-head">
-    <select id="maskDict" aria-label="{{T:search.maskDictionary}}"></select>
-    <span id="maskProgress" aria-label="{{T:search.maskResults}}" hidden>
-      <span id="maskCount" role="status" aria-label="{{T:search.maskTotal}}"></span>
+    <select id="maskDict" aria-label="{{T:search.wildcardsDictionary}}"></select>
+    <span id="maskProgress" aria-label="{{T:search.wildcardsResults}}" hidden>
+      <span id="maskCount" role="status" aria-label="{{T:search.wildcardsTotal}}"></span>
       <button type="button" id="maskPrev" aria-label="{{T:browse.previousTitle}}">‹</button>
       <span id="maskPage"></span>
       <button type="button" id="maskNext" aria-label="{{T:browse.nextTitle}}">›</button>
@@ -278,7 +278,7 @@ window.wudictFontScale=(function(){
 </main>
 <footer id="maskDock" class="mask-dock" role="search" hidden>
   <button type="button" id="maskFindMode" aria-label="{{T:browse.filterWords}}">⌕</button>
-  <button type="button" id="maskFindWildcard" aria-label="{{T:browse.maskSearch}}" aria-pressed="false">*</button>
+  <button type="button" id="maskFindWildcard" aria-label="{{T:browse.wildcardsSearch}}" aria-pressed="false">*</button>
   <input id="maskFindInput" type="search" placeholder="{{T:browse.findWords}}" aria-label="{{T:browse.findWords}}"
          spellcheck="false" autocomplete="off" autocapitalize="off" enterkeyhint="search">
   <output id="maskFindCount" aria-live="polite">0/0</output>
@@ -1179,10 +1179,10 @@ $("saveSystemLog").addEventListener("click",event=>{
   const result=prompt("wudict:system-log","");
   if(result&&result!=="ok")alert(result);
 });
-window.wuSearchHistory.setSearch(word=>searchFor(word));
+window.wuSearchHistory.setSearch(word=>{ if($("mode").value==="wildcards"){ $("q").value=word;window.wuSearchHistory.hide();maskSubmitRequested=true;commitOnce=true;doSearch(); } else searchFor(word); });
 window.wuSearchHistory.setSuggest((q,onHit,signal)=>{
   const mode=$("mode").value,sel=$("dict").value||"all";
-  if(mode==="fts"||mode==="mask")return;
+  if(mode==="fts"||mode==="wildcards")return;
   const ids=sel==="all"?activeUserGroupIds():sel.startsWith("g:")?groupIds(sel):null;
   if(ids&&!ids.length)return;
   const dict=ids?ids.join(","):sel,n=ids?(ids.length===1?25:5):25;
@@ -2585,7 +2585,7 @@ async function loadDicts(rescan){
   setPhase("ready");
   clearStatus("load");
   // a search run against a half-loaded list is now answerable in full
-  if(staleSearch&&lastQuery){staleSearch=false;if($("mode").value==="mask")maskSubmitRequested=true;doSearch()}
+  if(staleSearch&&lastQuery){staleSearch=false;if($("mode").value==="wildcards")maskSubmitRequested=true;doSearch()}
   return true;
 }
 /* The narrow-viewport chips. They render the two <select>s and nothing more:
@@ -2595,16 +2595,19 @@ async function loadDicts(rescan){
    Every chip keeps its mode's word: the words the mode dropdown, the
    per-dictionary switch and the result summaries all use, so a chip never
    names a mode differently from the rest of the page. */
-const MODE_SHORT={prefix:tx("search.prefixShort"),exact:tx("search.exact"),contains:tx("dictUI.contains"),fts:tx("dictUI.fts"),mask:tx("search.mask")};
+const MODE_SHORT={prefix:tx("search.prefixShort"),exact:tx("search.exact"),contains:tx("dictUI.contains"),fts:tx("dictUI.fts"),wildcards:tx("search.wildcards")};
 const SEARCH_MODE_KEY="wudict_search_mode";
+const canonicalSearchMode=mode=>mode==="mask"?"wildcards":mode;
 function setSearchMode(mode){
+	mode=canonicalSearchMode(mode);
   if(!Object.prototype.hasOwnProperty.call(MODE_SHORT,mode))return;
   $("mode").value=mode;
-  $("maskSubmit").hidden=mode!=="mask";
-  $("maskProgress").hidden=mode!=="mask";
-  $("maskView").hidden=mode!=="mask";
-  $("maskDock").hidden=mode!=="mask";
-  document.body.classList.toggle("mask-view-active",mode==="mask");
+  $("maskSubmit").hidden=mode!=="wildcards";
+  $("maskProgress").hidden=mode!=="wildcards";
+  $("maskView").hidden=mode!=="wildcards";
+  $("maskDock").hidden=mode!=="wildcards";
+  document.body.classList.toggle("mask-view-active",mode==="wildcards");
+  window.wuSearchHistory?.modeChanged();
   try{localStorage.setItem(SEARCH_MODE_KEY,mode)}catch(_){}
 }
 try{setSearchMode(localStorage.getItem(SEARCH_MODE_KEY))}catch(_){}
@@ -2648,7 +2651,7 @@ $("dict").onchange=e=>{const v=e.target.value;localStorage.setItem("wudict_dict"
 /* Mode re-runs the search on change, symmetric with #dict: the narrow bar has
    no submit button, so a mode that waited for the next submit would appear to
    do nothing at all. */
-$("mode").onchange=()=>{setSearchMode($("mode").value);syncChips();if($("mode").value==="mask"){window.wuSearchHistory.hide();maskInvalidate();return}if($("q").value.trim())doSearch()};
+$("mode").onchange=()=>{setSearchMode($("mode").value);syncChips();if($("mode").value==="wildcards"){window.wuSearchHistory.hide();maskInvalidate();return}if($("q").value.trim())doSearch()};
 syncChips(); // the markup ships empty chips; JS stays the single authority
 
 /* provenance: the collapsed line says where the dictionary came from (its
@@ -5036,7 +5039,7 @@ function renderSlot(box,h,mode,q,perDict,group){
   const dl=document.createElement("dl"),roots=[];
   for(const r of h.results){
     const dt=document.createElement("dt");
-    dt.innerHTML=mode==="mask"?highlightMaskHeadword(r.Headword,q):esc(r.Headword);
+    dt.innerHTML=mode==="wildcards"?highlightMaskHeadword(r.Headword,q):esc(r.Headword);
     const dd=document.createElement("dd");dd.dataset.dict=h.dict;
     roots.push(renderArticle(dd,r.Body,h.dict,
       anchorOnce&&anchorOnce.dict===h.dict&&r===h.results[0]?anchorOnce.frag:""));
@@ -5155,7 +5158,7 @@ function maskInvalidate(){
   $("maskDict").replaceChildren();$("maskLetters").replaceChildren();
   $("maskCount").textContent="";$("maskPage").textContent="";
   $("maskPrev").disabled=$("maskNext").disabled=true;
-  $("maskWords").innerHTML='<p class="mask-empty">'+tx("search.maskRun")+'</p>';
+  $("maskWords").innerHTML='<p class="mask-empty">'+tx("search.wildcardsRun")+'</p>';
 }
 function maskStripPaint(){
   const strip=$("maskLetters"),rebuilt=maskStripRendered!==maskStripVersion;
@@ -5237,13 +5240,13 @@ function maskNeighbor(from,step){
 }
 function maskRender(){
   const row=maskRows[maskCurrent];maskMenu();
-  if(!row){$("maskWords").innerHTML='<p class="mask-empty">'+tx("search.maskEmpty")+'</p>';return}
+  if(!row){$("maskWords").innerHTML='<p class="mask-empty">'+tx("search.wildcardsEmpty")+'</p>';return}
   const result=row.data;
   $("maskPrev").disabled=(!result||result.page<=1)&&maskNeighbor(maskCurrent,-1)<0;
   $("maskNext").disabled=(!result||result.page>=result.pages)&&maskNeighbor(maskCurrent,1)<0;
-  if(row.state==="pending"||(!result&&row.state!=="error")){$("maskWords").innerHTML='<p class="mask-empty">'+tx("search.maskLoading")+'</p>';return}
+  if(row.state==="pending"||(!result&&row.state!=="error")){$("maskWords").innerHTML='<p class="mask-empty">'+tx("search.wildcardsLoading")+'</p>';return}
   if(row.state==="error"){$("maskWords").innerHTML='<p class="mask-empty">'+esc(row.error)+'</p>';return}
-  if(!result?.words?.length){$("maskWords").innerHTML='<p class="mask-empty">'+tx("search.maskEmpty")+'</p>';return}
+  if(!result?.words?.length){$("maskWords").innerHTML='<p class="mask-empty">'+tx("search.wildcardsEmpty")+'</p>';return}
   $("maskWords").replaceChildren(...result.words.map((word,i)=>{
     const button=document.createElement("button");button.type="button";button.dataset.word=word;
     const lower=maskFindQuery;
@@ -5265,8 +5268,8 @@ async function maskFetch(row,page,generation,navToken){
   const controller=new AbortController();maskControllers.add(controller);
   row.abort=controller;
   try{
-    const params=new URLSearchParams({dict:row.id,q:maskPattern,p:String(page),mask:"1"});
-    if(row.within){params.set("within",row.within);params.set("withinMask",row.withinMask?"1":"0")}
+    const params=new URLSearchParams({dict:row.id,q:maskPattern,p:String(page),wildcards:"1"});
+    if(row.within){params.set("within",row.within);params.set("withinWildcards",row.withinMask?"1":"0")}
     const response=await fetch("/api/browse/find?"+params,{signal:controller.signal});
     if(!response.ok)throw new Error(tx("search.failedDict"));
     const data=await response.json();if(generation!==maskGeneration)return;
@@ -5328,7 +5331,7 @@ async function maskRun(pattern){
   maskBaseRows=maskRows;maskBaseCurrent=0;maskFindControls();
   maskStripVersion++;
   const saved=new URLSearchParams(location.search);
-  const restoring=saved.get("mode")==="mask"&&saved.get("q")===pattern;
+  const restoring=canonicalSearchMode(saved.get("mode"))==="wildcards"&&saved.get("q")===pattern;
   const index=restoring?maskRows.findIndex(row=>row.id===saved.get("maskdict")):-1;
   maskCurrent=index>=0?index:0;
   if(index>=0){
@@ -5348,7 +5351,7 @@ async function maskRun(pattern){
   if(rows.every(row=>row.state==="ready"&&row.total===0)&&maskRows===rows)maskRender();
 }
 function maskRestoreCached(url){
-  if(url.origin!==location.origin||url.pathname!=="/"||url.searchParams.get("mode")!=="mask"||
+  if(url.origin!==location.origin||url.pathname!=="/"||canonicalSearchMode(url.searchParams.get("mode"))!=="wildcards"||
      !maskRows.length||url.searchParams.get("q")!==maskPattern||
      url.searchParams.get("dict")!==maskSelection)return false;
   const index=maskRows.findIndex(row=>row.id===url.searchParams.get("maskdict"));
@@ -5358,7 +5361,7 @@ function maskRestoreCached(url){
   const page=Math.min(10000000,Math.max(1,Number.parseInt(url.searchParams.get("maskpage"),10)||1));
   maskRestoreScroll=Math.min(10000000,Math.max(0,Number.parseInt(url.searchParams.get("maskscroll"),10)||0));
   $("q").value=maskPattern;$("dict").value=maskSelection;
-  setSearchMode("mask");lastQuery=maskPattern;lastScope=null;scopeOnce=null;maskReturn="";
+  setSearchMode("wildcards");lastQuery=maskPattern;lastScope=null;scopeOnce=null;maskReturn="";
   $("out").replaceChildren();setStatus("");syncChips();sbarPaint();
   maskSelect(index,page);
   const pending=[...new Set([...maskRows,...maskBaseRows].filter(row=>row.state==="pending"))];
@@ -5448,8 +5451,8 @@ async function maskFindTurn(step){
   if(!result){
     const controller=new AbortController();maskControllers.add(controller);
     try{
-      const params=new URLSearchParams({dict:row.id,q:maskPattern,p:String(page),mask:"1",
-        within:row.within,withinMask:row.withinMask?"1":"0"});
+      const params=new URLSearchParams({dict:row.id,q:maskPattern,p:String(page),wildcards:"1",
+        within:row.within,withinWildcards:row.withinMask?"1":"0"});
       const response=await fetch("/api/browse/find?"+params,{signal:controller.signal});
       if(!response.ok)return;
       result=await response.json();row.data=result;
@@ -5490,20 +5493,20 @@ $("maskLetters").addEventListener("click",e=>{
 $("maskWords").addEventListener("click",e=>{
   const button=e.target.closest("button[data-word]");if(!button)return;
   const row=maskRows[maskCurrent];if(!row)return;
-  const params=new URLSearchParams({q:maskPattern,mode:"mask",dict:$("dict").value||"all",
+  const params=new URLSearchParams({q:maskPattern,mode:"wildcards",dict:$("dict").value||"all",
     maskdict:row.id,maskpage:String(row.data?.page||1),maskscroll:String(Math.round(scrollY))});
   maskReturn="/?"+params.toString();
   history.replaceState(null,"",maskReturn);
   maskAbort();setSearchMode("exact");syncChips();searchFor(button.dataset.word,{scope:row.id});
 });
-if($("mode").value==="mask")maskInvalidate();
+if($("mode").value==="wildcards")maskInvalidate();
 
 async function doSearch(ev){
   window.wudictArticleFind?.stop();
   if(ev)ev.preventDefault();
   const q=$("q").value.trim();
   if(!q)return;
-  if($("mode").value==="mask"){
+  if($("mode").value==="wildcards"){
     if(!maskSubmitRequested)return;
     maskSubmitRequested=false;scopeOnce=null;lastScope=null;commitOnce=false;
     return maskRun(q);
@@ -5772,7 +5775,7 @@ document.addEventListener("click",e=>{
 
 /* Typing updates suggestions; committing the field updates articles. */
 $("q").addEventListener("input",()=>{
-  if($("mode").value==="mask"){
+  if($("mode").value==="wildcards"){
     maskInvalidate();window.wuSearchHistory.hide();return;
   }
   window.wuSearchHistory.onInput($("q").value);
@@ -5865,10 +5868,10 @@ document.addEventListener("keydown",e=>{
 function searchFor(term,opts){
   const t=String(term||"").trim();
   if(!t)return;
+  if($("mode").value==="fts"||$("mode").value==="wildcards")setSearchMode("prefix");
   window.wuSearchHistory.record(t);
   window.wuSearchHistory.hide();
   $("q").value=t;                       // verbatim: no trimming, ever
-  if($("mode").value==="fts"||$("mode").value==="mask")setSearchMode("prefix");
   const scope=opts?.scope||null,frag=opts?.frag||"";
   scopeOnce=scope;
   // the fragment addresses a place in the SCOPED article; renderSlot matches
@@ -6346,11 +6349,11 @@ function browseReturnFromURL(){
 }
 let browseReturn=browseReturnFromURL();
 function maskReturnFromURL(){
-  const raw=new URLSearchParams(location.search).get("mask");
+  const raw=new URLSearchParams(location.search).get("wildcards")||new URLSearchParams(location.search).get("mask");
   if(!raw)return "";
   try{const url=new URL(raw,location.origin);
     return url.origin===location.origin&&url.pathname==="/"&&
-      url.searchParams.get("mode")==="mask"&&url.searchParams.has("q")
+      canonicalSearchMode(url.searchParams.get("mode"))==="wildcards"&&url.searchParams.has("q")
       ?url.pathname+url.search:"";
   }catch(_){return ""}
 }
@@ -6598,7 +6601,7 @@ function applyURL(){
   if(p.get("mode"))setSearchMode(p.get("mode"));
   if(p.get("dict"))$("dict").value=p.get("dict");
   syncChips();
-  if(p.get("q")){$("q").value=p.get("q");scopeOnce=p.get("from")||null;commitOnce=true;if($("mode").value==="mask")maskSubmitRequested=true;doSearch()}
+  if(p.get("q")){$("q").value=p.get("q");scopeOnce=p.get("from")||null;commitOnce=true;if($("mode").value==="wildcards")maskSubmitRequested=true;doSearch()}
 }
 const _doSearch=doSearch;
 doSearch=function(ev){
@@ -6612,7 +6615,7 @@ doSearch=function(ev){
     // own selector, so restoring a link-followed view never rewrites it
     if(lastScope)params.from=lastScope;
     if(browseReturn)params.browse=browseReturn;
-    if(maskReturn)params.mask=maskReturn;
+    if(maskReturn)params.wildcards=maskReturn;
     const url="?"+new URLSearchParams(params).toString();
     // clicking the same word twice must not stack identical entries
     if(record==="push"&&url!==location.search)history.pushState(null,"",url);
@@ -6626,7 +6629,7 @@ doSearch=function(ev){
 window.addEventListener("popstate",()=>{
   const p=new URLSearchParams(location.search);
   browseReturn=browseReturnFromURL();maskReturn=maskReturnFromURL();sbarPaint();
-  if(p.get("mode")==="mask"&&maskRestoreCached(new URL(location.href)))return;
+  if(canonicalSearchMode(p.get("mode"))==="wildcards"&&maskRestoreCached(new URL(location.href)))return;
   if(p.get("mode"))setSearchMode(p.get("mode"));
   if(p.get("dict"))$("dict").value=p.get("dict");
   syncChips();
@@ -6645,7 +6648,7 @@ window.addEventListener("popstate",()=>{
   navRecord="none";
   scopeOnce=p.get("from")||null; // a link-followed view was scoped; restore that
   commitOnce=true;               // Back/Forward restores a view, it does not type
-  if($("mode").value==="mask")maskSubmitRequested=true;
+  if($("mode").value==="wildcards")maskSubmitRequested=true;
   doSearch();
 });
 $("frm").removeEventListener("submit",_doSearch);
@@ -6660,7 +6663,7 @@ $("frm").removeEventListener("submit",_doSearch);
    Shift-Enter walks back; it is not a newline here, because a single-line
    input has none. */
 $("q").addEventListener("keydown",e=>{
-  if($("mode").value==="mask")return;
+  if($("mode").value==="wildcards")return;
   if(e.key!=="Enter"||e.isComposing||e.ctrlKey||e.metaKey||e.altKey)return;
   if(!navWalkable()||$("q").value.trim()!==lastQuery)return;
   e.preventDefault();navGo(e.shiftKey?-1:1);
@@ -6677,11 +6680,11 @@ $("frm").addEventListener("submit",e=>{
   window.wuSearchHistory.record($("q").value);
   window.wuSearchHistory.hide();
   commitOnce=true; // the one moment the query is finished: this search may scroll
-  if($("mode").value==="mask")maskSubmitRequested=true;
+  if($("mode").value==="wildcards")maskSubmitRequested=true;
   return doSearch(e);
 });
 $("q").addEventListener("blur",()=>setTimeout(()=>{
-  if($("mode").value==="mask")return;
+  if($("mode").value==="wildcards")return;
   if(window.wuSearchHistory.isPicking())return;
   const q=$("q").value.trim();
   if(q===lastQuery)return;

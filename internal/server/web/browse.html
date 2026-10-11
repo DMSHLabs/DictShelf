@@ -349,7 +349,7 @@ html[data-desktop-image] .chooser-list :is(.list-search-dock,.list-search-input,
 <footer id="foot" hidden>
   <div class="browse-search-dock" role="search">
     <button class="browse-search-mode" type="button" id="findMode" aria-label="{{T:browse.filterWords}}">⌕</button>
-  <button class="browse-search-mode" type="button" id="maskMode" aria-label="{{T:browse.maskSearch}}" aria-pressed="false">*</button>
+  <button class="browse-search-mode" type="button" id="maskMode" aria-label="{{T:browse.wildcardsSearch}}" aria-pressed="false">*</button>
     <input class="browse-search-input" id="findInput" type="search" placeholder="{{T:browse.findWords}}"
            spellcheck="false" autocomplete="off" autocapitalize="off" enterkeyhint="search"
            aria-label="{{T:browse.findWords}}">
@@ -574,7 +574,7 @@ async function fetchFound(page,target=0,record="replace"){
   findAbort?.abort();
   const controller=new AbortController();findAbort=controller;
   const seq=++findSeq,query=$("findInput").value.trim();
-  const u=new URLSearchParams({dict:dictId,q:query,p:String(page),mask:findMask?"1":"0"});
+  const u=new URLSearchParams({dict:dictId,q:query,p:String(page),wildcards:findMask?"1":"0"});
   try{
     const r=await fetch("/api/browse/find?"+u,{signal:controller.signal});
     if(!r.ok)throw new Error("find");
@@ -624,7 +624,7 @@ function browseReturnURL(){
   if(query){
     url.searchParams.set("find",query);
     if(findFilter)url.searchParams.set("filter","1");
-    if(findMask)url.searchParams.set("mask","1");
+    if(findMask)url.searchParams.set("wildcards","1");
     if(findResult){url.searchParams.set("fp",String(findResult.page));url.searchParams.set("fi",String(Math.max(0,findIndex)))}
   }
   url.searchParams.set("y",String(Math.round(scrollY)));
@@ -836,7 +836,7 @@ addEventListener("popstate",()=>{
     if(!state)return;
     const query=p.get("find")||"";
     if(query){
-      $("findInput").value=query;findFilter=p.get("filter")==="1";findMask=p.get("mask")==="1";
+      $("findInput").value=query;findFilter=p.get("filter")==="1";findMask=p.get("wildcards")==="1"||p.get("mask")==="1";
       updateFindControls();
       await fetchFound(Math.max(1,Number(p.get("fp"))||1),Math.max(0,Number(p.get("fi"))||0),"none");
     }

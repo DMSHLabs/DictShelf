@@ -36,13 +36,13 @@ func (s *Server) handleBrowseFind(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 400, "search text is too long")
 		return
 	}
-	mask := q.Get("mask") == "1"
+	mask := q.Get("wildcards") == "1" || q.Get("mask") == "1"
 	within := strings.TrimSpace(q.Get("within"))
 	if len(within) > 256 {
 		httpErr(w, 400, "filter text is too long")
 		return
 	}
-	withinMask := q.Get("withinMask") == "1"
+	withinMask := q.Get("withinWildcards") == "1" || q.Get("withinMask") == "1"
 	e, err := s.reg.get(q.Get("dict"))
 	if err != nil {
 		httpErr(w, 404, "%v", err)

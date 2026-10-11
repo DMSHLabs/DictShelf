@@ -296,7 +296,7 @@ func TestQuerySkipsWhatADirectBackendCannotDo(t *testing.T) {
 
 func TestParseMode(t *testing.T) {
 	for in, want := range map[string]Mode{"": Prefix, "prefix": Prefix, "fuzzy": Prefix,
-		"exact": Exact, "contains": Contains, "fts": FullText, "mask": Mask} {
+		"exact": Exact, "contains": Contains, "fts": FullText, "wildcards": Wildcards} {
 		if got, err := ParseMode(in); err != nil || got != want {
 			t.Errorf("ParseMode(%q) = %v, %v; want %v", in, got, err, want)
 		}
