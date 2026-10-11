@@ -38,7 +38,7 @@ DICT_DIR = ["~/Dictionaries", "/Volumes/Data/Dicts"]
 
 ## Features
 - Formats: MDict, StarDict, Aard2, DSL, Babylon, ZIM, wuDict markdown (a plain-text dictionary you can write in a text editor)
-- Instant search across all dictionaries with four modes: prefix, exact, contains, and full-text search
+- Instant search across all dictionaries with four modes: prefix, exact, full-text, and [wildcard](https://wudict.legbehindneck.com/reference/wildcard-syntax/) search (`c?t`, `*ology`, `*rain*`)
 - Dictionaries are automatically grouped by language, publisher, direction, or [your own custom groups](https://wudict.legbehindneck.com/dictionaries/groups/).
 - Adjust the font size via the <kbd>☰</kbd> → <kbd><b>+/-</b></kbd> widget
 - [Custom lemmatization](https://wudict.legbehindneck.com/start/search/#inflected-words) (word-form morphology) for 24 languages, configurable via <kbd>☰</kbd> → <kbd>⚙️</kbd> → <kbd>**Lemmatization**</kdb>; English lemmatization comes pre-installed
@@ -70,12 +70,12 @@ DICT_DIR = ["~/Dictionaries", "/Volumes/Data/Dicts"]
 |---|---|---|
 | **exact** | the headword, ignoring case and accents | |
 | **prefix** | headwords that start with the query | |
-| **contains** | headwords that contain the query | contains index |
+| **wildcard** | headwords that fit a pattern: `?` is one character, `*` any number of characters; `*rain*` finds headwords that contain *rain*; a capital letter makes it case-sensitive | headword index |
 | **full-text** | words in the article text, ranked by relevance; phrases, `AND`, `OR`, `NOT`, `NEAR` | full-text index |
 
 Each dictionary's headwords are indexed in the background on its first search.
-The contains and full-text indexes are added per dictionary in the dictionary
-panel (<kbd>☰</kbd>), or with `wudict ingest -contains -fulltext`. With lemma
+The full-text index is added per dictionary in the dictionary panel
+(<kbd>☰</kbd>), or with `wudict ingest -fulltext`. With lemma
 data, an inflected form finds its lemma: *understood* → **understand**.
 
 > [!TIP]
@@ -89,7 +89,7 @@ data, an inflected form finds its lemma: *understood* → **understand**.
 | | |
 |---|---|
 | [Install](https://wudict.legbehindneck.com/start/install/), [First run](https://wudict.legbehindneck.com/start/first-run/) | download, folders |
-| [Search](https://wudict.legbehindneck.com/start/search/), [Full-text query syntax](https://wudict.legbehindneck.com/reference/fts-syntax/) | modes, lemmatization, the dictionary panel |
+| [Search](https://wudict.legbehindneck.com/start/search/), [Full-text query syntax](https://wudict.legbehindneck.com/reference/fts-syntax/), [Wildcard syntax](https://wudict.legbehindneck.com/reference/wildcard-syntax/) | modes, lemmatization, the dictionary panel |
 | [Add dictionaries](https://wudict.legbehindneck.com/dictionaries/add/), [The library](https://wudict.legbehindneck.com/dictionaries/library/) | import, indexing, removal |
 | [Picker groups](https://wudict.legbehindneck.com/dictionaries/groups/), [Custom styles](https://wudict.legbehindneck.com/dictionaries/styles/), [Resource overrides](https://wudict.legbehindneck.com/dictionaries/override/) | customization |
 | [Android](https://wudict.legbehindneck.com/apps/android/), [macOS](https://wudict.legbehindneck.com/apps/macos/), [Windows](https://wudict.legbehindneck.com/apps/windows/), [Run at startup](https://wudict.legbehindneck.com/running/) | platforms |

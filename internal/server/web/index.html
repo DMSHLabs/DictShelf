@@ -214,6 +214,15 @@ select{font-size:13px;color:var(--fg-soft);background:var(--bg-card);
 #status>.msg{overflow:hidden;min-height:0}
 #status .txt{padding:var(--sp-2) 0}
 #status.show{grid-template-rows:1fr;opacity:1}
+/* A warning that stays until it is dismissed: #status is replaced by the next
+   statement, and a dictionary that cannot be opened at all must not be. */
+.notice{display:flex;gap:var(--sp-2);align-items:flex-start;margin-top:var(--sp-2);
+  padding:var(--sp-2) var(--sp-3);border:1px solid var(--danger-line);border-radius:10px;
+  background:var(--danger-soft);color:var(--fg);font-size:13px}
+.notice[hidden]{display:none}
+.notice .ntxt{flex:1;min-width:0;overflow-wrap:anywhere}
+.notice p{margin:0}
+.notice p+p{margin-top:.3em}
 /* one spinner, two homes: inline in #status, and large in the startup
    panel below (.empty) while the dictionary list is still arriving */
 .spin{display:inline-block;width:1em;height:1em;border:2px solid var(--line);
@@ -547,7 +556,7 @@ html:has(#panel.show) .bar{padding-right:var(--wd-sbw,0px)}
   color:#1f1a12;background:var(--accent)}
 .azgo:hover{filter:brightness(1.08)}
 /* ▲ ▼ and the drag handle place a card against neighbours in the WHOLE list,
-   which a filtered list does not show, so they leave. ⏫ and the pin keep
+   which a filtered list does not show, so they leave. To-top and the pin keep
    meaning the same thing. */
 #panelList.filtered .ord [data-mv=up],#panelList.filtered .ord [data-mv=down],
 #panelList.filtered .grip{display:none}
@@ -594,7 +603,7 @@ html:has(#panel.show) .bar{padding-right:var(--wd-sbw,0px)}
   font-size:12px;line-height:1;padding:.15em .2em;border-radius:4px}
 .pd .ord button:hover{color:var(--fg);background:var(--line-soft)}
 .pd .ord button:disabled{opacity:.3;cursor:default;background:none}
-.pd .ord .pin svg{width:14px;height:14px;display:block}
+.pd .ord svg{width:14px;height:14px;display:block}
 .pd .ord .pin path{fill:none;stroke:currentColor;stroke-width:1.4;stroke-linejoin:round;stroke-linecap:round}
 .pd .ord .pin[aria-pressed=true]{color:var(--accent)}
 .pd .ord .pin[aria-pressed=true] .head{fill:currentColor}
@@ -629,9 +638,6 @@ html:has(#panel.show) .bar{padding-right:var(--wd-sbw,0px)}
 .pd .feat.locked:hover{border-color:var(--line);color:var(--fg-faint)}
 .pd .feat.on.locked:hover{border-color:var(--accent);color:#fff;opacity:.5}
 .pd .feat.busy{border-style:dashed;cursor:default}
-/* stale: still on, still working, but rebuildable — a dotted edge reads as
-   "provisional" without the alarm of an error colour */
-.pd .feat.on.stale{border-style:dotted;border-color:var(--fg-faint)}
 .pd .tag{display:inline-block;border:1px solid var(--line);border-radius:5px;
   padding:0 .4em;font-size:10.5px;color:var(--fg-soft);margin-right:.25em}
 .pd .tag.on{color:var(--accent);border-color:var(--accent)}
@@ -692,6 +698,10 @@ html:has(#panel.show) .bar{padding-right:var(--wd-sbw,0px)}
   color:var(--safe);background:var(--safe-soft);cursor:pointer;user-select:none;
   transition:background var(--t-1),color var(--t-1)}
 .rmno:hover{background:var(--safe);border-color:var(--safe);color:#fff}
+/* The answers of a confirmation, which a thumb must not miss: about 30px tall
+   instead of 20 (measured on a 411px-wide phone). After every rule it sizes,
+   which would otherwise win at the same specificity. */
+@media (pointer:coarse){.azgo,.rmno,.pd .rmgo{padding:.55em 1em}}
 /* A provenance row is a PATH plus optional annotations, held as separate
    elements rather than composed into one sentence — the path carries what it
    copies in data-full, so nothing downstream has to take a display string
@@ -1095,14 +1105,14 @@ html:has(#panel.show) .bar{padding-right:var(--wd-sbw,0px)}
 <!-- enterkeyhint is declared, not inferred: type=search happens to label the
      soft key "Search" on most Android builds, but that is a browser default
      and not a contract. -->
-<input type="search" id="q" placeholder="Search…" autocomplete="off" enterkeyhint="search" autofocus aria-label="Search term" disabled>
+<input type="search" id="q" placeholder="Search…" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="search" autofocus aria-label="Search term" disabled>
 </span>
 <span class="seg">
 <span class="chip" id="modeChip" aria-hidden="true"></span>
 <select id="mode" aria-label="Search mode" disabled>
 <option value="prefix">prefix</option>
 <option value="exact">exact</option>
-<option value="contains">contains</option>
+<option value="wildcard">wildcard</option>
 <option value="fts">full-text</option>
 </select>
 </span>
@@ -1128,6 +1138,8 @@ html:has(#panel.show) .bar{padding-right:var(--wd-sbw,0px)}
 <!-- Three levels, one job each: #status is the collapsing grid, .msg is the
      clipped row, and .txt carries the padding INSIDE the clip so the closed
      state is truly 0px rather than 0px plus padding. -->
+<div id="notice" class="notice" role="alert" hidden><div class="ntxt" id="noticeMsg"></div>
+<button type="button" class="btn" id="noticeClose" title="Dismiss" aria-label="Dismiss">✕</button></div>
 <div id="status" role="status" aria-live="polite"><div class="msg"><div class="txt" id="statusMsg"></div></div></div>
 <div id="out"></div>
 </main>
@@ -1353,10 +1365,10 @@ let prefOrder=[],disabled=new Set();
    and finding a name. The panel, the picker, "All dictionaries" and the
    groups all list orderedDicts(). Server state with the order it shapes. */
 let pinned=new Set();
-/* Set while the saved list is an order of the whole library from before pins
-   (version 1): its labels as saved, by id. convertOrder turns it into pins
-   once the complete list of dictionaries is in. */
-let convertNames=null;
+/* The state.json format this page writes its lists in, sent with every list:
+   the server keeps the stored pins for a list without it, which is what a
+   page older than the format sends (prefs.go, handleSavePrefs). */
+const LIST_FORMAT=Number("{{PREFSV}}");
 /* Set when /api/dicts has delivered its last row. The picker's groups are
    counted over the complete list or not shown at all. */
 let dictsSettled=false;
@@ -1400,12 +1412,10 @@ async function loadPrefs(){
     // Last, so that a page whose baselines are not both in hand never saves:
     // savePrefs diffs against them.
     prefsReady=true;
-    // first run: keep whatever we had; an order from localStorage has no pins
-    if(!st.exists){if(adoptLocalPrefs())convertNames=new Map();return}
+    if(!st.exists){adoptLocalPrefs();return} // first run: keep whatever we had
     prefOrder=rows.map(d=>d.id);
     disabled=new Set(rows.filter(d=>d.off).map(d=>d.id));
     pinned=new Set(rows.filter(d=>d.pin).map(d=>d.id));
-    if((st.version||0)<2)convertNames=new Map(rows.map(d=>[d.id,d.name||""]));
   }catch(e){
     // A page that cannot read its settings must still search: fall back to
     // "everything enabled, alphabetical" rather than refusing to start.
@@ -1436,9 +1446,9 @@ function prefRow(d){
   if(d.pin)r.pin=true;
   return r;
 }
-/* Debounced, and silent when nothing actually changed — dragging a card emits
-   a move per hovered row, and startup normalisation usually yields the list
-   we just read, which is then not sent at all. */
+/* Debounced, and silent when nothing actually changed — ▲ ▼ pressed in a run
+   sends the order once, and startup normalisation usually yields the list we
+   just read, which is then not sent at all. */
 let prefsTimer=null,prefsSent=null;
 function savePrefs(now){
   clearTimeout(prefsTimer);
@@ -1451,7 +1461,7 @@ function savePrefs(now){
   for(const k in ui)if(JSON.stringify(ui[k])!==JSON.stringify(uiBase[k]))patch[k]=ui[k];
   const rows=orderedDicts().map(d=>prefRow({id:d.id,name:dictLabel(d),off:disabled.has(d.id),pin:pinned.has(d.id)})),
     seen=new Set(rows.map(d=>d.id)),req={};
-  if(JSON.stringify(rows)!==JSON.stringify(dictsBase.filter(d=>seen.has(d.id))))req.dicts=rows;
+  if(JSON.stringify(rows)!==JSON.stringify(dictsBase.filter(d=>seen.has(d.id)))){req.dicts=rows;req.version=LIST_FORMAT}
   if(Object.keys(patch).length)req.ui=patch;
   if(!req.dicts&&!req.ui)return;
   const body=JSON.stringify(req);
@@ -1473,36 +1483,38 @@ async function apiError(r){
 }
 /* a byte count in decimal units - the rule of logx.Size and the other pages */
 const mb=n=>n<1e3?n+" B":n<1e6?Math.round(n/1e3)+" kB":n<1e7?(n/1e6).toFixed(1)+" MB":n<1e9?Math.round(n/1e6)+" MB":(n/1e9).toFixed(1)+" GB";
-const collate=(a,b)=>a.localeCompare(b,undefined,{sensitivity:"base"});
+/* Labels in A–Z order, accents and case aside. One collator for every sort:
+   localeCompare with options builds a collator per comparison, about forty
+   times slower over a library this size, and the panel, the picker and every
+   save sort the whole library. */
+const collate=new Intl.Collator(undefined,{sensitivity:"base"}).compare;
 /* The one order (D166): the pinned dictionaries as the user placed them, then
-   every other one A→Z. */
+   every other one A→Z. Pinned first is an invariant the panel and the picker
+   build on, so a pinned dictionary the order does not place yet still leads,
+   after the placed ones. */
 function orderedDicts(){
   const byId=new Map(dicts.map(d=>[d.id,d]));
   const out=[];
-  for(const id of prefOrder){if(pinned.has(id)&&byId.has(id)){out.push(byId.get(id));byId.delete(id)}}
+  for(const id of prefOrder){const d=pinned.has(id)&&byId.get(id);if(d){out.push(d);byId.delete(id)}}
   const rest=[...byId.values()].sort((a,b)=>collate(dictLabel(a),dictLabel(b)));
-  return out.concat(rest);
+  return out.concat(rest.filter(d=>pinned.has(d.id)),rest.filter(d=>!pinned.has(d.id)));
 }
-/* A list saved before pins is an order of the whole library: the user's
-   arrangement on top, and under it the run of dictionaries the page appended
-   A→Z as they arrived. The longest A→Z run at its end becomes the A–Z part
-   and everything above it is pinned, which lists every dictionary exactly
-   where it was. Compared by the labels the list was saved with, because those
-   are what it was sorted by; dictionaries the list does not name (new ones,
-   or all of them on a first run) are A–Z already. Reports whether it ran, so
-   the caller saves the converted list - sent whole, which is what tells the
-   server the list is converted. */
-function convertOrder(){
-  if(!convertNames)return false;
-  const names=convertNames;convertNames=null;
-  const byId=new Map(dicts.map(d=>[d.id,d]));
-  const ids=prefOrder.filter(id=>byId.has(id));
-  const name=id=>names.get(id)||dictLabel(byId.get(id));
-  let k=ids.length-1;
-  while(k>0&&collate(name(ids[k-1]),name(ids[k]))<=0)k--;
-  pinned=new Set(ids.slice(0,Math.max(k,0)));
-  dictsBase=[];
-  return true;
+/* The order as the user leaves it, set from the dictionaries this page lists.
+   A pinned dictionary it does not list right now - on a drive that is away,
+   or not yet arrived - keeps its rank: it stays after the pinned dictionary
+   it followed, as the server keeps it (prefs.go, merge). */
+function setOrder(ids){
+  const shown=new Set(ids),after=new Map(),lead=[];
+  let prev=null;
+  for(const id of prefOrder){
+    if(shown.has(id)){if(pinned.has(id))prev=id;continue}
+    if(!pinned.has(id))continue;
+    if(prev===null)lead.push(id);
+    else if(after.has(prev))after.get(prev).push(id);
+    else after.set(prev,[id]);
+  }
+  prefOrder=lead;
+  for(const id of ids)prefOrder.push(id,...(after.get(id)||[]));
 }
 function orderedIds(){return orderedDicts().map(d=>d.id)}
 function enabledOrderedIds(){return orderedDicts().filter(d=>!disabled.has(d.id)).map(d=>d.id)}
@@ -1984,10 +1996,46 @@ function stopBootScreen(){
   if(bootTimer){clearInterval(bootTimer);bootTimer=null}
   if($("out").querySelector(".boot"))$("out").innerHTML="";
 }
+/* Dictionaries too large to open on this system (the row's tooLarge): its
+   text unpacks past the reader's limit, or past the free space to hold it.
+   The panel row says so too, but nothing leads there. Said once, until
+   dismissed. A dismissal is per browser and lasts while the dictionary keeps
+   failing: by id, not by message, because the free space a message quotes
+   changes between starts; and dropped once the dictionary opens, so a later
+   failure is reported again. */
+const DISMISSED_KEY="wudict_dismissed";
+function showTooLarge(){
+  const big=new Set(dicts.filter(d=>d.tooLarge&&d.error).map(d=>d.id));
+  const saved=loadJSON(DISMISSED_KEY,[]);
+  const gone=(Array.isArray(saved)?saved:[]).filter(id=>big.has(id));
+  if(gone.length!==(Array.isArray(saved)?saved.length:0))saveDismissed(gone);
+  const show=dicts.filter(d=>big.has(d.id)&&!gone.includes(d.id));
+  $("noticeMsg").innerHTML=show.map(d=>
+    `<p>⚠ Could not open <b>${esc(dictLabel(d))}</b>: ${esc(d.error)}</p>`).join("");
+  $("notice").hidden=!show.length;
+}
+function saveDismissed(ids){try{localStorage.setItem(DISMISSED_KEY,JSON.stringify(ids))}catch(_){}}
+$("noticeClose").addEventListener("click",()=>{
+  saveDismissed(dicts.filter(d=>d.tooLarge&&d.error).map(d=>d.id));
+  $("notice").hidden=true;
+});
+/* The rows that have kept the list waiting 10 s or more, from the stream's
+   "busy" frames (D169), with what each open is doing. Indexing on first open
+   is the one long wait with a known end, and a file pays it once. */
+let dictsBusy=[];
+function busyText(b){
+  const unpack=b.phase==="unpacking";
+  if(!unpack&&b.phase!=="indexing")return `Opening ${b.name}`;
+  const done=b.done||0,unit=unpack?mb:n=>n.toLocaleString();
+  const what=!done&&!b.total?""
+    :(b.total?`${unit(done)} of ${unpack?"about ":""}${unit(b.total)}`:unit(done))+(unpack?" unpacked":" entries");
+  return `Indexing ${b.name}, needed once`+(what?": "+what:"");
+}
 /* the honest progress line: a count, never a percentage */
 function readyCount(){
-  return dictTotal?`Loading dictionaries — ${dicts.length} of ${dictTotal} ready…`
-                  :"Looking for dictionaries…";
+  if(!dictTotal)return "Looking for dictionaries…";
+  const n=`Loading dictionaries — ${dicts.length} of ${dictTotal} ready…`;
+  return dictsBusy.length?n+" "+dictsBusy.map(busyText).join("; "):n;
 }
 function bootFailed(msg){
   setPhase("failed");
@@ -2068,14 +2116,14 @@ function facetGroups(){
   return [...byF.values()].sort((a,b)=>a.fo-b.fo)
     .map(f=>({id:f.id,label:f.label,
       values:[...f.vals.values()].filter(v=>v.n<total)
-        .sort((a,b)=>b.n-a.n||a.label.localeCompare(b.label,undefined,{sensitivity:"base"}))}))
+        .sort((a,b)=>b.n-a.n||collate(a.label,b.label))}))
     .filter(f=>f.values.length);
 }
 let refreshTimer=null;
 function refreshDictUI(now){
   clearTimeout(refreshTimer);
   if(!now){refreshTimer=setTimeout(()=>refreshDictUI(true),120);return}
-  dicts.sort((a,b)=>dictLabel(a).localeCompare(dictLabel(b),undefined,{sensitivity:"base"}));
+  dicts.sort((a,b)=>collate(dictLabel(a),dictLabel(b)));
   // The live value first, then the remembered one. They say the same thing
   // until a rebuild has just dropped the option that held it — a rescan
   // replaces the whole list row by row, and a group is only counted once the
@@ -2198,8 +2246,12 @@ async function loadDicts(rescan,opts={}){
   if(blocking)dictsSettled=false;
   if(blocking){setPhase("boot");startBootScreen();dictTotal=0;setStatus(esc(readyCount()),"load")}
   else if(!quiet&&!opts.silent)setStatus('<span class="spin"></span>Loading dictionaries…',"load");
-  const rows=[];
+  const rows=[],seen=new Set();
   let published=false,sawBegin=false,tag="",gp=0;
+  if(!quiet)dictsBusy=[]; // a quiet load shows nothing, so it owns none of it
+  // a rescan keeps its own line: the page works meanwhile, so no count
+  const rescanLine=()=>'<span class="spin"></span>Loading dictionaries…'+
+    (dictsBusy.length?" "+esc(dictsBusy.map(busyText).join("; ")):"");
   // "begin" costs the server no opens at all, so its absence means the server
   // is not answering — never leave the form inert waiting on a hang. Under an
   // early answer (silent) the answer stays: only the list is reported missing.
@@ -2217,9 +2269,19 @@ async function loadDicts(rescan,opts={}){
         if(quiet)return;
         dictTotal=msg.total||0;
         if(blocking)setStatus(esc(readyCount()),"load");
+      }else if(msg.t==="busy"){
+        if(quiet)return;
+        // a frame sent just before a row landed can follow that row
+        dictsBusy=(msg.busy||[]).filter(b=>b&&!seen.has(b.id));
+        if(blocking)setStatus(esc(readyCount()),"load");
+        else if(!opts.silent)setStatus(rescanLine(),"load");
       }else if(msg.t==="dict"&&msg.dict){
         rows.push(msg.dict);
         if(quiet)return;
+        seen.add(msg.dict.id);
+        const wasBusy=dictsBusy.length;
+        dictsBusy=dictsBusy.filter(b=>b.id!==msg.dict.id);
+        if(!blocking&&!opts.silent&&wasBusy!==dictsBusy.length)setStatus(rescanLine(),"load");
         if(!published){
           // swap the old list out only now: a rescan keeps showing the
           // previous dictionaries until replacements start arriving
@@ -2238,6 +2300,7 @@ async function loadDicts(rescan,opts={}){
     return false;
   }finally{
     clearTimeout(watchdog);
+    if(!quiet)dictsBusy=[];
   }
   const shape=quiet&&listShape();
   dicts=rows;dictTotal=rows.length;
@@ -2245,11 +2308,11 @@ async function loadDicts(rescan,opts={}){
   // normalize the saved preference order to the current dictionary set
   // (newly-added dicts take their A→Z place, removed ones drop). ONLY on the
   // complete set — doing it mid-stream would drop the ids that had not
-  // arrived yet, and convert an order it cannot see whole.
-  convertOrder();
-  prefOrder=orderedIds();savePrefs(true);
+  // arrived yet.
+  setOrder(orderedIds());savePrefs(true);
   dictsSettled=true; // every row is in; the groups can be counted
   refreshDictUI(true);
+  showTooLarge();
   setPhase("ready");
   clearStatus("load");clearStatus("dicts");
   // a search run against a half-loaded list is now answerable in full
@@ -2260,35 +2323,35 @@ async function loadDicts(rescan,opts={}){
 }
 /* Changing the order (D166 Am. 1). The pin says WHETHER a dictionary leads
    the list and adds it after the other pinned ones, so pinning never changes
-   which dictionary answers first; ⏫ makes one first, pinning it if it is not;
-   ▲ ▼ and the drag move one among the pinned. Each result is one action, so
-   where a new pin lands is not a setting. Nothing moves an unpinned
-   dictionary: its place is its title's. Each change redraws the picker with
-   the panel, because the two list one order. */
+   which dictionary answers first; to-top makes one first, pinning it if it
+   is not; ▲ ▼ and the drag move one among the pinned. Each result is one
+   action, so where a new pin lands is not a setting. Nothing moves an
+   unpinned dictionary: its place is its title's. Each change redraws the
+   picker with the panel, because the two list one order. */
 function orderChanged(){savePrefs();refreshDictUI(true)}
 function pinDict(id,on){
   const ids=orderedIds().filter(x=>x!==id);
   if(on)ids.splice(ids.filter(x=>pinned.has(x)).length,0,id);
   on?pinned.add(id):pinned.delete(id);
-  prefOrder=ids;orderChanged();
+  setOrder(ids);orderChanged();
 }
 function topDict(id){
   pinned.add(id);
-  prefOrder=[id,...orderedIds().filter(x=>x!==id)];orderChanged();
+  setOrder([id,...orderedIds().filter(x=>x!==id)]);orderChanged();
 }
 // One step within the pinned dictionaries, never across the A–Z line.
 function moveDict(id,step){
   const ids=orderedIds(),i=ids.indexOf(id),j=i+step;
   if(i<0||j<0||!pinned.has(id)||!pinned.has(ids[j]))return;
   [ids[i],ids[j]]=[ids[j],ids[i]];
-  prefOrder=ids;orderChanged();
+  setOrder(ids);orderChanged();
 }
 /* Unpinning every dictionary this page can see. One on a drive that is away
    keeps its pin: the page speaks only for the dictionaries it lists, as
    every save does (prefs.go, merge). */
 function unpinAll(){
   for(const d of dicts)pinned.delete(d.id);
-  prefOrder=orderedIds();orderChanged();
+  setOrder(orderedIds());orderChanged();
 }
 function pinnedShown(){return dicts.filter(d=>pinned.has(d.id))}
 function toggleDict(id){
@@ -2314,13 +2377,15 @@ function syncAZ(){
 function askAZ(open){
   const box=$("azAsk"),btn=$("azBtn");
   btn.setAttribute("aria-expanded",open?"true":"false");
-  if(!open){box.hidden=true;box.textContent="";return}
-  const p=pinnedShown();
-  // one pinned dictionary is named, and has no order among the pinned to lose
-  box.innerHTML=(p.length===1?`<b>Unpin ${esc(dictLabel(p[0]))}?</b> The list becomes A–Z.`
+  const p=open?pinnedShown():[];
+  if(!p.length){box.hidden=true;box.textContent="";btn.setAttribute("aria-expanded","false");return}
+  /* One pinned dictionary is named, and has no order among the pinned to
+     lose. The question describes both buttons, so a screen reader that lands
+     on cancel reads what it cancels. */
+  box.innerHTML=`<span id="azText">`+(p.length===1?`<b>Unpin ${esc(dictLabel(p[0]))}?</b> The list becomes A–Z.`
     :`<b>Unpin all ${p.length}?</b> The list becomes A–Z. The order of the pinned dictionaries is lost.`)+
-    `<br><button type="button" class="azgo">${p.length===1?"Unpin":"Unpin all"}</button>`+
-    `<button type="button" class="rmno">↩ cancel</button>`;
+    `</span><br><button type="button" class="azgo" aria-describedby="azText">${p.length===1?"Unpin":"Unpin all"}</button>`+
+    `<button type="button" class="rmno" aria-label="Cancel" aria-describedby="azText">↩ cancel</button>`;
   box.hidden=false;
   box.querySelector(".rmno").focus({preventScroll:true});
 }
@@ -2421,8 +2486,8 @@ $("enAll").addEventListener("change",e=>setAllEnabled(e.target.checked));
    names a mode differently from the rest of the page. */
 /* The user-facing name of each index switch (docs/STYLE.md), shared by the
    switch tooltips, the in-results offer and its collected line. */
-const FEAT_NAME={contains:"contains index",fts:"full-text index",media:"media pack"};
-const MODE_SHORT={prefix:"prefix",exact:"exact",contains:"contains",fts:"full-text"};
+const FEAT_NAME={base:"headword index",fts:"full-text index",media:"media pack"};
+const MODE_SHORT={prefix:"prefix",exact:"exact",wildcard:"wildcard",fts:"full-text"};
 function syncChips(){
   const m=$("mode"),d=$("dict");
   $("modeChip").textContent=MODE_SHORT[m.value]||m.value;
@@ -2579,19 +2644,18 @@ function renderPanel(){
   el.innerHTML="";
   const ord=orderedDicts(),np=ord.filter(d=>pinned.has(d.id)).length;
   for(const [i,d] of ord.entries()){
-    const off=disabled.has(d.id),pin=i<np;
+    const off=disabled.has(d.id),pin=pinned.has(d.id);
     // the A–Z line, between the pinned and the rest when there are both
     if(i===np&&np>0)el.appendChild(Object.assign(document.createElement("div"),{className:"pdiv",textContent:"A–Z"}));
     const div=document.createElement("div");div.className="pd"+(off?" off":"");div.dataset.id=d.id;
     div.dataset.find=findKey(d);
-    /* Only what varies AND can be changed. exact and prefix are true for every
-       dictionary and cost nothing, so showing them was decoration; contains,
+    /* Only what varies AND can be changed. exact, prefix and wildcard need
+       only the index and cost nothing more, so showing them was decoration;
        full-text and media each cost real disk, so each is a switch.
        Switching is offered only while the SOURCE is on disk — that is what
        makes it reversible, and why none of this needs a confirmation. */
     const canToggle=!!d.source;
     const feats=[
-      ["contains","contains",d.caps?.Contains,0],
       ["fts","full-text",d.caps?.FTS,0],
       ["media","media",!!d.mediaDB,d.mediaSize||0],
     ];
@@ -2630,20 +2694,13 @@ function renderPanel(){
     for(const[key,label,on,bytes]of feats){
       if(key==="media"&&!on&&!d.hasMedia)continue; // nothing to pack
       const size=on&&bytes?" "+mb(bytes):"";
-      /* A stale index still works — it was built with older text-folding
-         rules, so it can only miss words whose folding changed. So it is
-         marked, not disabled, and the click rebuilds instead of removing. */
-      const stale=key==="contains"&&on&&d.containsStale;
       const what=FEAT_NAME[key];
       const tip=!canToggle?"Locked: the dictionary files are gone, and this is the only copy":
-        stale?`Outdated ${what}: click to rebuild`:
         (on?"Remove the ":"Add the ")+what;
-      caps+=`<span class="feat${on?" on":""}${stale?" stale":""}${canToggle?"":" locked"}"`+
-        ` data-feat="${key}" data-on="${on?1:0}"${stale?' data-stale="1"':""}`+
-        ` title="${tip}">${label}${size}${stale?" ⟳":""}</span>`;
+      caps+=`<span class="feat${on?" on":""}${canToggle?"":" locked"}"`+
+        ` data-feat="${key}" data-on="${on?1:0}"`+
+        ` title="${tip}">${label}${size}</span>`;
     }
-    // the contains index is built automatically on first use, so the only
-    // manual action offered is full-text (which also covers contains).
     // "pack media" is offered only when the dictionary actually has packable
     // media, a source to pack it from, and it isn't already packed.
     let acts="";
@@ -2654,8 +2711,10 @@ function renderPanel(){
        This is the card for one dictionary, so unlike the row above it carries
        the id. */
     else acts=`<a class="browse" href="/browse?dict=${encodeURIComponent(d.id)}" title="Read this dictionary A–Z, page by page"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M2.4 3.4a1.2 1.2 0 0 1 1.2-1.2h6.2a1.2 1.2 0 0 1 1.2 1.2v9.2a1.2 1.2 0 0 1-1.2 1.2H3.6a1.2 1.2 0 0 1-1.2-1.2z"/><path d="M11 5h2.6"/><path d="M11 8h2.6"/><path d="M11 11h2.6"/></svg>Browse</a>`;
-    /* ⏫ and the pin are on every card: ⏫ means first in the list wherever
-       it is pressed, and the pin is the one way in or out of the pinned list.
+    /* To-top and the pin are on every card: to-top means first in the list
+       wherever it is pressed, and the pin is the one way in or out of the
+       pinned list. Both are monochrome SVG, as every icon here is: an emoji
+       arrow would be a colour blob on one platform and flat on another.
        ▲ ▼ and the handle exist only where there is a place to choose, among
        the pinned. An outline pin, filled once pinned: a pin predicts the move
        up that a star or a heart would not. */
@@ -2663,7 +2722,7 @@ function renderPanel(){
         ${pin?`<span class="grip" draggable="true" title="Drag to reorder">⠿</span>`:""}
         <b tabindex="0" role="button" title="Search only this dictionary">${esc(dictLabel(d))}</b>
         <span class="ord">
-          <button type="button" data-mv="top" title="${pin?"Move to the top":"Pin and move to the top"}" aria-label="Move to the top"${i===0?" disabled":""}>⏫</button>
+          <button type="button" data-mv="top" title="${pin?"Move to the top":"Pin and move to the top"}" aria-label="Move to the top"${i===0?" disabled":""}><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3.5 2.5h9"/><path d="M8 14V6"/><path d="M4.8 9.2 8 6l3.2 3.2"/></svg></button>
           ${pin?`<button type="button" data-mv="up" title="Move up" aria-label="Move up"${i===0?" disabled":""}>▲</button>
           <button type="button" data-mv="down" title="Move down" aria-label="Move down"${i===np-1?" disabled":""}>▼</button>`:""}
           <button type="button" class="pin" aria-pressed="${pin}" title="${pin?"Unpin":"Pin after the other pinned dictionaries"}" aria-label="Pin ${escAttr(dictLabel(d))}"><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path class="head" d="M6 2h4l-.6 4.2L12 8.5v1H4v-1l2.6-2.3z"/><path d="M8 9.5v4.8"/></svg></button>
@@ -2714,7 +2773,7 @@ $("panelList").addEventListener("drop",e=>{
   const r=pd.getBoundingClientRect(),after=e.clientY>r.top+r.height/2;
   const ids=orderedIds(),from=ids.indexOf(dragId);ids.splice(from,1);
   let to=ids.indexOf(pd.dataset.id);if(after)to++;
-  ids.splice(to,0,dragId);prefOrder=ids;clearDrop();dragId=null;orderChanged();
+  ids.splice(to,0,dragId);setOrder(ids);clearDrop();dragId=null;orderChanged();
 });
 /* Finding a dictionary in the panel. Every word typed must occur, case and
    accents ignored, in the title or in one of the dictionary's groups, and the
@@ -3121,19 +3180,25 @@ function aboutLangs(j){
   return `<div class="aboutlangs">${parts.join(" · ")}</div>`;
 }
 $("panelList").addEventListener("click",e=>{
-  /* A move redraws the panel, so a keyboard user's focus is put back on the
-     same control of the same card, wherever it went (detail 0 is a click
-     made by a key). A pointer user's view stays where it was. */
+  /* A move redraws the panel. A step (▲ ▼) keeps the card where it was on
+     the screen and moves the list instead, so the next press of the same spot
+     moves the same card. A key moves focus with the card (detail 0 is a click
+     made by a key), to the same control where it can still be pressed. A
+     pin or to-top pressed with a pointer leaves the view where it was. */
   const mv=e.target.closest("[data-mv]"),pn=e.target.closest(".pin");
   if(mv||pn){
-    const id=(mv||pn).closest(".pd").dataset.id,key=e.detail===0;
+    const card=(mv||pn).closest(".pd"),id=card.dataset.id,
+      step=!!mv&&mv.dataset.mv!=="top",y=card.getBoundingClientRect().top;
     if(!mv)pinDict(id,!pinned.has(id));
     else if(mv.dataset.mv==="top")topDict(id);
     else moveDict(id,mv.dataset.mv==="up"?-1:1);
-    if(key){
-      const card=$("panelList").querySelector(`.pd[data-id="${CSS.escape(id)}"]`);
-      const want=mv?card?.querySelector(`[data-mv="${mv.dataset.mv}"]:not(:disabled)`):null;
-      (want||card?.querySelector(".pin"))?.focus();
+    const now=$("panelList").querySelector(`.pd[data-id="${CSS.escape(id)}"]`);
+    if(!now)return;
+    const sc=now.closest(".panel-scroll");
+    if(step&&sc)sc.scrollTop+=now.getBoundingClientRect().top-y;
+    if(e.detail===0){
+      const want=mv&&now.querySelector(`[data-mv="${mv.dataset.mv}"]:not(:disabled)`);
+      (want||now.querySelector(".pin")).focus({preventScroll:step});
     }
     return;
   }
@@ -3158,9 +3223,7 @@ $("panelList").addEventListener("click",e=>{
   const feat=e.target.closest(".feat");
   if(feat){
     if(feat.classList.contains("locked")||feat.classList.contains("busy"))return;
-    // a stale index is re-requested, not removed: same switch, still "on",
-    // which setFeatures reads as "rebuild this"
-    const on=feat.dataset.on==="1"&&feat.dataset.stale!=="1";
+    const on=feat.dataset.on==="1";
     runIngest(feat.closest(".pd").dataset.id,{[feat.dataset.feat]:on?0:1},feat);
     return;
   }
@@ -3328,7 +3391,7 @@ function runIngest(id,opts,label){
   // A feature left out keeps its state; the index chip sends none, which
   // prepares an unprepared dictionary at the cheapest level (handleIngest).
   const params=Object.entries(opts)
-    .filter(([k])=>k==="contains"||k==="fts"||k==="media")
+    .filter(([k])=>k==="fts"||k==="media")
     .map(([k,v])=>"&"+k+"="+(v?1:0)).join("");
   return new Promise(resolve=>{
     const es=new EventSource("/api/ingest?dict="+id+params);
@@ -3915,9 +3978,10 @@ function renderSlot(box,h,mode,q,perDict,group){
     return{shown:true};
   }
   if(h.skipped){
-    // Both heavier indexes are opt-in, so a skipped dictionary is not a dead
-    // end: offer to add the one this search needed, right where it was missed.
-    const feat=mode==="fts"?"fts":mode==="contains"?"contains":"";
+    // A skipped dictionary is not a dead end: offer to add the index this
+    // search needed, right where it was missed. Wildcard needs only the
+    // headword index ("base", what the panel's index chip builds).
+    const feat=mode==="fts"?"fts":mode==="wildcard"?"base":"";
     if(feat){
       /* But it has not answered the QUERY - it has answered about itself, and
          a slot in the answer list is for answers. On a corpus where the heavy
@@ -4372,11 +4436,16 @@ document.addEventListener("keydown",e=>{
    for "Artificial". A cleaner that is right for one caller is silent
    corruption for the other, so these are two functions, not a smarter
    regex. */
+/* The modes a followed link or a handed-over word does not use. Both read the
+   text as something other than a headword: full-text as words in articles,
+   wildcard as a pattern, where `Who?` would match "Whom" and a capital
+   letter would make the lookup case-sensitive. */
+function notForWords(mode){return mode==="fts"||mode==="wildcard"}
 function searchFor(term,opts){
   const t=String(term||"").trim();
   if(!t)return;
   $("q").value=t;                       // verbatim: no trimming, ever
-  if($("mode").value==="fts")$("mode").value="prefix";
+  if(notForWords($("mode").value))$("mode").value="prefix";
   const scope=opts?.scope||null,frag=opts?.frag||"";
   scopeOnce=scope;
   // the fragment addresses a place in the SCOPED article; renderSlot matches
@@ -5023,9 +5092,9 @@ function applyURL(){
   if(p.get("theme")){localStorage.setItem("wudict_theme",p.get("theme"));applyTheme(p.get("theme"))}
   // A word handed over with no usable mode (another app, the Android popup,
   // the extension, a bookmark) is a headword lookup, as a followed link is in
-  // searchFor: a remembered full-text mode does not apply to it. The page's
-  // own addresses always carry the mode.
-  if(!setMode(p.get("mode"))&&p.get("q")&&$("mode").value==="fts")setMode("prefix");
+  // searchFor: a remembered full-text or wildcard mode does not apply to it.
+  // The page's own addresses always carry the mode.
+  if(!setMode(p.get("mode"))&&p.get("q")&&notForWords($("mode").value))setMode("prefix");
   if(p.get("dict"))selectDict(p.get("dict"));
   syncChips();
   if(p.get("q")){$("q").value=p.get("q");scopeOnce=p.get("from")||null;commitOnce=true;doSearch()}
@@ -5950,8 +6019,6 @@ function welcome(){
 function urlQuery(){$("q").value=new URLSearchParams(location.search).get("q")||""}
 function bootFromCache(c){
   dicts=c.rows;dictTotal=c.rows.length;dictsSettled=true;
-  // the list is whole, and a 304 below would not reach loadDicts' own call
-  if(convertOrder()){prefOrder=orderedIds();savePrefs()}
   groupsTrouble(c.gp||0);
   refreshDictUI(true);
   // ready BEFORE the search, which judges "nothing enabled" by the phase;

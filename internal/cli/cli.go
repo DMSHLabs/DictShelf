@@ -40,6 +40,7 @@ import (
 	"github.com/wuweidict/wudict/internal/speex"
 	"github.com/wuweidict/wudict/internal/store"
 	"github.com/wuweidict/wudict/internal/tray"
+	"github.com/wuweidict/wudict/internal/wildcard"
 
 	_ "github.com/wuweidict/wudict/internal/format/bgl"      // register .bgl
 	_ "github.com/wuweidict/wudict/internal/format/dsl"      // register .dsl(.dz)
@@ -93,15 +94,18 @@ COMMANDS
                                           language, and its files with their sizes
   lookup   [-n max] <dictfile> <word>     Exact search; accent-folded if nothing matches
   prefix   [-n max] <dictfile> <word>     Exact, then prefix; case and accents ignored
-  contains [-n max] <dictfile> <word>     Headwords containing <word> (contains index)
   fts      [-n max] <dictfile> <query>    Full-text query, read as in the app
                                           (full-text index)
+  wildcard [-n max] <dictfile> <pattern>  Headwords that fit <pattern>: ? is one
+                                          character, * any number; a capital letter
+                                          makes it case-sensitive. Quote the pattern:
+                                          'b???d'
                                           All four print to standard output and take
                                           -format raw (the dictionary's HTML; default),
                                           clean (no scripts, stylesheets or
-                                          presentation) or text (no markup). contains
-                                          and fts need an indexed dictionary: pass its
-                                          library folder.
+                                          presentation) or text (no markup). fts and
+                                          wildcard need an indexed dictionary: pass
+                                          its library folder.
   keys   [-offset N] [-n count] <dictfile>  List headwords, all by default; for an
                                           .mdd, the files it contains
   res    [-o out] [-f] <dictfile> <name>  Extract one resource, e.g. "audio/word.mp3";
@@ -124,23 +128,25 @@ COMMANDS
                                           -resources text: text files only (.css,
                                           .js, …); none: no resources. -output is
                                           the long form of -o.
-  ingest [-full] [-fulltext] [-contains] [<dictfile|folder…>]
+  ingest [-full] [-fulltext] [<dictfile|folder…>]
                                           Index dictionaries into the library:
                                           <DB_DIR>/<name>/text.db and info.txt.
                                           No path: the dictionary folders (DICT_DIR).
                                           Indexed dictionaries are skipped. A new
                                           dictionary gets the headword index, as in
-                                          the app; -contains and -fulltext add those
-                                          indexes, -full also the media pack
-                                          (media.db). -contains=false and
-                                          -fulltext=false (-headwords) remove them.
-                                          A flag left out keeps what a dictionary has.
+                                          the app; -fulltext adds the full-text
+                                          index, -full also the media pack
+                                          (media.db). -fulltext=false (-headwords)
+                                          removes the full-text index. A flag left
+                                          out keeps what a dictionary has.
   searchall [-mode m] [-n perDict] [-format f] [<dir>] <term>
                                           Search every dictionary in the folders and
                                           print each one's results as it answers.
                                           Default: DICT_DIR; <dir> may be an "a:b"
-                                          list. -format text (default), clean, raw,
-                                          or list (headwords only).
+                                          list. -mode exact (default), prefix, fts
+                                          or wildcard. -format text
+                                          (default), clean, raw, or list (headwords
+                                          only).
   lemmas list | download <lang…> | remove <lang…>
                                           Lemma data, so that an inflected form finds
                                           its lemma ("knew" -> "know"). English is
@@ -204,9 +210,9 @@ SETTINGS
   (env/toml only)
   AUTO_INDEX = "on"       Index each dictionary's headwords in the background on
                           its first search. "off": dictionaries stay not indexed
-                          and are searched through their own format. Contains,
-                          full-text and media pack are per-dictionary choices
-                          either way.
+                          and are searched through their own format. Full-text
+                          and media pack are per-dictionary choices either
+                          way.
                           env: AUTO_INDEX     toml: AUTO_INDEX
                           default: on
 
@@ -494,7 +500,7 @@ func Main() {
 		err = cmdList(args)
 	case "info":
 		err = cmdInfo(args)
-	case "lookup", "prefix", "contains", "fts":
+	case "lookup", "prefix", "fts", "wildcard":
 		err = cmdQuery(cmd, args)
 	case "ingest":
 		err = cmdIngest(args)
@@ -629,8 +635,8 @@ func cmdInfo(args []string) error {
 	}
 	defer d.Close()
 	m, c := d.Meta(), d.Caps()
-	fmt.Printf("name:        %s\nformat:      %s\npath:        %s\nentries:     %d\ncapabilities: exact=%v prefix=%v contains=%v fts=%v\n",
-		m.Name, m.Format, m.Path, m.EntryCount, c.Exact, c.Prefix, c.Contains, c.FTS)
+	fmt.Printf("name:        %s\nformat:      %s\npath:        %s\nentries:     %d\ncapabilities: exact=%v prefix=%v fts=%v wildcard=%v\n",
+		m.Name, m.Format, m.Path, m.EntryCount, c.Exact, c.Prefix, c.FTS, c.Wildcard)
 	if m.IndexLang != "" {
 		// Only when the dictionary DECLARED it. A language derived from the
 		// file name is the search path's fallback, not a fact about the file,
@@ -875,23 +881,20 @@ func cmdIngest(args []string) error {
 	fulltext := fs.Bool("fulltext", false, "also index article text for full-text search - the largest index (-fulltext=false drops it)")
 	headwords := fs.Bool("headwords", false, "index headwords only: the opposite of -fulltext")
 	fuzzyOnly := fs.Bool("fuzzy-only", false, "deprecated spelling of -headwords")
-	contains := fs.Bool("contains", false, "also build the substring (contains) index - roughly doubles a headword-only index (-contains=false drops it)")
 	configPath := fs.String("config", "", "path to wudict.toml (env: CONFIG_PATH)")
 	fs.Parse(args)
 
 	// A flag left out changes nothing about a dictionary already prepared, as
 	// a parameter left out of /api/ingest changes nothing; a dictionary never
 	// prepared starts from headwords only, as it does in the app (D152, D24).
-	var pf planFlags
+	var ft *bool
 	fs.Visit(func(f *flag.Flag) {
 		switch f.Name {
 		case "fulltext":
-			pf.fullText = fulltext
+			ft = fulltext
 		case "headwords", "fuzzy-only":
-			ft := !(*headwords || *fuzzyOnly)
-			pf.fullText = &ft
-		case "contains":
-			pf.contains = contains
+			v := !(*headwords || *fuzzyOnly)
+			ft = &v
 		}
 	})
 
@@ -937,14 +940,14 @@ func cmdIngest(args []string) error {
 			// ingest that could take minutes, not after it
 			return fmt.Errorf("-full packs media beside the text, so -o must end in .text.db (or be a text.db)")
 		}
-		return ingestOne(srcs[0], *out, *full, pf)
+		return ingestOne(srcs[0], *out, *full, ft)
 	}
 	if err := refuseUnderServer("use its dictionary panel"); err != nil {
 		return err
 	}
 	// a single file keeps its own errors, unprefixed by a [1/1] count
 	if len(srcs) == 1 && !fsx.DirExists(srcs[0]) {
-		return ingestOne(srcs[0], "", *full, pf)
+		return ingestOne(srcs[0], "", *full, ft)
 	}
 
 	var paths, dirs []string
@@ -972,7 +975,7 @@ func cmdIngest(args []string) error {
 	var failed int
 	for i, p := range paths {
 		fmt.Fprintf(os.Stderr, "[%d/%d] %s\n", i+1, len(paths), filepath.Base(p))
-		if err := ingestOne(p, "", *full, pf); err != nil {
+		if err := ingestOne(p, "", *full, ft); err != nil {
 			fmt.Fprintf(os.Stderr, "  failed: %v\n", err)
 			failed++
 		}
@@ -983,17 +986,13 @@ func cmdIngest(args []string) error {
 	return nil
 }
 
-// planFlags is ingest's index flags as given: nil where the flag was left out,
-// which keeps what a prepared dictionary already has.
-type planFlags struct{ fullText, contains *bool }
-
 // ingestOne prepares one dictionary into its library folder - or, with out,
 // into that database - by the rules every preparation follows
-// (store.Reconcile): the flags given change their index, the ones left out
-// keep what is built, outdated data is rebuilt, and full also packs media.
-func ingestOne(srcPath, out string, full bool, pf planFlags) error {
+// (store.Reconcile): fullText, when given, sets the full-text index, nil
+// keeps what is built; outdated data is rebuilt, and full also packs media.
+func ingestOne(srcPath, out string, full bool, fullText *bool) error {
 	name := displayName(srcPath)
-	t := store.Target{FullText: pf.fullText, Contains: pf.contains, Rebuild: store.IfOutdated, Out: out}
+	t := store.Target{FullText: fullText, Rebuild: store.IfOutdated, Out: out}
 	if full {
 		t.Media = store.MediaOn
 	}
@@ -1318,7 +1317,8 @@ Hint: pick another port with --port, e.g.:  wudict --port %s
 	// --config re-points both. Loaded BEFORE the registry: Warm skips disabled
 	// dictionaries, and it starts inside NewRegistry.
 	user := server.UserDir(userDir(cfgFile))
-	regOpts := []server.Option{server.WithPrefs(server.LoadPrefs(user.State()))}
+	regOpts := []server.Option{server.WithPrefs(server.LoadPrefs(user.State())),
+		server.WithFailures(user.Failures())}
 	// The wudict howto, the guide the app ships as a dictionary: written
 	// beside the config in effect (rewritten only when this build's guide
 	// differs), and listed with the user's dictionaries. Without a place to
@@ -1499,6 +1499,7 @@ func trayRescan(reg *server.Registry) func() {
 		}
 		go func() {
 			defer busy.Store(false)
+			reg.ForgetFailures()
 			if err := reg.Rescan(); err != nil {
 				logx.Warn("rescan: %v", err)
 				return
@@ -1900,7 +1901,7 @@ func indexingSummary(autoIndex string) string {
 	if autoIndex == config.AutoIndexOff {
 		return "off - dictionaries are searched through their own format (AUTO_INDEX=off)"
 	}
-	return "on - a headword index is prepared on first search; contains, full-text and media on request"
+	return "on - a headword index is prepared on first search; full-text and media on request"
 }
 
 func openBrowser(url string) {
@@ -1927,7 +1928,7 @@ func cmdSearchAll(args []string) error {
 	// exact by default: the term a person types on this command line is the
 	// word they want, and prefix over a whole library answers a query nobody
 	// asked - 97 dictionaries offering `Casablanca` for `casa`.
-	modeStr := fs.String("mode", "exact", "exact|prefix|contains|fts")
+	modeStr := fs.String("mode", "exact", "exact|prefix|fts|wildcard")
 	n := fs.Int("n", 10, "max results per dictionary")
 	format := fs.String("format", "text", "text|clean|raw|list - list prints headwords only")
 	base := fs.String("base", "", "prefix for /res/… references (e.g. http://127.0.0.1:6888)")
@@ -1951,6 +1952,12 @@ func cmdSearchAll(args []string) error {
 	mode, err := search.ParseMode(*modeStr)
 	if err != nil {
 		return err
+	}
+	// Before any dictionary opens: every one would report the same error.
+	if mode == search.Wildcard {
+		if _, err := wildcard.Parse(term); err != nil {
+			return err
+		}
 	}
 	// A search that prints only headwords answers "does this word exist", which
 	// is not what anyone runs a dictionary for. `text` is the default because

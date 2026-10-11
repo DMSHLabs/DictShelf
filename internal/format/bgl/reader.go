@@ -594,8 +594,8 @@ func (r *Reader) probeIDKey(typ byte, data []byte) {
 // string like "E310420", the real headword sits in the definition's title
 // field, and the word is repeated among the alternates. Left alone, all 86,916
 // of its entries index and display under their id - headwords the user cannot
-// read and the contains/full-text indexes, which cover the headword column
-// only, cannot search. Its articles cross-link by id (bword://E310420), which
+// read, and that no headword search (exact, prefix, wildcard) can find by the
+// word. Its articles cross-link by id (bword://E310420), which
 // is why the id is demoted to an alternate rather than dropped.
 //
 // The verdict is per-file and deliberately narrow: for nearly every sampled

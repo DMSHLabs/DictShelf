@@ -11,25 +11,58 @@ package dict
 import (
 	"context"
 	"errors"
+	"fmt"
 	"html"
 	"io"
+
+	"github.com/wuweidict/wudict/internal/logx"
 )
 
 var (
 	// ErrNotFound is returned for a missing headword or resource.
 	ErrNotFound = errors.New("not found")
 	// ErrUnsupported is returned when a backend lacks a capability
-	// (e.g. contains search on a direct backend).
+	// (e.g. full-text search on a direct backend).
 	ErrUnsupported = errors.New("operation not supported by this backend")
+	// ErrUnreadable marks a failure the file's own bytes decide: the same
+	// file opened by the same build fails the same way, so it is worth
+	// remembering until either changes.
+	ErrUnreadable = errors.New("not readable")
+	// ErrTooLarge marks a dictionary too large to open on this system: its
+	// text unpacks past what its reader accepts (also ErrUnreadable), or past
+	// the free space to hold it (*NoRoomError).
+	ErrTooLarge = errors.New("too large to open")
 )
+
+// NoRoomError: opening the dictionary needs more free space than there is.
+// Dir is the folder the space is missing in, "" for memory (Free is then
+// what this process allows itself). Need is a lower
+// bound - what was known to be needed when the open stopped - so an open
+// retried once Free exceeds it can still stop again, further on.
+type NoRoomError struct {
+	What       string // what the space was for, e.g. "to unpack it"
+	Dir        string
+	Need, Free int64
+}
+
+func (e *NoRoomError) Error() string {
+	where := "memory"
+	if e.Dir != "" {
+		where = "free disk space in " + e.Dir
+	}
+	return fmt.Sprintf("not enough %s %s: more than %s needed, %s available",
+		where, e.What, logx.Size(e.Need), logx.Size(e.Free))
+}
+
+func (e *NoRoomError) Is(target error) bool { return target == ErrTooLarge }
 
 // Caps advertises which search modes a backend supports. The UI/API must
 // consult this instead of probing with queries.
 type Caps struct {
 	Exact    bool
 	Prefix   bool // starts-with (accent-insensitive on ingested backends)
-	Contains bool // substring/typo-tolerant headword match (FTS5 trigram) - Searcher only
 	FTS      bool // FTS5 over headwords + article text - Searcher only
+	Wildcard bool // `?` and `*` over headwords (D167) - Searcher only
 }
 
 // Meta describes one opened dictionary.
@@ -153,14 +186,13 @@ type ResourceLister interface {
 // output nobody reads. A direct-format backend has nothing to interrupt, so
 // it answers only Dictionary's Exact and Prefix.
 //
-// ContainsContext needs Caps.Contains (the trigram index); FullTextContext
-// and FullTextMatch need Caps.FTS. Without them they return ErrUnsupported.
+// FullTextContext and FullTextMatch need Caps.FTS; without it they return
+// ErrUnsupported.
+// WildcardContext needs only the headword index, which every prepared
+// database has.
 type Searcher interface {
 	ExactContext(ctx context.Context, word string, limit int) ([]Result, error)
 	PrefixContext(ctx context.Context, word string, limit int) ([]Result, error)
-	// ContainsContext is a substring match over headwords (FTS5 trigram),
-	// accent/case-insensitive.
-	ContainsContext(ctx context.Context, word string, limit int) ([]Result, error)
 	// FullTextContext reads query as one bag of prefix words: the fallback
 	// when no composed reading could run.
 	FullTextContext(ctx context.Context, query string, limit int) ([]Result, error)
@@ -171,6 +203,9 @@ type Searcher interface {
 	// assembled from user text anywhere else: raw input reaching MATCH is how
 	// a quote in a search box becomes a syntax error (FTS-audit #2).
 	FullTextMatch(ctx context.Context, match string, limit int) ([]Result, error)
+	// WildcardContext matches whole headwords against a wildcard pattern
+	// (internal/wildcard): `?` is one character, `*` any run of characters.
+	WildcardContext(ctx context.Context, pattern string, limit int) ([]Result, error)
 }
 
 // Letter is one chip of the browse strip: a run of headwords sharing an

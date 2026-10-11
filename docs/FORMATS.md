@@ -70,8 +70,12 @@ The reference projects cited below (`pyglossary/…`, `mdict-go-web/…`, `draeg
     plain file in place; a compressed file, or one needing R2.1 repair, decoded once (streaming, across block
     boundaries) into a temporary file removed on Close, or into memory where no temporary file can be made. The
     same pass collects the candidate entry lines, `]:` presence and lines 1-2. Measured: reading back a 1.18 GB
-    file peaks at 113 MB.
-  - `load.go` — R2.1 decoding of a block; `.gz`/`.dz` suffixes, bounded to 1 GiB decompressed.
+    file peaks at 113 MB. The temporary file stops before the disk holding it falls under 1 GiB free, the memory
+    copy at half the Go memory limit (else 1 GiB): `*dict.NoRoomError`, which is `dict.ErrTooLarge`.
+  - `load.go` — R2.1 decoding of a block; `.gz`/`.dz` suffixes. The R2.4 bound on a compressed file is 1 GiB or
+    32 times the file's size, whichever is more (`unpackBound`; a 166 MB Wiktionary unpacks 7.0 times, a gzip
+    bomb 100 and more), capped at what the build addresses (2 GiB on 32-bit). Past it: E-format, which is
+    `dict.ErrUnreadable` and `dict.ErrTooLarge`.
   - `wmd.go` — registration: every spelling (`.wudict.md`, `.md`, `.wudict.md.gz`, `.wudict.md.dz`) through
     `dict.RegisterSniffed` + `Claim`, so the gate is the same whatever the name (R2.2): line 1 `# title`, line 2
     the `wudict` field, read from a 4 KiB head (decompressed for `.gz`/`.dz`). A DSL-style auto-prepared `Dict`,

@@ -24,7 +24,6 @@ import (
 //	                 alias and redirect rules, body normalization
 //	reader_version   one format's Reader (dict.RegisterReaderVersion)
 //	markup_version   internal/artmark's role vocabulary (MarkupStale)
-//	fold_version     dict.Fold, persisted only in the trigram index (FoldStale)
 //	media_version    IngestMedia
 //
 // A missing stamp means the database predates the stamp, and is read as
@@ -55,7 +54,6 @@ const (
 	ReasonIngest Reason = "ingest" // built by an older IngestPlan
 	ReasonReader Reason = "reader" // built by an older Reader for its format
 	ReasonMarkup Reason = "markup" // articles written with an older role markup
-	ReasonFold   Reason = "fold"   // trigram index built by another dict.Fold
 	ReasonMedia  Reason = "media"  // media.db unreadable, unpaired or outdated
 )
 
@@ -76,9 +74,8 @@ func stampOf(m map[string]string, key string, def int) int {
 //
 // Ingest and reader versions are compared as "older than": a library prepared
 // by a NEWER build is not something this one can improve by rebuilding it.
-// Markup and fold keep their established exact-match rule (MarkupStale,
-// FoldStale), since either direction changes what a query or a stylesheet
-// meets.
+// Markup keeps its established exact-match rule (MarkupStale), since either
+// direction changes what a stylesheet meets.
 func Outdated(m map[string]string) []Reason {
 	var out []Reason
 	if stampOf(m, "ingest_version", 1) < IngestVersion {
@@ -89,9 +86,6 @@ func Outdated(m map[string]string) []Reason {
 	}
 	if MarkupStale(m) {
 		out = append(out, ReasonMarkup)
-	}
-	if FoldStale(m) {
-		out = append(out, ReasonFold)
 	}
 	return out
 }
@@ -207,12 +201,9 @@ func ReadMetaSchema(dbPath string) (map[string]string, int, error) {
 }
 
 // PlanFromMeta is the Plan a prepared database was built with, read back from
-// its meta. The one reader of `ingest_level` and `has_trigram`.
+// its meta. The one reader of `ingest_level`.
 func PlanFromMeta(m map[string]string) Plan {
-	return Plan{
-		FullText: m["ingest_level"] != levelHeadwords,
-		Contains: m["has_trigram"] == "1",
-	}
+	return Plan{FullText: m["ingest_level"] != levelHeadwords}
 }
 
 // ingestLevel is PlanFromMeta's inverse for `ingest_level`.

@@ -46,8 +46,8 @@ func TestReindexRebuildsOutdatedKeepingPlanAndMedia(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sse(t, s, "/api/ingest?dict="+id+"&fts=1&contains=1&media=1")
-	want := features{FullText: true, Contains: true, Media: true}
+	sse(t, s, "/api/ingest?dict="+id+"&fts=1&media=1")
+	want := features{FullText: true, Media: true}
 	if f := s.currentFeatures(e); f != want {
 		t.Fatalf("setup: %+v, want %+v", f, want)
 	}
@@ -105,7 +105,7 @@ func TestRescanSeesEditedSource(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sse(t, s, "/api/ingest?dict="+id+"&fts=1&contains=1")
+	sse(t, s, "/api/ingest?dict="+id+"&fts=1")
 	if _, err := e.open(); err != nil {
 		t.Fatal(err)
 	}
@@ -143,7 +143,7 @@ func TestRescanSeesEditedSource(t *testing.T) {
 	if after, _ := store.ReadMetaValue(textDB, "dict_uuid"); after == before {
 		t.Error("the edited source was not prepared again")
 	}
-	if got := store.KeptPlan(textDB); got != (store.Plan{FullText: true, Contains: true}) {
+	if got := store.KeptPlan(textDB); got != (store.Plan{FullText: true}) {
 		t.Errorf("re-prepared with %+v, want the plan the user chose", got)
 	}
 	if entryOutdated(e.Path) {

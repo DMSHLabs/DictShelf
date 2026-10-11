@@ -36,13 +36,18 @@ import (
 const StateFile = "state.json"
 
 // prefsVersion is written to the file so a format change can be recognised
-// rather than guessed at. Version 2 is the pinned list (D166): DictPref.Pin
-// marks the dictionaries the user placed, and every other record's position
-// is no longer an order. A version-1 list is ordered whole, and only the page
-// converts it - it is the page that compares names (dictionary titles, in its
-// own collation), so the server keeps the version it read until the page has
-// sent a list of its own.
-const prefsVersion = 2
+// rather than guessed at. Since version 2, DictPref.Pin marks the dictionaries
+// the user placed (D166) and every other record's position is no longer an
+// order; version 1 is a list ordered whole. Version 3 is version 2 after the
+// one migration that keeps at most five pins (migrateList, D166 Am. 3), and the
+// page states it with every list it sends, so a page older than the format
+// cannot overwrite the pins (handleSavePrefs).
+const prefsVersion = 3
+
+// migratePins is how many pins a list keeps when it is migrated. With this
+// many or fewer of the user's dictionaries present, it keeps none, and the
+// whole library is listed A-Z (D166 Am. 3).
+const migratePins = 5
 
 // DictPref is one dictionary's remembered state. The path is what makes this
 // survivable: ids are sha256(path)[:12] (see pathID), so moving a dictionary
@@ -124,13 +129,14 @@ type UIPrefs struct {
 	// links to sub-entries) shown instead of hidden. Spelled positively: the
 	// brief view is Lingvo's own default, so the zero value keeps it - the
 	// rule every flag here obeys is that an absent key is the standing
-	// default, not that the word is always a negation. It is the reader's last choice on a section's switch, and
-	// sets how the next section opens; the server never reads it.
+	// default, not that the word is always a negation. It is the reader's
+	// last choice on a section's switch, and sets how the next section
+	// opens; the server never reads it.
 	Full bool `json:"full,omitempty"`
 
-	// Mode is the search mode the reader last picked: "exact", "contains" or
-	// "fts". Empty is prefix, the default, so an absent key keeps it. It is the
-	// reader's habit, and which modes answer at all is a fact about this
+	// Mode is the search mode the reader last picked: "exact", "fts" or
+	// "wildcard". Empty is prefix, the default, so an absent key keeps it. It
+	// is the reader's habit, and which modes answer at all is a fact about this
 	// server's library, so it lives here and not in the browser. The page
 	// writes it only when the reader picks a mode, never when a link or the
 	// history sets one; the server never reads it.
@@ -161,8 +167,8 @@ func (u *UIPrefs) normalize() {
 		u.OpenN = 0 // one, the default, is stored as absent
 	}
 	switch u.Mode {
-	case "exact", "contains", "fts":
-	default: // prefix, and what a hand edit may carry (the retired "fuzzy", D16)
+	case "exact", "fts", "wildcard":
+	default: // prefix, and a retired mode ("fuzzy", D16; "contains", D170)
 		u.Mode = ""
 	}
 }
@@ -239,8 +245,10 @@ func parsePrefs(text string) (prefsFile, []facet.Problem) {
 
 // data is the record in effect and whether it is a real one: a usable,
 // well-formed file, or one this process wrote.
-func (p *Prefs) data() (prefsFile, bool) {
-	st := p.file.now()
+func (p *Prefs) data() (prefsFile, bool) { return record(p.file.now()) }
+
+// record is st's record and whether it is a real one (data).
+func record(st fileState[prefsFile]) (prefsFile, bool) {
 	return st.val, st.exists && !st.unusable() && len(st.problems) == 0
 }
 
@@ -274,39 +282,40 @@ func (p *Prefs) Snapshot() (dicts []DictPref, exists bool) {
 	return append([]DictPref(nil), f.Dicts...), ok
 }
 
-// Replace stores a new list and writes it, atomically (fsx.WriteAtomic): a
-// crash mid-save leaves the previous state intact rather than a truncated
-// file that reads as "nothing was ever configured".
-func (p *Prefs) Replace(dicts []DictPref) error { return p.update(dicts, nil, false) }
-
-// update is Replace plus an optional UI patch: the JSON object of the UI
-// fields to change. A nil dicts keeps the stored list, decided here under the
-// write lock rather than by the caller re-sending a snapshot it read before,
-// which a save from another page could land between. Absent or null means "not mentioned" and leaves the stored
-// record untouched, and inside the object the rule is the same per field - a
-// key that is not sent keeps its stored value, and only a key sent as false,
-// 0 or [] clears one. Two pages on one server (two tabs, or the Android app and
-// its lookup popup, each a WebView of its own) each hold a copy of these
-// settings read when they loaded; a page that sends only what it changed
-// cannot carry its stale copy of the others back over a newer choice.
+// update saves the list and the UI settings in one write, atomically
+// (fsx.WriteAtomic): a crash mid-save leaves the previous state intact rather
+// than a truncated file that reads as "nothing was ever configured", and one
+// write, not two, means the two settings can never disagree on disk. It starts
+// from the file as it is NOW (fresh): a hand edit made a moment ago is kept
+// wherever this update does not speak.
 //
-// One write, not two, so the two settings can never disagree on disk. It
-// starts from the file as it is NOW (fresh): a hand edit made a moment ago is
-// kept wherever this update does not speak.
+// list makes the new list from the stored one, and a nil list keeps it - both
+// decided here, under the write lock, against the records as they are then,
+// rather than by the caller from a snapshot it read before, which a save from
+// another page or the migration (current) could land between.
 //
-// The version moves to prefsVersion only with a list the PAGE sent (page),
-// or when there is no list to be in an older format. A list the server
-// repaired itself (heal) keeps the version it was read with: that list is
-// still in the old format, and stamping it would tell the page it has
-// nothing to convert.
-func (p *Prefs) update(dicts []DictPref, ui json.RawMessage, page bool) error {
+// ui is the JSON object of the UI fields to change. Absent or null means "not
+// mentioned" and leaves the stored record untouched, and inside the object the
+// rule is the same per field - a key that is not sent keeps its stored value,
+// and only a key sent as false, 0 or [] clears one. Two pages on one server
+// (two tabs, or the Android app and its lookup popup, each a WebView of its
+// own) each hold a copy of these settings read when they loaded; a page that
+// sends only what it changed cannot carry its stale copy of the others back
+// over a newer choice.
+//
+// The version moves to prefsVersion with a list sent in that format (page),
+// or when the file held no list, so there is nothing older to migrate. A list
+// from a page older than the format keeps the version it was read with, and
+// the migration still runs on it (current).
+func (p *Prefs) update(list func(stored []DictPref) []DictPref, ui json.RawMessage, page bool) error {
 	p.write.Lock()
 	defer p.write.Unlock()
 	f := p.file.fresh().val
-	if dicts != nil {
-		f.Dicts = append([]DictPref(nil), dicts...)
+	had := len(f.Dicts) > 0
+	if list != nil {
+		f.Dicts = append([]DictPref(nil), list(f.Dicts)...)
 	}
-	if (page && dicts != nil) || len(f.Dicts) == 0 {
+	if (page && list != nil) || !had {
 		f.Version = prefsVersion
 	}
 	if mentioned(ui) {
@@ -333,8 +342,103 @@ func (p *Prefs) update(dicts []DictPref, ui json.RawMessage, page bool) error {
 	return err
 }
 
-// heal re-attaches stored records to the dictionaries as they exist NOW and
-// persists the repair when anything moved.
+// current is the state GET /api/prefs answers with, and whether it is a real
+// one (data): the stored records re-attached to the dictionaries as they exist
+// NOW (healList) and, when the list was saved before the current format,
+// migrated (migrateList), so the page is never handed an older one. Both are
+// worked out from one read and saved in one write, under the write lock, when
+// either changed anything: a save from a page cannot land between the read and
+// the write and be written away, and the migration counts the records the
+// repair re-attached even when the repair cannot be saved.
+//
+// The state is returned even when it could not be saved, so the page is
+// handed the re-attached records and the migrated pins, and its next save,
+// made in the current format, writes them - rather than writing the old pins
+// back under the new version, after which no migration would run again.
+func (p *Prefs) current(r *Registry) (prefsFile, bool) {
+	entries := r.all() // before the write lock, which never waits on the registry
+	// the common case - nothing moved, the format current - is answered from
+	// the state in effect, without forcing a read from disk or taking the
+	// write lock
+	f, ok := p.data()
+	if g, changed := settle(f, ok, entries); !changed {
+		return g, ok
+	}
+	p.write.Lock()
+	defer p.write.Unlock()
+	f, ok = record(p.file.fresh())
+	g, changed := settle(f, ok, entries)
+	if !changed {
+		return g, ok
+	}
+	data, err := json.MarshalIndent(g, "", "  ")
+	if err == nil {
+		_, err = p.file.save(string(data)+"\n", true)
+	}
+	switch {
+	case err != nil:
+		logx.Warn("could not save %s: %v", p.file.path(), err)
+	case g.Version != f.Version:
+		n := 0
+		for _, d := range g.Dicts {
+			if d.Pin {
+				n++
+			}
+		}
+		logx.V("%s: format %d to %d, %d pinned", StateFile, f.Version, g.Version, n)
+	}
+	return g, ok
+}
+
+// settle is f with its records re-attached (healList) and, when f is a real
+// record older than the current format, migrated (migrateList); and whether
+// either changed anything.
+func settle(f prefsFile, ok bool, entries []*entry) (prefsFile, bool) {
+	dicts, moved := healList(entries, f.Dicts)
+	migrate := ok && f.Version < prefsVersion && len(dicts) > 0
+	if migrate {
+		dicts, f.Version = migrateList(entries, dicts, f.Version), prefsVersion
+	}
+	f.Dicts = dicts
+	return f, moved || migrate
+}
+
+// migrateList is the one migration of a list saved in an older format,
+// version, to the current one (D166 Am. 3). With more than migratePins of the
+// user's dictionaries present - the ones the registry lists, without the guide
+// the app ships - the first migratePins of them in the list's order stay
+// pinned: of the pinned ones where the list has pins (version 2), of the whole
+// order where it predates them (version 1). Every other record is unpinned;
+// with migratePins or fewer, none is pinned. A record of a dictionary the
+// registry does not list (a drive that is away, a dictionary since deleted) is
+// neither counted nor pinned.
+func migrateList(entries []*entry, dicts []DictPref, version int) []DictPref {
+	own := map[string]bool{}
+	for _, e := range entries {
+		if !e.builtin {
+			own[e.ID] = true
+		}
+	}
+	keep := map[string]bool{}
+	if len(own) > migratePins {
+		for _, d := range dicts {
+			if len(keep) == migratePins {
+				break
+			}
+			if own[d.ID] && (version < 2 || d.Pin) {
+				keep[d.ID] = true
+			}
+		}
+	}
+	out := slices.Clone(dicts)
+	for i := range out {
+		out[i].Pin = keep[out[i].ID]
+	}
+	return out
+}
+
+// healList re-attaches stored records to the dictionaries as they exist NOW
+// (entries), and reports whether a record was re-attached under a new id.
 //
 // The identity ladder is id → path → unique file name, each rung weaker than
 // the last and each guarded against collisions: a record may claim an entry
@@ -346,10 +450,7 @@ func (p *Prefs) update(dicts []DictPref, ui json.RawMessage, page bool) error {
 // Records that match nothing are kept, not dropped. An unplugged drive is the
 // common case, and forgetting a user's curation because a disk was asleep
 // would be exactly the failure this whole file exists to prevent.
-func (p *Prefs) heal(r *Registry) []DictPref {
-	stored, _ := p.Snapshot()
-	entries := r.all()
-
+func healList(entries []*entry, stored []DictPref) ([]DictPref, bool) {
 	byID := make(map[string]*entry, len(entries))
 	byPath := make(map[string]*entry, len(entries))
 	base := map[string][]*entry{}
@@ -409,23 +510,36 @@ func (p *Prefs) heal(r *Registry) []DictPref {
 		out[i].ID, out[i].Path = e.ID, e.Path
 		changed = true
 	}
-	if changed {
-		if err := p.Replace(out); err != nil {
-			logx.Warn("could not save %s: %v", p.file.path(), err)
-		}
-	}
-	return out
+	return out, changed
 }
 
-// merge folds the client's ordered list into the stored one. The client can
+// mergeList folds the client's ordered list into the stored one. The client can
 // only speak for the dictionaries it can see, so records it did not mention
 // are RETAINED rather than deleted: an unmounted drive must not cost the user
-// the settings for everything on it. A retained record keeps its place: it
-// follows the record it followed before, or leads when nothing the client
-// sent stood before it - so a pinned dictionary on a drive that is away is
-// back at its rank when the drive is (D166).
-func (p *Prefs) merge(r *Registry, want []DictPref) []DictPref {
-	stored, _ := p.Snapshot()
+// the settings for everything on it. A retained pinned record keeps its rank
+// among the pinned: it follows the record that was pinned before it and still
+// is, or leads when none was - so a pinned dictionary on a drive that is away
+// is back at its rank when the drive is (D166). A retained unpinned record
+// has no rank, and goes last.
+//
+// pins says whether the list speaks for the pins. A list from a page older
+// than the format (a tab left open across an upgrade) does not: every record
+// it sends keeps the pin it has stored, by id or by path, whatever the list
+// says, so such a page cannot undo the pins or their migration.
+func mergeList(r *Registry, stored, want []DictPref, pins bool) []DictPref {
+	storedPath := make(map[string]string, len(stored))
+	pinnedID, pinnedPath := map[string]bool{}, map[string]bool{}
+	for _, d := range stored {
+		if d.Path != "" {
+			storedPath[d.ID] = d.Path
+		}
+		if d.Pin {
+			pinnedID[d.ID] = true
+			if d.Path != "" {
+				pinnedPath[cleanAbs(d.Path)] = true
+			}
+		}
+	}
 	sent := make([]DictPref, 0, len(want))
 	seenID := map[string]bool{}
 	seenPath := map[string]string{} // cleaned path -> the id it was sent under
@@ -434,12 +548,20 @@ func (p *Prefs) merge(r *Registry, want []DictPref) []DictPref {
 			continue
 		}
 		// the registry, not the client, is authoritative about where a
-		// dictionary lives; the name is the client echoing our own label back
+		// dictionary lives; the name is the client echoing our own label back.
+		// For one the registry does not list right now - a page working from
+		// a list it cached, sent before the rescan that dropped it - the
+		// stored record is the next best: a save never loses a known path.
 		if e, err := r.get(d.ID); err == nil {
 			d.Path = e.Path
+		} else if d.Path == "" {
+			d.Path = storedPath[d.ID]
 		}
 		if d.Name == "" && d.Path != "" {
 			d.Name = filepath.Base(d.Path)
+		}
+		if !pins {
+			d.Pin = pinnedID[d.ID] || (d.Path != "" && pinnedPath[cleanAbs(d.Path)])
 		}
 		seenID[d.ID] = true
 		if d.Path != "" {
@@ -447,25 +569,33 @@ func (p *Prefs) merge(r *Registry, want []DictPref) []DictPref {
 		}
 		sent = append(sent, d)
 	}
-	// after[id] holds the retained records that followed the sent record id
-	// in the stored order; lead holds those that no sent record preceded.
+	pinnedNow := map[string]bool{}
+	for _, d := range sent {
+		if d.Pin {
+			pinnedNow[d.ID] = true
+		}
+	}
+	// after[id] holds the retained pinned records that followed the sent
+	// pinned record id in the stored order; lead holds those no sent pinned
+	// record preceded.
 	after := map[string][]DictPref{}
-	var lead []DictPref
+	var lead, tail []DictPref
 	prev := ""
 	for _, d := range stored {
-		if seenID[d.ID] {
-			prev = d.ID
-			continue
+		id, sentToo := d.ID, seenID[d.ID]
+		if !sentToo && d.Path != "" {
+			id, sentToo = seenPath[cleanAbs(d.Path)] // sent under its current id
 		}
-		if d.Path != "" {
-			if id, ok := seenPath[cleanAbs(d.Path)]; ok {
-				prev = id // the client sent it under its current id
-				continue
+		switch {
+		case sentToo:
+			if pinnedNow[id] {
+				prev = id
 			}
-		}
-		if prev == "" {
+		case !d.Pin:
+			tail = append(tail, d)
+		case prev == "":
 			lead = append(lead, d)
-		} else {
+		default:
 			after[prev] = append(after[prev], d)
 		}
 	}
@@ -475,7 +605,7 @@ func (p *Prefs) merge(r *Registry, want []DictPref) []DictPref {
 		out = append(out, d)
 		out = append(out, after[d.ID]...)
 	}
-	return out
+	return append(out, tail...)
 }
 
 // mentioned reports whether a request carried a UI patch: an absent key and
@@ -491,15 +621,17 @@ func cleanAbs(p string) string {
 	return filepath.Clean(p)
 }
 
-// GET /api/prefs - the enabled set and the order, healed against the
-// dictionaries that exist right now. "exists" is false on a first run, which
-// is the client's cue to adopt whatever an older build left in localStorage
-// (once) instead of starting the user over. "version" below prefsVersion is
-// its cue to convert the list (D166).
+// GET /api/prefs - the enabled set and the order as they stand (current):
+// healed against the dictionaries that exist right now, in the current
+// format. "exists" is false on a first run, which is the client's cue to
+// adopt whatever an older build left in localStorage (once) instead of
+// starting the user over.
 func (s *Server) handlePrefs(w http.ResponseWriter, r *http.Request) {
-	dicts := s.reg.prefs.heal(s.reg)
-	f, exists := s.reg.prefs.data()
-	writeJSON(w, map[string]any{"exists": exists, "version": f.Version, "dicts": dicts, "ui": s.reg.prefs.UI()})
+	f, exists := s.reg.prefs.current(s.reg)
+	if f.Dicts == nil {
+		f.Dicts = []DictPref{} // [] on the wire, as PUT answers, never null
+	}
+	writeJSON(w, map[string]any{"exists": exists, "version": f.Version, "dicts": f.Dicts, "ui": s.reg.prefs.UI()})
 }
 
 // PUT /api/prefs - replace the order and enabled set when the request sends
@@ -510,6 +642,9 @@ func (s *Server) handleSavePrefs(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Dicts []DictPref      `json:"dicts"`
 		UI    json.RawMessage `json:"ui"` // raw: which keys are present is the patch
+		// Version is the format the list is written in. A page older than
+		// prefsVersion sends none, and its list does not speak for the pins.
+		Version int `json:"version"`
 	}
 	if !decodeJSON(w, r, &req, 1<<20) {
 		return
@@ -522,11 +657,12 @@ func (s *Server) handleSavePrefs(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	var merged []DictPref
+	current := req.Version >= prefsVersion
+	var list func([]DictPref) []DictPref
 	if req.Dicts != nil {
-		merged = s.reg.prefs.merge(s.reg, req.Dicts)
+		list = func(stored []DictPref) []DictPref { return mergeList(s.reg, stored, req.Dicts, current) }
 	}
-	if err := s.reg.prefs.update(merged, req.UI, true); err != nil {
+	if err := s.reg.prefs.update(list, req.UI, current); err != nil {
 		httpErr(w, http.StatusInternalServerError, "%s", "could not save: "+err.Error())
 		return
 	}

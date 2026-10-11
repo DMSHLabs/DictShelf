@@ -105,12 +105,20 @@ paths:
         - name: mode
           in: query
           description: |
-            `exact` · `prefix` · `contains` (trigram substring over folded
-            headwords) · `fts` (full text). `fuzzy` is accepted as a legacy
-            alias and now means `prefix`.
+            `exact` · `prefix` · `fts` (full text) · `wildcard` (a pattern for
+            the whole headword: `?` is one character, `*` any number; write
+            `?` as `%3F`). `fuzzy` is accepted as a legacy alias and now means
+            `prefix`. `contains` is retired and is a 400: write `*word*` in
+            `wildcard` mode.
 
-            `contains` and `fts` need the dictionary to carry that index; ask
-            `/api/dicts` for `caps` first, and expect `skipped` if you do not.
+            `fts` needs the dictionary to carry the full-text index, and
+            `wildcard` needs it to be indexed; ask `/api/dicts` for `caps`
+            first, and expect `skipped` if you do not.
+
+            A `wildcard` pattern with a capital letter is matched as typed,
+            case and accents included; any other pattern ignores them. A
+            pattern longer than 64 characters is a 400. A pattern containing
+            `*` or `?` is not lemmatized.
 
             A multi-word `fts` query is a PHRASE first. It is retried as a
             proximity and then as separate words only when the stricter reading
@@ -122,7 +130,7 @@ paths:
             rejected.
           schema:
             type: string
-            enum: [exact, prefix, contains, fts, fuzzy]
+            enum: [exact, prefix, fts, wildcard, fuzzy]
             default: prefix
         - name: hl
           in: query
@@ -254,11 +262,12 @@ paths:
                 oneOf:
                   - $ref: '#/components/schemas/DictsBegin'
                   - $ref: '#/components/schemas/DictsRow'
+                  - $ref: '#/components/schemas/DictsBusy'
                   - $ref: '#/components/schemas/DictsEnd'
                 discriminator: { propertyName: t }
               example: |
                 {"t":"begin","total":2}
-                {"t":"dict","dict":{"id":"oxford","name":"Oxford Advanced Learner's","format":"mdx","path":"/Users/me/Dicts/oald.mdx","entries":184000,"caps":{"Exact":true,"Prefix":true,"Contains":false,"FTS":false}}}
+                {"t":"dict","dict":{"id":"oxford","name":"Oxford Advanced Learner's","format":"mdx","path":"/Users/me/Dicts/oald.mdx","entries":184000,"caps":{"Exact":true,"Prefix":true,"FTS":false,"Wildcard":false}}}
                 {"t":"end","etag":"\"ac4fd9fecabd8ec4cf544212\""}
         '304':
           description: Nothing in the list has changed since the answer whose `etag` was sent.
@@ -375,6 +384,7 @@ paths:
                 oneOf:
                   - $ref: '#/components/schemas/DictsBegin'
                   - $ref: '#/components/schemas/DictsRow'
+                  - $ref: '#/components/schemas/DictsBusy'
                   - $ref: '#/components/schemas/DictsEnd'
                 discriminator: { propertyName: t }
         '500':
@@ -445,10 +455,6 @@ paths:
           required: true
           description: Dictionary id.
           schema: { type: string }
-        - name: contains
-          in: query
-          description: Trigram substring index over headwords. A switch.
-          schema: { type: string }
         - name: fts
           in: query
           description: Full-text index over article text - the largest one. A switch.
@@ -461,8 +467,8 @@ paths:
         - lang: Shell
           label: curl
           source: |
-            # add the substring index to one dictionary and watch it build
-            curl -sN 'http://127.0.0.1:6888/api/ingest?dict=oxford&contains=1'
+            # add the full-text index to one dictionary and watch it build
+            curl -sN 'http://127.0.0.1:6888/api/ingest?dict=oxford&fts=1'
 
             # leave a switch out and it keeps its current state; this only packs media
             curl -sN 'http://127.0.0.1:6888/api/ingest?dict=oxford&media=1'
@@ -1285,6 +1291,12 @@ paths:
                     The whole list, pinned entries in the user's order. Omit it (or send null)
                     to keep the stored list untouched, as when only a UI
                     setting changed.
+                version:
+                  type: integer
+                  description: >
+                    The format `dicts` is written in: 3. Without it, the list
+                    is taken as one from a client older than pins, and every
+                    dictionary it sends keeps the pin it has stored.
                 ui:
                   allOf: [{ $ref: '#/components/schemas/UIPrefs' }]
                   description: >
@@ -1302,7 +1314,7 @@ paths:
             # send back an edited copy.
             curl -s -X PUT 'http://127.0.0.1:6888/api/prefs' \
               -H 'content-type: application/json' \
-              -d '{"dicts":[{"id":"oxford","path":"/Users/me/Dicts/oald.mdx","pin":true},
+              -d '{"version":3,"dicts":[{"id":"oxford","path":"/Users/me/Dicts/oald.mdx","pin":true},
                           {"id":"webster","path":"/Users/me/Dicts/webster.slob","off":true}]}'
       responses:
         '200':
@@ -2172,13 +2184,14 @@ components:
       type: object
       description: >
         Which search modes this dictionary can serve now. The authority on what
-        to offer: Contains and FTS stay false until that index is built. Field
-        names are capitalised on the wire.
+        to offer: FTS stays false until the full-text index is built, and
+        Wildcard until the dictionary is indexed. Field names are capitalised
+        on the wire.
       properties:
         Exact: { type: boolean }
         Prefix: { type: boolean }
-        Contains: { type: boolean }
         FTS: { type: boolean }
+        Wildcard: { type: boolean }
 
     Result:
       type: object
@@ -2197,6 +2210,34 @@ components:
         i:
           type: integer
           description: Always 0 here. The search stream carries the field on every line.
+      required: [t]
+
+    DictsBusy:
+      type: object
+      description: >
+        The rows pending 10 seconds or more, sent every second while there are
+        any, and once more, empty, after the last of them has arrived. A row
+        named here may already have been sent: a client ignores it then.
+      properties:
+        t: { const: busy }
+        busy:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              name: { type: string, description: The file's name without its extension; the row's own name is not known yet. }
+              phase:
+                type: string
+                enum: [unpacking, indexing]
+                description: >
+                  What the open is doing; absent when it does not say.
+                  `unpacking` counts bytes of text, `indexing` entries. A DSL,
+                  Babylon or wudict markdown dictionary is indexed when it is
+                  first opened, and again after its files change.
+              done: { type: integer }
+              total: { type: integer, description: Absent when not known. For unpacking, an estimate. }
+            required: [id, name]
       required: [t]
 
     DictsEnd:
@@ -2319,11 +2360,12 @@ components:
         caps: { $ref: '#/components/schemas/Caps' }
         dbPath: { type: string, description: The prepared database. }
         error: { type: string, description: This dictionary could not be opened. }
-        containsStale:
+        tooLarge:
           type: boolean
           description: >
-            The substring index predates the current text folding, so it may
-            miss words. It keeps working; the panel offers a rebuild.
+            `error` is that the dictionary is too large to open on this system:
+            its text unpacks past the reader's limit, or past the free disk
+            space or memory to hold it.
         outdated:
           type: boolean
           description: >
@@ -2393,7 +2435,6 @@ components:
             while it is.
         entries: { type: integer }
         fullText: { type: boolean }
-        contains: { type: boolean }
         media: { type: boolean }
         size: { type: integer, description: Bytes. }
         created: { type: string }
@@ -2568,7 +2609,7 @@ components:
             own UI - the search endpoint never reads it.
         mode:
           type: string
-          enum: [exact, contains, fts]
+          enum: [exact, fts, wildcard]
           description: >
             The search mode the reader last picked. Absent is prefix, the
             default; prefix and unknown values are stored as absent.
@@ -2692,10 +2733,13 @@ components:
         version:
           type: integer
           description: >
-            The state file's format. Below 2, `dicts` is an order of the whole
-            library saved before `pin` existed; wudict's own page converts it
-            to pins and saves it back, which moves the file to 2. In the GET
-            answer only.
+            The format of `dicts`, 3. A list saved in an older one is migrated
+            when it is first read. With more than five of the user's
+            dictionaries present, the first five of them in its order stay
+            pinned: of its pinned dictionaries, or of its whole order if it is
+            older than pins. All others are listed A-Z. With five or fewer,
+            none is pinned. A dictionary that is not present when the list is
+            migrated is not counted and not pinned. In the GET answer only.
         dicts:
           type: array
           description: >

@@ -30,14 +30,14 @@ type Golden struct {
 // Versions renders the stamps that together decide a format's prepared
 // content, in a fixed order.
 func Versions(format string) string {
-	return fmt.Sprintf("reader=%d ingest=%d markup=%d fold=%d",
-		dict.ReaderVersion(format), store.IngestVersion, artmark.Version, dict.FoldVersion)
+	return fmt.Sprintf("reader=%d ingest=%d markup=%d",
+		dict.ReaderVersion(format), store.IngestVersion, artmark.Version)
 }
 
-// Check prepares src (full text and contains both on, so every index is
-// hashed) into a temporary text.db and compares its fingerprint and the
-// current versions with want. The fixture must be built in code, byte for
-// byte the same on every run.
+// Check prepares src (full text on, so every index is hashed) into a
+// temporary text.db and compares its fingerprint and the current versions
+// with want. The fixture must be built in code, byte for byte the same on
+// every run.
 func Check(t *testing.T, format, src string, want Golden) {
 	t.Helper()
 	t.Setenv("WUDICT_DB_DIR", t.TempDir())
@@ -46,7 +46,7 @@ func Check(t *testing.T, format, src string, want Golden) {
 		t.Fatalf("OpenReader(%s): %v", src, err)
 	}
 	dbPath := filepath.Join(t.TempDir(), store.TextDBName)
-	_, err = store.IngestPlan(r, dbPath, store.Plan{FullText: true, Contains: true}, nil)
+	_, err = store.IngestPlan(r, dbPath, store.Plan{FullText: true}, nil)
 	r.Close()
 	if err != nil {
 		t.Fatalf("IngestPlan: %v", err)
@@ -65,8 +65,8 @@ func Check(t *testing.T, format, src string, want Golden) {
 		t.Fatalf("%s: prepared content changed but no version was bumped.\n"+
 			"An existing library would keep the old content and never be told to rebuild.\n"+
 			"Bump the version of the layer you changed - %s.ReaderVersion (the Reader), "+
-			"store.IngestVersion (IngestPlan), artmark.Version (article markup) or "+
-			"dict.FoldVersion (folding) - then rerun and set the golden to the value it prints.\n"+
+			"store.IngestVersion (IngestPlan) or artmark.Version (article markup) - "+
+			"then rerun and set the golden to the value it prints.\n"+
 			"hash %s → %s", format, format, want.Hash, got.Hash)
 	case got.Hash != want.Hash:
 		t.Fatalf("%s: prepared content changed with versions %q → %q; update the golden:\n\t%s",

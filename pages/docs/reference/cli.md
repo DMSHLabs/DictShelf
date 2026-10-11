@@ -20,7 +20,7 @@ or two dashes.
 | [`serve`](#serve) | start the server (the default command) |
 | [`list`](#list) | list the dictionaries in one or more folders |
 | [`info`](#info) | show a dictionary's metadata, search modes and files |
-| [`lookup`, `prefix`, `contains`, `fts`](#lookup-prefix-contains-fts) | search one dictionary |
+| [`lookup`, `prefix`, `fts`, `wildcard`](#lookup-prefix-fts-wildcard) | search one dictionary |
 | [`searchall`](#searchall) | search all dictionaries in the dictionary folders |
 | [`keys`](#keys) | list headwords, or the files in an `.mdd` |
 | [`res`](#res) | extract one resource |
@@ -90,13 +90,13 @@ files:
   total                                 406.3 MB
 ```
 
-## lookup, prefix, contains, fts
+## lookup, prefix, fts, wildcard
 
 ``` sh
 wudict lookup   [-n max] <dictfile> <word>    # exact; accent-folded if nothing matches
 wudict prefix   [-n max] <dictfile> <word>    # exact, then prefix; accents ignored
-wudict contains [-n max] <dictfile> <word>    # headwords containing <word>
 wudict fts      [-n max] <dictfile> <query>   # full-text query, as in the app
+wudict wildcard [-n max] <dictfile> <pattern> # headwords that fit <pattern>
 ```
 
 | Flag | Effect |
@@ -105,10 +105,12 @@ wudict fts      [-n max] <dictfile> <query>   # full-text query, as in the app
 | `-format` | `raw` (default): the dictionary's HTML; `clean`: structure, emphasis and media, without scripts, stylesheets and presentation; `text`: no markup |
 | `-base <url>` | prefix for the `/res/…` references in `clean` output |
 
-`contains` and `fts` need an indexed dictionary: pass its library folder.
+`fts` and `wildcard` need an indexed dictionary: pass its library folder.
 `fts` reads the query as the app does
-([Full-text query syntax](fts-syntax.md)). The exit status is `1` when nothing
-matches.
+([Full-text query syntax](fts-syntax.md)), and so does `wildcard`
+([Wildcard syntax](wildcard-syntax.md)). Put a wildcard pattern in single
+quotes, so that the shell does not expand `*` and `?`. The exit status is `1`
+when nothing matches.
 
 ``` sh title="an article as an HTML file whose images load from the server"
 wudict lookup -format clean -base http://127.0.0.1:6888 ~/Dictionaries/Oxford.mdx flight > flight.html
@@ -126,15 +128,15 @@ for the search and closed when it has answered.
 
 | Flag | Effect |
 | --- | --- |
-| `-mode` | `exact` (default), `prefix`, `contains`, `fts` |
+| `-mode` | `exact` (default), `prefix`, `fts`, `wildcard` |
 | `-n` | results per dictionary; default `10` |
 | `-format` | `text` (default), `clean`, `raw` as for `lookup`; `list`: headwords only |
 | `-base <url>` | as for `lookup` |
 | `-dict-dir <dir>` | folder to search, repeatable; or a `<dir>` argument, which may be a `:`-separated list. Default: `DICT_DIR` |
 | `-config <file>` | the `wudict.toml` to read `DICT_DIR` from |
 
-`searchall` opens each dictionary through its own format. Contains and
-full-text therefore return results only for dictionaries that index themselves
+`searchall` opens each dictionary through its own format. Full-text and
+wildcard therefore return results only for dictionaries that index themselves
 (Lingvo DSL, Babylon, wudict markdown) and for library folders in the searched
 folders. The exit status is `1` when no dictionary matches.
 
@@ -228,7 +230,7 @@ is documented in [The text.db format](text-db.md).
 ## ingest
 
 ``` sh
-wudict ingest [-full] [-fulltext] [-contains] [<dictfile|folder> …]
+wudict ingest [-full] [-fulltext] [<dictfile|folder> …]
 ```
 
 Indexes dictionaries into `<DB_DIR>/<name>/` (`text.db`, `info.txt`). Without a
@@ -238,8 +240,6 @@ Dictionaries already indexed are skipped.
 | Flag | Effect |
 | --- | --- |
 | none | a new dictionary gets the headword index, as in the app |
-| `-contains` | add the contains index |
-| `-contains=false` | remove the contains index |
 | `-fulltext` | add the full-text index |
 | `-fulltext=false`, `-headwords` | remove the full-text index |
 | `-full` | also add the media pack (`media.db`) |
