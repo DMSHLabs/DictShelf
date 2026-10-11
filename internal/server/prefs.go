@@ -134,9 +134,9 @@ type UIPrefs struct {
 	// opens; the server never reads it.
 	Full bool `json:"full,omitempty"`
 
-	// Mode is the search mode the reader last picked: "exact", "contains",
-	// "fts" or "wildcard". Empty is prefix, the default, so an absent key keeps it. It is the
-	// reader's habit, and which modes answer at all is a fact about this
+	// Mode is the search mode the reader last picked: "exact", "fts" or
+	// "wildcard". Empty is prefix, the default, so an absent key keeps it. It
+	// is the reader's habit, and which modes answer at all is a fact about this
 	// server's library, so it lives here and not in the browser. The page
 	// writes it only when the reader picks a mode, never when a link or the
 	// history sets one; the server never reads it.
@@ -167,8 +167,8 @@ func (u *UIPrefs) normalize() {
 		u.OpenN = 0 // one, the default, is stored as absent
 	}
 	switch u.Mode {
-	case "exact", "contains", "fts", "wildcard":
-	default: // prefix, and what a hand edit may carry (the retired "fuzzy", D16)
+	case "exact", "fts", "wildcard":
+	default: // prefix, and a retired mode ("fuzzy", D16; "contains", D170)
 		u.Mode = ""
 	}
 }

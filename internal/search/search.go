@@ -24,13 +24,12 @@ type Mode int
 const (
 	Exact Mode = iota
 	Prefix
-	Contains
 	FullText
 	Wildcard
 )
 
 func (m Mode) String() string {
-	return [...]string{"exact", "prefix", "contains", "fts", "wildcard"}[m]
+	return [...]string{"exact", "prefix", "fts", "wildcard"}[m]
 }
 
 // ParseMode reads a mode by its API name. "" is prefix, the default; "fuzzy"
@@ -41,8 +40,6 @@ func ParseMode(s string) (Mode, error) {
 		return Prefix, nil
 	case "exact":
 		return Exact, nil
-	case "contains":
-		return Contains, nil
 	case "fts":
 		return FullText, nil
 	case "wildcard":
@@ -299,12 +296,6 @@ func query(ctx context.Context, d dict.Dictionary, mode Mode, term string, plan 
 		} else {
 			h.Results, h.Err = d.Prefix(term, perDict)
 		}
-	case Contains:
-		if !indexed || !caps.Contains {
-			h.Skipped = true
-			return h
-		}
-		h.Results, h.Err = s.ContainsContext(ctx, term, perDict)
 	case FullText:
 		if !indexed || !caps.FTS {
 			h.Skipped = true

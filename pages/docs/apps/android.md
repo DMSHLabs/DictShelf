@@ -101,7 +101,7 @@ full app instead, per source.
 am start -a android.intent.action.VIEW -d "wudict://lookup?q=phubbing"
 ```
 
-The link also takes `mode=exact|prefix|contains|fts|wildcard`, `dict=<name>`,
+The link also takes `mode=exact|prefix|fts|wildcard`, `dict=<name>`,
 and `full=1` (full app) or `full=0` (floating window). In a wildcard query,
 write `?` as `%3F`.
 

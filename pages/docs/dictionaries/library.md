@@ -15,7 +15,6 @@ dictionary.
 | --- |----------------------------| --- |
 | not indexed | the dictionary files       | exact, prefix |
 | indexed | `text.db` (headword index) | exact, prefix, wildcard; faster, less memory |
-| + contains index | the same `text.db`         | + contains |
 | + full-text index | the same `text.db`         | + full-text |
 
 A dictionary is searchable as soon as wudict finds it. On its first search
@@ -28,10 +27,10 @@ Lingvo DSL, Babylon and wudict markdown are indexed when first opened: they
 have no index of their own. ZIM is never indexed automatically: its own index
 answers exact and prefix search with little memory, and an indexed copy is
 several times the size of the file. Index a ZIM from the dictionary panel to
-use contains, full-text or a media pack.
+use wildcard, full-text or a media pack.
 
-The contains index, the full-text index and the media pack are added per
-dictionary with its switches in the dictionary panel, or with
+The full-text index and the media pack are added per dictionary with its
+switches in the dictionary panel, or with
 [`wudict ingest`](#index-from-the-terminal).
 
 ## Library folder
@@ -67,9 +66,9 @@ wudict ingest ~/Dictionaries/es  # one folder
 ```
 
 `ingest` skips dictionaries already indexed and gives a new dictionary the
-headword index only, as the app does. `-contains` and `-fulltext` add those
-indexes, `-full` also adds the media pack, `-contains=false` and
-`-fulltext=false` remove them. A flag left out keeps what each dictionary has.
+headword index only, as the app does. `-fulltext` adds the full-text index,
+`-full` also adds the media pack, and `-fulltext=false` removes the full-text
+index. A flag left out keeps what each dictionary has.
 See [`ingest`](../reference/cli.md#ingest).
 
 ## Outdated indexes

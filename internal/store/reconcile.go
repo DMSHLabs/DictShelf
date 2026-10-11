@@ -48,10 +48,10 @@ const (
 // missing or unusable database, or one built from an older edition of the
 // source, and nothing else.
 type Target struct {
-	// FullText and Contains set one index each; nil keeps what is built. A
+	// FullText sets the full-text index; nil keeps what is built. A
 	// dictionary never prepared - or whose database cannot be read - has
 	// nothing to keep and starts from headwords only (D24).
-	FullText, Contains *bool
+	FullText *bool
 
 	Media MediaGoal
 
@@ -223,9 +223,6 @@ func reconcileText(src string, t Target, h Hooks, out *Outcome) (p Prepared, dir
 	}
 	if t.FullText != nil {
 		plan.FullText = *t.FullText
-	}
-	if t.Contains != nil {
-		plan.Contains = *t.Contains
 	}
 	out.Plan = plan
 

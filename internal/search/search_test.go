@@ -14,20 +14,21 @@ import (
 	"time"
 
 	"github.com/wuweidict/wudict/internal/dict"
+	"github.com/wuweidict/wudict/internal/wildcard"
 )
 
-// fake is a minimal prepared-style backend (a dict.Searcher); the contains
+// fake is a minimal prepared-style backend (a dict.Searcher); the wildcard
 // capability is toggled per instance.
 type fake struct {
 	name        string
 	words       []string
-	hasContains bool
+	hasWildcard bool
 	err         error
 }
 
 func (f *fake) Meta() dict.Meta { return dict.Meta{Name: f.name, Format: "fake"} }
 func (f *fake) Caps() dict.Caps {
-	return dict.Caps{Exact: true, Prefix: true, Contains: f.hasContains}
+	return dict.Caps{Exact: true, Prefix: true, Wildcard: f.hasWildcard}
 }
 func (f *fake) Close() error                    { return nil }
 func (f *fake) Keywords(offset, n int) []string { return nil }
@@ -61,17 +62,19 @@ func (f *fake) ExactContext(_ context.Context, w string, n int) ([]dict.Result, 
 func (f *fake) PrefixContext(_ context.Context, w string, n int) ([]dict.Result, error) {
 	return f.Prefix(w, n)
 }
-func (f *fake) ContainsContext(_ context.Context, w string, n int) ([]dict.Result, error) {
-	return f.match(func(x string) bool { return strings.Contains(x, w) }, n)
-}
 func (f *fake) FullTextContext(context.Context, string, int) ([]dict.Result, error) {
 	return nil, dict.ErrUnsupported
 }
 func (f *fake) FullTextMatch(context.Context, string, int) ([]dict.Result, error) {
 	return nil, dict.ErrUnsupported
 }
-func (f *fake) WildcardContext(context.Context, string, int) ([]dict.Result, error) {
-	return nil, dict.ErrUnsupported
+func (f *fake) WildcardContext(_ context.Context, pattern string, n int) ([]dict.Result, error) {
+	p, err := wildcard.Parse(pattern)
+	if err != nil {
+		return nil, err
+	}
+	m := p.Matcher()
+	return f.match(func(x string) bool { return m.Match([]byte(x)) }, n)
 }
 
 // all runs the fan-out over dictionaries that are already open and returns
@@ -134,7 +137,7 @@ func TestStreamOpenSurfacesOpenError(t *testing.T) {
 func TestFanOutOrderAndModes(t *testing.T) {
 	dicts := []dict.Dictionary{
 		&fake{name: "A", words: []string{"casa", "casona"}},
-		&fake{name: "B", words: []string{"casa"}, hasContains: true},
+		&fake{name: "B", words: []string{"casa"}, hasWildcard: true},
 		&fake{name: "C", err: errors.New("boom")},
 	}
 	hits := all(context.Background(), dicts, Prefix, "cas", 10)
@@ -148,13 +151,13 @@ func TestFanOutOrderAndModes(t *testing.T) {
 		t.Error("error not propagated")
 	}
 
-	// contains: A lacks the capability -> skipped; B serves
-	hits = all(context.Background(), dicts[:2], Contains, "as", 10)
+	// wildcard: A lacks the capability -> skipped; B serves
+	hits = all(context.Background(), dicts[:2], Wildcard, "*as*", 10)
 	if !hits[0].Skipped {
-		t.Error("A should be skipped for contains")
+		t.Error("A should be skipped for wildcard")
 	}
 	if hits[1].Skipped || len(hits[1].Results) != 1 {
-		t.Errorf("B contains failed: %+v", hits[1])
+		t.Errorf("B wildcard failed: %+v", hits[1])
 	}
 }
 
@@ -275,10 +278,10 @@ func TestQueryHandsTheContextToTheBackend(t *testing.T) {
 	}
 }
 
-// A direct backend has no index for contains or full-text; Query reports it
+// A direct backend has no index for wildcard or full-text; Query reports it
 // skipped rather than failing, exactly as the fan-out does.
 func TestQuerySkipsWhatADirectBackendCannotDo(t *testing.T) {
-	for _, m := range []Mode{Contains, FullText} {
+	for _, m := range []Mode{Wildcard, FullText} {
 		if h := Query(context.Background(), okDict{}, m, "w", 5); !h.Skipped {
 			t.Errorf("%v on a direct backend: %+v, want skipped", m, h)
 		}
@@ -287,12 +290,14 @@ func TestQuerySkipsWhatADirectBackendCannotDo(t *testing.T) {
 
 func TestParseMode(t *testing.T) {
 	for in, want := range map[string]Mode{"": Prefix, "prefix": Prefix, "fuzzy": Prefix,
-		"exact": Exact, "contains": Contains, "fts": FullText} {
+		"exact": Exact, "fts": FullText, "wildcard": Wildcard} {
 		if got, err := ParseMode(in); err != nil || got != want {
 			t.Errorf("ParseMode(%q) = %v, %v; want %v", in, got, err, want)
 		}
 	}
-	if _, err := ParseMode("regex"); err == nil {
-		t.Error("an unknown mode must be refused")
+	for _, retired := range []string{"regex", "contains"} { // contains: D170
+		if _, err := ParseMode(retired); err == nil {
+			t.Errorf("ParseMode(%q): an unknown mode must be refused", retired)
+		}
 	}
 }

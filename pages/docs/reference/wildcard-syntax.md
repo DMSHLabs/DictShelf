@@ -86,8 +86,8 @@ number of results per dictionary is the same as in the other modes
 -   A pattern has at most 64 characters.
 -   There are no character sets (`[aeiou]`), alternatives or repeat counts.
     Write `???` for exactly three characters.
--   `*` and `?` cannot be searched as themselves. To find a headword that
-    contains them, use exact, prefix or contains.
+-   `*` and `?` cannot be searched as themselves. To find a headword with
+    one of them, use exact or prefix.
 -   A pattern that starts with `*` or `?` reads every headword of every
     searched dictionary, so it is slower on a large library.
 

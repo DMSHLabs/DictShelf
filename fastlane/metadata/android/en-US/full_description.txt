@@ -2,7 +2,7 @@ wuDict searches all your MDict, StarDict, AARD2, Lingvo DSL, Babylon, ZIM and wu
 
 <h2>FEATURES</h2>
 - Formats: MDict (.mdx/.mdd), StarDict (.ifo/.idx/.dict), Aard2 (.slob), Lingvo DSL (.dsl), Babylon (.bgl), ZIM (.zim) - library.kiwix.org, wuDict markdown (.wudict.md) - a plain-text dictionary you can write in any editor
-- Instant search across all dictionaries with four modes: prefix, exact, contains, and full-text search
+- Instant search across all dictionaries with four modes: prefix, exact, wildcard (c?t, *ology), and full-text search
 - Dictionaries are automatically grouped by language, publisher, direction, etc.
 - Double-tap any word in a wudict dictionary article to instantly look up its definition
 - Adjust the font size via the ☰ → <b>+/-</b> widget
@@ -17,8 +17,8 @@ wuDict searches all your MDict, StarDict, AARD2, Lingvo DSL, Babylon, ZIM and wu
 Dictionaries are searchable immediately after adding them. wudict
 builds a compact headword index in the background, making lookups
 almost instant even across hundreds of dictionaries. Preparation is
-automatic and requires no configuration; contains-search, full-text search and
-media packing are optional per-dictionary switches — enable them only where
+automatic and requires no configuration; full-text search and media packing
+are optional per-dictionary switches — enable them only where
 you need them. They require extra space, with the estimated size displayed
 in the dictionary panel.
 

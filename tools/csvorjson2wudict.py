@@ -4,7 +4,7 @@ pyglossary CSV, a pyglossary JSON, a `wudict dump` CSV, or a native JSON spec.
 
 The schema written here is the one internal/store/ingest.go builds and
 internal/store/store.go validates: user_version=1, meta/entry/alias +
-entry_fts, optional entry_trigram. Bodies are DEFLATE-compressed per row
+entry_fts. Bodies are DEFLATE-compressed per row
 behind a 0x00 sentinel exactly as store.encodeBody does (internal/store/
 compress.go); --no-compress stores them as plain TEXT instead. Both forms are
 legal in the same table, because the read path discriminates per row.
@@ -85,7 +85,7 @@ are degenerate, because a dictionary with eleven distinct keys is not a
 dictionary.
 
 Usage:
-  python3 csvorjson2wudict.py INPUT [-o OUTPUT] [--fulltext] [--contains] [--force]
+  python3 csvorjson2wudict.py INPUT [-o OUTPUT] [--fulltext] [--force]
   python3 csvorjson2wudict.py --demo [-o OUTPUT]
 
 OUTPUT (resolved like `go build -o`; <name> is the input's file stem):
@@ -106,12 +106,10 @@ import secrets
 import sqlite3
 import sys
 import tempfile
-import unicodedata
 import zlib
 from datetime import datetime, timezone
 
 SCHEMA_VERSION = 1   # store/store.go:43
-FOLD_VERSION = 1     # dict/fold.go:29
 MARKUP_VERSION = 2   # artmark/artmark.go:83
 COMPRESS_MARK = 0x00  # store/compress.go:31
 COMPRESS_MIN = 120    # store/compress.go:73 - shorter than deflate's overhead
@@ -156,12 +154,6 @@ EXTRA_MIME = {
 
 
 # ---------------------------------------------------------------- primitives
-
-def fold(s):
-    """dict.Fold: lowercase, NFD, drop combining marks (dict/fold.go:33)."""
-    return "".join(c for c in unicodedata.normalize("NFD", s.lower())
-                   if unicodedata.category(c) != "Mn")
-
 
 def strip_html(s):
     """store.StripHTML (store/strip.go): tags out, script/style contents out,
@@ -217,18 +209,12 @@ def split_by_bar(s):
             for p in BAR_SPLIT.split(s)]
 
 
-def require_sqlite(contains):
+def require_sqlite():
     db = sqlite3.connect(":memory:")
     try:
         db.execute("CREATE VIRTUAL TABLE p USING fts5(a)")
     except sqlite3.OperationalError:
         raise SystemExit("this Python's SQLite has no FTS5; FTS5 is mandatory (D29)")
-    if contains:
-        try:
-            db.execute("CREATE VIRTUAL TABLE q USING fts5(a, tokenize='trigram')")
-        except sqlite3.OperationalError:
-            raise SystemExit(f"SQLite {sqlite3.sqlite_version} has no trigram tokenizer "
-                             "(needs 3.34+); drop --contains")
     db.close()
 
 
@@ -442,9 +428,6 @@ def build(db, meta, entries, a, source_name):
             w, txt, content='', columnsize=0,
             tokenize='unicode61 remove_diacritics 2');
     """)
-    if a.contains:
-        db.execute("CREATE VIRTUAL TABLE entry_trigram USING fts5("
-                   "w, content='', columnsize=0, tokenize='trigram')")
 
     hw_re = None
     if a.headword_from:
@@ -488,8 +471,6 @@ def build(db, meta, entries, a, source_name):
                    (eid, w, encode_body(body, a.compress)))
         db.execute("INSERT INTO entry_fts(rowid, w, txt) VALUES(?,?,?)",
                    (eid, w, strip_html(body) if a.fulltext else ""))
-        if a.contains:
-            db.execute("INSERT INTO entry_trigram(rowid, w) VALUES(?,?)", (eid, fold(w)))
         if len(w) > 1 and w[0] == "@":        # MDict sub-entry: hidden from browsing
             sub += 1
         seen = {w}
@@ -517,8 +498,6 @@ def build(db, meta, entries, a, source_name):
         "entry_count": str(eid - sub),
         "sub_entries": str(sub),
         "ingest_level": "text" if a.fulltext else "headwords",
-        "has_trigram": "1" if a.contains else "0",
-        "fold_version": str(FOLD_VERSION),
         "markup_version": str(MARKUP_VERSION),
         "body_encoding": "deflate" if a.compress else "plain",
         "created": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -533,10 +512,8 @@ def build(db, meta, entries, a, source_name):
     return out, {"rescued": rescued, "xdxf": xdxf, "rows": eid}
 
 
-def finish_indexes(db, contains):
+def finish_indexes(db):
     db.execute("INSERT INTO entry_fts(entry_fts) VALUES('optimize')")
-    if contains:
-        db.execute("INSERT INTO entry_trigram(entry_trigram) VALUES('optimize')")
     db.execute("ANALYZE")
     db.execute("PRAGMA optimize")
 
@@ -606,9 +583,9 @@ def human_size(n):
 def write_info(outdir, meta, source, media_bytes):
     """Same shape store.WriteInfo regenerates (store/library.go:466), so the
     receipt does not change the first time wudict rewrites it."""
-    level = ("headwords only (exact · prefix · contains)"
+    level = ("headwords only (exact · prefix)"
              if meta["ingest_level"] == "headwords"
-             else "full text (exact · prefix · contains · full-text)")
+             else "full text (exact · prefix · full-text)")
     media = ("not packed - resources come from the original files"
              if media_bytes is None else f"media.db ({human_size(media_bytes)})")
     lines = [
@@ -691,7 +668,6 @@ def parse_args(argv):
 
     g = ap.add_argument_group("output")
     g.add_argument("--fulltext", action="store_true", help="index article text (full-text mode)")
-    g.add_argument("--contains", action="store_true", help="build the trigram substring index")
     g.add_argument("--no-compress", dest="compress", action="store_false",
                    help="store bodies as plain text (bigger, marginally faster to read)")
     g.add_argument("--name", help="override the dictionary title")
@@ -742,7 +718,7 @@ def resolve_output(spec, base):
 
 def main():
     a = parse_args(sys.argv[1:])
-    require_sqlite(a.contains)
+    require_sqlite()
 
     source = ""
     if a.demo:
@@ -785,7 +761,7 @@ def main():
         try:
             with db:
                 out, stats = build(db, meta, entries, a, base)
-            finish_indexes(db, a.contains)
+            finish_indexes(db)
             distinct = distinct_headwords(db)
         finally:
             db.close()
@@ -808,8 +784,7 @@ def main():
 
     size = os.path.getsize(final)
     print(f"{final}: {out['entry_count']} entries, "
-          f"{'full-text' if a.fulltext else 'headwords'}"
-          f"{', contains' if a.contains else ''}, {human_size(size)} — {out['name']}",
+          f"{'full-text' if a.fulltext else 'headwords'}, {human_size(size)} — {out['name']}",
           file=sys.stderr)
     if stats["rescued"]:
         print(f"headwords taken from <{a.headword_from}>: {stats['rescued']:,}",

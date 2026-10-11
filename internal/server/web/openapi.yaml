@@ -105,13 +105,13 @@ paths:
         - name: mode
           in: query
           description: |
-            `exact` · `prefix` · `contains` (trigram substring over folded
-            headwords) · `fts` (full text) · `wildcard` (a pattern for the
-            whole headword: `?` is one character, `*` any number; write `?`
-            as `%3F`). `fuzzy` is accepted as a legacy alias and now means
-            `prefix`.
+            `exact` · `prefix` · `fts` (full text) · `wildcard` (a pattern for
+            the whole headword: `?` is one character, `*` any number; write
+            `?` as `%3F`). `fuzzy` is accepted as a legacy alias and now means
+            `prefix`. `contains` is retired and is a 400: write `*word*` in
+            `wildcard` mode.
 
-            `contains` and `fts` need the dictionary to carry that index, and
+            `fts` needs the dictionary to carry the full-text index, and
             `wildcard` needs it to be indexed; ask `/api/dicts` for `caps`
             first, and expect `skipped` if you do not.
 
@@ -130,7 +130,7 @@ paths:
             rejected.
           schema:
             type: string
-            enum: [exact, prefix, contains, fts, wildcard, fuzzy]
+            enum: [exact, prefix, fts, wildcard, fuzzy]
             default: prefix
         - name: hl
           in: query
@@ -267,7 +267,7 @@ paths:
                 discriminator: { propertyName: t }
               example: |
                 {"t":"begin","total":2}
-                {"t":"dict","dict":{"id":"oxford","name":"Oxford Advanced Learner's","format":"mdx","path":"/Users/me/Dicts/oald.mdx","entries":184000,"caps":{"Exact":true,"Prefix":true,"Contains":false,"FTS":false,"Wildcard":false}}}
+                {"t":"dict","dict":{"id":"oxford","name":"Oxford Advanced Learner's","format":"mdx","path":"/Users/me/Dicts/oald.mdx","entries":184000,"caps":{"Exact":true,"Prefix":true,"FTS":false,"Wildcard":false}}}
                 {"t":"end","etag":"\"ac4fd9fecabd8ec4cf544212\""}
         '304':
           description: Nothing in the list has changed since the answer whose `etag` was sent.
@@ -455,10 +455,6 @@ paths:
           required: true
           description: Dictionary id.
           schema: { type: string }
-        - name: contains
-          in: query
-          description: Trigram substring index over headwords. A switch.
-          schema: { type: string }
         - name: fts
           in: query
           description: Full-text index over article text - the largest one. A switch.
@@ -471,8 +467,8 @@ paths:
         - lang: Shell
           label: curl
           source: |
-            # add the substring index to one dictionary and watch it build
-            curl -sN 'http://127.0.0.1:6888/api/ingest?dict=oxford&contains=1'
+            # add the full-text index to one dictionary and watch it build
+            curl -sN 'http://127.0.0.1:6888/api/ingest?dict=oxford&fts=1'
 
             # leave a switch out and it keeps its current state; this only packs media
             curl -sN 'http://127.0.0.1:6888/api/ingest?dict=oxford&media=1'
@@ -2188,13 +2184,12 @@ components:
       type: object
       description: >
         Which search modes this dictionary can serve now. The authority on what
-        to offer: Contains and FTS stay false until that index is built, and
+        to offer: FTS stays false until the full-text index is built, and
         Wildcard until the dictionary is indexed. Field names are capitalised
         on the wire.
       properties:
         Exact: { type: boolean }
         Prefix: { type: boolean }
-        Contains: { type: boolean }
         FTS: { type: boolean }
         Wildcard: { type: boolean }
 
@@ -2371,11 +2366,6 @@ components:
             `error` is that the dictionary is too large to open on this system:
             its text unpacks past the reader's limit, or past the free disk
             space or memory to hold it.
-        containsStale:
-          type: boolean
-          description: >
-            The substring index predates the current text folding, so it may
-            miss words. It keeps working; the panel offers a rebuild.
         outdated:
           type: boolean
           description: >
@@ -2445,7 +2435,6 @@ components:
             while it is.
         entries: { type: integer }
         fullText: { type: boolean }
-        contains: { type: boolean }
         media: { type: boolean }
         size: { type: integer, description: Bytes. }
         created: { type: string }
@@ -2620,7 +2609,7 @@ components:
             own UI - the search endpoint never reads it.
         mode:
           type: string
-          enum: [exact, contains, fts]
+          enum: [exact, fts, wildcard]
           description: >
             The search mode the reader last picked. Absent is prefix, the
             default; prefix and unknown values are stored as absent.

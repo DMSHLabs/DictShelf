@@ -198,9 +198,6 @@ func TestLibraryListingAndReceipt(t *testing.T) {
 	for _, e := range lib {
 		byName[e.Name] = e
 	}
-	if byName["Live"].Contains {
-		t.Error("contains must be off by default - it doubles a ~2 MB index for a mode most never use")
-	}
 	if !byName["Live"].SourceExists {
 		t.Error("Live: SourceExists should be true")
 	}
@@ -371,8 +368,8 @@ func testStore(t *testing.T) *Store {
 		},
 	}
 	dbPath := filepath.Join(t.TempDir(), "test.text.db")
-	// contains is opt-in; this fixture tests it, so it asks for it
-	if _, err := IngestPlan(r, dbPath, Plan{FullText: true, Contains: true}, nil); err != nil {
+	// full text is opt-in; this fixture tests it, so it asks for it
+	if _, err := IngestPlan(r, dbPath, Plan{FullText: true}, nil); err != nil {
 		t.Fatal(err)
 	}
 	s, err := Open(dbPath)
@@ -428,8 +425,8 @@ func TestIngestAndMeta(t *testing.T) {
 	if m.EntryCount != 6 { // 8 raw - 2 pure links
 		t.Errorf("entry_count = %d, want 6", m.EntryCount)
 	}
-	if !s.Caps().Contains || !s.Caps().FTS {
-		t.Error("store must advertise contains+fts")
+	if !s.Caps().Wildcard || !s.Caps().FTS {
+		t.Error("store must advertise wildcard+fts")
 	}
 	if m := s.SourcePath(); m == "" {
 		t.Error("source path not recorded")
@@ -536,27 +533,26 @@ func TestFuzzyAccentInsensitive(t *testing.T) {
 	}
 }
 
-func TestContains(t *testing.T) {
+// A substring anywhere in a headword is the wildcard `*x*` (D170).
+func TestSubstringByWildcard(t *testing.T) {
 	s := testStore(t)
-	// substring in the MIDDLE of a headword (trigram, ≥3 chars) - not a prefix
-	res, err := s.ContainsContext(bg, "razon", 10)
+	res, err := s.WildcardContext(bg, "*razon*", 10)
 	if err != nil {
-		t.Fatalf("Contains razon: %v", err)
+		t.Fatalf("*razon*: %v", err)
 	}
 	got := map[string]bool{}
 	for _, r := range res {
 		got[r.Headword] = true
 	}
 	if !got["corazón"] || !got["corazonada"] {
-		t.Errorf("contains 'razon' should match corazón/corazonada, got %v", res)
+		t.Errorf("*razon* should match corazón/corazonada, got %v", res)
 	}
-	// accent-insensitive: folded query matches accented headword
-	if r, _ := s.ContainsContext(bg, "orazó", 10); len(r) == 0 {
-		t.Error("contains should be accent-insensitive")
+	// accent-insensitive both ways, and no minimum length
+	if r, _ := s.WildcardContext(bg, "*orazó*", 10); len(r) == 0 {
+		t.Error("*orazó* should match corazón")
 	}
-	// short (<3 char) query falls back to LIKE, still returns something
-	if r, _ := s.ContainsContext(bg, "re", 10); len(r) == 0 {
-		t.Error("short contains query should fall back to LIKE and match 'pregunta'")
+	if r, _ := s.WildcardContext(bg, "*re*", 10); len(r) == 0 {
+		t.Error("*re* should match pregunta")
 	}
 }
 
@@ -591,8 +587,8 @@ func TestHostileFtsInput(t *testing.T) {
 		if _, err := s.fuzzy(bg, q, 5); err != nil {
 			t.Errorf("Fuzzy(%q) errored: %v", q, err)
 		}
-		if _, err := s.ContainsContext(bg, q, 5); err != nil {
-			t.Errorf("Contains(%q) errored: %v", q, err)
+		if _, err := s.WildcardContext(bg, q, 5); err != nil {
+			t.Errorf("Wildcard(%q) errored: %v", q, err)
 		}
 		if _, err := s.FullTextContext(bg, q, 5); err != nil {
 			t.Errorf("FullText(%q) errored: %v", q, err)
@@ -721,8 +717,8 @@ func TestHeadwordsOnlyLevel(t *testing.T) {
 	}
 	defer s.Close()
 	c := s.Caps()
-	if c.Contains || c.FTS {
-		t.Errorf("headwords level: want contains=false fts=false, got %+v", c)
+	if c.FTS || !c.Wildcard {
+		t.Errorf("headwords level: want fts=false wildcard=true, got %+v", c)
 	}
 	// accent-insensitive prefix (the internal fuzzy engine) works
 	res, err := s.fuzzy(bg, "corazon", 5)
@@ -928,7 +924,7 @@ func TestSearchIdenticalWithAndWithoutCompression(t *testing.T) {
 		SetCompressBodies(on)
 		p := filepath.Join(t.TempDir(), "text.db")
 		r := &fakeReader{meta: dict.Meta{Name: "C", Format: "mdx", Path: "/x.mdx"}, entries: append([]dict.Entry(nil), entries...)}
-		if _, err := IngestPlan(r, p, Plan{FullText: true, Contains: true}, nil); err != nil {
+		if _, err := IngestPlan(r, p, Plan{FullText: true}, nil); err != nil {
 			t.Fatal(err)
 		}
 		s, err := Open(p)
@@ -939,7 +935,7 @@ func TestSearchIdenticalWithAndWithoutCompression(t *testing.T) {
 		for _, q := range []func() ([]dict.Result, error){
 			func() ([]dict.Result, error) { return s.Exact("corazón", 10) },
 			func() ([]dict.Result, error) { return s.Prefix("cora", 10) },
-			func() ([]dict.Result, error) { return s.ContainsContext(bg, "razon", 10) },
+			func() ([]dict.Result, error) { return s.WildcardContext(bg, "*razon*", 10) },
 			func() ([]dict.Result, error) { return s.FullTextContext(bg, "definición", 10) },
 		} {
 			res, err := q()
@@ -968,49 +964,6 @@ func TestSearchIdenticalWithAndWithoutCompression(t *testing.T) {
 	}
 }
 
-// The default plan builds only what finding a headword needs. Contains costs
-// as much again as the whole rest of the index, so it is asked for or absent.
-func TestDefaultPlanOmitsTrigram(t *testing.T) {
-	t.Setenv("WUDICT_DB_DIR", t.TempDir())
-	mk := func(plan Plan) *Store {
-		p := filepath.Join(t.TempDir(), "text.db")
-		r := &fakeReader{
-			meta:    dict.Meta{Name: "P", Format: "mdx", Path: "/x.mdx"},
-			entries: []dict.Entry{h("corazón", "<p>órgano</p>")},
-		}
-		if _, err := IngestPlan(r, p, plan, nil); err != nil {
-			t.Fatal(err)
-		}
-		s, err := Open(p)
-		if err != nil {
-			t.Fatal(err)
-		}
-		t.Cleanup(func() { s.Close() })
-		return s
-	}
-	def := mk(Plan{FullText: true})
-	if def.Caps().Contains {
-		t.Error("the default plan must not build a trigram index")
-	}
-	if _, err := def.ContainsContext(bg, "razon", 5); err == nil {
-		t.Error("contains must report itself unsupported, not silently return nothing")
-	}
-	if !def.Caps().FTS || !def.Caps().Exact || !def.Caps().Prefix {
-		t.Errorf("the default must still find and full-text search: %+v", def.Caps())
-	}
-	// asked for, it works
-	on := mk(Plan{FullText: true, Contains: true})
-	res, err := on.ContainsContext(bg, "razon", 5)
-	if err != nil || len(res) != 1 {
-		t.Fatalf("contains when asked for: %v %v", res, err)
-	}
-	// and contains without full text is a legal combination
-	small := mk(Plan{Contains: true})
-	if !small.Caps().Contains || small.Caps().FTS {
-		t.Errorf("contains-only plan: %+v", small.Caps())
-	}
-}
-
 // MDict repacks store expandable sections as "@"-prefixed headwords - 59 % of
 // LDOCE6 No-Voice is `@collocations_woman` and friends. They must be fetchable
 // by exact lookup (that is how an article's link pulls one in) and invisible
@@ -1030,7 +983,7 @@ func TestSubEntriesHiddenFromBrowsing(t *testing.T) {
 			h("@", "<p>the at sign</p>"), // a bare @ IS a real headword: keep it
 		},
 	}
-	if _, err := IngestPlan(r, p, Plan{FullText: true, Contains: true}, nil); err != nil {
+	if _, err := IngestPlan(r, p, Plan{FullText: true}, nil); err != nil {
 		t.Fatal(err)
 	}
 	s, err := Open(p)
@@ -1054,18 +1007,18 @@ func TestSubEntriesHiddenFromBrowsing(t *testing.T) {
 		}
 		return out
 	}
-	// contains: the mode where they would drown everything
-	res, err := s.ContainsContext(bg, "woman", 20)
+	// a substring wildcard: the search where they would drown everything
+	res, err := s.WildcardContext(bg, "*woman*", 20)
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, n := range names(res) {
 		if strings.HasPrefix(n, "@") {
-			t.Errorf("contains returned a sub-entry: %q (all: %v)", n, names(res))
+			t.Errorf("*woman* returned a sub-entry: %q (all: %v)", n, names(res))
 		}
 	}
 	if len(res) != 2 {
-		t.Errorf("contains woman = %v, want the two real words", names(res))
+		t.Errorf("*woman* = %v, want the two real words", names(res))
 	}
 	// prefix, full-text and the headword listing likewise
 	if res, _ := s.Prefix("wom", 20); len(res) != 2 {
@@ -1179,84 +1132,59 @@ func (a assetDict) Resource(name string) (io.ReadCloser, string, error) {
 	return nil, "", dict.ErrNotFound
 }
 
-// A folding version is recorded so a later change to dict.Fold can be
-// detected instead of silently invalidating every trigram index (O1).
-func TestFoldVersionRecorded(t *testing.T) {
-	s := testStore(t)
-	m, err := ReadMeta(s.meta.Path)
+// addRetiredTrigram gives dbPath what a database prepared with the contains
+// index before D170 carries: the trigram table and its two meta keys, one of
+// them naming a folding version this build no longer has.
+func addRetiredTrigram(t *testing.T, dbPath string) {
+	t.Helper()
+	db, err := sql.Open(driverName, dsnIngest(dbPath))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got, want := m["fold_version"], fmt.Sprint(dict.FoldVersion); got != want {
-		t.Errorf("fold_version = %q, want %q", got, want)
-	}
-	if s.ContainsStale() {
-		t.Error("a database just written by this build reports a stale folding")
-	}
-}
-
-func TestFoldStale(t *testing.T) {
-	cur := fmt.Sprint(dict.FoldVersion)
-	cases := []struct {
-		name string
-		meta map[string]string
-		want bool
-	}{
-		{"current version, trigram present", map[string]string{"has_trigram": "1", "fold_version": cur}, false},
-		{"older version, trigram present", map[string]string{"has_trigram": "1", "fold_version": "0"}, true},
-		{"newer version, trigram present", map[string]string{"has_trigram": "1", "fold_version": "999"}, true},
-		// grandfathering: everything written before the key existed was folded
-		// by version 1, so a missing key must NOT read as stale
-		{"no version key, trigram present", map[string]string{"has_trigram": "1"}, dict.FoldVersion != 1},
-		// nothing but the trigram index persists a folded value, so a
-		// dictionary without one can never be stale
-		{"older version, no trigram", map[string]string{"fold_version": "0"}, false},
-		{"no version key, no trigram", map[string]string{}, false},
-		{"unparseable version", map[string]string{"has_trigram": "1", "fold_version": "banana"}, dict.FoldVersion != 1},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := FoldStale(tc.meta); got != tc.want {
-				t.Errorf("FoldStale(%v) = %v, want %v", tc.meta, got, tc.want)
-			}
-		})
+	defer db.Close()
+	for _, q := range []string{
+		`CREATE VIRTUAL TABLE entry_trigram USING fts5(w, content='', columnsize=0, tokenize='trigram')`,
+		`INSERT INTO entry_trigram(rowid, w) SELECT id, lower(w) FROM entry`,
+		`INSERT OR REPLACE INTO meta(key, value) VALUES('has_trigram', '1'), ('fold_version', '0')`,
+	} {
+		if _, err := db.Exec(q); err != nil {
+			t.Fatal(err)
+		}
 	}
 }
 
-// The whole point of O1: a database folded by different rules must be
-// recognisable on open, and must keep answering - a stale index is inaccurate
-// for one class of characters, not broken.
-func TestStaleFoldDetectedOnOpen(t *testing.T) {
+// A database prepared with the contains index opens and searches as any
+// other: the table and its meta are read past, the plan is what it was
+// without them, and nothing calls it outdated.
+func TestRetiredTrigramIsReadPast(t *testing.T) {
 	s := testStore(t)
 	path := s.meta.Path
 	s.Close()
+	addRetiredTrigram(t, path)
 
-	db, err := sql.Open(driverName, dsnIngest(path))
+	m, err := ReadMeta(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Exec("UPDATE meta SET value = '0' WHERE key = 'fold_version'"); err != nil {
-		t.Fatal(err)
+	if why := Outdated(m); len(why) != 0 {
+		t.Errorf("Outdated = %v, want nothing", why)
 	}
-	db.Close()
-
+	if got := KeptPlan(path); got != (Plan{FullText: true}) {
+		t.Errorf("KeptPlan = %+v, want full text only", got)
+	}
 	s2, err := Open(path)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer s2.Close()
-	if !s2.ContainsStale() {
-		t.Fatal("a trigram index built by another folding version was not detected")
+	if c := s2.Caps(); !c.FTS || !c.Wildcard {
+		t.Errorf("caps = %+v", c)
 	}
-	if !s2.Caps().Contains {
-		t.Error("contains was disabled: a stale index still answers, it is only offered a rebuild")
+	if res, err := s2.WildcardContext(bg, "*razon*", 10); err != nil || len(res) == 0 {
+		t.Errorf("*razon* = %v, %v", res, err)
 	}
-	got, err := s2.ContainsContext(bg, "razon", 10)
-	if err != nil {
-		t.Fatalf("contains search on a stale index: %v", err)
-	}
-	if len(got) == 0 {
-		t.Error("a stale index stopped answering entirely")
+	if _, err := Fingerprint(path); err != nil {
+		t.Errorf("Fingerprint: %v", err)
 	}
 }
 

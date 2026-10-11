@@ -16,33 +16,27 @@ Choose the mode in the drop-down next to the search box.
 | --- | --- | --- |
 | **exact** | the headword; if there is none, the headword ignoring case and accents | |
 | **prefix** (default) | the headword, then headwords that start with the query; case and accents ignored | |
-| **contains** | headwords that contain the query anywhere | contains index |
-| **wildcard** | headwords that fit a pattern: `?` is one character, `*` any number of characters | headword index |
+| **wildcard** | headwords that fit a pattern: `?` is one character, `*` any number of characters; `*rain*` finds headwords that contain *rain* | headword index |
 | **full-text** | words in the article text, ranked by relevance | full-text index |
 
 Exact and prefix work on every dictionary, indexed or not. Wildcard searches
 only indexed dictionaries: each dictionary gets its headword index in the
-background on its first search. Contains and full-text search only
-dictionaries that have the index; any other dictionary shows a link that adds
-it.
+background on its first search. Full-text searches only dictionaries that
+have the full-text index. A dictionary that does not have the index a search
+needs shows a link that adds it.
 
-To add an index to one dictionary, click its <kbd>contains</kbd> or
-<kbd>full-text</kbd> switch in the dictionary panel. To add the full-text index
-to all dictionaries: <kbd>☰</kbd> → folder summary →
-<kbd>Full-text for every dictionary…</kbd>.
+To add the full-text index to one dictionary, click its <kbd>full-text</kbd>
+switch in the dictionary panel. To add it to all dictionaries: <kbd>☰</kbd> →
+folder summary → <kbd>Full-text for every dictionary…</kbd>.
 
 ## Case, accents and spelling
 
-Exact, prefix, contains and full-text ignore case and accents: `corazon`
-finds *corazón*, `OXFORD` finds *Oxford*. Wildcard ignores them too, except
+Exact, prefix and full-text ignore case and accents: `corazon` finds
+*corazón*, `OXFORD` finds *Oxford*. Wildcard ignores them too, except
 when the pattern contains a capital letter: then it matches as typed
 ([Case and accents](../reference/wildcard-syntax.md#case-and-accents)).
 
-No mode corrects spelling. Contains matches the query as a literal substring:
-`orre` finds *correr*, `corer` finds nothing.
-
-A contains query shorter than 3 characters cannot use the index and is
-answered by scanning all headwords, which is slower.
+No mode corrects spelling: `*orre*` finds *correr*, `*corer*` finds nothing.
 
 ## Index sizes
 
@@ -51,10 +45,9 @@ For a dictionary of 40,000 entries:
 | Index | Size | Built |
 | --- | --- | --- |
 | headword | about 2 MB | automatically |
-| contains | about 2.4 MB | on request |
 | full-text | about 12 MB | on request |
 
-The dictionary panel shows each index's size for your own dictionaries. An
+The dictionary panel shows the index sizes for your own dictionaries. An
 indexed dictionary is usually smaller than its dictionary files, because
 article text is stored compressed.
 
@@ -89,6 +82,7 @@ one character, `*` for any number of characters, none included.
 | `c?t` | *cat*, *cot*, *cut* |
 | `b???d` | *beard*, *blood*, *bread* |
 | `*ology` | *biology*, *ology*, *zoology* |
+| `*rain*` | *brain*, *rain*, *rainbow*, *terrain* |
 | `un*able` | *unable*, *unbelievable*, *unthinkable* |
 | `apple` | *apple*, *Apple*; not *apples* |
 
@@ -193,8 +187,8 @@ Each dictionary row:
 -   checkbox: enabled for *All dictionaries* searches. A disabled dictionary
     can still be chosen in the picker.
 -   name: search this dictionary only.
--   switches: <kbd>🚀 index</kbd> (then the index size), <kbd>contains</kbd>,
-    <kbd>full-text</kbd>, <kbd>media</kbd>. Click to add or remove.
+-   switches: <kbd>🚀 index</kbd> (then the index size), <kbd>full-text</kbd>,
+    <kbd>media</kbd>. Click to add or remove.
 -   file row (e.g. `Oxford.mdx`): the dictionary files, the library folder, and
     <kbd>🗑 Remove…</kbd>.
 -   **About this dictionary**: its groups and its own description.
@@ -215,7 +209,7 @@ http://localhost:6888/?q=serendipity&mode=prefix&dict=all
 | Parameter | Value |
 | --- | --- |
 | `q` | the query |
-| `mode` | `exact`, `prefix`, `contains`, `fts` or `wildcard`; in a wildcard query, write `?` as `%3F` |
+| `mode` | `exact`, `prefix`, `fts` or `wildcard`; in a wildcard query, write `?` as `%3F` |
 | `dict` | `all`, a dictionary id ([`/api/dicts`](../reference/api.md) lists them), or a group, e.g. `g:lang:en` |
 | `theme` | `auto`, `light` or `dark`; kept for later visits |
 
@@ -234,13 +228,12 @@ wudict searchall -format clean phubbing                # HTML without scripts an
 ``` sh title="one dictionary"
 wudict lookup   ~/Dictionaries/Oxford.mdx phubbing
 wudict prefix   ~/Dictionaries/Oxford.mdx phubb
-wudict contains ~/.wudict/db/Oxford phub
 wudict fts      ~/.wudict/db/Oxford "sudden fear"
 wudict wildcard ~/.wudict/db/Oxford 'b???d'
+wudict wildcard ~/.wudict/db/Oxford '*phub*'
 ```
 
-`contains`, `fts` and `wildcard` need an indexed dictionary: pass its library
-folder. Put a wildcard query in single quotes, so that the shell does not
+`fts` and `wildcard` need an indexed dictionary: pass its library folder. Put a wildcard query in single quotes, so that the shell does not
 expand `*` and `?`.
 `lookup` and `prefix` work on any dictionary file. `searchall` uses exact mode
 unless `-mode` says otherwise.

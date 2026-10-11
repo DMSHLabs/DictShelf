@@ -13,7 +13,7 @@ import (
 )
 
 // browseStore ingests a headword-only fixture: browsing reads the index and
-// nothing else, so no fixture here needs an article, a trigram table or FTS.
+// nothing else, so no fixture here needs an article or FTS.
 func browseStore(t *testing.T, words []string) *Store {
 	t.Helper()
 	entries := make([]dict.Entry, 0, len(words))

@@ -68,7 +68,7 @@ Lists what is available. Call it **once at startup**, not per lookup.
 {"t":"begin","total":128}
 {"t":"dict","dict":{"id":"6e0594a94deb","name":"Babylon English-Spanish",
                     "format":"bgl","entries":129224,
-                    "caps":{"Exact":true,"Prefix":true,"Contains":false,"FTS":false}}}
+                    "caps":{"Exact":true,"Prefix":true,"FTS":false,"Wildcard":true}}}
 …
 {"t":"end","etag":"\"ac4fd9fecabd8ec4cf544212\""}
 ```
@@ -105,7 +105,7 @@ The only endpoint a lookup needs.
 | param | values | notes |
 |---|---|---|
 | `q` | the term | required, URL-encoded |
-| `mode` | `exact`, `prefix`, `contains`, `fts` | default `prefix` |
+| `mode` | `exact`, `prefix`, `fts`, `wildcard` | default `prefix`; `contains` is retired and is a 400 |
 | `dict` | `all`, one id, or a **comma-separated ordered list** | default `all`; no length limit |
 | `n` | max results **per dictionary** | default **20** — too many for hover; send it explicitly |
 | `format` | `raw`, `clean`, `text` | default `raw`; see §8 |
@@ -146,7 +146,7 @@ it carries. Three mutually exclusive outcomes:
 - **`results[]`** — found. Uses Go field names, capitalised: `Headword`, `Body`.
 - **`"skipped":true`, no `results`** — this dictionary cannot answer this
   `mode` (see `caps` in §2). Not an error; expected whenever a mixed set of
-  dictionaries is queried with `contains` or `fts`.
+  dictionaries is queried with `fts` or `wildcard`.
 - **`"error":"…"`, no `results`** — this dictionary failed. The others are
   unaffected and the stream continues.
 
@@ -389,7 +389,7 @@ lookup over to a real browser tab. Verified against `applyURL()`:
 | param | values | notes |
 |---|---|---|
 | `q` | the term | **required** — nothing searches without it |
-| `mode` | `prefix`, `exact`, `contains`, `fts` | must match the mode dropdown exactly |
+| `mode` | `prefix`, `exact`, `fts`, `wildcard` | must match the mode dropdown exactly |
 | `dict` | **one** dictionary id, or `all` | *not* a comma list — see below |
 | `theme` | `auto`, `light`, `dark` | **writes** the user's stored preference; don't set it |
 

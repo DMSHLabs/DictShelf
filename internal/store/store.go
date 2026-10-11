@@ -51,13 +51,11 @@ var _ dict.Searcher = (*Store)(nil)
 
 // Store is one opened .text.db. Safe for concurrent readers.
 type Store struct {
-	db         *sql.DB
-	meta       dict.Meta
-	ftsOK      bool   // article text indexed (ingest_level != "headwords")
-	srcPath    string // source_path recorded at ingest ("" if unknown)
-	hasTrigram bool   // entry_trigram present → "contains" substring search
-	staleFold  bool   // trigram built by a different dict.FoldVersion
-	uuid       string // dict_uuid: what a sibling media.db must match
+	db      *sql.DB
+	meta    dict.Meta
+	ftsOK   bool   // article text indexed (ingest_level != "headwords")
+	srcPath string // source_path recorded at ingest ("" if unknown)
+	uuid    string // dict_uuid: what a sibling media.db must match
 
 	// The sibling media.db is opened on the first resource that asks for one,
 	// not at open. Most opens never serve a resource at all - a search touches
@@ -78,35 +76,6 @@ type Store struct {
 	alphaOnce sync.Once
 	alpha     []dict.Letter
 	alphaErr  error
-}
-
-// foldVersionOf reads the folding version a database records.
-//
-// A database written before versioning existed carries no key, and was
-// necessarily built by version 1 - the folding in force when the key was
-// introduced. Defaulting to 1 rather than 0 is the whole reason this does not
-// declare every existing library stale on the day it ships.
-func foldVersionOf(m map[string]string) int {
-	if s := m["fold_version"]; s != "" {
-		if n, err := strconv.Atoi(s); err == nil {
-			return n
-		}
-	}
-	return 1
-}
-
-// FoldStale reports that a prepared database's trigram index was built by a
-// different text folding than the one running now, so "contains" may miss
-// words whose folding changed. Only the trigram index is affected - see
-// dict.FoldVersion for why nothing else is.
-//
-// It is a fact ABOUT the data, not a verdict on it: a folding change usually
-// affects one narrow class of characters, so a stale index is still correct
-// for every dictionary that contains none of them. Callers report it and offer
-// a rebuild; nobody disables the mode or re-indexes a hundred dictionaries on
-// the strength of it.
-func FoldStale(m map[string]string) bool {
-	return m["has_trigram"] == "1" && foldVersionOf(m) != dict.FoldVersion
 }
 
 // markupVersionOf reads the article-markup version a database records. Absent
@@ -179,15 +148,6 @@ func Open(path string) (*Store, error) {
 	}
 	s.ftsOK = PlanFromMeta(m).FullText
 	s.srcPath = m["source_path"]
-	// feature-detect the trigram "contains" index rather than gating on
-	// schema version, so older .text.db (and standalone native dicts whose
-	// source is gone) keep opening - they simply lack the contains mode.
-	var trig int
-	db.QueryRow(`SELECT count(*) FROM sqlite_master WHERE type='table' AND name='entry_trigram'`).Scan(&trig)
-	s.hasTrigram = trig > 0
-	// keyed on the table actually present, not on the has_trigram flag, so a
-	// database whose meta and schema disagree is judged by its schema
-	s.staleFold = s.hasTrigram && foldVersionOf(m) != dict.FoldVersion
 	fmt.Sscanf(m["entry_count"], "%d", &s.meta.EntryCount)
 	// standalone use: note the sibling media.db so a copied folder works
 	// without the original source (D2/D9). Only its existence is checked here;
@@ -278,12 +238,8 @@ func (s *Store) SourcePath() string { return s.srcPath }
 func (s *Store) UUID() string { return s.uuid }
 
 func (s *Store) Caps() dict.Caps {
-	return dict.Caps{Exact: true, Prefix: true, Contains: s.hasTrigram, FTS: s.ftsOK, Wildcard: true}
+	return dict.Caps{Exact: true, Prefix: true, FTS: s.ftsOK, Wildcard: true}
 }
-
-// ContainsStale reports that the trigram index was built by a different text
-// folding than the running one. Contains stays enabled - see FoldStale.
-func (s *Store) ContainsStale() bool { return s.staleFold }
 
 func (s *Store) Close() error {
 	s.mediaMu.Lock()
@@ -381,9 +337,7 @@ func (s *Store) ExactContext(ctx context.Context, word string, limit int) ([]dic
 	// What differs is narrower: FTS5 tokenizes and folds with its own
 	// unicode61 rules, this filter re-checks with dict.Fold, and the two agree
 	// on combining marks but need not agree on every token boundary. Closing
-	// even that would mean a second folded column in the schema, and folding
-	// stroke letters would mean a fold table and a FoldVersion bump that
-	// invalidates every trigram index in the library. Neither is worth it.
+	// even that would mean a second folded column in the schema. Not worth it.
 	match := buildExactMatch(word, "w")
 	if match == "" {
 		return nil, nil
@@ -410,8 +364,8 @@ func (s *Store) ExactContext(ctx context.Context, word string, limit int) ([]dic
 // "@" prefix - LDOCE6 No-Voice ships 95,162 of them against 65,382 real words,
 // so 59 % of its "entries" are `@collocations_woman`, `@examples_woman` and the
 // like. They exist to be fetched by a link inside an article, never to be
-// browsed: leaving them in makes a `contains` search for "woman" return five
-// sub-entries before the word itself, and inflates every entry count.
+// browsed: leaving them in makes a `*woman*` search return five sub-entries
+// before the word itself, and inflates every entry count.
 //
 // They stay reachable by EXACT lookup, which is how an article's link fetches
 // one. A bare "@" (the symbol as a headword) is not hidden - only "@" followed
@@ -505,40 +459,6 @@ func (s *Store) fuzzy(ctx context.Context, word string, limit int) ([]dict.Resul
 	return s.collect(s.db.QueryContext(ctx, `
 		SELECT e.w, e.m FROM entry_fts f JOIN entry e ON e.id = f.rowid
 		WHERE entry_fts MATCH ?1`+subEntryFilter("e.w")+`ORDER BY e.w LIMIT ?2`, match, clamp(limit)))
-}
-
-// ContainsContext is the substring/typo-tolerant headword mode, backed by the FTS5
-// trigram index over accent/case-folded headwords. The trigram tokenizer
-// needs at least 3 characters; shorter queries fall back to a folded LIKE.
-// Ordered by headword. Requires a trigram-indexed database (re-ingest older
-// ones); unsupported otherwise.
-func (s *Store) ContainsContext(ctx context.Context, word string, limit int) ([]dict.Result, error) {
-	word = strings.TrimSpace(word)
-	if word == "" {
-		return nil, nil
-	}
-	if !s.hasTrigram {
-		return nil, dict.ErrUnsupported
-	}
-	folded := dict.Fold(word)
-	if folded == "" {
-		return nil, nil
-	}
-	n := clamp(limit)
-	if len([]rune(folded)) >= 3 {
-		phrase := `"` + strings.ReplaceAll(folded, `"`, `""`) + `"`
-		res, err := s.collect(s.db.QueryContext(ctx, `
-			SELECT e.w, e.m FROM entry_trigram t JOIN entry e ON e.id = t.rowid
-			WHERE entry_trigram MATCH ?1`+subEntryFilter("e.w")+`ORDER BY e.w LIMIT ?2`, phrase, n))
-		if err != nil || len(res) > 0 {
-			return res, err
-		}
-	}
-	// short query (< 3 chars) or trigram miss: LIKE substring on the raw
-	// headword (accent-sensitive - acceptable for the <3-char contains edge).
-	return s.collect(s.db.QueryContext(ctx, `
-		SELECT e.w, e.m FROM entry e WHERE e.w LIKE ?1 ESCAPE '\'`+subEntryFilter("e.w")+`ORDER BY e.w LIMIT ?2`,
-		"%"+escapeLike(word)+"%", n))
 }
 
 // FullTextContext searches headwords and article text, ordered by BM25 rank,

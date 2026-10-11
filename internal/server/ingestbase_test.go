@@ -28,23 +28,23 @@ func TestIngestBaseIndexesAnUnpreparedDictionary(t *testing.T) {
 	if !prepared(e) {
 		t.Fatal("the index chip left the dictionary unprepared")
 	}
-	if f := s.currentFeatures(e); f.FullText || f.Contains || f.Media {
+	if f := s.currentFeatures(e); f.FullText || f.Media {
 		t.Errorf("the cheap index built more than headwords: %+v", f)
 	}
 }
 
 // A feature sent is a state, and one left out keeps its value: turning full
-// text off leaves contains where it was.
-func TestIngestFullTextOffKeepsContains(t *testing.T) {
+// text off leaves the media pack where it was.
+func TestIngestFullTextOffKeepsMedia(t *testing.T) {
 	s := newTestServer(t)
 	id := getDicts(t, s, "/api/dicts")[0].ID
 	e, err := s.reg.get(id)
 	if err != nil {
 		t.Fatal(err)
 	}
-	sse(t, s, "/api/ingest?dict="+id+"&fts=1&contains=1")
-	if f := s.currentFeatures(e); !f.FullText || !f.Contains {
-		t.Fatalf("setup: %+v, want full text and contains", f)
+	sse(t, s, "/api/ingest?dict="+id+"&fts=1&media=1")
+	if f := s.currentFeatures(e); !f.FullText || !f.Media {
+		t.Fatalf("setup: %+v, want full text and media", f)
 	}
 
 	sse(t, s, "/api/ingest?dict="+id+"&fts=off")
@@ -53,7 +53,7 @@ func TestIngestFullTextOffKeepsContains(t *testing.T) {
 	if f.FullText {
 		t.Error("fts=off must remove full text")
 	}
-	if !f.Contains {
+	if !f.Media {
 		t.Error("a parameter that was not sent must keep its value")
 	}
 }

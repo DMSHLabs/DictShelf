@@ -113,7 +113,7 @@ func TestReindexOneKeepsPlan(t *testing.T) {
 	dir := prepareFolder(t, src, "D")
 	textDB := store.TextDBPath(dir)
 	r := &oneEntryReader{meta: dict.Meta{Name: "D", Format: "mdx", Path: src}}
-	want := store.Plan{FullText: true, Contains: true}
+	want := store.Plan{FullText: true}
 	if _, err := store.IngestPlan(r, textDB, want, nil); err != nil {
 		t.Fatal(err)
 	}

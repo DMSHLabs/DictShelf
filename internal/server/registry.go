@@ -4,7 +4,7 @@
 
 // Package server is the persistent HTTP server (D3): dictionary
 // registry, JSON API, resource streaming, and the per-dictionary feature
-// flow (contains / full-text / media) with SSE progress (SPEC §6, D24).
+// flow (full-text / media) with SSE progress (SPEC §6, D24).
 package server
 
 import (
@@ -657,8 +657,8 @@ func (e *entry) open() (dict.Dictionary, error) {
 		// to exist again. It sleeps with no timer whenever nothing does.
 		e.reg.nudge()
 	}
-	logx.V("open %s [%s] %d entries contains=%v (%s)",
-		m.Name, m.Format, m.EntryCount, d.Caps().Contains, time.Since(start).Round(time.Millisecond))
+	logx.V("open %s [%s] %d entries fts=%v (%s)",
+		m.Name, m.Format, m.EntryCount, d.Caps().FTS, time.Since(start).Round(time.Millisecond))
 	return d, err
 }
 
@@ -1784,10 +1784,9 @@ func (r *Registry) get(id string) (*entry, error) {
 
 // features is the state a dictionary's prepared data can be in. Finding a
 // headword is not among them: it needs no switch, costs ~2 MB, and every
-// backend can do it. These three are the ones that cost real disk, so each is
+// backend can do it. These two are the ones that cost real disk, so each is
 // something the user turns on and off.
 type features struct {
-	Contains bool
 	FullText bool
 	Media    bool
 }
@@ -1816,8 +1815,8 @@ func (e *entry) reconcile(name string, t store.Target, progress store.Progress) 
 		if len(out.Why) > 0 {
 			logx.V("%sprepared data was outdated (%v) - re-indexed", logx.Dict(name), out.Why)
 		}
-		logx.V("%s%d entries indexed (fullText=%v contains=%v)",
-			logx.Dict(name), out.Report.Entries, out.Plan.FullText, out.Plan.Contains)
+		logx.V("%s%d entries indexed (fullText=%v)",
+			logx.Dict(name), out.Report.Entries, out.Plan.FullText)
 		if out.Report.UnresolvedLinks > 0 {
 			logx.V("%s%d redirects pointed at headwords not present in the source (skipped)",
 				logx.Dict(name), out.Report.UnresolvedLinks)
@@ -1916,8 +1915,7 @@ func (e *entry) setFeatures(want features, progress store.Progress) error {
 	// A dictionary the user is already changing is brought current on the
 	// way; one they are not is left alone until they ask (D151).
 	_, err := e.reconcile(name, store.Target{
-		FullText: &want.FullText, Contains: &want.Contains,
-		Media: media, Rebuild: store.IfOutdated,
+		FullText: &want.FullText, Media: media, Rebuild: store.IfOutdated,
 	}, progress)
 	return err
 }
@@ -2079,7 +2077,7 @@ func (r *Registry) upgradeAbbrev() {
 // reabsorbAbbrev rebuilds this dictionary's prepared data so its articles carry
 // the abbreviation glossary again. DSL bakes the expansions into the article
 // HTML at ingest, so data already on disk cannot gain them; the only fix is to
-// build it again, with the plan it already has - full text and contains survive.
+// build it again, with the plan it already has - full text survives.
 func (e *entry) reabsorbAbbrev() error {
 	if store.IsTextDB(e.Path) {
 		return nil
@@ -2102,8 +2100,7 @@ func abbrevChanged(why []store.Reason) bool { return slices.Contains(why, store.
 // (D13's silent auto-index). It never strips: a dictionary that is "not
 // prepared" only because its source changed, or because its text.db is one
 // this build cannot open, is rebuilt with the plan it already had - the user's
-// full text and contains are not quietly demoted by a rebuild they did not ask
-// for. Media is left to the user: an orphaned media.db degrades to serving from
+// full text is not quietly demoted by a rebuild they did not ask for. Media is left to the user: an orphaned media.db degrades to serving from
 // the source, and the dictionary is reported outdated until they rebuild it.
 func (e *entry) ensureBaseIndex(progress store.Progress) error {
 	if _, ok := validPrepared(e.Path); ok {

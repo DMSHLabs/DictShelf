@@ -168,8 +168,8 @@ type Server struct {
 	// AutoIndex, when true (config AUTO_INDEX=on, the default), prepares a
 	// dictionary's headword index the first time it is searched - silently,
 	// in the background - so accent-insensitive search works on the next
-	// query without the user ever asking. The heavier indexes (contains,
-	// full-text) and media stay opt-in per dictionary.
+	// query without the user ever asking. The full-text index and media stay
+	// opt-in per dictionary.
 	AutoIndex bool
 
 	// BrowserExtensions optionally pins which extension origins may read the
@@ -677,7 +677,7 @@ func (s *Server) currentFeatures(e *entry) features {
 		return features{}
 	}
 	// an unpaired media.db serves nothing, so it does not count as packed
-	return features{FullText: p.Plan.FullText, Contains: p.Plan.Contains, Media: p.MediaPaired()}
+	return features{FullText: p.Plan.FullText, Media: p.MediaPaired()}
 }
 
 // dictInfo is the /api/dicts row.
@@ -690,11 +690,6 @@ type dictInfo struct {
 	Caps    dict.Caps `json:"caps"`
 	DBPath  string    `json:"dbPath,omitempty"` // exposed per D7: users share these files
 	Error   string    `json:"error,omitempty"`
-
-	// ContainsStale: the trigram index was built by an older text folding, so
-	// substring search may miss words whose folding changed. Reported, not
-	// acted on - the mode keeps working, and the panel offers a rebuild.
-	ContainsStale bool `json:"containsStale,omitempty"`
 
 	// Outdated: the prepared data no longer matches what this build would
 	// prepare from the source (store.Stale) - an older build wrote it, the
@@ -973,10 +968,9 @@ func (s *Server) baseDictInfo(e *entry) dictInfo {
 		ec, _ := strconv.Atoi(meta["entry_count"])
 		info := dictInfo{
 			ID: e.ID, Path: e.Path, Name: meta["name"], Format: meta["format"], Entries: ec,
-			Caps:          dict.Caps{Exact: true, Prefix: true, Contains: p.Plan.Contains, FTS: p.Plan.FullText, Wildcard: true},
-			DBPath:        p.TextDB,
-			ContainsStale: store.FoldStale(meta),
-			Outdated:      rebuildable(e.Path) && len(p.Stale(e.Path)) > 0,
+			Caps:     dict.Caps{Exact: true, Prefix: true, FTS: p.Plan.FullText, Wildcard: true},
+			DBPath:   p.TextDB,
+			Outdated: rebuildable(e.Path) && len(p.Stale(e.Path)) > 0,
 		}
 		s.langFacts(&info, meta["name"], meta["index_lang"], meta["contents_lang"])
 		return info
@@ -1005,9 +999,6 @@ func (s *Server) baseDictInfo(e *entry) dictInfo {
 	m := d.Meta()
 	info.Name, info.Format, info.Entries, info.Caps = m.Name, m.Format, m.EntryCount, d.Caps()
 	s.langFacts(&info, m.Name, m.IndexLang, m.ContentsLang)
-	if cs, ok := d.(interface{ ContainsStale() bool }); ok {
-		info.ContainsStale = cs.ContainsStale()
-	}
 	if textDB, ok := validPrepared(e.Path); ok {
 		info.DBPath = textDB
 	}
@@ -1289,7 +1280,7 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 	// article's own bytes, unchanged - which is what makes "on by default in
 	// the UI" (the SPA sends hl=1 from its remembered preference) and "off by
 	// default for everyone else" the same rule rather than two. And only in
-	// full-text mode: in exact, prefix or contains the match IS the headword
+	// full-text mode: in exact, prefix or wildcard the match IS the headword
 	// the reader clicked, and marking it inside the article would mark the
 	// word they are already looking at, on every line it appears (D102).
 	hl, _ := queryFlag(r.URL.Query(), "hl")
@@ -1969,8 +1960,8 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 404, "%v", err)
 		return
 	}
-	// The panel sends the state it wants, not a verb: contains/fts/media each
-	// on or off. A parameter left out keeps whatever that feature is now, so a
+	// The panel sends the state it wants, not a verb: fts and media each on
+	// or off. A parameter left out keeps whatever that feature is now, so a
 	// caller toggling one thing cannot accidentally strip another - and a
 	// request naming none prepares an unprepared dictionary at the cheapest
 	// level, which is the panel's index chip.
@@ -1979,7 +1970,7 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 	for _, f := range []struct {
 		name string
 		to   *bool
-	}{{"contains", &want.Contains}, {"fts", &want.FullText}, {"media", &want.Media}} {
+	}{{"fts", &want.FullText}, {"media", &want.Media}} {
 		if on, sent := queryFlag(q, f.name); sent {
 			*f.to = on
 		}

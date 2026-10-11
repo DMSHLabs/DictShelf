@@ -84,12 +84,11 @@ as soon as it answers.
 | --- | --- | --- |
 | **exact** | the headword, ignoring case and accents: `corazon` finds *corazón* | |
 | **prefix** | headwords that start with the query | |
-| **contains** | headwords that contain the query anywhere | contains index |
-| **wildcard** | headwords that fit a pattern of `?` and `*`: `c?t`, `*ology` ([syntax](reference/wildcard-syntax.md)) | headword index |
+| **wildcard** | headwords that fit a pattern of `?` and `*`: `c?t`, `*ology`, `*rain*` ([syntax](reference/wildcard-syntax.md)) | headword index |
 | **full-text** | words in the article text, ranked by relevance | full-text index |
 
-The contains and full-text indexes are added per dictionary in the dictionary
-panel (<kbd>☰</kbd>), which shows each index's size.
+The full-text index is added per dictionary in the dictionary panel
+(<kbd>☰</kbd>), which shows its size.
 
 With lemma data, a search for an inflected form finds the lemma: *understood*
 finds **understand**, *estuviera* finds **estar**. English is built in; other

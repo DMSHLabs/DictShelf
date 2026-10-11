@@ -9,10 +9,12 @@ Status vocabulary: **ON HOLD** (wanted, unscheduled) · **MAYBE** (unconvinced) 
 
 ---
 
-## O1 — Unicode folding is unversioned — **DONE (D34 / P37)**
+## O1 — Unicode folding is unversioned — **DONE (D34 / P37); MOOT since D170**
 
 *Kept for the reasoning; the implementation notes and the correction are in D34. The blast
-radius turned out to be one index, not three — see below.*
+radius turned out to be one index, not three — see below. D170 retired that index with the
+*contains* mode, and `fold_version` with it: nothing `Fold` returns is persisted any more, so a
+change to it makes nothing stale.*
 
 `dict.Fold` (`internal/dict/fold.go:16`) is called in two places with **different lifetimes**:
 
@@ -264,7 +266,7 @@ maintenance surface, not a project with an end. **This is the main reason the it
 
 ### If it is ever picked up, the order is
 
-1. **O1** (`fold_version`) — precondition, stands alone.
+1. **O1** — moot since D170: nothing folded is stored, so a `Fold` change needs no version.
 2. **O2** (normalization) — the floor the oracle stands on. Every candidate is validated by an
    exact lookup; if query and headword disagree on normalization, *every* candidate fails and the
    suffix rules get blamed for a bug one layer down.
@@ -746,7 +748,7 @@ Until then, `<details><summary>` with markdown inside is the collapsible block t
 
 ## O13 — Wildcard search over headwords — **DONE (D167)**
 
-A fifth search mode, **wildcard**: the query is a pattern for the whole headword, with `?` for one
+A fifth search mode at the time (fourth since D170 retired *contains*), **wildcard**: the query is a pattern for the whole headword, with `?` for one
 character and `*` for any run of characters. Regular expressions were researched first and rejected
 (below). Kept for the measurements and the reasoning, which decide the design.
 
@@ -846,7 +848,7 @@ is at most 64 characters, so there is no pathological pattern to cap.
   and call them wildcards.
 - **Character sets `[…]`.** They are the slowest part of SQLite's GLOB (`*[aeiou][aeiou][aeiou][aeiou]*`
   181 ms against 75 ms), and the hardest to fold (`[à-ö]`). Not in this version.
-- **An escape for `*` and `?`.** Exact, prefix and contains find them.
+- **An escape for `*` and `?`.** Exact and prefix find them (contains did too, until D170).
 - **An SQL prefilter for ASCII rows** (`LIKE` or `lower(w) GLOB`, non-ASCII rows passed through).
   Measured slower than folding every row in Go: 260 ms (mattn) and 786 ms (modernc) against
   243 ms and 239 ms.
