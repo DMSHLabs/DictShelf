@@ -183,3 +183,41 @@ func TestReconcileConcurrent(t *testing.T) {
 		t.Errorf("%d concurrent first prepares: %d rebuilt, %d reads; want 1 and 1", n, got, reads)
 	}
 }
+
+// TestReconcileActivity: an ingest says what it is doing while it runs, and
+// nothing once it has ended - also when its reader failed after saying
+// something itself.
+func TestReconcileActivity(t *testing.T) {
+	t.Setenv("WUDICT_DB_DIR", t.TempDir())
+	src := writeSrc(t, filepath.Join(t.TempDir(), "s.mdx"), "source bytes")
+	reads := 0
+	hooks := reconcileHooks(src, mediaSrc{}, &reads)
+	var seen []dict.Activity
+	hooks.Progress = func(done, total int) {
+		if a, ok := dict.ActivityOf(src); ok {
+			seen = append(seen, a)
+		}
+	}
+	if _, err := Reconcile(src, Target{}, hooks); err != nil {
+		t.Fatal(err)
+	}
+	// the fake states no entry count: Total stays 0, "not known"
+	if len(seen) == 0 || seen[len(seen)-1] != (dict.Activity{Phase: dict.PhaseIndexing, Done: 2}) {
+		t.Errorf("during the ingest: %+v", seen)
+	}
+	if a, ok := dict.ActivityOf(src); ok {
+		t.Errorf("after the ingest: %+v", a)
+	}
+
+	failing := writeSrc(t, filepath.Join(t.TempDir(), "f.mdx"), "source bytes")
+	_, err := Reconcile(failing, Target{}, Hooks{Reader: func() (dict.Reader, error) {
+		dict.SetActivity(failing, dict.Activity{Phase: dict.PhaseUnpacking, Done: 1})
+		return nil, os.ErrInvalid
+	}})
+	if err == nil {
+		t.Fatal("a failing reader prepared")
+	}
+	if a, ok := dict.ActivityOf(failing); ok {
+		t.Errorf("after a failed ingest: %+v", a)
+	}
+}

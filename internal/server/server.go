@@ -745,11 +745,14 @@ type dictInfo struct {
 //
 //	{"t":"begin","total":N}   how many rows follow - known from the registry alone
 //	{"t":"dict","dict":{…}}   one resolved row, in completion order
+//	{"t":"busy","busy":[…]}   the rows pending busyAfter or longer, every busyTick
+//	                          while there are any; once more, empty, when the last lands
 //	{"t":"end","etag":"…"}    every row sent; etag when the answer may be kept
 type dictMsg struct {
 	T     string    `json:"t"`
 	Total int       `json:"total,omitempty"`
 	Dict  *dictInfo `json:"dict,omitempty"`
+	Busy  []busyRow `json:"busy,omitempty"`
 	// GroupsProblems counts what groups.ini skipped (groups.go), on "begin":
 	// a hand edit with a broken regex is otherwise invisible until someone
 	// opens the editor, so the page marks the way to it.
@@ -759,6 +762,52 @@ type dictMsg struct {
 	// answer must not be kept - a row carries an error or a running job, or
 	// what a row was derived from changed while it was derived.
 	ETag string `json:"etag,omitempty"`
+}
+
+// busyRow is a row that has kept the list waiting busyAfter or longer, and
+// what its open is doing (dict.Activity: Phase "" when the open says
+// nothing). Name is the file's (dict.Name): the row's own name is not known
+// until the open that is taking the time has finished.
+type busyRow struct {
+	ID    string `json:"id"`
+	Name  string `json:"name"`
+	Phase string `json:"phase,omitempty"`
+	Done  int64  `json:"done,omitempty"`
+	Total int64  `json:"total,omitempty"`
+}
+
+// busyAfter is how long a row may take before the stream names it and what it
+// is doing (D169): a cold open takes 0.2-1 s, a dictionary indexing itself on
+// first open minutes. busyTick is how often the names are sent again with
+// their progress. Variables for the tests.
+var (
+	busyAfter = 10 * time.Second
+	busyTick  = time.Second
+)
+
+// busyRows are the rows of pending (entry → when its derivation began) that
+// have taken busyAfter or longer by now, longest first.
+func busyRows(pending map[*entry]time.Time, now time.Time) []busyRow {
+	type slow struct {
+		e     *entry
+		since time.Time
+	}
+	var ss []slow
+	for e, t := range pending {
+		if now.Sub(t) >= busyAfter {
+			ss = append(ss, slow{e, t})
+		}
+	}
+	sort.Slice(ss, func(i, j int) bool { return ss[i].since.Before(ss[j].since) })
+	rows := make([]busyRow, 0, len(ss))
+	for _, s := range ss {
+		r := busyRow{ID: s.e.ID, Name: dict.Name(s.e.Path)}
+		if a, ok := dict.ActivityOf(s.e.Path); ok {
+			r.Phase, r.Done, r.Total = a.Phase, a.Done, a.Total
+		}
+		rows = append(rows, r)
+	}
+	return rows
 }
 
 // handleDicts streams the dictionary list as newline-delimited JSON, for the
@@ -808,6 +857,10 @@ func (s *Server) handleDicts(w http.ResponseWriter, r *http.Request) {
 
 	writeLine(dictMsg{T: "begin", Total: len(entries), GroupsProblems: problems})
 
+	// the rows being derived now, and since when: what the busy frames name
+	var pendMu sync.Mutex
+	pending := map[*entry]time.Time{}
+
 	// same width as a search fan-out, and for the same reason: this is the
 	// other place the whole library is touched at once (search.Workers)
 	sem := make(chan struct{}, search.Workers())
@@ -820,14 +873,46 @@ func (s *Server) handleDicts(w http.ResponseWriter, r *http.Request) {
 			defer wg.Done()
 			sem <- struct{}{}
 			defer func() { <-sem }()
+			pendMu.Lock()
+			pending[e] = time.Now()
+			pendMu.Unlock()
 			info, held := s.dictInfoFor(e, global, key)
+			pendMu.Lock()
+			delete(pending, e)
+			pendMu.Unlock()
 			if !held || info.Error != "" || info.Job != nil {
 				keepable.Store(false)
 			}
 			writeLine(dictMsg{T: "dict", Dict: &info})
 		}(e, keys[i])
 	}
+	// The busy frames, until every row is in. A frame snapshotted just before
+	// a row landed can follow that row on the stream; the page drops a name
+	// whose row it already has.
+	stop, stopped := make(chan struct{}), make(chan struct{})
+	go func() {
+		defer close(stopped)
+		tick := time.NewTicker(busyTick)
+		defer tick.Stop()
+		named := false
+		for {
+			select {
+			case <-stop:
+				return
+			case now := <-tick.C:
+				pendMu.Lock()
+				rows := busyRows(pending, now)
+				pendMu.Unlock()
+				if len(rows) > 0 || named {
+					writeLine(dictMsg{T: "busy", Busy: rows})
+				}
+				named = len(rows) > 0
+			}
+		}
+	}()
 	wg.Wait()
+	close(stop)
+	<-stopped
 	end := dictMsg{T: "end"}
 	if keepable.Load() {
 		end.ETag = tag

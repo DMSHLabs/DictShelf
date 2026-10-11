@@ -5,6 +5,7 @@
 package wmd
 
 import (
+	"encoding/binary"
 	"errors"
 	"os"
 	"path/filepath"
@@ -119,5 +120,59 @@ func TestNoRoom(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// trailer is a stand-in for a gzip file of size bytes whose last 4 bytes say
+// isize; only the trailer is read.
+type trailer uint32
+
+func (t trailer) ReadAt(p []byte, _ int64) (int, error) {
+	binary.LittleEndian.PutUint32(p, uint32(t))
+	return 4, nil
+}
+
+func TestUnpackEstimate(t *testing.T) {
+	const gib4 = int64(1) << 32
+	tests := []struct {
+		name  string
+		isize uint32
+		size  int64
+		limit int64
+		want  int64
+	}{
+		{"the trailer", 12345, 64, 1 << 40, 12345},
+		{"text smaller than its gzip file", 23, 50, 1 << 40, 23},
+		{"5 GB from 1 GB: wrapped once", uint32(5_000_000_000 - gib4), 1_000_000_000, 1 << 40, 5_000_000_000},
+		{"wrapped, landing above the file: short by 4 GiB", uint32(5_000_000_000 - gib4), 700_000_000, 1 << 40, 5_000_000_000 - gib4},
+		{"9 GB from 4.5 GB: the least the trailer allows", uint32(9_000_000_000 - 2*gib4), 4_500_000_000, 1 << 40, 9_000_000_000 - gib4},
+		{"past the limit: nothing", 12345, 64, 1000, 0},
+		{"too short to be gzip", 12345, 17, 1 << 40, 0},
+		{"zero", 0, 64, 1 << 40, 0},
+	}
+	for _, tt := range tests {
+		if got := unpackEstimate(trailer(tt.isize), tt.size, tt.limit); got != tt.want {
+			t.Errorf("%s: %d, want %d", tt.name, got, tt.want)
+		}
+	}
+}
+
+// TestUnpackReport: unpacking says how far it has come, against the
+// trailer's size.
+func TestUnpackReport(t *testing.T) {
+	text := "# R\nwudict: 1\n\n## a\n\nb\n"
+	p := filepath.Join(t.TempDir(), "r"+ExtGz)
+	if err := os.WriteFile(p, gz(t, text), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	defer dict.ClearActivity(p)
+	r, err := NewReader(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.Close()
+	want := dict.Activity{Phase: dict.PhaseUnpacking, Done: int64(len(text)), Total: int64(len(text))}
+	if a, ok := dict.ActivityOf(p); !ok || a != want {
+		t.Errorf("activity %+v, %v; want %+v", a, ok, want)
 	}
 }

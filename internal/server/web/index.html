@@ -2023,10 +2023,23 @@ $("noticeClose").addEventListener("click",()=>{
   saveDismissed(dicts.filter(d=>d.tooLarge&&d.error).map(d=>d.id));
   $("notice").hidden=true;
 });
+/* The rows that have kept the list waiting 10 s or more, from the stream's
+   "busy" frames (D169), with what each open is doing. Indexing on first open
+   is the one long wait with a known end, and a file pays it once. */
+let dictsBusy=[];
+function busyText(b){
+  const unpack=b.phase==="unpacking";
+  if(!unpack&&b.phase!=="indexing")return `Opening ${b.name}`;
+  const done=b.done||0,unit=unpack?mb:n=>n.toLocaleString();
+  const what=!done&&!b.total?""
+    :(b.total?`${unit(done)} of ${unpack?"about ":""}${unit(b.total)}`:unit(done))+(unpack?" unpacked":" entries");
+  return `Indexing ${b.name}, needed once`+(what?": "+what:"");
+}
 /* the honest progress line: a count, never a percentage */
 function readyCount(){
-  return dictTotal?`Loading dictionaries — ${dicts.length} of ${dictTotal} ready…`
-                  :"Looking for dictionaries…";
+  if(!dictTotal)return "Looking for dictionaries…";
+  const n=`Loading dictionaries — ${dicts.length} of ${dictTotal} ready…`;
+  return dictsBusy.length?n+" "+dictsBusy.map(busyText).join("; "):n;
 }
 function bootFailed(msg){
   setPhase("failed");
@@ -2237,8 +2250,12 @@ async function loadDicts(rescan,opts={}){
   if(blocking)dictsSettled=false;
   if(blocking){setPhase("boot");startBootScreen();dictTotal=0;setStatus(esc(readyCount()),"load")}
   else if(!quiet&&!opts.silent)setStatus('<span class="spin"></span>Loading dictionaries…',"load");
-  const rows=[];
+  const rows=[],seen=new Set();
   let published=false,sawBegin=false,tag="",gp=0;
+  if(!quiet)dictsBusy=[]; // a quiet load shows nothing, so it owns none of it
+  // a rescan keeps its own line: the page works meanwhile, so no count
+  const rescanLine=()=>'<span class="spin"></span>Loading dictionaries…'+
+    (dictsBusy.length?" "+esc(dictsBusy.map(busyText).join("; ")):"");
   // "begin" costs the server no opens at all, so its absence means the server
   // is not answering — never leave the form inert waiting on a hang. Under an
   // early answer (silent) the answer stays: only the list is reported missing.
@@ -2256,9 +2273,19 @@ async function loadDicts(rescan,opts={}){
         if(quiet)return;
         dictTotal=msg.total||0;
         if(blocking)setStatus(esc(readyCount()),"load");
+      }else if(msg.t==="busy"){
+        if(quiet)return;
+        // a frame sent just before a row landed can follow that row
+        dictsBusy=(msg.busy||[]).filter(b=>b&&!seen.has(b.id));
+        if(blocking)setStatus(esc(readyCount()),"load");
+        else if(!opts.silent)setStatus(rescanLine(),"load");
       }else if(msg.t==="dict"&&msg.dict){
         rows.push(msg.dict);
         if(quiet)return;
+        seen.add(msg.dict.id);
+        const wasBusy=dictsBusy.length;
+        dictsBusy=dictsBusy.filter(b=>b.id!==msg.dict.id);
+        if(!blocking&&!opts.silent&&wasBusy!==dictsBusy.length)setStatus(rescanLine(),"load");
         if(!published){
           // swap the old list out only now: a rescan keeps showing the
           // previous dictionaries until replacements start arriving
@@ -2277,6 +2304,7 @@ async function loadDicts(rescan,opts={}){
     return false;
   }finally{
     clearTimeout(watchdog);
+    if(!quiet)dictsBusy=[];
   }
   const shape=quiet&&listShape();
   dicts=rows;dictTotal=rows.length;

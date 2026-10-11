@@ -8,6 +8,7 @@ import (
 	"bufio"
 	"bytes"
 	"compress/gzip"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -253,6 +254,58 @@ func (rw *roomWriter) Write(p []byte) (int, error) {
 	return n, err
 }
 
+// reportStep is how many bytes of unpacked text pass between two reports of
+// how far unpacking has come.
+const reportStep = 8 << 20
+
+// unpackReport publishes how far unpacking has come (dict.SetActivity), for
+// a caller waiting on an open to show. store's ingest, which reads the text
+// it unpacks, clears it.
+type unpackReport struct {
+	path           string
+	n, next, total int64 // bytes so far; when to report again; unpackEstimate
+}
+
+func (u *unpackReport) Write(p []byte) (int, error) {
+	u.n += int64(len(p))
+	if u.n >= u.next {
+		if u.total < u.n {
+			u.total = 0 // the estimate was wrong: say only what is known
+		}
+		dict.SetActivity(u.path, dict.Activity{Phase: dict.PhaseUnpacking, Done: u.n, Total: u.total})
+		u.next = u.n + reportStep
+	}
+	return len(p), nil
+}
+
+// unpackEstimate is about how many bytes a compressed file of size bytes
+// unpacks to, for showing progress and never for a decision (D168). The gzip
+// trailer holds the last member's size modulo 4 GiB, and is random bytes in a
+// truncated file. No text unpacks to less than its compressed size minus
+// gzip's overhead (headers - a dictzip chunk table is up to 128 KiB - and
+// deflate's worst case of 5 bytes per 16 KiB), so a trailer under that has
+// wrapped and is lifted by 4 GiB until it is not: the least size the trailer
+// allows. It can still be short by multiples of 4 GiB, which the caller sees
+// when the text passes it. 0 when nothing plausible is known: no trailer, or
+// an estimate past limit, which the unpacking will not reach.
+func unpackEstimate(f io.ReaderAt, size int64, limit int64) int64 {
+	if size < 18 { // a gzip header and trailer alone
+		return 0
+	}
+	var b [4]byte
+	if _, err := f.ReadAt(b[:], size-4); err != nil {
+		return 0
+	}
+	est := int64(binary.LittleEndian.Uint32(b[:]))
+	if least := size - 1<<20 - size/1000; est > 0 && est < least {
+		est += (least - est + 1<<32 - 1) >> 32 << 32
+	}
+	if est <= 0 || est > limit {
+		return 0
+	}
+	return est
+}
+
 // memoryRoom is how much decoded text may be held in memory, where no
 // temporary file can be made: half the Go memory limit where one is set
 // (Android), else maxMarkdown.
@@ -270,6 +323,7 @@ func openSource(path string) (*source, error) {
 		return nil, err
 	}
 	var in io.Reader = f
+	var report io.Writer = io.Discard
 	limit, packed := int64(textMax), int64(0)
 	if compressed(path) {
 		fi, err := f.Stat()
@@ -284,6 +338,7 @@ func openSource(path string) (*source, error) {
 		}
 		packed = max(fi.Size(), 1) // a plain file is the one with packed == 0
 		in, limit = zr, unpackBound(fi.Size())
+		report = &unpackReport{path: path, total: unpackEstimate(f, fi.Size(), limit)}
 	} else {
 		// A plain file is used in place when it needs no repair.
 		s := &source{}
@@ -315,7 +370,7 @@ func openSource(path string) (*source, error) {
 		// No temporary file: the decoded text is held in memory.
 		room := memoryRoom()
 		var b bytes.Buffer
-		if _, err := decodeStream(in, io.MultiWriter(&b, sc), min(limit, room)); err != nil {
+		if _, err := decodeStream(in, io.MultiWriter(&b, sc, report), min(limit, room)); err != nil {
 			if errors.Is(err, errOverLimit) && room < limit {
 				return nil, &dict.NoRoomError{What: "to unpack it", Need: room, Free: room}
 			}
@@ -326,7 +381,7 @@ func openSource(path string) (*source, error) {
 		return s, nil
 	}
 	bw := bufio.NewWriterSize(&roomWriter{w: tmp, dir: filepath.Dir(tmp.Name())}, 256<<10)
-	_, err = decodeStream(in, io.MultiWriter(bw, sc), limit)
+	_, err = decodeStream(in, io.MultiWriter(bw, sc, report), limit)
 	if err == nil {
 		err = bw.Flush()
 	}

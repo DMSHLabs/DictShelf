@@ -253,8 +253,12 @@ func reconcileText(src string, t Target, h Hooks, out *Outcome) (p Prepared, dir
 	return p, dir, ingest(src, textDB, plan, h, out)
 }
 
-// ingest writes the text.db from the source.
+// ingest writes the text.db from the source. What it is doing is published
+// as src's dict.Activity - the reader's own phase while it opens (a wudict
+// markdown file unpacking), then the entries indexed - and cleared when it
+// ends, whatever the reader left there.
 func ingest(src, textDB string, plan Plan, h Hooks, out *Outcome) error {
+	defer dict.ClearActivity(src)
 	var r dict.Reader
 	var err error
 	if h.Reader != nil {
@@ -265,8 +269,15 @@ func ingest(src, textDB string, plan Plan, h Hooks, out *Outcome) error {
 	if err != nil {
 		return err
 	}
+	dict.SetActivity(src, dict.Activity{Phase: dict.PhaseIndexing, Total: int64(r.Meta().EntryCount)})
+	progress := func(done, total int) {
+		dict.SetActivity(src, dict.Activity{Phase: dict.PhaseIndexing, Done: int64(done), Total: int64(total)})
+		if h.Progress != nil {
+			h.Progress(done, total)
+		}
+	}
 	start := time.Now()
-	rep, err := IngestPlan(r, textDB, plan, h.Progress)
+	rep, err := IngestPlan(r, textDB, plan, progress)
 	if err != nil {
 		return err
 	}

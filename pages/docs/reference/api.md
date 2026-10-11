@@ -131,6 +131,19 @@ are true once the dictionary has the contains or full-text index, `Wildcard`
 once it is indexed. The other
 fields (files, library folder, sizes) are listed in the OpenAPI document.
 
+A dictionary that takes 10 seconds or more is named in a `busy` line, sent
+every second until its `dict` line arrives:
+
+``` json
+{"t":"busy","busy":[{"id":"9f3c","name":"wiktionary_es","phase":"unpacking","done":640000000,"total":1164332795}]}
+```
+
+`phase` is `unpacking` (bytes of text; `total` is an estimate) or `indexing`
+(entries), and is absent when the dictionary does not report one. A DSL,
+Babylon or wudict markdown dictionary is indexed when it is first opened, and
+again after its files change. A `busy` line can name a dictionary whose `dict` line has already arrived: ignore that
+name.
+
 ``` sh
 curl -s http://127.0.0.1:6888/api/dicts | jq
 ```

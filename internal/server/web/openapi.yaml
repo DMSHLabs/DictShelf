@@ -262,6 +262,7 @@ paths:
                 oneOf:
                   - $ref: '#/components/schemas/DictsBegin'
                   - $ref: '#/components/schemas/DictsRow'
+                  - $ref: '#/components/schemas/DictsBusy'
                   - $ref: '#/components/schemas/DictsEnd'
                 discriminator: { propertyName: t }
               example: |
@@ -383,6 +384,7 @@ paths:
                 oneOf:
                   - $ref: '#/components/schemas/DictsBegin'
                   - $ref: '#/components/schemas/DictsRow'
+                  - $ref: '#/components/schemas/DictsBusy'
                   - $ref: '#/components/schemas/DictsEnd'
                 discriminator: { propertyName: t }
         '500':
@@ -2213,6 +2215,34 @@ components:
         i:
           type: integer
           description: Always 0 here. The search stream carries the field on every line.
+      required: [t]
+
+    DictsBusy:
+      type: object
+      description: >
+        The rows pending 10 seconds or more, sent every second while there are
+        any, and once more, empty, after the last of them has arrived. A row
+        named here may already have been sent: a client ignores it then.
+      properties:
+        t: { const: busy }
+        busy:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              name: { type: string, description: The file's name without its extension; the row's own name is not known yet. }
+              phase:
+                type: string
+                enum: [unpacking, indexing]
+                description: >
+                  What the open is doing; absent when it does not say.
+                  `unpacking` counts bytes of text, `indexing` entries. A DSL,
+                  Babylon or wudict markdown dictionary is indexed when it is
+                  first opened, and again after its files change.
+              done: { type: integer }
+              total: { type: integer, description: Absent when not known. For unpacking, an estimate. }
+            required: [id, name]
       required: [t]
 
     DictsEnd:
