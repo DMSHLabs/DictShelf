@@ -606,9 +606,9 @@ func writeInfo(dir, source string) error {
 	// Machine-read as well as human-read: the library listing takes this file
 	// as its fast source, so the level is spelled both ways here.
 	plan := PlanFromMeta(meta)
-	level := "headwords only (exact · prefix)"
+	level := "headwords only (exact · prefix · wildcard)"
 	if plan.FullText {
-		level = "full text (exact · prefix · full-text)"
+		level = "full text (exact · prefix · wildcard · full-text)"
 	}
 	fmt.Fprintf(&b, "index = %s\n", level)
 	fmt.Fprintf(&b, "media = %s\n", media)

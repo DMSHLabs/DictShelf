@@ -64,8 +64,10 @@ type keyRange struct{ lo, hi string }
 //     every headword with a non-ASCII first byte, because Fold maps ç, ć, č -
 //     and a leading combining mark, which it drops - onto c. Fold never maps
 //     one ASCII character to another, so no other ASCII range can match.
-//   - A case-insensitive pattern with a non-ASCII lead: the whole index. The
-//     characters that fold to it are not one range.
+//   - A case-insensitive pattern with a non-ASCII lead: every headword with a
+//     non-ASCII first byte. The characters that fold to the lead are not one
+//     range, but none is ASCII: Fold maps an ASCII character to an ASCII one
+//     and drops only non-ASCII marks.
 func wildcardRanges(p wildcard.Pattern) []keyRange {
 	lead, ok := p.Lead()
 	switch {
@@ -76,7 +78,7 @@ func wildcardRanges(p wildcard.Pattern) []keyRange {
 	case lead < utf8.RuneSelf:
 		return []keyRange{leadRange(lead), {lo: "\x80"}}
 	}
-	return []keyRange{{}}
+	return []keyRange{{lo: "\x80"}}
 }
 
 // leadRange is the NOCASE range of the headwords that start with r.

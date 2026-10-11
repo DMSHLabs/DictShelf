@@ -583,9 +583,9 @@ def human_size(n):
 def write_info(outdir, meta, source, media_bytes):
     """Same shape store.WriteInfo regenerates (store/library.go:466), so the
     receipt does not change the first time wudict rewrites it."""
-    level = ("headwords only (exact · prefix)"
+    level = ("headwords only (exact · prefix · wildcard)"
              if meta["ingest_level"] == "headwords"
-             else "full text (exact · prefix · full-text)")
+             else "full text (exact · prefix · wildcard · full-text)")
     media = ("not packed - resources come from the original files"
              if media_bytes is None else f"media.db ({human_size(media_bytes)})")
     lines = [

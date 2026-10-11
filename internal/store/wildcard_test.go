@@ -173,6 +173,33 @@ func TestWildcardAgainstBruteForce(t *testing.T) {
 	}
 }
 
+// TestWildcardRanges pins what the planner reads; TestWildcardAgainstBruteForce
+// proves that it loses nothing.
+func TestWildcardRanges(t *testing.T) {
+	all, nonASCII := keyRange{}, keyRange{lo: "\x80"}
+	for _, tc := range []struct {
+		pattern string
+		want    []keyRange
+	}{
+		{"*at", []keyRange{all}},
+		{"?at", []keyRange{all}},
+		{"cat", []keyRange{{"c", "d"}, nonASCII}},
+		{"écu", []keyRange{{"e", "f"}, nonASCII}},   // folds to an ASCII lead
+		{"Cat", []keyRange{{"c", "d"}}},             // GLOB narrows the NOCASE range
+		{"Écu", []keyRange{{"\u00c9", "\xc3\x8a"}}}, // its own UTF-8 prefix
+		{"жук", []keyRange{nonASCII}},               // no ASCII headword folds to ж
+		{"Жук", []keyRange{{"\u0416", "\xd0\x97"}}},
+	} {
+		p, err := wildcard.Parse(tc.pattern)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := wildcardRanges(p); !slices.Equal(got, tc.want) {
+			t.Errorf("%q: ranges %q, want %q", tc.pattern, got, tc.want)
+		}
+	}
+}
+
 // TestWildcardTruncatedUTF8 pins the one place the two matchers differ: a
 // multi-byte sequence cut short is one character to SQLite and one per byte
 // to Go. Only a case-sensitive pattern reaches SQLite, and only a malformed

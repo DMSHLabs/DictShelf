@@ -2100,8 +2100,9 @@ func abbrevChanged(why []store.Reason) bool { return slices.Contains(why, store.
 // (D13's silent auto-index). It never strips: a dictionary that is "not
 // prepared" only because its source changed, or because its text.db is one
 // this build cannot open, is rebuilt with the plan it already had - the user's
-// full text is not quietly demoted by a rebuild they did not ask for. Media is left to the user: an orphaned media.db degrades to serving from
-// the source, and the dictionary is reported outdated until they rebuild it.
+// full text is not quietly demoted by a rebuild they did not ask for. Media is
+// left to the user: an orphaned media.db degrades to serving from the source,
+// and the dictionary is reported outdated until they rebuild it.
 func (e *entry) ensureBaseIndex(progress store.Progress) error {
 	if _, ok := validPrepared(e.Path); ok {
 		return nil // prepared already, at whatever level its owner chose

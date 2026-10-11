@@ -893,6 +893,11 @@ func (s *Server) handleDicts(w http.ResponseWriter, r *http.Request) {
 		for {
 			select {
 			case <-stop:
+				// the last named row landed between two ticks: the empty
+				// frame the stream promises still goes out, before "end"
+				if named {
+					writeLine(dictMsg{T: "busy"})
+				}
 				return
 			case now := <-tick.C:
 				pendMu.Lock()
