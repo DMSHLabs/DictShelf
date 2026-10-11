@@ -83,7 +83,10 @@
     }
     box.hidden = !box.childElementCount;
   }
-  function show(filter = "") { open = true; render(filter); }
+  function show(filter = "") {
+    if ($("mode").value === "mask") { hide(); return; }
+    open = true; render(filter);
+  }
   function onInput(value) {
     draft = true;
     refreshSuggestions(value);
@@ -93,7 +96,7 @@
     heads = [];
     show(value);
     const q = value.trim();
-    if (q.length < 2 || $("mode").value === "fts") return;
+    if (q.length < 2 || $("mode").value === "fts" || $("mode").value === "mask") return;
     const seq = suggestSeq;
     suggestTimer = setTimeout(() => {
       suggestAC = new AbortController();

@@ -101,9 +101,9 @@ func maskHeadwords(ctx context.Context, d dict.Dictionary, term string, limit in
 	return out, nil
 }
 
-// MatchMask matches a headword case-insensitively; ? consumes one rune and *
-// consumes any number of runes.
-func MatchMask(pattern, word string) (bool, error) {
+// CompileMask builds a case-insensitive whole-headword matcher; ? consumes one
+// rune and * consumes any number of runes.
+func CompileMask(pattern string) (*regexp.Regexp, error) {
 	var b strings.Builder
 	b.WriteString("(?i)^")
 	for _, r := range pattern {
@@ -117,7 +117,12 @@ func MatchMask(pattern, word string) (bool, error) {
 		}
 	}
 	b.WriteString("$")
-	re, err := regexp.Compile(b.String())
+	return regexp.Compile(b.String())
+}
+
+// MatchMask reports whether a headword matches the mask.
+func MatchMask(pattern, word string) (bool, error) {
+	re, err := CompileMask(pattern)
 	if err != nil {
 		return false, err
 	}
@@ -350,13 +355,7 @@ func query(ctx context.Context, d dict.Dictionary, mode Mode, term string, plan 
 			h.Skipped = true
 			return h
 		}
-		if HasMask(term) {
-			if indexed {
-				h.Results, h.Err = s.MaskContext(ctx, term, perDict)
-			} else {
-				h.Results, h.Err = maskHeadwords(ctx, d, term, perDict)
-			}
-		} else if indexed {
+		if indexed {
 			h.Results, h.Err = s.ExactContext(ctx, term, perDict)
 		} else {
 			h.Results, h.Err = d.Exact(term, perDict)
@@ -366,32 +365,18 @@ func query(ctx context.Context, d dict.Dictionary, mode Mode, term string, plan 
 			h.Skipped = true
 			return h
 		}
-		if HasMask(term) {
-			if indexed {
-				h.Results, h.Err = s.MaskContext(ctx, term, perDict)
-			} else {
-				h.Results, h.Err = maskHeadwords(ctx, d, term, perDict)
-			}
-		} else if indexed {
+		if indexed {
 			h.Results, h.Err = s.PrefixContext(ctx, term, perDict)
 		} else {
 			h.Results, h.Err = d.Prefix(term, perDict)
 		}
 	case Contains:
-		if !indexed || (!caps.Contains && !HasMask(term)) {
+		if !indexed || !caps.Contains {
 			h.Skipped = true
 			return h
 		}
-		if HasMask(term) {
-			h.Results, h.Err = s.MaskContext(ctx, term, perDict)
-		} else {
-			h.Results, h.Err = s.ContainsContext(ctx, term, perDict)
-		}
+		h.Results, h.Err = s.ContainsContext(ctx, term, perDict)
 	case FullText:
-		if HasMask(term) {
-			h.Skipped = true
-			return h
-		}
 		if !indexed || !caps.FTS {
 			h.Skipped = true
 			return h

@@ -324,6 +324,46 @@ html[data-desktop-image] #articleFindStrip{background-image:var(--paper-bk-image
 /* The geometry lives on .qbox so the glyph can be positioned against the
    field; the input only fills it. */
 .qbox{position:relative;display:flex;flex:1;min-width:130px;max-width:300px}
+#maskSubmit{position:absolute;right:.25em;top:50%;transform:translateY(-50%);border:1px solid var(--accent);border-radius:6px;background:var(--accent);color:var(--bg);cursor:pointer;min-width:2em;height:2em;font-weight:700}
+#maskSubmit[hidden],#maskProgress[hidden],#maskView[hidden]{display:none}
+body.mask-view-active .qbox input{padding-right:2.8em}
+#maskProgress{display:inline-flex;align-items:center;gap:.25em;white-space:nowrap;color:var(--label);font-size:calc(var(--ui-font-addition) * 1rem)}
+#maskCount{min-width:2ch;text-align:right}
+#maskPage{font-variant-numeric:tabular-nums}
+#maskProgress button{min-width:1.8em;min-height:1.8em;padding:0 .3em;color:var(--fg);background:var(--bg-card);border:1px solid var(--line);border-radius:6px;cursor:pointer}
+#maskProgress button:disabled{opacity:.4;cursor:default}
+/* Keep the search controls visible while moving through a long mask list. */
+body.mask-view-active{--stick:var(--barh)}
+body.mask-view-active .bar{transform:none!important}
+body.mask-view-active #out,body.mask-view-active #sbar{display:none}
+body.mask-view-active{padding-bottom:4.5rem}
+.mask-dock[hidden]{display:none}
+.mask-dock{position:fixed;left:0;right:0;bottom:0;z-index:8;display:flex;align-items:center;justify-content:center;gap:.25em;padding:.5rem .9rem max(.5rem,env(safe-area-inset-bottom));background:var(--bar);backdrop-filter:saturate(1.6) blur(8px);border-top:1px solid var(--line);font-size:calc(var(--ui-edit_control-font) * 1rem)}
+.mask-dock input{box-sizing:border-box;flex:1 1 auto;min-width:0;max-width:54rem;height:calc(var(--ui-edit_control-height) * 1.5rem);padding:0 .4em;font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:6px;outline:none}
+.mask-dock button{box-sizing:border-box;display:grid;place-items:center;flex:none;width:calc(var(--ui-edit_control-height) * 1.5rem);height:calc(var(--ui-edit_control-height) * 1.5rem);padding:0;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--fg);font:inherit;line-height:1;cursor:pointer}
+.mask-dock button svg{display:block;width:1.1em;height:1.1em}
+.mask-dock button.is-on{border-color:var(--accent);background:var(--accent);color:var(--bg)}
+.mask-dock button:disabled{opacity:.45;cursor:default}
+.mask-dock output{flex:none;min-width:2.5em;text-align:center;white-space:nowrap;font-variant-numeric:tabular-nums}
+.mask-words button.mask-find-current{background:var(--line-soft);outline:2px solid var(--accent);outline-offset:-2px}
+#maskView{margin-top:var(--sp-2);background:var(--bg-card);border:1px solid var(--line);border-radius:10px;overflow:clip}
+.mask-head{position:sticky;top:var(--stick);z-index:3;display:flex;align-items:center;gap:.5em;padding:.55em .7em;background:var(--paper-bg,var(--bg-card));border-bottom:1px solid var(--line)}
+.mask-head select{flex:1;min-width:0;max-width:none}
+.mask-head .themed-select-btn{flex:1;min-width:0;width:auto;max-width:none}
+html[data-shell-image] .mask-head .themed-select-btn{background-color:var(--paper-bg,var(--bg));background-image:linear-gradient(#ffffff24,#ffffff24),var(--paper-bk-image);background-size:100% 100%}
+.mask-letters button{color:var(--fg);background:var(--bg-card);border:1px solid var(--line);border-radius:6px;cursor:pointer}
+.mask-letters{display:flex;align-items:center;gap:.25em;overflow-x:auto;padding:.5em .7em;border-bottom:1px solid var(--line)}
+.mask-letter-group{display:inline-flex;align-items:center;gap:.25em;flex:none}
+.mask-letter-separator{flex:none;padding:0 .2em;color:var(--fg-faint)}
+.mask-letter-pending{color:var(--label)}
+.mask-letters button{flex:none;min-width:2em;padding:.3em}
+.mask-letters button[aria-current="true"]{border-color:var(--accent);color:var(--accent)}
+.mask-words{columns:12em;column-gap:1em;padding:.7em}
+.mask-words button{display:block;width:100%;break-inside:avoid;text-align:left;color:var(--link);background:transparent;border:0;border-radius:4px;padding:.3em .4em;font:inherit;cursor:pointer;overflow-wrap:anywhere}
+.mask-words button:hover,.mask-words button:focus-visible{background:var(--line-soft)}
+.mask-words mark{background:var(--accent);color:var(--bg);border-radius:.15em}
+.mask-empty{padding:1em;color:var(--label)}
+@media(max-width:600px){#maskProgress{font-size:11px;gap:.15em;flex:none}#maskProgress button{min-width:1.6em;min-height:1.8em;padding:0 .15em}}
 input[type=search]{width:100%;min-width:0;font-size:16px;
   color:var(--fg);background:var(--bg-card);border:1px solid var(--line);
   border-radius:8px;padding:.35em .7em .35em 2em;outline:none;appearance:none}

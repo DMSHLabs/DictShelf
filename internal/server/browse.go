@@ -6,20 +6,25 @@ package server
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 
 	"github.com/wuweidict/wudict/internal/dict"
+	"github.com/wuweidict/wudict/internal/search"
 )
 
 type browseFindResp struct {
-	Words []string `json:"words"`
-	Total int      `json:"total"`
-	Page  int      `json:"page"`
-	Pages int      `json:"pages"`
-	Size  int      `json:"size"`
+	Words     []string      `json:"words"`
+	Alphabet  []dict.Letter `json:"alphabet,omitempty"`
+	Positions []int         `json:"positions,omitempty"`
+	Total     int           `json:"total"`
+	Page      int           `json:"page"`
+	Pages     int           `json:"pages"`
+	Size      int           `json:"size"`
 }
 
 // handleBrowseFind searches the complete headword index, then pages the
@@ -32,12 +37,18 @@ func (s *Server) handleBrowseFind(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	mask := q.Get("mask") == "1"
+	within := strings.TrimSpace(q.Get("within"))
+	if len(within) > 256 {
+		httpErr(w, 400, "filter text is too long")
+		return
+	}
+	withinMask := q.Get("withinMask") == "1"
 	e, err := s.reg.get(q.Get("dict"))
 	if err != nil {
 		httpErr(w, 404, "%v", err)
 		return
 	}
-	if _, ok := validPrepared(e.Path); !ok {
+	if _, ok := validPrepared(e.Path); !ok && !mask {
 		browseUnprepared(w, e)
 		return
 	}
@@ -47,7 +58,7 @@ func (s *Server) handleBrowseFind(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	finder, ok := d.(dict.BrowseFinder)
-	if !ok {
+	if !ok && !mask {
 		browseUnprepared(w, e)
 		return
 	}
@@ -59,11 +70,26 @@ func (s *Server) handleBrowseFind(w http.ResponseWriter, r *http.Request) {
 	if page > 10000000 {
 		page = 10000000
 	}
-	find := finder.FindHeadwords
-	if mask {
-		find = finder.FindHeadwordsMask
+	find := func(page int) ([]string, int, []dict.Letter, []int, error) {
+		if mask {
+			if ok {
+				if within != "" {
+					if extended, yes := d.(interface {
+						FindHeadwordsMaskWithin(context.Context, string, string, bool, int, int) ([]string, int, []dict.Letter, []int, error)
+					}); yes {
+						return extended.FindHeadwordsMaskWithin(r.Context(), query, within, withinMask, (page-1)*browsePageSize, browsePageSize)
+					}
+					return findDirectMask(r, d, query, within, withinMask, (page-1)*browsePageSize, browsePageSize)
+				}
+				words, total, letters, err := finder.FindHeadwordsMask(r.Context(), query, (page-1)*browsePageSize, browsePageSize)
+				return words, total, letters, nil, err
+			}
+			return findDirectMask(r, d, query, within, withinMask, (page-1)*browsePageSize, browsePageSize)
+		}
+		words, total, err := finder.FindHeadwords(r.Context(), query, (page-1)*browsePageSize, browsePageSize)
+		return words, total, nil, nil, err
 	}
-	words, total, err := find(r.Context(), query, (page-1)*browsePageSize, browsePageSize)
+	words, total, letters, positions, err := find(page)
 	if err != nil {
 		if r.Context().Err() != nil {
 			return
@@ -74,13 +100,67 @@ func (s *Server) handleBrowseFind(w http.ResponseWriter, r *http.Request) {
 	pages := (total + browsePageSize - 1) / browsePageSize
 	if pages > 0 && page > pages {
 		page = pages
-		words, _, err = find(r.Context(), query, (page-1)*browsePageSize, browsePageSize)
+		words, _, letters, positions, err = find(page)
 		if err != nil {
 			httpErr(w, 500, "searching %s: %v", e.ID, err)
 			return
 		}
 	}
-	writeJSON(w, browseFindResp{Words: words, Total: total, Page: page, Pages: pages, Size: browsePageSize})
+	writeJSON(w, browseFindResp{Words: words, Alphabet: letters, Positions: positions, Total: total, Page: page, Pages: pages, Size: browsePageSize})
+}
+
+// Direct dictionaries expose headwords in pages. A mask scan reads those
+// pages without opening article bodies, and checks cancellation between them.
+func findDirectMask(r *http.Request, d dict.Dictionary, query, within string, withinMask bool, offset, limit int) ([]string, int, []dict.Letter, []int, error) {
+	re, err := search.CompileMask(query)
+	if err != nil {
+		return nil, 0, nil, nil, err
+	}
+	var withinRE *regexp.Regexp
+	if within != "" && withinMask {
+		withinRE, err = search.CompileMask(within)
+		if err != nil {
+			return nil, 0, nil, nil, err
+		}
+	}
+	matchTerms := dict.HeadwordTermMatcher(within)
+	words := make([]string, 0, limit)
+	positions := make([]int, 0, limit)
+	var sections dict.MaskSections
+	total, basePosition, previous := 0, 0, ""
+	for at := 0; ; at += 256 {
+		if err := r.Context().Err(); err != nil {
+			return nil, 0, nil, nil, err
+		}
+		page := d.Keywords(at, 256)
+		if len(page) == 0 {
+			break
+		}
+		for _, word := range page {
+			if word == previous || strings.HasPrefix(word, "@_") {
+				continue
+			}
+			previous = word
+			if !re.MatchString(word) {
+				continue
+			}
+			position := basePosition
+			basePosition++
+			if within != "" && (withinMask && !withinRE.MatchString(word) || !withinMask && !matchTerms(word)) {
+				continue
+			}
+			sections.Add(word)
+			if total >= offset && len(words) < limit {
+				words = append(words, word)
+				positions = append(positions, position)
+			}
+			total++
+		}
+		if len(page) < 256 {
+			break
+		}
+	}
+	return words, total, sections.Finish(), positions, nil
 }
 
 // browsePageSize is how many headwords one browse page holds, and it is a
@@ -91,7 +171,7 @@ func (s *Server) handleBrowseFind(w http.ResponseWriter, r *http.Request) {
 //
 // 300 is a screenful of columns on a desktop and a short scroll on a phone,
 // which is the trade a paper page makes too.
-const browsePageSize = 300
+const browsePageSize = dict.MaskPageSize
 
 // browseResp is one page of the word list plus everything needed to draw the
 // chrome around it, so a page turn is one request. The strip travels with

@@ -215,6 +215,7 @@ window.wudictFontScale=(function(){
      soft key "Search" on most Android builds, but that is a browser default
      and not a contract. -->
 <input type="search" id="q" placeholder="{{T:search.input}}" autocomplete="off" enterkeyhint="search" autofocus aria-label="{{T:search.term}}" disabled>
+<button type="submit" id="maskSubmit" aria-label="{{T:search.maskRun}}" title="{{T:search.maskRun}}" hidden>✓</button>
 <span id="searchHistory" class="search-history" role="group" aria-label="{{T:search.history}}" hidden></span>
 </span>
 <span class="seg">
@@ -261,7 +262,29 @@ window.wudictFontScale=(function(){
 <div id="status" role="status" aria-live="polite"><div class="msg"><div class="txt" id="statusMsg"></div></div></div>
 <div id="outdatedNotice" class="bulkbox outdated-notice" role="status" hidden></div>
 <div id="out"></div>
+<section id="maskView" aria-label="{{T:search.maskResults}}" hidden>
+  <header class="mask-head">
+    <select id="maskDict" aria-label="{{T:search.maskDictionary}}"></select>
+    <span id="maskProgress" aria-label="{{T:search.maskResults}}" hidden>
+      <span id="maskCount" role="status" aria-label="{{T:search.maskTotal}}"></span>
+      <button type="button" id="maskPrev" aria-label="{{T:browse.previousTitle}}">‹</button>
+      <span id="maskPage"></span>
+      <button type="button" id="maskNext" aria-label="{{T:browse.nextTitle}}">›</button>
+    </span>
+  </header>
+  <nav id="maskLetters" class="mask-letters" aria-label="{{T:browse.jumpLetter}}"></nav>
+  <div id="maskWords" class="mask-words"></div>
+</section>
 </main>
+<footer id="maskDock" class="mask-dock" role="search" hidden>
+  <button type="button" id="maskFindMode" aria-label="{{T:browse.filterWords}}">⌕</button>
+  <button type="button" id="maskFindWildcard" aria-label="{{T:browse.maskSearch}}" aria-pressed="false">*</button>
+  <input id="maskFindInput" type="search" placeholder="{{T:browse.findWords}}" aria-label="{{T:browse.findWords}}"
+         spellcheck="false" autocomplete="off" autocapitalize="off" enterkeyhint="search">
+  <output id="maskFindCount" aria-live="polite">0/0</output>
+  <button type="button" id="maskFindPrev" aria-label="{{T:browse.previousMatch}}">▲</button>
+  <button type="button" id="maskFindNext" aria-label="{{T:browse.nextMatch}}">▼</button>
+</footer>
 
 <!-- The status bar. Four controls and nothing else: the two jumps between the
      dictionaries of the current answer, the scope those jumps walk inside, and
@@ -1159,7 +1182,7 @@ $("saveSystemLog").addEventListener("click",event=>{
 window.wuSearchHistory.setSearch(word=>searchFor(word));
 window.wuSearchHistory.setSuggest((q,onHit,signal)=>{
   const mode=$("mode").value,sel=$("dict").value||"all";
-  if(mode==="fts")return;
+  if(mode==="fts"||mode==="mask")return;
   const ids=sel==="all"?activeUserGroupIds():sel.startsWith("g:")?groupIds(sel):null;
   if(ids&&!ids.length)return;
   const dict=ids?ids.join(","):sel,n=ids?(ids.length===1?25:5):25;
@@ -2562,7 +2585,7 @@ async function loadDicts(rescan){
   setPhase("ready");
   clearStatus("load");
   // a search run against a half-loaded list is now answerable in full
-  if(staleSearch&&lastQuery){staleSearch=false;doSearch()}
+  if(staleSearch&&lastQuery){staleSearch=false;if($("mode").value==="mask")maskSubmitRequested=true;doSearch()}
   return true;
 }
 /* The narrow-viewport chips. They render the two <select>s and nothing more:
@@ -2577,6 +2600,11 @@ const SEARCH_MODE_KEY="wudict_search_mode";
 function setSearchMode(mode){
   if(!Object.prototype.hasOwnProperty.call(MODE_SHORT,mode))return;
   $("mode").value=mode;
+  $("maskSubmit").hidden=mode!=="mask";
+  $("maskProgress").hidden=mode!=="mask";
+  $("maskView").hidden=mode!=="mask";
+  $("maskDock").hidden=mode!=="mask";
+  document.body.classList.toggle("mask-view-active",mode==="mask");
   try{localStorage.setItem(SEARCH_MODE_KEY,mode)}catch(_){}
 }
 try{setSearchMode(localStorage.getItem(SEARCH_MODE_KEY))}catch(_){}
@@ -2620,7 +2648,7 @@ $("dict").onchange=e=>{const v=e.target.value;localStorage.setItem("wudict_dict"
 /* Mode re-runs the search on change, symmetric with #dict: the narrow bar has
    no submit button, so a mode that waited for the next submit would appear to
    do nothing at all. */
-$("mode").onchange=()=>{setSearchMode($("mode").value);syncChips();if($("q").value.trim())doSearch()};
+$("mode").onchange=()=>{setSearchMode($("mode").value);syncChips();if($("mode").value==="mask"){window.wuSearchHistory.hide();maskInvalidate();return}if($("q").value.trim())doSearch()};
 syncChips(); // the markup ships empty chips; JS stays the single authority
 
 /* provenance: the collapsed line says where the dictionary came from (its
@@ -5008,7 +5036,7 @@ function renderSlot(box,h,mode,q,perDict,group){
   const dl=document.createElement("dl"),roots=[];
   for(const r of h.results){
     const dt=document.createElement("dt");
-    dt.innerHTML=(mode==="mask"||/[?*]/.test(q||""))?highlightMaskHeadword(r.Headword,q):esc(r.Headword);
+    dt.innerHTML=mode==="mask"?highlightMaskHeadword(r.Headword,q):esc(r.Headword);
     const dd=document.createElement("dd");dd.dataset.dict=h.dict;
     roots.push(renderArticle(dd,r.Body,h.dict,
       anchorOnce&&anchorOnce.dict===h.dict&&r===h.results[0]?anchorOnce.frag:""));
@@ -5031,11 +5059,37 @@ function renderSlot(box,h,mode,q,perDict,group){
 }
 
 function highlightMaskHeadword(word,pattern){
-  const ranges=maskRanges(word,pattern);
+  return highlightMaskRanges(word,maskRanges(word,pattern));
+}
+function highlightMaskRanges(word,ranges){
   if(!ranges)return esc(word);
   let from=0,html="";
   for(const [start,end] of ranges){html+=esc(word.slice(from,start))+'<mark class="wu-hl">'+esc(word.slice(start,end))+'</mark>';from=end}
   return html+esc(word.slice(from));
+}
+function maskFindRanges(word,query){
+  const fold=s=>s.normalize("NFD").replace(/\p{M}/gu,"").toLowerCase();
+  const parts=(query.match(/[\p{L}\p{N}\p{M}]+/gu)||[]).map(fold).filter(Boolean);
+  if(!parts.length)return null;
+  const ranges=[],seen=new Set();
+  for(const token of word.matchAll(/[\p{L}\p{N}\p{M}]+/gu)){
+    const raw=token[0],folded=fold(raw);
+    for(const [i,part] of parts.entries()){
+      if(!folded.startsWith(part))continue;
+      seen.add(i);let used="",end=0;
+      for(const char of raw){used+=fold(char);end+=char.length;if(used.length>=part.length)break}
+      while(end<raw.length&&/\p{M}/u.test(raw[end]))end++;
+      ranges.push([token.index,token.index+end]);
+    }
+  }
+  if(seen.size!==parts.length)return null;
+  ranges.sort((a,b)=>a[0]-b[0]||a[1]-b[1]);
+  const merged=[];
+  for(const [start,end] of ranges){
+    if(merged.length&&start<=merged[merged.length-1][1])merged[merged.length-1][1]=Math.max(end,merged[merged.length-1][1]);
+    else merged.push([start,end]);
+  }
+  return merged;
 }
 function maskRanges(word,pattern){
 	const w=Array.from(word),p=Array.from(pattern),starts=[];let at=0;
@@ -5080,11 +5134,381 @@ function noIndexRow(el,out,info){
   return el;
 }
 
+// Mask results are headwords only. Each dictionary keeps its slot in the
+// selected group's order even when requests finish out of order.
+let maskGeneration=0,maskControllers=new Set(),maskRows=[],maskCurrent=0;
+let maskPattern="",maskSelection="",maskSubmitRequested=false,maskNavToken=0,maskRestoreScroll=null;
+let maskStripVersion=0,maskStripRendered=-1,maskChipMap=new Map(),maskActiveKey="";
+let maskBaseRows=[],maskBaseCurrent=0,maskFindRows=[],maskFindFilter=false,maskFindWildcard=false;
+let maskFindIndex=-1,maskFindMatch=null,maskFindTimer=0,maskFindQuery="";
+function maskAbort(){
+  maskGeneration++;maskNavToken++;
+  for(const controller of maskControllers)controller.abort();
+  maskControllers.clear();
+  setBusy(false);
+}
+function maskInvalidate(){
+  maskAbort();clearTimeout(maskFindTimer);maskRows=[];maskBaseRows=[];maskFindRows=[];maskPattern="";maskSelection="";
+  maskFindQuery="";maskFindIndex=-1;maskFindMatch=null;$("maskFindInput").value="";maskFindControls();
+  maskStripVersion++;maskStripRendered=-1;maskChipMap.clear();maskActiveKey="";
+  if(searchAC)searchAC.abort();searchSeq++;
+  $("maskDict").replaceChildren();$("maskLetters").replaceChildren();
+  $("maskCount").textContent="";$("maskPage").textContent="";
+  $("maskPrev").disabled=$("maskNext").disabled=true;
+  $("maskWords").innerHTML='<p class="mask-empty">'+tx("search.maskRun")+'</p>';
+}
+function maskStripPaint(){
+  const strip=$("maskLetters"),rebuilt=maskStripRendered!==maskStripVersion;
+  if(rebuilt){
+    const left=strip.scrollLeft,fragment=document.createDocumentFragment();
+    maskChipMap=new Map();let groups=0;
+    for(const row of maskRows){
+      if(row.state==="ready"&&!row.total)continue;
+      const group=document.createElement("span");group.className="mask-letter-group";
+      if(row.state==="ready"){
+        for(const letter of row.alphabet||[]){
+          const page=Math.floor(letter.o/(row.size||300))+1;
+          const button=document.createElement("button");button.type="button";
+          button.textContent=letter.l;button.dataset.dict=row.id;button.dataset.page=page;
+          button.title=row.name+" · "+tx("browse.words",{count:letter.n,number:window.wudictI18n.number(letter.n)});
+          button.setAttribute("aria-current","false");
+          group.appendChild(button);maskChipMap.set(row.id+":"+page,button);
+        }
+      }else{
+        const marker=document.createElement("span");marker.className="mask-letter-pending";
+        marker.textContent=row.state==="error"?"⚠":"…";marker.title=row.name;
+        group.appendChild(marker);
+      }
+      if(!group.childNodes.length)continue;
+      if(groups++){
+        const separator=document.createElement("span");separator.className="mask-letter-separator";
+        separator.textContent="|";separator.setAttribute("aria-hidden","true");fragment.appendChild(separator);
+      }
+      fragment.appendChild(group);
+    }
+    strip.replaceChildren(fragment);strip.scrollLeft=left;maskStripRendered=maskStripVersion;
+  }
+  const row=maskRows[maskCurrent],key=row?.data?row.id+":"+row.data.page:"";
+  if(rebuilt||key!==maskActiveKey){
+    if(!rebuilt)maskChipMap.get(maskActiveKey)?.setAttribute("aria-current","false");
+    const active=maskChipMap.get(key);active?.setAttribute("aria-current","true");
+    if(active&&key!==maskActiveKey)requestAnimationFrame(()=>{
+      if(!active.isConnected)return;
+      const box=strip.getBoundingClientRect(),chip=active.getBoundingClientRect();
+      if(chip.left<box.left)strip.scrollLeft+=chip.left-box.left;
+      else if(chip.right>box.right)strip.scrollLeft+=chip.right-box.right;
+    });
+    maskActiveKey=key;
+  }
+}
+function maskMenu(){
+  const menu=$("maskDict"),selection=maskRows[maskCurrent]?.id;
+  let total=0,pages=0,prefixKnown=true,complete=true;
+  for(const row of maskRows){
+    row.firstPage=null;row.pages=0;
+    if(row.state==="ready"){
+      row.pages=Math.ceil(row.total/(row.size||300));
+      if(prefixKnown&&row.pages)row.firstPage=pages+1;
+      total+=row.total;pages+=row.pages;
+    }else{
+      complete=false;
+      if(row.state==="pending")prefixKnown=false;
+    }
+  }
+  menu.replaceChildren(...maskRows.filter(row=>row.state!=="ready"||row.total>0).map(row=>{
+    const option=document.createElement("option");option.value=row.id;
+    const range=row.firstPage===null?"…":row.firstPage===row.firstPage+row.pages-1
+      ?String(row.firstPage):row.firstPage+"–"+(row.firstPage+row.pages-1);
+    option.textContent=row.name+(row.state==="pending"?" · …":row.state==="error"?" · ⚠":
+      " · "+window.wudictI18n.number(row.total)+" ("+range+")");
+    return option;
+  }));
+  if(selection&&[...menu.options].some(option=>option.value===selection))menu.value=selection;
+  $("maskCount").textContent=window.wudictI18n.number(total)+(complete?"":"+");
+  const row=maskRows[maskCurrent],result=row?.data;
+  const current=result?(row.firstPage===null?"…":String(row.firstPage+result.page-1)):"…";
+  $("maskPage").textContent=current+"/"+(complete?String(pages):"…");
+  maskStripPaint();
+}
+function maskNeighbor(from,step){
+  for(let i=from+step;i>=0&&i<maskRows.length;i+=step)
+    if(maskRows[i].state!=="ready"||maskRows[i].total>0)return i;
+  return -1;
+}
+function maskRender(){
+  const row=maskRows[maskCurrent];maskMenu();
+  if(!row){$("maskWords").innerHTML='<p class="mask-empty">'+tx("search.maskEmpty")+'</p>';return}
+  const result=row.data;
+  $("maskPrev").disabled=(!result||result.page<=1)&&maskNeighbor(maskCurrent,-1)<0;
+  $("maskNext").disabled=(!result||result.page>=result.pages)&&maskNeighbor(maskCurrent,1)<0;
+  if(row.state==="pending"||(!result&&row.state!=="error")){$("maskWords").innerHTML='<p class="mask-empty">'+tx("search.maskLoading")+'</p>';return}
+  if(row.state==="error"){$("maskWords").innerHTML='<p class="mask-empty">'+esc(row.error)+'</p>';return}
+  if(!result?.words?.length){$("maskWords").innerHTML='<p class="mask-empty">'+tx("search.maskEmpty")+'</p>';return}
+  $("maskWords").replaceChildren(...result.words.map((word,i)=>{
+    const button=document.createElement("button");button.type="button";button.dataset.word=word;
+    const lower=maskFindQuery;
+    button.innerHTML=lower?highlightMaskRanges(word,maskFindWildcard?maskRanges(word,lower):maskFindRanges(word,lower)):
+      highlightMaskHeadword(word,maskPattern);
+    if(!maskFindFilter&&maskFindMatch?.id===row.id&&maskFindMatch.position===(result.page-1)*result.size+i)
+      button.classList.add("mask-find-current");
+    return button;
+  }));
+  if(!maskFindFilter&&maskFindMatch?.id===row.id){
+    requestAnimationFrame(()=>$('maskWords').querySelector('.mask-find-current')?.scrollIntoView({block:"center"}));
+  }
+  if(maskRestoreScroll!==null){
+    const y=maskRestoreScroll;maskRestoreScroll=null;
+    requestAnimationFrame(()=>scrollTo(0,y));
+  }
+}
+async function maskFetch(row,page,generation,navToken){
+  const controller=new AbortController();maskControllers.add(controller);
+  row.abort=controller;
+  try{
+    const params=new URLSearchParams({dict:row.id,q:maskPattern,p:String(page),mask:"1"});
+    if(row.within){params.set("within",row.within);params.set("withinMask",row.withinMask?"1":"0")}
+    const response=await fetch("/api/browse/find?"+params,{signal:controller.signal});
+    if(!response.ok)throw new Error(tx("search.failedDict"));
+    const data=await response.json();if(generation!==maskGeneration)return;
+    if(row.state!=="ready")maskStripVersion++;
+    row.state="ready";row.total=data.total;row.alphabet=data.alphabet||[];row.size=data.size;
+    if(row.wantedPage!==page&&maskRows[maskCurrent]===row){
+      maskSelect(maskCurrent,Math.min(Math.max(1,row.wantedPage),Math.max(1,data.pages)));
+      return;
+    }
+    if(row.enterFromEnd){
+      row.enterFromEnd=false;
+      if(maskRows[maskCurrent]===row&&data.pages>1){
+        maskSelect(maskCurrent,data.pages);
+        return;
+      }
+    }
+    if(page===1&&row.wantedPage===1&&!row.data)row.data=data;
+    if(row.within)row.data=data;
+    if(navToken===maskNavToken&&maskRows[maskCurrent]===row){row.data=data;maskRender()}
+    else if(page===1&&row.wantedPage===1&&maskRows[maskCurrent]===row)maskRender();
+    maskMenu();
+    if(row.within)maskFindControls();
+    if(maskRows[maskCurrent]===row&&row.total===0){const next=maskNeighbor(maskCurrent,1);if(next>=0)maskSelect(next)}
+  }catch(error){
+    if(controller.signal.aborted||generation!==maskGeneration)return;
+    row.state="error";row.error=error.message;maskStripVersion++;maskMenu();
+    if(row.within)maskFindControls();
+    if(maskRows[maskCurrent]===row)maskRender();
+  }finally{maskControllers.delete(controller);if(row.abort===controller)row.abort=null}
+}
+function maskSelect(index,page=1){
+  if(index<0||index>=maskRows.length)return;
+  maskCurrent=index;const row=maskRows[index],navToken=++maskNavToken;
+  row.wantedPage=page;
+  if(row.data?.page===page){maskRender();return}
+  row.data=null;maskRender();
+  if(row.state!=="pending")maskFetch(row,page,maskGeneration,navToken);
+}
+function maskTurn(step){
+  const row=maskRows[maskCurrent],data=row?.data;
+  if(data&&data.page+step>=1&&data.page+step<=data.pages){maskSelect(maskCurrent,data.page+step);return}
+  const next=maskNeighbor(maskCurrent,step);
+  if(next>=0){
+    const target=maskRows[next];
+    if(step<0&&target.state==="pending")target.enterFromEnd=true;
+    maskSelect(next,step<0?Math.max(1,target.pages||target.data?.pages||1):1);
+  }
+}
+async function maskRun(pattern){
+  maskAbort();maskPattern=pattern;lastQuery=pattern;maskReturn="";
+  clearTimeout(maskFindTimer);maskFindRows=[];maskFindQuery="";maskFindIndex=-1;maskFindMatch=null;
+  maskFindFilter=false;$("maskFindInput").value="";
+  if(searchAC)searchAC.abort();searchSeq++;$("out").replaceChildren();setStatus("");
+  const selection=$("dict").value||"all";
+  maskSelection=selection;
+  const ids=selection==="all"?activeUserGroupIds():selection.startsWith("g:")?groupIds(selection):[selection];
+  const byId=new Map(dicts.map(d=>[d.id,d]));
+  maskRows=ids.filter(id=>byId.has(id)).map(id=>({id,name:dictLabel(byId.get(id)),state:"pending",total:0,data:null,alphabet:[],size:300,wantedPage:1,error:""}));
+  maskBaseRows=maskRows;maskBaseCurrent=0;maskFindControls();
+  maskStripVersion++;
+  const saved=new URLSearchParams(location.search);
+  const restoring=saved.get("mode")==="mask"&&saved.get("q")===pattern;
+  const index=restoring?maskRows.findIndex(row=>row.id===saved.get("maskdict")):-1;
+  maskCurrent=index>=0?index:0;
+  if(index>=0){
+    maskRows[index].wantedPage=Math.min(10000000,Math.max(1,Number.parseInt(saved.get("maskpage"),10)||1));
+    maskRestoreScroll=Math.min(10000000,Math.max(0,Number.parseInt(saved.get("maskscroll"),10)||0));
+  }else maskRestoreScroll=null;
+  maskRender();
+  if(!maskRows.length){if(!dictsSettled){staleSearch=true;maskSubmitRequested=true}return}
+  const generation=maskGeneration,rows=maskBaseRows;setBusy(true);
+  let next=0;
+  const worker=async()=>{while(generation===maskGeneration&&next<rows.length){
+    const row=rows[next++];await maskFetch(row,row.wantedPage,generation,row===maskRows[maskCurrent]?maskNavToken:-1);
+  }};
+  await Promise.all(Array.from({length:Math.min(3,rows.length)},worker));
+  if(generation!==maskGeneration)return;
+  setBusy(false);
+  if(rows.every(row=>row.state==="ready"&&row.total===0)&&maskRows===rows)maskRender();
+}
+function maskRestoreCached(url){
+  if(url.origin!==location.origin||url.pathname!=="/"||url.searchParams.get("mode")!=="mask"||
+     !maskRows.length||url.searchParams.get("q")!==maskPattern||
+     url.searchParams.get("dict")!==maskSelection)return false;
+  const index=maskRows.findIndex(row=>row.id===url.searchParams.get("maskdict"));
+  if(index<0)return false;
+  maskAbort();
+  if(searchAC)searchAC.abort();searchSeq++;
+  const page=Math.min(10000000,Math.max(1,Number.parseInt(url.searchParams.get("maskpage"),10)||1));
+  maskRestoreScroll=Math.min(10000000,Math.max(0,Number.parseInt(url.searchParams.get("maskscroll"),10)||0));
+  $("q").value=maskPattern;$("dict").value=maskSelection;
+  setSearchMode("mask");lastQuery=maskPattern;lastScope=null;scopeOnce=null;maskReturn="";
+  $("out").replaceChildren();setStatus("");syncChips();sbarPaint();
+  maskSelect(index,page);
+  const pending=[...new Set([...maskRows,...maskBaseRows].filter(row=>row.state==="pending"))];
+  pending.sort((a,b)=>a===maskRows[index]?-1:b===maskRows[index]?1:0);
+  if(pending.length){
+    const generation=maskGeneration;let next=0;setBusy(true);
+    const worker=async()=>{while(generation===maskGeneration&&next<pending.length){
+      const row=pending[next++];
+      await maskFetch(row,row.wantedPage,generation,row===maskRows[maskCurrent]?maskNavToken:-1);
+    }};
+    Promise.all(Array.from({length:Math.min(3,pending.length)},worker)).then(()=>{
+      if(generation===maskGeneration)setBusy(false);
+    });
+  }
+  return true;
+}
+function maskFindControls(){
+  const input=$("maskFindInput"),query=input.value.trim();
+  input.placeholder=tx(maskFindFilter?"browse.filterPlaceholder":"browse.findWords");
+  input.setAttribute("aria-label",input.placeholder);
+  $("maskFindMode").innerHTML=maskFindFilter?
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h18l-7 8v5l-4 2v-7z"/></svg>':
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 5 5"/></svg>';
+  $("maskFindMode").classList.toggle("is-on",maskFindFilter);
+  $("maskFindMode").setAttribute("aria-pressed",String(maskFindFilter));
+  $("maskFindMode").setAttribute("aria-label",tx(maskFindFilter?"browse.searchWords":"browse.filterWords"));
+  $("maskFindWildcard").classList.toggle("is-on",maskFindWildcard);
+  $("maskFindWildcard").setAttribute("aria-pressed",String(maskFindWildcard));
+  const rows=query?maskFindRows:maskBaseRows;
+  const total=rows.reduce((sum,row)=>sum+(row.state==="ready"?row.total:0),0);
+  const settled=rows.every(row=>row.state!=="pending");
+  $("maskFindCount").textContent=(maskFindFilter?total:Math.max(0,maskFindIndex+1))+"/"+total+(settled?"":"+");
+  $("maskFindPrev").disabled=$("maskFindNext").disabled=maskFindFilter||!query||!settled||!total;
+}
+function maskFindSwitch(filter){
+  if(maskFindFilter===filter)return;
+  if(maskRows===maskBaseRows)maskBaseCurrent=maskCurrent;
+  else if(!filter){
+    const index=maskBaseRows.findIndex(row=>row.id===maskRows[maskCurrent]?.id);
+    if(index>=0)maskBaseCurrent=index;
+  }
+  maskFindFilter=filter;maskNavToken++;
+  if(filter&&maskFindQuery&&maskFindRows.length){
+    const id=maskBaseRows[maskBaseCurrent]?.id;
+    maskRows=maskFindRows;
+    maskCurrent=Math.max(0,maskRows.findIndex(row=>row.id===id));
+  }else{
+    maskRows=maskBaseRows;maskCurrent=maskBaseCurrent;
+  }
+  maskStripVersion++;maskStripRendered=-1;maskRender();maskFindControls();
+}
+function maskFindStart(){
+  const query=$("maskFindInput").value.trim();
+  for(const row of maskFindRows)row.abort?.abort();
+  if(maskRows!==maskBaseRows){maskRows=maskBaseRows;maskCurrent=maskBaseCurrent}
+  maskFindQuery=query;maskFindIndex=-1;maskFindMatch=null;maskFindRows=[];
+  maskStripVersion++;maskStripRendered=-1;
+  if(!query||!maskPattern||!maskBaseRows.length){maskRender();maskFindControls();return}
+  maskFindRows=maskBaseRows.map(row=>({id:row.id,name:row.name,state:"pending",total:0,data:null,
+    alphabet:[],size:300,wantedPage:1,error:"",within:query,withinMask:maskFindWildcard}));
+  if(maskFindFilter){
+    maskRows=maskFindRows;maskCurrent=maskBaseCurrent;
+  }
+  maskRender();maskFindControls();
+  const generation=maskGeneration,rows=maskFindRows;let next=0;
+  const worker=async()=>{while(generation===maskGeneration&&rows===maskFindRows&&next<rows.length){
+    const row=rows[next++];await maskFetch(row,1,generation,row===maskRows[maskCurrent]?maskNavToken:-1);
+  }};
+  Promise.all(Array.from({length:Math.min(3,rows.length)},worker)).then(()=>{
+    if(rows===maskFindRows)maskFindControls();
+  });
+}
+async function maskFindTurn(step){
+  if(maskFindFilter||!maskFindRows.length||maskFindRows.some(row=>row.state==="pending"))return;
+  const total=maskFindRows.reduce((sum,row)=>sum+(row.state==="ready"?row.total:0),0);
+  if(!total)return;
+  maskFindIndex=maskFindIndex<0?(step<0?total-1:0):(maskFindIndex+step+total)%total;
+  let at=maskFindIndex,row=null;
+  for(const candidate of maskFindRows){
+    if(candidate.state!=="ready")continue;
+    if(at<candidate.total){row=candidate;break}
+    at-=candidate.total;
+  }
+  if(!row)return;
+  const page=Math.floor(at/(row.size||300))+1,token=++maskNavToken;
+  let result=row.data?.page===page?row.data:null;
+  if(!result){
+    const controller=new AbortController();maskControllers.add(controller);
+    try{
+      const params=new URLSearchParams({dict:row.id,q:maskPattern,p:String(page),mask:"1",
+        within:row.within,withinMask:row.withinMask?"1":"0"});
+      const response=await fetch("/api/browse/find?"+params,{signal:controller.signal});
+      if(!response.ok)return;
+      result=await response.json();row.data=result;
+    }catch(_){return}finally{maskControllers.delete(controller)}
+  }
+  if(token!==maskNavToken||maskFindFilter)return;
+  const position=result.positions?.[at-(page-1)*result.size];
+  if(position===undefined)return;
+  maskFindMatch={id:row.id,position};
+  const base=maskBaseRows.findIndex(candidate=>candidate.id===row.id);
+  if(base>=0){maskSelect(base,Math.floor(position/(maskBaseRows[base].size||300))+1);maskFindControls()}
+}
+$("maskFindMode").addEventListener("click",()=>maskFindSwitch(!maskFindFilter));
+$("maskFindWildcard").addEventListener("click",()=>{
+  maskFindWildcard=!maskFindWildcard;maskFindStart();maskFindControls();
+});
+$("maskFindInput").addEventListener("input",()=>{
+  maskFindQuery=$("maskFindInput").value.trim();maskFindMatch=null;maskFindIndex=-1;
+  maskRender();maskFindControls();clearTimeout(maskFindTimer);
+  maskFindTimer=setTimeout(maskFindStart,250);
+});
+$("maskFindInput").addEventListener("keydown",e=>{
+  if(e.key==="Enter"){e.preventDefault();clearTimeout(maskFindTimer);maskFindStart()}
+  if(e.key==="ArrowDown"||e.key==="ArrowUp"){
+    e.preventDefault();maskFindTurn(e.key==="ArrowDown"?1:-1)
+  }
+});
+$("maskFindPrev").addEventListener("click",()=>maskFindTurn(-1));
+$("maskFindNext").addEventListener("click",()=>maskFindTurn(1));
+$("maskDict").addEventListener("change",()=>maskSelect(maskRows.findIndex(row=>row.id===$("maskDict").value)));
+$("maskPrev").addEventListener("click",()=>maskTurn(-1));
+$("maskNext").addEventListener("click",()=>maskTurn(1));
+$("maskLetters").addEventListener("click",e=>{
+  const button=e.target.closest("button[data-dict][data-page]");if(!button)return;
+  const index=maskRows.findIndex(row=>row.id===button.dataset.dict);
+  maskSelect(index,Number(button.dataset.page));
+});
+$("maskWords").addEventListener("click",e=>{
+  const button=e.target.closest("button[data-word]");if(!button)return;
+  const row=maskRows[maskCurrent];if(!row)return;
+  const params=new URLSearchParams({q:maskPattern,mode:"mask",dict:$("dict").value||"all",
+    maskdict:row.id,maskpage:String(row.data?.page||1),maskscroll:String(Math.round(scrollY))});
+  maskReturn="/?"+params.toString();
+  history.replaceState(null,"",maskReturn);
+  maskAbort();setSearchMode("exact");syncChips();searchFor(button.dataset.word,{scope:row.id});
+});
+if($("mode").value==="mask")maskInvalidate();
+
 async function doSearch(ev){
   window.wudictArticleFind?.stop();
   if(ev)ev.preventDefault();
   const q=$("q").value.trim();
   if(!q)return;
+  if($("mode").value==="mask"){
+    if(!maskSubmitRequested)return;
+    maskSubmitRequested=false;scopeOnce=null;lastScope=null;commitOnce=false;
+    return maskRun(q);
+  }
+  maskSubmitRequested=false;maskAbort();
   // consumed before the first await, so the history wrapper below can still
   // read which scope was used
   const scope=scopeOnce;scopeOnce=null;lastScope=scope;
@@ -5348,6 +5772,9 @@ document.addEventListener("click",e=>{
 
 /* Typing updates suggestions; committing the field updates articles. */
 $("q").addEventListener("input",()=>{
+  if($("mode").value==="mask"){
+    maskInvalidate();window.wuSearchHistory.hide();return;
+  }
   window.wuSearchHistory.onInput($("q").value);
 });
 
@@ -5441,7 +5868,7 @@ function searchFor(term,opts){
   window.wuSearchHistory.record(t);
   window.wuSearchHistory.hide();
   $("q").value=t;                       // verbatim: no trimming, ever
-  if($("mode").value==="fts")setSearchMode("prefix");
+  if($("mode").value==="fts"||$("mode").value==="mask")setSearchMode("prefix");
   const scope=opts?.scope||null,frag=opts?.frag||"";
   scopeOnce=scope;
   // the fragment addresses a place in the SCOPED article; renderSlot matches
@@ -5918,6 +6345,22 @@ function browseReturnFromURL(){
   }catch(_){return ""}
 }
 let browseReturn=browseReturnFromURL();
+function maskReturnFromURL(){
+  const raw=new URLSearchParams(location.search).get("mask");
+  if(!raw)return "";
+  try{const url=new URL(raw,location.origin);
+    return url.origin===location.origin&&url.pathname==="/"&&
+      url.searchParams.get("mode")==="mask"&&url.searchParams.has("q")
+      ?url.pathname+url.search:"";
+  }catch(_){return ""}
+}
+let maskReturn=maskReturnFromURL();
+$("sbarBackWords").addEventListener("click",e=>{
+  if(!maskReturn||e.button!==0||e.ctrlKey||e.metaKey||e.shiftKey||e.altKey)return;
+  const target=new URL(maskReturn,location.origin);
+  if(!maskRestoreCached(target))return;
+  e.preventDefault();history.pushState(null,"",target.pathname+target.search);
+});
 /* The sections the arrows walk. `.noindex` is not one of them: that row is the
    list of dictionaries this search could not run at all, a reference with an
    offer on it, not a place to read. A deferred section IS one - it is a
@@ -5970,8 +6413,8 @@ function sbarPaint(){
   // nowhere to walk, and the arrows are what would lie about it. Where an arrow
   // can act but has run out of list, it is dimmed instead - see sbarEndsPaint.
   $("sbarPrev").hidden=$("sbarNext").hidden=n<2;
-  $("sbarBackWords").hidden=!browseReturn||n>=2;
-  if(browseReturn)$("sbarBackWords").href=browseReturn;
+  $("sbarBackWords").hidden=!(browseReturn||maskReturn)||n>=2;
+  if(browseReturn||maskReturn)$("sbarBackWords").href=maskReturn||browseReturn;
   $("sbarOn").setAttribute("aria-pressed",sbarWant?"true":"false");
   $("sbarOff").setAttribute("aria-pressed",sbarWant?"false":"true");
   placeDictSeg();
@@ -6155,7 +6598,7 @@ function applyURL(){
   if(p.get("mode"))setSearchMode(p.get("mode"));
   if(p.get("dict"))$("dict").value=p.get("dict");
   syncChips();
-  if(p.get("q")){$("q").value=p.get("q");scopeOnce=p.get("from")||null;commitOnce=true;doSearch()}
+  if(p.get("q")){$("q").value=p.get("q");scopeOnce=p.get("from")||null;commitOnce=true;if($("mode").value==="mask")maskSubmitRequested=true;doSearch()}
 }
 const _doSearch=doSearch;
 doSearch=function(ev){
@@ -6169,6 +6612,7 @@ doSearch=function(ev){
     // own selector, so restoring a link-followed view never rewrites it
     if(lastScope)params.from=lastScope;
     if(browseReturn)params.browse=browseReturn;
+    if(maskReturn)params.mask=maskReturn;
     const url="?"+new URLSearchParams(params).toString();
     // clicking the same word twice must not stack identical entries
     if(record==="push"&&url!==location.search)history.pushState(null,"",url);
@@ -6181,7 +6625,8 @@ doSearch=function(ev){
    recorded — the browser already moved the cursor within the stack. */
 window.addEventListener("popstate",()=>{
   const p=new URLSearchParams(location.search);
-  browseReturn=browseReturnFromURL();sbarPaint();
+  browseReturn=browseReturnFromURL();maskReturn=maskReturnFromURL();sbarPaint();
+  if(p.get("mode")==="mask"&&maskRestoreCached(new URL(location.href)))return;
   if(p.get("mode"))setSearchMode(p.get("mode"));
   if(p.get("dict"))$("dict").value=p.get("dict");
   syncChips();
@@ -6200,6 +6645,7 @@ window.addEventListener("popstate",()=>{
   navRecord="none";
   scopeOnce=p.get("from")||null; // a link-followed view was scoped; restore that
   commitOnce=true;               // Back/Forward restores a view, it does not type
+  if($("mode").value==="mask")maskSubmitRequested=true;
   doSearch();
 });
 $("frm").removeEventListener("submit",_doSearch);
@@ -6214,6 +6660,7 @@ $("frm").removeEventListener("submit",_doSearch);
    Shift-Enter walks back; it is not a newline here, because a single-line
    input has none. */
 $("q").addEventListener("keydown",e=>{
+  if($("mode").value==="mask")return;
   if(e.key!=="Enter"||e.isComposing||e.ctrlKey||e.metaKey||e.altKey)return;
   if(!navWalkable()||$("q").value.trim()!==lastQuery)return;
   e.preventDefault();navGo(e.shiftKey?-1:1);
@@ -6230,9 +6677,11 @@ $("frm").addEventListener("submit",e=>{
   window.wuSearchHistory.record($("q").value);
   window.wuSearchHistory.hide();
   commitOnce=true; // the one moment the query is finished: this search may scroll
+  if($("mode").value==="mask")maskSubmitRequested=true;
   return doSearch(e);
 });
 $("q").addEventListener("blur",()=>setTimeout(()=>{
+  if($("mode").value==="mask")return;
   if(window.wuSearchHistory.isPicking())return;
   const q=$("q").value.trim();
   if(q===lastQuery)return;
@@ -7398,7 +7847,8 @@ function themedSelectCreate(select){
 }
 window.wudictThemedSelects={
   mode:themedSelect($("mode"),$("modeMenuBtn"),$("modeMenu")),
-  pickerGroup:themedSelect($("webPickerGroup"),$("webPickerGroupBtn"),$("webPickerGroupMenu"))
+  pickerGroup:themedSelect($("webPickerGroup"),$("webPickerGroupBtn"),$("webPickerGroupMenu")),
+  maskDict:themedSelectCreate($("maskDict"))
 };
 $("webDictionaryPicker").addEventListener("close",()=>window.wudictThemedSelects.pickerGroup.hide());
 document.documentElement.dataset.styledSelects="";
