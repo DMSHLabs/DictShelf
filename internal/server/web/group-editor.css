@@ -222,7 +222,7 @@ dialog#groupEditor.group-dialog.panel-card{gap:.65em;padding:0;border:0;backgrou
 #groupMemberHint[hidden]{display:none}
 #groupMemberHint span{font-size:calc(var(--ui-hint-font-size) * 1rem);line-height:1.25}
 #groupMembers:has(#groupMemberHint:not([hidden])) #groupRows{padding-top:0}
-#groupOrderToolbar{position:relative;z-index:1;display:flex;align-self:flex-start;align-items:center;box-sizing:border-box;width:fit-content;max-width:100%;flex:none;margin-bottom:.3em;border-bottom:1px solid var(--line)}
+#groupOrderToolbar{position:relative;z-index:1;display:flex;align-self:stretch;align-items:center;box-sizing:border-box;width:100%;max-width:100%;flex:none;margin-bottom:.3em;border-bottom:1px solid var(--line)}
 #groupOrderToolbar[hidden],#groupOrderHint[hidden],#groupOrderControls[hidden]{display:none}
 #groupOrderActions{display:flex;align-items:center;gap:.35em;margin-left:.35em;flex:none;order:2}
 #groupOrderActions[hidden],#groupPinControls[hidden]{display:none}
@@ -268,6 +268,7 @@ dialog#groupEditor.group-dialog.panel-card{gap:.65em;padding:0;border:0;backgrou
 #groupLists.members-sized #groupMembers{box-sizing:border-box;flex:0 0 var(--group-members-height)}
 #groupEditor.compact-controls #groupControls{display:none}
 #groupEditor.edit-members #groupControls{display:none}
+#groupControls[aria-disabled="true"]{opacity:.42}
 #groupEditor.name-mode #groupMembers,#groupEditor.name-mode #groupAvailable{opacity:.42;pointer-events:none}
 #groupHint[hidden]{display:none}
 #groupMembers.active,#groupAvailable.active,#groupControls.active{border-color:var(--accent)}

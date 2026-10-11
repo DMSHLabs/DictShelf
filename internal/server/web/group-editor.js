@@ -430,6 +430,9 @@ function renderGroupRows(){
   const outside=locked?[]:ordered.filter(d=>!members.has(d.id));
   const filtering=showAll.checked&&!locked;
   const selecting=updateGroupOrderToolbar(group,inside,filtering,nameMode);
+  const arranging=selecting||!!groupPinEditing;
+  $('groupControls').inert=arranging;
+  $('groupControls').setAttribute('aria-disabled',String(arranging));
   const showEmptyHint=!nameMode&&!filtering&&!group.readonly&&!group.filter&&members.size===0;
   $('groupLists').classList.toggle('editing',filtering);
   $('groupEditor').classList.toggle('edit-members',filtering&&!nameMode);
