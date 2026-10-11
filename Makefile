@@ -216,6 +216,13 @@ AAB_PLAY           := android/app/build/outputs/bundle/playRelease/wudict2-play-
 print-%: ## print the value of a make variable, e.g. make -s print-APK_FOSS
 	@echo '$($*)'
 
+# The tag a publishing run takes when the dispatch form left the tag blank:
+# the same script the release workflows call, so what you read here is what
+# they will do (D168). It only reads the clone, nothing is created.
+.PHONY: next-tag
+next-tag: ## Print the tag the next release build takes (PRERELEASE=1 for a pre-release)
+	@sh tools/next-tag.sh $(if $(PRERELEASE),--prerelease,--release)
+
 # Gradle needs JDK 17+; we build on 21, as CI does. Respect an inherited
 # JAVA_HOME; on macOS fall back to an installed JDK 21 rather than whatever
 # ancient default `java` resolves to. There is no gradle-daemon-jvm.properties:

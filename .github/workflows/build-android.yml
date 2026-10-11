@@ -26,7 +26,7 @@ on:
         default: releases
         required: true
       tag:
-        description: "Tag for the release (e.g., v0.1) or use latest tag if empty"
+        description: "Release tag (e.g. wudict2-v0.12.0); blank = next version: +0.0.1 for a pre-release, +0.1.0 for a release"
         required: false
       prerelease:
         description: "Mark the release as a pre-release"
@@ -91,15 +91,22 @@ jobs:
           sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0" "ndk;30.0.15729638"
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/30.0.15729638" >> "$GITHUB_ENV"
 
-      - name: Build the Go server as libwudict.so (cgo - FTS5 + speex)
-        run: make android-go
-
       - name: Compute version
         id: ver
         run: |
           VERSION="${{ inputs.tag }}"
           if [ -z "$VERSION" ]; then
-            VERSION="$(git describe --tags --always --abbrev=0 2>/dev/null || echo dev)"
+            # A blank field takes the next version, not the last one:
+            # tools/next-tag.sh owns the rule (D168) - a pre-release takes the
+            # next patch (0.11.1 → 0.11.2), a release the next minor with the
+            # patch reset (0.11.2 → 0.12.0) - and it reuses the tag an earlier
+            # workflow of the SAME release created, so Android, Windows and
+            # the native builds land in one release instead of one each.
+            if [ "${{ inputs.prerelease }}" = "true" ]; then
+              VERSION="$(sh tools/next-tag.sh --prerelease)"
+            else
+              VERSION="$(sh tools/next-tag.sh --release)"
+            fi
           fi
 
           # versionCode is NOT passed: app/build.gradle derives it from the
@@ -109,6 +116,13 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "TAG=$VERSION" >> "$GITHUB_ENV"
           echo "building $VERSION (versionCode = $(git rev-list --count HEAD))"
+
+      - name: Build the Go server as libwudict.so (cgo - FTS5 + speex)
+        # VERSION reaches the .so through the Makefile's -X stamp, so the
+        # server reports the version the APK is labelled with. Left to the
+        # Makefile it would report the clone's last tag instead, which is a
+        # different number the moment the field above was blank or new.
+        run: make android-go VERSION="$TAG"
 
       - name: Configure signing
         id: signing
@@ -198,7 +212,9 @@ jobs:
           else
             git config user.name "github-actions[bot]"
             git config user.email "github-actions[bot]@users.noreply.github.com"
-            git tag -a "${TAG}" -m "Release ${TAG}"
+            # The message keeps the shape of every hand-made tag in this
+            # repository (wuDict2 v0.11.1), so the two are one line in a log.
+            git tag -a "${TAG}" -m "wuDict2 ${TAG#wudict2-}"
             git push origin "${TAG}"
             echo "Tag ${TAG} pushed."
           fi
