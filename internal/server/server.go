@@ -1563,7 +1563,7 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 		}
 		writeLine(renderHit(i, h))
 	})
-	if empty > 0 {
+	if empty > 0 && !search.HasMask(q) {
 		s.lemmaWave(ctx, writeLine, renderHit, entries, metas, missed, openers, mode, q, n)
 	}
 	writeLine(streamMsg{T: "end"})

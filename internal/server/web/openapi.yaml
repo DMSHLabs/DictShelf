@@ -144,7 +144,12 @@ paths:
           in: query
           description: |
             `exact` · `prefix` · `contains` (trigram substring over folded
-            headwords) · `fts` (full text). `fuzzy` is accepted as a legacy
+            headwords) · `fts` (full text) · `mask` (whole headword, with `?`
+            for one character and `*` for zero or more). Masks scan headwords
+            without a new index and can be slow for broad patterns. A mask in
+            exact, prefix or contains mode uses the same headword mask search;
+            full-text queries do not accept masks. Mask queries are not lemmatized.
+            `fuzzy` is accepted as a legacy
             alias and now means `prefix`.
 
             `contains` and `fts` need the dictionary to carry that index; ask
@@ -160,7 +165,7 @@ paths:
             rejected.
           schema:
             type: string
-            enum: [exact, prefix, contains, fts, fuzzy]
+            enum: [exact, prefix, contains, fts, mask, fuzzy]
             default: prefix
         - name: hl
           in: query

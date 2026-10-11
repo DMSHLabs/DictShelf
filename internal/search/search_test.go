@@ -70,6 +70,18 @@ func (f *fake) FullTextContext(context.Context, string, int) ([]dict.Result, err
 func (f *fake) FullTextMatch(context.Context, string, int) ([]dict.Result, error) {
 	return nil, dict.ErrUnsupported
 }
+func (f *fake) MaskContext(_ context.Context, pattern string, n int) ([]dict.Result, error) {
+	var out []dict.Result
+	for _, w := range f.words {
+		if ok, _ := MatchMask(pattern, w); ok {
+			out = append(out, dict.Result{Headword: w, Body: "<p>" + w + "</p>"})
+			if len(out) >= n {
+				break
+			}
+		}
+	}
+	return out, nil
+}
 
 // all runs the fan-out over dictionaries that are already open and returns
 // the hits in input order.
@@ -284,12 +296,34 @@ func TestQuerySkipsWhatADirectBackendCannotDo(t *testing.T) {
 
 func TestParseMode(t *testing.T) {
 	for in, want := range map[string]Mode{"": Prefix, "prefix": Prefix, "fuzzy": Prefix,
-		"exact": Exact, "contains": Contains, "fts": FullText} {
+		"exact": Exact, "contains": Contains, "fts": FullText, "mask": Mask} {
 		if got, err := ParseMode(in); err != nil || got != want {
 			t.Errorf("ParseMode(%q) = %v, %v; want %v", in, got, err, want)
 		}
 	}
 	if _, err := ParseMode("regex"); err == nil {
 		t.Error("an unknown mode must be refused")
+	}
+}
+
+func TestMatchMask(t *testing.T) {
+	for _, tc := range []struct {
+		pattern, word string
+		want          bool
+	}{
+		{"ho?e", "home", true}, {"ho?e", "hole", true}, {"ho?e", "hose", true},
+		{"ho?e", "hopeful", false}, {"ab*e", "abe", true}, {"ab*e", "abXYZe", true},
+		{"*word*", "headword", true}, {"c?fé", "café", true},
+	} {
+		got, err := MatchMask(tc.pattern, tc.word)
+		if err != nil || got != tc.want {
+			t.Errorf("MatchMask(%q, %q) = %v, %v; want %v", tc.pattern, tc.word, got, err, tc.want)
+		}
+	}
+}
+
+func TestMaskSearchDisablesLemmaWaveAtCaller(t *testing.T) {
+	if !HasMask("ho?e") || !HasMask("ab*e") || HasMask("home") {
+		t.Fatal("mask detection must follow wildcard presence")
 	}
 }

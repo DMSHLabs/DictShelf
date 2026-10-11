@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -539,6 +540,55 @@ func (s *Store) ContainsContext(ctx context.Context, word string, limit int) ([]
 	return s.collect(s.db.QueryContext(ctx, `
 		SELECT e.w, e.m FROM entry e WHERE e.w LIKE ?1 ESCAPE '\'`+subEntryFilter("e.w")+`ORDER BY e.w LIMIT ?2`,
 		"%"+escapeLike(word)+"%", n))
+}
+
+// MaskContext walks existing headwords and filters them with a wildcard mask.
+// It does not add or rebuild an index; broad masks can therefore be slower.
+func (s *Store) MaskContext(ctx context.Context, pattern string, limit int) ([]dict.Result, error) {
+	re, err := regexp.Compile("(?i)^" + wildcardRegexp(pattern) + "$")
+	if err != nil {
+		return nil, err
+	}
+	n := clamp(limit)
+	rows, err := s.db.QueryContext(ctx, `SELECT w FROM entry ORDER BY w COLLATE NOCASE, w`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []dict.Result
+	for rows.Next() {
+		var word string
+		if err := rows.Scan(&word); err != nil {
+			return nil, err
+		}
+		if !re.MatchString(word) {
+			continue
+		}
+		var body []byte
+		if err := s.db.QueryRowContext(ctx, `SELECT m FROM entry WHERE w=? COLLATE NOCASE LIMIT 1`, word).Scan(&body); err != nil {
+			return nil, err
+		}
+		out = append(out, dict.Result{Headword: word, Body: decodeBody(body)})
+		if len(out) >= n {
+			break
+		}
+	}
+	return out, rows.Err()
+}
+
+func wildcardRegexp(pattern string) string {
+	var b strings.Builder
+	for _, r := range pattern {
+		switch r {
+		case '?':
+			b.WriteString(".")
+		case '*':
+			b.WriteString(".*")
+		default:
+			b.WriteString(regexp.QuoteMeta(string(r)))
+		}
+	}
+	return b.String()
 }
 
 // FullTextContext searches headwords and article text, ordered by BM25 rank,

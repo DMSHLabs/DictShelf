@@ -224,6 +224,7 @@ window.wudictFontScale=(function(){
 <option value="exact">{{T:search.exact}}</option>
 <option value="contains">{{T:dictUI.contains}}</option>
 <option value="fts">{{T:dictUI.fts}}</option>
+<option value="mask">{{T:search.mask}}</option>
 </select>
 <button type="button" class="choice-btn themed-select-btn" id="modeMenuBtn" aria-haspopup="listbox" aria-expanded="false" aria-label="{{T:search.mode}}" disabled></button>
 <span class="choice-menu menu-card themed-select-menu" id="modeMenu" role="listbox" aria-label="{{T:search.mode}}" data-w="anchor" hidden></span>
@@ -2571,7 +2572,7 @@ async function loadDicts(rescan){
    Every chip keeps its mode's word: the words the mode dropdown, the
    per-dictionary switch and the result summaries all use, so a chip never
    names a mode differently from the rest of the page. */
-const MODE_SHORT={prefix:tx("search.prefixShort"),exact:tx("search.exact"),contains:tx("dictUI.contains"),fts:tx("dictUI.fts")};
+const MODE_SHORT={prefix:tx("search.prefixShort"),exact:tx("search.exact"),contains:tx("dictUI.contains"),fts:tx("dictUI.fts"),mask:tx("search.mask")};
 const SEARCH_MODE_KEY="wudict_search_mode";
 function setSearchMode(mode){
   if(!Object.prototype.hasOwnProperty.call(MODE_SHORT,mode))return;

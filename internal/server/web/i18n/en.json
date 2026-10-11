@@ -869,6 +869,7 @@
   "search.boot4": "Letting the definitions marinate…",
   "search.boot5": "Tasting for seasoning…",
   "search.prefixShort": "prefix",
+  "search.mask": "mask",
   "search.loading": "Loading dictionaries…",
   "search.ready": "Loading dictionaries — {number} of {total} ready…",
   "search.bootFailed": "⚠ Could not load your dictionaries.",
