@@ -80,8 +80,8 @@ const Prefix = "wu-"
 // Version is bumped when the emitted markup changes in a way that makes
 // articles already ingested into a library folder look wrong under the current
 // DefaultCSS. It is written into text.db meta as markup_version, and a stale
-// value is reported the way a stale fold_version is - as a fact about the
-// data, with a rebuild offered and never forced (internal/store).
+// value is reported as a fact about the data, with a rebuild offered and
+// never forced (internal/store).
 const Version = 2
 
 // DefaultCSS is the floor. It is injected verbatim into a JS template literal

@@ -5,7 +5,9 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -133,9 +135,9 @@ func TestPrefsKeepsUnseenDictionaries(t *testing.T) {
 	}
 }
 
-// A record the page could not send keeps its place in the stored order, and
-// its pin: a pinned dictionary on a drive that is away is back at its rank
-// when the drive is (D166).
+// A pinned record the page could not send keeps its rank among the pinned,
+// and its pin: a pinned dictionary on a drive that is away is back at its
+// rank when the drive is (D166). An unpinned one has no rank, and goes last.
 func TestPrefsMergeKeepsUnseenInPlace(t *testing.T) {
 	r := &Registry{}
 	for _, id := range []string{"a", "b", "c"} {
@@ -177,13 +179,19 @@ func TestPrefsMergeKeepsUnseenInPlace(t *testing.T) {
 		stored: []DictPref{{ID: "old", Path: "/d/a.dsl", Pin: true}, {ID: "x", Pin: true}, {ID: "b"}},
 		sent:   []DictPref{{ID: "b"}, {ID: "a", Pin: true}},
 		want:   []string{"b", "a", "x"},
+	}, {
+		name:   "a neighbour the page unpinned anchors nothing",
+		stored: []DictPref{{ID: "a", Pin: true}, {ID: "x", Pin: true}, {ID: "b", Pin: true}, {ID: "c"}},
+		sent:   []DictPref{{ID: "b", Pin: true}, {ID: "c"}, {ID: "a"}},
+		want:   []string{"x", "b", "c", "a"},
+	}, {
+		name:   "an unpinned record goes last",
+		stored: []DictPref{{ID: "y"}, {ID: "a", Pin: true}, {ID: "b"}},
+		sent:   []DictPref{{ID: "a", Pin: true}, {ID: "b"}},
+		want:   []string{"a", "b", "y"},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
-			p := LoadPrefs("")
-			if err := p.Replace(tc.stored); err != nil {
-				t.Fatal(err)
-			}
-			got := p.merge(r, tc.sent)
+			got := mergeList(r, tc.stored, tc.sent, true)
 			if !slices.Equal(ids(got), tc.want) {
 				t.Fatalf("order %v, want %v", ids(got), tc.want)
 			}
@@ -192,13 +200,19 @@ func TestPrefsMergeKeepsUnseenInPlace(t *testing.T) {
 			}
 		})
 	}
+
+	// A page working from a list it cached may send a dictionary the
+	// registry no longer lists: its stored path is kept, not blanked.
+	stored := []DictPref{{ID: "gone", Path: "/away/gone.dsl", Pin: true}}
+	if got := mergeList(r, stored, []DictPref{{ID: "gone", Pin: true}}, true); len(got) != 1 || got[0].Path != "/away/gone.dsl" {
+		t.Errorf("the stored path was lost: %+v", got)
+	}
 }
 
-// The version tells the page whether the list is still in the order-only
-// format of version 1 (D166). Only a list the page sent moves it: a repair
-// the server makes itself, or a save of UI settings alone, leaves an old list
-// marked old, or the page would never convert it.
-func TestPrefsVersionMovesWithThePagesList(t *testing.T) {
+// The first GET heals a list from before the current format and then migrates
+// it, once. A save of UI settings alone, made before that, leaves the version
+// of a list it does not touch, so the migration still runs.
+func TestPrefsGetMigratesAnOlderList(t *testing.T) {
 	s, state := newPrefsServer(t)
 	live := s.reg.all()[0]
 	old := `{"version":1,"dicts":[{"id":"0000stale000","path":"` +
@@ -208,24 +222,305 @@ func TestPrefsVersionMovesWithThePagesList(t *testing.T) {
 	}
 	s.reg.prefs = LoadPrefs(state)
 
+	putPrefs(t, s, `{"ui":{"fontSize":20}}`)
+	if v := fileVersion(t, state); v != 1 {
+		t.Fatalf("version %d after a UI-only save, want 1", v)
+	}
 	var got prefsResp
-	getJSON(t, s, "/api/prefs", &got) // heals: the record is re-attached and written
+	getJSON(t, s, "/api/prefs", &got)
 	if len(got.Dicts) != 1 || got.Dicts[0].ID != live.ID {
 		t.Fatalf("not healed: %+v", got.Dicts)
 	}
-	if got.Version != 1 {
-		t.Fatalf("version %d after a repair, want 1", got.Version)
+	// two dictionaries are fewer than migratePins: nothing stays pinned
+	if got.Version != prefsVersion || got.Dicts[0].Pin {
+		t.Fatalf("version %d pin %v, want %d and false", got.Version, got.Dicts[0].Pin, prefsVersion)
 	}
-	putPrefs(t, s, `{"ui":{"fontSize":20}}`)
+	if v := fileVersion(t, state); v != prefsVersion {
+		t.Fatalf("version %d on disk, want %d", v, prefsVersion)
+	}
+}
+
+// Lists from before format 3 keep at most migratePins pins, once (D166 Am. 3):
+// the first ones of the order (version 1) or of the pinned (version 2), when
+// the user has more than migratePins dictionaries of their own; else none.
+func TestPrefsMigrateTopFive(t *testing.T) {
+	type rec struct {
+		ID  string `json:"id"`
+		Pin bool   `json:"pin,omitempty"`
+	}
+	for _, tc := range []struct {
+		name    string
+		own     int  // the user's dictionaries present: d0, d1, ...
+		howto   bool // and the shipped guide
+		version int
+		order   []string
+		pinned  []string
+		want    []string // pinned afterwards, in the list's order
+		wrote   bool
+	}{{
+		name: "version 1, seven: the first five of the order", own: 7, version: 1,
+		order: []string{"d6", "d0", "d5", "d1", "d4", "d2", "d3"},
+		want:  []string{"d6", "d0", "d5", "d1", "d4"}, wrote: true,
+	}, {
+		name: "version 1, five: none", own: 5, version: 1,
+		order: []string{"d4", "d3", "d2", "d1", "d0"}, wrote: true,
+	}, {
+		name: "version 1, four: none", own: 4, version: 1,
+		order: []string{"d3", "d2", "d1", "d0"}, wrote: true,
+	}, {
+		name: "version 2, all pinned: the first five pinned", own: 8, version: 2,
+		order:  []string{"d7", "d6", "d5", "d4", "d3", "d2", "d1", "d0"},
+		pinned: []string{"d7", "d6", "d5", "d4", "d3", "d2", "d1", "d0"},
+		want:   []string{"d7", "d6", "d5", "d4", "d3"}, wrote: true,
+	}, {
+		name: "version 2, two pinned: both stay, nothing added", own: 8, version: 2,
+		order:  []string{"d5", "d3", "d0", "d1", "d2", "d4", "d6", "d7"},
+		pinned: []string{"d5", "d3"},
+		want:   []string{"d5", "d3"}, wrote: true,
+	}, {
+		name: "version 1: a dictionary that is away is skipped, the next one is pinned", own: 7, version: 1,
+		order: []string{"away", "d6", "d0", "d5", "d1", "d4", "d2", "d3"},
+		want:  []string{"d6", "d0", "d5", "d1", "d4"}, wrote: true,
+	}, {
+		name: "version 2: a pinned dictionary that is away loses its pin to the next one", own: 6, version: 2,
+		order:  []string{"d5", "x", "d4", "d3", "d2", "d1", "d0"},
+		pinned: []string{"d5", "x", "d4", "d3", "d2", "d1", "d0"},
+		want:   []string{"d5", "d4", "d3", "d2", "d1"}, wrote: true,
+	}, {
+		name: "four here and two away are four: none", own: 4, version: 2,
+		order:  []string{"x", "d0", "y", "d1", "d2", "d3"},
+		pinned: []string{"x", "d0", "y", "d1", "d2", "d3"},
+		wrote:  true,
+	}, {
+		name: "the shipped guide is not the user's own", own: 5, howto: true, version: 1,
+		order: []string{"howto", "d4", "d3", "d2", "d1", "d0"}, wrote: true,
+	}, {
+		name: "version 3 is left alone", own: 7, version: 3,
+		order:  []string{"d0", "d1", "d2", "d3", "d4", "d5", "d6"},
+		pinned: []string{"d0", "d1", "d2", "d3", "d4", "d5", "d6"},
+		want:   []string{"d0", "d1", "d2", "d3", "d4", "d5", "d6"},
+	}} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := &Registry{byID: map[string]*entry{}}
+			add := func(e *entry) { r.entries = append(r.entries, e); r.byID[e.ID] = e }
+			for i := range tc.own {
+				add(&entry{ID: "d" + strconv.Itoa(i), Path: "/lib/d" + strconv.Itoa(i) + ".dsl"})
+			}
+			if tc.howto {
+				add(&entry{ID: "howto", Path: "/app/howto.wudict.md", builtin: true})
+			}
+			var recs []rec
+			for _, id := range tc.order {
+				recs = append(recs, rec{ID: id, Pin: slices.Contains(tc.pinned, id)})
+			}
+			data, _ := json.Marshal(map[string]any{"version": tc.version, "dicts": recs})
+			state := filepath.Join(t.TempDir(), StateFile)
+			if err := os.WriteFile(state, data, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			p := LoadPrefs(state)
+			got, _ := p.current(r)
+			after, err := os.ReadFile(state)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if wrote := string(after) != string(data); wrote != tc.wrote {
+				t.Fatalf("wrote %v, want %v", wrote, tc.wrote)
+			}
+			stored, _ := LoadPrefs(state).Snapshot()
+			for what, dicts := range map[string][]DictPref{"answered": got.Dicts, "stored": stored} {
+				if pins := pinnedIDs(dicts); !slices.Equal(pins, tc.want) {
+					t.Errorf("%s %v pinned, want %v", what, pins, tc.want)
+				}
+			}
+			if v := fileVersion(t, state); v != prefsVersion {
+				t.Errorf("version %d on disk, want %d", v, prefsVersion)
+			}
+			if again, _ := p.current(r); !slices.Equal(again.Dicts, got.Dicts) {
+				t.Errorf("a second read changed the list: %+v", again.Dicts)
+			}
+		})
+	}
+
+	// no file: nothing to bring forward, and nothing written - an absent file
+	// is the page's cue for a first run
+	state := filepath.Join(t.TempDir(), StateFile)
+	if f, exists := LoadPrefs(state).current(&Registry{}); exists || len(f.Dicts) > 0 {
+		t.Errorf("a file that does not exist answered %v %+v", exists, f.Dicts)
+	}
+	if _, err := os.Stat(state); !os.IsNotExist(err) {
+		t.Errorf("a file was created: %v", err)
+	}
+}
+
+// pinnedIDs is the ids of the pinned records, in their order.
+func pinnedIDs(dicts []DictPref) []string {
+	var out []string
+	for _, d := range dicts {
+		if d.Pin {
+			out = append(out, d.ID)
+		}
+	}
+	return out
+}
+
+// After a migration, a list from a page older than the format - a tab left
+// open across the upgrade, still holding every pin - cannot bring the pins
+// back: it is merged against the records as they are under the write lock,
+// and does not speak for the pins.
+func TestPrefsOlderPageCannotUndoTheMigration(t *testing.T) {
+	r := &Registry{byID: map[string]*entry{}}
+	var all []DictPref
+	for i := range 8 {
+		e := &entry{ID: "d" + strconv.Itoa(i), Path: "/lib/d" + strconv.Itoa(i) + ".dsl"}
+		r.entries = append(r.entries, e)
+		r.byID[e.ID] = e
+		all = append(all, DictPref{ID: e.ID, Pin: true})
+	}
+	state := filepath.Join(t.TempDir(), StateFile)
+	data, _ := json.Marshal(prefsFile{Version: 2, Dicts: all})
+	if err := os.WriteFile(state, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	p := LoadPrefs(state)
+	if f, _ := p.current(r); len(pinnedIDs(f.Dicts)) != migratePins {
+		t.Fatalf("not migrated: %v pinned", pinnedIDs(f.Dicts))
+	}
+	err := p.update(func(stored []DictPref) []DictPref { return mergeList(r, stored, all, false) }, nil, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stored, _ := p.Snapshot()
+	if n := len(pinnedIDs(stored)); n != migratePins || fileVersion(t, state) != prefsVersion {
+		t.Errorf("%d pinned at version %d, want %d at %d", n, fileVersion(t, state), migratePins, prefsVersion)
+	}
+}
+
+// A repair and a migration that cannot be saved still answer, both worked out
+// from one read: the page is handed the record of the dictionary that moved
+// re-attached, counted and pinned by the migration, and its own save, in the
+// current format, writes them.
+func TestPrefsUnsavedStateStillAnswers(t *testing.T) {
+	if os.Geteuid() == 0 || runtime.GOOS == "windows" {
+		t.Skip("needs a directory the test cannot write to")
+	}
+	r := &Registry{byID: map[string]*entry{}}
+	var all []DictPref
+	for i := range 7 {
+		e := &entry{ID: "d" + strconv.Itoa(i), Path: "/lib/d" + strconv.Itoa(i) + ".dsl"}
+		r.entries = append(r.entries, e)
+		r.byID[e.ID] = e
+		all = append(all, DictPref{ID: e.ID, Pin: true})
+	}
+	// d0, remembered from before its folder moved, and disabled
+	all[0] = DictPref{ID: "0000stale000", Path: "/old/d0.dsl", Pin: true, Off: true}
+	dir := t.TempDir()
+	state := filepath.Join(dir, StateFile)
+	data, _ := json.Marshal(prefsFile{Version: 2, Dicts: all})
+	if err := os.WriteFile(state, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	p := LoadPrefs(state)
+	if err := os.Chmod(dir, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(dir, 0o700) })
+	got, _ := p.current(r)
+	if pins := pinnedIDs(got.Dicts); !slices.Equal(pins, []string{"d0", "d1", "d2", "d3", "d4"}) {
+		t.Errorf("answered with %v pinned, want d0 to d4", pins)
+	}
+	if d := got.Dicts[0]; d.ID != "d0" || !d.Off {
+		t.Errorf("the record of the dictionary that moved was not re-attached: %+v", d)
+	}
+	if v := fileVersion(t, state); v != 2 {
+		t.Errorf("version %d on disk, want the unsaved 2", v)
+	}
+}
+
+// A list sent without the format - from a page older than it, a tab left open
+// across an upgrade - does not speak for the pins: each record keeps the pin it
+// has, and the version stays. A list in the format sets them.
+func TestPrefsOlderPageKeepsPins(t *testing.T) {
+	s, state := newPrefsServer(t)
+	a, b := s.reg.all()[0].ID, s.reg.all()[1].ID
+	v := strconv.Itoa(prefsVersion)
+	pins := func(r prefsResp) []string {
+		var out []string
+		for _, d := range r.Dicts {
+			if d.Pin {
+				out = append(out, d.ID)
+			}
+		}
+		return out
+	}
+	for _, tc := range []struct {
+		name, body string
+		want       []string
+	}{
+		{"the page pins a", `{"version":` + v + `,"dicts":[{"id":"` + a + `","pin":true},{"id":"` + b + `"}]}`, []string{a}},
+		{"an older page unpins nothing", `{"dicts":[{"id":"` + b + `"},{"id":"` + a + `"}]}`, []string{a}},
+		{"an older page pins nothing", `{"dicts":[{"id":"` + b + `","pin":true},{"id":"` + a + `"}]}`, []string{a}},
+		{"the page unpins a", `{"version":` + v + `,"dicts":[{"id":"` + a + `"},{"id":"` + b + `"}]}`, nil},
+	} {
+		got := putPrefs(t, s, tc.body)
+		if !slices.Equal(pins(got), tc.want) {
+			t.Fatalf("%s: pinned %v, want %v", tc.name, pins(got), tc.want)
+		}
+		if fv := fileVersion(t, state); fv != prefsVersion {
+			t.Fatalf("%s: version %d, want %d", tc.name, fv, prefsVersion)
+		}
+	}
+}
+
+// seed stores dicts as the list, in the current format.
+func seed(t *testing.T, p *Prefs, dicts []DictPref) {
+	t.Helper()
+	if err := p.update(func([]DictPref) []DictPref { return dicts }, nil, true); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// The repair is worked out from the file as it is under the write lock, not
+// from the state read before it: a save that lands in between - here the file
+// changes on disk while the state in effect still holds the older one - is
+// re-attached, not written away.
+func TestPrefsRepairKeepsASaveThatLandedFirst(t *testing.T) {
+	s, state := newPrefsServer(t)
+	live := s.reg.all()[0]
+	moved := DictPref{ID: "0000stale000", Path: filepath.Join("/elsewhere", filepath.Base(live.Path)), Name: "Alpha"}
+	write := func(d DictPref) {
+		t.Helper()
+		data, _ := json.Marshal(prefsFile{Version: prefsVersion, Dicts: []DictPref{d}})
+		if err := os.WriteFile(state, data, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write(moved)
+	s.reg.prefs = LoadPrefs(state)
+	moved.Off = true
+	write(moved)
+
+	var got prefsResp
 	getJSON(t, s, "/api/prefs", &got)
-	if got.Version != 1 {
-		t.Fatalf("version %d after a UI-only save, want 1", got.Version)
+	if len(got.Dicts) != 1 || got.Dicts[0].ID != live.ID || !got.Dicts[0].Off {
+		t.Fatalf("the save that landed first was written away: %+v", got.Dicts)
 	}
-	putPrefs(t, s, `{"dicts":[{"id":"`+live.ID+`","pin":true}]}`)
-	getJSON(t, s, "/api/prefs", &got)
-	if got.Version != prefsVersion || !got.Dicts[0].Pin {
-		t.Fatalf("version %d pin %v after the page's list, want %d and true", got.Version, got.Dicts[0].Pin, prefsVersion)
+	if !LoadPrefs(state).Off(live.ID, live.Path) {
+		t.Error("the file lost the save that landed first")
 	}
+}
+
+func fileVersion(t *testing.T, state string) int {
+	t.Helper()
+	data, err := os.ReadFile(state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var f prefsFile
+	if err := json.Unmarshal(data, &f); err != nil {
+		t.Fatal(err)
+	}
+	return f.Version
 }
 
 func TestPrefsHealsMovedDictionaries(t *testing.T) {
@@ -284,12 +579,10 @@ func TestPrefsAmbiguousNamesAreNotGuessed(t *testing.T) {
 	s.reg.mu.Unlock()
 
 	p := LoadPrefs("")
-	if err := p.Replace([]DictPref{{ID: "ccccccccccccc", Path: "/gone/three/text.db", Off: true}}); err != nil {
-		t.Fatal(err)
-	}
-	got := p.heal(s.reg)
-	if got[0].ID != "ccccccccccccc" {
-		t.Errorf("an ambiguous file name was matched anyway: %+v", got[0])
+	seed(t, p, []DictPref{{ID: "ccccccccccccc", Path: "/gone/three/text.db", Off: true}})
+	got, _ := p.current(s.reg)
+	if got.Dicts[0].ID != "ccccccccccccc" {
+		t.Errorf("an ambiguous file name was matched anyway: %+v", got.Dicts[0])
 	}
 }
 
@@ -309,7 +602,8 @@ func TestPrefsMalformedFileIsIgnored(t *testing.T) {
 
 func TestPrefsInMemoryWithoutAPath(t *testing.T) {
 	p := LoadPrefs("")
-	if err := p.Replace([]DictPref{{ID: "x", Path: "/a/b.mdx", Off: true}}); err != nil {
+	keep := []DictPref{{ID: "x", Path: "/a/b.mdx", Off: true}}
+	if err := p.update(func([]DictPref) []DictPref { return keep }, nil, true); err != nil {
 		t.Fatalf("saving without a file must succeed silently: %v", err)
 	}
 	if !p.Off("x", "/a/b.mdx") {
@@ -506,7 +800,8 @@ func TestPrefsMode(t *testing.T) {
 		{"full-text", `{"ui":{"mode":"fts"}}`, "fts"},
 		{"a patch without it keeps it", `{"ui":{"full":true}}`, "fts"},
 		{"exact", `{"ui":{"mode":"exact"}}`, "exact"},
-		{"contains", `{"ui":{"mode":"contains"}}`, "contains"},
+		{"wildcard", `{"ui":{"mode":"wildcard"}}`, "wildcard"},
+		{"contains, retired by D170, is dropped", `{"ui":{"mode":"contains"}}`, ""},
 		{"prefix is stored as absent", `{"ui":{"mode":"prefix"}}`, ""},
 		{"a retired mode is dropped", `{"ui":{"mode":"fuzzy"}}`, ""},
 	} {
@@ -640,7 +935,7 @@ func (u *UIPrefs) flags() (hlOff, fastFirst bool) {
 	return u.HLOff, u.FastFirst
 }
 
-// The file-name rung of heal's identity ladder, from both sides. It is the
+// The file-name rung of healList's identity ladder, from both sides. It is the
 // weakest rung and the only one that can guess wrong, so it fires only when
 // the name names exactly one thing in the registry AND exactly one thing in
 // the stored records. On the stored side, a library folder the user removes
@@ -696,10 +991,9 @@ func TestPrefsFileNameRungNeedsBothSidesUnique(t *testing.T) {
 				r.entries = append(r.entries, &entry{ID: ids[i], Path: p})
 			}
 			p := LoadPrefs("") // in-memory: this rung reads nothing from disk
-			if err := p.Replace(tc.stored); err != nil {
-				t.Fatal(err)
-			}
-			got := p.heal(r)
+			seed(t, p, tc.stored)
+			f, _ := p.current(r)
+			got := f.Dicts
 			if len(got) != len(tc.want) {
 				t.Fatalf("records lost or invented: %+v", got)
 			}

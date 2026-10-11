@@ -17,7 +17,7 @@ import (
 // Fingerprint hashes the LOGICAL content of a prepared text.db: what a query
 // can observe, independent of how the file happens to be laid out. Two ingests
 // of the same source by the same code produce the same fingerprint; a change
-// to a Reader, to IngestPlan, to the markup or to the folding changes it.
+// to a Reader, to IngestPlan or to the markup changes it.
 // That is what the golden tests in the format packages pin, so a behaviour
 // change cannot ship without the version bump that tells an existing library
 // it is outdated (stale.go).
@@ -25,10 +25,10 @@ import (
 // Hashed, in order: the meta table minus what varies between two identical
 // builds (identity, timestamps, the source's location on disk, the version
 // stamps themselves, the body encoding); every entry with its aliases and its
-// DECODED article; and the full-text and trigram indexes as (term, row,
-// column, offset) instances, read through fts5vocab since both are
-// contentless. Page layout, rowid gaps inside SQLite, compression and
-// statistics are not content and are not hashed.
+// DECODED article; and the full-text index as (term, row, column, offset)
+// instances, read through fts5vocab since it is contentless. Page layout,
+// rowid gaps inside SQLite, compression and statistics are not content and
+// are not hashed.
 func Fingerprint(textDB string) (string, error) {
 	m, schema, err := ReadMetaSchema(textDB)
 	if err != nil {
@@ -78,14 +78,9 @@ func Fingerprint(textDB string) (string, error) {
 		return "", err
 	}
 
-	for _, fts := range []string{"entry_fts", "entry_trigram"} {
-		if fts == "entry_trigram" && !s.hasTrigram {
-			continue
-		}
-		field(fts)
-		if err := hashVocab(s, fts, field); err != nil {
-			return "", fmt.Errorf("%s: %s: %w", textDB, fts, err)
-		}
+	field("entry_fts")
+	if err := hashVocab(s, "entry_fts", field); err != nil {
+		return "", fmt.Errorf("%s: entry_fts: %w", textDB, err)
 	}
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
@@ -98,7 +93,7 @@ func volatileMeta(k string) bool {
 	switch k {
 	case "dict_uuid", "created", "source_path", "source_size", "source_mtime",
 		"source_sha256_1M", "body_encoding",
-		"ingest_version", "reader_version", "markup_version", "fold_version":
+		"ingest_version", "reader_version", "markup_version":
 		return true
 	}
 	return strings.HasSuffix(k, "_path") || strings.HasSuffix(k, "_mtime")

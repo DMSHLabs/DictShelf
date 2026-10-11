@@ -30,7 +30,9 @@ func writeReceipt(t *testing.T, dir, info string) string {
 }
 
 // TestReceiptMetaReadsACompleteReceipt: the library listing answers from the
-// receipt alone - no SQLite - for any folder WriteInfo has regenerated.
+// receipt alone - no SQLite - for any folder WriteInfo has regenerated. The
+// `contains` lines are what receipts written before D170 carry; they are
+// read past.
 func TestReceiptMetaReadsACompleteReceipt(t *testing.T) {
 	dir := t.TempDir()
 	info := "# wudict - prepared dictionary\n" +
@@ -48,7 +50,6 @@ func TestReceiptMetaReadsACompleteReceipt(t *testing.T) {
 	want := map[string]string{
 		"name":         "AHD5",
 		"format":       "mdx",
-		"has_trigram":  "1",
 		"ingest_level": levelText,
 		"source_path":  `D:\dicts\ahd5.mdx`,
 		"created":      "2026-01-02T03:04:05Z",
@@ -62,25 +63,24 @@ func TestReceiptMetaReadsACompleteReceipt(t *testing.T) {
 	// The headwords level reads back as exactly the enum, so the listing's
 	// FullText test keeps working off the receipt.
 	dir = t.TempDir()
-	info = "name = Old\nformat = slob\nentries = 12\ncontains = 0\n" +
-		"index = headwords only (exact · prefix · contains)\n" +
+	info = "name = Old\nformat = slob\nentries = 12\n" +
+		"index = headwords only (exact · prefix)\n" +
 		"source = /dicts/old.slob\nimported = 2026-02-03T04:05:06Z\n"
-	if meta, ok = receiptMeta(dir, writeReceipt(t, dir, info)); !ok || meta["ingest_level"] != levelHeadwords ||
-		meta["has_trigram"] != "0" {
+	if meta, ok = receiptMeta(dir, writeReceipt(t, dir, info)); !ok || meta["ingest_level"] != levelHeadwords {
 		t.Fatalf("headwords receipt = %v ok %v", meta, ok)
 	}
 }
 
-// TestReceiptMetaFallsBackOnMissingFields: a receipt from before `contains`
-// was written - and no receipt at all - both report false, which is the
+// TestReceiptMetaFallsBackOnMissingFields: a receipt missing a field the
+// listing needs - and no receipt at all - both report false, which is the
 // caller's cue to read the meta table the slow way.
 func TestReceiptMetaFallsBackOnMissingFields(t *testing.T) {
 	dir := t.TempDir()
 	info := "name = Old\nformat = slob\n" +
-		"index = headwords only (exact · prefix · contains)\n" +
+		"index = headwords only (exact · prefix)\n" +
 		"source = /dicts/old.slob\nimported = 2026-02-03T04:05:06Z\n"
 	if _, ok := receiptMeta(dir, writeReceipt(t, dir, info)); ok {
-		t.Fatal("a receipt without contains was accepted")
+		t.Fatal("a receipt without entries was accepted")
 	}
 	dir = t.TempDir()
 	textDB := writeReceipt(t, dir, "")
@@ -98,8 +98,8 @@ func TestReceiptMetaFallsBackOnMissingFields(t *testing.T) {
 // is gone is not listed at all - the receipt alone would enrol a database that
 // cannot be opened.
 func TestReceiptMetaRefusesWhatReadMetaWould(t *testing.T) {
-	info := "name = X\nformat = mdx\nentries = 1\ncontains = 0\n" +
-		"index = headwords only (exact · prefix · contains)\n" +
+	info := "name = X\nformat = mdx\nentries = 1\n" +
+		"index = headwords only (exact · prefix)\n" +
 		"source = /d/x.mdx\nimported = 2026-02-03T04:05:06Z\n"
 
 	dir := t.TempDir()

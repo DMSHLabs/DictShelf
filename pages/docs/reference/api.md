@@ -101,6 +101,11 @@ A `hit` may carry one of these instead of results:
 | `error` | this dictionary failed; the others still answer |
 
 A search ends after 30 seconds. `mode=fuzzy` is read as `prefix`.
+`mode=contains` is answered with status 400: search for `*word*` with
+`mode=wildcard`.
+`mode=wildcard` reads `q` as a pattern ([Wildcard syntax](wildcard-syntax.md));
+write `?` in it as `%3F`. A pattern longer than 64 characters is answered
+with status 400.
 
 ### Article formats
 
@@ -118,14 +123,28 @@ articles with the dictionaries' own stylesheets.
 
 ``` json title="GET /api/dicts"
 {"t":"begin","total":2}
-{"t":"dict","dict":{"id":"oxford","name":"Oxford Advanced Learner's","format":"mdx","path":"/Users/me/Dictionaries/oald.mdx","entries":184000,"caps":{"Exact":true,"Prefix":true,"Contains":false,"FTS":false}}}
+{"t":"dict","dict":{"id":"oxford","name":"Oxford Advanced Learner's","format":"mdx","path":"/Users/me/Dictionaries/oald.mdx","entries":184000,"caps":{"Exact":true,"Prefix":true,"FTS":false,"Wildcard":false}}}
 {"t":"end"}
 ```
 
 `total` is sent first, before any dictionary is opened. `id` is the value for
-`dict` in `/api/search`. `caps` lists the supported modes: `Contains` and `FTS`
-are true once the dictionary has the contains or full-text index. The other
-fields (files, library folder, sizes) are listed in the OpenAPI document.
+`dict` in `/api/search`. `caps` lists the supported modes: `FTS` is true once
+the dictionary has the full-text index, `Wildcard` once it is indexed. The
+other fields (files, library folder, sizes) are listed in the OpenAPI
+document.
+
+A dictionary that takes 10 seconds or more is named in a `busy` line, sent
+every second until its `dict` line arrives:
+
+``` json
+{"t":"busy","busy":[{"id":"9f3c","name":"wiktionary_es","phase":"unpacking","done":640000000,"total":1164332795}]}
+```
+
+`phase` is `unpacking` (bytes of text; `total` is an estimate) or `indexing`
+(entries), and is absent when the dictionary does not report one. A DSL,
+Babylon or wudict markdown dictionary is indexed when it is first opened, and
+again after its files change. A `busy` line can name a dictionary whose `dict` line has already arrived: ignore that
+name.
 
 ``` sh
 curl -s http://127.0.0.1:6888/api/dicts | jq

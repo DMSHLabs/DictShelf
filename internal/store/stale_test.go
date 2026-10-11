@@ -122,7 +122,7 @@ func TestRebuildKeepsUUIDAndMedia(t *testing.T) {
 	src := writeSrc(t, filepath.Join(t.TempDir(), "s.mdx"), "source bytes")
 	dir := t.TempDir()
 	textDB := filepath.Join(dir, TextDBName)
-	ingestSrc(t, src, textDB, Plan{FullText: true, Contains: true})
+	ingestSrc(t, src, textDB, Plan{FullText: true})
 	uuid, _ := ReadMetaValue(textDB, "dict_uuid")
 	if err := IngestMedia(&mediaSrc{}, []string{"a.png"}, filepath.Join(dir, MediaDBName), uuid, nil); err != nil {
 		t.Fatal(err)
@@ -130,7 +130,7 @@ func TestRebuildKeepsUUIDAndMedia(t *testing.T) {
 	if !MediaPaired(textDB) {
 		t.Fatal("freshly packed media not paired")
 	}
-	if got := KeptPlan(textDB); got != (Plan{FullText: true, Contains: true}) {
+	if got := KeptPlan(textDB); got != (Plan{FullText: true}) {
 		t.Errorf("KeptPlan = %+v", got)
 	}
 
@@ -214,7 +214,7 @@ func TestFingerprint(t *testing.T) {
 		{Headwords: []string{"beta", "bet"}, Body: "<p>three</p>", Kind: dict.BodyHTML},
 		{Headwords: []string{"gamma"}, LinkTo: "alpha"},
 	}
-	full := Plan{FullText: true, Contains: true}
+	full := Plan{FullText: true}
 	a := build("/one/place/x.mdx", full, base)
 	if b := build("/another/place/x.mdx", full, base); a != b {
 		t.Error("same content, different location/uuid/time: fingerprints differ")
@@ -224,10 +224,7 @@ func TestFingerprint(t *testing.T) {
 	if a == build("/one/place/x.mdx", full, changed) {
 		t.Error("a changed article left the fingerprint unchanged")
 	}
-	if a == build("/one/place/x.mdx", Plan{FullText: true}, base) {
-		t.Error("dropping the trigram index left the fingerprint unchanged")
-	}
-	if a == build("/one/place/x.mdx", Plan{Contains: true}, base) {
+	if a == build("/one/place/x.mdx", Plan{}, base) {
 		t.Error("dropping full text left the fingerprint unchanged")
 	}
 }

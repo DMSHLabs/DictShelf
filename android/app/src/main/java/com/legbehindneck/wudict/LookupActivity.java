@@ -310,8 +310,8 @@ public class LookupActivity extends Activity {
         switch (m) {
             case "exact":
             case "prefix":
-            case "contains":
             case "fts":
+            case "wildcard":
                 return m;
             default:
                 return null; // leave the page on its own default

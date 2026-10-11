@@ -124,8 +124,7 @@ Index each dictionary's headwords in the background on its first search.
 | Default | `on` |
 
 `off`: dictionaries stay not indexed and are searched through their own format.
-The contains index, full-text index and media pack are per-dictionary choices
-either way.
+The full-text index and media pack are per-dictionary choices either way.
 
 [The library](../dictionaries/library.md){ .md-button }
 

@@ -193,7 +193,7 @@ func TestDictsReconcileInvalidates(t *testing.T) {
 	s, row, tag := settled(t)
 	e, _ := s.reg.get(row.ID)
 	before := e.gen.Load()
-	sse(t, s, "/api/ingest?dict="+row.ID+"&contains=1")
+	sse(t, s, "/api/ingest?dict="+row.ID+"&fts=1")
 	if e.gen.Load() == before {
 		t.Fatal("a reconcile did not move gen")
 	}

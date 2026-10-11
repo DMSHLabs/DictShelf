@@ -65,6 +65,7 @@ nav = [
     "reference/configuration.md",
     "reference/cli.md",
     "reference/fts-syntax.md",
+    "reference/wildcard-syntax.md",
     "reference/api.md",
     "reference/text-db.md",
     "reference/building.md",

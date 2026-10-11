@@ -34,8 +34,8 @@ func TestIngestConfiguredLibrary(t *testing.T) {
 		}
 		return p
 	}
-	withContains, headwordsOnly := src("WithContains"), src("HeadwordsOnly")
-	if err := cmdIngest([]string{"-contains", withContains}); err != nil {
+	withFullText, headwordsOnly := src("WithFullText"), src("HeadwordsOnly")
+	if err := cmdIngest([]string{"-fulltext", withFullText}); err != nil {
 		t.Fatal(err)
 	}
 	if err := cmdIngest([]string{"-headwords", headwordsOnly}); err != nil {
@@ -59,7 +59,7 @@ func TestIngestConfiguredLibrary(t *testing.T) {
 		}
 		return v
 	}
-	before := map[string]string{withContains: uuid(withContains), headwordsOnly: uuid(headwordsOnly)}
+	before := map[string]string{withFullText: uuid(withFullText), headwordsOnly: uuid(headwordsOnly)}
 
 	if err := cmdIngest(nil); err != nil {
 		t.Fatalf("no path: %v", err)
@@ -68,7 +68,7 @@ func TestIngestConfiguredLibrary(t *testing.T) {
 		path string
 		want store.Plan
 	}{
-		{withContains, store.Plan{Contains: true}},
+		{withFullText, store.Plan{FullText: true}},
 		{headwordsOnly, store.Plan{}},
 		{fresh, store.Plan{}},
 	} {
@@ -82,17 +82,17 @@ func TestIngestConfiguredLibrary(t *testing.T) {
 		}
 	}
 
-	if err := cmdIngest([]string{"-contains=false"}); err != nil {
+	if err := cmdIngest([]string{"-fulltext=false"}); err != nil {
 		t.Fatal(err)
 	}
-	if got := store.KeptPlan(textDB(withContains)); got != (store.Plan{}) {
-		t.Errorf("-contains=false: %+v, want contains dropped", got)
+	if got := store.KeptPlan(textDB(withFullText)); got != (store.Plan{}) {
+		t.Errorf("-fulltext=false: %+v, want full text dropped", got)
 	}
 	if got := store.KeptPlan(textDB(headwordsOnly)); got != (store.Plan{}) {
-		t.Errorf("-contains=false: %+v, want headwords only kept", got)
+		t.Errorf("-fulltext=false: %+v, want headwords only kept", got)
 	}
 
-	// -fulltext adds full text, and leaves contains as it is
+	// -fulltext on one file adds full text to that one
 	if err := cmdIngest([]string{"-fulltext", fresh}); err != nil {
 		t.Fatal(err)
 	}
@@ -107,7 +107,7 @@ func TestIngestConfiguredLibrary(t *testing.T) {
 	}{
 		{"-o without a file", []string{"-o", filepath.Join(home, "x.db")}, "-o needs"},
 		{"-o with a folder", []string{"-o", filepath.Join(home, "x.db"), srcDir}, "-o names"},
-		{"-o with two files", []string{"-o", filepath.Join(home, "x.db"), withContains, fresh}, "-o names"},
+		{"-o with two files", []string{"-o", filepath.Join(home, "x.db"), withFullText, fresh}, "-o names"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			err := cmdIngest(tc.args)

@@ -45,9 +45,6 @@ CREATE INDEX idx_alias_w ON alias(w COLLATE NOCASE);
 CREATE VIRTUAL TABLE entry_fts USING fts5(    -- rowid = entry.id
     w, txt, content='', columnsize=0,
     tokenize='unicode61 remove_diacritics 2');
-
-CREATE VIRTUAL TABLE entry_trigram USING fts5(-- only with the contains index
-    w, content='', columnsize=0, tokenize='trigram');
 ```
 
 `entry` holds the whole dictionary. The other tables are indexes and can be
@@ -94,24 +91,19 @@ off for dictionaries indexed afterwards; reading handles both forms.
   points at an existing `entry.id`, never at another alias.
 - A headword beginning with **`@`** (`@examples_woman`) is an MDict-style
   **sub-entry**: a fragment an article pulls in by link, never a word. It stays
-  reachable by exact lookup, is excluded from browsing and contains search,
+  reachable by exact lookup, is excluded from browsing and wildcard search,
   and is *not* counted in `meta.entry_count` (`meta.sub_entries` counts them).
   Exporters should normally skip `w LIKE '@_%'`.
 
-### The search indexes
+### The search index
 
-Both FTS5 tables are **contentless** (`content=''`) and keyed by
-`rowid = entry.id`; they hold no text that needs exporting.
+`entry_fts` is **contentless** (`content=''`) and keyed by
+`rowid = entry.id`; it holds no text that needs exporting.
 
 | Table | Column | Holds | Present when |
 | --- | --- | --- | --- |
 | `entry_fts` | `w` | the headword | always |
 | `entry_fts` | `txt` | the article with tags stripped | with the full-text index; otherwise `''` |
-| `entry_trigram` | `w` | the **folded** headword | with the contains index |
-
-*Folded* means lowercased, NFD-normalised, with combining marks dropped — so
-`Café` is indexed as `cafe`. `meta.fold_version` records the rules used; a
-mismatch marks the contains index outdated and does not affect the articles.
 
 `entry_fts` exists in every `text.db`: accent-insensitive exact and prefix
 lookup use it.
@@ -129,13 +121,12 @@ treated as empty rather than as an error.
 | `entry_count` | Entries excluding sub-entries |
 | `sub_entries` | How many `@`-prefixed fragments there are |
 | `ingest_level` | `text` = article text is indexed, `headwords` = only headwords |
-| `has_trigram` | `1` when `entry_trigram` was built (still feature-detect the table) |
 | `body_encoding` | `deflate` or `plain` — a note for humans; the read path decides per row |
 | `dict_uuid` | 32 hex characters; what pairs this file with its `media.db` |
 | `index_lang`, `contents_lang` | Languages, only when the source declared them |
 | `source_path`, `source_size`, `source_mtime`, `source_sha256_1M` | The dictionary file it was indexed from, for detecting changes |
 | `created` | RFC 3339, UTC |
-| `fold_version`, `markup_version` | Which text-folding and article-markup rules built this file |
+| `markup_version` | Which article-markup rules built this file |
 
 `name` and `description` are HTML-unescaped on the way out, so a title stored
 as `A &amp; B` displays as `A & B`.
@@ -215,7 +206,6 @@ Requirements:
       dictionary; leave `entry_fts.txt` as `''` when you do not index text.
 - [x] Create both indexes exactly as shown, with **`COLLATE NOCASE`**; otherwise
       SQLite does not use them and every lookup scans the table.
-- [x] `entry_trigram` stores the *folded* headword, not the raw one.
 - [x] Bodies may be stored uncompressed.
 - [x] Set `meta.name` and `meta.description`: they are the title and the
       *About this dictionary* text.
@@ -232,12 +222,12 @@ them.
 
 ## Compatibility
 
-- `user_version` stays at 1. Tables have been added without changing it
-  (`entry_trigram`); check that a table exists before using it:
-  `SELECT count(*) FROM sqlite_master WHERE type='table' AND name='entry_trigram'`.
+- `user_version` stays at 1. A `text.db` written by an older wudict can also
+  hold an `entry_trigram` table and the `meta` keys `has_trigram` and
+  `fold_version`. wudict no longer reads them.
 - Unknown `meta` keys are ignored, so you can add your own.
 - A database without an optional index opens with fewer search modes.
-- FTS5 is required: an SQLite build without it cannot open a `text.db`. The trigram tokenizer needs SQLite 3.34 or newer.
+- FTS5 is required: an SQLite build without it cannot open a `text.db`.
 
 [The library](../dictionaries/library.md){ .md-button }
 [CLI reference](cli.md){ .md-button }

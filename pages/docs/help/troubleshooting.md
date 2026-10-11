@@ -93,12 +93,16 @@ and did not open the remaining dictionaries that are not indexed. Choose one of
 them in the picker to search it alone. The limit is off by default on the
 desktop and on by default on Android.
 
-## Contains search misses a headword
+## Wildcard search misses a headword
 
-- Contains matches the query as a literal substring, ignoring case and
-  accents; it does not correct spelling.
-- The contains index is outdated: its switch in the dictionary panel says so.
-  Click it to rebuild the index.
+- A pattern matches the whole headword: `rain` finds only *rain*, `*rain*`
+  finds every headword that contains *rain*.
+- A pattern with a capital letter matches case and accents as typed: `Cafe`
+  does not find *café*. Write it in lowercase to ignore them.
+- Wildcard matches the headword an entry is filed under, not the other
+  spellings the dictionary lists for it. Exact and prefix find those.
+- A dictionary that is not indexed yet is not searched; its result section
+  offers to add the headword index.
 
 ## The library uses too much disk space
 

@@ -441,7 +441,6 @@ type LibEntry struct {
 	SourceExists bool   `json:"sourceExists"`
 	Entries      int    `json:"entries"`
 	FullText     bool   `json:"fullText"`
-	Contains     bool   `json:"contains"`
 	Media        bool   `json:"media"`
 	Size         int64  `json:"size"`
 	Created      string `json:"created,omitempty"`
@@ -486,7 +485,6 @@ func Library() ([]LibEntry, error) {
 			Format:   meta["format"],
 			Source:   meta["source_path"],
 			FullText: plan.FullText,
-			Contains: plan.Contains,
 			Created:  meta["created"],
 		}
 		if e.Name == "" {
@@ -608,16 +606,11 @@ func writeInfo(dir, source string) error {
 	// Machine-read as well as human-read: the library listing takes this file
 	// as its fast source, so the level is spelled both ways here.
 	plan := PlanFromMeta(meta)
-	level := "headwords only (exact · prefix)"
+	level := "headwords only (exact · prefix · wildcard)"
 	if plan.FullText {
-		level = "full text (exact · prefix · full-text)"
-	}
-	contains := "0"
-	if plan.Contains {
-		contains = "1"
+		level = "full text (exact · prefix · wildcard · full-text)"
 	}
 	fmt.Fprintf(&b, "index = %s\n", level)
-	fmt.Fprintf(&b, "contains = %s\n", contains)
 	fmt.Fprintf(&b, "media = %s\n", media)
 	if l := meta["index_lang"]; l != "" {
 		// Only ever what the source declared, so this line is a fact about the
@@ -668,8 +661,8 @@ func readInfo(path string) (map[string]string, error) {
 // regenerated after every ingest and pack, but that write is best-effort, so it
 // is trusted only while it is at least as new as the text.db it describes; a
 // text.db that is gone is not listed at all, as with ReadMeta. ok is false when
-// the receipt is missing, stale, or predates a field the listing needs
-// (receipts written before `contains` existed): the caller falls back.
+// the receipt is missing, stale, or lacks a field the listing needs: the
+// caller falls back.
 func receiptMeta(dir, textDB string) (map[string]string, bool) {
 	db, err := os.Stat(textDB)
 	if err != nil {
@@ -694,7 +687,6 @@ func receiptMeta(dir, textDB string) (map[string]string, bool) {
 		"entry_count":  info["entries"],
 		"source_path":  info["source"],
 		"ingest_level": level,
-		"has_trigram":  info["contains"],
 		"created":      info["imported"],
 	}
 	for _, v := range out {

@@ -187,8 +187,8 @@ func TestOpenAutoIngestAndLookup(t *testing.T) {
 	if c := d.Caps(); !c.Exact || !c.Prefix {
 		t.Errorf("bgl must be searchable after auto-preparation: %+v", c)
 	}
-	if c := d.Caps(); c.FTS || c.Contains {
-		t.Errorf("bgl must not build the opt-in indexes by itself: %+v", c)
+	if c := d.Caps(); c.FTS {
+		t.Errorf("bgl must not build the opt-in index by itself: %+v", c)
 	}
 	if res, err := d.Exact("apple", 5); err != nil || len(res) != 1 || res[0].Body != "<b>a fruit</b>" {
 		t.Fatalf("exact apple: %v %v", res, err)

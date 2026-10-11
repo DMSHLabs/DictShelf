@@ -12,6 +12,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -294,21 +295,20 @@ func TestDictsAndSearch(t *testing.T) {
 	if !dicts[0].Caps.Prefix || dicts[0].DBPath == "" {
 		t.Errorf("caps/dbpath: %+v", dicts[0])
 	}
-	if dicts[0].Caps.FTS || dicts[0].Caps.Contains {
-		t.Errorf("preparing a DSL must not build the opt-in indexes: %+v", dicts[0].Caps)
+	if dicts[0].Caps.FTS {
+		t.Errorf("preparing a DSL must not build the opt-in index: %+v", dicts[0].Caps)
 	}
 	id := dicts[0].ID
 
-	// contains is opt-in: skipped until asked for, then it works. (A trigram
-	// index costs about as much as the whole rest of the index.)
-	hits := searchStream(t, s, "/api/search?q=razon&mode=contains&dict="+id)
-	if len(hits) != 1 || !hits[0].Skipped {
-		t.Fatalf("contains should be unavailable until enabled: %+v", hits)
-	}
-	sse(t, s, "/api/ingest?dict="+id+"&contains=1")
-	hits = searchStream(t, s, "/api/search?q=razon&mode=contains&dict="+id)
+	// a substring is a wildcard on the headword index, with nothing to enable
+	hits := searchStream(t, s, "/api/search?q=*razon*&mode=wildcard&dict="+id)
 	if len(hits) != 1 || len(hits[0].Results) != 1 || hits[0].Results[0].Headword != "corazón" {
-		t.Fatalf("contains hits after enabling: %+v", hits)
+		t.Fatalf("*razon*: %+v", hits)
+	}
+	// full text is opt-in: skipped until asked for, then it works
+	hits = searchStream(t, s, "/api/search?q=vivienda&mode=fts&dict="+id)
+	if len(hits) != 1 || !hits[0].Skipped {
+		t.Fatalf("full text should be unavailable until enabled: %+v", hits)
 	}
 	sse(t, s, "/api/ingest?dict="+id+"&fts=1")
 	hits = searchStream(t, s, "/api/search?q=vivienda&mode=fts&dict=all")
@@ -316,11 +316,47 @@ func TestDictsAndSearch(t *testing.T) {
 		t.Fatalf("fts hits: %+v", hits)
 	}
 
-	if rec := getJSON(t, s, "/api/search?mode=contains", nil); rec.Code != 400 {
+	if rec := getJSON(t, s, "/api/search?mode=prefix", nil); rec.Code != 400 {
 		t.Errorf("missing q: %d", rec.Code)
 	}
-	if rec := getJSON(t, s, "/api/search?q=x&mode=bogus", nil); rec.Code != 400 {
-		t.Errorf("bad mode: %d", rec.Code)
+	for _, mode := range []string{"bogus", "contains"} { // contains: retired, D170
+		if rec := getJSON(t, s, "/api/search?q=x&mode="+mode, nil); rec.Code != 400 {
+			t.Errorf("mode %s: %d, want 400", mode, rec.Code)
+		}
+	}
+}
+
+// TestSearchWildcard: wildcard search needs only the headword index, so a
+// dictionary answers it as soon as it is indexed, with no switch to turn on.
+func TestSearchWildcard(t *testing.T) {
+	s := newTestServer(t)
+	dicts := getDicts(t, s, "/api/dicts")
+	if len(dicts) != 1 || !dicts[0].Caps.Wildcard {
+		t.Fatalf("an indexed dictionary must offer wildcard search: %+v", dicts)
+	}
+	id := dicts[0].ID
+	for _, tc := range []struct{ q, want string }{
+		{"coraz?n", "corazón"}, // accents ignored
+		{"*sa", "casa"},
+		{"c*", "casa"}, // browse order: casa before corazón
+		{"casa", "casa"},
+		{"CASA", ""}, // a capital letter: matched as typed
+		{"cas", ""},  // the whole headword
+	} {
+		hits := searchStream(t, s, "/api/search?mode=wildcard&dict="+id+"&q="+url.QueryEscape(tc.q))
+		if len(hits) != 1 || hits[0].Skipped || hits[0].Error != "" {
+			t.Fatalf("%q: %+v", tc.q, hits)
+		}
+		got := ""
+		if len(hits[0].Results) > 0 {
+			got = hits[0].Results[0].Headword
+		}
+		if got != tc.want {
+			t.Errorf("%q: first result %q, want %q", tc.q, got, tc.want)
+		}
+	}
+	if rec := getJSON(t, s, "/api/search?mode=wildcard&q="+strings.Repeat("a", 65), nil); rec.Code != 400 {
+		t.Errorf("a 65-character pattern: status %d, want 400", rec.Code)
 	}
 }
 
@@ -379,10 +415,10 @@ func init() {
 	dict.RegisterReader(".fake", func(p string) (dict.Reader, error) { return &fakeReader{words: words, path: p}, nil })
 }
 
-// TestAutoIndexOnFirstSearch: a direct-only dictionary (no contains) must gain
-// an index in the background the first time it is searched, so a later
-// contains query - including accent-folded - succeeds without any explicit
-// "enable" step.
+// TestAutoIndexOnFirstSearch: a direct-only dictionary (no wildcard) must
+// gain an index in the background the first time it is searched, so a later
+// query - including accent-folded - succeeds without any explicit "enable"
+// step.
 func TestAutoIndexOnFirstSearch(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "x.fake"), []byte("x"), 0o644); err != nil {
@@ -398,8 +434,8 @@ func TestAutoIndexOnFirstSearch(t *testing.T) {
 
 	dicts := getDicts(t, s, "/api/dicts")
 	id := dicts[0].ID
-	if dicts[0].Caps.Contains {
-		t.Fatalf("fake dict should start without contains: %+v", dicts[0])
+	if dicts[0].Caps.Wildcard {
+		t.Fatalf("fake dict should start without wildcard: %+v", dicts[0])
 	}
 
 	// first search (prefix) triggers the background index build
@@ -419,10 +455,10 @@ func TestAutoIndexOnFirstSearch(t *testing.T) {
 	if len(hits) != 1 || hits[0].Skipped || len(hits[0].Results) != 1 || hits[0].Results[0].Headword != "córazon" {
 		t.Fatalf("auto-index did not become available: %+v", hits)
 	}
-	// and it built the cheap index only - contains stays off until asked for
+	// and it built the cheap index only - full text stays off until asked for
 	dicts2 := getDicts(t, s, "/api/dicts")
-	if dicts2[0].Caps.Contains {
-		t.Error("auto-index must not build a trigram index")
+	if c := dicts2[0].Caps; !c.Wildcard || c.FTS {
+		t.Errorf("auto-index must build the headword index only: %+v", c)
 	}
 }
 

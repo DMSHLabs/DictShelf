@@ -42,6 +42,7 @@ import (
 	"github.com/wuweidict/wudict/internal/search"
 	"github.com/wuweidict/wudict/internal/speex"
 	"github.com/wuweidict/wudict/internal/store"
+	"github.com/wuweidict/wudict/internal/wildcard"
 )
 
 //go:embed web/index.html
@@ -109,7 +110,7 @@ type Server struct {
 
 	// indexOnce caches the substitutions index.html needs that never change
 	// after startup ({{VERSION}} in the About box, the {{FRAMEJS}}, {{PICKJS}} and {{SPEAKJS}} hashes,
-	// {{ARTCSS}}).
+	// {{ARTCSS}}, {{PREFSV}}).
 	// Version is assigned after the Server is built, so this cannot be done at
 	// embed time; doing it per request would re-copy the whole page on every
 	// load. {{USERCSS}} is deliberately left standing here - see pageFor.
@@ -167,8 +168,8 @@ type Server struct {
 	// AutoIndex, when true (config AUTO_INDEX=on, the default), prepares a
 	// dictionary's headword index the first time it is searched - silently,
 	// in the background - so accent-insensitive search works on the next
-	// query without the user ever asking. The heavier indexes (contains,
-	// full-text) and media stay opt-in per dictionary.
+	// query without the user ever asking. The full-text index and media stay
+	// opt-in per dictionary.
 	AutoIndex bool
 
 	// BrowserExtensions optionally pins which extension origins may read the
@@ -417,6 +418,8 @@ func (s *Server) basePage() []byte {
 		page = strings.ReplaceAll(page, "{{FRAMEJS}}", assetTag(frameJS))
 		page = strings.ReplaceAll(page, "{{PICKJS}}", assetTag(pickJS))
 		page = strings.ReplaceAll(page, "{{SPEAKJS}}", assetTag(speakJS))
+		// the state.json format the page writes its lists in (handleSavePrefs)
+		page = strings.ReplaceAll(page, "{{PREFSV}}", strconv.Itoa(prefsVersion))
 		// The role stylesheet for articles wudict writes itself
 		// (internal/artmark). It is a floor under BOTH article surfaces, so
 		// it is substituted once here and index.html hands it to the shadow
@@ -674,7 +677,7 @@ func (s *Server) currentFeatures(e *entry) features {
 		return features{}
 	}
 	// an unpaired media.db serves nothing, so it does not count as packed
-	return features{FullText: p.Plan.FullText, Contains: p.Plan.Contains, Media: p.MediaPaired()}
+	return features{FullText: p.Plan.FullText, Media: p.MediaPaired()}
 }
 
 // dictInfo is the /api/dicts row.
@@ -688,17 +691,18 @@ type dictInfo struct {
 	DBPath  string    `json:"dbPath,omitempty"` // exposed per D7: users share these files
 	Error   string    `json:"error,omitempty"`
 
-	// ContainsStale: the trigram index was built by an older text folding, so
-	// substring search may miss words whose folding changed. Reported, not
-	// acted on - the mode keeps working, and the panel offers a rebuild.
-	ContainsStale bool `json:"containsStale,omitempty"`
-
 	// Outdated: the prepared data no longer matches what this build would
 	// prepare from the source (store.Stale) - an older build wrote it, the
 	// source changed, or it cannot be read. Reported, never acted on: the
 	// panel sums these into one Rebuild the user starts (reindex.go). Never
 	// set for a dictionary whose source is gone, which nothing can rebuild.
 	Outdated bool `json:"outdated,omitempty"`
+
+	// TooLarge: Error is that the dictionary is too large to open on this
+	// system (dict.ErrTooLarge) - its text unpacks past its reader's bound, or
+	// past the free space to hold it. The page warns about it once, where an
+	// error in the panel would wait to be found.
+	TooLarge bool `json:"tooLarge,omitempty"`
 
 	// Groups: the derived memberships the dictionary picker offers as single
 	// choices ("English", "Encyclopedias") instead of a hundred names. Derived
@@ -736,11 +740,14 @@ type dictInfo struct {
 //
 //	{"t":"begin","total":N}   how many rows follow - known from the registry alone
 //	{"t":"dict","dict":{…}}   one resolved row, in completion order
+//	{"t":"busy","busy":[…]}   the rows pending busyAfter or longer, every busyTick
+//	                          while there are any; once more, empty, when the last lands
 //	{"t":"end","etag":"…"}    every row sent; etag when the answer may be kept
 type dictMsg struct {
 	T     string    `json:"t"`
 	Total int       `json:"total,omitempty"`
 	Dict  *dictInfo `json:"dict,omitempty"`
+	Busy  []busyRow `json:"busy,omitempty"`
 	// GroupsProblems counts what groups.ini skipped (groups.go), on "begin":
 	// a hand edit with a broken regex is otherwise invisible until someone
 	// opens the editor, so the page marks the way to it.
@@ -750,6 +757,52 @@ type dictMsg struct {
 	// answer must not be kept - a row carries an error or a running job, or
 	// what a row was derived from changed while it was derived.
 	ETag string `json:"etag,omitempty"`
+}
+
+// busyRow is a row that has kept the list waiting busyAfter or longer, and
+// what its open is doing (dict.Activity: Phase "" when the open says
+// nothing). Name is the file's (dict.Name): the row's own name is not known
+// until the open that is taking the time has finished.
+type busyRow struct {
+	ID    string `json:"id"`
+	Name  string `json:"name"`
+	Phase string `json:"phase,omitempty"`
+	Done  int64  `json:"done,omitempty"`
+	Total int64  `json:"total,omitempty"`
+}
+
+// busyAfter is how long a row may take before the stream names it and what it
+// is doing (D169): a cold open takes 0.2-1 s, a dictionary indexing itself on
+// first open minutes. busyTick is how often the names are sent again with
+// their progress. Variables for the tests.
+var (
+	busyAfter = 10 * time.Second
+	busyTick  = time.Second
+)
+
+// busyRows are the rows of pending (entry → when its derivation began) that
+// have taken busyAfter or longer by now, longest first.
+func busyRows(pending map[*entry]time.Time, now time.Time) []busyRow {
+	type slow struct {
+		e     *entry
+		since time.Time
+	}
+	var ss []slow
+	for e, t := range pending {
+		if now.Sub(t) >= busyAfter {
+			ss = append(ss, slow{e, t})
+		}
+	}
+	sort.Slice(ss, func(i, j int) bool { return ss[i].since.Before(ss[j].since) })
+	rows := make([]busyRow, 0, len(ss))
+	for _, s := range ss {
+		r := busyRow{ID: s.e.ID, Name: dict.Name(s.e.Path)}
+		if a, ok := dict.ActivityOf(s.e.Path); ok {
+			r.Phase, r.Done, r.Total = a.Phase, a.Done, a.Total
+		}
+		rows = append(rows, r)
+	}
+	return rows
 }
 
 // handleDicts streams the dictionary list as newline-delimited JSON, for the
@@ -799,6 +852,10 @@ func (s *Server) handleDicts(w http.ResponseWriter, r *http.Request) {
 
 	writeLine(dictMsg{T: "begin", Total: len(entries), GroupsProblems: problems})
 
+	// the rows being derived now, and since when: what the busy frames name
+	var pendMu sync.Mutex
+	pending := map[*entry]time.Time{}
+
 	// same width as a search fan-out, and for the same reason: this is the
 	// other place the whole library is touched at once (search.Workers)
 	sem := make(chan struct{}, search.Workers())
@@ -811,14 +868,51 @@ func (s *Server) handleDicts(w http.ResponseWriter, r *http.Request) {
 			defer wg.Done()
 			sem <- struct{}{}
 			defer func() { <-sem }()
+			pendMu.Lock()
+			pending[e] = time.Now()
+			pendMu.Unlock()
 			info, held := s.dictInfoFor(e, global, key)
+			pendMu.Lock()
+			delete(pending, e)
+			pendMu.Unlock()
 			if !held || info.Error != "" || info.Job != nil {
 				keepable.Store(false)
 			}
 			writeLine(dictMsg{T: "dict", Dict: &info})
 		}(e, keys[i])
 	}
+	// The busy frames, until every row is in. A frame snapshotted just before
+	// a row landed can follow that row on the stream; the page drops a name
+	// whose row it already has.
+	stop, stopped := make(chan struct{}), make(chan struct{})
+	go func() {
+		defer close(stopped)
+		tick := time.NewTicker(busyTick)
+		defer tick.Stop()
+		named := false
+		for {
+			select {
+			case <-stop:
+				// the last named row landed between two ticks: the empty
+				// frame the stream promises still goes out, before "end"
+				if named {
+					writeLine(dictMsg{T: "busy"})
+				}
+				return
+			case now := <-tick.C:
+				pendMu.Lock()
+				rows := busyRows(pending, now)
+				pendMu.Unlock()
+				if len(rows) > 0 || named {
+					writeLine(dictMsg{T: "busy", Busy: rows})
+				}
+				named = len(rows) > 0
+			}
+		}
+	}()
 	wg.Wait()
+	close(stop)
+	<-stopped
 	end := dictMsg{T: "end"}
 	if keepable.Load() {
 		end.ETag = tag
@@ -879,10 +973,9 @@ func (s *Server) baseDictInfo(e *entry) dictInfo {
 		ec, _ := strconv.Atoi(meta["entry_count"])
 		info := dictInfo{
 			ID: e.ID, Path: e.Path, Name: meta["name"], Format: meta["format"], Entries: ec,
-			Caps:          dict.Caps{Exact: true, Prefix: true, Contains: p.Plan.Contains, FTS: p.Plan.FullText},
-			DBPath:        p.TextDB,
-			ContainsStale: store.FoldStale(meta),
-			Outdated:      rebuildable(e.Path) && len(p.Stale(e.Path)) > 0,
+			Caps:     dict.Caps{Exact: true, Prefix: true, FTS: p.Plan.FullText, Wildcard: true},
+			DBPath:   p.TextDB,
+			Outdated: rebuildable(e.Path) && len(p.Stale(e.Path)) > 0,
 		}
 		s.langFacts(&info, meta["name"], meta["index_lang"], meta["contents_lang"])
 		return info
@@ -905,14 +998,12 @@ func (s *Server) baseDictInfo(e *entry) dictInfo {
 	d, err := e.open()
 	if err != nil {
 		info.Error = err.Error()
+		info.TooLarge = errors.Is(err, dict.ErrTooLarge)
 		return info
 	}
 	m := d.Meta()
 	info.Name, info.Format, info.Entries, info.Caps = m.Name, m.Format, m.EntryCount, d.Caps()
 	s.langFacts(&info, m.Name, m.IndexLang, m.ContentsLang)
-	if cs, ok := d.(interface{ ContainsStale() bool }); ok {
-		info.ContainsStale = cs.ContainsStale()
-	}
 	if textDB, ok := validPrepared(e.Path); ok {
 		info.DBPath = textDB
 	}
@@ -1011,6 +1102,7 @@ func addProvenance(info *dictInfo, entryPath string) {
 }
 
 func (s *Server) handleRescan(w http.ResponseWriter, r *http.Request) {
+	s.reg.ForgetFailures()
 	if err := s.reg.Rescan(); err != nil {
 		httpErr(w, 500, "rescan: %v", err)
 		return
@@ -1171,6 +1263,14 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 400, "%v", err)
 		return
 	}
+	// A pattern that cannot be read is one 400 here, before the stream: every
+	// dictionary would otherwise report the same error in its own slot.
+	if mode == search.Wildcard {
+		if _, err := wildcard.Parse(q); err != nil {
+			httpErr(w, 400, "%v", err)
+			return
+		}
+	}
 	format, err := parseFormat(r.URL.Query().Get("format"))
 	if err != nil {
 		httpErr(w, 400, "%v", err)
@@ -1185,7 +1285,7 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 	// article's own bytes, unchanged - which is what makes "on by default in
 	// the UI" (the SPA sends hl=1 from its remembered preference) and "off by
 	// default for everyone else" the same rule rather than two. And only in
-	// full-text mode: in exact, prefix or contains the match IS the headword
+	// full-text mode: in exact, prefix or wildcard the match IS the headword
 	// the reader clicked, and marking it inside the article would mark the
 	// word they are already looking at, on every line it appears (D102).
 	hl, _ := queryFlag(r.URL.Query(), "hl")
@@ -1416,6 +1516,11 @@ func (s *Server) lemmaWave(
 	// One word only. A phrase has no single lemma, and lemmatizing a token of
 	// it would answer a question nobody asked.
 	if !s.Morph.Enabled() || strings.ContainsAny(q, " \t\r\n") {
+		return
+	}
+	// A wildcard pattern names no word to lemmatize. A wildcard query without
+	// `*` or `?` is a word, and is lemmatized as in every other mode.
+	if mode == search.Wildcard && wildcard.HasWildcards(q) {
 		return
 	}
 	byLang := map[string][]int{}
@@ -1860,8 +1965,8 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 404, "%v", err)
 		return
 	}
-	// The panel sends the state it wants, not a verb: contains/fts/media each
-	// on or off. A parameter left out keeps whatever that feature is now, so a
+	// The panel sends the state it wants, not a verb: fts and media each on
+	// or off. A parameter left out keeps whatever that feature is now, so a
 	// caller toggling one thing cannot accidentally strip another - and a
 	// request naming none prepares an unprepared dictionary at the cheapest
 	// level, which is the panel's index chip.
@@ -1870,7 +1975,7 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 	for _, f := range []struct {
 		name string
 		to   *bool
-	}{{"contains", &want.Contains}, {"fts", &want.FullText}, {"media", &want.Media}} {
+	}{{"fts", &want.FullText}, {"media", &want.Media}} {
 		if on, sent := queryFlag(q, f.name); sent {
 			*f.to = on
 		}

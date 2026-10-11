@@ -5,6 +5,7 @@
 package store
 
 import (
+	"database/sql"
 	"os"
 	"path/filepath"
 	"slices"
@@ -15,6 +16,21 @@ import (
 	"github.com/wuweidict/wudict/internal/dict"
 	"github.com/wuweidict/wudict/internal/fsx"
 )
+
+// hasTable reports whether dbPath has a table named name.
+func hasTable(t *testing.T, dbPath, name string) bool {
+	t.Helper()
+	db, err := sql.Open(driverName, dsnIngest(dbPath))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	var n int
+	if err := db.QueryRow("SELECT count(*) FROM sqlite_master WHERE name = ?", name).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	return n > 0
+}
 
 // listingSrc is a source with one packable resource.
 type listingSrc struct{ mediaSrc }
@@ -43,7 +59,7 @@ func reconcileHooks(src string, media dict.Dictionary, reads *int) Hooks {
 func TestReconcile(t *testing.T) {
 	t.Setenv("WUDICT_DB_DIR", t.TempDir())
 	src := writeSrc(t, filepath.Join(t.TempDir(), "s.mdx"), "source bytes")
-	yes, no := true, false
+	yes := true
 	reads := 0
 	hooks := reconcileHooks(src, listingSrc{}, &reads)
 	run := func(tgt Target) Outcome {
@@ -66,13 +82,21 @@ func TestReconcile(t *testing.T) {
 		t.Errorf("current, nothing asked: %+v, want nothing done", out)
 	}
 
-	out = run(Target{Contains: &yes})
-	if !out.Rebuilt || out.Plan != (Plan{Contains: true}) {
-		t.Errorf("-contains: %+v", out)
+	// A contains index from before D170 is no reason to rebuild; the next
+	// rebuild for any other reason writes a file without it.
+	addRetiredTrigram(t, out.TextDB)
+	if out = run(Target{Rebuild: IfOutdated}); out.Changed() {
+		t.Errorf("retired trigram, IfOutdated: %+v, want nothing done", out)
 	}
 	out = run(Target{FullText: &yes})
-	if !out.Rebuilt || out.Plan != (Plan{FullText: true, Contains: true}) {
-		t.Errorf("full text on, contains left out: %+v, want contains kept", out)
+	if !out.Rebuilt || out.Plan != (Plan{FullText: true}) {
+		t.Errorf("-fulltext: %+v", out)
+	}
+	if hasTable(t, out.TextDB, "entry_trigram") {
+		t.Error("the rebuild kept the retired trigram table")
+	}
+	if out = run(Target{}); out.Changed() || out.Plan != (Plan{FullText: true}) {
+		t.Errorf("full text left out: %+v, want it kept", out)
 	}
 
 	// Outdated data is rebuilt only for a caller that asks (D151).
@@ -82,7 +106,7 @@ func TestReconcile(t *testing.T) {
 		t.Errorf("outdated, nobody asked: rebuilt=%v reads=%d, want left alone", out.Rebuilt, reads)
 	}
 	out = run(Target{Rebuild: IfOutdated})
-	if !out.Rebuilt || !slices.Contains(out.Why, ReasonIngest) || out.Plan != (Plan{FullText: true, Contains: true}) {
+	if !out.Rebuilt || !slices.Contains(out.Why, ReasonIngest) || out.Plan != (Plan{FullText: true}) {
 		t.Errorf("outdated, asked: %+v, want rebuilt on the plan it had", out)
 	}
 	if out = run(Target{Rebuild: Always}); !out.Rebuilt {
@@ -120,7 +144,7 @@ func TestReconcile(t *testing.T) {
 
 	// -o writes its own database from the flags alone, whatever the library has
 	o := filepath.Join(t.TempDir(), "out.text.db")
-	out, err := Reconcile(src, Target{Out: o, Contains: &no}, hooks)
+	out, err := Reconcile(src, Target{Out: o}, hooks)
 	if err != nil || !out.Rebuilt || out.TextDB != o || out.Plan != (Plan{}) {
 		t.Errorf("Out: %+v, %v", out, err)
 	}
@@ -181,5 +205,43 @@ func TestReconcileConcurrent(t *testing.T) {
 	}
 	if got := rebuilt.Load(); got != 1 || reads != 1 {
 		t.Errorf("%d concurrent first prepares: %d rebuilt, %d reads; want 1 and 1", n, got, reads)
+	}
+}
+
+// TestReconcileActivity: an ingest says what it is doing while it runs, and
+// nothing once it has ended - also when its reader failed after saying
+// something itself.
+func TestReconcileActivity(t *testing.T) {
+	t.Setenv("WUDICT_DB_DIR", t.TempDir())
+	src := writeSrc(t, filepath.Join(t.TempDir(), "s.mdx"), "source bytes")
+	reads := 0
+	hooks := reconcileHooks(src, mediaSrc{}, &reads)
+	var seen []dict.Activity
+	hooks.Progress = func(done, total int) {
+		if a, ok := dict.ActivityOf(src); ok {
+			seen = append(seen, a)
+		}
+	}
+	if _, err := Reconcile(src, Target{}, hooks); err != nil {
+		t.Fatal(err)
+	}
+	// the fake states no entry count: Total stays 0, "not known"
+	if len(seen) == 0 || seen[len(seen)-1] != (dict.Activity{Phase: dict.PhaseIndexing, Done: 2}) {
+		t.Errorf("during the ingest: %+v", seen)
+	}
+	if a, ok := dict.ActivityOf(src); ok {
+		t.Errorf("after the ingest: %+v", a)
+	}
+
+	failing := writeSrc(t, filepath.Join(t.TempDir(), "f.mdx"), "source bytes")
+	_, err := Reconcile(failing, Target{}, Hooks{Reader: func() (dict.Reader, error) {
+		dict.SetActivity(failing, dict.Activity{Phase: dict.PhaseUnpacking, Done: 1})
+		return nil, os.ErrInvalid
+	}})
+	if err == nil {
+		t.Fatal("a failing reader prepared")
+	}
+	if a, ok := dict.ActivityOf(failing); ok {
+		t.Errorf("after a failed ingest: %+v", a)
 	}
 }

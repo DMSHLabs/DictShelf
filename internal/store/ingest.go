@@ -47,12 +47,11 @@ type Report struct {
 }
 
 // Plan is what to build for one dictionary. Finding a headword (exact,
-// prefix, accent-insensitive) always works and costs almost nothing - around
-// 2 MB on a 40k-entry dictionary - so it has no switch. The two indexes that
-// do cost something are opt-in per dictionary.
+// prefix, wildcard, accent-insensitive) always works and costs almost
+// nothing - around 2 MB on a 40k-entry dictionary - so it has no switch. The
+// one index that does cost something is opt-in per dictionary.
 type Plan struct {
 	FullText bool // index article text as well as headwords (the largest index)
-	Contains bool // trigram over folded headwords, for substring search
 }
 
 // IngestPlan scans r into a new text database at dbPath (atomically: written
@@ -107,12 +106,6 @@ func IngestPlan(r dict.Reader, dbPath string, plan Plan, progress Progress) (rep
 	`, schemaVersion)); err != nil {
 		return rep, err
 	}
-	if plan.Contains {
-		if _, err = db.Exec(`CREATE VIRTUAL TABLE entry_trigram USING fts5(
-			w, content='', columnsize=0, tokenize='trigram')`); err != nil {
-			return rep, err
-		}
-	}
 
 	tx, err := db.Begin()
 	if err != nil {
@@ -131,12 +124,6 @@ func IngestPlan(r dict.Reader, dbPath string, plan Plan, progress Progress) (rep
 	insFts, err := tx.Prepare("INSERT INTO entry_fts(rowid, w, txt) VALUES(?, ?, ?)")
 	if err != nil {
 		return rep, err
-	}
-	var insTrig *sql.Stmt
-	if plan.Contains {
-		if insTrig, err = tx.Prepare("INSERT INTO entry_trigram(rowid, w) VALUES(?, ?)"); err != nil {
-			return rep, err
-		}
 	}
 	insAlias, err := tx.Prepare("INSERT INTO alias(w, entry_id) VALUES(?, ?)")
 	if err != nil {
@@ -208,13 +195,6 @@ func IngestPlan(r dict.Reader, dbPath string, plan Plan, progress Progress) (rep
 		if _, err = insFts.Exec(id, hw, txt); err != nil {
 			return rep, err
 		}
-		// trigram index over the accent/case-folded headword powers the
-		// "contains" substring mode (built only when asked for).
-		if insTrig != nil {
-			if _, err = insTrig.Exec(id, dict.Fold(hw)); err != nil {
-				return rep, err
-			}
-		}
 		if isSubEntry(hw) {
 			subEntries++
 		}
@@ -271,10 +251,8 @@ func IngestPlan(r dict.Reader, dbPath string, plan Plan, progress Progress) (rep
 		"entry_count":      fmt.Sprint(id - int64(subEntries)),
 		"sub_entries":      fmt.Sprint(subEntries), // @-prefixed, hidden from browsing
 		"ingest_level":     ingestLevel(plan),
-		"has_trigram":      boolMeta(plan.Contains),      // cheap-list flag; Open feature-detects the table
-		"fold_version":     fmt.Sprint(dict.FoldVersion), // which text folding built the trigram index
-		"markup_version":   fmt.Sprint(artmark.Version),  // which role markup the articles were written with
-		"ingest_version":   fmt.Sprint(IngestVersion),    // which IngestPlan wrote this (stale.go)
+		"markup_version":   fmt.Sprint(artmark.Version), // which role markup the articles were written with
+		"ingest_version":   fmt.Sprint(IngestVersion),   // which IngestPlan wrote this (stale.go)
 		"body_encoding":    bodyEncoding(),
 		"created":          time.Now().UTC().Format(time.RFC3339),
 		"source_sha256_1M": sourceHash(srcMeta.Path),
@@ -335,11 +313,6 @@ func IngestPlan(r dict.Reader, dbPath string, plan Plan, progress Progress) (rep
 	}
 	if _, err = db.Exec("INSERT INTO entry_fts(entry_fts) VALUES('optimize')"); err != nil {
 		return rep, err
-	}
-	if plan.Contains {
-		if _, err = db.Exec("INSERT INTO entry_trigram(entry_trigram) VALUES('optimize')"); err != nil {
-			return rep, err
-		}
 	}
 	if _, err = db.Exec("ANALYZE; PRAGMA optimize;"); err != nil {
 		return rep, err
@@ -492,13 +465,6 @@ func lookupTarget(sel *sql.Stmt, target string) (int64, bool, error) {
 // isSubEntry reports an MDict-style expandable section stored as a headword
 // ("@examples_woman"). See notSubEntry in store.go for why they are hidden.
 func isSubEntry(hw string) bool { return len(hw) > 1 && hw[0] == '@' }
-
-func boolMeta(b bool) string {
-	if b {
-		return "1"
-	}
-	return "0"
-}
 
 // bodyEncoding records how bodies were written, for humans reading the meta;
 // the read path detects the form per row and does not consult this.

@@ -165,6 +165,19 @@ func TestLemmaReachesDictionariesThatMissed(t *testing.T) {
 	}
 }
 
+// In wildcard mode a query without `*` or `?` is a word and is lemmatized as
+// in every other mode; a pattern names no word and is not.
+func TestLemmaWildcard(t *testing.T) {
+	s := morphServer(t, map[string]string{"en-en-b.dsl": dslFile("Lemmas", "know")})
+	getDicts(t, s, "/api/dicts")
+	if mm := morphMsgs(stream(t, s, "/api/search?q=knew&mode=wildcard&dict=all")); len(mm) != 1 || mm[0].To != "know" {
+		t.Fatalf("a plain word in wildcard mode: morph = %+v, want knew -> know", mm)
+	}
+	if mm := morphMsgs(stream(t, s, "/api/search?q=kne%3F&mode=wildcard&dict=all")); len(mm) != 0 {
+		t.Fatalf("a pattern was lemmatized: %+v", mm)
+	}
+}
+
 // A dictionary whose name and folder say nothing is searched with the ENGLISH
 // lemma - the one language assumed without evidence.
 func TestLemmaFallsBackToEnglish(t *testing.T) {

@@ -46,7 +46,7 @@ func TestMDDOpensAlone(t *testing.T) {
 	if m.EntryCount == 0 {
 		t.Fatal("no entries")
 	}
-	if c := d.Caps(); c.Exact || c.Prefix || c.Contains || c.FTS {
+	if c := d.Caps(); c.Exact || c.Prefix || c.FTS || c.Wildcard {
 		t.Errorf("an .mdd has no headwords, so nothing is searchable: %+v", c)
 	}
 	if r, _ := d.Exact("anything", 5); len(r) != 0 {

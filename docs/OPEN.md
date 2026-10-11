@@ -9,10 +9,12 @@ Status vocabulary: **ON HOLD** (wanted, unscheduled) · **MAYBE** (unconvinced) 
 
 ---
 
-## O1 — Unicode folding is unversioned — **DONE (D34 / P37)**
+## O1 — Unicode folding is unversioned — **DONE (D34 / P37); MOOT since D170**
 
 *Kept for the reasoning; the implementation notes and the correction are in D34. The blast
-radius turned out to be one index, not three — see below.*
+radius turned out to be one index, not three — see below. D170 retired that index with the
+*contains* mode, and `fold_version` with it: nothing `Fold` returns is persisted any more, so a
+change to it makes nothing stale.*
 
 `dict.Fold` (`internal/dict/fold.go:16`) is called in two places with **different lifetimes**:
 
@@ -264,7 +266,7 @@ maintenance surface, not a project with an end. **This is the main reason the it
 
 ### If it is ever picked up, the order is
 
-1. **O1** (`fold_version`) — precondition, stands alone.
+1. **O1** — moot since D170: nothing folded is stored, so a `Fold` change needs no version.
 2. **O2** (normalization) — the floor the oracle stands on. Every candidate is validated by an
    exact lookup; if query and headword disagree on normalization, *every* candidate fails and the
    suffix rules get blamed for a bug one layer down.
@@ -741,3 +743,143 @@ CommonMark renders the marker as text and the indented body as a code block, and
 Giving them meaning is a MINOR version of the format. The first question is whether a **stock** parser setting can
 read them on both reference stacks (goldmark, markdown-it-py); an in-house parser is exactly what D154 removed.
 Until then, `<details><summary>` with markdown inside is the collapsible block that works everywhere.
+
+---
+
+## O13 — Wildcard search over headwords — **DONE (D167)**
+
+A fifth search mode at the time (fourth since D170 retired *contains*), **wildcard**: the query is a pattern for the whole headword, with `?` for one
+character and `*` for any run of characters. Regular expressions were researched first and rejected
+(below). Kept for the measurements and the reasoning, which decide the design.
+
+### The rules
+
+- `?` matches exactly one character, a space included. `*` matches any run of characters, none
+  included. `**` is `*`. Nothing else is special: no character sets, no escape. `[`, `]` and `\`
+  are ordinary characters, and a literal `*` or `?` is searched with another mode.
+- **The pattern is the whole headword.** `c?t` finds *cat*, not *cats*. `apple*` is "starts with",
+  `*apple` "ends with", `*apple*` "contains".
+- **A query without `*` or `?` goes through the same engine**: `apple` finds the headword *apple*
+  (*Apple*, *Äpple*), not *apples*. It is never routed to exact or prefix. Those modes carry
+  fallbacks (NOCASE pass, folded FTS phrase, fuzzy prefix) and read aliases, so the same input would
+  answer differently from the pattern rules. This is the reading OED and Lingvo give a plain word.
+- **Case, ripgrep's smart case:** a pattern with any uppercase letter (`unicode.IsUpper` or
+  `IsTitle`, character sets do not exist to complicate it) is matched **as typed**, sensitive to
+  case and to accents. Any other pattern ignores case and accents. ripgrep has no accent folding,
+  so "uppercase means as typed" is one rule, not two.
+- Headwords of **indexed** dictionaries only, entries only: no aliases, no MDict sub-entries
+  (`@_%`). A dictionary that is not indexed answers `skipped`. `Caps.Wildcard` is true once a
+  dictionary is indexed, which every dictionary is after its first search. The direct backends are
+  not scanned: their headword maps are what `docs.local/PERF.md` §8 keeps out of memory.
+- Lemmatization runs for a query without `*` or `?`, as in the other modes. A pattern has no lemma.
+- A followed link, a double-clicked word and a word handed over by another app switch the mode
+  to prefix, as they already did from full-text: as a pattern, `Who?` would match *Whom*, and a
+  capital letter would make the lookup case-sensitive.
+- At most 64 characters after `**` collapses. A longer pattern is a 400 before the stream starts.
+
+### The engine
+
+**Case-sensitive pattern: SQLite does everything.** `w GLOB ?` with `[` written as `[[]` (in GLOB,
+a lone `]` is already literal). `*` and `?` are GLOB's own, so only matching rows cross into Go.
+
+**Case-insensitive pattern: Go matches a folded headword.**
+- **Per-character fold `f`:** lowercase, then NFD; keep the base when everything after it is a
+  nonspacing mark (Mn); drop a character that is itself Mn. A table for the BMP, `[0x10000]rune`
+  (256 kB), built once on first use; outside the BMP, the same definition per character.
+- `f` is not `dict.Fold`: it keeps a Hangul syllable whole and keeps a character whole when its
+  decomposition is not base + marks. Pattern and headword go through the same `f`, so matching is
+  consistent. Nothing folded is stored, so no `FoldVersion` and nothing to go stale.
+- **Matcher:** the iterative wildcard algorithm with one backtrack point (the last `*`), over the
+  folded runes in a per-worker buffer. O(len(w) × len(p)) worst case, about 30 lines, no allocation
+  per row.
+
+**Seek on the first character.**
+
+| first pattern character | rows read from `idx_entry_w` |
+|---|---|
+| ASCII, case-insensitive | the NOCASE range of that character (`[c, d)` holds *C…* and *c…*), then every headword whose first byte is non-ASCII |
+| ASCII, case-sensitive | the NOCASE range of that character |
+| non-ASCII, case-sensitive | the byte range of that character's UTF-8 encoding |
+| non-ASCII case-insensitive, `*` or `?` | the whole index |
+
+- Why the non-ASCII tail: `f` can turn a non-ASCII first character into `c` (`ç`, `ć`, `č`, or a
+  leading Mn that `f` drops). It never turns one ASCII character into another. NOCASE folds ASCII
+  only, and non-ASCII initials sort after `~`, so the tail is one contiguous range at the end.
+- Ranges are queried one after another in index order, never as an `OR` (SQLite would sort the
+  union in a temp b-tree).
+- Rows stream in `ORDER BY w COLLATE NOCASE` order. The scan stops at the result limit, then the
+  bodies of the hits are fetched by id.
+
+**Bounds.** A cancelled request interrupts SQLite: the UI aborts the search on every keystroke. The
+existing 30-second search limit applies. Matching cost is linear in the rows read, and the pattern
+is at most 64 characters, so there is no pathological pattern to cap.
+
+### Measured (2026-10-11, M-series host, warm, real indexed dictionaries)
+
+| | OED 879,141 headwords | Dahl 45,738 (all Cyrillic) |
+|---|---:|---:|
+| case-sensitive, `GLOB 'c?t'`, whole index, mattn | **54 ms** | 3 ms |
+| same, first-character seek | **4 ms** | — |
+| case-sensitive `GLOB '*tion*'` | 75 ms | 3 ms |
+| `GLOB '*a*a*a*a*a*a*b'` (worst case for a `*` matcher) | 73 ms | — |
+| case-insensitive, every row to Go, per-character fold | **243 ms** | **13 ms** |
+| same with `dict.Fold` instead | 355 ms | 36 ms |
+| one-letter NOCASE range `[c, d)` | 64,337 rows, 15 ms | — |
+| modernc (purego): sensitive `c?t` / insensitive whole index | 125 ms / 239 ms | — |
+
+- Handing a row from SQLite to Go costs ~200–250 ns on both drivers, whatever happens to it next.
+  The regex engine measured 10–30 ns of that. This is why everything that can stay in C stays there.
+- An insensitive pattern with an ASCII first character reads the letter's range plus the non-ASCII
+  tail: on OED at most ~115,000 rows, ~30 ms (estimate from the per-row cost).
+- The worst query is insensitive with a leading `*` over the whole library. The local library holds
+  155 indexed dictionaries and 18.7 M headwords: ~4.7 CPU-seconds, ~0.6 s wall with 8 workers
+  (estimate). The low-RAM tablet of PERF §8.6 is not measured.
+
+### Rejected
+
+- **Regular expressions** (RE2 or any engine). The engine is 5–10 % of the per-row cost. Any regex
+  forces every row through Go. It also brings back an apparatus:
+  - instruction caps and pattern rewrites against nested groups and `.*` chains, measured up to
+    10 µs per row;
+  - a second, folded copy of the pattern, plus the `ſ`/`K` orbit cases;
+  - an inverse-fold table tied to `FoldVersion`.
+  Alternation, counts and character classes are not what a dictionary reader searches with. The
+  authorities agree: OED, Lingvo, Merriam-Webster, Sketch Engine and OneLook all offer `?` and `*`,
+  and call them wildcards.
+- **Character sets `[…]`.** They are the slowest part of SQLite's GLOB (`*[aeiou][aeiou][aeiou][aeiou]*`
+  181 ms against 75 ms), and the hardest to fold (`[à-ö]`). Not in this version.
+- **An escape for `*` and `?`.** Exact and prefix find them (contains did too, until D170).
+- **An SQL prefilter for ASCII rows** (`LIKE` or `lower(w) GLOB`, non-ASCII rows passed through).
+  Measured slower than folding every row in Go: 260 ms (mattn) and 786 ms (modernc) against
+  243 ms and 239 ms.
+- **Trigram probe, inverse-fold ranges, deeper prefix seeks.** Each needs a table that must stay
+  aligned with something else, for a gain the first-character seek mostly already takes.
+- **An admission limit, a longer debounce, a separate deadline.** Cost is linear and bounded; the
+  30-second limit and cancellation already cover it.
+- **An `Aa` toggle.** Smart case is the switch.
+
+### Defect surface, and the test for each
+
+1. **Two matchers** (SQLite GLOB, Go). Differential test: random patterns × random strings, the Go
+   matcher with an identity fold against SQLite GLOB. The one known divergence is a truncated
+   multi-byte sequence: one character in SQLite, one per byte in Go. It is asserted, not hidden.
+2. **The seek.** Property test: every plan against a brute-force scan, over a corpus with `ç…`,
+   NFD-stored headwords, a leading Mn, Hangul, non-BMP characters, invalid UTF-8 and `@` sub-entries.
+3. **The fold table.** Every BMP character against the definition of `f`.
+4. **Smart case.** Table test of the uppercase rule, including titlecase letters (`ǅ`) and
+   uppercase non-Latin (`Ж`).
+
+### Where it lives
+
+- `internal/wildcard`: `Parse`, `Fold`, `Matcher`, `Pattern.Glob`, `Pattern.Lead`.
+- `store.(*Store).WildcardContext` (`internal/store/wildcard.go`); `dict.Caps.Wildcard`;
+  `dict.Searcher.WildcardContext`; `search.Wildcard`.
+- `handleSearch`: the pattern is checked before the stream (400); the lemma wave skips a pattern.
+- Web UI: the `wildcard` option, the "add the headword index" offer for a dictionary that is not
+  indexed, `notForWords` (links and handed-over words), and `#q` without autocapitalization.
+- `prefs.go` stored-mode allow-list; the CLI (`wudict wildcard`, `searchall -mode wildcard`,
+  `info`); the Android `wudict://lookup` mode whitelist; `openapi.yaml`; the howto.
+- Tests: `wildcard_test.go` in both packages (brute-force planner and GLOB-against-Go check,
+  verified to fail when the non-ASCII range is removed), `TestSearchWildcard`, `TestLemmaWildcard`.
+- Measured through the CLI on OED (879,141 headwords, warm): `b???d`, `Ab*`, `March` 20–30 ms
+  per process; `*xyzq` (no seek, no hit, every headword read) 0.34 s.
