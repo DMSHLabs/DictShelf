@@ -14,7 +14,7 @@ require (
 	github.com/anchore/go-lzo v0.1.1
 	github.com/bodgit/sevenzip v1.6.5
 	github.com/godbus/dbus/v5 v5.2.2
-	github.com/gogpu/systray v0.2.8
+	github.com/gogpu/systray v0.3.0
 	github.com/klauspost/compress v1.19.0
 	github.com/mattn/go-sqlite3 v1.14.48
 	github.com/ulikunitz/xz v0.5.16
