@@ -15,7 +15,7 @@ on:
         default: releases
         required: true
       tag:
-        description: "Tag for the release (e.g., v0.1); blank = use latest tag"
+        description: "Release tag (e.g. wudict2-v0.12.0); blank = next version: +0.0.1 for a pre-release, +0.1.0 for a release"
         required: false
       prerelease:
         description: "Mark the release as a pre-release"
@@ -60,6 +60,26 @@ jobs:
             choco install innosetup -y --no-progress
           }
 
+      - name: Compute version
+        shell: bash
+        run: |
+          VERSION="${{ inputs.tag }}"
+          if [ -z "$VERSION" ]; then
+            # The same rule the release job below applies (D168): a
+            # pre-release takes the next patch, a release the next minor, and
+            # a workflow that already published this release keeps its tag.
+            if [ "${{ inputs.prerelease }}" = "true" ]; then
+              VERSION="$(sh tools/next-tag.sh --prerelease)"
+            else
+              VERSION="$(sh tools/next-tag.sh --release)"
+            fi
+          fi
+          # build-windows.cmd reads the tag out of the clone for the setup
+          # file's name and its VersionInfo. The number that matters is the
+          # one the release will carry, so it is handed to the build instead.
+          echo "WUDICT_VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "building $VERSION"
+
       - name: Build executable and installer
         shell: cmd
         run: build-windows.cmd installer
@@ -103,12 +123,41 @@ jobs:
         shell: bash
         run: |
           TAG="${{ inputs.tag }}"
-          [ -z "$TAG" ] && TAG="$(git describe --tags --abbrev=0 2>/dev/null || true)"
           if [ -z "$TAG" ]; then
-            echo "::error::No tag input and no existing git tag to fall back on." >&2
-            exit 1
+            # Blank field: tools/next-tag.sh decides, and it decides the same
+            # tag the build job stamped above (D168) - both read the same
+            # clone, and neither creates anything, so the two agree.
+            if [ "${{ inputs.prerelease }}" = "true" ]; then
+              TAG="$(sh tools/next-tag.sh --prerelease)"
+            else
+              TAG="$(sh tools/next-tag.sh --release)"
+            fi
           fi
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Create git tag if missing
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        shell: bash
+        run: |
+          # Without this the release step would let `gh release create` mint
+          # the tag itself, and it mints it on the repository's DEFAULT branch
+          # rather than on the commit built here. A tag on another commit is a
+          # version line the next workflow of this release reads as moved, so
+          # it would bump past it and split the release in two.
+          # --exit-code with the full ref, not `| grep -q "$TAG"`: an unanchored
+          # grep for "v0.1" matches an existing "v0.10".
+          if git ls-remote --exit-code --tags origin "refs/tags/${TAG}" > /dev/null 2>&1; then
+            echo "Tag ${TAG} already exists - skipping."
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            # The message keeps the shape of every hand-made tag in this
+            # repository (wuDict2 v0.11.1), so the two are one line in a log.
+            git tag -a "${TAG}" -m "wuDict2 ${TAG#wudict2-}"
+            git push origin "${TAG}"
+            echo "Tag ${TAG} pushed."
+          fi
 
       - name: Download build artifacts
         uses: actions/download-artifact@v8

@@ -125,6 +125,14 @@ if not defined VERSION (
     set "VERSION=dev"
 )
 
+rem A publishing run of .github/workflows/build-windows.yml decides which tag
+rem this release carries (tools/next-tag.sh, D168) and passes it in: the setup
+rem file is named from the number and its VersionInfo reads it, so this build
+rem has to carry the number the RELEASE will have, not the last tag the clone
+rem happens to hold. Local builds leave it undefined and describe the working
+rem tree as before.
+if defined WUDICT_VERSION set "VERSION=%WUDICT_VERSION%"
+
 echo wuDict version:
 echo   %VERSION%
 echo.
