@@ -40,6 +40,7 @@ import (
 	"github.com/wuweidict/wudict/internal/speex"
 	"github.com/wuweidict/wudict/internal/store"
 	"github.com/wuweidict/wudict/internal/tray"
+	"github.com/wuweidict/wudict/internal/wildcard"
 
 	_ "github.com/wuweidict/wudict/internal/format/bgl"      // register .bgl
 	_ "github.com/wuweidict/wudict/internal/format/dsl"      // register .dsl(.dz)
@@ -96,12 +97,16 @@ COMMANDS
   contains [-n max] <dictfile> <word>     Headwords containing <word> (contains index)
   fts      [-n max] <dictfile> <query>    Full-text query, read as in the app
                                           (full-text index)
-                                          All four print to standard output and take
+  wildcard [-n max] <dictfile> <pattern>  Headwords that fit <pattern>: ? is one
+                                          character, * any number; a capital letter
+                                          makes it case-sensitive. Quote the pattern:
+                                          'b???d'
+                                          All five print to standard output and take
                                           -format raw (the dictionary's HTML; default),
                                           clean (no scripts, stylesheets or
-                                          presentation) or text (no markup). contains
-                                          and fts need an indexed dictionary: pass its
-                                          library folder.
+                                          presentation) or text (no markup). contains,
+                                          fts and wildcard need an indexed dictionary:
+                                          pass its library folder.
   keys   [-offset N] [-n count] <dictfile>  List headwords, all by default; for an
                                           .mdd, the files it contains
   res    [-o out] [-f] <dictfile> <name>  Extract one resource, e.g. "audio/word.mp3";
@@ -139,8 +144,10 @@ COMMANDS
                                           Search every dictionary in the folders and
                                           print each one's results as it answers.
                                           Default: DICT_DIR; <dir> may be an "a:b"
-                                          list. -format text (default), clean, raw,
-                                          or list (headwords only).
+                                          list. -mode exact (default), prefix,
+                                          contains, fts or wildcard. -format text
+                                          (default), clean, raw, or list (headwords
+                                          only).
   lemmas list | download <lang…> | remove <lang…>
                                           Lemma data, so that an inflected form finds
                                           its lemma ("knew" -> "know"). English is
@@ -494,7 +501,7 @@ func Main() {
 		err = cmdList(args)
 	case "info":
 		err = cmdInfo(args)
-	case "lookup", "prefix", "contains", "fts":
+	case "lookup", "prefix", "contains", "fts", "wildcard":
 		err = cmdQuery(cmd, args)
 	case "ingest":
 		err = cmdIngest(args)
@@ -629,8 +636,8 @@ func cmdInfo(args []string) error {
 	}
 	defer d.Close()
 	m, c := d.Meta(), d.Caps()
-	fmt.Printf("name:        %s\nformat:      %s\npath:        %s\nentries:     %d\ncapabilities: exact=%v prefix=%v contains=%v fts=%v\n",
-		m.Name, m.Format, m.Path, m.EntryCount, c.Exact, c.Prefix, c.Contains, c.FTS)
+	fmt.Printf("name:        %s\nformat:      %s\npath:        %s\nentries:     %d\ncapabilities: exact=%v prefix=%v contains=%v fts=%v wildcard=%v\n",
+		m.Name, m.Format, m.Path, m.EntryCount, c.Exact, c.Prefix, c.Contains, c.FTS, c.Wildcard)
 	if m.IndexLang != "" {
 		// Only when the dictionary DECLARED it. A language derived from the
 		// file name is the search path's fallback, not a fact about the file,
@@ -805,7 +812,7 @@ func cmdQuery(mode string, args []string) error {
 	if err != nil {
 		return err
 	}
-	m := search.Exact // "lookup"; the other three commands are named for their mode
+	m := search.Exact // "lookup"; the other four commands are named for their mode
 	if mode != "lookup" {
 		if m, err = search.ParseMode(mode); err != nil {
 			return err
@@ -1318,7 +1325,8 @@ Hint: pick another port with --port, e.g.:  wudict --port %s
 	// --config re-points both. Loaded BEFORE the registry: Warm skips disabled
 	// dictionaries, and it starts inside NewRegistry.
 	user := server.UserDir(userDir(cfgFile))
-	regOpts := []server.Option{server.WithPrefs(server.LoadPrefs(user.State()))}
+	regOpts := []server.Option{server.WithPrefs(server.LoadPrefs(user.State())),
+		server.WithFailures(user.Failures())}
 	// The wudict howto, the guide the app ships as a dictionary: written
 	// beside the config in effect (rewritten only when this build's guide
 	// differs), and listed with the user's dictionaries. Without a place to
@@ -1499,6 +1507,7 @@ func trayRescan(reg *server.Registry) func() {
 		}
 		go func() {
 			defer busy.Store(false)
+			reg.ForgetFailures()
 			if err := reg.Rescan(); err != nil {
 				logx.Warn("rescan: %v", err)
 				return
@@ -1927,7 +1936,7 @@ func cmdSearchAll(args []string) error {
 	// exact by default: the term a person types on this command line is the
 	// word they want, and prefix over a whole library answers a query nobody
 	// asked - 97 dictionaries offering `Casablanca` for `casa`.
-	modeStr := fs.String("mode", "exact", "exact|prefix|contains|fts")
+	modeStr := fs.String("mode", "exact", "exact|prefix|contains|fts|wildcard")
 	n := fs.Int("n", 10, "max results per dictionary")
 	format := fs.String("format", "text", "text|clean|raw|list - list prints headwords only")
 	base := fs.String("base", "", "prefix for /res/… references (e.g. http://127.0.0.1:6888)")
@@ -1951,6 +1960,12 @@ func cmdSearchAll(args []string) error {
 	mode, err := search.ParseMode(*modeStr)
 	if err != nil {
 		return err
+	}
+	// Before any dictionary opens: every one would report the same error.
+	if mode == search.Wildcard {
+		if _, err := wildcard.Parse(term); err != nil {
+			return err
+		}
 	}
 	// A search that prints only headwords answers "does this word exist", which
 	// is not what anyone runs a dictionary for. `text` is the default because

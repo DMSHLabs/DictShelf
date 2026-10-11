@@ -801,6 +801,7 @@ func TestPrefsMode(t *testing.T) {
 		{"a patch without it keeps it", `{"ui":{"full":true}}`, "fts"},
 		{"exact", `{"ui":{"mode":"exact"}}`, "exact"},
 		{"contains", `{"ui":{"mode":"contains"}}`, "contains"},
+		{"wildcard", `{"ui":{"mode":"wildcard"}}`, "wildcard"},
 		{"prefix is stored as absent", `{"ui":{"mode":"prefix"}}`, ""},
 		{"a retired mode is dropped", `{"ui":{"mode":"fuzzy"}}`, ""},
 	} {

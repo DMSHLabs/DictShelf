@@ -42,6 +42,7 @@ import (
 	"github.com/wuweidict/wudict/internal/search"
 	"github.com/wuweidict/wudict/internal/speex"
 	"github.com/wuweidict/wudict/internal/store"
+	"github.com/wuweidict/wudict/internal/wildcard"
 )
 
 //go:embed web/index.html
@@ -702,6 +703,12 @@ type dictInfo struct {
 	// set for a dictionary whose source is gone, which nothing can rebuild.
 	Outdated bool `json:"outdated,omitempty"`
 
+	// TooLarge: Error is that the dictionary is too large to open on this
+	// system (dict.ErrTooLarge) - its text unpacks past its reader's bound, or
+	// past the free space to hold it. The page warns about it once, where an
+	// error in the panel would wait to be found.
+	TooLarge bool `json:"tooLarge,omitempty"`
+
 	// Groups: the derived memberships the dictionary picker offers as single
 	// choices ("English", "Encyclopedias") instead of a hundred names. Derived
 	// from this row's own name, path and declared language and never stored -
@@ -881,7 +888,7 @@ func (s *Server) baseDictInfo(e *entry) dictInfo {
 		ec, _ := strconv.Atoi(meta["entry_count"])
 		info := dictInfo{
 			ID: e.ID, Path: e.Path, Name: meta["name"], Format: meta["format"], Entries: ec,
-			Caps:          dict.Caps{Exact: true, Prefix: true, Contains: p.Plan.Contains, FTS: p.Plan.FullText},
+			Caps:          dict.Caps{Exact: true, Prefix: true, Contains: p.Plan.Contains, FTS: p.Plan.FullText, Wildcard: true},
 			DBPath:        p.TextDB,
 			ContainsStale: store.FoldStale(meta),
 			Outdated:      rebuildable(e.Path) && len(p.Stale(e.Path)) > 0,
@@ -907,6 +914,7 @@ func (s *Server) baseDictInfo(e *entry) dictInfo {
 	d, err := e.open()
 	if err != nil {
 		info.Error = err.Error()
+		info.TooLarge = errors.Is(err, dict.ErrTooLarge)
 		return info
 	}
 	m := d.Meta()
@@ -1013,6 +1021,7 @@ func addProvenance(info *dictInfo, entryPath string) {
 }
 
 func (s *Server) handleRescan(w http.ResponseWriter, r *http.Request) {
+	s.reg.ForgetFailures()
 	if err := s.reg.Rescan(); err != nil {
 		httpErr(w, 500, "rescan: %v", err)
 		return
@@ -1172,6 +1181,14 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		httpErr(w, 400, "%v", err)
 		return
+	}
+	// A pattern that cannot be read is one 400 here, before the stream: every
+	// dictionary would otherwise report the same error in its own slot.
+	if mode == search.Wildcard {
+		if _, err := wildcard.Parse(q); err != nil {
+			httpErr(w, 400, "%v", err)
+			return
+		}
 	}
 	format, err := parseFormat(r.URL.Query().Get("format"))
 	if err != nil {
@@ -1418,6 +1435,11 @@ func (s *Server) lemmaWave(
 	// One word only. A phrase has no single lemma, and lemmatizing a token of
 	// it would answer a question nobody asked.
 	if !s.Morph.Enabled() || strings.ContainsAny(q, " \t\r\n") {
+		return
+	}
+	// A wildcard pattern names no word to lemmatize. A wildcard query without
+	// `*` or `?` is a word, and is lemmatized as in every other mode.
+	if mode == search.Wildcard && wildcard.HasWildcards(q) {
 		return
 	}
 	byLang := map[string][]int{}

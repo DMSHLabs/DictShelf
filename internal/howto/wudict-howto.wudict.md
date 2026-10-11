@@ -25,7 +25,7 @@ Type `wudict help` in the search box for quick access, and [browse](/browse?dict
 > *wudict features*
 
 - Formats: MDict (`.mdx/.mdd`), StarDict (`.ifo/.idx/.dict/.dz`), Aard2 (`.slob`), Lingvo DSL (`.dsl/.dsl.dz`), Babylon (`.bgl`), ZIM (`.zim`), and wudict markdown (`.wudict.md`)
-- Instant search across all dictionaries with four [search modes](<entry://wudict search>): prefix, exact, contains, and full-text search
+- Instant search across all dictionaries with five [search modes](<entry://wudict search>): prefix, exact, contains, [wildcard](<entry://wudict wildcard>), and full-text search
 - Dictionaries are automatically grouped by language, language pair, content and publisher; add your own groups in <kbd>☰</kbd> → ![](cog.svg) → [Edit groups](/groups).
 - Double-tap any word in a wudict dictionary article to instantly look up its definition
 - Adjust the font size via the <kbd>☰</kbd> → <kbd>−</kbd> <kbd>+</kbd> widget
@@ -42,7 +42,7 @@ Type `wudict help` in the search box for quick access, and [browse](/browse?dict
 
 | Control | What it does |
 | --- | --- |
-| <kbd>prefix</kbd> | the [search mode](<entry://wudict search>): prefix, exact, contains, full-text |
+| <kbd>prefix</kbd> | the [search mode](<entry://wudict search>): prefix, exact, contains, wildcard, full-text |
 | <kbd>All dictionaries</kbd> | search everything, a specific dictionary, a language or language pair, a publisher |
 | <kbd>◐</kbd> | theme: light, dark, automatic |
 | <kbd>⇔</kbd> | wide layout |
@@ -69,22 +69,23 @@ In <kbd>☰</kbd> → ![](cog.svg):
 - **Open** sets the number of dictionaries that open automatically. They open in the sequence of your list and only when they have a result. <kbd>1, first to show a result</kbd> opens the dictionary that shows a result first. <kbd>All</kbd> opens all dictionaries that have a result; many open dictionaries can make the page slow.
 - ![](rescan.svg) <kbd>Rescan folders</kbd> can be used to refresh the dictionary folders after adding or removing items.
 
-More: [search](<entry://wudict search>) · [full-text](<entry://wudict full-text>) · [panel](<entry://wudict panel>) · [index](<entry://wudict index>) · [styles](<entry://wudict styles>) · [links](<entry://wudict links>) · [📱 Android](<entry://wudict android>) · [💻 desktop](<entry://wudict desktop>) · [FAQ](<entry://wudict FAQ>)
+More: [search](<entry://wudict search>) · [full-text](<entry://wudict full-text>) · [wildcard](<entry://wudict wildcard>) · [panel](<entry://wudict panel>) · [index](<entry://wudict index>) · [styles](<entry://wudict styles>) · [links](<entry://wudict links>) · [📱 Android](<entry://wudict android>) · [💻 desktop](<entry://wudict desktop>) · [FAQ](<entry://wudict FAQ>)
 
 ## wudict search
 ## wudict search modes
 ## wudict modes
 
-**Pick a mode in the bar; accents and case never matter**: `corazon` finds *corazón*, `OXFORD` finds *Oxford*. Exact and prefix work at once; contains and full-text need an optional [index](<entry://wudict index>).
+**Pick a mode in the bar; accents and case do not matter**: `corazon` finds *corazón*, `OXFORD` finds *Oxford*. The one exception is a [wildcard](<entry://wudict wildcard>) pattern with a capital letter. Exact and prefix work at once, wildcard as soon as the dictionary is indexed; contains and full-text need an optional [index](<entry://wudict index>).
 
 | Mode | Finds | Use it when |
 | --- | --- | --- |
 | **prefix** | headwords that start with your text | you know how the word begins (the default) |
 | **exact** | the headword itself | you know the word |
 | **contains** | your text anywhere in a headword | you know the middle |
+| **wildcard** | headwords that fit a pattern: `c?t`, `*ology` | you know some of the letters |
 | **full-text** | words inside article text, best first | you remember the meaning, not the word |
 
-wudict keeps the mode that you select. A word from a link or from a different app does not use full-text: wudict uses prefix for that word.
+wudict keeps the mode that you select. A word from a link or from a different app does not use full-text or wildcard: wudict uses prefix for that word.
 
 [base form lemmas](<entry://wudict lemmatization>) let you find **know** by typing *knew*.
 
@@ -109,6 +110,25 @@ wudict keeps the mode that you select. A word from a link or from a different ap
 | `(pun OR joke) AND intended` | grouping |
 
 Operators count only in capitals: `wage not minimum` is three words. A query never fails; what cannot be parsed is read as plain words. ![](highlight.svg) <kbd>Highlight matches</kbd> in <kbd>☰</kbd> → ![](cog.svg) marks the words found; step through them with the chevrons (💻 <kbd>←</kbd> <kbd>→</kbd>, <kbd>F3</kbd>).
+
+- [index](/browse?dict=wudict-howto)
+
+## wudict wildcard
+## wudict wildcards
+## wudict wildcard syntax
+
+**A wildcard pattern is the whole headword**: `?` is one character, `*` is any number of characters. Choose <kbd>wildcard</kbd> in the bar. Wildcard searches every indexed dictionary; wudict indexes each dictionary on its first search.
+
+| You type | You get |
+| --- | --- |
+| `c?t` | *cat*, *cot*, *cut* |
+| `b???d` | five letters: *beard*, *blood*, *bread* |
+| `*ology` | *biology*, *zoology*, *ology* |
+| `un*able` | *unable*, *unbelievable*, *unthinkable* |
+| `by the *` | phrases that start with *by the* |
+| `apple` | *apple* and *Apple*, not *apples* |
+
+A pattern without a capital letter ignores case and accents: `cafe` finds *Café*. A pattern with a capital letter is matched as typed: `March` finds *March*, not *march*. There are no other special characters: to find a `*` or a `?` in a headword, use exact, prefix or contains. A pattern has at most 64 characters.
 
 - [index](/browse?dict=wudict-howto)
 

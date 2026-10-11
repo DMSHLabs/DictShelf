@@ -22,6 +22,10 @@ func (d UserDir) Style() string { return d.join(StyleDirName) }
 // Groups is groups.ini (groups.go).
 func (d UserDir) Groups() string { return d.join(GroupsFileName) }
 
+// Failures is open-failures.json: the open failures kept across restarts
+// (openfail.go).
+func (d UserDir) Failures() string { return d.join("open-failures.json") }
+
 // Builtin is where the wudict howto is written (internal/howto).
 func (d UserDir) Builtin() string { return d.join("builtin") }
 

@@ -106,11 +106,19 @@ paths:
           in: query
           description: |
             `exact` · `prefix` · `contains` (trigram substring over folded
-            headwords) · `fts` (full text). `fuzzy` is accepted as a legacy
-            alias and now means `prefix`.
+            headwords) · `fts` (full text) · `wildcard` (a pattern for the
+            whole headword: `?` is one character, `*` any number; write `?`
+            as `%3F`). `fuzzy` is accepted as a legacy alias and now means
+            `prefix`.
 
-            `contains` and `fts` need the dictionary to carry that index; ask
-            `/api/dicts` for `caps` first, and expect `skipped` if you do not.
+            `contains` and `fts` need the dictionary to carry that index, and
+            `wildcard` needs it to be indexed; ask `/api/dicts` for `caps`
+            first, and expect `skipped` if you do not.
+
+            A `wildcard` pattern with a capital letter is matched as typed,
+            case and accents included; any other pattern ignores them. A
+            pattern longer than 64 characters is a 400. A pattern containing
+            `*` or `?` is not lemmatized.
 
             A multi-word `fts` query is a PHRASE first. It is retried as a
             proximity and then as separate words only when the stricter reading
@@ -122,7 +130,7 @@ paths:
             rejected.
           schema:
             type: string
-            enum: [exact, prefix, contains, fts, fuzzy]
+            enum: [exact, prefix, contains, fts, wildcard, fuzzy]
             default: prefix
         - name: hl
           in: query
@@ -258,7 +266,7 @@ paths:
                 discriminator: { propertyName: t }
               example: |
                 {"t":"begin","total":2}
-                {"t":"dict","dict":{"id":"oxford","name":"Oxford Advanced Learner's","format":"mdx","path":"/Users/me/Dicts/oald.mdx","entries":184000,"caps":{"Exact":true,"Prefix":true,"Contains":false,"FTS":false}}}
+                {"t":"dict","dict":{"id":"oxford","name":"Oxford Advanced Learner's","format":"mdx","path":"/Users/me/Dicts/oald.mdx","entries":184000,"caps":{"Exact":true,"Prefix":true,"Contains":false,"FTS":false,"Wildcard":false}}}
                 {"t":"end","etag":"\"ac4fd9fecabd8ec4cf544212\""}
         '304':
           description: Nothing in the list has changed since the answer whose `etag` was sent.
@@ -2178,13 +2186,15 @@ components:
       type: object
       description: >
         Which search modes this dictionary can serve now. The authority on what
-        to offer: Contains and FTS stay false until that index is built. Field
-        names are capitalised on the wire.
+        to offer: Contains and FTS stay false until that index is built, and
+        Wildcard until the dictionary is indexed. Field names are capitalised
+        on the wire.
       properties:
         Exact: { type: boolean }
         Prefix: { type: boolean }
         Contains: { type: boolean }
         FTS: { type: boolean }
+        Wildcard: { type: boolean }
 
     Result:
       type: object
@@ -2325,6 +2335,12 @@ components:
         caps: { $ref: '#/components/schemas/Caps' }
         dbPath: { type: string, description: The prepared database. }
         error: { type: string, description: This dictionary could not be opened. }
+        tooLarge:
+          type: boolean
+          description: >
+            `error` is that the dictionary is too large to open on this system:
+            its text unpacks past the reader's limit, or past the free disk
+            space or memory to hold it.
         containsStale:
           type: boolean
           description: >

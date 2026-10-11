@@ -1,6 +1,6 @@
 ---
 title: Search
-description: Search modes, full-text search, lemmatization, result order, links to a search, and search from the terminal.
+description: Search modes, full-text search, wildcard search, lemmatization, result order, links to a search, and search from the terminal.
 ---
 
 # Search
@@ -17,11 +17,14 @@ Choose the mode in the drop-down next to the search box.
 | **exact** | the headword; if there is none, the headword ignoring case and accents | |
 | **prefix** (default) | the headword, then headwords that start with the query; case and accents ignored | |
 | **contains** | headwords that contain the query anywhere | contains index |
+| **wildcard** | headwords that fit a pattern: `?` is one character, `*` any number of characters | headword index |
 | **full-text** | words in the article text, ranked by relevance | full-text index |
 
-Exact and prefix work on every dictionary, indexed or not. Contains and
-full-text search only dictionaries that have the index; any other dictionary
-shows a link that adds it.
+Exact and prefix work on every dictionary, indexed or not. Wildcard searches
+only indexed dictionaries: each dictionary gets its headword index in the
+background on its first search. Contains and full-text search only
+dictionaries that have the index; any other dictionary shows a link that adds
+it.
 
 To add an index to one dictionary, click its <kbd>contains</kbd> or
 <kbd>full-text</kbd> switch in the dictionary panel. To add the full-text index
@@ -30,8 +33,10 @@ to all dictionaries: <kbd>☰</kbd> → folder summary →
 
 ## Case, accents and spelling
 
-All four modes ignore case and accents: `corazon` finds *corazón*, `OXFORD`
-finds *Oxford*.
+Exact, prefix, contains and full-text ignore case and accents: `corazon`
+finds *corazón*, `OXFORD` finds *Oxford*. Wildcard ignores them too, except
+when the pattern contains a capital letter: then it matches as typed
+([Case and accents](../reference/wildcard-syntax.md#case-and-accents)).
 
 No mode corrects spelling. Contains matches the query as a literal substring:
 `orre` finds *correr*, `corer` finds nothing.
@@ -74,11 +79,27 @@ three stages. Each dictionary stops at the first stage that returns results.
 The result header of a dictionary answered at the second or third stage shows
 *phrase not found · words proximity* or *phrase not found · words anywhere*.
 
+## Wildcard search
+
+Wildcard search matches the whole headword against a pattern. `?` stands for
+one character, `*` for any number of characters, none included.
+
+| Pattern | Finds |
+| --- | --- |
+| `c?t` | *cat*, *cot*, *cut* |
+| `b???d` | *beard*, *blood*, *bread* |
+| `*ology` | *biology*, *ology*, *zoology* |
+| `un*able` | *unable*, *unbelievable*, *unthinkable* |
+| `apple` | *apple*, *Apple*; not *apples* |
+
+[Wildcard syntax](../reference/wildcard-syntax.md){ .md-button }
+
 ## Inflected words
 
 When a single-word query returns nothing in a dictionary, wudict looks up the
 word's lemma and searches that dictionary again: *knew* → **know**,
-*estuviera* → **estar**. A banner names the lemma.
+*estuviera* → **estar**. A banner names the lemma. A wildcard query that
+contains `*` or `?` is not lemmatized.
 
 The retry goes only to dictionaries that returned nothing, and only with lemma
 data for the dictionary's language: *sale* → **salir** is never searched in an
@@ -194,7 +215,7 @@ http://localhost:6888/?q=serendipity&mode=prefix&dict=all
 | Parameter | Value |
 | --- | --- |
 | `q` | the query |
-| `mode` | `exact`, `prefix`, `contains` or `fts` |
+| `mode` | `exact`, `prefix`, `contains`, `fts` or `wildcard`; in a wildcard query, write `?` as `%3F` |
 | `dict` | `all`, a dictionary id ([`/api/dicts`](../reference/api.md) lists them), or a group, e.g. `g:lang:en` |
 | `theme` | `auto`, `light` or `dark`; kept for later visits |
 
@@ -215,9 +236,12 @@ wudict lookup   ~/Dictionaries/Oxford.mdx phubbing
 wudict prefix   ~/Dictionaries/Oxford.mdx phubb
 wudict contains ~/.wudict/db/Oxford phub
 wudict fts      ~/.wudict/db/Oxford "sudden fear"
+wudict wildcard ~/.wudict/db/Oxford 'b???d'
 ```
 
-`contains` and `fts` need an indexed dictionary: pass its library folder.
+`contains`, `fts` and `wildcard` need an indexed dictionary: pass its library
+folder. Put a wildcard query in single quotes, so that the shell does not
+expand `*` and `?`.
 `lookup` and `prefix` work on any dictionary file. `searchall` uses exact mode
 unless `-mode` says otherwise.
 

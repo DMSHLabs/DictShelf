@@ -14,7 +14,7 @@ dictionary.
 | State | Searched via               | Modes |
 | --- |----------------------------| --- |
 | not indexed | the dictionary files       | exact, prefix |
-| indexed | `text.db` (headword index) | exact, prefix; faster, less memory |
+| indexed | `text.db` (headword index) | exact, prefix, wildcard; faster, less memory |
 | + contains index | the same `text.db`         | + contains |
 | + full-text index | the same `text.db`         | + full-text |
 

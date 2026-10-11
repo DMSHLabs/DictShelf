@@ -6,8 +6,12 @@ package wmd
 
 import (
 	"fmt"
+	"math"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/wuweidict/wudict/internal/dict"
+	"github.com/wuweidict/wudict/internal/logx"
 )
 
 // Suffixes (spec R2.2, R2.4). A plain ".md" is claimed by content (Sniff).
@@ -18,9 +22,33 @@ const (
 	ExtPlain = ".md"
 )
 
-// maxMarkdown bounds what a compressed file may unpack to (R2.4). A variable
-// so the tests can reach it without writing gigabytes.
+// maxMarkdown is what any compressed file may unpack to, whatever its own
+// size: the floor R2.4 sets every reader. A variable so the tests can reach it
+// without writing gigabytes.
 var maxMarkdown int64 = 1 << 30
+
+// unpackRatio is how many times its own size a compressed file may unpack to,
+// where that is more than maxMarkdown (R2.4). Markup gzips 3 to 10 times - a
+// 166 MB Spanish Wiktionary unpacks 7.0 times - and a gzip bomb 100 times and
+// more: 32 leaves room above the first and stays well under the second. A
+// variable for the tests.
+var unpackRatio int64 = 32
+
+// textMax is the most decoded text this build addresses: its offsets are int,
+// so 2 GiB on a 32-bit build. 1<<62 on a 64-bit one keeps limit+1 finite.
+const textMax = min(math.MaxInt, 1<<62)
+
+// unpackBound is what a compressed file of packed bytes may unpack to.
+func unpackBound(packed int64) int64 {
+	b := maxMarkdown
+	if packed > 0 && unpackRatio > 0 {
+		if packed > textMax/unpackRatio {
+			return textMax
+		}
+		b = max(b, packed*unpackRatio)
+	}
+	return min(b, textMax)
+}
 
 func hasSuffixFold(s, suffix string) bool {
 	return len(s) >= len(suffix) && strings.EqualFold(s[len(s)-len(suffix):], suffix)
@@ -86,15 +114,39 @@ func trimBOM(b []byte) []byte {
 }
 
 // Error is a file this reader does not read (spec §8: E-format, E-version).
+// Both are decided by the file's bytes and this reader's rules, so every one
+// is dict.ErrUnreadable; a text past its bound (R2.4) is dict.ErrTooLarge too.
 type Error struct {
 	Code string
 	Msg  string
+
+	tooLarge bool
 }
 
 func (e *Error) Error() string { return "wudict markdown: " + e.Code + ": " + e.Msg }
 
+func (e *Error) Unwrap() []error {
+	if e.tooLarge {
+		return []error{dict.ErrUnreadable, dict.ErrTooLarge}
+	}
+	return []error{dict.ErrUnreadable}
+}
+
 func formatErr(format string, args ...any) error {
 	return &Error{Code: "E-format", Msg: fmt.Sprintf(format, args...)}
+}
+
+// overErr is the E-format of decoded text past limit; packed is the size of
+// the compressed file it came from, 0 for a plain file.
+func overErr(limit, packed int64) error {
+	e := &Error{Code: "E-format", tooLarge: true}
+	if packed == 0 || limit >= textMax {
+		e.Msg = fmt.Sprintf("text larger than %s, the most this build reads", logx.Size(limit))
+	} else {
+		e.Msg = fmt.Sprintf("unpacks to more than %s, the limit for a compressed file of %s",
+			logx.Size(limit), logx.Size(packed))
+	}
+	return e
 }
 
 func versionErr(format string, args ...any) error {

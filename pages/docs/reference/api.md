@@ -101,6 +101,9 @@ A `hit` may carry one of these instead of results:
 | `error` | this dictionary failed; the others still answer |
 
 A search ends after 30 seconds. `mode=fuzzy` is read as `prefix`.
+`mode=wildcard` reads `q` as a pattern ([Wildcard syntax](wildcard-syntax.md));
+write `?` in it as `%3F`. A pattern longer than 64 characters is answered
+with status 400.
 
 ### Article formats
 
@@ -118,13 +121,14 @@ articles with the dictionaries' own stylesheets.
 
 ``` json title="GET /api/dicts"
 {"t":"begin","total":2}
-{"t":"dict","dict":{"id":"oxford","name":"Oxford Advanced Learner's","format":"mdx","path":"/Users/me/Dictionaries/oald.mdx","entries":184000,"caps":{"Exact":true,"Prefix":true,"Contains":false,"FTS":false}}}
+{"t":"dict","dict":{"id":"oxford","name":"Oxford Advanced Learner's","format":"mdx","path":"/Users/me/Dictionaries/oald.mdx","entries":184000,"caps":{"Exact":true,"Prefix":true,"Contains":false,"FTS":false,"Wildcard":false}}}
 {"t":"end"}
 ```
 
 `total` is sent first, before any dictionary is opened. `id` is the value for
 `dict` in `/api/search`. `caps` lists the supported modes: `Contains` and `FTS`
-are true once the dictionary has the contains or full-text index. The other
+are true once the dictionary has the contains or full-text index, `Wildcard`
+once it is indexed. The other
 fields (files, library folder, sizes) are listed in the OpenAPI document.
 
 ``` sh

@@ -619,6 +619,19 @@ func (e *entry) open() (dict.Dictionary, error) {
 	// Read before the open, so the recorded resolution is the one this open
 	// actually acted on rather than whatever disk looked like once it finished.
 	backing, sig := backingDB(e.Path), sourceSig(e.Path)
+	// A failure kept from an earlier start answers for a file with no library
+	// folder (openfail.go).
+	var fails *failures
+	if e.reg != nil && backing == "" {
+		fails = e.reg.fails
+	}
+	if err = fails.lookup(e.Path, sig); err != nil {
+		e.dMu.Lock()
+		e.err, e.backing, e.srcSig = err, backing, sig
+		e.dMu.Unlock()
+		logx.V("open %s: FAILED, as at the last start: %v", e.Path, err)
+		return nil, err
+	}
 	// dsl, bgl and wudict markdown prepare themselves inside Open, and a
 	// re-prepare ends in a rename over text.db - which a backend superseded
 	// moments ago (a rescan that saw the source change) may still hold through
@@ -629,6 +642,7 @@ func (e *entry) open() (dict.Dictionary, error) {
 	e.d, e.err, e.backing, e.srcSig = d, err, backing, sig
 	e.dMu.Unlock()
 	if err != nil {
+		fails.record(e.Path, sig, err)
 		logx.V("open %s: FAILED: %v", e.Path, err)
 		return d, err
 	}
@@ -998,6 +1012,10 @@ type Registry struct {
 	// wake arms the janitor. Buffered by one: a signal means "there may be
 	// work now", and two of them mean nothing more than one.
 	wake chan struct{}
+
+	// fails are the open failures kept across restarts (openfail.go); nil
+	// keeps none beyond each entry's own err.
+	fails *failures
 }
 
 // nudge tells the janitor something changed. Never blocks - it is called from
@@ -1039,6 +1057,16 @@ func WithPrefs(p *Prefs) Option {
 		}
 	}
 }
+
+// WithFailures keeps the open failures that would only fail again in the file
+// at path, so the next start does not pay for them (openfail.go).
+func WithFailures(path string) Option {
+	return func(r *Registry) { r.fails = loadFailures(path) }
+}
+
+// ForgetFailures drops the open failures kept across restarts: the user's
+// Rescan is the request to try every dictionary again, whatever it cost.
+func (r *Registry) ForgetFailures() { r.fails.forget() }
 
 // Root is one dictionary folder and what it contributed. A folder that is
 // missing (an unmounted drive, a deleted path) is reported, never fatal: the
@@ -1651,7 +1679,10 @@ func backingDB(path string) string {
 // purpose - a fan-out over a hundred dictionaries must not retry a broken file
 // once per keystroke - and a rescan is the one thing that clears that cache:
 // it is the user asking for exactly that retry, paid for once, here, however
-// thoroughly they have fixed the file in between.
+// thoroughly they have fixed the file in between. A failure kept across
+// restarts (openfail.go) answers the retry instead while its file and the
+// build are unchanged; the user's own Rescan forgets those first
+// (ForgetFailures), every other rescan keeps them.
 //
 // A backend resolved against a DIFFERENT database than the one now on disk is
 // dropped, along with the conclusions drawn from it: autoTried and demanded

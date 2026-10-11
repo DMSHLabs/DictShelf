@@ -12,15 +12,22 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"math"
 	"os"
+	"path/filepath"
+	"runtime/debug"
 	"unicode/utf8"
+
+	"github.com/wuweidict/wudict/internal/dict"
+	"github.com/wuweidict/wudict/internal/fsx"
 )
 
 // The text a Reader reads, a range at a time, so that it never holds a whole
 // file. A plain file that needs no R2.1 repair is read where it is; anything
 // else - a compressed file, or one with a BOM, CR line ends, invalid UTF-8 or
 // NUL - is decoded once into a temporary file, removed on Close. Where no
-// temporary file can be made, the decoded text is held in memory instead.
+// temporary file can be made, the decoded text is held in memory instead,
+// within memoryRoom.
 //
 // One streaming pass over the decoded text also collects what cutting it into
 // chunks needs: the start and end of every line that could begin an entry, and
@@ -135,9 +142,14 @@ func sourceFromBytes(text []byte) *source {
 	return s
 }
 
+// errOverLimit: decodeStream read past its limit. The caller says what the
+// limit was (overErr, or a *dict.NoRoomError for memory).
+var errOverLimit = errors.New("over the limit")
+
 // decodeStream copies r to w applying R2.1, a block at a time: a UTF-8
 // sequence or a CR LF cut by a block boundary is carried to the next block.
-// It reports whether anything was changed, and fails past limit bytes read.
+// It reports whether anything was changed, and fails with errOverLimit past
+// limit bytes read.
 func decodeStream(r io.Reader, w io.Writer, limit int64) (changed bool, err error) {
 	lr := &io.LimitedReader{R: r, N: limit + 1}
 	br := bufio.NewReaderSize(lr, 256<<10)
@@ -157,7 +169,7 @@ func decodeStream(r io.Reader, w io.Writer, limit int64) (changed bool, err erro
 			return changed, rerr
 		}
 		if lr.N <= 0 {
-			return changed, formatErr("decompressed markdown over %d bytes", limit)
+			return changed, errOverLimit
 		}
 		if first {
 			if t := trimBOM(buf); len(t) < len(buf) {
@@ -204,6 +216,53 @@ func tailCarry(b []byte) int {
 	return 0
 }
 
+// unpackReserve is the free disk space unpacking leaves alone: the decoded
+// text stops before the disk holding the temporary folder falls under it, so
+// a file that would fill the disk fails instead of filling it.
+const unpackReserve = 1 << 30
+
+// roomStep is how many bytes of decoded text are written between two looks
+// at the free space.
+const roomStep = 64 << 20
+
+// freeSpace is fsx.FreeSpace; a variable for the tests.
+var freeSpace = fsx.FreeSpace
+
+// roomWriter writes the decoded text to its temporary file while the disk
+// keeps unpackReserve free: before each roomStep bytes, it looks whether they
+// fit above the reserve. Where the free space cannot be read, it writes on,
+// and a full disk reports itself.
+type roomWriter struct {
+	w       io.Writer
+	dir     string
+	n, next int64 // bytes written; when to look again
+}
+
+func (rw *roomWriter) Write(p []byte) (int, error) {
+	if rw.n >= rw.next {
+		if free, ok := freeSpace(rw.dir); ok && free < unpackReserve+roomStep {
+			// The temporary file is removed on this error, so what it holds
+			// is free again: Need and Free both count it.
+			return 0, &dict.NoRoomError{What: "to unpack it", Dir: rw.dir,
+				Need: rw.n + unpackReserve + roomStep, Free: free + rw.n}
+		}
+		rw.next = rw.n + roomStep
+	}
+	n, err := rw.w.Write(p)
+	rw.n += int64(n)
+	return n, err
+}
+
+// memoryRoom is how much decoded text may be held in memory, where no
+// temporary file can be made: half the Go memory limit where one is set
+// (Android), else maxMarkdown.
+func memoryRoom() int64 {
+	if l := debug.SetMemoryLimit(-1); l < math.MaxInt64 {
+		return l / 2
+	}
+	return maxMarkdown
+}
+
 // openSource opens path's decoded text (see the file comment).
 func openSource(path string) (*source, error) {
 	f, err := os.Open(path)
@@ -211,14 +270,20 @@ func openSource(path string) (*source, error) {
 		return nil, err
 	}
 	var in io.Reader = f
-	limit := int64(1 << 62) // a plain file is not bounded; this only keeps limit+1 finite
+	limit, packed := int64(textMax), int64(0)
 	if compressed(path) {
+		fi, err := f.Stat()
+		if err != nil {
+			f.Close()
+			return nil, err
+		}
 		zr, err := gzip.NewReader(bufio.NewReader(f)) // multistream: concatenated members read as one
 		if err != nil {
 			f.Close()
 			return nil, formatErr("not a gzip stream: %v", err)
 		}
-		in, limit = zr, maxMarkdown
+		packed = max(fi.Size(), 1) // a plain file is the one with packed == 0
+		in, limit = zr, unpackBound(fi.Size())
 	} else {
 		// A plain file is used in place when it needs no repair.
 		s := &source{}
@@ -226,6 +291,9 @@ func openSource(path string) (*source, error) {
 		changed, err := decodeStream(f, sc, limit)
 		if err != nil {
 			f.Close()
+			if errors.Is(err, errOverLimit) {
+				return nil, overErr(limit, 0)
+			}
 			return nil, err
 		}
 		if !changed {
@@ -245,15 +313,19 @@ func openSource(path string) (*source, error) {
 	tmp, terr := os.CreateTemp("", "wudict-md-*.txt")
 	if terr != nil {
 		// No temporary file: the decoded text is held in memory.
+		room := memoryRoom()
 		var b bytes.Buffer
-		if _, err := decodeStream(in, io.MultiWriter(&b, sc), limit); err != nil {
-			return nil, streamErr(err)
+		if _, err := decodeStream(in, io.MultiWriter(&b, sc), min(limit, room)); err != nil {
+			if errors.Is(err, errOverLimit) && room < limit {
+				return nil, &dict.NoRoomError{What: "to unpack it", Need: room, Free: room}
+			}
+			return nil, streamErr(err, limit, packed)
 		}
 		sc.finish()
 		s.ra, s.close = bytes.NewReader(b.Bytes()), func() error { return nil }
 		return s, nil
 	}
-	bw := bufio.NewWriterSize(tmp, 256<<10)
+	bw := bufio.NewWriterSize(&roomWriter{w: tmp, dir: filepath.Dir(tmp.Name())}, 256<<10)
 	_, err = decodeStream(in, io.MultiWriter(bw, sc), limit)
 	if err == nil {
 		err = bw.Flush()
@@ -261,7 +333,7 @@ func openSource(path string) (*source, error) {
 	if err != nil {
 		tmp.Close()
 		os.Remove(tmp.Name())
-		return nil, streamErr(err)
+		return nil, streamErr(err, limit, packed)
 	}
 	sc.finish()
 	s.ra = tmp
@@ -272,13 +344,17 @@ func openSource(path string) (*source, error) {
 	return s, nil
 }
 
-// streamErr reports a decoding failure as E-format; a failure of the file
-// system (a full disk) stays what it is.
-func streamErr(err error) error {
+// streamErr reports a decoding failure as E-format - past limit, the one
+// overErr names; a failure of the file system (a full disk) or of the room to
+// unpack in stays what it is.
+func streamErr(err error, limit, packed int64) error {
 	var e *Error
 	var pe *fs.PathError
+	var re *dict.NoRoomError
 	switch {
-	case errors.As(err, &e), errors.As(err, &pe):
+	case errors.Is(err, errOverLimit):
+		return overErr(limit, packed)
+	case errors.As(err, &e), errors.As(err, &pe), errors.As(err, &re):
 		return err
 	}
 	return formatErr("cannot be decompressed: %v", err)

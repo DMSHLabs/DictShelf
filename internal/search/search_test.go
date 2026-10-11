@@ -70,6 +70,9 @@ func (f *fake) FullTextContext(context.Context, string, int) ([]dict.Result, err
 func (f *fake) FullTextMatch(context.Context, string, int) ([]dict.Result, error) {
 	return nil, dict.ErrUnsupported
 }
+func (f *fake) WildcardContext(context.Context, string, int) ([]dict.Result, error) {
+	return nil, dict.ErrUnsupported
+}
 
 // all runs the fan-out over dictionaries that are already open and returns
 // the hits in input order.

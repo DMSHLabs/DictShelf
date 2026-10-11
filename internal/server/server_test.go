@@ -12,6 +12,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -321,6 +322,40 @@ func TestDictsAndSearch(t *testing.T) {
 	}
 	if rec := getJSON(t, s, "/api/search?q=x&mode=bogus", nil); rec.Code != 400 {
 		t.Errorf("bad mode: %d", rec.Code)
+	}
+}
+
+// TestSearchWildcard: wildcard search needs only the headword index, so a
+// dictionary answers it as soon as it is indexed, with no switch to turn on.
+func TestSearchWildcard(t *testing.T) {
+	s := newTestServer(t)
+	dicts := getDicts(t, s, "/api/dicts")
+	if len(dicts) != 1 || !dicts[0].Caps.Wildcard {
+		t.Fatalf("an indexed dictionary must offer wildcard search: %+v", dicts)
+	}
+	id := dicts[0].ID
+	for _, tc := range []struct{ q, want string }{
+		{"coraz?n", "corazón"}, // accents ignored
+		{"*sa", "casa"},
+		{"c*", "casa"}, // browse order: casa before corazón
+		{"casa", "casa"},
+		{"CASA", ""}, // a capital letter: matched as typed
+		{"cas", ""},  // the whole headword
+	} {
+		hits := searchStream(t, s, "/api/search?mode=wildcard&dict="+id+"&q="+url.QueryEscape(tc.q))
+		if len(hits) != 1 || hits[0].Skipped || hits[0].Error != "" {
+			t.Fatalf("%q: %+v", tc.q, hits)
+		}
+		got := ""
+		if len(hits[0].Results) > 0 {
+			got = hits[0].Results[0].Headword
+		}
+		if got != tc.want {
+			t.Errorf("%q: first result %q, want %q", tc.q, got, tc.want)
+		}
+	}
+	if rec := getJSON(t, s, "/api/search?mode=wildcard&q="+strings.Repeat("a", 65), nil); rec.Code != 400 {
+		t.Errorf("a 65-character pattern: status %d, want 400", rec.Code)
 	}
 }
 

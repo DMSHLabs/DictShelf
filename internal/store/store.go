@@ -278,7 +278,7 @@ func (s *Store) SourcePath() string { return s.srcPath }
 func (s *Store) UUID() string { return s.uuid }
 
 func (s *Store) Caps() dict.Caps {
-	return dict.Caps{Exact: true, Prefix: true, Contains: s.hasTrigram, FTS: s.ftsOK}
+	return dict.Caps{Exact: true, Prefix: true, Contains: s.hasTrigram, FTS: s.ftsOK, Wildcard: true}
 }
 
 // ContainsStale reports that the trigram index was built by a different text

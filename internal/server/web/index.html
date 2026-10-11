@@ -214,6 +214,15 @@ select{font-size:13px;color:var(--fg-soft);background:var(--bg-card);
 #status>.msg{overflow:hidden;min-height:0}
 #status .txt{padding:var(--sp-2) 0}
 #status.show{grid-template-rows:1fr;opacity:1}
+/* A warning that stays until it is dismissed: #status is replaced by the next
+   statement, and a dictionary that cannot be opened at all must not be. */
+.notice{display:flex;gap:var(--sp-2);align-items:flex-start;margin-top:var(--sp-2);
+  padding:var(--sp-2) var(--sp-3);border:1px solid var(--danger-line);border-radius:10px;
+  background:var(--danger-soft);color:var(--fg);font-size:13px}
+.notice[hidden]{display:none}
+.notice .ntxt{flex:1;min-width:0;overflow-wrap:anywhere}
+.notice p{margin:0}
+.notice p+p{margin-top:.3em}
 /* one spinner, two homes: inline in #status, and large in the startup
    panel below (.empty) while the dictionary list is still arriving */
 .spin{display:inline-block;width:1em;height:1em;border:2px solid var(--line);
@@ -1099,7 +1108,7 @@ html:has(#panel.show) .bar{padding-right:var(--wd-sbw,0px)}
 <!-- enterkeyhint is declared, not inferred: type=search happens to label the
      soft key "Search" on most Android builds, but that is a browser default
      and not a contract. -->
-<input type="search" id="q" placeholder="Search…" autocomplete="off" enterkeyhint="search" autofocus aria-label="Search term" disabled>
+<input type="search" id="q" placeholder="Search…" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="search" autofocus aria-label="Search term" disabled>
 </span>
 <span class="seg">
 <span class="chip" id="modeChip" aria-hidden="true"></span>
@@ -1107,6 +1116,7 @@ html:has(#panel.show) .bar{padding-right:var(--wd-sbw,0px)}
 <option value="prefix">prefix</option>
 <option value="exact">exact</option>
 <option value="contains">contains</option>
+<option value="wildcard">wildcard</option>
 <option value="fts">full-text</option>
 </select>
 </span>
@@ -1132,6 +1142,8 @@ html:has(#panel.show) .bar{padding-right:var(--wd-sbw,0px)}
 <!-- Three levels, one job each: #status is the collapsing grid, .msg is the
      clipped row, and .txt carries the padding INSIDE the clip so the closed
      state is truly 0px rather than 0px plus padding. -->
+<div id="notice" class="notice" role="alert" hidden><div class="ntxt" id="noticeMsg"></div>
+<button type="button" class="btn" id="noticeClose" title="Dismiss" aria-label="Dismiss">✕</button></div>
 <div id="status" role="status" aria-live="polite"><div class="msg"><div class="txt" id="statusMsg"></div></div></div>
 <div id="out"></div>
 </main>
@@ -1988,6 +2000,29 @@ function stopBootScreen(){
   if(bootTimer){clearInterval(bootTimer);bootTimer=null}
   if($("out").querySelector(".boot"))$("out").innerHTML="";
 }
+/* Dictionaries too large to open on this system (the row's tooLarge): its
+   text unpacks past the reader's limit, or past the free space to hold it.
+   The panel row says so too, but nothing leads there. Said once, until
+   dismissed. A dismissal is per browser and lasts while the dictionary keeps
+   failing: by id, not by message, because the free space a message quotes
+   changes between starts; and dropped once the dictionary opens, so a later
+   failure is reported again. */
+const DISMISSED_KEY="wudict_dismissed";
+function showTooLarge(){
+  const big=new Set(dicts.filter(d=>d.tooLarge&&d.error).map(d=>d.id));
+  const saved=loadJSON(DISMISSED_KEY,[]);
+  const gone=(Array.isArray(saved)?saved:[]).filter(id=>big.has(id));
+  if(gone.length!==(Array.isArray(saved)?saved.length:0))saveDismissed(gone);
+  const show=dicts.filter(d=>big.has(d.id)&&!gone.includes(d.id));
+  $("noticeMsg").innerHTML=show.map(d=>
+    `<p>⚠ Could not open <b>${esc(dictLabel(d))}</b>: ${esc(d.error)}</p>`).join("");
+  $("notice").hidden=!show.length;
+}
+function saveDismissed(ids){try{localStorage.setItem(DISMISSED_KEY,JSON.stringify(ids))}catch(_){}}
+$("noticeClose").addEventListener("click",()=>{
+  saveDismissed(dicts.filter(d=>d.tooLarge&&d.error).map(d=>d.id));
+  $("notice").hidden=true;
+});
 /* the honest progress line: a count, never a percentage */
 function readyCount(){
   return dictTotal?`Loading dictionaries — ${dicts.length} of ${dictTotal} ready…`
@@ -2253,6 +2288,7 @@ async function loadDicts(rescan,opts={}){
   setOrder(orderedIds());savePrefs(true);
   dictsSettled=true; // every row is in; the groups can be counted
   refreshDictUI(true);
+  showTooLarge();
   setPhase("ready");
   clearStatus("load");clearStatus("dicts");
   // a search run against a half-loaded list is now answerable in full
@@ -2426,8 +2462,8 @@ $("enAll").addEventListener("change",e=>setAllEnabled(e.target.checked));
    names a mode differently from the rest of the page. */
 /* The user-facing name of each index switch (docs/STYLE.md), shared by the
    switch tooltips, the in-results offer and its collected line. */
-const FEAT_NAME={contains:"contains index",fts:"full-text index",media:"media pack"};
-const MODE_SHORT={prefix:"prefix",exact:"exact",contains:"contains",fts:"full-text"};
+const FEAT_NAME={base:"headword index",contains:"contains index",fts:"full-text index",media:"media pack"};
+const MODE_SHORT={prefix:"prefix",exact:"exact",contains:"contains",wildcard:"wildcard",fts:"full-text"};
 function syncChips(){
   const m=$("mode"),d=$("dict");
   $("modeChip").textContent=MODE_SHORT[m.value]||m.value;
@@ -3928,9 +3964,10 @@ function renderSlot(box,h,mode,q,perDict,group){
     return{shown:true};
   }
   if(h.skipped){
-    // Both heavier indexes are opt-in, so a skipped dictionary is not a dead
-    // end: offer to add the one this search needed, right where it was missed.
-    const feat=mode==="fts"?"fts":mode==="contains"?"contains":"";
+    // A skipped dictionary is not a dead end: offer to add the index this
+    // search needed, right where it was missed. Wildcard needs only the
+    // headword index ("base", what the panel's index chip builds).
+    const feat=mode==="fts"?"fts":mode==="contains"?"contains":mode==="wildcard"?"base":"";
     if(feat){
       /* But it has not answered the QUERY - it has answered about itself, and
          a slot in the answer list is for answers. On a corpus where the heavy
@@ -4385,11 +4422,16 @@ document.addEventListener("keydown",e=>{
    for "Artificial". A cleaner that is right for one caller is silent
    corruption for the other, so these are two functions, not a smarter
    regex. */
+/* The modes a followed link or a handed-over word does not use. Both read the
+   text as something other than a headword: full-text as words in articles,
+   wildcard as a pattern, where `Who?` would match "Whom" and a capital
+   letter would make the lookup case-sensitive. */
+function notForWords(mode){return mode==="fts"||mode==="wildcard"}
 function searchFor(term,opts){
   const t=String(term||"").trim();
   if(!t)return;
   $("q").value=t;                       // verbatim: no trimming, ever
-  if($("mode").value==="fts")$("mode").value="prefix";
+  if(notForWords($("mode").value))$("mode").value="prefix";
   const scope=opts?.scope||null,frag=opts?.frag||"";
   scopeOnce=scope;
   // the fragment addresses a place in the SCOPED article; renderSlot matches
@@ -5036,9 +5078,9 @@ function applyURL(){
   if(p.get("theme")){localStorage.setItem("wudict_theme",p.get("theme"));applyTheme(p.get("theme"))}
   // A word handed over with no usable mode (another app, the Android popup,
   // the extension, a bookmark) is a headword lookup, as a followed link is in
-  // searchFor: a remembered full-text mode does not apply to it. The page's
-  // own addresses always carry the mode.
-  if(!setMode(p.get("mode"))&&p.get("q")&&$("mode").value==="fts")setMode("prefix");
+  // searchFor: a remembered full-text or wildcard mode does not apply to it.
+  // The page's own addresses always carry the mode.
+  if(!setMode(p.get("mode"))&&p.get("q")&&notForWords($("mode").value))setMode("prefix");
   if(p.get("dict"))selectDict(p.get("dict"));
   syncChips();
   if(p.get("q")){$("q").value=p.get("q");scopeOnce=p.get("from")||null;commitOnce=true;doSearch()}

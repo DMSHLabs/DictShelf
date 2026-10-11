@@ -304,7 +304,7 @@ public class LookupActivity extends Activity {
         return s.isEmpty() ? null : s;
     }
 
-    /** The page's four modes (index.html #mode); anything else is the caller's typo. */
+    /** The page's five modes (index.html #mode); anything else is the caller's typo. */
     private static String mode(String m) {
         if (m == null) return null;
         switch (m) {
@@ -312,6 +312,7 @@ public class LookupActivity extends Activity {
             case "prefix":
             case "contains":
             case "fts":
+            case "wildcard":
                 return m;
             default:
                 return null; // leave the page on its own default

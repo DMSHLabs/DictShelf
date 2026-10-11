@@ -41,7 +41,8 @@ it is a different thing.
 | **contains index** | the index behind contains search (FTS5 trigram) | substring index, trigram index, Contain |
 | **full-text index** | the index behind full-text search (FTS5) | FTS index (except in API and CLI reference), text index |
 | **media pack** | `media.db`: the dictionary's images and audio, copied into the library | packed media, media index |
-| **exact**, **prefix**, **contains**, **full-text** | the four search modes, as the API, the URL and the CLI spell them | starts with, substring search, FTS mode, fuzzy |
+| **exact**, **prefix**, **contains**, **full-text**, **wildcard** | the five search modes, as the API, the URL and the CLI spell them | starts with, substring search, FTS mode, fuzzy, pattern search, glob |
+| **wildcard** (character) | `?` (one character) or `*` (any number of characters) in a wildcard query | joker, placeholder, glob character |
 | **phrase**, **proximity**, **anywhere** | the three stages of an unquoted full-text query | ladder, rung, widening, step |
 | **headword** | the word an entry is filed under | keyword, key (except `wudict keys`), lemma (for a headword) |
 | **article** | the text of one entry, as the dictionary formats it | definition (for the whole article), body, card |
