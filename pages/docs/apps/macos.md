@@ -28,7 +28,7 @@ has the same effect as step 3:
 ```
 
 The menu bar then shows the wuDict icon, and the browser opens
-[localhost:6888](http://localhost:6888).
+[localhost:6889](http://localhost:6889).
 
 ## Menu-bar icon
 

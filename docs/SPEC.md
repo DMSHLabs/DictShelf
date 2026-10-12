@@ -8,7 +8,7 @@
 2. **Prepared backend (the "native" mode — D15)** — canonical SQLite databases built from the source, in the dictionary's library folder (D20). Always: headwords, aliases and articles in `text.db`, which every headword mode needs. Opt-in per dictionary (D24): the contains (trigram) index, the full-text (FTS5) index, and the binary resources packed into `media.db` (§3); without `media.db`, resources stay lazy from the source.
 
 ```
-config: AUTO_INDEX = on | off            (prepare headwords on first search, D13)
+config: AUTO_INDEX = on | off            (prepare headwords on first search, D13; not formats with their own index)
         per dictionary: contains · full-text · media
 
               runtime
@@ -21,6 +21,7 @@ config: AUTO_INDEX = on | off            (prepare headwords on first search, D13
 - **Capability tiers**: backends advertise `Caps.Exact/Prefix/Contains/FullText` (D16 renamed `Fuzzy`→`Contains`). the panel shows contains/full-text/media as per-dictionary switches with their measured sizes (D24), and a search mode a dictionary lacks offers to add it inline; the headword index is prepared on its own (D13, `AUTO_INDEX = on|off`).
 - **D15 (2026-07-25)**: the ingested pair is the *native* mode and direct readers are *preview*. Read D15 before optimizing anything on the direct side.
 - **DSL/BGL/wudict markdown exception**: no native index ⇒ opening one prepares its library folder first (`store.OpenSelfPrepared`) — with the same cheap plan as any other format (headwords + article text stored so it is readable at all; full-text and contains stay opt-in, D24). Its resources (`.files.zip`) stay lazy.
+- **Self-indexed formats**: a format such as ZIM already has an on-disk lookup index, so first search does not create a duplicate `text.db`, even when that search targets the only dictionary. Explicit indexing from the dictionary controls or CLI remains available.
 - Sources are never *modified*: nothing writes into a dictionary file. They can be **deleted**, but only by an explicit removal (D63 amended: `DELETE /api/library`, `wudict rm`) — never as a side effect of ingest, search or cleanup. `meta` stores source size/mtime/hash; changed source ⇒ stale-DB prompt (re-ingest or fall back to direct).
 
 ### Direct-backend feasibility notes (why this is OK)
@@ -410,7 +411,7 @@ type Searcher interface { …Context(ctx, …); FullTextMatch(ctx, …) }       
 - Ingester (`store.IngestPlan`): consumes `Reader`, normalizes body → HTML, strips text for FTS, batch inserts (5000 rows per progress step), then FTS `optimize`, `ANALYZE`, `PRAGMA optimize`. Media packing (`store.IngestMedia`) writes `media.db`.
 - **One way to change prepared data (D157)**: `store.Reconcile(src, Target, Hooks)`. Every caller — the panel's switches (`setFeatures`), the background indexer (`ensureBaseIndex`), the abbreviation sweep, the Rebuild job (`refresh`), `wudict ingest`, `wudict reindex`, and the self-preparing formats (`store.OpenSelfPrepared`) — states the result it wants, and what differs between them is the Target: `FullText`/`Contains` (nil keeps what is built; a dictionary never prepared starts from headwords only, D24 — `wudict ingest` included, D152 Am. 1), `Media` (leave · keep · repack · on · off), `Rebuild` (which outdated reasons rebuild usable data; nil never — D151), `Dir`/`Out`. A missing, unusable or source-changed database is always rebuilt. The text rebuild never opens the direct backend (PERF M3); only a media pack needs one.
 - **One read per prepared database (D157)**: `store.Inspect(textDB)` reads the meta once and answers usability, plan (`PlanFromMeta`, the one reader of `ingest_level`/`has_trigram`), staleness (`Stale`/`TextStale`) and media pairing from it; `FindPrepared` is `PreparedFor` with that read kept.
-- Triggered: CLI `wudict ingest [-full] [-fulltext] [-contains] [<path|dir>…]` (no path: the configured `DICT_DIR`; a flag left out keeps the prepared plan, D152); web UI per-dict switches / "full-text for every dictionary" with SSE progress; headword-level indexing happens silently on first search (D13).
+- Triggered: CLI `wudict ingest [-full] [-fulltext] [-contains] [<path|dir>…]` (no path: the configured `DICT_DIR`; a flag left out keeps the prepared plan, D152); web UI per-dict switches / "full-text for every dictionary" with SSE progress; headword-level indexing happens silently on first search for formats without their own index (D13).
 - Durability (P10): an upgrade no longer deletes the existing `.text.db` first — the atomic temp+rename overwrites it, so an interrupted "index all" leaves the old index intact; the finished temp is `fsync`ed before the rename (inserts still run `synchronous=OFF`; only the commit boundary syncs).
 - Direct and prepared backends share the format packages: each format implements `Dictionary` (runtime) + `Reader` (ingest scan) so parsing code is written once.
 

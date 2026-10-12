@@ -354,7 +354,7 @@ SETTINGS
 
   --port         <port>   Listen port
                           env: SERVER_PORT    toml: SERVER_PORT
-                          default: 6888
+                          default: 6889
 
   --config       <path>   The wudict.toml to read, instead of the search order
                           env: CONFIG_PATH
@@ -487,6 +487,10 @@ func fail(err error) {
 func Main() {
 	guiLaunch = tray.GUILaunched()
 	if !informationalCommand(os.Args[1:]) {
+		if err := prepareWindowsForkProfile(); err != nil {
+			fail(err)
+			return
+		}
 		release, err := acquireProcessLock()
 		if err != nil {
 			fail(err)
@@ -822,7 +826,7 @@ func cmdQuery(mode string, args []string) error {
 	// CLI is not a server, and inventing an address here would emit links to
 	// something that may not be listening. Point it at a running server and the
 	// output is a self-contained page.
-	base := fs.String("base", "", "prefix for /res/… references (e.g. http://127.0.0.1:6888)")
+	base := fs.String("base", "", "prefix for /res/… references (e.g. http://127.0.0.1:6889)")
 	fs.Parse(args)
 	if fs.NArg() != 2 {
 		return fmt.Errorf("usage: wudict %s [-n max] [-format raw|clean|text] <dictfile> <word>", mode)
@@ -1354,7 +1358,7 @@ Hint: pick another port with --port, e.g.:  wudict --port %s
 	// --config re-points both. Loaded BEFORE the registry: Warm skips disabled
 	// dictionaries, and it starts inside NewRegistry.
 	user := server.UserDir(userDir(cfgFile))
-	regOpts := []server.Option{server.WithPrefs(server.LoadPrefs(user.State()))}
+	regOpts := []server.Option{server.WithPrefs(server.LoadPrefs(user.State())), server.WithAutoIndex(cfg.AutoIndexEnabled())}
 	// The wudict howto (internal/howto) is deliberately NOT installed or
 	// listed here. It ships as a dictionary, so listing it would make the
 	// registry non-empty on a first run that has no dictionaries of the
@@ -1578,7 +1582,11 @@ func openHeadlessLog() (*os.File, error) {
 		if dir == "" {
 			return nil, errors.New("LOCALAPPDATA is not set")
 		}
-		path = filepath.Join(dir, "wudict", "wudict.log")
+		name := "wudict"
+		if os.Getenv("WUDICT_PROFILE") == "wudict2" {
+			name = "wudict2"
+		}
+		path = filepath.Join(dir, name, "wudict.log")
 	default:
 		home, err := os.UserHomeDir()
 		if err != nil {
@@ -2001,7 +2009,7 @@ func cmdSearchAll(args []string) error {
 	modeStr := fs.String("mode", "exact", "exact|prefix|contains|fts")
 	n := fs.Int("n", 10, "max results per dictionary")
 	format := fs.String("format", "text", "text|clean|raw|list - list prints headwords only")
-	base := fs.String("base", "", "prefix for /res/… references (e.g. http://127.0.0.1:6888)")
+	base := fs.String("base", "", "prefix for /res/… references (e.g. http://127.0.0.1:6889)")
 	var dictDirs multiFlag
 	fs.Var(&dictDirs, "dict-dir", "folder to search; repeat for several (env/toml: DICT_DIR)")
 	configPath := fs.String("config", "", "path to wudict.toml (env: CONFIG_PATH)")

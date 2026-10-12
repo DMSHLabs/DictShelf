@@ -463,10 +463,7 @@ func (e *entry) maybeAutoIndex() {
 	// with zstd, a text.db compresses one article at a time with DEFLATE,
 	// D24), so a 123 MB wiktionary would silently become a 431 MB text.db and
 	// an 8 GB wikipedia something no one asked for.
-	e.dMu.RLock()
-	si, selfIdx := e.d.(selfIndexed)
-	e.dMu.RUnlock()
-	if selfIdx && si.SelfIndexed() {
+	if e.hasSelfIndex() {
 		return
 	}
 	if !e.autoTried.CompareAndSwap(false, true) {
@@ -584,6 +581,16 @@ func (e *entry) demandIndex() {
 		}
 		logx.V("demand-index %s: index ready", e.Path)
 	}()
+}
+
+func (e *entry) hasSelfIndex() bool {
+	if dict.IsSelfIndexed(e.Path) {
+		return true
+	}
+	e.dMu.RLock()
+	d, ok := e.d.(selfIndexed)
+	e.dMu.RUnlock()
+	return ok && d.SelfIndexed()
 }
 
 // indexing reports that a demanded ingest is queued or running for this
@@ -981,16 +988,18 @@ func openUpgradedOrDirect(path string) (dict.Dictionary, error) {
 // non-empty registry. Opting in is a deliberate, remembered choice made on the
 // setup page ("Use these dictionaries").
 type Registry struct {
-	jobs      jobTable
-	dslAutoMu sync.Mutex
-	mu        sync.RWMutex
-	dictDirs  []string // dictionary folders: .mdx/.slob/.ifo/.dsl/.bgl sources
-	useCached bool     // include prepared dictionaries from the library (USE_CACHED)
-	entries   []*entry
-	byID      map[string]*entry
-	fromLib   int    // how many entries came from the library, not a dict folder
-	roots     []Root // per-folder status, for the startup summary and setup page
-	builtin   []Builtin
+	jobs                jobTable
+	dslAutoMu           sync.Mutex
+	mu                  sync.RWMutex
+	dictDirs            []string // dictionary folders: .mdx/.slob/.ifo/.dsl/.bgl sources
+	useCached           bool     // include prepared dictionaries from the library (USE_CACHED)
+	autoIndexOnAdd      bool
+	autoIndexConfigured bool
+	entries             []*entry
+	byID                map[string]*entry
+	fromLib             int    // how many entries came from the library, not a dict folder
+	roots               []Root // per-folder status, for the startup summary and setup page
+	builtin             []Builtin
 
 	// previewBudget caps the memory unprepared dictionaries may hold open
 	// (PREVIEW_MEMORY; 0 = unlimited). Prepared ones answer from disk and are
@@ -1049,6 +1058,14 @@ func WithPrefs(p *Prefs) Option {
 		if p != nil {
 			r.prefs = p
 		}
+	}
+}
+
+// WithAutoIndex applies AUTO_INDEX before the initial folder scan.
+func WithAutoIndex(on bool) Option {
+	return func(r *Registry) {
+		r.autoIndexOnAdd = on
+		r.autoIndexConfigured = true
 	}
 }
 

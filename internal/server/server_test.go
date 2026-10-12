@@ -377,53 +377,56 @@ func init() {
 	words := []string{"córazon", "beta", "gamma"}
 	dict.RegisterFormat(".fake", func(p string) (dict.Dictionary, error) { return &fakeDict{words: words, path: p}, nil })
 	dict.RegisterReader(".fake", func(p string) (dict.Reader, error) { return &fakeReader{words: words, path: p}, nil })
+	dict.RegisterFormat(".selfidx", func(p string) (dict.Dictionary, error) { return &fakeDict{words: words, path: p}, nil })
+	dict.RegisterReader(".selfidx", func(p string) (dict.Reader, error) { return &fakeReader{words: words, path: p}, nil })
+	dict.RegisterSelfIndexed(".selfidx")
 }
 
-// TestAutoIndexOnFirstSearch: a direct-only dictionary (no contains) must gain
-// an index in the background the first time it is searched, so a later
-// contains query - including accent-folded - succeeds without any explicit
-// "enable" step.
-func TestAutoIndexOnFirstSearch(t *testing.T) {
+// A newly discovered source is indexed before search; queries do not schedule
+// index work, including when an unprepared source is deliberately retained.
+func TestIndexOnFolderAddNotSearch(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "x.fake"), []byte("x"), 0o644); err != nil {
-		t.Fatal(err)
-	}
 	isolatedDBDir(t)
-	reg, err := NewRegistry([]string{dir}, false)
+	reg, err := NewRegistry([]string{dir}, false, WithAutoIndex(true))
 	if err != nil {
 		t.Fatal(err)
 	}
 	s := New(reg)
-	s.AutoIndex = true
+	if err := os.WriteFile(filepath.Join(dir, "x.fake"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.Rescan(); err != nil {
+		t.Fatal(err)
+	}
+	waitIndexPreparation(t, reg)
 
 	dicts := getDicts(t, s, "/api/dicts")
 	id := dicts[0].ID
 	if dicts[0].Caps.Contains {
-		t.Fatalf("fake dict should start without contains: %+v", dicts[0])
+		t.Fatalf("default index unexpectedly includes contains: %+v", dicts[0])
 	}
-
-	// first search (prefix) triggers the background index build
-	searchStream(t, s, "/api/search?q=beta&mode=prefix&dict="+id)
-
-	// poll until the accent-folded prefix query resolves via the new index:
-	// the direct backend matches raw strings only, so "corazon" finding
-	// "córazon" proves the index was built behind the search
-	var hits []streamMsg
-	for i := 0; i < 100; i++ {
-		hits = searchStream(t, s, "/api/search?q=corazon&mode=prefix&dict="+id)
-		if len(hits) == 1 && !hits[0].Skipped && len(hits[0].Results) == 1 {
-			break
-		}
-		time.Sleep(30 * time.Millisecond)
-	}
+	hits := searchStream(t, s, "/api/search?q=corazon&mode=prefix&dict="+id)
 	if len(hits) != 1 || hits[0].Skipped || len(hits[0].Results) != 1 || hits[0].Results[0].Headword != "córazon" {
-		t.Fatalf("auto-index did not become available: %+v", hits)
+		t.Fatalf("folder index did not become available: %+v", hits)
 	}
-	// and it built the cheap index only - contains stays off until asked for
-	dicts2 := getDicts(t, s, "/api/dicts")
-	if dicts2[0].Caps.Contains {
-		t.Error("auto-index must not build a trigram index")
+	if err := os.WriteFile(filepath.Join(dir, "held.fake"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
 	}
+	reg.autoIndexOnAdd = false
+	if err := reg.Rescan(); err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range reg.all() {
+		if filepath.Base(e.Path) != "held.fake" {
+			continue
+		}
+		searchStream(t, s, "/api/search?q=beta&mode=prefix&dict="+e.ID)
+		if _, ok := validPrepared(e.Path); ok || e.autoTried.Load() || e.indexing() {
+			t.Fatal("search started index preparation")
+		}
+		return
+	}
+	t.Fatal("held dictionary not discovered")
 }
 
 // TestFullIngestNoResourcesFlagsEmpty: a full ingest of a dictionary with no
