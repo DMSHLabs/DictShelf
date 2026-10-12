@@ -111,7 +111,7 @@ wudict fts      [-n max] <dictfile> <query>   # full-text query, as in the app
 matches.
 
 ``` sh title="an article as an HTML file whose images load from the server"
-wudict lookup -format clean -base http://127.0.0.1:6888 ~/Dictionaries/Oxford.mdx flight > flight.html
+wudict lookup -format clean -base http://127.0.0.1:6889 ~/Dictionaries/Oxford.mdx flight > flight.html
 ```
 
 ## searchall

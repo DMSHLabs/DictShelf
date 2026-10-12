@@ -14,7 +14,8 @@ will move without notice.
 - **Private — do not depend on:** `/api/prefs`, `/api/ingest`, `/api/setup`,
   `/api/library`, `/api/rescan`, `/api/reveal`, `/setup`, `/assets/…`
 
-Default origin `http://127.0.0.1:6888`. Both parts are user-configurable
+The wuDict2 default origin is `http://127.0.0.1:6889` (upstream wuDict uses
+`http://127.0.0.1:6888`). Both parts are user-configurable
 (`--ip` / `SERVER_IP`, `--port` / `SERVER_PORT`), so a client must treat the
 base URL as configuration, never a constant.
 
@@ -208,7 +209,7 @@ page's CORS. The working shape is:
 
 ```
 content script  ──message──▶  background service worker  ──fetch──▶  wudict
-   (hover, DOM)                (host_permissions: http://127.0.0.1:6888/*)
+   (hover, DOM)                (host_permissions: both configured server ports)
 ```
 
 The service worker holds the host permission, so its fetches are not

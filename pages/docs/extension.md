@@ -22,8 +22,10 @@ page: when you hover over a word while holding a key, or from the context menu.
   </a>
 </div>
 
-Requires a running wudict server (by default `http://127.0.0.1:6888`, or on
-another computer in your network) and Chrome 116 or Firefox 128 or later.
+Requires a running server (`http://127.0.0.1:6889` for wuDict2, or
+`http://127.0.0.1:6888` for upstream wuDict; a server on another computer also
+works) and Chrome 116 or Firefox 128 or later. Set **Base URL** below to the
+port of the server you use.
 
 [Run at startup](running.md){ .md-button }
 
@@ -52,7 +54,7 @@ extension shortcut settings.
 
 | Option | Default |
 | --- | --- |
-| Base URL | `http://127.0.0.1:6888` |
+| Base URL | `http://127.0.0.1:6889` for wuDict2; `6888` for upstream wuDict |
 | Hold key | <kbd>Alt</kbd>; also <kbd>Ctrl</kbd>, <kbd>Shift</kbd>, <kbd>Meta</kbd>, or none |
 | Hover delay | 200 ms |
 | Search opens | the full wudict page |

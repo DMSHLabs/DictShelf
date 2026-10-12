@@ -31,7 +31,7 @@ rem is: %CC%, then gcc.exe on PATH, then GCC_ROOTS. One found by path is handed
 rem to Go as an absolute CC, with CXX beside it; gcc locates its own cc1, ld and
 rem runtime DLLs relative to itself, so PATH is untouched.
 rem
-rem This builds the fork's Windows desktop product - wuDict2, port 6888, its
+rem This builds the fork's Windows desktop product - wuDict2, port 6889, its
 rem own config and library. It is NOT the Android app: that one is
 rem build-android.cmd (also wuDict2, port 6889, the same code inside an APK).
 rem ============================================================

@@ -8,6 +8,7 @@ import (
 	"maps"
 	"net/http"
 
+	"github.com/wuweidict/wudict/internal/dict"
 	"github.com/wuweidict/wudict/internal/logx"
 	"github.com/wuweidict/wudict/internal/store"
 )
@@ -61,11 +62,18 @@ func (s *Server) handleIndexDefaults(w http.ResponseWriter, req *http.Request) {
 func (r *Registry) queueNewDSL() error {
 	entries := r.all()
 	current, _ := r.prefs.data()
+	enabled := current.IndexDefaults != nil
+	if r.autoIndexConfigured {
+		enabled = r.autoIndexOnAdd
+	}
+	if !enabled {
+		return nil
+	}
 	families := make(map[string][]*entry)
 	for _, e := range entries {
 		if e.dslSource != "" {
 			families[e.dslSource] = append(families[e.dslSource], e)
-		} else if current.IndexDefaults != nil && !e.builtin && !store.IsTextDB(e.Path) {
+		} else if !e.builtin && !store.IsTextDB(e.Path) && !dict.IsSelfIndexed(e.Path) {
 			families[cleanAbs(e.Path)] = append(families[cleanAbs(e.Path)], e)
 		}
 	}
@@ -73,10 +81,7 @@ func (r *Registry) queueNewDSL() error {
 	p.editMu.Lock()
 	defer p.editMu.Unlock()
 	f, _ := p.data()
-	// Existing installations retain their choices until defaults are saved.
-	if f.IndexDefaults == nil {
-		return nil
-	}
+	defaults := r.prefs.newIndexDefaults()
 	f.DSLKnown = maps.Clone(f.DSLKnown)
 	if f.DSLKnown == nil {
 		f.DSLKnown = map[string]bool{}
@@ -111,7 +116,7 @@ func (r *Registry) queueNewDSL() error {
 			continue
 		}
 		for _, other := range family {
-			v := *f.IndexDefaults
+			v := defaults
 			key := other.indexRemovalKey()
 			// Block implicit preparation until the selected plan finishes.
 			f.DSLRemoved[key] = true
@@ -136,6 +141,18 @@ func (r *Registry) prepareNewDSL() {
 		f, _ := p.data()
 		v, ok := f.DSLPending[key]
 		if !ok {
+			continue
+		}
+		if dict.IsSelfIndexed(e.Path) {
+			p.editMu.Lock()
+			err := p.mutate(func(f *prefsFile) {
+				delete(f.DSLPending, key)
+				delete(f.DSLRemoved, key)
+			})
+			p.editMu.Unlock()
+			if err != nil {
+				logx.Warn("clearing obsolete automatic index plan for %s: %v", e.Path, err)
+			}
 			continue
 		}
 		jobKey := ingestKey(e.ID)

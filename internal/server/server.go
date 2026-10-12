@@ -215,11 +215,8 @@ type Server struct {
 	// article that references the file.
 	nulSeen sync.Map
 
-	// AutoIndex, when true (config AUTO_INDEX=on, the default), prepares a
-	// dictionary's headword index the first time it is searched - silently,
-	// in the background - so accent-insensitive search works on the next
-	// query without the user ever asking. The heavier indexes (contains,
-	// full-text) and media stay opt-in per dictionary.
+	// AutoIndex reflects config AUTO_INDEX for clients showing index settings.
+	// The registry schedules automatic preparation when sources are discovered.
 	AutoIndex bool
 
 	// BrowserExtensions optionally pins which extension origins may read the
@@ -1437,19 +1434,7 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 		e := e
 		begin[i] = streamSlot{Dict: e.ID, Name: e.ID}
 		openers[i] = func() (dict.Dictionary, error) {
-			d, err := e.openWithin(fan)
-			if err == nil && s.AutoIndex {
-				// A search of one dictionary is a demand for that dictionary,
-				// so its index jumps the background queue (demandIndex); a
-				// dictionary that merely happened to be in a wide search takes
-				// its turn (maybeAutoIndex). Both prepare the same thing.
-				if demand {
-					e.demandIndex()
-				} else {
-					e.maybeAutoIndex()
-				}
-			}
-			return d, err
+			return e.openWithin(fan)
 		}
 	}
 	writeLine(streamMsg{T: "begin", Slots: begin})

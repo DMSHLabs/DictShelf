@@ -432,13 +432,11 @@ func TestIndexingConcurrencyIsBounded(t *testing.T) {
 		maxIngests.Store(0)
 		SetIndexWorkers(workers)
 		isolatedDBDir(t) // a fresh library so every dictionary needs preparing
-		reg, err := NewRegistry([]string{dir}, false)
+		reg, err := NewRegistry([]string{dir}, false, WithAutoIndex(true))
 		if err != nil {
 			t.Fatal(err)
 		}
-		s := New(reg)
-		s.AutoIndex = true
-		searchStream(t, s, "/api/search?q=w&mode=prefix&dict=all")
+		// Discovery starts the bounded background queue without a search.
 		deadline := time.Now().Add(20 * time.Second)
 		for time.Now().Before(deadline) {
 			var prepared int
@@ -456,8 +454,7 @@ func TestIndexingConcurrencyIsBounded(t *testing.T) {
 		if got == 0 {
 			t.Fatalf("workers=%d: no indexing observed", workers)
 		}
-		// the foreground slot may add one on top of the background limit
-		if got > workers+1 {
+		if got > workers {
 			t.Errorf("INDEX_WORKERS=%d: %d dictionaries were indexed at once", workers, got)
 		}
 		t.Logf("INDEX_WORKERS=%d → peak concurrent ingests %d", workers, got)
