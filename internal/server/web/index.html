@@ -13,6 +13,14 @@
 <script>
 if (new URLSearchParams(location.search).get('wudict_webview2') === '1') {
   document.documentElement.setAttribute('data-webview2', '');
+  document.addEventListener('click', function (event) {
+    var link = event.target.closest && event.target.closest('a[href]');
+    if (!link) return;
+    var target = new URL(link.href, location.href);
+    if (target.origin !== location.origin || target.pathname !== '/browse') return;
+    target.searchParams.set('wudict_webview2', '1');
+    link.href = target.pathname + target.search + target.hash;
+  }, true);
 }
 </script>
 <script>
@@ -195,6 +203,7 @@ window.wudictFontScale=(function(){
      exactly when an eager "type and hit Enter" would reach the search path
      with an empty dictionary list. -->
 <form id="frm" class="col" role="search" aria-busy="true">
+<a class="btn" id="barBackWords" href="/browse" aria-label="{{T:search.backToWords}}" title="{{T:search.backToWords}}" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M19 12H5m6-6-6 6 6 6"/></svg><span>{{T:search.words}}</span></a>
 <span class="brand">wu<small>Dict2</small></span>
 <!-- The search pill. Above 600px it is display:contents, so the field and the
      two selects are direct flex children of the form. Below it the pill
@@ -1002,6 +1011,7 @@ window.wudictFontScale=(function(){
     <label class="sys-row"><input type="checkbox" id="sysLogWeb"><span class="sys-label">{{T:system.logWeb}}</span></label>
     <p class="sys-hint">{{T:system.logHint}}</p>
     <label class="sys-row"><input type="checkbox" id="sysBrowseDiagnostics"><span class="sys-label">{{T:system.browseDiagnostics}}</span></label>
+    <label class="sys-row"><input type="checkbox" id="sysFolderDiagnostics"><span class="sys-label">{{T:system.folderDiagnostics}}</span></label>
     <div class="group-toolbar"><a class="btn" id="sysSaveLog" href="/api/system-log" download>{{T:panel.saveSystemLog}}</a></div>
 
     <!-- Advanced FOLDS, and starts folded (the reader's ask, 2026-09-28). Two
@@ -3355,6 +3365,7 @@ function sysPaint(state){
   $("sysLogBase").disabled=!state.logEnabled;
   $("sysLogWeb").disabled=!state.logEnabled;
   $("sysBrowseDiagnostics").checked=browseDiagnosticsEnabled();
+  $("sysFolderDiagnostics").checked=folderDiagnosticsEnabled();
   const box=$("sysAdvanced");
   box.replaceChildren();
   sysRows.length=0;
@@ -3620,6 +3631,11 @@ async function showDesktopSysSettings(){
   diagnostics.addEventListener("change",()=>setBrowseDiagnostics(diagnostics.checked));
   const diagnosticsText=document.createElement("span");diagnosticsText.className="sys-label";diagnosticsText.textContent=tx("system.browseDiagnostics");
   diagnosticsLabel.append(diagnostics,diagnosticsText);body.append(diagnosticsLabel);
+  const folderLabel=document.createElement("label");folderLabel.className="sys-row";
+  const folderDiagnostics=document.createElement("input");folderDiagnostics.type="checkbox";folderDiagnostics.checked=folderDiagnosticsEnabled();
+  folderDiagnostics.addEventListener("change",()=>setFolderDiagnostics(folderDiagnostics.checked));
+  const folderText=document.createElement("span");folderText.className="sys-label";folderText.textContent=tx("system.folderDiagnostics");
+  folderLabel.append(folderDiagnostics,folderText);body.append(folderLabel);
   const saveLog=document.createElement("a");saveLog.className="btn";saveLog.href="/api/system-log";saveLog.download="";
   saveLog.textContent=tx("panel.saveSystemLog");body.append(saveLog);
   if(c.configPath){
@@ -3669,6 +3685,8 @@ $("sysInfo").addEventListener("change",e=>sysSwitch("info",e.target.checked));
 $("sysKey").addEventListener("change",e=>sysSwitch("key",e.target.checked));
 function browseDiagnosticsEnabled(){try{return localStorage.getItem("wudict_browse_diagnostics")==="1"}catch(_){return false}}
 function setBrowseDiagnostics(on){try{if(on)localStorage.setItem("wudict_browse_diagnostics","1");else localStorage.removeItem("wudict_browse_diagnostics")}catch(_){}}
+function folderDiagnosticsEnabled(){try{return localStorage.getItem("wudict_folder_diagnostics")==="1"}catch(_){return false}}
+function setFolderDiagnostics(on){try{if(on)localStorage.setItem("wudict_folder_diagnostics","1");else localStorage.removeItem("wudict_folder_diagnostics")}catch(_){}}
 function sysLogChange(){
   sysSet({action:"set",field:"log",enabled:$("sysLogEnabled").checked,
     baseEvents:$("sysLogBase").checked,webEvents:$("sysLogWeb").checked});
@@ -3677,6 +3695,7 @@ $("sysLogEnabled").addEventListener("change",sysLogChange);
 $("sysLogBase").addEventListener("change",sysLogChange);
 $("sysLogWeb").addEventListener("change",sysLogChange);
 $("sysBrowseDiagnostics").addEventListener("change",e=>setBrowseDiagnostics(e.target.checked));
+$("sysFolderDiagnostics").addEventListener("change",e=>setFolderDiagnostics(e.target.checked));
 /* Restore defaults: one tap clears every Advanced row at once, which is why it
    is confirmed. Clearing writes nothing anywhere else - it withdraws the
    overrides, and "follow the settings file" is what an absent override is. */
@@ -4401,8 +4420,10 @@ function runIngest(id,opts,label){
       }
       es.close();following.delete(id);activeIngestID=null;$("bulkIndexStop").hidden=bulkIndexBusy;$("bulkIndexStop").disabled=false;if(!bulkIndexBusy)clearGlobalStop();
       delete label.dataset.busy;
+      label.classList.remove("busy");
       if(!why)why=tx("dictUI.connectionLost");
-      show(tx("dictUI.failed"),tx("dictUI.failedReason",{error:why}));
+      for(const field of opts.labels||[label])field.textContent=tx("dictUI.failed");
+      setIndexStatus(esc(name)+" — "+esc(tx("dictUI.failedReason",{error:why})),false);
       label.classList.add("err");resolve(false)});
   });
 }
@@ -4704,11 +4725,11 @@ let statusTs=0,statusTimer=null,statusPending,statusBase="",statusOwner=null;
 /* `owner` lets a long-running writer retract its own message without
    clobbering whatever spoke after it — the dictionary loader used to key that
    on `lastQuery`, which is why a stale warning could sit there unretracted. */
-function setIndexStatus(html){
+function setIndexStatus(html,mirror=true){
   const box=$("bulkIndexConfirm");
   $("bulkIndexStatus").hidden=!html;
   box.innerHTML=html;
-  if(globalStopAction)showWorkNotice(html);
+  if(mirror&&globalStopAction)showWorkNotice(html);
 }
 let globalStopAction=null,globalStopLabel="";
 let workNoticeHTML="";
@@ -6436,12 +6457,14 @@ function maskReturnFromURL(){
   }catch(_){return ""}
 }
 let maskReturn=maskReturnFromURL();
-$("sbarBackWords").addEventListener("click",e=>{
+function onBackWords(e){
   if(!maskReturn||e.button!==0||e.ctrlKey||e.metaKey||e.shiftKey||e.altKey)return;
   const target=new URL(maskReturn,location.origin);
   if(!maskRestoreCached(target))return;
   e.preventDefault();history.pushState(null,"",target.pathname+target.search);
-});
+}
+$("sbarBackWords").addEventListener("click",onBackWords);
+$("barBackWords").addEventListener("click",onBackWords);
 /* The sections the arrows walk. `.noindex` is not one of them: that row is the
    list of dictionaries this search could not run at all, a reference with an
    offer on it, not a place to read. A deferred section IS one - it is a
@@ -6494,8 +6517,10 @@ function sbarPaint(){
   // nowhere to walk, and the arrows are what would lie about it. Where an arrow
   // can act but has run out of list, it is dimmed instead - see sbarEndsPaint.
   $("sbarPrev").hidden=$("sbarNext").hidden=n<2;
-  $("sbarBackWords").hidden=!(browseReturn||maskReturn)||n>=2;
-  if(browseReturn||maskReturn)$("sbarBackWords").href=maskReturn||browseReturn;
+  const returnURL=maskReturn||browseReturn;
+  $("sbarBackWords").hidden=!returnURL||n>=2||document.documentElement.hasAttribute("data-webview2");
+  $("barBackWords").hidden=!returnURL;
+  if(returnURL)$("sbarBackWords").href=$("barBackWords").href=returnURL;
   $("sbarOn").setAttribute("aria-pressed",sbarWant?"true":"false");
   $("sbarOff").setAttribute("aria-pressed",sbarWant?"false":"true");
   placeDictSeg();

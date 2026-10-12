@@ -170,6 +170,7 @@ func (r *Registry) prepareNewDictionaries() {
 			}
 			if err := e.restoreIndex(store.Plan{Contains: v.Contains, FullText: v.FullText}, progress, indexLimit); err != nil {
 				j.update(func(st *jobStatus) { st.Err = err.Error() })
+				store.IndexDiagnostic("new dictionary index failed source=%q dictionary=%q error=%q", e.Path, e.probeName(), err.Error())
 				logx.Warn("indexing new dictionary %s: %v", e.Path, err)
 				return
 			}

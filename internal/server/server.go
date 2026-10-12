@@ -668,6 +668,17 @@ func (s *Server) handleSetupSync(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	raw := strings.TrimSpace(q.Get("path"))
 	save, _ := queryFlag(q, "save")
+	diagnostics := save && q.Get("diagnostics") == "1"
+	phaseStart := time.Now()
+	traceStage := func(stage string, count int) {
+		if diagnostics {
+			logx.System("folder setup stage=%q elapsed=%s dictionaries=%d", stage, time.Since(phaseStart).Round(time.Millisecond), count)
+		}
+		phaseStart = time.Now()
+	}
+	if diagnostics {
+		logx.System("folder setup start folders=%d", len(q["path"]))
+	}
 	// tri-state: absent leaves the setting alone, on turns the library on, off
 	// turns it off - clearing the checkbox must be able to undo an earlier yes
 	useCached, useCachedSent := queryFlag(q, "useCached")
@@ -702,6 +713,7 @@ func (s *Server) handleSetupSync(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	paths, err := dict.Discover(dir)
+	traceStage("validate-first-folder", len(paths))
 	if err != nil {
 		writeJSON(w, map[string]any{"path": dir, "error": err.Error()})
 		return
@@ -719,6 +731,7 @@ func (s *Server) handleSetupSync(w http.ResponseWriter, r *http.Request) {
 		// saving may carry several folders (the setup page's list); validation
 		// above always concerns the first, which is what live typing checks.
 		dirs, total, verr := s.resolveDirs(q["path"])
+		traceStage("discover-all-folders", total)
 		switch {
 		case verr != nil:
 			out["error"] = verr.Error()
@@ -728,9 +741,11 @@ func (s *Server) handleSetupSync(w http.ResponseWriter, r *http.Request) {
 			out["dirs"] = dirs
 			out["found"] = total
 			if err := s.reg.SetDirs(dirs); err != nil {
+				traceStage("update-registry-failed", total)
 				out["error"] = err.Error()
 				break
 			}
+			traceStage("update-registry-and-queue-indexes", total)
 			if s.removalOffered(r) {
 				if err := s.reg.cleanupLibrary(); err != nil {
 					out["error"] = err.Error()
@@ -753,6 +768,7 @@ func (s *Server) handleSetupSync(w http.ResponseWriter, r *http.Request) {
 					out["warning"] = "folders saved, but the previously imported dictionaries setting failed: " + err.Error()
 				}
 			}
+			traceStage("save-settings", total)
 		}
 	}
 	writeJSON(w, out)

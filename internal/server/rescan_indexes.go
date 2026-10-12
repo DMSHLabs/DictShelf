@@ -394,6 +394,7 @@ func (r *Registry) updateDictionaryIndexesCancelable(req rescanIndexesRequest, p
 			want.FullText = req.Existing.FullText == "delete"
 		}
 		if err := e.clearDatabase(want); err != nil {
+			store.IndexDiagnostic("dictionary index failed source=%q dictionary=%q action=%q error=%q", e.Path, e.probeName(), state.Action, err.Error())
 			failures = append(failures, fmt.Sprintf("%s: %v", e.Path, err))
 			continue
 		}

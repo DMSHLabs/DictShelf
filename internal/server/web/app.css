@@ -169,10 +169,11 @@ body{margin:0;padding-top:var(--barh);
 body.wide .col{max-width:min(1280px,96vw)}
 /* The Windows WebView2 window has no browser chrome to expose its host mode.
    Its URL carries this marker so the reading column can use the whole window. */
-html[data-webview2] .col{width:100%;max-width:none;padding-left:10px;padding-right:10px}
+html[data-webview2] .col{box-sizing:border-box;width:100%;max-width:none;padding-left:10px;padding-right:10px}
 html[data-webview2] #wideBtn{display:none}
-html[data-webview2] .article{margin-right:10px}
-html[data-webview2] .bar>.col{width:100%;max-width:none;padding-left:10px;padding-right:10px}
+html[data-webview2] .article{margin:0}
+html[data-webview2] main.col.container dl{padding-left:0;padding-right:0}
+html[data-webview2] .bar>.col{box-sizing:border-box;width:100%;max-width:none;padding-left:10px;padding-right:10px}
 /* The page's own bottom space, in one expression: the usual gutter, and under
    it whichever of the two things owns the bottom edge is taller - the reading
    bar (--sbarh, which already includes the inset it wears) or, when the bar is
@@ -212,6 +213,9 @@ body.barpinned{--stick:var(--barh)}
    controls already fill the row; it does its work in wide mode and any time a
    control is removed. Move this class if the button order ever changes. */
 .bar form .tools{margin-left:auto}
+#barBackWords{display:none}
+html[data-webview2] #barBackWords:not([hidden]){display:inline-flex;align-items:center;justify-content:center;gap:.35em;flex:none;white-space:nowrap;text-decoration:none;font-size:calc(var(--ui-font-addition) * 1rem);line-height:1}
+#barBackWords svg{display:block;flex:none;width:1.15em;height:1.15em}
 /* ── the status bar ─────────────────────────────────────────────────
    The one piece of chrome the reader keeps while reading: two jumps between
    the dictionaries of the current answer, and one quick handle on the example

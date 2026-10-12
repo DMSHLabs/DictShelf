@@ -1,5 +1,9 @@
 # Localization: status and next tasks
 
+2026-10-13 folder diagnostics: EN/RU Log file label and hint updated for folder timing and index failure details. WebView2/Android wording check remains.
+
+2026-10-12 Browse Apply threshold: the ✓ action now uses a mode-neutral EN/RU label because the headword-count threshold applies to search and filter with or without mask. Browser/device wording check remains.
+
 2026-10-07 Dictionary Groups search: EN/RU labels for the two new Fonts controls (`--ui-edit_control-height`, `--ui-edit_control-font`) added. Group list docks reuse existing localized search/filter labels. Catalog and targeted server checks pass; phone layout and keyboard behavior remain to verify.
 
 2026-10-06 group editor: EN/RU labels for inline New Group/Rename/Save controls and group-name placeholder added alongside the dictionary search and keyboard labels. Phone layout and keyboard check remain.
