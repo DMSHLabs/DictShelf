@@ -65,15 +65,12 @@ func cmdReindex(args []string) error {
 	}
 	var todo []store.Folder
 	var gone []string
-	var native []string
 	current := 0
 	for _, f := range targets {
 		switch {
 		case f.Source == "" || !fsx.FileExists(f.Source):
 			gone = append(gone, folderLabel(f))
-		case strings.EqualFold(filepath.Ext(f.Source), ".zim"):
-			native = append(native, folderLabel(f))
-		case *all || len(store.Stale(store.TextDBPath(f.Dir), f.Source)) > 0:
+		case *all || folderNeedsReindex(f):
 			todo = append(todo, f)
 		default:
 			current++
@@ -81,9 +78,6 @@ func cmdReindex(args []string) error {
 	}
 	for _, name := range gone {
 		fmt.Fprintf(os.Stderr, "%sthe original file is gone - not rebuilt\n", logx.Dict(name))
-	}
-	for _, name := range native {
-		fmt.Fprintf(os.Stderr, "%suses its own index - not rebuilt\n", logx.Dict(name))
 	}
 	if len(todo) == 0 {
 		if current > 0 {
@@ -109,6 +103,14 @@ func cmdReindex(args []string) error {
 		return fmt.Errorf("%d of %d dictionaries could not be rebuilt", failed, len(todo))
 	}
 	return nil
+}
+
+func folderNeedsReindex(f store.Folder) bool {
+	if strings.EqualFold(filepath.Ext(f.Source), ".zim") {
+		p := store.Inspect(store.TextDBPath(f.Dir))
+		return p.Meta == nil || p.Meta["index_kind"] != "headwords" || len(p.Stale(f.Source)) > 0
+	}
+	return len(store.Stale(store.TextDBPath(f.Dir), f.Source)) > 0
 }
 
 // folderLabel is the name a library folder is known by in `wudict list`.
@@ -168,13 +170,16 @@ func resolveFolder(arg string, folders []store.Folder) (store.Folder, error) {
 // outdated (or always, with force), then repacks media it had and no longer
 // serves.
 func reindexOne(f store.Folder, force bool) error {
-	if strings.EqualFold(filepath.Ext(f.Source), ".zim") {
-		return fmt.Errorf("%q uses its own index and is not rebuilt by library reindex", folderLabel(f))
-	}
 	name := folderLabel(f)
 	t := store.Target{Dir: f.Dir, Rebuild: store.IfOutdated, Media: store.MediaKeep}
 	if force {
 		t.Rebuild, t.Media = store.Always, store.MediaRepack
+	}
+	if strings.EqualFold(filepath.Ext(f.Source), ".zim") {
+		p := store.Inspect(store.TextDBPath(f.Dir))
+		if p.Meta == nil || p.Meta["index_kind"] != "headwords" {
+			t.Rebuild = store.Always
+		}
 	}
 	var title string // the folder is what this command names, not the title
 	hooks := cliHooks(f.Source, &title)

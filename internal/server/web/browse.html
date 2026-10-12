@@ -425,7 +425,8 @@ function unesc(s){
 try{const t=localStorage.getItem("wudict_theme");
   if(t&&t!=="auto")document.documentElement.setAttribute("data-theme",t)}catch(e){}
 
-let dictId="",state=null,last={p:1},poll=0,stripFor="",stripLettersPainted=0,chooserSearch=null,browsePageAbort=null,browsePageBusy=false;
+let dictId="",state=null,last={p:1},poll=0,stripFor="",stripLettersPainted=0,chooserSearch=null,browsePageAbort=null,browseAlphabetTask=null,browsePageBusy=false;
+const browseAlphabetCache=new Map(),browseAlphabetPartial=new Map();
 function updateStripArrows(){
   const strip=$("strip"),end=Math.max(0,strip.scrollWidth-strip.clientWidth);
   $("stripPrev").disabled=strip.scrollLeft<=1;
@@ -440,7 +441,7 @@ $("stripNext").addEventListener("click",()=>scrollStrip(1));
 $("strip").addEventListener("scroll",updateStripArrows,{passive:true});
 new ResizeObserver(updateStripArrows).observe($("strip"));
 let findResult=null,findIndex=-1,findFilter=false,findTimer=0,findAbort=null,findSeq=0,browseSeq=0,findMask=false;
-let appliedFindMask=false,browseProgressSeq=0,browseProgressJobs=new Map(),findStreamDone=true,findPendingMove=0,findPendingPage=0,findFilterPage=1;
+let appliedFindMask=false,maskApplyPending=false,browseProgressSeq=0,browseProgressJobs=new Map(),findStreamDone=true,findPendingMove=0,findPendingPage=0,findFilterPage=1;
 let findStreamWords=[];
 const BROWSE_MASK_THRESHOLD_KEY="wudict_browse_mask_threshold";
 const BROWSE_MASK_THRESHOLD_DEFAULT=100000;
@@ -452,6 +453,7 @@ function browseMaskThreshold(){
   }catch(_){return BROWSE_MASK_THRESHOLD_DEFAULT}
 }
 function browseNeedsMaskApply(){return findMask&&(state?.total||0)>=browseMaskThreshold()}
+function maskAwaitingApply(){return maskApplyPending||browseNeedsMaskApply()&&!appliedFindMask}
 function browseProgress(message,cancel=null,kind=""){
   const seq=++browseProgressSeq;
   browseProgressJobs.set(seq,{message,cancel,kind});
@@ -465,9 +467,9 @@ function paintBrowseProgress(){
   $("browseProgressText").textContent=job?.message||"";
   const stop=$("browseProgressStop");stop.hidden=!job?.cancel;stop.onclick=job?.cancel||null;
 }
-function clearBrowseProgress(){browseProgressJobs.clear();paintBrowseProgress()}
-function updateBrowseProgress(message){
-  for(const job of [...browseProgressJobs.values()].reverse())if(job.kind==="find"){job.message=message;paintBrowseProgress();return}
+function clearBrowseProgress(){for(const [id,job] of browseProgressJobs)if(job.kind!=="alphabet")browseProgressJobs.delete(id);paintBrowseProgress()}
+function updateBrowseProgress(message,kind="find"){
+  for(const job of [...browseProgressJobs.values()].reverse())if(job.kind===kind){job.message=message;paintBrowseProgress();return}
 }
 function setBrowsePageBusy(on){
   browsePageBusy=on;document.body.classList.toggle("browse-page-busy",on);
@@ -496,25 +498,51 @@ function card(html,chooserList=false){chooserSearch?.destroy();chooserSearch=nul
 async function show(opts,record){
   clearTimeout(poll);
   const seq=++browseSeq;
-  browsePageAbort?.abort();
+  const requestDictId=dictId;
+  const continuingAlphabet=browseAlphabetTask?.dictId===dictId;
+  const streamAlphabet=!browseAlphabetCache.has(dictId)&&!continuingAlphabet;
+  if(browsePageAbort&&browsePageAbort!==browseAlphabetTask?.controller)browsePageAbort.abort();
+  if(browseAlphabetTask&&browseAlphabetTask.dictId!==dictId){browseAlphabetTask.controller.abort();browseAlphabetTask=null}
   const controller=new AbortController();browsePageAbort=controller;
-  setBrowsePageBusy(true);
-  const endProgress=browseProgress(t("browse.loadingWords"),()=>controller.abort(),"page");
+  if(streamAlphabet){browseAlphabetPartial.delete(dictId);browseAlphabetTask={dictId,controller}}
+  setBrowsePageBusy(streamAlphabet);
+  let endProgress=()=>{},progressTimer=0,progressVisible=false;
+  const startProgress=()=>{if(progressVisible)return;progressVisible=true;endProgress=browseProgress(t("browse.loadingWords"),()=>controller.abort(),streamAlphabet?"alphabet":"page")};
+  if(streamAlphabet)startProgress();else progressTimer=setTimeout(startProgress,220);
   last=opts;
   const u=new URLSearchParams({dict:dictId});
   if(opts.at)u.set("at",opts.at);else u.set("p",String(opts.p||1));
-  u.set("stream","1");
+  if(streamAlphabet)u.set("stream","1");else u.set("strip","0");
   let r;
   try{r=await fetch("/api/browse?"+u.toString(),{signal:controller.signal})}
-  catch(e){endProgress();if(seq===browseSeq){setBrowsePageBusy(false);if(e.name!=="AbortError")card("<b>"+tx("browse.noAnswer")+"</b><p>"+tx("browse.noAnswerBody")+"</p>")}return}
-  if(seq!==browseSeq){endProgress();return}
-  if(r.status===409){endProgress();setBrowsePageBusy(false);return unprepared(await r.json().catch(()=>({}))) }
+  catch(e){clearTimeout(progressTimer);endProgress();if(seq===browseSeq){setBrowsePageBusy(false);if(e.name!=="AbortError")card("<b>"+tx("browse.noAnswer")+"</b><p>"+tx("browse.noAnswerBody")+"</p>")}return}
+  if(seq!==browseSeq&&!streamAlphabet){clearTimeout(progressTimer);endProgress();return}
+  if(r.status===409){clearTimeout(progressTimer);endProgress();setBrowsePageBusy(false);return unprepared(await r.json().catch(()=>({}))) }
   if(!r.ok){const j=await r.json().catch(()=>({}));
+    clearTimeout(progressTimer);
     endProgress();setBrowsePageBusy(false);
     return card("<b>"+tx("browse.cannotBrowse")+"</b><p>"+
       tx(r.status===404?"browse.missing":"browse.error",{status:r.status})+"</p>"+
       (j.error?"<details><summary>"+tx("browse.details")+"</summary>"+esc(window.wudictI18n.errorText(j.error))+"</details>":"")+
       '<p><a href="/browse">'+tx("browse.chooseAnother")+"</a></p>")}
+  if(!streamAlphabet){
+    try{
+      const page=await r.json();if(seq!==browseSeq)return;
+      state=page;state.alphabet=browseAlphabetCache.get(requestDictId)||browseAlphabetPartial.get(requestDictId)||[];state.mark=opts.o!=null?opts.o:state.at;
+      chooserSearch?.destroy();chooserSearch=null;$("msg").classList.remove("chooser-list");$("msg").hidden=true;
+      render();
+      const url="?dict="+encodeURIComponent(dictId)+"&p="+state.page+
+        (new URLSearchParams(location.search).get("chooser")==="1"?"&chooser=1":"");
+      if(record==="push"&&url!==location.search)history.pushState(null,"",url);
+      else if(record!=="none")history.replaceState(null,"",url);
+      if(record!=="none"){
+        if(findResult&&!findFilter&&findIndex>=0)scheduleScrollToCurrentWord(seq);
+        else scrollTo(0,0);
+      }
+    }catch(error){if(seq===browseSeq)card("<b>"+tx("browse.noAnswer")+"</b><p>"+esc(error.message)+"</p>")}
+    finally{clearTimeout(progressTimer);endProgress()}
+    return;
+  }
   try{
     const reader=r.body.getReader(),decoder=new TextDecoder();let buffer="";
     const consume=async(final=false)=>{
@@ -523,9 +551,10 @@ async function show(opts,record){
         const line=newline>=0?buffer.slice(0,newline):buffer;
         buffer=newline>=0?buffer.slice(newline+1):"";
         if(!line.trim())continue;
-        const event=JSON.parse(line);if(seq!==browseSeq)return;
-        if(event.type==="error")throw new Error(event.error||"browse");
+        const event=JSON.parse(line);
+        if(event.type==="error"){if(browseAlphabetTask?.controller===controller)throw new Error(event.error||"browse");return}
         if(event.type==="page"){
+          if(seq!==browseSeq)continue;
           state=event.page;state.mark=opts.o!=null?opts.o:state.at;
           chooserSearch?.destroy();chooserSearch=null;$("msg").classList.remove("chooser-list");$("msg").hidden=true;
           stripFor="";stripLettersPainted=0;render();
@@ -533,23 +562,34 @@ async function show(opts,record){
             (new URLSearchParams(location.search).get("chooser")==="1"?"&chooser=1":"");
           if(record==="push"&&url!==location.search)history.pushState(null,"",url);
           else if(record!=="none")history.replaceState(null,"",url);
-          if(record!=="none")scrollTo(0,0);
+          if(record!=="none"&&!(findResult&&!findFilter&&findIndex>=0))scrollTo(0,0);
+          // The page is complete at this point. The remaining stream only
+          // samples page-start letters from the already prepared index.
+          setBrowsePageBusy(false);
         }else if(event.type==="letters"){
-          if(!state)continue;
-          state.alphabet.push(...(event.letters||[]));
-          updateBrowseProgress(t("browse.loadingWords")+" · "+num(event.at||0)+" / "+num(event.total||0));render();
+          if(browseAlphabetTask?.controller!==controller||browseAlphabetTask.dictId!==requestDictId)continue;
+          const partial=browseAlphabetPartial.get(requestDictId)||[];
+          partial.push(...(event.letters||[]));browseAlphabetPartial.set(requestDictId,partial);
+          if(state&&state.dict===requestDictId){state.alphabet=partial;render()}
+          updateBrowseProgress(t("browse.loadingWords")+" · "+num(event.at||0)+" / "+num(event.total||0),"alphabet");
         }else if(event.type==="progress"){
-          updateBrowseProgress(t("browse.loadingWords")+" · "+num(event.at||0)+" / "+num(event.total||0));
+          if(browseAlphabetTask?.controller===controller&&browseAlphabetTask.dictId===requestDictId)updateBrowseProgress(t("browse.loadingWords")+" · "+num(event.at||0)+" / "+num(event.total||0),"alphabet");
         }else if(event.type==="done"){
-          endProgress();setBrowsePageBusy(false);
-          if(findResult&&!findFilter&&findIndex>=0)scrollToCurrentWord();
+          if(browseAlphabetTask?.controller!==controller||browseAlphabetTask.dictId!==requestDictId)continue;
+          const complete=browseAlphabetPartial.get(requestDictId)||[];
+          browseAlphabetCache.set(requestDictId,complete.slice());browseAlphabetPartial.delete(requestDictId);
+          if(state&&state.dict===requestDictId){state.alphabet=complete;render()}
+          browseAlphabetTask=null;
+          endProgress();if(seq===browseSeq){setBrowsePageBusy(false);if(findResult&&!findFilter&&findIndex>=0)scheduleScrollToCurrentWord(seq)}
         }
       }
     };
     while(true){const {value,done}=await reader.read();if(done){buffer+=decoder.decode();await consume(true);break}buffer+=decoder.decode(value,{stream:true});await consume()}
+    if(browseAlphabetTask?.controller===controller)browseAlphabetTask=null;
     if(seq===browseSeq){endProgress();setBrowsePageBusy(false)}
   }catch(error){
     endProgress();
+    if(browseAlphabetTask?.controller===controller)browseAlphabetTask=null;
     if(seq!==browseSeq)return;
     setBrowsePageBusy(false);
     if(error.name==="AbortError"){
@@ -635,8 +675,11 @@ function highlightedWord(word,ranges){
   }
   return html+esc(word.slice(from));
 }
-function scrollToCurrentWord(){
-  $("list").querySelector(".browse-current")?.scrollIntoView({block:"center"});
+function scheduleScrollToCurrentWord(seq=browseSeq){
+  requestAnimationFrame(()=>{
+    if(seq!==browseSeq)return;
+    $("list").querySelector(".browse-current")?.scrollIntoView({block:"center"});
+  });
 }
 function fitTitle(){
   const name=$("name");
@@ -687,6 +730,9 @@ function updateFindControls(){
   }
 }
 async function fetchFound(page,target=0,record="replace"){
+  // A delayed input callback or a navigation action must never bypass the
+  // explicit Apply button for large wildcard searches.
+  if(maskAwaitingApply())return;
   findAbort?.abort();
   const controller=new AbortController();findAbort=controller;
   const seq=++findSeq,query=$("findInput").value.trim(),mask=appliedFindMask;
@@ -757,6 +803,7 @@ function findChanged(){
   clearTimeout(findTimer);findAbort?.abort();findSeq++;
   browseSeq++;
   clearBrowseProgress();
+  maskApplyPending=findMask&&browseNeedsMaskApply();
   if(browseNeedsMaskApply()){
     appliedFindMask=false;findResult=null;findIndex=-1;findStreamDone=true;findStreamWords=[];findPendingMove=0;
     updateFindControls();render();return;
@@ -770,7 +817,7 @@ function findChanged(){
 function applyFindMask(){
   if(!browseNeedsMaskApply())return;
   clearTimeout(findTimer);
-  appliedFindMask=true;
+  maskApplyPending=false;appliedFindMask=true;
   findResult=null;findIndex=-1;findStreamDone=true;findStreamWords=[];findPendingMove=0;
   if(!$('findInput').value.trim()){updateFindControls();render();return}
   $('findCount').textContent='…';
@@ -799,7 +846,7 @@ function toggleFindFilter(){
   findFilter=!findFilter;
   findFilterPage=1;
   updateFindControls();
-  if(findMask&&!appliedFindMask){render();return}
+  if(maskAwaitingApply()){render();return}
   if(!$("findInput").value.trim())return;
   if(findResult?.stream){
     if(!findFilter&&findIndex<0&&findStreamWords.length){findIndex=0;updateFindControls();show({at:currentFoundWord()},"replace")}
@@ -993,7 +1040,7 @@ $("maskThreshold").addEventListener("change",()=>{
   try{localStorage.setItem(BROWSE_MASK_THRESHOLD_KEY,String(value))}catch(_){}
   if(findMask){
     const needsApply=browseNeedsMaskApply();
-    if(needsApply&&!appliedFindMask){findResult=null;findIndex=-1;updateFindControls();render()}
+    if(needsApply&&!appliedFindMask){maskApplyPending=true;findResult=null;findIndex=-1;updateFindControls();render()}
     else if(!needsApply&&!appliedFindMask&&$("findInput").value.trim())findChanged();
     else updateFindControls();
   }
@@ -1003,9 +1050,9 @@ $("maskMode").addEventListener("click",()=>{
   if(findMask){
     clearTimeout(findTimer);findAbort?.abort();findSeq++;browseSeq++;
     clearBrowseProgress();
-    appliedFindMask=!browseNeedsMaskApply();findResult=null;findIndex=-1;
+    appliedFindMask=!browseNeedsMaskApply();maskApplyPending=browseNeedsMaskApply();findResult=null;findIndex=-1;
     if(appliedFindMask&&$("findInput").value.trim())findChanged();
-  }else{appliedFindMask=false;findChanged();return}
+  }else{appliedFindMask=false;maskApplyPending=false;findChanged();return}
   updateFindControls();render();
 });
 $("findApply").addEventListener("click",applyFindMask);

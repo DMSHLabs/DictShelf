@@ -54,11 +54,9 @@ func (s *Server) handleBrowseFind(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 404, "%v", err)
 		return
 	}
-	if !entryHasSelfIndex(e) {
-		if _, ok := validPrepared(e.Path); !ok {
-			browseUnprepared(w, e)
-			return
-		}
+	if !hasBrowseIndex(e.Path) {
+		browseUnprepared(w, e)
+		return
 	}
 	d, err := e.open()
 	if err != nil {
@@ -66,7 +64,7 @@ func (s *Server) handleBrowseFind(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	finder, ok := d.(dict.BrowseFinder)
-	if !ok && !mask && !entryHasSelfIndex(e) {
+	if !ok {
 		browseUnprepared(w, e)
 		return
 	}
@@ -145,11 +143,9 @@ func (s *Server) handleBrowseFindStream(w http.ResponseWriter, r *http.Request) 
 		httpErr(w, 404, "%v", err)
 		return
 	}
-	if !entryHasSelfIndex(e) {
-		if _, ok := validPrepared(e.Path); !ok {
-			browseUnprepared(w, e)
-			return
-		}
+	if !hasBrowseIndex(e.Path) {
+		browseUnprepared(w, e)
+		return
 	}
 	d, err := e.open()
 	if err != nil {
@@ -354,15 +350,12 @@ func (s *Server) handleBrowse(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 404, "%v", err)
 		return
 	}
-	// Checked BEFORE the open, not after: opening an unprepared dictionary
-	// materialises its entire direct backend - up to a gigabyte of headword
-	// map on the big ones. ZIM is the exception: opening it validates and uses
-	// its existing path-pointer list without constructing a headword map.
-	if !entryHasSelfIndex(e) {
-		if _, ok := validPrepared(e.Path); !ok {
-			browseUnprepared(w, e)
-			return
-		}
+	// Checked BEFORE the open: Browse pages the prepared headword index. ZIM's
+	// native path list remains available for search, but does not support this
+	// paged token-search and filtering view.
+	if !hasBrowseIndex(e.Path) {
+		browseUnprepared(w, e)
+		return
 	}
 	d, err := e.open()
 	if err != nil {
@@ -431,6 +424,10 @@ func (s *Server) handleBrowse(w http.ResponseWriter, r *http.Request) {
 	if alphabet == nil {
 		alphabet = []dict.Letter{}
 	}
+	responseAlphabet := alphabet
+	if q.Get("strip") == "0" {
+		responseAlphabet = nil
+	}
 	writeJSON(w, browseResp{
 		Dict:     e.ID,
 		Name:     d.Meta().Name,
@@ -440,7 +437,7 @@ func (s *Server) handleBrowse(w http.ResponseWriter, r *http.Request) {
 		Size:     browsePageSize,
 		At:       mark,
 		Words:    words,
-		Alphabet: alphabet,
+		Alphabet: responseAlphabet,
 	})
 }
 
@@ -464,11 +461,9 @@ func (s *Server) handleBrowseStream(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 404, "%v", err)
 		return
 	}
-	if !entryHasSelfIndex(e) {
-		if _, ok := validPrepared(e.Path); !ok {
-			browseUnprepared(w, e)
-			return
-		}
+	if !hasBrowseIndex(e.Path) {
+		browseUnprepared(w, e)
+		return
 	}
 	d, err := e.open()
 	if err != nil {

@@ -81,8 +81,8 @@ func entryOutdated(path string) bool {
 		return false
 	}
 	prepared := store.Inspect(store.TextDBPath(dir))
-	nativeIndex := strings.EqualFold(filepath.Ext(path), ".zim")
-	if prepared.Meta != nil && !preparedIndexesNeedRebuild(prepared.Meta["format"], prepared.Plan) {
+	nativeIndex := !isZIMPath(path) && formatHasSelfIndex(prepared.Meta["format"])
+	if !isZIMPath(path) && prepared.Meta != nil && !preparedIndexesNeedRebuild(prepared.Meta["format"], prepared.Plan) {
 		nativeIndex = true
 	}
 	if nativeIndex {
@@ -94,13 +94,13 @@ func entryOutdated(path string) bool {
 		return false
 	}
 	stale := prepared.Stale(path)
-	selected := len(stale) > 0
+	selected := len(stale) > 0 || isZIMPath(path) && (prepared.Meta == nil || prepared.Meta["index_kind"] != "headwords")
 	store.IndexDiagnostic("rebuild selection source=%q selected=%v format=%q contains=%v fulltext=%v stale=%v", path, selected, prepared.Meta["format"], prepared.Plan.Contains, prepared.Plan.FullText, stale)
 	return selected
 }
 
 func preparedIndexesNeedRebuild(format string, _ store.Plan) bool {
-	return !formatHasSelfIndex(format)
+	return strings.EqualFold(format, "zim") || !formatHasSelfIndex(format)
 }
 
 // handleReindex starts the job over every outdated dictionary. 202 with the

@@ -257,8 +257,10 @@ Speex `.spx` audio auto-converted for browser playback. A folder named after a l
 
 - <kbd>media</kbd> packs a dictionary's pictures and sounds into its index, so it keeps working if you delete the original files, and also makes access faster to assets such as images and audio.
 - <kbd>Full-text for every dictionary…</kbd> in the ![](cog.svg) row will generate full-text indexes for all dictionaries — IMPORTANT: depending on the size of your dictionary collection this can take GB of space and take hours.
+- New DSL, Babylon and wudict markdown dictionaries are indexed in the background when added.
 - ⟳ on a switch, or a **Rebuild** line: an outdated index, made by an older wudict or before the dictionary files changed; one click rebuilds it.
-- DSL, Babylon and wudict markdown are indexed as soon as they are opened; ZIM only when you ask, since this format already has its own index and wudict can use it.
+- New ZIM dictionaries are indexed in the background like other new dictionaries. The headword index stores titles only; articles stay in the ZIM file.
+- If a ZIM headword index is absent, Browse A-Z asks you to create it in Dictionary Settings.
 
 An index usually takes less space than the dictionary file.
 

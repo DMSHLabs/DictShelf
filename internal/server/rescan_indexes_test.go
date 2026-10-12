@@ -17,38 +17,32 @@ import (
 	"github.com/wuweidict/wudict/internal/store"
 )
 
-func TestSelfIndexedZIMSkipsBaseIndexPreparation(t *testing.T) {
+func TestZIMCanBuildPreparedTitleIndex(t *testing.T) {
 	if baseIndexRequired(true, indexOptions{Index: true}) {
-		t.Fatal("native ZIM index requested a duplicate base index")
+		t.Fatal("native-only format requested a duplicate base index")
 	}
 	if !baseIndexRequired(true, indexOptions{Index: true, Contains: true}) {
 		t.Fatal("contains index did not request the prepared database it needs")
 	}
 	if !baseIndexRequired(false, indexOptions{Index: true}) {
-		t.Fatal("ordinary dictionary did not request its base index")
+		t.Fatal("ZIM title index was not selected for preparation")
 	}
 }
 
-func TestSelfIndexedZIMBaseOnlyDoesNotNeedRebuild(t *testing.T) {
-	if preparedIndexesNeedRebuild("zim", store.Plan{}) {
-		t.Fatal("native headword index was treated as a stale prepared index")
-	}
-	if preparedIndexesNeedRebuild("zim", store.Plan{FullText: true}) {
-		t.Fatal("ZIM was scheduled for application indexing")
+func TestZIMPreparedIndexIsRebuildable(t *testing.T) {
+	if !preparedIndexesNeedRebuild("zim", store.Plan{}) {
+		t.Fatal("ZIM title index was excluded from prepared-index rebuilds")
 	}
 	if !preparedIndexesNeedRebuild("mdx", store.Plan{}) {
 		t.Fatal("ordinary dictionary was excluded from rebuild")
 	}
 }
 
-func TestSelfIndexedZIMDoesNotCountAsBaseIndexWork(t *testing.T) {
+func TestZIMTitleIndexCountsAsBaseIndexWork(t *testing.T) {
 	e := &entry{Path: "manual.zim"}
 	req := rescanIndexesRequest{Existing: rescanIndexActions{Index: "recreate"}}
-	if rescanTargetNeedsWork(e, true, true, indexOptions{Index: true}, req) {
-		t.Fatal("new ZIM with only the native headword index entered progress")
-	}
-	if rescanTargetNeedsWork(e, true, true, indexOptions{Index: true, FullText: true}, req) {
-		t.Fatal("new ZIM entered the rescan index queue")
+	if !rescanTargetNeedsWork(e, true, false, indexOptions{Index: true}, req) {
+		t.Fatal("new ZIM did not enter the rescan index queue")
 	}
 }
 

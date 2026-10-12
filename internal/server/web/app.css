@@ -656,6 +656,8 @@ dd{margin:var(--sp-1) 0 0 0}
 .article{display:block;border-radius:8px;
   background:var(--wd-article-bg,#fff);color:var(--wd-article-fg,#1a1a1a);
   padding:var(--sp-1) var(--sp-2);overflow-x:auto;overflow-y:hidden}
+html[data-shell-image] .article,
+html[data-shell-image] iframe.article{background:transparent}
 html[data-theme="dark"] .article:not(iframe),
 html:not([data-theme]) .article.autodark:not(iframe){
   filter:invert(1) hue-rotate(180deg) brightness(.9) contrast(.92)}
