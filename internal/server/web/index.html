@@ -304,9 +304,14 @@ window.wudictFontScale=(function(){
 </main>
 <footer id="maskDock" class="mask-dock" role="search" hidden>
   <button type="button" id="maskFindMode" aria-label="{{T:browse.filterWords}}">⌕</button>
-  <button type="button" id="maskFindWildcard" aria-label="{{T:browse.wildcardsSearch}}" aria-pressed="false">*</button>
+  <button type="button" id="maskFindWildcard" aria-label="{{T:browse.wildcardsSearch}}" aria-pressed="false">*?</button>
+  <select id="maskFindThreshold" aria-label="{{T:browse.maskThreshold}}" title="{{T:browse.maskThreshold}}">
+    <option value="0">0</option><option value="10000">10k</option><option value="50000">50k</option>
+    <option value="100000">100k</option><option value="500000">500k</option><option value="1000000">1m</option>
+  </select>
   <input id="maskFindInput" type="search" placeholder="{{T:browse.findWords}}" aria-label="{{T:browse.findWords}}"
          spellcheck="false" autocomplete="off" autocapitalize="off" enterkeyhint="search">
+  <button type="button" id="maskFindApply" aria-label="{{T:browse.runFind}}" title="{{T:browse.runFind}}" hidden>✓</button>
   <output id="maskFindCount" aria-live="polite">0/0</output>
   <button type="button" id="maskFindPrev" aria-label="{{T:browse.previousMatch}}">▲</button>
   <button type="button" id="maskFindNext" aria-label="{{T:browse.nextMatch}}">▼</button>
@@ -5201,13 +5206,58 @@ let maskGeneration=0,maskControllers=new Set(),maskRows=[],maskCurrent=0;
 let maskPattern="",maskSelection="",maskSubmitRequested=false,maskNavToken=0,maskRestoreScroll=null;
 let maskStripVersion=0,maskStripRendered=-1,maskChipMap=new Map(),maskActiveKey="";
 let maskBaseRows=[],maskBaseCurrent=0,maskFindRows=[],maskFindFilter=false,maskFindWildcard=false;
-let maskFindIndex=-1,maskFindMatch=null,maskFindTimer=0,maskFindQuery="",maskBusyJobs=new Set(),maskFindGeneration=0;
+let maskFindIndex=-1,maskFindMatch=null,maskFindTimer=0,maskFindQuery="",maskFindApproved=false,maskFindAwaitingApply=false,maskBusyJobs=new Set(),maskFindGeneration=0;
+const BROWSE_MASK_THRESHOLD_KEY="wudict_browse_mask_threshold";
+const BROWSE_MASK_THRESHOLD_DEFAULT=100000;
+const BROWSE_MASK_THRESHOLD_OPTIONS=[0,10000,50000,100000,500000,1000000];
+function maskFindThreshold(){
+  try{const saved=localStorage.getItem(BROWSE_MASK_THRESHOLD_KEY);if(saved===null)return BROWSE_MASK_THRESHOLD_DEFAULT;
+    const value=Number(saved);return BROWSE_MASK_THRESHOLD_OPTIONS.includes(value)?value:BROWSE_MASK_THRESHOLD_DEFAULT}
+  catch(_){return BROWSE_MASK_THRESHOLD_DEFAULT}
+}
+function maskFindBaseTotal(){return maskBaseRows.reduce((sum,row)=>sum+(row.state==="ready"?row.total:0),0)}
+function maskFindNeedsApply(){return maskFindBaseTotal()>=maskFindThreshold()}
+function maskFindStopPending(){
+  clearTimeout(maskFindTimer);
+  for(const row of maskFindRows)row.abort?.abort();
+  if(maskRows===maskFindRows){maskRows=maskBaseRows;maskCurrent=maskBaseCurrent}
+  maskFindRows=[];maskFindIndex=-1;maskFindMatch=null;
+}
+const maskFindWidthCanvas=document.createElement("canvas").getContext("2d");
+function fitMaskFindThreshold(){
+  const select=$("maskFindThreshold"),option=select.selectedOptions[0];if(!option)return;
+  const style=getComputedStyle(select);maskFindWidthCanvas.font=style.font;
+  const width=maskFindWidthCanvas.measureText(option.textContent).width+
+    parseFloat(style.paddingLeft||0)+parseFloat(style.paddingRight||0)+24;
+  select.style.width=Math.ceil(width)+"px";
+}
+function fitMaskDock(){
+  const dock=$("maskDock"),input=$("maskFindInput"),style=getComputedStyle(input);
+  maskFindWidthCanvas.font=style.font;
+  const textWidth=Math.max(maskFindWidthCanvas.measureText("xxxxxxxxxxxxxxx").width,
+    maskFindWidthCanvas.measureText("жжжжжжжжжжжжжжж").width);
+  const padding=parseFloat(style.paddingLeft||0)+parseFloat(style.paddingRight||0);
+  const controls=["maskFindMode","maskFindWildcard","maskFindThreshold","maskFindApply","maskFindCount","maskFindPrev","maskFindNext"]
+    .map(id=>$(id)).filter(el=>!el.hidden);
+  const gap=parseFloat(getComputedStyle(dock).columnGap)||0;
+  const controlsWidth=controls.reduce((sum,el)=>sum+el.getBoundingClientRect().width,0)+gap*(controls.length+1);
+  const threeRows=dock.clientWidth<470;
+  const twoRows=threeRows||dock.clientWidth+0.5<controlsWidth+textWidth+padding;
+  if(dock.hasAttribute("data-two-rows")!==twoRows){
+    if(twoRows)dock.setAttribute("data-two-rows","1");else dock.removeAttribute("data-two-rows");
+  }
+  if(dock.hasAttribute("data-three-rows")!==threeRows){
+    if(threeRows)dock.setAttribute("data-three-rows","1");else dock.removeAttribute("data-three-rows");
+  }
+}
+new ResizeObserver(fitMaskDock).observe($("maskDock"));
+addEventListener("resize",fitMaskDock);
 function maskBusyApply(){
   const busy=maskBusyJobs.size>0,body=document.body;
   body.classList.toggle("mask-computing",busy);
   body.setAttribute("aria-busy",String(busy));
   for(const id of ["q","mode","modeMenuBtn","dict","pinBtn","wideBtn","expandBtn","panelBtn","maskDict",
-    "maskFindMode","maskFindWildcard","maskFindInput"]){
+    "maskFindMode","maskFindWildcard","maskFindInput","maskFindThreshold","maskFindApply"]){
     const el=$(id);if(el)el.disabled=busy;
   }
   for(const el of document.querySelectorAll("#searchHistory button, #maskWords button"))el.disabled=busy;
@@ -5224,7 +5274,7 @@ function maskAbort(){
 }
 function maskInvalidate(){
   maskAbort();clearTimeout(maskFindTimer);maskRows=[];maskBaseRows=[];maskFindRows=[];maskPattern="";maskSelection="";
-  maskFindQuery="";maskFindIndex=-1;maskFindMatch=null;$("maskFindInput").value="";maskFindControls();
+  maskFindQuery="";maskFindIndex=-1;maskFindMatch=null;maskFindApproved=false;maskFindAwaitingApply=false;$("maskFindInput").value="";maskFindControls();
   maskStripVersion++;maskStripRendered=-1;maskChipMap.clear();maskActiveKey="";
   if(searchAC)searchAC.abort();searchSeq++;
   $("maskDict").replaceChildren();$("maskLetters").replaceChildren();
@@ -5365,12 +5415,12 @@ async function maskFetch(row,page,generation,navToken){
     if(navToken===maskNavToken&&maskRows[maskCurrent]===row){row.data=data;maskRender()}
     else if(page===1&&row.wantedPage===1&&maskRows[maskCurrent]===row)maskRender();
     maskMenu();
-    if(row.within)maskFindControls();
+    maskFindControls();
     if(maskRows[maskCurrent]===row&&row.total===0){const next=maskNeighbor(maskCurrent,1);if(next>=0)maskSelect(next)}
   }catch(error){
     if(controller.signal.aborted||generation!==maskGeneration)return;
     row.state="error";row.error=error.message;maskStripVersion++;maskMenu();
-    if(row.within)maskFindControls();
+    maskFindControls();
     if(maskRows[maskCurrent]===row)maskRender();
   }finally{maskControllers.delete(controller);if(row.abort===controller)row.abort=null}
 }
@@ -5416,7 +5466,7 @@ function maskGotoApply(){
 async function maskRun(pattern){
   maskAbort();maskPattern=pattern;lastQuery=pattern;maskReturn="";
   clearTimeout(maskFindTimer);maskFindRows=[];maskFindQuery="";maskFindIndex=-1;maskFindMatch=null;
-  maskFindFilter=false;$("maskFindInput").value="";
+  maskFindFilter=false;maskFindApproved=false;maskFindAwaitingApply=false;$("maskFindInput").value="";
   if(searchAC)searchAC.abort();searchSeq++;$("out").replaceChildren();setStatus("");
   const selection=$("dict").value||"all";
   maskSelection=selection;
@@ -5467,6 +5517,9 @@ function maskRestoreCached(url){
 }
 function maskFindControls(){
   const input=$("maskFindInput"),query=input.value.trim();
+  if(maskFindNeedsApply()&&!maskFindApproved&&query&&maskFindRows.length){
+    maskFindStopPending();maskFindAwaitingApply=true;maskRender();
+  }
   input.placeholder=tx(maskFindFilter?"browse.filterPlaceholder":"browse.findWords");
   input.setAttribute("aria-label",input.placeholder);
   $("maskFindMode").innerHTML=maskFindFilter?
@@ -5480,8 +5533,12 @@ function maskFindControls(){
   const rows=query?maskFindRows:maskBaseRows;
   const total=rows.reduce((sum,row)=>sum+(row.state==="ready"?row.total:0),0);
   const settled=rows.every(row=>row.state!=="pending");
+  $("maskFindThreshold").value=String(maskFindThreshold());fitMaskFindThreshold();
+  $("maskFindApply").hidden=!maskFindNeedsApply();
+  $("maskFindApply").disabled=$("maskFindApply").hidden||!query||!settled||maskBusyJobs.size>0;
   $("maskFindCount").textContent=(maskFindFilter?total:Math.max(0,maskFindIndex+1))+"/"+total+(settled?"":"+");
   $("maskFindPrev").disabled=$("maskFindNext").disabled=maskFindFilter||!query||!settled||!total;
+  fitMaskDock();
 }
 function maskFindSwitch(filter){
   if(maskFindFilter===filter)return;
@@ -5502,6 +5559,11 @@ function maskFindSwitch(filter){
 }
 function maskFindStart(){
   const query=$("maskFindInput").value.trim();
+  if(maskFindNeedsApply()&&!maskFindApproved){
+    maskFindStopPending();maskFindAwaitingApply=!!query;maskFindQuery=query;
+    maskRender();maskFindControls();return;
+  }
+  maskFindAwaitingApply=false;
   for(const row of maskFindRows)row.abort?.abort();
   const oldJob=[...maskBusyJobs].find(job=>job.kind==="find");
   if(oldJob)maskBusyFinish(oldJob);
@@ -5522,7 +5584,7 @@ function maskFindStart(){
     const row=rows[next++];await maskFetch(row,1,generation,row===maskRows[maskCurrent]?maskNavToken:-1);
   }};
   Promise.all(Array.from({length:Math.min(3,rows.length)},worker)).then(()=>{
-    if(findGeneration===maskFindGeneration){maskBusyFinish(job);if(rows===maskFindRows)maskFindControls()}
+    if(findGeneration===maskFindGeneration){maskBusyFinish(job);maskFindControls()}
   });
 }
 async function maskFindTurn(step){
@@ -5563,19 +5625,33 @@ $("maskFindWildcard").addEventListener("click",()=>{
 });
 $("maskFindInput").addEventListener("input",()=>{
   if(maskBusyJobs.size)return;
+  maskFindApproved=false;maskFindAwaitingApply=false;
   maskFindQuery=$("maskFindInput").value.trim();maskFindMatch=null;maskFindIndex=-1;
+  if(maskFindNeedsApply()){maskFindStart();return}
   maskRender();maskFindControls();clearTimeout(maskFindTimer);
   maskFindTimer=setTimeout(maskFindStart,250);
 });
 $("maskFindInput").addEventListener("keydown",e=>{
   if(maskBusyJobs.size&&e.key!="Escape"){e.preventDefault();return}
-  if(e.key==="Enter"){e.preventDefault();clearTimeout(maskFindTimer);maskFindStart()}
+  if(e.key==="Enter"){e.preventDefault();clearTimeout(maskFindTimer);if(maskFindNeedsApply()&&!maskFindApproved){$("maskFindApply").click();return}maskFindStart()}
   if(e.key==="ArrowDown"||e.key==="ArrowUp"){
     e.preventDefault();maskFindTurn(e.key==="ArrowDown"?1:-1)
   }
 });
 $("maskFindPrev").addEventListener("click",()=>maskFindTurn(-1));
 $("maskFindNext").addEventListener("click",()=>maskFindTurn(1));
+$("maskFindThreshold").value=String(maskFindThreshold());fitMaskFindThreshold();
+$("maskFindThreshold").addEventListener("change",()=>{
+  const value=Number($("maskFindThreshold").value);if(!BROWSE_MASK_THRESHOLD_OPTIONS.includes(value))return;
+  try{localStorage.setItem(BROWSE_MASK_THRESHOLD_KEY,String(value))}catch(_){}
+  maskFindApproved=false;maskFindAwaitingApply=maskFindNeedsApply()&&!!$("maskFindInput").value.trim();
+  if(maskFindAwaitingApply){maskFindStopPending();maskRender();maskFindControls()}
+  else if($("maskFindInput").value.trim())maskFindStart();else maskFindControls();
+});
+$("maskFindApply").addEventListener("click",()=>{
+  if(!maskFindNeedsApply())return;
+  maskFindApproved=true;maskFindAwaitingApply=false;clearTimeout(maskFindTimer);maskFindStart();
+});
 $("maskDict").addEventListener("change",()=>maskSelect(maskRows.findIndex(row=>row.id===$("maskDict").value)));
 $("maskPrev").addEventListener("click",()=>maskTurn(-1));
 $("maskNext").addEventListener("click",()=>maskTurn(1));
