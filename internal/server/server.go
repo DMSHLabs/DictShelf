@@ -821,6 +821,19 @@ func entryHasSelfIndex(e *entry) bool {
 	return dictionaryHasSelfIndex(d) || formatHasSelfIndex(strings.TrimPrefix(strings.ToLower(filepath.Ext(e.Path)), "."))
 }
 
+// nativeIndexOnly marks formats whose own index is sufficient for every
+// operation in this app. ZIM can search natively, but Browse needs the
+// optional prepared title index.
+func nativeIndexOnly(e *entry) bool { return entryHasSelfIndex(e) && !isZIMPath(e.Path) }
+
+func hasBrowseIndex(path string) bool {
+	p, ok := preparedInfo(path)
+	if !ok || p.Meta == nil {
+		return false
+	}
+	return !strings.EqualFold(p.Meta["format"], "zim") || p.Meta["index_kind"] == "headwords"
+}
+
 // dictInfo is the /api/dicts row.
 type dictInfo struct {
 	DSL         *dslView  `json:"dsl,omitempty"`
@@ -1015,9 +1028,14 @@ func (s *Server) diskDictInfo(e *entry) dictInfo {
 	// a library folder that exists but is not prepared-for-this-source (an
 	// unreadable or other-schema text.db, or a source edited since) is
 	// outdated too - the prepared branch above never sees it
-	if info.DBPath == "" && !info.SelfIndexed && rebuildable(e.Path) {
-		if _, ok := store.LookupDir(e.Path); ok {
-			info.Outdated = true
+	if info.DBPath == "" && rebuildable(e.Path) {
+		if dir, ok := store.LookupDir(e.Path); ok {
+			if isZIMPath(e.Path) {
+				p := store.Inspect(store.TextDBPath(dir))
+				info.Outdated = p.Meta == nil || p.Meta["index_kind"] != "headwords" || len(p.Stale(e.Path)) > 0
+			} else if !info.SelfIndexed {
+				info.Outdated = true
+			}
 		}
 	}
 	addProvenance(&info, e.Path)

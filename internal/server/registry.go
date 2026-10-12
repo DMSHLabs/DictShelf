@@ -690,8 +690,8 @@ func previewWeight(d dict.Dictionary, m dict.Meta) int64 {
 type selfWeighing interface{ PreviewBytes() int64 }
 
 // selfIndexed is a backend whose own file already answers exact and prefix
-// lookup at no resident cost. Automatic preparation and library-wide rebuilds
-// skip these formats; ZIM has an explicit title-only index action in settings.
+// lookup at no resident cost. ZIM also supports a prepared title index for
+// Browse; other self-indexed formats do not need library preparation.
 type selfIndexed interface{ SelfIndexed() bool }
 
 // storeBacked matches anything answering from a prepared database.

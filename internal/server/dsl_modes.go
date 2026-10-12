@@ -93,7 +93,7 @@ func (e *entry) setIndexRemoved(removed bool) error {
 // restoreIndex rebuilds an index deliberately removed by the user, or finishes
 // the first index for a newly added dictionary.
 func (e *entry) restoreIndex(plan store.Plan, progress store.Progress, lane chan struct{}) error {
-	if entryHasSelfIndex(e) {
+	if nativeIndexOnly(e) {
 		store.IndexDiagnostic("skip restored index source=%q reason=native-index", e.Path)
 		return e.setIndexRemoved(false)
 	}

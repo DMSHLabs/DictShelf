@@ -43,7 +43,7 @@ func baseIndexRequired(selfIndexed bool, options indexOptions) bool {
 
 func rescanTargetNeedsWork(e *entry, fresh, selfIndexed bool, options indexOptions, req rescanIndexesRequest) bool {
 	if selfIndexed {
-		return false // ZIM's own index is authoritative; never build a prepared index for it.
+		return false // This format's native index covers the app's supported operations.
 	}
 	if fresh {
 		return true
@@ -197,10 +197,10 @@ func (r *Registry) updateDictionaryIndexesCancelable(req rescanIndexesRequest, p
 		defaults = *req.New
 	}
 	type target struct {
-		e           *entry
-		fresh       bool
-		selfIndexed bool
-		options     indexOptions
+		e          *entry
+		fresh      bool
+		nativeOnly bool
+		options    indexOptions
 	}
 	targets := []target{}
 	workTargets := []target{}
@@ -212,15 +212,16 @@ func (r *Registry) updateDictionaryIndexesCancelable(req rescanIndexesRequest, p
 		}
 		_, prepared := store.LookupDir(e.Path)
 		_, pending := rec.DSLPending[e.indexRemovalKey()]
-		fresh := pending || (!prepared && (!previous[dict.CanonPath(e.Path)] || !e.indexBlocked()))
+		fresh := pending || (!prepared && (!previous[dict.CanonPath(e.Path)] || !e.indexBlocked())) ||
+			isZIMPath(e.Path) && !hasBrowseIndex(e.Path)
 		options := defaults
-		t := target{e: e, fresh: fresh, selfIndexed: entryHasSelfIndex(e), options: options}
-		store.IndexDiagnostic("rescan index candidate source=%q dictionary=%q fresh=%v self_indexed=%v index=%v contains=%v fulltext=%v", e.Path, e.probeName(), fresh, t.selfIndexed, options.Index, options.Contains, options.FullText)
-		if t.selfIndexed {
+		t := target{e: e, fresh: fresh, nativeOnly: nativeIndexOnly(e), options: options}
+		store.IndexDiagnostic("rescan index candidate source=%q dictionary=%q fresh=%v self_indexed=%v native_only=%v index=%v contains=%v fulltext=%v", e.Path, e.probeName(), fresh, entryHasSelfIndex(e), t.nativeOnly, options.Index, options.Contains, options.FullText)
+		if t.nativeOnly {
 			store.IndexDiagnostic("rescan index skipped source=%q dictionary=%q reason=native-index", e.Path, e.probeName())
 		}
 		targets = append(targets, t)
-		if rescanTargetNeedsWork(e, fresh, t.selfIndexed, options, req) {
+		if rescanTargetNeedsWork(e, fresh, t.nativeOnly, options, req) {
 			store.IndexDiagnostic("rescan index selected source=%q dictionary=%q", e.Path, e.probeName())
 			workTargets = append(workTargets, t)
 		}
@@ -247,11 +248,11 @@ func (r *Registry) updateDictionaryIndexesCancelable(req rescanIndexesRequest, p
 		}
 		f.DSLKnown[source] = true
 		delete(f.DSLPending, key)
-		if t.selfIndexed {
+		if t.nativeOnly {
 			delete(f.DSLRemoved, key) // its native headword index cannot be removed
 		} else if t.fresh {
 			f.DSLRemoved[key] = true
-			if baseIndexRequired(t.selfIndexed, t.options) {
+			if baseIndexRequired(t.nativeOnly, t.options) {
 				f.DSLPending[key] = t.options
 			}
 		}
@@ -276,11 +277,11 @@ func (r *Registry) updateDictionaryIndexesCancelable(req rescanIndexesRequest, p
 			break
 		}
 		e := t.e
-		store.IndexDiagnostic("rescan index start source=%q dictionary=%q fresh=%v self_indexed=%v", e.Path, e.probeName(), t.fresh, t.selfIndexed)
-		if t.selfIndexed {
+		store.IndexDiagnostic("rescan index start source=%q dictionary=%q fresh=%v self_indexed=%v native_only=%v", e.Path, e.probeName(), t.fresh, entryHasSelfIndex(e), t.nativeOnly)
+		if t.nativeOnly {
 			if t.fresh {
 				if !t.options.Contains && !t.options.FullText {
-					continue // the ZIM path index already answers headword searches
+					continue // the native index already answers headword searches
 				}
 			} else {
 				dir, ok := store.LookupDir(e.Path)
@@ -298,7 +299,7 @@ func (r *Registry) updateDictionaryIndexesCancelable(req rescanIndexesRequest, p
 		state := rescanIndexProgress{Stage: "dictionary", At: i + 1, Total: len(workTargets), Name: e.probeName()}
 		if t.fresh {
 			state.Action = "create"
-			if !t.selfIndexed {
+			if !t.nativeOnly {
 				state.Indexes = append(state.Indexes, "index")
 			}
 			if t.options.Contains {
@@ -307,7 +308,7 @@ func (r *Registry) updateDictionaryIndexesCancelable(req rescanIndexesRequest, p
 			if t.options.FullText {
 				state.Indexes = append(state.Indexes, "fullText")
 			}
-		} else if t.selfIndexed {
+		} else if t.nativeOnly {
 			dir, _ := store.LookupDir(e.Path)
 			have := store.KeptPlan(store.TextDBPath(dir))
 			if (req.Existing.Contains == "delete" || req.Existing.FullText == "delete") &&
@@ -377,7 +378,7 @@ func (r *Registry) updateDictionaryIndexesCancelable(req rescanIndexesRequest, p
 		want := clearDatabaseRequest{progress: articleProgress}
 		if t.fresh {
 			plan := store.Plan{Contains: t.options.Contains, FullText: t.options.FullText}
-			want.Index, want.plan = baseIndexRequired(t.selfIndexed, t.options), &plan
+			want.Index, want.plan = baseIndexRequired(t.nativeOnly, t.options), &plan
 		} else {
 			dir, ok := store.LookupDir(e.Path)
 			if !ok && req.Existing.Index != "recreate" {
@@ -387,7 +388,7 @@ func (r *Registry) updateDictionaryIndexesCancelable(req rescanIndexesRequest, p
 			if ok {
 				have = store.KeptPlan(store.TextDBPath(dir))
 			}
-			want.Index = (!t.selfIndexed && req.Existing.Index == "recreate") ||
+			want.Index = (!t.nativeOnly && req.Existing.Index == "recreate") ||
 				(req.Existing.Contains == "update" && have.Contains) || (req.Existing.FullText == "update" && have.FullText)
 			want.Contains = req.Existing.Contains == "delete"
 			want.FullText = req.Existing.FullText == "delete"

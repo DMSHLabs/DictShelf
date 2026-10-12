@@ -3892,10 +3892,9 @@ function bulkFeatureLabels(d,feat){
 function bulkIndexCandidates(scope,feat,action){
   return dicts.filter(d=>{
     if(d.builtin||!d.source||d.dsl&&!d.dsl.sourceAvailable)return false;
-    /* Self-indexed formats have no ordinary base-index operation in the
-       library-wide dialog. ZIM's title index is started only from its
-       per-dictionary Index control in Dictionary Settings. */
-    if(feat==="base"&&d.selfIndexed)return false;
+    /* Other self-indexed formats need no prepared headword index. ZIM's
+       native index serves search; its optional title index powers Browse. */
+    if(feat==="base"&&d.selfIndexed&&d.format!=="zim")return false;
     const have=feat==="base"?!!d.dbSize:feat==="contains"?!!d.caps?.Contains:!!d.caps?.FTS;
     return action==="recreate"||((action==="delete"||action==="update")?have:!have);
   });

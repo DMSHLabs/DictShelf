@@ -2426,8 +2426,12 @@ paths:
           description: >
             Set to `1` for NDJSON events: the page first, then alphabet strip
             batches and progress, followed by `done`. Closing the request stops
-            the native-index walk.
+            the prepared headword-index walk.
           schema: { type: string, enum: ['1'] }
+        - name: strip
+          in: query
+          description: Set to `0` to omit the alphabet strip when the caller already has it cached.
+          schema: { type: string, enum: ['0'] }
       x-codeSamples:
         - lang: Shell
           label: curl

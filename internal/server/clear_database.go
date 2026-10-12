@@ -163,7 +163,7 @@ func (s *Server) handleClearDatabase(w http.ResponseWriter, req *http.Request) {
 }
 
 func (e *entry) clearDatabase(want clearDatabaseRequest) error {
-	if entryHasSelfIndex(e) {
+	if nativeIndexOnly(e) {
 		store.IndexDiagnostic("skip database index request source=%q dictionary=%q index=%v contains=%v fulltext=%v obsolete=%v reason=native-index", e.Path, e.probeName(), want.Index, want.Contains, want.FullText, want.Obsolete)
 		return nil
 	}

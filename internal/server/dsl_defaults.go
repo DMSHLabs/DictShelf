@@ -64,7 +64,7 @@ func (r *Registry) queueNewDictionaries() error {
 	for _, e := range entries {
 		if e.dslSource != "" {
 			families[e.dslSource] = append(families[e.dslSource], e)
-		} else if !e.builtin && !store.IsTextDB(e.Path) && !entryHasSelfIndex(e) {
+		} else if !e.builtin && !store.IsTextDB(e.Path) && !nativeIndexOnly(e) {
 			families[cleanAbs(e.Path)] = append(families[cleanAbs(e.Path)], e)
 		}
 	}
@@ -86,7 +86,7 @@ func (r *Registry) queueNewDictionaries() error {
 	}
 	changed := false
 	for _, e := range entries {
-		if !entryHasSelfIndex(e) {
+		if !nativeIndexOnly(e) {
 			continue
 		}
 		key := e.indexRemovalKey()
@@ -113,7 +113,7 @@ func (r *Registry) queueNewDictionaries() error {
 		f.DSLKnown[source] = true
 		changed = true
 		for _, other := range family {
-			if _, ok := validPrepared(other.Path); ok {
+			if hasBrowseIndex(other.Path) {
 				continue
 			}
 			key := other.indexRemovalKey()
@@ -142,7 +142,7 @@ func (r *Registry) prepareNewDictionaries() {
 		if !ok {
 			continue
 		}
-		if entryHasSelfIndex(e) {
+		if nativeIndexOnly(e) {
 			store.IndexDiagnostic("skip pending index preparation source=%q reason=native-index", e.Path)
 			p.editMu.Lock()
 			err := p.mutate(func(f *prefsFile) {
