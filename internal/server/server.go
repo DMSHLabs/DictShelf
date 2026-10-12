@@ -791,11 +791,11 @@ func (s *Server) resolveDirs(raw []string) ([]string, int, error) {
 // currentFeatures reads what a dictionary has prepared right now, so a request
 // that names one feature leaves the others alone.
 func (s *Server) currentFeatures(e *entry) features {
-	if entryHasSelfIndex(e) {
+	if entryHasSelfIndex(e) && !isZIMPath(e.Path) {
 		return features{}
 	}
 	p, ok := preparedInfo(e.Path)
-	if !ok || p.Meta == nil {
+	if !ok || p.Meta == nil || isZIMPath(e.Path) && p.Meta["index_kind"] != "headwords" {
 		return features{}
 	}
 	// an unpaired media.db serves nothing, so it does not count as packed
@@ -806,6 +806,8 @@ func (s *Server) currentFeatures(e *entry) features {
 // its bounds before Open returns. Keep this capability on prepared rows too,
 // where the active backend is the SQLite store rather than the ZIM reader.
 func formatHasSelfIndex(format string) bool { return format == "zim" }
+
+func isZIMPath(path string) bool { return strings.EqualFold(filepath.Ext(path), ".zim") }
 
 func dictionaryHasSelfIndex(d dict.Dictionary) bool {
 	si, ok := d.(selfIndexed)
@@ -1024,9 +1026,10 @@ func (s *Server) diskDictInfo(e *entry) dictInfo {
 
 func (s *Server) baseDictInfo(e *entry) dictInfo {
 	// A prepared dictionary answers the whole row from its own meta without
-	// probing or opening the source. Self-indexed formats use the source.
+	// probing or opening the source. ZIM uses a prepared row only for the
+	// explicitly requested headword-only database.
 	// The library folder is located from the source path.
-	if p, ok := preparedInfo(e.Path); ok && p.Meta != nil && !entryHasSelfIndex(e) {
+	if p, ok := preparedInfo(e.Path); ok && p.Meta != nil && (!entryHasSelfIndex(e) || isZIMPath(e.Path) && p.Meta["index_kind"] == "headwords") {
 		meta := p.Meta
 		ec, _ := strconv.Atoi(meta["entry_count"])
 		info := dictInfo{
@@ -1166,7 +1169,9 @@ func addProvenance(info *dictInfo, entryPath string) {
 	textDB := info.DBPath
 	if textDB == "" {
 		if p, ok := validPrepared(entryPath); ok {
-			textDB = p
+			if !isZIMPath(entryPath) || store.Inspect(p).Meta["index_kind"] == "headwords" {
+				textDB = p
+			}
 		}
 	}
 	if fsx.FileExists(textDB) {
@@ -2097,7 +2102,7 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		if entryHasSelfIndex(e) {
+		if entryHasSelfIndex(e) && !isZIMPath(e.Path) {
 			store.IndexDiagnostic("skip ingest source=%q dictionary=%q reason=native-index", e.Path, e.probeName())
 		} else {
 			if err := e.setFeatures(want, progress, q.Get("rebuild") == "1"); err != nil {

@@ -9,6 +9,7 @@ package server
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -25,6 +26,7 @@ import (
 	"time"
 
 	"github.com/wuweidict/wudict/internal/dict"
+	zimformat "github.com/wuweidict/wudict/internal/format/zim"
 	"github.com/wuweidict/wudict/internal/fsx"
 	"github.com/wuweidict/wudict/internal/htmlref"
 	"github.com/wuweidict/wudict/internal/logx"
@@ -129,6 +131,71 @@ func (u *upgraded) Meta() dict.Meta {
 	m.Format = strings.TrimPrefix(m.Format, "wudict:")
 	m.Path = u.srcPath
 	return m
+}
+
+// ZIM title indexes deliberately store no article bodies. Search their local
+// headword database, then fetch only the matched articles from the source.
+func (u *upgraded) titleResults(ctx context.Context, rows []dict.Result, err error) ([]dict.Result, error) {
+	if err != nil || len(rows) == 0 || !u.Store.Meta().HeadwordsOnly {
+		return rows, err
+	}
+	src, err := u.source()
+	if err != nil {
+		return nil, err
+	}
+	for i := range rows {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		found, lookupErr := src.Exact(rows[i].Headword, 1)
+		if lookupErr != nil {
+			return nil, lookupErr
+		}
+		if len(found) > 0 {
+			rows[i].Body = found[0].Body
+		}
+	}
+	return rows, nil
+}
+
+func (u *upgraded) Exact(word string, limit int) ([]dict.Result, error) {
+	r, err := u.Store.Exact(word, limit)
+	return u.titleResults(context.Background(), r, err)
+}
+
+func (u *upgraded) Prefix(word string, limit int) ([]dict.Result, error) {
+	r, err := u.Store.Prefix(word, limit)
+	return u.titleResults(context.Background(), r, err)
+}
+
+func (u *upgraded) ExactContext(ctx context.Context, word string, limit int) ([]dict.Result, error) {
+	r, err := u.Store.ExactContext(ctx, word, limit)
+	return u.titleResults(ctx, r, err)
+}
+
+func (u *upgraded) PrefixContext(ctx context.Context, word string, limit int) ([]dict.Result, error) {
+	r, err := u.Store.PrefixContext(ctx, word, limit)
+	return u.titleResults(ctx, r, err)
+}
+
+func (u *upgraded) MaskContext(ctx context.Context, pattern string, limit int) ([]dict.Result, error) {
+	r, err := u.Store.MaskContext(ctx, pattern, limit)
+	return u.titleResults(ctx, r, err)
+}
+
+func (u *upgraded) ContainsContext(ctx context.Context, word string, limit int) ([]dict.Result, error) {
+	r, err := u.Store.ContainsContext(ctx, word, limit)
+	return u.titleResults(ctx, r, err)
+}
+
+func (u *upgraded) FullTextContext(ctx context.Context, query string, limit int) ([]dict.Result, error) {
+	r, err := u.Store.FullTextContext(ctx, query, limit)
+	return u.titleResults(ctx, r, err)
+}
+
+func (u *upgraded) FullTextMatch(ctx context.Context, match string, limit int) ([]dict.Result, error) {
+	r, err := u.Store.FullTextMatch(ctx, match, limit)
+	return u.titleResults(ctx, r, err)
 }
 
 // Resource resolves in three rungs, cheapest first (D2, extended by O8):
@@ -623,8 +690,8 @@ func previewWeight(d dict.Dictionary, m dict.Meta) int64 {
 type selfWeighing interface{ PreviewBytes() int64 }
 
 // selfIndexed is a backend whose own file already answers exact and prefix
-// lookup at no resident cost. App-managed indexing skips these formats because
-// they need no prepared headword index; see the index operation handlers.
+// lookup at no resident cost. Automatic preparation and library-wide rebuilds
+// skip these formats; ZIM has an explicit title-only index action in settings.
 type selfIndexed interface{ SelfIndexed() bool }
 
 // storeBacked matches anything answering from a prepared database.
@@ -739,9 +806,18 @@ func openUpgradedOrDirect(path string) (dict.Dictionary, error) {
 		}
 		return &native{Store: s, path: path}, nil
 	}
-	// ZIM's own path list remains the search backend even if an older build
-	// left a redundant prepared database in the library.
+	// ZIM's own path list remains the default. An explicitly requested
+	// headword-only database may serve search and browsing, with article bodies
+	// still resolved from the source.
 	if strings.EqualFold(filepath.Ext(path), ".zim") {
+		if textDB, ok := store.PreparedFor(path); ok {
+			if prepared, err := store.Open(textDB); err == nil {
+				if prepared.Meta().HeadwordsOnly {
+					return &upgraded{Store: prepared, srcPath: path}, nil
+				}
+				prepared.Close()
+			}
+		}
 		return dict.Open(path)
 	}
 	// a prepared folder for this source short-circuits the heavy direct
@@ -1637,16 +1713,31 @@ func (e *entry) reconcile(name string, t store.Target, progress store.Progress) 
 // paths do - so it must not take the lock a second time.
 func (e *entry) reconcileLocked(name string, t store.Target, progress store.Progress) (store.Outcome, error) {
 	defer e.rebuilding.Store(false) // releasePrepared may have armed it
-	if entryHasSelfIndex(e) {
+	zim := isZIMPath(e.Path)
+	if entryHasSelfIndex(e) && !zim {
 		store.IndexDiagnostic("skip prepared database source=%q dictionary=%q reason=native-index", e.Path, name)
 		return store.Outcome{}, nil
 	}
-	out, err := store.Reconcile(e.Path, t, store.Hooks{
+	hooks := store.Hooks{
 		Release:       func(textDB string) { releasePrepared(e, textDB) },
 		Backend:       e.mediaBackend,
 		Progress:      progress,
 		MediaProgress: progress,
-	})
+	}
+	if zim {
+		hooks.Reader = func() (dict.Reader, error) { return zimformat.NewHeadwordReader(e.Path) }
+		// A previous build may have left a conventional ZIM ingest in the
+		// library. The explicit Index action replaces it with the title-only
+		// form, even when source and ordinary plan stamps look current.
+		prepared := store.Prepared{}
+		if dir, ok := store.LookupDir(e.Path); ok {
+			prepared = store.Inspect(store.TextDBPath(dir))
+		}
+		if prepared.Meta == nil || prepared.Meta["index_kind"] != "headwords" {
+			t.Rebuild = store.Always
+		}
+	}
+	out, err := store.Reconcile(e.Path, t, hooks)
 	if out.Rebuilt {
 		if len(out.Why) > 0 {
 			logx.V("%sprepared data was outdated (%v) - re-indexed", logx.Dict(name), out.Why)

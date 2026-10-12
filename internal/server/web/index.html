@@ -263,18 +263,30 @@ window.wudictFontScale=(function(){
 <div id="outdatedNotice" class="bulkbox outdated-notice" role="status" hidden></div>
 <div id="out"></div>
 <section id="maskView" aria-label="{{T:search.wildcardsResults}}" hidden>
-  <header class="mask-head">
-    <select id="maskDict" aria-label="{{T:search.wildcardsDictionary}}"></select>
-    <span id="maskProgress" aria-label="{{T:search.wildcardsResults}}" hidden>
-      <span id="maskCount" role="status" aria-label="{{T:search.wildcardsTotal}}"></span>
-      <button type="button" id="maskPrev" aria-label="{{T:browse.previousTitle}}">‹</button>
-      <span id="maskPage"></span>
-      <button type="button" id="maskNext" aria-label="{{T:browse.nextTitle}}">›</button>
-    </span>
-  </header>
-  <nav id="maskLetters" class="mask-letters" aria-label="{{T:browse.jumpLetter}}"></nav>
+  <div class="mask-chrome">
+    <header class="mask-head">
+      <select id="maskDict" aria-label="{{T:search.wildcardsDictionary}}"></select>
+      <span id="maskProgress" aria-label="{{T:search.wildcardsResults}}" hidden>
+        <span id="maskCount" role="status" aria-label="{{T:search.wildcardsTotal}}"></span>
+        <button type="button" id="maskPrev" aria-label="{{T:browse.previousTitle}}">‹</button>
+        <button type="button" id="maskPage" aria-label="{{T:browse.gotoBlock}}" title="{{T:browse.gotoBlock}}">1/1</button>
+        <button type="button" id="maskNext" aria-label="{{T:browse.nextTitle}}">›</button>
+      </span>
+    </header>
+    <nav id="maskLetters" class="mask-letters" aria-label="{{T:browse.jumpLetter}}"></nav>
+  </div>
   <div id="maskWords" class="mask-words"></div>
 </section>
+<dialog id="maskGotoDialog" lang="{{T:locale}}" class="group-dialog panel-card" aria-labelledby="maskGotoTitle">
+  <h2 id="maskGotoTitle">{{T:browse.gotoBlock}}</h2>
+  <label for="maskGotoInput">{{T:browse.gotoBlockLabel}}</label>
+  <input type="number" id="maskGotoInput" min="1" step="1" inputmode="numeric">
+  <p id="maskGotoRange"></p>
+  <div class="article-find-actions">
+    <button type="button" class="btn" id="maskGotoCancel">{{T:panel.cancel}}</button>
+    <button type="button" class="btn" id="maskGotoGo">{{T:browse.gotoBlockAction}}</button>
+  </div>
+</dialog>
 </main>
 <footer id="maskDock" class="mask-dock" role="search" hidden>
   <button type="button" id="maskFindMode" aria-label="{{T:browse.filterWords}}">⌕</button>
@@ -2909,10 +2921,10 @@ function renderPanel(){
        chip next to it, which is a measurement of a file on disk. Hence "est.",
        hence "~", hence plain .feat styling - the estimate is an argument for
        clicking, the size is a fact about what a click already produced. */
-    const est=indexed||selfIndexed?0:baseIndexBytes(d);
+    const est=indexed||selfIndexed&&d.format!=="zim"?0:baseIndexBytes(d);
     let caps=indexed&&!d.dsl
       ? `<span class="feat on locked" title="${escAttr(tx("dictUI.indexedSize",{size:mb(d.dbSize)}))}">${mb(d.dbSize)}</span>`
-      : selfIndexed&&!d.dsl
+      : selfIndexed&&!d.dsl&&!(d.format==="zim"&&canToggle)
         ? `<span class="feat on locked" title="${escAttr(tx("dictUI.nativeIndexedHint"))}">${esc(tx("dictUI.nativeIndexed"))}</span>`
       : canToggle&&!d.dsl
         ? `<span class="feat" data-feat="base" title="${escAttr(tx("dictUI.buildHint")+(est?tx("dictUI.estimateHint",{size:mb(est)}):""))}">${esc(tx("dictUI.index"))}${est?" · ~"+mb(est):""}</span>`
@@ -3880,7 +3892,10 @@ function bulkFeatureLabels(d,feat){
 function bulkIndexCandidates(scope,feat,action){
   return dicts.filter(d=>{
     if(d.builtin||!d.source||d.dsl&&!d.dsl.sourceAvailable)return false;
-    if(feat==="base"&&d.selfIndexed&&!d.dbSize)return false;
+    /* Self-indexed formats have no ordinary base-index operation in the
+       library-wide dialog. ZIM's title index is started only from its
+       per-dictionary Index control in Dictionary Settings. */
+    if(feat==="base"&&d.selfIndexed)return false;
     const have=feat==="base"?!!d.dbSize:feat==="contains"?!!d.caps?.Contains:!!d.caps?.FTS;
     return action==="recreate"||((action==="delete"||action==="update")?have:!have);
   });
@@ -5125,11 +5140,25 @@ let maskGeneration=0,maskControllers=new Set(),maskRows=[],maskCurrent=0;
 let maskPattern="",maskSelection="",maskSubmitRequested=false,maskNavToken=0,maskRestoreScroll=null;
 let maskStripVersion=0,maskStripRendered=-1,maskChipMap=new Map(),maskActiveKey="";
 let maskBaseRows=[],maskBaseCurrent=0,maskFindRows=[],maskFindFilter=false,maskFindWildcard=false;
-let maskFindIndex=-1,maskFindMatch=null,maskFindTimer=0,maskFindQuery="";
+let maskFindIndex=-1,maskFindMatch=null,maskFindTimer=0,maskFindQuery="",maskBusyJobs=new Set(),maskFindGeneration=0;
+function maskBusyApply(){
+  const busy=maskBusyJobs.size>0,body=document.body;
+  body.classList.toggle("mask-computing",busy);
+  body.setAttribute("aria-busy",String(busy));
+  for(const id of ["q","mode","modeMenuBtn","dict","pinBtn","wideBtn","expandBtn","panelBtn","maskDict",
+    "maskFindMode","maskFindWildcard","maskFindInput"]){
+    const el=$(id);if(el)el.disabled=busy;
+  }
+  for(const el of document.querySelectorAll("#searchHistory button, #maskWords button"))el.disabled=busy;
+}
+function maskBusyStart(key){maskBusyJobs.add(key);maskBusyApply()}
+function maskBusyFinish(key){maskBusyJobs.delete(key);maskBusyApply()}
 function maskAbort(){
   maskGeneration++;maskNavToken++;
   for(const controller of maskControllers)controller.abort();
   maskControllers.clear();
+  maskBusyJobs.clear();maskFindGeneration++;
+  maskBusyApply();
   setBusy(false);
 }
 function maskInvalidate(){
@@ -5213,6 +5242,8 @@ function maskMenu(){
   const row=maskRows[maskCurrent],result=row?.data;
   const current=result?(row.firstPage===null?"…":String(row.firstPage+result.page-1)):"…";
   $("maskPage").textContent=current+"/"+(complete?String(pages):"…");
+  $("maskPage").disabled=!complete||pages===0;
+  $("maskPage").setAttribute("aria-label",tx("browse.gotoBlock"));
   maskStripPaint();
 }
 function maskNeighbor(from,step){
@@ -5300,6 +5331,27 @@ function maskTurn(step){
     maskSelect(next,step<0?Math.max(1,target.pages||target.data?.pages||1):1);
   }
 }
+function maskGotoOpen(){
+  let pages=0,complete=true;
+  for(const row of maskRows){
+    if(row.state!=="ready"){complete=false;break}
+    pages+=row.pages||0;
+  }
+  if(!complete||!pages)return;
+  const row=maskRows[maskCurrent],current=row?.data&&row.firstPage!==null?row.firstPage+row.data.page-1:1;
+  const input=$("maskGotoInput");input.min="1";input.max=String(pages);input.value=String(current);
+  $("maskGotoRange").textContent=t("browse.gotoBlockRange",{total:window.wudictI18n.number(pages)});
+  $("maskGotoDialog").showModal();input.focus();input.select();
+}
+function maskGotoApply(){
+  const input=$("maskGotoInput"),page=Number(input.value);
+  let pages=0;for(const row of maskRows)pages+=row.pages||0;
+  if(!Number.isInteger(page)||page<1||page>pages){input.reportValidity();return}
+  for(let i=0;i<maskRows.length;i++){
+    const row=maskRows[i],first=row.firstPage||0,last=first+(row.pages||0)-1;
+    if(first&&page>=first&&page<=last){$("maskGotoDialog").close();maskSelect(i,page-first+1);return}
+  }
+}
 async function maskRun(pattern){
   maskAbort();maskPattern=pattern;lastQuery=pattern;maskReturn="";
   clearTimeout(maskFindTimer);maskFindRows=[];maskFindQuery="";maskFindIndex=-1;maskFindMatch=null;
@@ -5322,14 +5374,14 @@ async function maskRun(pattern){
   }else maskRestoreScroll=null;
   maskRender();
   if(!maskRows.length){if(!dictsSettled){staleSearch=true;maskSubmitRequested=true}return}
-  const generation=maskGeneration,rows=maskBaseRows;setBusy(true);
+  const generation=maskGeneration,rows=maskBaseRows,job={kind:"base",generation};maskBusyStart(job);setBusy(true);
   let next=0;
   const worker=async()=>{while(generation===maskGeneration&&next<rows.length){
     const row=rows[next++];await maskFetch(row,row.wantedPage,generation,row===maskRows[maskCurrent]?maskNavToken:-1);
   }};
   await Promise.all(Array.from({length:Math.min(3,rows.length)},worker));
   if(generation!==maskGeneration)return;
-  setBusy(false);
+  maskBusyFinish(job);setBusy(false);
   if(rows.every(row=>row.state==="ready"&&row.total===0)&&maskRows===rows)maskRender();
 }
 function maskRestoreCached(url){
@@ -5349,13 +5401,13 @@ function maskRestoreCached(url){
   const pending=[...new Set([...maskRows,...maskBaseRows].filter(row=>row.state==="pending"))];
   pending.sort((a,b)=>a===maskRows[index]?-1:b===maskRows[index]?1:0);
   if(pending.length){
-    const generation=maskGeneration;let next=0;setBusy(true);
+    const generation=maskGeneration,job={kind:"restore",generation};let next=0;maskBusyStart(job);setBusy(true);
     const worker=async()=>{while(generation===maskGeneration&&next<pending.length){
       const row=pending[next++];
       await maskFetch(row,row.wantedPage,generation,row===maskRows[maskCurrent]?maskNavToken:-1);
     }};
     Promise.all(Array.from({length:Math.min(3,pending.length)},worker)).then(()=>{
-      if(generation===maskGeneration)setBusy(false);
+      if(generation===maskGeneration){maskBusyFinish(job);setBusy(false)}
     });
   }
   return true;
@@ -5398,6 +5450,9 @@ function maskFindSwitch(filter){
 function maskFindStart(){
   const query=$("maskFindInput").value.trim();
   for(const row of maskFindRows)row.abort?.abort();
+  const oldJob=[...maskBusyJobs].find(job=>job.kind==="find");
+  if(oldJob)maskBusyFinish(oldJob);
+  maskFindGeneration++;
   if(maskRows!==maskBaseRows){maskRows=maskBaseRows;maskCurrent=maskBaseCurrent}
   maskFindQuery=query;maskFindIndex=-1;maskFindMatch=null;maskFindRows=[];
   maskStripVersion++;maskStripRendered=-1;
@@ -5408,12 +5463,13 @@ function maskFindStart(){
     maskRows=maskFindRows;maskCurrent=maskBaseCurrent;
   }
   maskRender();maskFindControls();
-  const generation=maskGeneration,rows=maskFindRows;let next=0;
+  const generation=maskGeneration,rows=maskFindRows,findGeneration=maskFindGeneration,job={kind:"find",generation:findGeneration};let next=0;
+  maskBusyStart(job);
   const worker=async()=>{while(generation===maskGeneration&&rows===maskFindRows&&next<rows.length){
     const row=rows[next++];await maskFetch(row,1,generation,row===maskRows[maskCurrent]?maskNavToken:-1);
   }};
   Promise.all(Array.from({length:Math.min(3,rows.length)},worker)).then(()=>{
-    if(rows===maskFindRows)maskFindControls();
+    if(findGeneration===maskFindGeneration){maskBusyFinish(job);if(rows===maskFindRows)maskFindControls()}
   });
 }
 async function maskFindTurn(step){
@@ -5447,16 +5503,19 @@ async function maskFindTurn(step){
   const base=maskBaseRows.findIndex(candidate=>candidate.id===row.id);
   if(base>=0){maskSelect(base,Math.floor(position/(maskBaseRows[base].size||300))+1);maskFindControls()}
 }
-$("maskFindMode").addEventListener("click",()=>maskFindSwitch(!maskFindFilter));
+$("maskFindMode").addEventListener("click",()=>{if(maskBusyJobs.size)return;maskFindSwitch(!maskFindFilter)});
 $("maskFindWildcard").addEventListener("click",()=>{
+  if(maskBusyJobs.size)return;
   maskFindWildcard=!maskFindWildcard;maskFindStart();maskFindControls();
 });
 $("maskFindInput").addEventListener("input",()=>{
+  if(maskBusyJobs.size)return;
   maskFindQuery=$("maskFindInput").value.trim();maskFindMatch=null;maskFindIndex=-1;
   maskRender();maskFindControls();clearTimeout(maskFindTimer);
   maskFindTimer=setTimeout(maskFindStart,250);
 });
 $("maskFindInput").addEventListener("keydown",e=>{
+  if(maskBusyJobs.size&&e.key!="Escape"){e.preventDefault();return}
   if(e.key==="Enter"){e.preventDefault();clearTimeout(maskFindTimer);maskFindStart()}
   if(e.key==="ArrowDown"||e.key==="ArrowUp"){
     e.preventDefault();maskFindTurn(e.key==="ArrowDown"?1:-1)
@@ -5467,6 +5526,10 @@ $("maskFindNext").addEventListener("click",()=>maskFindTurn(1));
 $("maskDict").addEventListener("change",()=>maskSelect(maskRows.findIndex(row=>row.id===$("maskDict").value)));
 $("maskPrev").addEventListener("click",()=>maskTurn(-1));
 $("maskNext").addEventListener("click",()=>maskTurn(1));
+$("maskPage").addEventListener("click",maskGotoOpen);
+$("maskGotoCancel").addEventListener("click",()=>$("maskGotoDialog").close());
+$("maskGotoGo").addEventListener("click",maskGotoApply);
+$("maskGotoInput").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();maskGotoApply()}});
 $("maskLetters").addEventListener("click",e=>{
   const button=e.target.closest("button[data-dict][data-page]");if(!button)return;
   const index=maskRows.findIndex(row=>row.id===button.dataset.dict);
@@ -5486,6 +5549,7 @@ if($("mode").value==="wildcards")maskInvalidate();
 async function doSearch(ev){
   window.wudictArticleFind?.stop();
   if(ev)ev.preventDefault();
+  if(maskBusyJobs.size)return;
   const q=$("q").value.trim();
   if(!q)return;
   if($("mode").value==="wildcards"){

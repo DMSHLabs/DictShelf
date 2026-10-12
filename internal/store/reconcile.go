@@ -81,8 +81,8 @@ func Always([]Reason) bool { return true }
 // Hooks are what a caller supplies around the work. All are optional.
 type Hooks struct {
 	// Reader opens the source for an ingest, and is called only when one is
-	// needed. The caller owns what it returns. Nil opens dict.OpenReader and
-	// closes it.
+	// needed. Reconcile closes the returned reader after ingestion. Nil opens
+	// dict.OpenReader with the same lifetime.
 	Reader func() (dict.Reader, error)
 
 	// Backend is the dictionary media is packed from; done is called when
@@ -261,11 +261,11 @@ func ingest(src, textDB string, plan Plan, h Hooks, out *Outcome) (resultErr err
 	if h.Reader != nil {
 		r, err = h.Reader()
 	} else if r, err = dict.OpenReader(src); err == nil {
-		defer r.Close()
 	}
 	if err != nil {
 		return err
 	}
+	defer r.Close()
 	start := time.Now()
 	rep, err := IngestPlan(r, textDB, plan, h.Progress)
 	if err != nil {
