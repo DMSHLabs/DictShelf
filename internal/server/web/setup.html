@@ -519,7 +519,9 @@ async function save(){
   const q=paths().map(p=>"path="+encodeURIComponent(p)).join("&");
   if(!q)return;
   if(validationController){validationRun++;validationController.abort();validationController=null}
-  const url="/api/setup?"+q+"&save=1&async=1";
+  let diagnostics="";
+  try{if(localStorage.getItem("wudict_folder_diagnostics")==="1")diagnostics="&diagnostics=1"}catch(_){}
+  const url="/api/setup?"+q+"&save=1&async=1"+diagnostics;
   $("save").disabled=true;
   setSetupNotice(tx("pages.savingFolders"));
   let j;
