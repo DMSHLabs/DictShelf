@@ -267,6 +267,9 @@ final class Shell {
         reply.put("reader", ShellPrefs.opensApp(c, ShellPrefs.READER));
         reply.put("info", ShellPrefs.infoMessages(c));
         reply.put("key", ShellPrefs.requireKey(c));
+        reply.put("logEnabled", SystemLog.enabled());
+        reply.put("logBaseEvents", SystemLog.baseEvents());
+        reply.put("logWebEvents", SystemLog.detailedEvents());
         // The CONFIGURED port, and not ServerProcess.port: the page prints this
         // in the sentence under the listen switch ("other devices on this
         // network would use 192.168.1.44:6889"), which is a statement about the
@@ -717,7 +720,11 @@ final class Shell {
                         String action = request.optString("action", "get");
                         if ("set".equals(action)) {
                             String field = request.getString("field");
-                            if ("toolbar".equals(field)) {
+                            if ("log".equals(field)) {
+                                SystemLog.configure(a, request.getBoolean("enabled"),
+                                        request.getBoolean("baseEvents"), request.getBoolean("webEvents"));
+                                if (request.getBoolean("enabled")) ProcessExitDiagnostics.recordRecent(a);
+                            } else if ("toolbar".equals(field)) {
                                 ShellPrefs.set(a, ShellPrefs.TOOLBAR, request.getBoolean("value"));
                             } else if ("share".equals(field)) {
                                 ShellPrefs.set(a, ShellPrefs.SHARE, request.getBoolean("value"));

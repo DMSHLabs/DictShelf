@@ -167,6 +167,12 @@ body{margin:0;padding-top:var(--barh);
   padding-left:var(--sp-2);padding-right:var(--sp-2);
   transition:max-width .25s ease} /* on .col so the bar eases with the cards */
 body.wide .col{max-width:min(1280px,96vw)}
+/* The Windows WebView2 window has no browser chrome to expose its host mode.
+   Its URL carries this marker so the reading column can use the whole window. */
+html[data-webview2] .col{width:100%;max-width:none;padding-left:10px;padding-right:10px}
+html[data-webview2] #wideBtn{display:none}
+html[data-webview2] .article{margin-right:10px}
+html[data-webview2] .bar>.col{width:100%;max-width:none;padding-left:10px;padding-right:10px}
 /* The page's own bottom space, in one expression: the usual gutter, and under
    it whichever of the two things owns the bottom edge is taller - the reading
    bar (--sbarh, which already includes the inset it wears) or, when the bar is
