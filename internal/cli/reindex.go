@@ -65,11 +65,14 @@ func cmdReindex(args []string) error {
 	}
 	var todo []store.Folder
 	var gone []string
+	var native []string
 	current := 0
 	for _, f := range targets {
 		switch {
 		case f.Source == "" || !fsx.FileExists(f.Source):
 			gone = append(gone, folderLabel(f))
+		case strings.EqualFold(filepath.Ext(f.Source), ".zim"):
+			native = append(native, folderLabel(f))
 		case *all || len(store.Stale(store.TextDBPath(f.Dir), f.Source)) > 0:
 			todo = append(todo, f)
 		default:
@@ -78,6 +81,9 @@ func cmdReindex(args []string) error {
 	}
 	for _, name := range gone {
 		fmt.Fprintf(os.Stderr, "%sthe original file is gone - not rebuilt\n", logx.Dict(name))
+	}
+	for _, name := range native {
+		fmt.Fprintf(os.Stderr, "%suses its own index - not rebuilt\n", logx.Dict(name))
 	}
 	if len(todo) == 0 {
 		if current > 0 {
@@ -162,15 +168,17 @@ func resolveFolder(arg string, folders []store.Folder) (store.Folder, error) {
 // outdated (or always, with force), then repacks media it had and no longer
 // serves.
 func reindexOne(f store.Folder, force bool) error {
+	if strings.EqualFold(filepath.Ext(f.Source), ".zim") {
+		return fmt.Errorf("%q uses its own index and is not rebuilt by library reindex", folderLabel(f))
+	}
 	name := folderLabel(f)
 	t := store.Target{Dir: f.Dir, Rebuild: store.IfOutdated, Media: store.MediaKeep}
 	if force {
 		t.Rebuild, t.Media = store.Always, store.MediaRepack
 	}
 	var title string // the folder is what this command names, not the title
-	hooks, done := cliHooks(f.Source, &title)
+	hooks := cliHooks(f.Source, &title)
 	res, err := store.Reconcile(f.Source, t, hooks)
-	done()
 	logx.ClearLine()
 	if err != nil {
 		return err

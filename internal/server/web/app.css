@@ -329,7 +329,7 @@ html[data-desktop-image] #articleFindStrip{background-image:var(--paper-bk-image
 body.mask-view-active .qbox input{padding-right:2.8em}
 #maskProgress{display:inline-flex;align-items:center;gap:.25em;white-space:nowrap;color:var(--label);font-size:calc(var(--ui-font-addition) * 1rem)}
 #maskCount{min-width:2ch;text-align:right}
-#maskPage{font-variant-numeric:tabular-nums}
+#maskPage{font:inherit;font-variant-numeric:tabular-nums;white-space:nowrap}
 #maskProgress button{min-width:1.8em;min-height:1.8em;padding:0 .3em;color:var(--fg);background:var(--bg-card);border:1px solid var(--line);border-radius:6px;cursor:pointer}
 #maskProgress button:disabled{opacity:.4;cursor:default}
 /* Keep the search controls visible while moving through a long mask list. */
@@ -347,7 +347,8 @@ body.mask-view-active{padding-bottom:4.5rem}
 .mask-dock output{flex:none;min-width:2.5em;text-align:center;white-space:nowrap;font-variant-numeric:tabular-nums}
 .mask-words button.mask-find-current{background:var(--line-soft);outline:2px solid var(--accent);outline-offset:-2px}
 #maskView{margin-top:var(--sp-2);background:var(--bg-card);border:1px solid var(--line);border-radius:10px;overflow:clip}
-.mask-head{position:sticky;top:var(--stick);z-index:3;display:flex;align-items:center;gap:.5em;padding:.55em .7em;background:var(--paper-bg,var(--bg-card));border-bottom:1px solid var(--line)}
+.mask-chrome{position:sticky;top:var(--stick);z-index:4;background:var(--paper-bg,var(--bg-card))}
+.mask-head{position:static;display:flex;align-items:center;gap:.5em;padding:.55em .7em;background:var(--paper-bg,var(--bg-card));border-bottom:1px solid var(--line)}
 .mask-head select{flex:1;min-width:0;max-width:none}
 .mask-head .themed-select-btn{flex:1;min-width:0;width:auto;max-width:none}
 html[data-shell-image] .mask-head .themed-select-btn{background-color:var(--paper-bg,var(--bg));background-image:linear-gradient(#ffffff24,#ffffff24),var(--paper-bk-image);background-size:100% 100%}
@@ -362,6 +363,15 @@ html[data-shell-image] .mask-head .themed-select-btn{background-color:var(--pape
 .mask-words button{display:block;width:100%;break-inside:avoid;text-align:left;color:var(--link);background:transparent;border:0;border-radius:4px;padding:.3em .4em;font:inherit;cursor:pointer;overflow-wrap:anywhere}
 .mask-words button:hover,.mask-words button:focus-visible{background:var(--line-soft)}
 .mask-words mark{background:var(--accent);color:var(--bg);border-radius:.15em}
+body.mask-computing #maskLetters button{cursor:pointer}
+body.mask-computing #maskWords{pointer-events:none;opacity:.72}
+body.mask-computing #maskFindPrev,
+body.mask-computing #maskFindNext{opacity:1;cursor:pointer}
+body.mask-computing #maskDock button:disabled,
+body.mask-computing #maskDock input:disabled,
+body.mask-computing #bar button:disabled,
+body.mask-computing #bar input:disabled,
+body.mask-computing #bar select:disabled{cursor:wait}
 .mask-empty{padding:1em;color:var(--label)}
 @media(max-width:600px){#maskProgress{font-size:11px;gap:.15em;flex:none}#maskProgress button{min-width:1.6em;min-height:1.8em;padding:0 .15em}}
 input[type=search]{width:100%;min-width:0;font-size:16px;

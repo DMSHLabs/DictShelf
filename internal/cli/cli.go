@@ -30,6 +30,7 @@ import (
 
 	"github.com/wuweidict/wudict/internal/config"
 	"github.com/wuweidict/wudict/internal/dict"
+	zimformat "github.com/wuweidict/wudict/internal/format/zim"
 	"github.com/wuweidict/wudict/internal/fsx"
 	"github.com/wuweidict/wudict/internal/howto"
 	"github.com/wuweidict/wudict/internal/htmlref"
@@ -1015,9 +1016,8 @@ func ingestOne(srcPath, out string, full bool, pf planFlags) error {
 	if full {
 		t.Media = store.MediaOn
 	}
-	hooks, done := cliHooks(srcPath, &name)
+	hooks := cliHooks(srcPath, &name)
 	res, err := store.Reconcile(srcPath, t, hooks)
-	done()
 	logx.ClearLine()
 	dir := filepath.Dir(res.TextDB)
 	switch {
@@ -1042,16 +1042,17 @@ func ingestOne(srcPath, out string, full bool, pf planFlags) error {
 // cliHooks reports progress on the terminal and, when the source is read,
 // takes the dictionary's own title for the lines that follow. done closes the
 // reader, if one was opened.
-func cliHooks(srcPath string, name *string) (h store.Hooks, done func()) {
+func cliHooks(srcPath string, name *string) store.Hooks {
 	var r dict.Reader
-	done = func() {
-		if r != nil {
-			r.Close()
-		}
-	}
 	return store.Hooks{
 		Reader: func() (dict.Reader, error) {
-			rd, err := dict.OpenReader(srcPath)
+			var rd dict.Reader
+			var err error
+			if strings.EqualFold(filepath.Ext(srcPath), ".zim") {
+				rd, err = zimformat.NewHeadwordReader(srcPath)
+			} else {
+				rd, err = dict.OpenReader(srcPath)
+			}
 			if err != nil {
 				return nil, err
 			}
@@ -1063,7 +1064,7 @@ func cliHooks(srcPath string, name *string) (h store.Hooks, done func()) {
 		},
 		Progress:      entryProgress,
 		MediaProgress: func(n, total int) { logx.Progress("  %d/%d media files", n, total) },
-	}, done
+	}
 }
 
 // printMedia reports what a preparation did with media, when it did anything.

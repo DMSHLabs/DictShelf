@@ -2421,6 +2421,13 @@ paths:
             Overrides `p`. The reader lands on a page boundary, not on the word:
             a page that started mid-letter would have no stable address.
           schema: { type: string }
+        - name: stream
+          in: query
+          description: >
+            Set to `1` for NDJSON events: the page first, then alphabet strip
+            batches and progress, followed by `done`. Closing the request stops
+            the native-index walk.
+          schema: { type: string, enum: ['1'] }
       x-codeSamples:
         - lang: Shell
           label: curl
@@ -2474,6 +2481,16 @@ paths:
                         l: { type: string, description: 'The chip label: an uppercase initial, `0-9`, or `#`.' }
                         o: { type: integer, description: Browse offset of the first headword under it. }
                         n: { type: integer, description: How many headwords it holds. }
+            application/x-ndjson:
+              schema:
+                type: object
+                description: >
+                  One JSON event per line. `page` carries the initial browse
+                  page; `letters` appends strip labels; `progress` reports the
+                  native-list walk; `done` marks completion; `error` reports a
+                  failure after streaming has started.
+                properties:
+                  type: { type: string, enum: [page, letters, progress, done, error] }
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
@@ -2532,9 +2549,13 @@ paths:
           in: query
           description: Set to 1 to interpret within as a whole-headword wildcard pattern.
           schema: { type: string, enum: ['1'] }
+        - name: stream
+          in: query
+          description: Set to 1 to receive NDJSON progress and matching headword blocks as the scan runs.
+          schema: { type: string, enum: ['1'] }
       responses:
         '200':
-          description: One page of matches and the total match count.
+          description: One JSON page, or an NDJSON stream when stream=1.
           content:
             application/json:
               schema:
@@ -2862,6 +2883,13 @@ components:
         name: { type: string, description: "The file's name, as it would land beside the main file." }
         size:
           type: integer
+            application/x-ndjson:
+              schema:
+                type: string
+                description: >
+                  One object per line. type is block with words, progress for an updated
+                  count, done with the final count, or error if scanning fails after the
+                  stream starts. total is the number of matches found so far.
           description: >
             Bytes, when the server declared them. Zero means it did not, not
             that the file is empty.

@@ -170,13 +170,14 @@ func Open(path string) (*Store, error) {
 	// prepared before that leniency existed still holds whatever escaping the
 	// dictionary shipped. Decoding here repairs those without a re-ingest.
 	s.meta = dict.Meta{
-		Name:         dict.DisplayText(m["name"]),
-		Format:       "wudict:" + m["format"],
-		Path:         path,
-		Description:  dict.DisplayText(m["description"]),
-		IndexLang:    m["index_lang"],    // declared at ingest; "" for most formats
-		ContentsLang: m["contents_lang"], // DSL and BGL only, and absent from older libraries
-		Header:       headerOf(m),
+		Name:          dict.DisplayText(m["name"]),
+		Format:        "wudict:" + m["format"],
+		Path:          path,
+		Description:   dict.DisplayText(m["description"]),
+		IndexLang:     m["index_lang"],    // declared at ingest; "" for most formats
+		ContentsLang:  m["contents_lang"], // DSL and BGL only, and absent from older libraries
+		HeadwordsOnly: m["index_kind"] == "headwords",
+		Header:        headerOf(m),
 	}
 	s.ftsOK = PlanFromMeta(m).FullText
 	s.srcPath = m["source_path"]

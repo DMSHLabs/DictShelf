@@ -202,7 +202,7 @@ func (s *Server) handleIndexWork(w http.ResponseWriter, r *http.Request) {
 					st.CurrentTotal = 0
 				})
 				store.IndexDiagnostic("index operation start source=%q dictionary=%q feature=%q action=%q self_indexed=%v", e.Path, e.probeName(), op.Feature, op.Action, entryHasSelfIndex(e))
-				if entryHasSelfIndex(e) {
+				if entryHasSelfIndex(e) && !isZIMPath(e.Path) {
 					store.IndexDiagnostic("skip index operation source=%q dictionary=%q feature=%q action=%q reason=native-index", e.Path, e.probeName(), op.Feature, op.Action)
 					j.update(func(st *jobStatus) { st.Done++ })
 					continue
