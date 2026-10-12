@@ -349,12 +349,28 @@ body.mask-view-active #out,body.mask-view-active #sbar{display:none}
 body.mask-view-active{padding-bottom:4.5rem}
 .mask-dock[hidden]{display:none}
 .mask-dock{position:fixed;left:0;right:0;bottom:0;z-index:8;display:flex;align-items:center;justify-content:center;gap:.25em;padding:.5rem .9rem max(.5rem,env(safe-area-inset-bottom));background:var(--bar);backdrop-filter:saturate(1.6) blur(8px);border-top:1px solid var(--line);font-size:calc(var(--ui-edit_control-font) * 1rem)}
-.mask-dock input{box-sizing:border-box;flex:1 1 auto;min-width:0;max-width:54rem;height:calc(var(--ui-edit_control-height) * 1.5rem);padding:0 .4em;font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:6px;outline:none}
+.mask-dock[data-two-rows="1"]{display:grid;grid-template-columns:auto auto auto minmax(0,1fr) auto auto auto;
+  grid-template-areas:"input input input input input input apply" "mode wildcard threshold . count prev next"}
+.mask-dock[data-two-rows="1"]:has(#maskFindApply[hidden]){grid-template-areas:"input input input input input input input" "mode wildcard threshold . count prev next"}
+.mask-dock[data-three-rows="1"]{grid-template-areas:"input input input input input input apply" "mode wildcard . . prev next next" "threshold threshold . . count count count"}
+.mask-dock[data-three-rows="1"]:has(#maskFindApply[hidden]){grid-template-areas:"input input input input input input input" "mode wildcard . . prev next next" "threshold threshold . . count count count"}
+.mask-dock #maskFindInput{box-sizing:border-box;flex:1 1 auto;min-width:0;max-width:54rem;height:calc(var(--ui-edit_control-height) * 1.5rem);padding:0 .4em;font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:6px;outline:none}
+.mask-dock[data-two-rows="1"] #maskFindInput{grid-area:input;width:100%;min-width:0}
+.mask-dock[data-two-rows="1"] #maskFindMode{grid-area:mode}
+.mask-dock[data-two-rows="1"] #maskFindWildcard{grid-area:wildcard}
+.mask-dock[data-two-rows="1"] #maskFindThreshold{grid-area:threshold}
+.mask-dock[data-two-rows="1"] #maskFindApply{grid-area:apply}
+.mask-dock[data-two-rows="1"] #maskFindCount{grid-area:count}
+.mask-dock[data-two-rows="1"] #maskFindPrev{grid-area:prev}
+.mask-dock[data-two-rows="1"] #maskFindNext{grid-area:next}
 .mask-dock button{box-sizing:border-box;display:grid;place-items:center;flex:none;width:calc(var(--ui-edit_control-height) * 1.5rem);height:calc(var(--ui-edit_control-height) * 1.5rem);padding:0;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--fg);font:inherit;line-height:1;cursor:pointer}
 .mask-dock button svg{display:block;width:1.1em;height:1.1em}
 .mask-dock button.is-on{border-color:var(--accent);background:var(--accent);color:var(--bg)}
 .mask-dock button:disabled{opacity:.45;cursor:default}
 .mask-dock output{flex:none;min-width:2.5em;text-align:center;white-space:nowrap;font-variant-numeric:tabular-nums}
+.mask-dock select{box-sizing:border-box;flex:none;width:2.3em;max-width:none;height:calc(var(--ui-edit_control-height) * 1.5rem);padding:0 .2em;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--fg);font:inherit}
+.mask-dock #maskFindApply{border-color:var(--accent);background:var(--accent);color:var(--bg);font-weight:700}
+.mask-dock #maskFindApply[hidden]{display:none}
 .mask-words button.mask-find-current{background:var(--line-soft);outline:2px solid var(--accent);outline-offset:-2px}
 #maskView{margin-top:var(--sp-2);background:var(--bg-card);border:1px solid var(--line);border-radius:10px;overflow:clip}
 .mask-chrome{position:sticky;top:var(--stick);z-index:4;background:var(--paper-bg,var(--bg-card))}
