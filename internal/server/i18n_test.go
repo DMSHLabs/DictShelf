@@ -46,9 +46,8 @@ func TestI18nPersistenceAndIsolation(t *testing.T) {
 	}
 	after := serve(s, newRequest("GET", "/api/dicts", nil)).Body.String()
 	// NDJSON dictionaries are streamed concurrently; compare records, not order.
-	// `end` now carries the answer's etag (dictrows.go): the first list of a
-	// self-preparing DSL is not keepable and carries none, a later one does -
-	// the rows are what must not move with the interface language.
+	// `end` carries the answer's etag (dictrows.go); the rows must not move
+	// with the interface language.
 	a, b := strings.Split(strings.TrimSpace(before), "\n"), strings.Split(strings.TrimSpace(after), "\n")
 	a = slices.DeleteFunc(a, func(l string) bool { return strings.HasPrefix(l, `{"t":"end"`) })
 	b = slices.DeleteFunc(b, func(l string) bool { return strings.HasPrefix(l, `{"t":"end"`) })

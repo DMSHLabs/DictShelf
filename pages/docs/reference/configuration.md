@@ -113,22 +113,6 @@ Do not open a browser tab at startup.
 | Flag | `--no-browser` |
 | Default | off: a tab opens |
 
-### AUTO_INDEX
-
-Index each dictionary's headwords in the background on its first search.
-
-| | |
-| --- | --- |
-| Flag | none, environment and file only |
-| Values | `on`, `off` |
-| Default | `on` |
-
-`off`: dictionaries stay not indexed and are searched through their own format.
-The contains index, full-text index and media pack are per-dictionary choices
-either way.
-
-[The library](../dictionaries/library.md){ .md-button }
-
 ### USE_CACHED
 
 Also list indexed dictionaries whose dictionary files are gone.

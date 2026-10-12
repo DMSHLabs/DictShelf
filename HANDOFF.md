@@ -3,6 +3,7 @@
 **2026-10-11 Windows artifact names:** The desktop binary is now `wuDict2.exe`; installer output is `dist/wudict2-windows-x64-setup-<version>.exe`. Shortcuts, file associations, upgrade cleanup, Actions artifact paths and Windows docs follow the new names; the durable Inno AppId stays the same for upgrades. Built a temporary exe and compiled the renamed installer with Inno Setup 7 successfully; `git diff --check` passes.
 **2026-10-11 wuDict2 desktop icons:** Windows and macOS assets now use the digit-2 mark from the shared source: Windows tray PNG, installer/file icon and embedded amd64 exe icon; macOS menu-bar template and app ICNS. Linux retains the upstream tray mark. Updated `tools/make-icons.sh` to generate both variants and package ICNS cross-platform. Verified ICNS chunk structure, Windows ICO sizes, resource regeneration and `git diff --check`; no GUI/platform build check.
 # Agent handoff — current state
+**2026-10-12 index lifecycle:** `AUTO_INDEX`, demand-index routes and search-triggered index creation are removed. New non-ZIM dictionaries queue for a headword index when discovered; optional Contains/full-text defaults apply only to that queue. Searches require a prepared index, while ZIM uses its native index and is never prepared by the app. Explicit per-dictionary and bulk reindex actions remain. A Stop request preserves pending work so restart/rescan can resume it; an active ingest still runs to completion before Stop takes effect. Older config files may still contain `AUTO_INDEX`; the setting is ignored. The ZIM logging/guard work remains: ZIM is excluded from queue, rescan, rebuild and index requests; old prepared ZIM databases are ignored. `go build ./...` and `git diff --check` pass; no tests, APK or device check.
 **2026-10-11 selective upstream merge (branch `dev`, HEAD `b84ef9e`, uncommitted):** `master` (`84cca5c`) has been merged with conflicts resolved and the merge deliberately left uncommitted. Kept fork Contains/trigram metadata, group ordering, Windows desktop behavior and paged Mask UI; upstream wildcard parser/store implementation is retained as unwired code under the dead-code rule in `AGENTS.md`. Ported WMD unpack limits and free-space checks, Android Intake null guard, and the independent format note. Prepared Mask scans now seek the existing headword index for an ASCII literal lead, then scan its non-ASCII tail to preserve Unicode case-insensitive matching; wildcard/non-ASCII leads retain full scans. `go build ./...` and `git diff --check` pass; no tests, APK build or device check. Remaining: commit the merge only on request; device-check mask pages and dictionary transitions; consider result caching for repeated pages. The audit and comparison below are the pre-merge analysis.
 **2026-10-11 upstream audit (branch `dev`, HEAD `b84ef9e`):** `master` is `84cca5c`, seven upstream commits ahead of the merge base. Working tree was clean before this note. A virtual merge reports 19 text conflicts; no branch or code was changed. Selective candidates: WMD decompression bounds and disk/memory checks with `fsx` and typed errors (4f9a139), slow dictionary-open progress (03c68ec), Android `Intake` null guard (bf4e83c), and the independent format-document correction (61e8f06). Upstream wildcard parser/range pruning may inform the fork's mask search but differs in smart-case/accent semantics and result delivery. Keep the fork's Contains mode and group ordering; upstream's Contains removal and pinned-prefs migration (c727df4/f9aa07b/cc1917e) are incompatible with those choices. No build, test or device check for this read-only audit.
 **2026-10-11 mask trigram candidates (uncommitted):** For mask searches without an ASCII literal lead, a current optional Contains index supplies candidates from the longest safe literal run of at least three folded characters; the full mask still verifies each candidate. Stale fold indexes and dictionaries without Contains use the headword scan. This improves suffix/internal-literal masks when the trigram is selective; no benchmark run. `go build ./...` and `git diff --check` pass.\n**2026-10-11 mask-engine comparison:** Upstream's `wildcardRanges` seeks by first literal in the existing `idx_entry_w` index and stops after the first N article hits; its O13 measurements are for that contract. This fork's `/api/browse/find?mask=1` scans every distinct headword on each requested page because it also computes exact count, all page-start labels, and lower-query offsets; direct dictionaries participate too. Upstream is faster for first hits, especially literal-leading masks, but cannot replace the paged headword-list endpoint directly. Portable optimizations: range-prune prepared scans with equivalent case/accent semantics; then cache per-dictionary page-start words or bounded query results so page turns do not rescan the whole index. Both still scan broadly for leading `*`/`?`. No like-for-like benchmark was run.
@@ -333,11 +334,10 @@ elsewhere, and a session must read the named place BEFORE changing that area.
 
 ## What remains from the review (with the reasons for leaving each)
 
-- **Ingest is not cancellable** — deferred on purpose. Plumbing ctx through
-  `IngestPlan`/`IngestMedia`/Progress touches signatures shared with the CLI,
-  the server and format self-prepare: a wide diff in upstream-shared code for
-  a need nobody has voiced (one ingest runs at a time, intake jobs cancel
-  fine). Do it only if a "cancel indexing" button becomes a requirement.
+- **An active ingest is not cancellable mid-dictionary** — Stop takes effect
+  after the current dictionary finishes, and queued work remains persisted for
+  restart/rescan. True interruption would require threading cancellation through
+  the shared ingest and media paths; that work remains open.
 - **`setFeatures` stale backend**: when the rebuild succeeds but the media
   step fails, the entry keeps the old backend and `revalidate` (path-string
   compare) never swaps it until eviction. Fix is ~5 lines (reopen on the
@@ -365,61 +365,8 @@ elsewhere, and a session must read the named place BEFORE changing that area.
   on Windows the remove over the open reader silently kept the file; the
   two intake tests that caught it are green again).
 
-## Architecture facts this session leaned on
-
-- Android shell ↔ page channels: `wudict://` navigations caught in
-  `Shell.openExternal`; `window.prompt('wudict:…')` answered from
-  `Shell.windows().onJsPrompt` (the dictionary picker — the setup page's folder
-  button is no longer a prompt consumer: it navigates to `wudict://folder`
-  through `wudictPickFolder`, see the facts above);
-  `window.wudictNativeShell=1` injected by `Shell.applyBackground` marks a
-  page that will be answered; and `Shell.shellQuery` puts the shell's own
-  page parameters on the URL — `shell_bg` (the reader's window colour),
-  `shell_paper` (the paper an enabled preset paints, which the app page only
-  forwards), `shell_image`, `shell_quiet` — which the page reads in its head
-  block and remembers in `sessionStorage`, because each of them has to be
-  true at FIRST paint (the injected channel only runs at
-  `onPageFinished`). Web assets stay upstream-shared; Android behavior is
-  injected, not compiled in (D54).
-- Registry entry backends: `upgraded{Store over text.db + lazy src}`,
-  `native` (no source), direct preview. `dsl.Dict` and `bgl.Dict` embed
-  `*store.Store` themselves (auto-prepare formats) — they hold text.db too,
-  which is why `releasePrepared` closes ANY serving backend, not just
-  `*upgraded` (Windows-only; `registry_other.go` is a no-op).
-- `entry.rebuilding` bars `open()` with `errReindexing` for the length of an
-  ingest that renames over the prepared DB; defers in setFeatures /
-  ensureBaseIndex / reabsorbAbbrev own the un-set on every error path.
-- Allocation ceilings convention: 256 MiB (`maxLZOBlock`, zim
-  `maxClusterBytes`, slob `maxItemBytes`, stardict `maxIndexBytes`);
-  bgl blocks 64 MiB. `readAllBounded` pattern per package.
-- `entry.preparedDB` (no source-changed check) is for PATH lookups
-  (`serveOverride`); `preparedTextDB` (with the SQLite-verified check) stays
-  for open decisions and the panel's dict rows.
-- `store.Library()` reads `info.txt` receipts first (`receiptMeta`);
-  `WriteInfo` writes a machine-readable `contains = 0|1` line; receipts
-  predating it fall back to `ReadMeta` until re-ingest.
-- `Media.Resource`: length-first probe, whole-row read under
-  `blobStreamMin` (4 MiB), `blobReader` (substr chunks over the read-only
-  pool) above; Range requests then read only the requested bytes.
-- `search.runQuery`: queries run in an inner goroutine; on ctx death they
-  are abandoned (never interrupted — dict interfaces take no ctx), bounded
-  to one goroutine per wedged backend. A finished query outranks a
-  cancellation landing in the same tick (re-check under the ctx branch).
-- `config.SaveKeyRaw`: the WHOLE read-modify-write holds `saveMu`; the
-  write is temp-in-same-dir + Sync + rename (`writeFileAtomic`). Nested
-  locking would deadlock — `writeFileAtomic` takes no lock itself.
-- Merge workflow aid (NOT in the repo; excluded via `.git/info/exclude`):
-  `merge-work/index.full.html` — the fork's index.html with all extracted
-  assets (app.css, history, pick.js, group editor) inlined back, regenerated
-  by `go run merge-work/inline.go`. On an upstream sync, diff the new
-  upstream index.html against it: hunks outside fork-customized regions
-  port mechanically, hunks inside them are manual ports (to index.html or
-  to the external asset that feature now lives in). Procedure in
-  `merge-work/README.txt`; regenerate before every merge — a stale full
-  page hides exactly the changes being merged.
-
 ## Not verified on a device
 
 **The 2026-10-02 entries about the Original/GD parser** (per-family index defaults, the global parser control, per-variant deletion, the missing-variant UI) are in `docs/handoff-archive.md` → "The 2026-10-02 Original/GD entries": that machinery was removed in v0.9.0, so they describe nothing that exists. The font-purge and v0.6.0 release records went with them, as the archive already had both.
 
-Everything above is build- and test-verified on Windows x64 and cross-compiled for linux/arm64. No device (Android phone) has run the folder-picker UI, the rename fix under a real rebuild, or streamed media over the Range path. The Android-side checklist lives in `docs/ANDROID-UI-HANDOFF.md`.
+Prior implementation entries record their own verification. This change passed `go build ./...` and `git diff --check`; its tests and Android device behavior remain unchecked. The folder-picker UI, rename fix under a real rebuild, and streamed media over Range still need a device pass. The checklist lives in `docs/ANDROID-UI-HANDOFF.md`.

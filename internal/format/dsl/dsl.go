@@ -8,11 +8,9 @@ import (
 	"io"
 	"path/filepath"
 	"strings"
-	"sync"
 
 	"github.com/wuweidict/wudict/internal/dict"
 	"github.com/wuweidict/wudict/internal/resource"
-	"github.com/wuweidict/wudict/internal/store"
 )
 
 // ReaderVersion is the behaviour version of this format's Reader (see
@@ -37,23 +35,12 @@ func init() {
 	resource.Register("dsl", resource.Provider{Sources: MediaSources})
 }
 
-// Dict is the DSL "direct" backend. DSL has no native index, so Open
-// transparently prepares a library folder (<db dir>/<source name>/text.db) on
-// first use (SPEC §1); a changed source is detected from the recorded
-// size/mtime/hash and re-indexed in place. Resources stay lazy in
-// `<name>.files.zip`, the matching `.files` folder, or loose beside the .dsl.
+// Dict is the DSL direct backend. It reads the source without creating a
+// prepared index; library indexes are built by the add queue or explicit
+// indexing actions. Resources stay lazy in `<name>.files.zip`, the matching
+// `.files` folder, or loose beside the .dsl.
 type Dict struct {
-	*store.Store
-	srcPath string
-	// src is the source's own header, re-read at every open (the reader is
-	// opened anyway). Its description and header win over the text.db copies,
-	// which are frozen at preparation: a folder prepared before either was
-	// read in full still reports what the file says now.
-	src dict.Meta
-
-	resOnce sync.Once
-	res     []resource.Source
-	resMu   sync.Mutex // guards res against a concurrent Close
+	reader *Reader
 }
 
 // NewArticleReader is the application reader. NewReader retains the upstream
@@ -72,43 +59,24 @@ func Open(path string) (*Dict, error) {
 	if err != nil {
 		return nil, err
 	}
-	// The reader is opened whatever happens: the source's own header is
-	// read at every open (see src above).
-	defer r.Close()
-	src := r.Meta() // before the reader is consumed by an ingest
-	s, err := store.OpenSelfPrepared(path, "dsl", func() (dict.Reader, error) { return r, nil })
-	if err != nil {
-		return nil, err
-	}
-	return &Dict{Store: s, srcPath: r.path, src: src}, nil
+	return &Dict{reader: r}, nil
 }
 
-func (d *Dict) Meta() dict.Meta {
-	m := d.Store.Meta()
-	m.Format = d.src.Format
-	m.Path = d.src.Path
-	m.Description, m.Header = d.src.Description, d.src.Header
-	return m
-}
+func (d *Dict) Meta() dict.Meta                           { return d.reader.Meta() }
+func (d *Dict) Caps() dict.Caps                           { return dict.Caps{} }
+func (d *Dict) Exact(string, int) ([]dict.Result, error)  { return nil, dict.ErrUnsupported }
+func (d *Dict) Prefix(string, int) ([]dict.Result, error) { return nil, dict.ErrUnsupported }
+func (d *Dict) Keywords(int, int) []string                { return nil }
 
 func (d *Dict) Close() error {
-	// Do, not a flag: a Resource call racing Close must find the sources
-	// already built and closed, never build a fresh set nothing will close.
-	d.resOnce.Do(func() {})
-	d.resMu.Lock()
-	for _, s := range d.res {
-		s.Close()
-	}
-	d.res = nil
-	d.resMu.Unlock()
-	return d.Store.Close()
+	return d.reader.Close()
 }
 
 // Resource serves from the dictionary's resource containers, in the order
 // LingvoDSL itself documents: the `.files.zip` archive first, then the
 // `.files` folder, then loose beside the source.
 func (d *Dict) Resource(name string) (io.ReadCloser, string, error) {
-	for _, src := range d.sources() {
+	for _, src := range MediaSources(d.reader.path) {
 		if rc, err := src.Open(name); err == nil {
 			return rc, resource.MIME(name), nil
 		}
@@ -121,22 +89,10 @@ func (d *Dict) Resource(name string) (io.ReadCloser, string, error) {
 // and their assets, and packing them would copy a neighbour's media into this
 // dictionary's library folder.
 func (d *Dict) Resources() []string {
-	return resource.ListAll(d.sources())
+	return resource.ListAll(MediaSources(d.reader.path))
 }
 
-func (d *Dict) sources() []resource.Source {
-	d.resOnce.Do(d.loadSources)
-	d.resMu.Lock()
-	defer d.resMu.Unlock()
-	return d.res
-}
-
-func (d *Dict) loadSources() {
-	res := MediaSources(d.srcPath)
-	d.resMu.Lock()
-	d.res = res
-	d.resMu.Unlock()
-}
+func (d *Dict) PreviewBytes() int64 { return int64(d.reader.Meta().EntryCount) * 350 }
 
 // MediaSources builds the resource containers of a DSL from its PATH alone -
 // no parsing, no headwords, nothing opened but the archives themselves.

@@ -6,12 +6,10 @@ package dict
 
 import "sync"
 
-// Activity is what a long open of a dictionary is doing now. A dictionary
-// that indexes itself on first open (DSL, BGL, wudict markdown) can take
-// minutes inside Open, and the code waiting on Open has no other way to say
-// why. Keyed by the source path the work was given; set by the code doing the
-// work, and cleared by store's ingest, which every indexing runs through.
-// For showing only: nothing decides on it.
+// Activity is what a long open or scan of a dictionary is doing now. Keyed by
+// the source path the work was given; set by the code doing the work, and
+// cleared by store's ingest, which every indexing runs through. For showing
+// only: nothing decides on it.
 type Activity struct {
 	Phase       string // PhaseUnpacking or PhaseIndexing
 	Done, Total int64  // in the phase's unit; Total 0 when it is not known

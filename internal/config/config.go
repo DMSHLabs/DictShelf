@@ -39,7 +39,6 @@ type Config struct {
 	Verbose      bool   // VERBOSE=1: verbose logging
 	Speexdec     string // SPEEXDEC: path to the external speexdec binary (.spx audio)
 	SpeexBackend string // SPEEX_BACKEND: internal (in-process libspeex, default) | external (speexdec binary)
-	AutoIndex    string // AUTO_INDEX: on|off - prepare a dictionary's index on first search
 
 	// ImportKeep (IMPORT_KEEP) is what becomes of the archive an import came
 	// from once its dictionaries are installed: "ask" puts the choice in front
@@ -169,7 +168,6 @@ func defaults() Config {
 		// $PATH); SPEEXDEC overrides. See resolveSpeexdec in the CLI.
 		Speexdec:     "",
 		SpeexBackend: "internal",  // in-process libspeex (cgo); "external" = speexdec binary
-		AutoIndex:    AutoIndexOn, // opt-out: prepare an index on first use
 		ImportKeep:   ImportKeepAsk,
 		// Nil: any site (D139). Dictionaries come from wherever the user
 		// found them, and the link is one they handed over deliberately.
@@ -280,9 +278,6 @@ func Load(configPath string, flags map[string]string) (Config, error) {
 	}
 	if v := get("SPEEX_BACKEND"); v != "" {
 		cfg.SpeexBackend = strings.ToLower(v)
-	}
-	if v := get("AUTO_INDEX"); v != "" {
-		cfg.AutoIndex = normalizeAutoIndex(v)
 	}
 	if v := get("IMPORT_KEEP"); v != "" {
 		cfg.ImportKeep = normalizeImportKeep(v)
@@ -468,8 +463,6 @@ const configTemplate = `# wudict configuration  (~/.wudict/wudict.toml)
 # VERBOSE     = "0"                   # "1" = verbose logging for debugging
 # SPEEX_BACKEND = "internal"          # ".spx" audio decoder: "internal" (built-in libspeex) or "external" (speexdec)
 # SPEEXDEC    = "/usr/bin/speexdec"   # external speexdec path; blank = auto-detect (next to the executable, then $PATH)
-# AUTO_INDEX  = "on"                  # "off" = never prepare an index on its own; searching then
-#                                     #         uses the dictionary's own format directly
 # IMPORT_KEEP = "ask"                 # what happens to an archive after its dictionaries are
 #                                     # installed: "ask" each time, "keep" it, or "delete" it.
 #                                     # An import that FAILED always keeps it, whatever this says.
@@ -981,14 +974,6 @@ func ExpandHome(p string) string {
 	return p
 }
 
-// AUTO_INDEX values. "fuzzy" is the pre-D16 spelling of "on" - the mode it
-// named was retired, the setting was not - and is still accepted so an
-// existing wudict.toml keeps working.
-const (
-	AutoIndexOn  = "on"
-	AutoIndexOff = "off"
-)
-
 // IMPORT_KEEP values: what becomes of the archive an import came from.
 const (
 	ImportKeepAsk    = "ask"
@@ -1044,19 +1029,6 @@ func ParseHostList(v string) []string {
 	}
 	return out
 }
-
-// normalizeAutoIndex maps what a user may have written onto on/off.
-func normalizeAutoIndex(v string) string {
-	switch strings.ToLower(strings.TrimSpace(v)) {
-	case "off", "0", "false", "no", "none":
-		return AutoIndexOff
-	default: // "on", "1", "true", and the legacy "fuzzy"
-		return AutoIndexOn
-	}
-}
-
-// AutoIndexEnabled reports whether dictionaries index themselves on first use.
-func (c Config) AutoIndexEnabled() bool { return c.AutoIndex != AutoIndexOff }
 
 // ParseWorkers reads INDEX_WORKERS: a count, or "auto"/"all"/"max"/"0"/"-1"
 // for every core. Preparing a dictionary saturates a core and allocates a few

@@ -265,43 +265,19 @@ func TestWebOriginsConfig(t *testing.T) {
 	}
 }
 
-// AUTO_INDEX is on|off, and an existing wudict.toml saying "fuzzy" (the
-// retired search mode it was named after) must keep working.
-func TestAutoIndexValues(t *testing.T) {
-	for _, c := range []struct {
-		in   string
-		want string
-		on   bool
-	}{
-		{"", AutoIndexOn, true}, // unset → default
-		{"on", AutoIndexOn, true},
-		{"ON", AutoIndexOn, true},
-		{"1", AutoIndexOn, true},
-		{"true", AutoIndexOn, true},
-		{"fuzzy", AutoIndexOn, true}, // the legacy spelling
-		{"off", AutoIndexOff, false},
-		{"OFF", AutoIndexOff, false},
-		{"0", AutoIndexOff, false},
-		{"false", AutoIndexOff, false},
-		{"no", AutoIndexOff, false},
-	} {
-		dir := t.TempDir()
-		p := filepath.Join(dir, Name)
-		body := ""
-		if c.in != "" {
-			body = "AUTO_INDEX = \"" + c.in + "\"\n"
-		}
-		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
-			t.Fatal(err)
-		}
-		cfg, err := Load(p, nil)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if cfg.AutoIndex != c.want || cfg.AutoIndexEnabled() != c.on {
-			t.Errorf("AUTO_INDEX=%q → %q (enabled=%v), want %q (%v)",
-				c.in, cfg.AutoIndex, cfg.AutoIndexEnabled(), c.want, c.on)
-		}
+// AUTO_INDEX is ignored so older config files continue to load after the
+// search-triggered index setting has been removed.
+func TestLegacyAutoIndexSettingIgnored(t *testing.T) {
+	p := filepath.Join(t.TempDir(), Name)
+	if err := os.WriteFile(p, []byte("AUTO_INDEX = \"off\"\nSERVER_PORT = \"7788\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(p, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Port != "7788" {
+		t.Errorf("legacy setting interfered with other config values: port=%q", cfg.Port)
 	}
 }
 

@@ -144,6 +144,7 @@ func newTestServer(t *testing.T) *Server {
 	if err != nil {
 		t.Fatal(err)
 	}
+	waitNewDictionaryIndexing(t, reg)
 	closeBackends(t, reg)
 	return New(reg)
 }
@@ -289,8 +290,7 @@ func TestDictsAndSearch(t *testing.T) {
 	if len(dicts) != 1 || dicts[0].Name != "Server Test Dict" {
 		t.Fatalf("dicts: %+v", dicts)
 	}
-	// a DSL prepares itself (it has no native index) - the cheap headword
-	// index only, plus a shareable DBPath (D7)
+	// The queued headword index is ready, plus a shareable DBPath (D7).
 	if !dicts[0].Caps.Prefix || dicts[0].DBPath == "" {
 		t.Errorf("caps/dbpath: %+v", dicts[0])
 	}
@@ -324,7 +324,7 @@ func TestDictsAndSearch(t *testing.T) {
 	}
 }
 
-// --- fake direct-only format, for the auto-index test ------------------
+// --- fake direct-only format, for search tests -------------------------
 
 type fakeDict struct {
 	words []string
@@ -379,50 +379,34 @@ func init() {
 	dict.RegisterReader(".fake", func(p string) (dict.Reader, error) { return &fakeReader{words: words, path: p}, nil })
 }
 
-// TestAutoIndexOnFirstSearch: a direct-only dictionary (no contains) must gain
-// an index in the background the first time it is searched, so a later
-// contains query - including accent-folded - succeeds without any explicit
-// "enable" step.
-func TestAutoIndexOnFirstSearch(t *testing.T) {
+// Search does not open or index a source when its prepared index is absent.
+func TestSearchDoesNotIndexOnFirstUse(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "x.fake"), []byte("x"), 0o644); err != nil {
+	source := filepath.Join(dir, "x.fake")
+	if err := os.WriteFile(source, []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	isolatedDBDir(t)
-	reg, err := NewRegistry([]string{dir}, false)
+	prefs := LoadPrefs(filepath.Join(t.TempDir(), StateFile))
+	prefs.editMu.Lock()
+	err := prefs.mutate(func(f *prefsFile) { f.DSLKnown = map[string]bool{cleanAbs(source): true} })
+	prefs.editMu.Unlock()
+	if err != nil {
+		t.Fatal(err)
+	}
+	reg, err := NewRegistry([]string{dir}, false, WithPrefs(prefs))
 	if err != nil {
 		t.Fatal(err)
 	}
 	s := New(reg)
-	s.AutoIndex = true
-
 	dicts := getDicts(t, s, "/api/dicts")
 	id := dicts[0].ID
-	if dicts[0].Caps.Contains {
-		t.Fatalf("fake dict should start without contains: %+v", dicts[0])
+	hits := searchStream(t, s, "/api/search?q=beta&mode=prefix&dict="+id)
+	if len(hits) != 1 || !strings.Contains(hits[0].Error, "index is not ready") || len(hits[0].Results) != 0 {
+		t.Fatalf("unindexed search = %+v", hits)
 	}
-
-	// first search (prefix) triggers the background index build
-	searchStream(t, s, "/api/search?q=beta&mode=prefix&dict="+id)
-
-	// poll until the accent-folded prefix query resolves via the new index:
-	// the direct backend matches raw strings only, so "corazon" finding
-	// "córazon" proves the index was built behind the search
-	var hits []streamMsg
-	for i := 0; i < 100; i++ {
-		hits = searchStream(t, s, "/api/search?q=corazon&mode=prefix&dict="+id)
-		if len(hits) == 1 && !hits[0].Skipped && len(hits[0].Results) == 1 {
-			break
-		}
-		time.Sleep(30 * time.Millisecond)
-	}
-	if len(hits) != 1 || hits[0].Skipped || len(hits[0].Results) != 1 || hits[0].Results[0].Headword != "córazon" {
-		t.Fatalf("auto-index did not become available: %+v", hits)
-	}
-	// and it built the cheap index only - contains stays off until asked for
-	dicts2 := getDicts(t, s, "/api/dicts")
-	if dicts2[0].Caps.Contains {
-		t.Error("auto-index must not build a trigram index")
+	if _, ok := validPrepared(reg.all()[0].Path); ok {
+		t.Fatal("search created an index")
 	}
 }
 
@@ -745,7 +729,7 @@ func isolatedDBDir(t *testing.T) string {
 
 // TestMain isolates the whole package from the user's real library. Tests set
 // WUDICT_DB_DIR per-test, but background work started by a test (Registry.Warm,
-// auto-index, DSL auto-preparation) can outlive it and read the variable after
+// new-dictionary indexing, DSL auto-preparation) can outlive it and read the variable after
 // t.Setenv has restored it - which would prepare dictionaries into the real
 // ~/.wudict/db. Setting it for the process makes that fallback a temp dir.
 func TestMain(m *testing.M) {
@@ -1187,7 +1171,7 @@ func newRequest(method, target string, body io.Reader) *http.Request {
 // the temp dirs, so it runs before their removal: Windows refuses to delete a
 // file that is still open, and a registry has no Close of its own - it lives as
 // long as the process. ingestMu first, so an ingest still finishing (a
-// demanded index the test only waited to see land) is not raced.
+// explicitly requested index the test only waited to finish) is not raced.
 func closeBackends(t *testing.T, reg *Registry) {
 	t.Cleanup(func() {
 		for _, e := range reg.all() {

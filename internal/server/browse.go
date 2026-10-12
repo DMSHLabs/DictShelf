@@ -48,9 +48,11 @@ func (s *Server) handleBrowseFind(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 404, "%v", err)
 		return
 	}
-	if _, ok := validPrepared(e.Path); !ok && !mask {
-		browseUnprepared(w, e)
-		return
+	if !entryHasSelfIndex(e) {
+		if _, ok := validPrepared(e.Path); !ok {
+			browseUnprepared(w, e)
+			return
+		}
 	}
 	d, err := e.open()
 	if err != nil {
@@ -295,20 +297,16 @@ func (s *Server) handleBrowse(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// browseUnprepared answers the one state the browse page cannot draw a list
-// for. `indexing` separates "wait" from "act": work already in flight is
-// something to poll, and its absence means the reader has to ask for the index
-// in the dictionary panel (which is also the only place that can ask for it
-// when AUTO_INDEX is off).
+// browseUnprepared answers the state where the dictionary has no library index
+// to page through. The user can create the index in Dictionary Settings.
 func browseUnprepared(w http.ResponseWriter, e *entry) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(http.StatusConflict)
 	enc := json.NewEncoder(w)
 	enc.SetEscapeHTML(false)
 	_ = enc.Encode(map[string]any{
-		"error":    "this dictionary has no index yet",
+		"error":    "This dictionary has no index. Create one in Dictionary Settings.",
 		"prepared": false,
-		"indexing": e.indexing(),
 	})
 }
 

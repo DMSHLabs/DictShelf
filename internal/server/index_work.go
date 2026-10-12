@@ -201,7 +201,12 @@ func (s *Server) handleIndexWork(w http.ResponseWriter, r *http.Request) {
 					st.CurrentDone = 0
 					st.CurrentTotal = 0
 				})
-				store.IndexDiagnostic("bulk operation start dictionary=%q feature=%q action=%q", e.probeName(), op.Feature, op.Action)
+				store.IndexDiagnostic("index operation start source=%q dictionary=%q feature=%q action=%q self_indexed=%v", e.Path, e.probeName(), op.Feature, op.Action, entryHasSelfIndex(e))
+				if entryHasSelfIndex(e) {
+					store.IndexDiagnostic("skip index operation source=%q dictionary=%q feature=%q action=%q reason=native-index", e.Path, e.probeName(), op.Feature, op.Action)
+					j.update(func(st *jobStatus) { st.Done++ })
+					continue
+				}
 				lastProgress := time.Time{}
 				progress := func(done, total int) {
 					if done != total && time.Since(lastProgress) < 200*time.Millisecond {
@@ -234,7 +239,7 @@ func (s *Server) handleIndexWork(w http.ResponseWriter, r *http.Request) {
 					if err == nil {
 						set(op.Action != "delete")
 						if e.indexBlocked() && op.Action != "delete" {
-							err = e.restoreDSLIndex(store.Plan{FullText: want.FullText, Contains: want.Contains}, progress)
+							err = e.restoreIndex(store.Plan{FullText: want.FullText, Contains: want.Contains}, progress, frontLimit)
 							force = false
 						}
 						if err == nil {

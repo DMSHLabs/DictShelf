@@ -5,8 +5,10 @@
 package server
 
 import (
+	"fmt"
 	"net/http"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/wuweidict/wudict/internal/logx"
@@ -70,10 +72,35 @@ func (s *Server) reindexStatus() ReindexStatus {
 // by the same function.
 func entryOutdated(path string) bool {
 	if !rebuildable(path) {
+		store.IndexDiagnostic("rebuild selection source=%q selected=false reason=not-rebuildable", path)
 		return false
 	}
 	dir, ok := store.LookupDir(path)
-	return ok && len(store.Stale(store.TextDBPath(dir), path)) > 0
+	if !ok {
+		store.IndexDiagnostic("rebuild selection source=%q selected=false reason=no-prepared-folder", path)
+		return false
+	}
+	prepared := store.Inspect(store.TextDBPath(dir))
+	nativeIndex := strings.EqualFold(filepath.Ext(path), ".zim")
+	if prepared.Meta != nil && !preparedIndexesNeedRebuild(prepared.Meta["format"], prepared.Plan) {
+		nativeIndex = true
+	}
+	if nativeIndex {
+		format := "zim"
+		if prepared.Meta != nil && prepared.Meta["format"] != "" {
+			format = prepared.Meta["format"]
+		}
+		store.IndexDiagnostic("rebuild selection source=%q selected=false format=%q reason=native-index", path, format)
+		return false
+	}
+	stale := prepared.Stale(path)
+	selected := len(stale) > 0
+	store.IndexDiagnostic("rebuild selection source=%q selected=%v format=%q contains=%v fulltext=%v stale=%v", path, selected, prepared.Meta["format"], prepared.Plan.Contains, prepared.Plan.FullText, stale)
+	return selected
+}
+
+func preparedIndexesNeedRebuild(format string, _ store.Plan) bool {
+	return !formatHasSelfIndex(format)
 }
 
 // handleReindex starts the job over every outdated dictionary. 202 with the
@@ -111,6 +138,7 @@ func (s *Server) handleReindexCancel(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) runReindex(j *job, todo []*entry) {
+	store.IndexDiagnostic("rebuild job start dictionaries=%d", len(todo))
 	defer j.update(func(st *jobStatus) {
 		st.Current, st.CurrentDone, st.CurrentTotal = "", 0, 0
 	})
@@ -124,6 +152,7 @@ func (s *Server) runReindex(j *job, todo []*entry) {
 			return
 		}
 		name := e.probeName()
+		store.IndexDiagnostic("rebuild dictionary start source=%q dictionary=%q self_indexed=%v", e.Path, name, entryHasSelfIndex(e))
 		j.update(func(st *jobStatus) {
 			st.Current, st.CurrentDone, st.CurrentTotal = name, 0, 0
 		})
@@ -137,6 +166,7 @@ func (s *Server) runReindex(j *job, todo []*entry) {
 		}
 		_, err := e.refresh(progress)
 		release()
+		store.IndexDiagnostic("rebuild dictionary finish source=%q dictionary=%q error=%q", e.Path, name, fmt.Sprint(err))
 		j.update(func(st *jobStatus) {
 			st.Done++
 			if err != nil {

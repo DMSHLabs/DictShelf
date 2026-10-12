@@ -203,15 +203,6 @@ SETTINGS
                           default: ~/.wudict/db
 
   (env/toml only)
-  AUTO_INDEX = "on"       Index each dictionary's headwords in the background on
-                          its first search. "off": dictionaries stay not indexed
-                          and are searched through their own format. Contains,
-                          full-text and media pack are per-dictionary choices
-                          either way.
-                          env: AUTO_INDEX     toml: AUTO_INDEX
-                          default: on
-
-  (env/toml only)
   IMPORT_KEEP = "ask"     What happens to an archive after its dictionaries are
                           installed: "ask" each time, "keep", or "delete". A
                           failed import keeps it.
@@ -1410,7 +1401,6 @@ Hint: pick another port with --port, e.g.:  wudict --port %s
 		sxPath, sxSource = resolveSpeexdec(cfg.Speexdec)
 	}
 	srv.Speexdec = sxPath
-	srv.AutoIndex = cfg.AutoIndexEnabled()
 	srv.ImportKeep = cfg.ImportKeep
 	srv.ImportURLHosts = cfg.ImportURLHosts
 	srv.ImportInsecure = cfg.ImportInsecure
@@ -1837,7 +1827,6 @@ func printStartup(cfg config.Config, in startupInfo) {
 	if in.speex != "" {
 		fmt.Fprintf(out, "  .spx audio    %s\n", in.speex)
 	}
-	fmt.Fprintf(out, "  indexing      %s\n", indexingSummary(cfg.AutoIndex))
 	fmt.Fprintf(out, "  index workers %s%s\n",
 		logx.Plural(cfg.IndexWorkers, "dictionary at a time", "dictionaries at a time"),
 		memLimitNote(cfg.MemoryLimit))
@@ -1947,13 +1936,6 @@ func memLimitNote(limit int64) string {
 		return ""
 	}
 	return fmt.Sprintf("  ·  memory limit %.1f GB", float64(limit)/(1<<30))
-}
-
-func indexingSummary(autoIndex string) string {
-	if autoIndex == config.AutoIndexOff {
-		return "off - dictionaries are searched through their own format (AUTO_INDEX=off)"
-	}
-	return "on - a headword index is prepared on first search; contains, full-text and media on request"
 }
 
 func openBrowser(url string, gui bool, onWindowClose func()) {

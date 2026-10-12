@@ -17,6 +17,41 @@ import (
 	"github.com/wuweidict/wudict/internal/store"
 )
 
+func TestSelfIndexedZIMSkipsBaseIndexPreparation(t *testing.T) {
+	if baseIndexRequired(true, indexOptions{Index: true}) {
+		t.Fatal("native ZIM index requested a duplicate base index")
+	}
+	if !baseIndexRequired(true, indexOptions{Index: true, Contains: true}) {
+		t.Fatal("contains index did not request the prepared database it needs")
+	}
+	if !baseIndexRequired(false, indexOptions{Index: true}) {
+		t.Fatal("ordinary dictionary did not request its base index")
+	}
+}
+
+func TestSelfIndexedZIMBaseOnlyDoesNotNeedRebuild(t *testing.T) {
+	if preparedIndexesNeedRebuild("zim", store.Plan{}) {
+		t.Fatal("native headword index was treated as a stale prepared index")
+	}
+	if preparedIndexesNeedRebuild("zim", store.Plan{FullText: true}) {
+		t.Fatal("ZIM was scheduled for application indexing")
+	}
+	if !preparedIndexesNeedRebuild("mdx", store.Plan{}) {
+		t.Fatal("ordinary dictionary was excluded from rebuild")
+	}
+}
+
+func TestSelfIndexedZIMDoesNotCountAsBaseIndexWork(t *testing.T) {
+	e := &entry{Path: "manual.zim"}
+	req := rescanIndexesRequest{Existing: rescanIndexActions{Index: "recreate"}}
+	if rescanTargetNeedsWork(e, true, true, indexOptions{Index: true}, req) {
+		t.Fatal("new ZIM with only the native headword index entered progress")
+	}
+	if rescanTargetNeedsWork(e, true, true, indexOptions{Index: true, FullText: true}, req) {
+		t.Fatal("new ZIM entered the rescan index queue")
+	}
+}
+
 func TestRescanSurvivesClosedProgressStream(t *testing.T) {
 	s := newTestServer(t)
 	preparedDSL(t, s)
@@ -119,7 +154,7 @@ func TestBackgroundPreparationReusesAndDeduplicates(t *testing.T) {
 			}); err != nil {
 				t.Fatal(err)
 			}
-			s.reg.prepareNewDSL()
+			s.reg.prepareNewDictionaries()
 			if e.indexBlocked() {
 				t.Fatal("background preparation did not finish")
 			}
@@ -188,7 +223,7 @@ func TestRescanIndexActionsPreserveExactFeatures(t *testing.T) {
 					if err := s.reg.Rescan(); err != nil {
 						t.Fatal(err)
 					}
-					waitIndexPreparation(t, s.reg)
+					waitNewDictionaryIndexing(t, s.reg)
 					check()
 				})
 			}
@@ -240,7 +275,7 @@ func TestRescanNewDictionariesUseOnlySelectedIndexes(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				waitIndexPreparation(t, restarted)
+				waitNewDictionaryIndexing(t, restarted)
 				check(restarted)
 				if err := os.WriteFile(filepath.Join(dir, "later.dsl"), []byte(sampleDSL), 0600); err != nil {
 					t.Fatal(err)
@@ -248,7 +283,7 @@ func TestRescanNewDictionariesUseOnlySelectedIndexes(t *testing.T) {
 				if err := restarted.Rescan(); err != nil {
 					t.Fatal(err)
 				}
-				waitIndexPreparation(t, restarted)
+				waitNewDictionaryIndexing(t, restarted)
 				check(restarted)
 			})
 		}
@@ -276,7 +311,7 @@ func TestRescanKeepDoesNotRestoreRemovedBase(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	waitIndexPreparation(t, restarted)
+	waitNewDictionaryIndexing(t, restarted)
 	for _, other := range restarted.all() {
 		if _, ok := store.LookupDir(other.Path); ok || !other.indexBlocked() {
 			t.Fatal("restart restored a removed base")

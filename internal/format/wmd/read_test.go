@@ -16,6 +16,7 @@ import (
 	"testing"
 
 	"github.com/wuweidict/wudict/internal/dict"
+	"github.com/wuweidict/wudict/internal/store"
 )
 
 func writeTemp(t *testing.T, name, text string) string {
@@ -458,10 +459,8 @@ func TestPlainMarkdown(t *testing.T) {
 	}
 }
 
-// TestOpenPrepared: the first Open prepares a library folder, and a later Open
-// serves from it without reading the source again (the folder keeps the
-// title, description and header fields).
-func TestOpenPrepared(t *testing.T) {
+// TestOpenDoesNotIndex: opening returns source metadata without preparing it.
+func TestOpenDoesNotIndex(t *testing.T) {
 	t.Setenv("WUDICT_DB_DIR", t.TempDir())
 	src := writeTemp(t, "Glossary.wudict.md", "# Glossary\nwudict: 1\nfrom: en\nauthor: me\n\nAbout it.\n\n## run\n## runs\n\n*v.* to run\n\n## ran\nsee: run\n\n## gone\n## went\nsee: C# & more\n")
 	d, err := Open(src)
@@ -475,38 +474,15 @@ func TestOpenPrepared(t *testing.T) {
 			len(m.Header) != 1 || m.Header[0] != (dict.Field{Name: "author", Value: "me"}) {
 			t.Errorf("meta = %+v", m)
 		}
-		for _, w := range []string{"run", "runs", "ran"} {
-			res, err := d.Exact(w, 10)
-			if err != nil || len(res) != 1 || !strings.Contains(res[0].Body, "<em>v.</em> to run") {
-				t.Errorf("Lookup(%q) = %v, %+v", w, err, res)
-			}
-		}
 	}
 	check(d)
-	// R3.6: a redirect to nothing in the dictionary is a lookup link, under
-	// every name it has.
-	for _, w := range []string{"gone", "went"} {
-		res, err := d.Exact(w, 10)
-		if err != nil || len(res) != 1 || !strings.Contains(res[0].Body, `href="entry://C%23 &amp; more"`) {
-			t.Errorf("Exact(%q) = %v, %+v", w, err, res)
-		}
+	if c := d.Caps(); c.Exact || c.Prefix || c.Contains || c.FTS {
+		t.Errorf("unprepared markdown advertises search: %+v", c)
 	}
 	d.Close()
-
-	// Unreadable now: the prepared open must not need it.
-	if err := os.Chmod(src, 0); err != nil {
-		t.Fatal(err)
+	if _, ok := store.LookupDir(src); ok {
+		t.Fatal("opening markdown created a prepared index")
 	}
-	defer os.Chmod(src, 0o644)
-	if _, err := os.ReadFile(src); err == nil {
-		t.Skip("running with privileges that ignore file modes")
-	}
-	d, err = Open(src)
-	if err != nil {
-		t.Fatalf("prepared Open read the source: %v", err)
-	}
-	check(d)
-	d.Close()
 }
 
 // TestRedirectFolding: R3.6 - a redirect's names become aliases of every

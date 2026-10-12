@@ -140,9 +140,6 @@ func (s *Server) routes() []route {
 		{"PUT", "/api/looks", s.handleLookUpdate, "/api/looks", false},
 		{"DELETE", "/api/looks", s.handleLookDelete, "/api/looks", false},
 		{"POST", "/api/looks/apply", s.handleLookApply, "/api/looks/apply", false},
-		// "I picked this one": prepare it now, before a query exists
-		// (demand.go). Never CORS - it starts work and writes to the library.
-		{"POST", "/api/demand", s.handleDemand, "/api/demand", false},
 		// what a dictionary says about itself (about.go). Never CORS: an
 		// annotation names a sidecar file on the user's disk, and the list
 		// endpoint an extension does get deliberately carries no description.
