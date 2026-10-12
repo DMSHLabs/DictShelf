@@ -11,6 +11,11 @@
 <meta charset="utf-8">
 {{I18N}}
 <script>
+if (new URLSearchParams(location.search).get('wudict_webview2') === '1') {
+  document.documentElement.setAttribute('data-webview2', '');
+}
+</script>
+<script>
 // An optional host background. Session storage preserves it across page reloads;
 // an explicit empty URL value withdraws it on the next launch.
 window.wudictShellBackground = function (color, image, imageName, paper) {
@@ -991,6 +996,14 @@ window.wudictFontScale=(function(){
     <p class="sys-hint">{{T:system.cacheHint}}</p>
     <div class="group-toolbar"><button type="button" class="btn" id="sysClearCache">{{T:system.clearCache}}</button></div>
 
+    <h3 class="sys-head">{{T:system.logFile}}</h3>
+    <label class="sys-row"><input type="checkbox" id="sysLogEnabled"><span class="sys-label">{{T:system.logEnable}}</span></label>
+    <label class="sys-row"><input type="checkbox" id="sysLogBase"><span class="sys-label">{{T:system.logBase}}</span></label>
+    <label class="sys-row"><input type="checkbox" id="sysLogWeb"><span class="sys-label">{{T:system.logWeb}}</span></label>
+    <p class="sys-hint">{{T:system.logHint}}</p>
+    <label class="sys-row"><input type="checkbox" id="sysBrowseDiagnostics"><span class="sys-label">{{T:system.browseDiagnostics}}</span></label>
+    <div class="group-toolbar"><a class="btn" id="sysSaveLog" href="/api/system-log" download>{{T:panel.saveSystemLog}}</a></div>
+
     <!-- Advanced FOLDS, and starts folded (the reader's ask, 2026-09-28). Two
          reasons it is the one group that does: its rows are the server's own
          limits rather than anything about reading, so the window a reader opens
@@ -1185,12 +1198,14 @@ window.wudictFontScale=(function(){
 "use strict";
 const $=id=>document.getElementById(id);
 const tx=window.wudictI18n.t;
-$("saveSystemLog").addEventListener("click",event=>{
+function systemLogClick(event){
   if(!window.wudictNativeShell)return;
   event.preventDefault();
   const result=prompt("wudict:system-log","");
   if(result&&result!=="ok")alert(result);
-});
+}
+$("saveSystemLog").addEventListener("click",systemLogClick);
+$("sysSaveLog").addEventListener("click",systemLogClick);
 window.wuSearchHistory.setSearch(word=>{ if($("mode").value==="wildcards"){ $("q").value=word;window.wuSearchHistory.hide();maskSubmitRequested=true;commitOnce=true;doSearch(); } else searchFor(word); });
 window.wuSearchHistory.setSuggest((q,onHit,signal)=>{
   const mode=$("mode").value,sel=$("dict").value||"all";
@@ -3335,6 +3350,11 @@ function sysPaint(state){
       ["sysLink",state.link],["sysReader",state.reader],["sysInfo",state.info],["sysKey",state.key]]){
     $(pair[0]).checked=!!pair[1];
   }
+  for(const pair of [["sysLogEnabled",state.logEnabled],["sysLogBase",state.logBaseEvents],
+      ["sysLogWeb",state.logWebEvents]])$(pair[0]).checked=!!pair[1];
+  $("sysLogBase").disabled=!state.logEnabled;
+  $("sysLogWeb").disabled=!state.logEnabled;
+  $("sysBrowseDiagnostics").checked=browseDiagnosticsEnabled();
   const box=$("sysAdvanced");
   box.replaceChildren();
   sysRows.length=0;
@@ -3591,6 +3611,17 @@ async function showDesktopSysSettings(){
   if(!c){body.textContent=tx("system.desktopLoadFailed");return}
   const hint=document.createElement("p");hint.className="sys-hint";
   hint.textContent=tx("system.desktopHint");body.append(hint);
+  const logHeading=document.createElement("h3");logHeading.className="sys-head";
+  logHeading.textContent=tx("system.logFile");body.append(logHeading);
+  const logHint=document.createElement("p");logHint.className="sys-hint";
+  logHint.textContent=tx("system.logHint");body.append(logHint);
+  const diagnosticsLabel=document.createElement("label");diagnosticsLabel.className="sys-row";
+  const diagnostics=document.createElement("input");diagnostics.type="checkbox";diagnostics.checked=browseDiagnosticsEnabled();
+  diagnostics.addEventListener("change",()=>setBrowseDiagnostics(diagnostics.checked));
+  const diagnosticsText=document.createElement("span");diagnosticsText.className="sys-label";diagnosticsText.textContent=tx("system.browseDiagnostics");
+  diagnosticsLabel.append(diagnostics,diagnosticsText);body.append(diagnosticsLabel);
+  const saveLog=document.createElement("a");saveLog.className="btn";saveLog.href="/api/system-log";saveLog.download="";
+  saveLog.textContent=tx("panel.saveSystemLog");body.append(saveLog);
   if(c.configPath){
     const path=document.createElement("p");path.className="sys-desktop-path";
     path.textContent=c.configPath;body.append(path);
@@ -3636,6 +3667,16 @@ $("sysLink").addEventListener("change",e=>sysSwitch("link",e.target.checked));
 $("sysReader").addEventListener("change",e=>sysSwitch("reader",e.target.checked));
 $("sysInfo").addEventListener("change",e=>sysSwitch("info",e.target.checked));
 $("sysKey").addEventListener("change",e=>sysSwitch("key",e.target.checked));
+function browseDiagnosticsEnabled(){try{return localStorage.getItem("wudict_browse_diagnostics")==="1"}catch(_){return false}}
+function setBrowseDiagnostics(on){try{if(on)localStorage.setItem("wudict_browse_diagnostics","1");else localStorage.removeItem("wudict_browse_diagnostics")}catch(_){}}
+function sysLogChange(){
+  sysSet({action:"set",field:"log",enabled:$("sysLogEnabled").checked,
+    baseEvents:$("sysLogBase").checked,webEvents:$("sysLogWeb").checked});
+}
+$("sysLogEnabled").addEventListener("change",sysLogChange);
+$("sysLogBase").addEventListener("change",sysLogChange);
+$("sysLogWeb").addEventListener("change",sysLogChange);
+$("sysBrowseDiagnostics").addEventListener("change",e=>setBrowseDiagnostics(e.target.checked));
 /* Restore defaults: one tap clears every Advanced row at once, which is why it
    is confirmed. Clearing writes nothing anywhere else - it withdraws the
    overrides, and "follow the settings file" is what an absent override is. */
@@ -5397,18 +5438,10 @@ function maskRestoreCached(url){
   setSearchMode("wildcards");lastQuery=maskPattern;lastScope=null;scopeOnce=null;maskReturn="";
   $("out").replaceChildren();setStatus("");syncChips();sbarPaint();
   maskSelect(index,page);
-  const pending=[...new Set([...maskRows,...maskBaseRows].filter(row=>row.state==="pending"))];
-  pending.sort((a,b)=>a===maskRows[index]?-1:b===maskRows[index]?1:0);
-  if(pending.length){
-    const generation=maskGeneration,job={kind:"restore",generation};let next=0;maskBusyStart(job);setBusy(true);
-    const worker=async()=>{while(generation===maskGeneration&&next<pending.length){
-      const row=pending[next++];
-      await maskFetch(row,row.wantedPage,generation,row===maskRows[maskCurrent]?maskNavToken:-1);
-    }};
-    Promise.all(Array.from({length:Math.min(3,pending.length)},worker)).then(()=>{
-      if(generation===maskGeneration){maskBusyFinish(job);setBusy(false)}
-    });
-  }
+  // Restore the visible dictionary/page first. maskSelect reuses its cached
+  // page, or fetches just that page if it was still pending; other dictionaries
+  // stay lazy until selected so returning from an article never waits for the
+  // rest of a large group to finish loading.
   return true;
 }
 function maskFindControls(){

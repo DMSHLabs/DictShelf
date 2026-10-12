@@ -203,9 +203,12 @@ header{position:sticky;top:0;z-index:5;background:var(--bar);
    least afford it. The active chip is scrolled into view, so the strip is
    never scrolled to a place the reader is not. */
 .strip-wrap{display:flex;align-items:stretch;gap:.1rem;padding:0 .35rem .4rem}
-.strip{display:flex;flex:1;min-width:0;gap:.1rem;overflow-x:auto;padding:0;scrollbar-width:none;
+.strip{display:block;position:relative;flex:1;min-width:0;column-gap:.1rem;overflow-x:auto;padding:0;scrollbar-width:none;
   overscroll-behavior-x:contain}
 .strip::-webkit-scrollbar{display:none}
+.strip-track{position:relative;height:100%;min-width:100%}
+.strip button.strip-chip{position:absolute;top:50%;transform:translateY(-50%);margin:0;min-width:0}
+.strip button.strip-measure{position:absolute!important;left:0!important;top:0!important;visibility:hidden!important;pointer-events:none!important}
 .strip-nav{box-sizing:border-box;display:grid;place-items:center;flex:none;width:2rem;min-height:calc(var(--ui-control-height) * 1em);padding:0;border:0;background:transparent;color:var(--fg);cursor:pointer}
 .strip-nav svg{display:block;width:1.35rem;height:1.35rem}
 .strip-nav:disabled{opacity:.3;cursor:default}
@@ -358,7 +361,7 @@ html[data-desktop-image] .chooser-list :is(.list-search-dock,.list-search-input,
   </div>
   <div class="strip-wrap" id="stripWrap">
     <button type="button" class="strip-nav" id="stripPrev" aria-label="{{T:browse.scrollLettersLeft}}" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 4-8 8 8 8"/></svg></button>
-    <nav class="strip" id="strip" aria-label="{{T:browse.jumpLetter}}"></nav>
+    <nav class="strip" id="strip" aria-label="{{T:browse.jumpLetter}}"><div class="strip-track" id="stripTrack"><button class="strip-measure" id="stripMeasure" type="button" aria-hidden="true" tabindex="-1">M</button></div></nav>
     <button type="button" class="strip-nav" id="stripNext" aria-label="{{T:browse.scrollLettersRight}}" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 4 8 8-8 8"/></svg></button>
   </div>
 </header>
@@ -425,12 +428,122 @@ function unesc(s){
 try{const t=localStorage.getItem("wudict_theme");
   if(t&&t!=="auto")document.documentElement.setAttribute("data-theme",t)}catch(e){}
 
-let dictId="",state=null,last={p:1},poll=0,stripFor="",stripLettersPainted=0,chooserSearch=null,browsePageAbort=null,browseAlphabetTask=null,browsePageBusy=false;
+let dictId="",state=null,last={p:1},poll=0,stripFor="",stripLettersPainted=0,stripMetricKey="",stripWidths=[],stripOffsets=[],stripTotalWidth=0,stripCurrentIndex=-1,stripWindowStart=-1,stripWindowEnd=-1,stripFrame=0,chooserSearch=null,browsePageAbort=null,browseAlphabetTask=null,browsePageBusy=false;
 const browseAlphabetCache=new Map(),browseAlphabetPartial=new Map();
+const BROWSE_ALPHABET_SESSION_KEY="wudict_browse_alphabet_v1";
+const BROWSE_DEBUG=new URLSearchParams(location.search).get("browse_debug")==="1";
+function browseTrace(step,data={}){
+  let enabled=BROWSE_DEBUG;
+  try{enabled=enabled||localStorage.getItem("wudict_browse_diagnostics")==="1"}catch(_){}
+  if(!enabled)return;
+  console.info("[browse]",step,data);
+  const payload={event:step.replaceAll(" ","_")};
+  for(const key of ["page","words","letters","bytes","readMs","fetchMs","totalMs","wordsMs","stripBuildMs","stripMarkMs","status","restored","streamAlphabet"])
+    if(data[key]!==undefined)payload[key]=data[key];
+  fetch("/api/browse-diagnostic",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload),keepalive:true}).catch(()=>{});
+}
+function restoreBrowseAlphabet(dict){
+  if(browseAlphabetCache.has(dict))return;
+  const started=performance.now();let bytes=0,count=0,restored=false;
+  try{
+    const raw=sessionStorage.getItem(BROWSE_ALPHABET_SESSION_KEY)||"";bytes=raw.length;
+    const saved=JSON.parse(raw||"null");
+    if(saved?.dict!==dict||!Number.isSafeInteger(saved.total)||!Array.isArray(saved.letters)){
+      browseTrace("alphabet cache miss",{dict,readMs:Math.round(performance.now()-started),bytes});return;
+    }
+    const letters=saved.letters.map(item=>({l:item[0],o:item[1],n:item[2]}));
+    if(letters.some(item=>typeof item.l!=="string"||!Number.isSafeInteger(item.o)||!Number.isSafeInteger(item.n))){
+      browseTrace("alphabet cache invalid",{dict,readMs:Math.round(performance.now()-started),bytes});return;
+    }
+    const widths=saved.metricKey&&Array.isArray(saved.widths)&&saved.widths.length===letters.length&&
+      saved.widths.every(width=>Number.isFinite(width)&&width>0)?saved.widths:null;
+    browseAlphabetCache.set(dict,{total:saved.total,letters,metricKey:widths?saved.metricKey:"",widths});
+    count=letters.length;restored=true;
+  }catch(error){browseTrace("alphabet cache read failed",{dict,error:String(error)})}
+  browseTrace("alphabet cache restore",{dict,restored,count,bytes,readMs:Math.round(performance.now()-started)});
+}
+function saveBrowseAlphabet(dict,total,letters){
+  const widths=stripFor===dict&&stripMetricKey&&stripWidths.length===letters.length?stripWidths.slice():null;
+  const metricKey=widths?stripMetricKey:"";
+  browseAlphabetCache.set(dict,{total,letters,metricKey,widths});
+  try{
+    const encoded=JSON.stringify({dict,total,letters:letters.map(item=>[item.l,item.o,item.n]),metricKey,widths});
+    sessionStorage.setItem(BROWSE_ALPHABET_SESSION_KEY,encoded);
+    browseTrace("alphabet cache saved",{dict,total,count:letters.length,bytes:encoded.length});
+  }catch(error){browseTrace("alphabet cache save failed",{dict,count:letters.length,error:String(error)})}
+}
 function updateStripArrows(){
   const strip=$("strip"),end=Math.max(0,strip.scrollWidth-strip.clientWidth);
   $("stripPrev").disabled=strip.scrollLeft<=1;
   $("stripNext").disabled=strip.scrollLeft>=end-1;
+}
+function lowerStripIndex(value,byEnd=false){
+  let lo=0,hi=stripOffsets.length;
+  while(lo<hi){const mid=(lo+hi)>>>1;const edge=stripOffsets[mid]+(byEnd?stripWidths[mid]:0);if(edge<value)lo=mid+1;else hi=mid}
+  return lo;
+}
+function measureStripItems(items){
+  const strip=$("strip"),track=$("stripTrack"),sample=$("stripMeasure"),style=getComputedStyle(sample);
+  const font=[style.fontStyle,style.fontVariant,style.fontWeight,style.fontSize,style.fontFamily].join(" ");
+  const pad=parseFloat(style.paddingLeft)+parseFloat(style.paddingRight)+parseFloat(style.borderLeftWidth)+parseFloat(style.borderRightWidth);
+  const minWidth=parseFloat(style.minWidth)||0,gap=parseFloat(getComputedStyle(strip).columnGap)||0;
+  const height=sample.getBoundingClientRect().height;
+  const key=[font,pad,minWidth,gap,height,style.letterSpacing].join("|");
+  const canvas=measureStripItems.canvas||(measureStripItems.canvas=document.createElement("canvas"));
+  const ctx=canvas.getContext("2d");ctx.font=font;
+  const letterSpacing=parseFloat(style.letterSpacing)||0;
+  const metricsChanged=key!==stripMetricKey;
+  if(metricsChanged){
+    stripMetricKey=key;stripWidths=[];stripOffsets=[];stripTotalWidth=0;stripLettersPainted=0;stripWindowStart=stripWindowEnd=-1;
+    const cached=browseAlphabetCache.get(stripFor);
+    if(cached?.metricKey===key&&cached.widths?.length===items.length){
+      stripWidths=cached.widths;
+      for(const width of stripWidths){stripOffsets.push(stripTotalWidth);stripTotalWidth+=width+gap}
+      if(stripWidths.length)stripTotalWidth-=gap;
+      stripLettersPainted=stripWidths.length;
+    }
+  }
+  if(stripLettersPainted>0&&items.length>stripLettersPainted)stripTotalWidth+=gap;
+  for(let i=stripLettersPainted;i<items.length;i++){
+    const label=unesc(items[i].l),text=ctx.measureText(label).width+Math.max(0,label.length-1)*letterSpacing;
+    const width=Math.max(minWidth,text+pad);stripOffsets.push(stripTotalWidth);stripWidths.push(width);stripTotalWidth+=width+gap;
+  }
+  if(items.length>stripLettersPainted)stripTotalWidth-=gap;
+  stripLettersPainted=items.length;
+  if(items.length!==stripWidths.length){stripWidths.length=stripOffsets.length=items.length}
+  const cached=browseAlphabetCache.get(stripFor);
+  if(cached&&cached.letters.length===items.length&&cached.metricKey!==key)
+    saveBrowseAlphabet(stripFor,cached.total,cached.letters);
+  strip.style.height=Math.max(height,$("stripPrev").getBoundingClientRect().height)+"px";
+  track.style.width=Math.max(strip.clientWidth,stripTotalWidth)+"px";
+  if(metricsChanged&&stripCurrentIndex>=0&&stripCurrentIndex<stripOffsets.length){
+    const center=stripOffsets[stripCurrentIndex]+stripWidths[stripCurrentIndex]/2;
+    strip.scrollLeft=Math.max(0,Math.min(stripTotalWidth-strip.clientWidth,center-strip.clientWidth/2));
+  }
+}
+function renderVirtualStrip(force=false){
+  if(!state||!stripWidths.length)return;
+  const strip=$("strip"),track=$("stripTrack"),items=state.alphabet||[];
+  const left=strip.scrollLeft,right=left+strip.clientWidth,buffer=24;
+  const start=Math.max(0,lowerStripIndex(left,true)-buffer);
+  const end=Math.min(items.length,lowerStripIndex(right)+buffer);
+  if(!force&&start===stripWindowStart&&end===stripWindowEnd)return;
+  stripWindowStart=start;stripWindowEnd=end;
+  const fragment=document.createDocumentFragment();
+  for(let i=start;i<end;i++){
+    const item=items[i],label=unesc(item.l),button=document.createElement("button");
+    button.type="button";button.className="strip-chip";button.dataset.o=String(item.o);
+    button.title=label+" — "+t("browse.words",{count:item.n,number:num(item.n)});
+    button.textContent=label;button.style.left=stripOffsets[i]+"px";button.style.width=stripWidths[i]+"px";
+    button.disabled=browsePageBusy;button.setAttribute("aria-posinset",String(i+1));button.setAttribute("aria-setsize",String(items.length));
+    if(i===stripCurrentIndex)button.setAttribute("aria-current","true");
+    fragment.appendChild(button);
+  }
+  track.replaceChildren($("stripMeasure"),fragment);
+}
+function scheduleVirtualStrip(){
+  if(stripFrame)return;
+  stripFrame=requestAnimationFrame(()=>{stripFrame=0;renderVirtualStrip();updateStripArrows()});
 }
 function scrollStrip(direction){
   const strip=$("strip");
@@ -438,8 +551,8 @@ function scrollStrip(direction){
 }
 $("stripPrev").addEventListener("click",()=>scrollStrip(-1));
 $("stripNext").addEventListener("click",()=>scrollStrip(1));
-$("strip").addEventListener("scroll",updateStripArrows,{passive:true});
-new ResizeObserver(updateStripArrows).observe($("strip"));
+$("strip").addEventListener("scroll",scheduleVirtualStrip,{passive:true});
+new ResizeObserver(()=>{if(state&&!$("stripWrap").hidden){measureStripItems(state.alphabet||[]);renderVirtualStrip(true)}updateStripArrows()}).observe($("strip"));
 let findResult=null,findIndex=-1,findFilter=false,findTimer=0,findAbort=null,findSeq=0,browseSeq=0,findMask=false;
 let appliedFindMask=false,maskApplyPending=false,browseProgressSeq=0,browseProgressJobs=new Map(),findStreamDone=true,findPendingMove=0,findPendingPage=0,findFilterPage=1;
 let findStreamWords=[];
@@ -499,6 +612,8 @@ async function show(opts,record){
   clearTimeout(poll);
   const seq=++browseSeq;
   const requestDictId=dictId;
+  const started=performance.now();
+  restoreBrowseAlphabet(requestDictId);
   const continuingAlphabet=browseAlphabetTask?.dictId===dictId;
   const streamAlphabet=!browseAlphabetCache.has(dictId)&&!continuingAlphabet;
   if(browsePageAbort&&browsePageAbort!==browseAlphabetTask?.controller)browsePageAbort.abort();
@@ -513,8 +628,10 @@ async function show(opts,record){
   const u=new URLSearchParams({dict:dictId});
   if(opts.at)u.set("at",opts.at);else u.set("p",String(opts.p||1));
   if(streamAlphabet)u.set("stream","1");else u.set("strip","0");
+  browseTrace("page request",{dict:requestDictId,page:opts.p||1,streamAlphabet,letters:browseAlphabetCache.get(requestDictId)?.letters.length||0});
   let r;
-  try{r=await fetch("/api/browse?"+u.toString(),{signal:controller.signal})}
+  const fetchStarted=performance.now();
+  try{r=await fetch("/api/browse?"+u.toString(),{signal:controller.signal});browseTrace("page response",{dict:requestDictId,status:r.status,fetchMs:Math.round(performance.now()-fetchStarted)})}
   catch(e){clearTimeout(progressTimer);endProgress();if(seq===browseSeq){setBrowsePageBusy(false);if(e.name!=="AbortError")card("<b>"+tx("browse.noAnswer")+"</b><p>"+tx("browse.noAnswerBody")+"</p>")}return}
   if(seq!==browseSeq&&!streamAlphabet){clearTimeout(progressTimer);endProgress();return}
   if(r.status===409){clearTimeout(progressTimer);endProgress();setBrowsePageBusy(false);return unprepared(await r.json().catch(()=>({}))) }
@@ -528,11 +645,19 @@ async function show(opts,record){
   if(!streamAlphabet){
     try{
       const page=await r.json();if(seq!==browseSeq)return;
-      state=page;state.alphabet=browseAlphabetCache.get(requestDictId)||browseAlphabetPartial.get(requestDictId)||[];state.mark=opts.o!=null?opts.o:state.at;
+      const cached=browseAlphabetCache.get(requestDictId);
+      if(cached&&cached.total!==page.total){
+        browseAlphabetCache.delete(requestDictId);
+        try{sessionStorage.removeItem(BROWSE_ALPHABET_SESSION_KEY)}catch(_){}
+        clearTimeout(progressTimer);endProgress();show(opts,record);return;
+      }
+      state=page;state.alphabet=cached?.letters||browseAlphabetPartial.get(requestDictId)||[];state.mark=opts.o!=null?opts.o:state.at;
       chooserSearch?.destroy();chooserSearch=null;$("msg").classList.remove("chooser-list");$("msg").hidden=true;
       render();
+      browseTrace("page ready",{dict:requestDictId,page:state.page,words:state.words.length,letters:state.alphabet.length,totalMs:Math.round(performance.now()-started)});
       const url="?dict="+encodeURIComponent(dictId)+"&p="+state.page+
-        (new URLSearchParams(location.search).get("chooser")==="1"?"&chooser=1":"");
+        (new URLSearchParams(location.search).get("chooser")==="1"?"&chooser=1":"")+
+        (BROWSE_DEBUG?"&browse_debug=1":"");
       if(record==="push"&&url!==location.search)history.pushState(null,"",url);
       else if(record!=="none")history.replaceState(null,"",url);
       if(record!=="none"){
@@ -559,7 +684,8 @@ async function show(opts,record){
           chooserSearch?.destroy();chooserSearch=null;$("msg").classList.remove("chooser-list");$("msg").hidden=true;
           stripFor="";stripLettersPainted=0;render();
           const url="?dict="+encodeURIComponent(dictId)+"&p="+state.page+
-            (new URLSearchParams(location.search).get("chooser")==="1"?"&chooser=1":"");
+            (new URLSearchParams(location.search).get("chooser")==="1"?"&chooser=1":"")+
+            (BROWSE_DEBUG?"&browse_debug=1":"");
           if(record==="push"&&url!==location.search)history.pushState(null,"",url);
           else if(record!=="none")history.replaceState(null,"",url);
           if(record!=="none"&&!(findResult&&!findFilter&&findIndex>=0))scrollTo(0,0);
@@ -571,13 +697,13 @@ async function show(opts,record){
           const partial=browseAlphabetPartial.get(requestDictId)||[];
           partial.push(...(event.letters||[]));browseAlphabetPartial.set(requestDictId,partial);
           if(state&&state.dict===requestDictId){state.alphabet=partial;render()}
-          updateBrowseProgress(t("browse.loadingWords")+" · "+num(event.at||0)+" / "+num(event.total||0),"alphabet");
+          updateBrowseProgress(t("browse.loadingAlphabet")+" · "+num(event.at||0)+" / "+num(event.total||0),"alphabet");
         }else if(event.type==="progress"){
-          if(browseAlphabetTask?.controller===controller&&browseAlphabetTask.dictId===requestDictId)updateBrowseProgress(t("browse.loadingWords")+" · "+num(event.at||0)+" / "+num(event.total||0),"alphabet");
+          if(browseAlphabetTask?.controller===controller&&browseAlphabetTask.dictId===requestDictId)updateBrowseProgress(t("browse.loadingAlphabet")+" · "+num(event.at||0)+" / "+num(event.total||0),"alphabet");
         }else if(event.type==="done"){
           if(browseAlphabetTask?.controller!==controller||browseAlphabetTask.dictId!==requestDictId)continue;
           const complete=browseAlphabetPartial.get(requestDictId)||[];
-          browseAlphabetCache.set(requestDictId,complete.slice());browseAlphabetPartial.delete(requestDictId);
+          saveBrowseAlphabet(requestDictId,event.total,complete.slice());browseAlphabetPartial.delete(requestDictId);
           if(state&&state.dict===requestDictId){state.alphabet=complete;render()}
           browseAlphabetTask=null;
           endProgress();if(seq===browseSeq){setBrowsePageBusy(false);if(findResult&&!findFilter&&findIndex>=0)scheduleScrollToCurrentWord(seq)}
@@ -876,6 +1002,7 @@ function browseReturnURL(){
 function render(){
   const d=state;
   if(!d)return;
+  const renderStarted=performance.now();
   document.title=t("browse.pageTitle",{name:d.name});
   $("top").hidden=false;$("foot").hidden=false;
   $("name").textContent=d.name;
@@ -901,32 +1028,44 @@ function render(){
     return '<a class="'+(matched?"browse-match ":"")+(current?"browse-current":"")+'" href="/?q='+encodeURIComponent(w)+"&from="+encodeURIComponent(d.dict)+
       '&mode=exact&browse='+returnTo+'" title="'+e+'">'+highlightedWord(title,ranges)+"</a>";
   }).join("")||(filtering?(findResult.stream&&!findStreamDone?"":'<p class="browse-empty">'+tx("browse.noMatches")+'</p>'):"");
+  const wordsReady=performance.now();
 
   /* The strip belongs to the dictionary, not to the page, so it is built once
-     and only its current chip moves. */
+     and its visible window is rendered at a time. */
   $("stripWrap").hidden=!!filtering;
-  if(stripFor!==d.dict){stripFor=d.dict;stripLettersPainted=0;$("strip").replaceChildren()}
-  while(stripLettersPainted<d.alphabet.length){
-    const l=d.alphabet[stripLettersPainted++],button=document.createElement("button"),label=unesc(l.l);
-    button.type="button";button.dataset.o=String(l.o);button.title=label+" — "+t("browse.words",{count:l.n,number:num(l.n)});
-    button.textContent=label;$("strip").appendChild(button);
-  }
+  const strip=$("strip"),track=$("stripTrack"),stripStarted=performance.now();
+  let stripBuilt=stripStarted,stripReady=stripStarted;
+  if(!filtering){
+    if(stripFor!==d.dict){
+      stripFor=d.dict;stripLettersPainted=0;stripMetricKey="";stripWidths=[];stripOffsets=[];stripTotalWidth=0;
+      stripCurrentIndex=-1;stripWindowStart=stripWindowEnd=-1;strip.scrollLeft=0;
+      track.replaceChildren($("stripMeasure"));
+    }
+    measureStripItems(d.alphabet||[]);
+    stripBuilt=performance.now();
   /* Highlight what was ASKED for, not what the page happens to start with.
      Both a chip click and a jump snap down to the page grid, so the page
      holding the first K opens in the tail of J - and a strip that answers a
      click on K by lighting up J reads as a bug, because it is one. A mark
      outside this page (a page turn, a reload, a clamped bookmark) falls back
      to where the page starts, which is then exactly where the reader is. */
-  const at=(d.page-1)*d.size;
-  let mark=d.mark;
-  if(!(mark>=at&&mark<at+d.size))mark=at;
-  let cur=-1;
-  d.alphabet.forEach((l,i)=>{if(l.o<=mark)cur=i});
-  $("strip").querySelectorAll("button").forEach((b,i)=>{
-    if(i===cur){b.setAttribute("aria-current","true");
-      b.scrollIntoView({block:"nearest",inline:"center"})}
-    else b.removeAttribute("aria-current");
-  });
+    const at=(d.page-1)*d.size;
+    let mark=d.mark;
+    if(!(mark>=at&&mark<at+d.size))mark=at;
+    let lo=0,hi=d.alphabet.length;
+    while(lo<hi){const mid=(lo+hi)>>>1;if(d.alphabet[mid].o<=mark)lo=mid+1;else hi=mid}
+    const currentIndex=lo-1;
+    const currentChanged=currentIndex!==stripCurrentIndex;
+    if(currentChanged){
+      stripCurrentIndex=currentIndex;
+      if(currentIndex>=0){
+        const center=stripOffsets[currentIndex]+stripWidths[currentIndex]/2;
+        strip.scrollLeft=Math.max(0,Math.min(stripTotalWidth-strip.clientWidth,center-strip.clientWidth/2));
+      }
+    }
+    renderVirtualStrip(currentChanged);
+    stripReady=performance.now();
+  }
   requestAnimationFrame(updateStripArrows);
 
   const pages=filtering?(findResult.stream?Math.ceil(findStreamWords.length/300):findResult.pages):d.pages;
@@ -935,6 +1074,9 @@ function render(){
   const hasMore=filtering&&findResult.stream&&!findStreamDone;
   const ends={first:page<=1,prev:page<=1,next:hasMore?false:page>=pages,last:hasMore?false:page>=pages};
   document.querySelectorAll("[data-go]").forEach(b=>{b.disabled=!!ends[b.dataset.go]});
+  browseTrace("render",{dict:d.dict,page:d.page,words:words.length,letters:d.alphabet.length,
+    wordsMs:Math.round(wordsReady-renderStarted),stripBuildMs:Math.round(stripBuilt-stripStarted),
+    stripMarkMs:Math.round(stripReady-stripBuilt),totalMs:Math.round(performance.now()-renderStarted)});
 }
 
 function turn(where){
@@ -969,8 +1111,12 @@ async function chooser(){
   card(heading);
   let text="";
   const endProgress=browseProgress(t("browse.loadingDictionaries"));
-  try{const response=await fetch("/api/dicts");if(!response.ok)throw new Error("load");
-    text=await response.text()}catch(e){endProgress();return card(heading+"<b>"+tx("browse.noAnswer")+"</b><p>"+tx("browse.loadFailed")+"</p>")}
+  let prefs;
+  try{
+    const [response,prefsResponse]=await Promise.all([fetch("/api/dicts"),fetch("/api/prefs")]);
+    if(!response.ok||!prefsResponse.ok)throw new Error("load");
+    [text,prefs]=await Promise.all([response.text(),prefsResponse.json()]);
+  }catch(e){endProgress();return card(heading+"<b>"+tx("browse.noAnswer")+"</b><p>"+tx("browse.loadFailed")+"</p>")}
   endProgress();
   const ds=[];
   for(const line of text.split("\n")){
@@ -980,7 +1126,26 @@ async function chooser(){
       ds.push(m.dict);
     }
   }
-  ds.sort((x,y)=>(x.name||"").localeCompare(y.name||""));
+  // Match the All Dictionaries group: its saved order, pinned head, and
+  // alphabetical tail all come from /api/prefs.
+  const byId=new Map(ds.map(d=>[d.id,d]));
+  const saved=(prefs.dicts||[]).map(d=>d.id).filter(id=>byId.has(id));
+  const pinned=new Set((prefs.dicts||[]).filter(d=>d.pinned).map(d=>d.id));
+  const label=d=>d.name||d.path?.split(/[\\/]/).pop()||d.id;
+  const collator=new Intl.Collator(window.wudictI18n.language,{sensitivity:"base",numeric:true});
+  const alpha=ids=>{
+    const fixed=ids.filter(id=>pinned.has(id)),tail=ids.filter(id=>!pinned.has(id));
+    tail.sort((a,b)=>collator.compare(label(byId.get(a)),label(byId.get(b)))||a.localeCompare(b));
+    return fixed.concat(tail);
+  };
+  let customOrder=prefs.ui?.customOrder;
+  if(typeof customOrder!=="boolean"){
+    const initial=alpha(saved);
+    customOrder=!initial.every((id,i)=>id===saved[i]);
+  }
+  const ordered=[...saved,...ds.map(d=>d.id).filter(id=>!saved.includes(id))];
+  const ids=customOrder?ordered.slice(0,saved.length).concat(alpha(ordered.slice(saved.length))):alpha(ordered);
+  ds.splice(0,ds.length,...ids.map(id=>byId.get(id)).filter(Boolean));
   if(!ds.length)return card(heading+"<b>"+tx("browse.empty")+"</b><p>"+tx("browse.emptyBody")+
     '</p><p><a href="/">'+tx("browse.openApp")+"</a></p>");
   card(heading+"<div class='picks'>"+
@@ -1019,7 +1184,7 @@ document.addEventListener("click",e=>{
   }
   const g=e.target.closest("[data-go]");
   if(g)return turn(g.dataset.go);
-  const c=e.target.closest(".strip button");
+  const c=e.target.closest(".strip button[data-o]");
   if(c&&state){const o=Number(c.dataset.o);show({p:Math.floor(o/state.size)+1,o:o},"push")}
 });
 

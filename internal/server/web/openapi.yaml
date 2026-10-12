@@ -117,6 +117,39 @@ paths:
                 type: string
         '500':
           description: Could not read the log
+  /api/browse-diagnostic:
+    post:
+      tags: [internal]
+      operationId: recordBrowseDiagnostic
+      x-internal: true
+      summary: Add an opt-in, value-free Browse timing event to the system log
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [event]
+              properties:
+                event: { type: string }
+                page: { type: integer }
+                words: { type: integer }
+                letters: { type: integer }
+                bytes: { type: integer }
+                readMs: { type: integer }
+                fetchMs: { type: integer }
+                totalMs: { type: integer }
+                wordsMs: { type: integer }
+                stripBuildMs: { type: integer }
+                stripMarkMs: { type: integer }
+                status: { type: integer }
+                restored: { type: boolean }
+                streamAlphabet: { type: boolean }
+      responses:
+        '204': { description: Diagnostic recorded }
+        '400': { description: Invalid or unsupported diagnostic }
+        '413': { description: Request body is too large }
   /api/search:
     get:
       tags: [search]

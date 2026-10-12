@@ -367,10 +367,17 @@ func (s *Server) handleBrowse(w http.ResponseWriter, r *http.Request) {
 		browseUnprepared(w, e)
 		return
 	}
-	alphabet, err := b.Alphabet()
-	if err != nil {
-		httpErr(w, 500, "browsing %s: %v", e.ID, err)
-		return
+	// The client already has the completed strip on a strip=0 request. For
+	// ZIM, building it walks the native index and can take minutes, so a page
+	// return must not wait for Alphabet merely to discard its answer.
+	zimNative := entryHasSelfIndex(e) && !d.Meta().HeadwordsOnly
+	var alphabet []dict.Letter
+	if !(zimNative && q.Get("strip") == "0") {
+		alphabet, err = b.Alphabet()
+		if err != nil {
+			httpErr(w, 500, "browsing %s: %v", e.ID, err)
+			return
+		}
 	}
 	// The strip partitions the whole list, so its counts ARE the total - no
 	// COUNT(*) of its own, and no way for the two to disagree.
@@ -384,7 +391,7 @@ func (s *Server) handleBrowse(w http.ResponseWriter, r *http.Request) {
 	for _, l := range alphabet {
 		total += l.Count
 	}
-	if entryHasSelfIndex(e) && !d.Meta().HeadwordsOnly {
+	if zimNative {
 		// ZIM's strip samples the first visible headword in each native page;
 		// its offsets and total therefore use native index slots.
 		total = d.Meta().EntryCount

@@ -10,6 +10,21 @@
 <meta charset="utf-8">
 {{I18N}}
 <script>
+// WebView2 installs the native bridge before this page is parsed. Install the
+// page callback only after <html> exists, so its folder button can be shown.
+if (typeof window.wudictChooseFolder === 'function') {
+  let folderPicked = null;
+  window.__wdFolderPicked = path => {
+    const callback = folderPicked;
+    folderPicked = null;
+    if (callback) callback(path);
+  };
+  window.wudictPickFolder = callback => {
+    folderPicked = callback;
+    window.wudictChooseFolder();
+  };
+  document.documentElement.setAttribute('data-folder-picker', '');
+}
 // An optional host background. Session storage preserves it across page reloads;
 // an explicit empty URL value withdraws it on the next launch.
 window.wudictShellBackground = function (color, image, imageName, paper) {
@@ -244,6 +259,7 @@ body{font-size:calc(var(--ui-font-base) * 1rem)}
   width:calc(var(--ui-edit_control-height) * 1.5rem);
   height:calc(var(--ui-edit_control-height) * 1.5rem);
   padding:0;font-size:calc(var(--ui-edit_control-font) * 1rem)}
+#rows .frow .pick{font-size:calc(var(--ui-edit_control-font) * 1.3rem)}
 html:not([data-folder-picker]) #rows .frow .pick{display:none}
 #rows .frow .st,#msg,#indexDefaultsError{font-size:calc(var(--ui-hint-font-size) * 1rem)}
 #addRow{font-size:calc(var(--ui-font-addition) * 1rem)}
