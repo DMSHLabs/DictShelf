@@ -207,8 +207,7 @@ paths:
             `all`, one dictionary id, or a comma-separated list of ids in the
             order you want them back. Ids come from /api/dicts. A list where no
             id resolves is a 404; unknown ids inside a resolving list are
-            skipped. Naming exactly one dictionary bypasses the memory cap,
-            because a search of one is a direct demand.
+            skipped. Naming exactly one dictionary bypasses the memory cap.
           schema: { type: string, default: all }
           example: oxford,webster
         - name: 'n'
@@ -1785,7 +1784,7 @@ paths:
       tags: [internal]
       operationId: saveIndexDefaults
       x-internal: true
-      summary: Set automatic indexes for newly added dictionaries of any format
+      summary: Set optional indexes for newly added dictionaries
       description: >
         Index is always enabled. Existing dictionaries are not changed.
         Pending preparation plans survive restart. GET /api/config returns
@@ -2311,72 +2310,6 @@ paths:
         '500':
           description: The file could not be removed.
 
-  /api/demand:
-    post:
-      tags: [internal]
-      operationId: demand
-      x-internal: true
-      summary: Prepare this dictionary now, because the user chose it
-      description: >
-        Selecting a dictionary is a statement that it is about to be searched,
-        so its headword index is prepared at once rather than waiting for the
-        first query to discover it is missing. On a large dictionary that first
-        query would otherwise have to search the source format directly, which
-        is what the search budget is too short for.
-
-
-        The request returns as soon as the work is queued; the ingest outlives
-        it. Progress is not reported here - a client learns the dictionary is
-        ready from `/api/dicts`, where `dbSize` becomes non-zero.
-
-
-        Idempotent: repeated selection of the same dictionary neither queues a
-        second ingest nor restarts a running one, and a failed preparation is
-        retried only after a cooldown. Does nothing when `AUTO_INDEX` is off,
-        where preparation is the dictionary panel's job, unless `explicit=1`
-        says the user asked for the index itself (browsing); the response then
-        reports `indexing: false`.
-
-
-        Same-origin only. It is not part of the client API a browser extension
-        reaches (D69): it starts work and writes to the user's library folder.
-      parameters:
-        - name: dict
-          in: query
-          required: true
-          description: Dictionary id, as returned by `/api/dicts`.
-          schema: { type: string }
-        - name: explicit
-          in: query
-          required: false
-          description: >
-            `1` when the user asked for something only the index can serve
-            (browsing). Prepares even when `AUTO_INDEX` is off.
-          schema: { type: string }
-      x-codeSamples:
-        - lang: Shell
-          label: curl
-          source: |
-            curl -s -X POST 'http://127.0.0.1:6888/api/demand?dict=<id>'
-      responses:
-        '200':
-          description: >
-            The demand was recorded. `indexing` reports whether a preparation
-            for this dictionary is now queued or running, which is false when it
-            is already prepared, when `AUTO_INDEX` is off without `explicit=1`,
-            and while a failed preparation is cooling down.
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [indexing]
-                properties:
-                  indexing: { type: boolean }
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '500':
-          $ref: '#/components/responses/ServerError'
-
   /api/about:
     get:
       tags: [internal]
@@ -2546,18 +2479,15 @@ paths:
         '409':
           description: >
             This dictionary has no index yet, so there is nothing ordered to
-            page through. `indexing` separates the two things a client can say
-            about that: work already in flight is something to wait for,
-            its absence means the index has to be switched on.
+            page through. Create the index in Dictionary Settings.
           content:
             application/json:
               schema:
                 type: object
-                required: [error, prepared, indexing]
+                required: [error, prepared]
                 properties:
                   error: { type: string }
                   prepared: { type: boolean, description: Always false here. }
-                  indexing: { type: boolean, description: Preparation is running right now. }
         '500':
           $ref: '#/components/responses/ServerError'
   /api/browse/find:
@@ -2691,7 +2621,7 @@ paths:
       description: Loopback-only status used by the Android shell before exiting, including an adopted server.
       responses:
         '200':
-          description: Current state and whether demanded work is running
+          description: Current state and whether user-requested work is running
           content:
             application/json:
               schema:
@@ -3066,12 +2996,6 @@ components:
         bytes:
           type: integer
           description: What the declined open was estimated to cost. For logs.
-        indexing:
-          type: boolean
-          description: >
-            Only beside deferred: this dictionary is already being prepared,
-            because something asked for it by name. It will stop being deferred
-            once the ingest finishes.
         rung:
           type: string
           enum: [phrase, near, words, query]
@@ -3141,6 +3065,9 @@ components:
           description: The source file, or the text.db of a prepared dictionary.
         entries: { type: integer, description: Headword count. }
         caps: { $ref: '#/components/schemas/Caps' }
+        selfIndexed:
+          type: boolean
+          description: The source format supplies the exact/prefix headword index; dictionary settings do not offer a duplicate base index.
         dbPath: { type: string, description: The prepared database. }
         error: { type: string, description: This dictionary could not be opened. }
         containsStale:

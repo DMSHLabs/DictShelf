@@ -23,7 +23,7 @@ func entryState(e *entry) (d interface{}, err error, backing string) {
 
 // A library folder deleted from outside the app - a file manager, a cleanup
 // script - must survive "Rescan folders": the dictionary falls back to its
-// source in preview mode and prepares itself again, rather than holding a
+// source and the explicit rescan preparation path rebuilds it, rather than holding a
 // handle to the deleted database and answering every search with SQLite's
 // "unable to open database file", with neither preparation lane willing to
 // rebuild it.
@@ -32,11 +32,10 @@ func TestRescanRecoversFromDeletedPreparedFolder(t *testing.T) {
 		t.Skip("Windows refuses to delete a database the app holds open: the folder cannot vanish underneath it")
 	}
 	restorePower(t)
-	s, e := demandEntry(t)
-	s.AutoIndex = true
-
-	e.demandIndex()
-	waitUntil(t, "the demanded index", func() bool { return prepared(e) })
+	s, e := unpreparedEntry(t)
+	if err := e.setFeatures(features{}, nil, true); err != nil {
+		t.Fatalf("explicit index creation: %v", err)
+	}
 	if _, err := e.open(); err != nil {
 		t.Fatalf("open after preparing: %v", err)
 	}
@@ -61,29 +60,14 @@ func TestRescanRecoversFromDeletedPreparedFolder(t *testing.T) {
 	if d != nil || err != nil || backing != "" {
 		t.Fatalf("rescan kept stale state: backend=%T err=%v backing=%q", d, err, backing)
 	}
-	// The conclusions drawn from the deleted data go with it, or nothing would
-	// ever prepare this dictionary again.
-	if e.autoTried.Load() || e.demanded.Load() || e.demandFail.Load() != 0 {
-		t.Fatalf("preparation flags survived the deletion: auto=%v demanded=%v fail=%v",
-			e.autoTried.Load(), e.demanded.Load(), e.demandFail.Load())
+	// Search falls back to the source and never recreates the index.
+	hits := searchStream(t, s, "/api/search?q=beta&mode=prefix&dict="+e.ID)
+	if len(hits) != 1 || hits[0].Error != "" || len(hits[0].Results) != 1 {
+		t.Fatalf("search after external index deletion = %+v", hits)
 	}
-
-	// It opens again - directly, from the source - and searches.
-	fresh, err := e.open()
-	if err != nil {
-		t.Fatalf("reopen after deletion: %v", err)
+	if prepared(e) {
+		t.Fatal("search recreated the deleted index")
 	}
-	if _, ok := fresh.(storeBacked); ok {
-		t.Fatalf("expected the direct source backend, got %T", fresh)
-	}
-	hits, err := fresh.Exact("beta", 10)
-	if err != nil || len(hits) != 1 {
-		t.Fatalf("search through the recovered backend: %d hits, %v", len(hits), err)
-	}
-
-	// and prepares itself again, unasked
-	e.maybeAutoIndex()
-	waitUntil(t, "the rebuilt index", func() bool { return prepared(e) })
 }
 
 // entry.open memoizes failures on purpose (a fan-out must not retry a broken
@@ -91,7 +75,7 @@ func TestRescanRecoversFromDeletedPreparedFolder(t *testing.T) {
 // the user saying "look again". Set directly rather than provoked,
 // because what is under test is the lifetime of the memo, not any one failure.
 func TestRescanClearsMemoizedOpenError(t *testing.T) {
-	s, e := demandEntry(t)
+	s, e := unpreparedEntry(t)
 
 	e.dMu.Lock()
 	e.err = errors.New("boom")

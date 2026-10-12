@@ -23,7 +23,7 @@ import (
 // change to dictInfoFor alters what a row says for the same files, so a
 // client holding the previous derivation refetches it even from a build whose
 // executable stat happens to match.
-const dictRowsVersion = "1"
+const dictRowsVersion = "2"
 
 // rowCache keeps each dictionary's /api/dicts row under the key of what it was
 // derived from (rowKey). A row costs a SQLite meta read, a header probe or a

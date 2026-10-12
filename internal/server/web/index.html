@@ -2635,19 +2635,10 @@ function syncChips(){
   // group with a name like any other.
   $("dictLbl").textContent=scopeLabel();
 }
-/* Picking a dictionary is already a statement that it is about to be searched,
-   so its index is demanded on the selection itself and not on the first query
-   (D92, /api/demand). Only when there is nothing to re-run: a search of one
-   dictionary carries the same demand server-side, so doSearch() would make this
-   request redundant. Fire-and-forget - the ingest outlives the response, and
-   the chip catches up on the next loadDicts(). */
+/* Picking a dictionary only changes search scope. Indexing starts when the
+   dictionary is added or when the user requests it in Dictionary Settings. */
 $("dict").onchange=e=>{const v=e.target.value;localStorage.setItem("wudict_dict",v);syncChips();
-  if($("q").value.trim())doSearch();
-  // One dictionary only. A group would demand an index for every member at
-  // once, which is the unbounded auto-index fan-out (docs.local/PERF.md M1)
-  // — the single most expensive thing this app can be made to do — triggered
-  // by one tap on a menu, before the user has typed anything at all.
-  else if(v&&v!=="all"&&!v.startsWith("g:"))fetch("/api/demand?dict="+encodeURIComponent(v),{method:"POST"}).catch(()=>{})};
+  if($("q").value.trim())doSearch()};
 /* Mode re-runs the search on change, symmetric with #dict: the narrow bar has
    no submit button, so a mode that waited for the next submit would appear to
    do nothing at all. */
@@ -2889,9 +2880,8 @@ function renderPanel(){
       ["contains",tx("dictUI.contains"),d.caps?.Contains,0],
       ["fts",tx("dictUI.fts"),d.caps?.FTS,0],
     ];
-    /* The index itself, first in the run of chips. Two states, because the
-       dictionary only has two: "🚀 index" while there is none — it is searched
-       the slow way through its own format until there is — and the size once
+    /* The index itself, first in the run of chips. Two states: "🚀 index"
+       while there is none, and the size once
        there is one. A size rather than a tick: a number is what the reader can
        act on, and it is the same number that was in the meta line above until
        now (the word "indexed" stays there). The done state is .locked, so the
@@ -2903,6 +2893,7 @@ function renderPanel(){
        No chip at all when the source is gone — a prepared-only dictionary
        cannot be rebuilt, and dbSize covers it anyway. */
     const indexed=(d.dbSize||0)>0;
+    const selfIndexed=!!d.selfIndexed;
     /* What it would cost, on the ABSENT state only. A 2.9 M-entry dictionary
        is a gigabyte of disk and minutes of a phone's battery, and the chip
        that starts that says so first; O9 is the decision that the size be
@@ -2918,9 +2909,11 @@ function renderPanel(){
        chip next to it, which is a measurement of a file on disk. Hence "est.",
        hence "~", hence plain .feat styling - the estimate is an argument for
        clicking, the size is a fact about what a click already produced. */
-    const est=indexed?0:baseIndexBytes(d);
+    const est=indexed||selfIndexed?0:baseIndexBytes(d);
     let caps=indexed&&!d.dsl
       ? `<span class="feat on locked" title="${escAttr(tx("dictUI.indexedSize",{size:mb(d.dbSize)}))}">${mb(d.dbSize)}</span>`
+      : selfIndexed&&!d.dsl
+        ? `<span class="feat on locked" title="${escAttr(tx("dictUI.nativeIndexedHint"))}">${esc(tx("dictUI.nativeIndexed"))}</span>`
       : canToggle&&!d.dsl
         ? `<span class="feat" data-feat="base" title="${escAttr(tx("dictUI.buildHint")+(est?tx("dictUI.estimateHint",{size:mb(est)}):""))}">${esc(tx("dictUI.index"))}${est?" · ~"+mb(est):""}</span>`
         : "";
@@ -2940,23 +2933,21 @@ function renderPanel(){
         ` data-feat="${key}" data-on="${on?1:0}"${stale?' data-stale="1"':""}`+
         ` title="${escAttr(tip)}">${esc(label)}${size}${stale?" ⟳":""}</span>`;
     }
-    // the contains index is built automatically on first use, so the only
-    // manual action offered is full-text (which also covers contains).
+    // Contains and full-text are both built only after an explicit action.
     // "pack media" is offered only when the dictionary actually has packable
     // media, a source to pack it from, and it isn't already packed.
     let acts="";
     if(d.error)acts=`<span class="err">${esc(window.wudictI18n.errorText(d.error))}</span>`;
-    /* Offered whether or not the index exists yet: browsing IS the index, so
-       following this link on an unprepared dictionary is the request to build
-       it, and the browse page asks for it and opens the list when it is ready.
-       This is the card for one dictionary, so unlike the row above it carries
+    /* Offered only when the index exists: browsing reads its ordered headword
+       list and never starts index creation. This is the card for one
+       dictionary, so unlike the row above it carries
        the id. */
-    else acts=`<a class="browse btn" href="/browse?dict=${encodeURIComponent(d.id)}" title="${escAttr(tx("dictUI.browseHint"))}"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M2.4 3.4a1.2 1.2 0 0 1 1.2-1.2h6.2a1.2 1.2 0 0 1 1.2 1.2v9.2a1.2 1.2 0 0 1-1.2 1.2H3.6a1.2 1.2 0 0 1-1.2-1.2z"/><path d="M11 5h2.6"/><path d="M11 8h2.6"/><path d="M11 11h2.6"/></svg>${esc(tx("dictUI.browse"))}</a>`;
+    else if(indexed||selfIndexed)acts=`<a class="browse btn" href="/browse?dict=${encodeURIComponent(d.id)}" title="${escAttr(tx("dictUI.browseHint"))}"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M2.4 3.4a1.2 1.2 0 0 1 1.2-1.2h6.2a1.2 1.2 0 0 1 1.2 1.2v9.2a1.2 1.2 0 0 1-1.2 1.2H3.6a1.2 1.2 0 0 1-1.2-1.2z"/><path d="M11 5h2.6"/><path d="M11 8h2.6"/><path d="M11 11h2.6"/></svg>${esc(tx("dictUI.browse"))}</a>`;
     if(d.unavailable||d.dsl&&!d.error)acts="";
     div.innerHTML=`<div class="hd">
         <b tabindex="${d.unavailable?-1:0}" role="button" aria-disabled="${!!d.unavailable}" title="${escAttr(tx(d.unavailable?"dictUI.dslUnavailable":"dictUI.searchOnly"))}">${esc(dictLabel(d))}</b>
       </div>
-      <div class="meta">${esc(d.format||"?")}${d.entries?" · "+esc(tx("dictUI.entries",{number:window.wudictI18n.number(d.entries)})):""}${d.dbSize?tx("dictUI.indexed"):""}</div>
+      <div class="meta">${esc(d.format||"?")}${d.entries?" · "+esc(tx("dictUI.entries",{number:window.wudictI18n.number(d.entries)})):""}${d.dbSize||selfIndexed?tx("dictUI.indexed"):""}</div>
       ${dslIndexControls(d)}
       ${caps?`<div>${caps}</div>`:""}${acts?`<div class="acts">${acts}</div>`:""}
       ${provenance(d)}
@@ -3183,7 +3174,7 @@ $("dictSettingsScroll").addEventListener("scroll",()=>{
   dictListTop=$("dictSettingsScroll").scrollTop;
 },{passive:true});
 $("editDictSettings").onclick=async()=>{
-  // A search may have prepared an index since the dictionary list was loaded.
+  // An index job may have changed dictionary capabilities since the last list load.
   await loadDicts();
   showDictSettings();
 };
@@ -3818,7 +3809,7 @@ $("folderBody").addEventListener("click",e=>{
   p.style.color="var(--accent)";setTimeout(()=>{p.style.color=""},900);
 });
 /* Bulk full-text (D31). It names what the user gets, not our mechanism -
-   every dictionary is already indexed by headword on first open - and it
+   new dictionaries are queued for their headword index - and it
    spends gigabytes of disk and a long single-file CPU pass, so it lives in the
    configuration drawer as quiet text and prices itself before it can fire:
    prominence tracks value, not cost. The good discovery path is elsewhere: a
@@ -3889,6 +3880,7 @@ function bulkFeatureLabels(d,feat){
 function bulkIndexCandidates(scope,feat,action){
   return dicts.filter(d=>{
     if(d.builtin||!d.source||d.dsl&&!d.dsl.sourceAvailable)return false;
+    if(feat==="base"&&d.selfIndexed&&!d.dbSize)return false;
     const have=feat==="base"?!!d.dbSize:feat==="contains"?!!d.caps?.Contains:!!d.caps?.FTS;
     return action==="recreate"||((action==="delete"||action==="update")?have:!have);
   });
@@ -4126,7 +4118,7 @@ $("panelList").addEventListener("click",e=>{
     const sel=$("dict"),id=pick.closest(".pd").dataset.id;
     if(dicts.some(d=>d.id===id&&d.unavailable))return;
     // Through the <select> and its change event, so this is the same selection
-    // every other caller makes - persisted, chipped, re-run, index demanded.
+    // every other caller makes - persisted, chipped and re-run.
     if([...sel.options].some(o=>o.value===id)){
       sel.value=id;sel.dispatchEvent(new Event("change"));
     }
@@ -4158,11 +4150,9 @@ $("panelList").addEventListener("keydown",e=>{
    which asks the user to re-read a question they already answered rather than
    telling them anything.
 
-   Delete-everything is the default because preparation is automatic: deleting
-   only the index of a dictionary whose file is still in a scanned folder
-   frees the space until the next search rebuilds it. "Index only" is offered
-   anyway (it is the honest way to reclaim a full-text index), and it says so
-   afterwards, from the server's own report.
+   Delete-everything is the default because deleting only the index leaves a
+   dictionary that cannot be searched until the user indexes it again.
+   "Index only" is offered to reclaim index space and reports that result.
 
    Vocabulary: these are "the dictionary files", never "the originals". On the
    Play flavour the file this deletes is itself a COPY the importer made, and
@@ -4865,16 +4855,9 @@ const TAPS=matchMedia("(pointer:coarse)").matches;
    this dictionary alone, which the server does not cap, and which also puts it
    in line to be prepared — so the same tap answers the question now and stops
    it being asked again. */
-/* The label a deferred section wears. "preparing…" means the server already
-   has this dictionary in its front ingest queue because something asked for it
-   by name — it is NOT a disabled state, and the section stays tappable: the
-   uncapped single-dictionary search answers in seconds while the ingest behind
-   it takes minutes. What it stops is the page offering the same tap over and
-   over at a dictionary that is already doing the work, which reads as the first
-   tap having done nothing. */
-function deferLabel(indexing){
-  return indexing?tx("search.preparing"):tx(TAPS?"search.tap":"search.click");
-}
+/* A deferred search can be retried by opening the section; it never starts an
+   indexing job. */
+function deferLabel(){return tx(TAPS?"search.tap":"search.click")}
 function loadDeferred(det,box,h,mode,q){
   if(det.dataset.loading)return;
   det.dataset.loading="1";
@@ -4905,7 +4888,7 @@ function loadDeferred(det,box,h,mode,q){
     if(!cnt)return;
     const aborted=err.name==="AbortError";
     cnt.classList.toggle("hint",aborted); // an error is not an offer: drop the link colour
-    cnt.textContent=aborted?deferLabel(det.dataset.indexing==="1")
+    cnt.textContent=aborted?deferLabel()
                            :"⚠ "+(err.message||tx("search.failedDict"));
   });
 }
@@ -4984,9 +4967,8 @@ function renderSlot(box,h,mode,q,perDict,group){
     const det=document.createElement("details");
     det.className="dict";
     det.dataset.deferred=h.dict; // also what excludes it from expand-all
-    if(h.indexing)det.dataset.indexing="1";
     det.innerHTML=`<summary>${esc(hitName(h))}`+
-      `<span class="count hint">${esc(deferLabel(h.indexing))}</span></summary>`;
+      `<span class="count hint">${esc(deferLabel())}</span></summary>`;
     // `toggle` does not bubble, so this is bound to the element rather than
     // delegated on #out. It is not `once`: a failed load re-arms itself.
     det.addEventListener("toggle",()=>{if(det.open)loadDeferred(det,box,h,mode,q)});

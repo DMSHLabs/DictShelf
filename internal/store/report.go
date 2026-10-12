@@ -10,11 +10,8 @@ import (
 	"github.com/wuweidict/wudict/internal/logx"
 )
 
-// ReportPrepared prints the one line that closes a "preparing search index…"
-// status: how many entries were indexed, how long it took, and - only when
-// there were any - how many redirects pointed at headwords that do not exist
-// in the source. Shared by the formats that prepare themselves on first open
-// (OpenSelfPrepared: DSL, BGL, wudict markdown) so all read identically.
+// ReportPrepared prints index outcome details, including counts, duration and
+// unresolved redirects. Shared by indexing operations across formats.
 func ReportPrepared(name string, rep Report, took time.Duration) {
 	logx.ClearLine()
 	logx.Status("%s%d entries indexed in %.1fs", logx.Dict(name), rep.Entries, took.Seconds())

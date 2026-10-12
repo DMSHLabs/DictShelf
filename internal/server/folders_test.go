@@ -7,13 +7,11 @@ package server
 import (
 	"database/sql"
 	"fmt"
-	"io"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -332,8 +330,8 @@ func TestFeatureTogglesBothWays(t *testing.T) {
 	caps := func() dict.Caps {
 		return getDicts(t, s, "/api/dicts")[0].Caps
 	}
-	// default: a DSL prepares itself so it can be searched at all, but only
-	// the cheap headword index - both heavy indexes start off
+	// New dictionaries get the cheap headword index by default; both heavy
+	// indexes start off.
 	if c := caps(); c.Contains || c.FTS {
 		t.Fatalf("neither heavy index may be built by default: %+v", c)
 	}
@@ -379,90 +377,6 @@ func TestFeatureTogglesBothWays(t *testing.T) {
 	if err := e.setFeatures(features{}, nil); err == nil {
 		t.Error("a source-less dictionary must refuse to have its data stripped")
 	}
-}
-
-// slowFormat is a dictionary whose ingest takes measurable time, so a test can
-// observe how many are being prepared at once.
-type slowReader struct{ n int }
-
-var (
-	liveIngests atomic.Int32
-	maxIngests  atomic.Int32
-)
-
-func (r *slowReader) Meta() dict.Meta { return dict.Meta{Name: "Slow", Format: "slow"} }
-func (r *slowReader) Close() error {
-	liveIngests.Add(-1)
-	return nil
-}
-func (r *slowReader) Next() (dict.Entry, error) {
-	if r.n == 0 {
-		if v := liveIngests.Add(1); v > maxIngests.Load() {
-			maxIngests.Store(v)
-		}
-	}
-	if r.n >= 40 {
-		return dict.Entry{}, io.EOF
-	}
-	r.n++
-	time.Sleep(3 * time.Millisecond) // long enough for overlap to be visible
-	return dict.Entry{Headwords: []string{fmt.Sprintf("w%d", r.n)}, Body: "<p>x</p>", Kind: dict.BodyHTML}, nil
-}
-
-func init() {
-	dict.RegisterFormat(".slow", func(p string) (dict.Dictionary, error) { return &fakeDict{words: []string{"w1"}, path: p}, nil })
-	dict.RegisterReader(".slow", func(p string) (dict.Reader, error) { return &slowReader{}, nil })
-}
-
-// Background indexing must respect INDEX_WORKERS. Unbounded, a single "all
-// dictionaries" search starts one ingest per dictionary - measured at 500 MB
-// and 424 % CPU for four real dictionaries, extrapolating to 18 GB for a
-// 100-dictionary library (docs.local/PERF.md M1).
-func TestIndexingConcurrencyIsBounded(t *testing.T) {
-	isolatedDBDir(t)
-	dir := t.TempDir()
-	const dicts = 12
-	for i := 0; i < dicts; i++ {
-		if err := os.WriteFile(filepath.Join(dir, fmt.Sprintf("d%02d.slow", i)), []byte("x"), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-	for _, workers := range []int{1, 3} {
-		liveIngests.Store(0)
-		maxIngests.Store(0)
-		SetIndexWorkers(workers)
-		isolatedDBDir(t) // a fresh library so every dictionary needs preparing
-		reg, err := NewRegistry([]string{dir}, false)
-		if err != nil {
-			t.Fatal(err)
-		}
-		s := New(reg)
-		s.AutoIndex = true
-		searchStream(t, s, "/api/search?q=w&mode=prefix&dict=all")
-		deadline := time.Now().Add(20 * time.Second)
-		for time.Now().Before(deadline) {
-			var prepared int
-			for _, e := range reg.all() {
-				if _, ok := validPrepared(e.Path); ok {
-					prepared++
-				}
-			}
-			if prepared == dicts {
-				break
-			}
-			time.Sleep(20 * time.Millisecond)
-		}
-		got := int(maxIngests.Load())
-		if got == 0 {
-			t.Fatalf("workers=%d: no indexing observed", workers)
-		}
-		// the foreground slot may add one on top of the background limit
-		if got > workers+1 {
-			t.Errorf("INDEX_WORKERS=%d: %d dictionaries were indexed at once", workers, got)
-		}
-		t.Logf("INDEX_WORKERS=%d → peak concurrent ingests %d", workers, got)
-	}
-	SetIndexWorkers(1)
 }
 
 // Preview eviction: unprepared dictionaries hold an in-memory headword index

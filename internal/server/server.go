@@ -215,13 +215,6 @@ type Server struct {
 	// article that references the file.
 	nulSeen sync.Map
 
-	// AutoIndex, when true (config AUTO_INDEX=on, the default), prepares a
-	// dictionary's headword index the first time it is searched - silently,
-	// in the background - so accent-insensitive search works on the next
-	// query without the user ever asking. The heavier indexes (contains,
-	// full-text) and media stay opt-in per dictionary.
-	AutoIndex bool
-
 	// BrowserExtensions optionally pins which extension origins may read the
 	// client API cross-origin (config BROWSER_EXTENSIONS). Empty = any
 	// chrome-extension:// or moz-extension:// origin, which is what Firefox
@@ -798,6 +791,9 @@ func (s *Server) resolveDirs(raw []string) ([]string, int, error) {
 // currentFeatures reads what a dictionary has prepared right now, so a request
 // that names one feature leaves the others alone.
 func (s *Server) currentFeatures(e *entry) features {
+	if entryHasSelfIndex(e) {
+		return features{}
+	}
 	p, ok := preparedInfo(e.Path)
 	if !ok || p.Meta == nil {
 		return features{}
@@ -806,10 +802,28 @@ func (s *Server) currentFeatures(e *entry) features {
 	return features{FullText: p.Plan.FullText, Contains: p.Plan.Contains, Media: p.MediaPaired()}
 }
 
+// ZIM's path-pointer list is mandatory for a valid file and parse validates
+// its bounds before Open returns. Keep this capability on prepared rows too,
+// where the active backend is the SQLite store rather than the ZIM reader.
+func formatHasSelfIndex(format string) bool { return format == "zim" }
+
+func dictionaryHasSelfIndex(d dict.Dictionary) bool {
+	si, ok := d.(selfIndexed)
+	return ok && si.SelfIndexed()
+}
+
+func entryHasSelfIndex(e *entry) bool {
+	e.dMu.RLock()
+	d := e.d
+	e.dMu.RUnlock()
+	return dictionaryHasSelfIndex(d) || formatHasSelfIndex(strings.TrimPrefix(strings.ToLower(filepath.Ext(e.Path)), "."))
+}
+
 // dictInfo is the /api/dicts row.
 type dictInfo struct {
 	DSL         *dslView  `json:"dsl,omitempty"`
 	Unavailable bool      `json:"unavailable,omitempty"`
+	SelfIndexed bool      `json:"selfIndexed,omitempty"`
 	ID          string    `json:"id"`
 	Name        string    `json:"name"`
 	Format      string    `json:"format"`
@@ -973,12 +987,7 @@ func (s *Server) handleDicts(w http.ResponseWriter, r *http.Request) {
 // everything else falls back to a full open for real caps.
 //
 // A derived row is kept only under a key that held across its derivation, and
-// held reports whether it did. Deriving can change what it reads - a full
-// open prepares a DSL, BGL or wudict markdown file on the spot - and a row
-// describing the prepared state, filed under the key from before it, would be
-// served again the day that state is removed and the old key comes back. The
-// list validator is built from the same keys, so an answer holding such a row
-// is not offered for keeping either (handleDicts).
+// held reports whether it did (handleDicts).
 func (s *Server) dictInfoFor(e *entry, global, key string) (info dictInfo, held bool) {
 	info, held = s.dictRows.get(e.ID, key)
 	if !held {
@@ -1004,7 +1013,7 @@ func (s *Server) diskDictInfo(e *entry) dictInfo {
 	// a library folder that exists but is not prepared-for-this-source (an
 	// unreadable or other-schema text.db, or a source edited since) is
 	// outdated too - the prepared branch above never sees it
-	if info.DBPath == "" && rebuildable(e.Path) {
+	if info.DBPath == "" && !info.SelfIndexed && rebuildable(e.Path) {
 		if _, ok := store.LookupDir(e.Path); ok {
 			info.Outdated = true
 		}
@@ -1014,31 +1023,35 @@ func (s *Server) diskDictInfo(e *entry) dictInfo {
 }
 
 func (s *Server) baseDictInfo(e *entry) dictInfo {
-	// a prepared dictionary answers the whole row from its own meta - no
-	// probe, no direct open, and it works for every format (the library
-	// folder is located from the source PATH, so the name is not needed to
-	// find it).
-	if p, ok := preparedInfo(e.Path); ok && p.Meta != nil {
+	// A prepared dictionary answers the whole row from its own meta without
+	// probing or opening the source. Self-indexed formats use the source.
+	// The library folder is located from the source path.
+	if p, ok := preparedInfo(e.Path); ok && p.Meta != nil && !entryHasSelfIndex(e) {
 		meta := p.Meta
 		ec, _ := strconv.Atoi(meta["entry_count"])
 		info := dictInfo{
 			ID: e.ID, Path: e.Path, Name: meta["name"], Format: meta["format"], Entries: ec,
+			SelfIndexed:   formatHasSelfIndex(meta["format"]),
 			Caps:          dict.Caps{Exact: true, Prefix: true, Contains: p.Plan.Contains, FTS: p.Plan.FullText},
 			DBPath:        p.TextDB,
 			ContainsStale: store.FoldStale(meta),
-			Outdated:      rebuildable(e.Path) && len(p.Stale(e.Path)) > 0,
+			Outdated:      rebuildable(e.Path) && !formatHasSelfIndex(meta["format"]) && len(p.Stale(e.Path)) > 0,
 		}
 		s.langFacts(&info, meta["name"], meta["index_lang"], meta["contents_lang"])
 		return info
 	}
 	// only probe formats with a real cheap prober - otherwise dict.Probe
-	// falls back to a full dict.Open outside the entry's memoization (and
-	// can trigger DSL auto-ingest), racing the background warm.
+	// falls back to a full dict.Open outside the entry's memoization. Formats
+	// without probers are not opened just to build the list row.
 	if dict.HasProber(e.Path) {
 		if m, err := dict.Probe(e.Path); err == nil {
+			selfIndexed := formatHasSelfIndex(m.Format)
 			info := dictInfo{ // probeable, not prepared → direct backend
 				ID: e.ID, Path: e.Path, Name: m.Name, Format: m.Format, Entries: m.EntryCount,
-				Caps: dict.Caps{Exact: true, Prefix: true},
+				Caps: dict.Caps{}, SelfIndexed: selfIndexed,
+			}
+			if selfIndexed {
+				info.Caps = dict.Caps{Exact: true, Prefix: true}
 			}
 			s.langFacts(&info, m.Name, m.IndexLang, m.ContentsLang)
 			return info
@@ -1056,7 +1069,8 @@ func (s *Server) baseDictInfo(e *entry) dictInfo {
 		defer reader.Close()
 		m := reader.Meta()
 		info.Name, info.Format, info.Entries = m.Name, m.Format, m.EntryCount
-		info.Caps = dict.Caps{Exact: true, Prefix: true}
+		info.SelfIndexed = formatHasSelfIndex(m.Format)
+		info.Caps = dict.Caps{}
 		s.langFacts(&info, m.Name, m.IndexLang, m.ContentsLang)
 		return info
 	}
@@ -1067,12 +1081,17 @@ func (s *Server) baseDictInfo(e *entry) dictInfo {
 	}
 	m := d.Meta()
 	info.Name, info.Format, info.Entries, info.Caps = m.Name, m.Format, m.EntryCount, d.Caps()
+	info.SelfIndexed = dictionaryHasSelfIndex(d)
 	s.langFacts(&info, m.Name, m.IndexLang, m.ContentsLang)
 	if cs, ok := d.(interface{ ContainsStale() bool }); ok {
 		info.ContainsStale = cs.ContainsStale()
 	}
-	if textDB, ok := validPrepared(e.Path); ok {
-		info.DBPath = textDB
+	if !info.SelfIndexed {
+		if textDB, ok := validPrepared(e.Path); ok {
+			info.DBPath = textDB
+		} else {
+			info.Caps = dict.Caps{}
+		}
 	}
 	return info
 }
@@ -1244,13 +1263,6 @@ type streamMsg struct {
 	Deferred bool  `json:"deferred,omitempty"`
 	Bytes    int64 `json:"bytes,omitempty"`
 
-	// Indexing: this deferred dictionary is already being prepared, because
-	// something asked for it by name. Only ever set beside Deferred, and the
-	// difference matters to the reader: "tap to search" is an offer, and
-	// repeating it at a dictionary that is midway through a ten-minute ingest
-	// reads as nothing having happened the first time.
-	Indexing bool `json:"indexing,omitempty"`
-
 	// The "morph" line: From is what the user typed, To the dictionary form
 	// actually searched, Lang the language that produced it. Every "hit" after
 	// it belongs to To - which is why it is a line of its own and not a flag on
@@ -1260,11 +1272,11 @@ type streamMsg struct {
 	Lang string `json:"lang,omitempty"`
 }
 
-// demandSearchBudget is how long a search of ONE named dictionary may take
+// singleSearchBudget is how long a search of ONE named dictionary may take
 // before it is cut off. Generous rather than unlimited: the request still holds
 // a goroutine and an open backend, so it needs an end, but the end is there to
 // catch a wedged backend, not to police a slow one.
-const demandSearchBudget = 5 * time.Minute
+const singleSearchBudget = 5 * time.Minute
 
 // queryFlag reads a boolean query parameter, and is where every one of them is
 // read, so a spelling means the same thing on every route. sent reports that
@@ -1419,37 +1431,23 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 	// it starts declining dictionaries instead of opening them (see fanout).
 	// Nil when uncapped, which is the desktop default.
 	//
-	// A query naming ONE dictionary has no fan-out to cap, and is never capped.
-	// The budget bounds the multiplication - N dictionaries materialised at
-	// once by a single `all` query - and a search of one is bounded by that one
-	// dictionary. It is also, always, a direct demand: the user picked it in
-	// the selector, asked for `more…`, or opened a deferred section. Declining
-	// it would leave the dictionary unreachable through EVERY path the app has,
-	// which is worse than the memory by a wide margin - and the steady state is
-	// still held by PREVIEW_MEMORY, the janitor and the relax valve, none of
-	// which this bypasses.
+	// A query naming ONE dictionary has no fan-out to cap and gets the longer
+	// search budget.
 	fan := s.reg.fanout()
-	demand := len(entries) == 1
-	if demand {
+	single := len(entries) == 1
+	if single {
 		fan = nil
 	}
 	for i, e := range entries {
 		e := e
 		begin[i] = streamSlot{Dict: e.ID, Name: e.ID}
 		openers[i] = func() (dict.Dictionary, error) {
-			d, err := e.openWithin(fan)
-			if err == nil && s.AutoIndex {
-				// A search of one dictionary is a demand for that dictionary,
-				// so its index jumps the background queue (demandIndex); a
-				// dictionary that merely happened to be in a wide search takes
-				// its turn (maybeAutoIndex). Both prepare the same thing.
-				if demand {
-					e.demandIndex()
-				} else {
-					e.maybeAutoIndex()
+			if !entryHasSelfIndex(e) {
+				if _, ok := validPrepared(e.Path); !ok {
+					return nil, errors.New("dictionary index is not ready")
 				}
 			}
-			return d, err
+			return e.openWithin(fan)
 		}
 	}
 	writeLine(streamMsg{T: "begin", Slots: begin})
@@ -1492,22 +1490,16 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case errors.As(h.Err, &heavy):
 			// Deferred, not failed. The client renders a section the user can
-			// open, and opening it re-queries this dictionary alone - which is
-			// uncapped above, and which auto-indexes it so the deferral does
-			// not recur.
+			// open, and opening it re-queries this dictionary alone with the
+			// longer search budget.
 			m.Deferred, m.Bytes = true, heavy.bytes
-			m.Indexing = entries[i].indexing()
 		case errors.Is(h.Err, context.DeadlineExceeded):
 			// Never Go's own words. "context deadline exceeded" is what an
 			// unindexed dictionary looked like from the outside while a preview
 			// search crawled through its source format, and it told the user
 			// nothing they could act on - which is the whole content of the
 			// message they need.
-			if entries[i].indexing() {
-				m.Error = "timed out — still preparing this dictionary"
-			} else {
-				m.Error = "timed out — index this dictionary to search it"
-			}
+			m.Error = "timed out — search this dictionary alone to allow more time"
 		case errors.Is(h.Err, context.Canceled):
 			m.Error = "search cancelled"
 		case h.Err != nil:
@@ -1522,12 +1514,11 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 	// The ceiling exists to stop ONE slow dictionary from holding a wide
 	// fan-out open, and 30 s is right for that. It is the wrong shape for a
 	// search of a single named dictionary: there is nothing to fan out, the
-	// user chose this one, and an unprepared dictionary searched through its
-	// own format on a phone can legitimately take longer than that to answer.
-	// Cutting it off there produced a timeout instead of a result.
+	// user chose this one. A longer budget avoids timing out a slow but prepared
+	// database while it answers.
 	budget := 30 * time.Second
-	if demand {
-		budget = demandSearchBudget
+	if single {
+		budget = singleSearchBudget
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), budget)
 	defer cancel()
@@ -2050,6 +2041,7 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 404, "%v", err)
 		return
 	}
+	store.IndexDiagnostic("single ingest request source=%q dictionary=%q method=%s self_indexed=%v query=%q", e.Path, e.probeName(), r.Method, entryHasSelfIndex(e), r.URL.RawQuery)
 	// The panel sends the state it wants, not a verb: contains/fts/media each
 	// on or off. A parameter left out keeps whatever that feature is now, so a
 	// caller toggling one thing cannot accidentally strip another - and a
@@ -2096,7 +2088,7 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 		// change: this is the door the panel's chip and the DSL settings use
 		// to bring a removed index back.
 		if e.indexBlocked() {
-			if err := e.restoreDSLIndex(store.Plan{FullText: want.FullText, Contains: want.Contains}, progress); err != nil {
+			if err := e.restoreIndex(store.Plan{FullText: want.FullText, Contains: want.Contains}, progress, frontLimit); err != nil {
 				j.update(func(js *jobStatus) { js.Err = err.Error() })
 				return
 			}
@@ -2105,9 +2097,13 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		if err := e.setFeatures(want, progress, q.Get("rebuild") == "1"); err != nil {
-			j.update(func(js *jobStatus) { js.Err = err.Error() })
-			return
+		if entryHasSelfIndex(e) {
+			store.IndexDiagnostic("skip ingest source=%q dictionary=%q reason=native-index", e.Path, e.probeName())
+		} else {
+			if err := e.setFeatures(want, progress, q.Get("rebuild") == "1"); err != nil {
+				j.update(func(js *jobStatus) { js.Err = err.Error() })
+				return
+			}
 		}
 		if status, _ := s.jobs.status(key); status.StopRequested {
 			j.update(func(js *jobStatus) { js.Canceled = true })
@@ -2122,7 +2118,8 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 		dbPath, _ := validPrepared(e.Path)
 		info := dictInfo{
 			ID: e.ID, Name: m.Name, Format: m.Format, Path: e.Path,
-			Entries: m.EntryCount, Caps: d.Caps(),
+			SelfIndexed: entryHasSelfIndex(e),
+			Entries:     m.EntryCount, Caps: d.Caps(),
 			DBPath: dbPath,
 		}
 		j.update(func(js *jobStatus) { js.Result = info })

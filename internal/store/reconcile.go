@@ -13,13 +13,12 @@ import (
 
 	"github.com/wuweidict/wudict/internal/dict"
 	"github.com/wuweidict/wudict/internal/fsx"
-	"github.com/wuweidict/wudict/internal/logx"
 )
 
 // Reconcile is the one way prepared data changes: whoever prepares, rebuilds
 // or packs a dictionary - the panel's switches, the background indexer, the
 // abbreviation sweep, the Rebuild job, `wudict ingest`, `wudict reindex`, and
-// the formats that prepare themselves on open - states the result it wants as
+// the new-dictionary queue - states the result it wants as
 // a Target and gets the same rules for what is kept, what is rebuilt and when.
 // What differs between those callers is policy, and the policy is the Target.
 
@@ -120,12 +119,11 @@ type Outcome struct {
 // Changed reports that anything on disk changed.
 func (o Outcome) Changed() bool { return o.Rebuilt || o.Packed > 0 || o.MediaRemoved }
 
-// textLocks serialises the text phase of Reconcile per dictionary. The
-// server's switches and lanes, and a self-preparing format's open (DSL, BGL,
-// wudict markdown prepare inside dict.Open), can reach one dictionary at the
-// same moment; two ingests racing into one text.db would leave whichever
-// finished last, possibly on the wrong plan. The second caller waits, then
-// finds the text current and builds nothing.
+// textLocks serialises the text phase of Reconcile per dictionary. Concurrent
+// explicit index operations can reach one dictionary at the same moment; two
+// ingests racing into one text.db would leave whichever finished last,
+// possibly on the wrong plan. The second caller waits, then finds the text
+// current and builds nothing.
 var textLocks sync.Map // source path or -o target -> *sync.Mutex
 
 func lockText(key string) func() {
@@ -140,9 +138,8 @@ func lockText(key string) func() {
 
 // Reconcile brings the prepared data of the dictionary at src to t. The text
 // phase is serialised per dictionary (textLocks). The media phase is not: it
-// may open the source, and opening a self-preparing format re-enters
-// Reconcile, so it must run outside that lock - and only the server's switches,
-// the Rebuild job and the CLI pack media, each already serialised by its
+// may open the source, so it must run outside that lock. The server's switches,
+// the Rebuild job and the CLI pack media are each already serialised by their
 // caller.
 func Reconcile(src string, t Target, h Hooks) (out Outcome, err error) {
 	key := src
@@ -231,7 +228,7 @@ func reconcileText(src string, t Target, h Hooks, out *Outcome) (p Prepared, dir
 
 	// The reasons are read only when they can matter: a usable, current
 	// database on the wanted plan is rebuilt only if Rebuild says so, and this
-	// runs on every open of a self-preparing format.
+	// runs for every indexing request.
 	need := t.Out != "" || !p.Current(src) || plan != p.Plan
 	var why []Reason
 	if !need && t.Rebuild != nil {
@@ -336,35 +333,4 @@ func pack(src, textDB, mediaDB string, h Hooks, out *Outcome) (resultErr error) 
 	}
 	out.Packed, out.Beside, out.MediaTime = len(names), beside, time.Since(start)
 	return nil
-}
-
-// OpenSelfPrepared opens the prepared database of a format with no index of
-// its own - DSL, BGL, wudict markdown - preparing it first when it is
-// missing, unusable or built from an older edition of the source, with the
-// plan the user chose for it or headwords only (D24). reader is called only
-// when an ingest is needed; the caller owns and closes what it returns.
-func OpenSelfPrepared(path, format string, reader func() (dict.Reader, error)) (*Store, error) {
-	name := ""
-	out, err := Reconcile(path, Target{}, Hooks{
-		Reader: func() (dict.Reader, error) {
-			r, err := reader()
-			if err == nil {
-				name = r.Meta().Name
-				logx.Status("%spreparing search index (%s, first open)…", logx.Dict(name), format)
-			}
-			return r, err
-		},
-		Progress: func(done, _ int) { logx.Progress("  %d entries", done) },
-	})
-	if err != nil {
-		if name != "" {
-			logx.ClearLine()
-			return nil, fmt.Errorf("preparing %q: %w", name, err)
-		}
-		return nil, err
-	}
-	if out.Rebuilt {
-		ReportPrepared(name, out.Report, out.TextTime)
-	}
-	return Open(out.TextDB)
 }

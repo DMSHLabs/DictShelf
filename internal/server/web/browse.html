@@ -393,7 +393,7 @@ function unesc(s){
 try{const t=localStorage.getItem("wudict_theme");
   if(t&&t!=="auto")document.documentElement.setAttribute("data-theme",t)}catch(e){}
 
-let dictId="",state=null,last={p:1},poll=0,stripFor="",demanded=false,chooserSearch=null;
+let dictId="",state=null,last={p:1},poll=0,stripFor="",chooserSearch=null;
 function updateStripArrows(){
   const strip=$("strip"),end=Math.max(0,strip.scrollWidth-strip.clientWidth);
   $("stripPrev").disabled=strip.scrollLeft<=1;
@@ -701,34 +701,15 @@ function turn(where){
   }
 }
 
-/* The one state with no list to draw. Asking to browse IS asking for the
-   index - there is no other way to serve it - so the page asks for it itself
-   (explicit: even with AUTO_INDEX off, this is the user's own trigger) and
-   waits. Once per page: a dictionary that stops indexing without becoming
-   browsable failed, and asking again would only meet the server's cooldown. */
-const building="<p>"+tx("browse.building")+"</p>";
-async function unprepared(j){
-  if(!j.indexing&&!demanded){
-    demanded=true;
-    card(building);
-    try{
-      const r=await fetch("/api/demand?explicit=1&dict="+encodeURIComponent(dictId),{method:"POST"});
-      j=r.ok?await r.json():{};
-    }catch(e){j={}}
-  }
-  if(j.indexing){
-    card(building);
-    poll=setTimeout(()=>show(last,"none"),2500);
-  }else{
-    card("<b>"+tx("browse.buildFailed")+"</b><p>"+tx("browse.buildFailedBody")+
-      '</p><p><a href="/browse">'+tx("browse.chooseAnother")+"</a></p>");
-  }
+/* Browsing needs the headword index. Create it from Dictionary Settings. */
+async function unprepared(){
+  card("<b>"+tx("browse.indexRequired")+"</b><p><a href=\"/\">"+
+    tx("browse.openApp")+"</a></p><p><a href=\"/browse\">"+
+    tx("browse.chooseAnother")+"</a></p>");
 }
 
 /* No ?dict= is not an error: it is the question "which one?", and a page that
-   can be reached from a bookmark bar has to be able to answer it. Every
-   dictionary that opens is offered: choosing one that has no index yet
-   builds it (unprepared). */
+   can be reached from a bookmark bar has to be able to answer it. */
 async function chooser(){
   const heading='<div class="chooser-head"><b>'+tx("browse.choose")+'</b><button type="button" id="closeBrowseChooser" aria-label="'+tx("pages.close")+'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><p class="chooser-hint">'+tx("browse.chooseHint")+'</p>';
   card(heading);

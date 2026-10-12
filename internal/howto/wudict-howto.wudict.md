@@ -116,7 +116,7 @@ Operators count only in capitals: `wage not minimum` is three words. A query nev
 ## wudict wildcards
 ## wudict wildcard syntax
 
-**A wildcard pattern is the whole headword**: `?` is one character, `*` is any number of characters. Choose <kbd>wildcard</kbd> in the bar. Wildcard searches every indexed dictionary; wudict indexes each dictionary on its first search.
+**A wildcard pattern is the whole headword**: `?` is one character, `*` is any number of characters. Choose <kbd>wildcard</kbd> in the bar. Wildcard searches every indexed dictionary; wudict queues a new dictionary for indexing when it is added.
 
 | You type | You get |
 | --- | --- |
@@ -253,7 +253,7 @@ Speex `.spx` audio auto-converted for browser playback. A folder named after a l
 ## wudict indexing
 ## wudict prepare
 
-**wudict indexes each dictionary in the background**. You can search a dictionary even if it has no headword index, but the index makes it faster and more efficient for RAM/CPU consumption as well as battery life. In the dictionary panel <kbd>☰</kbd> you can also optionally enable the <kbd>full-text</kbd> index — it can be additional GB for large dictionaries, is optional and can be enabled on-demand.
+**wudict indexes each new dictionary in the background**. Search becomes available when its headword index is ready. In the dictionary panel <kbd>☰</kbd> you can also optionally enable the <kbd>full-text</kbd> index — it can be additional GB for large dictionaries and can be enabled when you need it.
 
 - <kbd>media</kbd> packs a dictionary's pictures and sounds into its index, so it keeps working if you delete the original files, and also makes access faster to assets such as images and audio.
 - <kbd>Full-text for every dictionary…</kbd> in the ![](cog.svg) row will generate full-text indexes for all dictionaries — IMPORTANT: depending on the size of your dictionary collection this can take GB of space and take hours.

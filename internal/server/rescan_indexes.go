@@ -37,6 +37,26 @@ type rescanIndexProgress struct {
 	Percent int      `json:"percent"`
 }
 
+func baseIndexRequired(selfIndexed bool, options indexOptions) bool {
+	return options.Index && (!selfIndexed || options.Contains || options.FullText)
+}
+
+func rescanTargetNeedsWork(e *entry, fresh, selfIndexed bool, options indexOptions, req rescanIndexesRequest) bool {
+	if selfIndexed {
+		return false // ZIM's own index is authoritative; never build a prepared index for it.
+	}
+	if fresh {
+		return true
+	}
+	dir, ok := store.LookupDir(e.Path)
+	if !ok {
+		return false
+	}
+	have := store.KeptPlan(store.TextDBPath(dir))
+	return req.Existing.Index == "recreate" || have.Contains && req.Existing.Contains != "keep" ||
+		have.FullText && req.Existing.FullText != "keep"
+}
+
 func (s *Server) handleStopRescanIndexes(w http.ResponseWriter, req *http.Request) {
 	if !s.removalOffered(req) {
 		httpErr(w, 403, "deleting from another machine is off")
@@ -68,6 +88,7 @@ func validRescanAction(action string, base bool) bool {
 
 func (s *Server) startRescanIndexes(body rescanIndexesRequest) {
 	key := "rescan-indexes"
+	store.IndexDiagnostic("rescan indexes requested new=%+v existing=%+v", body.New, body.Existing)
 	s.jobs.start(key, 0, jobStatus{}, func(j *job) {
 		failures := s.reg.updateDictionaryIndexesCancelable(body, func(progress rescanIndexProgress) {
 			j.update(func(st *jobStatus) {
@@ -80,6 +101,8 @@ func (s *Server) startRescanIndexes(body rescanIndexesRequest) {
 			st, _ := s.jobs.status(key)
 			return st.StopRequested
 		})
+		status, _ := s.jobs.status(key)
+		store.IndexDiagnostic("rescan indexes finished failed=%d canceled=%v", len(failures), status.StopRequested)
 		j.update(func(st *jobStatus) { st.Failed, st.Canceled = failures, st.StopRequested })
 	})
 }
@@ -158,8 +181,8 @@ func (r *Registry) updateDictionaryIndexesCancelable(req rescanIndexesRequest, p
 		}
 	}
 	report(rescanIndexProgress{Stage: "scanning"})
-	r.dslAutoMu.Lock()
-	defer r.dslAutoMu.Unlock()
+	r.indexQueueMu.Lock()
+	defer r.indexQueueMu.Unlock()
 	defer HoldActiveProcs()()
 	failures := []string{}
 	previous := map[string]bool{}
@@ -174,11 +197,13 @@ func (r *Registry) updateDictionaryIndexesCancelable(req rescanIndexesRequest, p
 		defaults = *req.New
 	}
 	type target struct {
-		e       *entry
-		fresh   bool
-		options indexOptions
+		e           *entry
+		fresh       bool
+		selfIndexed bool
+		options     indexOptions
 	}
 	targets := []target{}
+	workTargets := []target{}
 	p := r.prefs
 	rec, _ := p.data()
 	for _, e := range r.all() {
@@ -189,7 +214,16 @@ func (r *Registry) updateDictionaryIndexesCancelable(req rescanIndexesRequest, p
 		_, pending := rec.DSLPending[e.indexRemovalKey()]
 		fresh := pending || (!prepared && (!previous[dict.CanonPath(e.Path)] || !e.indexBlocked()))
 		options := defaults
-		targets = append(targets, target{e, fresh, options})
+		t := target{e: e, fresh: fresh, selfIndexed: entryHasSelfIndex(e), options: options}
+		store.IndexDiagnostic("rescan index candidate source=%q dictionary=%q fresh=%v self_indexed=%v index=%v contains=%v fulltext=%v", e.Path, e.probeName(), fresh, t.selfIndexed, options.Index, options.Contains, options.FullText)
+		if t.selfIndexed {
+			store.IndexDiagnostic("rescan index skipped source=%q dictionary=%q reason=native-index", e.Path, e.probeName())
+		}
+		targets = append(targets, t)
+		if rescanTargetNeedsWork(e, fresh, t.selfIndexed, options, req) {
+			store.IndexDiagnostic("rescan index selected source=%q dictionary=%q", e.Path, e.probeName())
+			workTargets = append(workTargets, t)
+		}
 	}
 	// Save desired pending plans before touching files; a retry/restart uses the
 	// requested features, never the older queued plan.
@@ -213,9 +247,11 @@ func (r *Registry) updateDictionaryIndexesCancelable(req rescanIndexesRequest, p
 		}
 		f.DSLKnown[source] = true
 		delete(f.DSLPending, key)
-		if t.fresh {
+		if t.selfIndexed {
+			delete(f.DSLRemoved, key) // its native headword index cannot be removed
+		} else if t.fresh {
 			f.DSLRemoved[key] = true
-			if t.options.Index {
+			if baseIndexRequired(t.selfIndexed, t.options) {
 				f.DSLPending[key] = t.options
 			}
 		}
@@ -225,11 +261,11 @@ func (r *Registry) updateDictionaryIndexesCancelable(req rescanIndexesRequest, p
 	if err != nil {
 		return []string{err.Error()}
 	}
-	for i, t := range targets {
+	for i, t := range workTargets {
 		if stop != nil && stop() {
 			p.editMu.Lock()
 			stopErr := p.mutate(func(f *prefsFile) {
-				for _, skipped := range targets[i:] {
+				for _, skipped := range workTargets[i:] {
 					delete(f.DSLPending, skipped.e.indexRemovalKey())
 				}
 			})
@@ -240,14 +276,50 @@ func (r *Registry) updateDictionaryIndexesCancelable(req rescanIndexesRequest, p
 			break
 		}
 		e := t.e
-		state := rescanIndexProgress{Stage: "dictionary", At: i + 1, Total: len(targets), Name: e.probeName()}
+		store.IndexDiagnostic("rescan index start source=%q dictionary=%q fresh=%v self_indexed=%v", e.Path, e.probeName(), t.fresh, t.selfIndexed)
+		if t.selfIndexed {
+			if t.fresh {
+				if !t.options.Contains && !t.options.FullText {
+					continue // the ZIM path index already answers headword searches
+				}
+			} else {
+				dir, ok := store.LookupDir(e.Path)
+				if !ok {
+					continue
+				}
+				have := store.KeptPlan(store.TextDBPath(dir))
+				containsWork := have.Contains && req.Existing.Contains != "keep"
+				fullTextWork := have.FullText && req.Existing.FullText != "keep"
+				if !containsWork && !fullTextWork {
+					continue
+				}
+			}
+		}
+		state := rescanIndexProgress{Stage: "dictionary", At: i + 1, Total: len(workTargets), Name: e.probeName()}
 		if t.fresh {
 			state.Action = "create"
-			state.Indexes = append(state.Indexes, "index")
+			if !t.selfIndexed {
+				state.Indexes = append(state.Indexes, "index")
+			}
 			if t.options.Contains {
 				state.Indexes = append(state.Indexes, "contains")
 			}
 			if t.options.FullText {
+				state.Indexes = append(state.Indexes, "fullText")
+			}
+		} else if t.selfIndexed {
+			dir, _ := store.LookupDir(e.Path)
+			have := store.KeptPlan(store.TextDBPath(dir))
+			if (req.Existing.Contains == "delete" || req.Existing.FullText == "delete") &&
+				!(req.Existing.Contains == "update" || req.Existing.FullText == "update") {
+				state.Action = "remove"
+			} else {
+				state.Action = "update"
+			}
+			if have.Contains && req.Existing.Contains != "keep" {
+				state.Indexes = append(state.Indexes, "contains")
+			}
+			if have.FullText && req.Existing.FullText != "keep" {
 				state.Indexes = append(state.Indexes, "fullText")
 			}
 		} else if req.Existing.Index == "recreate" {
@@ -305,7 +377,7 @@ func (r *Registry) updateDictionaryIndexesCancelable(req rescanIndexesRequest, p
 		want := clearDatabaseRequest{progress: articleProgress}
 		if t.fresh {
 			plan := store.Plan{Contains: t.options.Contains, FullText: t.options.FullText}
-			want.Index, want.plan = true, &plan
+			want.Index, want.plan = baseIndexRequired(t.selfIndexed, t.options), &plan
 		} else {
 			dir, ok := store.LookupDir(e.Path)
 			if !ok && req.Existing.Index != "recreate" {
@@ -315,7 +387,8 @@ func (r *Registry) updateDictionaryIndexesCancelable(req rescanIndexesRequest, p
 			if ok {
 				have = store.KeptPlan(store.TextDBPath(dir))
 			}
-			want.Index = req.Existing.Index == "recreate" || (req.Existing.Contains == "update" && have.Contains) || (req.Existing.FullText == "update" && have.FullText)
+			want.Index = (!t.selfIndexed && req.Existing.Index == "recreate") ||
+				(req.Existing.Contains == "update" && have.Contains) || (req.Existing.FullText == "update" && have.FullText)
 			want.Contains = req.Existing.Contains == "delete"
 			want.FullText = req.Existing.FullText == "delete"
 		}
@@ -330,7 +403,7 @@ func (r *Registry) updateDictionaryIndexesCancelable(req rescanIndexesRequest, p
 			failures = append(failures, err.Error())
 		}
 	}
-	report(rescanIndexProgress{Stage: "cleanup", At: len(targets), Total: len(targets)})
+	report(rescanIndexProgress{Stage: "cleanup", At: len(workTargets), Total: len(workTargets)})
 	if err := r.cleanupLibrary(); err != nil {
 		failures = append(failures, err.Error())
 	}

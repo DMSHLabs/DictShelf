@@ -229,7 +229,7 @@ func runOneLimit(t *testing.T, corpus string) {
 		t.Fatalf("scanning %s: %v", corpus, err)
 	}
 	reg.SetPreviewBudget(budget)
-	s := New(reg) // AutoIndex stays false: no ingest, so this measures lookups only
+	s := New(reg) // Search does not start an ingest, so this measures lookups only.
 	dicts := getDicts(t, s, "/api/dicts")
 
 	m0 := readPerf()

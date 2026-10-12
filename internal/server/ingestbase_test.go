@@ -15,7 +15,7 @@ import (
 )
 
 func TestRemovedNonDSLIndexRequiresExplicitIngest(t *testing.T) {
-	s, e := demandEntry(t)
+	s, e := unpreparedEntry(t)
 	if e.dslSource != "" {
 		t.Fatal("need a non-DSL fixture")
 	}
@@ -42,7 +42,7 @@ func TestRemovedNonDSLIndexRequiresExplicitIngest(t *testing.T) {
 // taken is not visible from outside, so what is asserted here is the outcome:
 // a prepared dictionary, at the cheapest level, with nothing else built.
 func TestIngestBaseIndexesAnUnpreparedDictionary(t *testing.T) {
-	s, e := demandEntry(t)
+	s, e := unpreparedEntry(t)
 	if prepared(e) {
 		t.Fatal("setup: the fixture was supposed to be unprepared")
 	}

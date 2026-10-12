@@ -90,9 +90,14 @@ func (e *entry) setIndexRemoved(removed bool) error {
 	})
 }
 
-// Only an explicit ingest request may restore a deliberately removed index.
-func (e *entry) restoreDSLIndex(plan store.Plan, progress store.Progress) error {
-	defer acquire(frontLimit)()
+// restoreIndex rebuilds an index deliberately removed by the user, or finishes
+// the first index for a newly added dictionary.
+func (e *entry) restoreIndex(plan store.Plan, progress store.Progress, lane chan struct{}) error {
+	if entryHasSelfIndex(e) {
+		store.IndexDiagnostic("skip restored index source=%q reason=native-index", e.Path)
+		return e.setIndexRemoved(false)
+	}
+	defer acquire(lane)()
 	defer HoldActiveProcs()()
 	e.ingestMu.Lock()
 	defer e.ingestMu.Unlock()

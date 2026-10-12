@@ -53,7 +53,7 @@ func previewRegistry(t *testing.T) (*Server, *Registry) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s := New(reg) // AutoIndex false: the dictionary stays in preview mode
+	s := New(reg) // Search does not start an index job.
 	searchStream(t, s, "/api/search?q=beta&mode=prefix&dict=all")
 	if len(reg.reclaimables()) != 1 {
 		t.Fatalf("expected one open preview backend, got %d", len(reg.reclaimables()))
@@ -156,45 +156,6 @@ func TestPowerShedsOnBackground(t *testing.T) {
 // a search happened to land as the screen went off is exactly how an app gets
 // flagged as a battery hog - and the refusal must be a deferral, so the next
 // search once the user is back still builds it.
-func TestAutoIndexDeferredWhenNotActive(t *testing.T) {
-	restorePower(t)
-	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "d.fake"), []byte("x"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	isolatedDBDir(t)
-	reg, err := NewRegistry([]string{dir}, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	s := New(reg)
-	s.AutoIndex = true
-
-	reg.SetPower(PowerBackground)
-	e := reg.all()[0]
-	e.maybeAutoIndex()
-	if e.autoTried.Load() {
-		t.Fatal("a deferred auto-index must not consume the one attempt")
-	}
-
-	reg.SetPower(PowerActive)
-	e.maybeAutoIndex()
-	if !e.autoTried.Load() {
-		t.Fatal("auto-index did not start once active")
-	}
-	// it runs in the background; wait for the folded query only the index can
-	// answer, which is what proves the deferral was not a cancellation
-	var hits []streamMsg
-	for i := 0; i < 200; i++ {
-		hits = searchStream(t, s, "/api/search?q=corazon&mode=prefix&dict=all")
-		if len(hits) == 1 && !hits[0].Skipped && len(hits[0].Results) == 1 {
-			return
-		}
-		time.Sleep(25 * time.Millisecond)
-	}
-	t.Fatalf("index never became available after returning to active: %+v", hits)
-}
-
 // The janitor exists to enforce a budget. With nothing open there is no budget
 // to enforce, and a periodic wakeup to discover that - every twenty seconds,
 // forever, in a process that outlives its window - is a battery cost for

@@ -114,9 +114,8 @@ func (d *Dict) PreviewBytes() int64 {
 // disk EXPANSION, because the source packs whole clusters with zstd (~14x)
 // while a prepared text.db compresses one article at a time with DEFLATE
 // (~3.5x, D24) - a 123 MB wiktionary becomes a ~431 MB text.db, and an 8 GB
-// wikipedia something nobody asked for. Preparation stays available on
-// request (the per-dictionary switches, `wudict ingest`); only the automatic
-// path declines.
+// wikipedia something nobody asked for. Server-managed index work skips this
+// format; the native path list already answers headword searches.
 func (d *Dict) SelfIndexed() bool { return true }
 
 // metadata reads one M/ namespace value. Metadata blobs are small and each
