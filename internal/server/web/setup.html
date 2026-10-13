@@ -10,6 +10,21 @@
 <meta charset="utf-8">
 {{I18N}}
 <script>
+// WebView2 installs the native bridge before this page is parsed. Install the
+// page callback only after <html> exists, so its folder button can be shown.
+if (typeof window.wudictChooseFolder === 'function') {
+  let folderPicked = null;
+  window.__wdFolderPicked = path => {
+    const callback = folderPicked;
+    folderPicked = null;
+    if (callback) callback(path);
+  };
+  window.wudictPickFolder = callback => {
+    folderPicked = callback;
+    window.wudictChooseFolder();
+  };
+  document.documentElement.setAttribute('data-folder-picker', '');
+}
 // An optional host background. Session storage preserves it across page reloads;
 // an explicit empty URL value withdraws it on the next launch.
 window.wudictShellBackground = function (color, image, imageName, paper) {
@@ -73,6 +88,7 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
 <title>{{T:pages.folders}}</title>
 <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
 <link rel="stylesheet" href="/assets/setup.css?v={{CSS}}">
+<link rel="stylesheet" href="/assets/workspace.css?v={{WORKSPACECSS}}">
 {{UI_SCALE_DEFAULTS}}
 <!-- The app halves of any preset that asked to be on this page too (manifest
      "pages" — Quiet labels is the one): attached by the server, after
@@ -244,6 +260,7 @@ body{font-size:calc(var(--ui-font-base) * 1rem)}
   width:calc(var(--ui-edit_control-height) * 1.5rem);
   height:calc(var(--ui-edit_control-height) * 1.5rem);
   padding:0;font-size:calc(var(--ui-edit_control-font) * 1rem)}
+#rows .frow .pick{font-size:calc(var(--ui-edit_control-font) * 1.3rem)}
 html:not([data-folder-picker]) #rows .frow .pick{display:none}
 #rows .frow .st,#msg,#indexDefaultsError{font-size:calc(var(--ui-hint-font-size) * 1rem)}
 #addRow{font-size:calc(var(--ui-font-addition) * 1rem)}
@@ -261,14 +278,32 @@ html:not([data-folder-picker]) #rows .frow .pick{display:none}
 #impMsg,.formats,#howtoBackRow{font-size:calc(var(--ui-font-addition) * 1rem)}
 #save{box-sizing:border-box;min-height:calc(var(--ui-edit_control-height) * 1.5rem);
   font-size:calc(var(--ui-edit_control-font) * 1rem)}
+.migration-shade{position:fixed;inset:0;z-index:1200;display:grid;place-items:center;
+  padding:1rem;background:color-mix(in srgb,var(--bg) 76%,transparent);backdrop-filter:blur(3px)}
+.migration-shade[hidden]{display:none}
+.migration-dialog{width:min(34rem,100%);max-height:calc(100dvh - 2rem);overflow:auto;
+  padding:1.25rem;border:1px solid var(--line);border-radius:1rem;background:var(--paper-bg,var(--bg));
+  color:var(--fg);box-shadow:0 1rem 3rem #0004}
+.migration-dialog h2{margin:.1rem 0 .65rem}
+.migration-dialog p{line-height:1.5}
+.migration-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:.55rem;margin-top:1.2rem}
+.migration-error{color:var(--error,#a22);white-space:pre-wrap}
 </style>
 </head>
-<body>
+<body class="workspace-page">
 <div id="workNotice" class="work-notice" role="status" aria-live="polite" hidden>
   <div id="workNoticeText" class="work-notice-text"></div>
   <button type="button" class="btn ghost" id="workNoticeStop" hidden></button>
 </div>
-<div class="card scroll-card">
+<div id="migrationShade" class="migration-shade" hidden>
+  <section class="migration-dialog" role="dialog" aria-modal="true" aria-labelledby="migrationTitle">
+    <h2 id="migrationTitle">{{T:pages.migrationTitle}}</h2>
+    <p id="migrationIntro"></p>
+    <p id="migrationError" class="migration-error" role="alert" hidden></p>
+    <div class="migration-actions" id="migrationActions"></div>
+  </section>
+</div>
+<div class="card scroll-card workspace-window">
 <!-- The page's closer (@see setup.css). It goes back rather than to "/": the
      page behind is restored as it was, and the entry this page took is spent,
      so the phone's back gesture does not reopen what was just closed.
@@ -278,7 +313,7 @@ html:not([data-folder-picker]) #rows .frow .pick{display:none}
 <h1>{{T:pages.folders}}</h1>
 <button type="button" class="x" id="closePage" aria-label="{{T:pages.close}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
 </div>
-<div class="card-scroll">
+<div class="card-scroll workspace-scroll">
 <p>{{INTRO}}</p>
 
 <section id="indexDefaults">
@@ -503,7 +538,9 @@ async function save(){
   const q=paths().map(p=>"path="+encodeURIComponent(p)).join("&");
   if(!q)return;
   if(validationController){validationRun++;validationController.abort();validationController=null}
-  const url="/api/setup?"+q+"&save=1&async=1";
+  let diagnostics="";
+  try{if(localStorage.getItem("wudict_folder_diagnostics")==="1")diagnostics="&diagnostics=1"}catch(_){}
+  const url="/api/setup?"+q+"&save=1&async=1"+diagnostics;
   $("save").disabled=true;
   setSetupNotice(tx("pages.savingFolders"));
   let j;
@@ -832,8 +869,14 @@ $("save").addEventListener("click",save);
    flag or an environment variable set DICT_DIR, saving to wudict.toml cannot
    take effect — say so instead of silently doing nothing next launch. */
 async function start(){
-  let cfg=null;
-  try{ cfg=await (await fetch("/api/config")).json() }catch(e){}
+  let cfg=null,migration=null;
+  try{
+    const [configResponse,migrationResponse]=await Promise.all([
+      fetch("/api/config"),fetch("/api/setup?migration=status")
+    ]);
+    cfg=await configResponse.json();migration=await migrationResponse.json();
+  }catch(e){try{cfg=await (await fetch("/api/config")).json()}catch(_){}}
+  if(migration&&migration.available)await showMigrationDialog(migration.forked);
   for(const [feature,suffix] of [["contains","Contains"],["fullText","FullText"]]){
     $("newIndex"+suffix).checked=!!cfg?.indexDefaults?.[feature];
   }
@@ -867,6 +910,44 @@ async function start(){
   wireIntake(st&&st.dir||dirs[0]||"");
   if(st&&st.state){impRender(st);
     if(st.state==="installing"||st.state==="downloading")impPoll()}
+}
+
+function showMigrationDialog(forked){
+  const intro=$("migrationIntro"),actions=$("migrationActions"),shade=$("migrationShade");
+  intro.textContent=tx(forked?"pages.migrationForked":"pages.migrationUpstream");
+  const choices=forked?
+    [["copy","pages.migrationCopy"],["move","pages.migrationMove"],["new","pages.migrationNew"]]:
+    [["import","pages.migrationImport"],["new","pages.migrationNew"]];
+  return new Promise(resolve=>{
+    for(const [choice,key] of choices){
+      const button=document.createElement("button");
+      button.type="button";button.className=choice==="new"?"btn ghost":"btn";
+      button.textContent=tx(key);
+      button.addEventListener("click",()=>{
+        if(choice==="new"){shade.hidden=true;resolve();return}
+        applyMigration(choice,button);
+      });
+      actions.appendChild(button);
+    }
+    shade.hidden=false;
+    actions.querySelector("button")?.focus();
+  });
+}
+
+async function applyMigration(choice,button){
+  const buttons=[...$("migrationActions").querySelectorAll("button")],error=$("migrationError");
+  buttons.forEach(b=>b.disabled=true);error.hidden=true;
+  $("migrationIntro").textContent=tx("pages.migrationProgress");
+  setSetupNotice(tx("pages.migrationProgress"));
+  try{
+    const response=await fetch("/api/setup?migration="+encodeURIComponent(choice),{method:"POST"});
+    const result=await response.json();
+    if(!response.ok||result.error)throw new Error(result.error||response.statusText);
+    location.assign("/setup");
+  }catch(e){
+    error.textContent=window.wudictI18n.errorText(e.message);error.hidden=false;
+    buttons.forEach(b=>b.disabled=false);button.focus();setSetupNotice("");
+  }
 }
 // Prepared data follows the selected source folders; it is no longer offered
 // as a second, independently retained collection.

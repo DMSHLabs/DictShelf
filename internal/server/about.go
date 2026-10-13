@@ -71,8 +71,8 @@ func (s *Server) aboutSourceFor(e *entry) aboutSource {
 		}
 	}
 	// PEEK, never open. e.open() reads as harmless and is not: only .mdx and
-	// .ifo register probers, so every DSL, slob and bgl reaches this line - and
-	// dsl.Open INGESTS on first open. A GET that wants one paragraph of blurb
+	// .ifo register probers, so formats without a cheap prober reach this line.
+	// A GET that wants one paragraph of blurb
 	// would run a multi-minute, multi-hundred-megabyte library build inside the
 	// request, on a phone, with nothing on screen to say why. An About is a
 	// disclosure triangle; it has no business starting work.

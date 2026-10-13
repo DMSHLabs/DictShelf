@@ -102,9 +102,7 @@ func AboutFor(format, srcPath string) (About, bool) {
 // name for it.
 //
 // That caller is the server's About endpoint. Naming the format there would
-// mean opening the dictionary to ask it, and opening is not free: a DSL that
-// has never been opened INGESTS on its first open, so a GET that only wants a
-// blurb would pay for a whole library. A provider is already
+// mean opening the dictionary to ask it, and opening a large source can be\r?\n// expensive. A provider is already
 // required to decide from the path alone and to report false rather than fail
 // (AboutProvider), and the one that exists rejects anything that is not its own
 // suffix - so asking all of them costs a handful of stats and no open at all.

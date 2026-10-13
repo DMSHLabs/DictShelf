@@ -87,11 +87,13 @@ func (s *Server) routes() []route {
 		{"GET", "/api/ingest", s.handleIngest, "/api/ingest", false},
 		{"DELETE", "/api/ingest", s.handleIngest, "/api/ingest", false},
 		{"GET", "/api/system-log", s.handleIndexLog, "/api/system-log", false},
+		{"POST", "/api/browse-diagnostic", s.handleBrowseDiagnostic, "/api/browse-diagnostic", false},
 		{"POST", "/api/exit", s.handleDesktopExit, "/api/exit", false},
 		{"GET", "/api/index-work", s.handleIndexWork, "/api/index-work", false},
 		{"POST", "/api/index-work", s.handleIndexWork, "/api/index-work", false},
 		{"DELETE", "/api/index-work", s.handleIndexWork, "/api/index-work", false},
 		{"GET", "/api/setup", s.handleSetup, "/api/setup", false},
+		{"POST", "/api/setup", s.handleSetup, "/api/setup", false},
 		{"GET", "/api/library", s.handleLibrary, "/api/library", false},
 		{"DELETE", "/api/library", s.handleRemoveLibrary, "/api/library", false},
 		// prepared dictionaries whose source is gone (orphans.go, D156): list
@@ -140,9 +142,6 @@ func (s *Server) routes() []route {
 		{"PUT", "/api/looks", s.handleLookUpdate, "/api/looks", false},
 		{"DELETE", "/api/looks", s.handleLookDelete, "/api/looks", false},
 		{"POST", "/api/looks/apply", s.handleLookApply, "/api/looks/apply", false},
-		// "I picked this one": prepare it now, before a query exists
-		// (demand.go). Never CORS - it starts work and writes to the library.
-		{"POST", "/api/demand", s.handleDemand, "/api/demand", false},
 		// what a dictionary says about itself (about.go). Never CORS: an
 		// annotation names a sidecar file on the user's disk, and the list
 		// endpoint an extension does get deliberately carries no description.
@@ -231,12 +230,15 @@ func (s *Server) routes() []route {
 		{"GET", "/assets/group-editor.js", serveAsset("application/javascript; charset=utf-8", groupEditorJS), "", false},
 		{"GET", "/assets/article-find.js", serveAsset("application/javascript; charset=utf-8", articleFindJS), "", false},
 		{"GET", "/assets/list-search.js", serveAsset("application/javascript; charset=utf-8", listSearchJS), "", false},
+		{"GET", "/assets/headword-control.js", serveAsset("application/javascript; charset=utf-8", headwordControlJS), "", false},
+		{"GET", "/assets/headword-control.css", serveAsset("text/css; charset=utf-8", headwordControlCSS), "", false},
 		{"GET", "/assets/work-progress.js", serveAsset("application/javascript; charset=utf-8", workProgressJS), "", false},
 		{"GET", "/assets/examples.js", serveAsset("application/javascript; charset=utf-8", examplesJS), "", false},
 		{"GET", "/assets/looks.js", serveAsset("application/javascript; charset=utf-8", looksJS), "", false},
 		{"GET", "/assets/pick.js", serveAsset("application/javascript; charset=utf-8", pickJS), "", false},
 		{"GET", "/assets/speak.js", serveAsset("application/javascript; charset=utf-8", speakJS), "", false},
 		{"GET", "/assets/setup.css", serveAsset("text/css; charset=utf-8", setupCSS), "", false},
+		{"GET", "/assets/workspace.css", serveAsset("text/css; charset=utf-8", workspaceCSS), "", false},
 		{"GET", "/assets/favicon.svg", serveFavicon, "", false},
 		{"GET", "/favicon.ico", serveFavicon, "", false},
 	}

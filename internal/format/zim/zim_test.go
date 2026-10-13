@@ -5,6 +5,7 @@
 package zim
 
 import (
+	"encoding/binary"
 	"errors"
 	"io"
 	"os"
@@ -55,6 +56,24 @@ func TestMeta(t *testing.T) {
 	}
 	if w := d.PreviewBytes(); w <= clusterCacheBytes {
 		t.Errorf("PreviewBytes = %d, want > cache size", w)
+	}
+}
+
+func TestOpenRejectsMissingPathPointerIndex(t *testing.T) {
+	path := writeZIM(t, sample())
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// pathPtrPos is mandatory in ZIM; without it the reader cannot perform
+	// exact or prefix lookup and must not advertise a direct searchable file.
+	binary.LittleEndian.PutUint64(data[32:40], 0)
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if d, err := Open(path); err == nil {
+		d.Close()
+		t.Fatal("opened a ZIM with no path pointer index")
 	}
 }
 

@@ -30,6 +30,7 @@ import (
 
 	"github.com/wuweidict/wudict/internal/config"
 	"github.com/wuweidict/wudict/internal/dict"
+	zimformat "github.com/wuweidict/wudict/internal/format/zim"
 	"github.com/wuweidict/wudict/internal/fsx"
 	"github.com/wuweidict/wudict/internal/howto"
 	"github.com/wuweidict/wudict/internal/htmlref"
@@ -201,15 +202,6 @@ SETTINGS
                           dictionary folder.
                           env: DB_DIR         toml: DB_DIR
                           default: ~/.wudict/db
-
-  (env/toml only)
-  AUTO_INDEX = "on"       Index each dictionary's headwords in the background on
-                          its first search. "off": dictionaries stay not indexed
-                          and are searched through their own format. Contains,
-                          full-text and media pack are per-dictionary choices
-                          either way.
-                          env: AUTO_INDEX     toml: AUTO_INDEX
-                          default: on
 
   (env/toml only)
   IMPORT_KEEP = "ask"     What happens to an archive after its dictionaries are
@@ -494,6 +486,10 @@ func Main() {
 		}
 		if release != nil {
 			defer release()
+		}
+		if err := prepareWindowsDataRoot(); err != nil {
+			fail(err)
+			return
 		}
 	}
 
@@ -1024,9 +1020,8 @@ func ingestOne(srcPath, out string, full bool, pf planFlags) error {
 	if full {
 		t.Media = store.MediaOn
 	}
-	hooks, done := cliHooks(srcPath, &name)
+	hooks := cliHooks(srcPath, &name)
 	res, err := store.Reconcile(srcPath, t, hooks)
-	done()
 	logx.ClearLine()
 	dir := filepath.Dir(res.TextDB)
 	switch {
@@ -1051,16 +1046,17 @@ func ingestOne(srcPath, out string, full bool, pf planFlags) error {
 // cliHooks reports progress on the terminal and, when the source is read,
 // takes the dictionary's own title for the lines that follow. done closes the
 // reader, if one was opened.
-func cliHooks(srcPath string, name *string) (h store.Hooks, done func()) {
+func cliHooks(srcPath string, name *string) store.Hooks {
 	var r dict.Reader
-	done = func() {
-		if r != nil {
-			r.Close()
-		}
-	}
 	return store.Hooks{
 		Reader: func() (dict.Reader, error) {
-			rd, err := dict.OpenReader(srcPath)
+			var rd dict.Reader
+			var err error
+			if strings.EqualFold(filepath.Ext(srcPath), ".zim") {
+				rd, err = zimformat.NewHeadwordReader(srcPath)
+			} else {
+				rd, err = dict.OpenReader(srcPath)
+			}
 			if err != nil {
 				return nil, err
 			}
@@ -1072,7 +1068,7 @@ func cliHooks(srcPath string, name *string) (h store.Hooks, done func()) {
 		},
 		Progress:      entryProgress,
 		MediaProgress: func(n, total int) { logx.Progress("  %d/%d media files", n, total) },
-	}, done
+	}
 }
 
 // printMedia reports what a preparation did with media, when it did anything.
@@ -1378,6 +1374,12 @@ Hint: pick another port with --port, e.g.:  wudict --port %s
 		logx.V("search memory budget: %d MB per query", cfg.SearchMemory>>20)
 	}
 	srv := server.New(reg)
+	if runtime.GOOS == "windows" {
+		srv.FirstRunMigrationStatus = legacyMigrationStatus
+		srv.ApplyFirstRunMigration = func(action string) error {
+			return applyLegacyMigration(action, reg, srv.RefreshMigratedUserFiles)
+		}
+	}
 	srv.UseUserGroups()
 	srv.ConfigPath = cfgFile
 	srv.User = user
@@ -1410,7 +1412,6 @@ Hint: pick another port with --port, e.g.:  wudict --port %s
 		sxPath, sxSource = resolveSpeexdec(cfg.Speexdec)
 	}
 	srv.Speexdec = sxPath
-	srv.AutoIndex = cfg.AutoIndexEnabled()
 	srv.ImportKeep = cfg.ImportKeep
 	srv.ImportURLHosts = cfg.ImportURLHosts
 	srv.ImportInsecure = cfg.ImportInsecure
@@ -1837,7 +1838,6 @@ func printStartup(cfg config.Config, in startupInfo) {
 	if in.speex != "" {
 		fmt.Fprintf(out, "  .spx audio    %s\n", in.speex)
 	}
-	fmt.Fprintf(out, "  indexing      %s\n", indexingSummary(cfg.AutoIndex))
 	fmt.Fprintf(out, "  index workers %s%s\n",
 		logx.Plural(cfg.IndexWorkers, "dictionary at a time", "dictionaries at a time"),
 		memLimitNote(cfg.MemoryLimit))
@@ -1947,13 +1947,6 @@ func memLimitNote(limit int64) string {
 		return ""
 	}
 	return fmt.Sprintf("  ·  memory limit %.1f GB", float64(limit)/(1<<30))
-}
-
-func indexingSummary(autoIndex string) string {
-	if autoIndex == config.AutoIndexOff {
-		return "off - dictionaries are searched through their own format (AUTO_INDEX=off)"
-	}
-	return "on - a headword index is prepared on first search; contains, full-text and media on request"
 }
 
 func openBrowser(url string, gui bool, onWindowClose func()) {

@@ -70,7 +70,7 @@ func cmdReindex(args []string) error {
 		switch {
 		case f.Source == "" || !fsx.FileExists(f.Source):
 			gone = append(gone, folderLabel(f))
-		case *all || len(store.Stale(store.TextDBPath(f.Dir), f.Source)) > 0:
+		case *all || folderNeedsReindex(f):
 			todo = append(todo, f)
 		default:
 			current++
@@ -103,6 +103,14 @@ func cmdReindex(args []string) error {
 		return fmt.Errorf("%d of %d dictionaries could not be rebuilt", failed, len(todo))
 	}
 	return nil
+}
+
+func folderNeedsReindex(f store.Folder) bool {
+	if strings.EqualFold(filepath.Ext(f.Source), ".zim") {
+		p := store.Inspect(store.TextDBPath(f.Dir))
+		return p.Meta == nil || p.Meta["index_kind"] != "headwords" || len(p.Stale(f.Source)) > 0
+	}
+	return len(store.Stale(store.TextDBPath(f.Dir), f.Source)) > 0
 }
 
 // folderLabel is the name a library folder is known by in `wudict list`.
@@ -167,10 +175,15 @@ func reindexOne(f store.Folder, force bool) error {
 	if force {
 		t.Rebuild, t.Media = store.Always, store.MediaRepack
 	}
+	if strings.EqualFold(filepath.Ext(f.Source), ".zim") {
+		p := store.Inspect(store.TextDBPath(f.Dir))
+		if p.Meta == nil || p.Meta["index_kind"] != "headwords" {
+			t.Rebuild = store.Always
+		}
+	}
 	var title string // the folder is what this command names, not the title
-	hooks, done := cliHooks(f.Source, &title)
+	hooks := cliHooks(f.Source, &title)
 	res, err := store.Reconcile(f.Source, t, hooks)
-	done()
 	logx.ClearLine()
 	if err != nil {
 		return err

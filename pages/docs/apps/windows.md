@@ -52,6 +52,15 @@ The log is written to
 
 The desktop and CLI builds share settings and library files. If one is active, a second operational launch displays a warning and exits.
 
+wuDict2 keeps its files in `%USERPROFILE%\.wuDict2`. On first launch, if
+`%USERPROFILE%\.wudict` exists, wuDict2 checks its `state.json` for wuDict2-only
+settings. If it finds them, it asks whether to copy or move wuDict2 settings,
+styles and lemma files into the new folder. Otherwise, it offers to import only
+the dictionary folders and lemmas, or start with **Edit Folders**. Dictionary
+indexes are not copied; wuDict2 rebuilds them in its own format. The old wuDict
+server is stopped before files are copied when its settings identify a running
+instance.
+
 | Tray menu | Action |
 | --- | --- |
 | **Open wuDict2** | open the page in the browser |
@@ -83,7 +92,7 @@ does not start the server.
 
 <kbd>Settings</kbd> → <kbd>Apps</kbd> → <kbd>Installed apps</kbd> → <kbd>wuDict2</kbd> → <kbd>Uninstall</kbd> removes the program,
 the shortcuts, the `PATH` entry and the *Open with* entries. Dictionary files,
-`%USERPROFILE%\.wudict` (settings and library) and the log remain; delete them
+`%USERPROFILE%\.wuDict2` (settings and library) and the log remain; delete them
 by hand if you no longer need them.
 
 ## Next

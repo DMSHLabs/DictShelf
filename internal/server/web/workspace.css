@@ -1,0 +1,34 @@
+/**
+ * Copyright (C) 2026 DmShAl (Shepeta Dmitry)
+ *
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
+/* Shared frame for the full-screen work surfaces. Each page keeps its own
+   controls and content; this file owns the viewport, edge spacing and scroll
+   boundary so they all behave like one workspace. */
+:root{--workspace-inset:8px;--workspace-radius:12px}
+body.workspace-page{box-sizing:border-box;width:100%;height:100dvh;min-height:0;overflow:hidden;padding:var(--workspace-inset)}
+.workspace-page .workspace-window{box-sizing:border-box;display:flex;flex-direction:column;
+  width:100%;height:100%;min-width:0;min-height:0;max-width:none;max-height:none;margin:0;
+  overflow:hidden;border-radius:var(--workspace-radius)}
+.workspace-page .workspace-window>.top{flex:none;margin:-.618em -.618em 0;align-items:center}
+.workspace-page .workspace-window>.top button.x{margin:0}
+.workspace-page.workspace-filters .workspace-window>.top{margin:0}
+.workspace-page .workspace-scroll{flex:1 1 auto;min-height:0;overflow:auto;overscroll-behavior:contain}
+body.workspace-browse{display:flex;flex-direction:column;gap:0}
+.workspace-browser{display:flex;flex-direction:column;min-width:0;min-height:0;flex:1 1 auto;
+  border:1px solid var(--line);border-radius:var(--workspace-radius);overflow:hidden;background:var(--bg)}
+html[data-shell-image] .workspace-browser{background:transparent}
+html:is([data-shell-image],[data-desktop-image]) .workspace-browser>header,
+html:is([data-shell-image],[data-desktop-image]) .workspace-browser>footer{background:transparent;backdrop-filter:none}
+.workspace-browser>header,.workspace-browser>footer{position:static;flex:none}
+.workspace-browser>main{flex:1 1 auto;min-height:0;overflow:auto;padding-bottom:0}
+.workspace-browser>main:has(.msg:not([hidden])){display:flex;flex-direction:column}
+.workspace-browser .msg:not([hidden]){box-sizing:border-box;flex:1 1 auto;width:100%;max-width:none;margin:0;border:0;border-radius:0;background:transparent}
+.workspace-browser .msg.chooser-list{max-height:none}
+.workspace-browser>footer{display:flex;max-height:35%;overflow:auto}
+.workspace-browser>footer[hidden]{display:none}
+@media(max-width:600px){:root{--workspace-inset:0px;--workspace-radius:0px}}
+@media(max-width:520px){.workspace-page .workspace-window>.top{margin:0 .2em}}
+@media(max-width:520px){.workspace-page.workspace-filters .workspace-window>.top{margin-inline:.2em}}

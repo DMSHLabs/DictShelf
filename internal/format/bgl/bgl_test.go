@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -17,6 +18,7 @@ import (
 	"testing"
 
 	"github.com/wuweidict/wudict/internal/dict"
+	"github.com/wuweidict/wudict/internal/fsx"
 )
 
 // block encodes one BGL block using the 4-byte explicit-length header form
@@ -167,10 +169,8 @@ func TestReaderParsesEntriesAndResources(t *testing.T) {
 	}
 }
 
-// TestOpenAutoIngestAndLookup exercises the full direct-backend path: Open
-// auto-ingests into a text.db, then exact/alias lookups and embedded-resource
-// serving must work.
-func TestOpenAutoIngestAndLookup(t *testing.T) {
+// TestOpenDoesNotIndex exercises direct opening without creating an index.
+func TestOpenDoesNotIndex(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("WUDICT_DB_DIR", t.TempDir())
 	p := writeBGL(t, dir)
@@ -181,23 +181,14 @@ func TestOpenAutoIngestAndLookup(t *testing.T) {
 	}
 	defer d.Close()
 
-	// BGL prepares itself so it can be searched at all, but only the cheap
-	// headword index: full-text is the user's choice, not a toll for opening
-	// the file (D24). Finding must work; full-text must not be assumed.
-	if c := d.Caps(); !c.Exact || !c.Prefix {
-		t.Errorf("bgl must be searchable after auto-preparation: %+v", c)
+	if fsx.FileExists(filepath.Join(os.Getenv("WUDICT_DB_DIR"), "Test BGL", "text.db")) {
+		t.Error("opening BGL created a prepared index")
 	}
-	if c := d.Caps(); c.FTS || c.Contains {
-		t.Errorf("bgl must not build the opt-in indexes by itself: %+v", c)
+	if c := d.Caps(); c.Exact || c.Prefix || c.FTS || c.Contains {
+		t.Errorf("unprepared BGL advertises search: %+v", c)
 	}
-	if res, err := d.Exact("apple", 5); err != nil || len(res) != 1 || res[0].Body != "<b>a fruit</b>" {
-		t.Fatalf("exact apple: %v %v", res, err)
-	}
-	if res, _ := d.Exact("apples", 5); len(res) != 1 { // alias
-		t.Errorf("alias apples: %v", res)
-	}
-	if res, _ := d.Exact("banana", 5); len(res) != 1 {
-		t.Errorf("exact banana: %v", res)
+	if _, err := d.Exact("apple", 5); !errors.Is(err, dict.ErrUnsupported) {
+		t.Errorf("unprepared BGL exact: %v", err)
 	}
 	rc, _, err := d.Resource("pic.png")
 	if err != nil {
