@@ -187,8 +187,7 @@ func (r *Registry) updateDictionaryIndexesCancelable(req rescanIndexesRequest, p
 		}
 		_, prepared := store.LookupDir(e.Path)
 		_, pending := rec.DSLPending[e.indexRemovalKey()]
-		selfIndexed := e.dslSource == "" && dict.IsSelfIndexed(e.Path)
-		fresh := !selfIndexed && (pending || (!prepared && (!previous[dict.CanonPath(e.Path)] || !e.indexBlocked())))
+		fresh := pending || (!prepared && (!previous[dict.CanonPath(e.Path)] || !e.indexBlocked()))
 		options := defaults
 		targets = append(targets, target{e, fresh, options})
 	}
@@ -214,9 +213,6 @@ func (r *Registry) updateDictionaryIndexesCancelable(req rescanIndexesRequest, p
 		}
 		f.DSLKnown[source] = true
 		delete(f.DSLPending, key)
-		if _, queued := rec.DSLPending[key]; queued && dict.IsSelfIndexed(t.e.Path) {
-			delete(f.DSLRemoved, key)
-		}
 		if t.fresh {
 			f.DSLRemoved[key] = true
 			if t.options.Index {

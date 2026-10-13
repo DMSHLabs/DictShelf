@@ -6,7 +6,7 @@ description: wudict searches MDict, StarDict, Aard 2, Lingvo DSL, Babylon, ZIM a
 # All your dictionaries, in your browser
 
 **WuWeiDict** (`wudict`) searches all your local dictionaries at once and shows
-the results in the browser, at [localhost:6889](http://localhost:6889). It is a
+the results in the browser, at [localhost:6888](http://localhost:6888). It is a
 single executable with no dependencies.
 
 [Install](start/install.md){ .md-button .md-button--primary }

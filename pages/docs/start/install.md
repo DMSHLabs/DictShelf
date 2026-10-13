@@ -92,7 +92,7 @@ wudict
 ```
 
 `wudict` prints the address it listens on and opens the browser at
-[localhost:6889](http://localhost:6889). `wudict --help` lists every command
+[localhost:6888](http://localhost:6888). `wudict --help` lists every command
 and setting.
 
 ## -cgo or -purego

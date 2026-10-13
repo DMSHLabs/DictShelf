@@ -20,14 +20,12 @@ so the two apps are told apart on a home screen. The phone's copy is
 `android/app/src/main/res/drawable/ic_launcher_foreground.xml` (adaptive and
 monochrome), and `tools/make-icons.sh` renders the Play listing's `icon.png` and
 `featureGraphic.png` from that same mark with that same digit. The mark itself
-stays upstream's `internal/server/web/favicon.svg`, untouched. Desktop tray and
-served favicon renditions remain upstream's too; at those sizes a digit is not
-legible. Windows and macOS launchers use the fork's own desktop icons.
+stays upstream's `internal/server/web/favicon.svg`, untouched, and so do the
+renditions that are only ever a few pixels tall — the tray PNGs, the served
+favicon, the `.icns`/`.ico`: a digit at 16px is a smudge, and no desktop build
+ships from this fork.
 
-wuDict2 uses `127.0.0.1:6889` by default on every platform; upstream wuDict
-uses port 6888. An explicit `SERVER_PORT` or `--port` setting still takes
-priority on desktop and CLI builds. Android's saved port setting takes priority
-in its shell.
+wuDict2 uses `127.0.0.1:6889` by default; upstream wuDict uses port 6888.
 The server's `wudict` protocol identity stays upstream-compatible. The Android
 shell checks the responding server's app-specific library directory before
 adopting it, so another installation on a shared loopback port is not mistaken

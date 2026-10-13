@@ -24,7 +24,7 @@ The library ([`DB_DIR`](../reference/configuration.md#db_dir)) must be a
 different folder from every dictionary folder. Usually only `DICT_DIR` needs
 setting; the library defaults to `~/.wudict/db`.
 
-## Port 6889 is in use { #port-taken }
+## Port 6888 is in use { #port-taken }
 
 Another program uses the port; startup reports it. Choose another port:
 
@@ -40,7 +40,7 @@ Then open `localhost:9090`.
 
 ## No browser tab opens { #no-browser }
 
-Open [localhost:6889](http://localhost:6889). A tab is not opened when
+Open [localhost:6888](http://localhost:6888). A tab is not opened when
 [`NO_BROWSER`](../reference/configuration.md#no_browser) is set.
 
 Started without a console, wudict shows an icon instead of output: on Windows

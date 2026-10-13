@@ -359,7 +359,7 @@ For problems, see [Troubleshooting](troubleshooting.md).
         for phones. **Files** adds fonts and images.
     -   One dictionary only: a [resource override](../dictionaries/override.md).
 
-    If a rule hides the page, open `http://127.0.0.1:6889/?style=off`.
+    If a rule hides the page, open `http://127.0.0.1:6888/?style=off`.
     See [Custom styles](../dictionaries/styles.md).
 
 ??? question "Why does *estuviera* find nothing?"

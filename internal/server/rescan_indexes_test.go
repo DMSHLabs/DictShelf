@@ -13,7 +13,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/wuweidict/wudict/internal/store"
 )
@@ -163,57 +162,6 @@ func updateIndexesReq(t *testing.T, s *Server, body rescanIndexesRequest) {
 	if len(report.Failed) > 0 {
 		t.Fatal(report.Failed)
 	}
-}
-
-func TestSelfIndexedSourceStaysDirectUntilExplicitDemand(t *testing.T) {
-	isolatedDBDir(t)
-	dir := t.TempDir()
-	state := filepath.Join(t.TempDir(), StateFile)
-	reg, err := NewRegistry([]string{dir}, false, WithPrefs(LoadPrefs(state)), WithAutoIndex(true))
-	if err != nil {
-		t.Fatal(err)
-	}
-	s := New(reg)
-	if err := os.WriteFile(filepath.Join(dir, "new.selfidx"), []byte("source"), 0600); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, "other.selfidx"), []byte("source"), 0600); err != nil {
-		t.Fatal(err)
-	}
-	if err := reg.Rescan(); err != nil {
-		t.Fatal(err)
-	}
-	e := reg.all()[0]
-	if _, ok := store.LookupDir(e.Path); ok || e.indexBlocked() {
-		t.Fatal("folder discovery prepared or blocked a self-indexed source")
-	}
-	searchStream(t, s, "/api/search?q=beta&mode=prefix&dict=all")
-	searchStream(t, s, "/api/search?q=beta&mode=prefix&dict="+e.ID)
-	if e.autoTried.Load() || e.indexing() {
-		t.Fatal("search queued an automatic index for a self-indexed source")
-	}
-	rec := httptest.NewRecorder()
-	s.ServeHTTP(rec, newRequest("POST", "/api/demand?dict="+e.ID, nil))
-	if rec.Code != 200 {
-		t.Fatalf("demand: %d %s", rec.Code, rec.Body.String())
-	}
-	updateIndexesReq(t, s, rescanIndexesRequest{New: &indexOptions{Index: true}, Existing: rescanIndexActions{Index: "keep"}})
-	if _, ok := store.LookupDir(e.Path); ok {
-		t.Fatal("search, selection or rescan created a duplicate index")
-	}
-	rec = httptest.NewRecorder()
-	s.ServeHTTP(rec, newRequest("POST", "/api/demand?explicit=1&dict="+e.ID, nil))
-	if rec.Code != 200 {
-		t.Fatalf("explicit demand: %d %s", rec.Code, rec.Body.String())
-	}
-	deadline := time.Now().Add(10 * time.Second)
-	for time.Now().Before(deadline) {
-		if _, ok := validPrepared(e.Path); ok {
-			return
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	t.Fatal("explicit demand did not create an index")
 }
 
 func TestRescanIndexActionsPreserveExactFeatures(t *testing.T) {

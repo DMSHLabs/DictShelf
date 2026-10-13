@@ -27,7 +27,7 @@ other Arm64 systems use `wudict-windows-arm64-purego.exe`.
 4.  Select the options.
 5.  Finish. **Start wuDict2 now** starts the server.
 
-The browser opens [localhost:6889](http://localhost:6889), and the **wuDict2**
+The browser opens [localhost:6888](http://localhost:6888), and the **wuDict2**
 icon appears in the notification area.
 
 ## Options

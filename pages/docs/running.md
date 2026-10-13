@@ -22,7 +22,7 @@ The macOS and Linux setups use `make` targets in a clone of the
     | `make mac-agent-uninstall` | stop the agent and delete the plist |
 
     Check with `make mac-agent-status`, then open
-    [localhost:6889](http://localhost:6889).
+    [localhost:6888](http://localhost:6888).
 
     [wuDict.app](apps/macos.md) is the alternative that starts when you open
     it and shows a menu-bar icon. Use one of the two.
@@ -72,7 +72,7 @@ The macOS and Linux setups use `make` targets in a clone of the
 
     Started this way, `wuDict2.exe` shows a tray icon and logs to
     `%LOCALAPPDATA%\wudict\wudict.log`. Sign out and in, then open
-    [localhost:6889](http://localhost:6889).
+    [localhost:6888](http://localhost:6888).
 
 ## Settings for a background server
 

@@ -171,6 +171,6 @@ styles are added after each dictionary's own CSS, for all dictionaries;
 
 ## If a rule hides the page
 
-Open `http://127.0.0.1:6889/?style=off`: the page loads without either file.
+Open `http://127.0.0.1:6888/?style=off`: the page loads without either file.
 The editor saves there without previewing; fix the rule and reload without
 `?style=off`.
