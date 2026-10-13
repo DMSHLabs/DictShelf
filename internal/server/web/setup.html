@@ -943,7 +943,7 @@ async function applyMigration(choice,button){
     const response=await fetch("/api/setup?migration="+encodeURIComponent(choice),{method:"POST"});
     const result=await response.json();
     if(!response.ok||result.error)throw new Error(result.error||response.statusText);
-    location.reload();
+    location.assign("/setup");
   }catch(e){
     error.textContent=window.wudictI18n.errorText(e.message);error.hidden=false;
     buttons.forEach(b=>b.disabled=false);button.focus();setSetupNotice("");
