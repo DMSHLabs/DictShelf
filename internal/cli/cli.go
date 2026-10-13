@@ -463,6 +463,9 @@ func fail(err error) {
 	}
 	fmt.Fprintln(os.Stderr, "error:", err)
 	if guiLaunch {
+		if runtime.GOOS == "windows" {
+			closeStartupWindow()
+		}
 		msg := err.Error()
 		if headlessLog != "" {
 			msg += "\n\nDetails: " + headlessLog
@@ -486,6 +489,10 @@ func Main() {
 		}
 		if release != nil {
 			defer release()
+		}
+		if err := prepareWindowsDataRoot(); err != nil {
+			fail(err)
+			return
 		}
 	}
 
@@ -1203,6 +1210,9 @@ func cmdServe(args []string) (err error) {
 			// Restore a hidden console-subsystem helper if the log is unavailable.
 			tray.ShowConsole()
 		}
+	}
+	if gui && runtime.GOOS == "windows" && !cfg.NoBrowser {
+		showStartupWindow()
 	}
 	logx.V("config: source=%q dictDirs=%v dbDir=%q addr=%s speexdec=%s",
 		cfg.Source, cfg.DictDirs, cfg.DBDir, cfg.Addr(), cfg.Speexdec)

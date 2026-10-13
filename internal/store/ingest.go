@@ -648,5 +648,9 @@ func DefaultDBDir() string {
 	if err != nil {
 		return ".wudict/db"
 	}
-	return filepath.Join(home, ".wudict", "db")
+	root := os.Getenv("WUDICT_HOME")
+	if root == "" {
+		root = filepath.Join(home, ".wudict")
+	}
+	return filepath.Join(root, "db")
 }

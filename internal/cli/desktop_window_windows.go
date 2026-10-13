@@ -31,6 +31,7 @@ var (
 	desktopWindowMu         sync.Mutex
 	desktopWindow           webview.WebView
 	desktopWindowStarting   bool
+	desktopWindowPendingURL string
 	windowUser32            = syscall.NewLazyDLL("user32.dll")
 	windowShowWindow        = windowUser32.NewProc("ShowWindow")
 	windowForeground        = windowUser32.NewProc("SetForegroundWindow")
@@ -61,11 +62,22 @@ func openDesktopWindow(address string, onClose func()) bool {
 		logx.Warn("WebView2 profile unavailable: %v", err)
 		return false
 	}
+	local := ""
+	if address != "" {
+		parsed, err := desktopWindowURL(address)
+		if err != nil {
+			return false
+		}
+		local = desktopWindowURLWithMarker(parsed)
+	}
 	desktopWindowMu.Lock()
 	if desktopWindow != nil {
 		w := desktopWindow
 		desktopWindowMu.Unlock()
 		w.Dispatch(func() {
+			if local != "" {
+				w.Navigate(local)
+			}
 			hwnd := uintptr(w.Window())
 			windowShowWindow.Call(hwnd, 9) // SW_RESTORE
 			windowForeground.Call(hwnd)
@@ -73,16 +85,31 @@ func openDesktopWindow(address string, onClose func()) bool {
 		return true
 	}
 	if desktopWindowStarting {
+		if local != "" {
+			desktopWindowPendingURL = local
+		}
 		desktopWindowMu.Unlock()
 		return true
 	}
 	desktopWindowStarting = true
+	desktopWindowPendingURL = local
 	desktopWindowMu.Unlock()
-	go runDesktopWindow(address, profile, onClose)
+	go runDesktopWindow(profile, onClose)
 	return true
 }
 
-func runDesktopWindow(address, profile string, onClose func()) {
+func showStartupWindow() { openDesktopWindow("", nil) }
+
+func closeStartupWindow() {
+	desktopWindowMu.Lock()
+	w := desktopWindow
+	desktopWindowMu.Unlock()
+	if w != nil {
+		w.Dispatch(func() { w.Terminate() })
+	}
+}
+
+func runDesktopWindow(profile string, onClose func()) {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 	w := webview.NewWithOptions(webview.WebViewOptions{
@@ -92,19 +119,17 @@ func runDesktopWindow(address, profile string, onClose func()) {
 	})
 	if w == nil {
 		desktopWindowMu.Lock()
+		address := desktopWindowPendingURL
+		desktopWindowPendingURL = ""
 		desktopWindowStarting = false
 		desktopWindowMu.Unlock()
 		logx.Warn("WebView2 window failed; opening the browser")
-		browserCmd(address)
+		if address != "" {
+			browserCmd(address)
+		}
 		return
 	}
-	desktopWindowMu.Lock()
-	desktopWindow, desktopWindowStarting = w, false
-	desktopWindowMu.Unlock()
-	local, _ := url.Parse(address)
-	query := local.Query()
-	query.Set("wudict_webview2", "1")
-	local.RawQuery = query.Encode()
+	var local *url.URL
 	var folderCallbackPending atomic.Bool
 	_ = w.Bind("wudictChooseFolder", func() error {
 		if !folderCallbackPending.CompareAndSwap(false, true) {
@@ -124,7 +149,7 @@ func runDesktopWindow(address, profile string, onClose func()) {
 		if err != nil || (link.Scheme != "http" && link.Scheme != "https") || link.Host == "" {
 			return fmt.Errorf("invalid external link")
 		}
-		if strings.EqualFold(link.Host, local.Host) {
+		if local != nil && strings.EqualFold(link.Host, local.Host) {
 			return nil
 		}
 		return exec.Command("rundll32", "url.dll,FileProtocolHandler", link.String()).Start()
@@ -136,9 +161,21 @@ func runDesktopWindow(address, profile string, onClose func()) {
     event.preventDefault();event.stopPropagation();window.wudictOpenExternal(u.href);
   }}catch(_){ }
 },true);`)
-	w.Navigate(local.String())
 	done := make(chan struct{})
-	go watchDesktopServer(w, local, done)
+	w.Navigate(startupSplashURL())
+	desktopWindowMu.Lock()
+	desktopWindow = w
+	address := desktopWindowPendingURL
+	desktopWindowPendingURL = ""
+	desktopWindowStarting = false
+	desktopWindowMu.Unlock()
+	if address != "" {
+		w.Navigate(address)
+		if parsed, err := url.Parse(address); err == nil {
+			local = parsed
+			go watchDesktopServer(w, local, done)
+		}
+	}
 	w.Run()
 	close(done)
 	w.Destroy()
@@ -148,6 +185,26 @@ func runDesktopWindow(address, profile string, onClose func()) {
 	if onClose != nil {
 		onClose()
 	}
+}
+
+func desktopWindowURLWithMarker(address string) string {
+	local, _ := url.Parse(address)
+	query := local.Query()
+	query.Set("wudict_webview2", "1")
+	local.RawQuery = query.Encode()
+	return local.String()
+}
+
+func startupSplashURL() string {
+	language, _, _ := syscall.NewLazyDLL("kernel32.dll").NewProc("GetUserDefaultUILanguage").Call()
+	message := "Starting wuDict2…"
+	if language&0x3ff == 0x19 {
+		message = "Запуск wuDict2…"
+	}
+	html := `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>
+*{box-sizing:border-box}html,body{height:100%;margin:0}body{display:grid;place-items:center;background:#f5f3ef;color:#302d29;font:16px "Segoe UI",sans-serif}.card{display:flex;align-items:center;gap:16px}.spin{width:24px;height:24px;border:3px solid #ded9d0;border-top-color:#8b6545;border-radius:50%;animation:turn .8s linear infinite}@keyframes turn{to{transform:rotate(360deg)}}
+</style><main class="card"><span class="spin"></span><span>` + message + `</span></main>`
+	return "data:text/html," + url.PathEscape(html)
 }
 
 // chooseDesktopFolder shows Windows' native folder browser and returns a

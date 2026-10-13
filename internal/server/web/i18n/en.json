@@ -293,7 +293,7 @@
   "panel.rescan": "Rescan folders",
   "panel.lemmas": "Lemmatization…",
   "panel.results": "Results",
-  "panel.headwordApplyThreshold": "Require ✓ for dictionaries with at least this many headwords",
+  "panel.headwordApplyThreshold": "Search as you type only below this headword count",
   "panel.highlight": "Highlight matches",
   "panel.on": "On",
   "panel.off": "Off",
