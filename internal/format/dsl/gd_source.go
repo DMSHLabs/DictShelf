@@ -14,7 +14,6 @@ import (
 
 	"github.com/wuweidict/wudict/internal/dict"
 	"github.com/wuweidict/wudict/internal/resource"
-	"github.com/wuweidict/wudict/internal/store"
 )
 
 const GDReaderVersion = 10
@@ -67,16 +66,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		// Mirrors Open in dsl.go: the reader is opened whatever happens and its
-		// header is read at every open; store.OpenSelfPrepared does the
-		// prepare-or-open a self-preparing format needs.
-		defer r.Close()
-		src := r.Meta() // before the reader is consumed by an ingest
-		s, err := store.OpenSelfPrepared(p, "dsl", func() (dict.Reader, error) { return r, nil })
-		if err != nil {
-			return nil, err
-		}
-		return &Dict{Store: s, srcPath: r.path, src: src}, nil
+		return &Dict{reader: r}, nil
 	})
 	dict.RegisterProber(".dslgd", func(p string) (dict.Meta, error) {
 		r, err := readGDSource(p)

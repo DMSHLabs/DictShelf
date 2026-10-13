@@ -12,8 +12,10 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/wuweidict/wudict/internal/dict"
+	"github.com/wuweidict/wudict/internal/logx"
 	"github.com/wuweidict/wudict/internal/search"
 )
 
@@ -28,8 +30,13 @@ type browseFindResp struct {
 }
 
 // handleBrowseFind searches the complete headword index, then pages the
-// matches; the browser never has to load or scan the entire dictionary.
+// matches. Prepared dictionaries answer from their index; ZIM scans its native
+// headword list because its path index has no arbitrary token-search operation.
 func (s *Server) handleBrowseFind(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Query().Get("stream") == "1" {
+		s.handleBrowseFindStream(w, r)
+		return
+	}
 	q := r.URL.Query()
 	query := strings.TrimSpace(q.Get("q"))
 	if len(query) > 256 {
@@ -48,7 +55,7 @@ func (s *Server) handleBrowseFind(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 404, "%v", err)
 		return
 	}
-	if _, ok := validPrepared(e.Path); !ok && !mask {
+	if !hasBrowseIndex(e.Path) {
 		browseUnprepared(w, e)
 		return
 	}
@@ -58,7 +65,7 @@ func (s *Server) handleBrowseFind(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	finder, ok := d.(dict.BrowseFinder)
-	if !ok && !mask {
+	if !ok {
 		browseUnprepared(w, e)
 		return
 	}
@@ -79,21 +86,25 @@ func (s *Server) handleBrowseFind(w http.ResponseWriter, r *http.Request) {
 					}); yes {
 						return extended.FindHeadwordsMaskWithin(r.Context(), query, within, withinMask, (page-1)*browsePageSize, browsePageSize)
 					}
-					return findDirectMask(r, d, query, within, withinMask, (page-1)*browsePageSize, browsePageSize)
+					return findDirectHeadwords(r, d, query, true, within, withinMask, (page-1)*browsePageSize, browsePageSize)
 				}
 				words, total, letters, err := finder.FindHeadwordsMask(r.Context(), query, (page-1)*browsePageSize, browsePageSize)
 				return words, total, letters, nil, err
 			}
-			return findDirectMask(r, d, query, within, withinMask, (page-1)*browsePageSize, browsePageSize)
+			return findDirectHeadwords(r, d, query, true, within, withinMask, (page-1)*browsePageSize, browsePageSize)
 		}
-		words, total, err := finder.FindHeadwords(r.Context(), query, (page-1)*browsePageSize, browsePageSize)
-		return words, total, nil, nil, err
+		if ok {
+			words, total, err := finder.FindHeadwords(r.Context(), query, (page-1)*browsePageSize, browsePageSize)
+			return words, total, nil, nil, err
+		}
+		return findDirectHeadwords(r, d, query, false, within, withinMask, (page-1)*browsePageSize, browsePageSize)
 	}
 	words, total, letters, positions, err := find(page)
 	if err != nil {
 		if r.Context().Err() != nil {
 			return
 		}
+		logx.System("browse find failed dict=%q mask=%v error=%q", e.ID, mask, err)
 		httpErr(w, 500, "searching %s: %v", e.ID, err)
 		return
 	}
@@ -109,12 +120,200 @@ func (s *Server) handleBrowseFind(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, browseFindResp{Words: words, Alphabet: letters, Positions: positions, Total: total, Page: page, Pages: pages, Size: browsePageSize})
 }
 
-// Direct dictionaries expose headwords in pages. A mask scan reads those
-// pages without opening article bodies, and checks cancellation between them.
-func findDirectMask(r *http.Request, d dict.Dictionary, query, within string, withinMask bool, offset, limit int) ([]string, int, []dict.Letter, []int, error) {
-	re, err := search.CompileMask(query)
+type browseFindStreamEvent struct {
+	Type      string        `json:"type"`
+	Words     []string      `json:"words,omitempty"`
+	Positions []int         `json:"positions,omitempty"`
+	Alphabet  []dict.Letter `json:"alphabet,omitempty"`
+	Total     int           `json:"total"`
+	Done      bool          `json:"done,omitempty"`
+	Error     string        `json:"error,omitempty"`
+}
+
+type browseHeadwordStreamer interface {
+	StreamBrowseHeadwords(context.Context, string, bool, func([]string, int, bool) error) error
+}
+
+func (s *Server) handleBrowseFindStream(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	query := strings.TrimSpace(q.Get("q"))
+	if len(query) > 256 {
+		httpErr(w, 400, "search text is too long")
+		return
+	}
+	mask := q.Get("wildcards") == "1" || q.Get("mask") == "1"
+	within := strings.TrimSpace(q.Get("within"))
+	if len(within) > 256 {
+		httpErr(w, 400, "filter text is too long")
+		return
+	}
+	withinMask := q.Get("withinWildcards") == "1" || q.Get("withinMask") == "1"
+	e, err := s.reg.get(q.Get("dict"))
 	if err != nil {
-		return nil, 0, nil, nil, err
+		httpErr(w, 404, "%v", err)
+		return
+	}
+	if !hasBrowseIndex(e.Path) {
+		browseUnprepared(w, e)
+		return
+	}
+	d, err := e.open()
+	if err != nil {
+		httpErr(w, 500, "%v", err)
+		return
+	}
+	st, ok := newStream(w, "application/x-ndjson")
+	if !ok {
+		return
+	}
+	emit := func(words []string, total int, done bool) error {
+		typ := "progress"
+		if len(words) > 0 {
+			typ = "block"
+		}
+		if done {
+			typ = "done"
+		}
+		st.line(browseFindStreamEvent{Type: typ, Words: words, Total: total, Done: done})
+		return r.Context().Err()
+	}
+	if within == "" {
+		if streamer, ok := d.(browseHeadwordStreamer); ok {
+			err = streamer.StreamBrowseHeadwords(r.Context(), query, mask, emit)
+		} else {
+			err = streamDirectBrowseHeadwords(r, d, query, mask, emit)
+		}
+	} else {
+		browseFindStreamsActive.Add(1)
+		defer browseFindStreamsActive.Add(-1)
+		var withinRE *regexp.Regexp
+		if withinMask {
+			withinRE, err = search.CompileMask(within)
+			if err != nil {
+				httpErr(w, 400, "invalid filter: %v", err)
+				return
+			}
+		}
+		terms := dict.HeadwordTermMatcher(within)
+		baseOffset, filteredTotal := 0, 0
+		filteredWords := make([]string, 0, browsePageSize)
+		filteredPositions := make([]int, 0, browsePageSize)
+		var sections dict.MaskSections
+		filteredEmit := func(words []string, total int, done bool) error {
+			base := baseOffset
+			for i, word := range words {
+				if withinMask && !withinRE.MatchString(word) || !withinMask && !terms(word) {
+					continue
+				}
+				sections.Add(word)
+				filteredWords = append(filteredWords, word)
+				filteredPositions = append(filteredPositions, base+i)
+				filteredTotal++
+			}
+			baseOffset = total
+			if len(filteredWords) >= browsePageSize || done {
+				typ := "block"
+				if done {
+					typ = "done"
+				}
+				st.line(browseFindStreamEvent{Type: typ, Words: filteredWords, Positions: filteredPositions,
+					Total: filteredTotal, Done: done, Alphabet: func() []dict.Letter {
+						if done {
+							return sections.Finish()
+						}
+						return nil
+					}()})
+				filteredWords = make([]string, 0, browsePageSize)
+				filteredPositions = make([]int, 0, browsePageSize)
+				return r.Context().Err()
+			}
+			typ := "progress"
+			st.line(browseFindStreamEvent{Type: typ, Total: filteredTotal})
+			return r.Context().Err()
+		}
+		if streamer, ok := d.(browseHeadwordStreamer); ok {
+			err = streamer.StreamBrowseHeadwords(r.Context(), query, mask, filteredEmit)
+		} else {
+			err = streamDirectBrowseHeadwords(r, d, query, mask, filteredEmit)
+		}
+	}
+	if err != nil && r.Context().Err() == nil {
+		logx.System("browse find stream failed dict=%q mask=%v error=%q", e.ID, mask, err)
+		st.line(browseFindStreamEvent{Type: "error", Error: err.Error()})
+	}
+}
+
+func streamDirectBrowseHeadwords(r *http.Request, d dict.Dictionary, query string, mask bool, emit func([]string, int, bool) error) error {
+	var re *regexp.Regexp
+	var err error
+	if mask {
+		re, err = search.CompileMask(query)
+		if err != nil {
+			return err
+		}
+	}
+	terms := dict.HeadwordTermMatcher(query)
+	words := make([]string, 0, browsePageSize)
+	total, previous := 0, ""
+	flush := func(done bool) error {
+		if err := emit(words, total, done); err != nil {
+			return err
+		}
+		words = make([]string, 0, browsePageSize)
+		return nil
+	}
+	entryCount := d.Meta().EntryCount
+	lastProgress := time.Now()
+	for at := 0; at < entryCount; at += 256 {
+		if err := r.Context().Err(); err != nil {
+			return err
+		}
+		page := d.Keywords(at, min(256, entryCount-at))
+		for _, word := range page {
+			if word == previous || strings.HasPrefix(word, "@_") {
+				continue
+			}
+			previous = word
+			matched := terms(word)
+			if mask {
+				matched = re.MatchString(word)
+			}
+			if matched {
+				words = append(words, word)
+				total++
+			}
+		}
+		now := time.Now()
+		if len(words) >= browsePageSize || (len(words) > 0 && now.Sub(lastProgress) >= time.Second) {
+			if err := flush(false); err != nil {
+				return err
+			}
+			lastProgress = now
+		} else if now.Sub(lastProgress) >= time.Second {
+			if err := emit(nil, total, false); err != nil {
+				return err
+			}
+			lastProgress = now
+		}
+	}
+	if len(words) > 0 {
+		if err := flush(false); err != nil {
+			return err
+		}
+	}
+	return emit(nil, total, true)
+}
+
+// Direct dictionaries expose headwords in pages. Browse search scans those
+// pages without opening article bodies and checks cancellation between them.
+func findDirectHeadwords(r *http.Request, d dict.Dictionary, query string, mask bool, within string, withinMask bool, offset, limit int) ([]string, int, []dict.Letter, []int, error) {
+	var re *regexp.Regexp
+	var err error
+	if mask {
+		re, err = search.CompileMask(query)
+		if err != nil {
+			return nil, 0, nil, nil, err
+		}
 	}
 	var withinRE *regexp.Regexp
 	if within != "" && withinMask {
@@ -123,30 +322,36 @@ func findDirectMask(r *http.Request, d dict.Dictionary, query, within string, wi
 			return nil, 0, nil, nil, err
 		}
 	}
-	matchTerms := dict.HeadwordTermMatcher(within)
+	matchTerms := dict.HeadwordTermMatcher(query)
+	withinTerms := dict.HeadwordTermMatcher(within)
 	words := make([]string, 0, limit)
 	positions := make([]int, 0, limit)
 	var sections dict.MaskSections
 	total, basePosition, previous := 0, 0, ""
-	for at := 0; ; at += 256 {
+	entryCount := d.Meta().EntryCount
+	for at := 0; at < entryCount; at += 256 {
 		if err := r.Context().Err(); err != nil {
 			return nil, 0, nil, nil, err
 		}
-		page := d.Keywords(at, 256)
-		if len(page) == 0 {
-			break
-		}
+		n := min(256, entryCount-at)
+		page := d.Keywords(at, n)
 		for _, word := range page {
 			if word == previous || strings.HasPrefix(word, "@_") {
 				continue
 			}
 			previous = word
-			if !re.MatchString(word) {
+			matched := false
+			if mask {
+				matched = re.MatchString(word)
+			} else {
+				matched = matchTerms(word)
+			}
+			if !matched {
 				continue
 			}
 			position := basePosition
 			basePosition++
-			if within != "" && (withinMask && !withinRE.MatchString(word) || !withinMask && !matchTerms(word)) {
+			if within != "" && (withinMask && !withinRE.MatchString(word) || !withinMask && !withinTerms(word)) {
 				continue
 			}
 			sections.Add(word)
@@ -155,9 +360,6 @@ func findDirectMask(r *http.Request, d dict.Dictionary, query, within string, wi
 				positions = append(positions, position)
 			}
 			total++
-		}
-		if len(page) < 256 {
-			break
 		}
 	}
 	return words, total, sections.Finish(), positions, nil
@@ -196,27 +398,28 @@ type browseResp struct {
 // handleBrowse serves the dictionary as an ordered list of headwords: the
 // reading view, as opposed to /api/search's answering view.
 //
-// Index-backed only (dict.Browser). The order, the offsets and the strip are
-// three reads of idx_entry_w; a direct backend would have to sort its whole
-// headword list in memory to answer any of them, which is both the slow path
-// and the memory spike preparation exists to remove. So an unprepared
-// dictionary is answered with 409 and what the client needs to say about it,
-// not with a worse browse.
+// Prepared dictionaries browse through dict.Browser's SQLite index. ZIM also
+// implements dict.Browser over its mandatory native path-pointer list, without
+// preparing a second index. Other unprepared direct dictionaries are answered
+// with 409 rather than sorted into a costly in-memory list.
 //
 // Same-origin, deliberately absent from corsAllowed (D69): the extension grant
 // is search, and a full headword dump is not a lookup.
 func (s *Server) handleBrowse(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Query().Get("stream") == "1" {
+		s.handleBrowseStream(w, r)
+		return
+	}
 	q := r.URL.Query()
 	e, err := s.reg.get(q.Get("dict"))
 	if err != nil {
 		httpErr(w, 404, "%v", err)
 		return
 	}
-	// Checked BEFORE the open, not after: opening an unprepared dictionary
-	// materialises its entire direct backend - up to a gigabyte of headword
-	// map on the big ones - and that is a ruinous price for the answer "not
-	// yet".
-	if _, ok := validPrepared(e.Path); !ok {
+	// Checked BEFORE the open: Browse pages the prepared headword index. ZIM's
+	// native path list remains available for search, but does not support this
+	// paged token-search and filtering view.
+	if !hasBrowseIndex(e.Path) {
 		browseUnprepared(w, e)
 		return
 	}
@@ -230,10 +433,17 @@ func (s *Server) handleBrowse(w http.ResponseWriter, r *http.Request) {
 		browseUnprepared(w, e)
 		return
 	}
-	alphabet, err := b.Alphabet()
-	if err != nil {
-		httpErr(w, 500, "browsing %s: %v", e.ID, err)
-		return
+	// The client already has the completed strip on a strip=0 request. For
+	// ZIM, building it walks the native index and can take minutes, so a page
+	// return must not wait for Alphabet merely to discard its answer.
+	zimNative := entryHasSelfIndex(e) && !d.Meta().HeadwordsOnly
+	var alphabet []dict.Letter
+	if !(zimNative && q.Get("strip") == "0") {
+		alphabet, err = b.Alphabet()
+		if err != nil {
+			httpErr(w, 500, "browsing %s: %v", e.ID, err)
+			return
+		}
 	}
 	// The strip partitions the whole list, so its counts ARE the total - no
 	// COUNT(*) of its own, and no way for the two to disagree.
@@ -246,6 +456,11 @@ func (s *Server) handleBrowse(w http.ResponseWriter, r *http.Request) {
 	total := 0
 	for _, l := range alphabet {
 		total += l.Count
+	}
+	if zimNative {
+		// ZIM's strip samples the first visible headword in each native page;
+		// its offsets and total therefore use native index slots.
+		total = d.Meta().EntryCount
 	}
 
 	offset, mark := 0, -1
@@ -282,6 +497,10 @@ func (s *Server) handleBrowse(w http.ResponseWriter, r *http.Request) {
 	if alphabet == nil {
 		alphabet = []dict.Letter{}
 	}
+	responseAlphabet := alphabet
+	if q.Get("strip") == "0" {
+		responseAlphabet = nil
+	}
 	writeJSON(w, browseResp{
 		Dict:     e.ID,
 		Name:     d.Meta().Name,
@@ -291,24 +510,132 @@ func (s *Server) handleBrowse(w http.ResponseWriter, r *http.Request) {
 		Size:     browsePageSize,
 		At:       mark,
 		Words:    words,
-		Alphabet: alphabet,
+		Alphabet: responseAlphabet,
 	})
 }
 
-// browseUnprepared answers the one state the browse page cannot draw a list
-// for. `indexing` separates "wait" from "act": work already in flight is
-// something to poll, and its absence means the reader has to ask for the index
-// in the dictionary panel (which is also the only place that can ask for it
-// when AUTO_INDEX is off).
+type browseStreamEvent struct {
+	Type    string        `json:"type"`
+	Page    *browseResp   `json:"page,omitempty"`
+	Letters []dict.Letter `json:"letters,omitempty"`
+	At      int           `json:"at,omitempty"`
+	Total   int           `json:"total,omitempty"`
+	Error   string        `json:"error,omitempty"`
+}
+
+type browseAlphabetStreamer interface {
+	StreamBrowseAlphabet(context.Context, func([]dict.Letter, int, int) error) error
+}
+
+func (s *Server) handleBrowseStream(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	e, err := s.reg.get(q.Get("dict"))
+	if err != nil {
+		httpErr(w, 404, "%v", err)
+		return
+	}
+	if !hasBrowseIndex(e.Path) {
+		browseUnprepared(w, e)
+		return
+	}
+	d, err := e.open()
+	if err != nil {
+		httpErr(w, 500, "%v", err)
+		return
+	}
+	b, ok := d.(dict.Browser)
+	if !ok {
+		browseUnprepared(w, e)
+		return
+	}
+	st, ok := newStream(w, "application/x-ndjson")
+	if !ok {
+		return
+	}
+	meta := d.Meta()
+	total := meta.EntryCount
+	if total < 0 {
+		total = 0
+	}
+	streamer, canStreamAlphabet := d.(browseAlphabetStreamer)
+	var readyAlphabet []dict.Letter
+	if !canStreamAlphabet {
+		readyAlphabet, err = b.Alphabet()
+		if err != nil {
+			st.line(browseStreamEvent{Type: "error", Error: err.Error()})
+			return
+		}
+		total = 0
+		for _, letter := range readyAlphabet {
+			total += letter.Count
+		}
+	}
+	offset, mark := 0, -1
+	if at := q.Get("at"); at != "" {
+		if mark, err = b.Locate(at); err != nil {
+			st.line(browseStreamEvent{Type: "error", Error: err.Error()})
+			return
+		}
+		offset = mark - mark%browsePageSize
+	} else if p, _ := strconv.Atoi(q.Get("p")); p > 1 {
+		offset = (p - 1) * browsePageSize
+	}
+	if total > 0 && offset >= total {
+		offset = (total - 1) / browsePageSize * browsePageSize
+	}
+	if mark < offset || mark >= offset+browsePageSize {
+		mark = offset
+	}
+	words, err := b.Page(offset, browsePageSize)
+	if err != nil {
+		st.line(browseStreamEvent{Type: "error", Error: err.Error()})
+		return
+	}
+	if words == nil {
+		words = []string{}
+	}
+	pages := (total + browsePageSize - 1) / browsePageSize
+	page := offset/browsePageSize + 1
+	st.line(browseStreamEvent{Type: "page", Page: &browseResp{Dict: e.ID, Name: meta.Name, Total: total,
+		Page: page, Pages: pages, Size: browsePageSize, At: mark, Words: words, Alphabet: []dict.Letter{}}})
+
+	emit := func(letters []dict.Letter, at, all int) error {
+		if len(letters) > 0 {
+			st.line(browseStreamEvent{Type: "letters", Letters: letters, At: at, Total: all})
+		} else {
+			st.line(browseStreamEvent{Type: "progress", At: at, Total: all})
+		}
+		return r.Context().Err()
+	}
+	if canStreamAlphabet {
+		err = streamer.StreamBrowseAlphabet(r.Context(), emit)
+	} else {
+		for start := 0; start < len(readyAlphabet); start += 512 {
+			end := min(start+512, len(readyAlphabet))
+			if err = emit(readyAlphabet[start:end], end*dict.MaskPageSize, total); err != nil {
+				break
+			}
+		}
+	}
+	if err != nil {
+		if r.Context().Err() == nil {
+			st.line(browseStreamEvent{Type: "error", Error: err.Error()})
+		}
+		return
+	}
+	st.line(browseStreamEvent{Type: "done", At: total, Total: total})
+}
+
+// browseUnprepared answers the state where the dictionary has no library index
+// to page through. The user can create the index in Dictionary Settings.
 func browseUnprepared(w http.ResponseWriter, e *entry) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(http.StatusConflict)
 	enc := json.NewEncoder(w)
 	enc.SetEscapeHTML(false)
 	_ = enc.Encode(map[string]any{
-		"error":    "this dictionary has no index yet",
+		"error":    "This dictionary has no index. Create one in Dictionary Settings.",
 		"prepared": false,
-		"indexing": e.indexing(),
 	})
 }
 
@@ -323,6 +650,9 @@ func (s *Server) handleBrowsePage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache")
 	page := bytes.ReplaceAll(browseHTML, []byte("{{PRESETS}}"), []byte(s.pagePresetLinks()))
+	page = bytes.ReplaceAll(page, []byte("{{WORKSPACECSS}}"), []byte(assetTag(workspaceCSS)))
 	page = bytes.ReplaceAll(page, []byte("{{LISTSEARCHJS}}"), []byte(assetTag(listSearchJS)))
+	page = bytes.ReplaceAll(page, []byte("{{HEADWORDJS}}"), []byte(assetTag(headwordControlJS)))
+	page = bytes.ReplaceAll(page, []byte("{{HEADWORDCSS}}"), []byte(assetTag(headwordControlCSS)))
 	_, _ = w.Write([]byte(renderUI(string(page), s.reg.prefs.Language())))
 }

@@ -18,17 +18,14 @@ description: The dictionary formats wudict reads, the files each needs, and how 
 
 ## Indexing
 
-Every dictionary is searchable as soon as wudict finds it: exact and prefix
-search use the dictionary's own index. wudict then indexes it in the
-background into the library, which is faster, uses less memory, and enables
-the optional _contains_ and _full-text_ searches.
+When wudict finds a dictionary, it queues a headword index in the background.
+Exact and prefix searches can use the dictionary's own format while that index
+is being created. The library index uses less memory and enables the optional
+_contains_ and _full-text_ searches.
 
-- **Lingvo DSL, Babylon, wudict markdown** are indexed when first opened: they
-  have no index of their own.
-- **ZIM** is never indexed automatically. Its own index answers exact and
-  prefix search with little memory, and an indexed copy is several times the
-  size of the file. Index it from the dictionary panel for _contains_, _full-text_
-  or a media pack — adding a headword index for ZIM dictionaries is not necessary.
+**ZIM** is not added to the queue. Its own index answers exact and prefix
+search with little memory, and an indexed copy is several times the size of the
+file. The app does not create a headword index for ZIM.
 
 [The library](library.md){ .md-button }
 

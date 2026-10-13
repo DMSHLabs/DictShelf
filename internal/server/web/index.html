@@ -11,6 +11,19 @@
 <meta charset="utf-8">
 {{I18N}}
 <script>
+if (new URLSearchParams(location.search).get('wudict_webview2') === '1') {
+  document.documentElement.setAttribute('data-webview2', '');
+  document.addEventListener('click', function (event) {
+    var link = event.target.closest && event.target.closest('a[href]');
+    if (!link) return;
+    var target = new URL(link.href, location.href);
+    if (target.origin !== location.origin || target.pathname !== '/browse') return;
+    target.searchParams.set('wudict_webview2', '1');
+    link.href = target.pathname + target.search + target.hash;
+  }, true);
+}
+</script>
+<script>
 // An optional host background. Session storage preserves it across page reloads;
 // an explicit empty URL value withdraws it on the next launch.
 window.wudictShellBackground = function (color, image, imageName, paper) {
@@ -110,7 +123,10 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
 <title>wuDict2</title>
 <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
 <link rel="stylesheet" href="/assets/app.css?v={{APPCSS}}">
+<link rel="stylesheet" href="/assets/workspace.css?v={{WORKSPACECSS}}">
+<link rel="stylesheet" href="/assets/headword-control.css?v={{HEADWORDCSS}}">
 <link rel="stylesheet" href="/assets/history.css?v={{HISTORYCSS}}">
+<script src="/assets/headword-control.js?v={{HEADWORDJS}}"></script>
 <script>
 /* Apply the reader's Settings font scale before the drawer can paint. */
 window.wudictFontScale=(function(){
@@ -190,6 +206,7 @@ window.wudictFontScale=(function(){
      exactly when an eager "type and hit Enter" would reach the search path
      with an empty dictionary list. -->
 <form id="frm" class="col" role="search" aria-busy="true">
+<a class="btn" id="barBackWords" href="/browse" aria-label="{{T:search.backToWords}}" title="{{T:search.backToWords}}" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M19 12H5m6-6-6 6 6 6"/></svg><span>{{T:search.words}}</span></a>
 <span class="brand">wu<small>Dict2</small></span>
 <!-- The search pill. Above 600px it is display:contents, so the field and the
      two selects are direct flex children of the form. Below it the pill
@@ -263,28 +280,38 @@ window.wudictFontScale=(function(){
 <div id="outdatedNotice" class="bulkbox outdated-notice" role="status" hidden></div>
 <div id="out"></div>
 <section id="maskView" aria-label="{{T:search.wildcardsResults}}" hidden>
-  <header class="mask-head">
-    <select id="maskDict" aria-label="{{T:search.wildcardsDictionary}}"></select>
-    <span id="maskProgress" aria-label="{{T:search.wildcardsResults}}" hidden>
-      <span id="maskCount" role="status" aria-label="{{T:search.wildcardsTotal}}"></span>
-      <button type="button" id="maskPrev" aria-label="{{T:browse.previousTitle}}">‹</button>
-      <span id="maskPage"></span>
-      <button type="button" id="maskNext" aria-label="{{T:browse.nextTitle}}">›</button>
-    </span>
-  </header>
-  <nav id="maskLetters" class="mask-letters" aria-label="{{T:browse.jumpLetter}}"></nav>
+  <div class="mask-chrome">
+    <header class="mask-head">
+      <select id="maskDict" aria-label="{{T:search.wildcardsDictionary}}"></select>
+      <span id="maskProgress" aria-label="{{T:search.wildcardsResults}}" hidden>
+        <span id="maskCount" role="status" aria-label="{{T:search.wildcardsTotal}}"></span>
+        <button type="button" id="maskPrev" aria-label="{{T:browse.previousTitle}}">‹</button>
+        <button type="button" id="maskPage" aria-label="{{T:browse.gotoBlock}}" title="{{T:browse.gotoBlock}}">1/1</button>
+        <button type="button" id="maskNext" aria-label="{{T:browse.nextTitle}}">›</button>
+      </span>
+    </header>
+    <nav id="maskLetters" class="mask-letters" aria-label="{{T:browse.jumpLetter}}"></nav>
+  </div>
   <div id="maskWords" class="mask-words"></div>
 </section>
+<dialog id="maskGotoDialog" lang="{{T:locale}}" class="group-dialog panel-card" aria-labelledby="maskGotoTitle">
+  <h2 id="maskGotoTitle">{{T:browse.gotoBlock}}</h2>
+  <label for="maskGotoInput">{{T:browse.gotoBlockLabel}}</label>
+  <input type="number" id="maskGotoInput" min="1" step="1" inputmode="numeric">
+  <p id="maskGotoRange"></p>
+  <div class="article-find-actions">
+    <button type="button" class="btn" id="maskGotoCancel">{{T:panel.cancel}}</button>
+    <button type="button" class="btn" id="maskGotoGo">{{T:browse.gotoBlockAction}}</button>
+  </div>
+</dialog>
 </main>
-<footer id="maskDock" class="mask-dock" role="search" hidden>
-  <button type="button" id="maskFindMode" aria-label="{{T:browse.filterWords}}">⌕</button>
-  <button type="button" id="maskFindWildcard" aria-label="{{T:browse.wildcardsSearch}}" aria-pressed="false">*</button>
-  <input id="maskFindInput" type="search" placeholder="{{T:browse.findWords}}" aria-label="{{T:browse.findWords}}"
-         spellcheck="false" autocomplete="off" autocapitalize="off" enterkeyhint="search">
-  <output id="maskFindCount" aria-live="polite">0/0</output>
-  <button type="button" id="maskFindPrev" aria-label="{{T:browse.previousMatch}}">▲</button>
-  <button type="button" id="maskFindNext" aria-label="{{T:browse.nextMatch}}">▼</button>
-</footer>
+<div id="maskSearchControls" class="mask-search-controls" hidden>
+  <div id="maskSearchProgress" class="mask-search-progress" role="status" aria-live="polite" hidden>
+    <span class="mask-search-spinner" aria-hidden="true"></span><span id="maskSearchProgressText"></span>
+    <button type="button" id="maskSearchStop">{{T:dictUI.stop}}</button>
+  </div>
+  <footer id="maskDock" class="mask-dock" role="search"></footer>
+</div>
 
 <!-- The status bar. Four controls and nothing else: the two jumps between the
      dictionaries of the current answer, the scope those jumps walk inside, and
@@ -504,6 +531,16 @@ window.wudictFontScale=(function(){
   <div class="facts">
     <a class="mrow door" id="browseLink" href="/browse" title="{{T:panel.browseHint}}">{{T:panel.browse}}</a>
   </div>
+  <div class="facts">
+    <label class="rowlabel" title="{{T:panel.ignoreDiacriticsHint}}"><input class="panel-checkbox" type="checkbox" id="ignoreDiacritics"> {{T:panel.ignoreDiacritics}}</label>
+  </div>
+  <div class="facts headword-threshold-row">
+    <select id="headwordApplyThreshold" aria-label="{{T:panel.headwordApplyThreshold}}">
+      <option value="0">0</option><option value="10000">10k</option><option value="50000">50k</option>
+      <option value="100000">100k</option><option value="500000">500k</option><option value="1000000">1m</option>
+    </select>
+    <label class="rowlabel" for="headwordApplyThreshold">{{T:panel.headwordApplyThreshold}}</label>
+  </div>
 </details>
 
 <details class="sect" data-panel-section="appearance" open>
@@ -612,7 +649,7 @@ window.wudictFontScale=(function(){
       <button type="button" class="act" data-layer="on" id="examplesOff" aria-pressed="false" title="{{T:panel.examplesOff}}">{{T:panel.hide}}</button>
     </span>
   </div>
-  <label id="examplesExtraRow" class="examples-extra" hidden><input type="checkbox" id="hideUnmarkedExamples"> {{T:panel.hideUnmarkedExamples}}</label>
+  <label id="examplesExtraRow" class="examples-extra" hidden><input class="panel-checkbox" type="checkbox" id="hideUnmarkedExamples"> {{T:panel.hideUnmarkedExamples}}</label>
   <!-- Whether the status bar is there at all. It is the bar's only door, so it
        has to be findable by someone who has just hidden it - hence a row here,
        in the drawer, beside the controls the bar duplicates, rather than in the
@@ -884,7 +921,7 @@ window.wudictFontScale=(function(){
   <p id="articleFindStatus" role="status"></p>
   <div class="article-find-actions"><button type="button" class="btn" id="articleFindDialogPrev">{{T:articleFind.previous}}</button><button type="button" class="btn" id="articleFindDialogNext">{{T:articleFind.next}}</button></div>
 </dialog>
-<dialog id="dictSettings" lang="{{T:locale}}" class="group-dialog panel-card" aria-labelledby="dictSettingsTitle">
+<dialog id="dictSettings" lang="{{T:locale}}" class="group-dialog panel-card workspace-dialog" aria-labelledby="dictSettingsTitle">
   <h2 id="dictSettingsTitle">{{T:dictUI.title}} <button type="button" class="btn" id="closeDictSettings" aria-label="{{T:dictUI.close}}"><svg class="icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></h2>
   <!-- Outside the scroller, so the one action stays reachable however far down
        a hundred cards the reader has gone. It is the only one left here: it is
@@ -917,7 +954,7 @@ window.wudictFontScale=(function(){
 </dialog>
 
 <dialog id="bulkIndexDialog" class="group-dialog panel-card" aria-labelledby="bulkIndexDialogTitle"></dialog>
-<dialog id="clearDatabaseDialog" lang="{{T:locale}}" class="group-dialog panel-card" aria-labelledby="clearDatabaseTitle">
+<dialog id="clearDatabaseDialog" lang="{{T:locale}}" class="group-dialog panel-card workspace-dialog" aria-labelledby="clearDatabaseTitle">
   <h2 id="clearDatabaseTitle">{{T:panel.rescan}} <button type="button" class="btn" id="clearDatabaseClose" aria-label="{{T:panel.close}}"><svg class="icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></h2>
   <div class="rescan-scroll">
   <h3>{{T:database.new}}</h3>
@@ -978,6 +1015,16 @@ window.wudictFontScale=(function(){
     <h3 class="sys-head">{{T:system.cache}}</h3>
     <p class="sys-hint">{{T:system.cacheHint}}</p>
     <div class="group-toolbar"><button type="button" class="btn" id="sysClearCache">{{T:system.clearCache}}</button></div>
+
+    <h3 class="sys-head">{{T:system.logFile}}</h3>
+    <label class="sys-row"><input type="checkbox" id="sysLogEnabled"><span class="sys-label">{{T:system.logEnable}}</span></label>
+    <label class="sys-row"><input type="checkbox" id="sysLogBase"><span class="sys-label">{{T:system.logBase}}</span></label>
+    <label class="sys-row"><input type="checkbox" id="sysLogWeb"><span class="sys-label">{{T:system.logWeb}}</span></label>
+    <p class="sys-hint">{{T:system.logHint}}</p>
+    <label class="sys-row"><input type="checkbox" id="sysBrowseDiagnostics"><span class="sys-label">{{T:system.browseDiagnostics}}</span></label>
+    <label class="sys-row"><input type="checkbox" id="sysDictionaryCacheDiagnostics"><span class="sys-label">{{T:system.dictionaryCacheDiagnostics}}</span></label>
+    <label class="sys-row"><input type="checkbox" id="sysFolderDiagnostics"><span class="sys-label">{{T:system.folderDiagnostics}}</span></label>
+    <div class="group-toolbar"><a class="btn" id="sysSaveLog" href="/api/system-log" download>{{T:panel.saveSystemLog}}</a></div>
 
     <!-- Advanced FOLDS, and starts folded (the reader's ask, 2026-09-28). Two
          reasons it is the one group that does: its rows are the server's own
@@ -1172,13 +1219,36 @@ window.wudictFontScale=(function(){
 <script>
 "use strict";
 const $=id=>document.getElementById(id);
+// Initialized before async startup and native callbacks can create a picker menu.
+const sheetMenus=[];
+// The desktop appearance bridge may answer during startup; keep this initialized
+// before its callback can inspect available background images.
+let stylerFileRows=null;
+// Appearance replies can render during startup, before the styler controls are
+// initialized further down this script.
+let stylerSubject="presets";
+// Theme and native appearance callbacks can run before the editor setup below.
+let stylerTab="app",
+    stylerText={app:"",article:""},
+    stylerSaved={app:"",article:""},
+    stylerOther={text:{app:"",article:""},saved:{app:"",article:""}},
+    stylerDir="",
+    stylerLoaded=false,
+    stylerTimer=null,
+    stylerView="css",
+    stylerFileLimits=null,
+    stylerBox="",
+    appearanceState=null,
+    stylerPickForBackground=false;
 const tx=window.wudictI18n.t;
-$("saveSystemLog").addEventListener("click",event=>{
+function systemLogClick(event){
   if(!window.wudictNativeShell)return;
   event.preventDefault();
   const result=prompt("wudict:system-log","");
   if(result&&result!=="ok")alert(result);
-});
+}
+$("saveSystemLog").addEventListener("click",systemLogClick);
+$("sysSaveLog").addEventListener("click",systemLogClick);
 window.wuSearchHistory.setSearch(word=>{ if($("mode").value==="wildcards"){ $("q").value=word;window.wuSearchHistory.hide();maskSubmitRequested=true;commitOnce=true;doSearch(); } else searchFor(word); });
 window.wuSearchHistory.setSuggest((q,onHit,signal)=>{
   const mode=$("mode").value,sel=$("dict").value||"all";
@@ -1187,7 +1257,7 @@ window.wuSearchHistory.setSuggest((q,onHit,signal)=>{
   if(ids&&!ids.length)return;
   const dict=ids?ids.join(","):sel,n=ids?(ids.length===1?25:5):25;
   return fetchStream("/api/search?q="+encodeURIComponent(q)+"&mode="+mode+
-    "&hl=0&dict="+encodeURIComponent(dict)+"&n="+n,msg=>{
+    "&hl=0"+diacriticsSearchParam()+"&dict="+encodeURIComponent(dict)+"&n="+n,msg=>{
       if(msg.t==="hit")onHit(msg.results,mode);
     },signal);
 });
@@ -1298,7 +1368,7 @@ async function apiError(r){
 const mb=n=>n<1e3?n+" B":n<1e6?Math.round(n/1e3)+" kB":n<1e7?(n/1e6).toFixed(1)+" MB":n<1e9?Math.round(n/1e6)+" MB":(n/1e9).toFixed(1)+" GB";
 function sortedDictionaryIds(ids,pinned,byId){
   const fixed=ids.filter(id=>pinned.has(id)),tail=ids.filter(id=>!pinned.has(id));
-  const collator=new Intl.Collator(window.wudictI18n.language,{sensitivity:"base",numeric:true});
+  const collator=new Intl.Collator("en",{sensitivity:"base",numeric:true});
   tail.sort((a,b)=>collator.compare(dictLabel(byId.get(a)),dictLabel(byId.get(b)))||a.localeCompare(b));
   return fixed.concat(tail);
 }
@@ -1543,6 +1613,14 @@ function applyFW(w,save){
    field is even enabled — loadPrefs settles before loadDicts, which is what
    ungreys the input — so no query can go out under the wrong setting. */
 let hlOn=true;
+let ignoreDiacritics=localStorage.getItem("wudict_ignore_diacritics")==="1";
+$("ignoreDiacritics").checked=ignoreDiacritics;
+$("ignoreDiacritics").addEventListener("change",e=>{
+  ignoreDiacritics=e.target.checked;
+  localStorage.setItem("wudict_ignore_diacritics",ignoreDiacritics?"1":"0");
+  if($("q").value.trim()&&["exact","prefix","contains"].includes($("mode").value))doSearch();
+});
+const diacriticsSearchParam=()=>"&ignoreDiacritics="+(ignoreDiacritics?1:0);
 function applyHL(on,save){
   const v=!!on,moved=v!==hlOn;
   hlOn=v;
@@ -2123,8 +2201,8 @@ function pickerGroupMenu(bar,menu,onPick){
   }};
 }
 /* Created on first use, not here, and for two ordering reasons rather than for
-   laziness: sheetMenuNew pushes onto `sheetMenus`, which this script declares
-   further down, and pickerGroupName reads userGroups, which group-editor.js
+   laziness: sheetMenuNew pushes onto `sheetMenus`, and pickerGroupName reads
+   userGroups, which group-editor.js
    declares AFTER this script has run. paintPickerGroup is only ever called once
    a page has loaded (the panel opening, the picker's own spinner, /api/groups
    answering), when both exist. */
@@ -2605,7 +2683,7 @@ function setSearchMode(mode){
   $("maskSubmit").hidden=mode!=="wildcards";
   $("maskProgress").hidden=mode!=="wildcards";
   $("maskView").hidden=mode!=="wildcards";
-  $("maskDock").hidden=mode!=="wildcards";
+  $("maskSearchControls").hidden=mode!=="wildcards";
   document.body.classList.toggle("mask-view-active",mode==="wildcards");
   window.wuSearchHistory?.modeChanged();
   try{localStorage.setItem(SEARCH_MODE_KEY,mode)}catch(_){}
@@ -2635,19 +2713,10 @@ function syncChips(){
   // group with a name like any other.
   $("dictLbl").textContent=scopeLabel();
 }
-/* Picking a dictionary is already a statement that it is about to be searched,
-   so its index is demanded on the selection itself and not on the first query
-   (D92, /api/demand). Only when there is nothing to re-run: a search of one
-   dictionary carries the same demand server-side, so doSearch() would make this
-   request redundant. Fire-and-forget - the ingest outlives the response, and
-   the chip catches up on the next loadDicts(). */
+/* Picking a dictionary only changes search scope. Indexing starts when the
+   dictionary is added or when the user requests it in Dictionary Settings. */
 $("dict").onchange=e=>{const v=e.target.value;localStorage.setItem("wudict_dict",v);syncChips();
-  if($("q").value.trim())doSearch();
-  // One dictionary only. A group would demand an index for every member at
-  // once, which is the unbounded auto-index fan-out (docs.local/PERF.md M1)
-  // — the single most expensive thing this app can be made to do — triggered
-  // by one tap on a menu, before the user has typed anything at all.
-  else if(v&&v!=="all"&&!v.startsWith("g:"))fetch("/api/demand?dict="+encodeURIComponent(v),{method:"POST"}).catch(()=>{})};
+  if($("q").value.trim())doSearch()};
 /* Mode re-runs the search on change, symmetric with #dict: the narrow bar has
    no submit button, so a mode that waited for the next submit would appear to
    do nothing at all. */
@@ -2789,12 +2858,14 @@ function renderReindex(){
     box.hidden=false;return;
   }
   const n=dicts.filter(d=>d.outdated).length,failed=st&&st.failed||[];
+  const diacriticsPending=dicts.some(d=>d.outdated&&d.diacriticsPending);
   if(!n&&!failed.length){box.hidden=true;box.innerHTML="";return}
-  box.innerHTML=(n?`<p>${esc(tx("dictUI.outdated",{number:n}))} <button type="button" class="btn" id="reindexGo">${esc(tx("dictUI.rebuild"))}</button></p>`:"")+
+  box.innerHTML=(n?`<p>${esc(tx("dictUI.outdated",{number:n}))} <button type="button" class="btn" id="reindexGo">${esc(tx("dictUI.rebuild"))}</button></p>${diacriticsPending?`<p>${esc(tx("dictUI.diacriticsPending"))}</p>`:""}`:"")+
     (failed.length?`<p class="cost">${esc(tx("dictUI.rebuildFailed",{errors:failed.join("; ")}))}</p>`:"");
   box.hidden=false;
   if(n&&dictsSettled){
-    notice.innerHTML=`<p>${esc(tx("dictUI.outdated",{number:n}))} <button type="button" class="btn" id="reindexMainGo">${esc(tx("dictUI.rebuild"))}</button></p>`;
+    notice.innerHTML=`<p>${esc(tx("dictUI.outdated",{number:n}))} <button type="button" class="btn" id="reindexMainGo">${esc(tx("dictUI.rebuild"))}</button></p>`+
+      (diacriticsPending?`<p>${esc(tx("dictUI.diacriticsPending"))}</p>`:"");
     notice.hidden=false;
   }
 }
@@ -2889,9 +2960,8 @@ function renderPanel(){
       ["contains",tx("dictUI.contains"),d.caps?.Contains,0],
       ["fts",tx("dictUI.fts"),d.caps?.FTS,0],
     ];
-    /* The index itself, first in the run of chips. Two states, because the
-       dictionary only has two: "🚀 index" while there is none — it is searched
-       the slow way through its own format until there is — and the size once
+    /* The index itself, first in the run of chips. Two states: "🚀 index"
+       while there is none, and the size once
        there is one. A size rather than a tick: a number is what the reader can
        act on, and it is the same number that was in the meta line above until
        now (the word "indexed" stays there). The done state is .locked, so the
@@ -2903,6 +2973,7 @@ function renderPanel(){
        No chip at all when the source is gone — a prepared-only dictionary
        cannot be rebuilt, and dbSize covers it anyway. */
     const indexed=(d.dbSize||0)>0;
+    const selfIndexed=!!d.selfIndexed;
     /* What it would cost, on the ABSENT state only. A 2.9 M-entry dictionary
        is a gigabyte of disk and minutes of a phone's battery, and the chip
        that starts that says so first; O9 is the decision that the size be
@@ -2918,9 +2989,11 @@ function renderPanel(){
        chip next to it, which is a measurement of a file on disk. Hence "est.",
        hence "~", hence plain .feat styling - the estimate is an argument for
        clicking, the size is a fact about what a click already produced. */
-    const est=indexed?0:baseIndexBytes(d);
+    const est=indexed||selfIndexed&&d.format!=="zim"?0:baseIndexBytes(d);
     let caps=indexed&&!d.dsl
       ? `<span class="feat on locked" title="${escAttr(tx("dictUI.indexedSize",{size:mb(d.dbSize)}))}">${mb(d.dbSize)}</span>`
+      : selfIndexed&&!d.dsl&&!(d.format==="zim"&&canToggle)
+        ? `<span class="feat on locked" title="${escAttr(tx("dictUI.nativeIndexedHint"))}">${esc(tx("dictUI.nativeIndexed"))}</span>`
       : canToggle&&!d.dsl
         ? `<span class="feat" data-feat="base" title="${escAttr(tx("dictUI.buildHint")+(est?tx("dictUI.estimateHint",{size:mb(est)}):""))}">${esc(tx("dictUI.index"))}${est?" · ~"+mb(est):""}</span>`
         : "";
@@ -2940,23 +3013,21 @@ function renderPanel(){
         ` data-feat="${key}" data-on="${on?1:0}"${stale?' data-stale="1"':""}`+
         ` title="${escAttr(tip)}">${esc(label)}${size}${stale?" ⟳":""}</span>`;
     }
-    // the contains index is built automatically on first use, so the only
-    // manual action offered is full-text (which also covers contains).
+    // Contains and full-text are both built only after an explicit action.
     // "pack media" is offered only when the dictionary actually has packable
     // media, a source to pack it from, and it isn't already packed.
     let acts="";
     if(d.error)acts=`<span class="err">${esc(window.wudictI18n.errorText(d.error))}</span>`;
-    /* Offered whether or not the index exists yet: browsing IS the index, so
-       following this link on an unprepared dictionary is the request to build
-       it, and the browse page asks for it and opens the list when it is ready.
-       This is the card for one dictionary, so unlike the row above it carries
+    /* Offered only when the index exists: browsing reads its ordered headword
+       list and never starts index creation. This is the card for one
+       dictionary, so unlike the row above it carries
        the id. */
-    else acts=`<a class="browse btn" href="/browse?dict=${encodeURIComponent(d.id)}" title="${escAttr(tx("dictUI.browseHint"))}"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M2.4 3.4a1.2 1.2 0 0 1 1.2-1.2h6.2a1.2 1.2 0 0 1 1.2 1.2v9.2a1.2 1.2 0 0 1-1.2 1.2H3.6a1.2 1.2 0 0 1-1.2-1.2z"/><path d="M11 5h2.6"/><path d="M11 8h2.6"/><path d="M11 11h2.6"/></svg>${esc(tx("dictUI.browse"))}</a>`;
+    else if(indexed||selfIndexed)acts=`<a class="browse btn" href="/browse?dict=${encodeURIComponent(d.id)}" title="${escAttr(tx("dictUI.browseHint"))}"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M2.4 3.4a1.2 1.2 0 0 1 1.2-1.2h6.2a1.2 1.2 0 0 1 1.2 1.2v9.2a1.2 1.2 0 0 1-1.2 1.2H3.6a1.2 1.2 0 0 1-1.2-1.2z"/><path d="M11 5h2.6"/><path d="M11 8h2.6"/><path d="M11 11h2.6"/></svg>${esc(tx("dictUI.browse"))}</a>`;
     if(d.unavailable||d.dsl&&!d.error)acts="";
     div.innerHTML=`<div class="hd">
         <b tabindex="${d.unavailable?-1:0}" role="button" aria-disabled="${!!d.unavailable}" title="${escAttr(tx(d.unavailable?"dictUI.dslUnavailable":"dictUI.searchOnly"))}">${esc(dictLabel(d))}</b>
       </div>
-      <div class="meta">${esc(d.format||"?")}${d.entries?" · "+esc(tx("dictUI.entries",{number:window.wudictI18n.number(d.entries)})):""}${d.dbSize?tx("dictUI.indexed"):""}</div>
+      <div class="meta">${esc(d.format||"?")}${d.entries?" · "+esc(tx("dictUI.entries",{number:window.wudictI18n.number(d.entries)})):""}${d.dbSize||selfIndexed?tx("dictUI.indexed"):""}</div>
       ${dslIndexControls(d)}
       ${caps?`<div>${caps}</div>`:""}${acts?`<div class="acts">${acts}</div>`:""}
       ${provenance(d)}
@@ -3183,7 +3254,7 @@ $("dictSettingsScroll").addEventListener("scroll",()=>{
   dictListTop=$("dictSettingsScroll").scrollTop;
 },{passive:true});
 $("editDictSettings").onclick=async()=>{
-  // A search may have prepared an index since the dictionary list was loaded.
+  // An index job may have changed dictionary capabilities since the last list load.
   await loadDicts();
   showDictSettings();
 };
@@ -3332,6 +3403,13 @@ function sysPaint(state){
       ["sysLink",state.link],["sysReader",state.reader],["sysInfo",state.info],["sysKey",state.key]]){
     $(pair[0]).checked=!!pair[1];
   }
+  for(const pair of [["sysLogEnabled",state.logEnabled],["sysLogBase",state.logBaseEvents],
+      ["sysLogWeb",state.logWebEvents]])$(pair[0]).checked=!!pair[1];
+  $("sysLogBase").disabled=!state.logEnabled;
+  $("sysLogWeb").disabled=!state.logEnabled;
+  $("sysBrowseDiagnostics").checked=browseDiagnosticsEnabled();
+  $("sysDictionaryCacheDiagnostics").checked=dictionaryCacheDiagnosticsEnabled();
+  $("sysFolderDiagnostics").checked=folderDiagnosticsEnabled();
   const box=$("sysAdvanced");
   box.replaceChildren();
   sysRows.length=0;
@@ -3588,6 +3666,27 @@ async function showDesktopSysSettings(){
   if(!c){body.textContent=tx("system.desktopLoadFailed");return}
   const hint=document.createElement("p");hint.className="sys-hint";
   hint.textContent=tx("system.desktopHint");body.append(hint);
+  const logHeading=document.createElement("h3");logHeading.className="sys-head";
+  logHeading.textContent=tx("system.logFile");body.append(logHeading);
+  const logHint=document.createElement("p");logHint.className="sys-hint";
+  logHint.textContent=tx("system.logHint");body.append(logHint);
+  const diagnosticsLabel=document.createElement("label");diagnosticsLabel.className="sys-row";
+  const diagnostics=document.createElement("input");diagnostics.type="checkbox";diagnostics.checked=browseDiagnosticsEnabled();
+  diagnostics.addEventListener("change",()=>setBrowseDiagnostics(diagnostics.checked));
+  const diagnosticsText=document.createElement("span");diagnosticsText.className="sys-label";diagnosticsText.textContent=tx("system.browseDiagnostics");
+  diagnosticsLabel.append(diagnostics,diagnosticsText);body.append(diagnosticsLabel);
+  const dictionaryCacheLabel=document.createElement("label");dictionaryCacheLabel.className="sys-row";
+  const dictionaryCacheDiagnostics=document.createElement("input");dictionaryCacheDiagnostics.type="checkbox";dictionaryCacheDiagnostics.checked=dictionaryCacheDiagnosticsEnabled();
+  dictionaryCacheDiagnostics.addEventListener("change",()=>setDictionaryCacheDiagnostics(dictionaryCacheDiagnostics.checked));
+  const dictionaryCacheText=document.createElement("span");dictionaryCacheText.className="sys-label";dictionaryCacheText.textContent=tx("system.dictionaryCacheDiagnostics");
+  dictionaryCacheLabel.append(dictionaryCacheDiagnostics,dictionaryCacheText);body.append(dictionaryCacheLabel);
+  const folderLabel=document.createElement("label");folderLabel.className="sys-row";
+  const folderDiagnostics=document.createElement("input");folderDiagnostics.type="checkbox";folderDiagnostics.checked=folderDiagnosticsEnabled();
+  folderDiagnostics.addEventListener("change",()=>setFolderDiagnostics(folderDiagnostics.checked));
+  const folderText=document.createElement("span");folderText.className="sys-label";folderText.textContent=tx("system.folderDiagnostics");
+  folderLabel.append(folderDiagnostics,folderText);body.append(folderLabel);
+  const saveLog=document.createElement("a");saveLog.className="btn";saveLog.href="/api/system-log";saveLog.download="";
+  saveLog.textContent=tx("panel.saveSystemLog");body.append(saveLog);
   if(c.configPath){
     const path=document.createElement("p");path.className="sys-desktop-path";
     path.textContent=c.configPath;body.append(path);
@@ -3633,6 +3732,22 @@ $("sysLink").addEventListener("change",e=>sysSwitch("link",e.target.checked));
 $("sysReader").addEventListener("change",e=>sysSwitch("reader",e.target.checked));
 $("sysInfo").addEventListener("change",e=>sysSwitch("info",e.target.checked));
 $("sysKey").addEventListener("change",e=>sysSwitch("key",e.target.checked));
+function browseDiagnosticsEnabled(){try{return localStorage.getItem("wudict_browse_diagnostics")==="1"}catch(_){return false}}
+function setBrowseDiagnostics(on){try{if(on)localStorage.setItem("wudict_browse_diagnostics","1");else localStorage.removeItem("wudict_browse_diagnostics")}catch(_){}}
+function dictionaryCacheDiagnosticsEnabled(){try{return localStorage.getItem("wudict_dictionary_cache_diagnostics")==="1"}catch(_){return false}}
+function setDictionaryCacheDiagnostics(on){try{if(on)localStorage.setItem("wudict_dictionary_cache_diagnostics","1");else localStorage.removeItem("wudict_dictionary_cache_diagnostics")}catch(_){}}
+function folderDiagnosticsEnabled(){try{return localStorage.getItem("wudict_folder_diagnostics")==="1"}catch(_){return false}}
+function setFolderDiagnostics(on){try{if(on)localStorage.setItem("wudict_folder_diagnostics","1");else localStorage.removeItem("wudict_folder_diagnostics")}catch(_){}}
+function sysLogChange(){
+  sysSet({action:"set",field:"log",enabled:$("sysLogEnabled").checked,
+    baseEvents:$("sysLogBase").checked,webEvents:$("sysLogWeb").checked});
+}
+$("sysLogEnabled").addEventListener("change",sysLogChange);
+$("sysLogBase").addEventListener("change",sysLogChange);
+$("sysLogWeb").addEventListener("change",sysLogChange);
+$("sysBrowseDiagnostics").addEventListener("change",e=>setBrowseDiagnostics(e.target.checked));
+$("sysDictionaryCacheDiagnostics").addEventListener("change",e=>setDictionaryCacheDiagnostics(e.target.checked));
+$("sysFolderDiagnostics").addEventListener("change",e=>setFolderDiagnostics(e.target.checked));
 /* Restore defaults: one tap clears every Advanced row at once, which is why it
    is confirmed. Clearing writes nothing anywhere else - it withdraws the
    overrides, and "follow the settings file" is what an absent override is. */
@@ -3818,7 +3933,7 @@ $("folderBody").addEventListener("click",e=>{
   p.style.color="var(--accent)";setTimeout(()=>{p.style.color=""},900);
 });
 /* Bulk full-text (D31). It names what the user gets, not our mechanism -
-   every dictionary is already indexed by headword on first open - and it
+   new dictionaries are queued for their headword index - and it
    spends gigabytes of disk and a long single-file CPU pass, so it lives in the
    configuration drawer as quiet text and prices itself before it can fire:
    prominence tracks value, not cost. The good discovery path is elsewhere: a
@@ -3889,6 +4004,9 @@ function bulkFeatureLabels(d,feat){
 function bulkIndexCandidates(scope,feat,action){
   return dicts.filter(d=>{
     if(d.builtin||!d.source||d.dsl&&!d.dsl.sourceAvailable)return false;
+    /* Other self-indexed formats need no prepared headword index. ZIM's
+       native index serves search; its optional title index powers Browse. */
+    if(feat==="base"&&d.selfIndexed&&d.format!=="zim")return false;
     const have=feat==="base"?!!d.dbSize:feat==="contains"?!!d.caps?.Contains:!!d.caps?.FTS;
     return action==="recreate"||((action==="delete"||action==="update")?have:!have);
   });
@@ -3896,6 +4014,11 @@ function bulkIndexCandidates(scope,feat,action){
 function bulkActionLabel(action){
   const keys={keep:"dictUI.bulkAction.keep",create:"dictUI.bulkAction.create",update:"dictUI.bulkAction.update",recreate:"dictUI.bulkAction.recreate",delete:"dictUI.bulkAction.delete"};
   return tx(keys[action]);
+}
+function bulkFailureReport(number,failed,damaged,error){
+  let report=tx("dictUI.bulkFailed",{number,error:failed?.length?tx("dictUI.bulkFailureCount",{number:failed.length}):window.wudictI18n.errorText(error)});
+  if(damaged?.length)report+=" "+tx("dictUI.bulkDamagedRemoved",{number:damaged.length});
+  return report;
 }
 function renderBulkIndexes(){
   if(bulkIndexBusy)return;
@@ -3942,9 +4065,9 @@ $("bulkIndexes").addEventListener("click",async e=>{
     try{
       const result=await window.wudictWork.start(todo.map(({d,feat,action})=>({dict:d.id,feature:feat,action})));
       succeeded=result.done;
-      if(result.error)throw new Error(result.error);
-      report=tx(result.canceled||result.stopRequested?"dictUI.bulkStopped":"dictUI.bulkFinished",{number:succeeded});
-    }catch(err){report=tx("dictUI.bulkFailed",{number:succeeded,error:window.wudictI18n.errorText(err.message)})}
+      if(result.error)throw Object.assign(new Error(result.error),{failed:result.failed,damaged:result.damaged});
+      report=result.canceled||result.stopRequested?tx("dictUI.bulkStopped",{number:succeeded}):tx("dictUI.bulkFinished",{number:succeeded});
+    }catch(err){report=bulkFailureReport(succeeded,err.failed,err.damaged,err.message)}
     finally{
       bulkIndexBusy=false;
       clearGlobalStop();
@@ -4126,7 +4249,7 @@ $("panelList").addEventListener("click",e=>{
     const sel=$("dict"),id=pick.closest(".pd").dataset.id;
     if(dicts.some(d=>d.id===id&&d.unavailable))return;
     // Through the <select> and its change event, so this is the same selection
-    // every other caller makes - persisted, chipped, re-run, index demanded.
+    // every other caller makes - persisted, chipped and re-run.
     if([...sel.options].some(o=>o.value===id)){
       sel.value=id;sel.dispatchEvent(new Event("change"));
     }
@@ -4158,11 +4281,9 @@ $("panelList").addEventListener("keydown",e=>{
    which asks the user to re-read a question they already answered rather than
    telling them anything.
 
-   Delete-everything is the default because preparation is automatic: deleting
-   only the index of a dictionary whose file is still in a scanned folder
-   frees the space until the next search rebuilds it. "Index only" is offered
-   anyway (it is the honest way to reclaim a full-text index), and it says so
-   afterwards, from the server's own report.
+   Delete-everything is the default because deleting only the index leaves a
+   dictionary that cannot be searched until the user indexes it again.
+   "Index only" is offered to reclaim index space and reports that result.
 
    Vocabulary: these are "the dictionary files", never "the originals". On the
    Play flavour the file this deletes is itself a COPY the importer made, and
@@ -4356,8 +4477,10 @@ function runIngest(id,opts,label){
       }
       es.close();following.delete(id);activeIngestID=null;$("bulkIndexStop").hidden=bulkIndexBusy;$("bulkIndexStop").disabled=false;if(!bulkIndexBusy)clearGlobalStop();
       delete label.dataset.busy;
+      label.classList.remove("busy");
       if(!why)why=tx("dictUI.connectionLost");
-      show(tx("dictUI.failed"),tx("dictUI.failedReason",{error:why}));
+      for(const field of opts.labels||[label])field.textContent=tx("dictUI.failed");
+      setIndexStatus(esc(name)+" — "+esc(tx("dictUI.failedReason",{error:why})),false);
       label.classList.add("err");resolve(false)});
   });
 }
@@ -4659,11 +4782,11 @@ let statusTs=0,statusTimer=null,statusPending,statusBase="",statusOwner=null;
 /* `owner` lets a long-running writer retract its own message without
    clobbering whatever spoke after it — the dictionary loader used to key that
    on `lastQuery`, which is why a stale warning could sit there unretracted. */
-function setIndexStatus(html){
+function setIndexStatus(html,mirror=true){
   const box=$("bulkIndexConfirm");
   $("bulkIndexStatus").hidden=!html;
   box.innerHTML=html;
-  if(globalStopAction)showWorkNotice(html);
+  if(mirror&&globalStopAction)showWorkNotice(html);
 }
 let globalStopAction=null,globalStopLabel="";
 let workNoticeHTML="";
@@ -4715,7 +4838,8 @@ window.addEventListener("wudict-work",event=>{
     }
   }else if(serverBulkWasRunning){
     serverBulkWasRunning=false;bulkIndexBusy=false;$("bulkIndexStop").hidden=true;
-    const report=tx(s.error?"dictUI.bulkFailed":s.canceled||s.stopRequested?"dictUI.bulkStopped":"dictUI.bulkFinished",{number:s.done,error:s.error});
+    const report=s.error?bulkFailureReport(s.done,s.failed,s.damaged,s.error):
+      s.canceled||s.stopRequested?tx("dictUI.bulkStopped",{number:s.done}):tx("dictUI.bulkFinished",{number:s.done});
     setIndexStatus(esc(report));loadDicts().then(renderBulkIndexes);
   }
 });
@@ -4865,23 +4989,16 @@ const TAPS=matchMedia("(pointer:coarse)").matches;
    this dictionary alone, which the server does not cap, and which also puts it
    in line to be prepared — so the same tap answers the question now and stops
    it being asked again. */
-/* The label a deferred section wears. "preparing…" means the server already
-   has this dictionary in its front ingest queue because something asked for it
-   by name — it is NOT a disabled state, and the section stays tappable: the
-   uncapped single-dictionary search answers in seconds while the ingest behind
-   it takes minutes. What it stops is the page offering the same tap over and
-   over at a dictionary that is already doing the work, which reads as the first
-   tap having done nothing. */
-function deferLabel(indexing){
-  return indexing?tx("search.preparing"):tx(TAPS?"search.tap":"search.click");
-}
+/* A deferred search can be retried by opening the section; it never starts an
+   indexing job. */
+function deferLabel(){return tx(TAPS?"search.tap":"search.click")}
 function loadDeferred(det,box,h,mode,q){
   if(det.dataset.loading)return;
   det.dataset.loading="1";
   const cnt=det.querySelector(".count");
   if(cnt)cnt.innerHTML='<span class="spin"></span>'+esc(tx("search.searching"));
   let shown=false;
-  fetchStream("/api/search?q="+encodeURIComponent(q)+"&mode="+mode+"&hl="+(hlOn?1:0)+"&dict="+encodeURIComponent(h.dict)+"&n=25",msg=>{
+  fetchStream("/api/search?q="+encodeURIComponent(q)+"&mode="+mode+"&hl="+(hlOn?1:0)+diacriticsSearchParam()+"&dict="+encodeURIComponent(h.dict)+"&n=25",msg=>{
     // The user has moved on: a new search replaced every box, so this one is
     // detached and writing into it would paint nothing at a cost.
     if(msg.t!=="hit"||!box.isConnected)return;
@@ -4905,7 +5022,7 @@ function loadDeferred(det,box,h,mode,q){
     if(!cnt)return;
     const aborted=err.name==="AbortError";
     cnt.classList.toggle("hint",aborted); // an error is not an offer: drop the link colour
-    cnt.textContent=aborted?deferLabel(det.dataset.indexing==="1")
+    cnt.textContent=aborted?deferLabel()
                            :"⚠ "+(err.message||tx("search.failedDict"));
   });
 }
@@ -4984,9 +5101,8 @@ function renderSlot(box,h,mode,q,perDict,group){
     const det=document.createElement("details");
     det.className="dict";
     det.dataset.deferred=h.dict; // also what excludes it from expand-all
-    if(h.indexing)det.dataset.indexing="1";
     det.innerHTML=`<summary>${esc(hitName(h))}`+
-      `<span class="count hint">${esc(deferLabel(h.indexing))}</span></summary>`;
+      `<span class="count hint">${esc(deferLabel())}</span></summary>`;
     // `toggle` does not bubble, so this is bound to the element rather than
     // delegated on #out. It is not `once`: a failed load re-arms itself.
     det.addEventListener("toggle",()=>{if(det.open)loadDeferred(det,box,h,mode,q)});
@@ -5143,16 +5259,74 @@ let maskGeneration=0,maskControllers=new Set(),maskRows=[],maskCurrent=0;
 let maskPattern="",maskSelection="",maskSubmitRequested=false,maskNavToken=0,maskRestoreScroll=null;
 let maskStripVersion=0,maskStripRendered=-1,maskChipMap=new Map(),maskActiveKey="";
 let maskBaseRows=[],maskBaseCurrent=0,maskFindRows=[],maskFindFilter=false,maskFindWildcard=false;
-let maskFindIndex=-1,maskFindMatch=null,maskFindTimer=0,maskFindQuery="";
+let maskFindIndex=-1,maskFindMatch=null,maskFindTimer=0,maskFindQuery="",maskFindApproved=false,maskFindAwaitingApply=false,maskBusyJobs=new Set(),maskFindGeneration=0;
+let maskMemorySnapshot=null;
+function maskMemoryStop(){
+  if(maskMemorySnapshot){maskMemorySnapshot("wildcard_memory_end");maskMemorySnapshot=null}
+}
+let maskHeadwordControl=null;
+function maskFindThreshold(){
+  return maskHeadwordControl?.threshold()??100000;
+}
+function maskFindBaseTotal(){return maskBaseRows.reduce((sum,row)=>sum+(row.state==="ready"?row.total:0),0)}
+function maskFindNeedsApply(){return maskHeadwordControl?.needsApply(maskFindBaseTotal())??(maskFindBaseTotal()>=maskFindThreshold())}
+function maskFindStopPending(){
+  clearTimeout(maskFindTimer);
+  for(const row of maskFindRows)row.abort?.abort();
+  if(maskRows===maskFindRows){maskRows=maskBaseRows;maskCurrent=maskBaseCurrent}
+  maskFindRows=[];maskFindIndex=-1;maskFindMatch=null;
+}
+maskHeadwordControl=window.wudictHeadwordControl.create({
+  dock:$("maskDock"),
+  ids:{mode:"maskFindMode",mask:"maskFindWildcard",input:"maskFindInput",
+    apply:"maskFindApply",count:"maskFindCount",previous:"maskFindPrev",next:"maskFindNext"},
+  labels:{search:tx("browse.findWords"),filter:tx("browse.filterPlaceholder"),
+    filterMode:tx("browse.filterWords"),searchMode:tx("browse.searchWords"),wildcard:tx("browse.wildcardsSearch"),
+    apply:tx("browse.runFind"),previous:tx("browse.previousMatch"),next:tx("browse.nextMatch")},
+  maxRows:3,
+  onQuery:maskFindInputChanged,
+  onMode:()=>{if(!maskBusyJobs.size)maskFindSwitch(!maskFindFilter)},
+  onMask:()=>{if(maskBusyJobs.size)return;maskFindWildcard=!maskFindWildcard;maskFindApproved=false;maskFindStart();maskFindControls()},
+  onThreshold:maskFindThresholdChanged,onApply:maskFindApply,onStep:maskFindTurn
+});
+const headwordApplyThreshold=$("headwordApplyThreshold");
+headwordApplyThreshold.value=String(window.wudictHeadwordControl.threshold());
+headwordApplyThreshold.addEventListener("change",()=>window.wudictHeadwordControl.setThreshold(headwordApplyThreshold.value));
+window.addEventListener("wudict:headword-threshold-change",event=>{
+  headwordApplyThreshold.value=String(Number(event.detail));
+});
+window.addEventListener("storage",event=>{
+  if(event.key==="wudict_browse_mask_threshold")headwordApplyThreshold.value=String(window.wudictHeadwordControl.threshold());
+});
+function maskBusyApply(){
+  const busy=maskBusyJobs.size>0,body=document.body;
+  body.classList.toggle("mask-computing",busy);
+  body.setAttribute("aria-busy",String(busy));
+  for(const id of ["q","mode","modeMenuBtn","dict","pinBtn","wideBtn","expandBtn","panelBtn","maskDict",
+    "maskFindMode","maskFindWildcard","maskFindInput","maskFindApply"]){
+    const el=$(id);if(el)el.disabled=busy;
+  }
+  for(const el of document.querySelectorAll("#searchHistory button, #maskWords button"))el.disabled=busy;
+}
+function maskBusyStart(key){maskBusyJobs.add(key);maskBusyApply()}
+function maskBusyFinish(key){maskBusyJobs.delete(key);maskBusyApply()}
+function maskWorkerCount(count){
+  const cores=Math.max(1,Number(navigator.hardwareConcurrency)||1);
+  return Math.min(count,cores);
+}
 function maskAbort(){
+  maskMemoryStop();
   maskGeneration++;maskNavToken++;
   for(const controller of maskControllers)controller.abort();
   maskControllers.clear();
+  maskBusyJobs.clear();maskFindGeneration++;
+  maskBusyApply();
+  maskProgressHide();
   setBusy(false);
 }
 function maskInvalidate(){
   maskAbort();clearTimeout(maskFindTimer);maskRows=[];maskBaseRows=[];maskFindRows=[];maskPattern="";maskSelection="";
-  maskFindQuery="";maskFindIndex=-1;maskFindMatch=null;$("maskFindInput").value="";maskFindControls();
+  maskFindQuery="";maskFindIndex=-1;maskFindMatch=null;maskFindApproved=false;maskFindAwaitingApply=false;$("maskFindInput").value="";maskFindControls();
   maskStripVersion++;maskStripRendered=-1;maskChipMap.clear();maskActiveKey="";
   if(searchAC)searchAC.abort();searchSeq++;
   $("maskDict").replaceChildren();$("maskLetters").replaceChildren();
@@ -5217,13 +5391,14 @@ function maskMenu(){
       complete=false;
       if(row.state==="pending")prefixKnown=false;
     }
+    if(row.partial)complete=false;
   }
   menu.replaceChildren(...maskRows.filter(row=>row.state!=="ready"||row.total>0).map(row=>{
     const option=document.createElement("option");option.value=row.id;
     const range=row.firstPage===null?"…":row.firstPage===row.firstPage+row.pages-1
       ?String(row.firstPage):row.firstPage+"–"+(row.firstPage+row.pages-1);
     option.textContent=row.name+(row.state==="pending"?" · …":row.state==="error"?" · ⚠":
-      " · "+window.wudictI18n.number(row.total)+" ("+range+")");
+      " · "+window.wudictI18n.number(row.total)+(row.partial?"+":"")+" ("+range+")");
     return option;
   }));
   if(selection&&[...menu.options].some(option=>option.value===selection))menu.value=selection;
@@ -5231,6 +5406,8 @@ function maskMenu(){
   const row=maskRows[maskCurrent],result=row?.data;
   const current=result?(row.firstPage===null?"…":String(row.firstPage+result.page-1)):"…";
   $("maskPage").textContent=current+"/"+(complete?String(pages):"…");
+  $("maskPage").disabled=!complete||pages===0;
+  $("maskPage").setAttribute("aria-label",tx("browse.gotoBlock"));
   maskStripPaint();
 }
 function maskNeighbor(from,step){
@@ -5244,7 +5421,7 @@ function maskRender(){
   const result=row.data;
   $("maskPrev").disabled=(!result||result.page<=1)&&maskNeighbor(maskCurrent,-1)<0;
   $("maskNext").disabled=(!result||result.page>=result.pages)&&maskNeighbor(maskCurrent,1)<0;
-  if(row.state==="pending"||(!result&&row.state!=="error")){$("maskWords").innerHTML='<p class="mask-empty">'+tx("search.wildcardsLoading")+'</p>';return}
+  if((row.state==="pending"&&!row.streamWords)||(!result&&row.state!=="error")){$("maskWords").innerHTML='<p class="mask-empty">'+tx("search.wildcardsLoading")+'</p>';return}
   if(row.state==="error"){$("maskWords").innerHTML='<p class="mask-empty">'+esc(row.error)+'</p>';return}
   if(!result?.words?.length){$("maskWords").innerHTML='<p class="mask-empty">'+tx("search.wildcardsEmpty")+'</p>';return}
   $("maskWords").replaceChildren(...result.words.map((word,i)=>{
@@ -5271,10 +5448,11 @@ async function maskFetch(row,page,generation,navToken){
     const params=new URLSearchParams({dict:row.id,q:maskPattern,p:String(page),wildcards:"1"});
     if(row.within){params.set("within",row.within);params.set("withinWildcards",row.withinMask?"1":"0")}
     const response=await fetch("/api/browse/find?"+params,{signal:controller.signal});
-    if(!response.ok)throw new Error(tx("search.failedDict"));
+    if(!response.ok){const body=await response.json().catch(()=>({}));throw new Error(window.wudictI18n.errorText(body.error||tx("search.failedDict")))}
     const data=await response.json();if(generation!==maskGeneration)return;
     if(row.state!=="ready")maskStripVersion++;
     row.state="ready";row.total=data.total;row.alphabet=data.alphabet||[];row.size=data.size;
+    if(!row.within)maskSaveBase(row,data);
     if(row.wantedPage!==page&&maskRows[maskCurrent]===row){
       maskSelect(maskCurrent,Math.min(Math.max(1,row.wantedPage),Math.max(1,data.pages)));
       return;
@@ -5291,20 +5469,249 @@ async function maskFetch(row,page,generation,navToken){
     if(navToken===maskNavToken&&maskRows[maskCurrent]===row){row.data=data;maskRender()}
     else if(page===1&&row.wantedPage===1&&maskRows[maskCurrent]===row)maskRender();
     maskMenu();
-    if(row.within)maskFindControls();
+    maskFindControls();
     if(maskRows[maskCurrent]===row&&row.total===0){const next=maskNeighbor(maskCurrent,1);if(next>=0)maskSelect(next)}
+    else if(!row.within&&maskRows[maskCurrent]===row)maskPrefetchBasePage(row,page+1,generation);
   }catch(error){
     if(controller.signal.aborted||generation!==maskGeneration)return;
     row.state="error";row.error=error.message;maskStripVersion++;maskMenu();
-    if(row.within)maskFindControls();
+    maskFindControls();
     if(maskRows[maskCurrent]===row)maskRender();
   }finally{maskControllers.delete(controller);if(row.abort===controller)row.abort=null}
+}
+function maskCacheKey(row,kind,query="",wildcard=false){
+  return "wudict_mask_"+kind+":"+[maskSelection,maskPattern,row.id,query,wildcard?1:0].join("|");
+}
+function maskSaveBase(row,data=row.data){
+  if(row.state!=="ready"||!data)return;
+  window.wudictHeadwordControl.cacheWrite(maskCacheKey(row,"base"),{total:row.total,alphabet:row.alphabet,size:row.size});
+  window.wudictHeadwordControl.cacheWrite(maskCacheKey(row,"page"+data.page),data);
+}
+function maskRestoreBase(row){
+  const saved=window.wudictHeadwordControl.cacheRead(maskCacheKey(row,"base"));
+  if(!saved||!Number.isSafeInteger(saved.total))return false;
+  row.total=saved.total;row.alphabet=saved.alphabet||[];row.size=saved.size||300;
+  const data=window.wudictHeadwordControl.cacheRead(maskCacheKey(row,"page1"));
+  if(data?.page===1&&Array.isArray(data.words)){row.state="ready";row.data=data}
+  return true;
+}
+function maskRestoreBasePage(row,page){
+  const data=window.wudictHeadwordControl.cacheRead(maskCacheKey(row,"page"+page));
+  if(!data||data.page!==page||!Array.isArray(data.words))return false;
+  row.state="ready";row.data=data;return true;
+}
+function maskPrefetchBasePage(row,page,generation=maskGeneration){
+  if(row.within||!row.total||page<1||page>Math.ceil(row.total/(row.size||300)))return;
+  if(window.wudictHeadwordControl.cacheRead(maskCacheKey(row,"page"+page)))return;
+  if(row.prefetching?.has(page))return;
+  if(!row.prefetching)row.prefetching=new Map();
+  const controller=new AbortController();maskControllers.add(controller);
+  const params=new URLSearchParams({dict:row.id,q:maskPattern,p:String(page),wildcards:"1"});
+  const request=fetch("/api/browse/find?"+params,{signal:controller.signal}).then(async response=>{
+    if(!response.ok) return null;
+    const data=await response.json();
+    if(generation===maskGeneration&&maskRows.includes(row)&&data.page===page)
+      window.wudictHeadwordControl.cacheWrite(maskCacheKey(row,"page"+page),data);
+    return data;
+  }).catch(()=>{}).finally(()=>{
+    row.prefetching.delete(page);maskControllers.delete(controller);
+  });
+  row.prefetching.set(page,request);
+  return request;
+}
+function maskProgressShow(message,onStop){
+  const progress=$("maskSearchProgress");progress.hidden=false;
+  $("maskSearchProgressText").textContent=message;
+  $("maskSearchStop").hidden=false;$("maskSearchStop").onclick=onStop;
+}
+function maskProgressUpdate(message){if(!$("maskSearchProgress").hidden)$("maskSearchProgressText").textContent=message}
+function maskProgressHide(){$("maskSearchProgress").hidden=true;$("maskSearchStop").onclick=null}
+function maskFindCommittedRows(){
+  const committed=[];
+  for(const row of maskFindRows){
+    if(row.state==="pending")break;
+    committed.push(row);
+    if(row.partial)break;
+  }
+  return committed;
+}
+function maskFindOrderedTotal(){
+  return maskFindCommittedRows().reduce((sum,row)=>sum+(row.total||0),0);
+}
+function maskPrefetchFindPages(){
+  if(maskFindFilter||!maskFindRows.length)return;
+  const rows=maskFindCommittedRows(),available=rows.reduce((sum,row)=>sum+(row.streamPositions?.length||0),0);
+  if(!available)return;
+  const next=maskFindIndex<0?0:(maskFindIndex+1)%available;
+  const targets=[next,(next+1)%available];
+  if(maskFindIndex>=0)targets.push((maskFindIndex-1+available)%available);
+  const seen=new Set();
+  for(const target of targets){
+    let at=target;
+    for(const found of rows){
+      const count=found.streamPositions?.length||0;
+      if(at>=count){at-=count;continue}
+      const base=maskBaseRows.find(row=>row.id===found.id);
+      if(!base)break;
+      const page=Math.floor(found.streamPositions[at]/(base.size||300))+1,key=base.id+":"+page;
+      if(!seen.has(key)){seen.add(key);maskPrefetchBasePage(base,page)}
+      break;
+    }
+  }
+}
+function maskFindProgress(row){
+  const done=maskFindRows.filter(item=>item.state==="error"||item.state==="ready"&&!item.partial).length;
+  maskProgressUpdate(row.name+" · "+window.wudictI18n.number(done)+"/"+
+    window.wudictI18n.number(maskFindRows.length));
+}
+function maskStopFind(job){
+  maskMemoryStop();
+  for(const row of maskFindRows){
+    row.abort?.abort();
+    if(row.streamWords)window.wudictHeadwordControl.cacheWrite(maskCacheKey(row,"filter",row.within,row.withinMask),{
+      total:row.total,alphabet:row.alphabet||[],positions:row.streamPositions||[],words:row.streamWords,partial:true});
+  }
+  if(job)maskBusyFinish(job);
+  maskProgressHide();maskRender();maskFindControls();
+}
+function maskStreamPageMetrics(data){
+  const words=data.words||[],positions=data.positions||[];
+  const chars=words.reduce((sum,word)=>sum+word.length,0);
+  const jsonBytes=new TextEncoder().encode(JSON.stringify(data)).length;
+  return {jsonBytes,heapBytes:chars*2+words.length*40+positions.length*8+256,words:words.length};
+}
+function maskStreamPageTrace(row,event,pageMetrics){
+  let enabled=false;try{enabled=localStorage.getItem("wudict_dictionary_cache_diagnostics")==="1"}catch(_){}
+  if(!enabled||!row.streamCachePages)return;
+  const totalPages=Math.ceil((row.total||0)/300),average=row.streamCachePages?row.streamCacheHeapBytes/row.streamCachePages:0;
+  fetch("/api/browse-diagnostic",{method:"POST",headers:{"Content-Type":"application/json"},keepalive:true,
+    body:JSON.stringify({event,dict:row.id,page:row.streamCachePages,words:row.streamWords.length,
+      pageBytes:pageMetrics?.heapBytes||0,pageJsonBytes:pageMetrics?.jsonBytes||0,
+      cachePages:row.streamCachePages,cacheBytes:row.streamCacheHeapBytes,cacheJsonBytes:row.streamCacheJsonBytes,
+      cacheStoredPages:row.streamCacheStoredPages,cacheStoredBytes:row.streamCacheStoredBytes,
+      totalPages,estimatedAllPagesBytes:Math.round(average*totalPages)})}).catch(()=>{});
+}
+function maskCacheStreamPages(row,complete=false){
+  if(!row.streamPages)row.streamPages=new Map();
+  row.streamCacheNextPage||=1;row.streamCachePages||=0;row.streamCacheHeapBytes||=0;row.streamCacheJsonBytes||=0;
+  row.streamCacheStoredPages||=0;row.streamCacheStoredBytes||=0;row.streamCacheStorageFull||=false;
+  let lastMetrics=null;
+  while(row.streamCacheNextPage*300<=row.streamWords.length||complete&&(row.streamCacheNextPage-1)*300<row.streamWords.length){
+    const page=row.streamCacheNextPage++,start=(page-1)*300,end=Math.min(start+300,row.streamWords.length);
+    const data={page,words:row.streamWords.slice(start,end),positions:row.streamPositions.slice(start,end),
+      total:row.total,pages:Math.ceil(row.total/300),size:300,partial:!complete};
+    row.streamPages.set(page,data);lastMetrics=maskStreamPageMetrics(data);
+    row.streamCachePages++;row.streamCacheHeapBytes+=lastMetrics.heapBytes;row.streamCacheJsonBytes+=lastMetrics.jsonBytes;
+    if(!row.streamCacheStorageFull){
+      if(window.wudictHeadwordControl.cacheWrite(maskCacheKey(row,"filter-page"+page,row.within,row.withinMask),data)){
+        row.streamCacheStoredPages++;row.streamCacheStoredBytes+=lastMetrics.jsonBytes;
+      }else row.streamCacheStorageFull=true;
+    }
+    if(row.streamCachePages===1||row.streamCachePages%100===0)
+      maskStreamPageTrace(row,"wildcard_cache_checkpoint",lastMetrics);
+  }
+  if(complete){
+    const totalPages=Math.ceil(row.total/300);
+    for(const data of row.streamPages.values()){data.total=row.total;data.pages=totalPages;data.partial=false}
+    if(!row.streamCacheStorageFull&&row.streamCacheStoredPages===row.streamCachePages){
+      window.wudictHeadwordControl.cacheWrite(maskCacheKey(row,"filter-pages",row.within,row.withinMask),{
+        total:row.total,pages:row.streamCachePages,storedPages:row.streamCacheStoredPages,alphabet:row.alphabet||[]});
+    }
+    maskStreamPageTrace(row,"wildcard_cache_complete",lastMetrics);
+  }
+}
+function maskRestoreFilterPages(row){
+  const saved=window.wudictHeadwordControl.cacheRead(maskCacheKey(row,"filter-pages",row.within,row.withinMask));
+  if(!saved||!Number.isSafeInteger(saved.pages)||saved.pages<1||saved.storedPages!==saved.pages)return false;
+  const pages=[];let wordCount=0;
+  for(let page=1;page<=saved.pages;page++){
+    const data=window.wudictHeadwordControl.cacheRead(maskCacheKey(row,"filter-page"+page,row.within,row.withinMask));
+    if(!data||data.page!==page||!Array.isArray(data.words)||!Array.isArray(data.positions)||data.words.length!==data.positions.length)return false;
+    data.total=saved.total;data.pages=saved.pages;data.size=300;data.partial=false;
+    pages.push(data);wordCount+=data.words.length;
+  }
+  if(wordCount!==saved.total)return false;
+  row.total=saved.total;row.alphabet=saved.alphabet||[];row.size=300;row.partial=false;row.state="ready";
+  row.streamWords=[];row.streamPositions=[];row.streamPages=new Map();
+  for(const data of pages){row.streamPages.set(data.page,data);row.streamWords.push(...data.words);row.streamPositions.push(...data.positions)}
+  row.data=row.streamPages.get(1)||null;
+  row.streamCacheNextPage=saved.pages+1;row.streamCachePages=saved.pages;row.streamCacheStoredPages=saved.pages;
+  row.streamCacheJsonBytes=pages.reduce((sum,data)=>sum+maskStreamPageMetrics(data).jsonBytes,0);
+  row.streamCacheHeapBytes=pages.reduce((sum,data)=>sum+maskStreamPageMetrics(data).heapBytes,0);
+  maskStreamPageTrace(row,"wildcard_cache_restored",pages.length?maskStreamPageMetrics(pages[pages.length-1]):null);
+  return true;
+}
+async function maskFetchWithinStream(row,generation,navToken,findGeneration){
+  const controller=new AbortController();maskControllers.add(controller);row.abort=controller;
+  row.streamWords=[];row.streamPositions=[];row.streamPages=new Map();row.streamCacheNextPage=1;
+  row.streamCachePages=0;row.streamCacheHeapBytes=0;row.streamCacheJsonBytes=0;row.streamCacheStoredPages=0;
+  row.streamCacheStoredBytes=0;row.streamCacheStorageFull=false;row.partial=true;
+  const params=new URLSearchParams({dict:row.id,q:maskPattern,wildcards:"1",within:row.within,
+    withinWildcards:row.withinMask?"1":"0",stream:"1"});
+  const current=()=>generation===maskGeneration&&findGeneration===maskFindGeneration&&row===maskFindRows.find(item=>item.id===row.id);
+  try{
+    const response=await fetch("/api/browse/find?"+params,{signal:controller.signal});
+    if(!response.ok)throw new Error(tx("search.failedDict"));
+    const reader=response.body.getReader(),decoder=new TextDecoder();let buffer="";
+    const consume=async(final=false)=>{
+      let newline;
+      while((newline=buffer.indexOf("\n"))>=0||final&&buffer.length){
+        const line=newline>=0?buffer.slice(0,newline):buffer;buffer=newline>=0?buffer.slice(newline+1):"";
+        if(!line.trim())continue;
+        const event=JSON.parse(line);if(!current())return;
+        if(event.type==="error")throw new Error(event.error||tx("search.failedDict"));
+        if(event.words?.length){row.streamWords.push(...event.words);row.streamPositions.push(...(event.positions||[]))}
+        row.total=event.total||0;row.alphabet=event.alphabet||row.alphabet;row.size=300;
+        if(event.done)maskCacheStreamPages(row,true);else maskCacheStreamPages(row,false);
+        const page=Math.max(1,Math.min(row.wantedPage||1,Math.max(1,Math.ceil(row.total/300))));
+        const cachedPage=row.streamPages?.get(page);
+        row.data=cachedPage?{...cachedPage,total:row.total,pages:Math.ceil(row.total/300),partial:!event.done}
+          :{words:row.streamWords.slice((page-1)*300,page*300),total:row.total,page,
+            pages:Math.ceil(row.total/300),size:300,alphabet:row.alphabet,partial:!event.done,
+            positions:row.streamPositions.slice((page-1)*300,page*300)};
+        if(event.done){row.partial=false;row.state="ready";row.total=event.total||0;row.alphabet=event.alphabet||[];
+          if(row.streamWords.length<=20000)window.wudictHeadwordControl.cacheWrite(maskCacheKey(row,"filter",row.within,row.withinMask),{
+            total:row.total,alphabet:row.alphabet,positions:row.streamPositions,words:row.streamWords});}
+        else row.state="ready";
+        // Search mode keeps the original strip. Rebuilding its thousands of
+        // chips for every streamed progress event exhausts the WebView heap.
+        if(maskRows===maskFindRows){maskStripVersion++;maskStripRendered=-1}
+        maskRender();maskFindControls();
+        if(event.words?.length||event.done)maskPrefetchFindPages();
+        maskFindProgress(row);
+      }
+    };
+    while(true){const {value,done}=await reader.read();if(done){buffer+=decoder.decode();await consume(true);break}
+      buffer+=decoder.decode(value,{stream:true});await consume()}
+  }catch(error){
+    if(!controller.signal.aborted&&generation===maskGeneration&&findGeneration===maskFindGeneration){
+      row.state="error";row.error=error.message;row.partial=false;maskStripVersion++;maskRender();
+    }
+  }finally{maskControllers.delete(controller);if(row.abort===controller)row.abort=null;
+    if(navToken===maskNavToken&&maskRows===maskFindRows)maskRender()}
 }
 function maskSelect(index,page=1){
   if(index<0||index>=maskRows.length)return;
   maskCurrent=index;const row=maskRows[index],navToken=++maskNavToken;
   row.wantedPage=page;
-  if(row.data?.page===page){maskRender();return}
+  if(row.data?.page===page){maskRender();maskPrefetchBasePage(row,page+1);return}
+  if(!row.within&&maskRestoreBasePage(row,page)){maskRender();maskMenu();maskPrefetchBasePage(row,page+1);return}
+  const prefetched=row.prefetching?.get(page);
+  if(!row.within&&prefetched){
+    const generation=maskGeneration;
+    row.data=null;maskRender();
+    prefetched.then(()=>{
+      if(generation!==maskGeneration||maskRows[maskCurrent]!==row||row.wantedPage!==page)return;
+      if(maskRestoreBasePage(row,page)){maskRender();maskMenu();maskPrefetchBasePage(row,page+1)}
+      else maskFetch(row,page,maskGeneration,navToken);
+    });
+    return;
+  }
+  if(row.streamWords){row.wantedPage=page;const cachedPage=row.streamPages?.get(page);
+    row.data=cachedPage?{...cachedPage,total:row.total,pages:Math.ceil(row.total/300),partial:!!row.partial}
+      :{words:row.streamWords.slice((page-1)*300,page*300),total:row.total,page,
+        pages:Math.ceil(row.total/300),size:300,alphabet:row.alphabet,positions:row.streamPositions.slice((page-1)*300,page*300)};
+    maskRender();return}
   row.data=null;maskRender();
   if(row.state!=="pending")maskFetch(row,page,maskGeneration,navToken);
 }
@@ -5318,16 +5725,38 @@ function maskTurn(step){
     maskSelect(next,step<0?Math.max(1,target.pages||target.data?.pages||1):1);
   }
 }
+function maskGotoOpen(){
+  let pages=0,complete=true;
+  for(const row of maskRows){
+    if(row.state!=="ready"){complete=false;break}
+    pages+=row.pages||0;
+  }
+  if(!complete||!pages)return;
+  const row=maskRows[maskCurrent],current=row?.data&&row.firstPage!==null?row.firstPage+row.data.page-1:1;
+  const input=$("maskGotoInput");input.min="1";input.max=String(pages);input.value=String(current);
+  $("maskGotoRange").textContent=tx("browse.gotoBlockRange",{total:window.wudictI18n.number(pages)});
+  $("maskGotoDialog").showModal();input.focus();input.select();
+}
+function maskGotoApply(){
+  const input=$("maskGotoInput"),page=Number(input.value);
+  let pages=0;for(const row of maskRows)pages+=row.pages||0;
+  if(!Number.isInteger(page)||page<1||page>pages){input.reportValidity();return}
+  for(let i=0;i<maskRows.length;i++){
+    const row=maskRows[i],first=row.firstPage||0,last=first+(row.pages||0)-1;
+    if(first&&page>=first&&page<=last){$("maskGotoDialog").close();maskSelect(i,page-first+1);return}
+  }
+}
 async function maskRun(pattern){
   maskAbort();maskPattern=pattern;lastQuery=pattern;maskReturn="";
   clearTimeout(maskFindTimer);maskFindRows=[];maskFindQuery="";maskFindIndex=-1;maskFindMatch=null;
-  maskFindFilter=false;$("maskFindInput").value="";
+  maskFindFilter=false;maskFindApproved=false;maskFindAwaitingApply=false;$("maskFindInput").value="";
   if(searchAC)searchAC.abort();searchSeq++;$("out").replaceChildren();setStatus("");
   const selection=$("dict").value||"all";
   maskSelection=selection;
   const ids=selection==="all"?activeUserGroupIds():selection.startsWith("g:")?groupIds(selection):[selection];
   const byId=new Map(dicts.map(d=>[d.id,d]));
   maskRows=ids.filter(id=>byId.has(id)).map(id=>({id,name:dictLabel(byId.get(id)),state:"pending",total:0,data:null,alphabet:[],size:300,wantedPage:1,error:""}));
+  for(const row of maskRows)maskRestoreBase(row);
   maskBaseRows=maskRows;maskBaseCurrent=0;maskFindControls();
   maskStripVersion++;
   const saved=new URLSearchParams(location.search);
@@ -5336,18 +5765,32 @@ async function maskRun(pattern){
   maskCurrent=index>=0?index:0;
   if(index>=0){
     maskRows[index].wantedPage=Math.min(10000000,Math.max(1,Number.parseInt(saved.get("maskpage"),10)||1));
+    if(maskRows[index].data?.page!==maskRows[index].wantedPage&&
+       !maskRestoreBasePage(maskRows[index],maskRows[index].wantedPage)){
+      maskRows[index].state="pending";maskRows[index].data=null;
+    }
     maskRestoreScroll=Math.min(10000000,Math.max(0,Number.parseInt(saved.get("maskscroll"),10)||0));
   }else maskRestoreScroll=null;
   maskRender();
   if(!maskRows.length){if(!dictsSettled){staleSearch=true;maskSubmitRequested=true}return}
-  const generation=maskGeneration,rows=maskBaseRows;setBusy(true);
+  const generation=maskGeneration,rows=maskBaseRows,job={kind:"base",generation};maskBusyStart(job);setBusy(true);
+  const cached=rows.filter(row=>row.state==="ready").length;
+  if(cached===rows.length){maskBusyFinish(job);setBusy(false);maskProgressHide();return}
   let next=0;
+  maskProgressShow(tx("search.wildcardsRun")+" · "+cached+"/"+rows.length,()=>{
+    maskAbort();setBusy(false);maskProgressHide();
+    for(const row of rows)if(row.state==="pending"){row.state="error";row.error=tx("dictUI.stop")}
+    maskRender();
+  });
   const worker=async()=>{while(generation===maskGeneration&&next<rows.length){
-    const row=rows[next++];await maskFetch(row,row.wantedPage,generation,row===maskRows[maskCurrent]?maskNavToken:-1);
+    const row=rows[next++];if(row.state==="ready")continue;
+    await maskFetch(row,row.wantedPage,generation,row===maskRows[maskCurrent]?maskNavToken:-1);
+    maskProgressUpdate(row.name+" · "+window.wudictI18n.number(rows.filter(item=>item.state==="ready").length)+"/"+
+      window.wudictI18n.number(rows.length));
   }};
-  await Promise.all(Array.from({length:Math.min(3,rows.length)},worker));
+  await Promise.all(Array.from({length:maskWorkerCount(rows.length)},worker));
   if(generation!==maskGeneration)return;
-  setBusy(false);
+  maskBusyFinish(job);setBusy(false);maskProgressHide();
   if(rows.every(row=>row.state==="ready"&&row.total===0)&&maskRows===rows)maskRender();
 }
 function maskRestoreCached(url){
@@ -5358,43 +5801,42 @@ function maskRestoreCached(url){
   if(index<0)return false;
   maskAbort();
   if(searchAC)searchAC.abort();searchSeq++;
+  maskRows=maskBaseRows;maskCurrent=maskBaseCurrent;maskFindRows=[];maskFindFilter=false;
   const page=Math.min(10000000,Math.max(1,Number.parseInt(url.searchParams.get("maskpage"),10)||1));
   maskRestoreScroll=Math.min(10000000,Math.max(0,Number.parseInt(url.searchParams.get("maskscroll"),10)||0));
   $("q").value=maskPattern;$("dict").value=maskSelection;
   setSearchMode("wildcards");lastQuery=maskPattern;lastScope=null;scopeOnce=null;maskReturn="";
   $("out").replaceChildren();setStatus("");syncChips();sbarPaint();
   maskSelect(index,page);
-  const pending=[...new Set([...maskRows,...maskBaseRows].filter(row=>row.state==="pending"))];
-  pending.sort((a,b)=>a===maskRows[index]?-1:b===maskRows[index]?1:0);
-  if(pending.length){
-    const generation=maskGeneration;let next=0;setBusy(true);
-    const worker=async()=>{while(generation===maskGeneration&&next<pending.length){
-      const row=pending[next++];
-      await maskFetch(row,row.wantedPage,generation,row===maskRows[maskCurrent]?maskNavToken:-1);
-    }};
-    Promise.all(Array.from({length:Math.min(3,pending.length)},worker)).then(()=>{
-      if(generation===maskGeneration)setBusy(false);
-    });
+  const find=url.searchParams.get("find")||"";
+  if(find){
+    maskFindWildcard=url.searchParams.get("findwildcards")==="1";
+    maskFindFilter=url.searchParams.get("filter")==="1";
+    $("maskFindInput").value=find;maskFindQuery=find;
+    maskFindApproved=true;maskFindStart();
+    maskFindIndex=Math.max(-1,Number.parseInt(url.searchParams.get("findindex"),10)||-1);
+    maskFindControls();maskRender();
   }
+  // Restore the visible dictionary/page first. maskSelect reuses its cached
+  // page, or fetches just that page if it was still pending; other dictionaries
+  // stay lazy until selected so returning from an article never waits for the
+  // rest of a large group to finish loading.
   return true;
 }
 function maskFindControls(){
   const input=$("maskFindInput"),query=input.value.trim();
-  input.placeholder=tx(maskFindFilter?"browse.filterPlaceholder":"browse.findWords");
-  input.setAttribute("aria-label",input.placeholder);
-  $("maskFindMode").innerHTML=maskFindFilter?
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h18l-7 8v5l-4 2v-7z"/></svg>':
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 5 5"/></svg>';
-  $("maskFindMode").classList.toggle("is-on",maskFindFilter);
-  $("maskFindMode").setAttribute("aria-pressed",String(maskFindFilter));
-  $("maskFindMode").setAttribute("aria-label",tx(maskFindFilter?"browse.searchWords":"browse.filterWords"));
-  $("maskFindWildcard").classList.toggle("is-on",maskFindWildcard);
-  $("maskFindWildcard").setAttribute("aria-pressed",String(maskFindWildcard));
+  if(maskFindNeedsApply()&&!maskFindApproved&&query&&maskFindRows.length){
+    maskFindStopPending();maskFindAwaitingApply=true;maskRender();
+  }
   const rows=query?maskFindRows:maskBaseRows;
-  const total=rows.reduce((sum,row)=>sum+(row.state==="ready"?row.total:0),0);
-  const settled=rows.every(row=>row.state!=="pending");
-  $("maskFindCount").textContent=(maskFindFilter?total:Math.max(0,maskFindIndex+1))+"/"+total+(settled?"":"+");
-  $("maskFindPrev").disabled=$("maskFindNext").disabled=maskFindFilter||!query||!settled||!total;
+  const total=maskFindOrderedTotal();
+  const available=maskFindCommittedRows().reduce((sum,row)=>sum+(row.streamPositions?.length||0),0);
+  const settled=rows.every(row=>row.state!=="pending"&&!row.partial);
+  maskHeadwordControl.paint({filtering:maskFindFilter,mask:maskFindWildcard,
+    applyRequired:maskFindNeedsApply(),applyEnabled:!!query&&settled,busy:maskBusyJobs.size>0,
+    count:(maskFindFilter?total:Math.max(0,maskFindIndex+1))+"/"+total+(settled?"":"+"),
+    previousDisabled:maskFindFilter||!query||!available,
+    nextDisabled:maskFindFilter||!query||!available});
 }
 function maskFindSwitch(filter){
   if(maskFindFilter===filter)return;
@@ -5412,79 +5854,121 @@ function maskFindSwitch(filter){
     maskRows=maskBaseRows;maskCurrent=maskBaseCurrent;
   }
   maskStripVersion++;maskStripRendered=-1;maskRender();maskFindControls();
+  if(!filter)maskPrefetchFindPages();
 }
 function maskFindStart(){
+  maskMemoryStop();
   const query=$("maskFindInput").value.trim();
+  if(maskFindRows.some(row=>row.partial))for(const row of maskFindRows)
+    window.wudictHeadwordControl.cacheWrite(maskCacheKey(row,"filter",row.within,row.withinMask),null);
+  if(maskFindNeedsApply()&&!maskFindApproved){
+    maskFindStopPending();maskFindAwaitingApply=!!query;maskFindQuery=query;
+    maskRender();maskFindControls();return;
+  }
+  maskFindAwaitingApply=false;
   for(const row of maskFindRows)row.abort?.abort();
+  const oldJob=[...maskBusyJobs].find(job=>job.kind==="find");
+  if(oldJob)maskBusyFinish(oldJob);
+  maskFindGeneration++;
   if(maskRows!==maskBaseRows){maskRows=maskBaseRows;maskCurrent=maskBaseCurrent}
   maskFindQuery=query;maskFindIndex=-1;maskFindMatch=null;maskFindRows=[];
   maskStripVersion++;maskStripRendered=-1;
   if(!query||!maskPattern||!maskBaseRows.length){maskRender();maskFindControls();return}
   maskFindRows=maskBaseRows.map(row=>({id:row.id,name:row.name,state:"pending",total:0,data:null,
     alphabet:[],size:300,wantedPage:1,error:"",within:query,withinMask:maskFindWildcard}));
+  for(const row of maskFindRows){
+    const saved=window.wudictHeadwordControl.cacheRead(maskCacheKey(row,"filter",query,maskFindWildcard));
+    if(saved&&Array.isArray(saved.words)&&Array.isArray(saved.positions)){
+      row.state="ready";row.total=saved.total;row.alphabet=saved.alphabet||[];row.partial=!!saved.partial;
+      row.streamWords=saved.words;row.streamPositions=saved.positions;row.streamPages=new Map();
+      for(let start=0,page=1;start<saved.words.length;start+=300,page++)row.streamPages.set(page,{
+        page,words:saved.words.slice(start,start+300),positions:saved.positions.slice(start,start+300),
+        total:saved.total,pages:Math.ceil(saved.total/300),size:300,alphabet:row.alphabet,partial:row.partial});
+      row.data={words:saved.words.slice(0,300),total:saved.total,page:1,pages:Math.ceil(saved.total/300),size:300,
+        alphabet:row.alphabet,positions:row.streamPositions};
+    }else maskRestoreFilterPages(row);
+  }
   if(maskFindFilter){
     maskRows=maskFindRows;maskCurrent=maskBaseCurrent;
   }
   maskRender();maskFindControls();
-  const generation=maskGeneration,rows=maskFindRows;let next=0;
+  maskPrefetchFindPages();
+  const generation=maskGeneration,rows=maskFindRows,findGeneration=maskFindGeneration,job={kind:"find",generation:findGeneration};let next=0;
+  if(rows.every(row=>row.state==="ready")){maskFindControls();maskRender();return}
+  maskBusyStart(job);
+  let active=0;
+  if(dictionaryCacheDiagnosticsEnabled()){
+    const snapshot=event=>fetch("/api/browse-diagnostic",{method:"POST",headers:{"Content-Type":"application/json"},keepalive:true,
+      body:JSON.stringify({event,active,completed:rows.filter(row=>row.state==="ready"&&!row.partial||row.state==="error").length,
+        dictionaries:rows.length})}).catch(()=>{});
+    maskMemorySnapshot=snapshot;snapshot("wildcard_memory_start");
+  }
+  const cached=rows.filter(row=>row.state==="ready"&&!row.partial).length;
+  maskProgressShow(tx("browse.filteringWords")+" · "+window.wudictI18n.number(cached)+"/"+
+    window.wudictI18n.number(rows.length),()=>maskStopFind(job));
   const worker=async()=>{while(generation===maskGeneration&&rows===maskFindRows&&next<rows.length){
-    const row=rows[next++];await maskFetch(row,1,generation,row===maskRows[maskCurrent]?maskNavToken:-1);
+    const row=rows[next++];if(row.state==="ready")continue;
+    active++;
+    try{await maskFetchWithinStream(row,generation,row===maskRows[maskCurrent]?maskNavToken:-1,findGeneration)}
+    finally{active--}
   }};
-  Promise.all(Array.from({length:Math.min(3,rows.length)},worker)).then(()=>{
-    if(rows===maskFindRows)maskFindControls();
+  Promise.all(Array.from({length:maskWorkerCount(rows.length)},worker)).then(()=>{
+    if(findGeneration===maskFindGeneration){maskMemoryStop();maskBusyFinish(job);maskProgressHide();maskFindControls()}
   });
 }
 async function maskFindTurn(step){
-  if(maskFindFilter||!maskFindRows.length||maskFindRows.some(row=>row.state==="pending"))return;
-  const total=maskFindRows.reduce((sum,row)=>sum+(row.state==="ready"?row.total:0),0);
-  if(!total)return;
-  maskFindIndex=maskFindIndex<0?(step<0?total-1:0):(maskFindIndex+step+total)%total;
+  if(maskFindFilter||!maskFindRows.length)return;
+  const rows=maskFindCommittedRows();
+  const available=rows.reduce((sum,row)=>sum+(row.streamPositions?.length||0),0);
+  if(!available)return;
+  maskFindIndex=maskFindIndex<0?(step<0?available-1:0):(maskFindIndex+step+available)%available;
   let at=maskFindIndex,row=null;
-  for(const candidate of maskFindRows){
-    if(candidate.state!=="ready")continue;
-    if(at<candidate.total){row=candidate;break}
-    at-=candidate.total;
+  for(const candidate of rows){
+    const count=candidate.streamPositions?.length||0;
+    if(at<count){row=candidate;break}
+    at-=count;
   }
   if(!row)return;
-  const page=Math.floor(at/(row.size||300))+1,token=++maskNavToken;
-  let result=row.data?.page===page?row.data:null;
-  if(!result){
-    const controller=new AbortController();maskControllers.add(controller);
-    try{
-      const params=new URLSearchParams({dict:row.id,q:maskPattern,p:String(page),wildcards:"1",
-        within:row.within,withinWildcards:row.withinMask?"1":"0"});
-      const response=await fetch("/api/browse/find?"+params,{signal:controller.signal});
-      if(!response.ok)return;
-      result=await response.json();row.data=result;
-    }catch(_){return}finally{maskControllers.delete(controller)}
-  }
+  const token=++maskNavToken;
   if(token!==maskNavToken||maskFindFilter)return;
-  const position=result.positions?.[at-(page-1)*result.size];
+  const position=row.streamPositions?.[at];
   if(position===undefined)return;
   maskFindMatch={id:row.id,position};
+  maskPrefetchFindPages();
   const base=maskBaseRows.findIndex(candidate=>candidate.id===row.id);
   if(base>=0){maskSelect(base,Math.floor(position/(maskBaseRows[base].size||300))+1);maskFindControls()}
 }
-$("maskFindMode").addEventListener("click",()=>maskFindSwitch(!maskFindFilter));
-$("maskFindWildcard").addEventListener("click",()=>{
-  maskFindWildcard=!maskFindWildcard;maskFindStart();maskFindControls();
-});
-$("maskFindInput").addEventListener("input",()=>{
+function maskFindInputChanged(){
+  if(maskBusyJobs.size)return;
+  maskFindApproved=false;maskFindAwaitingApply=false;
   maskFindQuery=$("maskFindInput").value.trim();maskFindMatch=null;maskFindIndex=-1;
+  if(maskFindNeedsApply()){maskFindStart();return}
   maskRender();maskFindControls();clearTimeout(maskFindTimer);
   maskFindTimer=setTimeout(maskFindStart,250);
-});
+}
+function maskFindThresholdChanged(){
+  maskFindApproved=false;maskFindAwaitingApply=maskFindNeedsApply()&&!!$("maskFindInput").value.trim();
+  if(maskFindAwaitingApply){maskFindStopPending();maskRender();maskFindControls()}
+  else if($("maskFindInput").value.trim())maskFindStart();else maskFindControls();
+}
+function maskFindApply(){
+  if(!maskFindNeedsApply())return;
+  maskFindApproved=true;maskFindAwaitingApply=false;clearTimeout(maskFindTimer);maskFindStart();
+}
 $("maskFindInput").addEventListener("keydown",e=>{
-  if(e.key==="Enter"){e.preventDefault();clearTimeout(maskFindTimer);maskFindStart()}
+  if(maskBusyJobs.size&&e.key!="Escape"){e.preventDefault();return}
+  if(e.key==="Enter"){e.preventDefault();clearTimeout(maskFindTimer);if(maskFindNeedsApply()&&!maskFindApproved){$("maskFindApply").click();return}maskFindStart()}
   if(e.key==="ArrowDown"||e.key==="ArrowUp"){
     e.preventDefault();maskFindTurn(e.key==="ArrowDown"?1:-1)
   }
 });
-$("maskFindPrev").addEventListener("click",()=>maskFindTurn(-1));
-$("maskFindNext").addEventListener("click",()=>maskFindTurn(1));
 $("maskDict").addEventListener("change",()=>maskSelect(maskRows.findIndex(row=>row.id===$("maskDict").value)));
 $("maskPrev").addEventListener("click",()=>maskTurn(-1));
 $("maskNext").addEventListener("click",()=>maskTurn(1));
+$("maskPage").addEventListener("click",maskGotoOpen);
+$("maskGotoCancel").addEventListener("click",()=>$("maskGotoDialog").close());
+$("maskGotoGo").addEventListener("click",maskGotoApply);
+$("maskGotoInput").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();maskGotoApply()}});
 $("maskLetters").addEventListener("click",e=>{
   const button=e.target.closest("button[data-dict][data-page]");if(!button)return;
   const index=maskRows.findIndex(row=>row.id===button.dataset.dict);
@@ -5493,8 +5977,16 @@ $("maskLetters").addEventListener("click",e=>{
 $("maskWords").addEventListener("click",e=>{
   const button=e.target.closest("button[data-word]");if(!button)return;
   const row=maskRows[maskCurrent];if(!row)return;
+  const visibleIndex=[...$("maskWords").querySelectorAll("button[data-word]")].indexOf(button);
+  const filteredOffset=Math.max(0,(row.data?.page||1)-1)*300+visibleIndex;
+  const basePosition=row.streamPositions?.[filteredOffset];
+  const basePage=Number.isInteger(basePosition)?Math.floor(basePosition/300)+1:(row.data?.page||1);
   const params=new URLSearchParams({q:maskPattern,mode:"wildcards",dict:$("dict").value||"all",
-    maskdict:row.id,maskpage:String(row.data?.page||1),maskscroll:String(Math.round(scrollY))});
+    maskdict:row.id,maskpage:String(basePage),maskscroll:String(Math.round(scrollY))});
+  const find=$("maskFindInput").value.trim();
+  if(find){params.set("find",find);if(maskFindFilter)params.set("filter","1");
+    if(maskFindWildcard)params.set("findwildcards","1");
+    params.set("findindex",String(maskFindIndex));}
   maskReturn="/?"+params.toString();
   history.replaceState(null,"",maskReturn);
   maskAbort();setSearchMode("exact");syncChips();searchFor(button.dataset.word,{scope:row.id});
@@ -5504,6 +5996,7 @@ if($("mode").value==="wildcards")maskInvalidate();
 async function doSearch(ev){
   window.wudictArticleFind?.stop();
   if(ev)ev.preventDefault();
+  if(maskBusyJobs.size)return;
   const q=$("q").value.trim();
   if(!q)return;
   if($("mode").value==="wildcards"){
@@ -5632,7 +6125,7 @@ async function doSearch(ev){
   let morphNote=null,morphAll=null;const morphSeen=new Set();
   const swap=()=>{if(stale){for(const n of stale)n.remove();stale=null}};
   try{
-    await fetchStream("/api/search?q="+encodeURIComponent(q)+"&mode="+mode+"&hl="+(hlOn?1:0)+"&dict="+encodeURIComponent(dictParam)+"&n="+perDict,msg=>{
+    await fetchStream("/api/search?q="+encodeURIComponent(q)+"&mode="+mode+"&hl="+(hlOn?1:0)+diacriticsSearchParam()+"&dict="+encodeURIComponent(dictParam)+"&n="+perDict,msg=>{
       if(seq!==searchSeq)return; // superseded by a newer search
       if(msg.t==="begin"){
         navDetach(); // the section it was walking is about to be replaced
@@ -5768,7 +6261,7 @@ document.addEventListener("click",e=>{
   e.preventDefault();
   const det=more.closest("details.dict"),box=det.parentElement,id=more.dataset.id,mode=$("mode").value;
   more.textContent="…";
-  fetchStream("/api/search?q="+encodeURIComponent(lastQuery)+"&mode="+mode+"&hl="+(hlOn?1:0)+"&dict="+id+"&n=100",msg=>{
+  fetchStream("/api/search?q="+encodeURIComponent(lastQuery)+"&mode="+mode+"&hl="+(hlOn?1:0)+diacriticsSearchParam()+"&dict="+id+"&n=100",msg=>{
     if(msg.t==="hit"){renderSlot(box,msg,mode,lastQuery,1e9);const nd=box.querySelector("details.dict");if(nd)nd.open=true}
   }).catch(()=>{more.textContent=tx("search.more")});
 });
@@ -6358,12 +6851,14 @@ function maskReturnFromURL(){
   }catch(_){return ""}
 }
 let maskReturn=maskReturnFromURL();
-$("sbarBackWords").addEventListener("click",e=>{
+function onBackWords(e){
   if(!maskReturn||e.button!==0||e.ctrlKey||e.metaKey||e.shiftKey||e.altKey)return;
   const target=new URL(maskReturn,location.origin);
   if(!maskRestoreCached(target))return;
   e.preventDefault();history.pushState(null,"",target.pathname+target.search);
-});
+}
+$("sbarBackWords").addEventListener("click",onBackWords);
+$("barBackWords").addEventListener("click",onBackWords);
 /* The sections the arrows walk. `.noindex` is not one of them: that row is the
    list of dictionaries this search could not run at all, a reference with an
    offer on it, not a place to read. A deferred section IS one - it is a
@@ -6416,8 +6911,10 @@ function sbarPaint(){
   // nowhere to walk, and the arrows are what would lie about it. Where an arrow
   // can act but has run out of list, it is dimmed instead - see sbarEndsPaint.
   $("sbarPrev").hidden=$("sbarNext").hidden=n<2;
-  $("sbarBackWords").hidden=!(browseReturn||maskReturn)||n>=2;
-  if(browseReturn||maskReturn)$("sbarBackWords").href=maskReturn||browseReturn;
+  const returnURL=maskReturn||browseReturn;
+  $("sbarBackWords").hidden=!returnURL||n>=2||document.documentElement.hasAttribute("data-webview2");
+  $("barBackWords").hidden=!returnURL;
+  if(returnURL)$("sbarBackWords").href=$("barBackWords").href=returnURL;
   $("sbarOn").setAttribute("aria-pressed",sbarWant?"true":"false");
   $("sbarOff").setAttribute("aria-pressed",sbarWant?"false":"true");
   placeDictSeg();
@@ -6786,49 +7283,6 @@ function stylerFileLine(){
    agree: this one decides what the manager says about a file, that one
    decides whether the file is there at all. */
 const BUILTIN_BACKGROUNDS=["paper_01.jpg","paper_02.jpg","paper_03.jpg"];
-
-let stylerTab="app",
-    stylerText={app:"",article:""},
-    // What is actually on disk. Closing without saving must put the page back
-    // to this: a preview that outlives the editor is a change nobody made.
-    stylerSaved={app:"",article:""},
-    // The OTHER theme's pair, held aside - both what is on disk for it and
-    // what was typed into it, because a reader who edits the day sheet and
-    // flips the theme to look has unsaved work in a theme they are no longer
-    // in. stylerText stays "the pair being edited", so every one of its
-    // twenty-odd readers is untouched, and a theme switch is a SWAP of the two
-    // rather than a fetch.
-    stylerOther={text:{app:"",article:""},saved:{app:"",article:""}},
-    stylerDir="",
-    stylerLoaded=false,
-    stylerTimer=null,
-    // "css" (either stylesheet), "files", or "presets". Tabs, but the extra
-    // two are not extra boxes: stylerTab stays the stylesheet the editor is
-    // on, so coming back from either pane lands where you left, and
-    // stylerCommit never has to know that a pane without a textarea exists.
-    stylerView="css",
-    // null until the folder has been read once, which is what lets the dot
-    // on the Files tab mean "there are files" rather than "not looked yet".
-    stylerFileRows=null,
-    stylerFileLimits=null,
-    // Which stylesheet the textarea is currently SHOWING, "" until it has
-    // shown one. stylerCommit folds the box back into the pair, and before
-    // the first render the box mirrors nothing: committing an empty textarea
-    // as the app sheet is how a freshly loaded app.css was erased the moment
-    // the editor opened.
-    stylerBox="",
-    // The last state the shell reported. The Files tab reads it to warn when
-    // a delete takes out the image the Background strip has selected.
-    appearanceState=null,
-    // The preset registry, as /api/presets answered it: groups with their
-    // presets and inline contents, plus what is enabled. The app half of an
-    // enabled preset is a <link> the server injected at page render; the
-    // article half is composed on the page - its text lives in
-    // presetArticleCSS, declared beside the article plumbing above.
-    // True between a tap on the strip's "+" tile and the upload it starts.
-    // The one <input type=file> serves both that tile and the Files tab, and
-    // only a pick made for the strip may promote its image to the background.
-    stylerPickForBackground=false;
 
 /* The app half of the preview, and it has to OWN the app layer, not merely
    sit on top of it. Winning on order is enough to ADD a rule and nowhere near
@@ -7643,7 +8097,6 @@ const stylerPanes={
   presets:$("stylerPresetsPane"),
   css:$("stylerBody")
 };
-let stylerSubject="presets";
 function stylerSubjectSet(name){
   if(name==="screen"&&!window.wudictNativeShell)name="bg";
   if(!stylerPanes[name])name="presets";
@@ -7713,7 +8166,6 @@ function appearanceSheetHeight(){
    positioned menu would be cut off at that scroller's edge. It then follows
    its anchor on any scroll - a menu left behind by the list under it
    answers about the wrong row - and goes away on a tap outside it. */
-const sheetMenus=[];
 function sheetMenuNew(anchor,menu,fill){
   const ctl={
     anchor,menu,
@@ -8551,7 +9003,7 @@ $("styler").addEventListener("keydown",e=>{
 // concurrently it costs no extra latency, and it cannot reject.
 </script>
 <link rel="stylesheet" href="/assets/group-editor.css?v={{GROUPCSS}}">
-<dialog id="groupEditor" lang="{{T:locale}}" class="group-dialog panel-card" aria-labelledby="groupTitle">
+<dialog id="groupEditor" lang="{{T:locale}}" class="group-dialog panel-card workspace-dialog" aria-labelledby="groupTitle">
   <div id="groupControls" class="group-section">
     <h2 id="groupTitle">{{T:panel.groups}} <button type="button" class="btn" id="groupNameApply" aria-label="{{T:panel.save}}" title="{{T:panel.save}}" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg></button><button type="button" class="btn" id="closeGroups" aria-label="{{T:dictUI.closeGroups}}"><svg class="icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></h2>
     <div class="group-toolbar"><select id="groupSelect" aria-label="{{T:dictUI.group}}"></select><input type="text" id="groupNameInline" maxlength="100" autocomplete="off" placeholder="{{T:dictUI.enterGroupName}}" aria-label="{{T:dictUI.groupName}}" hidden><button type="button" class="btn group-new-action" id="groupNewAction" aria-label="{{T:dictUI.newGroup}}" title="{{T:dictUI.newGroup}}"><svg class="group-new-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button></div>

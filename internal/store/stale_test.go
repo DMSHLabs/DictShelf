@@ -47,8 +47,8 @@ func ingestSrc(t *testing.T, src, dbPath string, plan Plan) {
 }
 
 // A freshly built database is current; each stamp an older build would have
-// left behind is reported under its own reason, and a missing stamp reads as
-// version 1 - so a library prepared before the stamps existed is current.
+// left behind is reported under its own reason. A missing stamp reads as
+// version 1, so the folded-headword change makes an unstamped library outdated.
 func TestStaleReasons(t *testing.T) {
 	t.Setenv("WUDICT_DB_DIR", t.TempDir())
 	src := writeSrc(t, filepath.Join(t.TempDir(), "s.mdx"), "source bytes")
@@ -61,8 +61,8 @@ func TestStaleReasons(t *testing.T) {
 	for _, k := range []string{"ingest_version", "reader_version"} {
 		setMeta(t, dbPath, k, "")
 	}
-	if got := Stale(dbPath, src); len(got) != 0 {
-		t.Fatalf("unstamped (pre-versioning) build: Stale = %v, want none", got)
+	if got := Stale(dbPath, src); !reflect.DeepEqual(got, []Reason{ReasonIngest}) {
+		t.Fatalf("unstamped (pre-versioning) build: Stale = %v, want ingest", got)
 	}
 	setMeta(t, dbPath, "ingest_version", "0")
 	if got := Stale(dbPath, src); !reflect.DeepEqual(got, []Reason{ReasonIngest}) {
@@ -103,10 +103,10 @@ func TestOutdatedReaderVersion(t *testing.T) {
 		meta map[string]string
 		want []Reason
 	}{
-		{map[string]string{"format": "stale-test-fmt", "reader_version": "3"}, nil},
-		{map[string]string{"format": "stale-test-fmt", "reader_version": "2"}, []Reason{ReasonReader}},
-		{map[string]string{"format": "stale-test-fmt"}, []Reason{ReasonReader}}, // unstamped = 1
-		{map[string]string{"format": "unregistered-fmt", "reader_version": "1"}, nil},
+		{map[string]string{"format": "stale-test-fmt", "reader_version": "3", "ingest_version": "3"}, nil},
+		{map[string]string{"format": "stale-test-fmt", "reader_version": "2", "ingest_version": "3"}, []Reason{ReasonReader}},
+		{map[string]string{"format": "stale-test-fmt", "ingest_version": "3"}, []Reason{ReasonReader}}, // unstamped reader = 1
+		{map[string]string{"format": "unregistered-fmt", "reader_version": "1", "ingest_version": "3"}, nil},
 	}
 	for _, c := range cases {
 		if got := Outdated(c.meta); !reflect.DeepEqual(got, c.want) {

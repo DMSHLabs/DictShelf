@@ -16,7 +16,6 @@ import (
 
 	"github.com/wuweidict/wudict/internal/dict"
 	"github.com/wuweidict/wudict/internal/resource"
-	"github.com/wuweidict/wudict/internal/store"
 )
 
 // ReaderVersion is the behaviour version of this format's Reader (see
@@ -77,57 +76,51 @@ func claim(head []byte) error {
 	return nil
 }
 
-// Dict is the direct backend. Like DSL, the format has no index of its own:
-// the first open prepares a library folder and every open serves from it. A
-// prepared dictionary is opened from its folder alone, since the folder keeps
-// the title, description and header fields; the source is read again only
-// when it changed and has to be prepared again.
+// Dict is the direct backend. Opening it does not create a prepared index;
+// library indexes are built by the add queue or explicit indexing actions.
 type Dict struct {
-	*store.Store
+	reader  *Reader
 	srcPath string
-
 	resOnce sync.Once
+	resMu   sync.Mutex
 	res     []resource.Source
-	resMu   sync.Mutex // guards res against a concurrent Close
 }
 
 func Open(path string) (*Dict, error) {
-	var r *Reader
-	defer func() {
-		if r != nil {
-			r.Close()
-		}
-	}()
-	s, err := store.OpenSelfPrepared(path, Format, func() (dict.Reader, error) {
-		var err error
-		r, err = NewReader(path)
-		if err != nil {
-			return nil, err
-		}
-		return r, nil
-	})
+	r, err := NewReader(path)
 	if err != nil {
 		return nil, err
 	}
-	return &Dict{Store: s, srcPath: path}, nil
+	return &Dict{reader: r, srcPath: path}, nil
 }
 
-func (d *Dict) Meta() dict.Meta {
-	m := d.Store.Meta()
-	m.Format = Format
-	m.Path = d.srcPath
-	return m
-}
+func (d *Dict) Meta() dict.Meta                           { return d.reader.Meta() }
+func (d *Dict) Caps() dict.Caps                           { return dict.Caps{} }
+func (d *Dict) Exact(string, int) ([]dict.Result, error)  { return nil, dict.ErrUnsupported }
+func (d *Dict) Prefix(string, int) ([]dict.Result, error) { return nil, dict.ErrUnsupported }
+func (d *Dict) Keywords(int, int) []string                { return nil }
 
 func (d *Dict) Close() error {
 	d.resOnce.Do(func() {})
 	d.resMu.Lock()
-	for _, s := range d.res {
-		s.Close()
+	for _, src := range d.res {
+		src.Close()
 	}
 	d.res = nil
 	d.resMu.Unlock()
-	return d.Store.Close()
+	return d.reader.Close()
+}
+
+func (d *Dict) sources() []resource.Source {
+	d.resOnce.Do(func() {
+		sources := MediaSources(d.srcPath)
+		d.resMu.Lock()
+		d.res = sources
+		d.resMu.Unlock()
+	})
+	d.resMu.Lock()
+	defer d.resMu.Unlock()
+	return d.res
 }
 
 func (d *Dict) Resource(name string) (io.ReadCloser, string, error) {
@@ -146,17 +139,7 @@ func (d *Dict) Resources() []string {
 	return resource.ListAll(d.sources())
 }
 
-func (d *Dict) sources() []resource.Source {
-	d.resOnce.Do(func() {
-		res := MediaSources(d.srcPath)
-		d.resMu.Lock()
-		d.res = res
-		d.resMu.Unlock()
-	})
-	d.resMu.Lock()
-	defer d.resMu.Unlock()
-	return d.res
-}
+func (d *Dict) PreviewBytes() int64 { return int64(d.reader.Meta().EntryCount) * 350 }
 
 // MediaSources builds the resource containers from the path alone (R2.3):
 // `<stem>.files.zip`, then the `<stem>.files` folder, then loose files beside

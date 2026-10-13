@@ -25,7 +25,7 @@ import (
 // Hashed, in order: the meta table minus what varies between two identical
 // builds (identity, timestamps, the source's location on disk, the version
 // stamps themselves, the body encoding); every entry with its aliases and its
-// DECODED article; and the full-text and trigram indexes as (term, row,
+// DECODED article; the persisted folded headword and alias keys; and the full-text and trigram indexes as (term, row,
 // column, offset) instances, read through fts5vocab since both are
 // contentless. Page layout, rowid gaps inside SQLite, compression and
 // statistics are not content and are not hashed.
@@ -76,6 +76,85 @@ func Fingerprint(textDB string) (string, error) {
 		return nil
 	}); err != nil {
 		return "", err
+	}
+	if s.hasFolded {
+		field("folded headwords")
+		rows, err := s.db.Query("SELECT wf FROM entry ORDER BY id")
+		if err != nil {
+			return "", err
+		}
+		for rows.Next() {
+			var key string
+			if err := rows.Scan(&key); err != nil {
+				rows.Close()
+				return "", err
+			}
+			field(key)
+		}
+		err = rows.Err()
+		rows.Close()
+		if err != nil {
+			return "", err
+		}
+		field("folded aliases")
+		rows, err = s.db.Query("SELECT w, wf, entry_id FROM alias ORDER BY entry_id, w, wf")
+		if err != nil {
+			return "", err
+		}
+		for rows.Next() {
+			var word, key string
+			var id int64
+			if err := rows.Scan(&word, &key, &id); err != nil {
+				rows.Close()
+				return "", err
+			}
+			field(word)
+			field(key)
+			field(fmt.Sprint(id))
+		}
+		err = rows.Err()
+		rows.Close()
+		if err != nil {
+			return "", err
+		}
+	}
+	if s.hasCaseKey {
+		field("case keys")
+		rows, err := s.db.Query("SELECT wc FROM entry ORDER BY id")
+		if err != nil {
+			return "", err
+		}
+		for rows.Next() {
+			var key string
+			if err := rows.Scan(&key); err != nil {
+				rows.Close()
+				return "", err
+			}
+			field(key)
+		}
+		err = rows.Err()
+		rows.Close()
+		if err != nil {
+			return "", err
+		}
+		field("alias case keys")
+		rows, err = s.db.Query("SELECT wc FROM alias ORDER BY entry_id, w, wf")
+		if err != nil {
+			return "", err
+		}
+		for rows.Next() {
+			var key string
+			if err := rows.Scan(&key); err != nil {
+				rows.Close()
+				return "", err
+			}
+			field(key)
+		}
+		err = rows.Err()
+		rows.Close()
+		if err != nil {
+			return "", err
+		}
 	}
 
 	for _, fts := range []string{"entry_fts", "entry_trigram"} {

@@ -27,8 +27,8 @@ type clearDatabaseRequest struct {
 // cleanupLibrary retains only prepared folders belonging to discovered sources.
 // Discovery must succeed before any deletion.
 func (r *Registry) cleanupLibrary() error {
-	// Stop preparation and first-open auto-ingestion while inspecting debris.
-	// Otherwise a claimed but incomplete folder could be an active ingest.
+	// Stop indexing while inspecting debris. Otherwise a claimed but incomplete
+	// folder could be an active ingest.
 	entries := r.all()
 	for _, e := range entries {
 		e.ingestMu.Lock()
@@ -163,6 +163,10 @@ func (s *Server) handleClearDatabase(w http.ResponseWriter, req *http.Request) {
 }
 
 func (e *entry) clearDatabase(want clearDatabaseRequest) error {
+	if nativeIndexOnly(e) {
+		store.IndexDiagnostic("skip database index request source=%q dictionary=%q index=%v contains=%v fulltext=%v obsolete=%v reason=native-index", e.Path, e.probeName(), want.Index, want.Contains, want.FullText, want.Obsolete)
+		return nil
+	}
 	defer acquire(frontLimit)()
 	e.ingestMu.Lock()
 	defer e.ingestMu.Unlock()

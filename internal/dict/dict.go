@@ -39,6 +39,9 @@ type Meta struct {
 	Path        string // source path (or .text.db path for ingested)
 	Description string
 	EntryCount  int
+	// HeadwordsOnly marks a prepared ZIM title index: article text is fetched
+	// from the original source after a headword match.
+	HeadwordsOnly bool
 
 	// IndexLang is the ISO 639-1 code of the language the HEADWORDS are in,
 	// as the dictionary itself declares it (Lingvo's #INDEX_LANGUAGE, Babylon's
@@ -190,13 +193,11 @@ type Letter struct {
 // an ordered, addressable list - reading it page by page instead of querying
 // it.
 //
-// Only the prepared backend implements it, and that is the contract rather
-// than an omission: all three answers are reads of one index (idx_entry_w),
-// which is what makes a jump to "M" in a 2.9 M-entry dictionary a seek instead
-// of a scan. A direct format backend would have to sort its entire headword
-// list in memory to answer any of them - precisely the cost preparation
-// exists to remove - so browsing is offered where the index is, and the
-// dictionary panel is where an index is asked for.
+// The prepared backend implements it with idx_entry_w. ZIM implements it with
+// the source's mandatory path-pointer list; its letter strip samples the first
+// visible headword of each page of native slots, which can include resources.
+// Other direct backends would have to sort their entire headword list in
+// memory to answer these calls, so they remain unavailable for Browse.
 //
 // Browse order is the index's order (case-insensitive by headword), NOT the
 // source file's entry order: a paper dictionary's pages are alphabetical, and

@@ -36,10 +36,10 @@ Runs natively on [android](https://wuweidict.github.io/wudict/apps/android/), [m
 | MDict           | `.mdx` + `.mdd`                     | companion `*.mdd`, `*.1.mdd`, … resource archives; built-in `.spx` audio decoding |
 | StarDict        | `.ifo` + `.idx(.gz)` + `.dict(.dz)` | `.syn` synonyms, `res/` folder or `res.zip` resources |
 | Aard2           | `.slob`                             | zlib/bz2/lzma2; embedded images/audio/css |
-| Lingvo DSL      | `.dsl`, `.dsl.dz`                   | UTF-8/16/32 auto-detected; `*.dsl.files.zip` resources; auto-indexed |
-| Babylon         | `.bgl`                              | gzip block stream; source/target charset auto-detected (Latin / Cyrillic / CJK code pages); embedded images; indexed automatically on first open |
+| Lingvo DSL      | `.dsl`, `.dsl.dz`                   | UTF-8/16/32 auto-detected; `*.dsl.files.zip` resources |
+| Babylon         | `.bgl`                              | gzip block stream; source/target charset auto-detected (Latin / Cyrillic / CJK code pages); embedded images |
 | ZIM             | `.zim`                              | Kiwix/Wikimedia offline archives; see https://library.kiwix.org
-| wudict markdown | `.wudict.md` or `.md`, `.wudict.md.gz` | plain CommonMark, readable and editable in any editor; a dictionary only when its first two lines are `# Title` and `wudict: 1`, whatever the name; `<name>.wudict.files/` resources; auto-indexed; written by `wudict dump -format md` |
+| wudict markdown | `.wudict.md` or `.md`, `.wudict.md.gz` | plain CommonMark, readable and editable in any editor; a dictionary only when its first two lines are `# Title` and `wudict: 1`, whatever the name; `<name>.wudict.files/` resources; written by `wudict dump -format md` |
 | wudict          | cache folder (`text.db`)            | wuDict's own SQLite-based format (see *Sharing*, below) |
 
 ## wuDict for Desktop
@@ -81,10 +81,10 @@ DICT_DIR = ["~/Dictionaries", "/Volumes/Data/Dicts"]
 | **contains** | substring / typo-tolerant headword match, anywhere in the word (FTS5 trigram) | ad-hoc |
 | **full-text** | search inside article text, ranked by relevance | yes |
 
-Every dictionary works immediately for _starts-with_ and _exact_ lookups using
-the native index. The first time you search **a small headword index
-is prepared in the background** — a couple of MB — so accent-insensitive
-lookups (*corazon* → *corazón*) work seamlessly (disable with `AUTO_INDEX=off`).
+When you add a dictionary, wudict queues its headword index in the background.
+Until the index is ready, exact and prefix searches use the dictionary's own
+format. The library index makes lookups faster and supports accent-insensitive
+search (*corazon* → *corazón*). Search does not start an index job.
 
 ***Full-text*** (searching inside article text) and ***contains*** 
  (substring search) are not enabled by default as they consume more disk space. 
@@ -187,7 +187,6 @@ config file path is printed on startup.
 | `--verbose` | `VERBOSE=1` | detailed logging              |
 | `--speexdec` | `SPEEXDEC` | found on `PATH`               |
 | `--use-cached` | `USE_CACHED` | off                           |
-| — | `AUTO_INDEX` | `on` (`off` to disable)       |
 | `--no-compress` | `NO_COMPRESS` | off (article text compressed) |
 | — | `BROWSER_EXTENSIONS` | any extension may look words up |
 

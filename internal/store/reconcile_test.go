@@ -142,7 +142,7 @@ func TestReconcileInAGivenFolder(t *testing.T) {
 }
 
 // Callers reaching one dictionary at once - a switch, a lane, a
-// self-preparing open - are serialised: the first builds, the rest find the
+// new-dictionary queue - are serialised: the first builds, the rest find the
 // text current. Without the lock each would ingest, and the last rename wins.
 func TestReconcileConcurrent(t *testing.T) {
 	t.Setenv("WUDICT_DB_DIR", t.TempDir())

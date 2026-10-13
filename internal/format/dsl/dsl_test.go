@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/binary"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -19,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/wuweidict/wudict/internal/dict"
+	"github.com/wuweidict/wudict/internal/fsx"
 	"github.com/wuweidict/wudict/internal/resource"
 	"golang.org/x/text/encoding/charmap"
 )
@@ -380,7 +382,7 @@ func TestResourceZip(t *testing.T) {
 	zw.Close()
 	zf.Close()
 
-	t.Setenv("WUDICT_DB_DIR", t.TempDir()) // keep auto-ingest out of the user cache
+	t.Setenv("WUDICT_DB_DIR", t.TempDir()) // keep any incidental library paths inside this test
 	d, err := Open(dslPath)
 	if err != nil {
 		t.Fatal(err)
@@ -398,14 +400,15 @@ func TestResourceZip(t *testing.T) {
 	if _, _, err := d.Resource("../evil"); err == nil {
 		t.Error("traversal must be rejected")
 	}
-	// caps: DSL prepares itself so it can be searched at all, but only the
-	// cheap headword index - full-text and contains stay opt-in (D24), the
-	// same as for a format with its own index
-	if c := d.Caps(); c.Contains || c.FTS {
+	if fsx.FileExists(filepath.Join(os.Getenv("WUDICT_DB_DIR"), "mini", "text.db")) {
+		t.Error("opening DSL created a prepared index")
+	}
+	// Opening a DSL serves resources without creating a prepared index.
+	if c := d.Caps(); c.Exact || c.Prefix || c.Contains || c.FTS {
 		t.Errorf("caps: %+v", c)
 	}
-	if res, err := d.Exact("corazon", 5); err != nil || len(res) != 1 {
-		t.Errorf("folded exact via store: %v %v", res, err)
+	if _, err := d.Exact("corazon", 5); !errors.Is(err, dict.ErrUnsupported) {
+		t.Errorf("unprepared DSL exact: %v", err)
 	}
 }
 

@@ -414,7 +414,7 @@ type dumpRes struct {
 func (d *dumpRes) Close() error { return d.close() }
 
 // selfPrepared holds the formats whose Dictionary prepares a library folder
-// when opened (store.OpenSelfPrepared), each with the containers its resources
+// when opened, each with the containers its resources
 // are in. A dump reads these formats' resources from the containers and opens
 // no Dictionary, so it never indexes what it dumps (D157).
 var selfPrepared = map[string]func(path string) ([]resource.Source, error){
@@ -430,7 +430,7 @@ var selfPrepared = map[string]func(path string) ([]resource.Source, error){
 }
 
 // openResources opens src for its resources, given the format its entries
-// were read as. A self-preparing format is read from its containers; any
+// were read as. Each format is read from its source containers; any
 // other source - a format with an index of its own, a library folder's
 // text.db - opens as the Dictionary it is, which prepares nothing.
 func openResources(src, format string) (*dumpRes, error) {

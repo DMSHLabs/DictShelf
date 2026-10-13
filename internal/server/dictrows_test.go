@@ -62,12 +62,6 @@ func dictsWith(t *testing.T, s *Server, inm string) (int, []dictInfo, string) {
 // changes on disk changes the validator and the row is derived again.
 func TestDictsRevalidation(t *testing.T) {
 	s := newTestServer(t)
-	// A DSL prepares itself on its first open, which this first list does:
-	// a validator for it would describe the files from before that, so it
-	// carries none. Revalidation is about the list after it.
-	if _, _, first := dictsWith(t, s, ""); first != "" {
-		t.Fatalf("the answer that prepared its dictionary carried a tag: %s", first)
-	}
 	code, rows, tag := dictsWith(t, s, "")
 	if code != 200 || len(rows) != 1 || tag == "" {
 		t.Fatalf("first answer: %d, %d rows, tag %q", code, len(rows), tag)
@@ -175,26 +169,6 @@ func wantFull(t *testing.T, s *Server, tag, why string) string {
 		t.Fatalf("%s: %d, want 200 (the kept answer is no longer true)", why, code)
 	}
 	return next
-}
-
-// A row derived while its own derivation changed the disk - a DSL preparing
-// itself on its first open - is not kept under the key from before: removing
-// the prepared data later would bring that key back.
-func TestDictsSelfPrepareIsNotKeptUnderOldKey(t *testing.T) {
-	s := newTestServer(t)
-	id := s.reg.all()[0].ID
-	// Nor is the answer: its validator is the key from before, which the same
-	// removal brings back, and a 304 then would vouch for the prepared row.
-	if _, _, tag := dictsWith(t, s, ""); tag != "" {
-		t.Errorf("the answer holding that row was offered for keeping: etag %s", tag)
-	}
-	if _, ok := s.dictRows.rows[id]; ok {
-		t.Fatal("the row derived while the dictionary prepared itself was kept")
-	}
-	dictsWith(t, s, "")
-	if _, ok := s.dictRows.rows[id]; !ok {
-		t.Fatal("a row derived from a library at rest was not kept")
-	}
 }
 
 // A change the app makes to prepared data invalidates the kept answer even

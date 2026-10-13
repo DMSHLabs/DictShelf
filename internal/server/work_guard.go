@@ -49,7 +49,7 @@ func (s *Server) workLocks() (bool, []string) {
 	}
 	s.jobs.mu.Lock()
 	for key, j := range s.jobs.jobs {
-		if j.st.Running {
+		if j.st.Running && key != "initial-index-queue" {
 			add(key)
 		}
 	}

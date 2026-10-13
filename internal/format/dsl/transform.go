@@ -4,7 +4,7 @@
 
 // Package dsl implements ABBYY Lingvo DSL dictionaries: plain-text
 // markup with no native index, so the direct backend transparently
-// ingests into a text.db on first open (SPEC §1). Markup semantics are
+// is prepared into a text.db by the indexing queue (SPEC §1). Markup semantics are
 // ported from pyglossary/plugins/dsl (lex.py, transform.py, title.py).
 package dsl
 

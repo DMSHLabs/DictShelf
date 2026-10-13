@@ -36,6 +36,8 @@ type indexWorkStatus struct {
 	StopRequested bool     `json:"stopRequested"`
 	Canceled      bool     `json:"canceled"`
 	Error         string   `json:"error"`
+	Failed        []string `json:"failed,omitempty"`
+	Damaged       []string `json:"damaged,omitempty"`
 	Result        any      `json:"result,omitempty"`
 	Exclusive     bool     `json:"exclusive"`
 	BusyDicts     []string `json:"busyDicts"`
@@ -74,6 +76,11 @@ func (s *Server) indexWorkStatus(requested ...string) indexWorkStatus {
 	out := indexWorkStatus{ID: key, Running: st.Running, Done: st.Done, Total: st.Total, Current: st.Current,
 		CurrentDone: st.CurrentDone, CurrentTotal: st.CurrentTotal, Action: st.Action, Indexes: st.Indexes,
 		StopRequested: st.StopRequested, Canceled: st.Canceled, Error: st.Err}
+	out.Failed = st.Failed
+	out.Damaged = st.Damaged
+	if len(st.Failed) > 0 {
+		out.Error = "index operations failed"
+	}
 	s.admission.mu.Lock()
 	out.Exclusive, out.BusyDicts = s.workLocks()
 	s.admission.mu.Unlock()
@@ -178,8 +185,12 @@ func (s *Server) handleIndexWork(w http.ResponseWriter, r *http.Request) {
 				}
 				e, err := s.reg.get(op.Dict)
 				if err != nil {
-					j.update(func(st *jobStatus) { st.Err = err.Error() })
-					return
+					failure := fmt.Sprintf("dictionary unavailable: %v", err)
+					j.update(func(st *jobStatus) {
+						st.Done++
+						st.Failed = append(st.Failed, failure)
+					})
+					continue
 				}
 				action := "create"
 				if op.Action == "delete" {
@@ -201,7 +212,12 @@ func (s *Server) handleIndexWork(w http.ResponseWriter, r *http.Request) {
 					st.CurrentDone = 0
 					st.CurrentTotal = 0
 				})
-				store.IndexDiagnostic("bulk operation start dictionary=%q feature=%q action=%q", e.probeName(), op.Feature, op.Action)
+				store.IndexDiagnostic("index operation start source=%q dictionary=%q feature=%q action=%q self_indexed=%v", e.Path, e.probeName(), op.Feature, op.Action, entryHasSelfIndex(e))
+				if entryHasSelfIndex(e) && !isZIMPath(e.Path) {
+					store.IndexDiagnostic("skip index operation source=%q dictionary=%q feature=%q action=%q reason=native-index", e.Path, e.probeName(), op.Feature, op.Action)
+					j.update(func(st *jobStatus) { st.Done++ })
+					continue
+				}
 				lastProgress := time.Time{}
 				progress := func(done, total int) {
 					if done != total && time.Since(lastProgress) < 200*time.Millisecond {
@@ -234,7 +250,7 @@ func (s *Server) handleIndexWork(w http.ResponseWriter, r *http.Request) {
 					if err == nil {
 						set(op.Action != "delete")
 						if e.indexBlocked() && op.Action != "delete" {
-							err = e.restoreDSLIndex(store.Plan{FullText: want.FullText, Contains: want.Contains}, progress)
+							err = e.restoreIndex(store.Plan{FullText: want.FullText, Contains: want.Contains}, progress, frontLimit)
 							force = false
 						}
 						if err == nil {
@@ -244,8 +260,17 @@ func (s *Server) handleIndexWork(w http.ResponseWriter, r *http.Request) {
 				}
 				store.IndexDiagnostic("bulk operation finish dictionary=%q feature=%q action=%q error=%v", e.probeName(), op.Feature, op.Action, err)
 				if err != nil {
-					j.update(func(st *jobStatus) { st.Err = fmt.Sprintf("%s: %v", e.probeName(), err) })
-					return
+					name := e.probeName()
+					failure := fmt.Sprintf("%s: %v", name, err)
+					damaged := damagedDictionaryError(err)
+					j.update(func(st *jobStatus) {
+						st.Done++
+						st.Failed = append(st.Failed, failure)
+						if damaged {
+							st.Damaged = append(st.Damaged, name)
+						}
+					})
+					continue
 				}
 				j.update(func(st *jobStatus) { st.Done++ })
 			}

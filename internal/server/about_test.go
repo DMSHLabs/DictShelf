@@ -96,16 +96,34 @@ func TestLooksLikeMarkup(t *testing.T) {
 // sidecar beside it.
 func aboutServer(t *testing.T, ann string) (*Server, string) {
 	t.Helper()
-	s := newTestServer(t)
-	e := s.reg.all()[0]
+	return aboutServerWithDSL(t, sampleDSL, ann)
+}
+
+func aboutServerWithDSL(t *testing.T, source, ann string) (*Server, string) {
+	t.Helper()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "test.dsl")
+	if err := os.WriteFile(path, []byte(source), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	if ann != "" {
-		src := e.Path
-		p := src[:len(src)-len(".dsl")] + ".ann"
+		p := path[:len(path)-len(".dsl")] + ".ann"
 		if err := os.WriteFile(p, []byte(ann), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
-	return s, e.ID
+	isolatedDBDir(t)
+	prefs := LoadPrefs(filepath.Join(t.TempDir(), StateFile))
+	if err := prefs.mutate(func(f *prefsFile) { f.DSLKnown = map[string]bool{cleanAbs(path): true} }); err != nil {
+		t.Fatal(err)
+	}
+	reg, err := NewRegistry([]string{dir}, false, WithPrefs(prefs), WithComparisons(false))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := New(reg)
+	closeBackends(t, reg)
+	return s, reg.all()[0].ID
 }
 
 func TestAboutSidecarWins(t *testing.T) {
@@ -149,14 +167,10 @@ func TestAboutFallsBackToHeader(t *testing.T) {
 
 	// One that DOES declare them: the synthesis is what a reader gets, and the
 	// declared pair travels beside it.
-	s2 := newTestServer(t)
-	e := s2.reg.all()[0]
-	if err := os.WriteFile(e.Path, []byte("#NAME \"D\"\n#INDEX_LANGUAGE \"English\"\n#CONTENTS_LANGUAGE \"Russian\"\n\ndog\n\tcanine\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	s2, id2 := aboutServerWithDSL(t, "#NAME \"D\"\n#INDEX_LANGUAGE \"English\"\n#CONTENTS_LANGUAGE \"Russian\"\n\ndog\n\tcanine\n", "")
 	getJSON(t, s2, "/api/dicts", nil)
 	var got2 aboutInfo
-	getJSON(t, s2, "/api/about?dict="+e.ID, &got2)
+	getJSON(t, s2, "/api/about?dict="+id2, &got2)
 	if !strings.Contains(got2.HTML, "English") || !strings.Contains(got2.HTML, "Russian") {
 		t.Errorf("html = %q, want the declared pair", got2.HTML)
 	}

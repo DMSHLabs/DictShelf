@@ -6,7 +6,7 @@ package server
 import "testing"
 
 func TestBulkRebuildRefreshesCurrentIndex(t *testing.T) {
-	s, e := demandEntry(t)
+	s, e := unpreparedEntry(t)
 	sse(t, s, "/api/ingest?dict="+e.ID+"&contains=1&fts=1")
 	want := s.currentFeatures(e)
 	if !want.Contains || !want.FullText {

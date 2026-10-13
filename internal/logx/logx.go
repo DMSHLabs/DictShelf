@@ -95,9 +95,8 @@ func Warn(format string, args ...any) {
 	fmt.Fprintf(dest(), "warning: "+format+"\n", args...)
 }
 
-// Status reports progress on a slow foreground operation (preparing a search
-// index on first open). One line, no timestamp - it is for humans watching a
-// wait, not for logs.
+// Status reports progress on a slow foreground operation. One line, no timestamp -
+// it is for humans watching a wait, not for logs.
 func Status(format string, args ...any) {
 	fmt.Fprintf(dest(), format+"\n", args...)
 }

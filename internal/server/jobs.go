@@ -6,6 +6,8 @@ package server
 
 import (
 	"context"
+	"fmt"
+	"runtime/debug"
 	"sync"
 	"time"
 
@@ -38,6 +40,7 @@ type jobStatus struct {
 	Stage                     string
 	// Failed names each item that could not be done, with why.
 	Failed   []string
+	Damaged  []string
 	Err      string // the job as a whole failed
 	Canceled bool
 	// StopRequested is a soft stop: finish the current atomic dictionary
@@ -94,15 +97,19 @@ func (t *jobTable) start(key string, timeout time.Duration, init jobStatus, fn f
 	t.jobs[key] = j
 	t.wg.Add(1)
 	go func() {
-		defer func() {
-			if p := recover(); p != nil {
-				logx.System("job=%q panic=%v", key, p)
-				panic(p)
-			}
-		}()
 		defer t.wg.Done()
 		defer HoldActiveProcs()()
 		defer j.end(key)
+		defer func() {
+			if p := recover(); p != nil {
+				logx.System("job=%q panic=%v\n%s", key, p, debug.Stack())
+				t.mu.Lock()
+				if j.st.Err == "" {
+					j.st.Err = fmt.Sprintf("background task failed: %v", p)
+				}
+				t.mu.Unlock()
+			}
+		}()
 		fn(j)
 	}()
 	return j.st.copy(), true
@@ -212,6 +219,9 @@ func (t *jobTable) forget(key string) {
 func (st jobStatus) copy() jobStatus {
 	if st.Failed != nil {
 		st.Failed = append([]string{}, st.Failed...)
+	}
+	if st.Damaged != nil {
+		st.Damaged = append([]string{}, st.Damaged...)
 	}
 	st.Indexes = append([]string(nil), st.Indexes...)
 	return st

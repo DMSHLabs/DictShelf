@@ -271,7 +271,7 @@ func TestSearchBudgetNeverCapsPreparedDictionaries(t *testing.T) {
 		t.Fatal(err)
 	}
 	e := reg.all()[0]
-	if _, err := e.open(); err != nil { // DSL prepares itself on open
+	if _, err := e.open(); err != nil { // the queued headword index is ready
 		t.Fatal(err)
 	}
 	if w := e.weight.Load(); w != 0 {

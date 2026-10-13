@@ -55,7 +55,7 @@ func TestSingleDSLMigratesGroupsAndRemoval(t *testing.T) {
 				t.Fatal(err)
 			}
 			closeBackends(t, r)
-			waitIndexPreparation(t, r)
+			waitNewDictionaryIndexing(t, r)
 			if r.Count() != 1 {
 				t.Fatal("legacy variant still listed")
 			}
@@ -126,7 +126,7 @@ func TestSingleDSLCachedReceiptThenSourceReturns(t *testing.T) {
 	if err := r.Rescan(); err != nil {
 		t.Fatal(err)
 	}
-	waitIndexPreparation(t, r)
+	waitNewDictionaryIndexing(t, r)
 	if r.Count() != 1 || r.all()[0].Path != source {
 		t.Fatal("source return duplicated dictionary")
 	}
