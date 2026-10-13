@@ -1190,7 +1190,11 @@ func (r *Registry) rescan(prepare bool) error {
 	}
 	f, _ := r.prefs.data()
 	if len(f.DSLPending) != 0 {
-		go r.prepareNewDictionaries()
+		r.indexQueueMu.Lock()
+		r.jobs.start("initial-index-queue", 0, jobStatus{}, func(*job) {
+			r.prepareNewDictionaries()
+		})
+		r.indexQueueMu.Unlock()
 	}
 	return nil
 }
@@ -1333,7 +1337,9 @@ func (r *Registry) Warm() {
 	}
 	entries := r.all()
 	prefs := r.prefs
+	r.jobs.wg.Add(1)
 	go func() {
+		defer r.jobs.wg.Done()
 		sem := make(chan struct{}, 4)
 		var wg sync.WaitGroup
 		for _, e := range entries {
@@ -2037,9 +2043,9 @@ func (e *entry) probeName() string {
 		}
 	}
 	e.dMu.RLock()
-	d := e.d
+	d, err := e.d, e.err
 	e.dMu.RUnlock()
-	if d != nil {
+	if d != nil && err == nil {
 		return d.Meta().Name
 	}
 	return filepath.Base(e.Path)

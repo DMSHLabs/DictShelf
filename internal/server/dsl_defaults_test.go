@@ -16,8 +16,9 @@ func waitNewDictionaryIndexing(t *testing.T, r *Registry) {
 	t.Helper()
 	deadline := time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
-		rec, _ := r.prefs.data()
-		if len(rec.DSLPending) == 0 {
+		_, _ = r.prefs.data() // observe the persisted state after the worker's write
+		queue, queueExists := r.jobs.status("initial-index-queue")
+		if !queueExists || !queue.Running {
 			return
 		}
 		time.Sleep(10 * time.Millisecond)

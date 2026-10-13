@@ -14,6 +14,8 @@ import (
 
 func TestIndexWorkSurvivesRequestAndStopsBetweenOperations(t *testing.T) {
 	s, _ := newPrefsServer(t)
+	waitNewDictionaryIndexing(t, s.reg)
+	s.reg.jobs.wg.Wait()
 	entries := s.reg.all()
 	first := entries[0]
 	// Hold the first operation so a simulated page departure and Stop happen
@@ -68,6 +70,8 @@ func TestIndexWorkSurvivesRequestAndStopsBetweenOperations(t *testing.T) {
 
 func TestIndexWorkCompletesWholeQueue(t *testing.T) {
 	s, _ := newPrefsServer(t)
+	waitNewDictionaryIndexing(t, s.reg)
+	s.reg.jobs.wg.Wait()
 	defer s.jobs.wg.Wait()
 	ops := []indexOperation{}
 	for _, e := range s.reg.all() {
@@ -89,5 +93,33 @@ func TestIndexWorkCompletesWholeQueue(t *testing.T) {
 		if !f.Contains || !f.FullText {
 			t.Fatalf("missing indexes: %+v", f)
 		}
+	}
+}
+
+func TestIndexWorkContinuesAfterOperationFailure(t *testing.T) {
+	s, _ := newPrefsServer(t)
+	waitNewDictionaryIndexing(t, s.reg)
+	s.reg.jobs.wg.Wait()
+	defer s.jobs.wg.Wait()
+	entries := s.reg.all()
+	if len(entries) < 2 {
+		t.Fatal("fixture needs two dictionaries")
+	}
+	broken := entries[0]
+	broken.Path = "missing-index-work-source.mdx"
+	ops := []indexOperation{{broken.ID, "base", "create"}, {entries[1].ID, "fts", "create"}}
+	body, _ := json.Marshal(ops)
+	rec := httptest.NewRecorder()
+	s.ServeHTTP(rec, newRequest("POST", "/api/index-work", strings.NewReader(string(body))))
+	if rec.Code != 202 {
+		t.Fatalf("start: %d %s", rec.Code, rec.Body.String())
+	}
+	s.jobs.wait(bulkIndexKey)
+	result := s.indexWorkStatus()
+	if result.Running || result.Done != 2 || len(result.Failed) != 1 || !strings.Contains(result.Failed[0], broken.probeName()) || result.Error == "" {
+		t.Fatalf("completion: %+v", result)
+	}
+	if !s.currentFeatures(entries[1]).FullText {
+		t.Fatal("operation after failure did not run")
 	}
 }

@@ -346,31 +346,24 @@ body.mask-view-active .qbox input{padding-right:2.8em}
 body.mask-view-active{--stick:var(--barh)}
 body.mask-view-active .bar{transform:none!important}
 body.mask-view-active #out,body.mask-view-active #sbar{display:none}
-body.mask-view-active{padding-bottom:4.5rem}
-.mask-dock[hidden]{display:none}
-.mask-dock{position:fixed;left:0;right:0;bottom:0;z-index:8;display:flex;align-items:center;justify-content:center;gap:.25em;padding:.5rem .9rem max(.5rem,env(safe-area-inset-bottom));background:var(--bar);backdrop-filter:saturate(1.6) blur(8px);border-top:1px solid var(--line);font-size:calc(var(--ui-edit_control-font) * 1rem)}
-.mask-dock[data-two-rows="1"]{display:grid;grid-template-columns:auto auto auto minmax(0,1fr) auto auto auto;
-  grid-template-areas:"input input input input input input apply" "mode wildcard threshold . count prev next"}
-.mask-dock[data-two-rows="1"]:has(#maskFindApply[hidden]){grid-template-areas:"input input input input input input input" "mode wildcard threshold . count prev next"}
-.mask-dock[data-three-rows="1"]{grid-template-areas:"input input input input input input apply" "mode wildcard . . prev next next" "threshold threshold . . count count count"}
-.mask-dock[data-three-rows="1"]:has(#maskFindApply[hidden]){grid-template-areas:"input input input input input input input" "mode wildcard . . prev next next" "threshold threshold . . count count count"}
-.mask-dock #maskFindInput{box-sizing:border-box;flex:1 1 auto;min-width:0;max-width:54rem;height:calc(var(--ui-edit_control-height) * 1.5rem);padding:0 .4em;font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:6px;outline:none}
-.mask-dock[data-two-rows="1"] #maskFindInput{grid-area:input;width:100%;min-width:0}
-.mask-dock[data-two-rows="1"] #maskFindMode{grid-area:mode}
-.mask-dock[data-two-rows="1"] #maskFindWildcard{grid-area:wildcard}
-.mask-dock[data-two-rows="1"] #maskFindThreshold{grid-area:threshold}
-.mask-dock[data-two-rows="1"] #maskFindApply{grid-area:apply}
-.mask-dock[data-two-rows="1"] #maskFindCount{grid-area:count}
-.mask-dock[data-two-rows="1"] #maskFindPrev{grid-area:prev}
-.mask-dock[data-two-rows="1"] #maskFindNext{grid-area:next}
-.mask-dock button{box-sizing:border-box;display:grid;place-items:center;flex:none;width:calc(var(--ui-edit_control-height) * 1.5rem);height:calc(var(--ui-edit_control-height) * 1.5rem);padding:0;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--fg);font:inherit;line-height:1;cursor:pointer}
-.mask-dock button svg{display:block;width:1.1em;height:1.1em}
-.mask-dock button.is-on{border-color:var(--accent);background:var(--accent);color:var(--bg)}
-.mask-dock button:disabled{opacity:.45;cursor:default}
-.mask-dock output{flex:none;min-width:2.5em;text-align:center;white-space:nowrap;font-variant-numeric:tabular-nums}
-.mask-dock select{box-sizing:border-box;flex:none;width:2.3em;max-width:none;height:calc(var(--ui-edit_control-height) * 1.5rem);padding:0 .2em;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--fg);font:inherit}
-.mask-dock #maskFindApply{border-color:var(--accent);background:var(--accent);color:var(--bg);font-weight:700}
-.mask-dock #maskFindApply[hidden]{display:none}
+body.mask-view-active{padding-bottom:calc(var(--mask-dock-height,4.5rem) + .5rem)}
+.mask-search-controls[hidden]{display:none}
+.mask-search-controls{position:fixed;left:0;right:0;bottom:0;z-index:8;display:flex;flex-direction:column;align-items:center;gap:.45rem;
+  padding:.5rem .9rem max(.5rem,env(safe-area-inset-bottom));background:var(--bar);backdrop-filter:saturate(1.6) blur(8px);border-top:1px solid var(--line)}
+.mask-dock{position:static;width:100%;max-width:54rem;padding:0;border:0;background:transparent;backdrop-filter:none;font-size:calc(var(--ui-edit_control-font) * 1rem)}
+.mask-search-progress{box-sizing:border-box;display:flex;align-items:center;gap:.55em;width:100%;max-width:54rem;min-height:2.3em;
+  padding:.35em .55em;border:1px solid var(--accent);border-radius:8px;background-color:var(--bg);
+  background-image:repeating-linear-gradient(135deg,color-mix(in srgb,var(--accent) 13%,transparent) 0px,
+    color-mix(in srgb,var(--accent) 13%,transparent) 7px,transparent 7px,transparent 15px);
+  font-size:calc(var(--ui-font-addition) * 1rem);color:var(--fg)}
+.mask-search-progress[hidden]{display:none}
+.mask-search-progress>span:nth-child(2){flex:1;min-width:0;overflow-wrap:anywhere}
+.mask-search-spinner{width:1em;height:1em;flex:none;border:2px solid color-mix(in srgb,var(--accent) 28%,transparent);
+  border-top-color:var(--accent);border-radius:50%;animation:mask-search-spin .8s linear infinite}
+@keyframes mask-search-spin{to{transform:rotate(360deg)}}
+.mask-search-progress button{flex:none;padding:.2em .55em;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--fg);font:inherit;cursor:pointer}
+.mask-search-progress button:hover{border-color:var(--accent);color:var(--accent)}
+@media(prefers-reduced-motion:reduce){.mask-search-spinner{animation:none;border-color:var(--accent)}}
 .mask-words button.mask-find-current{background:var(--line-soft);outline:2px solid var(--accent);outline-offset:-2px}
 #maskView{margin-top:var(--sp-2);background:var(--bg-card);border:1px solid var(--line);border-radius:10px;overflow:clip}
 .mask-chrome{position:sticky;top:var(--stick);z-index:4;background:var(--paper-bg,var(--bg-card))}
@@ -1292,6 +1285,8 @@ dialog.panel-card:not([open]){display:none}
 #panel .panel-head h2 .btn{font-size:100%}
 #panel .panel-head .headacts .btn{width:calc(var(--ui-main-control-height) * 1em);height:calc(var(--ui-main-control-height) * 1em);min-width:calc(var(--ui-main-control-height) * 1em);min-height:calc(var(--ui-main-control-height) * 1em);box-sizing:border-box;display:grid;place-items:center;padding:0;
   font-size:calc(var(--ui-main-control-font) * 1rem);line-height:1}
+#panel .panel-head .headacts .themeAuto{width:auto;height:auto;min-width:0;padding:.3em .55em;display:inline-block;
+  font-size:calc(var(--ui-font-title) * 1rem);line-height:1.2}
 #panel .panel-head #closePanel .icon-close{width:1.4em;height:1.4em}
 .panel-card h2 .headacts{margin-left:auto;display:flex;gap:calc(var(--ui-control-gap) * 1em)}
 /* The theme control is TWO buttons - Auto, and the state it resolves to - and

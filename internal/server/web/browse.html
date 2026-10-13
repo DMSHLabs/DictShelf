@@ -2,6 +2,7 @@
 <html lang="{{T:locale}}">
 <meta charset="utf-8">
 {{I18N}}
+<link rel="stylesheet" href="/assets/headword-control.css?v={{HEADWORDCSS}}">
 <script>
 // An optional host background, the same hook setup.html and lemmas.html carry:
 // the Android host paints the chosen image (or colour) behind a transparent
@@ -247,39 +248,8 @@ footer .browse-progress-stop:hover{border-color:var(--accent);color:var(--accent
 @media(prefers-reduced-motion:reduce){footer .browse-progress-spinner{animation:none;border-color:var(--accent)}}
 body.browse-page-busy #top,body.browse-page-busy main,body.browse-page-busy .browse-search-dock{pointer-events:none;opacity:.62}
 body.browse-page-busy footer .browse-progress{pointer-events:auto;opacity:1}
-footer .browse-search-dock{display:flex;align-items:center;gap:.25em;width:100%;max-width:54rem;
-  font-size:calc(var(--ui-edit_control-font) * 1rem)}
-footer .browse-search-dock[data-two-rows="1"]{display:grid;grid-template-columns:auto auto auto minmax(0,1fr) auto auto auto;
-  grid-template-areas:"input input input input input input apply" "mode mask threshold . count prev next"}
 footer .browse-controls{width:100%;max-width:54rem}
-footer .browse-search-input{box-sizing:border-box;flex:1 1 auto;min-width:0;width:0;
-  height:calc(var(--ui-edit_control-height) * 1.5rem);margin:0;padding:0 .4em;
-  font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);
-  border-radius:6px;outline:none;-webkit-appearance:none}
-footer .browse-search-dock[data-two-rows="1"] #findInput{grid-area:input;width:100%;min-width:0}
-footer .browse-search-dock[data-two-rows="1"] #findMode{grid-area:mode}
-footer .browse-search-dock[data-two-rows="1"] #maskMode{grid-area:mask}
-footer .browse-search-dock[data-two-rows="1"] #maskThreshold{grid-area:threshold}
-footer .browse-search-dock[data-two-rows="1"] #findApply{grid-area:apply}
-footer .browse-search-dock[data-two-rows="1"] #findCount{grid-area:count}
-footer .browse-search-dock[data-two-rows="1"] #findPrev{grid-area:prev}
-footer .browse-search-dock[data-two-rows="1"] #findNext{grid-area:next}
-footer .browse-search-count{flex:none;min-width:2.5em;text-align:center;
-  font-size:calc(var(--ui-font-addition) * 1rem);font-variant-numeric:tabular-nums;white-space:nowrap}
-footer .browse-search-dock button{box-sizing:border-box;display:grid;place-items:center;flex:none;
-  width:calc(var(--ui-edit_control-height) * 1.5rem);
-  height:calc(var(--ui-edit_control-height) * 1.5rem);padding:0;border:1px solid var(--line);
-  border-radius:6px;background:var(--bg);color:var(--fg);font:inherit;line-height:1;cursor:pointer}
-html[data-desktop-image] footer .browse-search-dock button:not(.is-on){background:transparent}
-footer .browse-search-mode svg{display:block;width:1.1em;height:1.1em}
-footer .browse-search-dock #maskMode{font-size:calc(var(--ui-edit_control-font) * 1rem)}
-footer .browse-search-mode.is-on{border-color:var(--accent);background:var(--accent);color:var(--bg)}
-footer .browse-search-dock #findApply{border-color:var(--accent);background:var(--accent);color:var(--bg);font-weight:700}
-footer .browse-search-dock #findApply[hidden]{display:none}
-footer .browse-search-dock #maskThreshold{box-sizing:border-box;flex:none;width:2.3em;max-width:none;height:calc(var(--ui-edit_control-height) * 1.5rem);
-  padding:0 .2em;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--fg);font:inherit}
-footer .browse-search-dock #maskThreshold[hidden]{display:none}
-footer .browse-search-dock button:disabled{opacity:.45;cursor:default}
+footer .browse-search-dock{width:100%;max-width:54rem}
 .words a.browse-match{outline:2px solid var(--accent);outline-offset:-2px}
 .words a.browse-current{background:var(--line-soft)}
 .words mark.browse-letter-match{background:var(--accent);color:var(--bg);border-radius:.15em}
@@ -341,6 +311,7 @@ html[data-desktop-image] .chooser-list :is(.list-search-dock,.list-search-input,
      otherwise. -->
 {{PRESETS}}
 <script src="/assets/list-search.js?v={{LISTSEARCHJS}}"></script>
+<script src="/assets/headword-control.js?v={{HEADWORDJS}}"></script>
 <script>
 /* The chooser shares the reader's saved Fonts values. */
 (function () {
@@ -387,20 +358,7 @@ html[data-desktop-image] .chooser-list :is(.list-search-dock,.list-search-input,
       <span class="browse-progress-spinner" aria-hidden="true"></span><span class="browse-progress-text" id="browseProgressText"></span>
       <button type="button" class="browse-progress-stop" id="browseProgressStop" hidden>{{T:dictUI.stop}}</button>
     </div>
-    <div class="browse-search-dock" role="search">
-      <button class="browse-search-mode" type="button" id="findMode" aria-label="{{T:browse.filterWords}}">⌕</button>
-      <button class="browse-search-mode" type="button" id="maskMode" aria-label="{{T:browse.wildcardsSearch}}" aria-pressed="false">*?</button>
-      <select id="maskThreshold" aria-label="{{T:browse.maskThreshold}}" title="{{T:browse.maskThreshold}}" hidden>
-        <option value="0">0</option><option value="10000">10k</option><option value="50000">50k</option>
-        <option value="100000">100k</option><option value="500000">500k</option><option value="1000000">1m</option>
-      </select>
-      <input class="browse-search-input" id="findInput" type="search" placeholder="{{T:browse.findWords}}"
-           spellcheck="false" autocomplete="off" autocapitalize="off" enterkeyhint="search"
-           aria-label="{{T:browse.findWords}}">
-      <button type="button" id="findApply" aria-label="{{T:browse.runFind}}" title="{{T:browse.runFind}}" hidden>✓</button>
-      <output class="browse-search-count" id="findCount" aria-live="polite">0/0</output>
-      <button type="button" id="findPrev" aria-label="{{T:browse.previousMatch}}">▲</button>
-      <button type="button" id="findNext" aria-label="{{T:browse.nextMatch}}">▼</button>
+    <div class="browse-search-dock" id="findDock" role="search">
     </div>
   </div>
 </footer>
@@ -440,10 +398,12 @@ try{const t=localStorage.getItem("wudict_theme");
   if(t&&t!=="auto")document.documentElement.setAttribute("data-theme",t)}catch(e){}
 
 let dictId="",state=null,last={p:1},poll=0,stripFor="",stripLettersPainted=0,stripMetricKey="",stripWidths=[],stripOffsets=[],stripTotalWidth=0,stripCurrentIndex=-1,stripWindowStart=-1,stripWindowEnd=-1,stripFrame=0,chooserSearch=null,browsePageAbort=null,browseAlphabetTask=null,browsePageBusy=false;
-const browseAlphabetCache=new Map(),browseAlphabetPartial=new Map();
+const browseAlphabetCache=new Map(),browseAlphabetPartial=new Map(),browsePageCache=new Map(),browsePageCacheMetrics=new Map(),browsePagePrefetches=new Map();
+const BROWSE_PAGE_CACHE_LIMIT=12,BROWSE_PAGE_SESSION_LIMIT=8;
 const BROWSE_ALPHABET_SESSION_KEY="wudict_browse_alphabet_v1";
 const BROWSE_FIND_SESSION_KEY="wudict_browse_find_v1";
 const BROWSE_PAGE_SESSION_KEY="wudict_browse_page_v1";
+let browseHeadwordControl=null;
 const BROWSE_DEBUG=new URLSearchParams(location.search).get("browse_debug")==="1";
 function browseTrace(step,data={}){
   let enabled=BROWSE_DEBUG;
@@ -569,27 +529,10 @@ new ResizeObserver(()=>{if(state&&!$("stripWrap").hidden){measureStripItems(stat
 let findResult=null,findIndex=-1,findFilter=false,findTimer=0,findAbort=null,findSeq=0,browseSeq=0,findMask=false;
 let appliedFindMask=false,findApproved=false,findApplyPending=false,browseProgressSeq=0,browseProgressJobs=new Map(),findStreamDone=true,findPendingMove=0,findPendingPage=0,findFilterPage=1;
 let findStreamWords=[];
-const BROWSE_MASK_THRESHOLD_KEY="wudict_browse_mask_threshold";
-const BROWSE_MASK_THRESHOLD_DEFAULT=100000;
-const BROWSE_MASK_THRESHOLD_OPTIONS=[0,10000,50000,100000,500000,1000000];
-function fitBrowseThreshold(){
-  const select=$("maskThreshold"),option=select.selectedOptions[0];
-  if(!option)return;
-  const style=getComputedStyle(select);
-  browseFindWidthCanvas.font=style.font;
-  const textWidth=browseFindWidthCanvas.measureText(option.textContent).width;
-  const padding=parseFloat(style.paddingLeft||0)+parseFloat(style.paddingRight||0);
-  select.style.width=Math.ceil(textWidth+padding+24)+"px";
-}
 function browseMaskThreshold(){
-  try{
-    const saved=localStorage.getItem(BROWSE_MASK_THRESHOLD_KEY);
-    if(saved===null)return BROWSE_MASK_THRESHOLD_DEFAULT;
-    const value=Number(saved);
-    return BROWSE_MASK_THRESHOLD_OPTIONS.includes(value)?value:BROWSE_MASK_THRESHOLD_DEFAULT;
-  }catch(_){return BROWSE_MASK_THRESHOLD_DEFAULT}
+  return browseHeadwordControl?.threshold()??100000;
 }
-function browseNeedsApply(){return (state?.total||0)>=browseMaskThreshold()}
+function browseNeedsApply(){return browseHeadwordControl?.needsApply(state?.total||0)??((state?.total||0)>=browseMaskThreshold())}
 function findAwaitingApply(){return findApplyPending||browseNeedsApply()&&!findApproved}
 function browseProgress(message,cancel=null,kind=""){
   const seq=++browseProgressSeq;
@@ -621,9 +564,6 @@ function setBrowsePageBusy(on){
     if(state)render();
   }
 }
-const findIcons={search:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 5 5"/></svg>',
-  filter:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h18l-7 8v5l-4 2v-7z"/></svg>'};
-
 function card(html,chooserList=false){chooserSearch?.destroy();chooserSearch=null;
   $("msg").classList.toggle("chooser-list",chooserList);
   $("msg").innerHTML=html;$("msg").hidden=false;
@@ -638,15 +578,28 @@ async function show(opts,record){
   const requestDictId=dictId;
   const started=performance.now();
   restoreBrowseAlphabet(requestDictId);
-  if(record==="replace"&&opts.p&&new URLSearchParams(location.search).has("y")){
-    const saved=restoreBrowsePage(requestDictId,opts.p);
-    if(saved){
-      state=saved;chooserSearch?.destroy();chooserSearch=null;
-      $("msg").classList.remove("chooser-list");$("msg").hidden=true;
-      render();browseTrace("page restored",{dict:requestDictId,page:state.page,words:state.words.length,
-        letters:state.alphabet.length,totalMs:Math.round(performance.now()-started)});
-      return;
+  let cached=opts.p?restoreBrowsePage(requestDictId,opts.p):null;
+  if(!cached&&opts.p){
+    const pending=browsePagePrefetches.get(browsePageKey(requestDictId,opts.p));
+    if(pending){
+      const endProgress=browseProgress(t("browse.loadingWords"),null,"page");
+      cached=await pending;endProgress();
+      if(seq!==browseSeq)return;
     }
+  }
+  if(cached){
+    if(browsePageAbort&&browsePageAbort!==browseAlphabetTask?.controller)browsePageAbort.abort();
+    state=cached;state.mark=opts.o!=null?opts.o:state.at;
+    chooserSearch?.destroy();chooserSearch=null;
+    $("msg").classList.remove("chooser-list");$("msg").hidden=true;
+    render();recordBrowsePage(state.page,record);
+    if(record!=="none"){
+      if(findResult&&!findFilter&&findIndex>=0)scheduleScrollToCurrentWord(seq);
+      else scrollTo(0,0);
+    }
+    browseTrace("page restored",{dict:requestDictId,page:state.page,words:state.words.length,
+      letters:state.alphabet.length,totalMs:Math.round(performance.now()-started)});
+    prefetchNextBrowsePage(state);return;
   }
   const continuingAlphabet=browseAlphabetTask?.dictId===dictId;
   const streamAlphabet=!browseAlphabetCache.has(dictId)&&!continuingAlphabet;
@@ -686,19 +639,16 @@ async function show(opts,record){
         clearTimeout(progressTimer);endProgress();show(opts,record);return;
       }
       state=page;state.alphabet=cached?.letters||browseAlphabetPartial.get(requestDictId)||[];state.mark=opts.o!=null?opts.o:state.at;
+      rememberBrowsePage(state);
       chooserSearch?.destroy();chooserSearch=null;$("msg").classList.remove("chooser-list");$("msg").hidden=true;
       render();
       browseTrace("page ready",{dict:requestDictId,page:state.page,words:state.words.length,letters:state.alphabet.length,totalMs:Math.round(performance.now()-started)});
-      const url="?dict="+encodeURIComponent(dictId)+"&p="+state.page+
-        (new URLSearchParams(location.search).get("chooser")==="1"?"&chooser=1":"")+
-        (BROWSE_DEBUG?"&browse_debug=1":"")+
-        (new URLSearchParams(location.search).get("wudict_webview2")==="1"?"&wudict_webview2=1":"");
-      if(record==="push"&&url!==location.search)history.pushState(null,"",url);
-      else if(record!=="none")history.replaceState(null,"",url);
+      recordBrowsePage(state.page,record);
       if(record!=="none"){
         if(findResult&&!findFilter&&findIndex>=0)scheduleScrollToCurrentWord(seq);
         else scrollTo(0,0);
       }
+      prefetchNextBrowsePage(state);
     }catch(error){if(seq===browseSeq)card("<b>"+tx("browse.noAnswer")+"</b><p>"+esc(error.message)+"</p>")}
     finally{clearTimeout(progressTimer);endProgress()}
     return;
@@ -715,15 +665,10 @@ async function show(opts,record){
         if(event.type==="error"){if(browseAlphabetTask?.controller===controller)throw new Error(event.error||"browse");return}
         if(event.type==="page"){
           if(seq!==browseSeq)continue;
-          state=event.page;state.mark=opts.o!=null?opts.o:state.at;
+          state=event.page;state.mark=opts.o!=null?opts.o:state.at;rememberBrowsePage(state);
           chooserSearch?.destroy();chooserSearch=null;$("msg").classList.remove("chooser-list");$("msg").hidden=true;
           stripFor="";stripLettersPainted=0;render();
-          const url="?dict="+encodeURIComponent(dictId)+"&p="+state.page+
-            (new URLSearchParams(location.search).get("chooser")==="1"?"&chooser=1":"")+
-            (BROWSE_DEBUG?"&browse_debug=1":"")+
-            (new URLSearchParams(location.search).get("wudict_webview2")==="1"?"&wudict_webview2=1":"");
-          if(record==="push"&&url!==location.search)history.pushState(null,"",url);
-          else if(record!=="none")history.replaceState(null,"",url);
+          recordBrowsePage(state.page,record);
           if(record!=="none"&&!(findResult&&!findFilter&&findIndex>=0))scrollTo(0,0);
           // The page is complete at this point. The remaining stream only
           // samples page-start letters from the already prepared index.
@@ -741,6 +686,7 @@ async function show(opts,record){
           const complete=browseAlphabetPartial.get(requestDictId)||[];
           saveBrowseAlphabet(requestDictId,event.total,complete.slice());browseAlphabetPartial.delete(requestDictId);
           if(state&&state.dict===requestDictId){state.alphabet=complete;render()}
+          if(state&&state.dict===requestDictId)prefetchNextBrowsePage(state);
           browseAlphabetTask=null;
           endProgress();if(seq===browseSeq){setBrowsePageBusy(false);if(findResult&&!findFilter&&findIndex>=0)scheduleScrollToCurrentWord(seq)}
         }
@@ -868,54 +814,31 @@ function fitTitle(){
 }
 addEventListener("resize",fitTitle);
 document.fonts?.ready.then(fitTitle);
-const browseFindWidthCanvas=document.createElement("canvas").getContext("2d");
-function fitBrowseFindDock(){
-  const dock=$("findInput").parentElement,input=$("findInput"),style=getComputedStyle(input);
-  browseFindWidthCanvas.font=style.font;
-  const textWidth=Math.max(browseFindWidthCanvas.measureText("xxxxxxxxxxxxxxx").width,
-    browseFindWidthCanvas.measureText("жжжжжжжжжжжжжжж").width);
-  const padding=parseFloat(style.paddingLeft||0)+parseFloat(style.paddingRight||0);
-  const buttons=["findMode","maskMode","maskThreshold","findApply","findCount","findPrev","findNext"]
-    .map(id=>$(id)).filter(el=>!el.hidden);
-  const gap=parseFloat(getComputedStyle(dock).columnGap)||0;
-  const controlsWidth=buttons.reduce((width,el)=>width+el.getBoundingClientRect().width,0)+gap*(buttons.length+1);
-  const minWidth=controlsWidth+textWidth+padding;
-  const twoRows=dock.clientWidth+0.5<minWidth;
-  if(dock.hasAttribute("data-two-rows")!==twoRows){
-    if(twoRows)dock.setAttribute("data-two-rows","1");else dock.removeAttribute("data-two-rows");
-  }
-}
-let browseFindDockWidth=-1;
-new ResizeObserver(()=>{
-  const width=$("findInput").parentElement.clientWidth;
-  if(Math.abs(width-browseFindDockWidth)<.5)return;
-  browseFindDockWidth=width;fitBrowseFindDock();
-}).observe($("findInput").parentElement);
-addEventListener("resize",()=>{browseFindDockWidth=-1;fitBrowseFindDock()});
+const browseControlLabels={
+  search:t("browse.findWords"),filter:t("browse.filterPlaceholder"),
+  filterMode:t("browse.filterWords"),searchMode:t("browse.searchWords"),
+  wildcard:t("browse.wildcardsSearch"),threshold:t("browse.maskThreshold"),
+  apply:t("browse.runFind"),previous:t("browse.previousMatch"),next:t("browse.nextMatch")
+};
+browseHeadwordControl=window.wudictHeadwordControl.create({
+  dock:$("findDock"),
+  ids:{mode:"findMode",mask:"maskMode",threshold:"maskThreshold",input:"findInput",apply:"findApply",count:"findCount",previous:"findPrev",next:"findNext"},
+  labels:browseControlLabels,maxRows:2,
+  onQuery:findChanged,onMode:toggleFindFilter,
+  onMask:()=>{findMask=!findMask;findChanged()},
+  onThreshold:()=>{if($("findInput").value.trim())findChanged();else updateFindControls()},
+  onApply:applyFind,onStep:findMove
+});
 function updateFindControls(){
   const filtering=findFilter;
-  $("findInput").placeholder=t(filtering?"browse.filterPlaceholder":"browse.findWords");
-  $("findInput").setAttribute("aria-label",$("findInput").placeholder);
-  $("findMode").innerHTML=filtering?findIcons.filter:findIcons.search;
-  $("findMode").classList.toggle("is-on",filtering);
-  $("findMode").setAttribute("aria-pressed",String(filtering));
-  $("findMode").setAttribute("aria-label",t(filtering?"browse.searchWords":"browse.filterWords"));
-  $("maskMode").classList.toggle("is-on",findMask);
-  $("maskMode").setAttribute("aria-pressed",String(findMask));
-  $("maskThreshold").hidden=false;
-  fitBrowseThreshold();
-  $("findApply").hidden=!browseNeedsApply();
-  $("findApply").disabled=$("findApply").hidden||!$("findInput").value.trim();
   const total=findResult?.total||(filtering&&!$("findInput").value.trim()?state?.total||0:0);
   const suffix=findResult&&!findStreamDone?"+":"";
-  $("findCount").textContent=filtering?total+suffix:(findIndex<0?0:findIndex+1)+"/"+total+suffix;
-  $("findPrev").disabled=filtering||findIndex<=0;
-  $("findNext").disabled=filtering||findIndex<0||(findStreamDone&&findIndex>=total-1);
   const locked=!!findResult?.stream&&!findStreamDone;
-  for(const id of ["findInput","findMode","maskMode","maskThreshold","findApply"]){
-    const el=$(id);if(el)el.disabled=locked;
-  }
-  fitBrowseFindDock();
+  browseHeadwordControl.paint({filtering,mask:findMask,applyRequired:browseNeedsApply(),
+    applyEnabled:!!$("findInput").value.trim(),busy:locked,
+    count:filtering?total+suffix:(findIndex<0?0:findIndex+1)+"/"+total+suffix,
+    previousDisabled:filtering||findIndex<0||(findStreamDone&&findIndex<=0),
+    nextDisabled:filtering||findIndex<0||(findStreamDone&&findIndex>=total-1)});
 }
 async function fetchFound(page,target=0,record="replace"){
   // A delayed input callback or navigation must not bypass Apply in any mode.
@@ -1015,7 +938,11 @@ function findMove(delta){
   if(findResult.stream){
     if(findIndex<0)return;
     const requested=findIndex+(findPendingMove||0)+delta;
-    if(requested<0)return;
+    if(requested<0){
+      if(!findStreamWords.length)return;
+      findIndex=(requested%findStreamWords.length+findStreamWords.length)%findStreamWords.length;
+      findPendingMove=0;updateFindControls();show({at:currentFoundWord()},"push");return;
+    }
     if(requested<findStreamWords.length){
       findPendingMove=0;findIndex=requested;updateFindControls();show({at:currentFoundWord()},"push");return;
     }
@@ -1050,22 +977,87 @@ function browseReturnURL(){
   return url.pathname+url.search;
 }
 
-function saveBrowsePage(){
-  if(!state)return;
-  const {alphabet,...page}=state;
-  try{sessionStorage.setItem(BROWSE_PAGE_SESSION_KEY,JSON.stringify({savedAt:Date.now(),page}))}catch(_){}
+function browsePageKey(dict,page){return dict+"|"+page}
+function browsePageMetrics(page){
+  const words=Array.isArray(page.words)?page.words:[];
+  const jsonBytes=new TextEncoder().encode(JSON.stringify(page)).length;
+  const chars=words.reduce((sum,word)=>sum+(typeof word==="string"?word.length:0),0);
+  return {jsonBytes,heapBytes:chars*2+words.length*40+256,words:words.length};
+}
+function dictionaryCacheTrace(event,page){
+  let enabled=false;try{enabled=localStorage.getItem("wudict_dictionary_cache_diagnostics")==="1"}catch(_){}
+  if(!enabled||!page)return;
+  const entries=[...browsePageCache.entries()].filter(([,item])=>item.dict===page.dict);
+  const cacheBytes=entries.reduce((sum,[key])=>sum+(browsePageCacheMetrics.get(key)?.heapBytes||0),0);
+  const cacheJsonBytes=entries.reduce((sum,[key])=>sum+(browsePageCacheMetrics.get(key)?.jsonBytes||0),0);
+  const pageMetrics=browsePageMetrics(page);
+  const totalPages=Number.isSafeInteger(page.pages)?page.pages:0;
+  const estimatedAllPagesBytes=entries.length?Math.round(cacheBytes/entries.length*totalPages):0;
+  fetch("/api/browse-diagnostic",{method:"POST",headers:{"Content-Type":"application/json"},keepalive:true,
+    body:JSON.stringify({event,dict:page.dict,page:page.page,words:pageMetrics.words,pageBytes:pageMetrics.heapBytes,
+      pageJsonBytes:pageMetrics.jsonBytes,cachePages:entries.length,cacheBytes,cacheJsonBytes,totalPages,estimatedAllPagesBytes})}).catch(()=>{});
+}
+function rememberBrowsePage(page,event="page_cache_saved"){
+  if(!page||!Number.isSafeInteger(page.page)||!Array.isArray(page.words))return;
+  const {alphabet,...saved}=page,key=browsePageKey(page.dict,page.page);
+  browsePageCache.delete(key);browsePageCache.set(key,saved);
+  browsePageCacheMetrics.set(key,browsePageMetrics(saved));
+  while(browsePageCache.size>BROWSE_PAGE_CACHE_LIMIT){
+    const oldest=browsePageCache.keys().next().value;browsePageCache.delete(oldest);browsePageCacheMetrics.delete(oldest);
+  }
+  dictionaryCacheTrace(event,saved);
 }
 function restoreBrowsePage(dict,pageNumber){
-  try{
+  const key=browsePageKey(dict,pageNumber);
+  let page=browsePageCache.get(key);
+  if(page){browsePageCache.delete(key);browsePageCache.set(key,page)}
+  else try{
     const saved=JSON.parse(sessionStorage.getItem(BROWSE_PAGE_SESSION_KEY)||"null");
-    const page=saved?.page;
-    if(!page||Date.now()-saved.savedAt>30*60*1000||page.dict!==dict||page.page!==pageNumber||
-      !Number.isSafeInteger(page.total)||!Array.isArray(page.words)||
-      page.words.some(word=>typeof word!=="string"))return null;
-    const alphabet=browseAlphabetCache.get(dict);
-    if(!alphabet||alphabet.total!==page.total)return null;
-    return {...page,alphabet:alphabet.letters};
+    if(!saved||Date.now()-saved.savedAt>30*60*1000)return null;
+    const pages=Array.isArray(saved.pages)?saved.pages:(saved.page?[saved.page]:[]);
+    page=pages.find(item=>item.dict===dict&&item.page===pageNumber)||null;
+    if(!page)return null;
   }catch(_){return null}
+  if(!Number.isSafeInteger(page.total)||!Array.isArray(page.words)||page.words.some(word=>typeof word!=="string"))return null;
+  const alphabet=browseAlphabetCache.get(dict);
+  if(!alphabet||alphabet.total!==page.total)return null;
+  rememberBrowsePage(page,"page_cache_restored");
+  return {...page,alphabet:alphabet.letters};
+}
+function saveBrowsePage(){
+  if(!state)return;
+  rememberBrowsePage(state);
+  const pages=[...browsePageCache.values()].filter(page=>page.dict===state.dict).slice(-BROWSE_PAGE_SESSION_LIMIT);
+  try{sessionStorage.setItem(BROWSE_PAGE_SESSION_KEY,JSON.stringify({savedAt:Date.now(),pages}))}catch(_){}
+}
+function prefetchBrowsePage(dict,pageNumber,lastPage){
+  if(pageNumber>lastPage||restoreBrowsePage(dict,pageNumber))return Promise.resolve(null);
+  const key=browsePageKey(dict,pageNumber),running=browsePagePrefetches.get(key);
+  if(running)return running;
+  const controller=new AbortController();
+  const request=fetch("/api/browse?"+new URLSearchParams({dict,p:String(pageNumber),strip:"0"}),{signal:controller.signal})
+    .then(response=>response.ok?response.json():null)
+    .then(page=>{
+      const alphabet=browseAlphabetCache.get(dict);
+      if(page&&page.dict===dict&&page.page===pageNumber&&alphabet&&page.total===alphabet.total){rememberBrowsePage(page);return {...page,alphabet:alphabet.letters}}
+      return null;
+    }).catch(()=>null).finally(()=>browsePagePrefetches.delete(key));
+  browsePagePrefetches.set(key,request);
+  return request;
+}
+function prefetchNextBrowsePage(page){
+  if(page&&page.page<page.pages)setTimeout(()=>prefetchBrowsePage(page.dict,page.page+1,page.pages),120);
+}
+function browsePageURL(page){
+  return "?dict="+encodeURIComponent(dictId)+"&p="+page+
+    (new URLSearchParams(location.search).get("chooser")==="1"?"&chooser=1":"")+
+    (BROWSE_DEBUG?"&browse_debug=1":"")+
+    (new URLSearchParams(location.search).get("wudict_webview2")==="1"?"&wudict_webview2=1":"");
+}
+function recordBrowsePage(page,record){
+  const url=browsePageURL(page);
+  if(record==="push"&&url!==location.search)history.pushState(null,"",url);
+  else if(record!=="none")history.replaceState(null,"",url);
 }
 
 function saveBrowseFind(){
@@ -1074,14 +1066,14 @@ function saveBrowseFind(){
     const full=findStreamWords.length<=50000;
     if(!full&&!findFilter)return;
     const words=full?findStreamWords:findStreamWords.slice((findFilterPage-1)*300,findFilterPage*300);
-    sessionStorage.setItem(BROWSE_FIND_SESSION_KEY,JSON.stringify({dict:dictId,dictTotal:state.total,
+    window.wudictHeadwordControl.cacheWrite(BROWSE_FIND_SESSION_KEY,{dict:dictId,dictTotal:state.total,
       query:$("findInput").value.trim(),mask:appliedFindMask,words,total:findResult.total,
-      full,page:findFilterPage}));
+      full,page:findFilterPage});
   }catch(_){}
 }
 function restoreBrowseFind(query,page,index){
   try{
-    const saved=JSON.parse(sessionStorage.getItem(BROWSE_FIND_SESSION_KEY)||"null");
+    const saved=window.wudictHeadwordControl.cacheRead(BROWSE_FIND_SESSION_KEY);
     if(saved?.dict!==dictId||saved.dictTotal!==state.total||saved.query!==query||saved.mask!==appliedFindMask||
       !Array.isArray(saved.words)||saved.full&&saved.words.length!==saved.total||
       !saved.full&&(!findFilter||saved.page!==page)||
@@ -1297,7 +1289,6 @@ document.addEventListener("click",e=>{
   if(c&&state){const o=Number(c.dataset.o);show({p:Math.floor(o/state.size)+1,o:o},"push")}
 });
 
-$("findInput").addEventListener("input",findChanged);
 $("findInput").addEventListener("keydown",e=>{
   if(e.key==="Tab"&&!e.shiftKey){e.preventDefault();toggleFindFilter()}
   else if(e.key==="ArrowUp"){e.preventDefault();findMove(-1)}
@@ -1306,23 +1297,6 @@ $("findInput").addEventListener("keydown",e=>{
     e.preventDefault();findMove(e.shiftKey?-1:1)
   }
 });
-$("findMode").addEventListener("click",toggleFindFilter);
-$("maskThreshold").value=String(browseMaskThreshold());
-fitBrowseThreshold();
-$("maskThreshold").addEventListener("change",()=>{
-  const value=Number($("maskThreshold").value);
-  if(!BROWSE_MASK_THRESHOLD_OPTIONS.includes(value))return;
-  fitBrowseThreshold();
-  try{localStorage.setItem(BROWSE_MASK_THRESHOLD_KEY,String(value))}catch(_){}
-  if($("findInput").value.trim())findChanged();else updateFindControls();
-});
-$("maskMode").addEventListener("click",()=>{
-  findMask=!findMask;
-  findChanged();
-});
-$("findApply").addEventListener("click",applyFind);
-$("findPrev").addEventListener("click",()=>findMove(-1));
-$("findNext").addEventListener("click",()=>findMove(1));
 updateFindControls();
 
 addEventListener("keydown",e=>{

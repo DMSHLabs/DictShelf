@@ -17,7 +17,6 @@ import (
 	"sort"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/wuweidict/wudict/internal/config"
 	"github.com/wuweidict/wudict/internal/dict"
@@ -1174,6 +1173,7 @@ func newRequest(method, target string, body io.Reader) *http.Request {
 // explicitly requested index the test only waited to finish) is not raced.
 func closeBackends(t *testing.T, reg *Registry) {
 	t.Cleanup(func() {
+		reg.jobs.wg.Wait()
 		for _, e := range reg.all() {
 			e.ingestMu.Lock()
 			e.closeNow()

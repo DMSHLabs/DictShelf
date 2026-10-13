@@ -26,6 +26,7 @@ func unpreparedEntry(t *testing.T) (*Server, *entry) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	waitNewDictionaryIndexing(t, reg)
 	closeBackends(t, reg)
 	return New(reg), reg.all()[0]
 }

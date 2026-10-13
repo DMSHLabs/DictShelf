@@ -16,17 +16,25 @@ import (
 func newPrefsServer(t *testing.T) (*Server, string) {
 	t.Helper()
 	dir := t.TempDir()
+	known := map[string]bool{}
 	for _, n := range []string{"alpha.dsl", "beta.dsl"} {
-		if err := os.WriteFile(filepath.Join(dir, n), []byte(sampleDSL), 0o644); err != nil {
+		path := filepath.Join(dir, n)
+		if err := os.WriteFile(path, []byte(sampleDSL), 0o644); err != nil {
 			t.Fatal(err)
 		}
+		known[cleanAbs(path)] = true
 	}
 	isolatedDBDir(t)
 	state := filepath.Join(t.TempDir(), StateFile)
-	reg, err := NewRegistry([]string{dir}, false, WithPrefs(LoadPrefs(state)), WithComparisons(false))
+	prefs := LoadPrefs(state)
+	if err := prefs.mutate(func(f *prefsFile) { f.DSLKnown = known }); err != nil {
+		t.Fatal(err)
+	}
+	reg, err := NewRegistry([]string{dir}, false, WithPrefs(prefs), WithComparisons(false))
 	if err != nil {
 		t.Fatal(err)
 	}
+	closeBackends(t, reg)
 	return New(reg), state
 }
 

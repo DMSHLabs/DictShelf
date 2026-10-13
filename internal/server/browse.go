@@ -119,11 +119,13 @@ func (s *Server) handleBrowseFind(w http.ResponseWriter, r *http.Request) {
 }
 
 type browseFindStreamEvent struct {
-	Type  string   `json:"type"`
-	Words []string `json:"words,omitempty"`
-	Total int      `json:"total"`
-	Done  bool     `json:"done,omitempty"`
-	Error string   `json:"error,omitempty"`
+	Type      string        `json:"type"`
+	Words     []string      `json:"words,omitempty"`
+	Positions []int         `json:"positions,omitempty"`
+	Alphabet  []dict.Letter `json:"alphabet,omitempty"`
+	Total     int           `json:"total"`
+	Done      bool          `json:"done,omitempty"`
+	Error     string        `json:"error,omitempty"`
 }
 
 type browseHeadwordStreamer interface {
@@ -138,6 +140,12 @@ func (s *Server) handleBrowseFindStream(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	mask := q.Get("wildcards") == "1" || q.Get("mask") == "1"
+	within := strings.TrimSpace(q.Get("within"))
+	if len(within) > 256 {
+		httpErr(w, 400, "filter text is too long")
+		return
+	}
+	withinMask := q.Get("withinWildcards") == "1" || q.Get("withinMask") == "1"
 	e, err := s.reg.get(q.Get("dict"))
 	if err != nil {
 		httpErr(w, 404, "%v", err)
@@ -167,10 +175,65 @@ func (s *Server) handleBrowseFindStream(w http.ResponseWriter, r *http.Request) 
 		st.line(browseFindStreamEvent{Type: typ, Words: words, Total: total, Done: done})
 		return r.Context().Err()
 	}
-	if streamer, ok := d.(browseHeadwordStreamer); ok {
-		err = streamer.StreamBrowseHeadwords(r.Context(), query, mask, emit)
+	if within == "" {
+		if streamer, ok := d.(browseHeadwordStreamer); ok {
+			err = streamer.StreamBrowseHeadwords(r.Context(), query, mask, emit)
+		} else {
+			err = streamDirectBrowseHeadwords(r, d, query, mask, emit)
+		}
 	} else {
-		err = streamDirectBrowseHeadwords(r, d, query, mask, emit)
+		browseFindStreamsActive.Add(1)
+		defer browseFindStreamsActive.Add(-1)
+		var withinRE *regexp.Regexp
+		if withinMask {
+			withinRE, err = search.CompileMask(within)
+			if err != nil {
+				httpErr(w, 400, "invalid filter: %v", err)
+				return
+			}
+		}
+		terms := dict.HeadwordTermMatcher(within)
+		baseOffset, filteredTotal := 0, 0
+		filteredWords := make([]string, 0, browsePageSize)
+		filteredPositions := make([]int, 0, browsePageSize)
+		var sections dict.MaskSections
+		filteredEmit := func(words []string, total int, done bool) error {
+			base := baseOffset
+			for i, word := range words {
+				if withinMask && !withinRE.MatchString(word) || !withinMask && !terms(word) {
+					continue
+				}
+				sections.Add(word)
+				filteredWords = append(filteredWords, word)
+				filteredPositions = append(filteredPositions, base+i)
+				filteredTotal++
+			}
+			baseOffset = total
+			if len(filteredWords) >= browsePageSize || done {
+				typ := "block"
+				if done {
+					typ = "done"
+				}
+				st.line(browseFindStreamEvent{Type: typ, Words: filteredWords, Positions: filteredPositions,
+					Total: filteredTotal, Done: done, Alphabet: func() []dict.Letter {
+						if done {
+							return sections.Finish()
+						}
+						return nil
+					}()})
+				filteredWords = make([]string, 0, browsePageSize)
+				filteredPositions = make([]int, 0, browsePageSize)
+				return r.Context().Err()
+			}
+			typ := "progress"
+			st.line(browseFindStreamEvent{Type: typ, Total: filteredTotal})
+			return r.Context().Err()
+		}
+		if streamer, ok := d.(browseHeadwordStreamer); ok {
+			err = streamer.StreamBrowseHeadwords(r.Context(), query, mask, filteredEmit)
+		} else {
+			err = streamDirectBrowseHeadwords(r, d, query, mask, filteredEmit)
+		}
 	}
 	if err != nil && r.Context().Err() == nil {
 		st.line(browseFindStreamEvent{Type: "error", Error: err.Error()})
@@ -585,5 +648,7 @@ func (s *Server) handleBrowsePage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-cache")
 	page := bytes.ReplaceAll(browseHTML, []byte("{{PRESETS}}"), []byte(s.pagePresetLinks()))
 	page = bytes.ReplaceAll(page, []byte("{{LISTSEARCHJS}}"), []byte(assetTag(listSearchJS)))
+	page = bytes.ReplaceAll(page, []byte("{{HEADWORDJS}}"), []byte(assetTag(headwordControlJS)))
+	page = bytes.ReplaceAll(page, []byte("{{HEADWORDCSS}}"), []byte(assetTag(headwordControlCSS)))
 	_, _ = w.Write([]byte(renderUI(string(page), s.reg.prefs.Language())))
 }

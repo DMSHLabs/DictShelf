@@ -148,6 +148,7 @@ func TestRescanClearsUnselectedSourcesButKeepsActiveIndexes(t *testing.T) {
 	if err := s.reg.Rescan(); err != nil {
 		t.Fatal(err)
 	}
+	waitNewDictionaryIndexing(t, s.reg)
 	e, err := s.reg.get(idOf(t, s, "new.dsl"))
 	if err != nil {
 		t.Fatal(err)
@@ -197,6 +198,7 @@ func TestCleanupKeepsSingleDSLIndex(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	waitNewDictionaryIndexing(t, reg)
 	paths := []string{}
 	for _, e := range reg.all() {
 		if _, err := e.open(); err != nil {

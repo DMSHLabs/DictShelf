@@ -21,7 +21,7 @@ func TestScriptsAreContentAddressed(t *testing.T) {
 	page, _ := s.pageFor("", "", "")
 	pageStr := string(page)
 
-	for name, body := range map[string][]byte{"frame.js": frameJS, "pick.js": pickJS, "speak.js": speakJS, "examples.js": examplesJS, "article-find.js": articleFindJS, "list-search.js": listSearchJS} {
+	for name, body := range map[string][]byte{"frame.js": frameJS, "pick.js": pickJS, "speak.js": speakJS, "examples.js": examplesJS, "article-find.js": articleFindJS, "list-search.js": listSearchJS, "headword-control.js": headwordControlJS} {
 		if want := "/assets/" + name + "?v=" + assetTag(body); !strings.Contains(pageStr, want) {
 			t.Errorf("index.html does not request %s by content hash (%s)", name, want)
 		}
@@ -36,6 +36,8 @@ func TestScriptsAreContentAddressed(t *testing.T) {
 		{"/assets/group-editor.css", groupEditorCSS},
 		{"/assets/group-editor.js", groupEditorJS},
 		{"/assets/list-search.js", listSearchJS},
+		{"/assets/headword-control.js", headwordControlJS},
+		{"/assets/headword-control.css", headwordControlCSS},
 		{"/assets/looks.js", looksJS},
 	} {
 		if want := asset.path + "?v=" + assetTag(asset.body); !strings.Contains(pageStr, want) {
@@ -70,6 +72,7 @@ func TestAssetCacheHeaders(t *testing.T) {
 		"/assets/group-editor.css?v=abc123", "/assets/group-editor.js?v=abc123",
 		"/assets/pick.js?v=abc123", "/assets/speak.js?v=abc123",
 		"/assets/examples.js?v=abc123", "/assets/article-find.js?v=abc123", "/assets/list-search.js?v=abc123",
+		"/assets/headword-control.js?v=abc123", "/assets/headword-control.css?v=abc123",
 	} {
 		rec := get(p)
 		if rec.Code != 200 || rec.Body.Len() == 0 {
