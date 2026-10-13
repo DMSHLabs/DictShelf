@@ -20,6 +20,7 @@ func TestRewriteEntryHTML(t *testing.T) {
 	cases := []struct {
 		name, in, want string
 	}{
+		{"HTML5 audio fallback becomes play link", `<audio src="voice.mp3"><img src="spkr.png"></audio>`, `<a class="wu-audio" href="` + R + `voice.mp3"><img src="` + R + `spkr.png"></a>`},
 		// ── pseudo-schemes and relative forms all land under /res/ ──────────
 		{"sound scheme", `<a href="sound://hwd/ame/6/abet.mp3">x</a>`, `<a href="` + R + `hwd/ame/6/abet.mp3">x</a>`},
 		{"sound scheme uppercase", `<a href="SOUND://a.mp3">x</a>`, `<a href="` + R + `a.mp3">x</a>`},
