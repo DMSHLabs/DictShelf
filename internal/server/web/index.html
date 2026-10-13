@@ -4491,6 +4491,14 @@ function lookupSelection(text){
    collected before it plays. Playback decodes by Content-Type, not the URL
    extension, so a .spx URL served as audio/wav plays fine. */
 let audioEl=null;
+/* The server's playable() (internal/htmlref) and frame.js playableHref,
+   mirrored: what a wu-audio href may be for the click to be audio. Anything
+   else - a #fragment above all - keeps its own branch. Keep the three in step. */
+function playableHref(h){
+  if(!h||/^[#?]/.test(h))return false;
+  const m=/^([^:\/?#]*):/.exec(h); // a scheme ends before any / ? #
+  return !m||/^https?$/i.test(m[1])||/^data:audio\//i.test(h);
+}
 function playAudio(url){
   if(!url)return;
   if(!audioEl)audioEl=new Audio();
@@ -4994,8 +5002,10 @@ document.addEventListener("click",e=>{
     // below: `entry://…mp3` names a headword, not a file.
     if(parseRef(href))return;
     const dictID=path.find(el=>el.classList?.contains("article"))?.dataset.dict;
-    if(/\.(mp3|ogg|wav|spx|m4a)(\?|#|$)/i.test(href))
-      url=href.startsWith("/res/")||/^https?:/i.test(href)?href:resURL(dictID,href);
+    // wu-audio is a play link whatever the extension: DSL [s], or an <audio>
+    // served as its speaker (htmlref PlayLinks), whose src may be inline
+    if(a.classList.contains("wu-audio")&&playableHref(href)||/\.(mp3|ogg|wav|spx|m4a)(\?|#|$)/i.test(href))
+      url=/^(\/res\/|\/\/|https?:|data:)/i.test(href)?href:resURL(dictID,href);
     else if(a.querySelector("img")&&href.startsWith("/res/"))url=href;
   }
   if(!url)return;

@@ -105,6 +105,18 @@ func TestRewriteEntryHTML(t *testing.T) {
 		{"plain text untouched", `<p>a plain <b>definition</b> with no refs</p>`, `<p>a plain <b>definition</b> with no refs</p>`},
 		{"prose data word untouched", `<p>consult the database of words</p>`, `<p>consult the database of words</p>`},
 
+		// ── pronunciation only GoldenDict could see (htmlref PlayLinks) ─────
+		{"LDOCE6 StarDict <audio> becomes its speaker link",
+			`<audio src="0hwd/bre/7/aeroplane0205.mp3"><img src="img/spkr_r.png"></audio>`,
+			`<a class="wu-audio" href="` + R + `0hwd/bre/7/aeroplane0205.mp3"><img src="` + R + `img/spkr_r.png"></a>`},
+		{"sound:// source is a /res/ play link", `<audio src="sound://a.mp3"><img src="s.png"></audio>`,
+			`<a class="wu-audio" href="` + R + `a.mp3"><img src="` + R + `s.png"></a>`},
+		{"file:// source is a /res/ play link", `<audio src="file://a.mp3"><img src="s.png"></audio>`,
+			`<a class="wu-audio" href="` + R + `a.mp3"><img src="` + R + `s.png"></a>`},
+		{"entry:// source stays <audio>", `<audio src="entry://word"><img src="s.png"></audio>`,
+			`<audio src="entry://word"><img src="` + R + `s.png"></audio>`},
+		{"<audio controls> untouched", `<audio controls src="a.mp3"></audio>`, `<audio controls="" src="` + R + `a.mp3"></audio>`},
+
 		// ── a whole line of real article markup ─────────────────────────────
 		{"mixed article",
 			`<a href="sound://a.mp3"><img src="spkr_b.png"></a> <a href="bword://apple">apple</a>`,
@@ -126,6 +138,7 @@ func TestRewriteEntryHTMLIdempotent(t *testing.T) {
 		`<a href="sound://hwd/ame/6/abet.mp3">x</a><img src="a.png">`,
 		`<a href=plaintiff__gb_1.ogg" class="pron">p</a>`,
 		`<div style="background:url(bg.png)"><img srcset="a.png 1x"></div>`,
+		`<audio src="0hwd/ame/0/aeroplane.mp3"><img src="img/spkr_b.png"></audio>`,
 	} {
 		once := RewriteEntryHTML(in, id)
 		twice := RewriteEntryHTML(once, id)

@@ -406,6 +406,15 @@
 		if (p && p.catch) p.catch(function (err) { console.warn("audio play failed:", url, err); });
 	}
 
+	// The server's playable() (internal/htmlref), mirrored: what a wu-audio
+	// href may be for the click to be audio. Anything else - a #fragment
+	// above all - keeps its own branch below. Keep the two in step.
+	function playableHref(h) {
+		if (!h || /^[#?]/.test(h)) return false;
+		var m = /^([^:\/?#]*):/.exec(h); // a scheme ends before any / ? #
+		return !m || /^https?$/i.test(m[1]) || /^data:audio\//i.test(h);
+	}
+
 	// Playing audio means TAKING the click, not merely cancelling the browser's
 	// default. The article usually plays it too: LDOCE spells pronunciation as
 	// `<a onclick="new Audio(this.href).play(); return false;" href="…mp3">`, an
@@ -476,7 +485,10 @@
 				return;
 			}
 			jumpToFragment(ref.frag); // "anchor": a place in this same article
-		} else if (/\.(mp3|ogg|wav|spx|m4a)([?#]|$)/i.test(href)) {
+		} else if (/\.(mp3|ogg|wav|spx|m4a)([?#]|$)/i.test(href) ||
+				(a.classList && a.classList.contains("wu-audio") && playableHref(href))) {
+			// wu-audio is a play link whatever the extension: DSL [s], or an
+			// <audio> served as its speaker (htmlref PlayLinks)
 			e.preventDefault();
 			ownAudio(e, href);
 		} else if (a.classList && a.classList.contains("wu-file")) {

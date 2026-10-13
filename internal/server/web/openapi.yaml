@@ -94,6 +94,12 @@ paths:
         was declined by the memory cap reports that on its own line. None of
         those is a request failure, and the other dictionaries still answer.
 
+        A one-word query that finds nothing in a dictionary is searched there
+        again with its lemma ("knew" -> "know"), using the lemma data for that
+        dictionary's language. The answer is a `morph` line, then a second
+        `hit` for each such slot, which replaces its miss. Not for a phrase,
+        and not for a `wildcard` pattern containing `*` or `?`.
+
         A search is cancelled after 30 seconds.
       parameters:
         - name: q
@@ -196,12 +202,13 @@ paths:
                 oneOf:
                   - $ref: '#/components/schemas/SearchBegin'
                   - $ref: '#/components/schemas/SearchHit'
+                  - $ref: '#/components/schemas/SearchMorph'
                   - $ref: '#/components/schemas/StreamEnd'
                 discriminator: { propertyName: t }
               example: |
                 {"t":"begin","i":0,"slots":[{"dict":"oxford","name":"oxford"},{"dict":"webster","name":"webster"}]}
                 {"t":"hit","i":1,"dict":"webster","name":"Webster's Revised Unabridged","results":[{"Headword":"flight","Body":"<div>…</div>"}]}
-                {"t":"hit","i":0,"dict":"oxford","name":"Oxford Advanced Learner's","results":[]}
+                {"t":"hit","i":0,"dict":"oxford","name":"Oxford Advanced Learner's"}
                 {"t":"end","i":0}
         '400':
           $ref: '#/components/responses/BadRequest'
@@ -2236,7 +2243,7 @@ components:
                   Babylon or wudict markdown dictionary is indexed when it is
                   first opened, and again after its files change.
               done: { type: integer }
-              total: { type: integer, description: Absent when not known. For unpacking, an estimate. }
+              total: { type: integer, description: 'Absent when not known. For unpacking, an estimate.' }
             required: [id, name]
       required: [t]
 
@@ -2273,7 +2280,11 @@ components:
 
     SearchHit:
       type: object
-      description: One dictionary's outcome. Fill slot `i`.
+      description: >
+        One dictionary's outcome. Fill slot `i`. `results` is absent when the
+        dictionary found nothing; such a slot may receive a second hit, with
+        results, after a `morph` line. A hit with results, `skipped`,
+        `deferred` or `error` is final.
       properties:
         t: { const: hit }
         i: { type: integer, description: Index into the begin line's slots array. }
@@ -2316,6 +2327,21 @@ components:
           type: string
           description: This dictionary failed. The others still answered.
       required: [t, i]
+
+    SearchMorph:
+      type: object
+      description: >
+        Every hit after this line answers `to`, the lemma of `from`, not the
+        query as typed. Sent after every first-wave hit, once per language whose
+        lemma found something, in language-code order; the hits that follow
+        replace the misses of their slots and always carry results.
+      properties:
+        t: { const: morph }
+        i: { type: integer, description: Always 0 here. }
+        from: { type: string, description: The query as typed. }
+        to: { type: string, description: The lemma searched instead. }
+        lang: { type: string, description: 'The language of the lemma data that produced it, as an ISO 639-1 code: `en`.' }
+      required: [t, from, to, lang]
 
     DictsBegin:
       type: object

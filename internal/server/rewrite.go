@@ -124,7 +124,9 @@ func attrBase(name string) string {
 // (htmlref.CanonRef).
 //
 // <base> is dropped: in dictionary HTML it is a scraping leftover, and left in
-// place it would re-root every relative reference in the article.
+// place it would re-root every relative reference in the article. An <audio>
+// whose only visible part is fallback content becomes a play link
+// (htmlref.Rewriter.PlayLinks).
 func RewriteEntryHTML(html, dictID string) string {
 	if html == "" || dictID == "" {
 		return html
@@ -190,6 +192,9 @@ func entryRewriter(dictID string, text func(string) string) htmlref.Rewriter {
 	relPrefix := "res/" + dictID + "/"
 
 	rw.Drop = func(tag string) bool { return tag == "base" }
+	// A controls-less <audio> around a speaker <img> (LDOCE6 StarDict) is
+	// invisible in every browser; served as the play link it was drawn as.
+	rw.PlayLinks = true
 	rw.URL = func(r htmlref.Ref) string {
 		ref := r.URL
 		switch {

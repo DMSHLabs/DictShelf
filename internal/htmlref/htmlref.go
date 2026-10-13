@@ -41,9 +41,14 @@
 //	                         |            | omitted. If no value changed, the
 //	                         |            | ORIGINAL BYTES are emitted, so the
 //	                         |            | document is preserved exactly.
-//	                         |            | Entering <style>/<script>/<title>/
-//	                         |            | <textarea> sets the raw-text state.
+//	                         |            | A raw-text tag (<style>, <script>,
+//	                         |            | <title>, <textarea>, …, self-closing
+//	                         |            | or dropped included) sets the
+//	                         |            | raw-text state, as in the tokenizer.
 //	EndTag                   | any        | emitted as-is; leaves raw text.
+//	<audio> … </audio>       | PlayLinks  | held back until its end, then
+//	                         |            | emitted as a play link or as-is
+//	                         |            | (see Rewriter.PlayLinks).
 //	Text                     | in <style> | CSS: url(...) references rewritten.
 //	Text                     | in <script>| NEVER touched. A `src="…"` inside a
 //	                         |            | script is a string literal, not
@@ -71,6 +76,9 @@
 // and it is applied before any policy runs, because a malformed value is a
 // parsing concern rather than a caller's decision. TestRoundTrip pins both
 // halves against real dictionary articles.
+//
+// The other exception is opt-in: with PlayLinks, an <audio> that qualifies
+// becomes an <a>. One that does not keeps its bytes.
 package htmlref
 
 import (
@@ -133,14 +141,192 @@ type Rewriter struct {
 	// its input would have to re-escape it, and any disagreement between the
 	// two would rewrite what the article says.
 	Text func(raw string) string
+
+	// PlayLinks turns a speaker icon only GoldenDict can show into one a
+	// browser can. LDOCE6 (StarDict) writes every pronunciation as
+	//
+	//	<audio src="0hwd/bre/7/aeroplane0205.mp3"><img src="img/spkr_r.png"></audio>
+	//
+	// with no controls attribute. A browser lays out none of it: every UA
+	// stylesheet hides audio:not([controls]), and the <img> is fallback
+	// content, drawn only where <audio> is unsupported. GoldenDict's StarDict
+	// reader rewrites this shape into a play link; so does this.
+	//
+	// The element becomes `<a class="wu-audio" href="SRC">CONTENT</a>`, the
+	// artmark role DSL pronunciation already uses. It converts only when every
+	// condition holds; otherwise its bytes are emitted exactly as without
+	// PlayLinks, which is what a browser hides:
+	//
+	//	no <a> open             an anchor cannot hold an anchor
+	//	no controls, autoplay,  the browser or a script acts on the element:
+	//	muted, loop, id, on*,   a player is drawn, a sound plays on load, a
+	//	data-* attribute        script finds it by id or reads its data
+	//	a playable SRC          src, else the first child <source src>, after
+	//	                        URL: relative, root-absolute, http(s), or
+	//	                        data:audio/ - never a scheme a link would run
+	//	an <img> in it          the author drew a button. Fallback TEXT is
+	//	                        "your browser does not support audio"
+	//	a CLOSED, SIMPLE body   only text, comments and the phrasing and media
+	//	                        elements of fallbackTag, each closed in order,
+	//	                        then </audio>. Any other tag decides where the
+	//	                        parser closes the element (a parent's end tag,
+	//	                        a block start), which a tokenizer cannot know,
+	//	                        so it leaves the element as written. End of
+	//	                        input closes it, as in the parser.
+	PlayLinks bool
+}
+
+// fallbackTag is what an <audio> may contain and still become a play link:
+// elements that never close an ancestor, never start a block and never hold
+// interactive content. The void ones (voidTag) open nothing to close.
+var fallbackTag = map[string]bool{
+	"img": true, "source": true, "track": true, "br": true, "wbr": true, // void
+	"span": true, "b": true, "i": true, "em": true, "strong": true, "small": true,
+	"sub": true, "sup": true, "u": true, "s": true, "font": true, "abbr": true,
+	"mark": true, "bdi": true, "bdo": true, "cite": true, "dfn": true, "q": true,
+	"code": true, "kbd": true, "samp": true, "var": true, "time": true, "data": true,
+}
+
+// pendingAudio holds one <audio> element while Rewrite decides whether it is
+// a play button (PlayLinks): the decision rests on its content, which the
+// tokenizer has not reached when the start tag is read. Every token buffered
+// here was rewritten exactly as it would have been outside, so giving the
+// element up (abandon) emits the bytes Rewrite emits without PlayLinks.
+type pendingAudio struct {
+	open  string          // the start tag, as emitted if the element stays
+	src   string          // its src after URL, else the first child <source>'s
+	body  strings.Builder // everything between the tags, already rewritten
+	stack []string        // fallbackTag elements open inside it
+	img   bool            // the fallback draws a button
+}
+
+// admit reports whether start tag t keeps the element convertible, and
+// records what it contributes.
+func (p *pendingAudio) admit(t *html.Token) bool {
+	if !fallbackTag[t.Data] {
+		return false
+	}
+	switch t.Data {
+	case "img":
+		p.img = true
+	case "source":
+		// Only a child <source> selects the element's resource.
+		if p.src == "" && len(p.stack) == 0 {
+			p.src = firstAttr(t, "src")
+		}
+	}
+	// A self-closing non-void element is a start tag to the parser.
+	if !voidTag(t.Data) {
+		p.stack = append(p.stack, t.Data)
+	}
+	return true
+}
+
+// finish emits the element as a play link when it qualifies, given its raw
+// end tag ("" when end of input closed it).
+func (p *pendingAudio) finish(end string) string {
+	if p.img && playable(p.src) {
+		return `<a class="wu-audio" href="` + html.EscapeString(p.src) + `">` + p.body.String() + `</a>`
+	}
+	return p.open + p.body.String() + end
+}
+
+// abandon emits what was held back, unchanged; the element stays open.
+func (p *pendingAudio) abandon() string { return p.open + p.body.String() }
+
+// playLinkSrc reports whether <audio> start tag t may become a play link, and
+// its src. Attribute keys arrive lower-cased; the first src wins, as in the
+// parser.
+func playLinkSrc(t *html.Token) (string, bool) {
+	src, seen := "", false
+	for _, a := range t.Attr {
+		switch k := a.Key; {
+		case k == "src":
+			if !seen {
+				src, seen = Clean(a.Val), true
+			}
+		case k == "controls", k == "autoplay", k == "muted", k == "loop", k == "id",
+			strings.HasPrefix(k, "on"), strings.HasPrefix(k, "data-"):
+			return "", false
+		}
+	}
+	return src, true
+}
+
+// firstAttr returns the first value of attribute name (lower-case), through
+// Clean.
+func firstAttr(t *html.Token, name string) string {
+	for _, a := range t.Attr {
+		if a.Key == name {
+			return Clean(a.Val)
+		}
+	}
+	return ""
+}
+
+// playable reports whether u may be a link's href: a reference with no
+// scheme (relative, root-absolute, protocol-relative), http(s), or inline
+// audio. As <audio src> a javascript: URL is inert; as <a href> it runs. A
+// fragment or a query alone names this article, not a file.
+func playable(u string) bool {
+	if u == "" || u[0] == '#' || u[0] == '?' {
+		return false
+	}
+	i := strings.IndexAny(u, ":/?#")
+	if i < 0 || u[i] != ':' {
+		return true
+	}
+	switch strings.ToLower(u[:i]) {
+	case "http", "https":
+		return true
+	case "data":
+		return hasPrefixFold(u[i+1:], "audio/")
+	}
+	return false
+}
+
+// endTagName returns the name in a raw end tag ("</SPAN >" → "SPAN") without
+// allocating; it ends where the tokenizer ends it.
+func endTagName(raw []byte) []byte {
+	if len(raw) < 2 {
+		return nil
+	}
+	raw = raw[2:]
+	for i, c := range raw {
+		switch c {
+		case ' ', '\t', '\n', '\f', '\r', '/', '>':
+			return raw[:i]
+		}
+	}
+	return raw
+}
+
+// tagIs compares a raw tag name with a lower-case one, ASCII case-insensitively,
+// as the tokenizer folds names.
+func tagIs(name []byte, lower string) bool {
+	if len(name) != len(lower) {
+		return false
+	}
+	for i := 0; i < len(name); i++ {
+		c := name[i]
+		if 'A' <= c && c <= 'Z' {
+			c += 'a' - 'A'
+		}
+		if c != lower[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // rawTextTag reports whether an element's content is raw text rather than
-// markup. The tokenizer already switches to those states; this mirror lets us
-// tell a <style> text run (CSS, rewritable) from a <script> one (never).
+// markup. It is the tokenizer's own list (x/net/html readStartTag), so the
+// two cannot disagree about where markup resumes; this mirror lets us tell a
+// <style> text run (CSS, rewritable) from a <script> one (never). <plaintext>
+// never ends.
 func rawTextTag(name string) bool {
 	switch name {
-	case "script", "style", "title", "textarea", "iframe", "noscript", "noembed", "noframes", "xmp":
+	case "script", "style", "title", "textarea", "iframe", "noscript", "noembed", "noframes", "xmp", "plaintext":
 		return true
 	}
 	return false
@@ -154,38 +340,97 @@ func (rw Rewriter) Rewrite(doc string) string {
 	z := html.NewTokenizer(strings.NewReader(doc))
 	var b strings.Builder
 	b.Grow(len(doc) + len(doc)/8)
-	raw := "" // the raw-text element we are inside, "" when in markup
+	out := &b            // b, or the body of the <audio> being decided
+	var pa *pendingAudio // non-nil while PlayLinks holds an <audio> back
+	inAnchor := false    // an <a> is open (PlayLinks only); a new <a> closes the old one in the parser
+	raw := ""            // the raw-text element we are inside, "" when in markup
 	for {
 		switch z.Next() {
 		case html.ErrorToken:
 			// io.EOF, or markup the tokenizer cannot continue past. Emit
 			// whatever it did not consume: a rewriter must never silently
 			// truncate an article.
-			b.Write(z.Raw())
+			tail := z.Raw()
+			if pa != nil {
+				// A clean end of input closes the element, as in the parser.
+				// A malformed tail would land inside the link.
+				if len(tail) == 0 {
+					b.WriteString(pa.finish(""))
+				} else {
+					b.WriteString(pa.abandon())
+				}
+			}
+			b.Write(tail)
 			return b.String()
 
 		case html.StartTagToken, html.SelfClosingTagToken:
 			// Raw() is only valid until the next Next(); Token() copies.
 			t := z.Token()
+			// The tokenizer enters raw text on these names whether the tag is
+			// self-closing or not (the slash is ignored on a non-void element)
+			// and whether or not Drop removes it; the mirror follows it.
+			if raw == "" && rawTextTag(t.Data) {
+				raw = t.Data
+			}
 			if rw.Drop != nil && rw.Drop(t.Data) {
 				continue
 			}
-			if raw == "" && rawTextTag(t.Data) && t.Type == html.StartTagToken {
-				raw = t.Data
+			changed := rw.rewriteAttrs(&t)
+			if pa != nil {
+				if pa.admit(&t) {
+					writeTag(&pa.body, &t, changed, z)
+					continue
+				}
+				b.WriteString(pa.abandon())
+				pa, out = nil, &b
 			}
-			if rw.rewriteAttrs(&t) {
-				b.WriteString(t.String()) // re-serialised: values changed
-			} else {
-				b.Write(z.Raw()) // untouched: original bytes, original quoting
+			if rw.PlayLinks {
+				switch t.Data {
+				case "a":
+					inAnchor = true
+				case "audio":
+					if src, ok := playLinkSrc(&t); ok && !inAnchor {
+						pa = &pendingAudio{src: src}
+						var open strings.Builder
+						writeTag(&open, &t, changed, z)
+						pa.open = open.String()
+						out = &pa.body
+						continue
+					}
+				}
 			}
+			writeTag(out, &t, changed, z)
 
 		case html.EndTagToken:
 			if raw != "" {
-				if name, _ := z.TagName(); string(name) == raw {
-					raw = ""
+				// The tokenizer ends raw text only at the matching end tag,
+				// and that tag is the next token it yields.
+				raw = ""
+				out.Write(z.Raw())
+				continue
+			}
+			if rw.PlayLinks {
+				name := endTagName(z.Raw())
+				if pa != nil {
+					n := len(pa.stack)
+					switch {
+					case n > 0 && tagIs(name, pa.stack[n-1]):
+						pa.stack = pa.stack[:n-1]
+						pa.body.Write(z.Raw())
+						continue
+					case n == 0 && tagIs(name, "audio"):
+						b.WriteString(pa.finish(string(z.Raw())))
+						pa, out = nil, &b
+						continue
+					}
+					b.WriteString(pa.abandon())
+					pa, out = nil, &b
+				}
+				if tagIs(name, "a") {
+					inAnchor = false
 				}
 			}
-			b.Write(z.Raw())
+			out.Write(z.Raw())
 
 		case html.TextToken:
 			// Only <style> holds rewritable text. <script> explicitly does
@@ -194,20 +439,30 @@ func (rw Rewriter) Rewrite(doc string) string {
 			// raw == "" IS the definition of prose here.
 			switch {
 			case raw == "style" && rw.URL != nil:
-				b.WriteString(rewriteCSS(string(z.Raw()), func(u string) string {
+				out.WriteString(rewriteCSS(string(z.Raw()), func(u string) string {
 					return rw.URL(Ref{Site: SiteCSS, Tag: "style", URL: u})
 				}))
 			case raw == "" && rw.Text != nil:
 				// Raw() is only valid until the next Next(); the hook is
 				// called and its result written before that happens.
-				b.WriteString(rw.Text(string(z.Raw())))
+				out.WriteString(rw.Text(string(z.Raw())))
 			default:
-				b.Write(z.Raw())
+				out.Write(z.Raw())
 			}
 
 		default: // Comment, Doctype
-			b.Write(z.Raw())
+			out.Write(z.Raw())
 		}
+	}
+}
+
+// writeTag emits start tag t: re-serialised when a value changed, otherwise
+// its original bytes - original quoting, attribute order and case.
+func writeTag(w *strings.Builder, t *html.Token, changed bool, z *html.Tokenizer) {
+	if changed {
+		w.WriteString(t.String())
+	} else {
+		w.Write(z.Raw())
 	}
 }
 
