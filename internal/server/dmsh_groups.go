@@ -139,8 +139,10 @@ func groupOrderNames(dicts []DictPref, entries []*entry) map[string]string {
 	return names
 }
 
-func groupOrderCompare(names map[string]string, locale string) func(a, b groupOrder) int {
-	col := collate.New(language.Make(locale), collate.Loose, collate.Numeric)
+func groupOrderCompare(names map[string]string, _ string) func(a, b groupOrder) int {
+	// Alphabetical dictionary order is a stable data order, not presentation
+	// localization. Keep it identical to the English interface for every user.
+	col := collate.New(language.English, collate.Loose, collate.Numeric)
 	return func(a, b groupOrder) int {
 		an, bn := names[a.ID], names[b.ID]
 		if an == "" {
