@@ -24,7 +24,7 @@ import (
 //	                 alias and redirect rules, body normalization
 //	reader_version   one format's Reader (dict.RegisterReaderVersion)
 //	markup_version   internal/artmark's role vocabulary (MarkupStale)
-//	fold_version     dict.Fold, persisted only in the trigram index (FoldStale)
+//	fold_version     dict.Fold, persisted in folded keys and optional trigram (FoldStale)
 //	media_version    IngestMedia
 //
 // A missing stamp means the database predates the stamp, and is read as
@@ -38,7 +38,7 @@ import (
 // IngestVersion identifies IngestPlan's behaviour. Bump it in the same commit
 // as any change to what an ingest writes for the same Reader output; the
 // golden tests in the format packages fail on such a change and say so.
-const IngestVersion = 1
+const IngestVersion = 2
 
 // MediaVersion identifies IngestMedia's behaviour, bumped the same way.
 const MediaVersion = 1
@@ -55,7 +55,7 @@ const (
 	ReasonIngest Reason = "ingest" // built by an older IngestPlan
 	ReasonReader Reason = "reader" // built by an older Reader for its format
 	ReasonMarkup Reason = "markup" // articles written with an older role markup
-	ReasonFold   Reason = "fold"   // trigram index built by another dict.Fold
+	ReasonFold   Reason = "fold"   // persisted folded keys built by another dict.Fold
 	ReasonMedia  Reason = "media"  // media.db unreadable, unpaired or outdated
 )
 

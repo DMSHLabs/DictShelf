@@ -14,18 +14,10 @@ import (
 // FoldVersion identifies Fold's BEHAVIOUR, and must be bumped in the same
 // commit as any change to what Fold returns.
 //
-// Fold is called in two places with different lifetimes: at query time on what
-// the user typed, and at ingest time on every headword - where the result is
-// PERSISTED into the trigram index that powers the "contains" mode
-// (store/ingest.go). Change Fold without bumping this, and every prepared
-// dictionary keeps a trigram index built by the old rules while queries fold
-// by the new ones: a search that quietly stops finding words it used to find,
-// with no error, and invisible to any test that ingests fresh data.
-//
-// Nothing else Fold touches is stored. The direct backends rebuild their fold
-// indexes on every open, entry_fts stores raw text and folds with SQLite's own
-// tokenizer, and idx_entry_w is a raw NOCASE index - so a bump makes exactly
-// one thing stale, and only for dictionaries that opted into "contains".
+// Fold is called at query time and at ingest time. Ingest persists its result
+// in the folded headword and alias keys, and in the optional trigram index.
+// A change to Fold requires this bump so prepared dictionaries are reported
+// outdated. Direct backends rebuild their fold indexes on every open.
 const FoldVersion = 1
 
 // Fold lowercases and strips combining marks for accent/case-insensitive

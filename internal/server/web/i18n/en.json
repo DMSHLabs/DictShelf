@@ -707,6 +707,7 @@
   "dictUI.articles": "articles {language}",
   "dictUI.rebuilding": "Rebuilding {at} of {total}",
   "dictUI.outdated": "Dictionaries with outdated indexes: {number}",
+  "dictUI.diacriticsPending": "Search without diacritics will work for these dictionaries after reindexing.",
   "dictUI.rebuildFailed": "Could not rebuild: {errors}",
   "dictUI.rebuilt": "rebuilt {done} of {total} dictionaries",
   "dictUI.stopped": " — stopped",

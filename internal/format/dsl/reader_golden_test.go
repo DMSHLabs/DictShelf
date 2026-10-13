@@ -15,8 +15,8 @@ import (
 // of whichever layer changed) so existing libraries are told to rebuild, then
 // update the golden to the value the failure prints.
 var readerGolden = goldentest.Golden{
-	Versions: "reader=11 ingest=1 markup=2 fold=1",
-	Hash:     "664517284a706f3a161ae9969a62ed60f98298585b916bc23747c291528607c1",
+	Versions: "reader=11 ingest=2 markup=2 fold=1",
+	Hash:     "5ba6454b302eccef4e0ea1e42dacf051a2df45dfc718b7e5cd6920c9a5d1b7ce",
 }
 
 func TestReaderGolden(t *testing.T) {

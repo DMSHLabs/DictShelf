@@ -889,6 +889,9 @@ type dictInfo struct {
 	// panel sums these into one Rebuild the user starts (reindex.go). Never
 	// set for a dictionary whose source is gone, which nothing can rebuild.
 	Outdated bool `json:"outdated,omitempty"`
+	// DiacriticsPending marks an older headword index that needs the user's
+	// reindex action before exact and prefix search use folded keys.
+	DiacriticsPending bool `json:"diacriticsPending,omitempty"`
 
 	// Groups: the derived memberships the dictionary picker offers as single
 	// choices ("English", "Encyclopedias") instead of a hundred names. Derived
@@ -1060,8 +1063,9 @@ func (s *Server) diskDictInfo(e *entry) dictInfo {
 	// outdated too - the prepared branch above never sees it
 	if info.DBPath == "" && rebuildable(e.Path) {
 		if dir, ok := store.LookupDir(e.Path); ok {
+			p := store.Inspect(store.TextDBPath(dir))
+			info.DiacriticsPending = p.Meta != nil && needsFoldedReindex(p.Meta)
 			if isZIMPath(e.Path) {
-				p := store.Inspect(store.TextDBPath(dir))
 				info.Outdated = p.Meta == nil || p.Meta["index_kind"] != "headwords" || len(p.Stale(e.Path)) > 0
 			} else if !info.SelfIndexed {
 				info.Outdated = true
@@ -1082,11 +1086,12 @@ func (s *Server) baseDictInfo(e *entry) dictInfo {
 		ec, _ := strconv.Atoi(meta["entry_count"])
 		info := dictInfo{
 			ID: e.ID, Path: e.Path, Name: meta["name"], Format: meta["format"], Entries: ec,
-			SelfIndexed:   formatHasSelfIndex(meta["format"]),
-			Caps:          dict.Caps{Exact: true, Prefix: true, Contains: p.Plan.Contains, FTS: p.Plan.FullText},
-			DBPath:        p.TextDB,
-			ContainsStale: store.FoldStale(meta),
-			Outdated:      rebuildable(e.Path) && !formatHasSelfIndex(meta["format"]) && len(p.Stale(e.Path)) > 0,
+			SelfIndexed:       formatHasSelfIndex(meta["format"]),
+			Caps:              dict.Caps{Exact: true, Prefix: true, Contains: p.Plan.Contains, FTS: p.Plan.FullText},
+			DBPath:            p.TextDB,
+			ContainsStale:     p.Plan.Contains && store.FoldStale(meta),
+			Outdated:          rebuildable(e.Path) && (!formatHasSelfIndex(meta["format"]) || isZIMPath(e.Path)) && len(p.Stale(e.Path)) > 0,
+			DiacriticsPending: rebuildable(e.Path) && needsFoldedReindex(meta),
 		}
 		s.langFacts(&info, meta["name"], meta["index_lang"], meta["contents_lang"])
 		return info
@@ -1145,6 +1150,11 @@ func (s *Server) baseDictInfo(e *entry) dictInfo {
 		}
 	}
 	return info
+}
+
+func needsFoldedReindex(meta map[string]string) bool {
+	version, err := strconv.Atoi(meta["ingest_version"])
+	return err != nil || version < 2 || store.FoldStale(meta)
 }
 
 // langFacts derives one row's picker groups and the language its articles are

@@ -8,6 +8,7 @@ import (
 	"io"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/wuweidict/wudict/internal/dict"
 	"github.com/wuweidict/wudict/internal/resource"
@@ -40,7 +41,10 @@ func init() {
 // indexing actions. Resources stay lazy in `<name>.files.zip`, the matching
 // `.files` folder, or loose beside the .dsl.
 type Dict struct {
-	reader *Reader
+	reader  *Reader
+	resOnce sync.Once
+	resMu   sync.Mutex
+	res     []resource.Source
 }
 
 // NewArticleReader is the application reader. NewReader retains the upstream
@@ -69,14 +73,33 @@ func (d *Dict) Prefix(string, int) ([]dict.Result, error) { return nil, dict.Err
 func (d *Dict) Keywords(int, int) []string                { return nil }
 
 func (d *Dict) Close() error {
+	d.resOnce.Do(func() {})
+	d.resMu.Lock()
+	for _, src := range d.res {
+		src.Close()
+	}
+	d.res = nil
+	d.resMu.Unlock()
 	return d.reader.Close()
+}
+
+func (d *Dict) sources() []resource.Source {
+	d.resOnce.Do(func() {
+		sources := MediaSources(d.reader.path)
+		d.resMu.Lock()
+		d.res = sources
+		d.resMu.Unlock()
+	})
+	d.resMu.Lock()
+	defer d.resMu.Unlock()
+	return d.res
 }
 
 // Resource serves from the dictionary's resource containers, in the order
 // LingvoDSL itself documents: the `.files.zip` archive first, then the
 // `.files` folder, then loose beside the source.
 func (d *Dict) Resource(name string) (io.ReadCloser, string, error) {
-	for _, src := range MediaSources(d.reader.path) {
+	for _, src := range d.sources() {
 		if rc, err := src.Open(name); err == nil {
 			return rc, resource.MIME(name), nil
 		}
@@ -89,7 +112,7 @@ func (d *Dict) Resource(name string) (io.ReadCloser, string, error) {
 // and their assets, and packing them would copy a neighbour's media into this
 // dictionary's library folder.
 func (d *Dict) Resources() []string {
-	return resource.ListAll(MediaSources(d.reader.path))
+	return resource.ListAll(d.sources())
 }
 
 func (d *Dict) PreviewBytes() int64 { return int64(d.reader.Meta().EntryCount) * 350 }

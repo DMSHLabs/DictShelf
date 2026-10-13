@@ -57,7 +57,8 @@ type Store struct {
 	ftsOK      bool   // article text indexed (ingest_level != "headwords")
 	srcPath    string // source_path recorded at ingest ("" if unknown)
 	hasTrigram bool   // entry_trigram present → "contains" substring search
-	staleFold  bool   // trigram built by a different dict.FoldVersion
+	staleFold  bool   // folded keys or trigram built by another dict.FoldVersion
+	hasFolded  bool   // prepared with indexed folded headwords and aliases
 	uuid       string // dict_uuid: what a sibling media.db must match
 
 	// The sibling media.db is opened on the first resource that asks for one,
@@ -96,10 +97,8 @@ func foldVersionOf(m map[string]string) int {
 	return 1
 }
 
-// FoldStale reports that a prepared database's trigram index was built by a
-// different text folding than the one running now, so "contains" may miss
-// words whose folding changed. Only the trigram index is affected - see
-// dict.FoldVersion for why nothing else is.
+// FoldStale reports that persisted folded keys or the trigram index were
+// built by a different text folding than the one running now.
 //
 // It is a fact ABOUT the data, not a verdict on it: a folding change usually
 // affects one narrow class of characters, so a stale index is still correct
@@ -107,7 +106,7 @@ func foldVersionOf(m map[string]string) int {
 // a rebuild; nobody disables the mode or re-indexes a hundred dictionaries on
 // the strength of it.
 func FoldStale(m map[string]string) bool {
-	return m["has_trigram"] == "1" && foldVersionOf(m) != dict.FoldVersion
+	return (m["has_trigram"] == "1" || stampOf(m, "ingest_version", 1) >= 2) && foldVersionOf(m) != dict.FoldVersion
 }
 
 // markupVersionOf reads the article-markup version a database records. Absent
@@ -180,6 +179,7 @@ func Open(path string) (*Store, error) {
 		Header:        headerOf(m),
 	}
 	s.ftsOK = PlanFromMeta(m).FullText
+	s.hasFolded = stampOf(m, "ingest_version", 1) >= 2
 	s.srcPath = m["source_path"]
 	// feature-detect the trigram "contains" index rather than gating on
 	// schema version, so older .text.db (and standalone native dicts whose
@@ -189,7 +189,7 @@ func Open(path string) (*Store, error) {
 	s.hasTrigram = trig > 0
 	// keyed on the table actually present, not on the has_trigram flag, so a
 	// database whose meta and schema disagree is judged by its schema
-	s.staleFold = s.hasTrigram && foldVersionOf(m) != dict.FoldVersion
+	s.staleFold = (s.hasTrigram || s.hasFolded) && foldVersionOf(m) != dict.FoldVersion
 	fmt.Sscanf(m["entry_count"], "%d", &s.meta.EntryCount)
 	// standalone use: note the sibling media.db so a copied folder works
 	// without the original source (D2/D9). Only its existence is checked here;
@@ -344,14 +344,26 @@ func (s *Store) Prefix(word string, limit int) ([]dict.Result, error) {
 	return s.PrefixContext(context.Background(), word, limit)
 }
 
-// ExactContext returns entries (and alias targets) whose headword equals word;
-// when the case-sensitive pass is empty it retries COLLATE NOCASE.
+// ExactContext returns entries (and alias targets) whose folded headword
+// equals word. Older prepared databases keep their original fallback.
 func (s *Store) ExactContext(ctx context.Context, word string, limit int) ([]dict.Result, error) {
 	word = strings.TrimSpace(word)
 	if word == "" {
 		return nil, nil
 	}
 	n := clamp(limit)
+	if s.hasFolded {
+		return s.collect(s.db.QueryContext(ctx, `
+			SELECT e.w, e.m FROM entry e JOIN (
+				SELECT id, min(priority) AS priority FROM (
+					SELECT id, CASE WHEN w = ?2 THEN 0 WHEN w = ?2 COLLATE NOCASE THEN 1 ELSE 2 END AS priority
+						FROM entry WHERE wf = ?1 COLLATE NOCASE
+					UNION ALL
+					SELECT entry_id AS id, CASE WHEN w = ?2 THEN 0 WHEN w = ?2 COLLATE NOCASE THEN 1 ELSE 2 END AS priority
+						FROM alias WHERE wf = ?1 COLLATE NOCASE
+				) GROUP BY id ORDER BY priority, id LIMIT ?3
+			) m ON e.id = m.id ORDER BY m.priority, e.w COLLATE NOCASE, e.w`, dict.Fold(word), word, n))
+	}
 	// Both passes compare COLLATE NOCASE because that is the collation the
 	// only indexes on these columns are built with (ingest.go): a bare
 	// case-sensitive `w = ?1` matches no index and full-scans a table whose
@@ -437,8 +449,8 @@ func buildExactMatch(input, column string) string {
 	return strings.Join(parts, " ")
 }
 
-// PrefixContext returns every headword starting with word, ordered by headword, the
-// exact match first (LIKE input escaped - FTS-audit #5).
+// PrefixContext returns headwords starting with word, ordered by the matching
+// key. Current databases use indexed folded keys; older ones retain FTS fallback.
 //
 // The exact match is NOT a short-circuit: "starts with" must not answer a
 // complete headword with that one article and drop every longer key under it.
@@ -469,6 +481,9 @@ func (s *Store) PrefixContext(ctx context.Context, word string, limit int) ([]di
 		return nil, nil
 	}
 	n := clamp(limit)
+	if s.hasFolded {
+		return s.foldedPrefix(ctx, word, n)
+	}
 	pat := escapeLike(word) + "%"
 	// GROUP BY id, not UNION: an entry its own headword AND an alias match is
 	// one article, filed under the earlier of the two keys.
@@ -494,6 +509,20 @@ func (s *Store) PrefixContext(ctx context.Context, word string, limit int) ([]di
 		return res, err
 	}
 	return s.fuzzy(ctx, word, n)
+}
+
+func (s *Store) foldedPrefix(ctx context.Context, word string, n int) ([]dict.Result, error) {
+	pat := escapeLike(dict.Fold(word)) + "%"
+	return s.collect(s.db.QueryContext(ctx, `
+		SELECT e.w, e.m FROM entry e JOIN (
+			SELECT id, min(k) AS k, min(priority) AS priority FROM (
+				SELECT e2.id AS id, e2.wf AS k, CASE WHEN e2.w = ?2 THEN 0 ELSE 1 END AS priority FROM entry e2
+					WHERE e2.wf LIKE ?1 ESCAPE '\'`+subEntryFilter("e2.w")+`
+				UNION ALL
+				SELECT e3.id AS id, a.wf AS k, CASE WHEN a.w = ?2 THEN 0 ELSE 1 END AS priority FROM alias a JOIN entry e3 ON e3.id = a.entry_id
+					WHERE a.wf LIKE ?1 ESCAPE '\'`+subEntryFilter("a.w")+`
+			) GROUP BY id ORDER BY k, priority LIMIT ?3
+		) m ON e.id = m.id ORDER BY m.k, m.priority, e.w COLLATE NOCASE, e.w`, pat, word, n))
 }
 
 // fuzzy is the accent/case-insensitive prefix-phrase engine (FTS5 unicode61
