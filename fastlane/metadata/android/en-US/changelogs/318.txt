@@ -1,0 +1,5 @@
+• Improved A–Z sorting and pinned items. 📌 adds items to the pinned list; ⬆️ moves items to the top.
+• Added wildcard search: *matter matches antimatter; p?t matches put, pot, pet, pat, and more.
+• Added detailed messages for long-running operations.
+• Improved wildcard search and removed Contains search.
+• Added dynamic hints in the search field.
