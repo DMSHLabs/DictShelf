@@ -6,10 +6,18 @@
 
 package cli
 
+import (
+	"errors"
+
+	"github.com/wuweidict/wudict/internal/server"
+)
+
 func acquireProcessLock() (func(), error) { return nil, nil }
 
 func prepareWindowsDataRoot() error { return nil }
 
-func showStartupWindow() {}
+func legacyMigrationStatus() server.FirstRunMigration { return server.FirstRunMigration{} }
 
-func closeStartupWindow() {}
+func applyLegacyMigration(string, *server.Registry, func()) error {
+	return errors.New("Windows data migration is unavailable on this platform")
+}

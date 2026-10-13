@@ -278,12 +278,30 @@ html:not([data-folder-picker]) #rows .frow .pick{display:none}
 #impMsg,.formats,#howtoBackRow{font-size:calc(var(--ui-font-addition) * 1rem)}
 #save{box-sizing:border-box;min-height:calc(var(--ui-edit_control-height) * 1.5rem);
   font-size:calc(var(--ui-edit_control-font) * 1rem)}
+.migration-shade{position:fixed;inset:0;z-index:1200;display:grid;place-items:center;
+  padding:1rem;background:color-mix(in srgb,var(--bg) 76%,transparent);backdrop-filter:blur(3px)}
+.migration-shade[hidden]{display:none}
+.migration-dialog{width:min(34rem,100%);max-height:calc(100dvh - 2rem);overflow:auto;
+  padding:1.25rem;border:1px solid var(--line);border-radius:1rem;background:var(--paper-bg,var(--bg));
+  color:var(--fg);box-shadow:0 1rem 3rem #0004}
+.migration-dialog h2{margin:.1rem 0 .65rem}
+.migration-dialog p{line-height:1.5}
+.migration-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:.55rem;margin-top:1.2rem}
+.migration-error{color:var(--error,#a22);white-space:pre-wrap}
 </style>
 </head>
 <body class="workspace-page">
 <div id="workNotice" class="work-notice" role="status" aria-live="polite" hidden>
   <div id="workNoticeText" class="work-notice-text"></div>
   <button type="button" class="btn ghost" id="workNoticeStop" hidden></button>
+</div>
+<div id="migrationShade" class="migration-shade" hidden>
+  <section class="migration-dialog" role="dialog" aria-modal="true" aria-labelledby="migrationTitle">
+    <h2 id="migrationTitle">{{T:pages.migrationTitle}}</h2>
+    <p id="migrationIntro"></p>
+    <p id="migrationError" class="migration-error" role="alert" hidden></p>
+    <div class="migration-actions" id="migrationActions"></div>
+  </section>
 </div>
 <div class="card scroll-card workspace-window">
 <!-- The page's closer (@see setup.css). It goes back rather than to "/": the
@@ -851,8 +869,14 @@ $("save").addEventListener("click",save);
    flag or an environment variable set DICT_DIR, saving to wudict.toml cannot
    take effect — say so instead of silently doing nothing next launch. */
 async function start(){
-  let cfg=null;
-  try{ cfg=await (await fetch("/api/config")).json() }catch(e){}
+  let cfg=null,migration=null;
+  try{
+    const [configResponse,migrationResponse]=await Promise.all([
+      fetch("/api/config"),fetch("/api/setup?migration=status")
+    ]);
+    cfg=await configResponse.json();migration=await migrationResponse.json();
+  }catch(e){try{cfg=await (await fetch("/api/config")).json()}catch(_){}}
+  if(migration&&migration.available)await showMigrationDialog(migration.forked);
   for(const [feature,suffix] of [["contains","Contains"],["fullText","FullText"]]){
     $("newIndex"+suffix).checked=!!cfg?.indexDefaults?.[feature];
   }
@@ -886,6 +910,44 @@ async function start(){
   wireIntake(st&&st.dir||dirs[0]||"");
   if(st&&st.state){impRender(st);
     if(st.state==="installing"||st.state==="downloading")impPoll()}
+}
+
+function showMigrationDialog(forked){
+  const intro=$("migrationIntro"),actions=$("migrationActions"),shade=$("migrationShade");
+  intro.textContent=tx(forked?"pages.migrationForked":"pages.migrationUpstream");
+  const choices=forked?
+    [["copy","pages.migrationCopy"],["move","pages.migrationMove"],["new","pages.migrationNew"]]:
+    [["import","pages.migrationImport"],["new","pages.migrationNew"]];
+  return new Promise(resolve=>{
+    for(const [choice,key] of choices){
+      const button=document.createElement("button");
+      button.type="button";button.className=choice==="new"?"btn ghost":"btn";
+      button.textContent=tx(key);
+      button.addEventListener("click",()=>{
+        if(choice==="new"){shade.hidden=true;resolve();return}
+        applyMigration(choice,button);
+      });
+      actions.appendChild(button);
+    }
+    shade.hidden=false;
+    actions.querySelector("button")?.focus();
+  });
+}
+
+async function applyMigration(choice,button){
+  const buttons=[...$("migrationActions").querySelectorAll("button")],error=$("migrationError");
+  buttons.forEach(b=>b.disabled=true);error.hidden=true;
+  $("migrationIntro").textContent=tx("pages.migrationProgress");
+  setSetupNotice(tx("pages.migrationProgress"));
+  try{
+    const response=await fetch("/api/setup?migration="+encodeURIComponent(choice),{method:"POST"});
+    const result=await response.json();
+    if(!response.ok||result.error)throw new Error(result.error||response.statusText);
+    location.reload();
+  }catch(e){
+    error.textContent=window.wudictI18n.errorText(e.message);error.hidden=false;
+    buttons.forEach(b=>b.disabled=false);button.focus();setSetupNotice("");
+  }
 }
 // Prepared data follows the selected source folders; it is no longer offered
 // as a second, independently retained collection.

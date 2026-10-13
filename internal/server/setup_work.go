@@ -24,6 +24,34 @@ func (w *setupResponse) WriteHeader(code int) { w.code = code }
 // Saving folders owns its discovery and registry update independently of the
 // page. Read-only validation still belongs to the request that asked for it.
 func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodPost && r.URL.Query().Get("migration") == "" {
+		httpErr(w, http.StatusBadRequest, "missing migration choice")
+		return
+	}
+	if action := r.URL.Query().Get("migration"); action != "" {
+		if !isLoopback(r) {
+			httpErr(w, http.StatusForbidden, "first-run migration is available only on this computer")
+			return
+		}
+		if action == "status" {
+			status := FirstRunMigration{}
+			if s.FirstRunMigrationStatus != nil {
+				status = s.FirstRunMigrationStatus()
+			}
+			writeJSON(w, status)
+			return
+		}
+		if s.ApplyFirstRunMigration == nil {
+			httpErr(w, http.StatusNotFound, "first-run migration is unavailable")
+			return
+		}
+		if err := s.ApplyFirstRunMigration(action); err != nil {
+			httpErr(w, http.StatusConflict, "%v", err)
+			return
+		}
+		writeJSON(w, map[string]bool{"saved": true})
+		return
+	}
 	save, _ := queryFlag(r.URL.Query(), "save")
 	if !save {
 		s.handleSetupSync(w, r)

@@ -1393,6 +1393,8 @@ paths:
         because overlapping folders must not be counted twice. Saving runs as
         a server-owned job and survives closing the page. With `async=1`, poll
         `/api/index-work?id=folder-setup` for progress and the retained result.
+        `migration=status` reports an optional Windows first-run import choice;
+        `migration=import|copy|move` applies that choice before folders are saved.
       parameters:
         - name: path
           in: query
@@ -1412,6 +1414,10 @@ paths:
             On enrolls the previously prepared dictionaries and persists
             USE_CACHED; off turns that off; absent leaves it alone. A switch.
           schema: { type: string, enum: ['0', '1'] }
+        - name: migration
+          in: query
+          description: Check or apply the first-run Windows data migration choice.
+          schema: { type: string, enum: [status, import, copy, move] }
       x-codeSamples:
         - lang: Shell
           label: curl
@@ -1436,6 +1442,29 @@ paths:
           description: Another folder save is already running.
         '400':
           $ref: '#/components/responses/BadRequest'
+
+    post:
+      tags: [internal]
+      operationId: applyFirstRunMigration
+      x-internal: true
+      summary: Apply the first-run Windows data migration choice
+      parameters:
+        - name: migration
+          in: query
+          required: true
+          description: Select upstream import, fork settings copy, or fork settings move.
+          schema: { type: string, enum: [import, copy, move] }
+      responses:
+        '200':
+          description: Migration succeeded and the active registry has been refreshed.
+        '400':
+          description: The migration choice is missing.
+        '403':
+          description: The request did not come from the local computer.
+        '404':
+          description: First-run migration is unavailable on this platform.
+        '409':
+          description: Migration could not be completed.
 
   /api/config:
     get:
@@ -3538,3 +3567,5 @@ components:
         saved: { type: boolean }
         useCached: { type: boolean }
         error: { type: string, description: Why this folder cannot be used. }
+        available: { type: boolean, description: First-run migration is available on this Windows installation. }
+        forked: { type: boolean, description: The existing state file contains wuDict2-specific settings. }

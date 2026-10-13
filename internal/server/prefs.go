@@ -257,6 +257,8 @@ func LoadPrefs(path string) *Prefs {
 	return p
 }
 
+func (p *Prefs) refresh() { p.file.refresh() }
+
 // parsePrefs reads a state file. A malformed one is announced (once per
 // content: it is parsed only when it changed) and treated as no state - the
 // next save writes over it, so this warning is the user's chance to notice.

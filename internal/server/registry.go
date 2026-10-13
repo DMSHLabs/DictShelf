@@ -980,6 +980,10 @@ func (r *Registry) Dirs() []string {
 	return append([]string(nil), r.dictDirs...)
 }
 
+// RefreshPrefs invalidates the cached state after a host migration copies it
+// into the active user folder.
+func (r *Registry) RefreshPrefs() { r.prefs.refresh() }
+
 // Roots reports each dictionary folder with its status and contribution.
 func (r *Registry) Roots() []Root {
 	r.mu.RLock()

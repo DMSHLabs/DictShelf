@@ -11,38 +11,24 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
-	"syscall"
 	"time"
-	"unsafe"
 
 	"github.com/wuweidict/wudict/internal/config"
+	"github.com/wuweidict/wudict/internal/server"
 )
 
-var (
-	migrationMessageBox = syscall.NewLazyDLL("user32.dll").NewProc("MessageBoxW")
-	migrationUILanguage = syscall.NewLazyDLL("kernel32.dll").NewProc("GetUserDefaultUILanguage")
-)
-
-const (
-	migrationYesNoCancel   = 0x00000003
-	migrationIconInfo      = 0x00000040
-	migrationSetForeground = 0x00010000
-	migrationTopmost       = 0x00040000
-	migrationYes           = 6
-	migrationNo            = 7
-	migrationCancel        = 2
-)
+var windowsFreshDataRoot bool
 
 var legacyForkItems = []string{"state.json", "style", "groups.ini"}
 
-// prepareWindowsDataRoot separates wuDict2's Windows files from upstream
-// wuDict. The environment override is read by config and store defaults.
+// prepareWindowsDataRoot selects wuDict2's Windows data folder. Migration
+// discovery and choices are handled after the first interface is shown.
 func prepareWindowsDataRoot() error {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -53,75 +39,112 @@ func prepareWindowsDataRoot() error {
 	}
 	newRoot := filepath.Join(home, ".wuDict2")
 	if existing := os.Getenv("WUDICT_HOME"); existing != "" {
+		windowsFreshDataRoot = false
 		return nil
 	}
-	if !migrationRequestedForLaunch() {
+	if !windowsServerLaunch() {
+		windowsFreshDataRoot = false
 		return os.Setenv("WUDICT_HOME", newRoot)
 	}
-	newInfo, newErr := os.Stat(newRoot)
-	if newErr != nil && !os.IsNotExist(newErr) {
-		return fmt.Errorf("cannot check %s: %w", newRoot, newErr)
+	if info, err := os.Stat(newRoot); err == nil {
+		if !info.IsDir() {
+			return fmt.Errorf("wuDict2 data path exists but is not a folder: %s", newRoot)
+		}
+		windowsFreshDataRoot = false
+	} else if os.IsNotExist(err) {
+		windowsFreshDataRoot = true
+	} else {
+		return fmt.Errorf("cannot inspect wuDict2 data folder: %w", err)
 	}
-	if newInfo != nil && !newInfo.IsDir() {
-		return fmt.Errorf("the wuDict2 data path exists but is not a folder: %s", newRoot)
+	if err := os.Setenv("WUDICT_HOME", newRoot); err != nil {
+		return err
+	}
+	if windowsFreshDataRoot {
+		if err := os.MkdirAll(newRoot, 0o755); err != nil {
+			return fmt.Errorf("cannot create wuDict2 data folder: %w", err)
+		}
+		cfg := filepath.Join(newRoot, config.Name)
+		if _, err := os.Stat(cfg); os.IsNotExist(err) {
+			dir := filepath.Join(newRoot, "Dictionaries")
+			if err := config.SaveKeyRaw(cfg, "DICT_DIR", config.FormatList([]string{dir})); err != nil {
+				return fmt.Errorf("cannot prepare wuDict2's first-run folder: %w", err)
+			}
+		} else if err != nil {
+			return fmt.Errorf("cannot inspect wuDict2 settings: %w", err)
+		}
+	}
+	return nil
+}
+
+func windowsServerLaunch() bool {
+	if guiLaunch || len(os.Args) < 2 {
+		return true
+	}
+	command := os.Args[1]
+	return command == "serve" || strings.HasPrefix(command, "-") || openFileArgs(command) != nil
+}
+
+func legacyMigrationStatus() server.FirstRunMigration {
+	if !windowsFreshDataRoot {
+		return server.FirstRunMigration{}
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return server.FirstRunMigration{}
 	}
 	oldRoot := filepath.Join(home, ".wudict")
-	oldInfo, oldErr := os.Stat(oldRoot)
-	if oldErr != nil && !os.IsNotExist(oldErr) {
-		return fmt.Errorf("cannot check %s: %w", oldRoot, oldErr)
-	}
-	if newInfo != nil {
-		return os.Setenv("WUDICT_HOME", newRoot)
-	}
-	if oldInfo == nil || !oldInfo.IsDir() {
-		return os.Setenv("WUDICT_HOME", newRoot)
+	info, err := os.Stat(oldRoot)
+	if err != nil || !info.IsDir() {
+		return server.FirstRunMigration{}
 	}
 	forked, err := hasForkState(filepath.Join(oldRoot, "state.json"))
 	if err != nil {
-		return fmt.Errorf("cannot inspect the existing wuDict settings: %w", err)
+		return server.FirstRunMigration{}
 	}
-	choice, err := migrationChoice(forked)
+	return server.FirstRunMigration{Available: true, Forked: forked}
+}
+
+func applyLegacyMigration(action string, reg *server.Registry, refresh func()) error {
+	status := legacyMigrationStatus()
+	if !status.Available {
+		return fmt.Errorf("the old wuDict data folder is no longer available")
+	}
+	if action != "import" && action != "copy" && action != "move" {
+		return fmt.Errorf("unknown migration choice")
+	}
+	if status.Forked && action == "import" || !status.Forked && (action == "copy" || action == "move") {
+		return fmt.Errorf("migration choice does not match the data found")
+	}
+	home, err := os.UserHomeDir()
 	if err != nil {
 		return err
 	}
-	if choice != migrationYes && choice != migrationNo {
-		return fmt.Errorf("could not read the wuDict2 data choice (Windows returned %d)", choice)
-	}
-	if !forked && choice == migrationNo {
-		if err := os.Setenv("WUDICT_HOME", newRoot); err != nil {
-			return fmt.Errorf("cannot select the wuDict2 data folder: %w", err)
-		}
-		return startFreshSetup(newRoot)
-	}
+	oldRoot, newRoot := filepath.Join(home, ".wudict"), filepath.Join(home, ".wuDict2")
 	if err := stopLegacyWindowsServer(oldRoot); err != nil {
 		return err
 	}
-	if err := os.Setenv("WUDICT_HOME", newRoot); err != nil {
-		return fmt.Errorf("cannot select the wuDict2 data folder: %w", err)
-	}
-	if err := importLegacyData(oldRoot, newRoot, forked); err != nil {
+	if err := importLegacyData(oldRoot, newRoot, status.Forked); err != nil {
 		return err
 	}
-	if forked && choice == migrationNo {
-		for _, name := range append(append([]string(nil), legacyForkItems...), "lemmas") {
+	windowsFreshDataRoot = false
+	if refresh != nil {
+		refresh()
+	}
+	// Re-read the effective paths from the config layers so the live registry
+	// agrees with the next launch, including any explicit environment override.
+	cfg, err := config.Load(config.HomeConfig(), nil)
+	if err != nil {
+		return fmt.Errorf("could not load imported dictionary folders: %w", err)
+	}
+	if err := reg.SetDirs(cfg.DictDirs); err != nil {
+		return fmt.Errorf("could not open imported dictionary folders: %w", err)
+	}
+	if action == "move" {
+		for _, name := range []string{"db", "db.logs", "lemmas", "style", "state.json", "groups.ini", config.Name} {
 			if err := os.RemoveAll(filepath.Join(oldRoot, name)); err != nil {
-				migrationNotice("wuDict2", "Данные перенесены в ~/.wuDict2, но часть старых файлов не удалось удалить. Проверьте папку ~/.wudict.")
-				break
+				return fmt.Errorf("data were copied, but %s could not be removed from ~/.wudict: %w", name, err)
 			}
 		}
-	}
-	return os.Setenv("WUDICT_HOME", newRoot)
-}
-
-func startFreshSetup(root string) error {
-	if err := os.MkdirAll(root, 0o755); err != nil {
-		return fmt.Errorf("cannot create ~/.wuDict2: %w", err)
-	}
-	// Point the first registry scan at an empty folder so the first page is
-	// Edit Folders even when the upstream default folder already has dictionaries.
-	dir := filepath.Join(root, "Dictionaries")
-	if err := config.SaveKeyRaw(filepath.Join(root, config.Name), "DICT_DIR", config.FormatList([]string{dir})); err != nil {
-		return fmt.Errorf("cannot prepare the new wuDict2 setup: %w", err)
 	}
 	return nil
 }
@@ -167,31 +190,6 @@ func hasForkState(path string) (bool, error) {
 	return false, nil
 }
 
-func migrationChoice(forked bool) (int, error) {
-	caption, _ := syscall.UTF16PtrFromString("wuDict2 — папка данных")
-	body := "Найдена папка wuDict: ~/.wudict. Импортировать настройки путей к словарям и файлы лемм? Индексы будут созданы заново в формате wuDict2.\n\nДа — импортировать пути и леммы.\nНет — настроить wuDict2 как новую программу и открыть Edit Folders.\nОтмена — закрыть программу."
-	if forked {
-		body = "В ~/.wudict найдены настройки wuDict2. Их необходимо перенести в отдельную папку, чтобы wuDict и wuDict2 не использовали общие настройки.\n\nДа — скопировать настройки wuDict2 и леммы в ~/.wuDict2, оставив исходные файлы wuDict на месте.\nНет — перенести настройки wuDict2 и леммы в ~/.wuDict2. Индексы не переносятся: они будут созданы заново.\nОтмена — закрыть программу."
-	}
-	language, _, _ := migrationUILanguage.Call()
-	if language&0x3ff != 0x19 {
-		caption, _ = syscall.UTF16PtrFromString("wuDict2 data folder")
-		body = "The wuDict folder was found: ~/.wudict. Import dictionary folder settings and lemma files? Indexes will be rebuilt in the wuDict2 format.\n\nYes — import dictionary paths and lemmas.\nNo — set up wuDict2 as a new program and open Edit Folders.\nCancel — exit."
-		if forked {
-			body = "wuDict2 settings were found in ~/.wudict. They need to be moved to a separate folder so wuDict and wuDict2 do not share settings.\n\nYes — copy wuDict2 settings and lemmas to ~/.wuDict2, leaving the original files in place.\nNo — move wuDict2 settings and lemmas to ~/.wuDict2. Indexes are rebuilt in the wuDict2 format.\nCancel — exit."
-		}
-	}
-	message, _ := syscall.UTF16PtrFromString(body)
-	owner, _, _ := syscall.NewLazyDLL("user32.dll").NewProc("GetForegroundWindow").Call()
-	r, _, _ := migrationMessageBox.Call(owner, uintptr(unsafe.Pointer(message)), uintptr(unsafe.Pointer(caption)), migrationYesNoCancel|migrationIconInfo|migrationSetForeground|migrationTopmost)
-	runtime.KeepAlive(caption)
-	runtime.KeepAlive(message)
-	if r == 0 || r == migrationCancel {
-		return 0, errMigrationCancelled
-	}
-	return int(r), nil
-}
-
 func importLegacyData(oldRoot, newRoot string, forked bool) error {
 	oldConfig := filepath.Join(oldRoot, config.Name)
 	var dirs []string
@@ -209,21 +207,32 @@ func importLegacyData(oldRoot, newRoot string, forked bool) error {
 	if err := os.MkdirAll(newRoot, 0o755); err != nil {
 		return fmt.Errorf("cannot create ~/.wuDict2: %w", err)
 	}
+	var rollbackNames []string
+	rollback := func() {
+		for _, name := range rollbackNames {
+			_ = os.RemoveAll(filepath.Join(newRoot, name))
+		}
+	}
 	if forked {
 		if err := copyMigrationItems(oldRoot, newRoot, legacyForkItems); err != nil {
 			return err
 		}
+		rollbackNames = append(rollbackNames, legacyForkItems...)
 	}
 	lemmaTarget := filepath.Join(newRoot, "lemmas")
 	if info, err := os.Stat(lemmaSource); err == nil && info.IsDir() {
 		if err := copyMigrationPath(lemmaSource, lemmaTarget); err != nil {
+			rollback()
 			return fmt.Errorf("could not copy lemma files: %w", err)
 		}
+		rollbackNames = append(rollbackNames, "lemmas")
 	} else if err != nil && !os.IsNotExist(err) {
+		rollback()
 		return fmt.Errorf("cannot inspect lemma folder %s: %w", lemmaSource, err)
 	}
 	if len(dirs) > 0 {
 		if err := config.SaveKeyRaw(config.HomeConfig(), "DICT_DIR", config.FormatList(dirs)); err != nil {
+			rollback()
 			return fmt.Errorf("cannot save dictionary folder settings: %w", err)
 		}
 	}
@@ -260,29 +269,11 @@ func fileExists(path string) bool {
 	return err == nil && !info.IsDir()
 }
 
-func migrationRequestedForLaunch() bool {
-	if guiLaunch || len(os.Args) < 2 {
-		return true
-	}
-	cmd := os.Args[1]
-	if cmd == "serve" || strings.HasPrefix(cmd, "-") {
-		return true
-	}
-	return openFileArgs(cmd) != nil
-}
-
-func migrationNotice(title, message string) {
-	t, _ := syscall.UTF16PtrFromString(title)
-	m, _ := syscall.UTF16PtrFromString(message)
-	migrationMessageBox.Call(0, uintptr(unsafe.Pointer(m)), uintptr(unsafe.Pointer(t)), migrationIconInfo)
-	runtime.KeepAlive(t)
-	runtime.KeepAlive(m)
-}
-
 func stopLegacyWindowsServer(oldRoot string) error {
 	oldConfig := filepath.Join(oldRoot, config.Name)
+	configExists := true
 	if _, err := os.Stat(oldConfig); os.IsNotExist(err) {
-		return nil
+		configExists = false
 	} else if err != nil {
 		return fmt.Errorf("cannot inspect old wuDict settings: %w", err)
 	}
@@ -293,7 +284,7 @@ func stopLegacyWindowsServer(oldRoot string) error {
 		present    bool
 	}
 	var saved []savedEnv
-	for _, key := range []string{"SERVER_IP", "SERVER_PORT", "AUTH", "AUTH_TOKEN"} {
+	for _, key := range []string{"WUDICT_HOME", "SERVER_IP", "SERVER_PORT", "AUTH", "AUTH_TOKEN"} {
 		value, present := os.LookupEnv(key)
 		saved = append(saved, savedEnv{key: key, value: value, present: present})
 		_ = os.Unsetenv(key)
@@ -307,18 +298,21 @@ func stopLegacyWindowsServer(oldRoot string) error {
 			}
 		}
 	}()
-	cfg, err := config.Load(oldConfig, nil)
-	if err != nil {
-		return fmt.Errorf("cannot read the old wuDict server port: %w", err)
+	addr, port, authToken := net.JoinHostPort("127.0.0.1", "6888"), "6888", ""
+	if configExists {
+		cfg, err := config.Load(oldConfig, nil)
+		if err != nil {
+			return fmt.Errorf("cannot read the old wuDict server port: %w", err)
+		}
+		addr, port, authToken = cfg.Addr(), cfg.Port, cfg.AuthToken
 	}
-	addr := cfg.Addr()
 	if _, ok := probeRunning(addr); !ok {
 		return nil
 	}
 	host := probeHost(addr)
 	base := "http://" + host
 	u, _ := url.Parse(base + "/api/exit")
-	if token := cfg.AuthToken; token != "" {
+	if token := authToken; token != "" {
 		q := u.Query()
 		q.Set("k", token)
 		u.RawQuery = q.Encode()
@@ -339,11 +333,11 @@ func stopLegacyWindowsServer(oldRoot string) error {
 	client := &http.Client{Timeout: 2 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	resp, err := client.Do(req)
 	if err != nil {
-		return fmt.Errorf("wuDict is running on port %s but could not be stopped. Close wuDict and try again", cfg.Port)
+		return fmt.Errorf("wuDict is running on port %s but could not be stopped. Close wuDict and try again", port)
 	}
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusAccepted {
-		return fmt.Errorf("wuDict is running on port %s but did not accept the stop request (HTTP %d). Close wuDict and try again", cfg.Port, resp.StatusCode)
+		return fmt.Errorf("wuDict is running on port %s but did not accept the stop request (HTTP %d). Close wuDict and try again", port, resp.StatusCode)
 	}
 	deadline := time.Now().Add(6 * time.Second)
 	for time.Now().Before(deadline) {

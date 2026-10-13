@@ -166,6 +166,12 @@ type Server struct {
 	// tray. Nil for Android, tests, and hosts without a desktop Exit action.
 	DesktopExit func()
 
+	// First-run Windows data migration is offered on the setup page after it
+	// has loaded. The host supplies filesystem operations; other platforms leave
+	// these callbacks nil.
+	FirstRunMigrationStatus func() FirstRunMigration
+	ApplyFirstRunMigration  func(string) error
+
 	// indexOnce caches the substitutions index.html needs that never change
 	// after startup ({{VERSION}} in the About box, the {{FRAMEJS}}, {{PICKJS}} and {{SPEAKJS}} hashes,
 	// {{ARTCSS}}).
@@ -332,6 +338,16 @@ func New(reg *Registry) *Server {
 		s.mux.HandleFunc(rt.Method+" "+rt.Pattern, h)
 	}
 	return s
+}
+
+// RefreshMigratedUserFiles makes copied state, group rules and styles visible
+// immediately without restarting the desktop server.
+func (s *Server) RefreshMigratedUserFiles() {
+	s.reg.RefreshPrefs()
+	s.groups.refresh()
+	for _, file := range s.styles {
+		file.refresh()
+	}
 }
 
 // ServerHeader is the value wudict answers with (plus its version), and

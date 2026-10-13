@@ -31,7 +31,6 @@ var (
 	desktopWindowMu         sync.Mutex
 	desktopWindow           webview.WebView
 	desktopWindowStarting   bool
-	desktopWindowPendingURL string
 	windowUser32            = syscall.NewLazyDLL("user32.dll")
 	windowShowWindow        = windowUser32.NewProc("ShowWindow")
 	windowForeground        = windowUser32.NewProc("SetForegroundWindow")
@@ -62,14 +61,11 @@ func openDesktopWindow(address string, onClose func()) bool {
 		logx.Warn("WebView2 profile unavailable: %v", err)
 		return false
 	}
-	local := ""
-	if address != "" {
-		parsed, err := desktopWindowURL(address)
-		if err != nil {
-			return false
-		}
-		local = desktopWindowURLWithMarker(parsed)
+	local, err := desktopWindowURL(address)
+	if err != nil {
+		return false
 	}
+	local = desktopWindowURLWithMarker(local)
 	desktopWindowMu.Lock()
 	if desktopWindow != nil {
 		w := desktopWindow
@@ -85,31 +81,16 @@ func openDesktopWindow(address string, onClose func()) bool {
 		return true
 	}
 	if desktopWindowStarting {
-		if local != "" {
-			desktopWindowPendingURL = local
-		}
 		desktopWindowMu.Unlock()
 		return true
 	}
 	desktopWindowStarting = true
-	desktopWindowPendingURL = local
 	desktopWindowMu.Unlock()
-	go runDesktopWindow(profile, onClose)
+	go runDesktopWindow(local, profile, onClose)
 	return true
 }
 
-func showStartupWindow() { openDesktopWindow("", nil) }
-
-func closeStartupWindow() {
-	desktopWindowMu.Lock()
-	w := desktopWindow
-	desktopWindowMu.Unlock()
-	if w != nil {
-		w.Dispatch(func() { w.Terminate() })
-	}
-}
-
-func runDesktopWindow(profile string, onClose func()) {
+func runDesktopWindow(address, profile string, onClose func()) {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 	w := webview.NewWithOptions(webview.WebViewOptions{
@@ -119,8 +100,6 @@ func runDesktopWindow(profile string, onClose func()) {
 	})
 	if w == nil {
 		desktopWindowMu.Lock()
-		address := desktopWindowPendingURL
-		desktopWindowPendingURL = ""
 		desktopWindowStarting = false
 		desktopWindowMu.Unlock()
 		logx.Warn("WebView2 window failed; opening the browser")
@@ -129,7 +108,7 @@ func runDesktopWindow(profile string, onClose func()) {
 		}
 		return
 	}
-	var local *url.URL
+	local, _ := url.Parse(address)
 	var folderCallbackPending atomic.Bool
 	_ = w.Bind("wudictChooseFolder", func() error {
 		if !folderCallbackPending.CompareAndSwap(false, true) {
@@ -162,20 +141,12 @@ func runDesktopWindow(profile string, onClose func()) {
   }}catch(_){ }
 },true);`)
 	done := make(chan struct{})
-	w.Navigate(startupSplashURL())
 	desktopWindowMu.Lock()
 	desktopWindow = w
-	address := desktopWindowPendingURL
-	desktopWindowPendingURL = ""
 	desktopWindowStarting = false
 	desktopWindowMu.Unlock()
-	if address != "" {
-		w.Navigate(address)
-		if parsed, err := url.Parse(address); err == nil {
-			local = parsed
-			go watchDesktopServer(w, local, done)
-		}
-	}
+	w.Navigate(address)
+	go watchDesktopServer(w, local, done)
 	w.Run()
 	close(done)
 	w.Destroy()
@@ -193,18 +164,6 @@ func desktopWindowURLWithMarker(address string) string {
 	query.Set("wudict_webview2", "1")
 	local.RawQuery = query.Encode()
 	return local.String()
-}
-
-func startupSplashURL() string {
-	language, _, _ := syscall.NewLazyDLL("kernel32.dll").NewProc("GetUserDefaultUILanguage").Call()
-	message := "Starting wuDict2…"
-	if language&0x3ff == 0x19 {
-		message = "Запуск wuDict2…"
-	}
-	html := `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>
-*{box-sizing:border-box}html,body{height:100%;margin:0}body{display:grid;place-items:center;background:#f5f3ef;color:#302d29;font:16px "Segoe UI",sans-serif}.card{display:flex;align-items:center;gap:16px}.spin{width:24px;height:24px;border:3px solid #ded9d0;border-top-color:#8b6545;border-radius:50%;animation:turn .8s linear infinite}@keyframes turn{to{transform:rotate(360deg)}}
-</style><main class="card"><span class="spin"></span><span>` + message + `</span></main>`
-	return "data:text/html," + url.PathEscape(html)
 }
 
 // chooseDesktopFolder shows Windows' native folder browser and returns a
