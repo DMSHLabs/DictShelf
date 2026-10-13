@@ -170,6 +170,12 @@ func (r *Registry) prepareNewDictionaries() {
 			}
 			if err := e.restoreIndex(store.Plan{Contains: v.Contains, FullText: v.FullText}, progress, indexLimit); err != nil {
 				j.update(func(st *jobStatus) { st.Err = err.Error() })
+				// A failed automatic index is not a deliberate removal. Keep
+				// the pending plan for a later retry, but let direct search use
+				// the source while the prepared index is unavailable.
+				if unblockErr := e.setIndexRemoved(false); unblockErr != nil {
+					logx.Warn("could not unblock dictionary after failed index %s: %v", e.Path, unblockErr)
+				}
 				store.IndexDiagnostic("new dictionary index failed source=%q dictionary=%q error=%q", e.Path, e.probeName(), err.Error())
 				logx.Warn("indexing new dictionary %s: %v", e.Path, err)
 				return
@@ -186,6 +192,16 @@ func (r *Registry) prepareNewDictionaries() {
 				logx.Warn("saving index preparation state: %v", err)
 			}
 		})
+		if !started {
+			st := r.jobs.wait(jobKey)
+			if st.Canceled || st.StopRequested {
+				return
+			}
+			if st.Err != "" {
+				logx.Warn("new dictionary index job did not complete: %s: %s", e.Path, st.Err)
+			}
+			continue
+		}
 		st := r.jobs.wait(jobKey)
 		if st.Canceled || st.StopRequested {
 			// Keep this and later entries pending. The next process start or

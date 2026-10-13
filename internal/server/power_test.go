@@ -15,7 +15,6 @@ import (
 	"strconv"
 	"strings"
 	"testing"
-	"time"
 )
 
 // restorePower puts the process-global power knobs back the way the rest of

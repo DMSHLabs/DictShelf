@@ -122,7 +122,7 @@ paths:
       tags: [internal]
       operationId: recordBrowseDiagnostic
       x-internal: true
-      summary: Add an opt-in, value-free Browse timing event to the system log
+      summary: Add an opt-in Browse, Wildcards cache, or Wildcards memory event to the system log
       requestBody:
         required: true
         content:
@@ -133,8 +133,18 @@ paths:
               required: [event]
               properties:
                 event: { type: string }
+                dict: { type: string }
                 page: { type: integer }
                 words: { type: integer }
+                pageBytes: { type: integer, description: Approximate JavaScript heap size of one cached page }
+                pageJsonBytes: { type: integer, description: UTF-8 JSON size of one cached page }
+                cachePages: { type: integer }
+                cacheBytes: { type: integer, description: Approximate JavaScript heap size of cached pages for this dictionary }
+                cacheJsonBytes: { type: integer, description: UTF-8 JSON size of cached pages for this dictionary }
+                cacheStoredPages: { type: integer, description: Number of page records persisted in session storage }
+                cacheStoredBytes: { type: integer, description: UTF-8 JSON size of persisted page records }
+                totalPages: { type: integer }
+                estimatedAllPagesBytes: { type: integer, description: Extrapolated JavaScript heap size if every page were cached }
                 letters: { type: integer }
                 bytes: { type: integer }
                 readMs: { type: integer }
@@ -146,6 +156,9 @@ paths:
                 status: { type: integer }
                 restored: { type: boolean }
                 streamAlphabet: { type: boolean }
+                active: { type: integer, description: Wildcards dictionaries currently scanning }
+                completed: { type: integer, description: Wildcards dictionaries with finished scans }
+                dictionaries: { type: integer, description: Wildcards dictionaries in this search }
       responses:
         '204': { description: Diagnostic recorded }
         '400': { description: Invalid or unsupported diagnostic }

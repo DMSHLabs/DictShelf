@@ -120,6 +120,12 @@ var articleFindJS []byte // search within loaded articles
 //go:embed web/list-search.js
 var listSearchJS []byte // reusable search and filter controls for lists
 
+//go:embed web/headword-control.js
+var headwordControlJS []byte // shared search controls for Browse and Wildcards
+
+//go:embed web/headword-control.css
+var headwordControlCSS []byte // shared layout and appearance for headword controls
+
 //go:embed web/examples.js
 var examplesJS []byte // example folding: marks the lines that hold nothing but examples
 
@@ -484,6 +490,8 @@ func (s *Server) basePage() []byte {
 		page = strings.ReplaceAll(page, "{{EXAMPLESJS}}", assetTag(examplesJS))
 		page = strings.ReplaceAll(page, "{{ARTICLEFINDJS}}", assetTag(articleFindJS))
 		page = strings.ReplaceAll(page, "{{LISTSEARCHJS}}", assetTag(listSearchJS))
+		page = strings.ReplaceAll(page, "{{HEADWORDJS}}", assetTag(headwordControlJS))
+		page = strings.ReplaceAll(page, "{{HEADWORDCSS}}", assetTag(headwordControlCSS))
 		// The role stylesheet for articles wudict writes itself
 		// (internal/artmark). It is a floor under BOTH article surfaces, so
 		// it is substituted once here and index.html hands it to the shadow

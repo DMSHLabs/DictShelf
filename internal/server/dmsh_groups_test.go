@@ -17,7 +17,8 @@ import (
 func TestUserGroupsExcludeUpstreamRules(t *testing.T) {
 	s := newGroupsServer(t)
 	s.UseUserGroups()
-	if _, code := callGroups(t, s, "PUT", "Upstream = server\nBroken = `(`\n"); code != 200 {
+	_, code := callGroups(t, s, "PUT", "Upstream = test dict\nBroken = `(`\n")
+	if code != 200 {
 		t.Fatal(code)
 	}
 	if got := rowGroups(t, s); len(got) != 0 {
@@ -35,6 +36,12 @@ func TestUserGroupsExcludeUpstreamRules(t *testing.T) {
 		t.Fatalf("editor filters must be separate from picker groups: %+v", info)
 	}
 	s.userGroupsOnly = false
+	// The fork-only request above may have primed groups.ini's one-second
+	// cache while the upstream facet was deliberately hidden.
+	s.groups.mu.Lock()
+	s.groups.loaded = false
+	s.groups.mu.Unlock()
+	s.dictRows.flush()
 	if got := rowGroups(t, s); !got["my groups/upstream"] {
 		t.Fatalf("upstream implementation no longer works: %v", got)
 	}
