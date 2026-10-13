@@ -14,6 +14,7 @@ body.workspace-page{box-sizing:border-box;width:100%;height:100dvh;min-height:0;
   overflow:hidden;border-radius:var(--workspace-radius)}
 .workspace-page .workspace-window>.top{flex:none;margin:-.618em -.618em 0;align-items:center}
 .workspace-page .workspace-window>.top button.x{margin:0}
+.workspace-page.workspace-filters .workspace-window>.top{margin:0}
 .workspace-page .workspace-scroll{flex:1 1 auto;min-height:0;overflow:auto;overscroll-behavior:contain}
 body.workspace-browse{display:flex;flex-direction:column;gap:0}
 .workspace-browser{display:flex;flex-direction:column;min-width:0;min-height:0;flex:1 1 auto;
@@ -30,3 +31,4 @@ html:is([data-shell-image],[data-desktop-image]) .workspace-browser>footer{backg
 .workspace-browser>footer[hidden]{display:none}
 @media(max-width:600px){:root{--workspace-inset:0px;--workspace-radius:0px}}
 @media(max-width:520px){.workspace-page .workspace-window>.top{margin:0 .2em}}
+@media(max-width:520px){.workspace-page.workspace-filters .workspace-window>.top{margin-inline:.2em}}
