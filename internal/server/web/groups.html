@@ -76,6 +76,7 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
 <title>{{T:filters.title}}</title>
 <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
 <link rel="stylesheet" href="/assets/setup.css?v={{CSS}}">
+<link rel="stylesheet" href="/assets/workspace.css?v={{WORKSPACECSS}}">
 {{UI_SCALE_DEFAULTS}}
 {{PRESETS}}
 <script>
@@ -112,10 +113,8 @@ html[data-shell-tone="dark"] {
   color-scheme:dark; --fg:#f4f1eb; --soft:#ded8cc; --faint:#c6beaf;
   --line:rgba(230,220,201,.4); --accent:#ffc773; --ok:#aad3ad; --err:#ffb3ad;
 }
-/* Page-specific only; palette, card, buttons and typography are shared. The
-   card is wider than the other pages' and the box takes most of the screen:
-   this page is an editor, and the text is the whole of it. */
-.card{max-width:760px;height:calc(100dvh - 2em);min-height:0;display:flex;flex-direction:column;overflow:auto}
+/* Page-specific only; the shared workspace owns the viewport and card. */
+.card{padding:1em}
 /* The editor uses the same saved type and control scale as Settings. */
 .top h1{font-size:calc(var(--ui-font-title) * 1rem)}
 .top button.x{box-sizing:border-box;display:grid;place-items:center;flex:none;
@@ -149,14 +148,13 @@ textarea:focus{border-color:var(--focus);box-shadow:0 0 0 3px color-mix(in srgb,
 /* A phone: the text gets the width the card's padding would take, so a
    comment line of groups.ini fits on one row instead of wrapping into two. */
 @media (max-width:520px){
-  body{padding:.5em}
-  .card{height:calc(100dvh - 1em);padding:1em .8em}
+  .card{padding:1em .8em}
   textarea{padding:.5em .6em}
 }
 </style>
 </head>
-<body>
-<div class="card">
+<body class="workspace-page">
+<div class="card workspace-window">
 <div class="top">
 <h1>{{T:filters.title}}</h1>
 <button type="button" class="x" id="closePage" aria-label="{{T:pages.close}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>

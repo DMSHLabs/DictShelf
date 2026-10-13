@@ -24,15 +24,28 @@
     catch (_) { return false; }
   }
 
+  function threshold() {
+    try {
+      const saved = localStorage.getItem(thresholdKey);
+      if (saved === null) return 100000;
+      const value = Number(saved);
+      return thresholds.includes(value) ? value : 100000;
+    } catch (_) { return 100000; }
+  }
+  function setThreshold(value) {
+    value = Number(value);
+    if (!thresholds.includes(value)) return false;
+    try { localStorage.setItem(thresholdKey, String(value)); } catch (_) { return false; }
+    window.dispatchEvent(new CustomEvent("wudict:headword-threshold-change", {detail:value}));
+    return true;
+  }
+
   function create({dock, ids, labels, maxRows = 2, onQuery, onMode, onMask, onThreshold, onApply, onStep}) {
     if (!dock || !ids) throw new TypeError("headword control needs a dock and element ids");
     const id = name => ids[name];
     dock.classList.add("headword-control");
     dock.innerHTML = `<button type="button" class="headword-control-mode" id="${id("mode")}"></button>` +
       `<button type="button" class="headword-control-mask" id="${id("mask")}" aria-pressed="false">*?</button>` +
-      `<select class="headword-control-threshold" id="${id("threshold")}" aria-label="${labels.threshold}" title="${labels.threshold}">` +
-      `<option value="0">0</option><option value="10000">10k</option><option value="50000">50k</option>` +
-      `<option value="100000">100k</option><option value="500000">500k</option><option value="1000000">1m</option></select>` +
       `<input class="headword-control-input" id="${id("input")}" type="search" placeholder="${labels.search}" ` +
       `spellcheck="false" autocomplete="off" autocapitalize="off" enterkeyhint="search" aria-label="${labels.search}">` +
       `<button type="button" class="headword-control-apply" id="${id("apply")}" aria-label="${labels.apply}" title="${labels.apply}" hidden>✓</button>` +
@@ -42,23 +55,6 @@
 
     const el = Object.fromEntries(Object.entries(ids).map(([name, value]) => [name, document.getElementById(value)]));
     const canvas = document.createElement("canvas").getContext("2d");
-    function threshold() {
-      try {
-        const saved = localStorage.getItem(thresholdKey);
-        if (saved === null) return 100000;
-        const value = Number(saved);
-        return thresholds.includes(value) ? value : 100000;
-      } catch (_) { return 100000; }
-    }
-    function fitThreshold() {
-      const option = el.threshold.selectedOptions[0];
-      if (!option) return;
-      const style = getComputedStyle(el.threshold);
-      canvas.font = style.font;
-      const width = canvas.measureText(option.textContent).width +
-        parseFloat(style.paddingLeft || 0) + parseFloat(style.paddingRight || 0) + 24;
-      el.threshold.style.width = Math.ceil(width) + "px";
-    }
     function fit() {
       if (dock.hidden || dock.parentElement?.hidden) return;
       const inputStyle = getComputedStyle(el.input), dockStyle = getComputedStyle(dock);
@@ -67,11 +63,11 @@
         canvas.measureText("жжжжжжжжжжжжжжж").width);
       const inputPadding = parseFloat(inputStyle.paddingLeft || 0) + parseFloat(inputStyle.paddingRight || 0);
       const gap = parseFloat(dockStyle.columnGap) || 0;
-      const controls = [el.mode, el.mask, el.threshold, el.apply, el.count, el.previous, el.next].filter(item => !item.hidden);
+      const controls = [el.mode, el.mask, el.apply, el.count, el.previous, el.next].filter(item => !item.hidden);
       const controlsWidth = controls.reduce((sum, item) => sum + item.getBoundingClientRect().width, 0) + gap * controls.length;
       const sidePadding = parseFloat(dockStyle.paddingLeft || 0) + parseFloat(dockStyle.paddingRight || 0);
       const available = dock.clientWidth - sidePadding;
-      const rowControls = [el.mode, el.mask, el.threshold, el.count, el.previous, el.next].filter(item => !item.hidden);
+      const rowControls = [el.mode, el.mask, el.count, el.previous, el.next].filter(item => !item.hidden);
       const rowWidth = rowControls.reduce((sum, item) => sum + item.getBoundingClientRect().width, 0) + gap * rowControls.length;
       const threeRows = maxRows >= 3 && available + .5 < rowWidth;
       const twoRows = threeRows || available + .5 < controlsWidth + textWidth + inputPadding;
@@ -92,43 +88,35 @@
       el.mask.title = labels.wildcard;
       el.input.placeholder = filtering ? labels.filter : labels.search;
       el.input.setAttribute("aria-label", el.input.placeholder);
-      el.threshold.value = String(threshold());
       el.apply.hidden = !state.applyRequired;
       el.apply.disabled = el.apply.hidden || !state.applyEnabled || !!state.busy;
       el.count.textContent = state.count ?? "0/0";
       el.count.value = el.count.textContent;
       el.previous.disabled = !!state.previousDisabled;
       el.next.disabled = !!state.nextDisabled;
-      for (const control of [el.mode, el.mask, el.threshold, el.input]) control.disabled = !!state.busy;
-      fitThreshold();
+      for (const control of [el.mode, el.mask, el.input]) control.disabled = !!state.busy;
       fit();
     }
     function onInput() { onQuery?.(el.input.value); }
     function onModeClick() { onMode?.(); }
     function onMaskClick() { onMask?.(); }
-    function onThresholdChange() {
-      const value = Number(el.threshold.value);
-      if (!thresholds.includes(value)) return;
-      try { localStorage.setItem(thresholdKey, String(value)); } catch (_) {}
-      fitThreshold();
-      onThreshold?.(value);
-    }
+    function onThresholdChange(event) { onThreshold?.(Number(event?.detail ?? threshold())); }
+    function onStorageChange(event) { if (event.key === thresholdKey) onThreshold?.(threshold()); }
     function onApplyClick() { onApply?.(); }
     function onPreviousClick() { onStep?.(-1); }
     function onNextClick() { onStep?.(1); }
     el.input.addEventListener("input", onInput);
     el.mode.addEventListener("click", onModeClick);
     el.mask.addEventListener("click", onMaskClick);
-    el.threshold.addEventListener("change", onThresholdChange);
     el.apply.addEventListener("click", onApplyClick);
     el.previous.addEventListener("click", onPreviousClick);
     el.next.addEventListener("click", onNextClick);
     const observer = new ResizeObserver(fit);
     observer.observe(dock);
     if (dock.id === "maskDock") observer.observe(dock.parentElement);
+    window.addEventListener("wudict:headword-threshold-change", onThresholdChange);
+    window.addEventListener("storage", onStorageChange);
     addEventListener("resize", fit);
-    el.threshold.value = String(threshold());
-    fitThreshold();
 
     return Object.freeze({
       elements: el,
@@ -140,11 +128,12 @@
       fit,
       destroy() {
         observer.disconnect();
+        window.removeEventListener("wudict:headword-threshold-change", onThresholdChange);
+        window.removeEventListener("storage", onStorageChange);
         removeEventListener("resize", fit);
         el.input.removeEventListener("input", onInput);
         el.mode.removeEventListener("click", onModeClick);
         el.mask.removeEventListener("click", onMaskClick);
-        el.threshold.removeEventListener("change", onThresholdChange);
         el.apply.removeEventListener("click", onApplyClick);
         el.previous.removeEventListener("click", onPreviousClick);
         el.next.removeEventListener("click", onNextClick);
@@ -154,5 +143,5 @@
     });
   }
 
-  window.wudictHeadwordControl = Object.freeze({create, cacheRead, cacheWrite});
+  window.wudictHeadwordControl = Object.freeze({create, cacheRead, cacheWrite, threshold, setThreshold});
 })();

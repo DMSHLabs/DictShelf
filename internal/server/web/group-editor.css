@@ -6,11 +6,17 @@
 
 dialog.group-dialog.panel-card{position:fixed;inset:0;margin:auto;width:min(560px,94vw);height:fit-content;max-height:85vh;max-height:85dvh;padding:1em;border:1px solid var(--line);border-radius:12px;color:var(--fg);background-color:var(--bg);box-shadow:var(--shadow);overflow:auto;z-index:300;font-size:calc(var(--ui-font-base) * 1rem)}
 #groupEditor{height:calc(100dvh - 32px);max-height:calc(100dvh - 32px)}
+#groupEditor.workspace-dialog,#dictSettings.workspace-dialog,#clearDatabaseDialog.workspace-dialog{height:auto;max-height:none}
 /* The dictionary list is the long one — a real library is a hundred cards — so
    Dictionary settings takes the same fixed height rather than fit-content, and
    the list scrolls inside it under a fixed toolbar. On a phone that fixed
    height is what the media query below lifts: see it for why. */
 #dictSettings{height:calc(100dvh - 32px);max-height:calc(100dvh - 32px)}
+.workspace-dialog{box-sizing:border-box;position:fixed;inset:var(--workspace-inset,8px);width:auto;max-width:none;
+  height:auto;max-height:none;margin:0;padding:16px;border:1px solid var(--line);
+  border-radius:var(--workspace-radius,12px);background:var(--paper-bg,var(--bg));
+  box-shadow:var(--shadow);overflow:hidden}
+html[data-shell-image] .workspace-dialog{background-image:var(--paper-bk-image);background-size:100% 100%;background-position:center;background-repeat:no-repeat}
 #dictSettingsOrderHint{margin:.35em 0 .8em;font-size:calc(var(--ui-hint-font-size) * 1rem);line-height:1.35;color:var(--label)}
 #dictSettingsGroupsLink{color:var(--link);text-decoration:underline;text-underline-offset:2px;cursor:pointer}
 #dictSettingsGroupsLink:hover{color:var(--link-hover)}
@@ -43,7 +49,7 @@ dialog.group-dialog.panel-card{position:fixed;inset:0;margin:auto;width:min(560p
 #webPickerSearch{padding-bottom:0}
 /* The selector section and each dictionary own their visible card borders;
    the dialog itself only provides the window surface and padding. */
-#dictSettings.group-dialog.panel-card{padding:0;border:0;box-shadow:none}
+#dictSettings.group-dialog.panel-card{padding:16px 0;border:0;box-shadow:none}
 /* On a phone, app windows use a fixed 16px page gutter, matching the default
    Lemmatization page gutter regardless of the app's text scale. The box is
    written as `inset` + `auto` sizes so it STRETCHES to that rect:
@@ -58,7 +64,8 @@ dialog.group-dialog.panel-card{position:fixed;inset:0;margin:auto;width:min(560p
   dialog.group-dialog.panel-card{
     inset:calc(16px + var(--wd-inset-top,0px)) 16px calc(16px + var(--wd-inset-bottom,0px));
     width:auto;max-width:none;height:auto;max-height:none;padding:16px}
-  dialog#groupEditor.group-dialog.panel-card{inset:calc(.5em + var(--wd-inset-top,0px)) .5em calc(.5em + var(--wd-inset-bottom,0px));height:auto;max-height:none}
+  dialog.group-dialog.panel-card.workspace-dialog{inset:var(--wd-inset-top,0px) 0 var(--wd-inset-bottom,0px);
+    width:auto;max-width:none;height:auto;max-height:none;padding:16px;border-radius:0}
   #dictSettings{height:auto;max-height:none}
   /* The colour window is short by nature - three sliders, a preview and one
      button - so it keeps its own height and centres itself in the same
@@ -97,6 +104,14 @@ dialog.group-dialog[open]{display:flex;flex-direction:column;gap:calc(var(--ui-r
 #groupEditor::backdrop,#dictSettings::backdrop,#sysSettings::backdrop{
   background:var(--paper-bg,var(--bg))}
 #clearDatabaseDialog::backdrop{background:var(--paper-bg,var(--bg))}
+/* A preset such as Warm paints --bg without changing the reader's own
+   --paper-bg. When there is no reader-selected colour or wallpaper, let the
+   full-screen dialogs reveal that preset paper instead of the cold shell. */
+html:not([data-shell-sepia]):not([data-shell-image]) #groupEditor::backdrop,
+html:not([data-shell-sepia]):not([data-shell-image]) #dictSettings::backdrop,
+html:not([data-shell-sepia]):not([data-shell-image]) #sysSettings::backdrop,
+html:not([data-shell-sepia]):not([data-shell-image]) #clearDatabaseDialog::backdrop{
+  background:var(--bg)}
 html[data-shell-image] #groupEditor::backdrop,
 html[data-shell-image] #dictSettings::backdrop,
 html[data-shell-image] #sysSettings::backdrop{
@@ -136,12 +151,9 @@ html[data-shell-image] .group-dialog input.list-search-input{background:transpar
 .group-dialog h2{display:flex;align-items:center;gap:calc(var(--ui-control-gap) * 1em);margin:0;font-size:calc(var(--ui-font-title) * 1rem)}
 .group-dialog h2 .btn{box-sizing:border-box;display:grid;place-items:center;flex:none;width:calc(var(--ui-main-control-height) * 1em);height:calc(var(--ui-main-control-height) * 1em);min-height:calc(var(--ui-main-control-height) * 1em);padding:0;font-size:calc(var(--ui-main-control-font) * 1rem);line-height:1}
 .group-dialog h2 .icon-close{display:block;width:1.3em;height:1.3em;flex:none}
-dialog#clearDatabaseDialog.group-dialog.panel-card{box-sizing:border-box;height:fit-content;max-height:calc(100dvh - 24px);width:min(480px,calc(100vw - 24px));inset:0;margin:auto;padding:14px}
+dialog#clearDatabaseDialog.group-dialog.panel-card{box-sizing:border-box}
 #clearDatabaseDialog>h2{flex:none}
 #clearDatabaseDialog .rescan-scroll{min-height:0;overflow:auto;overscroll-behavior:contain}
-@media(max-width:600px){dialog#clearDatabaseDialog.group-dialog.panel-card{
-  inset:calc(16px + var(--wd-inset-top,0px)) 16px calc(16px + var(--wd-inset-bottom,0px));
-  width:auto;max-width:none;height:auto;max-height:none;margin:auto;padding:16px}}
 #clearDatabaseDialog label{margin-top:.4em;display:flex;align-items:flex-start;gap:.3em}
 #clearDatabaseDialog input{margin-top:.15em}
 #clearDatabaseDialog h2{font-size:calc(var(--ui-font-title) * 1rem);display:flex;align-items:center;justify-content:space-between;gap:calc(var(--ui-control-gap) * 1em);margin:0 0 .5em}
@@ -177,7 +189,7 @@ dialog#clearDatabaseDialog.group-dialog.panel-card{box-sizing:border-box;height:
   gap:calc(var(--ui-control-gap) * 1em)}
 #clearDatabaseDialog #clearDatabaseCancel{margin-left:auto}
 #clearDatabaseStatus:empty{display:none}
-@media(max-width:360px){dialog#clearDatabaseDialog.group-dialog.panel-card{padding:12px}#clearDatabaseDialog .seg .btn{padding:.25em .35em}}
+@media(max-width:360px){#clearDatabaseDialog .seg .btn{padding:.25em .35em}}
 .group-dialog h2 button{margin-left:auto}
 #groupTitle{gap:calc(var(--ui-control-gap) * 1em)}
 #groupTitle .icon-close{width:1.4em;height:1.4em}
@@ -190,7 +202,10 @@ dialog#clearDatabaseDialog.group-dialog.panel-card{box-sizing:border-box;height:
 #groupEditor #groupNameCancel{box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;height:calc(var(--ui-edit_control-height) * 1.5rem);min-height:calc(var(--ui-edit_control-height) * 1.5rem);margin-left:auto;padding:.35em .65em;font-size:inherit}
 #groupEditor #groupNameCancel[hidden]{display:none}
 #groupLists{flex:1;display:flex;flex-direction:column;min-height:0}
-dialog#groupEditor.group-dialog.panel-card{gap:.65em;padding:0;border:0;background:transparent;box-shadow:none;overflow:hidden}
+dialog#groupEditor.group-dialog.panel-card{gap:.65em;padding:16px 0;border:0;background:var(--paper-bg,var(--bg));box-shadow:none;overflow:hidden}
+html[data-shell-image] dialog#groupEditor.group-dialog.panel-card{background-image:var(--paper-bk-image);background-size:100% 100%;background-position:center;background-repeat:no-repeat}
+#groupTitle{padding-inline:0}
+#groupControls{padding-inline:0}
 #groupEditor .btn,#newGroupDialog .btn,#groupFilterDialog .btn,#linkGroupDialog .btn,#discardGroupDraftDialog .btn,#deleteGroupDialog .btn{font-size:inherit}
 #groupControls{display:flex;flex-direction:column;gap:.65em;flex:none}
 #groupControls :is(.group-toolbar,.group-link-controls,.group-actions){font-size:calc(var(--ui-edit_control-font) * 1rem)}
@@ -200,7 +215,7 @@ dialog#groupEditor.group-dialog.panel-card{gap:.65em;padding:0;border:0;backgrou
 #groupControls #groupLink:checked::after{left:.32em;top:.06em;width:.31em;height:.63em;border-width:0 .125em .125em 0}
 #groupControls #groupNewAction{width:calc(var(--ui-edit_control-height) * 1.5rem);min-width:calc(var(--ui-edit_control-height) * 1.5rem);padding:0}
 .group-section{border:1px solid var(--line);border-radius:12px;background:var(--bg-card,var(--bg));padding:.8em;box-shadow:var(--shadow)}
-#groupControls,#groupMembers,#groupAvailable{border:2px solid transparent}
+#groupControls,#groupMembers,#groupAvailable{border:1px solid var(--line)}
 #groupLists{gap:.65em}
 #groupEditor:has(#groupOrderToolbar:not([hidden])){gap:.2em}
 #deleteGroup{align-self:flex-end;display:inline-flex;align-items:center;gap:.4em}
