@@ -1368,7 +1368,7 @@ async function apiError(r){
 const mb=n=>n<1e3?n+" B":n<1e6?Math.round(n/1e3)+" kB":n<1e7?(n/1e6).toFixed(1)+" MB":n<1e9?Math.round(n/1e6)+" MB":(n/1e9).toFixed(1)+" GB";
 function sortedDictionaryIds(ids,pinned,byId){
   const fixed=ids.filter(id=>pinned.has(id)),tail=ids.filter(id=>!pinned.has(id));
-  const collator=new Intl.Collator(window.wudictI18n.language,{sensitivity:"base",numeric:true});
+  const collator=new Intl.Collator("en",{sensitivity:"base",numeric:true});
   tail.sort((a,b)=>collator.compare(dictLabel(byId.get(a)),dictLabel(byId.get(b)))||a.localeCompare(b));
   return fixed.concat(tail);
 }
