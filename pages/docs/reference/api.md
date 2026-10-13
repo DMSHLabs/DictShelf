@@ -6,8 +6,7 @@ description: The wudict HTTP API - who may call it, streaming search results, th
 # HTTP API
 
 The web page, the browser extension and the Android app use this API; so can
-your own programs. wuDict2 answers on `http://127.0.0.1:6889` by default;
-upstream wuDict uses port 6888.
+your own programs. The server answers on `http://127.0.0.1:6888` by default.
 
 [API reference (OpenAPI)](../api/index.html){ .md-button }
 
@@ -59,7 +58,7 @@ document. A test checks it against the server's routes in both directions.
 
 | Where | |
 | --- | --- |
-| `http://127.0.0.1:6889/api/openapi.yaml` | served by the running server |
+| `http://127.0.0.1:6888/api/openapi.yaml` | served by the running server |
 | [`internal/server/web/openapi.yaml`](https://github.com/wuweidict/wudict/blob/master/internal/server/web/openapi.yaml) | in the repository |
 | [API reference](../api/index.html) | rendered, with a `curl` example per endpoint |
 | `make api-ui` | rendered to `dist/api-explorer.html`, for offline use |
@@ -129,7 +128,7 @@ are true once the dictionary has the contains or full-text index. The other
 fields (files, library folder, sizes) are listed in the OpenAPI document.
 
 ``` sh
-curl -s http://127.0.0.1:6889/api/dicts | jq
+curl -s http://127.0.0.1:6888/api/dicts | jq
 ```
 
 ## Resources
@@ -157,12 +156,12 @@ Search, then print each headword and article as it arrives.
 === "Shell"
 
     ``` sh title="curl and jq"
-    curl -sN 'http://127.0.0.1:6889/api/search?q=phubbing&mode=exact&format=text&n=3' |
+    curl -sN 'http://127.0.0.1:6888/api/search?q=phubbing&mode=exact&format=text&n=3' |
       jq -r --unbuffered 'select(.t == "hit") | .name as $d | (.results // [])[]
              | "\($d) | \(.Headword)", ("=" * 70), (.Body // "")'
 
     # one dictionary, by its id
-    curl -sN 'http://127.0.0.1:6889/api/search?q=flight&mode=exact&format=text&n=3&dict=4112242f8cf1' |
+    curl -sN 'http://127.0.0.1:6888/api/search?q=flight&mode=exact&format=text&n=3&dict=4112242f8cf1' |
           jq -r --unbuffered 'select(.t == "hit") | .name as $d | (.results // [])[]
                  | "\($d) | \(.Headword)", ("=" * 70), (.Body // "")'
     ```
@@ -175,7 +174,7 @@ Search, then print each headword and article as it arrives.
     ``` py title="Python standard library"
     import json, urllib.request
 
-    url = "http://127.0.0.1:6889/api/search?q=flight&mode=exact&format=text&n=3"
+    url = "http://127.0.0.1:6888/api/search?q=flight&mode=exact&format=text&n=3"
 
     with urllib.request.urlopen(url) as f:
         for line in f:
@@ -191,7 +190,7 @@ Search, then print each headword and article as it arrives.
 === "JavaScript"
 
     ``` js title="from a page in a browser; needs WEB_ORIGINS"
-    const url = "http://127.0.0.1:6889/api/search?q=flight&mode=exact&format=text&n=3";
+    const url = "http://127.0.0.1:6888/api/search?q=flight&mode=exact&format=text&n=3";
     const res = await fetch(url);           // no credentials, no custom headers
     const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
 

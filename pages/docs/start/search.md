@@ -182,7 +182,7 @@ can be bookmarked or opened from a script. Back and Forward step through
 searches.
 
 ```
-http://localhost:6889/?q=serendipity&mode=prefix&dict=all
+http://localhost:6888/?q=serendipity&mode=prefix&dict=all
 ```
 
 | Parameter | Value |

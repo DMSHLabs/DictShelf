@@ -160,15 +160,11 @@ const (
 
 func defaults() Config {
 	home, _ := os.UserHomeDir()
-	lemmaDirName := ".wudict"
-	if os.Getenv("WUDICT_PROFILE") == "wudict2" {
-		lemmaDirName = ".wudict2"
-	}
 	return Config{
 		DictDirs: []string{filepath.Join(home, "Dictionaries")},
 		DBDir:    "", // empty = store.DefaultDBDir()
 		IP:       "127.0.0.1",
-		Port:     defaultPort,
+		Port:     "6888",
 		// Speexdec "" = auto-detect at launch (next to the executable, then
 		// $PATH); SPEEXDEC overrides. See resolveSpeexdec in the CLI.
 		Speexdec:     "",
@@ -185,7 +181,7 @@ func defaults() Config {
 		MemoryLimit:   memoryLimitDefault(),
 		SearchMemory:  searchMemoryDefault(),
 		MorphCache:    morphCacheDefault(),
-		LemmaDir:      filepath.Join(home, lemmaDirName, "lemmas"),
+		LemmaDir:      filepath.Join(home, ".wudict", "lemmas"),
 		// off by default: see the field comment - loopback deletes regardless,
 		// so this only ever opens the LAN case, and that is opt-in.
 		AllowRemoteDelete: false,
@@ -359,26 +355,6 @@ const Name = "wudict.toml"
 // systemDir is the machine-wide location; a variable so tests can point it
 // somewhere harmless rather than depend on what is really in /etc.
 var systemDir = filepath.Join("/etc", "wudict")
-var homeConfigDir = ".wudict"
-var defaultPort = "6888"
-
-// SetHomeConfigDir changes only the per-user config directory. Fork launchers
-// call this before Load; environment and explicit config paths retain priority.
-func SetHomeConfigDir(name string) {
-	if name == "" {
-		homeConfigDir = ".wudict"
-		return
-	}
-	homeConfigDir = name
-}
-
-// SetDefaultPort changes the built-in port for a fork or embedding application.
-// Explicit flags, environment variables and config-file values still win.
-func SetDefaultPort(port string) {
-	if port != "" {
-		defaultPort = port
-	}
-}
 
 // Seams for the two directories the search is anchored to. Tests replace them;
 // both return "" when the OS cannot say, which simply drops that candidate.
@@ -403,7 +379,7 @@ var (
 // beside the library that directory already holds.
 func HomeConfig() string {
 	if h := homeDir(); h != "" {
-		return filepath.Join(h, homeConfigDir, Name)
+		return filepath.Join(h, ".wudict", Name)
 	}
 	return ""
 }
@@ -608,14 +584,7 @@ func EnsureConfigFile() (path string, created bool, err error) {
 	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 		return "", false, err
 	}
-	template := configTemplate
-	if homeConfigDir != ".wudict" {
-		template = strings.ReplaceAll(template, "~/.wudict/", "~/"+homeConfigDir+"/")
-	}
-	if defaultPort != "6888" {
-		template = strings.ReplaceAll(template, `SERVER_PORT = "6888"`, `SERVER_PORT = "`+defaultPort+`"`)
-	}
-	if err := fsx.WriteAtomic(p, []byte(template), 0o644); err != nil {
+	if err := fsx.WriteAtomic(p, []byte(configTemplate), 0o644); err != nil {
 		return "", false, err
 	}
 	return p, true, nil

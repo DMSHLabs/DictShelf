@@ -16,7 +16,7 @@ wudict
 
 wudict prints the address it listens on, the dictionary folders it reads and
 the config file in effect, then opens the browser at
-[localhost:6889](http://localhost:6889). A binary in the current folder is
+[localhost:6888](http://localhost:6888). A binary in the current folder is
 started with `./wudict`.
 
 The **wudict howto**, a guide built in as a dictionary, is always available:
@@ -26,7 +26,7 @@ search for `wudict` to list its topics.
 
 The default dictionary folder is `~/Dictionaries`, subfolders included. If it
 is missing or empty, the main page shows the howto with a link to the setup
-page, [localhost:6889/setup](http://localhost:6889/setup).
+page, [localhost:6888/setup](http://localhost:6888/setup).
 
 On the setup page, enter the path of a folder with dictionary files (`~` is
 allowed). The page checks the path as you type and shows how many dictionaries
@@ -89,7 +89,7 @@ during indexing.
 | Symptom | See |
 | --- | --- |
 | No dictionaries listed | [No dictionaries appear](../help/troubleshooting.md#no-dictionaries) |
-| `address already in use` | [Port 6889 is in use](../help/troubleshooting.md#port-taken) |
+| `address already in use` | [Port 6888 is in use](../help/troubleshooting.md#port-taken) |
 | No browser tab opens | [No browser tab opens](../help/troubleshooting.md#no-browser) |
 | No sound | [No sound](../help/troubleshooting.md#audio) |
 

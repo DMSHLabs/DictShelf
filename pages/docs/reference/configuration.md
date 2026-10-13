@@ -97,7 +97,7 @@ Must not be a `DICT_DIR` folder; wudict does not start if it is.
 | | |
 | --- | --- |
 | Flags | `--ip <address>`, `--port <port>` |
-| Defaults | `127.0.0.1`, `6889` |
+| Defaults | `127.0.0.1`, `6888` |
 
 `127.0.0.1` is the loopback address, reachable from your machine only. Set
 `0.0.0.0` to accept connections from your network. Requests from the network

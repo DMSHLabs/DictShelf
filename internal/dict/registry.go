@@ -234,23 +234,6 @@ type prober func(path string) (Meta, error)
 
 var probers = map[string]prober{}
 
-// selfIndexedFormats records source formats whose own on-disk structure
-// already provides the lookup index, so automatic text.db preparation is
-// unnecessary. Explicit indexing remains available.
-var selfIndexedFormats = map[string]bool{}
-
-// RegisterSelfIndexed marks a format as providing its own on-disk lookup
-// index. Called beside RegisterFormat by the format package.
-func RegisterSelfIndexed(ext string) {
-	selfIndexedFormats[strings.ToLower(ext)] = true
-}
-
-// IsSelfIndexed reports whether path's format provides its own lookup index.
-func IsSelfIndexed(path string) bool {
-	_, ok := matchKey(selfIndexedFormats, path)
-	return ok
-}
-
 var comparisonSources = map[string]func(string) (string, error){}
 var sourceRevisions = map[string]func(string) (string, error){}
 var sourceInputs = map[string]func(string) (string, error){}

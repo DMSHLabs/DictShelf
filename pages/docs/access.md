@@ -24,7 +24,7 @@ read-only endpoints for browser extensions (`/api/dicts`, `/api/search`,
 `/res/`).
 
 1.  On the server machine, run `wudict token`. It prints a link such as
-    `http://192.168.1.20:6889/?k=<key>`.
+    `http://192.168.1.20:6888/?k=<key>`.
 2.  Open the link once in the browser on the other device. The browser keeps
     the key as a cookie.
 
