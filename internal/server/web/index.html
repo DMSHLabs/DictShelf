@@ -3994,6 +3994,11 @@ function bulkActionLabel(action){
   const keys={keep:"dictUI.bulkAction.keep",create:"dictUI.bulkAction.create",update:"dictUI.bulkAction.update",recreate:"dictUI.bulkAction.recreate",delete:"dictUI.bulkAction.delete"};
   return tx(keys[action]);
 }
+function bulkFailureReport(number,failed,damaged,error){
+  let report=tx("dictUI.bulkFailed",{number,error:failed?.length?tx("dictUI.bulkFailureCount",{number:failed.length}):window.wudictI18n.errorText(error)});
+  if(damaged?.length)report+=" "+tx("dictUI.bulkDamagedRemoved",{number:damaged.length});
+  return report;
+}
 function renderBulkIndexes(){
   if(bulkIndexBusy)return;
   window.wudictThemedSelects?.bulk?.forEach(control=>control.destroy());
@@ -4039,9 +4044,9 @@ $("bulkIndexes").addEventListener("click",async e=>{
     try{
       const result=await window.wudictWork.start(todo.map(({d,feat,action})=>({dict:d.id,feature:feat,action})));
       succeeded=result.done;
-      if(result.error)throw Object.assign(new Error(result.error),{failed:result.failed});
+      if(result.error)throw Object.assign(new Error(result.error),{failed:result.failed,damaged:result.damaged});
       report=result.canceled||result.stopRequested?tx("dictUI.bulkStopped",{number:succeeded}):tx("dictUI.bulkFinished",{number:succeeded});
-    }catch(err){report=tx("dictUI.bulkFailed",{number:succeeded,error:err.failed?.length?tx("dictUI.bulkFailureCount",{number:err.failed.length}):window.wudictI18n.errorText(err.message)})}
+    }catch(err){report=bulkFailureReport(succeeded,err.failed,err.damaged,err.message)}
     finally{
       bulkIndexBusy=false;
       clearGlobalStop();
@@ -4812,7 +4817,7 @@ window.addEventListener("wudict-work",event=>{
     }
   }else if(serverBulkWasRunning){
     serverBulkWasRunning=false;bulkIndexBusy=false;$("bulkIndexStop").hidden=true;
-    const report=s.error?tx("dictUI.bulkFailed",{number:s.done,error:s.failed?.length?tx("dictUI.bulkFailureCount",{number:s.failed.length}):window.wudictI18n.errorText(s.error)}):
+    const report=s.error?bulkFailureReport(s.done,s.failed,s.damaged,s.error):
       s.canceled||s.stopRequested?tx("dictUI.bulkStopped",{number:s.done}):tx("dictUI.bulkFinished",{number:s.done});
     setIndexStatus(esc(report));loadDicts().then(renderBulkIndexes);
   }

@@ -40,6 +40,7 @@ type jobStatus struct {
 	Stage                     string
 	// Failed names each item that could not be done, with why.
 	Failed   []string
+	Damaged  []string
 	Err      string // the job as a whole failed
 	Canceled bool
 	// StopRequested is a soft stop: finish the current atomic dictionary
@@ -218,6 +219,9 @@ func (t *jobTable) forget(key string) {
 func (st jobStatus) copy() jobStatus {
 	if st.Failed != nil {
 		st.Failed = append([]string{}, st.Failed...)
+	}
+	if st.Damaged != nil {
+		st.Damaged = append([]string{}, st.Damaged...)
 	}
 	st.Indexes = append([]string(nil), st.Indexes...)
 	return st

@@ -629,6 +629,7 @@
   "dictUI.bulkStopped": "Остановлено после {number} операций с индексами; остальные операции не запускались.",
   "dictUI.bulkFailed": "Успешно выполнено операций: {number}. Не удалось выполнить: {error}.",
   "dictUI.bulkFailureCount": "{number} (подробности — в системном журнале)",
+  "dictUI.bulkDamagedRemoved": "Повреждённых словарей удалено из списка: {number}.",
   "dictUI.reconnecting": "Соединение прервано, переподключаемся…",
   "dictUI.connectionLost": "Соединение с задачей индексации потеряно.",
   "dictUI.dslUnavailable": "Недоступен для поиска",

@@ -1038,6 +1038,7 @@ func (r *Registry) rescan(prepare bool) error {
 	dirs := append([]string(nil), r.dictDirs...)
 	useCached := r.useCached
 	r.mu.RUnlock()
+	damaged := r.prefs.damagedSources()
 	paths, perRoot, err := dict.DiscoverAll(dirs)
 	if err != nil {
 		logx.V("scanning dictionary folders: %v", err)
@@ -1086,6 +1087,23 @@ func (r *Registry) rescan(prepare bool) error {
 		// to the builtin, or to nothing while the user's copy stands in.
 		lib := libraryPaths(append(paths, shipped...))
 		paths = append(paths, lib...)
+	}
+	if len(damaged) > 0 {
+		keptPaths := paths[:0]
+		for _, path := range paths {
+			source := damagedSourcePath(path)
+			if source != "" {
+				if signature, quarantined := damaged[cleanAbs(source)]; quarantined {
+					current := sourceSig(source)
+					if current == "" || current == signature {
+						store.IndexDiagnostic("skip damaged dictionary source=%q reason=quarantined", source)
+						continue
+					}
+				}
+			}
+			keptPaths = append(keptPaths, path)
+		}
+		paths = keptPaths
 	}
 	paths, err = r.singleDSLPaths(paths)
 	if err != nil {
@@ -1197,6 +1215,72 @@ func (r *Registry) rescan(prepare bool) error {
 		r.indexQueueMu.Unlock()
 	}
 	return nil
+}
+
+func damagedSourcePath(path string) string {
+	if store.IsTextDB(path) {
+		meta, err := store.ReadMeta(path)
+		if err != nil || meta["source_path"] == "" {
+			return ""
+		}
+		path = meta["source_path"]
+	}
+	return path
+}
+
+func damagedDictionaryError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+		return true
+	}
+	message := strings.ToLower(err.Error())
+	for _, marker := range []string{
+		"bad magic", "corrupt or truncated file", "corrupt or unsupported file (parser panic:",
+		"file shorter than a zim header", "empty zim (", "unterminated mime list", "empty mime list",
+		"truncated", "out of range", "bad redirect to",
+	} {
+		if strings.Contains(message, marker) {
+			return true
+		}
+	}
+	return false
+}
+
+func (r *Registry) excludeDamaged(e *entry, cause error) bool {
+	if e == nil || !damagedDictionaryError(cause) {
+		return false
+	}
+	source := damagedSourcePath(e.Path)
+	if source == "" || store.IsTextDB(source) {
+		return false
+	}
+	signature := sourceSig(source)
+	if signature == "" {
+		return false
+	}
+	key := cleanAbs(source)
+	if err := r.prefs.markDamaged(key, signature); err != nil {
+		logx.Warn("could not persist damaged dictionary exclusion %s: %v", source, err)
+	}
+	r.mu.Lock()
+	if r.byID[e.ID] == e {
+		delete(r.byID, e.ID)
+		entries := r.entries[:0]
+		for _, current := range r.entries {
+			if current != e {
+				entries = append(entries, current)
+			}
+		}
+		r.entries = entries
+		if store.IsTextDB(e.Path) && r.fromLib > 0 {
+			r.fromLib--
+		}
+	}
+	r.mu.Unlock()
+	store.IndexDiagnostic("damaged dictionary excluded from list source=%q signature=%q reason=%q", source, signature, cause)
+	return true
 }
 
 // Counts reports how many dictionaries came from the dictionary folder and
@@ -1744,6 +1828,9 @@ func (e *entry) reconcileLocked(name string, t store.Target, progress store.Prog
 		}
 	}
 	out, err := store.Reconcile(e.Path, t, hooks)
+	if err != nil && e.reg != nil {
+		e.reg.excludeDamaged(e, err)
+	}
 	if out.Rebuilt {
 		if len(out.Why) > 0 {
 			logx.V("%sprepared data was outdated (%v) - re-indexed", logx.Dict(name), out.Why)

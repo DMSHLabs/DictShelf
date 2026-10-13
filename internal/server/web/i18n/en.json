@@ -621,6 +621,7 @@
   "dictUI.bulkStopped": "Stopped after {number} index operations; remaining operations were not started.",
   "dictUI.bulkFailed": "Operations completed successfully: {number}. Failed operations: {error}.",
   "dictUI.bulkFailureCount": "{number} (see System Log for details)",
+  "dictUI.bulkDamagedRemoved": "Damaged dictionaries removed from the list: {number}.",
   "dictUI.reconnecting": "Connection interrupted; reconnecting…",
   "dictUI.connectionLost": "Connection to the index job was lost.",
   "dictUI.dslUnavailable": "Not available for search",
