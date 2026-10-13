@@ -92,6 +92,12 @@ jobs:
             *) echo "::warning title=Unversioned build::no usable tag found - stamping '$VERSION'; installers will be named 0.0.0" ;;
           esac
           echo "version: $VERSION"
+          # Pin the native target; Finder enforces LC_BUILD_VERSION per slice.
+          if [ "${{ matrix.goos }}" = darwin ]; then
+            export MACOSX_DEPLOYMENT_TARGET=12.0
+            export CGO_CFLAGS="-O2 -g -mmacosx-version-min=$MACOSX_DEPLOYMENT_TARGET"
+            export CGO_LDFLAGS="$CGO_CFLAGS"
+          fi
           go build -trimpath -tags sqlite_fts5 \
             -ldflags="-s -w -X github.com/wuweidict/wudict/internal/cli.Version=${VERSION}" \
             -o "${BINARY}" .

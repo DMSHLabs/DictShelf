@@ -37,12 +37,21 @@ tmpl=$root/packaging/darwin/Info.plist.in
 icns=$root/packaging/darwin/wudict.icns
 
 [ "$(uname -s)" = Darwin ] || { echo "make-app: macOS only (needs plutil/codesign)" >&2; exit 1; }
-for t in plutil codesign; do
+for t in plutil codesign vtool; do
 	command -v "$t" >/dev/null 2>&1 || { echo "make-app: $t not found" >&2; exit 1; }
 done
 [ -f "$tmpl" ] || { echo "make-app: missing $tmpl" >&2; exit 1; }
 [ -x "$bin" ]  || { echo "make-app: no binary at $bin — run: make build" >&2; exit 1; }
 [ -f "$icns" ] || { echo "make-app: missing $icns — run: make icons" >&2; exit 1; }
+
+# Finder enforces each binary slice's minimum OS, regardless of the plist.
+over=$(vtool -show-build "$bin" | awk -v min="$minos" '
+	function num(s, p) { split(s, p, "."); return p[1] * 10000 + p[2] * 100 + p[3] }
+	$1 == "minos" && num($2) > num(min) { print $2; exit }')
+if [ -n "$over" ]; then
+	echo "make-app: $bin requires macOS $over, above MACOS_MIN=$minos — build it with MACOSX_DEPLOYMENT_TARGET=$minos (make build does)" >&2
+	exit 1
+fi
 
 # Identity comes from the binary itself rather than from a Makefile variable
 # (tools/version.sh): `wudict --version` prints "<ProductName> <Version>", so
