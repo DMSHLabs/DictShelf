@@ -205,7 +205,7 @@ dialog#clearDatabaseDialog.group-dialog.panel-card{box-sizing:border-box}
 dialog#groupEditor.group-dialog.panel-card{gap:.65em;padding:16px 0;border:0;background:var(--paper-bg,var(--bg));box-shadow:none;overflow:hidden}
 html[data-shell-image] dialog#groupEditor.group-dialog.panel-card{background-image:var(--paper-bk-image);background-size:100% 100%;background-position:center;background-repeat:no-repeat}
 #groupTitle{padding-inline:0}
-#groupControls{padding-inline:0}
+#groupControls{padding-inline:1em}
 #groupEditor .btn,#newGroupDialog .btn,#groupFilterDialog .btn,#linkGroupDialog .btn,#discardGroupDraftDialog .btn,#deleteGroupDialog .btn{font-size:inherit}
 #groupControls{display:flex;flex-direction:column;gap:.65em;flex:none}
 #groupControls :is(.group-toolbar,.group-link-controls,.group-actions){font-size:calc(var(--ui-edit_control-font) * 1rem)}
