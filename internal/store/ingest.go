@@ -115,8 +115,8 @@ func IngestPlan(r dict.Reader, dbPath string, plan Plan, progress Progress) (rep
 	if _, err = db.Exec(fmt.Sprintf(`
 		PRAGMA user_version = %d;
 		CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT);
-		CREATE TABLE entry(id INTEGER PRIMARY KEY, w TEXT NOT NULL, m TEXT NOT NULL);
-		CREATE TABLE alias(w TEXT NOT NULL, entry_id INTEGER NOT NULL REFERENCES entry(id));
+		CREATE TABLE entry(id INTEGER PRIMARY KEY, w TEXT NOT NULL, wf TEXT NOT NULL, m TEXT NOT NULL);
+		CREATE TABLE alias(w TEXT NOT NULL, wf TEXT NOT NULL, entry_id INTEGER NOT NULL REFERENCES entry(id));
 		CREATE VIRTUAL TABLE entry_fts USING fts5(
 			w, txt, content='', columnsize=0,
 			tokenize='unicode61 remove_diacritics 2');
@@ -136,7 +136,7 @@ func IngestPlan(r dict.Reader, dbPath string, plan Plan, progress Progress) (rep
 	}
 	defer tx.Rollback() // also release the connection if a reader panics
 
-	insEntry, err := tx.Prepare("INSERT INTO entry(id, w, m) VALUES(?, ?, ?)")
+	insEntry, err := tx.Prepare("INSERT INTO entry(id, w, wf, m) VALUES(?, ?, ?, ?)")
 	if err != nil {
 		return rep, err
 	}
@@ -150,7 +150,7 @@ func IngestPlan(r dict.Reader, dbPath string, plan Plan, progress Progress) (rep
 			return rep, err
 		}
 	}
-	insAlias, err := tx.Prepare("INSERT INTO alias(w, entry_id) VALUES(?, ?)")
+	insAlias, err := tx.Prepare("INSERT INTO alias(w, wf, entry_id) VALUES(?, ?, ?)")
 	if err != nil {
 		return rep, err
 	}
@@ -211,7 +211,7 @@ func IngestPlan(r dict.Reader, dbPath string, plan Plan, progress Progress) (rep
 			return rep, err2
 		}
 		id++
-		if _, err = insEntry.Exec(id, hw, encodeBody(body)); err != nil {
+		if _, err = insEntry.Exec(id, hw, dict.Fold(hw), encodeBody(body)); err != nil {
 			return rep, err
 		}
 		txt := ""
@@ -237,7 +237,7 @@ func IngestPlan(r dict.Reader, dbPath string, plan Plan, progress Progress) (rep
 		for _, extra := range e.Headwords[1:] {
 			extra = strings.TrimSpace(extra)
 			if extra != "" && extra != hw {
-				if _, err = insAlias.Exec(extra, id); err != nil {
+				if _, err = insAlias.Exec(extra, dict.Fold(extra), id); err != nil {
 					return rep, err
 				}
 			}
@@ -348,6 +348,12 @@ func IngestPlan(r dict.Reader, dbPath string, plan Plan, progress Progress) (rep
 		return rep, err
 	}
 	if _, err = tx.Exec("CREATE INDEX idx_alias_w ON alias(w COLLATE NOCASE)"); err != nil {
+		return rep, err
+	}
+	if _, err = tx.Exec("CREATE INDEX idx_entry_wf ON entry(wf COLLATE NOCASE)"); err != nil {
+		return rep, err
+	}
+	if _, err = tx.Exec("CREATE INDEX idx_alias_wf ON alias(wf COLLATE NOCASE)"); err != nil {
 		return rep, err
 	}
 	trace.phase("commit")
@@ -472,7 +478,7 @@ func resolveLinks(tx *sql.Tx, insAlias *sql.Stmt, done func(int)) (int, error) {
 				unresolved++
 				continue
 			}
-			if _, err := insAlias.Exec(l.w, id); err != nil {
+			if _, err := insAlias.Exec(l.w, dict.Fold(l.w), id); err != nil {
 				return unresolved, err
 			}
 		}

@@ -473,6 +473,43 @@ func TestExactAndAliases(t *testing.T) {
 	}
 }
 
+func TestFoldedHeadwordSearch(t *testing.T) {
+	r := &fakeReader{
+		meta: dict.Meta{Name: "Accents", Format: "mdx", Path: "/nonexistent/accents.mdx"},
+		entries: []dict.Entry{
+			h("cafe", "plain"),
+			h("café", "accented"),
+			{Headwords: []string{"résumé", "curriculum"}, Body: "article", Kind: dict.BodyHTML},
+			{Headwords: []string{"exposé"}, LinkTo: "résumé"},
+		},
+	}
+	path := filepath.Join(t.TempDir(), "accents.text.db")
+	if _, err := IngestPlan(r, path, Plan{}, nil); err != nil {
+		t.Fatal(err)
+	}
+	s, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	for _, query := range []string{"cafe", "café"} {
+		rows, err := s.Exact(query, 10)
+		if err != nil || len(rows) != 2 || rows[0].Headword != query {
+			t.Fatalf("Exact(%q) = %v, %v", query, rows, err)
+		}
+		rows, err = s.Prefix(query, 10)
+		if err != nil || len(rows) != 2 || rows[0].Headword != query {
+			t.Fatalf("Prefix(%q) = %v, %v", query, rows, err)
+		}
+	}
+	for _, query := range []string{"resume", "expose"} {
+		rows, err := s.Exact(query, 10)
+		if err != nil || len(rows) != 1 || rows[0].Headword != "résumé" {
+			t.Fatalf("Exact alias %q = %v, %v", query, rows, err)
+		}
+	}
+}
+
 func TestPrefix(t *testing.T) {
 	s := testStore(t)
 	res, err := s.Prefix("coraz", 10)
@@ -1436,20 +1473,21 @@ func TestIngestProgressCoversRedirects(t *testing.T) {
 	}
 }
 
-// Exact is the hottest query in the app: it runs on every lookup, including
-// every miss. The `entry` table stores article bodies inline, so a scan of it
-// reads the whole dictionary; the only indexes on these columns are NOCASE
-// (ingest.go), which a case-SENSITIVE comparison cannot use. This asserts the
-// plan, not the rows - the rows are covered by the tests above and would stay
-// green through the regression this guards.
+// Exact runs on every lookup, including every miss. Its folded comparison
+// must use the headword index so misses never scan article bodies.
 func TestExactUsesTheHeadwordIndexes(t *testing.T) {
 	s := testStore(t)
 	const q = `
-		SELECT e.w, e.m FROM entry e WHERE e.w = ?1 COLLATE NOCASE AND e.w = ?1
-		UNION ALL
-		SELECT e.w, e.m FROM alias a JOIN entry e ON e.id = a.entry_id WHERE a.w = ?1 COLLATE NOCASE AND a.w = ?1
-		LIMIT ?2`
-	rows, err := s.db.Query("EXPLAIN QUERY PLAN "+q, "corazón", 10)
+		SELECT e.w, e.m FROM entry e JOIN (
+			SELECT id, min(priority) AS priority FROM (
+				SELECT id, CASE WHEN w = ?2 THEN 0 WHEN w = ?2 COLLATE NOCASE THEN 1 ELSE 2 END AS priority
+					FROM entry WHERE wf = ?1 COLLATE NOCASE
+				UNION ALL
+				SELECT entry_id AS id, CASE WHEN w = ?2 THEN 0 WHEN w = ?2 COLLATE NOCASE THEN 1 ELSE 2 END AS priority
+					FROM alias WHERE wf = ?1 COLLATE NOCASE
+			) GROUP BY id ORDER BY priority, id LIMIT ?3
+		) m ON e.id = m.id ORDER BY m.priority, e.w COLLATE NOCASE, e.w`
+	rows, err := s.db.Query("EXPLAIN QUERY PLAN "+q, "corazon", "corazón", 10)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1468,16 +1506,36 @@ func TestExactUsesTheHeadwordIndexes(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := plan.String()
-	// The entry side is the one that matters and the one this asserts: its
-	// rows carry the article bodies, so scanning it reads the dictionary. The
-	// alias side is (w, entry_id) and this fixture holds two rows of it, which
-	// ANALYZE (ingest.go) correctly tells the planner to scan - asserting an
-	// index there would be asserting the fixture's size, not the query.
-	if !strings.Contains(got, "idx_entry_w") {
-		t.Errorf("Exact does not use idx_entry_w; plan:\n%s", got)
+	if !strings.Contains(got, "idx_entry_wf") {
+		t.Errorf("Exact does not use idx_entry_wf; plan:\n%s", got)
 	}
-	if strings.Contains(got, "SCAN e\n") || strings.Contains(got, "SCAN entry") {
+	if strings.Contains(got, "SCAN entry") {
 		t.Errorf("Exact full-scans entry; plan:\n%s", got)
+	}
+}
+
+func TestFoldedPrefixUsesTheHeadwordIndex(t *testing.T) {
+	s := testStore(t)
+	rows, err := s.db.Query(`EXPLAIN QUERY PLAN SELECT id FROM entry WHERE wf LIKE ? ESCAPE '\'`, "coraz%")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	var plan strings.Builder
+	for rows.Next() {
+		var id, parent, notused int
+		var detail string
+		if err := rows.Scan(&id, &parent, &notused, &detail); err != nil {
+			t.Fatal(err)
+		}
+		plan.WriteString(detail)
+		plan.WriteByte('\n')
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(plan.String(), "idx_entry_wf") {
+		t.Errorf("Folded prefix does not use idx_entry_wf; plan:\n%s", plan.String())
 	}
 }
 

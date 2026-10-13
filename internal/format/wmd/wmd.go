@@ -12,6 +12,7 @@ import (
 	"compress/gzip"
 	"io"
 	"path/filepath"
+	"sync"
 
 	"github.com/wuweidict/wudict/internal/dict"
 	"github.com/wuweidict/wudict/internal/resource"
@@ -80,6 +81,9 @@ func claim(head []byte) error {
 type Dict struct {
 	reader  *Reader
 	srcPath string
+	resOnce sync.Once
+	resMu   sync.Mutex
+	res     []resource.Source
 }
 
 func Open(path string) (*Dict, error) {
@@ -97,11 +101,30 @@ func (d *Dict) Prefix(string, int) ([]dict.Result, error) { return nil, dict.Err
 func (d *Dict) Keywords(int, int) []string                { return nil }
 
 func (d *Dict) Close() error {
+	d.resOnce.Do(func() {})
+	d.resMu.Lock()
+	for _, src := range d.res {
+		src.Close()
+	}
+	d.res = nil
+	d.resMu.Unlock()
 	return d.reader.Close()
 }
 
+func (d *Dict) sources() []resource.Source {
+	d.resOnce.Do(func() {
+		sources := MediaSources(d.srcPath)
+		d.resMu.Lock()
+		d.res = sources
+		d.resMu.Unlock()
+	})
+	d.resMu.Lock()
+	defer d.resMu.Unlock()
+	return d.res
+}
+
 func (d *Dict) Resource(name string) (io.ReadCloser, string, error) {
-	for _, src := range MediaSources(d.srcPath) {
+	for _, src := range d.sources() {
 		if rc, err := src.Open(name); err == nil {
 			return rc, resource.MIME(name), nil
 		}
@@ -113,7 +136,7 @@ func (d *Dict) Resource(name string) (io.ReadCloser, string, error) {
 // folder the file sits in contributes nothing, since an exact-path source
 // lists nothing (see dsl.Dict.Resources).
 func (d *Dict) Resources() []string {
-	return resource.ListAll(MediaSources(d.srcPath))
+	return resource.ListAll(d.sources())
 }
 
 func (d *Dict) PreviewBytes() int64 { return int64(d.reader.Meta().EntryCount) * 350 }

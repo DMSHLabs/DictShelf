@@ -264,6 +264,13 @@ func TestGDIndependentPreparation(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer second.Close()
+	// Direct opens do not create library indexes. Prepare each source through
+	// the same explicit path used by the application before checking ownership.
+	for _, source := range []string{p, comparison} {
+		if _, err := store.Reconcile(source, store.Target{}, store.Hooks{}); err != nil {
+			t.Fatal(err)
+		}
+	}
 	a, ok := store.LookupDir(p)
 	if !ok {
 		t.Fatal("missing current index")
@@ -325,8 +332,8 @@ func TestGDReaderGolden(t *testing.T) {
 		t.Fatal(err)
 	}
 	goldentest.Check(t, "dsl-gd", comparison, goldentest.Golden{
-		Versions: "reader=10 ingest=1 markup=2 fold=1",
-		Hash:     "a47a694580da48d7f1e5d3a3cb7be4a711507a90ecf2af2e1961984aee696127",
+		Versions: "reader=10 ingest=2 markup=2 fold=1",
+		Hash:     "32b123db3e625ef5bfe7b492c49a0bbb16919f821c18367958eb30169083b5bc",
 	})
 }
 

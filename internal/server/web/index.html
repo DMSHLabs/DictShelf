@@ -2847,12 +2847,14 @@ function renderReindex(){
     box.hidden=false;return;
   }
   const n=dicts.filter(d=>d.outdated).length,failed=st&&st.failed||[];
+  const diacriticsPending=dicts.some(d=>d.outdated&&d.diacriticsPending);
   if(!n&&!failed.length){box.hidden=true;box.innerHTML="";return}
-  box.innerHTML=(n?`<p>${esc(tx("dictUI.outdated",{number:n}))} <button type="button" class="btn" id="reindexGo">${esc(tx("dictUI.rebuild"))}</button></p>`:"")+
+  box.innerHTML=(n?`<p>${esc(tx("dictUI.outdated",{number:n}))} <button type="button" class="btn" id="reindexGo">${esc(tx("dictUI.rebuild"))}</button></p>${diacriticsPending?`<p>${esc(tx("dictUI.diacriticsPending"))}</p>`:""}`:"")+
     (failed.length?`<p class="cost">${esc(tx("dictUI.rebuildFailed",{errors:failed.join("; ")}))}</p>`:"");
   box.hidden=false;
   if(n&&dictsSettled){
-    notice.innerHTML=`<p>${esc(tx("dictUI.outdated",{number:n}))} <button type="button" class="btn" id="reindexMainGo">${esc(tx("dictUI.rebuild"))}</button></p>`;
+    notice.innerHTML=`<p>${esc(tx("dictUI.outdated",{number:n}))} <button type="button" class="btn" id="reindexMainGo">${esc(tx("dictUI.rebuild"))}</button></p>`+
+      (diacriticsPending?`<p>${esc(tx("dictUI.diacriticsPending"))}</p>`:"");
     notice.hidden=false;
   }
 }
