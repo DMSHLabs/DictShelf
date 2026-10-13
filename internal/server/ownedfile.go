@@ -79,6 +79,13 @@ func (f *ownedFile[T]) fresh() fileState[T] {
 	return f.getLocked(true)
 }
 
+func (f *ownedFile[T]) refresh() {
+	f.mu.Lock()
+	f.loaded = false
+	f.checked = time.Time{}
+	f.mu.Unlock()
+}
+
 func (f *ownedFile[T]) getLocked(force bool) fileState[T] {
 	p := f.path()
 	if p == "" {

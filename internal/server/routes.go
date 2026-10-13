@@ -93,6 +93,7 @@ func (s *Server) routes() []route {
 		{"POST", "/api/index-work", s.handleIndexWork, "/api/index-work", false},
 		{"DELETE", "/api/index-work", s.handleIndexWork, "/api/index-work", false},
 		{"GET", "/api/setup", s.handleSetup, "/api/setup", false},
+		{"POST", "/api/setup", s.handleSetup, "/api/setup", false},
 		{"GET", "/api/library", s.handleLibrary, "/api/library", false},
 		{"DELETE", "/api/library", s.handleRemoveLibrary, "/api/library", false},
 		// prepared dictionaries whose source is gone (orphans.go, D156): list

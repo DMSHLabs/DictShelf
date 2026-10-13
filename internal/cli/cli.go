@@ -451,9 +451,8 @@ ABOUT
 // fatal error must be shown in a dialog. headlessLog records where runtime
 // output went instead.
 var (
-	guiLaunch             bool
-	headlessLog           string
-	errMigrationCancelled = errors.New("data migration cancelled")
+	guiLaunch   bool
+	headlessLog string
 )
 
 // fail reports a fatal error and exits 1. One place, so the GUI case cannot be
@@ -464,9 +463,6 @@ func fail(err error) {
 	}
 	fmt.Fprintln(os.Stderr, "error:", err)
 	if guiLaunch {
-		if runtime.GOOS == "windows" {
-			closeStartupWindow()
-		}
 		msg := err.Error()
 		if headlessLog != "" {
 			msg += "\n\nDetails: " + headlessLog
@@ -492,9 +488,6 @@ func Main() {
 			defer release()
 		}
 		if err := prepareWindowsDataRoot(); err != nil {
-			if errors.Is(err, errMigrationCancelled) {
-				return
-			}
 			fail(err)
 			return
 		}
@@ -1215,9 +1208,6 @@ func cmdServe(args []string) (err error) {
 			tray.ShowConsole()
 		}
 	}
-	if gui && runtime.GOOS == "windows" && !cfg.NoBrowser {
-		showStartupWindow()
-	}
 	logx.V("config: source=%q dictDirs=%v dbDir=%q addr=%s speexdec=%s",
 		cfg.Source, cfg.DictDirs, cfg.DBDir, cfg.Addr(), cfg.Speexdec)
 	store.SetDBDir(cfg.DBDir)
@@ -1384,6 +1374,12 @@ Hint: pick another port with --port, e.g.:  wudict --port %s
 		logx.V("search memory budget: %d MB per query", cfg.SearchMemory>>20)
 	}
 	srv := server.New(reg)
+	if runtime.GOOS == "windows" {
+		srv.FirstRunMigrationStatus = legacyMigrationStatus
+		srv.ApplyFirstRunMigration = func(action string) error {
+			return applyLegacyMigration(action, reg, srv.RefreshMigratedUserFiles)
+		}
+	}
 	srv.UseUserGroups()
 	srv.ConfigPath = cfgFile
 	srv.User = user
