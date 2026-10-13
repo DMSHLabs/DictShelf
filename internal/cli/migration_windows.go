@@ -136,7 +136,7 @@ func applyLegacyMigration(action string, reg *server.Registry, refresh func()) e
 	if err != nil {
 		return fmt.Errorf("could not load imported dictionary folders: %w", err)
 	}
-	if err := reg.SetDirs(cfg.DictDirs); err != nil {
+	if err := reg.SetDirsDeferred(cfg.DictDirs); err != nil {
 		return fmt.Errorf("could not open imported dictionary folders: %w", err)
 	}
 	if action == "move" {
@@ -207,25 +207,23 @@ func importLegacyData(oldRoot, newRoot string, forked bool) error {
 	if err := os.MkdirAll(newRoot, 0o755); err != nil {
 		return fmt.Errorf("cannot create ~/.wuDict2: %w", err)
 	}
-	var rollbackNames []string
+	var createdPaths []string
 	rollback := func() {
-		for _, name := range rollbackNames {
-			_ = os.RemoveAll(filepath.Join(newRoot, name))
+		for i := len(createdPaths) - 1; i >= 0; i-- {
+			_ = os.Remove(createdPaths[i])
 		}
 	}
 	if forked {
-		if err := copyMigrationItems(oldRoot, newRoot, legacyForkItems); err != nil {
+		if err := copyMigrationItems(oldRoot, newRoot, legacyForkItems, &createdPaths); err != nil {
 			return err
 		}
-		rollbackNames = append(rollbackNames, legacyForkItems...)
 	}
 	lemmaTarget := filepath.Join(newRoot, "lemmas")
 	if info, err := os.Stat(lemmaSource); err == nil && info.IsDir() {
-		if err := copyMigrationPath(lemmaSource, lemmaTarget); err != nil {
+		if err := copyMigrationPathTracked(lemmaSource, lemmaTarget, &createdPaths); err != nil {
 			rollback()
 			return fmt.Errorf("could not copy lemma files: %w", err)
 		}
-		rollbackNames = append(rollbackNames, "lemmas")
 	} else if err != nil && !os.IsNotExist(err) {
 		rollback()
 		return fmt.Errorf("cannot inspect lemma folder %s: %w", lemmaSource, err)
@@ -349,14 +347,13 @@ func stopLegacyWindowsServer(oldRoot string) error {
 	return fmt.Errorf("wuDict accepted the stop request but is still using its files. Close wuDict and try again")
 }
 
-func copyMigrationItems(from, to string, names []string) error {
+func copyMigrationItems(from, to string, names []string, created *[]string) error {
 	if err := os.MkdirAll(to, 0o755); err != nil {
 		return fmt.Errorf("cannot create ~/.wuDict2: %w", err)
 	}
-	var completed []string
 	rollback := func() {
-		for _, name := range completed {
-			_ = os.RemoveAll(filepath.Join(to, name))
+		for i := len(*created) - 1; i >= 0; i-- {
+			_ = os.Remove((*created)[i])
 		}
 	}
 	for _, name := range names {
@@ -368,18 +365,15 @@ func copyMigrationItems(from, to string, names []string) error {
 			return fmt.Errorf("cannot inspect %s: %w", src, err)
 		}
 		dst := filepath.Join(to, name)
-		if err := copyMigrationPath(src, dst); err != nil {
-			_ = os.RemoveAll(dst)
+		if err := copyMigrationPathTracked(src, dst, created); err != nil {
 			rollback()
-			_ = os.Remove(to)
 			return fmt.Errorf("could not copy %s: %w. The old data is unchanged", name, err)
 		}
-		completed = append(completed, name)
 	}
 	return nil
 }
 
-func copyMigrationPath(from, to string) error {
+func copyMigrationPathTracked(from, to string, created *[]string) error {
 	info, err := os.Lstat(from)
 	if err != nil {
 		return err
@@ -389,11 +383,28 @@ func copyMigrationPath(from, to string) error {
 		if err != nil {
 			return err
 		}
-		return os.Symlink(link, to)
+		if _, err := os.Lstat(to); err == nil {
+			return nil
+		} else if !os.IsNotExist(err) {
+			return err
+		}
+		if err := os.Symlink(link, to); err != nil {
+			if os.IsExist(err) {
+				return nil
+			}
+			return err
+		}
+		*created = append(*created, to)
+		return nil
 	}
 	if !info.IsDir() {
 		if !info.Mode().IsRegular() {
 			return errors.New("unsupported file type")
+		}
+		if _, err := os.Lstat(to); err == nil {
+			return nil
+		} else if !os.IsNotExist(err) {
+			return err
 		}
 		in, err := os.Open(from)
 		if err != nil {
@@ -402,31 +413,49 @@ func copyMigrationPath(from, to string) error {
 		defer in.Close()
 		out, err := os.OpenFile(to, os.O_CREATE|os.O_EXCL|os.O_WRONLY, info.Mode().Perm())
 		if err != nil {
+			if os.IsExist(err) {
+				return nil
+			}
 			return err
 		}
+		*created = append(*created, to)
 		_, copyErr := io.Copy(out, in)
 		closeErr := out.Close()
 		if copyErr != nil {
-			_ = os.Remove(to)
 			return copyErr
 		}
 		if closeErr != nil {
-			_ = os.Remove(to)
 			return closeErr
 		}
 		return os.Chtimes(to, info.ModTime(), info.ModTime())
 	}
+	createdDir := false
 	if err := os.Mkdir(to, info.Mode().Perm()); err != nil {
-		return err
+		if !os.IsExist(err) {
+			return err
+		}
+		destInfo, statErr := os.Lstat(to)
+		if statErr != nil {
+			return statErr
+		}
+		if !destInfo.IsDir() {
+			return fmt.Errorf("destination exists and is not a folder: %s", to)
+		}
+	} else {
+		*created = append(*created, to)
+		createdDir = true
 	}
 	entries, err := os.ReadDir(from)
 	if err != nil {
 		return err
 	}
 	for _, entry := range entries {
-		if err := copyMigrationPath(filepath.Join(from, entry.Name()), filepath.Join(to, entry.Name())); err != nil {
+		if err := copyMigrationPathTracked(filepath.Join(from, entry.Name()), filepath.Join(to, entry.Name()), created); err != nil {
 			return err
 		}
 	}
-	return os.Chtimes(to, info.ModTime(), info.ModTime())
+	if createdDir {
+		return os.Chtimes(to, info.ModTime(), info.ModTime())
+	}
+	return nil
 }

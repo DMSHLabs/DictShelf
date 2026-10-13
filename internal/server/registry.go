@@ -1032,6 +1032,16 @@ func (r *Registry) SetDirs(dirs []string) error {
 	return nil
 }
 
+// SetDirsDeferred updates the discovered folder list without starting index
+// preparation. The folder editor uses this when it needs to show imported
+// paths for review before the user chooses Use these folders.
+func (r *Registry) SetDirsDeferred(dirs []string) error {
+	r.mu.Lock()
+	r.dictDirs = dict.DedupeDirs(dirs)
+	r.mu.Unlock()
+	return r.rescan(false)
+}
+
 // Rescan re-discovers dictionaries, keeping already-open entries.
 func (r *Registry) Rescan() error {
 	return r.rescan(true)
