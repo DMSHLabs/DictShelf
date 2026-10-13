@@ -532,6 +532,9 @@ window.wudictFontScale=(function(){
     <a class="mrow door" id="browseLink" href="/browse" title="{{T:panel.browseHint}}">{{T:panel.browse}}</a>
   </div>
   <div class="facts">
+    <label class="rowlabel" title="{{T:panel.ignoreDiacriticsHint}}"><input type="checkbox" id="ignoreDiacritics"> {{T:panel.ignoreDiacritics}}</label>
+  </div>
+  <div class="facts">
     <label class="rowlabel" for="headwordApplyThreshold">{{T:panel.headwordApplyThreshold}}</label>
     <select id="headwordApplyThreshold" aria-label="{{T:panel.headwordApplyThreshold}}">
       <option value="0">0</option><option value="10000">10k</option><option value="50000">50k</option>
@@ -1254,7 +1257,7 @@ window.wuSearchHistory.setSuggest((q,onHit,signal)=>{
   if(ids&&!ids.length)return;
   const dict=ids?ids.join(","):sel,n=ids?(ids.length===1?25:5):25;
   return fetchStream("/api/search?q="+encodeURIComponent(q)+"&mode="+mode+
-    "&hl=0&dict="+encodeURIComponent(dict)+"&n="+n,msg=>{
+    "&hl=0"+diacriticsSearchParam()+"&dict="+encodeURIComponent(dict)+"&n="+n,msg=>{
       if(msg.t==="hit")onHit(msg.results,mode);
     },signal);
 });
@@ -1610,6 +1613,14 @@ function applyFW(w,save){
    field is even enabled — loadPrefs settles before loadDicts, which is what
    ungreys the input — so no query can go out under the wrong setting. */
 let hlOn=true;
+let ignoreDiacritics=localStorage.getItem("wudict_ignore_diacritics")==="1";
+$("ignoreDiacritics").checked=ignoreDiacritics;
+$("ignoreDiacritics").addEventListener("change",e=>{
+  ignoreDiacritics=e.target.checked;
+  localStorage.setItem("wudict_ignore_diacritics",ignoreDiacritics?"1":"0");
+  if($("q").value.trim()&&["exact","prefix","contains"].includes($("mode").value))doSearch();
+});
+const diacriticsSearchParam=()=>"&ignoreDiacritics="+(ignoreDiacritics?1:0);
 function applyHL(on,save){
   const v=!!on,moved=v!==hlOn;
   hlOn=v;
@@ -4987,7 +4998,7 @@ function loadDeferred(det,box,h,mode,q){
   const cnt=det.querySelector(".count");
   if(cnt)cnt.innerHTML='<span class="spin"></span>'+esc(tx("search.searching"));
   let shown=false;
-  fetchStream("/api/search?q="+encodeURIComponent(q)+"&mode="+mode+"&hl="+(hlOn?1:0)+"&dict="+encodeURIComponent(h.dict)+"&n=25",msg=>{
+  fetchStream("/api/search?q="+encodeURIComponent(q)+"&mode="+mode+"&hl="+(hlOn?1:0)+diacriticsSearchParam()+"&dict="+encodeURIComponent(h.dict)+"&n=25",msg=>{
     // The user has moved on: a new search replaced every box, so this one is
     // detached and writing into it would paint nothing at a cost.
     if(msg.t!=="hit"||!box.isConnected)return;
@@ -6114,7 +6125,7 @@ async function doSearch(ev){
   let morphNote=null,morphAll=null;const morphSeen=new Set();
   const swap=()=>{if(stale){for(const n of stale)n.remove();stale=null}};
   try{
-    await fetchStream("/api/search?q="+encodeURIComponent(q)+"&mode="+mode+"&hl="+(hlOn?1:0)+"&dict="+encodeURIComponent(dictParam)+"&n="+perDict,msg=>{
+    await fetchStream("/api/search?q="+encodeURIComponent(q)+"&mode="+mode+"&hl="+(hlOn?1:0)+diacriticsSearchParam()+"&dict="+encodeURIComponent(dictParam)+"&n="+perDict,msg=>{
       if(seq!==searchSeq)return; // superseded by a newer search
       if(msg.t==="begin"){
         navDetach(); // the section it was walking is about to be replaced
@@ -6250,7 +6261,7 @@ document.addEventListener("click",e=>{
   e.preventDefault();
   const det=more.closest("details.dict"),box=det.parentElement,id=more.dataset.id,mode=$("mode").value;
   more.textContent="…";
-  fetchStream("/api/search?q="+encodeURIComponent(lastQuery)+"&mode="+mode+"&hl="+(hlOn?1:0)+"&dict="+id+"&n=100",msg=>{
+  fetchStream("/api/search?q="+encodeURIComponent(lastQuery)+"&mode="+mode+"&hl="+(hlOn?1:0)+diacriticsSearchParam()+"&dict="+id+"&n=100",msg=>{
     if(msg.t==="hit"){renderSlot(box,msg,mode,lastQuery,1e9);const nd=box.querySelector("details.dict");if(nd)nd.open=true}
   }).catch(()=>{more.textContent=tx("search.more")});
 });

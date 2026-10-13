@@ -451,8 +451,9 @@ ABOUT
 // fatal error must be shown in a dialog. headlessLog records where runtime
 // output went instead.
 var (
-	guiLaunch   bool
-	headlessLog string
+	guiLaunch             bool
+	headlessLog           string
+	errMigrationCancelled = errors.New("data migration cancelled")
 )
 
 // fail reports a fatal error and exits 1. One place, so the GUI case cannot be
@@ -463,6 +464,9 @@ func fail(err error) {
 	}
 	fmt.Fprintln(os.Stderr, "error:", err)
 	if guiLaunch {
+		if runtime.GOOS == "windows" {
+			closeStartupWindow()
+		}
 		msg := err.Error()
 		if headlessLog != "" {
 			msg += "\n\nDetails: " + headlessLog
@@ -486,6 +490,13 @@ func Main() {
 		}
 		if release != nil {
 			defer release()
+		}
+		if err := prepareWindowsDataRoot(); err != nil {
+			if errors.Is(err, errMigrationCancelled) {
+				return
+			}
+			fail(err)
+			return
 		}
 	}
 
@@ -1203,6 +1214,9 @@ func cmdServe(args []string) (err error) {
 			// Restore a hidden console-subsystem helper if the log is unavailable.
 			tray.ShowConsole()
 		}
+	}
+	if gui && runtime.GOOS == "windows" && !cfg.NoBrowser {
+		showStartupWindow()
 	}
 	logx.V("config: source=%q dictDirs=%v dbDir=%q addr=%s speexdec=%s",
 		cfg.Source, cfg.DictDirs, cfg.DBDir, cfg.Addr(), cfg.Speexdec)

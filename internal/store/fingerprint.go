@@ -118,6 +118,44 @@ func Fingerprint(textDB string) (string, error) {
 			return "", err
 		}
 	}
+	if s.hasCaseKey {
+		field("case keys")
+		rows, err := s.db.Query("SELECT wc FROM entry ORDER BY id")
+		if err != nil {
+			return "", err
+		}
+		for rows.Next() {
+			var key string
+			if err := rows.Scan(&key); err != nil {
+				rows.Close()
+				return "", err
+			}
+			field(key)
+		}
+		err = rows.Err()
+		rows.Close()
+		if err != nil {
+			return "", err
+		}
+		field("alias case keys")
+		rows, err = s.db.Query("SELECT wc FROM alias ORDER BY entry_id, w, wf")
+		if err != nil {
+			return "", err
+		}
+		for rows.Next() {
+			var key string
+			if err := rows.Scan(&key); err != nil {
+				rows.Close()
+				return "", err
+			}
+			field(key)
+		}
+		err = rows.Err()
+		rows.Close()
+		if err != nil {
+			return "", err
+		}
+	}
 
 	for _, fts := range []string{"entry_fts", "entry_trigram"} {
 		if fts == "entry_trigram" && !s.hasTrigram {
