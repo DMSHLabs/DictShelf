@@ -7,3 +7,9 @@
 package cli
 
 func acquireProcessLock() (func(), error) { return nil, nil }
+
+func prepareWindowsDataRoot() error { return nil }
+
+func showStartupWindow() {}
+
+func closeStartupWindow() {}

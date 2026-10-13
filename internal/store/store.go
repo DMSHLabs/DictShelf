@@ -59,6 +59,7 @@ type Store struct {
 	hasTrigram bool   // entry_trigram present → "contains" substring search
 	staleFold  bool   // folded keys or trigram built by another dict.FoldVersion
 	hasFolded  bool   // prepared with indexed folded headwords and aliases
+	hasCaseKey bool   // prepared with indexed accent-preserving case keys
 	uuid       string // dict_uuid: what a sibling media.db must match
 
 	// The sibling media.db is opened on the first resource that asks for one,
@@ -180,6 +181,7 @@ func Open(path string) (*Store, error) {
 	}
 	s.ftsOK = PlanFromMeta(m).FullText
 	s.hasFolded = stampOf(m, "ingest_version", 1) >= 2
+	s.hasCaseKey = stampOf(m, "ingest_version", 1) >= 3
 	s.srcPath = m["source_path"]
 	// feature-detect the trigram "contains" index rather than gating on
 	// schema version, so older .text.db (and standalone native dicts whose
@@ -340,12 +342,19 @@ func (s *Store) Exact(word string, limit int) ([]dict.Result, error) {
 	return s.ExactContext(context.Background(), word, limit)
 }
 
+type ignoreDiacriticsKey struct{}
+
+// WithIgnoreDiacritics selects the folded headword index for this search.
+func WithIgnoreDiacritics(ctx context.Context) context.Context {
+	return context.WithValue(ctx, ignoreDiacriticsKey{}, true)
+}
+
 func (s *Store) Prefix(word string, limit int) ([]dict.Result, error) {
 	return s.PrefixContext(context.Background(), word, limit)
 }
 
-// ExactContext returns entries (and alias targets) whose folded headword
-// equals word. Older prepared databases keep their original fallback.
+// ExactContext selects the folded or accent-preserving key from the request.
+// Older databases retain their original fallback.
 func (s *Store) ExactContext(ctx context.Context, word string, limit int) ([]dict.Result, error) {
 	word = strings.TrimSpace(word)
 	if word == "" {
@@ -353,16 +362,18 @@ func (s *Store) ExactContext(ctx context.Context, word string, limit int) ([]dic
 	}
 	n := clamp(limit)
 	if s.hasFolded {
-		return s.collect(s.db.QueryContext(ctx, `
+		column, key := s.headwordSearchKey(ctx, word)
+		query := strings.ReplaceAll(`
 			SELECT e.w, e.m FROM entry e JOIN (
 				SELECT id, min(priority) AS priority FROM (
 					SELECT id, CASE WHEN w = ?2 THEN 0 WHEN w = ?2 COLLATE NOCASE THEN 1 ELSE 2 END AS priority
-						FROM entry WHERE wf = ?1 COLLATE NOCASE
+						FROM entry WHERE @KEY@ = ?1 COLLATE NOCASE
 					UNION ALL
 					SELECT entry_id AS id, CASE WHEN w = ?2 THEN 0 WHEN w = ?2 COLLATE NOCASE THEN 1 ELSE 2 END AS priority
-						FROM alias WHERE wf = ?1 COLLATE NOCASE
+						FROM alias WHERE @KEY@ = ?1 COLLATE NOCASE
 				) GROUP BY id ORDER BY priority, id LIMIT ?3
-			) m ON e.id = m.id ORDER BY m.priority, e.w COLLATE NOCASE, e.w`, dict.Fold(word), word, n))
+			) m ON e.id = m.id ORDER BY m.priority, e.w COLLATE NOCASE, e.w`, "@KEY@", column)
+		return s.collect(s.db.QueryContext(ctx, query, key, word, n))
 	}
 	// Both passes compare COLLATE NOCASE because that is the collation the
 	// only indexes on these columns are built with (ingest.go): a bare
@@ -450,7 +461,8 @@ func buildExactMatch(input, column string) string {
 }
 
 // PrefixContext returns headwords starting with word, ordered by the matching
-// key. Current databases use indexed folded keys; older ones retain FTS fallback.
+// key. Current databases use the indexed key selected by the request;
+// older ones retain their original FTS fallback.
 //
 // The exact match is NOT a short-circuit: "starts with" must not answer a
 // complete headword with that one article and drop every longer key under it.
@@ -482,7 +494,7 @@ func (s *Store) PrefixContext(ctx context.Context, word string, limit int) ([]di
 	}
 	n := clamp(limit)
 	if s.hasFolded {
-		return s.foldedPrefix(ctx, word, n)
+		return s.indexedPrefix(ctx, word, n)
 	}
 	pat := escapeLike(word) + "%"
 	// GROUP BY id, not UNION: an entry its own headword AND an alias match is
@@ -511,18 +523,27 @@ func (s *Store) PrefixContext(ctx context.Context, word string, limit int) ([]di
 	return s.fuzzy(ctx, word, n)
 }
 
-func (s *Store) foldedPrefix(ctx context.Context, word string, n int) ([]dict.Result, error) {
-	pat := escapeLike(dict.Fold(word)) + "%"
-	return s.collect(s.db.QueryContext(ctx, `
+func (s *Store) indexedPrefix(ctx context.Context, word string, n int) ([]dict.Result, error) {
+	column, key := s.headwordSearchKey(ctx, word)
+	pat := escapeLike(key) + "%"
+	query := strings.ReplaceAll(`
 		SELECT e.w, e.m FROM entry e JOIN (
 			SELECT id, min(k) AS k, min(priority) AS priority FROM (
-				SELECT e2.id AS id, e2.wf AS k, CASE WHEN e2.w = ?2 THEN 0 ELSE 1 END AS priority FROM entry e2
-					WHERE e2.wf LIKE ?1 ESCAPE '\'`+subEntryFilter("e2.w")+`
+				SELECT e2.id AS id, e2.@KEY@ AS k, CASE WHEN e2.w = ?2 THEN 0 ELSE 1 END AS priority FROM entry e2
+					WHERE e2.@KEY@ LIKE ?1 ESCAPE '\'`+subEntryFilter("e2.w")+`
 				UNION ALL
-				SELECT e3.id AS id, a.wf AS k, CASE WHEN a.w = ?2 THEN 0 ELSE 1 END AS priority FROM alias a JOIN entry e3 ON e3.id = a.entry_id
-					WHERE a.wf LIKE ?1 ESCAPE '\'`+subEntryFilter("a.w")+`
+				SELECT e3.id AS id, a.@KEY@ AS k, CASE WHEN a.w = ?2 THEN 0 ELSE 1 END AS priority FROM alias a JOIN entry e3 ON e3.id = a.entry_id
+					WHERE a.@KEY@ LIKE ?1 ESCAPE '\'`+subEntryFilter("a.w")+`
 			) GROUP BY id ORDER BY k, priority LIMIT ?3
-		) m ON e.id = m.id ORDER BY m.k, m.priority, e.w COLLATE NOCASE, e.w`, pat, word, n))
+		) m ON e.id = m.id ORDER BY m.k, m.priority, e.w COLLATE NOCASE, e.w`, "@KEY@", column)
+	return s.collect(s.db.QueryContext(ctx, query, pat, word, n))
+}
+
+func (s *Store) headwordSearchKey(ctx context.Context, word string) (column, key string) {
+	if s.hasCaseKey && ctx.Value(ignoreDiacriticsKey{}) != true {
+		return "wc", dict.CaseKey(word)
+	}
+	return "wf", dict.Fold(word)
 }
 
 // fuzzy is the accent/case-insensitive prefix-phrase engine (FTS5 unicode61
@@ -538,11 +559,10 @@ func (s *Store) fuzzy(ctx context.Context, word string, limit int) ([]dict.Resul
 		WHERE entry_fts MATCH ?1`+subEntryFilter("e.w")+`ORDER BY e.w LIMIT ?2`, match, clamp(limit)))
 }
 
-// ContainsContext is the substring/typo-tolerant headword mode, backed by the FTS5
-// trigram index over accent/case-folded headwords. The trigram tokenizer
-// needs at least 3 characters; shorter queries fall back to a folded LIKE.
-// Ordered by headword. Requires a trigram-indexed database (re-ingest older
-// ones); unsupported otherwise.
+// ContainsContext uses the folded trigram index to narrow candidates, then
+// checks the selected headword key so the diacritic setting also applies to
+// substrings. Queries shorter than three runes scan that key directly.
+// Requires a dictionary with its optional Contains index enabled.
 func (s *Store) ContainsContext(ctx context.Context, word string, limit int) ([]dict.Result, error) {
 	word = strings.TrimSpace(word)
 	if word == "" {
@@ -556,20 +576,31 @@ func (s *Store) ContainsContext(ctx context.Context, word string, limit int) ([]
 		return nil, nil
 	}
 	n := clamp(limit)
+	if !s.hasCaseKey {
+		if len([]rune(folded)) >= 3 {
+			phrase := `"` + strings.ReplaceAll(folded, `"`, `""`) + `"`
+			res, err := s.collect(s.db.QueryContext(ctx, `
+				SELECT e.w, e.m FROM entry_trigram t JOIN entry e ON e.id = t.rowid
+				WHERE entry_trigram MATCH ?1`+subEntryFilter("e.w")+`ORDER BY e.w LIMIT ?2`, phrase, n))
+			if err != nil || len(res) > 0 {
+				return res, err
+			}
+		}
+		return s.collect(s.db.QueryContext(ctx, `SELECT e.w, e.m FROM entry e WHERE e.w LIKE ?1 ESCAPE '\'`+
+			subEntryFilter("e.w")+`ORDER BY e.w LIMIT ?2`, "%"+escapeLike(word)+"%", n))
+	}
+	column, key := s.headwordSearchKey(ctx, word)
 	if len([]rune(folded)) >= 3 {
 		phrase := `"` + strings.ReplaceAll(folded, `"`, `""`) + `"`
-		res, err := s.collect(s.db.QueryContext(ctx, `
+		query := strings.ReplaceAll(`
 			SELECT e.w, e.m FROM entry_trigram t JOIN entry e ON e.id = t.rowid
-			WHERE entry_trigram MATCH ?1`+subEntryFilter("e.w")+`ORDER BY e.w LIMIT ?2`, phrase, n))
-		if err != nil || len(res) > 0 {
-			return res, err
-		}
+			WHERE entry_trigram MATCH ?1 AND instr(e.@KEY@, ?2) > 0`+subEntryFilter("e.w")+`ORDER BY e.w LIMIT ?3`, "@KEY@", column)
+		return s.collect(s.db.QueryContext(ctx, query, phrase, key, n))
 	}
-	// short query (< 3 chars) or trigram miss: LIKE substring on the raw
-	// headword (accent-sensitive - acceptable for the <3-char contains edge).
-	return s.collect(s.db.QueryContext(ctx, `
-		SELECT e.w, e.m FROM entry e WHERE e.w LIKE ?1 ESCAPE '\'`+subEntryFilter("e.w")+`ORDER BY e.w LIMIT ?2`,
-		"%"+escapeLike(word)+"%", n))
+	// Short queries have no usable trigrams and scan the selected key.
+	query := strings.ReplaceAll(`SELECT e.w, e.m FROM entry e WHERE instr(e.@KEY@, ?1) > 0`+
+		subEntryFilter("e.w")+`ORDER BY e.w LIMIT ?2`, "@KEY@", column)
+	return s.collect(s.db.QueryContext(ctx, query, key, n))
 }
 
 // MaskContext walks existing headwords and filters them with a wildcard mask.

@@ -38,7 +38,7 @@ import (
 // which case a token can still be supplied by AUTH_TOKEN.
 func TokenPath() string {
 	if h := homeDir(); h != "" {
-		return filepath.Join(h, ".wudict", "token")
+		return filepath.Join(userDataDir(h), "token")
 	}
 	return ""
 }

@@ -38,7 +38,7 @@ import (
 // IngestVersion identifies IngestPlan's behaviour. Bump it in the same commit
 // as any change to what an ingest writes for the same Reader output; the
 // golden tests in the format packages fail on such a change and say so.
-const IngestVersion = 2
+const IngestVersion = 3
 
 // MediaVersion identifies IngestMedia's behaviour, bumped the same way.
 const MediaVersion = 1

@@ -159,6 +159,7 @@ const (
 
 func defaults() Config {
 	home, _ := os.UserHomeDir()
+	appHome := userDataDir(home)
 	return Config{
 		DictDirs: []string{filepath.Join(home, "Dictionaries")},
 		DBDir:    "", // empty = store.DefaultDBDir()
@@ -167,7 +168,7 @@ func defaults() Config {
 		// Speexdec "" = auto-detect at launch (next to the executable, then
 		// $PATH); SPEEXDEC overrides. See resolveSpeexdec in the CLI.
 		Speexdec:     "",
-		SpeexBackend: "internal",  // in-process libspeex (cgo); "external" = speexdec binary
+		SpeexBackend: "internal", // in-process libspeex (cgo); "external" = speexdec binary
 		ImportKeep:   ImportKeepAsk,
 		// Nil: any site (D139). Dictionaries come from wherever the user
 		// found them, and the link is one they handed over deliberately.
@@ -179,7 +180,7 @@ func defaults() Config {
 		MemoryLimit:   memoryLimitDefault(),
 		SearchMemory:  searchMemoryDefault(),
 		MorphCache:    morphCacheDefault(),
-		LemmaDir:      filepath.Join(home, ".wudict", "lemmas"),
+		LemmaDir:      filepath.Join(appHome, "lemmas"),
 		// off by default: see the field comment - loopback deletes regardless,
 		// so this only ever opens the LAN case, and that is opt-in.
 		AllowRemoteDelete: false,
@@ -374,9 +375,18 @@ var (
 // beside the library that directory already holds.
 func HomeConfig() string {
 	if h := homeDir(); h != "" {
-		return filepath.Join(h, ".wudict", Name)
+		return filepath.Join(userDataDir(h), Name)
 	}
 	return ""
+}
+
+// userDataDir is the per-user data root. Windows wuDict2 sets WUDICT_HOME to
+// keep its files separate from the upstream wuDict installation.
+func userDataDir(home string) string {
+	if root := os.Getenv("WUDICT_HOME"); root != "" {
+		return root
+	}
+	return filepath.Join(home, ".wudict")
 }
 
 // candidates returns the search order: next to the executable (portable mode,

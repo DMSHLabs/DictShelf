@@ -103,10 +103,10 @@ func TestOutdatedReaderVersion(t *testing.T) {
 		meta map[string]string
 		want []Reason
 	}{
-		{map[string]string{"format": "stale-test-fmt", "reader_version": "3", "ingest_version": "2"}, nil},
-		{map[string]string{"format": "stale-test-fmt", "reader_version": "2", "ingest_version": "2"}, []Reason{ReasonReader}},
-		{map[string]string{"format": "stale-test-fmt", "ingest_version": "2"}, []Reason{ReasonReader}}, // unstamped reader = 1
-		{map[string]string{"format": "unregistered-fmt", "reader_version": "1", "ingest_version": "2"}, nil},
+		{map[string]string{"format": "stale-test-fmt", "reader_version": "3", "ingest_version": "3"}, nil},
+		{map[string]string{"format": "stale-test-fmt", "reader_version": "2", "ingest_version": "3"}, []Reason{ReasonReader}},
+		{map[string]string{"format": "stale-test-fmt", "ingest_version": "3"}, []Reason{ReasonReader}}, // unstamped reader = 1
+		{map[string]string{"format": "unregistered-fmt", "reader_version": "1", "ingest_version": "3"}, nil},
 	}
 	for _, c := range cases {
 		if got := Outdated(c.meta); !reflect.DeepEqual(got, c.want) {

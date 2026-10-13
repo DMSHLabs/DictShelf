@@ -1154,7 +1154,7 @@ func (s *Server) baseDictInfo(e *entry) dictInfo {
 
 func needsFoldedReindex(meta map[string]string) bool {
 	version, err := strconv.Atoi(meta["ingest_version"])
-	return err != nil || version < 2 || store.FoldStale(meta)
+	return err != nil || version < 3 || store.FoldStale(meta)
 }
 
 // langFacts derives one row's picker groups and the language its articles are
@@ -1585,6 +1585,9 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), budget)
 	defer cancel()
+	if ignore, _ := queryFlag(r.URL.Query(), "ignoreDiacritics"); ignore {
+		ctx = store.WithIgnoreDiacritics(ctx)
+	}
 	// Metas are kept because each carries the dictionary's declared language,
 	// and the morphology wave needs it. Nothing is opened to obtain them: the
 	// search callback is invoked for EVERY dictionary, hit or miss.

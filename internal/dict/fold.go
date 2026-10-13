@@ -34,3 +34,16 @@ func Fold(s string) string {
 	}
 	return b.String()
 }
+
+// HasDiacritics reports combining marks, including marks in precomposed text.
+func HasDiacritics(s string) bool {
+	for _, r := range norm.NFD.String(s) {
+		if unicode.Is(unicode.Mn, r) {
+			return true
+		}
+	}
+	return false
+}
+
+// CaseKey keeps diacritics while normalising Unicode spelling and case.
+func CaseKey(s string) string { return norm.NFC.String(strings.ToLower(norm.NFC.String(s))) }
