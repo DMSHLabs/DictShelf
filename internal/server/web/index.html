@@ -6387,6 +6387,12 @@ function lookupSelection(text){
    collected before it plays. Playback decodes by Content-Type, not the URL
    extension, so a .spx URL served as audio/wav plays fine. */
 let audioEl=null;
+/* Same safety boundary as htmlref.playable and frame.js playableHref. */
+function playableHref(h){
+  if(!h||/^[#?]/.test(h))return false;
+  const m=/^([^:\/?#]*):/.exec(h);
+  return !m||/^https?$/i.test(m[1])||/^data:audio\//i.test(h);
+}
 function playAudio(url){
   if(!url)return;
   if(!audioEl)audioEl=new Audio();
@@ -6778,8 +6784,8 @@ document.addEventListener("click",e=>{
     // below: `entry://…mp3` names a headword, not a file.
     if(parseRef(href))return;
     const dictID=path.find(el=>el.classList?.contains("article"))?.dataset.dict;
-    if(/\.(mp3|ogg|wav|spx|m4a)(\?|#|$)/i.test(href))
-      url=href.startsWith("/res/")||/^https?:/i.test(href)?href:resURL(dictID,href);
+    if(a.classList.contains("wu-audio")&&playableHref(href)||/\.(mp3|ogg|wav|spx|m4a)(\?|#|$)/i.test(href))
+      url=/^(\/res\/|\/\/|https?:|data:)/i.test(href)?href:resURL(dictID,href);
     else if(a.querySelector("img")&&href.startsWith("/res/"))url=href;
   }
   if(!url)return;

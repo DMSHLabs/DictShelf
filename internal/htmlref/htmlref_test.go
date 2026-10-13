@@ -45,6 +45,30 @@ func TestRoundTripPreservesWellFormedMarkup(t *testing.T) {
 	}
 }
 
+func TestPlayLinks(t *testing.T) {
+	rw := Rewriter{PlayLinks: true, URL: func(r Ref) string {
+		if r.URL == "0hwd/bre/7/aeroplane0205.mp3" {
+			return "/res/dict/" + r.URL
+		}
+		return r.URL
+	}}
+	cases := []struct{ in, want string }{
+		{`<audio src="0hwd/bre/7/aeroplane0205.mp3"><img src="img/spkr_r.png"></audio>`, `<a class="wu-audio" href="/res/dict/0hwd/bre/7/aeroplane0205.mp3"><img src="img/spkr_r.png"></a>`},
+		{`<audio src="voice.mp3"><img src="spkr.png"></audio>`, `<a class="wu-audio" href="voice.mp3"><img src="spkr.png"></a>`},
+		{`<audio controls src="a.mp3"><img src="spkr.png"></audio>`, `<audio controls src="a.mp3"><img src="spkr.png"></audio>`},
+		{`<audio src="javascript:alert(1)"><img src="spkr.png"></audio>`, `<audio src="javascript:alert(1)"><img src="spkr.png"></audio>`},
+		{`<audio src="a.mp3" onplay="x()"><img src="spkr.png"></audio>`, `<audio src="a.mp3" onplay="x()"><img src="spkr.png"></audio>`},
+		{`<audio src="a.mp3"><a href="x">x</a><img src="spkr.png"></audio>`, `<audio src="a.mp3"><a href="x">x</a><img src="spkr.png"></audio>`},
+		{`<audio src="a.mp3"><div><img src="spkr.png"></div>`, `<audio src="a.mp3"><div><img src="spkr.png"></div>`},
+		{`<audio src="a.mp3"><span>say <b>it</b></span><img src="spkr.png"></audio>`, `<a class="wu-audio" href="a.mp3"><span>say <b>it</b></span><img src="spkr.png"></a>`},
+	}
+	for _, tc := range cases {
+		if got := rw.Rewrite(tc.in); got != tc.want {
+			t.Errorf("Rewrite(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
 // The same guarantee against whole real articles, which is where the
 // pathological markup actually lives. Fixtures are optional: the paths come
 // from the same env vars the Makefile already sets for the format tests.

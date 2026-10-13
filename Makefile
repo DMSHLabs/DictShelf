@@ -134,6 +134,14 @@ APP_DEST    ?= $(HOME)/Applications
 MACOS_MIN   ?= 12.0
 CODESIGN_ID ?= -
 
+# clang otherwise stamps cgo objects with the host macOS release. The build
+# cache keys on these flags as well as the environment target.
+ifeq ($(shell uname),Darwin)
+build: export MACOSX_DEPLOYMENT_TARGET = $(MACOS_MIN)
+build: export CGO_CFLAGS ?= -O2 -g -mmacosx-version-min=$(MACOS_MIN)
+build: export CGO_LDFLAGS ?= -O2 -g -mmacosx-version-min=$(MACOS_MIN)
+endif
+
 .PHONY: mac-app
 mac-app: build ## Build the double-clickable macOS .app into dist/ (menu-bar icon, no Dock icon)
 	@APP_BIN="$(APP_BIN)" APP_ID="$(APP_ID)" MACOS_MIN="$(MACOS_MIN)" BUILD_DIR="$(BUILD_DIR)" \

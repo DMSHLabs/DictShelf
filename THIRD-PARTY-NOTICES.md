@@ -445,7 +445,7 @@ NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### github.com/gogpu/systray v0.2.8
+### github.com/gogpu/systray v0.3.0
 
 ```
 MIT License
