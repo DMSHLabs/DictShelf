@@ -437,6 +437,14 @@
 		playURL(url);
 	}
 
+	// Mirror htmlref.playable: wu-audio links can use extensionless or inline
+	// audio URLs, but must never turn an unsafe scheme into a navigable link.
+	function playableHref(h) {
+		if (!h || /^[#?]/.test(h)) return false;
+		var m = /^([^:\/?#]*):/.exec(h);
+		return !m || /^https?$/i.test(m[1]) || /^data:audio\//i.test(h);
+	}
+
 	// CAPTURE phase, deliberately. Dictionary scripts attach their own click
 	// handlers inside the article — LDOCE6's entry.js calls stopPropagation()
 	// on the speaker <img> so a play click does not also toggle the accordion
@@ -488,7 +496,8 @@
 				return;
 			}
 			jumpToFragment(ref.frag); // "anchor": a place in this same article
-		} else if (/\.(mp3|ogg|wav|spx|m4a)([?#]|$)/i.test(href)) {
+		} else if (/\.(mp3|ogg|wav|spx|m4a)([?#]|$)/i.test(href) ||
+				(a.classList && a.classList.contains("wu-audio") && playableHref(href))) {
 			e.preventDefault();
 			ownAudio(e, href);
 		} else if (a.classList && a.classList.contains("wu-file")) {

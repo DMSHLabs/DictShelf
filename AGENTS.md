@@ -14,6 +14,7 @@
 - `master` is reserved exclusively for synchronization with the upstream project from which this repository was forked. Do not develop fork-specific features or fixes on `master` or merge task branches into it.
 - Before creating a branch, verify the base and working-tree status. Do not silently switch, reset, rebase, stash, or discard existing work to enforce this policy. Existing task branches are not retroactively rebased. If `dev` is missing or its intended state is unclear, clarify rather than falling back to `master`.
 - When a task is ready, its integration target is `dev`; committing, merging, publishing, and upstream synchronization still require the user request specified above.
+- **Upstream review markers:** after reviewing `master`, record the last upstream commit considered with an annotated tag named `upstream-reviewed-YYYY-MM-DD` on that exact upstream commit (not on a fork merge commit). To review the next update, compare the marker with `master`, for example `git log --oneline upstream-reviewed-YYYY-MM-DD..master`; classify changes against the dead-upstream registry before adopting them. The tag is a review cursor, not a claim that every upstream change was merged. Do not move an existing marker; create a newer dated marker.
 
 ## Dead upstream code
 
