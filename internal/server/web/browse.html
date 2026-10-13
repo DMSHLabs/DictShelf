@@ -75,6 +75,7 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{{T:browse.title}}</title>
 <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
+<link rel="stylesheet" href="/assets/workspace.css?v={{WORKSPACECSS}}">
 {{UI_SCALE_DEFAULTS}}
 <!--
  Copyright (C) 2026 glowinthedark
@@ -250,8 +251,7 @@ body.browse-page-busy #top,body.browse-page-busy main,body.browse-page-busy .bro
 body.browse-page-busy footer .browse-progress{pointer-events:auto;opacity:1}
 footer .browse-controls{width:100%;max-width:54rem}
 footer .browse-search-dock{width:100%;max-width:54rem}
-.words a.browse-match{outline:2px solid var(--accent);outline-offset:-2px}
-.words a.browse-current{background:var(--line-soft)}
+.words a.browse-current{outline:2px solid var(--accent);outline-offset:-2px;background:var(--line-soft)}
 .words mark.browse-letter-match{background:var(--accent);color:var(--bg);border-radius:.15em}
 
 .msg{max-width:34rem;margin:4rem auto;padding:1.4rem 1.6rem;background:var(--bg);
@@ -331,6 +331,8 @@ html[data-desktop-image] .chooser-list :is(.list-search-dock,.list-search-input,
 })();
 </script>
 
+<body class="workspace-page workspace-browse">
+<div class="workspace-browser">
 <header id="top" hidden>
   <div class="bar">
     <a class="back" href="/" title="{{T:browse.back}}" aria-label="{{T:browse.back}}"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="7" cy="7" r="4.3"/><path d="M10.2 10.2 14 14"/></svg></a>
@@ -362,6 +364,7 @@ html[data-desktop-image] .chooser-list :is(.list-search-dock,.list-search-input,
     </div>
   </div>
 </footer>
+</div>
 
 <script>
 "use strict";
@@ -554,7 +557,7 @@ function updateBrowseProgress(message,kind="find"){
 function setBrowsePageBusy(on){
   browsePageBusy=on;document.body.classList.toggle("browse-page-busy",on);
   if(on){
-    for(const id of ["findInput","findMode","maskMode","maskThreshold","findApply","findPrev","findNext","stripPrev","stripNext"]){
+    for(const id of ["findInput","findMode","maskMode","findApply","findPrev","findNext","stripPrev","stripNext"]){
       const el=$(id);if(el)el.disabled=true;
     }
     document.querySelectorAll("[data-go], #strip button").forEach(el=>el.disabled=true);
@@ -817,12 +820,12 @@ document.fonts?.ready.then(fitTitle);
 const browseControlLabels={
   search:t("browse.findWords"),filter:t("browse.filterPlaceholder"),
   filterMode:t("browse.filterWords"),searchMode:t("browse.searchWords"),
-  wildcard:t("browse.wildcardsSearch"),threshold:t("browse.maskThreshold"),
+  wildcard:t("browse.wildcardsSearch"),
   apply:t("browse.runFind"),previous:t("browse.previousMatch"),next:t("browse.nextMatch")
 };
 browseHeadwordControl=window.wudictHeadwordControl.create({
   dock:$("findDock"),
-  ids:{mode:"findMode",mask:"maskMode",threshold:"maskThreshold",input:"findInput",apply:"findApply",count:"findCount",previous:"findPrev",next:"findNext"},
+  ids:{mode:"findMode",mask:"maskMode",input:"findInput",apply:"findApply",count:"findCount",previous:"findPrev",next:"findNext"},
   labels:browseControlLabels,maxRows:2,
   onQuery:findChanged,onMode:toggleFindFilter,
   onMask:()=>{findMask=!findMask;findChanged()},
@@ -854,7 +857,7 @@ async function fetchFound(page,target=0,record="replace"){
   const u=new URLSearchParams({dict:dictId,q:query,wildcards:mask?"1":"0",stream:"1"});
   try{
     const r=await fetch("/api/browse/find?"+u,{signal:controller.signal});
-    if(!r.ok)throw new Error("find");
+    if(!r.ok){const body=await r.json().catch(()=>({}));throw new Error(body.error||`HTTP ${r.status}`)}
     updateFindControls();
     const reader=r.body.getReader(),decoder=new TextDecoder();let buffer="";
     const consume=async(final=false)=>{
@@ -905,7 +908,8 @@ async function fetchFound(page,target=0,record="replace"){
     finish();
     findStreamDone=true;
     findResult=null;findIndex=-1;
-    $("findCount").textContent="!";$("findCount").title=t("browse.findFailed");
+    $("findCount").textContent="!";$("findCount").title=window.wudictI18n.errorText(e.message);
+    browseTrace("find failed",{dict:dictId,error:e.message});
     updateFindControls();render();
   }
 }
@@ -1111,9 +1115,8 @@ function render(){
   $("list").innerHTML=words.map(w=>{
     const title=unesc(w),e=esc(title);
     const ranges=findResult?.total?matchingLetters(title):null;
-    const matched=!filtering&&!!ranges;
-    const current=matched&&w===currentFoundWord();
-    return '<a class="'+(matched?"browse-match ":"")+(current?"browse-current":"")+'" href="/?q='+encodeURIComponent(w)+"&from="+encodeURIComponent(d.dict)+
+    const current=!filtering&&!!ranges&&w===currentFoundWord();
+    return '<a class="'+(current?"browse-current":"")+'" href="/?q='+encodeURIComponent(w)+"&from="+encodeURIComponent(d.dict)+
       '&mode=exact&browse='+returnTo+'" title="'+e+'">'+highlightedWord(title,ranges)+"</a>";
   }).join("")||(filtering?(findResult.stream&&!findStreamDone?"":'<p class="browse-empty">'+tx("browse.noMatches")+'</p>'):"");
   const wordsReady=performance.now();

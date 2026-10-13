@@ -69,6 +69,9 @@ var browseHTML = webAsset(browseHTMLSrc, htmlAsset) // the page-by-page headword
 var setupCSSSrc []byte
 var setupCSS = webAsset(setupCSSSrc, cssAsset) // palette and controls shared by setup.html and lemmas.html
 
+//go:embed web/workspace.css
+var workspaceCSS []byte // shared full-screen frame for the app's work surfaces
+
 //go:embed web/frame.js
 var frameJSSrc []byte
 var frameJS = webAsset(frameJSSrc, jsAsset) // bridge script for sandboxed article iframes
@@ -480,6 +483,7 @@ func (s *Server) basePage() []byte {
 		page := strings.ReplaceAll(string(indexHTML), "{{VERSION}}", v)
 		page = strings.ReplaceAll(page, "{{FRAMEJS}}", assetTag(frameJS))
 		page = strings.ReplaceAll(page, "{{APPCSS}}", assetTag(appCSS))
+		page = strings.ReplaceAll(page, "{{WORKSPACECSS}}", assetTag(workspaceCSS))
 		page = strings.ReplaceAll(page, "{{HISTORYCSS}}", assetTag(historyCSS))
 		page = strings.ReplaceAll(page, "{{HISTORYJS}}", assetTag(historyJS))
 		page = strings.ReplaceAll(page, "{{GROUPCSS}}", assetTag(groupEditorCSS))
@@ -598,6 +602,7 @@ func setupPage(dirs []string, serving int, presetLinks string, language string) 
 		})
 	}
 	page := strings.ReplaceAll(strings.ReplaceAll(setupHTML, "{{INTRO}}", intro), "{{CSS}}", cssTag)
+	page = strings.ReplaceAll(page, "{{WORKSPACECSS}}", assetTag(workspaceCSS))
 	return strings.ReplaceAll(page, "{{PRESETS}}", presetLinks)
 }
 
@@ -617,6 +622,7 @@ func (s *Server) handleLemmasPage(w http.ResponseWriter, r *http.Request) {
 	// request rather than precomputed: the page carries {{T:…}} keys and is
 	// served in the reader's language.
 	page := bytes.ReplaceAll(lemmasHTML, []byte("{{CSS}}"), []byte(cssTag))
+	page = bytes.ReplaceAll(page, []byte("{{WORKSPACECSS}}"), []byte(assetTag(workspaceCSS)))
 	_, _ = io.WriteString(w, renderUI(string(bytes.ReplaceAll(page, []byte("{{PRESETS}}"), []byte(s.pagePresetLinks()))), s.reg.prefs.Language()))
 }
 

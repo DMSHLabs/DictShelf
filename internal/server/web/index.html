@@ -123,6 +123,7 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
 <title>wuDict2</title>
 <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
 <link rel="stylesheet" href="/assets/app.css?v={{APPCSS}}">
+<link rel="stylesheet" href="/assets/workspace.css?v={{WORKSPACECSS}}">
 <link rel="stylesheet" href="/assets/headword-control.css?v={{HEADWORDCSS}}">
 <link rel="stylesheet" href="/assets/history.css?v={{HISTORYCSS}}">
 <script src="/assets/headword-control.js?v={{HEADWORDJS}}"></script>
@@ -530,6 +531,13 @@ window.wudictFontScale=(function(){
   <div class="facts">
     <a class="mrow door" id="browseLink" href="/browse" title="{{T:panel.browseHint}}">{{T:panel.browse}}</a>
   </div>
+  <div class="facts">
+    <label class="rowlabel" for="headwordApplyThreshold">{{T:panel.headwordApplyThreshold}}</label>
+    <select id="headwordApplyThreshold" aria-label="{{T:panel.headwordApplyThreshold}}">
+      <option value="0">0</option><option value="10000">10k</option><option value="50000">50k</option>
+      <option value="100000">100k</option><option value="500000">500k</option><option value="1000000">1m</option>
+    </select>
+  </div>
 </details>
 
 <details class="sect" data-panel-section="appearance" open>
@@ -910,7 +918,7 @@ window.wudictFontScale=(function(){
   <p id="articleFindStatus" role="status"></p>
   <div class="article-find-actions"><button type="button" class="btn" id="articleFindDialogPrev">{{T:articleFind.previous}}</button><button type="button" class="btn" id="articleFindDialogNext">{{T:articleFind.next}}</button></div>
 </dialog>
-<dialog id="dictSettings" lang="{{T:locale}}" class="group-dialog panel-card" aria-labelledby="dictSettingsTitle">
+<dialog id="dictSettings" lang="{{T:locale}}" class="group-dialog panel-card workspace-dialog" aria-labelledby="dictSettingsTitle">
   <h2 id="dictSettingsTitle">{{T:dictUI.title}} <button type="button" class="btn" id="closeDictSettings" aria-label="{{T:dictUI.close}}"><svg class="icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></h2>
   <!-- Outside the scroller, so the one action stays reachable however far down
        a hundred cards the reader has gone. It is the only one left here: it is
@@ -943,7 +951,7 @@ window.wudictFontScale=(function(){
 </dialog>
 
 <dialog id="bulkIndexDialog" class="group-dialog panel-card" aria-labelledby="bulkIndexDialogTitle"></dialog>
-<dialog id="clearDatabaseDialog" lang="{{T:locale}}" class="group-dialog panel-card" aria-labelledby="clearDatabaseTitle">
+<dialog id="clearDatabaseDialog" lang="{{T:locale}}" class="group-dialog panel-card workspace-dialog" aria-labelledby="clearDatabaseTitle">
   <h2 id="clearDatabaseTitle">{{T:panel.rescan}} <button type="button" class="btn" id="clearDatabaseClose" aria-label="{{T:panel.close}}"><svg class="icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></h2>
   <div class="rescan-scroll">
   <h3>{{T:database.new}}</h3>
@@ -5257,23 +5265,32 @@ function maskFindStopPending(){
 }
 maskHeadwordControl=window.wudictHeadwordControl.create({
   dock:$("maskDock"),
-  ids:{mode:"maskFindMode",mask:"maskFindWildcard",threshold:"maskFindThreshold",input:"maskFindInput",
+  ids:{mode:"maskFindMode",mask:"maskFindWildcard",input:"maskFindInput",
     apply:"maskFindApply",count:"maskFindCount",previous:"maskFindPrev",next:"maskFindNext"},
   labels:{search:tx("browse.findWords"),filter:tx("browse.filterPlaceholder"),
     filterMode:tx("browse.filterWords"),searchMode:tx("browse.searchWords"),wildcard:tx("browse.wildcardsSearch"),
-    threshold:tx("browse.maskThreshold"),apply:tx("browse.runFind"),previous:tx("browse.previousMatch"),next:tx("browse.nextMatch")},
+    apply:tx("browse.runFind"),previous:tx("browse.previousMatch"),next:tx("browse.nextMatch")},
   maxRows:3,
   onQuery:maskFindInputChanged,
   onMode:()=>{if(!maskBusyJobs.size)maskFindSwitch(!maskFindFilter)},
   onMask:()=>{if(maskBusyJobs.size)return;maskFindWildcard=!maskFindWildcard;maskFindApproved=false;maskFindStart();maskFindControls()},
   onThreshold:maskFindThresholdChanged,onApply:maskFindApply,onStep:maskFindTurn
 });
+const headwordApplyThreshold=$("headwordApplyThreshold");
+headwordApplyThreshold.value=String(window.wudictHeadwordControl.threshold());
+headwordApplyThreshold.addEventListener("change",()=>window.wudictHeadwordControl.setThreshold(headwordApplyThreshold.value));
+window.addEventListener("wudict:headword-threshold-change",event=>{
+  headwordApplyThreshold.value=String(Number(event.detail));
+});
+window.addEventListener("storage",event=>{
+  if(event.key==="wudict_browse_mask_threshold")headwordApplyThreshold.value=String(window.wudictHeadwordControl.threshold());
+});
 function maskBusyApply(){
   const busy=maskBusyJobs.size>0,body=document.body;
   body.classList.toggle("mask-computing",busy);
   body.setAttribute("aria-busy",String(busy));
   for(const id of ["q","mode","modeMenuBtn","dict","pinBtn","wideBtn","expandBtn","panelBtn","maskDict",
-    "maskFindMode","maskFindWildcard","maskFindInput","maskFindThreshold","maskFindApply"]){
+    "maskFindMode","maskFindWildcard","maskFindInput","maskFindApply"]){
     const el=$(id);if(el)el.disabled=busy;
   }
   for(const el of document.querySelectorAll("#searchHistory button, #maskWords button"))el.disabled=busy;
@@ -5418,7 +5435,7 @@ async function maskFetch(row,page,generation,navToken){
     const params=new URLSearchParams({dict:row.id,q:maskPattern,p:String(page),wildcards:"1"});
     if(row.within){params.set("within",row.within);params.set("withinWildcards",row.withinMask?"1":"0")}
     const response=await fetch("/api/browse/find?"+params,{signal:controller.signal});
-    if(!response.ok)throw new Error(tx("search.failedDict"));
+    if(!response.ok){const body=await response.json().catch(()=>({}));throw new Error(window.wudictI18n.errorText(body.error||tx("search.failedDict")))}
     const data=await response.json();if(generation!==maskGeneration)return;
     if(row.state!=="ready")maskStripVersion++;
     row.state="ready";row.total=data.total;row.alphabet=data.alphabet||[];row.size=data.size;
@@ -8973,7 +8990,7 @@ $("styler").addEventListener("keydown",e=>{
 // concurrently it costs no extra latency, and it cannot reject.
 </script>
 <link rel="stylesheet" href="/assets/group-editor.css?v={{GROUPCSS}}">
-<dialog id="groupEditor" lang="{{T:locale}}" class="group-dialog panel-card" aria-labelledby="groupTitle">
+<dialog id="groupEditor" lang="{{T:locale}}" class="group-dialog panel-card workspace-dialog" aria-labelledby="groupTitle">
   <div id="groupControls" class="group-section">
     <h2 id="groupTitle">{{T:panel.groups}} <button type="button" class="btn" id="groupNameApply" aria-label="{{T:panel.save}}" title="{{T:panel.save}}" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg></button><button type="button" class="btn" id="closeGroups" aria-label="{{T:dictUI.closeGroups}}"><svg class="icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></h2>
     <div class="group-toolbar"><select id="groupSelect" aria-label="{{T:dictUI.group}}"></select><input type="text" id="groupNameInline" maxlength="100" autocomplete="off" placeholder="{{T:dictUI.enterGroupName}}" aria-label="{{T:dictUI.groupName}}" hidden><button type="button" class="btn group-new-action" id="groupNewAction" aria-label="{{T:dictUI.newGroup}}" title="{{T:dictUI.newGroup}}"><svg class="group-new-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button></div>

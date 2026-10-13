@@ -88,6 +88,7 @@ Continue to commit, merge into `dev`, and publish only when requested; do not in
 - [x] Folders: hints, server-generated introduction, import, download, and counts.
 - [x] Lemmas: labels, installation/download states, confirmations, and displayed language names.
 - [x] Search and results: modes, progress/empty/retry states, result plurals, index-creation offers, link-scope and morphology messages, and match navigation.
+- [x] Settings → Results label for the shared headword Apply threshold (English and Russian).
 - [x] System Settings: web text, Advanced explanations, ranges, validation, reset/cache, and settings-application notices. Advanced rows themselves use already translated Android resources.
 - [x] Read-aloud menu: read/stop, voice, unavailable voice, language names, and navigation to system speech settings.
 - [x] Identified remaining UI strings: preference-saving and audio errors, stylesheet-file hints, file-replacement confirmation, and layer-switch errors.

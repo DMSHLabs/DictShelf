@@ -297,6 +297,7 @@
   "panel.rescan": "Пересканировать папки",
   "panel.lemmas": "Словоформы…",
   "panel.results": "Результаты",
+  "panel.headwordApplyThreshold": "Требовать нажатия ✓ для словарей от этого числа заголовков",
   "panel.highlight": "Подсветка",
   "panel.on": "Вкл",
   "panel.off": "Выкл",

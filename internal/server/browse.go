@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/wuweidict/wudict/internal/dict"
+	"github.com/wuweidict/wudict/internal/logx"
 	"github.com/wuweidict/wudict/internal/search"
 )
 
@@ -103,6 +104,7 @@ func (s *Server) handleBrowseFind(w http.ResponseWriter, r *http.Request) {
 		if r.Context().Err() != nil {
 			return
 		}
+		logx.System("browse find failed dict=%q mask=%v error=%q", e.ID, mask, err)
 		httpErr(w, 500, "searching %s: %v", e.ID, err)
 		return
 	}
@@ -236,6 +238,7 @@ func (s *Server) handleBrowseFindStream(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 	if err != nil && r.Context().Err() == nil {
+		logx.System("browse find stream failed dict=%q mask=%v error=%q", e.ID, mask, err)
 		st.line(browseFindStreamEvent{Type: "error", Error: err.Error()})
 	}
 }
@@ -647,6 +650,7 @@ func (s *Server) handleBrowsePage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache")
 	page := bytes.ReplaceAll(browseHTML, []byte("{{PRESETS}}"), []byte(s.pagePresetLinks()))
+	page = bytes.ReplaceAll(page, []byte("{{WORKSPACECSS}}"), []byte(assetTag(workspaceCSS)))
 	page = bytes.ReplaceAll(page, []byte("{{LISTSEARCHJS}}"), []byte(assetTag(listSearchJS)))
 	page = bytes.ReplaceAll(page, []byte("{{HEADWORDJS}}"), []byte(assetTag(headwordControlJS)))
 	page = bytes.ReplaceAll(page, []byte("{{HEADWORDCSS}}"), []byte(assetTag(headwordControlCSS)))

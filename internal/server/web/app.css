@@ -350,6 +350,7 @@ body.mask-view-active{padding-bottom:calc(var(--mask-dock-height,4.5rem) + .5rem
 .mask-search-controls[hidden]{display:none}
 .mask-search-controls{position:fixed;left:0;right:0;bottom:0;z-index:8;display:flex;flex-direction:column;align-items:center;gap:.45rem;
   padding:.5rem .9rem max(.5rem,env(safe-area-inset-bottom));background:var(--bar);backdrop-filter:saturate(1.6) blur(8px);border-top:1px solid var(--line)}
+html:is([data-shell-image],[data-desktop-image]) .mask-search-controls{background:transparent;backdrop-filter:none}
 .mask-dock{position:static;width:100%;max-width:54rem;padding:0;border:0;background:transparent;backdrop-filter:none;font-size:calc(var(--ui-edit_control-font) * 1rem)}
 .mask-search-progress{box-sizing:border-box;display:flex;align-items:center;gap:.55em;width:100%;max-width:54rem;min-height:2.3em;
   padding:.35em .55em;border:1px solid var(--accent);border-radius:8px;background-color:var(--bg);
