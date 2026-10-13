@@ -33,4 +33,3 @@
 .headword-control .headword-control-previous{grid-area:previous}
 .headword-control .headword-control-next{grid-area:next}
 .headword-control .headword-control-apply{grid-area:apply}
-html:is([data-shell-image],[data-desktop-image]) .headword-control button:not(.is-on){background:transparent}

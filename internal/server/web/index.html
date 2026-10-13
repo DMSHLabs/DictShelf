@@ -532,14 +532,14 @@ window.wudictFontScale=(function(){
     <a class="mrow door" id="browseLink" href="/browse" title="{{T:panel.browseHint}}">{{T:panel.browse}}</a>
   </div>
   <div class="facts">
-    <label class="rowlabel" title="{{T:panel.ignoreDiacriticsHint}}"><input type="checkbox" id="ignoreDiacritics"> {{T:panel.ignoreDiacritics}}</label>
+    <label class="rowlabel" title="{{T:panel.ignoreDiacriticsHint}}"><input class="panel-checkbox" type="checkbox" id="ignoreDiacritics"> {{T:panel.ignoreDiacritics}}</label>
   </div>
-  <div class="facts">
-    <label class="rowlabel" for="headwordApplyThreshold">{{T:panel.headwordApplyThreshold}}</label>
+  <div class="facts headword-threshold-row">
     <select id="headwordApplyThreshold" aria-label="{{T:panel.headwordApplyThreshold}}">
       <option value="0">0</option><option value="10000">10k</option><option value="50000">50k</option>
       <option value="100000">100k</option><option value="500000">500k</option><option value="1000000">1m</option>
     </select>
+    <label class="rowlabel" for="headwordApplyThreshold">{{T:panel.headwordApplyThreshold}}</label>
   </div>
 </details>
 
@@ -649,7 +649,7 @@ window.wudictFontScale=(function(){
       <button type="button" class="act" data-layer="on" id="examplesOff" aria-pressed="false" title="{{T:panel.examplesOff}}">{{T:panel.hide}}</button>
     </span>
   </div>
-  <label id="examplesExtraRow" class="examples-extra" hidden><input type="checkbox" id="hideUnmarkedExamples"> {{T:panel.hideUnmarkedExamples}}</label>
+  <label id="examplesExtraRow" class="examples-extra" hidden><input class="panel-checkbox" type="checkbox" id="hideUnmarkedExamples"> {{T:panel.hideUnmarkedExamples}}</label>
   <!-- Whether the status bar is there at all. It is the bar's only door, so it
        has to be findable by someone who has just hidden it - hence a row here,
        in the drawer, beside the controls the bar duplicates, rather than in the
