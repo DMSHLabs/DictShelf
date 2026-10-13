@@ -37,6 +37,7 @@ type indexWorkStatus struct {
 	Canceled      bool     `json:"canceled"`
 	Error         string   `json:"error"`
 	Failed        []string `json:"failed,omitempty"`
+	Damaged       []string `json:"damaged,omitempty"`
 	Result        any      `json:"result,omitempty"`
 	Exclusive     bool     `json:"exclusive"`
 	BusyDicts     []string `json:"busyDicts"`
@@ -76,6 +77,7 @@ func (s *Server) indexWorkStatus(requested ...string) indexWorkStatus {
 		CurrentDone: st.CurrentDone, CurrentTotal: st.CurrentTotal, Action: st.Action, Indexes: st.Indexes,
 		StopRequested: st.StopRequested, Canceled: st.Canceled, Error: st.Err}
 	out.Failed = st.Failed
+	out.Damaged = st.Damaged
 	if len(st.Failed) > 0 {
 		out.Error = "index operations failed"
 	}
@@ -183,8 +185,12 @@ func (s *Server) handleIndexWork(w http.ResponseWriter, r *http.Request) {
 				}
 				e, err := s.reg.get(op.Dict)
 				if err != nil {
-					j.update(func(st *jobStatus) { st.Err = err.Error() })
-					return
+					failure := fmt.Sprintf("dictionary unavailable: %v", err)
+					j.update(func(st *jobStatus) {
+						st.Done++
+						st.Failed = append(st.Failed, failure)
+					})
+					continue
 				}
 				action := "create"
 				if op.Action == "delete" {
@@ -254,10 +260,15 @@ func (s *Server) handleIndexWork(w http.ResponseWriter, r *http.Request) {
 				}
 				store.IndexDiagnostic("bulk operation finish dictionary=%q feature=%q action=%q error=%v", e.probeName(), op.Feature, op.Action, err)
 				if err != nil {
-					failure := fmt.Sprintf("%s: %v", e.probeName(), err)
+					name := e.probeName()
+					failure := fmt.Sprintf("%s: %v", name, err)
+					damaged := damagedDictionaryError(err)
 					j.update(func(st *jobStatus) {
 						st.Done++
 						st.Failed = append(st.Failed, failure)
+						if damaged {
+							st.Damaged = append(st.Damaged, name)
+						}
 					})
 					continue
 				}
