@@ -554,14 +554,20 @@ func cleanAbs(p string) string {
 	return filepath.Clean(p)
 }
 
-// GET /api/prefs - the enabled set and the order, healed against the
+// PrefsSnapshot returns the enabled set and order, healed against the
 // dictionaries that exist right now. "exists" is false on a first run, which
 // is the client's cue to adopt whatever an older build left in localStorage
-// (once) instead of starting the user over.
-func (s *Server) handlePrefs(w http.ResponseWriter, r *http.Request) {
+// (once) instead of starting the user over. The desktop bridge and HTTP route
+// share this method so both transports see the same state.
+func (s *Server) PrefsSnapshot() map[string]any {
 	dicts := s.reg.prefs.heal(s.reg)
 	_, exists := s.reg.prefs.Snapshot()
-	writeJSON(w, map[string]any{"exists": exists, "dicts": dicts, "ui": s.reg.prefs.UI()})
+	return map[string]any{"exists": exists, "dicts": dicts, "ui": s.reg.prefs.UI()}
+}
+
+// GET /api/prefs
+func (s *Server) handlePrefs(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, s.PrefsSnapshot())
 }
 
 // PUT /api/prefs - replace the order and enabled set when the request sends

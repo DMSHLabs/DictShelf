@@ -1218,9 +1218,10 @@ function adoptLocalPrefs(){
 let prefsReady=false;
 async function loadPrefs(){
   try{
-    const r=await fetch("/api/prefs");
-    if(!r.ok)throw new Error("HTTP "+r.status);
-    const st=await r.json(),rows=st.dicts||[];
+    let st;
+    if(typeof window.wudictNativeCall==="function")st=await window.wudictNativeCall("prefs");
+    else{const r=await fetch("/api/prefs");if(!r.ok)throw new Error("HTTP "+r.status);st=await r.json()}
+    const rows=st.dicts||[];
     prefsReady=true;
     // Read before the exists branch below returns: on a first run there is no
     // ui record, but there is also nothing here that can go wrong.
@@ -4729,6 +4730,11 @@ function setBusy(on){
    arrives — this is what lets each dictionary render the instant it is
    ready instead of waiting for the whole fan-out (progressive results). */
 async function fetchStream(url,onMsg,signal,options){
+  const nativeQuery=url==="/api/search"?"":url.startsWith("/api/search?")?url.slice("/api/search?".length):null;
+  if(nativeQuery!==null&&typeof window.wudictNativeCall==="function"){
+    try{return await window.wudictNativeCall("search",nativeQuery,onMsg,signal)}
+    catch(e){if(e&&e.name==="AbortError")throw e;throw new Error(window.wudictI18n.errorText(e&&e.message)||e.message||String(e))}
+  }
   const resp=await fetch(url,{...options,...(signal?{signal}:{})});
   if(!resp.ok){let e;try{e=(await resp.json()).error}catch(_){}throw new Error(window.wudictI18n.errorText(e)||resp.statusText)}
   const reader=resp.body.getReader(),dec=new TextDecoder();let buf="";

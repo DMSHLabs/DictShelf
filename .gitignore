@@ -62,3 +62,4 @@ __pycache__/
 # Agent tooling: plans and scratch written by coding sessions, never part of
 # the product (HANDOFF.md leaves it alone for the same reason).
 /.zcode/
+wuDict2.exe~

@@ -6,4 +6,8 @@
 
 package cli
 
-func openDesktopWindow(string, func(), func() (any, error)) bool { return false }
+import "context"
+
+func openDesktopWindow(string, func(), func(string) (any, error), func(context.Context, string, func([]byte)) error) bool {
+	return false
+}
