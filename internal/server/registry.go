@@ -1977,6 +1977,51 @@ func (e *entry) setFeatures(want features, progress store.Progress, force ...boo
 	return err
 }
 
+// setContainsIndex changes only the trigram table. The mandatory headword
+// index is prepared first when no usable text database exists; an existing
+// base index and any full-text index are left intact.
+func (e *entry) setContainsIndex(action string, progress store.Progress) error {
+	defer acquire(frontLimit)()
+	defer HoldActiveProcs()()
+	e.ingestMu.Lock()
+	defer e.ingestMu.Unlock()
+	defer e.rebuilding.Store(false)
+	if e.indexBlocked() {
+		return errors.New("dictionary index was removed; create an index in Dictionary settings")
+	}
+
+	textDB, prepared := validPrepared(e.Path)
+	if !prepared && action != "delete" {
+		if _, err := e.reconcileLocked(e.probeName(), store.Target{}, progress); err != nil {
+			return err
+		}
+		textDB, prepared = validPrepared(e.Path)
+	}
+	if !prepared {
+		return nil
+	}
+	have := store.Inspect(textDB).Plan.Contains
+	if action == "create" && have || action == "delete" && !have {
+		return nil
+	}
+
+	e.openMu.Lock()
+	defer e.openMu.Unlock()
+	releasePrepared(e, textDB)
+	var err error
+	if action == "delete" {
+		err = store.ClearSearchIndexes(textDB, true, false)
+	} else {
+		err = store.RebuildContainsIndex(textDB, progress)
+	}
+	reopenErr := e.reopen()
+	e.gen.Add(1)
+	if err != nil {
+		return errors.Join(err, reopenErr)
+	}
+	return reopenErr
+}
+
 // reopen swaps in a view of the freshly written data and lets go of the old
 // one. The superseded handle is usually a DIRECT backend holding a headword map
 // worth hundreds of bytes per entry; left to the garbage collector, that memory

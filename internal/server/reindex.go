@@ -5,6 +5,7 @@
 package server
 
 import (
+	"errors"
 	"net/http"
 	"path/filepath"
 	"time"
@@ -54,6 +55,8 @@ type ReindexStatus struct {
 // reindexKey is the rebuild's job (jobs.go): one at a time.
 const reindexKey = "reindex"
 
+var errReindexConflict = errors.New("dictionary operations are running; wait for completion or stop them")
+
 // reindexStatus is the rebuild job as the page and `wudict reindex` poll it.
 func (s *Server) reindexStatus() ReindexStatus {
 	st, _ := s.jobs.status(reindexKey)
@@ -62,6 +65,45 @@ func (s *Server) reindexStatus() ReindexStatus {
 		Current: st.Current, CurrentDone: int(st.CurrentDone), CurrentTotal: int(st.CurrentTotal),
 		Failed: st.Failed, Canceled: st.Canceled,
 	}
+}
+
+// StartReindex admits and starts a rebuild through the same operation for
+// HTTP clients and the Windows bridge. A running rebuild is returned as-is.
+func (s *Server) StartReindex() (ReindexStatus, bool, error) {
+	s.admission.mu.Lock()
+	defer s.admission.mu.Unlock()
+
+	if st, ok := s.jobs.status(reindexKey); ok && st.Running {
+		return s.reindexStatus(), false, nil
+	}
+	exclusive, ids := s.workLocks()
+	if exclusive || len(ids) > 0 {
+		return ReindexStatus{}, false, errReindexConflict
+	}
+	if s.admission.pending == nil {
+		s.admission.pending = map[string]int{}
+	}
+	s.admission.pending[reindexKey]++
+	defer func() { s.admission.pending[reindexKey]-- }()
+
+	var todo []*entry
+	for _, e := range s.reg.all() {
+		if entryOutdated(e.Path) {
+			todo = append(todo, e)
+		}
+	}
+	if len(todo) == 0 {
+		return s.reindexStatus(), false, nil
+	}
+	_, started := s.jobs.start(reindexKey, 0, jobStatus{Total: int64(len(todo))},
+		func(j *job) { s.runReindex(j, todo) })
+	return s.reindexStatus(), started, nil
+}
+
+// StopReindex asks the active rebuild to stop after its current dictionary.
+func (s *Server) StopReindex() ReindexStatus {
+	s.jobs.cancel(reindexKey)
+	return s.reindexStatus()
 }
 
 // entryOutdated is the per-dictionary test the job selects by. It agrees with
@@ -80,23 +122,15 @@ func entryOutdated(path string) bool {
 // status when it starts, 200 with the status when there was nothing to do or
 // a job is already running (the page then simply follows that one).
 func (s *Server) handleReindex(w http.ResponseWriter, r *http.Request) {
-	var todo []*entry
-	for _, e := range s.reg.all() {
-		if entryOutdated(e.Path) {
-			todo = append(todo, e)
-		}
-	}
-	if len(todo) == 0 {
-		writeJSON(w, s.reindexStatus())
+	status, started, err := s.StartReindex()
+	if err != nil {
+		httpErr(w, http.StatusConflict, "%s", err)
 		return
 	}
-	if _, started := s.jobs.start(reindexKey, 0, jobStatus{Total: int64(len(todo))},
-		func(j *job) { s.runReindex(j, todo) }); !started {
-		writeJSON(w, s.reindexStatus())
-		return
+	if started {
+		w.WriteHeader(http.StatusAccepted)
 	}
-	w.WriteHeader(http.StatusAccepted)
-	writeJSON(w, s.reindexStatus())
+	writeJSON(w, status)
 }
 
 // handleReindexStatus is the poll. Never fails, as the import poll never does.
@@ -106,8 +140,7 @@ func (s *Server) handleReindexStatus(w http.ResponseWriter, r *http.Request) {
 
 // handleReindexCancel stops the job after the dictionary in hand.
 func (s *Server) handleReindexCancel(w http.ResponseWriter, r *http.Request) {
-	s.jobs.cancel(reindexKey)
-	writeJSON(w, s.reindexStatus())
+	writeJSON(w, s.StopReindex())
 }
 
 func (s *Server) runReindex(j *job, todo []*entry) {

@@ -129,8 +129,8 @@ func (s *Server) desktopDictionaryList(ctx context.Context, emit func([]byte)) (
 }
 
 // DesktopJSON dispatches explicitly supported JSON operations for the desktop
-// bridge. Group, About and reindex-status snapshots call shared operations
-// directly; other actions still enter their existing routes.
+// bridge. It calls shared server methods directly; browser HTTP routes remain
+// available and delegate to the same operations where they overlap.
 func (s *Server) DesktopJSON(baseURL, method, argument string) (any, error) {
 	switch method {
 	case "groups":
@@ -145,6 +145,17 @@ func (s *Server) DesktopJSON(baseURL, method, argument string) (any, error) {
 		return s.aboutSnapshot(argument, base.Scheme+"://"+base.Host)
 	case "reindex":
 		return s.reindexStatus(), nil
+	case "indexWork":
+		return s.indexWorkStatus(argument), nil
+	case "startIndexWork", "startSingleIndexWork":
+		return s.startIndexWork([]byte(argument), method == "startSingleIndexWork", true)
+	case "stopIndexWork":
+		return s.stopIndexWork("all")
+	case "startReindex":
+		status, _, err := s.StartReindex()
+		return status, err
+	case "stopReindex":
+		return s.StopReindex(), nil
 	}
 	path := ""
 	query := ""
@@ -163,26 +174,6 @@ func (s *Server) DesktopJSON(baseURL, method, argument string) (any, error) {
 			"saveGroupOrder":         {"/api/user-groups/order", http.MethodPut},
 		}[method]
 		path, verb, body = route.path, route.verb, strings.NewReader(argument)
-	case "startReindex", "stopReindex":
-		path = "/api/reindex"
-		verb = http.MethodPost
-		if method == "stopReindex" {
-			verb = http.MethodDelete
-		}
-	case "startIndexWork", "startSingleIndexWork":
-		path, verb = "/api/index-work", http.MethodPost
-		body = strings.NewReader(argument)
-		if method == "startSingleIndexWork" {
-			query = "single=1"
-		}
-	case "stopIndexWork":
-		path, verb = "/api/index-work", http.MethodDelete
-		query = url.Values{"id": []string{"all"}}.Encode()
-	case "indexWork":
-		path = "/api/index-work"
-		if argument != "" {
-			query = url.Values{"id": []string{argument}}.Encode()
-		}
 	default:
 		return nil, fmt.Errorf("unsupported desktop request %q", method)
 	}

@@ -4,8 +4,11 @@
 package server
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -109,159 +112,194 @@ func (s *Server) indexWorkStatus(requested ...string) indexWorkStatus {
 	return out
 }
 
+type indexWorkError struct {
+	status  int
+	message string
+}
+
+func (e indexWorkError) Error() string { return e.message }
+
+func (s *Server) startIndexWork(raw []byte, single, allowBaseDelete bool) (indexWorkStatus, error) {
+	if len(raw) > 1<<20 {
+		return indexWorkStatus{}, indexWorkError{http.StatusRequestEntityTooLarge, "invalid index operation list"}
+	}
+	var operations []indexOperation
+	if err := json.NewDecoder(bytes.NewReader(raw)).Decode(&operations); err != nil || len(operations) == 0 || len(operations) > 10000 {
+		return indexWorkStatus{}, indexWorkError{http.StatusBadRequest, "invalid index operation list"}
+	}
+	for _, op := range operations {
+		if _, err := s.reg.get(op.Dict); err != nil {
+			return indexWorkStatus{}, indexWorkError{http.StatusNotFound, err.Error()}
+		}
+		if op.Feature != "base" && op.Feature != "contains" && op.Feature != "fts" {
+			return indexWorkStatus{}, indexWorkError{http.StatusBadRequest, "invalid index feature"}
+		}
+		if op.Action != "create" && op.Action != "update" && op.Action != "recreate" && op.Action != "delete" {
+			return indexWorkStatus{}, indexWorkError{http.StatusBadRequest, "invalid index action"}
+		}
+		if op.Action == "delete" && op.Feature == "base" && !allowBaseDelete {
+			return indexWorkStatus{}, indexWorkError{http.StatusForbidden, "deleting from another machine is off"}
+		}
+	}
+	key := bulkIndexKey
+	if single && len(operations) == 1 {
+		key = "single-index:" + operations[0].Dict
+	}
+	release, admitted := s.admitWork(key)
+	if !admitted {
+		return indexWorkStatus{}, indexWorkError{http.StatusConflict, "dictionary operations are running; wait for completion or stop them"}
+	}
+	defer release()
+	if _, started := s.jobs.start(key, 0, jobStatus{Total: int64(len(operations))}, func(j *job) {
+		for _, op := range operations {
+			st, _ := s.jobs.status(key)
+			if st.StopRequested {
+				j.update(func(st *jobStatus) { st.Canceled = true })
+				break
+			}
+			e, err := s.reg.get(op.Dict)
+			if err != nil {
+				j.update(func(st *jobStatus) {
+					st.Failed = append(st.Failed, fmt.Sprintf("%s: %v", op.Dict, err))
+					st.Done++
+				})
+				continue
+			}
+			action := "create"
+			if op.Action == "delete" {
+				action = "remove"
+			} else if op.Action == "update" || op.Action == "recreate" {
+				action = "update"
+			}
+			feature := op.Feature
+			if feature == "base" {
+				feature = "index"
+			} else if feature == "fts" {
+				feature = "fullText"
+			}
+			j.update(func(st *jobStatus) {
+				st.Stage = op.Dict
+				st.Current = e.probeName()
+				st.Action = action
+				st.Indexes = []string{feature}
+				st.CurrentDone = 0
+				st.CurrentTotal = 0
+			})
+			store.IndexDiagnostic("bulk operation start dictionary=%q feature=%q action=%q", e.probeName(), op.Feature, op.Action)
+			lastProgress := time.Time{}
+			progress := func(done, total int) {
+				if done != total && time.Since(lastProgress) < 200*time.Millisecond {
+					return
+				}
+				lastProgress = time.Now()
+				j.update(func(st *jobStatus) { st.CurrentDone = int64(done); st.CurrentTotal = int64(total) })
+			}
+			if op.Feature == "base" && op.Action == "delete" {
+				var result removal
+				result, err = s.reg.Remove(op.Dict, true, false)
+				j.update(func(st *jobStatus) { st.Result = result })
+			} else if op.Feature == "contains" && !e.indexBlocked() {
+				err = e.setContainsIndex(op.Action, progress)
+			} else {
+				want := s.currentFeatures(e)
+				force := op.Feature != "contains" && (op.Action == "update" || op.Action == "recreate")
+				set := func(on bool) {
+					if op.Feature == "contains" {
+						want.Contains = on
+					}
+					if op.Feature == "fts" {
+						want.FullText = on
+					}
+				}
+				if err == nil {
+					set(op.Action != "delete")
+					if e.indexBlocked() && op.Action != "delete" {
+						err = e.restoreDSLIndex(store.Plan{FullText: want.FullText, Contains: want.Contains}, progress)
+						force = false
+					}
+					if err == nil {
+						err = e.setFeatures(want, progress, force)
+					}
+				}
+			}
+			store.IndexDiagnostic("bulk operation finish dictionary=%q feature=%q action=%q error=%v", e.probeName(), op.Feature, op.Action, err)
+			if err != nil {
+				j.update(func(st *jobStatus) {
+					st.Failed = append(st.Failed, fmt.Sprintf("%s: %v", e.probeName(), err))
+					st.Done++
+				})
+				continue
+			}
+			j.update(func(st *jobStatus) { st.Done++ })
+		}
+	}); !started {
+		return indexWorkStatus{}, indexWorkError{http.StatusConflict, "index operations already running"}
+	}
+	return s.indexWorkStatus(key), nil
+}
+
+func (s *Server) stopIndexWork(key string) (indexWorkStatus, error) {
+	if key == "all" {
+		s.jobs.mu.Lock()
+		var keys []string
+		for candidate, j := range s.jobs.jobs {
+			if j.st.Running && (exclusiveWork(candidate) || workDictionary(candidate) != "") {
+				keys = append(keys, candidate)
+			}
+		}
+		s.jobs.mu.Unlock()
+		for _, candidate := range keys {
+			store.IndexDiagnostic("safe stop requested job=%q", candidate)
+			s.jobs.requestStop(candidate)
+			if candidate == reindexKey {
+				s.jobs.cancel(candidate)
+			}
+		}
+		return s.indexWorkStatus(), nil
+	}
+	if key != bulkIndexKey && key != setupWorkKey && key != "rescan-indexes" && key != reindexKey && workDictionary(key) == "" {
+		return indexWorkStatus{}, indexWorkError{http.StatusBadRequest, "invalid index job"}
+	}
+	s.jobs.requestStop(key)
+	if key == reindexKey {
+		s.jobs.cancel(key)
+	}
+	return s.indexWorkStatus(), nil
+}
+
 func (s *Server) handleIndexWork(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	switch r.Method {
 	case http.MethodDelete:
-		key := r.URL.Query().Get("id")
-		if key == "all" {
-			s.jobs.mu.Lock()
-			var keys []string
-			for candidate, j := range s.jobs.jobs {
-				if j.st.Running && (exclusiveWork(candidate) || workDictionary(candidate) != "") {
-					keys = append(keys, candidate)
-				}
+		status, err := s.stopIndexWork(r.URL.Query().Get("id"))
+		if err != nil {
+			var workErr indexWorkError
+			if errors.As(err, &workErr) {
+				httpErr(w, workErr.status, "%s", workErr.message)
+			} else {
+				httpErr(w, http.StatusInternalServerError, "%v", err)
 			}
-			s.jobs.mu.Unlock()
-			for _, candidate := range keys {
-				store.IndexDiagnostic("safe stop requested job=%q", candidate)
-				s.jobs.requestStop(candidate)
-				if candidate == reindexKey {
-					s.jobs.cancel(candidate)
-				}
-			}
-			writeJSON(w, s.indexWorkStatus())
 			return
 		}
-		if key != bulkIndexKey && key != setupWorkKey && key != "rescan-indexes" && key != reindexKey && workDictionary(key) == "" {
-			httpErr(w, 400, "invalid index job")
-			return
-		}
-		s.jobs.requestStop(key)
-		if key == reindexKey {
-			s.jobs.cancel(key)
-		}
-		writeJSON(w, s.indexWorkStatus())
+		writeJSON(w, status)
 	case http.MethodPost:
-		var operations []indexOperation
-		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&operations); err != nil || len(operations) == 0 || len(operations) > 10000 {
-			httpErr(w, 400, "invalid index operation list")
+		raw, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 1<<20))
+		if err != nil {
+			httpErr(w, http.StatusBadRequest, "invalid index operation list")
 			return
 		}
-		for _, op := range operations {
-			if _, err := s.reg.get(op.Dict); err != nil {
-				httpErr(w, 404, "%v", err)
-				return
+		status, err := s.startIndexWork(raw, r.URL.Query().Get("single") == "1", s.removalOffered(r))
+		if err != nil {
+			var workErr indexWorkError
+			if errors.As(err, &workErr) {
+				httpErr(w, workErr.status, "%s", workErr.message)
+			} else {
+				httpErr(w, http.StatusInternalServerError, "%v", err)
 			}
-			if op.Feature != "base" && op.Feature != "contains" && op.Feature != "fts" {
-				httpErr(w, 400, "invalid index feature")
-				return
-			}
-			if op.Action != "create" && op.Action != "update" && op.Action != "recreate" && op.Action != "delete" {
-				httpErr(w, 400, "invalid index action")
-				return
-			}
-			if op.Action == "delete" && op.Feature == "base" && !s.removalOffered(r) {
-				httpErr(w, 403, "deleting from another machine is off")
-				return
-			}
-		}
-		key := bulkIndexKey
-		if r.URL.Query().Get("single") == "1" && len(operations) == 1 {
-			key = "single-index:" + operations[0].Dict
-		}
-		if _, started := s.jobs.start(key, 0, jobStatus{Total: int64(len(operations))}, func(j *job) {
-			for _, op := range operations {
-				st, _ := s.jobs.status(key)
-				if st.StopRequested {
-					j.update(func(st *jobStatus) { st.Canceled = true })
-					break
-				}
-				e, err := s.reg.get(op.Dict)
-				if err != nil {
-					j.update(func(st *jobStatus) {
-						st.Failed = append(st.Failed, fmt.Sprintf("%s: %v", op.Dict, err))
-						st.Done++
-					})
-					continue
-				}
-				action := "create"
-				if op.Action == "delete" {
-					action = "remove"
-				} else if op.Action == "update" || op.Action == "recreate" {
-					action = "update"
-				}
-				feature := op.Feature
-				if feature == "base" {
-					feature = "index"
-				} else if feature == "fts" {
-					feature = "fullText"
-				}
-				j.update(func(st *jobStatus) {
-					st.Stage = op.Dict
-					st.Current = e.probeName()
-					st.Action = action
-					st.Indexes = []string{feature}
-					st.CurrentDone = 0
-					st.CurrentTotal = 0
-				})
-				store.IndexDiagnostic("bulk operation start dictionary=%q feature=%q action=%q", e.probeName(), op.Feature, op.Action)
-				lastProgress := time.Time{}
-				progress := func(done, total int) {
-					if done != total && time.Since(lastProgress) < 200*time.Millisecond {
-						return
-					}
-					lastProgress = time.Now()
-					j.update(func(st *jobStatus) { st.CurrentDone = int64(done); st.CurrentTotal = int64(total) })
-				}
-				if op.Feature == "base" && op.Action == "delete" {
-					var result removal
-					result, err = s.reg.Remove(op.Dict, true, false)
-					j.update(func(st *jobStatus) { st.Result = result })
-				} else {
-					want := s.currentFeatures(e)
-					force := op.Feature == "base" && (op.Action == "update" || op.Action == "recreate")
-					set := func(on bool) {
-						if op.Feature == "contains" {
-							want.Contains = on
-						}
-						if op.Feature == "fts" {
-							want.FullText = on
-						}
-					}
-					if op.Feature != "base" && action == "update" {
-						set(false)
-						if !e.indexBlocked() {
-							err = e.setFeatures(want, progress)
-						}
-					}
-					if err == nil {
-						set(op.Action != "delete")
-						if e.indexBlocked() && op.Action != "delete" {
-							err = e.restoreDSLIndex(store.Plan{FullText: want.FullText, Contains: want.Contains}, progress)
-							force = false
-						}
-						if err == nil {
-							err = e.setFeatures(want, progress, force)
-						}
-					}
-				}
-				store.IndexDiagnostic("bulk operation finish dictionary=%q feature=%q action=%q error=%v", e.probeName(), op.Feature, op.Action, err)
-				if err != nil {
-					j.update(func(st *jobStatus) {
-						st.Failed = append(st.Failed, fmt.Sprintf("%s: %v", e.probeName(), err))
-						st.Done++
-					})
-					continue
-				}
-				j.update(func(st *jobStatus) { st.Done++ })
-			}
-		}); !started {
-			httpErr(w, 409, "index operations already running")
 			return
 		}
 		w.WriteHeader(http.StatusAccepted)
-		writeJSON(w, s.indexWorkStatus(key))
+		writeJSON(w, status)
 	default:
 		writeJSON(w, s.indexWorkStatus(r.URL.Query().Get("id")))
 	}
