@@ -21,6 +21,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"slices"
 	"strings"
@@ -120,8 +121,8 @@ type groupFilter struct {
 
 type groupView struct {
 	DictionaryGroup
-	Order   []string `json:"order,omitempty"`
-	Pinned  []string `json:"pinned,omitempty"` // derived API view; persistence keeps the flag beside each ordered ID
+	Order    []string `json:"order,omitempty"`
+	Pinned   []string `json:"pinned,omitempty"` // derived API view; persistence keeps the flag beside each ordered ID
 	Members  []string `json:"members"`
 	Readonly bool     `json:"readonly"`
 }
@@ -131,11 +132,19 @@ func viewGroup(group DictionaryGroup, members []string, readonly bool) groupView
 }
 
 func (s *Server) handleUserGroups(w http.ResponseWriter, r *http.Request) {
+	views, err := s.userGroupsSnapshot()
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	writeJSON(w, views)
+}
+
+func (s *Server) userGroupsSnapshot() ([]groupView, error) {
 	s.reg.prefs.heal(s.reg)
 	entries := s.reg.all()
 	if err := s.syncLinkedGroups(entries); err != nil {
-		http.Error(w, "Could not update linked groups: "+err.Error(), 500)
-		return
+		return nil, fmt.Errorf("Could not update linked groups: %w", err)
 	}
 	f, _ := s.reg.prefs.data()
 	all := viewGroup(DictionaryGroup{ID: allDictionariesGroup, Name: "All Dictionaries"}, []string{}, true)
@@ -177,7 +186,7 @@ func (s *Server) handleUserGroups(w http.ResponseWriter, r *http.Request) {
 			return 0
 		})
 	}
-	writeJSON(w, views)
+	return views, nil
 }
 
 func (s *Server) filterExists(ref groupFilter) bool {

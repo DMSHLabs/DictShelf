@@ -128,19 +128,21 @@ func (s *Server) desktopDictionaryList(ctx context.Context, emit func([]byte)) (
 	return err
 }
 
-// DesktopJSON calls an explicitly supported JSON endpoint in-process for the desktop
-// bridge. The endpoint still runs through the same server middleware and
-// handler as an HTTP client.
+// DesktopJSON dispatches explicitly supported JSON operations for the desktop
+// bridge. Group snapshots call shared operations directly; other actions still
+// enter their existing routes.
 func (s *Server) DesktopJSON(baseURL, method, argument string) (any, error) {
+	switch method {
+	case "groups":
+		return s.groupsSnapshot(), nil
+	case "userGroups":
+		return s.userGroupsSnapshot()
+	}
 	path := ""
 	query := ""
 	verb := http.MethodGet
 	var body io.Reader
 	switch method {
-	case "groups":
-		path = "/api/groups"
-	case "userGroups":
-		path = "/api/user-groups"
 	case "createGroup", "renameGroup", "deleteGroup", "setGroupMember", "replaceGroupMembership", "addGroupMembers", "linkGroup", "saveGroupOrder":
 		route := map[string]struct{ path, verb string }{
 			"createGroup":            {"/api/user-groups", http.MethodPost},
