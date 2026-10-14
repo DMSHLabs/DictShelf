@@ -113,7 +113,7 @@ if (-not (Test-Path -LiteralPath $Exe -PathType Leaf)) {
     throw @"
 make-installer: no binary at $Exe
   Build it first, from the repository root:
-    go build -tags sqlite_fts5 -ldflags "-s -w" -o wuDict2.exe .
+    go build -tags sqlite_fts5 -ldflags "-H windowsgui -s -w" -o wuDict2.exe .
   (make build is a POSIX recipe and does not run on Windows; it would also
   write an extension-less "wudict", which Windows cannot execute.)
 "@

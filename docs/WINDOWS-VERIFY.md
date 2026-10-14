@@ -9,6 +9,14 @@ them are in `docs/handoff-archive.md`.
 
 ## Windows verification recipes (this machine)
 
+- **2026-10-14 GUI builds:** `build-windows.cmd debug` and `release` now use
+  `-H windowsgui` (PE subsystem 2). `build-windows.cmd debug console` preserves
+  a console executable (subsystem 3) for CLI use. GUI launch detection reads
+  the current executable's PE subsystem when there is no console, so the
+  GUI artifact selects WebView2 even when started from cmd. Redirected
+  `--version` remains usable by the build verification. Restart the app to
+  load a rebuilt executable.
+
 - **2026-09-29 localization baseline:** `TestSetupFlow` also fails on unchanged
   `e938e17` (`server_test.go:574`, "app page not served after setup"). Its
   assertion searches served HTML for the old `design tokens` comment after CSS

@@ -7,10 +7,35 @@ import (
 	"context"
 	"encoding/json"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
 )
+
+func TestIndexWorkContinuesAfterSourceFailure(t *testing.T) {
+	s, _ := newPrefsServer(t)
+	defer s.jobs.wg.Wait()
+	entries := s.reg.all()
+	if err := os.Remove(entries[0].Path); err != nil {
+		t.Fatal(err)
+	}
+	body, _ := json.Marshal([]indexOperation{
+		{entries[0].ID, "fts", "recreate"},
+		{entries[1].ID, "fts", "recreate"},
+	})
+	if _, err := s.DesktopJSON("http://127.0.0.1:6888", "startIndexWork", string(body)); err != nil {
+		t.Fatal(err)
+	}
+	s.jobs.wait(bulkIndexKey)
+	result := s.indexWorkStatus(bulkIndexKey)
+	if result.Running || result.Done != 2 || result.Total != 2 || len(result.Failed) != 1 || result.Error != "" {
+		t.Fatalf("unexpected result: %+v", result)
+	}
+	if !s.currentFeatures(entries[1]).FullText {
+		t.Fatal("valid dictionary after the failing source was not indexed")
+	}
+}
 
 func TestIndexWorkSurvivesRequestAndStopsBetweenOperations(t *testing.T) {
 	s, _ := newPrefsServer(t)

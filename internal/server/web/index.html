@@ -2719,9 +2719,9 @@ function rmTrigger(d){
    rotation mid-rebuild picks it up again from the poll. */
 let reindexSt=null,reindexTimer=0,reindexStopping=false;
 const following=new Set();
-async function readReindexStatus(){
-  if(typeof window.wudictNativeCall==="function")return window.wudictNativeCall("reindex");
-  const r=await fetch("/api/reindex");
+async function readReindexStatus(verb="GET"){
+  if(typeof window.wudictNativeCall==="function")return window.wudictNativeCall(verb==="POST"?"startReindex":verb==="DELETE"?"stopReindex":"reindex");
+  const r=await fetch("/api/reindex",{method:verb});
   if(!r.ok)throw new Error("HTTP "+r.status);
   return r.json();
 }
@@ -2772,7 +2772,7 @@ function pollReindex(){
 function requestReindexStop(){
   if(reindexStopping)return;
   reindexStopping=true;setGlobalStop(requestReindexStop,tx("dictUI.stopping"));renderReindex();
-  fetch("/api/reindex",{method:"DELETE"}).catch(()=>{});
+  readReindexStatus("DELETE").catch(()=>{});
 }
 async function reindexClick(e){
   if(e.target.id==="reindexStop"){
@@ -2782,9 +2782,7 @@ async function reindexClick(e){
   if(e.target.id!=="reindexGo"&&e.target.id!=="reindexMainGo")return;
   e.target.disabled=true;
   try{
-    const r=await fetch("/api/reindex",{method:"POST"});
-    if(!r.ok)throw new Error("HTTP "+r.status);
-    reindexSt=await r.json();reindexStopping=false;
+    reindexSt=await readReindexStatus("POST");reindexStopping=false;
   }catch(err){e.target.disabled=false;setStatus(esc(tx("dictUI.rebuildStartFailed",{error:err.message})));return}
   if(reindexSt.running){setGlobalStop(requestReindexStop);renderReindex();pollReindex()}
   else loadDicts(); // nothing was outdated any more: the list was behind
@@ -3851,6 +3849,7 @@ function bulkActionLabel(action){
   const keys={keep:"dictUI.bulkAction.keep",create:"dictUI.bulkAction.create",update:"dictUI.bulkAction.update",recreate:"dictUI.bulkAction.recreate",delete:"dictUI.bulkAction.delete"};
   return tx(keys[action]);
 }
+function indexWorkError(s){return [s.error,...s.failed||[]].filter(Boolean).map(window.wudictI18n.errorText).join("; ")}
 function renderBulkIndexes(){
   if(bulkIndexBusy)return;
   window.wudictThemedSelects?.bulk?.forEach(control=>control.destroy());
@@ -3895,8 +3894,9 @@ $("bulkIndexes").addEventListener("click",async e=>{
     let succeeded=0,report="";
     try{
       const result=await window.wudictWork.start(todo.map(({d,feat,action})=>({dict:d.id,feature:feat,action})));
-      succeeded=result.done;
-      if(result.error)throw new Error(result.error);
+      succeeded=result.done-(result.failed||[]).length;
+      const error=indexWorkError(result);
+      if(error)throw new Error(error);
       report=tx(result.canceled||result.stopRequested?"dictUI.bulkStopped":"dictUI.bulkFinished",{number:succeeded});
     }catch(err){report=tx("dictUI.bulkFailed",{number:succeeded,error:window.wudictI18n.errorText(err.message)})}
     finally{
@@ -4185,7 +4185,8 @@ async function runRemove(id,kind,node){
   try{
     if(kind==="index"){
       const result=await window.wudictWork.start([{dict:id,feature:"base",action:"delete"}],true);
-      if(result.error)throw new Error(result.error);
+      const error=indexWorkError(result);
+      if(error)throw new Error(error);
       rep=result.result||{};
     }else{
     const r=await fetch(q,{method:"DELETE"});
@@ -4273,7 +4274,7 @@ function runIngest(id,opts,label){
       if(!bulkIndexBusy)clearGlobalStop();
       // The shared banner polls independently. Refresh it at this terminal
       // event so its last progress count cannot linger on screen.
-      await window.wudictWork.refresh().catch(()=>{});
+      await window.wudictWork.complete("ingest:"+id).catch(()=>{});
       if(kind==="error"){
         if(!why)why=tx("dictUI.connectionLost");
         show(tx("dictUI.failed"),tx("dictUI.failedReason",{error:why}));
@@ -4658,19 +4659,23 @@ function setIndexStatus(html){
   const box=$("bulkIndexConfirm");
   $("bulkIndexStatus").hidden=!html;
   box.innerHTML=html;
-  if(globalStopAction)showWorkNotice(html);
+  // Index jobs use the shared server-work banner. This status belongs only
+  // to the dictionary settings panel, including its completion report.
 }
 let globalStopAction=null,globalStopLabel="";
 let workNoticeHTML="";
 function renderWorkNotice(){
-  if(document.documentElement.classList.contains("server-work-active"))return;
+  const serverActive=document.documentElement.classList.contains("server-work-active");
   const box=$("workNotice"),button=$("workNoticeStop");
   box.hidden=!workNoticeHTML;
-  if(box.hidden){document.documentElement.style.setProperty("--workh","0px");return}
+  if(box.hidden){if(!serverActive)document.documentElement.style.setProperty("--workh","0px");return}
   $("workNoticeText").innerHTML=workNoticeHTML;
   button.hidden=!globalStopAction;
   button.textContent=globalStopLabel||tx("dictUI.stop");
   button.disabled=globalStopLabel===tx("dictUI.bulkStopping");
+  // Keep the local notice current while the shared banner covers it. Only
+  // the visible banner owns the reserved footer height.
+  if(serverActive)return;
   requestAnimationFrame(()=>document.documentElement.style.setProperty("--workh",box.offsetHeight+"px"));
 }
 function showWorkNotice(html){workNoticeHTML=html;renderWorkNotice()}
@@ -4710,7 +4715,8 @@ window.addEventListener("wudict-work",event=>{
     }
   }else if(serverBulkWasRunning){
     serverBulkWasRunning=false;bulkIndexBusy=false;$("bulkIndexStop").hidden=true;
-    const report=tx(s.error?"dictUI.bulkFailed":s.canceled||s.stopRequested?"dictUI.bulkStopped":"dictUI.bulkFinished",{number:s.done,error:s.error});
+    const error=indexWorkError(s);
+    const report=tx(error?"dictUI.bulkFailed":s.canceled||s.stopRequested?"dictUI.bulkStopped":"dictUI.bulkFinished",{number:s.done-(s.failed||[]).length,error});
     setIndexStatus(esc(report));loadDicts().then(renderBulkIndexes);
   }
 });
@@ -4783,8 +4789,13 @@ function setBusy(on){
 async function fetchStream(url,onMsg,signal,options){
   const nativeQuery=url==="/api/search"?"":url.startsWith("/api/search?")?url.slice("/api/search?".length):null;
   const nativeDicts=url==="/api/dicts";
-  if((nativeQuery!==null||nativeDicts)&&typeof window.wudictNativeCall==="function"){
-    try{return await window.wudictNativeCall(nativeDicts?"dicts":"search",nativeQuery||"",onMsg,signal)}
+  const verb=options?.method||"GET";
+  const nativeRescan=verb==="GET"&&url==="/api/rescan";
+  const nativeRescanIndexes=verb==="POST"&&url==="/api/rescan?stream=1";
+  if((nativeQuery!==null||nativeDicts||nativeRescan||nativeRescanIndexes)&&typeof window.wudictNativeCall==="function"){
+    const method=nativeRescanIndexes?"rescanIndexes":nativeRescan?"rescan":nativeDicts?"dicts":"search";
+    const argument=nativeRescanIndexes?options.body:nativeQuery||"";
+    try{return await window.wudictNativeCall(method,argument,onMsg,signal)}
     catch(e){if(e&&e.name==="AbortError")throw e;throw new Error(window.wudictI18n.errorText(e&&e.message)||e.message||String(e))}
   }
   const resp=await fetch(url,{...options,...(signal?{signal}:{})});

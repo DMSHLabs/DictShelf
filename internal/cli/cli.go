@@ -1450,7 +1450,9 @@ Hint: pick another port with --port, e.g.:  wudict --port %s
 			return srv.PrefsSnapshot(), nil
 		case "savePrefs":
 			return srv.SavePrefs(strings.NewReader(argument))
-		case "groups", "userGroups", "about", "reindex", "indexWork":
+		case "groups", "userGroups", "about", "reindex", "indexWork", "startReindex", "stopReindex", "startIndexWork", "startSingleIndexWork", "stopIndexWork":
+			return srv.DesktopJSON(url, method, argument)
+		case "createGroup", "renameGroup", "deleteGroup", "setGroupMember", "replaceGroupMembership", "addGroupMembers", "linkGroup", "saveGroupOrder":
 			return srv.DesktopJSON(url, method, argument)
 		default:
 			return nil, fmt.Errorf("unknown native method %q", method)

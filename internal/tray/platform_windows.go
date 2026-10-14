@@ -7,13 +7,16 @@
 package tray
 
 import (
+	"debug/pe"
+	"os"
 	"syscall"
 	"unsafe"
 )
 
 // Windows decides "console or no console" in the PE header, at link time, so
 // the obvious way to ship a GUI launch is a second `-H windowsgui` binary.
-// **One wudict.exe, and the launch is read at runtime instead (D76).**
+// The launch is read at runtime for console builds (D76); a GUI-subsystem
+// executable on an interactive desktop also selects the native window.
 //
 // GetConsoleProcessList reports how many processes are attached to this
 // process's console. Typed into cmd, PowerShell or Windows Terminal the shell
@@ -56,17 +59,41 @@ func sessionZero() bool {
 	return ok != 0 && session == 0
 }
 
-// GUILaunched reports whether this process owns its console - see above.
+// GUILaunched reports an Explorer-style console launch or a GUI-subsystem
+// executable running without a console on an interactive desktop.
 //
 // It must be read BEFORE DetachConsole, and its answer carried in Config.GUI:
-// once the console is gone the same call reports false.
+// a detached console-subsystem executable then reports false.
 func GUILaunched() bool {
 	// The buffer only has to separate 1 from more. When it is too small the
 	// call returns the required element count, which is the number we want
 	// either way, so a console with a crowd on it is never mistaken for ours.
 	var pids [8]uint32
 	n, _, _ := procGetConsoleProcessList.Call(uintptr(unsafe.Pointer(&pids[0])), uintptr(len(pids)))
-	return n == 1
+	return n == 1 || n == 0 && !sessionZero() && guiExecutable()
+}
+
+// GUI builds do not allocate a console. Inspect the current executable so
+// manual -H windowsgui builds work without a separate build-time marker.
+func guiExecutable() bool {
+	path, err := os.Executable()
+	if err != nil {
+		return false
+	}
+	f, err := pe.Open(path)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+	const windowsGUI = 2
+	switch header := f.OptionalHeader.(type) {
+	case *pe.OptionalHeader64:
+		return header.Subsystem == windowsGUI
+	case *pe.OptionalHeader32:
+		return header.Subsystem == windowsGUI
+	default:
+		return false
+	}
 }
 
 // DetachConsole closes the console Windows created for this process alone, so

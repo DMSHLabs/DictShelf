@@ -36,6 +36,7 @@ type indexWorkStatus struct {
 	StopRequested bool     `json:"stopRequested"`
 	Canceled      bool     `json:"canceled"`
 	Error         string   `json:"error"`
+	Failed        []string `json:"failed,omitempty"`
 	Result        any      `json:"result,omitempty"`
 	Exclusive     bool     `json:"exclusive"`
 	BusyDicts     []string `json:"busyDicts"`
@@ -73,7 +74,7 @@ func (s *Server) indexWorkStatus(requested ...string) indexWorkStatus {
 	}
 	out := indexWorkStatus{ID: key, Running: st.Running, Done: st.Done, Total: st.Total, Current: st.Current,
 		CurrentDone: st.CurrentDone, CurrentTotal: st.CurrentTotal, Action: st.Action, Indexes: st.Indexes,
-		StopRequested: st.StopRequested, Canceled: st.Canceled, Error: st.Err}
+		StopRequested: st.StopRequested, Canceled: st.Canceled, Error: st.Err, Failed: st.Failed}
 	s.admission.mu.Lock()
 	out.Exclusive, out.BusyDicts = s.workLocks()
 	s.admission.mu.Unlock()
@@ -178,8 +179,11 @@ func (s *Server) handleIndexWork(w http.ResponseWriter, r *http.Request) {
 				}
 				e, err := s.reg.get(op.Dict)
 				if err != nil {
-					j.update(func(st *jobStatus) { st.Err = err.Error() })
-					return
+					j.update(func(st *jobStatus) {
+						st.Failed = append(st.Failed, fmt.Sprintf("%s: %v", op.Dict, err))
+						st.Done++
+					})
+					continue
 				}
 				action := "create"
 				if op.Action == "delete" {
@@ -244,8 +248,11 @@ func (s *Server) handleIndexWork(w http.ResponseWriter, r *http.Request) {
 				}
 				store.IndexDiagnostic("bulk operation finish dictionary=%q feature=%q action=%q error=%v", e.probeName(), op.Feature, op.Action, err)
 				if err != nil {
-					j.update(func(st *jobStatus) { st.Err = fmt.Sprintf("%s: %v", e.probeName(), err) })
-					return
+					j.update(func(st *jobStatus) {
+						st.Failed = append(st.Failed, fmt.Sprintf("%s: %v", e.probeName(), err))
+						st.Done++
+					})
+					continue
 				}
 				j.update(func(st *jobStatus) { st.Done++ })
 			}

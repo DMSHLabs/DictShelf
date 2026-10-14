@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -21,6 +22,8 @@ import (
 // browser and non-Windows transport; both paths enter the same handlers.
 func (s *Server) DesktopStream(ctx context.Context, baseURL, method, query string, emit func([]byte)) error {
 	path := ""
+	verb := http.MethodGet
+	var body io.Reader
 	switch method {
 	case "search":
 		path = "/api/search"
@@ -28,6 +31,12 @@ func (s *Server) DesktopStream(ctx context.Context, baseURL, method, query strin
 		path = "/api/dicts"
 	case "ingest":
 		path = "/api/ingest"
+	case "rescan":
+		path = "/api/rescan"
+	case "rescanIndexes":
+		path, verb = "/api/rescan", http.MethodPost
+		body = strings.NewReader(query)
+		query = "stream=1"
 	default:
 		return fmt.Errorf("unsupported desktop stream %q", method)
 	}
@@ -36,12 +45,15 @@ func (s *Server) DesktopStream(ctx context.Context, baseURL, method, query strin
 		return errors.New("invalid desktop server address")
 	}
 	base.Path, base.RawPath, base.RawQuery, base.Fragment = path, "", query, ""
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, base.String(), nil)
+	req, err := http.NewRequestWithContext(ctx, verb, base.String(), body)
 	if err != nil {
 		return err
 	}
 	req.Host = base.Host
 	req.RemoteAddr = "127.0.0.1:0"
+	if verb == http.MethodPost {
+		req.Header.Set("Content-Type", "application/json")
+	}
 	w := &desktopStreamWriter{header: make(http.Header), emit: emit}
 	s.ServeHTTP(w, req)
 	return w.finish()
@@ -53,22 +65,51 @@ func (s *Server) DesktopSearch(ctx context.Context, baseURL, query string, emit 
 	return s.DesktopStream(ctx, baseURL, "search", query, emit)
 }
 
-// DesktopJSON calls one read-only JSON endpoint in-process for the desktop
+// DesktopJSON calls an explicitly supported JSON endpoint in-process for the desktop
 // bridge. The endpoint still runs through the same server middleware and
 // handler as an HTTP client.
 func (s *Server) DesktopJSON(baseURL, method, argument string) (any, error) {
 	path := ""
 	query := ""
+	verb := http.MethodGet
+	var body io.Reader
 	switch method {
 	case "groups":
 		path = "/api/groups"
 	case "userGroups":
 		path = "/api/user-groups"
+	case "createGroup", "renameGroup", "deleteGroup", "setGroupMember", "replaceGroupMembership", "addGroupMembers", "linkGroup", "saveGroupOrder":
+		route := map[string]struct{ path, verb string }{
+			"createGroup":            {"/api/user-groups", http.MethodPost},
+			"renameGroup":            {"/api/user-groups/name", http.MethodPut},
+			"deleteGroup":            {"/api/user-groups", http.MethodDelete},
+			"setGroupMember":         {"/api/user-groups/member", http.MethodPut},
+			"replaceGroupMembership": {"/api/user-groups/membership", http.MethodPut},
+			"addGroupMembers":        {"/api/user-groups/members", http.MethodPut},
+			"linkGroup":              {"/api/user-groups/link", http.MethodPut},
+			"saveGroupOrder":         {"/api/user-groups/order", http.MethodPut},
+		}[method]
+		path, verb, body = route.path, route.verb, strings.NewReader(argument)
 	case "about":
 		path = "/api/about"
 		query = url.Values{"dict": []string{argument}}.Encode()
 	case "reindex":
 		path = "/api/reindex"
+	case "startReindex", "stopReindex":
+		path = "/api/reindex"
+		verb = http.MethodPost
+		if method == "stopReindex" {
+			verb = http.MethodDelete
+		}
+	case "startIndexWork", "startSingleIndexWork":
+		path, verb = "/api/index-work", http.MethodPost
+		body = strings.NewReader(argument)
+		if method == "startSingleIndexWork" {
+			query = "single=1"
+		}
+	case "stopIndexWork":
+		path, verb = "/api/index-work", http.MethodDelete
+		query = url.Values{"id": []string{"all"}}.Encode()
 	case "indexWork":
 		path = "/api/index-work"
 		if argument != "" {
@@ -82,12 +123,15 @@ func (s *Server) DesktopJSON(baseURL, method, argument string) (any, error) {
 		return nil, errors.New("invalid desktop server address")
 	}
 	base.Path, base.RawPath, base.RawQuery, base.Fragment = path, "", query, ""
-	req, err := http.NewRequest(http.MethodGet, base.String(), nil)
+	req, err := http.NewRequest(verb, base.String(), body)
 	if err != nil {
 		return nil, err
 	}
 	req.Host = base.Host
 	req.RemoteAddr = "127.0.0.1:0"
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
 	rec := httptest.NewRecorder()
 	s.ServeHTTP(rec, req)
 	if rec.Code >= 400 {

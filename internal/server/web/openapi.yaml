@@ -92,11 +92,13 @@ paths:
   /api/index-work:
     get:
       summary: Read the active dictionary indexing progress across pages.
+      description: '`done` counts attempted operations, including failures. `failed` lists per-operation errors; other queued operations continue. `error` describes a fatal job error.'
       responses:
         '200':
           description: Current job snapshot.
     post:
       summary: Start a server-owned sequence of index operations.
+      description: A failed dictionary operation is recorded and skipped; the remaining queue continues. Stop still finishes the current atomic operation safely.
       responses:
         '202':
           description: Queue accepted; navigation does not stop it.
