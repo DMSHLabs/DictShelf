@@ -131,7 +131,7 @@ func (s *Server) handleBrowseDiagnostic(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	switch d.Event {
-	case "alphabet_cache_miss", "alphabet_cache_invalid", "alphabet_cache_read_failed", "alphabet_cache_restore", "alphabet_cache_saved", "alphabet_cache_save_failed", "page_request", "page_response", "page_ready", "render", "page_cache_saved", "page_cache_restored", "wildcard_cache_checkpoint", "wildcard_cache_complete", "wildcard_cache_restored", "wildcard_memory_start", "wildcard_memory_sample", "wildcard_memory_end":
+	case "alphabet_cache_miss", "alphabet_cache_invalid", "alphabet_cache_read_failed", "alphabet_cache_restore", "alphabet_cache_saved", "alphabet_cache_save_failed", "page_request", "page_response", "page_ready", "render", "page_cache_saved", "page_cache_restored", "wildcard_cache_checkpoint", "wildcard_cache_complete", "wildcard_cache_restored", "wildcard_memory_start", "wildcard_memory_sample", "wildcard_memory_end", "dictionary_picker_open":
 	default:
 		http.Error(w, "invalid diagnostic", http.StatusBadRequest)
 		return
@@ -154,6 +154,12 @@ func (s *Server) handleBrowseDiagnostic(w http.ResponseWriter, r *http.Request) 
 			stopBrowseMemoryMonitor()
 		}
 		logBrowseMemory(d.Event, d.Active, d.Completed, d.Dictionaries)
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	if d.Event == "dictionary_picker_open" {
+		logx.System("dictionary_picker_diag group_fetch_ms=%d rows_render_ms=%d rows=%d total_ms=%d",
+			d.FetchMS, d.WordsMS, d.Words, d.TotalMS)
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}

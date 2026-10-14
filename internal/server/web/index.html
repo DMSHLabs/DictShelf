@@ -1022,6 +1022,7 @@ window.wudictFontScale=(function(){
     <label class="sys-row"><input type="checkbox" id="sysLogWeb"><span class="sys-label">{{T:system.logWeb}}</span></label>
     <p class="sys-hint">{{T:system.logHint}}</p>
     <label class="sys-row"><input type="checkbox" id="sysBrowseDiagnostics"><span class="sys-label">{{T:system.browseDiagnostics}}</span></label>
+    <label class="sys-row"><input type="checkbox" id="sysDictionaryListDiagnostics"><span class="sys-label">{{T:system.dictionaryListDiagnostics}}</span></label>
     <label class="sys-row"><input type="checkbox" id="sysDictionaryCacheDiagnostics"><span class="sys-label">{{T:system.dictionaryCacheDiagnostics}}</span></label>
     <label class="sys-row"><input type="checkbox" id="sysFolderDiagnostics"><span class="sys-label">{{T:system.folderDiagnostics}}</span></label>
     <div class="group-toolbar"><a class="btn" id="sysSaveLog" href="/api/system-log" download>{{T:panel.saveSystemLog}}</a></div>
@@ -2348,14 +2349,22 @@ function paintWebDictionaryPicker(){
     list.append(empty);
   }
   webPickerSearch?.refresh();
+  return rows.length;
 }
 async function openWebDictionaryPicker(){
   const dialog=$('webDictionaryPicker');
   if(dialog.open)return;
+  const started=performance.now();
+  const groupsStarted=started;
   try{
     userGroups=await groupRequest('/api/user-groups','GET');
+    const groupsMs=Math.round(performance.now()-groupsStarted);
     if(!userGroups.some(g=>g.id===pickerGroup))pickerGroup='all';
-    paintWebDictionaryPicker();
+    const paintStarted=performance.now();
+    const rows=paintWebDictionaryPicker();
+    const paintMs=Math.round(performance.now()-paintStarted);
+    if(dictionaryListDiagnosticsEnabled())fetch('/api/browse-diagnostic',{method:'POST',headers:{'Content-Type':'application/json'},keepalive:true,
+      body:JSON.stringify({event:'dictionary_picker_open',words:rows,fetchMs:groupsMs,wordsMs:paintMs,totalMs:Math.round(performance.now()-started)})}).catch(()=>{});
     dialog.showModal();
     if(!webPickerSearch){
       webPickerSearch=window.wudictListSearch.create({
@@ -2619,7 +2628,9 @@ async function loadDicts(rescan){
     bootFailed(tx("search.serverSilent"));
   },20000):null;
   try{
-    await fetchStream(rescan?"/api/rescan":"/api/dicts",msg=>{
+    const endpoint=rescan?"/api/rescan":"/api/dicts";
+    const listURL=dictionaryListDiagnosticsEnabled()?endpoint+"?diagnostics=1":endpoint;
+    await fetchStream(listURL,msg=>{
       if(msg.t==="begin"){
         sawBegin=true;dictTotal=msg.total||0;
         if(blocking){syncBootStatus();showWorkNotice('<span class="spin"></span>'+esc(readyCount()))}
@@ -3408,6 +3419,7 @@ function sysPaint(state){
   $("sysLogBase").disabled=!state.logEnabled;
   $("sysLogWeb").disabled=!state.logEnabled;
   $("sysBrowseDiagnostics").checked=browseDiagnosticsEnabled();
+  $("sysDictionaryListDiagnostics").checked=dictionaryListDiagnosticsEnabled();
   $("sysDictionaryCacheDiagnostics").checked=dictionaryCacheDiagnosticsEnabled();
   $("sysFolderDiagnostics").checked=folderDiagnosticsEnabled();
   const box=$("sysAdvanced");
@@ -3675,6 +3687,11 @@ async function showDesktopSysSettings(){
   diagnostics.addEventListener("change",()=>setBrowseDiagnostics(diagnostics.checked));
   const diagnosticsText=document.createElement("span");diagnosticsText.className="sys-label";diagnosticsText.textContent=tx("system.browseDiagnostics");
   diagnosticsLabel.append(diagnostics,diagnosticsText);body.append(diagnosticsLabel);
+  const dictionaryListLabel=document.createElement("label");dictionaryListLabel.className="sys-row";
+  const dictionaryListDiagnostics=document.createElement("input");dictionaryListDiagnostics.type="checkbox";dictionaryListDiagnostics.checked=dictionaryListDiagnosticsEnabled();
+  dictionaryListDiagnostics.addEventListener("change",()=>setDictionaryListDiagnostics(dictionaryListDiagnostics.checked));
+  const dictionaryListText=document.createElement("span");dictionaryListText.className="sys-label";dictionaryListText.textContent=tx("system.dictionaryListDiagnostics");
+  dictionaryListLabel.append(dictionaryListDiagnostics,dictionaryListText);body.append(dictionaryListLabel);
   const dictionaryCacheLabel=document.createElement("label");dictionaryCacheLabel.className="sys-row";
   const dictionaryCacheDiagnostics=document.createElement("input");dictionaryCacheDiagnostics.type="checkbox";dictionaryCacheDiagnostics.checked=dictionaryCacheDiagnosticsEnabled();
   dictionaryCacheDiagnostics.addEventListener("change",()=>setDictionaryCacheDiagnostics(dictionaryCacheDiagnostics.checked));
@@ -3734,6 +3751,8 @@ $("sysInfo").addEventListener("change",e=>sysSwitch("info",e.target.checked));
 $("sysKey").addEventListener("change",e=>sysSwitch("key",e.target.checked));
 function browseDiagnosticsEnabled(){try{return localStorage.getItem("wudict_browse_diagnostics")==="1"}catch(_){return false}}
 function setBrowseDiagnostics(on){try{if(on)localStorage.setItem("wudict_browse_diagnostics","1");else localStorage.removeItem("wudict_browse_diagnostics")}catch(_){}}
+function dictionaryListDiagnosticsEnabled(){try{return localStorage.getItem("wudict_dictionary_list_diagnostics")==="1"}catch(_){return false}}
+function setDictionaryListDiagnostics(on){try{if(on)localStorage.setItem("wudict_dictionary_list_diagnostics","1");else localStorage.removeItem("wudict_dictionary_list_diagnostics")}catch(_){}}
 function dictionaryCacheDiagnosticsEnabled(){try{return localStorage.getItem("wudict_dictionary_cache_diagnostics")==="1"}catch(_){return false}}
 function setDictionaryCacheDiagnostics(on){try{if(on)localStorage.setItem("wudict_dictionary_cache_diagnostics","1");else localStorage.removeItem("wudict_dictionary_cache_diagnostics")}catch(_){}}
 function folderDiagnosticsEnabled(){try{return localStorage.getItem("wudict_folder_diagnostics")==="1"}catch(_){return false}}
@@ -3746,6 +3765,7 @@ $("sysLogEnabled").addEventListener("change",sysLogChange);
 $("sysLogBase").addEventListener("change",sysLogChange);
 $("sysLogWeb").addEventListener("change",sysLogChange);
 $("sysBrowseDiagnostics").addEventListener("change",e=>setBrowseDiagnostics(e.target.checked));
+$("sysDictionaryListDiagnostics").addEventListener("change",e=>setDictionaryListDiagnostics(e.target.checked));
 $("sysDictionaryCacheDiagnostics").addEventListener("change",e=>setDictionaryCacheDiagnostics(e.target.checked));
 $("sysFolderDiagnostics").addEventListener("change",e=>setFolderDiagnostics(e.target.checked));
 /* Restore defaults: one tap clears every Advanced row at once, which is why it
