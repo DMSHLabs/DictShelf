@@ -4786,6 +4786,18 @@ function setBusy(on){
 /* read a newline-delimited JSON response, invoking onMsg per record as it
    arrives — this is what lets each dictionary render the instant it is
    ready instead of waiting for the whole fan-out (progressive results). */
+function nativeSearchRequest(query){
+  const parameters=new URLSearchParams(query),raw=parameters.get("n")||"";
+  let limit=0;
+  if(/^[+-]?\d+$/.test(raw)){
+    const value=BigInt(raw);
+    if(value>0n&&value<=9223372036854775807n)limit=Number(value>500n?500n:value);
+  }
+  const highlight=(parameters.get("hl")||"").trim().toLowerCase();
+  return JSON.stringify({q:parameters.get("q")||"",mode:parameters.get("mode")||"",
+    format:parameters.get("format")||"",dict:parameters.get("dict")||"",n:limit,
+    hl:!["","0","false","no","off"].includes(highlight)});
+}
 async function fetchStream(url,onMsg,signal,options){
   const nativeQuery=url==="/api/search"?"":url.startsWith("/api/search?")?url.slice("/api/search?".length):null;
   const nativeDicts=url==="/api/dicts";
@@ -4794,7 +4806,7 @@ async function fetchStream(url,onMsg,signal,options){
   const nativeRescanIndexes=verb==="POST"&&url==="/api/rescan?stream=1";
   if((nativeQuery!==null||nativeDicts||nativeRescan||nativeRescanIndexes)&&typeof window.wudictNativeCall==="function"){
     const method=nativeRescanIndexes?"rescanIndexes":nativeRescan?"rescan":nativeDicts?"dicts":"search";
-    const argument=nativeRescanIndexes?options.body:nativeQuery||"";
+    const argument=nativeRescanIndexes?options.body:nativeQuery!==null?nativeSearchRequest(nativeQuery):"";
     try{return await window.wudictNativeCall(method,argument,onMsg,signal)}
     catch(e){if(e&&e.name==="AbortError")throw e;throw new Error(window.wudictI18n.errorText(e&&e.message)||e.message||String(e))}
   }

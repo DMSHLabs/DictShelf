@@ -15,18 +15,24 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"strings"
+
+	"github.com/wuweidict/wudict/internal/logx"
 )
 
-// DesktopStream runs an existing streaming route in-process and forwards each
-// NDJSON record to the desktop WebView bridge. The HTTP routes remain the
-// browser and non-Windows transport; both paths enter the same handlers.
+// DesktopStream dispatches desktop streams. Search calls the shared Go
+// operation directly; the other streams still enter their existing routes.
 func (s *Server) DesktopStream(ctx context.Context, baseURL, method, query string, emit func([]byte)) error {
+	if method == "search" {
+		var request SearchRequest
+		if err := json.Unmarshal([]byte(query), &request); err != nil {
+			return fmt.Errorf("invalid native search request: %w", err)
+		}
+		return s.desktopSearchRequest(ctx, baseURL, request, emit)
+	}
 	path := ""
 	verb := http.MethodGet
 	var body io.Reader
 	switch method {
-	case "search":
-		path = "/api/search"
 	case "dicts":
 		path = "/api/dicts"
 	case "ingest":
@@ -59,10 +65,43 @@ func (s *Server) DesktopStream(ctx context.Context, baseURL, method, query strin
 	return w.finish()
 }
 
-// DesktopSearch remains a narrow convenience for callers that only need the
-// search stream.
+// DesktopSearch accepts a legacy query string and calls the shared search
+// operation directly. WebView2 uses the typed JSON request via DesktopStream.
 func (s *Server) DesktopSearch(ctx context.Context, baseURL, query string, emit func([]byte)) error {
-	return s.DesktopStream(ctx, baseURL, "search", query, emit)
+	parameters, err := url.ParseQuery(query)
+	if err != nil {
+		return err
+	}
+	return s.desktopSearchRequest(ctx, baseURL, searchRequestFromQuery(parameters), emit)
+}
+
+// Search enters the shared Go operation directly. Encoding events is the
+// bridge's only output adaptation; no request, router or NDJSON parser runs.
+func (s *Server) desktopSearchRequest(ctx context.Context, baseURL string, request SearchRequest, emit func([]byte)) (resultErr error) {
+	defer func() {
+		if p := recover(); p != nil {
+			logx.Warn("panic in native search: %v", p)
+			resultErr = fmt.Errorf("internal error: %v", p)
+		}
+	}()
+	base, err := url.Parse(baseURL)
+	if err != nil || base.Scheme != "http" || base.Host == "" || base.User != nil {
+		return errors.New("invalid desktop server address")
+	}
+	request.Origin = base.Scheme + "://" + base.Host
+	var buffer bytes.Buffer
+	encoder := json.NewEncoder(&buffer)
+	encoder.SetEscapeHTML(false)
+	return s.Search(ctx, request, func(event SearchEvent) error {
+		buffer.Reset()
+		if err := encoder.Encode(event); err != nil {
+			return err
+		}
+		if emit != nil {
+			emit(bytes.Clone(bytes.TrimSpace(buffer.Bytes())))
+		}
+		return nil
+	})
 }
 
 // DesktopJSON calls an explicitly supported JSON endpoint in-process for the desktop
