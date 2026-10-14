@@ -4,12 +4,14 @@ rem SPDX-License-Identifier: GPL-3.0-or-later
 setlocal EnableExtensions DisableDelayedExpansion
 
 rem ============================================================
-rem wuDict2 Windows desktop build: [debug|release] [purego]
+rem wuDict2 Windows desktop build: [debug|release] [purego] [console]
 rem
 rem   debug    (default)  build wuDict2.exe in the repository root
 rem   release             the same wuDict2.exe plus the per-user installer,
 rem                       compiled into dist\ (needs Inno Setup 6.3+)
 rem   purego              force the pure-Go flavour (see below)
+rem   console             console subsystem for CLI use and diagnostics;
+rem                       default builds use the Windows GUI subsystem
 rem
 rem Tokens may be written in either order, the way build-android.cmd takes
 rem `debug intel` and `intel debug`.
@@ -69,6 +71,8 @@ rem ------------------------------------------------------------
 
 set "BUILD_TYPE="
 set "FLAVOUR="
+set "WINDOW_MODE=gui"
+set "WINDOW_LDFLAGS=-H windowsgui"
 
 if not "%~1"=="" for %%A in (%*) do (
     if /i "%%A"=="debug" (
@@ -77,9 +81,12 @@ if not "%~1"=="" for %%A in (%*) do (
         set "BUILD_TYPE=release"
     ) else if /i "%%A"=="purego" (
         set "FLAVOUR=purego"
+    ) else if /i "%%A"=="console" (
+        set "WINDOW_MODE=console"
+        set "WINDOW_LDFLAGS="
     ) else (
         echo ERROR: unknown option "%%A".
-        echo Usage: build-windows.cmd [debug^|release] [purego]
+        echo Usage: build-windows.cmd [debug^|release] [purego] [console]
         exit /b 1
     )
 )
@@ -180,6 +187,8 @@ echo.
 
 echo Flavour:
 echo   %FLAVOUR% ^(tags: %GO_TAGS%, CGO_ENABLED=%CGO%^)
+echo Window subsystem:
+echo   %WINDOW_MODE%
 
 if /i "%FLAVOUR%"=="cgo" (
     echo Compiler:
@@ -219,7 +228,7 @@ set "CGO_ENABLED=%CGO%"
 go build ^
   -trimpath ^
   -tags %GO_TAGS% ^
-  -ldflags "-s -w -X github.com/wuweidict/wudict/internal/cli.Version=%VERSION% -X github.com/wuweidict/wudict/internal/cli.ProductName=wuDict2" ^
+  -ldflags "%WINDOW_LDFLAGS% -s -w -X github.com/wuweidict/wudict/internal/cli.Version=%VERSION% -X github.com/wuweidict/wudict/internal/cli.ProductName=wuDict2" ^
   -o wuDict2.exe ^
   .
 
@@ -321,7 +330,12 @@ if defined SETUP (
 )
 
 echo Run it:
-echo   wuDict2.exe                   open the app from Explorer, browser from cmd
+if /i "%WINDOW_MODE%"=="gui" (
+    echo   wuDict2.exe                   open the app without a console window
+    echo   build-windows.cmd debug console    build a console executable for CLI use
+) else (
+    echo   wuDict2.exe                   open the app from Explorer, browser from cmd
+)
 echo   wuDict2.exe --help            every command and flag
 echo.
 

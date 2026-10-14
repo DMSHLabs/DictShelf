@@ -123,9 +123,18 @@ function groupErrorText(message){
   return keys.has(message)?tx(keys.get(message)):message;
 }
 async function groupRequest(path,method,body){
-  if(method==='GET'&&typeof window.wudictNativeCall==='function'){
-    if(path==='/api/user-groups')return window.wudictNativeCall('userGroups');
-    if(path==='/api/groups')return window.wudictNativeCall('groups');
+  if(typeof window.wudictNativeCall==='function'){
+    const action={
+      'GET /api/user-groups':'userGroups', 'GET /api/groups':'groups',
+      'POST /api/user-groups':'createGroup', 'PUT /api/user-groups/name':'renameGroup',
+      'DELETE /api/user-groups':'deleteGroup', 'PUT /api/user-groups/member':'setGroupMember',
+      'PUT /api/user-groups/membership':'replaceGroupMembership', 'PUT /api/user-groups/members':'addGroupMembers',
+      'PUT /api/user-groups/link':'linkGroup', 'PUT /api/user-groups/order':'saveGroupOrder'
+    }[method+' '+path];
+    if(action){
+      try{return await window.wudictNativeCall(action,body===undefined?'':JSON.stringify(body))}
+      catch(error){throw new Error(groupErrorText(error.message))}
+    }
   }
   const response=await fetch(path,{method,headers:{"Content-Type":"application/json"},body:body===undefined?undefined:JSON.stringify(body)});
   if(!response.ok)throw new Error(groupErrorText((await response.text()).trim()));

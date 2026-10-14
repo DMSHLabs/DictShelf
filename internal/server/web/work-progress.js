@@ -19,7 +19,7 @@
   const spinner = document.createElement('span'), text = document.createElement('span'), button = document.createElement('button');
   spinner.className = 'work-spinner'; spinner.setAttribute('aria-hidden','true');
   button.type = 'button'; box.append(spinner, text, button); document.body.append(backing, box);
-  let status = null, pending = false, starting = false, refreshSequence = 0;
+  let status = null, pending = false, starting = false, refreshSequence = 0, waiting = 0;
   const cacheKey='wudict-active-work';
   async function request(url, options={}) {
     const controller=new AbortController();
@@ -102,31 +102,50 @@
   async function stop() {
     if (!status?.running || pending) return;
     pending = true; render(status);
-    try { const r = await request('/api/index-work?id=all', {method:'DELETE'}); if (!r.ok) throw new Error(await r.text()); render(await r.json()); }
+    try {
+      if(typeof window.wudictNativeCall==='function')render(await window.wudictNativeCall('stopIndexWork'));
+      else { const r = await request('/api/index-work?id=all', {method:'DELETE'}); if (!r.ok) throw new Error(await r.text()); render(await r.json()); }
+    }
     finally { pending = false; }
   }
   button.onclick = () => stop().catch(() => {button.disabled=false;});
   async function wait(id) {
-    for (;;) {
+    waiting++;
+    try { for (;;) {
       await new Promise(resolve => setTimeout(resolve, 700));
       let s; try { s = await refresh(id); } catch { continue; }
       if (!s.running) return s;
-    }
+    }} finally { waiting--; }
   }
-  window.wudictWork = {stop, refresh, wait, async start(operations, single=false) {
+  async function complete(id) {
+    // A terminal response belongs to this exact job. Clear its banner
+    // immediately, then refresh the aggregate status in case another job is
+    // already active.
+    if(status?.id===id)render({...status,running:false,exclusive:false,busyDicts:[]});
+    return refresh();
+  }
+  window.wudictWork = {stop, refresh, wait, complete, async start(operations, single=false) {
     starting=true;
     render({id:'starting',running:true,exclusive:!single,busyDicts:single?[operations[0].dict]:[]});
     let started;
     try{
-    const r = await fetch('/api/index-work'+(single?'?single=1':''), {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(operations)});
-    if (!r.ok) throw new Error(await r.text());
-    started=await r.json();
+    const body=JSON.stringify(operations);
+    if(typeof window.wudictNativeCall==='function')started=await window.wudictNativeCall(single?'startSingleIndexWork':'startIndexWork',body);
+    else {
+      const r = await request('/api/index-work'+(single?'?single=1':''), {method:'POST',headers:{'Content-Type':'application/json'},body});
+      if (!r.ok) throw new Error(await r.text());
+      started=await r.json();
+    }
     }catch(error){starting=false;await refresh().catch(()=>render({running:false,exclusive:false,busyDicts:[]}));throw error;}
     starting=false;render(started);
-    return wait(started.id);
+    const result=await wait(started.id);
+    await complete(started.id).catch(()=>{});
+    return result;
   }};
   async function poll() {
-    try { await refresh(); } catch { if (status?.running) text.textContent = t('dictUI.reconnecting'); }
+    // The queue waiter owns progress polling while start() is active. Two
+    // competing poll loops can continually supersede each other's replies.
+    try { if(!waiting)await refresh(); } catch { if (status?.running) text.textContent = t('dictUI.reconnecting'); }
     setTimeout(poll, 1000);
   }
   new ResizeObserver(() => {if(status?.running)document.documentElement.style.setProperty('--workh',`${box.getBoundingClientRect().height+8}px`);}).observe(box);
