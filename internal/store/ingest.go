@@ -654,6 +654,9 @@ func DefaultDBDir() string {
 		return *dir
 	}
 	if dir := os.Getenv("WUDICT_DB_DIR"); dir != "" {
+		if root := os.Getenv("WUDICT_PORTABLE_HOME"); root != "" && !filepath.IsAbs(dir) {
+			return filepath.Join(root, dir)
+		}
 		return dir
 	}
 	home, err := os.UserHomeDir()
