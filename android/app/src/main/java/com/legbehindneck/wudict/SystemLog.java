@@ -5,6 +5,7 @@ package com.legbehindneck.wudict;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.os.Build;
 import android.util.Log;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -33,7 +34,10 @@ final class SystemLog {
             baseEvents = prefs.getBoolean("base-events", true);
             detailedEvents = prefs.getBoolean("detailed-events", false);
         }
-        record("application start build=" + BuildConfig.VERSION_NAME);
+        record("application start build=" + BuildConfig.VERSION_NAME
+                + " android_release=" + Build.VERSION.RELEASE
+                + " android_sdk=" + Build.VERSION.SDK_INT
+                + " device=" + Build.MANUFACTURER + "/" + Build.MODEL);
         Thread.UncaughtExceptionHandler previous = Thread.getDefaultUncaughtExceptionHandler();
         if (previous != null) Thread.setDefaultUncaughtExceptionHandler((thread, error) -> {
             try {
@@ -63,6 +67,12 @@ final class SystemLog {
 
     static void recordDetailed(String message) {
         if (enabled && detailedEvents) write(message);
+    }
+
+    /** Records timings explicitly enabled by a diagnostic switch in the page. */
+    static void recordDiagnostic(String message) {
+        if (!enabled) return;
+        new Thread(() -> write(message), "wudict-diagnostic-log").start();
     }
 
     static boolean enabled() { return enabled; }

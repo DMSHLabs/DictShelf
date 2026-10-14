@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/wuweidict/wudict/internal/dict"
@@ -529,6 +530,37 @@ type browseAlphabetStreamer interface {
 
 func (s *Server) handleBrowseStream(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
+	started := time.Now()
+	diagnostics := q.Get("diagnostics") == "1"
+	phase := atomic.Int64{}
+	progressAt, progressTotal, letterCount := atomic.Int64{}, atomic.Int64{}, atomic.Int64{}
+	phaseNames := []string{"dictionary_lookup", "dictionary_open", "page_read", "alphabet_stream", "complete"}
+	stopHeartbeat := make(chan struct{})
+	if diagnostics {
+		go func() {
+			ticker := time.NewTicker(5 * time.Second)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-stopHeartbeat:
+					return
+				case <-r.Context().Done():
+					return
+				case <-ticker.C:
+					index := min(int(phase.Load()), len(phaseNames)-1)
+					logx.System("browse_stream event=slow_phase phase=%s elapsed_ms=%d progress_at=%d total=%d letters=%d",
+						phaseNames[index], time.Since(started).Milliseconds(), progressAt.Load(), progressTotal.Load(), letterCount.Load())
+				}
+			}
+		}()
+		defer func() {
+			close(stopHeartbeat)
+			index := min(int(phase.Load()), len(phaseNames)-1)
+			logx.System("browse_stream event=finished phase=%s elapsed_ms=%d progress_at=%d total=%d letters=%d",
+				phaseNames[index], time.Since(started).Milliseconds(), progressAt.Load(), progressTotal.Load(), letterCount.Load())
+		}()
+	}
+	phase.Store(0)
 	e, err := s.reg.get(q.Get("dict"))
 	if err != nil {
 		httpErr(w, 404, "%v", err)
@@ -538,6 +570,7 @@ func (s *Server) handleBrowseStream(w http.ResponseWriter, r *http.Request) {
 		browseUnprepared(w, e)
 		return
 	}
+	phase.Store(1)
 	d, err := e.open()
 	if err != nil {
 		httpErr(w, 500, "%v", err)
@@ -548,6 +581,7 @@ func (s *Server) handleBrowseStream(w http.ResponseWriter, r *http.Request) {
 		browseUnprepared(w, e)
 		return
 	}
+	phase.Store(2)
 	st, ok := newStream(w, "application/x-ndjson")
 	if !ok {
 		return
@@ -560,6 +594,7 @@ func (s *Server) handleBrowseStream(w http.ResponseWriter, r *http.Request) {
 	streamer, canStreamAlphabet := d.(browseAlphabetStreamer)
 	var readyAlphabet []dict.Letter
 	if !canStreamAlphabet {
+		phase.Store(3)
 		readyAlphabet, err = b.Alphabet()
 		if err != nil {
 			st.line(browseStreamEvent{Type: "error", Error: err.Error()})
@@ -598,8 +633,12 @@ func (s *Server) handleBrowseStream(w http.ResponseWriter, r *http.Request) {
 	page := offset/browsePageSize + 1
 	st.line(browseStreamEvent{Type: "page", Page: &browseResp{Dict: e.ID, Name: meta.Name, Total: total,
 		Page: page, Pages: pages, Size: browsePageSize, At: mark, Words: words, Alphabet: []dict.Letter{}}})
+	phase.Store(3)
 
 	emit := func(letters []dict.Letter, at, all int) error {
+		progressAt.Store(int64(at))
+		progressTotal.Store(int64(all))
+		letterCount.Add(int64(len(letters)))
 		if len(letters) > 0 {
 			st.line(browseStreamEvent{Type: "letters", Letters: letters, At: at, Total: all})
 		} else {
@@ -624,6 +663,7 @@ func (s *Server) handleBrowseStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	st.line(browseStreamEvent{Type: "done", At: total, Total: total})
+	phase.Store(4)
 }
 
 // browseUnprepared answers the state where the dictionary has no library index

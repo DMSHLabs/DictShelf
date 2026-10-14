@@ -14,6 +14,7 @@ import android.graphics.PixelFormat;
 import android.graphics.Typeface;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
+import android.os.SystemClock;
 import android.text.Editable;
 import android.text.SpannableString;
 import android.text.Spanned;
@@ -24,6 +25,7 @@ import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewTreeObserver;
 import android.view.WindowManager;
 import android.view.inputmethod.EditorInfo;
 import android.webkit.JsPromptResult;
@@ -52,10 +54,12 @@ final class DictionaryPicker {
     // stream new rows while this native window remains open.
     static void showLive(Activity activity, WebView web, String payload, JsPromptResult result) {
         if (activity.isFinishing() || activity.isDestroyed()) { result.cancel(); return; }
+        long started = SystemClock.elapsedRealtime();
         try {
             Live previous = live.remove(web);
             if (previous != null) previous.dialog.dismiss();
             Live picker = new Live(activity, web, payload);
+            long prepared = SystemClock.elapsedRealtime();
             live.put(web, picker);
             picker.dialog.show();
             picker.dialog.getWindow().setSoftInputMode(
@@ -63,6 +67,29 @@ final class DictionaryPicker {
                     WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN);
             picker.dialog.getWindow().setBackgroundDrawable(
                     WindowBackground.dialogDrawable(activity, ShellPrefs.pageBg(activity)));
+            if (picker.diagnostics) {
+                long shown = SystemClock.elapsedRealtime();
+                SystemLog.recordDiagnostic("dictionary_picker event=open native_prepare_ms="
+                        + (prepared - started) + " dialog_setup_ms=" + (shown - prepared)
+                        + " client_group_fetch_ms=" + picker.clientGroupFetchMs
+                        + " client_payload_ms=" + picker.clientPayloadMs
+                        + " client_total_ms=" + picker.clientTotalMs
+                        + " rows=" + picker.rows.length());
+                View decor = picker.dialog.getWindow().getDecorView();
+                ViewTreeObserver observer = decor.getViewTreeObserver();
+                long firstDrawStarted = started;
+                observer.addOnDrawListener(new ViewTreeObserver.OnDrawListener() {
+                    private boolean recorded;
+                    @Override public void onDraw() {
+                        if (recorded) return;
+                        recorded = true;
+                        if (observer.isAlive()) observer.removeOnDrawListener(this);
+                        SystemLog.recordDiagnostic("dictionary_picker event=first_draw elapsed_ms="
+                                + (SystemClock.elapsedRealtime() - firstDrawStarted)
+                                + " rows=" + picker.rows.length());
+                    }
+                });
+            }
             result.confirm("open");
         } catch (JSONException bad) { result.cancel(); }
     }
@@ -87,6 +114,8 @@ final class DictionaryPicker {
         final JSONObject searchLabels;
         final Activity activity;
         final int backgroundColor, textColor, accent;
+        final boolean diagnostics;
+        final long clientGroupFetchMs, clientPayloadMs, clientTotalMs;
         final List<Integer> shownRows = new ArrayList<>(), matchingRows = new ArrayList<>();
         JSONArray rows = new JSONArray();
         JSONArray groupValues = new JSONArray();
@@ -102,6 +131,11 @@ final class DictionaryPicker {
             this.web = web;
             JSONObject initial = new JSONObject(payload);
             found = initial.optBoolean("found");
+            diagnostics = initial.optBoolean("diagnostics");
+            JSONObject clientTiming = initial.optJSONObject("diagnosticsTiming");
+            clientGroupFetchMs = clientTiming == null ? -1 : clientTiming.optLong("groupFetchMs", -1);
+            clientPayloadMs = clientTiming == null ? -1 : clientTiming.optLong("payloadMs", -1);
+            clientTotalMs = clientTiming == null ? -1 : clientTiming.optLong("totalMs", -1);
             searchLabels = initial.optJSONObject("listSearch") == null
                     ? new JSONObject() : initial.optJSONObject("listSearch");
             int color = ShellPrefs.pageBg(activity);
@@ -310,6 +344,7 @@ final class DictionaryPicker {
         }
 
         void update(JSONObject data) throws JSONException {
+            long started = SystemClock.elapsedRealtime();
             updating = true;
             JSONArray values = data.getJSONArray("groups");
             groupValues = values;
@@ -327,6 +362,11 @@ final class DictionaryPicker {
             empty = data.optString("empty", "No dictionaries");
             rebuildRows(true, data.optString("selected"));
             updating = false;
+            long elapsed = SystemClock.elapsedRealtime() - started;
+            if (diagnostics && elapsed >= 50) {
+                SystemLog.recordDiagnostic("dictionary_picker event=update elapsed_ms="
+                        + elapsed + " rows=" + rows.length());
+            }
         }
 
         void rebuildRows(boolean keepPosition, String selected) {
