@@ -455,20 +455,32 @@ func writeGroupOperationError(w http.ResponseWriter, err error) {
 // Delete only the selected user group. Dictionary records and their other
 // memberships stay in place, including records for disconnected libraries.
 func (s *Server) handleDeleteGroup(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Group string `json:"group"`
-	}
+	var req deleteGroupRequest
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&req); err != nil || req.Group == "" || req.Group == allDictionariesGroup {
 		http.Error(w, "Invalid group", 400)
 		return
+	}
+	if err := s.deleteGroup(req); err != nil {
+		writeGroupOperationError(w, err)
+		return
+	}
+	writeJSON(w, map[string]bool{"deleted": true})
+}
+
+type deleteGroupRequest struct {
+	Group string `json:"group"`
+}
+
+func (s *Server) deleteGroup(req deleteGroupRequest) error {
+	if req.Group == "" || req.Group == allDictionariesGroup {
+		return groupOperationFailure(http.StatusBadRequest, "Invalid group")
 	}
 	p := s.reg.prefs
 	p.editMu.Lock()
 	defer p.editMu.Unlock()
 	f, _ := p.data()
 	if !slices.ContainsFunc(f.Groups, func(g DictionaryGroup) bool { return g.ID == req.Group }) {
-		http.Error(w, "Group not found", 404)
-		return
+		return groupOperationFailure(http.StatusNotFound, "Group not found")
 	}
 	if err := p.mutate(func(f *prefsFile) {
 		f.Groups = slices.DeleteFunc(f.Groups, func(g DictionaryGroup) bool { return g.ID == req.Group })
@@ -476,10 +488,9 @@ func (s *Server) handleDeleteGroup(w http.ResponseWriter, r *http.Request) {
 			f.Dicts[i].Groups = slices.DeleteFunc(f.Dicts[i].Groups, func(id string) bool { return id == req.Group })
 		}
 	}); err != nil {
-		http.Error(w, "Could not delete group: "+err.Error(), 500)
-		return
+		return groupOperationFailure(http.StatusInternalServerError, "Could not delete group: "+err.Error())
 	}
-	writeJSON(w, map[string]bool{"deleted": true})
+	return nil
 }
 
 // Add a filtered set in one state-file update. Existing members and their

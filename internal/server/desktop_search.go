@@ -175,6 +175,15 @@ func (s *Server) desktopDictionaryList(ctx context.Context, emit func([]byte)) (
 // available and delegate to the same operations where they overlap.
 func (s *Server) DesktopJSON(baseURL, method, argument string) (any, error) {
 	switch method {
+	case "deleteGroup":
+		var request deleteGroupRequest
+		if len(argument) > 4096 || json.Unmarshal([]byte(argument), &request) != nil || request.Group == "" || request.Group == allDictionariesGroup {
+			return nil, errors.New("Invalid group")
+		}
+		if err := s.deleteGroup(request); err != nil {
+			return nil, err
+		}
+		return map[string]bool{"deleted": true}, nil
 	case "createGroup":
 		var request createGroupRequest
 		if len(argument) > 1<<20 || json.Unmarshal([]byte(argument), &request) != nil {
@@ -236,9 +245,8 @@ func (s *Server) DesktopJSON(baseURL, method, argument string) (any, error) {
 	verb := http.MethodGet
 	var body io.Reader
 	switch method {
-	case "deleteGroup", "setGroupMember", "replaceGroupMembership", "addGroupMembers", "linkGroup":
+	case "setGroupMember", "replaceGroupMembership", "addGroupMembers", "linkGroup":
 		route := map[string]struct{ path, verb string }{
-			"deleteGroup":            {"/api/user-groups", http.MethodDelete},
 			"setGroupMember":         {"/api/user-groups/member", http.MethodPut},
 			"replaceGroupMembership": {"/api/user-groups/membership", http.MethodPut},
 			"addGroupMembers":        {"/api/user-groups/members", http.MethodPut},
