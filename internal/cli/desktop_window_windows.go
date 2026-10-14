@@ -83,7 +83,7 @@ func runDesktopWindow(address, profile string, onClose func(), desktopRequest fu
 	w := webview.NewWithOptions(webview.WebViewOptions{
 		DataPath:      profile,
 		AutoFocus:     true,
-		WindowOptions: webview.WindowOptions{Title: "wuDict2 - 17", Width: 1120, Height: 820, IconId: 101, Center: true},
+		WindowOptions: webview.WindowOptions{Title: "wuDict2 - 25", Width: 1120, Height: 820, IconId: 101, Center: true},
 	})
 	if w == nil {
 		desktopWindowMu.Lock()
@@ -210,6 +210,11 @@ func runDesktopWindow(address, profile string, onClose func(), desktopRequest fu
 })()`)
 		}
 	}
+	w.Init(`document.addEventListener('DOMContentLoaded',function(){
+  var style=document.createElement('style');
+  style.textContent='#wideBtn{display:none!important}';
+  document.head.appendChild(style);
+},{once:true});`)
 	w.Init(`document.addEventListener('click',function(event){
   var a=event.target&&event.target.closest&&event.target.closest('a[href]');
   if(!a)return;
