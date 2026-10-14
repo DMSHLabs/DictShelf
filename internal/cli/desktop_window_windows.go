@@ -7,6 +7,7 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -37,7 +38,7 @@ var (
 
 // openDesktopWindow opens the local reader on a dedicated Windows UI thread.
 // The tray keeps the main thread; WebView2 owns the locked thread below.
-func openDesktopWindow(address string, onClose func(), desktopConfig func() (any, error)) bool {
+func openDesktopWindow(address string, onClose func(), desktopSnapshot func(string) (any, error), desktopSearch func(context.Context, string, func([]byte)) error) bool {
 	version, err := webviewloader.GetInstalledVersion()
 	if err != nil || version == "" {
 		logx.Warn("WebView2 unavailable; opening the browser: %v", err)
@@ -72,11 +73,11 @@ func openDesktopWindow(address string, onClose func(), desktopConfig func() (any
 	}
 	desktopWindowStarting = true
 	desktopWindowMu.Unlock()
-	go runDesktopWindow(address, profile, onClose, desktopConfig)
+	go runDesktopWindow(address, profile, onClose, desktopSnapshot, desktopSearch)
 	return true
 }
 
-func runDesktopWindow(address, profile string, onClose func(), desktopConfig func() (any, error)) {
+func runDesktopWindow(address, profile string, onClose func(), desktopSnapshot func(string) (any, error), desktopSearch func(context.Context, string, func([]byte)) error) {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 	w := webview.NewWithOptions(webview.WebViewOptions{
@@ -107,34 +108,82 @@ func runDesktopWindow(address, profile string, onClose func(), desktopConfig fun
 		return exec.Command("rundll32", "url.dll,FileProtocolHandler", link.String()).Start()
 	})
 	bridgeDone := make(chan struct{})
-	if desktopConfig != nil {
-		if err := w.Bind("wudictNativeRequest", func(id int, method string) error {
+	var nativeCallsMu sync.Mutex
+	nativeCalls := make(map[int]context.CancelFunc)
+	if desktopSnapshot != nil || desktopSearch != nil {
+		if err := w.Bind("wudictNativeCancel", func(id int) error {
+			nativeCallsMu.Lock()
+			cancel := nativeCalls[id]
+			delete(nativeCalls, id)
+			nativeCallsMu.Unlock()
+			if cancel != nil {
+				cancel()
+			}
+			return nil
+		}); err != nil {
+			logx.Warn("WebView2 native cancellation unavailable: %v", err)
+		}
+		if err := w.Bind("wudictNativeRequest", func(id int, method, argument string) error {
 			if id <= 0 {
 				return fmt.Errorf("invalid native request id")
 			}
+			ctx, cancel := context.WithCancel(context.Background())
+			nativeCallsMu.Lock()
+			if old := nativeCalls[id]; old != nil {
+				old()
+			}
+			nativeCalls[id] = cancel
+			nativeCallsMu.Unlock()
 			go func() {
-				var value any
-				var callErr error
+				defer func() {
+					cancel()
+					nativeCallsMu.Lock()
+					delete(nativeCalls, id)
+					nativeCallsMu.Unlock()
+				}()
+				reply := func(payload []byte, callErr error, done bool) {
+					if len(payload) == 0 {
+						payload = []byte("null")
+					}
+					errorJSON, _ := json.Marshal(errorText(callErr))
+					select {
+					case <-bridgeDone:
+						return
+					default:
+					}
+					w.Dispatch(func() {
+						select {
+						case <-bridgeDone:
+							return
+						default:
+						}
+						w.Eval("window.wudictNativeReply(" + strconv.Itoa(id) + "," + string(payload) + "," + string(errorJSON) + "," + strconv.FormatBool(done) + ")")
+					})
+				}
 				switch method {
-				case "config":
-					value, callErr = desktopConfig()
+				case "config", "prefs":
+					if desktopSnapshot == nil {
+						reply(nil, fmt.Errorf("native snapshot API unavailable"), true)
+						return
+					}
+					value, callErr := desktopSnapshot(method)
+					payload, marshalErr := json.Marshal(value)
+					if marshalErr != nil {
+						callErr = marshalErr
+					}
+					reply(payload, callErr, true)
+				case "search":
+					if desktopSearch == nil {
+						reply(nil, fmt.Errorf("native search API unavailable"), true)
+						return
+					}
+					callErr := desktopSearch(ctx, argument, func(payload []byte) {
+						reply(payload, nil, false)
+					})
+					reply(nil, callErr, true)
 				default:
-					callErr = fmt.Errorf("unknown native method %q", method)
+					reply(nil, fmt.Errorf("unknown native method %q", method), true)
 				}
-				payload, marshalErr := json.Marshal(value)
-				if marshalErr != nil {
-					payload = []byte("null")
-					callErr = marshalErr
-				}
-				errorJSON, _ := json.Marshal(errorText(callErr))
-				select {
-				case <-bridgeDone:
-					return
-				default:
-				}
-				w.Dispatch(func() {
-					w.Eval("window.wudictNativeReply(" + strconv.Itoa(id) + "," + string(payload) + "," + string(errorJSON) + ")")
-				})
 			}()
 			return nil
 		}); err != nil {
@@ -142,14 +191,21 @@ func runDesktopWindow(address, profile string, onClose func(), desktopConfig fun
 		} else {
 			w.Init(`(function(){
   var pending=new Map(),next=1;
-  window.wudictNativeCall=function(method){return new Promise(function(resolve,reject){
-    var id=next++;pending.set(id,{resolve:resolve,reject:reject});
-    window.wudictNativeRequest(id,method).catch(function(error){window.wudictNativeReply(id,null,String(error))});
+  function forget(id,call){pending.delete(id);if(call.signal)call.signal.removeEventListener('abort',call.abort)}
+  window.wudictNativeCall=function(method,argument,onMessage,signal){return new Promise(function(resolve,reject){
+    var id=next++,call={resolve:resolve,reject:reject,onMessage:onMessage,signal:signal};
+    call.abort=function(){if(!pending.has(id))return;forget(id,call);window.wudictNativeCancel(id);var e=new Error('search cancelled');e.name='AbortError';reject(e)};
+    pending.set(id,call);
+    if(signal){if(signal.aborted){call.abort();return}signal.addEventListener('abort',call.abort,{once:true})}
+    window.wudictNativeRequest(id,method,argument||'').catch(function(error){window.wudictNativeReply(id,null,String(error),true)});
   })};
-  window.wudictNativeReply=function(id,value,error){
-    var call=pending.get(id);if(!call)return;pending.delete(id);
-    if(error)call.reject(new Error(error));else call.resolve(value);
+  window.wudictNativeReply=function(id,value,error,done){
+    var call=pending.get(id);if(!call)return;
+    if(error){forget(id,call);call.reject(new Error(error));return}
+    if(value!==null&&call.onMessage)call.onMessage(value);
+    if(done){forget(id,call);call.resolve(value)}
   };
+  window.addEventListener('pagehide',function(){for(var [id,call] of pending){forget(id,call);window.wudictNativeCancel(id);call.reject(new Error('page closed'))}});
 })()`)
 		}
 	}
@@ -166,6 +222,12 @@ func runDesktopWindow(address, profile string, onClose func(), desktopConfig fun
 	w.Run()
 	close(done)
 	close(bridgeDone)
+	nativeCallsMu.Lock()
+	for id, cancel := range nativeCalls {
+		cancel()
+		delete(nativeCalls, id)
+	}
+	nativeCallsMu.Unlock()
 	w.Destroy()
 	desktopWindowMu.Lock()
 	desktopWindow = nil

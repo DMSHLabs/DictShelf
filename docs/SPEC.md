@@ -462,7 +462,7 @@ Background preparation reuses fresh indexes matching the requested plan and remo
 
 ## 6c-bis. Seeing and editing the configuration (D22, P16)
 
-- **Windows WebView2 direct calls (experimental):** The embedded page can read `/api/config` through an asynchronous native RPC. Both transports call `Server.ConfigSnapshot`; ordinary browsers and other platforms keep using HTTP. This is the first transport slice, not a replacement for the HTTP server.
+- **Windows WebView2 direct calls (experimental):** The embedded page reads configuration and saved dictionary/UI preferences through asynchronous native RPCs to `Server.ConfigSnapshot` and `Server.PrefsSnapshot`. Main-page `/api/search` calls also use the RPC: Go invokes the existing `Server` route in-process and forwards each NDJSON record to WebView2, preserving progressive results and cancellation. The HTTP routes remain available to ordinary browsers and other platforms; preference writes still use HTTP. Search logic is still implemented by the server handler; extracting reusable application-level operations is a later step, not part of this transport change.
 
 - `GET /api/config` — folders with per-root status, library dir + prepared count, config file path, the origin of `DICT_DIR` (flag/env/file/default) and whether saving to the file can take effect, the platform reveal label, and whether the caller is on loopback.
 - `GET /setup` — the folder editor, always reachable, pre-filled, with Cancel when dictionaries are already in use. `/` still serves it automatically while the registry is empty.
