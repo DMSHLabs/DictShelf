@@ -473,6 +473,8 @@ Background preparation reuses fresh indexes matching the requested plan and remo
 
 ## 6c-bis. Seeing and editing the configuration (D22, P16)
 
+- **Windows configuration and portable data:** Windows wuDict2 uses `wudict2.toml`; other platforms retain `wudict.toml`. If a Windows user-data root has only `wudict.toml`, startup copies it once to `wudict2.toml` and then uses the new file. The same compatibility copy applies to portable `Data/` beside the executable. When `Data/wudict2.toml` and `Dictionaries/` exist, startup rewrites `DICT_DIR`, `DB_DIR`, and `LEMMA_DIR` to relative `Dictionaries`, `db`, and `lemmas` paths before validating portable mode. Relative config paths resolve from `Data`; library and lemma paths must stay inside it. Before indexing, portable startup reattaches copied prepared indexes to matching dictionary copies by filename, size and recorded source signature; the original user data and its indexes are untouched. An invalid portable folder is reported, then startup uses the regular per-user data folder.
+
 - `GET /api/config` — folders with per-root status, library dir + prepared count, config file path, the origin of `DICT_DIR` (flag/env/file/default) and whether saving to the file can take effect, the platform reveal label, and whether the caller is on loopback.
 - `GET /setup` — the folder editor, always reachable, pre-filled, with Cancel when dictionaries are already in use. `/` still serves it automatically while the registry is empty.
 - `GET /api/reveal?path=` — opens the platform file manager (`open -R` / `explorer /select,` / `xdg-open <dir>`). Refused unless the path is one the UI already displays **and** the request comes from loopback.

@@ -21,11 +21,14 @@ import (
 
 	"github.com/wuweidict/wudict/internal/config"
 	"github.com/wuweidict/wudict/internal/server"
+	"github.com/wuweidict/wudict/internal/tray"
 )
 
 var windowsFreshDataRoot bool
 
-var legacyForkItems = []string{"state.json", "style", "groups.ini"}
+const windowsPortableHomeEnv = "WUDICT_PORTABLE_HOME"
+
+var legacyForkItems = []string{"db", "db.logs", "state.json", "style", "groups.ini"}
 
 // prepareWindowsDataRoot selects wuDict2's Windows data folder. Migration
 // discovery and choices are handled after the first interface is shown.
@@ -40,11 +43,27 @@ func prepareWindowsDataRoot() error {
 	newRoot := filepath.Join(home, ".wuDict2")
 	if existing := os.Getenv("WUDICT_HOME"); existing != "" {
 		windowsFreshDataRoot = false
-		return nil
+		return ensureWindowsConfigName(existing)
+	}
+	// This variable is internal to the portable launcher. Do not let a stale
+	// shell value change path resolution after a normal-mode fallback.
+	_ = os.Unsetenv(windowsPortableHomeEnv)
+	if portableRoot, found, portableErr := windowsPortableDataRoot(); portableErr != nil {
+		warnPortableFallback(portableErr)
+	} else if found {
+		if err := activateWindowsPortableData(portableRoot); err != nil {
+			warnPortableFallback(err)
+		} else {
+			windowsFreshDataRoot = false
+			return nil
+		}
 	}
 	if !windowsServerLaunch() {
 		windowsFreshDataRoot = false
-		return os.Setenv("WUDICT_HOME", newRoot)
+		if err := os.Setenv("WUDICT_HOME", newRoot); err != nil {
+			return err
+		}
+		return ensureWindowsConfigName(newRoot)
 	}
 	if info, err := os.Stat(newRoot); err == nil {
 		if !info.IsDir() {
@@ -57,6 +76,9 @@ func prepareWindowsDataRoot() error {
 		return fmt.Errorf("cannot inspect wuDict2 data folder: %w", err)
 	}
 	if err := os.Setenv("WUDICT_HOME", newRoot); err != nil {
+		return err
+	}
+	if err := ensureWindowsConfigName(newRoot); err != nil {
 		return err
 	}
 	if windowsFreshDataRoot {
@@ -74,6 +96,211 @@ func prepareWindowsDataRoot() error {
 		}
 	}
 	return nil
+}
+
+func windowsPortableDataRoot() (string, bool, error) {
+	exe, err := os.Executable()
+	if err != nil {
+		return "", false, fmt.Errorf("cannot find wuDict2.exe: %w", err)
+	}
+	root := filepath.Join(filepath.Dir(exe), "Data")
+	info, err := os.Stat(root)
+	if os.IsNotExist(err) {
+		return "", false, nil
+	}
+	if err != nil {
+		return root, true, fmt.Errorf("cannot inspect %s: %w", root, err)
+	}
+	if !info.IsDir() {
+		return root, true, fmt.Errorf("%s exists but is not a folder", root)
+	}
+	configPath := filepath.Join(root, config.Name)
+	dictRoot := filepath.Join(root, "Dictionaries")
+	dictInfo, err := os.Stat(dictRoot)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return root, true, fmt.Errorf("%s is missing", dictRoot)
+		}
+		return root, true, fmt.Errorf("cannot inspect %s: %w", dictRoot, err)
+	}
+	if !dictInfo.IsDir() {
+		return root, true, fmt.Errorf("%s exists but is not a folder", dictRoot)
+	}
+	if configured := os.Getenv("CONFIG_PATH"); configured != "" && !sameWindowsPath(configured, configPath) {
+		return root, true, fmt.Errorf("CONFIG_PATH points outside the portable data folder: %s", configured)
+	}
+	if configured := windowsCommandConfigPath(); configured != "" && !sameWindowsPath(configured, configPath) {
+		return root, true, fmt.Errorf("the --config option points outside the portable data folder: %s", configured)
+	}
+	if err := ensureWindowsConfigName(root); err != nil {
+		return root, true, err
+	}
+	if !fileExists(configPath) {
+		return root, true, fmt.Errorf("%s is missing", configPath)
+	}
+	if err := normalizeWindowsPortableConfig(configPath); err != nil {
+		return root, true, err
+	}
+	if err := validateWindowsPortableConfig(root, configPath); err != nil {
+		return root, true, err
+	}
+	return root, true, nil
+}
+
+func normalizeWindowsPortableConfig(configPath string) error {
+	if _, err := config.Load(configPath, nil); err != nil {
+		return fmt.Errorf("cannot read portable settings: %w", err)
+	}
+	paths := []struct{ key, value string }{
+		{"DICT_DIR", config.FormatList([]string{"Dictionaries"})},
+		{"DB_DIR", config.QuoteTOML("db")},
+		{"LEMMA_DIR", config.QuoteTOML("lemmas")},
+	}
+	for _, item := range paths {
+		if err := config.SaveKeyRaw(configPath, item.key, item.value); err != nil {
+			return fmt.Errorf("cannot update portable %s in %s: %w", item.key, configPath, err)
+		}
+	}
+	return nil
+}
+
+func ensureWindowsConfigName(root string) error {
+	if os.Getenv("CONFIG_PATH") != "" || windowsCommandConfigPath() != "" {
+		return nil
+	}
+	current := filepath.Join(root, config.Name)
+	if fileExists(current) {
+		return nil
+	}
+	legacy := filepath.Join(root, config.LegacyName)
+	if !fileExists(legacy) {
+		return nil
+	}
+	var created []string
+	if err := copyMigrationPathTracked(legacy, current, &created); err != nil {
+		return fmt.Errorf("could not copy the existing settings to %s: %w", current, err)
+	}
+	return nil
+}
+
+func validateWindowsPortableConfig(root, configPath string) error {
+	oldHome, hadHome := os.LookupEnv("WUDICT_HOME")
+	oldPortable, hadPortable := os.LookupEnv(windowsPortableHomeEnv)
+	defer func() {
+		if hadHome {
+			_ = os.Setenv("WUDICT_HOME", oldHome)
+		} else {
+			_ = os.Unsetenv("WUDICT_HOME")
+		}
+		if hadPortable {
+			_ = os.Setenv(windowsPortableHomeEnv, oldPortable)
+		} else {
+			_ = os.Unsetenv(windowsPortableHomeEnv)
+		}
+	}()
+	if err := os.Setenv("WUDICT_HOME", root); err != nil {
+		return fmt.Errorf("cannot select portable data folder: %w", err)
+	}
+	if err := os.Setenv(windowsPortableHomeEnv, root); err != nil {
+		return fmt.Errorf("cannot select portable path base: %w", err)
+	}
+	cfg, err := config.Load(configPath, nil)
+	if err != nil {
+		return fmt.Errorf("cannot read portable settings: %w", err)
+	}
+	if len(cfg.Problems) > 0 {
+		return fmt.Errorf("portable settings contain errors: %s", strings.Join(cfg.Problems, "; "))
+	}
+	dictRoot := filepath.Join(root, "Dictionaries")
+	if len(cfg.DictDirs) != 1 || !sameWindowsPath(cfg.DictDirs[0], dictRoot) {
+		return fmt.Errorf("DICT_DIR must point to %s", dictRoot)
+	}
+	if cfg.DBDir != "" && !windowsPathWithin(root, cfg.DBDir) {
+		return fmt.Errorf("DB_DIR points outside the portable data folder: %s", cfg.DBDir)
+	}
+	if dbOverride := os.Getenv("WUDICT_DB_DIR"); dbOverride != "" {
+		resolved := config.ExpandHome(dbOverride)
+		if !windowsPathWithin(root, resolved) {
+			return fmt.Errorf("WUDICT_DB_DIR points outside the portable data folder: %s", resolved)
+		}
+	}
+	if cfg.LemmaDir != "" && !windowsPathWithin(root, cfg.LemmaDir) {
+		return fmt.Errorf("LEMMA_DIR points outside the portable data folder: %s", cfg.LemmaDir)
+	}
+	return nil
+}
+
+func windowsPathWithin(root, path string) bool {
+	absRoot, errRoot := filepath.Abs(root)
+	absPath, errPath := filepath.Abs(path)
+	if errRoot != nil || errPath != nil {
+		return false
+	}
+	rel, err := filepath.Rel(absRoot, absPath)
+	if err != nil || filepath.IsAbs(rel) || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return false
+	}
+	return true
+}
+
+func activateWindowsPortableData(root string) error {
+	values := []struct{ key, value string }{
+		{"WUDICT_HOME", root},
+		{windowsPortableHomeEnv, root},
+		{"CONFIG_PATH", filepath.Join(root, config.Name)},
+	}
+	var changed []struct {
+		key, value string
+		present    bool
+	}
+	for _, item := range values {
+		if item.key == "CONFIG_PATH" && os.Getenv(item.key) != "" {
+			continue
+		}
+		old, present := os.LookupEnv(item.key)
+		changed = append(changed, struct {
+			key, value string
+			present    bool
+		}{item.key, old, present})
+		if err := os.Setenv(item.key, item.value); err != nil {
+			for _, previous := range changed {
+				if previous.present {
+					_ = os.Setenv(previous.key, previous.value)
+				} else {
+					_ = os.Unsetenv(previous.key)
+				}
+			}
+			return fmt.Errorf("cannot select the portable data folder: %w", err)
+		}
+	}
+	return nil
+}
+
+func windowsCommandConfigPath() string {
+	for i := 1; i < len(os.Args); i++ {
+		arg := os.Args[i]
+		for _, prefix := range []string{"--config=", "-config="} {
+			if strings.HasPrefix(arg, prefix) {
+				return strings.TrimPrefix(arg, prefix)
+			}
+		}
+		if arg == "--config" || arg == "-config" {
+			if i+1 < len(os.Args) {
+				return os.Args[i+1]
+			}
+			return ""
+		}
+	}
+	return ""
+}
+
+func warnPortableFallback(err error) {
+	message := fmt.Sprintf("Portable mode is unavailable: %v\nStarting with the normal user data folder.", err)
+	if guiLaunch {
+		tray.Alert("wuDict2", message)
+		return
+	}
+	fmt.Fprintln(os.Stderr, message)
 }
 
 func windowsServerLaunch() bool {
@@ -140,7 +367,7 @@ func applyLegacyMigration(action string, reg *server.Registry, refresh func(), c
 		return fmt.Errorf("could not open imported dictionary folders: %w", err)
 	}
 	if action == "move" {
-		for _, name := range []string{"db", "db.logs", "lemmas", "style", "state.json", "groups.ini", config.Name} {
+		for _, name := range []string{"db", "db.logs", "lemmas", "style", "state.json", "groups.ini", config.LegacyName} {
 			if err := os.RemoveAll(filepath.Join(oldRoot, name)); err != nil {
 				return fmt.Errorf("data were copied, but %s could not be removed from ~/.wudict: %w", name, err)
 			}
@@ -191,7 +418,7 @@ func hasForkState(path string) (bool, error) {
 }
 
 func importLegacyData(oldRoot, newRoot string, forked bool) error {
-	oldConfig := filepath.Join(oldRoot, config.Name)
+	oldConfig := filepath.Join(oldRoot, config.LegacyName)
 	var dirs []string
 	configData := []byte(nil)
 	lemmaSource := filepath.Join(oldRoot, "lemmas")
@@ -201,6 +428,9 @@ func importLegacyData(oldRoot, newRoot string, forked bool) error {
 			return fmt.Errorf("cannot read dictionary folders from wuDict settings: %w", err)
 		}
 		dirs = cfg.DictDirs
+		for i := range dirs {
+			dirs[i] = rewriteMigrationPath(dirs[i], oldRoot, newRoot)
+		}
 		if cfg.Origin("LEMMA_DIR") == config.OriginFile {
 			lemmaSource = cfg.LemmaDir
 		}
@@ -234,8 +464,9 @@ func importLegacyData(oldRoot, newRoot string, forked bool) error {
 		return fmt.Errorf("cannot inspect lemma folder %s: %w", lemmaSource, err)
 	}
 	if len(configData) > 0 {
-		// Keep every setting from the old config, while moving wuDict2's own
-		// working folders into its new home. Prepared indexes are not copied.
+		// Keep every setting from the old config while moving wuDict2's data
+		// paths into its new home. Fork indexes use the same format and are
+		// copied above; upstream indexes are intentionally left behind.
 		configData = rewriteMigrationConfigPaths(configData, oldRoot, newRoot)
 		if err := installMigratedConfig(config.HomeConfig(), newRoot, configData, dirs); err != nil {
 			rollback()
@@ -246,14 +477,17 @@ func importLegacyData(oldRoot, newRoot string, forked bool) error {
 }
 
 func rewriteMigrationConfigPaths(data []byte, oldRoot, newRoot string) []byte {
-	text := string(data)
+	return []byte(rewriteMigrationPath(string(data), oldRoot, newRoot))
+}
+
+func rewriteMigrationPath(text, oldRoot, newRoot string) string {
 	oldClean, newClean := filepath.Clean(oldRoot), filepath.Clean(newRoot)
 	text = replacePathFold(text, oldClean, newClean)
 	text = replacePathFold(text, strings.ReplaceAll(oldClean, `\`, `\\`), strings.ReplaceAll(newClean, `\`, `\\`))
 	text = replacePathFold(text, filepath.ToSlash(oldClean), filepath.ToSlash(newClean))
 	text = replacePathFold(text, "~/.wudict", "~/.wuDict2")
 	text = renameMigrationComment(text)
-	return []byte(text)
+	return text
 }
 
 func renameMigrationComment(text string) string {
@@ -293,8 +527,11 @@ func renameMigrationCommentWords(comment string) string {
 		if i+6 <= len(comment) && strings.EqualFold(comment[i:i+6], "wudict") &&
 			(i == 0 || !isConfigWordByte(comment[i-1])) &&
 			(i+6 == len(comment) || !isConfigWordByte(comment[i+6])) {
-			// wudict.toml is the actual config filename and remains unchanged.
-			if !strings.HasPrefix(strings.ToLower(comment[i+6:]), ".toml") {
+			if strings.HasPrefix(strings.ToLower(comment[i+6:]), ".toml") {
+				out.WriteString("wudict2.toml")
+				i += len("wudict.toml")
+				continue
+			} else {
 				out.WriteString("wuDict2")
 				i += 6
 				continue
@@ -424,7 +661,7 @@ func fileExists(path string) bool {
 }
 
 func stopLegacyWindowsServer(oldRoot, currentConfig string) error {
-	oldConfig := filepath.Join(oldRoot, config.Name)
+	oldConfig := filepath.Join(oldRoot, config.LegacyName)
 	configExists := true
 	if _, err := os.Stat(oldConfig); os.IsNotExist(err) {
 		configExists = false
