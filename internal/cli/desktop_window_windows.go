@@ -7,6 +7,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -14,6 +15,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -35,7 +37,7 @@ var (
 
 // openDesktopWindow opens the local reader on a dedicated Windows UI thread.
 // The tray keeps the main thread; WebView2 owns the locked thread below.
-func openDesktopWindow(address string, onClose func()) bool {
+func openDesktopWindow(address string, onClose func(), desktopConfig func() (any, error)) bool {
 	version, err := webviewloader.GetInstalledVersion()
 	if err != nil || version == "" {
 		logx.Warn("WebView2 unavailable; opening the browser: %v", err)
@@ -70,11 +72,11 @@ func openDesktopWindow(address string, onClose func()) bool {
 	}
 	desktopWindowStarting = true
 	desktopWindowMu.Unlock()
-	go runDesktopWindow(address, profile, onClose)
+	go runDesktopWindow(address, profile, onClose, desktopConfig)
 	return true
 }
 
-func runDesktopWindow(address, profile string, onClose func()) {
+func runDesktopWindow(address, profile string, onClose func(), desktopConfig func() (any, error)) {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 	w := webview.NewWithOptions(webview.WebViewOptions{
@@ -104,6 +106,53 @@ func runDesktopWindow(address, profile string, onClose func()) {
 		}
 		return exec.Command("rundll32", "url.dll,FileProtocolHandler", link.String()).Start()
 	})
+	bridgeDone := make(chan struct{})
+	if desktopConfig != nil {
+		if err := w.Bind("wudictNativeRequest", func(id int, method string) error {
+			if id <= 0 {
+				return fmt.Errorf("invalid native request id")
+			}
+			go func() {
+				var value any
+				var callErr error
+				switch method {
+				case "config":
+					value, callErr = desktopConfig()
+				default:
+					callErr = fmt.Errorf("unknown native method %q", method)
+				}
+				payload, marshalErr := json.Marshal(value)
+				if marshalErr != nil {
+					payload = []byte("null")
+					callErr = marshalErr
+				}
+				errorJSON, _ := json.Marshal(errorText(callErr))
+				select {
+				case <-bridgeDone:
+					return
+				default:
+				}
+				w.Dispatch(func() {
+					w.Eval("window.wudictNativeReply(" + strconv.Itoa(id) + "," + string(payload) + "," + string(errorJSON) + ")")
+				})
+			}()
+			return nil
+		}); err != nil {
+			logx.Warn("WebView2 native API unavailable: %v", err)
+		} else {
+			w.Init(`(function(){
+  var pending=new Map(),next=1;
+  window.wudictNativeCall=function(method){return new Promise(function(resolve,reject){
+    var id=next++;pending.set(id,{resolve:resolve,reject:reject});
+    window.wudictNativeRequest(id,method).catch(function(error){window.wudictNativeReply(id,null,String(error))});
+  })};
+  window.wudictNativeReply=function(id,value,error){
+    var call=pending.get(id);if(!call)return;pending.delete(id);
+    if(error)call.reject(new Error(error));else call.resolve(value);
+  };
+})()`)
+		}
+	}
 	w.Init(`document.addEventListener('click',function(event){
   var a=event.target&&event.target.closest&&event.target.closest('a[href]');
   if(!a)return;
@@ -116,6 +165,7 @@ func runDesktopWindow(address, profile string, onClose func()) {
 	go watchDesktopServer(w, local, done)
 	w.Run()
 	close(done)
+	close(bridgeDone)
 	w.Destroy()
 	desktopWindowMu.Lock()
 	desktopWindow = nil
@@ -123,6 +173,13 @@ func runDesktopWindow(address, profile string, onClose func()) {
 	if onClose != nil {
 		onClose()
 	}
+}
+
+func errorText(err error) string {
+	if err == nil {
+		return ""
+	}
+	return err.Error()
 }
 
 func watchDesktopServer(w webview.WebView, address *url.URL, done <-chan struct{}) {

@@ -462,6 +462,8 @@ Background preparation reuses fresh indexes matching the requested plan and remo
 
 ## 6c-bis. Seeing and editing the configuration (D22, P16)
 
+- **Windows WebView2 direct calls (experimental):** The embedded page can read `/api/config` through an asynchronous native RPC. Both transports call `Server.ConfigSnapshot`; ordinary browsers and other platforms keep using HTTP. This is the first transport slice, not a replacement for the HTTP server.
+
 - `GET /api/config` — folders with per-root status, library dir + prepared count, config file path, the origin of `DICT_DIR` (flag/env/file/default) and whether saving to the file can take effect, the platform reveal label, and whether the caller is on loopback.
 - `GET /setup` — the folder editor, always reachable, pre-filled, with Cancel when dictionaries are already in use. `/` still serves it automatically while the registry is empty.
 - `GET /api/reveal?path=` — opens the platform file manager (`open -R` / `explorer /select,` / `xdg-open <dir>`). Refused unless the path is one the UI already displays **and** the request comes from loopback.

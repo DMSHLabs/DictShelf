@@ -3244,11 +3244,15 @@ function sysRequest(request){
    reads, and the two are not kept in step with each other on purpose: the
    window's subject is what the server is RUNNING, the Info section's is where
    the folders are. */
+async function readConfigSnapshot(){
+  if(typeof window.wudictNativeCall==="function")return window.wudictNativeCall("config");
+  const r=await fetch("/api/config");
+  if(!r.ok)throw new Error("HTTP "+r.status);
+  return r.json();
+}
 async function sysConfigRead(){
   try{
-    const r=await fetch("/api/config");
-    if(!r.ok)throw new Error("HTTP "+r.status);
-    sysCfg=await r.json();
+    sysCfg=await readConfigSnapshot();
     return true;
   }catch(e){sysCfg=null;return false}
 }
@@ -3680,7 +3684,7 @@ function pathHTML(p){
    having it. Errors are swallowed: no aliases means full paths, which is a
    correct fallback, not a failure. */
 async function loadConfig(){
-  try{ cfgInfo=await (await fetch("/api/config")).json() }catch(e){}
+  try{ cfgInfo=await readConfigSnapshot() }catch(e){}
   if(cfgInfo&&cfgInfo.canExit&&!window.wudictNativeShell){
     window.wudictDesktopAppearance=true;
     appearanceRequest({action:"get"});

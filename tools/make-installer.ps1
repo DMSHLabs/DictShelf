@@ -30,10 +30,10 @@
 #
 # Every path it needs is derived from $PSScriptRoot, so it is always a native
 # Windows path — the one thing a caller cannot be relied on to supply. -Exe and
-# -OutDir override the defaults (repo root \ wudict.exe, repo root \ dist).
+# -OutDir override the defaults (repo root \ wuDict2.exe, repo root \ dist).
 [CmdletBinding()]
 param(
-    # The wudict.exe to package.
+    # The wuDict2.exe to package.
     [string] $Exe,
     # Where the setup .exe is written.
     [string] $OutDir,
@@ -49,7 +49,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $root = Split-Path -Parent $PSScriptRoot
-if (-not $Exe)    { $Exe    = Join-Path $root 'wudict.exe' }
+if (-not $Exe)    { $Exe    = Join-Path $root 'wuDict2.exe' }
 if (-not $OutDir) { $OutDir = Join-Path $root 'dist' }
 $iss = Join-Path $root 'packaging\windows\wudict.iss'
 $ico = Join-Path $root 'packaging\windows\wudict.ico'
@@ -113,7 +113,7 @@ if (-not (Test-Path -LiteralPath $Exe -PathType Leaf)) {
     throw @"
 make-installer: no binary at $Exe
   Build it first, from the repository root:
-    go build -tags sqlite_fts5 -ldflags "-s -w" -o wudict.exe .
+    go build -tags sqlite_fts5 -ldflags "-s -w" -o wuDict2.exe .
   (make build is a POSIX recipe and does not run on Windows; it would also
   write an extension-less "wudict", which Windows cannot execute.)
 "@
@@ -180,7 +180,7 @@ $isccArgs = @(
 & $Iscc @isccArgs
 if ($LASTEXITCODE -ne 0) { throw "make-installer: iscc exited $LASTEXITCODE" }
 
-$setup = Join-Path $OutDir "wudict-windows-x64-setup-$num.exe"
+$setup = Join-Path $OutDir "wudict2-windows-x64-setup-$num.exe"
 if (-not (Test-Path -LiteralPath $setup -PathType Leaf)) {
     throw "make-installer: iscc reported success but $setup is missing"
 }
