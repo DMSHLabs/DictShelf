@@ -175,6 +175,18 @@ func (s *Server) desktopDictionaryList(ctx context.Context, emit func([]byte)) (
 // available and delegate to the same operations where they overlap.
 func (s *Server) DesktopJSON(baseURL, method, argument string) (any, error) {
 	switch method {
+	case "createGroup":
+		var request createGroupRequest
+		if len(argument) > 1<<20 || json.Unmarshal([]byte(argument), &request) != nil {
+			return nil, errors.New("Invalid group name")
+		}
+		return s.createGroup(request)
+	case "renameGroup":
+		var request renameGroupRequest
+		if len(argument) > 4096 || json.Unmarshal([]byte(argument), &request) != nil {
+			return nil, errors.New("Invalid group")
+		}
+		return s.renameGroup(request)
 	case "saveGroupOrder":
 		var request groupOrderRequest
 		if len(argument) > 1<<20 || json.Unmarshal([]byte(argument), &request) != nil || request.Members == nil || request.Group == allDictionariesGroup {
@@ -224,10 +236,8 @@ func (s *Server) DesktopJSON(baseURL, method, argument string) (any, error) {
 	verb := http.MethodGet
 	var body io.Reader
 	switch method {
-	case "createGroup", "renameGroup", "deleteGroup", "setGroupMember", "replaceGroupMembership", "addGroupMembers", "linkGroup":
+	case "deleteGroup", "setGroupMember", "replaceGroupMembership", "addGroupMembers", "linkGroup":
 		route := map[string]struct{ path, verb string }{
-			"createGroup":            {"/api/user-groups", http.MethodPost},
-			"renameGroup":            {"/api/user-groups/name", http.MethodPut},
 			"deleteGroup":            {"/api/user-groups", http.MethodDelete},
 			"setGroupMember":         {"/api/user-groups/member", http.MethodPut},
 			"replaceGroupMembership": {"/api/user-groups/membership", http.MethodPut},

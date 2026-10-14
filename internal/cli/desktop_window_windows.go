@@ -83,7 +83,7 @@ func runDesktopWindow(address, profile string, onClose func(), desktopRequest fu
 	w := webview.NewWithOptions(webview.WebViewOptions{
 		DataPath:      profile,
 		AutoFocus:     true,
-		WindowOptions: webview.WindowOptions{Title: "wuDict2 - 29", Width: 1120, Height: 820, IconId: 101, Center: true},
+		WindowOptions: webview.WindowOptions{Title: "wuDict2 - 30", Width: 1120, Height: 820, IconId: 101, Center: true},
 	})
 	if w == nil {
 		desktopWindowMu.Lock()

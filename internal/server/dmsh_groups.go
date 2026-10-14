@@ -283,24 +283,33 @@ func (s *Server) syncLinkedGroups(entries []*entry) error {
 }
 
 func (s *Server) handleCreateGroup(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Name    string       `json:"name"`
-		Filter  *groupFilter `json:"filter"`
-		Linked  bool         `json:"linked"`
-		Members []string     `json:"members"`
-	}
+	var req createGroupRequest
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&req); err != nil {
 		http.Error(w, "Invalid group name", 400)
 		return
 	}
-	name := strings.TrimSpace(req.Name)
-	if req.Linked && req.Filter == nil || req.Filter != nil && !s.filterExists(*req.Filter) {
-		http.Error(w, "Filter not found", 400)
+	group, err := s.createGroup(req)
+	if err != nil {
+		writeGroupOperationError(w, err)
 		return
 	}
+	writeJSON(w, group)
+}
+
+type createGroupRequest struct {
+	Name    string       `json:"name"`
+	Filter  *groupFilter `json:"filter"`
+	Linked  bool         `json:"linked"`
+	Members []string     `json:"members"`
+}
+
+func (s *Server) createGroup(req createGroupRequest) (groupView, error) {
+	name := strings.TrimSpace(req.Name)
+	if req.Linked && req.Filter == nil || req.Filter != nil && !s.filterExists(*req.Filter) {
+		return groupView{}, groupOperationFailure(http.StatusBadRequest, "Filter not found")
+	}
 	if name == "" || len([]rune(name)) > 100 || strings.ContainsFunc(name, unicode.IsControl) {
-		http.Error(w, "Enter a group name (1–100 characters, without control characters).", 400)
-		return
+		return groupView{}, groupOperationFailure(http.StatusBadRequest, "Enter a group name (1–100 characters, without control characters).")
 	}
 	p := s.reg.prefs
 	// The name is validated against the record in effect and then written:
@@ -309,19 +318,16 @@ func (s *Server) handleCreateGroup(w http.ResponseWriter, r *http.Request) {
 	defer p.editMu.Unlock()
 	f, _ := p.data()
 	if strings.EqualFold(name, "All Dictionaries") {
-		http.Error(w, "All Dictionaries is a reserved group name.", 409)
-		return
+		return groupView{}, groupOperationFailure(http.StatusConflict, "All Dictionaries is a reserved group name.")
 	}
 	for _, g := range f.Groups {
 		if strings.EqualFold(g.Name, name) {
-			http.Error(w, "A group with this name already exists.", 409)
-			return
+			return groupView{}, groupOperationFailure(http.StatusConflict, "A group with this name already exists.")
 		}
 	}
 	var id [16]byte
 	if _, err := rand.Read(id[:]); err != nil {
-		http.Error(w, "Could not create group", 500)
-		return
+		return groupView{}, groupOperationFailure(http.StatusInternalServerError, "Could not create group")
 	}
 	g := DictionaryGroup{ID: hex.EncodeToString(id[:]), Name: name, SelectedFilter: req.Filter}
 	var members []string
@@ -341,8 +347,7 @@ func (s *Server) handleCreateGroup(w http.ResponseWriter, r *http.Request) {
 			}
 			seen[id] = true
 			if _, err := s.reg.get(id); err != nil {
-				http.Error(w, "Dictionary no longer available", 404)
-				return
+				return groupView{}, groupOperationFailure(http.StatusNotFound, "Dictionary no longer available")
 			}
 			members = append(members, id)
 		}
@@ -364,31 +369,42 @@ func (s *Server) handleCreateGroup(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}); err != nil {
-		http.Error(w, "Could not save group: "+err.Error(), 500)
-		return
+		return groupView{}, groupOperationFailure(http.StatusInternalServerError, "Could not save group: "+err.Error())
 	}
-	writeJSON(w, viewGroup(g, append([]string{}, members...), false))
+	return viewGroup(g, append([]string{}, members...), false), nil
 }
 
 func (s *Server) handleRenameGroup(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Group  string       `json:"group"`
-		Name   string       `json:"name"`
-		Filter *groupFilter `json:"filter"`
-		Linked *bool        `json:"linked"`
-	}
+	var req renameGroupRequest
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&req); err != nil || req.Group == "" || req.Group == allDictionariesGroup {
 		http.Error(w, "Invalid group", 400)
 		return
 	}
-	name := strings.TrimSpace(req.Name)
-	if name == "" || len([]rune(name)) > 100 || strings.ContainsFunc(name, unicode.IsControl) {
-		http.Error(w, "Enter a group name (1–100 characters, without control characters).", 400)
+	result, err := s.renameGroup(req)
+	if err != nil {
+		writeGroupOperationError(w, err)
 		return
 	}
+	writeJSON(w, result)
+}
+
+type renameGroupRequest struct {
+	Group  string       `json:"group"`
+	Name   string       `json:"name"`
+	Filter *groupFilter `json:"filter"`
+	Linked *bool        `json:"linked"`
+}
+
+func (s *Server) renameGroup(req renameGroupRequest) (map[string]string, error) {
+	if req.Group == "" || req.Group == allDictionariesGroup {
+		return nil, groupOperationFailure(http.StatusBadRequest, "Invalid group")
+	}
+	name := strings.TrimSpace(req.Name)
+	if name == "" || len([]rune(name)) > 100 || strings.ContainsFunc(name, unicode.IsControl) {
+		return nil, groupOperationFailure(http.StatusBadRequest, "Enter a group name (1–100 characters, without control characters).")
+	}
 	if req.Linked != nil && *req.Linked && (req.Filter == nil || !s.filterExists(*req.Filter)) {
-		http.Error(w, "Filter not found", 400)
-		return
+		return nil, groupOperationFailure(http.StatusBadRequest, "Filter not found")
 	}
 	p := s.reg.prefs
 	p.editMu.Lock()
@@ -396,17 +412,14 @@ func (s *Server) handleRenameGroup(w http.ResponseWriter, r *http.Request) {
 	f, _ := p.data()
 	index := slices.IndexFunc(f.Groups, func(g DictionaryGroup) bool { return g.ID == req.Group })
 	if index < 0 {
-		http.Error(w, "Group not found", 404)
-		return
+		return nil, groupOperationFailure(http.StatusNotFound, "Group not found")
 	}
 	if strings.EqualFold(name, "All Dictionaries") {
-		http.Error(w, "All Dictionaries is a reserved group name.", 409)
-		return
+		return nil, groupOperationFailure(http.StatusConflict, "All Dictionaries is a reserved group name.")
 	}
 	for _, g := range f.Groups {
 		if g.ID != req.Group && strings.EqualFold(g.Name, name) {
-			http.Error(w, "A group with this name already exists.", 409)
-			return
+			return nil, groupOperationFailure(http.StatusConflict, "A group with this name already exists.")
 		}
 	}
 	if err := p.mutate(func(f *prefsFile) {
@@ -425,10 +438,18 @@ func (s *Server) handleRenameGroup(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}); err != nil {
-		http.Error(w, "Could not save group: "+err.Error(), 500)
-		return
+		return nil, groupOperationFailure(http.StatusInternalServerError, "Could not save group: "+err.Error())
 	}
-	writeJSON(w, map[string]string{"name": name})
+	return map[string]string{"name": name}, nil
+}
+
+func writeGroupOperationError(w http.ResponseWriter, err error) {
+	var operationErr groupOperationError
+	status := http.StatusInternalServerError
+	if errors.As(err, &operationErr) {
+		status = operationErr.status
+	}
+	http.Error(w, err.Error(), status)
 }
 
 // Delete only the selected user group. Dictionary records and their other
