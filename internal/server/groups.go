@@ -46,27 +46,11 @@ func (s *Server) initGroups() {
 
 // GET /api/groups - the file in effect, what it defines, and what was skipped.
 func (s *Server) handleGroups(w http.ResponseWriter, r *http.Request) {
-	writeGroups(w, s.User.Groups(), s.groupsNow())
+	writeJSON(w, s.groupsSnapshot())
 }
 
 func writeGroups(w http.ResponseWriter, file string, st fileState[*facet.Rules]) {
-	probs := st.problems
-	if probs == nil {
-		probs = []facet.Problem{}
-	}
-	text := st.text
-	if !st.exists {
-		text = facet.DefaultText // what is in effect, offered for editing
-	}
-	writeJSON(w, map[string]any{
-		"text":     text,
-		"custom":   st.exists,
-		"unusable": st.unusable(),
-		"file":     file,
-		"writable": file != "",
-		"problems": probs,
-		"facets":   st.val.Facets(),
-	})
+	writeJSON(w, groupsResponse(file, st))
 }
 
 // PUT /api/groups - replace the file with the request body. What does not

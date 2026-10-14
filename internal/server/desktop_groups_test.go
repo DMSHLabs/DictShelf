@@ -5,9 +5,51 @@ package server
 
 import (
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"reflect"
 	"slices"
 	"testing"
 )
+
+func TestDesktopGroupSnapshotsWithoutRouter(t *testing.T) {
+	s, _ := newPrefsServer(t)
+	for _, tc := range []struct{ method, path string }{
+		{"groups", "/api/groups"},
+		{"userGroups", "/api/user-groups"},
+	} {
+		t.Run(tc.method, func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+			s.ServeHTTP(recorder, newRequest("GET", tc.path, nil))
+			if recorder.Code != http.StatusOK {
+				t.Fatalf("HTTP status %d: %s", recorder.Code, recorder.Body.String())
+			}
+			var httpValue any
+			if err := json.Unmarshal(recorder.Body.Bytes(), &httpValue); err != nil {
+				t.Fatal(err)
+			}
+
+			mux := s.mux
+			s.mux = http.NewServeMux()
+			defer func() { s.mux = mux }()
+			nativeValue, err := s.DesktopJSON("", tc.method, "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			nativeJSON, err := json.Marshal(nativeValue)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var decodedNative any
+			if err := json.Unmarshal(nativeJSON, &decodedNative); err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(httpValue, decodedNative) {
+				t.Fatalf("HTTP and native snapshots differ:\nHTTP: %#v\nnative: %#v", httpValue, decodedNative)
+			}
+		})
+	}
+}
 
 func TestDesktopGroupEditsPersist(t *testing.T) {
 	s, state := newPrefsServer(t)
