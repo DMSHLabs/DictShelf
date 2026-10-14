@@ -22,12 +22,12 @@ import (
 	"github.com/wuweidict/wudict/internal/store"
 )
 
-// configInfo is what the panel's "Folders & configuration" section shows: the
+// ConfigInfo is what the panel's "Folders & configuration" section shows: the
 // folders being scanned, where prepared dictionaries live, which config file
 // is in effect - and, for each, WHICH layer set it. Everything here is
 // otherwise visible only on the terminal at startup, which a user who opened
 // the app in a browser never sees.
-type configInfo struct {
+type ConfigInfo struct {
 	IndexDefaults indexOptions `json:"indexDefaults"`
 	Roots         []Root       `json:"roots"`
 	LibDir        string       `json:"libDir"`
@@ -199,14 +199,17 @@ func androidAliases(paths []string) [][2]string {
 	return out
 }
 
-func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
+// ConfigSnapshot returns the configuration view for an already-authorized
+// transport. HTTP derives locality and host from the request; a native desktop
+// bridge supplies its known local connection.
+func (s *Server) ConfigSnapshot(local bool, host string) ConfigInfo {
 	lib, _ := store.Library()
 	roots := s.reg.Roots()
 	shown := []string{store.DefaultDBDir(), s.ConfigPath}
 	for _, r := range roots {
 		shown = append(shown, r.Path)
 	}
-	info := configInfo{
+	info := ConfigInfo{
 		IndexDefaults:   s.reg.prefs.newIndexDefaults(),
 		PathAliases:     pathAliases(shown),
 		Roots:           roots,
@@ -227,16 +230,20 @@ func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 		// whose command does not exist (Android has no xdg-open) is worse than
 		// not offering it: the click fails, and the user concludes the files
 		// are unreachable rather than that this button is.
-		CanReveal: isLoopback(r) && revealPossible(),
+		CanReveal: local && revealPossible(),
 		// Deleting, unlike revealing, is something this app can always do
 		// itself - so the question is only WHO is asking (D63 amended).
-		CanDelete: s.removalOffered(r),
-		CanExit:   s.DesktopExit != nil && isLoopback(r) && localExitHost(r.Host),
+		CanDelete: local || s.AllowRemoteDelete,
+		CanExit:   s.DesktopExit != nil && local && localExitHost(host),
 	}
 	if info.DictDirOrigin == "" {
 		info.DictDirOrigin = config.OriginDefault
 	}
-	writeJSON(w, info)
+	return info
+}
+
+func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, s.ConfigSnapshot(isLoopback(r), r.Host))
 }
 
 // isLoopback reports whether the request came from this machine. A remote

@@ -6,4 +6,4 @@
 
 package cli
 
-func openDesktopWindow(string, func()) bool { return false }
+func openDesktopWindow(string, func(), func() (any, error)) bool { return false }

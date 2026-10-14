@@ -4,10 +4,10 @@ rem SPDX-License-Identifier: GPL-3.0-or-later
 setlocal EnableExtensions DisableDelayedExpansion
 
 rem ============================================================
-rem wuDict Windows desktop build: [debug|release] [purego]
+rem wuDict2 Windows desktop build: [debug|release] [purego]
 rem
-rem   debug    (default)  build wudict.exe in the repository root
-rem   release             the same wudict.exe plus the per-user installer,
+rem   debug    (default)  build wuDict2.exe in the repository root
+rem   release             the same wuDict2.exe plus the per-user installer,
 rem                       compiled into dist\ (needs Inno Setup 6.3+)
 rem   purego              force the pure-Go flavour (see below)
 rem
@@ -30,9 +30,7 @@ rem is: %CC%, then gcc.exe on PATH, then GCC_ROOTS. One found by path is handed
 rem to Go as an absolute CC, with CXX beside it; gcc locates its own cc1, ld and
 rem runtime DLLs relative to itself, so PATH is untouched.
 rem
-rem This builds the DESKTOP product - upstream's wuDict, port 6888, its own
-rem config and library. It is NOT the Android app: that one is
-rem build-android.cmd (wuDict2, port 6889, the same code inside an APK).
+rem This builds the wuDict2 desktop product, separate from upstream's wuDict.
 rem ============================================================
 
 cd /d "%~dp0"
@@ -194,17 +192,17 @@ if /i "%FLAVOUR%"=="cgo" (
 
 echo.
 echo Output:
-echo   %CD%\wudict.exe
+echo   %CD%\wuDict2.exe
 echo.
 
-rem A running server holds wudict.exe open, and Windows then refuses to let the
+rem A running server holds wuDict2.exe open, and Windows then refuses to let the
 rem linker replace it - the "Access is denied" trap docs\WINDOWS-VERIFY.md
 rem records for preview servers. Said here, where it can still be acted on.
-tasklist /FI "IMAGENAME eq wudict.exe" 2>nul | findstr /i /c:"wudict.exe" >nul
+tasklist /FI "IMAGENAME eq wuDict2.exe" 2>nul | findstr /i /c:"wuDict2.exe" >nul
 if not errorlevel 1 (
-    echo WARNING: wudict.exe is running. Close it, or the build will fail when
+    echo WARNING: wuDict2.exe is running. Close it, or the build will fail when
     echo   it tries to replace the file:
-    echo     taskkill /F /IM wudict.exe
+    echo     taskkill /F /IM wuDict2.exe
     echo.
 )
 
@@ -221,8 +219,8 @@ set "CGO_ENABLED=%CGO%"
 go build ^
   -trimpath ^
   -tags %GO_TAGS% ^
-  -ldflags "-s -w -X github.com/wuweidict/wudict/internal/cli.Version=%VERSION%" ^
-  -o wudict.exe ^
+  -ldflags "-s -w -X github.com/wuweidict/wudict/internal/cli.Version=%VERSION% -X github.com/wuweidict/wudict/internal/cli.ProductName=wuDict2" ^
+  -o wuDict2.exe ^
   .
 
 if errorlevel 1 (
@@ -239,12 +237,12 @@ rem ------------------------------------------------------------
 
 echo.
 echo ============================================================
-echo Verifying wudict.exe
+echo Verifying wuDict2.exe
 echo ============================================================
 echo.
 
-if not exist "wudict.exe" (
-    echo ERROR: go build finished but wudict.exe was not found.
+if not exist "wuDict2.exe" (
+    echo ERROR: go build finished but wuDict2.exe was not found.
     exit /b 1
 )
 
@@ -254,10 +252,10 @@ rem or libgcc_s_seh-1.dll yields a build that reports success and a binary
 rem that dies before main. --version is the cheapest run there is: no port,
 rem no dictionary, no tray.
 set "RAN="
-for /f "delims=" %%V in ('wudict.exe --version') do if not defined RAN set "RAN=%%V"
+for /f "delims=" %%V in ('wuDict2.exe --version') do if not defined RAN set "RAN=%%V"
 
 if not defined RAN (
-    echo ERROR: wudict.exe was built but does not run.
+    echo ERROR: wuDict2.exe was built but does not run.
     if /i "%FLAVOUR%"=="cgo" (
         echo   Check that the mingw runtime DLLs ^(libwinpthread-1.dll,
         echo   libgcc_s_seh-1.dll^) are beside the exe or on PATH.
@@ -265,7 +263,7 @@ if not defined RAN (
     exit /b 1
 )
 
-echo OK: wudict.exe runs
+echo OK: wuDict2.exe runs
 echo   %RAN%
 echo.
 
@@ -276,21 +274,21 @@ rem an earlier run or a build cache hit answering with the wrong tags.
 set "WANT_DEP=modernc.org/sqlite"
 if /i "%FLAVOUR%"=="cgo" set "WANT_DEP=github.com/mattn/go-sqlite3"
 
-go version -m wudict.exe | findstr /i /c:"-tags=%GO_TAGS%" >nul
+go version -m wuDict2.exe | findstr /i /c:"-tags=%GO_TAGS%" >nul
 if errorlevel 1 (
-    echo ERROR: wudict.exe was not built with -tags %GO_TAGS%.
+    echo ERROR: wuDict2.exe was not built with -tags %GO_TAGS%.
     exit /b 1
 )
 
-go version -m wudict.exe | findstr /i /c:"CGO_ENABLED=%CGO%" >nul
+go version -m wuDict2.exe | findstr /i /c:"CGO_ENABLED=%CGO%" >nul
 if errorlevel 1 (
-    echo ERROR: wudict.exe was not built with CGO_ENABLED=%CGO%.
+    echo ERROR: wuDict2.exe was not built with CGO_ENABLED=%CGO%.
     exit /b 1
 )
 
-go version -m wudict.exe | findstr /i /c:"%WANT_DEP%" >nul
+go version -m wuDict2.exe | findstr /i /c:"%WANT_DEP%" >nul
 if errorlevel 1 (
-    echo ERROR: wudict.exe does not carry %WANT_DEP%.
+    echo ERROR: wuDict2.exe does not carry %WANT_DEP%.
     exit /b 1
 )
 
@@ -313,7 +311,7 @@ echo ============================================================
 echo.
 
 echo Binary:
-echo   %CD%\wudict.exe
+echo   %CD%\wuDict2.exe
 echo.
 
 if defined SETUP (
@@ -323,8 +321,8 @@ if defined SETUP (
 )
 
 echo Run it:
-echo   wudict.exe                    open the app from Explorer, browser from cmd
-echo   wudict.exe --help             every command and flag
+echo   wuDict2.exe                   open the app from Explorer, browser from cmd
+echo   wuDict2.exe --help            every command and flag
 echo.
 
 if /i "%FLAVOUR%"=="purego" (
@@ -391,7 +389,7 @@ where powershell >nul 2>&1
 if errorlevel 1 (
     echo ERROR: powershell.exe was not found, and the installer is compiled by
     echo   tools\make-installer.ps1 - the script that knows where Inno Setup is.
-    echo   A plain `build-windows.cmd` still produces wudict.exe.
+    echo   A plain `build-windows.cmd` still produces wuDict2.exe.
     exit /b 1
 )
 
@@ -423,7 +421,7 @@ if not defined ISCC (
     echo ERROR: no Inno Setup 6.3 or newer was found, and `release` builds the
     echo   installer. Install it, then run this script again:
     echo     winget install JRSoftware.InnoSetup
-    echo   A plain `build-windows.cmd` still produces wudict.exe.
+    echo   A plain `build-windows.cmd` still produces wuDict2.exe.
     exit /b 1
 )
 
@@ -435,10 +433,10 @@ exit /b 0
 rem ============================================================
 rem :make_installer - compiles the per-user installer
 rem
-rem Called with no arguments: wudict.exe and dist\ in the repository root are
+rem Called with no arguments: wuDict2.exe and dist\ in the repository root are
 rem the installer script's own defaults, which is the invocation
 rem `make win-installer` and CI both use - one less thing that can drift. It
-rem reads the product name and version out of the binary (`wudict.exe
+rem reads the product name and version out of the binary (`wuDict2.exe
 rem --version`), so nothing about the identity is restated here.
 rem ============================================================
 
@@ -448,7 +446,7 @@ echo Building the per-user installer
 echo ============================================================
 echo.
 
-powershell -NoProfile -ExecutionPolicy Bypass -File tools\make-installer.ps1 %ISCC_ARG%
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\make-installer.ps1 -Exe .\wuDict2.exe %ISCC_ARG%
 
 if errorlevel 1 (
     echo.
@@ -468,13 +466,13 @@ if errorlevel 1 (
 
 set "SETUP="
 
-for %%F in ("dist\wudict-windows-x64-setup-*.exe") do (
+for %%F in ("dist\wudict2-windows-x64-setup-*.exe") do (
     if exist "%%~fF" set "SETUP=%%~fF"
 )
 
 if not defined SETUP (
     echo ERROR: iscc reported success but no setup executable was found:
-    echo   dist\wudict-windows-x64-setup-*.exe
+    echo   dist\wudict2-windows-x64-setup-*.exe
     exit /b 1
 )
 

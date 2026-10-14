@@ -833,7 +833,10 @@ $("save").addEventListener("click",save);
    take effect — say so instead of silently doing nothing next launch. */
 async function start(){
   let cfg=null;
-  try{ cfg=await (await fetch("/api/config")).json() }catch(e){}
+  try{
+    if(typeof window.wudictNativeCall==="function")cfg=await window.wudictNativeCall("config");
+    else cfg=await (await fetch("/api/config")).json();
+  }catch(e){}
   for(const [feature,suffix] of [["contains","Contains"],["fullText","FullText"]]){
     $("newIndex"+suffix).checked=!!cfg?.indexDefaults?.[feature];
   }

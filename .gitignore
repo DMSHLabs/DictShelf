@@ -2,6 +2,8 @@
 # The Windows desktop binary (build-windows.cmd): the same product `make build`
 # writes, with the extension Windows needs to exec it.
 /wudict.exe
+/wuDict2.exe
+/wuDict2-cli.exe
 dist/**
 docs.local/
 *_NOTRACK.md

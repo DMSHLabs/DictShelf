@@ -67,8 +67,9 @@ var Notices string
 // Product identity, in one place. The binary is `wudict`; the name people
 // read is WuWeiDict. Anything user-facing - CLI banner, web UI
 // About box, setup page - sources its wording from here or mirrors it.
+var ProductName = "wuDict"
+
 const (
-	ProductName = "wuDict"
 	Tagline     = "Search every dictionary you own, from one browser tab."
 	SiteURL     = "https://wudict.legbehindneck.com"
 	RepoURL     = "https://github.com/wuweidict/wudict"
@@ -1441,8 +1442,11 @@ Hint: pick another port with --port, e.g.:  wudict --port %s
 	if runtime.GOOS == "windows" {
 		srv.DesktopExit = stop
 	}
+	desktopConfig := func() (any, error) {
+		return srv.ConfigSnapshot(true, "127.0.0.1"), nil
+	}
 	if !cfg.NoBrowser {
-		go openBrowser(browseURL(url, token), gui, stop)
+		go openBrowser(browseURL(url, token), gui, stop, desktopConfig)
 	}
 	go func() {
 		sig := make(chan os.Signal, 1)
@@ -1486,7 +1490,7 @@ Hint: pick another port with --port, e.g.:  wudict --port %s
 		GUI:      gui,
 		Version:  Version,
 		URL:      url,
-		Open:     func() { openUI(browseURL(url, token), gui, stop) },
+		Open:     func() { openUI(browseURL(url, token), gui, stop, desktopConfig) },
 		Rescan:   trayRescan(reg),
 		OpenDir:  trayOpenDir(reg.Dirs()),
 		Shutdown: stop,
@@ -1925,14 +1929,14 @@ func indexingSummary(autoIndex string) string {
 	return "on - a headword index is prepared on first search; contains, full-text and media on request"
 }
 
-func openBrowser(url string, gui bool, onWindowClose func()) {
+func openBrowser(url string, gui bool, onWindowClose func(), desktopConfig func() (any, error)) {
 	time.Sleep(300 * time.Millisecond) // let our own server finish binding
-	openUI(url, gui, onWindowClose)
+	openUI(url, gui, onWindowClose, desktopConfig)
 }
 
-func openUI(address string, gui bool, onWindowClose func()) {
+func openUI(address string, gui bool, onWindowClose func(), desktopConfig func() (any, error)) {
 	if gui && runtime.GOOS == "windows" {
-		if local, err := desktopWindowURL(address); err == nil && openDesktopWindow(local, onWindowClose) {
+		if local, err := desktopWindowURL(address); err == nil && openDesktopWindow(local, onWindowClose, desktopConfig) {
 			return
 		}
 	}
