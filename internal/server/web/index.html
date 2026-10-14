@@ -2719,6 +2719,12 @@ function rmTrigger(d){
    rotation mid-rebuild picks it up again from the poll. */
 let reindexSt=null,reindexTimer=0,reindexStopping=false;
 const following=new Set();
+async function readReindexStatus(){
+  if(typeof window.wudictNativeCall==="function")return window.wudictNativeCall("reindex");
+  const r=await fetch("/api/reindex");
+  if(!r.ok)throw new Error("HTTP "+r.status);
+  return r.json();
+}
 function renderReindex(){
   const box=$("reindexLine"),st=reindexSt;
   const notice=$("outdatedNotice");
@@ -2746,7 +2752,7 @@ function pollReindex(){
   clearTimeout(reindexTimer);
   reindexTimer=setTimeout(async()=>{
     let st=null;
-    try{const r=await fetch("/api/reindex");if(r.ok)st=await r.json()}catch(_){}
+    try{st=await readReindexStatus()}catch(_){}
     if(!st){pollReindex();return} // a missed poll is not the end of the job
     reindexSt=st;
     if(st.running){
@@ -2785,7 +2791,7 @@ async function reindexClick(e){
 }
 $("reindexLine").addEventListener("click",reindexClick);
 $("outdatedNotice").addEventListener("click",reindexClick);
-fetch("/api/reindex").then(r=>r.ok?r.json():null).then(st=>{
+readReindexStatus().then(st=>{
   if(st&&st.running){reindexSt=st;const message=esc(tx("dictUI.rebuilding",{at:Math.min(st.done+1,st.total),total:st.total})+(st.current?` · ${st.current}`:""));setStatus(message);setGlobalStop(requestReindexStop);showWorkNotice(message);renderReindex();pollReindex()}
 }).catch(()=>{});
 
@@ -4251,8 +4257,46 @@ function runIngest(id,opts,label){
     .filter(([k])=>k==="contains"||k==="fts"||k==="media"||k==="rebuild")
     .map(([k,v])=>"&"+k+"="+(v?1:0)).join("");
   return new Promise(resolve=>{
-    const es=new EventSource("/api/ingest?dict="+id+params);
-    es.addEventListener("progress",ev=>{
+    const nativeStream=typeof window.wudictNativeCall==="function";
+    const streamController=nativeStream?new AbortController():null;
+    const es=nativeStream?new EventTarget():new EventSource("/api/ingest?dict="+encodeURIComponent(id)+params);
+    if(nativeStream){
+      es.readyState=EventSource.OPEN;
+      es.close=()=>{if(es.readyState===EventSource.CLOSED)return;es.readyState=EventSource.CLOSED;streamController.abort()};
+    }
+    let lastEventAt=Date.now(),finished=false;
+    const finish=async(kind,why="")=>{
+      if(finished)return;
+      finished=true;clearInterval(reconcile);es.close();following.delete(id);activeIngestID=null;
+      delete label.dataset.busy;label.classList.remove("busy");
+      $("bulkIndexStop").hidden=bulkIndexBusy;$("bulkIndexStop").disabled=false;
+      if(!bulkIndexBusy)clearGlobalStop();
+      // The shared banner polls independently. Refresh it at this terminal
+      // event so its last progress count cannot linger on screen.
+      await window.wudictWork.refresh().catch(()=>{});
+      if(kind==="error"){
+        if(!why)why=tx("dictUI.connectionLost");
+        show(tx("dictUI.failed"),tx("dictUI.failedReason",{error:why}));
+        label.classList.add("err");resolve(false);return;
+      }
+      setIndexStatus("✓ "+esc(name)+(kind==="stopped"?tx("dictUI.bulkStopped"):removing?tx("dictUI.removed"):tx("dictUI.ready")));
+      if(!opts.quiet){await loadDicts();if(lastQuery)doSearch()}
+      resolve(true);
+    };
+    // SSE is the live progress channel. Reconcile its terminal state against
+    // the server job as well, so a dropped final event cannot leave the chip
+    // showing its last batch (often 5,000) after the index has finished.
+    const reconcile=setInterval(async()=>{
+      if(finished||Date.now()-lastEventAt<2500)return;
+      try{
+        const s=await window.wudictWork.refresh("ingest:"+id);
+        if(s.id!=="ingest:"+id||s.running)return;
+        if(s.error){await finish("error",window.wudictI18n.errorText(s.error));return}
+        await finish(s.canceled?"stopped":"done");
+      }catch(_){/* Keep the SSE connection as the recovery path. */}
+    },1000);
+    const onProgress=ev=>{
+      lastEventAt=Date.now();
       const p=JSON.parse(ev.data);
       if(p.action){
         const names=(p.indexes||[]).map(key=>tx(key==="index"?"dictUI.indexPlain":key==="contains"?"dictUI.contains":key==="fullText"?"dictUI.fts":"dictUI.media"));
@@ -4266,29 +4310,16 @@ function runIngest(id,opts,label){
       const pct=p.total?Math.min(100,Math.floor(p.done/p.total*100)):-1;
       const amount=pct<0?counts:pct>=100?tx("dictUI.finishing"):pct+"%";
       show(action+" "+amount,action+" "+counts+(pct>=0?" ("+pct+"%)":""));
-    });
-    es.addEventListener("stopping",()=>{
+    };
+    const onStopping=()=>{
+      lastEventAt=Date.now();
       $("bulkIndexStop").disabled=true;$("bulkIndexStop").textContent=tx("dictUI.bulkStopping");
       show(tx("dictUI.bulkStopping"),tx("dictUI.bulkStopping"));
-    });
-    es.addEventListener("stopped",async()=>{
-      es.close();following.delete(id);activeIngestID=null;
-      delete label.dataset.busy;
-      $("bulkIndexStop").hidden=bulkIndexBusy;$("bulkIndexStop").disabled=false;
-      if(!bulkIndexBusy)clearGlobalStop();
-      setIndexStatus("✓ "+esc(name)+tx("dictUI.bulkStopped"));
-      if(!opts.quiet){await loadDicts();if(lastQuery)doSearch()}
-      resolve(true);
-    });
-    es.addEventListener("done",async()=>{
-      es.close();following.delete(id);activeIngestID=null;
-      delete label.dataset.busy;
-      $("bulkIndexStop").hidden=bulkIndexBusy;$("bulkIndexStop").disabled=false;
-      if(!bulkIndexBusy)clearGlobalStop();
-      setIndexStatus("✓ "+esc(name)+(removing?tx("dictUI.removed"):tx("dictUI.ready")));
-      if(!opts.quiet){await loadDicts();if(lastQuery)doSearch()}
-      resolve(true);
-    });
+    };
+    es.addEventListener("progress",onProgress);
+    es.addEventListener("stopping",onStopping);
+    es.addEventListener("stopped",()=>finish("stopped"));
+    es.addEventListener("done",()=>finish("done"));
     /* Two unrelated events share the name "error": EventSource's own
        transport error, which carries no data, and the server's `event: error`
        (server.go emit("error", …)), which carries {"error":"…"} and is the
@@ -4302,15 +4333,27 @@ function runIngest(id,opts,label){
       // the server-owned job unless it has actually closed or sent a terminal
       // error event; closing on the first transient error turns recovery into
       // a false indexing failure.
-      if(!why&&es.readyState!==EventSource.CLOSED){
+      if(!why&&!nativeStream&&es.readyState!==EventSource.CLOSED){
         show(action,tx("dictUI.reconnecting"));
         return;
       }
-      es.close();following.delete(id);activeIngestID=null;$("bulkIndexStop").hidden=bulkIndexBusy;$("bulkIndexStop").disabled=false;if(!bulkIndexBusy)clearGlobalStop();
-      delete label.dataset.busy;
       if(!why)why=tx("dictUI.connectionLost");
-      show(tx("dictUI.failed"),tx("dictUI.failedReason",{error:why}));
-      label.classList.add("err");resolve(false)});
+      finish("error",why)});
+    if(nativeStream){
+      const query="dict="+encodeURIComponent(id)+params;
+      window.wudictNativeCall("ingest",query,message=>{
+        if(finished)return;
+        lastEventAt=Date.now();
+        es.dispatchEvent(new MessageEvent(message.event,{data:JSON.stringify(message.data)}));
+      },streamController.signal).then(()=>{
+        if(finished)return;
+        es.readyState=EventSource.CLOSED;
+      }).catch(error=>{
+        if(finished||error?.name==="AbortError")return;
+        es.readyState=EventSource.CLOSED;
+        es.dispatchEvent(new MessageEvent("error",{data:JSON.stringify({error:error.message})}));
+      });
+    }
   });
 }
 

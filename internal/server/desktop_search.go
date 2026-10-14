@@ -26,6 +26,8 @@ func (s *Server) DesktopStream(ctx context.Context, baseURL, method, query strin
 		path = "/api/search"
 	case "dicts":
 		path = "/api/dicts"
+	case "ingest":
+		path = "/api/ingest"
 	default:
 		return fmt.Errorf("unsupported desktop stream %q", method)
 	}
@@ -65,6 +67,13 @@ func (s *Server) DesktopJSON(baseURL, method, argument string) (any, error) {
 	case "about":
 		path = "/api/about"
 		query = url.Values{"dict": []string{argument}}.Encode()
+	case "reindex":
+		path = "/api/reindex"
+	case "indexWork":
+		path = "/api/index-work"
+		if argument != "" {
+			query = url.Values{"id": []string{argument}}.Encode()
+		}
 	default:
 		return nil, fmt.Errorf("unsupported desktop request %q", method)
 	}
@@ -98,11 +107,13 @@ func (s *Server) DesktopJSON(baseURL, method, argument string) (any, error) {
 }
 
 type desktopStreamWriter struct {
-	header http.Header
-	status int
-	body   bytes.Buffer
-	line   []byte
-	emit   func([]byte)
+	header    http.Header
+	status    int
+	body      bytes.Buffer
+	line      []byte
+	event     string
+	eventData []string
+	emit      func([]byte)
 }
 
 func (w *desktopStreamWriter) Header() http.Header { return w.header }
@@ -117,14 +128,24 @@ func (w *desktopStreamWriter) Write(p []byte) (int, error) {
 	if w.status == 0 {
 		w.status = http.StatusOK
 	}
-	if !strings.HasPrefix(w.header.Get("Content-Type"), "application/x-ndjson") {
-		return w.body.Write(p)
+	contentType := w.header.Get("Content-Type")
+	if strings.HasPrefix(contentType, "application/x-ndjson") {
+		w.writeNDJSON(p)
+		return len(p), nil
 	}
+	if strings.HasPrefix(contentType, "text/event-stream") {
+		w.writeSSE(p)
+		return len(p), nil
+	}
+	return w.body.Write(p)
+}
+
+func (w *desktopStreamWriter) writeNDJSON(p []byte) {
 	w.line = append(w.line, p...)
 	for {
 		i := bytes.IndexByte(w.line, '\n')
 		if i < 0 {
-			break
+			return
 		}
 		line := bytes.TrimSpace(w.line[:i])
 		if len(line) > 0 && w.emit != nil {
@@ -132,7 +153,58 @@ func (w *desktopStreamWriter) Write(p []byte) (int, error) {
 		}
 		w.line = w.line[i+1:]
 	}
-	return len(p), nil
+}
+
+func (w *desktopStreamWriter) writeSSE(p []byte) {
+	w.line = append(w.line, p...)
+	for {
+		i := bytes.IndexByte(w.line, '\n')
+		if i < 0 {
+			return
+		}
+		line := bytes.TrimSuffix(w.line[:i], []byte{'\r'})
+		w.line = w.line[i+1:]
+		if len(line) == 0 {
+			w.emitSSE()
+			continue
+		}
+		if line[0] == ':' { // SSE comment/keepalive
+			continue
+		}
+		field, value, _ := bytes.Cut(line, []byte{':'})
+		if len(value) > 0 && value[0] == ' ' {
+			value = value[1:]
+		}
+		switch string(field) {
+		case "event":
+			w.event = string(value)
+		case "data":
+			w.eventData = append(w.eventData, string(value))
+		}
+	}
+}
+
+func (w *desktopStreamWriter) emitSSE() {
+	if len(w.eventData) == 0 {
+		w.event = ""
+		return
+	}
+	data := []byte(strings.Join(w.eventData, "\n"))
+	if !json.Valid(data) {
+		data, _ = json.Marshal(string(data))
+	}
+	if w.event == "" {
+		w.event = "message"
+	}
+	message, err := json.Marshal(struct {
+		Event string          `json:"event"`
+		Data  json.RawMessage `json:"data"`
+	}{Event: w.event, Data: data})
+	if err == nil && w.emit != nil {
+		w.emit(message)
+	}
+	w.event = ""
+	w.eventData = nil
 }
 
 func (w *desktopStreamWriter) Flush() {}
@@ -141,8 +213,16 @@ func (w *desktopStreamWriter) finish() error {
 	if w.status == 0 {
 		w.status = http.StatusOK
 	}
-	if len(bytes.TrimSpace(w.line)) > 0 && w.emit != nil {
-		w.emit(bytes.Clone(bytes.TrimSpace(w.line)))
+	switch {
+	case strings.HasPrefix(w.header.Get("Content-Type"), "application/x-ndjson"):
+		if len(bytes.TrimSpace(w.line)) > 0 && w.emit != nil {
+			w.emit(bytes.Clone(bytes.TrimSpace(w.line)))
+		}
+	case strings.HasPrefix(w.header.Get("Content-Type"), "text/event-stream"):
+		if len(w.line) > 0 {
+			w.writeSSE([]byte{'\n'})
+		}
+		w.emitSSE()
 	}
 	if w.status < 400 {
 		return nil
