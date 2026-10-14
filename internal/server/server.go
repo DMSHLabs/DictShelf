@@ -20,7 +20,6 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
-	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -35,7 +34,6 @@ import (
 	"github.com/wuweidict/wudict/internal/fsx"
 	"github.com/wuweidict/wudict/internal/ftsq"
 	"github.com/wuweidict/wudict/internal/hilite"
-	"github.com/wuweidict/wudict/internal/htmlref"
 	"github.com/wuweidict/wudict/internal/intake"
 	"github.com/wuweidict/wudict/internal/lang"
 	"github.com/wuweidict/wudict/internal/logx"
@@ -1200,65 +1198,10 @@ func (s *Server) handleRescan(w http.ResponseWriter, r *http.Request) {
 	s.handleDicts(w, r)
 }
 
-// streamSlot names one dictionary in the result layout (begin message).
-type streamSlot struct {
-	Dict string `json:"dict"`
-	Name string `json:"name"`
-}
-
-// streamMsg is one NDJSON line of /api/search:
-//
-//	{"t":"begin","slots":[{dict,name}…]}   ordered slot layout
-//	{"t":"hit","i":N,dict,name,results…}   one dictionary's results
-//	{"t":"morph","from":…,"to":…,"lang":…} the hits that follow are for a
-//	                                       DIFFERENT word: nothing matched
-//	                                       what was typed, so its dictionary
-//	                                       form was searched instead (O3)
-//	{"t":"end"}                            all dictionaries done
-type streamMsg struct {
-	T       string        `json:"t"`
-	Slots   []streamSlot  `json:"slots,omitempty"`
-	I       int           `json:"i"`
-	Dict    string        `json:"dict,omitempty"`
-	Name    string        `json:"name,omitempty"`
-	Results []dict.Result `json:"results,omitempty"`
-	Skipped bool          `json:"skipped,omitempty"`
-	Error   string        `json:"error,omitempty"`
-
-	// Rung says which reading of a full-text query this dictionary answered:
-	// "phrase" (the words adjacent, in order), "near" (within ten tokens, any
-	// order) or "words" (anywhere in the article). Absent in every other mode.
-	//
-	// It is reported because the relaxation is silent otherwise, and a search
-	// tool that quietly answers a weaker question than the one asked is lying
-	// about its result. The UI says so only when the answer is NOT the phrase -
-	// the precise reading needs no announcement (D102).
-	Rung string `json:"rung,omitempty"`
-
-	// Deferred: this dictionary was not searched because the fan-out cap
-	// declined to materialise it (see fanout). It is NOT an error and must not
-	// be reported as one: the dictionary is fine, the query was wide, and
-	// asking for this one dictionary by itself answers it. Bytes is what the
-	// open was estimated to cost, for logs and tests - the UI does not show a
-	// number, because a megabyte figure is not a decision the reader can make.
-	Deferred bool  `json:"deferred,omitempty"`
-	Bytes    int64 `json:"bytes,omitempty"`
-
-	// Indexing: this deferred dictionary is already being prepared, because
-	// something asked for it by name. Only ever set beside Deferred, and the
-	// difference matters to the reader: "tap to search" is an offer, and
-	// repeating it at a dictionary that is midway through a ten-minute ingest
-	// reads as nothing having happened the first time.
-	Indexing bool `json:"indexing,omitempty"`
-
-	// The "morph" line: From is what the user typed, To the dictionary form
-	// actually searched, Lang the language that produced it. Every "hit" after
-	// it belongs to To - which is why it is a line of its own and not a flag on
-	// the hits: the client has to be able to SAY so.
-	From string `json:"from,omitempty"`
-	To   string `json:"to,omitempty"`
-	Lang string `json:"lang,omitempty"`
-}
+// Internal aliases keep existing morphology helpers and protocol tests
+// on the public event types shared by both transports.
+type streamSlot = SearchSlot
+type streamMsg = SearchEvent
 
 // demandSearchBudget is how long a search of ONE named dictionary may take
 // before it is cut off. Generous rather than unlimited: the request still holds
@@ -1335,238 +1278,33 @@ func marker(on bool) func(term, rung string) *hilite.Terms {
 // result line carries its slot index `i` so the client fills the correct
 // preference-ordered position regardless of completion order.
 func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
-	q := strings.TrimSpace(r.URL.Query().Get("q"))
-	if q == "" {
-		httpErr(w, 400, "missing q parameter")
-		return
-	}
-	mode, err := search.ParseMode(r.URL.Query().Get("mode"))
-	if err != nil {
-		httpErr(w, 400, "%v", err)
-		return
-	}
-	format, err := parseFormat(r.URL.Query().Get("format"))
-	if err != nil {
-		httpErr(w, 400, "%v", err)
-		return
-	}
-	origin := originOf(r)
-	// Full-text match marking, compiled ONCE for the whole fan-out rather than
-	// per result: the terms are the query, and the query does not change while
-	// twenty dictionaries answer it.
-	//
-	// Opt-in, and only here. An API client that did not ask for marks gets the
-	// article's own bytes, unchanged - which is what makes "on by default in
-	// the UI" (the SPA sends hl=1 from its remembered preference) and "off by
-	// default for everyone else" the same rule rather than two. And only in
-	// full-text mode: in exact, prefix or contains the match IS the headword
-	// the reader clicked, and marking it inside the article would mark the
-	// word they are already looking at, on every line it appears (D102).
-	hl, _ := queryFlag(r.URL.Query(), "hl")
-	marks := marker(mode == search.FullText && hl)
-	// Capped like the store's own maxLimit: the store clamps at its boundary,
-	// but a direct backend treats the limit as a stop sign only, and would
-	// materialize every match - article bodies included - before stopping.
-	n := 20
-	if v := r.URL.Query().Get("n"); v != "" {
-		if p, err := strconv.Atoi(v); err == nil && p > 0 {
-			if p > 500 {
-				p = 500
-			}
-			n = p
-		}
-	}
-
-	dictParam := r.URL.Query().Get("dict")
-	var entries []*entry
-	if dictParam == "" || dictParam == "all" {
-		entries = s.reg.all()
-	} else {
-		for _, id := range strings.Split(dictParam, ",") {
-			if id = strings.TrimSpace(id); id == "" {
-				continue
-			}
-			if e, err := s.reg.get(id); err == nil {
-				entries = append(entries, e)
+	request := searchRequestFromQuery(r.URL.Query())
+	request.Origin = originOf(r)
+	var stream *respStream
+	unavailable := errors.New("streaming unsupported")
+	err := s.Search(r.Context(), request, func(event SearchEvent) error {
+		if stream == nil {
+			var ok bool
+			stream, ok = newStream(w, "application/x-ndjson; charset=utf-8")
+			if !ok {
+				return unavailable
 			}
 		}
-		if len(entries) == 0 { // none of the requested ids resolved
-			httpErr(w, 404, "unknown dictionary id %q", dictParam)
-			return
-		}
-	}
-
-	entries = slices.DeleteFunc(entries, func(e *entry) bool { return !s.reg.dslAvailable(e) })
-	if len(entries) == 0 && dictParam != "" && dictParam != "all" {
-		httpErr(w, 404, "dictionary variant unavailable")
-		return
-	}
-
-	st, ok := newStream(w, "application/x-ndjson; charset=utf-8")
-	if !ok {
-		return
-	}
-	writeLine := func(m streamMsg) { st.line(m) }
-
-	// Emit the slot layout FIRST, from cheap entry ids only - no opens on the
-	// request path. The client paints the empty accordion immediately; each
-	// dictionary's real name arrives with its "hit" as it completes. Opening
-	// (cold MDX ~180ms, cold SLOB ~1s) is deferred into the workers below, so
-	// time-to-first-byte is one open at most, never the sum of all of them.
-	begin := make([]streamSlot, len(entries))
-	openers := make([]search.Opener, len(entries))
-	// One budget for this query: what the fan-out may newly materialise before
-	// it starts declining dictionaries instead of opening them (see fanout).
-	// Nil when uncapped, which is the desktop default.
-	//
-	// A query naming ONE dictionary has no fan-out to cap, and is never capped.
-	// The budget bounds the multiplication - N dictionaries materialised at
-	// once by a single `all` query - and a search of one is bounded by that one
-	// dictionary. It is also, always, a direct demand: the user picked it in
-	// the selector, asked for `more…`, or opened a deferred section. Declining
-	// it would leave the dictionary unreachable through EVERY path the app has,
-	// which is worse than the memory by a wide margin - and the steady state is
-	// still held by PREVIEW_MEMORY, the janitor and the relax valve, none of
-	// which this bypasses.
-	fan := s.reg.fanout()
-	demand := len(entries) == 1
-	if demand {
-		fan = nil
-	}
-	for i, e := range entries {
-		e := e
-		begin[i] = streamSlot{Dict: e.ID, Name: e.ID}
-		openers[i] = func() (dict.Dictionary, error) {
-			d, err := e.openWithin(fan)
-			if err == nil && s.AutoIndex {
-				// A search of one dictionary is a demand for that dictionary,
-				// so its index jumps the background queue (demandIndex); a
-				// dictionary that merely happened to be in a wide search takes
-				// its turn (maybeAutoIndex). Both prepare the same thing.
-				if demand {
-					e.demandIndex()
-				} else {
-					e.maybeAutoIndex()
-				}
-			}
-			return d, err
-		}
-	}
-	writeLine(streamMsg{T: "begin", Slots: begin})
-
-	// renderHit turns one dictionary's answer into its NDJSON line. Extracted
-	// because the morphology wave below emits the same shape for the same
-	// slots - a second copy of the rewrite/format pipeline would be a second
-	// place for it to drift.
-	renderHit := func(i int, h search.Hit) streamMsg {
-		id := entries[i].ID
-		name := h.Meta.Name
-		if name == "" {
-			// open failed or cancelled: no Meta. Show the filename, not the
-			// opaque id hash, so a broken dictionary is identifiable.
-			name = filepath.Base(entries[i].Path)
-		}
-		// resolve dictionary-internal refs (sound://, relative, absolute)
-		// to /res/{dict}/… here, where it is unit-tested.
-		// Rewrite first, reduce second: RewriteEntryHTML is what turns a
-		// dictionary's internal ref into /res/{dict}/…, and `clean` then
-		// absolutises exactly those. Reducing first would throw away the
-		// references before they had been named.
-		hl := marks(h.Term, h.Rung)
-		for j := range h.Results {
-			h.Results[j].Body = RewriteEntryHTMLMarked(h.Results[j].Body, id, hl)
-		}
-		// `clean` and `text` need this dictionary's own CSS to know which of
-		// its classes are blocks and which are hidden (D68); derived once per
-		// dictionary, from the article that first asks. `raw` never asks, so
-		// the desktop path costs nothing.
-		var st htmlref.Styles
-		if format != formatRaw && len(h.Results) > 0 {
-			st = s.articleStyles(id, h.Results[0].Body)
-		}
-		for j := range h.Results {
-			h.Results[j].Body = applyFormat(h.Results[j].Body, format, origin, st)
-		}
-		m := streamMsg{T: "hit", I: i, Dict: id, Name: name, Results: h.Results, Skipped: h.Skipped, Rung: h.Rung}
-		var heavy tooHeavy
-		switch {
-		case errors.As(h.Err, &heavy):
-			// Deferred, not failed. The client renders a section the user can
-			// open, and opening it re-queries this dictionary alone - which is
-			// uncapped above, and which auto-indexes it so the deferral does
-			// not recur.
-			m.Deferred, m.Bytes = true, heavy.bytes
-			m.Indexing = entries[i].indexing()
-		case errors.Is(h.Err, context.DeadlineExceeded):
-			// Never Go's own words. "context deadline exceeded" is what an
-			// unindexed dictionary looked like from the outside while a preview
-			// search crawled through its source format, and it told the user
-			// nothing they could act on - which is the whole content of the
-			// message they need.
-			if entries[i].indexing() {
-				m.Error = "timed out — still preparing this dictionary"
-			} else {
-				m.Error = "timed out — index this dictionary to search it"
-			}
-		case errors.Is(h.Err, context.Canceled):
-			m.Error = "search cancelled"
-		case h.Err != nil:
-			m.Error = h.Err.Error()
-		}
-		if m.Error != "" && !errors.Is(h.Err, context.Canceled) {
-			logx.System("search failure dictionary=%q source=%q mode=%q error=%q", name, entries[i].Path, mode, m.Error)
-		}
-		return m
-	}
-
-	// The ceiling exists to stop ONE slow dictionary from holding a wide
-	// fan-out open, and 30 s is right for that. It is the wrong shape for a
-	// search of a single named dictionary: there is nothing to fan out, the
-	// user chose this one, and an unprepared dictionary searched through its
-	// own format on a phone can legitimately take longer than that to answer.
-	// Cutting it off there produced a timeout instead of a result.
-	budget := 30 * time.Second
-	if demand {
-		budget = demandSearchBudget
-	}
-	ctx, cancel := context.WithTimeout(r.Context(), budget)
-	defer cancel()
-	// Metas are kept because each carries the dictionary's declared language,
-	// and the morphology wave needs it. Nothing is opened to obtain them: the
-	// search callback is invoked for EVERY dictionary, hit or miss.
-	metas := make([]dict.Meta, len(entries))
-	// missed marks the dictionaries that actually searched and came back
-	// EMPTY - the only ones the second wave has anything to ask. One that hit
-	// has answered the question; one that was deferred (too heavy), errored,
-	// or does not support this mode has said nothing about the word, and
-	// asking it the same question again with a lemma gets the same refusal.
-	// If nothing missed there is no second wave at all, and no lemma pack is
-	// loaded to serve a search that never happened.
-	//
-	// Per dictionary, not per search (D89): a gate on the WHOLE collection
-	// coming back empty would make lemmatization depend on what unrelated
-	// dictionaries are installed beside the one being read. One Babylon
-	// glossary carrying "estuviera" as a hand-listed alias of "estar" would
-	// suppress the lemma probe for every proper Spanish dictionary in the same
-	// search - each of which indexes lemmas only, and each of which would
-	// answer. The cost of the wider gate is that a language's pack can load on
-	// a search that already partly succeeded; it is still bounded by
-	// MORPH_CACHE, and the retry still goes only to dictionaries that returned
-	// nothing.
-	missed := make([]bool, len(entries))
-	empty := 0
-	search.StreamOpen(ctx, openers, mode, q, n, func(i int, h search.Hit) {
-		metas[i] = h.Meta
-		// Callbacks are serialised by StreamOpen, so this needs no lock.
-		if h.Err == nil && !h.Skipped && len(h.Results) == 0 {
-			missed[i], empty = true, empty+1
-		}
-		writeLine(renderHit(i, h))
+		stream.line(event)
+		return nil
 	})
-	if empty > 0 {
-		s.lemmaWave(ctx, writeLine, renderHit, entries, metas, missed, openers, mode, q, n)
+	if err == nil || errors.Is(err, unavailable) {
+		return
 	}
-	writeLine(streamMsg{T: "end"})
+	code := http.StatusInternalServerError
+	var validation *SearchError
+	if errors.As(err, &validation) {
+		code = http.StatusBadRequest
+		if validation.Kind == SearchDictionaryNotFound {
+			code = http.StatusNotFound
+		}
+	}
+	httpErr(w, code, "%v", err)
 }
 
 // lemmaWave is the second and last pass: for each dictionary that searched and
