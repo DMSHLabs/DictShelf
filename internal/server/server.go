@@ -983,11 +983,25 @@ type dictMsg struct {
 // says no), and a header would let the browser's own cache revalidate and
 // replay a body that carried one.
 func (s *Server) handleDicts(w http.ResponseWriter, r *http.Request) {
+	started := time.Now()
+	diagnostics := r.URL.Query().Get("diagnostics") == "1"
+	registryStarted := time.Now()
 	entries := s.reg.all()
+	registryElapsed := time.Since(registryStarted)
+	groupsStarted := time.Now()
 	groups := s.groupsNow()
+	groupsElapsed := time.Since(groupsStarted)
 	problems := facet.CountProblems(groups.problems)
+	globalStarted := time.Now()
 	global := s.rowsGlobal(groups)
+	globalElapsed := time.Since(globalStarted)
+	keysStarted := time.Now()
 	keys := rowKeys(entries, global)
+	keysElapsed := time.Since(keysStarted)
+	if diagnostics {
+		logx.System("dictionary_list phase=prepare dictionaries=%d registry_ms=%d groups_ms=%d global_ms=%d row_keys_ms=%d elapsed_ms=%d",
+			len(entries), registryElapsed.Milliseconds(), groupsElapsed.Milliseconds(), globalElapsed.Milliseconds(), keysElapsed.Milliseconds(), time.Since(started).Milliseconds())
+	}
 	ids := make(map[string]bool, len(entries))
 	for _, e := range entries {
 		ids[e.ID] = true
@@ -995,6 +1009,9 @@ func (s *Server) handleDicts(w http.ResponseWriter, r *http.Request) {
 	s.dictRows.keep(ids)
 	tag := s.listTag(entries, keys, problems)
 	if inm := r.Header.Get("If-None-Match"); inm != "" && matchesTag(inm, tag) {
+		if diagnostics {
+			logx.System("dictionary_list phase=not_modified dictionaries=%d elapsed_ms=%d", len(entries), time.Since(started).Milliseconds())
+		}
 		w.Header().Set("Cache-Control", "no-cache")
 		w.WriteHeader(http.StatusNotModified)
 		return
@@ -1008,11 +1025,13 @@ func (s *Server) handleDicts(w http.ResponseWriter, r *http.Request) {
 	writeLine := func(m dictMsg) { st.line(m) }
 
 	writeLine(dictMsg{T: "begin", Total: len(entries), GroupsProblems: problems})
+	rowsStarted := time.Now()
 
 	// same width as a search fan-out, and for the same reason: this is the
 	// other place the whole library is touched at once (search.Workers)
 	sem := make(chan struct{}, search.Workers())
 	var wg sync.WaitGroup
+	var firstRow sync.Once
 	var keepable atomic.Bool
 	keepable.Store(true)
 	for i, e := range entries {
@@ -1032,10 +1051,18 @@ func (s *Server) handleDicts(w http.ResponseWriter, r *http.Request) {
 			if !held || info.Error != "" || info.Job != nil {
 				keepable.Store(false)
 			}
+			if diagnostics {
+				firstRow.Do(func() {
+					logx.System("dictionary_list phase=first_row dictionaries=%d elapsed_ms=%d", len(entries), time.Since(started).Milliseconds())
+				})
+			}
 			writeLine(dictMsg{T: "dict", Dict: &info})
 		}(e, keys[i])
 	}
 	wg.Wait()
+	if diagnostics {
+		logx.System("dictionary_list phase=rows dictionaries=%d elapsed_ms=%d total_ms=%d", len(entries), time.Since(rowsStarted).Milliseconds(), time.Since(started).Milliseconds())
+	}
 	end := dictMsg{T: "end"}
 	if keepable.Load() {
 		end.ETag = tag

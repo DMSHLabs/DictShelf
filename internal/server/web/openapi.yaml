@@ -122,7 +122,7 @@ paths:
       tags: [internal]
       operationId: recordBrowseDiagnostic
       x-internal: true
-      summary: Add an opt-in Browse, Wildcards cache, or Wildcards memory event to the system log
+      summary: Add opt-in Browse, dictionary picker, Wildcards cache, or Wildcards memory timings to the system log
       requestBody:
         required: true
         content:
