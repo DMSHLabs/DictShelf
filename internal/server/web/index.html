@@ -2293,6 +2293,7 @@ function livePickerPayload(kind){
   if(scoped)groups.splice(1,0,scoped); // under "All dictionaries": the same axis, narrower
   const style=getComputedStyle(document.documentElement),rem=parseFloat(style.fontSize)||16;
   return {kind,groups,group:scoped?scoped.id:pickerGroup,
+    diagnostics:dictionaryListDiagnosticsEnabled(),
     found:true,rows:livePickerRows(),
     empty:livePickerSearching?tx("search.searching"):scoped?tx("search.emptyDict"):tx("search.emptyGroup"),
     listSearch:{
@@ -2316,11 +2317,17 @@ function refreshLivePicker(){
 window.wudictNativeDictionaryPicker=async function(){
   if(livePickerOpen||livePickerOpening)return;
   livePickerOpening=true;
+  const started=performance.now(),groupsStarted=started;
   try{
     userGroups=await groupRequest("/api/user-groups","GET");
+    const groupsMs=Math.round(performance.now()-groupsStarted);
     if(!userGroups.some(g=>g.id===pickerGroup))pickerGroup="all";
     livePickerOpen=true;
-    if(window.prompt("wudict:dictionary-picker",JSON.stringify(livePickerPayload("liveDict")))===null)
+    const payloadStarted=performance.now(),payload=livePickerPayload("liveDict");
+    const payloadMs=Math.round(performance.now()-payloadStarted);
+    if(payload.diagnostics)payload.diagnosticsTiming={groupFetchMs:groupsMs,payloadMs,
+      totalMs:Math.round(performance.now()-started)};
+    if(window.prompt("wudict:dictionary-picker",JSON.stringify(payload))===null)
       livePickerOpen=false;
   }catch(e){setStatus(esc(tx("search.groupFailed",{error:window.wudictI18n.errorText(e.message)})))}
   finally{livePickerOpening=false}
@@ -2616,6 +2623,9 @@ async function loadDicts(rescan){
   if(blocking){setPhase("boot");startBootScreen();dictTotal=0;syncBootStatus()}
   else setStatus('<span class="spin"></span>'+esc(tx("search.loading")),"load");
   const rows=[];
+  const listDiagnostics=dictionaryListDiagnosticsEnabled();
+  const listStarted=performance.now();
+  let beginMs=-1,firstRowMs=-1;
   let published=false,sawBegin=false,sawEnd=false;
   // "begin" costs the server no opens at all, so its absence means the server
   // is not answering — never leave the form inert waiting on a hang.
@@ -2629,12 +2639,14 @@ async function loadDicts(rescan){
   },20000):null;
   try{
     const endpoint=rescan?"/api/rescan":"/api/dicts";
-    const listURL=dictionaryListDiagnosticsEnabled()?endpoint+"?diagnostics=1":endpoint;
+    const listURL=listDiagnostics?endpoint+"?diagnostics=1":endpoint;
     await fetchStream(listURL,msg=>{
       if(msg.t==="begin"){
+        if(beginMs<0)beginMs=Math.round(performance.now()-listStarted);
         sawBegin=true;dictTotal=msg.total||0;
         if(blocking){syncBootStatus();showWorkNotice('<span class="spin"></span>'+esc(readyCount()))}
       }else if(msg.t==="dict"&&msg.dict){
+        if(firstRowMs<0)firstRowMs=Math.round(performance.now()-listStarted);
         rows.push(msg.dict);
         if(!published){
           // swap the old list out only now: a rescan keeps showing the
@@ -2670,7 +2682,13 @@ async function loadDicts(rescan){
   // place if its folder returns during this session.
   rememberVisibleOrder();savePrefs(true);
   dictsSettled=true; // every row is in; the groups can be counted
+  const streamMs=Math.round(performance.now()-listStarted);
+  const renderStarted=performance.now();
   refreshDictUI(true);
+  const renderMs=Math.round(performance.now()-renderStarted);
+  if(listDiagnostics)fetch("/api/browse-diagnostic",{method:"POST",headers:{"Content-Type":"application/json"},keepalive:true,
+    body:JSON.stringify({event:"dictionary_list_client",words:dicts.length,fetchMs:Math.max(0,beginMs),
+      wordsMs:Math.max(0,firstRowMs),totalMs:streamMs,stripBuildMs:renderMs})}).catch(()=>{});
   setPhase("ready");
   clearStatus("load");
   // a search run against a half-loaded list is now answerable in full

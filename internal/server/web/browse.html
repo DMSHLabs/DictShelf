@@ -408,9 +408,10 @@ const BROWSE_FIND_SESSION_KEY="wudict_browse_find_v1";
 const BROWSE_PAGE_SESSION_KEY="wudict_browse_page_v1";
 let browseHeadwordControl=null;
 const BROWSE_DEBUG=new URLSearchParams(location.search).get("browse_debug")==="1";
+function browseDiagnosticsEnabled(){try{return localStorage.getItem("wudict_browse_diagnostics")==="1"}catch(_){return false}}
 function browseTrace(step,data={}){
   let enabled=BROWSE_DEBUG;
-  try{enabled=enabled||localStorage.getItem("wudict_browse_diagnostics")==="1"}catch(_){}
+  enabled=enabled||browseDiagnosticsEnabled();
   if(!enabled)return;
   console.info("[browse]",step,data);
   const payload={event:step.replaceAll(" ","_")};
@@ -606,6 +607,14 @@ async function show(opts,record){
   }
   const continuingAlphabet=browseAlphabetTask?.dictId===dictId;
   const streamAlphabet=!browseAlphabetCache.has(dictId)&&!continuingAlphabet;
+  const alphabetStarted=performance.now();let alphabetTraceAt=0;
+  const traceAlphabetProgress=(at,total)=>{
+    const now=performance.now();
+    if(now-alphabetTraceAt<5000&&at<total)return;
+    alphabetTraceAt=now;
+    browseTrace("alphabet progress",{words:at,bytes:total,
+      letters:browseAlphabetPartial.get(requestDictId)?.length||0,totalMs:Math.round(now-alphabetStarted)});
+  };
   if(browsePageAbort&&browsePageAbort!==browseAlphabetTask?.controller)browsePageAbort.abort();
   if(browseAlphabetTask&&browseAlphabetTask.dictId!==dictId){browseAlphabetTask.controller.abort();browseAlphabetTask=null}
   const controller=new AbortController();browsePageAbort=controller;
@@ -618,11 +627,12 @@ async function show(opts,record){
   const u=new URLSearchParams({dict:dictId});
   if(opts.at)u.set("at",opts.at);else u.set("p",String(opts.p||1));
   if(streamAlphabet)u.set("stream","1");else u.set("strip","0");
+  if(browseDiagnosticsEnabled())u.set("diagnostics","1");
   browseTrace("page request",{dict:requestDictId,page:opts.p||1,streamAlphabet,letters:browseAlphabetCache.get(requestDictId)?.letters.length||0});
   let r;
   const fetchStarted=performance.now();
   try{r=await fetch("/api/browse?"+u.toString(),{signal:controller.signal});browseTrace("page response",{dict:requestDictId,status:r.status,fetchMs:Math.round(performance.now()-fetchStarted)})}
-  catch(e){clearTimeout(progressTimer);endProgress();if(seq===browseSeq){setBrowsePageBusy(false);if(e.name!=="AbortError")card("<b>"+tx("browse.noAnswer")+"</b><p>"+tx("browse.noAnswerBody")+"</p>")}return}
+  catch(e){clearTimeout(progressTimer);endProgress();browseTrace("page fetch failed",{status:e.name==="AbortError"?499:0,totalMs:Math.round(performance.now()-started)});if(seq===browseSeq){setBrowsePageBusy(false);if(e.name!=="AbortError")card("<b>"+tx("browse.noAnswer")+"</b><p>"+tx("browse.noAnswerBody")+"</p>")}return}
   if(seq!==browseSeq&&!streamAlphabet){clearTimeout(progressTimer);endProgress();return}
   if(r.status===409){clearTimeout(progressTimer);endProgress();setBrowsePageBusy(false);return unprepared(await r.json().catch(()=>({}))) }
   if(!r.ok){const j=await r.json().catch(()=>({}));
@@ -680,13 +690,16 @@ async function show(opts,record){
           if(browseAlphabetTask?.controller!==controller||browseAlphabetTask.dictId!==requestDictId)continue;
           const partial=browseAlphabetPartial.get(requestDictId)||[];
           partial.push(...(event.letters||[]));browseAlphabetPartial.set(requestDictId,partial);
+          traceAlphabetProgress(event.at||0,event.total||0);
           if(state&&state.dict===requestDictId){state.alphabet=partial;render()}
           updateBrowseProgress(t("browse.loadingAlphabet")+" · "+num(event.at||0)+" / "+num(event.total||0),"alphabet");
         }else if(event.type==="progress"){
           if(browseAlphabetTask?.controller===controller&&browseAlphabetTask.dictId===requestDictId)updateBrowseProgress(t("browse.loadingAlphabet")+" · "+num(event.at||0)+" / "+num(event.total||0),"alphabet");
+          traceAlphabetProgress(event.at||0,event.total||0);
         }else if(event.type==="done"){
           if(browseAlphabetTask?.controller!==controller||browseAlphabetTask.dictId!==requestDictId)continue;
           const complete=browseAlphabetPartial.get(requestDictId)||[];
+          browseTrace("alphabet done",{words:event.total||0,letters:complete.length,totalMs:Math.round(performance.now()-alphabetStarted)});
           saveBrowseAlphabet(requestDictId,event.total,complete.slice());browseAlphabetPartial.delete(requestDictId);
           if(state&&state.dict===requestDictId){state.alphabet=complete;render()}
           if(state&&state.dict===requestDictId)prefetchNextBrowsePage(state);
@@ -699,6 +712,9 @@ async function show(opts,record){
     if(browseAlphabetTask?.controller===controller)browseAlphabetTask=null;
     if(seq===browseSeq){endProgress();setBrowsePageBusy(false)}
   }catch(error){
+    if(streamAlphabet)browseTrace(error.name==="AbortError"?"alphabet aborted":"alphabet error",
+      {status:error.name==="AbortError"?499:0,words:browseAlphabetPartial.get(requestDictId)?.length||0,
+        letters:browseAlphabetPartial.get(requestDictId)?.length||0,totalMs:Math.round(performance.now()-alphabetStarted)});
     endProgress();
     if(browseAlphabetTask?.controller===controller)browseAlphabetTask=null;
     if(seq!==browseSeq)return;
