@@ -1377,7 +1377,7 @@ Hint: pick another port with --port, e.g.:  wudict --port %s
 	if runtime.GOOS == "windows" {
 		srv.FirstRunMigrationStatus = legacyMigrationStatus
 		srv.ApplyFirstRunMigration = func(action string) error {
-			return applyLegacyMigration(action, reg, srv.RefreshMigratedUserFiles)
+			return applyLegacyMigration(action, reg, srv.RefreshMigratedUserFiles, cfgFile)
 		}
 	}
 	srv.UseUserGroups()
