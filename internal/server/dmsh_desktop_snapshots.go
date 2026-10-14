@@ -29,3 +29,12 @@ func groupsResponse(file string, st fileState[*facet.Rules]) map[string]any {
 		"facets":   st.val.Facets(),
 	}
 }
+
+func (s *Server) aboutSnapshot(id, origin string) (aboutInfo, error) {
+	e, err := s.reg.get(id)
+	if err != nil {
+		return aboutInfo{}, err
+	}
+	info, _ := s.aboutOf(e, origin)
+	return info, nil
+}

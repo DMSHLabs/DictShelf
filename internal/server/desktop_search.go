@@ -129,14 +129,22 @@ func (s *Server) desktopDictionaryList(ctx context.Context, emit func([]byte)) (
 }
 
 // DesktopJSON dispatches explicitly supported JSON operations for the desktop
-// bridge. Group snapshots call shared operations directly; other actions still
-// enter their existing routes.
+// bridge. Group, About and reindex-status snapshots call shared operations
+// directly; other actions still enter their existing routes.
 func (s *Server) DesktopJSON(baseURL, method, argument string) (any, error) {
 	switch method {
 	case "groups":
 		return s.groupsSnapshot(), nil
 	case "userGroups":
 		return s.userGroupsSnapshot()
+	case "about":
+		base, err := url.Parse(baseURL)
+		if err != nil || base.Scheme != "http" || base.Host == "" || base.User != nil {
+			return nil, errors.New("invalid desktop server address")
+		}
+		return s.aboutSnapshot(argument, base.Scheme+"://"+base.Host)
+	case "reindex":
+		return s.reindexStatus(), nil
 	}
 	path := ""
 	query := ""
@@ -155,11 +163,6 @@ func (s *Server) DesktopJSON(baseURL, method, argument string) (any, error) {
 			"saveGroupOrder":         {"/api/user-groups/order", http.MethodPut},
 		}[method]
 		path, verb, body = route.path, route.verb, strings.NewReader(argument)
-	case "about":
-		path = "/api/about"
-		query = url.Values{"dict": []string{argument}}.Encode()
-	case "reindex":
-		path = "/api/reindex"
 	case "startReindex", "stopReindex":
 		path = "/api/reindex"
 		verb = http.MethodPost
