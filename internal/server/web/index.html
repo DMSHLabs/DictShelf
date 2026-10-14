@@ -1257,8 +1257,12 @@ function savePrefs(now){
     ui:{fontSize:articleFS,fontWeight:articleFW,hlOff:!hlOn,speakOff:!speakOn,fastFirst:!orderFirst,hideUnmarkedExamples}});
   if(body===prefsSent)return;
   prefsSent=body;
-  fetch("/api/prefs",{method:"PUT",headers:{"Content-Type":"application/json"},body})
-    .then(r=>{if(!r.ok)throw new Error("HTTP "+r.status);
+  const saved=typeof window.wudictNativeCall==="function"
+    ?window.wudictNativeCall("savePrefs",body)
+    :fetch("/api/prefs",{method:"PUT",headers:{"Content-Type":"application/json"},body})
+      .then(async r=>{if(!r.ok)throw new Error(await apiError(r));return r.json()});
+  Promise.resolve(saved)
+    .then(()=>{
       // The size and the weight are part of what a look holds, so a change to
       // them is a change to the screen: the Presets row's button follows.
       if(typeof looksCheckDrift==="function"&&$("panel").classList.contains("show"))looksCheckDrift()})
@@ -3990,9 +3994,13 @@ $("panelList").addEventListener("toggle",async e=>{
   det.dataset.loaded="1";
   const pd=det.closest(".pd"),body=det.querySelector(".aboutbody");
   try{
-    const r=await fetch("/api/about?dict="+encodeURIComponent(pd.dataset.id));
-    if(!r.ok)throw new Error(r.status);
-    const j=await r.json();
+    let j;
+    if(typeof window.wudictNativeCall==="function")j=await window.wudictNativeCall("about",pd.dataset.id);
+    else{
+      const r=await fetch("/api/about?dict="+encodeURIComponent(pd.dataset.id));
+      if(!r.ok)throw new Error(r.status);
+      j=await r.json();
+    }
     /* Inserted as markup on purpose: the server normalised it (escaped if it
        was plain text, reduced to prose elements if it was markup), so this is
        the one client that does NOT need a sanitiser of its own. */
@@ -4731,8 +4739,9 @@ function setBusy(on){
    ready instead of waiting for the whole fan-out (progressive results). */
 async function fetchStream(url,onMsg,signal,options){
   const nativeQuery=url==="/api/search"?"":url.startsWith("/api/search?")?url.slice("/api/search?".length):null;
-  if(nativeQuery!==null&&typeof window.wudictNativeCall==="function"){
-    try{return await window.wudictNativeCall("search",nativeQuery,onMsg,signal)}
+  const nativeDicts=url==="/api/dicts";
+  if((nativeQuery!==null||nativeDicts)&&typeof window.wudictNativeCall==="function"){
+    try{return await window.wudictNativeCall(nativeDicts?"dicts":"search",nativeQuery||"",onMsg,signal)}
     catch(e){if(e&&e.name==="AbortError")throw e;throw new Error(window.wudictI18n.errorText(e&&e.message)||e.message||String(e))}
   }
   const resp=await fetch(url,{...options,...(signal?{signal}:{})});

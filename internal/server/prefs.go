@@ -1,7 +1,10 @@
 package server
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
 	"path/filepath"
 	"slices"
@@ -575,12 +578,43 @@ func (s *Server) handlePrefs(w http.ResponseWriter, _ *http.Request) {
 // keeps the stored list: a page that changed only a UI setting must not carry
 // its stale copy of the order back over another page's newer one.
 func (s *Server) handleSavePrefs(w http.ResponseWriter, r *http.Request) {
+	result, err := s.SavePrefs(r.Body)
+	if err != nil {
+		var apiErr *prefsSaveError
+		if errors.As(err, &apiErr) {
+			httpErr(w, apiErr.status, "%s", apiErr.message)
+			return
+		}
+		httpErr(w, http.StatusInternalServerError, "%s", "could not save: "+err.Error())
+		return
+	}
+	writeJSON(w, result)
+}
+
+type prefsSaveError struct {
+	status  int
+	message string
+}
+
+func (e *prefsSaveError) Error() string { return e.message }
+
+// SavePrefs applies the /api/prefs update and returns its response snapshot.
+// HTTP and the Windows WebView bridge share this path so writes have identical
+// validation, merge and persistence behavior regardless of transport.
+func (s *Server) SavePrefs(body io.Reader) (map[string]any, error) {
 	var req struct {
 		Dicts []DictPref      `json:"dicts"`
 		UI    json.RawMessage `json:"ui"` // raw: which keys are present is the patch
 	}
-	if !decodeJSON(w, r, &req, 1<<20) {
-		return
+	data, err := io.ReadAll(io.LimitReader(body, (1<<20)+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(data) > 1<<20 {
+		return nil, &prefsSaveError{status: http.StatusRequestEntityTooLarge, message: "the request is larger than 1048576 bytes"}
+	}
+	if err := json.NewDecoder(bytes.NewReader(data)).Decode(&req); err != nil {
+		return nil, &prefsSaveError{status: http.StatusBadRequest, message: "bad request: " + err.Error()}
 	}
 	// merge reads the stored records and update writes them back: the pair is
 	// one read-modify-write, so it is serialized as one.
@@ -590,8 +624,7 @@ func (s *Server) handleSavePrefs(w http.ResponseWriter, r *http.Request) {
 	// save rather than inside it, where it would read as the server's (500).
 	if mentioned(req.UI) {
 		if err := json.Unmarshal(req.UI, new(UIPrefs)); err != nil {
-			httpErr(w, http.StatusBadRequest, "bad request: %v", err)
-			return
+			return nil, &prefsSaveError{status: http.StatusBadRequest, message: "bad request: " + err.Error()}
 		}
 	}
 	var merged []DictPref
@@ -599,12 +632,11 @@ func (s *Server) handleSavePrefs(w http.ResponseWriter, r *http.Request) {
 		merged = s.reg.prefs.merge(s.reg, req.Dicts)
 	}
 	if err := s.reg.prefs.update(merged, req.UI); err != nil {
-		httpErr(w, http.StatusInternalServerError, "%s", "could not save: "+err.Error())
-		return
+		return nil, err
 	}
 	dicts, _ := s.reg.prefs.Snapshot()
 	if dicts == nil {
 		dicts = []DictPref{} // [] on the wire, as before, never null
 	}
-	writeJSON(w, map[string]any{"exists": true, "dicts": dicts, "ui": s.reg.prefs.UI()})
+	return map[string]any{"exists": true, "dicts": dicts, "ui": s.reg.prefs.UI()}, nil
 }

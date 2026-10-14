@@ -38,7 +38,7 @@ var (
 
 // openDesktopWindow opens the local reader on a dedicated Windows UI thread.
 // The tray keeps the main thread; WebView2 owns the locked thread below.
-func openDesktopWindow(address string, onClose func(), desktopSnapshot func(string) (any, error), desktopSearch func(context.Context, string, func([]byte)) error) bool {
+func openDesktopWindow(address string, onClose func(), desktopRequest func(string, string) (any, error), desktopStream func(context.Context, string, string, func([]byte)) error) bool {
 	version, err := webviewloader.GetInstalledVersion()
 	if err != nil || version == "" {
 		logx.Warn("WebView2 unavailable; opening the browser: %v", err)
@@ -73,17 +73,17 @@ func openDesktopWindow(address string, onClose func(), desktopSnapshot func(stri
 	}
 	desktopWindowStarting = true
 	desktopWindowMu.Unlock()
-	go runDesktopWindow(address, profile, onClose, desktopSnapshot, desktopSearch)
+	go runDesktopWindow(address, profile, onClose, desktopRequest, desktopStream)
 	return true
 }
 
-func runDesktopWindow(address, profile string, onClose func(), desktopSnapshot func(string) (any, error), desktopSearch func(context.Context, string, func([]byte)) error) {
+func runDesktopWindow(address, profile string, onClose func(), desktopRequest func(string, string) (any, error), desktopStream func(context.Context, string, string, func([]byte)) error) {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 	w := webview.NewWithOptions(webview.WebViewOptions{
 		DataPath:      profile,
 		AutoFocus:     true,
-		WindowOptions: webview.WindowOptions{Title: "wuDict2", Width: 1120, Height: 820, IconId: 101, Center: true},
+		WindowOptions: webview.WindowOptions{Title: "wuDict2 - 6", Width: 1120, Height: 820, IconId: 101, Center: true},
 	})
 	if w == nil {
 		desktopWindowMu.Lock()
@@ -110,7 +110,7 @@ func runDesktopWindow(address, profile string, onClose func(), desktopSnapshot f
 	bridgeDone := make(chan struct{})
 	var nativeCallsMu sync.Mutex
 	nativeCalls := make(map[int]context.CancelFunc)
-	if desktopSnapshot != nil || desktopSearch != nil {
+	if desktopRequest != nil || desktopStream != nil {
 		if err := w.Bind("wudictNativeCancel", func(id int) error {
 			nativeCallsMu.Lock()
 			cancel := nativeCalls[id]
@@ -161,23 +161,23 @@ func runDesktopWindow(address, profile string, onClose func(), desktopSnapshot f
 					})
 				}
 				switch method {
-				case "config", "prefs":
-					if desktopSnapshot == nil {
-						reply(nil, fmt.Errorf("native snapshot API unavailable"), true)
+				case "config", "prefs", "savePrefs", "groups", "userGroups", "about":
+					if desktopRequest == nil {
+						reply(nil, fmt.Errorf("native request API unavailable"), true)
 						return
 					}
-					value, callErr := desktopSnapshot(method)
+					value, callErr := desktopRequest(method, argument)
 					payload, marshalErr := json.Marshal(value)
 					if marshalErr != nil {
 						callErr = marshalErr
 					}
 					reply(payload, callErr, true)
-				case "search":
-					if desktopSearch == nil {
-						reply(nil, fmt.Errorf("native search API unavailable"), true)
+				case "search", "dicts":
+					if desktopStream == nil {
+						reply(nil, fmt.Errorf("native stream API unavailable"), true)
 						return
 					}
-					callErr := desktopSearch(ctx, argument, func(payload []byte) {
+					callErr := desktopStream(ctx, method, argument, func(payload []byte) {
 						reply(payload, nil, false)
 					})
 					reply(nil, callErr, true)

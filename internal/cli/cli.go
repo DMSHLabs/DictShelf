@@ -1442,21 +1442,25 @@ Hint: pick another port with --port, e.g.:  wudict --port %s
 	if runtime.GOOS == "windows" {
 		srv.DesktopExit = stop
 	}
-	desktopSnapshot := func(method string) (any, error) {
+	desktopRequest := func(method, argument string) (any, error) {
 		switch method {
 		case "config":
 			return srv.ConfigSnapshot(true, "127.0.0.1"), nil
 		case "prefs":
 			return srv.PrefsSnapshot(), nil
+		case "savePrefs":
+			return srv.SavePrefs(strings.NewReader(argument))
+		case "groups", "userGroups", "about":
+			return srv.DesktopJSON(url, method, argument)
 		default:
 			return nil, fmt.Errorf("unknown native method %q", method)
 		}
 	}
-	desktopSearch := func(ctx context.Context, query string, emit func([]byte)) error {
-		return srv.DesktopSearch(ctx, url, query, emit)
+	desktopStream := func(ctx context.Context, method, query string, emit func([]byte)) error {
+		return srv.DesktopStream(ctx, url, method, query, emit)
 	}
 	if !cfg.NoBrowser {
-		go openBrowser(browseURL(url, token), gui, stop, desktopSnapshot, desktopSearch)
+		go openBrowser(browseURL(url, token), gui, stop, desktopRequest, desktopStream)
 	}
 	go func() {
 		sig := make(chan os.Signal, 1)
@@ -1500,7 +1504,7 @@ Hint: pick another port with --port, e.g.:  wudict --port %s
 		GUI:      gui,
 		Version:  Version,
 		URL:      url,
-		Open:     func() { openUI(browseURL(url, token), gui, stop, desktopSnapshot, desktopSearch) },
+		Open:     func() { openUI(browseURL(url, token), gui, stop, desktopRequest, desktopStream) },
 		Rescan:   trayRescan(reg),
 		OpenDir:  trayOpenDir(reg.Dirs()),
 		Shutdown: stop,
@@ -1939,14 +1943,14 @@ func indexingSummary(autoIndex string) string {
 	return "on - a headword index is prepared on first search; contains, full-text and media on request"
 }
 
-func openBrowser(url string, gui bool, onWindowClose func(), desktopSnapshot func(string) (any, error), desktopSearch func(context.Context, string, func([]byte)) error) {
+func openBrowser(url string, gui bool, onWindowClose func(), desktopRequest func(string, string) (any, error), desktopStream func(context.Context, string, string, func([]byte)) error) {
 	time.Sleep(300 * time.Millisecond) // let our own server finish binding
-	openUI(url, gui, onWindowClose, desktopSnapshot, desktopSearch)
+	openUI(url, gui, onWindowClose, desktopRequest, desktopStream)
 }
 
-func openUI(address string, gui bool, onWindowClose func(), desktopSnapshot func(string) (any, error), desktopSearch func(context.Context, string, func([]byte)) error) {
+func openUI(address string, gui bool, onWindowClose func(), desktopRequest func(string, string) (any, error), desktopStream func(context.Context, string, string, func([]byte)) error) {
 	if gui && runtime.GOOS == "windows" {
-		if local, err := desktopWindowURL(address); err == nil && openDesktopWindow(local, onWindowClose, desktopSnapshot, desktopSearch) {
+		if local, err := desktopWindowURL(address); err == nil && openDesktopWindow(local, onWindowClose, desktopRequest, desktopStream) {
 			return
 		}
 	}

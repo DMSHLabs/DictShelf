@@ -123,6 +123,10 @@ function groupErrorText(message){
   return keys.has(message)?tx(keys.get(message)):message;
 }
 async function groupRequest(path,method,body){
+  if(method==='GET'&&typeof window.wudictNativeCall==='function'){
+    if(path==='/api/user-groups')return window.wudictNativeCall('userGroups');
+    if(path==='/api/groups')return window.wudictNativeCall('groups');
+  }
   const response=await fetch(path,{method,headers:{"Content-Type":"application/json"},body:body===undefined?undefined:JSON.stringify(body)});
   if(!response.ok)throw new Error(groupErrorText((await response.text()).trim()));
   return response.json();
@@ -141,9 +145,7 @@ function groupFilters(){
 }
 async function loadConfiguredGroupFilters(){
   try{
-    const response=await fetch('/api/groups');
-    if(!response.ok)return;
-    const data=await response.json();
+    const data=await groupRequest('/api/groups','GET');
     configuredGroupFilters=(data.facets||[]).flatMap((f,fo)=>(f.groups||[]).map(g=>({f:f.id,v:g.id,fl:f.label,vl:g.label,fo:fo+3})));
   }catch(error){console.warn('could not load filters:',error)}
 }
