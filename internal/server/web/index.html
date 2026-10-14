@@ -2591,7 +2591,11 @@ $("dict").onchange=e=>{const v=e.target.value;localStorage.setItem("wudict_dict"
   // once, which is the unbounded auto-index fan-out (docs.local/PERF.md M1)
   // — the single most expensive thing this app can be made to do — triggered
   // by one tap on a menu, before the user has typed anything at all.
-  else if(v&&v!=="all"&&!v.startsWith("g:"))fetch("/api/demand?dict="+encodeURIComponent(v),{method:"POST"}).catch(()=>{})};
+  else if(v&&v!=="all"&&!v.startsWith("g:")){
+    const query="dict="+encodeURIComponent(v);
+    if(typeof window.wudictNativeCall==="function")window.wudictNativeCall("demand",query).catch(()=>{});
+    else fetch("/api/demand?"+query,{method:"POST"}).catch(()=>{});
+  }};
 /* Mode re-runs the search on change, symmetric with #dict: the narrow bar has
    no submit button, so a mode that waited for the next submit would appear to
    do nothing at all. */

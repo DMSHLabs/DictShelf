@@ -19,8 +19,9 @@ import (
 	"github.com/wuweidict/wudict/internal/logx"
 )
 
-// DesktopStream dispatches desktop streams. Search and dictionary listing call
-// their shared Go operations directly; the other streams still enter routes.
+// DesktopStream dispatches desktop streams. Search, dictionary listing, ingest
+// and rescan index work call their shared Go operations directly; plain rescan
+// still enters its route.
 func (s *Server) DesktopStream(ctx context.Context, baseURL, method, query string, emit func([]byte)) error {
 	if method == "search" {
 		var request SearchRequest
@@ -32,18 +33,26 @@ func (s *Server) DesktopStream(ctx context.Context, baseURL, method, query strin
 	if method == "dicts" {
 		return s.desktopDictionaryList(ctx, emit)
 	}
+	if method == "rescanIndexes" {
+		base, err := url.Parse(baseURL)
+		if err != nil || base.Scheme != "http" || base.Host == "" || base.User != nil {
+			return errors.New("invalid desktop server address")
+		}
+		return s.desktopRescanIndexes(ctx, []byte(query), emit)
+	}
+	if method == "ingest" {
+		base, err := url.Parse(baseURL)
+		if err != nil || base.Scheme != "http" || base.Host == "" || base.User != nil {
+			return errors.New("invalid desktop server address")
+		}
+		return s.desktopIngest(ctx, query, emit)
+	}
 	path := ""
 	verb := http.MethodGet
 	var body io.Reader
 	switch method {
-	case "ingest":
-		path = "/api/ingest"
 	case "rescan":
 		path = "/api/rescan"
-	case "rescanIndexes":
-		path, verb = "/api/rescan", http.MethodPost
-		body = strings.NewReader(query)
-		query = "stream=1"
 	default:
 		return fmt.Errorf("unsupported desktop stream %q", method)
 	}
@@ -64,6 +73,39 @@ func (s *Server) DesktopStream(ctx context.Context, baseURL, method, query strin
 	w := &desktopStreamWriter{header: make(http.Header), emit: emit}
 	s.ServeHTTP(w, req)
 	return w.finish()
+}
+
+func (s *Server) desktopIngest(ctx context.Context, query string, emit func([]byte)) error {
+	values, err := url.ParseQuery(query)
+	if err != nil {
+		return fmt.Errorf("invalid ingest request: %w", err)
+	}
+	e, err := s.reg.get(values.Get("dict"))
+	if err != nil {
+		return err
+	}
+	key := ingestKey(e.ID)
+	if status, ok := s.jobs.status(key); !ok || !status.Running || len(values) != 1 {
+		release, admitted := s.admitWork(key)
+		if !admitted {
+			return errors.New("dictionary operations are running; wait for completion or stop them")
+		}
+		s.startIngest(e, values)
+		release()
+	}
+	s.followIngestEvents(ctx, key, func(event string, data any) {
+		if emit == nil {
+			return
+		}
+		message, err := json.Marshal(struct {
+			Event string `json:"event"`
+			Data  any    `json:"data"`
+		}{event, data})
+		if err == nil {
+			emit(message)
+		}
+	})
+	return nil
 }
 
 // DesktopSearch accepts a legacy query string and calls the shared search
@@ -133,6 +175,26 @@ func (s *Server) desktopDictionaryList(ctx context.Context, emit func([]byte)) (
 // available and delegate to the same operations where they overlap.
 func (s *Server) DesktopJSON(baseURL, method, argument string) (any, error) {
 	switch method {
+	case "saveGroupOrder":
+		var request groupOrderRequest
+		if len(argument) > 1<<20 || json.Unmarshal([]byte(argument), &request) != nil || request.Members == nil || request.Group == allDictionariesGroup {
+			return nil, errors.New("Invalid group order")
+		}
+		if err := s.saveGroupOrder(request); err != nil {
+			return nil, err
+		}
+		return map[string]bool{"saved": true}, nil
+	case "demand":
+		values, err := url.ParseQuery(argument)
+		if err != nil {
+			return nil, fmt.Errorf("invalid demand request: %w", err)
+		}
+		explicit, _ := queryFlag(values, "explicit")
+		indexing, err := s.demandDictionary(values.Get("dict"), explicit)
+		if err != nil {
+			return nil, err
+		}
+		return map[string]bool{"indexing": indexing}, nil
 	case "groups":
 		return s.groupsSnapshot(), nil
 	case "userGroups":
@@ -162,7 +224,7 @@ func (s *Server) DesktopJSON(baseURL, method, argument string) (any, error) {
 	verb := http.MethodGet
 	var body io.Reader
 	switch method {
-	case "createGroup", "renameGroup", "deleteGroup", "setGroupMember", "replaceGroupMembership", "addGroupMembers", "linkGroup", "saveGroupOrder":
+	case "createGroup", "renameGroup", "deleteGroup", "setGroupMember", "replaceGroupMembership", "addGroupMembers", "linkGroup":
 		route := map[string]struct{ path, verb string }{
 			"createGroup":            {"/api/user-groups", http.MethodPost},
 			"renameGroup":            {"/api/user-groups/name", http.MethodPut},
@@ -171,7 +233,6 @@ func (s *Server) DesktopJSON(baseURL, method, argument string) (any, error) {
 			"replaceGroupMembership": {"/api/user-groups/membership", http.MethodPut},
 			"addGroupMembers":        {"/api/user-groups/members", http.MethodPut},
 			"linkGroup":              {"/api/user-groups/link", http.MethodPut},
-			"saveGroupOrder":         {"/api/user-groups/order", http.MethodPut},
 		}[method]
 		path, verb, body = route.path, route.verb, strings.NewReader(argument)
 	default:

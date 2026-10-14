@@ -676,8 +676,12 @@ async function unprepared(j){
     demanded=true;
     card(building);
     try{
-      const r=await fetch("/api/demand?explicit=1&dict="+encodeURIComponent(dictId),{method:"POST"});
-      j=r.ok?await r.json():{};
+      const query="explicit=1&dict="+encodeURIComponent(dictId);
+      if(typeof window.wudictNativeCall==="function")j=await window.wudictNativeCall("demand",query);
+      else{
+        const r=await fetch("/api/demand?"+query,{method:"POST"});
+        j=r.ok?await r.json():{};
+      }
     }catch(e){j={}}
   }
   if(j.indexing){

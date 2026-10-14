@@ -21,6 +21,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"slices"
@@ -730,14 +731,43 @@ func availableID(entries map[string]*entry, id string) bool { _, ok := entries[i
 // Reorder only the currently available members. Unavailable dictionaries keep
 // their membership and follow the visible rows until they reappear.
 func (s *Server) handleGroupOrder(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Group   string   `json:"group"`
-		Members []string `json:"members"`
-		Pinned  []string `json:"pinned"`
-	}
+	var req groupOrderRequest
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&req); err != nil || req.Members == nil || req.Group == allDictionariesGroup {
 		http.Error(w, "Invalid group order", 400)
 		return
+	}
+	if err := s.saveGroupOrder(req); err != nil {
+		var operationErr groupOperationError
+		status := http.StatusInternalServerError
+		if errors.As(err, &operationErr) {
+			status = operationErr.status
+		}
+		http.Error(w, err.Error(), status)
+		return
+	}
+	writeJSON(w, map[string]bool{"saved": true})
+}
+
+type groupOrderRequest struct {
+	Group   string   `json:"group"`
+	Members []string `json:"members"`
+	Pinned  []string `json:"pinned"`
+}
+
+type groupOperationError struct {
+	status  int
+	message string
+}
+
+func (e groupOperationError) Error() string { return e.message }
+
+func groupOperationFailure(status int, message string) error {
+	return groupOperationError{status: status, message: message}
+}
+
+func (s *Server) saveGroupOrder(req groupOrderRequest) error {
+	if req.Members == nil || req.Group == allDictionariesGroup {
+		return groupOperationFailure(http.StatusBadRequest, "Invalid group order")
 	}
 	p := s.reg.prefs
 	p.heal(s.reg)
@@ -747,8 +777,7 @@ func (s *Server) handleGroupOrder(w http.ResponseWriter, r *http.Request) {
 	f, _ := p.data()
 	gi := slices.IndexFunc(f.Groups, func(g DictionaryGroup) bool { return g.ID == req.Group })
 	if gi < 0 {
-		http.Error(w, "Group not found", 404)
-		return
+		return groupOperationFailure(http.StatusNotFound, "Group not found")
 	}
 	visible := make(map[string]bool)
 	for _, e := range entries {
@@ -760,14 +789,12 @@ func (s *Server) handleGroupOrder(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if len(req.Members) != len(visible) {
-		http.Error(w, "Group membership changed; reload the list", 409)
-		return
+		return groupOperationFailure(http.StatusConflict, "Group membership changed; reload the list")
 	}
 	seen := make(map[string]bool, len(req.Members))
 	for _, id := range req.Members {
 		if !visible[id] || seen[id] {
-			http.Error(w, "Invalid group order", 400)
-			return
+			return groupOperationFailure(http.StatusBadRequest, "Invalid group order")
 		}
 		seen[id] = true
 	}
@@ -798,8 +825,7 @@ func (s *Server) handleGroupOrder(w http.ResponseWriter, r *http.Request) {
 		pinned = make(map[string]bool, len(req.Pinned))
 		for _, id := range req.Pinned {
 			if !storedMembers[id] || pinned[id] {
-				http.Error(w, "Invalid group order", 400)
-				return
+				return groupOperationFailure(http.StatusBadRequest, "Invalid group order")
 			}
 			pinned[id] = true
 		}
@@ -809,8 +835,7 @@ func (s *Server) handleGroupOrder(w http.ResponseWriter, r *http.Request) {
 	if err := p.mutate(func(f *prefsFile) {
 		f.Groups = groupList
 	}); err != nil {
-		http.Error(w, "Could not save group order: "+err.Error(), 500)
-		return
+		return groupOperationFailure(http.StatusInternalServerError, "Could not save group order: "+err.Error())
 	}
-	writeJSON(w, map[string]bool{"saved": true})
+	return nil
 }
