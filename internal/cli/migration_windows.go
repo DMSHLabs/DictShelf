@@ -104,7 +104,7 @@ func legacyMigrationStatus() server.FirstRunMigration {
 	return server.FirstRunMigration{Available: true, Forked: forked}
 }
 
-func applyLegacyMigration(action string, reg *server.Registry, refresh func()) error {
+func applyLegacyMigration(action string, reg *server.Registry, refresh func(), currentConfig string) error {
 	status := legacyMigrationStatus()
 	if !status.Available {
 		return fmt.Errorf("the old wuDict data folder is no longer available")
@@ -120,7 +120,7 @@ func applyLegacyMigration(action string, reg *server.Registry, refresh func()) e
 		return err
 	}
 	oldRoot, newRoot := filepath.Join(home, ".wudict"), filepath.Join(home, ".wuDict2")
-	if err := stopLegacyWindowsServer(oldRoot); err != nil {
+	if err := stopLegacyWindowsServer(oldRoot, currentConfig); err != nil {
 		return err
 	}
 	if err := importLegacyData(oldRoot, newRoot, status.Forked); err != nil {
@@ -193,6 +193,7 @@ func hasForkState(path string) (bool, error) {
 func importLegacyData(oldRoot, newRoot string, forked bool) error {
 	oldConfig := filepath.Join(oldRoot, config.Name)
 	var dirs []string
+	configData := []byte(nil)
 	lemmaSource := filepath.Join(oldRoot, "lemmas")
 	if fileExists(oldConfig) {
 		cfg, err := loadLegacyConfig(oldConfig)
@@ -202,6 +203,10 @@ func importLegacyData(oldRoot, newRoot string, forked bool) error {
 		dirs = cfg.DictDirs
 		if cfg.Origin("LEMMA_DIR") == config.OriginFile {
 			lemmaSource = cfg.LemmaDir
+		}
+		configData, err = os.ReadFile(oldConfig)
+		if err != nil {
+			return fmt.Errorf("cannot read wuDict settings: %w", err)
 		}
 	}
 	if err := os.MkdirAll(newRoot, 0o755); err != nil {
@@ -228,11 +233,162 @@ func importLegacyData(oldRoot, newRoot string, forked bool) error {
 		rollback()
 		return fmt.Errorf("cannot inspect lemma folder %s: %w", lemmaSource, err)
 	}
-	if len(dirs) > 0 {
-		if err := config.SaveKeyRaw(config.HomeConfig(), "DICT_DIR", config.FormatList(dirs)); err != nil {
+	if len(configData) > 0 {
+		// Keep every setting from the old config, while moving wuDict2's own
+		// working folders into its new home. Prepared indexes are not copied.
+		configData = rewriteMigrationConfigPaths(configData, oldRoot, newRoot)
+		if err := installMigratedConfig(config.HomeConfig(), newRoot, configData, dirs); err != nil {
 			rollback()
-			return fmt.Errorf("cannot save dictionary folder settings: %w", err)
+			return fmt.Errorf("cannot save wuDict2 settings: %w", err)
 		}
+	}
+	return nil
+}
+
+func rewriteMigrationConfigPaths(data []byte, oldRoot, newRoot string) []byte {
+	text := string(data)
+	oldClean, newClean := filepath.Clean(oldRoot), filepath.Clean(newRoot)
+	text = replacePathFold(text, oldClean, newClean)
+	text = replacePathFold(text, strings.ReplaceAll(oldClean, `\`, `\\`), strings.ReplaceAll(newClean, `\`, `\\`))
+	text = replacePathFold(text, filepath.ToSlash(oldClean), filepath.ToSlash(newClean))
+	text = replacePathFold(text, "~/.wudict", "~/.wuDict2")
+	text = renameMigrationComment(text)
+	return []byte(text)
+}
+
+func renameMigrationComment(text string) string {
+	lines := strings.SplitAfter(text, "\n")
+	for i, line := range lines {
+		quote := byte(0)
+		escaped := false
+		for j := 0; j < len(line); j++ {
+			c := line[j]
+			if quote != 0 {
+				if quote == '"' && c == '\\' && !escaped {
+					escaped = true
+					continue
+				}
+				if c == quote && !escaped {
+					quote = 0
+				}
+				escaped = false
+				continue
+			}
+			if c == '"' || c == '\'' {
+				quote = c
+				continue
+			}
+			if c == '#' {
+				lines[i] = line[:j] + renameMigrationCommentWords(line[j:])
+				break
+			}
+		}
+	}
+	return strings.Join(lines, "")
+}
+
+func renameMigrationCommentWords(comment string) string {
+	var out strings.Builder
+	for i := 0; i < len(comment); {
+		if i+6 <= len(comment) && strings.EqualFold(comment[i:i+6], "wudict") &&
+			(i == 0 || !isConfigWordByte(comment[i-1])) &&
+			(i+6 == len(comment) || !isConfigWordByte(comment[i+6])) {
+			// wudict.toml is the actual config filename and remains unchanged.
+			if !strings.HasPrefix(strings.ToLower(comment[i+6:]), ".toml") {
+				out.WriteString("wuDict2")
+				i += 6
+				continue
+			}
+		}
+		out.WriteByte(comment[i])
+		i++
+	}
+	return out.String()
+}
+
+func isConfigWordByte(b byte) bool {
+	return b == '_' || b >= 'a' && b <= 'z' || b >= 'A' && b <= 'Z' || b >= '0' && b <= '9'
+}
+
+func replacePathFold(text, oldPath, newPath string) string {
+	if oldPath == "" {
+		return text
+	}
+	lowerText, lowerOld := strings.ToLower(text), strings.ToLower(oldPath)
+	var out strings.Builder
+	for start := 0; ; {
+		i := strings.Index(lowerText[start:], lowerOld)
+		if i < 0 {
+			out.WriteString(text[start:])
+			break
+		}
+		i += start
+		end := i + len(oldPath)
+		if end < len(text) && text[end] != '\\' && text[end] != '/' && text[end] != '"' && text[end] != '\'' && text[end] != ' ' && text[end] != '\t' && text[end] != '#' {
+			out.WriteString(text[start : i+1])
+			start = i + 1
+			continue
+		}
+		out.WriteString(text[start:i])
+		out.WriteString(newPath)
+		start = end
+	}
+	return out.String()
+}
+
+func installMigratedConfig(path, root string, data []byte, dirs []string) error {
+	tmp, err := os.CreateTemp(root, ".wuDict2-config-*")
+	if err != nil {
+		return err
+	}
+	tmpPath := tmp.Name()
+	defer os.Remove(tmpPath)
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	if len(dirs) > 0 {
+		if err := config.SaveKeyRaw(tmpPath, "DICT_DIR", config.FormatList(dirs)); err != nil {
+			return err
+		}
+	}
+	if err := config.SaveKeyRaw(tmpPath, "DB_DIR", config.QuoteTOML(filepath.Join(root, "db"))); err != nil {
+		return err
+	}
+	if err := config.SaveKeyRaw(tmpPath, "LEMMA_DIR", config.QuoteTOML(filepath.Join(root, "lemmas"))); err != nil {
+		return err
+	}
+	backup := ""
+	if _, err := os.Lstat(path); err == nil {
+		f, createErr := os.CreateTemp(root, ".wuDict2-config-backup-*")
+		if createErr != nil {
+			return createErr
+		}
+		backup = f.Name()
+		if closeErr := f.Close(); closeErr != nil {
+			os.Remove(backup)
+			return closeErr
+		}
+		if removeErr := os.Remove(backup); removeErr != nil {
+			return removeErr
+		}
+		if err := os.Rename(path, backup); err != nil {
+			return err
+		}
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+	if err := os.Rename(tmpPath, path); err != nil {
+		if backup != "" {
+			_ = os.Rename(backup, path)
+		}
+		return err
+	}
+	if backup != "" {
+		_ = os.Remove(backup)
 	}
 	return nil
 }
@@ -267,7 +423,7 @@ func fileExists(path string) bool {
 	return err == nil && !info.IsDir()
 }
 
-func stopLegacyWindowsServer(oldRoot string) error {
+func stopLegacyWindowsServer(oldRoot, currentConfig string) error {
 	oldConfig := filepath.Join(oldRoot, config.Name)
 	configExists := true
 	if _, err := os.Stat(oldConfig); os.IsNotExist(err) {
@@ -304,8 +460,17 @@ func stopLegacyWindowsServer(oldRoot string) error {
 		}
 		addr, port, authToken = cfg.Addr(), cfg.Port, cfg.AuthToken
 	}
-	if _, ok := probeRunning(addr); !ok {
+	inst, ok := probeRunning(addr)
+	if !ok {
 		return nil
+	}
+	// The just-started wuDict2 may use the same default port as wuDict. Never
+	// send Exit to the server handling the migration request itself.
+	if sameWindowsPath(inst.ConfigPath, currentConfig) {
+		return nil
+	}
+	if !sameWindowsPath(inst.ConfigPath, oldConfig) {
+		return fmt.Errorf("a wuDict server is running on port %s with settings %s; close it before migrating the files", port, inst.ConfigPath)
 	}
 	host := probeHost(addr)
 	base := "http://" + host
@@ -345,6 +510,18 @@ func stopLegacyWindowsServer(oldRoot string) error {
 		time.Sleep(150 * time.Millisecond)
 	}
 	return fmt.Errorf("wuDict accepted the stop request but is still using its files. Close wuDict and try again")
+}
+
+func sameWindowsPath(a, b string) bool {
+	if a == "" || b == "" {
+		return false
+	}
+	absA, errA := filepath.Abs(a)
+	absB, errB := filepath.Abs(b)
+	if errA != nil || errB != nil {
+		return strings.EqualFold(filepath.Clean(a), filepath.Clean(b))
+	}
+	return strings.EqualFold(filepath.Clean(absA), filepath.Clean(absB))
 }
 
 func copyMigrationItems(from, to string, names []string, created *[]string) error {
