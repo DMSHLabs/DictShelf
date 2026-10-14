@@ -19,7 +19,7 @@
   const spinner = document.createElement('span'), text = document.createElement('span'), button = document.createElement('button');
   spinner.className = 'work-spinner'; spinner.setAttribute('aria-hidden','true');
   button.type = 'button'; box.append(spinner, text, button); document.body.append(backing, box);
-  let status = null, pending = false, starting = false;
+  let status = null, pending = false, starting = false, refreshSequence = 0;
   const cacheKey='wudict-active-work';
   async function request(url, options={}) {
     const controller=new AbortController();
@@ -87,9 +87,17 @@
     window.dispatchEvent(new CustomEvent('wudict-work', {detail:{...s,text:text.textContent}}));
   }
   async function refresh(id = '') {
+    const sequence = ++refreshSequence;
+    if (typeof window.wudictNativeCall === 'function') {
+      const s = await window.wudictNativeCall('indexWork', id || '');
+      if(sequence===refreshSequence&&(!starting||s.running))render(s);
+      return s;
+    }
     const r = await request('/api/index-work'+(id?'?id='+encodeURIComponent(id):''));
     if (!r.ok) throw new Error(await r.text());
-    const s = await r.json(); if(!starting||s.running)render(s); return s;
+    const s = await r.json();
+    if(sequence===refreshSequence&&(!starting||s.running))render(s);
+    return s;
   }
   async function stop() {
     if (!status?.running || pending) return;
