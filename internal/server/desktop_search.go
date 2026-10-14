@@ -11,31 +11,93 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"strings"
 )
 
-// DesktopSearch runs the existing search route in-process and forwards each
-// NDJSON record to the desktop WebView bridge. The HTTP route remains the
-// browser and non-Windows transport; both paths enter the same handler.
-func (s *Server) DesktopSearch(ctx context.Context, baseURL, query string, emit func([]byte)) error {
+// DesktopStream runs an existing streaming route in-process and forwards each
+// NDJSON record to the desktop WebView bridge. The HTTP routes remain the
+// browser and non-Windows transport; both paths enter the same handlers.
+func (s *Server) DesktopStream(ctx context.Context, baseURL, method, query string, emit func([]byte)) error {
+	path := ""
+	switch method {
+	case "search":
+		path = "/api/search"
+	case "dicts":
+		path = "/api/dicts"
+	default:
+		return fmt.Errorf("unsupported desktop stream %q", method)
+	}
 	base, err := url.Parse(baseURL)
 	if err != nil || base.Scheme != "http" || base.Host == "" || base.User != nil {
 		return errors.New("invalid desktop server address")
 	}
-	base.Path, base.RawPath, base.RawQuery, base.Fragment = "/api/search", "", query, ""
+	base.Path, base.RawPath, base.RawQuery, base.Fragment = path, "", query, ""
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, base.String(), nil)
 	if err != nil {
 		return err
 	}
 	req.Host = base.Host
 	req.RemoteAddr = "127.0.0.1:0"
-	w := &desktopSearchWriter{header: make(http.Header), emit: emit}
+	w := &desktopStreamWriter{header: make(http.Header), emit: emit}
 	s.ServeHTTP(w, req)
 	return w.finish()
 }
 
-type desktopSearchWriter struct {
+// DesktopSearch remains a narrow convenience for callers that only need the
+// search stream.
+func (s *Server) DesktopSearch(ctx context.Context, baseURL, query string, emit func([]byte)) error {
+	return s.DesktopStream(ctx, baseURL, "search", query, emit)
+}
+
+// DesktopJSON calls one read-only JSON endpoint in-process for the desktop
+// bridge. The endpoint still runs through the same server middleware and
+// handler as an HTTP client.
+func (s *Server) DesktopJSON(baseURL, method, argument string) (any, error) {
+	path := ""
+	query := ""
+	switch method {
+	case "groups":
+		path = "/api/groups"
+	case "userGroups":
+		path = "/api/user-groups"
+	case "about":
+		path = "/api/about"
+		query = url.Values{"dict": []string{argument}}.Encode()
+	default:
+		return nil, fmt.Errorf("unsupported desktop request %q", method)
+	}
+	base, err := url.Parse(baseURL)
+	if err != nil || base.Scheme != "http" || base.Host == "" || base.User != nil {
+		return nil, errors.New("invalid desktop server address")
+	}
+	base.Path, base.RawPath, base.RawQuery, base.Fragment = path, "", query, ""
+	req, err := http.NewRequest(http.MethodGet, base.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Host = base.Host
+	req.RemoteAddr = "127.0.0.1:0"
+	rec := httptest.NewRecorder()
+	s.ServeHTTP(rec, req)
+	if rec.Code >= 400 {
+		var payload struct {
+			Error string `json:"error"`
+		}
+		if json.Unmarshal(rec.Body.Bytes(), &payload) == nil && payload.Error != "" {
+			return nil, errors.New(payload.Error)
+		}
+		return nil, errors.New(strings.TrimSpace(rec.Body.String()))
+	}
+	var result any
+	if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
+		return nil, fmt.Errorf("invalid JSON response: %w", err)
+	}
+	return result, nil
+}
+
+type desktopStreamWriter struct {
 	header http.Header
 	status int
 	body   bytes.Buffer
@@ -43,15 +105,15 @@ type desktopSearchWriter struct {
 	emit   func([]byte)
 }
 
-func (w *desktopSearchWriter) Header() http.Header { return w.header }
+func (w *desktopStreamWriter) Header() http.Header { return w.header }
 
-func (w *desktopSearchWriter) WriteHeader(status int) {
+func (w *desktopStreamWriter) WriteHeader(status int) {
 	if w.status == 0 {
 		w.status = status
 	}
 }
 
-func (w *desktopSearchWriter) Write(p []byte) (int, error) {
+func (w *desktopStreamWriter) Write(p []byte) (int, error) {
 	if w.status == 0 {
 		w.status = http.StatusOK
 	}
@@ -73,9 +135,9 @@ func (w *desktopSearchWriter) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
-func (w *desktopSearchWriter) Flush() {}
+func (w *desktopStreamWriter) Flush() {}
 
-func (w *desktopSearchWriter) finish() error {
+func (w *desktopStreamWriter) finish() error {
 	if w.status == 0 {
 		w.status = http.StatusOK
 	}
@@ -91,5 +153,5 @@ func (w *desktopSearchWriter) finish() error {
 	if json.Unmarshal(w.body.Bytes(), &payload) == nil && payload.Error != "" {
 		return errors.New(payload.Error)
 	}
-	return fmt.Errorf("search failed (HTTP %d)", w.status)
+	return fmt.Errorf("request failed (HTTP %d)", w.status)
 }
