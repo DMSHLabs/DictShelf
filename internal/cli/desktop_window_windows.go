@@ -83,7 +83,7 @@ func runDesktopWindow(address, profile string, onClose func(), desktopRequest fu
 	w := webview.NewWithOptions(webview.WebViewOptions{
 		DataPath:      profile,
 		AutoFocus:     true,
-		WindowOptions: webview.WindowOptions{Title: "wuDict2 - 25", Width: 1120, Height: 820, IconId: 101, Center: true},
+		WindowOptions: webview.WindowOptions{Title: "wuDict2 - 29", Width: 1120, Height: 820, IconId: 101, Center: true},
 	})
 	if w == nil {
 		desktopWindowMu.Lock()
@@ -161,7 +161,7 @@ func runDesktopWindow(address, profile string, onClose func(), desktopRequest fu
 					})
 				}
 				switch method {
-				case "config", "prefs", "savePrefs", "groups", "userGroups", "about", "reindex", "indexWork", "startReindex", "stopReindex", "startIndexWork", "startSingleIndexWork", "stopIndexWork",
+				case "config", "prefs", "savePrefs", "groups", "userGroups", "about", "demand", "reindex", "indexWork", "startReindex", "stopReindex", "startIndexWork", "startSingleIndexWork", "stopIndexWork",
 					"createGroup", "renameGroup", "deleteGroup", "setGroupMember", "replaceGroupMembership", "addGroupMembers", "linkGroup", "saveGroupOrder":
 					if desktopRequest == nil {
 						reply(nil, fmt.Errorf("native request API unavailable"), true)

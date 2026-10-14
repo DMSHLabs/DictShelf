@@ -4,7 +4,9 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"maps"
 	"net/http"
@@ -64,6 +66,61 @@ func (s *Server) handleRescanIndexesStatus(w http.ResponseWriter, req *http.Requ
 
 func validRescanAction(action string, base bool) bool {
 	return action == "" || action == "keep" || (base && action == "recreate") || (!base && (action == "update" || action == "delete"))
+}
+
+// desktopRescanIndexes runs the same rescan job as the HTTP API and adapts its
+// progress to the native bridge's NDJSON event stream.
+func (s *Server) desktopRescanIndexes(ctx context.Context, raw []byte, emit func([]byte)) error {
+	if len(raw) > 4096 {
+		return errors.New("bad request body: request too large")
+	}
+	var body rescanIndexesRequest
+	if err := json.Unmarshal(raw, &body); err != nil {
+		return fmt.Errorf("bad request body: %w", err)
+	}
+	if body.New == nil || !body.New.Index || !validRescanAction(body.Existing.Index, true) || !validRescanAction(body.Existing.Contains, false) || !validRescanAction(body.Existing.FullText, false) {
+		return errors.New("invalid index actions")
+	}
+	release, admitted := s.admitWork("exclusive-request")
+	if !admitted {
+		return errors.New("dictionary operations are running; wait for completion or stop them")
+	}
+	s.startRescanIndexes(body)
+	release()
+	encode := func(message any) error {
+		if emit == nil {
+			return nil
+		}
+		data, err := json.Marshal(message)
+		if err == nil {
+			emit(data)
+		}
+		return err
+	}
+	const key = "rescan-indexes"
+	for {
+		st, changed, ok := s.jobs.watch(key)
+		if !ok {
+			return nil
+		}
+		if !st.Running {
+			return encode(map[string]any{"t": "done", "failed": st.Failed, "canceled": st.Canceled})
+		}
+		if progress, ok := st.Result.(rescanIndexProgress); ok {
+			message := struct {
+				Type string `json:"t"`
+				rescanIndexProgress
+			}{"progress", progress}
+			if err := encode(message); err != nil {
+				return err
+			}
+		}
+		select {
+		case <-changed:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
 }
 
 func (s *Server) startRescanIndexes(body rescanIndexesRequest) {

@@ -1753,12 +1753,21 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 404, "%v", err)
 		return
 	}
+	st, ok := newStream(w, "text/event-stream")
+	if !ok {
+		return
+	}
+	key = s.startIngest(e, r.URL.Query())
+	s.followIngest(r.Context(), st, key)
+}
+
+func (s *Server) startIngest(e *entry, q url.Values) string {
+	key := ingestKey(e.ID)
 	// The panel sends the state it wants, not a verb: contains/fts/media each
 	// on or off. A parameter left out keeps whatever that feature is now, so a
 	// caller toggling one thing cannot accidentally strip another - and a
 	// request naming none prepares an unprepared dictionary at the cheapest
 	// level, which is the panel's index chip.
-	q := r.URL.Query()
 	want := s.currentFeatures(e)
 	for _, f := range []struct {
 		name string
@@ -1770,10 +1779,6 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 	}
 	action, indexes := ingestAction(e, q)
 
-	st, ok := newStream(w, "text/event-stream")
-	if !ok {
-		return
-	}
 	// The change runs as the dictionary's job (jobs.go), not inside this
 	// request: a page that closes or reloads mid-way loses nothing, and the
 	// next one finds the job in /api/dicts and follows it here again. While
@@ -1830,7 +1835,7 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 		}
 		j.update(func(js *jobStatus) { js.Result = info })
 	})
-	s.followIngest(r.Context(), st, key)
+	return key
 }
 
 // jobProgress is a running job as a list row carries it.
@@ -1883,29 +1888,33 @@ func ingestKey(id string) string { return "ingest:" + id }
 // "progress" on each change, then "done" with the dictionary as it now is, or
 // "error" with why.
 func (s *Server) followIngest(ctx context.Context, st *respStream, key string) {
+	s.followIngestEvents(ctx, key, st.event)
+}
+
+func (s *Server) followIngestEvents(ctx context.Context, key string, emit func(string, any)) {
 	stopAnnounced, progressAnnounced := false, false
 	for {
 		js, next, ok := s.jobs.watch(key)
 		switch {
 		case !ok:
-			st.event("error", map[string]string{"error": "no such job"})
+			emit("error", map[string]string{"error": "no such job"})
 			return
 		case !js.Running && js.Err != "":
-			st.event("error", map[string]string{"error": js.Err})
+			emit("error", map[string]string{"error": js.Err})
 			return
 		case !js.Running:
 			if js.Canceled {
-				st.event("stopped", js.Result)
+				emit("stopped", js.Result)
 			} else {
-				st.event("done", js.Result)
+				emit("done", js.Result)
 			}
 			return
 		case js.Done > 0 || js.Total > 0 || !progressAnnounced && js.Action != "":
-			st.event("progress", map[string]any{"done": js.Done, "total": js.Total, "action": js.Action, "indexes": js.Indexes})
+			emit("progress", map[string]any{"done": js.Done, "total": js.Total, "action": js.Action, "indexes": js.Indexes})
 			progressAnnounced = true
 		}
 		if js.StopRequested && !stopAnnounced {
-			st.event("stopping", map[string]bool{"stopping": true})
+			emit("stopping", map[string]bool{"stopping": true})
 			stopAnnounced = true
 		}
 		select {

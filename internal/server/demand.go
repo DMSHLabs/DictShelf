@@ -27,10 +27,19 @@ import "net/http"
 // and writes to the user's library folder, which is not what the read-only
 // extension grant is for.
 func (s *Server) handleDemand(w http.ResponseWriter, r *http.Request) {
-	e, err := s.reg.get(r.URL.Query().Get("dict"))
+	explicit, _ := queryFlag(r.URL.Query(), "explicit")
+	indexing, err := s.demandDictionary(r.URL.Query().Get("dict"), explicit)
 	if err != nil {
 		httpErr(w, 404, "%v", err)
 		return
+	}
+	writeJSON(w, map[string]bool{"indexing": indexing})
+}
+
+func (s *Server) demandDictionary(id string, explicit bool) (bool, error) {
+	e, err := s.reg.get(id)
+	if err != nil {
+		return false, err
 	}
 	// AUTO_INDEX off means the user has said preparation is theirs to trigger,
 	// and a selection is not that trigger - the dictionary panel is. Same
@@ -38,7 +47,7 @@ func (s *Server) handleDemand(w http.ResponseWriter, r *http.Request) {
 	// other kind of demand: the user asked for something only the index can
 	// serve (browsing, which has no direct-backend path), so the request IS
 	// the trigger AUTO_INDEX off reserves for them.
-	if explicit, _ := queryFlag(r.URL.Query(), "explicit"); s.AutoIndex || explicit {
+	if s.AutoIndex || explicit {
 		e.demandIndex()
 	}
 	// `indexing` means "work is in flight", and e.indexing() alone does not:
@@ -47,5 +56,5 @@ func (s *Server) handleDemand(w http.ResponseWriter, r *http.Request) {
 	// deferred again - but would make this endpoint answer "true" for a
 	// dictionary prepared an hour ago, forever. One stat settles it.
 	_, prepared := validPrepared(e.Path)
-	writeJSON(w, map[string]bool{"indexing": e.indexing() && !prepared})
+	return e.indexing() && !prepared, nil
 }
