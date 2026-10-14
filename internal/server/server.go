@@ -24,7 +24,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/wuweidict/wudict/internal/artmark"
@@ -903,64 +902,30 @@ type dictMsg struct {
 // says no), and a header would let the browser's own cache revalidate and
 // replay a body that carried one.
 func (s *Server) handleDicts(w http.ResponseWriter, r *http.Request) {
-	entries := s.reg.all()
-	groups := s.groupsNow()
-	problems := facet.CountProblems(groups.problems)
-	global := s.rowsGlobal(groups)
-	keys := rowKeys(entries, global)
-	ids := make(map[string]bool, len(entries))
-	for _, e := range entries {
-		ids[e.ID] = true
-	}
-	s.dictRows.keep(ids)
-	tag := s.listTag(entries, keys, problems)
-	if inm := r.Header.Get("If-None-Match"); inm != "" && matchesTag(inm, tag) {
+	var stream *respStream
+	unavailable := errors.New("streaming unsupported")
+	result, err := s.listDictionaries(r.Context(), r.Header.Get("If-None-Match"), func(message dictMsg) error {
+		if stream == nil {
+			var ok bool
+			stream, ok = newStream(w, "application/x-ndjson; charset=utf-8")
+			if !ok {
+				return unavailable
+			}
+		}
+		stream.line(message)
+		return nil
+	})
+	if result.notModified {
 		w.Header().Set("Cache-Control", "no-cache")
 		w.WriteHeader(http.StatusNotModified)
 		return
 	}
-
-	st, ok := newStream(w, "application/x-ndjson; charset=utf-8")
-	if !ok {
+	if err != nil && !errors.Is(err, unavailable) {
+		if stream == nil {
+			httpErr(w, http.StatusInternalServerError, "%v", err)
+		}
 		return
 	}
-	// the workers below write concurrently; stream serialises them
-	writeLine := func(m dictMsg) { st.line(m) }
-
-	writeLine(dictMsg{T: "begin", Total: len(entries), GroupsProblems: problems})
-
-	// same width as a search fan-out, and for the same reason: this is the
-	// other place the whole library is touched at once (search.Workers)
-	sem := make(chan struct{}, search.Workers())
-	var wg sync.WaitGroup
-	var keepable atomic.Bool
-	keepable.Store(true)
-	for i, e := range entries {
-		wg.Add(1)
-		go func(e *entry, key string) {
-			defer wg.Done()
-			select {
-			case sem <- struct{}{}:
-			case <-r.Context().Done():
-				return
-			}
-			defer func() { <-sem }()
-			if r.Context().Err() != nil {
-				return
-			}
-			info, held := s.dictInfoFor(e, global, key)
-			if !held || info.Error != "" || info.Job != nil {
-				keepable.Store(false)
-			}
-			writeLine(dictMsg{T: "dict", Dict: &info})
-		}(e, keys[i])
-	}
-	wg.Wait()
-	end := dictMsg{T: "end"}
-	if keepable.Load() {
-		end.ETag = tag
-	}
-	writeLine(end)
 }
 
 // dictInfoFor resolves one dictionary's list row: from the row cache while

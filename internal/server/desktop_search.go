@@ -19,8 +19,8 @@ import (
 	"github.com/wuweidict/wudict/internal/logx"
 )
 
-// DesktopStream dispatches desktop streams. Search calls the shared Go
-// operation directly; the other streams still enter their existing routes.
+// DesktopStream dispatches desktop streams. Search and dictionary listing call
+// their shared Go operations directly; the other streams still enter routes.
 func (s *Server) DesktopStream(ctx context.Context, baseURL, method, query string, emit func([]byte)) error {
 	if method == "search" {
 		var request SearchRequest
@@ -29,12 +29,13 @@ func (s *Server) DesktopStream(ctx context.Context, baseURL, method, query strin
 		}
 		return s.desktopSearchRequest(ctx, baseURL, request, emit)
 	}
+	if method == "dicts" {
+		return s.desktopDictionaryList(ctx, emit)
+	}
 	path := ""
 	verb := http.MethodGet
 	var body io.Reader
 	switch method {
-	case "dicts":
-		path = "/api/dicts"
 	case "ingest":
 		path = "/api/ingest"
 	case "rescan":
@@ -102,6 +103,29 @@ func (s *Server) desktopSearchRequest(ctx context.Context, baseURL string, reque
 		}
 		return nil
 	})
+}
+
+func (s *Server) desktopDictionaryList(ctx context.Context, emit func([]byte)) (resultErr error) {
+	defer func() {
+		if p := recover(); p != nil {
+			logx.Warn("panic in native dictionary list: %v", p)
+			resultErr = fmt.Errorf("internal error: %v", p)
+		}
+	}()
+	var buffer bytes.Buffer
+	encoder := json.NewEncoder(&buffer)
+	encoder.SetEscapeHTML(false)
+	_, err := s.listDictionaries(ctx, "", func(event dictMsg) error {
+		buffer.Reset()
+		if err := encoder.Encode(event); err != nil {
+			return err
+		}
+		if emit != nil {
+			emit(bytes.Clone(bytes.TrimSpace(buffer.Bytes())))
+		}
+		return nil
+	})
+	return err
 }
 
 // DesktopJSON calls an explicitly supported JSON endpoint in-process for the desktop
