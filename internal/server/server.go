@@ -82,7 +82,9 @@ var speakJSSrc []byte
 var speakJS = webAsset(speakJSSrc, jsAsset) // read-aloud of selected article text, fetched on the first selection
 
 //go:embed web/favicon.svg
-var faviconSVG []byte // "Lookup" mark: magnifier over headword lines
+var faviconSVGSrc []byte
+
+var faviconSVG = webAsset(faviconSVGSrc, htmlAsset) // "Lookup" mark: magnifier over headword lines
 
 // Server exposes the registry over HTTP.
 type Server struct {

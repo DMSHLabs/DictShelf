@@ -1,0 +1,35 @@
+wuDict は、手持ちの辞書をまとめて検索できるオフライン辞書アプリです。MDict (.mdx/.mdd)、StarDict、Lingvo DSL、Babylon BGL、Aard 2 (.slob)、Kiwix ZIM（ウィキペディア、ウィクショナリー）、wudict markdown に対応。電子書籍リーダーやブラウザなど、どのアプリからでも単語を調べられ、端末内のすべての辞書の結果がすぐに表示されます。
+
+<h2>電子書籍リーダーの中で使える</h2>
+- Moon+ Reader, ReadEra, Librera, FBReader, KnownReader, KOReader で辞書として wuDict を選択
+- リーダーの辞書メニューに ColorDict, GoldenDict, Aard 2, Lingvo, Fora がある場合、その項目からも wuDict が開きます
+- どのアプリでもテキストを選択し、メニューから → <b>wuDict</b>
+
+<h2>辞書をまだ持っていない場合</h2>
+初回起動時、内蔵ガイドから無料・オープンライセンスの辞書（FreeDict、ウィクショナリー、ウィキペディア）をワンタップでインストールできます：https://legbehindneck.com/wudict
+
+<h2>機能</h2>
+- 対応形式：MDict (.mdx/.mdd), StarDict (.ifo/.idx/.dict), Aard 2 (.slob), Lingvo DSL (.dsl), Babylon (.bgl), ZIM (.zim, library.kiwix.org), wudict markdown (.wudict.md)（どのエディタでも書けるプレーンテキスト辞書）
+- 4つのモードで全辞書を瞬時に検索：前方一致、完全一致、ワイルドカード（c?t、*ology）、全文検索
+- 言語・出版社・翻訳方向で辞書を自動グループ化
+- 記事内の単語をダブルタップしてすぐに検索
+- 文字サイズの調整：☰ → <b>+/-</b>
+- 24言語の見出し語化（語形変化）：☰ → ⚙️ → <b>Lemmatization</b>。英語は標準搭載
+- カメラ切り欠き部分まで使える全画面表示：wudict アイコンを長押し → <b>Settings</b>
+- 辞書の<b>全見出し語</b>を一覧表示：☰ → <b>Browse</b>
+- 内蔵スタイラーで CSS スタイルとフォントをカスタマイズ：☰ → ⚙️ → <b>Custom Style</b>
+- ファイルマネージャーから取り込み：.mdx/.dsl/.bgl/.zim/.slob/.zip/.7z ファイルをタップ → 共有 → <b>wuDict</b>
+- ウェブページ上の辞書ダウンロードリンクを長押し → 共有 → wuDict でインストール
+
+辞書は追加した直後から検索できます。wudict はバックグラウンドで小さな見出し語索引を作るため、数百の辞書でもほぼ瞬時に検索できます。準備は自動で設定不要。全文検索とメディアのパッキングは辞書ごとのオプションで、必要な辞書だけ有効にできます。追加の容量が必要で、推定サイズは辞書パネルに表示されます。
+
+<h2>プライバシー</h2>
+- アカウント不要、クラウドなし、テレメトリなし。広告なし。
+- ネットワーク権限は、アプリ内で動くサーバー（127.0.0.1:6888）への接続にのみ使用
+- ストレージ権限は不要：辞書はシステムのファイル選択からアプリ専用の領域に取り込みます。
+
+<h2>オープンソース</h2>
+wuDict は GPL-3.0 ライセンスの自由ソフトウェアです。同じプログラムが Linux、macOS、Windows、さらに Raspberry Pi でも動きます。
+
+ソースコード：https://github.com/wuweidict/wudict
+ガイド：https://wudict.legbehindneck.com/apps/android/

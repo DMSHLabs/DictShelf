@@ -1,0 +1,35 @@
+wuDict는 가지고 있는 모든 사전을 한 번에 검색하는 오프라인 사전 앱입니다. MDict (.mdx/.mdd), StarDict, Lingvo DSL, Babylon BGL, Aard 2 (.slob), Kiwix ZIM(위키백과, 위키낱말사전), wudict markdown을 지원합니다. 전자책 앱, 브라우저 등 어떤 앱에서든 단어를 찾으면 기기 안 모든 사전의 결과가 바로 표시됩니다.
+
+<h2>전자책 앱 안에서 바로 사용</h2>
+- Moon+ Reader, ReadEra, Librera, FBReader, KnownReader, KOReader에서 wuDict를 사전으로 선택하세요
+- 전자책 앱의 사전 메뉴에 ColorDict, GoldenDict, Aard 2, Lingvo, Fora 항목이 있다면 그 항목으로도 wuDict가 열립니다
+- 어떤 앱에서든 텍스트를 선택하고 메뉴에서 → <b>wuDict</b>
+
+<h2>아직 사전이 없나요?</h2>
+처음 실행하면 내장 안내서가 무료 오픈 라이선스 사전(FreeDict, 위키낱말사전, 위키백과)으로 연결하며, 탭 한 번으로 설치할 수 있습니다: https://legbehindneck.com/wudict
+
+<h2>기능</h2>
+- 형식: MDict (.mdx/.mdd), StarDict (.ifo/.idx/.dict), Aard 2 (.slob), Lingvo DSL (.dsl), Babylon (.bgl), ZIM (.zim, library.kiwix.org), wudict markdown (.wudict.md) — 어떤 편집기로도 작성할 수 있는 일반 텍스트 사전
+- 네 가지 모드로 모든 사전을 즉시 검색: 접두어, 정확히 일치, 와일드카드(c?t, *ology), 전문 검색
+- 언어, 출판사, 번역 방향별로 사전 자동 분류
+- 표제 본문의 단어를 두 번 탭하면 바로 검색
+- 글자 크기 조절: ☰ → <b>+/-</b>
+- 24개 언어의 표제어 복원(어형 변화): ☰ → ⚙️ → <b>Lemmatization</b>, 영어는 기본 설치
+- 카메라 노치 영역까지 쓰는 전체 화면 모드: wudict 아이콘 길게 누르기 → <b>Settings</b>
+- 사전의 <b>모든 표제어</b> 둘러보기: ☰ → <b>Browse</b>
+- 내장 스타일러로 CSS 스타일과 글꼴 지정: ☰ → ⚙️ → <b>Custom Style</b>
+- 파일 관리자에서 가져오기: .mdx/.dsl/.bgl/.zim/.slob/.zip/.7z 파일 탭 → 공유 → <b>wuDict</b>
+- 웹 페이지의 사전 다운로드 링크를 길게 누르고 → 공유 → wuDict로 설치
+
+사전은 추가하자마자 검색할 수 있습니다. wudict가 백그라운드에서 작은 표제어 색인을 만들기 때문에 사전이 수백 개여도 거의 즉시 검색됩니다. 준비 과정은 자동이며 설정이 필요 없고, 전문 검색과 미디어 패킹은 사전별 선택 사항이라 필요한 곳에서만 켜면 됩니다. 추가 공간이 필요하며 예상 크기는 사전 패널에 표시됩니다.
+
+<h2>개인정보</h2>
+- 계정, 클라우드, 원격 수집 없음. 광고 없음.
+- 네트워크 권한은 앱 안에서 실행되는 서버(127.0.0.1:6888)에 연결할 때만 사용
+- 저장소 권한 불필요: 사전은 시스템 파일 선택기를 통해 앱 전용 저장소로 가져옵니다.
+
+<h2>오픈 소스</h2>
+wuDict는 GPL-3.0 라이선스의 자유 소프트웨어입니다. 같은 프로그램이 Linux, macOS, Windows, 심지어 Raspberry Pi에서도 실행됩니다.
+
+소스 코드: https://github.com/wuweidict/wudict
+안내서: https://wudict.legbehindneck.com/apps/android/

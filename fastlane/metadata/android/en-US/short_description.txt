@@ -1,1 +1,1 @@
-Search all your offline dictionaries: MDict, StarDict, AARD2, DSL, BGL, ZIM.
+Offline dictionaries: MDict, StarDict, DSL, ZIM, Slob. Works in e-book readers

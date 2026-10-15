@@ -1,0 +1,1 @@
+Diccionarios sin conexión: MDict, StarDict, DSL, ZIM, Slob. Para lectores ebook

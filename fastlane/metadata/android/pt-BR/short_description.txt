@@ -1,0 +1,1 @@
+Dicionários offline: MDict, StarDict, DSL, ZIM, Slob. Funciona em leitores

@@ -1,1 +1,1 @@
-wudict
+wuDict: Offline MDX Dictionary

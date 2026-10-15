@@ -16,20 +16,24 @@ import (
 // is no second file to build, version or keep in step, and a tag-less
 // `go build` serves exactly what `make build` does.
 //
-// Only a comment that occupies whole lines is removed:
+// What is removed:
 //
-//   - <!-- … --> in HTML, outside <script>;
+//   - <!-- … --> in HTML (and the favicon's SVG), outside <script>;
 //   - a /* … */ that starts a line and ends one, in CSS, in <style> and in
 //     scripts;
-//   - a line whose first non-blank characters are //, in scripts.
+//   - a line whose first non-blank characters are //, in scripts;
+//   - a comment sharing a line with code: a /* … */ that opens and closes on
+//     that line, in CSS, in <style> and in scripts, and a trailing // in
+//     scripts.
 //
-// A comment sharing a line with code stays: the line rule takes nearly all of
-// them, and leaving the rest is what keeps this from needing a full parser.
-// So does a licence notice: the files carry it on purpose.
-// Scripts are read with just enough lexing to know when a line starts inside a
-// string, a template literal or a block comment - a template literal can hold
-// lines that look like comments and are content, such as the Custom styles
-// presets, whose CSS comments are inserted into the user's stylesheet.
+// A /* … */ that opens after code and closes on a later line stays: it is
+// the one shape that needs a full parser, and the sources do not use it. So
+// does a licence notice: the files carry it on purpose.
+// Scripts are read with just enough lexing to know where a string, a regular
+// expression, a template literal or a block comment begins and ends - a
+// template literal can hold lines that look like comments and are content,
+// such as the Custom styles presets, whose CSS comments are inserted into the
+// user's stylesheet.
 
 type assetKind int
 
@@ -44,23 +48,42 @@ func webAsset(src []byte, kind assetKind) []byte {
 	return []byte(stripComments(string(src), kind))
 }
 
-var scriptRE = regexp.MustCompile(`(?s)(<script\b[^>]*>)(.*?)(</script>)`)
+var (
+	scriptRE = regexp.MustCompile(`(?s)(<script\b[^>]*>)(.*?)(</script>)`)
+	styleRE  = regexp.MustCompile(`(?s)(<style\b[^>]*>)(.*?)(</style>)`)
+)
 
 func stripComments(s string, kind assetKind) string {
 	switch kind {
 	case jsAsset:
 		return stripJS(s)
 	case cssAsset:
-		return stripBlocks(s)
+		return stripCSSInline(stripBlocks(s))
 	}
 	var b strings.Builder
 	last := 0
 	for _, m := range scriptRE.FindAllStringSubmatchIndex(s, -1) {
-		b.WriteString(stripBlocks(stripHTMLComments(s[last:m[3]])))
+		b.WriteString(stripMarkup(s[last:m[3]]))
 		b.WriteString(stripJS(s[m[4]:m[5]]))
 		last = m[5]
 	}
-	b.WriteString(stripBlocks(stripHTMLComments(s[last:])))
+	b.WriteString(stripMarkup(s[last:]))
+	return b.String()
+}
+
+// stripMarkup strips HTML outside <script>: its own comments, whole-line
+// /* … */ anywhere, and same-line ones only inside <style>, where they are
+// known to be CSS rather than text.
+func stripMarkup(s string) string {
+	s = stripBlocks(stripHTMLComments(s))
+	var b strings.Builder
+	last := 0
+	for _, m := range styleRE.FindAllStringSubmatchIndex(s, -1) {
+		b.WriteString(s[last:m[4]])
+		b.WriteString(stripCSSInline(s[m[4]:m[5]]))
+		last = m[5]
+	}
+	b.WriteString(s[last:])
 	return b.String()
 }
 
@@ -116,9 +139,60 @@ func stripBlocks(s string) string {
 	return b.String()
 }
 
-// stripJS removes the whole-line comments of a script, deciding at each line
-// start whether that line begins in code or inside a construct that crossed a
-// line break (a template literal or a block comment).
+// stripCSSInline removes the /* … */ comments that open and close on a line
+// holding a declaration or a selector too. A comment that crosses a line break
+// is skipped whole, so nothing inside it is read as a quote.
+func stripCSSInline(s string) string {
+	var b strings.Builder
+	block := false
+	for len(s) > 0 {
+		line, rest := cutLine(s)
+		for i := 0; i < len(line); i++ {
+			switch c := line[i]; {
+			case block:
+				if c == '*' && i+1 < len(line) && line[i+1] == '/' {
+					block = false
+					i++
+				}
+			case c == '"' || c == '\'':
+				i = skipQuoted(line, i)
+			case c == '/' && i+1 < len(line) && line[i+1] == '*':
+				j := strings.Index(line[i+2:], "*/")
+				if j < 0 || licence(line[i:i+2+j+2]) {
+					block = j < 0
+					i++
+					continue
+				}
+				line, i = cutComment(line, i, i+2+j+2)
+			}
+		}
+		b.WriteString(line)
+		s = rest
+	}
+	return b.String()
+}
+
+// cutComment removes line[i:j], a comment, with the blanks that only served
+// to set it apart: one before it when it trails the line, one after it when
+// it leads. Between two pieces of code one space stands in for it, which every
+// tokenizer reads as the comment it replaces. It returns the new line and the
+// index of the last byte before the cut, for the caller's i++ to resume at.
+func cutComment(line string, i, j int) (string, int) {
+	before := strings.TrimRight(line[:i], " \t")
+	after := strings.TrimLeft(line[j:], " \t")
+	switch {
+	case blank(before):
+		before = line[:i] // the indentation
+	case blank(after):
+	default:
+		before += " "
+	}
+	return before + after, len(before) - 1
+}
+
+// stripJS removes the comments of a script, deciding at each line start
+// whether that line begins in code or inside a construct that crossed a line
+// break (a template literal or a block comment).
 func stripJS(s string) string {
 	var b strings.Builder
 	lx := jsLexer{}
@@ -141,8 +215,7 @@ func stripJS(s string) string {
 				}
 			}
 		}
-		lx.feed(line)
-		b.WriteString(line)
+		b.WriteString(lx.feed(line))
 		s = rest
 	}
 	return b.String()
@@ -159,7 +232,9 @@ type jsLexer struct {
 
 func (l *jsLexer) inCode() bool { return !l.block && !l.tmpl }
 
-func (l *jsLexer) feed(line string) {
+// feed lexes line and returns it without the comments that open on it and
+// close on it, or run to its end.
+func (l *jsLexer) feed(line string) string {
 	for i := 0; i < len(line); i++ {
 		c := line[i]
 		switch {
@@ -182,10 +257,17 @@ func (l *jsLexer) feed(line string) {
 				i++
 			}
 		case c == '/' && i+1 < len(line) && line[i+1] == '/':
-			return // the rest of the line is a comment
+			body := strings.TrimRight(line, "\r\n")
+			line, _ = cutComment(line, i, len(body))
+			return line
 		case c == '/' && i+1 < len(line) && line[i+1] == '*':
-			l.block = true
-			i++
+			j := strings.Index(line[i+2:], "*/")
+			if j < 0 || licence(line[i:i+2+j+2]) {
+				l.block = j < 0
+				i++
+				continue
+			}
+			line, i = cutComment(line, i, i+2+j+2)
 		case c == '"' || c == '\'':
 			i = skipQuoted(line, i)
 			l.prev = c
@@ -214,6 +296,7 @@ func (l *jsLexer) feed(line string) {
 			l.prev = c
 		}
 	}
+	return line
 }
 
 // regexCanStart reports that a / begins a regular expression rather than a

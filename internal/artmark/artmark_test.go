@@ -22,6 +22,10 @@ func TestDefaultCSSIsInjectionSafe(t *testing.T) {
 	if strings.Count(DefaultCSS, "{") != strings.Count(DefaultCSS, "}") {
 		t.Error("unbalanced braces in DefaultCSS")
 	}
+	// Every page carries DefaultCSS; its reasons belong in the Go source.
+	if strings.Contains(DefaultCSS, "/*") {
+		t.Error("DefaultCSS contains a CSS comment; move it to a Go comment")
+	}
 }
 
 // Every default must be zero-specificity, or the dictionary's own CSS and the

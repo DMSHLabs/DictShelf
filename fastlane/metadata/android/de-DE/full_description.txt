@@ -1,0 +1,35 @@
+wuDict ist eine Offline-Wörterbuch-App, die alle deine Wörterbücher gleichzeitig durchsucht: MDict (.mdx/.mdd), StarDict, Lingvo DSL, Babylon BGL, Aard 2 (.slob), Kiwix ZIM (Wikipedia, Wiktionary) und wudict markdown. Schlage ein Wort aus deinem E-Reader, Browser oder jeder anderen App nach und erhalte sofort Ergebnisse aus allen Wörterbüchern auf deinem Gerät.
+
+<h2>FUNKTIONIERT DIREKT IM E-READER</h2>
+- Wähle wuDict als Wörterbuch in Moon+ Reader, ReadEra, Librera, FBReader, KnownReader, KOReader
+- Bietet das Wörterbuchmenü deines Readers ColorDict, GoldenDict, Aard 2, Lingvo, Fora an, führen auch diese Einträge zu wuDict
+- Text in einer beliebigen App markieren und im Kontextmenü → <b>wuDict</b> wählen
+
+<h2>NOCH KEINE WÖRTERBÜCHER?</h2>
+Beim ersten Start verlinkt die eingebaute Anleitung kostenlose, frei lizenzierte Wörterbücher (FreeDict, Wiktionary, Wikipedia), die sich mit einem Tippen installieren: https://legbehindneck.com/wudict
+
+<h2>FUNKTIONEN</h2>
+- Formate: MDict (.mdx/.mdd), StarDict (.ifo/.idx/.dict), Aard 2 (.slob), Lingvo DSL (.dsl), Babylon (.bgl), ZIM (.zim, library.kiwix.org), wudict markdown (.wudict.md) – ein reines Textwörterbuch, das du in jedem Editor schreiben kannst
+- Sofortsuche in allen Wörterbüchern mit vier Modi: Präfix, exakt, Platzhalter (c?t, *ology) und Volltext
+- Wörterbücher werden automatisch nach Sprache, Verlag und Richtung gruppiert
+- Doppeltippen auf ein Wort in einem Artikel schlägt es sofort nach
+- Schriftgröße anpassen: ☰ → <b>+/-</b>
+- Lemmatisierung (Wortformen) für 24 Sprachen: ☰ → ⚙️ → <b>Lemmatization</b>; Englisch ist vorinstalliert
+- Vollbildmodus, optional bis in die Kameraaussparung: wudict-Symbol lange drücken → <b>Settings</b>
+- <b>Alle Stichwörter</b> eines Wörterbuchs durchblättern: ☰ → <b>Browse</b>
+- Eigene CSS-Stile und Schriften im eingebauten Styler: ☰ → ⚙️ → <b>Custom Style</b>
+- Import aus dem Dateimanager: eine .mdx/.dsl/.bgl/.zim/.slob/.zip/.7z-Datei antippen → Teilen → <b>wuDict</b>
+- Download-Link eines Wörterbuchs auf einer Webseite lange drücken → Teilen → wuDict, und es wird installiert
+
+Wörterbücher sind sofort nach dem Hinzufügen durchsuchbar. wudict baut im Hintergrund einen kompakten Stichwortindex auf, sodass Suchen selbst über Hunderte Wörterbücher fast sofort erfolgen. Die Vorbereitung läuft automatisch und ohne Einstellungen; Volltextsuche und Medienpaket sind pro Wörterbuch optional – nur dort einschalten, wo du sie brauchst. Sie benötigen zusätzlichen Speicher; die geschätzte Größe steht im Wörterbuch-Panel.
+
+<h2>DATENSCHUTZ</h2>
+- Kein Konto, keine Cloud, keine Telemetrie. Keine Werbung.
+- Die Netzwerkberechtigung dient nur dem Server in der App selbst (127.0.0.1:6888)
+- Keine Speicherberechtigung nötig: Wörterbücher werden über die Dateiauswahl des Systems in den eigenen Speicher der App importiert.
+
+<h2>OPEN SOURCE</h2>
+wuDict ist freie Software unter der GPL-3.0. Dasselbe Programm läuft unter Linux, macOS, Windows und sogar auf dem Raspberry Pi.
+
+Quellcode: https://github.com/wuweidict/wudict
+Anleitung: https://wudict.legbehindneck.com/apps/android/

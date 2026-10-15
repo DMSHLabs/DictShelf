@@ -20,8 +20,15 @@ func TestStripComments(t *testing.T) {
 	}{
 		{"js line comment", "a();\n  // gone\nb();\n", "a();\nb();\n", jsAsset},
 		{"js block on its own lines", "a();\n/* one\n   two */\nb();\n", "a();\nb();\n", jsAsset},
-		{"js trailing comment stays", "a(); // kept\n", "a(); // kept\n", jsAsset},
-		{"js block followed by code stays", "/* x */ a();\n", "/* x */ a();\n", jsAsset},
+		{"js trailing comment", "a(); // gone\n", "a();\n", jsAsset},
+		{"js block leading code", "  /* x */ a();\n", "  a();\n", jsAsset},
+		{"js block inside code", "try{f()}catch(e){ /* gone */ }\n", "try{f()}catch(e){ }\n", jsAsset},
+		{"js block between tokens", "return/* x */a\n", "return a\n", jsAsset},
+		{"js block then trailing", "a(); /* x */ // y\n", "a();\n", jsAsset},
+		{"js unclosed block after code stays", "a(); /* one\n two */\nb();\n", "a(); /* one\n two */\nb();\n", jsAsset},
+		{"js string holding // then a comment", "u='a//b'; // gone\n", "u='a//b';\n", jsAsset},
+		{"js regex holding // then a comment", "r=/^https?:\\/\\//i; // gone\n", "r=/^https?:\\/\\//i;\n", jsAsset},
+		{"js template keeps a trailing comment", "t=`a // kept\n`; // gone\n", "t=`a // kept\n`;\n", jsAsset},
 		{"js template literal content stays", "const p=`a\n/* css comment */\n// text\n`;\n// gone\n",
 			"const p=`a\n/* css comment */\n// text\n`;\n", jsAsset},
 		{"js nested template", "const p=`${x?`\n// in\n`:1}\n// in too\n`;\n// out\n",
@@ -33,6 +40,11 @@ func TestStripComments(t *testing.T) {
 			"x=a/2;\nconst t=`\n// kept\n`;\n", jsAsset},
 		{"css block", "a{b:c}\n  /* gone */\nd{e:f}\n", "a{b:c}\nd{e:f}\n", cssAsset},
 		{"css // is not a comment", "// kept\n", "// kept\n", cssAsset},
+		{"css trailing comment", "a{b:c} /* gone */\n", "a{b:c}\n", cssAsset},
+		{"css comment in a string stays", "a{content:\"/* x */\"}\n", "a{content:\"/* x */\"}\n", cssAsset},
+		{"css multi-line comment after code stays", "a{} /* it's\n */\n", "a{} /* it's\n */\n", cssAsset},
+		{"html text is not css", "<p>a /* b */ c</p>\n", "<p>a /* b */ c</p>\n", htmlAsset},
+		{"html style trailing comment", "<style>\na{b:c} /* gone */\n</style>\n", "<style>\na{b:c}\n</style>\n", htmlAsset},
 		{"html comment on its own lines", "<p>\n<!-- one\n two -->\n</p>\n", "<p>\n</p>\n", htmlAsset},
 		{"html comment inline", "<p>a<!-- x -->b</p>\n", "<p>ab</p>\n", htmlAsset},
 		{"html leaves script strings", "<script>\nconst s='<!-- x -->';\n// gone\n</script>\n",
@@ -71,6 +83,7 @@ func TestServedAssets(t *testing.T) {
 		{"frame.js", frameJS, jsAsset},
 		{"pick.js", pickJS, jsAsset},
 		{"speak.js", speakJS, jsAsset},
+		{"favicon.svg", faviconSVG, htmlAsset},
 	} {
 		t.Run(a.file, func(t *testing.T) {
 			src, err := os.ReadFile(filepath.Join("web", a.file))

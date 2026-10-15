@@ -1,7 +1,15 @@
-wuDict searches all your MDict, StarDict, AARD2, Lingvo DSL, Babylon, ZIM and wudict markdown dictionaries on your device, providing instant offline search across your entire dictionary collection.
+wuDict is an offline dictionary app that searches all your dictionaries at once: MDict (.mdx/.mdd), StarDict, Lingvo DSL, Babylon BGL, Aard 2 (.slob), Kiwix ZIM (Wikipedia, Wiktionary) and wudict markdown. Look up a word from your e-book reader, browser or any other app and get instant results from every dictionary on your device.
+
+<h2>WORKS INSIDE YOUR E-BOOK READER</h2>
+- Choose wuDict as the dictionary in Moon+ Reader, ReadEra, Librera, FBReader, KnownReader or KOReader
+- Readers whose dictionary menu offers ColorDict, GoldenDict, Aard 2, Lingvo or Fora reach wuDict through those entries too
+- Select text in any app and pick → <b>wuDict</b> from the context menu
+
+<h2>NO DICTIONARIES YET?</h2>
+On first launch, the built-in guide links to free, openly licensed dictionaries (FreeDict, Wiktionary, Wikipedia) that install in one tap: https://legbehindneck.com/wudict
 
 <h2>FEATURES</h2>
-- Formats: MDict (.mdx/.mdd), StarDict (.ifo/.idx/.dict), Aard2 (.slob), Lingvo DSL (.dsl), Babylon (.bgl), ZIM (.zim) - library.kiwix.org, wuDict markdown (.wudict.md) - a plain-text dictionary you can write in any editor
+- Formats: MDict (.mdx/.mdd), StarDict (.ifo/.idx/.dict), Aard 2 (.slob), Lingvo DSL (.dsl), Babylon (.bgl), ZIM (.zim, from library.kiwix.org), wuDict markdown (.wudict.md) - a plain-text dictionary you can write in any editor
 - Instant search across all dictionaries with four modes: prefix, exact, wildcard (c?t, *ology), and full-text search
 - Dictionaries are automatically grouped by language, publisher, direction, etc.
 - Double-tap any word in a wudict dictionary article to instantly look up its definition
@@ -9,7 +17,6 @@ wuDict searches all your MDict, StarDict, AARD2, Lingvo DSL, Babylon, ZIM and wu
 - Custom lemmatization (word-form morphology) for 24 languages, configurable via ☰ → ⚙️ → <b>Lemmatization</b>; English lemmatization comes pre-installed
 - Immersive mode (full screen), with an option to draw content edge-to-edge, including the camera cutout area; enable by long-tapping the wudict icon in the launcher → <b>Settings</b>
 - Browse <b>all headwords</b> in any dictionary via ☰ → <b>Browse</b>
-- Select text in any app and pick → <b>wuDict</b> from the context menu
 - Apply custom CSS styles and fonts via the embedded Styler: ☰ → ⚙️ → <b>Custom Style</b>
 - Import dictionaries into wudict directly from your file manager: tap a .mdx/.dsl/.bgl/.zim/.slob/.zip/.7z file → Share > <b>wuDict</b>
 - Long-tap a dictionary download link on any web page (.mdx/.slob/.dsl/.zip/.7z) and pick Share → wuDict to install it locally

@@ -1,0 +1,35 @@
+wuDict 是一款離線詞典 App，一次搜尋你所有的詞典：MDict (.mdx/.mdd)、StarDict、Lingvo DSL、Babylon BGL、Aard 2 (.slob)、Kiwix ZIM（維基百科、維基詞典）以及 wudict markdown。在電子書閱讀器、瀏覽器或任何 App 中選取單字，即可立即看到裝置上所有詞典的釋義。
+
+<h2>在電子書閱讀器中直接查詞</h2>
+- 在 Moon+ Reader, ReadEra, Librera, FBReader, KnownReader, KOReader 中將 wuDict 設為詞典
+- 閱讀器的詞典選單若提供 ColorDict, GoldenDict, Aard 2, Lingvo, Fora，選擇這些項目同樣會開啟 wuDict
+- 在任何 App 中選取文字，從選單中點選 → <b>wuDict</b>
+
+<h2>還沒有詞典？</h2>
+首次啟動時，內建指南會連結到免費、開放授權的詞典（FreeDict、維基詞典、維基百科），一鍵即可安裝：https://legbehindneck.com/wudict
+
+<h2>功能</h2>
+- 格式：MDict (.mdx/.mdd), StarDict (.ifo/.idx/.dict), Aard 2 (.slob), Lingvo DSL (.dsl), Babylon (.bgl), ZIM (.zim, library.kiwix.org), wudict markdown (.wudict.md)——可用任何文字編輯器撰寫的純文字詞典
+- 四種模式即時搜尋所有詞典：前綴、精確、萬用字元（c?t、*ology）與全文搜尋
+- 依語言、出版者、翻譯方向自動將詞典分組
+- 在詞條中雙擊任何單字即可立即查詢
+- 調整字型大小：☰ → <b>+/-</b>
+- 24 種語言的詞形還原（lemmatization）：☰ → ⚙️ → <b>Lemmatization</b>；內建英語
+- 沉浸式全螢幕模式，可延伸至相機挖孔區域：長按 wudict 圖示 → <b>Settings</b>
+- 瀏覽詞典的<b>所有詞目</b>：☰ → <b>Browse</b>
+- 內建樣式編輯器，自訂 CSS 樣式與字型：☰ → ⚙️ → <b>Custom Style</b>
+- 從檔案管理員匯入：點選 .mdx/.dsl/.bgl/.zim/.slob/.zip/.7z 檔案 → 分享 → <b>wuDict</b>
+- 在網頁上長按詞典下載連結 → 分享 → wuDict，即可安裝
+
+詞典加入後即可搜尋。wudict 會在背景建立精簡的詞目索引，即使有數百本詞典，查詢也幾乎即時。準備工作全自動，無需設定；全文搜尋與媒體打包是每本詞典的選用開關，只在需要時開啟。它們需要額外空間，詞典面板會顯示預估大小。
+
+<h2>隱私</h2>
+- 無需帳號、無雲端、無遙測。無廣告。
+- 唯一的網路權限用於連線 App 內建的伺服器（127.0.0.1:6888）
+- 不需要儲存空間權限：詞典透過系統檔案選擇器匯入 App 自己的儲存空間。
+
+<h2>開放原始碼</h2>
+wuDict 是以 GPL-3.0 授權的自由軟體。同一程式也可在 Linux、macOS、Windows，甚至 Raspberry Pi 上執行。
+
+原始碼：https://github.com/wuweidict/wudict
+使用指南：https://wudict.legbehindneck.com/apps/android/

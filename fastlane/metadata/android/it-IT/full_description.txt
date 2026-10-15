@@ -1,0 +1,35 @@
+wuDict è un'app di dizionario offline che cerca in tutti i tuoi dizionari contemporaneamente: MDict (.mdx/.mdd), StarDict, Lingvo DSL, Babylon BGL, Aard 2 (.slob), Kiwix ZIM (Wikipedia, Wikizionario) e wudict markdown. Cerca una parola dal tuo lettore di ebook, dal browser o da qualsiasi altra app e ottieni subito i risultati di tutti i dizionari sul dispositivo.
+
+<h2>FUNZIONA DENTRO IL TUO LETTORE DI EBOOK</h2>
+- Scegli wuDict come dizionario in Moon+ Reader, ReadEra, Librera, FBReader, KnownReader, KOReader
+- Se il menu dizionari del tuo lettore offre ColorDict, GoldenDict, Aard 2, Lingvo, Fora, anche queste voci aprono wuDict
+- Seleziona del testo in qualsiasi app e scegli → <b>wuDict</b> dal menu contestuale
+
+<h2>NON HAI ANCORA DIZIONARI?</h2>
+Al primo avvio, la guida integrata rimanda a dizionari gratuiti con licenza libera (FreeDict, Wikizionario, Wikipedia) che si installano con un tocco: https://legbehindneck.com/wudict
+
+<h2>FUNZIONI</h2>
+- Formati: MDict (.mdx/.mdd), StarDict (.ifo/.idx/.dict), Aard 2 (.slob), Lingvo DSL (.dsl), Babylon (.bgl), ZIM (.zim, library.kiwix.org), wudict markdown (.wudict.md): un dizionario in testo semplice che puoi scrivere con qualsiasi editor
+- Ricerca istantanea in tutti i dizionari con quattro modalità: prefisso, esatta, caratteri jolly (c?t, *ology) e testo completo
+- I dizionari vengono raggruppati automaticamente per lingua, editore e direzione
+- Tocca due volte una parola in un articolo per cercarla subito
+- Dimensione del testo: ☰ → <b>+/-</b>
+- Lemmatizzazione (forme flesse) per 24 lingue: ☰ → ⚙️ → <b>Lemmatization</b>; l'inglese è preinstallato
+- Modalità immersiva a schermo intero, anche sotto il foro della fotocamera: tieni premuta l'icona di wudict → <b>Settings</b>
+- Sfoglia <b>tutti i lemmi</b> di un dizionario: ☰ → <b>Browse</b>
+- Stili CSS e caratteri personalizzati con l'editor integrato: ☰ → ⚙️ → <b>Custom Style</b>
+- Importa dal file manager: tocca un file .mdx/.dsl/.bgl/.zim/.slob/.zip/.7z → Condividi → <b>wuDict</b>
+- Tieni premuto il link di download di un dizionario su una pagina web → Condividi → wuDict per installarlo
+
+I dizionari sono consultabili appena aggiunti. In background wudict crea un indice compatto dei lemmi, così la ricerca è quasi istantanea anche su centinaia di dizionari. La preparazione è automatica e non richiede configurazione; la ricerca a testo completo e l'impacchettamento dei media sono opzioni per singolo dizionario, da attivare solo dove servono. Richiedono spazio aggiuntivo; la dimensione stimata è indicata nel pannello dei dizionari.
+
+<h2>PRIVACY</h2>
+- Nessun account, nessun cloud, nessuna telemetria. Nessuna pubblicità.
+- L'unico permesso di rete serve a raggiungere il server interno all'app (127.0.0.1:6888)
+- Nessun permesso di archiviazione: i dizionari vengono importati con il selettore file di sistema nello spazio riservato dell'app.
+
+<h2>OPEN SOURCE</h2>
+wuDict è software libero con licenza GPL-3.0. Lo stesso programma funziona su Linux, macOS, Windows e perfino su Raspberry Pi.
+
+Codice sorgente: https://github.com/wuweidict/wudict
+Guida: https://wudict.legbehindneck.com/apps/android/

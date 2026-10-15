@@ -62,6 +62,21 @@ platform :android do
     )
   end
 
+  # :validate needs a built bundle; this checks only the listing (text, graphics,
+  # length limits) against Play. Nothing is published.
+  desc "Dry run: validate listing text/graphics only, no bundle needed"
+  lane :validate_metadata do
+    upload_to_play_store(
+      json_key: JSON_KEY,
+      metadata_path: METADATA,
+      track: 'production',
+      validate_only: true,
+      skip_upload_apk: true,
+      skip_upload_aab: true,
+      skip_upload_changelogs: true
+    )
+  end
+
   # draft, not completed: the release is created but stays under your control in
   # Console. For an app that has never been published, Play requires draft here
   # anyway — the first release is completed by hand in the Console.

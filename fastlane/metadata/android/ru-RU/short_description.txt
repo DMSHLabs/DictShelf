@@ -1,0 +1,1 @@
+Офлайн-словари MDict, StarDict, Lingvo DSL, ZIM, Slob. Работает в читалках
