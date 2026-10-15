@@ -10,6 +10,8 @@
 <meta charset="utf-8">
 {{I18N}}
 <script>
+const wudictDialogMode=new URLSearchParams(location.search).get('wudict_dialog')==='1';
+if(wudictDialogMode)document.documentElement.setAttribute('data-workspace-dialog','');
 // An optional host background, the same hook setup.html carries: the Android
 // host paints the chosen image (or colour) behind a transparent WebView, and
 // this is what tells the page it is there, before the first paint.
@@ -44,8 +46,10 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
     else sessionStorage.removeItem('wudict_shell_image');
     if (valid) sessionStorage.setItem('wudict_shell_bg', color);
     else sessionStorage.removeItem('wudict_shell_bg');
-    if (/^#[0-9a-f]{6}$/i.test(paper || '')) sessionStorage.setItem('wudict_shell_paper', paper);
-    else sessionStorage.removeItem('wudict_shell_paper');
+    if (paper !== undefined) {
+      if (/^#[0-9a-f]{6}$/i.test(paper || '')) sessionStorage.setItem('wudict_shell_paper', paper);
+      else sessionStorage.removeItem('wudict_shell_paper');
+    }
   } catch (_) {}
 };
 (function () {
@@ -167,6 +171,8 @@ body{font-size:calc(var(--ui-font-base) * 1rem)}
   height:calc(var(--ui-control-height) * 1em)}
 .lrow input[type=checkbox]:checked::after{left:35%;top:20%;width:25%;height:50%}
 .lrow .nm{font-size:inherit}
+.lemma-workspace-body{display:flex;flex:1 1 auto;flex-direction:column;min-height:0;overflow:hidden}
+.workspace-page #list{flex:1 1 0;min-height:0;overflow:auto;overscroll-behavior:contain}
 </style>
 </head>
 <body class="workspace-page">
@@ -179,7 +185,7 @@ body{font-size:calc(var(--ui-font-base) * 1rem)}
 <h1>{{T:pages.lemmas}}</h1>
 <button type="button" class="x" id="closePage" aria-label="{{T:pages.close}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
 </div>
-<div class="card-scroll workspace-scroll">
+<div class="lemma-workspace-body">
 <p>{{T:pages.lemmaIntro}}</p>
 
 <div id="banner" class="banner hidden"></div>
@@ -356,7 +362,15 @@ load().then(j=>{ if(j&&j.languages.some(l=>l.state==="downloading"))poll() });
    which would load the app from scratch and stack an entry the back gesture
    would then walk back into this page. A first run (where "/" is served as
    /setup) has nothing behind it, and shows no ✕. */
-if(history.length>1)$("closePage").onclick=()=>history.back();
+if(wudictDialogMode){
+  $("closePage").onclick=()=>parent.postMessage({type:"wudict-workspace-close"},location.origin);
+  addEventListener("message",event=>{
+    if(event.origin!==location.origin||event.source!==parent)return;
+    if(event.data?.type==="wudict-workspace-close-request")parent.postMessage({type:"wudict-workspace-close"},location.origin);
+    else if(event.data?.type==="wudict-workspace-refresh")load();
+  });
+}
+else if(history.length>1)$("closePage").onclick=()=>history.back();
 else $("closePage").hidden=true;
 </script>
 </body>

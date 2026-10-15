@@ -46,8 +46,8 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
   // offering it as a shell colour would change what the app looks like (a
   // shell colour tints the sheet, the menus and the history window, and at
   // night it lifts the muted registers - which is right for a paper the READER
-  // chose and wrong for one the app is already painting). What this page does
-  // with it is hand it over, under a key of its own: Edit Folders,
+  // chose and wrong for one the app is already painting). When supplied, this
+  // page hands it over under a key of its own: Edit Folders,
   // Lemmatization and Browse are reached by tapping a link, carry no shell
   // parameters of their own, and have no layers either - so for them the
   // preset's paper IS their ground, and this is where they get it.
@@ -56,8 +56,10 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
     else sessionStorage.removeItem('wudict_shell_image');
     if (valid) sessionStorage.setItem('wudict_shell_bg', color);
     else sessionStorage.removeItem('wudict_shell_bg');
-    if (/^#[0-9a-f]{6}$/i.test(paper || '')) sessionStorage.setItem('wudict_shell_paper', paper);
-    else sessionStorage.removeItem('wudict_shell_paper');
+    if (paper !== undefined) {
+      if (/^#[0-9a-f]{6}$/i.test(paper || '')) sessionStorage.setItem('wudict_shell_paper', paper);
+      else sessionStorage.removeItem('wudict_shell_paper');
+    }
   } catch (_) {}
   try { sessionStorage.setItem('wudict_shell_image_name', file); } catch (_) {}
   // Existing iframe articles must receive Settings changes as well.
@@ -943,6 +945,9 @@ window.wudictFontScale=(function(){
   </div>
   <div id="dictSettingsSearch" class="list-search-dock" role="search" aria-label="{{T:dictUI.listSearchLabel}}"></div>
 </dialog>
+<dialog id="workspaceFrameWindow" lang="{{T:locale}}" class="group-dialog panel-card workspace-dialog workspace-frame-window" aria-label="{{T:panel.editFilters}}">
+  <iframe id="workspaceFrame" title="{{T:panel.editFilters}}" loading="lazy"></iframe>
+</dialog>
 <dialog id="webDictionaryPicker" lang="{{T:locale}}" class="group-dialog panel-card" aria-label="{{T:search.dictionary}}">
   <div class="web-picker-head">
     <select id="webPickerGroup" aria-label="{{T:search.dictionary}}"></select>
@@ -1312,9 +1317,40 @@ function adoptLocalPrefs(){
   return true;
 }
 let prefsReady=false;
+/* Keep the UI's JSON-response contract while routing these shared settings
+   calls through the Windows bridge. Browser requests still use HTTP. */
+async function apiFetch(url,options){
+  if(typeof window.wudictNativeCall==="function"){
+    const requestURL=new URL(url,window.location.href);
+    if(requestURL.origin===window.location.origin){
+      const method=(options&&options.method||"GET").toUpperCase();
+      let nativeMethod=null,argument="";
+      if(requestURL.pathname==="/api/config"&&method==="GET")nativeMethod="config";
+      else if(requestURL.pathname==="/api/prefs"&&method==="GET")nativeMethod="prefs";
+      else if(requestURL.pathname==="/api/prefs"&&method==="PUT"){
+        nativeMethod="savePrefs";argument=options.body||"{}";
+      }
+      else if(requestURL.pathname==="/api/style"&&method==="GET")nativeMethod="style";
+      else if(requestURL.pathname==="/api/style"&&method==="PUT"){
+        nativeMethod="saveStyle";
+        argument=JSON.stringify({body:JSON.parse(options.body||"{}"),replace:requestURL.searchParams.get("replace")==="1"});
+      }
+      if(nativeMethod){
+        const value=await window.wudictNativeCall(nativeMethod,argument);
+        if(nativeMethod==="saveStyle"){
+          const status=value.status||200;
+          const result=value.value||{error:value.error||"style save failed"};
+          return {ok:status>=200&&status<300,status,json:async()=>result,text:async()=>value.error||JSON.stringify(result)};
+        }
+        return {ok:true,status:200,json:async()=>value};
+      }
+    }
+  }
+  return fetch(url,options);
+}
 async function loadPrefs(){
   try{
-    const r=await fetch("/api/prefs");
+    const r=await apiFetch("/api/prefs");
     if(!r.ok)throw new Error("HTTP "+r.status);
     const st=await r.json(),rows=st.dicts||[];
     prefsReady=true;
@@ -1352,7 +1388,7 @@ function savePrefs(now){
     ui:{fontSize:articleFS,fontWeight:articleFW,hlOff:!hlOn,speakOff:!speakOn,fastFirst:!orderFirst,hideUnmarkedExamples,customOrder:prefCustomOrder}});
   if(body===prefsSent)return;
   prefsSent=body;
-  fetch("/api/prefs",{method:"PUT",headers:{"Content-Type":"application/json"},body})
+  apiFetch("/api/prefs",{method:"PUT",headers:{"Content-Type":"application/json"},body})
     .then(r=>{if(!r.ok)throw new Error("HTTP "+r.status);
       // The size and the weight are part of what a look holds, so a change to
       // them is a change to the screen: the Presets row's button follows.
@@ -3233,6 +3269,36 @@ function showDictSettings(){
   // — a hundred cards is a great deal to lose your place in.
   $("dictSettingsScroll").scrollTop=dictListTop;
 }
+let workspaceFrameLoaded=false,workspaceReturnFocus=null;
+function showWorkspaceWindow(link){
+  const frame=$("workspaceFrame"),path=new URL(link.href,location.href).pathname;
+  $("workspaceFrameWindow").setAttribute("aria-label",link.textContent.trim());
+  frame.title=link.textContent.trim();workspaceReturnFocus=link;
+  if(frame.dataset.path!==path){
+    const url=new URL(path,location.href);
+    url.searchParams.set("wudict_dialog","1");
+    if(new URLSearchParams(location.search).get("wudict_webview2")==="1")url.searchParams.set("wudict_webview2","1");
+    frame.dataset.path=path;frame.src=url.pathname+url.search;
+  }
+  $("workspaceFrameWindow").showModal();
+  if(workspaceFrameLoaded)frame.contentWindow.postMessage({type:"wudict-workspace-refresh"},location.origin);
+}
+for(const id of ["editFilters","editFolders","lemmaLink"]){
+  const link=$(id);link.addEventListener("click",event=>{event.preventDefault();showWorkspaceWindow(link)});
+}
+$("workspaceFrame").addEventListener("load",()=>{workspaceFrameLoaded=true});
+window.addEventListener("message",event=>{
+  if(event.origin!==location.origin||event.source!==$("workspaceFrame").contentWindow)return;
+  if(event.data?.type==="wudict-workspace-close"){
+    $("workspaceFrameWindow").close();
+    if(event.data.changed==="setup")loadDicts().then(ok=>{if(ok){loadFolders();reissueIfCorpusMoved()}});
+  }
+});
+$("workspaceFrameWindow").addEventListener("cancel",event=>{
+  event.preventDefault();
+  $("workspaceFrame").contentWindow.postMessage({type:"wudict-workspace-close-request"},location.origin);
+});
+$("workspaceFrameWindow").addEventListener("close",()=>workspaceReturnFocus?.focus());
 $("dictSettingsScroll").addEventListener("scroll",()=>{
   dictListTop=$("dictSettingsScroll").scrollTop;
 },{passive:true});
@@ -3361,7 +3427,7 @@ function sysRequest(request){
    the folders are. */
 async function sysConfigRead(){
   try{
-    const r=await fetch("/api/config");
+    const r=await apiFetch("/api/config");
     if(!r.ok)throw new Error("HTTP "+r.status);
     sysCfg=await r.json();
     return true;
@@ -3848,7 +3914,7 @@ function pathHTML(p){
    having it. Errors are swallowed: no aliases means full paths, which is a
    correct fallback, not a failure. */
 async function loadConfig(){
-  try{ cfgInfo=await (await fetch("/api/config")).json() }catch(e){}
+  try{ cfgInfo=await (await apiFetch("/api/config")).json() }catch(e){}
   if(cfgInfo&&cfgInfo.canExit&&!window.wudictNativeShell){
     window.wudictDesktopAppearance=true;
     appearanceRequest({action:"get"});
@@ -7836,7 +7902,8 @@ function presetApplyAll(){
   // this page does NOT paint have to hear about.
   presetPaperPush();
 }
-/* The paper the enabled layers paint, handed to the SHELL.
+/* The paper the enabled layers paint, handed to standalone pages and the
+   Android shell.
    Everything else in this file styles THIS document. Three pages of the app are
    documents of their own (Edit Folders, Lemmatization, Browse) and are only
    told a colour by the host, and the dictionary list, the search-mode list, the
@@ -7853,10 +7920,15 @@ function presetApplyAll(){
    remembers and put it back a moment later, and which of the two comes first
    (this fetch or the shell's own hook) is not fixed. */
 function presetPaperPush(){
-  // Only Android owns a native paper preference. Its shell sets this flag
-  // before asking the page to report the current preset.
-  if(!window.wudictAndroidShell||!PRESETS)return;
+  if(!PRESETS)return;
   const paper=PRESETS.paper||{};
+  const current=paper[themeIsDark()?"dark":"light"];
+  try{
+    if(typeof current==="string"&&/^#[0-9a-f]{6}$/i.test(current))sessionStorage.setItem("wudict_shell_paper",current);
+    else sessionStorage.removeItem("wudict_shell_paper");
+  }catch(_){}
+  // Android also uses this value for windows outside the WebView.
+  if(!window.wudictAndroidShell)return;
   for(const [night,key] of [[false,"light"],[true,"dark"]]){
     appearanceRequest({action:"set",night,field:"paper",
       value:typeof paper[key]==="string"?paper[key]:""});
@@ -8727,7 +8799,7 @@ async function stylerOpen(subject){
   if(!stylerLoaded){
     stylerNote(tx("panel.loading"));
     try{
-      const r=await fetch("/api/style");
+      const r=await apiFetch("/api/style");
       if(!r.ok)throw new Error("HTTP "+r.status);
       const j=await r.json();
       // The pair the RESOLVED theme edits is the working copy; the other
@@ -8853,7 +8925,7 @@ async function stylerSave(){
   if(!("app" in body)&&!("article" in body)){stylerNote(tx("panel.noChanges"));setTimeout(stylerNote,1400);return}
   stylerNote(tx("panel.saving"));
   try{
-    const put=q=>fetch("/api/style"+q,{method:"PUT",
+    const put=q=>apiFetch("/api/style"+q,{method:"PUT",
       headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
 let r=await put("");
     if(!r.ok){

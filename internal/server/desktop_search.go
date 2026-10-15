@@ -176,6 +176,25 @@ func (s *Server) desktopDictionaryList(ctx context.Context, emit func([]byte)) (
 // available and delegate to the same operations where they overlap.
 func (s *Server) DesktopJSON(baseURL, method, argument string) (any, error) {
 	switch method {
+	case "saveGroups":
+		const limit = 4*maxGroupsBytes + 4096
+		if len(argument) > limit {
+			return nil, fmt.Errorf("%s is larger than 256 KB", GroupsFileName)
+		}
+		var request struct {
+			Text    string `json:"text"`
+			Replace bool   `json:"replace"`
+		}
+		if err := json.Unmarshal([]byte(argument), &request); err != nil {
+			return nil, fmt.Errorf("bad request: %w", err)
+		}
+		return s.saveGroups([]byte(request.Text), request.Replace)
+	case "resetGroups":
+		return s.resetGroups()
+	case "style":
+		return s.styleSnapshot(), nil
+	case "saveStyle":
+		return s.desktopSaveStyle(argument), nil
 	case "deleteGroup":
 		var request deleteGroupRequest
 		if len(argument) > 4096 || json.Unmarshal([]byte(argument), &request) != nil || request.Group == "" || request.Group == allDictionariesGroup {
@@ -293,6 +312,43 @@ func (s *Server) DesktopJSON(baseURL, method, argument string) (any, error) {
 		return nil, fmt.Errorf("invalid JSON response: %w", err)
 	}
 	return result, nil
+}
+
+type desktopStyleReply struct {
+	Status int            `json:"status"`
+	Value  map[string]any `json:"value,omitempty"`
+	Error  string         `json:"error,omitempty"`
+}
+
+// desktopSaveStyle preserves the style API's status and error contract for
+// the WebView while applying the same validation and file writes as HTTP.
+func (s *Server) desktopSaveStyle(argument string) desktopStyleReply {
+	const limit = 4*maxUserCSSBytes + (1 << 12)
+	if len(argument) > limit*2 {
+		return desktopStyleReply{Status: http.StatusRequestEntityTooLarge, Error: "the request is larger than the style limit"}
+	}
+	var request struct {
+		Body    json.RawMessage `json:"body"`
+		Replace bool            `json:"replace"`
+	}
+	if err := json.Unmarshal([]byte(argument), &request); err != nil {
+		return desktopStyleReply{Status: http.StatusBadRequest, Error: "bad request: " + err.Error()}
+	}
+	if len(request.Body) > limit {
+		return desktopStyleReply{Status: http.StatusRequestEntityTooLarge, Error: "the request is larger than the style limit"}
+	}
+	var body styleSaveRequest
+	if err := json.Unmarshal(request.Body, &body); err != nil {
+		return desktopStyleReply{Status: http.StatusBadRequest, Error: "bad request: " + err.Error()}
+	}
+	if err := s.saveStyle(body, request.Replace); err != nil {
+		var operation styleOperationError
+		if errors.As(err, &operation) {
+			return desktopStyleReply{Status: operation.status, Error: operation.message}
+		}
+		return desktopStyleReply{Status: http.StatusInternalServerError, Error: "could not save style: " + err.Error()}
+	}
+	return desktopStyleReply{Status: http.StatusOK, Value: s.styleSnapshot()}
 }
 
 type desktopStreamWriter struct {
