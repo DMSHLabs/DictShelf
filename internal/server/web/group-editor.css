@@ -279,7 +279,6 @@ html[data-shell-image] dialog#groupEditor.group-dialog.panel-card{background-ima
 @media(max-width:380px){#groupEditToggle .group-edit-label{display:none}#groupEditToggle{width:calc(var(--ui-main-control-height) * 1em);justify-content:center;padding:0}#groupOrderToolbar #groupEditToggle{flex:none;width:2.5em;min-width:2.5em;padding:0}}
 @media(max-width:380px){#groupPinControls{flex-wrap:wrap}#groupPinHint{flex-basis:100%}}
 #groupRows{flex:1;overflow:auto;min-height:0;overscroll-behavior:contain}
-#groupLists.hide-members #groupMembers{display:none}
 #groupLists.members-sized #groupMembers{box-sizing:border-box;flex:0 0 var(--group-members-height)}
 #groupEditor.compact-controls #groupControls{display:none}
 #groupEditor.edit-members #groupControls{display:none}

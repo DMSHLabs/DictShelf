@@ -189,20 +189,19 @@ final class Shell {
                 + color + "'," + image + "," + org.json.JSONObject.quote(image
                 ? ShellPrefs.backgroundImage(c) : "") + "," + org.json.JSONObject.quote(paper)
                 + ")", null);
-        // wudictNativeShell is how a page knows the shell answers its
-        // wudict: prompts - the setup page's folder button speaks only when
-        // it will be heard.
+        // wudictNativeShell exposes the page's native controls; the Android
+        // marker reserves the wudict:appearance prompt bridge for this host.
         // The flag first, then the two calls that need it: the page reports the
         // paper an enabled preset paints only where a shell answers, and the
         // report is what keeps the standalone pages and the native windows in
         // step with the app page. It is asked for here rather than left to the
         // page's own boot push because the flag arrives at onPageFinished,
         // which either side of that push can win.
-        web.evaluateJavascript("window.wudictNativeShell=1;"
+        web.evaluateJavascript("window.wudictAndroidShell=1;window.wudictNativeShell=1;"
                 + "if(typeof wudictPresetPaper==='function')wudictPresetPaper();"
                 + "if(typeof appearanceRead==='function' && document.getElementById('styler')"
                 + " && document.getElementById('styler').classList.contains('show')) appearanceRead();"
-                + DICTIONARY_PICKER_JS, null);
+                + NATIVE_SELECT_PICKER_JS, null);
     }
 
     // What the settings screen sends after emptying the browser's cache: the
@@ -314,19 +313,15 @@ final class Shell {
 
     // Keep the real select as the source of truth, including streamed options,
     // groups, disabled entries and its existing change handler.
-    static final String DICTIONARY_PICKER_JS = """
+    static final String NATIVE_SELECT_PICKER_JS = """
             (() => {
               function installPickers() {
-              for (const select of document.querySelectorAll('#dict, #mode, #articleFindMode, #stylerPreset, #groupSelect, #groupAvailableFilter, #bulkIndexes select')) {
+              for (const select of document.querySelectorAll('#mode, #articleFindMode, #stylerPreset, #groupSelect, #groupAvailableFilter, #bulkIndexes select')) {
               const id = select.id || 'bulkIndexAction';
               if (!select || select.dataset.shellPicker) continue;
               select.dataset.shellPicker = '1';
               function open() {
                 if (select.disabled) return;
-                if (id === 'dict' && window.wudictNativeDictionaryPicker) {
-                  window.wudictNativeDictionaryPicker();
-                  return;
-                }
                 const options = Array.from(select.options), rows = [];
                 let group = null;
                 for (let index = 0; index < options.length; index++) {
@@ -340,7 +335,7 @@ final class Shell {
                   rows.push({label: option.textContent, index,
                     disabled: option.disabled || (parent.tagName === 'OPTGROUP' && parent.disabled)});
                 }
-                const answer = window.prompt('wudict:dictionary-picker',
+                const answer = window.prompt('wudict:native-select-picker',
                   JSON.stringify({rows, selected: select.selectedIndex,
                     kind: id === 'articleFindMode' ? 'mode' : id}));
                 if (answer === null) return;
@@ -766,7 +761,7 @@ final class Shell {
                 // The setup page's 📁. The page asks through the prompt it is
                 // then blocked on; startActivityForResult answers it from
                 // onActivityResult, so returning true here is "the answer
-                // comes later", the same bargain DictionaryPicker makes.
+                // comes later", the same bargain NativeSelectPicker makes.
                 if ("wudict:folder-picker".equals(message)) {
                     // A second request supersedes the first; the abandoned
                     // prompt still gets its answer.
@@ -783,20 +778,8 @@ final class Shell {
                     }
                     return true;
                 }
-                if (!"wudict:dictionary-picker".equals(message)) return false;
-                String pickerKind = "";
-                try { pickerKind = new org.json.JSONObject(defaultValue).optString("kind"); }
-                catch (org.json.JSONException ignored) { }
-                if ("liveDict".equals(pickerKind)) {
-                    DictionaryPicker.showLive(a, view, defaultValue, result);
-                    return true;
-                }
-                if ("liveDictUpdate".equals(pickerKind)) {
-                    DictionaryPicker.updateLive(view, defaultValue);
-                    result.confirm("");
-                    return true;
-                }
-                DictionaryPicker.show(a, defaultValue, result);
+                if (!"wudict:native-select-picker".equals(message)) return false;
+                NativeSelectPicker.show(a, defaultValue, result);
                 return true;
             }
 

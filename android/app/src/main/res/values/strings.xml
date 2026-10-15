@@ -67,14 +67,6 @@
           web/index.html), and write the same ShellPrefs through the
           wudict:appearance bridge.
 	-->
-    <string name="settings_dictionary_picker">Dictionary picker</string>
-    <string-array name="settings_dictionary_picker_modes">
-        <item>All Dictionaries</item>
-        <item>Found Dictionaries</item>
-    </string-array>
-    <string name="settings_dictionary_picker_hint">All Dictionaries changes where you search. Found Dictionaries jumps to a dictionary in the current results.</string>
-    <string name="found_dictionaries_title">Found Dictionaries</string>
-    <string name="found_dictionaries_empty">No dictionary articles are displayed yet.</string>
 	<!--
  PLATFORM OVERRIDES (D101). Each row names a resource trade the DEVICE
           forces - space, memory, cores, an address - never a dictionary fact,
