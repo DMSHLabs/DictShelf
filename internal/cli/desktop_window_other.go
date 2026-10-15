@@ -8,6 +8,6 @@ package cli
 
 import "context"
 
-func openDesktopWindow(string, func(), func(string, string) (any, error), func(context.Context, string, string, func([]byte)) error) bool {
+func openDesktopWindow(string, string, func(), func(context.Context, string, string) (any, error), func(context.Context, string, string, func([]byte)) error, desktopResourceHandler) bool {
 	return false
 }

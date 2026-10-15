@@ -411,6 +411,10 @@ const BROWSE_PAGE_SESSION_KEY="wudict_browse_page_v1";
 let browseHeadwordControl=null;
 const BROWSE_DEBUG=new URLSearchParams(location.search).get("browse_debug")==="1";
 function browseDiagnosticsEnabled(){try{return localStorage.getItem("wudict_browse_diagnostics")==="1"}catch(_){return false}}
+function sendBrowseDiagnostic(payload){
+  if(typeof window.wudictNativeCall==="function")return window.wudictNativeCall("browseDiagnostic",JSON.stringify(payload)).catch(()=>{});
+  return fetch("/api/browse-diagnostic",{method:"POST",headers:{"Content-Type":"application/json"},keepalive:true,body:JSON.stringify(payload)}).catch(()=>{});
+}
 function browseTrace(step,data={}){
   let enabled=BROWSE_DEBUG;
   enabled=enabled||browseDiagnosticsEnabled();
@@ -1040,9 +1044,8 @@ function dictionaryCacheTrace(event,page){
   const pageMetrics=browsePageMetrics(page);
   const totalPages=Number.isSafeInteger(page.pages)?page.pages:0;
   const estimatedAllPagesBytes=entries.length?Math.round(cacheBytes/entries.length*totalPages):0;
-  fetch("/api/browse-diagnostic",{method:"POST",headers:{"Content-Type":"application/json"},keepalive:true,
-    body:JSON.stringify({event,dict:page.dict,page:page.page,words:pageMetrics.words,pageBytes:pageMetrics.heapBytes,
-      pageJsonBytes:pageMetrics.jsonBytes,cachePages:entries.length,cacheBytes,cacheJsonBytes,totalPages,estimatedAllPagesBytes})}).catch(()=>{});
+  sendBrowseDiagnostic({event,dict:page.dict,page:page.page,words:pageMetrics.words,pageBytes:pageMetrics.heapBytes,
+      pageJsonBytes:pageMetrics.jsonBytes,cachePages:entries.length,cacheBytes,cacheJsonBytes,totalPages,estimatedAllPagesBytes});
 }
 function rememberBrowsePage(page,event="page_cache_saved"){
   if(!page||!Number.isSafeInteger(page.page)||!Array.isArray(page.words))return;

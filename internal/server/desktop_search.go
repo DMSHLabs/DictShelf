@@ -7,6 +7,7 @@ package server
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -19,9 +20,20 @@ import (
 	"github.com/wuweidict/wudict/internal/logx"
 )
 
+func desktopOrigin(raw string) (*url.URL, bool) {
+	base, err := url.Parse(raw)
+	if err != nil || base.Host == "" || base.User != nil {
+		return nil, false
+	}
+	if base.Scheme == "http" || base.Scheme == "https" && strings.EqualFold(base.Host, "wudict2.local") {
+		return base, true
+	}
+	return nil, false
+}
+
 // DesktopStream dispatches desktop streams. Search, dictionary listing, ingest
-// and rescan index work call their shared Go operations directly; plain rescan
-// still enters its route.
+// and rescan index work call their shared Go operations directly. An ordinary
+// folder rescan likewise refreshes through the registry and then streams rows.
 func (s *Server) DesktopStream(ctx context.Context, baseURL, method, query string, emit func([]byte)) error {
 	if method == "search" {
 		var request SearchRequest
@@ -33,19 +45,26 @@ func (s *Server) DesktopStream(ctx context.Context, baseURL, method, query strin
 	if method == "dicts" {
 		return s.desktopDictionaryList(ctx, emit)
 	}
+	if method == "rescan" {
+		return s.desktopRescan(ctx, emit)
+	}
 	if method == "rescanIndexes" {
-		base, err := url.Parse(baseURL)
-		if err != nil || base.Scheme != "http" || base.Host == "" || base.User != nil {
+		if _, ok := desktopOrigin(baseURL); !ok {
 			return errors.New("invalid desktop server address")
 		}
 		return s.desktopRescanIndexes(ctx, []byte(query), emit)
 	}
 	if method == "ingest" {
-		base, err := url.Parse(baseURL)
-		if err != nil || base.Scheme != "http" || base.Host == "" || base.User != nil {
+		if _, ok := desktopOrigin(baseURL); !ok {
 			return errors.New("invalid desktop server address")
 		}
 		return s.desktopIngest(ctx, baseURL, query, emit)
+	}
+	if method == "browseFind" {
+		return s.desktopBrowseFindStream(ctx, query, emit)
+	}
+	if method == "browse" {
+		return s.desktopBrowseStream(ctx, query, emit)
 	}
 	path := ""
 	verb := http.MethodGet
@@ -53,15 +72,11 @@ func (s *Server) DesktopStream(ctx context.Context, baseURL, method, query strin
 	switch method {
 	case "rescan":
 		path = "/api/rescan"
-	case "browse":
-		path = "/api/browse"
-	case "browseFind":
-		path = "/api/browse/find"
 	default:
 		return fmt.Errorf("unsupported desktop stream %q", method)
 	}
-	base, err := url.Parse(baseURL)
-	if err != nil || base.Scheme != "http" || base.Host == "" || base.User != nil {
+	base, ok := desktopOrigin(baseURL)
+	if !ok {
 		return errors.New("invalid desktop server address")
 	}
 	base.Path, base.RawPath, base.RawQuery, base.Fragment = path, "", query, ""
@@ -77,7 +92,7 @@ func (s *Server) DesktopStream(ctx context.Context, baseURL, method, query strin
 	w := &desktopStreamWriter{header: make(http.Header), emit: emit}
 	s.ServeHTTP(w, req)
 	if err := w.finish(); err != nil {
-		if (method == "browse" || method == "browseFind") && w.status >= 400 {
+		if method == "browse" && w.status >= 400 {
 			var failure struct {
 				Error string `json:"error"`
 			}
@@ -146,8 +161,8 @@ func (s *Server) desktopSearchRequest(ctx context.Context, baseURL string, reque
 			resultErr = fmt.Errorf("internal error: %v", p)
 		}
 	}()
-	base, err := url.Parse(baseURL)
-	if err != nil || base.Scheme != "http" || base.Host == "" || base.User != nil {
+	base, ok := desktopOrigin(baseURL)
+	if !ok {
 		return errors.New("invalid desktop server address")
 	}
 	request.Origin = base.Scheme + "://" + base.Host
@@ -189,11 +204,124 @@ func (s *Server) desktopDictionaryList(ctx context.Context, emit func([]byte)) (
 	return err
 }
 
+// desktopRescan is the local WebView equivalent of GET /api/rescan: refresh
+// sources and prepared indexes, then stream a fresh dictionary list. The
+// browser route retains its network-origin guard; a native bridge call comes
+// only from the user's local Windows application.
+func (s *Server) desktopRescan(ctx context.Context, emit func([]byte)) error {
+	s.startRescanIndexes(rescanIndexesRequest{})
+	for {
+		status, changed, ok := s.jobs.watch("rescan-indexes")
+		if !ok || !status.Running {
+			if len(status.Failed) > 0 {
+				return fmt.Errorf("rescan: %v", status.Failed)
+			}
+			break
+		}
+		select {
+		case <-changed:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	s.reg.Warm()
+	s.dictRows.flush()
+	return s.desktopDictionaryList(ctx, emit)
+}
+
 // DesktopJSON dispatches explicitly supported JSON operations for the desktop
 // bridge. It calls shared server methods directly; browser HTTP routes remain
 // available and delegate to the same operations where they overlap.
 func (s *Server) DesktopJSON(baseURL, method, argument string) (any, error) {
+	return s.DesktopJSONContext(context.Background(), baseURL, method, argument)
+}
+
+// DesktopJSONContext is the cancellable form used by the Windows bridge for
+// JSON requests that may scan dictionary headwords.
+func (s *Server) DesktopJSONContext(ctx context.Context, baseURL, method, argument string) (any, error) {
 	switch method {
+	case "browseDiagnostic":
+		if len(argument) > 2048 {
+			return nil, errors.New("invalid diagnostic")
+		}
+		recorder := httptest.NewRecorder()
+		request := httptest.NewRequest(http.MethodPost, "/api/browse-diagnostic", strings.NewReader(argument))
+		s.handleBrowseDiagnostic(recorder, request)
+		if recorder.Code != http.StatusNoContent {
+			return nil, errors.New("invalid diagnostic")
+		}
+		return map[string]bool{"recorded": true}, nil
+	case "browseFindPage":
+		values, err := url.ParseQuery(argument)
+		if err != nil {
+			return map[string]any{"status": http.StatusBadRequest, "error": "invalid browse search request"}, nil
+		}
+		result, err := s.browseFindPage(ctx, values)
+		if err == nil {
+			return result, nil
+		}
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		var failure *browseFindSetupError
+		if errors.As(err, &failure) {
+			payload := map[string]any{"status": failure.status, "error": failure.message}
+			if failure.status == http.StatusConflict {
+				payload["prepared"] = false
+			}
+			return payload, nil
+		}
+		return map[string]any{"status": http.StatusInternalServerError, "error": err.Error()}, nil
+	case "intakeStatus":
+		return s.desktopIntakeStatus(), nil
+	case "intakeURL":
+		if len(argument) > 4096 {
+			return nil, errors.New("import link is too long")
+		}
+		return s.desktopIntakeURL(argument)
+	case "intakePath":
+		if len(argument) > 32768 {
+			return nil, errors.New("archive path is too long")
+		}
+		return s.desktopIntakePath(argument)
+	case "intakeFileStart":
+		var request struct {
+			Name string `json:"name"`
+			Size int64  `json:"size"`
+		}
+		if len(argument) > 4096 || json.Unmarshal([]byte(argument), &request) != nil {
+			return nil, errors.New("invalid archive file")
+		}
+		return s.desktopIntakeUploadStart(request.Name, request.Size)
+	case "intakeFileChunk":
+		return nil, s.desktopIntakeUploadChunk(argument)
+	case "intakeFileFinish":
+		if len(argument) > 64 {
+			return nil, errors.New("invalid file transfer")
+		}
+		return s.desktopIntakeUploadFinish(argument)
+	case "intakeFileCancel":
+		if len(argument) > 64 {
+			return nil, errors.New("invalid file transfer")
+		}
+		return map[string]bool{"canceled": true}, s.desktopIntakeUploadCancel(argument)
+	case "intakeConfirm":
+		if len(argument) > 1<<20 {
+			return nil, errors.New("import selection is too large")
+		}
+		var request intakeConfirmReq
+		if err := json.Unmarshal([]byte(argument), &request); err != nil {
+			return nil, fmt.Errorf("invalid import selection: %w", err)
+		}
+		return s.desktopIntakeConfirm(request)
+	case "intakeCancel":
+		return s.desktopIntakeCancel(argument), nil
+	case "exitApp":
+		if s.DesktopExit == nil {
+			return nil, errors.New("desktop exit is unavailable")
+		}
+		go s.DesktopExit()
+		return map[string]bool{"stopping": true}, nil
 	case "saveGroups":
 		const limit = 4*maxGroupsBytes + 4096
 		if len(argument) > limit {
@@ -225,7 +353,7 @@ func (s *Server) DesktopJSON(baseURL, method, argument string) (any, error) {
 		}
 		var request struct {
 			ID string `json:"id"`
-			On bool `json:"on"`
+			On bool   `json:"on"`
 		}
 		if err := json.Unmarshal([]byte(argument), &request); err != nil {
 			return nil, fmt.Errorf("bad preset request: %w", err)
@@ -263,6 +391,43 @@ func (s *Server) DesktopJSON(baseURL, method, argument string) (any, error) {
 			return nil, err
 		}
 		return map[string]bool{"saved": true}, nil
+	case "setGroupMember":
+		var request groupMemberRequest
+		if len(argument) > 4096 || json.Unmarshal([]byte(argument), &request) != nil || request.Member == nil {
+			return nil, errors.New("Invalid membership")
+		}
+		if err := s.setGroupMember(request); err != nil {
+			return nil, err
+		}
+		return map[string]bool{"saved": true}, nil
+	case "replaceGroupMembership":
+		var request replaceGroupMembershipRequest
+		if len(argument) > 1<<20 || json.Unmarshal([]byte(argument), &request) != nil || request.Group == allDictionariesGroup || request.Members == nil {
+			return nil, errors.New("Invalid group membership")
+		}
+		if err := s.replaceGroupMembership(request); err != nil {
+			return nil, err
+		}
+		return map[string]bool{"saved": true}, nil
+	case "addGroupMembers":
+		var request addGroupMembersRequest
+		if len(argument) > 1<<20 || json.Unmarshal([]byte(argument), &request) != nil || request.Group == "" || request.Group == allDictionariesGroup || request.Members == nil {
+			return nil, errors.New("Invalid membership")
+		}
+		if err := s.addGroupMembers(request); err != nil {
+			return nil, err
+		}
+		return map[string]bool{"saved": true}, nil
+	case "linkGroup":
+		var request linkGroupRequest
+		if len(argument) > 4096 || json.Unmarshal([]byte(argument), &request) != nil ||
+			request.Group == allDictionariesGroup || request.Filter != nil && !s.filterExists(*request.Filter) {
+			return nil, errors.New("Filter not found")
+		}
+		if err := s.linkGroup(request); err != nil {
+			return nil, err
+		}
+		return map[string]bool{"saved": true}, nil
 	case "demand":
 		values, err := url.ParseQuery(argument)
 		if err != nil {
@@ -276,8 +441,62 @@ func (s *Server) DesktopJSON(baseURL, method, argument string) (any, error) {
 		return map[string]bool{"indexing": indexing}, nil
 	case "savePrefs":
 		return s.SavePrefs(strings.NewReader(argument))
+	case "saveLanguage":
+		if len(argument) > 1024 {
+			return nil, errors.New("bad request")
+		}
+		var request struct {
+			Language string `json:"language"`
+		}
+		if err := json.Unmarshal([]byte(argument), &request); err != nil {
+			return nil, errors.New("bad request")
+		}
+		if request.Language != "en" && request.Language != "ru" {
+			return nil, errors.New("unsupported language")
+		}
+		if err := s.reg.prefs.setLanguage(request.Language); err != nil {
+			return nil, errors.New("could not save language")
+		}
+		return map[string]string{"language": s.reg.prefs.Language()}, nil
+	case "systemLog":
+		content, filename, err := s.systemLogSnapshot()
+		if err != nil {
+			return nil, fmt.Errorf("could not read system log: %w", err)
+		}
+		return map[string]string{"content": string(content), "filename": filename}, nil
+	case "userFiles":
+		return s.userFilesPayload(), nil
+	case "saveUserFile":
+		const maxArgument = 4*((maxUserFileBytes+2)/3) + 1024
+		if len(argument) > maxArgument {
+			return nil, errors.New("file is too large")
+		}
+		var request struct {
+			Name    string `json:"name"`
+			Replace bool   `json:"replace"`
+			Data    string `json:"data"`
+		}
+		if err := json.Unmarshal([]byte(argument), &request); err != nil {
+			return nil, errors.New("bad request: invalid file upload")
+		}
+		body, err := base64.StdEncoding.DecodeString(request.Data)
+		if err != nil {
+			return nil, errors.New("bad request: invalid file data")
+		}
+		return s.saveUserFile(request.Name, request.Replace, body)
+	case "deleteUserFile":
+		return s.deleteUserFile(argument)
 	case "setup":
 		return s.DesktopSetup(argument)
+	case "howto":
+		switch argument {
+		case "copy":
+			return s.howtoOperation(false)
+		case "restore":
+			return s.howtoOperation(true)
+		default:
+			return nil, errors.New("unsupported howto operation")
+		}
 	case "folderSetup":
 		return s.DesktopFolderSetup(argument)
 	case "indexDefaults":
@@ -294,8 +513,8 @@ func (s *Server) DesktopJSON(baseURL, method, argument string) (any, error) {
 	case "userGroups":
 		return s.userGroupsSnapshot()
 	case "about":
-		base, err := url.Parse(baseURL)
-		if err != nil || base.Scheme != "http" || base.Host == "" || base.User != nil {
+		base, ok := desktopOrigin(baseURL)
+		if !ok {
 			return nil, errors.New("invalid desktop server address")
 		}
 		return s.aboutSnapshot(argument, base.Scheme+"://"+base.Host)
@@ -352,76 +571,26 @@ func (s *Server) DesktopJSON(baseURL, method, argument string) (any, error) {
 		if err != nil {
 			return nil, fmt.Errorf("invalid browse request: %w", err)
 		}
-		base, err := url.Parse(baseURL)
-		if err != nil || base.Scheme != "http" || base.Host == "" || base.User != nil {
-			return nil, errors.New("invalid desktop server address")
-		}
-		base.Path, base.RawPath, base.RawQuery, base.Fragment = "/api/browse", "", values.Encode(), ""
-		req, err := http.NewRequest(http.MethodGet, base.String(), nil)
+		page, err := s.browsePage(values)
 		if err != nil {
-			return nil, err
+			var failure *browsePageFailure
+			if errors.As(err, &failure) {
+				body := map[string]any{"error": failure.message}
+				if failure.unprepared {
+					body["prepared"] = false
+				}
+				return map[string]any{"status": failure.status, "body": body}, nil
+			}
+			return map[string]any{"status": http.StatusInternalServerError,
+				"body": map[string]any{"error": err.Error()}}, nil
 		}
-		req.Host = base.Host
-		req.RemoteAddr = "127.0.0.1:0"
-		rec := httptest.NewRecorder()
-		s.ServeHTTP(rec, req)
-		var response any
-		if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
-			return nil, fmt.Errorf("invalid browse response: %w", err)
-		}
-		return map[string]any{"status": rec.Code, "body": response}, nil
+		return map[string]any{"status": http.StatusOK, "body": page}, nil
 	}
-	path := ""
-	query := ""
-	verb := http.MethodGet
-	var body io.Reader
-	switch method {
-	case "setGroupMember", "replaceGroupMembership", "addGroupMembers", "linkGroup":
-		route := map[string]struct{ path, verb string }{
-			"setGroupMember":         {"/api/user-groups/member", http.MethodPut},
-			"replaceGroupMembership": {"/api/user-groups/membership", http.MethodPut},
-			"addGroupMembers":        {"/api/user-groups/members", http.MethodPut},
-			"linkGroup":              {"/api/user-groups/link", http.MethodPut},
-		}[method]
-		path, verb, body = route.path, route.verb, strings.NewReader(argument)
-	default:
-		return nil, fmt.Errorf("unsupported desktop request %q", method)
-	}
-	base, err := url.Parse(baseURL)
-	if err != nil || base.Scheme != "http" || base.Host == "" || base.User != nil {
-		return nil, errors.New("invalid desktop server address")
-	}
-	base.Path, base.RawPath, base.RawQuery, base.Fragment = path, "", query, ""
-	req, err := http.NewRequest(verb, base.String(), body)
-	if err != nil {
-		return nil, err
-	}
-	req.Host = base.Host
-	req.RemoteAddr = "127.0.0.1:0"
-	if body != nil {
-		req.Header.Set("Content-Type", "application/json")
-	}
-	rec := httptest.NewRecorder()
-	s.ServeHTTP(rec, req)
-	if rec.Code >= 400 {
-		var payload struct {
-			Error string `json:"error"`
-		}
-		if json.Unmarshal(rec.Body.Bytes(), &payload) == nil && payload.Error != "" {
-			return nil, errors.New(payload.Error)
-		}
-		return nil, errors.New(strings.TrimSpace(rec.Body.String()))
-	}
-	var result any
-	if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
-		return nil, fmt.Errorf("invalid JSON response: %w", err)
-	}
-	return result, nil
+	return nil, fmt.Errorf("unsupported desktop request %q", method)
 }
 
-// desktopLooks keeps the saved-appearance UI off the loopback transport while
-// reusing its HTTP adapters until their operation logic is split into shared
-// methods. The route and method are restricted to the look endpoints.
+// desktopLooks dispatches saved-appearance operations directly to the shared
+// Go methods used by the browser and Android HTTP adapters.
 func (s *Server) desktopLooks(argument string) (any, error) {
 	if len(argument) > 6<<20 {
 		return nil, errors.New("look request is too large")
@@ -434,28 +603,7 @@ func (s *Server) desktopLooks(argument string) (any, error) {
 	if err := json.Unmarshal([]byte(argument), &call); err != nil {
 		return nil, fmt.Errorf("invalid look request: %w", err)
 	}
-	allowed := map[string]map[string]bool{
-		"/api/looks":       {http.MethodGet: true, http.MethodPost: true, http.MethodPut: true, http.MethodDelete: true},
-		"/api/looks/apply": {http.MethodPost: true},
-	}
-	if !allowed[call.Path][call.Method] {
-		return nil, errors.New("unsupported look request")
-	}
-	req := httptest.NewRequest(call.Method, call.Path, strings.NewReader(call.Body))
-	req.RemoteAddr = "127.0.0.1:0"
-	if call.Body != "" {
-		req.Header.Set("Content-Type", "application/json")
-	}
-	response := httptest.NewRecorder()
-	s.ServeHTTP(response, req)
-	if response.Code >= http.StatusBadRequest {
-		return nil, errors.New(strings.TrimSpace(response.Body.String()))
-	}
-	var result any
-	if err := json.Unmarshal(response.Body.Bytes(), &result); err != nil {
-		return nil, fmt.Errorf("invalid look response: %w", err)
-	}
-	return result, nil
+	return s.lookOperation(call.Method, call.Path, []byte(call.Body))
 }
 
 type desktopStyleReply struct {

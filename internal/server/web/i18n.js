@@ -170,6 +170,10 @@
     return original;
   }
   async function saveLanguage(chosen) {
+    if (typeof window.wudictNativeCall === "function") {
+      await window.wudictNativeCall("saveLanguage", JSON.stringify({language: chosen}));
+      return;
+    }
     const response = await fetch("/api/language", {method: "PUT",
       headers: {"Content-Type": "application/json"}, body: JSON.stringify({language: chosen})});
     if (!response.ok) throw new Error("save");

@@ -13,6 +13,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"net/http"
 	"net/url"
@@ -1194,6 +1195,13 @@ func cmdServe(args []string) (err error) {
 		// helper can still restore its window if opening the log fails.
 		if f, ferr := openHeadlessLog(); ferr == nil {
 			logx.SetOutput(f)
+			log.SetOutput(f)
+			log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds)
+			if runtime.GOOS == "windows" {
+				// The desktop build is being diagnosed through its persistent log;
+				// include verbose request, dictionary and indexing details by default.
+				logx.Enabled = true
+			}
 			guiLaunch, headlessLog = true, f.Name()
 			// Whatever ends this run is written to the log while the file is
 			// still open - the restore below is what closes it, and Main's
@@ -1203,6 +1211,7 @@ func cmdServe(args []string) (err error) {
 				if err != nil {
 					logx.Warn("%v", err)
 				}
+				log.SetOutput(os.Stderr)
 				logx.SetOutput(nil)
 				f.Close()
 			}()
@@ -1477,7 +1486,7 @@ Hint: pick another port with --port, e.g.:  wudict --port %s
 	if runtime.GOOS == "windows" {
 		srv.DesktopExit = stop
 	}
-	desktopRequest := func(method, argument string) (any, error) {
+	desktopRequest := func(ctx context.Context, method, argument string) (any, error) {
 		switch method {
 		case "config":
 			return srv.ConfigSnapshot(true, "127.0.0.1"), nil
@@ -1488,16 +1497,17 @@ Hint: pick another port with --port, e.g.:  wudict --port %s
 		case "setup":
 			return srv.DesktopSetup(argument)
 		case "groups", "userGroups", "about", "demand", "reindex", "indexWork", "startReindex", "stopReindex", "startIndexWork", "startSingleIndexWork", "stopIndexWork", "stopIngest", "createGroup", "renameGroup", "deleteGroup", "setGroupMember", "replaceGroupMembership", "addGroupMembers", "linkGroup", "saveGroupOrder":
-			return srv.DesktopJSON(url, method, argument)
+			return srv.DesktopJSONContext(ctx, url, method, argument)
 		default:
-			return srv.DesktopJSON(url, method, argument)
+			return srv.DesktopJSONContext(ctx, url, method, argument)
 		}
 	}
 	desktopStream := func(ctx context.Context, method, query string, emit func([]byte)) error {
 		return srv.DesktopStream(ctx, url, method, query, emit)
 	}
+	desktopResource := desktopResourceHandler(srv.DesktopResource)
 	if !cfg.NoBrowser {
-		go openBrowser(browseURL(url, token), gui, stop, desktopRequest, desktopStream)
+		go openBrowser(browseURL(url, token), gui, stop, desktopRequest, desktopStream, desktopResource)
 	}
 	go func() {
 		sig := make(chan os.Signal, 1)
@@ -1541,7 +1551,7 @@ Hint: pick another port with --port, e.g.:  wudict --port %s
 		GUI:      gui,
 		Version:  Version,
 		URL:      url,
-		Open:     func() { openUI(browseURL(url, token), gui, stop, desktopRequest, desktopStream) },
+		Open:     func() { openUI(browseURL(url, token), gui, stop, desktopRequest, desktopStream, desktopResource) },
 		Rescan:   trayRescan(reg),
 		OpenDir:  trayOpenDir(reg.Dirs()),
 		Shutdown: stop,
@@ -1972,18 +1982,26 @@ func memLimitNote(limit int64) string {
 	return fmt.Sprintf("  ·  memory limit %.1f GB", float64(limit)/(1<<30))
 }
 
-func openBrowser(url string, gui bool, onWindowClose func(), desktopRequest func(string, string) (any, error), desktopStream func(context.Context, string, string, func([]byte)) error) {
+type desktopResourceHandler func(method, uri string, headers map[string]string, spill func() (io.WriteSeeker, error)) (body []byte, status int, responseHeaders string, handled bool, spilled bool)
+
+func openBrowser(url string, gui bool, onWindowClose func(), desktopRequest func(context.Context, string, string) (any, error), desktopStream func(context.Context, string, string, func([]byte)) error, desktopResource desktopResourceHandler) {
 	time.Sleep(300 * time.Millisecond) // let our own server finish binding
-	openUI(url, gui, onWindowClose, desktopRequest, desktopStream)
+	openUI(url, gui, onWindowClose, desktopRequest, desktopStream, desktopResource)
 }
 
-func openUI(address string, gui bool, onWindowClose func(), desktopRequest func(string, string) (any, error), desktopStream func(context.Context, string, string, func([]byte)) error) {
+func openUI(address string, gui bool, onWindowClose func(), desktopRequest func(context.Context, string, string) (any, error), desktopStream func(context.Context, string, string, func([]byte)) error, desktopResource desktopResourceHandler) {
 	if gui && runtime.GOOS == "windows" {
-		if local, err := desktopWindowURL(address); err == nil && openDesktopWindow(local, onWindowClose, desktopRequest, desktopStream) {
-			return
+		if local, err := desktopWindowURL(address); err == nil {
+			if openDesktopWindow(desktopWindowURLWithMarker(local), desktopWebViewURL(), onWindowClose, desktopRequest, desktopStream, desktopResource) {
+				return
+			}
 		}
 	}
 	browserCmd(address)
+}
+
+func desktopWebViewURL() string {
+	return "https://wudict2.local/?wudict_webview2=1"
 }
 
 func desktopWindowURL(address string) (string, error) {
