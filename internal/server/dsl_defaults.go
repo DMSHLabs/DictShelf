@@ -72,11 +72,6 @@ func (r *Registry) queueNewDictionaries() error {
 	p.editMu.Lock()
 	defer p.editMu.Unlock()
 	f, _ := p.data()
-	// The fork leaves preparation under the reader's control until index
-	// defaults were explicitly saved in the setup page.
-	if f.IndexDefaults == nil {
-		return nil
-	}
 	f.DSLKnown = maps.Clone(f.DSLKnown)
 	if f.DSLKnown == nil {
 		f.DSLKnown = map[string]bool{}
@@ -105,9 +100,15 @@ func (r *Registry) queueNewDictionaries() error {
 			changed = true
 		}
 	}
-	// New dictionaries default to a headword index. Saved defaults only add optional indexes.
-	defaults := *f.IndexDefaults
-	defaults.Index = true
+	// A headword index is mandatory for a newly added dictionary. Saved defaults
+	// choose only the optional contains and full-text indexes. In particular, a
+	// first scan must still queue the base index before the setup page has saved
+	// those preferences.
+	defaults := indexOptions{Index: true}
+	if f.IndexDefaults != nil {
+		defaults = *f.IndexDefaults
+		defaults.Index = true
+	}
 	for source, family := range families {
 		if f.DSLKnown[source] {
 			continue
