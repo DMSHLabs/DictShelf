@@ -18,7 +18,7 @@ if (new URLSearchParams(location.search).get('wudict_webview2') === '1') {
     var link = event.target.closest && event.target.closest('a[href]');
     if (!link) return;
     var target = new URL(link.href, location.href);
-    if (target.origin !== location.origin || target.pathname !== '/browse') return;
+    if (target.origin !== location.origin || !['/browse', '/setup'].includes(target.pathname)) return;
     target.searchParams.set('wudict_webview2', '1');
     link.href = target.pathname + target.search + target.hash;
   }, true);

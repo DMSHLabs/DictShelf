@@ -844,7 +844,7 @@
   "pages.emptyFoldersIntro": "None of your {count} dictionary folders hold dictionaries yet.",
   "pages.noFolderIntro": "No dictionary folder is configured yet.",
   "pages.migrationTitle": "wuDict data found",
-  "pages.migrationForked": "wuDict2 settings were found in ~/.wudict. Move them to ~/.wuDict2 so the two programs keep separate settings and files. Indexes will be rebuilt in the wuDict2 format.",
+  "pages.migrationForked": "wuDict2 data were found in ~/.wudict. Move them to ~/.wuDict2 so the two programs keep separate settings and files. The index library and settings will be copied.",
   "pages.migrationUpstream": "The wuDict data folder ~/.wudict was found. You can import dictionary folder paths and lemma files. Search indexes will be built in the wuDict2 format.",
   "pages.migrationCopy": "Copy settings and lemmas",
   "pages.migrationMove": "Move settings and lemmas",

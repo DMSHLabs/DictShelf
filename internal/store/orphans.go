@@ -204,13 +204,26 @@ type Relinked struct {
 // (candidateDirs): a renamed file would never find the folder again, however
 // its claim read.
 func Relink(discovered []string) []Relinked {
+	return relink(discovered, false)
+}
+
+// RelinkCopies re-points prepared folders at matching discovered files even
+// when their recorded sources still exist. Portable libraries are copies, so
+// the original source commonly remains in the user's regular data folder.
+// Matching still requires the recorded size and source signature; only the
+// ownership claim in the portable library changes.
+func RelinkCopies(discovered []string) []Relinked {
+	return relink(discovered, true)
+}
+
+func relink(discovered []string, includePresent bool) []Relinked {
 	folders, err := Folders()
 	if err != nil || len(folders) == 0 {
 		return nil
 	}
 	byBase := map[string][]Folder{}
 	for _, f := range folders {
-		if sourceGone(f.Source) {
+		if includePresent || sourceGone(f.Source) {
 			b := filepath.Base(f.Source)
 			byBase[b] = append(byBase[b], f)
 		}

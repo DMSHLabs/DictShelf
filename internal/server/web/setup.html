@@ -10,6 +10,13 @@
 <meta charset="utf-8">
 {{I18N}}
 <script>
+function setupNavigation(path) {
+  var target = new URL(path, location.href);
+  if (new URLSearchParams(location.search).get('wudict_webview2') === '1') {
+    target.searchParams.set('wudict_webview2', '1');
+  }
+  return target.pathname + target.search + target.hash;
+}
 // WebView2 installs the native bridge before this page is parsed. Install the
 // page callback only after <html> exists, so its folder button can be shown.
 if (typeof window.wudictChooseFolder === 'function') {
@@ -551,7 +558,7 @@ async function save(){
   }
   catch(e){$("msg").className="err";$("msg").textContent="✕ "+window.wudictI18n.errorText(e.message);setSetupNotice("");validateAll();return}
   if(j.error){$("msg").className="err";$("msg").textContent="✕ "+window.wudictI18n.errorText(j.error);setSetupNotice("");$("save").disabled=false;return}
-  if(j.saved)location.href="/";
+  if(j.saved)location.href=setupNavigation("/");
 }
 
 /* Importing an archive (/api/intake). Two acts: the file is read and reports
@@ -896,11 +903,12 @@ async function start(){
     $("origin").textContent=tx("pages.origin",{source:how});
     $("origin").classList.remove("hidden");
   }
-  // Lines of wudict.toml that set nothing: a misspelt key is otherwise a
+  // Configuration lines that set nothing: a misspelt key is otherwise a
   // setting that silently does not exist.
   if(cfg&&cfg.configProblems&&cfg.configProblems.length){
     const p=$("cfgProblems");
-    p.textContent="⚠ wudict.toml"+(cfg.configPath?" ("+cfg.configPath+")":"")+": "+cfg.configProblems.join("; ");
+    const configName=cfg.configPath?cfg.configPath.replace(/^.*[\\/]/,""):"wudict.toml";
+    p.textContent="⚠ "+configName+(cfg.configPath?" ("+cfg.configPath+")":"")+": "+cfg.configProblems.join("; ");
     p.classList.remove("hidden");
   }
   if(dirs.length)validateAll(); else rowInputs()[0].focus();
@@ -943,7 +951,7 @@ async function applyMigration(choice,button){
     const response=await fetch("/api/setup?migration="+encodeURIComponent(choice),{method:"POST"});
     const result=await response.json();
     if(!response.ok||result.error)throw new Error(result.error||response.statusText);
-    location.assign("/setup");
+    location.assign(setupNavigation("/setup"));
   }catch(e){
     error.textContent=window.wudictI18n.errorText(e.message);error.hidden=false;
     buttons.forEach(b=>b.disabled=false);button.focus();setSetupNotice("");

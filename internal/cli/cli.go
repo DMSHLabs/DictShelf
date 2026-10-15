@@ -76,7 +76,7 @@ const (
 )
 
 func usage() string {
-	return fmt.Sprintf(`WuWeiDict %s - dictionary server for the browser
+	help := fmt.Sprintf(`WuWeiDict %s - dictionary server for the browser
 MDict (.mdx/.mdd) · StarDict (.ifo) · Aard 2 (.slob) · Lingvo DSL (.dsl/.dsl.dz) · Babylon (.bgl) · ZIM (.zim) · wudict markdown (.wudict.md) · wudict library (text.db)
 
 USAGE
@@ -444,6 +444,10 @@ ABOUT
   %s - %s
   %s
 `, Version, ProductName, Tagline, RepoURL)
+	if config.Name == "wudict2.toml" {
+		help = strings.ReplaceAll(help, "~/.wudict/", "~/.wuDict2/")
+	}
+	return strings.ReplaceAll(help, "wudict.toml", config.Name)
 }
 
 // Main is the CLI entry point, called by the module-root main package.
@@ -899,7 +903,7 @@ func cmdIngest(args []string) error {
 	headwords := fs.Bool("headwords", false, "index headwords only: the opposite of -fulltext")
 	fuzzyOnly := fs.Bool("fuzzy-only", false, "deprecated spelling of -headwords")
 	contains := fs.Bool("contains", false, "also build the substring (contains) index - roughly doubles a headword-only index (-contains=false drops it)")
-	configPath := fs.String("config", "", "path to wudict.toml (env: CONFIG_PATH)")
+	configPath := fs.String("config", "", fmt.Sprintf("path to %s (env: CONFIG_PATH)", config.Name))
 	fs.Parse(args)
 
 	// A flag left out changes nothing about a dictionary already prepared, as
@@ -1116,7 +1120,7 @@ func cmdServe(args []string) (err error) {
 	auth := fs.String("auth", "", "require the access key: auto (default), on, off (env/toml: AUTH)")
 	authToken := fs.String("auth-token", "", "the access key itself, instead of ~/.wudict/token (env/toml: AUTH_TOKEN)")
 	port := fs.String("port", "", "listen port (env/toml: SERVER_PORT)")
-	configPath := fs.String("config", "", "path to wudict.toml (env: CONFIG_PATH)")
+	configPath := fs.String("config", "", fmt.Sprintf("path to %s (env: CONFIG_PATH)", config.Name))
 	noBrowser := fs.Bool("no-browser", false, "do not open a browser tab (env/toml: NO_BROWSER)")
 	verbose := fs.Bool("verbose", false, "verbose logging (env/toml: VERBOSE)")
 	speexdec := fs.String("speexdec", "", "path to speexdec for .spx audio (env/toml: SPEEXDEC)")
@@ -2016,7 +2020,7 @@ func cmdSearchAll(args []string) error {
 	base := fs.String("base", "", "prefix for /res/… references (e.g. http://127.0.0.1:6888)")
 	var dictDirs multiFlag
 	fs.Var(&dictDirs, "dict-dir", "folder to search; repeat for several (env/toml: DICT_DIR)")
-	configPath := fs.String("config", "", "path to wudict.toml (env: CONFIG_PATH)")
+	configPath := fs.String("config", "", fmt.Sprintf("path to %s (env: CONFIG_PATH)", config.Name))
 	fs.Parse(args)
 
 	// The folder is optional now, so the term is the last argument either way.
@@ -2402,7 +2406,7 @@ func isTerminal(f *os.File) bool {
 func cmdToken(args []string) error {
 	fs := flag.NewFlagSet("token", flag.ExitOnError)
 	rotate := fs.Bool("rotate", false, "replace the key: every browser and script holding the old one loses access")
-	configPath := fs.String("config", "", "path to wudict.toml (env: CONFIG_PATH)")
+	configPath := fs.String("config", "", fmt.Sprintf("path to %s (env: CONFIG_PATH)", config.Name))
 	fs.Parse(args)
 	if *configPath == "" {
 		*configPath = os.Getenv("CONFIG_PATH")
