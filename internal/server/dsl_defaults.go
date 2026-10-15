@@ -34,6 +34,15 @@ func (s *Server) handleIndexDefaults(w http.ResponseWriter, req *http.Request) {
 		httpErr(w, 400, "invalid index defaults")
 		return
 	}
+	next, err := s.saveIndexDefaults(next)
+	if err != nil {
+		httpErr(w, 500, "%v", err)
+		return
+	}
+	writeJSON(w, next)
+}
+
+func (s *Server) saveIndexDefaults(next indexOptions) (indexOptions, error) {
 	next.Index = true
 	p := s.reg.prefs
 	p.editMu.Lock()
@@ -52,10 +61,9 @@ func (s *Server) handleIndexDefaults(w http.ResponseWriter, req *http.Request) {
 		f.DSLKnown[source] = true
 	}
 	if err := p.store(f); err != nil {
-		httpErr(w, 500, "%v", err)
-		return
+		return indexOptions{}, err
 	}
-	writeJSON(w, next)
+	return next, nil
 }
 
 func (r *Registry) queueNewDictionaries() error {
@@ -110,27 +118,47 @@ func (r *Registry) queueNewDictionaries() error {
 		defaults.Index = true
 	}
 	for source, family := range families {
-		if f.DSLKnown[source] {
-			continue
+		if !f.DSLKnown[source] {
+			f.DSLKnown[source] = true
+			changed = true
 		}
-		f.DSLKnown[source] = true
-		changed = true
 		for _, other := range family {
+			key := other.indexRemovalKey()
+			if wanted, pending := f.DSLPending[key]; pending {
+				if preparedHasIndexes(other.Path, wanted) {
+					delete(f.DSLPending, key)
+					delete(f.DSLRemoved, key)
+					changed = true
+				}
+				continue
+			}
 			if hasBrowseIndex(other.Path) {
 				continue
 			}
-			key := other.indexRemovalKey()
 			if f.DSLRemoved[key] {
 				continue
 			}
 			f.DSLRemoved[key] = true
 			f.DSLPending[key] = defaults
+			changed = true
 		}
 	}
 	if !changed {
 		return nil
 	}
 	return p.store(f)
+}
+
+// A finished database can outlive a queued receipt when the process stops
+// between index completion and saving preferences. Reuse it when it already
+// contains every requested index; an incomplete plan remains queued.
+func preparedHasIndexes(path string, wanted indexOptions) bool {
+	prepared, ok := preparedInfo(path)
+	if !ok || prepared.Meta == nil || isZIMPath(path) && prepared.Meta["index_kind"] != "headwords" {
+		return false
+	}
+	return (!wanted.Contains || prepared.Plan.Contains) &&
+		(!wanted.FullText || prepared.Plan.FullText)
 }
 
 func (r *Registry) prepareNewDictionaries() {
