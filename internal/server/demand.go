@@ -6,6 +6,12 @@ package server
 
 import "net/http"
 
+// DemandDictionary is used by the desktop bridge when a user chooses a
+// dictionary that needs its prepared headword index.
+func (s *Server) DemandDictionary(id string, explicit bool) (bool, error) {
+	return s.demandDictionary(id, explicit)
+}
+
 // handleDemand prepares one dictionary because the user chose it, before there
 // is anything to search.
 //
@@ -47,7 +53,7 @@ func (s *Server) demandDictionary(id string, explicit bool) (bool, error) {
 	// other kind of demand: the user asked for something only the index can
 	// serve (browsing, which has no direct-backend path), so the request IS
 	// the trigger AUTO_INDEX off reserves for them.
-	if s.AutoIndex || explicit {
+	if explicit {
 		e.demandIndex()
 	}
 	// `indexing` means "work is in flight", and e.indexing() alone does not:

@@ -16,9 +16,7 @@ import "github.com/wuweidict/wudict/internal/fsx"
 // Where the rename is legal this is a no-op (registry_other.go) and the entry
 // serves its prepared view mid-rebuild.
 //
-// The holder is whichever backend this entry currently serves, and it is not
-// always the upgraded wrapper: dsl and bgl embed their own store (they are the
-// formats that auto-prepare on first open). Closed outright, not after
+// The holder is whichever backend this entry currently serves. Closed outright, not after
 // closeGrace - the grace exists for in-flight readers, and none of them can
 // exist in a useful sense once the data they read is being replaced.
 //
@@ -58,15 +56,9 @@ func releasePrepared(e *entry, textDB string) {
 // orphan in those seconds would fail with "being used by another process". The
 // entry has left the registry, so no request can still be reading through it.
 //
-// The first: the source is edited, a rescan sees it (revalidate) and retires
-// the backend opened against the old edition, and the next open runs the
-// format's own first-open ingest (dsl, bgl, wudict markdown), which ends in a
-// rename over the text.db that retired backend still has open. Windows refuses
-// that rename ("Access is denied"); a rebuild does not meet it because it goes
-// through releasePrepared, which closes the retired set first. Here nothing is
-// lost by closing early: the entry is opening because it has no backend, so a
-// retired one can only be serving a request that began before the change - on
-// data that is being replaced.
+// An open follows a rescan or another backend change. It starts with no active
+// backend, so a retired one can only be serving a request that began before
+// the change and can safely be closed before opening the replacement.
 func releaseSuperseded(e *entry) {
 	e.retired.closeAll()
 }

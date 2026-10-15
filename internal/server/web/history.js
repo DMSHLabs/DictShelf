@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-// Search history and live headword suggestions for the search field.
-// The page supplies only the ordinary search action; this file owns storage,
+// Separate search histories and live headword suggestions for the search field.
+// The page supplies a mode-aware search action; this file owns storage,
 // rendering, input events and the history-length control.
 (function () {
   "use strict";
@@ -18,22 +18,35 @@
     const n = Number(raw);
     return Number.isInteger(n) && n >= 0 && n <= MAX ? n : 20;
   };
-  let saved = [];
-  try {
-    const rows = JSON.parse(localStorage.getItem("wudict_search_history") || "[]");
-    if (Array.isArray(rows)) {
-      const seen = new Set();
-      for (const word of rows) {
-        if (typeof word !== "string" || !word.trim()) continue;
-        const id = key(word);
-        if (seen.has(id)) continue;
-        seen.add(id);
-        saved.push(word);
-        if (saved.length === MAX) break;
+  function load(storageKey) {
+    const rows = [];
+    try {
+      const source = JSON.parse(localStorage.getItem(storageKey) || "[]");
+      if (Array.isArray(source)) {
+        const seen = new Set();
+        for (const word of source) {
+          if (typeof word !== "string" || !word.trim()) continue;
+          const id = key(word);
+          if (seen.has(id)) continue;
+          seen.add(id);
+          rows.push(word);
+          if (rows.length === MAX) break;
+        }
       }
-    }
-  } catch (_) {}
-  saved = saved.slice(0, limit());
+    } catch (_) {}
+    return rows.slice(0, limit());
+  }
+  const previousSaved = load("wudict_search_history");
+  let saved = previousSaved.filter(word => !/[?*]/.test(word));
+  let wildcardsSaved = [...load("wudict_wildcards_history"),
+    ...previousSaved.filter(word => /[?*]/.test(word))];
+  wildcardsSaved = wildcardsSaved.filter((word, i, rows) =>
+    rows.findIndex(other => key(other) === key(word)) === i).slice(0, MAX);
+  const activeHistory = () => $("mode").value === "wildcards" ? wildcardsSaved : saved;
+  const saveActiveHistory = rows => {
+    if ($("mode").value === "wildcards") wildcardsSaved = rows;
+    else saved = rows;
+  };
   let draft = false, open = false, heads = [], picking = false, search = () => {}, suggest = () => {};
   let suggestTimer = null, suggestAC = null, suggestSeq = 0;
   function stopSuggest() {
@@ -44,14 +57,17 @@
   }
 
   function persist() {
-    try { localStorage.setItem("wudict_search_history", JSON.stringify(saved)); } catch (_) {}
-    $("clearHistory").disabled = !saved.length;
+    try {
+      localStorage.setItem("wudict_search_history", JSON.stringify(saved));
+      localStorage.setItem("wudict_wildcards_history", JSON.stringify(wildcardsSaved));
+    } catch (_) {}
+    $("clearHistory").disabled = !activeHistory().length;
   }
   function record(term) {
     draft = false;
     const word = String(term || "").trim(), max = limit();
     if (!word || !max) return;
-    saved = [word, ...saved.filter(x => key(x) !== key(word))].slice(0, max);
+    saveActiveHistory([word, ...activeHistory().filter(x => key(x) !== key(word))].slice(0, max));
     persist();
   }
   function hide() { stopSuggest(); open = false; $("searchHistory").hidden = true; }
@@ -69,7 +85,8 @@
     box.replaceChildren();
     const needle = key(filter.trim()), seen = new Set();
     const maxRows = Math.max(20, limit());
-    const words = needle ? [...heads, ...saved.slice(0, limit())] : saved.slice(0, limit());
+    const history = activeHistory().slice(0, limit());
+    const words = needle ? [...heads, ...history] : history;
     for (const word of words) {
       const id = key(word);
       if ((needle && !id.includes(needle)) || seen.has(id)) continue;
@@ -83,7 +100,15 @@
     }
     box.hidden = !box.childElementCount;
   }
-  function show(filter = "") { open = true; render(filter); }
+  function show(filter = "") {
+    open = true; render(filter);
+  }
+  function modeChanged() {
+    stopSuggest();
+    heads = [];
+    $("clearHistory").disabled = !activeHistory().length;
+    if (open) render($("q").value);
+  }
   function onInput(value) {
     draft = true;
     refreshSuggestions(value);
@@ -93,7 +118,7 @@
     heads = [];
     show(value);
     const q = value.trim();
-    if (q.length < 2 || $("mode").value === "fts") return;
+    if (q.length < 2 || $("mode").value === "fts" || $("mode").value === "wildcards") return;
     const seq = suggestSeq;
     suggestTimer = setTimeout(() => {
       suggestAC = new AbortController();
@@ -118,9 +143,9 @@
   }
 
   $("historyLength").value = limit();
-  $("clearHistory").disabled = !saved.length;
+  $("clearHistory").disabled = !activeHistory().length;
   $("clearHistory").addEventListener("click", () => {
-    saved = [];
+    saveActiveHistory([]);
     draft = false;
     persist();
     render($("q").value);
@@ -130,6 +155,7 @@
     e.target.value = n;
     try { localStorage.setItem("wudict_history_length", String(n)); } catch (_) {}
     saved = saved.slice(0, n);
+    wildcardsSaved = wildcardsSaved.slice(0, n);
     persist();
     if (!n) hide();
   });
@@ -157,5 +183,5 @@
   sizer.observe(document.querySelector("#frm>.pill"));
   sizer.observe($("qbox"));
 
-  window.wuSearchHistory = { setSearch(fn) { search = fn; }, setSuggest(fn) { suggest = fn; }, record, hide, onInput, refreshSuggestions, isPicking() { return picking; } };
+  window.wuSearchHistory = { setSearch(fn) { search = fn; }, setSuggest(fn) { suggest = fn; }, record, hide, onInput, refreshSuggestions, modeChanged, isPicking() { return picking; } };
 })();

@@ -13,7 +13,6 @@ let groupActivePanel=null;
 let newGroupSelectedFilter=null,groupFilterMode="",groupFilterShowAll=false,groupFilterCollapsed=new Set();
 let groupEditorMode="",groupDraftMembers=new Set(),groupDraftFilter=null,groupDraftLinked=false,groupSavedEditPreference=false,groupDraftChooseForLink=false;
 let groupMemberDraft=null;
-let justCreatedGroup=null;
 let groupOrderSelection=null,groupOrderLongPress=null,groupOrderSuppressClick=false;
 let groupPinEditing=null,groupPinCutoff=null;
 const groupOrderActions=document.createElement('div');groupOrderActions.id='groupOrderActions';
@@ -342,12 +341,23 @@ window.addEventListener('resize',updateGroupSplit);
 window.visualViewport?.addEventListener('resize',updateGroupSplit);
 function groupMemberDraftDirty(){
   if(!groupMemberDraft)return false;
-  return groupMemberDraft.baseMembers.length!==groupMemberDraft.members.size||groupMemberDraft.baseMembers.some(id=>!groupMemberDraft.members.has(id))||groupMemberDraft.baseOrder.length!==groupMemberDraft.order.length||groupMemberDraft.baseOrder.some((id,i)=>groupMemberDraft.order[i]!==id);
+  return groupMemberDraft.baseCustomOrder!==groupMemberDraft.customOrder||groupMemberDraft.baseMembers.length!==groupMemberDraft.members.size||groupMemberDraft.baseMembers.some(id=>!groupMemberDraft.members.has(id))||groupMemberDraft.baseOrder.length!==groupMemberDraft.order.length||groupMemberDraft.baseOrder.some((id,i)=>groupMemberDraft.order[i]!==id)||groupMemberDraft.pinned.some(id=>!groupMemberDraft.basePinned.includes(id))||groupMemberDraft.basePinned.some(id=>!groupMemberDraft.pinned.includes(id));
 }
 function visibleGroupOrder(group){
   return group.readonly?orderedIds():orderedGroupDicts(group,orderedDicts()).map(d=>d.id);
 }
-function groupPinnedIds(group){return group.readonly?prefPinned:(group.pinned||[])}
+function groupPinnedIds(group){return groupMemberDraft?.groupId===group.id?groupMemberDraft.pinned:group.readonly?prefPinned:(group.pinned||[])}
+function pinsAfterMove(order,moved,previousPins){
+  const pinned=new Set(previousPins),moving=new Set(moved);
+  const remaining=order.filter(id=>!moving.has(id));
+  const boundary=remaining.filter(id=>pinned.has(id)).length;
+  const next=new Set(remaining.filter(id=>pinned.has(id)));
+  for(const id of moved){
+    const at=order.indexOf(id);
+    if(at<boundary||(pinned.has(id)&&at===boundary))next.add(id);
+  }
+  return order.filter(id=>next.has(id));
+}
 function movedGroupSelection(order,selection,direction){
   const picked=order.filter(id=>selection.has(id));
   if(!picked.length)return order;
@@ -366,6 +376,7 @@ function updateGroupOrderToolbar(group,inside,filtering,nameMode){
   $('groupOrderToolbar').hidden=!visible;
   $('groupOrderHint').hidden=selecting||groupPinEditing;
   $('groupOrderActions').hidden=selecting||!!groupPinEditing;
+  $('groupOrderAlpha').disabled=groupSaving||!(groupMemberDraft?.groupId===group.id?groupMemberDraft.customOrder:group.readonly?prefCustomOrder:group.customOrder);
   $('groupPinStart').hidden=false;
   $('groupPinControls').hidden=!groupPinEditing;
   $('groupMemberDraftActions').classList.toggle('pin-editing',!!groupPinEditing);
@@ -392,7 +403,8 @@ function updateGroupOrderToolbar(group,inside,filtering,nameMode){
 function beginGroupMemberDraft(group){
   if(!group||group.readonly||group.filter)return;
   const members=[...group.members],order=[...(group.order||group.members)];
-  groupMemberDraft={groupId:group.id,baseMembers:members,members:new Set(members),baseOrder:order,order};
+  const pinned=[...groupPinnedIds(group)];
+  groupMemberDraft={groupId:group.id,baseMembers:members,members:new Set(members),baseOrder:order,order,basePinned:pinned,pinned:[...pinned],baseCustomOrder:!!group.customOrder,customOrder:!!group.customOrder,manualOrder:false};
 }
 function confirmDiscardGroupDraft(onDiscard){
   const dialog=$("discardGroupDraftDialog");
@@ -428,7 +440,12 @@ function renderGroupRows(){
   const outside=locked?[]:ordered.filter(d=>!members.has(d.id));
   const filtering=showAll.checked&&!locked;
   const selecting=updateGroupOrderToolbar(group,inside,filtering,nameMode);
+  const arranging=selecting||!!groupPinEditing;
+  $('groupControls').inert=arranging;
+  $('groupControls').setAttribute('aria-disabled',String(arranging));
   const showEmptyHint=!nameMode&&!filtering&&!group.readonly&&!group.filter&&members.size===0;
+  $('groupEmptyHint').append($('groupEditToggle'));
+  if(!showEmptyHint)$('groupOrderToolbar').append($('groupEditToggle'));
   $('groupLists').classList.toggle('editing',filtering);
   $('groupEditor').classList.toggle('edit-members',filtering&&!nameMode);
   $('groupMemberDraftActions').hidden=!!(locked||nameMode||selecting);
@@ -445,7 +462,6 @@ function renderGroupRows(){
   $("groupHint").hidden=true;
   $("groupHint").textContent='';
   $('groupEmptyHint').hidden=!showEmptyHint;
-  $('groupEmptyHint').querySelector('svg').hidden=group.id===justCreatedGroup;
   $('groupEmptyHintText').textContent=showEmptyHint?tx('dictUI.emptyGroup'):'';
   for(const d of filtering?inside.concat(filteredOutside):inside){
     const label=document.createElement(selecting||(!locked&&showAll.checked)?"label":"div");label.className="group-row";
@@ -487,7 +503,7 @@ function renderGroupRows(){
       $('groupLists').querySelectorAll("input").forEach(input=>input.disabled=true);
       try{
         await groupRequest("/api/user-groups/member","PUT",{group:group.id,dict:d.id,member});
-        group.members=group.members.filter(id=>id!==d.id);if(member)group.members.push(d.id);
+        userGroups=await groupRequest('/api/user-groups','GET');
         refreshLivePicker();if(group.id===pickerGroup&&$("q").value.trim())doSearch();
       }catch(error){$("groupError").textContent=error.message}
       finally{
@@ -501,24 +517,24 @@ function renderGroupRows(){
   if(filtering)updateAvailableSearch();
   requestAnimationFrame(updateGroupSplit);
 }
-async function saveGroupOrder(ids,focusId,pinned){
+async function saveGroupOrder(ids,focusId,pinned,customOrder=true){
   if(groupSaving)return;
   const group=userGroups.find(g=>g.id===selectedGroup);
   if(!group||(!group.readonly&&groupShowAllPreferred&&!groupMemberDraft))return;
   const visible=new Set(ids), reordered=ids.slice();
   // Replace visible slots only; temporarily unavailable dictionaries keep membership and position.
   ids=(groupMemberDraft?.groupId===group.id?groupMemberDraft.order:(group.readonly?orderedIds():group.members)).map(id=>visible.has(id)?reordered.shift():id);
-  if(groupMemberDraft?.groupId===group.id){groupMemberDraft.order=ids;renderGroupRows();return}
+  if(groupMemberDraft?.groupId===group.id){groupMemberDraft.order=ids;if(pinned!==undefined)groupMemberDraft.pinned=pinned;groupMemberDraft.customOrder=customOrder;groupMemberDraft.manualOrder=customOrder;renderGroupRows();return}
   const rows=$("groupRows"),top=rows.scrollTop;
   groupSaving=true;$("groupError").textContent="";
   $("closeGroups").disabled=true;$("groupSelect").disabled=true;
   try{
     if(group.readonly){
-      prefOrder=ids;savePrefs(true);refreshDictUI(true);
+      prefOrder=ids;if(pinned!==undefined)prefPinned=pinned;prefCustomOrder=customOrder;group.customOrder=customOrder;savePrefs(true);refreshDictUI(true);
     }else{
-      const body={group:group.id,members:ids};if(pinned!==undefined)body.pinned=pinned;
+      const body={group:group.id,members:ids,customOrder};if(pinned!==undefined)body.pinned=pinned;
       await groupRequest("/api/user-groups/order","PUT",body);
-      group.members=ids;
+      group.members=ids;group.customOrder=customOrder;
       if(pinned!==undefined)group.pinned=pinned;
     }
     refreshLivePicker();
@@ -581,7 +597,7 @@ function finishGroupDrag(event,cancel){
   let to=ids.indexOf(drag.target);if(to<0)return;
   if(drag.after)to++;
   ids.splice(to,0,drag.id);
-  if(ids.some((id,i)=>id!==current[i]))saveGroupOrder(ids,drag.id);
+  if(ids.some((id,i)=>id!==current[i]))saveGroupOrder(ids,drag.id,pinsAfterMove(ids,[drag.id],groupMemberDraft?.groupId===group.id?groupMemberDraft.pinned:groupPinnedIds(group)));
 }
 $("groupRows").addEventListener("pointerup",event=>finishGroupDrag(event,false));
 $("groupRows").addEventListener("pointercancel",event=>finishGroupDrag(event,true));
@@ -592,7 +608,7 @@ $("groupRows").addEventListener("keydown",event=>{
   const id=event.target.closest(".group-row").dataset.dict,ids=(groupMemberDraft?.groupId===group.id?groupMemberDraft.order:(group.readonly?orderedIds():group.members)).filter(id=>visible.has(id)),from=ids.indexOf(id);
   const to=from+(event.key==="ArrowUp"?-1:1);
   if(from<0||to<0||to>=ids.length)return;
-  event.preventDefault();ids.splice(from,1);ids.splice(to,0,id);saveGroupOrder(ids,id);
+  event.preventDefault();ids.splice(from,1);ids.splice(to,0,id);saveGroupOrder(ids,id,pinsAfterMove(ids,[id],groupMemberDraft?.groupId===group.id?groupMemberDraft.pinned:groupPinnedIds(group)));
 });
 function cancelGroupOrderLongPress(){
   if(groupOrderLongPress)clearTimeout(groupOrderLongPress.timer);
@@ -633,7 +649,7 @@ for(const [id,direction] of [['groupOrderTop','top'],['groupOrderUp','up'],['gro
     const group=userGroups.find(g=>g.id===selectedGroup);
     if(!group||!groupOrderSelection||groupOrderSelection.groupId!==group.id||groupSaving)return;
     const order=visibleGroupOrder(group),next=movedGroupSelection(order,groupOrderSelection.ids,direction);
-    if(next.some((value,i)=>value!==order[i]))saveGroupOrder(next);
+    if(next.some((value,i)=>value!==order[i]))saveGroupOrder(next,undefined,pinsAfterMove(next,[...groupOrderSelection.ids],groupMemberDraft?.groupId===group.id?groupMemberDraft.pinned:groupPinnedIds(group)));
   });
 }
 $('groupOrderExit').addEventListener('click',()=>{
@@ -651,12 +667,14 @@ async function saveGroupPins(pinned){
   const group=userGroups.find(g=>g.id===selectedGroup);
   if(!group||groupSaving)return;
   const order=visibleGroupOrder(group);
+  const byId=new Map(orderedDicts().map(d=>[d.id,d]));
+  const customOrder=!dictionaryOrderIsAlphabetical(order,new Set(pinned),byId);
   groupSaving=true;$('groupError').textContent='';
   try{
-    if(group.readonly){prefPinned=pinned;savePrefs(true);refreshDictUI(true)}
+    if(group.readonly){prefPinned=pinned;prefCustomOrder=customOrder;group.customOrder=customOrder;savePrefs(true);refreshDictUI(true)}
     else{
-      await groupRequest('/api/user-groups/order','PUT',{group:group.id,members:order,pinned});
-      group.pinned=pinned;group.members=order;
+      await groupRequest('/api/user-groups/order','PUT',{group:group.id,members:order,pinned,customOrder});
+      group.pinned=pinned;group.members=order;group.customOrder=customOrder;
     }
     groupPinEditing=null;groupPinCutoff=null;renderGroupRows();
   }catch(error){$('groupError').textContent=error.message}
@@ -665,10 +683,8 @@ async function saveGroupPins(pinned){
 $('groupOrderAlpha').addEventListener('click',()=>{
   const group=userGroups.find(g=>g.id===selectedGroup);if(!group||groupSaving)return;
   const order=visibleGroupOrder(group),pinnedSet=new Set(groupPinnedIds(group)),dicts=new Map(orderedDicts().map(d=>[d.id,d]));
-  const fixed=order.filter(id=>pinnedSet.has(id)),rest=order.filter(id=>!pinnedSet.has(id));
-  const collator=new Intl.Collator(window.wudictI18n.language,{sensitivity:'base',numeric:true});
-  rest.sort((a,b)=>collator.compare(dictLabel(dicts.get(a)||{id:a}),dictLabel(dicts.get(b)||{id:b}))||a.localeCompare(b));
-  const next=fixed.concat(rest);if(next.some((id,i)=>id!==order[i]))saveGroupOrder(next);
+  const next=sortedDictionaryIds(order,pinnedSet,dicts);
+  if(groupMemberDraft?.groupId===group.id?groupMemberDraft.customOrder:group.readonly?prefCustomOrder:group.customOrder)saveGroupOrder(next,undefined,undefined,false);
 });
 $('groupPinStart').addEventListener('click',beginGroupPinEdit);
 $('groupPinApply').addEventListener('click',()=>{
@@ -715,7 +731,6 @@ $("closeGroups").onclick=()=>{
 };
 $("groupEditor").addEventListener("close",()=>{
   cancelGroupOrderLongPress();groupOrderSelection=null;groupOrderSuppressClick=false;groupPinEditing=null;groupPinCutoff=null;
-  justCreatedGroup=null;
   if(groupEditorMode){groupEditorMode='';groupShowAllPreferred=groupSavedEditPreference;groupDraftMembers.clear();groupDraftFilter=null;groupDraftLinked=false;$('groupNameInline').value='';}
   $('editGroups').focus();
 });
@@ -737,7 +752,7 @@ async function applyGroupMemberDraft(){
   if(!group||!draft||draft.groupId!==group.id||groupSaving)return;
   groupSaving=true;$('groupError').textContent='';$('groupMemberApply').disabled=true;$('groupMemberCancel').disabled=true;
   try{
-    await groupRequest('/api/user-groups/membership','PUT',{group:group.id,members:draft.order.filter(id=>draft.members.has(id))});
+    await groupRequest('/api/user-groups/membership','PUT',{group:group.id,members:draft.order.filter(id=>draft.members.has(id)),pinned:draft.pinned.filter(id=>draft.members.has(id)),customOrder:draft.customOrder,manualOrder:draft.manualOrder});
     userGroups=await groupRequest('/api/user-groups','GET');groupMemberDraft=null;groupShowAllPreferred=false;
     refreshLivePicker();if(group.id===pickerGroup&&$('q').value.trim())doSearch();renderGroupOptions();renderGroupRows();
   }catch(error){$('groupError').textContent=error.message}
@@ -890,7 +905,7 @@ async function saveGroupNameEdit(){
       const filter=groupDraftFilter?{facet:groupDraftFilter.facet,value:groupDraftFilter.value}:null;
       const body={name:$('groupNameInline').value,filter,linked:!!filter&&groupDraftLinked};
       if(!groupDraftLinked)body.members=[...groupDraftMembers];
-      const group=await groupRequest('/api/user-groups','POST',body);selectedGroup=group.id;justCreatedGroup=group.id;
+      const group=await groupRequest('/api/user-groups','POST',body);selectedGroup=group.id;
     }else await groupRequest('/api/user-groups/name','PUT',{group:selectedGroup,name:$('groupNameInline').value,filter:groupDraftFilter,linked:groupDraftLinked});
     userGroups=await groupRequest('/api/user-groups','GET');
     groupEditorMode='';groupDraftMembers.clear();groupDraftFilter=null;groupDraftLinked=false;groupShowAllPreferred=false;
@@ -913,7 +928,6 @@ $('groupSelect').onchange=()=>{
 function groupSelectChanged(){
   window.wudictThemedSelects?.group?.sync();
   cancelGroupOrderLongPress();groupOrderSelection=null;groupOrderSuppressClick=false;groupPinEditing=null;groupPinCutoff=null;
-  justCreatedGroup=null;
   groupShowAllPreferred=false;groupActivePanel=null;
   $('groupControls').classList.remove('active');$('groupMembers').classList.remove('active');$('groupAvailable').classList.remove('active');
   groupAvailableListSearch.clear();groupMemberListSearch.clear();$('groupError').textContent='';renderGroupRows();

@@ -46,7 +46,11 @@ func TestSharedSearchMatchesHTTPAndNativeWithoutRouter(t *testing.T) {
 		t.Run(tc.mode+"/"+tc.format+"/"+tc.term, func(t *testing.T) {
 			q := url.Values{"q": {tc.term}, "mode": {tc.mode}, "format": {tc.format},
 				"dict": {e.ID}, "n": {tc.limit}, "hl": {tc.highlight}}
-			httpEvents := stream(t, s, "/api/search?"+q.Encode())
+			wireEvents := stream(t, s, "/api/search?"+q.Encode())
+			httpEvents := make([]SearchEvent, len(wireEvents))
+			for i, event := range wireEvents {
+				httpEvents[i] = searchEventFromStream(event)
+			}
 			request := searchRequestFromQuery(q)
 			request.Origin = "http://127.0.0.1:6888"
 			mux := s.mux
@@ -182,7 +186,12 @@ func TestSharedSearchCancellationAndEmitterFailure(t *testing.T) {
 func TestSharedSearchMorphology(t *testing.T) {
 	s := morphServer(t, map[string]string{"words.dsl": dslFile("Unlabelled", "know")})
 	events := collectLookup(t, s, SearchRequest{Query: "knew", Mode: "exact"})
-	morphs := morphMsgs(events)
+	var morphs []SearchEvent
+	for _, event := range events {
+		if event.T == "morph" {
+			morphs = append(morphs, event)
+		}
+	}
 	if len(morphs) != 1 || morphs[0].To != "know" || events[len(events)-1].T != "end" {
 		t.Fatalf("shared lookup lost morphology: %+v", events)
 	}

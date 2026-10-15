@@ -59,18 +59,18 @@ The macOS and Linux setups use `make` targets in a clone of the
 
     ## Installer
 
-    The installer's *Start wuDict at sign-in* task puts a shortcut to
-    `wudict.exe --no-browser` in the Startup folder. See
+    The installer's *Start wuDict2 at sign-in* task puts a shortcut to
+    `wuDict2.exe --no-browser` in the Startup folder. See
     [Windows installer](apps/windows.md).
 
     ## By hand
 
-    1. Put `wudict.exe` in a folder, e.g. `C:\tools\wudict\`.
+    1. Put `wuDict2.exe` in a folder, e.g. `C:\tools\wudict\`.
     2. <kbd>Win</kbd>+<kbd>R</kbd>, enter `shell:startup`.
-    3. Create a shortcut to `wudict.exe` in that folder, and add
+    3. Create a shortcut to `wuDict2.exe` in that folder, and add
        `--no-browser` to its target.
 
-    Started this way, `wudict.exe` shows a tray icon and logs to
+    Started this way, `wuDict2.exe` shows a tray icon and logs to
     `%LOCALAPPDATA%\wudict\wudict.log`. Sign out and in, then open
     [localhost:6888](http://localhost:6888).
 

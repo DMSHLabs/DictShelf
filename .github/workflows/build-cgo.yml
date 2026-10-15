@@ -7,14 +7,15 @@ name: Build+Release (cgo)
 # workflow artifacts only - it does not create a GitHub Release, so it never
 # collides with the purego release assets.
 #
-# C toolchains are preinstalled on all these GitHub-hosted images
-# (actions/runner-images): Ubuntu → gcc, macOS → Xcode/clang, Windows → gcc.
+# C toolchains are preinstalled on the Linux and macOS GitHub-hosted images
+# (actions/runner-images): Ubuntu → gcc, macOS → Xcode/clang. Windows is built
+# separately through build-windows.cmd so its artifacts include WebView2.
 
 on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Version stamp for the binaries (e.g. v0.1); blank = use latest tag"
+        description: "Version stamp for the binaries (e.g. wudict2-v0.12.0); blank = next version: +0.0.1 for a pre-release, +0.1.0 for a release"
         required: false
       prerelease:
         description: "Mark the release as a pre-release"
@@ -22,6 +23,10 @@ on:
         default: false
       draft:
         description: "Create the release as a draft (nothing is downloadable until it is published)"
+        type: boolean
+        default: false
+      publish_release:
+        description: "Publish build assets to a GitHub Release (otherwise keep them as Actions artifacts)"
         type: boolean
         default: false
 
@@ -32,8 +37,6 @@ jobs:
   build:
     name: ${{ matrix.goos }}-${{ matrix.goarch }}
     runs-on: ${{ matrix.runner }}
-    # windows/arm64 (experimental cgo path) may fail without sinking the run.
-    continue-on-error: ${{ matrix.experimental || false }}
     strategy:
       fail-fast: false
       matrix:
@@ -49,14 +52,11 @@ jobs:
               goarch: amd64,
               cc: "clang -arch x86_64",
             }
-          # ── Windows (amd64 native mingw gcc; arm64 via clang) ─
-          - { runner: windows-2022, goos: windows, goarch: amd64, ext: ".exe" }
-          # - { runner: windows-11-arm,   goos: windows, goarch: arm64, ext: ".exe", cc: "clang", experimental: true }
-
     steps:
       - name: Checkout
         uses: actions/checkout@v6
         with:
+          ref: releases
           fetch-depth: 0
 
       - name: Setup Go
@@ -74,24 +74,33 @@ jobs:
         run: |
           BINARY="wudict-${{ matrix.goos }}-${{ matrix.goarch }}-cgo${{ matrix.ext }}"
           VERSION="${{ inputs.tag }}"
-          # --tags so lightweight tags count too; --abbrev=0 yields the bare tag
-          # (v3.0) rather than v3.0-4-gdeadbee, which the installer's numeric
-          # VersionInfoVersion needs.
-          [ -z "$VERSION" ] && VERSION="$(git describe --tags --abbrev=0 2>/dev/null || echo dev)"
-          # Fail loudly instead of silently shipping 0.0.0 artifacts.
+          if [ -z "$VERSION" ]; then
+            # Blank field: the rule the release job below applies (D168) -
+            # a pre-release takes the next patch, a release the next minor,
+            # and a release another workflow already started keeps its tag -
+            # so the binary is stamped with the version its release carries.
+            if [ "${{ inputs.prerelease }}" = "true" ]; then
+              VERSION="$(sh tools/next-tag.sh --prerelease)"
+            else
+              VERSION="$(sh tools/next-tag.sh --release)"
+            fi
+          fi
+          # Fail loudly instead of silently shipping 0.0.0 artifacts. The
+          # fork's tags carry the wudict2- prefix, so they count as versions.
           case "$VERSION" in
-            v[0-9]*|[0-9]*) : ;;
+            v[0-9]*|wudict2-v[0-9]*|[0-9]*) : ;;
             *) echo "::warning title=Unversioned build::no usable tag found - stamping '$VERSION'; installers will be named 0.0.0" ;;
           esac
           echo "version: $VERSION"
+          # Pin the native target; Finder enforces LC_BUILD_VERSION per slice.
+          if [ "${{ matrix.goos }}" = darwin ]; then
+            export MACOSX_DEPLOYMENT_TARGET=12.0
+            export CGO_CFLAGS="-O2 -g -mmacosx-version-min=$MACOSX_DEPLOYMENT_TARGET"
+            export CGO_LDFLAGS="$CGO_CFLAGS"
+          fi
           go build -trimpath -tags sqlite_fts5 \
             -ldflags="-s -w -X github.com/wuweidict/wudict/internal/cli.Version=${VERSION}" \
             -o "${BINARY}" .
-
-      - name: Warn on experimental build failure
-        if: failure() && matrix.experimental
-        shell: bash
-        run: echo "::warning title=Experimental target failed::${{ matrix.goos }}/${{ matrix.goarch }} (cgo) failed to build - continuing. Use the purego build-release.yml binary for this target."
 
       - name: Upload artifact
         if: success()
@@ -111,6 +120,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          ref: releases
 
       - name: Download the darwin binaries
         uses: actions/download-artifact@v8
@@ -136,7 +147,7 @@ jobs:
           APP_BIN="$PWD/wudict" BUILD_DIR="$PWD/dist" sh tools/make-app.sh
           # ditto, not zip: it is the only archiver Apple guarantees keeps the
           # bundle's symlinks, xattrs and code signature intact.
-          # Versioned like every other asset (wudict-windows-x64-setup-3.7.5.exe),
+          # Versioned like every other asset (wudict2-windows-x64-setup-3.7.5.exe),
           # from the binary's own --version via the same helper make-app.sh
           # used, so the zip and the bundle inside it cannot disagree. Same
           # file-name rules as the APK: leading "v" dropped, "/" -> "_".
@@ -151,58 +162,66 @@ jobs:
           path: wudict-macos-universal-app-*.zip
           if-no-files-found: warn
 
-  # One Windows executable carries the CLI/server and its WebView2 window.
+  # Windows desktop and console CLI binaries are built separately.
   windows-installer:
-    name: Windows installer
-    needs: build
+    name: Windows desktop and installer
+    # Build on the native Windows runner through the same entry point used
+    # locally. That embeds the fork's WebView2 window in wuDict2.exe before the
+    # installer packages it; packaging the upstream-style CLI artifact from
+    # the matrix build would omit the desktop shell.
     runs-on: windows-2022
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-
-      - name: Download the windows binary
-        uses: actions/download-artifact@v8
         with:
-          path: artifacts
-          pattern: wudict-windows-*-cgo
-          merge-multiple: true
+          ref: releases
+          fetch-depth: 0
 
-      - name: Ensure Inno Setup 6
-        shell: pwsh
+      - name: Compute version
+        shell: bash
         run: |
-          # Preinstalled on the windows-2022 image, but pinning the run to that
-          # promise would make an image change a release outage. -Locate is the
-          # script's own compiler search, so CI carries no second copy of where
-          # Inno Setup might live.
-          Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
-          $iscc = .\tools\make-installer.ps1 -Locate
-          if ($iscc) { Write-Host "Inno Setup: $iscc" } else { choco install innosetup -y --no-progress }
+          VERSION="${{ inputs.tag }}"
+          if [ -z "$VERSION" ]; then
+            # The version this release carries (D168), the same one the build
+            # job stamps the binaries with and the release job tags it as.
+            if [ "${{ inputs.prerelease }}" = "true" ]; then
+              VERSION="$(sh tools/next-tag.sh --prerelease)"
+            else
+              VERSION="$(sh tools/next-tag.sh --release)"
+            fi
+          fi
+          # build-windows.cmd would otherwise name the setup file and its
+          # VersionInfo after the clone's last tag, which is the PREVIOUS
+          # release the moment the field above was blank or new.
+          echo "WUDICT_VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "building $VERSION"
 
-      - name: Compile the installer
-        shell: pwsh
-        run: |
-          $exe = 'artifacts\wudict-windows-amd64-cgo.exe'
-          if (-not (Test-Path -LiteralPath $exe)) {
-            Write-Host "::warning title=No installer::the windows/amd64 build did not produce a binary - skipping"
-            exit 0
-          }
-          # wudict.exe and dist\ in the repository root are exactly what the
-          # script defaults to, so it is called with no arguments - the same
-          # invocation `make win-installer` uses, and one less thing to drift.
-          Copy-Item -LiteralPath $exe -Destination 'wudict.exe' -Force
-          # Process-scoped, so a runner image whose default policy tightens
-          # cannot turn "the script is right there" into a release outage.
-          Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
-          .\tools\make-installer.ps1
+      - name: Build WebView2 desktop executable and installer
+        shell: cmd
+        run: build-windows.cmd release
 
-      - name: Upload artifact
+      - name: Upload desktop executable
         uses: actions/upload-artifact@v7
         with:
-          name: wudict-windows-installer
-          path: dist/wudict-windows-x64-setup*.exe
-          if-no-files-found: warn
+          name: wudict2-windows-x64
+          path: wuDict2.exe
+
+      - name: Upload command-line executable
+        uses: actions/upload-artifact@v7
+        with:
+          name: wudict2-windows-cli-x64
+          path: wuDict2-cli.exe
+          if-no-files-found: error
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v7
+        with:
+          name: wudict2-windows-installer
+          path: dist/wudict2-windows-x64-setup*.exe
+          if-no-files-found: error
 
   release:
+    if: ${{ inputs.publish_release }}
     needs: [build, macos-app, windows-installer]
     runs-on: ubuntu-latest
     env:
@@ -211,19 +230,48 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          fetch-depth: 0 # full history + tags so git describe works
+          ref: releases
+          fetch-depth: 0 # full history + tags so tools/next-tag.sh can pick the version
           persist-credentials: true
 
       - name: Resolve tag
         id: tag
         run: |
           TAG="${{ inputs.tag }}"
-          [ -z "$TAG" ] && TAG="$(git describe --tags --abbrev=0 2>/dev/null || true)"
           if [ -z "$TAG" ]; then
-            echo "::error::No tag input and no existing git tag to fall back on." >&2
-            exit 1
+            # Blank field: tools/next-tag.sh decides, the same rule the build
+            # job stamped the binaries with (D168). Both read the same clone
+            # and neither creates anything, so the two cannot disagree.
+            if [ "${{ inputs.prerelease }}" = "true" ]; then
+              TAG="$(sh tools/next-tag.sh --prerelease)"
+            else
+              TAG="$(sh tools/next-tag.sh --release)"
+            fi
           fi
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Create git tag if missing
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          # Without this the release step would let `gh release create` mint
+          # the tag itself, and it mints it on the repository's DEFAULT branch
+          # rather than on the commit built here. A tag on another commit is a
+          # version line the next workflow of this release reads as moved, so
+          # it would bump past it and split the release in two.
+          # --exit-code with the full ref, not `| grep -q "$TAG"`: an unanchored
+          # grep for "v0.1" matches an existing "v0.10".
+          if git ls-remote --exit-code --tags origin "refs/tags/${TAG}" > /dev/null 2>&1; then
+            echo "Tag ${TAG} already exists - skipping."
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            # The message keeps the shape of every hand-made tag in this
+            # repository (wuDict2 v0.11.1), so the two are one line in a log.
+            git tag -a "${TAG}" -m "wuDict2 ${TAG#wudict2-}"
+            git push origin "${TAG}"
+            echo "Tag ${TAG} pushed."
+          fi
 
       # Notes are rendered from the commit history by cliff.toml, through the
       # same tools/release-notes.sh that `make release-notes TAG=v3.8.0` runs -

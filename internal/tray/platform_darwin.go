@@ -48,6 +48,9 @@ func GUILaunched() bool {
 // in the executable header rather than by how the process was started.
 func DetachConsole() {}
 
+// ShowConsole is a Windows concern: macOS app bundles have no console window.
+func ShowConsole() {}
+
 // Alert shows a modal dialog. It is the last channel a GUI launch has:
 // LSUIElement means there is no Dock icon either, so nothing else on screen
 // would say anything at all. The dialog belongs to osascript, not to us, which

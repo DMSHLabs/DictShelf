@@ -12,20 +12,21 @@ import (
 	_ "github.com/wuweidict/wudict/internal/format/wmd"
 )
 
-func waitIndexPreparation(t *testing.T, r *Registry) {
+func waitNewDictionaryIndexing(t *testing.T, r *Registry) {
 	t.Helper()
 	deadline := time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
-		rec, _ := r.prefs.data()
-		if len(rec.DSLPending) == 0 {
+		_, _ = r.prefs.data() // observe the persisted state after the worker's write
+		queue, queueExists := r.jobs.status("initial-index-queue")
+		if !queueExists || !queue.Running {
 			return
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	t.Fatal("new DSL preparation did not finish")
+	t.Fatal("new dictionary indexing did not finish")
 }
 
-func TestIndexDefaultsApplyToNewDSLAndMarkdownOnly(t *testing.T) {
+func TestNewDictionariesGetQueuedIndexWithOptionalDefaults(t *testing.T) {
 	isolatedDBDir(t)
 	dir := t.TempDir()
 	state := filepath.Join(t.TempDir(), StateFile)
@@ -50,7 +51,7 @@ func TestIndexDefaultsApplyToNewDSLAndMarkdownOnly(t *testing.T) {
 	if err := reg.Rescan(); err != nil {
 		t.Fatal(err)
 	}
-	waitIndexPreparation(t, reg)
+	waitNewDictionaryIndexing(t, reg)
 	seen := 0
 	for _, e := range reg.all() {
 		if got := s.currentFeatures(e); !got.Contains || !got.FullText || e.indexBlocked() {
@@ -65,7 +66,7 @@ func TestIndexDefaultsApplyToNewDSLAndMarkdownOnly(t *testing.T) {
 	if err := reg.Rescan(); err != nil {
 		t.Fatal(err)
 	}
-	waitIndexPreparation(t, reg)
+	waitNewDictionaryIndexing(t, reg)
 	for _, e := range reg.all() {
 		if got := s.currentFeatures(e); !got.Contains || !got.FullText {
 			t.Fatal("existing dictionary changed", e.Path, got)

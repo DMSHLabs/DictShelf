@@ -114,5 +114,6 @@ func (s *Server) handleGroupsPage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache")
 	page := bytes.ReplaceAll(groupsPage, []byte("{{PRESETS}}"), []byte(s.pagePresetLinks()))
+	page = bytes.ReplaceAll(page, []byte("{{WORKSPACECSS}}"), []byte(assetTag(workspaceCSS)))
 	_, _ = w.Write([]byte(renderUI(string(page), s.reg.prefs.Language())))
 }

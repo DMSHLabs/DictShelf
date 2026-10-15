@@ -17,8 +17,16 @@ name: Build Android APK
 on:
   workflow_dispatch:
     inputs:
+      branch:
+        description: "Source branch to build"
+        type: choice
+        options:
+          - releases
+          - dev
+        default: releases
+        required: true
       tag:
-        description: "Tag for the release (e.g., v0.1) or use latest tag if empty"
+        description: "Release tag (e.g. wudict2-v0.12.0); blank = next version: +0.0.1 for a pre-release, +0.1.0 for a release"
         required: false
       prerelease:
         description: "Mark the release as a pre-release"
@@ -28,6 +36,10 @@ on:
         description: "Create the release as a draft (nothing is downloadable until it is published)"
         type: boolean
         default: false
+      publish_release:
+        description: "Publish the APK to a GitHub Release (otherwise keep it as an Actions artifact)"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -35,7 +47,7 @@ permissions:
 jobs:
   build-and-release:
     name: Build & Release APK
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       signed: ${{ steps.signing.outputs.enabled }}
     env:
@@ -49,6 +61,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
+          ref: ${{ inputs.branch }}
           fetch-depth: 0 # versionName and versionCode both come from git history
 
       - name: Setup Go
@@ -57,14 +70,14 @@ jobs:
           go-version-file: go.mod
 
       - name: Setup JDK 21
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "21"
           cache: gradle
 
       - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
         with:
           # The action's default is `tools platform-tools`, and `tools` - the
           # old SDK Tools package - was retired from Google's repository, so
@@ -78,15 +91,22 @@ jobs:
           sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0" "ndk;30.0.15729638"
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/30.0.15729638" >> "$GITHUB_ENV"
 
-      - name: Build the Go server as libwudict.so (cgo - FTS5 + speex)
-        run: make android-go
-
       - name: Compute version
         id: ver
         run: |
           VERSION="${{ inputs.tag }}"
           if [ -z "$VERSION" ]; then
-            VERSION="$(git describe --tags --always --abbrev=0 2>/dev/null || echo dev)"
+            # A blank field takes the next version, not the last one:
+            # tools/next-tag.sh owns the rule (D168) - a pre-release takes the
+            # next patch (0.11.1 → 0.11.2), a release the next minor with the
+            # patch reset (0.11.2 → 0.12.0) - and it reuses the tag an earlier
+            # workflow of the SAME release created, so Android, Windows and
+            # the native builds land in one release instead of one each.
+            if [ "${{ inputs.prerelease }}" = "true" ]; then
+              VERSION="$(sh tools/next-tag.sh --prerelease)"
+            else
+              VERSION="$(sh tools/next-tag.sh --release)"
+            fi
           fi
 
           # versionCode is NOT passed: app/build.gradle derives it from the
@@ -96,6 +116,13 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "TAG=$VERSION" >> "$GITHUB_ENV"
           echo "building $VERSION (versionCode = $(git rev-list --count HEAD))"
+
+      - name: Build the Go server as libwudict.so (cgo - FTS5 + speex)
+        # VERSION reaches the .so through the Makefile's -X stamp, so the
+        # server reports the version the APK is labelled with. Left to the
+        # Makefile it would report the clone's last tag instead, which is a
+        # different number the moment the field above was blank or new.
+        run: make android-go VERSION="$TAG"
 
       - name: Configure signing
         id: signing
@@ -168,8 +195,14 @@ jobs:
       #     name: ${{ env.APK }}
       #     path: ${{ env.APK }}
 
+      - name: Upload APK for testing
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.signing.outputs.enabled == 'true' && 'wudict2-android-signed-test' || 'wudict2-android-debug-test' }}
+          path: ${{ env.APK }}
+
       - name: Create git tag if missing
-        if: ${{ steps.signing.outputs.enabled == 'true' }}
+        if: ${{ inputs.publish_release && steps.signing.outputs.enabled == 'true' }}
         run: |
           # --exit-code with the full ref, not `| grep -q "$TAG"`: an unanchored
           # grep for "v0.1" matches an existing "v0.10" and silently skips
@@ -179,13 +212,15 @@ jobs:
           else
             git config user.name "github-actions[bot]"
             git config user.email "github-actions[bot]@users.noreply.github.com"
-            git tag -a "${TAG}" -m "Release ${TAG}"
+            # The message keeps the shape of every hand-made tag in this
+            # repository (wuDict2 v0.11.1), so the two are one line in a log.
+            git tag -a "${TAG}" -m "wuDict2 ${TAG#wudict2-}"
             git push origin "${TAG}"
             echo "Tag ${TAG} pushed."
           fi
 
       - name: Create or update GitHub release
-        if: ${{ steps.signing.outputs.enabled == 'true' }}
+        if: ${{ inputs.publish_release && steps.signing.outputs.enabled == 'true' }}
         # The two dispatch checkboxes. They apply when the release is CREATED;
         # on one that already exists they are only ever ADDED, never cleared.
         # Three workflows publish into the same tag, so the second to arrive

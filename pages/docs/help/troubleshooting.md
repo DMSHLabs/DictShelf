@@ -78,13 +78,12 @@ In the browser's network panel, find the failing request to
 `/res/<dictionary id>/<path>`. A `404` means the dictionary lacks the file;
 `<path>` is where a [resource override](../dictionaries/override.md) goes.
 
-## The first searches are slow, and the CPU is busy
+## The CPU is busy indexing dictionaries
 
-wudict is indexing the dictionaries, once each, one at a time, in the
-background. Indexing one dictionary uses one CPU core.
-[`INDEX_WORKERS`](../reference/configuration.md#index_workers) indexes several
-at once; [`AUTO_INDEX = "off"`](../reference/configuration.md#auto_index)
-turns indexing off.
+wudict indexes new dictionaries in the background. Indexing one dictionary
+uses one CPU core. [`INDEX_WORKERS`](../reference/configuration.md#index_workers)
+sets how many dictionaries can be indexed at once. Search does not start an
+index job.
 
 ## Some dictionaries are reported as not searched
 

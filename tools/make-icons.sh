@@ -13,8 +13,9 @@
 # Outputs are COMMITTED, so `make build` needs no image toolchain. Run
 # `make icons` by hand when the mark changes.
 #
-#   internal/tray/icons/tray.png           32x32 colour  — Windows, Linux
-#   internal/tray/icons/tray-template.png  44x44 mono    — macOS @2x template
+#   internal/tray/icons/tray.png           32x32 colour  — Linux (upstream mark)
+#   internal/tray/icons/tray-windows.png   32x32 colour  — Windows (wuDict2)
+#   internal/tray/icons/tray-template.png  44x44 mono    — macOS (wuDict2 @2x)
 #
 # …and the mark the Android app and its Play listing wear, which is the same
 # mark with this fork's digit in it:
@@ -35,29 +36,53 @@ root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 src="$root/internal/server/web/favicon.svg"
 out="$root/internal/tray/icons"
 
-command -v rsvg-convert >/dev/null 2>&1 || {
-	echo "make-icons: rsvg-convert not found (brew install librsvg)" >&2
-	exit 1
-}
 [ -f "$src" ] || { echo "make-icons: missing $src" >&2; exit 1; }
 
 mkdir -p "$out"
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
-# The template variant: same geometry, no tile, ink in black. Derived from the
-# source by substitution so rule (3) of the mark's geometry (even strokes on odd
-# centres) survives untouched — nothing here moves a coordinate.
-sed -e '/<rect /d' -e 's/stroke="#fff"/stroke="#000"/' "$src" > "$tmp/template.svg"
+magick_bin=${MAGICK:-}
+if [ -z "$magick_bin" ]; then
+	if command -v magick >/dev/null 2>&1; then
+		magick_bin=$(command -v magick)
+	elif command -v magick.exe >/dev/null 2>&1; then
+		magick_bin=$(command -v magick.exe)
+	fi
+fi
 
-rsvg-convert -w 32 -h 32 -o "$out/tray.png"          "$src"
-rsvg-convert -w 44 -h 44 -o "$out/tray-template.png" "$tmp/template.svg"
+render() { # width height source output
+	if command -v rsvg-convert >/dev/null 2>&1; then
+		rsvg-convert -w "$1" -h "$2" -o "$4" "$3"
+	else
+		[ -n "$magick_bin" ] || {
+			echo "make-icons: install librsvg (rsvg-convert) or ImageMagick (magick)" >&2
+			exit 1
+		}
+		if case "$magick_bin" in *.exe) true ;; *) false ;; esac && command -v cygpath >/dev/null 2>&1; then
+			source_path=$(cygpath -w "$3")
+			output_path=$(cygpath -w "$4")
+			"$magick_bin" -background none "$source_path" -resize "${1}x${2}!" "PNG32:$output_path"
+		else
+			"$magick_bin" -background none "$3" -resize "${1}x${2}!" "PNG32:$4"
+		fi
+	fi
+}
 
-for f in tray.png tray-template.png; do
-	[ -s "$out/$f" ] || { echo "make-icons: $f is empty" >&2; exit 1; }
-	printf '%s  ' "$f"
-	ls -l "$out/$f" | awk '{print $5 " bytes"}'
-done
+run_python3() {
+	if [ -n "${PYTHON3:-}" ]; then
+		"$PYTHON3" "$@"
+	elif command -v python3 >/dev/null 2>&1; then
+		python3 "$@"
+	elif command -v py.exe >/dev/null 2>&1; then
+		py.exe -3 "$@"
+	elif command -v py >/dev/null 2>&1; then
+		py -3 "$@"
+	else
+		echo "make-icons: Python 3 is required to package .icns and .ico files" >&2
+		exit 1
+	fi
+}
 
 # ---- this fork's own launcher mark (wuDict2) ------------------------------
 # wuDict2 installs BESIDE the upstream app, so its icon has to say which of the
@@ -97,8 +122,21 @@ done
 tile=$(sed -n 's/.*<rect[^>]*fill="\(#[0-9a-fA-F]*\)".*/\1/p' "$src")
 [ -n "$tile" ] || { echo "make-icons: no tile colour in $src" >&2; exit 1; }
 digit='M4 20A3 3 0 1 1 10 20L4 25H11'
-mark=$(sed -e '/<rect /d' \
-	-e "s|</g>|<path d=\"$digit\" stroke-width=\"2\" stroke-linejoin=\"round\"/></g>|" "$src")
+fork="$tmp/wudict2.svg"
+sed -e "s|</g>|<path d=\"$digit\" stroke-width=\"2\" stroke-linejoin=\"round\"/></g>|" "$src" > "$fork"
+mark=$(sed -e '/<rect /d' "$fork")
+
+# Windows and macOS are fork-specific products. Keep Linux's shared image
+# untouched; render the digit-bearing mark into the platform assets instead.
+sed -e '/<rect /d' -e 's/stroke="#fff"/stroke="#000"/' "$fork" > "$tmp/template.svg"
+render 32 32 "$src" "$out/tray.png"
+render 32 32 "$fork" "$out/tray-windows.png"
+render 44 44 "$tmp/template.svg" "$out/tray-template.png"
+for f in tray.png tray-windows.png tray-template.png; do
+	[ -s "$out/$f" ] || { echo "make-icons: $f is empty" >&2; exit 1; }
+	printf '%s  ' "$f"
+	ls -l "$out/$f" | awk '{print $5 " bytes"}'
+done
 
 play="$root/fastlane/metadata/android/en-US/images"
 mkdir -p "$play"
@@ -112,7 +150,7 @@ $mark
   </g>
 </svg>
 EOF
-	rsvg-convert -w "$1" -h "$2" -o "$6" "$tmp/play.svg"
+	render "$1" "$2" "$tmp/play.svg" "$6"
 }
 
 render_mark 512  512 10.66667 85.3333 85.3333 "$play/icon.png"
@@ -125,58 +163,64 @@ for f in icon.png featureGraphic.png; do
 done
 
 # ---- the macOS app icon (P85) -------------------------------------------
-# Same mark, same rule: rendered, never redrawn. Full-bleed, keeping the tile's
+# Same wuDict2 mark, same rule: rendered, never redrawn. Full-bleed, keeping the tile's
 # own rx=7/32 corner — Apple's squircle-with-margins grid would mean moving
 # coordinates, which D70 forbids, and the tile already reads as an app icon at
 # every size.
 #
-# iconutil is macOS-only, so a Linux contributor regenerating the tray PNGs
-# gets a note rather than a failure; wudict.icns is committed, so nothing that
-# builds needs this branch.
+# Prefer Apple's iconutil where available. Else pack the same PNG iconset into
+# the standard ICNS container; this lets Windows/Linux maintainers regenerate
+# the committed app icon from the shared mark too.
 icns="$root/packaging/darwin/wudict.icns"
-if ! command -v iconutil >/dev/null 2>&1; then
-	echo "make-icons: iconutil not found — skipped $icns (macOS only; the committed copy is unchanged)" >&2
-	exit 0
-fi
-
 set -- 16 icon_16x16 32 icon_16x16@2x 32 icon_32x32 64 icon_32x32@2x \
        128 icon_128x128 256 icon_128x128@2x 256 icon_256x256 512 icon_256x256@2x \
        512 icon_512x512 1024 icon_512x512@2x
 mkdir -p "$tmp/wudict.iconset" "$(dirname "$icns")"
 while [ $# -gt 0 ]; do
-	rsvg-convert -w "$1" -h "$1" -o "$tmp/wudict.iconset/$2.png" "$src"
+	render "$1" "$1" "$fork" "$tmp/wudict.iconset/$2.png"
 	shift 2
 done
 
-iconutil -c icns -o "$icns" "$tmp/wudict.iconset"
+if command -v iconutil >/dev/null 2>&1; then
+	iconutil -c icns -o "$icns" "$tmp/wudict.iconset"
+else
+	run_python3 - "$tmp/wudict.iconset" "$icns" <<'PY'
+import os, struct, sys
+src, out = sys.argv[1:]
+images = [("icon_16x16.png", b"icp4"), ("icon_16x16@2x.png", b"icp5"),
+          ("icon_32x32@2x.png", b"icp6"), ("icon_128x128.png", b"ic07"),
+          ("icon_256x256.png", b"ic08"), ("icon_512x512.png", b"ic09"),
+          ("icon_512x512@2x.png", b"ic10")]
+chunks = []
+for name, kind in images:
+    data = open(os.path.join(src, name), "rb").read()
+    chunks.append(kind + struct.pack(">I", len(data) + 8) + data)
+body = b"".join(chunks)
+with open(out, "wb") as f:
+    f.write(b"icns" + struct.pack(">I", len(body) + 8) + body)
+PY
+fi
 [ -s "$icns" ] || { echo "make-icons: wudict.icns is empty" >&2; exit 1; }
 printf 'wudict.icns  '
 ls -l "$icns" | awk '{print $5 " bytes"}'
 
 # ---- the Windows app icon (P86) -----------------------------------------
-# Same mark, same rule. An .ico is a directory of images; since Vista each
+# Same wuDict2 mark, same rule. An .ico is a directory of images; since Vista each
 # entry may be a PNG verbatim, so the container is a 6-byte header plus one
 # 16-byte record per size and needs no image library to assemble — python3
 # (already required by nothing else here, but present on every dev machine
 # that has the Xcode tools) packs it in a dozen lines.
 #
-# The installer uses this for the Setup icon, the Start-menu shortcut and the
-# .mdx/.dsl/.slob/.bgl file type. The wudict.exe binary itself still shows
-# Explorer's generic icon: embedding one needs a PE resource (.syso), which
-# means committing a binary blob and a resource compiler — deliberately not
-# done, see D76.
+# The installer uses this for Setup, shortcuts and dictionary files. The same
+# ICO is embedded into the Windows/amd64 executable by packaging/windows/wudict.rc.
 ico="$root/packaging/windows/wudict.ico"
-command -v python3 >/dev/null 2>&1 || {
-	echo "make-icons: python3 not found — skipped $ico (the committed copy is unchanged)" >&2
-	exit 0
-}
 
 mkdir -p "$tmp/ico" "$(dirname "$ico")"
 for s in 16 32 48 64 128 256; do
-	rsvg-convert -w "$s" -h "$s" -o "$tmp/ico/$s.png" "$src"
+	render "$s" "$s" "$fork" "$tmp/ico/$s.png"
 done
 
-python3 - "$tmp/ico" "$ico" <<'PY'
+run_python3 - "$tmp/ico" "$ico" <<'PY'
 import struct, sys, os
 srcdir, out = sys.argv[1], sys.argv[2]
 sizes = [16, 32, 48, 64, 128, 256]
@@ -195,3 +239,23 @@ PY
 [ -s "$ico" ] || { echo "make-icons: wudict.ico is empty" >&2; exit 1; }
 printf 'wudict.ico   '
 ls -l "$ico" | awk '{print $5 " bytes"}'
+
+# Keep the app/window PE icon in sync with the ICO. The resource compiler is
+# only available on Windows; the committed, OS-filtered .syso is the build
+# input on every Windows build and is also what Android builds safely ignore.
+windres_bin=${WINDRES:-}
+if [ -z "$windres_bin" ] && command -v windres >/dev/null 2>&1; then
+	windres_bin=$(command -v windres)
+fi
+if [ -z "$windres_bin" ] && [ -n "${GCC_PATH:-}" ]; then
+	compiler_dir=$(dirname -- "$GCC_PATH")
+	for candidate in "$compiler_dir/windres.exe" "$compiler_dir/windres"; do
+		[ -x "$candidate" ] && { windres_bin=$candidate; break; }
+	done
+fi
+if [ -n "$windres_bin" ]; then
+	(cd "$root" && "$windres_bin" -F pe-x86-64 -i packaging/windows/wudict.rc -o wudict_windows_amd64.syso)
+	echo "wudict_windows_amd64.syso regenerated"
+else
+	echo "make-icons: windres not found — run the resource command in packaging/windows/wudict.rc to refresh the Windows executable icon" >&2
+fi

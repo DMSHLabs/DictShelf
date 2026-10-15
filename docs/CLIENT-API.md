@@ -77,6 +77,8 @@ Lists what is available. Call it **once at startup**, not per lookup.
   but re-resolve by `name` if it ever 404s: ids are derived from the path.
 - `caps` — which modes this dictionary can answer. Asking for an unsupported
   mode is not an error; that dictionary is simply skipped (`"skipped":true`).
+- `selfIndexed` — the source format provides exact and prefix lookup through
+  its own index, so a client should not offer a duplicate headword index.
 - Other fields exist (paths, sizes). They are for the desktop panel; ignore them.
 - `total` on `begin` is the number of `dict` frames to expect.
 - This stream has **no error frame and no per-row error field**: a dictionary

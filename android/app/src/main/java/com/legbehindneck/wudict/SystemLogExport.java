@@ -6,6 +6,7 @@ package com.legbehindneck.wudict;
 import android.app.Activity;
 import android.content.Intent;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Environment;
 import android.provider.DocumentsContract;
 import android.widget.Toast;
@@ -53,7 +54,12 @@ final class SystemLogExport {
                         SystemLog.warn("wudict", "server log unavailable during export", e);
                         snapshot.write(("wuDict2 System Log\nServer log unavailable: " + e.getClass().getSimpleName() + "\n").getBytes(StandardCharsets.UTF_8));
                     }
-                    snapshot.write("\n--- Android (UTC) ---\n".getBytes(StandardCharsets.UTF_8));
+                    snapshot.write(("\n--- Android environment ---\n"
+                            + "App: " + BuildConfig.VERSION_NAME + "\n"
+                            + "Android: " + Build.VERSION.RELEASE + " (SDK " + Build.VERSION.SDK_INT + ")\n"
+                            + "Build: " + Build.DISPLAY + "\n"
+                            + "Device: " + Build.MANUFACTURER + " " + Build.MODEL + "\n"
+                            + "\n--- Android events (UTC) ---\n").getBytes(StandardCharsets.UTF_8));
                     snapshot.write(SystemLog.snapshot());
                     byte[] output = snapshot.toByteArray();
                     if (output.length == 0) throw new java.io.IOException("Diagnostic snapshot is empty");

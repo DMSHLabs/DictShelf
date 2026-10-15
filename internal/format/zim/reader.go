@@ -22,7 +22,9 @@ import (
 // single dirent read each, and by then every target headword they name has
 // already been emitted.
 type Reader struct {
-	d *Dict
+	d             *Dict
+	headwordsOnly bool
+	scanPos       int
 
 	articles  []articleRef
 	pos       int
@@ -37,11 +39,29 @@ type articleRef struct {
 }
 
 func NewReader(path string) (*Reader, error) {
+	return newReader(path, false)
+}
+
+// NewHeadwordReader prepares the searchable title list without decompressing
+// article clusters. The prepared database is only an index; article bodies
+// continue to come from the original ZIM file.
+func NewHeadwordReader(path string) (*Reader, error) {
+	return newReader(path, true)
+}
+
+func newReader(path string, headwordsOnly bool) (*Reader, error) {
 	d, err := Open(path)
 	if err != nil {
 		return nil, err
 	}
-	r := &Reader{d: d}
+	r := &Reader{d: d, headwordsOnly: headwordsOnly}
+	if headwordsOnly {
+		// The path-pointer list is already sorted and the title index needs no
+		// cluster reads. Walk it in place instead of retaining millions of
+		// article references or sorting them in memory.
+		r.scanPos = d.lo
+		return r, nil
+	}
 	for i := d.lo; i < d.hi; i++ {
 		de, err := d.c.entry(i)
 		if err != nil {
@@ -68,7 +88,41 @@ func NewReader(path string) (*Reader, error) {
 
 func (r *Reader) Meta() dict.Meta { return r.d.Meta() }
 
+// ExtraMeta marks the prepared database as a title-only ZIM index. The server
+// uses this to reopen the native source for article bodies after searching it.
+func (r *Reader) ExtraMeta() map[string]string {
+	if r.headwordsOnly {
+		return map[string]string{"index_kind": "headwords"}
+	}
+	return nil
+}
+
 func (r *Reader) Next() (dict.Entry, error) {
+	if r.headwordsOnly {
+		for r.scanPos < r.d.hi {
+			i := r.scanPos
+			r.scanPos++
+			de, err := r.d.c.entry(i)
+			if err != nil {
+				return dict.Entry{}, err
+			}
+			if de.isRedirect() {
+				_, tgt, err := r.d.c.resolve(i)
+				if err != nil || !r.d.c.htmlMIME[tgt.mimetype] {
+					continue
+				}
+				hw, to := de.headword(), tgt.headword()
+				if hw == "" || hw == to {
+					continue
+				}
+				return dict.Entry{Headwords: []string{hw}, LinkTo: to}, nil
+			}
+			if r.d.c.htmlMIME[de.mimetype] {
+				return dict.Entry{Headwords: []string{de.headword()}, Kind: dict.BodyHTML}, nil
+			}
+		}
+		return dict.Entry{}, io.EOF
+	}
 	for r.pos < len(r.articles) {
 		a := r.articles[r.pos]
 		r.pos++

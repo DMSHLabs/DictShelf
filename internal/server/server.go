@@ -20,6 +20,7 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -33,6 +34,7 @@ import (
 	"github.com/wuweidict/wudict/internal/fsx"
 	"github.com/wuweidict/wudict/internal/ftsq"
 	"github.com/wuweidict/wudict/internal/hilite"
+	"github.com/wuweidict/wudict/internal/htmlref"
 	"github.com/wuweidict/wudict/internal/intake"
 	"github.com/wuweidict/wudict/internal/lang"
 	"github.com/wuweidict/wudict/internal/logx"
@@ -65,6 +67,9 @@ var browseHTML = webAsset(browseHTMLSrc, htmlAsset) // the page-by-page headword
 //go:embed web/setup.css
 var setupCSSSrc []byte
 var setupCSS = webAsset(setupCSSSrc, cssAsset) // palette and controls shared by setup.html and lemmas.html
+
+//go:embed web/workspace.css
+var workspaceCSS []byte // shared full-screen frame for the app's work surfaces
 
 //go:embed web/frame.js
 var frameJSSrc []byte
@@ -117,6 +122,12 @@ var articleFindJS []byte // search within loaded articles
 //go:embed web/list-search.js
 var listSearchJS []byte // reusable search and filter controls for lists
 
+//go:embed web/headword-control.js
+var headwordControlJS []byte // shared search controls for Browse and Wildcards
+
+//go:embed web/headword-control.css
+var headwordControlCSS []byte // shared layout and appearance for headword controls
+
 //go:embed web/examples.js
 var examplesJS []byte // example folding: marks the lines that hold nothing but examples
 
@@ -153,6 +164,16 @@ type Server struct {
 	// DesktopExit asks the owning desktop process to stop its HTTP server and
 	// tray. Nil for Android, tests, and hosts without a desktop Exit action.
 	DesktopExit func()
+
+	// AutoIndex is retained for compatibility with the shared UI API; the
+	// wuDict2 host leaves it disabled and prepares indexes only on explicit action.
+	AutoIndex bool
+
+	// First-run Windows data migration is offered on the setup page after it
+	// has loaded. The host supplies filesystem operations; other platforms leave
+	// these callbacks nil.
+	FirstRunMigrationStatus func() FirstRunMigration
+	ApplyFirstRunMigration  func(string) error
 
 	// indexOnce caches the substitutions index.html needs that never change
 	// after startup ({{VERSION}} in the About box, the {{FRAMEJS}}, {{PICKJS}} and {{SPEAKJS}} hashes,
@@ -211,13 +232,6 @@ type Server struct {
 	// reported, so the warning states the fact once instead of on every
 	// article that references the file.
 	nulSeen sync.Map
-
-	// AutoIndex, when true (config AUTO_INDEX=on, the default), prepares a
-	// dictionary's headword index the first time it is searched - silently,
-	// in the background - so accent-insensitive search works on the next
-	// query without the user ever asking. The heavier indexes (contains,
-	// full-text) and media stay opt-in per dictionary.
-	AutoIndex bool
 
 	// BrowserExtensions optionally pins which extension origins may read the
 	// client API cross-origin (config BROWSER_EXTENSIONS). Empty = any
@@ -327,6 +341,16 @@ func New(reg *Registry) *Server {
 		s.mux.HandleFunc(rt.Method+" "+rt.Pattern, h)
 	}
 	return s
+}
+
+// RefreshMigratedUserFiles makes copied state, group rules and styles visible
+// immediately without restarting the desktop server.
+func (s *Server) RefreshMigratedUserFiles() {
+	s.reg.RefreshPrefs()
+	s.groups.refresh()
+	for _, file := range s.styles {
+		file.refresh()
+	}
 }
 
 // ServerHeader is the value wudict answers with (plus its version), and
@@ -478,6 +502,7 @@ func (s *Server) basePage() []byte {
 		page := strings.ReplaceAll(string(indexHTML), "{{VERSION}}", v)
 		page = strings.ReplaceAll(page, "{{FRAMEJS}}", assetTag(frameJS))
 		page = strings.ReplaceAll(page, "{{APPCSS}}", assetTag(appCSS))
+		page = strings.ReplaceAll(page, "{{WORKSPACECSS}}", assetTag(workspaceCSS))
 		page = strings.ReplaceAll(page, "{{HISTORYCSS}}", assetTag(historyCSS))
 		page = strings.ReplaceAll(page, "{{HISTORYJS}}", assetTag(historyJS))
 		page = strings.ReplaceAll(page, "{{GROUPCSS}}", assetTag(groupEditorCSS))
@@ -488,6 +513,8 @@ func (s *Server) basePage() []byte {
 		page = strings.ReplaceAll(page, "{{EXAMPLESJS}}", assetTag(examplesJS))
 		page = strings.ReplaceAll(page, "{{ARTICLEFINDJS}}", assetTag(articleFindJS))
 		page = strings.ReplaceAll(page, "{{LISTSEARCHJS}}", assetTag(listSearchJS))
+		page = strings.ReplaceAll(page, "{{HEADWORDJS}}", assetTag(headwordControlJS))
+		page = strings.ReplaceAll(page, "{{HEADWORDCSS}}", assetTag(headwordControlCSS))
 		// The role stylesheet for articles wudict writes itself
 		// (internal/artmark). It is a floor under BOTH article surfaces, so
 		// it is substituted once here and index.html hands it to the shadow
@@ -594,6 +621,7 @@ func setupPage(dirs []string, serving int, presetLinks string, language string) 
 		})
 	}
 	page := strings.ReplaceAll(strings.ReplaceAll(setupHTML, "{{INTRO}}", intro), "{{CSS}}", cssTag)
+	page = strings.ReplaceAll(page, "{{WORKSPACECSS}}", assetTag(workspaceCSS))
 	return strings.ReplaceAll(page, "{{PRESETS}}", presetLinks)
 }
 
@@ -613,6 +641,7 @@ func (s *Server) handleLemmasPage(w http.ResponseWriter, r *http.Request) {
 	// request rather than precomputed: the page carries {{T:…}} keys and is
 	// served in the reader's language.
 	page := bytes.ReplaceAll(lemmasHTML, []byte("{{CSS}}"), []byte(cssTag))
+	page = bytes.ReplaceAll(page, []byte("{{WORKSPACECSS}}"), []byte(assetTag(workspaceCSS)))
 	_, _ = io.WriteString(w, renderUI(string(bytes.ReplaceAll(page, []byte("{{PRESETS}}"), []byte(s.pagePresetLinks()))), s.reg.prefs.Language()))
 }
 
@@ -672,6 +701,17 @@ func (s *Server) handleSetupSync(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	raw := strings.TrimSpace(q.Get("path"))
 	save, _ := queryFlag(q, "save")
+	diagnostics := save && q.Get("diagnostics") == "1"
+	phaseStart := time.Now()
+	traceStage := func(stage string, count int) {
+		if diagnostics {
+			logx.System("folder setup stage=%q elapsed=%s dictionaries=%d", stage, time.Since(phaseStart).Round(time.Millisecond), count)
+		}
+		phaseStart = time.Now()
+	}
+	if diagnostics {
+		logx.System("folder setup start folders=%d", len(q["path"]))
+	}
 	// tri-state: absent leaves the setting alone, on turns the library on, off
 	// turns it off - clearing the checkbox must be able to undo an earlier yes
 	useCached, useCachedSent := queryFlag(q, "useCached")
@@ -706,6 +746,7 @@ func (s *Server) handleSetupSync(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	paths, err := dict.Discover(dir)
+	traceStage("validate-first-folder", len(paths))
 	if err != nil {
 		writeJSON(w, map[string]any{"path": dir, "error": err.Error()})
 		return
@@ -723,6 +764,7 @@ func (s *Server) handleSetupSync(w http.ResponseWriter, r *http.Request) {
 		// saving may carry several folders (the setup page's list); validation
 		// above always concerns the first, which is what live typing checks.
 		dirs, total, verr := s.resolveDirs(q["path"])
+		traceStage("discover-all-folders", total)
 		switch {
 		case verr != nil:
 			out["error"] = verr.Error()
@@ -732,9 +774,11 @@ func (s *Server) handleSetupSync(w http.ResponseWriter, r *http.Request) {
 			out["dirs"] = dirs
 			out["found"] = total
 			if err := s.reg.SetDirs(dirs); err != nil {
+				traceStage("update-registry-failed", total)
 				out["error"] = err.Error()
 				break
 			}
+			traceStage("update-registry-and-queue-indexes", total)
 			if s.removalOffered(r) {
 				if err := s.reg.cleanupLibrary(); err != nil {
 					out["error"] = err.Error()
@@ -757,6 +801,7 @@ func (s *Server) handleSetupSync(w http.ResponseWriter, r *http.Request) {
 					out["warning"] = "folders saved, but the previously imported dictionaries setting failed: " + err.Error()
 				}
 			}
+			traceStage("save-settings", total)
 		}
 	}
 	writeJSON(w, out)
@@ -795,18 +840,54 @@ func (s *Server) resolveDirs(raw []string) ([]string, int, error) {
 // currentFeatures reads what a dictionary has prepared right now, so a request
 // that names one feature leaves the others alone.
 func (s *Server) currentFeatures(e *entry) features {
+	if entryHasSelfIndex(e) && !isZIMPath(e.Path) {
+		return features{}
+	}
 	p, ok := preparedInfo(e.Path)
-	if !ok || p.Meta == nil {
+	if !ok || p.Meta == nil || isZIMPath(e.Path) && p.Meta["index_kind"] != "headwords" {
 		return features{}
 	}
 	// an unpaired media.db serves nothing, so it does not count as packed
 	return features{FullText: p.Plan.FullText, Contains: p.Plan.Contains, Media: p.MediaPaired()}
 }
 
+// ZIM's path-pointer list is mandatory for a valid file and parse validates
+// its bounds before Open returns. Keep this capability on prepared rows too,
+// where the active backend is the SQLite store rather than the ZIM reader.
+func formatHasSelfIndex(format string) bool { return format == "zim" }
+
+func isZIMPath(path string) bool { return strings.EqualFold(filepath.Ext(path), ".zim") }
+
+func dictionaryHasSelfIndex(d dict.Dictionary) bool {
+	si, ok := d.(selfIndexed)
+	return ok && si.SelfIndexed()
+}
+
+func entryHasSelfIndex(e *entry) bool {
+	e.dMu.RLock()
+	d := e.d
+	e.dMu.RUnlock()
+	return dictionaryHasSelfIndex(d) || formatHasSelfIndex(strings.TrimPrefix(strings.ToLower(filepath.Ext(e.Path)), "."))
+}
+
+// nativeIndexOnly marks formats whose own index is sufficient for every
+// operation in this app. ZIM can search natively, but Browse needs the
+// optional prepared title index.
+func nativeIndexOnly(e *entry) bool { return entryHasSelfIndex(e) && !isZIMPath(e.Path) }
+
+func hasBrowseIndex(path string) bool {
+	p, ok := preparedInfo(path)
+	if !ok || p.Meta == nil {
+		return false
+	}
+	return !strings.EqualFold(p.Meta["format"], "zim") || p.Meta["index_kind"] == "headwords"
+}
+
 // dictInfo is the /api/dicts row.
 type dictInfo struct {
 	DSL         *dslView  `json:"dsl,omitempty"`
 	Unavailable bool      `json:"unavailable,omitempty"`
+	SelfIndexed bool      `json:"selfIndexed,omitempty"`
 	ID          string    `json:"id"`
 	Name        string    `json:"name"`
 	Format      string    `json:"format"`
@@ -827,6 +908,9 @@ type dictInfo struct {
 	// panel sums these into one Rebuild the user starts (reindex.go). Never
 	// set for a dictionary whose source is gone, which nothing can rebuild.
 	Outdated bool `json:"outdated,omitempty"`
+	// DiacriticsPending marks an older headword index that needs the user's
+	// reindex action before exact and prefix search use folded keys.
+	DiacriticsPending bool `json:"diacriticsPending,omitempty"`
 
 	// Groups: the derived memberships the dictionary picker offers as single
 	// choices ("English", "Encyclopedias") instead of a hundred names. Derived
@@ -920,11 +1004,11 @@ func (s *Server) handleDicts(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotModified)
 		return
 	}
-	if err != nil && !errors.Is(err, unavailable) {
-		if stream == nil {
-			httpErr(w, http.StatusInternalServerError, "%v", err)
-		}
-		return
+	if stream == nil {
+		stream, _ = newStream(w, "application/x-ndjson; charset=utf-8")
+	}
+	if err != nil && !errors.Is(err, unavailable) && stream == nil {
+		httpErr(w, http.StatusInternalServerError, "%v", err)
 	}
 }
 
@@ -936,12 +1020,7 @@ func (s *Server) handleDicts(w http.ResponseWriter, r *http.Request) {
 // everything else falls back to a full open for real caps.
 //
 // A derived row is kept only under a key that held across its derivation, and
-// held reports whether it did. Deriving can change what it reads - a full
-// open prepares a DSL, BGL or wudict markdown file on the spot - and a row
-// describing the prepared state, filed under the key from before it, would be
-// served again the day that state is removed and the old key comes back. The
-// list validator is built from the same keys, so an answer holding such a row
-// is not offered for keeping either (handleDicts).
+// held reports whether it did (handleDicts).
 func (s *Server) dictInfoFor(e *entry, global, key string) (info dictInfo, held bool) {
 	info, held = s.dictRows.get(e.ID, key)
 	if !held {
@@ -968,8 +1047,14 @@ func (s *Server) diskDictInfo(e *entry) dictInfo {
 	// unreadable or other-schema text.db, or a source edited since) is
 	// outdated too - the prepared branch above never sees it
 	if info.DBPath == "" && rebuildable(e.Path) {
-		if _, ok := store.LookupDir(e.Path); ok {
-			info.Outdated = true
+		if dir, ok := store.LookupDir(e.Path); ok {
+			p := store.Inspect(store.TextDBPath(dir))
+			info.DiacriticsPending = p.Meta != nil && needsFoldedReindex(p.Meta)
+			if isZIMPath(e.Path) {
+				info.Outdated = p.Meta == nil || p.Meta["index_kind"] != "headwords" || len(p.Stale(e.Path)) > 0
+			} else if !info.SelfIndexed {
+				info.Outdated = true
+			}
 		}
 	}
 	addProvenance(&info, e.Path)
@@ -977,31 +1062,37 @@ func (s *Server) diskDictInfo(e *entry) dictInfo {
 }
 
 func (s *Server) baseDictInfo(e *entry) dictInfo {
-	// a prepared dictionary answers the whole row from its own meta - no
-	// probe, no direct open, and it works for every format (the library
-	// folder is located from the source PATH, so the name is not needed to
-	// find it).
-	if p, ok := preparedInfo(e.Path); ok && p.Meta != nil {
+	// A prepared dictionary answers the whole row from its own meta without
+	// probing or opening the source. ZIM uses a prepared row only for the
+	// explicitly requested headword-only database.
+	// The library folder is located from the source path.
+	if p, ok := preparedInfo(e.Path); ok && p.Meta != nil && (!entryHasSelfIndex(e) || isZIMPath(e.Path) && p.Meta["index_kind"] == "headwords") {
 		meta := p.Meta
 		ec, _ := strconv.Atoi(meta["entry_count"])
 		info := dictInfo{
 			ID: e.ID, Path: e.Path, Name: meta["name"], Format: meta["format"], Entries: ec,
-			Caps:          dict.Caps{Exact: true, Prefix: true, Contains: p.Plan.Contains, FTS: p.Plan.FullText},
-			DBPath:        p.TextDB,
-			ContainsStale: store.FoldStale(meta),
-			Outdated:      rebuildable(e.Path) && len(p.Stale(e.Path)) > 0,
+			SelfIndexed:       formatHasSelfIndex(meta["format"]),
+			Caps:              dict.Caps{Exact: true, Prefix: true, Contains: p.Plan.Contains, FTS: p.Plan.FullText},
+			DBPath:            p.TextDB,
+			ContainsStale:     p.Plan.Contains && store.FoldStale(meta),
+			Outdated:          rebuildable(e.Path) && (!formatHasSelfIndex(meta["format"]) || isZIMPath(e.Path)) && len(p.Stale(e.Path)) > 0,
+			DiacriticsPending: rebuildable(e.Path) && needsFoldedReindex(meta),
 		}
 		s.langFacts(&info, meta["name"], meta["index_lang"], meta["contents_lang"])
 		return info
 	}
 	// only probe formats with a real cheap prober - otherwise dict.Probe
-	// falls back to a full dict.Open outside the entry's memoization (and
-	// can trigger DSL auto-ingest), racing the background warm.
+	// falls back to a full dict.Open outside the entry's memoization. Formats
+	// without probers are not opened just to build the list row.
 	if dict.HasProber(e.Path) {
 		if m, err := dict.Probe(e.Path); err == nil {
+			selfIndexed := formatHasSelfIndex(m.Format)
 			info := dictInfo{ // probeable, not prepared → direct backend
 				ID: e.ID, Path: e.Path, Name: m.Name, Format: m.Format, Entries: m.EntryCount,
-				Caps: dict.Caps{Exact: true, Prefix: true},
+				Caps: dict.Caps{}, SelfIndexed: selfIndexed,
+			}
+			if selfIndexed {
+				info.Caps = dict.Caps{Exact: true, Prefix: true}
 			}
 			s.langFacts(&info, m.Name, m.IndexLang, m.ContentsLang)
 			return info
@@ -1019,7 +1110,8 @@ func (s *Server) baseDictInfo(e *entry) dictInfo {
 		defer reader.Close()
 		m := reader.Meta()
 		info.Name, info.Format, info.Entries = m.Name, m.Format, m.EntryCount
-		info.Caps = dict.Caps{Exact: true, Prefix: true}
+		info.SelfIndexed = formatHasSelfIndex(m.Format)
+		info.Caps = dict.Caps{}
 		s.langFacts(&info, m.Name, m.IndexLang, m.ContentsLang)
 		return info
 	}
@@ -1030,14 +1122,24 @@ func (s *Server) baseDictInfo(e *entry) dictInfo {
 	}
 	m := d.Meta()
 	info.Name, info.Format, info.Entries, info.Caps = m.Name, m.Format, m.EntryCount, d.Caps()
+	info.SelfIndexed = dictionaryHasSelfIndex(d)
 	s.langFacts(&info, m.Name, m.IndexLang, m.ContentsLang)
 	if cs, ok := d.(interface{ ContainsStale() bool }); ok {
 		info.ContainsStale = cs.ContainsStale()
 	}
-	if textDB, ok := validPrepared(e.Path); ok {
-		info.DBPath = textDB
+	if !info.SelfIndexed {
+		if textDB, ok := validPrepared(e.Path); ok {
+			info.DBPath = textDB
+		} else {
+			info.Caps = dict.Caps{}
+		}
 	}
 	return info
+}
+
+func needsFoldedReindex(meta map[string]string) bool {
+	version, err := strconv.Atoi(meta["ingest_version"])
+	return err != nil || version < 3 || store.FoldStale(meta)
 }
 
 // langFacts derives one row's picker groups and the language its articles are
@@ -1110,7 +1212,9 @@ func addProvenance(info *dictInfo, entryPath string) {
 	textDB := info.DBPath
 	if textDB == "" {
 		if p, ok := validPrepared(entryPath); ok {
-			textDB = p
+			if !isZIMPath(entryPath) || store.Inspect(p).Meta["index_kind"] == "headwords" {
+				textDB = p
+			}
 		}
 	}
 	if fsx.FileExists(textDB) {
@@ -1163,16 +1267,87 @@ func (s *Server) handleRescan(w http.ResponseWriter, r *http.Request) {
 	s.handleDicts(w, r)
 }
 
-// Internal aliases keep existing morphology helpers and protocol tests
-// on the public event types shared by both transports.
-type streamSlot = SearchSlot
-type streamMsg = SearchEvent
+// streamSlot names one dictionary in the result layout (begin message).
+type streamSlot struct {
+	Dict string `json:"dict"`
+	Name string `json:"name"`
+}
 
-// demandSearchBudget is how long a search of ONE named dictionary may take
+// streamMsg is one NDJSON line of /api/search:
+//
+//	{"t":"begin","slots":[{dict,name}…]}   ordered slot layout
+//	{"t":"hit","i":N,dict,name,results…}   one dictionary's results
+//	{"t":"morph","from":…,"to":…,"lang":…} the hits that follow are for a
+//	                                       DIFFERENT word: nothing matched
+//	                                       what was typed, so its dictionary
+//	                                       form was searched instead (O3)
+//	{"t":"end"}                            all dictionaries done
+type streamMsg struct {
+	T       string        `json:"t"`
+	Slots   []streamSlot  `json:"slots,omitempty"`
+	I       int           `json:"i"`
+	Dict    string        `json:"dict,omitempty"`
+	Name    string        `json:"name,omitempty"`
+	Results []dict.Result `json:"results,omitempty"`
+	Skipped bool          `json:"skipped,omitempty"`
+	Error   string        `json:"error,omitempty"`
+
+	// Rung says which reading of a full-text query this dictionary answered:
+	// "phrase" (the words adjacent, in order), "near" (within ten tokens, any
+	// order) or "words" (anywhere in the article). Absent in every other mode.
+	//
+	// It is reported because the relaxation is silent otherwise, and a search
+	// tool that quietly answers a weaker question than the one asked is lying
+	// about its result. The UI says so only when the answer is NOT the phrase -
+	// the precise reading needs no announcement (D102).
+	Rung string `json:"rung,omitempty"`
+
+	// Deferred: this dictionary was not searched because the fan-out cap
+	// declined to materialise it (see fanout). It is NOT an error and must not
+	// be reported as one: the dictionary is fine, the query was wide, and
+	// asking for this one dictionary by itself answers it. Bytes is what the
+	// open was estimated to cost, for logs and tests - the UI does not show a
+	// number, because a megabyte figure is not a decision the reader can make.
+	Deferred bool  `json:"deferred,omitempty"`
+	Bytes    int64 `json:"bytes,omitempty"`
+	Indexing bool  `json:"indexing,omitempty"`
+
+	// The "morph" line: From is what the user typed, To the dictionary form
+	// actually searched, Lang the language that produced it. Every "hit" after
+	// it belongs to To - which is why it is a line of its own and not a flag on
+	// the hits: the client has to be able to SAY so.
+	From string `json:"from,omitempty"`
+	To   string `json:"to,omitempty"`
+	Lang string `json:"lang,omitempty"`
+}
+
+func searchEventToStream(event SearchEvent) streamMsg {
+	var slots []streamSlot
+	if event.Slots != nil {
+		slots = make([]streamSlot, len(event.Slots))
+	}
+	for i, slot := range event.Slots {
+		slots[i] = streamSlot{Dict: slot.Dict, Name: slot.Name}
+	}
+	return streamMsg{T: event.T, Slots: slots, I: event.I, Dict: event.Dict, Name: event.Name, Results: event.Results, Skipped: event.Skipped, Error: event.Error, Rung: event.Rung, Deferred: event.Deferred, Bytes: event.Bytes, Indexing: event.Indexing, From: event.From, To: event.To, Lang: event.Lang}
+}
+
+func searchEventFromStream(event streamMsg) SearchEvent {
+	var slots []SearchSlot
+	if event.Slots != nil {
+		slots = make([]SearchSlot, len(event.Slots))
+	}
+	for i, slot := range event.Slots {
+		slots[i] = SearchSlot{Dict: slot.Dict, Name: slot.Name}
+	}
+	return SearchEvent{T: event.T, Slots: slots, I: event.I, Dict: event.Dict, Name: event.Name, Results: event.Results, Skipped: event.Skipped, Error: event.Error, Rung: event.Rung, Deferred: event.Deferred, Bytes: event.Bytes, Indexing: event.Indexing, From: event.From, To: event.To, Lang: event.Lang}
+}
+
+// singleSearchBudget is how long a search of ONE named dictionary may take
 // before it is cut off. Generous rather than unlimited: the request still holds
 // a goroutine and an open backend, so it needs an end, but the end is there to
 // catch a wedged backend, not to police a slow one.
-const demandSearchBudget = 5 * time.Minute
+const singleSearchBudget = 5 * time.Minute
 
 // queryFlag reads a boolean query parameter, and is where every one of them is
 // read, so a spelling means the same thing on every route. sent reports that
@@ -1243,33 +1418,220 @@ func marker(on bool) func(term, rung string) *hilite.Terms {
 // result line carries its slot index `i` so the client fills the correct
 // preference-ordered position regardless of completion order.
 func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
-	request := searchRequestFromQuery(r.URL.Query())
-	request.Origin = originOf(r)
-	var stream *respStream
-	unavailable := errors.New("streaming unsupported")
-	err := s.Search(r.Context(), request, func(event SearchEvent) error {
-		if stream == nil {
-			var ok bool
-			stream, ok = newStream(w, "application/x-ndjson; charset=utf-8")
-			if !ok {
-				return unavailable
-			}
-		}
-		stream.line(event)
-		return nil
-	})
-	if err == nil || errors.Is(err, unavailable) {
+	q := strings.TrimSpace(r.URL.Query().Get("q"))
+	if q == "" {
+		httpErr(w, 400, "missing q parameter")
 		return
 	}
-	code := http.StatusInternalServerError
-	var validation *SearchError
-	if errors.As(err, &validation) {
-		code = http.StatusBadRequest
-		if validation.Kind == SearchDictionaryNotFound {
-			code = http.StatusNotFound
+	mode, err := search.ParseMode(r.URL.Query().Get("mode"))
+	if err != nil {
+		httpErr(w, 400, "%v", err)
+		return
+	}
+	format, err := parseFormat(r.URL.Query().Get("format"))
+	if err != nil {
+		httpErr(w, 400, "%v", err)
+		return
+	}
+	origin := originOf(r)
+	// Full-text match marking, compiled ONCE for the whole fan-out rather than
+	// per result: the terms are the query, and the query does not change while
+	// twenty dictionaries answer it.
+	//
+	// Opt-in, and only here. An API client that did not ask for marks gets the
+	// article's own bytes, unchanged - which is what makes "on by default in
+	// the UI" (the SPA sends hl=1 from its remembered preference) and "off by
+	// default for everyone else" the same rule rather than two. And only in
+	// full-text mode: in exact, prefix or contains the match IS the headword
+	// the reader clicked, and marking it inside the article would mark the
+	// word they are already looking at, on every line it appears (D102).
+	hl, _ := queryFlag(r.URL.Query(), "hl")
+	marks := marker(mode == search.FullText && hl)
+	// Capped like the store's own maxLimit: the store clamps at its boundary,
+	// but a direct backend treats the limit as a stop sign only, and would
+	// materialize every match - article bodies included - before stopping.
+	n := 20
+	if v := r.URL.Query().Get("n"); v != "" {
+		if p, err := strconv.Atoi(v); err == nil && p > 0 {
+			if p > 500 {
+				p = 500
+			}
+			n = p
 		}
 	}
-	httpErr(w, code, "%v", err)
+
+	dictParam := r.URL.Query().Get("dict")
+	var entries []*entry
+	if dictParam == "" || dictParam == "all" {
+		entries = s.reg.all()
+	} else {
+		for _, id := range strings.Split(dictParam, ",") {
+			if id = strings.TrimSpace(id); id == "" {
+				continue
+			}
+			if e, err := s.reg.get(id); err == nil {
+				entries = append(entries, e)
+			}
+		}
+		if len(entries) == 0 { // none of the requested ids resolved
+			httpErr(w, 404, "unknown dictionary id %q", dictParam)
+			return
+		}
+	}
+
+	entries = slices.DeleteFunc(entries, func(e *entry) bool { return !s.reg.dslAvailable(e) })
+	if len(entries) == 0 && dictParam != "" && dictParam != "all" {
+		httpErr(w, 404, "dictionary variant unavailable")
+		return
+	}
+
+	st, ok := newStream(w, "application/x-ndjson; charset=utf-8")
+	if !ok {
+		return
+	}
+	writeLine := func(m streamMsg) { st.line(m) }
+
+	// Emit the slot layout FIRST, from cheap entry ids only - no opens on the
+	// request path. The client paints the empty accordion immediately; each
+	// dictionary's real name arrives with its "hit" as it completes. Opening
+	// (cold MDX ~180ms, cold SLOB ~1s) is deferred into the workers below, so
+	// time-to-first-byte is one open at most, never the sum of all of them.
+	begin := make([]streamSlot, len(entries))
+	openers := make([]search.Opener, len(entries))
+	// One budget for this query: what the fan-out may newly materialise before
+	// it starts declining dictionaries instead of opening them (see fanout).
+	// Nil when uncapped, which is the desktop default.
+	//
+	// A query naming ONE dictionary has no fan-out to cap and gets the longer
+	// search budget.
+	fan := s.reg.fanout()
+	single := len(entries) == 1
+	if single {
+		fan = nil
+	}
+	for i, e := range entries {
+		e := e
+		begin[i] = streamSlot{Dict: e.ID, Name: e.ID}
+		openers[i] = func() (dict.Dictionary, error) {
+			if !entryHasSelfIndex(e) {
+				if _, ok := validPrepared(e.Path); !ok {
+					return nil, errors.New("dictionary index is not ready")
+				}
+			}
+			return e.openWithin(fan)
+		}
+	}
+	writeLine(streamMsg{T: "begin", Slots: begin})
+
+	// renderHit turns one dictionary's answer into its NDJSON line. Extracted
+	// because the morphology wave below emits the same shape for the same
+	// slots - a second copy of the rewrite/format pipeline would be a second
+	// place for it to drift.
+	renderHit := func(i int, h search.Hit) streamMsg {
+		id := entries[i].ID
+		name := h.Meta.Name
+		if name == "" {
+			// open failed or cancelled: no Meta. Show the filename, not the
+			// opaque id hash, so a broken dictionary is identifiable.
+			name = filepath.Base(entries[i].Path)
+		}
+		// resolve dictionary-internal refs (sound://, relative, absolute)
+		// to /res/{dict}/… here, where it is unit-tested.
+		// Rewrite first, reduce second: RewriteEntryHTML is what turns a
+		// dictionary's internal ref into /res/{dict}/…, and `clean` then
+		// absolutises exactly those. Reducing first would throw away the
+		// references before they had been named.
+		hl := marks(h.Term, h.Rung)
+		for j := range h.Results {
+			h.Results[j].Body = RewriteEntryHTMLMarked(h.Results[j].Body, id, hl)
+		}
+		// `clean` and `text` need this dictionary's own CSS to know which of
+		// its classes are blocks and which are hidden (D68); derived once per
+		// dictionary, from the article that first asks. `raw` never asks, so
+		// the desktop path costs nothing.
+		var st htmlref.Styles
+		if format != formatRaw && len(h.Results) > 0 {
+			st = s.articleStyles(id, h.Results[0].Body)
+		}
+		for j := range h.Results {
+			h.Results[j].Body = applyFormat(h.Results[j].Body, format, origin, st)
+		}
+		m := streamMsg{T: "hit", I: i, Dict: id, Name: name, Results: h.Results, Skipped: h.Skipped, Rung: h.Rung}
+		var heavy tooHeavy
+		switch {
+		case errors.As(h.Err, &heavy):
+			// Deferred, not failed. The client renders a section the user can
+			// open, and opening it re-queries this dictionary alone with the
+			// longer search budget.
+			m.Deferred, m.Bytes = true, heavy.bytes
+		case errors.Is(h.Err, context.DeadlineExceeded):
+			// Never Go's own words. "context deadline exceeded" is what an
+			// unindexed dictionary looked like from the outside while a preview
+			// search crawled through its source format, and it told the user
+			// nothing they could act on - which is the whole content of the
+			// message they need.
+			m.Error = "timed out — search this dictionary alone to allow more time"
+		case errors.Is(h.Err, context.Canceled):
+			m.Error = "search cancelled"
+		case h.Err != nil:
+			m.Error = h.Err.Error()
+		}
+		if m.Error != "" && !errors.Is(h.Err, context.Canceled) {
+			logx.System("search failure dictionary=%q source=%q mode=%q error=%q", name, entries[i].Path, mode, m.Error)
+		}
+		return m
+	}
+
+	// The ceiling exists to stop ONE slow dictionary from holding a wide
+	// fan-out open, and 30 s is right for that. It is the wrong shape for a
+	// search of a single named dictionary: there is nothing to fan out, the
+	// user chose this one. A longer budget avoids timing out a slow but prepared
+	// database while it answers.
+	budget := 30 * time.Second
+	if single {
+		budget = singleSearchBudget
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), budget)
+	defer cancel()
+	if ignore, _ := queryFlag(r.URL.Query(), "ignoreDiacritics"); ignore {
+		ctx = store.WithIgnoreDiacritics(ctx)
+	}
+	// Metas are kept because each carries the dictionary's declared language,
+	// and the morphology wave needs it. Nothing is opened to obtain them: the
+	// search callback is invoked for EVERY dictionary, hit or miss.
+	metas := make([]dict.Meta, len(entries))
+	// missed marks the dictionaries that actually searched and came back
+	// EMPTY - the only ones the second wave has anything to ask. One that hit
+	// has answered the question; one that was deferred (too heavy), errored,
+	// or does not support this mode has said nothing about the word, and
+	// asking it the same question again with a lemma gets the same refusal.
+	// If nothing missed there is no second wave at all, and no lemma pack is
+	// loaded to serve a search that never happened.
+	//
+	// Per dictionary, not per search (D89): a gate on the WHOLE collection
+	// coming back empty would make lemmatization depend on what unrelated
+	// dictionaries are installed beside the one being read. One Babylon
+	// glossary carrying "estuviera" as a hand-listed alias of "estar" would
+	// suppress the lemma probe for every proper Spanish dictionary in the same
+	// search - each of which indexes lemmas only, and each of which would
+	// answer. The cost of the wider gate is that a language's pack can load on
+	// a search that already partly succeeded; it is still bounded by
+	// MORPH_CACHE, and the retry still goes only to dictionaries that returned
+	// nothing.
+	missed := make([]bool, len(entries))
+	empty := 0
+	search.StreamOpen(ctx, openers, mode, q, n, func(i int, h search.Hit) {
+		metas[i] = h.Meta
+		// Callbacks are serialised by StreamOpen, so this needs no lock.
+		if h.Err == nil && !h.Skipped && len(h.Results) == 0 {
+			missed[i], empty = true, empty+1
+		}
+		writeLine(renderHit(i, h))
+	})
+	if empty > 0 && !search.HasMask(q) {
+		s.lemmaWave(ctx, writeLine, renderHit, entries, metas, missed, openers, mode, q, n)
+	}
+	writeLine(streamMsg{T: "end"})
 }
 
 // lemmaWave is the second and last pass: for each dictionary that searched and
@@ -1744,8 +2106,12 @@ func (s *Server) externalSpxToWav(raw []byte) ([]byte, error) {
 func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 	key := ingestKey(r.URL.Query().Get("dict"))
 	if r.Method == http.MethodDelete {
-		s.jobs.requestStop(key)
-		writeJSON(w, map[string]bool{"stopping": true})
+		status, err := s.stopIngest(key)
+		if err != nil {
+			httpErr(w, 400, "%v", err)
+			return
+		}
+		writeJSON(w, status)
 		return
 	}
 	e, err := s.reg.get(r.URL.Query().Get("dict"))
@@ -1757,17 +2123,15 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	key = s.startIngest(e, r.URL.Query())
+	if status, exists := s.jobs.status(key); !exists || !status.Running || len(r.URL.Query()) != 1 {
+		s.startIngest(e, r.URL.Query())
+	}
 	s.followIngest(r.Context(), st, key)
 }
 
 func (s *Server) startIngest(e *entry, q url.Values) string {
 	key := ingestKey(e.ID)
-	// The panel sends the state it wants, not a verb: contains/fts/media each
-	// on or off. A parameter left out keeps whatever that feature is now, so a
-	// caller toggling one thing cannot accidentally strip another - and a
-	// request naming none prepares an unprepared dictionary at the cheapest
-	// level, which is the panel's index chip.
+	store.IndexDiagnostic("single ingest request source=%q dictionary=%q method=GET self_indexed=%v query=%q", e.Path, e.probeName(), entryHasSelfIndex(e), q.Encode())
 	want := s.currentFeatures(e)
 	for _, f := range []struct {
 		name string
@@ -1778,13 +2142,6 @@ func (s *Server) startIngest(e *entry, q url.Values) string {
 		}
 	}
 	action, indexes := ingestAction(e, q)
-
-	// The change runs as the dictionary's job (jobs.go), not inside this
-	// request: a page that closes or reloads mid-way loses nothing, and the
-	// next one finds the job in /api/dicts and follows it here again. While
-	// one runs, a request for the same dictionary follows that one - what it
-	// asked for is not queued behind it, and the "done" it gets carries what
-	// the dictionary now has.
 	s.jobs.start(key, 0, jobStatus{Action: action, Indexes: indexes}, func(j *job) {
 		store.IndexDiagnostic("request start dictionary=%q source=%q contains=%v fulltext=%v media=%v rebuild=%v build=%q", e.probeName(), e.Path, want.Contains, want.FullText, want.Media, q.Get("rebuild") == "1", s.Version)
 		defer func() {
@@ -1799,12 +2156,8 @@ func (s *Server) startIngest(e *entry, q url.Values) string {
 			last = time.Now()
 			j.update(func(js *jobStatus) { js.Done, js.Total = int64(done), int64(total) })
 		}
-		// A dictionary whose index was removed from the library (the fork's
-		// GD/DSL work) is restored by an explicit ingest, before the feature
-		// change: this is the door the panel's chip and the DSL settings use
-		// to bring a removed index back.
 		if e.indexBlocked() {
-			if err := e.restoreDSLIndex(store.Plan{FullText: want.FullText, Contains: want.Contains}, progress); err != nil {
+			if err := e.restoreIndex(store.Plan{FullText: want.FullText, Contains: want.Contains}, progress, frontLimit); err != nil {
 				j.update(func(js *jobStatus) { js.Err = err.Error() })
 				return
 			}
@@ -1813,7 +2166,9 @@ func (s *Server) startIngest(e *entry, q url.Values) string {
 				return
 			}
 		}
-		if err := e.setFeatures(want, progress, q.Get("rebuild") == "1"); err != nil {
+		if entryHasSelfIndex(e) && !isZIMPath(e.Path) {
+			store.IndexDiagnostic("skip ingest source=%q dictionary=%q reason=native-index", e.Path, e.probeName())
+		} else if err := e.setFeatures(want, progress, q.Get("rebuild") == "1"); err != nil {
 			j.update(func(js *jobStatus) { js.Err = err.Error() })
 			return
 		}
@@ -1828,14 +2183,19 @@ func (s *Server) startIngest(e *entry, q url.Values) string {
 		}
 		m := d.Meta()
 		dbPath, _ := validPrepared(e.Path)
-		info := dictInfo{
-			ID: e.ID, Name: m.Name, Format: m.Format, Path: e.Path,
-			Entries: m.EntryCount, Caps: d.Caps(),
-			DBPath: dbPath,
-		}
-		j.update(func(js *jobStatus) { js.Result = info })
+		j.update(func(js *jobStatus) {
+			js.Result = dictInfo{ID: e.ID, Name: m.Name, Format: m.Format, Path: e.Path, SelfIndexed: entryHasSelfIndex(e), Entries: m.EntryCount, Caps: d.Caps(), DBPath: dbPath}
+		})
 	})
 	return key
+}
+
+func (s *Server) stopIngest(key string) (map[string]bool, error) {
+	if !strings.HasPrefix(key, "ingest:") || key == "ingest:" {
+		return nil, errors.New("invalid ingest job")
+	}
+	s.jobs.requestStop(key)
+	return map[string]bool{"stopping": true}, nil
 }
 
 // jobProgress is a running job as a list row carries it.

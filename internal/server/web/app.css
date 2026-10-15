@@ -167,6 +167,13 @@ body{margin:0;padding-top:var(--barh);
   padding-left:var(--sp-2);padding-right:var(--sp-2);
   transition:max-width .25s ease} /* on .col so the bar eases with the cards */
 body.wide .col{max-width:min(1280px,96vw)}
+/* The Windows WebView2 window has no browser chrome to expose its host mode.
+   Its URL carries this marker so the reading column can use the whole window. */
+html[data-webview2] .col{box-sizing:border-box;width:100%;max-width:none;padding-left:10px;padding-right:10px}
+html[data-webview2] #wideBtn{display:none}
+html[data-webview2] .article{margin:0}
+html[data-webview2] main.col.container dl{padding-left:0;padding-right:0}
+html[data-webview2] .bar>.col{box-sizing:border-box;width:100%;max-width:none;padding-left:10px;padding-right:10px}
 /* The page's own bottom space, in one expression: the usual gutter, and under
    it whichever of the two things owns the bottom edge is taller - the reading
    bar (--sbarh, which already includes the inset it wears) or, when the bar is
@@ -206,6 +213,9 @@ body.barpinned{--stick:var(--barh)}
    controls already fill the row; it does its work in wide mode and any time a
    control is removed. Move this class if the button order ever changes. */
 .bar form .tools{margin-left:auto}
+#barBackWords{display:none}
+html[data-webview2] #barBackWords:not([hidden]){display:inline-flex;align-items:center;justify-content:center;gap:.35em;flex:none;white-space:nowrap;text-decoration:none;font-size:calc(var(--ui-font-addition) * 1rem);line-height:1}
+#barBackWords svg{display:block;flex:none;width:1.15em;height:1.15em}
 /* ── the status bar ─────────────────────────────────────────────────
    The one piece of chrome the reader keeps while reading: two jumps between
    the dictionaries of the current answer, and one quick handle on the example
@@ -324,6 +334,67 @@ html[data-desktop-image] #articleFindStrip{background-image:var(--paper-bk-image
 /* The geometry lives on .qbox so the glyph can be positioned against the
    field; the input only fills it. */
 .qbox{position:relative;display:flex;flex:1;min-width:130px;max-width:300px}
+#maskSubmit{position:absolute;right:.25em;top:50%;transform:translateY(-50%);border:1px solid var(--accent);border-radius:6px;background:var(--accent);color:var(--bg);cursor:pointer;min-width:2em;height:2em;font-weight:700}
+#maskSubmit[hidden],#maskProgress[hidden],#maskView[hidden]{display:none}
+body.mask-view-active .qbox input{padding-right:2.8em}
+#maskProgress{display:inline-flex;align-items:center;gap:.25em;white-space:nowrap;color:var(--label);font-size:calc(var(--ui-font-addition) * 1rem)}
+#maskCount{min-width:2ch;text-align:right}
+#maskPage{font:inherit;font-variant-numeric:tabular-nums;white-space:nowrap}
+#maskProgress button{min-width:1.8em;min-height:1.8em;padding:0 .3em;color:var(--fg);background:var(--bg-card);border:1px solid var(--line);border-radius:6px;cursor:pointer}
+#maskProgress button:disabled{opacity:.4;cursor:default}
+/* Keep the search controls visible while moving through a long mask list. */
+body.mask-view-active{--stick:var(--barh)}
+body.mask-view-active .bar{transform:none!important}
+body.mask-view-active #out,body.mask-view-active #sbar{display:none}
+body.mask-view-active{padding-bottom:calc(var(--mask-dock-height,4.5rem) + .5rem)}
+.mask-search-controls[hidden]{display:none}
+.mask-search-controls{position:fixed;left:0;right:0;bottom:0;z-index:8;display:flex;flex-direction:column;align-items:center;gap:.45rem;
+  padding:.5rem .9rem max(.5rem,env(safe-area-inset-bottom));background:var(--bar);backdrop-filter:saturate(1.6) blur(8px);border-top:1px solid var(--line)}
+html:is([data-shell-sepia],[data-shell-image],[data-desktop-image]) .mask-search-controls{
+  background:var(--paper-bg,var(--bg));backdrop-filter:none}
+.mask-dock{position:static;width:100%;max-width:54rem;padding:0;border:0;background:transparent;backdrop-filter:none;font-size:calc(var(--ui-edit_control-font) * 1rem)}
+.mask-search-progress{box-sizing:border-box;display:flex;align-items:center;gap:.55em;width:100%;max-width:54rem;min-height:2.3em;
+  padding:.35em .55em;border:1px solid var(--accent);border-radius:8px;background-color:var(--bg);
+  background-image:repeating-linear-gradient(135deg,color-mix(in srgb,var(--accent) 13%,transparent) 0px,
+    color-mix(in srgb,var(--accent) 13%,transparent) 7px,transparent 7px,transparent 15px);
+  font-size:calc(var(--ui-font-addition) * 1rem);color:var(--fg)}
+.mask-search-progress[hidden]{display:none}
+.mask-search-progress>span:nth-child(2){flex:1;min-width:0;overflow-wrap:anywhere}
+.mask-search-spinner{width:1em;height:1em;flex:none;border:2px solid color-mix(in srgb,var(--accent) 28%,transparent);
+  border-top-color:var(--accent);border-radius:50%;animation:mask-search-spin .8s linear infinite}
+@keyframes mask-search-spin{to{transform:rotate(360deg)}}
+.mask-search-progress button{flex:none;padding:.2em .55em;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--fg);font:inherit;cursor:pointer}
+.mask-search-progress button:hover{border-color:var(--accent);color:var(--accent)}
+@media(prefers-reduced-motion:reduce){.mask-search-spinner{animation:none;border-color:var(--accent)}}
+.mask-words button.mask-find-current{background:var(--line-soft);outline:2px solid var(--accent);outline-offset:-2px}
+#maskView{margin-top:var(--sp-2);background:var(--bg-card);border:1px solid var(--line);border-radius:10px;overflow:clip}
+.mask-chrome{position:sticky;top:var(--stick);z-index:4;background:var(--paper-bg,var(--bg-card))}
+.mask-head{position:static;display:flex;align-items:center;gap:.5em;padding:.55em .7em;background:var(--paper-bg,var(--bg-card));border-bottom:1px solid var(--line)}
+.mask-head select{flex:1;min-width:0;max-width:none}
+.mask-head .themed-select-btn{flex:1;min-width:0;width:auto;max-width:none}
+html[data-shell-image] .mask-head .themed-select-btn{background-color:var(--paper-bg,var(--bg));background-image:linear-gradient(#ffffff24,#ffffff24),var(--paper-bk-image);background-size:100% 100%}
+.mask-letters button{color:var(--fg);background:var(--bg-card);border:1px solid var(--line);border-radius:6px;cursor:pointer}
+.mask-letters{display:flex;align-items:center;gap:.25em;overflow-x:auto;padding:.5em .7em;border-bottom:1px solid var(--line)}
+.mask-letter-group{display:inline-flex;align-items:center;gap:.25em;flex:none}
+.mask-letter-separator{flex:none;padding:0 .2em;color:var(--fg-faint)}
+.mask-letter-pending{color:var(--label)}
+.mask-letters button{flex:none;min-width:2em;padding:.3em}
+.mask-letters button[aria-current="true"]{border-color:var(--accent);color:var(--accent)}
+.mask-words{columns:12em;column-gap:1em;padding:.7em}
+.mask-words button{display:block;width:100%;break-inside:avoid;text-align:left;color:var(--link);background:transparent;border:0;border-radius:4px;padding:.3em .4em;font:inherit;cursor:pointer;overflow-wrap:anywhere}
+.mask-words button:hover,.mask-words button:focus-visible{background:var(--line-soft)}
+.mask-words mark{background:var(--accent);color:var(--bg);border-radius:.15em}
+body.mask-computing #maskLetters button{cursor:pointer}
+body.mask-computing #maskWords{pointer-events:none;opacity:.72}
+body.mask-computing #maskFindPrev,
+body.mask-computing #maskFindNext{opacity:1;cursor:pointer}
+body.mask-computing #maskDock button:disabled,
+body.mask-computing #maskDock input:disabled,
+body.mask-computing #bar button:disabled,
+body.mask-computing #bar input:disabled,
+body.mask-computing #bar select:disabled{cursor:wait}
+.mask-empty{padding:1em;color:var(--label)}
+@media(max-width:600px){#maskProgress{font-size:11px;gap:.15em;flex:none}#maskProgress button{min-width:1.6em;min-height:1.8em;padding:0 .15em}}
 input[type=search]{width:100%;min-width:0;font-size:16px;
   color:var(--fg);background:var(--bg-card);border:1px solid var(--line);
   border-radius:8px;padding:.35em .7em .35em 2em;outline:none;appearance:none}
@@ -541,6 +612,7 @@ details.dict>summary:focus-visible{outline-color:var(--focus)}
    which this hands back by skipping both for sections nobody has scrolled to.
    The size hint keeps the scrollbar from jumping as they are rendered. */
 details.dict[open]>dl{content-visibility:auto;contain-intrinsic-size:0 400px}
+details.dict>dl>dt mark.wu-hl{background:var(--accent);color:var(--bg);border-radius:.15em}
 summary .count{margin-left:auto;font-weight:400;color:var(--label-quiet);font-size:12px}
 /* The relaxation note (renderSlot, h.rung). A full-text search asks for the
    words as a phrase first; when no article had them adjacent the server answers
@@ -605,6 +677,8 @@ dd{margin:var(--sp-1) 0 0 0}
 .article{display:block;border-radius:8px;
   background:var(--wd-article-bg,#fff);color:var(--wd-article-fg,#1a1a1a);
   padding:var(--sp-1) var(--sp-2);overflow-x:auto;overflow-y:hidden}
+html[data-shell-image] .article,
+html[data-shell-image] iframe.article{background:transparent}
 html[data-theme="dark"] .article:not(iframe),
 html:not([data-theme]) .article.autodark:not(iframe){
   filter:invert(1) hue-rotate(180deg) brightness(.9) contrast(.92)}
@@ -860,6 +934,8 @@ body.styling{padding-bottom:var(--styler-shown,var(--styler-h))}
 #sysSettings .sys-hint{margin:0;font-size:calc(var(--ui-hint-font-size) * 1rem);line-height:1.618;color:var(--label)}
 #sysSettings .sys-item{margin:.5em 0 .2em}
 #sysSettings .sys-row{display:flex;align-items:center;gap:calc(var(--ui-control-gap) * 1em);min-height:calc(var(--ui-control-height) * 1em);cursor:pointer}
+#desktopSysBody .sys-row{display:flex;align-items:center;gap:calc(var(--ui-control-gap) * 1em);min-height:calc(var(--ui-control-height) * 1em);cursor:pointer}
+#desktopSysBody .sys-label{flex:1 1 auto;color:var(--label);min-width:0;font-size:calc(var(--ui-font-base) * 1rem);overflow-wrap:anywhere}
 #sysSettings .sys-row.sys-num{cursor:default}
 #sysSettings .sys-label{flex:1 1 auto;color:var(--label);min-width:0;font-size:calc(var(--ui-font-base) * 1rem);overflow-wrap:anywhere}
 #sysSettings .sys-num input{box-sizing:border-box;flex:none;width:6.5em;min-height:calc(var(--ui-control-height) * 1em);font:inherit;font-size:calc(var(--ui-font-base) * 1rem);text-align:right;
@@ -893,6 +969,17 @@ body.styling{padding-bottom:var(--styler-shown,var(--styler-h))}
   border-width:0 2px 2px 0;transform:rotate(45deg)}
 .appearance-row input[type=checkbox]:focus-visible{outline:2px solid var(--accent);
   outline-offset:2px}
+#panel .panel-checkbox{appearance:none;-webkit-appearance:none;flex:none;
+  width:20px;height:20px;margin:0 .5em 0 0;border:1.5px solid var(--fg);border-radius:4px;
+  background-color:var(--paper-bg,var(--bg));position:relative;vertical-align:middle;cursor:pointer}
+#panel .examples-extra .panel-checkbox{margin:.2em 0 0}
+#panel .panel-checkbox:checked::after{content:"";position:absolute;
+  left:5px;top:1px;width:5px;height:10px;border:solid var(--fg);
+  border-width:0 2px 2px 0;transform:rotate(45deg)}
+#panel .panel-checkbox:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+#panel .headword-threshold-row{width:100%;align-items:center;column-gap:calc(var(--ui-control-gap) * 2em)}
+#panel .headword-threshold-row>#headwordApplyThreshold{flex:none;max-width:100%}
+#panel .headword-threshold-row>.rowlabel{flex:1 1 14em;min-width:min(100%,14em);white-space:normal;line-height:1.35}
 /* ─ floating menus ──────────────────────────────────────────────────
    THE SURFACE, stated once: every menu the app floats over the page wears it,
    so a menu is a window like the others - the history dropdown's own card,
@@ -1211,9 +1298,11 @@ dialog.panel-card:not([open]){display:none}
   display:flex;align-items:center}
 #panel .panel-head h2{font-size:calc(var(--ui-font-title) * 1rem)}
 #panel .panel-head h2 .btn{font-size:100%}
-#panel .panel-head .headacts .btn{height:calc(var(--ui-main-control-height) * 1em);min-height:calc(var(--ui-main-control-height) * 1em);box-sizing:border-box;
-  font-size:calc(var(--ui-main-control-font) * 1rem);
-  padding:0 .55em;line-height:1}
+#panel .panel-head .headacts .btn{width:calc(var(--ui-main-control-height) * 1em);height:calc(var(--ui-main-control-height) * 1em);min-width:calc(var(--ui-main-control-height) * 1em);min-height:calc(var(--ui-main-control-height) * 1em);box-sizing:border-box;display:grid;place-items:center;padding:0;
+  font-size:calc(var(--ui-main-control-font) * 1rem);line-height:1}
+#panel .panel-head .headacts .themeAuto{width:auto;height:auto;min-width:0;padding:.3em .55em;display:inline-block;
+  font-size:calc(var(--ui-font-title) * 1rem);line-height:1.2}
+#panel .panel-head #closePanel .icon-close{width:1.4em;height:1.4em}
 .panel-card h2 .headacts{margin-left:auto;display:flex;gap:calc(var(--ui-control-gap) * 1em)}
 /* The theme control is TWO buttons - Auto, and the state it resolves to - and
    it has two mount points: the bar's pair above 600px, the panel's below it,

@@ -9,6 +9,7 @@ package server
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -25,6 +26,7 @@ import (
 	"time"
 
 	"github.com/wuweidict/wudict/internal/dict"
+	zimformat "github.com/wuweidict/wudict/internal/format/zim"
 	"github.com/wuweidict/wudict/internal/fsx"
 	"github.com/wuweidict/wudict/internal/htmlref"
 	"github.com/wuweidict/wudict/internal/logx"
@@ -129,6 +131,71 @@ func (u *upgraded) Meta() dict.Meta {
 	m.Format = strings.TrimPrefix(m.Format, "wudict:")
 	m.Path = u.srcPath
 	return m
+}
+
+// ZIM title indexes deliberately store no article bodies. Search their local
+// headword database, then fetch only the matched articles from the source.
+func (u *upgraded) titleResults(ctx context.Context, rows []dict.Result, err error) ([]dict.Result, error) {
+	if err != nil || len(rows) == 0 || !u.Store.Meta().HeadwordsOnly {
+		return rows, err
+	}
+	src, err := u.source()
+	if err != nil {
+		return nil, err
+	}
+	for i := range rows {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		found, lookupErr := src.Exact(rows[i].Headword, 1)
+		if lookupErr != nil {
+			return nil, lookupErr
+		}
+		if len(found) > 0 {
+			rows[i].Body = found[0].Body
+		}
+	}
+	return rows, nil
+}
+
+func (u *upgraded) Exact(word string, limit int) ([]dict.Result, error) {
+	r, err := u.Store.Exact(word, limit)
+	return u.titleResults(context.Background(), r, err)
+}
+
+func (u *upgraded) Prefix(word string, limit int) ([]dict.Result, error) {
+	r, err := u.Store.Prefix(word, limit)
+	return u.titleResults(context.Background(), r, err)
+}
+
+func (u *upgraded) ExactContext(ctx context.Context, word string, limit int) ([]dict.Result, error) {
+	r, err := u.Store.ExactContext(ctx, word, limit)
+	return u.titleResults(ctx, r, err)
+}
+
+func (u *upgraded) PrefixContext(ctx context.Context, word string, limit int) ([]dict.Result, error) {
+	r, err := u.Store.PrefixContext(ctx, word, limit)
+	return u.titleResults(ctx, r, err)
+}
+
+func (u *upgraded) MaskContext(ctx context.Context, pattern string, limit int) ([]dict.Result, error) {
+	r, err := u.Store.MaskContext(ctx, pattern, limit)
+	return u.titleResults(ctx, r, err)
+}
+
+func (u *upgraded) ContainsContext(ctx context.Context, word string, limit int) ([]dict.Result, error) {
+	r, err := u.Store.ContainsContext(ctx, word, limit)
+	return u.titleResults(ctx, r, err)
+}
+
+func (u *upgraded) FullTextContext(ctx context.Context, query string, limit int) ([]dict.Result, error) {
+	r, err := u.Store.FullTextContext(ctx, query, limit)
+	return u.titleResults(ctx, r, err)
+}
+
+func (u *upgraded) FullTextMatch(ctx context.Context, match string, limit int) ([]dict.Result, error) {
+	r, err := u.Store.FullTextMatch(ctx, match, limit)
+	return u.titleResults(ctx, r, err)
 }
 
 // Resource resolves in three rungs, cheapest first (D2, extended by O8):
@@ -291,16 +358,9 @@ func (u *upgraded) Close() error {
 	return u.Store.Close() // Store.Close also closes its attached media.db
 }
 
-// Preparing a dictionary costs a saturated core and a few hundred bytes of RAM
-// per headword (docs.local/PERF.md §3). Nothing bounded that: `maybeAutoIndex` fired
-// one goroutine per dictionary, so a single "all dictionaries" search over a
-// 100-dictionary library started 100 concurrent ingests - measured at 500 MB
-// and 424 % CPU for FOUR dictionaries, extrapolating to the reported 18 GB and
-// 1000 % CPU for the full corpus.
-//
-// Background indexing now flows through indexLimit (INDEX_WORKERS, default 1).
-// Work the user asked for explicitly gets its own single slot so a click never
-// waits behind a long background job; worst case is INDEX_WORKERS + 1.
+// New dictionaries and background reindex jobs use indexLimit
+// (INDEX_WORKERS, default 1). Explicit per-dictionary changes use frontLimit,
+// so they do not wait behind background work.
 var (
 	indexLimit = make(chan struct{}, 1)
 	frontLimit = make(chan struct{}, 1)
@@ -345,8 +405,8 @@ type entry struct {
 
 	// backing is the prepared database this entry's derived state was resolved
 	// against - the text.db that open() found, or "" for a dictionary that had
-	// none and was opened directly. Everything below (the memoized backend and
-	// error, autoTried, demanded, demandFail, abbrevTried) is a conclusion
+	// none and was opened directly. The memoized backend, error and abbrevTried
+	// are conclusions
 	// drawn from that resolution, and none of it survives the file it was drawn
 	// from: a library folder deleted from outside the app must not leave the
 	// entry serving a SQLite handle whose file is gone. Rescan re-derives this
@@ -387,14 +447,11 @@ type entry struct {
 	styleDone bool
 	style     htmlref.Styles
 
-	ingestMu  sync.Mutex  // one ingest at a time per dictionary
-	autoTried atomic.Bool // first-search auto-index, attempted once
-	demanded  atomic.Bool // a user-demanded index is queued or running (demandIndex)
-	// demandFail is when the last demanded ingest failed, in Unix nanoseconds.
-	// It is what keeps a retryable failure from becoming a per-keystroke storm:
-	// a search naming ONE dictionary is a demand, and the selector produces one
-	// of those per character typed.
+	autoTried  atomic.Bool
+	demanded   atomic.Bool
 	demandFail atomic.Int64
+
+	ingestMu sync.Mutex // one ingest at a time per dictionary
 	// abbrevTried marks this dictionary as already considered by the
 	// abbreviation upgrade sweep, so a rescan does not re-queue it.
 	abbrevTried atomic.Bool
@@ -412,8 +469,7 @@ type entry struct {
 
 	// rebuilding bars opens for the length of an ingest that will rename over
 	// the prepared database (Windows only; set with the backend handback in
-	// registry_windows.go). Set false again by the defers in setFeatures,
-	// ensureBaseIndex and reabsorbAbbrev - whichever stage armed it.
+	// registry_windows.go). Set false again by the defer in setFeatures.
 	rebuilding atomic.Bool
 }
 
@@ -424,173 +480,6 @@ func (e *entry) noPackableMedia() bool {
 	defer e.dMu.RUnlock()
 	return e.mediaEmpty
 }
-
-// maybeAutoIndex prepares this dictionary's headword index in the background
-// the first time it is searched, unless it already has one. Attempted at most
-// once per process; a failure (e.g. a read-only library, no ingest reader for
-// the format) is reported and not retried - auto-indexing is a convenience,
-// never a hard requirement. What the user asks for by name IS retried; see
-// demandIndex.
-//
-// Automatic while it is cheap; on demand once it is not. This fires from a
-// SUCCESSFUL open only, which is what bounds it: a dictionary the fan-out cap
-// declined is not opened and is therefore not indexed here, deliberately. That
-// refusal is the ceiling past which preparation stops being automatic - on a
-// phone the alternative is queueing an hour of sustained ingest for
-// dictionaries the user has not asked for, which is the storm the cap exists to
-// prevent. What lifts it is the user opening that dictionary's section: the
-// resulting single-dictionary search is uncapped (handleSearch), so it opens,
-// so it lands here, so it is prepared and never deferred again. Meanwhile every
-// dictionary that DID fit is prepared in the background, and each one that
-// finishes drops to previewWeight 0 and frees budget for the next - the library
-// converges on its own, at a rate the cap chooses.
-//
-// Never while the process is not active: indexing is the single most expensive
-// thing this program does (a saturated core and hundreds of bytes per headword),
-// and starting it because a search landed just as the screen went off is exactly
-// how an app gets flagged as a battery hog. The attempt is un-marked when it
-// declines, so this stays a deferral rather than a silent cancellation - the
-// next search once the user is back does it.
-func (e *entry) maybeAutoIndex() {
-	if CurrentPower() != PowerActive {
-		return
-	}
-	// Never for a backend that carries its own on-disk index. This is a
-	// property of the backend, not a name check, so a format that later gains
-	// it inherits the behaviour without another special case. For ZIM it is
-	// also the difference between an idle library and a runaway one:
-	// preparing it EXPANDS the data ~3.5x (the source packs whole clusters
-	// with zstd, a text.db compresses one article at a time with DEFLATE,
-	// D24), so a 123 MB wiktionary would silently become a 431 MB text.db and
-	// an 8 GB wikipedia something no one asked for.
-	e.dMu.RLock()
-	si, selfIdx := e.d.(selfIndexed)
-	e.dMu.RUnlock()
-	if selfIdx && si.SelfIndexed() {
-		return
-	}
-	if !e.autoTried.CompareAndSwap(false, true) {
-		return
-	}
-	// Automatic only while it is cheap (O9). Above the gate the convenience
-	// stops being one: a 2.9 M-headword dictionary measured 17 s of saturated
-	// CPU and 553 MB peak on a laptop, and it is not the program's place to
-	// spend minutes of a phone's battery and a gigabyte of its disk on a
-	// dictionary nobody has asked for yet. Checked here rather than in
-	// previewWeight's budget because that budget prices the OPEN, which has
-	// already happened by the time this runs, and prices nothing about the
-	// ingest that follows it.
-	//
-	// The gate is the background lane's alone. demandIndex - the user chose
-	// this dictionary - stays ungated (D92): size is a reason to not do this
-	// unasked, never a reason to refuse what was asked for.
-	if n := entryCountOf(e); n > autoIndexMaxEntries {
-		// A format that prepares itself at open - DSL ingests inside dsl.Open -
-		// is already past this gate by the time anyone can read the line, and
-		// telling its owner to "select the dictionary to prepare it" describes
-		// work that has happened. The gate still returns: ensureBaseIndex would
-		// no-op anyway, and a size ceiling has nothing to say about a library
-		// that already exists.
-		if _, prepared := validPrepared(e.Path); !prepared {
-			logx.V("auto-index %s: %d entries is over the %d automatic ceiling; "+
-				"select the dictionary to prepare it", e.Path, n, autoIndexMaxEntries)
-		}
-		return
-	}
-	go func() {
-		defer acquire(indexLimit)() // at most INDEX_WORKERS of these run at once
-		// the queue is FIFO and an ingest takes minutes, so the state that
-		// permitted this may be long gone by the time the slot is ours
-		if CurrentPower() != PowerActive {
-			e.autoTried.Store(false)
-			return
-		}
-		// ensureBaseIndex is a no-op when this dictionary is already
-		// prepared, at whatever level its owner chose
-		if err := e.ensureBaseIndex(nil); err != nil {
-			// Once per process, and said out loud: an auto-index is not
-			// retried, so this line is the only account of why a dictionary
-			// stayed unprepared.
-			logx.Warn("could not prepare %s: %v", filepath.Base(e.Path), err)
-		} else {
-			logx.V("auto-index %s: index ready", e.Path)
-		}
-	}()
-}
-
-// demandIndex prepares this dictionary's headword index because the user asked
-// for THIS dictionary: they chose it in the selector, followed a link into it,
-// or opened a section the fan-out cap had deferred. Same work as
-// maybeAutoIndex, two differences - the queue, and what a failure means.
-//
-// maybeAutoIndex waits on indexLimit, which is one worker and, on a library of
-// a hundred dictionaries, hours long. That is right for a convenience nobody
-// asked for and wrong here: the deferred dictionary is already in that queue,
-// somewhere, and leaving it there would mean "I opened this one" buys nothing
-// until this evening - the user would meet the same deferral on the same
-// dictionary tomorrow. So a demand jumps to frontLimit, the lane setFeatures
-// uses for work a person is waiting on. At most one such ingest runs at a time,
-// alongside at most one background one; the ceiling on concurrent ingests goes
-// from one to two, and only ever because someone asked.
-//
-// A FAILED demand is retried, unlike a failed auto-index. The once-per-process
-// flag exists to stop a search from re-queueing an ingest on every keystroke,
-// not to make one unwritable folder or one full disk permanent for the life of
-// the process while the deferred section goes on offering a tap that can no
-// longer do anything. The flag is therefore released on failure, and
-// demandRetryAfter does the flag's real job: typing cannot re-queue anything,
-// and a person who reads the message and taps again gets a real second attempt.
-//
-// No power check, deliberately, and this is the one place that omits one. Every
-// other expensive thing here starts on the program's initiative and must not
-// start while the screen is off; this one starts because a finger touched the
-// screen. A demand declined for a stale power state - a thermal warning, a
-// battery-saver flag the shell has not yet cleared - is a dictionary that
-// searches but never prepares, with nothing said about why. The work is
-// bounded (one dictionary, one front slot) and it is the work the user is
-// waiting on.
-const demandRetryAfter = 30 * time.Second
-
-func (e *entry) demandIndex() {
-	// Nothing to prepare: return before anything is spent. Not an
-	// optimisation of a few milliseconds - the goroutine, the front slot and
-	// the power hold are all observable. HoldActiveProcs announces "work the
-	// user is waiting on" to the host (power.go), and on Android that hoists a
-	// foreground service for an ingest that ends 36 ms later.
-	if _, ok := validPrepared(e.Path); ok {
-		e.demanded.Store(true) // ready, so the UI stops offering to prepare it
-		return
-	}
-	if f := e.demandFail.Load(); f != 0 && time.Since(time.Unix(0, f)) < demandRetryAfter {
-		return
-	}
-	if !e.demanded.CompareAndSwap(false, true) {
-		return
-	}
-	go func() {
-		defer acquire(frontLimit)()
-		// Someone is waiting on this one, so it keeps every core it was
-		// started with even if the screen goes off mid-ingest (power.go
-		// HoldActiveProcs). The background lane deliberately gets no such
-		// exemption.
-		defer HoldActiveProcs()()
-		if err := e.ensureBaseIndex(nil); err != nil {
-			// Warn, not V: this is the whole reason the dictionary keeps
-			// asking to be tapped, and at V the user never sees it.
-			logx.Warn("could not prepare %s: %v", filepath.Base(e.Path), err)
-			e.demandFail.Store(time.Now().UnixNano())
-			e.demanded.Store(false) // the next demand, after the cooldown, retries
-			return
-		}
-		logx.V("demand-index %s: index ready", e.Path)
-	}()
-}
-
-// indexing reports that a demanded ingest is queued or running for this
-// dictionary, which is what turns the deferred section's "tap to search" into
-// "preparing…". It stays true after a successful one - harmless, because a
-// prepared dictionary weighs nothing and is never deferred again.
-func (e *entry) indexing() bool { return e.demanded.Load() }
 
 // open opens the source backend and, when a cached text.db (and
 // media.db) exists for it, wraps it into the upgraded view.
@@ -629,10 +518,7 @@ func (e *entry) open() (dict.Dictionary, error) {
 	// Read before the open, so the recorded resolution is the one this open
 	// actually acted on rather than whatever disk looked like once it finished.
 	backing, sig := backingDB(e.Path), sourceSig(e.Path)
-	// dsl, bgl and wudict markdown prepare themselves inside Open, and a
-	// re-prepare ends in a rename over text.db - which a backend superseded
-	// moments ago (a rescan that saw the source change) may still hold through
-	// its closeGrace. Fatal only on Windows; see registry_windows.go.
+	// Release any superseded direct source handle before opening the new view.
 	releaseSuperseded(e)
 	d, err = openUpgradedOrDirect(e.Path)
 	e.dMu.Lock()
@@ -808,18 +694,11 @@ func previewWeight(d dict.Dictionary, m dict.Meta) int64 {
 type selfWeighing interface{ PreviewBytes() int64 }
 
 // selfIndexed is a backend whose own file already answers exact and prefix
-// lookup at no resident cost. Preparation stays fully available for these -
-// the per-dictionary switches, `wudict ingest` - but it stops being automatic,
-// because the one thing maybeAutoIndex buys for other formats (getting a
-// headword index off the heap and onto disk) is already true here. See
-// maybeAutoIndex.
+// lookup at no resident cost. ZIM also supports a prepared title index for
+// Browse; other self-indexed formats do not need library preparation.
 type selfIndexed interface{ SelfIndexed() bool }
 
-// storeBacked matches anything answering from a prepared database - the
-// `upgraded`/`native` wrappers, and the formats that embed a *store.Store
-// directly because they have no native index (DSL, BGL). Type-switching on the
-// wrappers alone missed those, and a self-prepared dictionary would have been
-// counted as if it held a headword map in RAM.
+// storeBacked matches anything answering from a prepared database.
 type storeBacked interface{ SourcePath() string }
 
 // previewBytesPerEntry is the per-headword cost of a direct backend's in-memory
@@ -831,30 +710,6 @@ type storeBacked interface{ SourcePath() string }
 // Android over-charging sheds early, and under-charging is what gets a process
 // killed.
 const previewBytesPerEntry = 350
-
-// autoIndexMaxEntries is the headword count above which preparation stops
-// happening on the program's own initiative (O9). Measured against the local
-// 152-dictionary corpus: a prepared headwords-only text.db costs ~1 KB per
-// entry in aggregate, so this ceiling is about a gigabyte of disk and, at
-// previewBytesPerEntry, a third of a gigabyte resident during the scan. Only
-// two dictionaries in that corpus are above it. It is a ceiling on what is
-// automatic, not on what is possible.
-const autoIndexMaxEntries = 1_000_000
-
-// entryCountOf reads the headword count off an already-open backend. It never
-// opens one: maybeAutoIndex runs from a successful open, so the backend is
-// there, and a nil one (a test entry, an evicted backend) reports 0 - which
-// reads as "under the ceiling" and preserves the previous behaviour for
-// anything that cannot be measured.
-func entryCountOf(e *entry) int {
-	e.dMu.RLock()
-	d := e.d
-	e.dMu.RUnlock()
-	if d == nil {
-		return 0
-	}
-	return d.Meta().EntryCount
-}
 
 // evict drops this entry's open backend so its memory can be reclaimed. It
 // refuses while the dictionary is being prepared, and closes after a grace so
@@ -955,6 +810,20 @@ func openUpgradedOrDirect(path string) (dict.Dictionary, error) {
 		}
 		return &native{Store: s, path: path}, nil
 	}
+	// ZIM's own path list remains the default. An explicitly requested
+	// headword-only database may serve search and browsing, with article bodies
+	// still resolved from the source.
+	if strings.EqualFold(filepath.Ext(path), ".zim") {
+		if textDB, ok := store.PreparedFor(path); ok {
+			if prepared, err := store.Open(textDB); err == nil {
+				if prepared.Meta().HeadwordsOnly {
+					return &upgraded{Store: prepared, srcPath: path}, nil
+				}
+				prepared.Close()
+			}
+		}
+		return dict.Open(path)
+	}
 	// a prepared folder for this source short-circuits the heavy direct
 	// backend entirely - no probe needed, since the folder is located from
 	// the source path, not from the dictionary name.
@@ -981,16 +850,16 @@ func openUpgradedOrDirect(path string) (dict.Dictionary, error) {
 // non-empty registry. Opting in is a deliberate, remembered choice made on the
 // setup page ("Use these dictionaries").
 type Registry struct {
-	jobs      jobTable
-	dslAutoMu sync.Mutex
-	mu        sync.RWMutex
-	dictDirs  []string // dictionary folders: .mdx/.slob/.ifo/.dsl/.bgl sources
-	useCached bool     // include prepared dictionaries from the library (USE_CACHED)
-	entries   []*entry
-	byID      map[string]*entry
-	fromLib   int    // how many entries came from the library, not a dict folder
-	roots     []Root // per-folder status, for the startup summary and setup page
-	builtin   []Builtin
+	jobs         jobTable
+	indexQueueMu sync.Mutex
+	mu           sync.RWMutex
+	dictDirs     []string // dictionary folders containing supported source formats
+	useCached    bool     // include prepared dictionaries from the library (USE_CACHED)
+	entries      []*entry
+	byID         map[string]*entry
+	fromLib      int    // how many entries came from the library, not a dict folder
+	roots        []Root // per-folder status, for the startup summary and setup page
+	builtin      []Builtin
 
 	// previewBudget caps the memory unprepared dictionaries may hold open
 	// (PREVIEW_MEMORY; 0 = unlimited). Prepared ones answer from disk and are
@@ -1115,6 +984,10 @@ func (r *Registry) Dirs() []string {
 	return append([]string(nil), r.dictDirs...)
 }
 
+// RefreshPrefs invalidates the cached state after a host migration copies it
+// into the active user folder.
+func (r *Registry) RefreshPrefs() { r.prefs.refresh() }
+
 // Roots reports each dictionary folder with its status and contribution.
 func (r *Registry) Roots() []Root {
 	r.mu.RLock()
@@ -1163,6 +1036,16 @@ func (r *Registry) SetDirs(dirs []string) error {
 	return nil
 }
 
+// SetDirsDeferred updates the discovered folder list without starting index
+// preparation. The folder editor uses this when it needs to show imported
+// paths for review before the user chooses Use these folders.
+func (r *Registry) SetDirsDeferred(dirs []string) error {
+	r.mu.Lock()
+	r.dictDirs = dict.DedupeDirs(dirs)
+	r.mu.Unlock()
+	return r.rescan(false)
+}
+
 // Rescan re-discovers dictionaries, keeping already-open entries.
 func (r *Registry) Rescan() error {
 	return r.rescan(true)
@@ -1173,6 +1056,7 @@ func (r *Registry) rescan(prepare bool) error {
 	dirs := append([]string(nil), r.dictDirs...)
 	useCached := r.useCached
 	r.mu.RUnlock()
+	damaged := r.prefs.damagedSources()
 	paths, perRoot, err := dict.DiscoverAll(dirs)
 	if err != nil {
 		logx.V("scanning dictionary folders: %v", err)
@@ -1221,6 +1105,23 @@ func (r *Registry) rescan(prepare bool) error {
 		// to the builtin, or to nothing while the user's copy stands in.
 		lib := libraryPaths(append(paths, shipped...))
 		paths = append(paths, lib...)
+	}
+	if len(damaged) > 0 {
+		keptPaths := paths[:0]
+		for _, path := range paths {
+			source := damagedSourcePath(path)
+			if source != "" {
+				if signature, quarantined := damaged[cleanAbs(source)]; quarantined {
+					current := sourceSig(source)
+					if current == "" || current == signature {
+						store.IndexDiagnostic("skip damaged dictionary source=%q reason=quarantined", source)
+						continue
+					}
+				}
+			}
+			keptPaths = append(keptPaths, path)
+		}
+		paths = keptPaths
 	}
 	paths, err = r.singleDSLPaths(paths)
 	if err != nil {
@@ -1320,14 +1221,84 @@ func (r *Registry) rescan(prepare bool) error {
 	if !prepare {
 		return nil
 	}
-	if err := r.queueNewDSL(); err != nil {
+	if err := r.queueNewDictionaries(); err != nil {
 		return err
 	}
 	f, _ := r.prefs.data()
 	if len(f.DSLPending) != 0 {
-		go r.prepareNewDSL()
+		r.indexQueueMu.Lock()
+		r.jobs.start("initial-index-queue", 0, jobStatus{}, func(*job) {
+			r.prepareNewDictionaries()
+		})
+		r.indexQueueMu.Unlock()
 	}
 	return nil
+}
+
+func damagedSourcePath(path string) string {
+	if store.IsTextDB(path) {
+		meta, err := store.ReadMeta(path)
+		if err != nil || meta["source_path"] == "" {
+			return ""
+		}
+		path = meta["source_path"]
+	}
+	return path
+}
+
+func damagedDictionaryError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+		return true
+	}
+	message := strings.ToLower(err.Error())
+	for _, marker := range []string{
+		"bad magic", "corrupt or truncated file", "corrupt or unsupported file (parser panic:",
+		"file shorter than a zim header", "empty zim (", "unterminated mime list", "empty mime list",
+		"truncated", "out of range", "bad redirect to",
+	} {
+		if strings.Contains(message, marker) {
+			return true
+		}
+	}
+	return false
+}
+
+func (r *Registry) excludeDamaged(e *entry, cause error) bool {
+	if e == nil || !damagedDictionaryError(cause) {
+		return false
+	}
+	source := damagedSourcePath(e.Path)
+	if source == "" || store.IsTextDB(source) {
+		return false
+	}
+	signature := sourceSig(source)
+	if signature == "" {
+		return false
+	}
+	key := cleanAbs(source)
+	if err := r.prefs.markDamaged(key, signature); err != nil {
+		logx.Warn("could not persist damaged dictionary exclusion %s: %v", source, err)
+	}
+	r.mu.Lock()
+	if r.byID[e.ID] == e {
+		delete(r.byID, e.ID)
+		entries := r.entries[:0]
+		for _, current := range r.entries {
+			if current != e {
+				entries = append(entries, current)
+			}
+		}
+		r.entries = entries
+		if store.IsTextDB(e.Path) && r.fromLib > 0 {
+			r.fromLib--
+		}
+	}
+	r.mu.Unlock()
+	store.IndexDiagnostic("damaged dictionary excluded from list source=%q signature=%q reason=%q", source, signature, cause)
+	return true
 }
 
 // Counts reports how many dictionaries came from the dictionary folder and
@@ -1449,8 +1420,7 @@ func pathID(path string) string {
 // those builds an in-memory headword index (measured 300–500 B per headword),
 // and doing it for a whole library costs several GB of resident memory for
 // dictionaries nobody has searched yet (docs.local/PERF.md M2). An unprepared
-// dictionary is opened when something actually needs it: a search, or the
-// background indexer that is about to replace it with a prepared one.
+// dictionary stays closed until its queued or explicit index operation opens it.
 //
 // Disabled dictionaries are skipped. Turning one off is the user asking us to
 // stop spending on it, and a few MB of SQLite handle each is exactly the kind
@@ -1463,17 +1433,21 @@ func pathID(path string) string {
 // during the exact seconds the platform is measuring the app's launch cost.
 // The bet is good on a desktop that just started a long-lived server; it is a
 // bad one on a device that may be resuming an activity for a screen rotation.
-// The first search opens what it needs, once.
 func (r *Registry) Warm() {
 	if !warmEnabled || CurrentPower() != PowerActive {
 		return
 	}
 	entries := r.all()
 	prefs := r.prefs
+	r.jobs.wg.Add(1)
 	go func() {
+		defer r.jobs.wg.Done()
 		sem := make(chan struct{}, 4)
 		var wg sync.WaitGroup
 		for _, e := range entries {
+			if entryHasSelfIndex(e) {
+				continue
+			}
 			e.ingestMu.Lock()
 			_, prepared := validPrepared(e.Path)
 			e.ingestMu.Unlock()
@@ -1729,16 +1703,9 @@ func backingDB(path string) string {
 // thoroughly they have fixed the file in between.
 //
 // A backend resolved against a DIFFERENT database than the one now on disk is
-// dropped, along with the conclusions drawn from it: autoTried and demanded
-// both mean "this dictionary has been prepared, or has refused to be", and a
-// library folder that no longer exists refutes both. Without this, deleting a
-// prepared folder from the file manager would leave the entry holding a handle
-// to it - answering searches until SQLite needs a new connection, then failing
-// every one with "unable to open database file" - and neither preparation lane
-// would rebuild it, because both would be marked as done. It is also what keeps
-// the in-app removal path honest: Remove closes the backend and says the
-// dictionary "will be indexed again the next time it is searched", which holds
-// only because autoTried does not outlive the data it describes.
+// dropped. Without this, deleting a prepared folder from the file manager would
+// leave the entry holding a handle to it - answering searches until SQLite
+// needs a new connection, then failing with "unable to open database file".
 //
 // The same holds for the SOURCE: a file replaced in place keeps its path and
 // its library folder, so backing alone cannot see it. Its size and mtime are
@@ -1777,9 +1744,6 @@ func (e *entry) revalidate() {
 		e.dMu.Unlock()
 	}
 	// The dictionary this entry describes is not the one its flags describe.
-	e.autoTried.Store(false)
-	e.demanded.Store(false)
-	e.demandFail.Store(0)
 	e.abbrevTried.Store(false)
 	logx.V("rescan: %s changed underneath us (prepared=%v); reopening on next use",
 		filepath.Base(e.Path), now != "")
@@ -1857,12 +1821,34 @@ func (e *entry) reconcile(name string, t store.Target, progress store.Progress) 
 // paths do - so it must not take the lock a second time.
 func (e *entry) reconcileLocked(name string, t store.Target, progress store.Progress) (store.Outcome, error) {
 	defer e.rebuilding.Store(false) // releasePrepared may have armed it
-	out, err := store.Reconcile(e.Path, t, store.Hooks{
+	zim := isZIMPath(e.Path)
+	if entryHasSelfIndex(e) && !zim {
+		store.IndexDiagnostic("skip prepared database source=%q dictionary=%q reason=native-index", e.Path, name)
+		return store.Outcome{}, nil
+	}
+	hooks := store.Hooks{
 		Release:       func(textDB string) { releasePrepared(e, textDB) },
 		Backend:       e.mediaBackend,
 		Progress:      progress,
 		MediaProgress: progress,
-	})
+	}
+	if zim {
+		hooks.Reader = func() (dict.Reader, error) { return zimformat.NewHeadwordReader(e.Path) }
+		// A previous build may have left a conventional ZIM ingest in the
+		// library. The explicit Index action replaces it with the title-only
+		// form, even when source and ordinary plan stamps look current.
+		prepared := store.Prepared{}
+		if dir, ok := store.LookupDir(e.Path); ok {
+			prepared = store.Inspect(store.TextDBPath(dir))
+		}
+		if prepared.Meta == nil || prepared.Meta["index_kind"] != "headwords" {
+			t.Rebuild = store.Always
+		}
+	}
+	out, err := store.Reconcile(e.Path, t, hooks)
+	if err != nil && e.reg != nil {
+		e.reg.excludeDamaged(e, err)
+	}
 	if out.Rebuilt {
 		if len(out.Why) > 0 {
 			logx.V("%sprepared data was outdated (%v) - re-indexed", logx.Dict(name), out.Why)
@@ -1974,6 +1960,48 @@ func (e *entry) setFeatures(want features, progress store.Progress, force ...boo
 		FullText: &want.FullText, Contains: &want.Contains,
 		Media: media, Rebuild: rebuild,
 	}, progress)
+	return err
+}
+
+const demandRetryAfter = 30 * time.Second
+
+func (e *entry) demandIndex() {
+	if _, ok := validPrepared(e.Path); ok {
+		e.demanded.Store(true)
+		return
+	}
+	if f := e.demandFail.Load(); f != 0 && time.Since(time.Unix(0, f)) < demandRetryAfter {
+		return
+	}
+	if !e.demanded.CompareAndSwap(false, true) {
+		return
+	}
+	go func() {
+		defer acquire(frontLimit)()
+		defer HoldActiveProcs()()
+		if err := e.ensureBaseIndex(nil); err != nil {
+			logx.Warn("could not prepare %s: %v", filepath.Base(e.Path), err)
+			e.demandFail.Store(time.Now().UnixNano())
+			e.demanded.Store(false)
+		}
+	}()
+}
+func (e *entry) indexing() bool { return e.demanded.Load() }
+
+func (e *entry) ensureBaseIndex(progress store.Progress) error {
+	if e.indexBlocked() {
+		return errors.New("dictionary index was removed; create an index in Dictionary settings")
+	}
+	e.ingestMu.Lock()
+	defer e.ingestMu.Unlock()
+	if e.indexBlocked() {
+		return errors.New("dictionary index was removed; create an index in Dictionary settings")
+	}
+	defer e.rebuilding.Store(false)
+	if _, ok := validPrepared(e.Path); ok {
+		return nil
+	}
+	_, err := e.reconcileLocked(e.probeName(), store.Target{}, progress)
 	return err
 }
 
@@ -2198,30 +2226,6 @@ func (e *entry) reabsorbAbbrev() error {
 
 func abbrevChanged(why []store.Reason) bool { return slices.Contains(why, store.ReasonAbbrev) }
 
-// ensureBaseIndex builds the cheap find-only index when a dictionary has none
-// (D13's silent auto-index). It never strips: a dictionary that is "not
-// prepared" only because its source changed, or because its text.db is one
-// this build cannot open, is rebuilt with the plan it already had - the user's
-// full text and contains are not quietly demoted by a rebuild they did not ask
-// for. Media is left to the user: an orphaned media.db degrades to serving from
-// the source, and the dictionary is reported outdated until they rebuild it.
-func (e *entry) ensureBaseIndex(progress store.Progress) error {
-	if e.indexBlocked() {
-		return errors.New("dictionary index was removed; create an index in Dictionary settings")
-	}
-	e.ingestMu.Lock()
-	defer e.ingestMu.Unlock()
-	if e.indexBlocked() {
-		return errors.New("dictionary index was removed; create an index in Dictionary settings")
-	}
-	defer e.rebuilding.Store(false) // rebuild's releasePrepared may have armed it
-	if _, ok := validPrepared(e.Path); ok {
-		return nil // a text.db of its own, or already prepared at whatever level the user chose
-	}
-	_, err := e.reconcileLocked(e.probeName(), store.Target{}, progress)
-	return err
-}
-
 // probeName is a display name for log lines, read from the file header when
 // the format has a prober and falling back to the file name.
 func (e *entry) probeName() string {
@@ -2231,9 +2235,9 @@ func (e *entry) probeName() string {
 		}
 	}
 	e.dMu.RLock()
-	d := e.d
+	d, err := e.d, e.err
 	e.dMu.RUnlock()
-	if d != nil {
+	if d != nil && err == nil {
 		return d.Meta().Name
 	}
 	return filepath.Base(e.Path)

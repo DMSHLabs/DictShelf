@@ -7,12 +7,132 @@ package store
 import (
 	"context"
 	"database/sql"
+	"regexp"
 	"strings"
+	"time"
 	"unicode"
 	"unicode/utf8"
 
 	"github.com/wuweidict/wudict/internal/dict"
 )
+
+// StreamBrowseHeadwords emits matched headwords as soon as a result block is
+// ready. total is the number found so far; done marks the final exact count.
+func (s *Store) StreamBrowseHeadwords(ctx context.Context, query string, mask bool, emit func([]string, int, bool) error) error {
+	query = strings.TrimSpace(query)
+	if query == "" {
+		return emit(nil, 0, true)
+	}
+	var rows *sql.Rows
+	var err error
+	if mask {
+		re, compileErr := regexp.Compile("(?i)^" + wildcardRegexp(query) + "$")
+		if compileErr != nil {
+			return compileErr
+		}
+		stream := newBrowseRowStream(emit)
+		if literal := maskTrigramLiteral(query); s.hasTrigram && !s.staleFold && literal != "" && !maskHasASCIILead(query) {
+			phrase := `"` + strings.ReplaceAll(literal, `"`, `""`) + `"`
+			rows, queryErr := s.db.QueryContext(ctx, `SELECT DISTINCT e.w FROM entry_trigram t
+				JOIN entry e ON e.id=t.rowid WHERE entry_trigram MATCH ? AND `+browseWhere+
+				` ORDER BY e.w COLLATE NOCASE`, phrase)
+			if queryErr != nil {
+				return queryErr
+			}
+			if err := stream.rows(ctx, rows, re.MatchString); err != nil {
+				return err
+			}
+		} else {
+			for _, span := range maskIndexSpans(query) {
+				rows, queryErr := s.db.QueryContext(ctx, `SELECT w FROM entry WHERE `+browseWhere+span.where+browseOrder, span.args...)
+				if queryErr != nil {
+					return queryErr
+				}
+				if err := stream.rows(ctx, rows, re.MatchString); err != nil {
+					return err
+				}
+			}
+		}
+		return stream.finish()
+	}
+	if !strings.ContainsFunc(query, func(r rune) bool { return unicode.IsLetter(r) || unicode.IsNumber(r) }) {
+		return emit(nil, 0, true)
+	}
+	match := buildMatch(query, "w")
+	rows, err = s.db.QueryContext(ctx, `SELECT e.w FROM entry_fts f
+		JOIN entry e ON e.id=f.rowid WHERE entry_fts MATCH ? AND e.w NOT LIKE '@_%'
+		ORDER BY e.w COLLATE NOCASE`, match)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	terms := dict.HeadwordTermMatcher(query)
+	return streamBrowseRows(ctx, rows, terms, emit)
+}
+
+func streamBrowseRows(ctx context.Context, rows *sql.Rows, matches func(string) bool, emit func([]string, int, bool) error) error {
+	stream := newBrowseRowStream(emit)
+	if err := stream.rows(ctx, rows, matches); err != nil {
+		return err
+	}
+	return stream.finish()
+}
+
+type browseRowStream struct {
+	words        []string
+	total        int
+	previous     string
+	nextProgress time.Time
+	emit         func([]string, int, bool) error
+}
+
+func newBrowseRowStream(emit func([]string, int, bool) error) *browseRowStream {
+	return &browseRowStream{words: make([]string, 0, dict.MaskPageSize), nextProgress: time.Now().Add(time.Second), emit: emit}
+}
+
+func (s *browseRowStream) rows(ctx context.Context, rows *sql.Rows, matches func(string) bool) error {
+	defer rows.Close()
+	for rows.Next() {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		var word string
+		if err := rows.Scan(&word); err != nil {
+			return err
+		}
+		if word == s.previous {
+			continue
+		}
+		s.previous = word
+		if matches(word) {
+			s.words = append(s.words, word)
+			s.total++
+		}
+		now := time.Now()
+		if len(s.words) >= dict.MaskPageSize || (len(s.words) > 0 && !now.Before(s.nextProgress)) {
+			if err := s.emit(s.words, s.total, false); err != nil {
+				return err
+			}
+			s.words = make([]string, 0, dict.MaskPageSize)
+			s.nextProgress = now.Add(time.Second)
+		} else if now.After(s.nextProgress) {
+			if err := s.emit(nil, s.total, false); err != nil {
+				return err
+			}
+			s.nextProgress = now.Add(time.Second)
+		}
+	}
+	return rows.Err()
+}
+
+func (s *browseRowStream) finish() error {
+	if len(s.words) > 0 {
+		if err := s.emit(s.words, s.total, false); err != nil {
+			return err
+		}
+	}
+	return s.emit(nil, s.total, true)
+}
 
 // FindHeadwords uses the always-present FTS headword index. A token-prefix
 // match finds a word at the start or after a separator, wherever it occurs in
@@ -48,6 +168,93 @@ func (s *Store) FindHeadwords(ctx context.Context, query string, offset, limit i
 		words = append(words, word)
 	}
 	return words, total, rows.Err()
+}
+
+// FindHeadwordsMask scans the existing headword index and pages mask matches.
+func (s *Store) FindHeadwordsMask(ctx context.Context, query string, offset, limit int) ([]string, int, []dict.Letter, error) {
+	words, total, letters, _, err := s.FindHeadwordsMaskWithin(ctx, query, "", false, offset, limit)
+	return words, total, letters, err
+}
+
+// FindHeadwordsMaskWithin intersects the main mask with the bottom Browse
+// control. Positions address the unfiltered mask list for match navigation.
+func (s *Store) FindHeadwordsMaskWithin(ctx context.Context, query, within string, withinMask bool, offset, limit int) ([]string, int, []dict.Letter, []int, error) {
+	if offset < 0 {
+		offset = 0
+	}
+	if limit <= 0 {
+		return []string{}, 0, nil, nil, nil
+	}
+	re, err := regexp.Compile("(?i)^" + wildcardRegexp(query) + "$")
+	if err != nil {
+		return nil, 0, nil, nil, err
+	}
+	var withinRE *regexp.Regexp
+	if within != "" && withinMask {
+		withinRE, err = regexp.Compile("(?i)^" + wildcardRegexp(within) + "$")
+		if err != nil {
+			return nil, 0, nil, nil, err
+		}
+	}
+	matchTerms := dict.HeadwordTermMatcher(within)
+	words := make([]string, 0, limit)
+	positions := make([]int, 0, limit)
+	total, basePosition := 0, 0
+	var sections dict.MaskSections
+	visit := func(rows *sql.Rows) error {
+		defer rows.Close()
+		for rows.Next() {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			var word string
+			if err := rows.Scan(&word); err != nil {
+				return err
+			}
+			if !re.MatchString(word) {
+				continue
+			}
+			position := basePosition
+			basePosition++
+			if within != "" && (withinMask && !withinRE.MatchString(word) || !withinMask && !matchTerms(word)) {
+				continue
+			}
+			sections.Add(word)
+			if total >= offset && len(words) < limit {
+				words = append(words, word)
+				positions = append(positions, position)
+			}
+			total++
+		}
+		return rows.Err()
+	}
+
+	// Use the optional trigram index as a candidate source when the mask has
+	// a sufficiently long literal run. The complete mask still verifies every
+	// candidate. Otherwise, retain the regular headword-index scan.
+	if literal := maskTrigramLiteral(query); s.hasTrigram && !s.staleFold && literal != "" && !maskHasASCIILead(query) {
+		phrase := `"` + strings.ReplaceAll(literal, `"`, `""`) + `"`
+		rows, err := s.db.QueryContext(ctx, `SELECT DISTINCT e.w FROM entry_trigram t
+			JOIN entry e ON e.id=t.rowid WHERE entry_trigram MATCH ? AND `+browseWhere+
+			` ORDER BY e.w COLLATE NOCASE`, phrase)
+		if err != nil {
+			return nil, 0, nil, nil, err
+		}
+		if err := visit(rows); err != nil {
+			return nil, 0, nil, nil, err
+		}
+	} else {
+		for _, span := range maskIndexSpans(query) {
+			rows, err := s.db.QueryContext(ctx, `SELECT DISTINCT w FROM entry WHERE `+browseWhere+span.where+browseOrder, span.args...)
+			if err != nil {
+				return nil, 0, nil, nil, err
+			}
+			if err := visit(rows); err != nil {
+				return nil, 0, nil, nil, err
+			}
+		}
+	}
+	return words, total, sections.Finish(), positions, nil
 }
 
 // browseWhere hides the internal entries from every browse read. `@_%` is an

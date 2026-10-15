@@ -76,6 +76,7 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
 <title>{{T:pages.lemmas}}</title>
 <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
 <link rel="stylesheet" href="/assets/setup.css?v={{CSS}}">
+<link rel="stylesheet" href="/assets/workspace.css?v={{WORKSPACECSS}}">
 {{UI_SCALE_DEFAULTS}}
 <!-- The app halves of any preset that asked to be on this page too (manifest
      "pages" — Quiet labels is the one): attached by the server, after
@@ -117,7 +118,7 @@ html[data-shell-tone="dark"] {
   --line:rgba(230,220,201,.4); --accent:#ffc773; --ok:#aad3ad; --err:#ffb3ad;
 }
 /* Page-specific only; palette, card, buttons and typography are shared. */
-.card{max-width:640px;min-width:0;overflow-wrap:anywhere;padding-bottom:1em}
+.card{width:100%;max-width:none;min-width:0;overflow-wrap:anywhere;padding-bottom:1em}
 #list{margin:.618em 0 0;border:1px solid var(--line);border-radius:8px;overflow:hidden}
 .lrow{display:flex;flex-wrap:wrap;align-items:center;gap:.5em;
   padding:.5em .618em;border-bottom:1px solid var(--line);font-size:13.5px}
@@ -168,8 +169,8 @@ body{font-size:calc(var(--ui-font-base) * 1rem)}
 .lrow .nm{font-size:inherit}
 </style>
 </head>
-<body>
-<div class="card scroll-card">
+<body class="workspace-page">
+<div class="card scroll-card workspace-window">
 <!-- The page's closer (@see setup.css), same control as the configuration
      page's: back rather than a link to "/", so the page behind comes back as
      it was and the back gesture does not walk into this page again. Hidden on
@@ -178,7 +179,7 @@ body{font-size:calc(var(--ui-font-base) * 1rem)}
 <h1>{{T:pages.lemmas}}</h1>
 <button type="button" class="x" id="closePage" aria-label="{{T:pages.close}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
 </div>
-<div class="card-scroll">
+<div class="card-scroll workspace-scroll">
 <p>{{T:pages.lemmaIntro}}</p>
 
 <div id="banner" class="banner hidden"></div>

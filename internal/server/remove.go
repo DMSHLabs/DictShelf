@@ -40,10 +40,10 @@ import (
 //   - the ORIGINAL FILES - a dictionary is rarely one file, so the set comes
 //     from dict.SourceFiles and is shown to the user before anything happens.
 //
-// And the trap that sets the default: preparation is automatic (AUTO_INDEX).
-// Deleting only the prepared folder of a dictionary whose source is still in a
-// scanned folder frees space until the next search re-prepares it. Removing
-// both is therefore the default, and "index only" reports what will happen.
+// Deleting only the library folder leaves the dictionary files in place.
+// Search does not recreate the index; the user can create it again in
+// Dictionary Settings. Removing both is therefore the default, and "index
+// only" reports what will happen.
 
 // removal is what a removal did - reported back so the UI states outcomes
 // rather than assuming them, and so a partial failure is visible.

@@ -19,6 +19,7 @@ func (f prefsFile) clone() prefsFile {
 	f.DSLKnown = maps.Clone(f.DSLKnown)
 	f.DSLPending = maps.Clone(f.DSLPending)
 	f.DSLRemoved = maps.Clone(f.DSLRemoved)
+	f.Damaged = maps.Clone(f.Damaged)
 	if f.UI != nil {
 		v := *f.UI
 		v.GroupsOff = slices.Clone(v.GroupsOff)

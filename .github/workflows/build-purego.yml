@@ -35,9 +35,8 @@ jobs:
           - { goos: linux, goarch: arm, goarm: "7" } # Pi2; Pi3+ on a 32-bit OS
           - { goos: linux, goarch: arm, goarm: "6" } # Pi1, Zero, Zero W
           - { goos: linux, goarch: arm64 } # Pi3, Pi3B+, Zero2, Pi4, Pi5
-          # ── Windows ────────────────────────────────────────────
-          - { goos: windows, goarch: amd64, ext: ".exe" }
-          - { goos: windows, goarch: arm64, ext: ".exe" }
+          # Windows artifacts are built separately with the fork's WebView2
+          # desktop shell by build-windows.cmd.
           # ── Android (requires cgo) ────────────────────────────────────────────
     #           - { goos: android, goarch: arm64 }              # arm64-v8a - all devices sold since ~2017
     #           - { goos: android, goarch: arm,    goarm: "7" } # armeabi-v7a - legacy/budget 32-bit
@@ -105,12 +104,16 @@ jobs:
 
       - name: Create git tag if missing
         run: |
-          if git ls-remote --tags origin "refs/tags/${TAG}" | grep -q "${TAG}"; then
+          # --exit-code with the full ref, not `| grep -q "$TAG"`: an unanchored
+          # grep for "v0.1" matches an existing "v0.10".
+          if git ls-remote --exit-code --tags origin "refs/tags/${TAG}" > /dev/null 2>&1; then
             echo "Tag ${TAG} already exists - skipping."
           else
             git config user.name  "github-actions[bot]"
             git config user.email "github-actions[bot]@users.noreply.github.com"
-            git tag -a "${TAG}" -m "Release ${TAG}"
+            # The message keeps the shape of every hand-made tag in this
+            # repository (wuDict2 v0.11.1), so the two are one line in a log.
+            git tag -a "${TAG}" -m "wuDict2 ${TAG#wudict2-}"
             git push origin "${TAG}"
             echo "Tag ${TAG} pushed."
           fi

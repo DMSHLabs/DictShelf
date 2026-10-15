@@ -1,4 +1,4 @@
-@echo off
+﻿@echo off
 rem Copyright (C) 2026 DmShAl (Shepeta Dmitry)
 rem SPDX-License-Identifier: GPL-3.0-or-later
 setlocal EnableExtensions DisableDelayedExpansion
@@ -125,6 +125,9 @@ if not defined VERSION (
     set "VERSION=dev"
 )
 
+rem CI supplies the release tag so installer metadata matches the published artifact.
+if defined WUDICT_VERSION set "VERSION=%WUDICT_VERSION%"
+
 echo wuDict version:
 echo   %VERSION%
 echo.
@@ -228,7 +231,7 @@ set "CGO_ENABLED=%CGO%"
 go build ^
   -trimpath ^
   -tags %GO_TAGS% ^
-  -ldflags "%WINDOW_LDFLAGS% -s -w -X github.com/wuweidict/wudict/internal/cli.Version=%VERSION% -X github.com/wuweidict/wudict/internal/cli.ProductName=wuDict2" ^
+  -ldflags "%WINDOW_LDFLAGS% -s -w -X github.com/wuweidict/wudict/internal/cli.Version=%VERSION%" ^
   -o wuDict2.exe ^
   .
 

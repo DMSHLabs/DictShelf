@@ -190,6 +190,9 @@ func entryRewriter(dictID string, text func(string) string) htmlref.Rewriter {
 	relPrefix := "res/" + dictID + "/"
 
 	rw.Drop = func(tag string) bool { return tag == "base" }
+	// Controls-less HTML5 audio around a speaker image is invisible in a
+	// browser; expose the fallback as the play link it represents.
+	rw.PlayLinks = true
 	rw.URL = func(r htmlref.Ref) string {
 		ref := r.URL
 		// Refresh cached GD styles in already-prepared articles without reindexing.
