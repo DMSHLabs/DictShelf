@@ -1,8 +1,8 @@
 # Agent handoff — current state
-Checkout: branch `dev2` at `5a156d6`; merge in progress from `portable` at `dfcba90`.
+Checkout: branch `dev2` at `78667f4`; the `portable` merge is complete. Current work is uncommitted.
 
 ## Current work
-The merge keeps the Windows desktop build as one GUI `wuDict2.exe`; `build-windows.cmd console` builds the same executable with a console subsystem for diagnostics. Windows tray launch detection uses the executable subsystem and falls back to the browser for console runs. The native WebView bridge shares Go services for search, dictionary listing, indexing, reindexing, ingest and progress; HTTP remains available to the server and browser UI.
+The Windows desktop build is one GUI `wuDict2.exe`; `build-windows.cmd console` builds the same executable with a console subsystem for diagnostics. Windows tray launch detection uses the executable subsystem and falls back to the browser for console runs. The native WebView bridge shares Go services for search, dictionary listing, indexing, reindexing, ingest and progress. In Windows WebView, streamed search, the initial dictionary list and explicit index rescan now use direct bridge calls; browser mode and diagnostic dictionary-list requests retain HTTP. Other APIs and page, dictionary-resource and static-asset delivery still use the local server.
 
 Windows WebView2 marks every document at creation, including pages reached through in-app navigation, so desktop layout and local appearance storage stay active across pages. The `← Words` return link appears in the top bar before `wuDict2`; the duplicate status-bar link stays hidden. Dictionary selection uses the same in-page group, dictionary and search/filter dialog in browser, Windows WebView2 and Android WebView; Android's old native dictionary dialog and prompt route are removed.
 
@@ -19,7 +19,7 @@ Newly added dictionaries always queue the mandatory headword index, even before 
 Fork-specific dictionary groups, mask search, migration and Android identity remain enabled. Upstream how-to and wildcard features remain unwired as recorded in `AGENTS.md`.
 
 ## Verification
-The portable merge preview passes `go build ./...` and `build-windows.cmd`; `internal/config` and `internal/cli` tests pass. Store tests fail in `TestPrefix` and `TestDefaultPlanOmitsTrigram`, and the server suite retains known asynchronous-index, DSL-backend and fixture-cleanup failures. Portable startup and index relinking have not been exercised at runtime. The Windows appearance popup fix was confirmed by the user. Android picker behavior remains unverified on a device.
+The current direct-stream change passes `go build ./...` and `git diff --check`; tests were not run. Runtime verification of the Windows bridge calls is pending. The portable merge preview passed `build-windows.cmd`; `internal/config` and `internal/cli` tests passed. Store tests fail in `TestPrefix` and `TestDefaultPlanOmitsTrigram`, and the server suite retains known asynchronous-index, DSL-backend and fixture-cleanup failures. Portable startup and index relinking have not been exercised at runtime. The Windows appearance popup fix was confirmed by the user. Android picker behavior remains unverified on a device.
 
 ## Remaining manual check
-On Windows, verify portable startup with prepared dictionaries and confirm the indexes are reused after copying `Data`. Check the shared dictionary picker on Android.
+On Windows, rebuild and verify that startup/list, regular search, and explicit index rescan (including progress and Stop) work through the WebView bridge. Then verify portable startup with prepared dictionaries and confirm the indexes are reused after copying `Data`. Check the shared dictionary picker on Android.
