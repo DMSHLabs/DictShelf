@@ -7,6 +7,7 @@ package server
 import (
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -312,11 +313,18 @@ func (s *Server) handleRemoveLibrary(w http.ResponseWriter, r *http.Request) {
 			"in wudict.toml, or do it on the machine running wudict")
 		return
 	}
-	q := r.URL.Query()
+	rep, status, err := s.removeLibrary(r.URL.Query())
+	if err != nil {
+		httpErr(w, status, "%v", err)
+		return
+	}
+	writeJSON(w, rep)
+}
+
+func (s *Server) removeLibrary(q url.Values) (removal, int, error) {
 	id := strings.TrimSpace(q.Get("dict"))
 	if id == "" {
-		httpErr(w, 400, "missing dict parameter")
-		return
+		return removal{}, http.StatusBadRequest, fmt.Errorf("missing dict parameter")
 	}
 	// both default on: Remove… deletes the whole dictionary unless told to keep a half
 	prepared, sent := queryFlag(q, "prepared")
@@ -326,14 +334,12 @@ func (s *Server) handleRemoveLibrary(w http.ResponseWriter, r *http.Request) {
 	if source && !prepared && !s.reg.UseCached() {
 		// Its folder would survive but nothing would list it: the library is
 		// only enrolled when the user opted in (D19).
-		httpErr(w, 409, "turn on prepared dictionaries first, or this one would vanish from the list with its files")
-		return
+		return removal{}, http.StatusConflict, fmt.Errorf("turn on prepared dictionaries first, or this one would vanish from the list with its files")
 	}
 	builtin := s.reg.builtinID(id)
 	rep, err := s.reg.Remove(id, prepared, source)
 	if err != nil {
-		httpErr(w, 400, "%v", err)
-		return
+		return removal{}, http.StatusBadRequest, err
 	}
 	if builtin && s.User.Builtin() != "" {
 		// Recorded, so the next start does not write it back; Setup's
@@ -342,7 +348,7 @@ func (s *Server) handleRemoveLibrary(w http.ResponseWriter, r *http.Request) {
 			rep.Note = "it will be back at the next start: " + err.Error()
 		}
 	}
-	writeJSON(w, rep)
+	return rep, http.StatusOK, nil
 }
 
 // removalOffered says whether this caller may delete. Loopback always may: the

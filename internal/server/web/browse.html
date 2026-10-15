@@ -416,10 +416,33 @@ function browseTrace(step,data={}){
   enabled=enabled||browseDiagnosticsEnabled();
   if(!enabled)return;
   console.info("[browse]",step,data);
+  if(typeof window.wudictNativeCall==="function")return;
   const payload={event:step.replaceAll(" ","_")};
   for(const key of ["page","words","letters","bytes","readMs","fetchMs","totalMs","wordsMs","stripBuildMs","stripMarkMs","status","restored","streamAlphabet"])
     if(data[key]!==undefined)payload[key]=data[key];
   fetch("/api/browse-diagnostic",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload),keepalive:true}).catch(()=>{});
+}
+async function browseFetch(url,options={}){
+  if(typeof window.wudictNativeCall!=="function")return fetch(url,options);
+  const requestURL=new URL(url,location.href);
+  if(requestURL.origin!==location.origin)return fetch(url,options);
+  const method=(options.method||"GET").toUpperCase(),params=requestURL.searchParams;
+  if(requestURL.pathname==="/api/browse"&&method==="GET"){
+    if(params.get("stream")==="1")return nativeBrowseStream("browse",params.toString(),options.signal);
+    const result=await window.wudictNativeCall("browsePage",params.toString());
+    return {status:result.status,ok:result.status>=200&&result.status<300,json:async()=>result.body};
+  }
+  if(requestURL.pathname==="/api/browse/find"&&method==="GET"&&params.get("stream")==="1")
+    return nativeBrowseStream("browseFind",params.toString(),options.signal);
+  return fetch(url,options);
+}
+function nativeBrowseStream(method,query,signal){
+  const encoder=new TextEncoder();
+  const body=new ReadableStream({start(controller){
+    window.wudictNativeCall(method,query,message=>controller.enqueue(encoder.encode(JSON.stringify(message)+"\n")),signal)
+      .then(()=>controller.close()).catch(error=>controller.error(error));
+  }});
+  return {status:200,ok:true,body};
 }
 function restoreBrowseAlphabet(dict){
   if(browseAlphabetCache.has(dict))return;
@@ -633,7 +656,7 @@ async function show(opts,record){
   browseTrace("page request",{dict:requestDictId,page:opts.p||1,streamAlphabet,letters:browseAlphabetCache.get(requestDictId)?.letters.length||0});
   let r;
   const fetchStarted=performance.now();
-  try{r=await fetch("/api/browse?"+u.toString(),{signal:controller.signal});browseTrace("page response",{dict:requestDictId,status:r.status,fetchMs:Math.round(performance.now()-fetchStarted)})}
+  try{r=await browseFetch("/api/browse?"+u.toString(),{signal:controller.signal});browseTrace("page response",{dict:requestDictId,status:r.status,fetchMs:Math.round(performance.now()-fetchStarted)})}
   catch(e){clearTimeout(progressTimer);endProgress();browseTrace("page fetch failed",{status:e.name==="AbortError"?499:0,totalMs:Math.round(performance.now()-started)});if(seq===browseSeq){setBrowsePageBusy(false);if(e.name!=="AbortError")card("<b>"+tx("browse.noAnswer")+"</b><p>"+tx("browse.noAnswerBody")+"</p>")}return}
   if(seq!==browseSeq&&!streamAlphabet){clearTimeout(progressTimer);endProgress();return}
   if(r.status===409){clearTimeout(progressTimer);endProgress();setBrowsePageBusy(false);return unprepared(await r.json().catch(()=>({}))) }
@@ -677,7 +700,7 @@ async function show(opts,record){
         buffer=newline>=0?buffer.slice(newline+1):"";
         if(!line.trim())continue;
         const event=JSON.parse(line);
-        if(event.type==="error"){if(browseAlphabetTask?.controller===controller)throw new Error(event.error||"browse");return}
+        if(event.type==="error"){const error=new Error(event.error||"browse");error.status=event.status;if(browseAlphabetTask?.controller===controller)throw error;return}
         if(event.type==="page"){
           if(seq!==browseSeq)continue;
           state=event.page;state.mark=opts.o!=null?opts.o:state.at;rememberBrowsePage(state);
@@ -725,6 +748,7 @@ async function show(opts,record){
       if(!state)card("<b>"+tx("browse.loadingStopped")+"</b><p><a href=\"/browse\">"+tx("browse.chooseAnother")+"</a></p>");
       return;
     }
+    if(error.status===409){unprepared();return}
     if(!state)card("<b>"+tx("browse.cannotBrowse")+"</b><p>"+esc(error.message)+"</p><p><a href=\"/browse\">"+tx("browse.chooseAnother")+"</a></p>");
   }
 }
@@ -874,7 +898,7 @@ async function fetchFound(page,target=0,record="replace"){
   const finish=()=>{if(seq===findSeq)endProgress()};
   const u=new URLSearchParams({dict:dictId,q:query,wildcards:mask?"1":"0",stream:"1"});
   try{
-    const r=await fetch("/api/browse/find?"+u,{signal:controller.signal});
+    const r=await browseFetch("/api/browse/find?"+u,{signal:controller.signal});
     if(!r.ok){const body=await r.json().catch(()=>({}));throw new Error(body.error||`HTTP ${r.status}`)}
     updateFindControls();
     const reader=r.body.getReader(),decoder=new TextDecoder();let buffer="";
@@ -1007,6 +1031,7 @@ function browsePageMetrics(page){
   return {jsonBytes,heapBytes:chars*2+words.length*40+256,words:words.length};
 }
 function dictionaryCacheTrace(event,page){
+  if(typeof window.wudictNativeCall==="function")return;
   let enabled=false;try{enabled=localStorage.getItem("wudict_dictionary_cache_diagnostics")==="1"}catch(_){}
   if(!enabled||!page)return;
   const entries=[...browsePageCache.entries()].filter(([,item])=>item.dict===page.dict);
@@ -1057,7 +1082,7 @@ function prefetchBrowsePage(dict,pageNumber,lastPage){
   const key=browsePageKey(dict,pageNumber),running=browsePagePrefetches.get(key);
   if(running)return running;
   const controller=new AbortController();
-  const request=fetch("/api/browse?"+new URLSearchParams({dict,p:String(pageNumber),strip:"0"}),{signal:controller.signal})
+  const request=browseFetch("/api/browse?"+new URLSearchParams({dict,p:String(pageNumber),strip:"0"}),{signal:controller.signal})
     .then(response=>response.ok?response.json():null)
     .then(page=>{
       const alphabet=browseAlphabetCache.get(dict);
@@ -1220,22 +1245,31 @@ async function chooser(){
   browseTrace("chooser start");
   const heading='<div class="chooser-head"><b>'+tx("browse.choose")+'</b><button type="button" id="closeBrowseChooser" aria-label="'+tx("pages.close")+'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><p class="chooser-hint">'+tx("browse.chooseHint")+'</p>';
   card(heading);
-  let text="";
+  let text="",ds=[];
   const endProgress=browseProgress(t("browse.loadingDictionaries"));
   let prefs;
   try{
-    const [response,prefsResponse]=await Promise.all([fetch("/api/dicts"),fetch("/api/prefs")]);
-    browseTrace("chooser response",{status:response.status,fetchMs:Math.round(performance.now()-chooserStarted)});
-    if(!response.ok||!prefsResponse.ok)throw new Error("load");
-    [text,prefs]=await Promise.all([response.text(),prefsResponse.json()]);
+    if(typeof window.wudictNativeCall==="function"){
+      const rows=[];
+      [prefs]=await Promise.all([
+        window.wudictNativeCall("prefs",""),
+        window.wudictNativeCall("dicts","",message=>{if(message.t==="dict"&&message.dict&&!message.dict.error)rows.push(message.dict)})
+      ]);
+      ds=rows;
+      browseTrace("chooser response",{status:200,fetchMs:Math.round(performance.now()-chooserStarted)});
+    }else{
+      const [response,prefsResponse]=await Promise.all([fetch("/api/dicts"),fetch("/api/prefs")]);
+      browseTrace("chooser response",{status:response.status,fetchMs:Math.round(performance.now()-chooserStarted)});
+      if(!response.ok||!prefsResponse.ok)throw new Error("load");
+      [text,prefs]=await Promise.all([response.text(),prefsResponse.json()]);
+    }
   }catch(e){browseTrace("chooser failed",{totalMs:Math.round(performance.now()-chooserStarted)});endProgress();return card(heading+"<b>"+tx("browse.noAnswer")+"</b><p>"+tx("browse.loadFailed")+"</p>")}
   endProgress();
-  const ds=[];
-  for(const line of text.split("\n")){
-    if(!line)continue;
-    let m;try{m=JSON.parse(line)}catch(e){continue}
-    if(m.t==="dict"&&m.dict&&!m.dict.error){
-      ds.push(m.dict);
+  if(typeof window.wudictNativeCall!=="function"){
+    for(const line of text.split("\n")){
+      if(!line)continue;
+      let m;try{m=JSON.parse(line)}catch(e){continue}
+      if(m.t==="dict"&&m.dict&&!m.dict.error){ds.push(m.dict)}
     }
   }
   // Match the All Dictionaries group: its saved order, pinned head, and

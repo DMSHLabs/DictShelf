@@ -654,10 +654,18 @@ func htmlEscape(s string) string {
 // - the ones the setup page offers to use, and the basis of the USE_CACHED
 // choice. Reading it never enrolls them: listing is not consent.
 func (s *Server) handleLibrary(w http.ResponseWriter, r *http.Request) {
-	all, err := store.Library()
+	result, err := s.librarySnapshot()
 	if err != nil {
 		httpErr(w, 500, "reading library: %v", err)
 		return
+	}
+	writeJSON(w, result)
+}
+
+func (s *Server) librarySnapshot() (map[string]any, error) {
+	all, err := store.Library()
+	if err != nil {
+		return nil, fmt.Errorf("reading library: %w", err)
 	}
 	// The wudict howto's own library folder is the app's, not something the
 	// user imported: listing it under "previously imported" would say so.
@@ -667,12 +675,12 @@ func (s *Server) handleLibrary(w http.ResponseWriter, r *http.Request) {
 			entries = append(entries, e)
 		}
 	}
-	writeJSON(w, map[string]any{
+	return map[string]any{
 		"dir":       store.DefaultDBDir(),
 		"count":     len(entries),
 		"useCached": s.reg.UseCached(),
 		"entries":   entries,
-	})
+	}, nil
 }
 
 // setUseCached opts the library in or out, live, and remembers the choice so
