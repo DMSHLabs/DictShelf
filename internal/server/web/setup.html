@@ -24,12 +24,18 @@ function setupNavigation(path) {
 // postMessage carries the selected path back to the editor in either case.
 {
   let folderPicked = null;
+  let archivePicked = null;
   window.addEventListener('message', event => {
-    if (event.origin !== location.origin || ![window, window.parent].includes(event.source) ||
-        event.data?.type !== 'wudict-folder-picked') return;
-    const callback = folderPicked;
-    folderPicked = null;
-    if (callback && typeof event.data.path === 'string') callback(event.data.path);
+    if (event.origin !== location.origin || ![window, window.parent].includes(event.source)) return;
+    if(event.data?.type==='wudict-folder-picked'){
+      const callback = folderPicked;
+      folderPicked = null;
+      if (callback && typeof event.data.path === 'string') callback(event.data.path);
+    }else if(event.data?.type==='wudict-archive-picked'){
+      const callback = archivePicked;
+      archivePicked = null;
+      if (callback && typeof event.data.path === 'string') callback(event.data.path);
+    }
   });
   if (wudictDialogMode && typeof window.parent.wudictChooseFolder === 'function') {
     window.wudictPickFolder = callback => {
@@ -43,6 +49,13 @@ function setupNavigation(path) {
       window.wudictChooseFolder();
     };
     document.documentElement.setAttribute('data-folder-picker', '');
+  }
+  if (typeof window.parent.wudictChooseArchive === 'function') {
+    window.wudictPickArchive = callback => {
+      archivePicked = callback;
+      if(wudictDialogMode)window.parent.postMessage({type:'wudict-archive-picker-request'},location.origin);
+      else window.parent.wudictChooseArchive();
+    };
   }
 }
 // An optional host background. Session storage preserves it across page reloads;
@@ -611,12 +624,13 @@ const sizeMB=n=>n<1e3?n+" B":n<1e6?Math.round(n/1e3)+" kB":n<1e7?(n/1e6).toFixed
 function impSay(text,cls){const m=$("impMsg");m.textContent=text;m.className=cls||""}
 
 async function impGET(){
-  try{ return await (await fetch("/api/intake")).json() }catch(e){ return null }
+  try{ return typeof nativeSetupCall==="function"
+    ? await nativeSetupCall("intakeStatus") : await (await fetch("/api/intake")).json() }
+  catch(e){ return null }
 }
 
-/* One archive, from the file picker or from a drop. Sent as the request body
-   rather than through a form: a dictionary bundle is routinely a gigabyte, and
-   multipart would mean the browser builds that in memory first. */
+/* A browser-selected or dropped archive. Windows sends bounded chunks through
+   the native bridge; browser and Android keep the streaming HTTP upload. */
 async function impSend(file){
   if(!file||impBusy)return;
   impBusy=true;
@@ -624,12 +638,50 @@ async function impSend(file){
   $("found").classList.add("hidden");
   let r,j;
   try{
-    r=await fetch("/api/intake?name="+encodeURIComponent(file.name),{method:"POST",body:file});
-    j=await r.json();
+    if(typeof nativeSetupCall==="function")j=await impSendNativeFile(file);
+    else{
+      r=await fetch("/api/intake?name="+encodeURIComponent(file.name),{method:"POST",body:file});
+      j=await r.json();
+    }
   }catch(e){ impBusy=false; impSay(tx("pages.readFailed",{name:file.name}),"err"); return }
   impBusy=false;
-  if(!r.ok||j.error){impSay("✕ "+(window.wudictI18n.errorText(j&&j.error)||tx("pages.cannotImport")),"err");return}
+  if(r&&!r.ok||j.error){impSay("✕ "+(window.wudictI18n.errorText(j&&j.error)||tx("pages.cannotImport")),"err");return}
   showCandidates(j);
+}
+
+function intakeChunkBase64(buffer){
+  const bytes=new Uint8Array(buffer);let binary="";
+  for(let offset=0;offset<bytes.length;offset+=32768)
+    binary+=String.fromCharCode(...bytes.subarray(offset,Math.min(offset+32768,bytes.length)));
+  return btoa(binary);
+}
+async function impSendNativeFile(file){
+  const started=await nativeSetupCall("intakeFileStart",JSON.stringify({name:file.name,size:file.size}));
+  const id=started.id,chunkSize=4*1024*1024;
+  try{
+    for(let offset=0;offset<file.size;offset+=chunkSize){
+      const end=Math.min(offset+chunkSize,file.size),data=intakeChunkBase64(await file.slice(offset,end).arrayBuffer());
+      await nativeSetupCall("intakeFileChunk",JSON.stringify({id,data}));
+      impSay(tx("pages.reading",{name:file.name})+" · "+Math.round(end/file.size*100)+"%");
+    }
+    return await nativeSetupCall("intakeFileFinish",id);
+  }catch(error){
+    await nativeSetupCall("intakeFileCancel",id).catch(()=>{});
+    throw error;
+  }
+}
+
+async function impSendPath(path){
+  if(!path||impBusy)return;
+  impBusy=true;
+  impSay(tx("pages.reading",{name:path.split(/[\\/]/).pop()}));
+  $("found").classList.add("hidden");
+  try{
+    const j=await nativeSetupCall("intakePath",path);
+    impBusy=false;
+    if(j.error){impSay("✕ "+window.wudictI18n.errorText(j.error),"err");return}
+    showCandidates(j);
+  }catch(e){impBusy=false;impSay("✕ "+(window.wudictI18n.errorText(e.message)||tx("pages.cannotImport")),"err")}
 }
 
 /* A link, fetched by the server rather than by this page. Not a download
@@ -645,11 +697,11 @@ async function impFetch(){
   $("found").classList.add("hidden");
   let r,j;
   try{
-    r=await fetch("/api/intake?url="+encodeURIComponent(u),{method:"POST"});
-    j=await r.json();
-  }catch(e){ impBusy=false; impSay(tx("pages.cannotOpenMark"),"err"); return }
+    if(typeof nativeSetupCall==="function")j=await nativeSetupCall("intakeURL",u);
+    else {r=await fetch("/api/intake?url="+encodeURIComponent(u),{method:"POST"});j=await r.json()}
+  }catch(e){ impBusy=false; impSay("✕ "+(window.wudictI18n.errorText(e.message)||tx("pages.cannotOpenMark")),"err"); return }
   impBusy=false;
-  if(!r.ok||j.error){impSay("✕ "+(window.wudictI18n.errorText(j&&j.error)||tx("pages.cannotOpen")),"err");return}
+  if(r&&!r.ok||j.error){impSay("✕ "+(window.wudictI18n.errorText(j&&j.error)||tx("pages.cannotOpen")),"err");return}
   $("url").value="";
   impRender(j);
   impPoll();
@@ -772,12 +824,12 @@ async function impInstall(){
   $("install").disabled=true;
   let r,j;
   try{
-    r=await fetch("/api/intake?confirm=1",{method:"POST",
-      headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({pick:pick,keep:$("srcKeep").checked,extras:extras})});
-    j=await r.json();
-  }catch(e){ impSay(tx("pages.cannotStartMark"),"err"); return }
-  if(!r.ok||j.error){impSay("✕ "+(window.wudictI18n.errorText(j&&j.error)||tx("pages.cannotStart")),"err");
+    const body=JSON.stringify({pick:pick,keep:$("srcKeep").checked,extras:extras});
+    if(typeof nativeSetupCall==="function")j=await nativeSetupCall("intakeConfirm",body);
+    else {r=await fetch("/api/intake?confirm=1",{method:"POST",
+      headers:{"Content-Type":"application/json"},body});j=await r.json()}
+  }catch(e){ impSay("✕ "+(window.wudictI18n.errorText(e.message)||tx("pages.cannotStartMark")),"err"); return }
+  if(r&&!r.ok||j.error){impSay("✕ "+(window.wudictI18n.errorText(j&&j.error)||tx("pages.cannotStart")),"err");
     $("install").disabled=false;return}
   $("found").classList.add("hidden");
   impPoll();
@@ -833,7 +885,8 @@ function impRender(j){
 
 async function impCancel(){
   clearTimeout(impTimer);
-  try{ await fetch("/api/intake",{method:"DELETE"}) }catch(e){}
+  try{if(typeof nativeSetupCall==="function")await nativeSetupCall("intakeCancel");
+    else await fetch("/api/intake",{method:"DELETE"})}catch(e){}
   $("found").classList.add("hidden");
   impSay("");
 }
@@ -843,29 +896,36 @@ async function impCancel(){
 async function howtoBack(e){
   e.preventDefault();
   const msg=$("howtoBackRow");
-  let r;
-  try{ r=await fetch("/api/howto?restore=1",{method:"POST"}) }
-  catch(_){ msg.textContent=tx("pages.notAnswering");return }
-  const j=await r.json().catch(()=>({}));
-  msg.textContent=r.ok?tx("pages.howtoRestored")
-                      :"✕ "+(window.wudictI18n.errorText(j.error)||("HTTP "+r.status));
+  try{
+    if(typeof nativeSetupCall==="function")await nativeSetupCall("howto","restore");
+    else {const r=await fetch("/api/howto?restore=1",{method:"POST"});
+      const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||"HTTP "+r.status)}
+    msg.textContent=tx("pages.howtoRestored");
+  }catch(e){msg.textContent="✕ "+window.wudictI18n.errorText(e.message||tx("pages.notAnswering"))}
 }
 
 async function howtoCopy(e){
   e.preventDefault();
-  let r;
-  try{ r=await fetch("/api/howto",{method:"POST"}) }
-  catch(_){ impSay(tx("pages.notAnswering"),"err");return }
-  const j=await r.json().catch(()=>({}));
-  if(!r.ok){impSay("✕ "+(window.wudictI18n.errorText(j.error)||("HTTP "+r.status)),"err");return}
-  impSay(tx("pages.howtoAdded",{path:j.path}),"ok");
+  try{
+    let j;
+    if(typeof nativeSetupCall==="function")j=await nativeSetupCall("howto","copy");
+    else {const r=await fetch("/api/howto",{method:"POST"});j=await r.json().catch(()=>({}));
+      if(!r.ok)throw new Error(j.error||"HTTP "+r.status)}
+    impSay(tx("pages.howtoAdded",{path:j.path}),"ok");
+  }catch(e){impSay("✕ "+window.wudictI18n.errorText(e.message||tx("pages.notAnswering")),"err")}
 }
 
 function wireIntake(dir){
   if(!dir)return; // nowhere to install into yet: the folder above comes first
   $("addDir").textContent=dir;
   $("addSection").classList.remove("hidden");
-  $("choose").addEventListener("click",()=>$("file").click());
+  $("choose").addEventListener("click",()=>{
+    if(typeof nativeSetupCall==="function"&&typeof window.wudictPickArchive==="function"){
+      window.wudictPickArchive(impSendPath);
+      return;
+    }
+    $("file").click();
+  });
   $("file").addEventListener("change",()=>{const f=$("file").files[0];$("file").value="";impSend(f)});
   $("fetch").addEventListener("click",impFetch);
   $("url").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();impFetch()}});

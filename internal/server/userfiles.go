@@ -198,6 +198,17 @@ func (s *Server) handleFiles(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, s.userFilesPayload())
 }
 
+type userFileError struct {
+	status  int
+	message string
+}
+
+func (e *userFileError) Error() string { return e.message }
+
+func userFileFailure(status int, message string) error {
+	return &userFileError{status: status, message: message}
+}
+
 // POST /api/files?name=<name>[&replace=1] - the body is the file, raw.
 //
 // Raw rather than multipart: there is exactly one file per request and no
@@ -211,35 +222,11 @@ func (s *Server) handleFileUpload(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, http.StatusBadRequest, "%s", "bad request: name must be 1-64 characters of A-Z a-z 0-9 . _ - and start with a letter or digit")
 		return
 	}
-	dir := s.userFilesDir()
-	if dir == "" {
+	if s.userFilesDir() == "" {
 		httpErr(w, http.StatusConflict, "%s", "no config directory: there is nowhere to save files")
 		return
 	}
 	replace, _ := queryFlag(r.URL.Query(), "replace")
-
-	// The caps are measured against the store as it will be AFTER the write,
-	// so replacing an 8 MiB file with a smaller one is never refused for being
-	// the 65th file or for a total it is about to reduce.
-	var total int64
-	count := 0
-	exists := false
-	for _, f := range s.userFileList() {
-		if f.Name == name {
-			exists = true
-			continue
-		}
-		total += f.Size
-		count++
-	}
-	if exists && !replace {
-		httpErr(w, http.StatusConflict, "%s", "a file named "+name+" is already there")
-		return
-	}
-	if count+1 > maxUserFiles {
-		httpErr(w, http.StatusRequestEntityTooLarge, "%s", "too many files")
-		return
-	}
 
 	// One byte past the cap, so a body that is exactly at the limit is
 	// accepted and the first one over is refused by length rather than by the
@@ -254,24 +241,58 @@ func (s *Server) handleFileUpload(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, http.StatusBadRequest, "%s", "bad request: "+err.Error())
 		return
 	}
-	if len(body) == 0 {
-		httpErr(w, http.StatusBadRequest, "%s", "bad request: empty file")
+	payload, err := s.saveUserFile(name, replace, body)
+	if err != nil {
+		var failure *userFileError
+		if errors.As(err, &failure) {
+			httpErr(w, failure.status, "%s", failure.message)
+		} else {
+			httpErr(w, http.StatusInternalServerError, "%s", "could not save "+name+": "+err.Error())
+		}
 		return
 	}
-	if len(body) > maxUserFileBytes {
-		httpErr(w, http.StatusRequestEntityTooLarge, "%s", "file is too large")
-		return
+	writeJSON(w, payload)
+}
+
+func (s *Server) saveUserFile(name string, replace bool, body []byte) (map[string]any, error) {
+	if !isUserFileName(name) {
+		return nil, userFileFailure(http.StatusBadRequest, "bad request: name must be 1-64 characters of A-Z a-z 0-9 . _ - and start with a letter or digit")
 	}
-	if total+int64(len(body)) > maxUserFilesBytes {
-		httpErr(w, http.StatusRequestEntityTooLarge, "%s", "not enough room: the files folder would be over its limit")
-		return
+	if s.userFilesDir() == "" {
+		return nil, userFileFailure(http.StatusConflict, "no config directory: there is nowhere to save files")
 	}
 
-	if err := s.userFileWrite(name, body); err != nil {
-		httpErr(w, http.StatusInternalServerError, "%s", "could not save "+name+": "+err.Error())
-		return
+	// Measure caps against the store after the write, so replacing a larger
+	// file does not count its old size or occupy a second slot.
+	var total int64
+	count, exists := 0, false
+	for _, f := range s.userFileList() {
+		if f.Name == name {
+			exists = true
+			continue
+		}
+		total += f.Size
+		count++
 	}
-	writeJSON(w, s.userFilesPayload())
+	if exists && !replace {
+		return nil, userFileFailure(http.StatusConflict, "a file named "+name+" is already there")
+	}
+	if count+1 > maxUserFiles {
+		return nil, userFileFailure(http.StatusRequestEntityTooLarge, "too many files")
+	}
+	if len(body) == 0 {
+		return nil, userFileFailure(http.StatusBadRequest, "bad request: empty file")
+	}
+	if len(body) > maxUserFileBytes {
+		return nil, userFileFailure(http.StatusRequestEntityTooLarge, "file is too large")
+	}
+	if total+int64(len(body)) > maxUserFilesBytes {
+		return nil, userFileFailure(http.StatusRequestEntityTooLarge, "not enough room: the files folder would be over its limit")
+	}
+	if err := s.userFileWrite(name, body); err != nil {
+		return nil, userFileFailure(http.StatusInternalServerError, "could not save "+name+": "+err.Error())
+	}
+	return s.userFilesPayload(), nil
 }
 
 // userFileWrite replaces one file atomically (fsx.WriteAtomic): a crash or a
@@ -290,14 +311,26 @@ func (s *Server) userFileWrite(name string, body []byte) error {
 // manager has to explain a race it cannot prevent.
 func (s *Server) handleFileDelete(w http.ResponseWriter, r *http.Request) {
 	name := r.URL.Query().Get("name")
+	payload, err := s.deleteUserFile(name)
+	if err != nil {
+		var failure *userFileError
+		if errors.As(err, &failure) {
+			httpErr(w, failure.status, "%s", failure.message)
+		} else {
+			httpErr(w, http.StatusInternalServerError, "%s", err.Error())
+		}
+		return
+	}
+	writeJSON(w, payload)
+}
+
+func (s *Server) deleteUserFile(name string) (map[string]any, error) {
 	p := s.userFilePath(name)
 	if p == "" {
-		httpErr(w, http.StatusBadRequest, "%s", "bad request: unknown file name")
-		return
+		return nil, userFileFailure(http.StatusBadRequest, "bad request: unknown file name")
 	}
 	if err := fsx.RemoveIfExists(p); err != nil {
-		httpErr(w, http.StatusInternalServerError, "%s", "could not remove "+name+": "+err.Error())
-		return
+		return nil, userFileFailure(http.StatusInternalServerError, "could not remove "+name+": "+err.Error())
 	}
-	writeJSON(w, s.userFilesPayload())
+	return s.userFilesPayload(), nil
 }

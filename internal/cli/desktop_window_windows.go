@@ -9,13 +9,16 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"sync"
@@ -32,6 +35,7 @@ import (
 var (
 	desktopWindowMu         sync.Mutex
 	desktopWindow           webview.WebView
+	desktopWindowAddress    string
 	desktopWindowStarting   bool
 	windowUser32            = syscall.NewLazyDLL("user32.dll")
 	windowShowWindow        = windowUser32.NewProc("ShowWindow")
@@ -39,13 +43,15 @@ var (
 	windowShell32           = syscall.NewLazyDLL("shell32.dll")
 	windowBrowseForFolder   = windowShell32.NewProc("SHBrowseForFolderW")
 	windowGetPathFromIDList = windowShell32.NewProc("SHGetPathFromIDListW")
+	windowComdlg32          = syscall.NewLazyDLL("comdlg32.dll")
+	windowGetOpenFileName   = windowComdlg32.NewProc("GetOpenFileNameW")
 	windowOle32             = syscall.NewLazyDLL("ole32.dll")
 	windowCoTaskMemFree     = windowOle32.NewProc("CoTaskMemFree")
 )
 
 // openDesktopWindow opens the local reader on a dedicated Windows UI thread.
 // The tray keeps the main thread; WebView2 owns the locked thread below.
-func openDesktopWindow(address string, onClose func(), desktopRequest func(string, string) (any, error), desktopStream func(context.Context, string, string, func([]byte)) error) bool {
+func openDesktopWindow(address, appAddress string, onClose func(), desktopRequest func(context.Context, string, string) (any, error), desktopStream func(context.Context, string, string, func([]byte)) error, desktopResource desktopResourceHandler) bool {
 	version, err := webviewloader.GetInstalledVersion()
 	if err != nil || version == "" {
 		logx.Warn("WebView2 unavailable; opening the browser: %v", err)
@@ -63,18 +69,14 @@ func openDesktopWindow(address string, onClose func(), desktopRequest func(strin
 		logx.Warn("WebView2 profile unavailable: %v", err)
 		return false
 	}
-	local, err := desktopWindowURL(address)
-	if err != nil {
-		return false
-	}
-	local = desktopWindowURLWithMarker(local)
 	desktopWindowMu.Lock()
 	if desktopWindow != nil {
 		w := desktopWindow
+		navigationAddress := desktopWindowAddress
 		desktopWindowMu.Unlock()
 		w.Dispatch(func() {
-			if local != "" {
-				w.Navigate(local)
+			if navigationAddress != "" {
+				w.Navigate(navigationAddress)
 			}
 			hwnd := uintptr(w.Window())
 			windowShowWindow.Call(hwnd, 9) // SW_RESTORE
@@ -88,19 +90,27 @@ func openDesktopWindow(address string, onClose func(), desktopRequest func(strin
 	}
 	desktopWindowStarting = true
 	desktopWindowMu.Unlock()
-	go runDesktopWindow(local, profile, onClose, desktopRequest, desktopStream)
+	go runDesktopWindow(address, appAddress, profile, onClose, desktopRequest, desktopStream, desktopResource)
 	return true
 }
 
-func runDesktopWindow(address, profile string, onClose func(), desktopRequest func(string, string) (any, error), desktopStream func(context.Context, string, string, func([]byte)) error) {
+func runDesktopWindow(address, appAddress, profile string, onClose func(), desktopRequest func(context.Context, string, string) (any, error), desktopStream func(context.Context, string, string, func([]byte)) error, desktopResource desktopResourceHandler) {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			log.Printf("WebView2 panic: %v\n%s", recovered, debug.Stack())
+			panic(recovered)
+		}
+	}()
+	log.Printf("WebView2 startup: creating window; profile=%q", profile)
 	w := webview.NewWithOptions(webview.WebViewOptions{
 		DataPath:      profile,
 		AutoFocus:     true,
 		WindowOptions: webview.WindowOptions{Title: "wuDict2", Width: 1120, Height: 820, IconId: 101, Center: true},
 	})
 	if w == nil {
+		log.Printf("WebView2 startup: window creation returned nil")
 		desktopWindowMu.Lock()
 		desktopWindowStarting = false
 		desktopWindowMu.Unlock()
@@ -110,9 +120,34 @@ func runDesktopWindow(address, profile string, onClose func(), desktopRequest fu
 		}
 		return
 	}
+	log.Printf("WebView2 startup: window created")
 	local, _ := url.Parse(address)
+	app, _ := url.Parse(appAddress)
+	log.Printf("WebView2 startup: parsed app and loopback origins")
+	navigationAddress := address
+	virtualOrigin := false
+	log.Printf("WebView2 startup: preparing in-process origin")
+	if desktopResource != nil && local != nil && app != nil {
+		if resourceView, ok := w.(webview.WebResourceView); ok {
+			filter := local.Scheme + "://" + local.Host + "/*"
+			filter += "|" + app.Scheme + "://" + app.Host + "/*"
+			if err := resourceView.SetWebResourceRequestedHandler(filter, webview.WebResourceHandler(desktopResource)); err != nil {
+				logx.Warn("WebView2 resource interception unavailable; using the loopback page: %v", err)
+			} else {
+				navigationAddress, virtualOrigin = appAddress, true
+				log.Printf("WebView2 startup: in-process origin enabled; filter=%q", filter)
+			}
+		} else {
+			logx.Warn("WebView2 resource interception unavailable; using the loopback page")
+		}
+	}
+	log.Printf("WebView2 startup: in-process origin enabled=%t; initial target=%q", virtualOrigin, navigationAddress)
 	if desktopRequest != nil || desktopStream != nil {
-		bindNativeBridge(w, local.String(), desktopRequest, desktopStream)
+		baseURL := local.String()
+		if virtualOrigin {
+			baseURL = app.String()
+		}
+		bindNativeBridge(w, baseURL, desktopRequest, desktopStream)
 	}
 	var folderCallbackPending atomic.Bool
 	_ = w.Bind("wudictChooseFolder", func() error {
@@ -128,12 +163,26 @@ func runDesktopWindow(address, profile string, onClose func(), desktopRequest fu
 		})
 		return nil
 	})
+	var archiveCallbackPending atomic.Bool
+	_ = w.Bind("wudictChooseArchive", func() error {
+		if !archiveCallbackPending.CompareAndSwap(false, true) {
+			return nil
+		}
+		w.Dispatch(func() {
+			path, ok := chooseDesktopArchive(uintptr(w.Window()))
+			if ok {
+				w.Eval("window.postMessage({type:'wudict-archive-picked',path:" + jsString(path) + "},location.origin)")
+			}
+			archiveCallbackPending.Store(false)
+		})
+		return nil
+	})
 	_ = w.Bind("wudictOpenExternal", func(raw string) error {
 		link, err := url.Parse(raw)
 		if err != nil || (link.Scheme != "http" && link.Scheme != "https") || link.Host == "" {
 			return fmt.Errorf("invalid external link")
 		}
-		if local != nil && strings.EqualFold(link.Host, local.Host) {
+		if local != nil && strings.EqualFold(link.Host, local.Host) || virtualOrigin && app != nil && strings.EqualFold(link.Host, app.Host) {
 			return nil
 		}
 		return exec.Command("rundll32", "url.dll,FileProtocolHandler", link.String()).Start()
@@ -146,17 +195,102 @@ func runDesktopWindow(address, profile string, onClose func(), desktopRequest fu
   }}catch(_){ }
 },true);`)
 	done := make(chan struct{})
+	storageMigrationPending := false
+	if virtualOrigin && local != nil && app != nil {
+		storageMarker := filepath.Join(profile, "virtual-origin-storage-v1")
+		if _, err := os.Stat(storageMarker); errors.Is(err, os.ErrNotExist) {
+			storageMigrationPending = true
+			var exportStarted atomic.Bool
+			startVirtualApp := func(entries string) {
+				if !exportStarted.CompareAndSwap(false, true) {
+					return
+				}
+				log.Printf("WebView2 storage migration: switching to virtual origin; exported bytes=%d", len(entries))
+				if len(entries) > 8<<20 {
+					entries = "[]"
+				}
+				seed, _ := json.Marshal(entries)
+				seedScript := `(function(){if(location.origin!==` + jsString(app.Scheme+"://"+app.Host) + `)return;var key="wudict_native_storage_seed_v1";if(localStorage.getItem(key)!=="1"){try{var rows=JSON.parse(` + string(seed) + `);for(var i=0;i<rows.length;i++){var row=rows[i];if(Array.isArray(row)&&row.length===2&&typeof row[0]==="string"&&typeof row[1]==="string"&&localStorage.getItem(row[0])===null)localStorage.setItem(row[0],row[1])}localStorage.setItem(key,"1")}catch(_){}}if(typeof window.wudictStorageSeeded==="function")window.wudictStorageSeeded().catch(function(){})})();`
+				w.Dispatch(func() {
+					log.Printf("WebView2 storage migration: navigating to %q", appAddress)
+					desktopWindowMu.Lock()
+					desktopWindowAddress = appAddress
+					desktopWindowMu.Unlock()
+					w.Init(seedScript)
+					w.Navigate(appAddress)
+				})
+			}
+			_ = w.Bind("wudictExportStorage", func(entries string) error {
+				log.Printf("WebView2 storage migration: received old-origin storage; bytes=%d", len(entries))
+				startVirtualApp(entries)
+				return nil
+			})
+			var markerWritten atomic.Bool
+			_ = w.Bind("wudictStorageSeeded", func() error {
+				log.Printf("WebView2 storage migration: new-origin seed callback received")
+				if markerWritten.CompareAndSwap(false, true) {
+					if err := os.WriteFile(storageMarker, []byte("ok\n"), 0600); err != nil {
+						logx.Warn("WebView2 storage migration marker failed: %v", err)
+					}
+				}
+				return nil
+			})
+			oldOrigin := local.Scheme + "://" + local.Host
+			w.Init(`(function(){
+  if(location.origin!==` + jsString(oldOrigin) + `||window!==window.top)return;
+  function exportStorage(){
+    var attempts=0;
+    function send(){
+      if(typeof window.wudictExportStorage==="function"){
+        if(document.documentElement)document.documentElement.style.visibility="hidden";
+        try{
+          var rows=[];
+          for(var i=0;i<localStorage.length;i++){
+            var key=localStorage.key(i);
+            rows.push([key,localStorage.getItem(key)]);
+          }
+          window.wudictExportStorage(JSON.stringify(rows));
+        }catch(_){window.wudictExportStorage("[]")}
+        return;
+      }
+      if(++attempts<100)setTimeout(send,100);
+    }
+    send();
+  }
+  if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",exportStorage,{once:true});
+  else exportStorage();
+})();`)
+			time.AfterFunc(15*time.Second, func() {
+				if !exportStarted.Load() {
+					log.Printf("WebView2 storage migration: old-origin export did not respond; staying on the working loopback page")
+				}
+			})
+		} else if err != nil {
+			logx.Warn("WebView2 storage migration state unavailable: %v", err)
+		}
+	}
+	initialNavigationAddress := navigationAddress
+	if storageMigrationPending {
+		// localStorage is scoped to the old loopback origin. Load it once in
+		// the hidden WebView so the exporter can seed the new virtual origin.
+		initialNavigationAddress = address
+	}
+	log.Printf("WebView2 startup: navigating to %q; localStorage migration=%t", initialNavigationAddress, storageMigrationPending)
 	desktopWindowMu.Lock()
 	desktopWindow = w
+	desktopWindowAddress = initialNavigationAddress
 	desktopWindowStarting = false
 	desktopWindowMu.Unlock()
-	w.Navigate(address)
+	w.Navigate(initialNavigationAddress)
+	log.Printf("WebView2 startup: navigation submitted")
 	go watchDesktopServer(w, local, done)
 	w.Run()
+	log.Printf("WebView2 window loop returned")
 	close(done)
 	w.Destroy()
 	desktopWindowMu.Lock()
 	desktopWindow = nil
+	desktopWindowAddress = ""
 	desktopWindowMu.Unlock()
 	if onClose != nil {
 		onClose()
@@ -168,7 +302,7 @@ type nativeCall struct{ cancel context.CancelFunc }
 var nativeCallsMu sync.Mutex
 var nativeCalls = map[int]nativeCall{}
 
-func bindNativeBridge(w webview.WebView, baseURL string, request func(string, string) (any, error), stream func(context.Context, string, string, func([]byte)) error) {
+func bindNativeBridge(w webview.WebView, baseURL string, request func(context.Context, string, string) (any, error), stream func(context.Context, string, string, func([]byte)) error) {
 	if err := w.Bind("wudictNativeCancel", func(id int) error {
 		nativeCallsMu.Lock()
 		call, ok := nativeCalls[id]
@@ -199,7 +333,7 @@ func bindNativeBridge(w webview.WebView, baseURL string, request func(string, st
 					w.Eval("window.wudictNativeReply(" + strconv.Itoa(id) + "," + string(payload) + "," + string(errorJSON) + "," + strconv.FormatBool(done) + ")")
 				})
 			}
-			if (method == "search" || method == "ingest" || method == "dicts" || method == "rescanIndexes" || method == "browse" || method == "browseFind") && stream != nil {
+			if (method == "search" || method == "ingest" || method == "dicts" || method == "rescan" || method == "rescanIndexes" || method == "browse" || method == "browseFind") && stream != nil {
 				err := stream(ctx, method, argument, func(message []byte) {
 					var value any
 					if json.Unmarshal(message, &value) == nil {
@@ -216,7 +350,7 @@ func bindNativeBridge(w webview.WebView, baseURL string, request func(string, st
 				reply(nil, fmt.Errorf("native request API unavailable"), true)
 				return
 			}
-			value, err := request(method, argument)
+			value, err := request(ctx, method, argument)
 			if ctx.Err() == nil {
 				reply(value, err, true)
 			}
@@ -226,10 +360,10 @@ func bindNativeBridge(w webview.WebView, baseURL string, request func(string, st
 		logx.Warn("WebView2 native request binding failed: %v", err)
 		return
 	}
-	w.Init(`(function(){document.documentElement.setAttribute('data-webview2','');var next=1,pending=new Map();window.wudictNativeShell=true;window.wudictWindowsShell=true;window.wudictDesktopAppearance=true;window.wudictNativeCall=function(method,argument,onMessage,signal){return new Promise(function(resolve,reject){var id=next++,call={resolve:resolve,reject:reject,onMessage:onMessage};pending.set(id,call);if(signal){if(signal.aborted){pending.delete(id);reject(new DOMException('Aborted','AbortError'));return}signal.addEventListener('abort',function(){pending.delete(id);window.wudictNativeCancel(id);var e=new Error('search cancelled');e.name='AbortError';reject(e)},{once:true})}window.wudictNativeRequest(id,method,argument||'').catch(function(error){window.wudictNativeReply(id,null,String(error),true)})})};window.wudictNativeReply=function(id,value,error,done){var call=pending.get(id);if(!call)return;if(error){pending.delete(id);call.reject(new Error(error));return}if(value!==null&&call.onMessage)call.onMessage(value);if(done){pending.delete(id);call.resolve(value)}};window.addEventListener('pagehide',function(){for(var [id,call] of pending){pending.delete(id);window.wudictNativeCancel(id);call.reject(new Error('page closed'))}})})();`)
+	w.Init(`(function(){function markWebView(){if(document.documentElement)document.documentElement.setAttribute('data-webview2','')}if(document.documentElement)markWebView();else document.addEventListener('DOMContentLoaded',markWebView,{once:true});var next=1,pending=new Map();window.wudictNativeShell=true;window.wudictWindowsShell=true;window.wudictDesktopAppearance=true;window.wudictNativeCall=function(method,argument,onMessage,signal){return new Promise(function(resolve,reject){var id=next++,call={resolve:resolve,reject:reject,onMessage:onMessage};pending.set(id,call);if(signal){if(signal.aborted){pending.delete(id);reject(new DOMException('Aborted','AbortError'));return}signal.addEventListener('abort',function(){pending.delete(id);window.wudictNativeCancel(id);var e=new Error('search cancelled');e.name='AbortError';reject(e)},{once:true})}window.wudictNativeRequest(id,method,argument||'').catch(function(error){window.wudictNativeReply(id,null,String(error),true)})})};window.wudictNativeReply=function(id,value,error,done){var call=pending.get(id);if(!call)return;if(error){pending.delete(id);call.reject(new Error(error));return}if(value!==null&&call.onMessage)call.onMessage(value);if(done){pending.delete(id);call.resolve(value)}};window.addEventListener('pagehide',function(){for(var [id,call] of pending){pending.delete(id);window.wudictNativeCancel(id);call.reject(new Error('page closed'))}})})();`)
 	// A restored page can retain an older appearanceRequest implementation.
 	// Handle its Android prompt protocol here before WebView2 shows a JS dialog.
-	w.Init(`(function(){var prompt=window.prompt;window.prompt=function(message,value){if(message==='wudict:appearance'&&(location.hostname==='127.0.0.1'||location.hostname==='localhost')){try{window.wudictDesktopAppearance=true;var request=JSON.parse(value||'{}');return JSON.stringify(typeof desktopAppearanceRequest==='function'?desktopAppearanceRequest(request):null)}catch(_){return 'null'}}return prompt.apply(window,arguments)}})();`)
+	w.Init(`(function(){var prompt=window.prompt;window.prompt=function(message,value){if(message==='wudict:appearance'&&window.wudictWindowsShell===true){try{window.wudictDesktopAppearance=true;var request=JSON.parse(value||'{}');return JSON.stringify(typeof desktopAppearanceRequest==='function'?desktopAppearanceRequest(request):null)}catch(_){return 'null'}}return prompt.apply(window,arguments)}})();`)
 }
 
 func errorText(err error) string {
@@ -284,6 +418,73 @@ func chooseDesktopFolder(owner uintptr) (string, bool) {
 	return "", false
 }
 
+// chooseDesktopArchive uses the Windows file dialog so a selected archive can
+// be read by Go in place rather than streamed through the local HTTP server.
+func chooseDesktopArchive(owner uintptr) (string, bool) {
+	const (
+		ofExplorer      = 0x00080000
+		ofFileMustExist = 0x00001000
+		ofPathMustExist = 0x00000800
+		ofNoChangeDir   = 0x00000008
+	)
+	type openFileName struct {
+		structSize       uint32
+		owner            uintptr
+		instance         uintptr
+		filter           *uint16
+		customFilter     *uint16
+		maxCustFilter    uint32
+		filterIndex      uint32
+		file             *uint16
+		maxFile          uint32
+		fileTitle        *uint16
+		maxFileTitle     uint32
+		initialDir       *uint16
+		title            *uint16
+		flags            uint32
+		fileOffset       uint16
+		fileExtension    uint16
+		defaultExtension *uint16
+		customData       uintptr
+		hook             uintptr
+		templateName     *uint16
+		reservedPtr      uintptr
+		reserved         uint32
+		flagsEx          uint32
+	}
+	filter := utf16MultiString("Dictionary archives and files\x00*.zip;*.7z;*.mdx;*.mdd;*.ifo;*.idx;*.dict;*.dz;*.syn;*.dsl;*.slob;*.bgl;*.zim;*.md;*.gz\x00All files\x00*.*")
+	title, _ := syscall.UTF16PtrFromString("Choose a dictionary file")
+	buffer := make([]uint16, 32768)
+	info := openFileName{
+		structSize: uint32(unsafe.Sizeof(openFileName{})), owner: owner,
+		filter: &filter[0], filterIndex: 1, file: &buffer[0], maxFile: uint32(len(buffer)),
+		title: title, flags: ofExplorer | ofFileMustExist | ofPathMustExist | ofNoChangeDir,
+	}
+	ok, _, _ := windowGetOpenFileName.Call(uintptr(unsafe.Pointer(&info)))
+	runtime.KeepAlive(filter)
+	runtime.KeepAlive(title)
+	runtime.KeepAlive(buffer)
+	if ok == 0 {
+		return "", false
+	}
+	for i, ch := range buffer {
+		if ch == 0 {
+			return syscall.UTF16ToString(buffer[:i]), true
+		}
+	}
+	return "", false
+}
+
+func utf16MultiString(value string) []uint16 {
+	units := make([]uint16, 0, len(value)+1)
+	for _, part := range strings.Split(value, "\x00") {
+		encoded, _ := syscall.UTF16FromString(part)
+		units = append(units, encoded[:len(encoded)-1]...)
+		units = append(units, 0)
+	}
+	return append(units, 0)
+}
+
 func jsString(s string) string {
 	quoted, _ := json.Marshal(s)
 	return string(quoted)
@@ -302,9 +503,16 @@ func watchDesktopServer(w webview.WebView, address *url.URL, done <-chan struct{
 		}
 		if alive {
 			seen, missed = true, 0
+			log.Printf("WebView2 server watch: server alive; status=%s server=%q", response.Status, response.Header.Get("Server"))
 		} else if seen {
 			missed++
+			if err != nil {
+				log.Printf("WebView2 server watch: probe failed; missed=%d error=%v", missed, err)
+			} else {
+				log.Printf("WebView2 server watch: unexpected response; missed=%d status=%s server=%q", missed, response.Status, response.Header.Get("Server"))
+			}
 			if missed >= 3 {
+				log.Printf("WebView2 server watch: terminating window after three failed probes")
 				w.Dispatch(func() { w.Terminate() })
 				return
 			}

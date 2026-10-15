@@ -177,6 +177,8 @@ An APK was not built or installed during those translation stages. The later pre
 
 Category localization: targeted `Test(I18n|AppearanceContract)` server tests, `go test ./internal/facet ./internal/lang`, `node tools/i18n-test.cjs`, and `git diff --check` passed. The new Node cases cover labels, language pairs, unknown values, absent language-name support, HTML escaping, unchanged metadata, and identical selected dictionary IDs. No APK build or device check was performed.
 
+Windows transport stage (2026-10-15): Settings saves the manually selected interface language through the native bridge, which calls the same `Prefs.setLanguage` operation as the HTTP adapter. `go build ./...`, `git diff --check`, and the GUI `build-windows.cmd` build pass. Verify English/Russian selection and persistence after reload in the Windows app; catalogs and language-selection behavior were not changed.
+
 ## 7. Maintaining this file
 
 After each stage, mark completed work, remove outdated descriptions of remaining work, and record new specific risks/unverified items. For verification, state the type of evidence: code/local test/browser/emulator/user report. Do not turn a local test into a claim about a phone.

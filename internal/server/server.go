@@ -145,6 +145,11 @@ type Server struct {
 	// dictRows keeps /api/dicts rows between requests (dictrows.go).
 	dictRows rowCache
 
+	// desktopUploads hold short-lived streams for archive files sent by the
+	// Windows WebView in chunks through its native bridge.
+	desktopUploadsMu sync.Mutex
+	desktopUploads   map[string]*desktopIntakeUpload
+
 	// ConfigPath, when set, is where the first-run setup flow persists
 	// DICT_DIR. In-memory state is updated regardless, so setup works
 	// even when the folder came from a CLI flag or the file is read-only.

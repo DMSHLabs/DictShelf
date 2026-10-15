@@ -1251,6 +1251,15 @@ const tx=window.wudictI18n.t;
 function systemLogClick(event){
   if(!window.wudictNativeShell)return;
   event.preventDefault();
+  if(typeof window.wudictNativeCall==="function"){
+    window.wudictNativeCall("systemLog").then(({content,filename})=>{
+      const url=URL.createObjectURL(new Blob([content],{type:"text/plain;charset=utf-8"}));
+      const link=document.createElement("a");link.href=url;link.download=filename;
+      document.body.appendChild(link);link.click();link.remove();
+      setTimeout(()=>URL.revokeObjectURL(url),1000);
+    }).catch(error=>alert(window.wudictI18n.errorText(error.message)));
+    return;
+  }
   const result=prompt("wudict:system-log","");
   if(result&&result!=="ok")alert(result);
 }
@@ -1345,6 +1354,7 @@ async function apiFetch(url,options){
       else if(requestURL.pathname==="/api/reindex"&&method==="GET")nativeMethod="reindex";
       else if(requestURL.pathname==="/api/reindex"&&method==="POST")nativeMethod="startReindex";
       else if(requestURL.pathname==="/api/reindex"&&method==="DELETE")nativeMethod="stopReindex";
+      else if(requestURL.pathname==="/api/exit"&&method==="POST")nativeMethod="exitApp";
       else if(requestURL.pathname==="/api/about"&&method==="GET"){
         nativeMethod="about";argument=requestURL.searchParams.get("dict")||"";
       }
@@ -1356,11 +1366,34 @@ async function apiFetch(url,options){
       else if(requestURL.pathname==="/api/orphans"&&method==="POST"){
         nativeMethod="resolveOrphans";argument=options.body||"{}";
       }
+      else if(requestURL.pathname==="/api/files"&&method==="GET")nativeMethod="userFiles";
+      else if(requestURL.pathname==="/api/files"&&method==="DELETE"){
+        nativeMethod="deleteUserFile";argument=requestURL.searchParams.get("name")||"";
+      }
+      else if(requestURL.pathname==="/api/files"&&method==="POST"){
+        const file=options.body;
+        if(!(file instanceof Blob))throw new Error("invalid file upload");
+        const dataURL=await new Promise((resolve,reject)=>{
+          const reader=new FileReader();reader.onload=()=>resolve(String(reader.result||""));
+          reader.onerror=()=>reject(new Error("could not read file"));reader.readAsDataURL(file);
+        });
+        nativeMethod="saveUserFile";
+        argument=JSON.stringify({name:requestURL.searchParams.get("name")||"",
+          replace:requestURL.searchParams.get("replace")==="1",
+          data:String(dataURL).slice(String(dataURL).indexOf(",")+1)});
+      }
       else if(requestURL.pathname==="/api/looks"||requestURL.pathname==="/api/looks/apply"){
         nativeMethod="looks";argument=JSON.stringify({path:requestURL.pathname,method,body:options.body||""});
       }
+      else if(requestURL.pathname==="/api/browse/find"&&method==="GET"&&requestURL.searchParams.get("stream")!=="1"){
+        nativeMethod="browseFindPage";argument=requestURL.searchParams.toString();
+      }
       if(nativeMethod){
-        const value=await window.wudictNativeCall(nativeMethod,argument);
+        const value=await window.wudictNativeCall(nativeMethod,argument,undefined,options&&options.signal);
+        if(nativeMethod==="browseFindPage"){
+          const status=value.status||200,result=status>=400?{error:value.error||tx("search.failedDict"),prepared:value.prepared}:value;
+          return {ok:status>=200&&status<300,status,json:async()=>result,text:async()=>JSON.stringify(result)};
+        }
         if(nativeMethod==="saveStyle"){
           const status=value.status||200;
           const result=value.value||{error:value.error||"style save failed"};
@@ -1368,6 +1401,22 @@ async function apiFetch(url,options){
         }
         return {ok:true,status:200,json:async()=>value};
       }
+    }
+  }
+  return fetch(url,options);
+}
+function browseFindStreamFetch(url,options={}){
+  if(typeof window.wudictNativeCall==="function"){
+    const requestURL=new URL(url,window.location.href);
+    if(requestURL.origin===window.location.origin&&requestURL.pathname==="/api/browse/find"&&
+       requestURL.searchParams.get("stream")==="1"){
+      const encoder=new TextEncoder(),signal=options.signal,query=requestURL.searchParams.toString();
+      const body=new ReadableStream({start(controller){
+        window.wudictNativeCall("browseFind",query,message=>
+          controller.enqueue(encoder.encode(JSON.stringify(message)+"\n")),signal)
+          .then(()=>controller.close()).catch(error=>controller.error(error));
+      }});
+      return Promise.resolve({status:200,ok:true,body});
     }
   }
   return fetch(url,options);
@@ -1920,8 +1969,8 @@ function applyArticleCSS(css){
 async function loadUserCSS(){
   if(STYLE_OFF)return;
   try{
-    const r=await fetch("/style/article.css");
-    if(r.ok)applyArticleCSS(await r.text());
+    const r=await apiFetch("/api/style");
+    if(r.ok){const styles=await r.json();applyArticleCSS(styles.article||"")}
   }catch(e){console.warn("could not load custom article CSS:",e)}
 }
 
@@ -2385,8 +2434,7 @@ async function openWebDictionaryPicker(){
     const paintStarted=performance.now();
     const rows=paintWebDictionaryPicker();
     const paintMs=Math.round(performance.now()-paintStarted);
-    if(dictionaryListDiagnosticsEnabled())fetch('/api/browse-diagnostic',{method:'POST',headers:{'Content-Type':'application/json'},keepalive:true,
-      body:JSON.stringify({event:'dictionary_picker_open',words:rows,fetchMs:groupsMs,wordsMs:paintMs,totalMs:Math.round(performance.now()-started)})}).catch(()=>{});
+    if(dictionaryListDiagnosticsEnabled())sendBrowseDiagnostic({event:'dictionary_picker_open',words:rows,fetchMs:groupsMs,wordsMs:paintMs,totalMs:Math.round(performance.now()-started)});
     dialog.showModal();
     if(!webPickerSearch){
       webPickerSearch=window.wudictListSearch.create({
@@ -2700,9 +2748,8 @@ async function loadDicts(rescan){
   const renderStarted=performance.now();
   refreshDictUI(true);
   const renderMs=Math.round(performance.now()-renderStarted);
-  if(listDiagnostics)fetch("/api/browse-diagnostic",{method:"POST",headers:{"Content-Type":"application/json"},keepalive:true,
-    body:JSON.stringify({event:"dictionary_list_client",words:dicts.length,fetchMs:Math.max(0,beginMs),
-      wordsMs:Math.max(0,firstRowMs),totalMs:streamMs,stripBuildMs:renderMs})}).catch(()=>{});
+  if(listDiagnostics)sendBrowseDiagnostic({event:"dictionary_list_client",words:dicts.length,fetchMs:Math.max(0,beginMs),
+    wordsMs:Math.max(0,firstRowMs),totalMs:streamMs,stripBuildMs:renderMs});
   setPhase("ready");
   clearStatus("load");
   // a search run against a half-loaded list is now answerable in full
@@ -3322,6 +3369,10 @@ window.addEventListener("message",event=>{
     if(typeof window.wudictChooseFolder==="function")window.wudictChooseFolder();
     return;
   }
+  if(event.data?.type==="wudict-archive-picker-request"){
+    if(typeof window.wudictChooseArchive==="function")window.wudictChooseArchive();
+    return;
+  }
   if(event.data?.type==="wudict-workspace-close"){
     $("workspaceFrameWindow").close();
     if(event.data.changed==="setup")loadDicts().then(ok=>{if(ok){loadFolders();reissueIfCorpusMoved()}});
@@ -3434,11 +3485,10 @@ let sysState=null;   // the shell's last answer: the switches, the rows, the add
 let sysCfg=null;     // the server's last /api/config answer, or null when it did not
 const sysRows=[];    // one entry per Advanced row: {row, field, hint}
 $("exitApp").addEventListener("click",async()=>{
-  if(window.wudictNativeShell){window.prompt("wudict:exit","");return}
   if(!cfgInfo?.canExit)return;
   const button=$("exitApp");button.disabled=true;
   try{
-    const r=await fetch("/api/exit",{method:"POST"});
+    const r=await apiFetch("/api/exit",{method:"POST"});
     if(!r.ok)throw new Error(await apiError(r));
     button.textContent=tx("system.desktopStopped");
   }catch(e){button.disabled=false;setStatus(esc(tx("system.desktopExitFailed",{error:window.wudictI18n.errorText(e.message)})))}
@@ -3774,7 +3824,7 @@ async function showDesktopSysSettings(){
   const folderText=document.createElement("span");folderText.className="sys-label";folderText.textContent=tx("system.folderDiagnostics");
   folderLabel.append(folderDiagnostics,folderText);body.append(folderLabel);
   const saveLog=document.createElement("a");saveLog.className="btn";saveLog.href="/api/system-log";saveLog.download="";
-  saveLog.textContent=tx("panel.saveSystemLog");body.append(saveLog);
+  saveLog.textContent=tx("panel.saveSystemLog");saveLog.addEventListener("click",systemLogClick);body.append(saveLog);
   if(c.configPath){
     const path=document.createElement("p");path.className="sys-desktop-path";
     path.textContent=c.configPath;body.append(path);
@@ -3825,6 +3875,10 @@ $("sysKey").addEventListener("change",e=>sysSwitch("key",e.target.checked));
 function browseDiagnosticsEnabled(){try{return localStorage.getItem("wudict_browse_diagnostics")==="1"}catch(_){return false}}
 function setBrowseDiagnostics(on){try{if(on)localStorage.setItem("wudict_browse_diagnostics","1");else localStorage.removeItem("wudict_browse_diagnostics")}catch(_){}}
 function dictionaryListDiagnosticsEnabled(){try{return localStorage.getItem("wudict_dictionary_list_diagnostics")==="1"}catch(_){return false}}
+function sendBrowseDiagnostic(payload){
+  if(typeof window.wudictNativeCall==="function")return window.wudictNativeCall("browseDiagnostic",JSON.stringify(payload)).catch(()=>{});
+  return fetch("/api/browse-diagnostic",{method:"POST",headers:{"Content-Type":"application/json"},keepalive:true,body:JSON.stringify(payload)}).catch(()=>{});
+}
 function setDictionaryListDiagnostics(on){try{if(on)localStorage.setItem("wudict_dictionary_list_diagnostics","1");else localStorage.removeItem("wudict_dictionary_list_diagnostics")}catch(_){}}
 function dictionaryCacheDiagnosticsEnabled(){try{return localStorage.getItem("wudict_dictionary_cache_diagnostics")==="1"}catch(_){return false}}
 function setDictionaryCacheDiagnostics(on){try{if(on)localStorage.setItem("wudict_dictionary_cache_diagnostics","1");else localStorage.removeItem("wudict_dictionary_cache_diagnostics")}catch(_){}}
@@ -5054,6 +5108,10 @@ async function fetchStream(url,onMsg,signal,options){
         await window.wudictNativeCall("dicts","",onMsg,signal);
         return;
       }
+      if(requestURL.pathname==="/api/rescan"&&method==="GET"&&!requestURL.searchParams.has("diagnostics")){
+        await window.wudictNativeCall("rescan","",onMsg,signal);
+        return;
+      }
       if(requestURL.pathname==="/api/rescan"&&method==="POST"&&requestURL.searchParams.get("stream")==="1"){
         await window.wudictNativeCall("rescanIndexes",options.body||"{}",onMsg,signal);
         return;
@@ -5598,7 +5656,7 @@ async function maskFetch(row,page,generation,navToken){
   try{
     const params=new URLSearchParams({dict:row.id,q:maskPattern,p:String(page),wildcards:"1"});
     if(row.within){params.set("within",row.within);params.set("withinWildcards",row.withinMask?"1":"0")}
-    const response=await fetch("/api/browse/find?"+params,{signal:controller.signal});
+    const response=await apiFetch("/api/browse/find?"+params,{signal:controller.signal});
     if(!response.ok){const body=await response.json().catch(()=>({}));throw new Error(window.wudictI18n.errorText(body.error||tx("search.failedDict")))}
     const data=await response.json();if(generation!==maskGeneration)return;
     if(row.state!=="ready")maskStripVersion++;
@@ -5658,7 +5716,7 @@ function maskPrefetchBasePage(row,page,generation=maskGeneration){
   if(!row.prefetching)row.prefetching=new Map();
   const controller=new AbortController();maskControllers.add(controller);
   const params=new URLSearchParams({dict:row.id,q:maskPattern,p:String(page),wildcards:"1"});
-  const request=fetch("/api/browse/find?"+params,{signal:controller.signal}).then(async response=>{
+  const request=apiFetch("/api/browse/find?"+params,{signal:controller.signal}).then(async response=>{
     if(!response.ok) return null;
     const data=await response.json();
     if(generation===maskGeneration&&maskRows.includes(row)&&data.page===page)
@@ -5735,12 +5793,11 @@ function maskStreamPageTrace(row,event,pageMetrics){
   let enabled=false;try{enabled=localStorage.getItem("wudict_dictionary_cache_diagnostics")==="1"}catch(_){}
   if(!enabled||!row.streamCachePages)return;
   const totalPages=Math.ceil((row.total||0)/300),average=row.streamCachePages?row.streamCacheHeapBytes/row.streamCachePages:0;
-  fetch("/api/browse-diagnostic",{method:"POST",headers:{"Content-Type":"application/json"},keepalive:true,
-    body:JSON.stringify({event,dict:row.id,page:row.streamCachePages,words:row.streamWords.length,
+  sendBrowseDiagnostic({event,dict:row.id,page:row.streamCachePages,words:row.streamWords.length,
       pageBytes:pageMetrics?.heapBytes||0,pageJsonBytes:pageMetrics?.jsonBytes||0,
       cachePages:row.streamCachePages,cacheBytes:row.streamCacheHeapBytes,cacheJsonBytes:row.streamCacheJsonBytes,
       cacheStoredPages:row.streamCacheStoredPages,cacheStoredBytes:row.streamCacheStoredBytes,
-      totalPages,estimatedAllPagesBytes:Math.round(average*totalPages)})}).catch(()=>{});
+      totalPages,estimatedAllPagesBytes:Math.round(average*totalPages)});
 }
 function maskCacheStreamPages(row,complete=false){
   if(!row.streamPages)row.streamPages=new Map();
@@ -5801,7 +5858,7 @@ async function maskFetchWithinStream(row,generation,navToken,findGeneration){
     withinWildcards:row.withinMask?"1":"0",stream:"1"});
   const current=()=>generation===maskGeneration&&findGeneration===maskFindGeneration&&row===maskFindRows.find(item=>item.id===row.id);
   try{
-    const response=await fetch("/api/browse/find?"+params,{signal:controller.signal});
+    const response=await browseFindStreamFetch("/api/browse/find?"+params,{signal:controller.signal});
     if(!response.ok)throw new Error(tx("search.failedDict"));
     const reader=response.body.getReader(),decoder=new TextDecoder();let buffer="";
     const consume=async(final=false)=>{
@@ -6049,9 +6106,8 @@ function maskFindStart(){
   maskBusyStart(job);
   let active=0;
   if(dictionaryCacheDiagnosticsEnabled()){
-    const snapshot=event=>fetch("/api/browse-diagnostic",{method:"POST",headers:{"Content-Type":"application/json"},keepalive:true,
-      body:JSON.stringify({event,active,completed:rows.filter(row=>row.state==="ready"&&!row.partial||row.state==="error").length,
-        dictionaries:rows.length})}).catch(()=>{});
+    const snapshot=event=>sendBrowseDiagnostic({event,active,completed:rows.filter(row=>row.state==="ready"&&!row.partial||row.state==="error").length,
+      dictionaries:rows.length});
     maskMemorySnapshot=snapshot;snapshot("wildcard_memory_start");
   }
   const cached=rows.filter(row=>row.state==="ready"&&!row.partial).length;
@@ -7590,7 +7646,7 @@ function stylerFilesTake(j){
 }
 async function stylerFilesLoad(){
   try{
-    const r=await fetch("/api/files");
+    const r=await apiFetch("/api/files");
     if(!r.ok)throw new Error("HTTP "+r.status);
     stylerFilesTake(await r.json());
     return true;
@@ -7775,7 +7831,7 @@ async function stylerFileDelete(f){
     : "")+(chosen?tx("panel.fileBackground"):"")))return;
   stylerNote(tx("panel.deleting"));
   try{
-    const r=await fetch("/api/files?name="+encodeURIComponent(f.name),{method:"DELETE"});
+    const r=await apiFetch("/api/files?name="+encodeURIComponent(f.name),{method:"DELETE"});
     if(!r.ok)throw new Error(await apiError(r));
     stylerFilesTake(await r.json());
     if(chosen)appearanceSet("image","");
@@ -7828,7 +7884,7 @@ async function stylerUpload(list){
     }
     stylerNote(tx("panel.uploading",{name}));
     try{
-      const r=await fetch("/api/files?name="+encodeURIComponent(name)+q,
+      const r=await apiFetch("/api/files?name="+encodeURIComponent(name)+q,
         {method:"POST",headers:{"Content-Type":file.type||"application/octet-stream"},body:file});
       if(!r.ok){
         throw new Error(await apiError(r));
