@@ -122,7 +122,7 @@ func runDesktopWindow(address, profile string, onClose func(), desktopRequest fu
 		w.Dispatch(func() {
 			path, ok := chooseDesktopFolder(uintptr(w.Window()))
 			if ok {
-				w.Eval("window.__wdFolderPicked(" + jsString(path) + ")")
+				w.Eval("window.postMessage({type:'wudict-folder-picked',path:" + jsString(path) + "},location.origin)")
 			}
 			folderCallbackPending.Store(false)
 		})
@@ -199,7 +199,7 @@ func bindNativeBridge(w webview.WebView, baseURL string, request func(string, st
 					w.Eval("window.wudictNativeReply(" + strconv.Itoa(id) + "," + string(payload) + "," + string(errorJSON) + "," + strconv.FormatBool(done) + ")")
 				})
 			}
-			if (method == "search" || method == "ingest" || method == "dicts" || method == "rescanIndexes") && stream != nil {
+			if (method == "search" || method == "ingest" || method == "dicts" || method == "rescanIndexes" || method == "browse" || method == "browseFind") && stream != nil {
 				err := stream(ctx, method, argument, func(message []byte) {
 					var value any
 					if json.Unmarshal(message, &value) == nil {

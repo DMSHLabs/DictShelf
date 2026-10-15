@@ -1335,6 +1335,20 @@ async function apiFetch(url,options){
         nativeMethod="saveStyle";
         argument=JSON.stringify({body:JSON.parse(options.body||"{}"),replace:requestURL.searchParams.get("replace")==="1"});
       }
+      else if(requestURL.pathname==="/api/reindex"&&method==="GET")nativeMethod="reindex";
+      else if(requestURL.pathname==="/api/reindex"&&method==="POST")nativeMethod="startReindex";
+      else if(requestURL.pathname==="/api/reindex"&&method==="DELETE")nativeMethod="stopReindex";
+      else if(requestURL.pathname==="/api/about"&&method==="GET"){
+        nativeMethod="about";argument=requestURL.searchParams.get("dict")||"";
+      }
+      else if(requestURL.pathname==="/api/library"&&method==="GET")nativeMethod="library";
+      else if(requestURL.pathname==="/api/library"&&method==="DELETE"){
+        nativeMethod="removeLibrary";argument=requestURL.searchParams.toString();
+      }
+      else if(requestURL.pathname==="/api/orphans"&&method==="GET")nativeMethod="orphans";
+      else if(requestURL.pathname==="/api/orphans"&&method==="POST"){
+        nativeMethod="resolveOrphans";argument=options.body||"{}";
+      }
       if(nativeMethod){
         const value=await window.wudictNativeCall(nativeMethod,argument);
         if(nativeMethod==="saveStyle"){
@@ -2892,7 +2906,7 @@ function pollReindex(){
   clearTimeout(reindexTimer);
   reindexTimer=setTimeout(async()=>{
     let st=null;
-    try{const r=await fetch("/api/reindex");if(r.ok)st=await r.json()}catch(_){}
+    try{const r=await apiFetch("/api/reindex");if(r.ok)st=await r.json()}catch(_){}
     if(!st){pollReindex();return} // a missed poll is not the end of the job
     reindexSt=st;
     if(st.running){
@@ -2912,7 +2926,7 @@ function pollReindex(){
 function requestReindexStop(){
   if(reindexStopping)return;
   reindexStopping=true;setGlobalStop(requestReindexStop,tx("dictUI.stopping"));renderReindex();
-  fetch("/api/reindex",{method:"DELETE"}).catch(()=>{});
+  apiFetch("/api/reindex",{method:"DELETE"}).catch(()=>{});
 }
 async function reindexClick(e){
   if(e.target.id==="reindexStop"){
@@ -2922,7 +2936,7 @@ async function reindexClick(e){
   if(e.target.id!=="reindexGo"&&e.target.id!=="reindexMainGo")return;
   e.target.disabled=true;
   try{
-    const r=await fetch("/api/reindex",{method:"POST"});
+    const r=await apiFetch("/api/reindex",{method:"POST"});
     if(!r.ok)throw new Error("HTTP "+r.status);
     reindexSt=await r.json();reindexStopping=false;
   }catch(err){e.target.disabled=false;setStatus(esc(tx("dictUI.rebuildStartFailed",{error:err.message})));return}
@@ -2931,7 +2945,7 @@ async function reindexClick(e){
 }
 $("reindexLine").addEventListener("click",reindexClick);
 $("outdatedNotice").addEventListener("click",reindexClick);
-fetch("/api/reindex").then(r=>r.ok?r.json():null).then(st=>{
+apiFetch("/api/reindex").then(r=>r.ok?r.json():null).then(st=>{
   if(st&&st.running){reindexSt=st;const message=esc(tx("dictUI.rebuilding",{at:Math.min(st.done+1,st.total),total:st.total})+(st.current?` · ${st.current}`:""));setStatus(message);setGlobalStop(requestReindexStop);showWorkNotice(message);renderReindex();pollReindex()}
 }).catch(()=>{});
 
@@ -3288,7 +3302,16 @@ for(const id of ["editFilters","editFolders","lemmaLink"]){
 }
 $("workspaceFrame").addEventListener("load",()=>{workspaceFrameLoaded=true});
 window.addEventListener("message",event=>{
-  if(event.origin!==location.origin||event.source!==$("workspaceFrame").contentWindow)return;
+  if(event.origin!==location.origin)return;
+  if(event.source===window&&event.data?.type==="wudict-folder-picked"){
+    $("workspaceFrame").contentWindow.postMessage(event.data,location.origin);
+    return;
+  }
+  if(event.source!==$("workspaceFrame").contentWindow)return;
+  if(event.data?.type==="wudict-folder-picker-request"){
+    if(typeof window.wudictChooseFolder==="function")window.wudictChooseFolder();
+    return;
+  }
   if(event.data?.type==="wudict-workspace-close"){
     $("workspaceFrameWindow").close();
     if(event.data.changed==="setup")loadDicts().then(ok=>{if(ok){loadFolders();reissueIfCorpusMoved()}});
@@ -4151,7 +4174,7 @@ async function checkOrphans(){
   if(!(cfgInfo&&cfgInfo.canDelete)){closeOrphans();return}
   let j;
   try{
-    const r=await fetch("/api/orphans");
+    const r=await apiFetch("/api/orphans");
     if(!r.ok)return;
     j=await r.json();
   }catch(e){return} // nothing to offer is the correct fallback
@@ -4197,7 +4220,7 @@ $("orphanBox").addEventListener("click",async e=>{
   go.disabled=true;go.textContent=del.length?tx("orphans.deleting"):tx("orphans.keeping");
   let rep;
   try{
-    const r=await fetch("/api/orphans",{method:"POST",
+    const r=await apiFetch("/api/orphans",{method:"POST",
       headers:{"Content-Type":"application/json"},body:JSON.stringify({delete:del,keep})});
     rep=await r.json();
     if(!r.ok)throw new Error(window.wudictI18n.errorText(rep&&rep.error)||("HTTP "+r.status));
@@ -4227,7 +4250,7 @@ $("panelList").addEventListener("toggle",async e=>{
   det.dataset.loaded="1";
   const pd=det.closest(".pd"),body=det.querySelector(".aboutbody");
   try{
-    const r=await fetch("/api/about?dict="+encodeURIComponent(pd.dataset.id));
+    const r=await apiFetch("/api/about?dict="+encodeURIComponent(pd.dataset.id));
     if(!r.ok)throw new Error(r.status);
     const j=await r.json();
     /* Inserted as markup on purpose: the server normalised it (escaped if it
@@ -4409,7 +4432,7 @@ async function runRemove(id,kind,node){
       if(result.error)throw new Error(result.error);
       rep=result.result||{};
     }else{
-    const r=await fetch(q,{method:"DELETE"});
+    const r=await apiFetch(q,{method:"DELETE"});
     rep=await r.json();
     if(!r.ok)throw new Error(window.wudictI18n.errorText(rep&&rep.error)||("HTTP "+r.status));
     }

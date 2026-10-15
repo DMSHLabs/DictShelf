@@ -53,6 +53,10 @@ func (s *Server) DesktopStream(ctx context.Context, baseURL, method, query strin
 	switch method {
 	case "rescan":
 		path = "/api/rescan"
+	case "browse":
+		path = "/api/browse"
+	case "browseFind":
+		path = "/api/browse/find"
 	default:
 		return fmt.Errorf("unsupported desktop stream %q", method)
 	}
@@ -72,7 +76,21 @@ func (s *Server) DesktopStream(ctx context.Context, baseURL, method, query strin
 	}
 	w := &desktopStreamWriter{header: make(http.Header), emit: emit}
 	s.ServeHTTP(w, req)
-	return w.finish()
+	if err := w.finish(); err != nil {
+		if (method == "browse" || method == "browseFind") && w.status >= 400 {
+			var failure struct {
+				Error string `json:"error"`
+			}
+			_ = json.Unmarshal(w.body.Bytes(), &failure)
+			message, _ := json.Marshal(map[string]any{"type": "error", "status": w.status, "error": failure.Error})
+			if emit != nil {
+				emit(message)
+			}
+			return nil
+		}
+		return err
+	}
+	return nil
 }
 
 func (s *Server) desktopIngest(ctx context.Context, baseURL, query string, emit func([]byte)) error {
@@ -250,6 +268,29 @@ func (s *Server) DesktopJSON(baseURL, method, argument string) (any, error) {
 			return nil, errors.New("invalid desktop server address")
 		}
 		return s.aboutSnapshot(argument, base.Scheme+"://"+base.Host)
+	case "library":
+		return s.librarySnapshot()
+	case "orphans":
+		return s.orphansSnapshot()
+	case "resolveOrphans":
+		if len(argument) > 1<<20 {
+			return nil, errors.New("orphan response is too large")
+		}
+		var request struct {
+			Delete []string `json:"delete"`
+			Keep   []string `json:"keep"`
+		}
+		if err := json.Unmarshal([]byte(argument), &request); err != nil {
+			return nil, fmt.Errorf("bad request: %w", err)
+		}
+		return s.resolveOrphanRequest(request.Delete, request.Keep)
+	case "removeLibrary":
+		values, err := url.ParseQuery(argument)
+		if err != nil {
+			return nil, fmt.Errorf("invalid library removal request: %w", err)
+		}
+		result, _, err := s.removeLibrary(values)
+		return result, err
 	case "reindex":
 		return s.reindexStatus(), nil
 	case "indexWork":
@@ -265,6 +306,29 @@ func (s *Server) DesktopJSON(baseURL, method, argument string) (any, error) {
 		return status, err
 	case "stopReindex":
 		return s.StopReindex(), nil
+	case "browsePage":
+		values, err := url.ParseQuery(argument)
+		if err != nil {
+			return nil, fmt.Errorf("invalid browse request: %w", err)
+		}
+		base, err := url.Parse(baseURL)
+		if err != nil || base.Scheme != "http" || base.Host == "" || base.User != nil {
+			return nil, errors.New("invalid desktop server address")
+		}
+		base.Path, base.RawPath, base.RawQuery, base.Fragment = "/api/browse", "", values.Encode(), ""
+		req, err := http.NewRequest(http.MethodGet, base.String(), nil)
+		if err != nil {
+			return nil, err
+		}
+		req.Host = base.Host
+		req.RemoteAddr = "127.0.0.1:0"
+		rec := httptest.NewRecorder()
+		s.ServeHTTP(rec, req)
+		var response any
+		if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+			return nil, fmt.Errorf("invalid browse response: %w", err)
+		}
+		return map[string]any{"status": rec.Code, "body": response}, nil
 	}
 	path := ""
 	query := ""

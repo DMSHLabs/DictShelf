@@ -19,20 +19,31 @@ function setupNavigation(path) {
   if(wudictDialogMode)target.searchParams.set('wudict_dialog','1');
   return target.pathname + target.search + target.hash;
 }
-// WebView2 installs the native bridge before this page is parsed. Install the
-// page callback only after <html> exists, so its folder button can be shown.
-if (typeof window.wudictChooseFolder === 'function') {
+// WebView2 installs the native picker before this page is parsed. Edit Folders
+// can live in an iframe, while the native callback targets the top-level page;
+// postMessage carries the selected path back to the editor in either case.
+{
   let folderPicked = null;
-  window.__wdFolderPicked = path => {
+  window.addEventListener('message', event => {
+    if (event.origin !== location.origin || ![window, window.parent].includes(event.source) ||
+        event.data?.type !== 'wudict-folder-picked') return;
     const callback = folderPicked;
     folderPicked = null;
-    if (callback) callback(path);
-  };
-  window.wudictPickFolder = callback => {
-    folderPicked = callback;
-    window.wudictChooseFolder();
-  };
-  document.documentElement.setAttribute('data-folder-picker', '');
+    if (callback && typeof event.data.path === 'string') callback(event.data.path);
+  });
+  if (wudictDialogMode && new URLSearchParams(location.search).get('wudict_webview2') === '1') {
+    window.wudictPickFolder = callback => {
+      folderPicked = callback;
+      window.parent.postMessage({type: 'wudict-folder-picker-request'}, location.origin);
+    };
+    document.documentElement.setAttribute('data-folder-picker', '');
+  } else if (typeof window.wudictChooseFolder === 'function') {
+    window.wudictPickFolder = callback => {
+      folderPicked = callback;
+      window.wudictChooseFolder();
+    };
+    document.documentElement.setAttribute('data-folder-picker', '');
+  }
 }
 // An optional host background. Session storage preserves it across page reloads;
 // an explicit empty URL value withdraws it on the next launch.
@@ -553,15 +564,14 @@ async function save(){
   try{if(localStorage.getItem("wudict_folder_diagnostics")==="1")diagnostics="&diagnostics=1"}catch(_){}
   const url="/api/setup?"+q+"&save=1&async=1"+diagnostics;
   $("save").disabled=true;
-  setSetupNotice(tx("pages.savingFolders"));
   let j;
   try{
     const response=await fetch(url);
     j=await response.json();
     if(response.status===202){const finished=await window.wudictWork.wait('folder-setup');j=finished.result||{error:finished.error};}
   }
-  catch(e){$("msg").className="err";$("msg").textContent="✕ "+window.wudictI18n.errorText(e.message);setSetupNotice("");validateAll();return}
-  if(j.error){$("msg").className="err";$("msg").textContent="✕ "+window.wudictI18n.errorText(j.error);setSetupNotice("");$("save").disabled=false;return}
+  catch(e){$("msg").className="err";$("msg").textContent="✕ "+window.wudictI18n.errorText(e.message);validateAll();return}
+  if(j.error){$("msg").className="err";$("msg").textContent="✕ "+window.wudictI18n.errorText(j.error);$("save").disabled=false;return}
   if(j.saved){
     if(wudictDialogMode)parent.postMessage({type:"wudict-workspace-close",changed:"setup"},location.origin);
     else location.href=setupNavigation("/");
