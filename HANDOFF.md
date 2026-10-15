@@ -1,5 +1,5 @@
 # Agent handoff — current state
-Checkout: branch `dev2`; merging `dev` commit `f54e3a2` into `dev2` commit `b35377f`.
+Checkout: branch `dev2` at merge commit `406a8f2` (`dev` `f54e3a2` into `dev2` `b35377f`).
 
 ## Current work
 The merge keeps the Windows desktop build as one GUI `wuDict2.exe`; `build-windows.cmd console` builds the same executable with a console subsystem for diagnostics. Windows tray launch detection uses the executable subsystem and falls back to the browser for console runs. The native WebView bridge shares Go services for search, dictionary listing, indexing, reindexing, ingest and progress; HTTP remains available to the server and browser UI.
@@ -11,3 +11,4 @@ Fork-specific dictionary groups, mask search, migration and Android identity rem
 
 ## Remaining manual check
 Launch the built Windows GUI and verify native WebView search and indexing progress. No Android build/device verification is planned for this merge.
+
