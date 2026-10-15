@@ -345,6 +345,8 @@ func (s *Server) DesktopJSON(baseURL, method, argument string) (any, error) {
 		return status, err
 	case "stopReindex":
 		return s.StopReindex(), nil
+	case "looks":
+		return s.desktopLooks(argument)
 	case "browsePage":
 		values, err := url.ParseQuery(argument)
 		if err != nil {
@@ -413,6 +415,45 @@ func (s *Server) DesktopJSON(baseURL, method, argument string) (any, error) {
 	var result any
 	if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
 		return nil, fmt.Errorf("invalid JSON response: %w", err)
+	}
+	return result, nil
+}
+
+// desktopLooks keeps the saved-appearance UI off the loopback transport while
+// reusing its HTTP adapters until their operation logic is split into shared
+// methods. The route and method are restricted to the look endpoints.
+func (s *Server) desktopLooks(argument string) (any, error) {
+	if len(argument) > 6<<20 {
+		return nil, errors.New("look request is too large")
+	}
+	var call struct {
+		Path   string `json:"path"`
+		Method string `json:"method"`
+		Body   string `json:"body"`
+	}
+	if err := json.Unmarshal([]byte(argument), &call); err != nil {
+		return nil, fmt.Errorf("invalid look request: %w", err)
+	}
+	allowed := map[string]map[string]bool{
+		"/api/looks":       {http.MethodGet: true, http.MethodPost: true, http.MethodPut: true, http.MethodDelete: true},
+		"/api/looks/apply": {http.MethodPost: true},
+	}
+	if !allowed[call.Path][call.Method] {
+		return nil, errors.New("unsupported look request")
+	}
+	req := httptest.NewRequest(call.Method, call.Path, strings.NewReader(call.Body))
+	req.RemoteAddr = "127.0.0.1:0"
+	if call.Body != "" {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	response := httptest.NewRecorder()
+	s.ServeHTTP(response, req)
+	if response.Code >= http.StatusBadRequest {
+		return nil, errors.New(strings.TrimSpace(response.Body.String()))
+	}
+	var result any
+	if err := json.Unmarshal(response.Body.Bytes(), &result); err != nil {
+		return nil, fmt.Errorf("invalid look response: %w", err)
 	}
 	return result, nil
 }

@@ -590,28 +590,41 @@
 		link.parentNode.insertBefore(box, link.nextSibling);
 		link.wudictSub = box;
 		post();
-		fetch("/api/search?mode=exact&n=1&dict=" + encodeURIComponent(dictID) +
-			"&q=" + encodeURIComponent(word))
-			.then(function (r) { return r.text(); })
-			.then(function (text) {
-				var html = null;
-				text.split("\n").forEach(function (line) {
-					if (!line.trim()) return;
-					var m;
-					try { m = JSON.parse(line); } catch (_) { return; }
-					if (m.t === "hit" && m.results && m.results.length) html = m.results[0].Body;
+		function accept(event, found) {
+			if (event && event.t === "hit" && event.results && event.results.length) found.html = event.results[0].Body;
+		}
+		var found = { html: null };
+		var request;
+		if (HOST && typeof HOST.wudictNativeCall === "function") {
+			request = HOST.wudictNativeCall("search", JSON.stringify({
+				q: word, mode: "exact", dict: dictID, n: 1
+			}), function (event) { accept(event, found); });
+		} else {
+			request = fetch("/api/search?mode=exact&n=1&dict=" + encodeURIComponent(dictID) +
+				"&q=" + encodeURIComponent(word))
+				.then(function (r) { return r.text(); })
+				.then(function (text) {
+					text.split("\n").forEach(function (line) {
+						if (!line.trim()) return;
+						var event;
+						try { event = JSON.parse(line); } catch (_) { return; }
+						accept(event, found);
+					});
 				});
-				if (html === null) { box.textContent = uiNotHere; post(); return; }
-				// the fragment repeats the article's stylesheet link; one is enough
-				box.innerHTML = '<span class="wu-sub-close">✕</span>' +
-					html.replace(/<link\b[^>]*>/gi, "");
-				box.querySelector(".wu-sub-close").title = uiClose;
-				box.querySelector(".wu-sub-close").addEventListener("click", function () {
-					toggleSub(link, word);
-				});
-				post();
-				setTimeout(post, 250); // late images/reflow
-			})
+		}
+		Promise.resolve(request).then(function () {
+			var html = found.html;
+			if (html === null) { box.textContent = uiNotHere; post(); return; }
+			// the fragment repeats the article's stylesheet link; one is enough
+			box.innerHTML = '<span class="wu-sub-close">✕</span>' +
+				html.replace(/<link\b[^>]*>/gi, "");
+			box.querySelector(".wu-sub-close").title = uiClose;
+			box.querySelector(".wu-sub-close").addEventListener("click", function () {
+				toggleSub(link, word);
+			});
+			post();
+			setTimeout(post, 250); // late images/reflow
+		})
 			.catch(function () { box.textContent = uiLoadFailed; post(); });
 	}
 
