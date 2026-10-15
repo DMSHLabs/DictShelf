@@ -70,9 +70,8 @@ final class ShellPrefs {
     private static final String FILE = "shell";
 
     static final String SEPIA = "sepia";
-    // "found_dictionaries" is no longer read: the dictionary picker lists the
-    // dictionaries that answered and nothing else, so a stored value from an
-    // older build cannot put the app back into the other mode.
+    // Legacy dictionary-picker preferences are no longer read; the page's
+    // shared picker owns group choice, result navigation and list filtering.
     private static final String SEPIA_COLOR = "sepia_color";
     private static final int DEFAULT_SEPIA_COLOR = 0xFFF4ECD8;
     static final String BACKGROUND_IMAGE = "background_image";

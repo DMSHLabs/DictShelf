@@ -16,10 +16,6 @@
     <string name="settings_short_label">Настройки</string>
     <string name="settings_title">Настройки wuDict2</string>
     <string name="settings_moved_hint">Основные настройки находятся в приложении: нажмите ☰ и откройте «Системные настройки». Здесь можно изменить порт сервера, сбросить расширенные настройки и перезапустить сервер словарей.</string>
-    <string name="settings_dictionary_picker">Выбор словарей</string>
-    <string name="settings_dictionary_picker_hint">«Все словари» задаёт область поиска. «Найденные словари» позволяет перейти к словарю в текущих результатах.</string>
-    <string name="found_dictionaries_title">Найденные словари</string>
-    <string name="found_dictionaries_empty">Статьи словарей ещё не показаны.</string>
     <string name="settings_no_compress">Хранить словари без сжатия</string>
     <string name="settings_no_compress_hint">Проиндексированные словари станут примерно в 3 раза больше: 100 МБ — около 300 МБ. Чтение ускорится на несколько процентов. Действует для словарей, индексируемых с этого момента. По умолчанию: выключено.</string>
     <string name="settings_search_memory">Память для одного поиска</string>
@@ -76,10 +72,6 @@
     <string name="intake_failed">Не удалось добавить словари: %1$s</string>
     <string name="intake_no_server">Сервер словарей не запустился. Ничего не добавлено.</string>
     <string name="intake_no_picker">На устройстве нет приложения для выбора файлов.</string>
-    <string-array name="settings_dictionary_picker_modes">
-        <item>Все словари</item>
-        <item>Найденные словари</item>
-    </string-array>
 	<string name="intake_same_elsewhere">%1$s — уже установлен в %2$s</string>
 	<string name="intake_other_elsewhere">%1$s — заменит вашу копию в %2$s</string>
 	<string name="intake_all">Все / Ничего</string>

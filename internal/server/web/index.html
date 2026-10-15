@@ -13,6 +13,7 @@
 <script>
 if (new URLSearchParams(location.search).get('wudict_webview2') === '1') {
   document.documentElement.setAttribute('data-webview2', '');
+  window.wudictDesktopAppearance = true;
   document.addEventListener('click', function (event) {
     var link = event.target.closest && event.target.closest('a[href]');
     if (!link) return;
@@ -2091,7 +2092,7 @@ $("out").addEventListener("click",e=>{if(e.target.id==="retryBtn")loadDicts().th
    aim at --barh (via scroll-margin-top) rather than the momentarily-zero
    --stick. */
 const lessMotion=matchMedia("(prefers-reduced-motion: reduce)");
-let livePickerOpen=false,livePickerOpening=false,livePickerTimer=null,liveSearchBoxes=null,livePickerSearching=false;
+let liveSearchBoxes=null,livePickerSearching=false;
 /* What the picker lists: the dictionaries that ANSWERED the current search, in
    the order their sections appear, and a tap jumps to that section. It is the
    only list there is — navigation over the rendered answer, never a second way
@@ -2283,55 +2284,9 @@ function scopeLabel(){
   // field: that is what is being searched, not a group the bar can speak for.
   return opt?(opt.dataset.label||opt.text):"";
 }
-function livePickerPayload(kind){
-  /* found:true is a statement about this list, not a mode: these rows are
-     dictionaries that answered, so the native window draws them as plain rows
-     (no radio circles, no chosen one) and a tap is a jump. There is no other
-     kind of picker left to tell it apart from. */
-  const scoped=scopedDictionary();
-  const groups=userGroups.map(g=>({id:g.id,name:pickerGroupName(g.id)}));
-  if(scoped)groups.splice(1,0,scoped); // under "All dictionaries": the same axis, narrower
-  const style=getComputedStyle(document.documentElement),rem=parseFloat(style.fontSize)||16;
-  return {kind,groups,group:scoped?scoped.id:pickerGroup,
-    diagnostics:dictionaryListDiagnosticsEnabled(),
-    found:true,rows:livePickerRows(),
-    empty:livePickerSearching?tx("search.searching"):scoped?tx("search.emptyDict"):tx("search.emptyGroup"),
-    listSearch:{
-      placeholder:tx("dictUI.listSearchPlaceholder"),
-      filterPlaceholder:tx("dictUI.listFilterPlaceholder"),search:tx("dictUI.listSearchLabel"),
-      filter:tx("dictUI.listSearchFilter"),previous:tx("dictUI.listSearchPrevious"),
-      next:tx("dictUI.listSearchNext"),
-      count:tx("dictUI.listSearchCount",{current:"{current}",total:"{total}"}),
-      height:Math.max(12,Math.min(120,(parseFloat(style.getPropertyValue("--ui-edit_control-height"))||1.8)*1.5*rem)),
-      font:Math.max(8,Math.min(64,(parseFloat(style.getPropertyValue("--ui-edit_control-font"))||1)*rem)),
-      accent:style.getPropertyValue("--accent").trim()
-    }};
-}
 function refreshLivePicker(){
   if($('webDictionaryPicker').open)paintWebDictionaryPicker();
-  if(!livePickerOpen)return;
-  clearTimeout(livePickerTimer);
-  livePickerTimer=setTimeout(()=>window.prompt("wudict:dictionary-picker",
-    JSON.stringify(livePickerPayload("liveDictUpdate"))),80);
 }
-window.wudictNativeDictionaryPicker=async function(){
-  if(livePickerOpen||livePickerOpening)return;
-  livePickerOpening=true;
-  const started=performance.now(),groupsStarted=started;
-  try{
-    userGroups=await groupRequest("/api/user-groups","GET");
-    const groupsMs=Math.round(performance.now()-groupsStarted);
-    if(!userGroups.some(g=>g.id===pickerGroup))pickerGroup="all";
-    livePickerOpen=true;
-    const payloadStarted=performance.now(),payload=livePickerPayload("liveDict");
-    const payloadMs=Math.round(performance.now()-payloadStarted);
-    if(payload.diagnostics)payload.diagnosticsTiming={groupFetchMs:groupsMs,payloadMs,
-      totalMs:Math.round(performance.now()-started)};
-    if(window.prompt("wudict:dictionary-picker",JSON.stringify(payload))===null)
-      livePickerOpen=false;
-  }catch(e){setStatus(esc(tx("search.groupFailed",{error:window.wudictI18n.errorText(e.message)})))}
-  finally{livePickerOpening=false}
-};
 let webPickerSearch=null;
 function paintWebDictionaryPicker(){
   const group=$('webPickerGroup'),current=scopedDictionary();
@@ -2389,18 +2344,17 @@ async function openWebDictionaryPicker(){
 $('webPickerClose').onclick=()=>$('webDictionaryPicker').close();
 $('webPickerGroup').onchange=e=>{wudictPickerGroupChanged(e.target.value);paintWebDictionaryPicker()};
 $('dict').addEventListener('pointerdown',e=>{
-  if(window.wudictNativeShell||$('dict').disabled)return;
+  if($('dict').disabled)return;
   e.preventDefault();openWebDictionaryPicker();
 });
 $('dict').addEventListener('click',e=>{
-  if(window.wudictNativeShell||$('dict').disabled)return;
+  if($('dict').disabled)return;
   e.preventDefault();openWebDictionaryPicker();
 });
 $('dict').addEventListener('keydown',e=>{
-  if(window.wudictNativeShell||$('dict').disabled||!['Enter',' ','ArrowDown','ArrowUp'].includes(e.key))return;
+  if($('dict').disabled||!['Enter',' ','ArrowDown','ArrowUp'].includes(e.key))return;
   e.preventDefault();if(!e.repeat)openWebDictionaryPicker();
 });
-window.wudictPickerClosed=()=>{livePickerOpen=false;clearTimeout(livePickerTimer)};
 window.wudictPickerGroupChanged=id=>{
   /* Compared against what the SPINNER is showing, not against pickerGroup: in
      a view scoped to one dictionary the spinner shows that dictionary
@@ -7878,7 +7832,9 @@ function presetApplyAll(){
    remembers and put it back a moment later, and which of the two comes first
    (this fetch or the shell's own hook) is not fixed. */
 function presetPaperPush(){
-  if(!window.wudictNativeShell||!PRESETS)return;
+  // Only Android owns a native paper preference. Its shell sets this flag
+  // before asking the page to report the current preset.
+  if(!window.wudictAndroidShell||!PRESETS)return;
   const paper=PRESETS.paper||{};
   for(const [night,key] of [[false,"light"],[true,"dark"]]){
     appearanceRequest({action:"set",night,field:"paper",
@@ -8529,9 +8485,13 @@ function colorFieldWire(input,menu,apply){
   return ctl;
 }
 function appearanceRequest(request){
-  if(window.wudictDesktopAppearance&&!window.wudictNativeShell)
+  // The Windows WebView2 host exposes this object even if a navigation drops
+  // the startup query marker or a shell init script ran too late.
+  if(window.wudictWindowsShell||(window.chrome&&window.chrome.webview)||
+      (window.wudictNativeShell&&!window.wudictAndroidShell))window.wudictDesktopAppearance=true;
+  if(window.wudictDesktopAppearance)
     return desktopAppearanceRequest(request);
-  if(!window.wudictNativeShell)return null;
+  if(!window.wudictAndroidShell)return null;
   try{
     // Which THEME this round trip is about. The sheet shows the ACTIVE theme's
     // values - the shell answers for the theme it is told - and a write lands

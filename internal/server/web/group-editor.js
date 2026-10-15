@@ -265,7 +265,7 @@ function renderGroupLink(group){
 }
 function updateGroupSplit(){
   const editor=$('groupEditor'),lists=$('groupLists');
-  editor.classList.remove('compact-controls');lists.classList.remove('hide-members','members-sized');
+  editor.classList.remove('compact-controls');lists.classList.remove('members-sized');
   const members=$('groupMembers'),available=$('groupAvailable');
   members.classList.remove('search-collapsed');available.classList.remove('search-collapsed');
   if(!editor.open)return;
@@ -274,42 +274,39 @@ function updateGroupSplit(){
     return;
   }
   const memberRows=$('groupRows'),availableRows=$('groupOtherRows');
+  const gap=parseFloat(getComputedStyle(lists).rowGap)||0;
+  const listsHeight=lists.clientHeight;
+  const halfHeight=Math.max(0,(listsHeight-gap)/2);
+  const memberRow=groupRowHeight('groupRows'),availableRow=groupRowHeight('groupOtherRows');
+  if(groupActivePanel==='available')editor.classList.add('compact-controls');
+
+  // Keep the inactive panel's search dock out of the way when its half cannot
+  // show four rows; the row list itself stays visible and scrollable.
+  if(groupActivePanel==='members'&&halfHeight<groupPanelChromeHeight(available,availableRows)+4*availableRow)
+    available.classList.add('search-collapsed');
+  if(groupActivePanel==='available'&&halfHeight<groupPanelChromeHeight(members,memberRows)+4*memberRow)
+    members.classList.add('search-collapsed');
+
   const memberChrome=groupPanelChromeHeight(members,memberRows);
   const availableChrome=groupPanelChromeHeight(available,availableRows);
-  const memberNatural=memberChrome+groupRowsContentHeight(memberRows);
-  const gap=parseFloat(getComputedStyle(lists).rowGap)||0;
-  if(groupActivePanel==='members'){
-    const listsHeight=lists.clientHeight;
-    const availableRow=groupRowsCapacityHeight(availableRows,1);
-    const fullLimit=listsHeight-gap-availableChrome-availableRow;
-    if(memberNatural>fullLimit)available.classList.add('search-collapsed');
-    const availableReserve=groupPanelChromeHeight(available,availableRows,available.classList.contains('search-collapsed'))+availableRow;
-    const wanted=window.wudictNativeShell?memberNatural:Math.max(memberNatural,listsHeight*.7);
-    const memberHeight=Math.max(0,Math.min(wanted,listsHeight-gap-availableReserve));
+  const memberTen=memberChrome+groupRowsCapacityHeight(memberRows,10);
+  const availableTen=availableChrome+groupRowsCapacityHeight(availableRows,10);
+  const memberOne=memberChrome+groupRowsCapacityHeight(memberRows,1);
+  const availableOne=availableChrome+groupRowsCapacityHeight(availableRows,1);
+  const bothFitTen=halfHeight>=memberTen&&halfHeight>=availableTen;
+
+  if(groupActivePanel==='members'||groupActivePanel==='available'){
+    let memberHeight=halfHeight;
+    if(!bothFitTen){
+      const activeTen=groupActivePanel==='members'?memberTen:availableTen;
+      const inactiveOne=groupActivePanel==='members'?availableOne:memberOne;
+      const activeHeight=Math.min(activeTen,Math.max(0,listsHeight-gap-inactiveOne));
+      memberHeight=groupActivePanel==='members'?activeHeight:listsHeight-gap-activeHeight;
+      memberHeight=Math.max(0,Math.min(memberHeight,listsHeight-gap));
+    }
     lists.style.setProperty('--group-members-height',Math.ceil(memberHeight)+'px');
     lists.classList.add('members-sized');
-  }else if(groupActivePanel==='available'){
-    editor.classList.add('compact-controls');
-    const listsHeight=lists.clientHeight;
-    if(window.wudictNativeShell){
-      const memberMin=groupPanelChromeHeight(members,memberRows,true)+groupRowsCapacityHeight(memberRows,3);
-      const availableMin=availableChrome+groupRowsCapacityHeight(availableRows,5);
-      if(memberMin+availableMin+gap<=listsHeight){
-        const memberHeight=Math.max(memberMin,Math.min(memberNatural,listsHeight-availableMin-gap));
-        lists.style.setProperty('--group-members-height',Math.ceil(memberHeight)+'px');
-        lists.classList.add('members-sized');
-      }else lists.classList.add('hide-members');
-    }else{
-      const memberMin=groupPanelChromeHeight(members,memberRows,true)+groupRowsCapacityHeight(memberRows,1);
-      const availableMin=availableChrome+groupRowsCapacityHeight(availableRows,1);
-      const memberHeight=Math.min(memberNatural,
-        Math.max(memberMin,Math.min(listsHeight*.3,listsHeight-availableMin-gap)));
-      lists.style.setProperty('--group-members-height',Math.ceil(memberHeight)+'px');
-      lists.classList.add('members-sized');
-    }
   }
-  if(groupActivePanel!=='members'&&$('groupRows').clientHeight<4*groupRowHeight('groupRows'))members.classList.add('search-collapsed');
-  if(groupActivePanel!=='available'&&$('groupOtherRows').clientHeight<4*groupRowHeight('groupOtherRows'))available.classList.add('search-collapsed');
 }
 function groupRowHeight(id){return Math.max(44,$(id).querySelector('.group-row:not([hidden])')?.getBoundingClientRect().height||0)}
 function groupPanelChromeHeight(panel,rows,withoutSearch=false){
@@ -320,15 +317,6 @@ function groupPanelChromeHeight(panel,rows,withoutSearch=false){
     const childStyle=getComputedStyle(child);
     if(childStyle.display==='none')continue;
     height+=child.getBoundingClientRect().height+(parseFloat(childStyle.marginTop)||0)+(parseFloat(childStyle.marginBottom)||0);
-  }
-  return height;
-}
-function groupRowsContentHeight(rows){
-  let height=0;
-  for(const child of rows.children){
-    if(child.hidden)continue;
-    const style=getComputedStyle(child);
-    height+=child.getBoundingClientRect().height+(parseFloat(style.marginTop)||0)+(parseFloat(style.marginBottom)||0);
   }
   return height;
 }
