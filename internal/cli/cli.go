@@ -30,6 +30,7 @@ import (
 
 	"github.com/wuweidict/wudict/internal/config"
 	"github.com/wuweidict/wudict/internal/dict"
+	zimformat "github.com/wuweidict/wudict/internal/format/zim"
 	"github.com/wuweidict/wudict/internal/fsx"
 	"github.com/wuweidict/wudict/internal/howto"
 	"github.com/wuweidict/wudict/internal/htmlref"
@@ -67,12 +68,11 @@ var Notices string
 // Product identity, in one place. The binary is `wudict`; the name people
 // read is WuWeiDict. Anything user-facing - CLI banner, web UI
 // About box, setup page - sources its wording from here or mirrors it.
-var ProductName = "wuDict"
-
 const (
-	Tagline = "Search every dictionary you own, from one browser tab."
-	SiteURL = "https://wudict.legbehindneck.com"
-	RepoURL = "https://github.com/wuweidict/wudict"
+	ProductName = "wuDict2"
+	Tagline     = "Search every dictionary you own, from one browser tab."
+	SiteURL     = "https://wudict.legbehindneck.com"
+	RepoURL     = "https://github.com/wuweidict/wudict"
 )
 
 func usage() string {
@@ -202,15 +202,6 @@ SETTINGS
                           dictionary folder.
                           env: DB_DIR         toml: DB_DIR
                           default: ~/.wudict/db
-
-  (env/toml only)
-  AUTO_INDEX = "on"       Index each dictionary's headwords in the background on
-                          its first search. "off": dictionaries stay not indexed
-                          and are searched through their own format. Contains,
-                          full-text and media pack are per-dictionary choices
-                          either way.
-                          env: AUTO_INDEX     toml: AUTO_INDEX
-                          default: on
 
   (env/toml only)
   IMPORT_KEEP = "ask"     What happens to an archive after its dictionaries are
@@ -456,13 +447,11 @@ ABOUT
 }
 
 // Main is the CLI entry point, called by the module-root main package.
-// guiDetached records that this process gave up its console (a double-clicked
-// wudict.exe, D76) and headlessLog where its output went instead. Set once, in
-// cmdServe, and read only by fail: after the detach, stderr is a hole in the
-// ground, so a fatal error has to be shown some other way or the user sees a
-// window flash and nothing else.
+// guiLaunch marks desktop-style launches whose stderr is not visible; a
+// fatal error must be shown in a dialog. headlessLog records where runtime
+// output went instead.
 var (
-	guiDetached bool
+	guiLaunch   bool
 	headlessLog string
 )
 
@@ -473,17 +462,37 @@ func fail(err error) {
 		return
 	}
 	fmt.Fprintln(os.Stderr, "error:", err)
-	if guiDetached {
+	if guiLaunch {
 		msg := err.Error()
 		if headlessLog != "" {
 			msg += "\n\nDetails: " + headlessLog
 		}
-		tray.Alert(ProductName, msg)
+		title := ProductName
+		if runtime.GOOS == "windows" {
+			title = "wuDict2"
+		}
+		tray.Alert(title, msg)
 	}
 	os.Exit(1)
 }
 
 func Main() {
+	guiLaunch = tray.GUILaunched()
+	if !informationalCommand(os.Args[1:]) {
+		release, err := acquireProcessLock()
+		if err != nil {
+			fail(err)
+			return
+		}
+		if release != nil {
+			defer release()
+		}
+		if err := prepareWindowsDataRoot(); err != nil {
+			fail(err)
+			return
+		}
+	}
+
 	if len(os.Args) < 2 {
 		// no arguments: start the server (documented default)
 		fail(cmdServe(nil))
@@ -544,6 +553,18 @@ func Main() {
 		os.Exit(2)
 	}
 	fail(err)
+}
+
+func informationalCommand(args []string) bool {
+	if len(args) == 0 {
+		return false
+	}
+	switch args[0] {
+	case "-h", "--help", "help", "-v", "--version", "version", "licenses", "license", "notices":
+		return true
+	default:
+		return false
+	}
 }
 
 // cmdLicenses prints the program's own licence line and then the embedded
@@ -999,9 +1020,8 @@ func ingestOne(srcPath, out string, full bool, pf planFlags) error {
 	if full {
 		t.Media = store.MediaOn
 	}
-	hooks, done := cliHooks(srcPath, &name)
+	hooks := cliHooks(srcPath, &name)
 	res, err := store.Reconcile(srcPath, t, hooks)
-	done()
 	logx.ClearLine()
 	dir := filepath.Dir(res.TextDB)
 	switch {
@@ -1026,16 +1046,17 @@ func ingestOne(srcPath, out string, full bool, pf planFlags) error {
 // cliHooks reports progress on the terminal and, when the source is read,
 // takes the dictionary's own title for the lines that follow. done closes the
 // reader, if one was opened.
-func cliHooks(srcPath string, name *string) (h store.Hooks, done func()) {
+func cliHooks(srcPath string, name *string) store.Hooks {
 	var r dict.Reader
-	done = func() {
-		if r != nil {
-			r.Close()
-		}
-	}
 	return store.Hooks{
 		Reader: func() (dict.Reader, error) {
-			rd, err := dict.OpenReader(srcPath)
+			var rd dict.Reader
+			var err error
+			if strings.EqualFold(filepath.Ext(srcPath), ".zim") {
+				rd, err = zimformat.NewHeadwordReader(srcPath)
+			} else {
+				rd, err = dict.OpenReader(srcPath)
+			}
 			if err != nil {
 				return nil, err
 			}
@@ -1047,7 +1068,7 @@ func cliHooks(srcPath string, name *string) (h store.Hooks, done func()) {
 		},
 		Progress:      entryProgress,
 		MediaProgress: func(n, total int) { logx.Progress("  %d/%d media files", n, total) },
-	}, done
+	}
 }
 
 // printMedia reports what a preparation did with media, when it did anything.
@@ -1075,6 +1096,11 @@ func displayName(path string) string {
 }
 
 func cmdServe(args []string) (err error) {
+	// A GUI-subsystem Windows build has no stderr console. Mark a desktop launch
+	// before config loading so fatal startup errors still reach Alert.
+	gui := tray.GUILaunched()
+	guiLaunch = gui
+
 	fs := flag.NewFlagSet("serve", flag.ExitOnError)
 	var dictDirs multiFlag
 	fs.Var(&dictDirs, "dict-dir", "folder with dictionaries; repeat for several (env/toml: DICT_DIR)")
@@ -1152,26 +1178,19 @@ func cmdServe(args []string) (err error) {
 		}
 	}
 
-	// Machine C (D74). A terminal launch keeps today's behaviour byte for
-	// byte; only a GUI launch - a macOS .app, a double-clicked wudict.exe -
-	// moves the message channel, because there stderr points at nothing a
-	// human will ever read. A console is never taken from a user who has one.
-	//
-	// Read once and carried: on Windows GUILaunched asks who else is attached
-	// to this console, and DetachConsole below makes the same question answer
-	// differently (D76).
-	gui := tray.GUILaunched()
+	// Desktop launches have no useful stderr. Runtime messages go to a log,
+	// while fatal startup errors are shown in a dialog. Terminal launches keep
+	// their normal console output.
 	trayWanted := gui
 	if cfg.Tray != nil {
 		trayWanted = *cfg.Tray
 	}
-	if trayWanted && gui {
-		// Order matters. Take the log first and give up the console second: if
-		// the log cannot be opened, keeping an ugly black window is worth more
-		// than a server that runs in total silence.
+	if gui {
+		// Open the log before redirecting runtime output. A console-owned
+		// helper can still restore its window if opening the log fails.
 		if f, ferr := openHeadlessLog(); ferr == nil {
 			logx.SetOutput(f)
-			guiDetached, headlessLog = true, f.Name()
+			guiLaunch, headlessLog = true, f.Name()
 			// Whatever ends this run is written to the log while the file is
 			// still open - the restore below is what closes it, and Main's
 			// stderr is dead by then. The dialog Main raises says where to
@@ -1184,6 +1203,9 @@ func cmdServe(args []string) (err error) {
 				f.Close()
 			}()
 			tray.DetachConsole()
+		} else {
+			// Restore a hidden console-subsystem helper if the log is unavailable.
+			tray.ShowConsole()
 		}
 	}
 	logx.V("config: source=%q dictDirs=%v dbDir=%q addr=%s speexdec=%s",
@@ -1226,6 +1248,10 @@ func cmdServe(args []string) (err error) {
 		// and answers the question that actually matters.
 		if inst, ok := probeRunning(cfg.Addr()); ok {
 			announceRunning(inst, url, cfg.DictDirs, !cfg.NoBrowser)
+			if gui {
+				tray.Alert("wuDict2", "wuDict2 is already running. Close it before starting another copy.")
+				return nil
+			}
 			if !cfg.NoBrowser {
 				// With the key, when this launch has one: the instance
 				// already running was started from the same configuration,
@@ -1348,6 +1374,12 @@ Hint: pick another port with --port, e.g.:  wudict --port %s
 		logx.V("search memory budget: %d MB per query", cfg.SearchMemory>>20)
 	}
 	srv := server.New(reg)
+	if runtime.GOOS == "windows" {
+		srv.FirstRunMigrationStatus = legacyMigrationStatus
+		srv.ApplyFirstRunMigration = func(action string) error {
+			return applyLegacyMigration(action, reg, srv.RefreshMigratedUserFiles, cfgFile)
+		}
+	}
 	srv.UseUserGroups()
 	srv.ConfigPath = cfgFile
 	srv.User = user
@@ -1380,7 +1412,6 @@ Hint: pick another port with --port, e.g.:  wudict --port %s
 		sxPath, sxSource = resolveSpeexdec(cfg.Speexdec)
 	}
 	srv.Speexdec = sxPath
-	srv.AutoIndex = cfg.AutoIndexEnabled()
 	srv.ImportKeep = cfg.ImportKeep
 	srv.ImportURLHosts = cfg.ImportURLHosts
 	srv.ImportInsecure = cfg.ImportInsecure
@@ -1450,12 +1481,12 @@ Hint: pick another port with --port, e.g.:  wudict --port %s
 			return srv.PrefsSnapshot(), nil
 		case "savePrefs":
 			return srv.SavePrefs(strings.NewReader(argument))
-		case "groups", "userGroups", "about", "demand", "reindex", "indexWork", "startReindex", "stopReindex", "startIndexWork", "startSingleIndexWork", "stopIndexWork":
-			return srv.DesktopJSON(url, method, argument)
-		case "createGroup", "renameGroup", "deleteGroup", "setGroupMember", "replaceGroupMembership", "addGroupMembers", "linkGroup", "saveGroupOrder":
+		case "setup":
+			return srv.DesktopSetup(argument)
+		case "groups", "userGroups", "about", "demand", "reindex", "indexWork", "startReindex", "stopReindex", "startIndexWork", "startSingleIndexWork", "stopIndexWork", "stopIngest", "createGroup", "renameGroup", "deleteGroup", "setGroupMember", "replaceGroupMembership", "addGroupMembers", "linkGroup", "saveGroupOrder":
 			return srv.DesktopJSON(url, method, argument)
 		default:
-			return nil, fmt.Errorf("unknown native method %q", method)
+			return srv.DesktopJSON(url, method, argument)
 		}
 	}
 	desktopStream := func(ctx context.Context, method, query string, emit func([]byte)) error {
@@ -1826,7 +1857,6 @@ func printStartup(cfg config.Config, in startupInfo) {
 	if in.speex != "" {
 		fmt.Fprintf(out, "  .spx audio    %s\n", in.speex)
 	}
-	fmt.Fprintf(out, "  indexing      %s\n", indexingSummary(cfg.AutoIndex))
 	fmt.Fprintf(out, "  index workers %s%s\n",
 		logx.Plural(cfg.IndexWorkers, "dictionary at a time", "dictionaries at a time"),
 		memLimitNote(cfg.MemoryLimit))
@@ -1936,13 +1966,6 @@ func memLimitNote(limit int64) string {
 		return ""
 	}
 	return fmt.Sprintf("  ·  memory limit %.1f GB", float64(limit)/(1<<30))
-}
-
-func indexingSummary(autoIndex string) string {
-	if autoIndex == config.AutoIndexOff {
-		return "off - dictionaries are searched through their own format (AUTO_INDEX=off)"
-	}
-	return "on - a headword index is prepared on first search; contains, full-text and media on request"
 }
 
 func openBrowser(url string, gui bool, onWindowClose func(), desktopRequest func(string, string) (any, error), desktopStream func(context.Context, string, string, func([]byte)) error) {

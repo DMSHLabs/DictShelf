@@ -76,11 +76,10 @@ Each line is one dictionary wudict can read.
 
 ## Indexing
 
-Exact and prefix search work at once, through each dictionary's own format.
-On the first search, wudict indexes each dictionary's headwords in the
-background, one dictionary at a time, into the library (`~/.wudict/db`).
-Indexed dictionaries are searched faster and use less memory. Search works
-during indexing.
+When wudict finds a dictionary, it queues its headword index in the background
+and saves it in the library (`~/.wudict/db`). Until indexing finishes, exact
+and prefix searches use the dictionary's own format. The library index makes
+search faster and uses less memory.
 
 [The library](../dictionaries/library.md){ .md-button }
 

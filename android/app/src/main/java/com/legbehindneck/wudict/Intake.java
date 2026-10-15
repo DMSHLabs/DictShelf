@@ -444,7 +444,7 @@ final class Intake {
             running = key;
             return true;
         }
-        if (!running.equals(key) || !runningDialog.isShowing()) {
+        if (!running.equals(key) || runningDialog == null || !runningDialog.isShowing()) {
             say(a, a.getString(R.string.intake_busy));
         }
         return false;

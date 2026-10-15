@@ -5,6 +5,7 @@
 package store
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"io"
@@ -472,10 +473,51 @@ func TestExactAndAliases(t *testing.T) {
 	}
 }
 
+func TestFoldedHeadwordSearch(t *testing.T) {
+	r := &fakeReader{
+		meta: dict.Meta{Name: "Accents", Format: "mdx", Path: "/nonexistent/accents.mdx"},
+		entries: []dict.Entry{
+			h("cafe", "plain"),
+			h("café", "accented"),
+			{Headwords: []string{"résumé", "curriculum"}, Body: "article", Kind: dict.BodyHTML},
+			{Headwords: []string{"exposé"}, LinkTo: "résumé"},
+		},
+	}
+	path := filepath.Join(t.TempDir(), "accents.text.db")
+	if _, err := IngestPlan(r, path, Plan{}, nil); err != nil {
+		t.Fatal(err)
+	}
+	s, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	for _, query := range []struct {
+		word  string
+		count int
+		first string
+	}{{"cafe", 1, "cafe"}, {"café", 1, "café"}, {"CAFÉ", 1, "café"}} {
+		rows, err := s.Exact(query.word, 10)
+		if err != nil || len(rows) != query.count || rows[0].Headword != query.first {
+			t.Fatalf("Exact(%q) = %v, %v", query.word, rows, err)
+		}
+		rows, err = s.Prefix(query.word, 10)
+		if err != nil || len(rows) != query.count || rows[0].Headword != query.first {
+			t.Fatalf("Prefix(%q) = %v, %v", query.word, rows, err)
+		}
+	}
+	for _, query := range []string{"résumé", "exposé"} {
+		rows, err := s.Exact(query, 10)
+		if err != nil || len(rows) != 1 || rows[0].Headword != "résumé" {
+			t.Fatalf("Exact alias %q = %v, %v", query, rows, err)
+		}
+	}
+}
+
 func TestPrefix(t *testing.T) {
 	s := testStore(t)
 	res, err := s.Prefix("coraz", 10)
-	if err != nil || len(res) != 2 {
+	if err != nil || len(res) != 1 {
 		t.Fatalf("Prefix coraz: %d results, err=%v", len(res), err)
 	}
 	// LIKE wildcards in input must be literal (FTS-audit #5)
@@ -485,6 +527,18 @@ func TestPrefix(t *testing.T) {
 	}
 	if res, _ := s.Prefix("%", 10); len(res) != 0 {
 		t.Errorf("bare %% must match nothing, got %d", len(res))
+	}
+}
+
+func TestMaskContext(t *testing.T) {
+	s := testStore(t)
+	rows, err := s.MaskContext(context.Background(), "coraz?n", 20)
+	if err != nil || len(rows) != 1 || rows[0].Headword != "corazón" {
+		t.Fatalf("MaskContext coraz?n = %#v, %v", rows, err)
+	}
+	rows, err = s.MaskContext(context.Background(), "pregunt*", 20)
+	if err != nil || len(rows) != 2 {
+		t.Fatalf("MaskContext pregunt* = %#v, %v", rows, err)
 	}
 }
 
@@ -516,19 +570,15 @@ func TestPrefixDoesNotStopAtExact(t *testing.T) {
 	}
 }
 
-// P-E: an accent/case-stripped prefix that the raw LIKE pass cannot match
-// must still resolve via the folded FTS fallback, matching the direct
-// backends (so "coraz" typed without the ó still finds corazón/corazonada).
-func TestPrefixFoldedFallback(t *testing.T) {
+// The default prefix search keeps accents in both the query and index.
+func TestPrefixRespectsTypedDiacritics(t *testing.T) {
 	s := testStore(t)
-	// "córaz" (extra accent) does not LIKE-prefix any headword, but folds
-	// to the same key as corazón/corazonada.
 	res, err := s.Prefix("córaz", 10)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(res) != 2 {
-		t.Fatalf("folded prefix córaz: %d results, want 2", len(res))
+	if len(res) != 0 {
+		t.Fatalf("accented prefix córaz: %d results, want 0", len(res))
 	}
 	// a genuinely absent prefix still returns nothing.
 	if r, _ := s.Prefix("zzzq", 10); len(r) != 0 {
@@ -555,12 +605,12 @@ func TestContains(t *testing.T) {
 	for _, r := range res {
 		got[r.Headword] = true
 	}
-	if !got["corazón"] || !got["corazonada"] {
-		t.Errorf("contains 'razon' should match corazón/corazonada, got %v", res)
+	if got["corazón"] || !got["corazonada"] {
+		t.Errorf("strict contains 'razon' should match corazonada only, got %v", res)
 	}
-	// accent-insensitive: folded query matches accented headword
+	// A typed accent is kept in the default search.
 	if r, _ := s.ContainsContext(bg, "orazó", 10); len(r) == 0 {
-		t.Error("contains should be accent-insensitive")
+		t.Error("contains should match the typed accent")
 	}
 	// short (<3 char) query falls back to LIKE, still returns something
 	if r, _ := s.ContainsContext(bg, "re", 10); len(r) == 0 {
@@ -1423,20 +1473,21 @@ func TestIngestProgressCoversRedirects(t *testing.T) {
 	}
 }
 
-// Exact is the hottest query in the app: it runs on every lookup, including
-// every miss. The `entry` table stores article bodies inline, so a scan of it
-// reads the whole dictionary; the only indexes on these columns are NOCASE
-// (ingest.go), which a case-SENSITIVE comparison cannot use. This asserts the
-// plan, not the rows - the rows are covered by the tests above and would stay
-// green through the regression this guards.
+// Exact runs on every lookup, including every miss. Its folded comparison
+// must use the headword index so misses never scan article bodies.
 func TestExactUsesTheHeadwordIndexes(t *testing.T) {
 	s := testStore(t)
 	const q = `
-		SELECT e.w, e.m FROM entry e WHERE e.w = ?1 COLLATE NOCASE AND e.w = ?1
-		UNION ALL
-		SELECT e.w, e.m FROM alias a JOIN entry e ON e.id = a.entry_id WHERE a.w = ?1 COLLATE NOCASE AND a.w = ?1
-		LIMIT ?2`
-	rows, err := s.db.Query("EXPLAIN QUERY PLAN "+q, "corazón", 10)
+		SELECT e.w, e.m FROM entry e JOIN (
+			SELECT id, min(priority) AS priority FROM (
+				SELECT id, CASE WHEN w = ?2 THEN 0 WHEN w = ?2 COLLATE NOCASE THEN 1 ELSE 2 END AS priority
+					FROM entry WHERE wf = ?1 COLLATE NOCASE
+				UNION ALL
+				SELECT entry_id AS id, CASE WHEN w = ?2 THEN 0 WHEN w = ?2 COLLATE NOCASE THEN 1 ELSE 2 END AS priority
+					FROM alias WHERE wf = ?1 COLLATE NOCASE
+			) GROUP BY id ORDER BY priority, id LIMIT ?3
+		) m ON e.id = m.id ORDER BY m.priority, e.w COLLATE NOCASE, e.w`
+	rows, err := s.db.Query("EXPLAIN QUERY PLAN "+q, "corazon", "corazón", 10)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1455,22 +1506,44 @@ func TestExactUsesTheHeadwordIndexes(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := plan.String()
-	// The entry side is the one that matters and the one this asserts: its
-	// rows carry the article bodies, so scanning it reads the dictionary. The
-	// alias side is (w, entry_id) and this fixture holds two rows of it, which
-	// ANALYZE (ingest.go) correctly tells the planner to scan - asserting an
-	// index there would be asserting the fixture's size, not the query.
-	if !strings.Contains(got, "idx_entry_w") {
-		t.Errorf("Exact does not use idx_entry_w; plan:\n%s", got)
+	if !strings.Contains(got, "idx_entry_wf") {
+		t.Errorf("Exact does not use idx_entry_wf; plan:\n%s", got)
 	}
-	if strings.Contains(got, "SCAN e\n") || strings.Contains(got, "SCAN entry") {
+	if strings.Contains(got, "SCAN entry") {
 		t.Errorf("Exact full-scans entry; plan:\n%s", got)
 	}
 }
 
-// The case-sensitive pass must still be case-SENSITIVE after being rewritten
-// to reach the NOCASE index: the index only narrows, the second comparison
-// decides.
+func TestFoldedPrefixUsesTheHeadwordIndex(t *testing.T) {
+	s := testStore(t)
+	for _, col := range []string{"wf", "wc"} {
+		rows, err := s.db.Query(`EXPLAIN QUERY PLAN SELECT id FROM entry WHERE `+col+` LIKE ? ESCAPE '\'`, "coraz%")
+		if err != nil {
+			t.Fatal(err)
+		}
+		var plan strings.Builder
+		for rows.Next() {
+			var id, parent, notused int
+			var detail string
+			if err := rows.Scan(&id, &parent, &notused, &detail); err != nil {
+				rows.Close()
+				t.Fatal(err)
+			}
+			plan.WriteString(detail)
+			plan.WriteByte('\n')
+		}
+		err = rows.Err()
+		rows.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(plan.String(), "idx_entry_"+col) {
+			t.Errorf("Prefix does not use idx_entry_%s; plan:\n%s", col, plan.String())
+		}
+	}
+}
+
+// The accented case key is Unicode case-insensitive while retaining marks.
 func TestExactStillPrefersTheExactCase(t *testing.T) {
 	s := testStore(t)
 	res, err := s.Exact("Corazón", 10)

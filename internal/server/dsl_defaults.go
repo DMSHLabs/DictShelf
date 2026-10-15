@@ -58,14 +58,13 @@ func (s *Server) handleIndexDefaults(w http.ResponseWriter, req *http.Request) {
 	writeJSON(w, next)
 }
 
-func (r *Registry) queueNewDSL() error {
+func (r *Registry) queueNewDictionaries() error {
 	entries := r.all()
-	current, _ := r.prefs.data()
 	families := make(map[string][]*entry)
 	for _, e := range entries {
 		if e.dslSource != "" {
 			families[e.dslSource] = append(families[e.dslSource], e)
-		} else if current.IndexDefaults != nil && !e.builtin && !store.IsTextDB(e.Path) {
+		} else if !e.builtin && !store.IsTextDB(e.Path) && !nativeIndexOnly(e) {
 			families[cleanAbs(e.Path)] = append(families[cleanAbs(e.Path)], e)
 		}
 	}
@@ -73,7 +72,8 @@ func (r *Registry) queueNewDSL() error {
 	p.editMu.Lock()
 	defer p.editMu.Unlock()
 	f, _ := p.data()
-	// Existing installations retain their choices until defaults are saved.
+	// The fork leaves preparation under the reader's control until index
+	// defaults were explicitly saved in the setup page.
 	if f.IndexDefaults == nil {
 		return nil
 	}
@@ -90,34 +90,40 @@ func (r *Registry) queueNewDSL() error {
 		f.DSLRemoved = map[string]bool{}
 	}
 	changed := false
+	for _, e := range entries {
+		if !nativeIndexOnly(e) {
+			continue
+		}
+		key := e.indexRemovalKey()
+		_, pending := f.DSLPending[key]
+		if pending || f.DSLRemoved[key] || !f.DSLKnown[cleanAbs(e.Path)] {
+			store.IndexDiagnostic("discard native-index preparation source=%q pending=%v removed=%v", e.Path, pending, f.DSLRemoved[key])
+			delete(f.DSLPending, key)
+			delete(f.DSLRemoved, key)
+			f.DSLKnown[cleanAbs(e.Path)] = true
+			e.gen.Add(1)
+			changed = true
+		}
+	}
+	// New dictionaries default to a headword index. Saved defaults only add optional indexes.
+	defaults := *f.IndexDefaults
+	defaults.Index = true
 	for source, family := range families {
 		if f.DSLKnown[source] {
 			continue
 		}
 		f.DSLKnown[source] = true
 		changed = true
-		// A previously prepared family is not a newly added dictionary.
-		existing := false
 		for _, other := range family {
-			if _, ok := validPrepared(other.Path); ok {
-				existing = true
+			if hasBrowseIndex(other.Path) {
+				continue
 			}
-			// Explicit removals and migration plans must survive import defaults.
-			if f.DSLRemoved[other.indexRemovalKey()] {
-				existing = true
-			}
-		}
-		if existing {
-			continue
-		}
-		for _, other := range family {
-			v := *f.IndexDefaults
 			key := other.indexRemovalKey()
-			// Block implicit preparation until the selected plan finishes.
-			f.DSLRemoved[key] = true
-			if v.Index {
-				f.DSLPending[key] = v
+			if f.DSLRemoved[key] {
+				continue
 			}
+			f.DSLRemoved[key] = true
+			f.DSLPending[key] = defaults
 		}
 	}
 	if !changed {
@@ -126,16 +132,30 @@ func (r *Registry) queueNewDSL() error {
 	return p.store(f)
 }
 
-func (r *Registry) prepareNewDSL() {
-	r.dslAutoMu.Lock()
-	defer r.dslAutoMu.Unlock()
+func (r *Registry) prepareNewDictionaries() {
+	r.indexQueueMu.Lock()
+	defer r.indexQueueMu.Unlock()
 	entries := r.all()
-	for i, e := range entries {
+	for _, e := range entries {
 		key := e.indexRemovalKey()
 		p := r.prefs
 		f, _ := p.data()
 		v, ok := f.DSLPending[key]
 		if !ok {
+			continue
+		}
+		if nativeIndexOnly(e) {
+			store.IndexDiagnostic("skip pending index preparation source=%q reason=native-index", e.Path)
+			p.editMu.Lock()
+			err := p.mutate(func(f *prefsFile) {
+				delete(f.DSLPending, key)
+				delete(f.DSLRemoved, key)
+			})
+			p.editMu.Unlock()
+			if err != nil {
+				logx.Warn("could not discard native-index preparation %s: %v", e.Path, err)
+			}
+			e.gen.Add(1)
 			continue
 		}
 		jobKey := ingestKey(e.ID)
@@ -150,18 +170,19 @@ func (r *Registry) prepareNewDSL() {
 			progress := func(done, total int) {
 				j.update(func(st *jobStatus) { st.Done, st.Total = int64(done), int64(total) })
 			}
-			if err := e.restoreDSLIndex(store.Plan{Contains: v.Contains, FullText: v.FullText}, progress); err != nil {
+			if err := e.restoreIndex(store.Plan{Contains: v.Contains, FullText: v.FullText}, progress, indexLimit); err != nil {
 				j.update(func(st *jobStatus) { st.Err = err.Error() })
-				logx.Warn("preparing new dictionary %s: %v", e.Path, err)
+				// A failed automatic index is not a deliberate removal. Keep
+				// the pending plan for a later retry, but let direct search use
+				// the source while the prepared index is unavailable.
+				if unblockErr := e.setIndexRemoved(false); unblockErr != nil {
+					logx.Warn("could not unblock dictionary after failed index %s: %v", e.Path, unblockErr)
+				}
+				store.IndexDiagnostic("new dictionary index failed source=%q dictionary=%q error=%q", e.Path, e.probeName(), err.Error())
+				logx.Warn("indexing new dictionary %s: %v", e.Path, err)
 				return
 			}
 			if st, _ := r.jobs.status(jobKey); st.StopRequested {
-				p.editMu.Lock()
-				err := p.mutate(func(f *prefsFile) { delete(f.DSLPending, key) })
-				p.editMu.Unlock()
-				if err != nil {
-					j.update(func(st *jobStatus) { st.Err = err.Error() })
-				}
 				j.update(func(st *jobStatus) { st.Canceled = true })
 				return
 			}
@@ -173,15 +194,20 @@ func (r *Registry) prepareNewDSL() {
 				logx.Warn("saving index preparation state: %v", err)
 			}
 		})
+		if !started {
+			st := r.jobs.wait(jobKey)
+			if st.Canceled || st.StopRequested {
+				return
+			}
+			if st.Err != "" {
+				logx.Warn("new dictionary index job did not complete: %s: %s", e.Path, st.Err)
+			}
+			continue
+		}
 		st := r.jobs.wait(jobKey)
 		if st.Canceled || st.StopRequested {
-			p.editMu.Lock()
-			_ = p.mutate(func(f *prefsFile) {
-				for _, skipped := range entries[i+1:] {
-					delete(f.DSLPending, skipped.indexRemovalKey())
-				}
-			})
-			p.editMu.Unlock()
+			// Keep this and later entries pending. The next process start or
+			// rescan can resume the unfinished work.
 			return
 		}
 		if !started && st.Err != "" {

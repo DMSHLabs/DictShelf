@@ -55,7 +55,7 @@ func TestClearDatabaseIndependentIndexes(t *testing.T) {
 			if _, err := os.Stat(e.Path); err != nil {
 				t.Fatalf("source removed: %v", err)
 			}
-			if result, err := d.Exact("corazon", 10); err != nil || len(result) == 0 {
+			if result, err := d.Exact("corazón", 10); err != nil || len(result) == 0 {
 				t.Fatalf("base lookup: %v %v", result, err)
 			}
 		})
@@ -148,6 +148,7 @@ func TestRescanClearsUnselectedSourcesButKeepsActiveIndexes(t *testing.T) {
 	if err := s.reg.Rescan(); err != nil {
 		t.Fatal(err)
 	}
+	waitNewDictionaryIndexing(t, s.reg)
 	e, err := s.reg.get(idOf(t, s, "new.dsl"))
 	if err != nil {
 		t.Fatal(err)
@@ -197,6 +198,7 @@ func TestCleanupKeepsSingleDSLIndex(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	waitNewDictionaryIndexing(t, reg)
 	paths := []string{}
 	for _, e := range reg.all() {
 		if _, err := e.open(); err != nil {

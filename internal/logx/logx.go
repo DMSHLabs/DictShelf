@@ -37,7 +37,7 @@ var Enabled = os.Getenv("WUDICT_VERBOSE") != "" || os.Getenv("VERBOSE") != ""
 
 // The destination is a variable rather than a constant os.Stderr because a
 // GUI launch has no console to write to: a macOS .app inherits a stderr
-// pointing at nothing useful, and a double-clicked wudict.exe is about to
+// pointing at nothing useful, and a double-clicked wuDict2.exe is about to
 // close the console Windows made for it (D76). SetOutput is the only way to
 // move it, it is called at most once per
 // process, and a terminal session never calls it - a console is never taken
@@ -95,9 +95,8 @@ func Warn(format string, args ...any) {
 	fmt.Fprintf(dest(), "warning: "+format+"\n", args...)
 }
 
-// Status reports progress on a slow foreground operation (preparing a search
-// index on first open). One line, no timestamp - it is for humans watching a
-// wait, not for logs.
+// Status reports progress on a slow foreground operation. One line, no timestamp -
+// it is for humans watching a wait, not for logs.
 func Status(format string, args ...any) {
 	fmt.Fprintf(dest(), format+"\n", args...)
 }

@@ -18,17 +18,15 @@ dictionary.
 | + contains index | the same `text.db`         | + contains |
 | + full-text index | the same `text.db`         | + full-text |
 
-A dictionary is searchable as soon as wudict finds it. On its first search
-wudict indexes its headwords in the background
-([`AUTO_INDEX`](../reference/configuration.md#auto_index)), one dictionary at a
-time ([`INDEX_WORKERS`](../reference/configuration.md#index_workers)). With
-`AUTO_INDEX = off`, dictionaries stay not indexed and use more memory and CPU.
+A dictionary is searchable as soon as wudict finds it. wudict queues its
+headword index when the dictionary is added or found by Rescan. The queue uses
+[`INDEX_WORKERS`](../reference/configuration.md#index_workers). Until the index
+is ready, exact and prefix searches use the dictionary's own format. Search
+does not start indexing.
 
-Lingvo DSL, Babylon and wudict markdown are indexed when first opened: they
-have no index of their own. ZIM is never indexed automatically: its own index
-answers exact and prefix search with little memory, and an indexed copy is
-several times the size of the file. Index a ZIM from the dictionary panel to
-use contains, full-text or a media pack.
+ZIM is not added to the indexing queue: its own index answers exact and prefix
+search with little memory, and an indexed copy is several times the size of the
+file. The ZIM index cannot be changed in Dictionary Settings.
 
 The contains index, the full-text index and the media pack are added per
 dictionary with its switches in the dictionary panel, or with
@@ -91,8 +89,8 @@ it after the current dictionary.
 | <kbd>index only</kbd> | the library folder; the dictionary files stay |
 | <kbd>dictionary files only</kbd> | the dictionary files; offered when the library folder is complete (media pack added, or no media) |
 
-After *index only*, a dictionary still in a dictionary folder is indexed again
-on its next search ([`AUTO_INDEX`](../reference/configuration.md#auto_index)).
+After *index only*, the dictionary files stay in place. Use Dictionary Settings
+to create the index again before you need the library copy.
 
 !!! warning "Deletion is permanent"
 

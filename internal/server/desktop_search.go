@@ -45,7 +45,7 @@ func (s *Server) DesktopStream(ctx context.Context, baseURL, method, query strin
 		if err != nil || base.Scheme != "http" || base.Host == "" || base.User != nil {
 			return errors.New("invalid desktop server address")
 		}
-		return s.desktopIngest(ctx, query, emit)
+		return s.desktopIngest(ctx, baseURL, query, emit)
 	}
 	path := ""
 	verb := http.MethodGet
@@ -75,7 +75,7 @@ func (s *Server) DesktopStream(ctx context.Context, baseURL, method, query strin
 	return w.finish()
 }
 
-func (s *Server) desktopIngest(ctx context.Context, query string, emit func([]byte)) error {
+func (s *Server) desktopIngest(ctx context.Context, baseURL, query string, emit func([]byte)) error {
 	values, err := url.ParseQuery(query)
 	if err != nil {
 		return fmt.Errorf("invalid ingest request: %w", err)
@@ -93,6 +93,7 @@ func (s *Server) desktopIngest(ctx context.Context, query string, emit func([]by
 		s.startIngest(e, values)
 		release()
 	}
+	var sendErr error
 	s.followIngestEvents(ctx, key, func(event string, data any) {
 		if emit == nil {
 			return
@@ -105,7 +106,7 @@ func (s *Server) desktopIngest(ctx context.Context, query string, emit func([]by
 			emit(message)
 		}
 	})
-	return nil
+	return sendErr
 }
 
 // DesktopSearch accepts a legacy query string and calls the shared search
@@ -211,11 +212,15 @@ func (s *Server) DesktopJSON(baseURL, method, argument string) (any, error) {
 			return nil, fmt.Errorf("invalid demand request: %w", err)
 		}
 		explicit, _ := queryFlag(values, "explicit")
-		indexing, err := s.demandDictionary(values.Get("dict"), explicit)
+		indexing, err := s.DemandDictionary(values.Get("dict"), explicit)
 		if err != nil {
 			return nil, err
 		}
 		return map[string]bool{"indexing": indexing}, nil
+	case "savePrefs":
+		return s.SavePrefs(strings.NewReader(argument))
+	case "setup":
+		return s.DesktopSetup(argument)
 	case "groups":
 		return s.groupsSnapshot(), nil
 	case "userGroups":
@@ -234,6 +239,8 @@ func (s *Server) DesktopJSON(baseURL, method, argument string) (any, error) {
 		return s.startIndexWork([]byte(argument), method == "startSingleIndexWork", true)
 	case "stopIndexWork":
 		return s.stopIndexWork("all")
+	case "stopIngest":
+		return s.stopIngest(argument)
 	case "startReindex":
 		status, _, err := s.StartReindex()
 		return status, err

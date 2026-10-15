@@ -39,6 +39,9 @@ type Meta struct {
 	Path        string // source path (or .text.db path for ingested)
 	Description string
 	EntryCount  int
+	// HeadwordsOnly marks a prepared ZIM title index: article text is fetched
+	// from the original source after a headword match.
+	HeadwordsOnly bool
 
 	// IndexLang is the ISO 639-1 code of the language the HEADWORDS are in,
 	// as the dictionary itself declares it (Lingvo's #INDEX_LANGUAGE, Babylon's
@@ -156,6 +159,7 @@ type ResourceLister interface {
 // ContainsContext needs Caps.Contains (the trigram index); FullTextContext
 // and FullTextMatch need Caps.FTS. Without them they return ErrUnsupported.
 type Searcher interface {
+	MaskContext(ctx context.Context, pattern string, limit int) ([]Result, error)
 	ExactContext(ctx context.Context, word string, limit int) ([]Result, error)
 	PrefixContext(ctx context.Context, word string, limit int) ([]Result, error)
 	// ContainsContext is a substring match over headwords (FTS5 trigram),
@@ -173,8 +177,8 @@ type Searcher interface {
 	FullTextMatch(ctx context.Context, match string, limit int) ([]Result, error)
 }
 
-// Letter is one chip of the browse strip: a run of headwords sharing an
-// initial, and where that run begins in browse order.
+// Letter is one chip of a headword strip: a run of browse headwords sharing
+// an initial, or a mask result page labelled by its first headword.
 //
 // Offset is a position in the SAME sequence Browser.Page pages through, so a
 // chip becomes a page by integer division and nothing has to agree about page
@@ -189,13 +193,11 @@ type Letter struct {
 // an ordered, addressable list - reading it page by page instead of querying
 // it.
 //
-// Only the prepared backend implements it, and that is the contract rather
-// than an omission: all three answers are reads of one index (idx_entry_w),
-// which is what makes a jump to "M" in a 2.9 M-entry dictionary a seek instead
-// of a scan. A direct format backend would have to sort its entire headword
-// list in memory to answer any of them - precisely the cost preparation
-// exists to remove - so browsing is offered where the index is, and the
-// dictionary panel is where an index is asked for.
+// The prepared backend implements it with idx_entry_w. ZIM implements it with
+// the source's mandatory path-pointer list; its letter strip samples the first
+// visible headword of each page of native slots, which can include resources.
+// Other direct backends would have to sort their entire headword list in
+// memory to answer these calls, so they remain unavailable for Browse.
 //
 // Browse order is the index's order (case-insensitive by headword), NOT the
 // source file's entry order: a paper dictionary's pages are alphabetical, and
@@ -219,6 +221,7 @@ type Browser interface {
 // Results are returned in browse order, independently of the current page.
 type BrowseFinder interface {
 	FindHeadwords(ctx context.Context, query string, offset, limit int) ([]string, int, error)
+	FindHeadwordsMask(ctx context.Context, query string, offset, limit int) ([]string, int, []Letter, error)
 }
 
 // Entry is one dictionary article as produced by a format Reader during

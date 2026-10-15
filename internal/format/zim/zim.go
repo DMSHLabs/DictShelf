@@ -6,10 +6,13 @@ package zim
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
+	"unicode"
 
 	"github.com/wuweidict/wudict/internal/dict"
 	"github.com/wuweidict/wudict/internal/lang"
@@ -44,6 +47,10 @@ type Dict struct {
 	// binary searches. It is both what Keywords browses and what EntryCount
 	// counts, so the two can never disagree.
 	lo, hi int
+
+	alphaMu    sync.Mutex
+	alphaReady bool
+	alpha      []dict.Letter
 }
 
 func Open(path string) (*Dict, error) {
@@ -114,9 +121,8 @@ func (d *Dict) PreviewBytes() int64 {
 // disk EXPANSION, because the source packs whole clusters with zstd (~14x)
 // while a prepared text.db compresses one article at a time with DEFLATE
 // (~3.5x, D24) - a 123 MB wiktionary becomes a ~431 MB text.db, and an 8 GB
-// wikipedia something nobody asked for. Preparation stays available on
-// request (the per-dictionary switches, `wudict ingest`); only the automatic
-// path declines.
+// wikipedia something nobody asked for. Server-managed index work skips this
+// format; the native path list already answers headword searches.
 func (d *Dict) SelfIndexed() bool { return true }
 
 // metadata reads one M/ namespace value. Metadata blobs are small and each
@@ -258,6 +264,165 @@ func (d *Dict) Keywords(offset, n int) []string {
 		out = append(out, de.headword())
 	}
 	return out
+}
+
+// Page, Locate and Alphabet expose the mandatory path-pointer list to Browse
+// A-Z. They read the ZIM's native index; they do not create or persist a
+// second headword index.
+func (d *Dict) Page(offset, n int) ([]string, error) {
+	if offset < 0 {
+		offset = 0
+	}
+	if n <= 0 {
+		return nil, nil
+	}
+	lo, hi, ok := dict.KeywordRange(d.hi-d.lo, offset, n)
+	if !ok {
+		return nil, nil
+	}
+	out := make([]string, 0, hi-lo)
+	for i := d.lo + lo; i < d.lo+hi; i++ {
+		de, err := d.c.entry(i)
+		if err != nil {
+			return nil, err
+		}
+		if !d.c.isArticle(de) {
+			continue
+		}
+		out = append(out, de.headword())
+	}
+	return out, nil
+}
+
+func (d *Dict) Locate(word string) (int, error) {
+	word = strings.TrimSpace(word)
+	if word == "" {
+		return 0, nil
+	}
+	// The native pointer list is ordered by path, while a displayed headword
+	// may be a title. Probe the usual ZIM path spellings and return its native
+	// slot; Browse uses native slots for ZIM pagination.
+	idx := d.hi
+	for _, variant := range pathVariants(word) {
+		candidate, err := d.c.lowerBound(searchKey(d.c.contentNS(), variant))
+		if err != nil {
+			return 0, err
+		}
+		if candidate < idx {
+			idx = candidate
+		}
+	}
+	if idx < d.lo {
+		idx = d.lo
+	}
+	return idx - d.lo, nil
+}
+
+func (d *Dict) Alphabet() ([]dict.Letter, error) {
+	d.alphaMu.Lock()
+	defer d.alphaMu.Unlock()
+	if !d.alphaReady {
+		alpha, err := d.buildAlphabetStream(context.Background(), nil)
+		if err != nil {
+			return nil, err
+		}
+		d.alpha = alpha
+		d.alphaReady = true
+	}
+	return append([]dict.Letter(nil), d.alpha...), nil
+}
+
+// StreamBrowseAlphabet supplies page-start labels as the native index is
+// walked, so Browse can show useful labels and progress before the full strip
+// has been sampled.
+func (d *Dict) StreamBrowseAlphabet(ctx context.Context, emit func([]dict.Letter, int, int) error) error {
+	d.alphaMu.Lock()
+	defer d.alphaMu.Unlock()
+	if d.alphaReady {
+		for start := 0; start < len(d.alpha); start += 512 {
+			end := min(start+512, len(d.alpha))
+			if err := emit(d.alpha[start:end], min(end*dict.MaskPageSize, d.hi-d.lo), d.hi-d.lo); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	alpha, err := d.buildAlphabetStream(ctx, emit)
+	if err != nil {
+		return err
+	}
+	d.alpha = alpha
+	d.alphaReady = true
+	return nil
+}
+
+// buildAlphabetStream samples the first visible headword in each Browse page.
+// The native index includes resources, so it inspects only the dirents needed
+// to locate each page's first article.
+func (d *Dict) buildAlphabetStream(ctx context.Context, emit func([]dict.Letter, int, int) error) ([]dict.Letter, error) {
+	total := d.hi - d.lo
+	var out []dict.Letter
+	used := make(map[string]bool)
+	chunkStart := 0
+	for offset := 0; offset < total; offset += dict.MaskPageSize {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		end := min(offset+dict.MaskPageSize, total)
+		emitted := false
+		var first string
+		for slot := offset; slot < end; slot++ {
+			de, err := d.c.entry(d.lo + slot)
+			if err != nil {
+				return nil, err
+			}
+			if d.c.isArticle(de) {
+				first = de.headword()
+				break
+			}
+		}
+		if first != "" {
+			label := dict.MaskInitial(first)
+			if used[label] {
+				label = nativeInitialPrefix(first, label, used)
+			}
+			used[label] = true
+			out = append(out, dict.Letter{Letter: label, Offset: offset, Count: min(dict.MaskPageSize, total-offset)})
+			if emit != nil && len(out)-chunkStart >= 512 {
+				if err := emit(out[chunkStart:], end, total); err != nil {
+					return nil, err
+				}
+				chunkStart = len(out)
+				emitted = true
+			}
+		}
+		if emit != nil && !emitted && offset%30000 == 0 {
+			if err := emit(nil, offset, total); err != nil {
+				return nil, err
+			}
+		}
+	}
+	if emit != nil && chunkStart < len(out) {
+		if err := emit(out[chunkStart:], total, total); err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
+}
+
+func nativeInitialPrefix(word, initial string, used map[string]bool) string {
+	runes := []rune(dict.Fold(word))
+	if len(runes) == 0 {
+		return initial
+	}
+	runes[0] = unicode.ToUpper(runes[0])
+	for n := 1; n <= len(runes); n++ {
+		label := string(runes[:n])
+		if label != initial && !used[label] {
+			return label
+		}
+	}
+	return word
 }
 
 // Resource serves any stored blob by its path. New-scheme files keep every

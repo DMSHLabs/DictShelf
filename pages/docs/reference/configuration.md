@@ -19,10 +19,10 @@ wudict reads the first of:
 
 1. `--config` or `CONFIG_PATH`
 2. `wudict.toml` next to the executable ([portable mode](#portable-mode))
-3. `~/.wudict/wudict.toml`
+3. `~/.wudict/wudict.toml` on macOS and Linux; `~/.wuDict2/wudict.toml` on Windows
 4. `/etc/wudict/wudict.toml`
 
-The first `wudict serve` creates `~/.wudict/wudict.toml` with every setting
+The first `wudict serve` creates the platform config file with every setting
 commented out. Each start prints the file in effect. An unknown key is reported
 at startup and on the setup page.
 
@@ -37,7 +37,7 @@ wudict never creates it.
 | Platform | Config folder |
 | --- | --- |
 | macOS, Linux | `~/.wudict` |
-| Windows | `%USERPROFILE%\.wudict` |
+| Windows | `%USERPROFILE%\.wuDict2` |
 | Android | `Android/data/com.dmshepeta.wudict2/files` |
 
 | In the config folder | Contents |
@@ -112,22 +112,6 @@ Do not open a browser tab at startup.
 | --- | --- |
 | Flag | `--no-browser` |
 | Default | off: a tab opens |
-
-### AUTO_INDEX
-
-Index each dictionary's headwords in the background on its first search.
-
-| | |
-| --- | --- |
-| Flag | none, environment and file only |
-| Values | `on`, `off` |
-| Default | `on` |
-
-`off`: dictionaries stay not indexed and are searched through their own format.
-The contains index, full-text index and media pack are per-dictionary choices
-either way.
-
-[The library](../dictionaries/library.md){ .md-button }
 
 ### USE_CACHED
 

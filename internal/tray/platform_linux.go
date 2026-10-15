@@ -72,6 +72,10 @@ func GUILaunched() bool { return false }
 // in the executable header rather than by how the process was started.
 func DetachConsole() {}
 
+// ShowConsole is a Windows concern: Linux has no startup console window to
+// restore after a GUI log failure.
+func ShowConsole() {}
+
 // Alert has nothing to do here: GUILaunched is always false on Linux, so a
 // degraded tray always has a terminal, a pipe or a journal behind it.
 func Alert(string, string) {}

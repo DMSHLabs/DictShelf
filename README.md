@@ -36,10 +36,10 @@ Runs natively on [android](https://wuweidict.github.io/wudict/apps/android/), [m
 | MDict           | `.mdx` + `.mdd`                     | companion `*.mdd`, `*.1.mdd`, … resource archives; built-in `.spx` audio decoding |
 | StarDict        | `.ifo` + `.idx(.gz)` + `.dict(.dz)` | `.syn` synonyms, `res/` folder or `res.zip` resources |
 | Aard2           | `.slob`                             | zlib/bz2/lzma2; embedded images/audio/css |
-| Lingvo DSL      | `.dsl`, `.dsl.dz`                   | UTF-8/16/32 auto-detected; `*.dsl.files.zip` resources; auto-indexed |
-| Babylon         | `.bgl`                              | gzip block stream; source/target charset auto-detected (Latin / Cyrillic / CJK code pages); embedded images; indexed automatically on first open |
+| Lingvo DSL      | `.dsl`, `.dsl.dz`                   | UTF-8/16/32 auto-detected; `*.dsl.files.zip` resources |
+| Babylon         | `.bgl`                              | gzip block stream; source/target charset auto-detected (Latin / Cyrillic / CJK code pages); embedded images |
 | ZIM             | `.zim`                              | Kiwix/Wikimedia offline archives; see https://library.kiwix.org
-| wudict markdown | `.wudict.md` or `.md`, `.wudict.md.gz` | plain CommonMark, readable and editable in any editor; a dictionary only when its first two lines are `# Title` and `wudict: 1`, whatever the name; `<name>.wudict.files/` resources; auto-indexed; written by `wudict dump -format md` |
+| wudict markdown | `.wudict.md` or `.md`, `.wudict.md.gz` | plain CommonMark, readable and editable in any editor; a dictionary only when its first two lines are `# Title` and `wudict: 1`, whatever the name; `<name>.wudict.files/` resources; written by `wudict dump -format md` |
 | wudict          | cache folder (`text.db`)            | wuDict's own SQLite-based format (see *Sharing*, below) |
 
 ## wuDict for Desktop
@@ -47,7 +47,7 @@ Runs natively on [android](https://wuweidict.github.io/wudict/apps/android/), [m
 1. Download the standalone binary for your OS from
    [releases](https://github.com/wuweidict/wudict/releases), rename to `wudict`, 
    `chmod +x wudict` (macOS/Linux) and move to a folder in `$PATH`, e.g. `/usr/local/bin`.
-2. Run `wudict` or `./wudict` if the file is in the current folder. For windows you can either use the installer [`wudict-windows-x64-setup-<x.y.z>.exe`](https://github.com/wuweidict/wudict/releases/latest), or download the standalone executable `wudict-windows-amd64-cgo.exe` and then double-click to run. For macOS an app bundle is provided  (it is not signed with a commercial Apple Developer Certificate, macOS flags it as unverified, and extra steps are needed to de-quarantine the app as described in the [manual](https://wuweidict.github.io/wudict/apps/macos/)).
+2. Run `wudict` or `./wudict` if the file is in the current folder. For Windows, use the `wudict2-windows-x64-setup-<version>.exe` installer or the `wuDict2.exe` desktop build. For macOS an app bundle is provided (it is not signed with a commercial Apple Developer Certificate, macOS flags it as unverified, and extra steps are needed to de-quarantine the app as described in the [manual](https://wuweidict.github.io/wudict/apps/macos/)).
 3. By default `wudict` searches for dictionaries under `~/Dictionaries` (including subfolders); 
    if the dictionary folder is missing or empty, a setup page opens where you can configure your dictionary folders.
 
@@ -81,10 +81,10 @@ DICT_DIR = ["~/Dictionaries", "/Volumes/Data/Dicts"]
 | **contains** | substring / typo-tolerant headword match, anywhere in the word (FTS5 trigram) | ad-hoc |
 | **full-text** | search inside article text, ranked by relevance | yes |
 
-Every dictionary works immediately for _starts-with_ and _exact_ lookups using
-the native index. The first time you search **a small headword index
-is prepared in the background** — a couple of MB — so accent-insensitive
-lookups (*corazon* → *corazón*) work seamlessly (disable with `AUTO_INDEX=off`).
+When you add a dictionary, wudict queues its headword index in the background.
+Until the index is ready, exact and prefix searches use the dictionary's own
+format. The library index makes lookups faster and supports accent-insensitive
+search (*corazon* → *corazón*). Search does not start an index job.
 
 ***Full-text*** (searching inside article text) and ***contains*** 
  (substring search) are not enabled by default as they consume more disk space. 
@@ -133,12 +133,12 @@ make mac-agent-uninstall # stop it and delete the plist
 
 ## Run as an app (Windows)
 
-In Windows, `wudict` runs from `cmd` or PowerShell as an ordinary command-line
-program. When started from Explorer or a shortcut, it opens a dedicated window
-using WebView2 and shows a tray icon; closing the window leaves the server in
-the tray. **Exit** in Settings or **Quit** in the tray stops the server. The
-window and server are in one `wudict.exe`. If the WebView2 Runtime is absent,
-it opens the default browser instead. Logs go to
+On Windows, `wuDict2.exe` opens the WebView2 desktop window without a console
+window. The same executable handles terminal commands, for example
+`wuDict2.exe --help`; run it from PowerShell or `cmd` to see command output.
+It also shows a tray icon; closing the window leaves the server running
+in the tray. **Exit** in Settings or **Quit** in the tray stops the server. If
+the WebView2 Runtime is absent, it opens the default browser instead. Logs go to
 `%LOCALAPPDATA%\wudict\wudict.log`. See also [running on Windows](https://wuweidict.github.io/wudict/apps/windows/).
 
 
@@ -187,7 +187,6 @@ config file path is printed on startup.
 | `--verbose` | `VERBOSE=1` | detailed logging              |
 | `--speexdec` | `SPEEXDEC` | found on `PATH`               |
 | `--use-cached` | `USE_CACHED` | off                           |
-| — | `AUTO_INDEX` | `on` (`off` to disable)       |
 | `--no-compress` | `NO_COMPRESS` | off (article text compressed) |
 | — | `BROWSER_EXTENSIONS` | any extension may look words up |
 
@@ -210,7 +209,7 @@ Config file search order: `--config` / `CONFIG_PATH`, then
 `<exe-dir>/wudict.toml`, `~/.wudict/wudict.toml`,
 `/etc/wudict/wudict.toml`.
 
-**Portable mode.** A `wudict.toml` can also be placed in the same folder as the `wudict` (or `wudict.exe`) executable.
+**Portable mode.** A `wudict.toml` can also be placed in the same folder as the `wudict` (or `wuDict2.exe`) executable.
 
 **`~/.wudict/state.json`** stores dictionary search order and enabled/disable state. 
 

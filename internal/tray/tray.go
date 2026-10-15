@@ -329,7 +329,7 @@ func runReason(err error) string {
 	return "message loop ended unexpectedly"
 }
 
-// startSafely and runSafely contain the library rather than trust it: a v0.2
+// startSafely and runSafely contain the library rather than trust it: a v0.3
 // FFI layer panicking is a live possibility, and a panic on the main goroutine
 // would take a working server down with it.
 func startSafely(p platform, cfg Config, items []Item) (err error) {

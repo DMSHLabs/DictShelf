@@ -111,6 +111,8 @@ type SearchEvent struct {
 	Lang string `json:"lang,omitempty"`
 }
 
+const demandSearchBudget = 5 * time.Minute
+
 // Search runs one lookup and serializes progressive events to emit. Both the
 // HTTP adapter and the native bridge use this method without a listener.
 // An emitter error stops delivery and cancels outstanding dictionary queries.
@@ -222,19 +224,7 @@ func (s *Server) Search(parent context.Context, request SearchRequest, emit func
 		e := e
 		begin[i] = SearchSlot{Dict: e.ID, Name: e.ID}
 		openers[i] = func() (dict.Dictionary, error) {
-			d, err := e.openWithin(fan)
-			if err == nil && s.AutoIndex {
-				// A search of one dictionary is a demand for that dictionary,
-				// so its index jumps the background queue (demandIndex); a
-				// dictionary that merely happened to be in a wide search takes
-				// its turn (maybeAutoIndex). Both prepare the same thing.
-				if demand {
-					e.demandIndex()
-				} else {
-					e.maybeAutoIndex()
-				}
-			}
-			return d, err
+			return e.openWithin(fan)
 		}
 	}
 	writeLine(SearchEvent{T: "begin", Slots: begin})
@@ -284,18 +274,14 @@ func (s *Server) Search(parent context.Context, request SearchRequest, emit func
 			// uncapped above, and which auto-indexes it so the deferral does
 			// not recur.
 			m.Deferred, m.Bytes = true, heavy.bytes
-			m.Indexing = entries[i].indexing()
+
 		case errors.Is(h.Err, context.DeadlineExceeded):
 			// Never Go's own words. "context deadline exceeded" is what an
 			// unindexed dictionary looked like from the outside while a preview
 			// search crawled through its source format, and it told the user
 			// nothing they could act on - which is the whole content of the
 			// message they need.
-			if entries[i].indexing() {
-				m.Error = "timed out — still preparing this dictionary"
-			} else {
-				m.Error = "timed out — index this dictionary to search it"
-			}
+			m.Error = "timed out — index this dictionary to search it"
 		case errors.Is(h.Err, context.Canceled):
 			m.Error = "search cancelled"
 		case h.Err != nil:
@@ -314,9 +300,6 @@ func (s *Server) Search(parent context.Context, request SearchRequest, emit func
 	// own format on a phone can legitimately take longer than that to answer.
 	// Cutting it off there produced a timeout instead of a result.
 	budget := 30 * time.Second
-	if demand {
-		budget = demandSearchBudget
-	}
 	ctx, cancel := context.WithTimeout(ctx, budget)
 	defer cancel()
 	// Metas are kept because each carries the dictionary's declared language,
@@ -352,7 +335,7 @@ func (s *Server) Search(parent context.Context, request SearchRequest, emit func
 		writeLine(renderHit(i, h))
 	})
 	if empty > 0 {
-		s.lemmaWave(ctx, writeLine, renderHit, entries, metas, missed, openers, mode, q, n)
+		s.lemmaWave(ctx, func(event streamMsg) { writeLine(searchEventFromStream(event)) }, func(i int, hit search.Hit) streamMsg { return searchEventToStream(renderHit(i, hit)) }, entries, metas, missed, openers, mode, q, n)
 	}
 	writeLine(SearchEvent{T: "end"})
 	return emitErr

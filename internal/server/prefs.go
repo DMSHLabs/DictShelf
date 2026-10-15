@@ -134,6 +134,11 @@ type UIPrefs struct {
 	// and an id no facet uses any more simply hides nothing.
 	GroupsOff []string `json:"groupsOff,omitempty"`
 
+	// False sorts the unpinned All Dictionaries tail alphabetically; true
+	// preserves manual order and appends new dictionaries alphabetically. Nil
+	// marks older state, whose mode the page infers from its saved order.
+	CustomOrder *bool `json:"customOrder,omitempty"`
+
 	// Full opens an article's secondary zone (DSL [*], wu-sec: examples and
 	// links to sub-entries) shown instead of hidden. Spelled positively, like
 	// SortMine: the brief view is Lingvo's own default, so the zero value
@@ -208,7 +213,8 @@ type prefsFile struct {
 	DSLKnown      map[string]bool         `json:"dslKnown,omitempty"`
 	DSLPending    map[string]indexOptions `json:"dslPending,omitempty"`
 	DSLRemoved    map[string]bool         `json:"dslRemoved,omitempty"`
-	Language      string                  `json:"language,omitempty"` // explicit interface language, never the dictionary language
+	Damaged       map[string]string       `json:"damagedSources,omitempty"` // source path → size:mtime signature
+	Language      string                  `json:"language,omitempty"`       // explicit interface language, never the dictionary language
 
 	Groups  []DictionaryGroup `json:"groups,omitempty"`
 	Version int               `json:"version"`
@@ -254,6 +260,8 @@ func LoadPrefs(path string) *Prefs {
 	return p
 }
 
+func (p *Prefs) refresh() { p.file.refresh() }
+
 // parsePrefs reads a state file. A malformed one is announced (once per
 // content: it is parsed only when it changed) and treated as no state - the
 // next save writes over it, so this warning is the user's chance to notice.
@@ -272,6 +280,45 @@ func parsePrefs(text string) (prefsFile, []facet.Problem) {
 func (p *Prefs) data() (prefsFile, bool) {
 	st := p.file.now()
 	return st.val, st.exists && !st.unusable() && len(st.problems) == 0
+}
+
+// damagedSources returns sources quarantined after a parser reported file
+// corruption. A changed file signature clears its quarantine so a repaired or
+// replaced file can re-enter the registry on the next rescan.
+func (p *Prefs) damagedSources() map[string]string {
+	p.editMu.Lock()
+	defer p.editMu.Unlock()
+	f, _ := p.data()
+	active := make(map[string]string, len(f.Damaged))
+	for path, signature := range f.Damaged {
+		current := sourceSig(path)
+		if current != "" && current != signature {
+			logx.System("damaged dictionary source changed; allow rediscovery source=%q", path)
+			continue
+		}
+		active[path] = signature
+	}
+	if len(active) != len(f.Damaged) {
+		if err := p.mutate(func(f *prefsFile) { f.Damaged = active }); err != nil {
+			logx.Warn("could not update damaged dictionary list: %v", err)
+		}
+	}
+	return active
+}
+
+func (p *Prefs) markDamaged(source, signature string) error {
+	p.editMu.Lock()
+	defer p.editMu.Unlock()
+	return p.mutate(func(f *prefsFile) {
+		if f.Damaged == nil {
+			f.Damaged = make(map[string]string)
+		}
+		f.Damaged[source] = signature
+		delete(f.DSLKnown, source)
+		key := source + "\noriginal"
+		delete(f.DSLPending, key)
+		delete(f.DSLRemoved, key)
+	})
 }
 
 // UI returns a copy of the UI record, or nil when nothing has been set. A copy

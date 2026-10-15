@@ -56,6 +56,7 @@ it is a different thing.
 | **dictionary picker** | the dictionary drop-down next to the search box | dropdown, selector |
 | **group** | a set of dictionaries the picker offers, defined in `groups.ini` | facet, category, tag |
 | **enabled** | included in *All dictionaries* searches | active, on, selected |
+| **pinned** | placed at the top of the dictionary list, in the user's order; the others are listed A–Z | favourite, starred, my order |
 | **import** | installing dictionary files from a file or a link | download (for the whole act), add |
 | **outdated** | indexed by an older version of wudict, or from dictionary files that have changed since | stale, old |
 | **reindex** | rebuild an outdated index | refresh, rebuild (as the name of the act) |

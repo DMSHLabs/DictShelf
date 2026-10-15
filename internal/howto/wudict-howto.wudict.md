@@ -25,7 +25,7 @@ Type `wudict help` in the search box for quick access, and [browse](/browse?dict
 > *wudict features*
 
 - Formats: MDict (`.mdx/.mdd`), StarDict (`.ifo/.idx/.dict/.dz`), Aard2 (`.slob`), Lingvo DSL (`.dsl/.dsl.dz`), Babylon (`.bgl`), ZIM (`.zim`), and wudict markdown (`.wudict.md`)
-- Instant search across all dictionaries with four [search modes](<entry://wudict search>): prefix, exact, contains, and full-text search
+- Instant search across all dictionaries with four [search modes](<entry://wudict search>): prefix, exact, [wildcard](<entry://wudict wildcard>), and full-text search
 - Dictionaries are automatically grouped by language, language pair, content and publisher; add your own groups in <kbd>☰</kbd> → ![](cog.svg) → [Edit groups](/groups).
 - Double-tap any word in a wudict dictionary article to instantly look up its definition
 - Adjust the font size via the <kbd>☰</kbd> → <kbd>−</kbd> <kbd>+</kbd> widget
@@ -42,7 +42,7 @@ Type `wudict help` in the search box for quick access, and [browse](/browse?dict
 
 | Control | What it does |
 | --- | --- |
-| <kbd>prefix</kbd> | the [search mode](<entry://wudict search>): prefix, exact, contains, full-text |
+| <kbd>prefix</kbd> | the [search mode](<entry://wudict search>): prefix, exact, wildcard, full-text |
 | <kbd>All dictionaries</kbd> | search everything, a specific dictionary, a language or language pair, a publisher |
 | <kbd>◐</kbd> | theme: light, dark, automatic |
 | <kbd>⇔</kbd> | wide layout |
@@ -53,7 +53,7 @@ Type `wudict help` in the search box for quick access, and [browse](/browse?dict
 
 1. [Add dictionaries](<entry://wudict add dictionaries>): MDict, StarDict, Slob, DSL, Babylon, ZIM, and [more](<entry://wudict formats>).
 2. Search. Double-click a word in an article (📱 double-tap) to look it up.
-3. In <kbd>☰</kbd>, drag the <kbd>⠿</kbd> handle to set your search priority order.
+3. In <kbd>☰</kbd>, pin ![](pin.svg) the dictionaries you use most. Pinned dictionaries come first in the results and in the picker.
 4. Install morphology files for your languages: ![](lemmas.svg) [Lemmatization](/lemmas). English is built in.
 
 ### Options
@@ -62,29 +62,29 @@ At the top of the dictionary panel <kbd>☰</kbd>:
 
 - **Text size**: <kbd>−</kbd> <kbd>15px</kbd> <kbd>+</kbd>. Click the number to reset.
 - **Find a dictionary**: type part of its title or group. Only the dictionaries that match stay in the list, and the switch above the list changes only these dictionaries. When you close the panel, the field becomes empty.
+- <kbd>A–Z</kbd>, beside the field: unpin all dictionaries, so that the whole list is A–Z. It asks first. It shows while a dictionary is pinned and the field is empty.
 
 In <kbd>☰</kbd> → ![](cog.svg):
 
 - **Open** sets the number of dictionaries that open automatically. They open in the sequence of your list and only when they have a result. <kbd>1, first to show a result</kbd> opens the dictionary that shows a result first. <kbd>All</kbd> opens all dictionaries that have a result; many open dictionaries can make the page slow.
-- **Sort dictionaries** controls the order used in the dictionary combobox, <kbd>Alphabetical</kbd> or <kbd>My order</kbd>.
 - ![](rescan.svg) <kbd>Rescan folders</kbd> can be used to refresh the dictionary folders after adding or removing items.
 
-More: [search](<entry://wudict search>) · [full-text](<entry://wudict full-text>) · [panel](<entry://wudict panel>) · [index](<entry://wudict index>) · [styles](<entry://wudict styles>) · [links](<entry://wudict links>) · [📱 Android](<entry://wudict android>) · [💻 desktop](<entry://wudict desktop>) · [FAQ](<entry://wudict FAQ>)
+More: [search](<entry://wudict search>) · [full-text](<entry://wudict full-text>) · [wildcard](<entry://wudict wildcard>) · [panel](<entry://wudict panel>) · [index](<entry://wudict index>) · [styles](<entry://wudict styles>) · [links](<entry://wudict links>) · [📱 Android](<entry://wudict android>) · [💻 desktop](<entry://wudict desktop>) · [FAQ](<entry://wudict FAQ>)
 
 ## wudict search
 ## wudict search modes
 ## wudict modes
 
-**Pick a mode in the bar; accents and case never matter**: `corazon` finds *corazón*, `OXFORD` finds *Oxford*. Exact and prefix work at once; contains and full-text need an optional [index](<entry://wudict index>).
+**Pick a mode in the bar; accents and case do not matter**: `corazon` finds *corazón*, `OXFORD` finds *Oxford*. The one exception is a [wildcard](<entry://wudict wildcard>) pattern with a capital letter. Exact and prefix work at once, wildcard as soon as the dictionary is indexed; full-text needs an optional [index](<entry://wudict index>).
 
 | Mode | Finds | Use it when |
 | --- | --- | --- |
 | **prefix** | headwords that start with your text | you know how the word begins (the default) |
 | **exact** | the headword itself | you know the word |
-| **contains** | your text anywhere in a headword | you know the middle |
+| **wildcard** | headwords that fit a pattern: `c?t`, `*ology`, `*rain*` | you know some of the letters, or the middle |
 | **full-text** | words inside article text, best first | you remember the meaning, not the word |
 
-wudict keeps the mode that you select. A word from a link or from a different app does not use full-text: wudict uses prefix for that word.
+wudict keeps the mode that you select. A word from a link or from a different app does not use full-text or wildcard: wudict uses prefix for that word.
 
 [base form lemmas](<entry://wudict lemmatization>) let you find **know** by typing *knew*.
 
@@ -109,6 +109,26 @@ wudict keeps the mode that you select. A word from a link or from a different ap
 | `(pun OR joke) AND intended` | grouping |
 
 Operators count only in capitals: `wage not minimum` is three words. A query never fails; what cannot be parsed is read as plain words. ![](highlight.svg) <kbd>Highlight matches</kbd> in <kbd>☰</kbd> → ![](cog.svg) marks the words found; step through them with the chevrons (💻 <kbd>←</kbd> <kbd>→</kbd>, <kbd>F3</kbd>).
+
+- [index](/browse?dict=wudict-howto)
+
+## wudict wildcard
+## wudict wildcards
+## wudict wildcard syntax
+
+**A wildcard pattern is the whole headword**: `?` is one character, `*` is any number of characters. Choose <kbd>wildcard</kbd> in the bar. Wildcard searches every indexed dictionary; wudict queues a new dictionary for indexing when it is added.
+
+| You type | You get |
+| --- | --- |
+| `c?t` | *cat*, *cot*, *cut* |
+| `b???d` | five letters: *beard*, *blood*, *bread* |
+| `*ology` | *biology*, *zoology*, *ology* |
+| `*rain*` | *brain*, *rainbow*, *terrain*: *rain* anywhere |
+| `un*able` | *unable*, *unbelievable*, *unthinkable* |
+| `by the *` | phrases that start with *by the* |
+| `apple` | *apple* and *Apple*, not *apples* |
+
+A pattern without a capital letter ignores case and accents: `cafe` finds *Café*. A pattern with a capital letter is matched as typed: `March` finds *March*, not *march*. There are no other special characters: to find a `*` or a `?` in a headword, use exact or prefix. A pattern has at most 64 characters.
 
 - [index](/browse?dict=wudict-howto)
 
@@ -151,7 +171,7 @@ In <kbd>☰</kbd> → ![](cog.svg):
 
 - ![](highlight.svg) <kbd>Highlight matches</kbd>: mark the words a [full-text](<entry://wudict full-text>) search found.
 - ![](speak.svg) <kbd>Read aloud</kbd>: select text in an article to speak it using the OS's Text-to-speech engine. You can pick your preferred voice via the chevron next to the speaker icon (when the OS provides multiple voices for the detected language), see more details under [wudict Text-to-speech](<entry://wudict Text-to-speech>)
-- **Open**, **Sort dictionaries**: see [wudict welcome](<entry://wudict welcome>).
+- **Open**: see [wudict welcome](<entry://wudict welcome>).
 - **Group by**: which groups the dictionary picker offers (language, language pair, content, publisher). [Edit groups](/groups) changes them or adds your own: one line per group, `MyGroup = text, other text`, and a dictionary joins it when one of the texts is anywhere in its title or file name. Between backticks, a regular expression: `` MyGroup = `^the\b` ``.
 
 ***
@@ -173,10 +193,12 @@ In <kbd>☰</kbd> → ![](cog.svg):
 
 ### Per dictionary
 
-- <kbd>⠿</kbd> drag, or <kbd>⏫</kbd> <kbd>▲</kbd> <kbd>▼</kbd> <kbd>⏬</kbd>: its place in your list.
+- ![](pin.svg) pin: add the dictionary to the pinned ones, after the others. Pinned dictionaries come first, in your order; all the others follow A–Z. The results and the picker use this order.
+- ![](top.svg) to the top: make the dictionary the first in the list. An unpinned dictionary is pinned.
+- <kbd>▲</kbd> <kbd>▼</kbd>, or 💻 drag <kbd>⠿</kbd>: move a pinned dictionary among the pinned ones.
 - the checkbox: include/exclude from *All dictionaries* search, even when <kbd>OFF</kbd> a dictionary is still searchable when selected explicitly in the combobox.
 - click or tap the dictionary name: search only this dictionary.
-- <kbd>contains</kbd> <kbd>full-text</kbd> <kbd>media</kbd>: optional [indexes](<entry://wudict index>), with their size.
+- <kbd>full-text</kbd> <kbd>media</kbd>: optional [indexes](<entry://wudict index>), with their size.
 - ![](browse.svg) <kbd>Browse</kbd>: [A–Z](<entry://wudict browse>). **About this dictionary**: its details.
 - the file row: its files, and 🗑 <kbd>Remove…</kbd> ([remove](<entry://wudict remove>)).
 
@@ -231,12 +253,14 @@ Speex `.spx` audio auto-converted for browser playback. A folder named after a l
 ## wudict indexing
 ## wudict prepare
 
-**wudict indexes each dictionary in the background**. You can search a dictionary even if it has no headword index, but the index makes it faster and more efficient for RAM/CPU consumption as well as battery life. In the dictionary panel <kbd>☰</kbd> you can also optionally enable <kbd>contains</kbd> and <kbd>full-text</kbd> indexes — these can be additional GB for large dictionaries, are optional and can be enabled on-demand.
+**wudict indexes each new dictionary in the background**. Search becomes available when its headword index is ready. In the dictionary panel <kbd>☰</kbd> you can also optionally enable the <kbd>full-text</kbd> index — it can be additional GB for large dictionaries and can be enabled when you need it.
 
 - <kbd>media</kbd> packs a dictionary's pictures and sounds into its index, so it keeps working if you delete the original files, and also makes access faster to assets such as images and audio.
 - <kbd>Full-text for every dictionary…</kbd> in the ![](cog.svg) row will generate full-text indexes for all dictionaries — IMPORTANT: depending on the size of your dictionary collection this can take GB of space and take hours.
+- New DSL, Babylon and wudict markdown dictionaries are indexed in the background when added.
 - ⟳ on a switch, or a **Rebuild** line: an outdated index, made by an older wudict or before the dictionary files changed; one click rebuilds it.
-- DSL, Babylon and wudict markdown are indexed as soon as they are opened; ZIM only when you ask, since this format already has its own index and wudict can use it.
+- New ZIM dictionaries are indexed in the background like other new dictionaries. The headword index stores titles only; articles stay in the ZIM file.
+- If a ZIM headword index is absent, Browse A-Z asks you to create it in Dictionary Settings.
 
 An index usually takes less space than the dictionary file.
 
@@ -410,7 +434,7 @@ More ways to install dictionaries:
 <details>
 <summary>wudict is using too much disk space — how do I claim it back?</summary>
 
-For every dictionary in the panel <kbd>☰</kbd> the size of headword, contains, and full-text search indexes are displayed. Also for dictionaries with assets (e.g. `.mdd`) resources also might be imported into a wudict optimized sqlite-based storage. You can reclaim space by deleting the *contains*, and *full-text search* indexes for dictionaries for which you don't need them - just tap the corresponding badge in the panel. Clicking the dictionary source file in the card, located below the <kbd>Browse</kbd> button, will display a delete option for deleting both the indexes and/or the source dictionaries (use with caution!)
+For every dictionary in the panel <kbd>☰</kbd> the size of the headword and full-text search indexes is displayed. Also for dictionaries with assets (e.g. `.mdd`) resources also might be imported into a wudict optimized sqlite-based storage. You can reclaim space by deleting the *full-text search* index for dictionaries for which you don't need it - just tap the corresponding badge in the panel. Clicking the dictionary source file in the card, located below the <kbd>Browse</kbd> button, will display a delete option for deleting both the indexes and/or the source dictionaries (use with caution!)
 
 </details>
 

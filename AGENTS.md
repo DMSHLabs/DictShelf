@@ -14,6 +14,36 @@
 - `master` is reserved exclusively for synchronization with the upstream project from which this repository was forked. Do not develop fork-specific features or fixes on `master` or merge task branches into it.
 - Before creating a branch, verify the base and working-tree status. Do not silently switch, reset, rebase, stash, or discard existing work to enforce this policy. Existing task branches are not retroactively rebased. If `dev` is missing or its intended state is unclear, clarify rather than falling back to `master`.
 - When a task is ready, its integration target is `dev`; committing, merging, publishing, and upstream synchronization still require the user request specified above.
+- **Upstream review markers:** after reviewing `master`, record the last upstream commit considered with an annotated tag named `upstream-reviewed-YYYY-MM-DD` on that exact upstream commit (not on a fork merge commit). To review the next update, compare the marker with `master`, for example `git log --oneline upstream-reviewed-YYYY-MM-DD..master`; classify changes against the dead-upstream registry before adopting them. The tag is a review cursor, not a claim that every upstream change was merged. Do not move an existing marker; create a newer dated marker.
+
+## Dead upstream code
+
+Upstream features this fork deliberately keeps but does not wire are dead code:
+take their side verbatim on every upstream sync, never wire them, and record a
+new decision here when one appears. The mirror convention is the fork's
+`dmsh_` file prefix: a fork-owned parallel implementation of an upstream
+surface is named `dmsh_<feature>` beside upstream's file (e.g. `dmsh_groups.go`
+beside `groups.go`), so the two never merge and upstream's file is taken
+verbatim. The registry:
+
+- **The panel's pinned sorting** (upstream `a00be12`, D166): skipped. This
+  fork's picker order is its own — the reader's arrangement, edited per group
+  in Dictionary Groups with its own pin mode (`dmsh_groups.go`) — while
+  upstream's model is pinned-first + A–Z and declares the saved array order no
+  longer an order, which this fork's search order (D142) is built on. It lives
+  inside shared files (`prefs.go`, `index.html`), so a sync resolves those to
+  this fork's side for anything pin-related.
+- **`internal/howto/`** — the built-in howto, kept unwired (see
+  `internal/cli/cli.go`); revive by wiring `server.WithBuiltin`.
+- **`ext/server/`** — upstream's share-link hosting asset; this fork's server
+  does not serve it.
+- **Upstream wildcard search** (`internal/wildcard/`, `internal/store/wildcard.go`,
+  D167): kept unwired. This fork's Mask mode uses a paged headword list with
+  Unicode case-insensitive matching and dictionary order; its index-range
+  optimization lives separately in `internal/store/dmsh_mask_ranges.go`.
+  Upstream's removal of Contains and its trigram index is not adopted.
+
+Files kept verbatim stay verbatim: the marker is this section, not the files.
 
 ## License and copyright
 

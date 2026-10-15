@@ -14,7 +14,6 @@ import (
 
 	"github.com/wuweidict/wudict/internal/dict"
 	"github.com/wuweidict/wudict/internal/resource"
-	"github.com/wuweidict/wudict/internal/store"
 )
 
 // ReaderVersion is the behaviour version of this format's Reader (see
@@ -28,18 +27,12 @@ func init() {
 	dict.RegisterReaderVersion("bgl", ReaderVersion)
 }
 
-// Dict is the BGL "direct" backend. BGL has no native index, so Open ingests
-// into a cached text.db on first use (SPEC §1); the cache name embeds a
-// source-content hash, so a changed source re-ingests automatically. Embedded
-// resources are scanned from the source lazily on first request.
+// Dict is the BGL direct backend. Opening it does not create a prepared
+// index; library indexes are built by the add queue or explicit indexing
+// actions. Embedded resources are scanned lazily on first request.
 type Dict struct {
-	*store.Store
+	reader  *Reader
 	srcPath string
-	// src is the source's own header, re-read at every open (the reader is
-	// opened anyway). Its description and header win over the text.db copies,
-	// which are frozen at preparation: a folder prepared before either was
-	// read in full still reports what the file says now.
-	src dict.Meta
 
 	resOnce sync.Once
 	res     *Embedded
@@ -51,26 +44,18 @@ func Open(path string) (*Dict, error) {
 	if err != nil {
 		return nil, err
 	}
-	// The reader is opened whatever happens: the source's own header is
-	// read at every open.
-	defer r.Close()
-	src := r.Meta() // before the reader is consumed by an ingest
-	s, err := store.OpenSelfPrepared(path, "bgl", func() (dict.Reader, error) { return r, nil })
-	if err != nil {
-		return nil, err
-	}
-	return &Dict{Store: s, srcPath: path, src: src}, nil
+	// Metadata is parsed once by the reader; entry blocks are streamed only by
+	// the explicit indexing path.
+	return &Dict{reader: r, srcPath: path}, nil
 }
 
-func (d *Dict) Meta() dict.Meta {
-	m := d.Store.Meta()
-	m.Format = "bgl"
-	m.Path = d.srcPath
-	m.Description, m.Header = d.src.Description, d.src.Header
-	return m
-}
+func (d *Dict) Meta() dict.Meta                           { return d.reader.Meta() }
+func (d *Dict) Caps() dict.Caps                           { return dict.Caps{} }
+func (d *Dict) Exact(string, int) ([]dict.Result, error)  { return nil, dict.ErrUnsupported }
+func (d *Dict) Prefix(string, int) ([]dict.Result, error) { return nil, dict.ErrUnsupported }
+func (d *Dict) Keywords(int, int) []string                { return nil }
 
-func (d *Dict) Close() error { return d.Store.Close() }
+func (d *Dict) Close() error { return d.reader.Close() }
 
 // loadRes scans the source BGL for its embedded resource blocks. Kept lazy so
 // a dictionary that never serves an image never pays the decompression.
@@ -100,6 +85,8 @@ func (d *Dict) Resources() []string {
 	}
 	return d.res.List()
 }
+
+func (d *Dict) PreviewBytes() int64 { return int64(d.reader.Meta().EntryCount) * 350 }
 
 // Embedded is the resources a BGL file carries inside it, read into memory by
 // one pass over the file. It is a resource.Source, and reading it opens no

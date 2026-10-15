@@ -134,6 +134,14 @@ APP_DEST    ?= $(HOME)/Applications
 MACOS_MIN   ?= 12.0
 CODESIGN_ID ?= -
 
+# clang otherwise stamps cgo objects with the host macOS release. The build
+# cache keys on these flags as well as the environment target.
+ifeq ($(shell uname),Darwin)
+build: export MACOSX_DEPLOYMENT_TARGET = $(MACOS_MIN)
+build: export CGO_CFLAGS ?= -O2 -g -mmacosx-version-min=$(MACOS_MIN)
+build: export CGO_LDFLAGS ?= -O2 -g -mmacosx-version-min=$(MACOS_MIN)
+endif
+
 .PHONY: mac-app
 mac-app: build ## Build the double-clickable macOS .app into dist/ (menu-bar icon, no Dock icon)
 	@APP_BIN="$(APP_BIN)" APP_ID="$(APP_ID)" MACOS_MIN="$(MACOS_MIN)" BUILD_DIR="$(BUILD_DIR)" \
@@ -160,7 +168,7 @@ mac-app-install: mac-app ## Install that .app into ~/Applications (per-user, no 
 # path flavour that make believes in - C:/... from GnuWin32 make, /c/... from
 # an MSYS one, and PowerShell can resolve only the first. The script derives
 # every path from its own location instead, which is native by construction.
-# Pass overrides through ARGS: make win-installer ARGS="-Exe C:\src\wudict.exe"
+# Pass overrides through ARGS: make win-installer ARGS="-Exe C:\src\wuDict2.exe"
 #
 # powershell.exe (Windows PowerShell 5.1) is on every Windows; pwsh is an
 # optional install, so it is not the default. PWSH=pwsh works if you have it.
@@ -215,6 +223,13 @@ AAB_PLAY           := android/app/build/outputs/bundle/playRelease/wudict2-play-
 # (a pattern rule, so no .PHONY - GNU make does not match patterns there.)
 print-%: ## print the value of a make variable, e.g. make -s print-APK_FOSS
 	@echo '$($*)'
+
+# The tag a publishing run takes when the dispatch form left the tag blank:
+# the same script the release workflows call, so what you read here is what
+# they will do (D168). It only reads the clone, nothing is created.
+.PHONY: next-tag
+next-tag: ## Print the tag the next release build takes (PRERELEASE=1 for a pre-release)
+	@sh tools/next-tag.sh $(if $(PRERELEASE),--prerelease,--release)
 
 # Gradle needs JDK 17+; we build on 21, as CI does. Respect an inherited
 # JAVA_HOME; on macOS fall back to an installed JDK 21 rather than whatever

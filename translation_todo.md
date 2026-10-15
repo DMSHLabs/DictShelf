@@ -1,5 +1,9 @@
 # Localization: status and next tasks
 
+2026-10-13 folder diagnostics: EN/RU Log file label and hint updated for folder timing and index failure details. WebView2/Android wording check remains.
+
+2026-10-12 Browse Apply threshold: the ✓ action now uses a mode-neutral EN/RU label because the headword-count threshold applies to search and filter with or without mask. Browser/device wording check remains.
+
 2026-10-07 Dictionary Groups search: EN/RU labels for the two new Fonts controls (`--ui-edit_control-height`, `--ui-edit_control-font`) added. Group list docks reuse existing localized search/filter labels. Catalog and targeted server checks pass; phone layout and keyboard behavior remain to verify.
 
 2026-10-06 group editor: EN/RU labels for inline New Group/Rename/Save controls and group-name placeholder added alongside the dictionary search and keyboard labels. Phone layout and keyboard check remain.
@@ -84,6 +88,7 @@ Continue to commit, merge into `dev`, and publish only when requested; do not in
 - [x] Folders: hints, server-generated introduction, import, download, and counts.
 - [x] Lemmas: labels, installation/download states, confirmations, and displayed language names.
 - [x] Search and results: modes, progress/empty/retry states, result plurals, index-creation offers, link-scope and morphology messages, and match navigation.
+- [x] Settings → Results label for the shared headword Apply threshold (English and Russian).
 - [x] System Settings: web text, Advanced explanations, ranges, validation, reset/cache, and settings-application notices. Advanced rows themselves use already translated Android resources.
 - [x] Read-aloud menu: read/stop, voice, unavailable voice, language names, and navigation to system speech settings.
 - [x] Identified remaining UI strings: preference-saving and audio errors, stylesheet-file hints, file-replacement confirmation, and layer-switch errors.

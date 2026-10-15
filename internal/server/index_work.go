@@ -4,7 +4,6 @@
 package server
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -40,6 +39,7 @@ type indexWorkStatus struct {
 	Canceled      bool     `json:"canceled"`
 	Error         string   `json:"error"`
 	Failed        []string `json:"failed,omitempty"`
+	Damaged       []string `json:"damaged,omitempty"`
 	Result        any      `json:"result,omitempty"`
 	Exclusive     bool     `json:"exclusive"`
 	BusyDicts     []string `json:"busyDicts"`
@@ -77,7 +77,12 @@ func (s *Server) indexWorkStatus(requested ...string) indexWorkStatus {
 	}
 	out := indexWorkStatus{ID: key, Running: st.Running, Done: st.Done, Total: st.Total, Current: st.Current,
 		CurrentDone: st.CurrentDone, CurrentTotal: st.CurrentTotal, Action: st.Action, Indexes: st.Indexes,
-		StopRequested: st.StopRequested, Canceled: st.Canceled, Error: st.Err, Failed: st.Failed}
+		StopRequested: st.StopRequested, Canceled: st.Canceled, Error: st.Err}
+	out.Failed = st.Failed
+	out.Damaged = st.Damaged
+	if len(st.Failed) > 0 {
+		out.Error = "index operations failed"
+	}
 	s.admission.mu.Lock()
 	out.Exclusive, out.BusyDicts = s.workLocks()
 	s.admission.mu.Unlock()
@@ -112,6 +117,47 @@ func (s *Server) indexWorkStatus(requested ...string) indexWorkStatus {
 	return out
 }
 
+func (s *Server) handleIndexWork(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	switch r.Method {
+	case http.MethodDelete:
+		status, err := s.stopIndexWork(r.URL.Query().Get("id"))
+		if err != nil {
+			var workErr indexWorkError
+			if errors.As(err, &workErr) {
+				httpErr(w, workErr.status, "%s", workErr.message)
+			} else {
+				httpErr(w, 500, "%v", err)
+			}
+			return
+		}
+		writeJSON(w, status)
+	case http.MethodPost:
+		raw, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 1<<20))
+		if err != nil {
+			httpErr(w, 400, "invalid index operation list")
+			return
+		}
+		status, err := s.startIndexWork(raw, r.URL.Query().Get("single") == "1", s.removalOffered(r))
+		if err != nil {
+			var workErr indexWorkError
+			if errors.As(err, &workErr) {
+				httpErr(w, workErr.status, "%s", workErr.message)
+			} else {
+				httpErr(w, 500, "%v", err)
+			}
+			return
+		}
+		w.WriteHeader(http.StatusAccepted)
+		writeJSON(w, status)
+	default:
+		writeJSON(w, s.indexWorkStatus(r.URL.Query().Get("id")))
+	}
+}
+
+// indexWorkError carries the HTTP status while keeping the shared operation
+// usable by the native desktop bridge.
+
 type indexWorkError struct {
 	status  int
 	message string
@@ -124,7 +170,7 @@ func (s *Server) startIndexWork(raw []byte, single, allowBaseDelete bool) (index
 		return indexWorkStatus{}, indexWorkError{http.StatusRequestEntityTooLarge, "invalid index operation list"}
 	}
 	var operations []indexOperation
-	if err := json.NewDecoder(bytes.NewReader(raw)).Decode(&operations); err != nil || len(operations) == 0 || len(operations) > 10000 {
+	if err := json.Unmarshal(raw, &operations); err != nil || len(operations) == 0 || len(operations) > 10000 {
 		return indexWorkStatus{}, indexWorkError{http.StatusBadRequest, "invalid index operation list"}
 	}
 	for _, op := range operations {
@@ -159,10 +205,7 @@ func (s *Server) startIndexWork(raw []byte, single, allowBaseDelete bool) (index
 			}
 			e, err := s.reg.get(op.Dict)
 			if err != nil {
-				j.update(func(st *jobStatus) {
-					st.Failed = append(st.Failed, fmt.Sprintf("%s: %v", op.Dict, err))
-					st.Done++
-				})
+				j.update(func(st *jobStatus) { st.Failed = append(st.Failed, fmt.Sprintf("%s: %v", op.Dict, err)); st.Done++ })
 				continue
 			}
 			action := "create"
@@ -178,21 +221,20 @@ func (s *Server) startIndexWork(raw []byte, single, allowBaseDelete bool) (index
 				feature = "fullText"
 			}
 			j.update(func(st *jobStatus) {
-				st.Stage = op.Dict
-				st.Current = e.probeName()
-				st.Action = action
-				st.Indexes = []string{feature}
-				st.CurrentDone = 0
-				st.CurrentTotal = 0
+				st.Stage, st.Current, st.Action, st.Indexes, st.CurrentDone, st.CurrentTotal = op.Dict, e.probeName(), action, []string{feature}, 0, 0
 			})
-			store.IndexDiagnostic("bulk operation start dictionary=%q feature=%q action=%q", e.probeName(), op.Feature, op.Action)
+			store.IndexDiagnostic("index operation start source=%q dictionary=%q feature=%q action=%q self_indexed=%v", e.Path, e.probeName(), op.Feature, op.Action, entryHasSelfIndex(e))
+			if entryHasSelfIndex(e) && !isZIMPath(e.Path) {
+				store.IndexDiagnostic("skip index operation source=%q dictionary=%q feature=%q action=%q reason=native-index", e.Path, e.probeName(), op.Feature, op.Action)
+				j.update(func(st *jobStatus) { st.Done++ })
+				continue
+			}
 			lastProgress := time.Time{}
 			progress := func(done, total int) {
-				if done != total && time.Since(lastProgress) < 200*time.Millisecond {
-					return
+				if done == total || time.Since(lastProgress) >= 200*time.Millisecond {
+					lastProgress = time.Now()
+					j.update(func(st *jobStatus) { st.CurrentDone, st.CurrentTotal = int64(done), int64(total) })
 				}
-				lastProgress = time.Now()
-				j.update(func(st *jobStatus) { st.CurrentDone = int64(done); st.CurrentTotal = int64(total) })
 			}
 			if op.Feature == "base" && op.Action == "delete" {
 				var result removal
@@ -203,34 +245,35 @@ func (s *Server) startIndexWork(raw []byte, single, allowBaseDelete bool) (index
 			} else {
 				want := s.currentFeatures(e)
 				force := op.Feature != "contains" && (op.Action == "update" || op.Action == "recreate")
-				set := func(on bool) {
-					if op.Feature == "contains" {
-						want.Contains = on
-					}
-					if op.Feature == "fts" {
-						want.FullText = on
-					}
+				if op.Feature == "contains" {
+					want.Contains = op.Action != "delete"
+				}
+				if op.Feature == "fts" {
+					want.FullText = op.Action != "delete"
+				}
+				if e.indexBlocked() && op.Action != "delete" {
+					err = e.restoreIndex(store.Plan{FullText: want.FullText, Contains: want.Contains}, progress, frontLimit)
+					force = false
 				}
 				if err == nil {
-					set(op.Action != "delete")
-					if e.indexBlocked() && op.Action != "delete" {
-						err = e.restoreDSLIndex(store.Plan{FullText: want.FullText, Contains: want.Contains}, progress)
-						force = false
-					}
-					if err == nil {
-						err = e.setFeatures(want, progress, force)
-					}
+					err = e.setFeatures(want, progress, force)
 				}
 			}
 			store.IndexDiagnostic("bulk operation finish dictionary=%q feature=%q action=%q error=%v", e.probeName(), op.Feature, op.Action, err)
 			if err != nil {
+				name := e.probeName()
+				failure := fmt.Sprintf("%s: %v", name, err)
+				damaged := damagedDictionaryError(err)
 				j.update(func(st *jobStatus) {
-					st.Failed = append(st.Failed, fmt.Sprintf("%s: %v", e.probeName(), err))
+					st.Failed = append(st.Failed, failure)
 					st.Done++
+					if damaged {
+						st.Damaged = append(st.Damaged, name)
+					}
 				})
-				continue
+			} else {
+				j.update(func(st *jobStatus) { st.Done++ })
 			}
-			j.update(func(st *jobStatus) { st.Done++ })
 		}
 	}); !started {
 		return indexWorkStatus{}, indexWorkError{http.StatusConflict, "index operations already running"}
@@ -265,42 +308,4 @@ func (s *Server) stopIndexWork(key string) (indexWorkStatus, error) {
 		s.jobs.cancel(key)
 	}
 	return s.indexWorkStatus(), nil
-}
-
-func (s *Server) handleIndexWork(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Cache-Control", "no-store")
-	switch r.Method {
-	case http.MethodDelete:
-		status, err := s.stopIndexWork(r.URL.Query().Get("id"))
-		if err != nil {
-			var workErr indexWorkError
-			if errors.As(err, &workErr) {
-				httpErr(w, workErr.status, "%s", workErr.message)
-			} else {
-				httpErr(w, http.StatusInternalServerError, "%v", err)
-			}
-			return
-		}
-		writeJSON(w, status)
-	case http.MethodPost:
-		raw, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 1<<20))
-		if err != nil {
-			httpErr(w, http.StatusBadRequest, "invalid index operation list")
-			return
-		}
-		status, err := s.startIndexWork(raw, r.URL.Query().Get("single") == "1", s.removalOffered(r))
-		if err != nil {
-			var workErr indexWorkError
-			if errors.As(err, &workErr) {
-				httpErr(w, workErr.status, "%s", workErr.message)
-			} else {
-				httpErr(w, http.StatusInternalServerError, "%v", err)
-			}
-			return
-		}
-		w.WriteHeader(http.StatusAccepted)
-		writeJSON(w, status)
-	default:
-		writeJSON(w, s.indexWorkStatus(r.URL.Query().Get("id")))
-	}
 }

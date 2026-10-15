@@ -121,6 +121,15 @@ Verified in the desktop browser against a throwaway server (`127.0.0.1:6899`, te
 
 ### The System Settings window: current work (2026-09-28)
 
+**2026-10-12 log controls and Browse timing capture:** The Android log controls
+(`Enable log file`, base events, WebView actions) now live in this window; the
+launcher screen keeps only Save System Log for recovery when the page cannot
+load. `Record Browse timings` opts into event/count/duration records sent to
+`/api/browse-diagnostic`, saved in the server log and included in System Log
+export, without dictionary names or search text. The desktop WebView2 window
+offers the same Browse checkbox. Build and device behavior for this change have
+not been checked on Android.
+
 The shell's own settings screen — reached by long-pressing the launcher icon —
 now has a second home inside the app page: a window opened from the ☰ drawer's
 new **System** section, for the reader who is already in the app (the reader's

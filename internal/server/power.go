@@ -95,8 +95,8 @@ func SetActiveProcs(n int) {
 	runtime.GOMAXPROCS(n)
 }
 
-// demandHold counts operations a person is currently waiting on: a demanded
-// index, a feature change, a rebuild (HoldActiveProcs). It is the one exemption
+// demandHold counts operations a person is currently waiting on: an index
+// change, a feature change, a rebuild (HoldActiveProcs). It is the one exemption
 // from the rule below, which would otherwise punish exactly the wrong work: a
 // user taps "index this dictionary", the screen dims thirty seconds later, the
 // shell reports PowerBackground, and the ingest they are waiting for would drop

@@ -6,8 +6,10 @@ package server
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/wuweidict/wudict/internal/logx"
@@ -55,8 +57,6 @@ type ReindexStatus struct {
 // reindexKey is the rebuild's job (jobs.go): one at a time.
 const reindexKey = "reindex"
 
-var errReindexConflict = errors.New("dictionary operations are running; wait for completion or stop them")
-
 // reindexStatus is the rebuild job as the page and `wudict reindex` poll it.
 func (s *Server) reindexStatus() ReindexStatus {
 	st, _ := s.jobs.status(reindexKey)
@@ -67,12 +67,11 @@ func (s *Server) reindexStatus() ReindexStatus {
 	}
 }
 
-// StartReindex admits and starts a rebuild through the same operation for
-// HTTP clients and the Windows bridge. A running rebuild is returned as-is.
+var errReindexConflict = errors.New("dictionary operations are running; wait for completion or stop them")
+
 func (s *Server) StartReindex() (ReindexStatus, bool, error) {
 	s.admission.mu.Lock()
 	defer s.admission.mu.Unlock()
-
 	if st, ok := s.jobs.status(reindexKey); ok && st.Running {
 		return s.reindexStatus(), false, nil
 	}
@@ -85,7 +84,6 @@ func (s *Server) StartReindex() (ReindexStatus, bool, error) {
 	}
 	s.admission.pending[reindexKey]++
 	defer func() { s.admission.pending[reindexKey]-- }()
-
 	var todo []*entry
 	for _, e := range s.reg.all() {
 		if entryOutdated(e.Path) {
@@ -95,16 +93,10 @@ func (s *Server) StartReindex() (ReindexStatus, bool, error) {
 	if len(todo) == 0 {
 		return s.reindexStatus(), false, nil
 	}
-	_, started := s.jobs.start(reindexKey, 0, jobStatus{Total: int64(len(todo))},
-		func(j *job) { s.runReindex(j, todo) })
+	_, started := s.jobs.start(reindexKey, 0, jobStatus{Total: int64(len(todo))}, func(j *job) { s.runReindex(j, todo) })
 	return s.reindexStatus(), started, nil
 }
-
-// StopReindex asks the active rebuild to stop after its current dictionary.
-func (s *Server) StopReindex() ReindexStatus {
-	s.jobs.cancel(reindexKey)
-	return s.reindexStatus()
-}
+func (s *Server) StopReindex() ReindexStatus { s.jobs.cancel(reindexKey); return s.reindexStatus() }
 
 // entryOutdated is the per-dictionary test the job selects by. It agrees with
 // dictInfo.Outdated by construction: a folder PreparedFor accepts is judged by
@@ -112,10 +104,35 @@ func (s *Server) StopReindex() ReindexStatus {
 // by the same function.
 func entryOutdated(path string) bool {
 	if !rebuildable(path) {
+		store.IndexDiagnostic("rebuild selection source=%q selected=false reason=not-rebuildable", path)
 		return false
 	}
 	dir, ok := store.LookupDir(path)
-	return ok && len(store.Stale(store.TextDBPath(dir), path)) > 0
+	if !ok {
+		store.IndexDiagnostic("rebuild selection source=%q selected=false reason=no-prepared-folder", path)
+		return false
+	}
+	prepared := store.Inspect(store.TextDBPath(dir))
+	nativeIndex := !isZIMPath(path) && formatHasSelfIndex(prepared.Meta["format"])
+	if !isZIMPath(path) && prepared.Meta != nil && !preparedIndexesNeedRebuild(prepared.Meta["format"], prepared.Plan) {
+		nativeIndex = true
+	}
+	if nativeIndex {
+		format := "zim"
+		if prepared.Meta != nil && prepared.Meta["format"] != "" {
+			format = prepared.Meta["format"]
+		}
+		store.IndexDiagnostic("rebuild selection source=%q selected=false format=%q reason=native-index", path, format)
+		return false
+	}
+	stale := prepared.Stale(path)
+	selected := len(stale) > 0 || isZIMPath(path) && (prepared.Meta == nil || prepared.Meta["index_kind"] != "headwords")
+	store.IndexDiagnostic("rebuild selection source=%q selected=%v format=%q contains=%v fulltext=%v stale=%v", path, selected, prepared.Meta["format"], prepared.Plan.Contains, prepared.Plan.FullText, stale)
+	return selected
+}
+
+func preparedIndexesNeedRebuild(format string, _ store.Plan) bool {
+	return strings.EqualFold(format, "zim") || !formatHasSelfIndex(format)
 }
 
 // handleReindex starts the job over every outdated dictionary. 202 with the
@@ -124,7 +141,7 @@ func entryOutdated(path string) bool {
 func (s *Server) handleReindex(w http.ResponseWriter, r *http.Request) {
 	status, started, err := s.StartReindex()
 	if err != nil {
-		httpErr(w, http.StatusConflict, "%s", err)
+		httpErr(w, http.StatusConflict, "%v", err)
 		return
 	}
 	if started {
@@ -140,10 +157,12 @@ func (s *Server) handleReindexStatus(w http.ResponseWriter, r *http.Request) {
 
 // handleReindexCancel stops the job after the dictionary in hand.
 func (s *Server) handleReindexCancel(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, s.StopReindex())
+	s.jobs.cancel(reindexKey)
+	writeJSON(w, s.reindexStatus())
 }
 
 func (s *Server) runReindex(j *job, todo []*entry) {
+	store.IndexDiagnostic("rebuild job start dictionaries=%d", len(todo))
 	defer j.update(func(st *jobStatus) {
 		st.Current, st.CurrentDone, st.CurrentTotal = "", 0, 0
 	})
@@ -157,6 +176,7 @@ func (s *Server) runReindex(j *job, todo []*entry) {
 			return
 		}
 		name := e.probeName()
+		store.IndexDiagnostic("rebuild dictionary start source=%q dictionary=%q self_indexed=%v", e.Path, name, entryHasSelfIndex(e))
 		j.update(func(st *jobStatus) {
 			st.Current, st.CurrentDone, st.CurrentTotal = name, 0, 0
 		})
@@ -170,6 +190,7 @@ func (s *Server) runReindex(j *job, todo []*entry) {
 		}
 		_, err := e.refresh(progress)
 		release()
+		store.IndexDiagnostic("rebuild dictionary finish source=%q dictionary=%q error=%q", e.Path, name, fmt.Sprint(err))
 		j.update(func(st *jobStatus) {
 			st.Done++
 			if err != nil {

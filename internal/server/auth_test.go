@@ -56,7 +56,7 @@ func TestAuthFreeMatchesRoutes(t *testing.T) {
 	for _, op := range []string{
 		"GET /api/config", "GET /api/prefs", "PUT /api/prefs", "GET /api/library",
 		"DELETE /api/library", "GET /api/rescan", "GET /api/ingest", "GET /api/system-log", "GET /api/setup",
-		"GET /api/reveal", "POST /api/demand", "GET /api/about", "POST /api/power",
+		"GET /api/reveal", "GET /api/about", "POST /api/power",
 		"GET /api/lemmas", "POST /api/lemmas", "DELETE /api/lemmas",
 		// The user's file store, and the files themselves: both name and
 		// serve bytes off the user's own disk (userfiles.go). /files/ is

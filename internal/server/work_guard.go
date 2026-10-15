@@ -4,6 +4,9 @@
 package server
 
 import (
+	"bytes"
+	"encoding/json"
+	"io"
 	"net/http"
 	"strings"
 	"sync"
@@ -46,7 +49,7 @@ func (s *Server) workLocks() (bool, []string) {
 	}
 	s.jobs.mu.Lock()
 	for key, j := range s.jobs.jobs {
-		if j.st.Running {
+		if j.st.Running && key != "initial-index-queue" {
 			add(key)
 		}
 	}
@@ -61,6 +64,7 @@ func (s *Server) workLocks() (bool, []string) {
 func (s *Server) withWorkAdmission(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		key := ""
+		preflightOnly := false
 		switch r.URL.Path {
 		case "/api/ingest":
 			if r.Method == "GET" {
@@ -91,6 +95,20 @@ func (s *Server) withWorkAdmission(next http.HandlerFunc) http.HandlerFunc {
 		case "/api/reindex":
 			// StartReindex owns admission so the HTTP route and native bridge
 			// enforce the same operation boundary.
+		case "/api/index-work":
+			if r.Method == http.MethodPost {
+				key, preflightOnly = bulkIndexKey, true
+				if r.URL.Query().Get("single") == "1" {
+					body, err := io.ReadAll(io.LimitReader(r.Body, (1<<20)+1))
+					if err == nil {
+						r.Body = io.NopCloser(bytes.NewReader(body))
+						var operations []indexOperation
+						if len(body) <= 1<<20 && json.Unmarshal(body, &operations) == nil && len(operations) == 1 && operations[0].Dict != "" {
+							key = "single-index:" + operations[0].Dict
+						}
+					}
+				}
+			}
 		case "/api/clear-database", "/api/orphans", "/api/intake", "/api/howto":
 			if r.Method == "POST" {
 				key = "exclusive-request"
@@ -103,6 +121,11 @@ func (s *Server) withWorkAdmission(next http.HandlerFunc) http.HandlerFunc {
 		release, ok := s.admitWork(key)
 		if !ok {
 			httpErr(w, http.StatusConflict, "dictionary operations are running; wait for completion or stop them")
+			return
+		}
+		if preflightOnly {
+			release()
+			next(w, r)
 			return
 		}
 		defer release()

@@ -27,6 +27,7 @@ func (stubPlatform) Stop()                      {}
 // DetachConsole and Alert exist so every platform file answers the same four
 // questions. On a platform with no tray at all there is nothing to answer.
 func DetachConsole()       {}
+func ShowConsole()         {}
 func Alert(string, string) {}
 
 // stopHint completes "To stop it, ..." for this platform.
