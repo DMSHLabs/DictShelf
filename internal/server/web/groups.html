@@ -187,6 +187,8 @@ html[data-workspace-dialog] textarea{min-height:0;resize:none}
 const tx=window.wudictI18n.t;
 const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const nativeCall=typeof window.wudictNativeCall==="function"?window.wudictNativeCall.bind(window):
+  wudictDialogMode&&typeof parent.wudictNativeCall==="function"?parent.wudictNativeCall.bind(parent):null;
 
 /* The server owns the file and parses it; this page shows its text, sends it
    back, and says what the save produced. "saved" is the text as the textarea
@@ -216,11 +218,17 @@ async function unmatched(changed){
   if(!changed.length)return [];
   const have=new Set();
   try{
-    const t=await (await fetch("/api/dicts")).text();
-    for(const l of t.split("\n")){
-      if(!l.trim())continue;
-      const o=JSON.parse(l);
-      if(o.t==="dict")for(const g of o.dict.filters||o.dict.groups||[])have.add(g.f+"\n"+g.v);
+    if(nativeCall){
+      await nativeCall("dicts","",o=>{
+        if(o.t==="dict")for(const g of o.dict.filters||o.dict.groups||[])have.add(g.f+"\n"+g.v);
+      });
+    }else{
+      const t=await (await fetch("/api/dicts")).text();
+      for(const l of t.split("\n")){
+        if(!l.trim())continue;
+        const o=JSON.parse(l);
+        if(o.t==="dict")for(const g of o.dict.filters||o.dict.groups||[])have.add(g.f+"\n"+g.v);
+      }
     }
   }catch(e){return []}
   return changed.filter(c=>!have.has(c.f+"\n"+c.g.id)).map(c=>c.g.label);
@@ -249,10 +257,10 @@ function show(j,keepText){
 }
 
 async function call(method,body,query){
-  if(typeof window.wudictNativeCall==='function'){
-    if(method==='GET')return window.wudictNativeCall('groups');
-    if(method==='PUT')return window.wudictNativeCall('saveGroups',JSON.stringify({text:body||'',replace:new URLSearchParams(query||'').get('replace')==='1'}));
-    if(method==='DELETE')return window.wudictNativeCall('resetGroups');
+  if(nativeCall){
+    if(method==='GET')return nativeCall('groups');
+    if(method==='PUT')return nativeCall('saveGroups',JSON.stringify({text:body||'',replace:new URLSearchParams(query||'').get('replace')==='1'}));
+    if(method==='DELETE')return nativeCall('resetGroups');
   }
   const r=await fetch("/api/groups"+(query||""),{method,body,headers:body==null?{}:{"Content-Type":"text/plain; charset=utf-8"}});
   if(!r.ok){

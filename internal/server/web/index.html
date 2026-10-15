@@ -1356,6 +1356,9 @@ async function apiFetch(url,options){
       else if(requestURL.pathname==="/api/orphans"&&method==="POST"){
         nativeMethod="resolveOrphans";argument=options.body||"{}";
       }
+      else if(requestURL.pathname==="/api/looks"||requestURL.pathname==="/api/looks/apply"){
+        nativeMethod="looks";argument=JSON.stringify({path:requestURL.pathname,method,body:options.body||""});
+      }
       if(nativeMethod){
         const value=await window.wudictNativeCall(nativeMethod,argument);
         if(nativeMethod==="saveStyle"){
@@ -6868,14 +6871,9 @@ async function toggleSub(link,word,dictID){
   link.parentNode.insertBefore(box,link.nextSibling);
   link._sub=box;
   try{
-    const r=await fetch("/api/search?mode=exact&n=1&dict="+encodeURIComponent(dictID||"")+
-      "&q="+encodeURIComponent(word));
     let html=null;
-    for(const line of (await r.text()).split("\n")){
-      if(!line.trim())continue;
-      let m;try{m=JSON.parse(line)}catch(_){continue}
-      if(m.t==="hit"&&m.results?.length)html=m.results[0].Body;
-    }
+    const query="/api/search?mode=exact&n=1&dict="+encodeURIComponent(dictID||"")+"&q="+encodeURIComponent(word);
+    await fetchStream(query,message=>{if(message.t==="hit"&&message.results?.length)html=message.results[0].Body});
     if(html===null){box.textContent=tx("search.notHere");return}
     box.innerHTML=`<span class="wu-sub-close" title="${escAttr(tx("panel.close"))}">✕</span>`+html.replace(/<link\b[^>]*>/gi,"");
     box.querySelector(".wu-sub-close").addEventListener("click",()=>toggleSub(link,word,dictID));
