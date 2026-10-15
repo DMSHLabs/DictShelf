@@ -1064,8 +1064,14 @@ func (r *Registry) rescan(prepare bool) error {
 	// A dictionary file that was moved, not deleted, takes its prepared folder
 	// with it (D156) - before anything below lists that folder on its own or
 	// prepares the file again from scratch.
-	for _, rl := range store.Relink(paths) {
-		logx.V("rescan: %s moved to %s; its prepared data follows it", rl.From, rl.To)
+	relinked := store.Relink(paths)
+	if os.Getenv("WUDICT_PORTABLE_HOME") != "" {
+		// A portable Data folder is copied, so the original source may still
+		// exist. Reuse its prepared library when a copied dictionary matches.
+		relinked = append(relinked, store.RelinkCopies(paths)...)
+	}
+	for _, rl := range relinked {
+		logx.V("rescan: prepared data now follows source %s -> %s", rl.From, rl.To)
 	}
 	roots := make([]Root, len(dirs))
 	for i, d := range dirs {

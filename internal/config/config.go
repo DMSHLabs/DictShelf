@@ -160,8 +160,12 @@ const (
 func defaults() Config {
 	home, _ := os.UserHomeDir()
 	appHome := userDataDir(home)
+	dictDir := filepath.Join(home, "Dictionaries")
+	if portableHome := os.Getenv("WUDICT_PORTABLE_HOME"); portableHome != "" {
+		dictDir = filepath.Join(portableHome, "Dictionaries")
+	}
 	return Config{
-		DictDirs: []string{filepath.Join(home, "Dictionaries")},
+		DictDirs: []string{dictDir},
 		DBDir:    "", // empty = store.DefaultDBDir()
 		IP:       "127.0.0.1",
 		Port:     "6888",
@@ -340,13 +344,9 @@ func Load(configPath string, flags map[string]string) (Config, error) {
 	return cfg, nil
 }
 
-// Name is the configuration file, spelled the same in every location. Not
-// "config.toml" - the most generic filename there is, shared with Rust, Hugo
-// and half the checkouts on a developer's disk, where wudict would parse a
-// stranger's file, skip creating its own, and point the setup page's SaveKey
-// at it. A name nobody else uses cannot be mistaken for anything, wherever it
-// is copied to (D32).
-const Name = "wudict.toml"
+// LegacyName is the original configuration filename. Windows wuDict2 keeps it
+// as a one-time migration source; other platforms still use it as Name.
+const LegacyName = "wudict.toml"
 
 // systemDir is the machine-wide location; a variable so tests can point it
 // somewhere harmless rather than depend on what is really in /etc.
@@ -371,8 +371,7 @@ var (
 	}
 )
 
-// HomeConfig is the only file wudict ever creates: ~/.wudict/wudict.toml,
-// beside the library that directory already holds.
+// HomeConfig is the per-user configuration file, beside the user's data.
 func HomeConfig() string {
 	if h := homeDir(); h != "" {
 		return filepath.Join(userDataDir(h), Name)
@@ -389,17 +388,29 @@ func userDataDir(home string) string {
 	return filepath.Join(home, ".wudict")
 }
 
-// candidates returns the search order: next to the executable (portable mode,
-// see EnsureConfigFile), then the user's own directory, then the machine's.
+// candidates returns the search order: a selected portable Data folder, next
+// to the executable, the user's own directory, then the machine's.
 func candidates() []string {
 	var out []string
+	seen := map[string]bool{}
+	add := func(path string) {
+		path = filepath.Clean(path)
+		if path != "." && !seen[path] {
+			seen[path] = true
+			out = append(out, path)
+		}
+	}
+	if root := os.Getenv("WUDICT_PORTABLE_HOME"); root != "" {
+		add(filepath.Join(root, Name))
+	}
 	if d := exeDir(); d != "" {
-		out = append(out, filepath.Join(d, Name))
+		add(filepath.Join(d, Name))
 	}
 	if p := HomeConfig(); p != "" {
-		out = append(out, p)
+		add(p)
 	}
-	return append(out, filepath.Join(systemDir, Name))
+	add(filepath.Join(systemDir, Name))
+	return out
 }
 
 // resolved is the outcome of the search: the file that was read, whether it is
@@ -587,7 +598,12 @@ func EnsureConfigFile() (path string, created bool, err error) {
 	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 		return "", false, err
 	}
-	if err := fsx.WriteAtomic(p, []byte(configTemplate), 0o644); err != nil {
+	template := configTemplate
+	if Name != LegacyName {
+		template = strings.ReplaceAll(template, "~/.wudict/", "~/.wuDict2/")
+		template = strings.ReplaceAll(template, LegacyName, Name)
+	}
+	if err := fsx.WriteAtomic(p, []byte(template), 0o644); err != nil {
 		return "", false, err
 	}
 	return p, true, nil
@@ -970,16 +986,27 @@ func FormatList(dirs []string) string {
 	return "[" + strings.Join(quoted, ", ") + "]"
 }
 
-// ExpandHome expands a leading ~ to the user home directory. "~\" counts too
-// on Windows, where it is how a path is written - and how the panel itself
-// shows one (pathAliases); elsewhere a backslash is part of a file name.
+// ExpandHome expands a leading ~ to the user home directory. A portable
+// Windows launch instead resolves ~ and relative paths from its Data folder.
+// "~\" counts too on Windows, where it is how a path is written - and how the
+// panel itself shows one (pathAliases); elsewhere a backslash is part of a file name.
 func ExpandHome(p string) string {
 	rest, ok := strings.CutPrefix(p, "~")
-	if !ok || (rest != "" && rest[0] != '/' && rest[0] != filepath.Separator) {
+	if ok && (rest == "" || rest[0] == '/' || rest[0] == filepath.Separator) {
+		base := os.Getenv("WUDICT_PORTABLE_HOME")
+		if base == "" {
+			base, _ = os.UserHomeDir()
+		}
+		if base != "" {
+			return filepath.Join(base, rest[min(len(rest), 1):])
+		}
 		return p
 	}
-	if home, err := os.UserHomeDir(); err == nil {
-		return filepath.Join(home, rest[min(len(rest), 1):])
+	if strings.HasPrefix(p, "~") {
+		return p
+	}
+	if base := os.Getenv("WUDICT_PORTABLE_HOME"); base != "" && !filepath.IsAbs(p) {
+		return filepath.Join(base, p)
 	}
 	return p
 }
