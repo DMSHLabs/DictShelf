@@ -4937,6 +4937,27 @@ function setBusy(on){
    arrives — this is what lets each dictionary render the instant it is
    ready instead of waiting for the whole fan-out (progressive results). */
 async function fetchStream(url,onMsg,signal,options){
+  if(typeof window.wudictNativeCall==="function"){
+    const requestURL=new URL(url,window.location.href);
+    if(requestURL.origin===window.location.origin){
+      const method=(options&&options.method||"GET").toUpperCase();
+      if(requestURL.pathname==="/api/search"&&method==="GET"){
+        const params=requestURL.searchParams,n=Number.parseInt(params.get("n"),10);
+        const flag=(value)=>!!value&&!/^(0|false|no|off)$/i.test(value.trim());
+        const request={q:params.get("q")||"",mode:params.get("mode")||"",format:params.get("format")||"",dict:params.get("dict")||"",n:Number.isFinite(n)?n:0,hl:flag(params.get("hl")||"")};
+        await window.wudictNativeCall("search",JSON.stringify(request),onMsg,signal);
+        return;
+      }
+      if(requestURL.pathname==="/api/dicts"&&method==="GET"&&!requestURL.searchParams.has("diagnostics")){
+        await window.wudictNativeCall("dicts","",onMsg,signal);
+        return;
+      }
+      if(requestURL.pathname==="/api/rescan"&&method==="POST"&&requestURL.searchParams.get("stream")==="1"){
+        await window.wudictNativeCall("rescanIndexes",options.body||"{}",onMsg,signal);
+        return;
+      }
+    }
+  }
   const resp=await fetch(url,{...options,...(signal?{signal}:{})});
   if(!resp.ok){let e;try{e=(await resp.json()).error}catch(_){}throw new Error(window.wudictI18n.errorText(e)||resp.statusText)}
   const reader=resp.body.getReader(),dec=new TextDecoder();let buf="";
