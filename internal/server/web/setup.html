@@ -10,11 +10,13 @@
 <meta charset="utf-8">
 {{I18N}}
 <script>
+const wudictDialogMode=new URLSearchParams(location.search).get('wudict_dialog')==='1';
+if(wudictDialogMode)document.documentElement.setAttribute('data-workspace-dialog','');
 function setupNavigation(path) {
   var target = new URL(path, location.href);
-  if (new URLSearchParams(location.search).get('wudict_webview2') === '1') {
-    target.searchParams.set('wudict_webview2', '1');
-  }
+  const params=new URLSearchParams(location.search);
+  if(params.get('wudict_webview2')==='1')target.searchParams.set('wudict_webview2','1');
+  if(wudictDialogMode)target.searchParams.set('wudict_dialog','1');
   return target.pathname + target.search + target.hash;
 }
 // WebView2 installs the native bridge before this page is parsed. Install the
@@ -63,8 +65,10 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
     else sessionStorage.removeItem('wudict_shell_image');
     if (valid) sessionStorage.setItem('wudict_shell_bg', color);
     else sessionStorage.removeItem('wudict_shell_bg');
-    if (/^#[0-9a-f]{6}$/i.test(paper || '')) sessionStorage.setItem('wudict_shell_paper', paper);
-    else sessionStorage.removeItem('wudict_shell_paper');
+    if (paper !== undefined) {
+      if (/^#[0-9a-f]{6}$/i.test(paper || '')) sessionStorage.setItem('wudict_shell_paper', paper);
+      else sessionStorage.removeItem('wudict_shell_paper');
+    }
   } catch (_) {}
 };
 (function () {
@@ -297,7 +301,7 @@ html:not([data-folder-picker]) #rows .frow .pick{display:none}
 .migration-error{color:var(--error,#a22);white-space:pre-wrap}
 </style>
 </head>
-<body class="workspace-page">
+<body class="workspace-page workspace-folders">
 <div id="workNotice" class="work-notice" role="status" aria-live="polite" hidden>
   <div id="workNoticeText" class="work-notice-text"></div>
   <button type="button" class="btn ghost" id="workNoticeStop" hidden></button>
@@ -558,7 +562,10 @@ async function save(){
   }
   catch(e){$("msg").className="err";$("msg").textContent="✕ "+window.wudictI18n.errorText(e.message);setSetupNotice("");validateAll();return}
   if(j.error){$("msg").className="err";$("msg").textContent="✕ "+window.wudictI18n.errorText(j.error);setSetupNotice("");$("save").disabled=false;return}
-  if(j.saved)location.href=setupNavigation("/");
+  if(j.saved){
+    if(wudictDialogMode)parent.postMessage({type:"wudict-workspace-close",changed:"setup"},location.origin);
+    else location.href=setupNavigation("/");
+  }
 }
 
 /* Importing an archive (/api/intake). Two acts: the file is read and reports
@@ -965,7 +972,14 @@ start();
    (which would load the app from scratch and stack an entry the back gesture
    would then walk back into this page), just history. A first run — where the
    server serves THIS page for "/" — has nothing behind it, and offers no ✕. */
-if(history.length>1)$("closePage").onclick=()=>history.back();
+if(wudictDialogMode){
+  $("closePage").onclick=()=>parent.postMessage({type:"wudict-workspace-close"},location.origin);
+  addEventListener("message",event=>{
+    if(event.origin===location.origin&&event.source===parent&&event.data?.type==="wudict-workspace-close-request")
+      parent.postMessage({type:"wudict-workspace-close"},location.origin);
+  });
+}
+else if(history.length>1)$("closePage").onclick=()=>history.back();
 else $("closePage").hidden=true;
 </script>
 </body>

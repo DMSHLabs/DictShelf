@@ -44,8 +44,10 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
     else sessionStorage.removeItem('wudict_shell_image');
     if (valid) sessionStorage.setItem('wudict_shell_bg', color);
     else sessionStorage.removeItem('wudict_shell_bg');
-    if (/^#[0-9a-f]{6}$/i.test(paper || '')) sessionStorage.setItem('wudict_shell_paper', paper);
-    else sessionStorage.removeItem('wudict_shell_paper');
+    if (paper !== undefined) {
+      if (/^#[0-9a-f]{6}$/i.test(paper || '')) sessionStorage.setItem('wudict_shell_paper', paper);
+      else sessionStorage.removeItem('wudict_shell_paper');
+    }
   } catch (_) {}
 };
 (function () {

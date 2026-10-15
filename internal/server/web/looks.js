@@ -36,7 +36,7 @@ let looksPending = null;
 function looksEl(id) { return document.getElementById(id); }
 
 async function looksFetch(path, method, body) {
-  const r = await fetch(path, {
+  const r = await apiFetch(path, {
     method,
     headers: body ? { "Content-Type": "application/json" } : undefined,
     body: body ? JSON.stringify(body) : undefined,

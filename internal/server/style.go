@@ -5,6 +5,7 @@
 package server
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"path/filepath"
@@ -199,6 +200,10 @@ func (s *Server) handleUserCSS(w http.ResponseWriter, r *http.Request) {
 // black box, and the point of using files was that an external editor works
 // too.
 func (s *Server) handleStyle(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, s.styleSnapshot())
+}
+
+func (s *Server) styleSnapshot() map[string]any {
 	// a stylesheet that exists but is not applied (too large, not a file)
 	// says why, so the editor's empty box is not mistaken for an empty file
 	problems := map[string]string{}
@@ -207,7 +212,7 @@ func (s *Server) handleStyle(w http.ResponseWriter, r *http.Request) {
 			problems[strings.TrimSuffix(n, ".css")] = st.why
 		}
 	}
-	writeJSON(w, map[string]any{
+	return map[string]any{
 		"app":          string(s.styleRead(appCSSName)),
 		"article":      string(s.styleRead(articleCSSName)),
 		"appNight":     string(s.styleRead(appNightCSSName)),
@@ -215,7 +220,7 @@ func (s *Server) handleStyle(w http.ResponseWriter, r *http.Request) {
 		"dir":          s.User.Style(),
 		"writable":     s.User.Style() != "",
 		"problems":     problems,
-	})
+	}
 }
 
 // PUT /api/style - replace either file of ONE theme's pair, or both.
@@ -226,24 +231,44 @@ func (s *Server) handleStyle(w http.ResponseWriter, r *http.Request) {
 // with `ui`. `theme` names WHICH pair, and its absence is the day pair, which
 // is what every request written before the night files existed meant.
 func (s *Server) handleSaveStyle(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		App     *string `json:"app"`
-		Article *string `json:"article"`
-		Theme   string  `json:"theme"`
-	}
+	var req styleSaveRequest
 	if !decodeJSON(w, r, &req, 4*maxUserCSSBytes+(1<<12)) {
 		return
 	}
-	if s.User.Style() == "" {
-		httpErr(w, http.StatusConflict, "%s", "no config directory: there is nowhere to save custom styles")
+	if err := s.saveStyle(req, r.URL.Query().Get("replace") == "1"); err != nil {
+		var operation styleOperationError
+		if errors.As(err, &operation) {
+			httpErr(w, operation.status, "%s", operation.message)
+		} else {
+			httpErr(w, http.StatusInternalServerError, "%s", "could not save style: "+err.Error())
+		}
 		return
+	}
+	writeJSON(w, s.styleSnapshot())
+}
+
+type styleSaveRequest struct {
+	App     *string `json:"app"`
+	Article *string `json:"article"`
+	Theme   string  `json:"theme"`
+}
+
+type styleOperationError struct {
+	status  int
+	message string
+}
+
+func (e styleOperationError) Error() string { return e.message }
+
+func (s *Server) saveStyle(req styleSaveRequest, replace bool) error {
+	if s.User.Style() == "" {
+		return styleOperationError{status: http.StatusConflict, message: "no config directory: there is nowhere to save custom styles"}
 	}
 	appName, articleName := styleNamesFor(req.Theme)
 	files := []struct {
 		name string
 		body *string
 	}{{appName, req.App}, {articleName, req.Article}}
-	replace := r.URL.Query().Get("replace") == "1"
 	// Both checked before either is written: a request that saves one file
 	// and is refused on the other would leave the editor out of step.
 	for _, f := range files {
@@ -251,12 +276,10 @@ func (s *Server) handleSaveStyle(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		if len(*f.body) > maxUserCSSBytes {
-			httpErr(w, http.StatusRequestEntityTooLarge, "%s", f.name+" is too large")
-			return
+			return styleOperationError{status: http.StatusRequestEntityTooLarge, message: f.name + " is too large"}
 		}
 		if st := s.styles[f.name].fresh(); st.unusable() && !replace {
-			httpErr(w, http.StatusConflict, "%s", st.why+" - replace=1 overwrites it")
-			return
+			return styleOperationError{status: http.StatusConflict, message: st.why + " - replace=1 overwrites it"}
 		}
 	}
 	for _, f := range files {
@@ -270,9 +293,8 @@ func (s *Server) handleSaveStyle(w http.ResponseWriter, r *http.Request) {
 			_, err = s.styles[f.name].save(*f.body, true)
 		}
 		if err != nil {
-			httpErr(w, http.StatusInternalServerError, "%s", "could not save "+f.name+": "+err.Error())
-			return
+			return styleOperationError{status: http.StatusInternalServerError, message: "could not save " + f.name + ": " + err.Error()}
 		}
 	}
-	s.handleStyle(w, r)
+	return nil
 }
