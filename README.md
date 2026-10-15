@@ -29,10 +29,6 @@ Windows and Android.
     empty, the setup page ([localhost:6888/setup](http://localhost:6888/setup))
     sets the folders, and imports dictionaries from a file or a link.
 
-``` toml title="~/.wudict/wudict.toml"
-DICT_DIR = ["~/Dictionaries", "/Volumes/Data/Dicts"]
-```
-
 > [!TIP]
 > <sup>If you don't have yet a local dictionary collection you can download some FOSS dictionaries from the [links here](https://legbehindneck.com/wudict/).</sup>
 
