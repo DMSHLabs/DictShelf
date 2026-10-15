@@ -1065,6 +1065,7 @@ func (r *Registry) rescan(prepare bool) error {
 	// with it (D156) - before anything below lists that folder on its own or
 	// prepares the file again from scratch.
 	relinked := store.Relink(paths)
+	relinked = append(relinked, store.RelinkUnlisted(paths)...)
 	if os.Getenv("WUDICT_PORTABLE_HOME") != "" {
 		// A portable Data folder is copied, so the original source may still
 		// exist. Reuse its prepared library when a copied dictionary matches.

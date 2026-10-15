@@ -125,3 +125,32 @@ func (s *Server) DesktopSetup(argument string) (any, error) {
 	}
 	return map[string]bool{"saved": true}, nil
 }
+
+func (s *Server) DesktopFolderSetup(argument string) (any, error) {
+	if len(argument) > 1<<20 {
+		return nil, errors.New("folder request is too large")
+	}
+	values, err := url.ParseQuery(argument)
+	if err != nil {
+		return nil, err
+	}
+	if values.Get("save") != "1" {
+		values.Del("save")
+		result, _ := s.setupResult(values, true)
+		return result, nil
+	}
+	_, started := s.jobs.start(setupWorkKey, 0, jobStatus{Total: 1, Stage: "folders"}, func(j *job) {
+		result, _ := s.setupResult(values, true)
+		j.update(func(st *jobStatus) {
+			st.Result = result
+			st.Done = 1
+			if message, ok := result["error"].(string); ok {
+				st.Err = message
+			}
+		})
+	})
+	if !started {
+		return nil, errors.New("folder setup already running")
+	}
+	return s.indexWorkStatus(setupWorkKey), nil
+}

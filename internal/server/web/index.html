@@ -1331,6 +1331,13 @@ async function apiFetch(url,options){
         nativeMethod="savePrefs";argument=options.body||"{}";
       }
       else if(requestURL.pathname==="/api/style"&&method==="GET")nativeMethod="style";
+      else if(requestURL.pathname==="/api/presets"&&method==="GET")nativeMethod="presets";
+      else if(requestURL.pathname==="/api/presets"&&method==="PUT"){
+        nativeMethod="savePreset";argument=options.body||"{}";
+      }
+      else if(requestURL.pathname==="/api/reveal"&&method==="GET"){
+        nativeMethod="reveal";argument=requestURL.searchParams.get("path")||"";
+      }
       else if(requestURL.pathname==="/api/style"&&method==="PUT"){
         nativeMethod="saveStyle";
         argument=JSON.stringify({body:JSON.parse(options.body||"{}"),replace:requestURL.searchParams.get("replace")==="1"});
@@ -3772,8 +3779,10 @@ async function showDesktopSysSettings(){
       const reveal=document.createElement("button");reveal.type="button";reveal.className="btn";
       reveal.textContent=c.revealLabel;
       reveal.onclick=async()=>{
-        const r=await fetch("/api/reveal?path="+encodeURIComponent(c.configPath));
-        if(!r.ok)setStatus(esc(await apiError(r)));
+        try{
+          const r=await apiFetch("/api/reveal?path="+encodeURIComponent(c.configPath));
+          if(!r.ok)setStatus(esc(await apiError(r)));
+        }catch(error){setStatus(esc(window.wudictI18n.errorText(error.message)))}
       };
       body.append(reveal);
     }
@@ -3973,8 +3982,9 @@ async function loadFolders(){
     }
     if(c.canReveal){
       const rv=document.createElement("span");rv.className="rv";rv.textContent=c.revealLabel;
-      rv.onclick=e=>{e.stopPropagation();fetch("/api/reveal?path="+encodeURIComponent(path))
-        .then(r=>r.json()).then(j=>{if(j.error)alert(window.wudictI18n.errorText(j.error))})};
+      rv.onclick=e=>{e.stopPropagation();apiFetch("/api/reveal?path="+encodeURIComponent(path))
+        .then(async r=>{const j=await r.json();if(!r.ok||j.error)throw new Error(j.error||"HTTP "+r.status)})
+        .catch(error=>alert(window.wudictI18n.errorText(error.message)))};
       m.appendChild(rv);
     }
     if(m.childNodes.length)d.appendChild(m);
@@ -7867,7 +7877,7 @@ async function stylerUpload(list){
 async function presetsLoad(){
   if(STYLE_OFF){presetRowsPaint();return false}
   try{
-    const r=await fetch("/api/presets");
+    const r=await apiFetch("/api/presets");
     if(!r.ok)throw new Error("HTTP "+r.status);
     PRESETS=await r.json();
     presetApplyAll();
@@ -7982,7 +7992,7 @@ async function presetToggle(id,on,notify){
     return false;
   }
   try{
-    const r=await fetch("/api/presets",{method:"PUT",
+    const r=await apiFetch("/api/presets",{method:"PUT",
       headers:{"Content-Type":"application/json"},body:JSON.stringify({id,on})});
     if(!r.ok)throw new Error("HTTP "+r.status);
     PRESETS=await r.json();

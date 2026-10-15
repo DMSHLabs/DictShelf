@@ -99,6 +99,8 @@ func (s *Server) indexWorkStatus(requested ...string) indexWorkStatus {
 			if json.Unmarshal(response.Bytes(), &result) == nil {
 				out.Result = result
 			}
+		} else if result, ok := st.Result.(map[string]any); ok {
+			out.Result = result
 		}
 	}
 	if strings.HasPrefix(key, "ingest:") {

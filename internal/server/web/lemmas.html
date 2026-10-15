@@ -203,10 +203,12 @@ body{font-size:calc(var(--ui-font-base) * 1rem)}
 const $=id=>document.getElementById(id);
 const tx=window.wudictI18n.t;
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const nativeLemmaCall=wudictDialogMode&&typeof parent.wudictNativeCall==="function"
+  ? parent.wudictNativeCall.bind(parent) : window.wudictNativeCall;
 // decimal, the rule of index.html's mb and the server's logx.Size
 const mb=n=>n<1e3?n+" B":n<1e6?Math.round(n/1e3)+" kB":n<1e7?(n/1e6).toFixed(1)+" MB":n<1e9?Math.round(n/1e6)+" MB":(n/1e9).toFixed(1)+" GB";
 
-/* State lives on the SERVER, not here: a download is a job the server runs, so
+/* State lives in the Go process, not here: a download is a job it runs, so
    this page can be reloaded, rotated or closed and reopened without losing it.
    Everything drawn below comes from one GET, which is also what is polled. */
 let polling=false;
@@ -218,10 +220,24 @@ function languageName(l){
 
 async function load(){
   let j;
-  try{ j=await (await fetch("/api/lemmas")).json() }
+  try{ j=typeof nativeLemmaCall==="function"
+    ? await nativeLemmaCall("lemmas")
+    : await (await fetch("/api/lemmas")).json() }
   catch(e){ $("banner").className="banner warn";$("banner").textContent=tx("pages.cannotReach");return null }
   render(j);
   return j;
+}
+
+async function changeLemma(method,code){
+  if(typeof nativeLemmaCall==="function"){
+    return nativeLemmaCall(method==="POST"?"installLemma":"removeLemma",code);
+  }
+  const response=await fetch("/api/lemmas?code="+encodeURIComponent(code),{method});
+  if(!response.ok){
+    const body=await response.json().catch(()=>({}));
+    throw new Error(body.error||"HTTP "+response.status);
+  }
+  return response.json();
 }
 
 function render(j){
@@ -307,16 +323,15 @@ function rowFor(l,j){
 
 /* Checking installs, unchecking removes. The box is disabled the moment it is
    clicked and re-enabled by the next poll that reports a terminal state, so a
-   second click cannot start a second download - the server refuses one anyway,
+   second click cannot start a second download - Go refuses one anyway,
    but the UI should not invite it. */
 async function toggle(l,cb){
   cb.disabled=true;
   if(cb.checked){
     setStatus(cb,"busy",tx("pages.downloading"));
     try{
-      const r=await fetch("/api/lemmas?code="+encodeURIComponent(l.code),{method:"POST"});
-      if(!r.ok){ const j=await r.json().catch(()=>({}));fail(cb,window.wudictI18n.errorText(j.error)||("HTTP "+r.status));return }
-    }catch(e){ fail(cb,tx("pages.cannotReachShort"));return }
+      await changeLemma("POST",l.code);
+    }catch(e){ fail(cb,window.wudictI18n.errorText(e.message)||tx("pages.cannotReachShort"));return }
     poll();
     return;
   }
@@ -326,9 +341,8 @@ async function toggle(l,cb){
   }
   setStatus(cb,"busy",tx("pages.removing"));
   try{
-    const r=await fetch("/api/lemmas?code="+encodeURIComponent(l.code),{method:"DELETE"});
-    if(!r.ok){ const j=await r.json().catch(()=>({}));fail(cb,window.wudictI18n.errorText(j.error)||("HTTP "+r.status));return }
-  }catch(e){ fail(cb,tx("pages.cannotReachShort"));return }
+    await changeLemma("DELETE",l.code);
+  }catch(e){ fail(cb,window.wudictI18n.errorText(e.message)||tx("pages.cannotReachShort"));return }
   load();
 }
 

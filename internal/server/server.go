@@ -706,7 +706,15 @@ func (s *Server) setUseCached(on bool) error {
 // folder. Clicking a Use button IS the "don't ask again": the setup page only
 // appears while the registry is empty.
 func (s *Server) handleSetupSync(w http.ResponseWriter, r *http.Request) {
-	q := r.URL.Query()
+	result, status := s.setupResult(r.URL.Query(), s.removalOffered(r))
+	if status != http.StatusOK {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(status)
+	}
+	writeJSON(w, result)
+}
+
+func (s *Server) setupResult(q url.Values, canRemove bool) (map[string]any, int) {
 	raw := strings.TrimSpace(q.Get("path"))
 	save, _ := queryFlag(q, "save")
 	diagnostics := save && q.Get("diagnostics") == "1"
@@ -726,8 +734,7 @@ func (s *Server) handleSetupSync(w http.ResponseWriter, r *http.Request) {
 
 	if raw == "" {
 		if !save || !useCached {
-			httpErr(w, 400, "missing path parameter")
-			return
+			return map[string]any{"error": "missing path parameter"}, http.StatusBadRequest
 		}
 		out := map[string]any{"useCached": true}
 		if err := s.setUseCached(true); err != nil {
@@ -736,8 +743,7 @@ func (s *Server) handleSetupSync(w http.ResponseWriter, r *http.Request) {
 			out["saved"] = true
 			out["found"] = s.reg.UserCount()
 		}
-		writeJSON(w, out)
-		return
+		return out, http.StatusOK
 	}
 	dir := config.ExpandHome(raw)
 	abs, err := filepath.Abs(dir)
@@ -746,18 +752,15 @@ func (s *Server) handleSetupSync(w http.ResponseWriter, r *http.Request) {
 	}
 	st, err := os.Stat(dir)
 	if err != nil {
-		writeJSON(w, map[string]any{"path": dir, "error": "folder not found"})
-		return
+		return map[string]any{"path": dir, "error": "folder not found"}, http.StatusOK
 	}
 	if !st.IsDir() {
-		writeJSON(w, map[string]any{"path": dir, "error": "not a folder"})
-		return
+		return map[string]any{"path": dir, "error": "not a folder"}, http.StatusOK
 	}
 	paths, err := dict.Discover(dir)
 	traceStage("validate-first-folder", len(paths))
 	if err != nil {
-		writeJSON(w, map[string]any{"path": dir, "error": err.Error()})
-		return
+		return map[string]any{"path": dir, "error": err.Error()}, http.StatusOK
 	}
 	out := map[string]any{"path": dir, "found": len(paths)}
 	// several folders at once: report the DEDUPED total, since folders may
@@ -787,7 +790,7 @@ func (s *Server) handleSetupSync(w http.ResponseWriter, r *http.Request) {
 				break
 			}
 			traceStage("update-registry-and-queue-indexes", total)
-			if s.removalOffered(r) {
+			if canRemove {
 				if err := s.reg.cleanupLibrary(); err != nil {
 					out["error"] = err.Error()
 					break
@@ -812,7 +815,7 @@ func (s *Server) handleSetupSync(w http.ResponseWriter, r *http.Request) {
 			traceStage("save-settings", total)
 		}
 	}
-	writeJSON(w, out)
+	return out, http.StatusOK
 }
 
 // resolveDirs cleans up the folder list a save carries: ~-expanded, absolute,

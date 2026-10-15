@@ -265,22 +265,27 @@ func (s *Server) handleReveal(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 403, "only available from the machine running wudict")
 		return
 	}
-	path := strings.TrimSpace(r.URL.Query().Get("path"))
-	if path == "" {
-		httpErr(w, 400, "missing path parameter")
-		return
-	}
-	if !s.revealAllowed(path) {
-		// never hand an arbitrary path to the shell: only the folders and
-		// files this app is already showing may be opened.
-		httpErr(w, 403, "not a wudict folder")
-		return
-	}
-	if err := reveal(path); err != nil {
-		httpErr(w, 500, "%v", err)
+	path, status, err := s.revealShownPath(r.URL.Query().Get("path"))
+	if err != nil {
+		httpErr(w, status, "%v", err)
 		return
 	}
 	writeJSON(w, map[string]any{"revealed": path})
+}
+
+func (s *Server) revealShownPath(value string) (string, int, error) {
+	path := strings.TrimSpace(value)
+	if path == "" {
+		return "", http.StatusBadRequest, fmt.Errorf("missing path parameter")
+	}
+	// Only the folders and files already shown by the app may reach the shell.
+	if !s.revealAllowed(path) {
+		return "", http.StatusForbidden, fmt.Errorf("not a wudict folder")
+	}
+	if err := reveal(path); err != nil {
+		return "", http.StatusInternalServerError, err
+	}
+	return path, http.StatusOK, nil
 }
 
 // revealAllowed limits reveal to what the UI legitimately displays: a

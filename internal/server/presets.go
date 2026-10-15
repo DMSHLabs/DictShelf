@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"embed"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"os"
 	"path"
@@ -502,18 +503,36 @@ func (s *Server) handlePresetSave(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad request: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	if s.User.Style() == "" {
-		http.Error(w, "no config directory: there is nowhere to remember preset choices", http.StatusConflict)
+	payload, err := s.savePreset(req.ID, req.On)
+	if err != nil {
+		status := http.StatusBadRequest
+		if presetErr, ok := err.(*presetSaveError); ok {
+			status = presetErr.status
+		}
+		http.Error(w, err.Error(), status)
 		return
+	}
+	writeJSON(w, payload)
+}
+
+type presetSaveError struct {
+	status int
+	text string
+}
+
+func (e *presetSaveError) Error() string { return e.text }
+
+func (s *Server) savePreset(id string, on bool) (map[string]any, error) {
+	if s.User.Style() == "" {
+		return nil, &presetSaveError{http.StatusConflict, "no config directory: there is nowhere to remember preset choices"}
 	}
 	_, index := presetRegistry()
-	p, ok := index[req.ID]
+	p, ok := index[id]
 	if !ok {
-		http.Error(w, "unknown preset: "+req.ID, http.StatusBadRequest)
-		return
+		return nil, fmt.Errorf("unknown preset: %s", id)
 	}
 	enabled := s.presetEnabled()
-	if req.On {
+	if on {
 		// Radio within the group AND the theme: only presets competing for
 		// the same surface go off. A group-mate in the OTHER theme is not a
 		// competitor - each applies in its own theme, by its own CSS - so a
@@ -527,21 +546,20 @@ func (s *Server) handlePresetSave(w http.ResponseWriter, r *http.Request) {
 			}
 			next = append(next, id)
 		}
-		enabled = append(next, req.ID)
+		enabled = append(next, id)
 	} else {
 		var kept []string
-		for _, id := range enabled {
-			if id != req.ID {
-				kept = append(kept, id)
+		for _, presetID := range enabled {
+			if presetID != id {
+				kept = append(kept, presetID)
 			}
 		}
 		enabled = kept
 	}
 	if err := s.presetStateWrite(enabled); err != nil {
-		http.Error(w, "could not save preset choices: "+err.Error(), http.StatusInternalServerError)
-		return
+		return nil, &presetSaveError{http.StatusInternalServerError, fmt.Sprintf("could not save preset choices: %v", err)}
 	}
-	writeJSON(w, s.presetPayload())
+	return s.presetPayload(), nil
 }
 
 // GET /assets/presets/<group>/<file> - the app half of an enabled preset

@@ -31,7 +31,7 @@ function setupNavigation(path) {
     folderPicked = null;
     if (callback && typeof event.data.path === 'string') callback(event.data.path);
   });
-  if (wudictDialogMode && new URLSearchParams(location.search).get('wudict_webview2') === '1') {
+  if (wudictDialogMode && typeof window.parent.wudictChooseFolder === 'function') {
     window.wudictPickFolder = callback => {
       folderPicked = callback;
       window.parent.postMessage({type: 'wudict-folder-picker-request'}, location.origin);
@@ -401,6 +401,8 @@ html:not([data-folder-picker]) #rows .frow .pick{display:none}
 "use strict";
 const $=id=>document.getElementById(id);
 const tx=window.wudictI18n.t;
+const nativeSetupCall=wudictDialogMode&&typeof parent.wudictNativeCall==="function"
+  ? parent.wudictNativeCall.bind(parent) : window.wudictNativeCall;
 let indexDefaultsWrite=Promise.resolve(true);
 function syncIndexDefaults(){
   $("newIndexIndex").checked=true;
@@ -413,8 +415,11 @@ function saveIndexDefaults(){
   const body={index:true,contains:$("newIndexContains").checked,fullText:$("newIndexFullText").checked};
   indexDefaultsWrite=indexDefaultsWrite.then(async()=>{
     try{
-      const r=await fetch("/api/index-defaults",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
-      if(!r.ok)throw new Error(await r.text());
+      if(typeof nativeSetupCall==="function")await nativeSetupCall("indexDefaults",JSON.stringify(body));
+      else {
+        const r=await fetch("/api/index-defaults",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+        if(!r.ok)throw new Error(await r.text());
+      }
       return true;
     }catch(e){
       $("indexDefaultsError").hidden=false;
@@ -464,6 +469,9 @@ function addRow(value){
       if(typeof p!=="string"||!(p=p.trim()))return;
       input.value=p;
       clearTimeout(timer);timer=setTimeout(validateAll,350);
+    }).catch(e=>{
+      const st=row.querySelector(".st");st.className="st err";
+      st.textContent="✕ "+window.wudictI18n.errorText(e.message);
     });
   });
   input.addEventListener("keydown",e=>{if(e.key==="Enter"&&lastOK)save()});
@@ -509,7 +517,9 @@ async function validateAll(){
     if(!p){st.className="st";st.textContent="";return}
     checked++;
     let j;
-    try{ j=await (await fetch("/api/setup?path="+encodeURIComponent(p),{signal:controller.signal})).json() }
+    try{ j=typeof nativeSetupCall==="function"
+      ? await nativeSetupCall("folderSetup","path="+encodeURIComponent(p),undefined,controller.signal)
+      : await (await fetch("/api/setup?path="+encodeURIComponent(p),{signal:controller.signal})).json() }
     catch(e){ if(controller.signal.aborted||run!==validationRun)return;st.className="st err";st.textContent=tx("pages.unreachable");bad++;reportFolder();return }
     if(run!==validationRun)return;
     if(j.error){st.className="st err";st.textContent="✕ "+window.wudictI18n.errorText(j.error);bad++;reportFolder();return}
@@ -525,7 +535,9 @@ async function validateAll(){
   if(list.length>1&&total>0){
     try{
       const q=list.map(p=>"path="+encodeURIComponent(p)).join("&");
-      const agg=await (await fetch("/api/setup?"+q,{signal:controller.signal})).json();
+      const agg=typeof nativeSetupCall==="function"
+        ? await nativeSetupCall("folderSetup",q,undefined,controller.signal)
+        : await (await fetch("/api/setup?"+q,{signal:controller.signal})).json();
       if(typeof agg.found==="number")total=agg.found;
     }catch(e){if(controller.signal.aborted||run!==validationRun)return}
   }
@@ -566,9 +578,15 @@ async function save(){
   $("save").disabled=true;
   let j;
   try{
-    const response=await fetch(url);
-    j=await response.json();
-    if(response.status===202){const finished=await window.wudictWork.wait('folder-setup');j=finished.result||{error:finished.error};}
+    if(typeof nativeSetupCall==="function"){
+      await nativeSetupCall("folderSetup",q+"&save=1"+diagnostics);
+      const finished=await window.wudictWork.wait('folder-setup');
+      j=finished.result||{error:finished.error};
+    }else{
+      const response=await fetch(url);
+      j=await response.json();
+      if(response.status===202){const finished=await window.wudictWork.wait('folder-setup');j=finished.result||{error:finished.error};}
+    }
   }
   catch(e){$("msg").className="err";$("msg").textContent="✕ "+window.wudictI18n.errorText(e.message);validateAll();return}
   if(j.error){$("msg").className="err";$("msg").textContent="✕ "+window.wudictI18n.errorText(j.error);$("save").disabled=false;return}
@@ -895,11 +913,18 @@ $("save").addEventListener("click",save);
 async function start(){
   let cfg=null,migration=null;
   try{
-    const [configResponse,migrationResponse]=await Promise.all([
-      fetch("/api/config"),fetch("/api/setup?migration=status")
-    ]);
-    cfg=await configResponse.json();migration=await migrationResponse.json();
-  }catch(e){try{cfg=await (await fetch("/api/config")).json()}catch(_){}}
+    if(typeof nativeSetupCall==="function"){
+      [cfg,migration]=await Promise.all([
+        nativeSetupCall("config"),nativeSetupCall("setup","migration=status")
+      ]);
+    }else{
+      const [configResponse,migrationResponse]=await Promise.all([
+        fetch("/api/config"),fetch("/api/setup?migration=status")
+      ]);
+      cfg=await configResponse.json();migration=await migrationResponse.json();
+    }
+  }catch(e){try{cfg=typeof nativeSetupCall==="function"
+    ? await nativeSetupCall("config") : await (await fetch("/api/config")).json()}catch(_){}}
   if(migration&&migration.available)await showMigrationDialog(migration.forked);
   for(const [feature,suffix] of [["contains","Contains"],["fullText","FullText"]]){
     $("newIndex"+suffix).checked=!!cfg?.indexDefaults?.[feature];
@@ -965,9 +990,12 @@ async function applyMigration(choice,button){
   $("migrationIntro").textContent=tx("pages.migrationProgress");
   setSetupNotice(tx("pages.migrationProgress"));
   try{
-    const response=await fetch("/api/setup?migration="+encodeURIComponent(choice),{method:"POST"});
-    const result=await response.json();
-    if(!response.ok||result.error)throw new Error(result.error||response.statusText);
+    if(typeof nativeSetupCall==="function")await nativeSetupCall("setup","migration="+encodeURIComponent(choice));
+    else {
+      const response=await fetch("/api/setup?migration="+encodeURIComponent(choice),{method:"POST"});
+      const result=await response.json();
+      if(!response.ok||result.error)throw new Error(result.error||response.statusText);
+    }
     location.assign(setupNavigation("/setup"));
   }catch(e){
     error.textContent=window.wudictI18n.errorText(e.message);error.hidden=false;

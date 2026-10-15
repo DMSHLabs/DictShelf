@@ -211,6 +211,26 @@ func (s *Server) DesktopJSON(baseURL, method, argument string) (any, error) {
 		return s.resetGroups()
 	case "style":
 		return s.styleSnapshot(), nil
+	case "presets":
+		return s.presetPayload(), nil
+	case "reveal":
+		path, _, err := s.revealShownPath(argument)
+		if err != nil {
+			return nil, err
+		}
+		return map[string]any{"revealed": path}, nil
+	case "savePreset":
+		if len(argument) > 1<<12 {
+			return nil, errors.New("preset request is too large")
+		}
+		var request struct {
+			ID string `json:"id"`
+			On bool `json:"on"`
+		}
+		if err := json.Unmarshal([]byte(argument), &request); err != nil {
+			return nil, fmt.Errorf("bad preset request: %w", err)
+		}
+		return s.savePreset(request.ID, request.On)
 	case "saveStyle":
 		return s.desktopSaveStyle(argument), nil
 	case "deleteGroup":
@@ -258,6 +278,17 @@ func (s *Server) DesktopJSON(baseURL, method, argument string) (any, error) {
 		return s.SavePrefs(strings.NewReader(argument))
 	case "setup":
 		return s.DesktopSetup(argument)
+	case "folderSetup":
+		return s.DesktopFolderSetup(argument)
+	case "indexDefaults":
+		if len(argument) > 4096 {
+			return nil, errors.New("invalid index defaults")
+		}
+		var next indexOptions
+		if err := json.Unmarshal([]byte(argument), &next); err != nil {
+			return nil, errors.New("invalid index defaults")
+		}
+		return s.saveIndexDefaults(next)
 	case "groups":
 		return s.groupsSnapshot(), nil
 	case "userGroups":
@@ -270,6 +301,14 @@ func (s *Server) DesktopJSON(baseURL, method, argument string) (any, error) {
 		return s.aboutSnapshot(argument, base.Scheme+"://"+base.Host)
 	case "library":
 		return s.librarySnapshot()
+	case "lemmas":
+		return s.lemmaSnapshot(context.Background(), argument == "refresh"), nil
+	case "installLemma":
+		result, _, err := s.startLemmaInstall(context.Background(), argument)
+		return result, err
+	case "removeLemma":
+		result, _, err := s.removeLemma(argument)
+		return result, err
 	case "orphans":
 		return s.orphansSnapshot()
 	case "resolveOrphans":
