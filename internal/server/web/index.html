@@ -950,6 +950,8 @@ window.wudictFontScale=(function(){
   <div id="workspaceFrameLoading" class="workspace-frame-loading" role="status" aria-live="polite" hidden>{{T:panel.loading}}</div>
   <iframe id="workspaceFrame" title="{{T:panel.editFilters}}"></iframe>
 </dialog>
+{{FILTERSDIALOG}}
+{{FOLDERSDIALOG}}
 <dialog id="webDictionaryPicker" lang="{{T:locale}}" class="group-dialog panel-card" aria-label="{{T:search.dictionary}}">
   <div class="web-picker-head">
     <select id="webPickerGroup" aria-label="{{T:search.dictionary}}"></select>
@@ -3357,9 +3359,12 @@ function showWorkspaceWindow(link){
   $("workspaceFrameWindow").showModal();
   if(samePage&&workspaceFrameLoaded)frame.contentWindow.postMessage({type:"wudict-workspace-refresh"},location.origin);
 }
-for(const id of ["editFilters","editFolders","lemmaLink"]){
+for(const id of ["lemmaLink"]){
   const link=$(id);link.addEventListener("click",event=>{event.preventDefault();showWorkspaceWindow(link)});
 }
+$("editFilters").addEventListener("click",event=>{event.preventDefault();window.openFiltersDialog?.(event.currentTarget)});
+$("editFolders").addEventListener("click",event=>{event.preventDefault();window.openFoldersDialog?.(event.currentTarget)});
+window.addEventListener("wudict-folders-saved",()=>loadDicts().then(ok=>{if(ok){loadFolders();reissueIfCorpusMoved()}}));
 $("workspaceFrame").addEventListener("load",event=>{
   const frame=event.currentTarget;
   if(!frame.dataset.path)return;

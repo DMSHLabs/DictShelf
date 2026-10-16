@@ -37,6 +37,10 @@ rem ============================================================
 
 cd /d "%~dp0"
 
+taskkill /IM "wuDict2.exe" /F >nul 2>&1
+del /F /Q "wuDict2.exe"
+del /F /Q "wuDict2.exe~"
+
 rem ============================================================
 rem PATHS - what this machine has to provide. Edit here, not below.
 rem ============================================================

@@ -56,6 +56,23 @@ var setupHTML = string(webAsset(setupHTMLSrc, htmlAsset))
 var groupsHTMLSrc []byte
 var groupsHTML = webAsset(groupsHTMLSrc, htmlAsset) // the groups.ini editor (D162)
 
+//go:embed web/filters-dialog.html
+var filtersDialogHTMLSrc []byte
+var filtersDialogHTML = webAsset(filtersDialogHTMLSrc, htmlAsset)
+
+//go:embed web/filters-dialog.css
+var filtersDialogCSS []byte
+
+//go:embed web/filters-dialog.js
+var filtersDialogJS []byte
+
+//go:embed web/folders-dialog.html
+var foldersDialogHTMLSrc []byte
+var foldersDialogHTML = webAsset(foldersDialogHTMLSrc, htmlAsset)
+
+//go:embed web/folders-dialog.css
+var foldersDialogCSS []byte
+
 //go:embed web/lemmas.html
 var lemmasHTMLSrc []byte
 var lemmasHTML = webAsset(lemmasHTMLSrc, htmlAsset) // the lemma-data installer (D91)
@@ -67,6 +84,10 @@ var browseHTML = webAsset(browseHTMLSrc, htmlAsset) // the page-by-page headword
 //go:embed web/setup.css
 var setupCSSSrc []byte
 var setupCSS = webAsset(setupCSSSrc, cssAsset) // palette and controls shared by setup.html and lemmas.html
+
+//go:embed web/setup.js
+var setupJSSrc []byte
+var setupJS = webAsset(setupJSSrc, jsAsset) // folder setup page and embedded folder editor
 
 //go:embed web/workspace.css
 var workspaceCSS []byte // shared full-screen frame for the app's work surfaces
@@ -522,6 +543,12 @@ func (s *Server) basePage() []byte {
 		page = strings.ReplaceAll(page, "{{HISTORYJS}}", assetTag(historyJS))
 		page = strings.ReplaceAll(page, "{{GROUPCSS}}", assetTag(groupEditorCSS))
 		page = strings.ReplaceAll(page, "{{GROUPJS}}", assetTag(groupEditorJS))
+		filterDialog := strings.ReplaceAll(string(filtersDialogHTML), "{{FILTERSDIALOGCSS}}", assetTag(filtersDialogCSS))
+		filterDialog = strings.ReplaceAll(filterDialog, "{{FILTERSDIALOGJS}}", assetTag(filtersDialogJS))
+		page = strings.ReplaceAll(page, "{{FILTERSDIALOG}}", filterDialog)
+		foldersDialog := strings.ReplaceAll(string(foldersDialogHTML), "{{SETUPJS}}", assetTag(setupJS))
+		foldersDialog = strings.ReplaceAll(foldersDialog, "{{FOLDERSDIALOGCSS}}", assetTag(foldersDialogCSS))
+		page = strings.ReplaceAll(page, "{{FOLDERSDIALOG}}", foldersDialog)
 		page = strings.ReplaceAll(page, "{{LOOKSJS}}", assetTag(looksJS))
 		page = strings.ReplaceAll(page, "{{PICKJS}}", assetTag(pickJS))
 		page = strings.ReplaceAll(page, "{{SPEAKJS}}", assetTag(speakJS))
@@ -646,6 +673,7 @@ func setupPage(dirs []string, serving int, presetLinks string, language string) 
 	}
 	page := strings.ReplaceAll(strings.ReplaceAll(setupHTML, "{{INTRO}}", intro), "{{CSS}}", cssTag)
 	page = strings.ReplaceAll(page, "{{WORKSPACECSS}}", assetTag(workspaceCSS))
+	page = strings.ReplaceAll(page, "{{SETUPJS}}", assetTag(setupJS))
 	return strings.ReplaceAll(page, "{{PRESETS}}", presetLinks)
 }
 
