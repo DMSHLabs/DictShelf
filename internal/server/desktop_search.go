@@ -200,6 +200,15 @@ func (s *Server) DesktopJSON(baseURL, method, argument string) (any, error) {
 // JSON requests that may scan dictionary headwords.
 func (s *Server) DesktopJSONContext(ctx context.Context, baseURL, method, argument string) (any, error) {
 	switch method {
+	case "storageState":
+		exists, err := s.userStorageExists()
+		return map[string]bool{"exists": exists}, err
+	case "storageRead":
+		return s.userStorageSnapshot()
+	case "storageImport":
+		return map[string]bool{"saved": true}, s.importLegacyStorageContext(ctx, argument)
+	case "storageWrite":
+		return map[string]bool{"saved": true}, s.saveUserStorage(argument)
 	case "browseDiagnostic":
 		if len(argument) > 2048 {
 			return nil, errors.New("invalid diagnostic")

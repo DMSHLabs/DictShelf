@@ -145,5 +145,5 @@ func (s *Server) handleGroupsPage(w http.ResponseWriter, r *http.Request) {
 func (s *Server) groupsPageHTML() []byte {
 	page := bytes.ReplaceAll(groupsPage, []byte("{{PRESETS}}"), []byte(s.pagePresetLinks()))
 	page = bytes.ReplaceAll(page, []byte("{{WORKSPACECSS}}"), []byte(assetTag(workspaceCSS)))
-	return []byte(renderUI(string(page), s.reg.prefs.Language()))
+	return s.renderUserUI(string(page), s.reg.prefs.Language())
 }

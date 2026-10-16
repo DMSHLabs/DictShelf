@@ -126,12 +126,19 @@ func (s *Server) DesktopResource(method, rawURL string, requestHeaders map[strin
 		// the origin migration. Give it an inert document; application pages
 		// and APIs are served only on the in-process origin and native bridge.
 		response.header.Set("Cache-Control", "no-store")
-		if u.Path == "/" {
+		if u.Path == "/__storage-migration" {
+			response.header.Set("Content-Type", "text/html; charset=utf-8")
+			_, _ = response.Write([]byte(desktopStorageMigrationPage))
+		} else if u.Path == "/" {
 			response.header.Set("Content-Type", "text/html; charset=utf-8")
 			_, _ = response.Write([]byte("<!doctype html><html><head><meta charset=utf-8></head><body></body></html>"))
 		} else {
 			http.NotFound(response, req)
 		}
+	} else if u.Path == "/__storage-migration" {
+		response.header.Set("Content-Type", "text/html; charset=utf-8")
+		response.header.Set("Cache-Control", "no-store")
+		_, _ = response.Write([]byte(desktopStorageMigrationPage))
 	} else if page, etag, cache, ok := s.desktopPage(u.Path, u.Query()); ok {
 		response.header.Set("Content-Type", "text/html; charset=utf-8")
 		response.header.Set("Cache-Control", cache)
@@ -159,9 +166,17 @@ func (s *Server) DesktopResource(method, rawURL string, requestHeaders map[strin
 			s.serveUserCSS(response, req, strings.TrimPrefix(u.Path, "/style/"))
 		})
 	} else if strings.HasPrefix(u.Path, "/files/") {
-		s.callDesktopOperation(response, req, func() {
-			s.serveUserFile(response, req, strings.TrimPrefix(u.Path, userFileURL))
-		})
+		name := strings.TrimPrefix(u.Path, userFileURL)
+		file, info := s.openUserFile(name)
+		if file == nil {
+			http.NotFound(response, req)
+		} else {
+			defer file.Close()
+			response.header.Set("Content-Type", resolveMIME(name, "application/octet-stream"))
+			response.header.Set("X-Content-Type-Options", "nosniff")
+			response.header.Set("Cache-Control", "no-cache")
+			http.ServeContent(response, req, name, info.ModTime(), file)
+		}
 	} else {
 		// The secure WebView origin has no HTTP API fallback. Its operations
 		// must be explicitly wired to the native bridge above.
@@ -179,6 +194,17 @@ func (s *Server) DesktopResource(method, rawURL string, requestHeaders map[strin
 	}
 	return response.body.Bytes(), response.status, strings.TrimRight(header.String(), "\r\n"), true, response.file != nil
 }
+
+const desktopStorageMigrationPage = `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Starting wuDict2</title><style>
+*{box-sizing:border-box}html,body{width:100%;height:100%;margin:0}body{display:grid;place-items:center;background:#f4ecd9;color:#332c20;font:16px "Segoe UI",sans-serif}
+main{width:min(440px,calc(100% - 40px));padding:30px;border:1px solid #d3c5a7;border-radius:12px;background:#fffaf0;box-shadow:0 8px 28px #332c201a}
+h1{margin:0 0 10px;font-size:22px}p{min-height:48px;margin:0 0 22px;color:#615746;line-height:1.5}
+.track{height:12px;overflow:hidden;border-radius:8px;background:#e5dac2}.bar{width:38%;height:100%;border-radius:8px;background:#d99000;animation:move 1.4s ease-in-out infinite alternate}
+@keyframes move{from{transform:translateX(-5%)}to{transform:translateX(165%)}}@media(prefers-reduced-motion:reduce){.bar{animation:none;width:100%}}
+</style></head><body><main><h1>Starting wuDict2</h1><p id="status" role="status" aria-live="polite">Checking your saved settings…</p><div class="track" role="progressbar" aria-label="Transferring settings"><div class="bar"></div></div></main>
+<script>window.wudictMigrationStatus=function(message){var node=document.getElementById("status");if(node)node.textContent=message}</script></body></html>`
 
 func (s *Server) desktopDictionaryResource(w http.ResponseWriter, r *http.Request) {
 	rest := strings.TrimPrefix(r.URL.Path, "/res/")

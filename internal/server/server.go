@@ -472,7 +472,7 @@ func (s *Server) indexPage(disableStyle bool) ([]byte, string) {
 	if s.reg.Count() == 0 {
 		language := s.reg.prefs.Language()
 		page := setupPage(s.reg.Dirs(), 0, s.pagePresetLinks(), language)
-		return []byte(renderUI(page, language)), ""
+		return s.renderUserUI(page, language), ""
 	}
 	// "no-cache" means REVALIDATE, not "never store" - and revalidation needs
 	// something to revalidate against. Without a validator the browser had no
@@ -556,7 +556,8 @@ func (s *Server) pageFor(dayTag, nightTag, presetLinks string) ([]byte, string) 
 	s.styleMu.Lock()
 	defer s.styleMu.Unlock()
 	language := s.reg.prefs.Language()
-	key := dayTag + "\x00" + nightTag + "\x00" + presetLinks + "\x00" + language
+	storageScript, storageTag := s.userStorageBootstrap()
+	key := dayTag + "\x00" + nightTag + "\x00" + presetLinks + "\x00" + language + "\x00" + storageTag
 	if s.styledPage != nil && s.styledTag == key {
 		return s.styledPage, s.styledETag
 	}
@@ -575,7 +576,9 @@ func (s *Server) pageFor(dayTag, nightTag, presetLinks string) ([]byte, string) 
 	if nightTag != "" {
 		links += `<link rel="stylesheet" href="/style/` + appNightCSSName + `?v=` + nightTag + `" data-skin="dark">`
 	}
-	page := []byte(renderUI(strings.ReplaceAll(string(s.basePage()), "{{USERCSS}}", presetLinks+links+"\n"), language))
+	template := strings.ReplaceAll(string(s.basePage()), "{{USERCSS}}", presetLinks+links+"\n")
+	template = strings.ReplaceAll(template, "{{USERSTORAGE}}", storageScript)
+	page := []byte(renderUI(template, language))
 	s.styledTag, s.styledPage, s.styledETag = key, page, `"`+assetTag(page)+`"`
 	return s.styledPage, s.styledETag
 }
@@ -592,7 +595,7 @@ func (s *Server) handleSetupPage(w http.ResponseWriter, r *http.Request) {
 func (s *Server) setupPage() []byte {
 	language := s.reg.prefs.Language()
 	page := setupPage(s.reg.Dirs(), s.reg.UserCount(), s.pagePresetLinks(), language)
-	return []byte(renderUI(page, language))
+	return s.renderUserUI(page, language)
 }
 
 // setupPage renders the folder chooser/editor. The intro names a single
@@ -667,7 +670,7 @@ func (s *Server) lemmasPage() []byte {
 	// served in the reader's language.
 	page := bytes.ReplaceAll(lemmasHTML, []byte("{{CSS}}"), []byte(cssTag))
 	page = bytes.ReplaceAll(page, []byte("{{WORKSPACECSS}}"), []byte(assetTag(workspaceCSS)))
-	return []byte(renderUI(string(bytes.ReplaceAll(page, []byte("{{PRESETS}}"), []byte(s.pagePresetLinks()))), s.reg.prefs.Language()))
+	return s.renderUserUI(string(bytes.ReplaceAll(page, []byte("{{PRESETS}}"), []byte(s.pagePresetLinks()))), s.reg.prefs.Language())
 }
 
 func htmlEscape(s string) string {
