@@ -30,6 +30,7 @@ import (
 	webview "github.com/jchv/go-webview2"
 	"github.com/jchv/go-webview2/webviewloader"
 	"github.com/wuweidict/wudict/internal/logx"
+	"github.com/wuweidict/wudict/internal/tray"
 )
 
 var (
@@ -51,10 +52,14 @@ var (
 
 // openDesktopWindow opens the local reader on a dedicated Windows UI thread.
 // The tray keeps the main thread; WebView2 owns the locked thread below.
-func openDesktopWindow(address, appAddress string, onClose func(), desktopRequest func(context.Context, string, string) (any, error), desktopStream func(context.Context, string, string, func([]byte)) error, desktopResource desktopResourceHandler) bool {
+func openDesktopWindow(address, appAddress string, onClose func(), desktopRequest func(context.Context, string, string) (any, error), desktopStream func(context.Context, string, string, func([]byte)) error, desktopResource desktopResourceHandler, desktopOnly bool) bool {
 	version, err := webviewloader.GetInstalledVersion()
 	if err != nil || version == "" {
-		logx.Warn("WebView2 unavailable; opening the browser: %v", err)
+		if desktopOnly {
+			logx.Warn("WebView2 unavailable in listenerless desktop mode: %v", err)
+		} else {
+			logx.Warn("WebView2 unavailable; opening the browser: %v", err)
+		}
 		return false
 	}
 	profile := os.Getenv("LOCALAPPDATA")
@@ -90,11 +95,11 @@ func openDesktopWindow(address, appAddress string, onClose func(), desktopReques
 	}
 	desktopWindowStarting = true
 	desktopWindowMu.Unlock()
-	go runDesktopWindow(address, appAddress, profile, onClose, desktopRequest, desktopStream, desktopResource)
+	go runDesktopWindow(address, appAddress, profile, onClose, desktopRequest, desktopStream, desktopResource, desktopOnly)
 	return true
 }
 
-func runDesktopWindow(address, appAddress, profile string, onClose func(), desktopRequest func(context.Context, string, string) (any, error), desktopStream func(context.Context, string, string, func([]byte)) error, desktopResource desktopResourceHandler) {
+func runDesktopWindow(address, appAddress, profile string, onClose func(), desktopRequest func(context.Context, string, string) (any, error), desktopStream func(context.Context, string, string, func([]byte)) error, desktopResource desktopResourceHandler, desktopOnly bool) {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 	defer func() {
@@ -114,8 +119,14 @@ func runDesktopWindow(address, appAddress, profile string, onClose func(), deskt
 		desktopWindowMu.Lock()
 		desktopWindowStarting = false
 		desktopWindowMu.Unlock()
-		logx.Warn("WebView2 window failed; opening the browser")
-		if address != "" {
+		if desktopOnly {
+			logx.Warn("WebView2 window failed in listenerless desktop mode")
+			tray.Alert("wuDict2", "WebView2 could not create the application window.")
+			if onClose != nil {
+				onClose()
+			}
+		} else if address != "" {
+			logx.Warn("WebView2 window failed; opening the browser")
 			browserCmd(address)
 		}
 		return
@@ -140,6 +151,18 @@ func runDesktopWindow(address, appAddress, profile string, onClose func(), deskt
 		} else {
 			logx.Warn("WebView2 resource interception unavailable; using the loopback page")
 		}
+	}
+	if desktopOnly && !virtualOrigin {
+		logx.Warn("WebView2 in-process resource handling is unavailable; cannot start without a listener")
+		w.Destroy()
+		desktopWindowMu.Lock()
+		desktopWindowStarting = false
+		desktopWindowMu.Unlock()
+		tray.Alert("wuDict2", "The in-app WebView cannot serve application pages directly.")
+		if onClose != nil {
+			onClose()
+		}
+		return
 	}
 	log.Printf("WebView2 startup: in-process origin enabled=%t; initial target=%q", virtualOrigin, navigationAddress)
 	if desktopRequest != nil || desktopStream != nil {
@@ -283,7 +306,9 @@ func runDesktopWindow(address, appAddress, profile string, onClose func(), deskt
 	desktopWindowMu.Unlock()
 	w.Navigate(initialNavigationAddress)
 	log.Printf("WebView2 startup: navigation submitted")
-	go watchDesktopServer(w, local, done)
+	if !desktopOnly {
+		go watchDesktopServer(w, local, done)
+	}
 	w.Run()
 	log.Printf("WebView2 window loop returned")
 	close(done)

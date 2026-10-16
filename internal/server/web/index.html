@@ -946,7 +946,8 @@ window.wudictFontScale=(function(){
   <div id="dictSettingsSearch" class="list-search-dock" role="search" aria-label="{{T:dictUI.listSearchLabel}}"></div>
 </dialog>
 <dialog id="workspaceFrameWindow" lang="{{T:locale}}" class="group-dialog panel-card workspace-dialog workspace-frame-window" aria-label="{{T:panel.editFilters}}">
-  <iframe id="workspaceFrame" title="{{T:panel.editFilters}}" loading="lazy"></iframe>
+  <div id="workspaceFrameLoading" class="workspace-frame-loading" role="status" aria-live="polite" hidden>{{T:panel.loading}}</div>
+  <iframe id="workspaceFrame" title="{{T:panel.editFilters}}"></iframe>
 </dialog>
 <dialog id="webDictionaryPicker" lang="{{T:locale}}" class="group-dialog panel-card" aria-label="{{T:search.dictionary}}">
   <div class="web-picker-head">
@@ -3343,21 +3344,27 @@ function showDictSettings(){
 let workspaceFrameLoaded=false,workspaceReturnFocus=null;
 function showWorkspaceWindow(link){
   const frame=$("workspaceFrame"),path=new URL(link.href,location.href).pathname;
+  const samePage=frame.dataset.path===path;
   $("workspaceFrameWindow").setAttribute("aria-label",link.textContent.trim());
   frame.title=link.textContent.trim();workspaceReturnFocus=link;
-  if(frame.dataset.path!==path){
+  if(!samePage){
     const url=new URL(path,location.href);
     url.searchParams.set("wudict_dialog","1");
     if(new URLSearchParams(location.search).get("wudict_webview2")==="1")url.searchParams.set("wudict_webview2","1");
-    frame.dataset.path=path;frame.src=url.pathname+url.search;
+    frame.dataset.path=path;workspaceFrameLoaded=false;frame.style.visibility="hidden";$("workspaceFrameLoading").hidden=false;frame.src=url.pathname+url.search;
   }
   $("workspaceFrameWindow").showModal();
-  if(workspaceFrameLoaded)frame.contentWindow.postMessage({type:"wudict-workspace-refresh"},location.origin);
+  if(samePage&&workspaceFrameLoaded)frame.contentWindow.postMessage({type:"wudict-workspace-refresh"},location.origin);
 }
 for(const id of ["editFilters","editFolders","lemmaLink"]){
   const link=$(id);link.addEventListener("click",event=>{event.preventDefault();showWorkspaceWindow(link)});
 }
-$("workspaceFrame").addEventListener("load",()=>{workspaceFrameLoaded=true});
+$("workspaceFrame").addEventListener("load",event=>{
+  const frame=event.currentTarget;
+  if(!frame.dataset.path)return;
+  try{if(frame.contentWindow.location.pathname!==frame.dataset.path)return}catch(_){return}
+  workspaceFrameLoaded=true;frame.style.visibility="visible";$("workspaceFrameLoading").hidden=true;
+});
 window.addEventListener("message",event=>{
   if(event.origin!==location.origin)return;
   if(event.source===window&&event.data?.type==="wudict-folder-picked"){
@@ -3861,7 +3868,7 @@ async function showDesktopSysSettings(){
   }
   body.append(table);
 }
-$("editSysSettings").onclick=()=>window.wudictNativeShell?showSysSettings():showDesktopSysSettings();
+$("editSysSettings").onclick=()=>window.wudictAndroidShell?showSysSettings():showDesktopSysSettings();
 $("desktopSysClose").onclick=()=>$("desktopSysSettings").close();
 $("desktopSysSettings").addEventListener("close",()=>$("editSysSettings").focus());
 $("closeSysSettings").onclick=()=>$("sysSettings").close();
@@ -5104,11 +5111,11 @@ async function fetchStream(url,onMsg,signal,options){
         await window.wudictNativeCall("search",JSON.stringify(request),onMsg,signal);
         return;
       }
-      if(requestURL.pathname==="/api/dicts"&&method==="GET"&&!requestURL.searchParams.has("diagnostics")){
+      if(requestURL.pathname==="/api/dicts"&&method==="GET"){
         await window.wudictNativeCall("dicts","",onMsg,signal);
         return;
       }
-      if(requestURL.pathname==="/api/rescan"&&method==="GET"&&!requestURL.searchParams.has("diagnostics")){
+      if(requestURL.pathname==="/api/rescan"&&method==="GET"){
         await window.wudictNativeCall("rescan","",onMsg,signal);
         return;
       }
@@ -8881,7 +8888,6 @@ async function stylerOpen(subject){
   hidePanel();
   $("styler").classList.add("show");
   if(!cfgInfo)await loadConfig();
-  appearanceRead();
   document.body.classList.add("styling");
   if(!stylerLoaded){
     stylerNote(tx("panel.loading"));
@@ -8906,7 +8912,14 @@ async function stylerOpen(subject){
       stylerNote(tx("panel.readStyleFailed"));
       return;
     }
+  }else if(stylerFileRows===null){
+    // Retry a file-list read that failed on a previous open.
+    await stylerFilesLoad();
   }
+  // The desktop appearance state includes its image choices from this same
+  // file listing. Read it only after the initial list is ready, or the saved
+  // image is shown as missing and its thumbnail is omitted on the first open.
+  appearanceRead();
   // WHICH SUBJECT the reader came for. The panel has one door per subject, so
   // the sheet opens on the thing that was asked for; the head's menu is how
   // they move to another without leaving, which is what the bars used to do.

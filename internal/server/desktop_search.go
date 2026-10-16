@@ -13,7 +13,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/http/httptest"
 	"net/url"
 	"strings"
 
@@ -66,46 +65,7 @@ func (s *Server) DesktopStream(ctx context.Context, baseURL, method, query strin
 	if method == "browse" {
 		return s.desktopBrowseStream(ctx, query, emit)
 	}
-	path := ""
-	verb := http.MethodGet
-	var body io.Reader
-	switch method {
-	case "rescan":
-		path = "/api/rescan"
-	default:
-		return fmt.Errorf("unsupported desktop stream %q", method)
-	}
-	base, ok := desktopOrigin(baseURL)
-	if !ok {
-		return errors.New("invalid desktop server address")
-	}
-	base.Path, base.RawPath, base.RawQuery, base.Fragment = path, "", query, ""
-	req, err := http.NewRequestWithContext(ctx, verb, base.String(), body)
-	if err != nil {
-		return err
-	}
-	req.Host = base.Host
-	req.RemoteAddr = "127.0.0.1:0"
-	if verb == http.MethodPost {
-		req.Header.Set("Content-Type", "application/json")
-	}
-	w := &desktopStreamWriter{header: make(http.Header), emit: emit}
-	s.ServeHTTP(w, req)
-	if err := w.finish(); err != nil {
-		if method == "browse" && w.status >= 400 {
-			var failure struct {
-				Error string `json:"error"`
-			}
-			_ = json.Unmarshal(w.body.Bytes(), &failure)
-			message, _ := json.Marshal(map[string]any{"type": "error", "status": w.status, "error": failure.Error})
-			if emit != nil {
-				emit(message)
-			}
-			return nil
-		}
-		return err
-	}
-	return nil
+	return fmt.Errorf("unsupported desktop stream %q", method)
 }
 
 func (s *Server) desktopIngest(ctx context.Context, baseURL, query string, emit func([]byte)) error {
@@ -244,11 +204,14 @@ func (s *Server) DesktopJSONContext(ctx context.Context, baseURL, method, argume
 		if len(argument) > 2048 {
 			return nil, errors.New("invalid diagnostic")
 		}
-		recorder := httptest.NewRecorder()
-		request := httptest.NewRequest(http.MethodPost, "/api/browse-diagnostic", strings.NewReader(argument))
-		s.handleBrowseDiagnostic(recorder, request)
-		if recorder.Code != http.StatusNoContent {
+		var diagnostic browseDiagnostic
+		decoder := json.NewDecoder(strings.NewReader(argument))
+		decoder.DisallowUnknownFields()
+		if decoder.Decode(&diagnostic) != nil || decoder.Decode(new(any)) != io.EOF {
 			return nil, errors.New("invalid diagnostic")
+		}
+		if err := recordBrowseDiagnostic(diagnostic); err != nil {
+			return nil, err
 		}
 		return map[string]bool{"recorded": true}, nil
 	case "browseFindPage":
@@ -641,134 +604,4 @@ func (s *Server) desktopSaveStyle(argument string) desktopStyleReply {
 		return desktopStyleReply{Status: http.StatusInternalServerError, Error: "could not save style: " + err.Error()}
 	}
 	return desktopStyleReply{Status: http.StatusOK, Value: s.styleSnapshot()}
-}
-
-type desktopStreamWriter struct {
-	header    http.Header
-	status    int
-	body      bytes.Buffer
-	line      []byte
-	event     string
-	eventData []string
-	emit      func([]byte)
-}
-
-func (w *desktopStreamWriter) Header() http.Header { return w.header }
-
-func (w *desktopStreamWriter) WriteHeader(status int) {
-	if w.status == 0 {
-		w.status = status
-	}
-}
-
-func (w *desktopStreamWriter) Write(p []byte) (int, error) {
-	if w.status == 0 {
-		w.status = http.StatusOK
-	}
-	contentType := w.header.Get("Content-Type")
-	if strings.HasPrefix(contentType, "application/x-ndjson") {
-		w.writeNDJSON(p)
-		return len(p), nil
-	}
-	if strings.HasPrefix(contentType, "text/event-stream") {
-		w.writeSSE(p)
-		return len(p), nil
-	}
-	return w.body.Write(p)
-}
-
-func (w *desktopStreamWriter) writeNDJSON(p []byte) {
-	w.line = append(w.line, p...)
-	for {
-		i := bytes.IndexByte(w.line, '\n')
-		if i < 0 {
-			return
-		}
-		line := bytes.TrimSpace(w.line[:i])
-		if len(line) > 0 && w.emit != nil {
-			w.emit(bytes.Clone(line))
-		}
-		w.line = w.line[i+1:]
-	}
-}
-
-func (w *desktopStreamWriter) writeSSE(p []byte) {
-	w.line = append(w.line, p...)
-	for {
-		i := bytes.IndexByte(w.line, '\n')
-		if i < 0 {
-			return
-		}
-		line := bytes.TrimSuffix(w.line[:i], []byte{'\r'})
-		w.line = w.line[i+1:]
-		if len(line) == 0 {
-			w.emitSSE()
-			continue
-		}
-		if line[0] == ':' { // SSE comment/keepalive
-			continue
-		}
-		field, value, _ := bytes.Cut(line, []byte{':'})
-		if len(value) > 0 && value[0] == ' ' {
-			value = value[1:]
-		}
-		switch string(field) {
-		case "event":
-			w.event = string(value)
-		case "data":
-			w.eventData = append(w.eventData, string(value))
-		}
-	}
-}
-
-func (w *desktopStreamWriter) emitSSE() {
-	if len(w.eventData) == 0 {
-		w.event = ""
-		return
-	}
-	data := []byte(strings.Join(w.eventData, "\n"))
-	if !json.Valid(data) {
-		data, _ = json.Marshal(string(data))
-	}
-	if w.event == "" {
-		w.event = "message"
-	}
-	message, err := json.Marshal(struct {
-		Event string          `json:"event"`
-		Data  json.RawMessage `json:"data"`
-	}{Event: w.event, Data: data})
-	if err == nil && w.emit != nil {
-		w.emit(message)
-	}
-	w.event = ""
-	w.eventData = nil
-}
-
-func (w *desktopStreamWriter) Flush() {}
-
-func (w *desktopStreamWriter) finish() error {
-	if w.status == 0 {
-		w.status = http.StatusOK
-	}
-	switch {
-	case strings.HasPrefix(w.header.Get("Content-Type"), "application/x-ndjson"):
-		if len(bytes.TrimSpace(w.line)) > 0 && w.emit != nil {
-			w.emit(bytes.Clone(bytes.TrimSpace(w.line)))
-		}
-	case strings.HasPrefix(w.header.Get("Content-Type"), "text/event-stream"):
-		if len(w.line) > 0 {
-			w.writeSSE([]byte{'\n'})
-		}
-		w.emitSSE()
-	}
-	if w.status < 400 {
-		return nil
-	}
-	var payload struct {
-		Error string `json:"error"`
-	}
-	if json.Unmarshal(w.body.Bytes(), &payload) == nil && payload.Error != "" {
-		return errors.New(payload.Error)
-	}
-	return fmt.Errorf("request failed (HTTP %d)", w.status)
 }

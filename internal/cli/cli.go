@@ -1244,74 +1244,79 @@ func cmdServe(args []string) (err error) {
 	}
 	dict.ExcludeDir(libDir)
 
-	// Claim the port FIRST. Everything below - adopting library folders,
-	// scanning dictionaries, auto-preparing a DSL index - costs time and
-	// writes to the library, and a launch that turns out to be a duplicate
-	// must do none of it.
+	// The Windows GUI serves its WebView from Go in-process and uses the native
+	// bridge for operations, so its configured port is not opened. Browser,
+	// console, Android and explicit --no-browser launches retain HTTP mode.
+	listenerlessDesktop := gui && runtime.GOOS == "windows" && !cfg.NoBrowser
 	url := "http://" + cfg.Addr() + "/"
-	ln, lerr := net.Listen("tcp", cfg.Addr())
-	if lerr != nil {
-		// Ask who is there rather than classify the error. The test this
-		// replaces matched the string "address already in use", which is the
-		// POSIX phrasing; Windows says "Only one usage of each socket address
-		// ... is normally permitted", so a second launch there never reached
-		// this branch - it returned a raw bind error, and after DetachConsole
-		// that error had nowhere to appear at all (D76). One HTTP probe on a
-		// path that has already failed costs less than a per-OS errno table
-		// and answers the question that actually matters.
-		if inst, ok := probeRunning(cfg.Addr()); ok {
-			announceRunning(inst, url, cfg.DictDirs, !cfg.NoBrowser)
-			if gui {
-				tray.Alert("wuDict2", "wuDict2 is already running. Close it before starting another copy.")
+	var lns []net.Listener
+	var alsoURL string
+	if listenerlessDesktop {
+		logx.System("Windows WebView mode: no TCP listener; configured port %s is unused", cfg.Port)
+	} else {
+		ln, lerr := net.Listen("tcp", cfg.Addr())
+		if lerr != nil {
+			// Ask who is there rather than classify the error. The test this
+			// replaces matched the string "address already in use", which is the
+			// POSIX phrasing; Windows says "Only one usage of each socket address
+			// ... is normally permitted", so a second launch there never reached
+			// this branch - it returned a raw bind error, and after DetachConsole
+			// that error had nowhere to appear at all (D76). One HTTP probe on a
+			// path that has already failed costs less than a per-OS errno table
+			// and answers the question that actually matters.
+			if inst, ok := probeRunning(cfg.Addr()); ok {
+				announceRunning(inst, url, cfg.DictDirs, !cfg.NoBrowser)
+				if gui {
+					tray.Alert("wuDict2", "wuDict2 is already running. Close it before starting another copy.")
+					return nil
+				}
+				if !cfg.NoBrowser {
+					// With the key, when this launch has one: the instance
+					// already running was started from the same configuration,
+					// so the key that would have been ours is the key it wants.
+					// This duplicate process exits immediately; a WebView owned by it
+					// would disappear with it. Open the existing server in the browser.
+					browserCmd(browseURL(url, token))
+				}
 				return nil
 			}
-			if !cfg.NoBrowser {
-				// With the key, when this launch has one: the instance
-				// already running was started from the same configuration,
-				// so the key that would have been ours is the key it wants.
-				// This duplicate process exits immediately; a WebView owned by it
-				// would disappear with it. Open the existing server in the browser.
-				browserCmd(browseURL(url, token))
-			}
-			return nil
-		}
-		return fmt.Errorf(`cannot listen on %s: %w
+			return fmt.Errorf(`cannot listen on %s: %w
 Something else holds the port (it did not answer as a wudict).
 Hint: pick another port with --port, e.g.:  wudict --port %s
       or find what holds it:                %s`,
-			cfg.Addr(), lerr, nextPort(cfg.Port), portHolderCmd(cfg.Port))
-	}
-	defer ln.Close()
+				cfg.Addr(), lerr, nextPort(cfg.Port), portHolderCmd(cfg.Port))
+		}
+		defer ln.Close()
 
-	// The loopback companion. A bind to one concrete address is a socket on
-	// that address and nowhere else, which has two consequences the wildcard
-	// default hides. Every client that lives on this machine reaches the
-	// server through 127.0.0.1 by construction - the Android shell's WebView
-	// origin and its readiness probe, a browser extension, an old bookmark -
-	// and none of them can know what the LAN address is today. And a listener
-	// bound to a LAN address is destroyed by the kernel when that address
-	// leaves the interface: roaming out of range, or a DHCP lease coming back
-	// different, makes accept() fail with EINVAL, which Go does not classify
-	// as temporary, so Serve returns it and the program ends.
-	//
-	// So loopback is opened alongside - the one address that cannot be taken
-	// away - and it, rather than the address the user asked for, is the one
-	// whose loss ends the program. Nothing is added when the main listener
-	// already accepts there, which is every default install.
-	lns := []net.Listener{ln}
-	var alsoURL string
-	if lb := loopbackAddr(cfg.IP, cfg.Port); lb != "" {
-		if lbLn, lbErr := net.Listen("tcp", lb); lbErr != nil {
-			// Not fatal: the server the user asked for is up, and only the
-			// clients that would have come in through loopback are affected.
-			// Another wudict already holding that port is the likely reason.
-			logx.Warn("could not also listen on %s: %v", lb, lbErr)
-		} else {
-			defer lbLn.Close()
-			alsoURL = "http://" + lb + "/"
-			// First: from here on this is the essential listener, and the
-			// address that can vanish is the expendable one.
-			lns = []net.Listener{lbLn, ln}
+		// The loopback companion. A bind to one concrete address is a socket on
+		// that address and nowhere else, which has two consequences the wildcard
+		// default hides. Every client that lives on this machine reaches the
+		// server through 127.0.0.1 by construction - the Android shell's WebView
+		// origin and its readiness probe, a browser extension, an old bookmark -
+		// and none of them can know what the LAN address is today. And a listener
+		// bound to a LAN address is destroyed by the kernel when that address
+		// leaves the interface: roaming out of range, or a DHCP lease coming back
+		// different, makes accept() fail with EINVAL, which Go does not classify
+		// as temporary, so Serve returns it and the program ends.
+		//
+		// So loopback is opened alongside - the one address that cannot be taken
+		// away - and it, rather than the address the user asked for, is the one
+		// whose loss ends the program. Nothing is added when the main listener
+		// already accepts there, which is every default install.
+		lns = []net.Listener{ln}
+		if lb := loopbackAddr(cfg.IP, cfg.Port); lb != "" {
+			if lbLn, lbErr := net.Listen("tcp", lb); lbErr != nil {
+				// Not fatal: the server the user asked for is up, and only the
+				// clients that would have come in through loopback are affected.
+				// Another wudict already holding that port is the likely reason.
+				logx.Warn("could not also listen on %s: %v", lb, lbErr)
+			} else {
+				defer lbLn.Close()
+				alsoURL = "http://" + lb + "/"
+				// First: from here on this is the essential listener, and the
+				// address that can vanish is the expendable one.
+				lns = []net.Listener{lbLn, ln}
+			}
 		}
 	}
 
@@ -1453,33 +1458,45 @@ Hint: pick another port with --port, e.g.:  wudict --port %s
 	printStartup(cfg, startupInfo{
 		roots:    reg.Roots(),
 		inFolder: inFolder, fromLibrary: fromLib, prepared: len(lib),
-		total: reg.Count(), libDir: libDir, url: url, alsoURL: alsoURL,
-		speex:  speexSummary(useExternalSpeex, sxPath, sxSource),
-		keyURL: keyURL(url, token),
+		total: reg.Count(), libDir: libDir, url: url, alsoURL: alsoURL, desktop: listenerlessDesktop,
+		speex: speexSummary(useExternalSpeex, sxPath, sxSource),
+		keyURL: func() string {
+			if listenerlessDesktop {
+				return ""
+			}
+			return keyURL(url, token)
+		}(),
 	})
-	// No WriteTimeout: /api/search (NDJSON) and /api/ingest (SSE) stream for
-	// a long time - a write deadline would sever them. ReadHeaderTimeout +
-	// IdleTimeout + MaxHeaderBytes harden against slowloris without touching
-	// the streaming paths.
-	httpSrv := &http.Server{
-		Addr:              cfg.Addr(),
-		Handler:           srv,
-		ReadHeaderTimeout: 10 * time.Second,
-		IdleTimeout:       120 * time.Second,
-		MaxHeaderBytes:    1 << 20,
+	// The in-process Windows window has no HTTP server. Other launch modes
+	// keep the HTTP adapter for browsers, Android and explicit server runs.
+	var httpSrv *http.Server
+	if !listenerlessDesktop {
+		// No WriteTimeout: /api/search (NDJSON) and /api/ingest (SSE) stream for
+		// a long time - a write deadline would sever them. ReadHeaderTimeout +
+		// IdleTimeout + MaxHeaderBytes harden against slowloris without touching
+		// the streaming paths.
+		httpSrv = &http.Server{
+			Addr:              cfg.Addr(),
+			Handler:           srv,
+			ReadHeaderTimeout: 10 * time.Second,
+			IdleTimeout:       120 * time.Second,
+			MaxHeaderBytes:    1 << 20,
+		}
 	}
-	// Graceful shutdown on Ctrl-C / SIGTERM: finish in-flight requests, close
-	// database handles cleanly. One shutdown, reachable from two places - a
-	// signal and the tray's Quit item - so sync.Once, not a second code path.
+	// One stop path serves signals, the tray's Quit item and the desktop
+	// window's Exit action. The in-process window only signals its lifecycle;
+	// HTTP modes also drain active requests before returning.
 	idle := make(chan struct{})
 	var stopOnce sync.Once
 	stop := func() {
 		stopOnce.Do(func() {
-			logx.System("server shutdown requested")
+			logx.System("application shutdown requested")
 			logx.Status("\nshutting down…")
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-			_ = httpSrv.Shutdown(ctx)
+			if httpSrv != nil {
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer cancel()
+				_ = httpSrv.Shutdown(ctx)
+			}
 			close(idle)
 		})
 	}
@@ -1507,7 +1524,7 @@ Hint: pick another port with --port, e.g.:  wudict --port %s
 	}
 	desktopResource := desktopResourceHandler(srv.DesktopResource)
 	if !cfg.NoBrowser {
-		go openBrowser(browseURL(url, token), gui, stop, desktopRequest, desktopStream, desktopResource)
+		go openBrowser(browseURL(url, token), gui, stop, desktopRequest, desktopStream, desktopResource, listenerlessDesktop)
 	}
 	go func() {
 		sig := make(chan os.Signal, 1)
@@ -1517,6 +1534,10 @@ Hint: pick another port with --port, e.g.:  wudict --port %s
 	}()
 
 	serve := func() error {
+		if listenerlessDesktop {
+			<-idle
+			return nil
+		}
 		// One http.Server across every listener: Serve registers each one, so
 		// the single Shutdown above closes them all and every call returns
 		// ErrServerClosed. Only lns[0] decides the program's fate. The rest
@@ -1546,12 +1567,20 @@ Hint: pick another port with --port, e.g.:  wudict --port %s
 	// Name is left empty so the menu uses the package default, WuWeiDict -
 	// ProductName still reads "wuDict", which predates D27.
 	return tray.Wrap(tray.Config{
-		Enabled:  trayWanted,
-		Explicit: cfg.Tray != nil,
-		GUI:      gui,
-		Version:  Version,
-		URL:      url,
-		Open:     func() { openUI(browseURL(url, token), gui, stop, desktopRequest, desktopStream, desktopResource) },
+		Enabled:   trayWanted,
+		Explicit:  cfg.Tray != nil,
+		GUI:       gui,
+		InProcess: listenerlessDesktop,
+		Version:   Version,
+		URL: func() string {
+			if listenerlessDesktop {
+				return ""
+			}
+			return url
+		}(),
+		Open: func() {
+			openUI(browseURL(url, token), gui, stop, desktopRequest, desktopStream, desktopResource, listenerlessDesktop)
+		},
 		Rescan:   trayRescan(reg),
 		OpenDir:  trayOpenDir(reg.Dirs()),
 		Shutdown: stop,
@@ -1756,6 +1785,7 @@ type startupInfo struct {
 	libDir      string
 	url         string
 	alsoURL     string // the loopback companion, "" when the main bind covers it
+	desktop     bool   // the Windows WebView is in-process and has no network listener
 	speex       string
 	keyURL      string // url carrying the access key, "" when none is required
 }
@@ -1833,7 +1863,11 @@ func printStartup(cfg config.Config, in startupInfo) {
 	for _, p := range cfg.Problems {
 		fmt.Fprintf(out, "                ⚠ %s\n", p)
 	}
-	fmt.Fprintf(out, "  address       %s\n", in.url)
+	if in.desktop {
+		fmt.Fprintln(out, "  address       in-app WebView (no network listener)")
+	} else {
+		fmt.Fprintf(out, "  address       %s\n", in.url)
+	}
 	// The second address is not a detail: it is the one that keeps working
 	// when the machine changes networks, and the only one a bookmark can name.
 	if in.alsoURL != "" {
@@ -1845,13 +1879,15 @@ func printStartup(cfg config.Config, in startupInfo) {
 	// in front of it - this is a server on the public internet, with no
 	// password on it. Printed at every start, because the setting is invisible
 	// from inside the app.
-	if ip := net.ParseIP(cfg.IP); ip != nil && ip.IsUnspecified() {
-		fmt.Fprintf(out, "                open to every network this machine is on, including\n")
-		if in.keyURL == "" {
-			fmt.Fprintf(out, "                any public IPv6 address, and it asks for no password\n")
-		} else {
-			fmt.Fprintf(out, "                any public IPv6 address; the access key below is all\n")
-			fmt.Fprintf(out, "                that stands in front of it\n")
+	if !in.desktop {
+		if ip := net.ParseIP(cfg.IP); ip != nil && ip.IsUnspecified() {
+			fmt.Fprintf(out, "                open to every network this machine is on, including\n")
+			if in.keyURL == "" {
+				fmt.Fprintf(out, "                any public IPv6 address, and it asks for no password\n")
+			} else {
+				fmt.Fprintf(out, "                any public IPv6 address; the access key below is all\n")
+				fmt.Fprintf(out, "                that stands in front of it\n")
+			}
 		}
 	}
 	// The link, not the key: a key printed on its own is something the user
@@ -1880,7 +1916,9 @@ func printStartup(cfg config.Config, in startupInfo) {
 	// what to do next, when there is something to do
 	switch {
 	case in.total == 0:
-		if in.prepared > 0 && !cfg.UseCached {
+		if in.desktop {
+			fmt.Fprintf(out, "\nchoose a dictionary folder in the app window\n")
+		} else if in.prepared > 0 && !cfg.UseCached {
 			fmt.Fprintf(out, "\nopen %s - choose a dictionary folder, or use the %s already prepared\n",
 				in.url, logx.Plural(in.prepared, "dictionary", "dictionaries"))
 		} else {
@@ -1984,18 +2022,27 @@ func memLimitNote(limit int64) string {
 
 type desktopResourceHandler func(method, uri string, headers map[string]string, spill func() (io.WriteSeeker, error)) (body []byte, status int, responseHeaders string, handled bool, spilled bool)
 
-func openBrowser(url string, gui bool, onWindowClose func(), desktopRequest func(context.Context, string, string) (any, error), desktopStream func(context.Context, string, string, func([]byte)) error, desktopResource desktopResourceHandler) {
-	time.Sleep(300 * time.Millisecond) // let our own server finish binding
-	openUI(url, gui, onWindowClose, desktopRequest, desktopStream, desktopResource)
+func openBrowser(url string, gui bool, onWindowClose func(), desktopRequest func(context.Context, string, string) (any, error), desktopStream func(context.Context, string, string, func([]byte)) error, desktopResource desktopResourceHandler, desktopOnly bool) {
+	if !desktopOnly {
+		time.Sleep(300 * time.Millisecond) // let our own server finish binding
+	}
+	openUI(url, gui, onWindowClose, desktopRequest, desktopStream, desktopResource, desktopOnly)
 }
 
-func openUI(address string, gui bool, onWindowClose func(), desktopRequest func(context.Context, string, string) (any, error), desktopStream func(context.Context, string, string, func([]byte)) error, desktopResource desktopResourceHandler) {
+func openUI(address string, gui bool, onWindowClose func(), desktopRequest func(context.Context, string, string) (any, error), desktopStream func(context.Context, string, string, func([]byte)) error, desktopResource desktopResourceHandler, desktopOnly bool) {
 	if gui && runtime.GOOS == "windows" {
 		if local, err := desktopWindowURL(address); err == nil {
-			if openDesktopWindow(desktopWindowURLWithMarker(local), desktopWebViewURL(), onWindowClose, desktopRequest, desktopStream, desktopResource) {
+			if openDesktopWindow(desktopWindowURLWithMarker(local), desktopWebViewURL(), onWindowClose, desktopRequest, desktopStream, desktopResource, desktopOnly) {
 				return
 			}
 		}
+	}
+	if desktopOnly {
+		tray.Alert("wuDict2", "WebView2 could not start, so the desktop app cannot open.")
+		if onWindowClose != nil {
+			onWindowClose()
+		}
+		return
 	}
 	browserCmd(address)
 }

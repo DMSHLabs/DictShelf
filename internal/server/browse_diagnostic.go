@@ -5,6 +5,7 @@ package server
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"runtime/metrics"
@@ -130,11 +131,18 @@ func (s *Server) handleBrowseDiagnostic(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, "invalid diagnostic", http.StatusBadRequest)
 		return
 	}
+	if err := recordBrowseDiagnostic(d); err != nil {
+		http.Error(w, "invalid diagnostic", http.StatusBadRequest)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func recordBrowseDiagnostic(d browseDiagnostic) error {
 	switch d.Event {
 	case "alphabet_cache_miss", "alphabet_cache_invalid", "alphabet_cache_read_failed", "alphabet_cache_restore", "alphabet_cache_saved", "alphabet_cache_save_failed", "alphabet_progress", "alphabet_done", "alphabet_aborted", "alphabet_error", "page_request", "page_response", "page_ready", "page_fetch_failed", "render", "page_cache_saved", "page_cache_restored", "wildcard_cache_checkpoint", "wildcard_cache_complete", "wildcard_cache_restored", "wildcard_memory_start", "wildcard_memory_sample", "wildcard_memory_end", "dictionary_picker_open", "dictionary_list_client":
 	default:
-		http.Error(w, "invalid diagnostic", http.StatusBadRequest)
-		return
+		return errors.New("invalid diagnostic")
 	}
 	if len(d.Dict) > 256 || strings.ContainsAny(d.Dict, "\r\n") ||
 		!bounded(d.Page, 1_000_000) || !bounded(d.Words, 1_000_000) || !bounded(d.PageBytes, 1_000_000_000) || !bounded(d.PageJSONBytes, 100_000_000) ||
@@ -144,8 +152,7 @@ func (s *Server) handleBrowseDiagnostic(w http.ResponseWriter, r *http.Request) 
 		!bounded(d.ReadMS, 600_000) || !bounded(d.FetchMS, 600_000) || !bounded(d.TotalMS, 600_000) || !bounded(d.WordsMS, 600_000) ||
 		!bounded(d.StripBuildMS, 600_000) || !bounded(d.StripMarkMS, 600_000) || !bounded(d.Status, 599) ||
 		!bounded(d.Active, 100_000) || !bounded(d.Completed, 100_000) || !bounded(d.Dictionaries, 100_000) {
-		http.Error(w, "invalid diagnostic", http.StatusBadRequest)
-		return
+		return errors.New("invalid diagnostic")
 	}
 	if strings.HasPrefix(d.Event, "wildcard_memory_") {
 		if d.Event == "wildcard_memory_start" {
@@ -154,24 +161,21 @@ func (s *Server) handleBrowseDiagnostic(w http.ResponseWriter, r *http.Request) 
 			stopBrowseMemoryMonitor()
 		}
 		logBrowseMemory(d.Event, d.Active, d.Completed, d.Dictionaries)
-		w.WriteHeader(http.StatusNoContent)
-		return
+		return nil
 	}
 	if d.Event == "dictionary_picker_open" {
 		logx.System("dictionary_picker_diag group_fetch_ms=%d rows_render_ms=%d rows=%d total_ms=%d",
 			d.FetchMS, d.WordsMS, d.Words, d.TotalMS)
-		w.WriteHeader(http.StatusNoContent)
-		return
+		return nil
 	}
 	if d.Event == "dictionary_list_client" {
 		logx.System("dictionary_list_client dictionaries=%d begin_ms=%d first_row_ms=%d stream_ms=%d render_ms=%d",
 			d.Words, d.FetchMS, d.WordsMS, d.TotalMS, d.StripBuildMS)
-		w.WriteHeader(http.StatusNoContent)
-		return
+		return nil
 	}
 	logx.System("browse_diag event=%s dict=%q page=%d words=%d page_heap_est_bytes=%d page_json_bytes=%d cache_pages=%d cache_heap_est_bytes=%d cache_json_bytes=%d cache_stored_pages=%d cache_stored_bytes=%d total_pages=%d all_pages_heap_est_bytes=%d letters=%d bytes=%d read_ms=%d fetch_ms=%d total_ms=%d words_ms=%d strip_build_ms=%d strip_mark_ms=%d status=%d restored=%t stream_alphabet=%t",
 		d.Event, d.Dict, d.Page, d.Words, d.PageBytes, d.PageJSONBytes, d.CachePages, d.CacheBytes, d.CacheJSONBytes, d.CacheStoredPages, d.CacheStoredBytes, d.TotalPages, d.EstimatedAllPagesBytes, d.Letters, d.Bytes, d.ReadMS, d.FetchMS, d.TotalMS, d.WordsMS, d.StripBuildMS, d.StripMarkMS, d.Status, d.Restored, d.StreamAlphabet)
-	w.WriteHeader(http.StatusNoContent)
+	return nil
 }
 
 func bounded(n, max int) bool { return n >= 0 && n <= max }
