@@ -148,6 +148,12 @@ const userFileURL = "/files/"
 // requests are same-origin too.
 func (s *Server) handleUserFile(w http.ResponseWriter, r *http.Request) {
 	name := strings.TrimPrefix(r.URL.Path, userFileURL)
+	s.serveUserFile(w, r, name)
+}
+
+// serveUserFile is shared by the browser HTTP adapter and the in-process
+// WebView resource path. ServeContent preserves byte-range seeking.
+func (s *Server) serveUserFile(w http.ResponseWriter, r *http.Request, name string) {
 	p := s.userFilePath(name)
 	if p == "" {
 		http.NotFound(w, r)

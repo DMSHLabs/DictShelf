@@ -517,7 +517,7 @@ func (s *Server) handlePresetSave(w http.ResponseWriter, r *http.Request) {
 
 type presetSaveError struct {
 	status int
-	text string
+	text   string
 }
 
 func (e *presetSaveError) Error() string { return e.text }
@@ -569,6 +569,17 @@ func (s *Server) savePreset(id string, on bool) (map[string]any, error) {
 // sheet. manifest.json is state, not a stylesheet, and answers 404.
 func (s *Server) handlePresetFile(w http.ResponseWriter, r *http.Request) {
 	name := strings.TrimPrefix(r.URL.Path, "/assets/presets/")
+	b, ok := presetAsset(name)
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Content-Type", "text/css; charset=utf-8")
+	w.Header().Set("Cache-Control", "public, max-age=604800, immutable")
+	_, _ = w.Write(b)
+}
+
+func presetAsset(name string) ([]byte, bool) {
 	// Backslashes and dot-dot are rejected, not cleaned: an embedded FS is
 	// always forward-slash, and a name carrying either is a second spelling
 	// of something this route must not answer. (ContainsAny with "..\\" here
@@ -577,15 +588,11 @@ func (s *Server) handlePresetFile(w http.ResponseWriter, r *http.Request) {
 	if name == "" || name == "manifest.json" ||
 		strings.Contains(name, "..") || strings.Contains(name, `\`) ||
 		strings.Contains(name, "//") {
-		http.NotFound(w, r)
-		return
+		return nil, false
 	}
 	b, err := presetFS.ReadFile(path.Join("web", "presets", name))
 	if err != nil {
-		http.NotFound(w, r)
-		return
+		return nil, false
 	}
-	w.Header().Set("Content-Type", "text/css; charset=utf-8")
-	w.Header().Set("Cache-Control", "public, max-age=604800, immutable")
-	_, _ = w.Write(b)
+	return b, true
 }

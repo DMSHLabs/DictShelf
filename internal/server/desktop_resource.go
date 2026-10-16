@@ -6,11 +6,15 @@ package server
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
+
+	"github.com/wuweidict/wudict/internal/logx"
 )
 
 const desktopMemoryThreshold = 8 << 20
@@ -73,9 +77,8 @@ func (w *desktopResourceResponse) Write(p []byte) (int, error) {
 	return n, w.err
 }
 
-// DesktopResource serves the embedded page and asset routes to a native
-// WebView without using the loopback listener. Other requests continue through
-// the normal WebView network path until their direct bridge is in place.
+// DesktopResource adapts GET requests from the in-process WebView to Go
+// operations. Mutating operations use the native bridge rather than HTTP.
 func (s *Server) DesktopResource(method, rawURL string, requestHeaders map[string]string, spill func() (io.WriteSeeker, error)) (body []byte, status int, headers string, handled bool, spilled bool) {
 	if method != http.MethodGet {
 		return nil, 0, "", false, false
@@ -86,7 +89,8 @@ func (s *Server) DesktopResource(method, rawURL string, requestHeaders map[strin
 		return nil, 0, "", false, false
 	}
 	virtualOrigin := u.Scheme == "https" && strings.EqualFold(u.Host, "wudict2.local")
-	if !virtualOrigin && !desktopWebResourceRoute(u.Path) {
+	localDesktopOrigin := u.Scheme == "http" && u.Hostname() == "127.0.0.1"
+	if !virtualOrigin && !localDesktopOrigin && !desktopWebResourceRoute(u.Path) {
 		return nil, 0, "", false, false
 	}
 	req, err := http.NewRequest(http.MethodGet, u.String(), nil)
@@ -116,7 +120,53 @@ func (s *Server) DesktopResource(method, rawURL string, requestHeaders map[strin
 		}
 	}
 	response := newDesktopResourceResponse(spill)
-	s.ServeHTTP(response, req)
+	response.header.Set("Referrer-Policy", "no-referrer")
+	if localDesktopOrigin {
+		// The old loopback origin is used once to read browser storage during
+		// the origin migration. Give it an inert document; application pages
+		// and APIs are served only on the in-process origin and native bridge.
+		response.header.Set("Cache-Control", "no-store")
+		if u.Path == "/" {
+			response.header.Set("Content-Type", "text/html; charset=utf-8")
+			_, _ = response.Write([]byte("<!doctype html><html><head><meta charset=utf-8></head><body></body></html>"))
+		} else {
+			http.NotFound(response, req)
+		}
+	} else if page, etag, cache, ok := s.desktopPage(u.Path, u.Query()); ok {
+		response.header.Set("Content-Type", "text/html; charset=utf-8")
+		response.header.Set("Cache-Control", cache)
+		if etag != "" {
+			response.header.Set("ETag", etag)
+			http.ServeContent(response, req, "", time.Time{}, bytes.NewReader(page))
+		} else {
+			_, _ = response.Write(page)
+		}
+	} else if strings.HasPrefix(u.Path, "/res/") {
+		// Article media is already an in-process WebView request. Dispatch it
+		// to its resource operation directly; do not route through the HTTP
+		// handler or its middleware chain.
+		s.callDesktopOperation(response, req, func() { s.desktopDictionaryResource(response, req) })
+	} else if strings.HasPrefix(u.Path, "/assets/") || u.Path == "/favicon.ico" {
+		if asset, ok := desktopAsset(u.Path); ok {
+			response.header.Set("Content-Type", asset.contentType)
+			response.header.Set("Cache-Control", asset.cacheControl)
+			_, _ = response.Write(asset.body)
+		} else {
+			http.NotFound(response, req)
+		}
+	} else if strings.HasPrefix(u.Path, "/style/") {
+		s.callDesktopOperation(response, req, func() {
+			s.serveUserCSS(response, req, strings.TrimPrefix(u.Path, "/style/"))
+		})
+	} else if strings.HasPrefix(u.Path, "/files/") {
+		s.callDesktopOperation(response, req, func() {
+			s.serveUserFile(response, req, strings.TrimPrefix(u.Path, userFileURL))
+		})
+	} else {
+		// The secure WebView origin has no HTTP API fallback. Its operations
+		// must be explicitly wired to the native bridge above.
+		http.NotFound(response, req)
+	}
 	if response.err != nil {
 		return nil, 0, "", false, false
 	}
@@ -128,6 +178,51 @@ func (s *Server) DesktopResource(method, rawURL string, requestHeaders map[strin
 		return nil, 0, "", false, false
 	}
 	return response.body.Bytes(), response.status, strings.TrimRight(header.String(), "\r\n"), true, response.file != nil
+}
+
+func (s *Server) desktopDictionaryResource(w http.ResponseWriter, r *http.Request) {
+	rest := strings.TrimPrefix(r.URL.Path, "/res/")
+	id, name, ok := strings.Cut(rest, "/")
+	if !ok || name == "" {
+		httpErr(w, http.StatusBadRequest, "usage: /res/{dict}/{name}")
+		return
+	}
+	e, err := s.reg.get(id)
+	if err != nil {
+		httpErr(w, http.StatusNotFound, "%v", err)
+		return
+	}
+	s.serveDictionaryResource(w, r, e, id, name)
+}
+
+func (s *Server) callDesktopOperation(w http.ResponseWriter, r *http.Request, operation func()) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			logx.Warn("panic serving in-process resource %s: %v", r.URL.Path, recovered)
+			httpErr(w, http.StatusInternalServerError, "internal error: %v", fmt.Sprint(recovered))
+		}
+	}()
+	operation()
+}
+
+func (s *Server) desktopPage(path string, query url.Values) ([]byte, string, string, bool) {
+	switch path {
+	case "/":
+		page, etag := s.indexPage(query.Get("style") == "off")
+		return page, etag, "no-cache", true
+	case "/setup":
+		return s.setupPage(), "", "no-cache", true
+	case "/lemmas":
+		return s.lemmasPage(), "", "no-cache", true
+	case "/groups":
+		return s.groupsPageHTML(), "", "no-cache", true
+	case "/browse":
+		return s.browsePageHTML(), "", "no-cache", true
+	case "/double-tap-probe":
+		return doubleTapProbe, "", "no-store", true
+	default:
+		return nil, "", "", false
+	}
 }
 
 func desktopWebResourceRoute(path string) bool {

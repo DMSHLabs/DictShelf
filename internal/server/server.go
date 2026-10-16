@@ -454,14 +454,25 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	// be served from cache without asking: a stale index.html would ask for a
 	// stale script by its old hash and put the two out of step again (D45).
 	w.Header().Set("Cache-Control", "no-cache")
+	page, etag := s.indexPage(styleOff(r))
+	if etag == "" {
+		_, _ = w.Write(page)
+		return
+	}
+	w.Header().Set("ETag", etag)
+	http.ServeContent(w, r, "", time.Time{}, bytes.NewReader(page))
+}
+
+func (s *Server) indexPage(disableStyle bool) ([]byte, string) {
 	// first-run: no dictionaries yet → serve the setup page instead. No
 	// validator here: this body is a function of registry state that nothing
 	// versions, so an ETag would be a promise we cannot keep. The wudict
 	// howto counts: with it listed the app has something to show, and the
 	// page opens on it instead, with the way to add dictionaries on top.
 	if s.reg.Count() == 0 {
-		_, _ = io.WriteString(w, renderUI(setupPage(s.reg.Dirs(), 0, s.pagePresetLinks(), s.reg.prefs.Language()), s.reg.prefs.Language()))
-		return
+		language := s.reg.prefs.Language()
+		page := setupPage(s.reg.Dirs(), 0, s.pagePresetLinks(), language)
+		return []byte(renderUI(page, language)), ""
 	}
 	// "no-cache" means REVALIDATE, not "never store" - and revalidation needs
 	// something to revalidate against. Without a validator the browser had no
@@ -483,7 +494,7 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	// it costs no second cache entry.
 	tag, nightTag := "", ""
 	links := ""
-	if !styleOff(r) {
+	if !disableStyle {
 		tag = s.appStyleTag(appCSSName)
 		nightTag = s.appStyleTag(appNightCSSName)
 		// ?style=off drops the whole chrome, presets included: they are the
@@ -492,8 +503,7 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		links = s.presetLinksHTML()
 	}
 	page, etag := s.pageFor(tag, nightTag, links)
-	w.Header().Set("ETag", etag)
-	http.ServeContent(w, r, "", time.Time{}, bytes.NewReader(page))
+	return page, etag
 }
 
 // basePage is index.html with everything that is fixed for this process
@@ -576,7 +586,13 @@ func (s *Server) pageFor(dayTag, nightTag, presetLinks string) ([]byte, string) 
 func (s *Server) handleSetupPage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache")
-	_, _ = io.WriteString(w, renderUI(setupPage(s.reg.Dirs(), s.reg.UserCount(), s.pagePresetLinks(), s.reg.prefs.Language()), s.reg.prefs.Language()))
+	_, _ = w.Write(s.setupPage())
+}
+
+func (s *Server) setupPage() []byte {
+	language := s.reg.prefs.Language()
+	page := setupPage(s.reg.Dirs(), s.reg.UserCount(), s.pagePresetLinks(), language)
+	return []byte(renderUI(page, language))
 }
 
 // setupPage renders the folder chooser/editor. The intro names a single
@@ -641,13 +657,17 @@ var cssTag = assetTag(setupCSS)
 func (s *Server) handleLemmasPage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache")
+	_, _ = w.Write(s.lemmasPage())
+}
+
+func (s *Server) lemmasPage() []byte {
 	// {{PRESETS}} is the same courtesy setup.html gets: the app halves of the
 	// presets that asked to be on this page too (presets.go). Rendered per
 	// request rather than precomputed: the page carries {{T:…}} keys and is
 	// served in the reader's language.
 	page := bytes.ReplaceAll(lemmasHTML, []byte("{{CSS}}"), []byte(cssTag))
 	page = bytes.ReplaceAll(page, []byte("{{WORKSPACECSS}}"), []byte(assetTag(workspaceCSS)))
-	_, _ = io.WriteString(w, renderUI(string(bytes.ReplaceAll(page, []byte("{{PRESETS}}"), []byte(s.pagePresetLinks()))), s.reg.prefs.Language()))
+	return []byte(renderUI(string(bytes.ReplaceAll(page, []byte("{{PRESETS}}"), []byte(s.pagePresetLinks()))), s.reg.prefs.Language()))
 }
 
 func htmlEscape(s string) string {
@@ -1849,20 +1869,14 @@ func (s *Server) handleResource(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 404, "%v", err)
 		return
 	}
-	if s.serveOverride(w, r, e, name) {
-		return
-	}
-	d, err := e.open()
-	if err != nil {
-		httpErr(w, 500, "%v", err)
-		return
-	}
-	rc, mime, err := d.Resource(name)
-	// serving a resource is the one path that can open a handle the entry's own
-	// open() never accounts for: a prepared dictionary lazily opening its source
-	// because media.db missed. Tell the janitor, or that handle would stay until
-	// something else happened to wake it.
-	s.reg.nudge()
+	s.serveDictionaryResource(w, r, e, id, name)
+}
+
+// serveDictionaryResource applies the response protocol for a resolved
+// dictionary resource. The browser HTTP handler and the in-process WebView
+// adapter both call this after resolving the dictionary themselves.
+func (s *Server) serveDictionaryResource(w http.ResponseWriter, r *http.Request, e *entry, id, name string) {
+	source, err := s.openResource(e, name)
 	if err != nil {
 		if err == dict.ErrNotFound {
 			http.NotFound(w, r)
@@ -1871,13 +1885,21 @@ func (s *Server) handleResource(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 500, "%v", err)
 		return
 	}
-	defer func() { rc.Close() }() // closure: rc may be swapped below
+	defer func() { _ = source.reader.Close() }()
+	if source.override {
+		if m := resolveMIME(name, ""); m != "" {
+			w.Header().Set("Content-Type", m)
+		}
+		w.Header().Set("Cache-Control", "no-cache")
+		http.ServeContent(w, r, name, source.modTime, source.reader.(io.ReadSeeker))
+		return
+	}
 	isSpx := strings.HasSuffix(strings.ToLower(name), ".spx")
 	// browsers cannot play Speex: transcode .spx to WAV (in-process libspeex by
 	// default, else the external speexdec). The bytes we send are WAV, so the
 	// Content-Type is audio/wav (never the audio/ogg of the raw container).
 	if isSpx && s.canTranscodeSpx() {
-		if wav, err := s.spxToWav(id, name, rc); err == nil {
+		if wav, err := s.spxToWav(id, name, source.reader); err == nil {
 			w.Header().Set("Content-Type", "audio/wav")
 			w.Header().Set("Cache-Control", "public, max-age=86400")
 			_, _ = w.Write(wav)
@@ -1885,16 +1907,16 @@ func (s *Server) handleResource(w http.ResponseWriter, r *http.Request) {
 		} else {
 			logx.V("spx transcode %s/%s failed: %v (serving raw)", id, name, err)
 			// rc is consumed; re-open for the raw fallback
-			rc2, _, err2 := d.Resource(name)
+			rc2, _, err2 := source.dictionary.Resource(name)
 			if err2 != nil {
 				httpErr(w, 500, "%v", err2)
 				return
 			}
-			rc.Close()
-			rc = rc2
+			_ = source.reader.Close()
+			source.reader = rc2
 		}
 	}
-	if m := resolveMIME(name, mime); m != "" {
+	if m := resolveMIME(name, source.mime); m != "" {
 		w.Header().Set("Content-Type", m)
 	}
 	// A .spx that reached here could NOT be transcoded (no speexdec / failure)
@@ -1926,20 +1948,11 @@ func (s *Server) handleResource(w http.ResponseWriter, r *http.Request) {
 	// Text resources keep the copy path: they are small, some containers hand
 	// them over non-seekable anyway, and the NUL check below only applies to
 	// them.
-	if rs, ok := rc.(io.ReadSeeker); ok && !isTextResource(name) {
+	if rs, ok := source.reader.(io.ReadSeeker); ok && !isTextResource(name) {
 		http.ServeContent(w, r, name, time.Time{}, rs)
 		return
 	}
-	watch := &nulWatcher{r: rc, text: isTextResource(name)}
-	_, _ = io.Copy(w, watch)
-	if watch.seen {
-		if _, dup := s.nulSeen.LoadOrStore(id+"\x00"+name, true); !dup {
-			logx.Warn("%s%s is damaged: it contains NUL bytes and cannot parse. "+
-				"The dictionary is stored that way - wudict is serving it verbatim. "+
-				"Drop a good copy at <library folder>/res/%s to override it.",
-				logx.Dict(e.Path), name, name)
-		}
-	}
+	_ = s.copyTextResource(w, e, id, name, source.reader)
 }
 
 // isTextResource reports whether a NUL byte in this resource would be proof of

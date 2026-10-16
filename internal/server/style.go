@@ -182,6 +182,12 @@ func (s *Server) handleUserCSS(w http.ResponseWriter, r *http.Request) {
 	// and not a second URL for the same file. There are four names here, and
 	// each of them has one address.
 	name := strings.TrimPrefix(r.URL.Path, "/style/")
+	s.serveUserCSS(w, r, name)
+}
+
+// serveUserCSS is shared by the browser HTTP adapter and the in-process
+// WebView resource path.
+func (s *Server) serveUserCSS(w http.ResponseWriter, r *http.Request, name string) {
 	if !isStyleName(name) {
 		http.NotFound(w, r)
 		return

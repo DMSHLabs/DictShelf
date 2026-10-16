@@ -187,8 +187,8 @@ html[data-workspace-dialog] textarea{min-height:0;resize:none}
 const tx=window.wudictI18n.t;
 const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-const nativeCall=typeof window.wudictNativeCall==="function"?window.wudictNativeCall.bind(window):
-  wudictDialogMode&&typeof parent.wudictNativeCall==="function"?parent.wudictNativeCall.bind(parent):null;
+const nativeCall=wudictDialogMode&&typeof parent.wudictNativeCall==="function"?parent.wudictNativeCall.bind(parent):
+  typeof window.wudictNativeCall==="function"?window.wudictNativeCall.bind(window):null;
 
 /* The server owns the file and parses it; this page shows its text, sends it
    back, and says what the save produced. "saved" is the text as the textarea
