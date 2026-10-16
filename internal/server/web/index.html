@@ -24,6 +24,16 @@ if (new URLSearchParams(location.search).get('wudict_webview2') === '1') {
     link.href = target.pathname + target.search + target.hash;
   }, true);
 }
+document.addEventListener('click', function (event) {
+  if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+  var link = event.target.closest && event.target.closest('a[href]');
+  if (!link) return;
+  var target = new URL(link.href, location.href);
+  if (target.origin !== location.origin || target.pathname !== '/browse' || target.searchParams.has('browseDiagStart')) return;
+  try { if (localStorage.getItem('wudict_browse_article_diagnostics') !== '1') return; } catch (_) { return; }
+  target.searchParams.set('browseDiagStart', String(Date.now()));
+  link.href = target.pathname + target.search + target.hash;
+}, true);
 </script>
 <script>
 // An optional host background. Session storage preserves it across page reloads;
@@ -1032,6 +1042,7 @@ window.wudictFontScale=(function(){
     <label class="sys-row"><input type="checkbox" id="sysLogBase"><span class="sys-label">{{T:system.logBase}}</span></label>
     <label class="sys-row"><input type="checkbox" id="sysLogWeb"><span class="sys-label">{{T:system.logWeb}}</span></label>
     <p class="sys-hint">{{T:system.logHint}}</p>
+    <label class="sys-row"><input type="checkbox" id="sysBrowseArticleDiagnostics"><span class="sys-label">{{T:system.browseArticleDiagnostics}}</span></label>
     <label class="sys-row"><input type="checkbox" id="sysBrowseDiagnostics"><span class="sys-label">{{T:system.browseDiagnostics}}</span></label>
     <label class="sys-row"><input type="checkbox" id="sysDictionaryListDiagnostics"><span class="sys-label">{{T:system.dictionaryListDiagnostics}}</span></label>
     <label class="sys-row"><input type="checkbox" id="sysDictionaryCacheDiagnostics"><span class="sys-label">{{T:system.dictionaryCacheDiagnostics}}</span></label>
@@ -2091,6 +2102,7 @@ function dictIDByName(name){
      failed  — the stream broke: interactive anyway, with a retry
    Only partial/ready may say anything about what the collection holds. */
 let phase="boot",dictTotal=0,staleSearch=false;
+let initialURLApplied=false;
 function setPhase(p){
   if(phase===p)return;
   const wasBoot=phase==="boot";
@@ -2670,6 +2682,10 @@ function refreshDictUI(now){
   refreshLivePicker();
 }
 
+function finishDesktopStartup(){
+  if(window.wudictWindowsShell&&typeof window.wudictStartupReady==="function")window.wudictStartupReady().catch(()=>{});
+}
+
 /* Consumes the /api/dicts NDJSON stream, so search unblocks on the FIRST
    dictionary rather than the last one. Returns whether the full list arrived;
    a failure here must still leave the user with a usable page. */
@@ -2725,6 +2741,16 @@ async function loadDicts(rescan){
         }
         if(blocking){syncBootStatus();showWorkNotice('<span class="spin"></span>'+esc(readyCount()))}
         refreshDictUI();
+        if(blocking&&rows.length===1)logBrowseArticleTransition("first_dictionary_row");
+        // A Browse headword link names one dictionary in `from`. Start that
+        // article as soon as the selector has its first row; waiting for the
+        // entire collection to stream in adds no information to a scoped
+        // search, and made every Browse → article transition pay for all rows.
+        const initialParams=new URLSearchParams(location.search);
+        if(blocking&&!initialURLApplied&&initialParams.has("q")&&initialParams.has("from")){
+          initialURLApplied=true;
+          applyURL();
+        }
       }else if(msg.t==="end"){
         sawEnd=true;
       }
@@ -2736,6 +2762,7 @@ async function loadDicts(rescan){
     else if(blocking&&controller&&controller.signal.aborted)bootFailed(tx("search.bootStopped"));
     else if(blocking)bootFailed(err.message);
     else setStatus("⚠ "+esc(err.message));
+    finishDesktopStartup();
     return false;
   }finally{
     clearTimeout(watchdog);
@@ -2757,6 +2784,8 @@ async function loadDicts(rescan){
   if(listDiagnostics)sendBrowseDiagnostic({event:"dictionary_list_client",words:dicts.length,fetchMs:Math.max(0,beginMs),
     wordsMs:Math.max(0,firstRowMs),totalMs:streamMs,stripBuildMs:renderMs});
   setPhase("ready");
+  if(blocking)logBrowseArticleTransition("dictionary_list_ready");
+  finishDesktopStartup();
   clearStatus("load");
   // a search run against a half-loaded list is now answerable in full
   if(staleSearch&&lastQuery){staleSearch=false;if($("mode").value==="wildcards")maskSubmitRequested=true;doSearch()}
@@ -3553,6 +3582,7 @@ function sysPaint(state){
   $("sysLogBase").disabled=!state.logEnabled;
   $("sysLogWeb").disabled=!state.logEnabled;
   $("sysBrowseDiagnostics").checked=browseDiagnosticsEnabled();
+  $("sysBrowseArticleDiagnostics").checked=browseArticleDiagnosticsEnabled();
   $("sysDictionaryListDiagnostics").checked=dictionaryListDiagnosticsEnabled();
   $("sysDictionaryCacheDiagnostics").checked=dictionaryCacheDiagnosticsEnabled();
   $("sysFolderDiagnostics").checked=folderDiagnosticsEnabled();
@@ -3821,6 +3851,11 @@ async function showDesktopSysSettings(){
   diagnostics.addEventListener("change",()=>setBrowseDiagnostics(diagnostics.checked));
   const diagnosticsText=document.createElement("span");diagnosticsText.className="sys-label";diagnosticsText.textContent=tx("system.browseDiagnostics");
   diagnosticsLabel.append(diagnostics,diagnosticsText);body.append(diagnosticsLabel);
+  const articleDiagnosticsLabel=document.createElement("label");articleDiagnosticsLabel.className="sys-row";
+  const articleDiagnostics=document.createElement("input");articleDiagnostics.type="checkbox";articleDiagnostics.checked=browseArticleDiagnosticsEnabled();
+  articleDiagnostics.addEventListener("change",()=>setBrowseArticleDiagnostics(articleDiagnostics.checked));
+  const articleDiagnosticsText=document.createElement("span");articleDiagnosticsText.className="sys-label";articleDiagnosticsText.textContent=tx("system.browseArticleDiagnostics");
+  articleDiagnosticsLabel.append(articleDiagnostics,articleDiagnosticsText);body.append(articleDiagnosticsLabel);
   const dictionaryListLabel=document.createElement("label");dictionaryListLabel.className="sys-row";
   const dictionaryListDiagnostics=document.createElement("input");dictionaryListDiagnostics.type="checkbox";dictionaryListDiagnostics.checked=dictionaryListDiagnosticsEnabled();
   dictionaryListDiagnostics.addEventListener("change",()=>setDictionaryListDiagnostics(dictionaryListDiagnostics.checked));
@@ -3887,6 +3922,58 @@ $("sysInfo").addEventListener("change",e=>sysSwitch("info",e.target.checked));
 $("sysKey").addEventListener("change",e=>sysSwitch("key",e.target.checked));
 function browseDiagnosticsEnabled(){try{return localStorage.getItem("wudict_browse_diagnostics")==="1"}catch(_){return false}}
 function setBrowseDiagnostics(on){try{if(on)localStorage.setItem("wudict_browse_diagnostics","1");else localStorage.removeItem("wudict_browse_diagnostics")}catch(_){}}
+function browseArticleDiagnosticsEnabled(){try{return localStorage.getItem("wudict_browse_article_diagnostics")==="1"}catch(_){return false}}
+function setBrowseArticleDiagnostics(on){try{if(on)localStorage.setItem("wudict_browse_article_diagnostics","1");else localStorage.removeItem("wudict_browse_article_diagnostics")}catch(_){}}
+let browseArticleDiagContext=(()=>{
+  if(!browseArticleDiagnosticsEnabled())return null;
+  const params=new URLSearchParams(location.search),startedAt=Number(params.get("browseDiagStart"));
+  if(!params.has("browse")||!params.has("from")||!Number.isSafeInteger(startedAt)||startedAt<=0)return null;
+  return {startedAt,dict:params.get("from")||"",page:Number(params.get("browsePage"))||0,
+    searchStartedAt:0,firstResponse:false,firstArticle:false};
+})();
+function logBrowseArticleTransition(stage,durationMs=0){
+  const context=browseArticleDiagContext;
+  if(!context||!browseArticleDiagnosticsEnabled())return;
+  const payload={event:"article_transition",stage,dict:context.dict,page:context.page,
+    startedAt:context.startedAt,elapsedMs:Math.max(0,Date.now()-context.startedAt),durationMs:Math.max(0,Math.round(durationMs))};
+  if(stage==="words_click"){
+    try{sessionStorage.setItem("wudict_browse_article_return_pending",JSON.stringify({...payload,returnStartedAt:Date.now()}))}catch(_){}
+    return;
+  }
+  sendBrowseDiagnostic(payload);
+}
+if(browseArticleDiagContext){
+  sendBrowseDiagnostic({event:"storage_bootstrap",startedAt:browseArticleDiagContext.startedAt,
+    elapsedMs:Math.max(0,Date.now()-browseArticleDiagContext.startedAt),
+    stripBuildMs:Math.max(0,Math.round(window.__wudictDocumentFirstScriptMs||0)),
+    readMs:Math.max(0,Math.round(window.__wudictDocumentScriptStartMs||0)),
+    fetchMs:Math.max(0,Math.round(window.__wudictStorageBootstrapStartMs||0)),
+    wordsMs:Math.max(0,Math.round(window.__wudictI18nMarkupAtMs||0)),
+    durationMs:Math.max(0,window.__wudictStorageBootstrapMs||0),restored:!!window.__wudictStorageRestored});
+  const nav=performance.getEntriesByType("navigation")[0];
+  if(nav){
+    for(const [stage,value] of [["document_response_start",nav.responseStart],["document_response_end",nav.responseEnd]]){
+      if(value>0)logBrowseArticleTransition(stage,value);
+    }
+  }
+  addEventListener("DOMContentLoaded",()=>{
+    const entry=performance.getEntriesByType("navigation")[0];
+    if(entry?.domInteractive>0)logBrowseArticleTransition("dom_interactive",entry.domInteractive);
+    if(entry?.responseEnd>0)logBrowseArticleTransition("document_response_end",entry.responseEnd);
+    let logged=0;
+    for(const resource of performance.getEntriesByType("resource")){
+      if(logged>=40)break;
+      const path=new URL(resource.name,location.href).pathname;
+      if(!path.startsWith("/assets/")&&!path.startsWith("/style/"))continue;
+      logged++;
+      sendBrowseDiagnostic({event:"navigation_resource",startedAt:browseArticleDiagContext.startedAt,
+        resource:path,elapsedMs:Math.max(0,Date.now()-browseArticleDiagContext.startedAt),
+        fetchMs:Math.max(0,Math.round(resource.startTime)),durationMs:Math.max(0,Math.round(resource.duration)),
+        totalMs:Math.max(0,Math.round(resource.responseEnd))});
+    }
+  },{once:true});
+}
+logBrowseArticleTransition("app_script_ready");
 function dictionaryListDiagnosticsEnabled(){try{return localStorage.getItem("wudict_dictionary_list_diagnostics")==="1"}catch(_){return false}}
 function sendBrowseDiagnostic(payload){
   if(typeof window.wudictNativeCall==="function")return window.wudictNativeCall("browseDiagnostic",JSON.stringify(payload)).catch(()=>{});
@@ -3905,6 +3992,7 @@ $("sysLogEnabled").addEventListener("change",sysLogChange);
 $("sysLogBase").addEventListener("change",sysLogChange);
 $("sysLogWeb").addEventListener("change",sysLogChange);
 $("sysBrowseDiagnostics").addEventListener("change",e=>setBrowseDiagnostics(e.target.checked));
+$("sysBrowseArticleDiagnostics").addEventListener("change",e=>setBrowseArticleDiagnostics(e.target.checked));
 $("sysDictionaryListDiagnostics").addEventListener("change",e=>setDictionaryListDiagnostics(e.target.checked));
 $("sysDictionaryCacheDiagnostics").addEventListener("change",e=>setDictionaryCacheDiagnostics(e.target.checked));
 $("sysFolderDiagnostics").addEventListener("change",e=>setFolderDiagnostics(e.target.checked));
@@ -6246,6 +6334,10 @@ async function doSearch(ev){
   const signal=searchAC.signal;
   livePickerSearching=true;
   lastQuery=q;
+  if(browseArticleDiagContext&&!browseArticleDiagContext.searchStartedAt){
+    browseArticleDiagContext.searchStartedAt=performance.now();
+    logBrowseArticleTransition("search_start");
+  }
   // No "Searching…" text: the spinner alone says it, and saying it twice
   // cost a permanently reserved line above the results.
   setBusy(true);
@@ -6348,6 +6440,8 @@ async function doSearch(ev){
     await fetchStream("/api/search?q="+encodeURIComponent(q)+"&mode="+mode+"&hl="+(hlOn?1:0)+diacriticsSearchParam()+"&dict="+encodeURIComponent(dictParam)+"&n="+perDict,msg=>{
       if(seq!==searchSeq)return; // superseded by a newer search
       if(msg.t==="begin"){
+        if(browseArticleDiagContext&&browseArticleDiagContext.searchStartedAt)
+          logBrowseArticleTransition("search_stream_begin",performance.now()-browseArticleDiagContext.searchStartedAt);
         navDetach(); // the section it was walking is about to be replaced
         markedAnswer=mode==="fts"&&hlOn; // only a marked answer has anything to walk
         stale=[...out.childNodes];
@@ -6364,11 +6458,20 @@ async function doSearch(ev){
         clearStatusForResults();
         refreshLivePicker();
       }else if(msg.t==="hit"){
+        if(browseArticleDiagContext&&!browseArticleDiagContext.firstResponse){
+          browseArticleDiagContext.firstResponse=true;
+          logBrowseArticleTransition("first_search_response",performance.now()-browseArticleDiagContext.searchStartedAt);
+        }
         const box=boxes[msg.i];if(!box)return;
         // These are the same headwords the current search found in the selected
         // dictionaries and mode. Full-text hits are articles matched by body.
         if(!anyShown)clearStatusForResults();
         const res=renderSlot(box,msg,mode,q,perDict,boxes.length>1);
+        if(browseArticleDiagContext&&res.results&&!browseArticleDiagContext.firstArticle){
+          browseArticleDiagContext.firstArticle=true;
+          const sinceSearch=browseArticleDiagContext.searchStartedAt?performance.now()-browseArticleDiagContext.searchStartedAt:0;
+          requestAnimationFrame(()=>requestAnimationFrame(()=>logBrowseArticleTransition("first_article_painted",sinceSearch)));
+        }
         if(res.shown)swap(); // including the grouped line: it is this generation's first paint
         if(res.noIndex){noIdx=noIndexRow(noIdx,out,res.noIndex);noIdxCount++}
         else if(res.shown)anyShown=true;
@@ -6427,6 +6530,8 @@ async function doSearch(ev){
         const forms=[...morphSeen].join(", ");
         morphNote.textContent=tx(morphAll?"search.morphAll":"search.morphSome",{query:msg.from||q,forms});
       }else if(msg.t==="end"){
+        if(browseArticleDiagContext&&browseArticleDiagContext.searchStartedAt)
+          logBrowseArticleTransition("search_end",performance.now()-browseArticleDiagContext.searchStartedAt);
         refreshLivePicker();
         // Nothing further can resolve the frontier, so release the hold and
         // let the best answer in hand take the slot (D142). A no-op in every
@@ -7062,6 +7167,11 @@ function browseReturnFromURL(){
   }catch(_){return ""}
 }
 let browseReturn=browseReturnFromURL();
+let browseHistoryReturn=(()=>{
+  if(!browseReturn||!document.referrer)return false;
+  try{const previous=new URL(document.referrer);return previous.origin===location.origin&&previous.pathname==="/browse"}
+  catch(_){return false}
+})();
 function maskReturnFromURL(){
   const raw=new URLSearchParams(location.search).get("wildcards")||new URLSearchParams(location.search).get("mask");
   if(!raw)return "";
@@ -7073,6 +7183,11 @@ function maskReturnFromURL(){
 }
 let maskReturn=maskReturnFromURL();
 function onBackWords(e){
+  if(browseReturn&&browseArticleDiagContext)logBrowseArticleTransition("words_click",
+    browseArticleDiagContext.searchStartedAt?performance.now()-browseArticleDiagContext.searchStartedAt:0);
+  if(browseReturn&&browseHistoryReturn&&e.button===0&&!e.ctrlKey&&!e.metaKey&&!e.shiftKey&&!e.altKey){
+    e.preventDefault();history.back();return;
+  }
   if(!maskReturn||e.button!==0||e.ctrlKey||e.metaKey||e.shiftKey||e.altKey)return;
   const target=new URL(maskReturn,location.origin);
   if(!maskRestoreCached(target))return;
@@ -7325,6 +7440,7 @@ const _doSearch=doSearch;
 doSearch=function(ev){
   const record=navRecord;
   navRecord="replace"; // one-shot: only the action that asked for it pushes
+  if(record==="push")browseHistoryReturn=false;
   const r=_doSearch(ev);
   const q=$("q").value.trim();
   if(q&&record!=="none"){
@@ -8710,10 +8826,17 @@ function desktopAppearanceRequest(request){
     if(request.field==="image"){
       if(request.value&&!/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(request.value))return null;
       saved.image=request.value||"";
+      if(saved.image)saved.colorEnabled=true;
     }else if(request.field==="color"){
       if(!/^#?[0-9a-f]{6}$/i.test(request.value))return null;
       saved.color="#"+String(request.value).replace(/^#/,"");
-    }else if(request.field==="colorEnabled")saved.colorEnabled=!!request.value;
+    }else if(request.field==="colorEnabled")saved.colorEnabled=saved.image?true:!!request.value;
+    try{localStorage.setItem(key,JSON.stringify(saved))}catch(_){}
+  }
+  // Older saved appearances may have an image with Color switched off. An
+  // image always needs its sampled paper color, so normalize that state too.
+  if(saved.image&&!saved.colorEnabled){
+    saved.colorEnabled=true;
     try{localStorage.setItem(key,JSON.stringify(saved))}catch(_){}
   }
   const state={colorEnabled:!!saved.colorEnabled,color:saved.color||"#F4ECD8",
@@ -8754,6 +8877,7 @@ function appearanceRender(state){
   // every round trip and must leave the sheet showing what the reader chose.
   document.documentElement.setAttribute("data-native-appearance","");
   $("appearanceColorOn").checked=!!state.colorEnabled;
+  $("appearanceColorOn").disabled=!!state.image;
   $("appearanceColor").value=String(state.color||"").replace(/^#/,"").toUpperCase();
   colorPickSync($("appearanceColor"),$("appearanceColorPick"));
   // Tiles, left to right: None, every image in the store, then "+". A
@@ -8847,7 +8971,8 @@ function appearanceRead(){appearanceRender(appearanceRequest({action:"get"}))}
    browser has usually done that for the thumbnail already. The sequence
    guard only orders rapid taps, so an older image's color can never land
    after a newer one's. The color is applied and remembered like a typed one;
-   the on/off checkbox is deliberately left as it is. */
+   choosing an image also turns Color on and locks that switch until None is
+   selected. */
 let appearanceColorAutoSeq=0;
 async function appearanceImageChosen(name){
   if(!appearanceSet("image",name))return null;

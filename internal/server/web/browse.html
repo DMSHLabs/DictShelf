@@ -412,10 +412,80 @@ const BROWSE_PAGE_SESSION_KEY="wudict_browse_page_v1";
 let browseHeadwordControl=null;
 const BROWSE_DEBUG=new URLSearchParams(location.search).get("browse_debug")==="1";
 function browseDiagnosticsEnabled(){try{return localStorage.getItem("wudict_browse_diagnostics")==="1"}catch(_){return false}}
+function browseArticleDiagnosticsEnabled(){try{return localStorage.getItem("wudict_browse_article_diagnostics")==="1"}catch(_){return false}}
 function sendBrowseDiagnostic(payload){
   if(typeof window.wudictNativeCall==="function")return window.wudictNativeCall("browseDiagnostic",JSON.stringify(payload)).catch(()=>{});
   return fetch("/api/browse-diagnostic",{method:"POST",headers:{"Content-Type":"application/json"},keepalive:true,body:JSON.stringify(payload)}).catch(()=>{});
 }
+const browseNavContext=(()=>{
+  if(!browseArticleDiagnosticsEnabled())return null;
+  const params=new URLSearchParams(location.search),raw=Number(params.get("browseDiagStart"));
+  return {startedAt:Number.isSafeInteger(raw)&&raw>0?raw:Math.floor(performance.timeOrigin),firstPaint:false};
+})();
+function logBrowseNavigation(stage,durationMs=0,extra={}){
+  if(!browseNavContext)return;
+  sendBrowseDiagnostic({event:"browse_navigation",stage,startedAt:browseNavContext.startedAt,
+    elapsedMs:Math.max(0,Date.now()-browseNavContext.startedAt),durationMs:Math.max(0,Math.round(durationMs)),
+    dict:dictId||new URLSearchParams(location.search).get("dict")||"",page:state?.page||0,...extra});
+}
+if(browseNavContext){
+  sendBrowseDiagnostic({event:"storage_bootstrap",startedAt:browseNavContext.startedAt,
+    elapsedMs:Math.max(0,Date.now()-browseNavContext.startedAt),
+    stripBuildMs:Math.max(0,Math.round(window.__wudictDocumentFirstScriptMs||0)),
+    readMs:Math.max(0,Math.round(window.__wudictDocumentScriptStartMs||0)),
+    fetchMs:Math.max(0,Math.round(window.__wudictStorageBootstrapStartMs||0)),
+    wordsMs:Math.max(0,Math.round(window.__wudictI18nMarkupAtMs||0)),
+    durationMs:Math.max(0,window.__wudictStorageBootstrapMs||0),restored:!!window.__wudictStorageRestored});
+  const nav=performance.getEntriesByType("navigation")[0];
+  if(nav)for(const [stage,value] of [["document_response_start",nav.responseStart],["document_response_end",nav.responseEnd]]){
+    if(value>0)logBrowseNavigation(stage,value);
+  }
+  addEventListener("DOMContentLoaded",()=>{
+    const entry=performance.getEntriesByType("navigation")[0];
+    if(entry?.domInteractive>0)logBrowseNavigation("dom_interactive",entry.domInteractive);
+    if(entry?.responseEnd>0)logBrowseNavigation("document_response_end",entry.responseEnd);
+    let logged=0;
+    for(const resource of performance.getEntriesByType("resource")){
+      if(logged>=40)break;
+      const path=new URL(resource.name,location.href).pathname;
+      if(!path.startsWith("/assets/")&&!path.startsWith("/style/"))continue;
+      logged++;
+      sendBrowseDiagnostic({event:"navigation_resource",startedAt:browseNavContext.startedAt,
+        resource:path,elapsedMs:Math.max(0,Date.now()-browseNavContext.startedAt),
+        fetchMs:Math.max(0,Math.round(resource.startTime)),durationMs:Math.max(0,Math.round(resource.duration)),
+        totalMs:Math.max(0,Math.round(resource.responseEnd))});
+    }
+  },{once:true});
+  logBrowseNavigation("script_ready");
+}
+let browseReturnStartedAt=0,browseReturnOriginStart=0,browseReturnReadyLogged=false;
+const browseReturnNeedsRestore=(()=>{const params=new URLSearchParams(location.search);return params.has("y")||params.has("word")})();
+function flushArticleReturnDiagnostic(){
+  if(!browseArticleDiagnosticsEnabled())return;
+  try{
+    const key="wudict_browse_article_return_pending",payload=JSON.parse(sessionStorage.getItem(key)||"null");
+    if(payload&&payload.event==="article_transition"&&payload.stage==="words_click"){
+      sessionStorage.removeItem(key);
+      browseReturnStartedAt=Number(payload.returnStartedAt)||0;
+      browseReturnOriginStart=Number(payload.startedAt)||0;
+      browseReturnReadyLogged=false;
+      delete payload.returnStartedAt;
+      sendBrowseDiagnostic(payload);
+    }
+  }catch(_){}
+}
+function logBrowseReturn(stage,durationMs){
+  if(!browseArticleDiagnosticsEnabled()||!browseReturnStartedAt)return;
+  if(stage==="browse_return_ready"){
+    if(browseReturnReadyLogged)return;
+    browseReturnReadyLogged=true;
+  }
+  sendBrowseDiagnostic({event:"article_transition",stage,startedAt:browseReturnOriginStart,
+    elapsedMs:Math.max(0,Date.now()-browseReturnOriginStart),durationMs:Math.max(0,Math.round(durationMs??Date.now()-browseReturnStartedAt)),
+    dict:dictId,page:state?.page||0});
+}
+flushArticleReturnDiagnostic();
+logBrowseReturn("browse_return_script_ready");
 function browseTrace(step,data={}){
   let enabled=BROWSE_DEBUG;
   enabled=enabled||browseDiagnosticsEnabled();
@@ -626,6 +696,7 @@ async function show(opts,record){
     state=cached;state.mark=opts.o!=null?opts.o:state.at;
     chooserSearch?.destroy();chooserSearch=null;
     $("msg").classList.remove("chooser-list");$("msg").hidden=true;
+    if(browseNavContext&&!browseNavContext.firstPaint)logBrowseNavigation("page_cache_restored",performance.now()-started,{words:state.words.length});
     render();recordBrowsePage(state.page,record);
     if(record!=="none"){
       if(findResult&&!findFilter&&findIndex>=0)scheduleScrollToCurrentWord(seq);
@@ -659,10 +730,11 @@ async function show(opts,record){
   if(streamAlphabet)u.set("stream","1");else u.set("strip","0");
   if(browseDiagnosticsEnabled())u.set("diagnostics","1");
   browseTrace("page request",{dict:requestDictId,page:opts.p||1,streamAlphabet,letters:browseAlphabetCache.get(requestDictId)?.letters.length||0});
+  if(browseNavContext&&!browseNavContext.firstPaint)logBrowseNavigation("page_request",performance.now()-started);
   let r;
   const fetchStarted=performance.now();
-  try{r=await browseFetch("/api/browse?"+u.toString(),{signal:controller.signal});browseTrace("page response",{dict:requestDictId,status:r.status,fetchMs:Math.round(performance.now()-fetchStarted)})}
-  catch(e){clearTimeout(progressTimer);endProgress();browseTrace("page fetch failed",{status:e.name==="AbortError"?499:0,totalMs:Math.round(performance.now()-started)});if(seq===browseSeq){setBrowsePageBusy(false);if(e.name!=="AbortError")card("<b>"+tx("browse.noAnswer")+"</b><p>"+tx("browse.noAnswerBody")+"</p>")}return}
+  try{r=await browseFetch("/api/browse?"+u.toString(),{signal:controller.signal});browseTrace("page response",{dict:requestDictId,status:r.status,fetchMs:Math.round(performance.now()-fetchStarted)});if(browseNavContext&&!browseNavContext.firstPaint)logBrowseNavigation("page_response",performance.now()-fetchStarted,{status:r.status})}
+  catch(e){clearTimeout(progressTimer);endProgress();browseTrace("page fetch failed",{status:e.name==="AbortError"?499:0,totalMs:Math.round(performance.now()-started)});if(browseNavContext&&!browseNavContext.firstPaint)logBrowseNavigation("load_failed",performance.now()-started);if(seq===browseSeq){setBrowsePageBusy(false);if(e.name!=="AbortError")card("<b>"+tx("browse.noAnswer")+"</b><p>"+tx("browse.noAnswerBody")+"</p>")}return}
   if(seq!==browseSeq&&!streamAlphabet){clearTimeout(progressTimer);endProgress();return}
   if(r.status===409){clearTimeout(progressTimer);endProgress();setBrowsePageBusy(false);return unprepared(await r.json().catch(()=>({}))) }
   if(!r.ok){const j=await r.json().catch(()=>({}));
@@ -730,6 +802,7 @@ async function show(opts,record){
           if(browseAlphabetTask?.controller!==controller||browseAlphabetTask.dictId!==requestDictId)continue;
           const complete=browseAlphabetPartial.get(requestDictId)||[];
           browseTrace("alphabet done",{words:event.total||0,letters:complete.length,totalMs:Math.round(performance.now()-alphabetStarted)});
+          if(browseNavContext)logBrowseNavigation("alphabet_ready",performance.now()-alphabetStarted,{words:event.total||0});
           saveBrowseAlphabet(requestDictId,event.total,complete.slice());browseAlphabetPartial.delete(requestDictId);
           if(state&&state.dict===requestDictId){state.alphabet=complete;render()}
           if(state&&state.dict===requestDictId)prefetchNextBrowsePage(state);
@@ -1015,7 +1088,7 @@ function toggleFindFilter(){
   render();
 }
 
-function browseReturnURL(){
+function browseReturnURL(targetWord=""){
   const url=new URL(location.href);
   const query=$("findInput").value.trim();
   if(query){
@@ -1024,8 +1097,24 @@ function browseReturnURL(){
     if(findMask)url.searchParams.set("wildcards","1");
     if(findResult){url.searchParams.set("fp",String(findFilter?findFilterPage:findResult.page));url.searchParams.set("fi",String(Math.max(0,findIndex)))}
   }
-  url.searchParams.set("y",String(Math.round(scrollY)));
+  url.searchParams.set("y",String(Math.round($("list").parentElement.scrollTop)));
+  if(targetWord)url.searchParams.set("word",targetWord);
   return url.pathname+url.search;
+}
+
+function restoreBrowsePosition(targetWord,scrollTop){
+  const restoreStarted=performance.now();
+  requestAnimationFrame(()=>{
+    const viewport=$("list").parentElement;
+    const target=targetWord?[...$("list").querySelectorAll("a")].find(link=>link.textContent===targetWord):null;
+    if(!target)viewport.scrollTop=scrollTop;
+    else{
+      const view=viewport.getBoundingClientRect(),item=target.getBoundingClientRect();
+      viewport.scrollTop+=item.top-view.top-(viewport.clientHeight-item.height)/2;
+    }
+    logBrowseReturn("browse_return_ready");
+    if(browseReturnStartedAt)logBrowseReturn("browse_return_restore_position",performance.now()-restoreStarted);
+  });
 }
 
 function browsePageKey(dict,page){return dict+"|"+page}
@@ -1215,6 +1304,15 @@ function render(){
   browseTrace("render",{dict:d.dict,page:d.page,words:words.length,letters:d.alphabet.length,
     wordsMs:Math.round(wordsReady-renderStarted),stripBuildMs:Math.round(stripBuilt-stripStarted),
     stripMarkMs:Math.round(stripReady-stripBuilt),totalMs:Math.round(performance.now()-renderStarted)});
+  if(browseNavContext&&!browseNavContext.firstPaint){
+    browseNavContext.firstPaint=true;
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{
+      logBrowseNavigation("first_words_painted",performance.now()-renderStarted,{words:words.length});
+      logBrowseNavigation("page_ready",performance.now(),{words:words.length});
+      logBrowseReturn("browse_return_page_ready");
+      if(browseReturnStartedAt&&!browseReturnNeedsRestore)logBrowseReturn("browse_return_ready");
+    }));
+  }
 }
 
 function turn(where){
@@ -1247,6 +1345,7 @@ async function unprepared(){
 async function chooser(){
   const chooserStarted=performance.now();
   browseTrace("chooser start");
+  logBrowseNavigation("chooser_request");
   const heading='<div class="chooser-head"><b>'+tx("browse.choose")+'</b><button type="button" id="closeBrowseChooser" aria-label="'+tx("pages.close")+'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><p class="chooser-hint">'+tx("browse.chooseHint")+'</p>';
   card(heading);
   let text="",ds=[];
@@ -1261,13 +1360,15 @@ async function chooser(){
       ]);
       ds=rows;
       browseTrace("chooser response",{status:200,fetchMs:Math.round(performance.now()-chooserStarted)});
+      logBrowseNavigation("chooser_response",performance.now()-chooserStarted,{status:200,words:ds.length});
     }else{
       const [response,prefsResponse]=await Promise.all([fetch("/api/dicts"),fetch("/api/prefs")]);
       browseTrace("chooser response",{status:response.status,fetchMs:Math.round(performance.now()-chooserStarted)});
+      logBrowseNavigation("chooser_response",performance.now()-chooserStarted,{status:response.status});
       if(!response.ok||!prefsResponse.ok)throw new Error("load");
       [text,prefs]=await Promise.all([response.text(),prefsResponse.json()]);
     }
-  }catch(e){browseTrace("chooser failed",{totalMs:Math.round(performance.now()-chooserStarted)});endProgress();return card(heading+"<b>"+tx("browse.noAnswer")+"</b><p>"+tx("browse.loadFailed")+"</p>")}
+  }catch(e){browseTrace("chooser failed",{totalMs:Math.round(performance.now()-chooserStarted)});logBrowseNavigation("load_failed",performance.now()-chooserStarted);endProgress();return card(heading+"<b>"+tx("browse.noAnswer")+"</b><p>"+tx("browse.loadFailed")+"</p>")}
   endProgress();
   if(typeof window.wudictNativeCall!=="function"){
     for(const line of text.split("\n")){
@@ -1303,6 +1404,7 @@ async function chooser(){
     ds.map(d=>'<a href="?dict='+encodeURIComponent(d.id)+'&chooser=1"><span class="pick-name">'+esc(d.name||d.id)+'</span>'+
       (d.entries?'<span class="pick-count">'+tx("browse.entries",{count:d.entries,number:num(d.entries)})+"</span>":"")+"</a>").join("")+"</div>"+
     '<div class="list-search-dock" role="search"></div>',true);
+  requestAnimationFrame(()=>requestAnimationFrame(()=>logBrowseNavigation("chooser_ready",performance.now()-chooserStarted,{words:ds.length})));
   const picks=$("msg").querySelector(".picks");
   chooserSearch=window.wudictListSearch.create({
     root:picks,itemSelector:"a",dock:$("msg").querySelector(".list-search-dock"),
@@ -1325,12 +1427,32 @@ function keepWebView2Mode(target){
 document.addEventListener("click",e=>{
   const link=e.target.closest("a[href]");
   if(link)link.href=keepWebView2Mode(link.href);
+  if(link&&e.button===0&&!e.ctrlKey&&!e.metaKey&&!e.shiftKey&&!e.altKey&&browseArticleDiagnosticsEnabled()){
+    const target=new URL(link.href,location.href);
+    if(target.origin===location.origin&&target.pathname==="/browse"&&target.searchParams.has("dict")&&!target.searchParams.has("browseDiagStart")){
+      target.searchParams.set("browseDiagStart",String(Date.now()));
+      link.href=target.pathname+target.search+target.hash;
+    }
+  }
   const wordLink=e.target.closest(".words a");
   if(wordLink){
     saveBrowsePage();
     saveBrowseFind();
     const url=new URL(wordLink.href);
-    url.searchParams.set("browse",browseReturnURL());
+    let returnTo=browseReturnURL(url.searchParams.get("q")||"");
+    if(browseArticleDiagnosticsEnabled()){
+      const startedAt=String(Date.now()),returnURLObj=new URL(returnTo,location.href);
+      url.searchParams.set("browseDiagStart",startedAt);
+      url.searchParams.set("browsePage",String(state?.page||0));
+      returnURLObj.searchParams.set("browseDiagStart",startedAt);
+      returnURLObj.searchParams.set("browsePage",String(state?.page||0));
+      returnTo=returnURLObj.pathname+returnURLObj.search;
+    }
+    url.searchParams.set("browse",returnTo);
+    // Make the prior history entry carry the target as well. If returning from
+    // the article can use WebView/browser history, Browse restores this exact
+    // word and scroll position without constructing another return URL.
+    history.replaceState(history.state,"",returnTo);
     wordLink.href=url.pathname+url.search;
     return;
   }
@@ -1400,7 +1522,13 @@ addEventListener("popstate",()=>{
       const page=Math.max(1,Number(p.get("fp"))||1),index=Math.max(0,Number(p.get("fi"))||0);
       if(!restoreBrowseFind(query,page,index))await fetchFound(page,index,"none");
     }
-    if(p.has("y"))scrollTo(0,Math.max(0,Number(p.get("y"))||0));
+    if(p.has("y")||p.has("word"))restoreBrowsePosition(p.get("word")||"",Math.max(0,Number(p.get("y"))||0));
   });
 })();
+addEventListener("pageshow",event=>{
+  if(!event.persisted||!browseArticleDiagnosticsEnabled())return;
+  flushArticleReturnDiagnostic();
+  logBrowseReturn("browse_return_bfcache");
+  requestAnimationFrame(()=>requestAnimationFrame(()=>logBrowseReturn("browse_return_ready")));
+});
 </script>

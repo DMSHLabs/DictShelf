@@ -30,6 +30,7 @@ import (
 	"github.com/jchv/go-webview2/webviewloader"
 	"github.com/wuweidict/wudict/internal/logx"
 	"github.com/wuweidict/wudict/internal/tray"
+	"golang.org/x/sys/windows/registry"
 )
 
 var (
@@ -110,10 +111,13 @@ func runDesktopWindow(address, appAddress, profile string, onClose func(), deskt
 		}
 	}()
 	log.Printf("WebView2 startup: creating window; profile=%q", profile)
+	initialColor, customCaptionColor := desktopInitialWindowColors(desktopRequest)
+	webviewStarted := time.Now()
 	w := webview.NewWithOptions(webview.WebViewOptions{
-		DataPath:      profile,
-		AutoFocus:     true,
-		WindowOptions: webview.WindowOptions{Title: "wuDict2", Width: 1120, Height: 820, IconId: 101, Center: true},
+		DataPath:  profile,
+		AutoFocus: true,
+		WindowOptions: webview.WindowOptions{Title: "wuDict2", Width: 1120, Height: 820, IconId: 101, Center: true,
+			BackgroundColor: initialColor, CaptionColor: customCaptionColor, StartupSplash: true},
 	})
 	if w == nil {
 		log.Printf("WebView2 startup: window creation returned nil")
@@ -132,7 +136,18 @@ func runDesktopWindow(address, appAddress, profile string, onClose func(), deskt
 		}
 		return
 	}
-	log.Printf("WebView2 startup: window created")
+	log.Printf("WebView2 startup: window and runtime initialized in %s", time.Since(webviewStarted).Round(time.Millisecond))
+	w.Init(`window.__wudictDocumentFirstScriptMs=performance.now()`)
+	if err := w.Bind("wudictStartupReady", func() error {
+		log.Printf("WebView2 startup: application ready")
+		w.Dispatch(func() { webview.HideStartupSplash(w) })
+		return nil
+	}); err != nil {
+		log.Printf("WebView2 startup: could not bind splash transition: %v", err)
+	}
+	time.AfterFunc(30*time.Second, func() {
+		w.Dispatch(func() { webview.HideStartupSplash(w) })
+	})
 	local, _ := url.Parse(address)
 	app, _ := url.Parse(appAddress)
 	log.Printf("WebView2 startup: parsed app and loopback origins")
@@ -143,6 +158,7 @@ func runDesktopWindow(address, appAddress, profile string, onClose func(), deskt
 		if resourceView, ok := w.(webview.WebResourceView); ok {
 			filter := local.Scheme + "://" + local.Host + "/*"
 			filter += "|" + app.Scheme + "://" + app.Host + "/*"
+			filter += "|" + legacyDesktopWebViewOrigin + "/*"
 			if err := resourceView.SetWebResourceRequestedHandler(filter, webview.WebResourceHandler(desktopResource)); err != nil {
 				logx.Warn("WebView2 resource interception unavailable; using the loopback page: %v", err)
 			} else {
@@ -215,7 +231,7 @@ func runDesktopWindow(address, appAddress, profile string, onClose func(), deskt
 		setDesktopCaptionColor(uintptr(w.Window()), color)
 		return nil
 	})
-	w.Init(`document.addEventListener('click',function(event){
+	w.Init(`window.__wudictDocumentScriptStartMs=performance.now();document.addEventListener('click',function(event){
   var a=event.target&&event.target.closest&&event.target.closest('a[href]');
   if(!a)return;
   try { var u=new URL(a.href); if((u.protocol==='http:'||u.protocol==='https:')&&u.origin!==location.origin){
@@ -307,7 +323,7 @@ func runDesktopWindow(address, appAddress, profile string, onClose func(), deskt
 			}
 			exportOrigin := oldOrigin
 			if markerExists {
-				exportOrigin = app.Scheme + "://" + app.Host
+				exportOrigin = legacyDesktopWebViewOrigin
 			}
 			w.Init(desktopStorageExportScript(exportOrigin))
 			if !markerExists {
@@ -328,6 +344,9 @@ func runDesktopWindow(address, appAddress, profile string, onClose func(), deskt
 				initialNavigationAddress = migrationURL.String()
 			}
 		}
+	}
+	if storageMigrationPending {
+		webview.HideStartupSplash(w)
 	}
 	log.Printf("WebView2 startup: navigating to %q; localStorage migration=%t", initialNavigationAddress, storageMigrationPending)
 	desktopWindowMu.Lock()
@@ -351,6 +370,63 @@ func runDesktopWindow(address, appAddress, profile string, onClose func(), deskt
 	if onClose != nil {
 		onClose()
 	}
+}
+
+// desktopInitialWindowColors reads the durable appearance before WebView2
+// creates a visible window. This lets the native window and WebView blank
+// surface use the same paper while the runtime and first page initialize.
+func desktopInitialWindowColors(request func(context.Context, string, string) (any, error)) (background, caption string) {
+	dark := windowsPrefersDark()
+	if request != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+		defer cancel()
+		if value, err := request(ctx, "storageRead", ""); err == nil {
+			if values, ok := value.(map[string]string); ok {
+				switch values["wudict_theme"] {
+				case "dark":
+					dark = true
+				case "light":
+					dark = false
+				}
+				key := "wudict_desktop_appearance_light"
+				if dark {
+					key = "wudict_desktop_appearance_dark"
+				}
+				var appearance struct {
+					ColorEnabled bool   `json:"colorEnabled"`
+					Color        string `json:"color"`
+					Image        string `json:"image"`
+				}
+				if json.Unmarshal([]byte(values[key]), &appearance) == nil &&
+					(appearance.Image != "" || appearance.ColorEnabled) && validWindowHexColor(appearance.Color) {
+					return strings.ToUpper(appearance.Color), strings.ToUpper(appearance.Color)
+				}
+			}
+		}
+	}
+	if dark {
+		return "#191A1C", ""
+	}
+	return "#FBFAF8", ""
+}
+
+func validWindowHexColor(value string) bool {
+	if len(value) != 7 || value[0] != '#' {
+		return false
+	}
+	_, err := strconv.ParseUint(value[1:], 16, 24)
+	return err == nil
+}
+
+func windowsPrefersDark() bool {
+	key, err := registry.OpenKey(registry.CURRENT_USER,
+		`Software\Microsoft\Windows\CurrentVersion\Themes\Personalize`, registry.QUERY_VALUE)
+	if err != nil {
+		return false
+	}
+	defer key.Close()
+	value, _, err := key.GetIntegerValue("AppsUseLightTheme")
+	return err == nil && value == 0
 }
 
 // setDesktopCaptionColor applies the app's chosen window paper to the native

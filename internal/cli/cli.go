@@ -2048,8 +2048,10 @@ func openUI(address string, gui bool, onWindowClose func(), desktopRequest func(
 }
 
 func desktopWebViewURL() string {
-	return "https://wudict2.local/?wudict_webview2=1"
+	return "https://wudict2.localhost/?wudict_webview2=1"
 }
+
+const legacyDesktopWebViewOrigin = "https://wudict2.local"
 
 func desktopWindowURL(address string) (string, error) {
 	u, err := url.Parse(address)

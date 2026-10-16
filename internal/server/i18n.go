@@ -112,6 +112,7 @@ func renderUI(page, code string) string {
 	})
 	boot, _ := json.Marshal(map[string]any{"language": code, "messages": uiCatalogs[code], "fallback": uiCatalogs["en"]})
 	assets := `<script id="wudict-i18n" type="application/json">` + string(boot) + `</script>` +
+		`<script>window.__wudictI18nMarkupAtMs=performance.now()</script>` +
 		`<script src="/assets/i18n.js?v=` + assetTag(i18nJS) + `"></script>` +
 		`<link rel="stylesheet" href="/assets/i18n.css?v=` + assetTag(i18nCSS) + `">`
 	assets += `<script defer src="/assets/work-progress.js?v=` + assetTag(workProgressJS) + `"></script>`

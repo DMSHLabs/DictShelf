@@ -32,6 +32,9 @@ type Chromium struct {
 
 	// Settings
 	DataPath string
+	// InitialBackgroundColor is applied before the first navigation so the
+	// embedded surface never flashes white while the app page is loading.
+	InitialBackgroundColor *COREWEBVIEW2_COLOR
 
 	// permissions
 	permissions      map[CoreWebView2PermissionKind]CoreWebView2PermissionState
@@ -222,6 +225,13 @@ func (e *Chromium) CreateCoreWebView2ControllerCompleted(res uintptr, controller
 	)
 
 	_ = e.controller.AddAcceleratorKeyPressed(e.acceleratorKeyPressed, &token)
+	if e.InitialBackgroundColor != nil {
+		if controller2 := controller.GetICoreWebView2Controller2(); controller2 != nil {
+			if err := controller2.PutDefaultBackgroundColor(*e.InitialBackgroundColor); err != nil {
+				log.Printf("Could not set WebView2 initial background color: %v", err)
+			}
+		}
+	}
 
 	atomic.StoreUintptr(&e.inited, 1)
 

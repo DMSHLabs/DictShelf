@@ -8,6 +8,7 @@ import (
 	"errors"
 	"io"
 	"log"
+	"math"
 	"net/http"
 	"reflect"
 	"strconv"
@@ -50,23 +51,108 @@ type browser interface {
 }
 
 type webview struct {
-	hwnd       uintptr
-	mainthread uintptr
-	browser    browser
-	autofocus  bool
-	maxsz      w32.Point
-	minsz      w32.Point
-	m          sync.Mutex
-	bindings   map[string]interface{}
-	dispatchq  []func()
+	hwnd          uintptr
+	mainthread    uintptr
+	browser       browser
+	autofocus     bool
+	maxsz         w32.Point
+	minsz         w32.Point
+	m             sync.Mutex
+	bindings      map[string]interface{}
+	dispatchq     []func()
+	startupSplash uintptr
 }
 
 type WindowOptions struct {
-	Title  string
-	Width  uint
-	Height uint
-	IconId uint
-	Center bool
+	Title           string
+	Width           uint
+	Height          uint
+	IconId          uint
+	Center          bool
+	BackgroundColor string // CSS #RRGGBB for the initial client surface
+	CaptionColor    string // CSS #RRGGBB; empty uses the Windows default
+	StartupSplash   bool   // paints a native loading screen while WebView2 initializes
+}
+
+var (
+	webviewGDI32           = windows.NewLazySystemDLL("gdi32.dll")
+	createBrush            = webviewGDI32.NewProc("CreateSolidBrush")
+	deleteObject           = webviewGDI32.NewProc("DeleteObject")
+	webviewUser32          = windows.NewLazySystemDLL("user32.dll")
+	webviewDWM             = windows.NewLazySystemDLL("dwmapi.dll")
+	dwmSetAttr             = webviewDWM.NewProc("DwmSetWindowAttribute")
+	webviewGDI             = windows.NewLazySystemDLL("gdi32.dll")
+	createPen              = webviewGDI.NewProc("CreatePen")
+	selectObject           = webviewGDI.NewProc("SelectObject")
+	moveToEx               = webviewGDI.NewProc("MoveToEx")
+	lineTo                 = webviewGDI.NewProc("LineTo")
+	createCompatibleDC     = webviewGDI.NewProc("CreateCompatibleDC")
+	createCompatibleBitmap = webviewGDI.NewProc("CreateCompatibleBitmap")
+	bitBlt                 = webviewGDI.NewProc("BitBlt")
+	deleteDC               = webviewGDI.NewProc("DeleteDC")
+	beginPaint             = webviewUser32.NewProc("BeginPaint")
+	endPaint               = webviewUser32.NewProc("EndPaint")
+	getClientRect          = webviewUser32.NewProc("GetClientRect")
+	invalidateRect         = webviewUser32.NewProc("InvalidateRect")
+	setTimer               = webviewUser32.NewProc("SetTimer")
+	killTimer              = webviewUser32.NewProc("KillTimer")
+	setWindowPos           = webviewUser32.NewProc("SetWindowPos")
+	createFont             = webviewGDI.NewProc("CreateFontW")
+	setTextColor           = webviewGDI.NewProc("SetTextColor")
+	setBkMode              = webviewGDI.NewProc("SetBkMode")
+	fillRect               = webviewUser32.NewProc("FillRect")
+	drawText               = webviewUser32.NewProc("DrawTextW")
+	startupSplashClassOnce sync.Once
+	startupSplashClassName = "wudict2-startup-splash"
+	startupSplashes        = map[uintptr]*startupSplashState{}
+	windowBackgroundBrush  uintptr
+)
+
+type paintStruct struct {
+	HDC       windows.Handle
+	Erase     int32
+	Paint     w32.Rect
+	Restore   int32
+	IncUpdate int32
+	Reserved  [32]byte
+}
+
+type startupSplashState struct {
+	background uint32
+	foreground uint32
+	phase      float64
+}
+
+func parseWindowColor(value string) (r, g, b uint8, ok bool) {
+	if len(value) != 7 || value[0] != '#' {
+		return 0, 0, 0, false
+	}
+	raw, err := strconv.ParseUint(value[1:], 16, 24)
+	if err != nil {
+		return 0, 0, 0, false
+	}
+	return uint8(raw >> 16), uint8(raw >> 8), uint8(raw), true
+}
+
+func windowColorRef(r, g, b uint8) uintptr {
+	return uintptr(uint32(r) | uint32(g)<<8 | uint32(b)<<16)
+}
+
+func setCaptionColor(hwnd uintptr, value string) {
+	if hwnd == 0 {
+		return
+	}
+	caption, text := uint32(0xFFFFFFFF), uint32(0xFFFFFFFF)
+	if r, g, b, ok := parseWindowColor(value); ok {
+		caption = uint32(windowColorRef(r, g, b))
+		if 299*uint32(r)+587*uint32(g)+114*uint32(b) >= 128000 {
+			text = 0
+		} else {
+			text = 0x00FFFFFF
+		}
+	}
+	_, _, _ = dwmSetAttr.Call(hwnd, 35, uintptr(unsafe.Pointer(&caption)), unsafe.Sizeof(caption))
+	_, _, _ = dwmSetAttr.Call(hwnd, 36, uintptr(unsafe.Pointer(&text)), unsafe.Sizeof(text))
 }
 
 type WebViewOptions struct {
@@ -105,6 +191,9 @@ func NewWithOptions(options WebViewOptions) WebView {
 	chromium := edge.NewChromium()
 	chromium.MessageCallback = w.msgcb
 	chromium.DataPath = options.DataPath
+	if r, g, b, ok := parseWindowColor(options.WindowOptions.BackgroundColor); ok {
+		chromium.InitialBackgroundColor = &edge.COREWEBVIEW2_COLOR{A: 255, R: r, G: g, B: b}
+	}
 	chromium.SetPermission(edge.CoreWebView2PermissionKindClipboardRead, edge.CoreWebView2PermissionStateAllow)
 
 	w.browser = chromium
@@ -338,7 +427,15 @@ func wndproc(hwnd, msg, wp, lp uintptr) uintptr {
 			r, _, _ := w32.User32DefWindowProcW.Call(hwnd, msg, wp, lp)
 			return r
 		case w32.WMSize:
-			w.browser.Resize()
+			if w.browser != nil {
+				w.browser.Resize()
+			}
+			if w.startupSplash != 0 {
+				var rect w32.Rect
+				_, _, _ = getClientRect.Call(hwnd, uintptr(unsafe.Pointer(&rect)))
+				_, _, _ = setWindowPos.Call(w.startupSplash, 0, 0, 0,
+					uintptr(rect.Right-rect.Left), uintptr(rect.Bottom-rect.Top), 0x0010)
+			}
 		case w32.WMActivate:
 			if wp == w32.WAInactive {
 				break
@@ -367,6 +464,125 @@ func wndproc(hwnd, msg, wp, lp uintptr) uintptr {
 	}
 	r, _, _ := w32.User32DefWindowProcW.Call(hwnd, msg, wp, lp)
 	return r
+}
+
+func registerStartupSplashClass() {
+	startupSplashClassOnce.Do(func() {
+		name, _ := windows.UTF16PtrFromString(startupSplashClassName)
+		var instance windows.Handle
+		_ = windows.GetModuleHandleEx(0, nil, &instance)
+		wc := w32.WndClassExW{CbSize: uint32(unsafe.Sizeof(w32.WndClassExW{})),
+			HInstance: instance, LpfnWndProc: windows.NewCallback(startupSplashWndProc), LpszClassName: name}
+		_, _, _ = w32.User32RegisterClassExW.Call(uintptr(unsafe.Pointer(&wc)))
+	})
+}
+
+func createStartupSplash(parent uintptr, background string) uintptr {
+	registerStartupSplashClass()
+	r, g, b, ok := parseWindowColor(background)
+	if !ok {
+		return 0
+	}
+	color := uint32(windowColorRef(r, g, b))
+	foreground := uint32(0x00201A12)
+	if 299*uint32(r)+587*uint32(g)+114*uint32(b) < 128000 {
+		foreground = 0x00F4EEE4
+	}
+	var rect w32.Rect
+	_, _, _ = getClientRect.Call(parent, uintptr(unsafe.Pointer(&rect)))
+	className, _ := windows.UTF16PtrFromString(startupSplashClassName)
+	var instance windows.Handle
+	_ = windows.GetModuleHandleEx(0, nil, &instance)
+	hwnd, _, _ := w32.User32CreateWindowExW.Call(0, uintptr(unsafe.Pointer(className)), 0,
+		0x40000000, 0, 0, uintptr(rect.Right-rect.Left), uintptr(rect.Bottom-rect.Top),
+		parent, 0, uintptr(instance), 0) // WS_CHILD; shown after its paint state is registered.
+	if hwnd == 0 {
+		return 0
+	}
+	startupSplashes[hwnd] = &startupSplashState{background: color, foreground: foreground}
+	setTimer.Call(hwnd, 1, 70, 0)
+	_, _, _ = w32.User32ShowWindow.Call(hwnd, w32.SWShow)
+	return hwnd
+}
+
+func startupSplashWndProc(hwnd, msg, wp, lp uintptr) uintptr {
+	state := startupSplashes[hwnd]
+	switch msg {
+	case 0x000F: // WM_PAINT
+		var ps paintStruct
+		hdc, _, _ := beginPaint.Call(hwnd, uintptr(unsafe.Pointer(&ps)))
+		var rect w32.Rect
+		_, _, _ = getClientRect.Call(hwnd, uintptr(unsafe.Pointer(&rect)))
+		if state != nil {
+			width, height := rect.Right-rect.Left, rect.Bottom-rect.Top
+			buffer, _, _ := createCompatibleDC.Call(hdc)
+			bitmap, _, _ := createCompatibleBitmap.Call(hdc, uintptr(width), uintptr(height))
+			oldBitmap, _, _ := selectObject.Call(buffer, bitmap)
+			brush, _, _ := createBrush.Call(uintptr(state.background))
+			fillRect.Call(buffer, uintptr(unsafe.Pointer(&rect)), brush)
+			_, _, _ = deleteObject.Call(brush)
+			paintStartupSpinner(buffer, rect, state)
+			face, _ := windows.UTF16PtrFromString("Segoe UI")
+			font, _, _ := createFont.Call(^uintptr(35), 0, 0, 0, 600, 0, 0, 0, 1, 0, 0, 5, 0, uintptr(unsafe.Pointer(face)))
+			oldFont, _, _ := selectObject.Call(buffer, font)
+			setTextColor.Call(buffer, uintptr(state.foreground))
+			setBkMode.Call(buffer, 1) // TRANSPARENT
+			text, _ := windows.UTF16PtrFromString("Starting wuDict2…")
+			textRect := w32.Rect{Left: 16, Top: rect.Bottom/2 + 68, Right: rect.Right - 16, Bottom: rect.Bottom/2 + 124}
+			drawText.Call(buffer, uintptr(unsafe.Pointer(text)), ^uintptr(0), uintptr(unsafe.Pointer(&textRect)), 0x00000001|0x00000004)
+			bitBlt.Call(hdc, 0, 0, uintptr(width), uintptr(height), buffer, 0, 0, 0x00CC0020)
+			selectObject.Call(buffer, oldFont)
+			selectObject.Call(buffer, oldBitmap)
+			deleteObject.Call(font)
+			deleteObject.Call(bitmap)
+			deleteDC.Call(buffer)
+		}
+		endPaint.Call(hwnd, uintptr(unsafe.Pointer(&ps)))
+		return 0
+	case 0x0014: // WM_ERASEBKGND: WM_PAINT supplies a complete buffered frame.
+		return 1
+	case 0x0113: // WM_TIMER
+		if state != nil {
+			state.phase += 0.12
+			_, _, _ = invalidateRect.Call(hwnd, 0, 0)
+		}
+		return 0
+	case 0x0002: // WM_DESTROY
+		killTimer.Call(hwnd, 1)
+		delete(startupSplashes, hwnd)
+		return 0
+	}
+	r, _, _ := w32.User32DefWindowProcW.Call(hwnd, msg, wp, lp)
+	return r
+}
+
+func paintStartupSpinner(hdc uintptr, rect w32.Rect, state *startupSplashState) {
+	cx, cy := int(rect.Right-rect.Left)/2, int(rect.Bottom-rect.Top)/2-48
+	const radius, count = 42.0, 44
+	for i := 0; i < count; i++ {
+		a := state.phase + 2*math.Pi*float64(i)/count
+		b := a + 2*math.Pi*0.72/count
+		x1, y1 := cx+int(math.Cos(a)*radius), cy+int(math.Sin(a)*radius)
+		x2, y2 := cx+int(math.Cos(b)*radius), cy+int(math.Sin(b)*radius)
+		pen, _, _ := createPen.Call(0, 7, uintptr(startupGradientColor(float64(i)/count)))
+		oldPen, _, _ := selectObject.Call(hdc, pen)
+		moveToEx.Call(hdc, uintptr(x1), uintptr(y1), 0)
+		lineTo.Call(hdc, uintptr(x2), uintptr(y2))
+		selectObject.Call(hdc, oldPen)
+		deleteObject.Call(pen)
+	}
+}
+
+func startupGradientColor(t float64) uint32 {
+	palette := [4][3]uint8{{255, 177, 40}, {255, 220, 120}, {255, 239, 190}, {226, 126, 0}}
+	x := t * float64(len(palette))
+	i := int(x) % len(palette)
+	f := x - math.Floor(x)
+	a, b := palette[i], palette[(i+1)%len(palette)]
+	r := uint8(float64(a[0]) + (float64(b[0])-float64(a[0]))*f)
+	g := uint8(float64(a[1]) + (float64(b[1])-float64(a[1]))*f)
+	bl := uint8(float64(a[2]) + (float64(b[2])-float64(a[2]))*f)
+	return uint32(windowColorRef(r, g, bl))
 }
 
 func (w *webview) Create(debug bool, window unsafe.Pointer) bool {
@@ -441,6 +657,20 @@ func (w *webview) CreateWithOptions(opts WindowOptions) bool {
 		0,
 	)
 	setWindowContext(w.hwnd, w)
+	if r, g, b, ok := parseWindowColor(opts.BackgroundColor); ok {
+		brush, _, _ := createBrush.Call(windowColorRef(r, g, b))
+		// GCLP_HBRBACKGROUND (-10). The window is still hidden here, so changing
+		// the shared class brush before ShowWindow cannot flash the old color.
+		w32.SetClassLong(w.hwnd, -10, brush)
+		if windowBackgroundBrush != 0 {
+			_, _, _ = deleteObject.Call(windowBackgroundBrush)
+		}
+		windowBackgroundBrush = brush
+	}
+	setCaptionColor(w.hwnd, opts.CaptionColor)
+	if opts.StartupSplash {
+		w.startupSplash = createStartupSplash(w.hwnd, opts.BackgroundColor)
+	}
 
 	_, _, _ = w32.User32ShowWindow.Call(w.hwnd, w32.SWShow)
 	_, _, _ = w32.User32UpdateWindow.Call(w.hwnd)
@@ -449,12 +679,31 @@ func (w *webview) CreateWithOptions(opts WindowOptions) bool {
 	if !w.browser.Embed(w.hwnd) {
 		return false
 	}
+	if w.startupSplash != 0 {
+		_, _, _ = setWindowPos.Call(w.startupSplash, 0, 0, 0, 0, 0, 0x0013)
+	}
 	w.browser.Resize()
 	return true
 }
 
 func (w *webview) Destroy() {
 	_, _, _ = w32.User32PostMessageW.Call(w.hwnd, w32.WMClose, 0, 0)
+}
+
+func (w *webview) hideStartupSplash() {
+	if w.startupSplash == 0 {
+		return
+	}
+	_, _, _ = w32.User32DestroyWindow.Call(w.startupSplash)
+	w.startupSplash = 0
+}
+
+// HideStartupSplash removes the native loading screen from a WebView created
+// with WindowOptions.StartupSplash.
+func HideStartupSplash(view WebView) {
+	if w, ok := view.(*webview); ok {
+		w.hideStartupSplash()
+	}
 }
 
 func (w *webview) Run() {

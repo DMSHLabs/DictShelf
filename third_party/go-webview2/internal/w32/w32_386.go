@@ -12,3 +12,8 @@ func SetWindowLong(hwnd uintptr, index int, newLong uintptr) uintptr {
 	ret, _, _ := User32SetWindowLongW.Call(hwnd, uintptr(index), newLong)
 	return ret
 }
+
+func SetClassLong(hwnd uintptr, index int, newLong uintptr) uintptr {
+	ret, _, _ := User32SetClassLongW.Call(hwnd, uintptr(index), newLong)
+	return ret
+}

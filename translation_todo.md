@@ -1,5 +1,7 @@
 # Localization: status and next tasks
 
+2026-10-16 Browse/article transition diagnostics: added an independent System checkbox and EN/RU labels; the timing events go to the existing System Log without enabling the other diagnostics. Catalog JSON parses and `go build ./...` passes; Windows and Android label/layout checks remain.
+
 2026-10-13 folder diagnostics: EN/RU Log file label and hint updated for folder timing and index failure details. WebView2/Android wording check remains.
 
 2026-10-12 Browse Apply threshold: the ✓ action now uses a mode-neutral EN/RU label because the headword-count threshold applies to search and filter with or without mask. Browser/device wording check remains.

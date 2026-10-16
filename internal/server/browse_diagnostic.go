@@ -81,8 +81,13 @@ func logBrowseMemory(event string, active, completed, dictionaries int) {
 
 type browseDiagnostic struct {
 	Event                  string `json:"event"`
+	Stage                  string `json:"stage"`
+	Resource               string `json:"resource"`
 	Dict                   string `json:"dict"`
 	Page                   int    `json:"page"`
+	StartedAt              int64  `json:"startedAt"`
+	ElapsedMS              int    `json:"elapsedMs"`
+	DurationMS             int    `json:"durationMs"`
 	Words                  int    `json:"words"`
 	PageBytes              int    `json:"pageBytes"`
 	PageJSONBytes          int    `json:"pageJsonBytes"`
@@ -140,19 +145,53 @@ func (s *Server) handleBrowseDiagnostic(w http.ResponseWriter, r *http.Request) 
 
 func recordBrowseDiagnostic(d browseDiagnostic) error {
 	switch d.Event {
-	case "alphabet_cache_miss", "alphabet_cache_invalid", "alphabet_cache_read_failed", "alphabet_cache_restore", "alphabet_cache_saved", "alphabet_cache_save_failed", "alphabet_progress", "alphabet_done", "alphabet_aborted", "alphabet_error", "page_request", "page_response", "page_ready", "page_fetch_failed", "render", "page_cache_saved", "page_cache_restored", "wildcard_cache_checkpoint", "wildcard_cache_complete", "wildcard_cache_restored", "wildcard_memory_start", "wildcard_memory_sample", "wildcard_memory_end", "dictionary_picker_open", "dictionary_list_client":
+	case "alphabet_cache_miss", "alphabet_cache_invalid", "alphabet_cache_read_failed", "alphabet_cache_restore", "alphabet_cache_saved", "alphabet_cache_save_failed", "alphabet_progress", "alphabet_done", "alphabet_aborted", "alphabet_error", "page_request", "page_response", "page_ready", "page_fetch_failed", "render", "page_cache_saved", "page_cache_restored", "wildcard_cache_checkpoint", "wildcard_cache_complete", "wildcard_cache_restored", "wildcard_memory_start", "wildcard_memory_sample", "wildcard_memory_end", "dictionary_picker_open", "dictionary_list_client", "article_transition", "browse_navigation", "navigation_resource", "storage_bootstrap":
 	default:
 		return errors.New("invalid diagnostic")
 	}
-	if len(d.Dict) > 256 || strings.ContainsAny(d.Dict, "\r\n") ||
+	if len(d.Dict) > 256 || strings.ContainsAny(d.Dict, "\r\n") || len(d.Resource) > 256 || strings.ContainsAny(d.Resource, "\r\n") ||
 		!bounded(d.Page, 1_000_000) || !bounded(d.Words, 1_000_000) || !bounded(d.PageBytes, 1_000_000_000) || !bounded(d.PageJSONBytes, 100_000_000) ||
 		!bounded(d.CachePages, 1_000_000) || !bounded(d.CacheBytes, 1_000_000_000_000) || !bounded(d.CacheJSONBytes, 100_000_000) ||
 		!bounded(d.CacheStoredPages, 1_000_000) || !bounded(d.CacheStoredBytes, 100_000_000) ||
 		!bounded(d.TotalPages, 1_000_000) || !bounded(d.EstimatedAllPagesBytes, 1_000_000_000_000) || !bounded(d.Letters, 1_000_000) || !bounded(d.Bytes, 10_000_000) ||
 		!bounded(d.ReadMS, 600_000) || !bounded(d.FetchMS, 600_000) || !bounded(d.TotalMS, 600_000) || !bounded(d.WordsMS, 600_000) ||
 		!bounded(d.StripBuildMS, 600_000) || !bounded(d.StripMarkMS, 600_000) || !bounded(d.Status, 599) ||
+		!bounded(d.ElapsedMS, 86_400_000) || !bounded(d.DurationMS, 86_400_000) || d.StartedAt < 0 || d.StartedAt > 10_000_000_000_000 ||
 		!bounded(d.Active, 100_000) || !bounded(d.Completed, 100_000) || !bounded(d.Dictionaries, 100_000) {
 		return errors.New("invalid diagnostic")
+	}
+	if d.Event == "article_transition" {
+		switch d.Stage {
+		case "document_response_start", "document_response_end", "dom_interactive", "app_script_ready", "startup_dependencies_ready", "first_dictionary_row", "dictionary_list_ready", "search_start", "search_stream_begin", "first_search_response", "first_article_painted", "search_end", "words_click", "browse_return_script_ready", "browse_return_page_ready", "browse_return_ready", "browse_return_restore_position", "browse_return_bfcache":
+		default:
+			return errors.New("invalid diagnostic")
+		}
+		logx.System("browse_article_transition nav_start_ms=%d stage=%s dict=%q browse_page=%d elapsed_ms=%d duration_ms=%d",
+			d.StartedAt, d.Stage, d.Dict, d.Page, d.ElapsedMS, d.DurationMS)
+		return nil
+	}
+	if d.Event == "browse_navigation" {
+		switch d.Stage {
+		case "document_response_start", "document_response_end", "dom_interactive", "script_ready", "chooser_request", "chooser_response", "chooser_ready", "page_request", "page_response", "page_cache_restored", "first_words_painted", "page_ready", "alphabet_ready", "load_failed":
+		default:
+			return errors.New("invalid diagnostic")
+		}
+		logx.System("browse_navigation nav_start_ms=%d stage=%s dict=%q browse_page=%d elapsed_ms=%d duration_ms=%d words=%d status=%d",
+			d.StartedAt, d.Stage, d.Dict, d.Page, d.ElapsedMS, d.DurationMS, d.Words, d.Status)
+		return nil
+	}
+	if d.Event == "navigation_resource" {
+		if d.Resource == "" || !strings.HasPrefix(d.Resource, "/assets/") && !strings.HasPrefix(d.Resource, "/style/") {
+			return errors.New("invalid diagnostic")
+		}
+		logx.System("navigation_resource nav_start_ms=%d resource=%q start_ms=%d duration_ms=%d response_end_ms=%d elapsed_ms=%d",
+			d.StartedAt, d.Resource, d.FetchMS, d.DurationMS, d.TotalMS, d.ElapsedMS)
+		return nil
+	}
+	if d.Event == "storage_bootstrap" {
+		logx.System("storage_bootstrap nav_start_ms=%d elapsed_ms=%d first_document_script_ms=%d document_script_start_ms=%d bootstrap_start_ms=%d i18n_markup_ms=%d duration_ms=%d restored=%t",
+			d.StartedAt, d.ElapsedMS, d.StripBuildMS, d.ReadMS, d.FetchMS, d.WordsMS, d.DurationMS, d.Restored)
+		return nil
 	}
 	if strings.HasPrefix(d.Event, "wildcard_memory_") {
 		if d.Event == "wildcard_memory_start" {
