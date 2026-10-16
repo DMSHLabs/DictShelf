@@ -73,6 +73,17 @@ var foldersDialogHTML = webAsset(foldersDialogHTMLSrc, htmlAsset)
 //go:embed web/folders-dialog.css
 var foldersDialogCSS []byte
 
+//go:embed web/lemma-dialog.html
+var lemmaDialogHTMLSrc []byte
+var lemmaDialogHTML = webAsset(lemmaDialogHTMLSrc, htmlAsset)
+
+//go:embed web/lemma-dialog.css
+var lemmaDialogCSS []byte
+
+//go:embed web/lemmas.js
+var lemmasJSSrc []byte
+var lemmasJS = webAsset(lemmasJSSrc, jsAsset)
+
 //go:embed web/lemmas.html
 var lemmasHTMLSrc []byte
 var lemmasHTML = webAsset(lemmasHTMLSrc, htmlAsset) // the lemma-data installer (D91)
@@ -549,6 +560,9 @@ func (s *Server) basePage() []byte {
 		foldersDialog := strings.ReplaceAll(string(foldersDialogHTML), "{{SETUPJS}}", assetTag(setupJS))
 		foldersDialog = strings.ReplaceAll(foldersDialog, "{{FOLDERSDIALOGCSS}}", assetTag(foldersDialogCSS))
 		page = strings.ReplaceAll(page, "{{FOLDERSDIALOG}}", foldersDialog)
+		lemmaDialog := strings.ReplaceAll(string(lemmaDialogHTML), "{{LEMMADIALOGCSS}}", assetTag(lemmaDialogCSS))
+		lemmaDialog = strings.ReplaceAll(lemmaDialog, "{{LEMMASJS}}", assetTag(lemmasJS))
+		page = strings.ReplaceAll(page, "{{LEMMADIALOG}}", lemmaDialog)
 		page = strings.ReplaceAll(page, "{{LOOKSJS}}", assetTag(looksJS))
 		page = strings.ReplaceAll(page, "{{PICKJS}}", assetTag(pickJS))
 		page = strings.ReplaceAll(page, "{{SPEAKJS}}", assetTag(speakJS))
@@ -698,6 +712,7 @@ func (s *Server) lemmasPage() []byte {
 	// served in the reader's language.
 	page := bytes.ReplaceAll(lemmasHTML, []byte("{{CSS}}"), []byte(cssTag))
 	page = bytes.ReplaceAll(page, []byte("{{WORKSPACECSS}}"), []byte(assetTag(workspaceCSS)))
+	page = bytes.ReplaceAll(page, []byte("{{LEMMASJS}}"), []byte(assetTag(lemmasJS)))
 	return s.renderUserUI(string(bytes.ReplaceAll(page, []byte("{{PRESETS}}"), []byte(s.pagePresetLinks()))), s.reg.prefs.Language())
 }
 

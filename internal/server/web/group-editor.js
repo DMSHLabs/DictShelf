@@ -51,7 +51,8 @@ function updateAvailableSearch(){groupAvailableListSearch.refresh()}
 const groupMemberListSearch=window.wudictListSearch.create({
   root:$('groupRows'),itemSelector:'.group-row',dock:$('groupMembersSearchDock'),
   scrollContainer:$('groupRows'),inputId:'groupMembersSearch',
-  highlightSelector:'.group-dictionary-name',initiallyFiltering:true,labels:groupSearchLabels,
+  highlightSelector:'.group-dictionary-name',initiallyFiltering:true,
+  storageKey:'wudict_list_search_mode_group_members',labels:groupSearchLabels,
   onUpdate:({query,filtering,visible})=>{
     const rows=$('groupRows');rows.querySelector('.group-filter-empty')?.remove();
     if(filtering&&query&&!visible){
@@ -64,7 +65,8 @@ const groupMemberListSearch=window.wudictListSearch.create({
 const groupAvailableListSearch=window.wudictListSearch.create({
   root:$('groupOtherRows'),itemSelector:'.group-row',dock:$('groupAvailableSearchDock'),
   scrollContainer:$('groupOtherRows'),inputId:'groupAvailableSearch',
-  highlightSelector:'.group-dictionary-name',initiallyFiltering:true,labels:groupSearchLabels,
+  highlightSelector:'.group-dictionary-name',initiallyFiltering:true,
+  storageKey:'wudict_list_search_mode_group_available',labels:groupSearchLabels,
   onUpdate:({query,filtering,visible})=>{
     const rows=$('groupOtherRows');rows.querySelector('.group-filter-empty')?.remove();
     if(!visible){

@@ -1,0 +1,23 @@
+<!-- Copyright (C) 2026 DmShAl (Shepeta Dmitry)
+
+     SPDX-License-Identifier: GPL-3.0-or-later
+-->
+<dialog id="lemmaDialog" lang="{{T:locale}}" class="group-dialog panel-card workspace-dialog lemma-dialog" aria-labelledby="lemmaDialogTitle">
+  <div class="lemma-dialog-shell">
+    <div class="lemma-dialog-top">
+      <h2 id="lemmaDialogTitle">{{T:pages.lemmas}}</h2>
+      <button type="button" class="btn" id="lemmaClosePage" aria-label="{{T:pages.close}}"><svg class="icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+    </div>
+    <div class="lemma-dialog-body">
+      <p>{{T:pages.lemmaIntro}}</p>
+      <div id="lemmaBanner" class="lemma-banner hidden"></div>
+      <div class="lemma-dialog-head"><h2>{{T:pages.languages}}</h2><span class="lemma-note" id="lemmaSummary"></span></div>
+      <div id="lemmaList" class="lemma-list"></div>
+      <p class="lemma-note" id="lemmaDir"></p>
+      <div id="lemmaShadow" class="lemma-banner warn hidden"></div>
+      <p class="lemma-formats" id="lemmaCredit"></p>
+    </div>
+  </div>
+</dialog>
+<link rel="stylesheet" href="/assets/lemma-dialog.css?v={{LEMMADIALOGCSS}}">
+<script defer src="/assets/lemmas.js?v={{LEMMASJS}}"></script>
