@@ -27,7 +27,7 @@ Keep each editor maintainable in separate source files for its markup, styles an
 
 ## Settings and history storage
 
-Do this after the Windows server-removal work is finished and verified. Keep it as a separate change because it affects persistent data and all supported platforms.
+This storage change is required before the first wuDict2 release so existing users can carry their preferences forward. Keep it separate from the Windows server-removal work because it affects persistent data and all supported platforms. The versioned files, shared HTTP persistence adapter, and Windows first-run import from the previous WebView origin are implemented; explicit settings export/import and runtime verification of the migration branches remain.
 
 ### Decisions
 

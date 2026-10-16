@@ -148,32 +148,36 @@ const userFileURL = "/files/"
 // requests are same-origin too.
 func (s *Server) handleUserFile(w http.ResponseWriter, r *http.Request) {
 	name := strings.TrimPrefix(r.URL.Path, userFileURL)
-	s.serveUserFile(w, r, name)
-}
-
-// serveUserFile is shared by the browser HTTP adapter and the in-process
-// WebView resource path. ServeContent preserves byte-range seeking.
-func (s *Server) serveUserFile(w http.ResponseWriter, r *http.Request, name string) {
-	p := s.userFilePath(name)
-	if p == "" {
-		http.NotFound(w, r)
-		return
-	}
-	f, err := os.Open(p)
-	if err != nil {
+	f, fi := s.openUserFile(name)
+	if f == nil {
 		http.NotFound(w, r)
 		return
 	}
 	defer f.Close()
-	fi, err := f.Stat()
-	if err != nil || fi.IsDir() {
-		http.NotFound(w, r)
-		return
-	}
 	w.Header().Set("Content-Type", resolveMIME(name, "application/octet-stream"))
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("Cache-Control", "no-cache")
 	http.ServeContent(w, r, name, fi.ModTime(), f)
+}
+
+// openUserFile resolves and opens a user-owned resource. HTTP and the
+// in-process WebView use the same file operation; each transport applies its
+// own range-response adapter after opening it.
+func (s *Server) openUserFile(name string) (*os.File, os.FileInfo) {
+	p := s.userFilePath(name)
+	if p == "" {
+		return nil, nil
+	}
+	f, err := os.Open(p)
+	if err != nil {
+		return nil, nil
+	}
+	fi, err := f.Stat()
+	if err != nil || fi.IsDir() {
+		_ = f.Close()
+		return nil, nil
+	}
+	return f, fi
 }
 
 // userFilesPayload is what the manager renders from: the rows, where they

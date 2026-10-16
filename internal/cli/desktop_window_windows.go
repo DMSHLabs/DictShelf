@@ -9,7 +9,6 @@ package cli
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -218,85 +217,111 @@ func runDesktopWindow(address, appAddress, profile string, onClose func(), deskt
   }}catch(_){ }
 },true);`)
 	done := make(chan struct{})
+	initialNavigationAddress := navigationAddress
 	storageMigrationPending := false
 	if virtualOrigin && local != nil && app != nil {
 		storageMarker := filepath.Join(profile, "virtual-origin-storage-v1")
-		if _, err := os.Stat(storageMarker); errors.Is(err, os.ErrNotExist) {
+		settingsExist := false
+		if desktopRequest != nil {
+			if value, err := desktopRequest(context.Background(), "storageState", ""); err == nil {
+				if state, ok := value.(map[string]bool); ok {
+					settingsExist = state["exists"]
+				}
+			} else {
+				logx.Warn("settings file status unavailable: %v", err)
+			}
+		}
+		_ = w.Bind("wudictStorageSeeded", func() error {
+			if err := os.WriteFile(storageMarker, []byte("ok\n"), 0600); err != nil {
+				logx.Warn("WebView2 storage migration marker failed: %v", err)
+				return err
+			}
+			return nil
+		})
+		if !settingsExist {
 			storageMigrationPending = true
-			var exportStarted atomic.Bool
-			startVirtualApp := func(entries string) {
-				if !exportStarted.CompareAndSwap(false, true) {
+			var migrationFinished atomic.Bool
+			var migrationImporting atomic.Bool
+			finishMigration := func(imported bool, reason string) {
+				if !migrationFinished.CompareAndSwap(false, true) {
 					return
 				}
-				log.Printf("WebView2 storage migration: switching to virtual origin; exported bytes=%d", len(entries))
-				if len(entries) > 8<<20 {
-					entries = "[]"
+				if reason != "" {
+					logx.Warn("settings migration %s; continuing with the application", reason)
+					tray.Alert("wuDict2", "Saved settings could not be transferred. The app will start with default settings; you can change them later.")
 				}
-				seed, _ := json.Marshal(entries)
-				seedScript := `(function(){if(location.origin!==` + jsString(app.Scheme+"://"+app.Host) + `)return;var key="wudict_native_storage_seed_v1";if(localStorage.getItem(key)!=="1"){try{var rows=JSON.parse(` + string(seed) + `);for(var i=0;i<rows.length;i++){var row=rows[i];if(Array.isArray(row)&&row.length===2&&typeof row[0]==="string"&&typeof row[1]==="string"&&localStorage.getItem(row[0])===null)localStorage.setItem(row[0],row[1])}localStorage.setItem(key,"1")}catch(_){}}if(typeof window.wudictStorageSeeded==="function")window.wudictStorageSeeded().catch(function(){})})();`
 				w.Dispatch(func() {
-					log.Printf("WebView2 storage migration: navigating to %q", appAddress)
+					if imported {
+						log.Printf("WebView2 storage migration: opening application after import")
+					} else {
+						log.Printf("WebView2 storage migration: opening application without imported settings")
+					}
 					desktopWindowMu.Lock()
 					desktopWindowAddress = appAddress
 					desktopWindowMu.Unlock()
-					w.Init(seedScript)
 					w.Navigate(appAddress)
 				})
 			}
+			startVirtualApp := func(entries string) {
+				if migrationFinished.Load() || !migrationImporting.CompareAndSwap(false, true) {
+					return
+				}
+				log.Printf("WebView2 storage migration: importing exported settings; bytes=%d", len(entries))
+				if len(entries) > 8<<20 {
+					finishMigration(false, "export is too large")
+					return
+				}
+				if desktopRequest == nil {
+					finishMigration(false, "direct storage bridge is unavailable")
+					return
+				}
+				w.Dispatch(func() {
+					w.Eval(`if(window.wudictMigrationStatus)window.wudictMigrationStatus("Saving your settings…")`)
+				})
+				go func() {
+					ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+					defer cancel()
+					if _, err := desktopRequest(ctx, "storageImport", entries); err != nil {
+						logx.Warn("legacy settings import failed: %v", err)
+						finishMigration(false, "could not save the exported settings")
+						return
+					}
+					finishMigration(true, "")
+				}()
+			}
 			_ = w.Bind("wudictExportStorage", func(entries string) error {
-				log.Printf("WebView2 storage migration: received old-origin storage; bytes=%d", len(entries))
+				log.Printf("WebView2 storage migration: received profile storage; bytes=%d", len(entries))
 				startVirtualApp(entries)
 				return nil
 			})
-			var markerWritten atomic.Bool
-			_ = w.Bind("wudictStorageSeeded", func() error {
-				log.Printf("WebView2 storage migration: new-origin seed callback received")
-				if markerWritten.CompareAndSwap(false, true) {
-					if err := os.WriteFile(storageMarker, []byte("ok\n"), 0600); err != nil {
-						logx.Warn("WebView2 storage migration marker failed: %v", err)
-					}
-				}
-				return nil
-			})
 			oldOrigin := local.Scheme + "://" + local.Host
-			w.Init(`(function(){
-  if(location.origin!==` + jsString(oldOrigin) + `||window!==window.top)return;
-  function exportStorage(){
-    var attempts=0;
-    function send(){
-      if(typeof window.wudictExportStorage==="function"){
-        if(document.documentElement)document.documentElement.style.visibility="hidden";
-        try{
-          var rows=[];
-          for(var i=0;i<localStorage.length;i++){
-            var key=localStorage.key(i);
-            rows.push([key,localStorage.getItem(key)]);
-          }
-          window.wudictExportStorage(JSON.stringify(rows));
-        }catch(_){window.wudictExportStorage("[]")}
-        return;
-      }
-      if(++attempts<100)setTimeout(send,100);
-    }
-    send();
-  }
-  if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",exportStorage,{once:true});
-  else exportStorage();
-})();`)
-			time.AfterFunc(15*time.Second, func() {
-				if !exportStarted.Load() {
-					log.Printf("WebView2 storage migration: old-origin export did not respond; staying on the working loopback page")
-				}
+			markerExists := false
+			if _, err := os.Stat(storageMarker); err == nil {
+				markerExists = true
+			}
+			exportOrigin := oldOrigin
+			if markerExists {
+				exportOrigin = app.Scheme + "://" + app.Host
+			}
+			w.Init(desktopStorageExportScript(exportOrigin))
+			if !markerExists {
+				log.Printf("WebView2 storage migration: importing from old loopback origin %q", exportOrigin)
+			} else {
+				log.Printf("WebView2 storage migration: importing from previous virtual origin %q", exportOrigin)
+			}
+			time.AfterFunc(2*time.Minute, func() {
+				finishMigration(false, "timed out after two minutes")
 			})
-		} else if err != nil {
-			logx.Warn("WebView2 storage migration state unavailable: %v", err)
+			migrationURL, err := url.Parse(exportOrigin + "/__storage-migration")
+			if err != nil {
+				finishMigration(false, "could not prepare migration screen")
+			} else {
+				query := migrationURL.Query()
+				query.Set("wudict_webview2", "1")
+				migrationURL.RawQuery = query.Encode()
+				initialNavigationAddress = migrationURL.String()
+			}
 		}
-	}
-	initialNavigationAddress := navigationAddress
-	if storageMigrationPending {
-		// localStorage is scoped to the old loopback origin. Load it once in
-		// the hidden WebView so the exporter can seed the new virtual origin.
-		initialNavigationAddress = address
 	}
 	log.Printf("WebView2 startup: navigating to %q; localStorage migration=%t", initialNavigationAddress, storageMigrationPending)
 	desktopWindowMu.Lock()
@@ -320,6 +345,10 @@ func runDesktopWindow(address, appAddress, profile string, onClose func(), deskt
 	if onClose != nil {
 		onClose()
 	}
+}
+
+func desktopStorageExportScript(origin string) string {
+	return `(function(){if(location.origin!==` + jsString(origin) + `||location.pathname!=="/__storage-migration"||window!==window.top)return;window.__wudictMigrationExporting=true;function exportStorage(){var attempts=0;function send(){if(typeof window.wudictExportStorage==="function"){if(window.wudictMigrationStatus)window.wudictMigrationStatus("Transferring settings and search history…");try{var rows=[];for(var i=0;i<localStorage.length;i++){var key=localStorage.key(i);rows.push([key,localStorage.getItem(key)])}window.wudictExportStorage(JSON.stringify(rows))}catch(_){window.wudictExportStorage("[]")}return}if(++attempts<1200){if(window.wudictMigrationStatus)window.wudictMigrationStatus("Connecting to the settings store…");setTimeout(send,100)}}send()}if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",exportStorage,{once:true});else exportStorage()})();`
 }
 
 type nativeCall struct{ cancel context.CancelFunc }

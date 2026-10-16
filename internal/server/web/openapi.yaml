@@ -1856,6 +1856,47 @@ paths:
         '500':
           description: The state file could not be written.
 
+  /api/user-storage:
+    get:
+      tags: [internal]
+      operationId: getUserStorage
+      x-internal: true
+      summary: Read file-backed interface settings and search history
+      responses:
+        '200':
+          description: Stored values indexed by their legacy WebView key.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: { type: string }
+        '500':
+          description: Settings or history could not be read.
+    put:
+      tags: [internal]
+      operationId: saveUserStorage
+      x-internal: true
+      summary: Save a complete interface settings and search history snapshot
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              maxItems: 65536
+              items:
+                type: array
+                minItems: 2
+                maxItems: 2
+                items: { type: string }
+      responses:
+        '200':
+          description: Snapshot saved to settings.json and history.json.
+        '400':
+          description: Snapshot could not be validated or saved.
+        '413':
+          description: Snapshot exceeds the 8 MiB transport limit.
+
   /api/index-defaults:
     put:
       tags: [internal]

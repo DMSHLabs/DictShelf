@@ -103,6 +103,8 @@ func (s *Server) routes() []route {
 		{"POST", "/api/orphans", s.handleResolveOrphans, "/api/orphans", false},
 		{"GET", "/api/config", s.handleConfig, "/api/config", false},
 		{"GET", "/api/prefs", s.handlePrefs, "/api/prefs", false},
+		{"GET", "/api/user-storage", s.handleUserStorage, "/api/user-storage", false},
+		{"PUT", "/api/user-storage", s.handleUserStorage, "/api/user-storage", false},
 		{"GET", "/api/language", s.handleLanguage, "/api/language", false},
 		{"PUT", "/api/language", s.handleLanguage, "/api/language", false},
 		{"GET", "/assets/i18n.js", serveAsset("application/javascript; charset=utf-8", i18nJS), "", false},

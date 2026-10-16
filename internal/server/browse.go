@@ -924,5 +924,5 @@ func (s *Server) browsePageHTML() []byte {
 	page = bytes.ReplaceAll(page, []byte("{{LISTSEARCHJS}}"), []byte(assetTag(listSearchJS)))
 	page = bytes.ReplaceAll(page, []byte("{{HEADWORDJS}}"), []byte(assetTag(headwordControlJS)))
 	page = bytes.ReplaceAll(page, []byte("{{HEADWORDCSS}}"), []byte(assetTag(headwordControlCSS)))
-	return []byte(renderUI(string(page), s.reg.prefs.Language()))
+	return s.renderUserUI(string(page), s.reg.prefs.Language())
 }
