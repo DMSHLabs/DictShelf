@@ -84,11 +84,15 @@ func (s *Server) DesktopResource(method, rawURL string, requestHeaders map[strin
 		return nil, 0, "", false, false
 	}
 	u, err := url.Parse(rawURL)
+	legacyVirtualOrigin := err == nil && u.Scheme == "https" && strings.EqualFold(u.Host, "wudict2.local")
+	appVirtualOrigin := err == nil && u.Scheme == "https" && strings.EqualFold(u.Host, "wudict2.localhost")
+	virtualOrigin := appVirtualOrigin ||
+		err == nil && u.Scheme == "http" && strings.EqualFold(u.Host, "wudict2.localhost") ||
+		legacyVirtualOrigin
 	if err != nil || u.Host == "" || u.User != nil ||
-		u.Scheme != "http" && !(u.Scheme == "https" && strings.EqualFold(u.Host, "wudict2.local")) {
+		u.Scheme != "http" && !legacyVirtualOrigin && !appVirtualOrigin {
 		return nil, 0, "", false, false
 	}
-	virtualOrigin := u.Scheme == "https" && strings.EqualFold(u.Host, "wudict2.local")
 	localDesktopOrigin := u.Scheme == "http" && u.Hostname() == "127.0.0.1"
 	if !virtualOrigin && !localDesktopOrigin && !desktopWebResourceRoute(u.Path) {
 		return nil, 0, "", false, false
@@ -101,7 +105,7 @@ func (s *Server) DesktopResource(method, rawURL string, requestHeaders map[strin
 	// contract for handlers that read the body even on GET requests.
 	req.Body = http.NoBody
 	req.Host = u.Host
-	if u.Scheme == "https" {
+	if virtualOrigin {
 		// The virtual host is a trusted in-process origin; route authorization
 		// still sees a loopback Host and the desktop capability token below.
 		req.Host = "127.0.0.1"
@@ -132,6 +136,15 @@ func (s *Server) DesktopResource(method, rawURL string, requestHeaders map[strin
 		} else if u.Path == "/" {
 			response.header.Set("Content-Type", "text/html; charset=utf-8")
 			_, _ = response.Write([]byte("<!doctype html><html><head><meta charset=utf-8></head><body></body></html>"))
+		} else {
+			http.NotFound(response, req)
+		}
+	} else if legacyVirtualOrigin {
+		// Keep the former application origin only for a retried storage import.
+		response.header.Set("Cache-Control", "no-store")
+		if u.Path == "/__storage-migration" {
+			response.header.Set("Content-Type", "text/html; charset=utf-8")
+			_, _ = response.Write([]byte(desktopStorageMigrationPage))
 		} else {
 			http.NotFound(response, req)
 		}

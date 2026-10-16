@@ -128,15 +128,18 @@ html[data-theme="dark"]{color-scheme:dark}
     border:2px solid transparent;background-clip:padding-box;border-radius:10px}
   *::-webkit-scrollbar-thumb:hover{background-color:color-mix(in srgb,var(--fg) 62%,transparent)}
   /* The Windows viewport scrollbar follows the same sampled window color as
-     the native caption; its transparent track leaves the wallpaper visible. */
+     the native caption, with enough foreground mixed in to stay visible over
+     wallpapers whose paper is close to that color. */
   html[data-desktop-window-color]{
-    scrollbar-color:var(--desktop-window-color) transparent
+    --desktop-scrollbar-thumb:color-mix(in srgb,var(--desktop-window-color) 55%,var(--fg));
+    --desktop-scrollbar-thumb-hover:color-mix(in srgb,var(--desktop-window-color) 42%,var(--fg));
+    scrollbar-color:var(--desktop-scrollbar-thumb) transparent
   }
   html[data-desktop-window-color]::-webkit-scrollbar-thumb{
-    background:var(--desktop-window-color)
+    background:var(--desktop-scrollbar-thumb)
   }
   html[data-desktop-window-color]::-webkit-scrollbar-thumb:hover{
-    background-color:var(--desktop-window-color)
+    background-color:var(--desktop-scrollbar-thumb-hover)
   }
 }
 /* --wd-inset-top / --wd-inset-bottom are set by a host that puts the page

@@ -41,6 +41,8 @@ var (
 	User32GetWindowLongPtrW  = user32.NewProc("GetWindowLongPtrW")
 	User32SetWindowLongW     = user32.NewProc("SetWindowLongW")
 	User32SetWindowLongPtrW  = user32.NewProc("SetWindowLongPtrW")
+	User32SetClassLongW      = user32.NewProc("SetClassLongW")
+	User32SetClassLongPtrW   = user32.NewProc("SetClassLongPtrW")
 	User32AdjustWindowRect   = user32.NewProc("AdjustWindowRect")
 	User32SetWindowPos       = user32.NewProc("SetWindowPos")
 	User32IsDialogMessage    = user32.NewProc("IsDialogMessage")

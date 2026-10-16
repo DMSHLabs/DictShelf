@@ -124,7 +124,7 @@ paths:
       tags: [internal]
       operationId: recordBrowseDiagnostic
       x-internal: true
-      summary: Add opt-in Browse, dictionary picker, Wildcards cache, or Wildcards memory timings to the system log
+      summary: Add opt-in Browse navigation, page resources, settings bootstrap, dictionary picker, Wildcards cache, or Wildcards memory timings to the system log
       requestBody:
         required: true
         content:
@@ -135,8 +135,13 @@ paths:
               required: [event]
               properties:
                 event: { type: string }
+                stage: { type: string, description: Navigation stage when event is article_transition or browse_navigation }
+                resource: { type: string, description: Same-origin asset path when event is navigation_resource }
                 dict: { type: string }
                 page: { type: integer }
+                startedAt: { type: integer, format: int64, description: Client navigation start time in Unix milliseconds }
+                elapsedMs: { type: integer, description: Elapsed milliseconds since navigation start }
+                durationMs: { type: integer, description: Duration of the reported stage in milliseconds }
                 words: { type: integer }
                 pageBytes: { type: integer, description: Approximate JavaScript heap size of one cached page }
                 pageJsonBytes: { type: integer, description: UTF-8 JSON size of one cached page }
