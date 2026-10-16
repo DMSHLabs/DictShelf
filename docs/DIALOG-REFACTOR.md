@@ -12,11 +12,12 @@ Keep each editor maintainable in separate source files for its markup, styles an
 
 ## Order of work
 
-1. Finish and verify the ongoing Windows server-removal work first. Keep this refactor separate so regressions remain easy to identify.
-2. Use Edit Filters as a pilot. Move its markup, styles and JavaScript into modular source files that are included in the main document at startup, then open it as an in-document dialog.
+1. The Windows server-removal implementation is complete; runtime verification of a few remaining branches is tracked in `HANDOFF.md`.
+2. **Edit Filters pilot implemented and confirmed by the user.** Its markup, styles and JavaScript are separate embedded assets; the dialog lives in the main document and opens without iframe navigation. The Windows native bridge is used when present; browser and Android retain the HTTP adapter.
 3. Verify its loading, reading and saving of `groups.ini`, translations, appearance presets, close behavior and browser fallback. Check Windows and Android first; check Linux and macOS on their supported builds.
-4. Apply the proven structure to Edit Folders and Lemmatization, preserving their native folder picker and shared progress behavior.
-5. Remove the old iframe route and dialog-only page branches once all three editors use the in-document implementation and the supported platforms are verified.
+4. **Edit Folders moved into the main document.** Its markup and styles are separate assets; its behavior is now a shared external `setup.js` used by both the standalone setup page and the embedded dialog, with scoped DOM lookups and deferred initialization. Folder/archive picker bindings, intake, folder validation, index defaults, saving and list refresh are wired. `node --check internal/server/web/setup.js`, `go build ./...` and `git diff --check` pass. Windows and Android runtime checks remain.
+5. Move Lemmatization into the main document using separate markup, styles and behavior files; preserve its list scrolling and platform bridge.
+6. Remove the old iframe route and dialog-only page branches once all three editors use the in-document implementation and the supported platforms are verified.
 
 ## Completion checks
 
