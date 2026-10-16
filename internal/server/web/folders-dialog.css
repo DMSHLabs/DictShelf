@@ -11,7 +11,14 @@ dialog#foldersDialog.group-dialog.panel-card.workspace-dialog[open]{display:flex
 .folders-dialog-shell{position:relative;box-sizing:border-box;display:flex;flex-direction:column;gap:.65em;
   width:100%;height:100%;min-height:0;padding:1em;border:1px solid var(--line);border-radius:12px;
   background:var(--paper-bg,var(--bg));overflow:hidden}
-html[data-shell-image] .folders-dialog-shell{background:rgba(255,255,255,.14)}
+html[data-shell-image] dialog#foldersDialog.group-dialog.panel-card.workspace-dialog{background-color:var(--paper-bg);
+  background-image:linear-gradient(rgba(255,245,220,.18),rgba(255,245,220,.18)),var(--paper-bk-image,none);
+  background-size:100% 100%,100% 100%;background-position:center;background-repeat:no-repeat;background-attachment:fixed}
+html[data-shell-image] .folders-dialog-shell{background-color:var(--paper-bg);
+  background-image:linear-gradient(rgba(255,245,220,.18),rgba(255,245,220,.18)),var(--paper-bk-image,none);
+  background-size:100% 100%,100% 100%;background-position:center;background-repeat:no-repeat;background-attachment:fixed}
+html:has(link[data-preset="sepia"]) dialog#foldersDialog.group-dialog.panel-card.workspace-dialog,
+html:has(link[data-preset="sepia"]) .folders-dialog-shell{background:var(--bg)}
 #foldersDialog #workNotice{position:static;transform:none;z-index:auto;width:100%;max-width:none;margin:0;pointer-events:auto}
 #foldersDialog #workNotice[hidden]{display:none}
 #foldersDialog #workNoticeStop{pointer-events:auto}
@@ -22,6 +29,15 @@ html[data-shell-image] .folders-dialog-shell{background:rgba(255,255,255,.14)}
   padding:0;font-size:calc(var(--ui-main-control-font) * 1rem);line-height:1;overflow:hidden;position:relative}
 dialog#foldersDialog .folders-dialog-top .icon-close{display:block;position:absolute;left:50%;top:50%;flex:none;
   width:1.1em!important;height:1.1em!important;transform:translate(-50%,-50%)}
+html[data-shell-image] .folders-dialog-top{background-color:var(--paper-bg);
+  background-image:linear-gradient(rgba(255,245,220,.25),rgba(255,245,220,.25)),var(--paper-bk-image,none);
+  background-size:100% 100%,100% 100%;background-position:center;background-repeat:no-repeat;background-attachment:fixed;
+  border-bottom:1px solid rgba(120,90,45,.22)}
+html:has(link[data-preset="sepia"]) .folders-dialog-top{background:var(--bg-card,var(--bg));border-bottom:1px solid var(--line)}
+html[data-shell-image] .folders-dialog-scroll{scrollbar-color:rgba(120,90,45,.58) transparent}
+html[data-shell-image] .folders-dialog-scroll::-webkit-scrollbar-track{background:transparent}
+html[data-shell-image] .folders-dialog-scroll::-webkit-scrollbar-thumb{background:rgba(120,90,45,.58);border:2px solid transparent;background-clip:padding-box;border-radius:10px}
+html[data-shell-image] .folders-dialog-scroll::-webkit-scrollbar-thumb:hover{background-color:rgba(90,65,35,.76)}
 .folders-dialog-scroll{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;scrollbar-gutter:stable;
   margin-right:-1em;padding:.2em 1em .8em 0}
 .folders-dialog-scroll h2{font-size:calc(var(--ui-font-section) * 1rem);margin:.65em 0 .3em}

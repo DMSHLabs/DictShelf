@@ -45,6 +45,10 @@ func desktopAsset(name string) (desktopAssetResponse, bool) {
 		return desktopAssetResponse{foldersDialogCSS, "text/css; charset=utf-8", immutable}, true
 	case "/assets/setup.js":
 		return desktopAssetResponse{setupJS, "application/javascript; charset=utf-8", immutable}, true
+	case "/assets/lemma-dialog.css":
+		return desktopAssetResponse{lemmaDialogCSS, "text/css; charset=utf-8", immutable}, true
+	case "/assets/lemmas.js":
+		return desktopAssetResponse{lemmasJS, "application/javascript; charset=utf-8", immutable}, true
 	case "/assets/article-find.js":
 		return desktopAssetResponse{articleFindJS, "application/javascript; charset=utf-8", immutable}, true
 	case "/assets/list-search.js":

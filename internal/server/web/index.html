@@ -952,6 +952,7 @@ window.wudictFontScale=(function(){
 </dialog>
 {{FILTERSDIALOG}}
 {{FOLDERSDIALOG}}
+{{LEMMADIALOG}}
 <dialog id="webDictionaryPicker" lang="{{T:locale}}" class="group-dialog panel-card" aria-label="{{T:search.dictionary}}">
   <div class="web-picker-head">
     <select id="webPickerGroup" aria-label="{{T:search.dictionary}}"></select>
@@ -2444,6 +2445,7 @@ async function openWebDictionaryPicker(){
       webPickerSearch=window.wudictListSearch.create({
         root:$('webPickerRows'),itemSelector:'.web-picker-row',dock:$('webPickerSearch'),
         scrollContainer:$('webPickerRows'),highlightSelector:'span',
+        initiallyFiltering:true,storageKey:'wudict_list_search_mode_picker',
         labels:{placeholder:tx('dictUI.listSearchPlaceholder'),filterPlaceholder:tx('dictUI.listFilterPlaceholder'),
           search:tx('dictUI.listSearchLabel'),filter:tx('dictUI.listSearchFilter'),
           previous:tx('dictUI.listSearchPrevious'),next:tx('dictUI.listSearchNext'),
@@ -3359,9 +3361,7 @@ function showWorkspaceWindow(link){
   $("workspaceFrameWindow").showModal();
   if(samePage&&workspaceFrameLoaded)frame.contentWindow.postMessage({type:"wudict-workspace-refresh"},location.origin);
 }
-for(const id of ["lemmaLink"]){
-  const link=$(id);link.addEventListener("click",event=>{event.preventDefault();showWorkspaceWindow(link)});
-}
+$("lemmaLink").addEventListener("click",event=>{event.preventDefault();window.openLemmaDialog?.(event.currentTarget)});
 $("editFilters").addEventListener("click",event=>{event.preventDefault();window.openFiltersDialog?.(event.currentTarget)});
 $("editFolders").addEventListener("click",event=>{event.preventDefault();window.openFoldersDialog?.(event.currentTarget)});
 window.addEventListener("wudict-folders-saved",()=>loadDicts().then(ok=>{if(ok){loadFolders();reissueIfCorpusMoved()}}));
@@ -8723,8 +8723,28 @@ function desktopAppearanceRequest(request){
     try{sessionStorage.setItem("wudict_desktop_image",state.image?"1":"0")}catch(_){}
     window.wudictShellBackground(state.colorEnabled?state.color:"",!!state.image,state.image);
     document.documentElement.toggleAttribute("data-desktop-image",!!state.image);
+    // The Windows caption is native chrome; keep its solid color in step with
+    // the same sampled/selected paper color used by the window background.
+    const captionColor=state.image||state.colorEnabled?state.color:"";
+    const root=document.documentElement;
+    if(/^#[0-9a-f]{6}$/i.test(captionColor)){
+      root.style.setProperty("--desktop-window-color",captionColor);
+      root.setAttribute("data-desktop-window-color","");
+    }else{
+      root.style.removeProperty("--desktop-window-color");
+      root.removeAttribute("data-desktop-window-color");
+    }
+    if(typeof window.wudictSetCaptionColor==="function")
+      window.wudictSetCaptionColor(captionColor).catch(()=>{});
   }
   return state;
+}
+// Apply the saved color as soon as the main page starts, and again whenever
+// the active light/dark appearance changes.
+if(window.wudictWindowsShell===true){
+  desktopAppearanceRequest({action:"get"});
+  new MutationObserver(()=>desktopAppearanceRequest({action:"get"}))
+    .observe(document.documentElement,{attributes:true,attributeFilter:["data-theme"]});
 }
 function appearanceRender(state){
   if(!state)return;

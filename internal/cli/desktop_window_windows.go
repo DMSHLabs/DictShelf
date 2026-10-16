@@ -40,6 +40,8 @@ var (
 	windowUser32            = syscall.NewLazyDLL("user32.dll")
 	windowShowWindow        = windowUser32.NewProc("ShowWindow")
 	windowForeground        = windowUser32.NewProc("SetForegroundWindow")
+	windowDwmapi            = syscall.NewLazyDLL("dwmapi.dll")
+	windowDwmSetAttribute   = windowDwmapi.NewProc("DwmSetWindowAttribute")
 	windowShell32           = syscall.NewLazyDLL("shell32.dll")
 	windowBrowseForFolder   = windowShell32.NewProc("SHBrowseForFolderW")
 	windowGetPathFromIDList = windowShell32.NewProc("SHGetPathFromIDListW")
@@ -209,6 +211,10 @@ func runDesktopWindow(address, appAddress, profile string, onClose func(), deskt
 		}
 		return exec.Command("rundll32", "url.dll,FileProtocolHandler", link.String()).Start()
 	})
+	_ = w.Bind("wudictSetCaptionColor", func(color string) error {
+		setDesktopCaptionColor(uintptr(w.Window()), color)
+		return nil
+	})
 	w.Init(`document.addEventListener('click',function(event){
   var a=event.target&&event.target.closest&&event.target.closest('a[href]');
   if(!a)return;
@@ -345,6 +351,30 @@ func runDesktopWindow(address, appAddress, profile string, onClose func(), deskt
 	if onClose != nil {
 		onClose()
 	}
+}
+
+// setDesktopCaptionColor applies the app's chosen window paper to the native
+// Windows caption. DWM ignores these attributes on Windows versions that do
+// not support caption colors, so failure is intentionally non-fatal.
+func setDesktopCaptionColor(hwnd uintptr, color string) {
+	if hwnd == 0 {
+		return
+	}
+	caption, text := uint32(0xFFFFFFFF), uint32(0xFFFFFFFF) // DWMWA_COLOR_DEFAULT
+	if len(color) == 7 && color[0] == '#' {
+		var r, g, b uint32
+		if _, err := fmt.Sscanf(color[1:], "%02x%02x%02x", &r, &g, &b); err == nil {
+			// COLORREF is 0x00BBGGRR, unlike CSS's #RRGGBB.
+			caption = r | g<<8 | b<<16
+			if 299*r+587*g+114*b >= 128000 {
+				text = 0
+			} else {
+				text = 0x00FFFFFF
+			}
+		}
+	}
+	_, _, _ = windowDwmSetAttribute.Call(hwnd, 35, uintptr(unsafe.Pointer(&caption)), unsafe.Sizeof(caption)) // DWMWA_CAPTION_COLOR
+	_, _, _ = windowDwmSetAttribute.Call(hwnd, 36, uintptr(unsafe.Pointer(&text)), unsafe.Sizeof(text))       // DWMWA_TEXT_COLOR
 }
 
 func desktopStorageExportScript(origin string) string {

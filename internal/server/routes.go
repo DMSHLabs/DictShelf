@@ -234,6 +234,8 @@ func (s *Server) routes() []route {
 		{"GET", "/assets/filters-dialog.js", serveAsset("application/javascript; charset=utf-8", filtersDialogJS), "", false},
 		{"GET", "/assets/folders-dialog.css", serveAsset("text/css; charset=utf-8", foldersDialogCSS), "", false},
 		{"GET", "/assets/setup.js", serveAsset("application/javascript; charset=utf-8", setupJS), "", false},
+		{"GET", "/assets/lemma-dialog.css", serveAsset("text/css; charset=utf-8", lemmaDialogCSS), "", false},
+		{"GET", "/assets/lemmas.js", serveAsset("application/javascript; charset=utf-8", lemmasJS), "", false},
 		{"GET", "/assets/article-find.js", serveAsset("application/javascript; charset=utf-8", articleFindJS), "", false},
 		{"GET", "/assets/list-search.js", serveAsset("application/javascript; charset=utf-8", listSearchJS), "", false},
 		{"GET", "/assets/headword-control.js", serveAsset("application/javascript; charset=utf-8", headwordControlJS), "", false},
