@@ -89,8 +89,8 @@
 	<string name="settings_workers_auto">Auto</string>
 	<string name="settings_close">Close</string>
 	<string name="settings_restore">Restore defaults</string>
-	<string name="settings_restore_confirm">Clear every advanced setting and use the values in wudict.toml?</string>
-	<string name="settings_restore_done">Advanced settings cleared.</string>
+	<string name="settings_restore_confirm">Clear the indexing override and use the value in wudict.toml?</string>
+	<string name="settings_restore_done">Indexing setting restored.</string>
 	<string name="settings_cancel">Cancel</string>
 	<!--
  Intake: an archive arriving from a file manager, a share sheet or the

@@ -1067,7 +1067,6 @@ window.wudictFontScale=(function(){
          otherwise keep whatever it was left in. -->
     <button type="button" class="sys-fold" id="sysAdvBar" aria-expanded="false" aria-controls="sysAdvBody">{{T:system.advanced}}</button>
     <div id="sysAdvBody" hidden>
-      <p class="sys-hint">{{T:system.advancedHint}}</p>
       <!-- The rows themselves, drawn from the shell's answer (sysRowsRender):
            a switch per BOOL key, a number field per count, each with its own
            label, hint and bounds. Empty in markup on purpose - what is in here
@@ -1860,7 +1859,8 @@ function applyFW(w,save){
    field is even enabled — loadPrefs settles before loadDicts, which is what
    ungreys the input — so no query can go out under the wrong setting. */
 let hlOn=true;
-let ignoreDiacritics=localStorage.getItem("wudict_ignore_diacritics")==="1";
+const savedIgnoreDiacritics=localStorage.getItem("wudict_ignore_diacritics");
+let ignoreDiacritics=savedIgnoreDiacritics===null||savedIgnoreDiacritics==="1";
 $("ignoreDiacritics").checked=ignoreDiacritics;
 $("ignoreDiacritics").addEventListener("change",e=>{
   ignoreDiacritics=e.target.checked;
@@ -4064,24 +4064,9 @@ async function showDesktopSysSettings(){
   folderLabel.append(folderDiagnostics,folderText);body.append(folderLabel);
   body.append(desktopSystemNodes.save);
   const desktopNote=document.createElement("p");desktopNote.className="sys-note";desktopNote.id="desktopSysNote";desktopNote.setAttribute("aria-live","polite");body.append(desktopNote);
-  if(c.configPath){
-    const path=document.createElement("p");path.className="sys-desktop-path";
-    path.textContent=c.configPath;body.append(path);
-    if(c.canReveal){
-      const reveal=document.createElement("button");reveal.type="button";reveal.className="btn";
-      reveal.textContent=c.revealLabel;
-      reveal.onclick=async()=>{
-        try{
-          const r=await apiFetch("/api/reveal?path="+encodeURIComponent(c.configPath));
-          if(!r.ok)setStatus(esc(await apiError(r)));
-        }catch(error){setStatus(esc(window.wudictI18n.errorText(error.message)))}
-      };
-      body.append(reveal);
-    }
-  }
   const table=document.createElement("div");table.className="sys-desktop-values";
   for(const [key,setting] of Object.entries(c.effective||{})){
-    if(key==="SEARCH_MEMORY"||key==="PREVIEW_MEMORY")continue;
+    if(key==="SEARCH_MEMORY"||key==="PREVIEW_MEMORY"||key==="SERVER_IP"||key==="SERVER_PORT")continue;
     const row=document.createElement("div");row.className="sys-desktop-row";
     const name=document.createElement("div"),value=document.createElement("span");
     const label=document.createElement("span"),configKey=document.createElement("code");

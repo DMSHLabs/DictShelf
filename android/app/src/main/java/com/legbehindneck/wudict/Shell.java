@@ -868,6 +868,9 @@ final class Shell {
                                 }
                             } else throw new IllegalArgumentException("Unknown field");
                         } else if ("restore".equals(action)) {
+                            if (!GoBridge.restoreIndexWorkersIfRunning()) {
+                                throw new IllegalStateException("Go runtime is unavailable");
+                            }
                             ShellPrefs.clearOverrides(a);
                         } else if ("clearCache".equals(action)) {
                             clearWebCache(a);
@@ -877,7 +880,7 @@ final class Shell {
                             throw new IllegalArgumentException("Unknown action");
                         }
                         result.confirm(systemState(a).toString());
-                    } catch (org.json.JSONException | IllegalArgumentException bad) {
+                    } catch (org.json.JSONException | RuntimeException bad) {
                         // Nothing is said here: the page holds the sentence a
                         // refused value deserves (its own field, its own
                         // words), and a cancel is how it learns to say it.
