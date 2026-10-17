@@ -276,6 +276,10 @@ final class GoBridge {
         }
     }
 
+    static boolean restoreIndexWorkersIfRunning() {
+        return loaded && nativeIndexWorkers(0) != 0;
+    }
+
     static String webResource(String rawURL, String headers) {
         if (!loaded) throw new IllegalStateException("Go bridge is unavailable");
         String result = nativeWebResource(rawURL, headers);

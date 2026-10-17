@@ -517,8 +517,15 @@ func TestFoldedHeadwordSearch(t *testing.T) {
 func TestPrefix(t *testing.T) {
 	s := testStore(t)
 	res, err := s.Prefix("coraz", 10)
-	if err != nil || len(res) != 1 {
-		t.Fatalf("Prefix coraz: %d results, err=%v", len(res), err)
+	if err != nil || len(res) != 2 {
+		t.Fatalf("Prefix coraz: %v, err=%v; want corazón and corazonada", res, err)
+	}
+	got := map[string]bool{}
+	for _, row := range res {
+		got[row.Headword] = true
+	}
+	if !got["corazón"] || !got["corazonada"] {
+		t.Fatalf("Prefix coraz = %v; want corazón and corazonada", res)
 	}
 	// LIKE wildcards in input must be literal (FTS-audit #5)
 	res, err = s.Prefix("100%", 10)
@@ -1034,9 +1041,15 @@ func TestDefaultPlanOmitsTrigram(t *testing.T) {
 	}
 	// asked for, it works
 	on := mk(Plan{FullText: true, Contains: true})
-	res, err := on.ContainsContext(bg, "razon", 5)
+	res, err := on.ContainsContext(WithIgnoreDiacritics(bg), "razon", 5)
 	if err != nil || len(res) != 1 {
-		t.Fatalf("contains when asked for: %v %v", res, err)
+		t.Fatalf("contains when asked for: %v %v; want corazón", res, err)
+	}
+	if res[0].Headword != "corazón" {
+		t.Fatalf("contains with diacritics ignored = %v; want corazón", res)
+	}
+	if res, err := on.ContainsContext(bg, "razon", 5); err != nil || len(res) != 0 {
+		t.Fatalf("contains with diacritics preserved = %v, %v; want no match", res, err)
 	}
 	// and contains without full text is a legal combination
 	small := mk(Plan{Contains: true})

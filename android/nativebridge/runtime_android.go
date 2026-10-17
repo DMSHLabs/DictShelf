@@ -678,7 +678,15 @@ func WudictGoBridgeSystemLogOptions(enabled, baseEvents, webEvents C.int) C.int 
 
 //export WudictGoBridgeIndexWorkers
 func WudictGoBridgeIndexWorkers(workers C.int) C.int {
-	if workers < 1 || int(workers) > config.ParseWorkers("all") {
+	nativeRuntime.Lock()
+	app := nativeRuntime.app
+	nativeRuntime.Unlock()
+	if app == nil {
+		return 0
+	}
+	if workers == 0 {
+		workers = C.int(config.ParseWorkers(app.Server.IndexWorkersValue))
+	} else if workers < 1 || int(workers) > config.ParseWorkers("all") {
 		return 0
 	}
 	server.SetIndexWorkers(int(workers))

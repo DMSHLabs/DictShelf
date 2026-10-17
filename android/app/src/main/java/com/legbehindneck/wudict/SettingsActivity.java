@@ -165,6 +165,7 @@ public class SettingsActivity extends Activity {
                 .setNegativeButton(R.string.settings_cancel, null)
                 .setPositiveButton(R.string.settings_restore, (d, w) -> {
                     ShellPrefs.clearOverrides(this);
+                    GoBridge.restoreIndexWorkersIfRunning();
                     toast(getString(R.string.settings_restore_done));
                 })
                 .show());
