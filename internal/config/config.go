@@ -85,8 +85,8 @@ type Config struct {
 	// wrong place to be generous. Set it to "1" when the server is bound to a
 	// network address and the LAN is trusted with deletions.
 	AllowRemoteDelete bool   // ALLOW_REMOTE_DELETE
-	NoCompress        bool   // NO_COMPRESS=1: store article text verbatim (bigger databases)
 	IndexWorkers      int    // INDEX_WORKERS: how many dictionaries may be indexed at once
+	IndexWorkersValue string // INDEX_WORKERS as selected: a count or "auto"
 	MemoryLimit       int64  // MEMORY_LIMIT: soft heap ceiling in bytes (0 = none)
 	PreviewMemory     int64  // PREVIEW_MEMORY: cap on RAM held by unprepared dictionaries (0 = unlimited)
 	SearchMemory      int64  // SEARCH_MEMORY: cap on RAM ONE search may materialise (0 = uncapped)
@@ -176,8 +176,9 @@ func defaults() Config {
 		ImportKeep:   ImportKeepAsk,
 		// Nil: any site (D139). Dictionaries come from wherever the user
 		// found them, and the link is one they handed over deliberately.
-		ImportURLHosts: nil,
-		IndexWorkers:   1, // one dictionary at a time: the machine has other work to do
+		ImportURLHosts:    nil,
+		IndexWorkers:      1, // one dictionary at a time: the machine has other work to do
+		IndexWorkersValue: "1",
 		// both are platform-dependent, and for reasons that are about the
 		// platform's opinion of us rather than its capability - see tuning.go
 		PreviewMemory: previewMemoryDefault(),
@@ -302,11 +303,14 @@ func Load(configPath string, flags map[string]string) (Config, error) {
 	if v := get("ALLOW_REMOTE_DELETE"); v != "" {
 		cfg.AllowRemoteDelete = !isOff(v)
 	}
-	if v := get("NO_COMPRESS"); v != "" {
-		cfg.NoCompress = !isOff(v)
-	}
 	if v := get("INDEX_WORKERS"); v != "" {
+		v = strings.ToLower(strings.TrimSpace(v))
 		cfg.IndexWorkers = ParseWorkers(v)
+		if v == "auto" {
+			cfg.IndexWorkersValue = v
+		} else {
+			cfg.IndexWorkersValue = strconv.Itoa(cfg.IndexWorkers)
+		}
 	}
 	if v := get("MEMORY_LIMIT"); v != "" {
 		cfg.MemoryLimit = ParseSize(v)
@@ -497,7 +501,7 @@ const configTemplate = `# wudict configuration  (~/.wudict/wudict.toml)
 # INDEX_WORKERS = "1"                 # how many dictionaries may be prepared at once. Each one
 #                                     # saturates a core and holds a few hundred bytes per headword,
 #                                     # so the default is one - the machine stays usable.
-#                                     # "auto" (or 0) = every core.
+#                                     # "auto" = all but one core, at least one; "all" (or 0) = every core.
 # PREVIEW_MEMORY = "1GB"              # how much RAM dictionaries that are NOT yet prepared may hold
 #                                     # open. Each costs ~350 bytes per headword; the least recently
 #                                     # used are closed above this. Prepared ones answer from disk and
@@ -531,8 +535,6 @@ const configTemplate = `# wudict configuration  (~/.wudict/wudict.toml)
 # MEMORY_LIMIT  = "0"                 # soft ceiling, e.g. "4GB": Go collects harder - and sheds its
 #                                     # caches - rather than growing past it. "0" = no ceiling.
 #                                     # Android defaults to a fraction of the device's RAM.
-# NO_COMPRESS = "0"                   # "1" = store article text uncompressed (databases roughly 3x larger,
-#                                     #       marginally faster reads; only worth it with disk to spare)
 # ALLOW_REMOTE_DELETE = "0"           # may a browser on ANOTHER machine delete a dictionary?
 #                                     # Deleting from this machine is always allowed. "1" = a browser
 #                                     # on the LAN may too; only meaningful when SERVER_IP is not
@@ -1067,15 +1069,15 @@ func ParseHostList(v string) []string {
 	return out
 }
 
-// ParseWorkers reads INDEX_WORKERS: a count, or "auto"/"all"/"max"/"0"/"-1"
-// for every core. Preparing a dictionary saturates a core and allocates a few
-// hundred bytes per headword, so the default is ONE - a background convenience
-// must not take the machine away from the person using it. The result is
-// clamped to [1, NumCPU].
+// ParseWorkers reads INDEX_WORKERS: a count, "auto" for all but one core,
+// or "all"/"max"/"0"/"-1" for every core. Auto leaves one core free for the
+// rest of the app and other work. The result is clamped to [1, NumCPU].
 func ParseWorkers(v string) int {
 	v = strings.ToLower(strings.TrimSpace(v))
 	switch v {
-	case "auto", "all", "max", "cpu", "0", "-1":
+	case "auto":
+		return max(1, runtime.NumCPU()-1)
+	case "all", "max", "cpu", "0", "-1":
 		return runtime.NumCPU()
 	}
 	n, err := strconv.Atoi(v)
@@ -1139,9 +1141,6 @@ type Setting struct {
 // actually in effect - including the defaults this package computes from the
 // device itself (tuning.go), which nothing outside Go should ever recompute.
 var Tunables = []string{
-	"NO_COMPRESS",
-	"SEARCH_MEMORY",
-	"PREVIEW_MEMORY",
 	"MEMORY_LIMIT",
 	"INDEX_WORKERS",
 	"SERVER_IP",
@@ -1156,11 +1155,6 @@ func (c Config) Effective() map[string]Setting {
 	out := make(map[string]Setting, len(Tunables))
 	val := func(key string) string {
 		switch key {
-		case "NO_COMPRESS":
-			if c.NoCompress {
-				return "1"
-			}
-			return "0"
 		case "SEARCH_MEMORY":
 			return FormatSize(c.SearchMemory)
 		case "PREVIEW_MEMORY":

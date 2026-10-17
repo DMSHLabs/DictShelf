@@ -4,6 +4,7 @@
 package edge
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -27,6 +28,7 @@ type Chromium struct {
 	webResourceRequested  *iCoreWebView2WebResourceRequestedEventHandler
 	acceleratorKeyPressed *ICoreWebView2AcceleratorKeyPressedEventHandler
 	navigationCompleted   *ICoreWebView2NavigationCompletedEventHandler
+	devToolsHandlers      []*iCoreWebView2CallDevToolsProtocolMethodCompletedHandler
 
 	environment *ICoreWebView2Environment
 
@@ -45,6 +47,13 @@ type Chromium struct {
 	WebResourceRequestedCallback func(request *ICoreWebView2WebResourceRequest, args *ICoreWebView2WebResourceRequestedEventArgs)
 	NavigationCompletedCallback  func(sender *ICoreWebView2, args *ICoreWebView2NavigationCompletedEventArgs)
 	AcceleratorKeyCallback       func(uint) bool
+}
+
+func (e *Chromium) ClearBrowserCache(done func(error)) error {
+	if e.webview == nil {
+		return fmt.Errorf("WebView2 is not ready")
+	}
+	return e.webview.ClearBrowserCache(done)
 }
 
 func NewChromium() *Chromium {

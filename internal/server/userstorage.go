@@ -128,6 +128,10 @@ var started=performance.now();
 window.__wudictStorageBootstrapStartMs=started;
 if(window.__wudictMigrationExporting)return;
 var data=` + string(data) + `,store=window.localStorage;
+var androidStorage=!!(window.wudictAndroidGo&&typeof window.wudictAndroidGo.userStorage==="function");
+function callAndroidStorage(method,argument){var result=JSON.parse(window.wudictAndroidGo.userStorage(method,argument||""));if(!result||!result.ok)throw new Error(result&&result.error||"settings bridge failed");return result.value}
+function storageRows(){var rows=[];for(var i=0;i<store.length;i++){var key=store.key(i);rows.push([key,store.getItem(key)])}return rows}
+if(androidStorage&&!data.blocked){try{var state=callAndroidStorage("storageState","");if(state&&state.exists){data.values=callAndroidStorage("storageRead","");data.exists=true}else{callAndroidStorage("storageImport",JSON.stringify(storageRows()));data.values=callAndroidStorage("storageRead","");data.exists=true}}catch(error){data.blocked=true;console.error("Could not migrate Android settings",error)}}
 if(data.exists){
   for(var i=store.length-1;i>=0;i--){var k=store.key(i);if(k&&k.indexOf("wudict_")===0)store.removeItem(k)}
   Object.keys(data.values||{}).forEach(function(k){store.setItem(k,data.values[k])});
@@ -136,7 +140,7 @@ window.__wudictStorageBootstrapMs=Math.round(performance.now()-started);
 window.__wudictStorageRestored=data.exists;
 window.__wudictSettingsReady=false;
 var p=Storage.prototype,put=p.setItem,del=p.removeItem,clear=p.clear,t;
-function persist(){if(!window.__wudictSettingsReady||data.blocked)return;clearTimeout(t);t=setTimeout(function(){try{var rows=[];for(var i=0;i<store.length;i++){var k=store.key(i);rows.push([k,store.getItem(k)])}var raw=JSON.stringify(rows);if(typeof window.wudictNativeCall==="function")window.wudictNativeCall("storageWrite",raw).catch(function(e){console.error("Could not save settings",e)});else fetch("/api/user-storage",{method:"PUT",headers:{"Content-Type":"application/json"},body:raw}).then(function(r){if(!r.ok)throw new Error("HTTP "+r.status)}).catch(function(e){console.error("Could not save settings",e)})}catch(e){console.error("Could not collect settings",e)}},200)}
+function persist(){if(!window.__wudictSettingsReady||data.blocked)return;clearTimeout(t);t=setTimeout(function(){try{var raw=JSON.stringify(storageRows());if(androidStorage){callAndroidStorage("storageWrite",raw);return}if(typeof window.wudictNativeCall==="function")window.wudictNativeCall("storageWrite",raw).catch(function(e){console.error("Could not save settings",e)});else fetch("/api/user-storage",{method:"PUT",headers:{"Content-Type":"application/json"},body:raw}).then(function(r){if(!r.ok)throw new Error("HTTP "+r.status)}).catch(function(e){console.error("Could not save settings",e)})}catch(e){console.error("Could not save settings",e)}},200)}
 p.setItem=function(k,v){put.call(this,k,v);if(this===store)persist()};
 p.removeItem=function(k){del.call(this,k);if(this===store)persist()};
 p.clear=function(){clear.call(this);if(this===store)persist()};

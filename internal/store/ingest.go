@@ -540,10 +540,7 @@ func boolMeta(b bool) string {
 // bodyEncoding records how bodies were written, for humans reading the meta;
 // the read path detects the form per row and does not consult this.
 func bodyEncoding() string {
-	if compressBodies {
-		return "deflate"
-	}
-	return "plain"
+	return "deflate"
 }
 
 // syncFile flushes a finished ingest temp to disk. dsnIngest runs with

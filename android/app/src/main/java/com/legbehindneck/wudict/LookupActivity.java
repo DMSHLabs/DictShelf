@@ -236,7 +236,9 @@ public class LookupActivity extends Activity {
 
             @Override
             public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest req) {
-                return speech.intercept(req.getUrl()); // null: the WebView's own business
+                WebResourceResponse response = speech.intercept(req.getUrl());
+                if (response != null) return response;
+                return GoAppResource.intercept(req);
             }
 
             @Override

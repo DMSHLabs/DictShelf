@@ -7,7 +7,7 @@
 // navigation that is NOT ours goes instead.
 //
 // It lives here rather than in MainActivity because there are now two windows
-// onto the same server - the app and the selection-lookup popup (D67) - and a
+// onto the same in-process Go runtime - the app and the selection-lookup popup (D67) - and a
 // second copy of this policy is a second thing to keep in step. Nothing here
 // knows about either activity's layout or lifecycle.
 package com.legbehindneck.wudict;
@@ -31,6 +31,8 @@ import android.webkit.WebResourceRequest;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 
+import org.json.JSONObject;
+
 import java.io.File;
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
@@ -38,16 +40,44 @@ import java.net.URLEncoder;
 final class Shell {
 
     private static final String TAG = "wudict";
+    static final String STABLE_HOST = "wudict2.localhost";
+    private static final String STABLE_ORIGIN = "https://" + STABLE_HOST;
+    private static volatile boolean originPrepared;
+    private static volatile boolean legacyOriginRequired = true;
 
     /**
-     * The one origin that belongs to us; everything else is somebody's website.
-     *
-     * <p>A method rather than a constant since D101, because the port is an
-     * install-level setting a device may override. The host never varies: it is
-     * the address we connect to, not the one the server binds to.
+     * The stable secure origin used after settings have moved out of WebView
+     * storage. Until settings.json marks that import complete, keep the old
+     * origin so its localStorage can be read without starting a listener.
      */
     static String origin(Context c) {
-        return "http://" + ServerProcess.HOST + ":" + ServerProcess.port(c);
+        return originPrepared && !legacyOriginRequired ? STABLE_ORIGIN : legacyOrigin(c);
+    }
+
+    private static String legacyOrigin(Context c) {
+        return "http://" + ShellPrefs.LEGACY_HOST + ":" + ShellPrefs.port(c);
+    }
+
+    /** Selects the origin once the in-process Go runtime can inspect settings files. */
+    static synchronized void prepareOrigin(Context c) {
+        if (originPrepared) return;
+        try {
+            JSONObject response = new JSONObject(GoBridge.userStorage("storageState", ""));
+            JSONObject state = response.optJSONObject("value");
+            if (!response.optBoolean("ok") || state == null)
+                throw new IllegalStateException("settings state is unavailable");
+            legacyOriginRequired = !state.optBoolean("exists");
+            originPrepared = true;
+            SystemLog.record("WebView origin selected: " +
+                    (legacyOriginRequired ? "legacy settings import" : "secure app origin"));
+        } catch (Exception error) {
+            // Preserving the old origin gives the embedded bootstrap one more
+            // chance to import the existing WebView profile if file status is
+            // temporarily unavailable.
+            legacyOriginRequired = true;
+            originPrepared = true;
+            Log.w(TAG, "Could not inspect settings files; keeping legacy WebView origin", error);
+        }
     }
 
     /**
@@ -96,26 +126,7 @@ final class Shell {
     }
 
     static String pageUrl(Context c) {
-        String k = key(c);
-        return origin(c) + "/?" + shellQuery(c) + (k.isEmpty() ? "" : "&" + k);
-    }
-
-    /**
-     * The access key as a query fragment, or "" when this install does not use
-     * one (ShellPrefs.REQUIRE_KEY).
-     *
-     * <p>Carried on the URL rather than installed with CookieManager, which
-     * would be the obvious way and is the fragile one: setCookie's write is
-     * not ordered against a loadUrl issued in the next statement, so the first
-     * page of a cold start would race it. The server takes the key off the
-     * URL, sets the cookie itself and redirects to the address without it -
-     * one loopback round trip, no timing to reason about, and the key never
-     * stays in the page's own location. Every subsequent request in that
-     * WebView - articles, media, the search stream - rides the cookie.
-     */
-    private static String key(Context c) {
-        String t = ShellPrefs.token(c);
-        return t.isEmpty() ? "" : "k=" + t;
+        return origin(c) + "/?" + shellQuery(c);
     }
 
     private Shell() {
@@ -133,8 +144,6 @@ final class Shell {
         StringBuilder b = new StringBuilder(origin(c)).append("/?q=").append(enc(q));
         if (mode != null && !mode.isEmpty()) b.append("&mode=").append(enc(mode));
         if (dict != null && !dict.isEmpty()) b.append("&dict=").append(enc(dict));
-        String k = key(c);
-        if (!k.isEmpty()) b.append("&").append(k);
         return b.append("&").append(shellQuery(c)).toString();
     }
 
@@ -242,22 +251,13 @@ final class Shell {
      * The app page's System window: every row of the shell's own settings
      * screen, as the page draws them (index.html, #sysSettings).
      *
-     * <p>The direction of knowledge is the one D54 sets: the page asks here
-     * with a {@code wudict:system} prompt and is told VALUES - which lookups
-     * open the app, whether the messages are shown, whether the access key is
-     * required, and the overridable config rows with their labels and bounds -
-     * and it never learns which platform answered. The wording of a row
-     * travels with it because the row's LABEL is Android's own string
-     * resource: the row table exists here, and the flavour that has no row
-     * (Play's listen address) sends none, so a page cannot draw a control this
-     * build cannot honour.
+     * <p>The page asks through {@code wudict:system} and receives Android shell
+     * preferences, diagnostics settings and app-tuning rows. Server controls
+     * are hidden because Android has no HTTP listener. Row labels travel with
+     * the values because they come from Android string resources.
      *
-     * <p>What is here is what only this side knows. The value each config key
-     * RESOLVES to, and which layer gave it, is asked of the running server
-     * instead (the page's own /api/config), exactly as the settings screen
-     * asks it rather than recomputing Go's device-derived defaults - so a key
-     * left empty reads as inherited from what, and a server running with
-     * older values is spotted the same way in both places.
+     * <p>Effective config values are read from the in-process Go runtime through
+     * JNI; Android does not make an HTTP request.
      */
     static org.json.JSONObject systemState(Context c) throws org.json.JSONException {
         org.json.JSONObject reply = new org.json.JSONObject();
@@ -267,22 +267,10 @@ final class Shell {
         reply.put("reader", ShellPrefs.opensApp(c, ShellPrefs.READER));
         reply.put("info", ShellPrefs.infoMessages(c));
         reply.put("key", ShellPrefs.requireKey(c));
+        reply.put("serverAvailable", false);
         reply.put("logEnabled", SystemLog.enabled());
         reply.put("logBaseEvents", SystemLog.baseEvents());
         reply.put("logWebEvents", SystemLog.detailedEvents());
-        // The CONFIGURED port, and not ServerProcess.port: the page prints this
-        // in the sentence under the listen switch ("other devices on this
-        // network would use 192.168.1.44:6889"), which is a statement about the
-        // address a spawn would bind - exactly like that switch itself, which
-        // is read once, at spawn. The port the app talks to is a different
-        // question with a different answer while a stored change is pending,
-        // and the page never needs it: it is being served by that server.
-        reply.put("port", ShellPrefs.port(c));
-        // Only the row that HAS a listen address draws the note that says
-        // where this phone would be reached, and that row is the flavour's
-        // (foss) - in Play there is no row, so this answer is unused.
-        String lan = Net.lanAddress();
-        reply.put("lan", lan == null ? org.json.JSONObject.NULL : lan);
         org.json.JSONArray rows = new org.json.JSONArray();
         for (ShellPrefs.Override o : ShellPrefs.OVERRIDES) {
             org.json.JSONObject row = new org.json.JSONObject();
@@ -294,16 +282,9 @@ final class Shell {
             row.put("min", o.min);
             row.put("max", ShellPrefs.maxOf(c, o));
             row.put("onValue", o.onValue == null ? org.json.JSONObject.NULL : o.onValue);
-            // The switch that carries an address, which is the one row whose
-            // hint grows a sentence naming where this phone is reachable.
-            row.put("lan", o.flag != null && o.kind == ShellPrefs.BOOL);
             String stored = ShellPrefs.override(c, o);
             row.put("stored", stored == null ? org.json.JSONObject.NULL : stored);
-            // What a spawn would pass for this key right now - a SERVER_IP
-            // resolved against the interfaces this moment - or null when
-            // nothing here sets it and the config's own layers decide. The
-            // page compares it against what the RUNNING server reported, which
-            // is the whole "still running with the previous settings" check.
+            // The value this Android app contributes for the Go runtime.
             String emitted = ShellPrefs.emitted(c, o);
             row.put("emitted", emitted == null ? org.json.JSONObject.NULL : emitted);
             rows.put(row);
@@ -317,7 +298,7 @@ final class Shell {
     static final String NATIVE_SELECT_PICKER_JS = """
             (() => {
               function installPickers() {
-              for (const select of document.querySelectorAll('#mode, #articleFindMode, #stylerPreset, #groupSelect, #groupAvailableFilter, #bulkIndexes select')) {
+              for (const select of document.querySelectorAll('#mode, #articleFindMode, #stylerPreset, #groupSelect, #groupAvailableFilter, #sysAdvanced select, #bulkIndexes select')) {
               const id = select.id || 'bulkIndexAction';
               if (!select || select.dataset.shellPicker) continue;
               select.dataset.shellPicker = '1';
@@ -544,6 +525,10 @@ final class Shell {
 
         @JavascriptInterface public String userFileOperation(String method, String argument) {
             return GoBridge.userFileOperation(method, argument);
+        }
+
+        @JavascriptInterface public String userStorage(String method, String argument) {
+            return GoBridge.userStorage(method, argument);
         }
     }
 
@@ -851,6 +836,8 @@ final class Shell {
                             if ("log".equals(field)) {
                                 SystemLog.configure(a, request.getBoolean("enabled"),
                                         request.getBoolean("baseEvents"), request.getBoolean("webEvents"));
+                                GoBridge.configureSystemLog(request.getBoolean("enabled"),
+                                        request.getBoolean("baseEvents"), request.getBoolean("webEvents"));
                                 if (request.getBoolean("enabled")) ProcessExitDiagnostics.recordRecent(a);
                             } else if ("toolbar".equals(field)) {
                                 ShellPrefs.set(a, ShellPrefs.TOOLBAR, request.getBoolean("value"));
@@ -872,6 +859,13 @@ final class Shell {
                                 String value = request.isNull("value") ? null
                                         : request.optString("value", "");
                                 ShellPrefs.setOverrideChecked(a, o, value);
+                                if ("INDEX_WORKERS".equals(o.key)) {
+                                    int workers = value == null ? 1
+                                            : "auto".equalsIgnoreCase(value)
+                                                    ? Math.max(1, Runtime.getRuntime().availableProcessors() - 1)
+                                                    : Integer.parseInt(value);
+                                    GoBridge.configureIndexWorkers(workers);
+                                }
                             } else throw new IllegalArgumentException("Unknown field");
                         } else if ("restore".equals(action)) {
                             ShellPrefs.clearOverrides(a);

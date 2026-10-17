@@ -14,8 +14,11 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"runtime"
+	"strconv"
 	"strings"
 
+	"github.com/wuweidict/wudict/internal/config"
 	"github.com/wuweidict/wudict/internal/logx"
 )
 
@@ -201,6 +204,45 @@ func (s *Server) DesktopJSON(baseURL, method, argument string) (any, error) {
 // JSON requests that may scan dictionary headwords.
 func (s *Server) DesktopJSONContext(ctx context.Context, baseURL, method, argument string) (any, error) {
 	switch method {
+	case "systemLogOptions":
+		var options struct {
+			Enabled    bool `json:"enabled"`
+			BaseEvents bool `json:"baseEvents"`
+			WebEvents  bool `json:"webEvents"`
+		}
+		if err := json.Unmarshal([]byte(argument), &options); err != nil {
+			return nil, errors.New("invalid system log settings")
+		}
+		logx.ConfigureSystemLog(options.Enabled, options.BaseEvents, options.WebEvents)
+		return map[string]bool{"saved": true}, nil
+	case "saveIndexWorkers":
+		if s.ConfigPath == "" {
+			return nil, errors.New("the active configuration file cannot be edited")
+		}
+		var request struct {
+			Value string `json:"value"`
+		}
+		if err := json.Unmarshal([]byte(argument), &request); err != nil {
+			return nil, errors.New("invalid indexing worker selection")
+		}
+		value := strings.ToLower(strings.TrimSpace(request.Value))
+		if value != "auto" {
+			n, err := strconv.Atoi(value)
+			if err != nil || n < 1 || n > runtime.NumCPU() {
+				return nil, errors.New("indexing workers must be Auto or between 1 and the processor count")
+			}
+			value = strconv.Itoa(n)
+		}
+		if err := config.SaveKeyRaw(s.ConfigPath, "INDEX_WORKERS", strconv.Quote(value)); err != nil {
+			return nil, fmt.Errorf("could not save INDEX_WORKERS: %w", err)
+		}
+		SetIndexWorkers(config.ParseWorkers(value))
+		s.IndexWorkersValue = value
+		setting := s.Effective["INDEX_WORKERS"]
+		setting.Value = strconv.Itoa(config.ParseWorkers(value))
+		setting.Origin = config.OriginFile
+		s.Effective["INDEX_WORKERS"] = setting
+		return map[string]any{"value": value, "workers": config.ParseWorkers(value)}, nil
 	case "storageState":
 		exists, err := s.userStorageExists()
 		return map[string]bool{"exists": exists}, err

@@ -98,6 +98,11 @@ type WebResourceView interface {
 	SetWebResourceRequestedHandler(filter string, handler WebResourceHandler) error
 }
 
+// BrowserCacheView clears the current WebView profile's HTTP cache.
+type BrowserCacheView interface {
+	ClearBrowserCache(done func(error)) error
+}
+
 // VirtualHostView maps an HTTPS host to a harmless local directory, giving
 // embedded pages a stable secure origin without requiring a listening socket.
 type VirtualHostView interface {

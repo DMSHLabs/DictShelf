@@ -954,6 +954,8 @@ body.styling{padding-bottom:var(--styler-shown,var(--styler-h))}
 #sysSettings .sys-label{flex:1 1 auto;color:var(--label);min-width:0;font-size:calc(var(--ui-font-base) * 1rem);overflow-wrap:anywhere}
 #sysSettings .sys-num input{box-sizing:border-box;flex:none;width:6.5em;min-height:calc(var(--ui-control-height) * 1em);font:inherit;font-size:calc(var(--ui-font-base) * 1rem);text-align:right;
   color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:.5em .6em}
+#sysSettings .sys-num select{box-sizing:border-box;flex:none;min-width:6.5em;min-height:calc(var(--ui-control-height) * 1em);font:inherit;font-size:calc(var(--ui-font-base) * 1rem);color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:.35em .5em}
+#sysSettings .sys-action-spaced{margin-top:calc(var(--ui-control-height) * .5em)}
 #sysSettings .sys-num input:focus{outline:none;border-color:var(--focus);
   box-shadow:0 0 0 3px color-mix(in srgb,var(--focus) 25%,transparent)}
 /* The unit beside a megabytes field. The box holds a bare number - a number

@@ -26,6 +26,7 @@ public final class AppExit extends Application implements Application.ActivityLi
     @Override public void onCreate() {
         super.onCreate();
         SystemLog.initialize(this);
+        GoBridge.configureSystemLog(SystemLog.enabled(), SystemLog.baseEvents(), SystemLog.detailedEvents());
         ProcessExitDiagnostics.recordRecent(this);
         registerActivityLifecycleCallbacks(this);
     }
@@ -55,7 +56,7 @@ public final class AppExit extends Application implements Application.ActivityLi
 
     private void check(Activity owner, boolean waiting) {
         new Thread(() -> {
-            boolean busy = ServerProcess.workInFlight() || IndexService.hasWork();
+            boolean busy = IndexService.hasWork();
             main.post(() -> {
                 if (!pending) return;
                 if (!busy) {

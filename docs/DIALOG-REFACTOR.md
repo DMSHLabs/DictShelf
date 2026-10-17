@@ -29,7 +29,7 @@ Keep each editor maintainable in separate source files for its markup, styles an
 
 ## Settings and history storage
 
-This storage change is required before the first wuDict2 release so existing users can carry their preferences forward. Keep it separate from the Windows server-removal work because it affects persistent data and all supported platforms. The versioned files, shared HTTP persistence adapter, and Windows first-run import from the previous WebView origin are implemented; explicit settings export/import and runtime verification of the migration branches remain.
+This storage change is required before the first wuDict2 release so existing users can carry their preferences forward. Keep it separate from the Windows server-removal work because it affects persistent data and all supported platforms. The versioned files and shared HTTP persistence adapter are implemented. Windows imports from its previous WebView origin; Android imports from its existing origin through JNI and uses the same files. Explicit user-facing settings export/import and Android migration runtime verification remain.
 
 ### Decisions
 

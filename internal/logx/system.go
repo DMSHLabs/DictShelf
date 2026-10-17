@@ -20,6 +20,9 @@ const maxSystemRecord = 16 * 1024
 var systemMu sync.Mutex
 var systemRoot func() string
 var diagnosticURL = regexp.MustCompile(`https?://[^\s"<>]+`)
+var systemLogEnabled = true
+var systemLogBaseEvents = true
+var systemLogWebEvents = true
 
 // SetSystemLogRoot installs a path resolver. It must not call logging functions.
 // One mutex owns configuration, complete records, rotation and snapshots.
@@ -27,6 +30,16 @@ func SetSystemLogRoot(root func() string) {
 	systemMu.Lock()
 	defer systemMu.Unlock()
 	systemRoot = root
+}
+
+// ConfigureSystemLog controls the retained diagnostic file. It does not
+// change terminal output or error handling in callers.
+func ConfigureSystemLog(enabled, baseEvents, webEvents bool) {
+	systemMu.Lock()
+	systemLogEnabled = enabled
+	systemLogBaseEvents = baseEvents
+	systemLogWebEvents = webEvents
+	systemMu.Unlock()
 }
 
 func systemDir() string {
@@ -63,6 +76,10 @@ func System(format string, args ...any) {
 	}
 	systemMu.Lock()
 	defer systemMu.Unlock()
+	if !systemLogEnabled || (isWebSystemEvent(message) && !systemLogWebEvents) ||
+		(!isWebSystemEvent(message) && !systemLogBaseEvents) {
+		return
+	}
 	root := systemDir()
 	if root == "" || os.MkdirAll(root, 0o700) != nil {
 		return
@@ -94,6 +111,11 @@ func System(format string, args ...any) {
 	defer f.Close()
 	_, _ = f.Write(record)
 	_ = f.Sync()
+}
+
+func isWebSystemEvent(message string) bool {
+	message = strings.ToLower(message)
+	return strings.HasPrefix(message, "web ") || strings.HasPrefix(message, "webview ")
 }
 
 // SystemSnapshot copies retained rotations under the writer's mutex. The caller

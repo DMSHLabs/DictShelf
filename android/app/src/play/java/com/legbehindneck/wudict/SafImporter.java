@@ -26,13 +26,13 @@ import android.provider.DocumentsContract;
 import android.provider.OpenableColumns;
 import android.util.Log;
 
+import org.json.JSONObject;
+
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
@@ -232,7 +232,7 @@ final class SafImporter {
             }
         }
 
-        rescan(a);
+        rescan();
         a.runOnUiThread(() -> {
             if (!a.isFinishing() && !a.isDestroyed() && a instanceof MainActivity) {
                 ((MainActivity) a).reloadPage(); // the panel is showing a stale library
@@ -474,21 +474,30 @@ final class SafImporter {
 
     // ── after ────────────────────────────────────────────────────────────
 
-    // The server already exposes a rescan (internal/server/server.go:116);
-    // nothing new is added to its API for the port's sake.
-    private static void rescan(Context ctx) {
-        HttpURLConnection c = null;
+    // Refresh the shared Go registry after the imported files have landed.
+    private static void rescan() {
+        int stream = 0;
         try {
-            c = (HttpURLConnection) new URL("http://" + ServerProcess.HOST + ":"
-                    + ServerProcess.port(ctx) + "/api/rescan").openConnection();
-            c.setConnectTimeout(2000);
-            c.setReadTimeout(120_000); // a rescan of a fresh import indexes headwords
-            ShellPrefs.authorize(c);   // /api/rescan writes to the library, so it is gated
-            c.getResponseCode();
+            stream = GoBridge.startRescanStream();
+            if (stream <= 0) throw new IOException("Go runtime is unavailable");
+            for (;;) {
+                JSONObject packet = new JSONObject(GoBridge.pollDictStream(stream));
+                if (packet.optBoolean("done")) {
+                    String error = packet.optString("error", "");
+                    if (!error.isEmpty()) throw new IOException(error);
+                    return;
+                }
+                try {
+                    Thread.sleep(16);
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    throw new IOException("rescan interrupted", interrupted);
+                }
+            }
         } catch (Exception e) {
             SystemLog.warn(TAG, "rescan after import failed", e); // the next launch picks it up
         } finally {
-            if (c != null) c.disconnect();
+            if (stream > 0) GoBridge.cancelDictStream(stream);
         }
     }
 

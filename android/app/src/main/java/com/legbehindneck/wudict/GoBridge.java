@@ -58,6 +58,8 @@ final class GoBridge {
     private static native String nativeSavePrefs(String body);
     private static native String nativeSaveLanguage(String body);
     private static native String nativeSystemLogSnapshot();
+    private static native int nativeSystemLogOptions(boolean enabled, boolean baseEvents, boolean webEvents);
+    private static native int nativeIndexWorkers(int workers);
     private static native String nativeWebResource(String rawURL, String headers);
     private static native String nativeMediaOpen(String rawURL, String headers);
     private static native int nativeMediaRead(long handle, byte[] dst, int offset, int length);
@@ -66,6 +68,7 @@ final class GoBridge {
     private static native String nativeSaveStyle(String argument);
     private static native String nativeUserFilesSnapshot();
     private static native String nativeUserFileOperation(String method, String argument);
+    private static native String nativeUserStorage(String method, String argument);
     private static native int nativeDictStreamStart();
     private static native int nativeRescanStreamStart();
     private static native int nativeRescanIndexesStart(String origin, String request);
@@ -259,6 +262,20 @@ final class GoBridge {
         return result;
     }
 
+    static void configureSystemLog(boolean enabled, boolean baseEvents, boolean webEvents) {
+        if (!loaded) throw new IllegalStateException("Go bridge is unavailable");
+        if (nativeSystemLogOptions(enabled, baseEvents, webEvents) == 0) {
+            throw new IllegalStateException("Could not configure Go system log");
+        }
+    }
+
+    static void configureIndexWorkers(int workers) {
+        if (!loaded) throw new IllegalStateException("Go bridge is unavailable");
+        if (nativeIndexWorkers(workers) == 0) {
+            throw new IllegalStateException("Could not configure indexing concurrency");
+        }
+    }
+
     static String webResource(String rawURL, String headers) {
         if (!loaded) throw new IllegalStateException("Go bridge is unavailable");
         String result = nativeWebResource(rawURL, headers);
@@ -340,6 +357,13 @@ final class GoBridge {
         return result;
     }
 
+    static String userStorage(String method, String argument) {
+        if (!loaded) throw new IllegalStateException("Go bridge is unavailable");
+        String result = nativeUserStorage(method, argument);
+        if (result == null) throw new IllegalStateException("Could not access saved settings");
+        return result;
+    }
+
     static synchronized void initialize(Context context) {
         if (!loaded) return;
         appContext = context.getApplicationContext();
@@ -390,12 +414,10 @@ final class GoBridge {
         }
     }
 
-    static int startRuntime(Context context, File home, File dbDir, int port) {
+    static int startRuntime(Context context, File home, File dbDir) {
         if (!loaded) return -9;
         try {
             JSONObject flags = new JSONObject(ShellPrefs.env(context));
-            flags.put("SERVER_IP", ShellPrefs.bindIp(context));
-            flags.put("SERVER_PORT", String.valueOf(port));
             flags.put("DB_DIR", dbDir.getAbsolutePath());
             flags.put("USE_CACHED", "1");
             flags.put("NO_BROWSER", "1");

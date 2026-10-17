@@ -197,8 +197,9 @@ fields whose placeholders are what `/api/config` resolved to (`1024` for `1GB`,
 `1`, `6899`), each hint carrying "Between …" and "In effect now: …", and the
 LAN sentence on the checked listen row; writes land as
 `{action:"set",field:"toolbar",value:true}`,
-`{action:"set",field:"override",key:"NO_COMPRESS",value:"1"}` and `value:null`
-for unticking (an override's off-state is the ABSENCE of a value), a number is
+`{action:"set",field:"override",key:"INDEX_WORKERS",value:"auto"}` and
+`value:null` for withdrawing an override (an override's off-state is the
+ABSENCE of a value), a number is
 stored in canonical form, an out-of-range number is refused locally with the
 field put back, a refused write restores the box and says so, `restore` clears
 every row, `clearCache` reaches the shell; the stale note appears while an
@@ -396,7 +397,7 @@ on their defaults); the window opens as the phone card with the corner ✕ and n
 Close button; every switch and every Advanced row is drawn from the shell's own
 table, with the numbers the device resolved (`244`/`81` for the memory caps,
 `1` worker, `3912` MB from the RAM, `4` cores, `6889`); a tick stores
-`override_NO_COMPRESS=1` and unticking WITHDRAWS the key; a number typed into
+`override_INDEX_WORKERS=auto` and withdrawing it removes the key; a number typed into
 the port row stores `override_SERVER_PORT=7001` in canonical form and the next
 launch REALLY serves on 7001 (`In effect now: 7001`, and the page loads from
 that origin); `Restore defaults` clears every override and `window.confirm`

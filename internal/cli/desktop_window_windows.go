@@ -480,6 +480,28 @@ func bindNativeBridge(w webview.WebView, baseURL string, request func(context.Co
 		if id <= 0 {
 			return fmt.Errorf("invalid native request id")
 		}
+		if method == "clearBrowserCache" {
+			cache, ok := w.(webview.BrowserCacheView)
+			if !ok {
+				return fmt.Errorf("WebView2 cache clearing is unavailable")
+			}
+			reply := func(err error) {
+				valueJSON := "null"
+				if err == nil {
+					valueJSON = `{"cleared":true}`
+				}
+				errorJSON, _ := json.Marshal(errorText(err))
+				w.Dispatch(func() {
+					w.Eval("window.wudictNativeReply(" + strconv.Itoa(id) + "," + valueJSON + "," + string(errorJSON) + ",true)")
+				})
+			}
+			w.Dispatch(func() {
+				if err := cache.ClearBrowserCache(reply); err != nil {
+					reply(err)
+				}
+			})
+			return nil
+		}
 		ctx, cancel := context.WithCancel(context.Background())
 		nativeCallsMu.Lock()
 		nativeCalls[id] = nativeCall{cancel: cancel}

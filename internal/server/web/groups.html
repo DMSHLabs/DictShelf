@@ -219,7 +219,19 @@ async function unmatched(changed){
   if(!changed.length)return [];
   const have=new Set();
   try{
-    if(nativeCall){
+    if(window.wudictAndroidGo){
+      const id=window.wudictAndroidGo.startDictStream();
+      if(id<=0)throw new Error("Dictionary list unavailable");
+      try{
+        for(;;){
+          const packet=JSON.parse(window.wudictAndroidGo.pollDictStream(id));
+          for(const message of packet.messages||[])if(message.t==="dict"&&message.dict)
+            for(const g of message.dict.filters||message.dict.groups||[])have.add(g.f+"\n"+g.v);
+          if(packet.done){if(packet.error)throw new Error(packet.error);break}
+          await new Promise(resolve=>setTimeout(resolve,16));
+        }
+      }finally{window.wudictAndroidGo.cancelDictStream(id)}
+    }else if(nativeCall){
       await nativeCall("dicts","",o=>{
         if(o.t==="dict")for(const g of o.dict.filters||o.dict.groups||[])have.add(g.f+"\n"+g.v);
       });
@@ -258,6 +270,14 @@ function show(j,keepText){
 }
 
 async function call(method,body,query){
+  if(window.wudictAndroidGo){
+    const action=method==="GET"?"get":method==="PUT"?"save":"reset";
+    const argument=method==="PUT"
+      ?JSON.stringify({text:body||"",replace:new URLSearchParams(query||"").get("replace")==="1"}):"";
+    const result=JSON.parse(window.wudictAndroidGo.groups(action,argument));
+    if(!result.ok)throw new Error(result.error||"Could not edit filters");
+    return result.value;
+  }
   if(nativeCall){
     if(method==='GET')return nativeCall('groups');
     if(method==='PUT')return nativeCall('saveGroups',JSON.stringify({text:body||'',replace:new URLSearchParams(query||'').get('replace')==='1'}));
