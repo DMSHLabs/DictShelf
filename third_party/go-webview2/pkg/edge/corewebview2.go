@@ -4,8 +4,10 @@
 package edge
 
 import (
+	"fmt"
 	"log"
 	"runtime"
+	"sync"
 	"unsafe"
 
 	"github.com/jchv/go-webview2/internal/w32"
@@ -13,6 +15,38 @@ import (
 	"github.com/jchv/go-webview2/webviewloader"
 	"golang.org/x/sys/windows"
 )
+
+var devToolsHandlers sync.Map
+
+func (i *ICoreWebView2) ClearBrowserCache(done func(error)) error {
+	if i == nil {
+		return fmt.Errorf("WebView2 is not ready")
+	}
+	method, err := windows.UTF16PtrFromString("Network.clearBrowserCache")
+	if err != nil {
+		return err
+	}
+	params, err := windows.UTF16PtrFromString("{}")
+	if err != nil {
+		return err
+	}
+	handler := newICoreWebView2CallDevToolsProtocolMethodCompletedHandler(done)
+	devToolsHandlers.Store(uintptr(unsafe.Pointer(handler)), handler)
+	result, _, _ := i.vtbl.CallDevToolsProtocolMethod.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(unsafe.Pointer(method)),
+		uintptr(unsafe.Pointer(params)),
+		uintptr(unsafe.Pointer(handler)),
+	)
+	runtime.KeepAlive(method)
+	runtime.KeepAlive(params)
+	runtime.KeepAlive(handler)
+	if int32(result) < 0 {
+		devToolsHandlers.Delete(uintptr(unsafe.Pointer(handler)))
+		return fmt.Errorf("WebView2 cache clear failed: HRESULT 0x%08X", uint32(result))
+	}
+	return nil
+}
 
 func init() {
 	runtime.LockOSThread()

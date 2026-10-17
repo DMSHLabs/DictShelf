@@ -222,7 +222,7 @@ window.wudictFontScale=(function(){
 <form id="frm" class="col" role="search" aria-busy="true">
 <a class="btn" id="barBackWords" href="/browse" aria-label="{{T:search.backToWords}}" title="{{T:search.backToWords}}" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M19 12H5m6-6-6 6 6 6"/></svg><span>{{T:search.words}}</span></a>
 <span class="brand">wu<small>Dict2</small></span>
-<span id="androidBridgeStage" hidden style="font-size:.65em;white-space:nowrap;opacity:.7">A52</span>
+<span id="androidBridgeStage" hidden style="font-size:.65em;white-space:nowrap;opacity:.7">A59</span>
 <!-- The search pill. Above 600px it is display:contents, so the field and the
      two selects are direct flex children of the form. Below it the pill
      becomes the row:
@@ -1030,25 +1030,27 @@ window.wudictFontScale=(function(){
     <p class="sys-hint">{{T:system.messagesHint}}</p>
     <label class="sys-row"><input type="checkbox" id="sysInfo"><span class="sys-label">{{T:system.showInfo}}</span></label>
 
-    <h3 class="sys-head">{{T:system.access}}</h3>
-    <p class="sys-hint">{{T:system.accessHint}}</p>
-    <label class="sys-row"><input type="checkbox" id="sysKey"><span class="sys-label">{{T:system.key}}</span></label>
+    <div id="sysAccessSection">
+      <h3 class="sys-head">{{T:system.access}}</h3>
+      <p class="sys-hint">{{T:system.accessHint}}</p>
+      <label class="sys-row"><input type="checkbox" id="sysKey"><span class="sys-label">{{T:system.key}}</span></label>
+    </div>
 
     <h3 class="sys-head">{{T:system.cache}}</h3>
     <p class="sys-hint">{{T:system.cacheHint}}</p>
-    <div class="group-toolbar"><button type="button" class="btn" id="sysClearCache">{{T:system.clearCache}}</button></div>
+    <div class="group-toolbar sys-action-spaced"><button type="button" class="btn" id="sysClearCache">{{T:system.clearCache}}</button></div>
 
     <h3 class="sys-head">{{T:system.logFile}}</h3>
+    <p class="sys-hint">{{T:system.logHint}}</p>
     <label class="sys-row"><input type="checkbox" id="sysLogEnabled"><span class="sys-label">{{T:system.logEnable}}</span></label>
     <label class="sys-row"><input type="checkbox" id="sysLogBase"><span class="sys-label">{{T:system.logBase}}</span></label>
     <label class="sys-row"><input type="checkbox" id="sysLogWeb"><span class="sys-label">{{T:system.logWeb}}</span></label>
-    <p class="sys-hint">{{T:system.logHint}}</p>
     <label class="sys-row"><input type="checkbox" id="sysBrowseArticleDiagnostics"><span class="sys-label">{{T:system.browseArticleDiagnostics}}</span></label>
     <label class="sys-row"><input type="checkbox" id="sysBrowseDiagnostics"><span class="sys-label">{{T:system.browseDiagnostics}}</span></label>
     <label class="sys-row"><input type="checkbox" id="sysDictionaryListDiagnostics"><span class="sys-label">{{T:system.dictionaryListDiagnostics}}</span></label>
     <label class="sys-row"><input type="checkbox" id="sysDictionaryCacheDiagnostics"><span class="sys-label">{{T:system.dictionaryCacheDiagnostics}}</span></label>
     <label class="sys-row"><input type="checkbox" id="sysFolderDiagnostics"><span class="sys-label">{{T:system.folderDiagnostics}}</span></label>
-    <div class="group-toolbar"><a class="btn" id="sysSaveLog" href="/api/system-log" download>{{T:panel.saveSystemLog}}</a></div>
+    <div class="group-toolbar sys-action-spaced"><a class="btn" id="sysSaveLog" href="/api/system-log" download>{{T:panel.saveSystemLog}}</a></div>
 
     <!-- Advanced FOLDS, and starts folded (the reader's ask, 2026-09-28). Two
          reasons it is the one group that does: its rows are the server's own
@@ -2279,7 +2281,8 @@ function setPhase(p){
    skimmed, so the switch leaves it alone (see the morph branch in doSearch).
    With the messages off the screen simply stays empty until results arrive,
    which is the point: a message nobody can finish reading is noise. */
-const quietMessages=!!window.wudictShellQuiet;
+let quietMessages=!!window.wudictShellQuiet;
+if(!window.wudictAndroidShell){try{quietMessages=localStorage.getItem("wudict_show_info_messages")==="0"}catch(_){}}
 const BOOT_MSGS=[tx("search.boot1"),tx("search.boot2"),
   tx("search.boot3"),tx("search.boot4"),
   tx("search.boot5")];
@@ -3649,11 +3652,16 @@ let sysState=null;   // the shell's last answer: the switches, the rows, the add
 let sysCfg=null;     // the server's last /api/config answer, or null when it did not
 const sysRows=[];    // one entry per Advanced row: {row, field, hint}
 $("exitApp").addEventListener("click",async()=>{
-  if(!cfgInfo?.canExit)return;
+  if(!window.wudictAndroidShell&&!cfgInfo?.canExit)return;
   const button=$("exitApp");button.disabled=true;
   try{
-    const r=await apiFetch("/api/exit",{method:"POST"});
-    if(!r.ok)throw new Error(await apiError(r));
+    if(window.wudictAndroidShell){
+      const result=window.prompt("wudict:exit","");
+      if(result!=="ok")throw new Error("Exit was not accepted");
+    }else{
+      const r=await apiFetch("/api/exit",{method:"POST"});
+      if(!r.ok)throw new Error(await apiError(r));
+    }
     button.textContent=tx("system.desktopStopped");
   }catch(e){button.disabled=false;setStatus(esc(tx("system.desktopExitFailed",{error:window.wudictI18n.errorText(e.message)})))}
 });
@@ -3695,6 +3703,8 @@ function sysRead(){
    flavour may contribute none, and a write answers with the same shape a read
    does, so one path draws both. */
 function sysPaint(state){
+  const accessSection=$("sysAccessSection");
+  if(accessSection)accessSection.hidden=state.serverAvailable===false;
   for(const pair of [["sysToolbar",state.toolbar],["sysShare",state.share],
       ["sysLink",state.link],["sysReader",state.reader],["sysInfo",state.info],["sysKey",state.key]]){
     $(pair[0]).checked=!!pair[1];
@@ -3743,17 +3753,24 @@ function sysRowBuild(row){
     const span=document.createElement("span");
     span.className="sys-label";
     span.textContent=row.label;
-    const field=document.createElement("input");
-    field.type="number";
-    field.inputMode="numeric";
-    field.step="1";
-    field.min=row.min;
-    field.max=row.max;
-    field.value=row.stored==null?"":row.stored;
+    const field=document.createElement(row.key==="INDEX_WORKERS"?"select":"input");
+    if(row.key==="INDEX_WORKERS"){
+      field.add(new Option(tx("system.desktop.workersAuto"),"auto"));
+      for(let n=1;n<=row.max;n++)field.add(new Option(String(n),String(n)));
+      field.value=row.stored==null?"1":String(row.stored);
+      field.addEventListener("change",()=>sysCommitWorkers(row,field));
+    }else{
+      field.type="number";
+      field.inputMode="numeric";
+      field.step="1";
+      field.min=row.min;
+      field.max=row.max;
+      field.value=row.stored==null?"":row.stored;
+      field.addEventListener("change",()=>sysCommitNumber(row,field));
+    }
     field.setAttribute("aria-label",row.label);
     // Committed on change, which is a blur or Enter: "1" on the way to "128"
     // is an unfinished value, not an invalid one.
-    field.addEventListener("change",()=>sysCommitNumber(row,field));
     line.appendChild(span);
     line.appendChild(field);
     // The unit, beside the box: a number field holds a number and nothing
@@ -3795,8 +3812,14 @@ function sysEffectPaint(){
     const row=entry.row,seen=sysSeen(row,eff);
     let text=row.hint;
     if(row.kind!=="bool"){
-      text+=" "+tx("system.range",{min:row.min,max:row.max,unit:row.kind==="mb"?" "+tx("system.mb"):""});
-      entry.field.placeholder=seen==null?"":sysBare(row.kind,seen);
+      if(row.key==="INDEX_WORKERS"){
+        const current=Number(seen)||1;
+        if(row.stored==null)entry.field.value=String(current);
+        text+=" "+tx("system.desktop.INDEX_WORKERS_HINT");
+      }else{
+        text+=" "+tx("system.range",{min:row.min,max:row.max,unit:row.kind==="mb"?" "+tx("system.mb"):""});
+        entry.field.placeholder=seen==null?"":sysBare(row.kind,seen);
+      }
     }
     if(seen!=null)text+=" "+tx("system.effective",{value:sysSeenText(row,seen)});
     if(row.lan&&entry.field.checked){
@@ -3885,6 +3908,7 @@ function sysIsStale(){
 }
 /* Value equality in the row's own terms: sizes by bytes, the rest literally. */
 function sysSame(row,a,b){
+  if(row.key==="INDEX_WORKERS"&&a==="auto")return Number(b)===Math.max(1,Number(row.maxIndexWorkers||row.max)-1);
   if(row.kind!=="mb")return a===b;
   const x=sysMb(a),y=sysMb(b);
   return x!=null&&x===y;
@@ -3934,7 +3958,19 @@ function sysCommitNumber(row,field){
   if(String(n)===String(stored))return;
   sysSet({action:"set",field:"override",key:row.key,value:String(n)});
 }
-function sysNote(text){$("sysNote").textContent=text||""}
+function sysCommitWorkers(row,field){
+  const value=field.value;
+  if(value==="auto"||(/^\d+$/.test(value)&&Number(value)>=1&&Number(value)<=row.max)){
+    sysSet({action:"set",field:"override",key:row.key,value});
+  }else{
+    sysNote(tx("system.invalid",{value,min:1,max:row.max}));
+    field.value=row.stored==null?"auto":String(row.stored);
+  }
+}
+function sysNote(text){
+  const note=$("desktopSysSettings")?.open?$("desktopSysNote"):$("sysNote");
+  if(note)note.textContent=text||"";
+}
 
 function showSysSettings(){
   // Advanced starts folded EVERY time the window opens, which is what "folded
@@ -3955,8 +3991,16 @@ $("sysAdvBar").onclick=()=>{
   $("sysAdvBody").hidden=!open;
   $("sysAdvBar").setAttribute("aria-expanded",open?"true":"false");
 };
+let desktopSystemNodes=null;
 async function showDesktopSysSettings(){
   const dialog=$("desktopSysSettings"),body=$("desktopSysBody");
+  if(!desktopSystemNodes)desktopSystemNodes={
+    info:$("sysInfo").parentElement,
+    logEnabled:$("sysLogEnabled").parentElement,
+    logBase:$("sysLogBase").parentElement,
+    logWeb:$("sysLogWeb").parentElement,
+    save:$("sysSaveLog").parentElement
+  };
   dialog.showModal();
   body.replaceChildren();
   body.scrollTop=0;
@@ -3964,10 +4008,35 @@ async function showDesktopSysSettings(){
   if(!c){body.textContent=tx("system.desktopLoadFailed");return}
   const hint=document.createElement("p");hint.className="sys-hint";
   hint.textContent=tx("system.desktopHint");body.append(hint);
+  const messagesHeading=document.createElement("h3");messagesHeading.className="sys-head";
+  messagesHeading.textContent=tx("system.messages");body.append(messagesHeading);
+  const messagesHint=document.createElement("p");messagesHint.className="sys-hint";
+  messagesHint.textContent=tx("system.messagesHint");body.append(messagesHint);
+  body.append(desktopSystemNodes.info);
+  $("sysInfo").checked=!quietMessages;
+  const cacheHeading=document.createElement("h3");cacheHeading.className="sys-head";
+  cacheHeading.textContent=tx("system.cache");body.append(cacheHeading);
+  const cacheHint=document.createElement("p");cacheHint.className="sys-hint";
+  cacheHint.textContent=tx("system.cacheHint");body.append(cacheHint);
+  const clearCache=document.createElement("button");clearCache.type="button";clearCache.className="btn sys-action-spaced";
+  clearCache.textContent=tx("system.clearCache");
+  clearCache.onclick=async()=>{
+    clearCache.disabled=true;
+    try{await window.wudictNativeCall("clearBrowserCache");location.reload()}
+    catch(error){sysNote(tx("system.cacheFailed")+" "+window.wudictI18n.errorText(error.message));clearCache.disabled=false}
+  };
+  body.append(clearCache);
   const logHeading=document.createElement("h3");logHeading.className="sys-head";
   logHeading.textContent=tx("system.logFile");body.append(logHeading);
   const logHint=document.createElement("p");logHint.className="sys-hint";
   logHint.textContent=tx("system.logHint");body.append(logHint);
+  body.append(desktopSystemNodes.logEnabled,desktopSystemNodes.logBase,desktopSystemNodes.logWeb);
+  const desktopLog=desktopSystemLogOptions();
+  $("sysLogEnabled").checked=desktopLog.enabled;
+  $("sysLogBase").checked=desktopLog.baseEvents;
+  $("sysLogWeb").checked=desktopLog.webEvents;
+  $("sysLogBase").disabled=!desktopLog.enabled;
+  $("sysLogWeb").disabled=!desktopLog.enabled;
   const diagnosticsLabel=document.createElement("label");diagnosticsLabel.className="sys-row";
   const diagnostics=document.createElement("input");diagnostics.type="checkbox";diagnostics.checked=browseDiagnosticsEnabled();
   diagnostics.addEventListener("change",()=>setBrowseDiagnostics(diagnostics.checked));
@@ -3993,8 +4062,8 @@ async function showDesktopSysSettings(){
   folderDiagnostics.addEventListener("change",()=>setFolderDiagnostics(folderDiagnostics.checked));
   const folderText=document.createElement("span");folderText.className="sys-label";folderText.textContent=tx("system.folderDiagnostics");
   folderLabel.append(folderDiagnostics,folderText);body.append(folderLabel);
-  const saveLog=document.createElement("a");saveLog.className="btn";saveLog.href="/api/system-log";saveLog.download="";
-  saveLog.textContent=tx("panel.saveSystemLog");saveLog.addEventListener("click",systemLogClick);body.append(saveLog);
+  body.append(desktopSystemNodes.save);
+  const desktopNote=document.createElement("p");desktopNote.className="sys-note";desktopNote.id="desktopSysNote";desktopNote.setAttribute("aria-live","polite");body.append(desktopNote);
   if(c.configPath){
     const path=document.createElement("p");path.className="sys-desktop-path";
     path.textContent=c.configPath;body.append(path);
@@ -4010,10 +4079,9 @@ async function showDesktopSysSettings(){
       body.append(reveal);
     }
   }
-  const heading=document.createElement("h3");heading.className="sys-head";
-  heading.textContent=tx("system.desktopEffective");body.append(heading);
   const table=document.createElement("div");table.className="sys-desktop-values";
   for(const [key,setting] of Object.entries(c.effective||{})){
+    if(key==="SEARCH_MEMORY"||key==="PREVIEW_MEMORY")continue;
     const row=document.createElement("div");row.className="sys-desktop-row";
     const name=document.createElement("div"),value=document.createElement("span");
     const label=document.createElement("span"),configKey=document.createElement("code");
@@ -4023,13 +4091,27 @@ async function showDesktopSysSettings(){
     name.append(label,configKey);
     value.className="sys-desktop-value";
     const raw=String(setting.value);
-    value.textContent=key==="NO_COMPRESS"?(raw==="0"?tx("system.desktop.no"):raw==="1"?tx("system.desktop.yes"):raw)
-      :["MEMORY_LIMIT","PREVIEW_MEMORY","SEARCH_MEMORY"].includes(key)&&raw==="0"
-        ?tx("system.desktop.unlimited"):raw;
+    if(key==="INDEX_WORKERS"){
+      const select=document.createElement("select");select.className="sys-desktop-worker-select";
+      select.add(new Option(tx("system.desktop.workersAuto"),"auto"));
+      const maximum=Math.max(1,Number(c.maxIndexWorkers)||1),current=Number(raw)||1;
+      for(let n=1;n<=maximum;n++)select.add(new Option(String(n),String(n)));
+      const stored=String(c.indexWorkersValue||raw);
+      select.value=stored==="auto"||(/^\d+$/.test(stored)&&Number(stored)>=1&&Number(stored)<=maximum)?stored:String(current);
+      select.dataset.previous=select.value;
+      select.addEventListener("change",()=>sysCommitDesktopWorkers(select));
+      value.append(select);
+    }else value.textContent=["MEMORY_LIMIT"].includes(key)&&raw==="0"
+      ?tx("system.desktop.unlimited"):raw;
+    if(key==="INDEX_WORKERS"){
+      const description=document.createElement("p");description.className="sys-hint";
+      description.textContent=tx("system.desktop."+key+"_HINT");name.append(description);
+    }
     row.append(name,value);
     table.append(row);
   }
-  body.append(table);
+  const settingsHeading=document.createElement("h3");settingsHeading.className="sys-head";
+  settingsHeading.textContent=tx("system.desktopEffective");body.append(settingsHeading,table);
 }
 $("editSysSettings").onclick=()=>window.wudictAndroidShell?showSysSettings():showDesktopSysSettings();
 $("desktopSysClose").onclick=()=>$("desktopSysSettings").close();
@@ -4040,7 +4122,13 @@ $("sysToolbar").addEventListener("change",e=>sysSwitch("toolbar",e.target.checke
 $("sysShare").addEventListener("change",e=>sysSwitch("share",e.target.checked));
 $("sysLink").addEventListener("change",e=>sysSwitch("link",e.target.checked));
 $("sysReader").addEventListener("change",e=>sysSwitch("reader",e.target.checked));
-$("sysInfo").addEventListener("change",e=>sysSwitch("info",e.target.checked));
+$("sysInfo").addEventListener("change",e=>{
+  quietMessages=!e.target.checked;
+  if(window.wudictAndroidShell)sysSwitch("info",e.target.checked);
+  else{
+    try{localStorage.setItem("wudict_show_info_messages",e.target.checked?"1":"0")}catch(_){}
+  }
+});
 $("sysKey").addEventListener("change",e=>sysSwitch("key",e.target.checked));
 function browseDiagnosticsEnabled(){try{return localStorage.getItem("wudict_browse_diagnostics")==="1"}catch(_){return false}}
 function setBrowseDiagnostics(on){try{if(on)localStorage.setItem("wudict_browse_diagnostics","1");else localStorage.removeItem("wudict_browse_diagnostics")}catch(_){}}
@@ -4108,8 +4196,41 @@ function setDictionaryCacheDiagnostics(on){try{if(on)localStorage.setItem("wudic
 function folderDiagnosticsEnabled(){try{return localStorage.getItem("wudict_folder_diagnostics")==="1"}catch(_){return false}}
 function setFolderDiagnostics(on){try{if(on)localStorage.setItem("wudict_folder_diagnostics","1");else localStorage.removeItem("wudict_folder_diagnostics")}catch(_){}}
 function sysLogChange(){
-  sysSet({action:"set",field:"log",enabled:$("sysLogEnabled").checked,
-    baseEvents:$("sysLogBase").checked,webEvents:$("sysLogWeb").checked});
+  const options={enabled:$("sysLogEnabled").checked,
+    baseEvents:$("sysLogBase").checked,webEvents:$("sysLogWeb").checked};
+  $("sysLogBase").disabled=!options.enabled;$("sysLogWeb").disabled=!options.enabled;
+  if(window.wudictAndroidShell){
+    sysSet({action:"set",field:"log",...options});
+    return;
+  }
+  try{localStorage.setItem("wudict_system_log_options",JSON.stringify(options))}catch(_){}
+  if(typeof window.wudictNativeCall==="function"){
+    window.wudictNativeCall("systemLogOptions",JSON.stringify(options)).catch(error=>
+      sysNote(window.wudictI18n.errorText(error.message)));
+  }
+}
+function desktopSystemLogOptions(){
+  try{
+    const value=JSON.parse(localStorage.getItem("wudict_system_log_options")||"null");
+    if(value&&typeof value==="object")return{
+      enabled:value.enabled!==false,baseEvents:value.baseEvents!==false,webEvents:value.webEvents===true
+    };
+  }catch(_){}
+  return {enabled:true,baseEvents:true,webEvents:false};
+}
+function sysCommitDesktopWorkers(field){
+  const value=field.value,previous=field.dataset.previous||value;
+  window.wudictNativeCall("saveIndexWorkers",JSON.stringify({value})).then(()=>{
+    field.dataset.previous=value;
+    sysNote(tx("system.desktop.workersSaved"));
+  }).catch(error=>{
+    field.value=previous;
+    sysNote(tx("system.desktop.workersSaveFailed",{error:window.wudictI18n.errorText(error.message)}));
+  });
+}
+if(window.wudictWindowsShell&&typeof window.wudictNativeCall==="function"){
+  const options=desktopSystemLogOptions();
+  window.wudictNativeCall("systemLogOptions",JSON.stringify(options)).catch(()=>{});
 }
 $("sysLogEnabled").addEventListener("change",sysLogChange);
 $("sysLogBase").addEventListener("change",sysLogChange);
@@ -4132,7 +4253,12 @@ $("sysRestore").onclick=()=>{
    why it is not confirmed, and the answer to the tap is the page coming back
    rather than a sentence about it. */
 $("sysClearCache").onclick=()=>{
-  if(!sysRequest({action:"clearCache"}))sysNote(tx("system.cacheFailed"));
+  if(window.wudictAndroidShell){
+    if(!sysRequest({action:"clearCache"}))sysNote(tx("system.cacheFailed"));
+  }else if(typeof window.wudictNativeCall==="function"){
+    window.wudictNativeCall("clearBrowserCache").then(()=>location.reload())
+      .catch(()=>sysNote(tx("system.cacheFailed")));
+  }
 };
 
 /* Coming back from `Lemmatization…` or `Edit folders…` puts the reader back in
@@ -5347,12 +5473,12 @@ async function fetchStream(url,onMsg,signal,options){
   if(window.wudictAndroidGo){
     const requestURL=new URL(url,window.location.href);
     if(requestURL.origin===window.location.origin&&requestURL.pathname==="/api/dicts"&&
-       (options?.method||"GET").toUpperCase()==="GET"&&!requestURL.searchParams.has("diagnostics")){
+       (options?.method||"GET").toUpperCase()==="GET"){
       await androidGoStream(()=>window.wudictAndroidGo.startDictStream(),onMsg,signal);
       return;
     }
     if(requestURL.origin===window.location.origin&&requestURL.pathname==="/api/rescan"&&
-       (options?.method||"GET").toUpperCase()==="GET"&&!requestURL.searchParams.has("diagnostics")){
+       (options?.method||"GET").toUpperCase()==="GET"){
       await androidGoStream(()=>window.wudictAndroidGo.startRescanStream(),onMsg,signal);
       return;
     }

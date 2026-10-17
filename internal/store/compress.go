@@ -30,18 +30,6 @@ import (
 // the read path.
 const compressedMark = 0x00
 
-// compressBodies turns article compression on or off for subsequent ingests.
-// Reading always understands both forms, so the setting only ever affects what
-// is written next.
-var compressBodies = true
-
-// SetCompressBodies sets whether new ingests compress article bodies
-// (config NO_COMPRESS / --no-compress turns it off).
-func SetCompressBodies(on bool) { compressBodies = on }
-
-// CompressBodies reports the current setting.
-func CompressBodies() bool { return compressBodies }
-
 // compressLevel is where the size/speed balance is struck. Level 6 is the
 // usual answer and the right one on a desktop, where an ingest is a minute of
 // a machine that is plugged in.
@@ -70,7 +58,7 @@ var flateWriters = sync.Pool{New: func() any {
 
 // encodeBody returns what to store for one article body.
 func encodeBody(s string) []byte {
-	if !compressBodies || len(s) < 120 { // shorter than the deflate overhead pays back
+	if len(s) < 120 { // shorter than the deflate overhead pays back
 		return []byte(s)
 	}
 	var buf bytes.Buffer

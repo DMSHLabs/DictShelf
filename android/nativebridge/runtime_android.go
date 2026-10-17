@@ -12,18 +12,14 @@ package main
 import "C"
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"io"
-	"net"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
-	"time"
 	"unsafe"
 
 	"github.com/wuweidict/wudict/internal/config"
@@ -585,6 +581,35 @@ func WudictGoBridgeUserFileOperation(method, argument *C.char) *C.char {
 	return C.CString(string(data))
 }
 
+//export WudictGoBridgeUserStorage
+func WudictGoBridgeUserStorage(method, argument *C.char) *C.char {
+	if method == nil || argument == nil {
+		return C.CString(`{"ok":false,"error":"invalid settings operation"}`)
+	}
+	operation := C.GoString(method)
+	switch operation {
+	case "storageState", "storageRead", "storageImport", "storageWrite":
+	default:
+		return C.CString(`{"ok":false,"error":"unsupported settings operation"}`)
+	}
+	nativeRuntime.Lock()
+	app := nativeRuntime.app
+	nativeRuntime.Unlock()
+	if app == nil {
+		return C.CString(`{"ok":false,"error":"Go runtime is unavailable"}`)
+	}
+	value, err := app.Server.DesktopJSON("", operation, C.GoString(argument))
+	if err != nil {
+		data, _ := json.Marshal(map[string]any{"ok": false, "error": err.Error()})
+		return C.CString(string(data))
+	}
+	data, err := json.Marshal(map[string]any{"ok": true, "value": value})
+	if err != nil {
+		return C.CString(`{"ok":false,"error":"could not encode settings response"}`)
+	}
+	return C.CString(string(data))
+}
+
 //export WudictGoBridgeSavePrefs
 func WudictGoBridgeSavePrefs(body *C.char) *C.char {
 	nativeRuntime.Lock()
@@ -643,6 +668,21 @@ func WudictGoBridgeSystemLogSnapshot() *C.char {
 		return C.CString(`{"ok":false,"error":"could not encode system log"}`)
 	}
 	return C.CString(string(data))
+}
+
+//export WudictGoBridgeSystemLogOptions
+func WudictGoBridgeSystemLogOptions(enabled, baseEvents, webEvents C.int) C.int {
+	logx.ConfigureSystemLog(enabled != 0, baseEvents != 0, webEvents != 0)
+	return 1
+}
+
+//export WudictGoBridgeIndexWorkers
+func WudictGoBridgeIndexWorkers(workers C.int) C.int {
+	if workers < 1 || int(workers) > config.ParseWorkers("all") {
+		return 0
+	}
+	server.SetIndexWorkers(int(workers))
+	return 1
 }
 
 //export WudictGoBridgeWebResource
@@ -761,9 +801,7 @@ func closeMediaStreams() {
 
 var nativeRuntime struct {
 	sync.Mutex
-	app       *server.Runtime
-	http      *http.Server
-	listeners []net.Listener
+	app *server.Runtime
 }
 
 // A single process must never open the prepared library twice.
@@ -789,31 +827,6 @@ func WudictGoBridgeRuntimeStart(path, flagsJSON, token, version *C.char) C.int {
 	if err != nil {
 		return -2
 	}
-	listener, err := net.Listen("tcp", cfg.Addr())
-	if err != nil {
-		return -6
-	}
-	listeners := []net.Listener{listener}
-	if ip := net.ParseIP(cfg.IP); ip != nil && !ip.IsUnspecified() && !ip.IsLoopback() {
-		loopback := "127.0.0.1"
-		if ip.To4() == nil {
-			loopback = "::1"
-		}
-		companion, listenErr := net.Listen("tcp", net.JoinHostPort(loopback, cfg.Port))
-		if listenErr != nil {
-			listener.Close()
-			return -7
-		}
-		listeners = append(listeners, companion)
-	}
-	ready := false
-	defer func() {
-		if !ready {
-			for _, ln := range listeners {
-				ln.Close()
-			}
-		}
-	}()
 	if _, err = server.ConfigureLibrary(cfg); err != nil {
 		return -3
 	}
@@ -824,24 +837,7 @@ func WudictGoBridgeRuntimeStart(path, flagsJSON, token, version *C.char) C.int {
 	if err != nil {
 		return -5
 	}
-	httpServer := &http.Server{
-		Addr:              cfg.Addr(),
-		Handler:           app.Server,
-		ReadHeaderTimeout: 10 * time.Second,
-		IdleTimeout:       120 * time.Second,
-		MaxHeaderBytes:    1 << 20,
-	}
 	nativeRuntime.app = app
-	nativeRuntime.http = httpServer
-	nativeRuntime.listeners = listeners
-	for _, ln := range listeners {
-		go func(ln net.Listener) {
-			if serveErr := httpServer.Serve(ln); serveErr != nil && !errors.Is(serveErr, http.ErrServerClosed) {
-				logx.Warn("Android in-process listener stopped: %v", serveErr)
-			}
-		}(ln)
-	}
-	ready = true
 	return 1
 }
 
@@ -851,21 +847,10 @@ func WudictGoBridgeRuntimeStop() C.int {
 	closeMediaStreams()
 	nativeRuntime.Lock()
 	defer nativeRuntime.Unlock()
-	if nativeRuntime.http == nil {
+	if nativeRuntime.app == nil {
 		return 0
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	err := nativeRuntime.http.Shutdown(ctx)
-	cancel()
-	if err != nil {
-		_ = nativeRuntime.http.Close()
-	}
-	for _, ln := range nativeRuntime.listeners {
-		_ = ln.Close()
-	}
-	nativeRuntime.http = nil
-	nativeRuntime.listeners = nil
 	// The registry remains process-owned. Android exits this process after
-	// stopping the listener and starts a fresh process for changed settings.
+	// stopping work and starts a fresh process for changed settings.
 	return 1
 }

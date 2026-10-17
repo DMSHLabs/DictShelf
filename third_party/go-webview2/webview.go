@@ -798,6 +798,14 @@ func (w *webview) Eval(js string) {
 	w.browser.Eval(js)
 }
 
+func (w *webview) ClearBrowserCache(done func(error)) error {
+	cache, ok := w.browser.(interface{ ClearBrowserCache(func(error)) error })
+	if !ok {
+		return errors.New("browser cache clearing is unavailable")
+	}
+	return cache.ClearBrowserCache(done)
+}
+
 func (w *webview) Dispatch(f func()) {
 	w.m.Lock()
 	w.dispatchq = append(w.dispatchq, f)

@@ -277,11 +277,6 @@ SETTINGS
                           env: MEMORY_LIMIT   toml: MEMORY_LIMIT
                           default: none (Android: 1/16 of RAM, 192-384 MiB)
 
-  --no-compress           Store article text uncompressed: the library is about
-                          3 times larger; reads are slightly faster.
-                          env: NO_COMPRESS    toml: NO_COMPRESS
-                          default: off (article text is DEFLATE-compressed)
-
   --use-cached            Also list indexed dictionaries whose dictionary files
                           are gone. "Use these dictionaries" on the setup page
                           sets it.
@@ -1109,8 +1104,7 @@ func cmdServe(args []string) (err error) {
 	fs.Var(&dictDirs, "dict-dir", "folder with dictionaries; repeat for several (env/toml: DICT_DIR)")
 	dbDir := fs.String("db-dir", "", "library dir for cached dictionaries (env/toml: DB_DIR)")
 	useCached := fs.Bool("use-cached", false, "also serve previously imported dictionaries from the library (env/toml: USE_CACHED)")
-	noCompress := fs.Bool("no-compress", false, "store article text uncompressed - larger databases (env/toml: NO_COMPRESS)")
-	indexWorkers := fs.String("index-workers", "", "dictionaries to prepare at once; \"auto\" = every core (env/toml: INDEX_WORKERS)")
+	indexWorkers := fs.String("index-workers", "", "dictionaries to prepare at once; \"auto\" = all but one core, at least one (env/toml: INDEX_WORKERS)")
 	// A string, not a Bool: "" has to mean "unset, defer to env and toml",
 	// which a bool flag cannot express - it would override a file that says
 	// "1" with its own false on every run.
@@ -1144,9 +1138,6 @@ func cmdServe(args []string) (err error) {
 	}
 	if *useCached {
 		flagVals["USE_CACHED"] = "1"
-	}
-	if *noCompress {
-		flagVals["NO_COMPRESS"] = "1"
 	}
 	if *indexWorkers != "" {
 		flagVals["INDEX_WORKERS"] = *indexWorkers
@@ -1582,7 +1573,6 @@ func applyLibrarySettings() {
 		return // a broken config must not stop a local command
 	}
 	store.SetDBDir(cfg.DBDir)
-	store.SetCompressBodies(!cfg.NoCompress)
 	if cfg.Verbose {
 		logx.Enabled = true
 	}

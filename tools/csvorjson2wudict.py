@@ -6,8 +6,7 @@ The schema written here is the one internal/store/ingest.go builds and
 internal/store/store.go validates: user_version=1, meta/entry/alias +
 entry_fts, optional entry_trigram. Bodies are DEFLATE-compressed per row
 behind a 0x00 sentinel exactly as store.encodeBody does (internal/store/
-compress.go); --no-compress stores them as plain TEXT instead. Both forms are
-legal in the same table, because the read path discriminates per row.
+compress.go). Short and incompressible bodies are stored literally.
 
 INPUT DIALECTS (auto-detected; force with --dialect)
 
@@ -169,10 +168,10 @@ def strip_html(s):
     return " ".join(html.unescape(TAG.sub(" ", SKIP.sub(" ", s))).split())
 
 
-def encode_body(s, compress):
+def encode_body(s):
     """store.encodeBody (store/compress.go:72). Raw DEFLATE behind a NUL byte,
     and only when it actually wins; anything else is stored literally."""
-    if not compress or len(s) < COMPRESS_MIN:
+    if len(s) < COMPRESS_MIN:
         return s
     raw = s.encode("utf-8")
     co = zlib.compressobj(COMPRESS_LEVEL, zlib.DEFLATED, -zlib.MAX_WBITS)
@@ -485,7 +484,7 @@ def build(db, meta, entries, a, source_name):
 
         eid += 1
         db.execute("INSERT INTO entry(id, w, m) VALUES(?,?,?)",
-                   (eid, w, encode_body(body, a.compress)))
+                   (eid, w, encode_body(body)))
         db.execute("INSERT INTO entry_fts(rowid, w, txt) VALUES(?,?,?)",
                    (eid, w, strip_html(body) if a.fulltext else ""))
         if a.contains:
@@ -520,7 +519,7 @@ def build(db, meta, entries, a, source_name):
         "has_trigram": "1" if a.contains else "0",
         "fold_version": str(FOLD_VERSION),
         "markup_version": str(MARKUP_VERSION),
-        "body_encoding": "deflate" if a.compress else "plain",
+        "body_encoding": "deflate",
         "created": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         # source_path deliberately absent: an existing path would let that
         # format's About provider shadow `description` (server/about.go).
@@ -692,8 +691,6 @@ def parse_args(argv):
     g = ap.add_argument_group("output")
     g.add_argument("--fulltext", action="store_true", help="index article text (full-text mode)")
     g.add_argument("--contains", action="store_true", help="build the trigram substring index")
-    g.add_argument("--no-compress", dest="compress", action="store_false",
-                   help="store bodies as plain text (bigger, marginally faster to read)")
     g.add_argument("--name", help="override the dictionary title")
     g.add_argument("--description", help="override the About text")
     g.add_argument("--index-lang", help="language of the headwords, e.g. ro")

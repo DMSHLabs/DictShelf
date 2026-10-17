@@ -33,9 +33,12 @@ extern char *WudictGoBridgeStyleSnapshot(void);
 extern char *WudictGoBridgeSaveStyle(char *argument);
 extern char *WudictGoBridgeUserFilesSnapshot(void);
 extern char *WudictGoBridgeUserFileOperation(char *method, char *argument);
+extern char *WudictGoBridgeUserStorage(char *method, char *argument);
 extern char *WudictGoBridgeSavePrefs(char *body);
 extern char *WudictGoBridgeSaveLanguage(char *body);
 extern char *WudictGoBridgeSystemLogSnapshot(void);
+extern int WudictGoBridgeSystemLogOptions(int enabled, int baseEvents, int webEvents);
+extern int WudictGoBridgeIndexWorkers(int workers);
 extern char *WudictGoBridgeWebResource(char *rawURL, char *headers);
 extern char *WudictGoBridgeMediaOpen(char *rawURL, char *headers);
 extern int WudictGoBridgeMediaRead(long long handle, char *dst, int size);
@@ -576,6 +579,27 @@ Java_com_legbehindneck_wudict_GoBridge_nativeUserFileOperation(JNIEnv *env, jcla
 }
 
 JNIEXPORT jstring JNICALL
+Java_com_legbehindneck_wudict_GoBridge_nativeUserStorage(JNIEnv *env, jclass owner,
+    jstring method, jstring argument) {
+    (void)owner;
+    if (method == NULL || argument == NULL) return NULL;
+    const char *methodText = (*env)->GetStringUTFChars(env, method, NULL);
+    if (methodText == NULL) return NULL;
+    const char *argumentText = (*env)->GetStringUTFChars(env, argument, NULL);
+    if (argumentText == NULL) {
+        (*env)->ReleaseStringUTFChars(env, method, methodText);
+        return NULL;
+    }
+    char *result = WudictGoBridgeUserStorage((char *)methodText, (char *)argumentText);
+    (*env)->ReleaseStringUTFChars(env, argument, argumentText);
+    (*env)->ReleaseStringUTFChars(env, method, methodText);
+    if (result == NULL) return NULL;
+    jstring text = (*env)->NewStringUTF(env, result);
+    free(result);
+    return text;
+}
+
+JNIEXPORT jstring JNICALL
 Java_com_legbehindneck_wudict_GoBridge_nativeSavePrefs(JNIEnv *env, jclass owner, jstring body) {
     (void)owner;
     if (body == NULL) return NULL;
@@ -611,6 +635,21 @@ Java_com_legbehindneck_wudict_GoBridge_nativeSystemLogSnapshot(JNIEnv *env, jcla
     jstring answer = (*env)->NewStringUTF(env, result);
     free(result);
     return answer;
+}
+
+JNIEXPORT jint JNICALL
+Java_com_legbehindneck_wudict_GoBridge_nativeSystemLogOptions(JNIEnv *env, jclass owner,
+    jboolean enabled, jboolean baseEvents, jboolean webEvents) {
+    (void)env;
+    (void)owner;
+    return (jint)WudictGoBridgeSystemLogOptions(enabled, baseEvents, webEvents);
+}
+
+JNIEXPORT jint JNICALL
+Java_com_legbehindneck_wudict_GoBridge_nativeIndexWorkers(JNIEnv *env, jclass owner, jint workers) {
+    (void)env;
+    (void)owner;
+    return (jint)WudictGoBridgeIndexWorkers(workers);
 }
 
 JNIEXPORT jstring JNICALL

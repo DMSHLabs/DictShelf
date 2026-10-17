@@ -251,6 +251,10 @@ type Server struct {
 	// /api/config for shells that override them per device (D101).
 	Effective map[string]config.Setting
 
+	// IndexWorkersValue preserves Auto in the desktop selector while
+	// Effective reports the resolved worker count used by the runtime.
+	IndexWorkersValue string
+
 	// Speexdec is the path to the external speexdec binary. It is used when
 	// UseExternalSpeex is set, or as a fallback when the in-process decoder is
 	// not compiled in (CGO_ENABLED=0) or fails on a given file.

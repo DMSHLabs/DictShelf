@@ -2,8 +2,8 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-// Starts the shared Go runtime in this app process. The WebView currently
-// reaches it through a local HTTP listener; the runtime itself is a JNI library.
+// Starts the shared Go runtime in this app process. The WebView and app
+// operations reach it through JNI; Android does not open an HTTP listener.
 package com.legbehindneck.wudict;
 
 import android.content.Context;
@@ -11,17 +11,12 @@ import android.util.Log;
 
 import org.json.JSONObject;
 
-import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.net.HttpURLConnection;
-import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
 class ServerProcess {
 
@@ -33,7 +28,7 @@ class ServerProcess {
      * override from moving the WebView's origin and orphaning the page prefs
      * saved against it.
      */
-    static final String HOST = ShellPrefs.DEFAULT_IP;
+    static final String HOST = ShellPrefs.LEGACY_HOST;
 
     // The port is fixed per install rather than per launch (D52: UI prefs live
     // in localStorage, which is keyed by origin, so a random port would forget
@@ -244,7 +239,7 @@ class ServerProcess {
 
     private void run(Listener listener) {
         GoBridge.initialize(app);
-        SystemLog.record("server startup requested");
+        SystemLog.record("Go runtime startup requested");
         int bridgeProtocol = GoBridge.protocol();
         SystemLog.record("Go bridge protocol=" + bridgeProtocol);
         Log.i(TAG, "Go bridge protocol=" + bridgeProtocol);
@@ -264,7 +259,7 @@ class ServerProcess {
         seedConfig(home, dicts);
         GoBridge.checkConfig(home, dbDir, ShellPrefs.env(app));
 
-        int result = GoBridge.startRuntime(app, home, dbDir, port);
+        int result = GoBridge.startRuntime(app, home, dbDir);
             if (result != 1) {
                 SystemLog.record("in-process Go startup failed code=" + result);
                 Log.e(TAG, "in-process Go startup failed code=" + result);
@@ -272,9 +267,10 @@ class ServerProcess {
                 return;
             }
             nativeOwned = true;
-            if (awaitNative(app, port)) {
-                SystemLog.record("in-process Go ready port=" + port);
-                Log.i(TAG, "in-process Go ready port=" + port);
+            if (runtimeReady(app)) {
+                Shell.prepareOrigin(app);
+                SystemLog.record("in-process Go runtime ready");
+                Log.i(TAG, "in-process Go runtime ready");
                 synchronized (this) {
                     if (stopped) return;
                     livePort = port;
@@ -334,84 +330,17 @@ class ServerProcess {
         }
     }
 
-    // Readiness requires a response from this app's own library.
-    private static boolean runtimeReady(Context app, int port) {
-        HttpURLConnection c = null;
+    // RuntimeStart returns only after the shared Go runtime and library exist.
+    // Read its snapshot over JNI so startup does not depend on a TCP listener.
+    private static boolean runtimeReady(Context app) {
         try {
-            c = (HttpURLConnection) new URL(
-                    "http://" + HOST + ":" + port + "/api/config").openConnection();
-            c.setConnectTimeout(700);
-            c.setReadTimeout(700);
-            // A 401 here means a wudict IS there and holds a different key -
-            // this install's switch was toggled while it ran, or another app
-            // shipped one. It is reported as unavailable; startup reports
-            // the port conflict separately.
-            ShellPrefs.authorize(c);
-            if (c.getResponseCode() != 200) return false;
-            StringBuilder body = new StringBuilder();
-            try (BufferedReader r = new BufferedReader(
-                    new InputStreamReader(c.getInputStream(), StandardCharsets.UTF_8))) {
-                for (String line; (line = r.readLine()) != null; ) body.append(line);
-            }
-            JSONObject config = new JSONObject(body.toString());
+            JSONObject config = new JSONObject(GoBridge.configSnapshot());
             String libDir = config.optString("libDir", "");
             return !libDir.isEmpty() && new File(libDir).getCanonicalFile()
                     .equals(AppDirs.dbDir(app).getCanonicalFile());
         } catch (IOException | org.json.JSONException | RuntimeException e) {
-            return false; // nothing listening, or not us
-        } finally {
-            if (c != null) c.disconnect();
+            return false; // runtime startup did not publish a usable Go snapshot
         }
-    }
-
-    /**
-     * Fills {@code values} and {@code origins} from /api/config's "effective"
-     * map; false when nothing answered, or answered without one - an older
-     * server, which is a silence rather than an error.
-     */
-    static boolean fetchEffective(int port, Map<String, String> values,
-                                  Map<String, String> origins) {
-        HttpURLConnection c = null;
-        try {
-            c = (HttpURLConnection) new URL(
-                    "http://" + HOST + ":" + port + "/api/config").openConnection();
-            c.setConnectTimeout(700);
-            c.setReadTimeout(700);
-            ShellPrefs.authorize(c);
-            if (c.getResponseCode() != 200) return false;
-            StringBuilder body = new StringBuilder();
-            try (BufferedReader r = new BufferedReader(
-                    new InputStreamReader(c.getInputStream(), StandardCharsets.UTF_8))) {
-                for (String line; (line = r.readLine()) != null; ) body.append(line);
-            }
-            JSONObject eff = new JSONObject(body.toString()).optJSONObject("effective");
-            if (eff == null) return false;
-            for (ShellPrefs.Override o : ShellPrefs.OVERRIDES) {
-                JSONObject e = eff.optJSONObject(o.key);
-                if (e == null) continue;
-                values.put(o.key, e.optString("value"));
-                origins.put(o.key, e.optString("origin"));
-            }
-            return true;
-        } catch (IOException | org.json.JSONException | RuntimeException e) {
-            return false; // nothing listening, or not answering like us
-        } finally {
-            if (c != null) c.disconnect();
-        }
-    }
-
-    private static boolean awaitNative(Context app, int port) {
-        long deadline = System.nanoTime() + 10_000_000_000L;
-        while (System.nanoTime() < deadline) {
-            if (runtimeReady(app, port)) return true;
-            try {
-                Thread.sleep(100);
-            } catch (InterruptedException error) {
-                Thread.currentThread().interrupt();
-                return false;
-            }
-        }
-        return false;
     }
 
     private synchronized void stop() {
@@ -433,25 +362,6 @@ class ServerProcess {
         waiting.clear();
         IndexService.busy(ctx, false);
         return owned;
-    }
-
-    /** Reads demanded work from the in-process Go runtime. */
-    static boolean workInFlight() {
-        HttpURLConnection c = null;
-        try {
-            c = (HttpURLConnection) new URL("http://" + HOST + ":" + port() + "/api/power").openConnection();
-            ShellPrefs.authorize(c);
-            c.setConnectTimeout(900);
-            c.setReadTimeout(900);
-            if (c.getResponseCode() != 200) return IndexService.hasWork();
-            try (BufferedReader r = new BufferedReader(new InputStreamReader(c.getInputStream(), StandardCharsets.UTF_8))) {
-                return new JSONObject(r.readLine()).optBoolean("busy");
-            }
-        } catch (Exception unavailable) {
-            return IndexService.hasWork();
-        } finally {
-            if (c != null) c.disconnect();
-        }
     }
 
 }

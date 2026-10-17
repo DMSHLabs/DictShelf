@@ -45,10 +45,8 @@ res/        resource overrides (optional)
 are read from the dictionary files, if present. Both are SQLite databases;
 [The text.db format](../reference/text-db.md) documents the schema.
 
-Article text is DEFLATE-compressed, so an indexed dictionary is usually smaller
-than its dictionary files.
-[`NO_COMPRESS`](../reference/configuration.md#no_compress) stores it
-uncompressed, about 3 times larger.
+Article text is DEFLATE-compressed when that reduces its size, so an indexed
+dictionary is usually smaller than its dictionary files.
 
 ## Move a dictionary to another machine
 

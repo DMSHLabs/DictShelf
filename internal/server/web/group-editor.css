@@ -32,6 +32,10 @@ html[data-shell-image] .workspace-dialog{background-image:var(--paper-bk-image);
 #desktopSysSettings .sys-desktop-row code{display:block;color:var(--label);font-size:calc(var(--ui-hint-font-size) * 1rem);
   font-weight:400;overflow-wrap:anywhere}
 #desktopSysSettings .sys-desktop-value{font-size:calc(var(--ui-font-base) * 1rem);text-align:right;overflow-wrap:anywhere}
+#desktopSysSettings .sys-desktop-worker-select{box-sizing:border-box;min-width:5em;height:calc(var(--ui-control-height) * 1em);font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:0 .35em}
+#desktopSysSettings .sys-desktop-row .sys-hint{margin:.25em 0 0;font-size:calc(var(--ui-hint-font-size) * 1rem);line-height:1.5;color:var(--label)}
+#desktopSysSettings .sys-action-spaced{margin-top:calc(var(--ui-control-height) * .5em)}
+#desktopSysSettings #sysSaveLog{box-sizing:border-box;min-height:calc(var(--ui-control-height) * 1em)}
 #webDictionaryPicker.group-dialog.panel-card{display:none;flex-direction:column;gap:0;
   width:min(480px,calc(100vw - 32px));height:min(650px,calc(100dvh - 32px));padding:12px;overflow:hidden}
 #webDictionaryPicker.group-dialog.panel-card[open]{display:flex}

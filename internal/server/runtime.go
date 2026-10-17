@@ -12,7 +12,6 @@ import (
 	"github.com/wuweidict/wudict/internal/logx"
 	"github.com/wuweidict/wudict/internal/morph"
 	"github.com/wuweidict/wudict/internal/search"
-	"github.com/wuweidict/wudict/internal/store"
 )
 
 // Runtime is the application state shared by the HTTP adapter and native
@@ -29,6 +28,11 @@ type Runtime struct {
 // transports must share this Runtime rather than opening a second registry.
 // ConfigureLibrary and RecoverLibrary run first, in that order.
 func NewRuntime(cfg config.Config, configPath, token, version string) (*Runtime, error) {
+	if configPath != "" {
+		if absolute, err := filepath.Abs(configPath); err == nil {
+			configPath = absolute
+		}
+	}
 	if n := config.MaxProcs(); n > 0 {
 		SetActiveProcs(n)
 		search.SetWorkers(n)
@@ -63,7 +67,6 @@ func NewRuntime(cfg config.Config, configPath, token, version string) (*Runtime,
 	s.User = user
 	s.InstallDesktopBackgrounds()
 	s.Morph = morph.New(cfg.MorphCache, cfg.LemmaDir)
-	store.SetCompressBodies(!cfg.NoCompress)
 	if cfg.MemoryLimit > 0 {
 		SetMemoryLimit(cfg.MemoryLimit)
 		logx.V("memory limit: %d MB", cfg.MemoryLimit>>20)
@@ -73,6 +76,7 @@ func NewRuntime(cfg config.Config, configPath, token, version string) (*Runtime,
 	s.DictDirEditable = cfg.EditableInFile("DICT_DIR")
 	s.ConfigProblems = cfg.Problems
 	s.Effective = cfg.Effective()
+	s.IndexWorkersValue = cfg.IndexWorkersValue
 	s.LemmaDir, s.LemmaURL = cfg.LemmaDir, cfg.LemmaURL
 	s.ImportKeep = cfg.ImportKeep
 	s.ImportURLHosts = cfg.ImportURLHosts
