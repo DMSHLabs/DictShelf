@@ -208,14 +208,24 @@ func WudictGoBridgeGroups(action, argument *C.char) *C.char {
 		return nil
 	}
 	method := "groups"
-	switch C.GoString(action) {
+	operation := C.GoString(action)
+	switch operation {
 	case "get":
 	case "save":
 		method = "saveGroups"
 	case "reset":
 		method = "resetGroups"
 	default:
-		return nil
+		// Dictionary Groups uses the same shared operations as the HTTP
+		// handlers. Keep the JNI surface limited to this explicit allowlist.
+		switch operation {
+		case "userGroups", "createGroup", "renameGroup", "deleteGroup",
+			"setGroupMember", "replaceGroupMembership", "addGroupMembers",
+			"linkGroup", "saveGroupOrder":
+			method = operation
+		default:
+			return nil
+		}
 	}
 	nativeRuntime.Lock()
 	app := nativeRuntime.app

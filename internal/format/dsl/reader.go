@@ -51,9 +51,10 @@ type Reader struct {
 	// plainBody is set for the scan of a companion itself: its articles are
 	// the tooltip text, so they must not be prefixed with their own headword,
 	// and it has no companion of its own to absorb.
-	plainBody bool
-	gd        bool
-	gdOptions GDOptions
+	plainBody    bool
+	gd           bool
+	gdOptions    GDOptions
+	repairTitles bool
 
 	buffered  []string     // lookahead lines
 	orphans   int          // body blocks skipped for having no headword
@@ -765,7 +766,7 @@ func (r *Reader) parseBlock(termLines, textLines []string) (dict.Entry, []dict.E
 
 func (r *Reader) title(line string) titleResult {
 	if r.gd {
-		return gdTitle(line)
+		return gdTitleWithRepairs(line, r.repairTitles)
 	}
 	return transformTitle(line)
 }
