@@ -533,14 +533,6 @@ func errorText(err error) string {
 	return err.Error()
 }
 
-func desktopWindowURLWithMarker(address string) string {
-	local, _ := url.Parse(address)
-	query := local.Query()
-	query.Set("wudict_webview2", "1")
-	local.RawQuery = query.Encode()
-	return local.String()
-}
-
 // chooseDesktopFolder shows Windows' native folder browser and returns a
 // filesystem path only when the user selects a folder and confirms it.
 func chooseDesktopFolder(owner uintptr) (string, bool) {

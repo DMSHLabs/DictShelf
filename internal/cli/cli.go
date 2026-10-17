@@ -35,9 +35,7 @@ import (
 	"github.com/wuweidict/wudict/internal/fsx"
 	"github.com/wuweidict/wudict/internal/howto"
 	"github.com/wuweidict/wudict/internal/htmlref"
-	"github.com/wuweidict/wudict/internal/intake"
 	"github.com/wuweidict/wudict/internal/logx"
-	"github.com/wuweidict/wudict/internal/morph"
 	"github.com/wuweidict/wudict/internal/search"
 	"github.com/wuweidict/wudict/internal/server"
 	"github.com/wuweidict/wudict/internal/speex"
@@ -1223,7 +1221,6 @@ func cmdServe(args []string) (err error) {
 	}
 	logx.V("config: source=%q dictDirs=%v dbDir=%q addr=%s speexdec=%s",
 		cfg.Source, cfg.DictDirs, cfg.DBDir, cfg.Addr(), cfg.Speexdec)
-	store.SetDBDir(cfg.DBDir)
 	logx.System("server start build=%q runtime=%s platform=%s/%s", Version, runtime.Version(), runtime.GOOS, runtime.GOARCH)
 	defer func() { logx.System("server exit error=%q", fmt.Sprint(err)) }()
 
@@ -1231,18 +1228,10 @@ func cmdServe(args []string) (err error) {
 	// user dictionaries. Using it as DICT_DIR is a
 	// hard error; and wherever it lives, discovery skips it - which also covers
 	// the subtler case of a DB_DIR nested inside the dictionary folder.
-	libDir := store.DefaultDBDir()
-	for _, d := range cfg.DictDirs {
-		if !dict.SameDir(d, libDir) {
-			continue
-		}
-		return fmt.Errorf("DICT_DIR and DB_DIR are the same folder:\n"+
-			"  %s\n"+
-			"  DB_DIR contains internally cached dictionaries; DICT_DIR must point at\n"+
-			"  the folder with your dictionary files (.mdx, .ifo, .slob, .dsl, .bgl, .zim).\n"+
-			"  To only use cached dictionaries, leave DICT_DIR unset and set USE_CACHED = \"1\".", libDir)
+	libDir, err := server.ConfigureLibrary(cfg)
+	if err != nil {
+		return err
 	}
-	dict.ExcludeDir(libDir)
 
 	// The Windows GUI serves its WebView from Go in-process and uses the native
 	// bridge for operations, so its configured port is not opened. Browser,
@@ -1324,10 +1313,8 @@ Hint: pick another port with --port, e.g.:  wudict --port %s
 	// lost power - leaves its half-extracted staging directory behind. It is
 	// hidden, so discovery never saw it, and nothing else would ever remove
 	// it; the only safe moment to do so is before anything is importing.
-	intake.Sweep(cfg.DictDirs)
-
 	// migrate old cached dictionaries
-	if moved, err := store.AdoptLoose(); err != nil {
+	if moved, err := server.RecoverLibrary(cfg); err != nil {
 		logx.Warn("could not tidy the library: %v", err)
 	} else if len(moved) > 0 {
 		for _, m := range moved {
@@ -1352,73 +1339,20 @@ Hint: pick another port with --port, e.g.:  wudict --port %s
 		}
 	}
 
-	// Parallelism, before anything starts using it. Zero means this platform
-	// keeps the runtime's own default (every core), which is right on a desktop
-	// and wrong on a phone - see config.MaxProcs. Handing the number to the
-	// server as well is what lets the power states lower it while the app is
-	// away and restore it on return (D64).
-	if n := config.MaxProcs(); n > 0 {
-		server.SetActiveProcs(n)
-		search.SetWorkers(n)
-		logx.V("parallelism: GOMAXPROCS=%d, search fan-out=%d", n, n)
-	}
-
-	// The UI state (which dictionaries are searched, in what order) lives
-	// beside the config file in effect, so a portable install carries both and
-	// --config re-points both. Loaded BEFORE the registry: Warm skips disabled
-	// dictionaries, and it starts inside NewRegistry.
-	user := server.UserDir(userDir(cfgFile))
-	regOpts := []server.Option{server.WithPrefs(server.LoadPrefs(user.State()))}
-	// The wudict howto (internal/howto) is deliberately NOT installed or
-	// listed here. It ships as a dictionary, so listing it would make the
-	// registry non-empty on a first run that has no dictionaries of the
-	// reader's own - and "/" would open the guide instead of the setup page,
-	// which is the order this fork keeps - and the guide would appear among
-	// the reader's dictionaries in the picker. Not calling WithBuiltin does
-	// both: server.handleIndex still sends an empty registry to the setup
-	// page, and HowtoRemoved stays false. The package, its endpoints and the
-	// guide itself stay in the tree, unwired, for a host that wants them
-	// back - and the package is still imported for isHowtoSource, which keeps
-	// a guide file that does exist from being treated as an orphan.
-	// Registry discovery can start the background abbreviation sweep.
-	server.SetIndexWorkers(cfg.IndexWorkers)
-	reg, err := server.NewRegistry(cfg.DictDirs, cfg.UseCached, regOpts...)
+	app, err := server.NewRuntime(cfg, cfgFile, token, Version)
 	if err != nil {
 		return fmt.Errorf("scanning %s: %w", strings.Join(cfg.DictDirs, ", "), err)
 	}
-	reg.SetPreviewBudget(cfg.PreviewMemory)
-	reg.SetSearchBudget(cfg.SearchMemory)
+	reg, srv := app.Registry, app.Server
 	if cfg.SearchMemory > 0 {
 		logx.V("search memory budget: %d MB per query", cfg.SearchMemory>>20)
 	}
-	srv := server.New(reg)
 	if runtime.GOOS == "windows" {
 		srv.FirstRunMigrationStatus = legacyMigrationStatus
 		srv.ApplyFirstRunMigration = func(action string) error {
 			return applyLegacyMigration(action, reg, srv.RefreshMigratedUserFiles, cfgFile)
 		}
 	}
-	srv.UseUserGroups()
-	srv.ConfigPath = cfgFile
-	srv.User = user
-	srv.InstallDesktopBackgrounds()
-	store.SetCompressBodies(!cfg.NoCompress)
-	if cfg.MemoryLimit > 0 {
-		// A soft ceiling: Go collects harder instead of growing past it. Set it
-		// through the server rather than debug directly, because a ceiling on
-		// its own only buys more GC - the registry needs the same number to
-		// know when to shed caches instead, which is what turns pressure into
-		// freed memory rather than a collector spinning on a live set (D64).
-		server.SetMemoryLimit(cfg.MemoryLimit)
-		logx.V("memory limit: %d MB", cfg.MemoryLimit>>20)
-	}
-	srv.Version = Version
-	srv.DictDirOrigin = cfg.Origin("DICT_DIR")
-	srv.DictDirEditable = cfg.EditableInFile("DICT_DIR")
-	srv.ConfigProblems = cfg.Problems
-	// What the tunable keys actually resolved to, for a shell that overrides
-	// them per device and needs to show what is in effect (D101).
-	srv.Effective = cfg.Effective()
 	useExternalSpeex := cfg.SpeexBackend == "external"
 	srv.UseExternalSpeex = useExternalSpeex
 	// Only look for the external speexdec binary when it will actually be used:
@@ -1430,22 +1364,6 @@ Hint: pick another port with --port, e.g.:  wudict --port %s
 		sxPath, sxSource = resolveSpeexdec(cfg.Speexdec)
 	}
 	srv.Speexdec = sxPath
-	srv.ImportKeep = cfg.ImportKeep
-	srv.ImportURLHosts = cfg.ImportURLHosts
-	srv.ImportInsecure = cfg.ImportInsecure
-	// Lemma packs are loaded on first use and never at startup: a launch must
-	// not pay 25-157 ms and tens of megabytes for a language this session may
-	// never search in. MORPH_CACHE=0 loads none at all.
-	// The folder is indexed here rather than per search: re-reading it on
-	// every query that found nothing would put a directory listing on the
-	// search path. It is re-read only when something changes it - an install
-	// or a removal through /api/lemmas calls Rescan (D91).
-	srv.Morph = morph.New(cfg.MorphCache, cfg.LemmaDir)
-	// What /api/lemmas installs into, and the catalogue it installs FROM. The
-	// URL lives on the Server because the client must never supply one: a
-	// caller-chosen address would make the endpoint fetch whatever the host
-	// running wudict can reach.
-	srv.LemmaDir, srv.LemmaURL = cfg.LemmaDir, cfg.LemmaURL
 	useLemmaClient(cfg.LemmaURL, cfg.ImportInsecure)
 	srv.AllowRemoteDelete = cfg.AllowRemoteDelete
 	srv.BrowserExtensions = cfg.BrowserExtensions
@@ -1790,22 +1708,6 @@ type startupInfo struct {
 	keyURL      string // url carrying the access key, "" when none is required
 }
 
-// userDir is the directory the wudict.toml in effect lives in - wudict's own
-// space for everything the user owns but did not put in the config file. When
-// no config file exists at all it falls back to the home location, the same
-// directory EnsureConfigFile would have used, and when even the home directory
-// is unknown it returns "": the caller then keeps its state in memory rather
-// than scattering a file somewhere nobody asked for.
-func userDir(cfgFile string) string {
-	if cfgFile != "" {
-		return filepath.Dir(cfgFile)
-	}
-	if p := config.HomeConfig(); p != "" {
-		return filepath.Dir(p)
-	}
-	return ""
-}
-
 func printStartup(cfg config.Config, in startupInfo) {
 	// Not os.Stderr: in a GUI launch the whole channel has been moved to a
 	// log file, and the banner is the most useful thing in it (D74).
@@ -2060,6 +1962,14 @@ func desktopWindowURL(address string) (string, error) {
 	}
 	u.Host = net.JoinHostPort("127.0.0.1", u.Port())
 	return u.String(), nil
+}
+
+func desktopWindowURLWithMarker(address string) string {
+	local, _ := url.Parse(address)
+	query := local.Query()
+	query.Set("wudict_webview2", "1")
+	local.RawQuery = query.Encode()
+	return local.String()
 }
 
 func browserCmd(url string) {

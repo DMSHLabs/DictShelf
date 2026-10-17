@@ -17,6 +17,7 @@ import (
 	"github.com/wuweidict/wudict/internal/htmlref"
 	"github.com/wuweidict/wudict/internal/logx"
 	"github.com/wuweidict/wudict/internal/search"
+	"github.com/wuweidict/wudict/internal/store"
 )
 
 // SearchRequest contains lookup parameters independent of either transport.
@@ -24,13 +25,14 @@ import (
 // retains its caller's slot order. Origin is supplied by the host for clean
 // article resource links, never read from the desktop JSON payload.
 type SearchRequest struct {
-	Query      string `json:"q"`
-	Mode       string `json:"mode,omitempty"`
-	Format     string `json:"format,omitempty"`
-	Dictionary string `json:"dict,omitempty"`
-	Limit      int    `json:"n,omitempty"`
-	Highlight  bool   `json:"hl,omitempty"`
-	Origin     string `json:"-"`
+	Query            string `json:"q"`
+	Mode             string `json:"mode,omitempty"`
+	Format           string `json:"format,omitempty"`
+	Dictionary       string `json:"dict,omitempty"`
+	Limit            int    `json:"n,omitempty"`
+	Highlight        bool   `json:"hl,omitempty"`
+	IgnoreDiacritics bool   `json:"ignoreDiacritics,omitempty"`
+	Origin           string `json:"-"`
 }
 
 type SearchErrorKind string
@@ -184,6 +186,9 @@ func (s *Server) Search(parent context.Context, request SearchRequest, emit func
 
 	ctx, stop := context.WithCancel(parent)
 	defer stop()
+	if request.IgnoreDiacritics {
+		ctx = store.WithIgnoreDiacritics(ctx)
+	}
 	var emitErr error
 	writeLine := func(m SearchEvent) {
 		if emitErr != nil {

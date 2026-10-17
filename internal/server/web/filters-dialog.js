@@ -25,7 +25,19 @@ async function unmatched(changed){
   if(!changed.length)return [];
   const have=new Set();
   try{
-    if(nativeCall)await nativeCall("dicts","",o=>{if(o.t==="dict")for(const g of o.dict.filters||o.dict.groups||[])have.add(g.f+"\n"+g.v)});
+    if(window.wudictAndroidGo){
+      const id=window.wudictAndroidGo.startDictStream();
+      if(id<=0)throw new Error("Dictionary list unavailable");
+      try{
+        for(;;){
+          const packet=JSON.parse(window.wudictAndroidGo.pollDictStream(id));
+          for(const o of packet.messages||[])if(o.t==="dict"&&o.dict)
+            for(const g of o.dict.filters||o.dict.groups||[])have.add(g.f+"\n"+g.v);
+          if(packet.done){if(packet.error)throw new Error(packet.error);break}
+          await new Promise(resolve=>setTimeout(resolve,16));
+        }
+      }finally{window.wudictAndroidGo.cancelDictStream(id)}
+    }else if(nativeCall)await nativeCall("dicts","",o=>{if(o.t==="dict")for(const g of o.dict.filters||o.dict.groups||[])have.add(g.f+"\n"+g.v)});
     else{
       const t=await(await fetch("/api/dicts")).text();
       for(const line of t.split("\n")){if(!line.trim())continue;const o=JSON.parse(line);if(o.t==="dict")for(const g of o.dict.filters||o.dict.groups||[])have.add(g.f+"\n"+g.v)}
@@ -48,6 +60,13 @@ function show(j,keepText){
   return problems(j);
 }
 async function call(method,body,query){
+  if(window.wudictAndroidGo){
+    const action=method==="GET"?"get":method==="PUT"?"save":"reset";
+    const argument=method==="PUT"?JSON.stringify({text:body||"",replace:new URLSearchParams(query||"").get("replace")==="1"}):"";
+    const result=JSON.parse(window.wudictAndroidGo.groups(action,argument));
+    if(!result.ok)throw new Error(result.error||"Could not edit filters");
+    return result.value;
+  }
   if(nativeCall){
     if(method==="GET")return nativeCall("groups");
     if(method==="PUT")return nativeCall("saveGroups",JSON.stringify({text:body||"",replace:new URLSearchParams(query||"").get("replace")==="1"}));

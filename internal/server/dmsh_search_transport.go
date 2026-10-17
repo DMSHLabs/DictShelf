@@ -16,8 +16,10 @@ func searchRequestFromQuery(q url.Values) SearchRequest {
 		n = 0
 	}
 	highlight, _ := queryFlag(q, "hl")
+	ignoreDiacritics, _ := queryFlag(q, "ignoreDiacritics")
 	return SearchRequest{
 		Query: q.Get("q"), Mode: q.Get("mode"), Format: q.Get("format"),
 		Dictionary: q.Get("dict"), Limit: n, Highlight: highlight,
+		IgnoreDiacritics: ignoreDiacritics,
 	}
 }

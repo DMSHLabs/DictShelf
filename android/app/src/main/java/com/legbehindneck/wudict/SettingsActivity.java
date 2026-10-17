@@ -541,7 +541,9 @@ public class SettingsActivity extends Activity {
     private void applyNow() {
         applyNow.setEnabled(false);
         Thread t = new Thread(() -> {
+            boolean nativeRestart = ServerProcess.nativeRuntimeActive();
             ServerProcess.stopAny(this);
+            if (nativeRestart && ProcessRestart.schedule(this)) return;
             if (gone) return;
             runOnUiThread(() -> {
                 if (gone) return;

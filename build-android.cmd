@@ -192,13 +192,13 @@ rem Output path for native Android binary
 rem ------------------------------------------------------------
 
 set "JNI_DIR=android\app\src\main\jniLibs\arm64-v8a"
-set "ANDROID_LIB=%JNI_DIR%\libwudict.so"
+set "ANDROID_BRIDGE=%JNI_DIR%\libwudictbridge.so"
 
 rem The emulator ABI goes to a source dir that is a default for NO source set.
 rem build.gradle looks at it only under -PemuX86=1, so however long this file
 rem sits here it can never reach a release APK.
 set "EMU_JNI_DIR=android\app\src\emuX86\jniLibs\x86_64"
-set "ANDROID_LIB_X86=%EMU_JNI_DIR%\libwudict.so"
+set "ANDROID_BRIDGE_X86=%EMU_JNI_DIR%\libwudictbridge.so"
 
 if not exist "%JNI_DIR%" (
     mkdir "%JNI_DIR%"
@@ -233,11 +233,11 @@ rem   -X github.com/wuweidict/wudict/internal/cli.Version=...
 rem   -extldflags '-Wl,-z,max-page-size=16384'
 rem ------------------------------------------------------------
 
-call :build_go arm64 aarch64 "%ANDROID_LIB%"
+call :build_bridge arm64 aarch64 "%ANDROID_BRIDGE%"
 if errorlevel 1 exit /b 1
 
 if defined EMU_X86 (
-    call :build_go amd64 x86_64 "%ANDROID_LIB_X86%"
+    call :build_bridge amd64 x86_64 "%ANDROID_BRIDGE_X86%"
     if errorlevel 1 exit /b 1
 )
 
@@ -283,7 +283,7 @@ if not exist "%APK%" (
 )
 
 rem ------------------------------------------------------------
-rem Verify libwudict.so inside APK
+rem Verify the in-process Go library inside APK
 rem ------------------------------------------------------------
 
 echo.
@@ -298,26 +298,20 @@ if errorlevel 1 (
     echo WARNING: jar.exe was not found in PATH.
     echo APK content verification skipped.
 ) else (
-    jar tf "%APK%" | findstr /x /c:"lib/arm64-v8a/libwudict.so" >nul
-
+    jar tf "%APK%" | findstr /x /c:"lib/arm64-v8a/libwudictbridge.so" >nul
     if errorlevel 1 (
-        echo ERROR: APK does not contain:
-        echo   lib/arm64-v8a/libwudict.so
+        echo ERROR: APK does not contain lib/arm64-v8a/libwudictbridge.so
         exit /b 1
     )
-
-    echo OK: APK contains lib/arm64-v8a/libwudict.so
+    echo OK: APK contains lib/arm64-v8a/libwudictbridge.so
 
     if defined EMU_X86 (
-        jar tf "%APK%" | findstr /x /c:"lib/x86_64/libwudict.so" >nul
-
+        jar tf "%APK%" | findstr /x /c:"lib/x86_64/libwudictbridge.so" >nul
         if errorlevel 1 (
-            echo ERROR: APK does not contain:
-            echo   lib/x86_64/libwudict.so
+            echo ERROR: APK does not contain lib/x86_64/libwudictbridge.so
             exit /b 1
         )
-
-        echo OK: APK contains lib/x86_64/libwudict.so
+        echo OK: APK contains lib/x86_64/libwudictbridge.so
     )
 )
 
@@ -349,55 +343,17 @@ echo.
 endlocal
 exit /b 0
 
-rem ============================================================
-rem :build_go ^<GOARCH^> ^<ndk-triple-prefix^> ^<output .so^>
-rem
-rem Windows NDK does not provide the Unix-style wrapper executables
-rem aarch64-linux-android26-clang / x86_64-linux-android26-clang as native
-rem binaries the way Linux does, so call clang.exe directly and name the target.
-rem ============================================================
-
-:build_go
+:build_bridge
 set "GOOS=android"
 set "GOARCH=%~1"
 set "CGO_ENABLED=1"
 set "CC=%NDK_BIN%\clang.exe --target=%~2-linux-android%ANDROID_API%"
 set "CXX=%NDK_BIN%\clang++.exe --target=%~2-linux-android%ANDROID_API%"
 
-echo ============================================================
-echo Building libwudict.so for android/%~1
-echo ============================================================
-echo.
-
-echo GOOS=%GOOS%
-echo GOARCH=%GOARCH%
-echo CGO_ENABLED=%CGO_ENABLED%
-echo CC=%CC%
-echo.
-
-go build ^
-  -tags sqlite_fts5 ^
-  -trimpath ^
-  -ldflags "-s -w -X github.com/wuweidict/wudict/internal/cli.Version=%VERSION% -extldflags=-Wl,-z,max-page-size=16384" ^
-  -o "%~3" ^
-  .
-
-if errorlevel 1 (
-    echo.
-    echo ============================================================
-    echo ERROR: Go Android build failed for %~1.
-    echo ============================================================
-    exit /b 1
-)
-
-if not exist "%~3" (
-    echo ERROR: Go build finished but libwudict.so is missing:
-    echo   %~3
-    exit /b 1
-)
-
-echo.
-echo Native library created:
-dir "%~3"
-echo.
+echo Building libwudictbridge.so for android/%~1
+go build -buildmode=c-shared -tags sqlite_fts5 -trimpath ^
+  -ldflags "-s -w -extldflags=-Wl,-z,max-page-size=16384" ^
+  -o "%~3" ./android/nativebridge
+if errorlevel 1 exit /b 1
+if not exist "%~3" exit /b 1
 exit /b 0

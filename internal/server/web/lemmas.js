@@ -29,7 +29,9 @@ function languageName(l){
 
 async function load(){
   let j;
-  try{ j=typeof nativeLemmaCall==="function"
+  try{ j=window.wudictAndroidGo
+    ? androidLemmaCall("get","")
+    : typeof nativeLemmaCall==="function"
     ? await nativeLemmaCall("lemmas")
     : await (await fetch("/api/lemmas")).json() }
   catch(e){ $("banner").className="banner warn";$("banner").textContent=tx("pages.cannotReach");return null }
@@ -38,6 +40,7 @@ async function load(){
 }
 
 async function changeLemma(method,code){
+  if(window.wudictAndroidGo)return androidLemmaCall(method==="POST"?"install":"remove",code);
   if(typeof nativeLemmaCall==="function"){
     return nativeLemmaCall(method==="POST"?"installLemma":"removeLemma",code);
   }
@@ -47,6 +50,12 @@ async function changeLemma(method,code){
     throw new Error(body.error||"HTTP "+response.status);
   }
   return response.json();
+}
+
+function androidLemmaCall(action,code){
+  const result=JSON.parse(window.wudictAndroidGo.lemmas(action,code));
+  if(!result.ok)throw new Error(result.error||"Lemmatization is unavailable");
+  return result.value;
 }
 
 function render(j){

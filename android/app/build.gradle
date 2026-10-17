@@ -156,10 +156,9 @@ android {
 
     packaging {
         jniLibs {
-            // The server ships as jniLibs/<abi>/libwudict.so and is exec'd
-            // from nativeLibraryDir, so the .so must be extracted to the
-            // filesystem at install time (the manifest's extractNativeLibs
-            // attribute is rejected by AGP 9 in favor of this).
+            // The Go runtime is loaded through JNI. Never package a stale
+            // executable left in jniLibs by an earlier local build.
+            excludes += ['**/libwudict.so']
             useLegacyPackaging = true
         }
     }
