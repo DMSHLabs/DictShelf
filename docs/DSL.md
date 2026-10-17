@@ -327,6 +327,14 @@ limit. `[V]`
   `maxOptionalParts` (6, i.e. 64 keys) the line falls back to the two extremes,
   all-in and all-out, so one pathological line cannot become millions of index
   rows. `[V]`
+- The app reader's recovery layer also indexes unescaped `[text]` and plain
+  `{text}` as optional fragments, and expands slash-separated word forms as a
+  Cartesian product (up to 32 keys). It preserves the original DSL-derived
+  key too; short all-uppercase pairs such as `AC/DC` are not split. Escaped
+  delimiters remain literal. This layer is enabled by default and can be
+  disabled in `state.json` with `"dslTitleRepairs": false`; switching it
+  changes the DSL reader version, so prepared indexes are reported outdated
+  and must be rebuilt to apply the change. `[V]`
 - `(` does not nest; a second one is literal. `)` outside a paren is literal. `[V]`
 - `{…}` may sit **inside** `(…)` and vice versa — one flat loop with an `inParen`
   flag, not a paren scanner, precisely because `(слов{[']}а{[/']}рной)` exists. `[V]`

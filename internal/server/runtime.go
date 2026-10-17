@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 
 	"github.com/wuweidict/wudict/internal/config"
+	dslformat "github.com/wuweidict/wudict/internal/format/dsl"
 	"github.com/wuweidict/wudict/internal/logx"
 	"github.com/wuweidict/wudict/internal/morph"
 	"github.com/wuweidict/wudict/internal/search"
@@ -43,8 +44,14 @@ func NewRuntime(cfg config.Config, configPath, token, version string) (*Runtime,
 		userDir = filepath.Dir(userPath)
 	}
 	user := UserDir(userDir)
+	prefs := LoadPrefs(user.State())
+	dslRepairs := true
+	if saved, ok := prefs.dslTitleRepairs(); ok {
+		dslRepairs = saved
+	}
+	dslformat.SetTitleRepairs(dslRepairs)
 	reg, err := NewRegistry(cfg.DictDirs, cfg.UseCached,
-		WithPrefs(LoadPrefs(user.State())))
+		WithPrefs(prefs))
 	if err != nil {
 		return nil, err
 	}

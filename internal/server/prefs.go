@@ -208,13 +208,14 @@ func facetIDs(in []string) []string {
 // prefsFile stores collection state. Unknown legacy parser-selection fields
 // are ignored by JSON decoding and disappear on the next save.
 type prefsFile struct {
-	IndexDefaults *indexOptions           `json:"indexDefaults,omitempty"`
-	IndexMigrated map[string]bool         `json:"indexMigrated,omitempty"` // completed legacy receipt migrations, per source
-	DSLKnown      map[string]bool         `json:"dslKnown,omitempty"`
-	DSLPending    map[string]indexOptions `json:"dslPending,omitempty"`
-	DSLRemoved    map[string]bool         `json:"dslRemoved,omitempty"`
-	Damaged       map[string]string       `json:"damagedSources,omitempty"` // source path → size:mtime signature
-	Language      string                  `json:"language,omitempty"`       // explicit interface language, never the dictionary language
+	DSLTitleRepairs *bool                   `json:"dslTitleRepairs,omitempty"`
+	IndexDefaults   *indexOptions           `json:"indexDefaults,omitempty"`
+	IndexMigrated   map[string]bool         `json:"indexMigrated,omitempty"` // completed legacy receipt migrations, per source
+	DSLKnown        map[string]bool         `json:"dslKnown,omitempty"`
+	DSLPending      map[string]indexOptions `json:"dslPending,omitempty"`
+	DSLRemoved      map[string]bool         `json:"dslRemoved,omitempty"`
+	Damaged         map[string]string       `json:"damagedSources,omitempty"` // source path → size:mtime signature
+	Language        string                  `json:"language,omitempty"`       // explicit interface language, never the dictionary language
 
 	Groups  []DictionaryGroup `json:"groups,omitempty"`
 	Version int               `json:"version"`
@@ -238,6 +239,14 @@ type Prefs struct {
 	// update()/mutate() only makes each WRITE atomic; this is what keeps two
 	// such sequences from interleaving and losing one of them.
 	editMu sync.Mutex
+}
+
+func (p *Prefs) dslTitleRepairs() (bool, bool) {
+	f, _ := p.data()
+	if f.DSLTitleRepairs == nil {
+		return true, false
+	}
+	return *f.DSLTitleRepairs, true
 }
 
 // maxPrefsBytes bounds state.json: thousands of dictionaries' worth, and a

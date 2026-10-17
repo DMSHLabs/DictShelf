@@ -933,8 +933,27 @@ final class Shell {
                 pendingFiles = callback;
                 try {
                     // createIntent() carries the accept= types and the multiple
-                    // flag the page asked for, so the picker matches the markup.
-                    a.startActivityForResult(params.createIntent(), REQ_FILES);
+                    // flag the page asked for.
+                    Intent picker = params.createIntent();
+                    // Android's picker treats WebView's extension list as MIME
+                    // types. It turns the archive/dictionary input's first
+                    // extension into application/zip, which makes visible
+                    // .dsl/.mdx files unselectable. These inputs are validated
+                    // by Go after selection, so let the document provider show
+                    // all openable files when the page supplied extensions.
+                    boolean hasAcceptFilter = false;
+                    for (String accept : params.getAcceptTypes()) {
+                        if (accept != null && !accept.trim().isEmpty()
+                                && !"*/*".equals(accept.trim())) {
+                            hasAcceptFilter = true;
+                            break;
+                        }
+                    }
+                    if (hasAcceptFilter) {
+                        picker.setType("*/*");
+                        picker.removeExtra(Intent.EXTRA_MIME_TYPES);
+                    }
+                    a.startActivityForResult(picker, REQ_FILES);
                 } catch (ActivityNotFoundException | SecurityException e) {
                     SystemLog.warn(TAG, "no file picker on this device", e);
                     settleFiles(null);

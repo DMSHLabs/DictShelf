@@ -124,6 +124,22 @@ function groupErrorText(message){
   return keys.has(message)?tx(keys.get(message)):message;
 }
 async function groupRequest(path,method,body){
+  if(window.wudictAndroidGo){
+    const action={
+      'GET /api/user-groups':'userGroups', 'GET /api/groups':'get',
+      'POST /api/user-groups':'createGroup', 'PUT /api/user-groups/name':'renameGroup',
+      'DELETE /api/user-groups':'deleteGroup', 'PUT /api/user-groups/member':'setGroupMember',
+      'PUT /api/user-groups/membership':'replaceGroupMembership', 'PUT /api/user-groups/members':'addGroupMembers',
+      'PUT /api/user-groups/link':'linkGroup', 'PUT /api/user-groups/order':'saveGroupOrder'
+    }[method+' '+path];
+    if(action){
+      try{
+        const result=JSON.parse(window.wudictAndroidGo.groups(action,body===undefined?'':JSON.stringify(body)));
+        if(!result.ok)throw new Error(result.error||'Dictionary Groups operation failed');
+        return result.value;
+      }catch(error){throw new Error(groupErrorText(error.message))}
+    }
+  }
   if(typeof window.wudictNativeCall==='function'){
     const action={
       'GET /api/user-groups':'userGroups', 'GET /api/groups':'groups',

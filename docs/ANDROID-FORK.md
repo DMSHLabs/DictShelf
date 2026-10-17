@@ -47,10 +47,11 @@ dictionary list and main-page search stream through a cancellable Go/JNI bridge;
 ordinary GET Rescan folders and Browse's word/find streams use that bridge too.
 Browse's nonstream page and chooser also use shared Go operations via JNI.
 The main-screen Wildcards list stream, Rebuild status/start/stop and explicit
-index-work status/start/stop, the Rescan Update dictionaries progress stream
-and single-dictionary ingest progress use the same bridge.
+index-work status/start/stop, the Rescan Update dictionaries progress stream,
+single-dictionary ingest progress, and Dictionary Groups data and edits use the
+same bridge.
 Browse and dictionary-list timing diagnostics use JNI. The Android page shows
-an `A24` stage marker beside the brand in this build. The article's `Words`
+an `A26` stage marker beside the brand in this build. The article's `Words`
 return button appears left of the arrows in the bottom status bar of the Android WebView. Other page requests still
 use local HTTP.
 
