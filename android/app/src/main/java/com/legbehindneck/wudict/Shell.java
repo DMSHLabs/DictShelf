@@ -24,6 +24,7 @@ import android.util.Log;
 import android.webkit.CookieManager;
 import android.webkit.JsPromptResult;
 import android.webkit.JsResult;
+import android.webkit.JavascriptInterface;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
@@ -410,6 +411,7 @@ final class Shell {
         // every request the page makes. It is the platform default; stated
         // here because it is now load-bearing.
         CookieManager.getInstance().setAcceptCookie(true);
+        web.addJavascriptInterface(new GoPageBridge(), "wudictAndroidGo");
         web.getSettings().setJavaScriptEnabled(true);                 // the UI is one SPA
         web.getSettings().setDomStorageEnabled(true);                 // prefs live in localStorage
         web.getSettings().setMediaPlaybackRequiresUserGesture(false); // dictionary audio
@@ -417,6 +419,124 @@ final class Shell {
         // with window.open(). A WebView has no tabs, so that call is inert
         // unless multiple windows are supported and onCreateWindow answers it.
         web.getSettings().setSupportMultipleWindows(true);
+    }
+
+    private static final class GoPageBridge {
+        @JavascriptInterface public int startDictStream() {
+            return GoBridge.startDictStream();
+        }
+
+        @JavascriptInterface public int startRescanStream() {
+            return GoBridge.startRescanStream();
+        }
+
+        @JavascriptInterface public int startRescanIndexes(String origin, String request) {
+            return GoBridge.startRescanIndexes(origin, request);
+        }
+
+        @JavascriptInterface public int startIngest(String origin, String query) {
+            return GoBridge.startIngest(origin, query);
+        }
+
+        @JavascriptInterface public int startSearchStream(String origin, String request) {
+            return GoBridge.startSearchStream(origin, request);
+        }
+
+        @JavascriptInterface public int startBrowseStream(String method, String query) {
+            return GoBridge.startBrowseStream(method, query);
+        }
+
+        @JavascriptInterface public String pollDictStream(int id) {
+            return GoBridge.pollDictStream(id);
+        }
+
+        @JavascriptInterface public void cancelDictStream(int id) {
+            GoBridge.cancelDictStream(id);
+        }
+
+        @JavascriptInterface public String config() {
+            return GoBridge.configSnapshot();
+        }
+
+        @JavascriptInterface public String prefs() {
+            return GoBridge.prefsSnapshot();
+        }
+
+        @JavascriptInterface public String browsePage(String query) {
+            return GoBridge.browsePage(query);
+        }
+
+        @JavascriptInterface public void browseDiagnostic(String payload) {
+            GoBridge.browseDiagnostic(payload);
+        }
+
+        @JavascriptInterface public String about(String origin, String dictionary) {
+            return GoBridge.about(origin, dictionary);
+        }
+
+        @JavascriptInterface public String orphans(String action, String body) {
+            return GoBridge.orphans(action, body);
+        }
+
+        @JavascriptInterface public String removeLibrary(String query) {
+            return GoBridge.removeLibrary(query);
+        }
+
+        @JavascriptInterface public String looks(String argument) {
+            return GoBridge.looks(argument);
+        }
+
+        @JavascriptInterface public String groups(String action, String argument) {
+            return GoBridge.groups(action, argument);
+        }
+
+        @JavascriptInterface public String lemmas(String action, String code) {
+            return GoBridge.lemmas(action, code);
+        }
+
+        @JavascriptInterface public String setup(String action, String argument) {
+            return GoBridge.setup(action, argument);
+        }
+
+        @JavascriptInterface public String intake(String action, String argument) {
+            return GoBridge.intake(action, argument);
+        }
+
+        @JavascriptInterface public String reindex(String action) {
+            return GoBridge.reindex(action);
+        }
+
+        @JavascriptInterface public String indexWork(String action, String id, String body) {
+            return GoBridge.indexWork(action, id, body);
+        }
+
+        @JavascriptInterface public String presets() {
+            return GoBridge.presetsSnapshot();
+        }
+
+        @JavascriptInterface public String savePreset(String body) {
+            return GoBridge.savePreset(body);
+        }
+
+        @JavascriptInterface public String savePrefs(String body) {
+            return GoBridge.savePrefs(body);
+        }
+
+        @JavascriptInterface public String style() {
+            return GoBridge.styleSnapshot();
+        }
+
+        @JavascriptInterface public String saveStyle(String argument) {
+            return GoBridge.saveStyle(argument);
+        }
+
+        @JavascriptInterface public String userFiles() {
+            return GoBridge.userFilesSnapshot();
+        }
+
+        @JavascriptInterface public String userFileOperation(String method, String argument) {
+            return GoBridge.userFileOperation(method, argument);
+        }
     }
 
     /**

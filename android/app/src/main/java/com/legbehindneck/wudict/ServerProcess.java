@@ -2,19 +2,8 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-// Runs the wudict server binary that ships inside the APK as
-// lib/arm64-v8a/libwudict.so - named like a library so the package manager
-// extracts it to the filesystem (with extractNativeLibs=true) and it can be
-// exec'd (D52). This is the same pattern Syncthing-Fork and InviZible Pro
-// ship in production; the alternative (JNI) would force an NDK and glue code
-// for no benefit to a localhost server.
-//
-// The binary is the same program `make android-go` cross-compiles; only its
-// environment is arranged here. HOME and the prepared library come from
-// AppDirs - the app's own external files dir, so that a phone with no root
-// can still reach wudict.toml and the db dir (D62). TMPDIR stays on internal
-// storage. Which dictionary folders exist is the flavour's decision and
-// belongs to Storage, not here.
+// Starts the shared Go runtime in this app process. The WebView currently
+// reaches it through a local HTTP listener; the runtime itself is a JNI library.
 package com.legbehindneck.wudict;
 
 import android.content.Context;
@@ -25,15 +14,12 @@ import org.json.JSONObject;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -41,7 +27,7 @@ class ServerProcess {
 
     /**
      * The address everything in this shell CONNECTS to. Always loopback, and
-     * deliberately not the address the child BINDS to: a platform override can
+     * deliberately not the address Go BINDS to: a platform override can
      * open the server to the local network (ShellPrefs.bindIp), and you connect
      * to 127.0.0.1 either way. Keeping the two apart is what stops that
      * override from moving the WebView's origin and orphaning the page prefs
@@ -62,25 +48,21 @@ class ServerProcess {
     private static volatile int portCache = ShellPrefs.DEFAULT_PORT;
 
     /**
-     * The port to TALK to: the one the live child is on, or - when none is up -
-     * the one a spawn would use ({@link ShellPrefs#port}).
+     * The port to TALK to: the live runtime's port, or the configured port.
      *
      * <p>The two differ whenever a stored port has changed under a running app,
      * and the difference is deliberate: a value from the settings takes effect
      * at the NEXT start (that is what every row there says), so until then the
      * server this app can reach is the one it already has, at the port it was
-     * exec'd with. Asking the configured port instead sent every window built
+     * started with. Asking the configured port instead sent every window built
      * in that window of time - a lookup popup, a handed-over search, the
      * PowerSignal ping - to an address where nothing was listening yet.
      * {@link #livePort()} is that fact, and this is the rule that reads it.
-     * What a spawn WOULD use is asked of {@link ShellPrefs#port} directly: the
+     * What the next start WOULD use is asked of {@link ShellPrefs#port} directly: the
      * settings window's own note about the listen address, and the port row's
      * hint on either screen, are sentences about the next start and not about
      * now, so they name the configured one on purpose.
      *
-     * <p>Adoption is the other half of the same coin: a child left over from a
-     * previous app process is adopted and keeps its port, so an app started
-     * after a port change still talks to what is really there.
      */
     static int port(Context c) {
         int live = livePort;
@@ -110,7 +92,7 @@ class ServerProcess {
         return state == FAILED;
     }
 
-    // The port the LIVE child was actually exec'd with, or 0 when none is up.
+    // The live Go runtime's port, or 0 when none is up.
     // Read by port(Context) above, which is the rule that matters, and by the
     // settings screen's probe - a probe of the CONFIGURED port finds nothing
     // there, so the footer would go silent in exactly the case it exists for
@@ -129,12 +111,10 @@ class ServerProcess {
         void onFailed(String message);
     }
 
-    private static final String BINARY = "libwudict.so";
     private static final String TAG = "wudict";
 
-    // ── the one child, and who is holding it ─────────────────────────────
-    // One server per app process, shared across activity recreation: the child
-    // holds this app's port, so a second spawn would lose the port to it.
+    // ── the one runtime, and who is holding it ───────────────────────────
+    // One Go runtime per app process, shared across activity recreation.
     //
     // Not a static inside MainActivity read back as "non-null means ready": a
     // lookup popup must work with MainActivity dead (D67), and two activities
@@ -147,19 +127,19 @@ class ServerProcess {
     private static ServerProcess shared;
     private static final List<Listener> waiting = new ArrayList<>();
     private static int holders;    // live windows retaining the server
-    private static int generation; // invalidates callbacks from a child we stopped
+    private static int generation; // invalidates callbacks from a runtime we stopped
     private static boolean stopWhenIdle;
 
     /**
      * Runs {@code l} against a ready server, starting one if needed. A second
-     * caller during STARTING queues rather than exec'ing a second child; READY
+     * caller during STARTING queues rather than starting a second runtime; READY
      * calls back immediately; a previous FAILED is retried, because the reason
-     * (a folder that was not there yet, a port a stale child was still holding)
+     * (a folder that was not there yet, or a port another app held)
      * may well be gone by the next attempt.
      *
      * <p>Callbacks arrive on whichever thread settles the start - the
      * activities hop to the main thread themselves, as they must anyway for the
-     * adopt path, which answers inline.
+     * ready path, which answers inline.
      */
     static synchronized void ensure(Context ctx, Listener l) {
         port(ctx); // prime portCache for the Context-less callers
@@ -181,7 +161,7 @@ class ServerProcess {
     private static void settle(int gen, int newState, String message) {
         List<Listener> pending;
         synchronized (ServerProcess.class) {
-            if (gen != generation) return; // this child was stopped; nobody is waiting on it
+            if (gen != generation) return; // this runtime was stopped
             state = newState;
             pending = new ArrayList<>(waiting);
             waiting.clear();
@@ -212,13 +192,13 @@ class ServerProcess {
      * {@code isFinishing()}, the lookup popup always passes false: a popup
      * closing must never stop the server (D67), it drops to
      * {@link PowerSignal#BACKGROUND} instead, so the next lookup from any app
-     * is instant. The child is killed only when the last holder says so.
+     * is instant. The runtime stops only when the last holder says so.
      */
     static synchronized void release(boolean mayStop) {
         if (holders > 0) holders--;
         if (!mayStop || holders > 0) return;
         // A task swipe finishes its activities just like an explicit exit.
-        // Keep the server child alive while its foreground service protects
+        // Keep the Go runtime alive while its foreground service protects
         // work, then stop it when the final busy marker (or import hold) ends.
         if (IndexService.hasWork()) {
             stopWhenIdle = true;
@@ -234,18 +214,22 @@ class ServerProcess {
 
     private static void stopOwnedServer() {
         stopWhenIdle = false;
-        generation++; // any callback still in flight from this child is now stale
+        generation++; // any callback still in flight is now stale
+        boolean nativeRuntime = shared != null && shared.nativeOwned;
         if (shared != null) shared.stop();
         shared = null;
         livePort = 0; // nothing is listening now
         state = IDLE;
         waiting.clear();
+        if (nativeRuntime) android.os.Process.killProcess(android.os.Process.myPid());
+    }
+
+    static synchronized boolean nativeRuntimeActive() {
+        return shared != null && shared.nativeOwned;
     }
 
     private final Context app;
-    private Process process;
-    // written by the log thread, read by the start thread when the child dies
-    private volatile String lastLine;
+    private boolean nativeOwned;
     private boolean stopped;
 
     private ServerProcess(Context app) {
@@ -259,33 +243,15 @@ class ServerProcess {
     }
 
     private void run(Listener listener) {
+        GoBridge.initialize(app);
         SystemLog.record("server startup requested");
-        // A previous run's child can outlive the app process: Android kills
-        // the app, but an exec'd child is reparented to init and keeps
-        // running - still holding this app's port, still serving the same library. Only
-        // a clean finish reaches onDestroy and stop(). Spawning a second
-        // server then means a bind failure and a misleading wait, when a
-        // perfectly good one is already there, so adopt it instead.
+        int bridgeProtocol = GoBridge.protocol();
+        SystemLog.record("Go bridge protocol=" + bridgeProtocol);
+        Log.i(TAG, "Go bridge protocol=" + bridgeProtocol);
         int port = port(app);
-        // Primed here, before anything can talk to a server: adoptRunningServer
-        // and PowerSignal are static and have no Context of their own, exactly
-        // as with the port above.
         ShellPrefs.token(app);
-        if (adoptRunningServer(app, port)) {
-            SystemLog.record("server adopted port=" + port);
-            Log.i(TAG, "adopted a wudict server already listening on " + port);
-            synchronized (this) {
-                if (stopped) return;
-                livePort = port; // the port the adopted child is really on
-            }
-            listener.onReady();
-            return;
-        }
-
-        String bin = app.getApplicationInfo().nativeLibraryDir + "/" + BINARY;
-        if (!new File(bin).canExecute()) {
-            SystemLog.record("server startup failed: binary unavailable " + bin);
-            listener.onFailed("server binary not extracted: " + bin);
+        if (bridgeProtocol != 1) {
+            listener.onFailed("Go bridge is unavailable");
             return;
         }
 
@@ -296,102 +262,31 @@ class ServerProcess {
         File dbDir = AppDirs.dbDir(app);
         File[] dicts = Storage.dictDirs(app);
         seedConfig(home, dicts);
+        GoBridge.checkConfig(home, dbDir, ShellPrefs.env(app));
 
-        ProcessBuilder pb = new ProcessBuilder(bin, "serve",
-                "--no-browser",                  // a WebView, not a browser tab
-                // The BIND address, which an override may widen to the local
-                // network; HOST above stays the connect address regardless.
-                "--ip", ShellPrefs.bindIp(app),
-                "--port", String.valueOf(port),
-                "--db-dir", dbDir.getAbsolutePath(),
-                // deliberately NO --dict-dir: see seedConfig
-                "--use-cached");                 // list what dbDir already holds
-        Map<String, String> env = pb.environment();
-        env.put("HOME", home.getAbsolutePath()); // ~/.wudict/wudict.toml lands in app storage
-        env.put("TMPDIR", app.getCacheDir().getAbsolutePath());
-        // Give freed pages back to the kernel immediately, and be seen to.
-        // The Go runtime defaults to MADV_DONTNEED only when GOOS == "linux"
-        // (runtime1.go, parseRuntimeDebugVars); GOOS == "android" misses that
-        // branch and keeps MADV_FREE, which leaves every reclaimed page counted
-        // in RSS until the kernel is short of memory. Measured on device: after
-        // shedding a 464k-headword preview backend the Go heap was empty and
-        // VmRSS still read 184 MB. On Android the number is the outcome - the
-        // low-memory killer, the vendor "RAM hog" watchdogs and the user's own
-        // battery screen all read RSS/PSS, so memory we have released but are
-        // still charged for is memory we did not release. Costs a page-fault
-        // per page on reuse; that is the cheaper side of the trade here.
-        env.put("GODEBUG", "madvdontneed=1");
-        // Ask the server to announce work a person is waiting on, so this shell
-        // can hold a foreground service across it (IndexService). Opt-in per
-        // process rather than a config setting: the markers are a private
-        // protocol between these two processes and are noise anywhere else.
-        env.put("WUDICT_BUSY_LINES", "1");
-        // Platform overrides (D101), delivered on the environment because that
-        // layer outranks wudict.toml and is truthfully reported as origin
-        // "env". The keys are disjoint from the four above by construction -
-        // they are wudict config keys, these are process environment - and an
-        // override that is not set contributes nothing at all, so an install
-        // that has never opened the Advanced section spawns a byte-for-byte
-        // identical child.
-        env.putAll(ShellPrefs.env(app));
-        // The access key, on the environment rather than in argv: every
-        // process on the device can read /proc/<pid>/cmdline, and none but
-        // this uid can read /proc/<pid>/environ.
-        env.putAll(ShellPrefs.authEnv(app));
-        pb.directory(home);
-        pb.redirectErrorStream(true);
-        try {
-            synchronized (this) {
-                if (stopped) return;
-                process = pb.start();
+        int result = GoBridge.startRuntime(app, home, dbDir, port);
+            if (result != 1) {
+                SystemLog.record("in-process Go startup failed code=" + result);
+                Log.e(TAG, "in-process Go startup failed code=" + result);
+                listener.onFailed("in-process Go startup failed (" + result + ")");
+                return;
             }
-        } catch (IOException e) {
-            SystemLog.warn(TAG, "server process start failed", e);
-            listener.onFailed(String.valueOf(e.getMessage()));
-            return;
-        }
-        logOutput(process.getInputStream());
-
-        if (awaitPort(app, process, port)) {
-            SystemLog.record("server ready port=" + port);
-            synchronized (this) {
-                if (stopped) return;
-                livePort = port; // and the one this child was exec'd with
+            nativeOwned = true;
+            if (awaitNative(app, port)) {
+                SystemLog.record("in-process Go ready port=" + port);
+                Log.i(TAG, "in-process Go ready port=" + port);
+                synchronized (this) {
+                    if (stopped) return;
+                    livePort = port;
+                }
+                listener.onReady();
+            } else {
+                GoBridge.stopRuntime();
+                IndexService.busy(app, false);
+                Log.e(TAG, "in-process Go did not become ready on port " + port);
+                listener.onFailed("in-process Go did not become ready on port " + port);
             }
-            listener.onReady();
             return;
-        }
-
-        // The start failed, and anything the child had announced died with it.
-        // The stdout reader cannot do this and neither can stop(), which is not
-        // on this path: a child that is killed, or that exits, closes the stream
-        // without ever emitting the closing marker, so an ingest that had opened
-        // one would leave the foreground service and its notification up for the
-        // life of the app - and SettingsActivity's "no ingest in flight" guard
-        // false forever with it.
-        IndexService.busy(app, false);
-
-        if (process.isAlive()) {
-            // It bound nothing, but it is still running and still holds
-            // whatever it did open. Left alive it outlives this app process -
-            // reparented to init, invisible to stop(), and a later adopt would
-            // take it for a healthy server of the current generation - and it
-            // denies the retry the very port the retry is about to ask for.
-            // A hard kill is safe for the same reason it is in stop():
-            // SQLite commits are transactional.
-            process.destroy();
-            SystemLog.record("server startup failed: port " + port + " never opened");
-            listener.onFailed("port " + port + " never opened");
-        } else {
-            // The child is gone, so its last line of output is the diagnosis -
-            // a bad --db-dir, a port already held, a permission refusal. Saying
-            // "port never opened" instead would send the user hunting for a
-            // network problem that does not exist.
-            SystemLog.record("server startup failed exit=" + process.exitValue() + " last=" + lastLine);
-            listener.onFailed(lastLine == null
-                    ? "server exited immediately (" + process.exitValue() + ")"
-                    : lastLine);
-        }
     }
 
     // seedConfig writes the dictionary folders into ~/.wudict/wudict.toml -
@@ -438,12 +333,8 @@ class ServerProcess {
         }
     }
 
-    // adoptRunningServer reports whether a wudict server is already answering
-    // on the port. Loopback is shared with every other app on the device, so
-    // an open socket is not proof: /api/config must name this app's library.
-    // process stays null, so stop() will not kill something this instance
-    // never started.
-    private static boolean adoptRunningServer(Context app, int port) {
+    // Readiness requires a response from this app's own library.
+    private static boolean runtimeReady(Context app, int port) {
         HttpURLConnection c = null;
         try {
             c = (HttpURLConnection) new URL(
@@ -452,9 +343,8 @@ class ServerProcess {
             c.setReadTimeout(700);
             // A 401 here means a wudict IS there and holds a different key -
             // this install's switch was toggled while it ran, or another app
-            // shipped one. Not ours to adopt and not ours to kill: it is
-            // reported as "not us", which leaves the bind failure below to say
-            // the port is taken.
+            // shipped one. It is reported as unavailable; startup reports
+            // the port conflict separately.
             ShellPrefs.authorize(c);
             if (c.getResponseCode() != 200) return false;
             StringBuilder body = new StringBuilder();
@@ -509,58 +399,13 @@ class ServerProcess {
         }
     }
 
-    // The server's out-of-band markers, read off the same stream as its log
-    // (WUDICT_BUSY_LINES above). "1" means an ingest a person is waiting on has
-    // started, "0" that the last one finished; they are refcounted on the
-    // server side, so this sees one of each and not one per dictionary.
-    private static final String BUSY_ON = "@wudict busy 1";
-    private static final String BUSY_OFF = "@wudict busy 0";
-
-    private void logOutput(InputStream in) {
-        Process loggedProcess = process;
-        Thread t = new Thread(() -> {
-            int fatalLines = 0;
-            try (BufferedReader r = new BufferedReader(new InputStreamReader(in))) {
-                for (String line; (line = r.readLine()) != null; ) {
-                    Log.d(TAG, line);
-                    String marker = line.trim();
-                    if (marker.startsWith("panic:") || marker.startsWith("fatal error:")) fatalLines = 40;
-                    if (fatalLines > 0) { SystemLog.record("server fatal: " + line); fatalLines--; }
-                    if (BUSY_ON.equals(marker) || BUSY_OFF.equals(marker)) {
-                        IndexService.busy(app, BUSY_ON.equals(marker));
-                        continue; // a marker is not a diagnosis; keep lastLine
-                    }
-                    if (!marker.isEmpty()) lastLine = line; // not isBlank(): API 35+
-                }
-            } catch (IOException ignored) {
-                // process ended; nothing more to log
-            }
-            try {
-                SystemLog.record("server process exited code=" + loggedProcess.waitFor());
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                SystemLog.record("server exit monitor interrupted");
-            }
-        }, "wudict-log");
-        t.setDaemon(true);
-        t.start();
-    }
-
-    // Waits for the server to accept a connection. Watching the child as well
-    // as the port matters: a server that dies on startup - the common failure,
-    // since it is the run that creates the config and the library folders -
-    // would otherwise hold the "Starting…" screen for the full minute before
-    // reporting the wrong thing.
-    private static boolean awaitPort(Context app, Process child, int port) {
-        long deadline = System.nanoTime() + 60_000_000_000L; // 60 s: first run writes its config
+    private static boolean awaitNative(Context app, int port) {
+        long deadline = System.nanoTime() + 10_000_000_000L;
         while (System.nanoTime() < deadline) {
-            // A second installation may already own this port. A socket alone
-            // does not establish that our child finished starting.
-            if (!child.isAlive()) return false;
-            if (adoptRunningServer(app, port) && child.isAlive()) return true;
+            if (runtimeReady(app, port)) return true;
             try {
-                Thread.sleep(200);
-            } catch (InterruptedException e) {
+                Thread.sleep(100);
+            } catch (InterruptedException error) {
                 Thread.currentThread().interrupt();
                 return false;
             }
@@ -570,46 +415,26 @@ class ServerProcess {
 
     private synchronized void stop() {
         stopped = true;
-        // Whatever it was preparing died with it, so the notification and the
-        // service holding the app up must go with it too. Doing this from the
-        // stdout reader instead would not be enough: a killed child closes the
-        // stream without ever emitting the closing marker.
         IndexService.busy(app, false);
-        Process p = process;
-        if (p != null) {
-            // No graceful shutdown: Java's destroy() is a hard kill. That is
-            // safe here - SQLite commits are transactional, so the library
-            // cannot be corrupted by it.
-            p.destroy();
-        }
+        if (nativeOwned) GoBridge.stopRuntime();
+        nativeOwned = false;
     }
 
-    /**
-     * Stops the server whoever started it, and reports whether anything was
-     * there to stop. This is the one operation the ordinary lifecycle cannot
-     * do: a child reparented to init and later ADOPTED has {@code process ==
-     * null}, so {@link #stop()} would find nothing to kill and the settings
-     * screen could only say "next time".
-     *
-     * <p>The caller is responsible for the guard - no live windows, no ingest
-     * in flight; see SettingsActivity. A hard kill is safe for the same reason
-     * it is in {@link #stop()}: SQLite commits are transactional.
-     */
+    /** Stops the in-process runtime; the caller handles process restart. */
     static synchronized boolean stopAny(Context ctx) {
         stopWhenIdle = false;
         generation++;   // any callback still in flight from this child is stale
-        boolean owned = shared != null && shared.process != null;
+        boolean owned = shared != null && shared.nativeOwned;
         if (shared != null) shared.stop();
         shared = null;
         livePort = 0;
         state = IDLE;
         waiting.clear();
-        if (owned) return true;
         IndexService.busy(ctx, false);
-        return killAdopted(ctx);
+        return owned;
     }
 
-    /** Reads demanded work even when the server was adopted without stdout. */
+    /** Reads demanded work from the in-process Go runtime. */
     static boolean workInFlight() {
         HttpURLConnection c = null;
         try {
@@ -628,39 +453,4 @@ class ServerProcess {
         }
     }
 
-    /**
-     * Kills a server this app process never started, by finding it in /proc.
-     * It is our own uid, so a {@code hidepid} mount hides nothing of ours, and
-     * matching the full cmdline - not just the pid - makes pid reuse harmless:
-     * the only process that can match is one exec'd from our own APK.
-     */
-    private static boolean killAdopted(Context ctx) {
-        String bin = ctx.getApplicationInfo().nativeLibraryDir + "/" + BINARY;
-        File[] entries = new File("/proc").listFiles();
-        if (entries == null) return false;
-        boolean killed = false;
-        for (File e : entries) {
-            int pid;
-            try {
-                pid = Integer.parseInt(e.getName());
-            } catch (NumberFormatException notAPid) {
-                continue;
-            }
-            if (pid == android.os.Process.myPid()) continue;
-            byte[] raw;
-            try {
-                raw = Files.readAllBytes(new File(e, "cmdline").toPath());
-            } catch (IOException | RuntimeException gone) {
-                continue; // the process ended, or is not ours to read
-            }
-            // cmdline is NUL-separated; the first field is argv[0].
-            String all = new String(raw, StandardCharsets.UTF_8);
-            int nul = all.indexOf('\0');
-            String argv0 = nul < 0 ? all : all.substring(0, nul);
-            if (!argv0.equals(bin)) continue;
-            android.os.Process.killProcess(pid);
-            killed = true;
-        }
-        return killed;
-    }
 }

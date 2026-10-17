@@ -222,6 +222,7 @@ window.wudictFontScale=(function(){
 <form id="frm" class="col" role="search" aria-busy="true">
 <a class="btn" id="barBackWords" href="/browse" aria-label="{{T:search.backToWords}}" title="{{T:search.backToWords}}" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M19 12H5m6-6-6 6 6 6"/></svg><span>{{T:search.words}}</span></a>
 <span class="brand">wu<small>Dict2</small></span>
+<span id="androidBridgeStage" hidden style="font-size:.65em;white-space:nowrap;opacity:.7">A24</span>
 <!-- The search pill. Above 600px it is display:contents, so the field and the
      two selects are direct flex children of the form. Below it the pill
      becomes the row:
@@ -1242,6 +1243,11 @@ window.wudictFontScale=(function(){
 <script>
 "use strict";
 const $=id=>document.getElementById(id);
+if(window.wudictAndroidGo){
+  document.documentElement.setAttribute('data-android-go','');
+  $('androidBridgeStage').hidden=false;
+  $('sbarPrev').before($('sbarBackWords'));
+}
 // Initialized before async startup and native callbacks can create a picker menu.
 const sheetMenus=[];
 // The desktop appearance bridge may answer during startup; keep this initialized
@@ -1342,9 +1348,97 @@ function adoptLocalPrefs(){
   return true;
 }
 let prefsReady=false;
-/* Keep the UI's JSON-response contract while routing these shared settings
-   calls through the Windows bridge. Browser requests still use HTTP. */
+/* Keep the UI's JSON-response contract for native and browser transports. */
 async function apiFetch(url,options){
+  if(window.wudictAndroidGo){
+    const requestURL=new URL(url,window.location.href);
+    const method=(options&&options.method||"GET").toUpperCase();
+    if(requestURL.origin===window.location.origin&&requestURL.pathname==="/api/about"&&method==="GET"){
+      const value=JSON.parse(window.wudictAndroidGo.about(window.location.origin,requestURL.searchParams.get("dict")||""));
+      return {ok:true,status:200,json:async()=>value,text:async()=>JSON.stringify(value)};
+    }
+    if(requestURL.origin===window.location.origin&&requestURL.pathname==="/api/orphans"&&
+       (method==="GET"||method==="POST")){
+      const result=JSON.parse(window.wudictAndroidGo.orphans(method==="GET"?"get":"resolve",options?.body||""));
+      const value=result.body||{error:"missing dictionary operation failed"};
+      return {ok:result.status>=200&&result.status<300,status:result.status,
+        json:async()=>value,text:async()=>JSON.stringify(value)};
+    }
+    if(requestURL.origin===window.location.origin&&requestURL.pathname==="/api/library"&&method==="DELETE"){
+      const result=JSON.parse(window.wudictAndroidGo.removeLibrary(requestURL.searchParams.toString()));
+      const value=result.body||{error:"dictionary removal failed"};
+      return {ok:result.status>=200&&result.status<300,status:result.status,
+        json:async()=>value,text:async()=>JSON.stringify(value)};
+    }
+    if(requestURL.origin===window.location.origin&&
+       (requestURL.pathname==="/api/looks"||requestURL.pathname==="/api/looks/apply")){
+      const argument=JSON.stringify({path:requestURL.pathname,method,body:options?.body||""});
+      const result=JSON.parse(window.wudictAndroidGo.looks(argument));
+      const value=result.body||{error:"saved appearance operation failed"};
+      return {ok:result.status>=200&&result.status<300,status:result.status,
+        json:async()=>value,text:async()=>result.status>=400?String(value.error||""):JSON.stringify(value)};
+    }
+    if(requestURL.origin===window.location.origin&&requestURL.pathname==="/api/reindex"&&
+       (method==="GET"||method==="POST"||method==="DELETE")){
+      const action=method==="GET"?"get":method==="POST"?"start":"stop";
+      const result=JSON.parse(window.wudictAndroidGo.reindex(action));
+      const status=result.status||500,body=result.body||{error:"reindex failed"};
+      return {ok:status>=200&&status<300,status,json:async()=>body,text:async()=>JSON.stringify(body)};
+    }
+    if(requestURL.origin===window.location.origin&&method==="GET"&&
+       (requestURL.pathname==="/api/config"||requestURL.pathname==="/api/prefs"||
+        requestURL.pathname==="/api/presets"||requestURL.pathname==="/api/style"||
+        requestURL.pathname==="/api/files")){
+      const value=JSON.parse(requestURL.pathname==="/api/config"
+        ?window.wudictAndroidGo.config():requestURL.pathname==="/api/prefs"
+        ?window.wudictAndroidGo.prefs():requestURL.pathname==="/api/presets"
+        ?window.wudictAndroidGo.presets():requestURL.pathname==="/api/style"
+        ?window.wudictAndroidGo.style():window.wudictAndroidGo.userFiles());
+      return {ok:true,status:200,json:async()=>value,text:async()=>JSON.stringify(value)};
+    }
+    if(requestURL.origin===window.location.origin&&requestURL.pathname==="/api/prefs"&&method==="PUT"){
+      const result=JSON.parse(window.wudictAndroidGo.savePrefs(options.body||"{}"));
+      const value=result.ok?result.value:{error:result.error||"could not save preferences"};
+      return {ok:!!result.ok,status:result.status||500,
+        json:async()=>value,text:async()=>JSON.stringify(value)};
+    }
+    if(requestURL.origin===window.location.origin&&requestURL.pathname==="/api/presets"&&method==="PUT"){
+      const result=JSON.parse(window.wudictAndroidGo.savePreset(options.body||"{}"));
+      const value=result.ok?result.value:{error:result.error||"could not save preset"};
+      return {ok:!!result.ok,status:result.status||500,
+        json:async()=>value,text:async()=>JSON.stringify(value)};
+    }
+    if(requestURL.origin===window.location.origin&&requestURL.pathname==="/api/style"&&method==="PUT"){
+      const argument=JSON.stringify({body:JSON.parse(options.body||"{}"),
+        replace:requestURL.searchParams.get("replace")==="1"});
+      const result=JSON.parse(window.wudictAndroidGo.saveStyle(argument));
+      const status=result.status||500,value=result.value||{error:result.error||"style save failed"};
+      return {ok:status>=200&&status<300,status,
+        json:async()=>value,text:async()=>result.error||JSON.stringify(value)};
+    }
+    if(requestURL.origin===window.location.origin&&requestURL.pathname==="/api/files"&&
+       (method==="DELETE"||method==="POST")){
+      let action,argument;
+      if(method==="DELETE"){
+        action="deleteUserFile";argument=requestURL.searchParams.get("name")||"";
+      }else{
+        const file=options.body;
+        if(!(file instanceof Blob))throw new Error("invalid file upload");
+        const dataURL=await new Promise((resolve,reject)=>{
+          const reader=new FileReader();reader.onload=()=>resolve(String(reader.result||""));
+          reader.onerror=()=>reject(new Error("could not read file"));reader.readAsDataURL(file);
+        });
+        action="saveUserFile";
+        argument=JSON.stringify({name:requestURL.searchParams.get("name")||"",
+          replace:requestURL.searchParams.get("replace")==="1",
+          data:String(dataURL).slice(String(dataURL).indexOf(",")+1)});
+      }
+      const result=JSON.parse(window.wudictAndroidGo.userFileOperation(action,argument));
+      const value=result.ok?result.value:{error:result.error||"file operation failed"};
+      return {ok:!!result.ok,status:result.status||500,
+        json:async()=>value,text:async()=>JSON.stringify(value)};
+    }
+  }
   if(typeof window.wudictNativeCall==="function"){
     const requestURL=new URL(url,window.location.href);
     if(requestURL.origin===window.location.origin){
@@ -1422,6 +1516,24 @@ async function apiFetch(url,options){
   return fetch(url,options);
 }
 function browseFindStreamFetch(url,options={}){
+  if(window.wudictAndroidGo){
+    const requestURL=new URL(url,window.location.href);
+    if(requestURL.origin===window.location.origin&&requestURL.pathname==="/api/browse/find"&&
+       requestURL.searchParams.get("stream")==="1"){
+      const encoder=new TextEncoder(),work=new AbortController(),signal=options.signal;
+      const abort=()=>work.abort();
+      if(signal){if(signal.aborted)work.abort();else signal.addEventListener("abort",abort,{once:true})}
+      const cleanup=()=>{if(signal)signal.removeEventListener("abort",abort)};
+      let canceled=false;
+      const body=new ReadableStream({start(controller){
+        androidGoStream(()=>window.wudictAndroidGo.startBrowseStream("browseFind",requestURL.searchParams.toString()),
+          message=>controller.enqueue(encoder.encode(JSON.stringify(message)+"\n")),work.signal)
+          .then(()=>{cleanup();if(!canceled)controller.close()})
+          .catch(error=>{cleanup();if(!canceled)controller.error(error)});
+      },cancel(){canceled=true;cleanup();work.abort()}});
+      return Promise.resolve({status:200,ok:true,body});
+    }
+  }
   if(typeof window.wudictNativeCall==="function"){
     const requestURL=new URL(url,window.location.href);
     if(requestURL.origin===window.location.origin&&requestURL.pathname==="/api/browse/find"&&
@@ -3976,6 +4088,7 @@ if(browseArticleDiagContext){
 logBrowseArticleTransition("app_script_ready");
 function dictionaryListDiagnosticsEnabled(){try{return localStorage.getItem("wudict_dictionary_list_diagnostics")==="1"}catch(_){return false}}
 function sendBrowseDiagnostic(payload){
+  if(window.wudictAndroidGo){try{window.wudictAndroidGo.browseDiagnostic(JSON.stringify(payload))}catch(_){}return Promise.resolve()}
   if(typeof window.wudictNativeCall==="function")return window.wudictNativeCall("browseDiagnostic",JSON.stringify(payload)).catch(()=>{});
   return fetch("/api/browse-diagnostic",{method:"POST",headers:{"Content-Type":"application/json"},keepalive:true,body:JSON.stringify(payload)}).catch(()=>{});
 }
@@ -4669,7 +4782,7 @@ function runIngest(id,opts,label){
     .filter(([k])=>k==="contains"||k==="fts"||k==="media"||k==="rebuild")
     .map(([k,v])=>"&"+k+"="+(v?1:0)).join("");
   return new Promise(resolve=>{
-    const nativeStream=typeof window.wudictNativeCall==="function";
+    const nativeStream=!!window.wudictAndroidGo||typeof window.wudictNativeCall==="function";
     const streamController=nativeStream?new AbortController():null;
     const es=nativeStream?new EventTarget():new EventSource("/api/ingest?dict="+encodeURIComponent(id)+params);
     if(nativeStream){
@@ -4753,11 +4866,15 @@ function runIngest(id,opts,label){
       finish("error",why)});
     if(nativeStream){
       const query="dict="+encodeURIComponent(id)+params;
-      window.wudictNativeCall("ingest",query,message=>{
+      const onMessage=message=>{
         if(finished)return;
         lastEventAt=Date.now();
         es.dispatchEvent(new MessageEvent(message.event,{data:JSON.stringify(message.data)}));
-      },streamController.signal).then(()=>{
+      };
+      const run=window.wudictAndroidGo
+        ?androidGoStream(()=>window.wudictAndroidGo.startIngest(window.location.origin,query),onMessage,streamController.signal)
+        :window.wudictNativeCall("ingest",query,onMessage,streamController.signal);
+      run.then(()=>{
         if(finished)return;
         es.readyState=EventSource.CLOSED;
       }).catch(error=>{
@@ -5075,9 +5192,9 @@ function setIndexStatus(html,mirror=true){
 let globalStopAction=null,globalStopLabel="";
 let workNoticeHTML="";
 function renderWorkNotice(){
-  if(document.documentElement.classList.contains("server-work-active"))return;
   const box=$("workNotice"),button=$("workNoticeStop");
   box.hidden=!workNoticeHTML;
+  if(document.documentElement.classList.contains("server-work-active"))return;
   if(box.hidden){document.documentElement.style.setProperty("--workh","0px");return}
   $("workNoticeText").innerHTML=workNoticeHTML;
   button.hidden=!globalStopAction;
@@ -5193,7 +5310,56 @@ function setBusy(on){
 /* read a newline-delimited JSON response, invoking onMsg per record as it
    arrives — this is what lets each dictionary render the instant it is
    ready instead of waiting for the whole fan-out (progressive results). */
+async function androidGoStream(start,onMsg,signal){
+  if(signal?.aborted)throw new DOMException("Aborted","AbortError");
+  const id=start();
+  if(id<=0)throw new Error("Go runtime is unavailable");
+  let aborted=false;
+  const abort=()=>{aborted=true;window.wudictAndroidGo.cancelDictStream(id)};
+  if(signal)signal.addEventListener("abort",abort,{once:true});
+  try{
+    for(;;){
+      if(aborted)throw new DOMException("Aborted","AbortError");
+      const packet=JSON.parse(window.wudictAndroidGo.pollDictStream(id));
+      for(const message of packet.messages||[]){
+        if(aborted)throw new DOMException("Aborted","AbortError");
+        onMsg(message);
+      }
+      if(packet.done){if(packet.error)throw new Error(packet.error);return}
+      await new Promise(resolve=>setTimeout(resolve,16));
+    }
+  }finally{
+    if(signal)signal.removeEventListener("abort",abort);
+    window.wudictAndroidGo.cancelDictStream(id);
+  }
+}
 async function fetchStream(url,onMsg,signal,options){
+  if(window.wudictAndroidGo){
+    const requestURL=new URL(url,window.location.href);
+    if(requestURL.origin===window.location.origin&&requestURL.pathname==="/api/dicts"&&
+       (options?.method||"GET").toUpperCase()==="GET"&&!requestURL.searchParams.has("diagnostics")){
+      await androidGoStream(()=>window.wudictAndroidGo.startDictStream(),onMsg,signal);
+      return;
+    }
+    if(requestURL.origin===window.location.origin&&requestURL.pathname==="/api/rescan"&&
+       (options?.method||"GET").toUpperCase()==="GET"&&!requestURL.searchParams.has("diagnostics")){
+      await androidGoStream(()=>window.wudictAndroidGo.startRescanStream(),onMsg,signal);
+      return;
+    }
+    if(requestURL.origin===window.location.origin&&requestURL.pathname==="/api/rescan"&&
+       (options?.method||"GET").toUpperCase()==="POST"&&requestURL.searchParams.get("stream")==="1"){
+      await androidGoStream(()=>window.wudictAndroidGo.startRescanIndexes(window.location.origin,options.body||"{}"),onMsg,signal);
+      return;
+    }
+    if(requestURL.origin===window.location.origin&&requestURL.pathname==="/api/search"&&
+       (options?.method||"GET").toUpperCase()==="GET"){
+      const params=requestURL.searchParams,n=Number.parseInt(params.get("n"),10);
+      const flag=(value)=>!!value&&!/^(0|false|no|off)$/i.test(value.trim());
+      const request={q:params.get("q")||"",mode:params.get("mode")||"",format:params.get("format")||"",dict:params.get("dict")||"",n:Number.isFinite(n)?n:0,hl:flag(params.get("hl")||""),ignoreDiacritics:flag(params.get("ignoreDiacritics")||"")};
+      await androidGoStream(()=>window.wudictAndroidGo.startSearchStream(window.location.origin,JSON.stringify(request)),onMsg,signal);
+      return;
+    }
+  }
   if(typeof window.wudictNativeCall==="function"){
     const requestURL=new URL(url,window.location.href);
     if(requestURL.origin===window.location.origin){
@@ -5201,7 +5367,7 @@ async function fetchStream(url,onMsg,signal,options){
       if(requestURL.pathname==="/api/search"&&method==="GET"){
         const params=requestURL.searchParams,n=Number.parseInt(params.get("n"),10);
         const flag=(value)=>!!value&&!/^(0|false|no|off)$/i.test(value.trim());
-        const request={q:params.get("q")||"",mode:params.get("mode")||"",format:params.get("format")||"",dict:params.get("dict")||"",n:Number.isFinite(n)?n:0,hl:flag(params.get("hl")||"")};
+        const request={q:params.get("q")||"",mode:params.get("mode")||"",format:params.get("format")||"",dict:params.get("dict")||"",n:Number.isFinite(n)?n:0,hl:flag(params.get("hl")||""),ignoreDiacritics:flag(params.get("ignoreDiacritics")||"")};
         await window.wudictNativeCall("search",JSON.stringify(request),onMsg,signal);
         return;
       }
@@ -5482,7 +5648,6 @@ function renderSlot(box,h,mode,q,perDict,group){
       const el=anchorTarget(roots[0],frag);
       if(el){det.open=true;revealAt(el.getBoundingClientRect().top,det)}
     });
-    if(nativeStream){const query="dict="+encodeURIComponent(id)+params;window.wudictNativeCall("ingest",query,message=>{if(finished)return;es.dispatchEvent(new MessageEvent(message.event,{data:JSON.stringify(message.data)}))},streamController.signal).then(()=>{if(!finished)es.readyState=EventSource.CLOSED}).catch(error=>{if(finished||error?.name==="AbortError")return;es.readyState=EventSource.CLOSED;es.dispatchEvent(new MessageEvent("error",{data:JSON.stringify({error:error.message})}))})}
   }
   return{shown:true,results:true};
 }
@@ -7248,8 +7413,9 @@ function sbarPaint(){
   // can act but has run out of list, it is dimmed instead - see sbarEndsPaint.
   $("sbarPrev").hidden=$("sbarNext").hidden=n<2;
   const returnURL=maskReturn||browseReturn;
-  $("sbarBackWords").hidden=!returnURL||n>=2||document.documentElement.hasAttribute("data-webview2");
-  $("barBackWords").hidden=!returnURL;
+  const androidGo=document.documentElement.hasAttribute("data-android-go");
+  $("sbarBackWords").hidden=!returnURL||(!androidGo&&n>=2)||document.documentElement.hasAttribute("data-webview2");
+  $("barBackWords").hidden=!returnURL||androidGo;
   if(returnURL)$("sbarBackWords").href=$("barBackWords").href=returnURL;
   $("sbarOn").setAttribute("aria-pressed",sbarWant?"true":"false");
   $("sbarOff").setAttribute("aria-pressed",sbarWant?"false":"true");

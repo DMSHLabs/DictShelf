@@ -33,6 +33,11 @@
     try {return await fetch(url,{...options,signal:controller.signal});}
     finally {clearTimeout(timer);}
   }
+  function androidIndexWork(action,id='',body='') {
+    const result=JSON.parse(window.wudictAndroidGo.indexWork(action,id,body));
+    if(result.status<200||result.status>=300)throw new Error(result.body?.error||'index operation failed');
+    return result.body;
+  }
   const locked = new Set();
   function lockControls(s) {
     const ids=new Set(s.busyDicts||[]),any=s.exclusive||ids.size>0;
@@ -94,6 +99,11 @@
   }
   async function refresh(id = '') {
     const sequence = ++refreshSequence;
+    if (window.wudictAndroidGo) {
+      const s=androidIndexWork('get',id||'');
+      if(sequence===refreshSequence&&(!starting||s.running))render(s);
+      return s;
+    }
     if (typeof window.wudictNativeCall === 'function') {
       const s = await window.wudictNativeCall('indexWork', id || '');
       if(sequence===refreshSequence&&(!starting||s.running))render(s);
@@ -109,7 +119,8 @@
     if (!status?.running || pending) return;
     pending = true; render(status);
     try {
-      if(typeof window.wudictNativeCall==='function')render(await window.wudictNativeCall('stopIndexWork'));
+      if(window.wudictAndroidGo)render(androidIndexWork('stop'));
+      else if(typeof window.wudictNativeCall==='function')render(await window.wudictNativeCall('stopIndexWork'));
       else { const r = await request('/api/index-work?id=all', {method:'DELETE'}); if (!r.ok) throw new Error(await r.text()); render(await r.json()); }
     }
     finally { pending = false; }
@@ -136,7 +147,8 @@
     let started;
     try{
     const body=JSON.stringify(operations);
-    if(typeof window.wudictNativeCall==='function')started=await window.wudictNativeCall(single?'startSingleIndexWork':'startIndexWork',body);
+    if(window.wudictAndroidGo)started=androidIndexWork(single?'startSingle':'start','',body);
+    else if(typeof window.wudictNativeCall==='function')started=await window.wudictNativeCall(single?'startSingleIndexWork':'startIndexWork',body);
     else {
       const r = await request('/api/index-work'+(single?'?single=1':''), {method:'POST',headers:{'Content-Type':'application/json'},body});
       if (!r.ok) throw new Error(await r.text());

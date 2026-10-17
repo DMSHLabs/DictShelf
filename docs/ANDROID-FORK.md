@@ -35,6 +35,25 @@ the port changes the WebView origin, so page preferences stored under an older
 port may need to be set again. Android shell preferences and app-owned files
 remain in the wuDict2 app's own storage.
 
+On `dev2`, Android starts the shared Go runtime from the JNI library inside
+the app process. During this transition it still serves the existing local
+HTTP interface for WebView pages. The APK contains only the in-process Go
+library; startup reports an error if it cannot load. Changing server settings
+restarts the app process so the next Go runtime reads them from a clean state.
+The main page's configuration read, preference reads/writes, style reads/writes,
+style preset reads/writes and custom style file listing, upload and deletion
+now go through the WebView's Java bridge to shared Go operations. The main
+dictionary list and main-page search stream through a cancellable Go/JNI bridge;
+ordinary GET Rescan folders and Browse's word/find streams use that bridge too.
+Browse's nonstream page and chooser also use shared Go operations via JNI.
+The main-screen Wildcards list stream, Rebuild status/start/stop and explicit
+index-work status/start/stop, the Rescan Update dictionaries progress stream
+and single-dictionary ingest progress use the same bridge.
+Browse and dictionary-list timing diagnostics use JNI. The Android page shows
+an `A24` stage marker beside the brand in this build. The article's `Words`
+return button appears left of the arrows in the bottom status bar of the Android WebView. Other page requests still
+use local HTTP.
+
 From Windows cmd, `build-android.cmd release` makes the FOSS release APK and
 `build-android.cmd debug` makes the FOSS debug APK. The second argument
 (`original` or `sh`) is retired and produces an error. Gradle's FOSS and Play
@@ -44,8 +63,8 @@ The APKs are named
 The Play bundle is `wudict2-play-release.aab`. Release builds without a
 configured keystore produce an unsigned APK; do not treat that as installable.
 
-`build-android.cmd debug intel` cross-compiles the server for x86_64 as well
-and ships both ABIs in one debug APK
+`build-android.cmd debug intel` cross-compiles the in-process Go library
+for x86_64 as well, and ships both ABIs in one debug APK
 (`wudict2-android-arm64-v8a-x86_64-foss-debug.apk`), so it installs on an x86_64
 emulator and on arm64 hardware alike. This is not a convenience: the emulator's
 ARM translation runs ordinary arm64 binaries but crashes every Go binary, a
@@ -89,7 +108,7 @@ merge merely to resume this work.
 | Distinct external-reader component | `android/app/src/main/java/com/dmshepeta/wudict2/LookupActivity.java`, extending the unchanged upstream-package implementation |
 | Launcher icon, Play listing images | `android/app/src/main/res/drawable/ic_launcher_foreground.xml` (the icon the phone shows); `tools/make-icons.sh` renders both Play images from `internal/server/web/favicon.svg` with the same digit |
 | Port and saved override | `android/app/src/main/java/com/legbehindneck/wudict/ShellPrefs.java`: `DEFAULT_PORT`, `SERVER_PORT`, `port(Context)`; the settings hint is in `src/main/res/values/strings.xml` |
-| Child Go process, adoption, readiness | `android/app/src/main/java/com/legbehindneck/wudict/ServerProcess.java`: `run`, `adoptRunningServer`, `awaitPort`; `AppDirs.java` provides the app-specific library directory |
+| In-process Go startup and readiness | `android/app/src/main/java/com/legbehindneck/wudict/ServerProcess.java`: `run`, `awaitNative`; `AppDirs.java` provides the app-specific library directory |
 | Shared Go protocol | `internal/server/server.go` defines the `wudict` Server header; `internal/server/folders.go` provides `/api/config.libDir`; `internal/cli/running.go` probes an occupied port. No Go identity rename is needed for separate ports. |
 | Build entry points | `build-android.cmd` (Windows, rebuilds Go and FOSS APK), `build-windows.cmd` (Windows desktop `wuDict2.exe` and Inno Setup installer under `release`; `console` builds the same executable with terminal output), `Makefile`, `.github/workflows/build-android.yml`, `fastlane/Appfile` |
 

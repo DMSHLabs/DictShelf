@@ -87,10 +87,12 @@ public final class AppExit extends Application implements Application.ActivityLi
 
     private void stopWhenClosed() {
         if (!closing || !windows.isEmpty()) return;
+        boolean nativeRuntime = ServerProcess.nativeRuntimeActive();
         ServerProcess.stopAny(this);
         closing = false;
         pending = false;
         SystemLog.record("exit complete");
+        if (nativeRuntime) android.os.Process.killProcess(android.os.Process.myPid());
     }
 
     @Override public void onActivityCreated(Activity a, Bundle state) {

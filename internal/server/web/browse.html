@@ -414,6 +414,7 @@ const BROWSE_DEBUG=new URLSearchParams(location.search).get("browse_debug")==="1
 function browseDiagnosticsEnabled(){try{return localStorage.getItem("wudict_browse_diagnostics")==="1"}catch(_){return false}}
 function browseArticleDiagnosticsEnabled(){try{return localStorage.getItem("wudict_browse_article_diagnostics")==="1"}catch(_){return false}}
 function sendBrowseDiagnostic(payload){
+  if(window.wudictAndroidGo){try{window.wudictAndroidGo.browseDiagnostic(JSON.stringify(payload))}catch(_){}return Promise.resolve()}
   if(typeof window.wudictNativeCall==="function")return window.wudictNativeCall("browseDiagnostic",JSON.stringify(payload)).catch(()=>{});
   return fetch("/api/browse-diagnostic",{method:"POST",headers:{"Content-Type":"application/json"},keepalive:true,body:JSON.stringify(payload)}).catch(()=>{});
 }
@@ -495,9 +496,23 @@ function browseTrace(step,data={}){
   const payload={event:step.replaceAll(" ","_")};
   for(const key of ["page","words","letters","bytes","readMs","fetchMs","totalMs","wordsMs","stripBuildMs","stripMarkMs","status","restored","streamAlphabet"])
     if(data[key]!==undefined)payload[key]=data[key];
-  fetch("/api/browse-diagnostic",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload),keepalive:true}).catch(()=>{});
+  sendBrowseDiagnostic(payload);
 }
 async function browseFetch(url,options={}){
+  if(window.wudictAndroidGo){
+    const requestURL=new URL(url,location.href);
+    if(requestURL.origin===location.origin&&(options.method||"GET").toUpperCase()==="GET"){
+      const params=requestURL.searchParams;
+      if(requestURL.pathname==="/api/browse"&&params.get("stream")==="1")
+        return androidBrowseStream("browse",params.toString(),options.signal);
+      if(requestURL.pathname==="/api/browse"){
+        const result=JSON.parse(window.wudictAndroidGo.browsePage(params.toString()));
+        return {status:result.status,ok:result.status>=200&&result.status<300,json:async()=>result.body};
+      }
+      if(requestURL.pathname==="/api/browse/find"&&params.get("stream")==="1")
+        return androidBrowseStream("browseFind",params.toString(),options.signal);
+    }
+  }
   if(typeof window.wudictNativeCall!=="function")return fetch(url,options);
   const requestURL=new URL(url,location.href);
   if(requestURL.origin!==location.origin)return fetch(url,options);
@@ -511,6 +526,34 @@ async function browseFetch(url,options={}){
     return nativeBrowseStream("browseFind",params.toString(),options.signal);
   return fetch(url,options);
 }
+function androidBrowseStream(method,query,signal){
+  const encoder=new TextEncoder();
+  let id=0,stopped=false;
+  const stop=()=>{stopped=true;if(id>0)window.wudictAndroidGo.cancelDictStream(id)};
+  const body=new ReadableStream({start(controller){
+    if(signal?.aborted){controller.error(new DOMException("Aborted","AbortError"));return}
+    id=window.wudictAndroidGo.startBrowseStream(method,query);
+    if(id<=0){controller.error(new Error("Go runtime is unavailable"));return}
+    const abort=()=>{stop();controller.error(new DOMException("Aborted","AbortError"))};
+    if(signal)signal.addEventListener("abort",abort,{once:true});
+    (async()=>{
+      try{
+        for(;;){
+          if(stopped)throw new DOMException("Aborted","AbortError");
+          const packet=JSON.parse(window.wudictAndroidGo.pollDictStream(id));
+          for(const message of packet.messages||[]){
+            if(stopped)throw new DOMException("Aborted","AbortError");
+            controller.enqueue(encoder.encode(JSON.stringify(message)+"\n"));
+          }
+          if(packet.done){if(packet.error)throw new Error(packet.error);controller.close();return}
+          await new Promise(resolve=>setTimeout(resolve,16));
+        }
+      }catch(error){if(!stopped)controller.error(error)}
+      finally{if(signal)signal.removeEventListener("abort",abort);stop()}
+    })();
+  },cancel(){stop()}});
+  return {status:200,ok:true,body};
+}
 function nativeBrowseStream(method,query,signal){
   const encoder=new TextEncoder();
   const body=new ReadableStream({start(controller){
@@ -518,6 +561,20 @@ function nativeBrowseStream(method,query,signal){
       .then(()=>controller.close()).catch(error=>controller.error(error));
   }});
   return {status:200,ok:true,body};
+}
+async function androidChooserDicts(){
+  const id=window.wudictAndroidGo.startDictStream();
+  if(id<=0)throw new Error("Go runtime is unavailable");
+  const rows=[];
+  try{
+    for(;;){
+      const packet=JSON.parse(window.wudictAndroidGo.pollDictStream(id));
+      for(const message of packet.messages||[])
+        if(message.t==="dict"&&message.dict&&!message.dict.error)rows.push(message.dict);
+      if(packet.done){if(packet.error)throw new Error(packet.error);return rows}
+      await new Promise(resolve=>setTimeout(resolve,16));
+    }
+  }finally{window.wudictAndroidGo.cancelDictStream(id)}
 }
 function restoreBrowseAlphabet(dict){
   if(browseAlphabetCache.has(dict))return;
@@ -1352,7 +1409,14 @@ async function chooser(){
   const endProgress=browseProgress(t("browse.loadingDictionaries"));
   let prefs;
   try{
-    if(typeof window.wudictNativeCall==="function"){
+    if(window.wudictAndroidGo){
+      [prefs,ds]=await Promise.all([
+        Promise.resolve().then(()=>JSON.parse(window.wudictAndroidGo.prefs())),
+        androidChooserDicts()
+      ]);
+      browseTrace("chooser response",{status:200,fetchMs:Math.round(performance.now()-chooserStarted)});
+      logBrowseNavigation("chooser_response",performance.now()-chooserStarted,{status:200,words:ds.length});
+    }else if(typeof window.wudictNativeCall==="function"){
       const rows=[];
       [prefs]=await Promise.all([
         window.wudictNativeCall("prefs",""),
@@ -1370,7 +1434,7 @@ async function chooser(){
     }
   }catch(e){browseTrace("chooser failed",{totalMs:Math.round(performance.now()-chooserStarted)});logBrowseNavigation("load_failed",performance.now()-chooserStarted);endProgress();return card(heading+"<b>"+tx("browse.noAnswer")+"</b><p>"+tx("browse.loadFailed")+"</p>")}
   endProgress();
-  if(typeof window.wudictNativeCall!=="function"){
+  if(!window.wudictAndroidGo&&typeof window.wudictNativeCall!=="function"){
     for(const line of text.split("\n")){
       if(!line)continue;
       let m;try{m=JSON.parse(line)}catch(e){continue}
