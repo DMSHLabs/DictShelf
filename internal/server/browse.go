@@ -31,6 +31,7 @@ type browseFindResp struct {
 	Page      int           `json:"page"`
 	Pages     int           `json:"pages"`
 	Size      int           `json:"size"`
+	Partial   bool          `json:"partial,omitempty"`
 }
 
 // handleBrowseFind searches the complete headword index, then pages the
@@ -62,6 +63,25 @@ func (s *Server) browseFindPage(ctx context.Context, q url.Values) (browseFindRe
 		return browseFindResp{}, &browseFindSetupError{status: http.StatusBadRequest, message: "filter text is too long"}
 	}
 	withinMask := q.Get("withinWildcards") == "1" || q.Get("withinMask") == "1"
+	page, _ := strconv.Atoi(q.Get("p"))
+	if page < 1 {
+		page = 1
+	}
+	// A stale or malformed bookmark cannot drive unbounded OFFSET work.
+	if page > 10000000 {
+		page = 10000000
+	}
+	if cacheID := q.Get("wildcache"); cacheID != "" && mask {
+		cached, ok, err := s.wildcardPages.page(cacheID, wildcardCacheSignature{
+			dictionary: q.Get("dict"), query: query, within: within, wildcards: mask, withinMask: withinMask,
+		}, page)
+		if err != nil {
+			return browseFindResp{}, &browseFindSetupError{status: http.StatusInternalServerError, message: "reading cached wildcard block: " + err.Error()}
+		}
+		if ok {
+			return cached, nil
+		}
+	}
 	e, err := s.reg.get(q.Get("dict"))
 	if err != nil {
 		return browseFindResp{}, &browseFindSetupError{status: http.StatusNotFound, message: err.Error()}
@@ -76,14 +96,6 @@ func (s *Server) browseFindPage(ctx context.Context, q url.Values) (browseFindRe
 	finder, ok := d.(dict.BrowseFinder)
 	if !ok {
 		return browseFindResp{}, &browseFindSetupError{status: http.StatusConflict, message: "This dictionary has no index. Create one in Dictionary Settings.", entry: e}
-	}
-	page, _ := strconv.Atoi(q.Get("p"))
-	if page < 1 {
-		page = 1
-	}
-	// A stale or malformed bookmark cannot drive unbounded OFFSET work.
-	if page > 10000000 {
-		page = 10000000
 	}
 	find := func(page int) ([]string, int, []dict.Letter, []int, error) {
 		if mask {
@@ -135,6 +147,8 @@ type browseFindStreamEvent struct {
 	Positions []int         `json:"positions,omitempty"`
 	Alphabet  []dict.Letter `json:"alphabet,omitempty"`
 	Total     int           `json:"total"`
+	Size      int           `json:"size,omitempty"`
+	DiskCache bool          `json:"diskCache,omitempty"`
 	Done      bool          `json:"done,omitempty"`
 	Error     string        `json:"error,omitempty"`
 }
@@ -151,6 +165,7 @@ type browseFindStreamRequest struct {
 	within     string
 	withinMask bool
 	withinRE   *regexp.Regexp
+	cacheID    string
 }
 
 type browseFindSetupError struct {
@@ -185,6 +200,13 @@ func (s *Server) prepareBrowseFindStream(q url.Values) (browseFindStreamRequest,
 		return browseFindStreamRequest{}, &browseFindSetupError{status: http.StatusBadRequest, message: "filter text is too long"}
 	}
 	withinMask := q.Get("withinWildcards") == "1" || q.Get("withinMask") == "1"
+	cacheID := q.Get("wildcache")
+	if cacheID != "" && (!mask || within == "") {
+		return browseFindStreamRequest{}, &browseFindSetupError{status: http.StatusBadRequest, message: "wildcard cache requires a filtered wildcard search"}
+	}
+	if cacheID != "" && !wildcardCacheIDPattern.MatchString(cacheID) {
+		return browseFindStreamRequest{}, &browseFindSetupError{status: http.StatusBadRequest, message: "invalid wildcard cache id"}
+	}
 	e, err := s.reg.get(q.Get("dict"))
 	if err != nil {
 		return browseFindStreamRequest{}, &browseFindSetupError{status: http.StatusNotFound, message: err.Error()}
@@ -205,7 +227,7 @@ func (s *Server) prepareBrowseFindStream(q url.Values) (browseFindStreamRequest,
 		}
 	}
 	return browseFindStreamRequest{entry: e, dict: d, query: query, mask: mask, within: within,
-		withinMask: withinMask, withinRE: withinRE}, nil
+		withinMask: withinMask, withinRE: withinRE, cacheID: cacheID}, nil
 }
 
 func (s *Server) handleBrowseFindStream(w http.ResponseWriter, r *http.Request) {
@@ -225,7 +247,7 @@ func (s *Server) handleBrowseFindStream(w http.ResponseWriter, r *http.Request) 
 	if !ok {
 		return
 	}
-	err = s.streamBrowseFind(r.Context(), request, func(event browseFindStreamEvent) error {
+	err = s.streamBrowseFindCached(r.Context(), request, func(event browseFindStreamEvent) error {
 		st.line(event)
 		return r.Context().Err()
 	})
@@ -233,6 +255,32 @@ func (s *Server) handleBrowseFindStream(w http.ResponseWriter, r *http.Request) 
 		logx.System("browse find stream failed dict=%q mask=%v error=%q", request.entry.ID, request.mask, err)
 		st.line(browseFindStreamEvent{Type: "error", Error: err.Error()})
 	}
+}
+
+func (s *Server) streamBrowseFindCached(ctx context.Context, request browseFindStreamRequest, send func(browseFindStreamEvent) error) error {
+	if request.cacheID == "" {
+		return s.streamBrowseFind(ctx, request, func(event browseFindStreamEvent) error {
+			event.Size = browsePageSize
+			return send(event)
+		})
+	}
+	entry, err := s.wildcardPages.begin(request.cacheID, wildcardCacheSignature{
+		dictionary: request.entry.ID, query: request.query, within: request.within,
+		wildcards: request.mask, withinMask: request.withinMask,
+	}, browsePageSize, s.wildcardCacheDir())
+	if err != nil {
+		return err
+	}
+	defer s.wildcardPages.finish(request.cacheID, entry)
+	return s.streamBrowseFind(ctx, request, func(event browseFindStreamEvent) error {
+		diskCache, err := entry.append(event)
+		if err != nil {
+			return err
+		}
+		event.Size = browsePageSize
+		event.DiskCache = diskCache
+		return send(event)
+	})
 }
 
 func (s *Server) streamBrowseFind(ctx context.Context, request browseFindStreamRequest, send func(browseFindStreamEvent) error) error {
@@ -271,28 +319,29 @@ func (s *Server) streamBrowseFind(ctx context.Context, request browseFindStreamR
 				filteredWords = append(filteredWords, word)
 				filteredPositions = append(filteredPositions, base+i)
 				filteredTotal++
+				if len(filteredWords) == browsePageSize {
+					if err := send(browseFindStreamEvent{Type: "block", Words: filteredWords,
+						Positions: filteredPositions, Total: filteredTotal}); err != nil {
+						return err
+					}
+					filteredWords = make([]string, 0, browsePageSize)
+					filteredPositions = make([]int, 0, browsePageSize)
+				}
 			}
 			baseOffset = total
-			if len(filteredWords) >= browsePageSize || done {
-				typ := "block"
-				if done {
-					typ = "done"
-				}
-				if err := send(browseFindStreamEvent{Type: typ, Words: filteredWords, Positions: filteredPositions,
-					Total: filteredTotal, Done: done, Alphabet: func() []dict.Letter {
-						if done {
-							return sections.Finish()
-						}
-						return nil
-					}()}); err != nil {
+			if done {
+				if err := send(browseFindStreamEvent{Type: "done", Words: filteredWords, Positions: filteredPositions,
+					Total: filteredTotal, Done: true, Alphabet: sections.Finish()}); err != nil {
 					return err
 				}
-				filteredWords = make([]string, 0, browsePageSize)
-				filteredPositions = make([]int, 0, browsePageSize)
+				filteredWords = nil
+				filteredPositions = nil
 				return ctx.Err()
 			}
-			if err := send(browseFindStreamEvent{Type: "progress", Total: filteredTotal}); err != nil {
-				return err
+			if len(filteredWords) == 0 {
+				if err := send(browseFindStreamEvent{Type: "progress", Total: filteredTotal}); err != nil {
+					return err
+				}
 			}
 			return ctx.Err()
 		}
@@ -324,7 +373,7 @@ func (s *Server) desktopBrowseFindStream(ctx context.Context, query string, emit
 		}
 		return ctx.Err()
 	}
-	err = s.streamBrowseFind(ctx, request, encode)
+	err = s.streamBrowseFindCached(ctx, request, encode)
 	if err != nil && ctx.Err() == nil {
 		logx.System("browse find stream failed dict=%q mask=%v error=%q", request.entry.ID, request.mask, err)
 		return s.emitBrowseFindError(ctx, emit, err.Error())

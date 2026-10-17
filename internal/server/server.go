@@ -174,6 +174,8 @@ type Server struct {
 	reg *Registry
 	mux *http.ServeMux
 
+	wildcardPages wildcardPageCache
+
 	// dictRows keeps /api/dicts rows between requests (dictrows.go).
 	dictRows rowCache
 
