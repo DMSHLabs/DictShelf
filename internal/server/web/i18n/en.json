@@ -793,6 +793,7 @@
   "pages.notAnswering": "✕ wudict is not answering",
   "pages.howtoRestored": "✓ The wudict howto is back — search “wudict” to find it",
   "pages.lemmas": "Lemmatization",
+  "pages.loadingLemmas": "Loading lemma data…",
   "pages.languages": "Languages",
   "pages.cannotReach": "Cannot reach wudict.",
   "pages.cannotReachShort": "cannot reach wudict",

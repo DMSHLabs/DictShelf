@@ -170,6 +170,11 @@
     return original;
   }
   async function saveLanguage(chosen) {
+    if (window.wudictAndroidGo) {
+      const result = JSON.parse(window.wudictAndroidGo.saveLanguage(JSON.stringify({language: chosen})));
+      if (!result.ok) throw new Error(result.error || "save");
+      return;
+    }
     if (typeof window.wudictNativeCall === "function") {
       await window.wudictNativeCall("saveLanguage", JSON.stringify({language: chosen}));
       return;

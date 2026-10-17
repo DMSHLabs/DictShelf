@@ -14,6 +14,7 @@ extern int WudictGoBridgeRuntimeStop(void);
 extern char *WudictGoBridgeConfigSnapshot(void);
 extern char *WudictGoBridgePrefsSnapshot(void);
 extern char *WudictGoBridgeBrowsePage(char *query);
+extern char *WudictGoBridgeBrowseFindPage(char *query);
 extern char *WudictGoBridgeBrowseDiagnostic(char *payload);
 extern char *WudictGoBridgeAbout(char *origin, char *dictionary);
 extern char *WudictGoBridgeOrphans(char *action, char *body);
@@ -23,6 +24,7 @@ extern char *WudictGoBridgeGroups(char *action, char *argument);
 extern char *WudictGoBridgeLemmas(char *action, char *code);
 extern char *WudictGoBridgeSetup(char *action, char *argument);
 extern char *WudictGoBridgeIntake(char *action, char *argument);
+extern int WudictGoBridgePower(char *state);
 extern char *WudictGoBridgeReindex(char *action);
 extern char *WudictGoBridgeIndexWork(char *action, char *id, char *body);
 extern char *WudictGoBridgePresetsSnapshot(void);
@@ -32,6 +34,12 @@ extern char *WudictGoBridgeSaveStyle(char *argument);
 extern char *WudictGoBridgeUserFilesSnapshot(void);
 extern char *WudictGoBridgeUserFileOperation(char *method, char *argument);
 extern char *WudictGoBridgeSavePrefs(char *body);
+extern char *WudictGoBridgeSaveLanguage(char *body);
+extern char *WudictGoBridgeSystemLogSnapshot(void);
+extern char *WudictGoBridgeWebResource(char *rawURL, char *headers);
+extern char *WudictGoBridgeMediaOpen(char *rawURL, char *headers);
+extern int WudictGoBridgeMediaRead(long long handle, char *dst, int size);
+extern void WudictGoBridgeMediaClose(long long handle);
 extern int WudictGoBridgeDictStreamStart(void);
 extern int WudictGoBridgeRescanStreamStart(void);
 extern int WudictGoBridgeRescanIndexesStart(char *origin, char *request);
@@ -148,6 +156,20 @@ Java_com_legbehindneck_wudict_GoBridge_nativeBrowsePage(JNIEnv *env, jclass owne
     const char *text = (*env)->GetStringUTFChars(env, query, NULL);
     if (text == NULL) return NULL;
     char *result = WudictGoBridgeBrowsePage((char *)text);
+    (*env)->ReleaseStringUTFChars(env, query, text);
+    if (result == NULL) return NULL;
+    jstring answer = (*env)->NewStringUTF(env, result);
+    free(result);
+    return answer;
+}
+
+JNIEXPORT jstring JNICALL
+Java_com_legbehindneck_wudict_GoBridge_nativeBrowseFindPage(JNIEnv *env, jclass owner, jstring query) {
+    (void)owner;
+    if (query == NULL) return NULL;
+    const char *text = (*env)->GetStringUTFChars(env, query, NULL);
+    if (text == NULL) return NULL;
+    char *result = WudictGoBridgeBrowseFindPage((char *)text);
     (*env)->ReleaseStringUTFChars(env, query, text);
     if (result == NULL) return NULL;
     jstring answer = (*env)->NewStringUTF(env, result);
@@ -321,6 +343,18 @@ Java_com_legbehindneck_wudict_GoBridge_nativeIntake(JNIEnv *env, jclass owner,
     jstring answer = (*env)->NewStringUTF(env, result);
     free(result);
     return answer;
+}
+
+JNIEXPORT jboolean JNICALL
+Java_com_legbehindneck_wudict_GoBridge_nativePower(JNIEnv *env, jclass owner,
+    jstring state) {
+    (void)owner;
+    if (state == NULL) return JNI_FALSE;
+    const char *text = (*env)->GetStringUTFChars(env, state, NULL);
+    if (text == NULL) return JNI_FALSE;
+    int ok = WudictGoBridgePower((char *)text);
+    (*env)->ReleaseStringUTFChars(env, state, text);
+    return ok ? JNI_TRUE : JNI_FALSE;
 }
 
 JNIEXPORT jstring JNICALL
@@ -553,6 +587,95 @@ Java_com_legbehindneck_wudict_GoBridge_nativeSavePrefs(JNIEnv *env, jclass owner
     jstring answer = (*env)->NewStringUTF(env, result);
     free(result);
     return answer;
+}
+
+JNIEXPORT jstring JNICALL
+Java_com_legbehindneck_wudict_GoBridge_nativeSaveLanguage(JNIEnv *env, jclass owner, jstring body) {
+    (void)owner;
+    if (body == NULL) return NULL;
+    const char *text = (*env)->GetStringUTFChars(env, body, NULL);
+    if (text == NULL) return NULL;
+    char *result = WudictGoBridgeSaveLanguage((char *)text);
+    (*env)->ReleaseStringUTFChars(env, body, text);
+    if (result == NULL) return NULL;
+    jstring answer = (*env)->NewStringUTF(env, result);
+    free(result);
+    return answer;
+}
+
+JNIEXPORT jstring JNICALL
+Java_com_legbehindneck_wudict_GoBridge_nativeSystemLogSnapshot(JNIEnv *env, jclass owner) {
+    (void)owner;
+    char *result = WudictGoBridgeSystemLogSnapshot();
+    if (result == NULL) return NULL;
+    jstring answer = (*env)->NewStringUTF(env, result);
+    free(result);
+    return answer;
+}
+
+JNIEXPORT jstring JNICALL
+Java_com_legbehindneck_wudict_GoBridge_nativeWebResource(JNIEnv *env, jclass owner,
+    jstring rawURL, jstring headers) {
+    (void)owner;
+    if (rawURL == NULL || headers == NULL) return NULL;
+    const char *text = (*env)->GetStringUTFChars(env, rawURL, NULL);
+    if (text == NULL) return NULL;
+    const char *headerText = (*env)->GetStringUTFChars(env, headers, NULL);
+    if (headerText == NULL) {
+        (*env)->ReleaseStringUTFChars(env, rawURL, text);
+        return NULL;
+    }
+    char *result = WudictGoBridgeWebResource((char *)text, (char *)headerText);
+    (*env)->ReleaseStringUTFChars(env, headers, headerText);
+    (*env)->ReleaseStringUTFChars(env, rawURL, text);
+    if (result == NULL) return NULL;
+    jstring answer = (*env)->NewStringUTF(env, result);
+    free(result);
+    return answer;
+}
+
+JNIEXPORT jstring JNICALL
+Java_com_legbehindneck_wudict_GoBridge_nativeMediaOpen(JNIEnv *env, jclass owner,
+    jstring rawURL, jstring headers) {
+    (void)owner;
+    if (rawURL == NULL || headers == NULL) return NULL;
+    const char *url = (*env)->GetStringUTFChars(env, rawURL, NULL);
+    if (url == NULL) return NULL;
+    const char *head = (*env)->GetStringUTFChars(env, headers, NULL);
+    if (head == NULL) {
+        (*env)->ReleaseStringUTFChars(env, rawURL, url);
+        return NULL;
+    }
+    char *result = WudictGoBridgeMediaOpen((char *)url, (char *)head);
+    (*env)->ReleaseStringUTFChars(env, headers, head);
+    (*env)->ReleaseStringUTFChars(env, rawURL, url);
+    if (result == NULL) return NULL;
+    jstring answer = (*env)->NewStringUTF(env, result);
+    free(result);
+    return answer;
+}
+
+JNIEXPORT jint JNICALL
+Java_com_legbehindneck_wudict_GoBridge_nativeMediaRead(JNIEnv *env, jclass owner,
+    jlong handle, jbyteArray dst, jint offset, jint length) {
+    (void)owner;
+    if (dst == NULL || offset < 0 || length < 0 ||
+        offset > (*env)->GetArrayLength(env, dst) - length) return -2;
+    if (length == 0) return 0;
+    if (length > 65536) length = 65536;
+    char *buffer = (char *)malloc((size_t)length);
+    if (buffer == NULL) return -2;
+    int n = WudictGoBridgeMediaRead((long long)handle, buffer, length);
+    if (n > 0) (*env)->SetByteArrayRegion(env, dst, offset, n, (jbyte *)buffer);
+    free(buffer);
+    return n;
+}
+
+JNIEXPORT void JNICALL
+Java_com_legbehindneck_wudict_GoBridge_nativeMediaClose(JNIEnv *env, jclass owner,
+    jlong handle) {
+    (void)env; (void)owner;
+    WudictGoBridgeMediaClose((long long)handle);
 }
 
 JNIEXPORT jstring JNICALL

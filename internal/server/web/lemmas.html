@@ -149,6 +149,10 @@ html[data-shell-tone="dark"] {
 .note{font-size:12.5px;color:var(--label-quiet);margin:.2em 0 0}
 .banner{font-size:13px;border:1px solid var(--line);border-radius:8px;
   padding:.5em .7em;margin:.618em 0 0;color:var(--label)}
+.banner.loading{display:flex;align-items:center;gap:.5em}
+.banner.loading .spin{display:inline-block;flex:none;width:1em;height:1em;border:2px solid var(--line);
+  border-right-color:var(--accent);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
 .banner.warn{border-color:var(--err);color:var(--err)}
 .head{display:flex;justify-content:space-between;align-items:baseline;gap:.5em;flex-wrap:wrap}
 .formats a{color:var(--accent);text-decoration:none}

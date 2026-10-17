@@ -466,6 +466,10 @@ final class Shell {
             return GoBridge.browsePage(query);
         }
 
+        @JavascriptInterface public String browseFindPage(String query) {
+            return GoBridge.browseFindPage(query);
+        }
+
         @JavascriptInterface public void browseDiagnostic(String payload) {
             GoBridge.browseDiagnostic(payload);
         }
@@ -520,6 +524,10 @@ final class Shell {
 
         @JavascriptInterface public String savePrefs(String body) {
             return GoBridge.savePrefs(body);
+        }
+
+        @JavascriptInterface public String saveLanguage(String body) {
+            return GoBridge.saveLanguage(body);
         }
 
         @JavascriptInterface public String style() {
@@ -750,6 +758,11 @@ final class Shell {
                                 if (!name.isEmpty() && !WindowBackground.images(a).contains(name))
                                     throw new IllegalArgumentException("Image unavailable");
                                 ShellPrefs.setBackgroundImage(a, night, name);
+                                // A selected image always uses its sampled
+                                // paper color. Match the shared settings UI:
+                                // selecting an image turns Color on, and
+                                // clearing it leaves Color enabled and editable.
+                                if (!name.isEmpty()) ShellPrefs.setSepia(a, night, true);
                             } else if ("edgeMode".equals(field)) {
                                 int mode = request.optInt("value", -1);
                                 if (mode < ShellPrefs.EDGE_SYSTEM || mode > ShellPrefs.EDGE_NONE)

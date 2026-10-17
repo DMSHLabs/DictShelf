@@ -6,6 +6,8 @@ package com.legbehindneck.wudict;
 import android.util.Log;
 import android.content.Context;
 import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.Map;
 import org.json.JSONObject;
 
@@ -38,6 +40,7 @@ final class GoBridge {
     private static native String nativeConfigSnapshot();
     private static native String nativePrefsSnapshot();
     private static native String nativeBrowsePage(String query);
+    private static native String nativeBrowseFindPage(String query);
     private static native String nativeBrowseDiagnostic(String payload);
     private static native String nativeAbout(String origin, String dictionary);
     private static native String nativeOrphans(String action, String body);
@@ -47,11 +50,18 @@ final class GoBridge {
     private static native String nativeLemmas(String action, String code);
     private static native String nativeSetup(String action, String argument);
     private static native String nativeIntake(String action, String argument);
+    private static native boolean nativePower(String state);
     private static native String nativeReindex(String action);
     private static native String nativeIndexWork(String action, String id, String body);
     private static native String nativePresetsSnapshot();
     private static native String nativeSavePreset(String body);
     private static native String nativeSavePrefs(String body);
+    private static native String nativeSaveLanguage(String body);
+    private static native String nativeSystemLogSnapshot();
+    private static native String nativeWebResource(String rawURL, String headers);
+    private static native String nativeMediaOpen(String rawURL, String headers);
+    private static native int nativeMediaRead(long handle, byte[] dst, int offset, int length);
+    private static native void nativeMediaClose(long handle);
     private static native String nativeStyleSnapshot();
     private static native String nativeSaveStyle(String argument);
     private static native String nativeUserFilesSnapshot();
@@ -127,6 +137,13 @@ final class GoBridge {
         return result;
     }
 
+    static String browseFindPage(String query) {
+        if (!loaded) throw new IllegalStateException("Go bridge is unavailable");
+        String result = nativeBrowseFindPage(query);
+        if (result == null) throw new IllegalStateException("Browse results are unavailable");
+        return result;
+    }
+
     static void browseDiagnostic(String payload) {
         if (!loaded) throw new IllegalStateException("Go bridge is unavailable");
         String result = nativeBrowseDiagnostic(payload);
@@ -189,6 +206,10 @@ final class GoBridge {
         return result;
     }
 
+    static boolean setPower(String state) {
+        return loaded && nativePower(state);
+    }
+
     static String reindex(String action) {
         if (!loaded) throw new IllegalStateException("Go bridge is unavailable");
         String result = nativeReindex(action);
@@ -222,6 +243,73 @@ final class GoBridge {
         String result = nativeSavePrefs(body);
         if (result == null) throw new IllegalStateException("Could not save preferences");
         return result;
+    }
+
+    static String saveLanguage(String body) {
+        if (!loaded) throw new IllegalStateException("Go bridge is unavailable");
+        String result = nativeSaveLanguage(body);
+        if (result == null) throw new IllegalStateException("Could not save language");
+        return result;
+    }
+
+    static String systemLogSnapshot() {
+        if (!loaded) throw new IllegalStateException("Go bridge is unavailable");
+        String result = nativeSystemLogSnapshot();
+        if (result == null) throw new IllegalStateException("Go runtime is unavailable");
+        return result;
+    }
+
+    static String webResource(String rawURL, String headers) {
+        if (!loaded) throw new IllegalStateException("Go bridge is unavailable");
+        String result = nativeWebResource(rawURL, headers);
+        if (result == null) throw new IllegalStateException("Web resource is unavailable");
+        return result;
+    }
+
+    static String mediaOpen(String rawURL, String headers) {
+        if (!loaded) throw new IllegalStateException("Go bridge is unavailable");
+        return nativeMediaOpen(rawURL, headers);
+    }
+
+    static InputStream mediaStream(long handle, long contentLength) {
+        return new InputStream() {
+            private boolean closed;
+            private boolean finished;
+            private long remaining = Math.max(0, contentLength);
+
+            @Override public int read() throws IOException {
+                byte[] single = new byte[1];
+                return read(single, 0, 1) < 0 ? -1 : single[0] & 0xff;
+            }
+
+            @Override public int read(byte[] dst, int offset, int length) throws IOException {
+                if (closed) throw new IOException("Media stream is closed");
+                if (dst == null) throw new NullPointerException();
+                if (offset < 0 || length < 0 || offset > dst.length - length)
+                    throw new IndexOutOfBoundsException();
+                if (length == 0) return 0;
+                if (finished) return -1;
+                int n = nativeMediaRead(handle, dst, offset, length);
+                if (n > 0) remaining = Math.max(0, remaining - n);
+                if (n < 0) {
+                    finished = true;
+                    nativeMediaClose(handle);
+                }
+                if (n == -2) throw new IOException("Could not read dictionary media");
+                return n;
+            }
+
+            @Override public int available() {
+                return (int) Math.min(Integer.MAX_VALUE, remaining);
+            }
+
+            @Override public void close() {
+                if (!closed) {
+                    closed = true;
+                    if (!finished) nativeMediaClose(handle);
+                }
+            }
+        };
     }
 
     static String styleSnapshot() {

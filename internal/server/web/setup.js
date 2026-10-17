@@ -548,7 +548,8 @@ async function howtoBack(e){
   e.preventDefault();
   const msg=$("howtoBackRow");
   try{
-    if(typeof nativeSetupCall==="function")await nativeSetupCall("howto","restore");
+    if(window.wudictAndroidGo)androidSetupCall("howto","restore");
+    else if(typeof nativeSetupCall==="function")await nativeSetupCall("howto","restore");
     else {const r=await fetch("/api/howto?restore=1",{method:"POST"});
       const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||"HTTP "+r.status)}
     msg.textContent=tx("pages.howtoRestored");
@@ -559,7 +560,8 @@ async function howtoCopy(e){
   e.preventDefault();
   try{
     let j;
-    if(typeof nativeSetupCall==="function")j=await nativeSetupCall("howto","copy");
+    if(window.wudictAndroidGo)j=androidSetupCall("howto","copy");
+    else if(typeof nativeSetupCall==="function")j=await nativeSetupCall("howto","copy");
     else {const r=await fetch("/api/howto",{method:"POST"});j=await r.json().catch(()=>({}));
       if(!r.ok)throw new Error(j.error||"HTTP "+r.status)}
     impSay(tx("pages.howtoAdded",{path:j.path}),"ok");

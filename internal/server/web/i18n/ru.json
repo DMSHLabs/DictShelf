@@ -801,6 +801,7 @@
   "pages.notAnswering": "✕ wudict не отвечает",
   "pages.howtoRestored": "✓ Руководство wudict восстановлено — найдите его по запросу «wudict»",
   "pages.lemmas": "Словоформы",
+  "pages.loadingLemmas": "Загружаем словоформы…",
   "pages.languages": "Языки",
   "pages.cannotReach": "Не удалось связаться с wudict.",
   "pages.cannotReachShort": "нет связи с wudict",

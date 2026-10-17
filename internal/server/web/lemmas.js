@@ -20,7 +20,7 @@ const mb=n=>n<1e3?n+" B":n<1e6?Math.round(n/1e3)+" kB":n<1e7?(n/1e6).toFixed(1)+
 /* State lives in the Go process, not here: a download is a job it runs, so
    this page can be reloaded, rotated or closed and reopened without losing it.
    Everything drawn below comes from one GET, which is also what is polled. */
-let polling=false;
+let polling=false,hasSnapshot=false;
 const languageNames=typeof Intl.DisplayNames==="function"?new Intl.DisplayNames([window.wudictI18n.language],{type:"language"}):null;
 function languageName(l){
   if(!languageNames)return l.name;
@@ -34,9 +34,26 @@ async function load(){
     : typeof nativeLemmaCall==="function"
     ? await nativeLemmaCall("lemmas")
     : await (await fetch("/api/lemmas")).json() }
-  catch(e){ $("banner").className="banner warn";$("banner").textContent=tx("pages.cannotReach");return null }
+  catch(e){ $("banner").className=(lemmaDialogEmbedded?"lemma-banner":"banner")+" warn";$("banner").textContent=tx("pages.cannotReach");return null }
   render(j);
+  hasSnapshot=true;
   return j;
+}
+
+function showLoading(){
+  const banner=$("banner");
+  banner.className=(lemmaDialogEmbedded?"lemma-banner":"banner")+" loading";
+  banner.replaceChildren();
+  const spinner=document.createElement("span");spinner.className="spin";spinner.setAttribute("aria-hidden","true");
+  banner.append(spinner,document.createTextNode(" "+tx("pages.loadingLemmas")));
+}
+function loadAfterPaint(){
+  if(!hasSnapshot)showLoading();
+  // Android's Go bridge call is synchronous. Yield through a paint first so
+  // the window and its loading state appear before a cold catalogue request.
+  requestAnimationFrame(()=>setTimeout(()=>{
+    load().then(j=>{if(j&&j.languages.some(l=>l.state==="downloading"))poll()});
+  },32));
 }
 
 async function changeLemma(method,code){
@@ -191,14 +208,14 @@ async function poll(){
 function openLemmaDialog(link){
   lemmaDialogReturnFocus.link=link||document.activeElement;
   lemmaDialog.showModal();
-  load().then(j=>{if(j&&j.languages.some(l=>l.state==="downloading"))poll()});
+  loadAfterPaint();
 }
 
 if(lemmaDialogEmbedded){
   $("closePage").onclick=()=>lemmaDialog.close();
   lemmaDialog.addEventListener("close",()=>lemmaDialogReturnFocus.link?.focus());
   window.openLemmaDialog=openLemmaDialog;
-}else load().then(j=>{if(j&&j.languages.some(l=>l.state==="downloading"))poll()});
+}else loadAfterPaint();
 
 /* The ✕ closes the page the way the back gesture does — no navigation to "/",
    which would load the app from scratch and stack an entry the back gesture

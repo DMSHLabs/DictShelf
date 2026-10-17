@@ -279,6 +279,7 @@ class ServerProcess {
                     if (stopped) return;
                     livePort = port;
                 }
+                PowerSignal.runtimeReady();
                 listener.onReady();
             } else {
                 GoBridge.stopRuntime();
