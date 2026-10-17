@@ -167,7 +167,7 @@ public class LookupActivity extends Activity {
         mode = mode(param(data, "mode"));
         dict = clean(param(data, "dict"));
 
-        // Before any window work, and before ServerProcess.retain(): the
+        // Before any window work, and before GoRuntime.retain(): the
         // forward leaves `retained` false, so the refcount is untouched and
         // MainActivity does its own. Nothing below this line has run, so there
         // is no WebView to tear down and no server call to cancel.
@@ -259,8 +259,8 @@ public class LookupActivity extends Activity {
         // that with a permission dialog would be an ambush. Whether the app
         // can reach any dictionaries is settled in the app itself.
         retained = true;
-        ServerProcess.retain();
-        ServerProcess.ensure(this, new ServerProcess.Listener() {
+        GoRuntime.retain();
+        GoRuntime.ensure(this, new GoRuntime.Listener() {
             @Override public void onReady() { showPage(); }
             @Override public void onFailed(String message) { showFailure(message); }
         });
@@ -547,7 +547,7 @@ public class LookupActivity extends Activity {
     private void showFailure(String message) {
         runOnUiThread(() -> {
             if (gone) return;
-            status.setText(getString(R.string.server_failed, message));
+            status.setText(getString(R.string.runtime_failed, message));
         });
     }
 
@@ -611,7 +611,7 @@ public class LookupActivity extends Activity {
         // false, always: a popup closing never stops the server (D67). It goes
         // to BACKGROUND via Power, the Go side sheds caches and threads, and
         // the next lookup from any app is instant rather than a cold start.
-        if (retained) ServerProcess.release(false);
+        if (retained) GoRuntime.release(false);
         if (web != null) {
             if (web.getParent() != null) ((ViewGroup) web.getParent()).removeView(web);
             if (speech != null) speech.shutdown(); // before the WebView its callbacks post into

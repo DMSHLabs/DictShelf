@@ -27,6 +27,10 @@ const $=id=>foldersDialogEmbedded?foldersDialogRoot.querySelector("#"+id):docume
 const tx=window.wudictI18n.t;
 const nativeSetupCall=wudictDialogMode&&typeof parent.wudictNativeCall==="function"
   ? parent.wudictNativeCall.bind(parent) : window.wudictNativeCall;
+function browserHTTP(url,options){
+  if(window.wudictAndroidGo)throw new Error("Android setup operation is not connected to the Go bridge");
+  return fetch(url,options);
+}
 function androidSetupCall(action,argument){
   const result=JSON.parse(window.wudictAndroidGo.setup(action,argument));
   if(!result.ok)throw new Error(result.error||"Folder setup failed");
@@ -52,7 +56,7 @@ function saveIndexDefaults(){
       if(window.wudictAndroidGo)androidSetupCall("indexDefaults",JSON.stringify(body));
       else if(typeof nativeSetupCall==="function")await nativeSetupCall("indexDefaults",JSON.stringify(body));
       else {
-        const r=await fetch("/api/index-defaults",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+        const r=await browserHTTP("/api/index-defaults",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
         if(!r.ok)throw new Error(await r.text());
       }
       return true;
@@ -156,7 +160,7 @@ async function validateAll(){
       ? androidSetupCall("folderSetup","path="+encodeURIComponent(p))
       : typeof nativeSetupCall==="function"
       ? await nativeSetupCall("folderSetup","path="+encodeURIComponent(p),undefined,controller.signal)
-      : await (await fetch("/api/setup?path="+encodeURIComponent(p),{signal:controller.signal})).json() }
+      : await (await browserHTTP("/api/setup?path="+encodeURIComponent(p),{signal:controller.signal})).json() }
     catch(e){ if(controller.signal.aborted||run!==validationRun)return;st.className="st err";st.textContent=tx("pages.unreachable");bad++;reportFolder();return }
     if(run!==validationRun)return;
     if(j.error){st.className="st err";st.textContent="✕ "+window.wudictI18n.errorText(j.error);bad++;reportFolder();return}
@@ -176,7 +180,7 @@ async function validateAll(){
         ? androidSetupCall("folderSetup",q)
         : typeof nativeSetupCall==="function"
         ? await nativeSetupCall("folderSetup",q,undefined,controller.signal)
-        : await (await fetch("/api/setup?"+q,{signal:controller.signal})).json();
+        : await (await browserHTTP("/api/setup?"+q,{signal:controller.signal})).json();
       if(typeof agg.found==="number")total=agg.found;
     }catch(e){if(controller.signal.aborted||run!==validationRun)return}
   }
@@ -226,7 +230,7 @@ async function save(){
       const finished=await window.wudictWork.wait('folder-setup');
       j=finished.result||{error:finished.error};
     }else{
-      const response=await fetch(url);
+      const response=await browserHTTP(url);
       j=await response.json();
       if(response.status===202){const finished=await window.wudictWork.wait('folder-setup');j=finished.result||{error:finished.error};}
     }
@@ -256,7 +260,7 @@ function impSay(text,cls){const m=$("impMsg");m.textContent=text;m.className=cls
 
 async function impGET(){
   try{ return window.wudictAndroidGo?androidIntakeCall("status") : typeof nativeSetupCall==="function"
-    ? await nativeSetupCall("intakeStatus") : await (await fetch("/api/intake")).json() }
+    ? await nativeSetupCall("intakeStatus") : await (await browserHTTP("/api/intake")).json() }
   catch(e){ return null }
 }
 
@@ -272,7 +276,7 @@ async function impSend(file){
     if(window.wudictAndroidGo)j=await impSendAndroidFile(file);
     else if(typeof nativeSetupCall==="function")j=await impSendNativeFile(file);
     else{
-      r=await fetch("/api/intake?name="+encodeURIComponent(file.name),{method:"POST",body:file});
+      r=await browserHTTP("/api/intake?name="+encodeURIComponent(file.name),{method:"POST",body:file});
       j=await r.json();
     }
   }catch(e){ impBusy=false; impSay(tx("pages.readFailed",{name:file.name}),"err"); return }
@@ -347,7 +351,7 @@ async function impFetch(){
   try{
     if(window.wudictAndroidGo)j=androidIntakeCall("url",u);
     else if(typeof nativeSetupCall==="function")j=await nativeSetupCall("intakeURL",u);
-    else {r=await fetch("/api/intake?url="+encodeURIComponent(u),{method:"POST"});j=await r.json()}
+    else {r=await browserHTTP("/api/intake?url="+encodeURIComponent(u),{method:"POST"});j=await r.json()}
   }catch(e){ impBusy=false; impSay("✕ "+(window.wudictI18n.errorText(e.message)||tx("pages.cannotOpenMark")),"err"); return }
   impBusy=false;
   if(r&&!r.ok||j.error){impSay("✕ "+(window.wudictI18n.errorText(j&&j.error)||tx("pages.cannotOpen")),"err");return}
@@ -476,7 +480,7 @@ async function impInstall(){
     const body=JSON.stringify({pick:pick,keep:$("srcKeep").checked,extras:extras});
     if(window.wudictAndroidGo)j=androidIntakeCall("confirm",body);
     else if(typeof nativeSetupCall==="function")j=await nativeSetupCall("intakeConfirm",body);
-    else {r=await fetch("/api/intake?confirm=1",{method:"POST",
+    else {r=await browserHTTP("/api/intake?confirm=1",{method:"POST",
       headers:{"Content-Type":"application/json"},body});j=await r.json()}
   }catch(e){ impSay("✕ "+(window.wudictI18n.errorText(e.message)||tx("pages.cannotStartMark")),"err"); return }
   if(r&&!r.ok||j.error){impSay("✕ "+(window.wudictI18n.errorText(j&&j.error)||tx("pages.cannotStart")),"err");
@@ -537,7 +541,7 @@ async function impCancel(){
   clearTimeout(impTimer);
   try{if(window.wudictAndroidGo)androidIntakeCall("cancel");
     else if(typeof nativeSetupCall==="function")await nativeSetupCall("intakeCancel");
-    else await fetch("/api/intake",{method:"DELETE"})}catch(e){}
+    else await browserHTTP("/api/intake",{method:"DELETE"})}catch(e){}
   $("found").classList.add("hidden");
   impSay("");
 }
@@ -550,7 +554,7 @@ async function howtoBack(e){
   try{
     if(window.wudictAndroidGo)androidSetupCall("howto","restore");
     else if(typeof nativeSetupCall==="function")await nativeSetupCall("howto","restore");
-    else {const r=await fetch("/api/howto?restore=1",{method:"POST"});
+    else {const r=await browserHTTP("/api/howto?restore=1",{method:"POST"});
       const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||"HTTP "+r.status)}
     msg.textContent=tx("pages.howtoRestored");
   }catch(e){msg.textContent="✕ "+window.wudictI18n.errorText(e.message||tx("pages.notAnswering"))}
@@ -562,7 +566,7 @@ async function howtoCopy(e){
     let j;
     if(window.wudictAndroidGo)j=androidSetupCall("howto","copy");
     else if(typeof nativeSetupCall==="function")j=await nativeSetupCall("howto","copy");
-    else {const r=await fetch("/api/howto",{method:"POST"});j=await r.json().catch(()=>({}));
+    else {const r=await browserHTTP("/api/howto",{method:"POST"});j=await r.json().catch(()=>({}));
       if(!r.ok)throw new Error(j.error||"HTTP "+r.status)}
     impSay(tx("pages.howtoAdded",{path:j.path}),"ok");
   }catch(e){impSay("✕ "+window.wudictI18n.errorText(e.message||tx("pages.notAnswering")),"err")}
@@ -644,12 +648,12 @@ async function start(){
       ]);
     }else{
       const [configResponse,migrationResponse]=await Promise.all([
-        fetch("/api/config"),fetch("/api/setup?migration=status")
+        browserHTTP("/api/config"),browserHTTP("/api/setup?migration=status")
       ]);
       cfg=await configResponse.json();migration=await migrationResponse.json();
     }
   }catch(e){try{cfg=window.wudictAndroidGo?JSON.parse(window.wudictAndroidGo.config()):typeof nativeSetupCall==="function"
-    ? await nativeSetupCall("config") : await (await fetch("/api/config")).json()}catch(_){}}
+    ? await nativeSetupCall("config") : await (await browserHTTP("/api/config")).json()}catch(_){}}
   if(migration&&migration.available&&!foldersDialogEmbedded)await showMigrationDialog(migration.forked);
   for(const [feature,suffix] of [["contains","Contains"],["fullText","FullText"]]){
     $("newIndex"+suffix).checked=!!cfg?.indexDefaults?.[feature];
@@ -718,7 +722,7 @@ async function applyMigration(choice,button){
     if(window.wudictAndroidGo)androidSetupCall("setup","migration="+encodeURIComponent(choice));
     else if(typeof nativeSetupCall==="function")await nativeSetupCall("setup","migration="+encodeURIComponent(choice));
     else {
-      const response=await fetch("/api/setup?migration="+encodeURIComponent(choice),{method:"POST"});
+      const response=await browserHTTP("/api/setup?migration="+encodeURIComponent(choice),{method:"POST"});
       const result=await response.json();
       if(!response.ok||result.error)throw new Error(result.error||response.statusText);
     }

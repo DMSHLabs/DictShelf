@@ -502,16 +502,6 @@ const configTemplate = `# wudict configuration  (~/.wudict/wudict.toml)
 #                                     # saturates a core and holds a few hundred bytes per headword,
 #                                     # so the default is one - the machine stays usable.
 #                                     # "auto" = all but one core, at least one; "all" (or 0) = every core.
-# PREVIEW_MEMORY = "1GB"              # how much RAM dictionaries that are NOT yet prepared may hold
-#                                     # open. Each costs ~350 bytes per headword; the least recently
-#                                     # used are closed above this. Prepared ones answer from disk and
-#                                     # are never evicted. "0" = no limit. On Android the default is a third of
-#                                     # MEMORY_LIMIT (64-128MB, by device RAM).
-# SEARCH_MEMORY = "0"                 # how much RAM ONE search may bring in by opening dictionaries
-#                                     # that are not yet prepared. Past it the rest are reported as
-#                                     # not searched rather than opened. Prepared dictionaries are
-#                                     # never capped. "0" = no cap. Android defaults to the memory
-#                                     # limit, where one query could otherwise get the app killed.
 # MORPH_CACHE = "2"                   # how many LEMMA packs stay in memory. When a search finds
 #                                     # nothing at all, wudict tries the word's dictionary form and
 #                                     # searches again. English is built in; other languages come
@@ -588,6 +578,12 @@ const configTemplate = `# wudict configuration  (~/.wudict/wudict.toml)
 //
 // Returns the path and whether it was created now.
 func EnsureConfigFile() (path string, created bool, err error) {
+	return EnsureConfigFileForNetwork(true)
+}
+
+// EnsureConfigFileForNetwork includes listener-only settings only when this
+// launch mode opens an HTTP listener. Existing files are never changed.
+func EnsureConfigFileForNetwork(network bool) (path string, created bool, err error) {
 	for _, p := range candidates() {
 		if _, err := os.Stat(p); err == nil {
 			return p, false, nil
@@ -600,7 +596,7 @@ func EnsureConfigFile() (path string, created bool, err error) {
 	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 		return "", false, err
 	}
-	template := configTemplate
+	template := firstRunConfigTemplate(network)
 	if Name != LegacyName {
 		template = strings.ReplaceAll(template, "~/.wudict/", "~/.wuDict2/")
 		template = strings.ReplaceAll(template, LegacyName, Name)
@@ -609,6 +605,94 @@ func EnsureConfigFile() (path string, created bool, err error) {
 		return "", false, err
 	}
 	return p, true, nil
+}
+
+// CleanObsoleteConfig removes settings that this fork no longer supports from
+// an existing config. Listener settings are retained for launches that use
+// the HTTP server and removed from listenerless desktop launches.
+// It returns whether the file changed.
+func CleanObsoleteConfig(path string, network bool) (bool, error) {
+	if path == "" {
+		return false, nil
+	}
+	data, err := fsx.ReadBounded(path, maxConfigBytes)
+	if err != nil {
+		return false, err
+	}
+	remove := map[string]bool{
+		"PREVIEW_MEMORY": true,
+		"SEARCH_MEMORY":  true,
+		"AUTO_INDEX":     true,
+		"NO_COMPRESS":    true,
+	}
+	if !network {
+		for _, key := range []string{
+			"SERVER_IP", "SERVER_PORT", "NO_BROWSER", "ALLOW_REMOTE_DELETE",
+			"BROWSER_EXTENSIONS", "WEB_ORIGINS", "TRUSTED_HOSTS", "AUTH", "AUTH_TOKEN",
+		} {
+			remove[key] = true
+		}
+	}
+	lines := strings.SplitAfter(string(data), "\n")
+	var kept []string
+	for i := 0; i < len(lines); i++ {
+		key := configLineKey(lines[i])
+		if !remove[key] {
+			kept = append(kept, lines[i])
+			continue
+		}
+		// Explanatory comment lines immediately after a removed option belong
+		// to it. Stop at the next option so its documentation is retained.
+		for i+1 < len(lines) {
+			next := strings.TrimSpace(lines[i+1])
+			if configLineKey(lines[i+1]) != "" || (next != "" && !strings.HasPrefix(next, "#")) {
+				break
+			}
+			i++
+		}
+	}
+	cleaned := strings.Join(kept, "")
+	if cleaned == string(data) {
+		return false, nil
+	}
+	if err := fsx.WriteAtomic(path, []byte(cleaned), 0o644); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// configLineKey recognizes both active assignments and commented template
+// entries, such as `# SERVER_PORT = "6888"`.
+func configLineKey(line string) string {
+	line = strings.TrimSpace(line)
+	line = strings.TrimPrefix(line, "#")
+	line = strings.TrimSpace(line)
+	key, _, ok := strings.Cut(line, "=")
+	if !ok {
+		return ""
+	}
+	key = strings.TrimSpace(key)
+	if key == "" {
+		return ""
+	}
+	for _, r := range key {
+		if !(r == '_' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9') {
+			return ""
+		}
+	}
+	return key
+}
+
+func firstRunConfigTemplate(network bool) string {
+	template := configTemplate
+	if !network {
+		template = regexp.MustCompile(`(?ms)^# SERVER_IP.*?^# NO_BROWSER[^\r\n]*\r?\n`).ReplaceAllString(template, "")
+		template = regexp.MustCompile(`(?ms)(^# ALLOW_REMOTE_DELETE.*?)(^# USE_CACHED)`).ReplaceAllString(template, "$2")
+		if start := strings.Index(template, "# BROWSER_EXTENSIONS"); start >= 0 {
+			template = template[:start]
+		}
+	}
+	return template
 }
 
 // SaveKey sets key = "value" in the config file at path, uncommenting or

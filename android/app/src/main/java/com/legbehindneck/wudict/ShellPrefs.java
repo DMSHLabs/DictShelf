@@ -8,7 +8,7 @@
     // The other three are spoken for. Collection facts - which dictionaries are
     // searched, in what order - live in state.json. Install facts - folders and
     // memory limits - live in wudict.toml, which this shell seeds
-// once and never reads back (ServerProcess.seedConfig). Browser-view facts -
+// once and never reads back (GoRuntime.seedConfig). Browser-view facts -
 // theme, wide mode - live in the page's localStorage.
 //
 // A shell fact is none of those: it is about the Android shell's own
@@ -58,9 +58,7 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.res.Configuration;
 import android.graphics.Color;
-import android.util.Base64;
 
-import java.security.SecureRandom;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -280,17 +278,6 @@ final class ShellPrefs {
     static final int BARS_NAV = 2;
     static final int BARS_BOTH = BARS_STATUS | BARS_NAV;
 
-    // ── the access key ───────────────────────────────────────────────────────
-    //
-    // Earlier Android builds exposed a loopback HTTP listener to other apps.
-    // The stored preference is retained for upgrades; this credential also
-    // protects internal ServeHTTP calls used by the Go resource adapter.
-    //
-    // The preference remains readable for existing installs; Android no longer
-    // offers HTTP server mode or exposes this switch in the UI.
-    static final String REQUIRE_KEY = "require_access_key";
-    private static final String KEY_TOKEN = "access_key";
-
     private ShellPrefs() {
     }
 
@@ -328,8 +315,7 @@ final class ShellPrefs {
         if (!p.contains(EDGE_MODE)) {
             // An EXISTING install keeps what it has always looked like; only a
             // genuinely new one gets the better default. An upgrade is
-            // recognised by the file having anything in it at all - every
-            // install that has ever started a server has an access key here.
+            // recognised by the file having any existing shell preferences.
             boolean fresh = p.getAll().isEmpty();
             e = p.edit().putInt(EDGE_MODE, fresh ? EDGE_PAGE : EDGE_SYSTEM);
         }
@@ -494,30 +480,6 @@ final class ShellPrefs {
         return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
     }
 
-    /** Whether internal Go resource requests use an access key. Default: yes. */
-    static boolean requireKey(Context c) {
-        return of(c).getBoolean(REQUIRE_KEY, true);
-    }
-
-    /**
-     * This install's access key, generated on first use and kept in the app's
-     * private preferences. Internal Go resource requests use it when enabled.
-     * Empty when the key is off.
-     */
-    static String token(Context c) {
-        if (!requireKey(c)) return "";
-        SharedPreferences p = of(c);
-        String t = p.getString(KEY_TOKEN, null);
-        if (t == null || t.isEmpty()) {
-            byte[] b = new byte[32];
-            new SecureRandom().nextBytes(b);
-            // URL_SAFE | NO_PADDING keeps the stored value compact and stable.
-            t = Base64.encodeToString(b, Base64.URL_SAFE | Base64.NO_WRAP | Base64.NO_PADDING);
-            p.edit().putString(KEY_TOKEN, t).apply();
-        }
-        return t;
-    }
-
     /**
      * Which key governs this launch. An action we do not recognise - or none at
      * all, which a hand-written intent can easily arrive with - falls to
@@ -583,9 +545,7 @@ final class ShellPrefs {
     /** Retained only to read the previous WebView profile during first-run import. */
     static final String LEGACY_HOST = "127.0.0.1";
     /** Previous WebView localStorage was keyed by this origin and port. */
-    static final int DEFAULT_PORT = 6889;
-
-    private static final int MIN_PORT = 1024, MAX_PORT = 65535;
+    static final int LEGACY_DEFAULT_PORT = 6889;
 
     // This table contains application tuning only. Android has no listener;
     // SERVER_PORT is read separately only for the one-time old-origin import.
@@ -699,14 +659,14 @@ final class ShellPrefs {
     }
 
     /** Prior install's port, used only to read localStorage from its old WebView origin. */
-    static int port(Context c) {
+    static int legacyOriginPort(Context c) {
         String v = of(c).getString("override_SERVER_PORT", null);
-        if (v == null || v.isEmpty()) return DEFAULT_PORT;
+        if (v == null || v.isEmpty()) return LEGACY_DEFAULT_PORT;
         try {
             int n = Integer.parseInt(v);
-            return n >= MIN_PORT && n <= MAX_PORT ? n : DEFAULT_PORT;
+            return n >= 1024 && n <= 65535 ? n : LEGACY_DEFAULT_PORT;
         } catch (NumberFormatException e) {
-            return DEFAULT_PORT; // a value we cannot use is a value we do not use
+            return LEGACY_DEFAULT_PORT; // a value we cannot use is a value we do not use
         }
     }
 

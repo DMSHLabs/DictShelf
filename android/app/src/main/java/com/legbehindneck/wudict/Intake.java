@@ -663,7 +663,7 @@ final class Intake {
             if ("ready".equals(state)) return j;
             if ("error".equals(state)) {
                 JSONObject e = new JSONObject();
-                e.put("error", j.optString("error", a.getString(R.string.intake_no_server)));
+                e.put("error", j.optString("error", a.getString(R.string.intake_no_runtime)));
                 return e;
             }
             if (!"downloading".equals(state)) return null; // cancelled elsewhere

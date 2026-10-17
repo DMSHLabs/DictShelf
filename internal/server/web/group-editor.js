@@ -153,6 +153,7 @@ async function groupRequest(path,method,body){
       catch(error){throw new Error(groupErrorText(error.message))}
     }
   }
+  if(window.wudictAndroidGo)throw new Error('Dictionary Groups operation is not connected to the Go bridge');
   const response=await fetch(path,{method,headers:{"Content-Type":"application/json"},body:body===undefined?undefined:JSON.stringify(body)});
   if(!response.ok)throw new Error(groupErrorText((await response.text()).trim()));
   return response.json();

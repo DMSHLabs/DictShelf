@@ -1155,6 +1155,17 @@ func cmdServe(args []string) (err error) {
 	if err != nil {
 		return err
 	}
+	// The Windows WebView app is listenerless; other launch modes use HTTP.
+	listenerlessDesktop := gui && runtime.GOOS == "windows" && !cfg.NoBrowser
+	if changed, cleanErr := config.CleanObsoleteConfig(cfg.Source, !listenerlessDesktop); cleanErr != nil {
+		log.Printf("config cleanup: %v", cleanErr)
+	} else if changed {
+		cfg, err = config.Load(*configPath, flagVals)
+		if err != nil {
+			return err
+		}
+		listenerlessDesktop = gui && runtime.GOOS == "windows" && !cfg.NoBrowser
+	}
 	if cfg.Verbose {
 		logx.Enabled = true
 	}
@@ -1227,7 +1238,6 @@ func cmdServe(args []string) (err error) {
 	// The Windows GUI serves its WebView from Go in-process and uses the native
 	// bridge for operations, so its configured port is not opened. Browser,
 	// console, Android and explicit --no-browser launches retain HTTP mode.
-	listenerlessDesktop := gui && runtime.GOOS == "windows" && !cfg.NoBrowser
 	url := "http://" + cfg.Addr() + "/"
 	var lns []net.Listener
 	var alsoURL string
@@ -1319,7 +1329,7 @@ Hint: pick another port with --port, e.g.:  wudict --port %s
 	// rather than reporting "none" on the very run that created it.
 	cfgFile := cfg.Source
 	if cfgFile == "" && *configPath == "" {
-		p, created, err := config.EnsureConfigFile()
+		p, created, err := config.EnsureConfigFileForNetwork(!listenerlessDesktop)
 		if err != nil {
 			logx.Warn("could not create %s: %v", config.Name, err)
 		} else {

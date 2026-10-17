@@ -9,7 +9,7 @@
 extern int WudictGoBridgeProtocol(void);
 extern char *WudictGoBridgeConfigSummary(char *path, char *flagsJSON);
 extern void WudictGoBridgeInstallBusyObserver(void);
-extern int WudictGoBridgeRuntimeStart(char *path, char *flagsJSON, char *token, char *version);
+extern int WudictGoBridgeRuntimeStart(char *path, char *flagsJSON, char *version);
 extern int WudictGoBridgeRuntimeStop(void);
 extern char *WudictGoBridgeConfigSnapshot(void);
 extern char *WudictGoBridgePrefsSnapshot(void);
@@ -444,29 +444,21 @@ Java_com_legbehindneck_wudict_GoBridge_nativeProtocol(JNIEnv *env, jclass owner)
 
 JNIEXPORT jint JNICALL
 Java_com_legbehindneck_wudict_GoBridge_nativeRuntimeStart(JNIEnv *env, jclass owner,
-    jstring path, jstring flagsJSON, jstring token, jstring version) {
+    jstring path, jstring flagsJSON, jstring version) {
     (void)owner;
-    if (path == NULL || flagsJSON == NULL || token == NULL || version == NULL) return -1;
+    if (path == NULL || flagsJSON == NULL || version == NULL) return -1;
     const char *p = (*env)->GetStringUTFChars(env, path, NULL);
     if (p == NULL) return -1;
     const char *f = (*env)->GetStringUTFChars(env, flagsJSON, NULL);
     if (f == NULL) { (*env)->ReleaseStringUTFChars(env, path, p); return -1; }
-    const char *t = (*env)->GetStringUTFChars(env, token, NULL);
-    if (t == NULL) {
-        (*env)->ReleaseStringUTFChars(env, flagsJSON, f);
-        (*env)->ReleaseStringUTFChars(env, path, p);
-        return -1;
-    }
     const char *v = (*env)->GetStringUTFChars(env, version, NULL);
     if (v == NULL) {
-        (*env)->ReleaseStringUTFChars(env, token, t);
         (*env)->ReleaseStringUTFChars(env, flagsJSON, f);
         (*env)->ReleaseStringUTFChars(env, path, p);
         return -1;
     }
-    jint result = (jint)WudictGoBridgeRuntimeStart((char *)p, (char *)f, (char *)t, (char *)v);
+    jint result = (jint)WudictGoBridgeRuntimeStart((char *)p, (char *)f, (char *)v);
     (*env)->ReleaseStringUTFChars(env, version, v);
-    (*env)->ReleaseStringUTFChars(env, token, t);
     (*env)->ReleaseStringUTFChars(env, flagsJSON, f);
     (*env)->ReleaseStringUTFChars(env, path, p);
     return result;

@@ -18,87 +18,10 @@ import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
 
-class ServerProcess {
-
-    /**
-     * The address everything in this shell CONNECTS to. Always loopback, and
-     * deliberately not the address Go BINDS to: a platform override can
-     * open the server to the local network (ShellPrefs.bindIp), and you connect
-     * to 127.0.0.1 either way. Keeping the two apart is what stops that
-     * override from moving the WebView's origin and orphaning the page prefs
-     * saved against it.
-     */
-    static final String HOST = ShellPrefs.LEGACY_HOST;
-
-    // The port is fixed per install rather than per launch (D52: UI prefs live
-    // in localStorage, which is keyed by origin, so a random port would forget
-    // them every time), but it is no longer a constant: a device where
-    // something else already holds the port can override it (D101).
-    //
-    // portCache exists for PowerSignal, which is entirely static and has no
-    // Context to ask. Every path that can reach the server primes it first -
-    // ensure() does, and nothing talks to a server it never asked for - so the
-    // worst case is a POST to the default port that nobody answers, which
-    // PowerSignal already treats as an ordinary miss.
-    private static volatile int portCache = ShellPrefs.DEFAULT_PORT;
-
-    /**
-     * The port to TALK to: the live runtime's port, or the configured port.
-     *
-     * <p>The two differ whenever a stored port has changed under a running app,
-     * and the difference is deliberate: a value from the settings takes effect
-     * at the NEXT start (that is what every row there says), so until then the
-     * server this app can reach is the one it already has, at the port it was
-     * started with. Asking the configured port instead sent every window built
-     * in that window of time - a lookup popup, a handed-over search, the
-     * PowerSignal ping - to an address where nothing was listening yet.
-     * {@link #livePort()} is that fact, and this is the rule that reads it.
-     * What the next start WOULD use is asked of {@link ShellPrefs#port} directly: the
-     * settings window's own note about the listen address, and the port row's
-     * hint on either screen, are sentences about the next start and not about
-     * now, so they name the configured one on purpose.
-     *
-     */
-    static int port(Context c) {
-        int live = livePort;
-        if (live != 0) {
-            portCache = live;
-            return live;
-        }
-        int p = ShellPrefs.port(c);
-        portCache = p;
-        return p;
-    }
-
-    /** The last port {@link #port(Context)} resolved. For callers with no Context. */
-    static int port() {
-        return portCache;
-    }
-
-    /**
-     * Whether the last start attempt failed and nobody has retried it. Read by
-     * MainActivity, which retries on a focus gain: the reader has been to the
-     * settings screen (a port, a memory cap) or has freed whatever held the
-     * port - and nothing else asks again, because ensure() runs in onCreate
-     * alone and that activity is singleTask with its config changes
-     * intercepted, so returning to it does not recreate it.
-     */
+class GoRuntime {
+    /** Whether the last runtime start failed and nobody has retried it. */
     static synchronized boolean failed() {
         return state == FAILED;
-    }
-
-    // The live Go runtime's port, or 0 when none is up.
-    // Read by port(Context) above, which is the rule that matters, and by the
-    // settings screen's probe - a probe of the CONFIGURED port finds nothing
-    // there, so the footer would go silent in exactly the case it exists for
-    // (found on the emulator, 2026-09-28, with the server on 7003 and the row
-    // already saying 7004). The page's own System window has no such problem:
-    // it asks the server it is being served by.
-    private static volatile int livePort;
-
-    /** The port the running server listens on, or 0 when none is running. */
-    static int livePort() {
-        return livePort;
     }
 
     interface Listener {
@@ -119,17 +42,17 @@ class ServerProcess {
     private static final int IDLE = 0, STARTING = 1, READY = 2, FAILED = 3;
 
     private static int state = IDLE;
-    private static ServerProcess shared;
+    private static GoRuntime shared;
     private static final List<Listener> waiting = new ArrayList<>();
-    private static int holders;    // live windows retaining the server
+    private static int holders;    // live windows retaining the Go runtime
     private static int generation; // invalidates callbacks from a runtime we stopped
     private static boolean stopWhenIdle;
 
     /**
-     * Runs {@code l} against a ready server, starting one if needed. A second
+     * Runs {@code l} against a ready runtime, starting one if needed. A second
      * caller during STARTING queues rather than starting a second runtime; READY
      * calls back immediately; a previous FAILED is retried, because the reason
-     * (a folder that was not there yet, or a port another app held)
+     * (a folder that was not there yet)
      * may well be gone by the next attempt.
      *
      * <p>Callbacks arrive on whichever thread settles the start - the
@@ -137,7 +60,6 @@ class ServerProcess {
      * ready path, which answers inline.
      */
     static synchronized void ensure(Context ctx, Listener l) {
-        port(ctx); // prime portCache for the Context-less callers
         if (state == READY) {
             l.onReady();
             return;
@@ -146,7 +68,7 @@ class ServerProcess {
         if (state == STARTING) return;
         state = STARTING;
         final int gen = generation;
-        shared = new ServerProcess(ctx.getApplicationContext());
+        shared = new GoRuntime(ctx.getApplicationContext());
         shared.start(new Listener() {
             @Override public void onReady() { settle(gen, READY, null); }
             @Override public void onFailed(String message) { settle(gen, FAILED, message); }
@@ -155,7 +77,7 @@ class ServerProcess {
 
     private static void settle(int gen, int newState, String message) {
         List<Listener> pending;
-        synchronized (ServerProcess.class) {
+        synchronized (GoRuntime.class) {
             if (gen != generation) return; // this runtime was stopped
             state = newState;
             pending = new ArrayList<>(waiting);
@@ -170,12 +92,12 @@ class ServerProcess {
         }
     }
 
-    /** How many windows are currently holding the server open. */
+    /** How many windows are currently using the Go runtime. */
     static synchronized int holders() {
         return holders;
     }
 
-    /** A window that needs the server is alive. Paired with {@link #release}. */
+    /** A window that needs the runtime is alive. Paired with {@link #release}. */
     static synchronized void retain() {
         holders++;
         stopWhenIdle = false;
@@ -183,9 +105,9 @@ class ServerProcess {
 
     /**
      * A window is gone. {@code mayStop} is the caller's answer to "is this
-     * window's own reason for the server ending too?" - MainActivity passes
+     * window's own reason for the runtime ending too?" - MainActivity passes
      * {@code isFinishing()}, the lookup popup always passes false: a popup
-     * closing must never stop the server (D67), it drops to
+     * closing must never stop the runtime (D67), it drops to
      * {@link PowerSignal#BACKGROUND} instead, so the next lookup from any app
      * is instant. The runtime stops only when the last holder says so.
      */
@@ -199,21 +121,20 @@ class ServerProcess {
             stopWhenIdle = true;
             return;
         }
-        stopOwnedServer();
+        stopRuntime();
     }
 
     static synchronized void workFinished() {
         if (!stopWhenIdle || holders > 0 || IndexService.hasWork()) return;
-        stopOwnedServer();
+        stopRuntime();
     }
 
-    private static void stopOwnedServer() {
+    private static void stopRuntime() {
         stopWhenIdle = false;
         generation++; // any callback still in flight is now stale
         boolean nativeRuntime = shared != null && shared.nativeOwned;
         if (shared != null) shared.stop();
         shared = null;
-        livePort = 0; // nothing is listening now
         state = IDLE;
         waiting.clear();
         if (nativeRuntime) android.os.Process.killProcess(android.os.Process.myPid());
@@ -227,12 +148,12 @@ class ServerProcess {
     private boolean nativeOwned;
     private boolean stopped;
 
-    private ServerProcess(Context app) {
+    private GoRuntime(Context app) {
         this.app = app;
     }
 
     private void start(Listener listener) {
-        Thread t = new Thread(() -> run(listener), "wudict-server");
+        Thread t = new Thread(() -> run(listener), "wudict-runtime");
         t.setDaemon(true);
         t.start();
     }
@@ -243,8 +164,6 @@ class ServerProcess {
         int bridgeProtocol = GoBridge.protocol();
         SystemLog.record("Go bridge protocol=" + bridgeProtocol);
         Log.i(TAG, "Go bridge protocol=" + bridgeProtocol);
-        int port = port(app);
-        ShellPrefs.token(app);
         if (bridgeProtocol != 1) {
             listener.onFailed("Go bridge is unavailable");
             return;
@@ -260,30 +179,28 @@ class ServerProcess {
         GoBridge.checkConfig(home, dbDir, ShellPrefs.env(app));
 
         int result = GoBridge.startRuntime(app, home, dbDir);
-            if (result != 1) {
-                SystemLog.record("in-process Go startup failed code=" + result);
-                Log.e(TAG, "in-process Go startup failed code=" + result);
-                listener.onFailed("in-process Go startup failed (" + result + ")");
-                return;
-            }
-            nativeOwned = true;
-            if (runtimeReady(app)) {
-                Shell.prepareOrigin(app);
-                SystemLog.record("in-process Go runtime ready");
-                Log.i(TAG, "in-process Go runtime ready");
-                synchronized (this) {
-                    if (stopped) return;
-                    livePort = port;
-                }
-                PowerSignal.runtimeReady();
-                listener.onReady();
-            } else {
-                GoBridge.stopRuntime();
-                IndexService.busy(app, false);
-                Log.e(TAG, "in-process Go did not become ready on port " + port);
-                listener.onFailed("in-process Go did not become ready on port " + port);
-            }
+        if (result != 1) {
+            SystemLog.record("in-process Go startup failed code=" + result);
+            Log.e(TAG, "in-process Go startup failed code=" + result);
+            listener.onFailed("in-process Go startup failed (" + result + ")");
             return;
+        }
+        nativeOwned = true;
+        if (runtimeReady(app)) {
+            Shell.prepareOrigin(app);
+            SystemLog.record("in-process Go runtime ready");
+            Log.i(TAG, "in-process Go runtime ready");
+            synchronized (this) {
+                if (stopped) return;
+            }
+            PowerSignal.runtimeReady();
+            listener.onReady();
+        } else {
+            GoBridge.stopRuntime();
+            IndexService.busy(app, false);
+            Log.e(TAG, "in-process Go runtime did not become ready");
+            listener.onFailed("in-process Go runtime did not become ready");
+        }
     }
 
     // seedConfig writes the dictionary folders into ~/.wudict/wudict.toml -
@@ -295,8 +212,7 @@ class ServerProcess {
     // from the file, the panel owns them.
     //
     // Written once, only when nothing is there: after that the file is the
-    // user's, and the server's own first-run template step finds it and leaves
-    // it alone. Paths are device-generated (/storage/emulated/0/…, /data/…) so
+    // user's. Paths are device-generated (/storage/emulated/0/…, /data/…) so
     // they need no TOML escaping.
     //
     // Consequence worth stating, since Storage.dictDirs can now answer with a
@@ -324,7 +240,7 @@ class ServerProcess {
             Files.createDirectories(cfg.getParentFile().toPath());
             Files.write(cfg.toPath(), toml.getBytes(StandardCharsets.UTF_8));
         } catch (IOException e) {
-            // Not fatal: the server falls back to $HOME/Dictionaries, which is
+            // Not fatal: the runtime falls back to $HOME/Dictionaries, which is
             // appPrivate - reachable, just without the shared folder.
             SystemLog.warn(TAG, "could not seed " + cfg, e);
         }
@@ -357,7 +273,6 @@ class ServerProcess {
         boolean owned = shared != null && shared.nativeOwned;
         if (shared != null) shared.stop();
         shared = null;
-        livePort = 0;
         state = IDLE;
         waiting.clear();
         IndexService.busy(ctx, false);

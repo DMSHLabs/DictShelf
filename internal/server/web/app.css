@@ -384,9 +384,10 @@ html:is([data-shell-sepia],[data-shell-image],[data-desktop-image]) .mask-search
 #maskView{margin-top:var(--sp-2);background:var(--bg-card);border:1px solid var(--line);border-radius:10px;overflow:clip}
 .mask-chrome{position:sticky;top:var(--stick);z-index:4;background:var(--paper-bg,var(--bg-card))}
 .mask-head{position:static;display:flex;align-items:center;gap:.5em;padding:.55em .7em;background:var(--paper-bg,var(--bg-card));border-bottom:1px solid var(--line)}
-.mask-head select{flex:1;min-width:0;max-width:none}
-.mask-head .themed-select-btn{flex:1;min-width:0;width:auto;max-width:none}
-html[data-shell-image] .mask-head .themed-select-btn{background-color:var(--paper-bg,var(--bg));background-image:linear-gradient(#ffffff24,#ffffff24),var(--paper-bk-image);background-size:100% 100%}
+.mask-head #maskDict{flex:1 1 0;min-width:0;width:auto;max-width:none;justify-content:space-between;overflow:hidden;text-align:left}
+.mask-head #maskDictName{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mask-head #maskDictMeta{flex:none;white-space:nowrap}
+html[data-shell-image] .mask-head #maskDict{background-color:var(--paper-bg,var(--bg));background-image:linear-gradient(#ffffff24,#ffffff24),var(--paper-bk-image);background-size:100% 100%}
 .mask-letters button{color:var(--fg);background:var(--bg-card);border:1px solid var(--line);border-radius:6px;cursor:pointer}
 .mask-letters{display:flex;align-items:center;gap:.25em;overflow-x:auto;padding:.5em .7em;border-bottom:1px solid var(--line)}
 .mask-letter-group{display:inline-flex;align-items:center;gap:.25em;flex:none}

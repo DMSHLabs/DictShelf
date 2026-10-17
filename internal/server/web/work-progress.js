@@ -28,6 +28,7 @@
   let status = null, pending = false, starting = false, refreshSequence = 0, waiting = 0;
   const cacheKey='wudict-active-work';
   async function request(url, options={}) {
+    if(window.wudictAndroidGo)throw new Error('Android work operation is not connected to the Go bridge');
     const controller=new AbortController();
     const timer=setTimeout(()=>controller.abort(),10000);
     try {return await fetch(url,{...options,signal:controller.signal});}

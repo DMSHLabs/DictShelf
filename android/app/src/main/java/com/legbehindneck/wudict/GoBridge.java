@@ -35,7 +35,7 @@ final class GoBridge {
     private static native String nativeConfigSummary(String path, String flagsJSON);
     private static native boolean nativeInstallBusyObserver();
     private static native int nativeRuntimeStart(String path, String flagsJSON,
-                                                  String token, String version);
+                                                  String version);
     private static native int nativeRuntimeStop();
     private static native String nativeConfigSnapshot();
     private static native String nativePrefsSnapshot();
@@ -427,7 +427,7 @@ final class GoBridge {
             flags.put("NO_BROWSER", "1");
             File path = new File(new File(home, ".wudict"), "wudict.toml");
             return nativeRuntimeStart(path.getAbsolutePath(), flags.toString(),
-                    ShellPrefs.token(context), BuildConfig.VERSION_NAME);
+                    BuildConfig.VERSION_NAME);
         } catch (Exception | UnsatisfiedLinkError error) {
             Log.e(TAG, "Go runtime start failed", error);
             return -9;

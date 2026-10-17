@@ -21,7 +21,6 @@ import android.os.Environment;
 import android.os.Message;
 import android.provider.DocumentsContract;
 import android.util.Log;
-import android.webkit.CookieManager;
 import android.webkit.JsPromptResult;
 import android.webkit.JsResult;
 import android.webkit.JavascriptInterface;
@@ -55,7 +54,7 @@ final class Shell {
     }
 
     private static String legacyOrigin(Context c) {
-        return "http://" + ShellPrefs.LEGACY_HOST + ":" + ShellPrefs.port(c);
+        return "http://" + ShellPrefs.LEGACY_HOST + ":" + ShellPrefs.legacyOriginPort(c);
     }
 
     /** Selects the origin once the in-process Go runtime can inspect settings files. */
@@ -266,7 +265,6 @@ final class Shell {
         reply.put("link", ShellPrefs.opensApp(c, ShellPrefs.LINK));
         reply.put("reader", ShellPrefs.opensApp(c, ShellPrefs.READER));
         reply.put("info", ShellPrefs.infoMessages(c));
-        reply.put("key", ShellPrefs.requireKey(c));
         reply.put("serverAvailable", false);
         reply.put("logEnabled", SystemLog.enabled());
         reply.put("logBaseEvents", SystemLog.baseEvents());
@@ -387,11 +385,6 @@ final class Shell {
 
     /** The settings the SPA needs. Identical in every window, by construction. */
     static void configure(WebView web) {
-        // The access key arrives as a cookie the server sets (see key()), so a
-        // WebView that refuses cookies would authenticate once and then fail
-        // every request the page makes. It is the platform default; stated
-        // here because it is now load-bearing.
-        CookieManager.getInstance().setAcceptCookie(true);
         web.addJavascriptInterface(new GoPageBridge(), "wudictAndroidGo");
         web.getSettings().setJavaScriptEnabled(true);                 // the UI is one SPA
         web.getSettings().setDomStorageEnabled(true);                 // prefs live in localStorage
@@ -849,8 +842,6 @@ final class Shell {
                                 ShellPrefs.set(a, ShellPrefs.READER, request.getBoolean("value"));
                             } else if ("info".equals(field)) {
                                 ShellPrefs.set(a, ShellPrefs.INFO_MESSAGES, request.getBoolean("value"));
-                            } else if ("key".equals(field)) {
-                                ShellPrefs.set(a, ShellPrefs.REQUIRE_KEY, request.getBoolean("value"));
                             } else if ("override".equals(field)) {
                                 ShellPrefs.Override o = ShellPrefs.byKey(request.getString("key"));
                                 // An absent or null value is "follow the
