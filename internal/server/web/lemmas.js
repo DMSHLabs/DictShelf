@@ -29,11 +29,11 @@ function languageName(l){
 
 async function load(){
   let j;
-  try{ j=window.wudictAndroidGo
-    ? androidLemmaCall("get","")
-    : typeof nativeLemmaCall==="function"
-    ? await nativeLemmaCall("lemmas")
-    : await (await fetch("/api/lemmas")).json() }
+  try{
+    if(window.wudictAndroidGo)j=androidLemmaCall("get","");
+    else if(typeof nativeLemmaCall==="function")j=await nativeLemmaCall("lemmas");
+    else j=await (await fetch("/api/lemmas")).json();
+  }
   catch(e){ $("banner").className=(lemmaDialogEmbedded?"lemma-banner":"banner")+" warn";$("banner").textContent=tx("pages.cannotReach");return null }
   render(j);
   hasSnapshot=true;
@@ -61,6 +61,7 @@ async function changeLemma(method,code){
   if(typeof nativeLemmaCall==="function"){
     return nativeLemmaCall(method==="POST"?"installLemma":"removeLemma",code);
   }
+  if(window.wudictAndroidGo)throw new Error("Lemmatization is not connected to the Go bridge");
   const response=await fetch("/api/lemmas?code="+encodeURIComponent(code),{method});
   if(!response.ok){
     const body=await response.json().catch(()=>({}));

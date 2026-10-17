@@ -43,7 +43,7 @@ func WudictGoBridgeConfigSnapshot() *C.char {
 	if app == nil {
 		return nil
 	}
-	data, err := json.Marshal(app.Server.ConfigSnapshot(true, "127.0.0.1"))
+	data, err := json.Marshal(app.Server.ConfigSnapshot(true, "android"))
 	if err != nil {
 		return nil
 	}
@@ -815,7 +815,7 @@ var nativeRuntime struct {
 // A single process must never open the prepared library twice.
 //
 //export WudictGoBridgeRuntimeStart
-func WudictGoBridgeRuntimeStart(path, flagsJSON, token, version *C.char) C.int {
+func WudictGoBridgeRuntimeStart(path, flagsJSON, version *C.char) C.int {
 	nativeRuntime.Lock()
 	defer nativeRuntime.Unlock()
 	if nativeRuntime.app != nil {
@@ -841,7 +841,7 @@ func WudictGoBridgeRuntimeStart(path, flagsJSON, token, version *C.char) C.int {
 	if _, err = server.RecoverLibrary(cfg); err != nil {
 		logx.Warn("could not tidy the library: %v", err)
 	}
-	app, err := server.NewRuntime(cfg, configPath, C.GoString(token), C.GoString(version))
+	app, err := server.NewRuntime(cfg, configPath, "", C.GoString(version))
 	if err != nil {
 		return -5
 	}

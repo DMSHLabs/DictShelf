@@ -51,7 +51,7 @@ index-work status/start/stop, the Rescan Update dictionaries progress stream,
 single-dictionary ingest progress, Dictionary Groups data and edits, and
 Browse/Wildcards result pages use the same bridge.
 Browse and dictionary-list timing diagnostics use JNI. The Android page shows
-an `A59` stage marker beside the brand in this build. Language preference
+an `A60` stage marker beside the brand in this build. Language preference
 saving and scripted-article inline lookups use the direct Go/JNI bridge;
 Browse, Edit Folders, Lemmatization and Dictionary Groups pages, embedded
 assets and user stylesheets are answered from Go in-process. Edit Folders'
@@ -98,7 +98,17 @@ implementation from Android. The System screen hides the access-key section,
 and launcher Settings no longer offers a port or server restart. The old port
 preference remains available only until first-run localStorage import completes.
 FOSS and Play debug APKs both build; emulator verification of the removed
-settings is pending.
+settings is pending. A60 renames the Android runtime coordinator to
+`GoRuntime`, removes its obsolete listener-port state and unused access-key
+generation, and guards the shared UI's same-origin HTTP fallbacks so an
+Android operation without a Go/JNI route fails clearly instead of trying the
+absent listener. The old `SERVER_PORT` preference remains read only to select
+the previous WebView origin during one-time `localStorage` import. The shared
+first-run config omits unindexed-dictionary memory keys; listenerless Windows
+WebView startup writes no listener/security settings, while HTTP launch modes
+retain them. Android's own first-run file contains only `DICT_DIR`. A60 FOSS
+debug build for arm64 and x86_64 passed on 2026-10-17; emulator verification is
+pending.
 A43 tried a private Android ContentProvider for seekable video, then A44 tried
 it for audio. Emulator diagnostics established that WebView rejects `content://`
 media from this HTTP page: audio logged "Not allowed to load local resource",
@@ -166,8 +176,8 @@ merge merely to resume this work.
 | Exported launcher/lookup activities and shortcut resource | `android/app/src/main/AndroidManifest.xml`; `src/main/res/xml/shortcuts.xml` and `src/debug/res/xml/shortcuts.xml` |
 | Distinct external-reader component | `android/app/src/main/java/com/dmshepeta/wudict2/LookupActivity.java`, extending the unchanged upstream-package implementation |
 | Launcher icon, Play listing images | `android/app/src/main/res/drawable/ic_launcher_foreground.xml` (the icon the phone shows); `tools/make-icons.sh` renders both Play images from `internal/server/web/favicon.svg` with the same digit |
-| Legacy WebView origin for settings import | `android/app/src/main/java/com/legbehindneck/wudict/Shell.java`: `legacyOrigin`, `prepareOrigin`; `ShellPrefs.port()` reads the former SERVER_PORT preference only while `settings.json` is absent |
-| In-process Go startup and readiness | `android/app/src/main/java/com/legbehindneck/wudict/ServerProcess.java`: `run`, `runtimeReady`; `AppDirs.java` provides the app-specific library directory |
+| Legacy WebView origin for settings import | `android/app/src/main/java/com/legbehindneck/wudict/Shell.java`: `legacyOrigin`, `prepareOrigin`; `ShellPrefs.legacyOriginPort()` reads the former SERVER_PORT preference only while `settings.json` is absent |
+| In-process Go startup and readiness | `android/app/src/main/java/com/legbehindneck/wudict/GoRuntime.java`: `run`, `runtimeReady`; `AppDirs.java` provides the app-specific library directory |
 | In-process resource dispatch | `android/app/src/main/java/com/legbehindneck/wudict/GoAppResource.java`; both Android WebViews use Go/JNI and no server mode is supported |
 | Build entry points | `build-android.cmd` (Windows, rebuilds Go and FOSS APK), `build-windows.cmd` (Windows desktop `wuDict2.exe` and Inno Setup installer under `release`; `console` builds the same executable with terminal output), `Makefile`, `.github/workflows/build-android.yml`, `fastlane/Appfile` |
 
@@ -208,8 +218,9 @@ behavior.
 
 On 2026-10-17, `build-android.cmd debug intel` built the FOSS APK for arm64 and
 x86_64. Gradle assembled both `:app:assembleFossDebug` and
-`:app:assemblePlayDebug` after the Android server controls were removed. The
-user has not yet verified the A59 settings screen on the emulator.
+`:app:assemblePlayDebug` after the Android listener controls were removed. The
+user has not yet verified the A59 settings screen on the emulator. The A60
+FOSS debug build for arm64 and x86_64 passed; emulator checks are pending.
 
 ## Unfinished work
 
@@ -230,6 +241,6 @@ user has not yet verified the A59 settings screen on the emulator.
 - `/api/config.libDir` is expected to resolve to the same canonical path as
   `AppDirs.dbDir` for the app's Go runtime. Source inspection supports this;
   device startup timing has not been independently checked in this session.
-- The A59 emulator check should confirm the Android System screen has no access
+- The A60 emulator check should confirm the Android System screen has no access
   or listener settings and the launcher Settings screen has no port or restart
   controls. Both FOSS and Play debug builds compile successfully.

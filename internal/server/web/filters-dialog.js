@@ -39,6 +39,7 @@ async function unmatched(changed){
       }finally{window.wudictAndroidGo.cancelDictStream(id)}
     }else if(nativeCall)await nativeCall("dicts","",o=>{if(o.t==="dict")for(const g of o.dict.filters||o.dict.groups||[])have.add(g.f+"\n"+g.v)});
     else{
+      if(window.wudictAndroidGo)throw new Error("Dictionary list is not connected to the Go bridge");
       const t=await(await fetch("/api/dicts")).text();
       for(const line of t.split("\n")){if(!line.trim())continue;const o=JSON.parse(line);if(o.t==="dict")for(const g of o.dict.filters||o.dict.groups||[])have.add(g.f+"\n"+g.v)}
     }
@@ -72,6 +73,7 @@ async function call(method,body,query){
     if(method==="PUT")return nativeCall("saveGroups",JSON.stringify({text:body||"",replace:new URLSearchParams(query||"").get("replace")==="1"}));
     if(method==="DELETE")return nativeCall("resetGroups");
   }
+  if(window.wudictAndroidGo)throw new Error("Filter operation is not connected to the Go bridge");
   const r=await fetch("/api/groups"+(query||""),{method,body,headers:body==null?{}:{"Content-Type":"text/plain; charset=utf-8"}});
   if(!r.ok){let why="HTTP "+r.status;try{const j=await r.json();if(j&&j.error)why=j.error}catch(_){}throw new Error(why)}
   return r.json();

@@ -88,8 +88,8 @@ public final class AppExit extends Application implements Application.ActivityLi
 
     private void stopWhenClosed() {
         if (!closing || !windows.isEmpty()) return;
-        boolean nativeRuntime = ServerProcess.nativeRuntimeActive();
-        ServerProcess.stopAny(this);
+        boolean nativeRuntime = GoRuntime.nativeRuntimeActive();
+        GoRuntime.stopAny(this);
         closing = false;
         pending = false;
         SystemLog.record("exit complete");

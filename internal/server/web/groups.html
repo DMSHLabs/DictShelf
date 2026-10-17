@@ -236,6 +236,7 @@ async function unmatched(changed){
         if(o.t==="dict")for(const g of o.dict.filters||o.dict.groups||[])have.add(g.f+"\n"+g.v);
       });
     }else{
+      if(window.wudictAndroidGo)throw new Error("Dictionary list is not connected to the Go bridge");
       const t=await (await fetch("/api/dicts")).text();
       for(const l of t.split("\n")){
         if(!l.trim())continue;
@@ -283,6 +284,7 @@ async function call(method,body,query){
     if(method==='PUT')return nativeCall('saveGroups',JSON.stringify({text:body||'',replace:new URLSearchParams(query||'').get('replace')==='1'}));
     if(method==='DELETE')return nativeCall('resetGroups');
   }
+  if(window.wudictAndroidGo)throw new Error('Dictionary Groups operation is not connected to the Go bridge');
   const r=await fetch("/api/groups"+(query||""),{method,body,headers:body==null?{}:{"Content-Type":"text/plain; charset=utf-8"}});
   if(!r.ok){
     let why="HTTP "+r.status;

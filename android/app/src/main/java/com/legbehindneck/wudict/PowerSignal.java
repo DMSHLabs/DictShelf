@@ -7,7 +7,7 @@ package com.legbehindneck.wudict;
 import android.util.Log;
 
 /**
- * Tells the server how much of the device it may use (D64).
+ * Tells the Go runtime how much of the device it may use (D64).
  *
  * Go cannot see a lifecycle callback, a thermal event or a battery state -
  * every one of those is an Android API, and the shell is the only part of this
@@ -43,7 +43,7 @@ final class PowerSignal {
 
     private PowerSignal() {}
 
-    /** Requests that the server move to {@code state}; returns immediately. */
+    /** Requests that the runtime move to {@code state}; returns immediately. */
     static void set(String state) {
         synchronized (LOCK) {
             if (state.equals(pending) || (pending == null && state.equals(delivered))) {

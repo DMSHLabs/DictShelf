@@ -202,6 +202,30 @@ header{position:sticky;top:0;z-index:5;background:var(--bar);
 .nav button:disabled{opacity:.3;cursor:default}
 .nav b{justify-self:center;font-size:calc(var(--ui-font-addition) * 1rem);font-weight:600;color:var(--fg);
   font-variant-numeric:tabular-nums;white-space:nowrap}
+.nav [data-pos]{padding:.15em .35em;border:1px solid transparent;border-radius:6px;background:transparent;color:inherit;font:inherit;cursor:pointer}
+.nav [data-pos]:hover{border-color:var(--line);color:var(--accent)}
+.nav [data-pos]:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+dialog.browse-goto{position:fixed;inset:0;margin:auto;box-sizing:border-box;width:min(420px,calc(100vw - 32px));height:fit-content;max-height:80dvh;padding:1em;
+  border:1px solid var(--line);border-radius:12px;color:var(--fg);background:var(--bg);box-shadow:0 8px 32px #0004;z-index:20;font-size:calc(var(--ui-font-base) * 1rem)}
+dialog.browse-goto:not([open]){display:none}
+dialog.browse-goto[open]{display:block}
+dialog.browse-goto::backdrop{background:rgba(0,0,0,.42)}
+.browse-goto form{display:flex;flex-direction:column;gap:.75em}
+.browse-goto h2{display:flex;align-items:center;justify-content:space-between;gap:.5em;margin:0;font-size:calc(var(--ui-font-title) * 1rem)}
+.browse-goto .close{box-sizing:border-box;display:grid;place-items:center;flex:none;width:calc(var(--ui-main-control-height) * 1em);height:calc(var(--ui-main-control-height) * 1em);padding:0;
+  border:0;background:transparent;color:var(--fg);font-size:calc(var(--ui-main-control-font) * 1rem);line-height:1;cursor:pointer}
+.browse-goto .close svg{display:block;width:1.3em;height:1.3em}
+.browse-goto .goto-field{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:.5em}
+.browse-goto .goto-field label{font-size:calc(var(--ui-font-base) * 1rem);white-space:nowrap}
+.browse-goto input{box-sizing:border-box;width:100%;height:calc(var(--ui-control-height) * 1em);padding:0 .45em;border:1px solid var(--line);border-radius:5px;
+  color:var(--fg);background:var(--bg);font:inherit;font-size:calc(var(--ui-font-base) * 1rem)}
+.browse-goto .range{grid-column:2;margin:-.45em 0 0;color:var(--label-quiet);font-size:calc(var(--ui-font-base) * 1rem);text-align:center}
+.browse-goto .actions{display:flex;justify-content:space-between;gap:.5em;margin-top:.25em}
+.browse-goto .actions button{min-height:calc(var(--ui-control-height) * 1em);padding:.2em .7em;border:1px solid var(--line);border-radius:8px;
+  color:var(--fg);background:transparent;font:inherit;cursor:pointer}
+.browse-goto .actions button[type=submit]{border-color:var(--line);background:color-mix(in srgb,var(--bg) 84%,var(--accent));color:var(--fg)}
+html:is([data-shell-sepia],[data-shell-image]) .browse-goto input{background-color:var(--paper-bg,var(--bg))}
+html[data-shell-image] dialog.browse-goto{background-image:var(--paper-bk-image);background-size:100% 100%;background-position:center;background-repeat:no-repeat}
 
 /* One row, scrolled sideways rather than wrapped: wrapping a Cyrillic+Latin
    alphabet is four rows of chrome above every page, on the screen that can
@@ -342,7 +366,7 @@ html[data-desktop-image] .chooser-list :is(.list-search-dock,.list-search-input,
     <div class="title"><div class="title-copy"><b id="name"></b><span id="sub"></span></div><button type="button" id="closeBrowse" aria-label="{{T:pages.close}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div>
     <div class="nav">
       <button type="button" data-go="prev" title="{{T:browse.previousTitle}}">{{T:browse.previousPage}}</button>
-      <b data-pos></b>
+      <button type="button" data-pos aria-label="{{T:browse.gotoBlock}}" title="{{T:browse.gotoBlock}}"></button>
       <button type="button" data-go="next" title="{{T:browse.nextTitle}}">{{T:browse.nextPage}}</button>
     </div>
   </div>
@@ -352,6 +376,17 @@ html[data-desktop-image] .chooser-list :is(.list-search-dock,.list-search-input,
     <button type="button" class="strip-nav" id="stripNext" aria-label="{{T:browse.scrollLettersRight}}" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 4 8 8-8 8"/></svg></button>
   </div>
 </header>
+
+<dialog class="browse-goto" id="browseGotoDialog" lang="{{T:locale}}" aria-labelledby="browseGotoTitle">
+  <form id="browseGotoForm">
+    <h2 id="browseGotoTitle"><span>{{T:browse.gotoBlock}}</span><button type="button" class="close" id="browseGotoClose" aria-label="{{T:pages.close}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></h2>
+    <div class="goto-field"><label for="browseGotoInput">{{T:browse.gotoBlockLabel}}</label><input id="browseGotoInput" type="number" inputmode="numeric" min="1" step="1" required><p class="range" id="browseGotoRange"></p></div>
+    <div class="actions">
+      <button type="button" id="browseGotoCancel">{{T:panel.cancel}}</button>
+      <button type="submit">{{T:browse.gotoBlockAction}}</button>
+    </div>
+  </form>
+</dialog>
 
 <main>
   <div class="msg" id="msg" hidden></div>
@@ -512,6 +547,7 @@ async function browseFetch(url,options={}){
       if(requestURL.pathname==="/api/browse/find"&&params.get("stream")==="1")
         return androidBrowseStream("browseFind",params.toString(),options.signal);
     }
+    throw new Error("Browse operation is not connected to the Go bridge");
   }
   if(typeof window.wudictNativeCall!=="function")return fetch(url,options);
   const requestURL=new URL(url,location.href);
@@ -1354,7 +1390,7 @@ function render(){
 
   const pages=filtering?(findResult.stream?Math.ceil(findStreamWords.length/300):findResult.pages):d.pages;
   const page=filtering?filterPage:d.page;
-  document.querySelectorAll("[data-pos]").forEach(el=>el.textContent=page+"/"+(pages||1)+(filtering&&findResult.stream&&!findStreamDone?"+":""));
+  document.querySelectorAll("[data-pos]").forEach(el=>{el.textContent=page+"/"+(pages||1)+(filtering&&findResult.stream&&!findStreamDone?"+":"");el.disabled=!!(filtering&&findResult.stream&&!findStreamDone)});
   const hasMore=filtering&&findResult.stream&&!findStreamDone;
   const ends={first:page<=1,prev:page<=1,next:hasMore?false:page>=pages,last:hasMore?false:page>=pages};
   document.querySelectorAll("[data-go]").forEach(b=>{b.disabled=!!ends[b.dataset.go]});
@@ -1389,6 +1425,39 @@ function turn(where){
     if(filtered)fetchFound(p,0,"replace");else show({p},"push");
   }
 }
+
+function browseGotoOpen(){
+  if(!state||browsePageBusy)return;
+  const filtering=findFilter&&!!$("findInput").value.trim()&&findResult;
+  if(filtering&&findResult.stream&&!findStreamDone)return;
+  const pages=filtering?(findResult.stream?Math.ceil(findStreamWords.length/300):findResult.pages):state.pages;
+  const page=filtering?findFilterPage:state.page;
+  const total=Math.max(1,pages||1);
+  const input=$("browseGotoInput");
+  input.min="1";input.max=String(total);input.value=String(Math.min(total,Math.max(1,page||1)));
+  $("browseGotoRange").textContent=t("browse.gotoBlockRange",{total:num(total)});
+  $("browseGotoDialog").showModal();input.focus();input.select();
+}
+function browseGotoApply(event){
+  event?.preventDefault();
+  if(!state||browsePageBusy)return;
+  const filtering=findFilter&&!!$("findInput").value.trim()&&findResult;
+  if(filtering&&findResult.stream&&!findStreamDone)return;
+  const pages=filtering?(findResult.stream?Math.ceil(findStreamWords.length/300):findResult.pages):state.pages;
+  const target=Number($("browseGotoInput").value);
+  const total=Math.max(1,pages||1);
+  if(!Number.isInteger(target)||target<1||target>total){$("browseGotoInput").reportValidity();return}
+  $("browseGotoDialog").close();
+  if(target===(filtering?findFilterPage:state.page))return;
+  if(filtering&&findResult.stream){findFilterPage=target;render();scrollTo(0,0)}
+  else if(filtering)fetchFound(target,0,"replace");
+  else show({p:target},"push");
+}
+$("browseGotoForm").addEventListener("submit",browseGotoApply);
+$("browseGotoCancel").addEventListener("click",()=>$("browseGotoDialog").close());
+$("browseGotoClose").addEventListener("click",()=>$("browseGotoDialog").close());
+document.querySelectorAll("[data-pos]").forEach(el=>el.addEventListener("click",browseGotoOpen));
+document.querySelectorAll("[data-pos]").forEach(el=>el.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();browseGotoOpen()}}));
 
 /* Browsing needs the headword index. Create it from Dictionary Settings. */
 async function unprepared(){

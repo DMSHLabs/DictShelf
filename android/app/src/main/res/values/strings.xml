@@ -8,7 +8,7 @@
 <resources>
 	<string name="app_name">wuDict2</string>
 	<string name="starting">Starting wuDict2…</string>
-	<string name="server_failed">wuDict2 could not start: %1$s</string>
+	<string name="runtime_failed">wuDict2 could not start: %1$s</string>
 	<!--
  The selection-toolbar entry (D67). It labels the PROCESS_TEXT filter
          only, where the toolbar is a row of verbs among other apps' verbs
@@ -212,7 +212,7 @@
 	<string name="intake_cancelled">Cancelled.</string>
 	<string name="intake_busy">An import is already running.</string>
 	<string name="intake_failed">Could not add dictionaries: %1$s</string>
-	<string name="intake_no_server">The dictionary server did not start, so nothing could be added.</string>
+	<string name="intake_no_runtime">wuDict2 could not start, so nothing could be added.</string>
 	<string name="intake_no_picker">This device has no file picker.</string>
 	<!-- The server's import slot is held by an import nothing on this phone is
 	     showing - one started before the app was last closed, or from the setup

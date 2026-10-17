@@ -222,7 +222,7 @@ window.wudictFontScale=(function(){
 <form id="frm" class="col" role="search" aria-busy="true">
 <a class="btn" id="barBackWords" href="/browse" aria-label="{{T:search.backToWords}}" title="{{T:search.backToWords}}" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M19 12H5m6-6-6 6 6 6"/></svg><span>{{T:search.words}}</span></a>
 <span class="brand">wu<small>Dict2</small></span>
-<span id="androidBridgeStage" hidden style="font-size:.65em;white-space:nowrap;opacity:.7">A59</span>
+<span id="androidBridgeStage" hidden style="font-size:.65em;white-space:nowrap;opacity:.7">A60</span>
 <!-- The search pill. Above 600px it is display:contents, so the field and the
      two selects are direct flex children of the form. Below it the pill
      becomes the row:
@@ -297,7 +297,7 @@ window.wudictFontScale=(function(){
 <section id="maskView" aria-label="{{T:search.wildcardsResults}}" hidden>
   <div class="mask-chrome">
     <header class="mask-head">
-      <select id="maskDict" aria-label="{{T:search.wildcardsDictionary}}"></select>
+      <button type="button" class="choice-btn mask-dictionary-picker" id="maskDict" aria-label="{{T:search.wildcardsDictionary}}" aria-haspopup="dialog"><span id="maskDictName"></span><span id="maskDictMeta"></span></button>
       <span id="maskProgress" aria-label="{{T:search.wildcardsResults}}" hidden>
         <span id="maskCount" role="status" aria-label="{{T:search.wildcardsTotal}}"></span>
         <button type="button" id="maskPrev" aria-label="{{T:browse.previousTitle}}">‹</button>
@@ -310,13 +310,11 @@ window.wudictFontScale=(function(){
   <div id="maskWords" class="mask-words"></div>
 </section>
 <dialog id="maskGotoDialog" lang="{{T:locale}}" class="group-dialog panel-card" aria-labelledby="maskGotoTitle">
-  <h2 id="maskGotoTitle">{{T:browse.gotoBlock}}</h2>
-  <label for="maskGotoInput">{{T:browse.gotoBlockLabel}}</label>
-  <input type="number" id="maskGotoInput" min="1" step="1" inputmode="numeric">
-  <p id="maskGotoRange"></p>
-  <div class="article-find-actions">
-    <button type="button" class="btn" id="maskGotoCancel">{{T:panel.cancel}}</button>
+  <h2 id="maskGotoTitle"><span>{{T:browse.gotoBlock}}</span><button type="button" class="mask-goto-close" id="maskGotoClose" aria-label="{{T:pages.close}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></h2>
+  <div class="mask-goto-field"><label for="maskGotoInput">{{T:browse.gotoBlockLabel}}</label><input type="number" id="maskGotoInput" min="1" step="1" inputmode="numeric"><p id="maskGotoRange"></p></div>
+  <div class="mask-goto-actions">
     <button type="button" class="btn" id="maskGotoGo">{{T:browse.gotoBlockAction}}</button>
+    <button type="button" class="btn" id="maskGotoCancel">{{T:panel.cancel}}</button>
   </div>
 </dialog>
 </main>
@@ -1520,6 +1518,7 @@ async function apiFetch(url,options){
       }
     }
   }
+  if(window.wudictAndroidGo)throw new Error("Android operation is not connected to the Go bridge: "+new URL(url,window.location.href).pathname);
   return fetch(url,options);
 }
 function browseFindStreamFetch(url,options={}){
@@ -1540,6 +1539,7 @@ function browseFindStreamFetch(url,options={}){
       },cancel(){canceled=true;cleanup();work.abort()}});
       return Promise.resolve({status:200,ok:true,body});
     }
+    throw new Error("Browse results are not connected to the Go bridge");
   }
   if(typeof window.wudictNativeCall==="function"){
     const requestURL=new URL(url,window.location.href);
@@ -2535,34 +2535,46 @@ function refreshLivePicker(){
   if($('webDictionaryPicker').open)paintWebDictionaryPicker();
 }
 let webPickerSearch=null;
+let webPickerContext="search";
 function paintWebDictionaryPicker(){
-  const group=$('webPickerGroup'),current=scopedDictionary();
+  const maskContext=webPickerContext==="wildcards";
+  const group=$('webPickerGroup'),current=maskContext?null:scopedDictionary();
   const selected=current?current.id:pickerGroup;
+  $('webDictionaryPicker').classList.toggle('wildcards-picker',maskContext);
   const choices=userGroups.map(g=>({id:g.id,name:pickerGroupName(g.id)}));
   if(current)choices.splice(1,0,current);
   group.replaceChildren(...choices.map(g=>new Option(g.name,g.id)));
   group.value=selected;
   window.wudictThemedSelects?.pickerGroup.sync();
-  const rows=livePickerRows(),list=$('webPickerRows');
+  const rows=maskContext?maskPickerRows():livePickerRows(),list=$('webPickerRows');
   list.replaceChildren(...rows.map(row=>{
     const button=document.createElement('button');
     button.type='button';button.className='web-picker-row';button.dataset.dict=row.id;
-    const name=document.createElement('span');name.textContent=row.label;
+    const name=document.createElement('span');name.className='web-picker-name';name.textContent=row.name||row.label;
     button.append(name);
-    button.onclick=()=>{ $('webDictionaryPicker').close();window.wudictPickerDictionarySelected(row.id) };
+    if(row.meta){const meta=document.createElement('span');meta.className='web-picker-meta';meta.textContent=row.meta;button.append(meta)}
+    if(maskContext)button.setAttribute('aria-current',String(row.id===maskRows[maskCurrent]?.id));
+    button.title=row.label;
+    button.onclick=()=>{
+      $('webDictionaryPicker').close();
+      if(maskContext){maskSelect(maskRows.findIndex(item=>item.id===row.id));return}
+      window.wudictPickerDictionarySelected(row.id);
+    };
     return button;
   }));
   if(!rows.length){
     const empty=document.createElement('p');
-    empty.textContent=livePickerSearching?tx('search.searching'):current?tx('search.emptyDict'):tx('search.emptyGroup');
+    empty.textContent=maskContext?tx('search.emptyGroup'):
+      livePickerSearching?tx('search.searching'):current?tx('search.emptyDict'):tx('search.emptyGroup');
     list.append(empty);
   }
   webPickerSearch?.refresh();
   return rows.length;
 }
-async function openWebDictionaryPicker(){
+async function openWebDictionaryPicker(context="search"){
   const dialog=$('webDictionaryPicker');
   if(dialog.open)return;
+  webPickerContext=context;
   const started=performance.now();
   const groupsStarted=started;
   try{
@@ -2590,6 +2602,7 @@ async function openWebDictionaryPicker(){
 }
 $('webPickerClose').onclick=()=>$('webDictionaryPicker').close();
 $('webPickerGroup').onchange=e=>{wudictPickerGroupChanged(e.target.value);paintWebDictionaryPicker()};
+$('maskDict').onclick=()=>openWebDictionaryPicker("wildcards");
 $('dict').addEventListener('pointerdown',e=>{
   if($('dict').disabled)return;
   e.preventDefault();openWebDictionaryPicker();
@@ -2621,7 +2634,10 @@ window.wudictPickerGroupChanged=id=>{
   const url=new URL(location.href);url.searchParams.delete("dict");url.searchParams.delete("from");
   history.replaceState(history.state,"",url.pathname+url.search+url.hash);
   $("out").replaceChildren();liveSearchBoxes=null;refreshLivePicker();
-  if($("q").value.trim())doSearch();
+  if($("q").value.trim()){
+    if($("mode").value==="wildcards")maskSubmitRequested=true;
+    doSearch();
+  }
 };
 /* One jump, two callers: the native picker's list and the status bar's
    arrows. Open the section, put the match walk back if it was in play, and
@@ -5506,6 +5522,7 @@ async function fetchStream(url,onMsg,signal,options){
       }
     }
   }
+  if(window.wudictAndroidGo)throw new Error("Android stream is not connected to the Go bridge: "+new URL(url,window.location.href).pathname);
   const resp=await fetch(url,{...options,...(signal?{signal}:{})});
   if(!resp.ok){let e;try{e=(await resp.json()).error}catch(_){}throw new Error(window.wudictI18n.errorText(e)||resp.statusText)}
   const reader=resp.body.getReader(),dec=new TextDecoder();let buf="";
@@ -5898,11 +5915,11 @@ function maskBusyApply(){
   const busy=maskBusyJobs.size>0,body=document.body;
   body.classList.toggle("mask-computing",busy);
   body.setAttribute("aria-busy",String(busy));
-  for(const id of ["q","mode","modeMenuBtn","dict","pinBtn","wideBtn","expandBtn","panelBtn","maskDict",
+  for(const id of ["q","mode","modeMenuBtn","dict","pinBtn","wideBtn","expandBtn","panelBtn","maskDict","webPickerGroup",
     "maskFindMode","maskFindWildcard","maskFindInput","maskFindApply"]){
     const el=$(id);if(el)el.disabled=busy;
   }
-  for(const el of document.querySelectorAll("#searchHistory button, #maskWords button"))el.disabled=busy;
+  for(const el of document.querySelectorAll("#searchHistory button, #maskWords button, #webPickerRows .web-picker-row"))el.disabled=busy;
 }
 function maskBusyStart(key){maskBusyJobs.add(key);maskBusyApply()}
 function maskBusyFinish(key){maskBusyJobs.delete(key);maskBusyApply()}
@@ -5925,7 +5942,7 @@ function maskInvalidate(){
   maskFindQuery="";maskFindIndex=-1;maskFindMatch=null;maskFindApproved=false;maskFindAwaitingApply=false;$("maskFindInput").value="";maskFindControls();
   maskStripVersion++;maskStripRendered=-1;maskChipMap.clear();maskActiveKey="";
   if(searchAC)searchAC.abort();searchSeq++;
-  $("maskDict").replaceChildren();$("maskLetters").replaceChildren();
+  $("maskDictName").textContent="";$("maskDictMeta").textContent="";$("maskDict").title="";$("maskLetters").replaceChildren();
   $("maskCount").textContent="";$("maskPage").textContent="";
   $("maskPrev").disabled=$("maskNext").disabled=true;
   $("maskWords").innerHTML='<p class="mask-empty">'+tx("search.wildcardsRun")+'</p>';
@@ -5975,7 +5992,7 @@ function maskStripPaint(){
   }
 }
 function maskMenu(){
-  const menu=$("maskDict"),selection=maskRows[maskCurrent]?.id;
+  const selected=maskRows[maskCurrent];
   let total=0,pages=0,prefixKnown=true,complete=true;
   for(const row of maskRows){
     row.firstPage=null;row.pages=0;
@@ -5989,15 +6006,9 @@ function maskMenu(){
     }
     if(row.partial)complete=false;
   }
-  menu.replaceChildren(...maskRows.filter(row=>row.state!=="ready"||row.total>0).map(row=>{
-    const option=document.createElement("option");option.value=row.id;
-    const range=row.firstPage===null?"…":row.firstPage===row.firstPage+row.pages-1
-      ?String(row.firstPage):row.firstPage+"–"+(row.firstPage+row.pages-1);
-    option.textContent=row.name+(row.state==="pending"?" · …":row.state==="error"?" · ⚠":
-      " · "+window.wudictI18n.number(row.total)+(row.partial?"+":"")+" ("+range+")");
-    return option;
-  }));
-  if(selection&&[...menu.options].some(option=>option.value===selection))menu.value=selection;
+  $("maskDictName").textContent=selected?.name||"";
+  $("maskDictMeta").textContent=selected?maskRowMeta(selected):"";
+  $("maskDict").title=selected?selected.name+maskRowMeta(selected):"";
   $("maskCount").textContent=window.wudictI18n.number(total)+(complete?"":"+");
   const row=maskRows[maskCurrent],result=row?.data;
   const current=result?(row.firstPage===null?"…":String(row.firstPage+result.page-1)):"…";
@@ -6005,6 +6016,20 @@ function maskMenu(){
   $("maskPage").disabled=!complete||pages===0;
   $("maskPage").setAttribute("aria-label",tx("browse.gotoBlock"));
   maskStripPaint();
+  if(webPickerContext==="wildcards")refreshLivePicker();
+}
+function maskRowMeta(row){
+  if(row.state==="pending")return " · …";
+  if(row.state==="error")return " · ⚠";
+  const range=row.firstPage===null?"…":row.firstPage===row.firstPage+row.pages-1
+    ?String(row.firstPage):row.firstPage+"–"+(row.firstPage+row.pages-1);
+  return " · "+window.wudictI18n.number(row.total)+(row.partial?"+":"")+" ("+range+")";
+}
+function maskPickerRows(){
+  return maskRows.map((row,index)=>({id:row.id,name:row.name,meta:maskRowMeta(row),
+    label:row.name+maskRowMeta(row),index})).filter(row=>{
+      const item=maskRows[row.index];return item.state!=="ready"||item.total>0;
+    });
 }
 function maskNeighbor(from,step){
   for(let i=from+step;i>=0&&i<maskRows.length;i+=step)
@@ -6556,12 +6581,12 @@ $("maskFindInput").addEventListener("keydown",e=>{
     e.preventDefault();maskFindTurn(e.key==="ArrowDown"?1:-1)
   }
 });
-$("maskDict").addEventListener("change",()=>maskSelect(maskRows.findIndex(row=>row.id===$("maskDict").value)));
 $("maskPrev").addEventListener("click",()=>maskTurn(-1));
 $("maskNext").addEventListener("click",()=>maskTurn(1));
 $("maskPage").addEventListener("click",maskGotoOpen);
 $("maskGotoCancel").addEventListener("click",()=>$("maskGotoDialog").close());
 $("maskGotoGo").addEventListener("click",maskGotoApply);
+$("maskGotoClose").addEventListener("click",()=>$ ("maskGotoDialog").close());
 $("maskGotoInput").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();maskGotoApply()}});
 $("maskLetters").addEventListener("click",e=>{
   const button=e.target.closest("button[data-dict][data-page]");if(!button)return;
@@ -8934,8 +8959,7 @@ function themedSelectCreate(select){
 }
 window.wudictThemedSelects={
   mode:themedSelect($("mode"),$("modeMenuBtn"),$("modeMenu")),
-  pickerGroup:themedSelect($("webPickerGroup"),$("webPickerGroupBtn"),$("webPickerGroupMenu")),
-  maskDict:themedSelectCreate($("maskDict"))
+  pickerGroup:themedSelect($("webPickerGroup"),$("webPickerGroupBtn"),$("webPickerGroupMenu"))
 };
 $("webDictionaryPicker").addEventListener("close",()=>window.wudictThemedSelects.pickerGroup.hide());
 document.documentElement.dataset.styledSelects="";

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="starting">Запуск wuDict2…</string>
-    <string name="server_failed">Не удалось запустить wuDict2: %1$s</string>
+    <string name="runtime_failed">Не удалось запустить wuDict2: %1$s</string>
     <string name="lookup_label">wuDict2</string>
     <string name="lookup_starting">Поиск «%1$s»…</string>
     <string name="lookup_empty">Нет текста для поиска</string>
@@ -56,7 +56,7 @@
     <string name="intake_cancelled">Отменено.</string>
     <string name="intake_busy">Импорт уже выполняется.</string>
     <string name="intake_failed">Не удалось добавить словари: %1$s</string>
-    <string name="intake_no_server">Сервер словарей не запустился. Ничего не добавлено.</string>
+    <string name="intake_no_runtime">wuDict2 не запустился. Ничего не добавлено.</string>
     <string name="intake_no_picker">На устройстве нет приложения для выбора файлов.</string>
 	<string name="intake_same_elsewhere">%1$s — уже установлен в %2$s</string>
 	<string name="intake_other_elsewhere">%1$s — заменит вашу копию в %2$s</string>
