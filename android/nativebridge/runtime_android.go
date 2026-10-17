@@ -15,13 +15,16 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
+	"unsafe"
 
 	"github.com/wuweidict/wudict/internal/config"
 	_ "github.com/wuweidict/wudict/internal/format/bgl"
@@ -31,6 +34,7 @@ import (
 	_ "github.com/wuweidict/wudict/internal/format/stardict"
 	_ "github.com/wuweidict/wudict/internal/format/wmd"
 	_ "github.com/wuweidict/wudict/internal/format/zim"
+	"github.com/wuweidict/wudict/internal/intake"
 	"github.com/wuweidict/wudict/internal/logx"
 	"github.com/wuweidict/wudict/internal/server"
 )
@@ -84,6 +88,29 @@ func WudictGoBridgeBrowsePage(query *C.char) *C.char {
 	data, err := json.Marshal(value)
 	if err != nil {
 		return C.CString(`{"status":500,"body":{"error":"could not encode browse page"}}`)
+	}
+	return C.CString(string(data))
+}
+
+//export WudictGoBridgeBrowseFindPage
+func WudictGoBridgeBrowseFindPage(query *C.char) *C.char {
+	if query == nil {
+		return nil
+	}
+	nativeRuntime.Lock()
+	app := nativeRuntime.app
+	nativeRuntime.Unlock()
+	if app == nil {
+		return C.CString(`{"status":503,"error":"Go runtime is unavailable"}`)
+	}
+	value, err := app.Server.DesktopJSON("", "browseFindPage", C.GoString(query))
+	if err != nil {
+		data, _ := json.Marshal(map[string]any{"status": 500, "error": err.Error()})
+		return C.CString(string(data))
+	}
+	data, err := json.Marshal(value)
+	if err != nil {
+		return C.CString(`{"status":500,"error":"could not encode Browse results"}`)
 	}
 	return C.CString(string(data))
 }
@@ -285,7 +312,7 @@ func WudictGoBridgeSetup(action, argument *C.char) *C.char {
 	}
 	method := ""
 	switch C.GoString(action) {
-	case "setup", "folderSetup", "indexDefaults":
+	case "setup", "folderSetup", "indexDefaults", "howto":
 		method = C.GoString(action)
 	default:
 		return nil
@@ -319,6 +346,8 @@ func WudictGoBridgeIntake(action, argument *C.char) *C.char {
 		method = "intakeStatus"
 	case "url":
 		method = "intakeURL"
+	case "path":
+		method = "intakePath"
 	case "confirm":
 		method = "intakeConfirm"
 	case "cancel":
@@ -342,7 +371,7 @@ func WudictGoBridgeIntake(action, argument *C.char) *C.char {
 	}
 	value, err := app.Server.DesktopJSON("", method, C.GoString(argument))
 	if err != nil {
-		data, _ := json.Marshal(map[string]any{"ok": false, "error": err.Error()})
+		data, _ := json.Marshal(map[string]any{"ok": false, "error": err.Error(), "busy": errors.Is(err, intake.ErrBusy)})
 		return C.CString(string(data))
 	}
 	data, err := json.Marshal(map[string]any{"ok": true, "value": value})
@@ -350,6 +379,23 @@ func WudictGoBridgeIntake(action, argument *C.char) *C.char {
 		return nil
 	}
 	return C.CString(string(data))
+}
+
+//export WudictGoBridgePower
+func WudictGoBridgePower(state *C.char) C.int {
+	if state == nil {
+		return 0
+	}
+	nativeRuntime.Lock()
+	app := nativeRuntime.app
+	nativeRuntime.Unlock()
+	if app == nil {
+		return 0
+	}
+	if _, err := app.Server.DesktopJSON("", "power", C.GoString(state)); err != nil {
+		return 0
+	}
+	return 1
 }
 
 //export WudictGoBridgeReindex
@@ -559,6 +605,160 @@ func WudictGoBridgeSavePrefs(body *C.char) *C.char {
 	return C.CString(string(data))
 }
 
+//export WudictGoBridgeSaveLanguage
+func WudictGoBridgeSaveLanguage(body *C.char) *C.char {
+	nativeRuntime.Lock()
+	app := nativeRuntime.app
+	nativeRuntime.Unlock()
+	if app == nil {
+		return C.CString(`{"ok":false,"status":503,"error":"Go runtime is unavailable"}`)
+	}
+	value, err := app.Server.DesktopJSON("", "saveLanguage", C.GoString(body))
+	if err != nil {
+		data, _ := json.Marshal(map[string]any{"ok": false, "status": 400, "error": err.Error()})
+		return C.CString(string(data))
+	}
+	data, err := json.Marshal(map[string]any{"ok": true, "status": 200, "value": value})
+	if err != nil {
+		return C.CString(`{"ok":false,"status":500,"error":"could not encode language response"}`)
+	}
+	return C.CString(string(data))
+}
+
+//export WudictGoBridgeSystemLogSnapshot
+func WudictGoBridgeSystemLogSnapshot() *C.char {
+	nativeRuntime.Lock()
+	app := nativeRuntime.app
+	nativeRuntime.Unlock()
+	if app == nil {
+		return C.CString(`{"ok":false,"error":"Go runtime is unavailable"}`)
+	}
+	value, err := app.Server.DesktopJSON("", "systemLog", "")
+	if err != nil {
+		data, _ := json.Marshal(map[string]any{"ok": false, "error": err.Error()})
+		return C.CString(string(data))
+	}
+	data, err := json.Marshal(map[string]any{"ok": true, "value": value})
+	if err != nil {
+		return C.CString(`{"ok":false,"error":"could not encode system log"}`)
+	}
+	return C.CString(string(data))
+}
+
+//export WudictGoBridgeWebResource
+func WudictGoBridgeWebResource(rawURL, headersJSON *C.char) *C.char {
+	if rawURL == nil || headersJSON == nil {
+		return nil
+	}
+	nativeRuntime.Lock()
+	app := nativeRuntime.app
+	nativeRuntime.Unlock()
+	if app == nil {
+		return C.CString(`{"handled":false,"status":503}`)
+	}
+	requestHeaders := map[string]string{}
+	if err := json.Unmarshal([]byte(C.GoString(headersJSON)), &requestHeaders); err != nil {
+		return C.CString(`{"handled":false,"status":400}`)
+	}
+	body, status, headers, handled, spilled := app.Server.DesktopResource("GET", C.GoString(rawURL), requestHeaders, nil)
+	if spilled {
+		return C.CString(`{"handled":false,"status":500}`)
+	}
+	data, err := json.Marshal(map[string]any{"handled": handled, "status": status, "headers": headers, "body": body})
+	if err != nil {
+		return C.CString(`{"handled":false,"status":500}`)
+	}
+	return C.CString(string(data))
+}
+
+var mediaStreams struct {
+	sync.Mutex
+	next    atomic.Int64
+	readers map[int64]io.ReadCloser
+}
+
+//export WudictGoBridgeMediaOpen
+func WudictGoBridgeMediaOpen(rawURL, headersJSON *C.char) *C.char {
+	if rawURL == nil || headersJSON == nil {
+		return nil
+	}
+	nativeRuntime.Lock()
+	app := nativeRuntime.app
+	nativeRuntime.Unlock()
+	if app == nil {
+		return C.CString(`{"handled":false}`)
+	}
+	requestHeaders := map[string]string{}
+	if json.Unmarshal([]byte(C.GoString(headersJSON)), &requestHeaders) != nil {
+		return C.CString(`{"handled":false}`)
+	}
+	reader, status, headers, handled := app.Server.DesktopMediaStream(C.GoString(rawURL), requestHeaders)
+	if !handled {
+		return C.CString(`{"handled":false}`)
+	}
+	// Android WebResourceResponse cannot represent HTTP redirects or 304.
+	// Let WebView use its ordinary network path for conditional cache hits.
+	if status >= 300 && status < 400 {
+		_ = reader.Close()
+		return C.CString(`{"handled":false}`)
+	}
+	id := mediaStreams.next.Add(1)
+	mediaStreams.Lock()
+	if mediaStreams.readers == nil {
+		mediaStreams.readers = make(map[int64]io.ReadCloser)
+	}
+	mediaStreams.readers[id] = reader
+	mediaStreams.Unlock()
+	data, err := json.Marshal(map[string]any{"handled": true, "stream": id, "status": status, "headers": headers})
+	if err != nil {
+		WudictGoBridgeMediaClose(C.longlong(id))
+		return C.CString(`{"handled":false}`)
+	}
+	return C.CString(string(data))
+}
+
+//export WudictGoBridgeMediaRead
+func WudictGoBridgeMediaRead(handle C.longlong, dst *C.char, size C.int) C.int {
+	if dst == nil || size <= 0 || size > 1<<20 {
+		return -2
+	}
+	mediaStreams.Lock()
+	reader := mediaStreams.readers[int64(handle)]
+	mediaStreams.Unlock()
+	if reader == nil {
+		return -1
+	}
+	n, err := reader.Read(unsafe.Slice((*byte)(unsafe.Pointer(dst)), int(size)))
+	if n > 0 {
+		return C.int(n)
+	}
+	if err != nil && err != io.EOF {
+		return -2
+	}
+	return -1
+}
+
+//export WudictGoBridgeMediaClose
+func WudictGoBridgeMediaClose(handle C.longlong) {
+	mediaStreams.Lock()
+	reader := mediaStreams.readers[int64(handle)]
+	delete(mediaStreams.readers, int64(handle))
+	mediaStreams.Unlock()
+	if reader != nil {
+		_ = reader.Close()
+	}
+}
+
+func closeMediaStreams() {
+	mediaStreams.Lock()
+	readers := mediaStreams.readers
+	mediaStreams.readers = nil
+	mediaStreams.Unlock()
+	for _, reader := range readers {
+		_ = reader.Close()
+	}
+}
+
 var nativeRuntime struct {
 	sync.Mutex
 	app       *server.Runtime
@@ -648,6 +848,7 @@ func WudictGoBridgeRuntimeStart(path, flagsJSON, token, version *C.char) C.int {
 //export WudictGoBridgeRuntimeStop
 func WudictGoBridgeRuntimeStop() C.int {
 	cancelDictionaryStreams()
+	closeMediaStreams()
 	nativeRuntime.Lock()
 	defer nativeRuntime.Unlock()
 	if nativeRuntime.http == nil {

@@ -599,6 +599,34 @@
 			request = HOST.wudictNativeCall("search", JSON.stringify({
 				q: word, mode: "exact", dict: dictID, n: 1
 			}), function (event) { accept(event, found); });
+		} else if (window.wudictAndroidGo) {
+			var bridge = window.wudictAndroidGo;
+			var id = bridge.startSearchStream(location.origin, JSON.stringify({
+				q: word, mode: "exact", dict: dictID, n: 1
+			}));
+			if (id <= 0) {
+				request = Promise.reject(new Error("Go runtime is unavailable"));
+			} else {
+				request = new Promise(function (resolve, reject) {
+					function poll() {
+						try {
+							var packet = JSON.parse(bridge.pollDictStream(id));
+						(packet.messages || []).forEach(function (event) { accept(event, found); });
+						if (packet.done) {
+							bridge.cancelDictStream(id);
+							if (packet.error) reject(new Error(packet.error));
+							else resolve();
+							return;
+						}
+						setTimeout(poll, 16);
+						} catch (error) {
+						bridge.cancelDictStream(id);
+						reject(error);
+						}
+					}
+					poll();
+				});
+			}
 		} else {
 			request = fetch("/api/search?mode=exact&n=1&dict=" + encodeURIComponent(dictID) +
 				"&q=" + encodeURIComponent(word))

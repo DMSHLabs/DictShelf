@@ -289,6 +289,16 @@ func (s *Server) DesktopJSONContext(ctx context.Context, baseURL, method, argume
 		return s.desktopIntakeConfirm(request)
 	case "intakeCancel":
 		return s.desktopIntakeCancel(argument), nil
+	case "power":
+		if len(argument) > 32 {
+			return nil, errors.New("invalid power state")
+		}
+		p, ok := ParsePower(strings.TrimSpace(argument))
+		if !ok {
+			return nil, errors.New("state must be active, background or restricted")
+		}
+		s.reg.SetPower(p)
+		return map[string]string{"state": p.String()}, nil
 	case "exitApp":
 		if s.DesktopExit == nil {
 			return nil, errors.New("desktop exit is unavailable")

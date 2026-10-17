@@ -48,10 +48,44 @@ ordinary GET Rescan folders and Browse's word/find streams use that bridge too.
 Browse's nonstream page and chooser also use shared Go operations via JNI.
 The main-screen Wildcards list stream, Rebuild status/start/stop and explicit
 index-work status/start/stop, the Rescan Update dictionaries progress stream,
-single-dictionary ingest progress, and Dictionary Groups data and edits use the
-same bridge.
+single-dictionary ingest progress, Dictionary Groups data and edits, and
+Browse/Wildcards result pages use the same bridge.
 Browse and dictionary-list timing diagnostics use JNI. The Android page shows
-an `A26` stage marker beside the brand in this build. The article's `Words`
+an `A52` stage marker beside the brand in this build. Language preference
+saving and scripted-article inline lookups use the direct Go/JNI bridge;
+Browse, Edit Folders, Lemmatization and Dictionary Groups pages, embedded
+assets and user stylesheets are answered from Go in-process. Edit Folders'
+built-in how-to copy and restore actions also call Go directly. The main page
+document now also loads from Go through WebView resource interception. `/files/`
+and `/res/` requests, including Range requests, are answered through Go resource
+interception and a streaming JNI InputStream. A47 returned Go's partial `206`
+response directly to WebView, but duplicate `Content-Length` and `Content-Type`
+headers caused large-video playback to fail. A48 removed those duplicates and
+reports the remaining stream length to WebView. Emulator logs then exposed an
+Android WebView bug: it applies the requested Range offset a second time to a
+custom `206` response, which makes tail ranges fail. A49 wraps eligible single
+ranges so `skip()` accounts for WebView's second offset while reads still start
+at the Go-provided range. The user confirmed large-video playback works with
+A49. A50 moves Android's System Log export from local HTTP to the Go/JNI bridge;
+the user confirmed it works. A51 moves Java archive intake status, URL/path
+import, confirmation, cancellation and chunked content-URI upload from local
+HTTP to the Go/JNI bridge. Unknown-length providers are streamed without
+buffering the archive in memory; the Go spool enforces the existing 16 GiB
+limit. A52 sends Android's active/background/restricted power state directly to
+Go over JNI, replaying the latest state when the runtime becomes ready;
+`/api/power` remains for HTTP clients. `build-android.cmd debug intel` passes;
+A52 runtime verification is pending. The listener remains active for other API
+fallbacks and Range media.
+A43 tried a private Android ContentProvider for seekable video, then A44 tried
+it for audio. Emulator diagnostics established that WebView rejects `content://`
+media from this HTTP page: audio logged "Not allowed to load local resource",
+and the large test video's media error was "Media load rejected by URL safety
+check". A45 restored audio; A46 restores video and removes the unused provider
+and JNI seek bridge. A49 works around Android WebView's repeated Range offset
+in the Go/JNI stream; the user confirmed playback works.
+Choosing a window background image enables and locks the Color checkbox; choosing
+`None` unlocks it again, matching the Windows settings behavior.
+The article's `Words`
 return button appears left of the arrows in the bottom status bar of the Android WebView. Other page requests still
 use local HTTP.
 

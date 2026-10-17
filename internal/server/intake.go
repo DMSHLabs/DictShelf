@@ -131,7 +131,7 @@ func (s *Server) desktopIntakeUploadStart(name string, size int64) (map[string]s
 		return nil, intake.ErrNoDestination
 	}
 	name = filepath.Base(strings.TrimSpace(name))
-	if name == "" || name == "." || name == string(filepath.Separator) || size <= 0 || size > maxIntakeUpload {
+	if name == "" || name == "." || name == string(filepath.Separator) || size < 0 || size > maxIntakeUpload {
 		return nil, errors.New("invalid archive file")
 	}
 	var token [16]byte
@@ -185,7 +185,11 @@ func (s *Server) desktopIntakeUploadChunk(argument string) error {
 		s.desktopUploadsMu.Unlock()
 		return errors.New("file transfer expired")
 	}
-	if upload.written+int64(len(data)) > upload.size {
+	if upload.written+int64(len(data)) > maxIntakeUpload {
+		s.desktopUploadsMu.Unlock()
+		return errors.New("that file is too large to import")
+	}
+	if upload.size > 0 && upload.written+int64(len(data)) > upload.size {
 		s.desktopUploadsMu.Unlock()
 		return errors.New("archive file size changed during transfer")
 	}
@@ -209,7 +213,7 @@ func (s *Server) desktopIntakeUploadFinish(id string) (intakeStatus, error) {
 	if upload.timer != nil {
 		upload.timer.Stop()
 	}
-	if upload.written != upload.size {
+	if upload.size > 0 && upload.written != upload.size {
 		s.desktopUploadsMu.Unlock()
 		_ = upload.writer.CloseWithError(errors.New("archive file is incomplete"))
 		<-upload.done

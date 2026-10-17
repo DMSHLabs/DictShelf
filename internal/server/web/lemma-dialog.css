@@ -55,6 +55,7 @@ html[data-shell-image] .lemma-list::-webkit-scrollbar-thumb:hover{background-col
 .lemma-dialog .lrow .st.ok{color:var(--safe)}.lemma-dialog .lrow .st.err{color:var(--danger)}.lemma-dialog .lrow .st.busy{color:var(--accent)}
 .lemma-dialog .lrow.off{opacity:.55}
 .lemma-banner{flex:none;margin:.2em 0 0;padding:.5em .7em;border:1px solid var(--line);border-radius:8px;color:var(--label);font-size:calc(var(--ui-hint-font-size) * 1rem)}
+.lemma-banner.loading{display:flex;align-items:center;gap:.5em}
 .lemma-banner.warn{border-color:var(--danger);color:var(--danger)}
 .lemma-banner.hidden{display:none}
 .lemma-formats a{color:var(--accent);text-decoration:none}.lemma-formats a:hover{text-decoration:underline}
