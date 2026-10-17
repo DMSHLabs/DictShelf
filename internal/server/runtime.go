@@ -65,6 +65,7 @@ func NewRuntime(cfg config.Config, configPath, token, version string) (*Runtime,
 	s.UseUserGroups()
 	s.ConfigPath = configPath
 	s.User = user
+	s.wildcardPages.init(s.wildcardCacheDir())
 	s.InstallDesktopBackgrounds()
 	s.Morph = morph.New(cfg.MorphCache, cfg.LemmaDir)
 	if cfg.MemoryLimit > 0 {
