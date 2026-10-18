@@ -72,16 +72,16 @@ $("indexDefaults").addEventListener("change",()=>{saveIndexDefaults()});
 let timer=null,lastOK=false;
 let validationController=null,validationRun=0;
 
+let setupNoticeTaskID=0;
+let setupNoticeMessage="",setupNoticeStop=null;
 function setSetupNotice(text,stop){
-  const box=$("workNotice"),button=$("workNoticeStop");
-  box.hidden=!text;
-  if(!text)return;
-  $("workNoticeText").textContent=text;
-  button.hidden=typeof stop!=="function";
-  button.textContent=tx("dictUI.stop");
-  button.disabled=false;
-  button.onclick=typeof stop==="function"?stop:null;
+  setupNoticeMessage=text||"";setupNoticeStop=typeof stop==="function"?stop:null;
+  if(!window.wudictTasks)return;
+  if(!setupNoticeMessage){if(setupNoticeTaskID)window.wudictTasks.finish(setupNoticeTaskID);setupNoticeTaskID=0;return}
+  if(setupNoticeTaskID)window.wudictTasks.update(setupNoticeTaskID,{message:setupNoticeMessage,stop:setupNoticeStop});
+  else setupNoticeTaskID=window.wudictTasks.start("setup",setupNoticeMessage,{stop:setupNoticeStop});
 }
+window.addEventListener("wudict-tasks-ready",()=>{if(setupNoticeMessage)setSetupNotice(setupNoticeMessage,setupNoticeStop)});
 
 const fmtN=n=>window.wudictI18n.number(n);
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));

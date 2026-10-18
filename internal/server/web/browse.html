@@ -232,6 +232,9 @@ html[data-shell-image] dialog.browse-goto{background-image:var(--paper-bk-image)
    least afford it. The active chip is scrolled into view, so the strip is
    never scrolled to a place the reader is not. */
 .strip-wrap{display:flex;align-items:stretch;gap:.1rem;padding:0 .35rem .4rem}
+.strip-scrollbar{position:relative;height:12px;margin:0 .65rem .35rem;border-radius:99px;background:color-mix(in srgb,var(--fg) 12%,transparent);touch-action:none;cursor:pointer}
+.strip-scroll-thumb{position:absolute;top:2px;left:0;height:8px;min-width:20px;border-radius:99px;background:color-mix(in srgb,var(--fg) 42%,var(--bg));cursor:grab;touch-action:none}
+.strip-scrollbar:active .strip-scroll-thumb{cursor:grabbing}
 .strip{display:block;position:relative;flex:1;min-width:0;column-gap:.1rem;overflow-x:auto;padding:0;scrollbar-width:none;
   overscroll-behavior-x:contain}
 .strip::-webkit-scrollbar{display:none}
@@ -261,21 +264,7 @@ main{padding-bottom:5rem}
 footer{position:fixed;bottom:0;left:0;right:0;z-index:6;display:flex;justify-content:center;
   padding:.5rem .9rem max(.5rem,env(safe-area-inset-bottom));background:var(--bar);
   backdrop-filter:saturate(1.6) blur(8px);border-top:1px solid var(--line)}
-footer .browse-progress{display:flex;align-items:center;gap:.55em;width:100%;max-width:54rem;
-  margin:0 auto .45rem;padding:.45rem .6rem;border:1px solid var(--accent);border-radius:8px;
-  background-color:var(--bg);background-image:repeating-linear-gradient(135deg,
-  color-mix(in srgb,var(--accent) 13%,transparent) 0px,color-mix(in srgb,var(--accent) 13%,transparent) 7px,
-  transparent 7px,transparent 15px);font-size:calc(var(--ui-font-addition) * 1rem)}
-footer .browse-progress[hidden]{display:none}
-footer .browse-progress-spinner{width:1em;height:1em;flex:none;border:2px solid color-mix(in srgb,var(--accent) 28%,transparent);
-  border-top-color:var(--accent);border-radius:50%;animation:browse-spin .8s linear infinite}
-footer .browse-progress-text{min-width:0;overflow-wrap:anywhere}
-footer .browse-progress-stop{flex:none;padding:.2em .55em;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--fg);font:inherit;cursor:pointer}
-footer .browse-progress-stop:hover{border-color:var(--accent);color:var(--accent)}
-@keyframes browse-spin{to{transform:rotate(360deg)}}
-@media(prefers-reduced-motion:reduce){footer .browse-progress-spinner{animation:none;border-color:var(--accent)}}
 body.browse-page-busy #top,body.browse-page-busy main,body.browse-page-busy .browse-search-dock{pointer-events:none;opacity:.62}
-body.browse-page-busy footer .browse-progress{pointer-events:auto;opacity:1}
 footer .browse-controls{width:100%;max-width:54rem}
 footer .browse-search-dock{width:100%;max-width:54rem}
 .words a.browse-current{outline:2px solid var(--accent);outline-offset:-2px;background:var(--line-soft)}
@@ -375,6 +364,7 @@ html[data-desktop-image] .chooser-list :is(.list-search-dock,.list-search-input,
     <nav class="strip" id="strip" aria-label="{{T:browse.jumpLetter}}"><div class="strip-track" id="stripTrack"><button class="strip-measure" id="stripMeasure" type="button" aria-hidden="true" tabindex="-1">M</button></div></nav>
     <button type="button" class="strip-nav" id="stripNext" aria-label="{{T:browse.scrollLettersRight}}" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 4 8 8-8 8"/></svg></button>
   </div>
+  <div class="strip-scrollbar" id="stripScrollbar" role="scrollbar" aria-label="{{T:browse.jumpLetter}}" aria-controls="strip" aria-orientation="horizontal" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0" tabindex="0" hidden><div class="strip-scroll-thumb" id="stripScrollThumb"></div></div>
 </header>
 
 <dialog class="browse-goto" id="browseGotoDialog" lang="{{T:locale}}" aria-labelledby="browseGotoTitle">
@@ -394,10 +384,6 @@ html[data-desktop-image] .chooser-list :is(.list-search-dock,.list-search-input,
 </main>
 <footer id="foot" hidden>
   <div class="browse-controls">
-    <div class="browse-progress" id="browseProgress" role="status" aria-live="polite" hidden>
-      <span class="browse-progress-spinner" aria-hidden="true"></span><span class="browse-progress-text" id="browseProgressText"></span>
-      <button type="button" class="browse-progress-stop" id="browseProgressStop" hidden>{{T:dictUI.stop}}</button>
-    </div>
     <div class="browse-search-dock" id="findDock" role="search">
     </div>
   </div>
@@ -407,6 +393,23 @@ html[data-desktop-image] .chooser-list :is(.list-search-dock,.list-search-input,
 <script>
 "use strict";
 const $=id=>document.getElementById(id);
+// The title and alphabet strip are fixed siblings of the scrolling word list.
+// Route vertical wheel input to that list from anywhere in the workspace;
+// keep the chooser's independently scrollable dictionary list native.
+const browseFrame=document.querySelector(".workspace-browser"),browseMain=browseFrame?.querySelector(":scope > main");
+browseFrame?.addEventListener("wheel",event=>{
+  if(!browseMain||event.defaultPrevented||!event.deltaY||Math.abs(event.deltaX)>Math.abs(event.deltaY))return;
+  if(event.target instanceof Element&&event.target.closest("footer"))return;
+  const nested=event.target instanceof Element?event.target.closest(".picks"):null;
+  if(nested&&nested.scrollHeight>nested.clientHeight){
+    const canScroll=event.deltaY<0?nested.scrollTop>0:nested.scrollTop+nested.clientHeight<nested.scrollHeight-1;
+    if(canScroll)return;
+  }
+  const factor=event.deltaMode===1?16:event.deltaMode===2?browseMain.clientHeight:1;
+  const before=browseMain.scrollTop;
+  browseMain.scrollTop+=event.deltaY*factor;
+  if(browseMain.scrollTop!==before)event.preventDefault();
+},{passive:false});
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const {t,number:num}=window.wudictI18n;
 const tx=(key,params)=>esc(t(key,params));
@@ -527,9 +530,8 @@ function browseTrace(step,data={}){
   enabled=enabled||browseDiagnosticsEnabled();
   if(!enabled)return;
   console.info("[browse]",step,data);
-  if(typeof window.wudictNativeCall==="function")return;
   const payload={event:step.replaceAll(" ","_")};
-  for(const key of ["page","words","letters","bytes","readMs","fetchMs","totalMs","wordsMs","stripBuildMs","stripMarkMs","status","restored","streamAlphabet"])
+  for(const key of ["dict","page","words","letters","bytes","readMs","fetchMs","totalMs","wordsMs","stripBuildMs","stripMarkMs","status","restored","streamAlphabet"])
     if(data[key]!==undefined)payload[key]=data[key];
   sendBrowseDiagnostic(payload);
 }
@@ -646,7 +648,62 @@ function updateStripArrows(){
   const strip=$("strip"),end=Math.max(0,strip.scrollWidth-strip.clientWidth);
   $("stripPrev").disabled=strip.scrollLeft<=1;
   $("stripNext").disabled=strip.scrollLeft>=end-1;
+  updateStripScrollbar();
 }
+function updateStripScrollbar(){
+  const strip=$("strip"),bar=$("stripScrollbar"),thumb=$("stripScrollThumb");
+  const viewport=strip.clientWidth,total=Math.max(viewport,strip.scrollWidth),maxScroll=Math.max(0,total-viewport);
+  const trackWidth=bar.clientWidth;
+  const thumbWidth=Math.min(trackWidth,Math.max(20,trackWidth*(viewport/total)));
+  const maxThumb=Math.max(0,trackWidth-thumbWidth);
+  const left=maxScroll?maxThumb*(strip.scrollLeft/maxScroll):0;
+  thumb.style.width=thumbWidth+"px";thumb.style.transform=`translateX(${left}px)`;
+  bar.setAttribute("aria-valuemax",String(Math.max(0,Math.round(maxScroll))));
+  bar.setAttribute("aria-valuenow",String(Math.max(0,Math.round(strip.scrollLeft))));
+  bar.setAttribute("aria-disabled",String(maxScroll===0));
+}
+let stripScrollbarDrag=null;
+function moveStripScrollbar(clientX){
+  if(!stripScrollbarDrag)return;
+  const strip=$("strip"),bar=$("stripScrollbar"),thumb=$("stripScrollThumb"),rect=bar.getBoundingClientRect();
+  const maxThumb=Math.max(0,bar.clientWidth-thumb.offsetWidth),maxScroll=Math.max(0,strip.scrollWidth-strip.clientWidth);
+  const left=Math.max(0,Math.min(maxThumb,clientX-rect.left-stripScrollbarDrag.grab));
+  strip.scrollLeft=maxThumb?left/maxThumb*maxScroll:0;
+}
+function selectStripBlockAtScroll(){
+  const items=state?.alphabet||[];
+  if(!items.length||!stripWidths.length)return;
+  const center=$("strip").scrollLeft+$("strip").clientWidth/2;
+  let index=Math.min(items.length-1,lowerStripIndex(center));
+  if(index>0&&Math.abs(stripOffsets[index-1]+stripWidths[index-1]/2-center)<Math.abs(stripOffsets[index]+stripWidths[index]/2-center))index--;
+  const item=items[index],offset=Number(item?.o);
+  if(Number.isFinite(offset))show({p:Math.floor(offset/state.size)+1,o:offset},"push");
+}
+$("stripScrollbar").addEventListener("pointerdown",event=>{
+  if(event.button!==0||event.isPrimary===false)return;
+  const bar=$("stripScrollbar"),thumb=$("stripScrollThumb"),rect=thumb.getBoundingClientRect();
+  const onThumb=event.target===thumb;
+  stripScrollbarDrag={pointerId:event.pointerId,grab:onThumb?event.clientX-rect.left:rect.width/2,onThumb,moved:false};
+  if(!onThumb)moveStripScrollbar(event.clientX);
+  bar.setPointerCapture?.(event.pointerId);event.preventDefault();
+});
+$("stripScrollbar").addEventListener("pointermove",event=>{
+  if(!stripScrollbarDrag||event.pointerId!==stripScrollbarDrag.pointerId)return;
+  stripScrollbarDrag.moved=true;
+  moveStripScrollbar(event.clientX);event.preventDefault();
+});
+function endStripScrollbarDrag(event){
+  if(!stripScrollbarDrag||event?.pointerId!==undefined&&event.pointerId!==stripScrollbarDrag.pointerId)return;
+  const shouldSelect=!stripScrollbarDrag.onThumb||stripScrollbarDrag.moved;
+  stripScrollbarDrag=null;
+  if(shouldSelect)selectStripBlockAtScroll();
+}
+for(const type of ["pointerup","pointercancel","lostpointercapture"])$("stripScrollbar").addEventListener(type,endStripScrollbarDrag);
+$("stripScrollbar").addEventListener("keydown",event=>{
+  const strip=$("strip"),step=Math.max(40,strip.clientWidth/5);let left=strip.scrollLeft;
+  if(event.key==="ArrowLeft")left-=step;else if(event.key==="ArrowRight")left+=step;else if(event.key==="PageUp")left-=strip.clientWidth;else if(event.key==="PageDown")left+=strip.clientWidth;else if(event.key==="Home")left=0;else if(event.key==="End")left=strip.scrollWidth;else return;
+  strip.scrollLeft=Math.max(0,Math.min(strip.scrollWidth-strip.clientWidth,left));event.preventDefault();
+});
 function lowerStripIndex(value,byEnd=false){
   let lo=0,hi=stripOffsets.length;
   while(lo<hi){const mid=(lo+hi)>>>1;const edge=stripOffsets[mid]+(byEnd?stripWidths[mid]:0);if(edge<value)lo=mid+1;else hi=mid}
@@ -731,23 +788,46 @@ function browseMaskThreshold(){
 }
 function browseNeedsApply(){return browseHeadwordControl?.needsApply(state?.total||0)??((state?.total||0)>=browseMaskThreshold())}
 function findAwaitingApply(){return findApplyPending||browseNeedsApply()&&!findApproved}
-function browseProgress(message,cancel=null,kind=""){
+function attachBrowseProgress(job){
+  if(!job.taskID&&window.wudictTasks)job.taskID=window.wudictTasks.start("browse",job.message,{stop:job.cancel});
+}
+function browseProgress(message,cancel=null,kind="",scope=""){
   const seq=++browseProgressSeq;
-  browseProgressJobs.set(seq,{message,cancel,kind});
+  const job={message,cancel,kind,scope,taskID:0};
+  browseProgressJobs.set(seq,job);
+  attachBrowseProgress(job);
+  if(kind==="alphabet")logAlphabetTask("start",scope);
   if(message===t("browse.loadingWords"))$("foot").hidden=false;
-  paintBrowseProgress();
-  return ()=>{browseProgressJobs.delete(seq);paintBrowseProgress()};
+  return ()=>{const removed=browseProgressJobs.delete(seq);if(job.taskID)window.wudictTasks?.finish(job.taskID);if(removed&&kind==="alphabet")logAlphabetTask("finish",scope)};
 }
-function paintBrowseProgress(){
-  const jobs=[...browseProgressJobs.values()],job=[...jobs].reverse().find(item=>item.kind==="find")||[...jobs].reverse().find(item=>item.cancel)||jobs.at(-1);
-  $("browseProgress").hidden=!job;
-  $("browseProgressText").textContent=job?.message||"";
-  const stop=$("browseProgressStop");stop.hidden=!job?.cancel;stop.onclick=job?.cancel||null;
+function logAlphabetTask(stage,dict){
+  if(browseDiagnosticsEnabled())sendBrowseDiagnostic({event:"alphabet_task",stage,dict,
+    words:window.wudictTasks?.activeCount?.()||0,status:$('serverWorkNotice')?.hidden?1:0});
 }
-function clearBrowseProgress(){for(const [id,job] of browseProgressJobs)if(job.kind!=="alphabet")browseProgressJobs.delete(id);paintBrowseProgress()}
-function updateBrowseProgress(message,kind="find"){
-  for(const job of [...browseProgressJobs.values()].reverse())if(job.kind===kind){job.message=message;paintBrowseProgress();return}
+function finishBrowseProgress(kind,scope){
+  for(const [id,job] of browseProgressJobs){
+    if(job.kind!==kind||scope&&job.scope!==scope)continue;
+    browseProgressJobs.delete(id);
+    const removed=job.taskID?window.wudictTasks?.finish(job.taskID):false;
+    if(kind==="alphabet")logAlphabetTask(removed?"finish_matching":"finish_missing",job.scope);
+  }
+  if(kind==="alphabet"&&![...browseProgressJobs.values()].some(job=>job.kind==="alphabet")){
+    window.wudictTasks?.finishMatching?.("browse",t("browse.loadingAlphabet"));
+    logAlphabetTask("panel_checked",scope||"");
+  }
 }
+function clearBrowseProgress(){for(const [id,job] of browseProgressJobs)if(job.kind!=="alphabet"){browseProgressJobs.delete(id);if(job.taskID)window.wudictTasks?.finish(job.taskID)}}
+addEventListener("pagehide",()=>{
+  for(const job of browseProgressJobs.values()){
+    try{job.cancel?.()}catch(_){ }
+    if(job.taskID)window.wudictTasks?.finish(job.taskID);
+  }
+  browseProgressJobs.clear();
+});
+function updateBrowseProgress(message,kind="find",progress={}){
+  for(const job of [...browseProgressJobs.values()].reverse())if(job.kind===kind){job.message=message;if(job.taskID)window.wudictTasks?.update(job.taskID,{message,...progress});return}
+}
+window.addEventListener("wudict-tasks-ready",()=>{for(const job of browseProgressJobs.values())attachBrowseProgress(job)});
 function setBrowsePageBusy(on){
   browsePageBusy=on;document.body.classList.toggle("browse-page-busy",on);
   if(on){
@@ -806,16 +886,35 @@ async function show(opts,record){
     const now=performance.now();
     if(now-alphabetTraceAt<5000&&at<total)return;
     alphabetTraceAt=now;
-    browseTrace("alphabet progress",{words:at,bytes:total,
+    browseTrace("alphabet progress",{dict:requestDictId,words:at,bytes:total,
       letters:browseAlphabetPartial.get(requestDictId)?.length||0,totalMs:Math.round(now-alphabetStarted)});
   };
   if(browsePageAbort&&browsePageAbort!==browseAlphabetTask?.controller)browsePageAbort.abort();
-  if(browseAlphabetTask&&browseAlphabetTask.dictId!==dictId){browseAlphabetTask.controller.abort();browseAlphabetTask=null}
+  if(browseAlphabetTask&&browseAlphabetTask.dictId!==dictId){
+    const previousAlphabet=browseAlphabetTask;
+    previousAlphabet.controller.abort();browseAlphabetTask=null;
+    finishBrowseProgress("alphabet",previousAlphabet.dictId);
+  }
   const controller=new AbortController();browsePageAbort=controller;
   if(streamAlphabet){browseAlphabetPartial.delete(dictId);browseAlphabetTask={dictId,controller}}
   setBrowsePageBusy(streamAlphabet);
-  let endProgress=()=>{},progressTimer=0,progressVisible=false;
-  const startProgress=()=>{if(progressVisible)return;progressVisible=true;endProgress=browseProgress(t("browse.loadingWords"),()=>controller.abort(),streamAlphabet?"alphabet":"page")};
+  let endProgress=()=>{},progressTimer=0,progressVisible=false,alphabetRenderTimer=0,lastAlphabetRender=0;
+  const renderAlphabetPartial=()=>{
+    alphabetRenderTimer=0;
+    if(browseAlphabetTask?.controller!==controller||!state||state.dict!==requestDictId)return;
+    state.alphabet=browseAlphabetPartial.get(requestDictId)||[];
+    lastAlphabetRender=performance.now();render();
+  };
+  const scheduleAlphabetRender=()=>{
+    if(alphabetRenderTimer)return;
+    alphabetRenderTimer=setTimeout(renderAlphabetPartial,Math.max(0,200-(performance.now()-lastAlphabetRender)));
+  };
+  const startProgress=()=>{
+    if(progressVisible)return;
+    progressVisible=true;
+    const message=streamAlphabet?t("browse.loadingAlphabet"):t("browse.loadingWords");
+    endProgress=browseProgress(message,()=>controller.abort(),streamAlphabet?"alphabet":"page",requestDictId);
+  };
   if(streamAlphabet)startProgress();else progressTimer=setTimeout(startProgress,220);
   last=opts;
   const u=new URLSearchParams({dict:dictId});
@@ -863,6 +962,20 @@ async function show(opts,record){
   }
   try{
     const reader=r.body.getReader(),decoder=new TextDecoder();let buffer="";
+    const completeAlphabet=total=>{
+      if(browseAlphabetTask?.controller!==controller||browseAlphabetTask.dictId!==requestDictId)return false;
+      clearTimeout(alphabetRenderTimer);alphabetRenderTimer=0;
+      const complete=browseAlphabetPartial.get(requestDictId)||[];
+      browseTrace("alphabet done",{dict:requestDictId,words:total,letters:complete.length,totalMs:Math.round(performance.now()-alphabetStarted)});
+      if(browseNavContext)logBrowseNavigation("alphabet_ready",performance.now()-alphabetStarted,{words:total});
+      saveBrowseAlphabet(requestDictId,total,complete.slice());browseAlphabetPartial.delete(requestDictId);
+      if(state&&state.dict===requestDictId){state.alphabet=complete;render();prefetchNextBrowsePage(state)}
+      browseAlphabetTask=null;
+      finishBrowseProgress("alphabet",requestDictId);
+      endProgress();
+      if(seq===browseSeq){setBrowsePageBusy(false);if(findResult&&!findFilter&&findIndex>=0)scheduleScrollToCurrentWord(seq)}
+      return true;
+    };
     const consume=async(final=false)=>{
       let newline;
       while((newline=buffer.indexOf("\n"))>=0||final&&buffer.length){
@@ -874,6 +987,10 @@ async function show(opts,record){
         if(event.type==="page"){
           if(seq!==browseSeq)continue;
           state=event.page;state.mark=opts.o!=null?opts.o:state.at;rememberBrowsePage(state);
+          if(browseAlphabetTask?.controller===controller){
+            const total=Math.max(0,Number(state.total)||0);
+            updateBrowseProgress(t("browse.loadingAlphabet")+" · "+num(0)+" / "+num(total),"alphabet",{done:0,total});
+          }
           chooserSearch?.destroy();chooserSearch=null;$("msg").classList.remove("chooser-list");$("msg").hidden=true;
           stripFor="";stripLettersPainted=0;render();
           recordBrowsePage(state.page,record);
@@ -886,32 +1003,40 @@ async function show(opts,record){
           const partial=browseAlphabetPartial.get(requestDictId)||[];
           partial.push(...(event.letters||[]));browseAlphabetPartial.set(requestDictId,partial);
           traceAlphabetProgress(event.at||0,event.total||0);
-          if(state&&state.dict===requestDictId){state.alphabet=partial;render()}
-          updateBrowseProgress(t("browse.loadingAlphabet")+" · "+num(event.at||0)+" / "+num(event.total||0),"alphabet");
+          if(Number(event.total)>0&&Number(event.at)>=Number(event.total))completeAlphabet(Number(event.total));
+          else{
+            if(state&&state.dict===requestDictId)scheduleAlphabetRender();
+            updateBrowseProgress(t("browse.loadingAlphabet")+" · "+num(event.at||0)+" / "+num(event.total||0),"alphabet",{done:event.at||0,total:event.total||0});
+          }
         }else if(event.type==="progress"){
-          if(browseAlphabetTask?.controller===controller&&browseAlphabetTask.dictId===requestDictId)updateBrowseProgress(t("browse.loadingAlphabet")+" · "+num(event.at||0)+" / "+num(event.total||0),"alphabet");
+          if(browseAlphabetTask?.controller===controller&&browseAlphabetTask.dictId===requestDictId)updateBrowseProgress(t("browse.loadingAlphabet")+" · "+num(event.at||0)+" / "+num(event.total||0),"alphabet",{done:event.at||0,total:event.total||0});
           traceAlphabetProgress(event.at||0,event.total||0);
         }else if(event.type==="done"){
-          if(browseAlphabetTask?.controller!==controller||browseAlphabetTask.dictId!==requestDictId)continue;
-          const complete=browseAlphabetPartial.get(requestDictId)||[];
-          browseTrace("alphabet done",{words:event.total||0,letters:complete.length,totalMs:Math.round(performance.now()-alphabetStarted)});
-          if(browseNavContext)logBrowseNavigation("alphabet_ready",performance.now()-alphabetStarted,{words:event.total||0});
-          saveBrowseAlphabet(requestDictId,event.total,complete.slice());browseAlphabetPartial.delete(requestDictId);
-          if(state&&state.dict===requestDictId){state.alphabet=complete;render()}
-          if(state&&state.dict===requestDictId)prefetchNextBrowsePage(state);
-          browseAlphabetTask=null;
-          endProgress();if(seq===browseSeq){setBrowsePageBusy(false);if(findResult&&!findFilter&&findIndex>=0)scheduleScrollToCurrentWord(seq)}
+          if(browseAlphabetTask?.controller!==controller||browseAlphabetTask.dictId!==requestDictId){
+            // A superseded request can still deliver its terminal event after
+            // the active alphabet task has moved to another dictionary. Close
+            // this request's own progress immediately; do not wait for EOF.
+            endProgress();continue;
+          }
+          completeAlphabet(Number(event.total)||0);
         }
       }
     };
     while(true){const {value,done}=await reader.read();if(done){buffer+=decoder.decode();await consume(true);break}buffer+=decoder.decode(value,{stream:true});await consume()}
     if(browseAlphabetTask?.controller===controller)browseAlphabetTask=null;
-    if(seq===browseSeq){endProgress();setBrowsePageBusy(false)}
+    // Every request owns its progress task, including a stream that finishes
+    // after another page request has made it stale. Never leave that old task
+    // spinning just because it no longer owns the visible page.
+    if(streamAlphabet)finishBrowseProgress("alphabet",requestDictId);
+    endProgress();
+    if(seq===browseSeq)setBrowsePageBusy(false);
   }catch(error){
+    clearTimeout(alphabetRenderTimer);
     if(streamAlphabet)browseTrace(error.name==="AbortError"?"alphabet aborted":"alphabet error",
       {status:error.name==="AbortError"?499:0,words:browseAlphabetPartial.get(requestDictId)?.length||0,
         letters:browseAlphabetPartial.get(requestDictId)?.length||0,totalMs:Math.round(performance.now()-alphabetStarted)});
     endProgress();
+    if(streamAlphabet)finishBrowseProgress("alphabet",requestDictId);
     if(browseAlphabetTask?.controller===controller)browseAlphabetTask=null;
     if(seq!==browseSeq)return;
     setBrowsePageBusy(false);
@@ -1353,6 +1478,7 @@ function render(){
   /* The strip belongs to the dictionary, not to the page, so it is built once
      and its visible window is rendered at a time. */
   $("stripWrap").hidden=!!filtering;
+  $("stripScrollbar").hidden=!!filtering;
   const strip=$("strip"),track=$("stripTrack"),stripStarted=performance.now();
   let stripBuilt=stripStarted,stripReady=stripStarted;
   if(!filtering){
@@ -1501,7 +1627,7 @@ async function chooser(){
       if(!response.ok||!prefsResponse.ok)throw new Error("load");
       [text,prefs]=await Promise.all([response.text(),prefsResponse.json()]);
     }
-  }catch(e){browseTrace("chooser failed",{totalMs:Math.round(performance.now()-chooserStarted)});logBrowseNavigation("load_failed",performance.now()-chooserStarted);endProgress();return card(heading+"<b>"+tx("browse.noAnswer")+"</b><p>"+tx("browse.loadFailed")+"</p>")}
+  }catch(e){browseTrace("chooser failed",{totalMs:Math.round(performance.now()-chooserStarted)});logBrowseNavigation("load_failed",performance.now()-chooserStarted);endProgress();clearBrowseProgress();window.wudictTasks?.finishMatching?.("browse",t("browse.loadingDictionaries"));return card(heading+"<b>"+tx("browse.noAnswer")+"</b><p>"+tx("browse.loadFailed")+"</p>")}
   endProgress();
   if(!window.wudictAndroidGo&&typeof window.wudictNativeCall!=="function"){
     for(const line of text.split("\n")){
@@ -1531,6 +1657,10 @@ async function chooser(){
   const ids=customOrder?ordered.slice(0,saved.length).concat(alpha(ordered.slice(saved.length))):alpha(ordered);
   ds.splice(0,ds.length,...ids.map(id=>byId.get(id)).filter(Boolean));
   browseTrace("chooser ready",{words:ds.length,totalMs:Math.round(performance.now()-chooserStarted)});
+  // The chooser is ready, so no dictionary-loading task should remain in the
+  // shared progress notice, including one left by an earlier visit.
+  clearBrowseProgress();
+  window.wudictTasks?.finishMatching?.("browse",t("browse.loadingDictionaries"));
   if(!ds.length)return card(heading+"<b>"+tx("browse.empty")+"</b><p>"+tx("browse.emptyBody")+
     '</p><p><a href="/">'+tx("browse.openApp")+"</a></p>");
   card(heading+"<div class='picks'>"+

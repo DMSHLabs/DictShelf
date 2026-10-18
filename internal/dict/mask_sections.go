@@ -7,6 +7,8 @@ package dict
 import (
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/wuweidict/wudict/internal/indexconst"
 )
 
 // MaskInitial groups a headword under the same readable initial as Browse.
@@ -44,7 +46,7 @@ type maskBoundary struct {
 
 // MaskPageSize is the fixed size of one mask result block. The server uses the
 // same size to page the matching headwords.
-const MaskPageSize = 300
+const MaskPageSize = indexconst.BrowsePageSize
 
 // MaskSections records the first matching headword of each result page.
 // The strip labels page starts, not every initial appearing inside a page.

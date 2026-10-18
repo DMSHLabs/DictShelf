@@ -4,9 +4,12 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"maps"
 	"net/http"
+	"time"
 
 	"github.com/wuweidict/wudict/internal/logx"
 	"github.com/wuweidict/wudict/internal/store"
@@ -125,6 +128,19 @@ func (r *Registry) queueNewDictionaries() error {
 		for _, other := range family {
 			key := other.indexRemovalKey()
 			if wanted, pending := f.DSLPending[key]; pending {
+				// A pending receipt may have been written before the user enabled
+				// optional indexes. Keep existing features and add the current
+				// defaults so a rescan can finish the requested setup.
+				if hasBrowseIndex(other.Path) {
+					if prepared, ok := preparedInfo(other.Path); ok {
+						wanted.Contains = wanted.Contains || prepared.Plan.Contains || defaults.Contains
+						wanted.FullText = wanted.FullText || prepared.Plan.FullText || defaults.FullText
+						if f.DSLPending[key] != wanted {
+							f.DSLPending[key] = wanted
+							changed = true
+						}
+					}
+				}
 				if preparedHasIndexes(other.Path, wanted) {
 					delete(f.DSLPending, key)
 					delete(f.DSLRemoved, key)
@@ -132,10 +148,25 @@ func (r *Registry) queueNewDictionaries() error {
 				}
 				continue
 			}
-			if hasBrowseIndex(other.Path) {
+			if f.DSLRemoved[key] {
 				continue
 			}
-			if f.DSLRemoved[key] {
+			if hasBrowseIndex(other.Path) {
+				// The base headword index already exists. Queue only the missing
+				// optional indexes, and leave the working base index available
+				// while they are built incrementally.
+				prepared, ok := preparedInfo(other.Path)
+				if !ok {
+					continue
+				}
+				wanted := defaults
+				wanted.Contains = wanted.Contains || prepared.Plan.Contains
+				wanted.FullText = wanted.FullText || prepared.Plan.FullText
+				if preparedHasIndexes(other.Path, wanted) {
+					continue
+				}
+				f.DSLPending[key] = wanted
+				changed = true
 				continue
 			}
 			f.DSLRemoved[key] = true
@@ -161,10 +192,21 @@ func preparedHasIndexes(path string, wanted indexOptions) bool {
 		(!wanted.FullText || prepared.Plan.FullText)
 }
 
-func (r *Registry) prepareNewDictionaries() {
+func (r *Registry) prepareNewDictionaries(parent ...*job) {
 	r.indexQueueMu.Lock()
 	defer r.indexQueueMu.Unlock()
+	type pendingIndex struct {
+		entry    *entry
+		key      string
+		plan     indexOptions
+		prepared bool
+	}
+	var queueJob *job
+	if len(parent) > 0 {
+		queueJob = parent[0]
+	}
 	entries := r.all()
+	var pending []pendingIndex
 	for _, e := range entries {
 		key := e.indexRemovalKey()
 		p := r.prefs
@@ -187,60 +229,127 @@ func (r *Registry) prepareNewDictionaries() {
 			e.gen.Add(1)
 			continue
 		}
-		jobKey := ingestKey(e.ID)
-		indexes := []string{"index"}
-		if v.Contains {
-			indexes = append(indexes, "contains")
-		}
-		if v.FullText {
-			indexes = append(indexes, "fullText")
-		}
-		_, started := r.jobs.start(jobKey, 0, jobStatus{Action: "create", Indexes: indexes}, func(j *job) {
-			progress := func(done, total int) {
-				j.update(func(st *jobStatus) { st.Done, st.Total = int64(done), int64(total) })
+		pending = append(pending, pendingIndex{entry: e, key: key, plan: v, prepared: hasBrowseIndex(e.Path)})
+	}
+	if queueJob != nil {
+		queueJob.update(func(st *jobStatus) {
+			st.Total = int64(len(pending))
+			st.QueuedDicts = make([]string, 0, len(pending))
+			for _, item := range pending {
+				st.QueuedDicts = append(st.QueuedDicts, item.entry.ID)
 			}
-			if err := e.restoreIndex(store.Plan{Contains: v.Contains, FullText: v.FullText}, progress, indexLimit); err != nil {
-				j.update(func(st *jobStatus) { st.Err = err.Error() })
-				// A failed automatic index is not a deliberate removal. Keep
-				// the pending plan for a later retry, but let direct search use
-				// the source while the prepared index is unavailable.
+		})
+	}
+	if len(pending) == 0 {
+		return
+	}
+	process := func(item pendingIndex) {
+		e := item.entry
+		ctx := context.Background()
+		cancel := func() {}
+		if queueJob != nil {
+			var ok bool
+			ctx, cancel, ok = queueJob.beginDictionary(e.ID)
+			if !ok {
+				return
+			}
+			queueJob.update(func(st *jobStatus) {
+				for i, id := range st.QueuedDicts {
+					if id == e.ID {
+						st.QueuedDicts = append(st.QueuedDicts[:i], st.QueuedDicts[i+1:]...)
+						break
+					}
+				}
+			})
+			trackJobDictionary(queueJob, e.ID, true)
+			defer func() {
+				queueJob.finishDictionary(e.ID, cancel)
+				trackJobDictionary(queueJob, e.ID, false)
+			}()
+			indexes := []string{"index"}
+			if item.prepared {
+				indexes = indexes[:0]
+			}
+			if item.plan.Contains {
+				indexes = append(indexes, "contains")
+			}
+			if item.plan.FullText {
+				indexes = append(indexes, "fullText")
+			}
+			queueJob.update(func(st *jobStatus) {
+				action := "create"
+				if item.prepared {
+					action = "update"
+				}
+				st.Stage, st.Current, st.Action, st.Indexes = e.ID, e.probeName(), action, indexes
+				st.CurrentDone, st.CurrentTotal = 0, 0
+			})
+			feature := "index"
+			action := "create"
+			if item.prepared {
+				feature, action = "", "update"
+			}
+			updateJobDictionaryProgress(queueJob, e.ID, e.probeName(), feature, action, 0, 0)
+		}
+		lastProgress := time.Time{}
+		progress := func(done, total int) {
+			if queueJob == nil || done != total && time.Since(lastProgress) < 200*time.Millisecond {
+				return
+			}
+			lastProgress = time.Now()
+			feature := "index"
+			action := "create"
+			if item.prepared {
+				feature, action = "", "update"
+			}
+			updateJobDictionaryProgress(queueJob, e.ID, e.probeName(), feature, action, int64(done), int64(total))
+		}
+		var err error
+		if item.prepared {
+			media := false
+			if prepared, ok := preparedInfo(e.Path); ok {
+				media = prepared.MediaPaired()
+			}
+			err = e.setFeaturesContext(ctx, features{Contains: item.plan.Contains, FullText: item.plan.FullText, Media: media}, progress)
+		} else {
+			err = e.restoreIndexContext(ctx, store.Plan{Contains: item.plan.Contains, FullText: item.plan.FullText}, progress, currentIndexLimit())
+		}
+		if err != nil {
+			canceled := errors.Is(err, context.Canceled) && ctx.Err() != nil
+			if queueJob != nil {
+				queueJob.update(func(st *jobStatus) {
+					if !canceled || errors.Is(err, store.ErrIngestTempCleanup) {
+						st.Failed = append(st.Failed, e.probeName()+": "+err.Error())
+					}
+				})
+			}
+			// A failed automatic index is not a deliberate removal. Keep its
+			// pending plan for retry, but let direct search use the source.
+			if !canceled {
 				if unblockErr := e.setIndexRemoved(false); unblockErr != nil {
 					logx.Warn("could not unblock dictionary after failed index %s: %v", e.Path, unblockErr)
 				}
-				store.IndexDiagnostic("new dictionary index failed source=%q dictionary=%q error=%q", e.Path, e.probeName(), err.Error())
-				logx.Warn("indexing new dictionary %s: %v", e.Path, err)
-				return
 			}
-			if st, _ := r.jobs.status(jobKey); st.StopRequested {
-				j.update(func(st *jobStatus) { st.Canceled = true })
-				return
-			}
+			store.IndexDiagnostic("new dictionary index failed source=%q dictionary=%q error=%q", e.Path, e.probeName(), err.Error())
+			logx.Warn("indexing new dictionary %s: %v", e.Path, err)
+		} else {
+			p := r.prefs
 			p.editMu.Lock()
-			err := p.mutate(func(f *prefsFile) { delete(f.DSLPending, key) })
+			clearErr := p.mutate(func(f *prefsFile) { delete(f.DSLPending, item.key) })
 			p.editMu.Unlock()
-			if err != nil {
-				j.update(func(st *jobStatus) { st.Err = err.Error() })
-				logx.Warn("saving index preparation state: %v", err)
+			if clearErr != nil {
+				if queueJob != nil {
+					queueJob.update(func(st *jobStatus) { st.Failed = append(st.Failed, e.probeName()+": "+clearErr.Error()) })
+				}
+				logx.Warn("saving index preparation state: %v", clearErr)
 			}
-		})
-		if !started {
-			st := r.jobs.wait(jobKey)
-			if st.Canceled || st.StopRequested {
-				return
-			}
-			if st.Err != "" {
-				logx.Warn("new dictionary index job did not complete: %s: %s", e.Path, st.Err)
-			}
-			continue
 		}
-		st := r.jobs.wait(jobKey)
-		if st.Canceled || st.StopRequested {
-			// Keep this and later entries pending. The next process start or
-			// rescan can resume the unfinished work.
-			return
+		if queueJob != nil {
+			queueJob.update(func(st *jobStatus) { st.Done++ })
 		}
-		if !started && st.Err != "" {
-			logx.Warn("new dictionary index job did not complete: %s: %s", e.Path, st.Err)
-		}
+	}
+	runIndexTasks(pending, func() bool { return queueJob != nil && queueJob.canceled() }, process)
+	if queueJob != nil && queueJob.canceled() {
+		queueJob.update(func(st *jobStatus) { st.Canceled = true })
 	}
 }

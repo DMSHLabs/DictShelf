@@ -5,6 +5,7 @@
 package store
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -80,6 +81,9 @@ func Always([]Reason) bool { return true }
 
 // Hooks are what a caller supplies around the work. All are optional.
 type Hooks struct {
+	// Context cancels cancellable text index builds. A committed database is
+	// never rolled back because a cancellation arrived afterwards.
+	Context context.Context
 	// Reader opens the source for an ingest, and is called only when one is
 	// needed. Reconcile closes the returned reader after ingestion. Nil opens
 	// dict.OpenReader with the same lifetime.
@@ -267,7 +271,11 @@ func ingest(src, textDB string, plan Plan, h Hooks, out *Outcome) (resultErr err
 	}
 	defer r.Close()
 	start := time.Now()
-	rep, err := IngestPlan(r, textDB, plan, h.Progress)
+	ctx := h.Context
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	rep, err := IngestPlanContext(ctx, r, textDB, plan, h.Progress)
 	if err != nil {
 		return err
 	}

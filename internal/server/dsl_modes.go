@@ -4,6 +4,7 @@
 package server
 
 import (
+	"context"
 	"path/filepath"
 	"strings"
 
@@ -93,14 +94,24 @@ func (e *entry) setIndexRemoved(removed bool) error {
 // restoreIndex rebuilds an index deliberately removed by the user, or finishes
 // the first index for a newly added dictionary.
 func (e *entry) restoreIndex(plan store.Plan, progress store.Progress, lane chan struct{}) error {
+	return e.restoreIndexContext(context.Background(), plan, progress, lane)
+}
+
+func (e *entry) restoreIndexContext(ctx context.Context, plan store.Plan, progress store.Progress, lane chan struct{}) error {
 	if nativeIndexOnly(e) {
 		store.IndexDiagnostic("skip restored index source=%q reason=native-index", e.Path)
 		return e.setIndexRemoved(false)
 	}
 	defer acquire(lane)()
 	defer HoldActiveProcs()()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	e.ingestMu.Lock()
 	defer e.ingestMu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	defer e.rebuilding.Store(false)
 	if !e.indexBlocked() {
 		return nil
@@ -112,7 +123,7 @@ func (e *entry) restoreIndex(plan store.Plan, progress store.Progress, lane chan
 	textDB := store.TextDBPath(dir)
 	prepared, ready := store.PreparedFor(e.Path)
 	if !ready || prepared != textDB || len(store.Inspect(textDB).TextStale(e.Path)) != 0 || store.KeptPlan(textDB) != plan {
-		if _, err := e.reconcileLocked(e.probeName(), store.Target{
+		if _, err := e.reconcileLockedContext(ctx, e.probeName(), store.Target{
 			FullText: &plan.FullText, Contains: &plan.Contains, Rebuild: store.Always,
 		}, progress); err != nil {
 			return err

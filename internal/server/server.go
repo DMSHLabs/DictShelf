@@ -2238,8 +2238,17 @@ func (s *Server) startIngest(e *entry, q url.Values) string {
 			j.update(func(js *jobStatus) { js.Done, js.Total = int64(done), int64(total) })
 		}
 		if e.indexBlocked() {
-			if err := e.restoreIndex(store.Plan{FullText: want.FullText, Contains: want.Contains}, progress, frontLimit); err != nil {
-				j.update(func(js *jobStatus) { js.Err = err.Error() })
+			if err := e.restoreIndexContext(j.ctx, store.Plan{FullText: want.FullText, Contains: want.Contains}, progress, currentIndexLimit()); err != nil {
+				j.update(func(js *jobStatus) {
+					if errors.Is(err, context.Canceled) && j.canceled() {
+						js.Canceled = true
+						if errors.Is(err, store.ErrIngestTempCleanup) {
+							js.Err = err.Error()
+						}
+					} else {
+						js.Err = err.Error()
+					}
+				})
 				return
 			}
 			if status, _ := s.jobs.status(key); status.StopRequested {
@@ -2249,8 +2258,17 @@ func (s *Server) startIngest(e *entry, q url.Values) string {
 		}
 		if entryHasSelfIndex(e) && !isZIMPath(e.Path) {
 			store.IndexDiagnostic("skip ingest source=%q dictionary=%q reason=native-index", e.Path, e.probeName())
-		} else if err := e.setFeatures(want, progress, q.Get("rebuild") == "1"); err != nil {
-			j.update(func(js *jobStatus) { js.Err = err.Error() })
+		} else if err := e.setFeaturesContext(j.ctx, want, progress, q.Get("rebuild") == "1"); err != nil {
+			j.update(func(js *jobStatus) {
+				if errors.Is(err, context.Canceled) && j.canceled() {
+					js.Canceled = true
+					if errors.Is(err, store.ErrIngestTempCleanup) {
+						js.Err = err.Error()
+					}
+				} else {
+					js.Err = err.Error()
+				}
+			})
 			return
 		}
 		if status, _ := s.jobs.status(key); status.StopRequested {
@@ -2276,6 +2294,7 @@ func (s *Server) stopIngest(key string) (map[string]bool, error) {
 		return nil, errors.New("invalid ingest job")
 	}
 	s.jobs.requestStop(key)
+	s.jobs.cancel(key)
 	return map[string]bool{"stopping": true}, nil
 }
 

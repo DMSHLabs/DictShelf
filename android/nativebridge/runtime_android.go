@@ -443,6 +443,10 @@ func WudictGoBridgeIndexWork(action, id, body *C.char) *C.char {
 		method, argument = "startSingleIndexWork", C.GoString(body)
 	case "stop":
 		method = "stopIndexWork"
+	case "stopDictionary":
+		method = "stopIndexWork"
+		request, _ := json.Marshal(map[string]string{"id": C.GoString(id), "dict": C.GoString(body)})
+		argument = string(request)
 	default:
 		return C.CString(`{"status":400,"body":{"error":"invalid index action"}}`)
 	}

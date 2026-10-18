@@ -49,9 +49,19 @@ func (s *Server) workLocks() (bool, []string) {
 	}
 	s.jobs.mu.Lock()
 	for key, j := range s.jobs.jobs {
-		if j.st.Running && key != "initial-index-queue" {
-			add(key)
+		if !j.st.Running {
+			continue
 		}
+		if key == "initial-index-queue" {
+			for _, id := range j.st.QueuedDicts {
+				ids[id] = true
+			}
+			for _, id := range j.st.ActiveDicts {
+				ids[id] = true
+			}
+			continue
+		}
+		add(key)
 	}
 	s.jobs.mu.Unlock()
 	dictionaries := make([]string, 0, len(ids))
