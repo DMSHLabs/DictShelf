@@ -49,20 +49,20 @@ them are in `docs/handoff-archive.md`.
   process after a restart. The page also caches its CSS by the `?v=` hash, so
   the browser must be reloaded after the server is really new.
 - Go: `go build ./...`; targeted `go test ./internal/<pkg> -run '...' -count=1`.
-- **`build-windows.cmd [debug|release] [purego] [console]`** — the fork's desktop build
+- **`build-windows.cmd [debug|release] [console]`** — the fork's desktop build
   (added 2026-09-28, beside `build-android.cmd`): one `wuDict2.exe` in the repo root,
   upstream's product (wuDict, port 6888, its own config and library), NOT the
   Android app. **Every machine path it needs is in one block at the top of the
   file** — `GCC_PATH` (pinned to Qt's mingw-w64 GCC; empty falls back to `%CC%`,
   then `gcc.exe` on PATH, then `GCC_ROOTS`), `GCC_ROOTS`, `ISCC_PATH` — and each
   of those respects a value inherited from the environment, the way
-  build-android.cmd respects `ANDROID_HOME`. Flavour is chosen for you: cgo
-  (`-tags sqlite_fts5`, CGO_ENABLED=1) when a C compiler can be found, the
-  pure-Go one when it cannot (`purego` forces the second). On this machine the
-  Qt GCC 13.1.0 is found, so the default build here IS the cgo one — what
-  `make build` and the CI cgo job ship. `cl.exe` is unusable: Go's cgo drives a
-  gcc-style compiler, not MSVC. Verified 2026-09-28: both flavours build, run,
-  and the cgo exe ingests a `test_data` `.dsl.dz` and answers `fts` (mattn +
+  build-android.cmd respects `ANDROID_HOME`. Windows desktop always requires
+  cgo (`-tags sqlite_fts5`, CGO_ENABLED=1); there is no purego option or
+  fallback. If no compatible GCC is found, the script exits before replacing
+  the existing executable. On this machine the Qt GCC 13.1.0 is found, which
+  produces what `make build` and the CI cgo job ship. `cl.exe` is unusable: Go's
+  cgo drives a gcc-style compiler, not MSVC. Verified 2026-09-28: the cgo exe
+  builds, runs, ingests a `test_data` `.dsl.dz` and answers `fts` (mattn +
   FTS5 inside the artifact; tags, CGO flag and driver are read back out of it
   with `go version -m`); its imports are KERNEL32 and msvcrt only, so no mingw
   DLL has to sit beside it.

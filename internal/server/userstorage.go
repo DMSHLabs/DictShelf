@@ -39,12 +39,8 @@ var userStorageHistoryKeys = map[string]bool{
 }
 
 var userStorageTransientKeys = map[string]bool{
-	"wudict_browse_diagnostics":           true,
-	"wudict_dictionary_list_diagnostics":  true,
-	"wudict_dictionary_cache_diagnostics": true,
-	"wudict_folder_diagnostics":           true,
-	"wudict_order":                        true,
-	"wudict_native_storage_seed_v1":       true,
+	"wudict_order":                  true,
+	"wudict_native_storage_seed_v1": true,
 }
 
 // userStorageMu serializes settings/history snapshots and the first-run
@@ -240,8 +236,8 @@ func (s *Server) importLegacyStorageContext(ctx context.Context, raw string) err
 }
 
 // saveUserStorage persists a complete durable localStorage snapshot. History
-// entries remain in their own file; diagnostics and migration markers are
-// intentionally omitted from both documents.
+// entries remain in their own file. Ephemeral display state and migration
+// markers are omitted; diagnostic preferences are durable across restarts.
 func (s *Server) saveUserStorage(raw string) error {
 	if len(raw) > 8<<20 {
 		return errors.New("settings snapshot is too large")

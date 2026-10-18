@@ -142,6 +142,7 @@ The user confirmed that the former Language dialog worked and Browse changed lan
 - [ ] Confirm that Language remains only in Settings; the first-run Folders page no longer has a separate selector, at the user's request.
 - [ ] Check phone widths: 320/360px, long labels, search modes, Examples buttons, System Settings, and the CSS editor. Specifically check Settings labels: `Оформления`, `Размер шрифта`, `Толщина шрифта`, `Компактно`, `Примеры`, and `Нижняя панель` must be fully readable on one line; appearance-row controls must begin at the same x coordinate; `Читать вслух` in Results must be fully visible with its pair beside it. A control should move to a second line only when that row's content really lacks room, and the three appearance buttons must wrap together.
 - [ ] Check day/night, custom background color, wallpaper, and Quiet labels. Translation must not restore grey text to active controls or break window appearance.
+- [ ] Verify **Camera area and system bars** appears only in Android Appearance, not Windows WebView; check the EN/RU labels and Android controls after rebuilding.
 - [ ] Check Russian counts: 1/2/5/11/21/22; limited results with `+`; long dictionary/group names and paths.
 - [ ] Check import, notifications, and native dialogs in the required flavors; Android's system picker may remain in the system language.
 - [ ] Check Advanced: inherited value, ranges, invalid input, restore, and the notice about applying settings on next opening. Do not change real settings solely for testing without necessity and an authorized context.

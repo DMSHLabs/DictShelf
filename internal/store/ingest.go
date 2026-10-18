@@ -5,6 +5,7 @@
 package store
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"database/sql"
@@ -22,13 +23,16 @@ import (
 	"github.com/wuweidict/wudict/internal/artmark"
 
 	"github.com/wuweidict/wudict/internal/dict"
+	"github.com/wuweidict/wudict/internal/indexconst"
 )
 
 // Progress is called during ingest with entries processed so far and the
 // total (0 when unknown).
 type Progress func(done, total int)
 
-const batchSize = 5000
+const batchSize = indexconst.IngestBatchSize
+
+var ErrIngestTempCleanup = errors.New("could not remove temporary index files")
 
 // The meta `ingest_level` values: whether article text was indexed for
 // full-text search. On-disk format - read only through PlanFromMeta.
@@ -59,6 +63,16 @@ type Plan struct {
 // to a temp file, renamed on success). The FTS index is built inside the same
 // transaction as the data (FTS-audit #3).
 func IngestPlan(r dict.Reader, dbPath string, plan Plan, progress Progress) (rep Report, err error) {
+	return IngestPlanContext(context.Background(), r, dbPath, plan, progress)
+}
+
+// IngestPlanContext builds a replacement database and observes ctx between
+// reader records and the expensive SQLite phases. A canceled ingest never
+// renames its temporary database over the prepared one.
+func IngestPlanContext(ctx context.Context, r dict.Reader, dbPath string, plan Plan, progress Progress) (rep Report, err error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	srcMeta := r.Meta()
 	trace := newIndexTrace(srcMeta.Path, dbPath, plan)
 	defer func() {
@@ -86,20 +100,38 @@ func IngestPlan(r dict.Reader, dbPath string, plan Plan, progress Progress) (rep
 	}
 	tmp := tempDBName(dbPath)
 	_ = os.Remove(tmp)
+	var db *sql.DB
 	defer func() {
-		if err != nil {
-			_ = os.Remove(tmp)
+		panicValue := recover()
+		if db != nil {
+			if closeErr := db.Close(); err == nil && closeErr != nil {
+				err = closeErr
+			}
+		}
+		if err != nil || panicValue != nil {
+			if cleanupErr := removeIngestTemp(tmp); cleanupErr != nil {
+				if panicValue == nil {
+					err = errors.Join(err, fmt.Errorf("%w: %v", ErrIngestTempCleanup, cleanupErr))
+				} else {
+					IndexDiagnostic("could not clean interrupted ingest temp=%q error=%v", tmp, cleanupErr)
+				}
+			}
+		}
+		if panicValue != nil {
+			panic(panicValue)
 		}
 	}()
+	if err = ctx.Err(); err != nil {
+		return rep, err
+	}
 	if err := os.MkdirAll(filepath.Dir(dbPath), 0o755); err != nil {
 		return rep, err
 	}
 
-	db, err := sql.Open(driverName, dsnIngest(tmp))
+	db, err = sql.Open(driverName, dsnIngest(tmp))
 	if err != nil {
 		return rep, err
 	}
-	defer db.Close()
 	// One connection, deliberately. An ingest is a single writer, so a pool
 	// buys nothing - and the scratch tables below are TEMP tables, which live
 	// on the connection that made them. A second connection would not see them.
@@ -108,14 +140,15 @@ func IngestPlan(r dict.Reader, dbPath string, plan Plan, progress Progress) (rep
 	// keep a 2.9M-headword ingest off the heap, and temp_store=MEMORY would put
 	// them right back on it. SQLite's default is already FILE on every build we
 	// ship; saying so makes it independent of how the driver was compiled.
-	if _, err = db.Exec("PRAGMA temp_store = FILE"); err != nil {
+	if _, err = db.ExecContext(ctx, "PRAGMA temp_store = FILE"); err != nil {
 		return rep, err
 	}
 
-	if _, err = db.Exec(fmt.Sprintf(`
+	if _, err = db.ExecContext(ctx, fmt.Sprintf(`
 		PRAGMA user_version = %d;
 		CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT);
 		CREATE TABLE entry(id INTEGER PRIMARY KEY, w TEXT NOT NULL, wf TEXT NOT NULL, wc TEXT NOT NULL, m TEXT NOT NULL);
+		CREATE TABLE browse_anchor(ordinal INTEGER PRIMARY KEY, entry_id INTEGER NOT NULL, w TEXT NOT NULL);
 		CREATE TABLE alias(w TEXT NOT NULL, wf TEXT NOT NULL, wc TEXT NOT NULL, entry_id INTEGER NOT NULL REFERENCES entry(id));
 		CREATE VIRTUAL TABLE entry_fts USING fts5(
 			w, txt, content='', columnsize=0,
@@ -124,7 +157,7 @@ func IngestPlan(r dict.Reader, dbPath string, plan Plan, progress Progress) (rep
 		return rep, err
 	}
 	if plan.Contains {
-		if _, err = db.Exec(`CREATE VIRTUAL TABLE entry_trigram USING fts5(
+		if _, err = db.ExecContext(ctx, `CREATE VIRTUAL TABLE entry_trigram USING fts5(
 			w, content='', columnsize=0, tokenize='trigram')`); err != nil {
 			return rep, err
 		}
@@ -166,7 +199,7 @@ func IngestPlan(r dict.Reader, dbPath string, plan Plan, progress Progress) (rep
 	// entry; plink is one row per unresolved redirect. TEMP means SQLite keeps
 	// them in its own temp file and discards them when the connection closes,
 	// so nothing here reaches the text.db that ships.
-	if _, err = tx.Exec(`
+	if _, err = tx.ExecContext(ctx, `
 		CREATE TEMP TABLE wref(w TEXT NOT NULL, lw TEXT NOT NULL, id INTEGER NOT NULL);
 		CREATE TEMP TABLE plink(w TEXT NOT NULL, target TEXT NOT NULL);
 	`); err != nil {
@@ -185,12 +218,18 @@ func IngestPlan(r dict.Reader, dbPath string, plan Plan, progress Progress) (rep
 
 	trace.phase("scan articles: headwords, fulltext and contains per plan")
 	for {
+		if err = ctx.Err(); err != nil {
+			return rep, err
+		}
 		e, rerr := r.Next()
 		if errors.Is(rerr, io.EOF) {
 			break
 		}
 		if rerr != nil {
 			return rep, rerr
+		}
+		if err = ctx.Err(); err != nil {
+			return rep, err
 		}
 		if len(e.Headwords) == 0 {
 			continue
@@ -200,7 +239,7 @@ func IngestPlan(r dict.Reader, dbPath string, plan Plan, progress Progress) (rep
 			continue
 		}
 		if e.LinkTo != "" {
-			if _, err = insLink.Exec(hw, e.LinkTo); err != nil {
+			if _, err = insLink.ExecContext(ctx, hw, e.LinkTo); err != nil {
 				return rep, err
 			}
 			linkCount++
@@ -211,33 +250,33 @@ func IngestPlan(r dict.Reader, dbPath string, plan Plan, progress Progress) (rep
 			return rep, err2
 		}
 		id++
-		if _, err = insEntry.Exec(id, hw, dict.Fold(hw), dict.CaseKey(hw), encodeBody(body)); err != nil {
+		if _, err = insEntry.ExecContext(ctx, id, hw, dict.Fold(hw), dict.CaseKey(hw), encodeBody(body)); err != nil {
 			return rep, err
 		}
 		txt := ""
 		if plan.FullText {
 			txt = StripHTML(body)
 		}
-		if _, err = insFts.Exec(id, hw, txt); err != nil {
+		if _, err = insFts.ExecContext(ctx, id, hw, txt); err != nil {
 			return rep, err
 		}
 		// trigram index over the accent/case-folded headword powers the
 		// "contains" substring mode (built only when asked for).
 		if insTrig != nil {
-			if _, err = insTrig.Exec(id, dict.Fold(hw)); err != nil {
+			if _, err = insTrig.ExecContext(ctx, id, dict.Fold(hw)); err != nil {
 				return rep, err
 			}
 		}
 		if isSubEntry(hw) {
 			subEntries++
 		}
-		if _, err = insWref.Exec(hw, strings.ToLower(hw), id); err != nil {
+		if _, err = insWref.ExecContext(ctx, hw, strings.ToLower(hw), id); err != nil {
 			return rep, err
 		}
 		for _, extra := range e.Headwords[1:] {
 			extra = strings.TrimSpace(extra)
 			if extra != "" && extra != hw {
-				if _, err = insAlias.Exec(extra, dict.Fold(extra), dict.CaseKey(extra), id); err != nil {
+				if _, err = insAlias.ExecContext(ctx, extra, dict.Fold(extra), dict.CaseKey(extra), id); err != nil {
 					return rep, err
 				}
 			}
@@ -266,7 +305,7 @@ func IngestPlan(r dict.Reader, dbPath string, plan Plan, progress Progress) (rep
 		// believed - a bar that reads 103% is a bug report about arithmetic,
 		// while one that sits at 100% while the last records land is what the
 		// client already renders as "finishing…".
-		if unresolved, err = resolveLinks(tx, insAlias, func(done int) {
+		if unresolved, err = resolveLinks(ctx, tx, insAlias, func(done int) {
 			donerec = clampDone(int(id)+done, total)
 			if progress != nil {
 				progress(donerec, total)
@@ -338,49 +377,70 @@ func IngestPlan(r dict.Reader, dbPath string, plan Plan, progress Progress) (rep
 		}
 	}
 	for k, v := range metaKV {
-		if _, err = tx.Exec("INSERT INTO meta(key, value) VALUES(?, ?)", k, v); err != nil {
+		if _, err = tx.ExecContext(ctx, "INSERT INTO meta(key, value) VALUES(?, ?)", k, v); err != nil {
 			return rep, err
 		}
 	}
 
 	trace.phase("headword index")
-	if _, err = tx.Exec("CREATE INDEX idx_entry_w ON entry(w COLLATE NOCASE)"); err != nil {
+	if err = ctx.Err(); err != nil {
 		return rep, err
 	}
-	if _, err = tx.Exec("CREATE INDEX idx_alias_w ON alias(w COLLATE NOCASE)"); err != nil {
+	if _, err = tx.ExecContext(ctx, "CREATE INDEX idx_entry_w ON entry(w COLLATE NOCASE)"); err != nil {
 		return rep, err
 	}
-	if _, err = tx.Exec("CREATE INDEX idx_entry_wf ON entry(wf COLLATE NOCASE)"); err != nil {
+	trace.phase("browse seek anchors")
+	if _, err = tx.ExecContext(ctx, `INSERT INTO browse_anchor(ordinal, entry_id, w)
+		SELECT ordinal, id, w FROM (
+			SELECT ROW_NUMBER() OVER (ORDER BY w COLLATE NOCASE, id) - 1 AS ordinal, id, w
+			FROM entry WHERE w NOT LIKE '@_%'
+		) WHERE ordinal % ? = 0`, indexconst.BrowseAnchorStride); err != nil {
 		return rep, err
 	}
-	if _, err = tx.Exec("CREATE INDEX idx_alias_wf ON alias(wf COLLATE NOCASE)"); err != nil {
+	if _, err = tx.ExecContext(ctx, "CREATE INDEX idx_browse_anchor_w ON browse_anchor(w COLLATE NOCASE, entry_id)"); err != nil {
 		return rep, err
 	}
-	if _, err = tx.Exec("CREATE INDEX idx_entry_wc ON entry(wc COLLATE NOCASE)"); err != nil {
+	if _, err = tx.ExecContext(ctx, "CREATE INDEX idx_alias_w ON alias(w COLLATE NOCASE)"); err != nil {
 		return rep, err
 	}
-	if _, err = tx.Exec("CREATE INDEX idx_alias_wc ON alias(wc COLLATE NOCASE)"); err != nil {
+	if _, err = tx.ExecContext(ctx, "CREATE INDEX idx_entry_wf ON entry(wf COLLATE NOCASE)"); err != nil {
+		return rep, err
+	}
+	if _, err = tx.ExecContext(ctx, "CREATE INDEX idx_alias_wf ON alias(wf COLLATE NOCASE)"); err != nil {
+		return rep, err
+	}
+	if _, err = tx.ExecContext(ctx, "CREATE INDEX idx_entry_wc ON entry(wc COLLATE NOCASE)"); err != nil {
+		return rep, err
+	}
+	if _, err = tx.ExecContext(ctx, "CREATE INDEX idx_alias_wc ON alias(wc COLLATE NOCASE)"); err != nil {
 		return rep, err
 	}
 	trace.phase("commit")
+	if err = ctx.Err(); err != nil {
+		return rep, err
+	}
 	if err = tx.Commit(); err != nil {
 		return rep, err
 	}
 	trace.phase("optimize fulltext index")
-	if _, err = db.Exec("INSERT INTO entry_fts(entry_fts) VALUES('optimize')"); err != nil {
+	if _, err = db.ExecContext(ctx, "INSERT INTO entry_fts(entry_fts) VALUES('optimize')"); err != nil {
 		return rep, err
 	}
 	if plan.Contains {
 		trace.phase("optimize contains index")
-		if _, err = db.Exec("INSERT INTO entry_trigram(entry_trigram) VALUES('optimize')"); err != nil {
+		if _, err = db.ExecContext(ctx, "INSERT INTO entry_trigram(entry_trigram) VALUES('optimize')"); err != nil {
 			return rep, err
 		}
 	}
 	trace.phase("optimize database")
-	if _, err = db.Exec("ANALYZE; PRAGMA optimize;"); err != nil {
+	if _, err = db.ExecContext(ctx, "ANALYZE; PRAGMA optimize;"); err != nil {
 		return rep, err
 	}
 	if err = db.Close(); err != nil {
+		return rep, err
+	}
+	db = nil
+	if err = ctx.Err(); err != nil {
 		return rep, err
 	}
 	if progress != nil {
@@ -388,9 +448,15 @@ func IngestPlan(r dict.Reader, dbPath string, plan Plan, progress Progress) (rep
 		// dictionary that would end the run by snapping the bar back to 2%.
 		progress(donerec, total)
 	}
+	if err = ctx.Err(); err != nil {
+		return rep, err
+	}
 	rep = Report{Entries: int(id), UnresolvedLinks: unresolved}
 	trace.phase("save database")
 	syncFile(tmp)
+	if err = ctx.Err(); err != nil {
+		return rep, err
+	}
 	if err = os.Rename(tmp, dbPath); err != nil {
 		return rep, err
 	}
@@ -400,6 +466,25 @@ func IngestPlan(r dict.Reader, dbPath string, plan Plan, progress Progress) (rep
 		_ = WriteInfo(filepath.Dir(dbPath))
 	}
 	return rep, nil
+}
+
+func removeIngestTemp(path string) error {
+	var joined error
+	for _, candidate := range []string{path, path + "-journal", path + "-wal", path + "-shm"} {
+		var err error
+		for attempt := 0; attempt < 3; attempt++ {
+			err = os.Remove(candidate)
+			if err == nil || errors.Is(err, os.ErrNotExist) {
+				err = nil
+				break
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
+		if err != nil {
+			joined = errors.Join(joined, fmt.Errorf("remove temporary index file %q: %w", candidate, err))
+		}
+	}
+	return joined
 }
 
 // linkPage bounds how many pending redirects are held in memory at once while
@@ -429,8 +514,11 @@ func clampDone(done, total int) int {
 	return done
 }
 
-func resolveLinks(tx *sql.Tx, insAlias *sql.Stmt, done func(int)) (int, error) {
-	if _, err := tx.Exec("CREATE INDEX temp.ix_wref_lw ON wref(lw)"); err != nil {
+func resolveLinks(ctx context.Context, tx *sql.Tx, insAlias *sql.Stmt, done func(int)) (int, error) {
+	if err := ctx.Err(); err != nil {
+		return 0, err
+	}
+	if _, err := tx.ExecContext(ctx, "CREATE INDEX temp.ix_wref_lw ON wref(lw)"); err != nil {
 		return 0, err
 	}
 	sel, err := tx.Prepare("SELECT w, id FROM wref WHERE lw = ? ORDER BY id")
@@ -452,7 +540,10 @@ func resolveLinks(tx *sql.Tx, insAlias *sql.Stmt, done func(int)) (int, error) {
 	var after int64
 	buf := make([]pending, 0, linkPage)
 	for {
-		rows, err := page.Query(after, linkPage)
+		if err := ctx.Err(); err != nil {
+			return unresolved, err
+		}
+		rows, err := page.QueryContext(ctx, after, linkPage)
 		if err != nil {
 			return unresolved, err
 		}
@@ -476,7 +567,10 @@ func resolveLinks(tx *sql.Tx, insAlias *sql.Stmt, done func(int)) (int, error) {
 			return unresolved, nil
 		}
 		for _, l := range buf {
-			id, ok, err := lookupTarget(sel, l.target)
+			if err := ctx.Err(); err != nil {
+				return unresolved, err
+			}
+			id, ok, err := lookupTarget(ctx, sel, l.target)
 			if err != nil {
 				return unresolved, err
 			}
@@ -484,7 +578,7 @@ func resolveLinks(tx *sql.Tx, insAlias *sql.Stmt, done func(int)) (int, error) {
 				unresolved++
 				continue
 			}
-			if _, err := insAlias.Exec(l.w, dict.Fold(l.w), dict.CaseKey(l.w), id); err != nil {
+			if _, err := insAlias.ExecContext(ctx, l.w, dict.Fold(l.w), dict.CaseKey(l.w), id); err != nil {
 				return unresolved, err
 			}
 		}
@@ -499,8 +593,8 @@ func resolveLinks(tx *sql.Tx, insAlias *sql.Stmt, done func(int)) (int, error) {
 
 // lookupTarget finds the entry a redirect points at: the lowest-id entry whose
 // headword equals target, else the lowest-id entry whose folded headword does.
-func lookupTarget(sel *sql.Stmt, target string) (int64, bool, error) {
-	rows, err := sel.Query(strings.ToLower(target))
+func lookupTarget(ctx context.Context, sel *sql.Stmt, target string) (int64, bool, error) {
+	rows, err := sel.QueryContext(ctx, strings.ToLower(target))
 	if err != nil {
 		return 0, false, err
 	}
@@ -508,6 +602,9 @@ func lookupTarget(sel *sql.Stmt, target string) (int64, bool, error) {
 	var fallback int64
 	var haveFallback bool
 	for rows.Next() {
+		if err := ctx.Err(); err != nil {
+			return 0, false, err
+		}
 		var w string
 		var id int64
 		if err := rows.Scan(&w, &id); err != nil {

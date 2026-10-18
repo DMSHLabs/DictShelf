@@ -20,6 +20,7 @@ import (
 	"runtime/debug"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -358,20 +359,28 @@ func (u *upgraded) Close() error {
 	return u.Store.Close() // Store.Close also closes its attached media.db
 }
 
-// New dictionaries and background reindex jobs use indexLimit
-// (INDEX_WORKERS, default 1). Explicit per-dictionary changes use frontLimit,
-// so they do not wait behind background work.
+// Every operation that prepares or changes a dictionary index shares one
+// limiter. Per-entry ingestMu keeps operations for the same dictionary in
+// sequence; this limiter lets INDEX_WORKERS dictionaries run at once.
 var (
-	indexLimit = make(chan struct{}, 1)
-	frontLimit = make(chan struct{}, 1)
+	indexLimitMu sync.RWMutex
+	indexLimit   = make(chan struct{}, 1)
 )
+
+func currentIndexLimit() chan struct{} {
+	indexLimitMu.RLock()
+	defer indexLimitMu.RUnlock()
+	return indexLimit
+}
 
 // SetIndexWorkers sizes the background indexing limiter (config INDEX_WORKERS).
 func SetIndexWorkers(n int) {
 	if n < 1 {
 		n = 1
 	}
+	indexLimitMu.Lock()
 	indexLimit = make(chan struct{}, n)
+	indexLimitMu.Unlock()
 }
 
 // acquire blocks until a slot of sem is free and returns what frees it. The
@@ -1234,8 +1243,8 @@ func (r *Registry) rescan(prepare bool) error {
 	f, _ := r.prefs.data()
 	if len(f.DSLPending) != 0 {
 		r.indexQueueMu.Lock()
-		r.jobs.start("initial-index-queue", 0, jobStatus{}, func(*job) {
-			r.prepareNewDictionaries()
+		r.jobs.start("initial-index-queue", 0, jobStatus{}, func(j *job) {
+			r.prepareNewDictionaries(j)
 		})
 		r.indexQueueMu.Unlock()
 	}
@@ -1818,22 +1827,37 @@ type features struct {
 // doubles the working set of the largest thing in the process
 // (docs.local/PERF.md M3). Only a media pack needs a backend (mediaBackend).
 func (e *entry) reconcile(name string, t store.Target, progress store.Progress) (store.Outcome, error) {
+	return e.reconcileContext(context.Background(), name, t, progress)
+}
+
+func (e *entry) reconcileContext(ctx context.Context, name string, t store.Target, progress store.Progress) (store.Outcome, error) {
 	e.ingestMu.Lock()
 	defer e.ingestMu.Unlock()
-	return e.reconcileLocked(name, t, progress)
+	if err := ctx.Err(); err != nil {
+		return store.Outcome{}, err
+	}
+	return e.reconcileLockedContext(ctx, name, t, progress)
 }
 
 // reconcileLocked is reconcile for a caller that already holds ingestMu for
 // its whole operation - this fork's clear-database and DSL-index-restore
 // paths do - so it must not take the lock a second time.
 func (e *entry) reconcileLocked(name string, t store.Target, progress store.Progress) (store.Outcome, error) {
+	return e.reconcileLockedContext(context.Background(), name, t, progress)
+}
+
+func (e *entry) reconcileLockedContext(ctx context.Context, name string, t store.Target, progress store.Progress) (store.Outcome, error) {
 	defer e.rebuilding.Store(false) // releasePrepared may have armed it
+	if err := ctx.Err(); err != nil {
+		return store.Outcome{}, err
+	}
 	zim := isZIMPath(e.Path)
 	if entryHasSelfIndex(e) && !zim {
 		store.IndexDiagnostic("skip prepared database source=%q dictionary=%q reason=native-index", e.Path, name)
 		return store.Outcome{}, nil
 	}
 	hooks := store.Hooks{
+		Context:       ctx,
 		Release:       func(textDB string) { releasePrepared(e, textDB) },
 		Backend:       e.mediaBackend,
 		Progress:      progress,
@@ -1853,7 +1877,8 @@ func (e *entry) reconcileLocked(name string, t store.Target, progress store.Prog
 		}
 	}
 	out, err := store.Reconcile(e.Path, t, hooks)
-	if err != nil && e.reg != nil {
+	canceled := errors.Is(err, context.Canceled) && ctx.Err() != nil
+	if err != nil && !canceled && e.reg != nil {
 		e.reg.excludeDamaged(e, err)
 	}
 	if out.Rebuilt {
@@ -1885,7 +1910,7 @@ func (e *entry) reconcileLocked(name string, t store.Target, progress store.Prog
 	stale := e.d != nil && e.backing != out.TextDB
 	e.dMu.RUnlock()
 	var rerr error
-	if out.Changed() || (err == nil && stale) {
+	if out.Changed() || (err == nil && stale) || canceled {
 		rerr = e.reopen()
 	}
 	// What this entry's /api/dicts row is derived from moved - or may have,
@@ -1943,15 +1968,42 @@ func (e *entry) mediaBackend() (dict.Dictionary, func(), error) {
 // dictionary whose source is gone carries the only copy of its own text, so
 // its features are locked rather than dangerous.
 func (e *entry) setFeatures(want features, progress store.Progress, force ...bool) error {
-	defer acquire(frontLimit)() // the user is waiting: never queue behind background work
+	return e.setFeaturesContext(context.Background(), want, progress, force...)
+}
+
+func (e *entry) setFeaturesContext(ctx context.Context, want features, progress store.Progress, force ...bool) error {
+	defer acquire(currentIndexLimit())()
 	// The user ticked a box and is watching a progress bar: the longest
 	// user-visible operation the app has keeps every core it started with,
 	// and the Android shell keeps its foreground service up (power.go).
 	// Refcounted, so nesting with a concurrent demand is safe.
 	defer HoldActiveProcs()()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	name := e.probeName()
 	if store.IsTextDB(e.Path) {
 		return fmt.Errorf("%q is a prepared dictionary - its original files are gone, so its data cannot be rebuilt", name)
+	}
+	if want.FullText && progress != nil {
+		// Some readers cannot report a source record count. The prepared index
+		// still knows how many article rows its ingest processed: entry_count
+		// excludes hidden @-subentries, so add them back to match ingest's
+		// progress unit. This is a fallback; a non-zero source total wins below.
+		knownTotal := preparedIngestCount(e.Path)
+		if knownTotal > 0 {
+			progress(0, knownTotal)
+			callerProgress := progress
+			progress = func(done, total int) {
+				if total <= 0 {
+					total = knownTotal
+				}
+				if total > 0 && done > total {
+					done = total
+				}
+				callerProgress(done, total)
+			}
+		}
 	}
 	media := store.MediaOff
 	if want.Media {
@@ -1963,11 +2015,31 @@ func (e *entry) setFeatures(want features, progress store.Progress, force ...boo
 	if len(force) > 0 && force[0] {
 		rebuild = store.Always
 	}
-	_, err := e.reconcile(name, store.Target{
+	_, err := e.reconcileContext(ctx, name, store.Target{
 		FullText: &want.FullText, Contains: &want.Contains,
 		Media: media, Rebuild: rebuild,
 	}, progress)
 	return err
+}
+
+// preparedIngestCount returns the article records represented by the current
+// prepared index, including hidden subentries. It is used only as a progress
+// fallback when a reader has no source count of its own.
+func preparedIngestCount(path string) int {
+	textDB := backingDB(path)
+	if textDB == "" {
+		return 0
+	}
+	p := store.Inspect(textDB)
+	if !p.Usable() {
+		return 0
+	}
+	entries, _ := strconv.Atoi(p.Meta["entry_count"])
+	subEntries, _ := strconv.Atoi(p.Meta["sub_entries"])
+	if entries < 0 || subEntries < 0 {
+		return 0
+	}
+	return entries + subEntries
 }
 
 const demandRetryAfter = 30 * time.Second
@@ -1984,7 +2056,7 @@ func (e *entry) demandIndex() {
 		return
 	}
 	go func() {
-		defer acquire(frontLimit)()
+		defer acquire(currentIndexLimit())()
 		defer HoldActiveProcs()()
 		if err := e.ensureBaseIndex(nil); err != nil {
 			logx.Warn("could not prepare %s: %v", filepath.Base(e.Path), err)
@@ -2016,10 +2088,20 @@ func (e *entry) ensureBaseIndex(progress store.Progress) error {
 // index is prepared first when no usable text database exists; an existing
 // base index and any full-text index are left intact.
 func (e *entry) setContainsIndex(action string, progress store.Progress) error {
-	defer acquire(frontLimit)()
+	return e.setContainsIndexContext(context.Background(), action, progress)
+}
+
+func (e *entry) setContainsIndexContext(ctx context.Context, action string, progress store.Progress) error {
+	defer acquire(currentIndexLimit())()
 	defer HoldActiveProcs()()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	e.ingestMu.Lock()
 	defer e.ingestMu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	defer e.rebuilding.Store(false)
 	if e.indexBlocked() {
 		return errors.New("dictionary index was removed; create an index in Dictionary settings")
@@ -2027,7 +2109,7 @@ func (e *entry) setContainsIndex(action string, progress store.Progress) error {
 
 	textDB, prepared := validPrepared(e.Path)
 	if !prepared && action != "delete" {
-		if _, err := e.reconcileLocked(e.probeName(), store.Target{}, progress); err != nil {
+		if _, err := e.reconcileLockedContext(ctx, e.probeName(), store.Target{}, progress); err != nil {
 			return err
 		}
 		textDB, prepared = validPrepared(e.Path)
@@ -2042,12 +2124,15 @@ func (e *entry) setContainsIndex(action string, progress store.Progress) error {
 
 	e.openMu.Lock()
 	defer e.openMu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	releasePrepared(e, textDB)
 	var err error
 	if action == "delete" {
-		err = store.ClearSearchIndexes(textDB, true, false)
+		err = store.ClearSearchIndexesContext(ctx, textDB, true, false)
 	} else {
-		err = store.RebuildContainsIndex(textDB, progress)
+		err = store.RebuildContainsIndexContext(ctx, textDB, progress)
 	}
 	reopenErr := e.reopen()
 	e.gen.Add(1)
@@ -2152,12 +2237,11 @@ func (rs *retiring) closeAll() {
 // fix is to build it again.
 //
 // This is the one sweep in the program that starts work nobody asked for on a
-// whole library, so where it runs matters more than what it does. It takes the
-// BACKGROUND lane (indexLimit, one at a time, FIFO), never the front one, and
-// never runs from Warm or open - a rebuild triggered by pre-opening would turn
-// a startup into an hours-long, invisible re-index of everything. Here it is a
-// drip: one dictionary at a time, deferred entirely while the process is not
-// active, and each one attempted once per process.
+// whole library, so where it runs matters more than what it does. It uses the
+// configured worker limit and never runs from Warm or open - a rebuild
+// triggered by pre-opening would turn a startup into an hours-long, invisible
+// re-index of everything. It is deferred entirely while the process is not
+// active, and each dictionary is attempted once per process.
 //
 // Only dictionaries whose companion is present on disk are swept. The reverse
 // case - a companion deleted after it was absorbed - would cost a meta read per
@@ -2181,12 +2265,12 @@ func (r *Registry) upgradeAbbrev() {
 		return
 	}
 	go func() {
-		for _, e := range todo {
-			release := acquire(indexLimit)
+		runIndexTasks(todo, func() bool { return CurrentPower() != PowerActive }, func(e *entry) {
+			release := acquire(currentIndexLimit())
+			defer release()
 			// the queue is FIFO and an ingest takes minutes, so the state that
 			// permitted this may be long gone by the time the slot is ours
 			if CurrentPower() != PowerActive {
-				release()
 				return
 			}
 			// Claimed HERE, not at collection. Marking the whole list up front
@@ -2199,15 +2283,13 @@ func (r *Registry) upgradeAbbrev() {
 			// of the work also keeps a transient failure - a full disk - from
 			// being made permanent by an entry that never got its turn.
 			if !e.abbrevTried.CompareAndSwap(false, true) {
-				release()
-				continue
+				return
 			}
 			err := e.reabsorbAbbrev()
-			release()
 			if err != nil {
 				logx.Warn("could not re-index %s for abbreviations: %v", filepath.Base(e.Path), err)
 			}
-		}
+		})
 	}()
 }
 

@@ -581,6 +581,16 @@ func (s *Server) DesktopJSONContext(ctx context.Context, baseURL, method, argume
 	case "startIndexWork", "startSingleIndexWork":
 		return s.startIndexWork([]byte(argument), method == "startSingleIndexWork", true)
 	case "stopIndexWork":
+		if strings.TrimSpace(argument) != "" {
+			var request struct {
+				ID   string `json:"id"`
+				Dict string `json:"dict"`
+			}
+			if err := json.Unmarshal([]byte(argument), &request); err != nil {
+				return nil, fmt.Errorf("bad dictionary stop request: %w", err)
+			}
+			return s.stopIndexDictionary(request.ID, request.Dict)
+		}
 		return s.stopIndexWork("all")
 	case "stopIngest":
 		return s.stopIngest(argument)

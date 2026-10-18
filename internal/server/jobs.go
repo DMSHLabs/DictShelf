@@ -45,10 +45,24 @@ type jobStatus struct {
 	Canceled bool
 	// StopRequested is a soft stop: finish the current atomic dictionary
 	// operation, then leave the remaining queue untouched.
-	StopRequested bool
-	Action        string
-	Indexes       []string
-	Result        any // what a successful job produced, for its watchers
+	StopRequested  bool
+	Action         string
+	Indexes        []string
+	ActiveDicts    []string
+	ActiveProgress []dictionaryWorkProgress
+	QueuedDicts    []string
+	Result         any // what a successful job produced, for its watchers
+}
+
+type dictionaryWorkProgress struct {
+	ID            string `json:"id"`
+	Name          string `json:"name,omitempty"`
+	Feature       string `json:"feature,omitempty"`
+	Action        string `json:"action,omitempty"`
+	Active        bool   `json:"active"`
+	Done          int64  `json:"done"`
+	Total         int64  `json:"total"`
+	StopRequested bool   `json:"stopRequested,omitempty"`
 }
 
 // jobTable is every job, running or last run, by key. The zero value is
@@ -68,8 +82,10 @@ type job struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 	// changed is closed, and replaced, on every update: what a watcher waits on.
-	changed chan struct{}
-	drop    bool // forget the job when it ends (dropWhenDone)
+	changed           chan struct{}
+	drop              bool // forget the job when it ends (dropWhenDone)
+	dictCancels       map[string]context.CancelFunc
+	dictStopRequested map[string]bool
 }
 
 // start runs fn as the job key, unless one is running under that key: then it
@@ -150,6 +166,62 @@ func (j *job) signalLocked() {
 // canceled reports that the job was asked to stop, or ran out of time.
 func (j *job) canceled() bool { return j.ctx.Err() != nil }
 
+// beginDictionary gives one dictionary operation a child context so it can be
+// stopped without canceling the other dictionaries in the same queue.
+func (j *job) beginDictionary(id string) (context.Context, context.CancelFunc, bool) {
+	j.t.mu.Lock()
+	defer j.t.mu.Unlock()
+	if j.ctx.Err() != nil || j.dictStopRequested[id] {
+		return nil, nil, false
+	}
+	ctx, cancel := context.WithCancel(j.ctx)
+	if j.dictCancels == nil {
+		j.dictCancels = make(map[string]context.CancelFunc)
+	}
+	j.dictCancels[id] = cancel
+	return ctx, cancel, true
+}
+
+func (j *job) finishDictionary(id string, cancel context.CancelFunc) {
+	cancel()
+	j.t.mu.Lock()
+	delete(j.dictCancels, id)
+	if j.dictStopRequested[id] {
+		delete(j.dictStopRequested, id)
+	}
+	for i := range j.st.ActiveProgress {
+		if j.st.ActiveProgress[i].ID == id {
+			j.st.ActiveProgress[i].Active = false
+			j.st.ActiveProgress[i].StopRequested = false
+			break
+		}
+	}
+	j.signalLocked()
+	j.t.mu.Unlock()
+}
+
+func (j *job) cancelDictionary(id string) bool {
+	j.t.mu.Lock()
+	defer j.t.mu.Unlock()
+	cancel := j.dictCancels[id]
+	if !j.st.Running || cancel == nil || j.dictStopRequested[id] {
+		return false
+	}
+	if j.dictStopRequested == nil {
+		j.dictStopRequested = make(map[string]bool)
+	}
+	j.dictStopRequested[id] = true
+	for i := range j.st.ActiveProgress {
+		if j.st.ActiveProgress[i].ID == id {
+			j.st.ActiveProgress[i].StopRequested = true
+			break
+		}
+	}
+	cancel()
+	j.signalLocked()
+	return true
+}
+
 // dropWhenDone forgets the job once it ends: its outcome is then a fact on
 // disk (an installed file), not one a page loaded tomorrow should be told.
 func (j *job) dropWhenDone() {
@@ -224,5 +296,67 @@ func (st jobStatus) copy() jobStatus {
 		st.Damaged = append([]string{}, st.Damaged...)
 	}
 	st.Indexes = append([]string(nil), st.Indexes...)
+	st.ActiveDicts = append([]string(nil), st.ActiveDicts...)
+	st.ActiveProgress = append([]dictionaryWorkProgress(nil), st.ActiveProgress...)
+	st.QueuedDicts = append([]string(nil), st.QueuedDicts...)
 	return st
+}
+
+func trackJobDictionary(j *job, id string, active bool) {
+	j.update(func(st *jobStatus) {
+		if active {
+			for _, existing := range st.ActiveDicts {
+				if existing == id {
+					return
+				}
+			}
+			st.ActiveDicts = append(st.ActiveDicts, id)
+			found := false
+			for i := range st.ActiveProgress {
+				if st.ActiveProgress[i].ID == id {
+					st.ActiveProgress[i].Active = true
+					found = true
+					break
+				}
+			}
+			if !found {
+				st.ActiveProgress = append(st.ActiveProgress, dictionaryWorkProgress{ID: id, Active: true})
+			}
+			return
+		}
+		for i, existing := range st.ActiveDicts {
+			if existing == id {
+				st.ActiveDicts = append(st.ActiveDicts[:i], st.ActiveDicts[i+1:]...)
+				for p := range st.ActiveProgress {
+					if st.ActiveProgress[p].ID == id {
+						st.ActiveProgress[p].Active = false
+						break
+					}
+				}
+				return
+			}
+		}
+	})
+}
+
+func updateJobDictionaryProgress(j *job, id, name, feature, action string, done, total int64) {
+	j.update(func(st *jobStatus) {
+		// The compact status line has one current dictionary even when several
+		// workers run. Keep its name and counters in the same locked update so
+		// progress from another worker cannot be paired with a stale name.
+		st.Stage, st.Current, st.CurrentDone, st.CurrentTotal, st.Action = id, name, done, total, action
+		if feature != "" {
+			st.Indexes = []string{feature}
+		}
+		for i := range st.ActiveProgress {
+			if st.ActiveProgress[i].ID == id {
+				st.ActiveProgress[i].Name = name
+				st.ActiveProgress[i].Feature = feature
+				st.ActiveProgress[i].Action = action
+				st.ActiveProgress[i].Done = done
+				st.ActiveProgress[i].Total = total
+				return
+			}
+		}
+	})
 }

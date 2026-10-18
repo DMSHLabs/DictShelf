@@ -159,8 +159,13 @@ func (r *Registry) Remove(id string, dropPrepared, dropSource bool) (removal, er
 		}
 		n, err := store.RemovePrepared(prepared)
 		if err != nil {
+			// RemoveAll can fail after removing some files. Do not make a
+			// possibly partial text.db searchable again; only restore the
+			// previous unblocked state when its database is still readable.
 			if !dropSource {
-				_ = e.setIndexRemoved(false)
+				if _, readErr := store.ReadMeta(store.TextDBPath(prepared)); readErr == nil {
+					_ = e.setIndexRemoved(false)
+				}
 			}
 			return rep, err
 		}

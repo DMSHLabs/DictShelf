@@ -389,11 +389,20 @@ html:is([data-shell-sepia],[data-shell-image],[data-desktop-image]) .mask-search
 .mask-head #maskDictMeta{flex:none;white-space:nowrap}
 html[data-shell-image] .mask-head #maskDict{background-color:var(--paper-bg,var(--bg));background-image:linear-gradient(#ffffff24,#ffffff24),var(--paper-bk-image);background-size:100% 100%}
 .mask-letters button{color:var(--fg);background:var(--bg-card);border:1px solid var(--line);border-radius:6px;cursor:pointer}
-.mask-letters{display:flex;align-items:center;gap:.25em;overflow-x:auto;padding:.5em .7em;border-bottom:1px solid var(--line)}
+.mask-letters{display:block;position:relative;overflow:hidden;padding:.5em .7em;border-bottom:1px solid var(--line);overscroll-behavior-x:contain;touch-action:pan-y}
+.mask-letter-track{position:relative;height:100%;width:100%;min-width:100%}
+.mask-letter-track> :is(button,span){position:absolute;top:50%;transform:translateY(-50%);box-sizing:border-box;margin:0;text-align:center}
 .mask-letter-group{display:inline-flex;align-items:center;gap:.25em;flex:none}
-.mask-letter-separator{flex:none;padding:0 .2em;color:var(--fg-faint)}
+.mask-letter-separator{padding:0 .2em;color:var(--fg-faint)}
 .mask-letter-pending{color:var(--label)}
-.mask-letters button{flex:none;min-width:2em;padding:.3em}
+.mask-letters button{min-width:2em;padding:.3em}
+.mask-letter-track.mask-fixed-chips{overflow:hidden}
+.mask-letter-track.mask-fixed-chips button{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mask-scrollbar{position:relative;height:12px;margin:0 .7em .3em;cursor:pointer;touch-action:none;user-select:none;-webkit-user-select:none}
+.mask-scrollbar::before{content:"";position:absolute;left:0;right:0;top:3px;height:6px;border-radius:99px;background:var(--line)}
+.mask-scroll-thumb{position:absolute;z-index:1;top:2px;left:0;height:8px;border-radius:99px;background:color-mix(in srgb,var(--fg) 42%,var(--bg));min-width:20px;cursor:grab}
+.mask-scrollbar:active .mask-scroll-thumb{cursor:grabbing}
+.mask-scrollbar:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .mask-letters button[aria-current="true"]{border-color:var(--accent);color:var(--accent)}
 .mask-words{columns:12em;column-gap:1em;padding:.7em}
 .mask-words button{display:block;width:100%;break-inside:avoid;text-align:left;color:var(--link);background:transparent;border:0;border-radius:4px;padding:.3em .4em;font:inherit;cursor:pointer;overflow-wrap:anywhere}
@@ -527,6 +536,14 @@ select{box-sizing:border-box;font-size:calc(var(--ui-font-base) * 1rem);min-heig
 #status>.msg{overflow:hidden;min-height:0}
 #status .txt{padding:var(--sp-2) 0}
 #status.show{grid-template-rows:1fr;opacity:1}
+.search-progress{display:flex;align-items:center;gap:.65em;margin:0 0 var(--sp-2);font-size:13px;color:var(--label)}
+.search-progress[hidden]{display:none}
+.search-progress-track{position:relative;display:block;flex:1 1 8em;min-width:3em;height:.45em;overflow:hidden;border-radius:999px;background:var(--line-soft,var(--line))}
+.search-progress-track>span{position:absolute;inset:0 auto 0 0;width:34%;border-radius:inherit;background:var(--accent);animation:search-progress-move 1.25s ease-in-out infinite}
+@keyframes search-progress-move{from{transform:translateX(-110%)}to{transform:translateX(310%)}}
+.search-progress button{flex:none}
+@media(max-width:420px){.search-progress{gap:.4em}.search-progress button{padding:.25em .4em}}
+@media(prefers-reduced-motion:reduce){.search-progress-track>span{animation:none;left:30%;width:40%}}
 /* The line under the editor that names the FILE being edited. Small and faint
    like the sheet's other reference text, and never hidden: it answers "which
    of the four boxes is this" at the moment the reader is typing, which is
@@ -1577,9 +1594,9 @@ dialog.panel-card:not([open]){display:none}
    `width:100%` too: it is a child of `.facts.reading`, which is a column with
    `align-items:flex-start`, so without it the row and the bar inside it would
    be only as wide as their content - a short group name left a short bar. */
-.facts:has(>:is(#pickerGroupBtn,#languageBtn)){width:100%;align-self:stretch}
-.facts:has(>:is(#pickerGroupBtn,#languageBtn))>.rowlabel{flex:0 1 var(--rlcol,96px);min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.facts:has(>:is(#pickerGroupBtn,#languageBtn))>:is(#pickerGroupBtn,#languageBtn){width:auto;flex:1 1 0;min-width:0}
+.facts.dictionary-group-row{width:100%;align-self:stretch}
+.facts.dictionary-group-row>.rowlabel{flex:0 0 var(--rlcol,96px);min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.facts.dictionary-group-row>#pickerGroupBtn{box-sizing:border-box;width:auto;flex:1 1 0;min-width:0}
 #pickerGroupBtn>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #languageError{margin:calc(var(--ui-addition-gap) * 1em) 0 0;color:var(--danger);font-size:calc(var(--ui-hint-font-size) * 1rem)}
 #languageError[hidden]{display:none}
@@ -1732,7 +1749,7 @@ dialog.panel-card:not([open]){display:none}
    the seg to its row is what lets the column inside it be the column; the
    strip's content is left-aligned either way, so nothing but the pairs' own
    starting point moves. */
-.facts.reading>.seg{align-self:stretch}
+.facts.reading>.seg{align-self:stretch;width:100%}
 .facts .history-controls{display:flex;align-items:center;flex-wrap:wrap;gap:calc(var(--ui-control-gap) * 1em);
   font-size:calc(var(--ui-font-base) * 1rem)}
 .facts .history-setting{display:inline-flex;align-items:center;gap:calc(var(--ui-control-gap) * 1em);font-size:calc(var(--ui-font-base) * 1rem)}
@@ -1781,7 +1798,7 @@ dialog.panel-card:not([open]){display:none}
    ellipsis stays for the one case a wrap cannot help - a name longer than the
    column itself - and a page whose script never ran falls back to the label's
    own text. */
-.facts .seg>span{flex:0 1 var(--rlcol,96px);min-width:0;white-space:nowrap;overflow:hidden;
+.facts .seg>span{flex:0 0 var(--rlcol,96px);min-width:0;white-space:nowrap;overflow:hidden;
   text-overflow:ellipsis;font-size:calc(var(--ui-font-base) * 1rem);line-height:1.2;color:var(--label-quiet)}
 /* A mark may ride in the label, as the speaker does. It is drawn at the same
    size and in the same faint colour as the marks that ride ON a control, but

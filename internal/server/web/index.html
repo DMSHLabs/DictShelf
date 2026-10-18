@@ -282,16 +282,16 @@ window.wudictFontScale=(function(){
 </form>
 </header>
 
-<div id="workNotice" class="work-notice" role="status" aria-live="polite" hidden>
-  <div id="workNoticeText" class="work-notice-text"></div>
-  <button type="button" class="btn" id="workNoticeStop"></button>
-</div>
-
 <main class="col container">
 <!-- Three levels, one job each: #status is the collapsing grid, .msg is the
      clipped row, and .txt carries the padding INSIDE the clip so the closed
      state is truly 0px rather than 0px plus padding. -->
 <div id="status" role="status" aria-live="polite"><div class="msg"><div class="txt" id="statusMsg"></div></div></div>
+<div id="searchProgress" class="search-progress" role="status" aria-live="polite" hidden>
+  <span id="searchProgressLabel"></span>
+  <span class="search-progress-track" aria-hidden="true"><span></span></span>
+  <button type="button" class="btn" id="searchProgressStop">{{T:search.stop}}</button>
+</div>
 <div id="outdatedNotice" class="bulkbox outdated-notice" role="status" hidden></div>
 <div id="out"></div>
 <section id="maskView" aria-label="{{T:search.wildcardsResults}}" hidden>
@@ -305,7 +305,8 @@ window.wudictFontScale=(function(){
         <button type="button" id="maskNext" aria-label="{{T:browse.nextTitle}}">›</button>
       </span>
     </header>
-    <nav id="maskLetters" class="mask-letters" aria-label="{{T:browse.jumpLetter}}"></nav>
+    <nav id="maskLetters" class="mask-letters" aria-label="{{T:browse.jumpLetter}}"><div id="maskLetterTrack" class="mask-letter-track"></div></nav>
+    <div id="maskScrollbar" class="mask-scrollbar" role="scrollbar" aria-label="{{T:browse.jumpLetter}}" aria-controls="maskLetters" aria-orientation="horizontal" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0" tabindex="0"><div id="maskScrollThumb" class="mask-scroll-thumb"></div></div>
   </div>
   <div id="maskWords" class="mask-words"></div>
 </section>
@@ -319,10 +320,6 @@ window.wudictFontScale=(function(){
 </dialog>
 </main>
 <div id="maskSearchControls" class="mask-search-controls" hidden>
-  <div id="maskSearchProgress" class="mask-search-progress" role="status" aria-live="polite" hidden>
-    <span class="mask-search-spinner" aria-hidden="true"></span><span id="maskSearchProgressText"></span>
-    <button type="button" id="maskSearchStop">{{T:dictUI.stop}}</button>
-  </div>
   <footer id="maskDock" class="mask-dock" role="search"></footer>
 </div>
 
@@ -525,7 +522,7 @@ window.wudictFontScale=(function(){
        bar's scope chip lives in a bar that only appears with results: this is
        the door for scoping BEFORE any search exists. A group's name is
        truncated by CSS (the bar is one line). -->
-  <div class="facts">
+  <div class="facts dictionary-group-row" id="pickerGroupRow">
     <span class="rowlabel" id="pickerGroupLabel">{{T:panel.dictionaries}}</span>
     <button type="button" class="choice-btn" id="pickerGroupBtn" aria-haspopup="listbox" aria-labelledby="pickerGroupLabel" title="{{T:panel.chooseGroup}}"></button>
     <div class="choice-menu menu-card" id="pickerGroupMenu" role="listbox" aria-label="{{T:panel.groups}}" data-w="anchor" hidden></div>
@@ -1132,9 +1129,9 @@ window.wudictFontScale=(function(){
   <div id="appearanceGroups">
   <!-- Screen: the app WINDOW's own two facts, moved here from the shell's
        settings screen - the one reached by long-pressing the launcher icon -
-       so that everything about how the app looks is in one place. Hidden
-       without a shell, because in a browser there is no window of ours to
-       decide anything about.
+       so that everything about how the app looks is in one place. Android-only:
+       desktop windows do not have the camera area or system-bar inset behaviour
+       these choices configure.
        The two answers are menus the page draws rather than <select>s, and
        that is the point of them: a <select> opens the platform's own popup
        window, which wears the system's theme and can wear neither the app's
@@ -2834,7 +2831,7 @@ async function loadDicts(rescan){
   const stopBoot=blocking?()=>controller.abort():null;
   if(blocking){
     setGlobalStop(stopBoot,tx("dictUI.stop"));
-    showWorkNotice('<span class="spin"></span>'+esc(readyCount()));
+    updateIndexingTask('<span class="spin"></span>'+esc(readyCount()));
   }
   // A first load has no groups to show until the last row has resolved. A
   // RESCAN keeps the ones it has: the list on screen is already the previous
@@ -2865,7 +2862,7 @@ async function loadDicts(rescan){
       if(msg.t==="begin"){
         if(beginMs<0)beginMs=Math.round(performance.now()-listStarted);
         sawBegin=true;dictTotal=msg.total||0;
-        if(blocking){syncBootStatus();showWorkNotice('<span class="spin"></span>'+esc(readyCount()))}
+        if(blocking){syncBootStatus();updateIndexingTask('<span class="spin"></span>'+esc(readyCount()))}
       }else if(msg.t==="dict"&&msg.dict){
         if(firstRowMs<0)firstRowMs=Math.round(performance.now()-listStarted);
         rows.push(msg.dict);
@@ -2876,7 +2873,7 @@ async function loadDicts(rescan){
           if(phase==="failed")$("out").innerHTML=""; // a slow stream beat the watchdog
           setPhase("partial");
         }
-        if(blocking){syncBootStatus();showWorkNotice('<span class="spin"></span>'+esc(readyCount()))}
+        if(blocking){syncBootStatus();updateIndexingTask('<span class="spin"></span>'+esc(readyCount()))}
         refreshDictUI();
         if(blocking&&rows.length===1)logBrowseArticleTransition("first_dictionary_row");
         // A Browse headword link names one dictionary in `from`. Start that
@@ -2907,7 +2904,7 @@ async function loadDicts(rescan){
     // A reindex can finish while its follow-up dictionary refresh is still
     // settling. Re-render the shared notice after that refresh so a completed
     // load cannot leave its last "N of M ready" line or Stop button behind.
-    if(!globalStopAction){workNoticeHTML="";renderWorkNotice()}
+    if(!globalStopAction)finishIndexingTask()
   }
   dicts=rows;dictTotal=rows.length;
   resolvePrefOrderMode();
@@ -3110,15 +3107,16 @@ function rmTrigger(d){
    rotation mid-rebuild picks it up again from the poll. */
 let reindexSt=null,reindexTimer=0,reindexStopping=false;
 const following=new Set();
+function reindexProgressText(st){
+  const at=Math.min(st.done+1,st.total),pct=st.currentTotal?` (${Math.min(100,Math.floor(st.currentDone/st.currentTotal*100))}%)`:"";
+  return tx("dictUI.rebuilding",{at,total:st.total})+(st.current?` · ${st.current}${pct}`:"");
+}
 function renderReindex(){
   const box=$("reindexLine"),st=reindexSt;
   const notice=$("outdatedNotice");
   notice.hidden=true;
   if(st&&st.running){
-    const at=Math.min(st.done+1,st.total),
-      pct=st.currentTotal?` ${Math.min(100,Math.floor(st.currentDone/st.currentTotal*100))}%`:"";
-    box.innerHTML=`<p><span class="spin"></span>${esc(tx("dictUI.rebuilding",{at,total:st.total}))}`+
-      (st.current?` · ${esc(st.current)}${pct}`:"")+"</p>"+
+    box.innerHTML=`<p><span class="spin"></span>${esc(reindexProgressText(st))}</p>`+
       (reindexStopping?`<p class="cost">${esc(tx("dictUI.stopping"))}</p>`:
         `<p><button type="button" class="btn" id="reindexStop">${esc(tx("dictUI.stop"))}</button></p>`);
     box.hidden=false;return;
@@ -3143,9 +3141,8 @@ function pollReindex(){
     if(!st){pollReindex();return} // a missed poll is not the end of the job
     reindexSt=st;
     if(st.running){
-      const at=Math.min(st.done+1,st.total),pct=st.currentTotal?` (${Math.min(100,Math.floor(st.currentDone/st.currentTotal*100))}%)`:"";
-      const message=esc(tx("dictUI.rebuilding",{at,total:st.total})+(st.current?` · ${st.current}${pct}`:""));
-      showWorkNotice(message);
+      const message=esc(reindexProgressText(st));
+      updateIndexingTask(message,st.activeDicts||[]);
       setGlobalStop(requestReindexStop,reindexStopping?tx("dictUI.stopping"):tx("dictUI.stop"));renderReindex();pollReindex();return
     }
     reindexStopping=false;
@@ -3179,7 +3176,7 @@ async function reindexClick(e){
 $("reindexLine").addEventListener("click",reindexClick);
 $("outdatedNotice").addEventListener("click",reindexClick);
 apiFetch("/api/reindex").then(r=>r.ok?r.json():null).then(st=>{
-  if(st&&st.running){reindexSt=st;const message=esc(tx("dictUI.rebuilding",{at:Math.min(st.done+1,st.total),total:st.total})+(st.current?` · ${st.current}`:""));setStatus(message);setGlobalStop(requestReindexStop);showWorkNotice(message);renderReindex();pollReindex()}
+  if(st&&st.running){reindexSt=st;const message=esc(reindexProgressText(st));setStatus(message);setGlobalStop(requestReindexStop);updateIndexingTask(message,st.activeDicts||[]);renderReindex();pollReindex()}
 }).catch(()=>{});
 
 function dslIndexControls(d){
@@ -3406,6 +3403,7 @@ function panelRowColumns(){
     for(const row of rows){
       const label=row.querySelector(":scope > .rowlabel");
       if(!label||col<=0)continue;
+      if(row.id==="pickerGroupRow")continue;
       const gap=parseFloat(getComputedStyle(row).columnGap)||0;
       const ctl=[...row.children].filter(el=>el!==label&&!el.classList.contains("choice-menu")&&!el.hidden)
         .reduce((sum,el)=>sum+el.getBoundingClientRect().width,0);
@@ -3474,7 +3472,7 @@ document.querySelectorAll(".font-scale-step").forEach(button=>button.addEventLis
 function showPanel(){panelSnap=panelState();  /* before the lock: once the root stops scrolling the bar is gone to measure */
   document.documentElement.style.setProperty("--wd-sbw",
     Math.max(0,innerWidth-document.documentElement.clientWidth)+"px");
-document.querySelector('[data-styler="screen"]').hidden=!window.wudictNativeShell;
+document.querySelector('[data-styler="screen"]').hidden=!window.wudictAndroidShell;
 $("speakSeg").hidden=!speakCan();$("panel").classList.add("show");
   // The rows are read down one column per section, so its width has to be
   // known before the reader sees them: measured here, in the same frame the
@@ -4221,7 +4219,9 @@ function desktopSystemLogOptions(){
 }
 function sysCommitDesktopWorkers(field){
   const value=field.value,previous=field.dataset.previous||value;
-  window.wudictNativeCall("saveIndexWorkers",JSON.stringify({value})).then(()=>{
+  window.wudictNativeCall("saveIndexWorkers",JSON.stringify({value})).then(result=>{
+    if(cfgInfo?.effective?.INDEX_WORKERS&&Number(result?.workers)>0)
+      cfgInfo.effective.INDEX_WORKERS.value=String(result.workers);
     field.dataset.previous=value;
     sysNote(tx("system.desktop.workersSaved"));
   }).catch(error=>{
@@ -5324,38 +5324,44 @@ function setIndexStatus(html,mirror=true){
   const box=$("bulkIndexConfirm");
   $("bulkIndexStatus").hidden=!html;
   box.innerHTML=html;
-  if(mirror&&globalStopAction)showWorkNotice(html);
+  if(mirror&&globalStopAction)updateIndexingTask(html);
 }
-let globalStopAction=null,globalStopLabel="";
-let workNoticeHTML="";
-function renderWorkNotice(){
-  const box=$("workNotice"),button=$("workNoticeStop");
-  box.hidden=!workNoticeHTML;
-  if(document.documentElement.classList.contains("server-work-active"))return;
-  if(box.hidden){document.documentElement.style.setProperty("--workh","0px");return}
-  $("workNoticeText").innerHTML=workNoticeHTML;
-  button.hidden=!globalStopAction;
-  button.textContent=globalStopLabel||tx("dictUI.stop");
-  button.disabled=globalStopLabel===tx("dictUI.bulkStopping");
-  requestAnimationFrame(()=>document.documentElement.style.setProperty("--workh",box.offsetHeight+"px"));
+let globalStopAction=null,globalStopLabel="",indexingTaskID=0,indexingTaskMessage="",indexWorkTaskActive=false;
+function activeDictionaryRows(ids,progress=[],workID=""){
+  const byID=new Map((progress||[]).map(item=>[item.id,item]));
+  return (ids||[]).map(id=>{const d=dicts.find(item=>item.id===id),p=byID.get(id);return {label:d?dictLabel(d):(p?.name||String(id)),done:p?.done||0,total:p?.total||0,active:!!p?.active,stop:p?.active&&workID?()=>window.wudictWork?.stopDictionary(workID,id):null,stopRequested:!!p?.stopRequested}});
 }
-function showWorkNotice(html){workNoticeHTML=html;renderWorkNotice()}
-$("workNoticeStop").addEventListener("click",()=>{if(globalStopAction)globalStopAction()});
+function updateIndexingTask(html,activeDicts){
+  if(html!==undefined)indexingTaskMessage=html;
+  if(!window.wudictTasks)return;
+  if(indexWorkTaskActive||!indexingTaskMessage){finishIndexingTask();return}
+  const content=document.createElement("div");content.innerHTML=indexingTaskMessage;
+  const message=content.textContent.trim();
+  const stopRequested=globalStopLabel===tx("dictUI.bulkStopping")||globalStopLabel===tx("dictUI.stopping");
+  if(indexingTaskID)window.wudictTasks.update(indexingTaskID,{message,stop:globalStopAction,stopRequested,...(activeDicts!==undefined?{children:activeDictionaryRows(activeDicts)}:{})});
+  else indexingTaskID=window.wudictTasks.start("indexing",message,{stop:globalStopAction,stopRequested,children:activeDictionaryRows(activeDicts)});
+}
+function finishIndexingTask(){
+  if(indexingTaskID)window.wudictTasks?.finish(indexingTaskID);
+  indexingTaskID=0;indexingTaskMessage="";
+}
 function setGlobalStop(action,label){
   globalStopAction=action;globalStopLabel=label||tx("dictUI.stop");
-  renderWorkNotice();
+  if(indexingTaskMessage)updateIndexingTask();
   if(statusBase)setStatus(statusBase,statusOwner);
 }
 function clearGlobalStop(){
   globalStopAction=null;globalStopLabel="";
-  workNoticeHTML="";renderWorkNotice();
+  finishIndexingTask();
   if(statusBase)setStatus(statusBase,statusOwner);
 }
-new ResizeObserver(()=>{
-  if(document.documentElement.classList.contains("server-work-active"))return;
-  const box=$("workNotice");
-  document.documentElement.style.setProperty("--workh",box.hidden?"0px":box.offsetHeight+"px");
-}).observe($("workNotice"),{box:"border-box"});
+window.addEventListener("wudict-work",event=>{
+  indexWorkTaskActive=!!event.detail?.running;
+  if(indexWorkTaskActive)finishIndexingTask();
+  const s=event.detail;
+  if(s?.running&&s.taskID&&Array.isArray(s.busyProgress))window.wudictTasks?.update(s.taskID,{children:activeDictionaryRows(s.busyDicts,s.busyProgress,s.id)});
+});
+window.addEventListener("wudict-tasks-ready",()=>{if(indexingTaskMessage&&!indexWorkTaskActive)updateIndexingTask()});
 let serverBulkWasRunning=false;
 window.addEventListener("wudict-work",event=>{
   const s=event.detail;
@@ -5365,13 +5371,18 @@ window.addEventListener("wudict-work",event=>{
     $("bulkIndexes").querySelectorAll("button,select").forEach(el=>el.disabled=true);
     $("bulkIndexStop").hidden=false;$("bulkIndexStop").disabled=s.stopRequested;
     $("bulkIndexStop").textContent=tx(s.stopRequested?"dictUI.bulkStopping":"dictUI.stop");
-    setIndexStatus(esc(s.text));
-    const current=dicts.find(d=>d.id===s.dict);
-    if(current)for(const feature of s.indexes||[]){
-      const feat=feature==="index"?"base":feature==="fullText"?"fts":feature;
+    setIndexStatus(esc(s.text),false);
+    if(s.taskID&&Array.isArray(s.busyProgress))window.wudictTasks?.update(s.taskID,{children:activeDictionaryRows(s.busyDicts,s.busyProgress,s.id)});
+    const perDictionary=s.busyProgress||[];
+    for(const item of perDictionary){
+      const current=dicts.find(d=>d.id===item.id);
+      const feat=item.feature==="index"?"base":item.feature==="fullText"?"fts":item.feature;
+      if(!current||!feat)continue;
+      const action=item.action==="remove"?"dictUI.removing":item.action==="update"?"database.actionUpdate":"dictUI.indexing";
+      const count=item.total>0?` ${window.wudictI18n.number(item.done)} ${tx("dictUI.progressOf",{total:window.wudictI18n.number(item.total)})}`:item.done>0?` ${tx("dictUI.entries",{number:window.wudictI18n.number(item.done)})}`:"";
       for(const label of bulkFeatureLabels(current,feat)){
-        label.textContent=tx(s.action==="remove"?"dictUI.removing":"dictUI.indexing")+(s.currentDone?' '+s.currentDone.toLocaleString():'');
-        label.classList.add("busy");
+        label.textContent=tx(action)+count;
+        label.classList.toggle("busy",!!item.active);
       }
     }
   }else if(serverBulkWasRunning){
@@ -5443,6 +5454,37 @@ function setBusy(on){
   if(box.classList.contains("busy"))return; // already spinning: leave it alone
   busyTimer=setTimeout(()=>{if(busyWanted)box.classList.add("busy")},BUSY_DELAY);
 }
+
+let searchProgressTimer=null,searchProgressGeneration=0,searchProgressDone=0,searchProgressTotal=0;
+function hideSearchProgress(){
+  clearTimeout(searchProgressTimer);searchProgressTimer=null;searchProgressGeneration=0;
+  const box=$("searchProgress");if(box)box.hidden=true;
+}
+function beginSearchProgress(seq,total){
+  hideSearchProgress();
+  if(total<1)return;
+  searchProgressGeneration=seq;searchProgressDone=0;searchProgressTotal=total;
+  searchProgressTimer=setTimeout(()=>{
+    if(searchProgressGeneration!==seq||seq!==searchSeq||!searchAC||searchAC.signal.aborted)return;
+    $("searchProgressLabel").textContent=tx("search.progress",{
+      done:window.wudictI18n.number(searchProgressDone),total:window.wudictI18n.number(searchProgressTotal)});
+    $("searchProgress").hidden=false;
+  },2000);
+}
+function advanceSearchProgress(seq){
+  if(searchProgressGeneration!==seq)return;
+  searchProgressDone=Math.min(searchProgressTotal,searchProgressDone+1);
+  if(!$("searchProgress").hidden)$("searchProgressLabel").textContent=tx("search.progress",{
+    done:window.wudictI18n.number(searchProgressDone),total:window.wudictI18n.number(searchProgressTotal)});
+}
+function finishSearchProgress(seq){
+  if(searchProgressGeneration!==seq)return;
+  hideSearchProgress();
+}
+$("searchProgressStop").addEventListener("click",()=>{
+  if(searchAC)searchAC.abort();
+  hideSearchProgress();
+});
 
 /* read a newline-delimited JSON response, invoking onMsg per record as it
    arrives — this is what lets each dictionary render the instant it is
@@ -5870,7 +5912,9 @@ function noIndexRow(el,out,info){
 // selected group's order even when requests finish out of order.
 let maskGeneration=0,maskControllers=new Set(),maskRows=[],maskCurrent=0;
 let maskPattern="",maskSelection="",maskSubmitRequested=false,maskNavToken=0,maskRestoreScroll=null;
-let maskStripVersion=0,maskStripRendered=-1,maskChipMap=new Map(),maskActiveKey="";
+let maskStripVersion=0,maskStripRendered=-1,maskChipMap=new Map(),maskActiveKey="",maskStripWantedKey="";
+let maskStripItems=[],maskStripOffsets=[],maskStripWidths=[],maskStripSectionOffsets=[],maskStripSectionTargets=[],maskStripTotalWidth=0,maskStripSectionTotal=0,maskStripVisibleCount=0,maskStripStart=-1,maskStripEnd=-1,maskStripKeyIndex=new Map();
+let maskStripPaintAt=0,maskStripPaintTimer=0,maskScrollbarDrag=null,maskStripScrollX=0,maskStripTouch=null,maskStripScrubTarget=null;
 let maskBaseRows=[],maskBaseCurrent=0,maskFindRows=[],maskFindFilter=false,maskFindWildcard=false;
 let maskFindIndex=-1,maskFindMatch=null,maskFindTimer=0,maskFindQuery="",maskFindApproved=false,maskFindAwaitingApply=false,maskBusyJobs=new Set(),maskFindGeneration=0;
 let maskMemorySnapshot=null;
@@ -5924,8 +5968,10 @@ function maskBusyApply(){
 function maskBusyStart(key){maskBusyJobs.add(key);maskBusyApply()}
 function maskBusyFinish(key){maskBusyJobs.delete(key);maskBusyApply()}
 function maskWorkerCount(count){
+  const configured=Number(cfgInfo?.effective?.INDEX_WORKERS?.value);
   const cores=Math.max(1,Number(navigator.hardwareConcurrency)||1);
-  return Math.min(count,cores);
+  const limit=Number.isSafeInteger(configured)&&configured>0?configured:Math.min(4,Math.max(1,cores-1));
+  return Math.min(count,limit);
 }
 function maskAbort(){
   maskMemoryStop();
@@ -5934,63 +5980,211 @@ function maskAbort(){
   maskControllers.clear();
   maskBusyJobs.clear();maskFindGeneration++;
   maskBusyApply();
-  maskProgressHide();
+  maskTaskFinishAll();
   setBusy(false);
 }
 function maskInvalidate(){
   maskAbort();clearTimeout(maskFindTimer);maskRows=[];maskBaseRows=[];maskFindRows=[];maskPattern="";maskSelection="";
   maskFindQuery="";maskFindIndex=-1;maskFindMatch=null;maskFindApproved=false;maskFindAwaitingApply=false;$("maskFindInput").value="";maskFindControls();
-  maskStripVersion++;maskStripRendered=-1;maskChipMap.clear();maskActiveKey="";
-  if(searchAC)searchAC.abort();searchSeq++;
-  $("maskDictName").textContent="";$("maskDictMeta").textContent="";$("maskDict").title="";$("maskLetters").replaceChildren();
+  maskStripVersion++;maskStripRendered=-1;maskChipMap.clear();maskActiveKey="";maskStripWantedKey="";maskStripItems=[];maskStripOffsets=[];maskStripWidths=[];maskStripSectionOffsets=[];maskStripSectionTargets=[];maskStripKeyIndex.clear();maskStripTotalWidth=maskStripSectionTotal=maskStripVisibleCount=0;maskStripStart=maskStripEnd=-1;maskStripScrollX=0;maskStripScrubTarget=null;
+  if(searchAC)searchAC.abort();hideSearchProgress();searchSeq++;
+  $("maskDictName").textContent="";$("maskDictMeta").textContent="";$("maskDict").title="";$("maskLetterTrack").replaceChildren();$("maskLetterTrack").style.width="100%";$("maskLetterTrack").style.minWidth="100%";
   $("maskCount").textContent="";$("maskPage").textContent="";
   $("maskPrev").disabled=$("maskNext").disabled=true;
   $("maskWords").innerHTML='<p class="mask-empty">'+tx("search.wildcardsRun")+'</p>';
 }
+function maskReservedBlocks(row){
+  const size=row.size||300;
+  return Math.max(1,row.expectedBlocks||0,Math.ceil((row.scanTotal||0)/size),Math.ceil((row.total||0)/size));
+}
+function maskSectionAtOffset(offset){
+  let lo=0,hi=maskStripSectionOffsets.length;
+  while(lo<hi){const mid=(lo+hi)>>>1;if(maskStripSectionOffsets[mid]<offset)lo=mid+1;else hi=mid}
+  return lo;
+}
+function maskStripTargetIndex(targetKey,allWords){
+  const split=targetKey.lastIndexOf(":");if(split<0)return -1;
+  const dict=targetKey.slice(0,split),page=Number(targetKey.slice(split+1));
+  if(!Number.isInteger(page)||page<1)return -1;
+  let section=0;
+  for(const row of maskRows){
+    const complete=row.state==="ready"&&(!allWords||!row.partial);
+    const count=complete?(row.total?(row.alphabet||[]).length:0):allWords&&row.state!=="error"?maskReservedBlocks(row):1;
+    if(row.id===dict)return count?Math.min(section+page-1,section+count-1):-1;
+    if(count)section+=count;
+  }
+  return -1;
+}
 function maskStripPaint(){
-  const strip=$("maskLetters"),rebuilt=maskStripRendered!==maskStripVersion;
+  if(maskScrollbarDrag||maskStripTouch?.dragging){
+    const delay=50-(performance.now()-maskStripPaintAt);
+    if(delay>0){if(!maskStripPaintTimer)maskStripPaintTimer=setTimeout(()=>{maskStripPaintTimer=0;maskStripPaint()},delay);return}
+  }
+  if(maskStripPaintTimer){clearTimeout(maskStripPaintTimer);maskStripPaintTimer=0}
+  maskStripPaintAt=performance.now();
+  maskStripPaintNow();
+}
+function maskStripPaintNow(){
+  const strip=$("maskLetters"),track=$("maskLetterTrack");
+  if(!track)return;
+  const rebuilt=maskStripRendered!==maskStripVersion;
   if(rebuilt){
-    const left=strip.scrollLeft,fragment=document.createDocumentFragment();
-    maskChipMap=new Map();let groups=0;
+    maskStripItems=[];maskStripOffsets=[];maskStripWidths=[];maskStripSectionOffsets=[];maskStripTotalWidth=0;maskStripKeyIndex=new Map();
+    maskChipMap=new Map();maskStripStart=maskStripEnd=-1;
+    const sample=document.createElement("button");sample.type="button";sample.textContent="M";sample.style.position="absolute";sample.style.visibility="hidden";
+    track.appendChild(sample);
+    const sampleHeight=sample.getBoundingClientRect().height,style=getComputedStyle(sample),font=[style.fontStyle,style.fontVariant,style.fontWeight,style.fontSize,style.fontFamily].join(" ");
+    const ctx=(maskStripPaint.canvas||(maskStripPaint.canvas=document.createElement("canvas"))).getContext("2d");ctx.font=font;
+    const metric=(value,fallback=0)=>{const number=Number.parseFloat(value);return Number.isFinite(number)?number:fallback};
+    const measure=value=>{const width=ctx.measureText(value||"").width;return Number.isFinite(width)?width:0};
+    const em=metric(style.fontSize,16),pad=metric(style.paddingLeft)+metric(style.paddingRight)+metric(style.borderLeftWidth)+metric(style.borderRightWidth);
+    const gap=.25*em,minWidth=Math.max(2*em,metric(style.minWidth));
+    const allWords=isAllWildcardMask(maskPattern);
     for(const row of maskRows){
-      if(row.state==="ready"&&!row.total)continue;
-      const group=document.createElement("span");group.className="mask-letter-group";
-      if(row.state==="ready"){
+      const complete=row.state==="ready"&&(!allWords||!row.partial);
+      if(complete&&!row.total)continue;
+      if(complete){
         for(const letter of row.alphabet||[]){
           const page=Math.floor(letter.o/(row.size||300))+1;
-          const button=document.createElement("button");button.type="button";
-          button.textContent=letter.l;button.dataset.dict=row.id;button.dataset.page=page;
-          button.title=row.name+" · "+tx("browse.words",{count:letter.n,number:window.wudictI18n.number(letter.n)});
-          button.setAttribute("aria-current","false");
-          group.appendChild(button);maskChipMap.set(row.id+":"+page,button);
+          const label=letter.l;
+          maskStripItems.push({kind:"chip",label,dict:row.id,page,title:row.name+" · "+tx("browse.words",{count:letter.n,number:window.wudictI18n.number(letter.n)})});
         }
       }else{
-        const marker=document.createElement("span");marker.className="mask-letter-pending";
-        marker.textContent=row.state==="error"?"⚠":"…";marker.title=row.name;
-        group.appendChild(marker);
+        const count=allWords&&row.state!=="error"?maskReservedBlocks(row):1;
+        for(let i=0;i<count;i++)maskStripItems.push({kind:"pending",label:row.state==="error"?"⚠":i===0?"…":"",dict:row.id,page:i+1,title:row.name});
       }
-      if(!group.childNodes.length)continue;
-      if(groups++){
-        const separator=document.createElement("span");separator.className="mask-letter-separator";
-        separator.textContent="|";separator.setAttribute("aria-hidden","true");fragment.appendChild(separator);
-      }
-      fragment.appendChild(group);
     }
-    strip.replaceChildren(fragment);strip.scrollLeft=left;maskStripRendered=maskStripVersion;
+    track.replaceChildren();
+    const fixedChipWidth=Math.max(minWidth,3*em);
+    track.classList.toggle("mask-fixed-chips",allWords);
+    const separatorWidth=allWords?em:measure("|")+.4*em+2*metric(style.borderLeftWidth);
+    // A separator marks the boundary between dictionaries; include it only
+    // where both neighbouring dictionaries contribute a visible strip.
+    const groups=[];let cursor=0;
+    for(const row of maskRows){const complete=row.state==="ready"&&(!allWords||!row.partial);const count=complete?(row.total?(row.alphabet||[]).length:0):allWords&&row.state!=="error"?maskReservedBlocks(row):1;if(count){groups.push({start:cursor,count,dict:row.id});cursor+=count}}
+    const all=[];
+    for(let i=0;i<groups.length;i++){if(i)all.push({kind:"separator",label:"|"});for(let j=0;j<groups[i].count;j++){const item=maskStripItems[groups[i].start+j];all.push(item||{kind:"pending",label:j===0?"…":"",dict:groups[i].dict,page:j+1})}}
+    maskStripItems=all;maskStripOffsets=[];maskStripWidths=[];maskStripSectionOffsets=[];maskStripSectionTargets=[];maskStripTotalWidth=0;maskStripSectionTotal=all.length-(groups.length?groups.length-1:0);
+    for(let i=0;i<all.length;i++){const item=all[i],w=item.kind==="separator"?separatorWidth:allWords?fixedChipWidth:Math.max(minWidth,measure(item.label)+pad);if(i)maskStripTotalWidth+=gap;maskStripOffsets.push(maskStripTotalWidth);maskStripWidths.push(w);if(item.kind!=="separator"){maskStripSectionOffsets.push(maskStripTotalWidth);maskStripSectionTargets.push({dict:item.dict,page:item.page})}if(item.kind==="chip")maskStripKeyIndex.set(item.dict+":"+item.page,i);maskStripTotalWidth+=w}
+    track.style.width="100%";track.style.minWidth="100%";track.style.height=Math.max(1,sampleHeight)+"px";
+    sample.remove();maskStripScrollX=Math.min(maskStripScrollX,Math.max(0,maskStripTotalWidth-track.clientWidth));maskStripRendered=maskStripVersion;
   }
-  const row=maskRows[maskCurrent],key=row?.data?row.id+":"+row.data.page:"";
-  if(rebuilt||key!==maskActiveKey){
-    if(!rebuilt)maskChipMap.get(maskActiveKey)?.setAttribute("aria-current","false");
-    const active=maskChipMap.get(key);active?.setAttribute("aria-current","true");
-    if(active&&key!==maskActiveKey)requestAnimationFrame(()=>{
-      if(!active.isConnected)return;
-      const box=strip.getBoundingClientRect(),chip=active.getBoundingClientRect();
-      if(chip.left<box.left)strip.scrollLeft+=chip.left-box.left;
-      else if(chip.right>box.right)strip.scrollLeft+=chip.right-box.right;
-    });
-    maskActiveKey=key;
+  const row=maskRows[maskCurrent],key=row?.data?row.id+":"+row.data.page:"",targetKey=maskStripWantedKey||key;
+  if(targetKey&&(targetKey!==maskActiveKey||maskStripWantedKey)){
+    const itemIndex=maskStripKeyIndex.get(targetKey),section=maskStripTargetIndex(targetKey,isAllWildcardMask(maskPattern));
+    const x=section>=0?maskStripSectionOffsets[section]:undefined;
+    if(x!==undefined){const w=itemIndex===undefined?0:maskStripWidths[itemIndex],left=maskStripScrollX;
+      if(x<left||x+w>left+track.clientWidth)maskStripScrollX=Math.max(0,x-track.clientWidth/2+w/2);
+      maskStripWantedKey=""}
   }
+  const viewport=track.clientWidth,maxLogicalScroll=Math.max(0,maskStripTotalWidth-viewport);
+  if(!Number.isFinite(maskStripScrollX))maskStripScrollX=0;
+  maskStripScrollX=Math.max(0,Math.min(maxLogicalScroll,maskStripScrollX));
+  const left=maskStripScrollX,right=left+viewport,buffer=24;
+  const lower=(x,byEnd=false)=>{let lo=0,hi=maskStripOffsets.length;while(lo<hi){const mid=(lo+hi)>>>1;const edge=maskStripOffsets[mid]+(byEnd?maskStripWidths[mid]:0);if(edge<x)lo=mid+1;else hi=mid}return lo};
+  const start=Math.max(0,lower(left,true)-buffer),end=Math.min(maskStripItems.length,lower(right)+buffer);
+  if(start!==maskStripStart||end!==maskStripEnd||rebuilt){
+    maskStripStart=start;maskStripEnd=end;maskChipMap=new Map();const fragment=document.createDocumentFragment();
+    for(let i=start;i<end;i++){
+      const item=maskStripItems[i],el=document.createElement(item.kind==="chip"?"button":"span");
+      if(item.kind==="chip"){el.type="button";el.dataset.dict=item.dict;el.dataset.page=item.page;el.setAttribute("aria-current","false");maskChipMap.set(item.dict+":"+item.page,el)}
+      else if(item.kind==="pending")el.className="mask-letter-pending";
+      else el.className="mask-letter-separator";
+      el.textContent=item.label;el.title=item.kind==="chip"?((item.title||"")+(item.label?" — "+item.label:"")):(item.title||"");el.style.left=(maskStripOffsets[i]-left)+"px";el.style.width=maskStripWidths[i]+"px";el.dataset.stripIndex=String(i);
+      fragment.appendChild(el);
+    }
+    track.replaceChildren(fragment);
+  }
+  for(const [chipKey,chip] of maskChipMap)chip.setAttribute("aria-current",String(chipKey===key));
+  for(const el of track.children){const index=Number(el.dataset.stripIndex);if(Number.isInteger(index))el.style.left=(maskStripOffsets[index]-left)+"px"}
+  maskActiveKey=key;
+  const bar=$("maskScrollbar"),thumb=$("maskScrollThumb"),barWidth=bar.clientWidth;
+  let visible=0;
+  for(let i=lower(left,true);i<Math.min(maskStripItems.length,lower(right));i++)if(maskStripItems[i].kind!=="separator")visible++;
+  maskStripVisibleCount=visible;
+  const thumbWidth=Math.min(barWidth,Math.max(20,barWidth*(maskStripSectionTotal?Math.min(1,visible/maskStripSectionTotal):1)));
+  const maxScroll=maxLogicalScroll,maxThumb=Math.max(0,barWidth-thumbWidth);
+  const firstSection=maskSectionAtOffset(left),maxFirst=Math.max(0,maskStripSectionTotal-visible);
+  const fraction=maxScroll&&left>=maxScroll-1?1:maxFirst?Math.min(1,firstSection/maxFirst):0;
+  thumb.style.width=thumbWidth+"px";thumb.style.left=fraction*maxThumb+"px";
+  bar.setAttribute("aria-valuemax",String(Math.max(0,maskStripSectionTotal-1)));
+  bar.setAttribute("aria-valuenow",String(Math.max(0,Math.min(maskStripSectionTotal-1,firstSection))));
+  bar.setAttribute("aria-disabled",String(maxScroll===0));
 }
+new ResizeObserver(()=>{maskStripVersion++;maskStripRendered=-1;maskStripPaint()}).observe($("maskLetters"));
+function maskScrollbarMove(clientX){
+  const bar=$("maskScrollbar"),thumb=$("maskScrollThumb"),track=$("maskLetterTrack"),rect=bar.getBoundingClientRect();
+  const maxThumb=Math.max(0,bar.clientWidth-thumb.offsetWidth),maxScroll=Math.max(0,maskStripTotalWidth-track.clientWidth);
+  const x=Math.max(0,Math.min(maxThumb,clientX-rect.left-maskScrollbarDrag.grab));
+  const visible=Math.max(1,maskStripVisibleCount);
+  const first=Math.round((maxThumb?x/maxThumb:0)*Math.max(0,maskStripSectionTotal-visible));
+  maskStripScrollX=x>=maxThumb?maxScroll:Math.min(maxScroll,maskStripSectionOffsets[first]||0);
+  maskStripScrubTarget=maskStripPreviewPage(first);
+  maskStripPaint();
+}
+function maskStripPreviewPage(section){
+  const target=maskStripSectionTargets[section];if(!target)return null;
+  const index=maskRows.findIndex(row=>row.id===target.dict),row=maskRows[index];
+  if(index<0||!row||row.firstPage===null)return null;
+  const page=target.page||section+1,totalPages=maskRows.reduce((sum,item)=>sum+(item.state==="ready"?(item.pages||0):0),0);
+  $("maskPage").textContent=(row.firstPage+page-1)+"/"+totalPages;
+  return {index,page};
+}
+$("maskScrollbar").addEventListener("pointerdown",event=>{
+  if(event.button!==0||event.isPrimary===false)return;
+  const bar=$("maskScrollbar"),thumb=$("maskScrollThumb"),rect=thumb.getBoundingClientRect();
+  maskStripWantedKey="";
+  const onThumb=event.target===thumb;
+  maskScrollbarDrag={grab:onThumb?event.clientX-rect.left:rect.width/2,pointerId:event.pointerId,onThumb,moved:false};
+  if(!onThumb)maskScrollbarMove(event.clientX);event.preventDefault();
+});
+window.addEventListener("pointermove",event=>{
+  if(!maskScrollbarDrag||event.pointerId!==maskScrollbarDrag.pointerId)return;
+  if(event.buttons===0){maskScrollbarEndDrag();return}
+  maskScrollbarDrag.moved=true;
+  maskScrollbarMove(event.clientX);event.preventDefault();
+},{capture:true,passive:false});
+function maskScrollbarEndDrag(event){
+  if(event?.pointerId!==undefined&&maskScrollbarDrag&&event.pointerId!==maskScrollbarDrag.pointerId)return;
+  if(maskScrollbarDrag?.onThumb&&!maskScrollbarDrag.moved)maskStripScrubTarget=null;
+  maskScrollbarDrag=null;
+  const target=maskStripScrubTarget;maskStripScrubTarget=null;
+  if(target)maskSelect(target.index,target.page);
+  if(maskStripPaintTimer){clearTimeout(maskStripPaintTimer);maskStripPaintTimer=0;maskStripPaint()}
+}
+for(const type of ["pointerup","pointercancel","blur"])window.addEventListener(type,event=>maskScrollbarEndDrag(event),true);
+$("maskScrollbar").addEventListener("keydown",event=>{
+  const strip=$("maskLetters"),track=$("maskLetterTrack"),step=Math.max(40,track.clientWidth/5);
+  let left=maskStripScrollX;
+  if(event.key==="ArrowLeft")left-=step;
+  else if(event.key==="ArrowRight")left+=step;
+  else if(event.key==="PageUp")left-=track.clientWidth;
+  else if(event.key==="PageDown")left+=track.clientWidth;
+  else if(event.key==="Home")left=0;
+  else if(event.key==="End")left=maskStripTotalWidth-track.clientWidth;
+  else return;
+  maskStripWantedKey="";maskStripScrollX=Math.max(0,Math.min(maskStripTotalWidth-track.clientWidth,left));maskStripPaint();event.preventDefault();
+});
+$("maskLetters").addEventListener("wheel",event=>{
+  const delta=Math.abs(event.deltaX)>Math.abs(event.deltaY)?event.deltaX:event.shiftKey?event.deltaY:0;
+  if(!delta)return;
+  const max=Math.max(0,maskStripTotalWidth-$("maskLetterTrack").clientWidth);
+  if(!max)return;
+  maskStripWantedKey="";maskStripScrollX=Math.max(0,Math.min(max,maskStripScrollX+delta));maskStripPaint();event.preventDefault();
+},{passive:false});
+$("maskLetters").addEventListener("pointerdown",event=>{
+  if(event.pointerType!=="touch"||event.button!==0)return;
+  maskStripTouch={id:event.pointerId,startX:event.clientX,startScroll:maskStripScrollX,dragging:false};
+},{passive:true});
+window.addEventListener("pointermove",event=>{
+  const touch=maskStripTouch;if(!touch||event.pointerId!==touch.id)return;
+  const dx=touch.startX-event.clientX;
+  if(!touch.dragging&&Math.abs(dx)<6)return;
+  touch.dragging=true;maskStripWantedKey="";
+  const max=Math.max(0,maskStripTotalWidth-$("maskLetterTrack").clientWidth);
+  maskStripScrollX=Math.max(0,Math.min(max,touch.startScroll+dx));maskStripPaint();event.preventDefault();
+},{capture:true,passive:false});
+for(const type of ["pointerup","pointercancel","blur"])window.addEventListener(type,event=>{if(!maskStripTouch||event.pointerId===undefined||event.pointerId===maskStripTouch.id)maskStripTouch=null},true);
 function maskMenu(){
   const selected=maskRows[maskCurrent];
   let total=0,pages=0,prefixKnown=true,complete=true;
@@ -6011,7 +6205,8 @@ function maskMenu(){
   $("maskDict").title=selected?selected.name+maskRowMeta(selected):"";
   $("maskCount").textContent=window.wudictI18n.number(total)+(complete?"":"+");
   const row=maskRows[maskCurrent],result=row?.data;
-  const current=result?(row.firstPage===null?"…":String(row.firstPage+result.page-1)):"…";
+  const currentPage=result?.page||row?.wantedPage;
+  const current=currentPage&&row?.firstPage!==null?String(row.firstPage+currentPage-1):"…";
   $("maskPage").textContent=current+"/"+(complete?String(pages):"…");
   $("maskPage").disabled=!complete||pages===0;
   $("maskPage").setAttribute("aria-label",tx("browse.gotoBlock"));
@@ -6068,7 +6263,8 @@ async function maskFetch(row,page,generation,navToken){
   try{
     const params=new URLSearchParams({dict:row.id,q:maskPattern,p:String(page),wildcards:"1"});
     if(row.within){params.set("within",row.within);params.set("withinWildcards",row.withinMask?"1":"0")}
-    if(row.within&&row.diskCache&&row.cacheID)params.set("wildcache",row.cacheID);
+    if(row.diskCache&&row.cacheID){params.set("wildgroup",row.cacheGroup||maskSelection);params.set("wildcache",row.cacheID);
+      params.set("wildorder",String(row.cacheOrder||0));params.set("wildcount",String(row.cacheCount||maskFindRows.length))}
     const response=await apiFetch("/api/browse/find?"+params,{signal:controller.signal});
     if(!response.ok){const body=await response.json().catch(()=>({}));throw new Error(window.wudictI18n.errorText(body.error||tx("search.failedDict")))}
     const data=await response.json();if(generation!==maskGeneration)return;
@@ -6112,17 +6308,30 @@ function maskNewCacheID(){
 async function maskReadResultPage(row,page){
   const params=new URLSearchParams({dict:row.id,q:maskPattern,p:String(page),wildcards:"1"});
   if(row.within){params.set("within",row.within);params.set("withinWildcards",row.withinMask?"1":"0")}
-  if(row.cacheID)params.set("wildcache",row.cacheID);
+  if(row.cacheID){params.set("wildcache",row.cacheID);params.set("wildgroup",row.cacheGroup||maskSelection);
+    params.set("wildorder",String(row.cacheOrder||0));params.set("wildcount",String(row.cacheCount||maskFindRows.length))}
   const response=await apiFetch("/api/browse/find?"+params);
   if(!response.ok){const body=await response.json().catch(()=>({}));throw new Error(window.wudictI18n.errorText(body.error||tx("search.failedDict")))}
   return response.json();
 }
 function maskSaveBase(row,data=row.data){
-  if(row.state!=="ready"||!data)return;
-  window.wudictHeadwordControl.cacheWrite(maskCacheKey(row,"base"),{total:row.total,alphabet:row.alphabet,size:row.size});
-  window.wudictHeadwordControl.cacheWrite(maskCacheKey(row,"page"+data.page),data);
+  if(row.state!=="ready")return;
+  window.wudictHeadwordControl.cacheWrite(maskCacheKey(row,"base-sqlite"),{cacheID:row.cacheID,diskCache:!!row.diskCache,
+    cacheGroup:row.cacheGroup||maskSelection,cacheOrder:row.cacheOrder||0,cacheCount:row.cacheCount||maskBaseRows.length,
+    total:row.total,alphabet:row.alphabet,size:row.size,partial:!!row.partial});
+  if(!row.diskCache&&data){
+    window.wudictHeadwordControl.cacheWrite(maskCacheKey(row,"base"),{total:row.total,alphabet:row.alphabet,size:row.size});
+    window.wudictHeadwordControl.cacheWrite(maskCacheKey(row,"page"+data.page),data);
+  }
 }
 function maskRestoreBase(row){
+  const disk=window.wudictHeadwordControl.cacheRead(maskCacheKey(row,"base-sqlite"));
+  if(disk&&typeof disk.cacheID==="string"&&Number.isSafeInteger(disk.total)){
+    row.total=disk.total;row.alphabet=disk.alphabet||[];row.size=disk.size||300;row.diskCache=!!disk.diskCache;
+    row.cacheID=disk.cacheID;row.cacheGroup=disk.cacheGroup||maskSelection;row.partial=!!disk.partial;
+    row.cacheOrder=row.cacheOrder??0;row.cacheCount=row.cacheCount||maskBaseRows.length;
+    row.state="pending";row.restoreStream=row.partial;return true;
+  }
   const saved=window.wudictHeadwordControl.cacheRead(maskCacheKey(row,"base"));
   if(!saved||!Number.isSafeInteger(saved.total))return false;
   row.total=saved.total;row.alphabet=saved.alphabet||[];row.size=saved.size||300;
@@ -6131,12 +6340,13 @@ function maskRestoreBase(row){
   return true;
 }
 function maskRestoreBasePage(row,page){
+  if(row.diskCache)return false;
   const data=window.wudictHeadwordControl.cacheRead(maskCacheKey(row,"page"+page));
   if(!data||data.page!==page||!Array.isArray(data.words))return false;
   row.state="ready";row.data=data;return true;
 }
 function maskPrefetchBasePage(row,page,generation=maskGeneration){
-  if(row.within||!row.total||page<1||page>Math.ceil(row.total/(row.size||300)))return;
+  if(row.within||row.diskCache||!row.total||page<1||page>Math.ceil(row.total/(row.size||300)))return;
   if(window.wudictHeadwordControl.cacheRead(maskCacheKey(row,"page"+page)))return;
   if(row.prefetching?.has(page))return;
   if(!row.prefetching)row.prefetching=new Map();
@@ -6154,13 +6364,50 @@ function maskPrefetchBasePage(row,page,generation=maskGeneration){
   row.prefetching.set(page,request);
   return request;
 }
-function maskProgressShow(message,onStop){
-  const progress=$("maskSearchProgress");progress.hidden=false;
-  $("maskSearchProgressText").textContent=message;
-  $("maskSearchStop").hidden=false;$("maskSearchStop").onclick=onStop;
+const maskTaskIDs=new Map();
+function maskTaskStart(type,message,stop,progress={}){
+  const old=maskTaskIDs.get(type);if(old?.id)window.wudictTasks?.finish(old.id);
+  const task={id:0,message,stop,done:progress.done||0,total:progress.total||0,children:progress.children||[]};maskTaskIDs.set(type,task);
+  if(window.wudictTasks)task.id=window.wudictTasks.start(type,message,{...progress,stop});
+  return task.id;
 }
-function maskProgressUpdate(message){if(!$("maskSearchProgress").hidden)$("maskSearchProgressText").textContent=message}
-function maskProgressHide(){$("maskSearchProgress").hidden=true;$("maskSearchStop").onclick=null}
+function maskTaskUpdate(type,message,done,total,children){const task=maskTaskIDs.get(type);if(task){task.message=message;
+  if(Number.isFinite(done))task.done=done;if(Number.isFinite(total))task.total=total;
+  if(children)task.children=children;
+  if(task.id)window.wudictTasks?.update(task.id,{message,done:task.done,total:task.total,...(children?{children}:{})})}}
+function maskWildcardTaskRows(rows){return rows.filter(row=>row.active||row.state==="pending").map(row=>{
+  const total=Math.max(0,Number(row.scanTotal)||0),done=row.state==="ready"&&!row.partial?total:Math.max(0,Math.min(total,Number(row.scanDone)||0));
+  return {label:row.name,done,total,percent:total>0?done*100/total:null,active:!!row.active};
+})}
+function maskProgressShouldPublish(row,force=false){
+  const now=performance.now(),total=Math.max(0,Number(row.scanTotal)||0);
+  const percent=total>0?Math.max(0,Math.min(100,(Number(row.scanDone)||0)*100/total)):null;
+  if(force||percent!==null&&percent-(row.progressPublishedPercent??0)>=1||
+     percent!==null&&percent>=100&&row.progressPublishedPercent<100||
+     percent===null&&now-(row.progressPublishedAt||0)>=200){
+    row.progressPublishedAt=now;
+    if(percent!==null)row.progressPublishedPercent=percent;
+    return true;
+  }
+  return false;
+}
+function maskProgressTraceStart(row){
+  if(!browseDiagnosticsEnabled())return null;
+  return {started:performance.now(),events:0,bytes:0,renders:0,renderMs:0,maxRenderMs:0,
+    taskUpdates:0,taskUpdateMs:0,maxTaskUpdateMs:0,published:0,logged:false};
+}
+function maskProgressTraceFinish(row,trace,status){
+  if(!trace||trace.logged)return;trace.logged=true;
+  sendBrowseDiagnostic({event:"wildcard_progress",dict:row.id,stage:status,readMs:Math.round(performance.now()-trace.started),
+    progressEvents:trace.events,progressBytes:trace.bytes,progressPublished:trace.published,progressRenders:trace.renders,
+    progressRenderMs:Math.round(trace.renderMs),progressRenderMaxMs:Math.ceil(trace.maxRenderMs),
+    progressTaskUpdates:trace.taskUpdates,progressTaskUpdateMs:Math.round(trace.taskUpdateMs),
+    progressTaskMaxMs:Math.ceil(trace.maxTaskUpdateMs),progressScanned:Math.max(0,Number(row.scanDone)||0),
+    progressScanTotal:Math.max(0,Number(row.scanTotal)||0)});
+}
+function maskTaskFinish(type){const task=maskTaskIDs.get(type);if(task?.id)window.wudictTasks?.finish(task.id);maskTaskIDs.delete(type)}
+function maskTaskFinishAll(){for(const type of maskTaskIDs.keys())maskTaskFinish(type)}
+window.addEventListener("wudict-tasks-ready",()=>{for(const [type,task] of maskTaskIDs)if(!task.id)task.id=window.wudictTasks.start(type,task.message,{stop:task.stop,done:task.done,total:task.total,children:task.children})});
 function maskFindCommittedRows(){
   const committed=[];
   for(const row of maskFindRows){
@@ -6197,20 +6444,20 @@ function maskPrefetchFindPages(){
 }
 function maskFindProgress(row){
   const done=maskFindRows.filter(item=>item.state==="error"||item.state==="ready"&&!item.partial).length;
-  maskProgressUpdate(row.name+" · "+window.wudictI18n.number(done)+"/"+
-    window.wudictI18n.number(maskFindRows.length));
+  maskTaskUpdate("browse",row.name+" · "+window.wudictI18n.number(done)+"/"+
+    window.wudictI18n.number(maskFindRows.length),done,maskFindRows.length);
 }
 function maskStopFind(job){
   maskMemoryStop();
   for(const row of maskFindRows){
     row.abort?.abort();
-    if(row.diskCache&&row.cacheID)window.wudictHeadwordControl.cacheWrite(maskCacheKey(row,"filter-file",row.within,row.withinMask),{
+    if(row.diskCache&&row.cacheID)window.wudictHeadwordControl.cacheWrite(maskCacheKey(row,"filter-sqlite",row.within,row.withinMask),{
       cacheID:row.cacheID,total:row.total,alphabet:row.alphabet||[],size:row.size||300,partial:true});
     else if(row.streamWords)window.wudictHeadwordControl.cacheWrite(maskCacheKey(row,"filter",row.within,row.withinMask),{
       total:row.total,alphabet:row.alphabet||[],positions:row.streamPositions||[],words:row.streamWords,partial:true});
   }
   if(job)maskBusyFinish(job);
-  maskProgressHide();maskRender();maskFindControls();
+  maskTaskFinish("browse");maskRender();maskFindControls();
 }
 function maskStreamPageMetrics(data){
   const words=data.words||[],positions=data.positions||[];
@@ -6281,13 +6528,16 @@ function maskRestoreFilterPages(row){
 }
 async function maskFetchWithinStream(row,generation,navToken,findGeneration){
   const controller=new AbortController();maskControllers.add(controller);row.abort=controller;
-  row.diskCache=false;row.cacheID=maskNewCacheID();row.size=row.size||300;
+  const progressTrace=maskProgressTraceStart(row);row.progressPublishedAt=performance.now();row.progressPublishedPercent=0;
+  row.diskCache=false;row.size=row.size||300;
   row.streamWords=[];row.streamPositions=[];row.streamPages=new Map();row.streamCacheNextPage=1;
   row.streamCachePages=0;row.streamCacheHeapBytes=0;row.streamCacheJsonBytes=0;row.streamCacheStoredPages=0;
   row.streamCacheStoredBytes=0;row.streamCacheStorageFull=false;row.partial=true;
-  const params=new URLSearchParams({dict:row.id,q:maskPattern,wildcards:"1",within:row.within,
-    withinWildcards:row.withinMask?"1":"0",stream:"1",wildcache:row.cacheID});
-  const current=()=>generation===maskGeneration&&findGeneration===maskFindGeneration&&row===maskFindRows.find(item=>item.id===row.id);
+  const params=new URLSearchParams({dict:row.id,q:maskPattern,p:String(row.wantedPage||1),wildcards:"1",stream:"1",wildcache:row.cacheID,
+    wildgroup:row.cacheGroup||maskSelection,wildorder:String(row.cacheOrder||0),wildcount:String(row.cacheCount||maskFindRows.length)});
+  if(row.within){params.set("within",row.within);params.set("withinWildcards",row.withinMask?"1":"0")}
+  const ownerRows=row.within?maskFindRows:maskBaseRows;
+  const current=()=>generation===maskGeneration&&(findGeneration<0||findGeneration===maskFindGeneration)&&ownerRows.includes(row);
   try{
     const response=await browseFindStreamFetch("/api/browse/find?"+params,{signal:controller.signal});
     if(!response.ok)throw new Error(tx("search.failedDict"));
@@ -6299,6 +6549,11 @@ async function maskFetchWithinStream(row,generation,navToken,findGeneration){
         if(!line.trim())continue;
         const event=JSON.parse(line);if(!current())return;
         if(event.type==="error")throw new Error(event.error||tx("search.failedDict"));
+        if(Number.isFinite(event.scanTotal)&&event.scanTotal>0)row.scanTotal=event.scanTotal;
+        if(Number.isFinite(event.scanned))row.scanDone=Math.max(0,event.scanned);
+        if(event.done&&row.scanTotal>0)row.scanDone=row.scanTotal;
+        const publishProgress=maskProgressShouldPublish(row,!!event.done);
+        if(progressTrace)progressTrace.events++;
         const blockSize=event.size||row.size||300;
         row.size=blockSize;
         if(event.diskCache&&!row.diskCache){
@@ -6315,7 +6570,8 @@ async function maskFetchWithinStream(row,generation,navToken,findGeneration){
         row.total=event.total||0;row.alphabet=event.alphabet||row.alphabet;
         if(row.diskCache){
           if(event.words?.length){
-            const page=Math.floor(Math.max(0,row.total-event.words.length)/blockSize)+1;
+            const page=event.positions?.length?Math.floor(Math.max(0,event.positions[0])/blockSize)+1:
+              Math.floor(Math.max(0,row.total-event.words.length)/blockSize)+1;
             if(page===(row.wantedPage||1))row.data={words:event.words,positions:event.positions||[],total:row.total,page,
               pages:Math.ceil(row.total/blockSize),size:blockSize,alphabet:row.alphabet,partial:!event.done};
           }
@@ -6331,33 +6587,55 @@ async function maskFetchWithinStream(row,generation,navToken,findGeneration){
               positions:row.streamPositions.slice((page-1)*blockSize,page*blockSize)};
         }
         if(event.done){row.partial=false;row.state="ready";row.total=event.total||0;row.alphabet=event.alphabet||[];
-          if(row.diskCache)window.wudictHeadwordControl.cacheWrite(maskCacheKey(row,"filter-file",row.within,row.withinMask),{
-            cacheID:row.cacheID,total:row.total,alphabet:row.alphabet,size:blockSize,partial:false});
-          else if(row.streamWords.length<=20000)window.wudictHeadwordControl.cacheWrite(maskCacheKey(row,"filter",row.within,row.withinMask),{
+          if(row.diskCache){
+            if(row.within)window.wudictHeadwordControl.cacheWrite(maskCacheKey(row,"filter-sqlite",row.within,row.withinMask),{
+              cacheID:row.cacheID,cacheGroup:row.cacheGroup||maskSelection,cacheOrder:row.cacheOrder,cacheCount:row.cacheCount,
+              total:row.total,alphabet:row.alphabet,size:blockSize,partial:false});
+            else maskSaveBase(row,row.data);
+          }else if(row.within&&row.streamWords.length<=20000)window.wudictHeadwordControl.cacheWrite(maskCacheKey(row,"filter",row.within,row.withinMask),{
             total:row.total,alphabet:row.alphabet,positions:row.streamPositions,words:row.streamWords,size:blockSize});}
         else row.state="ready";
         // Search mode keeps the original strip. Rebuilding its thousands of
         // chips for every streamed progress event exhausts the WebView heap.
-        if(maskRows===maskFindRows){maskStripVersion++;maskStripRendered=-1}
-        maskRender();maskFindControls();
-        if(row.diskCache&&row===maskRows[maskCurrent]&&row.wantedPage&&row.data?.page!==row.wantedPage&&
+        if(publishProgress){
+          if(progressTrace)progressTrace.published++;
+          if(maskRows===maskFindRows||event.done){maskStripVersion++;maskStripRendered=-1}
+          let renderStarted=performance.now();maskRender();maskFindControls();
+          if(progressTrace){const elapsed=performance.now()-renderStarted;progressTrace.renders++;
+            progressTrace.renderMs+=elapsed;progressTrace.maxRenderMs=Math.max(progressTrace.maxRenderMs,elapsed)}
+        }
+        if(row.diskCache&&row.within&&row===maskRows[maskCurrent]&&row.wantedPage&&row.data?.page!==row.wantedPage&&
            row.wantedPage<=Math.ceil(row.total/blockSize))maskFetch(row,row.wantedPage,generation,maskNavToken);
-        if(event.words?.length||event.done)maskPrefetchFindPages();
-        maskFindProgress(row);
+        if(row.within){if(event.words?.length||event.done)maskPrefetchFindPages();if(publishProgress)maskFindProgress(row)}
+        else {
+          maskSaveBase(row,row.data);
+          if(publishProgress){
+            const done=ownerRows.filter(item=>item.state==="ready"&&!item.partial).length;
+            let taskStarted=performance.now();maskTaskUpdate(row.within?"browse":"wildcards",row.name+" · "+window.wudictI18n.number(done)+"/"+
+              window.wudictI18n.number(ownerRows.length),done,ownerRows.length,
+              row.within?undefined:maskWildcardTaskRows(ownerRows));
+            if(progressTrace){const elapsed=performance.now()-taskStarted;progressTrace.taskUpdates++;
+              progressTrace.taskUpdateMs+=elapsed;progressTrace.maxTaskUpdateMs=Math.max(progressTrace.maxTaskUpdateMs,elapsed)}
+          }
+        }
+        if(event.done)maskProgressTraceFinish(row,progressTrace,"complete");
       }
     };
     while(true){const {value,done}=await reader.read();if(done){buffer+=decoder.decode();await consume(true);break}
+      if(progressTrace)progressTrace.bytes+=value?.byteLength||0;
       buffer+=decoder.decode(value,{stream:true});await consume()}
   }catch(error){
-    if(!controller.signal.aborted&&generation===maskGeneration&&findGeneration===maskFindGeneration){
+    if(!controller.signal.aborted&&generation===maskGeneration&&(findGeneration<0||findGeneration===maskFindGeneration)){
       row.state="error";row.error=error.message;row.partial=false;maskStripVersion++;maskRender();
     }
-  }finally{maskControllers.delete(controller);if(row.abort===controller)row.abort=null;
-    if(navToken===maskNavToken&&maskRows===maskFindRows)maskRender()}
+  }finally{maskProgressTraceFinish(row,progressTrace,controller.signal.aborted?"cancelled":row.state==="error"?"error":"ended");
+    maskControllers.delete(controller);if(row.abort===controller)row.abort=null;
+    if(navToken===maskNavToken&&maskRows===ownerRows)maskRender()}
 }
 function maskSelect(index,page=1){
   if(index<0||index>=maskRows.length)return;
   maskCurrent=index;const row=maskRows[index],navToken=++maskNavToken;
+  maskStripWantedKey=row.id+":"+page;
   row.wantedPage=page;
   if(row.data?.page===page){maskRender();maskPrefetchBasePage(row,page+1);return}
   if(row.diskCache){row.data=null;maskRender();maskFetch(row,page,maskGeneration,navToken);return}
@@ -6412,17 +6690,30 @@ function maskGotoApply(){
     if(first&&page>=first&&page<=last){$("maskGotoDialog").close();maskSelect(i,page-first+1);return}
   }
 }
+function isAllWildcardMask(pattern){return pattern.length>0&&/^\*+$/.test(pattern)}
 async function maskRun(pattern){
-  maskAbort();maskPattern=pattern;lastQuery=pattern;maskReturn="";
+  maskAbort();maskStripScrollX=0;maskPattern=pattern;lastQuery=pattern;maskReturn="";
   clearTimeout(maskFindTimer);maskFindRows=[];maskFindQuery="";maskFindIndex=-1;maskFindMatch=null;
   maskFindFilter=false;maskFindApproved=false;maskFindAwaitingApply=false;$("maskFindInput").value="";
-  if(searchAC)searchAC.abort();searchSeq++;$("out").replaceChildren();setStatus("");
+  if(searchAC)searchAC.abort();hideSearchProgress();searchSeq++;$("out").replaceChildren();setStatus("");
   const selection=$("dict").value||"all";
   maskSelection=selection;
   const ids=selection==="all"?activeUserGroupIds():selection.startsWith("g:")?groupIds(selection):[selection];
   const byId=new Map(dicts.map(d=>[d.id,d]));
-  maskRows=ids.filter(id=>byId.has(id)).map(id=>({id,name:dictLabel(byId.get(id)),state:"pending",total:0,data:null,alphabet:[],size:300,wantedPage:1,error:""}));
+  const baseCacheID=maskNewCacheID(),groupRows=ids.filter(id=>byId.has(id));
+  maskRows=groupRows.map((id,index)=>({id,name:dictLabel(byId.get(id)),state:"pending",total:0,data:null,alphabet:[],size:300,
+    expectedBlocks:Math.ceil(Math.max(0,Number(byId.get(id)?.entries)||0)/300),
+    scanDone:0,scanTotal:Math.max(0,Number(byId.get(id)?.entries)||0),active:false,
+    wantedPage:1,error:"",diskCache:false,cacheID:baseCacheID,cacheGroup:selection,cacheOrder:index,cacheCount:groupRows.length}));
   for(const row of maskRows)maskRestoreBase(row);
+  if(isAllWildcardMask(pattern))for(const row of maskRows){row.diskCache=true;row.restoreStream=false;row.scanTotal=1}
+  if(isAllWildcardMask(pattern))for(const row of maskRows){
+    const blocks=Math.ceil(row.total/(row.size||300));
+    if(row.state==="ready"&&blocks>0&&row.alphabet.length<blocks*.75){
+      row.state="pending";row.partial=true;row.data=null;row.alphabet=[];
+    }
+  }
+  for(const row of maskRows)if(row.state==="ready"){row.scanDone=row.scanTotal;row.active=false}
   maskBaseRows=maskRows;maskBaseCurrent=0;maskFindControls();
   maskStripVersion++;
   const saved=new URLSearchParams(location.search);
@@ -6441,22 +6732,28 @@ async function maskRun(pattern){
   if(!maskRows.length){if(!dictsSettled){staleSearch=true;maskSubmitRequested=true}return}
   const generation=maskGeneration,rows=maskBaseRows,job={kind:"base",generation};maskBusyStart(job);setBusy(true);
   const cached=rows.filter(row=>row.state==="ready").length;
-  if(cached===rows.length){maskBusyFinish(job);setBusy(false);maskProgressHide();return}
+  if(cached===rows.length){maskBusyFinish(job);setBusy(false);maskTaskFinish("wildcards");return}
   let next=0;
-  maskProgressShow(tx("search.wildcardsRun")+" · "+cached+"/"+rows.length,()=>{
-    maskAbort();setBusy(false);maskProgressHide();
+  maskTaskStart("wildcards",tx("search.wildcardsRun")+" · "+cached+"/"+rows.length,()=>{
+    maskAbort();setBusy(false);maskTaskFinish("wildcards");
     for(const row of rows)if(row.state==="pending"){row.state="error";row.error=tx("dictUI.stop")}
     maskRender();
-  });
+  },{done:cached,total:rows.length,children:maskWildcardTaskRows(rows)});
   const worker=async()=>{while(generation===maskGeneration&&next<rows.length){
     const row=rows[next++];if(row.state==="ready")continue;
-    await maskFetch(row,row.wantedPage,generation,row===maskRows[maskCurrent]?maskNavToken:-1);
-    maskProgressUpdate(row.name+" · "+window.wudictI18n.number(rows.filter(item=>item.state==="ready").length)+"/"+
-      window.wudictI18n.number(rows.length));
+    row.active=true;
+    maskTaskUpdate("wildcards",tx("search.wildcardsRun"),rows.filter(item=>item.state==="ready"&&!item.partial).length,rows.length,maskWildcardTaskRows(rows));
+    try{
+      if(row.diskCache&&!row.restoreStream&&!isAllWildcardMask(pattern))await maskFetch(row,row.wantedPage,generation,row===maskRows[maskCurrent]?maskNavToken:-1);
+      else await maskFetchWithinStream(row,generation,row===maskRows[maskCurrent]?maskNavToken:-1,-1);
+    }finally{row.active=false}
+    const done=rows.filter(item=>item.state==="ready").length;
+    maskTaskUpdate("wildcards",row.name+" · "+window.wudictI18n.number(done)+"/"+
+      window.wudictI18n.number(rows.length),done,rows.length,maskWildcardTaskRows(rows));
   }};
   await Promise.all(Array.from({length:maskWorkerCount(rows.length)},worker));
   if(generation!==maskGeneration)return;
-  maskBusyFinish(job);setBusy(false);maskProgressHide();
+  maskBusyFinish(job);setBusy(false);maskTaskFinish("wildcards");
   if(rows.every(row=>row.state==="ready"&&row.total===0)&&maskRows===rows)maskRender();
 }
 function maskRestoreCached(url){
@@ -6466,7 +6763,7 @@ function maskRestoreCached(url){
   const index=maskRows.findIndex(row=>row.id===url.searchParams.get("maskdict"));
   if(index<0)return false;
   maskAbort();
-  if(searchAC)searchAC.abort();searchSeq++;
+  if(searchAC)searchAC.abort();hideSearchProgress();searchSeq++;
   maskRows=maskBaseRows;maskCurrent=maskBaseCurrent;maskFindRows=[];maskFindFilter=false;
   const page=Math.min(10000000,Math.max(1,Number.parseInt(url.searchParams.get("maskpage"),10)||1));
   maskRestoreScroll=Math.min(10000000,Math.max(0,Number.parseInt(url.searchParams.get("maskscroll"),10)||0));
@@ -6528,7 +6825,7 @@ function maskFindStart(){
   if(maskFindRows.some(row=>row.partial))for(const row of maskFindRows){
     try{
       sessionStorage.removeItem(maskCacheKey(row,"filter",row.within,row.withinMask));
-      sessionStorage.removeItem(maskCacheKey(row,"filter-file",row.within,row.withinMask));
+      sessionStorage.removeItem(maskCacheKey(row,"filter-sqlite",row.within,row.withinMask));
       sessionStorage.removeItem(maskCacheKey(row,"filter-pages",row.within,row.withinMask));
       for(let page=1;page<=(row.streamCachePages||0);page++)
         sessionStorage.removeItem(maskCacheKey(row,"filter-page"+page,row.within,row.withinMask));
@@ -6547,14 +6844,17 @@ function maskFindStart(){
   maskFindQuery=query;maskFindIndex=-1;maskFindMatch=null;maskFindRows=[];
   maskStripVersion++;maskStripRendered=-1;
   if(!query||!maskPattern||!maskBaseRows.length){maskRender();maskFindControls();return}
-  maskFindRows=maskBaseRows.map(row=>({id:row.id,name:row.name,state:"pending",total:0,data:null,
-    alphabet:[],size:row.size||300,wantedPage:1,error:"",within:query,withinMask:maskFindWildcard,cacheID:maskNewCacheID()}));
+  const groupCacheID=maskBaseRows[0]?.cacheID||maskNewCacheID(),groupCacheGroup=maskBaseRows[0]?.cacheGroup||maskSelection;
+  maskFindRows=maskBaseRows.map((row,index)=>({id:row.id,name:row.name,state:"pending",total:0,data:null,
+    alphabet:[],size:row.size||300,wantedPage:1,error:"",within:query,withinMask:maskFindWildcard,
+    cacheID:groupCacheID,cacheGroup:groupCacheGroup,cacheOrder:index,cacheCount:maskBaseRows.length}));
   for(const row of maskFindRows){
-    const fileSaved=window.wudictHeadwordControl.cacheRead(maskCacheKey(row,"filter-file",query,maskFindWildcard));
+    const fileSaved=window.wudictHeadwordControl.cacheRead(maskCacheKey(row,"filter-sqlite",query,maskFindWildcard));
     if(fileSaved&&typeof fileSaved.cacheID==="string"&&Number.isSafeInteger(fileSaved.total)){
-      row.state="ready";row.diskCache=true;row.cacheID=fileSaved.cacheID;row.total=fileSaved.total;
+      row.state=fileSaved.partial?"pending":"ready";row.diskCache=!fileSaved.partial;row.cacheID=fileSaved.cacheID;row.total=fileSaved.total;
       row.alphabet=fileSaved.alphabet||[];row.size=fileSaved.size||row.size;row.partial=!!fileSaved.partial;
-      row.streamWords=[];row.streamPositions=[];continue;
+      row.streamWords=[];row.streamPositions=[];
+      if(!fileSaved.partial)continue;
     }
     const saved=window.wudictHeadwordControl.cacheRead(maskCacheKey(row,"filter",query,maskFindWildcard));
     if(saved&&Array.isArray(saved.words)&&Array.isArray(saved.positions)){
@@ -6591,8 +6891,8 @@ function maskFindStart(){
     maskMemorySnapshot=snapshot;snapshot("wildcard_memory_start");
   }
   const cached=rows.filter(row=>row.state==="ready"&&!row.partial).length;
-  maskProgressShow(tx("browse.filteringWords")+" · "+window.wudictI18n.number(cached)+"/"+
-    window.wudictI18n.number(rows.length),()=>maskStopFind(job));
+  maskTaskStart("browse",tx("browse.filteringWords")+" · "+window.wudictI18n.number(cached)+"/"+
+    window.wudictI18n.number(rows.length),()=>maskStopFind(job),{done:cached,total:rows.length});
   const worker=async()=>{while(generation===maskGeneration&&rows===maskFindRows&&next<rows.length){
     const row=rows[next++];if(row.state==="ready")continue;
     active++;
@@ -6600,7 +6900,7 @@ function maskFindStart(){
     finally{active--}
   }};
   Promise.all(Array.from({length:maskWorkerCount(rows.length)},worker)).then(()=>{
-    if(findGeneration===maskFindGeneration){maskMemoryStop();maskBusyFinish(job);maskProgressHide();maskFindControls()}
+    if(findGeneration===maskFindGeneration){maskMemoryStop();maskBusyFinish(job);maskTaskFinish("browse");maskFindControls()}
   });
 }
 async function maskFindTurn(step){
@@ -6689,6 +6989,7 @@ if($("mode").value==="wildcards")maskInvalidate();
 
 async function doSearch(ev){
   window.wudictArticleFind?.stop();
+  hideSearchProgress();
   if(ev)ev.preventDefault();
   if(maskBusyJobs.size)return;
   const q=$("q").value.trim();
@@ -6826,6 +7127,7 @@ async function doSearch(ev){
     await fetchStream("/api/search?q="+encodeURIComponent(q)+"&mode="+mode+"&hl="+(hlOn?1:0)+diacriticsSearchParam()+"&dict="+encodeURIComponent(dictParam)+"&n="+perDict,msg=>{
       if(seq!==searchSeq)return; // superseded by a newer search
       if(msg.t==="begin"){
+        beginSearchProgress(seq,(msg.slots||[]).length);
         if(browseArticleDiagContext&&browseArticleDiagContext.searchStartedAt)
           logBrowseArticleTransition("search_stream_begin",performance.now()-browseArticleDiagContext.searchStartedAt);
         navDetach(); // the section it was walking is about to be replaced
@@ -6844,6 +7146,7 @@ async function doSearch(ev){
         clearStatusForResults();
         refreshLivePicker();
       }else if(msg.t==="hit"){
+        advanceSearchProgress(seq);
         if(browseArticleDiagContext&&!browseArticleDiagContext.firstResponse){
           browseArticleDiagContext.firstResponse=true;
           logBrowseArticleTransition("first_search_response",performance.now()-browseArticleDiagContext.searchStartedAt);
@@ -6916,6 +7219,7 @@ async function doSearch(ev){
         const forms=[...morphSeen].join(", ");
         morphNote.textContent=tx(morphAll?"search.morphAll":"search.morphSome",{query:msg.from||q,forms});
       }else if(msg.t==="end"){
+        finishSearchProgress(seq);
         if(browseArticleDiagContext&&browseArticleDiagContext.searchStartedAt)
           logBrowseArticleTransition("search_end",performance.now()-browseArticleDiagContext.searchStartedAt);
         refreshLivePicker();
@@ -6961,7 +7265,7 @@ async function doSearch(ev){
     // Only the newest search may stop the glyph. An aborted one has already
     // been superseded by a search that is still running, and clearing here
     // would blink the spinner off in the middle of the work that replaced it.
-    if(seq===searchSeq){livePickerSearching=false;refreshLivePicker();setBusy(false);clearTimeout(barrier);barrier=null}
+    if(seq===searchSeq){finishSearchProgress(seq);livePickerSearching=false;refreshLivePicker();setBusy(false);clearTimeout(barrier);barrier=null}
   }
 }
 $("frm").addEventListener("submit",doSearch);
@@ -7859,6 +8163,7 @@ window.addEventListener("popstate",()=>{
   if(!q){ // back to the empty start: leave nothing stale on screen
     window.wudictArticleFind?.stop();
     if(searchAC)searchAC.abort();
+    hideSearchProgress();
     $("out").innerHTML="";
     lastQuery="";
     lastScope=null; // no answer, so no answer-scope for the picker to name
@@ -7916,6 +8221,7 @@ $("q").addEventListener("blur",()=>setTimeout(()=>{
     doSearch();
   }else{
     if(searchAC)searchAC.abort();
+    hideSearchProgress();
     searchSeq++;
     window.wudictArticleFind?.stop();
     lastQuery="";
@@ -8830,7 +9136,7 @@ const stylerPanes={
   css:$("stylerBody")
 };
 function stylerSubjectSet(name){
-  if(name==="screen"&&!window.wudictNativeShell)name="bg";
+  if(name==="screen"&&!window.wudictAndroidShell)name="bg";
   if(!stylerPanes[name])name="presets";
   stylerSubject=name;
   for(const id in stylerPanes)stylerPanes[id].hidden=id!==name;
@@ -9149,7 +9455,7 @@ const screenBars=radioGroup($("barsChoice"),SCREEN_BARS_OPTIONS,
 stylerSubjectChoice=screenChoice($("stylerSubject"),$("stylerSubjectMenu"),
   SUBJECT_ORDER.map(id=>STYLER_SUBJECTS[id]),
   i=>stylerSubjectSet(SUBJECT_ORDER[i]),
-  i=>SUBJECT_ORDER[i]!=="screen"||!!window.wudictNativeShell);
+  i=>SUBJECT_ORDER[i]!=="screen"||!!window.wudictAndroidShell);
 /* One colour field's behaviour, wired twice (the window background and the
    margin colour). Both remember what they have been given - one list, the
    sheet's own, because a colour this reader likes is a colour this reader

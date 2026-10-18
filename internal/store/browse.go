@@ -18,10 +18,10 @@ import (
 
 // StreamBrowseHeadwords emits matched headwords as soon as a result block is
 // ready. total is the number found so far; done marks the final exact count.
-func (s *Store) StreamBrowseHeadwords(ctx context.Context, query string, mask bool, emit func([]string, int, bool) error) error {
+func (s *Store) StreamBrowseHeadwords(ctx context.Context, query string, mask bool, emit func([]string, int, bool, int, int) error) error {
 	query = strings.TrimSpace(query)
 	if query == "" {
-		return emit(nil, 0, true)
+		return emit(nil, 0, true, 0, s.meta.EntryCount)
 	}
 	var rows *sql.Rows
 	var err error
@@ -30,7 +30,7 @@ func (s *Store) StreamBrowseHeadwords(ctx context.Context, query string, mask bo
 		if compileErr != nil {
 			return compileErr
 		}
-		stream := newBrowseRowStream(emit)
+		stream := newBrowseRowStream(s.meta.EntryCount, emit)
 		if literal := maskTrigramLiteral(query); s.hasTrigram && !s.staleFold && literal != "" && !maskHasASCIILead(query) {
 			phrase := `"` + strings.ReplaceAll(literal, `"`, `""`) + `"`
 			rows, queryErr := s.db.QueryContext(ctx, `SELECT DISTINCT e.w FROM entry_trigram t
@@ -56,7 +56,7 @@ func (s *Store) StreamBrowseHeadwords(ctx context.Context, query string, mask bo
 		return stream.finish()
 	}
 	if !strings.ContainsFunc(query, func(r rune) bool { return unicode.IsLetter(r) || unicode.IsNumber(r) }) {
-		return emit(nil, 0, true)
+		return emit(nil, 0, true, 0, s.meta.EntryCount)
 	}
 	match := buildMatch(query, "w")
 	rows, err = s.db.QueryContext(ctx, `SELECT e.w FROM entry_fts f
@@ -67,11 +67,11 @@ func (s *Store) StreamBrowseHeadwords(ctx context.Context, query string, mask bo
 	}
 	defer rows.Close()
 	terms := dict.HeadwordTermMatcher(query)
-	return streamBrowseRows(ctx, rows, terms, emit)
+	return streamBrowseRows(ctx, rows, terms, s.meta.EntryCount, emit)
 }
 
-func streamBrowseRows(ctx context.Context, rows *sql.Rows, matches func(string) bool, emit func([]string, int, bool) error) error {
-	stream := newBrowseRowStream(emit)
+func streamBrowseRows(ctx context.Context, rows *sql.Rows, matches func(string) bool, scanTotal int, emit func([]string, int, bool, int, int) error) error {
+	stream := newBrowseRowStream(scanTotal, emit)
 	if err := stream.rows(ctx, rows, matches); err != nil {
 		return err
 	}
@@ -81,13 +81,16 @@ func streamBrowseRows(ctx context.Context, rows *sql.Rows, matches func(string) 
 type browseRowStream struct {
 	words        []string
 	total        int
+	scanned      int
+	scanTotal    int
 	previous     string
 	nextProgress time.Time
-	emit         func([]string, int, bool) error
+	emit         func([]string, int, bool, int, int) error
 }
 
-func newBrowseRowStream(emit func([]string, int, bool) error) *browseRowStream {
-	return &browseRowStream{words: make([]string, 0, dict.MaskPageSize), nextProgress: time.Now().Add(time.Second), emit: emit}
+func newBrowseRowStream(scanTotal int, emit func([]string, int, bool, int, int) error) *browseRowStream {
+	return &browseRowStream{words: make([]string, 0, dict.MaskPageSize), scanTotal: scanTotal,
+		nextProgress: time.Now().Add(time.Second), emit: emit}
 }
 
 func (s *browseRowStream) rows(ctx context.Context, rows *sql.Rows, matches func(string) bool) error {
@@ -104,19 +107,20 @@ func (s *browseRowStream) rows(ctx context.Context, rows *sql.Rows, matches func
 			continue
 		}
 		s.previous = word
+		s.scanned++
 		if matches(word) {
 			s.words = append(s.words, word)
 			s.total++
 		}
 		now := time.Now()
 		if len(s.words) >= dict.MaskPageSize || (len(s.words) > 0 && !now.Before(s.nextProgress)) {
-			if err := s.emit(s.words, s.total, false); err != nil {
+			if err := s.emit(s.words, s.total, false, s.scanned, s.scanTotal); err != nil {
 				return err
 			}
 			s.words = make([]string, 0, dict.MaskPageSize)
 			s.nextProgress = now.Add(time.Second)
 		} else if now.After(s.nextProgress) {
-			if err := s.emit(nil, s.total, false); err != nil {
+			if err := s.emit(nil, s.total, false, s.scanned, s.scanTotal); err != nil {
 				return err
 			}
 			s.nextProgress = now.Add(time.Second)
@@ -127,11 +131,11 @@ func (s *browseRowStream) rows(ctx context.Context, rows *sql.Rows, matches func
 
 func (s *browseRowStream) finish() error {
 	if len(s.words) > 0 {
-		if err := s.emit(s.words, s.total, false); err != nil {
+		if err := s.emit(s.words, s.total, false, s.scanned, s.scanTotal); err != nil {
 			return err
 		}
 	}
-	return s.emit(nil, s.total, true)
+	return s.emit(nil, s.total, true, s.scanTotal, s.scanTotal)
 }
 
 // FindHeadwords uses the always-present FTS headword index. A token-prefix
@@ -272,23 +276,94 @@ const browseOrder = " ORDER BY w COLLATE NOCASE"
 
 // Page implements dict.Browser.
 func (s *Store) Page(offset, n int) ([]string, error) {
+	words, _, err := s.PageWithStats(offset, n)
+	return words, err
+}
+
+// BrowsePageStats describes how a prepared index served one Browse page.
+type BrowsePageStats struct {
+	Offset        int
+	AnchorOrdinal int
+	AnchorIndex   bool
+	AnchorUsed    bool
+	AnchorLookup  time.Duration
+	Read          time.Duration
+	RowsRead      int
+	Words         int
+}
+
+// PageWithStats reads a Browse page and reports whether it started from a
+// sparse anchor. The normal Browser interface uses Page and discards the stats.
+func (s *Store) PageWithStats(offset, n int) ([]string, BrowsePageStats, error) {
+	stats := BrowsePageStats{Offset: max(0, offset), AnchorIndex: s.hasBrowseAnchors}
 	if offset < 0 {
 		offset = 0
 	}
 	if n <= 0 {
-		return nil, nil
+		return nil, stats, nil
 	}
-	rows, err := s.db.Query("SELECT w FROM entry WHERE "+browseWhere+browseOrder+" LIMIT ? OFFSET ?", n, offset)
+	var rows *sql.Rows
+	var err error
+	if s.hasBrowseAnchors {
+		var ordinal, entryID int
+		var word string
+		anchorStarted := time.Now()
+		anchorErr := s.db.QueryRow("SELECT ordinal, entry_id, w FROM browse_anchor WHERE ordinal <= ? ORDER BY ordinal DESC LIMIT 1", offset).Scan(&ordinal, &entryID, &word)
+		stats.AnchorLookup = time.Since(anchorStarted)
+		if anchorErr == nil {
+			stats.AnchorUsed = true
+			stats.AnchorOrdinal = ordinal
+			skip := offset - ordinal
+			readStarted := time.Now()
+			rows, err = s.db.Query(`SELECT w FROM entry WHERE `+browseWhere+
+				` AND (w COLLATE NOCASE, id) >= (? COLLATE NOCASE, ?)`+
+				` ORDER BY w COLLATE NOCASE, id LIMIT ?`, word, entryID, skip+n)
+			if err != nil {
+				return nil, stats, err
+			}
+			out := make([]string, 0, n)
+			scanned := 0
+			for rows.Next() {
+				var w string
+				if err := rows.Scan(&w); err != nil {
+					rows.Close()
+					stats.Read = time.Since(readStarted)
+					return nil, stats, err
+				}
+				stats.RowsRead++
+				if scanned < skip {
+					scanned++
+					continue
+				}
+				scanned++
+				if len(out) == 0 || out[len(out)-1] != w {
+					out = append(out, w)
+				}
+			}
+			err = rows.Err()
+			rows.Close()
+			stats.Read = time.Since(readStarted)
+			stats.Words = len(out)
+			return out, stats, err
+		} else if anchorErr != sql.ErrNoRows {
+			return nil, stats, anchorErr
+		}
+	}
+	readStarted := time.Now()
+	rows, err = s.db.Query("SELECT w FROM entry WHERE "+browseWhere+browseOrder+" LIMIT ? OFFSET ?", n, offset)
 	if err != nil {
-		return nil, err
+		stats.Read = time.Since(readStarted)
+		return nil, stats, err
 	}
-	defer rows.Close()
 	out := make([]string, 0, n)
 	for rows.Next() {
 		var w string
 		if err := rows.Scan(&w); err != nil {
-			return nil, err
+			rows.Close()
+			stats.Read = time.Since(readStarted)
+			return nil, stats, err
 		}
+		stats.RowsRead++
 		// Homographs are two articles under one headword, and a word list
 		// that prints "bank" twice reads as a bug. Only the RUN collapses -
 		// the offsets stay row-based, which is what keeps them addressing the
@@ -298,11 +373,70 @@ func (s *Store) Page(offset, n int) ([]string, error) {
 		}
 		out = append(out, w)
 	}
-	return out, rows.Err()
+	err = rows.Err()
+	rows.Close()
+	stats.Read = time.Since(readStarted)
+	stats.Words = len(out)
+	return out, stats, err
+}
+
+// StreamBrowseMaskAlphabet builds one jump label for every paged headword
+// block. Browse's regular alphabet is intentionally sparse; the Wildcards
+// all-words ribbon must instead address each MaskPageSize block.
+func (s *Store) StreamBrowseMaskAlphabet(ctx context.Context, progress func(scanned, total int) error) ([]dict.Letter, int, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT w FROM entry WHERE `+browseWhere+browseOrder)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+	sections := dict.MaskSections{}
+	scanned, scanTotal := 0, max(0, s.meta.EntryCount)
+	for rows.Next() {
+		if err := ctx.Err(); err != nil {
+			return nil, scanned, err
+		}
+		var word string
+		if err := rows.Scan(&word); err != nil {
+			return nil, scanned, err
+		}
+		sections.Add(word)
+		scanned++
+		if progress != nil && scanned%30000 == 0 {
+			if err := progress(scanned, scanTotal); err != nil {
+				return nil, scanned, err
+			}
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, scanned, err
+	}
+	if progress != nil {
+		if err := progress(scanned, scanned); err != nil {
+			return nil, scanned, err
+		}
+	}
+	return sections.Finish(), scanned, nil
 }
 
 // Locate implements dict.Browser.
 func (s *Store) Locate(word string) (int, error) {
+	if s.hasBrowseAnchors {
+		var ordinal, entryID int
+		var anchorWord string
+		err := s.db.QueryRow(`SELECT ordinal, entry_id, w FROM browse_anchor
+			WHERE w < ? COLLATE NOCASE ORDER BY w COLLATE NOCASE DESC, entry_id DESC LIMIT 1`, word).
+			Scan(&ordinal, &entryID, &anchorWord)
+		if err == nil {
+			var count int
+			err = s.db.QueryRow(`SELECT COUNT(*) FROM entry WHERE `+browseWhere+
+				` AND (w COLLATE NOCASE, id) > (? COLLATE NOCASE, ?)`+
+				` AND w < ? COLLATE NOCASE`, anchorWord, entryID, word).Scan(&count)
+			return ordinal + count, err
+		}
+		if err != sql.ErrNoRows {
+			return 0, err
+		}
+	}
 	var n int
 	err := s.db.QueryRow("SELECT COUNT(*) FROM entry WHERE "+browseWhere+" AND w < ? COLLATE NOCASE", word).Scan(&n)
 	return n, err

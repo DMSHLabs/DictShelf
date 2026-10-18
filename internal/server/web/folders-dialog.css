@@ -19,9 +19,6 @@ html[data-shell-image] .folders-dialog-shell{background-color:var(--paper-bg);
   background-size:100% 100%,100% 100%;background-position:center;background-repeat:no-repeat;background-attachment:fixed}
 html:has(link[data-preset="sepia"]) dialog#foldersDialog.group-dialog.panel-card.workspace-dialog,
 html:has(link[data-preset="sepia"]) .folders-dialog-shell{background:var(--bg)}
-#foldersDialog #workNotice{position:static;transform:none;z-index:auto;width:100%;max-width:none;margin:0;pointer-events:auto}
-#foldersDialog #workNotice[hidden]{display:none}
-#foldersDialog #workNoticeStop{pointer-events:auto}
 .folders-dialog-top{display:flex;align-items:center;justify-content:space-between;gap:1em;flex:none}
 .folders-dialog-top h2{font-size:calc(var(--ui-font-title) * 1rem);margin:0}
 .folders-dialog-top .btn{box-sizing:border-box;display:grid;place-items:center;flex:none;width:calc(var(--ui-main-control-height) * 1em);

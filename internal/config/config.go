@@ -498,7 +498,8 @@ const configTemplate = `# wudict configuration  (~/.wudict/wudict.toml)
 #                                     # otherwise aim a download anywhere this machine can reach.
 # IMPORT_INSECURE = "0"               # "1" = also allow plain http, and hosts on the local network.
 #                                     # Only meaningful if you trust the address you are pointing at.
-# INDEX_WORKERS = "1"                 # how many dictionaries may be prepared at once. Each one
+# INDEX_WORKERS = "1"                 # how many dictionaries are processed at once by indexing
+#                                     # and multi-dictionary search. Each index preparation
 #                                     # saturates a core and holds a few hundred bytes per headword,
 #                                     # so the default is one - the machine stays usable.
 #                                     # "auto" = all but one core, at least one; "all" (or 0) = every core.
