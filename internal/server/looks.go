@@ -111,15 +111,10 @@ func builtinLooks() []look {
 			// window colour is called in its own code and what the style layer
 			// is called in the pane; a third thing by that name was one too
 			// many, and the reader asked for this one to move.
-			//
-			// No window colour: the palette in the layer is the whole look.
-			// It used to enable the warm window colour as well, which meant
-			// the look appeared to do nothing when that colour was switched
-			// off - and the two are different things: the layer paints the
-			// page, the colour paints the window behind it.
 			ID: lookWarm, Name: "Warm", Builtin: true,
 			State: lookState{
 				Layers: []string{"sepia"},
+				Light:  lookHalf{ColorEnabled: true, Color: "#F4ECD8"},
 			},
 		},
 		{

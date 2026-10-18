@@ -316,8 +316,9 @@ func (s *Store) PageWithStats(offset, n int) ([]string, BrowsePageStats, error) 
 			skip := offset - ordinal
 			readStarted := time.Now()
 			rows, err = s.db.Query(`SELECT w FROM entry WHERE `+browseWhere+
-				` AND (w COLLATE NOCASE, id) >= (? COLLATE NOCASE, ?)`+
-				` ORDER BY w COLLATE NOCASE, id LIMIT ?`, word, entryID, skip+n)
+				` AND w >= ? COLLATE NOCASE`+
+				` AND (w COLLATE NOCASE > ? COLLATE NOCASE OR (w = ? COLLATE NOCASE AND id >= ?))`+
+				` ORDER BY w COLLATE NOCASE, id LIMIT ?`, word, word, word, entryID, skip+n)
 			if err != nil {
 				return nil, stats, err
 			}

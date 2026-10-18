@@ -365,7 +365,7 @@
     clearTimeout(resizeTimer);resizeTimer=setTimeout(()=>{
       if(resizeBurst!==burst)return;resizeBurst=null;
       const send=window.sendBrowseDiagnostic;
-      if(typeof send==='function')send({event:'work_resize',durationMs:Math.round(performance.now()-burst.started),words:window.innerWidth,letters:window.innerHeight,active:burst.count,completed:burst.maxHandlerDelay,dictionaries:burst.maxFrameDelay,readMs:burst.maxPaintDelay,progressEvents:tasks.size});
+      if(typeof send==='function')send({event:'work_resize',durationMs:Math.round(performance.now()-burst.started),viewportWidth:window.innerWidth,viewportHeight:window.innerHeight,resizeEvents:burst.count,handlerDelayMaxMs:Math.round(burst.maxHandlerDelay),frameDelayMaxMs:Math.round(burst.maxFrameDelay),paintDelayMaxMs:Math.round(burst.maxPaintDelay),activeTasks:tasks.size});
     },350);
   },{passive:true});
   try {const previous=JSON.parse(sessionStorage.getItem(cacheKey));if(previous?.running)render(previous);}catch{}
