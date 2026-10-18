@@ -144,14 +144,15 @@ input[type=search]:focus{border-color:var(--focus);box-shadow:0 0 0 3px color-mi
 /* --fg-soft is 5.4:1 light, 5.1:1 dark; opacity:1 undoes Firefox's own 0.54,
    so every browser draws the same colour. */
 input[type=search]::placeholder{color:var(--fg-soft);opacity:1}
-/* #q's placeholder is a query (MODE_HINT) and is never seen beside typed
-   text, so it must read as "not typed" on its own. Lightness cannot carry
-   that: it is read, so it keeps >= 4.5:1, which leaves it near enough to --fg
-   to pass for it (D172). The shape carries it: the → in front (syncChips) and
-   a fixed-width face, which is how a manual sets text to type. The styler's
+/* The placeholders of #q (a query, MODE_HINT) and #panelFind (what to type)
+   are never seen beside typed text, so each must read as "not typed" on its
+   own. Lightness cannot carry that: it is read, so it keeps >= 4.5:1, which
+   leaves it near enough to --fg to pass for it (D172). The shape carries it:
+   the → in front (syncChips for #q, the markup for #panelFind) and a
+   fixed-width face, which is how a manual sets text to type. The styler's
    stack; .875em because a monospace face looks larger than --font at the
    same size, and it keeps "→ word for word" inside a narrow field. */
-#q::placeholder{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.875em}
+#q::placeholder,#panelFind::placeholder{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.875em}
 /* ⌕ and spinner share ONE 14px box and crossfade, so going busy is a change
    of identity in an occupied box rather than an element arriving — the least
    intrusive transition available, and the only one that costs no layout.
@@ -1178,7 +1179,7 @@ html:has(#panel.show) .bar{padding-right:var(--wd-sbw,0px)}
      the search. It acts on the list the field narrows, so it shows only while
      the field is empty and something is pinned (D166). -->
 <div class="pfrow"><label class="pfind"><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" d="M7.1 2.4a4.7 4.7 0 1 0 0 9.4 4.7 4.7 0 0 0 0-9.4zm3.6 8.3l3 3"/></svg>
-<input type="search" id="panelFind" placeholder="title or group" autocomplete="off" enterkeyhint="done" aria-label="Find a dictionary by title or group"></label>
+<input type="search" id="panelFind" placeholder="→ title or group" autocomplete="off" enterkeyhint="done" aria-label="Find a dictionary by title or group"></label>
 <button type="button" id="azBtn" aria-expanded="false" aria-controls="azAsk" title="Unpin all dictionaries and list them A–Z" hidden>A–Z</button></div>
 <div class="azq" id="azAsk" hidden></div></div>
 <div class="panel-scroll">

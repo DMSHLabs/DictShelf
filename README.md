@@ -37,7 +37,7 @@ Windows and Android.
 - Instant search across all dictionaries with four modes: prefix, exact, full-text, and [wildcard](https://wudict.legbehindneck.com/reference/wildcard-syntax/) search (`c?t`, `*ology`, `*rain*`)
 - Dictionaries are automatically grouped by language, publisher, direction, or [your own custom groups](https://wudict.legbehindneck.com/dictionaries/groups/).
 - Adjust the font size via the <kbd>☰</kbd> → <kbd><b>+/-</b></kbd> widget
-- [Custom lemmatization](https://wudict.legbehindneck.com/start/search/#inflected-words) (word-form morphology) for 24 languages, configurable via <kbd>☰</kbd> → <kbd>⚙️</kbd> → <kbd>**Lemmatization**</kdb>; English lemmatization comes pre-installed
+- [Custom lemmatization](https://wudict.legbehindneck.com/start/search/#inflected-words) (word-form morphology) for 24 languages, configurable via <kbd>☰</kbd> → <kbd>⚙️</kbd> → <kbd>**Lemmatization**</kbd>; English lemmatization comes pre-installed
 - Browse **all headwords** in a dictionary via <kbd>☰</kbd> → <kbd>**Browse**</kbd>
 - Apply custom CSS styles and fonts via the [embedded Styler](https://wudict.legbehindneck.com/dictionaries/styles/#custom-styles): <kbd>☰</kbd> → <kbd>⚙️</kbd> → <kbd>**Custom Style**</kbd>
 - 📱 Double-tap / 💻 double-click any word in a wudict dictionary article to instantly look up its definition
