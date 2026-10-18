@@ -761,6 +761,15 @@ func (m *Manager) extractAll(ctx context.Context, j *jobState, src Source, stage
 		}
 		defer closeArchive()
 	}
+	if err == nil {
+		// Everything chosen is written before the last of it is renamed into
+		// the library, so the room is for all of it, asked once.
+		var need int64
+		for _, c := range chosen {
+			need += c.Size
+		}
+		err = roomFor(j.dest, "to install it", need)
+	}
 	pa, plain := a.(*plainArchive)
 	for i, c := range chosen {
 		if err != nil {

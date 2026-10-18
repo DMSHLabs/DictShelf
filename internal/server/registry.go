@@ -8,7 +8,6 @@
 package server
 
 import (
-	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -185,7 +184,7 @@ func (u *upgraded) linked(name string) (io.ReadCloser, string, bool) {
 				if mime == "" {
 					mime = resource.MIME(name)
 				}
-				return io.NopCloser(bytes.NewReader(data)), mime, true
+				return resource.Bytes(data), mime, true
 			}
 		}
 	}
@@ -471,7 +470,7 @@ func (e *entry) maybeAutoIndex() {
 	if !e.autoTried.CompareAndSwap(false, true) {
 		return
 	}
-	// Automatic only while it is cheap (O9). Above the gate the convenience
+	// Automatic only while it is cheap (D99). Above the gate the convenience
 	// stops being one: a 2.9 M-headword dictionary measured 17 s of saturated
 	// CPU and 553 MB peak on a laptop, and it is not the program's place to
 	// spend minutes of a phone's battery and a gigabyte of its disk on a
@@ -837,7 +836,7 @@ type storeBacked interface{ SourcePath() string }
 const previewBytesPerEntry = 350
 
 // autoIndexMaxEntries is the headword count above which preparation stops
-// happening on the program's own initiative (O9). Measured against the local
+// happening on the program's own initiative (D99). Measured against the local
 // 152-dictionary corpus: a prepared headwords-only text.db costs ~1 KB per
 // entry in aggregate, so this ceiling is about a gigabyte of disk and, at
 // previewBytesPerEntry, a third of a gigabyte resident during the scan. Only

@@ -15,6 +15,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/wuweidict/wudict/internal/htmlref"
 )
 
 // Faithful ports of pyglossary babylon_bgl/bgl_text.py text helpers.
@@ -38,21 +40,16 @@ func removeNewlines(s string) string { return reNewlines.ReplaceAllString(s, " "
 
 func normalizeNewlines(s string) string { return reNewlines.ReplaceAllString(s, "\n") }
 
-// Replacers built once: strings.NewReplacer compiles a trie, and these run
+// imgMarkerStripper is built once: strings.NewReplacer compiles a trie, and it runs
 // per definition during an ingest scan of the whole dictionary.
-var (
-	imgMarkerStripper = strings.NewReplacer("\x1e", "", "\x1f", "")
-	xmlEscaper        = strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;")
-)
+var imgMarkerStripper = strings.NewReplacer("\x1e", "", "\x1f", "")
 
 // fixImgLinks strips the \x1e / \x1f markers Babylon wraps around img src names.
 func fixImgLinks(s string) string {
 	return imgMarkerStripper.Replace(s)
 }
 
-func escapeXML(s string) string {
-	return xmlEscaper.Replace(s)
-}
+func escapeXML(s string) string { return htmlref.EscapeText(s) }
 
 // replaceHTMLEntities converts &#NN; / &#xHH; / &name; references to their
 // characters. Unknown named entities are kept verbatim (Babylon dictionaries

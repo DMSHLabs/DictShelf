@@ -75,8 +75,10 @@ build-purego: ## Build the host binary - purego flavour (*slower* pure-Go sqlite
 install: ## go install the wudict binary into GOBIN
 	go install $(GOFLAGS) -ldflags "$(LDFLAGS)" $(CMD)
 
+# No browser step: `serve` (the default command) opens one itself once it is
+# listening, and a CLI command such as `lookup` needs none.
 .PHONY: run
-run: build open ## Build then run with ARGS, e.g. make run ARGS="lookup dict.mdx word"
+run: build ## Build then run with ARGS, e.g. make run ARGS="lookup dict.mdx word"
 	./$(BINARY) --verbose $(ARGS)
 
 .PHONY: ingest
@@ -318,9 +320,12 @@ apk-play-debug: android-go ## Build the Play-flavour debug APK (SAF import)
 	@echo "$(APK_PLAY_DEBUG)"
 
 .PHONY: apk-play-release
-apk-play-release: $(KEYSTORE_GUARD) android-go ## Build the Play-flavour release APK (SAF import)
+apk-play-release: $(KEYSTORE_GUARD) android-go ## Build + sign the Play-flavour release APK (SAF import), copy to dist/
+	@# Cleared before Gradle runs, for the reason apk-foss-release gives.
+	@rm -f dist/$(BINARY)-android-$(ANDROID_ABI)-play-*.apk
 	cd android && ./gradlew assemblePlayRelease $(GRADLE_VERSION)
-	@echo "$(APK_PLAY)"
+	@mkdir -p dist && cp "$(APK_PLAY)" dist/
+	@echo "dist/$(notdir $(APK_PLAY))"
 
 .PHONY: apk-play-release-install
 apk-play-release-install: apk-play-release ## build Play release and install via adb
@@ -380,7 +385,7 @@ apk-verify: ## Assert the Play APK declares no storage permission and still extr
 	@sh tools/verify-apk.sh
 
 .PHONY: test-purego
-test-purego: ## Run store tests against the pure-Go sqlite driver (release parity)
+test-purego: ## Run store + server tests against the pure-Go sqlite driver (release parity)
 	CGO_ENABLED=0 go test -tags purego ./internal/store/ ./internal/server/
 
 # ---- quality ------------------------------------------------------------
@@ -648,9 +653,14 @@ linux-service-status: ## Show service state (add 'journalctl --user -u wudict -f
 clean: ## Remove binaries, dist/, coverage artifacts
 	rm -rf $(BINARY) $(BUILD_DIR) coverage.out
 
+# The folder comes from tools/dbdir - the app's own resolution - and never
+# from a copy of the default here, which would delete ~/.wudict/db while the
+# library the app uses sat in DB_DIR untouched.
 .PHONY: purge
-purge: ## zap all local cached dictionaries in ~/.wudict/db
-	rm -rfv ~/.wudict/db
+purge: ## Delete the whole prepared library: DB_DIR as wudict resolves it (env, wudict.toml, else ~/.wudict/db)
+	@dir=$$(CGO_ENABLED=0 go run -tags purego ./tools/dbdir) || exit 1; \
+	case "$$dir" in ""|/|"$$HOME"|"$$HOME"/) echo "refusing to delete '$$dir'"; exit 2;; esac; \
+	if [ -d "$$dir" ]; then rm -rfv "$$dir"; else echo "no library at $$dir"; fi
 
 .PHONY: version
 version: ## Print the version stamp used for builds
@@ -665,12 +675,12 @@ release-notes: ## Preview the release notes CI will publish (TAG=v3.8.0; default
 .PHONY: remotes
 remotes: ## git remotes
 	git remote -v
-	echo '---'
+	@echo '---'
 	git --no-pager branch -vv
 
 .PHONY: open
-open: build  ## run browser
-	open http://localhost:6888
+open: ## Open the running server in a browser (PORT=<n>, default 6888)
+	@python3 -m webbrowser "http://localhost:$(or $(PORT),6888)" 2>/dev/null || open "http://localhost:$(or $(PORT),6888)"
 
 .PHONY: android-clean
 android-clean: ## Remove Gradle's Android build outputs (stale APKs under an older name)

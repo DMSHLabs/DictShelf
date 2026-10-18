@@ -5,8 +5,7 @@
 // Package store is the ingested backend: the wudict canonical SQLite
 // format (docs/SPEC.md §2). One `text.db` per dictionary - inside its library
 // folder, see library.go - holds headwords, aliases, article HTML, and the
-// FTS5 indexes powering the contains and full-text modes the direct backends
-// cannot offer.
+// FTS5 index powering the full-text mode the direct backends cannot offer.
 //
 // Query modes are ported from draego/drae.go with the fixes catalogued in
 // docs/SPEC.md §FTS-audit (stripped-text indexing, quoted-phrase MATCH
@@ -76,6 +75,15 @@ type Store struct {
 	alphaOnce sync.Once
 	alpha     []dict.Letter
 	alphaErr  error
+
+	// The wildcard statements (wildcard.go), prepared on the first wildcard
+	// search of this handle and kept for its life; db.Close releases them.
+	// marksStmt is nil when no headword starts with a nonspacing mark, which a
+	// text.db that does not change under an open reader answers once.
+	marksOnce sync.Once
+	marksStmt *sql.Stmt
+	marksErr  error
+	scanStmts sync.Map // wildcardScan text → *sql.Stmt
 }
 
 // markupVersionOf reads the article-markup version a database records. Absent

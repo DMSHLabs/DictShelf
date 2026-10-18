@@ -12,7 +12,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-	"unicode/utf8"
+
+	"github.com/wuweidict/wudict/internal/fsx"
 )
 
 // Where a half-extracted dictionary lives while it is being extracted.
@@ -100,18 +101,6 @@ func Sweep(dests []string) {
 	}
 }
 
-// windowsReserved are the device names MS-DOS bequeathed to every Windows
-// filesystem, which are still not usable as file names and still resolve to
-// the device WITH any extension attached. An archive is free to contain
-// "CON.mdx"; a folder named after it is not free to exist.
-var windowsReserved = map[string]bool{
-	"con": true, "prn": true, "aux": true, "nul": true,
-	"com1": true, "com2": true, "com3": true, "com4": true, "com5": true,
-	"com6": true, "com7": true, "com8": true, "com9": true,
-	"lpt1": true, "lpt2": true, "lpt3": true, "lpt4": true, "lpt5": true,
-	"lpt6": true, "lpt7": true, "lpt8": true, "lpt9": true,
-}
-
 // safeDirName turns a candidate's name - which came out of an archive and is
 // therefore attacker-chosen - into one path segment that can be created on any
 // of the three platforms this runs on.
@@ -124,32 +113,16 @@ var windowsReserved = map[string]bool{
 // separators, the traversal, the device names - is removed rather than
 // escaped, and the result is still checked for containment when it is used.
 func safeDirName(name string) string {
-	var b strings.Builder
-	for _, r := range name {
-		switch {
-		case r < 0x20 || r == 0x7f:
-			// control characters, including the newline that makes a folder
-			// name unreadable in every listing
-		case strings.ContainsRune(`/\:*?"<>|`, r):
-			b.WriteByte('_')
-		default:
-			b.WriteRune(r)
-		}
-	}
 	// Bytes, not runes: the limit every filesystem here enforces is 255 bytes
 	// per component. Cut on a rune boundary so the name stays printable.
-	out := strings.TrimLeft(b.String(), ". ")
-	for len(out) > 200 {
-		_, n := utf8.DecodeLastRuneInString(out)
-		out = out[:len(out)-n]
-	}
+	out := fsx.CutUTF8(strings.TrimLeft(fsx.SafeName(name, '_'), ". "), 200)
 	// Leading dots hide the folder from the scan that is supposed to find it;
 	// trailing dots and spaces are silently stripped by Windows, which turns
 	// "a." and "a" into a collision the caller cannot see coming. Trimmed
-	// after the cut, which can expose either.
+	// after the cut, which can expose either. An archive is free to contain
+	// "CON.mdx"; a folder named after it is not free to exist.
 	out = strings.TrimRight(out, ". ")
-	if i := strings.IndexByte(out, '.'); windowsReserved[strings.ToLower(out)] ||
-		(i > 0 && windowsReserved[strings.ToLower(out[:i])]) {
+	if fsx.WindowsReserved(out) {
 		out = "_" + out
 	}
 	if out == "" {

@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/wuweidict/wudict/internal/artmark"
+	"github.com/wuweidict/wudict/internal/htmlref"
 
 	"github.com/wuweidict/wudict/internal/dict"
 )
@@ -138,12 +139,13 @@ func IngestPlan(r dict.Reader, dbPath string, plan Plan, progress Progress) (rep
 	// free, a kill by the low-memory killer rather than a slow ingest.
 	//
 	// So both are scratch tables. wref is (headword, folded headword, id) per
-	// entry; plink is one row per unresolved redirect. TEMP means SQLite keeps
-	// them in its own temp file and discards them when the connection closes,
-	// so nothing here reaches the text.db that ships.
+	// entry; plink is one row per unresolved redirect, its target folded the
+	// same way. TEMP means SQLite keeps them in its own temp file and discards
+	// them when the connection closes, so nothing here reaches the text.db
+	// that ships.
 	if _, err = tx.Exec(`
 		CREATE TEMP TABLE wref(w TEXT NOT NULL, lw TEXT NOT NULL, id INTEGER NOT NULL);
-		CREATE TEMP TABLE plink(w TEXT NOT NULL, target TEXT NOT NULL);
+		CREATE TEMP TABLE plink(w TEXT NOT NULL, target TEXT NOT NULL, lt TEXT NOT NULL);
 	`); err != nil {
 		return rep, err
 	}
@@ -151,7 +153,7 @@ func IngestPlan(r dict.Reader, dbPath string, plan Plan, progress Progress) (rep
 	if err != nil {
 		return rep, err
 	}
-	insLink, err := tx.Prepare("INSERT INTO plink(w, target) VALUES(?, ?)")
+	insLink, err := tx.Prepare("INSERT INTO plink(w, target, lt) VALUES(?, ?, ?)")
 	if err != nil {
 		return rep, err
 	}
@@ -174,7 +176,7 @@ func IngestPlan(r dict.Reader, dbPath string, plan Plan, progress Progress) (rep
 			continue
 		}
 		if e.LinkTo != "" {
-			if _, err = insLink.Exec(hw, e.LinkTo); err != nil {
+			if _, err = insLink.Exec(hw, e.LinkTo, strings.ToLower(e.LinkTo)); err != nil {
 				return rep, err
 			}
 			linkCount++
@@ -232,7 +234,7 @@ func IngestPlan(r dict.Reader, dbPath string, plan Plan, progress Progress) (rep
 		// believed - a bar that reads 103% is a bug report about arithmetic,
 		// while one that sits at 100% while the last records land is what the
 		// client already renders as "finishing…".
-		if unresolved, err = resolveLinks(tx, insAlias, func(done int) {
+		if unresolved, err = resolveLinks(tx, linkCount, func(done int) {
 			donerec = clampDone(int(id)+done, total)
 			if progress != nil {
 				progress(donerec, total)
@@ -257,16 +259,16 @@ func IngestPlan(r dict.Reader, dbPath string, plan Plan, progress Progress) (rep
 		"created":          time.Now().UTC().Format(time.RFC3339),
 		"source_sha256_1M": sourceHash(srcMeta.Path),
 	}
-	// Only what the SOURCE DICTIONARY declared. A language worked out from the
-	// file name or a parent folder is deliberately not recorded: those are
-	// recomputed at every open, so renaming a folder to add a hint takes effect
-	// immediately instead of being frozen here by an ingest that may have run
-	// before the source file was moved - or before it stopped existing at all.
 	// which Reader produced the entries; a format that registered no version
 	// records none, and Outdated has no opinion about it
 	if rv := dict.ReaderVersion(srcMeta.Format); rv > 0 {
 		metaKV["reader_version"] = fmt.Sprint(rv)
 	}
+	// Only what the SOURCE DICTIONARY declared. A language worked out from the
+	// file name or a parent folder is deliberately not recorded: those are
+	// recomputed at every open, so renaming a folder to add a hint takes effect
+	// immediately instead of being frozen here by an ingest that may have run
+	// before the source file was moved - or before it stopped existing at all.
 	if srcMeta.IndexLang != "" {
 		metaKV["index_lang"] = srcMeta.IndexLang
 	}
@@ -338,23 +340,10 @@ func IngestPlan(r dict.Reader, dbPath string, plan Plan, progress Progress) (rep
 	return rep, nil
 }
 
-// linkPage bounds how many pending redirects are held in memory at once while
-// they are resolved. The rows are read in pages rather than streamed because
-// the ingest runs on a single connection: an open cursor would block the
-// per-link lookups issued against the same connection.
+// linkPage is how many pending redirects one resolving statement covers: the
+// unit of progress during the link pass.
 const linkPage = 10000
 
-// resolveLinks turns every pending redirect into an alias row and reports how
-// many had no target.
-//
-// The rule: the raw headword first, else the lowercased one, and in both cases
-// the lowest entry id. One folded lookup covers both - a raw match implies
-// a folded match - so the candidates come back in id order and the first row
-// whose headword matches the target verbatim wins, else the first row at all.
-//
-// Folding is Go's strings.ToLower on both sides, not SQL. SQLite's NOCASE and
-// lower() are ASCII-only, so in the query "ÁBACO" would not resolve to "ábaco" -
-// silently wrong on exactly the accented languages a dictionary is written in.
 // clampDone keeps a progress numerator inside the denominator the source
 // header supplied. A total of 0 means "unknown" throughout this file and is
 // reported as a bare count by the client, so it is left alone.
@@ -365,101 +354,56 @@ func clampDone(done, total int) int {
 	return done
 }
 
-func resolveLinks(tx *sql.Tx, insAlias *sql.Stmt, done func(int)) (int, error) {
+// resolveLinks turns every pending redirect into an alias row and reports how
+// many had no target.
+//
+// The rule: the raw headword first, else the lowercased one, and in both cases
+// the lowest entry id. One folded lookup covers both - a raw match implies
+// a folded match - so the candidates are ordered verbatim-first, then by id.
+//
+// Folding is Go's strings.ToLower on both sides, done at insert time (wref.lw,
+// plink.lt), not SQL. SQLite's NOCASE and lower() are ASCII-only, so in the
+// query "ÁBACO" would not resolve to "ábaco" - silently wrong on exactly the
+// accented languages a dictionary is written in. With both sides folded the
+// match itself is plain equality, so the whole pass runs inside SQLite: one
+// statement per page instead of a query and an insert per redirect.
+//
+// plink is a fresh TEMP table written once in order, so its rowids are
+// exactly 1..total and a page is a rowid range.
+func resolveLinks(tx *sql.Tx, total int64, done func(int)) (int, error) {
 	if _, err := tx.Exec("CREATE INDEX temp.ix_wref_lw ON wref(lw)"); err != nil {
 		return 0, err
 	}
-	sel, err := tx.Prepare("SELECT w, id FROM wref WHERE lw = ? ORDER BY id")
+	ins, err := tx.Prepare(`
+		INSERT INTO alias(w, entry_id)
+		SELECT w, eid FROM (
+			SELECT p.rowid AS r, p.w AS w, (
+				SELECT x.id FROM wref x WHERE x.lw = p.lt
+				ORDER BY x.w <> p.target, x.id LIMIT 1
+			) AS eid
+			FROM plink p WHERE p.rowid > ?1 AND p.rowid <= ?2
+		) WHERE eid IS NOT NULL ORDER BY r`)
 	if err != nil {
 		return 0, err
 	}
-	defer sel.Close()
-	page, err := tx.Prepare("SELECT rowid, w, target FROM plink WHERE rowid > ? ORDER BY rowid LIMIT ?")
-	if err != nil {
-		return 0, err
-	}
-	defer page.Close()
-
-	type pending struct {
-		w, target string
-	}
-	unresolved := 0
-	processed := 0
-	var after int64
-	buf := make([]pending, 0, linkPage)
-	for {
-		rows, err := page.Query(after, linkPage)
+	defer ins.Close()
+	var resolved int64
+	for lo := int64(0); lo < total; lo += linkPage {
+		hi := min(lo+linkPage, total)
+		res, err := ins.Exec(lo, hi)
 		if err != nil {
-			return unresolved, err
+			return int(lo - resolved), err
 		}
-		buf = buf[:0]
-		for rows.Next() {
-			var rowid int64
-			var p pending
-			if err := rows.Scan(&rowid, &p.w, &p.target); err != nil {
-				rows.Close()
-				return unresolved, err
-			}
-			after = rowid
-			buf = append(buf, p)
+		n, err := res.RowsAffected()
+		if err != nil {
+			return int(lo - resolved), err
 		}
-		if err := rows.Err(); err != nil {
-			rows.Close()
-			return unresolved, err
-		}
-		rows.Close()
-		if len(buf) == 0 {
-			return unresolved, nil
-		}
-		for _, l := range buf {
-			id, ok, err := lookupTarget(sel, l.target)
-			if err != nil {
-				return unresolved, err
-			}
-			if !ok {
-				unresolved++
-				continue
-			}
-			if _, err := insAlias.Exec(l.w, id); err != nil {
-				return unresolved, err
-			}
-		}
-		// Every link in the page is processed whether or not it resolved, so
-		// the count reaches linkCount exactly and the caller's total is met.
-		processed += len(buf)
+		resolved += n
 		if done != nil {
-			done(processed)
+			done(int(hi))
 		}
 	}
-}
-
-// lookupTarget finds the entry a redirect points at: the lowest-id entry whose
-// headword equals target, else the lowest-id entry whose folded headword does.
-func lookupTarget(sel *sql.Stmt, target string) (int64, bool, error) {
-	rows, err := sel.Query(strings.ToLower(target))
-	if err != nil {
-		return 0, false, err
-	}
-	defer rows.Close()
-	var fallback int64
-	var haveFallback bool
-	for rows.Next() {
-		var w string
-		var id int64
-		if err := rows.Scan(&w, &id); err != nil {
-			return 0, false, err
-		}
-		if w == target {
-			return id, true, nil
-		}
-		if !haveFallback {
-			fallback, haveFallback = id, true
-		}
-	}
-	if err := rows.Err(); err != nil {
-		return 0, false, err
-	}
-	return fallback, haveFallback, nil
+	return int(total - resolved), nil
 }
 
 // isSubEntry reports an MDict-style expandable section stored as a headword
@@ -509,16 +453,11 @@ func NormalizeBody(e dict.Entry) (string, error) {
 	case dict.BodyHTML:
 		return e.Body, nil
 	case dict.BodyText:
-		return "<p>" + strings.ReplaceAll(htmlEscape(e.Body), "\n", "<br/>") + "</p>", nil
+		return "<p>" + strings.ReplaceAll(htmlref.EscapeText(e.Body), "\n", "<br/>") + "</p>", nil
 	default:
 		// BodyXDXF / BodyDSL converters arrive with their formats (P3/P4).
 		return "", fmt.Errorf("unsupported body kind %d", e.Kind)
 	}
-}
-
-func htmlEscape(s string) string {
-	r := strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;")
-	return r.Replace(s)
 }
 
 // sourceHash hashes the first 1 MiB of the source file - cheap identity
@@ -532,34 +471,6 @@ func sourceHash(path string) string {
 	h := sha256.New()
 	_, _ = io.CopyN(h, f, 1<<20)
 	return hex.EncodeToString(h.Sum(nil))
-}
-
-// Slug converts a dictionary display name into a filesystem-safe base name.
-// Library folders are named after the source FILE (see FolderName); Slug
-// remains for callers that need a safe name derived from a display name.
-func Slug(name string) string {
-	var b strings.Builder
-	dash := false
-	for _, r := range name {
-		switch {
-		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r > 127:
-			b.WriteRune(r)
-			dash = false
-		default:
-			if !dash && b.Len() > 0 {
-				b.WriteByte('-')
-				dash = true
-			}
-		}
-	}
-	s := strings.Trim(b.String(), "-")
-	if s == "" {
-		return "dictionary"
-	}
-	if len(s) > 80 {
-		s = s[:80]
-	}
-	return s
 }
 
 // dbDir is the library folder the configuration chose (SetDBDir); nil when

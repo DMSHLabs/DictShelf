@@ -6,9 +6,11 @@ package zim
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/wuweidict/wudict/internal/dict"
@@ -189,6 +191,10 @@ func TestResources(t *testing.T) {
 	rc, mime, err := d.Resource("f.png")
 	if err != nil {
 		t.Fatal(err)
+	}
+	// Seekable, or the server cannot answer a Range request for it.
+	if _, ok := rc.(io.ReadSeeker); !ok {
+		t.Errorf("Resource(f.png) is a %T, not an io.ReadSeeker", rc)
 	}
 	b, _ := io.ReadAll(rc)
 	rc.Close()
@@ -415,5 +421,59 @@ func TestRealFile(t *testing.T) {
 	}
 	if res, err := d.Prefix(kws[0][:1], 5); err != nil || len(res) == 0 {
 		t.Errorf("Prefix(%q) = %d results, %v", kws[0][:1], len(res), err)
+	}
+}
+
+// More entries than a page of path pointers holds: every lookup, the walks
+// across page boundaries, and lookups from many goroutines at once, which
+// share no pointer state.
+func TestManyEntries(t *testing.T) {
+	const n = 3*ptrPageLen + 7
+	// a stored cluster last, as in sample: the builder writes the pointer
+	// lists after the clusters, inside the last one's extent
+	f := bFile{major: 6, minor: 3, clusters: []bCluster{{codec: 5}, {codec: 1}}}
+	for i := range n {
+		w := fmt.Sprintf("w%05d", i)
+		f.entries = append(f.entries, bEntry{ns: 'C', path: w, mime: "text/html",
+			body: []byte("<html><body>" + w + "</body></html>"), cluster: i % 2})
+	}
+	f.entries = append(f.entries, bEntry{ns: 'M', path: "Title", mime: "text/plain", body: []byte("Many"), cluster: 0})
+	d, err := Open(writeZIM(t, f))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	kw := d.Keywords(0, 0)
+	if len(kw) != n || kw[0] != "w00000" || kw[n-1] != fmt.Sprintf("w%05d", n-1) {
+		t.Fatalf("Keywords: %d, first %q last %q", len(kw), kw[0], kw[len(kw)-1])
+	}
+	if got := d.Keywords(ptrPageLen-2, 4); strings.Join(got, " ") !=
+		fmt.Sprintf("w%05d w%05d w%05d w%05d", ptrPageLen-2, ptrPageLen-1, ptrPageLen, ptrPageLen+1) {
+		t.Errorf("Keywords across a page boundary = %q", got)
+	}
+	var wg sync.WaitGroup
+	errs := make(chan string, 8)
+	for g := range 8 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := g; i < n; i += 8 {
+				w := fmt.Sprintf("w%05d", i)
+				res, err := d.Exact(w, 1)
+				if err != nil || len(res) != 1 || !strings.Contains(res[0].Body, w) {
+					errs <- fmt.Sprintf("Exact(%s) = %v, %v", w, res, err)
+					return
+				}
+			}
+		}()
+	}
+	wg.Wait()
+	close(errs)
+	for e := range errs {
+		t.Error(e)
+	}
+	res, err := d.Prefix(fmt.Sprintf("w%04d", (ptrPageLen+3)/10), 20)
+	if err != nil || len(res) != 10 {
+		t.Errorf("Prefix across entries = %d results, %v", len(res), err)
 	}
 }

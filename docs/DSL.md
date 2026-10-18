@@ -656,9 +656,10 @@ Formats Lingvo itself supports:
 
 ### What wudict emits `[V]`
 
-`mediaExt` + `lexTagS` in `internal/format/dsl/transform.go`. The extension is
-lower-cased through `path.Ext`; the four kinds are exhaustive — **every payload
-renders something**.
+`lexMedia` in `internal/format/dsl/transform.go` reads the payload; `artmark.KindOf` and
+`artmark.Media` (`internal/artmark/media.go`, shared with StarDict's `r` parts) classify and
+draw it. The extension is lower-cased through `path.Ext`; the four kinds are exhaustive —
+**every payload renders something**.
 
 | Kind | Extensions | HTML |
 | --- | --- | --- |

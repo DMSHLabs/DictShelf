@@ -42,8 +42,9 @@ func NewReader(path string) (*Reader, error) {
 		return nil, err
 	}
 	r := &Reader{d: d}
+	w := d.c.walk()
 	for i := d.lo; i < d.hi; i++ {
-		de, err := d.c.entry(i)
+		de, err := w.entry(i)
 		if err != nil {
 			d.Close()
 			return nil, err

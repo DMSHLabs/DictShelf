@@ -37,7 +37,7 @@ DICT_DIR = ["~/Dictionaries", "/Volumes/Data/Dicts"]
 > <sup>If you don't have yet a local dictionary collection you can download some FOSS dictionaries from the [links here](https://legbehindneck.com/wudict/).</sup>
 
 ## Features
-- Formats: MDict, StarDict, Aard2, DSL, Babylon, ZIM, wuDict markdown (a plain-text dictionary you can write in a text editor)
+- Formats: MDict, StarDict, Aard2, DSL, Babylon, ZIM, wudict markdown (a plain-text dictionary you can write in a text editor)
 - Instant search across all dictionaries with four modes: prefix, exact, full-text, and [wildcard](https://wudict.legbehindneck.com/reference/wildcard-syntax/) search (`c?t`, `*ology`, `*rain*`)
 - Dictionaries are automatically grouped by language, publisher, direction, or [your own custom groups](https://wudict.legbehindneck.com/dictionaries/groups/).
 - Adjust the font size via the <kbd>☰</kbd> → <kbd><b>+/-</b></kbd> widget

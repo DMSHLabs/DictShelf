@@ -19,10 +19,11 @@ import (
 // wiktionary.
 
 // lowerBound returns the first entry index whose key is >= key, or entryCount
-// when none is. ~21 preads on a 1.5M-entry file, no resident index.
+// when none is. ~21 probes on a 1.5M-entry file, two preads each - the
+// pointer, then the dirent - and no resident index.
 func (c *container) lowerBound(key string) (int, error) {
 	var err error
-	n := len(c.urlPtr)
+	n := c.entries()
 	i := sort.Search(n, func(m int) bool {
 		if err != nil {
 			return true // unwind: every probe reports "at or past", so lo stops moving
@@ -44,7 +45,7 @@ func (c *container) lowerBound(key string) (int, error) {
 func (c *container) find(ns byte, path string) (int, dirent, bool) {
 	key := searchKey(ns, path)
 	i, err := c.lowerBound(key)
-	if err != nil || i >= len(c.urlPtr) {
+	if err != nil || i >= c.entries() {
 		return 0, dirent{}, false
 	}
 	d, err := c.entry(i)
@@ -63,7 +64,7 @@ func (c *container) nsRange(ns byte) (int, int) {
 		return 0, 0
 	}
 	if ns == 0xFF { // no successor byte to bound with
-		return lo, len(c.urlPtr)
+		return lo, c.entries()
 	}
 	hi, err := c.lowerBound(string([]byte{ns + 1}))
 	if err != nil || hi < lo {
@@ -85,8 +86,9 @@ func (c *container) prefixScan(ns byte, prefix string, budget int, fn func(int, 
 	if err != nil {
 		return err
 	}
-	for ; i < len(c.urlPtr) && budget > 0; i, budget = i+1, budget-1 {
-		d, err := c.entry(i)
+	w := c.walk()
+	for ; i < c.entries() && budget > 0; i, budget = i+1, budget-1 {
+		d, err := w.entry(i)
 		if err != nil {
 			return err
 		}
@@ -105,7 +107,7 @@ func (c *container) prefixScan(ns byte, prefix string, budget int, fn func(int, 
 // '_', MediaWiki capitalises the first letter of every title, and a proper
 // noun carries that capital on every word - so "new york" must still find
 // "New_York" without any resident folded index. Each variant costs one binary
-// search (~21 preads) and is only tried after the plainer ones miss, which is
+// search (~21 probes) and is only tried after the plainer ones miss, which is
 // why a short closed list of spellings is cheaper here than the folded map it
 // replaces. It is not case folding: a title that capitalises nothing a user
 // would guess stays a preview miss, and is found once the dictionary is

@@ -219,10 +219,11 @@ const (
 	maxDepth = 32
 
 	// maxCandidateBytes bounds one dictionary's extraction. Large, because
-	// real dictionaries are: a full Wikipedia .zim runs to tens of gigabytes.
-	// The number exists so that a declared size which is absurd rather than
-	// merely large is refused before any disk is touched.
-	maxCandidateBytes = 64 << 30
+	// real dictionaries are: a full English Wikipedia .zim with pictures runs
+	// past 100 GB. The number exists so that a declared size which is absurd
+	// rather than merely large is refused before any disk is touched; whether
+	// a merely large one fits is roomFor's question.
+	maxCandidateBytes = 256 << 30
 
 	// maxRatio bounds compression ratio per entry. Deflate tops out near
 	// 1032:1 on a stream of one repeated byte, so anything past this was

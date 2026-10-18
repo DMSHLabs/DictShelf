@@ -46,7 +46,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/wuweidict/wudict/internal/dict"
 	"github.com/wuweidict/wudict/internal/fsx"
@@ -109,28 +108,18 @@ func byteCutName(srcPath string) string {
 
 func folderName(srcPath string, runeCut bool) string {
 	name := dict.Name(srcPath) // x.dsl.dz and x.wudict.md.gz are both x
-	var b strings.Builder
-	for _, r := range name {
-		switch {
-		case r < 0x20, r == 0x7f:
-			// control characters: drop
-		case strings.ContainsRune(`/\:*?"<>|`, r):
-			b.WriteByte('-')
-		default:
-			b.WriteRune(r)
-		}
-	}
 	// trailing dots and spaces are illegal in Windows directory names
-	out := strings.TrimRight(strings.TrimSpace(b.String()), " .")
+	out := strings.TrimRight(strings.TrimSpace(fsx.SafeName(name, '-')), " .")
 	// 80 bytes, cut on a rune boundary: a cut through a character leaves bytes
 	// that are not UTF-8 - Windows stores them as U+FFFD, and elsewhere the
 	// folder's name no longer matches the path the panel shows for it.
 	if len(out) > 80 {
-		cut := 80
-		for runeCut && cut > 0 && !utf8.RuneStart(out[cut]) {
-			cut--
+		if runeCut {
+			out = fsx.CutUTF8(out, 80)
+		} else {
+			out = out[:80]
 		}
-		out = strings.TrimRight(strings.TrimSpace(out[:cut]), " .")
+		out = strings.TrimRight(strings.TrimSpace(out), " .")
 	}
 	if out == "" {
 		return "dictionary"

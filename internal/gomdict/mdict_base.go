@@ -97,19 +97,7 @@ func (mdict *MdictBase) readDictHeader() error {
 		meta.numberFormat = NumfmtBe4bytesi
 	}
 
-	// Handle encoding
-	encoding := headerInfo.Encoding
-	encoding = strings.ToLower(encoding)
-	switch encoding {
-	case "GBK", "GB2312", "gbk", "gb2312":
-		meta.encoding = EncodingGb18030
-	case "Big5", "BIG5", "big5":
-		meta.encoding = EncodingBig5
-	case "utf16", "utf-16", "UTF-16":
-		meta.encoding = EncodingUtf16
-	default:
-		meta.encoding = EncodingUtf8
-	}
+	meta.encoding = encodingOf(headerInfo.Encoding)
 
 	// v3 is always UTF-8.
 	if meta.version >= 3.0 {
@@ -144,6 +132,22 @@ func (mdict *MdictBase) readDictHeader() error {
 	mdict.meta = meta
 
 	return nil
+}
+
+// encodingOf maps the header's Encoding attribute. GBK and GB2312 are read as
+// their superset GB18030, as readmdict does; MdxBuilder also writes "GB18030"
+// itself. Anything unrecognised is UTF-8.
+func encodingOf(attr string) int {
+	switch strings.ToLower(strings.TrimSpace(attr)) {
+	case "gbk", "gb2312", "gb18030":
+		return EncodingGb18030
+	case "big5":
+		return EncodingBig5
+	case "utf16", "utf-16", "utf-16le":
+		return EncodingUtf16
+	default:
+		return EncodingUtf8
+	}
 }
 
 func readMDictFileHeader(filename string) (*mdictHeader, error) {

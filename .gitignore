@@ -31,3 +31,6 @@ code-review/
 /fastlane/README.md
 /vendor/bundle/
 **/testdata/fuzz/*
+
+# Python bytecode from tools/*.py
+__pycache__/

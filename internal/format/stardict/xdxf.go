@@ -6,11 +6,11 @@ package stardict
 
 import (
 	"encoding/xml"
-	"fmt"
 	"io"
 	"strings"
 
 	"github.com/wuweidict/wudict/internal/artmark"
+	"github.com/wuweidict/wudict/internal/htmlref"
 )
 
 // xdxfToHTML converts XDXF article markup (StarDict sametypesequence 'x')
@@ -31,7 +31,7 @@ func xdxfToHTML(src string) string {
 		}
 		if err != nil {
 			// malformed markup: fall back to escaped source
-			return "<p>" + htmlEscape(src) + "</p>"
+			return "<p>" + htmlref.EscapeText(src) + "</p>"
 		}
 		switch t := tok.(type) {
 		case xml.StartElement:
@@ -39,7 +39,7 @@ func xdxfToHTML(src string) string {
 		case xml.EndElement:
 			b.WriteString(xdxfClose(t.Name.Local))
 		case xml.CharData:
-			b.WriteString(htmlEscape(string(t)))
+			htmlref.WriteText(&b, string(t))
 		}
 	}
 	return b.String()
@@ -94,7 +94,7 @@ func xdxfOpen(e xml.StartElement) string {
 		if href == "" {
 			return `<a href="">` // filled by the text content; UI rewrites
 		}
-		return fmt.Sprintf(`<a href="%s">`, htmlEscape(href))
+		return `<a href="` + htmlref.EscapeAttr(href) + `">`
 	case "rref":
 		return "" // resource reference: text content is the file name
 	case "blockquote", "def":

@@ -66,10 +66,12 @@ const DownloadDirName = dict.DownloadDirName
 // tomorrow, not to fetch two gigabytes again.
 const partialStale = 7 * 24 * time.Hour
 
-// maxDownloadBytes bounds what a single URL may deliver. Not a memory bound -
-// the body is written straight to disk - but a bound on how much of somebody's
-// storage one mistyped link can consume.
-const maxDownloadBytes = 16 << 30
+// maxDownloadBytes bounds what a single URL may deliver: maxCandidateBytes,
+// since a download is one dictionary or an archive of them. Not a memory
+// bound - the body is written straight to disk - and not the disk's guard
+// either: a download whose length is known is refused up front when the
+// folder lacks the room for it (roomFor).
+const maxDownloadBytes = maxCandidateBytes
 
 // maxRedirects is the hop limit. Each hop is re-checked against the same
 // scheme and host rules, so a redirect cannot be the way around them.
@@ -318,6 +320,11 @@ func (f Fetcher) Fetch(ctx context.Context, dest, raw string, progress Progress)
 	}
 	if total > maxDownloadBytes {
 		return Source{}, errors.New("that file is too large to download")
+	}
+	// Room for what is still to come, asked of the library folder: it exists,
+	// and the download folder inside it is on the same disk.
+	if err := roomFor(dest, "to download it", total-offset); err != nil {
+		return Source{}, err
 	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return Source{}, err

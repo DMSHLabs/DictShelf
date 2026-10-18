@@ -9,13 +9,13 @@
 package dsl
 
 import (
-	"path"
 	"strings"
 	"sync"
 	"unicode"
 	"unicode/utf8"
 
 	"github.com/wuweidict/wudict/internal/artmark"
+	"github.com/wuweidict/wudict/internal/htmlref"
 )
 
 // stripComments removes `{{...}}` comments. A comment may itself contain a
@@ -655,18 +655,13 @@ func flipCaseFirst(s string) string {
 	return string(f) + s[size:]
 }
 
-var (
-	textEscaper = strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;")
-	attrEscaper = strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;", `"`, "&quot;")
-)
-
-func escape(s string) string { return textEscaper.Replace(s) }
+func escape(s string) string { return htmlref.EscapeText(s) }
 
 // quoteAttr renders a value as a complete double-quoted attribute. Every
 // attribute built from dictionary content must go through this and not
 // escape(): a `"` inside a colour name or a media file name would otherwise
 // close the attribute and start a new one.
-func quoteAttr(s string) string { return `"` + attrEscaper.Replace(s) + `"` }
+func quoteAttr(s string) string { return `"` + htmlref.EscapeAttr(s) + `"` }
 
 // colourOpen is the [c] markup. The author's colour is a PARAMETER, not a
 // decision: it rides as --wd-c and internal/artmark's rule turns it into a
@@ -697,43 +692,6 @@ func marginOpen(tag string) string {
 		return `<p class="wu-m" style=` + quoteAttr("--wd-m:"+n) + `>`
 	}
 	return `<p class="wu-m">`
-}
-
-// mediaKind is what a browser can do with one [s] payload.
-type mediaKind int
-
-const (
-	mediaFile mediaKind = iota // the default: hand it over as a link
-	mediaAudio
-	mediaImage
-	mediaVideo
-)
-
-// mediaExt classifies the media zone by extension. Lingvo's [s] supports
-// images, sound AND video, and an author may
-// put anything else in the .files folder besides - a PDF plate, a document.
-// Only what a browser can actually render or decode is named here; everything
-// else is deliberately absent and becomes a file link.
-//
-// The formats Lingvo names but a browser cannot handle are the reason this is
-// an allowlist rather than a "video/ prefix" test: .avi, .wmv, .flv, .mkv and
-// .mpg are Lingvo's and GoldenDict's own video formats, and an inline <video>
-// pointed at one is a permanently broken player. As a link they reach the
-// system player instead, which is exactly what Lingvo does with them. Same
-// for its .pcx, .dcx, .wmf and .emf images, which no browser draws.
-var mediaExt = map[string]mediaKind{
-	// Sound. Lingvo documents .wav alone; the rest arrive from GoldenDict-era
-	// dictionaries, and .spx is transcoded to WAV when served (D18).
-	"wav": mediaAudio, "mp3": mediaAudio, "ogg": mediaAudio,
-	"spx": mediaAudio, "m4a": mediaAudio,
-	// Images.
-	"bmp": mediaImage, "gif": mediaImage, "ico": mediaImage,
-	"jpeg": mediaImage, "jpg": mediaImage, "png": mediaImage,
-	"svg": mediaImage, "tif": mediaImage, "tiff": mediaImage,
-	"webp": mediaImage, "avif": mediaImage,
-	// Video.
-	"mp4": mediaVideo, "webm": mediaVideo, "ogv": mediaVideo,
-	"mov": mediaVideo, "m4v": mediaVideo, "3gp": mediaVideo,
 }
 
 // lexMedia reads the file name filling a media zone ([s] or [video]) from
@@ -769,50 +727,13 @@ func (tr *transformer) lexMedia(i int) int {
 	return i
 }
 
-// media emits the element for one media file. Every kind renders something.
-// Emitting nothing for an unrecognised extension would lose the file
-// silently: the article would show a gap where the author put a video or a
-// PDF, and no part of the pipeline downstream can recover a reference that
-// was never written.
+// media emits the element for one media file, its name recorded for the
+// resource set. The markup is artmark's, shared with every format whose
+// articles wudict writes; the audio and file kinds are anchors, which balance
+// closes around when a link is open.
 func (tr *transformer) media(fname string) {
-	t := token{kind: tkHTML, rng: -1}
-	switch mediaExt[strings.TrimPrefix(strings.ToLower(path.Ext(fname)), ".")] {
-	case mediaAudio:
-		// A link, not GoldenDict's `<object type="audio/x-wav">`. That spelling
-		// is a plugin-era embedding vector: `clean` has to drop it as unsafe
-		// and rescue the URL back out (server/articleformat.go audioObject),
-		// and both renderers need a handler that exists for this one element.
-		// An anchor needs none of it: the
-		// server's rewriter already recognises a media href on <a> and points
-		// it at /res/, both renderers already play such a link, `clean` keeps
-		// it as an ordinary link, and no inline handler is emitted (the
-		// sanitiser strips every on* attribute, by design).
-		//
-		// [s] carries no link text of its own, so the glyph is the affordance.
-		t.s, t.anchor = `<a class="wu-audio" href=`+quoteAttr(fname)+`>&#128266;</a>`, true
-	case mediaImage:
-		t.s = `<img align="top" src=` + quoteAttr(fname) + ` alt=` + quoteAttr(fname) + ` />`
-	case mediaVideo:
-		// preload="none" is what makes this affordable: a card may carry
-		// several videos of tens of megabytes each, and nothing is fetched
-		// until the reader presses play. src is a fetch site, so the article
-		// rewriter points it at /res/{dict}/ with no special case, and `clean`
-		// already keeps <video src|controls> (server/articleformat.go).
-		t.s = `<video class="wu-video" controls preload="none" src=` + quoteAttr(fname) + `></video>`
-	default:
-		// Anything else - a PDF, a document, one of Lingvo's own formats no
-		// browser handles. The `file://` pseudo-scheme is the author saying
-		// "this names MY file": the rewriter honours it (server/rewrite.go
-		// isResourceRef) and rewrites the link to /res/ whatever the
-		// extension, so a dictionary's own container is served in full without
-		// widening dict.IsAssetName - which is also the allowlist for files
-		// lying LOOSE beside an .mdx, a boundary this must not touch.
-		//
-		// The file name is the link text because it is all there is: [s] has no
-		// text of its own, and a bare glyph would not say what it opens.
-		t.s, t.anchor = `<a class="wu-file" href=`+quoteAttr("file://"+fname)+
-			`>&#128196; `+escape(fname)+`</a>`, true
-	}
-	tr.push(t)
+	k := artmark.KindOf(fname)
+	tr.push(token{kind: tkHTML, rng: -1, s: artmark.Media(fname, k),
+		anchor: k == artmark.MediaAudio || k == artmark.MediaFile})
 	tr.resFiles = append(tr.resFiles, fname)
 }

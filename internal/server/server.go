@@ -480,7 +480,7 @@ func setupPage(dirs []string, serving int) string {
 		if _, err := os.Stat(dirs[0]); err != nil {
 			state = "does not exist"
 		}
-		intro = fmt.Sprintf("Your dictionary folder <code>%s</code> %s.", htmlEscape(dirs[0]), state)
+		intro = fmt.Sprintf("Your dictionary folder <code>%s</code> %s.", htmlref.EscapeAttr(dirs[0]), state)
 	case len(dirs) > 1:
 		intro = fmt.Sprintf("None of your %d dictionary folders hold dictionaries yet.", len(dirs))
 	default:
@@ -504,11 +504,6 @@ func (s *Server) handleLemmasPage(w http.ResponseWriter, r *http.Request) {
 }
 
 var lemmasPage = bytes.ReplaceAll(lemmasHTML, []byte("{{CSS}}"), []byte(cssTag))
-
-func htmlEscape(s string) string {
-	r := strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;", `"`, "&quot;")
-	return r.Replace(s)
-}
 
 // handleLibrary lists the previously imported dictionaries kept in the db dir
 // - the ones the setup page offers to use, and the basis of the USE_CACHED
@@ -1722,7 +1717,9 @@ func (s *Server) handleResource(w http.ResponseWriter, r *http.Request) {
 		if wav, err := s.spxToWav(id, name, rc); err == nil {
 			w.Header().Set("Content-Type", "audio/wav")
 			w.Header().Set("Cache-Control", "public, max-age=86400")
-			_, _ = w.Write(wav)
+			// ServeContent for the Range answer every other media path gets
+			// (see below); WebKit probes audio with bytes=0-1 too.
+			http.ServeContent(w, r, name, time.Time{}, bytes.NewReader(wav))
 			return
 		} else {
 			logx.V("spx transcode %s/%s failed: %v (serving raw)", id, name, err)

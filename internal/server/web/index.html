@@ -1384,6 +1384,9 @@ const LIST_FORMAT=Number("{{PREFSV}}");
    counted over the complete list or not shown at all. */
 let dictsSettled=false;
 function loadJSON(k,d){try{return JSON.parse(localStorage.getItem(k))??d}catch(e){return d}}
+/* A preference that cannot be stored (quota, blocked storage) must not stop the
+   control that set it from taking effect. */
+function lsSet(k,v){try{localStorage.setItem(k,v)}catch(_){}}
 /* One-time adoption of a pre-server build's localStorage, so upgrading does
    not silently throw away someone's curation. Self-erasing: the keys are
    removed as they are read, and the server file is authoritative from then on. */
@@ -1590,7 +1593,7 @@ function syncAutoDark(){
 function applyWide(on){document.body.classList.toggle("wide",on);$("wideBtn").style.color=on?"var(--accent)":""}
 $("wideBtn").onclick=()=>{
   const on=!document.body.classList.contains("wide");
-  localStorage.setItem("wudict_wide",on?"1":"");applyWide(on);
+  lsSet("wudict_wide",on?"1":"");applyWide(on);
 };
 applyWide(localStorage.getItem("wudict_wide")==="1");
 
@@ -1913,7 +1916,7 @@ $("expandBtn").onclick=()=>{
 function cycleTheme(){
   const cur=localStorage.getItem("wudict_theme")||"auto";
   const next=THEMES[(THEMES.indexOf(cur)+1)%THEMES.length];
-  localStorage.setItem("wudict_theme",next);applyTheme(next);
+  lsSet("wudict_theme",next);applyTheme(next);
 }
 for(const b of document.querySelectorAll(".themeBtn"))b.onclick=cycleTheme;
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change",syncAutoDark);
@@ -2530,7 +2533,7 @@ function syncChips(){
    dictionary carries the same demand server-side, so doSearch() would make this
    request redundant. Fire-and-forget - the ingest outlives the response, and
    the chip catches up on the next loadDicts(). */
-$("dict").onchange=e=>{const v=e.target.value;localStorage.setItem("wudict_dict",v);syncChips();
+$("dict").onchange=e=>{const v=e.target.value;lsSet("wudict_dict",v);syncChips();
   if($("q").value.trim())doSearch();
   // One dictionary only. A group would demand an index for every member at
   // once, which is the unbounded auto-index fan-out (docs.local/PERF.md M1)
@@ -2695,7 +2698,7 @@ function renderPanel(){
     const indexed=(d.dbSize||0)>0;
     /* What it would cost, on the ABSENT state only. A 2.9 M-entry dictionary
        is a gigabyte of disk and minutes of a phone's battery, and the chip
-       that starts that says so first; O9 is the decision that the size be
+       that starts that says so first; D99 is the decision that the size be
        shown before it is spent, not after.
 
        The estimate is calibrated on the user's own corpus, exactly as
@@ -2992,7 +2995,7 @@ async function loadFolders(){
 if(localStorage.getItem("wudict_folders")==="1")$("folders").open=true;
 $("folders").addEventListener("toggle",()=>{
   if($("folders").open&&!$("folderBody").childNodes.length)loadFolders();
-  localStorage.setItem("wudict_folders",$("folders").open?"1":"");
+  lsSet("wudict_folders",$("folders").open?"1":"");
 });
 $("folderBody").addEventListener("click",e=>{
   const p=e.target.closest(".path");if(!p)return;
@@ -5122,7 +5125,7 @@ function linkNamesOne(){
 }
 function applyURL(){
   const p=new URLSearchParams(location.search);
-  if(p.get("theme")){localStorage.setItem("wudict_theme",p.get("theme"));applyTheme(p.get("theme"))}
+  if(p.get("theme")){lsSet("wudict_theme",p.get("theme"));applyTheme(p.get("theme"))}
   // A word handed over with no usable mode (another app, the Android popup,
   // the extension, a bookmark) is a headword lookup, as a followed link is in
   // searchFor: a remembered full-text or wildcard mode does not apply to it.

@@ -177,7 +177,7 @@ func Parse(text string) (*Rules, []Problem) {
 		}
 		var g *ruleGroup
 		for _, it := range its {
-			key := it.text
+			var key string
 			if it.re {
 				key = "`" + it.text + "`"
 			} else {

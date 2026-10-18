@@ -176,27 +176,45 @@ func TestWildcardAgainstBruteForce(t *testing.T) {
 // TestWildcardRanges pins what the planner reads; TestWildcardAgainstBruteForce
 // proves that it loses nothing.
 func TestWildcardRanges(t *testing.T) {
-	all, nonASCII := keyRange{}, keyRange{lo: "\x80"}
+	all := keyRange{}
 	for _, tc := range []struct {
 		pattern string
 		want    []keyRange
+		marks   bool
 	}{
-		{"*at", []keyRange{all}},
-		{"?at", []keyRange{all}},
-		{"cat", []keyRange{{"c", "d"}, nonASCII}},
-		{"écu", []keyRange{{"e", "f"}, nonASCII}},   // folds to an ASCII lead
-		{"Cat", []keyRange{{"c", "d"}}},             // GLOB narrows the NOCASE range
-		{"Écu", []keyRange{{"\u00c9", "\xc3\x8a"}}}, // its own UTF-8 prefix
-		{"жук", []keyRange{nonASCII}},               // no ASCII headword folds to ж
-		{"Жук", []keyRange{{"\u0416", "\xd0\x97"}}},
+		{"*at", []keyRange{all}, false},
+		{"?at", []keyRange{all}, false},
+		// c, C and every character that folds to c: ç Ç, Ć ć … č (adjacent,
+		// so one range), and Ḉ ḉ
+		{"cat", []keyRange{{"c", "d"}, {"Ç", "È"}, {"ç", "è"}, {"Ć", "Ď"}, {"Ḉ", "Ḋ"}}, true},
+		{"Cat", []keyRange{{"c", "d"}}, false},             // GLOB narrows the NOCASE range
+		{"Écu", []keyRange{{"\u00c9", "\xc3\x8a"}}, false}, // its own UTF-8 prefix
+		{"жук", []keyRange{{"Ж", "З"}, {"ж", "з"}, {"Ӂ", "Ӄ"}, {"Ӝ", "Ӟ"}}, true},
+		{"Жук", []keyRange{{"\u0416", "\xd0\x97"}}, false},
+		{"\ufffd*", []keyRange{{lo: "\x80"}}, false}, // what invalid UTF-8 reads as
 	} {
 		p, err := wildcard.Parse(tc.pattern)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got := wildcardRanges(p); !slices.Equal(got, tc.want) {
-			t.Errorf("%q: ranges %q, want %q", tc.pattern, got, tc.want)
+		got, marks := wildcardRanges(p)
+		if !slices.Equal(got, tc.want) || marks != tc.marks {
+			t.Errorf("%q: ranges %q marks %v, want %q %v", tc.pattern, got, marks, tc.want, tc.marks)
 		}
+	}
+}
+
+// spanRanges splits at the UTF-8 length boundaries, inside which the
+// encoding keeps code point order.
+func TestSpanRanges(t *testing.T) {
+	got := spanRanges(0x7FE, 0x10001)
+	want := []keyRange{
+		{"\u07fe", "\xdf\xc0"},
+		{"\u0800", "\xef\xbf\xc0"},
+		{"\U00010000", "\xf0\x90\x80\x82"},
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("spanRanges = %q, want %q", got, want)
 	}
 }
 
@@ -234,38 +252,91 @@ func TestWildcardTruncatedUTF8(t *testing.T) {
 	}
 }
 
-// TestWildcardReadsTheIndexOnly: the scans must stay on idx_entry_w, which
-// covers id and w. A plan that reads the entry table reads every article.
+// TestWildcardReadsTheIndexOnly: the scans must stay on idx_entry_w, in its
+// order. A plan that reads the entry table reads every article, and a sort
+// would read a whole range before the first headword.
 func TestWildcardReadsTheIndexOnly(t *testing.T) {
 	s := wildcardStore(t)
-	for _, k := range []keyRange{{}, {lo: "c", hi: "d"}, {lo: "\x80"}} {
-		cond, args := k.where()
-		for _, q := range []string{
-			"SELECT id, w FROM entry WHERE " + browseWhere + cond + browseOrder,
-			"SELECT id FROM entry WHERE " + browseWhere + " AND w GLOB ?" + cond + browseOrder + " LIMIT ?",
-		} {
-			a := args
-			if strings.Contains(q, "GLOB") {
-				a = append([]any{"c*"}, append(append([]any(nil), args...), 10)...)
-			}
-			rows, err := s.db.Query("EXPLAIN QUERY PLAN "+q, a...)
-			if err != nil {
+	plan := func(q string, args ...any) string {
+		t.Helper()
+		rows, err := s.db.Query("EXPLAIN QUERY PLAN "+q, args...)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer rows.Close()
+		var plan []string
+		for rows.Next() {
+			var id, parent, unused int
+			var detail string
+			if err := rows.Scan(&id, &parent, &unused, &detail); err != nil {
 				t.Fatal(err)
 			}
-			var plan []string
-			for rows.Next() {
-				var id, parent, unused int
-				var detail string
-				if err := rows.Scan(&id, &parent, &unused, &detail); err != nil {
-					t.Fatal(err)
-				}
-				plan = append(plan, detail)
+			plan = append(plan, detail)
+		}
+		return strings.Join(plan, "; ")
+	}
+	for _, k := range []keyRange{{}, {lo: "c", hi: "d"}, {lo: "\x80"}} {
+		cond, bounds := k.where()
+		for _, glob := range []bool{false, true} {
+			args := bounds
+			if glob {
+				args = append([]any{"c*"}, bounds...)
 			}
-			rows.Close()
-			joined := strings.Join(plan, "; ")
-			if !strings.Contains(joined, "COVERING INDEX idx_entry_w") || strings.Contains(joined, "TEMP B-TREE") {
-				t.Errorf("%s\nplan: %s", q, joined)
+			q := wildcardScan(cond, glob)
+			if got := plan(q, args...); !strings.Contains(got, "COVERING INDEX idx_entry_w") || strings.Contains(got, "TEMP B-TREE") {
+				t.Errorf("%s\nplan: %s", q, got)
 			}
+		}
+	}
+	// The marks: a seek per range, never a scan of the whole index.
+	if got := plan(marksQuery()); strings.Contains(got, "SCAN e") {
+		t.Errorf("marks query scans a whole table or index\nplan: %s", got)
+	}
+}
+
+// The pattern is the whole headword (D167): the other spellings an entry
+// lists, its redirects and its `@_` keys are not matched - exact and prefix
+// search find those.
+func TestWildcardHeadwordsOnly(t *testing.T) {
+	entries := []dict.Entry{
+		{Headwords: []string{"go", "went", "gone"}, Body: "<p>go</p>", Kind: dict.BodyHTML},
+		{Headwords: []string{"run", "runs"}, Body: "<p>run</p>", Kind: dict.BodyHTML},
+		{Headwords: []string{"Zoo", "a zebra"}, Body: "<p>Zoo</p>", Kind: dict.BodyHTML},
+		{Headwords: []string{"zebra", "@_zebra"}, Body: "<p>zebra</p>", Kind: dict.BodyHTML},
+		{Headwords: []string{"weg"}, LinkTo: "go"},
+		{Headwords: []string{"́wendy"}, LinkTo: "run"}, // an alias led by a combining mark
+	}
+	r := &fakeReader{meta: dict.Meta{Name: "Aliases", Format: "mdx", Path: "/nonexistent/alias.mdx"}, entries: entries}
+	dbPath := t.TempDir() + "/alias.text.db"
+	if _, err := IngestPlan(r, dbPath, Plan{}, nil); err != nil {
+		t.Fatal(err)
+	}
+	s, err := Open(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	// the aliases are there: prefix search reads them
+	if got, err := s.PrefixContext(bg, "went", 10); err != nil || len(got) != 1 || got[0].Headword != "go" {
+		t.Fatalf("prefix went = %+v, %v", got, err)
+	}
+	for _, tc := range []struct {
+		pattern string
+		want    []string // in order
+	}{
+		{"we*", nil}, // went, weg and ́wendy are aliases
+		{"wen?", nil},
+		{"*zebra", []string{"zebra"}}, // not by "a zebra", and @_zebra is no key
+		{"z*", []string{"zebra", "Zoo"}},
+		{"g*", []string{"go"}},
+		{"run*", []string{"run"}},
+	} {
+		got, err := s.WildcardContext(bg, tc.pattern, 100)
+		if err != nil {
+			t.Fatalf("%q: %v", tc.pattern, err)
+		}
+		if hw := headwords(got); !slices.Equal(hw, tc.want) {
+			t.Errorf("%q = %q, want %q", tc.pattern, hw, tc.want)
 		}
 	}
 }

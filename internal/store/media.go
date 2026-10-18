@@ -5,7 +5,6 @@
 package store
 
 import (
-	"bytes"
 	"database/sql"
 	"fmt"
 	"io"
@@ -94,18 +93,8 @@ func (m *Media) Resource(name string) (io.ReadCloser, string, error) {
 	if err != nil {
 		return nil, "", err
 	}
-	// A *bytes.Reader, kept seekable. io.NopCloser hides Seek behind a plain
-	// io.Reader, and the resource handler tests for io.ReadSeeker to decide
-	// whether it can answer Range requests - so wrapping it that way made every
-	// packed video and PDF unseekable although the whole blob is already in
-	// memory (server.handleResource).
-	return readSeekNopCloser{bytes.NewReader(data)}, mime, nil
+	return resource.Bytes(data), mime, nil
 }
-
-// readSeekNopCloser is io.NopCloser that keeps the Seek method.
-type readSeekNopCloser struct{ *bytes.Reader }
-
-func (readSeekNopCloser) Close() error { return nil }
 
 // References are found with the shared HTML tokenizer (internal/htmlref), not
 // a pattern over the markup. Unquoted attributes are common - OALD10 writes
@@ -206,6 +195,12 @@ func MediaNames(src dict.Dictionary, textDB string) (names []string, extra int) 
 	return names, extra
 }
 
+// maxBlobBytes is the largest resource a media.db can hold: SQLite's default
+// SQLITE_MAX_LENGTH (10^9) bounds the whole row, so a little is left for the
+// name and type. A larger file is skipped like an unreadable one - it stays
+// served from the source - instead of failing the pack on its insert.
+const maxBlobBytes = 1_000_000_000 - 1<<16
+
 // IngestMedia packs every resource of d into a media.db at dbPath,
 // stamped with dictUUID (must be the paired text.db's dict_uuid).
 func IngestMedia(d dict.Dictionary, names []string, dbPath, dictUUID string, progress Progress) (err error) {
@@ -259,9 +254,9 @@ func IngestMedia(d dict.Dictionary, names []string, dbPath, dictUUID string, pro
 		if rerr != nil {
 			continue // missing/corrupt resource: skip, keep packing
 		}
-		data, rerr := io.ReadAll(rc)
+		data, rerr := io.ReadAll(io.LimitReader(rc, maxBlobBytes+1))
 		rc.Close()
-		if rerr != nil {
+		if rerr != nil || len(data) > maxBlobBytes {
 			continue
 		}
 		if _, err = ins.Exec(name, mime, data); err != nil {

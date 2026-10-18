@@ -46,14 +46,14 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           # checkout's default fetch-depth of 1 fetches no tags, so the
           # `git describe` below would fall through to a bare commit SHA.
           fetch-depth: 0
 
       - name: Setup Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
 
@@ -70,7 +70,9 @@ jobs:
           SUFFIX="${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.goarm && format('-v{0}', matrix.goarm) || '' }}"
           BINARY="wudict-${SUFFIX}-purego${{ matrix.ext }}"
           VERSION="${{ inputs.tag }}"
-          [ -z "$VERSION" ] && VERSION="$(git describe --tags --always 2>/dev/null || echo dev)"
+          # The bare tag, as build-cgo.yml and build-android.yml stamp: all
+          # three publish into one release, so its assets carry one version.
+          [ -z "$VERSION" ] && VERSION="$(git describe --tags --abbrev=0 2>/dev/null || echo dev)"
           go build -trimpath -tags purego -ldflags="-s -w -X github.com/wuweidict/wudict/internal/cli.Version=${VERSION}" -o "${BINARY}" .
 
       - name: Upload artifact
@@ -89,7 +91,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
           persist-credentials: true
@@ -103,9 +105,20 @@ jobs:
       - name: List artifacts
         run: find artifacts -type f | sort
 
+      # The tag input is optional: blank means the latest tag, the same
+      # fallback the build step stamped the binaries with.
+      - name: Resolve tag
+        run: |
+          [ -z "$TAG" ] && TAG="$(git describe --tags --abbrev=0 2>/dev/null || true)"
+          if [ -z "$TAG" ]; then
+            echo "::error::No tag input and no existing git tag to fall back on." >&2
+            exit 1
+          fi
+          echo "TAG=$TAG" >> "$GITHUB_ENV"
+
       - name: Create git tag if missing
         run: |
-          if git ls-remote --tags origin "refs/tags/${TAG}" | grep -q "${TAG}"; then
+          if git ls-remote --exit-code --tags origin "refs/tags/${TAG}" > /dev/null 2>&1; then
             echo "Tag ${TAG} already exists - skipping."
           else
             git config user.name  "github-actions[bot]"

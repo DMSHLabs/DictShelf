@@ -571,3 +571,42 @@ func TestParseIfoHeader(t *testing.T) {
 		t.Errorf("map lost bookname/description: %q", m)
 	}
 }
+
+// An 'r' part is StarDict's resource list: one "type:name" per line, drawn
+// with the shared media markup and never shown as its raw text.
+func TestResourceListPart(t *testing.T) {
+	for _, tc := range []struct{ name, in, want string }{
+		{"image", "img:pic/a.jpg", `<p><img align="top" src="pic/a.jpg" alt="pic/a.jpg" /></p>`},
+		{"sound", "snd:apple.wav", `<p><a class="wu-audio" href="apple.wav">&#128266;</a></p>`},
+		{"playable video", "vdo:clip.MP4", `<p><video class="wu-video" controls preload="none" src="clip.MP4"></video></p>`},
+		{"unplayable video is a link", "vdo:film.avi", `<p><a class="wu-file" href="file://film.avi">&#128196; film.avi</a></p>`},
+		{"attachment", "att:notes.png", `<p><a class="wu-file" href="file://notes.png">&#128196; notes.png</a></p>`},
+		{"several lines, CRLF and blanks", "img:a.png\r\n\nsnd:b.mp3\n",
+			`<p><img align="top" src="a.png" alt="a.png" /></p><p><a class="wu-audio" href="b.mp3">&#128266;</a></p>`},
+		{"quotes cannot leave the attribute", `img:a"b<.png`, `<p><img align="top" src="a&quot;b&lt;.png" alt="a&quot;b&lt;.png" /></p>`},
+		{"unknown type is text", "xyz:thing", `<p>xyz:thing</p>`},
+		{"no type is text", "a & b", `<p>a &amp; b</p>`},
+		{"empty name is text", "img:", `<p>img:</p>`},
+		{"empty", "", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := partToHTML('r', []byte(tc.in+"\x00")); got != tc.want {
+				t.Errorf("partToHTML('r', %q)\n got %s\nwant %s", tc.in, got, tc.want)
+			}
+		})
+	}
+	// Inside a typed record, after an HTML part.
+	got := recordToHTML([]byte("<b>x</b>\x00snd:x.ogg"), "hr")
+	if want := `<b>x</b><p><a class="wu-audio" href="x.ogg">&#128266;</a></p>`; got != want {
+		t.Errorf("recordToHTML(hr) = %s, want %s", got, want)
+	}
+}
+
+// A cross-reference target is an attribute value: a quote in it must not
+// close the href and open another attribute.
+func TestXDXFRefTargetIsAttributeEscaped(t *testing.T) {
+	got := xdxfToHTML(`<kref href='say "hi"'>x</kref>`)
+	if want := `<a href="say &quot;hi&quot;">x</a>`; got != want {
+		t.Errorf("xdxfToHTML = %s, want %s", got, want)
+	}
+}

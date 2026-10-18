@@ -1,7 +1,7 @@
 name: Build+Release (cgo)
 
 # Performance-optimized builds using the cgo mattn/go-sqlite3 driver
-# (-tags sqlite_fts5, CGO_ENABLED=1). Unlike build-release.yml (pure-Go
+# (-tags sqlite_fts5, CGO_ENABLED=1). Unlike build-purego.yml (pure-Go
 # modernc cross-compiled from one ubuntu box), each target is built on its
 # OWN native runner because cgo cannot cross the host arch/OS. Produces
 # workflow artifacts only - it does not create a GitHub Release, so it never
@@ -55,12 +55,12 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: Setup Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
 
@@ -100,7 +100,7 @@ jobs:
       - name: Warn on experimental build failure
         if: failure() && matrix.experimental
         shell: bash
-        run: echo "::warning title=Experimental target failed::${{ matrix.goos }}/${{ matrix.goarch }} (cgo) failed to build - continuing. Use the purego build-release.yml binary for this target."
+        run: echo "::warning title=Experimental target failed::${{ matrix.goos }}/${{ matrix.goarch }} (cgo) failed to build - continuing. Use the purego build-purego.yml binary for this target."
 
       - name: Upload artifact
         if: success()
@@ -119,7 +119,7 @@ jobs:
     runs-on: macos-14
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Download the darwin binaries
         uses: actions/download-artifact@v8
@@ -169,7 +169,7 @@ jobs:
     runs-on: windows-2022
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Download the windows binary
         uses: actions/download-artifact@v8
@@ -220,7 +220,7 @@ jobs:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0 # full history + tags so git describe works
           persist-credentials: true

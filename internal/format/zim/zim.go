@@ -31,7 +31,7 @@ func init() {
 // Unlike every other direct backend in the tree it builds NO headword index,
 // in memory or otherwise: the file's own path pointer list is sorted, so
 // lookup is a binary search over the file (see search.go). Resident cost is
-// the pointer list plus a bounded cluster cache, which is why PreviewBytes
+// the cluster pointer list plus a bounded cluster cache, which is why PreviewBytes
 // below reports a real figure instead of letting the server's per-headword
 // estimate charge half a gigabyte for an index that does not exist.
 //
@@ -105,7 +105,7 @@ func (d *Dict) Caps() dict.Caps { return dict.Caps{Exact: true, Prefix: true} }
 // server's headword-count estimate (previewWeight) does not charge it for an
 // in-memory index it never builds.
 func (d *Dict) PreviewBytes() int64 {
-	return int64(len(d.c.urlPtr))*8 + clusterCacheBytes
+	return int64(len(d.c.clusterPtr))*8 + ptrPageLen*8 + clusterCacheBytes
 }
 
 // SelfIndexed marks a backend whose own file answers exact and prefix lookup
@@ -247,8 +247,9 @@ func (d *Dict) Keywords(offset, n int) []string {
 		return nil
 	}
 	out := make([]string, 0, hi-lo)
+	w := d.c.walk()
 	for i := d.lo + lo; i < d.lo+hi; i++ {
-		de, err := d.c.entry(i)
+		de, err := w.entry(i)
 		if err != nil {
 			break
 		}
@@ -292,11 +293,11 @@ func (d *Dict) Resource(name string) (io.ReadCloser, string, error) {
 				return nil, "", err
 			}
 		}
-		b, err := d.c.content(de)
+		rc, err := d.c.contentReader(de)
 		if err != nil {
 			return nil, "", err
 		}
-		return io.NopCloser(bytes.NewReader(b)), d.c.mimeOf(de), nil
+		return rc, d.c.mimeOf(de), nil
 	}
 	return nil, "", dict.ErrNotFound
 }
@@ -306,8 +307,9 @@ func (d *Dict) Resource(name string) (io.ReadCloser, string, error) {
 // the same shape of scan the other formats' Resources does.
 func (d *Dict) Resources() []string {
 	var out []string
+	w := d.c.walk()
 	for i := d.lo; i < d.hi; i++ {
-		de, err := d.c.entry(i)
+		de, err := w.entry(i)
 		if err != nil {
 			break
 		}
@@ -323,7 +325,7 @@ func (d *Dict) Resources() []string {
 		for _, ns := range []byte{'I', '-', 'J'} {
 			lo, hi := d.c.nsRange(ns)
 			for i := lo; i < hi; i++ {
-				de, err := d.c.entry(i)
+				de, err := w.entry(i)
 				if err != nil {
 					break
 				}

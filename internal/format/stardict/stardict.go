@@ -16,6 +16,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"sort"
@@ -23,14 +24,16 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/wuweidict/wudict/internal/artmark"
 	"github.com/wuweidict/wudict/internal/dict"
+	"github.com/wuweidict/wudict/internal/htmlref"
 	"github.com/wuweidict/wudict/internal/resource"
 )
 
 // ReaderVersion is the behaviour version of this format's Reader (see
 // dict.RegisterReaderVersion). Bump it in the same commit as any change to
 // what the Reader yields, and update the golden in reader_golden_test.go.
-const ReaderVersion = 1
+const ReaderVersion = 2
 
 func init() {
 	dict.RegisterFormat(".ifo", func(path string) (dict.Dictionary, error) { return Open(path) })
@@ -114,7 +117,8 @@ func Open(ifoPath string) (*Dict, error) {
 	if err != nil {
 		return nil, fmt.Errorf("stardict %s: %w", ifoPath, err)
 	}
-	if d.entries, err = parseIdx(idxData, offBits); err != nil {
+	wc, _ := strconv.Atoi(strings.TrimSpace(ifo["wordcount"]))
+	if d.entries, err = parseIdx(idxData, offBits, wc); err != nil {
 		return nil, fmt.Errorf("stardict %s: %w", ifoPath, err)
 	}
 
@@ -254,11 +258,16 @@ func readCompanion(base, ext string) ([]byte, error) {
 		filepath.Base(base+ext), compressedSuffixes[1])
 }
 
-// maxIndexBytes bounds one decompressed companion. An .idx of a real
-// dictionary runs to tens of MB, and it is loaded whole by design - but a gzip
-// bomb, a few KB that inflate to gigabytes, must cost one refused dictionary,
-// not the process.
-const maxIndexBytes = 256 << 20
+// maxIndexBytes and maxIndexRatio bound one decompressed companion. An .idx
+// is loaded whole by design and runs to tens of MB, and to hundreds for a
+// Wikipedia-scale dictionary (~24 bytes per headword) - but a gzip bomb, a few
+// KB that inflate to gigabytes, must cost one refused dictionary, not the
+// process. So the ceiling is the larger of a fixed floor and a multiple of
+// the compressed size: an index deflates 3-5x, a bomb ~1000x.
+const (
+	maxIndexBytes = 256 << 20
+	maxIndexRatio = 16
+)
 
 // readGzAll decompresses f whole, keeping what it got when the stream is
 // damaged at its TAIL. gzip verifies a CRC and a length that sit after the last
@@ -267,12 +276,16 @@ const maxIndexBytes = 256 << 20
 // then an error. Discarding all of it over the last record loses the
 // dictionary; a header-level failure still does, because nothing decompressed.
 func readGzAll(f *os.File) ([]byte, error) {
+	limit := int64(maxIndexBytes)
+	if st, err := f.Stat(); err == nil {
+		limit = max(limit, maxIndexRatio*st.Size())
+	}
 	gr, err := gzip.NewReader(f)
 	if err != nil {
 		return nil, err
 	}
 	defer gr.Close()
-	return readGzBounded(gr, maxIndexBytes)
+	return readGzBounded(gr, int(min(limit, math.MaxInt-1)))
 }
 
 // readGzBounded is readGzAll's body with the ceiling made a parameter, so a
@@ -290,13 +303,15 @@ func readGzBounded(gr io.Reader, max int) ([]byte, error) {
 }
 
 // parseIdx decodes the sorted index: word\0 + offset (32/64-bit BE) +
-// size (u32 BE) per entry.
-func parseIdx(data []byte, offBits int) ([]idxEntry, error) {
+// size (u32 BE) per entry. hint is the .ifo wordcount, used only to size the
+// result once - bounded by the most records data can hold, so a lying header
+// cannot turn it into an allocation.
+func parseIdx(data []byte, offBits, hint int) ([]idxEntry, error) {
 	offSize := 4
 	if offBits == 64 {
 		offSize = 8
 	}
-	var out []idxEntry
+	out := make([]idxEntry, 0, max(0, min(hint, len(data)/(offSize+5))))
 	pos := 0
 	for pos < len(data) {
 		nul := bytes.IndexByte(data[pos:], 0)
@@ -642,24 +657,45 @@ func partToHTML(t byte, data []byte) string {
 	case 'h', 'g': // HTML / Pango markup (HTML-compatible subset)
 		return strings.Trim(string(data), "\x00")
 	case 'm', 'l', 't', 'y': // plain text / phonetics
-		s := htmlEscape(strings.Trim(string(data), "\x00"))
+		s := htmlref.EscapeText(strings.Trim(string(data), "\x00"))
 		return "<p>" + strings.ReplaceAll(s, "\n", "<br/>") + "</p>"
 	case 'x': // XDXF markup
 		return xdxfToHTML(strings.Trim(string(data), "\x00"))
+	case 'r': // resource list
+		return resourceList(strings.Trim(string(data), "\x00"))
 	case 'W', 'P', 'X': // media / unknown binary: not renderable inline
 		return ""
 	default:
-		s := htmlEscape(strings.Trim(string(data), "\x00"))
+		s := htmlref.EscapeText(strings.Trim(string(data), "\x00"))
 		return "<p>" + s + "</p>"
 	}
 }
 
-// htmlEscaper is built once: strings.NewReplacer compiles a trie, and this
-// runs for every plain-text record part of every lookup.
-var htmlEscaper = strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;")
-
-func htmlEscape(s string) string {
-	return htmlEscaper.Replace(s)
+// resourceList renders an 'r' part: one resource per line, "type:name", the
+// name relative to the dictionary's resource storage (res/ or res.zip). img,
+// snd and vdo name media and are drawn by what a browser can do with the file
+// - artmark's rule, so a vdo:film.avi is a link exactly as it is in a DSL
+// article; att is an attachment, always a link. A line of any other shape is
+// shown as the text it is.
+func resourceList(s string) string {
+	var b strings.Builder
+	for _, ln := range strings.Split(s, "\n") {
+		if ln = strings.TrimSpace(ln); ln == "" {
+			continue
+		}
+		typ, name, _ := strings.Cut(ln, ":")
+		name = strings.TrimSpace(name)
+		el := htmlref.EscapeText(ln)
+		switch {
+		case name == "":
+		case typ == "att":
+			el = artmark.Media(name, artmark.MediaFile)
+		case typ == "img" || typ == "snd" || typ == "vdo":
+			el = artmark.Media(name, artmark.KindOf(name))
+		}
+		b.WriteString("<p>" + el + "</p>")
+	}
+	return b.String()
 }
 
 // wordCount reports the .ifo wordcount (used by tests).

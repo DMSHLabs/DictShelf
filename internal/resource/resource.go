@@ -27,6 +27,7 @@
 package resource
 
 import (
+	"bytes"
 	"io"
 	"mime"
 	"path"
@@ -68,6 +69,16 @@ func ListAll(srcs []Source) []string {
 
 // MIME is the content type implied by a resource name's extension.
 func MIME(name string) string { return mime.TypeByExtension(path.Ext(name)) }
+
+// Bytes serves a resource already in memory. It keeps the *bytes.Reader's Seek:
+// the HTTP resource handler answers Range requests only for an io.ReadSeeker,
+// and io.NopCloser hides Seek - a video a browser cannot seek is one Safari
+// will not start.
+func Bytes(b []byte) io.ReadCloser { return bytesCloser{bytes.NewReader(b)} }
+
+type bytesCloser struct{ *bytes.Reader }
+
+func (bytesCloser) Close() error { return nil }
 
 // Clean puts a name in the form used for both lookup and storage: forward
 // slashes, no leading "/" or "./", and no path climbing out of the container.

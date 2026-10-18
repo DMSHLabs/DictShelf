@@ -641,21 +641,6 @@ func TestStripHTML(t *testing.T) {
 	}
 }
 
-func TestSlug(t *testing.T) {
-	cases := map[string]string{
-		"Diccionario de la lengua española (2016)": "Diccionario-de-la-lengua-española-2016",
-		"a/b\\c:d": "a-b-c-d",
-		"---":      "dictionary",
-		"":         "dictionary",
-		"ok_name":  "ok-name",
-	}
-	for in, want := range cases {
-		if got := Slug(in); got != want {
-			t.Errorf("Slug(%q) = %q, want %q", in, got, want)
-		}
-	}
-}
-
 func TestBuildMatch(t *testing.T) {
 	if got := buildMatch(`he"llo world`, "w"); got != `w:"he""llo"* w:"world"*` {
 		t.Errorf("buildMatch = %q", got)
@@ -1399,5 +1384,47 @@ func TestExactStillPrefersTheExactCase(t *testing.T) {
 	}
 	if len(res) != 1 || res[0].Headword != "corazón" {
 		t.Fatalf("case-folded lookup = %+v, want the one lowercase entry", res)
+	}
+}
+
+// The redirect rule: the target spelled verbatim wins, else its lowercased
+// form, and the lowest entry id breaks ties in both - with Unicode folding,
+// not SQLite's ASCII-only NOCASE.
+func TestRedirectResolutionRule(t *testing.T) {
+	entries := []dict.Entry{
+		h("Apple", "<p>1</p>"), // id 1
+		h("apple", "<p>2</p>"), // id 2
+		h("APPLE", "<p>3</p>"), // id 3
+		h("ábaco", "<p>4</p>"), // id 4
+		{Headwords: []string{"to-verbatim"}, LinkTo: "APPLE"},
+		{Headwords: []string{"to-folded"}, LinkTo: "aPPle"},
+		{Headwords: []string{"to-unicode"}, LinkTo: "ÁBACO"},
+		{Headwords: []string{"to-nothing"}, LinkTo: "pear"},
+	}
+	r := &fakeReader{meta: dict.Meta{Name: "R", Format: "mdx", Path: "/nonexistent/r.mdx"}, entries: entries}
+	path := filepath.Join(t.TempDir(), "text.db")
+	rep, err := IngestPlan(r, path, Plan{}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rep.UnresolvedLinks != 1 {
+		t.Errorf("UnresolvedLinks = %d, want 1", rep.UnresolvedLinks)
+	}
+	db, err := openRO(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	for alias, want := range map[string]int64{"to-verbatim": 3, "to-folded": 1, "to-unicode": 4} {
+		var got int64
+		if err := db.QueryRow("SELECT entry_id FROM alias WHERE w = ?", alias).Scan(&got); err != nil {
+			t.Errorf("%s: %v", alias, err)
+		} else if got != want {
+			t.Errorf("%s -> entry %d, want %d", alias, got, want)
+		}
+	}
+	var n int
+	if err := db.QueryRow("SELECT count(*) FROM alias WHERE w = 'to-nothing'").Scan(&n); err != nil || n != 0 {
+		t.Errorf("unresolved redirect stored %d alias rows (%v)", n, err)
 	}
 }

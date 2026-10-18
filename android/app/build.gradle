@@ -4,7 +4,7 @@
 
 // The WuWeiDict app module (D52): a WebView shell around the wudict server
 // binary. There are deliberately no dependencies - the UI is served by the
-// Go server, the shell is one activity and one process launcher.
+// Go server; the shell is a few activities around one process launcher.
 plugins {
     id 'com.android.application'
 }
@@ -113,7 +113,7 @@ android {
 
     buildTypes {
         release {
-            minifyEnabled = false  // nothing to shrink: two classes, no libraries
+            minifyEnabled = false  // nothing to shrink: no libraries, and the Java is the shell alone
             shrinkResources = false
             if (System.getenv("KEYSTORE") != null) {
                 signingConfig = signingConfigs.release

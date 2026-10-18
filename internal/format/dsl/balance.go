@@ -326,10 +326,10 @@ func (tr *transformer) emit() {
 			if t.ipa {
 				s = legacyIPA(s)
 			}
-			textEscaper.WriteString(&tr.out, s)
+			htmlref.WriteText(&tr.out, s)
 		case tkLit:
 			tr.materialize(false)
-			textEscaper.WriteString(&tr.out, t.s)
+			htmlref.WriteText(&tr.out, t.s)
 		case tkHTML:
 			if t.anchor {
 				// An <a> inside a link is invalid HTML and the parser ends the

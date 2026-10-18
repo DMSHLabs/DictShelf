@@ -151,15 +151,6 @@ func (mdict *Mdict) BuildRecordIndex() error {
 // FilePath is the container this Mdict was opened from.
 func (mdict *Mdict) FilePath() string { return mdict.filePath }
 
-func (mdict *Mdict) Name() string {
-	_, rawpath := filepath.Split(mdict.filePath)
-	rawpath = strings.TrimRight(rawpath, ".mdx")
-	if len(rawpath) > 0 {
-		return rawpath
-	}
-	return rawpath
-}
-
 func (mdict *Mdict) Title() string {
 	return mdict.meta.title
 

@@ -11,6 +11,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/wuweidict/wudict/internal/dict"
@@ -272,7 +274,7 @@ func TestIntegrationRealSlob(t *testing.T) {
 	}
 }
 
-// parseRefs seeks by a position the file declares, so pos can arrive negative
+// A ref is read at a position the file declares, so pos can arrive negative
 // from a uint64 that overflows int. An upper-bound-only check waves that
 // through and the slice panics; the whole point of bufReader is that a
 // malformed container returns an error instead.
@@ -310,5 +312,159 @@ func TestBufReaderRejectsOutOfRangePos(t *testing.T) {
 				t.Fatalf("read returned %q, want an error", got)
 			}
 		})
+	}
+}
+
+// Opening, browsing, listing media and the ingest scan all read refs from the
+// file; only a lookup decodes the whole list, which is what keeps preparing a
+// Wikipedia-scale slob from holding every key at once.
+func TestRefListIsReadOnDemand(t *testing.T) {
+	p := buildSlob(t)
+	d, err := Open(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	if d.c.refs != nil {
+		t.Fatal("Open decoded the ref list")
+	}
+	if kw := d.Keywords(1, 2); !slices.Equal(kw, []string{"Corazón", "img.png"}) {
+		t.Errorf("Keywords(1, 2) = %q", kw)
+	}
+	if kw := d.Keywords(0, 0); len(kw) != 4 {
+		t.Errorf("Keywords(0, 0) = %q, want all 4", kw)
+	}
+	if res := d.Resources(); !slices.Equal(res, []string{"img.png"}) {
+		t.Errorf("Resources = %q", res)
+	}
+	if d.c.refs != nil {
+		t.Fatal("a browse or a media listing decoded the ref list")
+	}
+	r, err := NewReader(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+	for {
+		if _, err := r.Next(); err == io.EOF {
+			break
+		} else if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if r.d.c.refs != nil {
+		t.Fatal("the ingest scan decoded the ref list")
+	}
+	if res, err := d.Exact("corazón", 1); err != nil || len(res) != 1 {
+		t.Fatalf("Exact: %v %v", res, err)
+	}
+	if len(d.c.refs) != 4 {
+		t.Errorf("a lookup decoded %d refs, want 4", len(d.c.refs))
+	}
+}
+
+// Records of every length the format allows read back through both windows:
+// a whole-list walk in position order through the scan window, and single
+// records out of order through the small window that has to grow for a key
+// longer than it. The positions are deliberately not in list order, as in
+// files the slob writers produce.
+func TestRefWindowReadsAnyRecordLength(t *testing.T) {
+	keys := []string{"a", strings.Repeat("k", 1000), "b", strings.Repeat("z", 0xFFFF)}
+	// Records written in this order; the list (by key) is a permutation of it.
+	written := []int{2, 0, 3, 1}
+	var data bytes.Buffer
+	pos := make([]uint64, len(keys))
+	for _, i := range written {
+		pos[i] = uint64(data.Len())
+		binary.Write(&data, binary.BigEndian, uint16(len(keys[i])))
+		data.WriteString(keys[i])
+		binary.Write(&data, binary.BigEndian, uint32(i)) // bin
+		binary.Write(&data, binary.BigEndian, uint16(i)) // item
+		data.WriteByte(0)                                // empty fragment
+	}
+	var file bytes.Buffer
+	file.Write(make([]byte, 7)) // what precedes the list in a real file
+	refsOff := int64(file.Len())
+	binary.Write(&file, binary.BigEndian, uint32(len(keys)))
+	for _, p := range pos {
+		binary.Write(&file, binary.BigEndian, p)
+	}
+	file.Write(data.Bytes())
+	path := filepath.Join(t.TempDir(), "refs.bin")
+	if err := os.WriteFile(path, file.Bytes(), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	end := int64(file.Len())
+	c := &container{f: f, size: end}
+	if err := c.parseRefList(refsOff, end); err != nil {
+		t.Fatal(err)
+	}
+
+	locs, err := c.locate(0, c.refCount)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.IsSortedFunc(locs, func(a, b refLoc) int { return int(a.pos) - int(b.pos) }) {
+		t.Error("locate did not order the refs by position")
+	}
+	got := make([]string, len(keys))
+	if err := c.walk(locs, true, func(l *refLoc, r ref) error {
+		i := int(l.idx)
+		if l.pos != pos[i] || r.bin != uint32(i) || r.item != uint16(i) {
+			t.Errorf("ref %d: pos %d bin %d item %d", i, l.pos, r.bin, r.item)
+		}
+		got[i] = r.key
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(got, keys) {
+		t.Error("the walk read mismatched keys")
+	}
+	// The whole list, read in one piece, agrees with the walk.
+	all, err := c.allRefs()
+	if err != nil || len(all) != len(keys) {
+		t.Fatalf("allRefs = %d refs, %v", len(all), err)
+	}
+	for i, r := range all {
+		if r.key != keys[i] || r.bin != uint32(i) || r.item != uint16(i) {
+			t.Errorf("allRefs[%d] = %d-byte key, bin %d item %d", i, len(r.key), r.bin, r.item)
+		}
+	}
+	// A range is the list's, not the file's: refs 1..2 by key.
+	if locs, err := c.locate(1, 3); err != nil || len(locs) != 2 || locs[0].idx+locs[1].idx != 3 {
+		t.Errorf("locate(1, 3) = %+v, %v", locs, err)
+	}
+
+	w := refWindow{c: c, size: pointWindowBytes}
+	for _, i := range []int{3, 1, 0, 2, 1, 3} {
+		if r, err := w.ref(pos[i], true); err != nil || r.key != keys[i] {
+			t.Errorf("ref(%d): %d-byte key, %v; want %d bytes", pos[i], len(r.key), err, len(keys[i]))
+		}
+	}
+	if _, err := w.ref(uint64(data.Len()), true); err == nil {
+		t.Error("a position past the records was read")
+	}
+
+	// A region that ends inside a record: that record fails when it is read.
+	// The file ends with the record written last, which is neither the list's
+	// first nor its last - the two open checks - so the open itself stands.
+	short := &container{f: f, size: end}
+	if err := short.parseRefList(refsOff, end-3); err != nil {
+		t.Fatalf("open with the first and last refs intact: %v", err)
+	}
+	last := written[len(written)-1]
+	if _, err := (&refWindow{c: short, size: pointWindowBytes}).ref(pos[last], true); err == nil {
+		t.Error("a record cut short by the region's end was read")
+	}
+	// Cut inside the list's last ref (written third), and the open refuses.
+	dataOff := refsOff + 4 + 8*int64(len(keys))
+	if err := (&container{f: f, size: end}).parseRefList(refsOff, dataOff+int64(pos[3])+10); err == nil {
+		t.Error("a list whose last ref is cut short opened")
 	}
 }
