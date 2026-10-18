@@ -689,15 +689,23 @@ func readBrowsePage(b dict.Browser, offset, size int, diagnostics bool, transpor
 	started := time.Now()
 	if measured, ok := b.(browsePageMeasurer); ok {
 		words, stats, err := measured.PageWithStats(offset, size)
+		errorText := ""
+		if err != nil {
+			errorText = err.Error()
+		}
 		logx.System("browse_page transport=%s dict=%q name=%q page=%d offset=%d size=%d anchor_index=%t anchor_used=%t anchor_ordinal=%d anchor_lookup_ms=%d read_ms=%d rows_read=%d words=%d total_ms=%d error=%q",
 			transport, dictID, name, offset/size+1, offset, size, stats.AnchorIndex, stats.AnchorUsed, stats.AnchorOrdinal,
 			stats.AnchorLookup.Milliseconds(), stats.Read.Milliseconds(), stats.RowsRead, stats.Words,
-			time.Since(started).Milliseconds(), err)
+			time.Since(started).Milliseconds(), errorText)
 		return words, err
 	}
 	words, err := b.Page(offset, size)
+	errorText := ""
+	if err != nil {
+		errorText = err.Error()
+	}
 	logx.System("browse_page transport=%s dict=%q name=%q page=%d offset=%d size=%d anchor_index=false anchor_used=false rows_read=%d words=%d total_ms=%d error=%q",
-		transport, dictID, name, offset/size+1, offset, size, len(words), len(words), time.Since(started).Milliseconds(), err)
+		transport, dictID, name, offset/size+1, offset, size, len(words), len(words), time.Since(started).Milliseconds(), errorText)
 	return words, err
 }
 

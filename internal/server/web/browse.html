@@ -441,7 +441,7 @@ function unesc(s){
 try{const t=localStorage.getItem("wudict_theme");
   if(t&&t!=="auto")document.documentElement.setAttribute("data-theme",t)}catch(e){}
 
-let dictId="",state=null,last={p:1},poll=0,stripFor="",stripLettersPainted=0,stripMetricKey="",stripWidths=[],stripOffsets=[],stripTotalWidth=0,stripCurrentIndex=-1,stripWindowStart=-1,stripWindowEnd=-1,stripFrame=0,chooserSearch=null,browsePageAbort=null,browseAlphabetTask=null,browsePageBusy=false;
+let dictId="",state=null,last={p:1},poll=0,stripFor="",stripLettersPainted=0,stripMetricKey="",stripWidths=[],stripOffsets=[],stripTotalWidth=0,stripCurrentIndex=-1,stripCurrentPositionedIndex=-1,stripWindowStart=-1,stripWindowEnd=-1,stripFrame=0,stripMeasureFrame=0,stripMeasureGeneration=0,stripMeasureStarted=0,stripMeasureStartCount=0,stripMeasureChunks=0,chooserSearch=null,browsePageAbort=null,browseAlphabetTask=null,browsePageBusy=false;
 const browseAlphabetCache=new Map(),browseAlphabetPartial=new Map(),browsePageCache=new Map(),browsePageCacheMetrics=new Map(),browsePagePrefetches=new Map();
 const BROWSE_PAGE_CACHE_LIMIT=12,BROWSE_PAGE_SESSION_LIMIT=8;
 const BROWSE_ALPHABET_SESSION_KEY="wudict_browse_alphabet_v1";
@@ -531,7 +531,7 @@ function browseTrace(step,data={}){
   if(!enabled)return;
   console.info("[browse]",step,data);
   const payload={event:step.replaceAll(" ","_")};
-  for(const key of ["dict","page","words","letters","bytes","readMs","fetchMs","totalMs","wordsMs","stripBuildMs","stripMarkMs","status","restored","streamAlphabet"])
+  for(const key of ["dict","page","words","letters","measured","bytes","readMs","fetchMs","totalMs","wordsMs","stripBuildMs","stripMarkMs","status","restored","streamAlphabet"])
     if(data[key]!==undefined)payload[key]=data[key];
   sendBrowseDiagnostic(payload);
 }
@@ -721,7 +721,9 @@ function measureStripItems(items){
   const letterSpacing=parseFloat(style.letterSpacing)||0;
   const metricsChanged=key!==stripMetricKey;
   if(metricsChanged){
-    stripMetricKey=key;stripWidths=[];stripOffsets=[];stripTotalWidth=0;stripLettersPainted=0;stripWindowStart=stripWindowEnd=-1;
+    stripMetricKey=key;stripWidths=[];stripOffsets=[];stripTotalWidth=0;stripLettersPainted=0;stripWindowStart=stripWindowEnd=-1;stripCurrentPositionedIndex=-1;
+    stripMeasureGeneration++;stripMeasureStarted=0;stripMeasureStartCount=0;stripMeasureChunks=0;
+    if(stripMeasureFrame){cancelAnimationFrame(stripMeasureFrame);stripMeasureFrame=0}
     const cached=browseAlphabetCache.get(stripFor);
     if(cached?.metricKey===key&&cached.widths?.length===items.length){
       stripWidths=cached.widths;
@@ -730,23 +732,45 @@ function measureStripItems(items){
       stripLettersPainted=stripWidths.length;
     }
   }
-  if(stripLettersPainted>0&&items.length>stripLettersPainted)stripTotalWidth+=gap;
-  for(let i=stripLettersPainted;i<items.length;i++){
-    const label=unesc(items[i].l),text=ctx.measureText(label).width+Math.max(0,label.length-1)*letterSpacing;
-    const width=Math.max(minWidth,text+pad);stripOffsets.push(stripTotalWidth);stripWidths.push(width);stripTotalWidth+=width+gap;
+  if(items.length<stripLettersPainted){
+    stripWidths=[];stripOffsets=[];stripTotalWidth=0;stripLettersPainted=0;stripWindowStart=stripWindowEnd=-1;stripCurrentPositionedIndex=-1;
+    if(stripMeasureFrame){cancelAnimationFrame(stripMeasureFrame);stripMeasureFrame=0}
+    stripMeasureGeneration++;stripMeasureStarted=0;stripMeasureStartCount=0;stripMeasureChunks=0;
   }
-  if(items.length>stripLettersPainted)stripTotalWidth-=gap;
-  stripLettersPainted=items.length;
-  if(items.length!==stripWidths.length){stripWidths.length=stripOffsets.length=items.length}
+  if(items.length>stripLettersPainted&&!stripMeasureStarted){stripMeasureStarted=performance.now();stripMeasureStartCount=stripLettersPainted;stripMeasureChunks=0}
+  const measuredBefore=stripLettersPainted,batchStarted=performance.now();let measureEnd=measuredBefore;
+  while(measureEnd<items.length&&measureEnd-measuredBefore<512){
+    const i=measureEnd;
+    const label=unesc(items[i].l),text=ctx.measureText(label).width+Math.max(0,label.length-1)*letterSpacing;
+    const width=Math.max(minWidth,text+pad);if(stripWidths.length)stripTotalWidth+=gap;stripOffsets.push(stripTotalWidth);stripWidths.push(width);stripTotalWidth+=width;
+    measureEnd++;
+    if(performance.now()-batchStarted>=8)break;
+  }
+  if(measureEnd>measuredBefore){stripMeasureChunks++;stripLettersPainted=measureEnd}
+  const complete=stripLettersPainted>=items.length;
   const cached=browseAlphabetCache.get(stripFor);
   if(cached&&cached.letters.length===items.length&&cached.metricKey!==key)
     saveBrowseAlphabet(stripFor,cached.total,cached.letters);
   strip.style.height=Math.max(height,$("stripPrev").getBoundingClientRect().height)+"px";
   track.style.width=Math.max(strip.clientWidth,stripTotalWidth)+"px";
-  if(metricsChanged&&stripCurrentIndex>=0&&stripCurrentIndex<stripOffsets.length){
+  if(complete){
+    if(stripMeasureFrame){cancelAnimationFrame(stripMeasureFrame);stripMeasureFrame=0}
+    if(stripMeasureStarted&&items.length){browseTrace("alphabet measure done",{dict:stripFor,letters:items.length,measured:stripLettersPainted-stripMeasureStartCount,words:stripMeasureChunks,stripBuildMs:Math.round(performance.now()-stripMeasureStarted)});stripMeasureStarted=0}
+  }else if(!stripMeasureFrame){
+    const generation=stripMeasureGeneration;
+    stripMeasureFrame=requestAnimationFrame(()=>{
+      stripMeasureFrame=0;
+      if(generation!==stripMeasureGeneration||!state||state.dict!==stripFor)return;
+      const currentItems=state.alphabet||[];
+      if(measureStripItems(currentItems))render();
+    });
+  }
+  if(browseAlphabetCache.has(stripFor)&&stripCurrentIndex>=0&&stripCurrentIndex<stripOffsets.length&&stripCurrentPositionedIndex!==stripCurrentIndex){
     const center=stripOffsets[stripCurrentIndex]+stripWidths[stripCurrentIndex]/2;
     strip.scrollLeft=Math.max(0,Math.min(stripTotalWidth-strip.clientWidth,center-strip.clientWidth/2));
+    stripCurrentPositionedIndex=stripCurrentIndex;
   }
+  return complete;
 }
 function renderVirtualStrip(force=false){
   if(!state||!stripWidths.length)return;
@@ -969,8 +993,8 @@ async function show(opts,record){
       browseTrace("alphabet done",{dict:requestDictId,words:total,letters:complete.length,totalMs:Math.round(performance.now()-alphabetStarted)});
       if(browseNavContext)logBrowseNavigation("alphabet_ready",performance.now()-alphabetStarted,{words:total});
       saveBrowseAlphabet(requestDictId,total,complete.slice());browseAlphabetPartial.delete(requestDictId);
-      if(state&&state.dict===requestDictId){state.alphabet=complete;render();prefetchNextBrowsePage(state)}
       browseAlphabetTask=null;
+    if(state&&state.dict===requestDictId){state.alphabet=complete;render();prefetchNextBrowsePage(state)}
       finishBrowseProgress("alphabet",requestDictId);
       endProgress();
       if(seq===browseSeq){setBrowsePageBusy(false);if(findResult&&!findFilter&&findIndex>=0)scheduleScrollToCurrentWord(seq)}
@@ -1484,7 +1508,7 @@ function render(){
   if(!filtering){
     if(stripFor!==d.dict){
       stripFor=d.dict;stripLettersPainted=0;stripMetricKey="";stripWidths=[];stripOffsets=[];stripTotalWidth=0;
-      stripCurrentIndex=-1;stripWindowStart=stripWindowEnd=-1;strip.scrollLeft=0;
+      stripCurrentIndex=-1;stripCurrentPositionedIndex=-1;stripWindowStart=stripWindowEnd=-1;strip.scrollLeft=0;
       track.replaceChildren($("stripMeasure"));
     }
     measureStripItems(d.alphabet||[]);
@@ -1502,12 +1526,11 @@ function render(){
     while(lo<hi){const mid=(lo+hi)>>>1;if(d.alphabet[mid].o<=mark)lo=mid+1;else hi=mid}
     const currentIndex=lo-1;
     const currentChanged=currentIndex!==stripCurrentIndex;
-    if(currentChanged){
-      stripCurrentIndex=currentIndex;
-      if(currentIndex>=0){
-        const center=stripOffsets[currentIndex]+stripWidths[currentIndex]/2;
-        strip.scrollLeft=Math.max(0,Math.min(stripTotalWidth-strip.clientWidth,center-strip.clientWidth/2));
-      }
+    if(currentChanged)stripCurrentIndex=currentIndex;
+    if(browseAlphabetCache.has(d.dict)&&currentIndex>=0&&currentIndex<stripOffsets.length&&stripCurrentPositionedIndex!==currentIndex){
+      const center=stripOffsets[currentIndex]+stripWidths[currentIndex]/2;
+      strip.scrollLeft=Math.max(0,Math.min(stripTotalWidth-strip.clientWidth,center-strip.clientWidth/2));
+      stripCurrentPositionedIndex=currentIndex;
     }
     renderVirtualStrip(currentChanged);
     stripReady=performance.now();

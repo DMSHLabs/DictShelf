@@ -4418,7 +4418,7 @@ async function loadFolders(){
   // is restated one line down by the row's own note — the same rule that keeps
   // the format prefix off a file name ending in ".mdx" (see provenance above).
   grp(tx("panel.library"));
-  row(c.libDir,tx("panel.prepared",{number:c.prepared})+(c.useCached?tx("panel.inUse"):c.prepared?tx("panel.notInUse"):""),false);
+  row(c.libDir,tx("panel.prepared",{number:c.prepared}),false);
   // Likewise "file": the row shows a path ending in ".toml".
   if(c.configPath){grp(tx("panel.configFile"));row(c.configPath,"",false)}
 }
