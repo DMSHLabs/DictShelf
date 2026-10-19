@@ -130,11 +130,15 @@ final class Intake {
      *
      * <p>Deliberately NARROWER than the server's rule, which also accepts a
      * companion that names its dictionary. It lists the main files plus
-     * ".mdd", the second half somebody shares on its own after the first. The
+     * ".mdd", the second half somebody shares on its own after the first, and
+     * the parts of a split ZIM (ZIM_PART), which arrive one at a time. The
      * two errors are not symmetric: too narrow is an absence the user can see
      * and route around with the page's own picker, too broad is a wasted
      * upload of somebody's disk image.
      */
+    /** ".zimaa" to ".zimzz": a split ZIM, its first part the main file. */
+    private static final String ZIM_PART = ".*\\.zim[a-z][a-z]";
+
     private static final String[] DICT_EXTS = {
             ".mdx", ".mdd", ".slob", ".bgl", ".zim", ".ifo", ".dsl", ".dsl.dz",
             // WuWeiDict markdown: ".md" covers ".wudict.md". Most .md files
@@ -308,7 +312,7 @@ final class Intake {
         for (String ext : DICT_EXTS) {
             if (n.endsWith(ext)) return true;
         }
-        return false;
+        return n.matches(ZIM_PART);
     }
 
     /**

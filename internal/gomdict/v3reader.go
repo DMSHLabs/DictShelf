@@ -13,6 +13,7 @@ import (
 	"os"
 	"sort"
 
+	"github.com/wuweidict/wudict/internal/limits"
 	"github.com/wuweidict/wudict/internal/logx"
 )
 
@@ -168,8 +169,8 @@ func (mdict *MdictBase) readKeyEntriesV3() error {
 		// compSize is the file's word for how much to allocate; blocks are tens
 		// of KB and this cap is the only thing between a corrupt count and a
 		// 4 GB make.
-		if int64(compSize) > maxLZOBlock {
-			return fmt.Errorf("v3 keys: block %d: compressed size %d exceeds the %d byte limit", i, compSize, maxLZOBlock)
+		if int64(compSize) > maxLZOBlock() {
+			return fmt.Errorf("v3 keys: block %d: %w", i, limits.Exceeded(fmt.Sprintf("a compressed size of %d bytes", compSize), "MAX_MDICT_BLOCK", maxLZOBlock()))
 		}
 		blockData := make([]byte, compSize)
 		if _, err := io.ReadFull(f, blockData); err != nil {

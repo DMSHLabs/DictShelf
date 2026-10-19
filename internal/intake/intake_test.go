@@ -26,7 +26,7 @@ import (
 // without linking five format packages into it.
 func init() {
 	open := func(path string) (dict.Dictionary, error) { return nil, errors.New("not opened in tests") }
-	for _, ext := range []string{".mdx", ".ifo", ".dsl", ".dsl.dz", ".slob", ".bgl", ".zim"} {
+	for _, ext := range []string{".mdx", ".ifo", ".dsl", ".dsl.dz", ".slob", ".bgl", ".zim", ".zimaa"} {
 		dict.RegisterFormat(ext, open)
 	}
 	dict.RegisterInspectable(".mdd", open)

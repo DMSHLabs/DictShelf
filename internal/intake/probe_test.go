@@ -17,6 +17,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/wuweidict/wudict/internal/dict"
 )
 
 // site serves a fixed set of file names and records every path asked for. What
@@ -452,5 +454,32 @@ func TestConfirmWithExtrasDownloadsBeforeInstalling(t *testing.T) {
 	// The companion is part of the installed dictionary, not merely fetched.
 	if _, err := os.Stat(filepath.Join(dest, st.Installed[0], "OED.mdd")); err != nil {
 		t.Fatalf("the companion did not reach the library: %v", err)
+	}
+}
+
+// A split ZIM's parts are all required, asked for in order past the probe
+// budget (30 parts here, maxProbes is 24), and the run ends at the first gap.
+func TestProbeZIMPartsRunPastTheBudget(t *testing.T) {
+	var names []string
+	for _, suf := range dict.ZIMPartSuffixes()[:30] {
+		names = append(names, "Wiki"+suf)
+	}
+	beyond := "Wiki" + dict.ZIMPartSuffixes()[31] // [30] is the gap
+	s, srv := serve(t, append(names, beyond)...)
+	got := probeFor(t, srv, "Wiki.zimaa", t.TempDir())
+
+	if !equal(extraNames(got), names) {
+		t.Fatalf("extras = %v, want the 30 parts in order", extraNames(got))
+	}
+	for _, e := range got {
+		if e.Need != NeedRequired {
+			t.Errorf("%s: need = %q, want %q", e.Name, e.Need, NeedRequired)
+		}
+	}
+	if !s.asked("/dicts/Wiki" + dict.ZIMPartSuffixes()[30]) {
+		t.Error("the gap itself must be asked about")
+	}
+	if s.asked("/dicts/" + beyond) {
+		t.Error("the run continued past the gap")
 	}
 }

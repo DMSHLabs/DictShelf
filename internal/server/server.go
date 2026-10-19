@@ -716,6 +716,9 @@ type dictInfo struct {
 	// default voice for reading a selection aloud (facet.ArticleLang). Derived
 	// alongside Groups from the same evidence; "" when nothing says.
 	ArticleLang string `json:"articleLang,omitempty"`
+	// LemmaLang is the language the lemma retry searches this dictionary with
+	// (lemmaLangOf), kept for the Lemmatization page's counts; not sent.
+	LemmaLang string `json:"-"`
 
 	// provenance (panel display): where the dictionary came from and what
 	// derived files exist. All optional and filesystem-cheap.
@@ -1025,6 +1028,17 @@ func (s *Server) langFacts(info *dictInfo, name, declared, contents string) {
 	}
 	info.Groups = facet.Derive(in)
 	info.ArticleLang = facet.ArticleLang(in)
+	info.LemmaLang = s.lemmaLangOf(declared, info.Path, name)
+}
+
+// lemmaLangOf is the language whose lemma data a dictionary is searched with
+// when a word finds nothing: the three naming sources in authority order -
+// declared, then file and folder, then the title, which is the one label the
+// user did not choose and so speaks only when the others were silent. The
+// picker's groups read the same ladder through the same function. "" is
+// English (lemmaWave): the one language assumed without evidence.
+func (s *Server) lemmaLangOf(declared, path, name string) string {
+	return lang.Resolve(declared, langPath(path), s.reg.Dirs(), name)
 }
 
 // rebuildable reports that an entry has a source to prepare from: not a
@@ -1525,12 +1539,9 @@ func (s *Server) lemmaWave(
 		if !missed[i] {
 			continue
 		}
-		// The three naming sources in authority order - declared, then file
-		// and folder, then the title, which is the one label the user did not
-		// choose and so speaks only when the others were silent. The picker's
-		// groups read the same ladder through the same function; what differs
-		// is only what each does with "", immediately below.
-		code := lang.Resolve(metas[i].IndexLang, langPath(entries[i].Path), s.reg.Dirs(), metas[i].Name)
+		// What differs from the picker is only what is done with "",
+		// immediately below.
+		code := s.lemmaLangOf(metas[i].IndexLang, entries[i].Path, metas[i].Name)
 		if code == "" {
 			// The one language assumed without evidence. It is the smallest
 			// pack by a wide margin (7 MB against 65 for Russian), an

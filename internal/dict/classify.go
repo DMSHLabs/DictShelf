@@ -85,6 +85,9 @@ func ClassifyName(name string) Kind {
 	if n := suffixLen(companionSuffixes, base); n > comp {
 		comp = n
 	}
+	if n := zimPartLen(base); n > comp {
+		comp = n
+	}
 	// "_abrv.dsl" with nothing in front of it names no parent, so it is
 	// somebody's own abbreviation dictionary rather than a companion - the
 	// name-only half of the check IsAbbrevCompanion makes with a stat.
@@ -181,6 +184,9 @@ func CompanionStem(name string) string {
 		return ""
 	}
 	if n := abbrevSuffixLen(lower); n > 0 && len(base) > n {
+		return base[:len(base)-n]
+	}
+	if n := zimPartLen(lower); n > 0 && len(base) > n {
 		return base[:len(base)-n]
 	}
 	n := suffixLen(companionSuffixes, lower)

@@ -24,6 +24,7 @@ import (
 	"compress/bzip2"
 	"compress/zlib"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -32,6 +33,8 @@ import (
 	"sync"
 
 	"github.com/ulikunitz/xz/lzma"
+	"github.com/wuweidict/wudict/internal/inflate"
+	"github.com/wuweidict/wudict/internal/limits"
 )
 
 var magic = []byte("!-1SLOB\x1f")
@@ -707,45 +710,65 @@ func (c *container) binContent(bin uint32, zlenOff int64) ([]byte, error) {
 	return data, nil
 }
 
-// maxItemBytes caps one decompressed bin. Slob items are articles and media
-// clips - kilobytes to a few megabytes - and every codec below would otherwise
-// inflate whatever a corrupt container declares. The same ceiling zim's
-// clusters get.
-const maxItemBytes = 256 << 20
+// maxBin caps one decompressed bin (MAX_SLOB_BIN). Slob items are articles
+// and media clips - kilobytes to a few megabytes - and every codec below
+// would otherwise inflate whatever a corrupt container declares.
+func maxBin() int64 { return limits.Get().SlobBin }
 
-func readAllBounded(r io.Reader, max int64) ([]byte, error) {
-	out, err := io.ReadAll(io.LimitReader(r, max+1))
-	if err != nil {
-		return nil, err
+// lzma2DictCap is the dictionary a bin is decoded with first. Raw LZMA2, as
+// slob stores it, declares no dictionary size, and the decoder allocates its
+// whole capacity up front: 32 MiB allocated and zeroed per bin, where bins
+// decompress to ~530 kB (30 real slobs: 511-578 kB on average, 977 kB at
+// most). A match reaches back at most over the data already decoded, so a
+// 2 MiB dictionary decodes any bin up to 2 MiB exactly; a match that reaches
+// further is refused by the decoder's distance check - exact, not a guess -
+// and the bin is decoded again with lzma2MaxDict.
+const (
+	lzma2DictCap = 2 << 20
+	lzma2MaxDict = 32 << 20
+)
+
+// decompress decodes one bin into a reused buffer (internal/inflate:
+// io.ReadAll allocated 2.8x a 530 kB bin growing its own).
+func decompress(name string, data []byte) ([]byte, error) {
+	if name == "" {
+		return data, nil
 	}
-	if int64(len(out)) > max {
-		return nil, fmt.Errorf("decompressed bin exceeds %d bytes", max)
+	out, err := inflate.Into(func(dst []byte) ([]byte, error) { return decode(name, data, dst) })
+	if errors.Is(err, inflate.ErrTooLarge) {
+		err = limits.Exceeded("the unpacked bin", "MAX_SLOB_BIN", maxBin())
 	}
-	return out, nil
+	return out, err
 }
 
-func decompress(name string, data []byte) ([]byte, error) {
+func decode(name string, data, dst []byte) ([]byte, error) {
 	switch name {
-	case "":
-		return data, nil
 	case "zlib":
 		r, err := zlib.NewReader(bytes.NewReader(data))
 		if err != nil {
-			return nil, err
+			return dst, err
 		}
 		defer r.Close()
-		return readAllBounded(r, maxItemBytes)
+		return inflate.AppendAll(dst, r, maxBin())
 	case "bz2":
-		return readAllBounded(bzip2.NewReader(bytes.NewReader(data)), maxItemBytes)
+		return inflate.AppendAll(dst, bzip2.NewReader(bytes.NewReader(data)), maxBin())
 	case "lzma2":
-		r, err := lzma.Reader2Config{DictCap: 1 << 25}.NewReader2(bytes.NewReader(data))
+		out, err := decodeLZMA2(data, lzma2DictCap, dst)
 		if err != nil {
-			return nil, err
+			out, err = decodeLZMA2(data, lzma2MaxDict, out[:0])
 		}
-		return readAllBounded(r, maxItemBytes)
+		return out, err
 	default:
-		return nil, fmt.Errorf("unsupported compression %q", name)
+		return dst, fmt.Errorf("unsupported compression %q", name)
 	}
+}
+
+func decodeLZMA2(data []byte, dictCap int, dst []byte) ([]byte, error) {
+	r, err := lzma.Reader2Config{DictCap: dictCap}.NewReader2(bytes.NewReader(data))
+	if err != nil {
+		return dst, err
+	}
+	return inflate.AppendAll(dst, r, maxBin())
 }
 
 func min64(a, b int64) int64 {

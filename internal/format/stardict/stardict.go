@@ -27,6 +27,7 @@ import (
 	"github.com/wuweidict/wudict/internal/artmark"
 	"github.com/wuweidict/wudict/internal/dict"
 	"github.com/wuweidict/wudict/internal/htmlref"
+	"github.com/wuweidict/wudict/internal/limits"
 	"github.com/wuweidict/wudict/internal/resource"
 )
 
@@ -264,10 +265,9 @@ func readCompanion(base, ext string) ([]byte, error) {
 // KB that inflate to gigabytes, must cost one refused dictionary, not the
 // process. So the ceiling is the larger of a fixed floor and a multiple of
 // the compressed size: an index deflates 3-5x, a bomb ~1000x.
-const (
-	maxIndexBytes = 256 << 20
-	maxIndexRatio = 16
-)
+//
+// The floor is MAX_STARDICT_INDEX (limits.Get().StarDictIndex).
+const maxIndexRatio = 16
 
 // readGzAll decompresses f whole, keeping what it got when the stream is
 // damaged at its TAIL. gzip verifies a CRC and a length that sit after the last
@@ -276,7 +276,7 @@ const (
 // then an error. Discarding all of it over the last record loses the
 // dictionary; a header-level failure still does, because nothing decompressed.
 func readGzAll(f *os.File) ([]byte, error) {
-	limit := int64(maxIndexBytes)
+	limit := limits.Get().StarDictIndex
 	if st, err := f.Stat(); err == nil {
 		limit = max(limit, maxIndexRatio*st.Size())
 	}
@@ -297,7 +297,7 @@ func readGzBounded(gr io.Reader, max int) ([]byte, error) {
 		return data, nil
 	}
 	if len(data) > max {
-		return nil, fmt.Errorf("decompressed index exceeds the %d byte limit", max)
+		return nil, limits.Exceeded("the unpacked index", "MAX_STARDICT_INDEX", int64(max))
 	}
 	return data, err
 }

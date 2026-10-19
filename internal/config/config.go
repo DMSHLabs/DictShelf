@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"math"
 	"net"
 	"os"
 	"path/filepath"
@@ -21,6 +22,7 @@ import (
 	"sync"
 
 	"github.com/wuweidict/wudict/internal/fsx"
+	"github.com/wuweidict/wudict/internal/limits"
 )
 
 // Config holds all server settings.
@@ -136,6 +138,10 @@ type Config struct {
 	// edited it and nothing changed" - two binaries, two files, one silent winner.
 	Shadowed []string
 
+	// Limits are the MAX_* guards against corrupt or hostile files
+	// (internal/limits); the CLI applies them at startup.
+	Limits limits.Limits
+
 	// Problems are lines of the config file in effect that set nothing - not
 	// `KEY = value`, a key wudict does not know (a typo is otherwise silent),
 	// an array or a string left open. The rest of the file still applies;
@@ -186,8 +192,44 @@ func defaults() Config {
 		// so this only ever opens the LAN case, and that is opt-in.
 		AllowRemoteDelete: false,
 		LemmaURL:          DefaultLemmaURL,
+		Limits:            limits.Default,
 	}
 }
+
+// LimitKeys are the MAX_* keys, each with the guard it sets, what it bounds
+// and the range a value is held to. Ratio keys are a plain number; the others
+// a size ParseSize reads ("256MB", "16GB"). The flag of each is its key in
+// lower case with '-' for '_' (--max-zim-cluster).
+//
+// The range is what keeps an edited value from breaking wudict rather than
+// tuning it. The floors sit several times above the largest unit measured in
+// real files - ZIM clusters 2.3 MB, slob bins 977 kB, MDict and Babylon blocks
+// tens of kB to a few MB, the largest lemma data 11.5 MB - so lowering a limit
+// cannot stop an ordinary dictionary from opening. The ceilings of the
+// per-block keys are what one allocation can be (4 GB, or the address space of
+// a 32-bit build); past the others' ceilings a value means nothing a disk
+// holds. A value outside the range is moved to the nearest end of it.
+var LimitKeys = []struct {
+	Key      string
+	Ratio    bool
+	Min, Max int64
+	Help     string
+	Field    func(*limits.Limits) *int64
+}{
+	{"MAX_ZIM_CLUSTER", false, 16 << 20, blockMax, "one ZIM cluster, unpacked", func(l *limits.Limits) *int64 { return &l.ZIMCluster }},
+	{"MAX_SLOB_BIN", false, 16 << 20, blockMax, "one Aard 2 (.slob) bin, unpacked", func(l *limits.Limits) *int64 { return &l.SlobBin }},
+	{"MAX_MDICT_BLOCK", false, 16 << 20, blockMax, "one MDict (.mdx/.mdd) block, unpacked", func(l *limits.Limits) *int64 { return &l.MDictBlock }},
+	{"MAX_STARDICT_INDEX", false, 16 << 20, blockMax, "a compressed StarDict index, unpacked; 16 times the file is always allowed", func(l *limits.Limits) *int64 { return &l.StarDictIndex }},
+	{"MAX_BGL_BLOCK", false, 8 << 20, blockMax, "one Babylon (.bgl) block", func(l *limits.Limits) *int64 { return &l.BGLBlock }},
+	{"MAX_LEMMA_SIZE", false, 16 << 20, 1 << 30, "one lemma data file, unpacked", func(l *limits.Limits) *int64 { return &l.LemmaSize }},
+	{"MAX_IMPORT_SIZE", false, 1 << 30, 64 << 40, "one dictionary taken out of an archive, or downloaded", func(l *limits.Limits) *int64 { return &l.ImportSize }},
+	{"MAX_IMPORT_RATIO", true, 100, 100_000, "how many times its packed size one file in an archive may unpack to", func(l *limits.Limits) *int64 { return &l.ImportRatio }},
+	{"MAX_UPLOAD_SIZE", false, 1 << 30, 64 << 40, "one archive sent to the server from a browser or the app", func(l *limits.Limits) *int64 { return &l.UploadSize }},
+}
+
+// blockMax is the ceiling of a per-block limit: 4 GB, or what one []byte can
+// hold on a 32-bit build.
+const blockMax = min(4<<30, math.MaxInt)
 
 // Load builds the effective config. flags maps key -> value for
 // CLI-provided values (highest priority); configPath overrides the
@@ -316,6 +358,32 @@ func Load(configPath string, flags map[string]string) (Config, error) {
 	}
 	if v := get("SEARCH_MEMORY"); v != "" {
 		cfg.SearchMemory = ParseSize(v)
+	}
+	for _, k := range LimitKeys {
+		v := get(k.Key)
+		if v == "" {
+			continue
+		}
+		n := ParseSize(v)
+		if k.Ratio {
+			n = int64(ParseCount(v))
+		}
+		// A guard cannot be switched off, and cannot be set where it breaks
+		// dictionaries or overflows (LimitKeys): what applies instead is said
+		// where Problems are shown, startup included.
+		at := fmt.Sprintf("%s = %q (%s)", k.Key, v, cfg.Origins[k.Key])
+		switch {
+		case n <= 0:
+			cfg.Problems = append(cfg.Problems, fmt.Sprintf("%s is not a positive value: the default %s applies", at, limits.Format(*k.Field(&cfg.Limits))))
+		case n < k.Min:
+			*k.Field(&cfg.Limits) = k.Min
+			cfg.Problems = append(cfg.Problems, fmt.Sprintf("%s is below the lowest allowed value: %s applies", at, limits.Format(k.Min)))
+		case n > k.Max:
+			*k.Field(&cfg.Limits) = k.Max
+			cfg.Problems = append(cfg.Problems, fmt.Sprintf("%s is above the highest allowed value: %s applies", at, limits.Format(k.Max)))
+		default:
+			*k.Field(&cfg.Limits) = n
+		}
 	}
 	if v := get("MORPH_CACHE"); v != "" {
 		cfg.MorphCache = ParseCount(v)
@@ -554,6 +622,29 @@ const configTemplate = `# wudict configuration  (~/.wudict/wudict.toml)
 #                                     # "on" = always, "off" = never. The key is a random string in
 #                                     # ~/.wudict/token: "wudict token" prints the link that carries
 #                                     # it, "wudict token --rotate" replaces it.
+
+# ---- Advanced: safety limits ----------------------------------------------
+# Ceilings that stop a damaged or malicious file from making wudict use
+# unlimited memory or disk. Real dictionaries stay far below each of them.
+# Change one only when a dictionary you trust fails with "exceeds the ... limit":
+# a higher limit lets a bad file use that much memory or disk, and a limit
+# below what your dictionaries need stops them from opening. Each key keeps to
+# a range, so a typo cannot disable a guard or break your dictionaries: a value
+# outside it is moved to the nearest end (16MB to 4GB for the unpacked blocks,
+# 8MB for Babylon; lemma data 16MB to 1GB; imports and uploads 1GB to 64TB;
+# the ratio 100 to 100000), and one that is not a positive size leaves the
+# default. Startup names any value that was changed.
+# MAX_ZIM_CLUSTER    = "256MB"        # one ZIM cluster, unpacked
+# MAX_SLOB_BIN       = "256MB"        # one Aard 2 (.slob) bin, unpacked
+# MAX_MDICT_BLOCK    = "256MB"        # one MDict (.mdx/.mdd) block, unpacked
+# MAX_STARDICT_INDEX = "256MB"        # a compressed StarDict index (.idx.gz), unpacked;
+#                                     # 16 times the file's own size is always allowed
+# MAX_BGL_BLOCK      = "64MB"         # one Babylon (.bgl) block
+# MAX_LEMMA_SIZE     = "64MB"         # one lemma data file, unpacked
+# MAX_IMPORT_SIZE    = "256GB"        # one dictionary taken out of an archive, or downloaded
+# MAX_IMPORT_RATIO   = "2000"         # how many times larger than its packed size one file
+#                                     # in an archive may unpack
+# MAX_UPLOAD_SIZE    = "16GB"         # one archive sent to the server from a browser or the app
 `
 
 // EnsureConfigFile makes sure a config file exists, generating the fully
@@ -1093,8 +1184,8 @@ func ParseCount(v string) int {
 	return n
 }
 
-// ParseSize reads a byte size: plain bytes, or with a K/M/G suffix
-// ("2GB", "1500MB", "512M"). Returns 0 for "off"/"none"/unparseable.
+// ParseSize reads a byte size: plain bytes, or with a K/M/G/T suffix
+// ("2GB", "1500MB", "512M", "64TB"). Returns 0 for "off"/"none"/unparseable.
 func ParseSize(v string) int64 {
 	v = strings.ToLower(strings.TrimSpace(strings.ReplaceAll(v, " ", "")))
 	if v == "" || v == "off" || v == "none" || v == "0" {
@@ -1109,12 +1200,20 @@ func ParseSize(v string) int64 {
 		mult, v = 1<<20, strings.TrimSuffix(v, "m")
 	case strings.HasSuffix(v, "g"):
 		mult, v = 1<<30, strings.TrimSuffix(v, "g")
+	case strings.HasSuffix(v, "t"):
+		mult, v = 1<<40, strings.TrimSuffix(v, "t")
 	}
 	f, err := strconv.ParseFloat(v, 64)
-	if err != nil || f <= 0 {
+	if err != nil || math.IsNaN(f) || f <= 0 {
 		return 0
 	}
-	return int64(f * float64(mult))
+	// "1e30GB" and "inf" are past what int64 holds, and a float conversion
+	// past it is undefined - in practice negative, which a caller would read
+	// as "no limit". Saturate instead.
+	if b := f * float64(mult); b < math.MaxInt64 {
+		return int64(b)
+	}
+	return math.MaxInt64
 }
 
 // Setting is one resolved config key: the value that is actually in effect,
@@ -1176,20 +1275,7 @@ func (c Config) Effective() map[string]Setting {
 // FormatSize renders a byte count the way ParseSize reads one, using the
 // largest unit that divides it exactly so a value set as "1GB" comes back as
 // "1GB" and not "1024MB". Zero is "0", which both keys define as "no limit".
-func FormatSize(n int64) string {
-	if n <= 0 {
-		return "0"
-	}
-	for _, u := range []struct {
-		mult int64
-		name string
-	}{{1 << 30, "GB"}, {1 << 20, "MB"}, {1 << 10, "KB"}} {
-		if n%u.mult == 0 {
-			return strconv.FormatInt(n/u.mult, 10) + u.name
-		}
-	}
-	return strconv.FormatInt(n, 10)
-}
+func FormatSize(n int64) string { return limits.Format(n) }
 
 // Origin reports which layer supplied key ("default" when nothing did).
 func (c Config) Origin(key string) string {

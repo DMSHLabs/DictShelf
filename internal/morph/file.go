@@ -16,6 +16,7 @@ import (
 	"github.com/aaaton/golem/v4"
 
 	"github.com/wuweidict/wudict/internal/lang"
+	"github.com/wuweidict/wudict/internal/limits"
 )
 
 // Lemma data from a folder (LEMMA_DIR, D87).
@@ -46,9 +47,10 @@ import (
 // not a file-size preference: golem costs 6-10x its text in heap once it has
 // built the map (Russian is 11.5 MB of text and 65 MB resident), so a gzip
 // bomb pointed at this folder would otherwise be an OOM with no diagnostic.
-// 64 MB is five times the largest language golem publishes and comfortably
-// above a raw michmech list, so nothing legitimate meets it.
-const MaxPackBytes = 64 << 20
+// The 64 MB default (MAX_LEMMA_SIZE) is five times the largest language golem
+// publishes and comfortably above a raw michmech list, so nothing legitimate
+// meets it.
+func MaxPackBytes() int64 { return limits.Get().LemmaSize }
 
 // filePack is a golem.LanguagePack backed by a file instead of a generated Go
 // const. golem takes an interface, so this is the whole of the mechanism -
@@ -76,12 +78,13 @@ func (p filePack) GetResource() ([]byte, error) {
 		defer zr.Close()
 		r = zr
 	}
-	b, err := io.ReadAll(io.LimitReader(r, MaxPackBytes+1))
+	max := MaxPackBytes()
+	b, err := io.ReadAll(io.LimitReader(r, max+1))
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", p.path, err)
 	}
-	if len(b) > MaxPackBytes {
-		return nil, fmt.Errorf("%s: lemma data larger than %d MB", p.path, MaxPackBytes>>20)
+	if int64(len(b)) > max {
+		return nil, fmt.Errorf("%s: %w", p.path, limits.Exceeded("the unpacked lemma data", "MAX_LEMMA_SIZE", max))
 	}
 	return normalize(b), nil
 }

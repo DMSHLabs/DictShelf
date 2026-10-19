@@ -33,6 +33,7 @@ import (
 
 	"github.com/wuweidict/wudict/internal/dict"
 	"github.com/wuweidict/wudict/internal/lang"
+	"github.com/wuweidict/wudict/internal/limits"
 )
 
 // entryTypes are the block types carrying word/definition entries.
@@ -137,7 +138,7 @@ func isStreamEnd(err error) bool {
 // kilobytes to a few megabytes even with an embedded audio clip - so this is
 // orders of magnitude of headroom, and it is the only thing between a corrupt
 // length field and a 4 GB allocation (cf. gomdict's maxLZOBlock).
-const maxBlockBytes = 64 << 20
+func maxBlock() int64 { return limits.Get().BGLBlock }
 
 // readBlockStream reads one block header + data. ok=false with err==nil marks
 // a clean end of stream (EOF or the type-4 end marker).
@@ -167,8 +168,8 @@ func readBlockStream(br *bufio.Reader) (typ byte, data []byte, ok bool, err erro
 	if length < 0 {
 		return 0, nil, false, nil
 	}
-	if length > maxBlockBytes {
-		return 0, nil, false, fmt.Errorf("bgl block of %d bytes exceeds the %d byte limit", length, maxBlockBytes)
+	if int64(length) > maxBlock() {
+		return 0, nil, false, limits.Exceeded(fmt.Sprintf("a bgl block of %d bytes", length), "MAX_BGL_BLOCK", maxBlock())
 	}
 	if length > 0 {
 		data = make([]byte, length)

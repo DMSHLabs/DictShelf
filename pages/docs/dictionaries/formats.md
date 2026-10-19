@@ -12,7 +12,7 @@ description: The dictionary formats wudict reads, the files each needs, and how 
 | **Aard 2** | `.slob` | everything in the file; zlib, bz2 and LZMA2 compression                 |
 | **Lingvo DSL** | `.dsl` or `.dsl.dz` | `.dsl.files.zip`; `.ann` annotations; UTF-8, UTF-16 and UTF-32 detected |
 | **Babylon** | `.bgl` | everything in the file; source and target character sets detected       |
-| **ZIM** | `.zim` | everything in the file (Kiwix, Wikipedia, Wiktionary)                   |
+| **ZIM** | `.zim`, or a split archive: `.zimaa`, `.zimab`, … | everything in the file (Kiwix, Wikipedia, Wiktionary); the parts of a split archive are read as one file |
 | **wudict markdown** | `.wudict.md`, `.wudict.md.gz`, `.wudict.md.dz`, or `.md` | `<name>.wudict.files` folder or `<name>.wudict.files.zip`               |
 | **wudict library** | `text.db` | `media.db` in the same folder                                           |
 
@@ -21,14 +21,14 @@ description: The dictionary formats wudict reads, the files each needs, and how 
 Every dictionary is searchable as soon as wudict finds it: exact and prefix
 search use the dictionary's own index. wudict then indexes it in the
 background into the library, which is faster, uses less memory, and enables
-the optional _contains_ and _full-text_ searches.
+_wildcard_ search and the optional _full-text_ search.
 
 - **Lingvo DSL, Babylon, wudict markdown** are indexed when first opened: they
   have no index of their own.
 - **ZIM** is never indexed automatically. Its own index answers exact and
   prefix search with little memory, and an indexed copy is several times the
-  size of the file. Index it from the dictionary panel for _contains_, _full-text_
-  or a media pack — adding a headword index for ZIM dictionaries is not necessary.
+  size of the file. Index it from the dictionary panel for _wildcard_ or
+  _full-text_ search, or for a media pack.
 
 [The library](library.md){ .md-button }
 

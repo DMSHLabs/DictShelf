@@ -18,6 +18,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/wuweidict/wudict/internal/lemmas"
 	"github.com/wuweidict/wudict/internal/morph"
 )
 
@@ -184,7 +185,11 @@ func TestLemmaChecksumFailureLeavesNothing(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, e := range ents {
-		t.Fatalf("the folder must be empty, found %q", e.Name())
+		// The kept catalogue (lemmas.CacheName) is the one file a read of the
+		// catalogue writes; nothing of the failed download may remain.
+		if e.Name() != lemmas.CacheName {
+			t.Fatalf("the folder must hold no lemma data, found %q", e.Name())
+		}
 	}
 	if s.Morph.Supports("pl") {
 		t.Fatal("a failed download must not make the language supported")

@@ -22,7 +22,7 @@ var (
 	ErrIncomplete = errors.New("dictionary is missing files it cannot work without")
 	ErrUnsafePath = errors.New("archive entry points outside the destination")
 	ErrSizeLied   = errors.New("archive entry is larger than it declared")
-	ErrBomb       = errors.New("archive entry is compressed beyond any plausible ratio")
+	ErrBomb       = errors.New("archive entry unpacks to more than MAX_IMPORT_RATIO times its packed size")
 )
 
 // Extract writes one candidate's files into dest, which must already exist and
@@ -104,7 +104,7 @@ func writeEntry(ctx context.Context, a Archive, e Entry, out string, buf []byte,
 	// An archive is free to declare a large entry and free to store a small
 	// one; declaring a small stored size AND a vast uncompressed one is the
 	// shape of a bomb and of nothing else. Checked before the handle exists.
-	if e.Compressed > 0 && e.Size/e.Compressed > maxRatio {
+	if e.Compressed > 0 && e.Size/e.Compressed > maxRatio() {
 		return fmt.Errorf("%w: %s", ErrBomb, e.Name)
 	}
 	src, err := a.Open(e.Name)

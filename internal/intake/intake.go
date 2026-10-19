@@ -36,6 +36,7 @@ import (
 	"strings"
 
 	"github.com/wuweidict/wudict/internal/dict"
+	"github.com/wuweidict/wudict/internal/limits"
 )
 
 // kindOf is dict.ClassifyName, with a candidate - a name whose content
@@ -218,19 +219,20 @@ const (
 	// legitimate bundle is two or three deep.
 	maxDepth = 32
 
-	// maxCandidateBytes bounds one dictionary's extraction. Large, because
-	// real dictionaries are: a full English Wikipedia .zim with pictures runs
-	// past 100 GB. The number exists so that a declared size which is absurd
-	// rather than merely large is refused before any disk is touched; whether
-	// a merely large one fits is roomFor's question.
-	maxCandidateBytes = 256 << 30
-
-	// maxRatio bounds compression ratio per entry. Deflate tops out near
-	// 1032:1 on a stream of one repeated byte, so anything past this was
-	// built to be a bomb; dictionary text compresses to single figures.
-	maxRatio = 2000
-
 	// copyBufBytes is the streaming window, matching the Android importer's.
 	// Extraction is O(1) in RAM by construction: one buffer, one open entry.
 	copyBufBytes = 1 << 20
 )
+
+// maxCandidateBytes bounds one dictionary's extraction (MAX_IMPORT_SIZE).
+// Large, because real dictionaries are: a full English Wikipedia .zim with
+// pictures runs past 100 GB. The number exists so that a declared size which
+// is absurd rather than merely large is refused before any disk is touched;
+// whether a merely large one fits is roomFor's question.
+func maxCandidateBytes() int64 { return limits.Get().ImportSize }
+
+// maxRatio bounds compression ratio per entry (MAX_IMPORT_RATIO). Deflate
+// tops out near 1032:1 on a stream of one repeated byte, so anything past the
+// default 2000 was built to be a bomb; dictionary text compresses to single
+// figures.
+func maxRatio() int64 { return limits.Get().ImportRatio }

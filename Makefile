@@ -398,6 +398,20 @@ test: ## Unit tests (integration tests skip unless WUDICT_TEST_MDX exists)
 test-v: ## Tests, verbose
 	$(TEST_ENV) go test $(GOFLAGS) -v ./...
 
+# openZIM's zim-testing-suite, the files libzim tests against. Not vendored: the
+# repository carries no licence. Fetched once, at a pinned commit, into
+# ZIM_SUITE; ZIM_SUITE=<dir> uses an existing checkout.
+ZIM_SUITE     ?= $(HOME)/.cache/wudict/zim-testing-suite
+ZIM_SUITE_REV := 2edf72096208e60c82b6ebbe313baa552cc6af52
+
+.PHONY: test-zim-suite
+test-zim-suite: ## Run the ZIM reader against openZIM's zim-testing-suite (fetched once into ZIM_SUITE)
+	@test -d "$(ZIM_SUITE)/data" || { mkdir -p "$(ZIM_SUITE)" && cd "$(ZIM_SUITE)" && git init -q && \
+	  git fetch -q --depth 1 https://github.com/openzim/zim-testing-suite $(ZIM_SUITE_REV) && \
+	  git checkout -q FETCH_HEAD; }
+	$(TEST_ENV) WUDICT_TEST_ZIM_SUITE="$(ZIM_SUITE)" go test $(GOFLAGS) -count=1 \
+	  -run 'TestZIMTestingSuite|TestSuite' ./internal/format/zim/
+
 .PHONY: cover
 cover: ## Tests with coverage report
 	$(TEST_ENV) go test $(GOFLAGS) -coverprofile=coverage.out ./...
@@ -457,6 +471,15 @@ LEMMA_MODE = $(if $(LEMMA_SRC),-src $(LEMMA_SRC),-fetch)
 .PHONY: lemma-files
 lemma-files: ## Build the lemma catalogue into $(LEMMA_OUT) (LEMMA_SRC=<dir> for offline)
 	go run ./tools/lemmafiles $(LEMMA_MODE) -o $(LEMMA_OUT) $(LEMMA_LANGS)
+
+# The copy of the catalogue built into wudict, which the Lemmatization page
+# draws before the network answers (internal/lemmas/listed.go). Refresh it after
+# publishing a new catalogue; TestSnapshot holds it to the parser.
+.PHONY: lemma-snapshot
+lemma-snapshot: ## Refresh the lemma catalogue built into wudict from the published one
+	curl -fsSL https://raw.githubusercontent.com/wuweidict/lemmas/main/manifest.json -o internal/lemmas/snapshot.json.tmp
+	mv internal/lemmas/snapshot.json.tmp internal/lemmas/snapshot.json
+	go test -count=1 -run 'TestSnapshot' ./internal/lemmas/
 
 # ---- API contract -------------------------------------------------------
 # The OpenAPI document is hand-written and embedded, so a running server serves

@@ -48,6 +48,12 @@ const maxProbes = 24
 // and this is the backstop for a server that answers 200 to everything.
 const maxParts = 20
 
+// maxZIMParts bounds a split ZIM's run of parts, which is not counted against
+// maxProbes: every part is required, and a probe budget that cut the run short
+// would offer an archive that cannot open. 64 parts of 4 GiB is 256 GiB, the
+// largest file an import accepts (maxCandidateBytes).
+const maxZIMParts = 64
+
 // Extra is a companion file found beside the one that was downloaded, offered
 // to the user rather than taken.
 type Extra struct {
@@ -104,6 +110,19 @@ func probeSiblings(ctx context.Context, f Fetcher, base *url.URL, fileName strin
 	}
 	var out []Extra
 	spent := 0
+	// find asks the server for one name and offers it when it is there.
+	find := func(name, need string) bool {
+		u, ok := sibling(f, base, name)
+		if !ok {
+			return false
+		}
+		h := headInfo(ctx, f, u)
+		if !h.found {
+			return false
+		}
+		out = append(out, Extra{Name: name, Size: h.size, Need: need, url: u.String()})
+		return true
+	}
 	// ask reports that the name is ACCOUNTED FOR - already on disk, or found
 	// on the server and now offered. The distinction matters twice: a file
 	// already downloaded satisfies its group without a request, and it must
@@ -116,16 +135,7 @@ func probeSiblings(ctx context.Context, f Fetcher, base *url.URL, fileName strin
 			return false
 		}
 		spent++
-		u, ok := sibling(f, base, name)
-		if !ok {
-			return false
-		}
-		h := headInfo(ctx, f, u)
-		if !h.found {
-			return false
-		}
-		out = append(out, Extra{Name: name, Size: h.size, Need: need, url: u.String()})
-		return true
+		return find(name, need)
 	}
 
 	for _, g := range companionGroups(dict.MainExt(fileName)) {
@@ -155,6 +165,15 @@ func probeSiblings(ctx context.Context, f Fetcher, base *url.URL, fileName strin
 		// Named after the folder rather than the stem, so it is asked for by
 		// its own name or not at all.
 		ask("res.zip", NeedMedia)
+	}
+	if dict.MainExt(fileName) == ".zimaa" {
+		// A split ZIM: ".zimab" onwards, each required, the run ending at the
+		// first gap - outside the probe budget (maxZIMParts).
+		for k, suf := range dict.ZIMPartSuffixes() {
+			if k == maxZIMParts || !(known(stem+suf) || find(stem+suf, NeedRequired)) {
+				break
+			}
+		}
 	}
 	return out
 }

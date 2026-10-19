@@ -14,6 +14,7 @@ import (
 
 	"github.com/wuweidict/wudict/internal/config"
 	"github.com/wuweidict/wudict/internal/intake"
+	"github.com/wuweidict/wudict/internal/limits"
 	"github.com/wuweidict/wudict/internal/logx"
 )
 
@@ -35,7 +36,7 @@ import (
 // dropped connection can leave behind before the sweep notices, and a number
 // that makes a mis-aimed upload fail while there is still room on the device.
 // Dictionary bundles of several gigabytes are real, so it is generous.
-const maxIntakeUpload = 16 << 30
+// The bound is MAX_UPLOAD_SIZE (limits.Get().UploadSize).
 
 // importer returns the manager, wiring its hooks on first use. Not done in
 // New because a Server built directly in a test is a supported shape, and a
@@ -160,11 +161,11 @@ func (s *Server) handleIntake(w http.ResponseWriter, r *http.Request) {
 	if name == "" || name == "." || name == string(filepath.Separator) {
 		name = "archive.zip"
 	}
-	src, err := intake.Spool(dest, name, http.MaxBytesReader(w, r.Body, maxIntakeUpload))
+	src, err := intake.Spool(dest, name, http.MaxBytesReader(w, r.Body, limits.Get().UploadSize))
 	if err != nil {
 		var mbe *http.MaxBytesError
 		if errors.As(err, &mbe) {
-			httpErr(w, http.StatusRequestEntityTooLarge, "that file is too large to import")
+			httpErr(w, http.StatusRequestEntityTooLarge, "%v", limits.Exceeded("that file", "MAX_UPLOAD_SIZE", limits.Get().UploadSize))
 			return
 		}
 		httpErr(w, http.StatusInternalServerError, "could not receive the file: %v", err)

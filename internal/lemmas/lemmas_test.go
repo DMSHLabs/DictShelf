@@ -16,6 +16,10 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/wuweidict/wudict/internal/config"
+	"github.com/wuweidict/wudict/internal/morph"
 )
 
 // asset is the body of one published language, and its digest.
@@ -77,7 +81,7 @@ func TestFetchRejects(t *testing.T) {
 		{"absurd size", manifestFor("hu.tsv.gz", 1<<30, good), "out of range"},
 		{"oversize raw",
 			strings.Replace(manifestFor("hu.tsv.gz", 20, good), `"raw_size":20`, `"raw_size":1073741824`, 1),
-			"exceeds the 64 MB limit"},
+			"exceeds the MAX_LEMMA_SIZE limit of 64MB"},
 		{"bad digest", manifestFor("hu.tsv.gz", 20, "not-a-digest"), "not a sha256 digest"},
 		{"duplicate language",
 			strings.Replace(manifestFor("hu.tsv.gz", 20, good), `"license":"ODbL-1.0"}]}`,
@@ -282,5 +286,40 @@ func TestRemove(t *testing.T) {
 	}
 	if gone, err := Remove(filepath.Join(dir, "absent"), "ru"); err != nil || gone != nil {
 		t.Fatalf("removing from a missing folder = %v, %v", gone, err)
+	}
+}
+
+// The catalogue built into wudict is a valid one, taken from the URL wudict
+// asks by default.
+func TestSnapshot(t *testing.T) {
+	if SnapshotURL != config.DefaultLemmaURL {
+		t.Fatalf("SnapshotURL %q is not the default LEMMA_URL %q", SnapshotURL, config.DefaultLemmaURL)
+	}
+	cat := Snapshot(config.DefaultLemmaURL)
+	if cat == nil || len(cat.Languages) == 0 {
+		t.Fatal("the built-in catalogue does not parse")
+	}
+	if Snapshot("https://example.org/manifest.json") != nil {
+		t.Error("the built-in catalogue was offered for another LEMMA_URL")
+	}
+}
+
+func TestCatalogueCache(t *testing.T) {
+	dir := t.TempDir()
+	src := config.DefaultLemmaURL
+	cat := Snapshot(src)
+	at := time.Date(2026, 10, 12, 8, 30, 0, 0, time.UTC)
+	if err := SaveCache(dir, src, cat, at); err != nil {
+		t.Fatal(err)
+	}
+	got, when := LoadCache(dir, src)
+	if got == nil || !when.Equal(at) || len(got.Languages) != len(cat.Languages) {
+		t.Fatalf("LoadCache = %v, %v", got, when)
+	}
+	if other, _ := LoadCache(dir, "https://example.org/manifest.json"); other != nil {
+		t.Error("a catalogue kept for one LEMMA_URL was read for another")
+	}
+	if _, ok := morph.LemmaFile(CacheName); ok {
+		t.Errorf("%s reads as lemma data", CacheName)
 	}
 }

@@ -54,6 +54,12 @@ type lemmaState struct {
 	// polling page would re-read every installed file - up to 21 MB - once per
 	// second to decide whether to draw one "differs from the catalogue" mark.
 	hashes map[string]string
+	// shown is the catalogue a page draws without the network (listed), and
+	// when it was read from its host. Under mu, not catMu: catMu is held for
+	// as long as a fetch takes, and the network-free answer must not wait
+	// behind one.
+	shown        *lemmas.Catalog
+	shownChecked time.Time
 
 	catMu  sync.Mutex
 	cat    *lemmas.Catalog
@@ -102,7 +108,32 @@ func (s *Server) catalog(ctx context.Context, force bool) (*lemmas.Catalog, stri
 		return st.cat, st.catErr
 	}
 	st.cat, st.catErr = cat, ""
+	st.mu.Lock()
+	st.shown, st.shownChecked = cat, st.catAt
+	st.mu.Unlock()
+	if err := lemmas.SaveCache(s.LemmaDir, s.LemmaURL, cat, st.catAt); err != nil {
+		logx.V("lemma catalogue not kept on disk: %v", err)
+	}
 	return cat, ""
+}
+
+// listed is the catalogue a page draws without the network, and when it was
+// read from its host: the one this run read, else the one kept in LEMMA_DIR,
+// else the copy built into wudict, dated by its generation. Drawn only: an
+// install reads the host again (handleLemmaInstall calls catalog).
+func (s *Server) listed() (*lemmas.Catalog, time.Time) {
+	st := &s.lemmas
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	if st.shown == nil {
+		if cat, at := lemmas.LoadCache(s.LemmaDir, s.LemmaURL); cat != nil {
+			st.shown, st.shownChecked = cat, at
+		} else if cat := lemmas.Snapshot(s.LemmaURL); cat != nil {
+			at, _ := time.Parse(time.RFC3339, cat.Generated)
+			st.shown, st.shownChecked = cat, at
+		}
+	}
+	return st.shown, st.shownChecked
 }
 
 // lemmaRow is one language as the page draws it: what the catalogue offers,
@@ -134,6 +165,11 @@ type lemmaRow struct {
 	Done  int64  `json:"done"`
 	Total int64  `json:"total"`
 	Error string `json:"error,omitempty"`
+	// Dicts is how many of the user's dictionaries search with this
+	// language's lemma data (lemmaLangOf), counted from the rows /api/dicts
+	// has derived: a dictionary not listed yet is not counted, and nothing is
+	// opened to count it.
+	Dicts int `json:"dicts,omitempty"`
 }
 
 type lemmaInfo struct {
@@ -141,31 +177,48 @@ type lemmaInfo struct {
 	// Enabled is MORPH_CACHE > 0. Said out loud because it is the one state in
 	// which every download on this page is inert: the search path never asks
 	// for a lemma, so nothing installed here would ever be read.
-	Enabled     bool       `json:"enabled"`
-	CacheSize   int        `json:"cacheSize"`
-	URL         string     `json:"url"`
-	Attribution string     `json:"attribution,omitempty"`
-	Error       string     `json:"error,omitempty"`
-	Shadowed    []string   `json:"shadowed,omitempty"`
-	Languages   []lemmaRow `json:"languages"`
+	Enabled     bool     `json:"enabled"`
+	CacheSize   int      `json:"cacheSize"`
+	URL         string   `json:"url"`
+	Attribution string   `json:"attribution,omitempty"`
+	Error       string   `json:"error,omitempty"`
+	Shadowed    []string `json:"shadowed,omitempty"`
+	// Checked is when the list was read from its host (RFC 3339), "" when
+	// unknown. Offline marks an answer drawn without asking the host, which
+	// the page follows with one that asks.
+	Checked   string     `json:"checked,omitempty"`
+	Offline   bool       `json:"offline,omitempty"`
+	Languages []lemmaRow `json:"languages"`
 }
 
 func (s *Server) handleLemmas(w http.ResponseWriter, r *http.Request) {
 	refresh, _ := queryFlag(r.URL.Query(), "refresh")
-	cat, cerr := s.catalog(r.Context(), refresh)
+	offline, _ := queryFlag(r.URL.Query(), "offline")
+	var cerr string
+	if !offline {
+		// The read refreshes what listed returns; when it fails, the list
+		// drawn is the last one there is, and cerr says why it is not newer.
+		_, cerr = s.catalog(r.Context(), refresh)
+	}
+	cat, checked := s.listed()
 	local, shadowed := lemmas.Installed(s.LemmaDir)
 
 	info := lemmaInfo{
 		Dir: s.LemmaDir, Enabled: s.Morph.Enabled(), CacheSize: s.Morph.Max(),
 		URL: s.LemmaURL, Attribution: attributionURL(s.LemmaURL),
-		Error: cerr, Shadowed: shadowed, Languages: []lemmaRow{},
+		Error: cerr, Shadowed: shadowed, Offline: offline, Languages: []lemmaRow{},
+	}
+	if !checked.IsZero() {
+		info.Checked = checked.UTC().Format(time.RFC3339)
 	}
 
 	seen := map[string]bool{}
 	if cat != nil {
 		for _, e := range cat.Languages {
 			seen[e.Code] = true
-			info.Languages = append(info.Languages, s.lemmaRow(e, local))
+			// An offline answer must not read every installed file to mark
+			// one as differing: the answer that follows it does.
+			info.Languages = append(info.Languages, s.lemmaRow(e, local, !offline))
 		}
 	}
 	// On disk but not in the catalogue: a file the user wrote, or a language
@@ -191,7 +244,9 @@ func (s *Server) handleLemmas(w http.ResponseWriter, r *http.Request) {
 	sort.Slice(info.Languages, func(i, j int) bool {
 		return info.Languages[i].Name < info.Languages[j].Name
 	})
+	dicts := s.lemmaDicts()
 	for i := range info.Languages {
+		info.Languages[i].Dicts = dicts[info.Languages[i].Code]
 		if j := s.job(info.Languages[i].Code); j != nil {
 			info.Languages[i].State, info.Languages[i].Done = j.State, j.Done
 			info.Languages[i].Total, info.Languages[i].Error = j.Total, j.Err
@@ -203,7 +258,7 @@ func (s *Server) handleLemmas(w http.ResponseWriter, r *http.Request) {
 // lemmaRow merges one catalogue entry with what is on disk. Same rules as
 // `wudict lemmas list` (catalogRow in internal/cli), because two views of one
 // folder disagreeing would be a bug report nobody could reproduce.
-func (s *Server) lemmaRow(e lemmas.Entry, local map[string]lemmas.Local) lemmaRow {
+func (s *Server) lemmaRow(e lemmas.Entry, local map[string]lemmas.Local, verify bool) lemmaRow {
 	r := lemmaRow{
 		Code: e.Code, Name: e.Name, Size: e.Size, Lemmas: e.Lemmas,
 		HeapMB: e.HeapMB, Source: e.Source, License: e.License,
@@ -215,10 +270,25 @@ func (s *Server) lemmaRow(e lemmas.Entry, local map[string]lemmas.Local) lemmaRo
 		return r
 	}
 	r.Installed, r.Local = true, l.Size
+	if !verify {
+		return r
+	}
 	if h, err := s.lemmaHash(l); err != nil || h != e.SHA256 {
 		r.Mismatch = true
 	}
 	return r
+}
+
+// lemmaDicts counts the user's dictionaries by the language their lemma
+// retry searches with, over the rows /api/dicts has already derived.
+func (s *Server) lemmaDicts() map[string]int {
+	out := map[string]int{}
+	s.dictRows.each(func(info dictInfo) {
+		if info.LemmaLang != "" {
+			out[info.LemmaLang]++
+		}
+	})
+	return out
 }
 
 // lemmaHash is lemmas.Hash memoized on the file's identity. A file that has

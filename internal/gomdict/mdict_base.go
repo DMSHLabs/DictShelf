@@ -370,7 +370,7 @@ func (mdict *MdictBase) decodeKeyBlockInfo(data []byte) error {
 		}
 
 		var err error
-		decompressKeyInfoBuffer, err = zlibDecompress(keyBlockInfoDecryptedBuffer, 8, mdict.keyBlockMeta.keyBlockInfoCompressedSize-8, maxLZOBlock)
+		decompressKeyInfoBuffer, err = zlibDecompress(keyBlockInfoDecryptedBuffer, 8, mdict.keyBlockMeta.keyBlockInfoCompressedSize-8, maxLZOBlock())
 		if err != nil {
 			return err
 		}
@@ -576,7 +576,7 @@ func (mdict *MdictBase) decodeKeyEntries(keyBlockDataCompressBuffer []byte) erro
 			//} else if (kbCompType.toString('hex') === '02000000') {
 		} else if kbCompType[0] == 2 {
 			// decompress key block, zlib decompress
-			out, err2 := zlibDecompress(keyBlockDataCompressBuffer, start+8, end-(start+8), maxLZOBlock)
+			out, err2 := zlibDecompress(keyBlockDataCompressBuffer, start+8, end-(start+8), maxLZOBlock())
 			if err2 != nil {
 				return err2
 			}
@@ -1037,7 +1037,7 @@ func (mdict *MdictBase) decodeRecordBlock(startOffset, compLen int64, info *Mdic
 			}
 			recordBlock = out
 		case 2:
-			out, err2 := zlibDecompress(dec, 0, int64(len(dec)), maxLZOBlock)
+			out, err2 := zlibDecompress(dec, 0, int64(len(dec)), maxLZOBlock())
 			if err2 != nil {
 				return nil, err2
 			}

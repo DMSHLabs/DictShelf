@@ -49,6 +49,7 @@ import (
 	"time"
 
 	"github.com/wuweidict/wudict/internal/lang"
+	"github.com/wuweidict/wudict/internal/limits"
 	"github.com/wuweidict/wudict/internal/morph"
 )
 
@@ -122,6 +123,18 @@ func Fetch(ctx context.Context, src string) (*Catalog, error) {
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", src, err)
 	}
+	return Parse(b, src)
+}
+
+// Parse validates a manifest's bytes as the catalogue published at src, which
+// is what its files are fetched relative to. Fetch reads src first; the copy
+// built into wudict and the one kept on disk (listed.go) are read with it too,
+// so every catalogue a page can draw passed the same checks.
+func Parse(b []byte, src string) (*Catalog, error) {
+	s, err := parseSource(src)
+	if err != nil {
+		return nil, err
+	}
 	if len(b) > maxManifest {
 		return nil, fmt.Errorf("%s: not a lemma catalogue (larger than %d KB)", src, maxManifest>>10)
 	}
@@ -166,14 +179,16 @@ func (c *Catalog) validate() error {
 			return fmt.Errorf("%s: %q is not lemma data (%s)", code, e.File,
 				strings.Join(lemmaExts, ", "))
 		}
-		if e.Size <= 0 || e.Size > morph.MaxPackBytes {
+		if e.Size <= 0 || e.Size > morph.MaxPackBytes() {
 			return fmt.Errorf("%s: declared size %d is out of range", code, e.Size)
 		}
-		if e.RawSize < 0 || e.RawSize > morph.MaxPackBytes {
+		if e.RawSize < 0 {
+			return fmt.Errorf("%s: uncompressed size %d is out of range", code, e.RawSize)
+		}
+		if e.RawSize > morph.MaxPackBytes() {
 			// The cap that matters: morph refuses to decompress past it, so
 			// installing such a file would produce a language that never loads.
-			return fmt.Errorf("%s: uncompressed size %d exceeds the %d MB limit",
-				code, e.RawSize, morph.MaxPackBytes>>20)
+			return fmt.Errorf("%s: %w", code, limits.Exceeded(fmt.Sprintf("an unpacked size of %d bytes", e.RawSize), "MAX_LEMMA_SIZE", morph.MaxPackBytes()))
 		}
 		if !isSHA256(e.SHA256) {
 			return fmt.Errorf("%s: %q is not a sha256 digest", code, e.SHA256)

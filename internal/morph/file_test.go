@@ -191,7 +191,7 @@ func TestFilePackCap(t *testing.T) {
 		t.Fatal(err)
 	}
 	chunk := bytes.Repeat([]byte("kot\tkota\n"), 1<<16) // 576 KB
-	for n := 0; n <= MaxPackBytes; n += len(chunk) {
+	for n := int64(0); n <= MaxPackBytes(); n += int64(len(chunk)) {
 		if _, err := zw.Write(chunk); err != nil {
 			t.Fatal(err)
 		}
@@ -204,7 +204,7 @@ func TestFilePackCap(t *testing.T) {
 	}
 
 	_, err = (filePack{code: "pl", path: path}).GetResource()
-	if err == nil || !strings.Contains(err.Error(), "larger than") {
+	if err == nil || !strings.Contains(err.Error(), "exceeds the MAX_LEMMA_SIZE limit") {
 		t.Fatalf("oversized lemma data: err = %v, want a size refusal", err)
 	}
 

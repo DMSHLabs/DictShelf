@@ -63,6 +63,15 @@ func (c *rowCache) put(id, key string, info dictInfo) {
 	c.rows[id] = cachedRow{key: key, info: info}
 }
 
+// each calls fn on every cached row.
+func (c *rowCache) each(fn func(dictInfo)) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for _, r := range c.rows {
+		fn(r.info)
+	}
+}
+
 // keep drops every row whose id is not in ids: a dictionary the registry no
 // longer lists has nothing to be cached for.
 func (c *rowCache) keep(ids map[string]bool) {

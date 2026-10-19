@@ -63,7 +63,7 @@ Copy every file of a dictionary:
 | Aard 2 | `*.slob` |
 | Lingvo DSL | `*.dsl` or `*.dsl.dz`, and `*.dsl.files.zip` if present |
 | Babylon | `*.bgl` |
-| ZIM | `*.zim` |
+| ZIM | `*.zim`, or every part of a split archive: `*.zimaa`, `*.zimab`, … |
 
 A subfolder named by a language code, such as `es/`, sets the language of the
 dictionaries in it, which lemmatization needs when a dictionary declares none

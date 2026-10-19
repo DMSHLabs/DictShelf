@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"io"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -21,8 +22,12 @@ import (
 const ReaderVersion = 3
 
 func init() {
-	dict.RegisterFormat(".zim", func(path string) (dict.Dictionary, error) { return Open(path) })
-	dict.RegisterReader(".zim", func(path string) (dict.Reader, error) { return NewReader(path) })
+	// ".zimaa" is the first part of a split archive; the parts after it are
+	// its companions (dict.ZIMParts) and are read as one file with it.
+	for _, ext := range []string{".zim", ".zimaa"} {
+		dict.RegisterFormat(ext, func(path string) (dict.Dictionary, error) { return Open(path) })
+		dict.RegisterReader(ext, func(path string) (dict.Reader, error) { return NewReader(path) })
+	}
 	dict.RegisterReaderVersion("zim", ReaderVersion)
 }
 
@@ -44,6 +49,8 @@ type Dict struct {
 	// binary searches. It is both what Keywords browses and what EntryCount
 	// counts, so the two can never disagree.
 	lo, hi int
+
+	titles *titleIndex // nil when the file has no usable title order
 }
 
 func Open(path string) (*Dict, error) {
@@ -51,7 +58,7 @@ func Open(path string) (*Dict, error) {
 	if err != nil {
 		return nil, err
 	}
-	d := &Dict{c: c}
+	d := &Dict{c: c, titles: c.titles()}
 	d.lo, d.hi = c.nsRange(c.contentNS())
 
 	name := strings.TrimSpace(c.metadata("Title"))
@@ -134,14 +141,17 @@ func (c *container) metadata(name string) string {
 	return string(b)
 }
 
-// isArticle reports whether an entry is something a search may return: a
-// stored HTML page, or a redirect (whose target is resolved before rendering).
-func (c *container) isArticle(d dirent) bool {
+// isArticle reports whether entry i is something a search may return: a
+// stored HTML page, or a redirect that resolves to one. A redirect to an image
+// or a stylesheet ("favicon" -> favicon.png in every zimwriterfs file) is not:
+// listed by Keywords, it was a headword that Exact could not show.
+func (c *container) isArticle(i int, d dirent) bool {
 	if d.namespace != c.contentNS() {
 		return false
 	}
 	if d.isRedirect() {
-		return true
+		_, t, err := c.resolve(i)
+		return err == nil && c.htmlMIME[t.mimetype]
 	}
 	return c.htmlMIME[d.mimetype]
 }
@@ -154,9 +164,29 @@ func (d *Dict) Exact(word string, limit int) ([]dict.Result, error) {
 	var idxs []int
 	for _, v := range pathVariants(word) {
 		i, de, ok := d.c.find(d.c.contentNS(), v)
-		if ok && d.c.isArticle(de) {
+		if ok && d.c.isArticle(i, de) {
 			idxs = append(idxs, i)
 			break
+		}
+	}
+	if len(idxs) == 0 && d.titles != nil {
+		ns := d.c.contentNS()
+		for _, v := range titleVariants(word) {
+			// Titles are not unique (an article and a redirect may share
+			// one), so the run of equal titles is walked to its first article.
+			d.titles.scan(ns, v, 16, func(i int, de dirent) bool {
+				if de.headword() != v {
+					return false
+				}
+				if de.namespace == ns && d.c.isArticle(i, de) {
+					idxs = append(idxs, i)
+					return false
+				}
+				return true
+			})
+			if len(idxs) > 0 {
+				break
+			}
 		}
 	}
 	return d.results(idxs, limit)
@@ -185,7 +215,7 @@ func (d *Dict) Prefix(word string, limit int) ([]dict.Result, error) {
 		// and it must be able to walk past them without walking the namespace.
 		budget := limit*4 + 64
 		err := d.c.prefixScan(d.c.contentNS(), v, budget, func(i int, de dirent) bool {
-			if d.c.isArticle(de) {
+			if d.c.isArticle(i, de) {
 				idxs = append(idxs, i)
 			}
 			return len(idxs) < limit
@@ -197,13 +227,38 @@ func (d *Dict) Prefix(word string, limit int) ([]dict.Result, error) {
 			break
 		}
 	}
+	if len(idxs) == 0 && d.titles != nil {
+		ns := d.c.contentNS()
+		for _, v := range titleVariants(word) {
+			d.titles.scan(ns, v, limit*4+64, func(i int, de dirent) bool {
+				if de.namespace == ns && d.c.isArticle(i, de) {
+					idxs = append(idxs, i)
+				}
+				return len(idxs) < limit
+			})
+			if len(idxs) > 0 {
+				break
+			}
+		}
+	}
 	return d.results(idxs, limit)
 }
 
 // results renders entries, following redirects and dropping duplicates that
 // resolve to the same article.
+//
+// Bodies are read in cluster order and returned in the order given. Hits come
+// in path order, which scatters them over the file's clusters, and in that
+// order the cluster cache misses on nearly every one: a 20-hit prefix search
+// on wikipedia_en_climate_change_mini_2024-06 (2 MB clusters) decompressed a
+// cluster per hit. In cluster order each cluster is decompressed once.
 func (d *Dict) results(idxs []int, limit int) ([]dict.Result, error) {
-	var out []dict.Result
+	type hit struct {
+		headword string
+		de       dirent
+		body     string
+	}
+	var hits []hit
 	seen := map[int]bool{}
 	for _, i := range idxs {
 		src, err := d.c.entry(i)
@@ -218,14 +273,34 @@ func (d *Dict) results(idxs []int, limit int) ([]dict.Result, error) {
 			continue
 		}
 		seen[tgt] = true
-		body, err := d.c.content(de)
+		hits = append(hits, hit{headword: src.headword(), de: de})
+	}
+	order := make([]int, len(hits))
+	for k := range order {
+		order[k] = k
+	}
+	sort.Slice(order, func(a, b int) bool {
+		x, y := hits[order[a]].de, hits[order[b]].de
+		if x.cluster != y.cluster {
+			return x.cluster < y.cluster
+		}
+		return x.blob < y.blob
+	})
+	for _, k := range order {
+		body, err := d.c.content(hits[k].de)
 		if err != nil {
 			return nil, err
 		}
-		if len(body) == 0 {
+		if len(body) > 0 {
+			hits[k].body = d.articleHTML(body)
+		}
+	}
+	var out []dict.Result
+	for _, h := range hits {
+		if h.body == "" {
 			continue
 		}
-		out = append(out, dict.Result{Headword: src.headword(), Body: d.articleHTML(body)})
+		out = append(out, dict.Result{Headword: h.headword, Body: h.body})
 		if limit > 0 && len(out) >= limit {
 			break
 		}
@@ -253,7 +328,7 @@ func (d *Dict) Keywords(offset, n int) []string {
 		if err != nil {
 			break
 		}
-		if !d.c.isArticle(de) {
+		if !d.c.isArticle(i, de) {
 			continue
 		}
 		out = append(out, de.headword())

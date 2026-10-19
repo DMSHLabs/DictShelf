@@ -38,7 +38,7 @@ icon appears in the notification area.
 | Create a desktop shortcut   | off | a desktop shortcut                                            |
 | Start wuDict at sign-in     | off | a Startup folder shortcut that runs `wudict.exe --no-browser` |
 | Add wuDict to `%PATH%`      | on | makes `wudict` command available in PowerShell and `cmd`   |
-| Offer wuDict in *Open with* | on | for `.mdx`, `.dsl`, `.slob`, `.bgl` and `.zim` files          |
+| Offer wuDict in *Open with* | on | for `.mdx`, `.dsl`, `.slob`, `.bgl`, `.zim` and `.zimaa` files |
 
 The uninstaller removes all four. *Start wuDict at sign-in* is the same as the
 manual Startup folder shortcut in [Run at startup](../running.md); use one of

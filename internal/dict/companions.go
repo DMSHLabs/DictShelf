@@ -82,7 +82,7 @@ func trimMainExt(base string) (string, bool) {
 // the ".dsl" inside it. One list, read twice: MainExt matches a name against
 // it, and classify.go walks it to build the companion vocabulary, so a format
 // that grows a companion table cannot be forgotten by the other reader.
-var mainExts = []string{".wudict.md.gz", ".wudict.md.dz", ".wudict.md", ".dsl.dz", ".dsl", ".mdx", ".ifo", ".slob", ".bgl", ".zim", ".md"}
+var mainExts = []string{".wudict.md.gz", ".wudict.md.dz", ".wudict.md", ".dsl.dz", ".dsl", ".mdx", ".ifo", ".slob", ".bgl", ".zimaa", ".zim", ".md"}
 
 // MainExt names the format of a main file for the tables below: the longest
 // spelling this file has companion knowledge about, so a compressed DSL is
@@ -196,8 +196,71 @@ func CompanionSuffixes(mainExt string) []string {
 		// MediaSuffixes.
 		return []string{".css", ".js"}
 	}
-	// slob, bgl and zim are single files that carry everything inside them.
+	// slob, bgl and an unsplit zim are single files that carry everything
+	// inside them. A split zim's parts are not suffixes of this table: there
+	// are 675 of them, and a name is matched against them by pattern
+	// (zimPartLen) rather than by a scan of every one.
 	return nil
+}
+
+// zimPartSuffixes are the names of a split ZIM's parts after the first:
+// ".zimab" to ".zimzz", the `split` naming Kiwix uses to fit an archive on
+// FAT32 (4 GiB per file). The first part, ".zimaa", is the main file. Every
+// part is required - they are one archive cut into pieces - and the run ends at
+// the first missing name.
+var zimPartSuffixes = func() []string {
+	var out []string
+	for a := 'a'; a <= 'z'; a++ {
+		for b := 'a'; b <= 'z'; b++ {
+			if a != 'a' || b != 'a' {
+				out = append(out, ".zim"+string(a)+string(b))
+			}
+		}
+	}
+	return out
+}()
+
+// zimPartLen is the length of the split-ZIM part suffix lower ends with -
+// ".zimab" to ".zimzz", 6 - or 0. The first part, ".zimaa", is a main file.
+func zimPartLen(lower string) int {
+	n := len(lower)
+	if n < 6 || lower[n-6:n-2] != ".zim" || lower[n-2:] == "aa" {
+		return 0
+	}
+	if a, b := lower[n-2], lower[n-1]; a < 'a' || a > 'z' || b < 'a' || b > 'z' {
+		return 0
+	}
+	return 6
+}
+
+// ZIMPartSuffixes is zimPartSuffixes in order, for a caller asking about
+// names it cannot stat (intake's probe of a download location). Not to be
+// modified.
+func ZIMPartSuffixes() []string { return zimPartSuffixes }
+
+// ZIMParts lists the files of a split ZIM whose first part is src, in order
+// and src first, up to the first missing part; nil when src is not a first
+// part. The parts are spelled in the case of src's own suffix, so
+// "X.ZIMAA" is followed by "X.ZIMAB" on a case-sensitive file system.
+func ZIMParts(src string) []string {
+	if MainExt(src) != ".zimaa" {
+		return nil
+	}
+	ext := src[len(src)-len(".zimaa"):]
+	upper := ext == strings.ToUpper(ext)
+	base := src[:len(src)-len(ext)]
+	out := []string{src}
+	for _, suf := range zimPartSuffixes {
+		if upper {
+			suf = strings.ToUpper(suf)
+		}
+		p := base + suf
+		if !fsx.FileExists(p) {
+			break
+		}
+		out = append(out, p)
+	}
+	return out
 }
 
 // MediaSuffixes are the STEM suffixes a format keeps its images and audio
@@ -320,11 +383,17 @@ func SourceFiles(src string) []string {
 			out = append(out, p)
 		}
 	}
-	base := Stem(src)
-	for _, suf := range CompanionSuffixes(MainExt(src)) {
-		p := base + suf
-		if !strings.EqualFold(p, src) && fsx.FileExists(p) {
+	if parts := ZIMParts(src); parts != nil {
+		for _, p := range parts[1:] {
 			add(p)
+		}
+	} else {
+		base := Stem(src)
+		for _, suf := range CompanionSuffixes(MainExt(src)) {
+			p := base + suf
+			if !strings.EqualFold(p, src) && fsx.FileExists(p) {
+				add(p)
+			}
 		}
 	}
 	for _, p := range CompanionMedia(src) {

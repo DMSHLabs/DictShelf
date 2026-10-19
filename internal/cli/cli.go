@@ -33,6 +33,7 @@ import (
 	"github.com/wuweidict/wudict/internal/howto"
 	"github.com/wuweidict/wudict/internal/htmlref"
 	"github.com/wuweidict/wudict/internal/intake"
+	"github.com/wuweidict/wudict/internal/limits"
 	"github.com/wuweidict/wudict/internal/logx"
 	"github.com/wuweidict/wudict/internal/morph"
 	"github.com/wuweidict/wudict/internal/search"
@@ -76,7 +77,7 @@ const (
 
 func usage() string {
 	return fmt.Sprintf(`WuWeiDict %s - dictionary server for the browser
-MDict (.mdx/.mdd) · StarDict (.ifo) · Aard 2 (.slob) · Lingvo DSL (.dsl/.dsl.dz) · Babylon (.bgl) · ZIM (.zim) · wudict markdown (.wudict.md) · wudict library (text.db)
+MDict (.mdx/.mdd) · StarDict (.ifo) · Aard 2 (.slob) · Lingvo DSL (.dsl/.dsl.dz) · Babylon (.bgl) · ZIM (.zim, split .zimaa…) · wudict markdown (.wudict.md) · wudict library (text.db)
 
 USAGE
   wudict [command] [flags] [args]
@@ -389,6 +390,34 @@ SETTINGS
   -v, --version           Print the version
   -h, --help              Print this help
 
+SAFETY LIMITS (advanced)
+  Ceilings that stop a damaged or malicious file from making wudict use
+  unlimited memory or disk. Real dictionaries stay far below each of them.
+  Change one only when a dictionary you trust fails with "exceeds the ...
+  limit": a higher limit lets a bad file use that much, and a limit below
+  what your dictionaries need stops them from opening. A value outside a
+  key's range is moved to the nearest end of it; one that is not a positive
+  size leaves the default. Startup names any value that was changed.
+  Each is a wudict.toml key, an environment variable and a flag of serve and
+  ingest: MAX_ZIM_CLUSTER is also --max-zim-cluster.
+
+                      default  range         bounds
+  MAX_ZIM_CLUSTER     256MB  16MB-4GB      one ZIM cluster, unpacked
+  MAX_SLOB_BIN        256MB  16MB-4GB      one Aard 2 (.slob) bin, unpacked
+  MAX_MDICT_BLOCK     256MB  16MB-4GB      one MDict (.mdx/.mdd) block,
+                                           unpacked
+  MAX_STARDICT_INDEX  256MB  16MB-4GB      a compressed StarDict index
+                                           (.idx.gz), unpacked; 16 times the
+                                           file's size is always allowed
+  MAX_BGL_BLOCK        64MB  8MB-4GB       one Babylon (.bgl) block
+  MAX_LEMMA_SIZE       64MB  16MB-1GB      one lemma data file, unpacked
+  MAX_IMPORT_SIZE     256GB  1GB-64TB      one dictionary taken out of an
+                                           archive, or downloaded
+  MAX_IMPORT_RATIO     2000  100-100000    how many times its packed size
+                                           one file in an archive may unpack to
+  MAX_UPLOAD_SIZE      16GB  1GB-64TB      one archive sent to the server from
+                                           a browser or the app
+
 CONFIG FILE
   The first found of:
   1. --config / CONFIG_PATH
@@ -470,6 +499,38 @@ var (
 	headlessLog string
 )
 
+// applyLimits puts the MAX_* guards (internal/limits) in force from flags, the
+// environment and wudict.toml. A config that cannot be read leaves the
+// defaults: the command that reads it reports why.
+func applyLimits(configPath string, flags map[string]string) {
+	if configPath == "" {
+		configPath = os.Getenv("CONFIG_PATH")
+	}
+	if cfg, err := config.Load(configPath, flags); err == nil {
+		limits.Set(cfg.Limits)
+	}
+}
+
+// limitFlags registers one flag per MAX_* key on fs (--max-zim-cluster for
+// MAX_ZIM_CLUSTER) and returns a function giving the values that were set,
+// keyed as config.Load reads them.
+func limitFlags(fs *flag.FlagSet) func() map[string]string {
+	vals := map[string]*string{}
+	for _, k := range config.LimitKeys {
+		name := strings.ToLower(strings.ReplaceAll(k.Key, "_", "-"))
+		vals[k.Key] = fs.String(name, "", "advanced: "+k.Help+" (env/toml: "+k.Key+")")
+	}
+	return func() map[string]string {
+		out := map[string]string{}
+		for k, v := range vals {
+			if *v != "" {
+				out[k] = *v
+			}
+		}
+		return out
+	}
+}
+
 // fail reports a fatal error and exits 1. One place, so the GUI case cannot be
 // handled on one path and forgotten on the other.
 func fail(err error) {
@@ -488,6 +549,9 @@ func fail(err error) {
 }
 
 func Main() {
+	// Before any command: every one that opens a dictionary is bounded alike.
+	// serve and ingest apply the limits again with their own flags.
+	applyLimits("", nil)
 	if len(os.Args) < 2 {
 		// no arguments: start the server (documented default)
 		fail(cmdServe(nil))
@@ -882,7 +946,9 @@ func cmdIngest(args []string) error {
 	headwords := fs.Bool("headwords", false, "index headwords only: the opposite of -fulltext")
 	fuzzyOnly := fs.Bool("fuzzy-only", false, "deprecated spelling of -headwords")
 	configPath := fs.String("config", "", "path to wudict.toml (env: CONFIG_PATH)")
+	limitVals := limitFlags(fs)
 	fs.Parse(args)
+	applyLimits(*configPath, limitVals())
 
 	// A flag left out changes nothing about a dictionary already prepared, as
 	// a parameter left out of /api/ingest changes nothing; a dictionary never
@@ -1093,6 +1159,7 @@ func cmdServe(args []string) (err error) {
 	speexdec := fs.String("speexdec", "", "path to speexdec for .spx audio (env/toml: SPEEXDEC)")
 	trayOn := fs.Bool("tray", false, "show a system tray icon (env/toml: TRAY)")
 	trayOff := fs.Bool("no-tray", false, "never show a system tray icon (env/toml: TRAY=0)")
+	limitVals := limitFlags(fs)
 	fs.Parse(args)
 
 	if *configPath == "" {
@@ -1119,6 +1186,9 @@ func cmdServe(args []string) (err error) {
 	if *indexWorkers != "" {
 		flagVals["INDEX_WORKERS"] = *indexWorkers
 	}
+	for k, v := range limitVals() {
+		flagVals[k] = v
+	}
 	// --no-tray is checked second so it wins if both are given: between two
 	// contradictory flags, the one that changes nothing about the process is
 	// the safe reading.
@@ -1132,6 +1202,7 @@ func cmdServe(args []string) (err error) {
 	if err != nil {
 		return err
 	}
+	limits.Set(cfg.Limits)
 	if cfg.Verbose {
 		logx.Enabled = true
 	}
@@ -1986,6 +2057,7 @@ func cmdSearchAll(args []string) error {
 	if err != nil {
 		return err
 	}
+	limits.Set(cfg.Limits)
 	dirs := cfg.DictDirs
 	origin := cfg.Origin("DICT_DIR")
 	if dirArg != "" {

@@ -13,6 +13,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/wuweidict/wudict/internal/inflate"
 )
 
 // craft writes the smallest header a slob parser accepts, with storeOffset
@@ -116,7 +118,7 @@ func TestReadAllBoundedRefusesBombs(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer zr.Close()
-	if _, err := readAllBounded(zr, 128); err == nil || !strings.Contains(err.Error(), "exceeds") {
+	if _, err := inflate.AppendAll(nil, zr, 128); err == nil || !strings.Contains(err.Error(), "exceeds") {
 		t.Fatalf("expected the inflate-size refusal, got %v", err)
 	}
 
@@ -129,7 +131,7 @@ func TestReadAllBoundedRefusesBombs(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer zr.Close()
-	out, err := readAllBounded(zr, 128)
+	out, err := inflate.AppendAll(nil, zr, 128)
 	if err != nil || len(out) != 100 {
 		t.Fatalf("honest bin = %d bytes err %v", len(out), err)
 	}

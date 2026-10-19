@@ -706,6 +706,16 @@ paths:
             catalogue is otherwise cached for ten minutes, so a page polling
             during a download does not ask its host once a second.
           schema: { type: string }
+        - name: offline
+          in: query
+          description: >
+            Answer without asking the catalogue's host: the list read last -
+            this run, or kept in LEMMA_DIR from an earlier one - or else the
+            copy built into wudict, which applies to the default LEMMA_URL only.
+            Installed files are not read to set `mismatch`. The page asks this
+            first and then without it, so it is never empty while the host
+            answers.
+          schema: { type: string }
       x-codeSamples:
         - lang: Shell
           label: curl
@@ -735,7 +745,16 @@ paths:
                     description: ATTRIBUTION.txt published beside the catalogue (ODbL).
                   error:
                     type: string
-                    description: Why the catalogue could not be read, if it could not.
+                    description: >
+                      Why the catalogue could not be read, if it could not. The
+                      languages listed are then the last list there is.
+                  checked:
+                    type: string
+                    format: date-time
+                    description: When the list was read from its host; absent when unknown.
+                  offline:
+                    type: boolean
+                    description: The answer was drawn without asking the host (`offline` was set).
                   shadowed:
                     type: array
                     description: Files the lemmatizer ignores because another supplies the same language.
@@ -2186,6 +2205,11 @@ components:
         done: { type: integer }
         total: { type: integer }
         error: { type: string }
+        dicts:
+          type: integer
+          description: >
+            How many of the user's dictionaries search with this language's
+            lemma data, counted over the dictionaries /api/dicts has listed.
 
     Caps:
       type: object

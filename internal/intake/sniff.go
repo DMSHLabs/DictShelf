@@ -127,7 +127,7 @@ func Sniff(a Archive) ([]Candidate, error) {
 				c.Size += e.Size
 			}
 		}
-		if c.Size > maxCandidateBytes {
+		if c.Size > maxCandidateBytes() {
 			continue
 		}
 		out = append(out, c)

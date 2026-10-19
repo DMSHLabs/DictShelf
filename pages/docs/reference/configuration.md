@@ -323,7 +323,9 @@ The folder of installed lemma data. English is built in.
 Install languages with <kbd>Lemmatization…</kbd> (dictionary panel → folder
 summary) or [`wudict lemmas download`](cli.md#lemmas). The folder is read at
 startup and after each install or removal on the Lemmatization page; a file
-added by hand or with `wudict lemmas` is read after a restart.
+added by hand or with `wudict lemmas` is read after a restart. The folder also
+holds `.catalogue.json`, the list of languages the Lemmatization page read
+last, which it shows before the network answers.
 
 ??? info "Lemma data file format"
 
@@ -512,6 +514,119 @@ the server runs. Use it only while developing; the startup output shows it:
 Programs outside a browser (curl, scripts, applications) are not subject to
 this setting. What limits them is [`SERVER_IP`](#server_ip-and-server_port) and
 the access key ([`AUTH`](#auth)).
+
+## Safety limits
+
+These settings bound what one damaged or hostile file can make wudict use:
+memory for a block it unpacks, disk for an import. A real dictionary stays far
+below each default.
+
+Change a limit only when a dictionary you trust does not open and the message
+names the limit, for example:
+
+``` text
+cluster 0: the unpacked cluster exceeds the MAX_ZIM_CLUSTER limit of 256MB
+```
+
+A higher limit lets a damaged or hostile file use that much memory or disk. A
+limit below what your dictionaries need stops them from opening. A value that is
+outside a key's range is moved to the nearest end of it, and a value that is not
+a positive size leaves the default in effect; the startup output names the key
+in either case. The ranges keep a typo from disabling a guard or stopping
+ordinary dictionaries from opening.
+
+Each key is also a flag of `wudict serve` and `wudict ingest`: `MAX_ZIM_CLUSTER`
+is `--max-zim-cluster`.
+
+### MAX_ZIM_CLUSTER
+
+One ZIM cluster, unpacked.
+
+| | |
+| --- | --- |
+| Flag | `--max-zim-cluster` (`serve`, `ingest`) |
+| Values | a size from `16MB` to `4GB` |
+| Default | `256MB` |
+
+### MAX_SLOB_BIN
+
+One Aard 2 (`.slob`) bin, unpacked.
+
+| | |
+| --- | --- |
+| Flag | `--max-slob-bin` (`serve`, `ingest`) |
+| Values | a size from `16MB` to `4GB` |
+| Default | `256MB` |
+
+### MAX_MDICT_BLOCK
+
+One MDict (`.mdx`, `.mdd`) block, unpacked.
+
+| | |
+| --- | --- |
+| Flag | `--max-mdict-block` (`serve`, `ingest`) |
+| Values | a size from `16MB` to `4GB` |
+| Default | `256MB` |
+
+### MAX_STARDICT_INDEX
+
+A compressed StarDict index (`.idx.gz`), unpacked; 16 times the size of the file is always allowed.
+
+| | |
+| --- | --- |
+| Flag | `--max-stardict-index` (`serve`, `ingest`) |
+| Values | a size from `16MB` to `4GB` |
+| Default | `256MB` |
+
+### MAX_BGL_BLOCK
+
+One Babylon (`.bgl`) block.
+
+| | |
+| --- | --- |
+| Flag | `--max-bgl-block` (`serve`, `ingest`) |
+| Values | a size from `8MB` to `4GB` |
+| Default | `64MB` |
+
+### MAX_LEMMA_SIZE
+
+One lemma data file, unpacked.
+
+| | |
+| --- | --- |
+| Flag | `--max-lemma-size` (`serve`, `ingest`) |
+| Values | a size from `16MB` to `1GB` |
+| Default | `64MB` |
+
+### MAX_IMPORT_SIZE
+
+One dictionary taken out of an archive, or downloaded.
+
+| | |
+| --- | --- |
+| Flag | `--max-import-size` (`serve`, `ingest`) |
+| Values | a size from `1GB` to `64TB` |
+| Default | `256GB` |
+
+### MAX_IMPORT_RATIO
+
+How many times its packed size one file in an archive may unpack to.
+
+| | |
+| --- | --- |
+| Flag | `--max-import-ratio` (`serve`, `ingest`) |
+| Values | a number from `100` to `100000` |
+| Default | `2000` |
+
+### MAX_UPLOAD_SIZE
+
+One archive sent to the server from a browser or the app.
+
+| | |
+| --- | --- |
+| Flag | `--max-upload-size` (`serve`, `ingest`) |
+| Values | a size from `1GB` to `64TB` |
+| Default | `16GB` |
 
 ## CONFIG_PATH
 

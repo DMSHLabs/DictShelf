@@ -18,7 +18,7 @@ import (
 func registerRealFormats(t *testing.T) {
 	t.Helper()
 	open := func(path string) (Dictionary, error) { return fakeDict{}, nil }
-	for _, ext := range []string{".mdx", ".ifo", ".dsl", ".dsl.dz", ".slob", ".bgl", ".zim"} {
+	for _, ext := range []string{".mdx", ".ifo", ".dsl", ".dsl.dz", ".slob", ".bgl", ".zim", ".zimaa"} {
 		RegisterFormat(ext, open)
 	}
 	RegisterInspectable(".mdd", open)
@@ -242,5 +242,27 @@ func TestDiscoverSkipsTheDownloadShelf(t *testing.T) {
 		if filepath.Dir(p) == filepath.Join(dir, DownloadDirName) {
 			t.Fatalf("Discover returned the download shelf entry %q", p)
 		}
+	}
+}
+
+// A split ZIM's first part is the dictionary; the parts after it are its
+// companions, named after the same stem, and never offered on their own.
+func TestClassifySplitZIM(t *testing.T) {
+	registerRealFormats(t)
+	for name, want := range map[string]Kind{
+		"Wiki.zimaa": KindMain, "Wiki.zimab": KindCompanion, "Wiki.zimzz": KindCompanion,
+		"Wiki.ZIMAC": KindCompanion, "Wiki.zim": KindMain, "Wiki.zimx": KindOther,
+	} {
+		if got := ClassifyName(name); got != want {
+			t.Errorf("ClassifyName(%q) = %v, want %v", name, got, want)
+		}
+	}
+	for _, name := range []string{"Wiki.zimab", "Wiki.zimbe"} {
+		if got := CompanionStem(name); got != "Wiki" {
+			t.Errorf("CompanionStem(%q) = %q, want Wiki", name, got)
+		}
+	}
+	if Name("dir/Wiki_en_all.zimaa") != "Wiki_en_all" || Stem("dir/Wiki.zimaa") != "dir/Wiki" {
+		t.Errorf("Name/Stem of a first part = %q, %q", Name("dir/Wiki_en_all.zimaa"), Stem("dir/Wiki.zimaa"))
 	}
 }

@@ -24,7 +24,7 @@ Type `wudict help` in the search box for quick access, and [browse](/browse?dict
 
 > *wudict features*
 
-- Formats: MDict (`.mdx/.mdd`), StarDict (`.ifo/.idx/.dict/.dz`), Aard2 (`.slob`), Lingvo DSL (`.dsl/.dsl.dz`), Babylon (`.bgl`), ZIM (`.zim`), and wudict markdown (`.wudict.md`)
+- Formats: MDict (`.mdx/.mdd`), StarDict (`.ifo/.idx/.dict/.dz`), Aard2 (`.slob`), Lingvo DSL (`.dsl/.dsl.dz`), Babylon (`.bgl`), ZIM (`.zim`, or split: `.zimaa`, `.zimab`, …), and wudict markdown (`.wudict.md`)
 - Instant search across all dictionaries with four [search modes](<entry://wudict search>): prefix, exact, [wildcard](<entry://wudict wildcard>), and full-text search
 - Dictionaries are automatically grouped by language, language pair, content and publisher; add your own groups in <kbd>☰</kbd> → ![](cog.svg) → [Edit groups](/groups).
 - Double-tap any word in a wudict dictionary article to instantly look up its definition
@@ -240,7 +240,7 @@ After copying files into a folder, press ![](rescan.svg) <kbd>Rescan folders</kb
 | Aard 2 | `.slob` |
 | Lingvo DSL | `.dsl` or `.dsl.dz`, and its `.files.zip` |
 | Babylon | `.bgl` |
-| ZIM | `.zim` (Kiwix, Wikipedia, Wiktionary) |
+| ZIM | `.zim` (Kiwix, Wikipedia, Wiktionary), or a split archive: `.zimaa`, `.zimab`, … |
 | wudict markdown | `.wudict.md`, a [text file you can write](<entry://wudict markdown>) |
 
 Speex `.spx` audio auto-converted for browser playback. A folder named after a language (`es/`) can be used to signal to wudict the language of a dictionary. The preferred way is for dictionary files to have a file prefix with a two character or three character language codes, e.g. `fr-es-oxford.mdx` or `fra-spa-oxford.mdx`.
@@ -370,10 +370,52 @@ To exclude a dictionary from *All dictionaries* searches, just untick its checkm
 | <kbd>←</kbd> <kbd>→</kbd> · <kbd>F3</kbd> · <kbd>Ctrl</kbd> <kbd>G</kbd> | step through [full-text](<entry://wudict full-text>) matches |
 
 - **wuDict Hover** (Chrome, Firefox): hover a word on any web page (optionally holding <kbd>Alt</kbd>) to see its definition in a popup.
-- **Command line**: `wudict searchall word` searches from a terminal; `wudict dump -format md` writes any dictionary as [wudict markdown](<entry://wudict markdown>); `wudict help` lists the rest.
+- **Command line**: `wudict searchall word` searches from a terminal; `wudict dump -format md` writes any dictionary as [wudict markdown](<entry://wudict markdown>); `wudict help` lists the rest ([command line](<entry://wudict command line>)).
 
 ***
 
+- [index](/browse?dict=wudict-howto)
+
+## wudict command line
+## wudict CLI
+## wudict advanced
+
+💻 **wudict is also a command line program** on a computer: `wudict help` lists every command and setting. The ones used most:
+
+| Command | Action |
+| --- | --- |
+| `wudict lookup <file> <word>` | look up a word in one dictionary |
+| `wudict searchall <word>` | search every dictionary in your folders |
+| `wudict info <file>` | show a dictionary's details and files |
+| `wudict keys <file>` | list a dictionary's headwords |
+| `wudict ingest -fulltext <file>` | index a dictionary, with its full-text index |
+| `wudict dump -format md -o <folder> <file>` | export a dictionary as [wudict markdown](<entry://wudict markdown>) |
+| `wudict token` | print the link that carries the access key |
+
+A setting is a flag, an environment variable or a line in `~/.wudict/wudict.toml`; a flag wins over the environment, the environment over the file.
+
+<details>
+<summary>Safety limits (advanced)</summary>
+
+These limits stop a damaged or hostile file from making wudict use unlimited memory or disk. Change one only when a dictionary you trust does not open and the message names the limit: a higher limit lets a bad file use that much, a lower one can stop your dictionaries from opening. A value outside the range is moved to its nearest end. Each is also a flag of `serve` and `ingest`: `MAX_ZIM_CLUSTER` is `--max-zim-cluster`.
+
+| Key | Default | Range | Bounds |
+| --- | --- | --- | --- |
+| `MAX_ZIM_CLUSTER` | `256MB` | 16MB to 4GB | one ZIM cluster, unpacked |
+| `MAX_SLOB_BIN` | `256MB` | 16MB to 4GB | one Aard 2 (`.slob`) bin, unpacked |
+| `MAX_MDICT_BLOCK` | `256MB` | 16MB to 4GB | one MDict (`.mdx`, `.mdd`) block, unpacked |
+| `MAX_STARDICT_INDEX` | `256MB` | 16MB to 4GB | a compressed StarDict index (`.idx.gz`), unpacked; 16 times the size of the file is always allowed |
+| `MAX_BGL_BLOCK` | `64MB` | 8MB to 4GB | one Babylon (`.bgl`) block |
+| `MAX_LEMMA_SIZE` | `64MB` | 16MB to 1GB | one lemma data file, unpacked |
+| `MAX_IMPORT_SIZE` | `256GB` | 1GB to 64TB | one dictionary taken out of an archive, or downloaded |
+| `MAX_IMPORT_RATIO` | `2000` | 100 to 100000 | how many times its packed size one file in an archive may unpack to |
+| `MAX_UPLOAD_SIZE` | `16GB` | 1GB to 64TB | one archive sent to the server from a browser or the app |
+
+</details>
+
+***
+
+- [↗ configuration reference](https://wudict.legbehindneck.com/reference/configuration/#safety-limits)
 - [index](/browse?dict=wudict-howto)
 
 ## wudict markdown

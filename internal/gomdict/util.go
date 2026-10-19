@@ -33,6 +33,8 @@ import (
 
 	"github.com/c0mm4nd/go-ripemd"
 	"golang.org/x/text/encoding/unicode"
+
+	"github.com/wuweidict/wudict/internal/limits"
 )
 
 func decodeLittleEndianUtf16(raw []byte) (string, error) {
@@ -155,7 +157,7 @@ func zlibDecompress(data []byte, from, length, max int64) ([]byte, error) {
 		return nil, err
 	}
 	if int64(len(p)) > max {
-		return nil, fmt.Errorf("inflated block exceeds %d bytes", max)
+		return nil, limits.Exceeded("the unpacked block", "MAX_MDICT_BLOCK", max)
 	}
 	return p, nil
 }

@@ -14,6 +14,8 @@ import (
 	"io"
 
 	lzo "github.com/anchore/go-lzo"
+
+	"github.com/wuweidict/wudict/internal/limits"
 )
 
 // decodeBlockV3 decodes a single v3 key/record block.
@@ -103,12 +105,12 @@ func (mdict *MdictBase) decodeBlockV3(block []byte, decompressedSize int) ([]byt
 		// out of the block header, and an unbounded inflate turns a corrupt
 		// (or hostile) size into a zlib bomb - a small block that inflates to
 		// nothing but RAM.
-		decompressed, err = io.ReadAll(io.LimitReader(z, maxLZOBlock+1))
+		decompressed, err = io.ReadAll(io.LimitReader(z, maxLZOBlock()+1))
 		if err != nil {
 			return nil, fmt.Errorf("v3 block: zlib read: %w", err)
 		}
-		if int64(len(decompressed)) > maxLZOBlock {
-			return nil, fmt.Errorf("v3 block: inflated size exceeds the %d byte limit", maxLZOBlock)
+		if int64(len(decompressed)) > maxLZOBlock() {
+			return nil, fmt.Errorf("v3 block: %w", limits.Exceeded("the unpacked block", "MAX_MDICT_BLOCK", maxLZOBlock()))
 		}
 	default:
 		return nil, fmt.Errorf("v3 block: unsupported compression method %d", compressionMethod)
@@ -122,8 +124,11 @@ func (mdict *MdictBase) decodeBlockV3(block []byte, decompressedSize int) ([]byt
 // its own, so that claimed size is both the allocation and the check: a stream
 // that stops short or runs long is a corrupt block, not a short read.
 func lzoDecompress1X(data []byte, decompressedSize int) ([]byte, error) {
-	if decompressedSize < 0 || decompressedSize > maxLZOBlock {
+	if decompressedSize < 0 {
 		return nil, fmt.Errorf("lzo: implausible decompressed size %d", decompressedSize)
+	}
+	if int64(decompressedSize) > maxLZOBlock() {
+		return nil, fmt.Errorf("lzo: %w", limits.Exceeded(fmt.Sprintf("an unpacked size of %d bytes", decompressedSize), "MAX_MDICT_BLOCK", maxLZOBlock()))
 	}
 	out := make([]byte, decompressedSize)
 	n, err := lzo.Decompress(data, out)
@@ -139,7 +144,7 @@ func lzoDecompress1X(data []byte, decompressedSize int) ([]byte, error) {
 // maxLZOBlock caps what a header may ask us to allocate. MDX record and key
 // blocks are tens of KB; this is three orders of magnitude of headroom, and it
 // is the only thing between a corrupt size field and a 4 GB allocation.
-const maxLZOBlock = 256 << 20
+func maxLZOBlock() int64 { return limits.Get().MDictBlock }
 
 // adler32Of computes the Adler-32 checksum of data (matching zlib.adler32).
 func adler32Of(data []byte) uint32 {

@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/wuweidict/wudict/internal/dict"
+	"github.com/wuweidict/wudict/internal/limits"
 )
 
 // Fetching an archive over https.
@@ -71,7 +72,7 @@ const partialStale = 7 * 24 * time.Hour
 // bound - the body is written straight to disk - and not the disk's guard
 // either: a download whose length is known is refused up front when the
 // folder lacks the room for it (roomFor).
-const maxDownloadBytes = maxCandidateBytes
+func maxDownloadBytes() int64 { return maxCandidateBytes() }
 
 // maxRedirects is the hop limit. Each hop is re-checked against the same
 // scheme and host rules, so a redirect cannot be the way around them.
@@ -318,8 +319,8 @@ func (f Fetcher) Fetch(ctx context.Context, dest, raw string, progress Progress)
 	if resp.ContentLength < 0 {
 		total = 0
 	}
-	if total > maxDownloadBytes {
-		return Source{}, errors.New("that file is too large to download")
+	if total > maxDownloadBytes() {
+		return Source{}, limits.Exceeded("that file", "MAX_IMPORT_SIZE", maxDownloadBytes())
 	}
 	// Room for what is still to come, asked of the library folder: it exists,
 	// and the download folder inside it is on the same disk.
@@ -640,8 +641,8 @@ func copyBody(ctx context.Context, w io.Writer, r io.Reader, offset, total int64
 		}
 		n, err := r.Read(buf)
 		if n > 0 {
-			if done+int64(n) > maxDownloadBytes {
-				return done, errors.New("that file is too large to download")
+			if done+int64(n) > maxDownloadBytes() {
+				return done, limits.Exceeded("that file", "MAX_IMPORT_SIZE", maxDownloadBytes())
 			}
 			if _, werr := w.Write(buf[:n]); werr != nil {
 				return done, werr

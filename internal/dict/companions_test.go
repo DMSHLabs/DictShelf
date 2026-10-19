@@ -7,6 +7,7 @@ package dict
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 )
 
@@ -267,5 +268,34 @@ func TestName(t *testing.T) {
 		if got := Name(tc.in); got != tc.want {
 			t.Errorf("Name(%q) = %q, want %q", tc.in, got, tc.want)
 		}
+	}
+}
+
+// The parts of a split ZIM run from .zimab to the first gap, in the case of
+// the first part's suffix, and removal takes them with it.
+func TestZIMParts(t *testing.T) {
+	dir := t.TempDir()
+	first := touch(t, filepath.Join(dir, "w.zimaa"))
+	for _, n := range []string{"w.zimab", "w.zimac", "w.zimae"} { // .zimad is the gap
+		touch(t, filepath.Join(dir, n))
+	}
+	want := []string{first, filepath.Join(dir, "w.zimab"), filepath.Join(dir, "w.zimac")}
+	if got := ZIMParts(first); !slices.Equal(got, want) {
+		t.Errorf("ZIMParts = %v, want %v", got, want)
+	}
+	if got := SourceFiles(first); !slices.Equal(got, want) {
+		t.Errorf("SourceFiles = %v, want %v", got, want)
+	}
+	if got := ZIMParts(touch(t, filepath.Join(dir, "w.zim"))); got != nil {
+		t.Errorf("ZIMParts of an unsplit .zim = %v, want nil", got)
+	}
+
+	upper := touch(t, filepath.Join(dir, "U.ZIMAA"))
+	touch(t, filepath.Join(dir, "U.ZIMAB"))
+	if got := ZIMParts(upper); len(got) != 2 || got[1] != filepath.Join(dir, "U.ZIMAB") {
+		t.Errorf("ZIMParts(%q) = %v", upper, got)
+	}
+	if n := len(ZIMPartSuffixes()); n != 26*26-1 || ZIMPartSuffixes()[0] != ".zimab" || ZIMPartSuffixes()[n-1] != ".zimzz" {
+		t.Errorf("ZIMPartSuffixes: %d, %q..%q", n, ZIMPartSuffixes()[0], ZIMPartSuffixes()[n-1])
 	}
 }

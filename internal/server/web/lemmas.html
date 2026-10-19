@@ -30,15 +30,21 @@
 .lrow .st.err{color:var(--err)}
 .lrow .st.busy{color:var(--accent)}
 .lrow.off{opacity:.55}
+/* a language the user's dictionaries need is the page's call to action, so it
+   is not dimmed with the other languages not installed */
+.lrow.off.mine{opacity:1}
 @media (max-width:520px){
   .lrow .st{order:1;flex:1 1 auto;min-width:0;text-align:left}
   .lrow .cost{order:1}
 }
 .note{font-size:12.5px;color:var(--faint);margin:.2em 0 0}
 .banner{font-size:13px;border:1px solid var(--line);border-radius:8px;
-  padding:.5em .7em;margin:.618em 0 0;color:var(--soft)}
+  padding:.5em .7em;margin:.618em 0 0;color:var(--soft);overflow-wrap:anywhere}
 .banner.warn{border-color:var(--err);color:var(--err)}
 .head{display:flex;justify-content:space-between;align-items:baseline;gap:.5em;flex-wrap:wrap}
+.grp{padding:.45em .618em .25em;font-size:12px;font-weight:600;color:var(--soft);
+  border-bottom:1px solid var(--line)}
+.banner .btn{margin-left:.5em;padding:.15em .7em;font-size:12.5px}
 .formats a{color:var(--accent);text-decoration:none}
 .formats a:hover{text-decoration:underline}
 </style>
@@ -53,6 +59,7 @@
 <div id="banner" class="banner hidden"></div>
 
 <div class="head"><h2>Languages</h2><span class="note" id="summary"></span></div>
+<p class="note" id="listState" aria-live="polite"></p>
 <div id="list"></div>
 <p class="note" id="dir"></p>
 <div id="shadow" class="banner warn hidden"></div>
@@ -75,38 +82,64 @@ const mb=n=>n<1e3?n+" B":n<1e6?Math.round(n/1e3)+" kB":n<1e7?(n/1e6).toFixed(1)+
 
 /* State lives on the SERVER, not here: a download is a job the server runs, so
    this page can be reloaded, rotated or closed and reopened without losing it.
-   Everything drawn below comes from one GET, which is also what is polled. */
+   Everything drawn below comes from one GET, which is also what is polled.
+
+   The page asks twice on open. The first answer (?offline=1) needs no network:
+   what is installed, and the last list of languages there is - read before, or
+   built into wudict - so the page is never empty while the catalogue's host is
+   asked. The second asks the host and redraws. */
 let polling=false;
 
-async function load(){
+async function load(query){
   let j;
-  try{ j=await (await fetch("/api/lemmas")).json() }
+  try{ j=await (await fetch("/api/lemmas"+(query?"?"+query:""))).json() }
   catch(e){ $("banner").className="banner warn";$("banner").textContent="The wudict server does not respond.";return null }
   render(j);
   return j;
 }
 
+const day=iso=>new Date(iso).toLocaleDateString(undefined,{year:"numeric",month:"short",day:"numeric"});
+
 function render(j){
   const list=$("list");
   list.textContent="";
-  let installed=0;
-  for(const l of j.languages){
-    if(l.installed)installed++;
-    list.appendChild(rowFor(l,j));
+  const ls=j.languages;
+  const installed=ls.filter(l=>l.installed).length;
+  /* The languages of the user's own dictionaries that are not installed come
+     first, most dictionaries first: they are what this page is opened for. */
+  const mine=ls.filter(l=>l.dicts>0&&!l.installed&&l.catalogued)
+    .sort((a,b)=>b.dicts-a.dicts||a.name.localeCompare(b.name));
+  const rest=ls.filter(l=>!mine.includes(l));
+  if(mine.length){
+    list.appendChild(groupHead("For your dictionaries"));
+    for(const l of mine)list.appendChild(rowFor(l,j)).classList.add("mine");
+    list.appendChild(groupHead("All languages"));
   }
-  $("summary").textContent=installed+" installed"+
-    (j.languages.length?" of "+j.languages.length:"");
+  for(const l of rest)list.appendChild(rowFor(l,j));
+  const catalogued=ls.some(l=>l.catalogued);
+  if(j.offline&&!catalogued){
+    const row=document.createElement("div");
+    row.className="lrow";row.textContent="Getting the list of languages…";
+    list.appendChild(row);
+  }
+  $("summary").textContent=installed+" installed"+(catalogued?" of "+ls.length:"");
   $("dir").textContent="Installed in "+j.dir;
+  $("listState").textContent=j.offline&&catalogued?"Updating the list of languages…":"";
 
   const b=$("banner");
+  b.textContent="";
   if(!j.enabled){
     b.className="banner warn";
     b.innerHTML="Lemmatization is off (<code>MORPH_CACHE = 0</code>): installed lemma data "+
       "is not used until it is turned on.";
   }else if(j.error){
     b.className="banner warn";
-    b.textContent="Could not read the catalogue: "+j.error+
-      " — languages already installed still work.";
+    b.append("Could not update the list of languages: "+j.error+". "+
+      (catalogued&&j.checked?"The list is from "+day(j.checked)+".":"Languages already installed still work."));
+    const retry=document.createElement("button");
+    retry.className="btn ghost";retry.type="button";retry.textContent="Retry";
+    retry.addEventListener("click",()=>{ retry.disabled=true;$("listState").textContent="Updating the list of languages…";load("refresh=1") });
+    b.append(retry);
   }else{
     b.className="banner hidden";
   }
@@ -121,6 +154,12 @@ function render(j){
     ? "Word lists: "+esc(lic.source||"")+" · "+esc(lic.license)+
       (j.attribution?' · <a href="'+esc(j.attribution)+'" target="_blank" rel="noopener">attribution</a>':"")
     : "";
+}
+
+function groupHead(text){
+  const h=document.createElement("div");
+  h.className="grp";h.textContent=text;
+  return h;
 }
 
 function rowFor(l,j){
@@ -144,6 +183,7 @@ function rowFor(l,j){
   if(l.size)bits.push(mb(l.size));
   else if(l.localSize)bits.push(mb(l.localSize));
   if(l.heapMB)bits.push("~"+l.heapMB+" MB RAM");
+  if(l.dicts)bits.push(l.dicts+(l.dicts===1?" dictionary":" dictionaries"));
   cost.textContent=bits.join(" · ");
 
   const st=document.createElement("span");
@@ -221,7 +261,7 @@ async function poll(){
   polling=false;
 }
 
-load().then(j=>{ if(j&&j.languages.some(l=>l.state==="downloading"))poll() });
+load("offline=1").then(()=>load()).then(j=>{ if(j&&j.languages.some(l=>l.state==="downloading"))poll() });
 </script>
 </body>
 </html>
