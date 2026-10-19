@@ -447,7 +447,7 @@ const browseAlphabetCache=new Map(),browseAlphabetPartial=new Map(),browsePageCa
 const BROWSE_PAGE_CACHE_LIMIT=12,BROWSE_PAGE_SESSION_LIMIT=8;
 const BROWSE_ALPHABET_SESSION_KEY="wudict_browse_alphabet_v2";
 const BROWSE_STRIP_EXACT_WIDTHS={{BROWSE_STRIP_EXACT_WIDTHS}};
-const BROWSE_SEARCH_DEBOUNCE_MS={{BROWSE_SEARCH_DEBOUNCE_MS}};
+const SEARCH_DEBOUNCE_MS={{SEARCH_DEBOUNCE_MS}};
 const BROWSE_FIND_SESSION_KEY="wudict_browse_find_v1";
 const BROWSE_PAGE_SESSION_KEY="wudict_browse_page_v1";
 let browseHeadwordControl=null;
@@ -1258,7 +1258,7 @@ function findChanged(){
   findResult=null;findIndex=-1;findStreamDone=true;findStreamWords=[];findPendingMove=0;
   if(!$("findInput").value.trim()){updateFindControls();render();return}
   $("findCount").textContent="…";
-  findTimer=setTimeout(()=>fetchFound(1,0,"replace"),BROWSE_SEARCH_DEBOUNCE_MS);
+  findTimer=setTimeout(()=>fetchFound(1,0,"replace"),SEARCH_DEBOUNCE_MS);
 }
 function applyFind(){
   if(!browseNeedsApply())return;

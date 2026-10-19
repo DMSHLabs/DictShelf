@@ -934,6 +934,7 @@
   "search.wildcards": "маски",
   "search.wildcardsRun": "Найти заголовки по маске",
   "search.wildcardsResults": "Подходящие заголовки",
+  "search.wildcardsTotalLabel": "Всего:",
   "search.wildcardsTotal": "Всего подходящих заголовков",
   "search.wildcardsDictionary": "Словарь с подходящими заголовками",
   "search.wildcardsLoading": "Поиск заголовков…",

@@ -591,6 +591,7 @@ func (s *Server) basePage() []byte {
 		page = strings.ReplaceAll(page, "{{HEADWORDJS}}", assetTag(headwordControlJS))
 		page = strings.ReplaceAll(page, "{{RIBBONJS}}", assetTag(headwordRibbonJS))
 		page = strings.ReplaceAll(page, "{{BROWSE_STRIP_EXACT_WIDTHS}}", strconv.Itoa(indexconst.BrowseStripExactWidthCount))
+		page = strings.ReplaceAll(page, "{{SEARCH_DEBOUNCE_MS}}", strconv.Itoa(indexconst.SearchDebounceMS))
 		page = strings.ReplaceAll(page, "{{HEADWORDCSS}}", assetTag(headwordControlCSS))
 		// The role stylesheet for articles wudict writes itself
 		// (internal/artmark). It is a floor under BOTH article surfaces, so
