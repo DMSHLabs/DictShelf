@@ -94,7 +94,8 @@
       el.count.value = el.count.textContent;
       el.previous.disabled = !!state.previousDisabled;
       el.next.disabled = !!state.nextDisabled;
-      for (const control of [el.mode, el.mask, el.input]) control.disabled = !!state.busy;
+      for (const control of [el.mode, el.mask]) control.disabled = !!state.busy;
+      el.input.disabled = !!state.busy && !state.allowInputWhileBusy;
       fit();
     }
     function onInput() { onQuery?.(el.input.value); }

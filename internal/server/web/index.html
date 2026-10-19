@@ -523,7 +523,7 @@ window.wudictFontScale=(function(){
        the door for scoping BEFORE any search exists. A group's name is
        truncated by CSS (the bar is one line). -->
   <div class="facts dictionary-group-row" id="pickerGroupRow">
-    <span class="rowlabel" id="pickerGroupLabel">{{T:panel.dictionaries}}</span>
+    <span class="rowlabel" id="pickerGroupLabel">{{T:panel.searchGroups}}</span>
     <button type="button" class="choice-btn" id="pickerGroupBtn" aria-haspopup="listbox" aria-labelledby="pickerGroupLabel" title="{{T:panel.chooseGroup}}"></button>
     <div class="choice-menu menu-card" id="pickerGroupMenu" role="listbox" aria-label="{{T:panel.groups}}" data-w="anchor" hidden></div>
   </div>
@@ -545,6 +545,7 @@ window.wudictFontScale=(function(){
     <label class="rowlabel" title="{{T:panel.ignoreDiacriticsHint}}"><input class="panel-checkbox" type="checkbox" id="ignoreDiacritics"> {{T:panel.ignoreDiacritics}}</label>
   </div>
   <div class="facts headword-threshold-row">
+    <label class="rowlabel" for="headwordApplyThreshold">{{T:panel.headwordApplyThreshold}}</label>
     <select id="headwordApplyThreshold" aria-label="{{T:panel.headwordApplyThreshold}}">
       <option value="0">{{T:panel.searchAsYouTypeNever}}</option>
       <option value="10000">{{T:panel.searchAsYouTypeBelow10k}}</option>
@@ -554,7 +555,6 @@ window.wudictFontScale=(function(){
       <option value="1000000">{{T:panel.searchAsYouTypeBelow1m}}</option>
       <option value="-1">{{T:panel.searchAsYouTypeAlways}}</option>
     </select>
-    <label class="rowlabel" for="headwordApplyThreshold">{{T:panel.headwordApplyThreshold}}</label>
   </div>
 </details>
 
@@ -3379,6 +3379,14 @@ for(const sect of $("panel").querySelectorAll("details[data-panel-section]")){
   });
 }
 function panelRowColumns(){
+  for(const reading of $("panel").querySelectorAll(".facts.reading")){
+    let width=0;
+    for(const label of reading.querySelectorAll(":scope > .seg > span")){
+      const range=document.createRange();range.selectNodeContents(label);
+      width=Math.max(width,range.getBoundingClientRect().width);
+    }
+    if(width>0)reading.style.setProperty("--rlcol",Math.ceil(width)+"px");
+  }
   for(const sect of $("panel").querySelectorAll(".sect")){
     if(sect.matches("details:not([open])"))continue;
     const rows=[...sect.querySelectorAll(":scope > .facts")];

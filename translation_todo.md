@@ -1,5 +1,7 @@
 # Localization: status and next tasks
 
+2026-10-19 Results group picker label is Groups: / Группы:. Runtime layout verification is pending.
+
 2026-10-19 Search as you type options now read Never / Below … / Always and Никогда / Менее … / Всегда. Runtime layout verification is pending.
 
 2026-10-19 Search as you type: shortened the Settings label in EN/RU and added Always / Всегда for unrestricted input search. Runtime wording/layout verification is pending.

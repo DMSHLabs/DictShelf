@@ -15,11 +15,9 @@
   style.textContent += `#serverWorkNotice{margin:0 6px 6px;border:1px solid var(--accent,var(--line,#b9a98e));border-radius:10px;background-color:var(--paper-bg,var(--bg,#fff));background-image:repeating-linear-gradient(135deg,color-mix(in srgb,var(--accent,#865000) 13%,transparent) 0px,color-mix(in srgb,var(--accent,#865000) 13%,transparent) 7px,transparent 7px,transparent 15px);box-shadow:var(--shadow,0 2px 10px #0003)}#serverWorkBacking{position:fixed;left:0;right:0;bottom:var(--wd-vv-bottom,0px);height:var(--workh,0px);z-index:9998;background-color:var(--paper-bg,var(--bg,#fff));background-image:var(--paper-bk-image,none);background-size:100vw 100vh;background-position:center bottom;background-repeat:no-repeat;pointer-events:none}#serverWorkBacking[hidden]{display:none}`;
   style.textContent += `#serverWorkNotice{flex-wrap:wrap}#serverWorkNotice span{flex:1 1 220px;overflow-wrap:anywhere}#serverWorkNotice button{flex:0 1 auto;max-width:100%;white-space:normal;overflow-wrap:anywhere}`;
   style.textContent += `html.server-work-active body>.card{margin-bottom:var(--workh,0px)}html.server-work-active #panel.show{bottom:var(--workh,0px)}@media(max-width:600px){html.server-work-active dialog.group-dialog.panel-card{bottom:calc(16px + var(--wd-inset-bottom,0px) + var(--workh,0px))}}`;
-  // Browse is a full-height flex workspace. Keep its one shared task panel in
-  // normal flow at the bottom so it takes space from the word pane instead of
-  // covering the page controls or the list. The fixed backing is only for
-  // surfaces where the notice floats over the app.
-  style.textContent += `html.server-work-active body.workspace-browse>#serverWorkNotice{position:static;inset:auto;flex:none;width:auto;margin:0 6px 6px}body.workspace-browse>#serverWorkBacking{display:none!important}`;
+  // Browse keeps progress above its footer in normal flow: only the word pane
+  // shrinks when a task appears, while the input stays at the viewport bottom.
+  style.textContent += `html.server-work-active body.workspace-browse .workspace-browser>#serverWorkNotice{position:static;inset:auto;flex:none;width:auto;margin:0 6px 6px}body.workspace-browse #serverWorkBacking{display:none!important}`;
   style.textContent += `@media(min-width:601px){html.server-work-active dialog:is(#groupEditor,#dictSettings,#webDictionaryPicker):has(> #serverWorkNotice){box-sizing:border-box;padding-bottom:var(--workh,0px)}}html.server-work-active .mask-dock{bottom:var(--workh,0px)}`;
   style.textContent += `html.server-work-active #bulkIndexStatus,html.server-work-active #reindexLine,html.server-work-active #clearDatabaseStatus,html.server-work-active #clearDatabaseProgress{display:none!important}`;
   style.textContent += `[data-work-locked]{opacity:.45!important;pointer-events:none!important;cursor:default!important}`;
@@ -218,9 +216,13 @@
   // the most recently opened modal so it remains visible and its Stop is usable.
   const dialogs = [];
   function place() {
-    const parent = dialogs.filter(d => d.open && d.isConnected).at(-1) || document.body;
+    const browse = document.body.classList.contains('workspace-browse') ? document.querySelector('.workspace-browser') : null;
+    const parent = dialogs.filter(d => d.open && d.isConnected).at(-1) || browse || document.body;
     if (backing.parentNode !== parent) parent.append(backing);
-    if (box.parentNode !== parent) parent.append(box);
+    const footer = parent === browse ? browse.querySelector(':scope > footer') : null;
+    if (footer) {
+      if (box.parentNode !== parent || box.nextElementSibling !== footer) parent.insertBefore(box, footer);
+    } else if (box.parentNode !== parent) parent.append(box);
     const local = document.getElementById('workNotice');
     if (local && local.parentNode !== parent) parent.append(local);
   }
