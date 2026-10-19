@@ -242,10 +242,6 @@ html[data-shell-image] dialog.browse-goto{background-image:var(--paper-bk-image)
 .strip-track{position:relative;height:100%;min-width:100%}
 .strip button.strip-chip{position:absolute;top:50%;transform:translateY(-50%);margin:0;min-width:0}
 .strip button.strip-measure{position:absolute!important;left:0!important;top:0!important;visibility:hidden!important;pointer-events:none!important}
-.strip-nav{box-sizing:border-box;display:grid;place-items:center;flex:none;width:2rem;min-height:calc(var(--ui-control-height) * 1em);padding:0;border:0;background:transparent;color:var(--fg);cursor:pointer}
-.strip-nav svg{display:block;width:1.35rem;height:1.35rem}
-.strip-nav:disabled{opacity:.3;cursor:default}
-.strip-nav:not(:disabled):hover{color:var(--accent)}
 .strip button{font:inherit;font-size:calc(var(--ui-font-addition) * 1rem);line-height:1;background:none;border:0;color:var(--label);
   cursor:pointer;padding:.36rem .5rem;border-radius:7px;flex:0 0 auto;min-width:1.85rem;text-align:center}
 .strip button.strip-chip{box-sizing:border-box;max-width:12em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -365,9 +361,9 @@ html[data-desktop-image] .chooser-list :is(.list-search-dock,.list-search-input,
     </div>
   </div>
   <div class="strip-wrap" id="stripWrap">
-    <button type="button" class="strip-nav" id="stripPrev" aria-label="{{T:browse.scrollLettersLeft}}" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 4-8 8 8 8"/></svg></button>
+    <button type="button" class="wudict-ribbon-nav" id="stripPrev" aria-label="{{T:browse.scrollLettersLeft}}" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 4-8 8 8 8"/></svg></button>
     <nav class="strip" id="strip" aria-label="{{T:browse.jumpLetter}}"><div class="strip-track" id="stripTrack"><button class="strip-measure" id="stripMeasure" type="button" aria-hidden="true" tabindex="-1">M</button></div></nav>
-    <button type="button" class="strip-nav" id="stripNext" aria-label="{{T:browse.scrollLettersRight}}" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 4 8 8-8 8"/></svg></button>
+    <button type="button" class="wudict-ribbon-nav" id="stripNext" aria-label="{{T:browse.scrollLettersRight}}" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 4 8 8-8 8"/></svg></button>
   </div>
   <div class="strip-scrollbar" id="stripScrollbar" role="scrollbar" aria-label="{{T:browse.jumpLetter}}" aria-controls="strip" aria-orientation="horizontal" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0" tabindex="0" hidden><div class="strip-scroll-thumb" id="stripScrollThumb"></div></div>
 </header>

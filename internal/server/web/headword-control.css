@@ -33,3 +33,7 @@
 .headword-control .headword-control-previous{grid-area:previous}
 .headword-control .headword-control-next{grid-area:next}
 .headword-control .headword-control-apply{grid-area:apply}
+.wudict-ribbon-nav{box-sizing:border-box;display:grid;place-items:center;flex:none;width:2rem;min-height:calc(var(--ui-control-height) * 1em);padding:0;border:0;background:transparent;color:var(--fg);cursor:pointer}
+.wudict-ribbon-nav svg{display:block;width:1.35rem;height:1.35rem}
+.wudict-ribbon-nav:disabled{opacity:.3;cursor:default}
+.wudict-ribbon-nav:not(:disabled):hover{color:var(--accent)}
