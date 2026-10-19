@@ -1179,7 +1179,7 @@ html:has(#panel.show) .bar{padding-right:var(--wd-sbw,0px)}
      the search. It acts on the list the field narrows, so it shows only while
      the field is empty and something is pinned (D166). -->
 <div class="pfrow"><label class="pfind"><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" d="M7.1 2.4a4.7 4.7 0 1 0 0 9.4 4.7 4.7 0 0 0 0-9.4zm3.6 8.3l3 3"/></svg>
-<input type="search" id="panelFind" placeholder="→ title or group" autocomplete="off" enterkeyhint="done" aria-label="Find a dictionary by title or group"></label>
+<input type="search" id="panelFind" placeholder="→ title or group" enterkeyhint="done" aria-label="Find a dictionary by title or group"></label>
 <button type="button" id="azBtn" aria-expanded="false" aria-controls="azAsk" title="Unpin all dictionaries and list them A–Z" hidden>A–Z</button></div>
 <div class="azq" id="azAsk" hidden></div></div>
 <div class="panel-scroll">
@@ -2863,6 +2863,8 @@ function showPanel(){panelSnap=panelState();
   // before the lock: once the root stops scrolling the bar is gone to measure
   document.documentElement.style.setProperty("--wd-sbw",
     Math.max(0,innerWidth-document.documentElement.clientWidth)+"px");
+  // the setup drawer is a detour, never where an opening lands
+  $("folders").open=false;
   $("panel").classList.add("show");loadFolders();
   // A touch keyboard would cover half the list it is meant to narrow, so on
   // a touch screen the field waits for a tap.
@@ -2871,8 +2873,6 @@ function hidePanel(){
   if(!$("panel").classList.contains("show"))return;
   $("panel").classList.remove("show");
   askAZ(false);
-  // every opening starts from the whole list
-  if($("panelFind").value){$("panelFind").value="";findDicts()}
   const was=panelSnap;panelSnap=null;
   /* Only an "All dictionaries" answer is built from the enabled set. A view
      scoped to one dictionary — by the selector, or one-shot by an entry:// link
@@ -2988,15 +2988,8 @@ async function loadFolders(){
 }
 // cfgInfo is fetched at boot, so "have we loaded?" is not the same question as
 // "has this section been drawn?" — ask the one that is meant.
-//
-// Whether the setup drawer is open is view state for THIS browser, like the
-// wide toggle and the theme: it is not a property of the person or of the
-// collection, so it does not belong in state.json (D143). Default closed — a
-// reader who never opens it never sees it again.
-if(localStorage.getItem("wudict_folders")==="1")$("folders").open=true;
 $("folders").addEventListener("toggle",()=>{
   if($("folders").open&&!$("folderBody").childNodes.length)loadFolders();
-  lsSet("wudict_folders",$("folders").open?"1":"");
 });
 $("folderBody").addEventListener("click",e=>{
   const p=e.target.closest(".path");if(!p)return;
