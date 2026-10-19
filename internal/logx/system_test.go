@@ -69,8 +69,11 @@ func TestSystemLogConcurrentWritesRotationAndSnapshots(t *testing.T) {
 	if len(seen) != workers*records {
 		t.Fatalf("lost records: got %d", len(seen))
 	}
-	for _, name := range []string{"system.log", "system.log.1"} {
-		st, err := os.Stat(filepath.Join(root, name))
+	systemMu.Lock()
+	current := systemSessionPath
+	systemMu.Unlock()
+	for _, path := range []string{current, current + ".1"} {
+		st, err := os.Stat(path)
 		if err != nil || st.Size() > SystemLogLimit {
 			t.Fatalf("rotation size: %v", err)
 		}
@@ -97,37 +100,41 @@ func TestSystemLogWarningsRedactionAndUnavailableStorage(t *testing.T) {
 	System("%s", fmt.Sprint("original failure"))
 }
 
-func TestSystemLogKeepsFiveFilesAcrossRestart(t *testing.T) {
+func TestSystemLogKeepsFiveSessionsAcrossRestart(t *testing.T) {
 	root := isolatedSystemLog(t)
-	if err := os.MkdirAll(root, 0700); err != nil {
-		t.Fatal(err)
-	}
-	path := filepath.Join(root, "system.log")
 	for generation := 0; generation < 7; generation++ {
-		marker := fmt.Sprintf("generation=%d\n", generation)
-		content := marker + strings.Repeat("x", SystemLogLimit-len(marker))
-		if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+		SetSystemLogRoot(func() string { return strings.TrimSuffix(root, ".logs") })
+		if err := StartSystemLogSession(); err != nil {
 			t.Fatal(err)
 		}
-		System("rotation=%d", generation)
+		System("generation=%d", generation)
 	}
-	for i := 1; i < SystemLogFiles; i++ {
-		content, err := os.ReadFile(fmt.Sprintf("%s.%d", path, i))
-		if err != nil || !strings.HasPrefix(string(content), fmt.Sprintf("generation=%d\n", 7-i)) {
-			t.Fatalf("archive %d: %v", i, err)
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var sessions []string
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), "system_") && strings.HasSuffix(entry.Name(), ".log") && !strings.Contains(entry.Name(), ".log.") {
+			sessions = append(sessions, entry.Name())
 		}
 	}
-	if _, err := os.Stat(path + ".5"); !os.IsNotExist(err) {
-		t.Fatalf("unexpected sixth file: %v", err)
+	if len(sessions) != SystemLogFiles {
+		t.Fatalf("retained %d sessions, want %d", len(sessions), SystemLogFiles)
 	}
-	SetSystemLogRoot(func() string { return strings.TrimSuffix(root, ".logs") })
-	System("after restart")
 	snapshot, err := SystemSnapshot()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(snapshot), "generation=3") || !strings.Contains(string(snapshot), "rotation=6") || !strings.Contains(string(snapshot), "after restart") {
-		t.Fatal("restart or export lost retained history")
+	for generation := 0; generation < 7-SystemLogFiles; generation++ {
+		if strings.Contains(string(snapshot), fmt.Sprintf("generation=%d", generation)) {
+			t.Fatalf("expired generation %d remains in export", generation)
+		}
+	}
+	for generation := 7 - SystemLogFiles; generation < 7; generation++ {
+		if !strings.Contains(string(snapshot), fmt.Sprintf("generation=%d", generation)) {
+			t.Fatalf("export lost retained generation %d", generation)
+		}
 	}
 }
 

@@ -1223,8 +1223,6 @@ func cmdServe(args []string) (err error) {
 	}
 	logx.V("config: source=%q dictDirs=%v dbDir=%q addr=%s speexdec=%s",
 		cfg.Source, cfg.DictDirs, cfg.DBDir, cfg.Addr(), cfg.Speexdec)
-	logx.System("server start build=%q runtime=%s platform=%s/%s", Version, runtime.Version(), runtime.GOOS, runtime.GOARCH)
-	defer func() { logx.System("server exit error=%q", fmt.Sprint(err)) }()
 
 	// The library (DB_DIR) is wudict's own working area, never a folder of
 	// user dictionaries. Using it as DICT_DIR is a
@@ -1234,6 +1232,11 @@ func cmdServe(args []string) (err error) {
 	if err != nil {
 		return err
 	}
+	if logErr := logx.StartSystemLogSession(); logErr != nil {
+		log.Printf("could not start system log session: %v", logErr)
+	}
+	logx.System("server start build=%q runtime=%s platform=%s/%s", Version, runtime.Version(), runtime.GOOS, runtime.GOARCH)
+	defer func() { logx.System("server exit error=%q", fmt.Sprint(err)) }()
 	if listenerlessDesktop {
 		if crashErr := logx.ConfigureCrashLog(); crashErr != nil {
 			log.Printf("could not configure crash output: %v", crashErr)

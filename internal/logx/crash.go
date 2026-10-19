@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"runtime/debug"
+	"strings"
 )
 
 // setCrashOutputFile directs unrecovered Go panics and runtime-fatal errors to
@@ -19,29 +20,27 @@ func setCrashOutputFile(f *os.File) error {
 	return debug.SetCrashOutput(f, debug.CrashOptions{})
 }
 
-// ConfigureCrashLog installs a separate crash file beside the retained system
-// log. A non-empty file from the preceding run is kept as crash.log.1 so a
-// normal restart does not erase the dump before the user can export it.
+// ConfigureCrashLog installs a crash file paired with the current run's system
+// log, preserving the traceback beside the diagnostics from the same run.
 func ConfigureCrashLog() error {
+	if err := StartSystemLogSession(); err != nil {
+		return err
+	}
 	systemMu.Lock()
 	root := systemDir()
+	sessionPath := systemSessionPath
 	systemMu.Unlock()
 	if root == "" {
 		return fmt.Errorf("system log location is not configured")
 	}
+	if sessionPath == "" {
+		return fmt.Errorf("system log session is not configured")
+	}
 	if err := os.MkdirAll(root, 0o700); err != nil {
 		return err
 	}
-	path := filepath.Join(root, "crash.log")
-	if st, err := os.Stat(path); err == nil && st.Size() > 0 {
-		previous := path + ".1"
-		if err := os.Remove(previous); err != nil && !os.IsNotExist(err) {
-			return err
-		}
-		if err := os.Rename(path, previous); err != nil {
-			return err
-		}
-	}
+	stamp := strings.TrimSuffix(strings.TrimPrefix(filepath.Base(sessionPath), "system_"), ".log")
+	path := filepath.Join(root, "crash_"+stamp+".log")
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
 	if err != nil {
 		return err
@@ -52,5 +51,8 @@ func ConfigureCrashLog() error {
 	}
 	System("Go crash output armed file=%q runtime=%s platform=%s/%s pid=%d", path,
 		runtime.Version(), runtime.GOOS, runtime.GOARCH, os.Getpid())
+	if err := configureNativeCrashCapture(root, sessionPath); err != nil {
+		System("native crash capture unavailable error=%q", err)
+	}
 	return nil
 }

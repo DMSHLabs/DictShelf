@@ -8,7 +8,7 @@
   "use strict";
 
   const thresholdKey = "wudict_browse_mask_threshold";
-  const thresholds = [0, 10000, 50000, 100000, 500000, 1000000];
+  const thresholds = [-1, 0, 10000, 50000, 100000, 500000, 1000000];
   const icons = {
     search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 5 5"/></svg>',
     filter: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h18l-7 8v5l-4 2v-7z"/></svg>'
@@ -121,7 +121,7 @@
     return Object.freeze({
       elements: el,
       threshold,
-      needsApply: total => Number(total || 0) >= threshold(),
+      needsApply: total => threshold() !== -1 && Number(total || 0) >= threshold(),
       cacheRead,
       cacheWrite,
       paint,

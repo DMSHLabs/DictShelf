@@ -247,6 +247,7 @@ html[data-shell-image] dialog.browse-goto{background-image:var(--paper-bk-image)
 .strip-nav:not(:disabled):hover{color:var(--accent)}
 .strip button{font:inherit;font-size:calc(var(--ui-font-addition) * 1rem);line-height:1;background:none;border:0;color:var(--label);
   cursor:pointer;padding:.36rem .5rem;border-radius:7px;flex:0 0 auto;min-width:1.85rem;text-align:center}
+.strip button.strip-chip{box-sizing:border-box;max-width:12em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .strip button:hover{background:var(--line-soft);color:var(--fg)}
 .strip button[aria-current=true]{background:var(--accent);color:#fff}
 
@@ -716,7 +717,7 @@ function measureStripItems(items){
   const strip=$("strip"),track=$("stripTrack"),sample=$("stripMeasure"),style=getComputedStyle(sample);
   const font=[style.fontStyle,style.fontVariant,style.fontWeight,style.fontSize,style.fontFamily].join(" ");
   const pad=parseFloat(style.paddingLeft)+parseFloat(style.paddingRight)+parseFloat(style.borderLeftWidth)+parseFloat(style.borderRightWidth);
-  const minWidth=parseFloat(style.minWidth)||0,gap=parseFloat(getComputedStyle(strip).columnGap)||0;
+  const minWidth=parseFloat(style.minWidth)||0,maxWidth=(parseFloat(style.fontSize)||16)*12,gap=parseFloat(getComputedStyle(strip).columnGap)||0;
   const height=sample.getBoundingClientRect().height;
   const key=[font,pad,minWidth,gap,height,style.letterSpacing].join("|");
   const canvas=measureStripItems.canvas||(measureStripItems.canvas=document.createElement("canvas"));
@@ -746,7 +747,7 @@ function measureStripItems(items){
   while(measureEnd<exactTarget&&measureEnd-measuredBefore<512){
     const i=measureEnd;
     const label=unesc(items[i].l),text=ctx.measureText(label).width+Math.max(0,label.length-1)*letterSpacing;
-    const width=Math.max(minWidth,text+pad);if(stripWidths.length)stripTotalWidth+=gap;stripOffsets.push(stripTotalWidth);stripWidths.push(width);stripTotalWidth+=width;
+    const width=Math.max(minWidth,Math.min(maxWidth,text+pad));if(stripWidths.length)stripTotalWidth+=gap;stripOffsets.push(stripTotalWidth);stripWidths.push(width);stripTotalWidth+=width;
     measureEnd++;
     if(performance.now()-batchStarted>=8)break;
   }
@@ -796,7 +797,7 @@ function renderVirtualStrip(force=false){
   for(let i=start;i<end;i++){
     const item=items[i],label=unesc(item.l),button=document.createElement("button");
     button.type="button";button.className="strip-chip";button.dataset.o=String(item.o);
-    button.title=label+" — "+t("browse.words",{count:item.n,number:num(item.n)});
+    button.title=label+" — "+t("browse.words",{count:item.n,number:num(item.n)});button.setAttribute("aria-label",label);
     button.textContent=label;button.style.left=stripOffsets[i]+"px";button.style.width=stripWidths[i]+"px";
     button.disabled=browsePageBusy;button.setAttribute("aria-posinset",String(i+1));button.setAttribute("aria-setsize",String(items.length));
     if(i===stripCurrentIndex)button.setAttribute("aria-current","true");
