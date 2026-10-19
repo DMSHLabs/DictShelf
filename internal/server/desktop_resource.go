@@ -117,7 +117,7 @@ func (s *Server) DesktopResource(method, rawURL string, requestHeaders map[strin
 		req.Header.Set("Authorization", "Bearer "+s.AuthToken)
 	}
 	if requestHeaders != nil {
-		for _, name := range []string{"Range", "If-Range", "If-Modified-Since", "If-None-Match", "If-Unmodified-Since", "If-Match"} {
+		for _, name := range []string{"Range", "If-Range", "If-Modified-Since", "If-None-Match", "If-Unmodified-Since", "If-Match", "Accept-Language"} {
 			if value := requestHeaders[name]; value != "" {
 				req.Header.Set(name, value)
 			}
@@ -152,9 +152,10 @@ func (s *Server) DesktopResource(method, rawURL string, requestHeaders map[strin
 		response.header.Set("Content-Type", "text/html; charset=utf-8")
 		response.header.Set("Cache-Control", "no-store")
 		_, _ = response.Write([]byte(desktopStorageMigrationPage))
-	} else if page, etag, cache, ok := s.desktopPage(u.Path, u.Query()); ok {
+	} else if page, etag, cache, ok := s.desktopPage(u.Path, u.Query(), requestHeaders["Accept-Language"]); ok {
 		response.header.Set("Content-Type", "text/html; charset=utf-8")
 		response.header.Set("Cache-Control", cache)
+		response.header.Add("Vary", "Accept-Language")
 		if etag != "" {
 			response.header.Set("ETag", etag)
 			http.ServeContent(response, req, "", time.Time{}, bytes.NewReader(page))
@@ -244,19 +245,19 @@ func (s *Server) callDesktopOperation(w http.ResponseWriter, r *http.Request, op
 	operation()
 }
 
-func (s *Server) desktopPage(path string, query url.Values) ([]byte, string, string, bool) {
+func (s *Server) desktopPage(path string, query url.Values, acceptLanguage string) ([]byte, string, string, bool) {
 	switch path {
 	case "/":
-		page, etag := s.indexPage(query.Get("style") == "off")
+		page, etag := s.indexPageFor(query.Get("style") == "off", acceptLanguage)
 		return page, etag, "no-cache", true
 	case "/setup":
-		return s.setupPage(), "", "no-cache", true
+		return s.setupPageFor(acceptLanguage), "", "no-cache", true
 	case "/lemmas":
-		return s.lemmasPage(), "", "no-cache", true
+		return s.lemmasPageFor(acceptLanguage), "", "no-cache", true
 	case "/groups":
-		return s.groupsPageHTML(), "", "no-cache", true
+		return s.groupsPageHTMLFor(acceptLanguage), "", "no-cache", true
 	case "/browse":
-		return s.browsePageHTML(), "", "no-cache", true
+		return s.browsePageHTMLFor(acceptLanguage), "", "no-cache", true
 	case "/double-tap-probe":
 		return doubleTapProbe, "", "no-store", true
 	default:

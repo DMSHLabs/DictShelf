@@ -239,6 +239,7 @@
   "facets.medical": "Медицина",
   "facets.legal": "Право",
   "facets.monolingual": "Одноязычные: {language}",
+  "language.system": "Система",
   "language.saveFailed": "Не удалось сохранить язык. Попробуйте ещё раз.",
   "browse.title": "Просмотр словаря",
   "browse.back": "Вернуться к поиску",

@@ -103,7 +103,7 @@ final class GoAppResource {
         Map<String, String> headers = request.getRequestHeaders();
         if (headers != null) {
             String[] allowed = {"Range", "If-Range", "If-Modified-Since", "If-None-Match",
-                    "If-Unmodified-Since", "If-Match"};
+                    "If-Unmodified-Since", "If-Match", "Accept-Language"};
             for (String canonical : allowed) {
                 for (Map.Entry<String, String> entry : headers.entrySet()) {
                     if (canonical.equalsIgnoreCase(entry.getKey())) {

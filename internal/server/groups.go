@@ -139,11 +139,16 @@ var groupsPage = bytes.ReplaceAll(groupsHTML, []byte("{{CSS}}"), []byte(cssTag))
 func (s *Server) handleGroupsPage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache")
-	_, _ = w.Write(s.groupsPageHTML())
+	w.Header().Add("Vary", "Accept-Language")
+	_, _ = w.Write(s.groupsPageHTMLFor(r.Header.Get("Accept-Language")))
 }
 
 func (s *Server) groupsPageHTML() []byte {
+	return s.groupsPageHTMLFor("")
+}
+
+func (s *Server) groupsPageHTMLFor(acceptLanguage string) []byte {
 	page := bytes.ReplaceAll(groupsPage, []byte("{{PRESETS}}"), []byte(s.pagePresetLinks()))
 	page = bytes.ReplaceAll(page, []byte("{{WORKSPACECSS}}"), []byte(assetTag(workspaceCSS)))
-	return s.renderUserUI(string(page), s.reg.prefs.Language())
+	return s.renderUserUIChoice(string(page), s.reg.prefs.ResolvedLanguage(acceptLanguage), s.reg.prefs.Language())
 }

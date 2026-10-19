@@ -1597,6 +1597,10 @@ dialog.panel-card:not([open]){display:none}
 #pickerGroupBtn>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #languageError{margin:calc(var(--ui-addition-gap) * 1em) 0 0;color:var(--danger);font-size:calc(var(--ui-hint-font-size) * 1rem)}
 #languageError[hidden]{display:none}
+#panel .language-setting{margin:0 var(--sp-2) var(--sp-1);padding:calc(var(--ui-section-space-before) * 1em) 0 var(--sp-1);border-bottom:1px solid color-mix(in srgb,var(--fg) 22%,transparent)}
+#panel .facts.language-row{flex-wrap:nowrap}
+#panel .facts.language-row>.rowlabel{flex:0 0 auto;white-space:nowrap}
+#panel .facts.language-row>#languageBtn{width:auto;min-width:0;flex:1 1 0}
 /* A label for the control on its row, in the register the segs' labels use. */
 .facts .rowlabel{font-size:calc(var(--ui-font-base) * 1rem);line-height:1.2;color:var(--label-quiet)}
 /* The collection's count, on its own line under the heading: the answer to "is
@@ -1647,7 +1651,7 @@ dialog.panel-card:not([open]){display:none}
    `.facts` row in the panel has a `.rowlabel`; the reading strip's labels
    measure into their own section's column (see "One label column" there). */
 .facts:has(>#fsCtl)>.rowlabel,.facts:has(>#fwCtl)>.rowlabel,
-.facts:has(>#looksChoice)>.rowlabel,.facts:has(>#compactSeg)>.rowlabel,
+.facts:has(>#looksControls)>.rowlabel,.facts:has(>#compactSeg)>.rowlabel,
 .facts:has(>#examplesSeg)>.rowlabel,.facts:has(>#sbarSeg)>.rowlabel,
 .facts:has(>#articleFontSelect)>.rowlabel{
   flex:0 1 var(--rlcol,auto);min-width:0;white-space:nowrap;overflow:hidden;
@@ -1665,7 +1669,9 @@ dialog.panel-card:not([open]){display:none}
 #panel .facts .choice-btn{gap:calc(var(--ui-control-gap) * 1em)}
 .facts:has(>#articleFontSelect)>.rowlabel{flex:0 0 var(--rlcol,auto)}
 .facts>#articleFontSelect{box-sizing:border-box;width:auto;flex:0 1 10.5em;min-width:0}
-.facts:has(>#looksChoice)>#looksChoice{width:auto;flex:0 1 auto;min-width:6.5em}
+.facts:has(>#looksControls)>.rowlabel{flex:0 1 var(--rlcol,auto)}
+#looksControls{display:flex;flex:0 1 auto;flex-wrap:wrap;align-items:center;gap:calc(var(--ui-control-gap) * 1em);min-width:0}
+#looksControls>#looksChoice{box-sizing:border-box;width:auto;flex:0 1 auto;min-width:6.5em}
 /* The row's three actions: square, drawn marks. The app's other icon-sized
    controls are 22px and these are 32, because they are the only way to save,
    update or delete a preset and a miss costs a window - the row is 32px tall
@@ -1674,11 +1680,11 @@ dialog.panel-card:not([open]){display:none}
    They are one flex item, so the row's wrap takes all three to the second line
    together instead of parting them. The gap is the row's own .45em, so on one
    line the trio is spaced exactly as loose siblings were. */
-#panel .facts:has(>#looksChoice)>.iconrow{display:flex;align-items:center;gap:calc(var(--ui-control-gap) * 1em);
+#panel #looksControls>.iconrow{display:flex;align-items:center;gap:calc(var(--ui-control-gap) * 1em);
   flex:none}
-.facts:has(>#looksChoice)>.iconrow>.icon-btn{width:calc(var(--ui-control-height) * 2em);height:calc(var(--ui-control-height) * 1em);padding:0;
+#looksControls>.iconrow>.icon-btn{width:calc(var(--ui-control-height) * 2em);height:calc(var(--ui-control-height) * 1em);padding:0;
   display:flex;align-items:center;justify-content:center}
-.facts:has(>#looksChoice)>.iconrow>.icon-btn svg{width:16px;height:16px}
+#looksControls>.iconrow>.icon-btn svg{width:16px;height:16px}
 #fsCtl,#fwCtl{flex:none;display:flex;align-items:center;gap:calc(var(--ui-control-gap) * 1em)}
 #fsCtl button,#fwCtl button{font:inherit;line-height:1;margin:0;padding:0;cursor:pointer;
   display:flex;align-items:center;justify-content:center;
@@ -1749,7 +1755,7 @@ dialog.panel-card:not([open]){display:none}
    the seg to its row is what lets the column inside it be the column; the
    strip's content is left-aligned either way, so nothing but the pairs' own
    starting point moves. */
-.facts.reading>.seg{align-self:stretch;width:100%}
+.facts.reading>.seg{align-self:flex-start;width:auto}
 .facts .history-controls{display:flex;align-items:center;flex-wrap:wrap;gap:calc(var(--ui-control-gap) * 1em);
   font-size:calc(var(--ui-font-base) * 1rem)}
 .facts .history-setting{display:inline-flex;align-items:center;gap:calc(var(--ui-control-gap) * 1em);font-size:calc(var(--ui-font-base) * 1rem)}

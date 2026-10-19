@@ -1,5 +1,7 @@
 # Localization: status and next tasks
 
+2026-10-19 Settings → Language: made it a permanent first row outside the collapsible sections, with label and dropdown on one line; System is the default before English and Русский. The saved choice resolves from the requesting browser/app locale (English/Russian supported, English fallback); Android native resources follow device configuration. Go build passes; runtime and Android Java verification pending.
+
 2026-10-19 Added Settings → Appearance Fonts selector (System/Charis/Gentium) and EN/RU labels. Go build passes; runtime label/layout and device rendering remain unverified.
 
 2026-10-19 Export dialog: added the group-selection checkbox label; success status is now only n of T exported / Экспортировано: n из T. Runtime layout check remains pending.
@@ -93,10 +95,10 @@ Continue to commit, merge into `dev`, and publish only when requested; do not in
 
 ## Already implemented
 
-- [x] Manual English / Русский selection in Settings, English default, `language` persisted in `state.json`, applied through reload.
+- [x] Settings language selector with System (default), English and Русский; the saved choice is persisted in `state.json`, System resolves from the app/browser locale with English fallback, explicit choices override it and apply through reload.
 - [x] Catalogs, fallback, interpolation, plural forms, synchronous bootstrap, and language-aware page caching.
 - [x] Browse, including empty states, counts, and navigation.
-- [x] Main/FOSS/Play Android resources and resource contexts following the manual language choice.
+- [x] Main/FOSS/Play Android resources and resource contexts following explicit language choices or the device locale for System.
 - [x] Settings, appearance, built-in layer/look names, CSS editor, and related dialogs.
 - [x] Dictionary settings and groups: cards, indexes, removal, confirmations, and known group-validation errors.
 - [x] Folders: hints, server-generated introduction, import, download, and counts.
@@ -170,7 +172,7 @@ Do not run these actions automatically in the emulator: the user has currently t
 - [ ] **Sentence fragments:** the Folders page and saved-path hint still have separate text fragments around DOM nodes. If the next language needs a different word order, move to a safe template with DOM parameters; do not insert unchecked HTML from the catalog.
 - [ ] **Simplifying knowledge storage:** `docs/I18N.md` contains early stage history; rules now live in `translation.md`, and remaining work lives here. Do not maintain three independent TODO lists. Preserve verification facts during future cleanup without presenting them as new checks.
 - [ ] **Key names:** do not rename working `panel.*`/`pages.*` and other namespaces in bulk without a reason. If a key is misleading, change it together with every reference and check.
-- [ ] **A new language:** this is a separate task. The en/ru allowlist is currently repeated in the Go loader and normalization/validation, Settings drop-down, Android `UiLanguage`, checks, and `/api/language` schemas in `internal/server/web/openapi.yaml`. One new JSON file is not enough; Android resources, plural forms, fallback, and tests are needed. Keep static-slot keys as strings and check dynamic key sets too. Do not enable automatic system-language selection.
+- [ ] **A new language:** this is a separate task. The en/ru allowlist is repeated in the Go loader and normalization/validation, Settings drop-down, Android `UiLanguage`, checks, and `/api/language` schemas in `internal/server/web/openapi.yaml`. One new JSON file is not enough; Android resources, plural forms, fallback, and tests are needed. Keep static-slot keys as strings and check dynamic key sets too.
 - [ ] **RTL:** not implemented. Direction, CSS, and menus require separate verification; do not promise Arabic/Hebrew support after adding only a catalog.
 - [ ] **Main-page `html lang`:** do not switch it before separating the article-segmentation fallback from the UI language. Retaining `en` is currently intentional. This is an accessibility/language-architecture task, not a mechanical attribute replacement.
 

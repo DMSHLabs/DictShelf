@@ -203,6 +203,11 @@ async function looksApply(id) {
 
 async function looksApplied(answer) {
   LOOKS = answer.payload;
+  const appliedLook = LOOKS && LOOKS.looks.find((l) => l.id === answer.applied);
+  if (appliedLook && appliedLook.builtin) {
+    applyArticleFont("charis", true);
+    applyHideUnmarkedExamples(true, true);
+  }
   // The PAGE's own halves go back FIRST: the backdrop over the bridge, and the
   // size and the weight onto the element - the server's copy of those is a
   // file, and neither the stepper nor the article's custom property reads one.

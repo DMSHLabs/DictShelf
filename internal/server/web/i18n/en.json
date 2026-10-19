@@ -239,6 +239,7 @@
   "facets.medical": "Medicine",
   "facets.legal": "Law",
   "facets.monolingual": "Monolingual {language}",
+  "language.system": "System",
   "language.saveFailed": "Could not save the language. Try again.",
   "browse.title": "Browse",
   "browse.back": "Back to search",

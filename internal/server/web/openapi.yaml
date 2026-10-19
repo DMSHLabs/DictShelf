@@ -1746,23 +1746,24 @@ paths:
       tags: [internal]
       operationId: getInterfaceLanguage
       x-internal: true
-      summary: Read the installation's manually selected interface language
-      description: Defaults to English. Does not inspect system or browser locales or change dictionary languages.
+      summary: Read the interface-language choice
+      description: Defaults to System, which follows the requesting app or browser's preferred language when supported (English or Russian), then falls back to English. An explicit English or Russian choice overrides it. Dictionary languages are unchanged.
       responses:
         '200':
-          description: Current interface language.
+          description: Saved choice and its effective language for this request.
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  language: { type: string, enum: [en, ru] }
+                  language: { type: string, enum: [system, en, ru] }
+                  resolved: { type: string, enum: [en, ru] }
     put:
       tags: [internal]
       operationId: setInterfaceLanguage
       x-internal: true
       summary: Save the interface language for subsequent page loads
-      description: Updates only the language; dictionary preferences and content are unchanged. Reload the page to apply.
+      description: Saves System, English or Russian. System follows the requesting app or browser's preferred language. Reload the page to apply.
       requestBody:
         required: true
         content:
@@ -1771,7 +1772,7 @@ paths:
               type: object
               required: [language]
               properties:
-                language: { type: string, enum: [en, ru] }
+                language: { type: string, enum: [system, en, ru] }
       responses:
         '200':
           description: Saved interface language.
@@ -1780,7 +1781,8 @@ paths:
               schema:
                 type: object
                 properties:
-                  language: { type: string, enum: [en, ru] }
+                  language: { type: string, enum: [system, en, ru] }
+                  resolved: { type: string, enum: [en, ru] }
         '400':
           description: Malformed request or unsupported language.
         '500':

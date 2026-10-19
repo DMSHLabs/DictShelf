@@ -418,6 +418,15 @@ window.wudictFontScale=(function(){
      Appearance sheet folds because a stylesheet editor and a thumbnail strip
      are long; nothing here is. -->
 
+<div class="language-setting">
+  <div class="facts language-row">
+    <span class="rowlabel" id="languageLabel">Language</span>
+    <button type="button" class="choice-btn" id="languageBtn" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="languageLabel"></button>
+    <div class="choice-menu menu-card" id="languageMenu" role="listbox" aria-label="Language" data-w="anchor" hidden></div>
+  </div>
+  <p id="languageError" role="alert" hidden></p>
+</div>
+
 <details class="sect" data-panel-section="dictionaries" open>
   <summary class="sect-h">{{T:panel.dictionaries}}</summary>
   <!-- The collection's state, in numbers the server counted (/api/config's roots
@@ -571,31 +580,18 @@ window.wudictFontScale=(function(){
        makes a new group. -->
   <div class="facts">
     <span class="rowlabel" id="looksLabel">{{T:panel.looks}}</span>
-    <button type="button" class="choice-btn" id="looksChoice" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="looksLabel"></button>
+    <div id="looksControls">
+      <button type="button" class="choice-btn" id="looksChoice" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="looksLabel"></button>
+      <span class="iconrow">
+        <button type="button" class="btn icon-btn" id="looksSaveAsBtn" disabled>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M5 3h11l3 3v15H5z"/><path d="M9 3v5h6V3"/><path d="M8 20v-6h8v6"/></svg></button>
+        <button type="button" class="btn icon-btn" id="looksUpdateBtn" disabled>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 4v10"/><path d="M8 11l4 4 4-4"/><path d="M4 20h16"/></svg></button>
+        <button type="button" class="btn icon-btn" id="looksDeleteBtn" disabled>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M4 6h16"/><path d="M9 6V3h6v3"/><path d="M6 6l1 15h10l1-15"/><path d="M10 10v7M14 10v7"/></svg></button>
+      </span>
+    </div>
     <div class="choice-menu menu-card" id="looksMenu" role="listbox" aria-labelledby="looksLabel" data-w="anchor" hidden></div>
-    <!-- The three actions, as icons: the words they would need are longer than
-         the row has, and the drop-down beside them already names what they act
-         on. Each carries a title AND an aria-label, so the tooltip and the
-         screen reader still say it in full - and the last two say why they are
-         inert when a built-in is in force.
-         Drawn, not emoji: emoji do not take currentColor, so they cannot follow
-         the theme or the paper the way every other mark in this app does. The
-         arrow onto a line is "put what is on screen into this one" - a circular
-         arrow reads as "reload", which is what it must not mean.
-         The three travel as ONE flex item (`iconrow`), so a drawer too narrow
-         for the whole row drops all three to the second line together: as
-         loose siblings, the wrap parted them (two icons on one line and the
-         third below it at 360px, one and two at 320) for no reason the reader
-         could see. Which icon is which is by id (looks.js), not by position,
-         so the box changes nothing about them. -->
-    <span class="iconrow">
-      <button type="button" class="btn icon-btn" id="looksSaveAsBtn" disabled>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M5 3h11l3 3v15H5z"/><path d="M9 3v5h6V3"/><path d="M8 20v-6h8v6"/></svg></button>
-      <button type="button" class="btn icon-btn" id="looksUpdateBtn" disabled>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 4v10"/><path d="M8 11l4 4 4-4"/><path d="M4 20h16"/></svg></button>
-      <button type="button" class="btn icon-btn" id="looksDeleteBtn" disabled>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M4 6h16"/><path d="M9 6V3h6v3"/><path d="M6 6l1 15h10l1-15"/><path d="M10 10v7M14 10v7"/></svg></button>
-    </span>
   </div>
   <div class="facts">
     <label class="rowlabel" for="articleFontSelect">{{T:panel.articleFont}}</label>
@@ -861,16 +857,6 @@ window.wudictFontScale=(function(){
 <summary class="sect-h">{{T:export.tools}}</summary>
 <div class="facts"><button type="button" class="mrow" id="openHeadwordExport">{{T:export.open}}</button></div>
 </details>
-<details class="sect" data-panel-section="language" open>
-  <summary class="sect-h">Language</summary>
-  <div class="facts">
-    <span class="rowlabel" id="languageLabel">Language</span>
-    <button type="button" class="choice-btn" id="languageBtn" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="languageLabel"></button>
-    <div class="choice-menu menu-card" id="languageMenu" role="listbox" aria-label="Language" data-w="anchor" hidden></div>
-  </div>
-  <p id="languageError" role="alert" hidden></p>
-</details>
-
 <details class="sect" id="sysSection" hidden data-panel-section="system" open>
   <summary class="sect-h">{{T:panel.system}}</summary>
   <!-- The shell's own settings, which until now lived only on the screen the
@@ -9385,18 +9371,18 @@ function sheetMenuNew(anchor,menu,fill){
   return ctl;
 }
 function sheetMenusFollow(){for(const m of sheetMenus)if(m.isOpen())m.place()}
-const languageNames=[["en","English"],["ru","Русский"]];
+const languageNames=[["system",tx("language.system")],["en","English"],["ru","Русский"]];
 const languageButton=$("languageBtn"),languageMenu=$("languageMenu"),languageError=$("languageError");
-languageButton.textContent=languageNames.find(([code])=>code===window.wudictI18n.language)?.[1]||"English";
+languageButton.textContent=languageNames.find(([code])=>code===window.wudictI18n.selection)?.[1]||tx("language.system");
 const languageChoice=sheetMenuNew(languageButton,languageMenu,()=>{
   languageMenu.replaceChildren(...languageNames.map(([code,name])=>{
     const option=document.createElement("button");
     option.type="button";option.className="choice-item";option.role="option";
-    option.lang=code;option.textContent=name;
-    option.setAttribute("aria-selected",String(code===window.wudictI18n.language));
+    option.lang=code==="system"?window.wudictI18n.language:code;option.textContent=name;
+    option.setAttribute("aria-selected",String(code===window.wudictI18n.selection));
     option.onclick=async()=>{
       languageChoice.hide();
-      if(code===window.wudictI18n.language){languageButton.focus();return}
+      if(code===window.wudictI18n.selection){languageButton.focus();return}
       languageButton.disabled=true;languageError.hidden=true;
       try{await window.wudictI18n.saveLanguage(code);location.reload()}
       catch(_){

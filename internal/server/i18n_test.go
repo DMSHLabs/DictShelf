@@ -64,8 +64,8 @@ func TestI18nDefaultAndWriteFailure(t *testing.T) {
 		if err := os.WriteFile(path, []byte(data), 0600); err != nil {
 			t.Fatal(err)
 		}
-		if LoadPrefs(path).Language() != "en" {
-			t.Fatal("missing/unsupported language must default to English")
+		if LoadPrefs(path).Language() != "system" {
+			t.Fatal("missing/unsupported language must default to System")
 		}
 	}
 	p := LoadPrefs(path)
@@ -88,17 +88,17 @@ func TestI18nPagesAndCache(t *testing.T) {
 	s, _ := newPrefsServer(t)
 	req := newRequest("GET", "/", nil)
 	req.Header.Set("Accept-Language", "ru")
-	en := serve(s, req)
-	if !strings.Contains(en.Body.String(), `"language":"en"`) {
-		t.Fatal("system/browser language affected default")
+	systemRu := serve(s, req)
+	if !strings.Contains(systemRu.Body.String(), `"language":"ru"`) || !strings.Contains(systemRu.Body.String(), `"selection":"system"`) {
+		t.Fatal("System choice did not follow the requesting browser language")
 	}
 	if err := s.reg.prefs.setLanguage("ru"); err != nil {
 		t.Fatal(err)
 	}
 	req = newRequest("GET", "/", nil)
-	req.Header.Set("If-None-Match", en.Header().Get("ETag"))
+	req.Header.Set("If-None-Match", systemRu.Header().Get("ETag"))
 	ru := serve(s, req)
-	if ru.Code != 200 || ru.Header().Get("ETag") == en.Header().Get("ETag") {
+	if ru.Code != 200 || ru.Header().Get("ETag") == systemRu.Header().Get("ETag") {
 		t.Fatal("language did not invalidate the cached page")
 	}
 	for _, path := range []string{"/", "/setup", "/browse", "/lemmas"} {
@@ -138,8 +138,8 @@ func TestI18nPagesAndCache(t *testing.T) {
 		t.Fatal(err)
 	}
 	back := serve(s, newRequest("GET", "/", nil))
-	if back.Header().Get("ETag") != en.Header().Get("ETag") {
-		t.Fatal("switching back did not restore English page")
+	if back.Header().Get("ETag") == systemRu.Header().Get("ETag") {
+		t.Fatal("explicit English selection reused the System page")
 	}
 	// No loaded dictionaries is the separate first-run path through setupPage.
 	empty, err := NewRegistry(nil, false, WithPrefs(LoadPrefs("")))
