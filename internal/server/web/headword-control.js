@@ -13,6 +13,7 @@
     search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 5 5"/></svg>',
     filter: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h18l-7 8v5l-4 2v-7z"/></svg>'
   };
+  let ribbon = null;
   function cacheRead(key, ttl = 30 * 60 * 1000) {
     try {
       const saved = JSON.parse(sessionStorage.getItem(key) || "null");
@@ -144,5 +145,7 @@
     });
   }
 
-  window.wudictHeadwordControl = Object.freeze({create, cacheRead, cacheWrite, threshold, setThreshold});
+  window.wudictHeadwordControl = Object.freeze({create, cacheRead, cacheWrite, threshold, setThreshold,
+    registerRibbon(api){if(api&&typeof api.measure==="function"&&typeof api.paint==="function")ribbon=api},
+    get ribbon(){return ribbon}});
 })();

@@ -206,6 +206,11 @@ func NewWithOptions(options WebViewOptions) WebView {
 	if err != nil {
 		log.Fatal(err)
 	}
+	// Hide the native hover-status overlay so it does not cover application controls.
+	err = settings.PutIsStatusBarEnabled(false)
+	if err != nil {
+		log.Fatal(err)
+	}
 	// disable context menu
 	err = settings.PutAreDefaultContextMenusEnabled(options.Debug)
 	if err != nil {

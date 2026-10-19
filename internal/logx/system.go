@@ -25,6 +25,8 @@ var diagnosticURL = regexp.MustCompile(`https?://[^\s"<>]+`)
 var systemLogEnabled = true
 var systemLogBaseEvents = true
 var systemLogWebEvents = true
+var systemHasErrors bool
+var systemErrorStatusKnown bool
 
 // SetSystemLogRoot installs a path resolver. It must not call logging functions.
 // One mutex owns configuration, complete records, rotation and snapshots.
@@ -33,6 +35,8 @@ func SetSystemLogRoot(root func() string) {
 	defer systemMu.Unlock()
 	systemRoot = root
 	systemSessionPath = ""
+	systemHasErrors = false
+	systemErrorStatusKnown = false
 }
 
 // StartSystemLogSession creates a new timestamped log for this application
@@ -79,6 +83,15 @@ func systemDir() string {
 // System writes diagnostics independently of verbose console output. Logging
 // failures never replace the original failure and never recurse into logging.
 func System(format string, args ...any) {
+	writeSystem(false, format, args...)
+}
+
+// SystemError records an error and makes it visible in the panel's Info section.
+func SystemError(format string, args ...any) {
+	writeSystem(true, "error: "+format, args...)
+}
+
+func writeSystem(isError bool, format string, args ...any) {
 	message := fmt.Sprintf(format, args...)
 	// URL queries can carry access keys. Keep the host/path for diagnosis.
 	message = diagnosticURL.ReplaceAllStringFunc(message, func(value string) string {
@@ -139,8 +152,71 @@ func System(format string, args ...any) {
 		return
 	}
 	defer f.Close()
-	_, _ = f.Write(record)
-	_ = f.Sync()
+	if _, err := f.Write(record); err == nil {
+		if isError || isSystemError(message) {
+			systemHasErrors = true
+			systemErrorStatusKnown = true
+		}
+		_ = f.Sync()
+	}
+}
+
+// SystemHasErrors reports whether any retained log for this library contains
+// an error or crash record. The first check scans the bounded retained logs;
+// later writes update the cached result.
+func SystemHasErrors() bool {
+	systemMu.Lock()
+	defer systemMu.Unlock()
+	if systemErrorStatusKnown {
+		return systemHasErrors
+	}
+	root := systemDir()
+	if root == "" {
+		return false
+	}
+	unlock, err := systemFileGuard(root)
+	if err != nil {
+		return false
+	}
+	defer unlock()
+	logs, err := retainedSystemLogFiles(root)
+	if err != nil {
+		return false
+	}
+	for _, path := range logs {
+		contents, err := os.ReadFile(path)
+		if err == nil && hasSystemErrorRecord(contents) {
+			systemHasErrors = true
+			break
+		}
+	}
+	if !systemHasErrors {
+		for _, name := range retainedCrashLogNames(root, logs) {
+			if info, err := os.Stat(filepath.Join(root, name)); err == nil && info.Size() > 0 {
+				systemHasErrors = true
+				break
+			}
+		}
+	}
+	systemErrorStatusKnown = true
+	return systemHasErrors
+}
+
+func hasSystemErrorRecord(contents []byte) bool {
+	for _, line := range strings.Split(strings.ToLower(string(contents)), "\n") {
+		if isSystemError(line) {
+			return true
+		}
+	}
+	return false
+}
+
+func isSystemError(message string) bool {
+	message = strings.ToLower(message)
+	return strings.Contains(message, " error:") || strings.Contains(message, " error=") ||
+		strings.Contains(message, "event=error") || strings.Contains(message, "panic:") ||
+		strings.Contains(message, "fatal error:") || strings.Contains(message, "unhandled exception") ||
+		strings.Contains(message, "recovered")
 }
 
 func isWebSystemEvent(message string) bool {

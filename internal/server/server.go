@@ -35,6 +35,7 @@ import (
 	"github.com/wuweidict/wudict/internal/ftsq"
 	"github.com/wuweidict/wudict/internal/hilite"
 	"github.com/wuweidict/wudict/internal/htmlref"
+	"github.com/wuweidict/wudict/internal/indexconst"
 	"github.com/wuweidict/wudict/internal/intake"
 	"github.com/wuweidict/wudict/internal/lang"
 	"github.com/wuweidict/wudict/internal/logx"
@@ -162,6 +163,9 @@ var headwordControlJS []byte // shared search controls for Browse and Wildcards
 
 //go:embed web/headword-control.css
 var headwordControlCSS []byte // shared layout and appearance for headword controls
+
+//go:embed web/headword-ribbon.js
+var headwordRibbonJS []byte // shared virtual ribbon geometry and painting for Browse and Wildcards
 
 //go:embed web/examples.js
 var examplesJS []byte // example folding: marks the lines that hold nothing but examples
@@ -585,6 +589,8 @@ func (s *Server) basePage() []byte {
 		page = strings.ReplaceAll(page, "{{ARTICLEFINDJS}}", assetTag(articleFindJS))
 		page = strings.ReplaceAll(page, "{{LISTSEARCHJS}}", assetTag(listSearchJS))
 		page = strings.ReplaceAll(page, "{{HEADWORDJS}}", assetTag(headwordControlJS))
+		page = strings.ReplaceAll(page, "{{RIBBONJS}}", assetTag(headwordRibbonJS))
+		page = strings.ReplaceAll(page, "{{BROWSE_STRIP_EXACT_WIDTHS}}", strconv.Itoa(indexconst.BrowseStripExactWidthCount))
 		page = strings.ReplaceAll(page, "{{HEADWORDCSS}}", assetTag(headwordControlCSS))
 		// The role stylesheet for articles wudict writes itself
 		// (internal/artmark). It is a floor under BOTH article surfaces, so

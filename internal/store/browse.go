@@ -9,6 +9,7 @@ import (
 	"database/sql"
 	"fmt"
 	"regexp"
+	"runtime/debug"
 	"strings"
 	"time"
 	"unicode"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/wuweidict/wudict/internal/dict"
 	"github.com/wuweidict/wudict/internal/indexconst"
+	"github.com/wuweidict/wudict/internal/logx"
 )
 
 // StreamBrowseHeadwords emits matched headwords as soon as a result block is
@@ -549,13 +551,15 @@ func (s *Store) buildAlphabet() ([]dict.Letter, error) {
 				return nil, err
 			}
 			page, within := ordinal/pageSize, ordinal%pageSize
-			if page < pageCount {
-				switch within {
-				case 0:
-					pageFirst[page] = word
-				case indexconst.BrowsePageLastOffset:
-					pageLast[page] = word
-				}
+			if page < 0 || page >= pageCount {
+				logx.SystemError("Browse anchor outside alphabet range ordinal=%d page=%d pages=%d", ordinal, page, pageCount)
+				continue
+			}
+			switch within {
+			case 0:
+				pageFirst[page] = word
+			case indexconst.BrowsePageLastOffset:
+				pageLast[page] = word
 			}
 		}
 		if err := rows.Err(); err != nil {
@@ -650,14 +654,21 @@ func browseCommonPhrasePrefix(previous, current string) string {
 // browseRangeEnd adds the last initial that begins within this page. Using the
 // page tail also handles punctuation and script transitions without ordering
 // assumptions about their alphabets.
-func browseRangeEnd(label, last string) string {
+func browseRangeEnd(label, last string) (result string) {
+	result = label
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			logx.SystemError("Browse section label calculation recovered label=%q last=%q panic=%v\n%s", label, last, recovered, debug.Stack())
+			result = label
+		}
+	}()
 	if label == "" || last == "" {
-		return label
+		return result
 	}
 	start := browseSectionInitial(firstRune(label))
 	end := browseSectionInitial(firstRune(last))
 	if start == "" || end == "" || start == end {
-		return label
+		return result
 	}
 	return label + "-" + end
 }
@@ -740,9 +751,19 @@ var browseHangulLead = []rune("ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋ�
 func hangulLeadOf(r rune) (string, bool) {
 	switch {
 	case r >= 0xAC00 && r <= 0xD7A3:
-		return string(browseHangulLead[(r-0xAC00)/588]), true
+		index := int((r - 0xAC00) / 588)
+		if index < 0 || index >= len(browseHangulLead) {
+			logx.SystemError("Browse Hangul initial outside range rune=U+%04X index=%d initials=%d", r, index, len(browseHangulLead))
+			return "", false
+		}
+		return string(browseHangulLead[index]), true
 	case r >= 0x1100 && r <= 0x1112:
-		return string(browseHangulLead[r-0x1100]), true
+		index := int(r - 0x1100)
+		if index < 0 || index >= len(browseHangulLead) {
+			logx.SystemError("Browse Hangul lead outside range rune=U+%04X index=%d initials=%d", r, index, len(browseHangulLead))
+			return "", false
+		}
+		return string(browseHangulLead[index]), true
 	}
 	return "", false
 }

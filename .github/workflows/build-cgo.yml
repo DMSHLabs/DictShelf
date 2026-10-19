@@ -4,8 +4,8 @@ name: Build+Release (cgo)
 # (-tags sqlite_fts5, CGO_ENABLED=1). Unlike build-release.yml (pure-Go
 # modernc cross-compiled from one ubuntu box), each target is built on its
 # OWN native runner because cgo cannot cross the host arch/OS. Produces
-# workflow artifacts only - it does not create a GitHub Release, so it never
-# collides with the purego release assets.
+# workflow artifacts by default; the explicit publish_release input can add
+# these cgo assets to a GitHub Release.
 #
 # C toolchains are preinstalled on the Linux and macOS GitHub-hosted images
 # (actions/runner-images): Ubuntu → gcc, macOS → Xcode/clang. Windows is built

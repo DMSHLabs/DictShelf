@@ -1210,6 +1210,7 @@ func (s *Server) browsePageHTMLFor(acceptLanguage string) []byte {
 	page = bytes.ReplaceAll(page, []byte("{{WORKSPACECSS}}"), []byte(assetTag(workspaceCSS)))
 	page = bytes.ReplaceAll(page, []byte("{{LISTSEARCHJS}}"), []byte(assetTag(listSearchJS)))
 	page = bytes.ReplaceAll(page, []byte("{{HEADWORDJS}}"), []byte(assetTag(headwordControlJS)))
+	page = bytes.ReplaceAll(page, []byte("{{RIBBONJS}}"), []byte(assetTag(headwordRibbonJS)))
 	page = bytes.ReplaceAll(page, []byte("{{HEADWORDCSS}}"), []byte(assetTag(headwordControlCSS)))
 	return s.renderUserUIChoice(string(page), s.reg.prefs.ResolvedLanguage(acceptLanguage), s.reg.prefs.Language())
 }

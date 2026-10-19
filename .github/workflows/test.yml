@@ -1,9 +1,7 @@
 # The correctness gate
 #
-# Both flavours are covered, because they are different products: the cgo
-# build links mattn/go-sqlite3 and the built-in Speex decoder, the purego build
-# links modernc's driver (D4, D18, D29). A change can pass one and fail the
-# other.
+# Official builds use cgo, which links mattn/go-sqlite3 and the built-in Speex
+# decoder (D4, D18, D29).
 #
 # And all three desktop systems, because they are different too: Windows
 # refuses to rename over or delete an open file and checks text out with CRLF
@@ -56,22 +54,14 @@ jobs:
       - name: go.mod and go.sum are tidy
         run: git diff --exit-code -- go.mod go.sum
 
-      # Release parity (D4): the pure-Go driver must keep passing, and the
-      # tag-less build must keep working, because `go install` produces it.
-      - name: purego flavour
-        run: |
-          make test-purego
-          go build -tags purego ./...
-          go build ./...
-
   # The same suite on macOS and Windows, on the images the release binaries
   # are built on (build-cgo.yml), so a test passing here is about the system
   # users run. Repository-wide checks (tidy) stay with the job above: their
   # answer does not depend on the system.
   #
   # `go` directly, not `make`: the Windows image has no GNU make, and the
-  # Makefile assumes a POSIX shell. The commands are the ones `make vet`,
-  # `make test` and `make test-purego` run - keep them in step.
+  # Makefile assumes a POSIX shell. Keep these commands in step with `make vet`
+  # and `make test`.
   platforms:
     name: ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
@@ -102,10 +92,3 @@ jobs:
         env:
           CGO_ENABLED: "1"
         run: go test -tags sqlite_fts5 -trimpath ./...
-
-      - name: purego flavour
-        env:
-          CGO_ENABLED: "0"
-        run: |
-          go test -tags purego ./internal/store/ ./internal/server/
-          go build -tags purego ./...

@@ -396,6 +396,7 @@ html[data-shell-image] .mask-head #maskDict{background-color:var(--paper-bg,var(
 .mask-letter-separator{padding:0 .2em;color:var(--fg-faint)}
 .mask-letter-pending{color:var(--label)}
 .mask-letters button{min-width:2em;padding:.3em}
+.wudict-ribbon-chip{box-sizing:border-box;max-width:12em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .mask-letter-track.mask-fixed-chips{overflow:hidden}
 .mask-letter-track.mask-fixed-chips button{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .mask-scrollbar{position:relative;height:12px;margin:0 .7em .3em;cursor:pointer;touch-action:none;user-select:none;-webkit-user-select:none}
@@ -1602,18 +1603,18 @@ dialog.panel-card:not([open]){display:none}
 #panel .facts.language-row{flex-wrap:nowrap}
 #panel .facts.language-row>.rowlabel{flex:0 0 auto;white-space:nowrap}
 #panel .facts.language-row>#languageBtn{width:auto;min-width:0;flex:1 1 0}
-#panel .facts .choice-btn,#panel .facts select{
-  box-sizing:border-box;height:calc(var(--ui-control-height) * var(--ui-font-base) * 1rem);
-  min-height:calc(var(--ui-control-height) * var(--ui-font-base) * 1rem);
-  font-size:calc(var(--ui-control-font) * 1rem);line-height:1}
-.panel-select-wrap{position:relative;min-width:0}
-.panel-select-wrap::after{content:"";position:absolute;right:calc(var(--ui-control-font) * .55em);top:50%;transform:translateY(-50%);pointer-events:none;
-  width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:4px solid var(--fg)}
+.panel-dropdown{position:relative;box-sizing:border-box;height:calc(var(--ui-control-height) * var(--ui-font-base) * 1rem);
+  min-height:calc(var(--ui-control-height) * var(--ui-font-base) * 1rem)}
+#panel .facts .panel-dropdown{font-size:calc(var(--ui-control-font) * 1rem);line-height:1}
+.panel-dropdown::after{content:"";position:absolute;right:.55em;top:50%;transform:translateY(-50%);pointer-events:none;
+  width:0;height:0;margin:0;border:4px solid transparent;border-top-color:var(--fg)}
+.panel-select-wrap{min-width:0}
 .panel-select-wrap:has(>select:disabled)::after{opacity:.55}
 #panel .panel-select-wrap>select{display:block;width:100%;max-width:none;min-width:0;
   min-height:calc(var(--ui-control-height) * var(--ui-font-base) * 1rem);
   height:calc(var(--ui-control-height) * var(--ui-font-base) * 1rem);
-  appearance:none;-webkit-appearance:none;padding:0 1.8em 0 .55em;line-height:1}
+  font-size:calc(var(--ui-control-font) * 1rem);line-height:1;
+  appearance:none;-webkit-appearance:none;padding:0 1.8em 0 .55em}
 /* A label for the control on its row, in the register the segs' labels use. */
 .facts .rowlabel{font-size:calc(var(--ui-font-base) * 1rem);line-height:1.2;color:var(--label-quiet)}
 /* The collection's count, on its own line under the heading: the answer to "is

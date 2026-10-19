@@ -202,8 +202,9 @@ header{position:sticky;top:0;z-index:5;background:var(--bar);
 .nav button:disabled{opacity:.3;cursor:default}
 .nav b{justify-self:center;font-size:calc(var(--ui-font-addition) * 1rem);font-weight:600;color:var(--fg);
   font-variant-numeric:tabular-nums;white-space:nowrap}
-.nav [data-pos]{padding:.15em .35em;border:1px solid transparent;border-radius:6px;background:transparent;color:inherit;font:inherit;cursor:pointer}
-.nav [data-pos]:hover{border-color:var(--line);color:var(--accent)}
+.nav [data-pos]{padding:.2em .55em;border:1px solid var(--line);border-radius:8px;min-height:calc(var(--ui-control-height) * 1em);background:var(--bar);color:inherit;font:inherit;cursor:pointer}
+.nav [data-pos]:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}
+.nav [data-pos]:disabled{opacity:.45;cursor:default}
 .nav [data-pos]:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
 dialog.browse-goto{position:fixed;inset:0;margin:auto;box-sizing:border-box;width:min(420px,calc(100vw - 32px));height:fit-content;max-height:80dvh;padding:1em;
   border:1px solid var(--line);border-radius:12px;color:var(--fg);background:var(--bg);box-shadow:0 8px 32px #0004;z-index:20;font-size:calc(var(--ui-font-base) * 1rem)}
@@ -330,6 +331,8 @@ html[data-desktop-image] .chooser-list :is(.list-search-dock,.list-search-input,
 {{PRESETS}}
 <script src="/assets/list-search.js?v={{LISTSEARCHJS}}"></script>
 <script src="/assets/headword-control.js?v={{HEADWORDJS}}"></script>
+<script src="/assets/headword-ribbon.js?v={{RIBBONJS}}"></script>
+<script>window.wudictHeadwordControl.ribbon.setExactCount({{BROWSE_STRIP_EXACT_WIDTHS}})</script>
 <script>
 /* The chooser shares the reader's saved Fonts values. */
 (function () {
@@ -648,83 +651,17 @@ function saveBrowseAlphabet(dict,total,letters){
     browseTrace("alphabet cache saved",{dict,total,count:letters.length,bytes:encoded.length});
   }catch(error){browseTrace("alphabet cache save failed",{dict,count:letters.length,error:String(error)})}
 }
-function updateStripArrows(){
-  const strip=$("strip"),end=Math.max(0,strip.scrollWidth-strip.clientWidth);
-  $("stripPrev").disabled=strip.scrollLeft<=1;
-  $("stripNext").disabled=strip.scrollLeft>=end-1;
-  updateStripScrollbar();
-}
-function updateStripScrollbar(){
-  const strip=$("strip"),bar=$("stripScrollbar"),thumb=$("stripScrollThumb");
-  const viewport=strip.clientWidth,total=Math.max(viewport,strip.scrollWidth),maxScroll=Math.max(0,total-viewport);
-  const trackWidth=bar.clientWidth;
-  const thumbWidth=Math.min(trackWidth,Math.max(20,trackWidth*(viewport/total)));
-  const maxThumb=Math.max(0,trackWidth-thumbWidth);
-  const left=maxScroll?maxThumb*(strip.scrollLeft/maxScroll):0;
-  thumb.style.width=thumbWidth+"px";thumb.style.transform=`translateX(${left}px)`;
-  bar.setAttribute("aria-valuemax",String(Math.max(0,Math.round(maxScroll))));
-  bar.setAttribute("aria-valuenow",String(Math.max(0,Math.round(strip.scrollLeft))));
-  bar.setAttribute("aria-disabled",String(maxScroll===0));
-}
-let stripScrollbarDrag=null;
-function moveStripScrollbar(clientX){
-  if(!stripScrollbarDrag)return;
-  const strip=$("strip"),bar=$("stripScrollbar"),thumb=$("stripScrollThumb"),rect=bar.getBoundingClientRect();
-  const maxThumb=Math.max(0,bar.clientWidth-thumb.offsetWidth),maxScroll=Math.max(0,strip.scrollWidth-strip.clientWidth);
-  const left=Math.max(0,Math.min(maxThumb,clientX-rect.left-stripScrollbarDrag.grab));
-  strip.scrollLeft=maxThumb?left/maxThumb*maxScroll:0;
-}
-function selectStripBlockAtScroll(){
-  const items=activeStripItems();
-  if(!items.length||!stripWidths.length)return;
-  const strip=$("strip"),maxScroll=Math.max(0,strip.scrollWidth-strip.clientWidth),left=strip.scrollLeft;
-  const atStart=left<=1,atEnd=!atStart&&left>=maxScroll-1;
-  let index=atStart?0:atEnd?items.length-1:Math.min(items.length-1,lowerStripIndex(left+strip.clientWidth/2));
-  const center=left+strip.clientWidth/2;
-  if(!atStart&&!atEnd&&index>0&&Math.abs(stripOffsets[index-1]+stripWidths[index-1]/2-center)<Math.abs(stripOffsets[index]+stripWidths[index]/2-center))index--;
-  const item=items[index],offset=Number(item?.o);
-  if(Number.isFinite(offset))selectStripOffset(offset);
-}
-$("stripScrollbar").addEventListener("pointerdown",event=>{
-  if(event.button!==0||event.isPrimary===false)return;
-  const bar=$("stripScrollbar"),thumb=$("stripScrollThumb"),rect=thumb.getBoundingClientRect();
-  const onThumb=event.target===thumb;
-  stripScrollbarDrag={pointerId:event.pointerId,grab:onThumb?event.clientX-rect.left:rect.width/2,onThumb,moved:false};
-  if(!onThumb)moveStripScrollbar(event.clientX);
-  bar.setPointerCapture?.(event.pointerId);event.preventDefault();
-});
-$("stripScrollbar").addEventListener("pointermove",event=>{
-  if(!stripScrollbarDrag||event.pointerId!==stripScrollbarDrag.pointerId)return;
-  stripScrollbarDrag.moved=true;
-  moveStripScrollbar(event.clientX);event.preventDefault();
-});
-function endStripScrollbarDrag(event){
-  if(!stripScrollbarDrag||event?.pointerId!==undefined&&event.pointerId!==stripScrollbarDrag.pointerId)return;
-  const shouldSelect=!stripScrollbarDrag.onThumb||stripScrollbarDrag.moved;
-  stripScrollbarDrag=null;
-  if(shouldSelect)selectStripBlockAtScroll();
-}
-for(const type of ["pointerup","pointercancel","lostpointercapture"])$("stripScrollbar").addEventListener(type,endStripScrollbarDrag);
-$("stripScrollbar").addEventListener("keydown",event=>{
-  const strip=$("strip"),step=Math.max(40,strip.clientWidth/5);let left=strip.scrollLeft;
-  if(event.key==="ArrowLeft")left-=step;else if(event.key==="ArrowRight")left+=step;else if(event.key==="PageUp")left-=strip.clientWidth;else if(event.key==="PageDown")left+=strip.clientWidth;else if(event.key==="Home")left=0;else if(event.key==="End")left=strip.scrollWidth;else return;
-  strip.scrollLeft=Math.max(0,Math.min(strip.scrollWidth-strip.clientWidth,left));event.preventDefault();
-});
+let stripNavigator=null;
 function lowerStripIndex(value,byEnd=false){
-  let lo=0,hi=stripOffsets.length;
-  while(lo<hi){const mid=(lo+hi)>>>1;const edge=stripOffsets[mid]+(byEnd?stripWidths[mid]:0);if(edge<value)lo=mid+1;else hi=mid}
-  return lo;
+  return window.wudictHeadwordControl.ribbon.lower(stripOffsets,stripWidths,value,byEnd);
 }
 function measureStripItems(items){
   const strip=$("strip"),track=$("stripTrack"),sample=$("stripMeasure"),style=getComputedStyle(sample);
   const font=[style.fontStyle,style.fontVariant,style.fontWeight,style.fontSize,style.fontFamily].join(" ");
   const pad=parseFloat(style.paddingLeft)+parseFloat(style.paddingRight)+parseFloat(style.borderLeftWidth)+parseFloat(style.borderRightWidth);
-  const minWidth=parseFloat(style.minWidth)||0,maxWidth=(parseFloat(style.fontSize)||16)*12,gap=parseFloat(getComputedStyle(strip).columnGap)||0;
+  const minWidth=parseFloat(style.minWidth)||0,gap=parseFloat(getComputedStyle(strip).columnGap)||0;
   const height=sample.getBoundingClientRect().height;
   const key=[font,pad,minWidth,gap,height,style.letterSpacing].join("|");
-  const canvas=measureStripItems.canvas||(measureStripItems.canvas=document.createElement("canvas"));
-  const ctx=canvas.getContext("2d");ctx.font=font;
-  const letterSpacing=parseFloat(style.letterSpacing)||0;
   const metricsChanged=key!==stripMetricKey;
   if(metricsChanged){
     stripMetricKey=key;stripWidths=[];stripOffsets=[];stripTotalWidth=0;stripLettersPainted=0;stripWindowStart=stripWindowEnd=-1;stripCurrentPositionedIndex=-1;
@@ -744,23 +681,11 @@ function measureStripItems(items){
     stripMeasureGeneration++;stripMeasureStarted=0;stripMeasureStartCount=0;stripMeasureChunks=0;
   }
   const exactTarget=Math.min(items.length,BROWSE_STRIP_EXACT_WIDTHS);
-  if(exactTarget>stripLettersPainted&&!stripMeasureStarted){stripMeasureStarted=performance.now();stripMeasureStartCount=stripLettersPainted;stripMeasureChunks=0}
-  const measuredBefore=stripLettersPainted,batchStarted=performance.now();let measureEnd=measuredBefore;
-  while(measureEnd<exactTarget&&measureEnd-measuredBefore<512){
-    const i=measureEnd;
-    const label=unesc(items[i].l),text=ctx.measureText(label).width+Math.max(0,label.length-1)*letterSpacing;
-    const width=Math.max(minWidth,Math.min(maxWidth,text+pad));if(stripWidths.length)stripTotalWidth+=gap;stripOffsets.push(stripTotalWidth);stripWidths.push(width);stripTotalWidth+=width;
-    measureEnd++;
-    if(performance.now()-batchStarted>=8)break;
-  }
-  if(measureEnd>measuredBefore){stripMeasureChunks++;stripLettersPainted=measureEnd}
-  if(stripLettersPainted>=exactTarget&&stripWidths.length<items.length){
-    let widthTotal=0;for(let i=0;i<stripLettersPainted;i++)widthTotal+=stripWidths[i];
-    const estimatedWidth=stripLettersPainted?widthTotal/stripLettersPainted:Math.max(minWidth,pad);
-    while(stripWidths.length<items.length){
-      if(stripWidths.length)stripTotalWidth+=gap;
-      stripOffsets.push(stripTotalWidth);stripWidths.push(estimatedWidth);stripTotalWidth+=estimatedWidth;
-    }
+  if(stripWidths.length!==items.length){
+    if(exactTarget>stripLettersPainted&&!stripMeasureStarted){stripMeasureStarted=performance.now();stripMeasureStartCount=stripLettersPainted;stripMeasureChunks=0}
+    const geometry=window.wudictHeadwordControl.ribbon.measure(items,sample,strip,{gap,minWidth,maxWidthEm:12,getLabel:item=>unesc(item.l)});
+    stripWidths=geometry.widths;stripOffsets=geometry.offsets;stripTotalWidth=geometry.total;
+    stripLettersPainted=exactTarget;if(exactTarget)stripMeasureChunks++;
   }
   const complete=stripWidths.length>=items.length;
   const cached=browseAlphabetCache.get(stripFor);
@@ -790,35 +715,27 @@ function measureStripItems(items){
 function renderVirtualStrip(force=false){
   if(!state||!stripWidths.length)return;
   const strip=$("strip"),track=$("stripTrack"),items=activeStripItems();
-  const left=strip.scrollLeft,right=left+strip.clientWidth,buffer=24;
+  const ribbon=window.wudictHeadwordControl.ribbon;
+  const left=strip.scrollLeft,right=left+strip.clientWidth,buffer=ribbon.buffer;
   const start=Math.max(0,lowerStripIndex(left,true)-buffer);
   const end=Math.min(items.length,lowerStripIndex(right)+buffer);
-  if(!force&&start===stripWindowStart&&end===stripWindowEnd)return;
+  if(!force&&start===stripWindowStart&&end===stripWindowEnd){stripNavigator?.update();return}
   stripWindowStart=start;stripWindowEnd=end;
-  const fragment=document.createDocumentFragment();
-  for(let i=start;i<end;i++){
-    const item=items[i],label=unesc(item.l),button=document.createElement("button");
-    button.type="button";button.className="strip-chip";button.dataset.o=String(item.o);
-    button.title=label+" — "+t("browse.words",{count:item.n,number:num(item.n)});button.setAttribute("aria-label",label);
-    button.textContent=label;button.style.left=stripOffsets[i]+"px";button.style.width=stripWidths[i]+"px";
-    button.disabled=browsePageBusy;button.setAttribute("aria-posinset",String(i+1));button.setAttribute("aria-setsize",String(items.length));
-    if(i===stripCurrentIndex)button.setAttribute("aria-current","true");
-    fragment.appendChild(button);
-  }
-  track.replaceChildren($("stripMeasure"),fragment);
+  ribbon.paint(track,window.wudictHeadwordControl.ribbon.fromBrowseIndex(items,{
+    labelOf:item=>unesc(item.l),
+    title:(item,_index,label)=>label+" — "+t("browse.words",{count:item.n,number:num(item.n)})
+  }),{offsets:stripOffsets,widths:stripWidths,viewport:strip.clientWidth},left,String(stripCurrentIndex),start,end,{
+    buttonClass:"strip-chip",sampleNode:$("stripMeasure"),contentWidth:true,
+    decorate:(button,_item,index)=>{button.disabled=browsePageBusy;button.setAttribute("aria-posinset",String(index+1));button.setAttribute("aria-setsize",String(items.length))}
+  });
+  stripNavigator?.update();
 }
 function scheduleVirtualStrip(){
   if(stripFrame)return;
-  stripFrame=requestAnimationFrame(()=>{stripFrame=0;renderVirtualStrip();updateStripArrows()});
+  stripFrame=requestAnimationFrame(()=>{stripFrame=0;renderVirtualStrip()});
 }
-function scrollStrip(direction){
-  const strip=$("strip");
-  strip.scrollBy({left:direction*Math.max(80,strip.clientWidth*.75),behavior:"smooth"});
-}
-$("stripPrev").addEventListener("click",()=>scrollStrip(-1));
-$("stripNext").addEventListener("click",()=>scrollStrip(1));
 $("strip").addEventListener("scroll",scheduleVirtualStrip,{passive:true});
-new ResizeObserver(()=>{if(state&&!$("stripWrap").hidden){measureStripItems(activeStripItems());renderVirtualStrip(true)}updateStripArrows()}).observe($("strip"));
+new ResizeObserver(()=>{if(state&&!$("stripWrap").hidden){measureStripItems(activeStripItems());renderVirtualStrip(true)}stripNavigator?.update()}).observe($("strip"));
 let findResult=null,findIndex=-1,findFilter=false,findTimer=0,findAbort=null,findSeq=0,browseSeq=0,findMask=false;
 let filteredStripResult=null,filteredStripWords=null,filteredStripLength=-1,filteredStripItems=[];
 let baseStripGeometry=null;
@@ -847,6 +764,15 @@ function selectStripOffset(offset){
     else fetchFound(page,0,"push");
   }else show({p:Math.floor(offset/state.size)+1,o:offset},"push");
 }
+stripNavigator=window.wudictHeadwordControl.ribbon.createScroller({
+  viewport:$("strip"),track:$("stripTrack"),bar:$("stripScrollbar"),thumb:$("stripScrollThumb"),
+  previous:$("stripPrev"),next:$("stripNext"),getItems:activeStripItems,
+  getOffsets:()=>stripOffsets,getWidths:()=>stripWidths,getPosition:()=>$("strip").scrollLeft,
+  setPosition:(value,behavior)=>{if(behavior==="smooth")$("strip").scrollTo({left:value,behavior});else $("strip").scrollLeft=value},
+  getMaxScroll:()=>Math.max(0,$("strip").scrollWidth-$("strip").clientWidth),thumbPosition:"transform",
+  onFinish:({item})=>{const offset=Number(item?.o);if(Number.isFinite(offset))selectStripOffset(offset)},
+  onRender:scheduleVirtualStrip
+});
 let appliedFindMask=false,findApproved=false,findApplyPending=false,browseProgressSeq=0,browseProgressJobs=new Map(),findStreamDone=true,findPendingMove=0,findPendingPage=0,findFilterPage=1;
 let findStreamWords=[];
 function browseMaskThreshold(){
