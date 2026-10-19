@@ -652,6 +652,7 @@ function saveBrowseAlphabet(dict,total,letters){
   }catch(error){browseTrace("alphabet cache save failed",{dict,count:letters.length,error:String(error)})}
 }
 let stripNavigator=null;
+function updateStripArrows(){stripNavigator?.update()}
 function lowerStripIndex(value,byEnd=false){
   return window.wudictHeadwordControl.ribbon.lower(stripOffsets,stripWidths,value,byEnd);
 }
@@ -725,7 +726,9 @@ function renderVirtualStrip(force=false){
     labelOf:item=>unesc(item.l),
     title:(item,_index,label)=>label+" — "+t("browse.words",{count:item.n,number:num(item.n)})
   }),{offsets:stripOffsets,widths:stripWidths,viewport:strip.clientWidth},left,String(stripCurrentIndex),start,end,{
-    buttonClass:"strip-chip",sampleNode:$("stripMeasure"),contentWidth:true,
+    buttonClass:"strip-chip",sampleNode:$("stripMeasure"),contentWidth:true,mode:"browse",
+    onProblem:problem=>sendBrowseDiagnostic({event:"ribbon_guard",resource:problem.mode,stage:problem.reason,
+      letters:problem.items,measured:problem.offsets,words:problem.widths,page:Math.max(0,problem.from||0),totalPages:Math.max(0,problem.to||0)}),
     decorate:(button,_item,index)=>{button.disabled=browsePageBusy;button.setAttribute("aria-posinset",String(index+1));button.setAttribute("aria-setsize",String(items.length))}
   });
   stripNavigator?.update();

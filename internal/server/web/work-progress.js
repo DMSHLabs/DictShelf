@@ -18,7 +18,8 @@
   // Browse keeps progress above its footer in normal flow: only the word pane
   // shrinks when a task appears, while the input stays at the viewport bottom.
   style.textContent += `html.server-work-active body.workspace-browse .workspace-browser>#serverWorkNotice{position:static;inset:auto;flex:none;width:auto;margin:0 6px 6px}body.workspace-browse #serverWorkBacking{display:none!important}`;
-  style.textContent += `@media(min-width:601px){html.server-work-active dialog:is(#groupEditor,#dictSettings,#webDictionaryPicker):has(> #serverWorkNotice){box-sizing:border-box;padding-bottom:var(--workh,0px)}}html.server-work-active .mask-dock{bottom:var(--workh,0px)}`;
+  style.textContent += `html.server-work-active body.mask-view-active #maskSearchControls>#serverWorkNotice{position:static;inset:auto;align-self:stretch;flex:none;width:100%;max-width:none;margin:0}body.mask-view-active #serverWorkBacking{display:none!important}html.server-work-active body.mask-view-active{padding-bottom:calc(var(--mask-dock-height,4.5rem) + .5rem + var(--workh,0px))}`;
+  style.textContent += `@media(min-width:601px){html.server-work-active dialog:is(#groupEditor,#dictSettings,#webDictionaryPicker):has(> #serverWorkNotice){box-sizing:border-box;padding-bottom:var(--workh,0px)}}`;
   style.textContent += `html.server-work-active #bulkIndexStatus,html.server-work-active #reindexLine,html.server-work-active #clearDatabaseStatus,html.server-work-active #clearDatabaseProgress{display:none!important}`;
   style.textContent += `[data-work-locked]{opacity:.45!important;pointer-events:none!important;cursor:default!important}`;
   style.textContent += `#serverWorkNotice .work-summary{display:flex;align-items:center;gap:8px;flex:1 1 100%;min-width:0}#serverWorkNotice .work-toggle{flex:none;width:1.8em;padding:0!important;font-size:1.2em;line-height:1.2}#serverWorkNotice .work-summary-text{flex:1 1 auto;min-width:0;overflow-wrap:anywhere}#serverWorkNotice .work-pulse,#serverWorkNotice .work-task-progress{height:4px;overflow:hidden;border-radius:9px;background:color-mix(in srgb,var(--accent,#865000) 18%,transparent)}#serverWorkNotice .work-pulse{flex:1 1 100%;min-width:100%;margin:0 0 0 0}#serverWorkNotice .work-pulse::after{content:"";display:block;width:42%;height:100%;background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--accent,#865000) 72%,transparent),transparent);animation:work-pulse 1.8s ease-in-out infinite}#serverWorkNotice .work-task-list{flex:1 1 100%;min-width:0;max-height:min(32vh,280px);overflow-y:auto;overscroll-behavior:contain}#serverWorkNotice .work-task-row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:4px 8px;padding:5px 0;border-top:1px solid color-mix(in srgb,var(--line,#b9a98e) 60%,transparent)}#serverWorkNotice .work-task-label{min-width:0;overflow-wrap:anywhere}#serverWorkNotice .work-task-progress{grid-column:1/-1}#serverWorkNotice .work-task-progress>span{display:block;height:100%;background:var(--accent,#865000)}#serverWorkNotice .work-task-stop{grid-column:2;grid-row:1;font-size:.9em;padding:1px 7px}@keyframes work-pulse{0%{transform:translateX(-110%)}100%{transform:translateX(240%)}}@media(prefers-reduced-motion:reduce){#serverWorkNotice .work-pulse::after{animation:none;width:100%;background:color-mix(in srgb,var(--accent,#865000) 38%,transparent)}}`;
@@ -217,9 +218,10 @@
   const dialogs = [];
   function place() {
     const browse = document.body.classList.contains('workspace-browse') ? document.querySelector('.workspace-browser') : null;
-    const parent = dialogs.filter(d => d.open && d.isConnected).at(-1) || browse || document.body;
+    const maskControls = document.body.classList.contains('mask-view-active') ? document.getElementById('maskSearchControls') : null;
+    const parent = dialogs.filter(d => d.open && d.isConnected).at(-1) || browse || maskControls || document.body;
     if (backing.parentNode !== parent) parent.append(backing);
-    const footer = parent === browse ? browse.querySelector(':scope > footer') : null;
+    const footer = parent === browse ? browse.querySelector(':scope > footer') : parent === maskControls ? maskControls.querySelector(':scope > .mask-dock') : null;
     if (footer) {
       if (box.parentNode !== parent || box.nextElementSibling !== footer) parent.insertBefore(box, footer);
     } else if (box.parentNode !== parent) parent.append(box);
@@ -235,6 +237,7 @@
     }
     place();
   }).observe(document.body, {subtree:true, attributes:true, attributeFilter:['open']});
+  new MutationObserver(place).observe(document.body, {attributes:true, attributeFilter:['class']});
   function render(s) {
     status = s;
     try {if(s.running)sessionStorage.setItem(cacheKey,JSON.stringify(s));else sessionStorage.removeItem(cacheKey);}catch{}
