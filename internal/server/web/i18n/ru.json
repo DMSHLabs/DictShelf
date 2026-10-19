@@ -291,6 +291,7 @@
   "browse.loadFailed": "Не удалось загрузить список словарей. Перезагрузите страницу, чтобы попробовать снова.",
   "panel.settings": "Настройки",
   "panel.dictionaries": "Словари",
+  "panel.searchGroups": "Группы:",
   "panel.editDicts": "Настройки словарей",
   "panel.editGroups": "Группы словарей",
   "panel.editFolders": "Папки словарей",

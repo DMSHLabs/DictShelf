@@ -1,5 +1,17 @@
 # Agent handoff — current state
 
+Browse filtered results now have their own virtualized strip, one marker per available 300-word page labelled by its first headword. Chips and scrollbar navigate filtered pages. The full dictionary alphabet remains separate in its existing cache; its measured geometry is saved across filter toggles and restored without rebuilding when metrics match. Runtime verification is pending.
+
+Browse typing debounce is now 500 ms, restarted by every input edit. Its shared task panel sits inside the workspace immediately above the footer, shrinking the headword pane instead of shifting the input upward. Runtime layout/typing verification is pending.
+
+Browse headword search finishes its own progress task on the done event and unconditionally in finally, including canceled/superseded requests. Task cleanup no longer depends on the current query sequence. Runtime confirmation of the reported lingering Searching headwords message is pending.
+
+Results toggles measure their own shared label width, independently of checkbox labels in the section. Groups: (Группы:) and Search as you type use natural-width labels and dropdowns filling the remaining row. Visual verification is pending.
+
+Browse input search uses indexconst.BrowseSearchDebounceMS (300 ms after the last edit). The input stays enabled during search streams and page/alphabet loading, and page-loading keyboard guards allow typing in it. Runtime focus/continued-typing verification is pending.
+
+Settings places the Search as you type label before its dropdown. Runtime layout verification is pending.
+
 Search as you type options now explicitly read Never, Below 10k/50k/100k/500k/1m, Always (localized in EN/RU); saved values and threshold behavior are unchanged. Runtime layout verification is pending.
 
 Settings → Search as you type adds Always (Всегда), saved as -1 in the existing threshold preference. Shared Browse/Wildcards controls then search/filter on input regardless of headword count; existing numeric thresholds and default remain unchanged. Runtime verification is pending.

@@ -266,6 +266,7 @@ footer{position:fixed;bottom:0;left:0;right:0;z-index:6;display:flex;justify-con
   padding:.5rem .9rem max(.5rem,env(safe-area-inset-bottom));background:var(--bar);
   backdrop-filter:saturate(1.6) blur(8px);border-top:1px solid var(--line)}
 body.browse-page-busy #top,body.browse-page-busy main,body.browse-page-busy .browse-search-dock{pointer-events:none;opacity:.62}
+body.browse-page-busy #findInput{pointer-events:auto}
 footer .browse-controls{width:100%;max-width:54rem}
 footer .browse-search-dock{width:100%;max-width:54rem}
 .words a.browse-current{outline:2px solid var(--accent);outline-offset:-2px;background:var(--line-soft)}
@@ -447,6 +448,7 @@ const browseAlphabetCache=new Map(),browseAlphabetPartial=new Map(),browsePageCa
 const BROWSE_PAGE_CACHE_LIMIT=12,BROWSE_PAGE_SESSION_LIMIT=8;
 const BROWSE_ALPHABET_SESSION_KEY="wudict_browse_alphabet_v2";
 const BROWSE_STRIP_EXACT_WIDTHS={{BROWSE_STRIP_EXACT_WIDTHS}};
+const BROWSE_SEARCH_DEBOUNCE_MS={{BROWSE_SEARCH_DEBOUNCE_MS}};
 const BROWSE_FIND_SESSION_KEY="wudict_browse_find_v1";
 const BROWSE_PAGE_SESSION_KEY="wudict_browse_page_v1";
 let browseHeadwordControl=null;
@@ -673,7 +675,7 @@ function moveStripScrollbar(clientX){
   strip.scrollLeft=maxThumb?left/maxThumb*maxScroll:0;
 }
 function selectStripBlockAtScroll(){
-  const items=state?.alphabet||[];
+  const items=activeStripItems();
   if(!items.length||!stripWidths.length)return;
   const strip=$("strip"),maxScroll=Math.max(0,strip.scrollWidth-strip.clientWidth),left=strip.scrollLeft;
   const atStart=left<=1,atEnd=!atStart&&left>=maxScroll-1;
@@ -681,7 +683,7 @@ function selectStripBlockAtScroll(){
   const center=left+strip.clientWidth/2;
   if(!atStart&&!atEnd&&index>0&&Math.abs(stripOffsets[index-1]+stripWidths[index-1]/2-center)<Math.abs(stripOffsets[index]+stripWidths[index]/2-center))index--;
   const item=items[index],offset=Number(item?.o);
-  if(Number.isFinite(offset))show({p:Math.floor(offset/state.size)+1,o:offset},"push");
+  if(Number.isFinite(offset))selectStripOffset(offset);
 }
 $("stripScrollbar").addEventListener("pointerdown",event=>{
   if(event.button!==0||event.isPrimary===false)return;
@@ -773,8 +775,8 @@ function measureStripItems(items){
     const generation=stripMeasureGeneration;
     stripMeasureFrame=requestAnimationFrame(()=>{
       stripMeasureFrame=0;
-      if(generation!==stripMeasureGeneration||!state||state.dict!==stripFor)return;
-      const currentItems=state.alphabet||[];
+      if(generation!==stripMeasureGeneration||!state)return;
+      const currentItems=activeStripItems();
       if(measureStripItems(currentItems))render();
     });
   }
@@ -787,7 +789,7 @@ function measureStripItems(items){
 }
 function renderVirtualStrip(force=false){
   if(!state||!stripWidths.length)return;
-  const strip=$("strip"),track=$("stripTrack"),items=state.alphabet||[];
+  const strip=$("strip"),track=$("stripTrack"),items=activeStripItems();
   const left=strip.scrollLeft,right=left+strip.clientWidth,buffer=24;
   const start=Math.max(0,lowerStripIndex(left,true)-buffer);
   const end=Math.min(items.length,lowerStripIndex(right)+buffer);
@@ -816,8 +818,35 @@ function scrollStrip(direction){
 $("stripPrev").addEventListener("click",()=>scrollStrip(-1));
 $("stripNext").addEventListener("click",()=>scrollStrip(1));
 $("strip").addEventListener("scroll",scheduleVirtualStrip,{passive:true});
-new ResizeObserver(()=>{if(state&&!$("stripWrap").hidden){measureStripItems(state.alphabet||[]);renderVirtualStrip(true)}updateStripArrows()}).observe($("strip"));
+new ResizeObserver(()=>{if(state&&!$("stripWrap").hidden){measureStripItems(activeStripItems());renderVirtualStrip(true)}updateStripArrows()}).observe($("strip"));
 let findResult=null,findIndex=-1,findFilter=false,findTimer=0,findAbort=null,findSeq=0,browseSeq=0,findMask=false;
+let filteredStripResult=null,filteredStripWords=null,filteredStripLength=-1,filteredStripItems=[];
+let baseStripGeometry=null;
+function filteredStripActive(){return !!(findFilter&&$("findInput").value.trim()&&findResult)}
+function activeStripItems(){
+  if(!filteredStripActive())return state?.alphabet||[];
+  const words=findResult.words||[];
+  if(filteredStripResult!==findResult||filteredStripWords!==words||words.length<filteredStripLength){
+    filteredStripResult=findResult;filteredStripWords=words;filteredStripItems=[];filteredStripLength=-1;
+  }
+  if(words.length!==filteredStripLength){
+    // Append page markers as results arrive; only the final page count changes.
+    const base=findResult.stream?0:((findResult.page||1)-1)*300;
+    if(filteredStripItems.length)filteredStripItems.at(-1).n=Math.min(300,words.length-(filteredStripItems.length-1)*300);
+    for(let i=filteredStripItems.length*300;i<words.length;i+=300)
+      filteredStripItems.push({l:words[i],o:base+i,n:Math.min(300,words.length-i)});
+    if(filteredStripItems.length)filteredStripItems.at(-1).n=Math.min(300,words.length-(filteredStripItems.length-1)*300);
+    filteredStripLength=words.length;
+  }
+  return filteredStripItems;
+}
+function selectStripOffset(offset){
+  if(filteredStripActive()){
+    const page=Math.floor(offset/300)+1;
+    if(findResult.stream){findFilterPage=page;render();$("list").parentElement.scrollTop=0}
+    else fetchFound(page,0,"push");
+  }else show({p:Math.floor(offset/state.size)+1,o:offset},"push");
+}
 let appliedFindMask=false,findApproved=false,findApplyPending=false,browseProgressSeq=0,browseProgressJobs=new Map(),findStreamDone=true,findPendingMove=0,findPendingPage=0,findFilterPage=1;
 let findStreamWords=[];
 function browseMaskThreshold(){
@@ -868,7 +897,7 @@ window.addEventListener("wudict-tasks-ready",()=>{for(const job of browseProgres
 function setBrowsePageBusy(on){
   browsePageBusy=on;document.body.classList.toggle("browse-page-busy",on);
   if(on){
-    for(const id of ["findInput","findMode","maskMode","findApply","findPrev","findNext","stripPrev","stripNext"]){
+    for(const id of ["findMode","maskMode","findApply","findPrev","findNext","stripPrev","stripNext"]){
       const el=$(id);if(el)el.disabled=true;
     }
     document.querySelectorAll("[data-go], #strip button").forEach(el=>el.disabled=true);
@@ -1213,7 +1242,7 @@ function updateFindControls(){
   const suffix=findResult&&!findStreamDone?"+":"";
   const locked=!!findResult?.stream&&!findStreamDone;
   browseHeadwordControl.paint({filtering,mask:findMask,applyRequired:browseNeedsApply(),
-    applyEnabled:!!$("findInput").value.trim(),busy:locked,
+    applyEnabled:!!$("findInput").value.trim(),busy:locked,allowInputWhileBusy:true,
     count:filtering?total+suffix:(findIndex<0?0:findIndex+1)+"/"+total+suffix,
     previousDisabled:filtering||findIndex<0||(findStreamDone&&findIndex<=0),
     nextDisabled:filtering||findIndex<0||(findStreamDone&&findIndex>=total-1)});
@@ -1228,7 +1257,8 @@ async function fetchFound(page,target=0,record="replace"){
   findResult={words:findStreamWords,total:0,page:1,pages:0,size:300,stream:true};
   updateFindControls();render();
   const endProgress=browseProgress(t(findFilter?"browse.filteringWords":"browse.searchingWords"),()=>controller.abort(),"find");
-  const finish=()=>{if(seq===findSeq)endProgress()};
+  // This closure owns only this request's task, including after a newer query starts.
+  const finish=()=>endProgress();
   const u=new URLSearchParams({dict:dictId,q:query,wildcards:mask?"1":"0",stream:"1"});
   try{
     const r=await browseFetch("/api/browse/find?"+u,{signal:controller.signal});
@@ -1247,7 +1277,7 @@ async function fetchFound(page,target=0,record="replace"){
         if(event.words?.length)findStreamWords.push(...event.words);
         findResult.total=event.total||0;
         findResult.pages=Math.ceil(findResult.total/300);
-        if(event.done){findStreamDone=true;findResult.total=event.total||0;findResult.pages=Math.ceil(findResult.total/300)}
+        if(event.done){findStreamDone=true;findResult.total=event.total||0;findResult.pages=Math.ceil(findResult.total/300);finish()}
         updateBrowseProgress(t(findFilter?"browse.filteringWords":"browse.searchingWords")+" · "+num(event.total||findStreamWords.length));
         if(findFilter){
           if(findPendingPage&&findPendingPage<=Math.ceil(findStreamWords.length/300)){findFilterPage=findPendingPage;findPendingPage=0}
@@ -1286,6 +1316,8 @@ async function fetchFound(page,target=0,record="replace"){
     $("findCount").textContent="!";$("findCount").title=window.wudictI18n.errorText(e.message);
     browseTrace("find failed",{dict:dictId,error:e.message});
     updateFindControls();render();
+  }finally{
+    finish();
   }
 }
 function findChanged(){
@@ -1301,7 +1333,7 @@ function findChanged(){
   findResult=null;findIndex=-1;findStreamDone=true;findStreamWords=[];findPendingMove=0;
   if(!$("findInput").value.trim()){updateFindControls();render();return}
   $("findCount").textContent="…";
-  findTimer=setTimeout(()=>fetchFound(1,0,"replace"),300);
+  findTimer=setTimeout(()=>fetchFound(1,0,"replace"),BROWSE_SEARCH_DEBOUNCE_MS);
 }
 function applyFind(){
   if(!browseNeedsApply())return;
@@ -1514,17 +1546,27 @@ function render(){
 
   /* The strip belongs to the dictionary, not to the page, so it is built once
      and its visible window is rendered at a time. */
-  $("stripWrap").hidden=!!filtering;
-  $("stripScrollbar").hidden=!!filtering;
+  const stripItems=activeStripItems();
+  $("stripWrap").hidden=!stripItems.length;
+  $("stripScrollbar").hidden=!stripItems.length;
   const strip=$("strip"),track=$("stripTrack"),stripStarted=performance.now();
   let stripBuilt=stripStarted,stripReady=stripStarted;
-  if(!filtering){
-    if(stripFor!==d.dict){
-      stripFor=d.dict;stripLettersPainted=0;stripMetricKey="";stripWidths=[];stripOffsets=[];stripTotalWidth=0;
+  {
+    const stripKey=filtering?d.dict+":filter:"+findSeq:d.dict;
+    if(stripFor!==stripKey){
+      if(stripFor===d.dict)baseStripGeometry={dict:d.dict,metricKey:stripMetricKey,widths:stripWidths.slice(),offsets:stripOffsets.slice(),totalWidth:stripTotalWidth,painted:stripLettersPainted,scroll:strip.scrollLeft};
+      stripMeasureGeneration++;
+      if(stripMeasureFrame){cancelAnimationFrame(stripMeasureFrame);stripMeasureFrame=0}
+      stripMeasureStarted=0;
+      stripFor=stripKey;stripLettersPainted=0;stripMetricKey="";stripWidths=[];stripOffsets=[];stripTotalWidth=0;
       stripCurrentIndex=-1;stripCurrentPositionedIndex=-1;stripWindowStart=stripWindowEnd=-1;strip.scrollLeft=0;
+      if(!filtering&&baseStripGeometry?.dict===d.dict&&baseStripGeometry.widths.length===stripItems.length){
+        stripMetricKey=baseStripGeometry.metricKey;stripWidths=baseStripGeometry.widths.slice();stripOffsets=baseStripGeometry.offsets.slice();stripTotalWidth=baseStripGeometry.totalWidth;stripLettersPainted=baseStripGeometry.painted;
+        track.style.width=Math.max(strip.clientWidth,stripTotalWidth)+"px";strip.scrollLeft=baseStripGeometry.scroll;
+      }
       track.replaceChildren($("stripMeasure"));
     }
-    measureStripItems(d.alphabet||[]);
+    measureStripItems(stripItems);
     stripBuilt=performance.now();
   /* Highlight what was ASKED for, not what the page happens to start with.
      Both a chip click and a jump snap down to the page grid, so the page
@@ -1532,15 +1574,15 @@ function render(){
      click on K by lighting up J reads as a bug, because it is one. A mark
      outside this page (a page turn, a reload, a clamped bookmark) falls back
      to where the page starts, which is then exactly where the reader is. */
-    const at=(d.page-1)*d.size;
-    let mark=d.mark;
+    const at=filtering?(filterPage-1)*300:(d.page-1)*d.size;
+    let mark=filtering?at:d.mark;
     if(!(mark>=at&&mark<at+d.size))mark=at;
-    let lo=0,hi=d.alphabet.length;
-    while(lo<hi){const mid=(lo+hi)>>>1;if(d.alphabet[mid].o<=mark)lo=mid+1;else hi=mid}
+    let lo=0,hi=stripItems.length;
+    while(lo<hi){const mid=(lo+hi)>>>1;if(stripItems[mid].o<=mark)lo=mid+1;else hi=mid}
     const currentIndex=lo-1;
     const currentChanged=currentIndex!==stripCurrentIndex;
     if(currentChanged)stripCurrentIndex=currentIndex;
-    if(browseAlphabetCache.has(d.dict)&&currentIndex>=0&&currentIndex<stripOffsets.length&&stripCurrentPositionedIndex!==currentIndex){
+    if((filtering||browseAlphabetCache.has(d.dict))&&currentIndex>=0&&currentIndex<stripOffsets.length&&stripCurrentPositionedIndex!==currentIndex){
       const center=stripOffsets[currentIndex]+stripWidths[currentIndex]/2;
       strip.scrollLeft=Math.max(0,Math.min(stripTotalWidth-strip.clientWidth,center-strip.clientWidth/2));
       stripCurrentPositionedIndex=currentIndex;
@@ -1766,7 +1808,7 @@ document.addEventListener("click",e=>{
   const g=e.target.closest("[data-go]");
   if(g)return turn(g.dataset.go);
   const c=e.target.closest(".strip button[data-o]");
-  if(c&&state){const o=Number(c.dataset.o);show({p:Math.floor(o/state.size)+1,o:o},"push")}
+  if(c&&state)selectStripOffset(Number(c.dataset.o));
 });
 
 $("findInput").addEventListener("keydown",e=>{
@@ -1780,7 +1822,7 @@ $("findInput").addEventListener("keydown",e=>{
 updateFindControls();
 
 addEventListener("keydown",e=>{
-  if(browsePageBusy){e.preventDefault();return}
+  if(browsePageBusy&&e.target!==$("findInput")){e.preventDefault();return}
   if(e.metaKey||e.ctrlKey||e.altKey)return;
   if(e.target.tagName==="INPUT"){
     if(e.key==="Escape"){

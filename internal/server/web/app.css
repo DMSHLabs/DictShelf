@@ -1012,8 +1012,8 @@ body.styling{padding-bottom:var(--styler-shown,var(--styler-h))}
   border-width:0 2px 2px 0;transform:rotate(45deg)}
 #panel .panel-checkbox:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 #panel .headword-threshold-row{width:100%;align-items:center;column-gap:calc(var(--ui-control-gap) * 2em)}
-#panel .headword-threshold-row>#headwordApplyThreshold{flex:none;max-width:100%}
-#panel .headword-threshold-row>.rowlabel{flex:1 1 14em;min-width:min(100%,14em);white-space:normal;line-height:1.35}
+#panel .headword-threshold-row>#headwordApplyThreshold{flex:1 1 0;min-width:0;max-width:100%}
+#panel .headword-threshold-row>.rowlabel{flex:none;white-space:nowrap;line-height:1.35}
 /* ─ floating menus ──────────────────────────────────────────────────
    THE SURFACE, stated once: every menu the app floats over the page wears it,
    so a menu is a window like the others - the history dropdown's own card,
@@ -1582,11 +1582,8 @@ dialog.panel-card:not([open]){display:none}
 .facts .mrow.door::after{content:"›";margin-left:auto;color:var(--label-quiet);
   font-size:1em;line-height:1;flex:none}
 .facts .mrow.door:hover::after{color:var(--label)}
-/* The panel's group drop-down (which group the search is on, in place of the
-   removed "Open first" pair): the label takes the READING STRIP's own MEASURED
-   column - not the Appearance rows' one, which is narrower here - so it lines
-   up with "Highlight matches" and "Read aloud" above it. The bar then fills
-   the rest of the row, and its own label is
+/* The panel's group drop-down follows its natural-width label and fills
+   the rest of the row. Its own label is
    ellipsised: min-width:0 is what lets a flex item shrink below its content at
    all, and the caret keeps its place on its own auto margin. The button's
    `width:100%` is replaced by `flex:1 1 0` because `.facts` wraps: an item
@@ -1595,7 +1592,7 @@ dialog.panel-card:not([open]){display:none}
    `align-items:flex-start`, so without it the row and the bar inside it would
    be only as wide as their content - a short group name left a short bar. */
 .facts.dictionary-group-row{width:100%;align-self:stretch}
-.facts.dictionary-group-row>.rowlabel{flex:0 0 var(--rlcol,96px);min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#panel .facts.dictionary-group-row>.rowlabel{flex:none;min-width:0;white-space:nowrap}
 .facts.dictionary-group-row>#pickerGroupBtn{box-sizing:border-box;width:auto;flex:1 1 0;min-width:0}
 #pickerGroupBtn>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #languageError{margin:calc(var(--ui-addition-gap) * 1em) 0 0;color:var(--danger);font-size:calc(var(--ui-hint-font-size) * 1rem)}
