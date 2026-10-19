@@ -186,8 +186,8 @@ func TestLookApplyWritesTheWholeState(t *testing.T) {
 	if !asked.Shell.Light.ColorEnabled || asked.Shell.Light.Color != "#F4ECD8" {
 		t.Fatalf("Warm must enable its window colour: %+v", asked.Shell.Light)
 	}
-	if asked.Shell.Dark.ColorEnabled || asked.Shell.Dark.Image != "" {
-		t.Fatalf("Warm's night half must be empty: %+v", asked.Shell.Dark)
+	if !asked.Shell.Dark.ColorEnabled || asked.Shell.Dark.Color != "#1C1A17" || asked.Shell.Dark.Image != "" {
+		t.Fatalf("Warm must enable its night window colour: %+v", asked.Shell.Dark)
 	}
 	if _, err := os.ReadFile(filepath.Join(dir, "looks.json")); err != nil {
 		t.Fatalf("the look was not remembered: %v", err)
@@ -208,7 +208,7 @@ func TestLookApplyAsksBeforeLosingUnsavedChanges(t *testing.T) {
 	// what the window is wearing, including Warm's enabled light colour.
 	warmShell := map[string]any{
 		"light": map[string]any{"colorEnabled": true, "color": "#F4ECD8"},
-		"dark":  map[string]any{"colorEnabled": false},
+		"dark":  map[string]any{"colorEnabled": true, "color": "#1C1A17"},
 	}
 	body := lookCall(t, s, "POST", "/api/looks/apply",
 		map[string]any{"id": lookOldPaper, "shell": warmShell}, 200)
@@ -431,10 +431,10 @@ func TestLookSwitchBetweenBuiltinsNeverAsks(t *testing.T) {
 	// After Clean: the same, because a look with no colour of its own leaves
 	// the field alone.
 	afterClean := fresh
-	// Warm enables its light window colour; the dark colour stays disabled.
+	// Warm enables a window colour for each theme.
 	afterWarm := map[string]any{
 		"light": map[string]any{"colorEnabled": true, "color": "#F4ECD8", "image": ""},
-		"dark":  map[string]any{"colorEnabled": false, "color": "#332111", "image": ""},
+		"dark":  map[string]any{"colorEnabled": true, "color": "#1C1A17", "image": ""},
 	}
 	// After Old paper: a paper for each theme.
 	afterOldPaper := map[string]any{
