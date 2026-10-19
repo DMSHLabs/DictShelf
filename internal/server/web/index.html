@@ -848,6 +848,10 @@ window.wudictFontScale=(function(){
   </div>
 </details>
 
+<details class="sect" data-panel-section="tools" open>
+<summary class="sect-h">{{T:export.tools}}</summary>
+<div class="facts"><button type="button" class="mrow" id="openHeadwordExport">{{T:export.open}}</button></div>
+</details>
 <details class="sect" data-panel-section="language" open>
   <summary class="sect-h">Language</summary>
   <div class="facts">
@@ -964,6 +968,20 @@ window.wudictFontScale=(function(){
 {{FILTERSDIALOG}}
 {{FOLDERSDIALOG}}
 {{LEMMADIALOG}}
+<dialog id="headwordExport" lang="{{T:locale}}" class="group-dialog panel-card" aria-labelledby="headwordExportTitle">
+<h2 id="headwordExportTitle">{{T:export.title}} <button type="button" class="btn" id="exportClose" aria-label="{{T:panel.close}}">✕</button></h2>
+<div class="export-group"><input type="checkbox" id="exportGroupCheck" aria-label="{{T:export.selectGroup}}"><select id="exportGroup" aria-label="{{T:panel.groups}}"></select></div>
+<div id="exportRows" class="web-picker-rows"></div>
+<div id="exportSearch" class="list-search-dock" role="search" aria-label="{{T:dictUI.listSearchLabel}}"></div>
+<div class="export-actions"><button type="button" class="btn" id="exportAll">{{T:export.all}}</button><button type="button" class="btn" id="exportNone">{{T:export.none}}</button><span id="exportSelected"></span></div>
+<label><input type="checkbox" id="exportSeparate" checked> {{T:export.separate}}</label>
+<label for="exportPath">{{T:export.folder}}</label>
+<div class="export-path"><input type="text" id="exportPath" autocomplete="off" spellcheck="false"><button type="button" class="btn" id="exportFolder" aria-label="{{T:pages.chooseFolder}}" hidden>📁</button></div>
+<p class="export-hint">{{T:export.format}}</p>
+<progress id="exportProgress" value="0" max="1" hidden></progress>
+<p id="exportStatus" role="status" aria-live="polite"></p>
+<div class="export-actions export-footer"><button type="button" class="btn" id="exportSave">{{T:panel.save}}</button><button type="button" class="btn" id="exportStop" hidden>{{T:dictUI.stop}}</button><button type="button" class="btn" id="exportCancel">{{T:panel.cancel}}</button></div>
+</dialog>
 <dialog id="webDictionaryPicker" lang="{{T:locale}}" class="group-dialog panel-card" aria-label="{{T:search.dictionary}}">
   <div class="web-picker-head">
     <select id="webPickerGroup" aria-label="{{T:search.dictionary}}"></select>
@@ -2602,6 +2620,90 @@ async function openWebDictionaryPicker(context="search"){
     webPickerSearch.clear();
   }catch(e){setStatus(esc(tx('search.groupFailed',{error:window.wudictI18n.errorText(e.message)})))}
 }
+let exportSearch=null,exportRunning=false,exportPolling=false;
+const exportSelected=new Set();
+async function exportCall(action,extra={}){
+ const argument=JSON.stringify({action,...extra});
+ if(window.wudictAndroidGo){const result=JSON.parse(window.wudictAndroidGo.headwordExport(action,argument));if(!result.ok)throw new Error(result.error);return result.value}
+ if(typeof window.wudictNativeCall==='function')return window.wudictNativeCall('headwordExport',argument);
+ const response=await fetch('/api/headword-export',{method:'POST',headers:{'Content-Type':'application/json'},body:argument});
+ const result=await response.json();if(!response.ok)throw new Error(result.error);return result;
+}
+function exportGroupRows(){
+ const group=userGroups.find(g=>g.id===$('exportGroup').value);
+ return group&&group.id!=='all'?orderedGroupDicts(group,orderedDicts()):orderedDicts();
+}
+function exportSelectionChanged(){
+ const rows=exportGroupRows(),selected=rows.filter(d=>exportSelected.has(d.id)).length;
+ $('exportGroupCheck').checked=rows.length>0&&selected===rows.length;
+ $('exportGroupCheck').indeterminate=selected>0&&selected<rows.length;
+ $('exportGroupCheck').disabled=exportRunning||!rows.length;
+ $('exportSelected').textContent=tx('export.selected',{number:window.wudictI18n.number(exportSelected.size)});
+ $('exportSave').disabled=exportRunning||!exportSelected.size||!$('exportPath').value.trim();
+}
+function paintExportRows(){
+ const rows=exportGroupRows();
+ $('exportRows').replaceChildren(...rows.map(d=>{
+  const row=document.createElement('label');row.className='web-picker-row';
+  const check=document.createElement('input');check.type='checkbox';check.value=d.id;check.checked=exportSelected.has(d.id);check.disabled=exportRunning;
+  check.onchange=()=>{if(check.checked)exportSelected.add(d.id);else exportSelected.delete(d.id);exportSelectionChanged()};
+  const name=document.createElement('span');name.className='web-picker-name';name.textContent=dictLabel(d);row.title=name.textContent;
+  row.append(check,name);return row;
+ }));exportSearch?.refresh();exportSelectionChanged();
+}
+function exportBusy(busy){
+ exportRunning=busy;
+ for(const id of ['exportGroup','exportGroupCheck','exportAll','exportNone','exportSeparate','exportPath','exportFolder'])$(id).disabled=busy;
+ $('exportRows').querySelectorAll('input').forEach(el=>el.disabled=busy);
+ $('exportStop').hidden=!busy;$('exportProgress').hidden=!busy;exportSelectionChanged();
+}
+function exportShowStatus(st){
+ exportBusy(!!st.Running);
+ const fraction=st.CurrentTotal>0?Math.min(1,st.CurrentDone/st.CurrentTotal):0;
+ $('exportProgress').max=Math.max(1,st.Total||0);$('exportProgress').value=Math.min(st.Total||0,(st.Done||0)+fraction);
+ if(st.Err)$('exportStatus').textContent=tx('export.failed',{error:st.Err});
+ else if(st.Canceled)$('exportStatus').textContent=tx('export.stopped');
+ else if(st.Running)$('exportStatus').textContent=tx('export.progress',{name:st.Current||'',done:st.Done||0,total:st.Total||0,words:window.wudictI18n.number(st.CurrentDone||0)});
+ else if(st.Total)$('exportStatus').textContent=tx('export.saved',{done:window.wudictI18n.number(st.Done||0),total:window.wudictI18n.number(st.Total)});
+ else $('exportStatus').textContent='';
+}
+async function exportFollow(){
+ if(exportPolling)return;exportPolling=true;
+ try{do{const st=await exportCall('status');exportShowStatus(st);if(!st.Running)break;await new Promise(resolve=>setTimeout(resolve,300))}while(true)}
+ catch(error){$('exportStatus').textContent=tx('export.failed',{error:error.message});$('exportStop').hidden=false}
+ finally{exportPolling=false}
+}
+$('openHeadwordExport').onclick=async()=>{
+ try{
+  userGroups=await groupRequest('/api/user-groups','GET');
+  const selected=$('exportGroup').value;
+  $('exportGroup').replaceChildren(...userGroups.map(g=>new Option(pickerGroupName(g.id),g.id)));
+  $('exportGroup').value=userGroups.some(g=>g.id===selected)?selected:'all';
+  $('exportPath').value=localStorage.getItem('wudict_headword_export_path')||'';
+  $('exportFolder').hidden=typeof window.wudictPickFolder!=='function';
+  paintExportRows();hidePanel();$('headwordExport').showModal();
+  if(!exportSearch)exportSearch=window.wudictListSearch.create({root:$('exportRows'),itemSelector:'.web-picker-row',dock:$('exportSearch'),highlightSelector:'.web-picker-name',initiallyFiltering:true,
+   labels:{placeholder:tx('dictUI.listSearchPlaceholder'),filterPlaceholder:tx('dictUI.listFilterPlaceholder'),search:tx('dictUI.listSearchLabel'),filter:tx('dictUI.listSearchFilter'),previous:tx('dictUI.listSearchPrevious'),next:tx('dictUI.listSearchNext'),count:tx('dictUI.listSearchCount',{current:'{current}',total:'{total}'})}});
+  exportSearch.clear();exportFollow();
+ }catch(error){setStatus(esc(tx('export.failed',{error:error.message})))}
+};
+$('exportGroup').onchange=paintExportRows;
+$('exportGroupCheck').onchange=()=>{const checked=$('exportGroupCheck').checked;exportGroupRows().forEach(d=>{if(checked)exportSelected.add(d.id);else exportSelected.delete(d.id)});paintExportRows()};
+$('exportAll').onclick=()=>{orderedDicts().forEach(d=>exportSelected.add(d.id));paintExportRows()};
+$('exportNone').onclick=()=>{exportSelected.clear();paintExportRows()};
+$('exportPath').oninput=exportSelectionChanged;
+$('exportFolder').onclick=()=>window.wudictPickFolder(path=>{if(path){$('exportPath').value=path;exportSelectionChanged()}});
+$('exportClose').onclick=()=>$('headwordExport').close();
+$('exportCancel').onclick=async()=>{if(exportRunning){try{await exportCall('stop')}catch(error){$('exportStatus').textContent=tx('export.failed',{error:error.message});return}}$('headwordExport').close()};
+$('exportSave').onclick=async()=>{
+ exportBusy(true);$('exportStatus').textContent='';
+ try{
+  const path=$('exportPath').value.trim();
+  const st=await exportCall('start',{dictionaries:orderedDicts().filter(d=>exportSelected.has(d.id)).map(d=>d.id),path,separate:$('exportSeparate').checked});
+  localStorage.setItem('wudict_headword_export_path',path);exportShowStatus(st);exportFollow();
+ }catch(error){exportBusy(false);$('exportStatus').textContent=tx('export.failed',{error:error.message})}
+};
+$('exportStop').onclick=async()=>{try{exportShowStatus(await exportCall('stop'));exportFollow()}catch(error){$('exportStatus').textContent=tx('export.failed',{error:error.message})}};
 $('webPickerClose').onclick=()=>$('webDictionaryPicker').close();
 $('webPickerGroup').onchange=e=>{wudictPickerGroupChanged(e.target.value);paintWebDictionaryPicker()};
 $('maskDict').onclick=()=>openWebDictionaryPicker("wildcards");

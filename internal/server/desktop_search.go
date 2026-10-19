@@ -483,6 +483,8 @@ func (s *Server) DesktopJSONContext(ctx context.Context, baseURL, method, argume
 			return nil, errors.New("could not save language")
 		}
 		return map[string]string{"language": s.reg.prefs.Language()}, nil
+	case "headwordExport":
+		return s.headwordExport(argument)
 	case "systemLog":
 		content, filename, err := s.systemLogSnapshot()
 		if err != nil {

@@ -2141,3 +2141,32 @@ html:is([data-shell-sepia],[data-shell-image]) .list-search-input{background-col
 .list-search-current{background-color:color-mix(in srgb,var(--accent) 14%,var(--bg-card,var(--bg)))}
 .list-search-name-match{background:var(--accent);color:var(--bg);border-radius:.15em}
 .list-search-filtered-out{display:none!important}
+
+/* Headword export uses the shared dictionary list and search dock. */
+#headwordExport{width:min(560px,calc(100vw - 32px));height:min(760px,calc(100dvh - 32px));max-height:calc(100dvh - 32px);box-sizing:border-box;overflow:auto}
+#headwordExport[open]{display:flex;flex-direction:column;gap:.6em}
+#headwordExport h2{display:flex;align-items:center;justify-content:space-between;margin:0}
+#exportRows{min-height:80px;max-height:40dvh}
+#exportRows .web-picker-row{box-sizing:border-box;display:flex;align-items:center;gap:.6em;text-align:start}
+#exportRows .web-picker-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#headwordExport .export-actions,#headwordExport .export-path{display:flex;gap:.6em;align-items:center;flex-wrap:wrap}
+#exportPath{flex:1;min-width:0;width:100%}
+#headwordExport .export-hint,#exportStatus{margin:0;font-size:.9em;overflow-wrap:anywhere}
+#exportProgress{width:100%;flex:none}
+
+#headwordExport> :not(#exportRows){flex-shrink:0}
+
+#headwordExport .export-group{display:flex;align-items:center;gap:.8em;padding:.2em .5em .6em;border-bottom:1px solid var(--line)}
+#exportGroup{flex:1;min-width:0;width:100%;max-width:none}
+#headwordExport input[type="checkbox"]{flex:none;margin:0}
+#exportRows .web-picker-row{padding:.75em .5em;gap:.8em}
+#exportSearch{border-top:1px solid var(--line);padding-top:.5em}
+#exportSelected{margin-inline-start:auto;white-space:nowrap}
+#headwordExport .export-path{flex-wrap:nowrap}
+#exportPath{box-sizing:border-box;flex:1 1 0;width:0}
+#exportFolder{flex:none}
+#headwordExport .export-footer{margin-top:auto;padding-top:.6em}
+#exportCancel{margin-inline-start:auto}
+#headwordExport>label:has(#exportSeparate){display:flex;align-items:center;gap:.6em}
+
+#exportGroupCheck:indeterminate::after{content:"";position:absolute;left:50%;top:50%;width:8px;height:8px;border:0;background:var(--fg);transform:translate(-50%,-50%)}
