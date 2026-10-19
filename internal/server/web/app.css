@@ -396,6 +396,7 @@ html[data-shell-image] .mask-head #maskDict{background-color:var(--paper-bg,var(
 .mask-letters button{color:var(--fg);background:var(--bg-card);border:1px solid var(--line);border-radius:6px;cursor:pointer}
 .mask-strip-wrap{display:flex;align-items:stretch;gap:.1rem;padding:.5em .35rem .15em}
 .mask-letters{display:block;position:relative;flex:1;min-width:0;overflow:hidden;padding:0;overscroll-behavior-x:contain;touch-action:pan-y}
+.mask-scrollbar[hidden]{display:none}
 .mask-letter-track{position:relative;height:100%;width:100%;min-width:100%}
 .mask-letter-track> :is(button,span){position:absolute;top:50%;transform:translateY(-50%);box-sizing:border-box;margin:0;text-align:center}
 .mask-letter-track>.mask-dictionary-band{z-index:0;top:0;bottom:0;height:100%;transform:none;border-radius:5px;pointer-events:none}

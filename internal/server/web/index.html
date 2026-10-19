@@ -6152,8 +6152,10 @@ function maskInvalidate(){
   if(searchAC)searchAC.abort();hideSearchProgress();searchSeq++;
   $("maskDictName").textContent="";$("maskDictMeta").textContent="";$("maskDict").title="";$("maskLetterTrack").replaceChildren();$("maskLetterTrack").style.width="100%";$("maskLetterTrack").style.minWidth="100%";
   $("maskCount").textContent="";$("maskPage").textContent="";
-  $("maskPrev").disabled=$("maskNext").disabled=true;
-  $("maskWords").innerHTML='<p class="mask-empty">'+tx("search.wildcardsRun")+'</p>';
+  $("maskPrev").disabled=$("maskPage").disabled=$("maskNext").disabled=true;
+  $("maskDict").disabled=true;
+  $("maskWords").replaceChildren();
+  maskStripPaint();
 }
 function maskReservedBlocks(row){
   const size=row.size||300;
@@ -6282,12 +6284,14 @@ function maskStripPaintNow(){
   const left=maskStripScrollX,right=left+viewport,buffer=ribbon.buffer;
   if(!maskStripItems.length){
     track.replaceChildren(maskStripMeasureNode);maskChipMap.clear();maskStripStart=maskStripEnd=0;maskActiveKey=key;
+    $("maskScrollbar").hidden=true;$("maskStripPrev").disabled=$("maskStripNext").disabled=true;
     maskRibbonNavigator?.update();
     if(rebuilt)maskRibbonDiagnostic("build",{ribbonItems:0,ribbonSections:0,ribbonVisible:0,ribbonAnchor:0,
       ribbonAdapterMs:adapterMS,ribbonBuildMs:buildMS,
       ribbonPaintMs:Math.max(0,Math.round(performance.now()-paintStarted)-buildMS)});
     return;
   }
+  $("maskScrollbar").hidden=false;
   const anchor=Math.min(maskStripItems.length-1,Math.max(0,ribbon.lower(maskStripNavOffsets,maskStripNavWidths,left,true)));
   const start=Math.max(0,anchor-buffer),displayOffsets=maskStripOffsets,displayWidths=maskStripWidths;
   const estimatedEnd=Math.min(maskStripItems.length,Math.max(anchor+buffer+1,
@@ -6390,6 +6394,7 @@ new ResizeObserver(()=>{
 function maskMenu(){
   const selected=maskRows[maskCurrent];
   let total=0,pages=0,prefixKnown=true,complete=true;
+  const settled=maskRows.length>0&&maskRows.every(row=>row.state==="error"||row.state==="ready"&&!row.partial);
   for(const row of maskRows){
     row.firstPage=null;row.pages=0;
     if(row.state==="ready"){
@@ -6405,6 +6410,7 @@ function maskMenu(){
   $("maskDictName").textContent=selected?.name||"";
   $("maskDictMeta").textContent=selected?maskRowMeta(selected):"";
   $("maskDict").title=selected?selected.name+maskRowMeta(selected):"";
+  $("maskDict").disabled=!maskPattern||!settled||total===0;
   $("maskCount").textContent=window.wudictI18n.number(total)+(complete?"":"+");
   const row=maskRows[maskCurrent],result=row?.data;
   const currentPage=result?.page||row?.wantedPage;
