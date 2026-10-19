@@ -29,6 +29,17 @@ func desktopAsset(name string) (desktopAssetResponse, bool) {
 		return desktopAssetResponse{frameJS, "application/javascript; charset=utf-8", immutable}, true
 	case "/assets/app.css":
 		return desktopAssetResponse{appCSS, "text/css; charset=utf-8", immutable}, true
+	case "/assets/fonts/Quivira.otf":
+		body, err := articleFontFiles.ReadFile("web/fonts/Quivira.otf")
+		if err == nil {
+			return desktopAssetResponse{body, "font/otf", immutable}, true
+		}
+	case "/assets/fonts/Charis-Regular.woff2", "/assets/fonts/Charis-Italic.woff2", "/assets/fonts/Charis-Medium.woff2", "/assets/fonts/Charis-MediumItalic.woff2", "/assets/fonts/Charis-Bold.woff2", "/assets/fonts/Charis-BoldItalic.woff2",
+		"/assets/fonts/Gentium-Regular.woff2", "/assets/fonts/Gentium-Italic.woff2", "/assets/fonts/Gentium-Medium.woff2", "/assets/fonts/Gentium-MediumItalic.woff2", "/assets/fonts/Gentium-Bold.woff2", "/assets/fonts/Gentium-BoldItalic.woff2":
+		body, err := articleFontFiles.ReadFile("web/fonts/" + name[strings.LastIndex(name, "/")+1:])
+		if err == nil {
+			return desktopAssetResponse{body, "font/woff2", immutable}, true
+		}
 	case "/assets/history.css":
 		return desktopAssetResponse{historyCSS, "text/css; charset=utf-8", immutable}, true
 	case "/assets/history.js":

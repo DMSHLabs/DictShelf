@@ -1,5 +1,13 @@
 # Agent handoff — current state
 
+Settings → Appearance now has Fonts, Font size and Font weight rows in that order. Charis is the default; the selected family including System is stored in UIPrefs and applied to shadow articles and scripted frames. IPA/transcription elements always use Charis. Embedded fonts are available via same-origin assets for Windows and Android. Build passed; browser/device rendering remains unverified.
+
+All 13 font assets in web/fonts are registered for the document and scripted article frames. Charis and Gentium Regular/Medium/Bold normal and italic WOFF2 faces map to CSS weights 400/500/700; Quivira OTF remains available as a fallback/selection. Build passed; rendering remains unverified.
+
+Copied Charis 7 and Gentium 7 Regular/Italic/Bold/BoldItalic WOFF2 files and each family's OFL.txt into web/fonts; font hashes match the local source packages. Existing Charis-Regular.ttf and Quivira.otf were preserved. Font registration and article styling were not changed.
+
+Export output-folder label, path input and folder button now share one non-wrapping row; the path field takes the remaining width. Runtime layout confirmation remains pending.
+
 Export group checkbox now inherits the same 20px box and checkmark geometry as dictionary rows; only its mixed-state square has a dedicated centered mark. Removed the em-sized override that shrank the box without moving the shared checkmark. Runtime visual confirmation remains pending.
 
 Export defaults to separate files. The group checkbox uses a centered square for mixed selection, a check for all selected, and an empty box for none. Runtime appearance remains unverified.
@@ -26,7 +34,7 @@ Settings → Search as you type adds Always (Всегда), saved as -1 in the e
 
 The built-in Warm appearance enables Window background → Color in both themes: #F4ECD8 in light and #1C1A17 in dark. Runtime checkbox/color verification is pending.
 
-Current checkout: branch `dev2` at `f3c68bb6`; current export changes are uncommitted.
+Current checkout: branch `dev2` at `416df3c6`; current worktree changes are uncommitted. Browse/Wildcards ribbon comparison and open design questions are recorded in `docs/BROWSE-WILDCARDS-CONTROL.md`; no implementation decision has been made.
 
 Browse alphabet chips now cap visible labels at 12 em and render longer labels with an ellipsis; the full label remains available through the native tooltip and accessible name. The width cap is included in the measured chip geometry so virtual scrolling and navigation stay aligned. `go build ./...` and `git diff --check` pass; visual runtime confirmation is pending.
 

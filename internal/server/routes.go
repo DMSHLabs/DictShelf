@@ -221,6 +221,7 @@ func (s *Server) routes() []route {
 		{"GET", "/files/", s.handleUserFile, "", false},
 		{"GET", "/assets/frame.js", serveAsset("application/javascript; charset=utf-8", frameJS), "", false},
 		{"GET", "/assets/app.css", serveAsset("text/css; charset=utf-8", appCSS), "", false},
+		{"GET", "/assets/fonts/", s.handleArticleFont, "", false},
 		// The preset layers' app halves, one file each (presets.go). Same
 		// immutable cache as the assets above - each URL carries its own
 		// content hash - but under their own prefix, because they are a SET

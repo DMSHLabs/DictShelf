@@ -1648,7 +1648,8 @@ dialog.panel-card:not([open]){display:none}
    measure into their own section's column (see "One label column" there). */
 .facts:has(>#fsCtl)>.rowlabel,.facts:has(>#fwCtl)>.rowlabel,
 .facts:has(>#looksChoice)>.rowlabel,.facts:has(>#compactSeg)>.rowlabel,
-.facts:has(>#examplesSeg)>.rowlabel,.facts:has(>#sbarSeg)>.rowlabel{
+.facts:has(>#examplesSeg)>.rowlabel,.facts:has(>#sbarSeg)>.rowlabel,
+.facts:has(>#articleFontSelect)>.rowlabel{
   flex:0 1 var(--rlcol,auto);min-width:0;white-space:nowrap;overflow:hidden;
   text-overflow:ellipsis}
 /* A `.facts` row is `display:flex`, which outvotes the user-agent's
@@ -1662,6 +1663,8 @@ dialog.panel-card:not([open]){display:none}
    name - and never less than the longest of the built-in ones. */
 .facts .choice-btn{font-size:calc(var(--ui-font-base) * 1rem)}
 #panel .facts .choice-btn{gap:calc(var(--ui-control-gap) * 1em)}
+.facts:has(>#articleFontSelect)>.rowlabel{flex:0 0 var(--rlcol,auto)}
+.facts>#articleFontSelect{box-sizing:border-box;width:auto;flex:0 1 10.5em;min-width:0}
 .facts:has(>#looksChoice)>#looksChoice{width:auto;flex:0 1 auto;min-width:6.5em}
 /* The row's three actions: square, drawn marks. The app's other icon-sized
    controls are 22px and these are 32, because they are the only way to save,
@@ -2170,3 +2173,18 @@ html:is([data-shell-sepia],[data-shell-image]) .list-search-input{background-col
 #headwordExport>label:has(#exportSeparate){display:flex;align-items:center;gap:.6em}
 
 #exportGroupCheck:indeterminate::after{content:"";position:absolute;left:50%;top:50%;width:8px;height:8px;border:0;background:var(--fg);transform:translate(-50%,-50%)}
+
+#headwordExport .export-path>label{flex:none;white-space:nowrap}
+@font-face{font-family:"wudict-Charis";font-weight:400;font-style:normal;src:url("/assets/fonts/Charis-Regular.woff2?v=7.000") format("woff2")}
+@font-face{font-family:"wudict-Charis";font-weight:400;font-style:italic;src:url("/assets/fonts/Charis-Italic.woff2?v=7.000") format("woff2")}
+@font-face{font-family:"wudict-Charis";font-weight:500;font-style:normal;src:url("/assets/fonts/Charis-Medium.woff2?v=7.000") format("woff2")}
+@font-face{font-family:"wudict-Charis";font-weight:500;font-style:italic;src:url("/assets/fonts/Charis-MediumItalic.woff2?v=7.000") format("woff2")}
+@font-face{font-family:"wudict-Charis";font-weight:700;font-style:normal;src:url("/assets/fonts/Charis-Bold.woff2?v=7.000") format("woff2")}
+@font-face{font-family:"wudict-Charis";font-weight:700;font-style:italic;src:url("/assets/fonts/Charis-BoldItalic.woff2?v=7.000") format("woff2")}
+@font-face{font-family:"wudict-Gentium";font-weight:400;font-style:normal;src:url("/assets/fonts/Gentium-Regular.woff2?v=7.000") format("woff2")}
+@font-face{font-family:"wudict-Gentium";font-weight:400;font-style:italic;src:url("/assets/fonts/Gentium-Italic.woff2?v=7.000") format("woff2")}
+@font-face{font-family:"wudict-Gentium";font-weight:500;font-style:normal;src:url("/assets/fonts/Gentium-Medium.woff2?v=7.000") format("woff2")}
+@font-face{font-family:"wudict-Gentium";font-weight:500;font-style:italic;src:url("/assets/fonts/Gentium-MediumItalic.woff2?v=7.000") format("woff2")}
+@font-face{font-family:"wudict-Gentium";font-weight:700;font-style:normal;src:url("/assets/fonts/Gentium-Bold.woff2?v=7.000") format("woff2")}
+@font-face{font-family:"wudict-Gentium";font-weight:700;font-style:italic;src:url("/assets/fonts/Gentium-BoldItalic.woff2?v=7.000") format("woff2")}
+@font-face{font-family:"wudict-Quivira";src:url("/assets/fonts/Quivira.otf?v=1") format("opentype")}

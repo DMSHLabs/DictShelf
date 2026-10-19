@@ -597,6 +597,15 @@ window.wudictFontScale=(function(){
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M4 6h16"/><path d="M9 6V3h6v3"/><path d="M6 6l1 15h10l1-15"/><path d="M10 10v7M14 10v7"/></svg></button>
     </span>
   </div>
+  <div class="facts">
+    <label class="rowlabel" for="articleFontSelect">{{T:panel.articleFont}}</label>
+    <select id="articleFontSelect" aria-label="{{T:panel.articleFont}}">
+      <option value="system">{{T:panel.fontSystem}}</option>
+      <option value="charis">Charis</option>
+      <option value="gentium">Gentium</option>
+      <option value="quivira">Quivira</option>
+    </select>
+  </div>
   <!-- The size stepper is adjusted WHILE reading, so it stays on the panel
        rather than behind the Appearance door — the promise the old layout made
        by keeping it in the summary. Now that it owns a line instead of sharing
@@ -975,8 +984,7 @@ window.wudictFontScale=(function(){
 <div id="exportSearch" class="list-search-dock" role="search" aria-label="{{T:dictUI.listSearchLabel}}"></div>
 <div class="export-actions"><button type="button" class="btn" id="exportAll">{{T:export.all}}</button><button type="button" class="btn" id="exportNone">{{T:export.none}}</button><span id="exportSelected"></span></div>
 <label><input type="checkbox" id="exportSeparate" checked> {{T:export.separate}}</label>
-<label for="exportPath">{{T:export.folder}}</label>
-<div class="export-path"><input type="text" id="exportPath" autocomplete="off" spellcheck="false"><button type="button" class="btn" id="exportFolder" aria-label="{{T:pages.chooseFolder}}" hidden>📁</button></div>
+<div class="export-path"><label for="exportPath">{{T:export.folder}}</label><input type="text" id="exportPath" autocomplete="off" spellcheck="false"><button type="button" class="btn" id="exportFolder" aria-label="{{T:pages.chooseFolder}}" hidden>📁</button></div>
 <p class="export-hint">{{T:export.format}}</p>
 <progress id="exportProgress" value="0" max="1" hidden></progress>
 <p id="exportStatus" role="status" aria-live="polite"></p>
@@ -1589,7 +1597,7 @@ async function loadPrefs(){
        reader in a strategy with nothing on screen to explain or change it -
        the same call the removed `sortMine` got. The field is still WRITTEN
        (below, always false), because it is upstream's. */
-    if(st.ui){applyFS(st.ui.fontSize,false);applyFW(st.ui.fontWeight,false);applyHL(!st.ui.hlOff,false);applySpeak(!st.ui.speakOff,false);applyHideUnmarkedExamples(!!st.ui.hideUnmarkedExamples,false);openN=st.ui.openN||1;openAll=!!st.ui.openAll;prefOrderModeKnown=typeof st.ui.customOrder==="boolean";prefCustomOrder=!!st.ui.customOrder}
+    if(st.ui){applyFS(st.ui.fontSize,false);applyFW(st.ui.fontWeight,false);applyArticleFont(st.ui.fontFamily||"charis",false);applyHL(!st.ui.hlOff,false);applySpeak(!st.ui.speakOff,false);applyHideUnmarkedExamples(!!st.ui.hideUnmarkedExamples,false);openN=st.ui.openN||1;openAll=!!st.ui.openAll;prefOrderModeKnown=typeof st.ui.customOrder==="boolean";prefCustomOrder=!!st.ui.customOrder}
     if(!st.exists){adoptLocalPrefs();return} // first run: keep whatever we had
     prefOrder=rows.map(d=>d.id);prefPinned=rows.filter(d=>d.pinned).map(d=>d.id);
   }catch(e){
@@ -1613,7 +1621,7 @@ function savePrefs(now){
   // omitempty zero value), which is what retires a flag set by the switches
   // that no longer exist.
   const body=JSON.stringify({dicts:orderedDicts().map(d=>({id:d.id,name:dictLabel(d),pinned:prefPinned.includes(d.id)})),
-    ui:{fontSize:articleFS,fontWeight:articleFW,hlOff:!hlOn,speakOff:!speakOn,fastFirst:!orderFirst,hideUnmarkedExamples,customOrder:prefCustomOrder}});
+    ui:{fontSize:articleFS,fontWeight:articleFW,fontFamily:articleFont,hlOff:!hlOn,speakOff:!speakOn,fastFirst:!orderFirst,hideUnmarkedExamples,customOrder:prefCustomOrder}});
   if(body===prefsSent)return;
   prefsSent=body;
   apiFetch("/api/prefs",{method:"PUT",headers:{"Content-Type":"application/json"},body})
@@ -1829,6 +1837,20 @@ const FS_MIN=11,FS_MAX=32,FS_DEF=15;
 const FW_STEPS=[400,500,700],FW_LABEL={400:tx("panel.normal"),500:tx("panel.medium"),700:tx("panel.bold")},FW_DEF=400;
 let articleFS=FS_DEF;
 let articleFW=FW_DEF;
+let articleFont="charis";
+function articleFontCSS(frame=false){
+  const root=frame?":root":":host";
+  const articleScope=frame?":root,:root *":":host,:host *";
+  const selected=articleFont==="system"?"":`${articleScope}{font-family:"wudict-${articleFont[0].toUpperCase()+articleFont.slice(1)}",serif!important}`;
+  const ipa=frame?":root :is(.ipa,.wu-ipa,.wu-trs,[lang=\"und-fonipa\"],[lang$=\"-fonipa\"]) {font-family:\"wudict-Charis\",\"wudict-Quivira\",serif!important}":":host :is(.ipa,.wu-ipa,.wu-trs,[lang=\"und-fonipa\"],[lang$=\"-fonipa\"]) {font-family:\"wudict-Charis\",\"wudict-Quivira\",serif!important}";
+  return selected+ipa;
+}
+function applyArticleFont(value,save){
+  const next=["system","charis","gentium","quivira"].includes(value)?value:"system",moved=next!==articleFont;
+  articleFont=next;$("articleFontSelect").value=next;articleRefresh();
+  if(save&&moved)savePrefs();
+}
+$("articleFontSelect").addEventListener("change",event=>applyArticleFont(event.target.value,true));
 function applyFS(px,save){
   const n=Math.min(FS_MAX,Math.max(FS_MIN,Math.round(+px||FS_DEF)));
   const moved=n!==articleFS;
@@ -2090,10 +2112,24 @@ function articleTokens(){
   const v=(n,d)=>(cs.getPropertyValue(n)||"").trim()||d;
   return ":root{--wd-article-bg:"+v("--wd-article-bg","#fff")+
          ";--wd-article-fg:"+v("--wd-article-fg","#1a1a1a")+
+         ";--wd-article-font:"+(articleFont==="charis"?"\"wudict-Charis\",serif":articleFont==="gentium"?"\"wudict-Gentium\",serif":articleFont==="quivira"?"\"wudict-Quivira\",serif":"-apple-system,Helvetica,Arial,sans-serif")+
          ";--paper-bg:"+v("--paper-bg",v("--bg","transparent"))+
          ";--paper-bk-image:"+v("--paper-bk-image","none")+"}\n";
 }
-function frameCSS(){return articleTokens()+presetArticleCSS+extraExampleCSS()+userArticleCSS}
+function articleFontFacesCSS(){return `@font-face{font-family:"wudict-Charis";font-weight:400;font-style:normal;src:url("/assets/fonts/Charis-Regular.woff2?v=7.000") format("woff2")}
+@font-face{font-family:"wudict-Charis";font-weight:400;font-style:italic;src:url("/assets/fonts/Charis-Italic.woff2?v=7.000") format("woff2")}
+@font-face{font-family:"wudict-Charis";font-weight:500;font-style:normal;src:url("/assets/fonts/Charis-Medium.woff2?v=7.000") format("woff2")}
+@font-face{font-family:"wudict-Charis";font-weight:500;font-style:italic;src:url("/assets/fonts/Charis-MediumItalic.woff2?v=7.000") format("woff2")}
+@font-face{font-family:"wudict-Charis";font-weight:700;font-style:normal;src:url("/assets/fonts/Charis-Bold.woff2?v=7.000") format("woff2")}
+@font-face{font-family:"wudict-Charis";font-weight:700;font-style:italic;src:url("/assets/fonts/Charis-BoldItalic.woff2?v=7.000") format("woff2")}
+@font-face{font-family:"wudict-Gentium";font-weight:400;font-style:normal;src:url("/assets/fonts/Gentium-Regular.woff2?v=7.000") format("woff2")}
+@font-face{font-family:"wudict-Gentium";font-weight:400;font-style:italic;src:url("/assets/fonts/Gentium-Italic.woff2?v=7.000") format("woff2")}
+@font-face{font-family:"wudict-Gentium";font-weight:500;font-style:normal;src:url("/assets/fonts/Gentium-Medium.woff2?v=7.000") format("woff2")}
+@font-face{font-family:"wudict-Gentium";font-weight:500;font-style:italic;src:url("/assets/fonts/Gentium-MediumItalic.woff2?v=7.000") format("woff2")}
+@font-face{font-family:"wudict-Gentium";font-weight:700;font-style:normal;src:url("/assets/fonts/Gentium-Bold.woff2?v=7.000") format("woff2")}
+@font-face{font-family:"wudict-Gentium";font-weight:700;font-style:italic;src:url("/assets/fonts/Gentium-BoldItalic.woff2?v=7.000") format("woff2")}
+@font-face{font-family:"wudict-Quivira";src:url("/assets/fonts/Quivira.otf?v=1") format("opentype")}`}
+function frameCSS(){return presetArticleCSS+extraExampleCSS()+userArticleCSS+articleTokens()+articleFontFacesCSS()+articleFontCSS(true)}
 function pushFrameCSS(){
   const css=frameCSS();
   for(const f of document.querySelectorAll("iframe.article"))
@@ -2104,7 +2140,7 @@ function pushFrameCSS(){
    with the user text UNCHANGED, which is the whole point of layers: nothing
    in the box moves when a switch flips. */
 function articleRefresh(){
-  if(userSheet)try{userSheet.replaceSync(presetArticleCSS+extraExampleCSS()+userArticleCSS)}
+  if(userSheet)try{userSheet.replaceSync(presetArticleCSS+extraExampleCSS()+userArticleCSS+articleTokens()+articleFontCSS())}
   catch(e){console.warn("custom article CSS:",e)}
   pushFrameCSS();
   window.wudictArticleFind?.refresh();
@@ -5170,7 +5206,7 @@ const articleSelectionCSS=`:host,html,body{user-select:text!important;-webkit-us
   user-select:text!important;-webkit-user-select:text!important;-webkit-touch-callout:default!important}`;
 
 const shadowBase=`<style>
-:host{all:initial;display:block;font-family:${"-apple-system,Helvetica,Arial,sans-serif"};
+:host{all:initial;display:block;font-family:var(--wd-article-font,-apple-system,Helvetica,Arial,sans-serif);font-size-adjust:.52;
   font-size:var(--wd-fs,15px);font-weight:var(--wd-fw,400);
   line-height:1.618;color:var(--wd-article-fg,#1a1a1a);word-break:break-word}
 img,video,svg{max-width:100%;height:auto}
@@ -5298,7 +5334,7 @@ function frameDoc(content,fid,dark,dictID,frag){
   return '<!DOCTYPE html><html class="'+(dark?'dark':'')+'"'+(dark?' data-dark':'')+'><head><meta charset="utf-8">'+
     /* Baked in, because a custom property cannot cross into another
        document; changes AFTER creation arrive by postMessage instead. */
-    '<style>html{font-family:-apple-system,Helvetica,Arial,sans-serif;font-size:'+articleFS+'px;font-weight:'+articleFW+';line-height:1.618;color:var(--wd-article-fg,#1a1a1a);background:var(--wd-article-bg,#fff);overflow-y:hidden}'+
+    '<style>'+articleFontFacesCSS()+articleFontCSS(true)+'html{font-family:var(--wd-article-font,-apple-system,Helvetica,Arial,sans-serif);font-size-adjust:.52;font-size:'+articleFS+'px;font-weight:'+articleFW+';line-height:1.618;color:var(--wd-article-fg,#1a1a1a);background:var(--wd-article-bg,#fff);overflow-y:hidden}'+
     'body{margin:8px}img,video,svg{max-width:100%;height:auto}'+
     'html.dark{filter:invert(1) hue-rotate(180deg) brightness(.9) contrast(.92)}'+
     'html.dark :is(img,picture,video,svg,canvas,iframe,embed,object,[data-noinvert]){filter:invert(1) hue-rotate(180deg)}'+
