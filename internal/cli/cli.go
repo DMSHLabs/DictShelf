@@ -1234,6 +1234,11 @@ func cmdServe(args []string) (err error) {
 	if err != nil {
 		return err
 	}
+	if listenerlessDesktop {
+		if crashErr := logx.ConfigureCrashLog(); crashErr != nil {
+			log.Printf("could not configure crash output: %v", crashErr)
+		}
+	}
 
 	// The Windows GUI serves its WebView from Go in-process and uses the native
 	// bridge for operations, so its configured port is not opened. Browser,

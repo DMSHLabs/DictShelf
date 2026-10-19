@@ -9,7 +9,6 @@ import (
 	"database/sql"
 	"fmt"
 	"regexp"
-	"sort"
 	"strings"
 	"time"
 	"unicode"
@@ -454,10 +453,9 @@ func (s *Store) Alphabet() ([]dict.Letter, error) {
 	return s.alpha, s.alphaErr
 }
 
-// buildAlphabet locates the first row of each initial run with ordered-index
-// seeks and assigns that initial to the 300-row Browse page where it begins.
-// Pages inside a long initial run use a short prefix of that page's first
-// headword, so they remain distinguishable without scanning every title.
+// buildAlphabet counts initial runs through ordered-index seeks and labels each
+// page from the last title before it and its first title. The anchors also
+// provide the next page's first title for the optional range suffix.
 func (s *Store) buildAlphabet() ([]dict.Letter, error) {
 	seek, err := s.db.Prepare("SELECT w FROM entry WHERE " + browseWhere + " AND w >= ? COLLATE NOCASE" + browseOrder + " LIMIT 1")
 	if err != nil {
@@ -475,18 +473,12 @@ func (s *Store) buildAlphabet() ([]dict.Letter, error) {
 	}
 	defer tail.Close()
 
-	type initialStart struct {
-		symbol string
-		offset int
-	}
-	var starts []initialStart
 	type initialRun struct {
 		symbol string
 		start  int
 		end    int
 	}
 	var runs []initialRun
-	seen := make(map[string]struct{})
 	total, from := 0, ""
 	for i := 0; i < 1<<16; i++ {
 		var word string
@@ -513,12 +505,6 @@ func (s *Store) buildAlphabet() ([]dict.Letter, error) {
 		}
 		symbol := browseInitial(r)
 		runs = append(runs, initialRun{symbol: symbol, start: total, end: total + count})
-		if symbol != "" {
-			if _, exists := seen[symbol]; !exists {
-				starts = append(starts, initialStart{symbol: symbol, offset: total})
-				seen[symbol] = struct{}{}
-			}
-		}
 		total += count
 		if !bounded {
 			break
@@ -531,12 +517,8 @@ func (s *Store) buildAlphabet() ([]dict.Letter, error) {
 
 	pageSize := indexconst.BrowsePageSize
 	pageCount := (total + pageSize - 1) / pageSize
-	pageSymbols := make([][]string, pageCount)
-	for _, start := range starts {
-		page := start.offset / pageSize
-		pageSymbols[page] = append(pageSymbols[page], start.symbol)
-	}
 	pageRunLabels := make([]string, pageCount)
+	pageNextRunLabels := make([]string, pageCount)
 	runIndex := 0
 	for page := range pageRunLabels {
 		offset := page * pageSize
@@ -545,12 +527,17 @@ func (s *Store) buildAlphabet() ([]dict.Letter, error) {
 		}
 		if runIndex < len(runs) && runs[runIndex].start <= offset && offset < runs[runIndex].end {
 			pageRunLabels[page] = runs[runIndex].symbol
+			if runIndex+1 < len(runs) && runs[runIndex+1].start < offset+pageSize {
+				pageNextRunLabels[page] = runs[runIndex+1].symbol
+			}
 		}
 	}
-	pageWords := make([]string, pageCount)
+	pageFirst := make([]string, pageCount)
+	pageLast := make([]string, pageCount)
 	if s.hasBrowseAnchors && pageSize%indexconst.BrowseAnchorStride == 0 {
 		rows, err := s.db.Query(`SELECT ordinal, w FROM browse_anchor
-			WHERE ordinal % ? = 0 ORDER BY ordinal`, pageSize)
+			WHERE ordinal % ? = 0 OR ordinal % ? = ? ORDER BY ordinal`,
+			pageSize, pageSize, indexconst.BrowsePageLastOffset)
 		if err != nil {
 			return nil, err
 		}
@@ -561,9 +548,14 @@ func (s *Store) buildAlphabet() ([]dict.Letter, error) {
 				rows.Close()
 				return nil, err
 			}
-			page := ordinal / pageSize
-			if page < len(pageWords) && ordinal == page*pageSize {
-				pageWords[page] = word
+			page, within := ordinal/pageSize, ordinal%pageSize
+			if page < pageCount {
+				switch within {
+				case 0:
+					pageFirst[page] = word
+				case indexconst.BrowsePageLastOffset:
+					pageLast[page] = word
+				}
 			}
 		}
 		if err := rows.Err(); err != nil {
@@ -575,19 +567,26 @@ func (s *Store) buildAlphabet() ([]dict.Letter, error) {
 	out := make([]dict.Letter, pageCount)
 	for page := range out {
 		offset := page * pageSize
-		label := formatBrowseInitials(pageSymbols[page])
-		if label == "" {
-			if pageWords[page] != "" {
-				var previous, next string
-				if page > 0 {
-					previous = pageWords[page-1]
+		label := pageRunLabels[page]
+		if pageFirst[page] != "" {
+			first := firstRune(pageFirst[page])
+			if page == 0 {
+				label = browseSectionInitial(first)
+			} else if pageLast[page-1] != "" {
+				if (unicode.IsPunct(first) || unicode.IsSymbol(first)) && pageNextRunLabels[page] != "" &&
+					browseSectionInitial(firstRune(pageLast[page-1])) == browseSectionInitial(first) {
+					// This symbol already closes the preceding section. Start at the
+					// first new initial that appears within this page.
+					label = pageNextRunLabels[page]
+				} else {
+					label = browseCommonPhrasePrefix(pageLast[page-1], pageFirst[page])
 				}
-				if page+1 < len(pageWords) {
-					next = pageWords[page+1]
+				if label == "" {
+					label = browseSectionInitial(first)
 				}
-				label = browsePageStartLabel(pageWords[page], previous, next)
-			} else {
-				label = pageRunLabels[page]
+			}
+			if pageLast[page] != "" && !unicode.Is(unicode.Han, first) {
+				label = browseRangeEnd(label, pageLast[page])
 			}
 		}
 		out[page] = dict.Letter{Letter: label, Offset: offset, Count: min(pageSize, total-offset)}
@@ -595,65 +594,80 @@ func (s *Store) buildAlphabet() ([]dict.Letter, error) {
 	return out, nil
 }
 
-// browsePageStartLabel uses the shortest prefix (up to five runes) that
-// distinguishes this page's first title from the adjacent page starts. The cap
-// keeps chips narrow when many titles share a long prefix.
-func browsePageStartLabel(word, previous, next string) string {
-	wordRunes := []rune(word)
-	if len(wordRunes) == 0 {
-		return ""
-	}
-	need := 1
-	for _, neighbor := range []string{previous, next} {
-		neighborRunes := []rune(neighbor)
-		common := 0
-		for common < len(wordRunes) && common < len(neighborRunes) && unicode.ToLower(wordRunes[common]) == unicode.ToLower(neighborRunes[common]) {
-			common++
-		}
-		if common+1 > need {
-			need = common + 1
-		}
-	}
-	if need > 5 {
-		need = 5
-	}
-	if need > len(wordRunes) {
-		need = len(wordRunes)
-	}
-	wordRunes[0] = unicode.ToUpper(wordRunes[0])
-	return string(wordRunes[:need])
+func firstRune(s string) rune {
+	r, _ := utf8.DecodeRuneInString(s)
+	return r
 }
 
-func formatBrowseInitials(symbols []string) string {
-	if len(symbols) == 0 {
+func browseCommonPrefix(previous, current string) string {
+	previousRunes, currentRunes := []rune(previous), []rune(current)
+	common := 0
+	for common < len(previousRunes) && common < len(currentRunes) &&
+		unicode.ToLower(previousRunes[common]) == unicode.ToLower(currentRunes[common]) {
+		common++
+	}
+	if common == 0 {
 		return ""
 	}
-	values := make([]rune, 0, len(symbols))
-	for _, symbol := range symbols {
-		r, _ := utf8.DecodeRuneInString(symbol)
-		values = append(values, r)
+	currentRunes[0] = unicode.ToUpper(currentRunes[0])
+	return string(currentRunes[:common])
+}
+
+// browseCommonPhrasePrefix keeps a character prefix when the first word differs.
+// Once one or more whole words match, it includes the complete next word so a
+// section label does not stop at a shared phrase fragment.
+func browseCommonPhrasePrefix(previous, current string) string {
+	previousWords, currentWords := strings.Fields(previous), strings.Fields(current)
+	sharedWords := 0
+	for sharedWords < len(previousWords) && sharedWords < len(currentWords) &&
+		strings.EqualFold(previousWords[sharedWords], currentWords[sharedWords]) {
+		sharedWords++
 	}
-	sort.Slice(values, func(i, j int) bool { return values[i] < values[j] })
-	unique := values[:0]
-	for _, r := range values {
-		if len(unique) == 0 || unique[len(unique)-1] != r {
-			unique = append(unique, r)
+	if sharedWords > 0 && sharedWords < len(currentWords) {
+		label := []rune(strings.Join(currentWords[:sharedWords+1], " "))
+		label[0] = unicode.ToUpper(label[0])
+		return string(label)
+	}
+	if sharedWords == 0 && len(previousWords) > 0 && len(currentWords) > 0 {
+		previousRunes, currentRunes := []rune(previousWords[0]), []rune(currentWords[0])
+		common := 0
+		for common < len(previousRunes) && common < len(currentRunes) &&
+			unicode.ToLower(previousRunes[common]) == unicode.ToLower(currentRunes[common]) {
+			common++
+		}
+		if common < len(currentRunes) {
+			currentRunes[0] = unicode.ToUpper(currentRunes[0])
+			return string(currentRunes[:common+1])
+		}
+		if len(currentRunes) > 0 {
+			currentRunes[0] = unicode.ToUpper(currentRunes[0])
+			return string(currentRunes)
 		}
 	}
-	var parts []string
-	for i := 0; i < len(unique); {
-		j := i
-		for j+1 < len(unique) && unique[j+1] == unique[j]+1 {
-			j++
-		}
-		if j == i {
-			parts = append(parts, string(unique[i]))
-		} else {
-			parts = append(parts, string(unique[i])+"-"+string(unique[j]))
-		}
-		i = j + 1
+	return browseCommonPrefix(previous, current)
+}
+
+// browseRangeEnd adds the last initial that begins within this page. Using the
+// page tail also handles punctuation and script transitions without ordering
+// assumptions about their alphabets.
+func browseRangeEnd(label, last string) string {
+	if label == "" || last == "" {
+		return label
 	}
-	return strings.Join(parts, ",")
+	start := browseSectionInitial(firstRune(label))
+	end := browseSectionInitial(firstRune(last))
+	if start == "" || end == "" || start == end {
+		return label
+	}
+	return label + "-" + end
+}
+
+func browseSectionInitial(r rune) string {
+	initial := browseInitial(r)
+	if initial != "#" || !unicode.IsPrint(r) || unicode.IsSpace(r) {
+		return initial
+	}
+	return string(r)
 }
 
 func browseInitial(r rune) string {

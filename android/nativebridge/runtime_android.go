@@ -842,6 +842,9 @@ func WudictGoBridgeRuntimeStart(path, flagsJSON, version *C.char) C.int {
 	if _, err = server.ConfigureLibrary(cfg); err != nil {
 		return -3
 	}
+	if err := logx.ConfigureCrashLog(); err != nil {
+		logx.Warn("could not configure crash output: %v", err)
+	}
 	if _, err = server.RecoverLibrary(cfg); err != nil {
 		logx.Warn("could not tidy the library: %v", err)
 	}

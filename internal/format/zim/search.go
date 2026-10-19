@@ -5,6 +5,7 @@
 package zim
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 )
@@ -57,19 +58,22 @@ func (c *container) find(ns byte, path string) (int, dirent, bool) {
 // nsRange returns the half-open entry range of one namespace. Two binary
 // searches, no scan: the namespace is the first byte of every key, so its
 // entries are contiguous.
-func (c *container) nsRange(ns byte) (int, int) {
+func (c *container) nsRange(ns byte) (int, int, error) {
 	lo, err := c.lowerBound(string([]byte{ns}))
 	if err != nil {
-		return 0, 0
+		return 0, 0, fmt.Errorf("find namespace %q start: %w", ns, err)
 	}
 	if ns == 0xFF { // no successor byte to bound with
-		return lo, len(c.urlPtr)
+		return lo, len(c.urlPtr), nil
 	}
 	hi, err := c.lowerBound(string([]byte{ns + 1}))
-	if err != nil || hi < lo {
-		return lo, lo
+	if err != nil {
+		return 0, 0, fmt.Errorf("find namespace %q end: %w", ns, err)
 	}
-	return lo, hi
+	if hi < lo {
+		return 0, 0, fmt.Errorf("namespace %q range is inverted: %d..%d", ns, lo, hi)
+	}
+	return lo, hi, nil
 }
 
 // prefixScan walks entries in a namespace whose path starts with prefix,

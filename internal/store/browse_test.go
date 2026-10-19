@@ -92,7 +92,7 @@ func TestBrowseAlphabet(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []dict.Letter{{Letter: "#,1,A,C,Z,ア,ㄱ,ㄴ,漢", Offset: 0, Count: 13}}
+	want := []dict.Letter{{Letter: "#", Offset: 0, Count: 13}}
 	if len(got) != len(want) {
 		t.Fatalf("alphabet = %+v, want %+v", got, want)
 	}
@@ -153,28 +153,7 @@ func TestBrowsePageInitials(t *testing.T) {
 			t.Errorf("page label %d = %+v, want offset %d count %d", i, l, wantOffset, wantCount)
 		}
 	}
-	if got[0].Letter != "A-B" || got[1].Letter != "C" || got[2].Letter != "C" {
-		t.Errorf("page labels = %q, %q, %q; want A-B, C, C", got[0].Letter, got[1].Letter, got[2].Letter)
-	}
-}
-
-func TestBrowsePageLabelsDistinguishPagesWithinOneInitial(t *testing.T) {
-	words := make([]string, 0, 900)
-	for i := 0; i < 900; i++ {
-		words = append(words, fmt.Sprintf("a%03d", i))
-	}
-	s := browseStore(t, words)
-	got, err := s.Alphabet()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(got) != 3 {
-		t.Fatalf("alphabet has %d page labels, want 3", len(got))
-	}
-	want := []string{"A", "A3", "A6"}
-	for i := range want {
-		if got[i].Letter != want[i] {
-			t.Errorf("page %d label = %q, want %q", i, got[i].Letter, want[i])
-		}
+	if got[0].Letter != "A-B" || got[1].Letter != "B00-C" || got[2].Letter != "C00" {
+		t.Errorf("page labels = %q, %q, %q; want A-B, B00-C, C00", got[0].Letter, got[1].Letter, got[2].Letter)
 	}
 }
