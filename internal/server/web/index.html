@@ -141,6 +141,8 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
 <link rel="stylesheet" href="/assets/headword-control.css?v={{HEADWORDCSS}}">
 <link rel="stylesheet" href="/assets/history.css?v={{HISTORYCSS}}">
 <script src="/assets/headword-control.js?v={{HEADWORDJS}}"></script>
+<script src="/assets/headword-ribbon.js?v={{RIBBONJS}}"></script>
+<script>window.wudictHeadwordControl.ribbon.setExactCount({{BROWSE_STRIP_EXACT_WIDTHS}})</script>
 <script>
 /* Apply the reader's Settings font scale before the drawer can paint. */
 window.wudictFontScale=(function(){
@@ -421,7 +423,7 @@ window.wudictFontScale=(function(){
 <div class="language-setting">
   <div class="facts language-row">
     <span class="rowlabel" id="languageLabel">Language</span>
-    <button type="button" class="choice-btn" id="languageBtn" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="languageLabel"></button>
+    <button type="button" class="choice-btn panel-dropdown" id="languageBtn" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="languageLabel"></button>
     <div class="choice-menu menu-card" id="languageMenu" role="listbox" aria-label="Language" data-w="anchor" hidden></div>
   </div>
   <p id="languageError" role="alert" hidden></p>
@@ -538,7 +540,7 @@ window.wudictFontScale=(function(){
        truncated by CSS (the bar is one line). -->
   <div class="facts dictionary-group-row" id="pickerGroupRow">
     <span class="rowlabel" id="pickerGroupLabel">{{T:panel.searchGroups}}</span>
-    <button type="button" class="choice-btn" id="pickerGroupBtn" aria-haspopup="listbox" aria-labelledby="pickerGroupLabel" title="{{T:panel.chooseGroup}}"></button>
+    <button type="button" class="choice-btn panel-dropdown" id="pickerGroupBtn" aria-haspopup="listbox" aria-labelledby="pickerGroupLabel" title="{{T:panel.chooseGroup}}"></button>
     <div class="choice-menu menu-card" id="pickerGroupMenu" role="listbox" aria-label="{{T:panel.groups}}" data-w="anchor" hidden></div>
   </div>
   <!-- There was a third pair here, "Sort dictionaries: Alphabetical | My
@@ -553,7 +555,7 @@ window.wudictFontScale=(function(){
   </div>
   <div class="facts headword-threshold-row">
     <label class="rowlabel" for="headwordApplyThreshold">{{T:panel.headwordApplyThreshold}}</label>
-    <div class="panel-select-wrap threshold-select-wrap">
+    <div class="panel-select-wrap panel-dropdown threshold-select-wrap">
       <select id="headwordApplyThreshold" aria-label="{{T:panel.headwordApplyThreshold}}">
         <option value="0">{{T:panel.searchAsYouTypeNever}}</option>
         <option value="10000">{{T:panel.searchAsYouTypeBelow10k}}</option>
@@ -581,7 +583,7 @@ window.wudictFontScale=(function(){
   <div class="facts">
     <span class="rowlabel" id="looksLabel">{{T:panel.looks}}</span>
     <div id="looksControls">
-      <button type="button" class="choice-btn" id="looksChoice" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="looksLabel"></button>
+      <button type="button" class="choice-btn panel-dropdown" id="looksChoice" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="looksLabel"></button>
       <span class="iconrow">
         <button type="button" class="btn icon-btn" id="looksSaveAsBtn" disabled>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M5 3h11l3 3v15H5z"/><path d="M9 3v5h6V3"/><path d="M8 20v-6h8v6"/></svg></button>
@@ -595,7 +597,7 @@ window.wudictFontScale=(function(){
   </div>
   <div class="facts">
     <label class="rowlabel" for="articleFontSelect">{{T:panel.articleFont}}</label>
-    <div class="panel-select-wrap article-font-select-wrap">
+    <div class="panel-select-wrap panel-dropdown article-font-select-wrap">
       <select id="articleFontSelect" aria-label="{{T:panel.articleFont}}">
         <option value="system">{{T:panel.fontSystem}}</option>
         <option value="charis">Charis</option>
@@ -4518,6 +4520,13 @@ async function loadFolders(){
   $("folderSummary").textContent=tx("panel.folders",{count:n,number:n})+" · "+tx("panel.dictionaryCount",{count:c.total,number:c.total});
   paintPickerGroup(); // the row that says which group the search is on
   b.innerHTML="";
+  if(c.systemLogHasErrors){
+    const warning=document.createElement("div");warning.className="warn";
+    warning.append(document.createTextNode(tx("panel.logErrors")+" "));
+    const save=document.createElement("a");save.href="/api/system-log";save.download="";
+    save.textContent=tx("panel.saveSystemLog");save.addEventListener("click",systemLogClick);
+    warning.appendChild(save);b.appendChild(warning);
+  }
   const row=(path,note,bad)=>{
     const d=document.createElement("div");d.className="frow";
     const p=document.createElement("span");p.className="p path";
@@ -6058,8 +6067,8 @@ function noIndexRow(el,out,info){
 let maskGeneration=0,maskControllers=new Set(),maskRows=[],maskCurrent=0;
 let maskPattern="",maskSelection="",maskSubmitRequested=false,maskNavToken=0,maskRestoreScroll=null;
 let maskStripVersion=0,maskStripRendered=-1,maskChipMap=new Map(),maskActiveKey="",maskStripWantedKey="";
-let maskStripItems=[],maskStripOffsets=[],maskStripWidths=[],maskStripSectionOffsets=[],maskStripSectionTargets=[],maskStripTotalWidth=0,maskStripSectionTotal=0,maskStripVisibleCount=0,maskStripStart=-1,maskStripEnd=-1,maskStripKeyIndex=new Map();
-let maskStripPaintAt=0,maskStripPaintTimer=0,maskScrollbarDrag=null,maskStripScrollX=0,maskStripTouch=null,maskStripScrubTarget=null;
+let maskStripItems=[],maskStripOffsets=[],maskStripWidths=[],maskStripSectionOffsets=[],maskStripSectionTargets=[],maskStripTotalWidth=0,maskStripSectionTotal=0,maskStripStart=-1,maskStripEnd=-1,maskStripKeyIndex=new Map(),maskStripMeasureNode=null;
+let maskStripPaintAt=0,maskStripPaintTimer=0,maskStripScrollX=0,maskStripScrubTarget=null,maskRibbonNavigator=null;
 let maskBaseRows=[],maskBaseCurrent=0,maskFindRows=[],maskFindFilter=false,maskFindWildcard=false;
 let maskFindIndex=-1,maskFindMatch=null,maskFindTimer=0,maskFindQuery="",maskFindApproved=false,maskFindAwaitingApply=false,maskBusyJobs=new Set(),maskFindGeneration=0;
 let maskMemorySnapshot=null;
@@ -6131,7 +6140,7 @@ function maskAbort(){
 function maskInvalidate(){
   maskAbort();clearTimeout(maskFindTimer);maskRows=[];maskBaseRows=[];maskFindRows=[];maskPattern="";maskSelection="";
   maskFindQuery="";maskFindIndex=-1;maskFindMatch=null;maskFindApproved=false;maskFindAwaitingApply=false;$("maskFindInput").value="";maskFindControls();
-  maskStripVersion++;maskStripRendered=-1;maskChipMap.clear();maskActiveKey="";maskStripWantedKey="";maskStripItems=[];maskStripOffsets=[];maskStripWidths=[];maskStripSectionOffsets=[];maskStripSectionTargets=[];maskStripKeyIndex.clear();maskStripTotalWidth=maskStripSectionTotal=maskStripVisibleCount=0;maskStripStart=maskStripEnd=-1;maskStripScrollX=0;maskStripScrubTarget=null;
+  maskStripVersion++;maskStripRendered=-1;maskChipMap.clear();maskActiveKey="";maskStripWantedKey="";maskStripItems=[];maskStripOffsets=[];maskStripWidths=[];maskStripSectionOffsets=[];maskStripSectionTargets=[];maskStripKeyIndex.clear();maskStripTotalWidth=maskStripSectionTotal=0;maskStripStart=maskStripEnd=-1;maskStripScrollX=0;maskStripScrubTarget=null;
   if(searchAC)searchAC.abort();hideSearchProgress();searchSeq++;
   $("maskDictName").textContent="";$("maskDictMeta").textContent="";$("maskDict").title="";$("maskLetterTrack").replaceChildren();$("maskLetterTrack").style.width="100%";$("maskLetterTrack").style.minWidth="100%";
   $("maskCount").textContent="";$("maskPage").textContent="";
@@ -6141,11 +6150,6 @@ function maskInvalidate(){
 function maskReservedBlocks(row){
   const size=row.size||300;
   return Math.max(1,row.expectedBlocks||0,Math.ceil((row.scanTotal||0)/size),Math.ceil((row.total||0)/size));
-}
-function maskSectionAtOffset(offset){
-  let lo=0,hi=maskStripSectionOffsets.length;
-  while(lo<hi){const mid=(lo+hi)>>>1;if(maskStripSectionOffsets[mid]<offset)lo=mid+1;else hi=mid}
-  return lo;
 }
 function maskStripTargetIndex(targetKey,allWords){
   const split=targetKey.lastIndexOf(":");if(split<0)return -1;
@@ -6161,7 +6165,7 @@ function maskStripTargetIndex(targetKey,allWords){
   return -1;
 }
 function maskStripPaint(){
-  if(maskScrollbarDrag||maskStripTouch?.dragging){
+  if(maskRibbonNavigator?.dragging){
     const delay=50-(performance.now()-maskStripPaintAt);
     if(delay>0){if(!maskStripPaintTimer)maskStripPaintTimer=setTimeout(()=>{maskStripPaintTimer=0;maskStripPaint()},delay);return}
   }
@@ -6176,7 +6180,7 @@ function maskStripPaintNow(){
   if(rebuilt){
     maskStripItems=[];maskStripOffsets=[];maskStripWidths=[];maskStripSectionOffsets=[];maskStripTotalWidth=0;maskStripKeyIndex=new Map();
     maskChipMap=new Map();maskStripStart=maskStripEnd=-1;
-    const sample=document.createElement("button");sample.type="button";sample.textContent="M";sample.style.position="absolute";sample.style.visibility="hidden";
+    const sample=document.createElement("button");sample.type="button";sample.textContent="M";sample.style.position="absolute";sample.style.visibility="hidden";maskStripMeasureNode=sample;
     track.appendChild(sample);
     const sampleHeight=sample.getBoundingClientRect().height,style=getComputedStyle(sample),font=[style.fontStyle,style.fontVariant,style.fontWeight,style.fontSize,style.fontFamily].join(" ");
     const ctx=(maskStripPaint.canvas||(maskStripPaint.canvas=document.createElement("canvas"))).getContext("2d");ctx.font=font;
@@ -6185,34 +6189,20 @@ function maskStripPaintNow(){
     const em=metric(style.fontSize,16),pad=metric(style.paddingLeft)+metric(style.paddingRight)+metric(style.borderLeftWidth)+metric(style.borderRightWidth);
     const gap=.25*em,minWidth=Math.max(2*em,metric(style.minWidth));
     const allWords=isAllWildcardMask(maskPattern);
-    for(const row of maskRows){
-      const complete=row.state==="ready"&&(!allWords||!row.partial);
-      if(complete&&!row.total)continue;
-      if(complete){
-        for(const letter of row.alphabet||[]){
-          const page=Math.floor(letter.o/(row.size||300))+1;
-          const label=letter.l;
-          maskStripItems.push({kind:"chip",label,dict:row.id,page,title:row.name+" · "+tx("browse.words",{count:letter.n,number:window.wudictI18n.number(letter.n)})});
-        }
-      }else{
-        const count=allWords&&row.state!=="error"?maskReservedBlocks(row):1;
-        for(let i=0;i<count;i++)maskStripItems.push({kind:"pending",label:row.state==="error"?"⚠":i===0?"…":"",dict:row.id,page:i+1,title:row.name});
-      }
-    }
-    track.replaceChildren();
+    maskStripItems=window.wudictHeadwordControl.ribbon.fromWildcardSQL(maskRows,{
+      allWords,pageSize:300,
+      reservedBlocks:row=>allWords&&row.state!=="error"?maskReservedBlocks(row):1,
+      title:(row,letter,label)=>row.name+" · "+tx("browse.words",{count:letter.n,number:window.wudictI18n.number(letter.n)})+" — "+label
+    });
+    track.replaceChildren(sample);
     const fixedChipWidth=Math.max(minWidth,3*em);
     track.classList.toggle("mask-fixed-chips",allWords);
-    const separatorWidth=allWords?em:measure("|")+.4*em+2*metric(style.borderLeftWidth);
-    // A separator marks the boundary between dictionaries; include it only
-    // where both neighbouring dictionaries contribute a visible strip.
-    const groups=[];let cursor=0;
-    for(const row of maskRows){const complete=row.state==="ready"&&(!allWords||!row.partial);const count=complete?(row.total?(row.alphabet||[]).length:0):allWords&&row.state!=="error"?maskReservedBlocks(row):1;if(count){groups.push({start:cursor,count,dict:row.id});cursor+=count}}
-    const all=[];
-    for(let i=0;i<groups.length;i++){if(i)all.push({kind:"separator",label:"|"});for(let j=0;j<groups[i].count;j++){const item=maskStripItems[groups[i].start+j];all.push(item||{kind:"pending",label:j===0?"…":"",dict:groups[i].dict,page:j+1})}}
-    maskStripItems=all;maskStripOffsets=[];maskStripWidths=[];maskStripSectionOffsets=[];maskStripSectionTargets=[];maskStripTotalWidth=0;maskStripSectionTotal=all.length-(groups.length?groups.length-1:0);
-    for(let i=0;i<all.length;i++){const item=all[i],w=item.kind==="separator"?separatorWidth:allWords?fixedChipWidth:Math.max(minWidth,measure(item.label)+pad);if(i)maskStripTotalWidth+=gap;maskStripOffsets.push(maskStripTotalWidth);maskStripWidths.push(w);if(item.kind!=="separator"){maskStripSectionOffsets.push(maskStripTotalWidth);maskStripSectionTargets.push({dict:item.dict,page:item.page})}if(item.kind==="chip")maskStripKeyIndex.set(item.dict+":"+item.page,i);maskStripTotalWidth+=w}
+    const separatorWidth=allWords?em:.7*em;
+    const geometry=window.wudictHeadwordControl.ribbon.measure(maskStripItems,sample,strip,{gap,minWidth,fixedWidth:allWords?fixedChipWidth:0,separatorWidth,maxWidthEm:12});
+    maskStripOffsets=geometry.offsets;maskStripWidths=geometry.widths;maskStripTotalWidth=geometry.total;maskStripSectionOffsets=[];maskStripSectionTargets=[];maskStripSectionTotal=0;maskStripKeyIndex=new Map();
+    for(let i=0;i<maskStripItems.length;i++){const item=maskStripItems[i];if(item.kind==="separator")continue;maskStripSectionOffsets.push(maskStripOffsets[i]);maskStripSectionTargets.push({dict:item.dict,page:item.page});maskStripSectionTotal++;if(item.kind==="chip")maskStripKeyIndex.set(item.dict+":"+item.page,i)}
     track.style.width="100%";track.style.minWidth="100%";track.style.height=Math.max(1,sampleHeight)+"px";
-    sample.remove();maskStripScrollX=Math.min(maskStripScrollX,Math.max(0,maskStripTotalWidth-track.clientWidth));maskStripRendered=maskStripVersion;
+    maskStripScrollX=Math.min(maskStripScrollX,Math.max(0,maskStripTotalWidth-track.clientWidth));maskStripRendered=maskStripVersion;
   }
   const row=maskRows[maskCurrent],key=row?.data?row.id+":"+row.data.page:"",targetKey=maskStripWantedKey||key;
   if(targetKey&&(targetKey!==maskActiveKey||maskStripWantedKey)){
@@ -6225,47 +6215,19 @@ function maskStripPaintNow(){
   const viewport=track.clientWidth,maxLogicalScroll=Math.max(0,maskStripTotalWidth-viewport);
   if(!Number.isFinite(maskStripScrollX))maskStripScrollX=0;
   maskStripScrollX=Math.max(0,Math.min(maxLogicalScroll,maskStripScrollX));
-  const left=maskStripScrollX,right=left+viewport,buffer=24;
-  const lower=(x,byEnd=false)=>{let lo=0,hi=maskStripOffsets.length;while(lo<hi){const mid=(lo+hi)>>>1;const edge=maskStripOffsets[mid]+(byEnd?maskStripWidths[mid]:0);if(edge<x)lo=mid+1;else hi=mid}return lo};
+  const ribbon=window.wudictHeadwordControl.ribbon;
+  const left=maskStripScrollX,right=left+viewport,buffer=ribbon.buffer;
+  const lower=(x,byEnd=false)=>ribbon.lower(maskStripOffsets,maskStripWidths,x,byEnd);
   const start=Math.max(0,lower(left,true)-buffer),end=Math.min(maskStripItems.length,lower(right)+buffer);
   if(start!==maskStripStart||end!==maskStripEnd||rebuilt){
-    maskStripStart=start;maskStripEnd=end;maskChipMap=new Map();const fragment=document.createDocumentFragment();
-    for(let i=start;i<end;i++){
-      const item=maskStripItems[i],el=document.createElement(item.kind==="chip"?"button":"span");
-      if(item.kind==="chip"){el.type="button";el.dataset.dict=item.dict;el.dataset.page=item.page;el.setAttribute("aria-current","false");maskChipMap.set(item.dict+":"+item.page,el)}
-      else if(item.kind==="pending")el.className="mask-letter-pending";
-      else el.className="mask-letter-separator";
-      el.textContent=item.label;el.title=item.kind==="chip"?((item.title||"")+(item.label?" — "+item.label:"")):(item.title||"");el.style.left=(maskStripOffsets[i]-left)+"px";el.style.width=maskStripWidths[i]+"px";el.dataset.stripIndex=String(i);
-      fragment.appendChild(el);
-    }
-    track.replaceChildren(fragment);
+    maskStripStart=start;maskStripEnd=end;maskChipMap=new Map();
+    ribbon.paint(track,maskStripItems,{offsets:maskStripOffsets,widths:maskStripWidths,viewport},left,key,start,end,{pendingClass:"mask-letter-pending",separatorClass:"mask-letter-separator",sampleNode:maskStripMeasureNode});
+    for(const chip of track.querySelectorAll("button[data-dict][data-page]"))maskChipMap.set(chip.dataset.dict+":"+chip.dataset.page,chip);
   }
   for(const [chipKey,chip] of maskChipMap)chip.setAttribute("aria-current",String(chipKey===key));
   for(const el of track.children){const index=Number(el.dataset.stripIndex);if(Number.isInteger(index))el.style.left=(maskStripOffsets[index]-left)+"px"}
   maskActiveKey=key;
-  const bar=$("maskScrollbar"),thumb=$("maskScrollThumb"),barWidth=bar.clientWidth;
-  let visible=0;
-  for(let i=lower(left,true);i<Math.min(maskStripItems.length,lower(right));i++)if(maskStripItems[i].kind!=="separator")visible++;
-  maskStripVisibleCount=visible;
-  const thumbWidth=Math.min(barWidth,Math.max(20,barWidth*(maskStripSectionTotal?Math.min(1,visible/maskStripSectionTotal):1)));
-  const maxScroll=maxLogicalScroll,maxThumb=Math.max(0,barWidth-thumbWidth);
-  const firstSection=maskSectionAtOffset(left),maxFirst=Math.max(0,maskStripSectionTotal-visible);
-  const fraction=maxScroll&&left>=maxScroll-1?1:maxFirst?Math.min(1,firstSection/maxFirst):0;
-  thumb.style.width=thumbWidth+"px";thumb.style.left=fraction*maxThumb+"px";
-  bar.setAttribute("aria-valuemax",String(Math.max(0,maskStripSectionTotal-1)));
-  bar.setAttribute("aria-valuenow",String(Math.max(0,Math.min(maskStripSectionTotal-1,firstSection))));
-  bar.setAttribute("aria-disabled",String(maxScroll===0));
-}
-new ResizeObserver(()=>{maskStripVersion++;maskStripRendered=-1;maskStripPaint()}).observe($("maskLetters"));
-function maskScrollbarMove(clientX){
-  const bar=$("maskScrollbar"),thumb=$("maskScrollThumb"),track=$("maskLetterTrack"),rect=bar.getBoundingClientRect();
-  const maxThumb=Math.max(0,bar.clientWidth-thumb.offsetWidth),maxScroll=Math.max(0,maskStripTotalWidth-track.clientWidth);
-  const x=Math.max(0,Math.min(maxThumb,clientX-rect.left-maskScrollbarDrag.grab));
-  const visible=Math.max(1,maskStripVisibleCount);
-  const first=Math.round((maxThumb?x/maxThumb:0)*Math.max(0,maskStripSectionTotal-visible));
-  maskStripScrollX=x>=maxThumb?maxScroll:Math.min(maxScroll,maskStripSectionOffsets[first]||0);
-  maskStripScrubTarget=maskStripPreviewPage(first);
-  maskStripPaint();
+  maskRibbonNavigator?.update();
 }
 function maskStripPreviewPage(section){
   const target=maskStripSectionTargets[section];if(!target)return null;
@@ -6275,61 +6237,16 @@ function maskStripPreviewPage(section){
   $("maskPage").textContent=(row.firstPage+page-1)+"/"+totalPages;
   return {index,page};
 }
-$("maskScrollbar").addEventListener("pointerdown",event=>{
-  if(event.button!==0||event.isPrimary===false)return;
-  const bar=$("maskScrollbar"),thumb=$("maskScrollThumb"),rect=thumb.getBoundingClientRect();
-  maskStripWantedKey="";
-  const onThumb=event.target===thumb;
-  maskScrollbarDrag={grab:onThumb?event.clientX-rect.left:rect.width/2,pointerId:event.pointerId,onThumb,moved:false};
-  if(!onThumb)maskScrollbarMove(event.clientX);event.preventDefault();
+maskRibbonNavigator=window.wudictHeadwordControl.ribbon.createScroller({
+  viewport:$("maskLetters"),track:$("maskLetterTrack"),bar:$("maskScrollbar"),thumb:$("maskScrollThumb"),
+  getItems:()=>maskStripItems,getOffsets:()=>maskStripOffsets,getWidths:()=>maskStripWidths,
+  getPosition:()=>maskStripScrollX,setPosition:value=>{maskStripWantedKey="";maskStripScrollX=value},
+  getMaxScroll:()=>Math.max(0,maskStripTotalWidth-$("maskLetters").clientWidth),
+  onMove:({section})=>{maskStripScrubTarget=maskStripPreviewPage(section)},
+  onFinish:({section})=>{const target=maskStripScrubTarget||maskStripPreviewPage(section);maskStripScrubTarget=null;if(target)maskSelect(target.index,target.page)},
+  minRenderInterval:50,onRender:maskStripPaint
 });
-window.addEventListener("pointermove",event=>{
-  if(!maskScrollbarDrag||event.pointerId!==maskScrollbarDrag.pointerId)return;
-  if(event.buttons===0){maskScrollbarEndDrag();return}
-  maskScrollbarDrag.moved=true;
-  maskScrollbarMove(event.clientX);event.preventDefault();
-},{capture:true,passive:false});
-function maskScrollbarEndDrag(event){
-  if(event?.pointerId!==undefined&&maskScrollbarDrag&&event.pointerId!==maskScrollbarDrag.pointerId)return;
-  if(maskScrollbarDrag?.onThumb&&!maskScrollbarDrag.moved)maskStripScrubTarget=null;
-  maskScrollbarDrag=null;
-  const target=maskStripScrubTarget;maskStripScrubTarget=null;
-  if(target)maskSelect(target.index,target.page);
-  if(maskStripPaintTimer){clearTimeout(maskStripPaintTimer);maskStripPaintTimer=0;maskStripPaint()}
-}
-for(const type of ["pointerup","pointercancel","blur"])window.addEventListener(type,event=>maskScrollbarEndDrag(event),true);
-$("maskScrollbar").addEventListener("keydown",event=>{
-  const strip=$("maskLetters"),track=$("maskLetterTrack"),step=Math.max(40,track.clientWidth/5);
-  let left=maskStripScrollX;
-  if(event.key==="ArrowLeft")left-=step;
-  else if(event.key==="ArrowRight")left+=step;
-  else if(event.key==="PageUp")left-=track.clientWidth;
-  else if(event.key==="PageDown")left+=track.clientWidth;
-  else if(event.key==="Home")left=0;
-  else if(event.key==="End")left=maskStripTotalWidth-track.clientWidth;
-  else return;
-  maskStripWantedKey="";maskStripScrollX=Math.max(0,Math.min(maskStripTotalWidth-track.clientWidth,left));maskStripPaint();event.preventDefault();
-});
-$("maskLetters").addEventListener("wheel",event=>{
-  const delta=Math.abs(event.deltaX)>Math.abs(event.deltaY)?event.deltaX:event.shiftKey?event.deltaY:0;
-  if(!delta)return;
-  const max=Math.max(0,maskStripTotalWidth-$("maskLetterTrack").clientWidth);
-  if(!max)return;
-  maskStripWantedKey="";maskStripScrollX=Math.max(0,Math.min(max,maskStripScrollX+delta));maskStripPaint();event.preventDefault();
-},{passive:false});
-$("maskLetters").addEventListener("pointerdown",event=>{
-  if(event.pointerType!=="touch"||event.button!==0)return;
-  maskStripTouch={id:event.pointerId,startX:event.clientX,startScroll:maskStripScrollX,dragging:false};
-},{passive:true});
-window.addEventListener("pointermove",event=>{
-  const touch=maskStripTouch;if(!touch||event.pointerId!==touch.id)return;
-  const dx=touch.startX-event.clientX;
-  if(!touch.dragging&&Math.abs(dx)<6)return;
-  touch.dragging=true;maskStripWantedKey="";
-  const max=Math.max(0,maskStripTotalWidth-$("maskLetterTrack").clientWidth);
-  maskStripScrollX=Math.max(0,Math.min(max,touch.startScroll+dx));maskStripPaint();event.preventDefault();
-},{capture:true,passive:false});
-for(const type of ["pointerup","pointercancel","blur"])window.addEventListener(type,event=>{if(!maskStripTouch||event.pointerId===undefined||event.pointerId===maskStripTouch.id)maskStripTouch=null},true);
+new ResizeObserver(()=>{maskStripVersion++;maskStripRendered=-1;maskStripPaint();maskRibbonNavigator?.update()}).observe($("maskLetters"));
 function maskMenu(){
   const selected=maskRows[maskCurrent];
   let total=0,pages=0,prefixKnown=true,complete=true;

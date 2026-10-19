@@ -68,6 +68,8 @@ func desktopAsset(name string) (desktopAssetResponse, bool) {
 		return desktopAssetResponse{headwordControlJS, "application/javascript; charset=utf-8", immutable}, true
 	case "/assets/headword-control.css":
 		return desktopAssetResponse{headwordControlCSS, "text/css; charset=utf-8", immutable}, true
+	case "/assets/headword-ribbon.js":
+		return desktopAssetResponse{headwordRibbonJS, "application/javascript; charset=utf-8", immutable}, true
 	case "/assets/work-progress.js":
 		return desktopAssetResponse{workProgressJS, "application/javascript; charset=utf-8", immutable}, true
 	case "/assets/examples.js":

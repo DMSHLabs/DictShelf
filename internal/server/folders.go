@@ -19,6 +19,7 @@ import (
 	"github.com/wuweidict/wudict/internal/config"
 	"github.com/wuweidict/wudict/internal/dict"
 	"github.com/wuweidict/wudict/internal/howto"
+	"github.com/wuweidict/wudict/internal/logx"
 	"github.com/wuweidict/wudict/internal/store"
 )
 
@@ -74,6 +75,9 @@ type ConfigInfo struct {
 	// it to every browser on the LAN.
 	CanDelete bool `json:"canDelete"`
 	CanExit   bool `json:"canExit"`
+	// SystemLogHasErrors tells the panel whether a retained System Log has an
+	// error or crash record.
+	SystemLogHasErrors bool `json:"systemLogHasErrors"`
 
 	// PathAliases shorten the prefix that is identical on every row and
 	// therefore carries no information: {prefix, label} pairs, first match
@@ -237,8 +241,9 @@ func (s *Server) ConfigSnapshot(local bool, host string) ConfigInfo {
 		CanReveal: local && revealPossible(),
 		// Deleting, unlike revealing, is something this app can always do
 		// itself - so the question is only WHO is asking (D63 amended).
-		CanDelete: local || s.AllowRemoteDelete,
-		CanExit:   s.DesktopExit != nil && local && localExitHost(host),
+		CanDelete:          local || s.AllowRemoteDelete,
+		CanExit:            s.DesktopExit != nil && local && localExitHost(host),
+		SystemLogHasErrors: logx.SystemHasErrors(),
 	}
 	if info.DictDirOrigin == "" {
 		info.DictDirOrigin = config.OriginDefault

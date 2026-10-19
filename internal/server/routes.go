@@ -242,6 +242,7 @@ func (s *Server) routes() []route {
 		{"GET", "/assets/list-search.js", serveAsset("application/javascript; charset=utf-8", listSearchJS), "", false},
 		{"GET", "/assets/headword-control.js", serveAsset("application/javascript; charset=utf-8", headwordControlJS), "", false},
 		{"GET", "/assets/headword-control.css", serveAsset("text/css; charset=utf-8", headwordControlCSS), "", false},
+		{"GET", "/assets/headword-ribbon.js", serveAsset("application/javascript; charset=utf-8", headwordRibbonJS), "", false},
 		{"GET", "/assets/work-progress.js", serveAsset("application/javascript; charset=utf-8", workProgressJS), "", false},
 		{"GET", "/assets/examples.js", serveAsset("application/javascript; charset=utf-8", examplesJS), "", false},
 		{"GET", "/assets/looks.js", serveAsset("application/javascript; charset=utf-8", looksJS), "", false},
