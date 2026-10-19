@@ -331,6 +331,31 @@ func WudictGoBridgeSetup(action, argument *C.char) *C.char {
 	return C.CString(string(data))
 }
 
+//export WudictGoBridgeHeadwordExport
+func WudictGoBridgeHeadwordExport(action, argument *C.char) *C.char {
+	if action == nil || argument == nil {
+		return nil
+	}
+	method := "headwordExport"
+
+	nativeRuntime.Lock()
+	app := nativeRuntime.app
+	nativeRuntime.Unlock()
+	if app == nil {
+		return C.CString(`{"ok":false,"error":"Go runtime is unavailable"}`)
+	}
+	value, err := app.Server.DesktopJSON("", method, C.GoString(argument))
+	if err != nil {
+		data, _ := json.Marshal(map[string]any{"ok": false, "error": err.Error()})
+		return C.CString(string(data))
+	}
+	data, err := json.Marshal(map[string]any{"ok": true, "value": value})
+	if err != nil {
+		return nil
+	}
+	return C.CString(string(data))
+}
+
 //export WudictGoBridgeIntake
 func WudictGoBridgeIntake(action, argument *C.char) *C.char {
 	if action == nil || argument == nil {

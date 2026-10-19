@@ -1,5 +1,9 @@
 # Localization: status and next tasks
 
+2026-10-19 Export dialog: added the group-selection checkbox label; success status is now only n of T exported / Экспортировано: n из T. Runtime layout check remains pending.
+
+2026-10-19 Headword export: Tools section, dictionary selection, folder, file options and progress/Stop messages added in EN/RU. Catalog checks pass; visual layout and native-device wording remain unverified.
+
 2026-10-19 Results group picker label is Groups: / Группы:. Runtime layout verification is pending.
 
 2026-10-19 Search as you type options now read Never / Below … / Always and Никогда / Менее … / Всегда. Runtime layout verification is pending.

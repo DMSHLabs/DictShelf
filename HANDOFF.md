@@ -1,5 +1,13 @@
 # Agent handoff — current state
 
+Export group checkbox now inherits the same 20px box and checkmark geometry as dictionary rows; only its mixed-state square has a dedicated centered mark. Removed the em-sized override that shrank the box without moving the shared checkmark. Runtime visual confirmation remains pending.
+
+Export defaults to separate files. The group checkbox uses a centered square for mixed selection, a check for all selected, and an empty box for none. Runtime appearance remains unverified.
+
+Export dialog now follows the supplied layout: group checkbox with mixed selection, selection count aligned right, one-line folder picker and Save/Cancel footer. Successful completion shows only the exported dictionary count (n of T exported); Cancel requests Stop before closing. Visual runtime check remains pending.
+
+Settings → Tools → Export headwords now opens a shared-style dictionary list with groups, search/filter, checkboxes, Select all/none, separate-file choice and output folder. Export streams current prepared headword indexes to UTF-8 text (one displayed title per line, aliases/repeated titles retained; internal DSL subentries follow Browse exclusions). Existing filenames receive numeric suffixes. Stop removes the unfinished file and keeps completed separate files. Windows and Android use direct Go operations; browser mode has a protected POST adapter. A writable filesystem folder and an existing headword index are required; Android Play SAF destinations are not implemented. Current checkout is `dev2` at `f3c68bb6`; export changes are uncommitted. Go build, focused Unicode/cancellation/file-preservation tests, catalog checks and inline JavaScript syntax pass. Android FOSS Java compilation passes; APK/native JNI build and Windows/Android visual/runtime export checks remain pending.
+
 Browse filtered results now have their own virtualized strip, one marker per available 300-word page labelled by its first headword. Chips and scrollbar navigate filtered pages. The full dictionary alphabet remains separate in its existing cache; its measured geometry is saved across filter toggles and restored without rebuilding when metrics match. Runtime verification is pending.
 
 Browse typing debounce is now 500 ms, restarted by every input edit. Its shared task panel sits inside the workspace immediately above the footer, shrinking the headword pane instead of shifting the input upward. Runtime layout/typing verification is pending.
@@ -18,7 +26,7 @@ Settings → Search as you type adds Always (Всегда), saved as -1 in the e
 
 The built-in Warm appearance enables Window background → Color in both themes: #F4ECD8 in light and #1C1A17 in dark. Runtime checkbox/color verification is pending.
 
-Current checkout: branch `dev2` at `f17bfc44`. The working tree has the current System Log session-file change unstaged.
+Current checkout: branch `dev2` at `f3c68bb6`; current export changes are uncommitted.
 
 Browse alphabet chips now cap visible labels at 12 em and render longer labels with an ellipsis; the full label remains available through the native tooltip and accessible name. The width cap is included in the measured chip geometry so virtual scrolling and navigation stay aligned. `go build ./...` and `git diff --check` pass; visual runtime confirmation is pending.
 

@@ -475,6 +475,9 @@ final class Shell {
         @JavascriptInterface public String setup(String action, String argument) {
             return GoBridge.setup(action, argument);
         }
+        @JavascriptInterface public String headwordExport(String action, String argument) {
+            return GoBridge.headwordExport(action, argument);
+        }
 
         @JavascriptInterface public String intake(String action, String argument) {
             return GoBridge.intake(action, argument);

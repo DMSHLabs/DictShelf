@@ -23,6 +23,7 @@ extern char *WudictGoBridgeLooks(char *argument);
 extern char *WudictGoBridgeGroups(char *action, char *argument);
 extern char *WudictGoBridgeLemmas(char *action, char *code);
 extern char *WudictGoBridgeSetup(char *action, char *argument);
+extern char *WudictGoBridgeHeadwordExport(char *action, char *argument);
 extern char *WudictGoBridgeIntake(char *action, char *argument);
 extern int WudictGoBridgePower(char *state);
 extern char *WudictGoBridgeReindex(char *action);
@@ -319,6 +320,27 @@ Java_com_legbehindneck_wudict_GoBridge_nativeSetup(JNIEnv *env, jclass owner,
         return NULL;
     }
     char *result = WudictGoBridgeSetup((char *)actionText, (char *)argumentText);
+    (*env)->ReleaseStringUTFChars(env, argument, argumentText);
+    (*env)->ReleaseStringUTFChars(env, action, actionText);
+    if (result == NULL) return NULL;
+    jstring answer = (*env)->NewStringUTF(env, result);
+    free(result);
+    return answer;
+}
+
+JNIEXPORT jstring JNICALL
+Java_com_legbehindneck_wudict_GoBridge_nativeHeadwordExport(JNIEnv *env, jclass owner,
+    jstring action, jstring argument) {
+    (void)owner;
+    if (action == NULL || argument == NULL) return NULL;
+    const char *actionText = (*env)->GetStringUTFChars(env, action, NULL);
+    if (actionText == NULL) return NULL;
+    const char *argumentText = (*env)->GetStringUTFChars(env, argument, NULL);
+    if (argumentText == NULL) {
+        (*env)->ReleaseStringUTFChars(env, action, actionText);
+        return NULL;
+    }
+    char *result = WudictGoBridgeHeadwordExport((char *)actionText, (char *)argumentText);
     (*env)->ReleaseStringUTFChars(env, argument, argumentText);
     (*env)->ReleaseStringUTFChars(env, action, actionText);
     if (result == NULL) return NULL;

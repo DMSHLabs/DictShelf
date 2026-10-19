@@ -150,6 +150,7 @@ func (s *Server) routes() []route {
 		{"GET", "/api/about", s.handleAbout, "/api/about", false},
 		// one page of the headword list (browse.go). Never CORS: the D69
 		// grant is lookup, and this dumps a dictionary a page at a time.
+		{"POST", "/api/headword-export", s.handleHeadwordExport, "/api/headword-export", false},
 		{"GET", "/api/browse", s.handleBrowse, "/api/browse", false},
 		{"GET", "/api/browse/find", s.handleBrowseFind, "/api/browse/find", false},
 		// what the platform is doing to us (D64) - the Android shell's channel

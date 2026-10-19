@@ -49,6 +49,7 @@ final class GoBridge {
     private static native String nativeGroups(String action, String argument);
     private static native String nativeLemmas(String action, String code);
     private static native String nativeSetup(String action, String argument);
+    private static native String nativeHeadwordExport(String action, String argument);
     private static native String nativeIntake(String action, String argument);
     private static native boolean nativePower(String state);
     private static native String nativeReindex(String action);
@@ -199,6 +200,13 @@ final class GoBridge {
         if (!loaded) throw new IllegalStateException("Go bridge is unavailable");
         String result = nativeSetup(action, argument);
         if (result == null) throw new IllegalStateException("Folder setup is unavailable");
+        return result;
+    }
+
+    static String headwordExport(String action, String argument) {
+        if (!loaded) throw new IllegalStateException("Go bridge is unavailable");
+        String result = nativeHeadwordExport(action, argument);
+        if (result == null) throw new IllegalStateException("Headword export is unavailable");
         return result;
     }
 
