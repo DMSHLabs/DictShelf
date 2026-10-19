@@ -6067,7 +6067,7 @@ function noIndexRow(el,out,info){
 let maskGeneration=0,maskControllers=new Set(),maskRows=[],maskCurrent=0;
 let maskPattern="",maskSelection="",maskSubmitRequested=false,maskNavToken=0,maskRestoreScroll=null;
 let maskStripVersion=0,maskStripRendered=-1,maskChipMap=new Map(),maskActiveKey="",maskStripWantedKey="";
-let maskStripItems=[],maskStripOffsets=[],maskStripWidths=[],maskStripSectionOffsets=[],maskStripSectionTargets=[],maskStripTotalWidth=0,maskStripSectionTotal=0,maskStripStart=-1,maskStripEnd=-1,maskStripKeyIndex=new Map(),maskStripMeasureNode=null;
+let maskStripItems=[],maskStripOffsets=[],maskStripWidths=[],maskStripBands=[],maskStripSectionOffsets=[],maskStripSectionTargets=[],maskStripTotalWidth=0,maskStripSectionTotal=0,maskStripStart=-1,maskStripEnd=-1,maskStripKeyIndex=new Map(),maskStripMeasureNode=null;
 let maskStripPaintAt=0,maskStripPaintTimer=0,maskStripScrollX=0,maskStripScrubTarget=null,maskRibbonNavigator=null;
 let maskBaseRows=[],maskBaseCurrent=0,maskFindRows=[],maskFindFilter=false,maskFindWildcard=false;
 let maskFindIndex=-1,maskFindMatch=null,maskFindTimer=0,maskFindQuery="",maskFindApproved=false,maskFindAwaitingApply=false,maskBusyJobs=new Set(),maskFindGeneration=0;
@@ -6140,7 +6140,7 @@ function maskAbort(){
 function maskInvalidate(){
   maskAbort();clearTimeout(maskFindTimer);maskRows=[];maskBaseRows=[];maskFindRows=[];maskPattern="";maskSelection="";
   maskFindQuery="";maskFindIndex=-1;maskFindMatch=null;maskFindApproved=false;maskFindAwaitingApply=false;$("maskFindInput").value="";maskFindControls();
-  maskStripVersion++;maskStripRendered=-1;maskChipMap.clear();maskActiveKey="";maskStripWantedKey="";maskStripItems=[];maskStripOffsets=[];maskStripWidths=[];maskStripSectionOffsets=[];maskStripSectionTargets=[];maskStripKeyIndex.clear();maskStripTotalWidth=maskStripSectionTotal=0;maskStripStart=maskStripEnd=-1;maskStripScrollX=0;maskStripScrubTarget=null;
+  maskStripVersion++;maskStripRendered=-1;maskChipMap.clear();maskActiveKey="";maskStripWantedKey="";maskStripItems=[];maskStripOffsets=[];maskStripWidths=[];maskStripBands=[];maskStripSectionOffsets=[];maskStripSectionTargets=[];maskStripKeyIndex.clear();maskStripTotalWidth=maskStripSectionTotal=0;maskStripStart=maskStripEnd=-1;maskStripScrollX=0;maskStripScrubTarget=null;
   if(searchAC)searchAC.abort();hideSearchProgress();searchSeq++;
   $("maskDictName").textContent="";$("maskDictMeta").textContent="";$("maskDict").title="";$("maskLetterTrack").replaceChildren();$("maskLetterTrack").style.width="100%";$("maskLetterTrack").style.minWidth="100%";
   $("maskCount").textContent="";$("maskPage").textContent="";
@@ -6178,7 +6178,7 @@ function maskStripPaintNow(){
   if(!track)return;
   const rebuilt=maskStripRendered!==maskStripVersion;
   if(rebuilt){
-    maskStripItems=[];maskStripOffsets=[];maskStripWidths=[];maskStripSectionOffsets=[];maskStripTotalWidth=0;maskStripKeyIndex=new Map();
+    maskStripItems=[];maskStripOffsets=[];maskStripWidths=[];maskStripBands=[];maskStripSectionOffsets=[];maskStripTotalWidth=0;maskStripKeyIndex=new Map();
     maskChipMap=new Map();maskStripStart=maskStripEnd=-1;
     const sample=document.createElement("button");sample.type="button";sample.textContent="M";sample.style.position="absolute";sample.style.visibility="hidden";maskStripMeasureNode=sample;
     track.appendChild(sample);
@@ -6195,12 +6195,19 @@ function maskStripPaintNow(){
       title:(row,letter,label)=>row.name+" · "+tx("browse.words",{count:letter.n,number:window.wudictI18n.number(letter.n)})+" — "+label
     });
     track.replaceChildren(sample);
-    const fixedChipWidth=Math.max(minWidth,3*em);
-    track.classList.toggle("mask-fixed-chips",allWords);
     const separatorWidth=allWords?em:.7*em;
-    const geometry=window.wudictHeadwordControl.ribbon.measure(maskStripItems,sample,strip,{gap,minWidth,fixedWidth:allWords?fixedChipWidth:0,separatorWidth,maxWidthEm:12});
+    const geometry=window.wudictHeadwordControl.ribbon.measure(maskStripItems,sample,strip,{gap,minWidth,separatorWidth,maxWidthEm:12});
     maskStripOffsets=geometry.offsets;maskStripWidths=geometry.widths;maskStripTotalWidth=geometry.total;maskStripSectionOffsets=[];maskStripSectionTargets=[];maskStripSectionTotal=0;maskStripKeyIndex=new Map();
-    for(let i=0;i<maskStripItems.length;i++){const item=maskStripItems[i];if(item.kind==="separator")continue;maskStripSectionOffsets.push(maskStripOffsets[i]);maskStripSectionTargets.push({dict:item.dict,page:item.page});maskStripSectionTotal++;if(item.kind==="chip")maskStripKeyIndex.set(item.dict+":"+item.page,i)}
+    const bandsByDictionary=new Map();
+    for(let i=0;i<maskStripItems.length;i++){
+      const item=maskStripItems[i];if(item.kind==="separator")continue;
+      maskStripSectionOffsets.push(maskStripOffsets[i]);maskStripSectionTargets.push({dict:item.dict,page:item.page});maskStripSectionTotal++;
+      if(item.kind==="chip")maskStripKeyIndex.set(item.dict+":"+item.page,i);
+      const group=item.groupIndex,begin=maskStripOffsets[i],end=begin+maskStripWidths[i];
+      if(!Number.isInteger(group)||!Number.isFinite(begin)||!Number.isFinite(end))continue;
+      const band=bandsByDictionary.get(group);if(band)band.end=end;else bandsByDictionary.set(group,{tone:group%4,start:begin,end});
+    }
+    maskStripBands=[...bandsByDictionary.values()];
     track.style.width="100%";track.style.minWidth="100%";track.style.height=Math.max(1,sampleHeight)+"px";
     maskStripScrollX=Math.min(maskStripScrollX,Math.max(0,maskStripTotalWidth-track.clientWidth));maskStripRendered=maskStripVersion;
   }
@@ -6221,11 +6228,16 @@ function maskStripPaintNow(){
   const start=Math.max(0,lower(left,true)-buffer),end=Math.min(maskStripItems.length,lower(right)+buffer);
   if(start!==maskStripStart||end!==maskStripEnd||rebuilt){
     maskStripStart=start;maskStripEnd=end;maskChipMap=new Map();
-    ribbon.paint(track,maskStripItems,{offsets:maskStripOffsets,widths:maskStripWidths,viewport},left,key,start,end,{pendingClass:"mask-letter-pending",separatorClass:"mask-letter-separator",sampleNode:maskStripMeasureNode});
+    ribbon.paint(track,maskStripItems,{offsets:maskStripOffsets,widths:maskStripWidths,viewport},left,key,start,end,{pendingClass:"mask-letter-pending",separatorClass:"mask-letter-separator",sampleNode:maskStripMeasureNode,bands:maskStripBands,mode:"wildcards",
+      onProblem:problem=>sendBrowseDiagnostic({event:"ribbon_guard",resource:problem.mode,stage:problem.reason,
+        letters:problem.items,measured:problem.offsets,words:problem.widths,page:Math.max(0,problem.from||0),totalPages:Math.max(0,problem.to||0)})});
     for(const chip of track.querySelectorAll("button[data-dict][data-page]"))maskChipMap.set(chip.dataset.dict+":"+chip.dataset.page,chip);
   }
   for(const [chipKey,chip] of maskChipMap)chip.setAttribute("aria-current",String(chipKey===key));
-  for(const el of track.children){const index=Number(el.dataset.stripIndex);if(Number.isInteger(index))el.style.left=(maskStripOffsets[index]-left)+"px"}
+  for(const el of track.children){
+    if(el.classList.contains("mask-dictionary-band")){const x=Number(el.dataset.ribbonStart);if(Number.isFinite(x))el.style.left=(x-left)+"px";continue}
+    const index=Number(el.dataset.stripIndex);if(Number.isInteger(index)&&index>=0&&index<maskStripOffsets.length)el.style.left=(maskStripOffsets[index]-left)+"px"
+  }
   maskActiveKey=key;
   maskRibbonNavigator?.update();
 }
@@ -6243,6 +6255,7 @@ maskRibbonNavigator=window.wudictHeadwordControl.ribbon.createScroller({
   getPosition:()=>maskStripScrollX,setPosition:value=>{maskStripWantedKey="";maskStripScrollX=value},
   getMaxScroll:()=>Math.max(0,maskStripTotalWidth-$("maskLetters").clientWidth),
   onMove:({section})=>{maskStripScrubTarget=maskStripPreviewPage(section)},
+  onCancel:()=>{maskStripScrubTarget=null},
   onFinish:({section})=>{const target=maskStripScrubTarget||maskStripPreviewPage(section);maskStripScrubTarget=null;if(target)maskSelect(target.index,target.page)},
   minRenderInterval:50,onRender:maskStripPaint
 });

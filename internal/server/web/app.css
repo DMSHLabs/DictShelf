@@ -366,7 +366,7 @@ body.mask-view-active{padding-bottom:calc(var(--mask-dock-height,4.5rem) + .5rem
   padding:.5rem .9rem max(.5rem,env(safe-area-inset-bottom));background:var(--bar);backdrop-filter:saturate(1.6) blur(8px);border-top:1px solid var(--line)}
 html:is([data-shell-sepia],[data-shell-image],[data-desktop-image]) .mask-search-controls{
   background:var(--paper-bg,var(--bg));backdrop-filter:none}
-.mask-dock{position:static;width:100%;max-width:54rem;padding:0;border:0;background:transparent;backdrop-filter:none;font-size:calc(var(--ui-edit_control-font) * 1rem)}
+.mask-dock{position:static;width:100%;max-width:none;padding:0;border:0;background:transparent;backdrop-filter:none;font-size:calc(var(--ui-edit_control-font) * 1rem)}
 .mask-search-progress{box-sizing:border-box;display:flex;align-items:center;gap:.55em;width:100%;max-width:54rem;min-height:2.3em;
   padding:.35em .55em;border:1px solid var(--accent);border-radius:8px;background-color:var(--bg);
   background-image:repeating-linear-gradient(135deg,color-mix(in srgb,var(--accent) 13%,transparent) 0px,
@@ -392,13 +392,17 @@ html[data-shell-image] .mask-head #maskDict{background-color:var(--paper-bg,var(
 .mask-letters{display:block;position:relative;overflow:hidden;padding:.5em .7em;border-bottom:1px solid var(--line);overscroll-behavior-x:contain;touch-action:pan-y}
 .mask-letter-track{position:relative;height:100%;width:100%;min-width:100%}
 .mask-letter-track> :is(button,span){position:absolute;top:50%;transform:translateY(-50%);box-sizing:border-box;margin:0;text-align:center}
+.mask-letter-track>.mask-dictionary-band{z-index:0;top:0;bottom:0;height:100%;transform:none;border-radius:5px;pointer-events:none}
+.mask-letter-track>button[data-dictionary-group]{z-index:1;background-color:transparent}
+.mask-dictionary-band[data-tone="0"]{background-color:color-mix(in srgb,#e08600 10%,var(--paper-bg,var(--bg-card,var(--bg))))}
+.mask-dictionary-band[data-tone="1"]{background-color:color-mix(in srgb,#3978c5 10%,var(--paper-bg,var(--bg-card,var(--bg))))}
+.mask-dictionary-band[data-tone="2"]{background-color:color-mix(in srgb,#38946f 10%,var(--paper-bg,var(--bg-card,var(--bg))))}
+.mask-dictionary-band[data-tone="3"]{background-color:color-mix(in srgb,#9b62a8 10%,var(--paper-bg,var(--bg-card,var(--bg))))}
 .mask-letter-group{display:inline-flex;align-items:center;gap:.25em;flex:none}
 .mask-letter-separator{padding:0 .2em;color:var(--fg-faint)}
 .mask-letter-pending{color:var(--label)}
 .mask-letters button{min-width:2em;padding:.3em}
 .wudict-ribbon-chip{box-sizing:border-box;max-width:12em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.mask-letter-track.mask-fixed-chips{overflow:hidden}
-.mask-letter-track.mask-fixed-chips button{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .mask-scrollbar{position:relative;height:12px;margin:0 .7em .3em;cursor:pointer;touch-action:none;user-select:none;-webkit-user-select:none}
 .mask-scrollbar::before{content:"";position:absolute;left:0;right:0;top:3px;height:6px;border-radius:99px;background:var(--line)}
 .mask-scroll-thumb{position:absolute;z-index:1;top:2px;left:0;height:8px;border-radius:99px;background:color-mix(in srgb,var(--fg) 42%,var(--bg));min-width:20px;cursor:grab}

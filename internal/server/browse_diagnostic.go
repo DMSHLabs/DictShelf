@@ -164,7 +164,7 @@ func (s *Server) handleBrowseDiagnostic(w http.ResponseWriter, r *http.Request) 
 
 func recordBrowseDiagnostic(d browseDiagnostic) error {
 	switch d.Event {
-	case "alphabet_cache_miss", "alphabet_cache_invalid", "alphabet_cache_read_failed", "alphabet_cache_restore", "alphabet_cache_saved", "alphabet_cache_save_failed", "alphabet_progress", "alphabet_done", "alphabet_measure_done", "alphabet_aborted", "alphabet_error", "alphabet_task", "page_request", "page_response", "page_ready", "page_fetch_failed", "render", "page_cache_saved", "page_cache_restored", "wildcard_cache_checkpoint", "wildcard_cache_complete", "wildcard_cache_restored", "wildcard_memory_start", "wildcard_memory_sample", "wildcard_memory_end", "wildcard_progress", "dictionary_picker_open", "dictionary_list_client", "article_transition", "browse_navigation", "navigation_resource", "storage_bootstrap", "work_resize":
+	case "alphabet_cache_miss", "alphabet_cache_invalid", "alphabet_cache_read_failed", "alphabet_cache_restore", "alphabet_cache_saved", "alphabet_cache_save_failed", "alphabet_progress", "alphabet_done", "alphabet_measure_done", "alphabet_aborted", "alphabet_error", "alphabet_task", "page_request", "page_response", "page_ready", "page_fetch_failed", "render", "page_cache_saved", "page_cache_restored", "wildcard_cache_checkpoint", "wildcard_cache_complete", "wildcard_cache_restored", "wildcard_memory_start", "wildcard_memory_sample", "wildcard_memory_end", "wildcard_progress", "dictionary_picker_open", "dictionary_list_client", "article_transition", "browse_navigation", "navigation_resource", "storage_bootstrap", "work_resize", "ribbon_guard":
 	default:
 		return errors.New("invalid diagnostic")
 	}
@@ -259,6 +259,14 @@ func recordBrowseDiagnostic(d browseDiagnostic) error {
 	if d.Event == "work_resize" {
 		logx.System("work_resize width=%d height=%d events=%d burst_ms=%d handler_delay_max_ms=%d frame_delay_max_ms=%d paint_delay_max_ms=%d active_tasks=%d",
 			d.ViewportWidth, d.ViewportHeight, d.ResizeEvents, d.DurationMS, d.HandlerDelayMaxMS, d.FrameDelayMaxMS, d.PaintDelayMaxMS, d.ActiveTasks)
+		return nil
+	}
+	if d.Event == "ribbon_guard" {
+		if d.Resource != "browse" && d.Resource != "wildcards" || d.Stage != "geometry" && d.Stage != "entry" {
+			return errors.New("invalid diagnostic")
+		}
+		logx.SystemError("ribbon_guard mode=%q reason=%q items=%d offsets=%d widths=%d from=%d to=%d",
+			d.Resource, d.Stage, d.Letters, d.Measured, d.Words, d.Page, d.TotalPages)
 		return nil
 	}
 	logx.System("browse_diag event=%s dict=%q page=%d words=%d page_heap_est_bytes=%d page_json_bytes=%d cache_pages=%d cache_heap_est_bytes=%d cache_json_bytes=%d cache_stored_pages=%d cache_stored_bytes=%d total_pages=%d all_pages_heap_est_bytes=%d letters=%d bytes=%d read_ms=%d fetch_ms=%d total_ms=%d words_ms=%d strip_build_ms=%d strip_mark_ms=%d status=%d restored=%t stream_alphabet=%t",
