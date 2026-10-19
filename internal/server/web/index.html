@@ -463,6 +463,11 @@ window.wudictFontScale=(function(){
        Rescan folders, right under the row that button is in: the answer
        appears where the question was asked. -->
   <div id="orphanBox" class="bulkbox orphbox" hidden></div>
+  <!-- Reading the library instead of asking it something: it belongs after
+       the collection actions because Browse opens one of those dictionaries. -->
+  <div class="facts browse-row">
+    <a class="mrow door" id="browseLink" href="/browse" title="{{T:panel.browseHint}}">{{T:panel.browse}}</a>
+  </div>
 </details>
 
 <details class="sect" data-panel-section="results" open>
@@ -543,27 +548,22 @@ window.wudictFontScale=(function(){
        follows. Keeping it as a row nobody needs meant keeping a way for a
        reader to meet a list that is not the one they arranged. -->
 </div>
-  <!-- Reading the library instead of asking it something. It is a destination,
-       not a mode of the search: the search box answers a question, and this
-       opens a dictionary at a page. No dictionary in the href on purpose;
-       /browse with none asks which. -->
-  <div class="facts">
-    <a class="mrow door" id="browseLink" href="/browse" title="{{T:panel.browseHint}}">{{T:panel.browse}}</a>
-  </div>
   <div class="facts">
     <label class="rowlabel" title="{{T:panel.ignoreDiacriticsHint}}"><input class="panel-checkbox" type="checkbox" id="ignoreDiacritics"> {{T:panel.ignoreDiacritics}}</label>
   </div>
   <div class="facts headword-threshold-row">
     <label class="rowlabel" for="headwordApplyThreshold">{{T:panel.headwordApplyThreshold}}</label>
-    <select id="headwordApplyThreshold" aria-label="{{T:panel.headwordApplyThreshold}}">
-      <option value="0">{{T:panel.searchAsYouTypeNever}}</option>
-      <option value="10000">{{T:panel.searchAsYouTypeBelow10k}}</option>
-      <option value="50000">{{T:panel.searchAsYouTypeBelow50k}}</option>
-      <option value="100000">{{T:panel.searchAsYouTypeBelow100k}}</option>
-      <option value="500000">{{T:panel.searchAsYouTypeBelow500k}}</option>
-      <option value="1000000">{{T:panel.searchAsYouTypeBelow1m}}</option>
-      <option value="-1">{{T:panel.searchAsYouTypeAlways}}</option>
-    </select>
+    <div class="panel-select-wrap threshold-select-wrap">
+      <select id="headwordApplyThreshold" aria-label="{{T:panel.headwordApplyThreshold}}">
+        <option value="0">{{T:panel.searchAsYouTypeNever}}</option>
+        <option value="10000">{{T:panel.searchAsYouTypeBelow10k}}</option>
+        <option value="50000">{{T:panel.searchAsYouTypeBelow50k}}</option>
+        <option value="100000">{{T:panel.searchAsYouTypeBelow100k}}</option>
+        <option value="500000">{{T:panel.searchAsYouTypeBelow500k}}</option>
+        <option value="1000000">{{T:panel.searchAsYouTypeBelow1m}}</option>
+        <option value="-1">{{T:panel.searchAsYouTypeAlways}}</option>
+      </select>
+    </div>
   </div>
 </details>
 
@@ -595,12 +595,14 @@ window.wudictFontScale=(function(){
   </div>
   <div class="facts">
     <label class="rowlabel" for="articleFontSelect">{{T:panel.articleFont}}</label>
-    <select id="articleFontSelect" aria-label="{{T:panel.articleFont}}">
-      <option value="system">{{T:panel.fontSystem}}</option>
-      <option value="charis">Charis</option>
-      <option value="gentium">Gentium</option>
-      <option value="quivira">Quivira</option>
-    </select>
+    <div class="panel-select-wrap article-font-select-wrap">
+      <select id="articleFontSelect" aria-label="{{T:panel.articleFont}}">
+        <option value="system">{{T:panel.fontSystem}}</option>
+        <option value="charis">Charis</option>
+        <option value="gentium">Gentium</option>
+        <option value="quivira">Quivira</option>
+      </select>
+    </div>
   </div>
   <!-- The size stepper is adjusted WHILE reading, so it stays on the panel
        rather than behind the Appearance door — the promise the old layout made
@@ -3521,7 +3523,7 @@ function panelRowColumns(){
     if(sect.matches("details:not([open])"))continue;
     const rows=[...sect.querySelectorAll(":scope > .facts")];
     const hid=rows.filter(row=>row.hidden);hid.forEach(row=>{row.hidden=false});
-    rows.forEach(row=>row.style.removeProperty("--rlcol"));
+    rows.forEach(row=>{if(!row.classList.contains("reading"))row.style.removeProperty("--rlcol")});
     let w=0;
     for(const el of sect.querySelectorAll(":scope > .facts > .rowlabel,:scope > .facts > .seg>span")){
       const range=document.createRange();range.selectNodeContents(el);
@@ -9065,6 +9067,7 @@ function presetRowsPaint(){
       b.setAttribute("aria-pressed",(b.dataset.layer==="on")===on?"true":"false");
   }
   $("examplesExtraRow").hidden=$("examplesRow").hidden;
+  $("hideUnmarkedExamples").disabled=!(PRESETS&&PRESETS.enabled&&PRESETS.enabled.includes("hide_examples"));
 }
 for(const [rowId,id,kind] of PRESET_ROWS){
   const row=$(rowId);

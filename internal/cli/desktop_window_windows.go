@@ -38,9 +38,6 @@ var (
 	desktopWindow           webview.WebView
 	desktopWindowAddress    string
 	desktopWindowStarting   bool
-	windowUser32            = syscall.NewLazyDLL("user32.dll")
-	windowShowWindow        = windowUser32.NewProc("ShowWindow")
-	windowForeground        = windowUser32.NewProc("SetForegroundWindow")
 	windowDwmapi            = syscall.NewLazyDLL("dwmapi.dll")
 	windowDwmSetAttribute   = windowDwmapi.NewProc("DwmSetWindowAttribute")
 	windowShell32           = syscall.NewLazyDLL("shell32.dll")
@@ -85,9 +82,7 @@ func openDesktopWindow(address, appAddress string, onClose func(), desktopReques
 			if navigationAddress != "" {
 				w.Navigate(navigationAddress)
 			}
-			hwnd := uintptr(w.Window())
-			windowShowWindow.Call(hwnd, 9) // SW_RESTORE
-			windowForeground.Call(hwnd)
+			restoreAndFocusWindow(uintptr(w.Window()))
 		})
 		return true
 	}

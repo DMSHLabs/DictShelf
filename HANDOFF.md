@@ -1,5 +1,7 @@
 # Agent handoff — current state
 
+On Windows, a second GUI launch now locates the existing `wuDict2` window, restores it, moves it into the current monitor's work area if needed, and focuses it without an already-running alert. Console launches retain the existing duplicate-instance error. `go build ./...` and `git diff --check` pass; GUI relaunch/offscreen behavior still needs runtime verification.
+
 Settings → Appearance now has Fonts, Font size and Font weight rows in that order. Charis is the default; the selected family including System is stored in UIPrefs and applied to shadow articles and scripted frames. IPA/transcription elements always use Charis. Embedded fonts are available via same-origin assets for Windows and Android. Build passed; browser/device rendering remains unverified.
 
 Applying a built-in appearance look (Clean, Warm/Sepia or Old Paper) switches Settings → Fonts to Charis, enables Hide examples without [*], and persists both choices. User-created looks keep the current Fonts and example-filter choices.
@@ -7,6 +9,8 @@ Applying a built-in appearance look (Clean, Warm/Sepia or Old Paper) switches Se
 Appearance panel controls now stay beside their label column instead of being pushed to the far edge. Preset icons share a wrapping group with the dropdown, so they remain beside it when they fit and wrap underneath aligned to its left edge when they do not. Build passed; visual confirmation pending.
 
 All 13 font assets in web/fonts are registered for the document and scripted article frames. Charis and Gentium Regular/Medium/Bold normal and italic WOFF2 faces map to CSS weights 400/500/700; Quivira OTF remains available as a fallback/selection. Build passed; rendering remains unverified.
+
+Hide examples without [*] is indented by 4ch and disabled while the Examples layer is off. Settings dropdown controls use Language's shared control height/font tokens. Search as you type and Fonts selects now use a drawn triangle and zero vertical padding to align the text. Browse A-Z now ends the Dictionaries section with row spacing. Build passed; visual confirmation pending.
 
 Copied Charis 7 and Gentium 7 Regular/Italic/Bold/BoldItalic WOFF2 files and each family's OFL.txt into web/fonts; font hashes match the local source packages. Existing Charis-Regular.ttf and Quivira.otf were preserved. Font registration and article styling were not changed.
 
@@ -26,11 +30,13 @@ Browse typing debounce is now 500 ms, restarted by every input edit. Its shared 
 
 Browse headword search finishes its own progress task on the done event and unconditionally in finally, including canceled/superseded requests. Task cleanup no longer depends on the current query sequence. Runtime confirmation of the reported lingering Searching headwords message is pending.
 
-Results toggles measure their own shared label width, independently of checkbox labels in the section. Groups: (Группы:) and Search as you type use natural-width labels and dropdowns filling the remaining row. Visual verification is pending.
+Results toggles keep their independently measured label width when the section computes its other label columns; the shared pass no longer replaces it with the wider section column. Their On/Off pairs begin just after the longest of those two labels. Groups: (Группы:) and Search as you type use natural-width labels and dropdowns filling the remaining row. Visual verification is pending.
 
 Browse input search uses indexconst.BrowseSearchDebounceMS (300 ms after the last edit). The input stays enabled during search streams and page/alphabet loading, and page-loading keyboard guards allow typing in it. Runtime focus/continued-typing verification is pending.
 
-Settings places the Search as you type label before its dropdown. Runtime layout verification is pending.
+Settings places the Search as you type label before its dropdown. Language, Groups, Search as you type, Presets and Fonts dropdowns now use the same physical height as Edit dictionary settings: their height follows the base control size instead of shrinking with the smaller dropdown text. Runtime layout verification is pending.
+
+Language and the native Search as you type / Fonts selects now draw matching downward carets with the same size, vertical centering and right inset. Runtime visual verification is pending.
 
 Search as you type options now explicitly read Never, Below 10k/50k/100k/500k/1m, Always (localized in EN/RU); saved values and threshold behavior are unchanged. Runtime layout verification is pending.
 
@@ -38,7 +44,7 @@ Settings → Search as you type adds Always (Всегда), saved as -1 in the e
 
 The built-in Warm appearance enables Window background → Color in both themes: #F4ECD8 in light and #1C1A17 in dark. Runtime checkbox/color verification is pending.
 
-Current checkout: branch `dev2` at `828542ac`; changes are uncommitted. Settings → Language is a permanent first row, outside the collapsible sections; System is the default and English/Русский are explicit overrides. System follows the requesting browser/app language where supported (English/Russian), with English fallback; Android resource contexts use the device locale. `go build ./...` and `git diff --check` pass. Windows/Android runtime and Android Java compilation remain unverified. Browse/Wildcards ribbon comparison and open design questions are recorded in `docs/BROWSE-WILDCARDS-CONTROL.md`.
+Current checkout: branch `dev2` at `828542ac`; changes are uncommitted. Settings → Language is a permanent first row, outside the collapsible sections; System is the default and English/Русский are explicit overrides. System follows the requesting browser/app language where supported (English/Russian), with English fallback; Android resource contexts use the device locale. Browse A–Z now gets the same vertical row spacing as the other dictionary actions. Highlight matches and Read aloud already use the screenshot's measured shared label column and On/Off pairs. `go build ./...` and `git diff --check` pass; visual runtime verification remains pending. Browse/Wildcards ribbon comparison and open design questions are recorded in `docs/BROWSE-WILDCARDS-CONTROL.md`.
 
 Browse alphabet chips now cap visible labels at 12 em and render longer labels with an ellipsis; the full label remains available through the native tooltip and accessible name. The width cap is included in the measured chip geometry so virtual scrolling and navigation stay aligned. `go build ./...` and `git diff --check` pass; visual runtime confirmation is pending.
 
