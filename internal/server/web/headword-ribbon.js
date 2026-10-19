@@ -28,7 +28,7 @@
     const fraction=maxFirst?Math.max(0,Math.min(1,first/maxFirst)):0;
     return {width,left:Math.max(0,trackWidth-width)*fraction,maxFirst};
   };
-  const measure=(items,sample,viewport,{gap=0,minWidth=0,fixedWidth=0,separatorWidth=0,maxWidthEm=maxLabelEm,getLabel=null}={})=>{
+  const measure=(items,sample,viewport,{gap=0,minWidth=0,fixedWidth=0,separatorWidth=0,maxWidthEm=maxLabelEm,getLabel=null,widthCache=null}={})=>{
     const style=getComputedStyle(sample),font=[style.fontStyle,style.fontVariant,style.fontWeight,style.fontSize,style.fontFamily].join(" ");
     const px=Number.parseFloat(style.fontSize)||16,pad=(Number.parseFloat(style.paddingLeft)||0)+(Number.parseFloat(style.paddingRight)||0)+(Number.parseFloat(style.borderLeftWidth)||0)+(Number.parseFloat(style.borderRightWidth)||0);
     const floor=Math.max(0,minWidth||Number.parseFloat(style.minWidth)||0),cap=px*maxWidthEm;
@@ -38,8 +38,10 @@
     const widthOf=(item,index)=>{
       if(item.kind==="separator")return separatorWidth||Math.max(floor,ctx.measureText(item.label||"|").width+pad);
       if(fixedWidth)return fixedWidth;
-      const label=String(getLabel?getLabel(item,index):item.label||""),text=ctx.measureText(label).width+Math.max(0,label.length-1)*spacing;
-      return Math.max(floor,Math.min(cap,text+pad));
+      const label=String(getLabel?getLabel(item,index):item.label||""),key=item.kind+"\0"+label;
+      const cached=widthCache?.get(key);if(cached!==undefined)return cached;
+      const text=ctx.measureText(label).width+Math.max(0,label.length-1)*spacing;
+      const width=Math.max(floor,Math.min(cap,text+pad));widthCache?.set(key,width);return width;
     };
     for(let i=0;i<n;i++){const w=widthOf(items[i],i);widths[i]=w;if(items[i].kind!=="separator"){sum+=w;averageCount++}}
     const average=averageCount?sum/averageCount:Math.max(floor,pad),limit=Math.max(n,items.length);

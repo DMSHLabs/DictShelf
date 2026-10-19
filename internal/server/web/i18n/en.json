@@ -926,6 +926,7 @@
   "search.wildcards": "wildcards",
   "search.wildcardsRun": "Find matching headwords",
   "search.wildcardsResults": "Matching headwords",
+  "search.wildcardsTotalLabel": "Total:",
   "search.wildcardsTotal": "Total matching headwords",
   "search.wildcardsDictionary": "Dictionary with matching headwords",
   "search.wildcardsLoading": "Searching headwords…",

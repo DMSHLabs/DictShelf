@@ -131,6 +131,17 @@ type browseDiagnostic struct {
 	FrameDelayMaxMS        int    `json:"frameDelayMaxMs"`
 	PaintDelayMaxMS        int    `json:"paintDelayMaxMs"`
 	ActiveTasks            int    `json:"activeTasks"`
+	RibbonItems            int    `json:"ribbonItems"`
+	RibbonSections         int    `json:"ribbonSections"`
+	RibbonVisible          int    `json:"ribbonVisible"`
+	RibbonAnchor           int    `json:"ribbonAnchor"`
+	RibbonAdapterMS        int    `json:"ribbonAdapterMs"`
+	RibbonBuildMS          int    `json:"ribbonBuildMs"`
+	RibbonPaintMS          int    `json:"ribbonPaintMs"`
+	ResizeStartWidth       int    `json:"resizeStartWidth"`
+	ResizeBurstMS          int    `json:"resizeBurstMs"`
+	RibbonMetricsChanged   bool   `json:"ribbonMetricsChanged"`
+	RibbonPaintDeferred    bool   `json:"ribbonPaintDeferred"`
 }
 
 func (s *Server) handleBrowseDiagnostic(w http.ResponseWriter, r *http.Request) {
@@ -164,7 +175,7 @@ func (s *Server) handleBrowseDiagnostic(w http.ResponseWriter, r *http.Request) 
 
 func recordBrowseDiagnostic(d browseDiagnostic) error {
 	switch d.Event {
-	case "alphabet_cache_miss", "alphabet_cache_invalid", "alphabet_cache_read_failed", "alphabet_cache_restore", "alphabet_cache_saved", "alphabet_cache_save_failed", "alphabet_progress", "alphabet_done", "alphabet_measure_done", "alphabet_aborted", "alphabet_error", "alphabet_task", "page_request", "page_response", "page_ready", "page_fetch_failed", "render", "page_cache_saved", "page_cache_restored", "wildcard_cache_checkpoint", "wildcard_cache_complete", "wildcard_cache_restored", "wildcard_memory_start", "wildcard_memory_sample", "wildcard_memory_end", "wildcard_progress", "dictionary_picker_open", "dictionary_list_client", "article_transition", "browse_navigation", "navigation_resource", "storage_bootstrap", "work_resize", "ribbon_guard":
+	case "alphabet_cache_miss", "alphabet_cache_invalid", "alphabet_cache_read_failed", "alphabet_cache_restore", "alphabet_cache_saved", "alphabet_cache_save_failed", "alphabet_progress", "alphabet_done", "alphabet_measure_done", "alphabet_aborted", "alphabet_error", "alphabet_task", "page_request", "page_response", "page_ready", "page_fetch_failed", "render", "page_cache_saved", "page_cache_restored", "wildcard_cache_checkpoint", "wildcard_cache_complete", "wildcard_cache_restored", "wildcard_memory_start", "wildcard_memory_sample", "wildcard_memory_end", "wildcard_progress", "wildcard_ribbon", "dictionary_picker_open", "dictionary_list_client", "article_transition", "browse_navigation", "navigation_resource", "storage_bootstrap", "work_resize", "ribbon_guard":
 	default:
 		return errors.New("invalid diagnostic")
 	}
@@ -186,7 +197,12 @@ func recordBrowseDiagnostic(d browseDiagnostic) error {
 		!bounded(d.ProgressScanTotal, 1_000_000_000) || !bounded(d.ViewportWidth, 100_000) ||
 		!bounded(d.ViewportHeight, 100_000) || !bounded(d.ResizeEvents, 1_000_000) ||
 		!bounded(d.HandlerDelayMaxMS, 86_400_000) || !bounded(d.FrameDelayMaxMS, 86_400_000) ||
-		!bounded(d.PaintDelayMaxMS, 86_400_000) || !bounded(d.ActiveTasks, 100_000) {
+		!bounded(d.PaintDelayMaxMS, 86_400_000) || !bounded(d.ActiveTasks, 100_000) ||
+		!bounded(d.RibbonItems, 1_000_000) || !bounded(d.RibbonSections, 1_000_000) ||
+		!bounded(d.RibbonVisible, 100_000) || !bounded(d.RibbonAnchor, 1_000_000) ||
+		!bounded(d.RibbonAdapterMS, 600_000) || !bounded(d.RibbonBuildMS, 600_000) ||
+		!bounded(d.RibbonPaintMS, 600_000) || !bounded(d.ResizeStartWidth, 100_000) ||
+		!bounded(d.ResizeBurstMS, 600_000) {
 		return errors.New("invalid diagnostic")
 	}
 	if d.Event == "article_transition" {
@@ -236,6 +252,18 @@ func recordBrowseDiagnostic(d browseDiagnostic) error {
 			d.Dict, d.Stage, d.ReadMS, d.ProgressEvents, d.ProgressBytes, d.ProgressPublished, d.ProgressRenders,
 			d.ProgressRenderMS, d.ProgressRenderMaxMS, d.ProgressTaskUpdates, d.ProgressTaskUpdateMS, d.ProgressTaskMaxMS,
 			d.ProgressScanned, d.ProgressScanTotal)
+		return nil
+	}
+	if d.Event == "wildcard_ribbon" {
+		switch d.Stage {
+		case "build", "resize":
+		default:
+			return errors.New("invalid diagnostic")
+		}
+		logx.System("wildcard_ribbon stage=%s dict=%q items=%d sections=%d visible=%d anchor=%d adapter_ms=%d build_ms=%d paint_ms=%d viewport_width=%d viewport_height=%d resize_events=%d resize_start_width=%d resize_burst_ms=%d metrics_changed=%t paint_deferred=%t",
+			d.Stage, d.Dict, d.RibbonItems, d.RibbonSections, d.RibbonVisible, d.RibbonAnchor,
+			d.RibbonAdapterMS, d.RibbonBuildMS, d.RibbonPaintMS, d.ViewportWidth, d.ViewportHeight,
+			d.ResizeEvents, d.ResizeStartWidth, d.ResizeBurstMS, d.RibbonMetricsChanged, d.RibbonPaintDeferred)
 		return nil
 	}
 	if d.Event == "dictionary_picker_open" {

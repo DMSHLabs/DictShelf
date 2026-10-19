@@ -351,10 +351,12 @@ html[data-desktop-image] #articleFindStrip{background-image:var(--paper-bk-image
 #maskSubmit{position:absolute;right:.25em;top:50%;transform:translateY(-50%);border:1px solid var(--accent);border-radius:6px;background:var(--accent);color:var(--bg);cursor:pointer;min-width:2em;height:2em;font-weight:700}
 #maskSubmit[hidden],#maskProgress[hidden],#maskView[hidden]{display:none}
 body.mask-view-active .qbox input{padding-right:2.8em}
-#maskProgress{display:inline-flex;align-items:center;gap:.25em;white-space:nowrap;color:var(--label);font-size:calc(var(--ui-font-addition) * 1rem)}
-#maskCount{min-width:2ch;text-align:right}
+#maskProgress{display:flex;align-items:center;justify-content:space-between;gap:.5em;min-width:0;white-space:nowrap;color:var(--label);font-size:inherit}
+#maskCount{flex:none;min-width:2ch;text-align:right}
+.mask-total{display:inline-flex;align-items:center;gap:.3em;flex:none}
 #maskPage{font:inherit;font-variant-numeric:tabular-nums;white-space:nowrap}
-#maskProgress button{min-width:1.8em;min-height:1.8em;padding:0 .3em;color:var(--fg);background:var(--bg-card);border:1px solid var(--line);border-radius:6px;cursor:pointer}
+#maskProgress button{box-sizing:border-box;flex:none;height:calc(var(--ui-edit_control-height) * 1.5rem);margin:0;padding:0 .5em;color:var(--fg);background:var(--bg-card);border:1px solid var(--line);border-radius:6px;font:inherit;cursor:pointer}
+#maskProgress :is(#maskPrev,#maskNext){width:calc(var(--ui-edit_control-height) * 1.5rem);padding:0}
 #maskProgress button:disabled{opacity:.4;cursor:default}
 /* Keep the search controls visible while moving through a long mask list. */
 body.mask-view-active{--stick:var(--barh)}
@@ -384,10 +386,12 @@ html:is([data-shell-sepia],[data-shell-image],[data-desktop-image]) .mask-search
 .mask-words button.mask-find-current{background:var(--line-soft);outline:2px solid var(--accent);outline-offset:-2px}
 #maskView{display:flex;flex:1 1 auto;flex-direction:column;min-height:0;margin-top:var(--sp-2);background:var(--bg-card);border:1px solid var(--line);border-radius:10px;overflow:hidden}
 .mask-chrome{flex:none;z-index:4;background:var(--paper-bg,var(--bg-card));border-bottom:1px solid var(--line)}
-.mask-head{position:static;display:flex;align-items:center;gap:.5em;padding:.55em .7em;background:var(--paper-bg,var(--bg-card));border-bottom:1px solid var(--line)}
-.mask-head #maskDict{flex:1 1 0;min-width:0;width:auto;max-width:none;justify-content:space-between;overflow:hidden;text-align:left}
+.mask-head{position:static;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,23ch),1fr));align-items:center;gap:.5em 1em;padding:.55em .7em;background:var(--paper-bg,var(--bg-card));border-bottom:1px solid var(--line);font-size:calc(var(--ui-edit_control-font) * 1rem)}
+.mask-head #maskDict{container:mask-dictionary/inline-size;min-width:0;width:100%;height:calc(var(--ui-edit_control-height) * 1.5rem);max-width:none;justify-content:space-between;overflow:hidden;text-align:left;font:inherit}
 .mask-head #maskDictName{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .mask-head #maskDictMeta{flex:none;white-space:nowrap}
+.mask-head #maskProgress{width:100%;padding-left:min(16vw,16em)}
+@container mask-dictionary (max-width:38ch){.mask-head #maskDictMeta{display:none}}
 html[data-shell-image] .mask-head #maskDict{background-color:var(--paper-bg,var(--bg));background-image:linear-gradient(#ffffff24,#ffffff24),var(--paper-bk-image);background-size:100% 100%}
 .mask-letters button{color:var(--fg);background:var(--bg-card);border:1px solid var(--line);border-radius:6px;cursor:pointer}
 .mask-strip-wrap{display:flex;align-items:stretch;gap:.1rem;padding:.5em .35rem .15em}
@@ -426,7 +430,7 @@ body.mask-computing #bar button:disabled,
 body.mask-computing #bar input:disabled,
 body.mask-computing #bar select:disabled{cursor:wait}
 .mask-empty{padding:1em;color:var(--label)}
-@media(max-width:600px){#maskProgress{font-size:11px;gap:.15em;flex:none}#maskProgress button{min-width:1.6em;min-height:1.8em;padding:0 .15em}}
+@media(max-width:62rem){.mask-head #maskProgress{padding-left:0}}
 input[type=search]{width:100%;min-width:0;font-size:16px;
   color:var(--fg);background:var(--bg-card);border:1px solid var(--line);
   border-radius:8px;padding:.35em .7em .35em 2em;outline:none;appearance:none}
