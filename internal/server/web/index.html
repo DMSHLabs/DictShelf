@@ -307,7 +307,11 @@ window.wudictFontScale=(function(){
         <button type="button" id="maskNext" aria-label="{{T:browse.nextTitle}}">›</button>
       </span>
     </header>
-    <nav id="maskLetters" class="mask-letters" aria-label="{{T:browse.jumpLetter}}"><div id="maskLetterTrack" class="mask-letter-track"></div></nav>
+    <div class="mask-strip-wrap">
+      <button type="button" class="wudict-ribbon-nav" id="maskStripPrev" aria-label="{{T:browse.scrollLettersLeft}}" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 4-8 8 8 8"/></svg></button>
+      <nav id="maskLetters" class="mask-letters" aria-label="{{T:browse.jumpLetter}}"><div id="maskLetterTrack" class="mask-letter-track"></div></nav>
+      <button type="button" class="wudict-ribbon-nav" id="maskStripNext" aria-label="{{T:browse.scrollLettersRight}}" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 4 8 8-8 8"/></svg></button>
+    </div>
     <div id="maskScrollbar" class="mask-scrollbar" role="scrollbar" aria-label="{{T:browse.jumpLetter}}" aria-controls="maskLetters" aria-orientation="horizontal" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0" tabindex="0"><div id="maskScrollThumb" class="mask-scroll-thumb"></div></div>
   </div>
   <div id="maskWords" class="mask-words"></div>
@@ -6066,6 +6070,7 @@ function noIndexRow(el,out,info){
 // selected group's order even when requests finish out of order.
 let maskGeneration=0,maskControllers=new Set(),maskRows=[],maskCurrent=0;
 let maskPattern="",maskSelection="",maskSubmitRequested=false,maskNavToken=0,maskRestoreScroll=null;
+let maskWordsPageKey="";
 let maskStripVersion=0,maskStripRendered=-1,maskChipMap=new Map(),maskActiveKey="",maskStripWantedKey="";
 let maskStripItems=[],maskStripOffsets=[],maskStripWidths=[],maskStripNavOffsets=[],maskStripNavWidths=[],maskStripBands=[],maskStripSectionOffsets=[],maskStripSectionTargets=[],maskStripTotalWidth=0,maskStripSectionTotal=0,maskStripStart=-1,maskStripEnd=-1,maskStripRenderAnchor=-1,maskStripDisplayStart=-1,maskStripDisplayEnd=-1,maskStripKeyIndex=new Map(),maskStripMeasureNode=null,maskStripMeasureWidth=null,maskStripGap=0;
 let maskStripPaintAt=0,maskStripPaintTimer=0,maskStripScrollX=0,maskStripScrubTarget=null,maskRibbonNavigator=null;
@@ -6139,6 +6144,7 @@ function maskAbort(){
 }
 function maskInvalidate(){
   maskAbort();clearTimeout(maskFindTimer);maskRows=[];maskBaseRows=[];maskFindRows=[];maskPattern="";maskSelection="";
+  maskWordsPageKey="";
   maskFindQuery="";maskFindIndex=-1;maskFindMatch=null;maskFindApproved=false;maskFindAwaitingApply=false;$("maskFindInput").value="";maskFindControls();
   maskStripVersion++;maskStripRendered=-1;maskChipMap.clear();maskActiveKey="";maskStripWantedKey="";maskStripItems=[];maskStripOffsets=[];maskStripWidths=[];maskStripNavOffsets=[];maskStripNavWidths=[];maskStripBands=[];maskStripSectionOffsets=[];maskStripSectionTargets=[];maskStripKeyIndex.clear();maskStripTotalWidth=maskStripSectionTotal=0;maskStripStart=maskStripEnd=maskStripRenderAnchor=maskStripDisplayStart=maskStripDisplayEnd=-1;maskStripMeasureWidth=null;maskStripScrollX=0;maskStripScrubTarget=null;
   if(searchAC)searchAC.abort();hideSearchProgress();searchSeq++;
@@ -6212,7 +6218,9 @@ function maskStripPaintNow(){
       const band=bandsByDictionary.get(group);if(band)band.end=end;else bandsByDictionary.set(group,{tone:group%4,start:begin,end});
     }
     maskStripBands=[...bandsByDictionary.values()];
-    track.style.width="100%";track.style.minWidth="100%";track.style.height=Math.max(1,sampleHeight)+"px";
+    const stripHeight=Math.max(1,sampleHeight,$("maskStripPrev").getBoundingClientRect().height);
+    strip.style.height=stripHeight+"px";
+    track.style.width="100%";track.style.minWidth="100%";track.style.height=stripHeight+"px";
     maskStripScrollX=Math.min(maskStripScrollX,Math.max(0,maskStripTotalWidth-track.clientWidth));maskStripRendered=maskStripVersion;
   }
   const row=maskRows[maskCurrent],key=row?.data?row.id+":"+row.data.page:"",targetKey=maskStripWantedKey||key;
@@ -6282,6 +6290,7 @@ function maskStripPreviewPage(section){
 }
 maskRibbonNavigator=window.wudictHeadwordControl.ribbon.createScroller({
   viewport:$("maskLetters"),track:$("maskLetterTrack"),bar:$("maskScrollbar"),thumb:$("maskScrollThumb"),
+  previous:$("maskStripPrev"),next:$("maskStripNext"),
   getItems:()=>maskStripItems,getOffsets:()=>maskStripNavOffsets,getWidths:()=>maskStripNavWidths,
   getPosition:()=>maskStripScrollX,setPosition:value=>{maskStripWantedKey="";maskStripScrollX=value},
   getMaxScroll:()=>Math.max(0,maskStripTotalWidth-$("maskLetters").clientWidth),
@@ -6290,6 +6299,13 @@ maskRibbonNavigator=window.wudictHeadwordControl.ribbon.createScroller({
   onFinish:({section})=>{const target=maskStripScrubTarget||maskStripPreviewPage(section);maskStripScrubTarget=null;if(target)maskSelect(target.index,target.page)},
   minRenderInterval:50,onRender:maskStripPaint
 });
+$("maskView").addEventListener("wheel",event=>{
+  if(event.defaultPrevented||!event.deltaY||Math.abs(event.deltaX)>Math.abs(event.deltaY)||
+      (event.target instanceof Element&&event.target.closest("#maskWords")))return;
+  const words=$("maskWords"),factor=event.deltaMode===1?16:event.deltaMode===2?words.clientHeight:1;
+  const before=words.scrollTop;words.scrollTop+=event.deltaY*factor;
+  if(words.scrollTop!==before)event.preventDefault();
+},{passive:false});
 new ResizeObserver(()=>{maskStripVersion++;maskStripRendered=-1;maskStripPaint();maskRibbonNavigator?.update()}).observe($("maskLetters"));
 function maskMenu(){
   const selected=maskRows[maskCurrent];
@@ -6346,7 +6362,8 @@ function maskRender(){
   if((row.state==="pending"&&!row.streamWords)||(!result&&row.state!=="error")){$("maskWords").innerHTML='<p class="mask-empty">'+tx("search.wildcardsLoading")+'</p>';return}
   if(row.state==="error"){$("maskWords").innerHTML='<p class="mask-empty">'+esc(row.error)+'</p>';return}
   if(!result?.words?.length){$("maskWords").innerHTML='<p class="mask-empty">'+tx("search.wildcardsEmpty")+'</p>';return}
-  $("maskWords").replaceChildren(...result.words.map((word,i)=>{
+  const columns=document.createElement("div");columns.className="mask-word-columns";
+  columns.replaceChildren(...result.words.map((word,i)=>{
     const button=document.createElement("button");button.type="button";button.dataset.word=word;
     const lower=maskFindQuery;
     button.innerHTML=lower?highlightMaskRanges(word,maskFindWildcard?maskRanges(word,lower):maskFindRanges(word,lower)):
@@ -6355,12 +6372,15 @@ function maskRender(){
       button.classList.add("mask-find-current");
     return button;
   }));
+  $("maskWords").replaceChildren(columns);
+  const pageKey=row.id+":"+result.page+":"+maskFindFilter;
+  if(pageKey!==maskWordsPageKey){$("maskWords").scrollTop=0;maskWordsPageKey=pageKey}
   if(!maskFindFilter&&maskFindMatch?.id===row.id){
     requestAnimationFrame(()=>$('maskWords').querySelector('.mask-find-current')?.scrollIntoView({block:"center"}));
   }
   if(maskRestoreScroll!==null){
     const y=maskRestoreScroll;maskRestoreScroll=null;
-    requestAnimationFrame(()=>scrollTo(0,y));
+    requestAnimationFrame(()=>{$("maskWords").scrollTop=y});
   }
 }
 async function maskFetch(row,page,generation,navToken){
@@ -7082,7 +7102,7 @@ $("maskWords").addEventListener("click",e=>{
   const basePosition=row.diskCache?row.data?.positions?.[visibleIndex]:row.streamPositions?.[filteredOffset];
   const basePage=Number.isInteger(basePosition)?Math.floor(basePosition/blockSize)+1:(row.data?.page||1);
   const params=new URLSearchParams({q:maskPattern,mode:"wildcards",dict:$("dict").value||"all",
-    maskdict:row.id,maskpage:String(basePage),maskscroll:String(Math.round(scrollY))});
+    maskdict:row.id,maskpage:String(basePage),maskscroll:String(Math.round($("maskWords").scrollTop))});
   const find=$("maskFindInput").value.trim();
   if(find){params.set("find",find);if(maskFindFilter)params.set("filter","1");
     if(maskFindWildcard)params.set("findwildcards","1");

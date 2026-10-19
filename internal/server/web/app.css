@@ -360,7 +360,8 @@ body.mask-view-active .qbox input{padding-right:2.8em}
 body.mask-view-active{--stick:var(--barh)}
 body.mask-view-active .bar{transform:none!important}
 body.mask-view-active #out,body.mask-view-active #sbar{display:none}
-body.mask-view-active{padding-bottom:calc(var(--mask-dock-height,4.5rem) + .5rem)}
+body.mask-view-active{box-sizing:border-box;display:flex;flex-direction:column;height:100dvh;overflow:hidden;padding-bottom:calc(var(--mask-dock-height,4.5rem) + .5rem)}
+body.mask-view-active main.col.container{box-sizing:border-box;display:flex;flex:1 1 auto;flex-direction:column;min-height:0;overflow:hidden;padding-bottom:0}
 .mask-search-controls[hidden]{display:none}
 .mask-search-controls{position:fixed;left:0;right:0;bottom:0;z-index:8;display:flex;flex-direction:column;align-items:center;gap:.45rem;
   padding:.5rem .9rem max(.5rem,env(safe-area-inset-bottom));background:var(--bar);backdrop-filter:saturate(1.6) blur(8px);border-top:1px solid var(--line)}
@@ -381,15 +382,16 @@ html:is([data-shell-sepia],[data-shell-image],[data-desktop-image]) .mask-search
 .mask-search-progress button:hover{border-color:var(--accent);color:var(--accent)}
 @media(prefers-reduced-motion:reduce){.mask-search-spinner{animation:none;border-color:var(--accent)}}
 .mask-words button.mask-find-current{background:var(--line-soft);outline:2px solid var(--accent);outline-offset:-2px}
-#maskView{margin-top:var(--sp-2);background:var(--bg-card);border:1px solid var(--line);border-radius:10px;overflow:clip}
-.mask-chrome{position:sticky;top:var(--stick);z-index:4;background:var(--paper-bg,var(--bg-card))}
+#maskView{display:flex;flex:1 1 auto;flex-direction:column;min-height:0;margin-top:var(--sp-2);background:var(--bg-card);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.mask-chrome{flex:none;z-index:4;background:var(--paper-bg,var(--bg-card));border-bottom:1px solid var(--line)}
 .mask-head{position:static;display:flex;align-items:center;gap:.5em;padding:.55em .7em;background:var(--paper-bg,var(--bg-card));border-bottom:1px solid var(--line)}
 .mask-head #maskDict{flex:1 1 0;min-width:0;width:auto;max-width:none;justify-content:space-between;overflow:hidden;text-align:left}
 .mask-head #maskDictName{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .mask-head #maskDictMeta{flex:none;white-space:nowrap}
 html[data-shell-image] .mask-head #maskDict{background-color:var(--paper-bg,var(--bg));background-image:linear-gradient(#ffffff24,#ffffff24),var(--paper-bk-image);background-size:100% 100%}
 .mask-letters button{color:var(--fg);background:var(--bg-card);border:1px solid var(--line);border-radius:6px;cursor:pointer}
-.mask-letters{display:block;position:relative;overflow:hidden;padding:.5em .7em;border-bottom:1px solid var(--line);overscroll-behavior-x:contain;touch-action:pan-y}
+.mask-strip-wrap{display:flex;align-items:stretch;gap:.1rem;padding:.5em .35rem .15em}
+.mask-letters{display:block;position:relative;flex:1;min-width:0;overflow:hidden;padding:0;overscroll-behavior-x:contain;touch-action:pan-y}
 .mask-letter-track{position:relative;height:100%;width:100%;min-width:100%}
 .mask-letter-track> :is(button,span){position:absolute;top:50%;transform:translateY(-50%);box-sizing:border-box;margin:0;text-align:center}
 .mask-letter-track>.mask-dictionary-band{z-index:0;top:0;bottom:0;height:100%;transform:none;border-radius:5px;pointer-events:none}
@@ -409,7 +411,8 @@ html[data-shell-image] .mask-head #maskDict{background-color:var(--paper-bg,var(
 .mask-scrollbar:active .mask-scroll-thumb{cursor:grabbing}
 .mask-scrollbar:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .mask-letters button[aria-current="true"]{border-color:var(--accent);color:var(--accent)}
-.mask-words{columns:12em;column-gap:1em;padding:.7em}
+.mask-words{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:.7em}
+.mask-word-columns{columns:12em;column-gap:1em}
 .mask-words button{display:block;width:100%;break-inside:avoid;text-align:left;color:var(--link);background:transparent;border:0;border-radius:4px;padding:.3em .4em;font:inherit;cursor:pointer;overflow-wrap:anywhere}
 .mask-words button:hover,.mask-words button:focus-visible{background:var(--line-soft)}
 .mask-words mark{background:var(--accent);color:var(--bg);border-radius:.15em}
