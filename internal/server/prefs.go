@@ -71,6 +71,8 @@ type UIPrefs struct {
 	// reader who needs 500 needs it on the phone that reaches this server too.
 	FontWeight int `json:"fontWeight,omitempty"`
 
+	FontFamily string `json:"fontFamily,omitempty"` // system, charis, gentium or quivira
+
 	// HLOff turns OFF marking of full-text matches inside articles. It is
 	// negating for the same reason DictPref.Off is: the default is on, and a
 	// default that is the zero value is a default a hand-written or
@@ -173,6 +175,13 @@ func (u *UIPrefs) normalize() {
 	}
 	if u.FontSize != 0 {
 		u.FontSize = max(FontSizeMin, min(FontSizeMax, u.FontSize))
+	}
+	switch u.FontFamily {
+	case "charis", "gentium", "quivira", "system":
+	case "":
+		u.FontFamily = "charis"
+	default:
+		u.FontFamily = ""
 	}
 	u.GroupsOff = facetIDs(u.GroupsOff)
 	if u.OpenN <= 1 {

@@ -1,5 +1,7 @@
 # Localization: status and next tasks
 
+2026-10-19 Added Settings → Appearance Fonts selector (System/Charis/Gentium) and EN/RU labels. Go build passes; runtime label/layout and device rendering remain unverified.
+
 2026-10-19 Export dialog: added the group-selection checkbox label; success status is now only n of T exported / Экспортировано: n из T. Runtime layout check remains pending.
 
 2026-10-19 Headword export: Tools section, dictionary selection, folder, file options and progress/Stop messages added in EN/RU. Catalog checks pass; visual layout and native-device wording remain unverified.

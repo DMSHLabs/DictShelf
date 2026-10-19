@@ -1053,5 +1053,7 @@
   "work.task.setup": "setup",
   "work.expand": "Show tasks",
   "work.collapse": "Hide tasks",
-  "work.stopAll": "Stop All"
+  "work.stopAll": "Stop All",
+  "panel.articleFont": "Fonts",
+  "panel.fontSystem": "System"
 }

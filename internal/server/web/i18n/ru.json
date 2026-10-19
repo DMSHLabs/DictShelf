@@ -1065,5 +1065,7 @@
   "work.task.setup": "настройка",
   "work.expand": "Показать задачи",
   "work.collapse": "Скрыть задачи",
-  "work.stopAll": "Остановить все"
+  "work.stopAll": "Остановить все",
+  "panel.articleFont": "Шрифт",
+  "panel.fontSystem": "Системный"
 }

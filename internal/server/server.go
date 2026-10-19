@@ -8,7 +8,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
-	_ "embed"
+	"embed"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -113,6 +113,9 @@ var pickJS = webAsset(pickJSSrc, jsAsset) // word-at-point for a double tap, loa
 
 //go:embed web/app.css
 var appCSS []byte // main page styles
+
+//go:embed web/fonts/*
+var articleFontFiles embed.FS
 
 // uiScaleDefaultsStyle lets standalone pages use the same token defaults as
 // app.css without loading the main page's layout rules or copying values.
