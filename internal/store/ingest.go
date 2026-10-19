@@ -394,7 +394,8 @@ func IngestPlanContext(ctx context.Context, r dict.Reader, dbPath string, plan P
 		SELECT ordinal, id, w FROM (
 			SELECT ROW_NUMBER() OVER (ORDER BY w COLLATE NOCASE, id) - 1 AS ordinal, id, w
 			FROM entry WHERE w NOT LIKE '@_%'
-		) WHERE ordinal % ? = 0`, indexconst.BrowseAnchorStride); err != nil {
+		) WHERE ordinal % ? = 0 OR ordinal % ? = ?`,
+		indexconst.BrowseAnchorStride, indexconst.BrowsePageSize, indexconst.BrowsePageLastOffset); err != nil {
 		return rep, err
 	}
 	if _, err = tx.ExecContext(ctx, "CREATE INDEX idx_browse_anchor_w ON browse_anchor(w COLLATE NOCASE, entry_id)"); err != nil {

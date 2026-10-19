@@ -7,6 +7,8 @@ package indexconst
 const (
 	// BrowsePageSize is the default number of headwords shown on a Browse page.
 	BrowsePageSize = 300
+	// BrowsePageLastOffset is the last row of a Browse page relative to its start.
+	BrowsePageLastOffset = BrowsePageSize - 1
 	// BrowseAnchorStride stores one ordinal seek point per this many headword rows.
 	BrowseAnchorStride = 100
 	// BrowseStripExactWidthCount is the number of Browse strip labels measured exactly.

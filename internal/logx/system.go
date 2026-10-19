@@ -147,6 +147,16 @@ func SystemSnapshot() ([]byte, error) {
 		}
 		result = append(result, b...)
 	}
+	for _, name := range []string{"crash.log.1", "crash.log"} {
+		b, err := os.ReadFile(filepath.Join(root, name))
+		if err != nil && !os.IsNotExist(err) {
+			return nil, err
+		}
+		if len(b) > 0 {
+			result = append(result, []byte("\n--- Go crash output ("+name+") ---\n")...)
+			result = append(result, b...)
+		}
+	}
 	return result, nil
 }
 

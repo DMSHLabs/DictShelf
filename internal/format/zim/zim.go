@@ -7,6 +7,7 @@ package zim
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"path/filepath"
 	"strconv"
@@ -59,7 +60,17 @@ func Open(path string) (*Dict, error) {
 		return nil, err
 	}
 	d := &Dict{c: c}
-	d.lo, d.hi = c.nsRange(c.contentNS())
+	d.lo, d.hi, err = c.nsRange(c.contentNS())
+	if err != nil {
+		_ = c.Close()
+		return nil, fmt.Errorf("read ZIM content range: %w", err)
+	}
+	if d.lo == d.hi {
+		if claimed := c.articleCount(); claimed > 0 {
+			_ = c.Close()
+			return nil, fmt.Errorf("ZIM content namespace %q is empty, but metadata reports %d articles", c.contentNS(), claimed)
+		}
+	}
 
 	name := strings.TrimSpace(c.metadata("Title"))
 	nameFromName := name == ""
@@ -486,7 +497,10 @@ func (d *Dict) Resources() []string {
 	}
 	if !d.c.newNamespaces() {
 		for _, ns := range []byte{'I', '-', 'J'} {
-			lo, hi := d.c.nsRange(ns)
+			lo, hi, err := d.c.nsRange(ns)
+			if err != nil {
+				continue
+			}
 			for i := lo; i < hi; i++ {
 				de, err := d.c.entry(i)
 				if err != nil {
