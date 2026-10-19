@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -19,6 +20,7 @@ const maxSystemRecord = 16 * 1024
 
 var systemMu sync.Mutex
 var systemRoot func() string
+var systemSessionPath string
 var diagnosticURL = regexp.MustCompile(`https?://[^\s"<>]+`)
 var systemLogEnabled = true
 var systemLogBaseEvents = true
@@ -30,6 +32,31 @@ func SetSystemLogRoot(root func() string) {
 	systemMu.Lock()
 	defer systemMu.Unlock()
 	systemRoot = root
+	systemSessionPath = ""
+}
+
+// StartSystemLogSession creates a new timestamped log for this application
+// run. It is safe to call more than once; a process keeps its first session.
+func StartSystemLogSession() error {
+	systemMu.Lock()
+	defer systemMu.Unlock()
+	root := systemDir()
+	if root == "" {
+		return fmt.Errorf("system log location is not configured")
+	}
+	if err := os.MkdirAll(root, 0o700); err != nil {
+		return err
+	}
+	unlock, err := systemFileGuard(root)
+	if err != nil {
+		return err
+	}
+	defer unlock()
+	if err := ensureSystemLogSession(root); err != nil {
+		return err
+	}
+	pruneSystemLogSessions(root)
+	return nil
 }
 
 // ConfigureSystemLog controls the retained diagnostic file. It does not
@@ -89,8 +116,11 @@ func System(format string, args ...any) {
 		return
 	}
 	defer unlock()
+	if ensureSystemLogSession(root) != nil {
+		return
+	}
 	record := []byte(time.Now().UTC().Format(time.RFC3339Nano) + " " + message + "\n")
-	path := filepath.Join(root, "system.log")
+	path := systemSessionPath
 	if st, err := os.Stat(path); err == nil && st.Size()+int64(len(record)) > SystemLogLimit {
 		if err := os.Remove(fmt.Sprintf("%s.%d", path, SystemLogFiles-1)); err != nil && !os.IsNotExist(err) {
 			return
@@ -136,28 +166,158 @@ func SystemSnapshot() ([]byte, error) {
 	}
 	defer unlock()
 	var result []byte
-	for i := SystemLogFiles - 1; i >= 0; i-- {
-		name := "system.log"
-		if i > 0 {
-			name = fmt.Sprintf("%s.%d", name, i)
-		}
-		b, err := os.ReadFile(filepath.Join(root, name))
+	logs, err := retainedSystemLogFiles(root)
+	if err != nil {
+		return nil, err
+	}
+	for _, path := range logs {
+		b, err := os.ReadFile(path)
 		if err != nil && !os.IsNotExist(err) {
 			return nil, err
 		}
 		result = append(result, b...)
 	}
-	for _, name := range []string{"crash.log.1", "crash.log"} {
+	for _, name := range retainedCrashLogNames(root, logs) {
 		b, err := os.ReadFile(filepath.Join(root, name))
 		if err != nil && !os.IsNotExist(err) {
 			return nil, err
 		}
 		if len(b) > 0 {
-			result = append(result, []byte("\n--- Go crash output ("+name+") ---\n")...)
+			result = append(result, []byte("\n--- Crash details ("+name+") ---\n")...)
 			result = append(result, b...)
 		}
 	}
 	return result, nil
+}
+
+func ensureSystemLogSession(root string) error {
+	if systemSessionPath != "" && filepath.Dir(systemSessionPath) == root {
+		return nil
+	}
+	stamp := time.Now().Format("2006_01_02__15_04_05")
+	for suffix := 0; suffix < 1000; suffix++ {
+		name := "system_" + stamp
+		if suffix > 0 {
+			name += fmt.Sprintf("_%02d", suffix)
+		}
+		path := filepath.Join(root, name+".log")
+		f, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+		if err == nil {
+			if closeErr := f.Close(); closeErr != nil {
+				_ = os.Remove(path)
+				return closeErr
+			}
+			systemSessionPath = path
+			return nil
+		}
+		if !os.IsExist(err) {
+			return err
+		}
+	}
+	return fmt.Errorf("could not allocate a unique system log filename")
+}
+
+func retainedSystemLogFiles(root string) ([]string, error) {
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		return nil, err
+	}
+	var sessions []string
+	for _, entry := range entries {
+		name := entry.Name()
+		if strings.HasPrefix(name, "system_") && strings.HasSuffix(name, ".log") && !strings.Contains(name, ".log.") {
+			sessions = append(sessions, name)
+		}
+	}
+	sort.Strings(sessions)
+	if len(sessions) > SystemLogFiles {
+		sessions = sessions[len(sessions)-SystemLogFiles:]
+	}
+	var result []string
+	// Include logs made by older builds in the first export after upgrade.
+	for i := SystemLogFiles - 1; i >= 0; i-- {
+		name := "system.log"
+		if i > 0 {
+			name = fmt.Sprintf("system.log.%d", i)
+		}
+		path := filepath.Join(root, name)
+		if _, err := os.Stat(path); err == nil {
+			result = append(result, path)
+		} else if !os.IsNotExist(err) {
+			return nil, err
+		}
+	}
+	for _, name := range sessions {
+		for i := SystemLogFiles - 1; i >= 0; i-- {
+			path := filepath.Join(root, name)
+			if i > 0 {
+				path = fmt.Sprintf("%s.%d", path, i)
+			}
+			if _, err := os.Stat(path); err == nil {
+				result = append(result, path)
+			} else if !os.IsNotExist(err) {
+				return nil, err
+			}
+		}
+	}
+	return result, nil
+}
+
+func retainedCrashLogNames(root string, logs []string) []string {
+	var names []string
+	seen := make(map[string]bool)
+	for _, logPath := range logs {
+		name := filepath.Base(logPath)
+		if !strings.HasPrefix(name, "system_") {
+			continue
+		}
+		stamp := strings.TrimPrefix(name, "system_")
+		stamp = strings.SplitN(stamp, ".log", 2)[0]
+		for _, crashName := range []string{"crash_" + stamp + ".log", "crash_" + stamp + "_windows.log"} {
+			if seen[crashName] {
+				continue
+			}
+			if _, err := os.Stat(filepath.Join(root, crashName)); err == nil {
+				names = append(names, crashName)
+				seen[crashName] = true
+			}
+		}
+	}
+	for _, name := range []string{"crash.log.1", "crash.log"} {
+		if _, err := os.Stat(filepath.Join(root, name)); err == nil {
+			names = append(names, name)
+		}
+	}
+	return names
+}
+
+func pruneSystemLogSessions(root string) {
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		return
+	}
+	var sessions []string
+	for _, entry := range entries {
+		name := entry.Name()
+		if strings.HasPrefix(name, "system_") && strings.HasSuffix(name, ".log") && !strings.Contains(name, ".log.") {
+			sessions = append(sessions, name)
+		}
+	}
+	sort.Strings(sessions)
+	if len(sessions) <= SystemLogFiles {
+		return
+	}
+	for _, name := range sessions[:len(sessions)-SystemLogFiles] {
+		path := filepath.Join(root, name)
+		_ = os.Remove(path)
+		for i := 1; i < SystemLogFiles; i++ {
+			_ = os.Remove(fmt.Sprintf("%s.%d", path, i))
+		}
+		crashName := "crash_" + strings.TrimSuffix(strings.TrimPrefix(name, "system_"), ".log") + ".log"
+		_ = os.Remove(filepath.Join(root, crashName))
+		_ = os.Remove(filepath.Join(root, "crash_"+strings.TrimSuffix(strings.TrimPrefix(name, "system_"), ".log")+"_windows.log"))
+		_ = os.Remove(filepath.Join(root, "crash_"+strings.TrimSuffix(strings.TrimPrefix(name, "system_"), ".log")+"_windows.dmp"))
+	}
 }
 
 // The stable lock file also coordinates a CLI process using the same library.

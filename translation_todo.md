@@ -1,5 +1,9 @@
 # Localization: status and next tasks
 
+2026-10-19 Search as you type options now read Never / Below … / Always and Никогда / Менее … / Всегда. Runtime layout verification is pending.
+
+2026-10-19 Search as you type: shortened the Settings label in EN/RU and added Always / Всегда for unrestricted input search. Runtime wording/layout verification is pending.
+
 2026-10-16 Browse/article transition diagnostics: added an independent System checkbox and EN/RU labels; the timing events go to the existing System Log without enabling the other diagnostics. Catalog JSON parses and `go build ./...` passes; Windows and Android label/layout checks remain.
 
 2026-10-13 folder diagnostics: EN/RU Log file label and hint updated for folder timing and index failure details. WebView2/Android wording check remains.

@@ -1,12 +1,18 @@
 # Agent handoff — current state
 
+Search as you type options now explicitly read Never, Below 10k/50k/100k/500k/1m, Always (localized in EN/RU); saved values and threshold behavior are unchanged. Runtime layout verification is pending.
+
+Settings → Search as you type adds Always (Всегда), saved as -1 in the existing threshold preference. Shared Browse/Wildcards controls then search/filter on input regardless of headword count; existing numeric thresholds and default remain unchanged. Runtime verification is pending.
+
 The built-in Warm appearance enables Window background → Color in both themes: #F4ECD8 in light and #1C1A17 in dark. Runtime checkbox/color verification is pending.
 
-Current checkout: branch `dev2` at `bf75db6b` (`Warm preset fix`).
+Current checkout: branch `dev2` at `f17bfc44`. The working tree has the current System Log session-file change unstaged.
+
+Browse alphabet chips now cap visible labels at 12 em and render longer labels with an ellipsis; the full label remains available through the native tooltip and accessible name. The width cap is included in the measured chip geometry so virtual scrolling and navigation stay aligned. `go build ./...` and `git diff --check` pass; visual runtime confirmation is pending.
 
 Browse labels follow the explicit boundary rule: shared character prefix plus the first differing character when the first word differs; shared whole words plus the full first differing word when later words differ. Existing letter/digit range suffixes and repeated-punctuation boundary handling remain. `docs/SPEC.md` records the rule. `go build ./...`, `build-windows.cmd debug`, and `git diff --check` pass; no tests were run.
 
-The listenerless Windows WebView app and Android Go/JNI runtime now install `runtime/debug.SetCrashOutput` with `GOTRACEBACK=all` behavior. Unrecovered panics and Go runtime fatal dumps go to `crash.log`; Android System Log export includes `crash.log` and the retained previous-run `crash.log.1`. This does not capture OS-forced termination or native crashes outside Go's runtime. `go build ./...`, `build-windows.cmd debug`, and `build-android.cmd debug` pass; no crash was deliberately triggered, and runtime capture is not yet verified.
+Each app run now writes a separate local-time `system_YYYY_MM_DD__HH_MM_SS.log` in the library `.logs` directory; the five most recent sessions are retained and System Log export combines them oldest to newest. Listenerless Windows WebView and Android Go/JNI pair a timestamped Go crash file with the run. Windows also installs an unhandled SEH filter that writes a text report and a `.dmp` containing thread information and stack memory; the dump must be sent separately. Ordinary HTTP-server launches do not install these crash handlers. These handlers do not capture OS-forced termination. `go build ./...` passes; native crash capture is compiled but not runtime-triggered.
 
 Browse crash report (2026-10-19): the log has no Go panic, but the ZIM Browse stream returned a successful empty page and alphabet (`0/0`) for Wiktionary, then the process restarted without a recorded clean exit. `zim.container.nsRange` previously swallowed read errors as an empty range. It now propagates those errors, and `zim.Open` rejects an empty content namespace when ZIM metadata claims articles. `go build ./...` passes; the user's source file and crash cause are not available for runtime confirmation.
 

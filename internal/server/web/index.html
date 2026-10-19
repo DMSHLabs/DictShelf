@@ -546,8 +546,13 @@ window.wudictFontScale=(function(){
   </div>
   <div class="facts headword-threshold-row">
     <select id="headwordApplyThreshold" aria-label="{{T:panel.headwordApplyThreshold}}">
-      <option value="0">0</option><option value="10000">10k</option><option value="50000">50k</option>
-      <option value="100000">100k</option><option value="500000">500k</option><option value="1000000">1m</option>
+      <option value="0">{{T:panel.searchAsYouTypeNever}}</option>
+      <option value="10000">{{T:panel.searchAsYouTypeBelow10k}}</option>
+      <option value="50000">{{T:panel.searchAsYouTypeBelow50k}}</option>
+      <option value="100000">{{T:panel.searchAsYouTypeBelow100k}}</option>
+      <option value="500000">{{T:panel.searchAsYouTypeBelow500k}}</option>
+      <option value="1000000">{{T:panel.searchAsYouTypeBelow1m}}</option>
+      <option value="-1">{{T:panel.searchAsYouTypeAlways}}</option>
     </select>
     <label class="rowlabel" for="headwordApplyThreshold">{{T:panel.headwordApplyThreshold}}</label>
   </div>

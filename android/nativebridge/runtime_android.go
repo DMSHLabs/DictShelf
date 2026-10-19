@@ -842,6 +842,9 @@ func WudictGoBridgeRuntimeStart(path, flagsJSON, version *C.char) C.int {
 	if _, err = server.ConfigureLibrary(cfg); err != nil {
 		return -3
 	}
+	if err := logx.StartSystemLogSession(); err != nil {
+		logx.Warn("could not start system log session: %v", err)
+	}
 	if err := logx.ConfigureCrashLog(); err != nil {
 		logx.Warn("could not configure crash output: %v", err)
 	}
