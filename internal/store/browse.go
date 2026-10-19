@@ -9,7 +9,6 @@ import (
 	"database/sql"
 	"fmt"
 	"regexp"
-	"runtime/debug"
 	"strings"
 	"time"
 	"unicode"
@@ -569,29 +568,31 @@ func (s *Store) buildAlphabet() ([]dict.Letter, error) {
 		rows.Close()
 	}
 	out := make([]dict.Letter, pageCount)
+	usedLabels := make(map[string]bool, pageCount)
 	for page := range out {
 		offset := page * pageSize
 		label := pageRunLabels[page]
 		if pageFirst[page] != "" {
 			first := firstRune(pageFirst[page])
-			if page == 0 {
-				label = browseSectionInitial(first)
-			} else if pageLast[page-1] != "" {
+			initial := browseSectionInitial(first)
+			previousLast := ""
+			if page > 0 && pageLast[page-1] != "" {
 				if (unicode.IsPunct(first) || unicode.IsSymbol(first)) && pageNextRunLabels[page] != "" &&
 					browseSectionInitial(firstRune(pageLast[page-1])) == browseSectionInitial(first) {
 					// This symbol already closes the preceding section. Start at the
 					// first new initial that appears within this page.
-					label = pageNextRunLabels[page]
+					initial = pageNextRunLabels[page]
 				} else {
-					label = browseCommonPhrasePrefix(pageLast[page-1], pageFirst[page])
-				}
-				if label == "" {
-					label = browseSectionInitial(first)
+					previousLast = pageLast[page-1]
 				}
 			}
+			lastInitial := ""
 			if pageLast[page] != "" && !unicode.Is(unicode.Han, first) {
-				label = browseRangeEnd(label, pageLast[page])
+				lastInitial = browseSectionInitial(firstRune(pageLast[page]))
 			}
+			label = dict.SectionLabel(previousLast, pageFirst[page], pageLast[page], initial, lastInitial, usedLabels)
+		} else {
+			usedLabels[label] = true
 		}
 		out[page] = dict.Letter{Letter: label, Offset: offset, Count: min(pageSize, total-offset)}
 	}
@@ -601,76 +602,6 @@ func (s *Store) buildAlphabet() ([]dict.Letter, error) {
 func firstRune(s string) rune {
 	r, _ := utf8.DecodeRuneInString(s)
 	return r
-}
-
-func browseCommonPrefix(previous, current string) string {
-	previousRunes, currentRunes := []rune(previous), []rune(current)
-	common := 0
-	for common < len(previousRunes) && common < len(currentRunes) &&
-		unicode.ToLower(previousRunes[common]) == unicode.ToLower(currentRunes[common]) {
-		common++
-	}
-	if common == 0 {
-		return ""
-	}
-	currentRunes[0] = unicode.ToUpper(currentRunes[0])
-	return string(currentRunes[:common])
-}
-
-// browseCommonPhrasePrefix keeps a character prefix when the first word differs.
-// Once one or more whole words match, it includes the complete next word so a
-// section label does not stop at a shared phrase fragment.
-func browseCommonPhrasePrefix(previous, current string) string {
-	previousWords, currentWords := strings.Fields(previous), strings.Fields(current)
-	sharedWords := 0
-	for sharedWords < len(previousWords) && sharedWords < len(currentWords) &&
-		strings.EqualFold(previousWords[sharedWords], currentWords[sharedWords]) {
-		sharedWords++
-	}
-	if sharedWords > 0 && sharedWords < len(currentWords) {
-		label := []rune(strings.Join(currentWords[:sharedWords+1], " "))
-		label[0] = unicode.ToUpper(label[0])
-		return string(label)
-	}
-	if sharedWords == 0 && len(previousWords) > 0 && len(currentWords) > 0 {
-		previousRunes, currentRunes := []rune(previousWords[0]), []rune(currentWords[0])
-		common := 0
-		for common < len(previousRunes) && common < len(currentRunes) &&
-			unicode.ToLower(previousRunes[common]) == unicode.ToLower(currentRunes[common]) {
-			common++
-		}
-		if common < len(currentRunes) {
-			currentRunes[0] = unicode.ToUpper(currentRunes[0])
-			return string(currentRunes[:common+1])
-		}
-		if len(currentRunes) > 0 {
-			currentRunes[0] = unicode.ToUpper(currentRunes[0])
-			return string(currentRunes)
-		}
-	}
-	return browseCommonPrefix(previous, current)
-}
-
-// browseRangeEnd adds the last initial that begins within this page. Using the
-// page tail also handles punctuation and script transitions without ordering
-// assumptions about their alphabets.
-func browseRangeEnd(label, last string) (result string) {
-	result = label
-	defer func() {
-		if recovered := recover(); recovered != nil {
-			logx.SystemError("Browse section label calculation recovered label=%q last=%q panic=%v\n%s", label, last, recovered, debug.Stack())
-			result = label
-		}
-	}()
-	if label == "" || last == "" {
-		return result
-	}
-	start := browseSectionInitial(firstRune(label))
-	end := browseSectionInitial(firstRune(last))
-	if start == "" || end == "" || start == end {
-		return result
-	}
-	return label + "-" + end
 }
 
 func browseSectionInitial(r rune) string {

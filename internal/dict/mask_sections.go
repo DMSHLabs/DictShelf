@@ -40,16 +40,16 @@ func MaskInitial(word string) string {
 }
 
 type maskBoundary struct {
-	initial, word string
-	offset        int
+	initial, word, last string
+	offset              int
 }
 
 // MaskPageSize is the fixed size of one mask result block. The server uses the
 // same size to page the matching headwords.
 const MaskPageSize = indexconst.BrowsePageSize
 
-// MaskSections records the first matching headword of each result page.
-// The strip labels page starts, not every initial appearing inside a page.
+// MaskSections records the first and last matching headword of each result
+// page. The strip labels page starts and the last initial reached in the page.
 type MaskSections struct {
 	boundaries []maskBoundary
 	total      int
@@ -59,17 +59,26 @@ func (m *MaskSections) Add(word string) {
 	if m.total%MaskPageSize == 0 {
 		m.boundaries = append(m.boundaries, maskBoundary{initial: MaskInitial(word), word: word, offset: m.total})
 	}
+	if len(m.boundaries) > 0 {
+		m.boundaries[len(m.boundaries)-1].last = word
+	}
 	m.total++
 }
 
 func (m *MaskSections) Finish() []Letter {
 	var out []Letter
 	used := make(map[string]bool)
-	for _, boundary := range m.boundaries {
-		label := boundary.initial
-		if used[label] {
-			label = maskBlockPrefix(boundary.word, boundary.initial, used)
+	for index, boundary := range m.boundaries {
+		previousLast := ""
+		if index > 0 {
+			previousLast = m.boundaries[index-1].last
 		}
+		lastInitial := ""
+		first, _ := utf8.DecodeRuneInString(boundary.word)
+		if boundary.last != "" && !unicode.Is(unicode.Han, first) {
+			lastInitial = MaskInitial(boundary.last)
+		}
+		label := SectionLabel(previousLast, boundary.word, boundary.last, boundary.initial, lastInitial, used)
 		if len(out) > 0 {
 			out[len(out)-1].Count = boundary.offset - out[len(out)-1].Offset
 		}
@@ -80,22 +89,4 @@ func (m *MaskSections) Finish() []Letter {
 		out[len(out)-1].Count = m.total - out[len(out)-1].Offset
 	}
 	return out
-}
-
-func maskBlockPrefix(word, initial string, used map[string]bool) string {
-	runes := []rune(Fold(word))
-	if len(runes) == 0 {
-		runes = []rune(word)
-	}
-	if len(runes) == 0 {
-		return initial
-	}
-	runes[0] = unicode.ToUpper(runes[0])
-	for n := 1; n <= len(runes); n++ {
-		label := string(runes[:n])
-		if label != initial && !used[label] {
-			return label
-		}
-	}
-	return word
 }
