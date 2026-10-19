@@ -115,6 +115,7 @@ func builtinLooks() []look {
 			State: lookState{
 				Layers: []string{"sepia"},
 				Light:  lookHalf{ColorEnabled: true, Color: "#F4ECD8"},
+				Dark:   lookHalf{ColorEnabled: true, Color: "#1C1A17"},
 			},
 		},
 		{

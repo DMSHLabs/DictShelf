@@ -77,12 +77,8 @@ func browseStore(t *testing.T, words []string) *Store {
 	return s
 }
 
-// TestBrowseAlphabet pins the three things the strip is easy to get wrong:
-// non-adjacent runs of one letter merge into one chip (NOCASE folds ASCII and
-// nothing else, so "Ärger" and "äpfel" are separated by every C-with-cedilla
-// in the dictionary), a whole non-alphabetic script collapses to one chip, and
-// Korean gets its nineteen leading jamo rather than one chip or eleven
-// thousand.
+// TestBrowseAlphabet checks one page's new initials, including folded accents
+// and the existing compact labels for non-Latin scripts.
 func TestBrowseAlphabet(t *testing.T) {
 	s := browseStore(t, []string{
 		"1000", "apple", "azalea", "Zebra", // ASCII, case-folded
@@ -96,17 +92,7 @@ func TestBrowseAlphabet(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []dict.Letter{
-		{Letter: "0-9", Offset: 0, Count: 1},
-		{Letter: "A", Offset: 1, Count: 4}, // apple azalea + Ärger + äpfel
-		{Letter: "Z", Offset: 3, Count: 1},
-		{Letter: "C", Offset: 5, Count: 1},
-		{Letter: "#", Offset: 7, Count: 1},
-		{Letter: "ア", Offset: 8, Count: 1},
-		{Letter: "漢", Offset: 9, Count: 2},
-		{Letter: "ㄱ", Offset: 11, Count: 1},
-		{Letter: "ㄴ", Offset: 12, Count: 1},
-	}
+	want := []dict.Letter{{Letter: "#,1,A,C,Z,ア,ㄱ,ㄴ,漢", Offset: 0, Count: 13}}
 	if len(got) != len(want) {
 		t.Fatalf("alphabet = %+v, want %+v", got, want)
 	}
@@ -124,8 +110,7 @@ func TestBrowseAlphabet(t *testing.T) {
 	if sum != 13 {
 		t.Errorf("chip counts sum to %d, want 13", sum)
 	}
-	// Every chip offset is a browse offset: it addresses the sequence Page
-	// pages through, or the jump lands somewhere else than the tab promises.
+	// Every page marker addresses the same sequence Page reads.
 	for _, l := range got {
 		w, err := s.Page(l.Offset, 1)
 		if err != nil {
@@ -140,50 +125,56 @@ func TestBrowseAlphabet(t *testing.T) {
 	}
 }
 
-// TestBrowseChipCut covers the reason a Chinese dictionary is browsable at all:
-// 漢 alone is every headword in the book behind one tab, so a run longer than
-// the span is cut into pieces labelled by the headword each opens on.
-func TestBrowseChipCut(t *testing.T) {
-	const han = 7000
-	words := make([]string, 0, han+10)
-	for i := 0; i < 10; i++ {
-		words = append(words, fmt.Sprintf("aaa%03d", i))
+// TestBrowsePageInitials assigns an initial to the page where its run begins,
+// even when that transition occurs near the end of a page.
+func TestBrowsePageInitials(t *testing.T) {
+	words := make([]string, 0, 609)
+	for i := 0; i < 299; i++ {
+		words = append(words, fmt.Sprintf("a%03d", i))
 	}
-	for i := 0; i < han; i++ {
-		words = append(words, string(rune(0x4E00+i)))
+	for i := 0; i < 300; i++ {
+		words = append(words, fmt.Sprintf("b%03d", i))
+	}
+	for i := 0; i < 10; i++ {
+		words = append(words, fmt.Sprintf("c%03d", i))
 	}
 	s := browseStore(t, words)
 	got, err := s.Alphabet()
 	if err != nil {
 		t.Fatal(err)
 	}
-	// 7010 headwords: below the budget, so the span is the ceiling, and the
-	// Han run becomes 3000 + 3000 + 1000.
-	wantOffsets := []int{0, 10, 3010, 6010}
-	wantCounts := []int{10, 3000, 3000, 1000}
-	if len(got) != 4 {
-		t.Fatalf("alphabet = %+v, want 4 chips", got)
+	if len(got) != 3 {
+		t.Fatalf("alphabet has %d page labels, want 3", len(got))
 	}
 	for i, l := range got {
-		if l.Offset != wantOffsets[i] || l.Count != wantCounts[i] {
-			t.Errorf("chip %d = %+v, want offset %d count %d", i, l, wantOffsets[i], wantCounts[i])
-		}
-		if l.Count > chipCeiling {
-			t.Errorf("chip %+v is longer than the span", l)
+		wantOffset := i * dict.MaskPageSize
+		wantCount := min(dict.MaskPageSize, len(words)-wantOffset)
+		if l.Offset != wantOffset || l.Count != wantCount {
+			t.Errorf("page label %d = %+v, want offset %d count %d", i, l, wantOffset, wantCount)
 		}
 	}
-	if got[0].Letter != "A" || got[1].Letter != "漢" {
-		t.Errorf("first chips = %q %q, want A 漢", got[0].Letter, got[1].Letter)
+	if got[0].Letter != "A-B" || got[1].Letter != "C" || got[2].Letter != "C" {
+		t.Errorf("page labels = %q, %q, %q; want A-B, C, C", got[0].Letter, got[1].Letter, got[2].Letter)
 	}
-	// A cut piece is labelled with the word it opens on, which is the whole
-	// promise the tab makes.
-	for _, l := range got[2:] {
-		w, err := s.Page(l.Offset, 1)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if len(w) != 1 || w[0] != l.Letter {
-			t.Errorf("chip %q opens on %v", l.Letter, w)
+}
+
+func TestBrowsePageLabelsDistinguishPagesWithinOneInitial(t *testing.T) {
+	words := make([]string, 0, 900)
+	for i := 0; i < 900; i++ {
+		words = append(words, fmt.Sprintf("a%03d", i))
+	}
+	s := browseStore(t, words)
+	got, err := s.Alphabet()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 3 {
+		t.Fatalf("alphabet has %d page labels, want 3", len(got))
+	}
+	want := []string{"A", "A3", "A6"}
+	for i := range want {
+		if got[i].Letter != want[i] {
+			t.Errorf("page %d label = %q, want %q", i, got[i].Letter, want[i])
 		}
 	}
 }
