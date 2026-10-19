@@ -292,6 +292,8 @@
 			// an unauthenticated channel, not the range - applyFW owns that.
 			document.documentElement.style.fontWeight =
 				String(Math.min(700, Math.max(400, +e.data.w || 400)));
+			document.documentElement.style.webkitTextStroke =
+				String(e.data.stroke || "0px") + " currentColor";
 		} else if (e.data.t === "fs") {
 			// The parent bakes the size into our srcdoc at creation; this is
 			// how every change AFTER that arrives, because a CSS custom

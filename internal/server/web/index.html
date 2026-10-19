@@ -1847,10 +1847,15 @@ function articleFontCSS(frame=false){
 }
 function applyArticleFont(value,save){
   const next=["system","charis","gentium","quivira"].includes(value)?value:"system",moved=next!==articleFont;
-  articleFont=next;$("articleFontSelect").value=next;articleRefresh();
+  articleFont=next;$("articleFontSelect").value=next;applyArticleFWStroke();articleRefresh();
   if(save&&moved)savePrefs();
 }
 $("articleFontSelect").addEventListener("change",event=>applyArticleFont(event.target.value,true));
+function applyArticleFWStroke(){
+  const stroke=articleFW===500&&(articleFont==="system"||articleFont==="quivira")?".2px":"0px";
+  document.documentElement.style.setProperty("--wd-fw-stroke",stroke);
+  return stroke;
+}
 function applyFS(px,save){
   const n=Math.min(FS_MAX,Math.max(FS_MIN,Math.round(+px||FS_DEF)));
   const moved=n!==articleFS;
@@ -1875,11 +1880,12 @@ function applyFW(w,save){
   const moved=n!==articleFW;
   articleFW=n;
   document.documentElement.style.setProperty("--wd-fw",String(n));
+  const stroke=applyArticleFWStroke();
   $("fwVal").textContent=FW_LABEL[n];
   $("fwDown").classList.toggle("lim",n<=FW_STEPS[0]);
   $("fwUp").classList.toggle("lim",n>=FW_STEPS[FW_STEPS.length-1]);
   if(moved)for(const f of document.querySelectorAll("iframe.article"))
-    f.contentWindow&&f.contentWindow.postMessage({t:"fw",w:n},"*");
+    f.contentWindow&&f.contentWindow.postMessage({t:"fw",w:n,stroke},"*");
   if(save&&moved)savePrefs();
 }
 /* The stepper's clicks used to be swallowed on the container: it sat inside a
@@ -5207,7 +5213,7 @@ const articleSelectionCSS=`:host,html,body{user-select:text!important;-webkit-us
 
 const shadowBase=`<style>
 :host{all:initial;display:block;font-family:var(--wd-article-font,-apple-system,Helvetica,Arial,sans-serif);font-size-adjust:.52;
-  font-size:var(--wd-fs,15px);font-weight:var(--wd-fw,400);
+  font-size:var(--wd-fs,15px);font-weight:var(--wd-fw,400);-webkit-text-stroke:var(--wd-fw-stroke,0px) currentColor;
   line-height:1.618;color:var(--wd-article-fg,#1a1a1a);word-break:break-word}
 img,video,svg{max-width:100%;height:auto}
 a{color:var(--link,#5b7a99);cursor:pointer}
@@ -5334,7 +5340,7 @@ function frameDoc(content,fid,dark,dictID,frag){
   return '<!DOCTYPE html><html class="'+(dark?'dark':'')+'"'+(dark?' data-dark':'')+'><head><meta charset="utf-8">'+
     /* Baked in, because a custom property cannot cross into another
        document; changes AFTER creation arrive by postMessage instead. */
-    '<style>'+articleFontFacesCSS()+articleFontCSS(true)+'html{font-family:var(--wd-article-font,-apple-system,Helvetica,Arial,sans-serif);font-size-adjust:.52;font-size:'+articleFS+'px;font-weight:'+articleFW+';line-height:1.618;color:var(--wd-article-fg,#1a1a1a);background:var(--wd-article-bg,#fff);overflow-y:hidden}'+
+    '<style>'+articleFontFacesCSS()+articleFontCSS(true)+'html{font-family:var(--wd-article-font,-apple-system,Helvetica,Arial,sans-serif);font-size-adjust:.52;font-size:'+articleFS+'px;font-weight:'+articleFW+';-webkit-text-stroke:'+(articleFW===500&&(articleFont==="system"||articleFont==="quivira")?'.2px':'0px')+' currentColor;line-height:1.618;color:var(--wd-article-fg,#1a1a1a);background:var(--wd-article-bg,#fff);overflow-y:hidden}'+
     'body{margin:8px}img,video,svg{max-width:100%;height:auto}'+
     'html.dark{filter:invert(1) hue-rotate(180deg) brightness(.9) contrast(.92)}'+
     'html.dark :is(img,picture,video,svg,canvas,iframe,embed,object,[data-noinvert]){filter:invert(1) hue-rotate(180deg)}'+
