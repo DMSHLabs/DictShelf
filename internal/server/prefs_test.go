@@ -209,6 +209,57 @@ func TestPrefsMergeKeepsUnseenInPlace(t *testing.T) {
 	}
 }
 
+// A user's title is kept by a save that does not mention it - by id, or by
+// path when the dictionary is sent under a new id - cleared by "", and stored
+// cleaned.
+func TestPrefsMergeTitle(t *testing.T) {
+	r := &Registry{}
+	for _, id := range []string{"a", "b"} {
+		r.entries = append(r.entries, &entry{ID: id, Path: "/d/" + id + ".dsl"})
+	}
+	r.byID = map[string]*entry{}
+	for _, e := range r.entries {
+		r.byID[e.ID] = e
+	}
+	str := func(s string) *string { return &s }
+	title := func(ds []DictPref, id string) string {
+		for _, d := range ds {
+			if d.ID == id && d.Title != nil {
+				return *d.Title
+			}
+		}
+		return "<none>"
+	}
+	long := strings.Repeat("é", maxTitle+5)
+	for _, tc := range []struct {
+		name   string
+		stored []DictPref
+		sent   []DictPref
+		id     string
+		want   string
+	}{
+		{"absent keeps it", []DictPref{{ID: "a", Title: str("Mine")}}, []DictPref{{ID: "a"}}, "a", "Mine"},
+		{"absent keeps it under a new id", []DictPref{{ID: "old", Path: "/d/b.dsl", Title: str("Mine")}}, []DictPref{{ID: "b"}}, "b", "Mine"},
+		{"empty clears it", []DictPref{{ID: "a", Title: str("Mine")}}, []DictPref{{ID: "a", Title: str("")}}, "a", "<none>"},
+		{"blank clears it", []DictPref{{ID: "a", Title: str("Mine")}}, []DictPref{{ID: "a", Title: str(" \t\n ")}}, "a", "<none>"},
+		{"sent replaces it", []DictPref{{ID: "a", Title: str("Mine")}}, []DictPref{{ID: "a", Title: str("Yours")}}, "a", "Yours"},
+		{"cleaned", nil, []DictPref{{ID: "a", Title: str("  Big\x00 \t Book\u0085 ")}}, "a", "Big Book"},
+		{"capped in characters", nil, []DictPref{{ID: "a", Title: str(long)}}, "a", long[:2*maxTitle]},
+		{"none stays none", nil, []DictPref{{ID: "a"}}, "a", "<none>"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := title(mergeList(r, tc.stored, tc.sent, true), tc.id); got != tc.want {
+				t.Errorf("title %q, want %q", got, tc.want)
+			}
+		})
+	}
+	// a hand-edited file is read by the same rule
+	f, _ := parsePrefs(`{"version":3,"dicts":[{"id":"a","title":" \t "},{"id":"b","title":" B  b "}]}`)
+	if got := title(f.Dicts, "a") + "|" + title(f.Dicts, "b"); got != "<none>|B b" {
+		t.Errorf("parsed titles %q", got)
+	}
+}
+
 // The first GET heals a list from before the current format and then migrates
 // it, once. A save of UI settings alone, made before that, leaves the version
 // of a list it does not touch, so the migration still runs.

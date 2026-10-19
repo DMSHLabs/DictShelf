@@ -2588,6 +2588,14 @@ components:
             Pinned: listed and searched before the others, in the order of the
             pinned entries. Every entry without it is listed A-Z, whatever its
             place in the array.
+        title:
+          type: string
+          maxLength: 200
+          description: >
+            The title the user gave the dictionary, shown in place of its own
+            (`name` in /api/dicts). An entry sent without it keeps the stored
+            one; an empty string clears it. White space is collapsed and
+            control characters are dropped.
 
     UIPrefs:
       type: object

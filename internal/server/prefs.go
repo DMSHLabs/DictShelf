@@ -8,6 +8,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/wuweidict/wudict/internal/facet"
 	"github.com/wuweidict/wudict/internal/fsx"
@@ -61,6 +63,37 @@ type DictPref struct {
 	// Pin places the dictionary at the head of the list, in the order of
 	// the pinned records; the others are listed A-Z (D166).
 	Pin bool `json:"pin,omitempty"`
+	// Title is the title the user gave the dictionary, shown in place of its
+	// own; nil is its own. Only the page reads it: the dictionary's own title
+	// stays what the language ladder and groups.ini read (D85). A pointer,
+	// because a list saved without the key - by a page older than the field -
+	// keeps the stored title, and "" is the user clearing it (mergeList).
+	Title *string `json:"title,omitempty"`
+}
+
+// maxTitle bounds a user's title, in characters.
+const maxTitle = 200
+
+// userTitle is a title the user gave, as it is stored: control characters
+// dropped, white space runs made one space, at most maxTitle characters; nil
+// when nothing is left, which is the dictionary's own title.
+func userTitle(s string) *string {
+	t := strings.Join(strings.Fields(strings.Map(func(r rune) rune {
+		switch {
+		case unicode.IsSpace(r):
+			return ' '
+		case unicode.IsControl(r):
+			return -1
+		}
+		return r
+	}, s)), " ")
+	if utf8.RuneCountInString(t) > maxTitle {
+		t = strings.TrimSpace(string([]rune(t)[:maxTitle]))
+	}
+	if t == "" {
+		return nil
+	}
+	return &t
 }
 
 // UIPrefs is the part of the reading experience that belongs to the PERSON
@@ -240,6 +273,11 @@ func parsePrefs(text string) (prefsFile, []facet.Problem) {
 		return prefsFile{}, []facet.Problem{{Msg: "malformed: " + err.Error()}}
 	}
 	f.UI.normalize()
+	for i, d := range f.Dicts {
+		if d.Title != nil {
+			f.Dicts[i].Title = userTitle(*d.Title)
+		}
+	}
 	return f, nil
 }
 
@@ -522,6 +560,9 @@ func healList(entries []*entry, stored []DictPref) ([]DictPref, bool) {
 // is back at its rank when the drive is (D166). A retained unpinned record
 // has no rank, and goes last.
 //
+// A record sent without a title keeps the one stored, by id or by path: only
+// a page that knows titles speaks for them, and it sends "" to clear one.
+//
 // pins says whether the list speaks for the pins. A list from a page older
 // than the format (a tab left open across an upgrade) does not: every record
 // it sends keeps the pin it has stored, by id or by path, whatever the list
@@ -529,9 +570,16 @@ func healList(entries []*entry, stored []DictPref) ([]DictPref, bool) {
 func mergeList(r *Registry, stored, want []DictPref, pins bool) []DictPref {
 	storedPath := make(map[string]string, len(stored))
 	pinnedID, pinnedPath := map[string]bool{}, map[string]bool{}
+	titleID, titlePath := map[string]*string{}, map[string]*string{}
 	for _, d := range stored {
 		if d.Path != "" {
 			storedPath[d.ID] = d.Path
+		}
+		if d.Title != nil {
+			titleID[d.ID] = d.Title
+			if d.Path != "" {
+				titlePath[cleanAbs(d.Path)] = d.Title
+			}
 		}
 		if d.Pin {
 			pinnedID[d.ID] = true
@@ -562,6 +610,14 @@ func mergeList(r *Registry, stored, want []DictPref, pins bool) []DictPref {
 		}
 		if !pins {
 			d.Pin = pinnedID[d.ID] || (d.Path != "" && pinnedPath[cleanAbs(d.Path)])
+		}
+		switch {
+		case d.Title != nil:
+			d.Title = userTitle(*d.Title)
+		case titleID[d.ID] != nil:
+			d.Title = titleID[d.ID]
+		case d.Path != "":
+			d.Title = titlePath[cleanAbs(d.Path)]
 		}
 		seenID[d.ID] = true
 		if d.Path != "" {

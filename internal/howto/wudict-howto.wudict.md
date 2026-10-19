@@ -199,7 +199,7 @@ In <kbd>☰</kbd> → ![](cog.svg):
 - the checkbox: include/exclude from *All dictionaries* search, even when <kbd>OFF</kbd> a dictionary is still searchable when selected explicitly in the combobox.
 - click or tap the dictionary name: search only this dictionary.
 - <kbd>full-text</kbd> <kbd>media</kbd>: optional [indexes](<entry://wudict index>), with their size.
-- ![](browse.svg) <kbd>Browse</kbd>: [A–Z](<entry://wudict browse>). **About this dictionary**: its details.
+- ![](browse.svg) <kbd>Browse</kbd>: [A–Z](<entry://wudict browse>). **About this dictionary**: its details, and <kbd>Rename…</kbd>: the title the app shows; empty, its own.
 - the file row: its files, and 🗑 <kbd>Remove…</kbd> ([remove](<entry://wudict remove>)).
 
 ## wudict text size

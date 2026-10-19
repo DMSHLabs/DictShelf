@@ -961,6 +961,12 @@ html:has(#panel.show) .bar{padding-right:var(--wd-sbw,0px)}
 .pd .about>summary::before{content:"▸";color:var(--fg-soft);display:inline-block;width:1em;font-size:9px}
 .pd .about[open]>summary::before{content:"▾"}
 .pd .aboutbody{margin:.2em 0 0 1em;line-height:1.45}
+.pd .rename{display:block;margin:.3em 0 0 1em;padding:0;border:0;background:none;font:inherit;
+  color:var(--fg-soft);cursor:pointer;text-decoration:underline;text-decoration-color:var(--line);
+  text-underline-offset:2px}
+.pd .rename:hover{color:var(--link);text-decoration-color:currentColor}
+.pd .rename:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
+@media (pointer:coarse){.pd .rename{padding:.55em 0}}
 .pd .aboutbody p{margin:.25em 0}
 .pd .aboutbody h4{margin:.5em 0 .1em;font-size:10px;text-transform:uppercase;
   letter-spacing:.04em;color:var(--fg-soft);font-weight:600}
@@ -1400,6 +1406,9 @@ function adoptLocalPrefs(){
   return true;
 }
 let prefsReady=false;
+/* The titles the user gave dictionaries, by id (DictPref.title). Labels only:
+   d.name stays the dictionary's own title. */
+let titles=new Map();
 let fullOn=false; // brief or full view for the next section that opens (fullInit)
 /* The search mode the reader last PICKED, which is what is saved - not what
    #mode shows. A link, Back/Forward and searchFor set #mode too, and the next
@@ -1431,6 +1440,7 @@ async function loadPrefs(){
     prefOrder=rows.map(d=>d.id);
     disabled=new Set(rows.filter(d=>d.off).map(d=>d.id));
     pinned=new Set(rows.filter(d=>d.pin).map(d=>d.id));
+    titles=new Map(rows.filter(d=>d.title).map(d=>[d.id,d.title]));
   }catch(e){
     // A page that cannot read its settings must still search: fall back to
     // "everything enabled, alphabetical" rather than refusing to start.
@@ -1455,9 +1465,10 @@ function uiNow(){
   return{fontSize:articleFS,hlOff:!hlOn,speakOff:!speakOn,fastFirst:!orderFirst,openN:openN>1?openN:0,openAll,groupsOff:[...groupsOff].sort(),full:fullOn,mode:modePref==="prefix"?"":modePref};
 }
 /* One dictionary's record as it is sent and compared: pin only when set, as
-   the server stores it. */
+   the server stores it. The title always, "" for none: a record without the
+   key keeps the stored title (prefs.go, mergeList), so none is said out loud. */
 function prefRow(d){
-  const r={id:d.id,name:d.name||"",off:!!d.off};
+  const r={id:d.id,name:d.name||"",off:!!d.off,title:d.title||""};
   if(d.pin)r.pin=true;
   return r;
 }
@@ -1474,7 +1485,7 @@ function savePrefs(now){
   if(!now){prefsTimer=setTimeout(()=>savePrefs(true),400);return}
   const ui=uiNow(),patch={};
   for(const k in ui)if(JSON.stringify(ui[k])!==JSON.stringify(uiBase[k]))patch[k]=ui[k];
-  const rows=orderedDicts().map(d=>prefRow({id:d.id,name:dictLabel(d),off:disabled.has(d.id),pin:pinned.has(d.id)})),
+  const rows=orderedDicts().map(d=>prefRow({id:d.id,name:ownLabel(d),off:disabled.has(d.id),pin:pinned.has(d.id),title:titles.get(d.id)})),
     seen=new Set(rows.map(d=>d.id)),req={};
   if(JSON.stringify(rows)!==JSON.stringify(dictsBase.filter(d=>seen.has(d.id)))){req.dicts=rows;req.version=LIST_FORMAT}
   if(Object.keys(patch).length)req.ui=patch;
@@ -1924,9 +1935,17 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change",syncAutoDar
 applyTheme(localStorage.getItem("wudict_theme")||"auto");
 
 /* ── dictionaries ──────────────────────────────────────────────────── */
-function dictLabel(d){return d.name||d.path.split(/[\\/]/).pop()}
+/* The dictionary's own label, and the one shown: the user's title for it when
+   they gave one. */
+function ownLabel(d){return d.name||d.path.split(/[\\/]/).pop()}
+function dictLabel(d){return titles.get(d.id)||ownLabel(d)}
+/* The title as the server stores it (prefs.go, userTitle). */
+function cleanTitle(s){
+  const t=String(s).replace(/[\s\u0085]/g," ").replace(/[\u0000-\u001f\u007f-\u009f]/g,"").replace(/ +/g," ").trim();
+  return [...t].slice(0,200).join("").trim();
+}
 /* A DSL [ref dict="..."] names another dictionary by its #NAME, which is what
-   dictLabel shows, so the name is matched against the label as well as the
+   ownLabel shows, so the name is matched against the label as well as the
    stored name - a dictionary whose file carries no #NAME is known here by its
    file name and can be pointed at by it. Case- and space-insensitive, because
    an author types the name by hand into the markup. null when nothing matches:
@@ -1936,7 +1955,7 @@ function dictIDByName(name){
   const k=String(name||"").trim().toLowerCase().replace(/\s+/g," ");
   if(!k)return null;
   for(const d of dicts){
-    for(const c of [d.name,dictLabel(d)]){
+    for(const c of [d.name,ownLabel(d)]){
       if(c&&String(c).trim().toLowerCase().replace(/\s+/g," ")===k)return d.id;
     }
   }
@@ -2759,7 +2778,7 @@ function renderPanel(){
       <div class="meta">${esc(d.format||"?")}${d.entries?" · "+d.entries.toLocaleString()+" entries":""}${d.dbSize?" · indexed":""}</div>
       <div>${caps}</div><div class="acts">${acts}</div>
       ${provenance(d)}
-      <details class="about"><summary>About this dictionary</summary>${traits(d)}<div class="aboutbody">…</div></details>`;
+      <details class="about"><summary>About this dictionary</summary><button type="button" class="rename">Rename…</button>${traits(d)}<div class="aboutbody">…</div></details>`;
     el.appendChild(div);
   }
   findDicts(); // also syncs the master switch, which follows the filter
@@ -2809,7 +2828,7 @@ $("panelList").addEventListener("drop",e=>{
    survive it. The master switch acts on the cards shown, so it is
    synced on every pass. */
 function findFold(s){return s.normalize("NFD").replace(/\p{M}/gu,"").toLowerCase()}
-function findKey(d){return findFold([dictLabel(d),...(d.groups||[]).map(g=>g.vl)].join("\n"))}
+function findKey(d){return findFold([dictLabel(d),...(titles.has(d.id)?[ownLabel(d)]:[]),...(d.groups||[]).map(g=>g.vl)].join("\n"))}
 function findWords(){return findFold($("panelFind").value).split(/\s+/).filter(Boolean)}
 // `dicts` itself when nothing is typed, so callers can test for a filter by identity
 function scopeDicts(){
@@ -3228,6 +3247,8 @@ $("panelList").addEventListener("click",e=>{
      guard is not ceremony: the picker rebuilds as dictionaries arrive, and a
      group that was worth a section when this card was drawn can be gone by the
      time it is pressed. */
+  const rn=e.target.closest(".rename");
+  if(rn){retitle(rn.closest(".pd"));return}
   const tr=e.target.closest(".trait[data-g]");
   if(tr){
     const sel=$("dict"),v=tr.dataset.g;
@@ -3380,6 +3401,27 @@ async function runRemove(id,kind,node){
 $("panelList").addEventListener("change",e=>{
   if(e.target.classList.contains("en"))toggleDict(e.target.closest(".pd").dataset.id);
 });
+/* Rename… (D177) asks with prompt(), not a field in each card: a text field
+   per card costs every panel opening ~0.8 s of forced layout at 160
+   dictionaries (Chrome), and a dialog costs nothing until it is asked for.
+   Empty restores the dictionary's own title. The card changes in place rather
+   than by renderPanel, which would close the section the user is in; the
+   panel and the picker take the new A–Z place at their next render. */
+function retitle(pd){
+  const id=pd.dataset.id,d=dicts.find(x=>x.id===id);
+  if(!d)return;
+  const v=prompt(`Title for this dictionary. Empty → reset to original: “${ownLabel(d)}”`,dictLabel(d));
+  if(v===null)return;
+  const t=cleanTitle(v);
+  if(!t||t===ownLabel(d))titles.delete(id);else titles.set(id,t);
+  const label=dictLabel(d);
+  pd.querySelector(".hd>b").textContent=label;
+  pd.querySelector(".hd .pin").setAttribute("aria-label","Pin "+label);
+  pd.dataset.find=findKey(d);
+  for(const o of $("dict").options)if(o.value===id)o.textContent=label;
+  syncChips();
+  savePrefs(true);
+}
 /* the "enable full-text search" link - in a result summary when the search
    named one dictionary, in the grouped no-index list when it named many */
 document.addEventListener("click",e=>{
