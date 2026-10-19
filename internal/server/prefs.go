@@ -224,7 +224,7 @@ type prefsFile struct {
 	DSLPending      map[string]indexOptions `json:"dslPending,omitempty"`
 	DSLRemoved      map[string]bool         `json:"dslRemoved,omitempty"`
 	Damaged         map[string]string       `json:"damagedSources,omitempty"` // source path → size:mtime signature
-	Language        string                  `json:"language,omitempty"`       // explicit interface language, never the dictionary language
+	Language        string                  `json:"language,omitempty"`       // interface language choice: system, en or ru; never the dictionary language
 
 	Groups  []DictionaryGroup `json:"groups,omitempty"`
 	Version int               `json:"version"`

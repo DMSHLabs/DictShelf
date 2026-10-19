@@ -495,7 +495,8 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	// be served from cache without asking: a stale index.html would ask for a
 	// stale script by its old hash and put the two out of step again (D45).
 	w.Header().Set("Cache-Control", "no-cache")
-	page, etag := s.indexPage(styleOff(r))
+	w.Header().Add("Vary", "Accept-Language")
+	page, etag := s.indexPageFor(styleOff(r), r.Header.Get("Accept-Language"))
 	if etag == "" {
 		_, _ = w.Write(page)
 		return
@@ -505,15 +506,20 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) indexPage(disableStyle bool) ([]byte, string) {
+	return s.indexPageFor(disableStyle, "")
+}
+
+func (s *Server) indexPageFor(disableStyle bool, acceptLanguage string) ([]byte, string) {
+	choice := s.reg.prefs.Language()
+	language := s.reg.prefs.ResolvedLanguage(acceptLanguage)
 	// first-run: no dictionaries yet → serve the setup page instead. No
 	// validator here: this body is a function of registry state that nothing
 	// versions, so an ETag would be a promise we cannot keep. The wudict
 	// howto counts: with it listed the app has something to show, and the
 	// page opens on it instead, with the way to add dictionaries on top.
 	if s.reg.Count() == 0 {
-		language := s.reg.prefs.Language()
 		page := setupPage(s.reg.Dirs(), 0, s.pagePresetLinks(), language)
-		return s.renderUserUI(page, language), ""
+		return s.renderUserUIChoice(page, language, choice), ""
 	}
 	// "no-cache" means REVALIDATE, not "never store" - and revalidation needs
 	// something to revalidate against. Without a validator the browser had no
@@ -543,7 +549,7 @@ func (s *Server) indexPage(disableStyle bool) ([]byte, string) {
 		// in must not depend on any of it.
 		links = s.presetLinksHTML()
 	}
-	page, etag := s.pageFor(tag, nightTag, links)
+	page, etag := s.pageForLanguage(tag, nightTag, links, language, choice)
 	return page, etag
 }
 
@@ -603,11 +609,15 @@ func (s *Server) basePage() []byte {
 // browser is holding, so a change to any of them must invalidate. The cache
 // key is therefore both parts, not just the stylesheet's.
 func (s *Server) pageFor(dayTag, nightTag, presetLinks string) ([]byte, string) {
+	choice := s.reg.prefs.Language()
+	return s.pageForLanguage(dayTag, nightTag, presetLinks, s.reg.prefs.ResolvedLanguage(""), choice)
+}
+
+func (s *Server) pageForLanguage(dayTag, nightTag, presetLinks, language, choice string) ([]byte, string) {
 	s.styleMu.Lock()
 	defer s.styleMu.Unlock()
-	language := s.reg.prefs.Language()
 	storageScript, storageTag := s.userStorageBootstrap()
-	key := dayTag + "\x00" + nightTag + "\x00" + presetLinks + "\x00" + language + "\x00" + storageTag
+	key := dayTag + "\x00" + nightTag + "\x00" + presetLinks + "\x00" + language + "\x00" + choice + "\x00" + storageTag
 	if s.styledPage != nil && s.styledTag == key {
 		return s.styledPage, s.styledETag
 	}
@@ -628,7 +638,7 @@ func (s *Server) pageFor(dayTag, nightTag, presetLinks string) ([]byte, string) 
 	}
 	template := strings.ReplaceAll(string(s.basePage()), "{{USERCSS}}", presetLinks+links+"\n")
 	template = strings.ReplaceAll(template, "{{USERSTORAGE}}", storageScript)
-	page := []byte(renderUI(template, language))
+	page := []byte(renderUIChoice(template, language, choice))
 	s.styledTag, s.styledPage, s.styledETag = key, page, `"`+assetTag(page)+`"`
 	return s.styledPage, s.styledETag
 }
@@ -639,13 +649,19 @@ func (s *Server) pageFor(dayTag, nightTag, presetLinks string) ([]byte, string) 
 func (s *Server) handleSetupPage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache")
-	_, _ = w.Write(s.setupPage())
+	w.Header().Add("Vary", "Accept-Language")
+	_, _ = w.Write(s.setupPageFor(r.Header.Get("Accept-Language")))
 }
 
 func (s *Server) setupPage() []byte {
-	language := s.reg.prefs.Language()
+	return s.setupPageFor("")
+}
+
+func (s *Server) setupPageFor(acceptLanguage string) []byte {
+	choice := s.reg.prefs.Language()
+	language := s.reg.prefs.ResolvedLanguage(acceptLanguage)
 	page := setupPage(s.reg.Dirs(), s.reg.UserCount(), s.pagePresetLinks(), language)
-	return s.renderUserUI(page, language)
+	return s.renderUserUIChoice(page, language, choice)
 }
 
 // setupPage renders the folder chooser/editor. The intro names a single
@@ -711,10 +727,15 @@ var cssTag = assetTag(setupCSS)
 func (s *Server) handleLemmasPage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache")
-	_, _ = w.Write(s.lemmasPage())
+	w.Header().Add("Vary", "Accept-Language")
+	_, _ = w.Write(s.lemmasPageFor(r.Header.Get("Accept-Language")))
 }
 
 func (s *Server) lemmasPage() []byte {
+	return s.lemmasPageFor("")
+}
+
+func (s *Server) lemmasPageFor(acceptLanguage string) []byte {
 	// {{PRESETS}} is the same courtesy setup.html gets: the app halves of the
 	// presets that asked to be on this page too (presets.go). Rendered per
 	// request rather than precomputed: the page carries {{T:…}} keys and is
@@ -722,7 +743,9 @@ func (s *Server) lemmasPage() []byte {
 	page := bytes.ReplaceAll(lemmasHTML, []byte("{{CSS}}"), []byte(cssTag))
 	page = bytes.ReplaceAll(page, []byte("{{WORKSPACECSS}}"), []byte(assetTag(workspaceCSS)))
 	page = bytes.ReplaceAll(page, []byte("{{LEMMASJS}}"), []byte(assetTag(lemmasJS)))
-	return s.renderUserUI(string(bytes.ReplaceAll(page, []byte("{{PRESETS}}"), []byte(s.pagePresetLinks()))), s.reg.prefs.Language())
+	choice := s.reg.prefs.Language()
+	language := s.reg.prefs.ResolvedLanguage(acceptLanguage)
+	return s.renderUserUIChoice(string(bytes.ReplaceAll(page, []byte("{{PRESETS}}"), []byte(s.pagePresetLinks()))), language, choice)
 }
 
 func htmlEscape(s string) string {

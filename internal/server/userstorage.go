@@ -148,9 +148,13 @@ if(typeof window.wudictStorageSeeded==="function")window.wudictStorageSeeded().c
 }
 
 func (s *Server) renderUserUI(page, language string) []byte {
+	return s.renderUserUIChoice(page, language, language)
+}
+
+func (s *Server) renderUserUIChoice(page, language, choice string) []byte {
 	storageScript, _ := s.userStorageBootstrap()
 	page = strings.ReplaceAll(page, "{{USERSTORAGE}}", storageScript)
-	return []byte(renderUI(page, language))
+	return []byte(renderUIChoice(page, language, choice))
 }
 
 func (s *Server) handleUserStorage(w http.ResponseWriter, r *http.Request) {

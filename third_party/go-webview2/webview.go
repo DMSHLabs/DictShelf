@@ -244,7 +244,7 @@ func (w *webview) SetWebResourceRequestedHandler(filter string, handler WebResou
 		requestHeaders := make(map[string]string, 6)
 		if requestHeadersCOM, err := request.GetHeaders(); err == nil {
 			defer requestHeadersCOM.Release()
-			for _, name := range []string{"Range", "If-Range", "If-Modified-Since", "If-None-Match", "If-Unmodified-Since", "If-Match"} {
+			for _, name := range []string{"Range", "If-Range", "If-Modified-Since", "If-None-Match", "If-Unmodified-Since", "If-Match", "Accept-Language"} {
 				if value, err := requestHeadersCOM.GetHeader(name); err == nil && value != "" {
 					requestHeaders[name] = value
 				}

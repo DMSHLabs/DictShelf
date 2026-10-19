@@ -1195,10 +1195,15 @@ func browseUnprepared(w http.ResponseWriter, e *entry) {
 func (s *Server) handleBrowsePage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache")
-	_, _ = w.Write(s.browsePageHTML())
+	w.Header().Add("Vary", "Accept-Language")
+	_, _ = w.Write(s.browsePageHTMLFor(r.Header.Get("Accept-Language")))
 }
 
 func (s *Server) browsePageHTML() []byte {
+	return s.browsePageHTMLFor("")
+}
+
+func (s *Server) browsePageHTMLFor(acceptLanguage string) []byte {
 	page := bytes.ReplaceAll(browseHTML, []byte("{{PRESETS}}"), []byte(s.pagePresetLinks()))
 	page = bytes.ReplaceAll(page, []byte("{{BROWSE_STRIP_EXACT_WIDTHS}}"), []byte(strconv.Itoa(indexconst.BrowseStripExactWidthCount)))
 	page = bytes.ReplaceAll(page, []byte("{{BROWSE_SEARCH_DEBOUNCE_MS}}"), []byte(strconv.Itoa(indexconst.BrowseSearchDebounceMS)))
@@ -1206,5 +1211,5 @@ func (s *Server) browsePageHTML() []byte {
 	page = bytes.ReplaceAll(page, []byte("{{LISTSEARCHJS}}"), []byte(assetTag(listSearchJS)))
 	page = bytes.ReplaceAll(page, []byte("{{HEADWORDJS}}"), []byte(assetTag(headwordControlJS)))
 	page = bytes.ReplaceAll(page, []byte("{{HEADWORDCSS}}"), []byte(assetTag(headwordControlCSS)))
-	return s.renderUserUI(string(page), s.reg.prefs.Language())
+	return s.renderUserUIChoice(string(page), s.reg.prefs.ResolvedLanguage(acceptLanguage), s.reg.prefs.Language())
 }

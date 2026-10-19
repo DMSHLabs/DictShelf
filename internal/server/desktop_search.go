@@ -476,7 +476,7 @@ func (s *Server) DesktopJSONContext(ctx context.Context, baseURL, method, argume
 		if err := json.Unmarshal([]byte(argument), &request); err != nil {
 			return nil, errors.New("bad request")
 		}
-		if request.Language != "en" && request.Language != "ru" {
+		if request.Language != "system" && request.Language != "en" && request.Language != "ru" {
 			return nil, errors.New("unsupported language")
 		}
 		if err := s.reg.prefs.setLanguage(request.Language); err != nil {
