@@ -6067,7 +6067,7 @@ function noIndexRow(el,out,info){
 let maskGeneration=0,maskControllers=new Set(),maskRows=[],maskCurrent=0;
 let maskPattern="",maskSelection="",maskSubmitRequested=false,maskNavToken=0,maskRestoreScroll=null;
 let maskStripVersion=0,maskStripRendered=-1,maskChipMap=new Map(),maskActiveKey="",maskStripWantedKey="";
-let maskStripItems=[],maskStripOffsets=[],maskStripWidths=[],maskStripBands=[],maskStripSectionOffsets=[],maskStripSectionTargets=[],maskStripTotalWidth=0,maskStripSectionTotal=0,maskStripStart=-1,maskStripEnd=-1,maskStripKeyIndex=new Map(),maskStripMeasureNode=null;
+let maskStripItems=[],maskStripOffsets=[],maskStripWidths=[],maskStripNavOffsets=[],maskStripNavWidths=[],maskStripBands=[],maskStripSectionOffsets=[],maskStripSectionTargets=[],maskStripTotalWidth=0,maskStripSectionTotal=0,maskStripStart=-1,maskStripEnd=-1,maskStripRenderAnchor=-1,maskStripDisplayStart=-1,maskStripDisplayEnd=-1,maskStripKeyIndex=new Map(),maskStripMeasureNode=null,maskStripMeasureWidth=null,maskStripGap=0;
 let maskStripPaintAt=0,maskStripPaintTimer=0,maskStripScrollX=0,maskStripScrubTarget=null,maskRibbonNavigator=null;
 let maskBaseRows=[],maskBaseCurrent=0,maskFindRows=[],maskFindFilter=false,maskFindWildcard=false;
 let maskFindIndex=-1,maskFindMatch=null,maskFindTimer=0,maskFindQuery="",maskFindApproved=false,maskFindAwaitingApply=false,maskBusyJobs=new Set(),maskFindGeneration=0;
@@ -6140,7 +6140,7 @@ function maskAbort(){
 function maskInvalidate(){
   maskAbort();clearTimeout(maskFindTimer);maskRows=[];maskBaseRows=[];maskFindRows=[];maskPattern="";maskSelection="";
   maskFindQuery="";maskFindIndex=-1;maskFindMatch=null;maskFindApproved=false;maskFindAwaitingApply=false;$("maskFindInput").value="";maskFindControls();
-  maskStripVersion++;maskStripRendered=-1;maskChipMap.clear();maskActiveKey="";maskStripWantedKey="";maskStripItems=[];maskStripOffsets=[];maskStripWidths=[];maskStripBands=[];maskStripSectionOffsets=[];maskStripSectionTargets=[];maskStripKeyIndex.clear();maskStripTotalWidth=maskStripSectionTotal=0;maskStripStart=maskStripEnd=-1;maskStripScrollX=0;maskStripScrubTarget=null;
+  maskStripVersion++;maskStripRendered=-1;maskChipMap.clear();maskActiveKey="";maskStripWantedKey="";maskStripItems=[];maskStripOffsets=[];maskStripWidths=[];maskStripNavOffsets=[];maskStripNavWidths=[];maskStripBands=[];maskStripSectionOffsets=[];maskStripSectionTargets=[];maskStripKeyIndex.clear();maskStripTotalWidth=maskStripSectionTotal=0;maskStripStart=maskStripEnd=maskStripRenderAnchor=maskStripDisplayStart=maskStripDisplayEnd=-1;maskStripMeasureWidth=null;maskStripScrollX=0;maskStripScrubTarget=null;
   if(searchAC)searchAC.abort();hideSearchProgress();searchSeq++;
   $("maskDictName").textContent="";$("maskDictMeta").textContent="";$("maskDict").title="";$("maskLetterTrack").replaceChildren();$("maskLetterTrack").style.width="100%";$("maskLetterTrack").style.minWidth="100%";
   $("maskCount").textContent="";$("maskPage").textContent="";
@@ -6178,16 +6178,13 @@ function maskStripPaintNow(){
   if(!track)return;
   const rebuilt=maskStripRendered!==maskStripVersion;
   if(rebuilt){
-    maskStripItems=[];maskStripOffsets=[];maskStripWidths=[];maskStripBands=[];maskStripSectionOffsets=[];maskStripTotalWidth=0;maskStripKeyIndex=new Map();
-    maskChipMap=new Map();maskStripStart=maskStripEnd=-1;
-    const sample=document.createElement("button");sample.type="button";sample.textContent="M";sample.style.position="absolute";sample.style.visibility="hidden";maskStripMeasureNode=sample;
+    maskStripItems=[];maskStripOffsets=[];maskStripWidths=[];maskStripNavOffsets=[];maskStripNavWidths=[];maskStripBands=[];maskStripSectionOffsets=[];maskStripTotalWidth=0;maskStripKeyIndex=new Map();
+    maskChipMap=new Map();maskStripStart=maskStripEnd=maskStripRenderAnchor=maskStripDisplayStart=maskStripDisplayEnd=-1;
+    const sample=document.createElement("button");sample.type="button";sample.className="wudict-ribbon-chip";sample.textContent="M";sample.style.position="absolute";sample.style.visibility="hidden";sample.style.width="max-content";sample.style.maxWidth="none";maskStripMeasureNode=sample;
     track.appendChild(sample);
-    const sampleHeight=sample.getBoundingClientRect().height,style=getComputedStyle(sample),font=[style.fontStyle,style.fontVariant,style.fontWeight,style.fontSize,style.fontFamily].join(" ");
-    const ctx=(maskStripPaint.canvas||(maskStripPaint.canvas=document.createElement("canvas"))).getContext("2d");ctx.font=font;
+    const sampleHeight=sample.getBoundingClientRect().height,style=getComputedStyle(sample);
     const metric=(value,fallback=0)=>{const number=Number.parseFloat(value);return Number.isFinite(number)?number:fallback};
-    const measure=value=>{const width=ctx.measureText(value||"").width;return Number.isFinite(width)?width:0};
-    const em=metric(style.fontSize,16),pad=metric(style.paddingLeft)+metric(style.paddingRight)+metric(style.borderLeftWidth)+metric(style.borderRightWidth);
-    const gap=.25*em,minWidth=Math.max(2*em,metric(style.minWidth));
+    const em=metric(style.fontSize,16),gap=.25*em,minWidth=metric(style.minWidth),cap=12*em;
     const allWords=isAllWildcardMask(maskPattern);
     maskStripItems=window.wudictHeadwordControl.ribbon.fromWildcardSQL(maskRows,{
       allWords,pageSize:300,
@@ -6196,14 +6193,21 @@ function maskStripPaintNow(){
     });
     track.replaceChildren(sample);
     const separatorWidth=allWords?em:.7*em;
+    maskStripGap=gap;
+    maskStripMeasureWidth=item=>{
+      if(item.kind==="separator")return separatorWidth;
+      sample.textContent=String(item.label||"");
+      const natural=sample.getBoundingClientRect().width;
+      return Math.max(minWidth,Math.min(cap,Number.isFinite(natural)?natural:minWidth));
+    };
     const geometry=window.wudictHeadwordControl.ribbon.measure(maskStripItems,sample,strip,{gap,minWidth,separatorWidth,maxWidthEm:12});
-    maskStripOffsets=geometry.offsets;maskStripWidths=geometry.widths;maskStripTotalWidth=geometry.total;maskStripSectionOffsets=[];maskStripSectionTargets=[];maskStripSectionTotal=0;maskStripKeyIndex=new Map();
+    maskStripNavOffsets=geometry.offsets;maskStripNavWidths=geometry.widths;maskStripOffsets=geometry.offsets.slice();maskStripWidths=geometry.widths.slice();maskStripTotalWidth=geometry.total;maskStripSectionOffsets=[];maskStripSectionTargets=[];maskStripSectionTotal=0;maskStripKeyIndex=new Map();
     const bandsByDictionary=new Map();
     for(let i=0;i<maskStripItems.length;i++){
       const item=maskStripItems[i];if(item.kind==="separator")continue;
-      maskStripSectionOffsets.push(maskStripOffsets[i]);maskStripSectionTargets.push({dict:item.dict,page:item.page});maskStripSectionTotal++;
+      maskStripSectionOffsets.push(maskStripNavOffsets[i]);maskStripSectionTargets.push({dict:item.dict,page:item.page});maskStripSectionTotal++;
       if(item.kind==="chip")maskStripKeyIndex.set(item.dict+":"+item.page,i);
-      const group=item.groupIndex,begin=maskStripOffsets[i],end=begin+maskStripWidths[i];
+      const group=item.groupIndex,begin=maskStripNavOffsets[i],end=begin+maskStripNavWidths[i];
       if(!Number.isInteger(group)||!Number.isFinite(begin)||!Number.isFinite(end))continue;
       const band=bandsByDictionary.get(group);if(band)band.end=end;else bandsByDictionary.set(group,{tone:group%4,start:begin,end});
     }
@@ -6215,7 +6219,7 @@ function maskStripPaintNow(){
   if(targetKey&&(targetKey!==maskActiveKey||maskStripWantedKey)){
     const itemIndex=maskStripKeyIndex.get(targetKey),section=maskStripTargetIndex(targetKey,isAllWildcardMask(maskPattern));
     const x=section>=0?maskStripSectionOffsets[section]:undefined;
-    if(x!==undefined){const w=itemIndex===undefined?0:maskStripWidths[itemIndex],left=maskStripScrollX;
+    if(x!==undefined){const w=itemIndex===undefined?0:maskStripNavWidths[itemIndex],left=maskStripScrollX;
       if(x<left||x+w>left+track.clientWidth)maskStripScrollX=Math.max(0,x-track.clientWidth/2+w/2);
       maskStripWantedKey=""}
   }
@@ -6224,11 +6228,38 @@ function maskStripPaintNow(){
   maskStripScrollX=Math.max(0,Math.min(maxLogicalScroll,maskStripScrollX));
   const ribbon=window.wudictHeadwordControl.ribbon;
   const left=maskStripScrollX,right=left+viewport,buffer=ribbon.buffer;
-  const lower=(x,byEnd=false)=>ribbon.lower(maskStripOffsets,maskStripWidths,x,byEnd);
-  const start=Math.max(0,lower(left,true)-buffer),end=Math.min(maskStripItems.length,lower(right)+buffer);
-  if(start!==maskStripStart||end!==maskStripEnd||rebuilt){
-    maskStripStart=start;maskStripEnd=end;maskChipMap=new Map();
-    ribbon.paint(track,maskStripItems,{offsets:maskStripOffsets,widths:maskStripWidths,viewport},left,key,start,end,{pendingClass:"mask-letter-pending",separatorClass:"mask-letter-separator",sampleNode:maskStripMeasureNode,bands:maskStripBands,mode:"wildcards",
+  if(!maskStripItems.length){
+    track.replaceChildren(maskStripMeasureNode);maskChipMap.clear();maskStripStart=maskStripEnd=0;maskActiveKey=key;
+    maskRibbonNavigator?.update();return;
+  }
+  const anchor=Math.min(maskStripItems.length-1,Math.max(0,ribbon.lower(maskStripNavOffsets,maskStripNavWidths,left,true)));
+  const start=Math.max(0,anchor-buffer),displayOffsets=maskStripOffsets,displayWidths=maskStripWidths;
+  if(maskStripDisplayStart>=0){for(let i=maskStripDisplayStart;i<maskStripDisplayEnd;i++){displayOffsets[i]=maskStripNavOffsets[i];displayWidths[i]=maskStripNavWidths[i]}}
+  displayOffsets[anchor]=maskStripNavOffsets[anchor];
+  displayWidths[anchor]=maskStripMeasureWidth(maskStripItems[anchor]);
+  for(let i=anchor-1;i>=start;i--){
+    displayWidths[i]=maskStripMeasureWidth(maskStripItems[i]);
+    displayOffsets[i]=displayOffsets[i+1]-maskStripGap-displayWidths[i];
+  }
+  let end=anchor+1,outside=0;
+  while(end<maskStripItems.length){
+    displayOffsets[end]=displayOffsets[end-1]+displayWidths[end-1]+maskStripGap;
+    displayWidths[end]=maskStripMeasureWidth(maskStripItems[end]);
+    const pastViewport=displayOffsets[end]>right;
+    end++;
+    if(pastViewport&&end>anchor+buffer)outside++;else outside=0;
+    if(outside>=buffer)break;
+  }
+  maskStripDisplayStart=start;maskStripDisplayEnd=end;
+  const bands=[];
+  for(let i=start;i<end;i++){
+    const item=maskStripItems[i],group=item.groupIndex,begin=displayOffsets[i],finish=begin+displayWidths[i];
+    if(!Number.isInteger(group)||!Number.isFinite(begin)||!Number.isFinite(finish))continue;
+    const band=bands[bands.length-1];if(band&&band.tone===group%4)band.end=finish;else bands.push({tone:group%4,start:begin,end:finish});
+  }
+  if(start!==maskStripStart||end!==maskStripEnd||anchor!==maskStripRenderAnchor||rebuilt){
+    maskStripStart=start;maskStripEnd=end;maskStripRenderAnchor=anchor;maskChipMap=new Map();
+    ribbon.paint(track,maskStripItems,{offsets:displayOffsets,widths:displayWidths,viewport},left,key,start,end,{pendingClass:"mask-letter-pending",separatorClass:"mask-letter-separator",sampleNode:maskStripMeasureNode,bands,mode:"wildcards",
       onProblem:problem=>sendBrowseDiagnostic({event:"ribbon_guard",resource:problem.mode,stage:problem.reason,
         letters:problem.items,measured:problem.offsets,words:problem.widths,page:Math.max(0,problem.from||0),totalPages:Math.max(0,problem.to||0)})});
     for(const chip of track.querySelectorAll("button[data-dict][data-page]"))maskChipMap.set(chip.dataset.dict+":"+chip.dataset.page,chip);
@@ -6236,7 +6267,7 @@ function maskStripPaintNow(){
   for(const [chipKey,chip] of maskChipMap)chip.setAttribute("aria-current",String(chipKey===key));
   for(const el of track.children){
     if(el.classList.contains("mask-dictionary-band")){const x=Number(el.dataset.ribbonStart);if(Number.isFinite(x))el.style.left=(x-left)+"px";continue}
-    const index=Number(el.dataset.stripIndex);if(Number.isInteger(index)&&index>=0&&index<maskStripOffsets.length)el.style.left=(maskStripOffsets[index]-left)+"px"
+    const index=Number(el.dataset.stripIndex);if(Number.isInteger(index)&&index>=0&&index<displayOffsets.length)el.style.left=(displayOffsets[index]-left)+"px"
   }
   maskActiveKey=key;
   maskRibbonNavigator?.update();
@@ -6251,7 +6282,7 @@ function maskStripPreviewPage(section){
 }
 maskRibbonNavigator=window.wudictHeadwordControl.ribbon.createScroller({
   viewport:$("maskLetters"),track:$("maskLetterTrack"),bar:$("maskScrollbar"),thumb:$("maskScrollThumb"),
-  getItems:()=>maskStripItems,getOffsets:()=>maskStripOffsets,getWidths:()=>maskStripWidths,
+  getItems:()=>maskStripItems,getOffsets:()=>maskStripNavOffsets,getWidths:()=>maskStripNavWidths,
   getPosition:()=>maskStripScrollX,setPosition:value=>{maskStripWantedKey="";maskStripScrollX=value},
   getMaxScroll:()=>Math.max(0,maskStripTotalWidth-$("maskLetters").clientWidth),
   onMove:({section})=>{maskStripScrubTarget=maskStripPreviewPage(section)},
