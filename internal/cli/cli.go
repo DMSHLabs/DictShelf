@@ -453,6 +453,8 @@ var (
 	headlessLog string
 )
 
+var errExistingDesktopInstance = errors.New("existing desktop instance activated")
+
 // fail reports a fatal error and exits 1. One place, so the GUI case cannot be
 // handled on one path and forgotten on the other.
 func fail(err error) {
@@ -479,6 +481,9 @@ func Main() {
 	if !informationalCommand(os.Args[1:]) {
 		release, err := acquireProcessLock()
 		if err != nil {
+			if errors.Is(err, errExistingDesktopInstance) {
+				return
+			}
 			fail(err)
 			return
 		}

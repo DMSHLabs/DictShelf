@@ -509,10 +509,11 @@ select{box-sizing:border-box;font-size:calc(var(--ui-font-base) * 1rem);min-heig
 .btn:hover{color:var(--fg);border-color:var(--fg-faint)}
 .icon-close{display:block;width:1.3em;height:1.3em}
 #panel .examples-extra{display:flex;align-items:flex-start;gap:calc(var(--ui-control-gap) * 1em);
-  margin:calc(var(--ui-addition-gap) * 1em) 0;padding-left:.4em;font-size:calc(var(--ui-font-addition) * 1rem);overflow-wrap:anywhere}
+  margin:calc(var(--ui-addition-gap) * 1em) 0 0 4ch;padding-left:.4em;font-size:calc(var(--ui-font-addition) * 1rem);overflow-wrap:anywhere}
 #panel .examples-extra[hidden]{display:none}
 .examples-extra[hidden]{display:none}
 .examples-extra input{flex:none;margin-top:.2em;accent-color:var(--accent)}
+#panel .examples-extra:has(input:disabled){opacity:.5;cursor:not-allowed}
 #pinBtn{color:var(--pin);border:none;background:none;padding:.3em .4em;font-size:16px;line-height:1;cursor:pointer;display:inline-flex;align-items:center}
 #pinBtn:hover{color:var(--pin-hover)}
 #pinBtn svg{display:block;transition:transform .2s ease;width:16px;height:18px}
@@ -1012,7 +1013,7 @@ body.styling{padding-bottom:var(--styler-shown,var(--styler-h))}
   border-width:0 2px 2px 0;transform:rotate(45deg)}
 #panel .panel-checkbox:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 #panel .headword-threshold-row{width:100%;align-items:center;column-gap:calc(var(--ui-control-gap) * 2em)}
-#panel .headword-threshold-row>#headwordApplyThreshold{flex:1 1 0;min-width:0;max-width:100%}
+#panel .headword-threshold-row>.threshold-select-wrap{flex:1 1 0;min-width:0;max-width:100%}
 #panel .headword-threshold-row>.rowlabel{flex:none;white-space:nowrap;line-height:1.35}
 /* ─ floating menus ──────────────────────────────────────────────────
    THE SURFACE, stated once: every menu the app floats over the page wears it,
@@ -1601,6 +1602,18 @@ dialog.panel-card:not([open]){display:none}
 #panel .facts.language-row{flex-wrap:nowrap}
 #panel .facts.language-row>.rowlabel{flex:0 0 auto;white-space:nowrap}
 #panel .facts.language-row>#languageBtn{width:auto;min-width:0;flex:1 1 0}
+#panel .facts .choice-btn,#panel .facts select{
+  box-sizing:border-box;height:calc(var(--ui-control-height) * var(--ui-font-base) * 1rem);
+  min-height:calc(var(--ui-control-height) * var(--ui-font-base) * 1rem);
+  font-size:calc(var(--ui-control-font) * 1rem);line-height:1}
+.panel-select-wrap{position:relative;min-width:0}
+.panel-select-wrap::after{content:"";position:absolute;right:calc(var(--ui-control-font) * .55em);top:50%;transform:translateY(-50%);pointer-events:none;
+  width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:4px solid var(--fg)}
+.panel-select-wrap:has(>select:disabled)::after{opacity:.55}
+#panel .panel-select-wrap>select{display:block;width:100%;max-width:none;min-width:0;
+  min-height:calc(var(--ui-control-height) * var(--ui-font-base) * 1rem);
+  height:calc(var(--ui-control-height) * var(--ui-font-base) * 1rem);
+  appearance:none;-webkit-appearance:none;padding:0 1.8em 0 .55em;line-height:1}
 /* A label for the control on its row, in the register the segs' labels use. */
 .facts .rowlabel{font-size:calc(var(--ui-font-base) * 1rem);line-height:1.2;color:var(--label-quiet)}
 /* The collection's count, on its own line under the heading: the answer to "is
@@ -1653,7 +1666,7 @@ dialog.panel-card:not([open]){display:none}
 .facts:has(>#fsCtl)>.rowlabel,.facts:has(>#fwCtl)>.rowlabel,
 .facts:has(>#looksControls)>.rowlabel,.facts:has(>#compactSeg)>.rowlabel,
 .facts:has(>#examplesSeg)>.rowlabel,.facts:has(>#sbarSeg)>.rowlabel,
-.facts:has(>#articleFontSelect)>.rowlabel{
+.facts:has(>.article-font-select-wrap)>.rowlabel{
   flex:0 1 var(--rlcol,auto);min-width:0;white-space:nowrap;overflow:hidden;
   text-overflow:ellipsis}
 /* A `.facts` row is `display:flex`, which outvotes the user-agent's
@@ -1667,8 +1680,8 @@ dialog.panel-card:not([open]){display:none}
    name - and never less than the longest of the built-in ones. */
 .facts .choice-btn{font-size:calc(var(--ui-font-base) * 1rem)}
 #panel .facts .choice-btn{gap:calc(var(--ui-control-gap) * 1em)}
-.facts:has(>#articleFontSelect)>.rowlabel{flex:0 0 var(--rlcol,auto)}
-.facts>#articleFontSelect{box-sizing:border-box;width:auto;flex:0 1 10.5em;min-width:0}
+.facts:has(>.article-font-select-wrap)>.rowlabel{flex:0 0 var(--rlcol,auto)}
+.facts>.article-font-select-wrap{box-sizing:border-box;width:auto;flex:0 1 10.5em;min-width:0}
 .facts:has(>#looksControls)>.rowlabel{flex:0 1 var(--rlcol,auto)}
 #looksControls{display:flex;flex:0 1 auto;flex-wrap:wrap;align-items:center;gap:calc(var(--ui-control-gap) * 1em);min-width:0}
 #looksControls>#looksChoice{box-sizing:border-box;width:auto;flex:0 1 auto;min-width:6.5em}
@@ -1740,22 +1753,18 @@ dialog.panel-card:not([open]){display:none}
 #panel .facts{gap:calc(var(--ui-control-gap) * 1em);margin-top:0}
 #panel .facts:has(> .mrow){row-gap:calc(var(--ui-row-gap) * 1em)}
 #panel .sect>.facts+.facts,#panel .sect>.counts+.facts{margin-top:calc(var(--ui-row-gap) * 1em)}
+#panel .sect>.facts.browse-row{margin-top:calc(var(--ui-row-gap) * 1em)}
 /* The reading strip's rows. Same left edge as the section that holds it (its
    .sect's own inline margin), so the row reads as part of the section and not
    as a control floating above one. One setting per LINE, not wrapped: the
    controls are meant to be compared, and a wrap put whichever two happened to
    fit beside each other. */
 #panel .facts.reading{flex-direction:column;align-items:flex-start;margin:0;gap:calc(var(--ui-row-gap) * 1em)}
-/* The reading strip's rows carry their label INSIDE the seg (they are label
-   and pair in one control), and a seg is shrink-to-fit. A box sized from its
-   content asks its items for their max-content size, not for their
-   flex-basis - so the measured column never reached these labels: measured in
-   Russian, labels 54.9px and 85.4px wide inside a section whose column is
-   86px, and the pairs starting at 119 and 150 instead of at one x. Stretching
-   the seg to its row is what lets the column inside it be the column; the
-   strip's content is left-aligned either way, so nothing but the pairs' own
-   starting point moves. */
-.facts.reading>.seg{align-self:flex-start;width:auto}
+/* Keep the pair beside the shared label column. The row itself must remain
+   content-sized: stretching it across the drawer made the pair look pinned to
+   the right edge. The explicit label width below still gives both rows the
+   same control start. */
+.facts.reading>.seg{align-self:flex-start;width:auto;max-width:100%}
 .facts .history-controls{display:flex;align-items:center;flex-wrap:wrap;gap:calc(var(--ui-control-gap) * 1em);
   font-size:calc(var(--ui-font-base) * 1rem)}
 .facts .history-setting{display:inline-flex;align-items:center;gap:calc(var(--ui-control-gap) * 1em);font-size:calc(var(--ui-font-base) * 1rem)}
@@ -1806,6 +1815,7 @@ dialog.panel-card:not([open]){display:none}
    own text. */
 .facts .seg>span{flex:0 0 var(--rlcol,96px);min-width:0;white-space:nowrap;overflow:hidden;
   text-overflow:ellipsis;font-size:calc(var(--ui-font-base) * 1rem);line-height:1.2;color:var(--label-quiet)}
+.facts.reading>.seg>span{box-sizing:border-box;flex:0 1 auto;width:var(--rlcol,96px)}
 /* A mark may ride in the label, as the speaker does. It is drawn at the same
    size and in the same faint colour as the marks that ride ON a control, but
    it sits in the label column with the words it belongs to: the row it came
