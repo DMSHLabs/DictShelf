@@ -17,7 +17,6 @@ import (
 
 	"github.com/wuweidict/wudict/internal/dict"
 	"github.com/wuweidict/wudict/internal/lang"
-	"github.com/wuweidict/wudict/internal/resource"
 )
 
 // ReaderVersion is the behaviour version of this format's Reader (see
@@ -38,7 +37,9 @@ func init() {
 // lookup is a binary search over the file (see search.go). Resident cost is
 // the pointer list plus a bounded cluster cache, which is why PreviewBytes
 // below reports a real figure instead of letting the server's per-headword
-// estimate charge half a gigabyte for an index that does not exist.
+// estimate charge half a gigabyte for an index that does not exist. The path
+// pointer list stays on disk; only a small page of pointers and the bounded
+// cluster cache are resident.
 //
 // Safe for concurrent readers.
 type Dict struct {
@@ -124,7 +125,7 @@ func (d *Dict) Caps() dict.Caps { return dict.Caps{Exact: true, Prefix: true} }
 // server's headword-count estimate (previewWeight) does not charge it for an
 // in-memory index it never builds.
 func (d *Dict) PreviewBytes() int64 {
-	return int64(len(d.c.urlPtr))*8 + clusterCacheBytes
+	return int64(len(d.c.clusterPtr))*8 + ptrPageLen*8 + clusterCacheBytes
 }
 
 // SelfIndexed marks a backend whose own file answers exact and prefix lookup
@@ -265,8 +266,9 @@ func (d *Dict) Keywords(offset, n int) []string {
 		return nil
 	}
 	out := make([]string, 0, hi-lo)
+	w := d.c.walk()
 	for i := d.lo + lo; i < d.lo+hi; i++ {
-		de, err := d.c.entry(i)
+		de, err := w.entry(i)
 		if err != nil {
 			break
 		}
@@ -293,8 +295,9 @@ func (d *Dict) Page(offset, n int) ([]string, error) {
 		return nil, nil
 	}
 	out := make([]string, 0, hi-lo)
+	w := d.c.walk()
 	for i := d.lo + lo; i < d.lo+hi; i++ {
-		de, err := d.c.entry(i)
+		de, err := w.entry(i)
 		if err != nil {
 			return nil, err
 		}
@@ -376,6 +379,7 @@ func (d *Dict) buildAlphabetStream(ctx context.Context, emit func([]dict.Letter,
 	var out []dict.Letter
 	used := make(map[string]bool)
 	chunkStart := 0
+	w := d.c.walk()
 	for offset := 0; offset < total; offset += dict.MaskPageSize {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -384,7 +388,7 @@ func (d *Dict) buildAlphabetStream(ctx context.Context, emit func([]dict.Letter,
 		emitted := false
 		var first string
 		for slot := offset; slot < end; slot++ {
-			de, err := d.c.entry(d.lo + slot)
+			de, err := w.entry(d.lo + slot)
 			if err != nil {
 				return nil, err
 			}
@@ -469,11 +473,11 @@ func (d *Dict) Resource(name string) (io.ReadCloser, string, error) {
 				return nil, "", err
 			}
 		}
-		b, err := d.c.content(de)
+		rc, err := d.c.contentReader(de)
 		if err != nil {
 			return nil, "", err
 		}
-		return resource.Bytes(b), d.c.mimeOf(de), nil
+		return rc, d.c.mimeOf(de), nil
 	}
 	return nil, "", dict.ErrNotFound
 }
@@ -483,8 +487,9 @@ func (d *Dict) Resource(name string) (io.ReadCloser, string, error) {
 // the same shape of scan the other formats' Resources does.
 func (d *Dict) Resources() []string {
 	var out []string
+	w := d.c.walk()
 	for i := d.lo; i < d.hi; i++ {
-		de, err := d.c.entry(i)
+		de, err := w.entry(i)
 		if err != nil {
 			break
 		}
@@ -503,7 +508,7 @@ func (d *Dict) Resources() []string {
 				continue
 			}
 			for i := lo; i < hi; i++ {
-				de, err := d.c.entry(i)
+				de, err := w.entry(i)
 				if err != nil {
 					break
 				}

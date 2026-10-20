@@ -1,12 +1,15 @@
 # Agent handoff — current state
 
 Current checkout for the upstream resource-transfer planning session: branch
-`dev2` at `2183ed90`. P1 baseline and P2 seekable in-memory readers are
-complete; large `media.db` streaming remains in place. `go build ./...` and
-`git diff --check` pass; tests were not run. The staged port plan and the
-Android/Windows streaming invariants are recorded in
-[`docs/UPSTREAM-TRANSFER-PLAN.md`](docs/UPSTREAM-TRANSFER-PLAN.md). The next
-implementation step is P3, ZIM on-demand indexing and direct resource reads.
+`dev2` at `f5356803`. P1 baseline and P2 seekable in-memory readers are
+complete; large `media.db` streaming remains in place. P3 ZIM on-demand
+pointer access and direct reads for stored clusters are implemented. The full
+path-pointer list stays on disk and sequential walks use a bounded page;
+compressed clusters still decompress as a bounded whole. Build and diff
+checks pass; runtime verification with real large ZIM resources is pending.
+The staged port plan and Android/Windows streaming invariants are recorded in
+[`docs/UPSTREAM-TRANSFER-PLAN.md`](docs/UPSTREAM-TRANSFER-PLAN.md). Hold at P3
+until runtime confirmation, then continue to P4, split-ZIM support.
 
 Previous handoff snapshot (before the upstream resource-transfer plan): `dev2` at `78a18610`, with uncommitted Wildcards responsiveness changes, ribbon diagnostics, and a responsive result header. The header uses equal-height dictionary and page controls based on the edit-control UI tokens; its page controls keep their size and move below the dictionary selector only when its text field approaches 20 characters. At narrower selector widths, its match count and page range hide before the dictionary name is ellipsized. When the existing Browse/Wildcards timing option is enabled, System Log records each actual Wildcards ribbon rebuild (SQL adapter, geometry build and viewport paint timings) and one debounced summary per window-resize burst (event count, viewport dimensions, metrics changes and paint deferrals). The 2026-10-20 01:36 log shows six successful resize summaries, but repeated stream updates can spend 100–140 ms measuring/painting the visible strip and up to 254 ms in a synchronous UI render. Wildcards now caches estimated label widths across data updates, measures visible button widths in one DOM layout pass, and skips rewriting the current word list when another dictionary reports progress. Resizing its ribbon does not rebuild the full section model unless font metrics change; the viewport repaint is scheduled once per animation frame. The Wildcards stream yields to browser painting after about 12 ms of continuous event handling, and scan-only progress does not rerender the word list or ribbon. Inline JavaScript syntax, `go build ./...`, and `git diff --check` pass; Windows performance and visual behavior still need runtime verification.
 
