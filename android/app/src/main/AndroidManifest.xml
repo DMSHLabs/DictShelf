@@ -3,9 +3,8 @@
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- The server speaks HTTP on loopback; the WebView loads it from there.
-         The app only ever talks to 127.0.0.1, so cleartext is allowed
-         app-wide rather than via a networkSecurityConfig domain list. -->
+    <!-- Used for online lemma and archive downloads. App pages and dictionary
+         resources are served in-process by Go/JNI. -->
     <uses-permission android:name="android.permission.INTERNET" />
 
     <!-- Preparing a dictionary the user asked for is minutes of work in a

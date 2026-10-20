@@ -8,7 +8,7 @@
 //
 // It is flavour-NEUTRAL, unlike Storage, and that is the point of the file.
 // Nothing here is a permission, a picker grant or a folder policy - it hands
-// the server either a path or a stream of bytes and lets internal/intake do
+// Go either a path or a stream of bytes and lets internal/intake do
 // the rest, which is the same code the desktop page drives. So the FOSS
 // flavour, which had no intake of any kind, gets exactly what the Play
 // flavour gets, and neither has an unarchiver, a format table or an idea of
@@ -40,14 +40,9 @@ import android.util.Log;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
-import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.net.URLEncoder;
+import android.util.Base64;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -59,17 +54,11 @@ final class Intake {
     private static final String TAG = "wudict";
 
     private static final int BUF = 1 << 20;             // 1 MiB, as SafImporter: these are multi-GB files
-    private static final int CONNECT_MS = 5_000;
-    // Covers spooling AND sniffing a multi-gigabyte archive inside one
-    // request: the server answers POST /api/intake only once it has the whole
-    // body on disk and has read the directory.
-    private static final int READ_MS = 600_000;
     private static final int POLL_MS = 700;             // the page's own poll interval
     private static final long CHOICE_TIMEOUT_MIN = 10;  // a dialog nobody ever answers
-    private static final int ERR_MAX = 8 << 10;         // an error body is one JSON object
 
-    // One at a time here as well as in the server. The server's claim is the
-    // real one; this one exists so a second share is answered immediately
+    // One at a time here as well as in the Go importer. The importer's claim
+    // is the real one; this one exists so a second share is answered immediately
     // instead of after a multi-gigabyte upload that is going to be refused.
     //
     // Held as WHAT is being imported and the dialog showing it, because one act
@@ -82,7 +71,7 @@ final class Intake {
     private static volatile boolean cancelled;
 
     /**
-     * The server job this shell started and has not let go of. The server has
+     * The Go import job this shell started and has not let go of. The importer has
      * ONE import slot, so a job the shell stops watching - an error read, a
      * dialog that went with its activity, an exception - must be released, or
      * it holds that slot, invisible, and every link opened after it is refused
@@ -142,6 +131,8 @@ final class Intake {
             // (`wudict: 1`) and declines the rest.
             ".md", ".wudict.md.gz", ".wudict.md.dz",
     };
+    private static final java.util.regex.Pattern ZIM_PART =
+            java.util.regex.Pattern.compile(".*\\.zim[a-z][a-z]", java.util.regex.Pattern.CASE_INSENSITIVE);
 
     /**
      * What the page's own "Add dictionaries" picker offers. DocumentsUI
@@ -308,7 +299,7 @@ final class Intake {
         for (String ext : DICT_EXTS) {
             if (n.endsWith(ext)) return true;
         }
-        return false;
+        return ZIM_PART.matcher(n).matches();
     }
 
     /**
@@ -335,7 +326,7 @@ final class Intake {
      * Whether shared text is links to install rather than words to look up:
      * one link, or a list of them - the shape of a list file, one per line,
      * "#" lines allowed. Prose with a link in it stays a lookup: the user who
-     * selected a sentence meant the sentence. The server reads every link out
+     * selected a sentence meant the sentence. The importer reads every link out
      * of what it is given, a share link included (internal/intake).
      */
     static boolean isLinks(String s) {
@@ -526,14 +517,9 @@ final class Intake {
         dialog.show();
         runningDialog = dialog;
 
-        // Held for exactly the reasons SafImporter holds it: this is minutes
-        // of work in a process the platform reads as idle, and a kill strands
-        // a half-extracted staging directory. The server retain is the second
-        // half of the same guarantee - an import that outlives the activity
-        // must not have its server killed out from under it by
-        // MainActivity.onDestroy. release(true) hands that decision back.
+        // This is minutes of work in a process the platform reads as idle; a
+        // kill can strand a half-extracted staging directory.
         Context app = a.getApplicationContext();
-        ServerProcess.retain();
         IndexService.hold(app, R.string.index_import_title, R.string.index_import_text);
         Thread t = new Thread(() -> {
             String summary;
@@ -544,7 +530,6 @@ final class Intake {
                 summary = a.getString(R.string.intake_failed, String.valueOf(e.getMessage()));
             } finally {
                 IndexService.release(app);
-                ServerProcess.release(true);
             }
             final String msg = summary;
             a.runOnUiThread(() -> {
@@ -559,10 +544,9 @@ final class Intake {
         t.start();
     }
 
-    /** Every archive in turn - the server takes one job at a time. */
+    /** Every archive in turn - the importer takes one job at a time. */
     private static String run(Activity a, Context app, List<Uri> uris, AlertDialog dialog)
             throws Exception {
-        if (!awaitServer(app)) return a.getString(R.string.intake_no_server);
         List<String> added = new ArrayList<>();
         String problem = null;
         for (Uri u : uris) {
@@ -599,7 +583,6 @@ final class Intake {
         runningDialog = dialog;
 
         Context app = a.getApplicationContext();
-        ServerProcess.retain();
         IndexService.hold(app, R.string.index_download_title, R.string.index_download_text);
         Thread t = new Thread(() -> {
             String summary;
@@ -610,7 +593,6 @@ final class Intake {
                 summary = a.getString(R.string.intake_failed, String.valueOf(e.getMessage()));
             } finally {
                 IndexService.release(app);
-                ServerProcess.release(true);
             }
             final String msg = summary;
             a.runOnUiThread(() -> {
@@ -627,15 +609,14 @@ final class Intake {
 
     private static String runURL(Activity a, Context app, String url, AlertDialog dialog)
             throws Exception {
-        if (!awaitServer(app)) return a.getString(R.string.intake_no_server);
-        JSONObject job = begin(a, app, () -> post(app, "/api/intake?url=" + enc(url), null, null));
+        JSONObject job = begin(a, () -> bridge("url", url));
         if (job == null) return null; // the user kept the other import running
-        if (job.has("error")) return job.optString("error");
+        if (job.has("error")) return cancelled ? null : job.optString("error");
         claim(job);
         try {
             return followURL(a, app, url, dialog);
         } finally {
-            release(app);
+            release();
         }
     }
 
@@ -675,16 +656,16 @@ final class Intake {
             if (cancelled) {
                 // The partial file stays on the server's side on purpose: the
                 // next attempt continues from it rather than starting over.
-                release(app);
+                release();
                 return null;
             }
-            JSONObject j = post(app, "/api/intake", "GET", null);
+            JSONObject j = bridge("status", "");
             if (j.has("error")) return j;
             String state = j.optString("state");
             if ("ready".equals(state)) return j;
             if ("error".equals(state)) {
                 JSONObject e = new JSONObject();
-                e.put("error", j.optString("error", a.getString(R.string.intake_no_server)));
+                e.put("error", j.optString("error", a.getString(R.string.intake_no_runtime)));
                 return e;
             }
             if (!"downloading".equals(state)) return null; // cancelled elsewhere
@@ -701,26 +682,26 @@ final class Intake {
         if (name == null) name = "archive.zip";
         ui(a, dialog, a.getString(R.string.intake_reading, name));
 
-        // Zero copy where the bytes are already a readable file: the server
+        // Zero copy where the bytes are already a readable file: Go
         // reads the archive in place, and a 2 GB import costs nothing to
         // begin. Only the FOSS flavour normally gets here, since it is the one
         // holding all-files access - but the test is the file's readability,
         // not the flavour, so a file:// share reaches it in both.
         String path = realPath(a, u);
         final String label = name;
-        JSONObject job = begin(a, app, () -> path != null
-                ? post(app, "/api/intake?path=" + enc(path), null, null)
-                : upload(a, app, u, label));
+        JSONObject job = begin(a, () -> path != null
+                ? bridge("path", path)
+                : upload(a, u, label));
         if (job == null) {
             cancelled = true; // the user kept the other import: the rest of this share waits too
             return null;
         }
-        if (job.has("error")) return job.optString("error");
+        if (job.has("error")) return cancelled ? null : job.optString("error");
         claim(job);
         try {
             return offer(a, app, job, name, dialog, added);
         } finally {
-            release(app);
+            release();
         }
     }
 
@@ -731,14 +712,14 @@ final class Intake {
      * setup page - so the user is told what it is and chooses. "Stop it"
      * cancels it and asks again, once; "Keep it running" returns null.
      */
-    private static JSONObject begin(Activity a, Context app,
+    private static JSONObject begin(Activity a,
                                     java.util.function.Supplier<JSONObject> request) throws Exception {
         JSONObject job = request.get();
         if (!job.optBoolean("busy")) return job;
-        JSONObject other = post(app, "/api/intake", "GET", null);
+        JSONObject other = bridge("status", "");
         if (!askStopOther(a, describe(a, other))) return null;
         String id = other.optString("id", "");
-        post(app, id.isEmpty() ? "/api/intake" : "/api/intake?id=" + enc(id), "DELETE", null);
+        bridge("cancel", id);
         return request.get();
     }
 
@@ -785,10 +766,10 @@ final class Intake {
      * the current one, and does nothing if it is not. Called on every way out,
      * so it is idempotent - the first call takes the id.
      */
-    private static void release(Context app) {
+    private static void release() {
         String id = ownJob;
         ownJob = null;
-        if (id != null) post(app, "/api/intake?id=" + enc(id), "DELETE", null);
+        if (id != null) bridge("cancel", id);
     }
 
     /**
@@ -822,11 +803,11 @@ final class Intake {
         Choice chose = choose(a, name, cands, extras);
         if (chose == null) {
             cancelled = true;
-            release(app);
+            release();
             return null;
         }
         if (chose.dicts.length == 0) {
-            release(app);
+            release();
             return null;
         }
 
@@ -846,7 +827,7 @@ final class Intake {
         // this (which is why sending true is not a lie - it is the request,
         // and the setting outranks it).
         body.put("keep", true);
-        JSONObject started = post(app, "/api/intake?confirm=1", null, body.toString());
+        JSONObject started = bridge("confirm", body.toString());
         if (started.has("error")) return started.optString("error");
 
         return await(a, app, dialog, added);
@@ -857,10 +838,10 @@ final class Intake {
             throws Exception {
         for (; ; ) {
             if (cancelled) {
-                release(app);
+                release();
                 return null;
             }
-            JSONObject j = post(app, "/api/intake", "GET", null);
+            JSONObject j = bridge("status", "");
             String state = j.optString("state");
             if ("done".equals(state)) {
                 JSONArray inst = j.optJSONArray("installed");
@@ -1224,126 +1205,67 @@ final class Intake {
                                 : String.valueOf(Math.round(v))) + " " + unit[i];
     }
 
-    // ── talking to the server ────────────────────────────────────────────
+    // ── the Go intake API ────────────────────────────────────────────────
 
-    private static boolean awaitServer(Context app) throws InterruptedException {
-        final boolean[] ok = new boolean[1];
-        final CountDownLatch latch = new CountDownLatch(1);
-        ServerProcess.ensure(app, new ServerProcess.Listener() {
-            @Override
-            public void onReady() {
-                ok[0] = true;
-                latch.countDown();
-            }
-
-            @Override
-            public void onFailed(String message) {
-                SystemLog.warn(TAG, "server not available for intake: " + message);
-                latch.countDown();
-            }
-        });
-        latch.await(90, TimeUnit.SECONDS);
-        return ok[0];
-    }
-
-    /**
-     * One request, one JSON object. An error - HTTP or transport - comes back
-     * as an object carrying "error", so every caller reads the outcome in one
-     * place instead of catching around each call.
-     */
-    private static JSONObject post(Context c, String path, String method, String body) {
-        HttpURLConnection h = null;
+    /** Calls the in-process Go importer and presents failures in the shape
+     * this screen already understands. */
+    private static JSONObject bridge(String action, String argument) {
         try {
-            h = (HttpURLConnection) new URL(Shell.origin(c) + path).openConnection();
-            h.setRequestMethod(method == null ? "POST" : method);
-            h.setConnectTimeout(CONNECT_MS);
-            h.setReadTimeout(READ_MS);
-            ShellPrefs.authorize(h);
-            if (body != null) {
-                byte[] b = body.getBytes("UTF-8");
-                h.setDoOutput(true);
-                h.setFixedLengthStreamingMode(b.length);
-                h.setRequestProperty("Content-Type", "application/json");
-                try (OutputStream out = h.getOutputStream()) {
-                    out.write(b);
-                }
+            JSONObject envelope = new JSONObject(GoBridge.intake(action, argument));
+            if (!envelope.optBoolean("ok")) {
+                JSONObject failure = error(envelope.optString("error", "Archive import failed"));
+                if (envelope.optBoolean("busy")) failure.put("busy", true);
+                return failure;
             }
-            return read(h);
+            JSONObject value = envelope.optJSONObject("value");
+            return value == null ? new JSONObject() : value;
         } catch (Exception e) {
-            SystemLog.warn(TAG, "intake request failed: " + path, e);
+            SystemLog.warn(TAG, "intake bridge failed: " + action, e);
             return error(String.valueOf(e.getMessage()));
-        } finally {
-            if (h != null) h.disconnect();
         }
     }
 
     /**
      * The copying path: the bytes cross the process boundary because a
-     * content:// URI is a token the exec'd server can never resolve (D62). The
-     * stream is written straight through to the request - never held - and the
-     * server spools it inside the destination folder, so the install that
-     * follows is a rename rather than a second full copy.
+     * content:// URI is a token Go cannot resolve directly. The stream is sent
+     * in bounded chunks and spooled in the destination folder, so the install
+     * that follows is a rename rather than a second full copy.
      */
-    private static JSONObject upload(Context ui, Context app, Uri u, String name) {
+    private static JSONObject upload(Context ui, Uri u, String name) {
         ContentResolver cr = ui.getContentResolver();
         long size = sizeOf(cr, u);
-        HttpURLConnection h = null;
+        String transfer = null;
+        boolean complete = false;
         try (InputStream in = cr.openInputStream(u)) {
             if (in == null) return error("cannot read that file");
-            h = (HttpURLConnection) new URL(Shell.origin(app) + "/api/intake?name=" + enc(name))
-                    .openConnection();
-            h.setRequestMethod("POST");
-            h.setConnectTimeout(CONNECT_MS);
-            h.setReadTimeout(READ_MS);
-            ShellPrefs.authorize(h);
-            h.setDoOutput(true);
-            h.setRequestProperty("Content-Type", "application/octet-stream");
-            // Known length where the provider gives one, so the server sees a
-            // Content-Length; chunked otherwise. Either way the body is
-            // streamed: setChunkedStreamingMode is what keeps HttpURLConnection
-            // from buffering the whole request in the heap first.
-            if (size > 0) {
-                h.setFixedLengthStreamingMode(size);
-            } else {
-                h.setChunkedStreamingMode(BUF);
+            JSONObject request = new JSONObject();
+            request.put("name", name);
+            request.put("size", size);
+            JSONObject started = bridge("fileStart", request.toString());
+            if (started.has("error")) return started;
+            transfer = started.optString("id", "");
+            if (transfer.isEmpty()) return error("Could not start file transfer");
+
+            byte[] buf = new byte[BUF];
+            for (int n; (n = in.read(buf)) > 0; ) {
+                if (cancelled) return error(null);
+                JSONObject chunk = new JSONObject();
+                chunk.put("id", transfer);
+                chunk.put("data", Base64.encodeToString(buf, 0, n, Base64.NO_WRAP));
+                JSONObject sent = bridge("fileChunk", chunk.toString());
+                if (sent.has("error")) return sent;
             }
-            try (OutputStream out = h.getOutputStream()) {
-                byte[] buf = new byte[BUF];
-                for (int n; (n = in.read(buf)) > 0; ) {
-                    if (cancelled) return error(null);
-                    out.write(buf, 0, n);
-                }
-            }
-            return read(h);
+            JSONObject result = bridge("fileFinish", transfer);
+            complete = !result.has("error");
+            return result;
         } catch (Exception e) {
             SystemLog.warn(TAG, "upload failed: " + u, e);
             return error(String.valueOf(e.getMessage()));
         } finally {
-            if (h != null) h.disconnect();
+            if (transfer != null && !complete) {
+                bridge("fileCancel", transfer);
+            }
         }
-    }
-
-    private static JSONObject read(HttpURLConnection h) throws IOException {
-        int code = h.getResponseCode();
-        InputStream in = code >= 400 ? h.getErrorStream() : h.getInputStream();
-        String text = slurp(in);
-        try {
-            JSONObject o = new JSONObject(text);
-            if (code >= 400 && !o.has("error")) return error("HTTP " + code);
-            return o;
-        } catch (Exception e) {
-            return error(code >= 400 ? "HTTP " + code : "unreadable answer from the server");
-        }
-    }
-
-    private static String slurp(InputStream in) throws IOException {
-        if (in == null) return "";
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        byte[] buf = new byte[4096];
-        for (int n; out.size() < ERR_MAX && (n = in.read(buf)) > 0; ) {
-            out.write(buf, 0, n);
-        }
-        return out.toString("UTF-8");
     }
 
     private static JSONObject error(String message) {
@@ -1354,14 +1276,6 @@ final class Intake {
             // JSONObject.put only throws on a null key
         }
         return o;
-    }
-
-    private static String enc(String s) {
-        try {
-            return URLEncoder.encode(s, "UTF-8");
-        } catch (Exception e) {
-            return ""; // UTF-8 is guaranteed by the platform
-        }
     }
 
     // ── the bytes, where they already are ────────────────────────────────
@@ -1438,7 +1352,10 @@ final class Intake {
     /** The declared size, or 0 when the provider will not say. */
     private static long sizeOf(ContentResolver cr, Uri u) {
         try (Cursor c = cr.query(u, new String[]{OpenableColumns.SIZE}, null, null, null)) {
-            if (c != null && c.moveToFirst() && !c.isNull(0)) return c.getLong(0);
+            if (c != null && c.moveToFirst() && !c.isNull(0)) {
+                long size = c.getLong(0);
+                return size > 0 ? size : 0;
+            }
         } catch (Exception e) {
             SystemLog.warn(TAG, "no size for " + u, e);
         }

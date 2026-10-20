@@ -6,8 +6,8 @@ description: The wuDict2 installer for Windows - install modes, optional tasks, 
 # Windows installer
 
 The installer is optional. It installs `wuDict2.exe` for the desktop and
-`wuDict2-cli.exe` for terminal commands, alongside a Start menu entry, an
-uninstaller and four optional actions.
+terminal commands, alongside a Start menu entry, an uninstaller and four
+optional actions.
 It runs on 64-bit Windows on x64, and on Arm64 Windows 11 (x64 emulation). On
 other Arm64 systems use `wudict-windows-arm64-purego.exe`.
 
@@ -36,7 +36,7 @@ icon appears in the notification area.
 |-----------------------------| --- |---------------------------------------------------------------|
 | Create a desktop shortcut   | off | a desktop shortcut                                            |
 | Start wuDict2 at sign-in    | off | a Startup folder shortcut that runs `wuDict2.exe --no-browser` |
-| Add wuDict2 to `%PATH%`     | on | makes `wuDict2-cli` command available in PowerShell and `cmd` |
+| Add wuDict2 to `%PATH%`     | on | makes `wuDict2` command available in PowerShell and `cmd` |
 | Offer wuDict2 in *Open with*| on | for `.mdx`, `.dsl`, `.slob`, `.bgl` and `.zim` files |
 
 The uninstaller removes all four. *Start wuDict2 at sign-in* is the same as the
@@ -45,12 +45,12 @@ the two.
 
 ## Console or tray
 
-The desktop `wuDict2.exe` runs without a console window and shows a **tray
-icon**. Use `wuDict2-cli.exe` from PowerShell or `cmd` for commands and output.
-The log is written to
+`wuDict2.exe` opens the app without a console window and shows a **tray
+icon**. The same executable accepts commands such as `wuDict2.exe --help` from
+PowerShell or `cmd`. The log is written to
 `%LOCALAPPDATA%\wudict\wudict.log`.
 
-The desktop and CLI builds share settings and library files. If one is active, a second operational launch displays a warning and exits.
+If the app is already active, a second operational launch displays a warning and exits.
 
 wuDict2 keeps its files in `%USERPROFILE%\.wuDict2`. On first launch, if
 `%USERPROFILE%\.wudict` exists, wuDict2 checks its `state.json` for wuDict2-only

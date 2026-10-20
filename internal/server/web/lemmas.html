@@ -8,8 +8,11 @@
 <html lang="{{T:locale}}">
 <head>
 <meta charset="utf-8">
+{{USERSTORAGE}}
 {{I18N}}
 <script>
+const wudictDialogMode=new URLSearchParams(location.search).get('wudict_dialog')==='1';
+if(wudictDialogMode)document.documentElement.setAttribute('data-workspace-dialog','');
 // An optional host background, the same hook setup.html carries: the Android
 // host paints the chosen image (or colour) behind a transparent WebView, and
 // this is what tells the page it is there, before the first paint.
@@ -44,8 +47,10 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
     else sessionStorage.removeItem('wudict_shell_image');
     if (valid) sessionStorage.setItem('wudict_shell_bg', color);
     else sessionStorage.removeItem('wudict_shell_bg');
-    if (/^#[0-9a-f]{6}$/i.test(paper || '')) sessionStorage.setItem('wudict_shell_paper', paper);
-    else sessionStorage.removeItem('wudict_shell_paper');
+    if (paper !== undefined) {
+      if (/^#[0-9a-f]{6}$/i.test(paper || '')) sessionStorage.setItem('wudict_shell_paper', paper);
+      else sessionStorage.removeItem('wudict_shell_paper');
+    }
   } catch (_) {}
 };
 (function () {
@@ -144,6 +149,10 @@ html[data-shell-tone="dark"] {
 .note{font-size:12.5px;color:var(--label-quiet);margin:.2em 0 0}
 .banner{font-size:13px;border:1px solid var(--line);border-radius:8px;
   padding:.5em .7em;margin:.618em 0 0;color:var(--label)}
+.banner.loading{display:flex;align-items:center;gap:.5em}
+.banner.loading .spin{display:inline-block;flex:none;width:1em;height:1em;border:2px solid var(--line);
+  border-right-color:var(--accent);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
 .banner.warn{border-color:var(--err);color:var(--err)}
 .head{display:flex;justify-content:space-between;align-items:baseline;gap:.5em;flex-wrap:wrap}
 .formats a{color:var(--accent);text-decoration:none}
@@ -167,6 +176,8 @@ body{font-size:calc(var(--ui-font-base) * 1rem)}
   height:calc(var(--ui-control-height) * 1em)}
 .lrow input[type=checkbox]:checked::after{left:35%;top:20%;width:25%;height:50%}
 .lrow .nm{font-size:inherit}
+.lemma-workspace-body{display:flex;flex:1 1 auto;flex-direction:column;min-height:0;overflow:hidden}
+.workspace-page #list{flex:1 1 0;min-height:0;overflow:auto;overscroll-behavior:contain}
 </style>
 </head>
 <body class="workspace-page">
@@ -179,7 +190,7 @@ body{font-size:calc(var(--ui-font-base) * 1rem)}
 <h1>{{T:pages.lemmas}}</h1>
 <button type="button" class="x" id="closePage" aria-label="{{T:pages.close}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
 </div>
-<div class="card-scroll workspace-scroll">
+<div class="lemma-workspace-body">
 <p>{{T:pages.lemmaIntro}}</p>
 
 <div id="banner" class="banner hidden"></div>
@@ -192,172 +203,6 @@ body{font-size:calc(var(--ui-font-base) * 1rem)}
 <p class="formats" id="credit"></p>
 </div>
 </div>
-<script>
-"use strict";
-const $=id=>document.getElementById(id);
-const tx=window.wudictI18n.t;
-const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-// decimal, the rule of index.html's mb and the server's logx.Size
-const mb=n=>n<1e3?n+" B":n<1e6?Math.round(n/1e3)+" kB":n<1e7?(n/1e6).toFixed(1)+" MB":n<1e9?Math.round(n/1e6)+" MB":(n/1e9).toFixed(1)+" GB";
-
-/* State lives on the SERVER, not here: a download is a job the server runs, so
-   this page can be reloaded, rotated or closed and reopened without losing it.
-   Everything drawn below comes from one GET, which is also what is polled. */
-let polling=false;
-const languageNames=typeof Intl.DisplayNames==="function"?new Intl.DisplayNames([window.wudictI18n.language],{type:"language"}):null;
-function languageName(l){
-  if(!languageNames)return l.name;
-  try{const name=languageNames.of(l.code);return name&&name!==l.code?name:l.name}catch(_){return l.name}
-}
-
-async function load(){
-  let j;
-  try{ j=await (await fetch("/api/lemmas")).json() }
-  catch(e){ $("banner").className="banner warn";$("banner").textContent=tx("pages.cannotReach");return null }
-  render(j);
-  return j;
-}
-
-function render(j){
-  const list=$("list");
-  list.textContent="";
-  let installed=0;
-  for(const l of j.languages){
-    if(l.installed)installed++;
-    list.appendChild(rowFor(l,j));
-  }
-  $("summary").textContent=j.languages.length?tx("pages.installedTotal",{number:installed,total:j.languages.length}):tx("pages.installedCount",{number:installed});
-  $("dir").textContent=tx("pages.installedIn",{path:j.dir});
-
-  const b=$("banner");
-  if(!j.enabled){
-    b.className="banner warn";
-    b.textContent=tx("pages.lemmaOff");
-  }else if(j.error){
-    b.className="banner warn";
-    b.textContent=tx("pages.catalogueFailed",{error:window.wudictI18n.errorText(j.error)});
-  }else{
-    b.className="banner hidden";
-  }
-
-  $("shadow").className=j.shadowed&&j.shadowed.length?"banner warn":"banner warn hidden";
-  if(j.shadowed&&j.shadowed.length)$("shadow").textContent=j.shadowed.join("; ");
-
-  /* ODbL: this data may be redistributed only with attribution, and the page
-     that installs it is where a user will look for that. */
-  const lic=j.languages.find(l=>l.license);
-  $("credit").innerHTML=lic
-    ? esc(tx("pages.wordLists",{source:lic.source||"",license:lic.license}))+
-      (j.attribution?' · <a href="'+esc(j.attribution)+'" target="_blank" rel="noopener">'+esc(tx("pages.attribution"))+'</a>':"")
-    : "";
-}
-
-function rowFor(l,j){
-  const row=document.createElement("div");
-  row.className="lrow"+(l.installed?"":" off");
-  const cb=document.createElement("input");
-  cb.type="checkbox";cb.checked=l.installed;cb.id="cb-"+l.code;
-  cb.setAttribute("aria-label",languageName(l));
-  const busy=l.state==="downloading";
-  // Built-in English cannot be "not installed", so its box has nothing to say.
-  cb.disabled=busy||(l.builtin&&!l.localSize)||(!l.installed&&!l.catalogued);
-  cb.addEventListener("change",()=>toggle(l,cb));
-
-  const nm=document.createElement("label");
-  nm.className="nm";nm.htmlFor=cb.id;
-  nm.textContent=languageName(l)+" ("+l.code+")";
-
-  const cost=document.createElement("span");
-  cost.className="cost";
-  const bits=[];
-  if(l.size)bits.push(mb(l.size));
-  else if(l.localSize)bits.push(mb(l.localSize));
-  if(l.heapMB)bits.push(tx("pages.memory",{number:l.heapMB}));
-  cost.textContent=bits.join(" · ");
-
-  const st=document.createElement("span");
-  st.className="st";
-  if(busy){
-    st.className="st busy";
-    // Guarded rather than trusting the numbers: a catalogue with no declared
-    // size, or a row read from an older build, must read "Downloading…" and
-    // never "Downloading… NaN%".
-    var pct=l.total>0?Math.floor(100*(l.done||0)/l.total):-1;
-    st.textContent=pct>=0?tx("pages.downloadPercent",{percent:Math.min(pct,100)}):tx("pages.downloading");
-  }else if(l.state==="error"){
-    st.className="st err";st.textContent="✕ "+window.wudictI18n.errorText(l.error);
-  }else if(l.builtin&&!l.localSize){
-    st.className="st ok";st.textContent=tx("pages.builtin");
-  }else if(l.installed&&l.mismatch){
-    st.className="st";st.textContent=tx("pages.installedDiffers");
-  }else if(l.installed&&!l.catalogued){
-    st.className="st ok";st.textContent=tx("pages.installedLocal");
-  }else if(l.installed){
-    st.className="st ok";st.textContent=tx("pages.installed");
-  }
-  row.append(cb,nm,cost,st);
-  return row;
-}
-
-/* Checking installs, unchecking removes. The box is disabled the moment it is
-   clicked and re-enabled by the next poll that reports a terminal state, so a
-   second click cannot start a second download - the server refuses one anyway,
-   but the UI should not invite it. */
-async function toggle(l,cb){
-  cb.disabled=true;
-  if(cb.checked){
-    setStatus(cb,"busy",tx("pages.downloading"));
-    try{
-      const r=await fetch("/api/lemmas?code="+encodeURIComponent(l.code),{method:"POST"});
-      if(!r.ok){ const j=await r.json().catch(()=>({}));fail(cb,window.wudictI18n.errorText(j.error)||("HTTP "+r.status));return }
-    }catch(e){ fail(cb,tx("pages.cannotReachShort"));return }
-    poll();
-    return;
-  }
-  const size=l.localSize?" ("+mb(l.localSize)+")":"";
-  if(!confirm(tx("pages.removeLemmas",{language:languageName(l),size}))){
-    cb.checked=true;cb.disabled=false;return;
-  }
-  setStatus(cb,"busy",tx("pages.removing"));
-  try{
-    const r=await fetch("/api/lemmas?code="+encodeURIComponent(l.code),{method:"DELETE"});
-    if(!r.ok){ const j=await r.json().catch(()=>({}));fail(cb,window.wudictI18n.errorText(j.error)||("HTTP "+r.status));return }
-  }catch(e){ fail(cb,tx("pages.cannotReachShort"));return }
-  load();
-}
-
-function setStatus(cb,cls,text){
-  const st=cb.parentElement.querySelector(".st");
-  st.className="st "+cls;st.textContent=text;
-}
-function fail(cb,msg){
-  cb.checked=!cb.checked;cb.disabled=false;setStatus(cb,"err","✕ "+msg);
-}
-
-/* Polling, not a stream. A browser allows about six connections per origin and
-   a download here can be one of several; a stream each would leave the app
-   unable to search while they ran. It also means progress is server state:
-   nothing is lost when the page goes away, which on Android it does on every
-   rotation. */
-async function poll(){
-  if(polling)return;
-  polling=true;
-  for(;;){
-    const j=await load();
-    if(!j||!j.languages.some(l=>l.state==="downloading"))break;
-    await new Promise(r=>setTimeout(r,800));
-  }
-  polling=false;
-}
-
-load().then(j=>{ if(j&&j.languages.some(l=>l.state==="downloading"))poll() });
-
-/* The ✕ closes the page the way the back gesture does — no navigation to "/",
-   which would load the app from scratch and stack an entry the back gesture
-   would then walk back into this page. A first run (where "/" is served as
-   /setup) has nothing behind it, and shows no ✕. */
-if(history.length>1)$("closePage").onclick=()=>history.back();
-else $("closePage").hidden=true;
-</script>
+<script src="/assets/lemmas.js?v={{LEMMASJS}}"></script>
 </body>
 </html>

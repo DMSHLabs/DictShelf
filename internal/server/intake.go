@@ -5,20 +5,26 @@
 package server
 
 import (
+	"crypto/rand"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/wuweidict/wudict/internal/config"
 	"github.com/wuweidict/wudict/internal/intake"
 	"github.com/wuweidict/wudict/internal/logx"
 )
 
-// Importing an archive over HTTP. internal/intake does the work; this file is
-// the three requests a page makes of it, and one answer shape it polls.
+// Importing an archive. internal/intake does the work; this file is
+// the requests a page makes of it, the desktop bridge adapters and one answer shape it polls.
 //
 // The split matters on Android, where this endpoint is the ONLY way a
 // dictionary can arrive: the shell hands the server a path or a stream and has
@@ -36,6 +42,23 @@ import (
 // that makes a mis-aimed upload fail while there is still room on the device.
 // Dictionary bundles of several gigabytes are real, so it is generous.
 const maxIntakeUpload = 16 << 30
+const desktopIntakeChunkLimit = 4 << 20
+
+type desktopIntakeUpload struct {
+	id      string
+	name    string
+	dest    string
+	size    int64
+	written int64
+	writer  *io.PipeWriter
+	done    chan desktopIntakeSpool
+	timer   *time.Timer
+}
+
+type desktopIntakeSpool struct {
+	source intake.Source
+	err    error
+}
 
 // importer returns the manager, wiring its hooks on first use. Not done in
 // New because a Server built directly in a test is a supported shape, and a
@@ -69,6 +92,184 @@ type intakeStatus struct {
 
 func (s *Server) intakeStatus(j intake.Job) intakeStatus {
 	return intakeStatus{Job: j, Dir: s.importDir(), Keep: s.keepPolicy()}
+}
+
+func (s *Server) desktopIntakeStatus() intakeStatus {
+	return s.intakeStatus(s.importer().Status())
+}
+
+func (s *Server) desktopIntakeURL(raw string) (intakeStatus, error) {
+	dest := s.importDir()
+	if dest == "" {
+		return intakeStatus{}, intake.ErrNoDestination
+	}
+	job, err := s.importer().BeginURL(dest, strings.TrimSpace(raw), s.fetcher())
+	if err != nil {
+		return intakeStatus{}, err
+	}
+	return s.intakeStatus(job), nil
+}
+
+func (s *Server) desktopIntakePath(path string) (intakeStatus, error) {
+	if s.importDir() == "" {
+		return intakeStatus{}, intake.ErrNoDestination
+	}
+	src, err := localSource(path)
+	if err != nil {
+		return intakeStatus{}, err
+	}
+	job, err := s.importer().Begin(s.importDir(), src)
+	if err != nil {
+		return intakeStatus{}, err
+	}
+	return s.intakeStatus(job), nil
+}
+
+func (s *Server) desktopIntakeUploadStart(name string, size int64) (map[string]string, error) {
+	dest := s.importDir()
+	if dest == "" {
+		return nil, intake.ErrNoDestination
+	}
+	name = filepath.Base(strings.TrimSpace(name))
+	if name == "" || name == "." || name == string(filepath.Separator) || size < 0 || size > maxIntakeUpload {
+		return nil, errors.New("invalid archive file")
+	}
+	var token [16]byte
+	if _, err := rand.Read(token[:]); err != nil {
+		return nil, fmt.Errorf("could not start file transfer: %w", err)
+	}
+	id := hex.EncodeToString(token[:])
+	reader, writer := io.Pipe()
+	upload := &desktopIntakeUpload{
+		id: id, name: name, dest: dest, size: size, writer: writer,
+		done: make(chan desktopIntakeSpool, 1),
+	}
+	s.desktopUploadsMu.Lock()
+	if len(s.desktopUploads) >= 2 {
+		s.desktopUploadsMu.Unlock()
+		_ = writer.CloseWithError(errors.New("another file transfer is already active"))
+		return nil, errors.New("another file transfer is already active")
+	}
+	if s.desktopUploads == nil {
+		s.desktopUploads = make(map[string]*desktopIntakeUpload)
+	}
+	s.desktopUploads[id] = upload
+	upload.timer = time.AfterFunc(15*time.Minute, func() { s.desktopIntakeUploadCancel(id) })
+	s.desktopUploadsMu.Unlock()
+	go func() {
+		source, err := intake.Spool(dest, name, reader)
+		_ = reader.Close()
+		upload.done <- desktopIntakeSpool{source: source, err: err}
+	}()
+	return map[string]string{"id": id}, nil
+}
+
+func (s *Server) desktopIntakeUploadChunk(argument string) error {
+	if len(argument) > 6<<20 {
+		return errors.New("archive chunk is too large")
+	}
+	var chunk struct {
+		ID   string `json:"id"`
+		Data string `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(argument), &chunk); err != nil || chunk.ID == "" {
+		return errors.New("invalid archive chunk")
+	}
+	data, err := base64.StdEncoding.DecodeString(chunk.Data)
+	if err != nil || len(data) == 0 || len(data) > desktopIntakeChunkLimit {
+		return errors.New("invalid archive chunk")
+	}
+	s.desktopUploadsMu.Lock()
+	upload := s.desktopUploads[chunk.ID]
+	if upload == nil {
+		s.desktopUploadsMu.Unlock()
+		return errors.New("file transfer expired")
+	}
+	if upload.written+int64(len(data)) > maxIntakeUpload {
+		s.desktopUploadsMu.Unlock()
+		return errors.New("that file is too large to import")
+	}
+	if upload.size > 0 && upload.written+int64(len(data)) > upload.size {
+		s.desktopUploadsMu.Unlock()
+		return errors.New("archive file size changed during transfer")
+	}
+	n, writeErr := upload.writer.Write(data)
+	upload.written += int64(n)
+	if upload.timer != nil {
+		upload.timer.Reset(15 * time.Minute)
+	}
+	s.desktopUploadsMu.Unlock()
+	return writeErr
+}
+
+func (s *Server) desktopIntakeUploadFinish(id string) (intakeStatus, error) {
+	s.desktopUploadsMu.Lock()
+	upload := s.desktopUploads[id]
+	if upload == nil {
+		s.desktopUploadsMu.Unlock()
+		return intakeStatus{}, errors.New("file transfer expired")
+	}
+	delete(s.desktopUploads, id)
+	if upload.timer != nil {
+		upload.timer.Stop()
+	}
+	if upload.size > 0 && upload.written != upload.size {
+		s.desktopUploadsMu.Unlock()
+		_ = upload.writer.CloseWithError(errors.New("archive file is incomplete"))
+		<-upload.done
+		return intakeStatus{}, errors.New("archive file is incomplete")
+	}
+	s.desktopUploadsMu.Unlock()
+	if err := upload.writer.Close(); err != nil {
+		<-upload.done
+		return intakeStatus{}, err
+	}
+	spooled := <-upload.done
+	if spooled.err != nil {
+		return intakeStatus{}, fmt.Errorf("could not receive the file: %w", spooled.err)
+	}
+	job, err := s.importer().Begin(upload.dest, spooled.source)
+	if err != nil {
+		return intakeStatus{}, err
+	}
+	return s.intakeStatus(job), nil
+}
+
+func (s *Server) desktopIntakeUploadCancel(id string) error {
+	s.desktopUploadsMu.Lock()
+	upload := s.desktopUploads[id]
+	if upload == nil {
+		s.desktopUploadsMu.Unlock()
+		return nil
+	}
+	delete(s.desktopUploads, id)
+	if upload.timer != nil {
+		upload.timer.Stop()
+	}
+	s.desktopUploadsMu.Unlock()
+	_ = upload.writer.CloseWithError(errors.New("archive transfer canceled"))
+	<-upload.done
+	return nil
+}
+
+func (s *Server) desktopIntakeConfirm(req intakeConfirmReq) (intakeStatus, error) {
+	job, err := s.importer().Confirm(s.importDir(), req.Pick, intake.Options{
+		Keep: s.keepSource(req.Keep), Extras: req.Extras,
+	})
+	if err != nil {
+		return intakeStatus{}, err
+	}
+	return s.intakeStatus(job), nil
+}
+
+func (s *Server) desktopIntakeCancel(id string) intakeStatus {
+	manager := s.importer()
+	if id = strings.TrimSpace(id); id != "" {
+		manager.CancelID(id)
+		return s.intakeStatus(manager.Status())
+	}
+	manager.Cancel()
+	return s.intakeStatus(intake.Job{})
 }
 
 // importDir is where dictionaries are installed: the first configured folder,
@@ -128,13 +329,13 @@ func (s *Server) handleIntake(w http.ResponseWriter, r *http.Request) {
 	// no networking of its own (D130). It answers at once and the download
 	// runs behind the same poll the extraction uses.
 	if u := strings.TrimSpace(q.Get("url")); u != "" {
-		j, err := s.importer().BeginURL(dest, u, s.fetcher())
+		j, err := s.desktopIntakeURL(u)
 		if err != nil {
 			intakeErr(w, err)
 			return
 		}
 		w.WriteHeader(http.StatusAccepted)
-		writeJSON(w, s.intakeStatus(j))
+		writeJSON(w, j)
 		return
 	}
 
@@ -231,14 +432,10 @@ func (s *Server) intakeConfirm(w http.ResponseWriter, r *http.Request) {
 			req.Keep = &keep
 		}
 	}
-	dest := s.importDir()
 	if len(req.Extras) == 0 {
 		req.Extras = parsePick(r.URL.Query().Get("extras"))
 	}
-	j, err := s.importer().Confirm(dest, req.Pick, intake.Options{
-		Keep:   s.keepSource(req.Keep),
-		Extras: req.Extras,
-	})
+	j, err := s.desktopIntakeConfirm(req)
 	if err != nil {
 		intakeErr(w, err)
 		return
@@ -247,7 +444,7 @@ func (s *Server) intakeConfirm(w http.ResponseWriter, r *http.Request) {
 	// and the page learns how it went by polling - the same shape as a lemma
 	// install, for the same reason (the Android page dies on rotation).
 	w.WriteHeader(http.StatusAccepted)
-	writeJSON(w, s.intakeStatus(j))
+	writeJSON(w, j)
 }
 
 func parsePick(v string) []int {
@@ -286,7 +483,7 @@ func (s *Server) fetcher() intake.Fetcher {
 // answer the page acts on, and it must not have to tell that apart from a
 // request that did not arrive.
 func (s *Server) handleIntakeStatus(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, s.intakeStatus(s.importer().Status()))
+	writeJSON(w, s.desktopIntakeStatus())
 }
 
 // handleIntakeCancel abandons whatever is in flight. Also how the page says
@@ -296,13 +493,7 @@ func (s *Server) handleIntakeStatus(w http.ResponseWriter, r *http.Request) {
 // cancel one another client started since (intake.Manager.CancelID). The
 // answer is then the job that is current, cancelled or not.
 func (s *Server) handleIntakeCancel(w http.ResponseWriter, r *http.Request) {
-	if id := strings.TrimSpace(r.URL.Query().Get("id")); id != "" {
-		s.importer().CancelID(id)
-		writeJSON(w, s.intakeStatus(s.importer().Status()))
-		return
-	}
-	s.importer().Cancel()
-	writeJSON(w, s.intakeStatus(intake.Job{}))
+	writeJSON(w, s.desktopIntakeCancel(r.URL.Query().Get("id")))
 }
 
 // intakeErr maps the package's sentinels onto status codes. Each is a

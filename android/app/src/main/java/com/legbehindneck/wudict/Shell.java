@@ -7,7 +7,7 @@
 // navigation that is NOT ours goes instead.
 //
 // It lives here rather than in MainActivity because there are now two windows
-// onto the same server - the app and the selection-lookup popup (D67) - and a
+// onto the same in-process Go runtime - the app and the selection-lookup popup (D67) - and a
 // second copy of this policy is a second thing to keep in step. Nothing here
 // knows about either activity's layout or lifecycle.
 package com.legbehindneck.wudict;
@@ -21,14 +21,16 @@ import android.os.Environment;
 import android.os.Message;
 import android.provider.DocumentsContract;
 import android.util.Log;
-import android.webkit.CookieManager;
 import android.webkit.JsPromptResult;
 import android.webkit.JsResult;
+import android.webkit.JavascriptInterface;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+
+import org.json.JSONObject;
 
 import java.io.File;
 import java.io.UnsupportedEncodingException;
@@ -37,16 +39,44 @@ import java.net.URLEncoder;
 final class Shell {
 
     private static final String TAG = "wudict";
+    static final String STABLE_HOST = "wudict2.localhost";
+    private static final String STABLE_ORIGIN = "https://" + STABLE_HOST;
+    private static volatile boolean originPrepared;
+    private static volatile boolean legacyOriginRequired = true;
 
     /**
-     * The one origin that belongs to us; everything else is somebody's website.
-     *
-     * <p>A method rather than a constant since D101, because the port is an
-     * install-level setting a device may override. The host never varies: it is
-     * the address we connect to, not the one the server binds to.
+     * The stable secure origin used after settings have moved out of WebView
+     * storage. Until settings.json marks that import complete, keep the old
+     * origin so its localStorage can be read without starting a listener.
      */
     static String origin(Context c) {
-        return "http://" + ServerProcess.HOST + ":" + ServerProcess.port(c);
+        return originPrepared && !legacyOriginRequired ? STABLE_ORIGIN : legacyOrigin(c);
+    }
+
+    private static String legacyOrigin(Context c) {
+        return "http://" + ShellPrefs.LEGACY_HOST + ":" + ShellPrefs.legacyOriginPort(c);
+    }
+
+    /** Selects the origin once the in-process Go runtime can inspect settings files. */
+    static synchronized void prepareOrigin(Context c) {
+        if (originPrepared) return;
+        try {
+            JSONObject response = new JSONObject(GoBridge.userStorage("storageState", ""));
+            JSONObject state = response.optJSONObject("value");
+            if (!response.optBoolean("ok") || state == null)
+                throw new IllegalStateException("settings state is unavailable");
+            legacyOriginRequired = !state.optBoolean("exists");
+            originPrepared = true;
+            SystemLog.record("WebView origin selected: " +
+                    (legacyOriginRequired ? "legacy settings import" : "secure app origin"));
+        } catch (Exception error) {
+            // Preserving the old origin gives the embedded bootstrap one more
+            // chance to import the existing WebView profile if file status is
+            // temporarily unavailable.
+            legacyOriginRequired = true;
+            originPrepared = true;
+            Log.w(TAG, "Could not inspect settings files; keeping legacy WebView origin", error);
+        }
     }
 
     /**
@@ -95,26 +125,7 @@ final class Shell {
     }
 
     static String pageUrl(Context c) {
-        String k = key(c);
-        return origin(c) + "/?" + shellQuery(c) + (k.isEmpty() ? "" : "&" + k);
-    }
-
-    /**
-     * The access key as a query fragment, or "" when this install does not use
-     * one (ShellPrefs.REQUIRE_KEY).
-     *
-     * <p>Carried on the URL rather than installed with CookieManager, which
-     * would be the obvious way and is the fragile one: setCookie's write is
-     * not ordered against a loadUrl issued in the next statement, so the first
-     * page of a cold start would race it. The server takes the key off the
-     * URL, sets the cookie itself and redirects to the address without it -
-     * one loopback round trip, no timing to reason about, and the key never
-     * stays in the page's own location. Every subsequent request in that
-     * WebView - articles, media, the search stream - rides the cookie.
-     */
-    private static String key(Context c) {
-        String t = ShellPrefs.token(c);
-        return t.isEmpty() ? "" : "k=" + t;
+        return origin(c) + "/?" + shellQuery(c);
     }
 
     private Shell() {
@@ -132,8 +143,6 @@ final class Shell {
         StringBuilder b = new StringBuilder(origin(c)).append("/?q=").append(enc(q));
         if (mode != null && !mode.isEmpty()) b.append("&mode=").append(enc(mode));
         if (dict != null && !dict.isEmpty()) b.append("&dict=").append(enc(dict));
-        String k = key(c);
-        if (!k.isEmpty()) b.append("&").append(k);
         return b.append("&").append(shellQuery(c)).toString();
     }
 
@@ -189,20 +198,19 @@ final class Shell {
                 + color + "'," + image + "," + org.json.JSONObject.quote(image
                 ? ShellPrefs.backgroundImage(c) : "") + "," + org.json.JSONObject.quote(paper)
                 + ")", null);
-        // wudictNativeShell is how a page knows the shell answers its
-        // wudict: prompts - the setup page's folder button speaks only when
-        // it will be heard.
+        // wudictNativeShell exposes the page's native controls; the Android
+        // marker reserves the wudict:appearance prompt bridge for this host.
         // The flag first, then the two calls that need it: the page reports the
         // paper an enabled preset paints only where a shell answers, and the
         // report is what keeps the standalone pages and the native windows in
         // step with the app page. It is asked for here rather than left to the
         // page's own boot push because the flag arrives at onPageFinished,
         // which either side of that push can win.
-        web.evaluateJavascript("window.wudictNativeShell=1;"
+        web.evaluateJavascript("window.wudictAndroidShell=1;window.wudictNativeShell=1;"
                 + "if(typeof wudictPresetPaper==='function')wudictPresetPaper();"
                 + "if(typeof appearanceRead==='function' && document.getElementById('styler')"
                 + " && document.getElementById('styler').classList.contains('show')) appearanceRead();"
-                + DICTIONARY_PICKER_JS, null);
+                + NATIVE_SELECT_PICKER_JS, null);
     }
 
     // What the settings screen sends after emptying the browser's cache: the
@@ -242,22 +250,13 @@ final class Shell {
      * The app page's System window: every row of the shell's own settings
      * screen, as the page draws them (index.html, #sysSettings).
      *
-     * <p>The direction of knowledge is the one D54 sets: the page asks here
-     * with a {@code wudict:system} prompt and is told VALUES - which lookups
-     * open the app, whether the messages are shown, whether the access key is
-     * required, and the overridable config rows with their labels and bounds -
-     * and it never learns which platform answered. The wording of a row
-     * travels with it because the row's LABEL is Android's own string
-     * resource: the row table exists here, and the flavour that has no row
-     * (Play's listen address) sends none, so a page cannot draw a control this
-     * build cannot honour.
+     * <p>The page asks through {@code wudict:system} and receives Android shell
+     * preferences, diagnostics settings and app-tuning rows. Server controls
+     * are hidden because Android has no HTTP listener. Row labels travel with
+     * the values because they come from Android string resources.
      *
-     * <p>What is here is what only this side knows. The value each config key
-     * RESOLVES to, and which layer gave it, is asked of the running server
-     * instead (the page's own /api/config), exactly as the settings screen
-     * asks it rather than recomputing Go's device-derived defaults - so a key
-     * left empty reads as inherited from what, and a server running with
-     * older values is spotted the same way in both places.
+     * <p>Effective config values are read from the in-process Go runtime through
+     * JNI; Android does not make an HTTP request.
      */
     static org.json.JSONObject systemState(Context c) throws org.json.JSONException {
         org.json.JSONObject reply = new org.json.JSONObject();
@@ -266,23 +265,10 @@ final class Shell {
         reply.put("link", ShellPrefs.opensApp(c, ShellPrefs.LINK));
         reply.put("reader", ShellPrefs.opensApp(c, ShellPrefs.READER));
         reply.put("info", ShellPrefs.infoMessages(c));
-        reply.put("key", ShellPrefs.requireKey(c));
+        reply.put("serverAvailable", false);
         reply.put("logEnabled", SystemLog.enabled());
         reply.put("logBaseEvents", SystemLog.baseEvents());
         reply.put("logWebEvents", SystemLog.detailedEvents());
-        // The CONFIGURED port, and not ServerProcess.port: the page prints this
-        // in the sentence under the listen switch ("other devices on this
-        // network would use 192.168.1.44:6889"), which is a statement about the
-        // address a spawn would bind - exactly like that switch itself, which
-        // is read once, at spawn. The port the app talks to is a different
-        // question with a different answer while a stored change is pending,
-        // and the page never needs it: it is being served by that server.
-        reply.put("port", ShellPrefs.port(c));
-        // Only the row that HAS a listen address draws the note that says
-        // where this phone would be reached, and that row is the flavour's
-        // (foss) - in Play there is no row, so this answer is unused.
-        String lan = Net.lanAddress();
-        reply.put("lan", lan == null ? org.json.JSONObject.NULL : lan);
         org.json.JSONArray rows = new org.json.JSONArray();
         for (ShellPrefs.Override o : ShellPrefs.OVERRIDES) {
             org.json.JSONObject row = new org.json.JSONObject();
@@ -294,16 +280,9 @@ final class Shell {
             row.put("min", o.min);
             row.put("max", ShellPrefs.maxOf(c, o));
             row.put("onValue", o.onValue == null ? org.json.JSONObject.NULL : o.onValue);
-            // The switch that carries an address, which is the one row whose
-            // hint grows a sentence naming where this phone is reachable.
-            row.put("lan", o.flag != null && o.kind == ShellPrefs.BOOL);
             String stored = ShellPrefs.override(c, o);
             row.put("stored", stored == null ? org.json.JSONObject.NULL : stored);
-            // What a spawn would pass for this key right now - a SERVER_IP
-            // resolved against the interfaces this moment - or null when
-            // nothing here sets it and the config's own layers decide. The
-            // page compares it against what the RUNNING server reported, which
-            // is the whole "still running with the previous settings" check.
+            // The value this Android app contributes for the Go runtime.
             String emitted = ShellPrefs.emitted(c, o);
             row.put("emitted", emitted == null ? org.json.JSONObject.NULL : emitted);
             rows.put(row);
@@ -314,19 +293,15 @@ final class Shell {
 
     // Keep the real select as the source of truth, including streamed options,
     // groups, disabled entries and its existing change handler.
-    static final String DICTIONARY_PICKER_JS = """
+    static final String NATIVE_SELECT_PICKER_JS = """
             (() => {
               function installPickers() {
-              for (const select of document.querySelectorAll('#dict, #mode, #articleFindMode, #stylerPreset, #groupSelect, #groupAvailableFilter, #bulkIndexes select')) {
+              for (const select of document.querySelectorAll('#mode, #articleFindMode, #stylerPreset, #groupSelect, #groupAvailableFilter, #sysAdvanced select, #bulkIndexes select')) {
               const id = select.id || 'bulkIndexAction';
               if (!select || select.dataset.shellPicker) continue;
               select.dataset.shellPicker = '1';
               function open() {
                 if (select.disabled) return;
-                if (id === 'dict' && window.wudictNativeDictionaryPicker) {
-                  window.wudictNativeDictionaryPicker();
-                  return;
-                }
                 const options = Array.from(select.options), rows = [];
                 let group = null;
                 for (let index = 0; index < options.length; index++) {
@@ -340,7 +315,7 @@ final class Shell {
                   rows.push({label: option.textContent, index,
                     disabled: option.disabled || (parent.tagName === 'OPTGROUP' && parent.disabled)});
                 }
-                const answer = window.prompt('wudict:dictionary-picker',
+                const answer = window.prompt('wudict:native-select-picker',
                   JSON.stringify({rows, selected: select.selectedIndex,
                     kind: id === 'articleFindMode' ? 'mode' : id}));
                 if (answer === null) return;
@@ -410,11 +385,7 @@ final class Shell {
 
     /** The settings the SPA needs. Identical in every window, by construction. */
     static void configure(WebView web) {
-        // The access key arrives as a cookie the server sets (see key()), so a
-        // WebView that refuses cookies would authenticate once and then fail
-        // every request the page makes. It is the platform default; stated
-        // here because it is now load-bearing.
-        CookieManager.getInstance().setAcceptCookie(true);
+        web.addJavascriptInterface(new GoPageBridge(), "wudictAndroidGo");
         web.getSettings().setJavaScriptEnabled(true);                 // the UI is one SPA
         web.getSettings().setDomStorageEnabled(true);                 // prefs live in localStorage
         web.getSettings().setMediaPlaybackRequiresUserGesture(false); // dictionary audio
@@ -422,6 +393,139 @@ final class Shell {
         // with window.open(). A WebView has no tabs, so that call is inert
         // unless multiple windows are supported and onCreateWindow answers it.
         web.getSettings().setSupportMultipleWindows(true);
+    }
+
+    private static final class GoPageBridge {
+        @JavascriptInterface public int startDictStream() {
+            return GoBridge.startDictStream();
+        }
+
+        @JavascriptInterface public int startRescanStream() {
+            return GoBridge.startRescanStream();
+        }
+
+        @JavascriptInterface public int startRescanIndexes(String origin, String request) {
+            return GoBridge.startRescanIndexes(origin, request);
+        }
+
+        @JavascriptInterface public int startIngest(String origin, String query) {
+            return GoBridge.startIngest(origin, query);
+        }
+
+        @JavascriptInterface public int startSearchStream(String origin, String request) {
+            return GoBridge.startSearchStream(origin, request);
+        }
+
+        @JavascriptInterface public int startBrowseStream(String method, String query) {
+            return GoBridge.startBrowseStream(method, query);
+        }
+
+        @JavascriptInterface public String pollDictStream(int id) {
+            return GoBridge.pollDictStream(id);
+        }
+
+        @JavascriptInterface public void cancelDictStream(int id) {
+            GoBridge.cancelDictStream(id);
+        }
+
+        @JavascriptInterface public String config() {
+            return GoBridge.configSnapshot();
+        }
+
+        @JavascriptInterface public String prefs() {
+            return GoBridge.prefsSnapshot();
+        }
+
+        @JavascriptInterface public String browsePage(String query) {
+            return GoBridge.browsePage(query);
+        }
+
+        @JavascriptInterface public String browseFindPage(String query) {
+            return GoBridge.browseFindPage(query);
+        }
+
+        @JavascriptInterface public void browseDiagnostic(String payload) {
+            GoBridge.browseDiagnostic(payload);
+        }
+
+        @JavascriptInterface public String about(String origin, String dictionary) {
+            return GoBridge.about(origin, dictionary);
+        }
+
+        @JavascriptInterface public String orphans(String action, String body) {
+            return GoBridge.orphans(action, body);
+        }
+
+        @JavascriptInterface public String removeLibrary(String query) {
+            return GoBridge.removeLibrary(query);
+        }
+
+        @JavascriptInterface public String looks(String argument) {
+            return GoBridge.looks(argument);
+        }
+
+        @JavascriptInterface public String groups(String action, String argument) {
+            return GoBridge.groups(action, argument);
+        }
+
+        @JavascriptInterface public String lemmas(String action, String code) {
+            return GoBridge.lemmas(action, code);
+        }
+
+        @JavascriptInterface public String setup(String action, String argument) {
+            return GoBridge.setup(action, argument);
+        }
+        @JavascriptInterface public String headwordExport(String action, String argument) {
+            return GoBridge.headwordExport(action, argument);
+        }
+
+        @JavascriptInterface public String intake(String action, String argument) {
+            return GoBridge.intake(action, argument);
+        }
+
+        @JavascriptInterface public String reindex(String action) {
+            return GoBridge.reindex(action);
+        }
+
+        @JavascriptInterface public String indexWork(String action, String id, String body) {
+            return GoBridge.indexWork(action, id, body);
+        }
+
+        @JavascriptInterface public String presets() {
+            return GoBridge.presetsSnapshot();
+        }
+
+        @JavascriptInterface public String savePreset(String body) {
+            return GoBridge.savePreset(body);
+        }
+
+        @JavascriptInterface public String savePrefs(String body) {
+            return GoBridge.savePrefs(body);
+        }
+
+        @JavascriptInterface public String saveLanguage(String body) {
+            return GoBridge.saveLanguage(body);
+        }
+
+        @JavascriptInterface public String style() {
+            return GoBridge.styleSnapshot();
+        }
+
+        @JavascriptInterface public String saveStyle(String argument) {
+            return GoBridge.saveStyle(argument);
+        }
+
+        @JavascriptInterface public String userFiles() {
+            return GoBridge.userFilesSnapshot();
+        }
+
+        @JavascriptInterface public String userFileOperation(String method, String argument) {
+            return GoBridge.userFileOperation(method, argument);
+        }
+
+        @JavascriptInterface public String userStorage(String method, String argument) {
+            return GoBridge.userStorage(method, argument);
+        }
     }
 
     /**
@@ -635,6 +739,11 @@ final class Shell {
                                 if (!name.isEmpty() && !WindowBackground.images(a).contains(name))
                                     throw new IllegalArgumentException("Image unavailable");
                                 ShellPrefs.setBackgroundImage(a, night, name);
+                                // A selected image always uses its sampled
+                                // paper color. Match the shared settings UI:
+                                // selecting an image turns Color on, and
+                                // clearing it leaves Color enabled and editable.
+                                if (!name.isEmpty()) ShellPrefs.setSepia(a, night, true);
                             } else if ("edgeMode".equals(field)) {
                                 int mode = request.optInt("value", -1);
                                 if (mode < ShellPrefs.EDGE_SYSTEM || mode > ShellPrefs.EDGE_NONE)
@@ -723,6 +832,8 @@ final class Shell {
                             if ("log".equals(field)) {
                                 SystemLog.configure(a, request.getBoolean("enabled"),
                                         request.getBoolean("baseEvents"), request.getBoolean("webEvents"));
+                                GoBridge.configureSystemLog(request.getBoolean("enabled"),
+                                        request.getBoolean("baseEvents"), request.getBoolean("webEvents"));
                                 if (request.getBoolean("enabled")) ProcessExitDiagnostics.recordRecent(a);
                             } else if ("toolbar".equals(field)) {
                                 ShellPrefs.set(a, ShellPrefs.TOOLBAR, request.getBoolean("value"));
@@ -734,8 +845,6 @@ final class Shell {
                                 ShellPrefs.set(a, ShellPrefs.READER, request.getBoolean("value"));
                             } else if ("info".equals(field)) {
                                 ShellPrefs.set(a, ShellPrefs.INFO_MESSAGES, request.getBoolean("value"));
-                            } else if ("key".equals(field)) {
-                                ShellPrefs.set(a, ShellPrefs.REQUIRE_KEY, request.getBoolean("value"));
                             } else if ("override".equals(field)) {
                                 ShellPrefs.Override o = ShellPrefs.byKey(request.getString("key"));
                                 // An absent or null value is "follow the
@@ -744,8 +853,18 @@ final class Shell {
                                 String value = request.isNull("value") ? null
                                         : request.optString("value", "");
                                 ShellPrefs.setOverrideChecked(a, o, value);
+                                if ("INDEX_WORKERS".equals(o.key)) {
+                                    int workers = value == null ? 1
+                                            : "auto".equalsIgnoreCase(value)
+                                                    ? Math.max(1, Runtime.getRuntime().availableProcessors() - 1)
+                                                    : Integer.parseInt(value);
+                                    GoBridge.configureIndexWorkers(workers);
+                                }
                             } else throw new IllegalArgumentException("Unknown field");
                         } else if ("restore".equals(action)) {
+                            if (!GoBridge.restoreIndexWorkersIfRunning()) {
+                                throw new IllegalStateException("Go runtime is unavailable");
+                            }
                             ShellPrefs.clearOverrides(a);
                         } else if ("clearCache".equals(action)) {
                             clearWebCache(a);
@@ -755,7 +874,7 @@ final class Shell {
                             throw new IllegalArgumentException("Unknown action");
                         }
                         result.confirm(systemState(a).toString());
-                    } catch (org.json.JSONException | IllegalArgumentException bad) {
+                    } catch (org.json.JSONException | RuntimeException bad) {
                         // Nothing is said here: the page holds the sentence a
                         // refused value deserves (its own field, its own
                         // words), and a cancel is how it learns to say it.
@@ -766,7 +885,7 @@ final class Shell {
                 // The setup page's 📁. The page asks through the prompt it is
                 // then blocked on; startActivityForResult answers it from
                 // onActivityResult, so returning true here is "the answer
-                // comes later", the same bargain DictionaryPicker makes.
+                // comes later", the same bargain NativeSelectPicker makes.
                 if ("wudict:folder-picker".equals(message)) {
                     // A second request supersedes the first; the abandoned
                     // prompt still gets its answer.
@@ -783,20 +902,8 @@ final class Shell {
                     }
                     return true;
                 }
-                if (!"wudict:dictionary-picker".equals(message)) return false;
-                String pickerKind = "";
-                try { pickerKind = new org.json.JSONObject(defaultValue).optString("kind"); }
-                catch (org.json.JSONException ignored) { }
-                if ("liveDict".equals(pickerKind)) {
-                    DictionaryPicker.showLive(a, view, defaultValue, result);
-                    return true;
-                }
-                if ("liveDictUpdate".equals(pickerKind)) {
-                    DictionaryPicker.updateLive(view, defaultValue);
-                    result.confirm("");
-                    return true;
-                }
-                DictionaryPicker.show(a, defaultValue, result);
+                if (!"wudict:native-select-picker".equals(message)) return false;
+                NativeSelectPicker.show(a, defaultValue, result);
                 return true;
             }
 
@@ -830,8 +937,27 @@ final class Shell {
                 pendingFiles = callback;
                 try {
                     // createIntent() carries the accept= types and the multiple
-                    // flag the page asked for, so the picker matches the markup.
-                    a.startActivityForResult(params.createIntent(), REQ_FILES);
+                    // flag the page asked for.
+                    Intent picker = params.createIntent();
+                    // Android's picker treats WebView's extension list as MIME
+                    // types. It turns the archive/dictionary input's first
+                    // extension into application/zip, which makes visible
+                    // .dsl/.mdx files unselectable. These inputs are validated
+                    // by Go after selection, so let the document provider show
+                    // all openable files when the page supplied extensions.
+                    boolean hasAcceptFilter = false;
+                    for (String accept : params.getAcceptTypes()) {
+                        if (accept != null && !accept.trim().isEmpty()
+                                && !"*/*".equals(accept.trim())) {
+                            hasAcceptFilter = true;
+                            break;
+                        }
+                    }
+                    if (hasAcceptFilter) {
+                        picker.setType("*/*");
+                        picker.removeExtra(Intent.EXTRA_MIME_TYPES);
+                    }
+                    a.startActivityForResult(picker, REQ_FILES);
                 } catch (ActivityNotFoundException | SecurityException e) {
                     SystemLog.warn(TAG, "no file picker on this device", e);
                     settleFiles(null);

@@ -134,11 +134,11 @@ make mac-agent-uninstall # stop it and delete the plist
 ## Run as an app (Windows)
 
 On Windows, `wuDict2.exe` opens the WebView2 desktop window without a console
-window. It also shows a tray icon; closing the window leaves the server running
+window. The same executable handles terminal commands, for example
+`wuDict2.exe --help`; run it from PowerShell or `cmd` to see command output.
+It also shows a tray icon; closing the window leaves the server running
 in the tray. **Exit** in Settings or **Quit** in the tray stops the server. If
-the WebView2 Runtime is absent, it opens the default browser instead. For
-terminal commands, use `wuDict2-cli.exe` (for example,
-`wuDict2-cli.exe --help`). Logs go to
+the WebView2 Runtime is absent, it opens the default browser instead. Logs go to
 `%LOCALAPPDATA%\wudict\wudict.log`. See also [running on Windows](https://wuweidict.github.io/wudict/apps/windows/).
 
 
@@ -187,7 +187,6 @@ config file path is printed on startup.
 | `--verbose` | `VERBOSE=1` | detailed logging              |
 | `--speexdec` | `SPEEXDEC` | found on `PATH`               |
 | `--use-cached` | `USE_CACHED` | off                           |
-| `--no-compress` | `NO_COMPRESS` | off (article text compressed) |
 | — | `BROWSER_EXTENSIONS` | any extension may look words up |
 
 **`BROWSER_EXTENSIONS`** sets which browser extensions may use the `wudict` server. 
@@ -366,9 +365,7 @@ article bodies are compressed, and _full-text search_ and _contains_ indexes are
 The <kbd>☰</kbd> panel shows these as switches per dictionary, with their real sizes —
 click to add, click again to remove.
 
-You can set in `~/.wudict/wudict.toml` the option `NO_COMPRESS = "1"` (or pass `--no-compress` from the CLI) to disable compression of article bodies —
-this will make the indexes roughly 3x larger, and provide slightly faster reads. 
-By default (e.g. `NO_COMPRESS = "0"`) article bodies are compressed with gzip.
+Article text in prepared dictionaries is compressed when that reduces its size.
 
 ## Speex audio (.spx)
 

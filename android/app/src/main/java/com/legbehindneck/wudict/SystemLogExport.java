@@ -6,18 +6,18 @@ package com.legbehindneck.wudict;
 import android.app.Activity;
 import android.content.Intent;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Environment;
 import android.provider.DocumentsContract;
 import android.widget.Toast;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
+import org.json.JSONObject;
 
 final class SystemLogExport {
     private static final int REQUEST = 0x574c;
@@ -48,12 +48,17 @@ final class SystemLogExport {
                 try {
                     ByteArrayOutputStream snapshot = new ByteArrayOutputStream();
                     try {
-                        snapshot.write(serverSnapshot(a));
+                        snapshot.write(goSnapshot());
                     } catch (Exception e) {
-                        SystemLog.warn("wudict", "server log unavailable during export", e);
-                        snapshot.write(("wuDict2 System Log\nServer log unavailable: " + e.getClass().getSimpleName() + "\n").getBytes(StandardCharsets.UTF_8));
+                        SystemLog.warn("wudict", "Go system log unavailable during export", e);
+                        snapshot.write(("wuDict2 System Log\nGo system log unavailable: " + e.getClass().getSimpleName() + "\n").getBytes(StandardCharsets.UTF_8));
                     }
-                    snapshot.write("\n--- Android (UTC) ---\n".getBytes(StandardCharsets.UTF_8));
+                    snapshot.write(("\n--- Android environment ---\n"
+                            + "App: " + BuildConfig.VERSION_NAME + "\n"
+                            + "Android: " + Build.VERSION.RELEASE + " (SDK " + Build.VERSION.SDK_INT + ")\n"
+                            + "Build: " + Build.DISPLAY + "\n"
+                            + "Device: " + Build.MANUFACTURER + " " + Build.MODEL + "\n"
+                            + "\n--- Android events (UTC) ---\n").getBytes(StandardCharsets.UTF_8));
                     snapshot.write(SystemLog.snapshot());
                     byte[] output = snapshot.toByteArray();
                     if (output.length == 0) throw new java.io.IOException("Diagnostic snapshot is empty");
@@ -79,25 +84,14 @@ final class SystemLogExport {
         }, "wudict-log-export").start();
     }
 
-    private static byte[] serverSnapshot(Activity a) throws Exception {
-        HttpURLConnection connection = (HttpURLConnection) new URL("http://127.0.0.1:" + ServerProcess.port(a) + "/api/system-log").openConnection();
-        try {
-            connection.setConnectTimeout(5000);
-            connection.setReadTimeout(15000);
-            ShellPrefs.token(a);
-            ShellPrefs.authorize(connection);
-            if (connection.getResponseCode() != 200) throw new java.io.IOException("HTTP " + connection.getResponseCode());
-            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-            try (InputStream in = connection.getInputStream()) {
-                byte[] buffer = new byte[8192];
-                for (int n; (n = in.read(buffer)) != -1;) {
-                    if (bytes.size() + n > 5 * 1024 * 1024) throw new java.io.IOException("Server log exceeds size limit");
-                    bytes.write(buffer, 0, n);
-                }
-            }
-            return bytes.toByteArray();
-        } finally {
-            connection.disconnect();
-        }
+    private static byte[] goSnapshot() throws Exception {
+        JSONObject result = new JSONObject(GoBridge.systemLogSnapshot());
+        if (!result.optBoolean("ok", false))
+            throw new java.io.IOException(result.optString("error", "Could not read Go system log"));
+        JSONObject value = result.optJSONObject("value");
+        if (value == null) throw new java.io.IOException("Go system log response is empty");
+        byte[] bytes = value.optString("content", "").getBytes(StandardCharsets.UTF_8);
+        if (bytes.length > 5 * 1024 * 1024) throw new java.io.IOException("Go system log exceeds size limit");
+        return bytes;
     }
 }

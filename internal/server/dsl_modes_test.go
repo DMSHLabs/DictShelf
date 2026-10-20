@@ -23,6 +23,7 @@ func TestSingleDSLIndexRemoval(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	waitNewDictionaryIndexing(t, reg)
 	closeBackends(t, reg)
 	if len(reg.all()) != 1 {
 		t.Fatal("DSL duplicated")

@@ -10,7 +10,7 @@
 .headword-control[data-two-rows="1"]:has(.headword-control-apply[hidden]){grid-template-areas:"input input input input input input input" "mode mask . . count previous next"}
 .headword-control[data-three-rows="1"]{grid-template-areas:"input input input input input input apply" "mode mask . . previous next next" ". . . . count count count"}
 .headword-control[data-three-rows="1"]:has(.headword-control-apply[hidden]){grid-template-areas:"input input input input input input input" "mode mask . . previous next next" ". . . . count count count"}
-.headword-control .headword-control-input{box-sizing:border-box;flex:1 1 auto;min-width:0;width:0;max-width:54rem;
+.headword-control .headword-control-input{box-sizing:border-box;flex:1 1 auto;min-width:0;width:0;max-width:none;
   height:calc(var(--ui-edit_control-height) * 1.5rem);margin:0;padding:0 .4em;font:inherit;color:var(--fg);
   background:var(--bg);border:1px solid var(--line);border-radius:6px;outline:none;-webkit-appearance:none}
 .headword-control[data-two-rows="1"] .headword-control-input{grid-area:input;width:100%;min-width:0}
@@ -33,3 +33,7 @@
 .headword-control .headword-control-previous{grid-area:previous}
 .headword-control .headword-control-next{grid-area:next}
 .headword-control .headword-control-apply{grid-area:apply}
+.wudict-ribbon-nav{box-sizing:border-box;display:grid;place-items:center;flex:none;width:2rem;min-height:calc(var(--ui-control-height) * 1em);padding:0;border:0;background:transparent;color:var(--fg);cursor:pointer}
+.wudict-ribbon-nav svg{display:block;width:1.35rem;height:1.35rem}
+.wudict-ribbon-nav:disabled{opacity:.3;cursor:default}
+.wudict-ribbon-nav:not(:disabled):hover{color:var(--accent)}

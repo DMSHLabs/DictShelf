@@ -4,7 +4,9 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -22,6 +24,7 @@ type clearDatabaseRequest struct {
 	Obsolete bool `json:"obsolete"`
 	plan     *store.Plan
 	progress store.Progress
+	ctx      context.Context
 }
 
 // cleanupLibrary retains only prepared folders belonging to discovered sources.
@@ -147,6 +150,7 @@ func (s *Server) handleClearDatabase(w http.ResponseWriter, req *http.Request) {
 		if store.IsTextDB(e.Path) || e.builtin {
 			continue
 		}
+		body.ctx = req.Context()
 		if err := e.clearDatabase(body); err != nil {
 			failures = append(failures, fmt.Sprintf("%s: %v", filepath.Base(e.Path), err))
 		}
@@ -163,11 +167,18 @@ func (s *Server) handleClearDatabase(w http.ResponseWriter, req *http.Request) {
 }
 
 func (e *entry) clearDatabase(want clearDatabaseRequest) error {
+	ctx := want.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if nativeIndexOnly(e) {
 		store.IndexDiagnostic("skip database index request source=%q dictionary=%q index=%v contains=%v fulltext=%v obsolete=%v reason=native-index", e.Path, e.probeName(), want.Index, want.Contains, want.FullText, want.Obsolete)
 		return nil
 	}
-	defer acquire(frontLimit)()
+	defer acquire(currentIndexLimit())()
 	e.ingestMu.Lock()
 	defer e.ingestMu.Unlock()
 	dir, ok := store.LookupDir(e.Path)
@@ -204,7 +215,7 @@ func (e *entry) clearDatabase(want clearDatabaseRequest) error {
 	}
 	if want.Index || (want.Obsolete && len(store.Inspect(text).TextStale(e.Path)) > 0) {
 		// Rebuild atomically: a failed rebuild preserves the existing searchable data.
-		if _, err := e.reconcileLocked(e.probeName(), store.Target{
+		if _, err := e.reconcileLockedContext(ctx, e.probeName(), store.Target{
 			FullText: &plan.FullText, Contains: &plan.Contains, Rebuild: store.Always,
 		}, want.progress); err != nil {
 			return err
@@ -213,8 +224,11 @@ func (e *entry) clearDatabase(want clearDatabaseRequest) error {
 			return err
 		}
 	} else if want.Contains || want.FullText {
-		if err := store.ClearSearchIndexes(text, want.Contains, want.FullText); err != nil {
-			return err
+		indexErr := store.ClearSearchIndexesContext(ctx, text, want.Contains, want.FullText)
+		reopenErr := e.reopen()
+		e.gen.Add(1)
+		if indexErr != nil || reopenErr != nil {
+			return errors.Join(indexErr, reopenErr)
 		}
 	}
 	return store.WriteInfo(dir)

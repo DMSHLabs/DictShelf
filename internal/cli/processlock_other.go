@@ -18,6 +18,6 @@ func prepareWindowsDataRoot() error { return nil }
 
 func legacyMigrationStatus() server.FirstRunMigration { return server.FirstRunMigration{} }
 
-func applyLegacyMigration(string, *server.Registry, func()) error {
+func applyLegacyMigration(string, *server.Registry, func(), string) error {
 	return errors.New("Windows data migration is unavailable on this platform")
 }

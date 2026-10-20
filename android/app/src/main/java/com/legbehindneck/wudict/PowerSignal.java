@@ -6,19 +6,14 @@ package com.legbehindneck.wudict;
 
 import android.util.Log;
 
-import java.io.IOException;
-import java.net.HttpURLConnection;
-import java.net.URL;
-
 /**
- * Tells the server how much of the device it may use (D64).
+ * Tells the Go runtime how much of the device it may use (D64).
  *
- * The server is an exec'd POSIX child with no JVM and no Binder handle (D52),
- * so it cannot see a lifecycle callback, a thermal event or a battery state -
+ * Go cannot see a lifecycle callback, a thermal event or a battery state -
  * every one of those is an Android API, and the shell is the only part of this
- * app that has one. So the shell watches, and forwards a single verdict over
- * the loopback API the server already serves. Nothing is added to the Go
- * program's platform knowledge: it is told a state, not a platform.
+ * app that has one. So the shell watches and sends a single verdict through
+ * JNI. Nothing is added to the Go program's platform knowledge: it is told a
+ * state, not a platform.
  *
  * Delivery is deliberately lossy in one direction and stubborn in the other.
  * A dropped "active" costs a moment of conservatism; a dropped "background"
@@ -42,17 +37,19 @@ final class PowerSignal {
 
     private static final Object LOCK = new Object();
     private static String pending;   // newest state not yet delivered
-    private static String delivered; // newest state the server acknowledged
+    private static String delivered; // newest state Go acknowledged
+    private static String requested; // latest state, replayed when Go starts
     private static boolean running;  // a sender thread is alive
 
     private PowerSignal() {}
 
-    /** Requests that the server move to {@code state}; returns immediately. */
+    /** Requests that the runtime move to {@code state}; returns immediately. */
     static void set(String state) {
         synchronized (LOCK) {
             if (state.equals(pending) || (pending == null && state.equals(delivered))) {
                 return; // already there, or already on its way there
             }
+            requested = state;
             pending = state;
             LOCK.notifyAll();
             if (running) return;
@@ -61,6 +58,16 @@ final class PowerSignal {
         Thread t = new Thread(PowerSignal::pump, "wudict-power");
         t.setDaemon(true);
         t.start();
+    }
+
+    /** Re-sends the last device state after the in-process Go runtime starts. */
+    static void runtimeReady() {
+        String state;
+        synchronized (LOCK) {
+            state = requested;
+            delivered = null;
+        }
+        if (state != null) set(state);
     }
 
     private static void pump() {
@@ -109,30 +116,13 @@ final class PowerSignal {
     }
 
     private static boolean post(String state) {
-        HttpURLConnection c = null;
         try {
-            // No Context here by design - this class is all statics - so the
-            // port comes from the cache every ServerProcess.ensure() primes.
-            c = (HttpURLConnection) new URL("http://" + ServerProcess.HOST + ":"
-                    + ServerProcess.port() + "/api/power?state=" + state).openConnection();
-            c.setRequestMethod("POST");
-            c.setFixedLengthStreamingMode(0);
-            ShellPrefs.authorize(c); // the cache ServerProcess primes, as with the port
-            c.setConnectTimeout(900);
-            c.setReadTimeout(900);
-            int code = c.getResponseCode();
-            if (code != 200) {
-                SystemLog.warn(TAG, "power " + state + ": HTTP " + code);
-                return false;
-            }
-            return true;
-        } catch (IOException | RuntimeException e) {
-            // The server may not be up yet, or may already be frozen behind us.
-            // Neither is worth more than a debug line.
+            boolean ok = GoBridge.setPower(state);
+            if (!ok) Log.d(TAG, "power " + state + ": Go runtime unavailable");
+            return ok;
+        } catch (RuntimeException e) {
             Log.d(TAG, "power " + state + ": " + e);
             return false;
-        } finally {
-            if (c != null) c.disconnect();
         }
     }
 }

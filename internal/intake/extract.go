@@ -50,6 +50,9 @@ func Extract(ctx context.Context, a Archive, c Candidate, dest string, progress 
 	if !c.Complete() {
 		return fmt.Errorf("%w: %s", ErrIncomplete, strings.Join(c.Missing, ", "))
 	}
+	if c.Size < 0 || c.Size > maxCandidateBytes {
+		return ErrCandidateTooLarge
+	}
 	root, err := filepath.Abs(dest)
 	if err != nil {
 		return err

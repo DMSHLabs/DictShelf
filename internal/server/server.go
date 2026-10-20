@@ -8,7 +8,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
-	_ "embed"
+	"embed"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -25,7 +25,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/wuweidict/wudict/internal/artmark"
@@ -36,6 +35,7 @@ import (
 	"github.com/wuweidict/wudict/internal/ftsq"
 	"github.com/wuweidict/wudict/internal/hilite"
 	"github.com/wuweidict/wudict/internal/htmlref"
+	"github.com/wuweidict/wudict/internal/indexconst"
 	"github.com/wuweidict/wudict/internal/intake"
 	"github.com/wuweidict/wudict/internal/lang"
 	"github.com/wuweidict/wudict/internal/logx"
@@ -57,6 +57,34 @@ var setupHTML = string(webAsset(setupHTMLSrc, htmlAsset))
 var groupsHTMLSrc []byte
 var groupsHTML = webAsset(groupsHTMLSrc, htmlAsset) // the groups.ini editor (D162)
 
+//go:embed web/filters-dialog.html
+var filtersDialogHTMLSrc []byte
+var filtersDialogHTML = webAsset(filtersDialogHTMLSrc, htmlAsset)
+
+//go:embed web/filters-dialog.css
+var filtersDialogCSS []byte
+
+//go:embed web/filters-dialog.js
+var filtersDialogJS []byte
+
+//go:embed web/folders-dialog.html
+var foldersDialogHTMLSrc []byte
+var foldersDialogHTML = webAsset(foldersDialogHTMLSrc, htmlAsset)
+
+//go:embed web/folders-dialog.css
+var foldersDialogCSS []byte
+
+//go:embed web/lemma-dialog.html
+var lemmaDialogHTMLSrc []byte
+var lemmaDialogHTML = webAsset(lemmaDialogHTMLSrc, htmlAsset)
+
+//go:embed web/lemma-dialog.css
+var lemmaDialogCSS []byte
+
+//go:embed web/lemmas.js
+var lemmasJSSrc []byte
+var lemmasJS = webAsset(lemmasJSSrc, jsAsset)
+
 //go:embed web/lemmas.html
 var lemmasHTMLSrc []byte
 var lemmasHTML = webAsset(lemmasHTMLSrc, htmlAsset) // the lemma-data installer (D91)
@@ -68,6 +96,10 @@ var browseHTML = webAsset(browseHTMLSrc, htmlAsset) // the page-by-page headword
 //go:embed web/setup.css
 var setupCSSSrc []byte
 var setupCSS = webAsset(setupCSSSrc, cssAsset) // palette and controls shared by setup.html and lemmas.html
+
+//go:embed web/setup.js
+var setupJSSrc []byte
+var setupJS = webAsset(setupJSSrc, jsAsset) // folder setup page and embedded folder editor
 
 //go:embed web/workspace.css
 var workspaceCSS []byte // shared full-screen frame for the app's work surfaces
@@ -82,6 +114,9 @@ var pickJS = webAsset(pickJSSrc, jsAsset) // word-at-point for a double tap, loa
 
 //go:embed web/app.css
 var appCSS []byte // main page styles
+
+//go:embed web/fonts/*
+var articleFontFiles embed.FS
 
 // uiScaleDefaultsStyle lets standalone pages use the same token defaults as
 // app.css without loading the main page's layout rules or copying values.
@@ -129,6 +164,9 @@ var headwordControlJS []byte // shared search controls for Browse and Wildcards
 //go:embed web/headword-control.css
 var headwordControlCSS []byte // shared layout and appearance for headword controls
 
+//go:embed web/headword-ribbon.js
+var headwordRibbonJS []byte // shared virtual ribbon geometry and painting for Browse and Wildcards
+
 //go:embed web/examples.js
 var examplesJS []byte // example folding: marks the lines that hold nothing but examples
 
@@ -143,8 +181,15 @@ type Server struct {
 	reg *Registry
 	mux *http.ServeMux
 
+	wildcardPages wildcardPageCache
+
 	// dictRows keeps /api/dicts rows between requests (dictrows.go).
 	dictRows rowCache
+
+	// desktopUploads hold short-lived streams for archive files sent by the
+	// Windows WebView in chunks through its native bridge.
+	desktopUploadsMu sync.Mutex
+	desktopUploads   map[string]*desktopIntakeUpload
 
 	// ConfigPath, when set, is where the first-run setup flow persists
 	// DICT_DIR. In-memory state is updated regardless, so setup works
@@ -165,6 +210,10 @@ type Server struct {
 	// DesktopExit asks the owning desktop process to stop its HTTP server and
 	// tray. Nil for Android, tests, and hosts without a desktop Exit action.
 	DesktopExit func()
+
+	// AutoIndex is retained for compatibility with the shared UI API; the
+	// wuDict2 host leaves it disabled and prepares indexes only on explicit action.
+	AutoIndex bool
 
 	// First-run Windows data migration is offered on the setup page after it
 	// has loaded. The host supplies filesystem operations; other platforms leave
@@ -210,6 +259,10 @@ type Server struct {
 	// Effective is every tunable key's resolved value and origin, published by
 	// /api/config for shells that override them per device (D101).
 	Effective map[string]config.Setting
+
+	// IndexWorkersValue preserves Auto in the desktop selector while
+	// Effective reports the resolved worker count used by the runtime.
+	IndexWorkersValue string
 
 	// Speexdec is the path to the external speexdec binary. It is used when
 	// UseExternalSpeex is set, or as a fallback when the in-process decoder is
@@ -446,14 +499,31 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	// be served from cache without asking: a stale index.html would ask for a
 	// stale script by its old hash and put the two out of step again (D45).
 	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Add("Vary", "Accept-Language")
+	page, etag := s.indexPageFor(styleOff(r), r.Header.Get("Accept-Language"))
+	if etag == "" {
+		_, _ = w.Write(page)
+		return
+	}
+	w.Header().Set("ETag", etag)
+	http.ServeContent(w, r, "", time.Time{}, bytes.NewReader(page))
+}
+
+func (s *Server) indexPage(disableStyle bool) ([]byte, string) {
+	return s.indexPageFor(disableStyle, "")
+}
+
+func (s *Server) indexPageFor(disableStyle bool, acceptLanguage string) ([]byte, string) {
+	choice := s.reg.prefs.Language()
+	language := s.reg.prefs.ResolvedLanguage(acceptLanguage)
 	// first-run: no dictionaries yet → serve the setup page instead. No
 	// validator here: this body is a function of registry state that nothing
 	// versions, so an ETag would be a promise we cannot keep. The wudict
 	// howto counts: with it listed the app has something to show, and the
 	// page opens on it instead, with the way to add dictionaries on top.
 	if s.reg.Count() == 0 {
-		_, _ = io.WriteString(w, renderUI(setupPage(s.reg.Dirs(), 0, s.pagePresetLinks(), s.reg.prefs.Language()), s.reg.prefs.Language()))
-		return
+		page := setupPage(s.reg.Dirs(), 0, s.pagePresetLinks(), language)
+		return s.renderUserUIChoice(page, language, choice), ""
 	}
 	// "no-cache" means REVALIDATE, not "never store" - and revalidation needs
 	// something to revalidate against. Without a validator the browser had no
@@ -475,7 +545,7 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	// it costs no second cache entry.
 	tag, nightTag := "", ""
 	links := ""
-	if !styleOff(r) {
+	if !disableStyle {
 		tag = s.appStyleTag(appCSSName)
 		nightTag = s.appStyleTag(appNightCSSName)
 		// ?style=off drops the whole chrome, presets included: they are the
@@ -483,9 +553,8 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		// in must not depend on any of it.
 		links = s.presetLinksHTML()
 	}
-	page, etag := s.pageFor(tag, nightTag, links)
-	w.Header().Set("ETag", etag)
-	http.ServeContent(w, r, "", time.Time{}, bytes.NewReader(page))
+	page, etag := s.pageForLanguage(tag, nightTag, links, language, choice)
+	return page, etag
 }
 
 // basePage is index.html with everything that is fixed for this process
@@ -504,6 +573,15 @@ func (s *Server) basePage() []byte {
 		page = strings.ReplaceAll(page, "{{HISTORYJS}}", assetTag(historyJS))
 		page = strings.ReplaceAll(page, "{{GROUPCSS}}", assetTag(groupEditorCSS))
 		page = strings.ReplaceAll(page, "{{GROUPJS}}", assetTag(groupEditorJS))
+		filterDialog := strings.ReplaceAll(string(filtersDialogHTML), "{{FILTERSDIALOGCSS}}", assetTag(filtersDialogCSS))
+		filterDialog = strings.ReplaceAll(filterDialog, "{{FILTERSDIALOGJS}}", assetTag(filtersDialogJS))
+		page = strings.ReplaceAll(page, "{{FILTERSDIALOG}}", filterDialog)
+		foldersDialog := strings.ReplaceAll(string(foldersDialogHTML), "{{SETUPJS}}", assetTag(setupJS))
+		foldersDialog = strings.ReplaceAll(foldersDialog, "{{FOLDERSDIALOGCSS}}", assetTag(foldersDialogCSS))
+		page = strings.ReplaceAll(page, "{{FOLDERSDIALOG}}", foldersDialog)
+		lemmaDialog := strings.ReplaceAll(string(lemmaDialogHTML), "{{LEMMADIALOGCSS}}", assetTag(lemmaDialogCSS))
+		lemmaDialog = strings.ReplaceAll(lemmaDialog, "{{LEMMASJS}}", assetTag(lemmasJS))
+		page = strings.ReplaceAll(page, "{{LEMMADIALOG}}", lemmaDialog)
 		page = strings.ReplaceAll(page, "{{LOOKSJS}}", assetTag(looksJS))
 		page = strings.ReplaceAll(page, "{{PICKJS}}", assetTag(pickJS))
 		page = strings.ReplaceAll(page, "{{SPEAKJS}}", assetTag(speakJS))
@@ -511,6 +589,9 @@ func (s *Server) basePage() []byte {
 		page = strings.ReplaceAll(page, "{{ARTICLEFINDJS}}", assetTag(articleFindJS))
 		page = strings.ReplaceAll(page, "{{LISTSEARCHJS}}", assetTag(listSearchJS))
 		page = strings.ReplaceAll(page, "{{HEADWORDJS}}", assetTag(headwordControlJS))
+		page = strings.ReplaceAll(page, "{{RIBBONJS}}", assetTag(headwordRibbonJS))
+		page = strings.ReplaceAll(page, "{{BROWSE_STRIP_EXACT_WIDTHS}}", strconv.Itoa(indexconst.BrowseStripExactWidthCount))
+		page = strings.ReplaceAll(page, "{{SEARCH_DEBOUNCE_MS}}", strconv.Itoa(indexconst.SearchDebounceMS))
 		page = strings.ReplaceAll(page, "{{HEADWORDCSS}}", assetTag(headwordControlCSS))
 		// The role stylesheet for articles wudict writes itself
 		// (internal/artmark). It is a floor under BOTH article surfaces, so
@@ -535,10 +616,15 @@ func (s *Server) basePage() []byte {
 // browser is holding, so a change to any of them must invalidate. The cache
 // key is therefore both parts, not just the stylesheet's.
 func (s *Server) pageFor(dayTag, nightTag, presetLinks string) ([]byte, string) {
+	choice := s.reg.prefs.Language()
+	return s.pageForLanguage(dayTag, nightTag, presetLinks, s.reg.prefs.ResolvedLanguage(""), choice)
+}
+
+func (s *Server) pageForLanguage(dayTag, nightTag, presetLinks, language, choice string) ([]byte, string) {
 	s.styleMu.Lock()
 	defer s.styleMu.Unlock()
-	language := s.reg.prefs.Language()
-	key := dayTag + "\x00" + nightTag + "\x00" + presetLinks + "\x00" + language
+	storageScript, storageTag := s.userStorageBootstrap()
+	key := dayTag + "\x00" + nightTag + "\x00" + presetLinks + "\x00" + language + "\x00" + choice + "\x00" + storageTag
 	if s.styledPage != nil && s.styledTag == key {
 		return s.styledPage, s.styledETag
 	}
@@ -557,7 +643,9 @@ func (s *Server) pageFor(dayTag, nightTag, presetLinks string) ([]byte, string) 
 	if nightTag != "" {
 		links += `<link rel="stylesheet" href="/style/` + appNightCSSName + `?v=` + nightTag + `" data-skin="dark">`
 	}
-	page := []byte(renderUI(strings.ReplaceAll(string(s.basePage()), "{{USERCSS}}", presetLinks+links+"\n"), language))
+	template := strings.ReplaceAll(string(s.basePage()), "{{USERCSS}}", presetLinks+links+"\n")
+	template = strings.ReplaceAll(template, "{{USERSTORAGE}}", storageScript)
+	page := []byte(renderUIChoice(template, language, choice))
 	s.styledTag, s.styledPage, s.styledETag = key, page, `"`+assetTag(page)+`"`
 	return s.styledPage, s.styledETag
 }
@@ -568,7 +656,19 @@ func (s *Server) pageFor(dayTag, nightTag, presetLinks string) ([]byte, string) 
 func (s *Server) handleSetupPage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache")
-	_, _ = io.WriteString(w, renderUI(setupPage(s.reg.Dirs(), s.reg.UserCount(), s.pagePresetLinks(), s.reg.prefs.Language()), s.reg.prefs.Language()))
+	w.Header().Add("Vary", "Accept-Language")
+	_, _ = w.Write(s.setupPageFor(r.Header.Get("Accept-Language")))
+}
+
+func (s *Server) setupPage() []byte {
+	return s.setupPageFor("")
+}
+
+func (s *Server) setupPageFor(acceptLanguage string) []byte {
+	choice := s.reg.prefs.Language()
+	language := s.reg.prefs.ResolvedLanguage(acceptLanguage)
+	page := setupPage(s.reg.Dirs(), s.reg.UserCount(), s.pagePresetLinks(), language)
+	return s.renderUserUIChoice(page, language, choice)
 }
 
 // setupPage renders the folder chooser/editor. The intro names a single
@@ -619,6 +719,7 @@ func setupPage(dirs []string, serving int, presetLinks string, language string) 
 	}
 	page := strings.ReplaceAll(strings.ReplaceAll(setupHTML, "{{INTRO}}", intro), "{{CSS}}", cssTag)
 	page = strings.ReplaceAll(page, "{{WORKSPACECSS}}", assetTag(workspaceCSS))
+	page = strings.ReplaceAll(page, "{{SETUPJS}}", assetTag(setupJS))
 	return strings.ReplaceAll(page, "{{PRESETS}}", presetLinks)
 }
 
@@ -633,13 +734,25 @@ var cssTag = assetTag(setupCSS)
 func (s *Server) handleLemmasPage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Add("Vary", "Accept-Language")
+	_, _ = w.Write(s.lemmasPageFor(r.Header.Get("Accept-Language")))
+}
+
+func (s *Server) lemmasPage() []byte {
+	return s.lemmasPageFor("")
+}
+
+func (s *Server) lemmasPageFor(acceptLanguage string) []byte {
 	// {{PRESETS}} is the same courtesy setup.html gets: the app halves of the
 	// presets that asked to be on this page too (presets.go). Rendered per
 	// request rather than precomputed: the page carries {{T:…}} keys and is
 	// served in the reader's language.
 	page := bytes.ReplaceAll(lemmasHTML, []byte("{{CSS}}"), []byte(cssTag))
 	page = bytes.ReplaceAll(page, []byte("{{WORKSPACECSS}}"), []byte(assetTag(workspaceCSS)))
-	_, _ = io.WriteString(w, renderUI(string(bytes.ReplaceAll(page, []byte("{{PRESETS}}"), []byte(s.pagePresetLinks()))), s.reg.prefs.Language()))
+	page = bytes.ReplaceAll(page, []byte("{{LEMMASJS}}"), []byte(assetTag(lemmasJS)))
+	choice := s.reg.prefs.Language()
+	language := s.reg.prefs.ResolvedLanguage(acceptLanguage)
+	return s.renderUserUIChoice(string(bytes.ReplaceAll(page, []byte("{{PRESETS}}"), []byte(s.pagePresetLinks()))), language, choice)
 }
 
 func htmlEscape(s string) string {
@@ -651,10 +764,18 @@ func htmlEscape(s string) string {
 // - the ones the setup page offers to use, and the basis of the USE_CACHED
 // choice. Reading it never enrolls them: listing is not consent.
 func (s *Server) handleLibrary(w http.ResponseWriter, r *http.Request) {
-	all, err := store.Library()
+	result, err := s.librarySnapshot()
 	if err != nil {
 		httpErr(w, 500, "reading library: %v", err)
 		return
+	}
+	writeJSON(w, result)
+}
+
+func (s *Server) librarySnapshot() (map[string]any, error) {
+	all, err := store.Library()
+	if err != nil {
+		return nil, fmt.Errorf("reading library: %w", err)
 	}
 	// The wudict howto's own library folder is the app's, not something the
 	// user imported: listing it under "previously imported" would say so.
@@ -664,12 +785,12 @@ func (s *Server) handleLibrary(w http.ResponseWriter, r *http.Request) {
 			entries = append(entries, e)
 		}
 	}
-	writeJSON(w, map[string]any{
+	return map[string]any{
 		"dir":       store.DefaultDBDir(),
 		"count":     len(entries),
 		"useCached": s.reg.UseCached(),
 		"entries":   entries,
-	})
+	}, nil
 }
 
 // setUseCached opts the library in or out, live, and remembers the choice so
@@ -695,7 +816,15 @@ func (s *Server) setUseCached(on bool) error {
 // folder. Clicking a Use button IS the "don't ask again": the setup page only
 // appears while the registry is empty.
 func (s *Server) handleSetupSync(w http.ResponseWriter, r *http.Request) {
-	q := r.URL.Query()
+	result, status := s.setupResult(r.URL.Query(), s.removalOffered(r))
+	if status != http.StatusOK {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(status)
+	}
+	writeJSON(w, result)
+}
+
+func (s *Server) setupResult(q url.Values, canRemove bool) (map[string]any, int) {
 	raw := strings.TrimSpace(q.Get("path"))
 	save, _ := queryFlag(q, "save")
 	diagnostics := save && q.Get("diagnostics") == "1"
@@ -715,8 +844,7 @@ func (s *Server) handleSetupSync(w http.ResponseWriter, r *http.Request) {
 
 	if raw == "" {
 		if !save || !useCached {
-			httpErr(w, 400, "missing path parameter")
-			return
+			return map[string]any{"error": "missing path parameter"}, http.StatusBadRequest
 		}
 		out := map[string]any{"useCached": true}
 		if err := s.setUseCached(true); err != nil {
@@ -725,8 +853,7 @@ func (s *Server) handleSetupSync(w http.ResponseWriter, r *http.Request) {
 			out["saved"] = true
 			out["found"] = s.reg.UserCount()
 		}
-		writeJSON(w, out)
-		return
+		return out, http.StatusOK
 	}
 	dir := config.ExpandHome(raw)
 	abs, err := filepath.Abs(dir)
@@ -735,18 +862,15 @@ func (s *Server) handleSetupSync(w http.ResponseWriter, r *http.Request) {
 	}
 	st, err := os.Stat(dir)
 	if err != nil {
-		writeJSON(w, map[string]any{"path": dir, "error": "folder not found"})
-		return
+		return map[string]any{"path": dir, "error": "folder not found"}, http.StatusOK
 	}
 	if !st.IsDir() {
-		writeJSON(w, map[string]any{"path": dir, "error": "not a folder"})
-		return
+		return map[string]any{"path": dir, "error": "not a folder"}, http.StatusOK
 	}
 	paths, err := dict.Discover(dir)
 	traceStage("validate-first-folder", len(paths))
 	if err != nil {
-		writeJSON(w, map[string]any{"path": dir, "error": err.Error()})
-		return
+		return map[string]any{"path": dir, "error": err.Error()}, http.StatusOK
 	}
 	out := map[string]any{"path": dir, "found": len(paths)}
 	// several folders at once: report the DEDUPED total, since folders may
@@ -770,22 +894,25 @@ func (s *Server) handleSetupSync(w http.ResponseWriter, r *http.Request) {
 		default:
 			out["dirs"] = dirs
 			out["found"] = total
-			if err := s.reg.SetDirs(dirs); err != nil {
+			// Apply new roots without starting preparation yet. Hosts that can
+			// clean the library remove stale data first and rescan once after;
+			// SetDirs followed by Rescan queued two competing initial jobs.
+			if err := s.reg.SetDirsDeferred(dirs); err != nil {
 				traceStage("update-registry-failed", total)
 				out["error"] = err.Error()
 				break
 			}
-			traceStage("update-registry-and-queue-indexes", total)
-			if s.removalOffered(r) {
+			if canRemove {
 				if err := s.reg.cleanupLibrary(); err != nil {
 					out["error"] = err.Error()
 					break
 				}
-				if err := s.reg.Rescan(); err != nil {
-					out["error"] = err.Error()
-					break
-				}
 			}
+			if err := s.reg.Rescan(); err != nil {
+				out["error"] = err.Error()
+				break
+			}
+			traceStage("update-registry-and-queue-indexes", total)
 			out["saved"] = true
 			if s.ConfigPath != "" {
 				if err := config.SaveKeyRaw(s.ConfigPath, "DICT_DIR", config.FormatList(dirs)); err != nil {
@@ -801,7 +928,7 @@ func (s *Server) handleSetupSync(w http.ResponseWriter, r *http.Request) {
 			traceStage("save-settings", total)
 		}
 	}
-	writeJSON(w, out)
+	return out, http.StatusOK
 }
 
 // resolveDirs cleans up the folder list a save carries: ~-expanded, absolute,
@@ -983,64 +1110,30 @@ type dictMsg struct {
 // says no), and a header would let the browser's own cache revalidate and
 // replay a body that carried one.
 func (s *Server) handleDicts(w http.ResponseWriter, r *http.Request) {
-	entries := s.reg.all()
-	groups := s.groupsNow()
-	problems := facet.CountProblems(groups.problems)
-	global := s.rowsGlobal(groups)
-	keys := rowKeys(entries, global)
-	ids := make(map[string]bool, len(entries))
-	for _, e := range entries {
-		ids[e.ID] = true
-	}
-	s.dictRows.keep(ids)
-	tag := s.listTag(entries, keys, problems)
-	if inm := r.Header.Get("If-None-Match"); inm != "" && matchesTag(inm, tag) {
+	var stream *respStream
+	unavailable := errors.New("streaming unsupported")
+	result, err := s.listDictionaries(r.Context(), r.Header.Get("If-None-Match"), func(message dictMsg) error {
+		if stream == nil {
+			var ok bool
+			stream, ok = newStream(w, "application/x-ndjson; charset=utf-8")
+			if !ok {
+				return unavailable
+			}
+		}
+		stream.line(message)
+		return nil
+	})
+	if result.notModified {
 		w.Header().Set("Cache-Control", "no-cache")
 		w.WriteHeader(http.StatusNotModified)
 		return
 	}
-
-	st, ok := newStream(w, "application/x-ndjson; charset=utf-8")
-	if !ok {
-		return
+	if stream == nil {
+		stream, _ = newStream(w, "application/x-ndjson; charset=utf-8")
 	}
-	// the workers below write concurrently; stream serialises them
-	writeLine := func(m dictMsg) { st.line(m) }
-
-	writeLine(dictMsg{T: "begin", Total: len(entries), GroupsProblems: problems})
-
-	// same width as a search fan-out, and for the same reason: this is the
-	// other place the whole library is touched at once (search.Workers)
-	sem := make(chan struct{}, search.Workers())
-	var wg sync.WaitGroup
-	var keepable atomic.Bool
-	keepable.Store(true)
-	for i, e := range entries {
-		wg.Add(1)
-		go func(e *entry, key string) {
-			defer wg.Done()
-			select {
-			case sem <- struct{}{}:
-			case <-r.Context().Done():
-				return
-			}
-			defer func() { <-sem }()
-			if r.Context().Err() != nil {
-				return
-			}
-			info, held := s.dictInfoFor(e, global, key)
-			if !held || info.Error != "" || info.Job != nil {
-				keepable.Store(false)
-			}
-			writeLine(dictMsg{T: "dict", Dict: &info})
-		}(e, keys[i])
+	if err != nil && !errors.Is(err, unavailable) && stream == nil {
+		httpErr(w, http.StatusInternalServerError, "%v", err)
 	}
-	wg.Wait()
-	end := dictMsg{T: "end"}
-	if keepable.Load() {
-		end.ETag = tag
-	}
-	writeLine(end)
 }
 
 // dictInfoFor resolves one dictionary's list row: from the row cache while
@@ -1341,6 +1434,7 @@ type streamMsg struct {
 	// number, because a megabyte figure is not a decision the reader can make.
 	Deferred bool  `json:"deferred,omitempty"`
 	Bytes    int64 `json:"bytes,omitempty"`
+	Indexing bool  `json:"indexing,omitempty"`
 
 	// The "morph" line: From is what the user typed, To the dictionary form
 	// actually searched, Lang the language that produced it. Every "hit" after
@@ -1349,6 +1443,28 @@ type streamMsg struct {
 	From string `json:"from,omitempty"`
 	To   string `json:"to,omitempty"`
 	Lang string `json:"lang,omitempty"`
+}
+
+func searchEventToStream(event SearchEvent) streamMsg {
+	var slots []streamSlot
+	if event.Slots != nil {
+		slots = make([]streamSlot, len(event.Slots))
+	}
+	for i, slot := range event.Slots {
+		slots[i] = streamSlot{Dict: slot.Dict, Name: slot.Name}
+	}
+	return streamMsg{T: event.T, Slots: slots, I: event.I, Dict: event.Dict, Name: event.Name, Results: event.Results, Skipped: event.Skipped, Error: event.Error, Rung: event.Rung, Deferred: event.Deferred, Bytes: event.Bytes, Indexing: event.Indexing, From: event.From, To: event.To, Lang: event.Lang}
+}
+
+func searchEventFromStream(event streamMsg) SearchEvent {
+	var slots []SearchSlot
+	if event.Slots != nil {
+		slots = make([]SearchSlot, len(event.Slots))
+	}
+	for i, slot := range event.Slots {
+		slots[i] = SearchSlot{Dict: slot.Dict, Name: slot.Name}
+	}
+	return SearchEvent{T: event.T, Slots: slots, I: event.I, Dict: event.Dict, Name: event.Name, Results: event.Results, Skipped: event.Skipped, Error: event.Error, Rung: event.Rung, Deferred: event.Deferred, Bytes: event.Bytes, Indexing: event.Indexing, From: event.From, To: event.To, Lang: event.Lang}
 }
 
 // singleSearchBudget is how long a search of ONE named dictionary may take
@@ -1841,20 +1957,14 @@ func (s *Server) handleResource(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 404, "%v", err)
 		return
 	}
-	if s.serveOverride(w, r, e, name) {
-		return
-	}
-	d, err := e.open()
-	if err != nil {
-		httpErr(w, 500, "%v", err)
-		return
-	}
-	rc, mime, err := d.Resource(name)
-	// serving a resource is the one path that can open a handle the entry's own
-	// open() never accounts for: a prepared dictionary lazily opening its source
-	// because media.db missed. Tell the janitor, or that handle would stay until
-	// something else happened to wake it.
-	s.reg.nudge()
+	s.serveDictionaryResource(w, r, e, id, name)
+}
+
+// serveDictionaryResource applies the response protocol for a resolved
+// dictionary resource. The browser HTTP handler and the in-process WebView
+// adapter both call this after resolving the dictionary themselves.
+func (s *Server) serveDictionaryResource(w http.ResponseWriter, r *http.Request, e *entry, id, name string) {
+	source, err := s.openResource(e, name)
 	if err != nil {
 		if err == dict.ErrNotFound {
 			http.NotFound(w, r)
@@ -1863,13 +1973,21 @@ func (s *Server) handleResource(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 500, "%v", err)
 		return
 	}
-	defer func() { rc.Close() }() // closure: rc may be swapped below
+	defer func() { _ = source.reader.Close() }()
+	if source.override {
+		if m := resolveMIME(name, ""); m != "" {
+			w.Header().Set("Content-Type", m)
+		}
+		w.Header().Set("Cache-Control", "no-cache")
+		http.ServeContent(w, r, name, source.modTime, source.reader.(io.ReadSeeker))
+		return
+	}
 	isSpx := strings.HasSuffix(strings.ToLower(name), ".spx")
 	// browsers cannot play Speex: transcode .spx to WAV (in-process libspeex by
 	// default, else the external speexdec). The bytes we send are WAV, so the
 	// Content-Type is audio/wav (never the audio/ogg of the raw container).
 	if isSpx && s.canTranscodeSpx() {
-		if wav, err := s.spxToWav(id, name, rc); err == nil {
+		if wav, err := s.spxToWav(id, name, source.reader); err == nil {
 			w.Header().Set("Content-Type", "audio/wav")
 			w.Header().Set("Cache-Control", "public, max-age=86400")
 			_, _ = w.Write(wav)
@@ -1877,16 +1995,16 @@ func (s *Server) handleResource(w http.ResponseWriter, r *http.Request) {
 		} else {
 			logx.V("spx transcode %s/%s failed: %v (serving raw)", id, name, err)
 			// rc is consumed; re-open for the raw fallback
-			rc2, _, err2 := d.Resource(name)
+			rc2, _, err2 := source.dictionary.Resource(name)
 			if err2 != nil {
 				httpErr(w, 500, "%v", err2)
 				return
 			}
-			rc.Close()
-			rc = rc2
+			_ = source.reader.Close()
+			source.reader = rc2
 		}
 	}
-	if m := resolveMIME(name, mime); m != "" {
+	if m := resolveMIME(name, source.mime); m != "" {
 		w.Header().Set("Content-Type", m)
 	}
 	// A .spx that reached here could NOT be transcoded (no speexdec / failure)
@@ -1918,20 +2036,11 @@ func (s *Server) handleResource(w http.ResponseWriter, r *http.Request) {
 	// Text resources keep the copy path: they are small, some containers hand
 	// them over non-seekable anyway, and the NUL check below only applies to
 	// them.
-	if rs, ok := rc.(io.ReadSeeker); ok && !isTextResource(name) {
+	if rs, ok := source.reader.(io.ReadSeeker); ok && !isTextResource(name) {
 		http.ServeContent(w, r, name, time.Time{}, rs)
 		return
 	}
-	watch := &nulWatcher{r: rc, text: isTextResource(name)}
-	_, _ = io.Copy(w, watch)
-	if watch.seen {
-		if _, dup := s.nulSeen.LoadOrStore(id+"\x00"+name, true); !dup {
-			logx.Warn("%s%s is damaged: it contains NUL bytes and cannot parse. "+
-				"The dictionary is stored that way - wudict is serving it verbatim. "+
-				"Drop a good copy at <library folder>/res/%s to override it.",
-				logx.Dict(e.Path), name, name)
-		}
-	}
+	_ = s.copyTextResource(w, e, id, name, source.reader)
 }
 
 // isTextResource reports whether a NUL byte in this resource would be proof of
@@ -2114,8 +2223,12 @@ func (s *Server) externalSpxToWav(raw []byte) ([]byte, error) {
 func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 	key := ingestKey(r.URL.Query().Get("dict"))
 	if r.Method == http.MethodDelete {
-		s.jobs.requestStop(key)
-		writeJSON(w, map[string]bool{"stopping": true})
+		status, err := s.stopIngest(key)
+		if err != nil {
+			httpErr(w, 400, "%v", err)
+			return
+		}
+		writeJSON(w, status)
 		return
 	}
 	e, err := s.reg.get(r.URL.Query().Get("dict"))
@@ -2123,13 +2236,19 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 404, "%v", err)
 		return
 	}
-	store.IndexDiagnostic("single ingest request source=%q dictionary=%q method=%s self_indexed=%v query=%q", e.Path, e.probeName(), r.Method, entryHasSelfIndex(e), r.URL.RawQuery)
-	// The panel sends the state it wants, not a verb: contains/fts/media each
-	// on or off. A parameter left out keeps whatever that feature is now, so a
-	// caller toggling one thing cannot accidentally strip another - and a
-	// request naming none prepares an unprepared dictionary at the cheapest
-	// level, which is the panel's index chip.
-	q := r.URL.Query()
+	st, ok := newStream(w, "text/event-stream")
+	if !ok {
+		return
+	}
+	if status, exists := s.jobs.status(key); !exists || !status.Running || len(r.URL.Query()) != 1 {
+		s.startIngest(e, r.URL.Query())
+	}
+	s.followIngest(r.Context(), st, key)
+}
+
+func (s *Server) startIngest(e *entry, q url.Values) string {
+	key := ingestKey(e.ID)
+	store.IndexDiagnostic("single ingest request source=%q dictionary=%q method=GET self_indexed=%v query=%q", e.Path, e.probeName(), entryHasSelfIndex(e), q.Encode())
 	want := s.currentFeatures(e)
 	for _, f := range []struct {
 		name string
@@ -2140,17 +2259,6 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	action, indexes := ingestAction(e, q)
-
-	st, ok := newStream(w, "text/event-stream")
-	if !ok {
-		return
-	}
-	// The change runs as the dictionary's job (jobs.go), not inside this
-	// request: a page that closes or reloads mid-way loses nothing, and the
-	// next one finds the job in /api/dicts and follows it here again. While
-	// one runs, a request for the same dictionary follows that one - what it
-	// asked for is not queued behind it, and the "done" it gets carries what
-	// the dictionary now has.
 	s.jobs.start(key, 0, jobStatus{Action: action, Indexes: indexes}, func(j *job) {
 		store.IndexDiagnostic("request start dictionary=%q source=%q contains=%v fulltext=%v media=%v rebuild=%v build=%q", e.probeName(), e.Path, want.Contains, want.FullText, want.Media, q.Get("rebuild") == "1", s.Version)
 		defer func() {
@@ -2165,13 +2273,18 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 			last = time.Now()
 			j.update(func(js *jobStatus) { js.Done, js.Total = int64(done), int64(total) })
 		}
-		// A dictionary whose index was removed from the library (the fork's
-		// GD/DSL work) is restored by an explicit ingest, before the feature
-		// change: this is the door the panel's chip and the DSL settings use
-		// to bring a removed index back.
 		if e.indexBlocked() {
-			if err := e.restoreIndex(store.Plan{FullText: want.FullText, Contains: want.Contains}, progress, frontLimit); err != nil {
-				j.update(func(js *jobStatus) { js.Err = err.Error() })
+			if err := e.restoreIndexContext(j.ctx, store.Plan{FullText: want.FullText, Contains: want.Contains}, progress, currentIndexLimit()); err != nil {
+				j.update(func(js *jobStatus) {
+					if errors.Is(err, context.Canceled) && j.canceled() {
+						js.Canceled = true
+						if errors.Is(err, store.ErrIngestTempCleanup) {
+							js.Err = err.Error()
+						}
+					} else {
+						js.Err = err.Error()
+					}
+				})
 				return
 			}
 			if status, _ := s.jobs.status(key); status.StopRequested {
@@ -2181,11 +2294,18 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 		}
 		if entryHasSelfIndex(e) && !isZIMPath(e.Path) {
 			store.IndexDiagnostic("skip ingest source=%q dictionary=%q reason=native-index", e.Path, e.probeName())
-		} else {
-			if err := e.setFeatures(want, progress, q.Get("rebuild") == "1"); err != nil {
-				j.update(func(js *jobStatus) { js.Err = err.Error() })
-				return
-			}
+		} else if err := e.setFeaturesContext(j.ctx, want, progress, q.Get("rebuild") == "1"); err != nil {
+			j.update(func(js *jobStatus) {
+				if errors.Is(err, context.Canceled) && j.canceled() {
+					js.Canceled = true
+					if errors.Is(err, store.ErrIngestTempCleanup) {
+						js.Err = err.Error()
+					}
+				} else {
+					js.Err = err.Error()
+				}
+			})
+			return
 		}
 		if status, _ := s.jobs.status(key); status.StopRequested {
 			j.update(func(js *jobStatus) { js.Canceled = true })
@@ -2198,15 +2318,20 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 		}
 		m := d.Meta()
 		dbPath, _ := validPrepared(e.Path)
-		info := dictInfo{
-			ID: e.ID, Name: m.Name, Format: m.Format, Path: e.Path,
-			SelfIndexed: entryHasSelfIndex(e),
-			Entries:     m.EntryCount, Caps: d.Caps(),
-			DBPath: dbPath,
-		}
-		j.update(func(js *jobStatus) { js.Result = info })
+		j.update(func(js *jobStatus) {
+			js.Result = dictInfo{ID: e.ID, Name: m.Name, Format: m.Format, Path: e.Path, SelfIndexed: entryHasSelfIndex(e), Entries: m.EntryCount, Caps: d.Caps(), DBPath: dbPath}
+		})
 	})
-	s.followIngest(r.Context(), st, key)
+	return key
+}
+
+func (s *Server) stopIngest(key string) (map[string]bool, error) {
+	if !strings.HasPrefix(key, "ingest:") || key == "ingest:" {
+		return nil, errors.New("invalid ingest job")
+	}
+	s.jobs.requestStop(key)
+	s.jobs.cancel(key)
+	return map[string]bool{"stopping": true}, nil
 }
 
 // jobProgress is a running job as a list row carries it.
@@ -2259,29 +2384,33 @@ func ingestKey(id string) string { return "ingest:" + id }
 // "progress" on each change, then "done" with the dictionary as it now is, or
 // "error" with why.
 func (s *Server) followIngest(ctx context.Context, st *respStream, key string) {
+	s.followIngestEvents(ctx, key, st.event)
+}
+
+func (s *Server) followIngestEvents(ctx context.Context, key string, emit func(string, any)) {
 	stopAnnounced, progressAnnounced := false, false
 	for {
 		js, next, ok := s.jobs.watch(key)
 		switch {
 		case !ok:
-			st.event("error", map[string]string{"error": "no such job"})
+			emit("error", map[string]string{"error": "no such job"})
 			return
 		case !js.Running && js.Err != "":
-			st.event("error", map[string]string{"error": js.Err})
+			emit("error", map[string]string{"error": js.Err})
 			return
 		case !js.Running:
 			if js.Canceled {
-				st.event("stopped", js.Result)
+				emit("stopped", js.Result)
 			} else {
-				st.event("done", js.Result)
+				emit("done", js.Result)
 			}
 			return
 		case js.Done > 0 || js.Total > 0 || !progressAnnounced && js.Action != "":
-			st.event("progress", map[string]any{"done": js.Done, "total": js.Total, "action": js.Action, "indexes": js.Indexes})
+			emit("progress", map[string]any{"done": js.Done, "total": js.Total, "action": js.Action, "indexes": js.Indexes})
 			progressAnnounced = true
 		}
 		if js.StopRequested && !stopAnnounced {
-			st.event("stopping", map[string]bool{"stopping": true})
+			emit("stopping", map[string]bool{"stopping": true})
 			stopAnnounced = true
 		}
 		select {

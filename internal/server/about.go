@@ -242,11 +242,10 @@ func descriptionPolicy(base string) htmlref.Policy {
 // absent from corsAllowed (D69): an annotation names a file on the user's disk,
 // which is exactly what the extension grant does not get.
 func (s *Server) handleAbout(w http.ResponseWriter, r *http.Request) {
-	e, err := s.reg.get(r.URL.Query().Get("dict"))
+	info, err := s.aboutSnapshot(r.URL.Query().Get("dict"), originOf(r))
 	if err != nil {
 		httpErr(w, 404, "%v", err)
 		return
 	}
-	info, _ := s.aboutOf(e, originOf(r))
 	writeJSON(w, info)
 }

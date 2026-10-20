@@ -6,6 +6,8 @@ package server
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"os"
@@ -152,7 +154,11 @@ type lemmaInfo struct {
 
 func (s *Server) handleLemmas(w http.ResponseWriter, r *http.Request) {
 	refresh, _ := queryFlag(r.URL.Query(), "refresh")
-	cat, cerr := s.catalog(r.Context(), refresh)
+	writeJSON(w, s.lemmaSnapshot(r.Context(), refresh))
+}
+
+func (s *Server) lemmaSnapshot(ctx context.Context, refresh bool) lemmaInfo {
+	cat, cerr := s.catalog(ctx, refresh)
 	local, shadowed := lemmas.Installed(s.LemmaDir)
 
 	info := lemmaInfo{
@@ -197,7 +203,7 @@ func (s *Server) handleLemmas(w http.ResponseWriter, r *http.Request) {
 			info.Languages[i].Total, info.Languages[i].Error = j.Total, j.Err
 		}
 	}
-	writeJSON(w, info)
+	return info
 }
 
 // lemmaRow merges one catalogue entry with what is on disk. Same rules as
@@ -276,33 +282,37 @@ func (s *Server) job(code string) *lemmaJob {
 }
 
 func (s *Server) handleLemmaInstall(w http.ResponseWriter, r *http.Request) {
-	code := lang.Normalize(r.URL.Query().Get("code"))
-	if code == "" {
-		httpErr(w, 400, "not a language: %q", r.URL.Query().Get("code"))
+	result, status, err := s.startLemmaInstall(r.Context(), r.URL.Query().Get("code"))
+	if err != nil {
+		httpErr(w, status, "%s", err)
 		return
+	}
+	w.WriteHeader(status)
+	writeJSON(w, result)
+}
+
+func (s *Server) startLemmaInstall(ctx context.Context, rawCode string) (map[string]string, int, error) {
+	code := lang.Normalize(rawCode)
+	if code == "" {
+		return nil, http.StatusBadRequest, fmt.Errorf("not a language: %q", rawCode)
 	}
 	if s.LemmaDir == "" {
-		httpErr(w, 500, "no lemma folder configured (LEMMA_DIR)")
-		return
+		return nil, http.StatusInternalServerError, errors.New("no lemma folder configured (LEMMA_DIR)")
 	}
-	cat, cerr := s.catalog(r.Context(), false)
+	cat, cerr := s.catalog(ctx, false)
 	if cat == nil {
-		httpErr(w, 502, "could not read the catalogue: %s", cerr)
-		return
+		return nil, http.StatusBadGateway, fmt.Errorf("could not read the catalogue: %s", cerr)
 	}
 	e, ok := cat.Find(code)
 	if !ok {
-		httpErr(w, 400, "the catalogue has no lemma data for %s", code)
-		return
+		return nil, http.StatusBadRequest, fmt.Errorf("the catalogue has no lemma data for %s", code)
 	}
 	// Already running is the same answer as starting it: the caller wanted
 	// this language downloaded and it is being downloaded. A FAILED job is
 	// replaced: asking again is how a user retries, and the old error must
 	// not outlive the retry.
 	s.jobs.start(lemmaKey(code), installTimeout, jobStatus{Total: e.Size}, func(j *job) { s.install(j, cat, e) })
-
-	w.WriteHeader(http.StatusAccepted)
-	writeJSON(w, map[string]string{"code": code, "state": "downloading"})
+	return map[string]string{"code": code, "state": "downloading"}, http.StatusAccepted, nil
 }
 
 // install runs one download to completion, outliving the request that asked
@@ -326,19 +336,25 @@ func (s *Server) install(j *job, cat *lemmas.Catalog, e lemmas.Entry) {
 }
 
 func (s *Server) handleLemmaRemove(w http.ResponseWriter, r *http.Request) {
-	code := lang.Normalize(r.URL.Query().Get("code"))
-	if code == "" {
-		httpErr(w, 400, "not a language: %q", r.URL.Query().Get("code"))
+	result, status, err := s.removeLemma(r.URL.Query().Get("code"))
+	if err != nil {
+		httpErr(w, status, "%s", err)
 		return
 	}
+	writeJSON(w, result)
+}
+
+func (s *Server) removeLemma(rawCode string) (map[string]any, int, error) {
+	code := lang.Normalize(rawCode)
+	if code == "" {
+		return nil, http.StatusBadRequest, fmt.Errorf("not a language: %q", rawCode)
+	}
 	if j := s.job(code); j != nil && j.State == "downloading" {
-		httpErr(w, 409, "%s is being downloaded", code)
-		return
+		return nil, http.StatusConflict, fmt.Errorf("%s is being downloaded", code)
 	}
 	gone, err := lemmas.Remove(s.LemmaDir, code)
 	if err != nil {
-		httpErr(w, 500, "%v", err)
-		return
+		return nil, http.StatusInternalServerError, err
 	}
 	// A failed job for this language is cleared too: the user has just said
 	// they do not want it, and an error message about a download they have
@@ -346,7 +362,7 @@ func (s *Server) handleLemmaRemove(w http.ResponseWriter, r *http.Request) {
 	s.jobs.forget(lemmaKey(code))
 
 	s.Morph.Rescan()
-	writeJSON(w, map[string]any{"code": code, "removed": gone, "builtin": code == "en"})
+	return map[string]any{"code": code, "removed": gone, "builtin": code == "en"}, http.StatusOK, nil
 }
 
 // attributionURL points at the ATTRIBUTION.txt published beside the manifest.

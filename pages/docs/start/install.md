@@ -68,9 +68,9 @@ install. macOS also has an app bundle, Windows an installer, Android an APK.
     The file is not code-signed, so Windows Defender SmartScreen stops its
     first run: choose **More info**, then **Run anyway**.
 
-    `wuDict2.exe` is a Windows app and opens without a console window. For
-    terminal commands, use `wuDict2-cli.exe`; it writes to the terminal and
-    returns an exit code. Desktop launches show a tray icon and log to
+    `wuDict2.exe` is a Windows app and opens without a console window. The same
+    executable handles terminal commands; run `wuDict2.exe --help` from
+    PowerShell or `cmd`. Desktop launches show a tray icon and log to
     `%LOCALAPPDATA%\wudict\wudict.log`.
 
     The installer `wudict2-windows-x64-setup-<version>.exe` adds a Start menu

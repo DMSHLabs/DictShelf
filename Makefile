@@ -9,27 +9,15 @@ BINARY     := wudict
 CMD        := .
 BUILD_DIR  := dist
 
-# ---- build flavours -----------------------------------------------------
-# wudict builds in two flavours; `build`/`install`/`check` use cgo:
+# ---- build --------------------------------------------------------------
+# Official builds use cgo and the fast mattn SQLite driver with FTS5.
 #
 #   cgo  (what `make build` does): CGO_ENABLED=1 -tags sqlite_fts5
 #     * mattn/go-sqlite3 - fast FTS5 (D4)
 #     * built-in libspeex .spx decoder (internal/speex + internal/speex/clib)
 #     Requires a C compiler.
-#
-#   purego (`make build-purego`, `make cross` releases): CGO_ENABLED=0 -tags purego
-#     * modernc.org/sqlite - pure Go, no C toolchain
-#     * NO built-in speex; .spx audio falls back to the external `speexdec`
-#       binary (SPEEX_BACKEND=external has the same effect on a cgo build)
-#
-# The sqlite_fts5 tag IS the cgo selector (D29): store/driver_cgo.go is
-# `sqlite_fts5 && cgo`, so dropping the tag no longer yields a mattn build
-# without FTS5 - it yields the pure-Go driver, which always has FTS5. The
-# purego flavour's tag is now redundant but kept: it lands in the same place.
-# A tag-less `go build`/`go install` therefore always works.
 GO_TAGS      := sqlite_fts5
 GOFLAGS      := -tags $(GO_TAGS) -trimpath
-PUREGO_FLAGS := -tags purego -trimpath
 # VERSION must be defined BEFORE LDFLAGS: `:=` expands immediately, so the
 # other order stamped the version with an empty string (the binary then printed
 # a blank version, overriding cli.Version's "dev" default).
@@ -54,7 +42,7 @@ ARGS ?=
 
 .PHONY: i18n-check
 i18n-check: ## Check interface catalogs, persistence, cache and English fallback
-	go test ./internal/server -run TestI18n -count=1
+	CGO_ENABLED=1 go test $(GOFLAGS) ./internal/server -run TestI18n -count=1
 
 .PHONY: i18n-check-js
 i18n-check-js: ## Check JS plural rules and fallback (optional; requires Node, no npm)
@@ -75,13 +63,9 @@ help: ## Show this help
 build: ## Build the host binary - cgo flavour (built-in sqlite FTS5 + built-in speex .spx decoder)
 	CGO_ENABLED=1 go build $(GOFLAGS) -ldflags "$(LDFLAGS)" -o $(BINARY) $(CMD)
 
-.PHONY: build-purego
-build-purego: ## Build the host binary - purego flavour (*slower* pure-Go sqlite, external speexdec)
-	CGO_ENABLED=0 go build $(PUREGO_FLAGS) -ldflags "$(LDFLAGS)" -o $(BINARY) $(CMD)
-
 .PHONY: install
 install: ## go install the wudict binary into GOBIN
-	go install $(GOFLAGS) -ldflags "$(LDFLAGS)" $(CMD)
+	CGO_ENABLED=1 go install $(GOFLAGS) -ldflags "$(LDFLAGS)" $(CMD)
 
 .PHONY: run
 run: build open ## Build then run with ARGS, e.g. make run ARGS="lookup dict.mdx word"
@@ -95,18 +79,6 @@ ingest: build ## Ingest DICT=<path> into a text.db (OUT=<path> optional), e.g. m
 .PHONY: serve
 serve: build ## Run the HTTP server (DICT_DIR/PORT/ARGS overridable), e.g. make serve DICT_DIR=~/Dicts
 	./$(BINARY) serve $(if $(DICT_DIR),-dict-dir "$(DICT_DIR)") $(if $(PORT),-port $(PORT)) $(ARGS)
-
-.PHONY: cross
-cross: ## Cross-compile all release targets into dist/ (purego flavour: pure-Go sqlite, no C toolchain; .spx via external speexdec)
-	@mkdir -p $(BUILD_DIR)
-	@for target in darwin/arm64 darwin/amd64 linux/amd64 linux/arm64 linux/arm/7 linux/arm/6 windows/amd64 windows/arm64; do \
-	  os=$$(echo $$target | cut -d/ -f1); arch=$$(echo $$target | cut -d/ -f2); arm=$$(echo $$target | cut -d/ -f3); \
-	  ext=""; [ "$$os" = windows ] && ext=".exe"; \
-	  suffix="$$os-$$arch"; [ -n "$$arm" ] && suffix="$$suffix-v$$arm"; \
-	  echo "building $$suffix"; \
-	  CGO_ENABLED=0 GOOS=$$os GOARCH=$$arch GOARM=$$arm go build -trimpath -tags purego -ldflags "$(LDFLAGS)" \
-	    -o $(BUILD_DIR)/$(BINARY)-$$suffix$$ext $(CMD) || exit 1; \
-	done
 
 # ---- tray (D74, D76) ----------------------------------------------------
 # There is nothing to build here. The tray icon is off unless the app was
@@ -179,14 +151,12 @@ win-installer: ## Compile the Windows per-user installer into dist/ (needs Inno 
 	@$(PWSH) -NoProfile -ExecutionPolicy Bypass -File tools/make-installer.ps1 $(ARGS)
 
 # ---- Android (D52, D53) -----------------------------------------------------
-# The app is android/: a WebView shell around the same binary, shipped inside
-# the APK as libwudict.so, which the shell execs as a child process.
+# The app is android/: a WebView shell with the Go runtime loaded through JNI.
 #
 # `android-go` is the CGO flavour (D53): mattn FTS5 + built-in speex .spx
 # decoder, cross-compiled with the NDK - desktop parity on-device. The
 # external linker is given -Wl,-z,max-page-size=16384 (verified: PT_LOAD
 # alignment 0x4000), so the 16 KiB page-size mandate is met.
-# `android-go-purego` is the NDK-less fallback (slower sqlite, no .spx audio).
 #
 # NDK resolution: $ANDROID_NDK_HOME, else $ANDROID_NDK, else the newest
 # version under the SDK's ndk/ dir ($ANDROID_HOME, then the macOS default).
@@ -196,7 +166,7 @@ ANDROID_NDK  ?= $(or $(ANDROID_NDK_HOME),$(lastword $(sort $(wildcard $(ANDROID_
 NDK_HOST     := $(if $(filter Darwin,$(shell uname)),darwin-x86_64,linux-x86_64)
 NDK_BIN      := $(ANDROID_NDK)/toolchains/llvm/prebuilt/$(NDK_HOST)/bin
 ANDROID_API  ?= 26
-ANDROID_LIB  := android/app/src/main/jniLibs/arm64-v8a/libwudict.so
+ANDROID_BRIDGE := android/app/src/main/jniLibs/arm64-v8a/libwudictbridge.so
 
 # APK names come from android/app/build.gradle (androidComponents.onVariants),
 # which is also what build-android.yml publishes - the workflow no longer
@@ -248,20 +218,15 @@ endif
 endif
 
 .PHONY: android-go
-android-go: ## Cross-compile the server into the APK's jniLibs (android/arm64, cgo: fast FTS5 + built-in speex; needs the NDK)
+android-go: ## Cross-compile the in-process Go library into Android jniLibs
 	@test -n "$(ANDROID_NDK)" || { echo "error: no Android NDK found."; \
 	  echo "  install one: $(ANDROID_SDK)/cmdline-tools/latest/bin/sdkmanager 'ndk;30.0.15729638'"; \
 	  echo "  or set ANDROID_NDK_HOME / ANDROID_NDK"; exit 2; }
-	@mkdir -p $(dir $(ANDROID_LIB))
+	@mkdir -p $(dir $(ANDROID_BRIDGE))
 	CC="$(NDK_BIN)/aarch64-linux-android$(ANDROID_API)-clang" \
 	CXX="$(NDK_BIN)/aarch64-linux-android$(ANDROID_API)-clang++" \
-	CGO_ENABLED=1 GOOS=android GOARCH=arm64 go build $(GOFLAGS) \
-	  -ldflags "$(LDFLAGS) -extldflags '-Wl,-z,max-page-size=16384'" -o $(ANDROID_LIB) $(CMD)
-
-.PHONY: android-go-purego
-android-go-purego: ## NDK-less fallback lib (pure-Go sqlite; .spx audio unavailable on-device)
-	@mkdir -p $(dir $(ANDROID_LIB))
-	CGO_ENABLED=0 GOOS=android GOARCH=arm64 go build $(PUREGO_FLAGS) -ldflags "$(LDFLAGS)" -o $(ANDROID_LIB) $(CMD)
+	CGO_ENABLED=1 GOOS=android GOARCH=arm64 go build -buildmode=c-shared $(GOFLAGS) \
+	  -ldflags "-s -w -extldflags '-Wl,-z,max-page-size=16384'" -o $(ANDROID_BRIDGE) ./android/nativebridge
 
 .PHONY: android-require-keystore
 android-require-keystore:
@@ -293,7 +258,7 @@ endif
 
 # Two flavours (D62), one binary: `foss` is the GitHub/F-Droid build and keeps
 # All-files access; `play` declares no storage permission and imports through
-# SAF. Both package the same libwudict.so, so android-go is a shared prereq.
+# SAF. Both package the same in-process Go library, so android-go is shared.
 .PHONY: apk-foss-debug
 apk-foss-debug: android-go ## Build the FOSS debug APK (needs Android SDK: ANDROID_HOME or local.properties)
 	cd android && ./gradlew assembleFossDebug $(GRADLE_VERSION)
@@ -388,32 +353,28 @@ aab-play: android-go ## Build the Play release bundle (unsigned: Play App Signin
 apk-verify: ## Assert the Play APK declares no storage permission and still extracts the binary
 	@sh tools/verify-apk.sh
 
-.PHONY: test-purego
-test-purego: ## Run store tests against the pure-Go sqlite driver (release parity)
-	CGO_ENABLED=0 go test -tags purego ./internal/store/ ./internal/server/
-
 # ---- quality ------------------------------------------------------------
 
 .PHONY: test
 test: ## Unit tests (integration tests skip unless WUDICT_TEST_MDX exists)
-	$(TEST_ENV) go test $(GOFLAGS) ./...
+	CGO_ENABLED=1 $(TEST_ENV) go test $(GOFLAGS) ./...
 
 .PHONY: test-v
 test-v: ## Tests, verbose
-	$(TEST_ENV) go test $(GOFLAGS) -v ./...
+	CGO_ENABLED=1 $(TEST_ENV) go test $(GOFLAGS) -v ./...
 
 .PHONY: cover
 cover: ## Tests with coverage report
-	$(TEST_ENV) go test $(GOFLAGS) -coverprofile=coverage.out ./...
+	CGO_ENABLED=1 $(TEST_ENV) go test $(GOFLAGS) -coverprofile=coverage.out ./...
 	go tool cover -func=coverage.out | tail -1
 
 .PHONY: bench
 bench: ## Run benchmarks
-	$(TEST_ENV) go test $(GOFLAGS) -bench=. -benchmem -run=^$$ ./...
+	CGO_ENABLED=1 $(TEST_ENV) go test $(GOFLAGS) -bench=. -benchmem -run=^$$ ./...
 
 .PHONY: vet
 vet: ## go vet
-	go vet $(GOFLAGS) ./...
+	CGO_ENABLED=1 go vet $(GOFLAGS) ./...
 
 .PHONY: fmt
 fmt: ## gofmt all sources in place
@@ -426,7 +387,7 @@ notices: ## Regenerate THIRD-PARTY-NOTICES.md from the module licences (run afte
 .PHONY: lint
 lint: vet ## golangci-lint if installed, else vet only
 	@if command -v golangci-lint >/dev/null; then \
-		golangci-lint run --build-tags $(GO_TAGS) ./...; \
+		CGO_ENABLED=1 golangci-lint run --build-tags $(GO_TAGS) ./...; \
 	else \
 		echo "golangci-lint not installed; ran vet only"; \
 	fi
@@ -481,7 +442,7 @@ API_HTML := $(BUILD_DIR)/api-explorer.html
 
 .PHONY: api-test
 api-test: ## Assert the OpenAPI document matches the routes (also runs in `make test`)
-	go test $(GOFLAGS) -run 'TestOpenAPI|TestCORSBoundary|TestRoutesAreUnique' ./internal/server/
+	CGO_ENABLED=1 go test $(GOFLAGS) -run 'TestOpenAPI|TestCORSBoundary|TestRoutesAreUnique' ./internal/server/
 
 .PHONY: api-lint
 api-lint: ## Validate $(OPENAPI) with Redocly (needs Node; network on first run)

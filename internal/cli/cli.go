@@ -13,6 +13,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"net/http"
 	"net/url"
@@ -34,9 +35,7 @@ import (
 	"github.com/wuweidict/wudict/internal/fsx"
 	"github.com/wuweidict/wudict/internal/howto"
 	"github.com/wuweidict/wudict/internal/htmlref"
-	"github.com/wuweidict/wudict/internal/intake"
 	"github.com/wuweidict/wudict/internal/logx"
-	"github.com/wuweidict/wudict/internal/morph"
 	"github.com/wuweidict/wudict/internal/search"
 	"github.com/wuweidict/wudict/internal/server"
 	"github.com/wuweidict/wudict/internal/speex"
@@ -69,14 +68,14 @@ var Notices string
 // read is WuWeiDict. Anything user-facing - CLI banner, web UI
 // About box, setup page - sources its wording from here or mirrors it.
 const (
-	ProductName = "wuDict"
+	ProductName = "wuDict2"
 	Tagline     = "Search every dictionary you own, from one browser tab."
 	SiteURL     = "https://wudict.legbehindneck.com"
 	RepoURL     = "https://github.com/wuweidict/wudict"
 )
 
 func usage() string {
-	return fmt.Sprintf(`WuWeiDict %s - dictionary server for the browser
+	help := fmt.Sprintf(`WuWeiDict %s - dictionary server for the browser
 MDict (.mdx/.mdd) · StarDict (.ifo) · Aard 2 (.slob) · Lingvo DSL (.dsl/.dsl.dz) · Babylon (.bgl) · ZIM (.zim) · wudict markdown (.wudict.md) · wudict library (text.db)
 
 USAGE
@@ -278,11 +277,6 @@ SETTINGS
                           env: MEMORY_LIMIT   toml: MEMORY_LIMIT
                           default: none (Android: 1/16 of RAM, 192-384 MiB)
 
-  --no-compress           Store article text uncompressed: the library is about
-                          3 times larger; reads are slightly faster.
-                          env: NO_COMPRESS    toml: NO_COMPRESS
-                          default: off (article text is DEFLATE-compressed)
-
   --use-cached            Also list indexed dictionaries whose dictionary files
                           are gone. "Use these dictionaries" on the setup page
                           sets it.
@@ -444,6 +438,10 @@ ABOUT
   %s - %s
   %s
 `, Version, ProductName, Tagline, RepoURL)
+	if config.Name == "wudict2.toml" {
+		help = strings.ReplaceAll(help, "~/.wudict/", "~/.wuDict2/")
+	}
+	return strings.ReplaceAll(help, "wudict.toml", config.Name)
 }
 
 // Main is the CLI entry point, called by the module-root main package.
@@ -454,6 +452,8 @@ var (
 	guiLaunch   bool
 	headlessLog string
 )
+
+var errExistingDesktopInstance = errors.New("existing desktop instance activated")
 
 // fail reports a fatal error and exits 1. One place, so the GUI case cannot be
 // handled on one path and forgotten on the other.
@@ -481,6 +481,9 @@ func Main() {
 	if !informationalCommand(os.Args[1:]) {
 		release, err := acquireProcessLock()
 		if err != nil {
+			if errors.Is(err, errExistingDesktopInstance) {
+				return
+			}
 			fail(err)
 			return
 		}
@@ -899,7 +902,7 @@ func cmdIngest(args []string) error {
 	headwords := fs.Bool("headwords", false, "index headwords only: the opposite of -fulltext")
 	fuzzyOnly := fs.Bool("fuzzy-only", false, "deprecated spelling of -headwords")
 	contains := fs.Bool("contains", false, "also build the substring (contains) index - roughly doubles a headword-only index (-contains=false drops it)")
-	configPath := fs.String("config", "", "path to wudict.toml (env: CONFIG_PATH)")
+	configPath := fs.String("config", "", fmt.Sprintf("path to %s (env: CONFIG_PATH)", config.Name))
 	fs.Parse(args)
 
 	// A flag left out changes nothing about a dictionary already prepared, as
@@ -1106,8 +1109,7 @@ func cmdServe(args []string) (err error) {
 	fs.Var(&dictDirs, "dict-dir", "folder with dictionaries; repeat for several (env/toml: DICT_DIR)")
 	dbDir := fs.String("db-dir", "", "library dir for cached dictionaries (env/toml: DB_DIR)")
 	useCached := fs.Bool("use-cached", false, "also serve previously imported dictionaries from the library (env/toml: USE_CACHED)")
-	noCompress := fs.Bool("no-compress", false, "store article text uncompressed - larger databases (env/toml: NO_COMPRESS)")
-	indexWorkers := fs.String("index-workers", "", "dictionaries to prepare at once; \"auto\" = every core (env/toml: INDEX_WORKERS)")
+	indexWorkers := fs.String("index-workers", "", "dictionaries to prepare at once; \"auto\" = all but one core, at least one (env/toml: INDEX_WORKERS)")
 	// A string, not a Bool: "" has to mean "unset, defer to env and toml",
 	// which a bool flag cannot express - it would override a file that says
 	// "1" with its own false on every run.
@@ -1116,7 +1118,7 @@ func cmdServe(args []string) (err error) {
 	auth := fs.String("auth", "", "require the access key: auto (default), on, off (env/toml: AUTH)")
 	authToken := fs.String("auth-token", "", "the access key itself, instead of ~/.wudict/token (env/toml: AUTH_TOKEN)")
 	port := fs.String("port", "", "listen port (env/toml: SERVER_PORT)")
-	configPath := fs.String("config", "", "path to wudict.toml (env: CONFIG_PATH)")
+	configPath := fs.String("config", "", fmt.Sprintf("path to %s (env: CONFIG_PATH)", config.Name))
 	noBrowser := fs.Bool("no-browser", false, "do not open a browser tab (env/toml: NO_BROWSER)")
 	verbose := fs.Bool("verbose", false, "verbose logging (env/toml: VERBOSE)")
 	speexdec := fs.String("speexdec", "", "path to speexdec for .spx audio (env/toml: SPEEXDEC)")
@@ -1142,9 +1144,6 @@ func cmdServe(args []string) (err error) {
 	if *useCached {
 		flagVals["USE_CACHED"] = "1"
 	}
-	if *noCompress {
-		flagVals["NO_COMPRESS"] = "1"
-	}
 	if *indexWorkers != "" {
 		flagVals["INDEX_WORKERS"] = *indexWorkers
 	}
@@ -1160,6 +1159,17 @@ func cmdServe(args []string) (err error) {
 	cfg, err := config.Load(*configPath, flagVals)
 	if err != nil {
 		return err
+	}
+	// The Windows WebView app is listenerless; other launch modes use HTTP.
+	listenerlessDesktop := gui && runtime.GOOS == "windows" && !cfg.NoBrowser
+	if changed, cleanErr := config.CleanObsoleteConfig(cfg.Source, !listenerlessDesktop); cleanErr != nil {
+		log.Printf("config cleanup: %v", cleanErr)
+	} else if changed {
+		cfg, err = config.Load(*configPath, flagVals)
+		if err != nil {
+			return err
+		}
+		listenerlessDesktop = gui && runtime.GOOS == "windows" && !cfg.NoBrowser
 	}
 	if cfg.Verbose {
 		logx.Enabled = true
@@ -1190,6 +1200,13 @@ func cmdServe(args []string) (err error) {
 		// helper can still restore its window if opening the log fails.
 		if f, ferr := openHeadlessLog(); ferr == nil {
 			logx.SetOutput(f)
+			log.SetOutput(f)
+			log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds)
+			if runtime.GOOS == "windows" {
+				// The desktop build is being diagnosed through its persistent log;
+				// include verbose request, dictionary and indexing details by default.
+				logx.Enabled = true
+			}
 			guiLaunch, headlessLog = true, f.Name()
 			// Whatever ends this run is written to the log while the file is
 			// still open - the restore below is what closes it, and Main's
@@ -1199,6 +1216,7 @@ func cmdServe(args []string) (err error) {
 				if err != nil {
 					logx.Warn("%v", err)
 				}
+				log.SetOutput(os.Stderr)
 				logx.SetOutput(nil)
 				f.Close()
 			}()
@@ -1210,95 +1228,98 @@ func cmdServe(args []string) (err error) {
 	}
 	logx.V("config: source=%q dictDirs=%v dbDir=%q addr=%s speexdec=%s",
 		cfg.Source, cfg.DictDirs, cfg.DBDir, cfg.Addr(), cfg.Speexdec)
-	store.SetDBDir(cfg.DBDir)
-	logx.System("server start build=%q runtime=%s platform=%s/%s", Version, runtime.Version(), runtime.GOOS, runtime.GOARCH)
-	defer func() { logx.System("server exit error=%q", fmt.Sprint(err)) }()
 
 	// The library (DB_DIR) is wudict's own working area, never a folder of
 	// user dictionaries. Using it as DICT_DIR is a
 	// hard error; and wherever it lives, discovery skips it - which also covers
 	// the subtler case of a DB_DIR nested inside the dictionary folder.
-	libDir := store.DefaultDBDir()
-	for _, d := range cfg.DictDirs {
-		if !dict.SameDir(d, libDir) {
-			continue
-		}
-		return fmt.Errorf("DICT_DIR and DB_DIR are the same folder:\n"+
-			"  %s\n"+
-			"  DB_DIR contains internally cached dictionaries; DICT_DIR must point at\n"+
-			"  the folder with your dictionary files (.mdx, .ifo, .slob, .dsl, .bgl, .zim).\n"+
-			"  To only use cached dictionaries, leave DICT_DIR unset and set USE_CACHED = \"1\".", libDir)
+	libDir, err := server.ConfigureLibrary(cfg)
+	if err != nil {
+		return err
 	}
-	dict.ExcludeDir(libDir)
+	if logErr := logx.StartSystemLogSession(); logErr != nil {
+		log.Printf("could not start system log session: %v", logErr)
+	}
+	logx.System("server start build=%q runtime=%s platform=%s/%s", Version, runtime.Version(), runtime.GOOS, runtime.GOARCH)
+	defer func() { logx.System("server exit error=%q", fmt.Sprint(err)) }()
+	if listenerlessDesktop {
+		if crashErr := logx.ConfigureCrashLog(); crashErr != nil {
+			log.Printf("could not configure crash output: %v", crashErr)
+		}
+	}
 
-	// Claim the port FIRST. Everything below - adopting library folders,
-	// scanning dictionaries, auto-preparing a DSL index - costs time and
-	// writes to the library, and a launch that turns out to be a duplicate
-	// must do none of it.
+	// The Windows GUI serves its WebView from Go in-process and uses the native
+	// bridge for operations, so its configured port is not opened. Browser,
+	// console, Android and explicit --no-browser launches retain HTTP mode.
 	url := "http://" + cfg.Addr() + "/"
-	ln, lerr := net.Listen("tcp", cfg.Addr())
-	if lerr != nil {
-		// Ask who is there rather than classify the error. The test this
-		// replaces matched the string "address already in use", which is the
-		// POSIX phrasing; Windows says "Only one usage of each socket address
-		// ... is normally permitted", so a second launch there never reached
-		// this branch - it returned a raw bind error, and after DetachConsole
-		// that error had nowhere to appear at all (D76). One HTTP probe on a
-		// path that has already failed costs less than a per-OS errno table
-		// and answers the question that actually matters.
-		if inst, ok := probeRunning(cfg.Addr()); ok {
-			announceRunning(inst, url, cfg.DictDirs, !cfg.NoBrowser)
-			if gui {
-				tray.Alert("wuDict2", "wuDict2 is already running. Close it before starting another copy.")
+	var lns []net.Listener
+	var alsoURL string
+	if listenerlessDesktop {
+		logx.System("Windows WebView mode: no TCP listener; configured port %s is unused", cfg.Port)
+	} else {
+		ln, lerr := net.Listen("tcp", cfg.Addr())
+		if lerr != nil {
+			// Ask who is there rather than classify the error. The test this
+			// replaces matched the string "address already in use", which is the
+			// POSIX phrasing; Windows says "Only one usage of each socket address
+			// ... is normally permitted", so a second launch there never reached
+			// this branch - it returned a raw bind error, and after DetachConsole
+			// that error had nowhere to appear at all (D76). One HTTP probe on a
+			// path that has already failed costs less than a per-OS errno table
+			// and answers the question that actually matters.
+			if inst, ok := probeRunning(cfg.Addr()); ok {
+				announceRunning(inst, url, cfg.DictDirs, !cfg.NoBrowser)
+				if gui {
+					tray.Alert("wuDict2", "wuDict2 is already running. Close it before starting another copy.")
+					return nil
+				}
+				if !cfg.NoBrowser {
+					// With the key, when this launch has one: the instance
+					// already running was started from the same configuration,
+					// so the key that would have been ours is the key it wants.
+					// This duplicate process exits immediately; a WebView owned by it
+					// would disappear with it. Open the existing server in the browser.
+					browserCmd(browseURL(url, token))
+				}
 				return nil
 			}
-			if !cfg.NoBrowser {
-				// With the key, when this launch has one: the instance
-				// already running was started from the same configuration,
-				// so the key that would have been ours is the key it wants.
-				// This duplicate process exits immediately; a WebView owned by it
-				// would disappear with it. Open the existing server in the browser.
-				browserCmd(browseURL(url, token))
-			}
-			return nil
-		}
-		return fmt.Errorf(`cannot listen on %s: %w
+			return fmt.Errorf(`cannot listen on %s: %w
 Something else holds the port (it did not answer as a wudict).
 Hint: pick another port with --port, e.g.:  wudict --port %s
       or find what holds it:                %s`,
-			cfg.Addr(), lerr, nextPort(cfg.Port), portHolderCmd(cfg.Port))
-	}
-	defer ln.Close()
+				cfg.Addr(), lerr, nextPort(cfg.Port), portHolderCmd(cfg.Port))
+		}
+		defer ln.Close()
 
-	// The loopback companion. A bind to one concrete address is a socket on
-	// that address and nowhere else, which has two consequences the wildcard
-	// default hides. Every client that lives on this machine reaches the
-	// server through 127.0.0.1 by construction - the Android shell's WebView
-	// origin and its readiness probe, a browser extension, an old bookmark -
-	// and none of them can know what the LAN address is today. And a listener
-	// bound to a LAN address is destroyed by the kernel when that address
-	// leaves the interface: roaming out of range, or a DHCP lease coming back
-	// different, makes accept() fail with EINVAL, which Go does not classify
-	// as temporary, so Serve returns it and the program ends.
-	//
-	// So loopback is opened alongside - the one address that cannot be taken
-	// away - and it, rather than the address the user asked for, is the one
-	// whose loss ends the program. Nothing is added when the main listener
-	// already accepts there, which is every default install.
-	lns := []net.Listener{ln}
-	var alsoURL string
-	if lb := loopbackAddr(cfg.IP, cfg.Port); lb != "" {
-		if lbLn, lbErr := net.Listen("tcp", lb); lbErr != nil {
-			// Not fatal: the server the user asked for is up, and only the
-			// clients that would have come in through loopback are affected.
-			// Another wudict already holding that port is the likely reason.
-			logx.Warn("could not also listen on %s: %v", lb, lbErr)
-		} else {
-			defer lbLn.Close()
-			alsoURL = "http://" + lb + "/"
-			// First: from here on this is the essential listener, and the
-			// address that can vanish is the expendable one.
-			lns = []net.Listener{lbLn, ln}
+		// The loopback companion. A bind to one concrete address is a socket on
+		// that address and nowhere else, which has two consequences the wildcard
+		// default hides. Every client that lives on this machine reaches the
+		// server through 127.0.0.1 by construction - the Android shell's WebView
+		// origin and its readiness probe, a browser extension, an old bookmark -
+		// and none of them can know what the LAN address is today. And a listener
+		// bound to a LAN address is destroyed by the kernel when that address
+		// leaves the interface: roaming out of range, or a DHCP lease coming back
+		// different, makes accept() fail with EINVAL, which Go does not classify
+		// as temporary, so Serve returns it and the program ends.
+		//
+		// So loopback is opened alongside - the one address that cannot be taken
+		// away - and it, rather than the address the user asked for, is the one
+		// whose loss ends the program. Nothing is added when the main listener
+		// already accepts there, which is every default install.
+		lns = []net.Listener{ln}
+		if lb := loopbackAddr(cfg.IP, cfg.Port); lb != "" {
+			if lbLn, lbErr := net.Listen("tcp", lb); lbErr != nil {
+				// Not fatal: the server the user asked for is up, and only the
+				// clients that would have come in through loopback are affected.
+				// Another wudict already holding that port is the likely reason.
+				logx.Warn("could not also listen on %s: %v", lb, lbErr)
+			} else {
+				defer lbLn.Close()
+				alsoURL = "http://" + lb + "/"
+				// First: from here on this is the essential listener, and the
+				// address that can vanish is the expendable one.
+				lns = []net.Listener{lbLn, ln}
+			}
 		}
 	}
 
@@ -1306,10 +1327,8 @@ Hint: pick another port with --port, e.g.:  wudict --port %s
 	// lost power - leaves its half-extracted staging directory behind. It is
 	// hidden, so discovery never saw it, and nothing else would ever remove
 	// it; the only safe moment to do so is before anything is importing.
-	intake.Sweep(cfg.DictDirs)
-
 	// migrate old cached dictionaries
-	if moved, err := store.AdoptLoose(); err != nil {
+	if moved, err := server.RecoverLibrary(cfg); err != nil {
 		logx.Warn("could not tidy the library: %v", err)
 	} else if len(moved) > 0 {
 		for _, m := range moved {
@@ -1323,7 +1342,7 @@ Hint: pick another port with --port, e.g.:  wudict --port %s
 	// rather than reporting "none" on the very run that created it.
 	cfgFile := cfg.Source
 	if cfgFile == "" && *configPath == "" {
-		p, created, err := config.EnsureConfigFile()
+		p, created, err := config.EnsureConfigFileForNetwork(!listenerlessDesktop)
 		if err != nil {
 			logx.Warn("could not create %s: %v", config.Name, err)
 		} else {
@@ -1334,73 +1353,20 @@ Hint: pick another port with --port, e.g.:  wudict --port %s
 		}
 	}
 
-	// Parallelism, before anything starts using it. Zero means this platform
-	// keeps the runtime's own default (every core), which is right on a desktop
-	// and wrong on a phone - see config.MaxProcs. Handing the number to the
-	// server as well is what lets the power states lower it while the app is
-	// away and restore it on return (D64).
-	if n := config.MaxProcs(); n > 0 {
-		server.SetActiveProcs(n)
-		search.SetWorkers(n)
-		logx.V("parallelism: GOMAXPROCS=%d, search fan-out=%d", n, n)
-	}
-
-	// The UI state (which dictionaries are searched, in what order) lives
-	// beside the config file in effect, so a portable install carries both and
-	// --config re-points both. Loaded BEFORE the registry: Warm skips disabled
-	// dictionaries, and it starts inside NewRegistry.
-	user := server.UserDir(userDir(cfgFile))
-	regOpts := []server.Option{server.WithPrefs(server.LoadPrefs(user.State()))}
-	// The wudict howto (internal/howto) is deliberately NOT installed or
-	// listed here. It ships as a dictionary, so listing it would make the
-	// registry non-empty on a first run that has no dictionaries of the
-	// reader's own - and "/" would open the guide instead of the setup page,
-	// which is the order this fork keeps - and the guide would appear among
-	// the reader's dictionaries in the picker. Not calling WithBuiltin does
-	// both: server.handleIndex still sends an empty registry to the setup
-	// page, and HowtoRemoved stays false. The package, its endpoints and the
-	// guide itself stay in the tree, unwired, for a host that wants them
-	// back - and the package is still imported for isHowtoSource, which keeps
-	// a guide file that does exist from being treated as an orphan.
-	// Registry discovery can start the background abbreviation sweep.
-	server.SetIndexWorkers(cfg.IndexWorkers)
-	reg, err := server.NewRegistry(cfg.DictDirs, cfg.UseCached, regOpts...)
+	app, err := server.NewRuntime(cfg, cfgFile, token, Version)
 	if err != nil {
 		return fmt.Errorf("scanning %s: %w", strings.Join(cfg.DictDirs, ", "), err)
 	}
-	reg.SetPreviewBudget(cfg.PreviewMemory)
-	reg.SetSearchBudget(cfg.SearchMemory)
+	reg, srv := app.Registry, app.Server
 	if cfg.SearchMemory > 0 {
 		logx.V("search memory budget: %d MB per query", cfg.SearchMemory>>20)
 	}
-	srv := server.New(reg)
 	if runtime.GOOS == "windows" {
 		srv.FirstRunMigrationStatus = legacyMigrationStatus
 		srv.ApplyFirstRunMigration = func(action string) error {
-			return applyLegacyMigration(action, reg, srv.RefreshMigratedUserFiles)
+			return applyLegacyMigration(action, reg, srv.RefreshMigratedUserFiles, cfgFile)
 		}
 	}
-	srv.UseUserGroups()
-	srv.ConfigPath = cfgFile
-	srv.User = user
-	srv.InstallDesktopBackgrounds()
-	store.SetCompressBodies(!cfg.NoCompress)
-	if cfg.MemoryLimit > 0 {
-		// A soft ceiling: Go collects harder instead of growing past it. Set it
-		// through the server rather than debug directly, because a ceiling on
-		// its own only buys more GC - the registry needs the same number to
-		// know when to shed caches instead, which is what turns pressure into
-		// freed memory rather than a collector spinning on a live set (D64).
-		server.SetMemoryLimit(cfg.MemoryLimit)
-		logx.V("memory limit: %d MB", cfg.MemoryLimit>>20)
-	}
-	srv.Version = Version
-	srv.DictDirOrigin = cfg.Origin("DICT_DIR")
-	srv.DictDirEditable = cfg.EditableInFile("DICT_DIR")
-	srv.ConfigProblems = cfg.Problems
-	// What the tunable keys actually resolved to, for a shell that overrides
-	// them per device and needs to show what is in effect (D101).
-	srv.Effective = cfg.Effective()
 	useExternalSpeex := cfg.SpeexBackend == "external"
 	srv.UseExternalSpeex = useExternalSpeex
 	// Only look for the external speexdec binary when it will actually be used:
@@ -1412,22 +1378,6 @@ Hint: pick another port with --port, e.g.:  wudict --port %s
 		sxPath, sxSource = resolveSpeexdec(cfg.Speexdec)
 	}
 	srv.Speexdec = sxPath
-	srv.ImportKeep = cfg.ImportKeep
-	srv.ImportURLHosts = cfg.ImportURLHosts
-	srv.ImportInsecure = cfg.ImportInsecure
-	// Lemma packs are loaded on first use and never at startup: a launch must
-	// not pay 25-157 ms and tens of megabytes for a language this session may
-	// never search in. MORPH_CACHE=0 loads none at all.
-	// The folder is indexed here rather than per search: re-reading it on
-	// every query that found nothing would put a directory listing on the
-	// search path. It is re-read only when something changes it - an install
-	// or a removal through /api/lemmas calls Rescan (D91).
-	srv.Morph = morph.New(cfg.MorphCache, cfg.LemmaDir)
-	// What /api/lemmas installs into, and the catalogue it installs FROM. The
-	// URL lives on the Server because the client must never supply one: a
-	// caller-chosen address would make the endpoint fetch whatever the host
-	// running wudict can reach.
-	srv.LemmaDir, srv.LemmaURL = cfg.LemmaDir, cfg.LemmaURL
 	useLemmaClient(cfg.LemmaURL, cfg.ImportInsecure)
 	srv.AllowRemoteDelete = cfg.AllowRemoteDelete
 	srv.BrowserExtensions = cfg.BrowserExtensions
@@ -1440,41 +1390,73 @@ Hint: pick another port with --port, e.g.:  wudict --port %s
 	printStartup(cfg, startupInfo{
 		roots:    reg.Roots(),
 		inFolder: inFolder, fromLibrary: fromLib, prepared: len(lib),
-		total: reg.Count(), libDir: libDir, url: url, alsoURL: alsoURL,
-		speex:  speexSummary(useExternalSpeex, sxPath, sxSource),
-		keyURL: keyURL(url, token),
+		total: reg.Count(), libDir: libDir, url: url, alsoURL: alsoURL, desktop: listenerlessDesktop,
+		speex: speexSummary(useExternalSpeex, sxPath, sxSource),
+		keyURL: func() string {
+			if listenerlessDesktop {
+				return ""
+			}
+			return keyURL(url, token)
+		}(),
 	})
-	// No WriteTimeout: /api/search (NDJSON) and /api/ingest (SSE) stream for
-	// a long time - a write deadline would sever them. ReadHeaderTimeout +
-	// IdleTimeout + MaxHeaderBytes harden against slowloris without touching
-	// the streaming paths.
-	httpSrv := &http.Server{
-		Addr:              cfg.Addr(),
-		Handler:           srv,
-		ReadHeaderTimeout: 10 * time.Second,
-		IdleTimeout:       120 * time.Second,
-		MaxHeaderBytes:    1 << 20,
+	// The in-process Windows window has no HTTP server. Other launch modes
+	// keep the HTTP adapter for browsers, Android and explicit server runs.
+	var httpSrv *http.Server
+	if !listenerlessDesktop {
+		// No WriteTimeout: /api/search (NDJSON) and /api/ingest (SSE) stream for
+		// a long time - a write deadline would sever them. ReadHeaderTimeout +
+		// IdleTimeout + MaxHeaderBytes harden against slowloris without touching
+		// the streaming paths.
+		httpSrv = &http.Server{
+			Addr:              cfg.Addr(),
+			Handler:           srv,
+			ReadHeaderTimeout: 10 * time.Second,
+			IdleTimeout:       120 * time.Second,
+			MaxHeaderBytes:    1 << 20,
+		}
 	}
-	// Graceful shutdown on Ctrl-C / SIGTERM: finish in-flight requests, close
-	// database handles cleanly. One shutdown, reachable from two places - a
-	// signal and the tray's Quit item - so sync.Once, not a second code path.
+	// One stop path serves signals, the tray's Quit item and the desktop
+	// window's Exit action. The in-process window only signals its lifecycle;
+	// HTTP modes also drain active requests before returning.
 	idle := make(chan struct{})
 	var stopOnce sync.Once
 	stop := func() {
 		stopOnce.Do(func() {
-			logx.System("server shutdown requested")
+			logx.System("application shutdown requested")
 			logx.Status("\nshutting down…")
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-			_ = httpSrv.Shutdown(ctx)
+			if httpSrv != nil {
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer cancel()
+				_ = httpSrv.Shutdown(ctx)
+			}
 			close(idle)
 		})
 	}
 	if runtime.GOOS == "windows" {
 		srv.DesktopExit = stop
 	}
+	desktopRequest := func(ctx context.Context, method, argument string) (any, error) {
+		switch method {
+		case "config":
+			return srv.ConfigSnapshot(true, "127.0.0.1"), nil
+		case "prefs":
+			return srv.PrefsSnapshot(), nil
+		case "savePrefs":
+			return srv.SavePrefs(strings.NewReader(argument))
+		case "setup":
+			return srv.DesktopSetup(argument)
+		case "groups", "userGroups", "about", "demand", "reindex", "indexWork", "startReindex", "stopReindex", "startIndexWork", "startSingleIndexWork", "stopIndexWork", "stopIngest", "createGroup", "renameGroup", "deleteGroup", "setGroupMember", "replaceGroupMembership", "addGroupMembers", "linkGroup", "saveGroupOrder":
+			return srv.DesktopJSONContext(ctx, url, method, argument)
+		default:
+			return srv.DesktopJSONContext(ctx, url, method, argument)
+		}
+	}
+	desktopStream := func(ctx context.Context, method, query string, emit func([]byte)) error {
+		return srv.DesktopStream(ctx, url, method, query, emit)
+	}
+	desktopResource := desktopResourceHandler(srv.DesktopResource)
 	if !cfg.NoBrowser {
-		go openBrowser(browseURL(url, token), gui, stop)
+		go openBrowser(browseURL(url, token), gui, stop, desktopRequest, desktopStream, desktopResource, listenerlessDesktop)
 	}
 	go func() {
 		sig := make(chan os.Signal, 1)
@@ -1484,6 +1466,10 @@ Hint: pick another port with --port, e.g.:  wudict --port %s
 	}()
 
 	serve := func() error {
+		if listenerlessDesktop {
+			<-idle
+			return nil
+		}
 		// One http.Server across every listener: Serve registers each one, so
 		// the single Shutdown above closes them all and every call returns
 		// ErrServerClosed. Only lns[0] decides the program's fate. The rest
@@ -1513,12 +1499,20 @@ Hint: pick another port with --port, e.g.:  wudict --port %s
 	// Name is left empty so the menu uses the package default, WuWeiDict -
 	// ProductName still reads "wuDict", which predates D27.
 	return tray.Wrap(tray.Config{
-		Enabled:  trayWanted,
-		Explicit: cfg.Tray != nil,
-		GUI:      gui,
-		Version:  Version,
-		URL:      url,
-		Open:     func() { openUI(browseURL(url, token), gui, stop) },
+		Enabled:   trayWanted,
+		Explicit:  cfg.Tray != nil,
+		GUI:       gui,
+		InProcess: listenerlessDesktop,
+		Version:   Version,
+		URL: func() string {
+			if listenerlessDesktop {
+				return ""
+			}
+			return url
+		}(),
+		Open: func() {
+			openUI(browseURL(url, token), gui, stop, desktopRequest, desktopStream, desktopResource, listenerlessDesktop)
+		},
 		Rescan:   trayRescan(reg),
 		OpenDir:  trayOpenDir(reg.Dirs()),
 		Shutdown: stop,
@@ -1562,9 +1556,8 @@ func trayOpenDir(dirs []string) func() {
 	}
 }
 
-// openHeadlessLog is where logx goes when there is no console to write to. The
-// destinations are the ones the service templates already chose, so a user who
-// switches between a GUI launch and a launchd agent finds one log, not two.
+// openHeadlessLog is where logx goes when there is no console to write to.
+// Windows keeps it in db.logs under the active application data root.
 func openHeadlessLog() (*os.File, error) {
 	var path string
 	switch runtime.GOOS {
@@ -1575,11 +1568,18 @@ func openHeadlessLog() (*os.File, error) {
 		}
 		path = filepath.Join(home, "Library", "Logs", "wudict.log")
 	case "windows":
-		dir := os.Getenv("LOCALAPPDATA")
+		dir := os.Getenv("WUDICT_PORTABLE_HOME")
 		if dir == "" {
-			return nil, errors.New("LOCALAPPDATA is not set")
+			dir = os.Getenv("WUDICT_HOME")
 		}
-		path = filepath.Join(dir, "wudict", "wudict.log")
+		if dir == "" {
+			home, err := os.UserHomeDir()
+			if err != nil {
+				return nil, err
+			}
+			dir = filepath.Join(home, ".wuDict2")
+		}
+		path = filepath.Join(dir, "db.logs", "wudict.log")
 	default:
 		home, err := os.UserHomeDir()
 		if err != nil {
@@ -1602,7 +1602,6 @@ func applyLibrarySettings() {
 		return // a broken config must not stop a local command
 	}
 	store.SetDBDir(cfg.DBDir)
-	store.SetCompressBodies(!cfg.NoCompress)
 	if cfg.Verbose {
 		logx.Enabled = true
 	}
@@ -1723,24 +1722,9 @@ type startupInfo struct {
 	libDir      string
 	url         string
 	alsoURL     string // the loopback companion, "" when the main bind covers it
+	desktop     bool   // the Windows WebView is in-process and has no network listener
 	speex       string
 	keyURL      string // url carrying the access key, "" when none is required
-}
-
-// userDir is the directory the wudict.toml in effect lives in - wudict's own
-// space for everything the user owns but did not put in the config file. When
-// no config file exists at all it falls back to the home location, the same
-// directory EnsureConfigFile would have used, and when even the home directory
-// is unknown it returns "": the caller then keeps its state in memory rather
-// than scattering a file somewhere nobody asked for.
-func userDir(cfgFile string) string {
-	if cfgFile != "" {
-		return filepath.Dir(cfgFile)
-	}
-	if p := config.HomeConfig(); p != "" {
-		return filepath.Dir(p)
-	}
-	return ""
 }
 
 func printStartup(cfg config.Config, in startupInfo) {
@@ -1800,7 +1784,11 @@ func printStartup(cfg config.Config, in startupInfo) {
 	for _, p := range cfg.Problems {
 		fmt.Fprintf(out, "                ⚠ %s\n", p)
 	}
-	fmt.Fprintf(out, "  address       %s\n", in.url)
+	if in.desktop {
+		fmt.Fprintln(out, "  address       in-app WebView (no network listener)")
+	} else {
+		fmt.Fprintf(out, "  address       %s\n", in.url)
+	}
 	// The second address is not a detail: it is the one that keeps working
 	// when the machine changes networks, and the only one a bookmark can name.
 	if in.alsoURL != "" {
@@ -1812,13 +1800,15 @@ func printStartup(cfg config.Config, in startupInfo) {
 	// in front of it - this is a server on the public internet, with no
 	// password on it. Printed at every start, because the setting is invisible
 	// from inside the app.
-	if ip := net.ParseIP(cfg.IP); ip != nil && ip.IsUnspecified() {
-		fmt.Fprintf(out, "                open to every network this machine is on, including\n")
-		if in.keyURL == "" {
-			fmt.Fprintf(out, "                any public IPv6 address, and it asks for no password\n")
-		} else {
-			fmt.Fprintf(out, "                any public IPv6 address; the access key below is all\n")
-			fmt.Fprintf(out, "                that stands in front of it\n")
+	if !in.desktop {
+		if ip := net.ParseIP(cfg.IP); ip != nil && ip.IsUnspecified() {
+			fmt.Fprintf(out, "                open to every network this machine is on, including\n")
+			if in.keyURL == "" {
+				fmt.Fprintf(out, "                any public IPv6 address, and it asks for no password\n")
+			} else {
+				fmt.Fprintf(out, "                any public IPv6 address; the access key below is all\n")
+				fmt.Fprintf(out, "                that stands in front of it\n")
+			}
 		}
 	}
 	// The link, not the key: a key printed on its own is something the user
@@ -1847,7 +1837,9 @@ func printStartup(cfg config.Config, in startupInfo) {
 	// what to do next, when there is something to do
 	switch {
 	case in.total == 0:
-		if in.prepared > 0 && !cfg.UseCached {
+		if in.desktop {
+			fmt.Fprintf(out, "\nchoose a dictionary folder in the app window\n")
+		} else if in.prepared > 0 && !cfg.UseCached {
 			fmt.Fprintf(out, "\nopen %s - choose a dictionary folder, or use the %s already prepared\n",
 				in.url, logx.Plural(in.prepared, "dictionary", "dictionaries"))
 		} else {
@@ -1949,19 +1941,38 @@ func memLimitNote(limit int64) string {
 	return fmt.Sprintf("  ·  memory limit %.1f GB", float64(limit)/(1<<30))
 }
 
-func openBrowser(url string, gui bool, onWindowClose func()) {
-	time.Sleep(300 * time.Millisecond) // let our own server finish binding
-	openUI(url, gui, onWindowClose)
+type desktopResourceHandler func(method, uri string, headers map[string]string, spill func() (io.WriteSeeker, error)) (body []byte, status int, responseHeaders string, handled bool, spilled bool)
+
+func openBrowser(url string, gui bool, onWindowClose func(), desktopRequest func(context.Context, string, string) (any, error), desktopStream func(context.Context, string, string, func([]byte)) error, desktopResource desktopResourceHandler, desktopOnly bool) {
+	if !desktopOnly {
+		time.Sleep(300 * time.Millisecond) // let our own server finish binding
+	}
+	openUI(url, gui, onWindowClose, desktopRequest, desktopStream, desktopResource, desktopOnly)
 }
 
-func openUI(address string, gui bool, onWindowClose func()) {
+func openUI(address string, gui bool, onWindowClose func(), desktopRequest func(context.Context, string, string) (any, error), desktopStream func(context.Context, string, string, func([]byte)) error, desktopResource desktopResourceHandler, desktopOnly bool) {
 	if gui && runtime.GOOS == "windows" {
-		if local, err := desktopWindowURL(address); err == nil && openDesktopWindow(local, onWindowClose) {
-			return
+		if local, err := desktopWindowURL(address); err == nil {
+			if openDesktopWindow(desktopWindowURLWithMarker(local), desktopWebViewURL(), onWindowClose, desktopRequest, desktopStream, desktopResource, desktopOnly) {
+				return
+			}
 		}
+	}
+	if desktopOnly {
+		tray.Alert("wuDict2", "WebView2 could not start, so the desktop app cannot open.")
+		if onWindowClose != nil {
+			onWindowClose()
+		}
+		return
 	}
 	browserCmd(address)
 }
+
+func desktopWebViewURL() string {
+	return "https://wudict2.localhost/?wudict_webview2=1"
+}
+
+const legacyDesktopWebViewOrigin = "https://wudict2.local"
 
 func desktopWindowURL(address string) (string, error) {
 	u, err := url.Parse(address)
@@ -1970,6 +1981,14 @@ func desktopWindowURL(address string) (string, error) {
 	}
 	u.Host = net.JoinHostPort("127.0.0.1", u.Port())
 	return u.String(), nil
+}
+
+func desktopWindowURLWithMarker(address string) string {
+	local, _ := url.Parse(address)
+	query := local.Query()
+	query.Set("wudict_webview2", "1")
+	local.RawQuery = query.Encode()
+	return local.String()
 }
 
 func browserCmd(url string) {
@@ -1997,7 +2016,7 @@ func cmdSearchAll(args []string) error {
 	base := fs.String("base", "", "prefix for /res/… references (e.g. http://127.0.0.1:6888)")
 	var dictDirs multiFlag
 	fs.Var(&dictDirs, "dict-dir", "folder to search; repeat for several (env/toml: DICT_DIR)")
-	configPath := fs.String("config", "", "path to wudict.toml (env: CONFIG_PATH)")
+	configPath := fs.String("config", "", fmt.Sprintf("path to %s (env: CONFIG_PATH)", config.Name))
 	fs.Parse(args)
 
 	// The folder is optional now, so the term is the last argument either way.
@@ -2383,7 +2402,7 @@ func isTerminal(f *os.File) bool {
 func cmdToken(args []string) error {
 	fs := flag.NewFlagSet("token", flag.ExitOnError)
 	rotate := fs.Bool("rotate", false, "replace the key: every browser and script holding the old one loses access")
-	configPath := fs.String("config", "", "path to wudict.toml (env: CONFIG_PATH)")
+	configPath := fs.String("config", "", fmt.Sprintf("path to %s (env: CONFIG_PATH)", config.Name))
 	fs.Parse(args)
 	if *configPath == "" {
 		*configPath = os.Getenv("CONFIG_PATH")

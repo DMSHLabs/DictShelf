@@ -1,5 +1,21 @@
 # Localization: status and next tasks
 
+2026-10-19 Settings → Language: made it a permanent first row outside the collapsible sections, with label and dropdown on one line; System is the default before English and Русский. The saved choice resolves from the requesting browser/app locale (English/Russian supported, English fallback); Android native resources follow device configuration. Go build passes; runtime and Android Java verification pending.
+
+2026-10-19 Added Settings → Appearance Fonts selector (System/Charis/Gentium) and EN/RU labels. Go build passes; runtime label/layout and device rendering remain unverified.
+
+2026-10-19 Export dialog: added the group-selection checkbox label; success status is now only n of T exported / Экспортировано: n из T. Runtime layout check remains pending.
+
+2026-10-19 Headword export: Tools section, dictionary selection, folder, file options and progress/Stop messages added in EN/RU. Catalog checks pass; visual layout and native-device wording remain unverified.
+
+2026-10-19 Results group picker label is Groups: / Группы:. Runtime layout verification is pending.
+
+2026-10-19 Search as you type options now read Never / Below … / Always and Никогда / Менее … / Всегда. Runtime layout verification is pending.
+
+2026-10-19 Search as you type: shortened the Settings label in EN/RU and added Always / Всегда for unrestricted input search. Runtime wording/layout verification is pending.
+
+2026-10-16 Browse/article transition diagnostics: added an independent System checkbox and EN/RU labels; the timing events go to the existing System Log without enabling the other diagnostics. Catalog JSON parses and `go build ./...` passes; Windows and Android label/layout checks remain.
+
 2026-10-13 folder diagnostics: EN/RU Log file label and hint updated for folder timing and index failure details. WebView2/Android wording check remains.
 
 2026-10-12 Browse Apply threshold: the ✓ action now uses a mode-neutral EN/RU label because the headword-count threshold applies to search and filter with or without mask. Browser/device wording check remains.
@@ -79,10 +95,10 @@ Continue to commit, merge into `dev`, and publish only when requested; do not in
 
 ## Already implemented
 
-- [x] Manual English / Русский selection in Settings, English default, `language` persisted in `state.json`, applied through reload.
+- [x] Settings language selector with System (default), English and Русский; the saved choice is persisted in `state.json`, System resolves from the app/browser locale with English fallback, explicit choices override it and apply through reload.
 - [x] Catalogs, fallback, interpolation, plural forms, synchronous bootstrap, and language-aware page caching.
 - [x] Browse, including empty states, counts, and navigation.
-- [x] Main/FOSS/Play Android resources and resource contexts following the manual language choice.
+- [x] Main/FOSS/Play Android resources and resource contexts following explicit language choices or the device locale for System.
 - [x] Settings, appearance, built-in layer/look names, CSS editor, and related dialogs.
 - [x] Dictionary settings and groups: cards, indexes, removal, confirmations, and known group-validation errors.
 - [x] Folders: hints, server-generated introduction, import, download, and counts.
@@ -140,6 +156,7 @@ The user confirmed that the former Language dialog worked and Browse changed lan
 - [ ] Confirm that Language remains only in Settings; the first-run Folders page no longer has a separate selector, at the user's request.
 - [ ] Check phone widths: 320/360px, long labels, search modes, Examples buttons, System Settings, and the CSS editor. Specifically check Settings labels: `Оформления`, `Размер шрифта`, `Толщина шрифта`, `Компактно`, `Примеры`, and `Нижняя панель` must be fully readable on one line; appearance-row controls must begin at the same x coordinate; `Читать вслух` in Results must be fully visible with its pair beside it. A control should move to a second line only when that row's content really lacks room, and the three appearance buttons must wrap together.
 - [ ] Check day/night, custom background color, wallpaper, and Quiet labels. Translation must not restore grey text to active controls or break window appearance.
+- [ ] Verify **Camera area and system bars** appears only in Android Appearance, not Windows WebView; check the EN/RU labels and Android controls after rebuilding.
 - [ ] Check Russian counts: 1/2/5/11/21/22; limited results with `+`; long dictionary/group names and paths.
 - [ ] Check import, notifications, and native dialogs in the required flavors; Android's system picker may remain in the system language.
 - [ ] Check Advanced: inherited value, ranges, invalid input, restore, and the notice about applying settings on next opening. Do not change real settings solely for testing without necessity and an authorized context.
@@ -155,7 +172,7 @@ Do not run these actions automatically in the emulator: the user has currently t
 - [ ] **Sentence fragments:** the Folders page and saved-path hint still have separate text fragments around DOM nodes. If the next language needs a different word order, move to a safe template with DOM parameters; do not insert unchecked HTML from the catalog.
 - [ ] **Simplifying knowledge storage:** `docs/I18N.md` contains early stage history; rules now live in `translation.md`, and remaining work lives here. Do not maintain three independent TODO lists. Preserve verification facts during future cleanup without presenting them as new checks.
 - [ ] **Key names:** do not rename working `panel.*`/`pages.*` and other namespaces in bulk without a reason. If a key is misleading, change it together with every reference and check.
-- [ ] **A new language:** this is a separate task. The en/ru allowlist is currently repeated in the Go loader and normalization/validation, Settings drop-down, Android `UiLanguage`, checks, and `/api/language` schemas in `internal/server/web/openapi.yaml`. One new JSON file is not enough; Android resources, plural forms, fallback, and tests are needed. Keep static-slot keys as strings and check dynamic key sets too. Do not enable automatic system-language selection.
+- [ ] **A new language:** this is a separate task. The en/ru allowlist is repeated in the Go loader and normalization/validation, Settings drop-down, Android `UiLanguage`, checks, and `/api/language` schemas in `internal/server/web/openapi.yaml`. One new JSON file is not enough; Android resources, plural forms, fallback, and tests are needed. Keep static-slot keys as strings and check dynamic key sets too.
 - [ ] **RTL:** not implemented. Direction, CSS, and menus require separate verification; do not promise Arabic/Hebrew support after adding only a catalog.
 - [ ] **Main-page `html lang`:** do not switch it before separating the article-segmentation fallback from the UI language. Retaining `en` is currently intentional. This is an accessibility/language-architecture task, not a mechanical attribute replacement.
 
@@ -176,6 +193,10 @@ Checks covered catalogs, served pages, plural forms, preservation of data/identi
 An APK was not built or installed during those translation stages. The later preview release did include an APK build, as recorded above; that build is not evidence of phone/emulator verification. The layout stage separately recorded Chromium checks, including simulated text zoom. The full test suite was not rerun during the final translation stages; known baseline problems are documented in `docs/WINDOWS-VERIFY.md`.
 
 Category localization: targeted `Test(I18n|AppearanceContract)` server tests, `go test ./internal/facet ./internal/lang`, `node tools/i18n-test.cjs`, and `git diff --check` passed. The new Node cases cover labels, language pairs, unknown values, absent language-name support, HTML escaping, unchanged metadata, and identical selected dictionary IDs. No APK build or device check was performed.
+
+Windows transport stage (2026-10-15): Settings saves the manually selected interface language through the native bridge, which calls the same `Prefs.setLanguage` operation as the HTTP adapter. `go build ./...`, `git diff --check`, and the GUI `build-windows.cmd` build pass. Verify English/Russian selection and persistence after reload in the Windows app; catalogs and language-selection behavior were not changed.
+
+Create portable (2026-10-20): Windows Tools command, dialog, hints, file-counting phase, percentage progress and created-path confirmation have EN/RU catalog entries. Catalog tests and inline JavaScript syntax pass. Verify dialog layout, folder picking, Stop, and completion/error messages in both languages in the desktop app.
 
 ## 7. Maintaining this file
 

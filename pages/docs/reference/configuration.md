@@ -203,7 +203,7 @@ How many dictionaries are indexed at the same time.
 | | |
 | --- | --- |
 | Flag | `--index-workers <n>` |
-| Values | a number; `auto` or `0`: one per CPU core |
+| Values | a number; `auto`: one fewer than the CPU core count, at least one; `0` or `all`: one per core |
 | Default | `1` |
 
 Indexing one dictionary fully uses one CPU core and a few hundred bytes of
@@ -248,17 +248,6 @@ A soft memory limit for the whole process.
 
 Near the limit, the Go runtime collects garbage more often and wudict drops its
 caches; the process can still exceed it.
-
-### NO_COMPRESS
-
-Store article text uncompressed.
-
-| | |
-| --- | --- |
-| Flag | `--no-compress` |
-| Default | off: article text is DEFLATE-compressed |
-
-The library becomes about 3 times larger; reads are slightly faster.
 
 ## Lemmatization
 

@@ -1,7 +1,10 @@
 package server
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
 	"path/filepath"
 	"slices"
@@ -48,6 +51,7 @@ type DictPref struct {
 	ID     string   `json:"id"`
 	Path   string   `json:"path"`
 	Name   string   `json:"name,omitempty"`   // display name, for a readable file
+	Title  *string  `json:"title,omitempty"`  // optional user-facing label; nil restores the dictionary's own name
 	Off    bool     `json:"off,omitempty"`    // excluded from "All dictionaries"
 	Pinned *bool    `json:"pinned,omitempty"` // fixed at the top when All Dictionaries is sorted
 }
@@ -67,6 +71,8 @@ type UIPrefs struct {
 	// Server state and not localStorage, for the reason the size is not - a
 	// reader who needs 500 needs it on the phone that reaches this server too.
 	FontWeight int `json:"fontWeight,omitempty"`
+
+	FontFamily string `json:"fontFamily,omitempty"` // system, charis, gentium or quivira
 
 	// HLOff turns OFF marking of full-text matches inside articles. It is
 	// negating for the same reason DictPref.Off is: the default is on, and a
@@ -171,6 +177,13 @@ func (u *UIPrefs) normalize() {
 	if u.FontSize != 0 {
 		u.FontSize = max(FontSizeMin, min(FontSizeMax, u.FontSize))
 	}
+	switch u.FontFamily {
+	case "charis", "gentium", "quivira", "system":
+	case "":
+		u.FontFamily = "charis"
+	default:
+		u.FontFamily = ""
+	}
 	u.GroupsOff = facetIDs(u.GroupsOff)
 	if u.OpenN <= 1 {
 		u.OpenN = 0 // one, the default, is stored as absent
@@ -205,13 +218,14 @@ func facetIDs(in []string) []string {
 // prefsFile stores collection state. Unknown legacy parser-selection fields
 // are ignored by JSON decoding and disappear on the next save.
 type prefsFile struct {
-	IndexDefaults *indexOptions           `json:"indexDefaults,omitempty"`
-	IndexMigrated map[string]bool         `json:"indexMigrated,omitempty"` // completed legacy receipt migrations, per source
-	DSLKnown      map[string]bool         `json:"dslKnown,omitempty"`
-	DSLPending    map[string]indexOptions `json:"dslPending,omitempty"`
-	DSLRemoved    map[string]bool         `json:"dslRemoved,omitempty"`
-	Damaged       map[string]string       `json:"damagedSources,omitempty"` // source path → size:mtime signature
-	Language      string                  `json:"language,omitempty"`       // explicit interface language, never the dictionary language
+	DSLTitleRepairs *bool                   `json:"dslTitleRepairs,omitempty"`
+	IndexDefaults   *indexOptions           `json:"indexDefaults,omitempty"`
+	IndexMigrated   map[string]bool         `json:"indexMigrated,omitempty"` // completed legacy receipt migrations, per source
+	DSLKnown        map[string]bool         `json:"dslKnown,omitempty"`
+	DSLPending      map[string]indexOptions `json:"dslPending,omitempty"`
+	DSLRemoved      map[string]bool         `json:"dslRemoved,omitempty"`
+	Damaged         map[string]string       `json:"damagedSources,omitempty"` // source path → size:mtime signature
+	Language        string                  `json:"language,omitempty"`       // interface language choice: system, en or ru; never the dictionary language
 
 	Groups  []DictionaryGroup `json:"groups,omitempty"`
 	Version int               `json:"version"`
@@ -235,6 +249,14 @@ type Prefs struct {
 	// update()/mutate() only makes each WRITE atomic; this is what keeps two
 	// such sequences from interleaving and losing one of them.
 	editMu sync.Mutex
+}
+
+func (p *Prefs) dslTitleRepairs() (bool, bool) {
+	f, _ := p.data()
+	if f.DSLTitleRepairs == nil {
+		return true, false
+	}
+	return *f.DSLTitleRepairs, true
 }
 
 // maxPrefsBytes bounds state.json: thousands of dictionaries' worth, and a
@@ -345,7 +367,24 @@ func (p *Prefs) Off(id, path string) bool {
 // Snapshot returns the records and whether a state file exists.
 func (p *Prefs) Snapshot() (dicts []DictPref, exists bool) {
 	f, ok := p.data()
-	return append([]DictPref(nil), f.Dicts...), ok
+	// Internal index receipts may create state.json during first-run
+	// preparation. They are not collection preferences and must not prevent
+	// the browser from adopting its legacy localStorage order on first visit.
+	userState := f.Dicts != nil || f.UI != nil || f.Groups != nil || f.Language != "" ||
+		f.IndexDefaults != nil || f.DSLTitleRepairs != nil
+	return append([]DictPref(nil), f.Dicts...), ok && userState
+}
+
+// DisplayTitle returns a dictionary's optional user-facing label. Dictionary
+// identity and its own metadata name remain unchanged.
+func (p *Prefs) DisplayTitle(id string) string {
+	dicts, _ := p.Snapshot()
+	for _, d := range dicts {
+		if d.ID == id && d.Title != nil {
+			return *d.Title
+		}
+	}
+	return ""
 }
 
 // Replace stores a new list and writes it, atomically (fsx.WriteAtomic): a
@@ -567,10 +606,21 @@ func (p *Prefs) merge(r *Registry, want []DictPref) []DictPref {
 		for _, old := range stored {
 			if old.ID == d.ID || fsx.SamePath(old.Path, d.Path) {
 				d.Groups = append([]string(nil), old.Groups...)
+				if d.Title == nil {
+					d.Title = old.Title
+				}
 				if d.Pinned == nil {
 					d.Pinned = old.Pinned
 				}
 				break
+			}
+		}
+		if d.Title != nil {
+			title := strings.TrimSpace(*d.Title)
+			if title == "" {
+				d.Title = nil
+			} else {
+				d.Title = &title
 			}
 		}
 		seenID[d.ID] = true
@@ -601,14 +651,20 @@ func cleanAbs(p string) string {
 	return filepath.Clean(p)
 }
 
-// GET /api/prefs - the enabled set and the order, healed against the
+// PrefsSnapshot returns the enabled set and order, healed against the
 // dictionaries that exist right now. "exists" is false on a first run, which
 // is the client's cue to adopt whatever an older build left in localStorage
-// (once) instead of starting the user over.
-func (s *Server) handlePrefs(w http.ResponseWriter, r *http.Request) {
+// (once) instead of starting the user over. The desktop bridge and HTTP route
+// share this method so both transports see the same state.
+func (s *Server) PrefsSnapshot() map[string]any {
 	dicts := s.reg.prefs.heal(s.reg)
 	_, exists := s.reg.prefs.Snapshot()
-	writeJSON(w, map[string]any{"exists": exists, "dicts": dicts, "ui": s.reg.prefs.UI()})
+	return map[string]any{"exists": exists, "dicts": dicts, "ui": s.reg.prefs.UI()}
+}
+
+// GET /api/prefs
+func (s *Server) handlePrefs(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, s.PrefsSnapshot())
 }
 
 // PUT /api/prefs - replace the order and enabled set when the request sends
@@ -616,12 +672,43 @@ func (s *Server) handlePrefs(w http.ResponseWriter, r *http.Request) {
 // keeps the stored list: a page that changed only a UI setting must not carry
 // its stale copy of the order back over another page's newer one.
 func (s *Server) handleSavePrefs(w http.ResponseWriter, r *http.Request) {
+	result, err := s.SavePrefs(r.Body)
+	if err != nil {
+		var apiErr *prefsSaveError
+		if errors.As(err, &apiErr) {
+			httpErr(w, apiErr.status, "%s", apiErr.message)
+			return
+		}
+		httpErr(w, http.StatusInternalServerError, "%s", "could not save: "+err.Error())
+		return
+	}
+	writeJSON(w, result)
+}
+
+type prefsSaveError struct {
+	status  int
+	message string
+}
+
+func (e *prefsSaveError) Error() string { return e.message }
+
+// SavePrefs applies the /api/prefs update and returns its response snapshot.
+// HTTP and the Windows WebView bridge share this path so writes have identical
+// validation, merge and persistence behavior regardless of transport.
+func (s *Server) SavePrefs(body io.Reader) (map[string]any, error) {
 	var req struct {
 		Dicts []DictPref      `json:"dicts"`
 		UI    json.RawMessage `json:"ui"` // raw: which keys are present is the patch
 	}
-	if !decodeJSON(w, r, &req, 1<<20) {
-		return
+	data, err := io.ReadAll(io.LimitReader(body, (1<<20)+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(data) > 1<<20 {
+		return nil, &prefsSaveError{status: http.StatusRequestEntityTooLarge, message: "the request is larger than 1048576 bytes"}
+	}
+	if err := json.NewDecoder(bytes.NewReader(data)).Decode(&req); err != nil {
+		return nil, &prefsSaveError{status: http.StatusBadRequest, message: "bad request: " + err.Error()}
 	}
 	// merge reads the stored records and update writes them back: the pair is
 	// one read-modify-write, so it is serialized as one.
@@ -631,8 +718,7 @@ func (s *Server) handleSavePrefs(w http.ResponseWriter, r *http.Request) {
 	// save rather than inside it, where it would read as the server's (500).
 	if mentioned(req.UI) {
 		if err := json.Unmarshal(req.UI, new(UIPrefs)); err != nil {
-			httpErr(w, http.StatusBadRequest, "bad request: %v", err)
-			return
+			return nil, &prefsSaveError{status: http.StatusBadRequest, message: "bad request: " + err.Error()}
 		}
 	}
 	var merged []DictPref
@@ -640,12 +726,11 @@ func (s *Server) handleSavePrefs(w http.ResponseWriter, r *http.Request) {
 		merged = s.reg.prefs.merge(s.reg, req.Dicts)
 	}
 	if err := s.reg.prefs.update(merged, req.UI); err != nil {
-		httpErr(w, http.StatusInternalServerError, "%s", "could not save: "+err.Error())
-		return
+		return nil, err
 	}
 	dicts, _ := s.reg.prefs.Snapshot()
 	if dicts == nil {
 		dicts = []DictPref{} // [] on the wire, as before, never null
 	}
-	writeJSON(w, map[string]any{"exists": true, "dicts": dicts, "ui": s.reg.prefs.UI()})
+	return map[string]any{"exists": true, "dicts": dicts, "ui": s.reg.prefs.UI()}, nil
 }

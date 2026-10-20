@@ -28,16 +28,27 @@ final class UiLanguage {
         File state = new File(AppDirs.home(context), ".wudict/state.json");
         long stamp = state.lastModified(), size = state.length();
         if (stamp != modified || size != length) {
-            String next = "en";
+            String choice = "system";
             try {
                 JSONObject json = new JSONObject(new String(Files.readAllBytes(state.toPath()), StandardCharsets.UTF_8));
-                if ("ru".equals(json.optString("language"))) next = "ru";
-            } catch (Exception ignored) { /* first run or unreadable state: English */ }
+                String saved = json.optString("language", "system");
+                if ("en".equals(saved) || "ru".equals(saved)) choice = saved;
+            } catch (Exception ignored) { /* first run or unreadable state: System */ }
             modified = stamp;
             length = size;
-            code = next;
+            code = "system".equals(choice) ? systemLanguage(context) : choice;
         }
         return code;
+    }
+
+    private static String systemLanguage(Context context) {
+        LocaleList locales = context.getResources().getConfiguration().getLocales();
+        for (int i = 0; i < locales.size(); i++) {
+            String language = locales.get(i).getLanguage();
+            if ("ru".equals(language)) return "ru";
+            if ("en".equals(language)) return "en";
+        }
+        return "en";
     }
 
     static Context context(Context base) {

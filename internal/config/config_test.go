@@ -265,8 +265,8 @@ func TestWebOriginsConfig(t *testing.T) {
 	}
 }
 
-// AUTO_INDEX is ignored so older config files continue to load after the
-// search-triggered index setting has been removed.
+// AUTO_INDEX is a retired setting. Older config files still load, while index
+// preparation is driven by dictionary discovery rather than search requests.
 func TestLegacyAutoIndexSettingIgnored(t *testing.T) {
 	p := filepath.Join(t.TempDir(), Name)
 	if err := os.WriteFile(p, []byte("AUTO_INDEX = \"off\"\nSERVER_PORT = \"7788\"\n"), 0o644); err != nil {
@@ -373,7 +373,7 @@ func TestImportKeepValues(t *testing.T) {
 func TestParseWorkersAndSize(t *testing.T) {
 	cpu := runtime.NumCPU()
 	for in, want := range map[string]int{
-		"1": 1, "2": 2, "auto": cpu, "all": cpu, "max": cpu, "0": cpu, "-1": cpu,
+		"1": 1, "2": 2, "auto": max(1, cpu-1), "all": cpu, "max": cpu, "0": cpu, "-1": cpu,
 		"": 1, "nonsense": 1, "99999": cpu,
 	} {
 		if got := ParseWorkers(in); got != want {
@@ -393,6 +393,24 @@ func TestParseWorkersAndSize(t *testing.T) {
 	if err == nil && cfg.IndexWorkers != 1 {
 		t.Errorf("default INDEX_WORKERS = %d, want 1", cfg.IndexWorkers)
 	}
+	if err == nil && cfg.IndexWorkersValue != "1" {
+		t.Errorf("default INDEX_WORKERS value = %q, want 1", cfg.IndexWorkersValue)
+	}
+
+	t.Run("auto selection is retained separately from its resolved count", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), Name)
+		if err := os.WriteFile(path, []byte("INDEX_WORKERS = \"auto\"\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		got, err := Load(path, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := max(1, runtime.NumCPU()-1)
+		if got.IndexWorkers != want || got.IndexWorkersValue != "auto" {
+			t.Errorf("INDEX_WORKERS = %d (%q), want %d (auto)", got.IndexWorkers, got.IndexWorkersValue, want)
+		}
+	})
 }
 
 // isolate points the three search anchors at empty temporary directories, so a
@@ -525,37 +543,10 @@ func TestConfigLocation(t *testing.T) {
 	})
 }
 
-// A key whose value says "off" must not turn the feature on. NO_COMPRESS used
-// to test "0"/"false" inline and so read "off" as "set, therefore on" (D101).
-func TestNoCompressNegatives(t *testing.T) {
-	for _, tc := range []struct {
-		v    string
-		want bool
-	}{
-		{"", false}, {"0", false}, {"false", false}, {"FALSE", false},
-		{"off", false}, {"no", false}, {"n", false},
-		{"1", true}, {"true", true}, {"yes", true},
-	} {
-		t.Run("v="+tc.v, func(t *testing.T) {
-			t.Setenv("NO_COMPRESS", tc.v)
-			toml := filepath.Join(t.TempDir(), Name)
-			os.WriteFile(toml, nil, 0o644)
-			cfg, err := Load(toml, nil)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if cfg.NoCompress != tc.want {
-				t.Errorf("NO_COMPRESS=%q -> NoCompress %v, want %v", tc.v, cfg.NoCompress, tc.want)
-			}
-		})
-	}
-}
-
 func TestEffective(t *testing.T) {
 	dir := t.TempDir()
 	toml := filepath.Join(dir, Name)
 	os.WriteFile(toml, []byte("INDEX_WORKERS = \"1\"\nPREVIEW_MEMORY = \"2GB\"\n"), 0o644)
-	t.Setenv("NO_COMPRESS", "1")
 	cfg, err := Load(toml, map[string]string{"SERVER_PORT": "7000"})
 	if err != nil {
 		t.Fatal(err)
@@ -565,8 +556,6 @@ func TestEffective(t *testing.T) {
 		t.Fatalf("Effective() has %d keys, want %d", len(eff), len(Tunables))
 	}
 	for _, tc := range []struct{ key, value, origin string }{
-		{"NO_COMPRESS", "1", OriginEnv},
-		{"PREVIEW_MEMORY", "2GB", OriginFile},
 		{"INDEX_WORKERS", "1", OriginFile},
 		{"SERVER_PORT", "7000", OriginFlag},
 		{"SERVER_IP", cfg.IP, OriginDefault},
@@ -575,10 +564,6 @@ func TestEffective(t *testing.T) {
 		if got.Value != tc.value || got.Origin != tc.origin {
 			t.Errorf("Effective()[%q] = %+v, want {%q %q}", tc.key, got, tc.value, tc.origin)
 		}
-	}
-	// The values must read back the way the config would accept them.
-	if v := eff["SEARCH_MEMORY"].Value; ParseSize(v) != cfg.SearchMemory {
-		t.Errorf("SEARCH_MEMORY %q reparses to %d, want %d", v, ParseSize(v), cfg.SearchMemory)
 	}
 }
 
@@ -624,7 +609,6 @@ func TestBooleanKeysAgree(t *testing.T) {
 		"VERBOSE":             func(c Config) bool { return c.Verbose },
 		"USE_CACHED":          func(c Config) bool { return c.UseCached },
 		"ALLOW_REMOTE_DELETE": func(c Config) bool { return c.AllowRemoteDelete },
-		"NO_COMPRESS":         func(c Config) bool { return c.NoCompress },
 		"TRAY":                func(c Config) bool { return c.Tray != nil && *c.Tray },
 	}
 	values := map[string]bool{
@@ -654,14 +638,14 @@ func TestBooleanKeysAgree(t *testing.T) {
 // ("decide from how the app was launched", D74), not false.
 func TestBooleanKeysUnset(t *testing.T) {
 	isolate(t)
-	for _, k := range []string{"NO_BROWSER", "VERBOSE", "USE_CACHED", "ALLOW_REMOTE_DELETE", "NO_COMPRESS", "TRAY"} {
+	for _, k := range []string{"NO_BROWSER", "VERBOSE", "USE_CACHED", "ALLOW_REMOTE_DELETE", "TRAY"} {
 		t.Setenv(k, "")
 	}
 	cfg, err := Load("", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.NoBrowser || cfg.Verbose || cfg.UseCached || cfg.AllowRemoteDelete || cfg.NoCompress {
+	if cfg.NoBrowser || cfg.Verbose || cfg.UseCached || cfg.AllowRemoteDelete {
 		t.Errorf("an unset boolean turned something on: %+v", cfg)
 	}
 	if cfg.Tray != nil {

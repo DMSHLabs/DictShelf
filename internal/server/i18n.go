@@ -6,15 +6,19 @@ package server
 import (
 	"embed"
 	"encoding/json"
+	"errors"
 	"html"
 	"io"
 	"net/http"
 	"regexp"
 	"strings"
+
+	"golang.org/x/text/language"
 )
 
-// Catalogs are embedded and decoded once. No OS/browser locale detection: the
-// reader explicitly chooses a language for this installation, default English.
+// Catalogs are embedded and decoded once. The saved choice is System, English
+// or Russian; System resolves from the requesting browser/app's preferred
+// languages, independently of dictionary and article languages.
 //
 //go:embed web/i18n/*.json
 var uiCatalogFiles embed.FS
@@ -51,14 +55,50 @@ func uiLanguage(code string) string {
 	return "en"
 }
 
+func uiLanguageChoice(code string) string {
+	switch code {
+	case "en", "ru", "system":
+		return code
+	default:
+		return "system"
+	}
+}
+
+var uiLanguageMatcher = language.NewMatcher([]language.Tag{language.English, language.Russian})
+
+func resolveUILanguage(choice, acceptLanguage string) string {
+	choice = uiLanguageChoice(choice)
+	if choice != "system" {
+		return choice
+	}
+	if len(acceptLanguage) > 1024 {
+		acceptLanguage = acceptLanguage[:1024]
+	}
+	preferred, _, _ := language.ParseAcceptLanguage(acceptLanguage)
+	if len(preferred) != 0 {
+		matched, _, _ := uiLanguageMatcher.Match(preferred...)
+		if base, _ := matched.Base(); base.String() == "ru" {
+			return "ru"
+		}
+	}
+	return "en"
+}
+
 func (p *Prefs) Language() string {
 	f, _ := p.data()
-	return uiLanguage(f.Language)
+	return uiLanguageChoice(f.Language)
+}
+
+func (p *Prefs) ResolvedLanguage(acceptLanguage string) string {
+	return resolveUILanguage(p.Language(), acceptLanguage)
 }
 
 // A dedicated update avoids an old tab's full UI preferences overwriting a
 // newly chosen language. It also leaves dictionary order/groups untouched.
 func (p *Prefs) setLanguage(code string) error {
+	if code != "system" && code != "en" && code != "ru" {
+		return errors.New("unsupported language")
+	}
 	p.editMu.Lock()
 	defer p.editMu.Unlock()
 	return p.mutate(func(f *prefsFile) { f.Language = code })
@@ -66,6 +106,7 @@ func (p *Prefs) setLanguage(code string) error {
 
 func (s *Server) handleLanguage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Add("Vary", "Accept-Language")
 	if r.Method == http.MethodPut {
 		var req struct {
 			Language string `json:"language"`
@@ -75,7 +116,7 @@ func (s *Server) handleLanguage(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "bad request", http.StatusBadRequest)
 			return
 		}
-		if err := dec.Decode(new(any)); err != io.EOF || (req.Language != "en" && req.Language != "ru") {
+		if err := dec.Decode(new(any)); err != io.EOF || (req.Language != "system" && req.Language != "en" && req.Language != "ru") {
 			http.Error(w, "unsupported language", http.StatusBadRequest)
 			return
 		}
@@ -84,7 +125,7 @@ func (s *Server) handleLanguage(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	writeJSON(w, map[string]string{"language": s.reg.prefs.Language()})
+	writeJSON(w, map[string]string{"language": s.reg.prefs.Language(), "resolved": s.reg.prefs.ResolvedLanguage(r.Header.Get("Accept-Language"))})
 }
 
 var uiTextSlot = regexp.MustCompile(`\{\{T:([a-zA-Z0-9_.]+)\}\}`)
@@ -104,14 +145,20 @@ func uiText(code, key string) string {
 // Static text is escaped for HTML/attributes; JSON uses encoding/json's HTML
 // escaping, so a translated </script> cannot terminate the bootstrap element.
 func renderUI(page, code string) string {
+	return renderUIChoice(page, code, code)
+}
+
+func renderUIChoice(page, code, choice string) string {
 	code = uiLanguage(code)
+	choice = uiLanguageChoice(choice)
 	page = strings.ReplaceAll(page, "{{UI_SCALE_DEFAULTS}}", uiScaleDefaultsStyle)
 	page = uiTextSlot.ReplaceAllStringFunc(page, func(slot string) string {
 		key := uiTextSlot.FindStringSubmatch(slot)[1]
 		return html.EscapeString(uiText(code, key))
 	})
-	boot, _ := json.Marshal(map[string]any{"language": code, "messages": uiCatalogs[code], "fallback": uiCatalogs["en"]})
+	boot, _ := json.Marshal(map[string]any{"language": code, "selection": choice, "messages": uiCatalogs[code], "fallback": uiCatalogs["en"]})
 	assets := `<script id="wudict-i18n" type="application/json">` + string(boot) + `</script>` +
+		`<script>window.__wudictI18nMarkupAtMs=performance.now()</script>` +
 		`<script src="/assets/i18n.js?v=` + assetTag(i18nJS) + `"></script>` +
 		`<link rel="stylesheet" href="/assets/i18n.css?v=` + assetTag(i18nCSS) + `">`
 	assets += `<script defer src="/assets/work-progress.js?v=` + assetTag(workProgressJS) + `"></script>`

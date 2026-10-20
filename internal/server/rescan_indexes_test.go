@@ -331,6 +331,7 @@ func TestRescanDeletesRemovedPreparedIndex(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	waitNewDictionaryIndexing(t, reg)
 	s := New(reg)
 	var unwanted string
 	for _, e := range reg.all() {

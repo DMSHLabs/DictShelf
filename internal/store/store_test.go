@@ -517,8 +517,15 @@ func TestFoldedHeadwordSearch(t *testing.T) {
 func TestPrefix(t *testing.T) {
 	s := testStore(t)
 	res, err := s.Prefix("coraz", 10)
-	if err != nil || len(res) != 1 {
-		t.Fatalf("Prefix coraz: %d results, err=%v", len(res), err)
+	if err != nil || len(res) != 2 {
+		t.Fatalf("Prefix coraz: %v, err=%v; want corazón and corazonada", res, err)
+	}
+	got := map[string]bool{}
+	for _, row := range res {
+		got[row.Headword] = true
+	}
+	if !got["corazón"] || !got["corazonada"] {
+		t.Fatalf("Prefix coraz = %v; want corazón and corazonada", res)
 	}
 	// LIKE wildcards in input must be literal (FTS-audit #5)
 	res, err = s.Prefix("100%", 10)
@@ -951,14 +958,10 @@ func TestBodyCompressionRoundTrip(t *testing.T) {
 		"<p>" + string([]byte{0x01, 0x02, 0x7f}) + strings.Repeat("x", 200) + "</p>",
 	}
 	for _, want := range cases {
-		for _, on := range []bool{true, false} {
-			SetCompressBodies(on)
-			if got := decodeBody(encodeBody(want)); got != want {
-				t.Fatalf("compress=%v: round trip changed the body (%d bytes in, %d out)", on, len(want), len(got))
-			}
+		if got := decodeBody(encodeBody(want)); got != want {
+			t.Fatalf("round trip changed the body (%d bytes in, %d out)", len(want), len(got))
 		}
 	}
-	SetCompressBodies(true)
 	// long, repetitive text must actually shrink - otherwise the whole point
 	big := strings.Repeat("<p>palabra significado ejemplo</p>", 100)
 	if enc := encodeBody(big); len(enc) >= len(big)/2 {
@@ -970,9 +973,8 @@ func TestBodyCompressionRoundTrip(t *testing.T) {
 	}
 }
 
-// End to end: the same dictionary ingested with and without compression must
-// answer every mode identically.
-func TestSearchIdenticalWithAndWithoutCompression(t *testing.T) {
+// End to end: compressed article bodies answer every search mode unchanged.
+func TestSearchWithCompressedBodies(t *testing.T) {
 	t.Setenv("WUDICT_DB_DIR", t.TempDir())
 	body := func(w string) string {
 		return "<p>" + strings.Repeat(w+" definición de ejemplo con texto repetido. ", 12) + "</p>"
@@ -981,47 +983,28 @@ func TestSearchIdenticalWithAndWithoutCompression(t *testing.T) {
 		h("corazón", body("corazón")), h("corazonada", body("corazonada")),
 		h("casa", body("casa")), h("Straße", body("Straße")),
 	}
-	results := map[bool][][]dict.Result{}
-	for _, on := range []bool{true, false} {
-		SetCompressBodies(on)
-		p := filepath.Join(t.TempDir(), "text.db")
-		r := &fakeReader{meta: dict.Meta{Name: "C", Format: "mdx", Path: "/x.mdx"}, entries: append([]dict.Entry(nil), entries...)}
-		if _, err := IngestPlan(r, p, Plan{FullText: true, Contains: true}, nil); err != nil {
-			t.Fatal(err)
-		}
-		s, err := Open(p)
-		if err != nil {
-			t.Fatal(err)
-		}
-		var got [][]dict.Result
-		for _, q := range []func() ([]dict.Result, error){
-			func() ([]dict.Result, error) { return s.Exact("corazón", 10) },
-			func() ([]dict.Result, error) { return s.Prefix("cora", 10) },
-			func() ([]dict.Result, error) { return s.ContainsContext(bg, "razon", 10) },
-			func() ([]dict.Result, error) { return s.FullTextContext(bg, "definición", 10) },
-		} {
-			res, err := q()
-			if err != nil {
-				t.Fatal(err)
-			}
-			got = append(got, res)
-		}
-		s.Close()
-		results[on] = got
+	p := filepath.Join(t.TempDir(), "text.db")
+	r := &fakeReader{meta: dict.Meta{Name: "C", Format: "mdx", Path: "/x.mdx"}, entries: entries}
+	if _, err := IngestPlan(r, p, Plan{FullText: true, Contains: true}, nil); err != nil {
+		t.Fatal(err)
 	}
-	SetCompressBodies(true)
-	for i := range results[true] {
-		a, b := results[true][i], results[false][i]
-		if len(a) != len(b) {
-			t.Fatalf("query %d: %d results compressed vs %d uncompressed", i, len(a), len(b))
+	s, err := Open(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	for name, q := range map[string]func() ([]dict.Result, error){
+		"exact": func() ([]dict.Result, error) { return s.Exact("corazón", 10) },
+		"prefix": func() ([]dict.Result, error) { return s.Prefix("cora", 10) },
+		"contains": func() ([]dict.Result, error) { return s.ContainsContext(bg, "razon", 10) },
+		"full-text": func() ([]dict.Result, error) { return s.FullTextContext(bg, "definición", 10) },
+	} {
+		results, err := q()
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
 		}
-		for j := range a {
-			if a[j].Headword != b[j].Headword || a[j].Body != b[j].Body {
-				t.Fatalf("query %d result %d differs between compressed and uncompressed", i, j)
-			}
-		}
-		if len(a) == 0 {
-			t.Errorf("query %d returned nothing - the comparison proves nothing", i)
+		if len(results) == 0 {
+			t.Errorf("%s returned nothing", name)
 		}
 	}
 }
@@ -1058,9 +1041,15 @@ func TestDefaultPlanOmitsTrigram(t *testing.T) {
 	}
 	// asked for, it works
 	on := mk(Plan{FullText: true, Contains: true})
-	res, err := on.ContainsContext(bg, "razon", 5)
+	res, err := on.ContainsContext(WithIgnoreDiacritics(bg), "razon", 5)
 	if err != nil || len(res) != 1 {
-		t.Fatalf("contains when asked for: %v %v", res, err)
+		t.Fatalf("contains when asked for: %v %v; want corazón", res, err)
+	}
+	if res[0].Headword != "corazón" {
+		t.Fatalf("contains with diacritics ignored = %v; want corazón", res)
+	}
+	if res, err := on.ContainsContext(bg, "razon", 5); err != nil || len(res) != 0 {
+		t.Fatalf("contains with diacritics preserved = %v, %v; want no match", res, err)
 	}
 	// and contains without full text is a legal combination
 	small := mk(Plan{Contains: true})

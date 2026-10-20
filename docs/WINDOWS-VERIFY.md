@@ -9,6 +9,14 @@ them are in `docs/handoff-archive.md`.
 
 ## Windows verification recipes (this machine)
 
+- **2026-10-14 GUI builds:** `build-windows.cmd debug` and `release` use
+  `-H windowsgui` (PE subsystem 2). `build-windows.cmd debug console` builds
+  the same executable with the console subsystem (3) for terminal diagnostics. GUI launch detection reads
+  the current executable's PE subsystem when there is no console, so the
+  GUI artifact selects WebView2 even when started from cmd. Redirected
+  `--version` remains usable by the build verification. Restart the app to
+  load a rebuilt executable.
+
 - **2026-09-29 localization baseline:** `TestSetupFlow` also fails on unchanged
   `e938e17` (`server_test.go:574`, "app page not served after setup"). Its
   assertion searches served HTML for the old `design tokens` comment after CSS
@@ -41,20 +49,20 @@ them are in `docs/handoff-archive.md`.
   process after a restart. The page also caches its CSS by the `?v=` hash, so
   the browser must be reloaded after the server is really new.
 - Go: `go build ./...`; targeted `go test ./internal/<pkg> -run '...' -count=1`.
-- **`build-windows.cmd [debug|release] [installer] [purego]`** — the fork's desktop build
-  (added 2026-09-28, beside `build-android.cmd`): `wuDict2.exe` (GUI subsystem) and `wuDict2-cli.exe` (console) in the repo root,
+- **`build-windows.cmd [debug|release] [console]`** — the fork's desktop build
+  (added 2026-09-28, beside `build-android.cmd`): one `wuDict2.exe` in the repo root,
   upstream's product (wuDict, port 6888, its own config and library), NOT the
   Android app. **Every machine path it needs is in one block at the top of the
   file** — `GCC_PATH` (pinned to Qt's mingw-w64 GCC; empty falls back to `%CC%`,
   then `gcc.exe` on PATH, then `GCC_ROOTS`), `GCC_ROOTS`, `ISCC_PATH` — and each
   of those respects a value inherited from the environment, the way
-  build-android.cmd respects `ANDROID_HOME`. Flavour is chosen for you: cgo
-  (`-tags sqlite_fts5`, CGO_ENABLED=1) when a C compiler can be found, the
-  pure-Go one when it cannot (`purego` forces the second). On this machine the
-  Qt GCC 13.1.0 is found, so the default build here IS the cgo one — what
-  `make build` and the CI cgo job ship. `cl.exe` is unusable: Go's cgo drives a
-  gcc-style compiler, not MSVC. Verified 2026-09-28: both flavours build, run,
-  and the cgo exe ingests a `test_data` `.dsl.dz` and answers `fts` (mattn +
+  build-android.cmd respects `ANDROID_HOME`. Windows desktop always requires
+  cgo (`-tags sqlite_fts5`, CGO_ENABLED=1); there is no purego option or
+  fallback. If no compatible GCC is found, the script exits before replacing
+  the existing executable. On this machine the Qt GCC 13.1.0 is found, which
+  produces what `make build` and the CI cgo job ship. `cl.exe` is unusable: Go's
+  cgo drives a gcc-style compiler, not MSVC. Verified 2026-09-28: the cgo exe
+  builds, runs, ingests a `test_data` `.dsl.dz` and answers `fts` (mattn +
   FTS5 inside the artifact; tags, CGO flag and driver are read back out of it
   with `go version -m`); its imports are KERNEL32 and msvcrt only, so no mingw
   DLL has to sit beside it.
@@ -100,7 +108,7 @@ them are in `docs/handoff-archive.md`.
   `control-browser`) against a local preview, which is the way to check the
   page actually runs: build the server with `go build -o <tmp>/wuDict2.exe .`,
   start it with isolated dirs and no auth —
-  `wuDict2-cli.exe serve -dict-dir <test_data> -db-dir <tmp>/lib -config <tmp>/wudict.toml
+  `wuDict2.exe serve -dict-dir <test_data> -db-dir <tmp>/lib -config <tmp>/wudict.toml
   -port 6925 -auth off -no-browser -no-tray` (the `-config` file must EXIST,
   even empty) — then load `http://127.0.0.1:6925/` in the browser and read the
   page's own state with `evaluate` (tokens, `localStorage`, element `hidden`

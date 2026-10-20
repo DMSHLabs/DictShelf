@@ -2,9 +2,8 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-// WuWeiDict's Android shell (D52): a WebView over the wudict server binary
-// that ships inside the APK as libwudict.so. The Go program is unchanged -
-// ServerProcess execs it as a child and it answers on this app's loopback port.
+// wuDict2's Android shell: a WebView over the shared Go runtime loaded from
+// the APK's JNI library. App operations and resources are dispatched in-process.
 package com.legbehindneck.wudict;
 
 import android.app.Activity;
@@ -51,8 +50,8 @@ public class MainActivity extends Activity {
     private WebView web;
     private Speech speech;           // read-aloud (D148); binds no engine until asked
 
-    private volatile boolean gone;   // onDestroy ran: late server callbacks must not touch the views
-    private boolean serverRetained;
+    private volatile boolean gone;   // onDestroy ran: late runtime callbacks must not touch the views
+    private boolean runtimeRetained;
     private Object backCallback;     // OnBackInvokedCallback (API 33+), registered only while canGoBack()
     private boolean wantAutoFocus;   // this load is a cold start onto an empty screen
     private String pendingQuery;     // arrived from LookupActivity (D67, D100)
@@ -83,7 +82,7 @@ public class MainActivity extends Activity {
         root = new FrameLayout(this);
         status = new TextView(this);
         // The view stays either way: it is what paints the page's own colour
-        // over the window (applyEdges) while the server starts, and it is
+            // over the window (applyEdges) while the Go runtime starts, and it is
         // where showFailure puts the one message that is never suppressed -
         // a failure is an answer, not a note passing by. Only its text goes
         // with ShellPrefs.INFO_MESSAGES, whose first half this is: the page's
@@ -129,8 +128,8 @@ public class MainActivity extends Activity {
         // first created its task, again: a task a shared link started keeps that
         // VIEW intent as its base for good, and the platform replays it after
         // every process death - reopening the app from the launcher or recents
-        // re-imported the link (and the import still held by the server that
-        // outlived the process refused it as "already running"). Clearing the
+        // re-imported the link (and the import still held by the Go runtime
+        // refused it as "already running"). Clearing the
         // data or the extra cannot prevent it: that edits this process's copy,
         // and the system restores from its own. A recreation carries saved
         // state; a relaunch from recents after the state is gone carries
@@ -141,9 +140,9 @@ public class MainActivity extends Activity {
         if (fresh && !Intake.onNewIntent(this, launch)) Storage.onNewIntent(this, launch);
         takeQuery(launch);
 
-        ServerProcess.retain();
-        serverRetained = true;
-        ServerProcess.ensure(this, new ServerProcess.Listener() {
+        GoRuntime.retain();
+        runtimeRetained = true;
+        GoRuntime.ensure(this, new GoRuntime.Listener() {
             @Override public void onReady() { showPage(); }
             @Override public void onFailed(String message) { showFailure(message); }
         });
@@ -476,23 +475,23 @@ public class MainActivity extends Activity {
             Shell.applyBackground(web);
             root.requestApplyInsets();
             // A start that FAILED is retried here, and nowhere else. The reader
-            // has been to the settings screen (a port that was already taken,
-            // a memory cap) or has freed whatever held the port - and nothing
+            // has been to the settings screen (for example, to change a memory
+            // limit) - and nothing
             // else ever asks again: ensure() runs in onCreate alone, and this
             // activity is singleTask with its config changes intercepted, so
             // coming back to it does not recreate it. Without this, the only
-            // way out of a port that would not bind was to swipe the app away
-            // and start it over - even after the settings were fixed. A READY
-            // server is left alone (nothing to do) and a start in flight is
+            // way out of a failed runtime start was to swipe the app away and
+            // start it over - even after the settings were fixed. A READY
+            // runtime is left alone (nothing to do) and a start in flight is
             // joined by ensure() itself, so the narrow test is "failed".
-            if (ServerProcess.failed()) retryServer();
+            if (GoRuntime.failed()) retryRuntime();
         }
     }
 
     /** A failed start, retried with whatever the settings say now. */
-    private void retryServer() {
+    private void retryRuntime() {
         status.setText(R.string.starting);
-        ServerProcess.ensure(this, new ServerProcess.Listener() {
+        GoRuntime.ensure(this, new GoRuntime.Listener() {
             @Override public void onReady() { showPage(); }
             @Override public void onFailed(String message) { showFailure(message); }
         });
@@ -515,6 +514,8 @@ public class MainActivity extends Activity {
                         new ByteArrayInputStream(new byte[0]));
             }
             WebResourceResponse r = speech.intercept(req.getUrl());
+            if (r != null) return r;
+            r = GoAppResource.intercept(req);
             if (r != null) return r;
             return null; // everything else is the WebView's own business
         }
@@ -752,7 +753,7 @@ public class MainActivity extends Activity {
     private void showFailure(String message) {
         runOnUiThread(() -> {
             if (gone) return;
-            status.setText(getString(R.string.server_failed, message));
+            status.setText(getString(R.string.runtime_failed, message));
         });
     }
 
@@ -834,15 +835,15 @@ public class MainActivity extends Activity {
     @Override
     protected void onDestroy() {
         SystemLog.record("main destroy finishing=" + isFinishing() + " web=" + (web != null)
-                + " serverRetained=" + serverRetained);
+                + " runtimeRetained=" + runtimeRetained);
         gone = true;
         unwatchThermal();
-        // The server is bound to the app's windows (D52): finishing the last
+        // The runtime is shared by the app's windows: finishing the last
         // window stops it unless demanded work is active, in which case
-        // ServerProcess stops it after the foreground work hold ends.
+        // GoRuntime stops it after the foreground work hold ends.
         // Recreation keeps it - and so does a lookup popup that is still up,
-        // which is why the decision is ServerProcess's (D67).
-        if (serverRetained) ServerProcess.release(isFinishing());
+        // which is why the decision is GoRuntime's (D67).
+        if (runtimeRetained) GoRuntime.release(isFinishing());
         if (web != null) {
             if (web.getParent() != null) {
                 ((FrameLayout) web.getParent()).removeView(web);

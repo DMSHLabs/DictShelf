@@ -300,12 +300,12 @@ func TestDictsAndSearch(t *testing.T) {
 
 	// contains is opt-in: skipped until asked for, then it works. (A trigram
 	// index costs about as much as the whole rest of the index.)
-	hits := searchStream(t, s, "/api/search?q=razon&mode=contains&dict="+id)
+	hits := searchStream(t, s, "/api/search?q=corazón&mode=contains&dict="+id)
 	if len(hits) != 1 || !hits[0].Skipped {
 		t.Fatalf("contains should be unavailable until enabled: %+v", hits)
 	}
 	sse(t, s, "/api/ingest?dict="+id+"&contains=1")
-	hits = searchStream(t, s, "/api/search?q=razon&mode=contains&dict="+id)
+	hits = searchStream(t, s, "/api/search?q=corazón&mode=contains&dict="+id)
 	if len(hits) != 1 || len(hits[0].Results) != 1 || hits[0].Results[0].Headword != "corazón" {
 		t.Fatalf("contains hits after enabling: %+v", hits)
 	}
@@ -328,9 +328,13 @@ func TestDictsAndSearch(t *testing.T) {
 type fakeDict struct {
 	words []string
 	path  string
+	meta  dict.Meta
 }
 
 func (d *fakeDict) Meta() dict.Meta {
+	if d.meta.Format != "" {
+		return d.meta
+	}
 	return dict.Meta{Name: "Fake Dict", Format: "fake", Path: d.path, EntryCount: len(d.words)}
 }
 func (d *fakeDict) Caps() dict.Caps { return dict.Caps{Exact: true, Prefix: true} }
@@ -386,17 +390,7 @@ func TestSearchDoesNotIndexOnFirstUse(t *testing.T) {
 		t.Fatal(err)
 	}
 	isolatedDBDir(t)
-	prefs := LoadPrefs(filepath.Join(t.TempDir(), StateFile))
-	prefs.editMu.Lock()
-	err := prefs.mutate(func(f *prefsFile) { f.DSLKnown = map[string]bool{cleanAbs(source): true} })
-	prefs.editMu.Unlock()
-	if err != nil {
-		t.Fatal(err)
-	}
-	reg, err := NewRegistry([]string{dir}, false, WithPrefs(prefs))
-	if err != nil {
-		t.Fatal(err)
-	}
+	reg := unpreparedRegistry(t, []string{dir})
 	s := New(reg)
 	dicts := getDicts(t, s, "/api/dicts")
 	id := dicts[0].ID
@@ -418,10 +412,7 @@ func TestFullIngestNoResourcesFlagsEmpty(t *testing.T) {
 		t.Fatal(err)
 	}
 	isolatedDBDir(t)
-	reg, err := NewRegistry([]string{dir}, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	reg := unpreparedRegistry(t, []string{dir})
 	e := reg.all()[0]
 	if err := e.setFeatures(features{FullText: true, Media: true}, nil); err != nil {
 		t.Fatalf("full ingest errored: %v", err)
@@ -541,6 +532,7 @@ func TestSetupFlow(t *testing.T) {
 	if v["saved"] != true || v["found"].(float64) != 1 {
 		t.Fatalf("save failed: %v", v)
 	}
+	waitNewDictionaryIndexing(t, reg)
 	// registry switched live
 	if dirs := reg.Dirs(); len(dirs) != 1 || dirs[0] != dictDir || reg.Count() != 1 {
 		t.Errorf("registry not switched: %q %d", reg.Dirs(), reg.Count())
@@ -726,6 +718,45 @@ func isolatedDBDir(t *testing.T) string {
 	return dir
 }
 
+// unpreparedRegistry builds a source-only fixture without racing the registry's
+// automatic first-index queue. The test starts with that queue suppressed, then
+// clears the suppression before returning so direct opens behave normally.
+func unpreparedRegistry(t *testing.T, roots []string) *Registry {
+	t.Helper()
+	paths, _, err := dict.DiscoverAll(roots)
+	if err != nil {
+		t.Fatal(err)
+	}
+	prefs := LoadPrefs(filepath.Join(t.TempDir(), StateFile))
+	blocked := make(map[string]bool, len(paths))
+	for _, path := range paths {
+		key := cleanAbs(path) + "\noriginal"
+		if source, variant := dslIdentity(path); source != "" {
+			key = source + "\n" + variant
+		}
+		blocked[key] = true
+	}
+	if err := prefs.store(prefsFile{DSLRemoved: blocked}); err != nil {
+		t.Fatal(err)
+	}
+	reg, err := NewRegistry(roots, false, WithPrefs(prefs), WithComparisons(false))
+	if err != nil {
+		t.Fatal(err)
+	}
+	prefs.editMu.Lock()
+	err = prefs.mutate(func(f *prefsFile) {
+		for key := range blocked {
+			delete(f.DSLRemoved, key)
+		}
+	})
+	prefs.editMu.Unlock()
+	if err != nil {
+		t.Fatal(err)
+	}
+	closeBackends(t, reg)
+	return reg
+}
+
 // TestMain isolates the whole package from the user's real library. Tests set
 // WUDICT_DB_DIR per-test, but background work started by a test (Registry.Warm,
 // new-dictionary indexing, DSL auto-preparation) can outlive it and read the variable after
@@ -771,6 +802,7 @@ func TestSetupMultipleFolders(t *testing.T) {
 	if v["saved"] != true {
 		t.Fatalf("save failed: %v", v)
 	}
+	waitNewDictionaryIndexing(t, reg)
 	if got := v["found"].(float64); got != 3 {
 		t.Errorf("found = %v, want 3 (each dictionary counted once)", got)
 	}
@@ -851,11 +883,7 @@ func newDictWithResources(t *testing.T, files map[string][]byte) *Server {
 	zf.Close()
 
 	isolatedDBDir(t)
-	reg, err := NewRegistry([]string{dir}, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	closeBackends(t, reg)
+	reg := unpreparedRegistry(t, []string{dir})
 	return New(reg)
 }
 

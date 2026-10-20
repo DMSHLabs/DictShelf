@@ -53,7 +53,6 @@ wudict ~/Dictionaries/Oxford.mdx     # serve that file's folder and open it
 | `--port <port>` | [`SERVER_PORT`](configuration.md#server_ip-and-server_port) |
 | `--no-browser` | [`NO_BROWSER`](configuration.md#no_browser) |
 | `--use-cached` | [`USE_CACHED`](configuration.md#use_cached) |
-| `--no-compress` | [`NO_COMPRESS`](configuration.md#no_compress) |
 | `--index-workers <n>` | [`INDEX_WORKERS`](configuration.md#index_workers) |
 | `--allow-remote-delete <0\|1>` | [`ALLOW_REMOTE_DELETE`](configuration.md#allow_remote_delete) |
 | `--speexdec <path>` | [`SPEEXDEC`](configuration.md#speexdec) |

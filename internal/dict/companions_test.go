@@ -30,6 +30,7 @@ func TestStemAndMainExt(t *testing.T) {
 		{"/d/star.ifo", "/d/star", ".ifo"},
 		{"/d/x.slob", "/d/x", ".slob"},
 		{"/d/x.bgl", "/d/x", ".bgl"},
+		{"/d/wiki.zimaa", "/d/wiki", ".zimaa"},
 		{"/d/g.wudict.md", "/d/g.wudict", ".wudict.md"},
 		{"/d/g.wudict.md.gz", "/d/g.wudict", ".wudict.md.gz"},
 		{"/d/g.WUDICT.MD.DZ", "/d/g.WUDICT", ".wudict.md.dz"},
@@ -43,6 +44,27 @@ func TestStemAndMainExt(t *testing.T) {
 		if got := MainExt(c.src); got != c.ext {
 			t.Errorf("MainExt(%q) = %q, want %q", c.src, got, c.ext)
 		}
+	}
+}
+
+func TestSplitZIMPartsCaseAndGap(t *testing.T) {
+	dir := t.TempDir()
+	first := touch(t, filepath.Join(dir, "wiki.ZIMAA"))
+	touch(t, filepath.Join(dir, "wiki.ZIMAB"))
+	touch(t, filepath.Join(dir, "wiki.ZIMAD"))
+	parts, missing, err := ZIMPartSet(first)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(parts) != 2 || filepath.Base(parts[1]) != "wiki.ZIMAB" || filepath.Base(missing) != "wiki.ZIMAC" {
+		t.Fatalf("parts=%v missing=%q", parts, missing)
+	}
+	if got := CompanionStem("wiki.ZIMAC"); got != "wiki" {
+		t.Errorf("CompanionStem = %q, want wiki", got)
+	}
+	files := SourceFiles(first)
+	if len(files) != 3 || filepath.Base(files[2]) != "wiki.ZIMAD" {
+		t.Fatalf("SourceFiles = %v, want every part including one after a gap", files)
 	}
 }
 

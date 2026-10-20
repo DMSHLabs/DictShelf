@@ -7,6 +7,7 @@ package server
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -46,27 +47,7 @@ func (s *Server) initGroups() {
 
 // GET /api/groups - the file in effect, what it defines, and what was skipped.
 func (s *Server) handleGroups(w http.ResponseWriter, r *http.Request) {
-	writeGroups(w, s.User.Groups(), s.groupsNow())
-}
-
-func writeGroups(w http.ResponseWriter, file string, st fileState[*facet.Rules]) {
-	probs := st.problems
-	if probs == nil {
-		probs = []facet.Problem{}
-	}
-	text := st.text
-	if !st.exists {
-		text = facet.DefaultText // what is in effect, offered for editing
-	}
-	writeJSON(w, map[string]any{
-		"text":     text,
-		"custom":   st.exists,
-		"unusable": st.unusable(),
-		"file":     file,
-		"writable": file != "",
-		"problems": probs,
-		"facets":   st.val.Facets(),
-	})
+	writeJSON(w, s.groupsSnapshot())
 }
 
 // PUT /api/groups - replace the file with the request body. What does not
@@ -77,10 +58,6 @@ func writeGroups(w http.ResponseWriter, file string, st fileState[*facet.Rules])
 // is not replaced unless the request says so (?replace=1): the editor showed
 // an empty box for it, and a save from there would otherwise destroy it.
 func (s *Server) handleSaveGroups(w http.ResponseWriter, r *http.Request) {
-	if s.User.Groups() == "" {
-		httpErr(w, http.StatusConflict, "%s", "no config directory: there is nowhere to save groups")
-		return
-	}
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxGroupsBytes))
 	if err != nil {
 		if errors.As(err, new(*http.MaxBytesError)) {
@@ -90,36 +67,69 @@ func (s *Server) handleSaveGroups(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	if !utf8.Valid(body) {
-		httpErr(w, http.StatusBadRequest, "%s", "not UTF-8 text")
+	result, err := s.saveGroups(body, r.URL.Query().Get("replace") == "1")
+	if err != nil {
+		var operation groupsFileError
+		if errors.As(err, &operation) {
+			httpErr(w, operation.status, "%s", operation.message)
+		} else {
+			httpErr(w, http.StatusInternalServerError, "%s", "could not save "+GroupsFileName+": "+err.Error())
+		}
 		return
 	}
-	text := strings.ReplaceAll(string(body), "\r\n", "\n")
-	var st fileState[*facet.Rules]
-	if text == facet.DefaultText {
-		st, err = s.groups.remove()
-	} else {
-		st, err = s.groups.save(text, r.URL.Query().Get("replace") == "1")
-	}
-	switch {
-	case errors.Is(err, errUnusable):
-		httpErr(w, http.StatusConflict, "%s", err.Error()+" - replace=1 overwrites it")
-		return
-	case err != nil:
-		httpErr(w, http.StatusInternalServerError, "%s", "could not save "+GroupsFileName+": "+err.Error())
-		return
-	}
-	writeGroups(w, s.User.Groups(), st)
+	writeJSON(w, result)
 }
 
 // DELETE /api/groups - back to the embedded default.
 func (s *Server) handleResetGroups(w http.ResponseWriter, r *http.Request) {
-	st, err := s.groups.remove()
+	result, err := s.resetGroups()
 	if err != nil {
 		httpErr(w, http.StatusInternalServerError, "%s", "could not remove "+GroupsFileName+": "+err.Error())
 		return
 	}
-	writeGroups(w, s.User.Groups(), st)
+	writeJSON(w, result)
+}
+
+type groupsFileError struct {
+	status  int
+	message string
+}
+
+func (e groupsFileError) Error() string { return e.message }
+
+func (s *Server) saveGroups(body []byte, replace bool) (map[string]any, error) {
+	if s.User.Groups() == "" {
+		return nil, groupsFileError{status: http.StatusConflict, message: "no config directory: there is nowhere to save groups"}
+	}
+	if len(body) > maxGroupsBytes {
+		return nil, groupsFileError{status: http.StatusRequestEntityTooLarge, message: GroupsFileName + " is larger than 256 KB"}
+	}
+	if !utf8.Valid(body) {
+		return nil, groupsFileError{status: http.StatusBadRequest, message: "not UTF-8 text"}
+	}
+	text := strings.ReplaceAll(string(body), "\r\n", "\n")
+	var st fileState[*facet.Rules]
+	var err error
+	if text == facet.DefaultText {
+		st, err = s.groups.remove()
+	} else {
+		st, err = s.groups.save(text, replace)
+	}
+	if errors.Is(err, errUnusable) {
+		return nil, groupsFileError{status: http.StatusConflict, message: err.Error() + " - replace=1 overwrites it"}
+	}
+	if err != nil {
+		return nil, fmt.Errorf("could not save %s: %w", GroupsFileName, err)
+	}
+	return groupsResponse(s.User.Groups(), st), nil
+}
+
+func (s *Server) resetGroups() (map[string]any, error) {
+	st, err := s.groups.remove()
+	if err != nil {
+		return nil, fmt.Errorf("could not remove %s: %w", GroupsFileName, err)
+	}
+	return groupsResponse(s.User.Groups(), st), nil
 }
 
 // groupsPage is the editor as served. Like the lemma installer, nothing is
@@ -129,7 +139,16 @@ var groupsPage = bytes.ReplaceAll(groupsHTML, []byte("{{CSS}}"), []byte(cssTag))
 func (s *Server) handleGroupsPage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Add("Vary", "Accept-Language")
+	_, _ = w.Write(s.groupsPageHTMLFor(r.Header.Get("Accept-Language")))
+}
+
+func (s *Server) groupsPageHTML() []byte {
+	return s.groupsPageHTMLFor("")
+}
+
+func (s *Server) groupsPageHTMLFor(acceptLanguage string) []byte {
 	page := bytes.ReplaceAll(groupsPage, []byte("{{PRESETS}}"), []byte(s.pagePresetLinks()))
 	page = bytes.ReplaceAll(page, []byte("{{WORKSPACECSS}}"), []byte(assetTag(workspaceCSS)))
-	_, _ = w.Write([]byte(renderUI(string(page), s.reg.prefs.Language())))
+	return s.renderUserUIChoice(string(page), s.reg.prefs.ResolvedLanguage(acceptLanguage), s.reg.prefs.Language())
 }

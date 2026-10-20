@@ -182,16 +182,12 @@ func TestLookApplyWritesTheWholeState(t *testing.T) {
 	if got := string(s.styleRead(articleCSSName)); got != "" {
 		t.Fatalf("the article sheet survived too: %q", got)
 	}
-	// The shell's half comes back for the page to push: Sepia's light colour,
-	// and nothing at night.
-	// Warm carries NO window colour: its palette is the layer, and the look
-	// that also switched the warm window colour on appeared to do nothing when
-	// that colour was off.
-	if asked.Shell.Light.ColorEnabled || asked.Shell.Light.Color != "" {
-		t.Fatalf("Warm must not touch the window colour: %+v", asked.Shell.Light)
+	// The shell enables the window colour matching the light Sepia palette.
+	if !asked.Shell.Light.ColorEnabled || asked.Shell.Light.Color != "#F4ECD8" {
+		t.Fatalf("Warm must enable its window colour: %+v", asked.Shell.Light)
 	}
-	if asked.Shell.Dark.ColorEnabled || asked.Shell.Dark.Image != "" {
-		t.Fatalf("Warm's night half must be empty: %+v", asked.Shell.Dark)
+	if !asked.Shell.Dark.ColorEnabled || asked.Shell.Dark.Color != "#1C1A17" || asked.Shell.Dark.Image != "" {
+		t.Fatalf("Warm must enable its night window colour: %+v", asked.Shell.Dark)
 	}
 	if _, err := os.ReadFile(filepath.Join(dir, "looks.json")); err != nil {
 		t.Fatalf("the look was not remembered: %v", err)
@@ -209,12 +205,10 @@ func TestLookApplyAsksBeforeLosingUnsavedChanges(t *testing.T) {
 
 	// Nothing changed since, so no question. The shell's half is part of the
 	// comparison, which is why the caller has to send it: the page reports
-	// what the window is wearing, and Warm left it wearing this - no colour of
-	// its own, and the colour FIELD keeping whatever was in it, because
-	// nothing paints it.
+	// what the window is wearing, including Warm's enabled light colour.
 	warmShell := map[string]any{
-		"light": map[string]any{"colorEnabled": false, "color": "#EDD1A6"},
-		"dark":  map[string]any{"colorEnabled": false},
+		"light": map[string]any{"colorEnabled": true, "color": "#F4ECD8"},
+		"dark":  map[string]any{"colorEnabled": true, "color": "#1C1A17"},
 	}
 	body := lookCall(t, s, "POST", "/api/looks/apply",
 		map[string]any{"id": lookOldPaper, "shell": warmShell}, 200)
@@ -437,9 +431,11 @@ func TestLookSwitchBetweenBuiltinsNeverAsks(t *testing.T) {
 	// After Clean: the same, because a look with no colour of its own leaves
 	// the field alone.
 	afterClean := fresh
-	// After Warm: the same as well, and that is the change: the look is its
-	// layer, not the window colour. The colour FIELD keeps whatever was there.
-	afterWarm := fresh
+	// Warm enables a window colour for each theme.
+	afterWarm := map[string]any{
+		"light": map[string]any{"colorEnabled": true, "color": "#F4ECD8", "image": ""},
+		"dark":  map[string]any{"colorEnabled": true, "color": "#1C1A17", "image": ""},
+	}
 	// After Old paper: a paper for each theme.
 	afterOldPaper := map[string]any{
 		"light": map[string]any{"colorEnabled": true, "color": "#EDD1A6", "image": "paper_02.jpg"},

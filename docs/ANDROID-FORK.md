@@ -25,15 +25,103 @@ renditions that are only ever a few pixels tall — the tray PNGs, the served
 favicon, the `.icns`/`.ico`: a digit at 16px is a smudge, and no desktop build
 ships from this fork.
 
-wuDict2 uses `127.0.0.1:6889` by default; upstream wuDict uses port 6888.
-The server's `wudict` protocol identity stays upstream-compatible. The Android
-shell checks the responding server's app-specific library directory before
-adopting it, so another installation on a shared loopback port is not mistaken
-for this app. An explicit port override in Android Settings still takes priority;
-change an existing override of 6888 if both apps must run together. Changing
-the port changes the WebView origin, so page preferences stored under an older
-port may need to be set again. Android shell preferences and app-owned files
-remain in the wuDict2 app's own storage.
+Android uses `https://wudict2.localhost` as its stable WebView origin once
+`settings.json` marks migration complete. Before that file exists, it temporarily
+uses the previous `http://127.0.0.1:<port>` origin so the in-process Go bridge
+can import that WebView profile's localStorage. Android never opens a TCP
+listener and does not support server mode. The old port preference is consulted
+only for that one-time profile import. Android shell preferences and app-owned
+files remain in the wuDict2 app's own storage. The shared HTTP API remains
+available to browser and explicit server launch modes on other platforms.
+
+On `dev2`, Android starts the shared Go runtime from the JNI library inside
+the app process. The WebView calls Go operations through JNI and intercepts
+page, asset, stylesheet, dictionary-resource and ranged-media reads in Go; the
+Android runtime opens no HTTP listener. The APK contains only the in-process Go
+library; startup reports an error if it cannot load. Runtime changes that need
+a fresh registry restart the app process.
+The main page's configuration read, preference reads/writes, style reads/writes,
+style preset reads/writes and custom style file listing, upload and deletion
+now go through the WebView's Java bridge to shared Go operations. The main
+dictionary list and main-page search stream through a cancellable Go/JNI bridge;
+ordinary GET Rescan folders and Browse's word/find streams use that bridge too.
+Browse's nonstream page and chooser also use shared Go operations via JNI.
+The main-screen Wildcards list stream, Rebuild status/start/stop and explicit
+index-work status/start/stop, the Rescan Update dictionaries progress stream,
+single-dictionary ingest progress, Dictionary Groups data and edits, and
+Browse/Wildcards result pages use the same bridge.
+Browse and dictionary-list timing diagnostics use JNI. The Android page shows
+an `A60` stage marker beside the brand in this build. Language preference
+saving and scripted-article inline lookups use the direct Go/JNI bridge;
+Browse, Edit Folders, Lemmatization and Dictionary Groups pages, embedded
+assets and user stylesheets are answered from Go in-process. Edit Folders'
+built-in how-to copy and restore actions also call Go directly. The main page
+document now also loads from Go through WebView resource interception. `/files/`
+and `/res/` requests, including Range requests, are answered through Go resource
+interception and a streaming JNI InputStream. A47 returned Go's partial `206`
+response directly to WebView, but duplicate `Content-Length` and `Content-Type`
+headers caused large-video playback to fail. A48 removed those duplicates and
+reports the remaining stream length to WebView. Emulator logs then exposed an
+Android WebView bug: it applies the requested Range offset a second time to a
+custom `206` response, which makes tail ranges fail. A49 wraps eligible single
+ranges so `skip()` accounts for WebView's second offset while reads still start
+at the Go-provided range. The user confirmed large-video playback works with
+A49. A50 moves Android's System Log export from local HTTP to the Go/JNI bridge;
+the user confirmed it works. A51 moves Java archive intake status, URL/path
+import, confirmation, cancellation and chunked content-URI upload from local
+HTTP to the Go/JNI bridge. Unknown-length providers are streamed without
+buffering the archive in memory; the Go spool enforces the existing 16 GiB
+limit. A52 sends Android's active/background/restricted power state directly to
+Go over JNI, replaying the latest state when the runtime becomes ready;
+`/api/power` remains for HTTP clients. The user confirmed the app works on the
+emulator; the first minimize/restore observation showed the launcher bringing
+the existing activity back, with no app restart. A53 routes the standalone
+`/groups` filter editor's groups.ini operations and dictionary-facet scan
+through Go/JNI on Android. The browser path keeps HTTP. `build-android.cmd debug
+intel` passes; the user confirmed A53 works on the emulator. A54 changes runtime
+readiness, launcher Settings' effective-config read, and Exit's busy check to
+JNI or local Android state. A55 moves Play SAF post-import rescan to a cancellable
+Go/JNI stream. A56 removes Android's TCP listener and routes diagnostic variants
+of dictionary listing and folder rescan through the same direct streams. The
+FOSS debug APK builds for arm64 and x86_64; Play Java compilation passes.
+Emulator verification of A56 is pending. A57 connects Android WebView settings
+to the shared file-backed storage through JNI: on first launch it imports old
+same-origin localStorage values, then reads and writes `settings.json` and
+`history.json` through Go. The user confirmed settings/history migration and
+persistence work on the emulator. A58 selects the old origin only while
+`settings.json` is absent; after that it uses
+`https://wudict2.localhost` without a port. A shared resource adapter serves
+pages and ranged media from Go in both the main and lookup WebViews. The FOSS
+debug APK builds for arm64 and x86_64; the user confirmed it works on the
+emulator. A59 removes listener-specific controls and the FOSS network-listening
+implementation from Android. The System screen hides the access-key section,
+and launcher Settings no longer offers a port or server restart. The old port
+preference remains available only until first-run localStorage import completes.
+FOSS and Play debug APKs both build; emulator verification of the removed
+settings is pending. A60 renames the Android runtime coordinator to
+`GoRuntime`, removes its obsolete listener-port state and unused access-key
+generation, and guards the shared UI's same-origin HTTP fallbacks so an
+Android operation without a Go/JNI route fails clearly instead of trying the
+absent listener. The old `SERVER_PORT` preference remains read only to select
+the previous WebView origin during one-time `localStorage` import. The shared
+first-run config omits unindexed-dictionary memory keys; listenerless Windows
+WebView startup writes no listener/security settings, while HTTP launch modes
+retain them. Android's own first-run file contains only `DICT_DIR`. A60 FOSS
+debug build for arm64 and x86_64 passed on 2026-10-17; emulator verification is
+pending.
+A43 tried a private Android ContentProvider for seekable video, then A44 tried
+it for audio. Emulator diagnostics established that WebView rejects `content://`
+media from this HTTP page: audio logged "Not allowed to load local resource",
+and the large test video's media error was "Media load rejected by URL safety
+check". A45 restored audio; A46 restores video and removes the unused provider
+and JNI seek bridge. A49 works around Android WebView's repeated Range offset
+in the Go/JNI stream; the user confirmed playback works.
+Choosing a window background image enables and locks the Color checkbox; choosing
+`None` unlocks it again, matching the Windows settings behavior.
+The article's `Words`
+return button appears left of the arrows in the bottom status bar of the Android
+WebView. All Android app pages, API operations and article media now use Go/JNI;
+local HTTP remains for browser and explicit server launch modes on other platforms.
 
 From Windows cmd, `build-android.cmd release` makes the FOSS release APK and
 `build-android.cmd debug` makes the FOSS debug APK. The second argument
@@ -44,8 +132,8 @@ The APKs are named
 The Play bundle is `wudict2-play-release.aab`. Release builds without a
 configured keystore produce an unsigned APK; do not treat that as installable.
 
-`build-android.cmd debug intel` cross-compiles the server for x86_64 as well
-and ships both ABIs in one debug APK
+`build-android.cmd debug intel` cross-compiles the in-process Go library
+for x86_64 as well, and ships both ABIs in one debug APK
 (`wudict2-android-arm64-v8a-x86_64-foss-debug.apk`), so it installs on an x86_64
 emulator and on arm64 hardware alike. This is not a convenience: the emulator's
 ARM translation runs ordinary arm64 binaries but crashes every Go binary, a
@@ -88,17 +176,15 @@ merge merely to resume this work.
 | Exported launcher/lookup activities and shortcut resource | `android/app/src/main/AndroidManifest.xml`; `src/main/res/xml/shortcuts.xml` and `src/debug/res/xml/shortcuts.xml` |
 | Distinct external-reader component | `android/app/src/main/java/com/dmshepeta/wudict2/LookupActivity.java`, extending the unchanged upstream-package implementation |
 | Launcher icon, Play listing images | `android/app/src/main/res/drawable/ic_launcher_foreground.xml` (the icon the phone shows); `tools/make-icons.sh` renders both Play images from `internal/server/web/favicon.svg` with the same digit |
-| Port and saved override | `android/app/src/main/java/com/legbehindneck/wudict/ShellPrefs.java`: `DEFAULT_PORT`, `SERVER_PORT`, `port(Context)`; the settings hint is in `src/main/res/values/strings.xml` |
-| Child Go process, adoption, readiness | `android/app/src/main/java/com/legbehindneck/wudict/ServerProcess.java`: `run`, `adoptRunningServer`, `awaitPort`; `AppDirs.java` provides the app-specific library directory |
-| Shared Go protocol | `internal/server/server.go` defines the `wudict` Server header; `internal/server/folders.go` provides `/api/config.libDir`; `internal/cli/running.go` probes an occupied port. No Go identity rename is needed for separate ports. |
-| Build entry points | `build-android.cmd` (Windows, rebuilds Go and FOSS APK), `build-windows.cmd` (Windows desktop: GUI `wuDict2.exe`, console `wuDict2-cli.exe` and Inno Setup installer under `release`), `Makefile`, `.github/workflows/build-android.yml`, `fastlane/Appfile` |
+| Legacy WebView origin for settings import | `android/app/src/main/java/com/legbehindneck/wudict/Shell.java`: `legacyOrigin`, `prepareOrigin`; `ShellPrefs.legacyOriginPort()` reads the former SERVER_PORT preference only while `settings.json` is absent |
+| In-process Go startup and readiness | `android/app/src/main/java/com/legbehindneck/wudict/GoRuntime.java`: `run`, `runtimeReady`; `AppDirs.java` provides the app-specific library directory |
+| In-process resource dispatch | `android/app/src/main/java/com/legbehindneck/wudict/GoAppResource.java`; both Android WebViews use Go/JNI and no server mode is supported |
+| Build entry points | `build-android.cmd` (Windows, rebuilds Go and FOSS APK), `build-windows.cmd` (Windows desktop `wuDict2.exe` and Inno Setup installer under `release`; `console` builds the same executable with terminal output), `Makefile`, `.github/workflows/build-android.yml`, `fastlane/Appfile` |
 
-The device's loopback interface is shared across apps. The old shell accepted
-any listening socket as startup success and could adopt another wuDict server.
-The current shell checks `/api/config.libDir` against its own `AppDirs.dbDir`
-both when adopting a surviving child and while waiting for a new one. The
-different default port is the primary coexistence fix; the directory check
-prevents a wrong-server success when a user override creates a collision.
+The old Android build used a loopback listener. The current build starts Go
+inside the app process and opens no TCP socket. A58 uses the former URL only
+when `settings.json` is absent, so Go can read the old WebView localStorage;
+after migration, every app page and resource uses the stable secure origin.
 
 ## Build and verification record
 
@@ -130,6 +216,12 @@ fork-package exported `LookupActivity`; inspect the debug shortcut target
 package separately. These source and artifact checks do not establish device
 behavior.
 
+On 2026-10-17, `build-android.cmd debug intel` built the FOSS APK for arm64 and
+x86_64. Gradle assembled both `:app:assembleFossDebug` and
+`:app:assemblePlayDebug` after the Android listener controls were removed. The
+user has not yet verified the A59 settings screen on the emulator. The A60
+FOSS debug build for arm64 and x86_64 passed; emulator checks are pending.
+
 ## Unfinished work
 
 - Install the current wuDict2 release on a device and test simultaneous wuDict
@@ -147,14 +239,8 @@ behavior.
 ## Unverified assumptions
 
 - `/api/config.libDir` is expected to resolve to the same canonical path as
-  `AppDirs.dbDir` for the app's own Go child. Source inspection supports this;
-  adoption and startup timing have not been exercised on a device.
-- An existing explicit `SERVER_PORT=6888` override in wuDict2 takes precedence
-  over the new default and still collides with upstream until changed or
-  cleared in Android Settings. No installed preference state was inspected.
-- An older, reparented Go child could survive an app update on port 6888. The
-  new app does not adopt it on port 6889; whether one exists on the user's
-  device is unknown.
-- Moving wuDict2's WebView from port 6888 to 6889 changes its origin. Page
-  preferences tied to the old origin may need to be set again; Android shell
-  preferences and app-owned files remain under the same application ID.
+  `AppDirs.dbDir` for the app's Go runtime. Source inspection supports this;
+  device startup timing has not been independently checked in this session.
+- The A60 emulator check should confirm the Android System screen has no access
+  or listener settings and the launcher Settings screen has no port or restart
+  controls. Both FOSS and Play debug builds compile successfully.

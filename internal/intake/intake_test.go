@@ -26,10 +26,40 @@ import (
 // without linking five format packages into it.
 func init() {
 	open := func(path string) (dict.Dictionary, error) { return nil, errors.New("not opened in tests") }
-	for _, ext := range []string{".mdx", ".ifo", ".dsl", ".dsl.dz", ".slob", ".bgl", ".zim"} {
+	for _, ext := range []string{".mdx", ".ifo", ".dsl", ".dsl.dz", ".slob", ".bgl", ".zim", ".zimaa"} {
 		dict.RegisterFormat(ext, open)
 	}
 	dict.RegisterInspectable(".mdd", open)
+}
+
+func TestSniffSplitZIMAndRejectsGapOrOrphanPart(t *testing.T) {
+	got, _ := sniffZip(t,
+		member{"wiki.zimaa", "aa"}, member{"wiki.zimab", "bb"}, member{"wiki.zimac", "cc"},
+	)
+	if len(got) != 1 || !got[0].Complete() || len(got[0].Files) != 3 {
+		t.Fatalf("contiguous split ZIM = %+v", got)
+	}
+
+	got, _ = sniffZip(t, member{"wiki.zimaa", "aa"}, member{"wiki.zimac", "cc"})
+	if len(got) != 1 || got[0].Complete() || len(got[0].Missing) != 1 || !strings.HasSuffix(got[0].Missing[0], "wiki.zimab") {
+		t.Fatalf("gapped split ZIM = %+v, want missing .zimab", got)
+	}
+
+	got, _ = sniffZip(t, member{"wiki.zimab", "bb"})
+	if len(got) != 0 {
+		t.Fatalf("later part alone must not become a candidate: %+v", got)
+	}
+}
+
+func TestSplitZIMProbeSelectionRequiresAllDiscoveredParts(t *testing.T) {
+	c := Candidate{Main: "wiki.zimaa", Format: ".zimaa"}
+	found := []Extra{{Name: "wiki.zimab"}, {Name: "wiki.zimac"}}
+	if allSplitExtrasPicked(c, found, found[:1]) {
+		t.Fatal("accepting only the first discovered part would truncate the ZIM")
+	}
+	if !allSplitExtrasPicked(c, found, found) {
+		t.Fatal("all discovered contiguous parts should be accepted")
+	}
 }
 
 type member struct {

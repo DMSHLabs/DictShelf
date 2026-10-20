@@ -4,8 +4,9 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-/* Interface text only. Never infer the language from the OS, browser or a
-   dictionary. Reload after saving so old and new labels cannot mix in a view. */
+/* Interface text only. The server resolves System from this request's
+   preferred-language header; an explicit saved choice overrides it. Reload
+   after saving so old and new labels cannot mix in a view. */
 (function () {
   "use strict";
   const boot = JSON.parse(document.getElementById("wudict-i18n").textContent);
@@ -170,10 +171,19 @@
     return original;
   }
   async function saveLanguage(chosen) {
+    if (window.wudictAndroidGo) {
+      const result = JSON.parse(window.wudictAndroidGo.saveLanguage(JSON.stringify({language: chosen})));
+      if (!result.ok) throw new Error(result.error || "save");
+      return;
+    }
+    if (typeof window.wudictNativeCall === "function") {
+      await window.wudictNativeCall("saveLanguage", JSON.stringify({language: chosen}));
+      return;
+    }
     const response = await fetch("/api/language", {method: "PUT",
       headers: {"Content-Type": "application/json"}, body: JSON.stringify({language: chosen})});
     if (!response.ok) throw new Error("save");
   }
-  window.wudictI18n = Object.freeze({language, t, facetLabels, errorText,
+  window.wudictI18n = Object.freeze({language, selection:boot.selection, t, facetLabels, errorText,
     saveLanguage, number: n => numbers.format(n)});
 })();

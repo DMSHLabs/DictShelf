@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/wuweidict/wudict/internal/dict"
 	"github.com/wuweidict/wudict/internal/resource"
@@ -17,7 +18,22 @@ import (
 // ReaderVersion is the behaviour version of this format's Reader (see
 // dict.RegisterReaderVersion). Bump it in the same commit as any change to
 // what the Reader yields, and update the golden in reader_golden_test.go.
-const ReaderVersion = 11
+const ReaderVersion = 12
+
+var titleRepairsEnabled atomic.Bool
+
+func init() { titleRepairsEnabled.Store(true) }
+
+// SetTitleRepairs switches the app-specific recovery rules for malformed
+// human-written titles. Its version is part of prepared-index staleness.
+func SetTitleRepairs(enabled bool) {
+	titleRepairsEnabled.Store(enabled)
+	version := ReaderVersion
+	if !enabled {
+		version++
+	}
+	dict.RegisterReaderVersion("dsl", version)
+}
 
 func init() {
 	openFn := func(path string) (dict.Dictionary, error) { return Open(path) }
@@ -54,6 +70,7 @@ func NewArticleReader(path string) (*Reader, error) {
 	if err == nil {
 		r.gd = true
 		r.gdOptions = ArticleOptions{Enhance: true, Styles: true}
+		r.repairTitles = titleRepairsEnabled.Load()
 	}
 	return r, err
 }

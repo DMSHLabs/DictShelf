@@ -179,6 +179,7 @@ func TestRemoveEverything(t *testing.T) {
 	if err := s.reg.Rescan(); err != nil {
 		t.Fatal(err)
 	}
+	waitNewDictionaryIndexing(t, s.reg)
 	id := idOf(t, s, "test.dsl")
 
 	rec := deleteReq(t, s, "/api/library?dict="+id)
@@ -286,6 +287,7 @@ func TestRemoveKeepsARootSpelledAnotherWay(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			waitNewDictionaryIndexing(t, reg)
 			closeBackends(t, reg)
 			s := New(reg)
 			id := idOf(t, s, "only.dsl")
@@ -318,6 +320,7 @@ func TestCloseUnderClosesOnlyThatFolder(t *testing.T) {
 	if err := s.reg.Rescan(); err != nil {
 		t.Fatal(err)
 	}
+	waitNewDictionaryIndexing(t, s.reg)
 	inside, err := s.reg.get(idOf(t, s, "imported.dsl"))
 	if err != nil {
 		t.Fatal(err)

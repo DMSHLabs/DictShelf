@@ -88,7 +88,7 @@
 .wu-gd .dsl_t,
 .wu-gd .wu-ipa
 {
-  font-family: 'WuGD Phonetic' !important;
+  font-family: 'wudict-Charis', 'WuGD Phonetic' !important;
   font-size: 1.307692em !important;
   font-weight: inherit;
   font-style:normal;
@@ -100,6 +100,6 @@
 .wu-gd .dsl_t > .gde,
 .wu-gd .wu-ipa > .gde
 {
-  font-family: 'WuGD Phonetic' !important;
+  font-family: 'wudict-Charis', 'WuGD Phonetic' !important;
   font-size: inherit !important;
 }

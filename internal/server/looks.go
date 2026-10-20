@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -110,15 +111,11 @@ func builtinLooks() []look {
 			// window colour is called in its own code and what the style layer
 			// is called in the pane; a third thing by that name was one too
 			// many, and the reader asked for this one to move.
-			//
-			// No window colour: the palette in the layer is the whole look.
-			// It used to enable the warm window colour as well, which meant
-			// the look appeared to do nothing when that colour was switched
-			// off - and the two are different things: the layer paints the
-			// page, the colour paints the window behind it.
 			ID: lookWarm, Name: "Warm", Builtin: true,
 			State: lookState{
 				Layers: []string{"sepia"},
+				Light:  lookHalf{ColorEnabled: true, Color: "#F4ECD8"},
+				Dark:   lookHalf{ColorEnabled: true, Color: "#1C1A17"},
 			},
 		},
 		{
@@ -516,7 +513,183 @@ func (s *Server) lookPayload() map[string]any {
 }
 
 func (s *Server) handleLooks(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, s.lookPayload())
+	s.serveLookOperation(w, r)
+}
+
+type lookOperationError struct {
+	status  int
+	message string
+}
+
+func (e *lookOperationError) Error() string { return e.message }
+
+func lookError(status int, message string) error {
+	return &lookOperationError{status: status, message: message}
+}
+
+func decodeLookBody(body []byte, limit int64, target any) error {
+	if int64(len(body)) > limit {
+		return lookError(http.StatusBadRequest, "request body too large")
+	}
+	if err := json.Unmarshal(body, target); err != nil {
+		return lookError(http.StatusBadRequest, "bad request: "+err.Error())
+	}
+	return nil
+}
+
+// lookOperation contains the saved-appearance behavior shared by the native
+// Windows bridge and the browser/Android HTTP adapters.
+func (s *Server) lookOperation(method, path string, body []byte) (any, error) {
+	if method == http.MethodGet && path == "/api/looks" {
+		return s.lookPayload(), nil
+	}
+	if method == http.MethodPost && path == "/api/looks" {
+		var req saveLookRequest
+		if err := decodeLookBody(body, 1<<20, &req); err != nil {
+			return nil, err
+		}
+		if s.User.Style() == "" {
+			return nil, lookError(http.StatusConflict, "no configuration folder: there is nowhere to save a look")
+		}
+		name := strings.TrimSpace(req.Name)
+		if !lookNameOK(name) {
+			return nil, lookError(http.StatusBadRequest, "Enter a name (1–100 characters, without control characters).")
+		}
+		f := s.looksRead()
+		if lookNameTaken(f, name) {
+			return nil, lookError(http.StatusConflict, "A look with this name already exists.")
+		}
+		id := newLookID()
+		if id == "" {
+			return nil, lookError(http.StatusInternalServerError, "could not make a name for it")
+		}
+		f.Looks = append(f.Looks, look{ID: id, Name: name, State: s.lookStateNow(&req.lookNow)})
+		f.Current = id
+		if err := s.looksWrite(f); err != nil {
+			return nil, lookError(http.StatusInternalServerError, "could not save the look: "+err.Error())
+		}
+		return s.lookPayload(), nil
+	}
+	if method == http.MethodPut && path == "/api/looks" {
+		var req saveLookRequest
+		if err := decodeLookBody(body, 1<<20, &req); err != nil {
+			return nil, err
+		}
+		if s.User.Style() == "" {
+			return nil, lookError(http.StatusConflict, "no configuration folder: there is nowhere to save a look")
+		}
+		if _, ok := builtinLook(req.ID); ok {
+			return nil, lookError(http.StatusConflict, "A built-in look cannot be changed. Save yours under a new name.")
+		}
+		f := s.looksRead()
+		i := slices.IndexFunc(f.Looks, func(l look) bool { return l.ID == req.ID })
+		if i < 0 {
+			return nil, lookError(http.StatusNotFound, "no such look")
+		}
+		f.Looks[i].State = s.lookStateNow(&req.lookNow)
+		f.Current = f.Looks[i].ID
+		if err := s.looksWrite(f); err != nil {
+			return nil, lookError(http.StatusInternalServerError, "could not save the look: "+err.Error())
+		}
+		return s.lookPayload(), nil
+	}
+	if method == http.MethodDelete && path == "/api/looks" {
+		var req struct {
+			ID string `json:"id"`
+		}
+		if err := decodeLookBody(body, 1<<12, &req); err != nil {
+			return nil, err
+		}
+		if _, ok := builtinLook(req.ID); ok {
+			return nil, lookError(http.StatusConflict, "A built-in look cannot be deleted.")
+		}
+		f := s.looksRead()
+		i := slices.IndexFunc(f.Looks, func(l look) bool { return l.ID == req.ID })
+		if i < 0 {
+			return nil, lookError(http.StatusNotFound, "no such look")
+		}
+		f.Looks = append(f.Looks[:i], f.Looks[i+1:]...)
+		if f.Current == req.ID {
+			f.Current = ""
+		}
+		if err := s.looksWrite(f); err != nil {
+			return nil, lookError(http.StatusInternalServerError, "could not delete the look: "+err.Error())
+		}
+		return s.lookPayload(), nil
+	}
+	if method == http.MethodPost && path == "/api/looks/apply" {
+		var req applyLookRequest
+		if err := decodeLookBody(body, 1<<20, &req); err != nil {
+			return nil, err
+		}
+		if s.User.Style() == "" {
+			return nil, lookError(http.StatusConflict, "no configuration folder: there is nowhere to remember this")
+		}
+		target := look{}
+		if req.ID != "" || !req.Dry {
+			var ok bool
+			target, ok = s.lookByID(req.ID)
+			if !ok {
+				return nil, lookError(http.StatusNotFound, "no such look")
+			}
+		}
+		f := s.looksRead()
+		current := s.lookStateNow(&req.lookNow)
+		var inForce look
+		haveBase := false
+		if f.Current != "" {
+			inForce, haveBase = s.lookByID(f.Current)
+		}
+		drifted := lookIsCustomised(current)
+		if haveBase {
+			drifted = lookDiffers(current, inForce.State)
+		}
+		sameLook := haveBase && f.Current == req.ID
+		cur := map[string]any{}
+		if haveBase {
+			cur = map[string]any{"id": inForce.ID, "name": inForce.Name, "builtin": inForce.Builtin}
+		}
+		if req.Dry {
+			return map[string]any{"needsConfirm": drifted && !sameLook, "drifted": drifted, "current": cur, "payload": s.lookPayload()}, nil
+		}
+		if !req.Confirm && drifted && !sameLook {
+			return map[string]any{"needsConfirm": true, "current": cur, "payload": s.lookPayload()}, nil
+		}
+		if err := s.applyLook(target); err != nil {
+			return nil, lookError(http.StatusInternalServerError, "could not apply the look: "+err.Error())
+		}
+		f = s.looksRead()
+		f.Current = target.ID
+		if err := s.looksWrite(f); err != nil {
+			return nil, lookError(http.StatusInternalServerError, "could not remember the look: "+err.Error())
+		}
+		return map[string]any{"applied": target.ID, "fontSize": target.State.FontSize,
+			"fontWeight": target.State.FontWeight, "shell": shellHalf(target.State), "payload": s.lookPayload()}, nil
+	}
+	return nil, lookError(http.StatusNotFound, "unsupported look request")
+}
+
+func (s *Server) serveLookOperation(w http.ResponseWriter, r *http.Request) {
+	limit := int64(1 << 20)
+	if r.Method == http.MethodDelete {
+		limit = 1 << 12
+	}
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, limit))
+	if err != nil {
+		http.Error(w, "bad request: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	value, err := s.lookOperation(r.Method, r.URL.Path, body)
+	if err != nil {
+		var failure *lookOperationError
+		if errors.As(err, &failure) {
+			http.Error(w, failure.message, failure.status)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, value)
 }
 
 // lookNameOK is the same rule the group editor lives by: a name that is not
@@ -555,108 +728,9 @@ type saveLookRequest struct {
 	lookNow
 }
 
-// POST /api/looks - save what is on screen right now under a name. The new
-// look becomes the one in force, because it IS what is in force.
-func (s *Server) handleLookSave(w http.ResponseWriter, r *http.Request) {
-	var req saveLookRequest
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&req); err != nil {
-		http.Error(w, "bad request: "+err.Error(), http.StatusBadRequest)
-		return
-	}
-	if s.User.Style() == "" {
-		http.Error(w, "no configuration folder: there is nowhere to save a look", http.StatusConflict)
-		return
-	}
-	name := strings.TrimSpace(req.Name)
-	if !lookNameOK(name) {
-		http.Error(w, "Enter a name (1–100 characters, without control characters).", http.StatusBadRequest)
-		return
-	}
-	f := s.looksRead()
-	if lookNameTaken(f, name) {
-		http.Error(w, "A look with this name already exists.", http.StatusConflict)
-		return
-	}
-	st := s.lookStateNow(&req.lookNow)
-	id := newLookID()
-	if id == "" {
-		http.Error(w, "could not make a name for it", http.StatusInternalServerError)
-		return
-	}
-	f.Looks = append(f.Looks, look{ID: id, Name: name, State: st})
-	f.Current = id
-	if err := s.looksWrite(f); err != nil {
-		http.Error(w, "could not save the look: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-	writeJSON(w, s.lookPayload())
-}
-
-// PUT /api/looks - "save my changes into this one": the named look is
-// replaced by what is on screen now. Built-ins are refused: they are the
-// app's, not the reader's, and a look called "Clean" that means something
-// else is worse than no look at all.
-func (s *Server) handleLookUpdate(w http.ResponseWriter, r *http.Request) {
-	var req saveLookRequest
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&req); err != nil {
-		http.Error(w, "bad request: "+err.Error(), http.StatusBadRequest)
-		return
-	}
-	if s.User.Style() == "" {
-		http.Error(w, "no configuration folder: there is nowhere to save a look", http.StatusConflict)
-		return
-	}
-	if _, ok := builtinLook(req.ID); ok {
-		http.Error(w, "A built-in look cannot be changed. Save yours under a new name.", http.StatusConflict)
-		return
-	}
-	f := s.looksRead()
-	i := slices.IndexFunc(f.Looks, func(l look) bool { return l.ID == req.ID })
-	if i < 0 {
-		http.Error(w, "no such look", http.StatusNotFound)
-		return
-	}
-	st := s.lookStateNow(&req.lookNow)
-	f.Looks[i].State = st
-	f.Current = f.Looks[i].ID
-	if err := s.looksWrite(f); err != nil {
-		http.Error(w, "could not save the look: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-	writeJSON(w, s.lookPayload())
-}
-
-// DELETE /api/looks - forget one. The built-ins cannot be deleted, and
-// deleting the look in force leaves nothing in force, which is honest: what
-// is on screen came from somewhere the reader has just thrown away.
-func (s *Server) handleLookDelete(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		ID string `json:"id"`
-	}
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<12)).Decode(&req); err != nil {
-		http.Error(w, "bad request: "+err.Error(), http.StatusBadRequest)
-		return
-	}
-	if _, ok := builtinLook(req.ID); ok {
-		http.Error(w, "A built-in look cannot be deleted.", http.StatusConflict)
-		return
-	}
-	f := s.looksRead()
-	i := slices.IndexFunc(f.Looks, func(l look) bool { return l.ID == req.ID })
-	if i < 0 {
-		http.Error(w, "no such look", http.StatusNotFound)
-		return
-	}
-	f.Looks = append(f.Looks[:i], f.Looks[i+1:]...)
-	if f.Current == req.ID {
-		f.Current = ""
-	}
-	if err := s.looksWrite(f); err != nil {
-		http.Error(w, "could not delete the look: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-	writeJSON(w, s.lookPayload())
-}
+func (s *Server) handleLookSave(w http.ResponseWriter, r *http.Request)   { s.serveLookOperation(w, r) }
+func (s *Server) handleLookUpdate(w http.ResponseWriter, r *http.Request) { s.serveLookOperation(w, r) }
+func (s *Server) handleLookDelete(w http.ResponseWriter, r *http.Request) { s.serveLookOperation(w, r) }
 
 // applyLookRequest carries the shell's half so the server can decide whether
 // applying would throw away something unsaved, and `confirm` so the page can
@@ -672,96 +746,4 @@ type applyLookRequest struct {
 	Dry bool `json:"dry"`
 }
 
-// POST /api/looks/apply - put a look on. Two passes over one endpoint: the
-// first reports whether the current state has drifted from the look in force
-// (the page's cue to offer saving it first), the second applies.
-//
-// Re-applying the look that is ALREADY in force is never a question. That is
-// the "put it back how it was" gesture after a change the reader does not
-// want, and answering it with a dialog would put a form in front of the one
-// action that has no doubt in it.
-func (s *Server) handleLookApply(w http.ResponseWriter, r *http.Request) {
-	var req applyLookRequest
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&req); err != nil {
-		http.Error(w, "bad request: "+err.Error(), http.StatusBadRequest)
-		return
-	}
-	if s.User.Style() == "" {
-		http.Error(w, "no configuration folder: there is nowhere to remember this", http.StatusConflict)
-		return
-	}
-	// A target is only needed to APPLY one; a dry run asks about the screen.
-	target := look{}
-	if req.ID != "" || !req.Dry {
-		var ok bool
-		target, ok = s.lookByID(req.ID)
-		if !ok {
-			http.Error(w, "no such look", http.StatusNotFound)
-			return
-		}
-	}
-	f := s.looksRead()
-	now := s.lookStateNow(&req.lookNow)
-	// What the reader would lose: the difference between the screen and the
-	// look in force. With NOTHING in force there is no baseline to compare
-	// against, so the only question is whether the screen has been changed at
-	// all - which is the state of every install on the day this arrives, and
-	// a fresh one applying its first look has nothing to save.
-	var inForce look
-	haveBase := false
-	if f.Current != "" {
-		inForce, haveBase = s.lookByID(f.Current)
-	}
-	drifted := lookIsCustomised(now)
-	if haveBase {
-		drifted = lookDiffers(now, inForce.State)
-	}
-	sameLook := haveBase && f.Current == req.ID
-	cur := map[string]any{}
-	if haveBase {
-		cur = map[string]any{"id": inForce.ID, "name": inForce.Name, "builtin": inForce.Builtin}
-	}
-	// The DRY pass answers and writes nothing. It is what the panel's button
-	// asks on every change: "has the screen drifted from the look in force?",
-	// which is the one thing the drop-down cannot say, because the answer
-	// changes with every tap on the steppers. It answers the switch question
-	// too, so the caller that is about to apply needs no second round trip.
-	if req.Dry {
-		writeJSON(w, map[string]any{
-			"needsConfirm": drifted && !sameLook,
-			"drifted":      drifted,
-			"current":      cur,
-			"payload":      s.lookPayload(),
-		})
-		return
-	}
-	if !req.Confirm && drifted && !sameLook {
-		writeJSON(w, map[string]any{
-			"needsConfirm": true,
-			"current":      cur,
-			"payload":      s.lookPayload(),
-		})
-		return
-	}
-	if err := s.applyLook(target); err != nil {
-		http.Error(w, "could not apply the look: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-	f = s.looksRead()
-	f.Current = target.ID
-	if err := s.looksWrite(f); err != nil {
-		http.Error(w, "could not remember the look: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-	// The two text settings ride along with the shell's half, for the same
-	// reason: they are the parts of the look the PAGE has to put back on
-	// itself. What the server wrote is on disk; what the reader is looking at
-	// is a custom property and a stepper, and neither reads the file.
-	writeJSON(w, map[string]any{
-		"applied":    target.ID,
-		"fontSize":   target.State.FontSize,
-		"fontWeight": target.State.FontWeight,
-		"shell":      shellHalf(target.State),
-		"payload":    s.lookPayload(),
-	})
-}
+func (s *Server) handleLookApply(w http.ResponseWriter, r *http.Request) { s.serveLookOperation(w, r) }

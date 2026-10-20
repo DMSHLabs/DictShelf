@@ -140,12 +140,13 @@ type Item struct {
 // the HTTP layer - and Quit runs in-process, which keeps a remotely reachable
 // kill switch out of the mux entirely.
 type Config struct {
-	Enabled  bool   // false → Wrap is a pass-through
-	Explicit bool   // --tray was passed, as opposed to inferred from a GUI launch
-	GUI      bool   // launched from a desktop, so there is no console to fall back on
-	Name     string // product name, user-visible (default "WuWeiDict")
-	Version  string
-	URL      string
+	Enabled   bool   // false → Wrap is a pass-through
+	Explicit  bool   // --tray was passed, as opposed to inferred from a GUI launch
+	GUI       bool   // launched from a desktop, so there is no console to fall back on
+	InProcess bool   // UI is an in-process desktop window, not a browser served over HTTP
+	Name      string // product name, user-visible (default "WuWeiDict")
+	Version   string
+	URL       string
 
 	Open     func() // open the UI in a browser; omitted from the menu when nil
 	Rescan   func() // rescan the dictionary folders; omitted when nil
@@ -168,6 +169,9 @@ func (cfg Config) header() string {
 }
 
 func (cfg Config) tooltip() string {
+	if cfg.InProcess {
+		return cfg.name() + " - desktop app"
+	}
 	if cfg.URL == "" {
 		return cfg.name()
 	}
@@ -202,6 +206,13 @@ func (cfg Config) items(quit func()) []Item {
 // platform files so those carry only the transport and the single clause that
 // genuinely differs between them: how you stop a process on that OS.
 func notify(cfg Config, why string) {
+	if cfg.InProcess {
+		Alert(cfg.name(), fmt.Sprintf(
+			"%s is open, but could not show a tray icon (%s).\n\n"+
+				"The app window remains available; close it to quit.",
+			cfg.name(), why))
+		return
+	}
 	Alert(cfg.name(), fmt.Sprintf(
 		"%s is running at %s, but could not show an icon (%s).\n\n"+
 			"Use the browser tab. To stop it, %s.",
@@ -258,7 +269,11 @@ func Wrap(cfg Config, serve func() error) error {
 		return <-serveErr
 	}
 	m.to(Running)
-	logx.V("tray: icon active, serving on %s", cfg.URL)
+	if cfg.InProcess {
+		logx.V("tray: icon active for in-process desktop app")
+	} else {
+		logx.V("tray: icon active, serving on %s", cfg.URL)
+	}
 
 	// intentional distinguishes "Run returned because we asked it to" from
 	// "Run returned on its own", which is the difference between a clean exit
@@ -356,6 +371,13 @@ func runSafely(p platform) (err error) {
 // that opened at startup is then the only liveness indicator left, which is why
 // preflight refuses early rather than letting Starting fail silently.
 func degrade(cfg Config, why string) {
+	if cfg.InProcess {
+		logx.Warn("tray unavailable (%s) - in-process desktop app remains open", why)
+		if cfg.GUI {
+			go warnUser(cfg, why)
+		}
+		return
+	}
 	logx.Warn("tray unavailable (%s) - serving anyway at %s; press Ctrl-C or run '%s' to stop",
 		why, cfg.URL, fmt.Sprintf(killCmd, os.Getpid()))
 	// A GUI launch has nowhere else to look: no console (Windows closed its

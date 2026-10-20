@@ -5,6 +5,8 @@
 package server
 
 import (
+	"errors"
+	"fmt"
 	"net/http"
 	"path/filepath"
 
@@ -44,10 +46,18 @@ type orphanReport struct {
 }
 
 func (s *Server) handleOrphans(w http.ResponseWriter, r *http.Request) {
+	result, err := s.orphansSnapshot()
+	if err != nil {
+		httpErr(w, 500, "%v", err)
+		return
+	}
+	writeJSON(w, result)
+}
+
+func (s *Server) orphansSnapshot() (map[string]any, error) {
 	list, err := store.FindOrphans(s.reg.IsBuiltin)
 	if err != nil {
-		httpErr(w, 500, "reading library: %v", err)
-		return
+		return nil, fmt.Errorf("reading library: %w", err)
 	}
 	if list == nil {
 		list = []store.Orphan{}
@@ -56,7 +66,7 @@ func (s *Server) handleOrphans(w http.ResponseWriter, r *http.Request) {
 	for _, o := range list {
 		size += o.Size
 	}
-	writeJSON(w, map[string]any{"orphans": list, "size": size})
+	return map[string]any{"orphans": list, "size": size}, nil
 }
 
 func (s *Server) handleResolveOrphans(w http.ResponseWriter, r *http.Request) {
@@ -74,15 +84,22 @@ func (s *Server) handleResolveOrphans(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &req, 1<<20) {
 		return
 	}
-	if len(req.Delete)+len(req.Keep) == 0 {
-		httpErr(w, 400, "nothing to delete or keep")
+	report, err := s.resolveOrphanRequest(req.Delete, req.Keep)
+	if err != nil {
+		httpErr(w, 400, "%v", err)
 		return
 	}
-	if len(req.Delete)+len(req.Keep) > maxOrphanAnswers {
-		httpErr(w, 400, "too many folders in one request")
-		return
+	writeJSON(w, report)
+}
+
+func (s *Server) resolveOrphanRequest(del, keep []string) (orphanReport, error) {
+	if len(del)+len(keep) == 0 {
+		return orphanReport{}, errors.New("nothing to delete or keep")
 	}
-	writeJSON(w, s.reg.ResolveOrphans(req.Delete, req.Keep))
+	if len(del)+len(keep) > maxOrphanAnswers {
+		return orphanReport{}, errors.New("too many folders in one request")
+	}
+	return s.reg.ResolveOrphans(del, keep), nil
 }
 
 // ResolveOrphans deletes and keeps the named orphans and reports each outcome.
