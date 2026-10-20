@@ -466,7 +466,7 @@ func (s *Server) streamBrowseFind(ctx context.Context, request browseFindStreamR
 				filteredWords = append(filteredWords, word)
 				filteredPositions = append(filteredPositions, base+i)
 				filteredTotal++
-				if len(filteredWords) == browsePageSize {
+				if len(filteredWords) == 1 || len(filteredWords) >= browsePageSize {
 					if err := send(browseFindStreamEvent{Type: "block", Words: filteredWords,
 						Positions: filteredPositions, Total: filteredTotal, Scanned: scanned, ScanTotal: scanTotal}); err != nil {
 						return err
@@ -556,6 +556,7 @@ func streamDirectBrowseHeadwords(ctx context.Context, d dict.Dictionary, query s
 	words := make([]string, 0, browsePageSize)
 	total, previous := 0, ""
 	scanned := 0
+	firstMatch := false
 	entryCount := d.Meta().EntryCount
 	flush := func(done bool) error {
 		if err := emit(words, total, done, scanned, entryCount); err != nil {
@@ -583,6 +584,12 @@ func streamDirectBrowseHeadwords(ctx context.Context, d dict.Dictionary, query s
 			if matched {
 				words = append(words, word)
 				total++
+				if !firstMatch {
+					if err := flush(false); err != nil {
+						return err
+					}
+					firstMatch = true
+				}
 			}
 		}
 		scanned = min(at+len(page), entryCount)
