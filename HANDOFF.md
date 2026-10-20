@@ -2,7 +2,8 @@
 
 Current checkout: branch `dev` at `bb2a4b17`. Uncommitted Android changes keep
 the Browse A–Z heading and Find/Filter dock fixed while its dictionary list
-scrolls, with a divider under its heading and filter mode selected by default.
+scrolls; the Reading it word by word hint stays with the heading above its
+divider, and filter mode is selected by default.
 The Android-only `A60` header marker is now shown only by debug builds. The
 wildcards results now use a full-width unboxed surface with compact top controls.
 Android versionCode now uses 941 as a baseline at commit `bb2a4b17` and
