@@ -109,13 +109,13 @@ jobs:
             fi
           fi
 
-          # versionCode is NOT passed: app/build.gradle derives it from the
-          # commit count itself, so a local `make apk-foss-release` and this
+          # versionCode is NOT passed: app/build.gradle derives it from commits
+          # after its checked-in baseline, so local and CI builds of the same
           # workflow agree on it. Passing it here too would be a second source
           # of truth, which is how they came to disagree in the first place.
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "TAG=$VERSION" >> "$GITHUB_ENV"
-          echo "building $VERSION (versionCode = $(git rev-list --count HEAD))"
+          echo "building $VERSION (versionCode derived from Android baseline)"
 
       - name: Build the Go/JNI bridge (cgo - FTS5 + speex)
         # Assemble below stamps the selected release tag into BuildConfig and

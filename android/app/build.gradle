@@ -44,18 +44,19 @@ def gitVersion = {
     }
 }
 
-// versionCode = commits on HEAD. Monotonic, needs no stored state, and is what
-// the released APKs already carry (v3.7.3 shipped as 202). A shallow clone
-// yields a wrong count, so CI checks out with fetch-depth: 0.
+// Use 941 as the version-code baseline for this checkout, then increment once
+// for every commit after it. All flavours and build types share this value.
+// CI fetches full history so the baseline commit is available.
+def versionCodeBase = 941
+def versionCodeBaseCommit = 'bb2a4b17bdf1a5c9c38b86f355c98507efe1ff57'
 def gitCount = {
     try {
-        def p = ['git', '-C', rootDir.parent, 'rev-list', '--count', 'HEAD'].execute()
+        def p = ['git', '-C', rootDir.parent, 'rev-list', '--count', "${versionCodeBaseCommit}..HEAD"].execute()
         def out = p.text.trim()
-        if (p.waitFor() != 0 || !out.isInteger()) return 1
-        def n = out as int
-        return n > 0 ? n : 1
+        if (p.waitFor() != 0 || !out.isInteger()) return versionCodeBase
+        return versionCodeBase + (out as int)
     } catch (Exception ignored) {
-        return 1
+        return versionCodeBase
     }
 }
 
