@@ -716,6 +716,7 @@ func readBrowsePage(b dict.Browser, offset, size int, diagnostics bool, transpor
 type browseResp struct {
 	Dict  string `json:"dict"`
 	Name  string `json:"name"`
+	Title string `json:"title,omitempty"` // user-facing name, if customized
 	Total int    `json:"total"`
 	Page  int    `json:"page"`  // 1-based, as the URL spells it
 	Pages int    `json:"pages"` // 0 when the dictionary is empty
@@ -859,6 +860,7 @@ func (s *Server) browsePage(q url.Values) (browseResp, error) {
 	return browseResp{
 		Dict:     e.ID,
 		Name:     d.Meta().Name,
+		Title:    s.reg.prefs.DisplayTitle(e.ID),
 		Total:    total,
 		Page:     offset/browsePageSize + 1,
 		Pages:    (total + browsePageSize - 1) / browsePageSize,
@@ -995,7 +997,7 @@ func (s *Server) desktopBrowseStream(ctx context.Context, query string, emit fun
 		words = []string{}
 	}
 	page := offset/browsePageSize + 1
-	if err := send(browseStreamEvent{Type: "page", Page: &browseResp{Dict: e.ID, Name: meta.Name,
+	if err := send(browseStreamEvent{Type: "page", Page: &browseResp{Dict: e.ID, Name: meta.Name, Title: s.reg.prefs.DisplayTitle(e.ID),
 		Total: total, Page: page, Pages: (total + browsePageSize - 1) / browsePageSize,
 		Size: browsePageSize, At: mark, Words: words, Alphabet: []dict.Letter{}}}); err != nil {
 		return err
@@ -1137,7 +1139,7 @@ func (s *Server) handleBrowseStream(w http.ResponseWriter, r *http.Request) {
 	}
 	pages := (total + browsePageSize - 1) / browsePageSize
 	page := offset/browsePageSize + 1
-	st.line(browseStreamEvent{Type: "page", Page: &browseResp{Dict: e.ID, Name: meta.Name, Total: total,
+	st.line(browseStreamEvent{Type: "page", Page: &browseResp{Dict: e.ID, Name: meta.Name, Title: s.reg.prefs.DisplayTitle(e.ID), Total: total,
 		Page: page, Pages: pages, Size: browsePageSize, At: mark, Words: words, Alphabet: []dict.Letter{}}})
 	phase.Store(3)
 
