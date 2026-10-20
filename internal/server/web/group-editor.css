@@ -24,7 +24,6 @@ html[data-shell-image] .workspace-dialog{background-image:var(--paper-bk-image);
 #desktopSysSettings .panel-scroll{overflow-wrap:anywhere}
 #desktopSysSettings h3{font-size:calc(var(--ui-font-section) * 1rem);color:var(--label)}
 #desktopSysSettings .sys-hint{margin:0;font-size:calc(var(--ui-hint-font-size) * 1rem);color:var(--label)}
-#desktopSysSettings .sys-desktop-path{font-family:monospace;user-select:text}
 #desktopSysSettings .sys-desktop-values{display:grid;margin-top:calc(var(--ui-row-gap) * 1em)}
 #desktopSysSettings .sys-desktop-row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:1em;
   padding:.55em 0;border-bottom:1px solid var(--line)}
@@ -32,6 +31,10 @@ html[data-shell-image] .workspace-dialog{background-image:var(--paper-bk-image);
 #desktopSysSettings .sys-desktop-row code{display:block;color:var(--label);font-size:calc(var(--ui-hint-font-size) * 1rem);
   font-weight:400;overflow-wrap:anywhere}
 #desktopSysSettings .sys-desktop-value{font-size:calc(var(--ui-font-base) * 1rem);text-align:right;overflow-wrap:anywhere}
+#desktopSysSettings .sys-desktop-worker-select{box-sizing:border-box;min-width:5em;height:calc(var(--ui-control-height) * 1em);font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:0 .35em}
+#desktopSysSettings .sys-desktop-row .sys-hint{margin:.25em 0 0;font-size:calc(var(--ui-hint-font-size) * 1rem);line-height:1.5;color:var(--label)}
+#desktopSysSettings .sys-action-spaced{margin-top:calc(var(--ui-control-height) * .5em)}
+#desktopSysSettings #sysSaveLog{box-sizing:border-box;min-height:calc(var(--ui-control-height) * 1em);text-decoration:none}
 #webDictionaryPicker.group-dialog.panel-card{display:none;flex-direction:column;gap:0;
   width:min(480px,calc(100vw - 32px));height:min(650px,calc(100dvh - 32px));padding:12px;overflow:hidden}
 #webDictionaryPicker.group-dialog.panel-card[open]{display:flex}
@@ -44,12 +47,23 @@ html[data-shell-image] .workspace-dialog{background-image:var(--paper-bk-image);
 .web-picker-rows{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;padding:6px 0}
 .web-picker-row{display:block;width:100%;padding:.7em .5em;border:0;border-radius:8px;
   background:transparent;color:var(--fg);font:inherit;text-align:left;cursor:pointer}
+.wildcards-picker .web-picker-row{box-sizing:border-box;display:flex;align-items:center;gap:calc(var(--ui-control-gap) * 1em);min-width:0}
+.wildcards-picker .web-picker-row[aria-current="true"]::before{content:"✓";flex:none;width:1em;color:var(--accent)}
+.wildcards-picker .web-picker-name{display:block;flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wildcards-picker .web-picker-meta{flex:none;white-space:nowrap}
 .web-picker-row:hover,.web-picker-row:focus-visible{background:var(--bg-card);outline:2px solid var(--accent);outline-offset:-2px}
 .web-picker-rows>p{margin:.7em .5em;color:var(--label)}
 #webPickerSearch{padding-bottom:0}
 /* The selector section and each dictionary own their visible card borders;
    the dialog itself only provides the window surface and padding. */
 #dictSettings.group-dialog.panel-card{padding:16px 0;border:0;box-shadow:none}
+#workspaceFrameWindow.workspace-dialog{position:fixed;inset:var(--wd-inset-top,0px) 0 var(--wd-inset-bottom,0px);
+  width:auto;height:auto;max-width:none;max-height:none;margin:0;box-sizing:border-box;overflow:hidden;
+  padding:0;border:0;border-radius:0;background:var(--paper-bg,var(--bg))}
+.workspace-frame-window iframe{position:absolute;inset:0;display:block;width:100%;height:100%;min-height:0;border:0;background:transparent}
+.workspace-frame-loading{position:absolute;inset:0;z-index:1;display:grid;place-items:center;
+  background:var(--paper-bg,var(--bg));color:var(--soft)}
+#workspaceFrameLoading[hidden]{display:none!important}
 /* On a phone, app windows use a fixed 16px page gutter, matching the default
    Lemmatization page gutter regardless of the app's text scale. The box is
    written as `inset` + `auto` sizes so it STRETCHES to that rect:
@@ -76,6 +90,16 @@ html[data-shell-image] .workspace-dialog{background-image:var(--paper-bk-image);
      confirmation - nothing to scroll, so they centre in the same column
      instead of stretching to the card. */
   #lookSaveDialog,#lookAskDialog,#lookDeleteDialog{height:fit-content;margin:auto}
+}
+/* Rescan is a compact dialog, but unlike the full-window editors it must keep
+   a visible gutter around the card on narrow WebViews too. */
+dialog#clearDatabaseDialog.group-dialog.panel-card.workspace-dialog{
+  inset:0;margin:auto;width:min(560px,94vw);max-width:none;height:fit-content;
+  max-height:calc(100dvh - 20px);padding:16px;border-radius:12px}
+@media(max-width:600px){
+  dialog#clearDatabaseDialog.group-dialog.panel-card.workspace-dialog{
+    inset:calc(16px + var(--wd-inset-top,0px)) 16px calc(16px + var(--wd-inset-bottom,0px));
+    width:auto;height:auto;max-height:none;margin:0;padding:16px;border-radius:12px}
 }
 /* The window's own actions, above the cards they act on: outside the scroller,
    so they stay reachable however far down the list the reader has gone. */
@@ -133,6 +157,16 @@ dialog#bulkIndexDialog.group-dialog.panel-card{
 #bulkIndexDialog p{margin:0;overflow-wrap:anywhere}
 dialog#linkGroupDialog.group-dialog.panel-card,dialog#discardGroupDraftDialog.group-dialog.panel-card{inset:0;margin:auto;box-sizing:border-box;width:min(420px,calc(100vw - 64px));max-width:none;height:fit-content;max-height:80dvh;padding:1em}
 #linkGroupDialog p,#discardGroupDraftDialog p{margin:0;overflow-wrap:anywhere}
+#maskGotoDialog.group-dialog.panel-card{width:min(420px,calc(100vw - 32px));max-width:none;padding:1em}
+#maskGotoDialog #maskGotoTitle{justify-content:space-between;margin:0}
+#maskGotoDialog .mask-goto-close{box-sizing:border-box;display:grid;place-items:center;flex:none;width:calc(var(--ui-main-control-height) * 1em);height:calc(var(--ui-main-control-height) * 1em);padding:0;border:0;background:transparent;color:var(--fg);font-size:calc(var(--ui-main-control-font) * 1rem);line-height:1;cursor:pointer}
+#maskGotoDialog .mask-goto-close svg{display:block;width:1.3em;height:1.3em}
+#maskGotoDialog .mask-goto-field{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:.5em}
+#maskGotoDialog .mask-goto-field label{white-space:nowrap}
+#maskGotoDialog .mask-goto-field input{min-width:0;width:100%}
+#maskGotoDialog #maskGotoRange{grid-column:2;margin:-.45em 0 0;text-align:center}
+#maskGotoDialog .mask-goto-actions{display:flex;justify-content:space-between;gap:.5em;margin-top:.25em}
+#maskGotoDialog .mask-goto-actions .btn{border-radius:8px}
 .group-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:calc(var(--ui-control-gap) * 1em)}
 .group-toolbar select{flex:1;min-width:0;max-width:100%;width:12em}
 .group-toolbar .themed-select-btn{flex:1;min-width:0;width:12em}
@@ -153,7 +187,8 @@ html[data-shell-image] .group-dialog input.list-search-input{background:transpar
 .group-dialog h2 .icon-close{display:block;width:1.3em;height:1.3em;flex:none}
 dialog#clearDatabaseDialog.group-dialog.panel-card{box-sizing:border-box}
 #clearDatabaseDialog>h2{flex:none}
-#clearDatabaseDialog .rescan-scroll{min-height:0;overflow:auto;overscroll-behavior:contain}
+#clearDatabaseDialog .rescan-scroll{min-height:0;overflow:auto;overscroll-behavior:contain;
+  margin-right:-16px;padding:.65em 16px .65em 0;scrollbar-gutter:stable}
 #clearDatabaseDialog label{margin-top:.4em;display:flex;align-items:flex-start;gap:.3em}
 #clearDatabaseDialog input{margin-top:.15em}
 #clearDatabaseDialog h2{font-size:calc(var(--ui-font-title) * 1rem);display:flex;align-items:center;justify-content:space-between;gap:calc(var(--ui-control-gap) * 1em);margin:0 0 .5em}
@@ -268,18 +303,17 @@ html[data-shell-image] dialog#groupEditor.group-dialog.panel-card{background-ima
 #groupMembers.pin-selecting .group-row{cursor:pointer}
 #groupMembers.pin-selecting .group-row:active{background:color-mix(in srgb,var(--accent) 12%,transparent)}
 #groupMembers.pin-selecting .group-row.pin-boundary{outline:2px solid var(--accent);outline-offset:-2px}
-#groupEmptyHint{position:absolute;z-index:1;top:.55em;left:.8em;right:3.2em;display:flex;align-items:flex-start;min-height:2.35em;color:var(--label);pointer-events:none}
+#groupEmptyHint{position:absolute;z-index:1;top:.55em;left:.8em;right:.35em;display:flex;align-items:flex-start;gap:.5em;min-height:2.35em;color:var(--label);pointer-events:none}
 #groupEmptyHint[hidden]{display:none}
-#groupEmptyHint span{max-width:100%;padding-right:1.1em;font-size:calc(var(--ui-hint-font-size) * 1rem);line-height:1.25}
-#groupEmptyHint svg{position:absolute;top:0;right:-1.8em;width:2.2em;height:2.5em;overflow:visible;stroke:var(--accent);stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}
-#groupEmptyHint svg[hidden]{display:none}
+#groupEmptyHint span{flex:1 1 auto;min-width:0;max-width:none;box-sizing:border-box;font-size:calc(var(--ui-hint-font-size) * 1rem);line-height:1.25}
+#groupEmptyHint #groupEditToggle{position:relative;inset:auto;z-index:2;flex:none;pointer-events:auto}
+#groupEmptyHint #groupEditToggle svg{display:block;width:1.1em;height:1.1em;min-width:1.1em;min-height:1.1em;flex:0 0 1.1em}
 #groupNewAction{flex:none;display:grid;place-items:center;min-width:2.7em;height:2.7em;padding:.4em}
 #groupNewAction .group-new-icon{width:1.5em;height:1.5em}
 #groupNewAction[hidden]{display:none}
 @media(max-width:380px){#groupEditToggle .group-edit-label{display:none}#groupEditToggle{width:calc(var(--ui-main-control-height) * 1em);justify-content:center;padding:0}#groupOrderToolbar #groupEditToggle{flex:none;width:2.5em;min-width:2.5em;padding:0}}
 @media(max-width:380px){#groupPinControls{flex-wrap:wrap}#groupPinHint{flex-basis:100%}}
 #groupRows{flex:1;overflow:auto;min-height:0;overscroll-behavior:contain}
-#groupLists.hide-members #groupMembers{display:none}
 #groupLists.members-sized #groupMembers{box-sizing:border-box;flex:0 0 var(--group-members-height)}
 #groupEditor.compact-controls #groupControls{display:none}
 #groupEditor.edit-members #groupControls{display:none}

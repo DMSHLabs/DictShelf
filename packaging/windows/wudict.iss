@@ -4,19 +4,19 @@
 ;
 ; The Windows installer (P86 / D76). Compiled by tools\make-installer.ps1,
 ; which locates ISCC.exe and fills the defines below in from the built binary
-; (`wuDict2-cli --version`), so the version is read from the binary:
+; (`wuDict2 --version`), so nothing here carries a second copy of the product
 ; name or the version:
 ;
-;   .\tools\make-installer.ps1 -Exe .\wuDict2.exe -CliExe .\wuDict2-cli.exe -OutDir .\dist
+;   .\tools\make-installer.ps1 -Exe .\wuDict2.exe -OutDir .\dist
 ;
 ; or `make win-installer`. Every define has a default, so opening this file in
 ; the Inno Setup IDE and pressing Compile also works.
 ;
-; The GUI-subsystem wuDict2.exe opens WebView2 without a console flash.
-; wuDict2-cli.exe retains normal console input, output and exit status.
+; One executable is installed: wuDict2.exe hosts both the CLI/server and the
+; WebView2 window when launched from the desktop.
 
 #ifndef AppName
-  #define AppName "wuDict2"
+#define AppName "wuDict2"
 #endif
 #ifndef AppVersion
   #define AppVersion "dev"
@@ -27,18 +27,15 @@
 #ifndef SourceExe
   #define SourceExe "..\..\wuDict2.exe"
 #endif
-#ifndef SourceCliExe
-  #define SourceCliExe "..\..\wuDict2-cli.exe"
-#endif
 #ifndef OutputDir
   #define OutputDir "..\..\dist"
 #endif
-#define ProgId "wuDict.Dictionary"
+#define ProgId "wuDict2.Dictionary"
 
 [Setup]
 ; Durable identity. Never change this GUID: Windows keys the installed-programs
 ; entry off it, and a new one turns every upgrade into a second installation.
-AppId={{7B267AE3-CE1C-49F4-A8B2-2DEB9F979DE3}
+AppId={{A4927D64-81EE-46F7-923C-2B01A57D2C14}
 AppName={#AppName}
 AppVersion={#AppVersion}
 VersionInfoVersion={#NumVersion}
@@ -130,20 +127,15 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 [Tasks]
 Name: "desktopicon";  Description: "Create a &desktop shortcut"; Flags: unchecked
 Name: "startup";      Description: "Start {#AppName} at sign-in"; Flags: unchecked
-Name: "addtopath";    Description: "Add {#AppName} to my &PATH (so `wuDict2-cli` works in a terminal)"
+Name: "addtopath";    Description: "Add {#AppName} to my &PATH (so `wuDict2` works in a terminal)"
 Name: "associate";    Description: "Offer {#AppName} in ""Open with"" for dictionary files"
 
 [Files]
 Source: "{#SourceExe}"; DestDir: "{app}"; DestName: "wuDict2.exe"; Flags: ignoreversion
-Source: "{#SourceCliExe}"; DestDir: "{app}"; DestName: "wuDict2-cli.exe"; Flags: ignoreversion
 Source: "wudict.ico";   DestDir: "{app}"; Flags: ignoreversion
-; The third-party notices, beside the exe as well as inside it (`wudict
+; The third-party notices, beside the exe as well as inside it (`wuDict2
 ; licenses`): several of them require their text to accompany a binary.
 Source: "..\..\THIRD-PARTY-NOTICES.md"; DestDir: "{app}"; Flags: ignoreversion
-
-[InstallDelete]
-; Remove the previous executable when upgrading an existing wuDict install.
-Type: files; Name: "{app}\wudict.exe"
 
 [Icons]
 Name: "{group}\{#AppName}";       Filename: "{app}\wuDict2.exe"; IconFilename: "{app}\wudict.ico"; Comment: "Open your dictionaries"

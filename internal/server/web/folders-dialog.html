@@ -1,0 +1,60 @@
+<!-- Copyright (C) 2026 DmShAl (Shepeta Dmitry)
+
+     SPDX-License-Identifier: GPL-3.0-or-later
+-->
+<dialog id="foldersDialog" lang="{{T:locale}}" class="group-dialog panel-card workspace-dialog folders-dialog" aria-labelledby="foldersDialogTitle">
+  <div class="folders-dialog-shell">
+    <div class="folders-dialog-top">
+      <h2 id="foldersDialogTitle">{{T:pages.folders}}</h2>
+      <button type="button" class="btn" id="closePage" aria-label="{{T:pages.close}}"><svg class="icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+    </div>
+    <div class="folders-dialog-scroll">
+      <section id="indexDefaults">
+        <p>{{T:pages.indexDefaultsHint}}</p>
+        <div class="dsl-default-row"><div>
+          <label><input type="checkbox" id="newIndexIndex" checked disabled>{{T:dictUI.indexPlain}}</label>
+          <label><input type="checkbox" id="newIndexContains">{{T:dictUI.contains}}</label>
+          <label><input type="checkbox" id="newIndexFullText">{{T:dictUI.fts}}</label>
+        </div></div>
+        <p id="indexDefaultsError" class="err" role="alert" hidden></p>
+      </section>
+      <h2>{{T:pages.point}}</h2>
+      <p>{{T:pages.folderHint}}</p>
+      <div id="rows"></div>
+      <button type="button" id="addRow" class="link">{{T:pages.addFolder}}</button>
+      <div id="origin" class="warn hidden"></div>
+      <div id="cfgProblems" class="warn hidden"></div>
+      <div id="addSection" class="hidden">
+        <hr class="sep">
+        <h2>{{T:pages.addDictionaries}}</h2>
+        <p>{{T:pages.addHint}} <code id="addDir"></code>. {{T:pages.assetsHint}}</p>
+        <div id="drop">
+          <input type="file" id="file" accept=".zip,.7z,.mdx,.mdd,.ifo,.idx,.dict,.dz,.syn,.dsl,.slob,.bgl,.zim,.md,.gz" hidden>
+          <button type="button" id="choose" class="link">{{T:pages.chooseFile}}</button>
+          <span class="hint">{{T:pages.dropFile}}</span>
+        </div>
+        <div id="urlRow">
+          <input type="text" id="url" placeholder="{{T:pages.url}}" autocomplete="off" spellcheck="false" inputmode="url">
+          <button type="button" id="fetch" class="btn">{{T:pages.download}}</button>
+        </div>
+        <div id="found" class="hidden">
+          <p class="formats hidden" id="candAll">{{T:pages.select}} <a href="#" id="candAllOn">{{T:pages.selectAll}}</a> · <a href="#" id="candAllOff">{{T:pages.selectNone}}</a></p>
+          <div id="cands"></div><div id="extras" class="hidden"></div>
+          <label class="keep" id="srcKeepWrap"><input type="checkbox" id="srcKeep" checked>
+            <span>{{T:pages.keep}} <b id="srcName"></b> {{T:pages.afterwards}} <em>{{T:pages.keepFailed}}</em></span></label>
+          <button type="button" id="install" class="btn">{{T:pages.install}}</button>
+          <button type="button" id="dropJob" class="btn">{{T:pages.cancel}}</button>
+        </div>
+        <div id="impMsg"></div>
+        <p class="formats"><a href="#" id="howtoCopy">{{T:pages.howtoCopy}}</a> {{T:pages.howtoCopyHint}}</p>
+      </div>
+      <hr class="sep">
+      <div id="msg"></div>
+      <button type="button" class="btn" id="save" disabled>{{T:pages.useFolder}}</button>
+      <p class="formats hidden" id="howtoBackRow"><a href="#" id="howtoBack">{{T:pages.restoreHowto}}</a> {{T:pages.restoreHint}}</p>
+      <p class="formats">{{T:pages.supported}}</p>
+    </div>
+  </div>
+</dialog>
+<link rel="stylesheet" href="/assets/folders-dialog.css?v={{FOLDERSDIALOGCSS}}">
+<script defer src="/assets/setup.js?v={{SETUPJS}}"></script>

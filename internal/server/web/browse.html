@@ -1,6 +1,7 @@
 <!doctype html>
 <html lang="{{T:locale}}">
 <meta charset="utf-8">
+{{USERSTORAGE}}
 {{I18N}}
 <link rel="stylesheet" href="/assets/headword-control.css?v={{HEADWORDCSS}}">
 <script>
@@ -44,8 +45,10 @@ window.wudictShellBackground = function (color, image, imageName, paper) {
     else sessionStorage.removeItem('wudict_shell_image');
     if (valid) sessionStorage.setItem('wudict_shell_bg', color);
     else sessionStorage.removeItem('wudict_shell_bg');
-    if (/^#[0-9a-f]{6}$/i.test(paper || '')) sessionStorage.setItem('wudict_shell_paper', paper);
-    else sessionStorage.removeItem('wudict_shell_paper');
+    if (paper !== undefined) {
+      if (/^#[0-9a-f]{6}$/i.test(paper || '')) sessionStorage.setItem('wudict_shell_paper', paper);
+      else sessionStorage.removeItem('wudict_shell_paper');
+    }
   } catch (_) {}
 };
 (function () {
@@ -199,24 +202,49 @@ header{position:sticky;top:0;z-index:5;background:var(--bar);
 .nav button:disabled{opacity:.3;cursor:default}
 .nav b{justify-self:center;font-size:calc(var(--ui-font-addition) * 1rem);font-weight:600;color:var(--fg);
   font-variant-numeric:tabular-nums;white-space:nowrap}
+.nav [data-pos]{padding:.2em .55em;border:1px solid var(--line);border-radius:8px;min-height:calc(var(--ui-control-height) * 1em);background:var(--bar);color:inherit;font:inherit;cursor:pointer}
+.nav [data-pos]:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}
+.nav [data-pos]:disabled{opacity:.45;cursor:default}
+.nav [data-pos]:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+dialog.browse-goto{position:fixed;inset:0;margin:auto;box-sizing:border-box;width:min(420px,calc(100vw - 32px));height:fit-content;max-height:80dvh;padding:1em;
+  border:1px solid var(--line);border-radius:12px;color:var(--fg);background:var(--bg);box-shadow:0 8px 32px #0004;z-index:20;font-size:calc(var(--ui-font-base) * 1rem)}
+dialog.browse-goto:not([open]){display:none}
+dialog.browse-goto[open]{display:block}
+dialog.browse-goto::backdrop{background:rgba(0,0,0,.42)}
+.browse-goto form{display:flex;flex-direction:column;gap:.75em}
+.browse-goto h2{display:flex;align-items:center;justify-content:space-between;gap:.5em;margin:0;font-size:calc(var(--ui-font-title) * 1rem)}
+.browse-goto .close{box-sizing:border-box;display:grid;place-items:center;flex:none;width:calc(var(--ui-main-control-height) * 1em);height:calc(var(--ui-main-control-height) * 1em);padding:0;
+  border:0;background:transparent;color:var(--fg);font-size:calc(var(--ui-main-control-font) * 1rem);line-height:1;cursor:pointer}
+.browse-goto .close svg{display:block;width:1.3em;height:1.3em}
+.browse-goto .goto-field{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:.5em}
+.browse-goto .goto-field label{font-size:calc(var(--ui-font-base) * 1rem);white-space:nowrap}
+.browse-goto input{box-sizing:border-box;width:100%;height:calc(var(--ui-control-height) * 1em);padding:0 .45em;border:1px solid var(--line);border-radius:5px;
+  color:var(--fg);background:var(--bg);font:inherit;font-size:calc(var(--ui-font-base) * 1rem)}
+.browse-goto .range{grid-column:2;margin:-.45em 0 0;color:var(--label-quiet);font-size:calc(var(--ui-font-base) * 1rem);text-align:center}
+.browse-goto .actions{display:flex;justify-content:space-between;gap:.5em;margin-top:.25em}
+.browse-goto .actions button{min-height:calc(var(--ui-control-height) * 1em);padding:.2em .7em;border:1px solid var(--line);border-radius:8px;
+  color:var(--fg);background:transparent;font:inherit;cursor:pointer}
+.browse-goto .actions button[type=submit]{border-color:var(--line);background:color-mix(in srgb,var(--bg) 84%,var(--accent));color:var(--fg)}
+html:is([data-shell-sepia],[data-shell-image]) .browse-goto input{background-color:var(--paper-bg,var(--bg))}
+html[data-shell-image] dialog.browse-goto{background-image:var(--paper-bk-image);background-size:100% 100%;background-position:center;background-repeat:no-repeat}
 
 /* One row, scrolled sideways rather than wrapped: wrapping a Cyrillic+Latin
    alphabet is four rows of chrome above every page, on the screen that can
    least afford it. The active chip is scrolled into view, so the strip is
    never scrolled to a place the reader is not. */
 .strip-wrap{display:flex;align-items:stretch;gap:.1rem;padding:0 .35rem .4rem}
+.strip-scrollbar{position:relative;height:12px;margin:0 .65rem .35rem;border-radius:99px;background:color-mix(in srgb,var(--fg) 12%,transparent);touch-action:none;cursor:pointer}
+.strip-scroll-thumb{position:absolute;top:2px;left:0;height:8px;min-width:20px;border-radius:99px;background:color-mix(in srgb,var(--fg) 42%,var(--bg));cursor:grab;touch-action:none}
+.strip-scrollbar:active .strip-scroll-thumb{cursor:grabbing}
 .strip{display:block;position:relative;flex:1;min-width:0;column-gap:.1rem;overflow-x:auto;padding:0;scrollbar-width:none;
   overscroll-behavior-x:contain}
 .strip::-webkit-scrollbar{display:none}
 .strip-track{position:relative;height:100%;min-width:100%}
 .strip button.strip-chip{position:absolute;top:50%;transform:translateY(-50%);margin:0;min-width:0}
 .strip button.strip-measure{position:absolute!important;left:0!important;top:0!important;visibility:hidden!important;pointer-events:none!important}
-.strip-nav{box-sizing:border-box;display:grid;place-items:center;flex:none;width:2rem;min-height:calc(var(--ui-control-height) * 1em);padding:0;border:0;background:transparent;color:var(--fg);cursor:pointer}
-.strip-nav svg{display:block;width:1.35rem;height:1.35rem}
-.strip-nav:disabled{opacity:.3;cursor:default}
-.strip-nav:not(:disabled):hover{color:var(--accent)}
 .strip button{font:inherit;font-size:calc(var(--ui-font-addition) * 1rem);line-height:1;background:none;border:0;color:var(--label);
   cursor:pointer;padding:.36rem .5rem;border-radius:7px;flex:0 0 auto;min-width:1.85rem;text-align:center}
+.strip button.strip-chip{box-sizing:border-box;max-width:12em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .strip button:hover{background:var(--line-soft);color:var(--fg)}
 .strip button[aria-current=true]{background:var(--accent);color:#fff}
 
@@ -234,21 +262,8 @@ main{padding-bottom:5rem}
 footer{position:fixed;bottom:0;left:0;right:0;z-index:6;display:flex;justify-content:center;
   padding:.5rem .9rem max(.5rem,env(safe-area-inset-bottom));background:var(--bar);
   backdrop-filter:saturate(1.6) blur(8px);border-top:1px solid var(--line)}
-footer .browse-progress{display:flex;align-items:center;gap:.55em;width:100%;max-width:54rem;
-  margin:0 auto .45rem;padding:.45rem .6rem;border:1px solid var(--accent);border-radius:8px;
-  background-color:var(--bg);background-image:repeating-linear-gradient(135deg,
-  color-mix(in srgb,var(--accent) 13%,transparent) 0px,color-mix(in srgb,var(--accent) 13%,transparent) 7px,
-  transparent 7px,transparent 15px);font-size:calc(var(--ui-font-addition) * 1rem)}
-footer .browse-progress[hidden]{display:none}
-footer .browse-progress-spinner{width:1em;height:1em;flex:none;border:2px solid color-mix(in srgb,var(--accent) 28%,transparent);
-  border-top-color:var(--accent);border-radius:50%;animation:browse-spin .8s linear infinite}
-footer .browse-progress-text{min-width:0;overflow-wrap:anywhere}
-footer .browse-progress-stop{flex:none;padding:.2em .55em;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--fg);font:inherit;cursor:pointer}
-footer .browse-progress-stop:hover{border-color:var(--accent);color:var(--accent)}
-@keyframes browse-spin{to{transform:rotate(360deg)}}
-@media(prefers-reduced-motion:reduce){footer .browse-progress-spinner{animation:none;border-color:var(--accent)}}
 body.browse-page-busy #top,body.browse-page-busy main,body.browse-page-busy .browse-search-dock{pointer-events:none;opacity:.62}
-body.browse-page-busy footer .browse-progress{pointer-events:auto;opacity:1}
+body.browse-page-busy #findInput{pointer-events:auto}
 footer .browse-controls{width:100%;max-width:54rem}
 footer .browse-search-dock{width:100%;max-width:54rem}
 .words a.browse-current{outline:2px solid var(--accent);outline-offset:-2px;background:var(--line-soft)}
@@ -312,6 +327,8 @@ html[data-desktop-image] .chooser-list :is(.list-search-dock,.list-search-input,
 {{PRESETS}}
 <script src="/assets/list-search.js?v={{LISTSEARCHJS}}"></script>
 <script src="/assets/headword-control.js?v={{HEADWORDJS}}"></script>
+<script src="/assets/headword-ribbon.js?v={{RIBBONJS}}"></script>
+<script>window.wudictHeadwordControl.ribbon.setExactCount({{BROWSE_STRIP_EXACT_WIDTHS}})</script>
 <script>
 /* The chooser shares the reader's saved Fonts values. */
 (function () {
@@ -339,16 +356,28 @@ html[data-desktop-image] .chooser-list :is(.list-search-dock,.list-search-input,
     <div class="title"><div class="title-copy"><b id="name"></b><span id="sub"></span></div><button type="button" id="closeBrowse" aria-label="{{T:pages.close}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div>
     <div class="nav">
       <button type="button" data-go="prev" title="{{T:browse.previousTitle}}">{{T:browse.previousPage}}</button>
-      <b data-pos></b>
+      <button type="button" data-pos aria-label="{{T:browse.gotoBlock}}" title="{{T:browse.gotoBlock}}"></button>
       <button type="button" data-go="next" title="{{T:browse.nextTitle}}">{{T:browse.nextPage}}</button>
     </div>
   </div>
   <div class="strip-wrap" id="stripWrap">
-    <button type="button" class="strip-nav" id="stripPrev" aria-label="{{T:browse.scrollLettersLeft}}" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 4-8 8 8 8"/></svg></button>
+    <button type="button" class="wudict-ribbon-nav" id="stripPrev" aria-label="{{T:browse.scrollLettersLeft}}" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 4-8 8 8 8"/></svg></button>
     <nav class="strip" id="strip" aria-label="{{T:browse.jumpLetter}}"><div class="strip-track" id="stripTrack"><button class="strip-measure" id="stripMeasure" type="button" aria-hidden="true" tabindex="-1">M</button></div></nav>
-    <button type="button" class="strip-nav" id="stripNext" aria-label="{{T:browse.scrollLettersRight}}" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 4 8 8-8 8"/></svg></button>
+    <button type="button" class="wudict-ribbon-nav" id="stripNext" aria-label="{{T:browse.scrollLettersRight}}" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 4 8 8-8 8"/></svg></button>
   </div>
+  <div class="strip-scrollbar" id="stripScrollbar" role="scrollbar" aria-label="{{T:browse.jumpLetter}}" aria-controls="strip" aria-orientation="horizontal" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0" tabindex="0" hidden><div class="strip-scroll-thumb" id="stripScrollThumb"></div></div>
 </header>
+
+<dialog class="browse-goto" id="browseGotoDialog" lang="{{T:locale}}" aria-labelledby="browseGotoTitle">
+  <form id="browseGotoForm">
+    <h2 id="browseGotoTitle"><span>{{T:browse.gotoBlock}}</span><button type="button" class="close" id="browseGotoClose" aria-label="{{T:pages.close}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></h2>
+    <div class="goto-field"><label for="browseGotoInput">{{T:browse.gotoBlockLabel}}</label><input id="browseGotoInput" type="number" inputmode="numeric" min="1" step="1" required><p class="range" id="browseGotoRange"></p></div>
+    <div class="actions">
+      <button type="button" id="browseGotoCancel">{{T:panel.cancel}}</button>
+      <button type="submit">{{T:browse.gotoBlockAction}}</button>
+    </div>
+  </form>
+</dialog>
 
 <main>
   <div class="msg" id="msg" hidden></div>
@@ -356,10 +385,6 @@ html[data-desktop-image] .chooser-list :is(.list-search-dock,.list-search-input,
 </main>
 <footer id="foot" hidden>
   <div class="browse-controls">
-    <div class="browse-progress" id="browseProgress" role="status" aria-live="polite" hidden>
-      <span class="browse-progress-spinner" aria-hidden="true"></span><span class="browse-progress-text" id="browseProgressText"></span>
-      <button type="button" class="browse-progress-stop" id="browseProgressStop" hidden>{{T:dictUI.stop}}</button>
-    </div>
     <div class="browse-search-dock" id="findDock" role="search">
     </div>
   </div>
@@ -369,6 +394,23 @@ html[data-desktop-image] .chooser-list :is(.list-search-dock,.list-search-input,
 <script>
 "use strict";
 const $=id=>document.getElementById(id);
+// The title and alphabet strip are fixed siblings of the scrolling word list.
+// Route vertical wheel input to that list from anywhere in the workspace;
+// keep the chooser's independently scrollable dictionary list native.
+const browseFrame=document.querySelector(".workspace-browser"),browseMain=browseFrame?.querySelector(":scope > main");
+browseFrame?.addEventListener("wheel",event=>{
+  if(!browseMain||event.defaultPrevented||!event.deltaY||Math.abs(event.deltaX)>Math.abs(event.deltaY))return;
+  if(event.target instanceof Element&&event.target.closest("footer"))return;
+  const nested=event.target instanceof Element?event.target.closest(".picks"):null;
+  if(nested&&nested.scrollHeight>nested.clientHeight){
+    const canScroll=event.deltaY<0?nested.scrollTop>0:nested.scrollTop+nested.clientHeight<nested.scrollHeight-1;
+    if(canScroll)return;
+  }
+  const factor=event.deltaMode===1?16:event.deltaMode===2?browseMain.clientHeight:1;
+  const before=browseMain.scrollTop;
+  browseMain.scrollTop+=event.deltaY*factor;
+  if(browseMain.scrollTop!==before)event.preventDefault();
+},{passive:false});
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const {t,number:num}=window.wudictI18n;
 const tx=(key,params)=>esc(t(key,params));
@@ -400,23 +442,180 @@ function unesc(s){
 try{const t=localStorage.getItem("wudict_theme");
   if(t&&t!=="auto")document.documentElement.setAttribute("data-theme",t)}catch(e){}
 
-let dictId="",state=null,last={p:1},poll=0,stripFor="",stripLettersPainted=0,stripMetricKey="",stripWidths=[],stripOffsets=[],stripTotalWidth=0,stripCurrentIndex=-1,stripWindowStart=-1,stripWindowEnd=-1,stripFrame=0,chooserSearch=null,browsePageAbort=null,browseAlphabetTask=null,browsePageBusy=false;
+let dictId="",state=null,last={p:1},poll=0,stripFor="",stripLettersPainted=0,stripMetricKey="",stripWidths=[],stripOffsets=[],stripTotalWidth=0,stripCurrentIndex=-1,stripCurrentPositionedIndex=-1,stripWindowStart=-1,stripWindowEnd=-1,stripFrame=0,stripMeasureFrame=0,stripMeasureGeneration=0,stripMeasureStarted=0,stripMeasureStartCount=0,stripMeasureChunks=0,chooserSearch=null,browsePageAbort=null,browseAlphabetTask=null,browsePageBusy=false;
 const browseAlphabetCache=new Map(),browseAlphabetPartial=new Map(),browsePageCache=new Map(),browsePageCacheMetrics=new Map(),browsePagePrefetches=new Map();
 const BROWSE_PAGE_CACHE_LIMIT=12,BROWSE_PAGE_SESSION_LIMIT=8;
-const BROWSE_ALPHABET_SESSION_KEY="wudict_browse_alphabet_v1";
+const BROWSE_ALPHABET_SESSION_KEY="wudict_browse_alphabet_v2";
+const BROWSE_STRIP_EXACT_WIDTHS={{BROWSE_STRIP_EXACT_WIDTHS}};
+const SEARCH_DEBOUNCE_MS={{SEARCH_DEBOUNCE_MS}};
 const BROWSE_FIND_SESSION_KEY="wudict_browse_find_v1";
 const BROWSE_PAGE_SESSION_KEY="wudict_browse_page_v1";
 let browseHeadwordControl=null;
 const BROWSE_DEBUG=new URLSearchParams(location.search).get("browse_debug")==="1";
+function browseDiagnosticsEnabled(){try{return localStorage.getItem("wudict_browse_diagnostics")==="1"}catch(_){return false}}
+function browseArticleDiagnosticsEnabled(){try{return localStorage.getItem("wudict_browse_article_diagnostics")==="1"}catch(_){return false}}
+function sendBrowseDiagnostic(payload){
+  if(window.wudictAndroidGo){try{window.wudictAndroidGo.browseDiagnostic(JSON.stringify(payload))}catch(_){}return Promise.resolve()}
+  if(typeof window.wudictNativeCall==="function")return window.wudictNativeCall("browseDiagnostic",JSON.stringify(payload)).catch(()=>{});
+  return fetch("/api/browse-diagnostic",{method:"POST",headers:{"Content-Type":"application/json"},keepalive:true,body:JSON.stringify(payload)}).catch(()=>{});
+}
+const browseNavContext=(()=>{
+  if(!browseArticleDiagnosticsEnabled())return null;
+  const params=new URLSearchParams(location.search),raw=Number(params.get("browseDiagStart"));
+  return {startedAt:Number.isSafeInteger(raw)&&raw>0?raw:Math.floor(performance.timeOrigin),firstPaint:false};
+})();
+function logBrowseNavigation(stage,durationMs=0,extra={}){
+  if(!browseNavContext)return;
+  sendBrowseDiagnostic({event:"browse_navigation",stage,startedAt:browseNavContext.startedAt,
+    elapsedMs:Math.max(0,Date.now()-browseNavContext.startedAt),durationMs:Math.max(0,Math.round(durationMs)),
+    dict:dictId||new URLSearchParams(location.search).get("dict")||"",page:state?.page||0,...extra});
+}
+if(browseNavContext){
+  sendBrowseDiagnostic({event:"storage_bootstrap",startedAt:browseNavContext.startedAt,
+    elapsedMs:Math.max(0,Date.now()-browseNavContext.startedAt),
+    stripBuildMs:Math.max(0,Math.round(window.__wudictDocumentFirstScriptMs||0)),
+    readMs:Math.max(0,Math.round(window.__wudictDocumentScriptStartMs||0)),
+    fetchMs:Math.max(0,Math.round(window.__wudictStorageBootstrapStartMs||0)),
+    wordsMs:Math.max(0,Math.round(window.__wudictI18nMarkupAtMs||0)),
+    durationMs:Math.max(0,window.__wudictStorageBootstrapMs||0),restored:!!window.__wudictStorageRestored});
+  const nav=performance.getEntriesByType("navigation")[0];
+  if(nav)for(const [stage,value] of [["document_response_start",nav.responseStart],["document_response_end",nav.responseEnd]]){
+    if(value>0)logBrowseNavigation(stage,value);
+  }
+  addEventListener("DOMContentLoaded",()=>{
+    const entry=performance.getEntriesByType("navigation")[0];
+    if(entry?.domInteractive>0)logBrowseNavigation("dom_interactive",entry.domInteractive);
+    if(entry?.responseEnd>0)logBrowseNavigation("document_response_end",entry.responseEnd);
+    let logged=0;
+    for(const resource of performance.getEntriesByType("resource")){
+      if(logged>=40)break;
+      const path=new URL(resource.name,location.href).pathname;
+      if(!path.startsWith("/assets/")&&!path.startsWith("/style/"))continue;
+      logged++;
+      sendBrowseDiagnostic({event:"navigation_resource",startedAt:browseNavContext.startedAt,
+        resource:path,elapsedMs:Math.max(0,Date.now()-browseNavContext.startedAt),
+        fetchMs:Math.max(0,Math.round(resource.startTime)),durationMs:Math.max(0,Math.round(resource.duration)),
+        totalMs:Math.max(0,Math.round(resource.responseEnd))});
+    }
+  },{once:true});
+  logBrowseNavigation("script_ready");
+}
+let browseReturnStartedAt=0,browseReturnOriginStart=0,browseReturnReadyLogged=false;
+const browseReturnNeedsRestore=(()=>{const params=new URLSearchParams(location.search);return params.has("y")||params.has("word")})();
+function flushArticleReturnDiagnostic(){
+  if(!browseArticleDiagnosticsEnabled())return;
+  try{
+    const key="wudict_browse_article_return_pending",payload=JSON.parse(sessionStorage.getItem(key)||"null");
+    if(payload&&payload.event==="article_transition"&&payload.stage==="words_click"){
+      sessionStorage.removeItem(key);
+      browseReturnStartedAt=Number(payload.returnStartedAt)||0;
+      browseReturnOriginStart=Number(payload.startedAt)||0;
+      browseReturnReadyLogged=false;
+      delete payload.returnStartedAt;
+      sendBrowseDiagnostic(payload);
+    }
+  }catch(_){}
+}
+function logBrowseReturn(stage,durationMs){
+  if(!browseArticleDiagnosticsEnabled()||!browseReturnStartedAt)return;
+  if(stage==="browse_return_ready"){
+    if(browseReturnReadyLogged)return;
+    browseReturnReadyLogged=true;
+  }
+  sendBrowseDiagnostic({event:"article_transition",stage,startedAt:browseReturnOriginStart,
+    elapsedMs:Math.max(0,Date.now()-browseReturnOriginStart),durationMs:Math.max(0,Math.round(durationMs??Date.now()-browseReturnStartedAt)),
+    dict:dictId,page:state?.page||0});
+}
+flushArticleReturnDiagnostic();
+logBrowseReturn("browse_return_script_ready");
 function browseTrace(step,data={}){
   let enabled=BROWSE_DEBUG;
-  try{enabled=enabled||localStorage.getItem("wudict_browse_diagnostics")==="1"}catch(_){}
+  enabled=enabled||browseDiagnosticsEnabled();
   if(!enabled)return;
   console.info("[browse]",step,data);
   const payload={event:step.replaceAll(" ","_")};
-  for(const key of ["page","words","letters","bytes","readMs","fetchMs","totalMs","wordsMs","stripBuildMs","stripMarkMs","status","restored","streamAlphabet"])
+  for(const key of ["dict","page","words","letters","measured","bytes","readMs","fetchMs","totalMs","wordsMs","stripBuildMs","stripMarkMs","status","restored","streamAlphabet"])
     if(data[key]!==undefined)payload[key]=data[key];
-  fetch("/api/browse-diagnostic",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload),keepalive:true}).catch(()=>{});
+  sendBrowseDiagnostic(payload);
+}
+async function browseFetch(url,options={}){
+  if(window.wudictAndroidGo){
+    const requestURL=new URL(url,location.href);
+    if(requestURL.origin===location.origin&&(options.method||"GET").toUpperCase()==="GET"){
+      const params=requestURL.searchParams;
+      if(requestURL.pathname==="/api/browse"&&params.get("stream")==="1")
+        return androidBrowseStream("browse",params.toString(),options.signal);
+      if(requestURL.pathname==="/api/browse"){
+        const result=JSON.parse(window.wudictAndroidGo.browsePage(params.toString()));
+        return {status:result.status,ok:result.status>=200&&result.status<300,json:async()=>result.body};
+      }
+      if(requestURL.pathname==="/api/browse/find"&&params.get("stream")==="1")
+        return androidBrowseStream("browseFind",params.toString(),options.signal);
+    }
+    throw new Error("Browse operation is not connected to the Go bridge");
+  }
+  if(typeof window.wudictNativeCall!=="function")return fetch(url,options);
+  const requestURL=new URL(url,location.href);
+  if(requestURL.origin!==location.origin)return fetch(url,options);
+  const method=(options.method||"GET").toUpperCase(),params=requestURL.searchParams;
+  if(requestURL.pathname==="/api/browse"&&method==="GET"){
+    if(params.get("stream")==="1")return nativeBrowseStream("browse",params.toString(),options.signal);
+    const result=await window.wudictNativeCall("browsePage",params.toString());
+    return {status:result.status,ok:result.status>=200&&result.status<300,json:async()=>result.body};
+  }
+  if(requestURL.pathname==="/api/browse/find"&&method==="GET"&&params.get("stream")==="1")
+    return nativeBrowseStream("browseFind",params.toString(),options.signal);
+  return fetch(url,options);
+}
+function androidBrowseStream(method,query,signal){
+  const encoder=new TextEncoder();
+  let id=0,stopped=false;
+  const stop=()=>{stopped=true;if(id>0)window.wudictAndroidGo.cancelDictStream(id)};
+  const body=new ReadableStream({start(controller){
+    if(signal?.aborted){controller.error(new DOMException("Aborted","AbortError"));return}
+    id=window.wudictAndroidGo.startBrowseStream(method,query);
+    if(id<=0){controller.error(new Error("Go runtime is unavailable"));return}
+    const abort=()=>{stop();controller.error(new DOMException("Aborted","AbortError"))};
+    if(signal)signal.addEventListener("abort",abort,{once:true});
+    (async()=>{
+      try{
+        for(;;){
+          if(stopped)throw new DOMException("Aborted","AbortError");
+          const packet=JSON.parse(window.wudictAndroidGo.pollDictStream(id));
+          for(const message of packet.messages||[]){
+            if(stopped)throw new DOMException("Aborted","AbortError");
+            controller.enqueue(encoder.encode(JSON.stringify(message)+"\n"));
+          }
+          if(packet.done){if(packet.error)throw new Error(packet.error);controller.close();return}
+          await new Promise(resolve=>setTimeout(resolve,16));
+        }
+      }catch(error){if(!stopped)controller.error(error)}
+      finally{if(signal)signal.removeEventListener("abort",abort);stop()}
+    })();
+  },cancel(){stop()}});
+  return {status:200,ok:true,body};
+}
+function nativeBrowseStream(method,query,signal){
+  const encoder=new TextEncoder();
+  const body=new ReadableStream({start(controller){
+    window.wudictNativeCall(method,query,message=>controller.enqueue(encoder.encode(JSON.stringify(message)+"\n")),signal)
+      .then(()=>controller.close()).catch(error=>controller.error(error));
+  }});
+  return {status:200,ok:true,body};
+}
+async function androidChooserDicts(){
+  const id=window.wudictAndroidGo.startDictStream();
+  if(id<=0)throw new Error("Go runtime is unavailable");
+  const rows=[];
+  try{
+    for(;;){
+      const packet=JSON.parse(window.wudictAndroidGo.pollDictStream(id));
+      for(const message of packet.messages||[])
+        if(message.t==="dict"&&message.dict&&!message.dict.error)rows.push(message.dict);
+      if(packet.done){if(packet.error)throw new Error(packet.error);return rows}
+      await new Promise(resolve=>setTimeout(resolve,16));
+    }
+  }finally{window.wudictAndroidGo.cancelDictStream(id)}
 }
 function restoreBrowseAlphabet(dict){
   if(browseAlphabetCache.has(dict))return;
@@ -448,15 +647,10 @@ function saveBrowseAlphabet(dict,total,letters){
     browseTrace("alphabet cache saved",{dict,total,count:letters.length,bytes:encoded.length});
   }catch(error){browseTrace("alphabet cache save failed",{dict,count:letters.length,error:String(error)})}
 }
-function updateStripArrows(){
-  const strip=$("strip"),end=Math.max(0,strip.scrollWidth-strip.clientWidth);
-  $("stripPrev").disabled=strip.scrollLeft<=1;
-  $("stripNext").disabled=strip.scrollLeft>=end-1;
-}
+let stripNavigator=null;
+function updateStripArrows(){stripNavigator?.update()}
 function lowerStripIndex(value,byEnd=false){
-  let lo=0,hi=stripOffsets.length;
-  while(lo<hi){const mid=(lo+hi)>>>1;const edge=stripOffsets[mid]+(byEnd?stripWidths[mid]:0);if(edge<value)lo=mid+1;else hi=mid}
-  return lo;
+  return window.wudictHeadwordControl.ribbon.lower(stripOffsets,stripWidths,value,byEnd);
 }
 function measureStripItems(items){
   const strip=$("strip"),track=$("stripTrack"),sample=$("stripMeasure"),style=getComputedStyle(sample);
@@ -465,71 +659,119 @@ function measureStripItems(items){
   const minWidth=parseFloat(style.minWidth)||0,gap=parseFloat(getComputedStyle(strip).columnGap)||0;
   const height=sample.getBoundingClientRect().height;
   const key=[font,pad,minWidth,gap,height,style.letterSpacing].join("|");
-  const canvas=measureStripItems.canvas||(measureStripItems.canvas=document.createElement("canvas"));
-  const ctx=canvas.getContext("2d");ctx.font=font;
-  const letterSpacing=parseFloat(style.letterSpacing)||0;
   const metricsChanged=key!==stripMetricKey;
   if(metricsChanged){
-    stripMetricKey=key;stripWidths=[];stripOffsets=[];stripTotalWidth=0;stripLettersPainted=0;stripWindowStart=stripWindowEnd=-1;
+    stripMetricKey=key;stripWidths=[];stripOffsets=[];stripTotalWidth=0;stripLettersPainted=0;stripWindowStart=stripWindowEnd=-1;stripCurrentPositionedIndex=-1;
+    stripMeasureGeneration++;stripMeasureStarted=0;stripMeasureStartCount=0;stripMeasureChunks=0;
+    if(stripMeasureFrame){cancelAnimationFrame(stripMeasureFrame);stripMeasureFrame=0}
     const cached=browseAlphabetCache.get(stripFor);
     if(cached?.metricKey===key&&cached.widths?.length===items.length){
       stripWidths=cached.widths;
       for(const width of stripWidths){stripOffsets.push(stripTotalWidth);stripTotalWidth+=width+gap}
       if(stripWidths.length)stripTotalWidth-=gap;
-      stripLettersPainted=stripWidths.length;
+      stripLettersPainted=Math.min(BROWSE_STRIP_EXACT_WIDTHS,stripWidths.length);
     }
   }
-  if(stripLettersPainted>0&&items.length>stripLettersPainted)stripTotalWidth+=gap;
-  for(let i=stripLettersPainted;i<items.length;i++){
-    const label=unesc(items[i].l),text=ctx.measureText(label).width+Math.max(0,label.length-1)*letterSpacing;
-    const width=Math.max(minWidth,text+pad);stripOffsets.push(stripTotalWidth);stripWidths.push(width);stripTotalWidth+=width+gap;
+  if(items.length<stripWidths.length){
+    stripWidths=[];stripOffsets=[];stripTotalWidth=0;stripLettersPainted=0;stripWindowStart=stripWindowEnd=-1;stripCurrentPositionedIndex=-1;
+    if(stripMeasureFrame){cancelAnimationFrame(stripMeasureFrame);stripMeasureFrame=0}
+    stripMeasureGeneration++;stripMeasureStarted=0;stripMeasureStartCount=0;stripMeasureChunks=0;
   }
-  if(items.length>stripLettersPainted)stripTotalWidth-=gap;
-  stripLettersPainted=items.length;
-  if(items.length!==stripWidths.length){stripWidths.length=stripOffsets.length=items.length}
+  const exactTarget=Math.min(items.length,BROWSE_STRIP_EXACT_WIDTHS);
+  if(stripWidths.length!==items.length){
+    if(exactTarget>stripLettersPainted&&!stripMeasureStarted){stripMeasureStarted=performance.now();stripMeasureStartCount=stripLettersPainted;stripMeasureChunks=0}
+    const geometry=window.wudictHeadwordControl.ribbon.measure(items,sample,strip,{gap,minWidth,maxWidthEm:12,getLabel:item=>unesc(item.l)});
+    stripWidths=geometry.widths;stripOffsets=geometry.offsets;stripTotalWidth=geometry.total;
+    stripLettersPainted=exactTarget;if(exactTarget)stripMeasureChunks++;
+  }
+  const complete=stripWidths.length>=items.length;
   const cached=browseAlphabetCache.get(stripFor);
   if(cached&&cached.letters.length===items.length&&cached.metricKey!==key)
     saveBrowseAlphabet(stripFor,cached.total,cached.letters);
   strip.style.height=Math.max(height,$("stripPrev").getBoundingClientRect().height)+"px";
   track.style.width=Math.max(strip.clientWidth,stripTotalWidth)+"px";
-  if(metricsChanged&&stripCurrentIndex>=0&&stripCurrentIndex<stripOffsets.length){
+  if(complete){
+    if(stripMeasureFrame){cancelAnimationFrame(stripMeasureFrame);stripMeasureFrame=0}
+    if(stripMeasureStarted&&stripLettersPainted){browseTrace("alphabet measure done",{dict:stripFor,letters:items.length,measured:stripLettersPainted-stripMeasureStartCount,words:stripMeasureChunks,stripBuildMs:Math.round(performance.now()-stripMeasureStarted)});stripMeasureStarted=0}
+  }else if(!stripMeasureFrame){
+    const generation=stripMeasureGeneration;
+    stripMeasureFrame=requestAnimationFrame(()=>{
+      stripMeasureFrame=0;
+      if(generation!==stripMeasureGeneration||!state)return;
+      const currentItems=activeStripItems();
+      if(measureStripItems(currentItems))render();
+    });
+  }
+  if(browseAlphabetCache.has(stripFor)&&stripCurrentIndex>=0&&stripCurrentIndex<stripOffsets.length&&stripCurrentPositionedIndex!==stripCurrentIndex){
     const center=stripOffsets[stripCurrentIndex]+stripWidths[stripCurrentIndex]/2;
     strip.scrollLeft=Math.max(0,Math.min(stripTotalWidth-strip.clientWidth,center-strip.clientWidth/2));
+    stripCurrentPositionedIndex=stripCurrentIndex;
   }
+  return complete;
 }
 function renderVirtualStrip(force=false){
   if(!state||!stripWidths.length)return;
-  const strip=$("strip"),track=$("stripTrack"),items=state.alphabet||[];
-  const left=strip.scrollLeft,right=left+strip.clientWidth,buffer=24;
+  const strip=$("strip"),track=$("stripTrack"),items=activeStripItems();
+  const ribbon=window.wudictHeadwordControl.ribbon;
+  const left=strip.scrollLeft,right=left+strip.clientWidth,buffer=ribbon.buffer;
   const start=Math.max(0,lowerStripIndex(left,true)-buffer);
   const end=Math.min(items.length,lowerStripIndex(right)+buffer);
-  if(!force&&start===stripWindowStart&&end===stripWindowEnd)return;
+  if(!force&&start===stripWindowStart&&end===stripWindowEnd){stripNavigator?.update();return}
   stripWindowStart=start;stripWindowEnd=end;
-  const fragment=document.createDocumentFragment();
-  for(let i=start;i<end;i++){
-    const item=items[i],label=unesc(item.l),button=document.createElement("button");
-    button.type="button";button.className="strip-chip";button.dataset.o=String(item.o);
-    button.title=label+" — "+t("browse.words",{count:item.n,number:num(item.n)});
-    button.textContent=label;button.style.left=stripOffsets[i]+"px";button.style.width=stripWidths[i]+"px";
-    button.disabled=browsePageBusy;button.setAttribute("aria-posinset",String(i+1));button.setAttribute("aria-setsize",String(items.length));
-    if(i===stripCurrentIndex)button.setAttribute("aria-current","true");
-    fragment.appendChild(button);
-  }
-  track.replaceChildren($("stripMeasure"),fragment);
+  ribbon.paint(track,window.wudictHeadwordControl.ribbon.fromBrowseIndex(items,{
+    labelOf:item=>unesc(item.l),
+    title:(item,_index,label)=>label+" — "+t("browse.words",{count:item.n,number:num(item.n)})
+  }),{offsets:stripOffsets,widths:stripWidths,viewport:strip.clientWidth},left,String(stripCurrentIndex),start,end,{
+    buttonClass:"strip-chip",sampleNode:$("stripMeasure"),contentWidth:true,mode:"browse",
+    onProblem:problem=>sendBrowseDiagnostic({event:"ribbon_guard",resource:problem.mode,stage:problem.reason,
+      letters:problem.items,measured:problem.offsets,words:problem.widths,page:Math.max(0,problem.from||0),totalPages:Math.max(0,problem.to||0)}),
+    decorate:(button,_item,index)=>{button.disabled=browsePageBusy;button.setAttribute("aria-posinset",String(index+1));button.setAttribute("aria-setsize",String(items.length))}
+  });
+  stripNavigator?.update();
 }
 function scheduleVirtualStrip(){
   if(stripFrame)return;
-  stripFrame=requestAnimationFrame(()=>{stripFrame=0;renderVirtualStrip();updateStripArrows()});
+  stripFrame=requestAnimationFrame(()=>{stripFrame=0;renderVirtualStrip()});
 }
-function scrollStrip(direction){
-  const strip=$("strip");
-  strip.scrollBy({left:direction*Math.max(80,strip.clientWidth*.75),behavior:"smooth"});
-}
-$("stripPrev").addEventListener("click",()=>scrollStrip(-1));
-$("stripNext").addEventListener("click",()=>scrollStrip(1));
 $("strip").addEventListener("scroll",scheduleVirtualStrip,{passive:true});
-new ResizeObserver(()=>{if(state&&!$("stripWrap").hidden){measureStripItems(state.alphabet||[]);renderVirtualStrip(true)}updateStripArrows()}).observe($("strip"));
+new ResizeObserver(()=>{if(state&&!$("stripWrap").hidden){measureStripItems(activeStripItems());renderVirtualStrip(true)}stripNavigator?.update()}).observe($("strip"));
 let findResult=null,findIndex=-1,findFilter=false,findTimer=0,findAbort=null,findSeq=0,browseSeq=0,findMask=false;
+let filteredStripResult=null,filteredStripWords=null,filteredStripLength=-1,filteredStripItems=[];
+let baseStripGeometry=null;
+function filteredStripActive(){return !!(findFilter&&$("findInput").value.trim()&&findResult)}
+function activeStripItems(){
+  if(!filteredStripActive())return state?.alphabet||[];
+  const words=findResult.words||[];
+  if(filteredStripResult!==findResult||filteredStripWords!==words||words.length<filteredStripLength){
+    filteredStripResult=findResult;filteredStripWords=words;filteredStripItems=[];filteredStripLength=-1;
+  }
+  if(words.length!==filteredStripLength){
+    // Append page markers as results arrive; only the final page count changes.
+    const base=findResult.stream?0:((findResult.page||1)-1)*300;
+    if(filteredStripItems.length)filteredStripItems.at(-1).n=Math.min(300,words.length-(filteredStripItems.length-1)*300);
+    for(let i=filteredStripItems.length*300;i<words.length;i+=300)
+      filteredStripItems.push({l:words[i],o:base+i,n:Math.min(300,words.length-i)});
+    if(filteredStripItems.length)filteredStripItems.at(-1).n=Math.min(300,words.length-(filteredStripItems.length-1)*300);
+    filteredStripLength=words.length;
+  }
+  return filteredStripItems;
+}
+function selectStripOffset(offset){
+  if(filteredStripActive()){
+    const page=Math.floor(offset/300)+1;
+    if(findResult.stream){findFilterPage=page;render();$("list").parentElement.scrollTop=0}
+    else fetchFound(page,0,"push");
+  }else show({p:Math.floor(offset/state.size)+1,o:offset},"push");
+}
+stripNavigator=window.wudictHeadwordControl.ribbon.createScroller({
+  viewport:$("strip"),track:$("stripTrack"),bar:$("stripScrollbar"),thumb:$("stripScrollThumb"),
+  previous:$("stripPrev"),next:$("stripNext"),getItems:activeStripItems,
+  getOffsets:()=>stripOffsets,getWidths:()=>stripWidths,getPosition:()=>$("strip").scrollLeft,
+  setPosition:(value,behavior)=>{if(behavior==="smooth")$("strip").scrollTo({left:value,behavior});else $("strip").scrollLeft=value},
+  getMaxScroll:()=>Math.max(0,$("strip").scrollWidth-$("strip").clientWidth),thumbPosition:"transform",
+  onFinish:({item})=>{const offset=Number(item?.o);if(Number.isFinite(offset))selectStripOffset(offset)},
+  onRender:scheduleVirtualStrip
+});
 let appliedFindMask=false,findApproved=false,findApplyPending=false,browseProgressSeq=0,browseProgressJobs=new Map(),findStreamDone=true,findPendingMove=0,findPendingPage=0,findFilterPage=1;
 let findStreamWords=[];
 function browseMaskThreshold(){
@@ -537,27 +779,50 @@ function browseMaskThreshold(){
 }
 function browseNeedsApply(){return browseHeadwordControl?.needsApply(state?.total||0)??((state?.total||0)>=browseMaskThreshold())}
 function findAwaitingApply(){return findApplyPending||browseNeedsApply()&&!findApproved}
-function browseProgress(message,cancel=null,kind=""){
+function attachBrowseProgress(job){
+  if(!job.taskID&&window.wudictTasks)job.taskID=window.wudictTasks.start("browse",job.message,{stop:job.cancel});
+}
+function browseProgress(message,cancel=null,kind="",scope=""){
   const seq=++browseProgressSeq;
-  browseProgressJobs.set(seq,{message,cancel,kind});
+  const job={message,cancel,kind,scope,taskID:0};
+  browseProgressJobs.set(seq,job);
+  attachBrowseProgress(job);
+  if(kind==="alphabet")logAlphabetTask("start",scope);
   if(message===t("browse.loadingWords"))$("foot").hidden=false;
-  paintBrowseProgress();
-  return ()=>{browseProgressJobs.delete(seq);paintBrowseProgress()};
+  return ()=>{const removed=browseProgressJobs.delete(seq);if(job.taskID)window.wudictTasks?.finish(job.taskID);if(removed&&kind==="alphabet")logAlphabetTask("finish",scope)};
 }
-function paintBrowseProgress(){
-  const jobs=[...browseProgressJobs.values()],job=[...jobs].reverse().find(item=>item.kind==="find")||[...jobs].reverse().find(item=>item.cancel)||jobs.at(-1);
-  $("browseProgress").hidden=!job;
-  $("browseProgressText").textContent=job?.message||"";
-  const stop=$("browseProgressStop");stop.hidden=!job?.cancel;stop.onclick=job?.cancel||null;
+function logAlphabetTask(stage,dict){
+  if(browseDiagnosticsEnabled())sendBrowseDiagnostic({event:"alphabet_task",stage,dict,
+    words:window.wudictTasks?.activeCount?.()||0,status:$('serverWorkNotice')?.hidden?1:0});
 }
-function clearBrowseProgress(){for(const [id,job] of browseProgressJobs)if(job.kind!=="alphabet")browseProgressJobs.delete(id);paintBrowseProgress()}
-function updateBrowseProgress(message,kind="find"){
-  for(const job of [...browseProgressJobs.values()].reverse())if(job.kind===kind){job.message=message;paintBrowseProgress();return}
+function finishBrowseProgress(kind,scope){
+  for(const [id,job] of browseProgressJobs){
+    if(job.kind!==kind||scope&&job.scope!==scope)continue;
+    browseProgressJobs.delete(id);
+    const removed=job.taskID?window.wudictTasks?.finish(job.taskID):false;
+    if(kind==="alphabet")logAlphabetTask(removed?"finish_matching":"finish_missing",job.scope);
+  }
+  if(kind==="alphabet"&&![...browseProgressJobs.values()].some(job=>job.kind==="alphabet")){
+    window.wudictTasks?.finishMatching?.("browse",t("browse.loadingAlphabet"));
+    logAlphabetTask("panel_checked",scope||"");
+  }
 }
+function clearBrowseProgress(){for(const [id,job] of browseProgressJobs)if(job.kind!=="alphabet"){browseProgressJobs.delete(id);if(job.taskID)window.wudictTasks?.finish(job.taskID)}}
+addEventListener("pagehide",()=>{
+  for(const job of browseProgressJobs.values()){
+    try{job.cancel?.()}catch(_){ }
+    if(job.taskID)window.wudictTasks?.finish(job.taskID);
+  }
+  browseProgressJobs.clear();
+});
+function updateBrowseProgress(message,kind="find",progress={}){
+  for(const job of [...browseProgressJobs.values()].reverse())if(job.kind===kind){job.message=message;if(job.taskID)window.wudictTasks?.update(job.taskID,{message,...progress});return}
+}
+window.addEventListener("wudict-tasks-ready",()=>{for(const job of browseProgressJobs.values())attachBrowseProgress(job)});
 function setBrowsePageBusy(on){
   browsePageBusy=on;document.body.classList.toggle("browse-page-busy",on);
   if(on){
-    for(const id of ["findInput","findMode","maskMode","findApply","findPrev","findNext","stripPrev","stripNext"]){
+    for(const id of ["findMode","maskMode","findApply","findPrev","findNext","stripPrev","stripNext"]){
       const el=$(id);if(el)el.disabled=true;
     }
     document.querySelectorAll("[data-go], #strip button").forEach(el=>el.disabled=true);
@@ -595,6 +860,7 @@ async function show(opts,record){
     state=cached;state.mark=opts.o!=null?opts.o:state.at;
     chooserSearch?.destroy();chooserSearch=null;
     $("msg").classList.remove("chooser-list");$("msg").hidden=true;
+    if(browseNavContext&&!browseNavContext.firstPaint)logBrowseNavigation("page_cache_restored",performance.now()-started,{words:state.words.length});
     render();recordBrowsePage(state.page,record);
     if(record!=="none"){
       if(findResult&&!findFilter&&findIndex>=0)scheduleScrollToCurrentWord(seq);
@@ -606,23 +872,52 @@ async function show(opts,record){
   }
   const continuingAlphabet=browseAlphabetTask?.dictId===dictId;
   const streamAlphabet=!browseAlphabetCache.has(dictId)&&!continuingAlphabet;
+  const alphabetStarted=performance.now();let alphabetTraceAt=0;
+  const traceAlphabetProgress=(at,total)=>{
+    const now=performance.now();
+    if(now-alphabetTraceAt<5000&&at<total)return;
+    alphabetTraceAt=now;
+    browseTrace("alphabet progress",{dict:requestDictId,words:at,bytes:total,
+      letters:browseAlphabetPartial.get(requestDictId)?.length||0,totalMs:Math.round(now-alphabetStarted)});
+  };
   if(browsePageAbort&&browsePageAbort!==browseAlphabetTask?.controller)browsePageAbort.abort();
-  if(browseAlphabetTask&&browseAlphabetTask.dictId!==dictId){browseAlphabetTask.controller.abort();browseAlphabetTask=null}
+  if(browseAlphabetTask&&browseAlphabetTask.dictId!==dictId){
+    const previousAlphabet=browseAlphabetTask;
+    previousAlphabet.controller.abort();browseAlphabetTask=null;
+    finishBrowseProgress("alphabet",previousAlphabet.dictId);
+  }
   const controller=new AbortController();browsePageAbort=controller;
   if(streamAlphabet){browseAlphabetPartial.delete(dictId);browseAlphabetTask={dictId,controller}}
   setBrowsePageBusy(streamAlphabet);
-  let endProgress=()=>{},progressTimer=0,progressVisible=false;
-  const startProgress=()=>{if(progressVisible)return;progressVisible=true;endProgress=browseProgress(t("browse.loadingWords"),()=>controller.abort(),streamAlphabet?"alphabet":"page")};
+  let endProgress=()=>{},progressTimer=0,progressVisible=false,alphabetRenderTimer=0,lastAlphabetRender=0;
+  const renderAlphabetPartial=()=>{
+    alphabetRenderTimer=0;
+    if(browseAlphabetTask?.controller!==controller||!state||state.dict!==requestDictId)return;
+    state.alphabet=browseAlphabetPartial.get(requestDictId)||[];
+    lastAlphabetRender=performance.now();render();
+  };
+  const scheduleAlphabetRender=()=>{
+    if(alphabetRenderTimer)return;
+    alphabetRenderTimer=setTimeout(renderAlphabetPartial,Math.max(0,200-(performance.now()-lastAlphabetRender)));
+  };
+  const startProgress=()=>{
+    if(progressVisible)return;
+    progressVisible=true;
+    const message=streamAlphabet?t("browse.loadingAlphabet"):t("browse.loadingWords");
+    endProgress=browseProgress(message,()=>controller.abort(),streamAlphabet?"alphabet":"page",requestDictId);
+  };
   if(streamAlphabet)startProgress();else progressTimer=setTimeout(startProgress,220);
   last=opts;
   const u=new URLSearchParams({dict:dictId});
   if(opts.at)u.set("at",opts.at);else u.set("p",String(opts.p||1));
   if(streamAlphabet)u.set("stream","1");else u.set("strip","0");
+  if(browseDiagnosticsEnabled())u.set("diagnostics","1");
   browseTrace("page request",{dict:requestDictId,page:opts.p||1,streamAlphabet,letters:browseAlphabetCache.get(requestDictId)?.letters.length||0});
+  if(browseNavContext&&!browseNavContext.firstPaint)logBrowseNavigation("page_request",performance.now()-started);
   let r;
   const fetchStarted=performance.now();
-  try{r=await fetch("/api/browse?"+u.toString(),{signal:controller.signal});browseTrace("page response",{dict:requestDictId,status:r.status,fetchMs:Math.round(performance.now()-fetchStarted)})}
-  catch(e){clearTimeout(progressTimer);endProgress();if(seq===browseSeq){setBrowsePageBusy(false);if(e.name!=="AbortError")card("<b>"+tx("browse.noAnswer")+"</b><p>"+tx("browse.noAnswerBody")+"</p>")}return}
+  try{r=await browseFetch("/api/browse?"+u.toString(),{signal:controller.signal});browseTrace("page response",{dict:requestDictId,status:r.status,fetchMs:Math.round(performance.now()-fetchStarted)});if(browseNavContext&&!browseNavContext.firstPaint)logBrowseNavigation("page_response",performance.now()-fetchStarted,{status:r.status})}
+  catch(e){clearTimeout(progressTimer);endProgress();browseTrace("page fetch failed",{status:e.name==="AbortError"?499:0,totalMs:Math.round(performance.now()-started)});if(browseNavContext&&!browseNavContext.firstPaint)logBrowseNavigation("load_failed",performance.now()-started);if(seq===browseSeq){setBrowsePageBusy(false);if(e.name!=="AbortError")card("<b>"+tx("browse.noAnswer")+"</b><p>"+tx("browse.noAnswerBody")+"</p>")}return}
   if(seq!==browseSeq&&!streamAlphabet){clearTimeout(progressTimer);endProgress();return}
   if(r.status===409){clearTimeout(progressTimer);endProgress();setBrowsePageBusy(false);return unprepared(await r.json().catch(()=>({}))) }
   if(!r.ok){const j=await r.json().catch(()=>({}));
@@ -658,6 +953,20 @@ async function show(opts,record){
   }
   try{
     const reader=r.body.getReader(),decoder=new TextDecoder();let buffer="";
+    const completeAlphabet=total=>{
+      if(browseAlphabetTask?.controller!==controller||browseAlphabetTask.dictId!==requestDictId)return false;
+      clearTimeout(alphabetRenderTimer);alphabetRenderTimer=0;
+      const complete=browseAlphabetPartial.get(requestDictId)||[];
+      browseTrace("alphabet done",{dict:requestDictId,words:total,letters:complete.length,totalMs:Math.round(performance.now()-alphabetStarted)});
+      if(browseNavContext)logBrowseNavigation("alphabet_ready",performance.now()-alphabetStarted,{words:total});
+      saveBrowseAlphabet(requestDictId,total,complete.slice());browseAlphabetPartial.delete(requestDictId);
+      browseAlphabetTask=null;
+    if(state&&state.dict===requestDictId){state.alphabet=complete;render();prefetchNextBrowsePage(state)}
+      finishBrowseProgress("alphabet",requestDictId);
+      endProgress();
+      if(seq===browseSeq){setBrowsePageBusy(false);if(findResult&&!findFilter&&findIndex>=0)scheduleScrollToCurrentWord(seq)}
+      return true;
+    };
     const consume=async(final=false)=>{
       let newline;
       while((newline=buffer.indexOf("\n"))>=0||final&&buffer.length){
@@ -665,10 +974,14 @@ async function show(opts,record){
         buffer=newline>=0?buffer.slice(newline+1):"";
         if(!line.trim())continue;
         const event=JSON.parse(line);
-        if(event.type==="error"){if(browseAlphabetTask?.controller===controller)throw new Error(event.error||"browse");return}
+        if(event.type==="error"){const error=new Error(event.error||"browse");error.status=event.status;if(browseAlphabetTask?.controller===controller)throw error;return}
         if(event.type==="page"){
           if(seq!==browseSeq)continue;
           state=event.page;state.mark=opts.o!=null?opts.o:state.at;rememberBrowsePage(state);
+          if(browseAlphabetTask?.controller===controller){
+            const total=Math.max(0,Number(state.total)||0);
+            updateBrowseProgress(t("browse.loadingAlphabet")+" · "+num(0)+" / "+num(total),"alphabet",{done:0,total});
+          }
           chooserSearch?.destroy();chooserSearch=null;$("msg").classList.remove("chooser-list");$("msg").hidden=true;
           stripFor="";stripLettersPainted=0;render();
           recordBrowsePage(state.page,record);
@@ -680,26 +993,41 @@ async function show(opts,record){
           if(browseAlphabetTask?.controller!==controller||browseAlphabetTask.dictId!==requestDictId)continue;
           const partial=browseAlphabetPartial.get(requestDictId)||[];
           partial.push(...(event.letters||[]));browseAlphabetPartial.set(requestDictId,partial);
-          if(state&&state.dict===requestDictId){state.alphabet=partial;render()}
-          updateBrowseProgress(t("browse.loadingAlphabet")+" · "+num(event.at||0)+" / "+num(event.total||0),"alphabet");
+          traceAlphabetProgress(event.at||0,event.total||0);
+          if(Number(event.total)>0&&Number(event.at)>=Number(event.total))completeAlphabet(Number(event.total));
+          else{
+            if(state&&state.dict===requestDictId)scheduleAlphabetRender();
+            updateBrowseProgress(t("browse.loadingAlphabet")+" · "+num(event.at||0)+" / "+num(event.total||0),"alphabet",{done:event.at||0,total:event.total||0});
+          }
         }else if(event.type==="progress"){
-          if(browseAlphabetTask?.controller===controller&&browseAlphabetTask.dictId===requestDictId)updateBrowseProgress(t("browse.loadingAlphabet")+" · "+num(event.at||0)+" / "+num(event.total||0),"alphabet");
+          if(browseAlphabetTask?.controller===controller&&browseAlphabetTask.dictId===requestDictId)updateBrowseProgress(t("browse.loadingAlphabet")+" · "+num(event.at||0)+" / "+num(event.total||0),"alphabet",{done:event.at||0,total:event.total||0});
+          traceAlphabetProgress(event.at||0,event.total||0);
         }else if(event.type==="done"){
-          if(browseAlphabetTask?.controller!==controller||browseAlphabetTask.dictId!==requestDictId)continue;
-          const complete=browseAlphabetPartial.get(requestDictId)||[];
-          saveBrowseAlphabet(requestDictId,event.total,complete.slice());browseAlphabetPartial.delete(requestDictId);
-          if(state&&state.dict===requestDictId){state.alphabet=complete;render()}
-          if(state&&state.dict===requestDictId)prefetchNextBrowsePage(state);
-          browseAlphabetTask=null;
-          endProgress();if(seq===browseSeq){setBrowsePageBusy(false);if(findResult&&!findFilter&&findIndex>=0)scheduleScrollToCurrentWord(seq)}
+          if(browseAlphabetTask?.controller!==controller||browseAlphabetTask.dictId!==requestDictId){
+            // A superseded request can still deliver its terminal event after
+            // the active alphabet task has moved to another dictionary. Close
+            // this request's own progress immediately; do not wait for EOF.
+            endProgress();continue;
+          }
+          completeAlphabet(Number(event.total)||0);
         }
       }
     };
     while(true){const {value,done}=await reader.read();if(done){buffer+=decoder.decode();await consume(true);break}buffer+=decoder.decode(value,{stream:true});await consume()}
     if(browseAlphabetTask?.controller===controller)browseAlphabetTask=null;
-    if(seq===browseSeq){endProgress();setBrowsePageBusy(false)}
-  }catch(error){
+    // Every request owns its progress task, including a stream that finishes
+    // after another page request has made it stale. Never leave that old task
+    // spinning just because it no longer owns the visible page.
+    if(streamAlphabet)finishBrowseProgress("alphabet",requestDictId);
     endProgress();
+    if(seq===browseSeq)setBrowsePageBusy(false);
+  }catch(error){
+    clearTimeout(alphabetRenderTimer);
+    if(streamAlphabet)browseTrace(error.name==="AbortError"?"alphabet aborted":"alphabet error",
+      {status:error.name==="AbortError"?499:0,words:browseAlphabetPartial.get(requestDictId)?.length||0,
+        letters:browseAlphabetPartial.get(requestDictId)?.length||0,totalMs:Math.round(performance.now()-alphabetStarted)});
+    endProgress();
+    if(streamAlphabet)finishBrowseProgress("alphabet",requestDictId);
     if(browseAlphabetTask?.controller===controller)browseAlphabetTask=null;
     if(seq!==browseSeq)return;
     setBrowsePageBusy(false);
@@ -707,6 +1035,7 @@ async function show(opts,record){
       if(!state)card("<b>"+tx("browse.loadingStopped")+"</b><p><a href=\"/browse\">"+tx("browse.chooseAnother")+"</a></p>");
       return;
     }
+    if(error.status===409){unprepared();return}
     if(!state)card("<b>"+tx("browse.cannotBrowse")+"</b><p>"+esc(error.message)+"</p><p><a href=\"/browse\">"+tx("browse.chooseAnother")+"</a></p>");
   }
 }
@@ -838,7 +1167,7 @@ function updateFindControls(){
   const suffix=findResult&&!findStreamDone?"+":"";
   const locked=!!findResult?.stream&&!findStreamDone;
   browseHeadwordControl.paint({filtering,mask:findMask,applyRequired:browseNeedsApply(),
-    applyEnabled:!!$("findInput").value.trim(),busy:locked,
+    applyEnabled:!!$("findInput").value.trim(),busy:locked,allowInputWhileBusy:true,
     count:filtering?total+suffix:(findIndex<0?0:findIndex+1)+"/"+total+suffix,
     previousDisabled:filtering||findIndex<0||(findStreamDone&&findIndex<=0),
     nextDisabled:filtering||findIndex<0||(findStreamDone&&findIndex>=total-1)});
@@ -853,10 +1182,11 @@ async function fetchFound(page,target=0,record="replace"){
   findResult={words:findStreamWords,total:0,page:1,pages:0,size:300,stream:true};
   updateFindControls();render();
   const endProgress=browseProgress(t(findFilter?"browse.filteringWords":"browse.searchingWords"),()=>controller.abort(),"find");
-  const finish=()=>{if(seq===findSeq)endProgress()};
+  // This closure owns only this request's task, including after a newer query starts.
+  const finish=()=>endProgress();
   const u=new URLSearchParams({dict:dictId,q:query,wildcards:mask?"1":"0",stream:"1"});
   try{
-    const r=await fetch("/api/browse/find?"+u,{signal:controller.signal});
+    const r=await browseFetch("/api/browse/find?"+u,{signal:controller.signal});
     if(!r.ok){const body=await r.json().catch(()=>({}));throw new Error(body.error||`HTTP ${r.status}`)}
     updateFindControls();
     const reader=r.body.getReader(),decoder=new TextDecoder();let buffer="";
@@ -872,7 +1202,7 @@ async function fetchFound(page,target=0,record="replace"){
         if(event.words?.length)findStreamWords.push(...event.words);
         findResult.total=event.total||0;
         findResult.pages=Math.ceil(findResult.total/300);
-        if(event.done){findStreamDone=true;findResult.total=event.total||0;findResult.pages=Math.ceil(findResult.total/300)}
+        if(event.done){findStreamDone=true;findResult.total=event.total||0;findResult.pages=Math.ceil(findResult.total/300);finish()}
         updateBrowseProgress(t(findFilter?"browse.filteringWords":"browse.searchingWords")+" · "+num(event.total||findStreamWords.length));
         if(findFilter){
           if(findPendingPage&&findPendingPage<=Math.ceil(findStreamWords.length/300)){findFilterPage=findPendingPage;findPendingPage=0}
@@ -911,6 +1241,8 @@ async function fetchFound(page,target=0,record="replace"){
     $("findCount").textContent="!";$("findCount").title=window.wudictI18n.errorText(e.message);
     browseTrace("find failed",{dict:dictId,error:e.message});
     updateFindControls();render();
+  }finally{
+    finish();
   }
 }
 function findChanged(){
@@ -926,7 +1258,7 @@ function findChanged(){
   findResult=null;findIndex=-1;findStreamDone=true;findStreamWords=[];findPendingMove=0;
   if(!$("findInput").value.trim()){updateFindControls();render();return}
   $("findCount").textContent="…";
-  findTimer=setTimeout(()=>fetchFound(1,0,"replace"),300);
+  findTimer=setTimeout(()=>fetchFound(1,0,"replace"),SEARCH_DEBOUNCE_MS);
 }
 function applyFind(){
   if(!browseNeedsApply())return;
@@ -968,7 +1300,7 @@ function toggleFindFilter(){
   render();
 }
 
-function browseReturnURL(){
+function browseReturnURL(targetWord=""){
   const url=new URL(location.href);
   const query=$("findInput").value.trim();
   if(query){
@@ -977,8 +1309,24 @@ function browseReturnURL(){
     if(findMask)url.searchParams.set("wildcards","1");
     if(findResult){url.searchParams.set("fp",String(findFilter?findFilterPage:findResult.page));url.searchParams.set("fi",String(Math.max(0,findIndex)))}
   }
-  url.searchParams.set("y",String(Math.round(scrollY)));
+  url.searchParams.set("y",String(Math.round($("list").parentElement.scrollTop)));
+  if(targetWord)url.searchParams.set("word",targetWord);
   return url.pathname+url.search;
+}
+
+function restoreBrowsePosition(targetWord,scrollTop){
+  const restoreStarted=performance.now();
+  requestAnimationFrame(()=>{
+    const viewport=$("list").parentElement;
+    const target=targetWord?[...$("list").querySelectorAll("a")].find(link=>link.textContent===targetWord):null;
+    if(!target)viewport.scrollTop=scrollTop;
+    else{
+      const view=viewport.getBoundingClientRect(),item=target.getBoundingClientRect();
+      viewport.scrollTop+=item.top-view.top-(viewport.clientHeight-item.height)/2;
+    }
+    logBrowseReturn("browse_return_ready");
+    if(browseReturnStartedAt)logBrowseReturn("browse_return_restore_position",performance.now()-restoreStarted);
+  });
 }
 
 function browsePageKey(dict,page){return dict+"|"+page}
@@ -989,6 +1337,7 @@ function browsePageMetrics(page){
   return {jsonBytes,heapBytes:chars*2+words.length*40+256,words:words.length};
 }
 function dictionaryCacheTrace(event,page){
+  if(typeof window.wudictNativeCall==="function")return;
   let enabled=false;try{enabled=localStorage.getItem("wudict_dictionary_cache_diagnostics")==="1"}catch(_){}
   if(!enabled||!page)return;
   const entries=[...browsePageCache.entries()].filter(([,item])=>item.dict===page.dict);
@@ -997,9 +1346,8 @@ function dictionaryCacheTrace(event,page){
   const pageMetrics=browsePageMetrics(page);
   const totalPages=Number.isSafeInteger(page.pages)?page.pages:0;
   const estimatedAllPagesBytes=entries.length?Math.round(cacheBytes/entries.length*totalPages):0;
-  fetch("/api/browse-diagnostic",{method:"POST",headers:{"Content-Type":"application/json"},keepalive:true,
-    body:JSON.stringify({event,dict:page.dict,page:page.page,words:pageMetrics.words,pageBytes:pageMetrics.heapBytes,
-      pageJsonBytes:pageMetrics.jsonBytes,cachePages:entries.length,cacheBytes,cacheJsonBytes,totalPages,estimatedAllPagesBytes})}).catch(()=>{});
+  sendBrowseDiagnostic({event,dict:page.dict,page:page.page,words:pageMetrics.words,pageBytes:pageMetrics.heapBytes,
+      pageJsonBytes:pageMetrics.jsonBytes,cachePages:entries.length,cacheBytes,cacheJsonBytes,totalPages,estimatedAllPagesBytes});
 }
 function rememberBrowsePage(page,event="page_cache_saved"){
   if(!page||!Number.isSafeInteger(page.page)||!Array.isArray(page.words))return;
@@ -1039,7 +1387,7 @@ function prefetchBrowsePage(dict,pageNumber,lastPage){
   const key=browsePageKey(dict,pageNumber),running=browsePagePrefetches.get(key);
   if(running)return running;
   const controller=new AbortController();
-  const request=fetch("/api/browse?"+new URLSearchParams({dict,p:String(pageNumber),strip:"0"}),{signal:controller.signal})
+  const request=browseFetch("/api/browse?"+new URLSearchParams({dict,p:String(pageNumber),strip:"0"}),{signal:controller.signal})
     .then(response=>response.ok?response.json():null)
     .then(page=>{
       const alphabet=browseAlphabetCache.get(dict);
@@ -1095,9 +1443,10 @@ function render(){
   const d=state;
   if(!d)return;
   const renderStarted=performance.now();
-  document.title=t("browse.pageTitle",{name:d.name});
+  const displayName=d.title||d.name;
+  document.title=t("browse.pageTitle",{name:displayName});
   $("top").hidden=false;$("foot").hidden=false;
-  $("name").textContent=d.name;
+  $("name").textContent=displayName;
   fitTitle();
   const filtering=findFilter&&!!$("findInput").value.trim()&&findResult;
   const filterPage=filtering?(findResult.stream?findFilterPage:findResult.page):d.page;
@@ -1123,16 +1472,27 @@ function render(){
 
   /* The strip belongs to the dictionary, not to the page, so it is built once
      and its visible window is rendered at a time. */
-  $("stripWrap").hidden=!!filtering;
+  const stripItems=activeStripItems();
+  $("stripWrap").hidden=!stripItems.length;
+  $("stripScrollbar").hidden=!stripItems.length;
   const strip=$("strip"),track=$("stripTrack"),stripStarted=performance.now();
   let stripBuilt=stripStarted,stripReady=stripStarted;
-  if(!filtering){
-    if(stripFor!==d.dict){
-      stripFor=d.dict;stripLettersPainted=0;stripMetricKey="";stripWidths=[];stripOffsets=[];stripTotalWidth=0;
-      stripCurrentIndex=-1;stripWindowStart=stripWindowEnd=-1;strip.scrollLeft=0;
+  {
+    const stripKey=filtering?d.dict+":filter:"+findSeq:d.dict;
+    if(stripFor!==stripKey){
+      if(stripFor===d.dict)baseStripGeometry={dict:d.dict,metricKey:stripMetricKey,widths:stripWidths.slice(),offsets:stripOffsets.slice(),totalWidth:stripTotalWidth,painted:stripLettersPainted,scroll:strip.scrollLeft};
+      stripMeasureGeneration++;
+      if(stripMeasureFrame){cancelAnimationFrame(stripMeasureFrame);stripMeasureFrame=0}
+      stripMeasureStarted=0;
+      stripFor=stripKey;stripLettersPainted=0;stripMetricKey="";stripWidths=[];stripOffsets=[];stripTotalWidth=0;
+      stripCurrentIndex=-1;stripCurrentPositionedIndex=-1;stripWindowStart=stripWindowEnd=-1;strip.scrollLeft=0;
+      if(!filtering&&baseStripGeometry?.dict===d.dict&&baseStripGeometry.widths.length===stripItems.length){
+        stripMetricKey=baseStripGeometry.metricKey;stripWidths=baseStripGeometry.widths.slice();stripOffsets=baseStripGeometry.offsets.slice();stripTotalWidth=baseStripGeometry.totalWidth;stripLettersPainted=baseStripGeometry.painted;
+        track.style.width=Math.max(strip.clientWidth,stripTotalWidth)+"px";strip.scrollLeft=baseStripGeometry.scroll;
+      }
       track.replaceChildren($("stripMeasure"));
     }
-    measureStripItems(d.alphabet||[]);
+    measureStripItems(stripItems);
     stripBuilt=performance.now();
   /* Highlight what was ASKED for, not what the page happens to start with.
      Both a chip click and a jump snap down to the page grid, so the page
@@ -1140,19 +1500,18 @@ function render(){
      click on K by lighting up J reads as a bug, because it is one. A mark
      outside this page (a page turn, a reload, a clamped bookmark) falls back
      to where the page starts, which is then exactly where the reader is. */
-    const at=(d.page-1)*d.size;
-    let mark=d.mark;
+    const at=filtering?(filterPage-1)*300:(d.page-1)*d.size;
+    let mark=filtering?at:d.mark;
     if(!(mark>=at&&mark<at+d.size))mark=at;
-    let lo=0,hi=d.alphabet.length;
-    while(lo<hi){const mid=(lo+hi)>>>1;if(d.alphabet[mid].o<=mark)lo=mid+1;else hi=mid}
+    let lo=0,hi=stripItems.length;
+    while(lo<hi){const mid=(lo+hi)>>>1;if(stripItems[mid].o<=mark)lo=mid+1;else hi=mid}
     const currentIndex=lo-1;
     const currentChanged=currentIndex!==stripCurrentIndex;
-    if(currentChanged){
-      stripCurrentIndex=currentIndex;
-      if(currentIndex>=0){
-        const center=stripOffsets[currentIndex]+stripWidths[currentIndex]/2;
-        strip.scrollLeft=Math.max(0,Math.min(stripTotalWidth-strip.clientWidth,center-strip.clientWidth/2));
-      }
+    if(currentChanged)stripCurrentIndex=currentIndex;
+    if((filtering||browseAlphabetCache.has(d.dict))&&currentIndex>=0&&currentIndex<stripOffsets.length&&stripCurrentPositionedIndex!==currentIndex){
+      const center=stripOffsets[currentIndex]+stripWidths[currentIndex]/2;
+      strip.scrollLeft=Math.max(0,Math.min(stripTotalWidth-strip.clientWidth,center-strip.clientWidth/2));
+      stripCurrentPositionedIndex=currentIndex;
     }
     renderVirtualStrip(currentChanged);
     stripReady=performance.now();
@@ -1161,13 +1520,22 @@ function render(){
 
   const pages=filtering?(findResult.stream?Math.ceil(findStreamWords.length/300):findResult.pages):d.pages;
   const page=filtering?filterPage:d.page;
-  document.querySelectorAll("[data-pos]").forEach(el=>el.textContent=page+"/"+(pages||1)+(filtering&&findResult.stream&&!findStreamDone?"+":""));
+  document.querySelectorAll("[data-pos]").forEach(el=>{el.textContent=page+"/"+(pages||1)+(filtering&&findResult.stream&&!findStreamDone?"+":"");el.disabled=!!(filtering&&findResult.stream&&!findStreamDone)});
   const hasMore=filtering&&findResult.stream&&!findStreamDone;
   const ends={first:page<=1,prev:page<=1,next:hasMore?false:page>=pages,last:hasMore?false:page>=pages};
   document.querySelectorAll("[data-go]").forEach(b=>{b.disabled=!!ends[b.dataset.go]});
   browseTrace("render",{dict:d.dict,page:d.page,words:words.length,letters:d.alphabet.length,
     wordsMs:Math.round(wordsReady-renderStarted),stripBuildMs:Math.round(stripBuilt-stripStarted),
     stripMarkMs:Math.round(stripReady-stripBuilt),totalMs:Math.round(performance.now()-renderStarted)});
+  if(browseNavContext&&!browseNavContext.firstPaint){
+    browseNavContext.firstPaint=true;
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{
+      logBrowseNavigation("first_words_painted",performance.now()-renderStarted,{words:words.length});
+      logBrowseNavigation("page_ready",performance.now(),{words:words.length});
+      logBrowseReturn("browse_return_page_ready");
+      if(browseReturnStartedAt&&!browseReturnNeedsRestore)logBrowseReturn("browse_return_ready");
+    }));
+  }
 }
 
 function turn(where){
@@ -1188,6 +1556,39 @@ function turn(where){
   }
 }
 
+function browseGotoOpen(){
+  if(!state||browsePageBusy)return;
+  const filtering=findFilter&&!!$("findInput").value.trim()&&findResult;
+  if(filtering&&findResult.stream&&!findStreamDone)return;
+  const pages=filtering?(findResult.stream?Math.ceil(findStreamWords.length/300):findResult.pages):state.pages;
+  const page=filtering?findFilterPage:state.page;
+  const total=Math.max(1,pages||1);
+  const input=$("browseGotoInput");
+  input.min="1";input.max=String(total);input.value=String(Math.min(total,Math.max(1,page||1)));
+  $("browseGotoRange").textContent=t("browse.gotoBlockRange",{total:num(total)});
+  $("browseGotoDialog").showModal();input.focus();input.select();
+}
+function browseGotoApply(event){
+  event?.preventDefault();
+  if(!state||browsePageBusy)return;
+  const filtering=findFilter&&!!$("findInput").value.trim()&&findResult;
+  if(filtering&&findResult.stream&&!findStreamDone)return;
+  const pages=filtering?(findResult.stream?Math.ceil(findStreamWords.length/300):findResult.pages):state.pages;
+  const target=Number($("browseGotoInput").value);
+  const total=Math.max(1,pages||1);
+  if(!Number.isInteger(target)||target<1||target>total){$("browseGotoInput").reportValidity();return}
+  $("browseGotoDialog").close();
+  if(target===(filtering?findFilterPage:state.page))return;
+  if(filtering&&findResult.stream){findFilterPage=target;render();scrollTo(0,0)}
+  else if(filtering)fetchFound(target,0,"replace");
+  else show({p:target},"push");
+}
+$("browseGotoForm").addEventListener("submit",browseGotoApply);
+$("browseGotoCancel").addEventListener("click",()=>$("browseGotoDialog").close());
+$("browseGotoClose").addEventListener("click",()=>$("browseGotoDialog").close());
+document.querySelectorAll("[data-pos]").forEach(el=>el.addEventListener("click",browseGotoOpen));
+document.querySelectorAll("[data-pos]").forEach(el=>el.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();browseGotoOpen()}}));
+
 /* Browsing needs the headword index. Create it from Dictionary Settings. */
 async function unprepared(){
   card("<b>"+tx("browse.indexRequired")+"</b><p><a href=\"/\">"+
@@ -1200,24 +1601,43 @@ async function unprepared(){
 async function chooser(){
   const chooserStarted=performance.now();
   browseTrace("chooser start");
+  logBrowseNavigation("chooser_request");
   const heading='<div class="chooser-head"><b>'+tx("browse.choose")+'</b><button type="button" id="closeBrowseChooser" aria-label="'+tx("pages.close")+'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><p class="chooser-hint">'+tx("browse.chooseHint")+'</p>';
   card(heading);
-  let text="";
+  let text="",ds=[];
   const endProgress=browseProgress(t("browse.loadingDictionaries"));
   let prefs;
   try{
-    const [response,prefsResponse]=await Promise.all([fetch("/api/dicts"),fetch("/api/prefs")]);
-    browseTrace("chooser response",{status:response.status,fetchMs:Math.round(performance.now()-chooserStarted)});
-    if(!response.ok||!prefsResponse.ok)throw new Error("load");
-    [text,prefs]=await Promise.all([response.text(),prefsResponse.json()]);
-  }catch(e){browseTrace("chooser failed",{totalMs:Math.round(performance.now()-chooserStarted)});endProgress();return card(heading+"<b>"+tx("browse.noAnswer")+"</b><p>"+tx("browse.loadFailed")+"</p>")}
+    if(window.wudictAndroidGo){
+      [prefs,ds]=await Promise.all([
+        Promise.resolve().then(()=>JSON.parse(window.wudictAndroidGo.prefs())),
+        androidChooserDicts()
+      ]);
+      browseTrace("chooser response",{status:200,fetchMs:Math.round(performance.now()-chooserStarted)});
+      logBrowseNavigation("chooser_response",performance.now()-chooserStarted,{status:200,words:ds.length});
+    }else if(typeof window.wudictNativeCall==="function"){
+      const rows=[];
+      [prefs]=await Promise.all([
+        window.wudictNativeCall("prefs",""),
+        window.wudictNativeCall("dicts","",message=>{if(message.t==="dict"&&message.dict&&!message.dict.error)rows.push(message.dict)})
+      ]);
+      ds=rows;
+      browseTrace("chooser response",{status:200,fetchMs:Math.round(performance.now()-chooserStarted)});
+      logBrowseNavigation("chooser_response",performance.now()-chooserStarted,{status:200,words:ds.length});
+    }else{
+      const [response,prefsResponse]=await Promise.all([fetch("/api/dicts"),fetch("/api/prefs")]);
+      browseTrace("chooser response",{status:response.status,fetchMs:Math.round(performance.now()-chooserStarted)});
+      logBrowseNavigation("chooser_response",performance.now()-chooserStarted,{status:response.status});
+      if(!response.ok||!prefsResponse.ok)throw new Error("load");
+      [text,prefs]=await Promise.all([response.text(),prefsResponse.json()]);
+    }
+  }catch(e){browseTrace("chooser failed",{totalMs:Math.round(performance.now()-chooserStarted)});logBrowseNavigation("load_failed",performance.now()-chooserStarted);endProgress();clearBrowseProgress();window.wudictTasks?.finishMatching?.("browse",t("browse.loadingDictionaries"));return card(heading+"<b>"+tx("browse.noAnswer")+"</b><p>"+tx("browse.loadFailed")+"</p>")}
   endProgress();
-  const ds=[];
-  for(const line of text.split("\n")){
-    if(!line)continue;
-    let m;try{m=JSON.parse(line)}catch(e){continue}
-    if(m.t==="dict"&&m.dict&&!m.dict.error){
-      ds.push(m.dict);
+  if(!window.wudictAndroidGo&&typeof window.wudictNativeCall!=="function"){
+    for(const line of text.split("\n")){
+      if(!line)continue;
+      let m;try{m=JSON.parse(line)}catch(e){continue}
+      if(m.t==="dict"&&m.dict&&!m.dict.error){ds.push(m.dict)}
     }
   }
   // Match the All Dictionaries group: its saved order, pinned head, and
@@ -1225,7 +1645,8 @@ async function chooser(){
   const byId=new Map(ds.map(d=>[d.id,d]));
   const saved=(prefs.dicts||[]).map(d=>d.id).filter(id=>byId.has(id));
   const pinned=new Set((prefs.dicts||[]).filter(d=>d.pinned).map(d=>d.id));
-  const label=d=>d.name||d.path?.split(/[\\/]/).pop()||d.id;
+  const customTitles=new Map((prefs.dicts||[]).filter(d=>d.title).map(d=>[d.id,d.title]));
+  const label=d=>customTitles.get(d.id)||d.name||d.path?.split(/[\\/]/).pop()||d.id;
   const collator=new Intl.Collator(window.wudictI18n.language,{sensitivity:"base",numeric:true});
   const alpha=ids=>{
     const fixed=ids.filter(id=>pinned.has(id)),tail=ids.filter(id=>!pinned.has(id));
@@ -1241,12 +1662,17 @@ async function chooser(){
   const ids=customOrder?ordered.slice(0,saved.length).concat(alpha(ordered.slice(saved.length))):alpha(ordered);
   ds.splice(0,ds.length,...ids.map(id=>byId.get(id)).filter(Boolean));
   browseTrace("chooser ready",{words:ds.length,totalMs:Math.round(performance.now()-chooserStarted)});
+  // The chooser is ready, so no dictionary-loading task should remain in the
+  // shared progress notice, including one left by an earlier visit.
+  clearBrowseProgress();
+  window.wudictTasks?.finishMatching?.("browse",t("browse.loadingDictionaries"));
   if(!ds.length)return card(heading+"<b>"+tx("browse.empty")+"</b><p>"+tx("browse.emptyBody")+
     '</p><p><a href="/">'+tx("browse.openApp")+"</a></p>");
   card(heading+"<div class='picks'>"+
-    ds.map(d=>'<a href="?dict='+encodeURIComponent(d.id)+'&chooser=1"><span class="pick-name">'+esc(d.name||d.id)+'</span>'+
+    ds.map(d=>'<a href="?dict='+encodeURIComponent(d.id)+'&chooser=1"><span class="pick-name">'+esc(label(d))+'</span>'+
       (d.entries?'<span class="pick-count">'+tx("browse.entries",{count:d.entries,number:num(d.entries)})+"</span>":"")+"</a>").join("")+"</div>"+
     '<div class="list-search-dock" role="search"></div>',true);
+  requestAnimationFrame(()=>requestAnimationFrame(()=>logBrowseNavigation("chooser_ready",performance.now()-chooserStarted,{words:ds.length})));
   const picks=$("msg").querySelector(".picks");
   chooserSearch=window.wudictListSearch.create({
     root:picks,itemSelector:"a",dock:$("msg").querySelector(".list-search-dock"),
@@ -1269,12 +1695,32 @@ function keepWebView2Mode(target){
 document.addEventListener("click",e=>{
   const link=e.target.closest("a[href]");
   if(link)link.href=keepWebView2Mode(link.href);
+  if(link&&e.button===0&&!e.ctrlKey&&!e.metaKey&&!e.shiftKey&&!e.altKey&&browseArticleDiagnosticsEnabled()){
+    const target=new URL(link.href,location.href);
+    if(target.origin===location.origin&&target.pathname==="/browse"&&target.searchParams.has("dict")&&!target.searchParams.has("browseDiagStart")){
+      target.searchParams.set("browseDiagStart",String(Date.now()));
+      link.href=target.pathname+target.search+target.hash;
+    }
+  }
   const wordLink=e.target.closest(".words a");
   if(wordLink){
     saveBrowsePage();
     saveBrowseFind();
     const url=new URL(wordLink.href);
-    url.searchParams.set("browse",browseReturnURL());
+    let returnTo=browseReturnURL(url.searchParams.get("q")||"");
+    if(browseArticleDiagnosticsEnabled()){
+      const startedAt=String(Date.now()),returnURLObj=new URL(returnTo,location.href);
+      url.searchParams.set("browseDiagStart",startedAt);
+      url.searchParams.set("browsePage",String(state?.page||0));
+      returnURLObj.searchParams.set("browseDiagStart",startedAt);
+      returnURLObj.searchParams.set("browsePage",String(state?.page||0));
+      returnTo=returnURLObj.pathname+returnURLObj.search;
+    }
+    url.searchParams.set("browse",returnTo);
+    // Make the prior history entry carry the target as well. If returning from
+    // the article can use WebView/browser history, Browse restores this exact
+    // word and scroll position without constructing another return URL.
+    history.replaceState(history.state,"",returnTo);
     wordLink.href=url.pathname+url.search;
     return;
   }
@@ -1289,7 +1735,7 @@ document.addEventListener("click",e=>{
   const g=e.target.closest("[data-go]");
   if(g)return turn(g.dataset.go);
   const c=e.target.closest(".strip button[data-o]");
-  if(c&&state){const o=Number(c.dataset.o);show({p:Math.floor(o/state.size)+1,o:o},"push")}
+  if(c&&state)selectStripOffset(Number(c.dataset.o));
 });
 
 $("findInput").addEventListener("keydown",e=>{
@@ -1303,7 +1749,7 @@ $("findInput").addEventListener("keydown",e=>{
 updateFindControls();
 
 addEventListener("keydown",e=>{
-  if(browsePageBusy){e.preventDefault();return}
+  if(browsePageBusy&&e.target!==$("findInput")){e.preventDefault();return}
   if(e.metaKey||e.ctrlKey||e.altKey)return;
   if(e.target.tagName==="INPUT"){
     if(e.key==="Escape"){
@@ -1344,7 +1790,13 @@ addEventListener("popstate",()=>{
       const page=Math.max(1,Number(p.get("fp"))||1),index=Math.max(0,Number(p.get("fi"))||0);
       if(!restoreBrowseFind(query,page,index))await fetchFound(page,index,"none");
     }
-    if(p.has("y"))scrollTo(0,Math.max(0,Number(p.get("y"))||0));
+    if(p.has("y")||p.has("word"))restoreBrowsePosition(p.get("word")||"",Math.max(0,Number(p.get("y"))||0));
   });
 })();
+addEventListener("pageshow",event=>{
+  if(!event.persisted||!browseArticleDiagnosticsEnabled())return;
+  flushArticleReturnDiagnostic();
+  logBrowseReturn("browse_return_bfcache");
+  requestAnimationFrame(()=>requestAnimationFrame(()=>logBrowseReturn("browse_return_ready")));
+});
 </script>

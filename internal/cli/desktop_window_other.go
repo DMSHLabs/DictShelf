@@ -6,4 +6,8 @@
 
 package cli
 
-func openDesktopWindow(string, func()) bool { return false }
+import "context"
+
+func openDesktopWindow(string, string, func(), func(context.Context, string, string) (any, error), func(context.Context, string, string, func([]byte)) error, desktopResourceHandler, bool) bool {
+	return false
+}

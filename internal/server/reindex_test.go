@@ -128,8 +128,9 @@ func TestRescanSeesEditedSource(t *testing.T) {
 	if err := s.reg.Rescan(); err != nil {
 		t.Fatal(err)
 	}
-	if d, _, _ := entryState(e); d != nil {
-		t.Fatalf("rescan kept the backend opened against the old edition: %T", d)
+	waitNewDictionaryIndexing(t, s.reg)
+	if d, _, _ := entryState(e); d != nil && entryOutdated(e.Path) {
+		t.Fatalf("rescan reopened an outdated backend: %T", d)
 	}
 
 	d, err := e.open()

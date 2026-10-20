@@ -92,11 +92,13 @@ paths:
   /api/index-work:
     get:
       summary: Read the active dictionary indexing progress across pages.
+      description: '`done` counts attempted operations, including failures. `failed` lists per-operation errors; other queued operations continue. `error` describes a fatal job error.'
       responses:
         '200':
           description: Current job snapshot.
     post:
       summary: Start a server-owned sequence of index operations.
+      description: A failed dictionary operation is recorded and skipped; the remaining queue continues. Stop still finishes the current atomic operation safely.
       responses:
         '202':
           description: Queue accepted; navigation does not stop it.
@@ -122,7 +124,7 @@ paths:
       tags: [internal]
       operationId: recordBrowseDiagnostic
       x-internal: true
-      summary: Add an opt-in Browse, Wildcards cache, or Wildcards memory event to the system log
+      summary: Add opt-in Browse navigation, page resources, settings bootstrap, dictionary picker, Wildcards cache, memory, or progress timings to the system log
       requestBody:
         required: true
         content:
@@ -133,8 +135,13 @@ paths:
               required: [event]
               properties:
                 event: { type: string }
+                stage: { type: string, description: Navigation stage when event is article_transition or browse_navigation }
+                resource: { type: string, description: Same-origin asset path when event is navigation_resource }
                 dict: { type: string }
                 page: { type: integer }
+                startedAt: { type: integer, format: int64, description: Client navigation start time in Unix milliseconds }
+                elapsedMs: { type: integer, description: Elapsed milliseconds since navigation start }
+                durationMs: { type: integer, description: Duration of the reported stage in milliseconds }
                 words: { type: integer }
                 pageBytes: { type: integer, description: Approximate JavaScript heap size of one cached page }
                 pageJsonBytes: { type: integer, description: UTF-8 JSON size of one cached page }
@@ -1739,23 +1746,24 @@ paths:
       tags: [internal]
       operationId: getInterfaceLanguage
       x-internal: true
-      summary: Read the installation's manually selected interface language
-      description: Defaults to English. Does not inspect system or browser locales or change dictionary languages.
+      summary: Read the interface-language choice
+      description: Defaults to System, which follows the requesting app or browser's preferred language when supported (English or Russian), then falls back to English. An explicit English or Russian choice overrides it. Dictionary languages are unchanged.
       responses:
         '200':
-          description: Current interface language.
+          description: Saved choice and its effective language for this request.
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  language: { type: string, enum: [en, ru] }
+                  language: { type: string, enum: [system, en, ru] }
+                  resolved: { type: string, enum: [en, ru] }
     put:
       tags: [internal]
       operationId: setInterfaceLanguage
       x-internal: true
       summary: Save the interface language for subsequent page loads
-      description: Updates only the language; dictionary preferences and content are unchanged. Reload the page to apply.
+      description: Saves System, English or Russian. System follows the requesting app or browser's preferred language. Reload the page to apply.
       requestBody:
         required: true
         content:
@@ -1764,7 +1772,7 @@ paths:
               type: object
               required: [language]
               properties:
-                language: { type: string, enum: [en, ru] }
+                language: { type: string, enum: [system, en, ru] }
       responses:
         '200':
           description: Saved interface language.
@@ -1773,7 +1781,8 @@ paths:
               schema:
                 type: object
                 properties:
-                  language: { type: string, enum: [en, ru] }
+                  language: { type: string, enum: [system, en, ru] }
+                  resolved: { type: string, enum: [en, ru] }
         '400':
           description: Malformed request or unsupported language.
         '500':
@@ -1853,6 +1862,47 @@ paths:
           description: The body is not valid JSON, or a UI field has the wrong type.
         '500':
           description: The state file could not be written.
+
+  /api/user-storage:
+    get:
+      tags: [internal]
+      operationId: getUserStorage
+      x-internal: true
+      summary: Read file-backed interface settings and search history
+      responses:
+        '200':
+          description: Stored values indexed by their legacy WebView key.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: { type: string }
+        '500':
+          description: Settings or history could not be read.
+    put:
+      tags: [internal]
+      operationId: saveUserStorage
+      x-internal: true
+      summary: Save a complete interface settings and search history snapshot
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              maxItems: 65536
+              items:
+                type: array
+                minItems: 2
+                maxItems: 2
+                items: { type: string }
+      responses:
+        '200':
+          description: Snapshot saved to settings.json and history.json.
+        '400':
+          description: Snapshot could not be validated or saved.
+        '413':
+          description: Snapshot exceeds the 8 MiB transport limit.
 
   /api/index-defaults:
     put:
@@ -2628,6 +2678,24 @@ paths:
           in: query
           description: Set to 1 to interpret within as a whole-headword wildcard pattern.
           schema: { type: string, enum: ['1'] }
+        - name: wildcache
+          in: query
+          description: >
+            ID of the temporary SQLite cache for this wildcard pattern and group.
+            Headword blocks and optional within-filter blocks share this database.
+          schema: { type: string, minLength: 16, maxLength: 80 }
+        - name: wildgroup
+          in: query
+          description: Selected dictionary group, stored in the temporary cache metadata.
+          schema: { type: string, maxLength: 256 }
+        - name: wildorder
+          in: query
+          description: Dictionary position in the selected group's ordered result list.
+          schema: { type: integer, minimum: 0, maximum: 9999 }
+        - name: wildcount
+          in: query
+          description: Number of dictionaries in the selected group.
+          schema: { type: integer, minimum: 1, maximum: 10000 }
         - name: stream
           in: query
           description: Set to 1 to receive NDJSON progress and matching headword blocks as the scan runs.
@@ -2661,6 +2729,9 @@ paths:
                   page: { type: integer }
                   pages: { type: integer }
                   size: { type: integer }
+                  partial:
+                    type: boolean
+                    description: True while the matching wildcard stream is still being collected.
         '400':
           $ref: '#/components/responses/BadRequest'
         '404':
@@ -2785,6 +2856,34 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
 
+  /api/headword-export:
+    post:
+      tags: [internal]
+      operationId: headwordExport
+      x-internal: true
+      summary: Export indexed headwords
+      description: Start, inspect, or stop a headword export job. The request body uses action `start`, `status`, or `stop`; starting requires selected dictionary IDs and an existing output folder.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action]
+              properties:
+                action: { type: string, enum: [start, status, stop] }
+                dictionaries: { type: array, items: { type: string } }
+                path: { type: string }
+                separate: { type: boolean }
+      responses:
+        '200':
+          description: Current export job status, or a start error.
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
 components:
   responses:
     BadRequest:
@@ -2816,6 +2915,11 @@ components:
       description: The rebuild of outdated dictionaries, running or last run.
       properties:
         running: { type: boolean }
+        active: { type: integer, description: 'Dictionaries being processed concurrently.' }
+        activeDicts:
+          type: array
+          items: { type: string }
+          description: IDs of dictionaries being processed concurrently.
         done: { type: integer, description: 'Dictionaries finished, failed ones included.' }
         total: { type: integer, description: 'Dictionaries in this job.' }
         current: { type: string, description: 'The dictionary being rebuilt.' }

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="starting">Запуск wuDict2…</string>
-    <string name="server_failed">Не удалось запустить сервер wuDict2: %1$s</string>
+    <string name="runtime_failed">Не удалось запустить wuDict2: %1$s</string>
     <string name="lookup_label">wuDict2</string>
     <string name="lookup_starting">Поиск «%1$s»…</string>
     <string name="lookup_empty">Нет текста для поиска</string>
@@ -15,32 +15,14 @@
     <string name="index_download_text">Загрузка продолжится, пока вы пользуетесь другими приложениями.</string>
     <string name="settings_short_label">Настройки</string>
     <string name="settings_title">Настройки wuDict2</string>
-    <string name="settings_moved_hint">Основные настройки находятся в приложении: нажмите ☰ и откройте «Системные настройки». Здесь можно изменить порт сервера, сбросить расширенные настройки и перезапустить сервер словарей.</string>
-    <string name="settings_dictionary_picker">Выбор словарей</string>
-    <string name="settings_dictionary_picker_hint">«Все словари» задаёт область поиска. «Найденные словари» позволяет перейти к словарю в текущих результатах.</string>
-    <string name="found_dictionaries_title">Найденные словари</string>
-    <string name="found_dictionaries_empty">Статьи словарей ещё не показаны.</string>
-    <string name="settings_no_compress">Хранить словари без сжатия</string>
-    <string name="settings_no_compress_hint">Проиндексированные словари станут примерно в 3 раза больше: 100 МБ — около 300 МБ. Чтение ускорится на несколько процентов. Действует для словарей, индексируемых с этого момента. По умолчанию: выключено.</string>
-    <string name="settings_search_memory">Память для одного поиска</string>
-    <string name="settings_search_memory_hint">Память, которую поиск может занять на открытие непроиндексированных словарей; сверх неё остальные отмечаются как не проверенные. Проиндексированные словари не ограничены. 0 снимает предел: один поиск по большой непроиндексированной библиотеке занимал 6,3 ГБ, что на телефоне завершает приложение.</string>
-    <string name="settings_preview_memory">Память для непроиндексированных словарей</string>
-    <string name="settings_preview_memory_hint">Непроиндексированные словари остаются открытыми между поисками — около 350 байт на заголовок: 64 МБ вмещают примерно 180 000 заголовков. Сверх предела самые давно не использованные закрываются и открываются заново при необходимости. Больше: меньше переоткрытий, больше памяти.</string>
+    <string name="settings_moved_hint">Большинство настроек находится в приложении: нажмите ☰ и откройте «Системные настройки». Здесь можно сохранить системный журнал или сбросить параметры приложения.</string>
     <string name="settings_index_workers">Словарей индексируется одновременно</string>
-    <string name="settings_index_workers_hint">Каждый использует ядро процессора и несколько сотен байт памяти на заголовок во время индексации. Больше — быстрее, но выше расход энергии и нагрев. По умолчанию: 1.</string>
-    <string name="settings_server_port">Порт сервера</string>
-    <string name="settings_server_port_hint">Меняйте только если порт 6889 уже занят на устройстве. Тема и состояние панели сохраняются для каждого адреса отдельно: при смене порта они сбросятся. По умолчанию: 6889.</string>
-    <string name="settings_range">От %1$d до %2$d.</string>
-    <string name="settings_in_effect">Сейчас действует: %1$s.</string>
-    <string name="settings_out_of_range">«%1$s»: введите целое число от %2$d до %3$d.</string>
-    <string name="settings_stale">Сервер словарей пока работает с прежними настройками.</string>
-    <string name="settings_stale_later">Новые настройки применятся при следующем открытии приложения.</string>
-    <string name="settings_apply_now">Перезапустить сервер</string>
-    <string name="settings_applied">Сервер остановлен. Новые настройки применятся при следующем поиске.</string>
+    <string name="settings_index_workers_hint">Выберите Auto или число от 1 до количества ядер процессора. Auto использует на одно ядро меньше, но не меньше одного. Больше потоков могут ускорить индексацию, но увеличивают расход энергии и нагрев.</string>
+    <string name="settings_workers_auto">Auto</string>
     <string name="settings_close">Закрыть</string>
     <string name="settings_restore">Восстановить настройки</string>
-    <string name="settings_restore_confirm">Сбросить все дополнительные настройки и использовать значения из wudict.toml?</string>
-    <string name="settings_restore_done">Расширенные настройки сброшены.</string>
+    <string name="settings_restore_confirm">Убрать переопределение индексации и использовать значение из wudict.toml?</string>
+    <string name="settings_restore_done">Параметр индексации восстановлен.</string>
     <string name="settings_cancel">Отмена</string>
     <string name="intake_title">Добавить словари</string>
     <string name="intake_reading">Чтение %1$s…</string>
@@ -74,12 +56,8 @@
     <string name="intake_cancelled">Отменено.</string>
     <string name="intake_busy">Импорт уже выполняется.</string>
     <string name="intake_failed">Не удалось добавить словари: %1$s</string>
-    <string name="intake_no_server">Сервер словарей не запустился. Ничего не добавлено.</string>
+    <string name="intake_no_runtime">wuDict2 не запустился. Ничего не добавлено.</string>
     <string name="intake_no_picker">На устройстве нет приложения для выбора файлов.</string>
-    <string-array name="settings_dictionary_picker_modes">
-        <item>Все словари</item>
-        <item>Найденные словари</item>
-    </string-array>
 	<string name="intake_same_elsewhere">%1$s — уже установлен в %2$s</string>
 	<string name="intake_other_elsewhere">%1$s — заменит вашу копию в %2$s</string>
 	<string name="intake_all">Все / Ничего</string>

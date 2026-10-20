@@ -1,0 +1,63 @@
+/**
+ * Copyright (C) 2026 DmShAl (Shepeta Dmitry)
+ *
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+dialog#lemmaDialog.group-dialog.panel-card.workspace-dialog{position:fixed;inset:var(--wd-inset-top,0px) 0 var(--wd-inset-bottom,0px);
+  width:auto;height:auto;max-width:none;max-height:none;margin:0;padding:10px;border:0;border-radius:0;
+  background:var(--paper-bg,var(--bg));box-shadow:none;overflow:hidden}
+dialog#lemmaDialog.group-dialog.panel-card.workspace-dialog:not([open]){display:none}
+dialog#lemmaDialog.group-dialog.panel-card.workspace-dialog[open]{display:flex}
+.lemma-dialog-shell{box-sizing:border-box;display:flex;flex-direction:column;gap:.65em;width:100%;height:100%;min-height:0;
+  padding:1em;border:1px solid var(--line);border-radius:12px;background:var(--paper-bg,var(--bg));overflow:hidden}
+html[data-shell-image] dialog#lemmaDialog.group-dialog.panel-card.workspace-dialog{background-color:var(--paper-bg);
+  background-image:linear-gradient(rgba(255,245,220,.18),rgba(255,245,220,.18)),var(--paper-bk-image,none);
+  background-size:100% 100%,100% 100%;background-position:center;background-repeat:no-repeat;background-attachment:fixed}
+html[data-shell-image] .lemma-dialog-shell{background-color:var(--paper-bg);
+  background-image:linear-gradient(rgba(255,245,220,.18),rgba(255,245,220,.18)),var(--paper-bk-image,none);
+  background-size:100% 100%,100% 100%;background-position:center;background-repeat:no-repeat;background-attachment:fixed}
+html:has(link[data-preset="sepia"]) dialog#lemmaDialog.group-dialog.panel-card.workspace-dialog,
+html:has(link[data-preset="sepia"]) .lemma-dialog-shell{background:var(--bg)}
+.lemma-dialog-top{display:flex;align-items:center;justify-content:space-between;gap:1em;flex:none}
+.lemma-dialog-top h2{font-size:calc(var(--ui-font-title) * 1rem);margin:0}
+.lemma-dialog-top .btn{box-sizing:border-box;display:grid;place-items:center;position:relative;flex:none;width:calc(var(--ui-main-control-height) * 1em);
+  height:calc(var(--ui-main-control-height) * 1em);min-height:calc(var(--ui-main-control-height) * 1em);min-width:calc(var(--ui-main-control-height) * 1em);
+  padding:0;font-size:calc(var(--ui-main-control-font) * 1rem);line-height:1;overflow:hidden}
+dialog#lemmaDialog .lemma-dialog-top .icon-close{display:block;position:absolute;left:50%;top:50%;width:1.1em!important;height:1.1em!important;
+  transform:translate(-50%,-50%)}
+html[data-shell-image] .lemma-dialog-top{background-color:var(--paper-bg);
+  background-image:linear-gradient(rgba(255,245,220,.25),rgba(255,245,220,.25)),var(--paper-bk-image,none);
+  background-size:100% 100%,100% 100%;background-position:center;background-repeat:no-repeat;background-attachment:fixed;
+  border-bottom:1px solid rgba(120,90,45,.22)}
+html:has(link[data-preset="sepia"]) .lemma-dialog-top{background:var(--bg-card,var(--bg));border-bottom:1px solid var(--line)}
+html[data-shell-image] .lemma-list{scrollbar-color:rgba(120,90,45,.58) transparent}
+html[data-shell-image] .lemma-list::-webkit-scrollbar-track{background:transparent}
+html[data-shell-image] .lemma-list::-webkit-scrollbar-thumb{background:rgba(120,90,45,.58);border:2px solid transparent;background-clip:padding-box;border-radius:10px}
+html[data-shell-image] .lemma-list::-webkit-scrollbar-thumb:hover{background-color:rgba(90,65,35,.76)}
+.lemma-dialog-body{display:flex;flex:1 1 auto;flex-direction:column;gap:.45em;min-height:0;overflow:hidden;font-size:calc(var(--ui-font-base) * 1rem)}
+.lemma-dialog-body>p:first-child{flex:none;margin:.1em 0;color:var(--label);font-size:calc(var(--ui-hint-font-size) * 1rem)}
+.lemma-dialog-head{display:flex;flex:none;align-items:baseline;justify-content:space-between;gap:.5em;flex-wrap:wrap}
+.lemma-dialog-head h2{margin:.25em 0;font-size:calc(var(--ui-font-section) * 1rem)}
+.lemma-note,.lemma-formats{flex:none;margin:.15em 0 0;color:var(--label-quiet);font-size:calc(var(--ui-hint-font-size) * 1rem);overflow-wrap:anywhere}
+.lemma-list{flex:1 1 0;min-height:0;overflow:auto;overscroll-behavior:contain;border:1px solid var(--line);border-radius:8px}
+.lemma-dialog .lrow{display:flex;flex-wrap:wrap;align-items:center;gap:.5em;min-height:calc(var(--ui-control-height) * 1em);
+  padding:.5em .618em;border-bottom:1px solid var(--line);font-size:calc(var(--ui-control-font) * 1rem)}
+.lemma-dialog .lrow:last-child{border-bottom:0}
+.lemma-dialog .lrow input[type=checkbox]{appearance:none;-webkit-appearance:none;position:relative;flex:none;width:calc(var(--ui-control-height) * 1em);
+  height:calc(var(--ui-control-height) * 1em);margin:0;padding:0;border:1.5px solid var(--fg);border-radius:4px;background:var(--bg);cursor:pointer}
+.lemma-dialog .lrow input[type=checkbox]:checked::after{content:"";position:absolute;left:35%;top:20%;width:25%;height:50%;
+  border:solid var(--fg);border-width:0 2px 2px 0;transform:rotate(45deg)}
+.lemma-dialog .lrow input[type=checkbox]:disabled{opacity:.5;cursor:default}
+.lemma-dialog .lrow input[type=checkbox]:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.lemma-dialog .lrow .nm{flex:1 1 8em;min-width:0;color:var(--fg)}
+.lemma-dialog .lrow .cost{flex:none;color:var(--label);font-size:calc(var(--ui-hint-font-size) * 1rem);font-variant-numeric:tabular-nums}
+.lemma-dialog .lrow .st{flex:0 1 auto;min-width:min(9em,100%);max-width:100%;color:var(--label);text-align:right;font-size:calc(var(--ui-hint-font-size) * 1rem);overflow-wrap:anywhere}
+.lemma-dialog .lrow .st.ok{color:var(--safe)}.lemma-dialog .lrow .st.err{color:var(--danger)}.lemma-dialog .lrow .st.busy{color:var(--accent)}
+.lemma-dialog .lrow.off{opacity:.55}
+.lemma-banner{flex:none;margin:.2em 0 0;padding:.5em .7em;border:1px solid var(--line);border-radius:8px;color:var(--label);font-size:calc(var(--ui-hint-font-size) * 1rem)}
+.lemma-banner.loading{display:flex;align-items:center;gap:.5em}
+.lemma-banner.warn{border-color:var(--danger);color:var(--danger)}
+.lemma-banner.hidden{display:none}
+.lemma-formats a{color:var(--accent);text-decoration:none}.lemma-formats a:hover{text-decoration:underline}
+@media(max-width:600px){dialog#lemmaDialog.group-dialog.panel-card.workspace-dialog{padding:10px}.lemma-dialog-shell{padding:1em .8em}}
+@media(max-width:520px){.lemma-dialog .lrow .st{order:1;flex:1 1 auto;min-width:0;text-align:left}.lemma-dialog .lrow .cost{order:1}}

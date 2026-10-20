@@ -81,8 +81,8 @@ for w, m in db.execute("SELECT w, m FROM entry ORDER BY id"):
 without it will fail.
 
 Each row is compressed on its own, without a shared dictionary, so any row can
-be read alone. [`NO_COMPRESS`](configuration.md#no_compress) turns compression
-off for dictionaries indexed afterwards; reading handles both forms.
+be read alone. Short or incompressible rows are stored literally; reading
+handles both forms, including databases written before compression was added.
 
 ### Headwords, aliases and sub-entries
 
@@ -216,7 +216,7 @@ Requirements:
 - [x] Create both indexes exactly as shown, with **`COLLATE NOCASE`**; otherwise
       SQLite does not use them and every lookup scans the table.
 - [x] `entry_trigram` stores the *folded* headword, not the raw one.
-- [x] Bodies may be stored uncompressed.
+- [x] Article bodies are compressed when this reduces their stored size. Readers also accept literal bodies written by older versions.
 - [x] Set `meta.name` and `meta.description`: they are the title and the
       *About this dictionary* text.
 - [x] Set `meta.dict_uuid` (16 random bytes, hex) if you also write a

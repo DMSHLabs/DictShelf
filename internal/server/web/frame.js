@@ -292,6 +292,8 @@
 			// an unauthenticated channel, not the range - applyFW owns that.
 			document.documentElement.style.fontWeight =
 				String(Math.min(700, Math.max(400, +e.data.w || 400)));
+			document.documentElement.style.webkitTextStroke =
+				String(e.data.stroke || "0px") + " currentColor";
 		} else if (e.data.t === "fs") {
 			// The parent bakes the size into our srcdoc at creation; this is
 			// how every change AFTER that arrives, because a CSS custom
@@ -590,28 +592,69 @@
 		link.parentNode.insertBefore(box, link.nextSibling);
 		link.wudictSub = box;
 		post();
-		fetch("/api/search?mode=exact&n=1&dict=" + encodeURIComponent(dictID) +
-			"&q=" + encodeURIComponent(word))
-			.then(function (r) { return r.text(); })
-			.then(function (text) {
-				var html = null;
-				text.split("\n").forEach(function (line) {
-					if (!line.trim()) return;
-					var m;
-					try { m = JSON.parse(line); } catch (_) { return; }
-					if (m.t === "hit" && m.results && m.results.length) html = m.results[0].Body;
+		function accept(event, found) {
+			if (event && event.t === "hit" && event.results && event.results.length) found.html = event.results[0].Body;
+		}
+		var found = { html: null };
+		var request;
+		if (HOST && typeof HOST.wudictNativeCall === "function") {
+			request = HOST.wudictNativeCall("search", JSON.stringify({
+				q: word, mode: "exact", dict: dictID, n: 1
+			}), function (event) { accept(event, found); });
+		} else if (window.wudictAndroidGo) {
+			var bridge = window.wudictAndroidGo;
+			var id = bridge.startSearchStream(location.origin, JSON.stringify({
+				q: word, mode: "exact", dict: dictID, n: 1
+			}));
+			if (id <= 0) {
+				request = Promise.reject(new Error("Go runtime is unavailable"));
+			} else {
+				request = new Promise(function (resolve, reject) {
+					function poll() {
+						try {
+							var packet = JSON.parse(bridge.pollDictStream(id));
+						(packet.messages || []).forEach(function (event) { accept(event, found); });
+						if (packet.done) {
+							bridge.cancelDictStream(id);
+							if (packet.error) reject(new Error(packet.error));
+							else resolve();
+							return;
+						}
+						setTimeout(poll, 16);
+						} catch (error) {
+						bridge.cancelDictStream(id);
+						reject(error);
+						}
+					}
+					poll();
 				});
-				if (html === null) { box.textContent = uiNotHere; post(); return; }
-				// the fragment repeats the article's stylesheet link; one is enough
-				box.innerHTML = '<span class="wu-sub-close">✕</span>' +
-					html.replace(/<link\b[^>]*>/gi, "");
-				box.querySelector(".wu-sub-close").title = uiClose;
-				box.querySelector(".wu-sub-close").addEventListener("click", function () {
-					toggleSub(link, word);
+			}
+		} else {
+			request = fetch("/api/search?mode=exact&n=1&dict=" + encodeURIComponent(dictID) +
+				"&q=" + encodeURIComponent(word))
+				.then(function (r) { return r.text(); })
+				.then(function (text) {
+					text.split("\n").forEach(function (line) {
+						if (!line.trim()) return;
+						var event;
+						try { event = JSON.parse(line); } catch (_) { return; }
+						accept(event, found);
+					});
 				});
-				post();
-				setTimeout(post, 250); // late images/reflow
-			})
+		}
+		Promise.resolve(request).then(function () {
+			var html = found.html;
+			if (html === null) { box.textContent = uiNotHere; post(); return; }
+			// the fragment repeats the article's stylesheet link; one is enough
+			box.innerHTML = '<span class="wu-sub-close">✕</span>' +
+				html.replace(/<link\b[^>]*>/gi, "");
+			box.querySelector(".wu-sub-close").title = uiClose;
+			box.querySelector(".wu-sub-close").addEventListener("click", function () {
+				toggleSub(link, word);
+			});
+			post();
+			setTimeout(post, 250); // late images/reflow
+		})
 			.catch(function () { box.textContent = uiLoadFailed; post(); });
 	}
 

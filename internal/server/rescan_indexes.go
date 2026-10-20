@@ -4,10 +4,13 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"maps"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/wuweidict/wudict/internal/dict"
@@ -26,15 +29,17 @@ type rescanIndexesRequest struct {
 }
 
 type rescanIndexProgress struct {
-	Stage   string   `json:"stage"`
-	At      int      `json:"at"`
-	Total   int      `json:"total"`
-	Name    string   `json:"name"`
-	Action  string   `json:"action"`
-	Indexes []string `json:"indexes,omitempty"`
-	Done    int      `json:"done"`
-	Entries int      `json:"entries"`
-	Percent int      `json:"percent"`
+	Stage        string   `json:"stage"`
+	Active       bool     `json:"active,omitempty"`
+	DictionaryID string   `json:"dictionaryId,omitempty"`
+	At           int      `json:"at"`
+	Total        int      `json:"total"`
+	Name         string   `json:"name"`
+	Action       string   `json:"action"`
+	Indexes      []string `json:"indexes,omitempty"`
+	Done         int      `json:"done"`
+	Entries      int      `json:"entries"`
+	Percent      int      `json:"percent"`
 }
 
 func baseIndexRequired(selfIndexed bool, options indexOptions) bool {
@@ -50,7 +55,10 @@ func rescanTargetNeedsWork(e *entry, fresh, selfIndexed bool, options indexOptio
 	}
 	dir, ok := store.LookupDir(e.Path)
 	if !ok {
-		return false
+		// An explicit recreate is also the recovery path for a deliberately
+		// removed or missing base index. There is no current plan to inspect,
+		// but the user has asked us to create one from the source.
+		return req.Existing.Index == "recreate"
 	}
 	have := store.KeptPlan(store.TextDBPath(dir))
 	return req.Existing.Index == "recreate" || have.Contains && req.Existing.Contains != "keep" ||
@@ -86,12 +94,108 @@ func validRescanAction(action string, base bool) bool {
 	return action == "" || action == "keep" || (base && action == "recreate") || (!base && (action == "update" || action == "delete"))
 }
 
+// desktopRescanIndexes runs the same rescan job as the HTTP API and adapts its
+// progress to the native bridge's NDJSON event stream.
+func (s *Server) desktopRescanIndexes(ctx context.Context, raw []byte, emit func([]byte)) error {
+	if len(raw) > 4096 {
+		return errors.New("bad request body: request too large")
+	}
+	var body rescanIndexesRequest
+	if err := json.Unmarshal(raw, &body); err != nil {
+		return fmt.Errorf("bad request body: %w", err)
+	}
+	if body.New == nil || !body.New.Index || !validRescanAction(body.Existing.Index, true) || !validRescanAction(body.Existing.Contains, false) || !validRescanAction(body.Existing.FullText, false) {
+		return errors.New("invalid index actions")
+	}
+	release, admitted := s.admitWork("exclusive-request")
+	if !admitted {
+		return errors.New("dictionary operations are running; wait for completion or stop them")
+	}
+	s.startRescanIndexes(body)
+	release()
+	encode := func(message any) error {
+		if emit == nil {
+			return nil
+		}
+		data, err := json.Marshal(message)
+		if err == nil {
+			emit(data)
+		}
+		return err
+	}
+	const key = "rescan-indexes"
+	for {
+		st, changed, ok := s.jobs.watch(key)
+		if !ok {
+			return nil
+		}
+		if !st.Running {
+			return encode(map[string]any{"t": "done", "failed": st.Failed, "canceled": st.Canceled})
+		}
+		if progress, ok := st.Result.(rescanIndexProgress); ok {
+			message := struct {
+				Type string `json:"t"`
+				rescanIndexProgress
+			}{"progress", progress}
+			if err := encode(message); err != nil {
+				return err
+			}
+		}
+		select {
+		case <-changed:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+}
+
 func (s *Server) startRescanIndexes(body rescanIndexesRequest) {
 	key := "rescan-indexes"
 	store.IndexDiagnostic("rescan indexes requested new=%+v existing=%+v", body.New, body.Existing)
 	s.jobs.start(key, 0, jobStatus{}, func(j *job) {
-		failures := s.reg.updateDictionaryIndexesCancelable(body, func(progress rescanIndexProgress) {
+		failures := s.reg.updateDictionaryIndexesContext(j.ctx, body, func(progress rescanIndexProgress) {
 			j.update(func(st *jobStatus) {
+				id := progress.DictionaryID
+				if progress.Active {
+					found := false
+					for _, id := range st.ActiveDicts {
+						if id == progress.DictionaryID {
+							found = true
+							break
+						}
+					}
+					if !found {
+						st.ActiveDicts = append(st.ActiveDicts, id)
+						st.ActiveProgress = append(st.ActiveProgress, dictionaryWorkProgress{ID: id, Active: true})
+					}
+				} else {
+					for i, id := range st.ActiveDicts {
+						if id == progress.DictionaryID {
+							st.ActiveDicts = append(st.ActiveDicts[:i], st.ActiveDicts[i+1:]...)
+							break
+						}
+					}
+					for i, item := range st.ActiveProgress {
+						if item.ID == id {
+							st.ActiveProgress[i].Active = false
+							break
+						}
+					}
+				}
+				if progress.Active {
+					for i := range st.ActiveProgress {
+						if st.ActiveProgress[i].ID == id {
+							st.ActiveProgress[i].Name = progress.Name
+							st.ActiveProgress[i].Action = progress.Action
+							if len(progress.Indexes) > 0 {
+								st.ActiveProgress[i].Feature = progress.Indexes[0]
+							}
+							st.ActiveProgress[i].Done = int64(progress.Done)
+							st.ActiveProgress[i].Total = int64(progress.Entries)
+							break
+						}
+					}
+				}
 				st.Stage, st.Current, st.Action = progress.Stage, progress.Name, progress.Action
 				st.Done, st.Total = int64(progress.At), int64(progress.Total)
 				st.CurrentDone, st.CurrentTotal = int64(progress.Done), int64(progress.Entries)
@@ -100,6 +204,16 @@ func (s *Server) startRescanIndexes(body rescanIndexesRequest) {
 		}, func() bool {
 			st, _ := s.jobs.status(key)
 			return st.StopRequested
+		}, func(id string) (context.Context, func(), bool) {
+			ctx, cancel, ok := j.beginDictionary(id)
+			if !ok {
+				return nil, nil, false
+			}
+			trackJobDictionary(j, id, true)
+			return ctx, func() {
+				j.finishDictionary(id, cancel)
+				trackJobDictionary(j, id, false)
+			}, true
 		})
 		status, _ := s.jobs.status(key)
 		store.IndexDiagnostic("rescan indexes finished failed=%d canceled=%v", len(failures), status.StopRequested)
@@ -171,10 +285,14 @@ func (r *Registry) updateDictionaryIndexes(req rescanIndexesRequest) []string {
 }
 
 func (r *Registry) updateDictionaryIndexesProgress(req rescanIndexesRequest, progress func(rescanIndexProgress)) []string {
-	return r.updateDictionaryIndexesCancelable(req, progress, nil)
+	return r.updateDictionaryIndexesContext(context.Background(), req, progress, nil, nil)
 }
 
 func (r *Registry) updateDictionaryIndexesCancelable(req rescanIndexesRequest, progress func(rescanIndexProgress), stop func() bool) []string {
+	return r.updateDictionaryIndexesContext(context.Background(), req, progress, stop, nil)
+}
+
+func (r *Registry) updateDictionaryIndexesContext(ctx context.Context, req rescanIndexesRequest, progress func(rescanIndexProgress), stop func() bool, beginDictionary func(string) (context.Context, func(), bool)) []string {
 	report := func(p rescanIndexProgress) {
 		if progress != nil {
 			progress(p)
@@ -262,41 +380,57 @@ func (r *Registry) updateDictionaryIndexesCancelable(req rescanIndexesRequest, p
 	if err != nil {
 		return []string{err.Error()}
 	}
+	positions := make(map[string]int, len(workTargets))
 	for i, t := range workTargets {
-		if stop != nil && stop() {
-			p.editMu.Lock()
-			stopErr := p.mutate(func(f *prefsFile) {
-				for _, skipped := range workTargets[i:] {
-					delete(f.DSLPending, skipped.e.indexRemovalKey())
-				}
-			})
-			p.editMu.Unlock()
-			if stopErr != nil {
-				failures = append(failures, "could not clear queued index plans after stop: "+stopErr.Error())
+		positions[t.e.ID] = i
+	}
+	var failuresMu sync.Mutex
+	var started sync.Map
+	addFailure := func(message string) {
+		failuresMu.Lock()
+		failures = append(failures, message)
+		failuresMu.Unlock()
+	}
+	shouldStop := func() bool { return ctx.Err() != nil || stop != nil && stop() }
+	runIndexTasks(workTargets, shouldStop, func(t target) {
+		started.Store(t.e.ID, true)
+		dictCtx := ctx
+		finishDictionary := func() {}
+		if beginDictionary != nil {
+			var ok bool
+			dictCtx, finishDictionary, ok = beginDictionary(t.e.ID)
+			if !ok {
+				return
 			}
-			break
+			defer finishDictionary()
 		}
+		i := positions[t.e.ID]
 		e := t.e
 		store.IndexDiagnostic("rescan index start source=%q dictionary=%q fresh=%v self_indexed=%v native_only=%v", e.Path, e.probeName(), t.fresh, entryHasSelfIndex(e), t.nativeOnly)
 		if t.nativeOnly {
 			if t.fresh {
 				if !t.options.Contains && !t.options.FullText {
-					continue // the native index already answers headword searches
+					return // the native index already answers headword searches
 				}
 			} else {
 				dir, ok := store.LookupDir(e.Path)
 				if !ok {
-					continue
+					return
 				}
 				have := store.KeptPlan(store.TextDBPath(dir))
 				containsWork := have.Contains && req.Existing.Contains != "keep"
 				fullTextWork := have.FullText && req.Existing.FullText != "keep"
 				if !containsWork && !fullTextWork {
-					continue
+					return
 				}
 			}
 		}
-		state := rescanIndexProgress{Stage: "dictionary", At: i + 1, Total: len(workTargets), Name: e.probeName()}
+		state := rescanIndexProgress{Stage: "dictionary", DictionaryID: e.ID, At: i + 1, Total: len(workTargets), Name: e.probeName()}
+		state.Active = true
+		defer func() {
+			state.Active = false
+			report(state)
+		}()
 		if t.fresh {
 			state.Action = "create"
 			if !t.nativeOnly {
@@ -356,33 +490,36 @@ func (r *Registry) updateDictionaryIndexesCancelable(req rescanIndexesRequest, p
 			}
 		}
 		if t.fresh && !t.options.Index {
+			if dictCtx.Err() != nil {
+				return
+			}
 			if err := e.setIndexRemoved(true); err != nil {
-				failures = append(failures, err.Error())
-				continue
+				addFailure(err.Error())
+				return
 			}
 			if dir, ok := store.LookupDir(e.Path); ok {
 				e.ingestMu.Lock()
 				e.rebuilding.Store(true)
 				e.openMu.Lock()
 				e.closeNow()
-				_, err = store.RemovePrepared(dir)
+				_, removeErr := store.RemovePrepared(dir)
 				e.openMu.Unlock()
 				e.rebuilding.Store(false)
 				e.ingestMu.Unlock()
-				if err != nil {
-					failures = append(failures, err.Error())
+				if removeErr != nil {
+					addFailure(removeErr.Error())
 				}
 			}
-			continue
+			return
 		}
-		want := clearDatabaseRequest{progress: articleProgress}
+		want := clearDatabaseRequest{progress: articleProgress, ctx: dictCtx}
 		if t.fresh {
 			plan := store.Plan{Contains: t.options.Contains, FullText: t.options.FullText}
 			want.Index, want.plan = baseIndexRequired(t.nativeOnly, t.options), &plan
 		} else {
 			dir, ok := store.LookupDir(e.Path)
 			if !ok && req.Existing.Index != "recreate" {
-				continue
+				return
 			}
 			have := store.Plan{}
 			if ok {
@@ -394,16 +531,37 @@ func (r *Registry) updateDictionaryIndexesCancelable(req rescanIndexesRequest, p
 			want.FullText = req.Existing.FullText == "delete"
 		}
 		if err := e.clearDatabase(want); err != nil {
+			if errors.Is(err, context.Canceled) && dictCtx.Err() != nil && !errors.Is(err, store.ErrIngestTempCleanup) {
+				if ctx.Err() == nil {
+					return
+				}
+				return
+			}
 			store.IndexDiagnostic("dictionary index failed source=%q dictionary=%q action=%q error=%q", e.Path, e.probeName(), state.Action, err.Error())
-			failures = append(failures, fmt.Sprintf("%s: %v", e.Path, err))
-			continue
+			addFailure(fmt.Sprintf("%s: %v", e.Path, err))
+			return
 		}
 		p.editMu.Lock()
-		err = p.mutate(func(f *prefsFile) { delete(f.DSLPending, e.indexRemovalKey()) })
+		mutateErr := p.mutate(func(f *prefsFile) { delete(f.DSLPending, e.indexRemovalKey()) })
 		p.editMu.Unlock()
-		if err != nil {
-			failures = append(failures, err.Error())
+		if mutateErr != nil {
+			addFailure(mutateErr.Error())
 		}
+	})
+	if shouldStop() {
+		p.editMu.Lock()
+		stopErr := p.mutate(func(f *prefsFile) {
+			for _, skipped := range workTargets {
+				if _, began := started.Load(skipped.e.ID); !began {
+					delete(f.DSLPending, skipped.e.indexRemovalKey())
+				}
+			}
+		})
+		p.editMu.Unlock()
+		if stopErr != nil {
+			addFailure("could not clear queued index plans after stop: " + stopErr.Error())
+		}
+		return failures
 	}
 	report(rescanIndexProgress{Stage: "cleanup", At: len(workTargets), Total: len(workTargets)})
 	if err := r.cleanupLibrary(); err != nil {

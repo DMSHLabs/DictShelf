@@ -1,0 +1,111 @@
+/**
+ * Copyright (C) 2026 DmShAl (Shepeta Dmitry)
+ *
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+dialog#foldersDialog.group-dialog.panel-card.workspace-dialog{position:fixed;inset:var(--wd-inset-top,0px) 0 var(--wd-inset-bottom,0px);
+  width:auto;height:auto;max-width:none;max-height:none;margin:0;padding:10px;border:0;border-radius:0;
+  background:var(--paper-bg,var(--bg));box-shadow:none;overflow:hidden}
+dialog#foldersDialog.group-dialog.panel-card.workspace-dialog:not([open]){display:none}
+dialog#foldersDialog.group-dialog.panel-card.workspace-dialog[open]{display:flex}
+.folders-dialog-shell{position:relative;box-sizing:border-box;display:flex;flex-direction:column;gap:.65em;
+  width:100%;height:100%;min-height:0;padding:1em;border:1px solid var(--line);border-radius:12px;
+  background:var(--paper-bg,var(--bg));overflow:hidden}
+html[data-shell-image] dialog#foldersDialog.group-dialog.panel-card.workspace-dialog{background-color:var(--paper-bg);
+  background-image:linear-gradient(rgba(255,245,220,.18),rgba(255,245,220,.18)),var(--paper-bk-image,none);
+  background-size:100% 100%,100% 100%;background-position:center;background-repeat:no-repeat;background-attachment:fixed}
+html[data-shell-image] .folders-dialog-shell{background-color:var(--paper-bg);
+  background-image:linear-gradient(rgba(255,245,220,.18),rgba(255,245,220,.18)),var(--paper-bk-image,none);
+  background-size:100% 100%,100% 100%;background-position:center;background-repeat:no-repeat;background-attachment:fixed}
+html:has(link[data-preset="sepia"]) dialog#foldersDialog.group-dialog.panel-card.workspace-dialog,
+html:has(link[data-preset="sepia"]) .folders-dialog-shell{background:var(--bg)}
+.folders-dialog-top{display:flex;align-items:center;justify-content:space-between;gap:1em;flex:none}
+.folders-dialog-top h2{font-size:calc(var(--ui-font-title) * 1rem);margin:0}
+.folders-dialog-top .btn{box-sizing:border-box;display:grid;place-items:center;flex:none;width:calc(var(--ui-main-control-height) * 1em);
+  height:calc(var(--ui-main-control-height) * 1em);min-height:calc(var(--ui-main-control-height) * 1em);min-width:calc(var(--ui-main-control-height) * 1em);
+  padding:0;font-size:calc(var(--ui-main-control-font) * 1rem);line-height:1;overflow:hidden;position:relative}
+dialog#foldersDialog .folders-dialog-top .icon-close{display:block;position:absolute;left:50%;top:50%;flex:none;
+  width:1.1em!important;height:1.1em!important;transform:translate(-50%,-50%)}
+html[data-shell-image] .folders-dialog-top{background-color:var(--paper-bg);
+  background-image:linear-gradient(rgba(255,245,220,.25),rgba(255,245,220,.25)),var(--paper-bk-image,none);
+  background-size:100% 100%,100% 100%;background-position:center;background-repeat:no-repeat;background-attachment:fixed;
+  border-bottom:1px solid rgba(120,90,45,.22)}
+html:has(link[data-preset="sepia"]) .folders-dialog-top{background:var(--bg-card,var(--bg));border-bottom:1px solid var(--line)}
+html[data-shell-image] .folders-dialog-scroll{scrollbar-color:rgba(120,90,45,.58) transparent}
+html[data-shell-image] .folders-dialog-scroll::-webkit-scrollbar-track{background:transparent}
+html[data-shell-image] .folders-dialog-scroll::-webkit-scrollbar-thumb{background:rgba(120,90,45,.58);border:2px solid transparent;background-clip:padding-box;border-radius:10px}
+html[data-shell-image] .folders-dialog-scroll::-webkit-scrollbar-thumb:hover{background-color:rgba(90,65,35,.76)}
+.folders-dialog-scroll{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;scrollbar-gutter:stable;
+  margin-right:-1em;padding:.2em 1em .8em 0}
+.folders-dialog-scroll h2{font-size:calc(var(--ui-font-section) * 1rem);margin:.65em 0 .3em}
+.folders-dialog-scroll>p,.folders-dialog-scroll #indexDefaults>p,.folders-dialog-scroll #addSection>p,
+.folders-dialog-scroll #origin,.folders-dialog-scroll #cfgProblems{font-size:calc(var(--ui-font-addition) * 1rem)}
+.folders-dialog-scroll p{margin:.382em 0;color:var(--label)}
+.folders-dialog-scroll code{background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:0 .3em;font-size:.9em;word-break:break-all}
+html[data-shell-image] .folders-dialog-scroll code,html[data-shell-image] .folders-dialog-scroll input{background:rgba(255,255,255,.18)}
+.folders-dialog-scroll input[type=text],.folders-dialog-scroll .frow input{box-sizing:border-box;width:100%;height:calc(var(--ui-edit_control-height) * 1.5rem);min-height:0;
+  margin:.3em 0;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:.5em .7em;
+  font:calc(var(--ui-edit_control-font) * 1rem) var(--font);outline:none}
+.folders-dialog-scroll input[type=text]:focus,.folders-dialog-scroll .frow input:focus{border-color:var(--focus);box-shadow:0 0 0 3px color-mix(in srgb,var(--focus) 25%,transparent)}
+.folders-dialog-scroll input[type=checkbox]{appearance:none;-webkit-appearance:none;flex:none;width:20px;height:20px;margin:0;padding:0;
+  border:1.5px solid var(--fg);border-radius:4px;background-color:var(--bg);position:relative;cursor:pointer}
+.folders-dialog-scroll input[type=checkbox]:checked::after{content:"";position:absolute;left:5px;top:1px;width:5px;height:10px;
+  border:solid var(--fg);border-width:0 2px 2px 0;transform:rotate(45deg)}
+.folders-dialog-scroll input[type=checkbox]:disabled{opacity:.45;cursor:default}
+.folders-dialog-scroll input[type=checkbox]:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.folders-dialog-scroll .dsl-default-row{display:flex;flex-wrap:wrap;align-items:center;gap:.5em 1em;margin:.6em 0}
+.folders-dialog-scroll .dsl-default-row>div{display:flex;flex-wrap:wrap;gap:.5em 1em}
+.folders-dialog-scroll .dsl-default-row label{display:inline-flex;align-items:center;gap:.3em;min-height:calc(var(--ui-edit_control-height) * 1em);
+  font-size:calc(var(--ui-edit_control-font) * 1rem)}
+.folders-dialog-scroll .dsl-default-row input[type=checkbox]{width:calc(var(--ui-edit_control-height) * 1em);height:calc(var(--ui-edit_control-height) * 1em)}
+.folders-dialog-scroll .frow{display:flex;align-items:center;gap:.4em}
+.folders-dialog-scroll .frow input{flex:1 1 0;min-width:0}
+.folders-dialog-scroll .frow .pick,.folders-dialog-scroll .frow .rm{box-sizing:border-box;display:grid;place-items:center;flex:none;
+  width:calc(var(--ui-edit_control-height) * 1.5rem);height:calc(var(--ui-edit_control-height) * 1.5rem);padding:0;
+  background:none;border:0;color:var(--label-quiet);font-size:calc(var(--ui-edit_control-font) * 1.3rem);cursor:pointer}
+.folders-dialog-scroll .frow .rm{font-size:calc(var(--ui-edit_control-font) * 1rem)}
+.folders-dialog-scroll .frow .rm:hover{color:var(--danger)}
+.folders-dialog-scroll .frow .pick:hover{color:var(--accent)}
+html:not([data-folder-picker]) #foldersDialog .frow .pick{display:none}
+.folders-dialog-scroll .frow .st{flex:none;min-width:8.5em;text-align:right;color:var(--label);font-size:calc(var(--ui-hint-font-size) * 1rem)}
+.folders-dialog-scroll .frow .st.ok{color:var(--safe)}.folders-dialog-scroll .frow .st.err{color:var(--danger)}
+.folders-dialog-scroll .frow .brk{display:none}
+.folders-dialog-scroll #addRow,.folders-dialog-scroll button.link{background:none;border:0;color:var(--accent);font-size:calc(var(--ui-font-addition) * 1rem);
+  cursor:pointer;padding:0;margin:.2em 0 .4em;text-decoration:underline}
+.folders-dialog-scroll .warn{font-size:calc(var(--ui-font-addition) * 1rem);color:var(--danger)}
+.folders-dialog-scroll .warn.hidden,.folders-dialog-scroll .hidden{display:none!important}
+.folders-dialog-scroll .sep{border:0;border-top:1px solid var(--line);margin:1em 0}
+.folders-dialog-scroll .keep{display:flex;gap:.5em;align-items:flex-start;color:var(--label);margin-top:.618em}
+.folders-dialog-scroll .keep input{margin:.25em 0 0}.folders-dialog-scroll .keep em{font-style:normal;color:var(--label-quiet);font-size:calc(var(--ui-hint-font-size) * 1rem)}
+.folders-dialog-scroll #drop{box-sizing:border-box;display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:.3em;min-height:calc(var(--ui-edit_control-height) * 3em);
+  padding:.4em .8em;border:1.5px dashed var(--line);border-radius:10px;color:var(--label);font-size:calc(var(--ui-font-addition) * 1rem);text-align:center}
+.folders-dialog-scroll #drop.over{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 7%,transparent)}
+.folders-dialog-scroll #drop .hint,.folders-dialog-scroll .formats{font-size:calc(var(--ui-hint-font-size) * 1rem);color:var(--label)}
+.folders-dialog-scroll #urlRow{display:flex;gap:.5em;margin-top:.618em}
+.folders-dialog-scroll #urlRow input{flex:1;min-width:0;margin:0}
+.folders-dialog-scroll #urlRow button{flex:none;min-height:calc(var(--ui-edit_control-height) * 1.5rem);font-size:calc(var(--ui-edit_control-font) * 1rem)}
+.folders-dialog-scroll #lib,.folders-dialog-scroll #cands{margin:.618em 0 0;border:1px solid var(--line);border-radius:8px;max-height:38vh;overflow:auto}
+.folders-dialog-scroll .row{display:flex;gap:.5em;align-items:baseline;padding:.38em .618em;border-bottom:1px solid var(--line);font-size:calc(var(--ui-hint-font-size) * 1rem)}
+.folders-dialog-scroll .row:last-child{border-bottom:0}.folders-dialog-scroll .row .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.folders-dialog-scroll .row .fmt{color:var(--label-quiet);font-size:.9em;text-transform:uppercase;letter-spacing:.04em}
+.folders-dialog-scroll .row .n,.folders-dialog-scroll .row .fl,.folders-dialog-scroll .row .have{color:var(--label);font-size:.95em}
+.folders-dialog-scroll .row .fl{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.folders-dialog-scroll .row .why{color:var(--danger)}.folders-dialog-scroll .row.no{color:var(--fg-soft)}
+.folders-dialog-scroll .tag{font-size:.85em;border:1px solid var(--line);border-radius:99px;padding:0 .5em;color:var(--label)}
+.folders-dialog-scroll .tag.on{border-color:var(--accent);color:var(--accent)}
+.folders-dialog-scroll #extras{margin:.618em 0 0}.folders-dialog-scroll #extras .head{font-size:calc(var(--ui-hint-font-size) * 1rem);color:var(--label);margin:0 0 .3em}
+.folders-dialog-scroll #impMsg{font-size:calc(var(--ui-hint-font-size) * 1rem);margin-top:.618em}
+.folders-dialog-scroll #impMsg.ok{color:var(--safe)}.folders-dialog-scroll #impMsg.err{color:var(--danger)}
+.folders-dialog-scroll #save,.folders-dialog-scroll #install{box-sizing:border-box;min-height:calc(var(--ui-edit_control-height) * 1.5rem);font-size:calc(var(--ui-edit_control-font) * 1rem)}
+.folders-dialog-scroll #msg,.folders-dialog-scroll #indexDefaultsError{font-size:calc(var(--ui-hint-font-size) * 1rem)}
+.folders-dialog-scroll #msg.ok{color:var(--safe)}.folders-dialog-scroll #msg.err{color:var(--danger)}
+.folders-setup-status{display:flex;align-items:center;gap:.6em;flex:none;min-width:0;color:var(--label);font-size:calc(var(--ui-hint-font-size) * 1rem)}
+.folders-setup-status span{flex:1;min-width:0;overflow-wrap:anywhere}.folders-setup-status[hidden]{display:none}
+.folders-setup-status button{flex:none}
+@media(max-width:600px){dialog#foldersDialog.group-dialog.panel-card.workspace-dialog{padding:10px}.folders-dialog-shell{padding:1em .8em}}
+@media(max-width:520px){.folders-dialog-scroll .frow{flex-wrap:wrap;row-gap:.15em;margin-bottom:.7em}
+  .folders-dialog-scroll .frow .brk{display:block;flex:0 0 100%;height:0}
+  .folders-dialog-scroll .frow input{flex:1 1 0}
+  .folders-dialog-scroll .frow .st{flex:1 1 auto;min-width:0;text-align:left}
+  .folders-dialog-scroll .frow .pick,.folders-dialog-scroll .frow .rm{font-size:18px;padding:.15em .35em}
+  .folders-dialog-scroll .frow .rm{margin-left:auto}}

@@ -82,7 +82,81 @@ func trimMainExt(base string) (string, bool) {
 // the ".dsl" inside it. One list, read twice: MainExt matches a name against
 // it, and classify.go walks it to build the companion vocabulary, so a format
 // that grows a companion table cannot be forgotten by the other reader.
-var mainExts = []string{".wudict.md.gz", ".wudict.md.dz", ".wudict.md", ".dsl.dz", ".dsl", ".mdx", ".ifo", ".slob", ".bgl", ".zim", ".md"}
+var mainExts = []string{".wudict.md.gz", ".wudict.md.dz", ".wudict.md", ".dsl.dz", ".dsl", ".mdx", ".ifo", ".slob", ".bgl", ".zimaa", ".zim", ".md"}
+
+// MaxZIMParts bounds the number of files opened for a split archive, including
+// its first .zimaa part. Kiwix splits at file boundaries only by chance; the
+// reader treats the run as one byte stream.
+const MaxZIMParts = 64
+
+var zimPartSuffixes = func() []string {
+	var out []string
+	for a := 'a'; a <= 'z'; a++ {
+		for b := 'a'; b <= 'z'; b++ {
+			if a != 'a' || b != 'a' {
+				out = append(out, ".zim"+string(a)+string(b))
+			}
+		}
+	}
+	return out
+}()
+
+// ZIMParts returns the contiguous part run beginning with src. Part suffix
+// case follows the first part, and a later part after a gap is not included.
+// Call ZIMPartSet when the caller needs to reject an incomplete run.
+func ZIMParts(src string) []string {
+	parts, _, _ := ZIMPartSet(src)
+	return parts
+}
+
+// ZIMPartSuffixes returns split-part suffixes after .zimaa, in archive order.
+func ZIMPartSuffixes() []string { return append([]string(nil), zimPartSuffixes...) }
+
+// ZIMPartSet lists the contiguous run, the first missing suffix when a later
+// part exists, and any filesystem error. A lone .zimaa is allowed because the
+// format does not record whether its input was split before or after part aa.
+func ZIMPartSet(src string) (parts []string, missing string, err error) {
+	if MainExt(src) != ".zimaa" {
+		return nil, "", nil
+	}
+	base := src[:len(src)-len(".zimaa")]
+	firstExt := src[len(src)-len(".zimaa"):]
+	upper := firstExt == strings.ToUpper(firstExt)
+	dir := filepath.Dir(src)
+	ents, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, "", err
+	}
+	have := make(map[string]string, len(ents))
+	for _, ent := range ents {
+		if !ent.IsDir() {
+			have[ent.Name()] = filepath.Join(dir, ent.Name())
+		}
+	}
+	parts = append(parts, src)
+	gap := false
+	for _, suf := range zimPartSuffixes {
+		if upper {
+			suf = strings.ToUpper(suf)
+		}
+		p := base + suf
+		if found, ok := have[filepath.Base(p)]; ok {
+			if gap {
+				return parts, missing, nil
+			}
+			if len(parts) == MaxZIMParts {
+				return parts, "", fmt.Errorf("split ZIM exceeds %d parts", MaxZIMParts)
+			}
+			parts = append(parts, found)
+			continue
+		}
+		if !gap {
+			gap = true
+			missing = p
+		}
+	}
+	return parts, "", nil
+}
 
 // MainExt names the format of a main file for the tables below: the longest
 // spelling this file has companion knowledge about, so a compressed DSL is
@@ -329,6 +403,21 @@ func SourceFiles(src string) []string {
 	}
 	for _, p := range CompanionMedia(src) {
 		add(p)
+	}
+	if MainExt(src) == ".zimaa" {
+		if ents, err := os.ReadDir(filepath.Dir(src)); err == nil {
+			stem := filepath.Base(base)
+			for _, ent := range ents {
+				name := ent.Name()
+				if ent.IsDir() || len(name) <= len(stem) || !strings.EqualFold(name[:len(stem)], stem) {
+					continue
+				}
+				if zimPartSuffixLen(strings.ToLower(name)) == 6 &&
+					strings.EqualFold(name[len(stem):len(stem)+6], name[len(name)-6:]) {
+					add(filepath.Join(filepath.Dir(src), name))
+				}
+			}
+		}
 	}
 	return out
 }

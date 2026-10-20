@@ -68,11 +68,12 @@ func TestPrefsFailedHealKeepsGroupOrder(t *testing.T) {
 		t.Fatal(err)
 	}
 	blocked := t.TempDir()
+	activePath := p.file.path
 	calls := 0
 	p.file.path = func() string {
 		calls++
 		if calls <= 2 {
-			return ""
+			return activePath()
 		}
 		return blocked
 	}

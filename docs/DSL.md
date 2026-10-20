@@ -327,6 +327,14 @@ limit. `[V]`
   `maxOptionalParts` (6, i.e. 64 keys) the line falls back to the two extremes,
   all-in and all-out, so one pathological line cannot become millions of index
   rows. `[V]`
+- The app reader's recovery layer also indexes unescaped `[text]` and plain
+  `{text}` as optional fragments, and expands slash-separated word forms as a
+  Cartesian product (up to 32 keys). It preserves the original DSL-derived
+  key too; short all-uppercase pairs such as `AC/DC` are not split. Escaped
+  delimiters remain literal. This layer is enabled by default and can be
+  disabled in `state.json` with `"dslTitleRepairs": false`; switching it
+  changes the DSL reader version, so prepared indexes are reported outdated
+  and must be rebuilt to apply the change. `[V]`
 - `(` does not nest; a second one is literal. `)` outside a paren is literal. `[V]`
 - `{…}` may sit **inside** `(…)` and vice versa — one flat loop with an `inParen`
   flag, not a paren scanner, precisely because `(слов{[']}а{[/']}рной)` exists. `[V]`
@@ -766,8 +774,9 @@ reported stale the same way. `[V]`
 
 Seekability matters end to end: `resource.Dir` returns an `*os.File` (seekable), a zip
 entry is **not** seekable, and `store.Media.Resource` returns
-`readSeekNopCloser{*bytes.Reader}` — `io.NopCloser` would hide `Seek` and silently
-disable ranges for every packed dictionary. `[V]`
+`resource.Bytes` returns a seekable reader for in-memory resources, while large
+`media.db` blobs use a chunked seekable reader — `io.NopCloser` would hide `Seek`
+and silently disable ranges for packed dictionaries. `[V]`
 
 ## 10. Resource-name matching (`internal/resource`)
 

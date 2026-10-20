@@ -145,14 +145,14 @@ var busyLines = os.Getenv("WUDICT_BUSY_LINES") == "1"
 // behind but a partial database; that is the failure this prevents, and it is
 // not one more CPU would have prevented.
 //
-// Over stdout, which the shell already reads line by line (ServerProcess
-// logOutput), rather than a callback the exec'd child has no way to make: no
-// port back, no Binder, no JNI (D52). The marker is prefixed so it can never
-// be confused with a log line.
+// The child process reports over stdout, which ServerProcess reads line by
+// line; an in-process shell receives the same state through SetBusyObserver.
+// The stdout marker is prefixed so it cannot be confused with a log line.
 //
 // Fire-and-forget by design. A missed marker costs a foreground service that
 // is not started, so nothing here is worth an error path.
 func emitBusy(busy bool) {
+	notifyBusyObserver(busy)
 	if !busyLines {
 		return
 	}

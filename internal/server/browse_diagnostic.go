@@ -5,6 +5,7 @@ package server
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"runtime/metrics"
@@ -80,8 +81,13 @@ func logBrowseMemory(event string, active, completed, dictionaries int) {
 
 type browseDiagnostic struct {
 	Event                  string `json:"event"`
+	Stage                  string `json:"stage"`
+	Resource               string `json:"resource"`
 	Dict                   string `json:"dict"`
 	Page                   int    `json:"page"`
+	StartedAt              int64  `json:"startedAt"`
+	ElapsedMS              int    `json:"elapsedMs"`
+	DurationMS             int    `json:"durationMs"`
 	Words                  int    `json:"words"`
 	PageBytes              int    `json:"pageBytes"`
 	PageJSONBytes          int    `json:"pageJsonBytes"`
@@ -93,6 +99,7 @@ type browseDiagnostic struct {
 	TotalPages             int    `json:"totalPages"`
 	EstimatedAllPagesBytes int    `json:"estimatedAllPagesBytes"`
 	Letters                int    `json:"letters"`
+	Measured               int    `json:"measured"`
 	Bytes                  int    `json:"bytes"`
 	ReadMS                 int    `json:"readMs"`
 	FetchMS                int    `json:"fetchMs"`
@@ -106,6 +113,35 @@ type browseDiagnostic struct {
 	Active                 int    `json:"active"`
 	Completed              int    `json:"completed"`
 	Dictionaries           int    `json:"dictionaries"`
+	ProgressEvents         int    `json:"progressEvents"`
+	ProgressBytes          int    `json:"progressBytes"`
+	ProgressRenders        int    `json:"progressRenders"`
+	ProgressRenderMS       int    `json:"progressRenderMs"`
+	ProgressRenderMaxMS    int    `json:"progressRenderMaxMs"`
+	ProgressTaskUpdates    int    `json:"progressTaskUpdates"`
+	ProgressTaskUpdateMS   int    `json:"progressTaskUpdateMs"`
+	ProgressTaskMaxMS      int    `json:"progressTaskMaxMs"`
+	ProgressPublished      int    `json:"progressPublished"`
+	ProgressScanned        int    `json:"progressScanned"`
+	ProgressScanTotal      int    `json:"progressScanTotal"`
+	ViewportWidth          int    `json:"viewportWidth"`
+	ViewportHeight         int    `json:"viewportHeight"`
+	ResizeEvents           int    `json:"resizeEvents"`
+	HandlerDelayMaxMS      int    `json:"handlerDelayMaxMs"`
+	FrameDelayMaxMS        int    `json:"frameDelayMaxMs"`
+	PaintDelayMaxMS        int    `json:"paintDelayMaxMs"`
+	ActiveTasks            int    `json:"activeTasks"`
+	RibbonItems            int    `json:"ribbonItems"`
+	RibbonSections         int    `json:"ribbonSections"`
+	RibbonVisible          int    `json:"ribbonVisible"`
+	RibbonAnchor           int    `json:"ribbonAnchor"`
+	RibbonAdapterMS        int    `json:"ribbonAdapterMs"`
+	RibbonBuildMS          int    `json:"ribbonBuildMs"`
+	RibbonPaintMS          int    `json:"ribbonPaintMs"`
+	ResizeStartWidth       int    `json:"resizeStartWidth"`
+	ResizeBurstMS          int    `json:"resizeBurstMs"`
+	RibbonMetricsChanged   bool   `json:"ribbonMetricsChanged"`
+	RibbonPaintDeferred    bool   `json:"ribbonPaintDeferred"`
 }
 
 func (s *Server) handleBrowseDiagnostic(w http.ResponseWriter, r *http.Request) {
@@ -130,22 +166,77 @@ func (s *Server) handleBrowseDiagnostic(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, "invalid diagnostic", http.StatusBadRequest)
 		return
 	}
-	switch d.Event {
-	case "alphabet_cache_miss", "alphabet_cache_invalid", "alphabet_cache_read_failed", "alphabet_cache_restore", "alphabet_cache_saved", "alphabet_cache_save_failed", "page_request", "page_response", "page_ready", "render", "page_cache_saved", "page_cache_restored", "wildcard_cache_checkpoint", "wildcard_cache_complete", "wildcard_cache_restored", "wildcard_memory_start", "wildcard_memory_sample", "wildcard_memory_end":
-	default:
+	if err := recordBrowseDiagnostic(d); err != nil {
 		http.Error(w, "invalid diagnostic", http.StatusBadRequest)
 		return
 	}
-	if len(d.Dict) > 256 || strings.ContainsAny(d.Dict, "\r\n") ||
-		!bounded(d.Page, 1_000_000) || !bounded(d.Words, 1_000_000) || !bounded(d.PageBytes, 1_000_000_000) || !bounded(d.PageJSONBytes, 100_000_000) ||
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func recordBrowseDiagnostic(d browseDiagnostic) error {
+	switch d.Event {
+	case "alphabet_cache_miss", "alphabet_cache_invalid", "alphabet_cache_read_failed", "alphabet_cache_restore", "alphabet_cache_saved", "alphabet_cache_save_failed", "alphabet_progress", "alphabet_done", "alphabet_measure_done", "alphabet_aborted", "alphabet_error", "alphabet_task", "page_request", "page_response", "page_ready", "page_fetch_failed", "render", "page_cache_saved", "page_cache_restored", "wildcard_cache_checkpoint", "wildcard_cache_complete", "wildcard_cache_restored", "wildcard_memory_start", "wildcard_memory_sample", "wildcard_memory_end", "wildcard_progress", "wildcard_ribbon", "dictionary_picker_open", "dictionary_list_client", "article_transition", "browse_navigation", "navigation_resource", "storage_bootstrap", "work_resize", "ribbon_guard":
+	default:
+		return errors.New("invalid diagnostic")
+	}
+	if len(d.Stage) > 64 || strings.ContainsAny(d.Stage, "\r\n") || len(d.Dict) > 256 || strings.ContainsAny(d.Dict, "\r\n") ||
+		len(d.Resource) > 256 || strings.ContainsAny(d.Resource, "\r\n") ||
+		!bounded(d.Page, 1_000_000) || !bounded(d.Words, 1_000_000_000) || !bounded(d.PageBytes, 1_000_000_000) || !bounded(d.PageJSONBytes, 100_000_000) ||
 		!bounded(d.CachePages, 1_000_000) || !bounded(d.CacheBytes, 1_000_000_000_000) || !bounded(d.CacheJSONBytes, 100_000_000) ||
 		!bounded(d.CacheStoredPages, 1_000_000) || !bounded(d.CacheStoredBytes, 100_000_000) ||
-		!bounded(d.TotalPages, 1_000_000) || !bounded(d.EstimatedAllPagesBytes, 1_000_000_000_000) || !bounded(d.Letters, 1_000_000) || !bounded(d.Bytes, 10_000_000) ||
+		!bounded(d.TotalPages, 1_000_000) || !bounded(d.EstimatedAllPagesBytes, 1_000_000_000_000) || !bounded(d.Letters, 1_000_000) || !bounded(d.Measured, 1_000_000) || !bounded(d.Bytes, 1_000_000_000) ||
 		!bounded(d.ReadMS, 600_000) || !bounded(d.FetchMS, 600_000) || !bounded(d.TotalMS, 600_000) || !bounded(d.WordsMS, 600_000) ||
 		!bounded(d.StripBuildMS, 600_000) || !bounded(d.StripMarkMS, 600_000) || !bounded(d.Status, 599) ||
-		!bounded(d.Active, 100_000) || !bounded(d.Completed, 100_000) || !bounded(d.Dictionaries, 100_000) {
-		http.Error(w, "invalid diagnostic", http.StatusBadRequest)
-		return
+		!bounded(d.ElapsedMS, 86_400_000) || !bounded(d.DurationMS, 86_400_000) || d.StartedAt < 0 || d.StartedAt > 10_000_000_000_000 ||
+		!bounded(d.Active, 100_000) || !bounded(d.Completed, 100_000) || !bounded(d.Dictionaries, 100_000) ||
+		!bounded(d.ProgressEvents, 10_000_000) || !bounded(d.ProgressBytes, 10_000_000_000) ||
+		!bounded(d.ProgressRenders, 10_000_000) || !bounded(d.ProgressRenderMS, 86_400_000) ||
+		!bounded(d.ProgressRenderMaxMS, 86_400_000) || !bounded(d.ProgressTaskUpdates, 10_000_000) ||
+		!bounded(d.ProgressTaskUpdateMS, 86_400_000) || !bounded(d.ProgressTaskMaxMS, 86_400_000) ||
+		!bounded(d.ProgressPublished, 10_000_000) || !bounded(d.ProgressScanned, 1_000_000_000) ||
+		!bounded(d.ProgressScanTotal, 1_000_000_000) || !bounded(d.ViewportWidth, 100_000) ||
+		!bounded(d.ViewportHeight, 100_000) || !bounded(d.ResizeEvents, 1_000_000) ||
+		!bounded(d.HandlerDelayMaxMS, 86_400_000) || !bounded(d.FrameDelayMaxMS, 86_400_000) ||
+		!bounded(d.PaintDelayMaxMS, 86_400_000) || !bounded(d.ActiveTasks, 100_000) ||
+		!bounded(d.RibbonItems, 1_000_000) || !bounded(d.RibbonSections, 1_000_000) ||
+		!bounded(d.RibbonVisible, 100_000) || !bounded(d.RibbonAnchor, 1_000_000) ||
+		!bounded(d.RibbonAdapterMS, 600_000) || !bounded(d.RibbonBuildMS, 600_000) ||
+		!bounded(d.RibbonPaintMS, 600_000) || !bounded(d.ResizeStartWidth, 100_000) ||
+		!bounded(d.ResizeBurstMS, 600_000) {
+		return errors.New("invalid diagnostic")
+	}
+	if d.Event == "article_transition" {
+		switch d.Stage {
+		case "document_response_start", "document_response_end", "dom_interactive", "app_script_ready", "startup_dependencies_ready", "first_dictionary_row", "dictionary_list_ready", "search_start", "search_stream_begin", "first_search_response", "first_article_painted", "search_end", "words_click", "browse_return_script_ready", "browse_return_page_ready", "browse_return_ready", "browse_return_restore_position", "browse_return_bfcache":
+		default:
+			return errors.New("invalid diagnostic")
+		}
+		logx.System("browse_article_transition nav_start_ms=%d stage=%s dict=%q browse_page=%d elapsed_ms=%d duration_ms=%d",
+			d.StartedAt, d.Stage, d.Dict, d.Page, d.ElapsedMS, d.DurationMS)
+		return nil
+	}
+	if d.Event == "browse_navigation" {
+		switch d.Stage {
+		case "document_response_start", "document_response_end", "dom_interactive", "script_ready", "chooser_request", "chooser_response", "chooser_ready", "page_request", "page_response", "page_cache_restored", "first_words_painted", "page_ready", "alphabet_ready", "load_failed":
+		default:
+			return errors.New("invalid diagnostic")
+		}
+		logx.System("browse_navigation nav_start_ms=%d stage=%s dict=%q browse_page=%d elapsed_ms=%d duration_ms=%d words=%d status=%d",
+			d.StartedAt, d.Stage, d.Dict, d.Page, d.ElapsedMS, d.DurationMS, d.Words, d.Status)
+		return nil
+	}
+	if d.Event == "navigation_resource" {
+		if d.Resource == "" || !strings.HasPrefix(d.Resource, "/assets/") && !strings.HasPrefix(d.Resource, "/style/") {
+			return errors.New("invalid diagnostic")
+		}
+		logx.System("navigation_resource nav_start_ms=%d resource=%q start_ms=%d duration_ms=%d response_end_ms=%d elapsed_ms=%d",
+			d.StartedAt, d.Resource, d.FetchMS, d.DurationMS, d.TotalMS, d.ElapsedMS)
+		return nil
+	}
+	if d.Event == "storage_bootstrap" {
+		logx.System("storage_bootstrap nav_start_ms=%d elapsed_ms=%d first_document_script_ms=%d document_script_start_ms=%d bootstrap_start_ms=%d i18n_markup_ms=%d duration_ms=%d restored=%t",
+			d.StartedAt, d.ElapsedMS, d.StripBuildMS, d.ReadMS, d.FetchMS, d.WordsMS, d.DurationMS, d.Restored)
+		return nil
 	}
 	if strings.HasPrefix(d.Event, "wildcard_memory_") {
 		if d.Event == "wildcard_memory_start" {
@@ -154,12 +245,61 @@ func (s *Server) handleBrowseDiagnostic(w http.ResponseWriter, r *http.Request) 
 			stopBrowseMemoryMonitor()
 		}
 		logBrowseMemory(d.Event, d.Active, d.Completed, d.Dictionaries)
-		w.WriteHeader(http.StatusNoContent)
-		return
+		return nil
+	}
+	if d.Event == "wildcard_progress" {
+		logx.System("wildcard_progress dict=%q stage=%s elapsed_ms=%d stream_events=%d stream_bytes=%d published_updates=%d ui_renders=%d ui_render_ms=%d ui_render_max_ms=%d task_updates=%d task_update_ms=%d task_update_max_ms=%d scanned=%d scan_total=%d",
+			d.Dict, d.Stage, d.ReadMS, d.ProgressEvents, d.ProgressBytes, d.ProgressPublished, d.ProgressRenders,
+			d.ProgressRenderMS, d.ProgressRenderMaxMS, d.ProgressTaskUpdates, d.ProgressTaskUpdateMS, d.ProgressTaskMaxMS,
+			d.ProgressScanned, d.ProgressScanTotal)
+		return nil
+	}
+	if d.Event == "wildcard_ribbon" {
+		switch d.Stage {
+		case "build", "resize":
+		default:
+			return errors.New("invalid diagnostic")
+		}
+		logx.System("wildcard_ribbon stage=%s dict=%q items=%d sections=%d visible=%d anchor=%d adapter_ms=%d build_ms=%d paint_ms=%d viewport_width=%d viewport_height=%d resize_events=%d resize_start_width=%d resize_burst_ms=%d metrics_changed=%t paint_deferred=%t",
+			d.Stage, d.Dict, d.RibbonItems, d.RibbonSections, d.RibbonVisible, d.RibbonAnchor,
+			d.RibbonAdapterMS, d.RibbonBuildMS, d.RibbonPaintMS, d.ViewportWidth, d.ViewportHeight,
+			d.ResizeEvents, d.ResizeStartWidth, d.ResizeBurstMS, d.RibbonMetricsChanged, d.RibbonPaintDeferred)
+		return nil
+	}
+	if d.Event == "dictionary_picker_open" {
+		logx.System("dictionary_picker_diag group_fetch_ms=%d rows_render_ms=%d rows=%d total_ms=%d",
+			d.FetchMS, d.WordsMS, d.Words, d.TotalMS)
+		return nil
+	}
+	if d.Event == "alphabet_task" {
+		logx.System("browse_alphabet_task dict=%q stage=%s active_tasks=%d panel_hidden=%t", d.Dict, d.Stage, d.Words, d.Status == 1)
+		return nil
+	}
+	if d.Event == "dictionary_list_client" {
+		logx.System("dictionary_list_client dictionaries=%d begin_ms=%d first_row_ms=%d stream_ms=%d render_ms=%d",
+			d.Words, d.FetchMS, d.WordsMS, d.TotalMS, d.StripBuildMS)
+		return nil
+	}
+	if d.Event == "alphabet_measure_done" {
+		logx.System("browse_alphabet_measure dict=%q letters=%d measured=%d chunks=%d elapsed_ms=%d", d.Dict, d.Letters, d.Measured, d.Words, d.StripBuildMS)
+		return nil
+	}
+	if d.Event == "work_resize" {
+		logx.System("work_resize width=%d height=%d events=%d burst_ms=%d handler_delay_max_ms=%d frame_delay_max_ms=%d paint_delay_max_ms=%d active_tasks=%d",
+			d.ViewportWidth, d.ViewportHeight, d.ResizeEvents, d.DurationMS, d.HandlerDelayMaxMS, d.FrameDelayMaxMS, d.PaintDelayMaxMS, d.ActiveTasks)
+		return nil
+	}
+	if d.Event == "ribbon_guard" {
+		if d.Resource != "browse" && d.Resource != "wildcards" || d.Stage != "geometry" && d.Stage != "entry" {
+			return errors.New("invalid diagnostic")
+		}
+		logx.SystemError("ribbon_guard mode=%q reason=%q items=%d offsets=%d widths=%d from=%d to=%d",
+			d.Resource, d.Stage, d.Letters, d.Measured, d.Words, d.Page, d.TotalPages)
+		return nil
 	}
 	logx.System("browse_diag event=%s dict=%q page=%d words=%d page_heap_est_bytes=%d page_json_bytes=%d cache_pages=%d cache_heap_est_bytes=%d cache_json_bytes=%d cache_stored_pages=%d cache_stored_bytes=%d total_pages=%d all_pages_heap_est_bytes=%d letters=%d bytes=%d read_ms=%d fetch_ms=%d total_ms=%d words_ms=%d strip_build_ms=%d strip_mark_ms=%d status=%d restored=%t stream_alphabet=%t",
 		d.Event, d.Dict, d.Page, d.Words, d.PageBytes, d.PageJSONBytes, d.CachePages, d.CacheBytes, d.CacheJSONBytes, d.CacheStoredPages, d.CacheStoredBytes, d.TotalPages, d.EstimatedAllPagesBytes, d.Letters, d.Bytes, d.ReadMS, d.FetchMS, d.TotalMS, d.WordsMS, d.StripBuildMS, d.StripMarkMS, d.Status, d.Restored, d.StreamAlphabet)
-	w.WriteHeader(http.StatusNoContent)
+	return nil
 }
 
 func bounded(n, max int) bool { return n >= 0 && n <= max }

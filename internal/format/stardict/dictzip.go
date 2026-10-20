@@ -199,8 +199,13 @@ func (d *dzReader) chunk(i int) ([]byte, error) {
 	out = out[:n]
 
 	d.mu.Lock()
+	// Two readers can inflate the same chunk at once; only the first insert
+	// joins the FIFO, or its key would sit in it twice and the second
+	// eviction would drop a later, still-fresh copy.
+	if _, dup := d.cache[i]; !dup {
+		d.cacheKeys = append(d.cacheKeys, i)
+	}
 	d.cache[i] = out
-	d.cacheKeys = append(d.cacheKeys, i)
 	if len(d.cacheKeys) > dzCacheSize {
 		delete(d.cache, d.cacheKeys[0])
 		d.cacheKeys = d.cacheKeys[1:]

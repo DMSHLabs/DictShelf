@@ -13,7 +13,6 @@ let groupActivePanel=null;
 let newGroupSelectedFilter=null,groupFilterMode="",groupFilterShowAll=false,groupFilterCollapsed=new Set();
 let groupEditorMode="",groupDraftMembers=new Set(),groupDraftFilter=null,groupDraftLinked=false,groupSavedEditPreference=false,groupDraftChooseForLink=false;
 let groupMemberDraft=null;
-let justCreatedGroup=null;
 let groupOrderSelection=null,groupOrderLongPress=null,groupOrderSuppressClick=false;
 let groupPinEditing=null,groupPinCutoff=null;
 const groupOrderActions=document.createElement('div');groupOrderActions.id='groupOrderActions';
@@ -52,7 +51,8 @@ function updateAvailableSearch(){groupAvailableListSearch.refresh()}
 const groupMemberListSearch=window.wudictListSearch.create({
   root:$('groupRows'),itemSelector:'.group-row',dock:$('groupMembersSearchDock'),
   scrollContainer:$('groupRows'),inputId:'groupMembersSearch',
-  highlightSelector:'.group-dictionary-name',initiallyFiltering:true,labels:groupSearchLabels,
+  highlightSelector:'.group-dictionary-name',initiallyFiltering:true,
+  storageKey:'wudict_list_search_mode_group_members',labels:groupSearchLabels,
   onUpdate:({query,filtering,visible})=>{
     const rows=$('groupRows');rows.querySelector('.group-filter-empty')?.remove();
     if(filtering&&query&&!visible){
@@ -65,7 +65,8 @@ const groupMemberListSearch=window.wudictListSearch.create({
 const groupAvailableListSearch=window.wudictListSearch.create({
   root:$('groupOtherRows'),itemSelector:'.group-row',dock:$('groupAvailableSearchDock'),
   scrollContainer:$('groupOtherRows'),inputId:'groupAvailableSearch',
-  highlightSelector:'.group-dictionary-name',initiallyFiltering:true,labels:groupSearchLabels,
+  highlightSelector:'.group-dictionary-name',initiallyFiltering:true,
+  storageKey:'wudict_list_search_mode_group_available',labels:groupSearchLabels,
   onUpdate:({query,filtering,visible})=>{
     const rows=$('groupOtherRows');rows.querySelector('.group-filter-empty')?.remove();
     if(!visible){
@@ -123,6 +124,36 @@ function groupErrorText(message){
   return keys.has(message)?tx(keys.get(message)):message;
 }
 async function groupRequest(path,method,body){
+  if(window.wudictAndroidGo){
+    const action={
+      'GET /api/user-groups':'userGroups', 'GET /api/groups':'get',
+      'POST /api/user-groups':'createGroup', 'PUT /api/user-groups/name':'renameGroup',
+      'DELETE /api/user-groups':'deleteGroup', 'PUT /api/user-groups/member':'setGroupMember',
+      'PUT /api/user-groups/membership':'replaceGroupMembership', 'PUT /api/user-groups/members':'addGroupMembers',
+      'PUT /api/user-groups/link':'linkGroup', 'PUT /api/user-groups/order':'saveGroupOrder'
+    }[method+' '+path];
+    if(action){
+      try{
+        const result=JSON.parse(window.wudictAndroidGo.groups(action,body===undefined?'':JSON.stringify(body)));
+        if(!result.ok)throw new Error(result.error||'Dictionary Groups operation failed');
+        return result.value;
+      }catch(error){throw new Error(groupErrorText(error.message))}
+    }
+  }
+  if(typeof window.wudictNativeCall==='function'){
+    const action={
+      'GET /api/user-groups':'userGroups', 'GET /api/groups':'groups',
+      'POST /api/user-groups':'createGroup', 'PUT /api/user-groups/name':'renameGroup',
+      'DELETE /api/user-groups':'deleteGroup', 'PUT /api/user-groups/member':'setGroupMember',
+      'PUT /api/user-groups/membership':'replaceGroupMembership', 'PUT /api/user-groups/members':'addGroupMembers',
+      'PUT /api/user-groups/link':'linkGroup', 'PUT /api/user-groups/order':'saveGroupOrder'
+    }[method+' '+path];
+    if(action){
+      try{return await window.wudictNativeCall(action,body===undefined?'':JSON.stringify(body))}
+      catch(error){throw new Error(groupErrorText(error.message))}
+    }
+  }
+  if(window.wudictAndroidGo)throw new Error('Dictionary Groups operation is not connected to the Go bridge');
   const response=await fetch(path,{method,headers:{"Content-Type":"application/json"},body:body===undefined?undefined:JSON.stringify(body)});
   if(!response.ok)throw new Error(groupErrorText((await response.text()).trim()));
   return response.json();
@@ -141,9 +172,7 @@ function groupFilters(){
 }
 async function loadConfiguredGroupFilters(){
   try{
-    const response=await fetch('/api/groups');
-    if(!response.ok)return;
-    const data=await response.json();
+    const data=await groupRequest('/api/groups','GET');
     configuredGroupFilters=(data.facets||[]).flatMap((f,fo)=>(f.groups||[]).map(g=>({f:f.id,v:g.id,fl:f.label,vl:g.label,fo:fo+3})));
   }catch(error){console.warn('could not load filters:',error)}
 }
@@ -255,7 +284,7 @@ function renderGroupLink(group){
 }
 function updateGroupSplit(){
   const editor=$('groupEditor'),lists=$('groupLists');
-  editor.classList.remove('compact-controls');lists.classList.remove('hide-members','members-sized');
+  editor.classList.remove('compact-controls');lists.classList.remove('members-sized');
   const members=$('groupMembers'),available=$('groupAvailable');
   members.classList.remove('search-collapsed');available.classList.remove('search-collapsed');
   if(!editor.open)return;
@@ -264,42 +293,39 @@ function updateGroupSplit(){
     return;
   }
   const memberRows=$('groupRows'),availableRows=$('groupOtherRows');
+  const gap=parseFloat(getComputedStyle(lists).rowGap)||0;
+  const listsHeight=lists.clientHeight;
+  const halfHeight=Math.max(0,(listsHeight-gap)/2);
+  const memberRow=groupRowHeight('groupRows'),availableRow=groupRowHeight('groupOtherRows');
+  if(groupActivePanel==='available')editor.classList.add('compact-controls');
+
+  // Keep the inactive panel's search dock out of the way when its half cannot
+  // show four rows; the row list itself stays visible and scrollable.
+  if(groupActivePanel==='members'&&halfHeight<groupPanelChromeHeight(available,availableRows)+4*availableRow)
+    available.classList.add('search-collapsed');
+  if(groupActivePanel==='available'&&halfHeight<groupPanelChromeHeight(members,memberRows)+4*memberRow)
+    members.classList.add('search-collapsed');
+
   const memberChrome=groupPanelChromeHeight(members,memberRows);
   const availableChrome=groupPanelChromeHeight(available,availableRows);
-  const memberNatural=memberChrome+groupRowsContentHeight(memberRows);
-  const gap=parseFloat(getComputedStyle(lists).rowGap)||0;
-  if(groupActivePanel==='members'){
-    const listsHeight=lists.clientHeight;
-    const availableRow=groupRowsCapacityHeight(availableRows,1);
-    const fullLimit=listsHeight-gap-availableChrome-availableRow;
-    if(memberNatural>fullLimit)available.classList.add('search-collapsed');
-    const availableReserve=groupPanelChromeHeight(available,availableRows,available.classList.contains('search-collapsed'))+availableRow;
-    const wanted=window.wudictNativeShell?memberNatural:Math.max(memberNatural,listsHeight*.7);
-    const memberHeight=Math.max(0,Math.min(wanted,listsHeight-gap-availableReserve));
+  const memberTen=memberChrome+groupRowsCapacityHeight(memberRows,10);
+  const availableTen=availableChrome+groupRowsCapacityHeight(availableRows,10);
+  const memberOne=memberChrome+groupRowsCapacityHeight(memberRows,1);
+  const availableOne=availableChrome+groupRowsCapacityHeight(availableRows,1);
+  const bothFitTen=halfHeight>=memberTen&&halfHeight>=availableTen;
+
+  if(groupActivePanel==='members'||groupActivePanel==='available'){
+    let memberHeight=halfHeight;
+    if(!bothFitTen){
+      const activeTen=groupActivePanel==='members'?memberTen:availableTen;
+      const inactiveOne=groupActivePanel==='members'?availableOne:memberOne;
+      const activeHeight=Math.min(activeTen,Math.max(0,listsHeight-gap-inactiveOne));
+      memberHeight=groupActivePanel==='members'?activeHeight:listsHeight-gap-activeHeight;
+      memberHeight=Math.max(0,Math.min(memberHeight,listsHeight-gap));
+    }
     lists.style.setProperty('--group-members-height',Math.ceil(memberHeight)+'px');
     lists.classList.add('members-sized');
-  }else if(groupActivePanel==='available'){
-    editor.classList.add('compact-controls');
-    const listsHeight=lists.clientHeight;
-    if(window.wudictNativeShell){
-      const memberMin=groupPanelChromeHeight(members,memberRows,true)+groupRowsCapacityHeight(memberRows,3);
-      const availableMin=availableChrome+groupRowsCapacityHeight(availableRows,5);
-      if(memberMin+availableMin+gap<=listsHeight){
-        const memberHeight=Math.max(memberMin,Math.min(memberNatural,listsHeight-availableMin-gap));
-        lists.style.setProperty('--group-members-height',Math.ceil(memberHeight)+'px');
-        lists.classList.add('members-sized');
-      }else lists.classList.add('hide-members');
-    }else{
-      const memberMin=groupPanelChromeHeight(members,memberRows,true)+groupRowsCapacityHeight(memberRows,1);
-      const availableMin=availableChrome+groupRowsCapacityHeight(availableRows,1);
-      const memberHeight=Math.min(memberNatural,
-        Math.max(memberMin,Math.min(listsHeight*.3,listsHeight-availableMin-gap)));
-      lists.style.setProperty('--group-members-height',Math.ceil(memberHeight)+'px');
-      lists.classList.add('members-sized');
-    }
   }
-  if(groupActivePanel!=='members'&&$('groupRows').clientHeight<4*groupRowHeight('groupRows'))members.classList.add('search-collapsed');
-  if(groupActivePanel!=='available'&&$('groupOtherRows').clientHeight<4*groupRowHeight('groupOtherRows'))available.classList.add('search-collapsed');
 }
 function groupRowHeight(id){return Math.max(44,$(id).querySelector('.group-row:not([hidden])')?.getBoundingClientRect().height||0)}
 function groupPanelChromeHeight(panel,rows,withoutSearch=false){
@@ -310,15 +336,6 @@ function groupPanelChromeHeight(panel,rows,withoutSearch=false){
     const childStyle=getComputedStyle(child);
     if(childStyle.display==='none')continue;
     height+=child.getBoundingClientRect().height+(parseFloat(childStyle.marginTop)||0)+(parseFloat(childStyle.marginBottom)||0);
-  }
-  return height;
-}
-function groupRowsContentHeight(rows){
-  let height=0;
-  for(const child of rows.children){
-    if(child.hidden)continue;
-    const style=getComputedStyle(child);
-    height+=child.getBoundingClientRect().height+(parseFloat(style.marginTop)||0)+(parseFloat(style.marginBottom)||0);
   }
   return height;
 }
@@ -434,6 +451,8 @@ function renderGroupRows(){
   $('groupControls').inert=arranging;
   $('groupControls').setAttribute('aria-disabled',String(arranging));
   const showEmptyHint=!nameMode&&!filtering&&!group.readonly&&!group.filter&&members.size===0;
+  $('groupEmptyHint').append($('groupEditToggle'));
+  if(!showEmptyHint)$('groupOrderToolbar').append($('groupEditToggle'));
   $('groupLists').classList.toggle('editing',filtering);
   $('groupEditor').classList.toggle('edit-members',filtering&&!nameMode);
   $('groupMemberDraftActions').hidden=!!(locked||nameMode||selecting);
@@ -450,7 +469,6 @@ function renderGroupRows(){
   $("groupHint").hidden=true;
   $("groupHint").textContent='';
   $('groupEmptyHint').hidden=!showEmptyHint;
-  $('groupEmptyHint').querySelector('svg').hidden=group.id===justCreatedGroup;
   $('groupEmptyHintText').textContent=showEmptyHint?tx('dictUI.emptyGroup'):'';
   for(const d of filtering?inside.concat(filteredOutside):inside){
     const label=document.createElement(selecting||(!locked&&showAll.checked)?"label":"div");label.className="group-row";
@@ -720,7 +738,6 @@ $("closeGroups").onclick=()=>{
 };
 $("groupEditor").addEventListener("close",()=>{
   cancelGroupOrderLongPress();groupOrderSelection=null;groupOrderSuppressClick=false;groupPinEditing=null;groupPinCutoff=null;
-  justCreatedGroup=null;
   if(groupEditorMode){groupEditorMode='';groupShowAllPreferred=groupSavedEditPreference;groupDraftMembers.clear();groupDraftFilter=null;groupDraftLinked=false;$('groupNameInline').value='';}
   $('editGroups').focus();
 });
@@ -895,7 +912,7 @@ async function saveGroupNameEdit(){
       const filter=groupDraftFilter?{facet:groupDraftFilter.facet,value:groupDraftFilter.value}:null;
       const body={name:$('groupNameInline').value,filter,linked:!!filter&&groupDraftLinked};
       if(!groupDraftLinked)body.members=[...groupDraftMembers];
-      const group=await groupRequest('/api/user-groups','POST',body);selectedGroup=group.id;justCreatedGroup=group.id;
+      const group=await groupRequest('/api/user-groups','POST',body);selectedGroup=group.id;
     }else await groupRequest('/api/user-groups/name','PUT',{group:selectedGroup,name:$('groupNameInline').value,filter:groupDraftFilter,linked:groupDraftLinked});
     userGroups=await groupRequest('/api/user-groups','GET');
     groupEditorMode='';groupDraftMembers.clear();groupDraftFilter=null;groupDraftLinked=false;groupShowAllPreferred=false;
@@ -918,14 +935,14 @@ $('groupSelect').onchange=()=>{
 function groupSelectChanged(){
   window.wudictThemedSelects?.group?.sync();
   cancelGroupOrderLongPress();groupOrderSelection=null;groupOrderSuppressClick=false;groupPinEditing=null;groupPinCutoff=null;
-  justCreatedGroup=null;
   groupShowAllPreferred=false;groupActivePanel=null;
   $('groupControls').classList.remove('active');$('groupMembers').classList.remove('active');$('groupAvailable').classList.remove('active');
   groupAvailableListSearch.clear();groupMemberListSearch.clear();$('groupError').textContent='';renderGroupRows();
 }// Promise.all resolves to an array: passing it to loadDicts would enable
 // rescan and wait for index maintenance instead of listing dictionaries.
 Promise.all([loadPrefs(),loadConfig(),loadUserCSS(),loadPickerGroups()])
-  .then(()=>loadDicts()).then(ok=>{if(ok)applyURL()}).catch(error=>bootFailed(error.message));
+  .then(()=>{logBrowseArticleTransition("startup_dependencies_ready");return loadDicts()})
+  .then(ok=>{if(ok&&!initialURLApplied)applyURL()}).catch(error=>bootFailed(error.message));
 // The preset layers are independent of the boot chain: their app halves are
 // server-injected <link>s and their article halves join the article sheet
 // whenever this answer lands, which is why this is fire-and-forget rather

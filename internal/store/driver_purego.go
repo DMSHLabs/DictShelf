@@ -43,3 +43,7 @@ func dsnRO(path string) string {
 func dsnIngest(path string) string {
 	return "file:" + uriPath(path) + "?_pragma=journal_mode(OFF)&_pragma=synchronous(OFF)"
 }
+
+func dsnWildcardCache(path string) string {
+	return "file:" + uriPath(path) + "?mode=rwc&_pragma=journal_mode(DELETE)&_pragma=synchronous(NORMAL)&_pragma=busy_timeout(5000)"
+}

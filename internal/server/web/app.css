@@ -127,6 +127,20 @@ html[data-theme="dark"]{color-scheme:dark}
   *::-webkit-scrollbar-thumb{background:color-mix(in srgb,var(--fg) 38%,transparent);
     border:2px solid transparent;background-clip:padding-box;border-radius:10px}
   *::-webkit-scrollbar-thumb:hover{background-color:color-mix(in srgb,var(--fg) 62%,transparent)}
+  /* The Windows viewport scrollbar follows the same sampled window color as
+     the native caption, with enough foreground mixed in to stay visible over
+     wallpapers whose paper is close to that color. */
+  html[data-desktop-window-color]{
+    --desktop-scrollbar-thumb:color-mix(in srgb,var(--desktop-window-color) 55%,var(--fg));
+    --desktop-scrollbar-thumb-hover:color-mix(in srgb,var(--desktop-window-color) 42%,var(--fg));
+    scrollbar-color:var(--desktop-scrollbar-thumb) transparent
+  }
+  html[data-desktop-window-color]::-webkit-scrollbar-thumb{
+    background:var(--desktop-scrollbar-thumb)
+  }
+  html[data-desktop-window-color]::-webkit-scrollbar-thumb:hover{
+    background-color:var(--desktop-scrollbar-thumb-hover)
+  }
 }
 /* --wd-inset-top / --wd-inset-bottom are set by a host that puts the page
    under the system's own chrome - the Android shell's edge-to-edge mode. They
@@ -337,22 +351,25 @@ html[data-desktop-image] #articleFindStrip{background-image:var(--paper-bk-image
 #maskSubmit{position:absolute;right:.25em;top:50%;transform:translateY(-50%);border:1px solid var(--accent);border-radius:6px;background:var(--accent);color:var(--bg);cursor:pointer;min-width:2em;height:2em;font-weight:700}
 #maskSubmit[hidden],#maskProgress[hidden],#maskView[hidden]{display:none}
 body.mask-view-active .qbox input{padding-right:2.8em}
-#maskProgress{display:inline-flex;align-items:center;gap:.25em;white-space:nowrap;color:var(--label);font-size:calc(var(--ui-font-addition) * 1rem)}
-#maskCount{min-width:2ch;text-align:right}
+#maskProgress{display:flex;align-items:center;justify-content:space-between;gap:.5em;min-width:0;white-space:nowrap;color:var(--label);font-size:inherit}
+#maskCount{flex:none;min-width:2ch;text-align:right}
+.mask-total{display:inline-flex;align-items:center;gap:.3em;flex:none}
 #maskPage{font:inherit;font-variant-numeric:tabular-nums;white-space:nowrap}
-#maskProgress button{min-width:1.8em;min-height:1.8em;padding:0 .3em;color:var(--fg);background:var(--bg-card);border:1px solid var(--line);border-radius:6px;cursor:pointer}
+#maskProgress button{box-sizing:border-box;flex:none;height:calc(var(--ui-edit_control-height) * 1.5rem);margin:0;padding:0 .5em;color:var(--fg);background:var(--bg-card);border:1px solid var(--line);border-radius:6px;font:inherit;cursor:pointer}
+#maskProgress :is(#maskPrev,#maskNext){width:calc(var(--ui-edit_control-height) * 1.5rem);padding:0}
 #maskProgress button:disabled{opacity:.4;cursor:default}
 /* Keep the search controls visible while moving through a long mask list. */
 body.mask-view-active{--stick:var(--barh)}
 body.mask-view-active .bar{transform:none!important}
 body.mask-view-active #out,body.mask-view-active #sbar{display:none}
-body.mask-view-active{padding-bottom:calc(var(--mask-dock-height,4.5rem) + .5rem)}
+body.mask-view-active{box-sizing:border-box;display:flex;flex-direction:column;height:100dvh;overflow:hidden;padding-bottom:calc(var(--mask-dock-height,4.5rem) + .5rem)}
+body.mask-view-active main.col.container{box-sizing:border-box;display:flex;flex:1 1 auto;flex-direction:column;min-height:0;overflow:hidden;padding-bottom:0}
 .mask-search-controls[hidden]{display:none}
 .mask-search-controls{position:fixed;left:0;right:0;bottom:0;z-index:8;display:flex;flex-direction:column;align-items:center;gap:.45rem;
   padding:.5rem .9rem max(.5rem,env(safe-area-inset-bottom));background:var(--bar);backdrop-filter:saturate(1.6) blur(8px);border-top:1px solid var(--line)}
 html:is([data-shell-sepia],[data-shell-image],[data-desktop-image]) .mask-search-controls{
   background:var(--paper-bg,var(--bg));backdrop-filter:none}
-.mask-dock{position:static;width:100%;max-width:54rem;padding:0;border:0;background:transparent;backdrop-filter:none;font-size:calc(var(--ui-edit_control-font) * 1rem)}
+.mask-dock{position:static;width:100%;max-width:none;padding:0;border:0;background:transparent;backdrop-filter:none;font-size:calc(var(--ui-edit_control-font) * 1rem)}
 .mask-search-progress{box-sizing:border-box;display:flex;align-items:center;gap:.55em;width:100%;max-width:54rem;min-height:2.3em;
   padding:.35em .55em;border:1px solid var(--accent);border-radius:8px;background-color:var(--bg);
   background-image:repeating-linear-gradient(135deg,color-mix(in srgb,var(--accent) 13%,transparent) 0px,
@@ -367,20 +384,40 @@ html:is([data-shell-sepia],[data-shell-image],[data-desktop-image]) .mask-search
 .mask-search-progress button:hover{border-color:var(--accent);color:var(--accent)}
 @media(prefers-reduced-motion:reduce){.mask-search-spinner{animation:none;border-color:var(--accent)}}
 .mask-words button.mask-find-current{background:var(--line-soft);outline:2px solid var(--accent);outline-offset:-2px}
-#maskView{margin-top:var(--sp-2);background:var(--bg-card);border:1px solid var(--line);border-radius:10px;overflow:clip}
-.mask-chrome{position:sticky;top:var(--stick);z-index:4;background:var(--paper-bg,var(--bg-card))}
-.mask-head{position:static;display:flex;align-items:center;gap:.5em;padding:.55em .7em;background:var(--paper-bg,var(--bg-card));border-bottom:1px solid var(--line)}
-.mask-head select{flex:1;min-width:0;max-width:none}
-.mask-head .themed-select-btn{flex:1;min-width:0;width:auto;max-width:none}
-html[data-shell-image] .mask-head .themed-select-btn{background-color:var(--paper-bg,var(--bg));background-image:linear-gradient(#ffffff24,#ffffff24),var(--paper-bk-image);background-size:100% 100%}
+#maskView{display:flex;flex:1 1 auto;flex-direction:column;min-height:0;margin-top:var(--sp-2);background:var(--bg-card);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.mask-chrome{flex:none;z-index:4;background:var(--paper-bg,var(--bg-card));border-bottom:1px solid var(--line)}
+.mask-head{position:static;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,23ch),1fr));align-items:center;gap:.5em 1em;padding:.55em .7em;background:var(--paper-bg,var(--bg-card));border-bottom:1px solid var(--line);font-size:calc(var(--ui-edit_control-font) * 1rem)}
+.mask-head #maskDict{container:mask-dictionary/inline-size;min-width:0;width:100%;height:calc(var(--ui-edit_control-height) * 1.5rem);max-width:none;justify-content:space-between;overflow:hidden;text-align:left;font:inherit}
+.mask-head #maskDictName{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mask-head #maskDictMeta{flex:none;white-space:nowrap}
+.mask-head #maskProgress{width:100%;padding-left:min(16vw,16em)}
+@container mask-dictionary (max-width:38ch){.mask-head #maskDictMeta{display:none}}
+html[data-shell-image] .mask-head #maskDict{background-color:var(--paper-bg,var(--bg));background-image:linear-gradient(#ffffff24,#ffffff24),var(--paper-bk-image);background-size:100% 100%}
 .mask-letters button{color:var(--fg);background:var(--bg-card);border:1px solid var(--line);border-radius:6px;cursor:pointer}
-.mask-letters{display:flex;align-items:center;gap:.25em;overflow-x:auto;padding:.5em .7em;border-bottom:1px solid var(--line)}
+.mask-strip-wrap{display:flex;align-items:stretch;gap:.1rem;padding:.5em .35rem .15em}
+.mask-letters{display:block;position:relative;flex:1;min-width:0;overflow:hidden;padding:0;overscroll-behavior-x:contain;touch-action:pan-y}
+.mask-scrollbar[hidden]{display:none}
+.mask-letter-track{position:relative;height:100%;width:100%;min-width:100%}
+.mask-letter-track> :is(button,span){position:absolute;top:50%;transform:translateY(-50%);box-sizing:border-box;margin:0;text-align:center}
+.mask-letter-track>.mask-dictionary-band{z-index:0;top:0;bottom:0;height:100%;transform:none;border-radius:5px;pointer-events:none}
+.mask-letter-track>button[data-dictionary-group]{z-index:1;background-color:transparent}
+.mask-dictionary-band[data-tone="0"]{background-color:color-mix(in srgb,#e08600 10%,var(--paper-bg,var(--bg-card,var(--bg))))}
+.mask-dictionary-band[data-tone="1"]{background-color:color-mix(in srgb,#3978c5 10%,var(--paper-bg,var(--bg-card,var(--bg))))}
+.mask-dictionary-band[data-tone="2"]{background-color:color-mix(in srgb,#38946f 10%,var(--paper-bg,var(--bg-card,var(--bg))))}
+.mask-dictionary-band[data-tone="3"]{background-color:color-mix(in srgb,#9b62a8 10%,var(--paper-bg,var(--bg-card,var(--bg))))}
 .mask-letter-group{display:inline-flex;align-items:center;gap:.25em;flex:none}
-.mask-letter-separator{flex:none;padding:0 .2em;color:var(--fg-faint)}
+.mask-letter-separator{padding:0 .2em;color:var(--label-quiet)}
 .mask-letter-pending{color:var(--label)}
-.mask-letters button{flex:none;min-width:2em;padding:.3em}
+.mask-letters button{min-width:1.85rem;padding:.36em .5em}
+.wudict-ribbon-chip{box-sizing:border-box;max-width:12em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mask-scrollbar{position:relative;height:12px;margin:0 .7em .3em;cursor:pointer;touch-action:none;user-select:none;-webkit-user-select:none}
+.mask-scrollbar::before{content:"";position:absolute;left:0;right:0;top:3px;height:6px;border-radius:99px;background:var(--line)}
+.mask-scroll-thumb{position:absolute;z-index:1;top:2px;left:0;height:8px;border-radius:99px;background:color-mix(in srgb,var(--fg) 42%,var(--bg));min-width:20px;cursor:grab}
+.mask-scrollbar:active .mask-scroll-thumb{cursor:grabbing}
+.mask-scrollbar:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .mask-letters button[aria-current="true"]{border-color:var(--accent);color:var(--accent)}
-.mask-words{columns:12em;column-gap:1em;padding:.7em}
+.mask-words{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:.7em}
+.mask-word-columns{columns:12em;column-gap:1em}
 .mask-words button{display:block;width:100%;break-inside:avoid;text-align:left;color:var(--link);background:transparent;border:0;border-radius:4px;padding:.3em .4em;font:inherit;cursor:pointer;overflow-wrap:anywhere}
 .mask-words button:hover,.mask-words button:focus-visible{background:var(--line-soft)}
 .mask-words mark{background:var(--accent);color:var(--bg);border-radius:.15em}
@@ -394,7 +431,7 @@ body.mask-computing #bar button:disabled,
 body.mask-computing #bar input:disabled,
 body.mask-computing #bar select:disabled{cursor:wait}
 .mask-empty{padding:1em;color:var(--label)}
-@media(max-width:600px){#maskProgress{font-size:11px;gap:.15em;flex:none}#maskProgress button{min-width:1.6em;min-height:1.8em;padding:0 .15em}}
+@media(max-width:62rem){.mask-head #maskProgress{padding-left:0}}
 input[type=search]{width:100%;min-width:0;font-size:16px;
   color:var(--fg);background:var(--bg-card);border:1px solid var(--line);
   border-radius:8px;padding:.35em .7em .35em 2em;outline:none;appearance:none}
@@ -485,10 +522,11 @@ select{box-sizing:border-box;font-size:calc(var(--ui-font-base) * 1rem);min-heig
 .btn:hover{color:var(--fg);border-color:var(--fg-faint)}
 .icon-close{display:block;width:1.3em;height:1.3em}
 #panel .examples-extra{display:flex;align-items:flex-start;gap:calc(var(--ui-control-gap) * 1em);
-  margin:calc(var(--ui-addition-gap) * 1em) 0;padding-left:.4em;font-size:calc(var(--ui-font-addition) * 1rem);overflow-wrap:anywhere}
+  margin:calc(var(--ui-addition-gap) * 1em) 0 0 4ch;padding-left:.4em;font-size:calc(var(--ui-font-addition) * 1rem);overflow-wrap:anywhere}
 #panel .examples-extra[hidden]{display:none}
 .examples-extra[hidden]{display:none}
 .examples-extra input{flex:none;margin-top:.2em;accent-color:var(--accent)}
+#panel .examples-extra:has(input:disabled){opacity:.5;cursor:not-allowed}
 #pinBtn{color:var(--pin);border:none;background:none;padding:.3em .4em;font-size:16px;line-height:1;cursor:pointer;display:inline-flex;align-items:center}
 #pinBtn:hover{color:var(--pin-hover)}
 #pinBtn svg{display:block;transition:transform .2s ease;width:16px;height:18px}
@@ -512,6 +550,14 @@ select{box-sizing:border-box;font-size:calc(var(--ui-font-base) * 1rem);min-heig
 #status>.msg{overflow:hidden;min-height:0}
 #status .txt{padding:var(--sp-2) 0}
 #status.show{grid-template-rows:1fr;opacity:1}
+.search-progress{display:flex;align-items:center;gap:.65em;margin:0 0 var(--sp-2);font-size:13px;color:var(--label)}
+.search-progress[hidden]{display:none}
+.search-progress-track{position:relative;display:block;flex:1 1 8em;min-width:3em;height:.45em;overflow:hidden;border-radius:999px;background:var(--line-soft,var(--line))}
+.search-progress-track>span{position:absolute;inset:0 auto 0 0;width:34%;border-radius:inherit;background:var(--accent);animation:search-progress-move 1.25s ease-in-out infinite}
+@keyframes search-progress-move{from{transform:translateX(-110%)}to{transform:translateX(310%)}}
+.search-progress button{flex:none}
+@media(max-width:420px){.search-progress{gap:.4em}.search-progress button{padding:.25em .4em}}
+@media(prefers-reduced-motion:reduce){.search-progress-track>span{animation:none;left:30%;width:40%}}
 /* The line under the editor that names the FILE being edited. Small and faint
    like the sheet's other reference text, and never hidden: it answers "which
    of the four boxes is this" at the moment the reader is typing, which is
@@ -934,10 +980,14 @@ body.styling{padding-bottom:var(--styler-shown,var(--styler-h))}
 #sysSettings .sys-hint{margin:0;font-size:calc(var(--ui-hint-font-size) * 1rem);line-height:1.618;color:var(--label)}
 #sysSettings .sys-item{margin:.5em 0 .2em}
 #sysSettings .sys-row{display:flex;align-items:center;gap:calc(var(--ui-control-gap) * 1em);min-height:calc(var(--ui-control-height) * 1em);cursor:pointer}
+#desktopSysBody .sys-row{display:flex;align-items:center;gap:calc(var(--ui-control-gap) * 1em);min-height:calc(var(--ui-control-height) * 1em);cursor:pointer}
+#desktopSysBody .sys-label{flex:1 1 auto;color:var(--label);min-width:0;font-size:calc(var(--ui-font-base) * 1rem);overflow-wrap:anywhere}
 #sysSettings .sys-row.sys-num{cursor:default}
 #sysSettings .sys-label{flex:1 1 auto;color:var(--label);min-width:0;font-size:calc(var(--ui-font-base) * 1rem);overflow-wrap:anywhere}
 #sysSettings .sys-num input{box-sizing:border-box;flex:none;width:6.5em;min-height:calc(var(--ui-control-height) * 1em);font:inherit;font-size:calc(var(--ui-font-base) * 1rem);text-align:right;
   color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:.5em .6em}
+#sysSettings .sys-num select{box-sizing:border-box;flex:none;min-width:6.5em;min-height:calc(var(--ui-control-height) * 1em);font:inherit;font-size:calc(var(--ui-font-base) * 1rem);color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:.35em .5em}
+#sysSettings .sys-action-spaced{margin-top:calc(var(--ui-control-height) * .5em)}
 #sysSettings .sys-num input:focus{outline:none;border-color:var(--focus);
   box-shadow:0 0 0 3px color-mix(in srgb,var(--focus) 25%,transparent)}
 /* The unit beside a megabytes field. The box holds a bare number - a number
@@ -976,8 +1026,8 @@ body.styling{padding-bottom:var(--styler-shown,var(--styler-h))}
   border-width:0 2px 2px 0;transform:rotate(45deg)}
 #panel .panel-checkbox:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 #panel .headword-threshold-row{width:100%;align-items:center;column-gap:calc(var(--ui-control-gap) * 2em)}
-#panel .headword-threshold-row>#headwordApplyThreshold{flex:none;max-width:100%}
-#panel .headword-threshold-row>.rowlabel{flex:1 1 14em;min-width:min(100%,14em);white-space:normal;line-height:1.35}
+#panel .headword-threshold-row>.threshold-select-wrap{flex:1 1 0;min-width:0;max-width:100%}
+#panel .headword-threshold-row>.rowlabel{flex:none;white-space:nowrap;line-height:1.35}
 /* ─ floating menus ──────────────────────────────────────────────────
    THE SURFACE, stated once: every menu the app floats over the page wears it,
    so a menu is a window like the others - the history dropdown's own card,
@@ -1327,6 +1377,15 @@ dialog.panel-card:not([open]){display:none}
 .pd.drop-before{box-shadow:0 -2px 0 var(--accent)}
 .pd.drop-after{box-shadow:0 2px 0 var(--accent)}
 .pd .hd{display:flex;align-items:center;gap:calc(var(--ui-control-gap) * 1em)}
+.dict-name-line{display:flex;align-items:center;gap:.5em;min-width:0;flex:1}
+.dict-name-line>b{min-width:0}
+.dict-rename,.dict-rename-reset,.dict-rename-save{display:grid;place-items:center;flex:none;width:44px;height:44px;padding:.65em;border:0;border-radius:50%;background:transparent;color:var(--label-quiet);cursor:pointer}
+.dict-rename:hover,.dict-rename-reset:hover,.dict-rename-save:hover{background:var(--line-soft);color:var(--fg)}
+.dict-rename svg,.dict-rename-reset svg,.dict-rename-save svg{width:1.25em;height:1.25em}
+.dict-rename:focus-visible,.dict-rename-reset:focus-visible,.dict-rename-save:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.dict-rename-input{box-sizing:border-box;min-width:0;flex:1;height:2.4em;padding:.35em .55em;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--fg);font:inherit}
+.dict-rename-input:focus{outline:2px solid var(--focus);outline-offset:1px}
+.dict-name-line:has(.dict-rename-input){width:100%}
 .pd .grip{cursor:grab;color:var(--label-quiet);user-select:none;font-size:calc(var(--ui-font-base) * 1rem);
   line-height:1;letter-spacing:-.15em;padding-right:.15em}
 .pd .grip:active{cursor:grabbing}
@@ -1343,7 +1402,8 @@ dialog.panel-card:not([open]){display:none}
 .pd .ord button:hover{color:var(--fg);background:var(--line-soft)}
 #dictSettings .pd .hd{display:grid;grid-template-columns:auto minmax(0,1fr);gap:calc(var(--ui-control-gap) * 1em)}
 #dictSettings .pd .hd{box-sizing:border-box;padding:0;border-radius:0;background:transparent}
-#dictSettings .pd .hd>b{grid-column:1 / -1;grid-row:1}
+#dictSettings .pd .hd>.dict-name-line{grid-column:1 / -1;grid-row:1}
+#dictSettings .pd .hd>.dict-name-line>b{font-size:calc(var(--ui-font-section) * 1rem)}
 #dictSettings .pd .grip{grid-column:1;grid-row:2;padding:.4em;align-self:center}
 #dictSettings .pd .ord{grid-column:2;grid-row:2;gap:calc(var(--ui-control-gap) * 2.5em);margin-left:0;justify-content:flex-end}
 #dictSettings .pd .ord button{box-sizing:border-box;min-width:calc(var(--ui-control-height) * 1em);width:calc(var(--ui-control-height) * 1em);height:calc(var(--ui-control-height) * 1em);min-height:calc(var(--ui-control-height) * 1em);padding:0}
@@ -1546,11 +1606,8 @@ dialog.panel-card:not([open]){display:none}
 .facts .mrow.door::after{content:"›";margin-left:auto;color:var(--label-quiet);
   font-size:1em;line-height:1;flex:none}
 .facts .mrow.door:hover::after{color:var(--label)}
-/* The panel's group drop-down (which group the search is on, in place of the
-   removed "Open first" pair): the label takes the READING STRIP's own MEASURED
-   column - not the Appearance rows' one, which is narrower here - so it lines
-   up with "Highlight matches" and "Read aloud" above it. The bar then fills
-   the rest of the row, and its own label is
+/* The panel's group drop-down follows its natural-width label and fills
+   the rest of the row. Its own label is
    ellipsised: min-width:0 is what lets a flex item shrink below its content at
    all, and the caret keeps its place on its own auto margin. The button's
    `width:100%` is replaced by `flex:1 1 0` because `.facts` wraps: an item
@@ -1558,12 +1615,28 @@ dialog.panel-card:not([open]){display:none}
    `width:100%` too: it is a child of `.facts.reading`, which is a column with
    `align-items:flex-start`, so without it the row and the bar inside it would
    be only as wide as their content - a short group name left a short bar. */
-.facts:has(>:is(#pickerGroupBtn,#languageBtn)){width:100%;align-self:stretch}
-.facts:has(>:is(#pickerGroupBtn,#languageBtn))>.rowlabel{flex:0 1 var(--rlcol,96px);min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.facts:has(>:is(#pickerGroupBtn,#languageBtn))>:is(#pickerGroupBtn,#languageBtn){width:auto;flex:1 1 0;min-width:0}
+.facts.dictionary-group-row{width:100%;align-self:stretch}
+#panel .facts.dictionary-group-row>.rowlabel{flex:none;min-width:0;white-space:nowrap}
+.facts.dictionary-group-row>#pickerGroupBtn{box-sizing:border-box;width:auto;flex:1 1 0;min-width:0}
 #pickerGroupBtn>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #languageError{margin:calc(var(--ui-addition-gap) * 1em) 0 0;color:var(--danger);font-size:calc(var(--ui-hint-font-size) * 1rem)}
 #languageError[hidden]{display:none}
+#panel .language-setting{margin:0 var(--sp-2) var(--sp-1);padding:calc(var(--ui-section-space-before) * 1em) 0 var(--sp-1);border-bottom:1px solid color-mix(in srgb,var(--fg) 22%,transparent)}
+#panel .facts.language-row{flex-wrap:nowrap}
+#panel .facts.language-row>.rowlabel{flex:0 0 auto;white-space:nowrap}
+#panel .facts.language-row>#languageBtn{width:auto;min-width:0;flex:1 1 0}
+.panel-dropdown{position:relative;box-sizing:border-box;height:calc(var(--ui-control-height) * var(--ui-font-base) * 1rem);
+  min-height:calc(var(--ui-control-height) * var(--ui-font-base) * 1rem)}
+#panel .facts .panel-dropdown{font-size:calc(var(--ui-control-font) * 1rem);line-height:1}
+.panel-dropdown::after{content:"";position:absolute;right:.55em;top:50%;transform:translateY(-50%);pointer-events:none;
+  width:0;height:0;margin:0;border:4px solid transparent;border-top-color:var(--fg)}
+.panel-select-wrap{min-width:0}
+.panel-select-wrap:has(>select:disabled)::after{opacity:.55}
+#panel .panel-select-wrap>select{display:block;width:100%;max-width:none;min-width:0;
+  min-height:calc(var(--ui-control-height) * var(--ui-font-base) * 1rem);
+  height:calc(var(--ui-control-height) * var(--ui-font-base) * 1rem);
+  font-size:calc(var(--ui-control-font) * 1rem);line-height:1;
+  appearance:none;-webkit-appearance:none;padding:0 1.8em 0 .55em}
 /* A label for the control on its row, in the register the segs' labels use. */
 .facts .rowlabel{font-size:calc(var(--ui-font-base) * 1rem);line-height:1.2;color:var(--label-quiet)}
 /* The collection's count, on its own line under the heading: the answer to "is
@@ -1614,8 +1687,9 @@ dialog.panel-card:not([open]){display:none}
    `.facts` row in the panel has a `.rowlabel`; the reading strip's labels
    measure into their own section's column (see "One label column" there). */
 .facts:has(>#fsCtl)>.rowlabel,.facts:has(>#fwCtl)>.rowlabel,
-.facts:has(>#looksChoice)>.rowlabel,.facts:has(>#compactSeg)>.rowlabel,
-.facts:has(>#examplesSeg)>.rowlabel,.facts:has(>#sbarSeg)>.rowlabel{
+.facts:has(>#looksControls)>.rowlabel,.facts:has(>#compactSeg)>.rowlabel,
+.facts:has(>#examplesSeg)>.rowlabel,.facts:has(>#sbarSeg)>.rowlabel,
+.facts:has(>.article-font-select-wrap)>.rowlabel{
   flex:0 1 var(--rlcol,auto);min-width:0;white-space:nowrap;overflow:hidden;
   text-overflow:ellipsis}
 /* A `.facts` row is `display:flex`, which outvotes the user-agent's
@@ -1629,7 +1703,11 @@ dialog.panel-card:not([open]){display:none}
    name - and never less than the longest of the built-in ones. */
 .facts .choice-btn{font-size:calc(var(--ui-font-base) * 1rem)}
 #panel .facts .choice-btn{gap:calc(var(--ui-control-gap) * 1em)}
-.facts:has(>#looksChoice)>#looksChoice{width:auto;flex:0 1 auto;min-width:6.5em}
+.facts:has(>.article-font-select-wrap)>.rowlabel{flex:0 0 var(--rlcol,auto)}
+.facts>.article-font-select-wrap{box-sizing:border-box;width:auto;flex:0 1 10.5em;min-width:0}
+.facts:has(>#looksControls)>.rowlabel{flex:0 1 var(--rlcol,auto)}
+#looksControls{display:flex;flex:0 1 auto;flex-wrap:wrap;align-items:center;gap:calc(var(--ui-control-gap) * 1em);min-width:0}
+#looksControls>#looksChoice{box-sizing:border-box;width:auto;flex:0 1 auto;min-width:6.5em}
 /* The row's three actions: square, drawn marks. The app's other icon-sized
    controls are 22px and these are 32, because they are the only way to save,
    update or delete a preset and a miss costs a window - the row is 32px tall
@@ -1638,11 +1716,11 @@ dialog.panel-card:not([open]){display:none}
    They are one flex item, so the row's wrap takes all three to the second line
    together instead of parting them. The gap is the row's own .45em, so on one
    line the trio is spaced exactly as loose siblings were. */
-#panel .facts:has(>#looksChoice)>.iconrow{display:flex;align-items:center;gap:calc(var(--ui-control-gap) * 1em);
+#panel #looksControls>.iconrow{display:flex;align-items:center;gap:calc(var(--ui-control-gap) * 1em);
   flex:none}
-.facts:has(>#looksChoice)>.iconrow>.icon-btn{width:calc(var(--ui-control-height) * 2em);height:calc(var(--ui-control-height) * 1em);padding:0;
+#looksControls>.iconrow>.icon-btn{width:calc(var(--ui-control-height) * 2em);height:calc(var(--ui-control-height) * 1em);padding:0;
   display:flex;align-items:center;justify-content:center}
-.facts:has(>#looksChoice)>.iconrow>.icon-btn svg{width:16px;height:16px}
+#looksControls>.iconrow>.icon-btn svg{width:16px;height:16px}
 #fsCtl,#fwCtl{flex:none;display:flex;align-items:center;gap:calc(var(--ui-control-gap) * 1em)}
 #fsCtl button,#fwCtl button{font:inherit;line-height:1;margin:0;padding:0;cursor:pointer;
   display:flex;align-items:center;justify-content:center;
@@ -1698,22 +1776,18 @@ dialog.panel-card:not([open]){display:none}
 #panel .facts{gap:calc(var(--ui-control-gap) * 1em);margin-top:0}
 #panel .facts:has(> .mrow){row-gap:calc(var(--ui-row-gap) * 1em)}
 #panel .sect>.facts+.facts,#panel .sect>.counts+.facts{margin-top:calc(var(--ui-row-gap) * 1em)}
+#panel .sect>.facts.browse-row{margin-top:calc(var(--ui-row-gap) * 1em)}
 /* The reading strip's rows. Same left edge as the section that holds it (its
    .sect's own inline margin), so the row reads as part of the section and not
    as a control floating above one. One setting per LINE, not wrapped: the
    controls are meant to be compared, and a wrap put whichever two happened to
    fit beside each other. */
 #panel .facts.reading{flex-direction:column;align-items:flex-start;margin:0;gap:calc(var(--ui-row-gap) * 1em)}
-/* The reading strip's rows carry their label INSIDE the seg (they are label
-   and pair in one control), and a seg is shrink-to-fit. A box sized from its
-   content asks its items for their max-content size, not for their
-   flex-basis - so the measured column never reached these labels: measured in
-   Russian, labels 54.9px and 85.4px wide inside a section whose column is
-   86px, and the pairs starting at 119 and 150 instead of at one x. Stretching
-   the seg to its row is what lets the column inside it be the column; the
-   strip's content is left-aligned either way, so nothing but the pairs' own
-   starting point moves. */
-.facts.reading>.seg{align-self:stretch}
+/* Keep the pair beside the shared label column. The row itself must remain
+   content-sized: stretching it across the drawer made the pair look pinned to
+   the right edge. The explicit label width below still gives both rows the
+   same control start. */
+.facts.reading>.seg{align-self:flex-start;width:auto;max-width:100%}
 .facts .history-controls{display:flex;align-items:center;flex-wrap:wrap;gap:calc(var(--ui-control-gap) * 1em);
   font-size:calc(var(--ui-font-base) * 1rem)}
 .facts .history-setting{display:inline-flex;align-items:center;gap:calc(var(--ui-control-gap) * 1em);font-size:calc(var(--ui-font-base) * 1rem)}
@@ -1762,8 +1836,9 @@ dialog.panel-card:not([open]){display:none}
    ellipsis stays for the one case a wrap cannot help - a name longer than the
    column itself - and a page whose script never ran falls back to the label's
    own text. */
-.facts .seg>span{flex:0 1 var(--rlcol,96px);min-width:0;white-space:nowrap;overflow:hidden;
+.facts .seg>span{flex:0 0 var(--rlcol,96px);min-width:0;white-space:nowrap;overflow:hidden;
   text-overflow:ellipsis;font-size:calc(var(--ui-font-base) * 1rem);line-height:1.2;color:var(--label-quiet)}
+.facts.reading>.seg>span{box-sizing:border-box;flex:0 1 auto;width:var(--rlcol,96px)}
 /* A mark may ride in the label, as the speaker does. It is drawn at the same
    size and in the same faint colour as the marks that ride ON a control, but
    it sits in the label column with the words it belongs to: the row it came
@@ -2108,3 +2183,57 @@ html:is([data-shell-sepia],[data-shell-image]) .list-search-input{background-col
 .list-search-current{background-color:color-mix(in srgb,var(--accent) 14%,var(--bg-card,var(--bg)))}
 .list-search-name-match{background:var(--accent);color:var(--bg);border-radius:.15em}
 .list-search-filtered-out{display:none!important}
+
+/* Headword export uses the shared dictionary list and search dock. */
+#headwordExport{width:min(560px,calc(100vw - 32px));height:min(760px,calc(100dvh - 32px));max-height:calc(100dvh - 32px);box-sizing:border-box;overflow:auto}
+#headwordExport[open]{display:flex;flex-direction:column;gap:.6em}
+#headwordExport h2{display:flex;align-items:center;justify-content:space-between;margin:0}
+#exportRows{min-height:80px;max-height:40dvh}
+#exportRows .web-picker-row{box-sizing:border-box;display:flex;align-items:center;gap:.6em;text-align:start}
+#exportRows .web-picker-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#headwordExport .export-actions,#headwordExport .export-path{display:flex;gap:.6em;align-items:center;flex-wrap:wrap}
+#exportPath{flex:1;min-width:0;width:100%}
+#headwordExport .export-hint,#exportStatus{margin:0;font-size:.9em;overflow-wrap:anywhere}
+#exportProgress{width:100%;flex:none}
+
+#headwordExport> :not(#exportRows){flex-shrink:0}
+
+#headwordExport .export-group{display:flex;align-items:center;gap:.8em;padding:.2em .5em .6em;border-bottom:1px solid var(--line)}
+#exportGroup{flex:1;min-width:0;width:100%;max-width:none}
+#headwordExport input[type="checkbox"]{flex:none;margin:0}
+#exportRows .web-picker-row{padding:.75em .5em;gap:.8em}
+#exportSearch{border-top:1px solid var(--line);padding-top:.5em}
+#exportSelected{margin-inline-start:auto;white-space:nowrap}
+#headwordExport .export-path{flex-wrap:nowrap}
+#exportPath{box-sizing:border-box;flex:1 1 0;width:0}
+#exportFolder{flex:none}
+#headwordExport .export-footer{margin-top:auto;padding-top:.6em}
+#exportCancel{margin-inline-start:auto}
+#headwordExport>label:has(#exportSeparate){display:flex;align-items:center;gap:.6em}
+
+#exportGroupCheck:indeterminate::after{content:"";position:absolute;left:50%;top:50%;width:8px;height:8px;border:0;background:var(--fg);transform:translate(-50%,-50%)}
+
+#headwordExport .export-path>label{flex:none;white-space:nowrap}
+@font-face{font-family:"wudict-Charis";font-weight:400;font-style:normal;src:url("/assets/fonts/Charis-Regular.woff2?v=7.000") format("woff2")}
+@font-face{font-family:"wudict-Charis";font-weight:400;font-style:italic;src:url("/assets/fonts/Charis-Italic.woff2?v=7.000") format("woff2")}
+@font-face{font-family:"wudict-Charis";font-weight:500;font-style:normal;src:url("/assets/fonts/Charis-Medium.woff2?v=7.000") format("woff2")}
+@font-face{font-family:"wudict-Charis";font-weight:500;font-style:italic;src:url("/assets/fonts/Charis-MediumItalic.woff2?v=7.000") format("woff2")}
+@font-face{font-family:"wudict-Charis";font-weight:700;font-style:normal;src:url("/assets/fonts/Charis-Bold.woff2?v=7.000") format("woff2")}
+@font-face{font-family:"wudict-Charis";font-weight:700;font-style:italic;src:url("/assets/fonts/Charis-BoldItalic.woff2?v=7.000") format("woff2")}
+@font-face{font-family:"wudict-Gentium";font-weight:400;font-style:normal;src:url("/assets/fonts/Gentium-Regular.woff2?v=7.000") format("woff2")}
+@font-face{font-family:"wudict-Gentium";font-weight:400;font-style:italic;src:url("/assets/fonts/Gentium-Italic.woff2?v=7.000") format("woff2")}
+@font-face{font-family:"wudict-Gentium";font-weight:500;font-style:normal;src:url("/assets/fonts/Gentium-Medium.woff2?v=7.000") format("woff2")}
+@font-face{font-family:"wudict-Gentium";font-weight:500;font-style:italic;src:url("/assets/fonts/Gentium-MediumItalic.woff2?v=7.000") format("woff2")}
+@font-face{font-family:"wudict-Gentium";font-weight:700;font-style:normal;src:url("/assets/fonts/Gentium-Bold.woff2?v=7.000") format("woff2")}
+@font-face{font-family:"wudict-Gentium";font-weight:700;font-style:italic;src:url("/assets/fonts/Gentium-BoldItalic.woff2?v=7.000") format("woff2")}
+@font-face{font-family:"wudict-Quivira";src:url("/assets/fonts/Quivira.otf?v=1") format("opentype")}
+
+#portableDialog{width:min(560px,calc(100vw - 32px));box-sizing:border-box;max-height:calc(100dvh - 32px);overflow:auto}
+#portableDialog h2{margin-top:0}
+.portable-path,.portable-actions,.portable-check{display:flex;gap:.6em;align-items:center}
+.portable-path input{min-width:0;flex:1}
+.portable-check{margin-top:1em}
+.portable-actions{flex-wrap:wrap}
+#portableStatus{overflow-wrap:anywhere}
+#portableProgress{width:100%;margin-top:1em}
+#portableTool[hidden]{display:none}

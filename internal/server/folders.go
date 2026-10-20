@@ -19,22 +19,25 @@ import (
 	"github.com/wuweidict/wudict/internal/config"
 	"github.com/wuweidict/wudict/internal/dict"
 	"github.com/wuweidict/wudict/internal/howto"
+	"github.com/wuweidict/wudict/internal/logx"
 	"github.com/wuweidict/wudict/internal/store"
 )
 
-// configInfo is what the panel's "Folders & configuration" section shows: the
+// ConfigInfo is what the panel's "Folders & configuration" section shows: the
 // folders being scanned, where prepared dictionaries live, which config file
 // is in effect - and, for each, WHICH layer set it. Everything here is
 // otherwise visible only on the terminal at startup, which a user who opened
 // the app in a browser never sees.
-type configInfo struct {
-	IndexDefaults indexOptions `json:"indexDefaults"`
-	Roots         []Root       `json:"roots"`
-	LibDir        string       `json:"libDir"`
-	Prepared      int          `json:"prepared"`
-	UseCached     bool         `json:"useCached"`
-	ConfigPath    string       `json:"configPath"`
-	Total         int          `json:"total"`
+type ConfigInfo struct {
+	IndexDefaults     indexOptions `json:"indexDefaults"`
+	MaxIndexWorkers   int          `json:"maxIndexWorkers"`
+	IndexWorkersValue string       `json:"indexWorkersValue"`
+	Roots             []Root       `json:"roots"`
+	LibDir            string       `json:"libDir"`
+	Prepared          int          `json:"prepared"`
+	UseCached         bool         `json:"useCached"`
+	ConfigPath        string       `json:"configPath"`
+	Total             int          `json:"total"`
 	// HowtoRemoved: the user removed the built-in wudict howto; the setup
 	// page offers it back.
 	HowtoRemoved bool `json:"howtoRemoved,omitempty"`
@@ -72,6 +75,9 @@ type configInfo struct {
 	// it to every browser on the LAN.
 	CanDelete bool `json:"canDelete"`
 	CanExit   bool `json:"canExit"`
+	// SystemLogHasErrors tells the panel whether a retained System Log has an
+	// error or crash record.
+	SystemLogHasErrors bool `json:"systemLogHasErrors"`
 
 	// PathAliases shorten the prefix that is identical on every row and
 	// therefore carries no information: {prefix, label} pairs, first match
@@ -199,44 +205,54 @@ func androidAliases(paths []string) [][2]string {
 	return out
 }
 
-func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
+// ConfigSnapshot returns the configuration view for an already-authorized
+// transport. HTTP derives locality and host from the request; a native desktop
+// bridge supplies its known local connection.
+func (s *Server) ConfigSnapshot(local bool, host string) ConfigInfo {
 	lib, _ := store.Library()
 	roots := s.reg.Roots()
 	shown := []string{store.DefaultDBDir(), s.ConfigPath}
 	for _, r := range roots {
 		shown = append(shown, r.Path)
 	}
-	info := configInfo{
-		IndexDefaults:   s.reg.prefs.newIndexDefaults(),
-		PathAliases:     pathAliases(shown),
-		Roots:           roots,
-		LibDir:          store.DefaultDBDir(),
-		Prepared:        len(lib),
-		UseCached:       s.reg.UseCached(),
-		ConfigPath:      s.ConfigPath,
-		Total:           s.reg.UserCount(),
-		HowtoRemoved:    s.User.Builtin() != "" && howto.IsRemoved(s.User.Builtin()),
-		DictDirOrigin:   s.DictDirOrigin,
-		DictDirEditable: s.DictDirEditable,
-		ConfigProblems:  s.ConfigProblems,
-		Effective:       s.Effective,
-		RevealLabel:     revealLabel(),
+	info := ConfigInfo{
+		IndexDefaults:     s.reg.prefs.newIndexDefaults(),
+		MaxIndexWorkers:   runtime.NumCPU(),
+		IndexWorkersValue: s.IndexWorkersValue,
+		PathAliases:       pathAliases(shown),
+		Roots:             roots,
+		LibDir:            store.DefaultDBDir(),
+		Prepared:          len(lib),
+		UseCached:         s.reg.UseCached(),
+		ConfigPath:        s.ConfigPath,
+		Total:             s.reg.UserCount(),
+		HowtoRemoved:      s.User.Builtin() != "" && howto.IsRemoved(s.User.Builtin()),
+		DictDirOrigin:     s.DictDirOrigin,
+		DictDirEditable:   s.DictDirEditable,
+		ConfigProblems:    s.ConfigProblems,
+		Effective:         s.Effective,
+		RevealLabel:       revealLabel(),
 		// revealing opens a window on the machine running the server, which is
 		// only useful when that is also the machine at the keyboard - and only
 		// works where there is something to open it with. Offering a control
 		// whose command does not exist (Android has no xdg-open) is worse than
 		// not offering it: the click fails, and the user concludes the files
 		// are unreachable rather than that this button is.
-		CanReveal: isLoopback(r) && revealPossible(),
+		CanReveal: local && revealPossible(),
 		// Deleting, unlike revealing, is something this app can always do
 		// itself - so the question is only WHO is asking (D63 amended).
-		CanDelete: s.removalOffered(r),
-		CanExit:   s.DesktopExit != nil && isLoopback(r) && localExitHost(r.Host),
+		CanDelete:          local || s.AllowRemoteDelete,
+		CanExit:            s.DesktopExit != nil && local && localExitHost(host),
+		SystemLogHasErrors: logx.SystemHasErrors(),
 	}
 	if info.DictDirOrigin == "" {
 		info.DictDirOrigin = config.OriginDefault
 	}
-	writeJSON(w, info)
+	return info
+}
+
+func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, s.ConfigSnapshot(isLoopback(r), r.Host))
 }
 
 // isLoopback reports whether the request came from this machine. A remote
@@ -258,22 +274,27 @@ func (s *Server) handleReveal(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 403, "only available from the machine running wudict")
 		return
 	}
-	path := strings.TrimSpace(r.URL.Query().Get("path"))
-	if path == "" {
-		httpErr(w, 400, "missing path parameter")
-		return
-	}
-	if !s.revealAllowed(path) {
-		// never hand an arbitrary path to the shell: only the folders and
-		// files this app is already showing may be opened.
-		httpErr(w, 403, "not a wudict folder")
-		return
-	}
-	if err := reveal(path); err != nil {
-		httpErr(w, 500, "%v", err)
+	path, status, err := s.revealShownPath(r.URL.Query().Get("path"))
+	if err != nil {
+		httpErr(w, status, "%v", err)
 		return
 	}
 	writeJSON(w, map[string]any{"revealed": path})
+}
+
+func (s *Server) revealShownPath(value string) (string, int, error) {
+	path := strings.TrimSpace(value)
+	if path == "" {
+		return "", http.StatusBadRequest, fmt.Errorf("missing path parameter")
+	}
+	// Only the folders and files already shown by the app may reach the shell.
+	if !s.revealAllowed(path) {
+		return "", http.StatusForbidden, fmt.Errorf("not a wudict folder")
+	}
+	if err := reveal(path); err != nil {
+		return "", http.StatusInternalServerError, err
+	}
+	return path, http.StatusOK, nil
 }
 
 // revealAllowed limits reveal to what the UI legitimately displays: a

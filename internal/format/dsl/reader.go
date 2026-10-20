@@ -51,9 +51,10 @@ type Reader struct {
 	// plainBody is set for the scan of a companion itself: its articles are
 	// the tooltip text, so they must not be prefixed with their own headword,
 	// and it has no companion of its own to absorb.
-	plainBody bool
-	gd        bool
-	gdOptions GDOptions
+	plainBody    bool
+	gd           bool
+	gdOptions    GDOptions
+	repairTitles bool
 
 	buffered  []string     // lookahead lines
 	orphans   int          // body blocks skipped for having no headword
@@ -109,21 +110,30 @@ func (r *Reader) abbrevs() *abbrevMap {
 	return r.abbrev
 }
 
-// ExtraMeta records what was absorbed, so a later run can tell a text.db built
-// with this companion from one built without it, or with an older copy of it.
-// Written only when a companion was actually found: a dictionary that has none
-// records nothing, and therefore never looks stale for the lack of it.
+// ExtraMeta records which companion was considered and what was absorbed, so a
+// later run can tell a text.db built with this companion from one built without
+// it, or with an older copy. The file stamp is recorded even when the glossary
+// is empty, malformed or over the parser's size limit: otherwise every check
+// would call the unchanged file stale and schedule the same rebuild again.
 func (r *Reader) ExtraMeta() map[string]string {
-	a := r.abbrevs()
-	if a == nil {
+	path, ok := dict.AbbrevCompanion(r.path)
+	if !ok {
 		return nil
 	}
-	return map[string]string{
-		"abbrev_path":  a.path,
-		"abbrev_size":  strconv.FormatInt(a.size, 10),
-		"abbrev_mtime": a.mtime.Format(time.RFC3339),
-		"abbrev_count": strconv.Itoa(a.count),
+	st, err := os.Stat(path)
+	if err != nil {
+		return nil
 	}
+	meta := map[string]string{
+		"abbrev_path":  path,
+		"abbrev_size":  strconv.FormatInt(st.Size(), 10),
+		"abbrev_mtime": st.ModTime().UTC().Truncate(time.Second).Format(time.RFC3339),
+		"abbrev_count": "0",
+	}
+	if a := r.abbrevs(); a != nil {
+		meta["abbrev_count"] = strconv.Itoa(a.count)
+	}
+	return meta
 }
 
 // decodedScanner turns an already-open Lingvo file into a line scanner: gunzip
@@ -756,7 +766,7 @@ func (r *Reader) parseBlock(termLines, textLines []string) (dict.Entry, []dict.E
 
 func (r *Reader) title(line string) titleResult {
 	if r.gd {
-		return gdTitle(line)
+		return gdTitleWithRepairs(line, r.repairTitles)
 	}
 	return transformTitle(line)
 }

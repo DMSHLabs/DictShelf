@@ -85,8 +85,8 @@ type Config struct {
 	// wrong place to be generous. Set it to "1" when the server is bound to a
 	// network address and the LAN is trusted with deletions.
 	AllowRemoteDelete bool   // ALLOW_REMOTE_DELETE
-	NoCompress        bool   // NO_COMPRESS=1: store article text verbatim (bigger databases)
 	IndexWorkers      int    // INDEX_WORKERS: how many dictionaries may be indexed at once
+	IndexWorkersValue string // INDEX_WORKERS as selected: a count or "auto"
 	MemoryLimit       int64  // MEMORY_LIMIT: soft heap ceiling in bytes (0 = none)
 	PreviewMemory     int64  // PREVIEW_MEMORY: cap on RAM held by unprepared dictionaries (0 = unlimited)
 	SearchMemory      int64  // SEARCH_MEMORY: cap on RAM ONE search may materialise (0 = uncapped)
@@ -132,7 +132,7 @@ type Config struct {
 
 	// Shadowed lists config files that exist further down the search order and
 	// therefore did nothing. Saying so out loud is the whole cure for "I
-	// edited it and nothing changed" - two binaries, two files, one silent winner.
+	// edited it and nothing changed" - two config files, one silent winner.
 	Shadowed []string
 
 	// Problems are lines of the config file in effect that set nothing - not
@@ -160,8 +160,12 @@ const (
 func defaults() Config {
 	home, _ := os.UserHomeDir()
 	appHome := userDataDir(home)
+	dictDir := filepath.Join(home, "Dictionaries")
+	if portableHome := os.Getenv("WUDICT_PORTABLE_HOME"); portableHome != "" {
+		dictDir = filepath.Join(portableHome, "Dictionaries")
+	}
 	return Config{
-		DictDirs: []string{filepath.Join(home, "Dictionaries")},
+		DictDirs: []string{dictDir},
 		DBDir:    "", // empty = store.DefaultDBDir()
 		IP:       "127.0.0.1",
 		Port:     "6888",
@@ -172,8 +176,9 @@ func defaults() Config {
 		ImportKeep:   ImportKeepAsk,
 		// Nil: any site (D139). Dictionaries come from wherever the user
 		// found them, and the link is one they handed over deliberately.
-		ImportURLHosts: nil,
-		IndexWorkers:   1, // one dictionary at a time: the machine has other work to do
+		ImportURLHosts:    nil,
+		IndexWorkers:      1, // one dictionary at a time: the machine has other work to do
+		IndexWorkersValue: "1",
 		// both are platform-dependent, and for reasons that are about the
 		// platform's opinion of us rather than its capability - see tuning.go
 		PreviewMemory: previewMemoryDefault(),
@@ -298,11 +303,14 @@ func Load(configPath string, flags map[string]string) (Config, error) {
 	if v := get("ALLOW_REMOTE_DELETE"); v != "" {
 		cfg.AllowRemoteDelete = !isOff(v)
 	}
-	if v := get("NO_COMPRESS"); v != "" {
-		cfg.NoCompress = !isOff(v)
-	}
 	if v := get("INDEX_WORKERS"); v != "" {
+		v = strings.ToLower(strings.TrimSpace(v))
 		cfg.IndexWorkers = ParseWorkers(v)
+		if v == "auto" {
+			cfg.IndexWorkersValue = v
+		} else {
+			cfg.IndexWorkersValue = strconv.Itoa(cfg.IndexWorkers)
+		}
 	}
 	if v := get("MEMORY_LIMIT"); v != "" {
 		cfg.MemoryLimit = ParseSize(v)
@@ -340,13 +348,9 @@ func Load(configPath string, flags map[string]string) (Config, error) {
 	return cfg, nil
 }
 
-// Name is the configuration file, spelled the same in every location. Not
-// "config.toml" - the most generic filename there is, shared with Rust, Hugo
-// and half the checkouts on a developer's disk, where wudict would parse a
-// stranger's file, skip creating its own, and point the setup page's SaveKey
-// at it. A name nobody else uses cannot be mistaken for anything, wherever it
-// is copied to (D32).
-const Name = "wudict.toml"
+// LegacyName is the original configuration filename. Windows wuDict2 keeps it
+// as a one-time migration source; other platforms still use it as Name.
+const LegacyName = "wudict.toml"
 
 // systemDir is the machine-wide location; a variable so tests can point it
 // somewhere harmless rather than depend on what is really in /etc.
@@ -371,8 +375,7 @@ var (
 	}
 )
 
-// HomeConfig is the only file wudict ever creates: ~/.wudict/wudict.toml,
-// beside the library that directory already holds.
+// HomeConfig is the per-user configuration file, beside the user's data.
 func HomeConfig() string {
 	if h := homeDir(); h != "" {
 		return filepath.Join(userDataDir(h), Name)
@@ -389,17 +392,29 @@ func userDataDir(home string) string {
 	return filepath.Join(home, ".wudict")
 }
 
-// candidates returns the search order: next to the executable (portable mode,
-// see EnsureConfigFile), then the user's own directory, then the machine's.
+// candidates returns the search order: a selected portable Data folder, next
+// to the executable, the user's own directory, then the machine's.
 func candidates() []string {
 	var out []string
+	seen := map[string]bool{}
+	add := func(path string) {
+		path = filepath.Clean(path)
+		if path != "." && !seen[path] {
+			seen[path] = true
+			out = append(out, path)
+		}
+	}
+	if root := os.Getenv("WUDICT_PORTABLE_HOME"); root != "" {
+		add(filepath.Join(root, Name))
+	}
 	if d := exeDir(); d != "" {
-		out = append(out, filepath.Join(d, Name))
+		add(filepath.Join(d, Name))
 	}
 	if p := HomeConfig(); p != "" {
-		out = append(out, p)
+		add(p)
 	}
-	return append(out, filepath.Join(systemDir, Name))
+	add(filepath.Join(systemDir, Name))
+	return out
 }
 
 // resolved is the outcome of the search: the file that was read, whether it is
@@ -483,20 +498,11 @@ const configTemplate = `# wudict configuration  (~/.wudict/wudict.toml)
 #                                     # otherwise aim a download anywhere this machine can reach.
 # IMPORT_INSECURE = "0"               # "1" = also allow plain http, and hosts on the local network.
 #                                     # Only meaningful if you trust the address you are pointing at.
-# INDEX_WORKERS = "1"                 # how many dictionaries may be prepared at once. Each one
+# INDEX_WORKERS = "1"                 # how many dictionaries are processed at once by indexing
+#                                     # and multi-dictionary search. Each index preparation
 #                                     # saturates a core and holds a few hundred bytes per headword,
 #                                     # so the default is one - the machine stays usable.
-#                                     # "auto" (or 0) = every core.
-# PREVIEW_MEMORY = "1GB"              # how much RAM dictionaries that are NOT yet prepared may hold
-#                                     # open. Each costs ~350 bytes per headword; the least recently
-#                                     # used are closed above this. Prepared ones answer from disk and
-#                                     # are never evicted. "0" = no limit. On Android the default is a third of
-#                                     # MEMORY_LIMIT (64-128MB, by device RAM).
-# SEARCH_MEMORY = "0"                 # how much RAM ONE search may bring in by opening dictionaries
-#                                     # that are not yet prepared. Past it the rest are reported as
-#                                     # not searched rather than opened. Prepared dictionaries are
-#                                     # never capped. "0" = no cap. Android defaults to the memory
-#                                     # limit, where one query could otherwise get the app killed.
+#                                     # "auto" = all but one core, at least one; "all" (or 0) = every core.
 # MORPH_CACHE = "2"                   # how many LEMMA packs stay in memory. When a search finds
 #                                     # nothing at all, wudict tries the word's dictionary form and
 #                                     # searches again. English is built in; other languages come
@@ -520,8 +526,6 @@ const configTemplate = `# wudict configuration  (~/.wudict/wudict.toml)
 # MEMORY_LIMIT  = "0"                 # soft ceiling, e.g. "4GB": Go collects harder - and sheds its
 #                                     # caches - rather than growing past it. "0" = no ceiling.
 #                                     # Android defaults to a fraction of the device's RAM.
-# NO_COMPRESS = "0"                   # "1" = store article text uncompressed (databases roughly 3x larger,
-#                                     #       marginally faster reads; only worth it with disk to spare)
 # ALLOW_REMOTE_DELETE = "0"           # may a browser on ANOTHER machine delete a dictionary?
 #                                     # Deleting from this machine is always allowed. "1" = a browser
 #                                     # on the LAN may too; only meaningful when SERVER_IP is not
@@ -575,6 +579,12 @@ const configTemplate = `# wudict configuration  (~/.wudict/wudict.toml)
 //
 // Returns the path and whether it was created now.
 func EnsureConfigFile() (path string, created bool, err error) {
+	return EnsureConfigFileForNetwork(true)
+}
+
+// EnsureConfigFileForNetwork includes listener-only settings only when this
+// launch mode opens an HTTP listener. Existing files are never changed.
+func EnsureConfigFileForNetwork(network bool) (path string, created bool, err error) {
 	for _, p := range candidates() {
 		if _, err := os.Stat(p); err == nil {
 			return p, false, nil
@@ -587,10 +597,103 @@ func EnsureConfigFile() (path string, created bool, err error) {
 	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 		return "", false, err
 	}
-	if err := fsx.WriteAtomic(p, []byte(configTemplate), 0o644); err != nil {
+	template := firstRunConfigTemplate(network)
+	if Name != LegacyName {
+		template = strings.ReplaceAll(template, "~/.wudict/", "~/.wuDict2/")
+		template = strings.ReplaceAll(template, LegacyName, Name)
+	}
+	if err := fsx.WriteAtomic(p, []byte(template), 0o644); err != nil {
 		return "", false, err
 	}
 	return p, true, nil
+}
+
+// CleanObsoleteConfig removes settings that this fork no longer supports from
+// an existing config. Listener settings are retained for launches that use
+// the HTTP server and removed from listenerless desktop launches.
+// It returns whether the file changed.
+func CleanObsoleteConfig(path string, network bool) (bool, error) {
+	if path == "" {
+		return false, nil
+	}
+	data, err := fsx.ReadBounded(path, maxConfigBytes)
+	if err != nil {
+		return false, err
+	}
+	remove := map[string]bool{
+		"PREVIEW_MEMORY": true,
+		"SEARCH_MEMORY":  true,
+		"AUTO_INDEX":     true,
+		"NO_COMPRESS":    true,
+	}
+	if !network {
+		for _, key := range []string{
+			"SERVER_IP", "SERVER_PORT", "NO_BROWSER", "ALLOW_REMOTE_DELETE",
+			"BROWSER_EXTENSIONS", "WEB_ORIGINS", "TRUSTED_HOSTS", "AUTH", "AUTH_TOKEN",
+		} {
+			remove[key] = true
+		}
+	}
+	lines := strings.SplitAfter(string(data), "\n")
+	var kept []string
+	for i := 0; i < len(lines); i++ {
+		key := configLineKey(lines[i])
+		if !remove[key] {
+			kept = append(kept, lines[i])
+			continue
+		}
+		// Explanatory comment lines immediately after a removed option belong
+		// to it. Stop at the next option so its documentation is retained.
+		for i+1 < len(lines) {
+			next := strings.TrimSpace(lines[i+1])
+			if configLineKey(lines[i+1]) != "" || (next != "" && !strings.HasPrefix(next, "#")) {
+				break
+			}
+			i++
+		}
+	}
+	cleaned := strings.Join(kept, "")
+	if cleaned == string(data) {
+		return false, nil
+	}
+	if err := fsx.WriteAtomic(path, []byte(cleaned), 0o644); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// configLineKey recognizes both active assignments and commented template
+// entries, such as `# SERVER_PORT = "6888"`.
+func configLineKey(line string) string {
+	line = strings.TrimSpace(line)
+	line = strings.TrimPrefix(line, "#")
+	line = strings.TrimSpace(line)
+	key, _, ok := strings.Cut(line, "=")
+	if !ok {
+		return ""
+	}
+	key = strings.TrimSpace(key)
+	if key == "" {
+		return ""
+	}
+	for _, r := range key {
+		if !(r == '_' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9') {
+			return ""
+		}
+	}
+	return key
+}
+
+func firstRunConfigTemplate(network bool) string {
+	template := configTemplate
+	if !network {
+		template = regexp.MustCompile(`(?ms)^# SERVER_IP.*?^# NO_BROWSER[^\r\n]*\r?\n`).ReplaceAllString(template, "")
+		template = regexp.MustCompile(`(?ms)(^# ALLOW_REMOTE_DELETE.*?)(^# USE_CACHED)`).ReplaceAllString(template, "$2")
+		if start := strings.Index(template, "# BROWSER_EXTENSIONS"); start >= 0 {
+			template = template[:start]
+		}
+	}
+	return template
 }
 
 // SaveKey sets key = "value" in the config file at path, uncommenting or
@@ -970,16 +1073,27 @@ func FormatList(dirs []string) string {
 	return "[" + strings.Join(quoted, ", ") + "]"
 }
 
-// ExpandHome expands a leading ~ to the user home directory. "~\" counts too
-// on Windows, where it is how a path is written - and how the panel itself
-// shows one (pathAliases); elsewhere a backslash is part of a file name.
+// ExpandHome expands a leading ~ to the user home directory. A portable
+// Windows launch instead resolves ~ and relative paths from its Data folder.
+// "~\" counts too on Windows, where it is how a path is written - and how the
+// panel itself shows one (pathAliases); elsewhere a backslash is part of a file name.
 func ExpandHome(p string) string {
 	rest, ok := strings.CutPrefix(p, "~")
-	if !ok || (rest != "" && rest[0] != '/' && rest[0] != filepath.Separator) {
+	if ok && (rest == "" || rest[0] == '/' || rest[0] == filepath.Separator) {
+		base := os.Getenv("WUDICT_PORTABLE_HOME")
+		if base == "" {
+			base, _ = os.UserHomeDir()
+		}
+		if base != "" {
+			return filepath.Join(base, rest[min(len(rest), 1):])
+		}
 		return p
 	}
-	if home, err := os.UserHomeDir(); err == nil {
-		return filepath.Join(home, rest[min(len(rest), 1):])
+	if strings.HasPrefix(p, "~") {
+		return p
+	}
+	if base := os.Getenv("WUDICT_PORTABLE_HOME"); base != "" && !filepath.IsAbs(p) {
+		return filepath.Join(base, p)
 	}
 	return p
 }
@@ -1040,15 +1154,15 @@ func ParseHostList(v string) []string {
 	return out
 }
 
-// ParseWorkers reads INDEX_WORKERS: a count, or "auto"/"all"/"max"/"0"/"-1"
-// for every core. Preparing a dictionary saturates a core and allocates a few
-// hundred bytes per headword, so the default is ONE - a background convenience
-// must not take the machine away from the person using it. The result is
-// clamped to [1, NumCPU].
+// ParseWorkers reads INDEX_WORKERS: a count, "auto" for all but one core,
+// or "all"/"max"/"0"/"-1" for every core. Auto leaves one core free for the
+// rest of the app and other work. The result is clamped to [1, NumCPU].
 func ParseWorkers(v string) int {
 	v = strings.ToLower(strings.TrimSpace(v))
 	switch v {
-	case "auto", "all", "max", "cpu", "0", "-1":
+	case "auto":
+		return max(1, runtime.NumCPU()-1)
+	case "all", "max", "cpu", "0", "-1":
 		return runtime.NumCPU()
 	}
 	n, err := strconv.Atoi(v)
@@ -1112,9 +1226,6 @@ type Setting struct {
 // actually in effect - including the defaults this package computes from the
 // device itself (tuning.go), which nothing outside Go should ever recompute.
 var Tunables = []string{
-	"NO_COMPRESS",
-	"SEARCH_MEMORY",
-	"PREVIEW_MEMORY",
 	"MEMORY_LIMIT",
 	"INDEX_WORKERS",
 	"SERVER_IP",
@@ -1129,11 +1240,6 @@ func (c Config) Effective() map[string]Setting {
 	out := make(map[string]Setting, len(Tunables))
 	val := func(key string) string {
 		switch key {
-		case "NO_COMPRESS":
-			if c.NoCompress {
-				return "1"
-			}
-			return "0"
 		case "SEARCH_MEMORY":
 			return FormatSize(c.SearchMemory)
 		case "PREVIEW_MEMORY":

@@ -5,7 +5,6 @@
 package mdx
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"mime"
@@ -16,6 +15,7 @@ import (
 
 	"github.com/wuweidict/wudict/internal/dict"
 	go_mdict "github.com/wuweidict/wudict/internal/gomdict"
+	"github.com/wuweidict/wudict/internal/resource"
 )
 
 // MDD is ONE .mdd file opened on its own.
@@ -122,5 +122,5 @@ func (d *MDD) Resource(name string) (io.ReadCloser, string, error) {
 	if err != nil {
 		return nil, "", fmt.Errorf("mdd: locate %q: %w", name, err)
 	}
-	return io.NopCloser(bytes.NewReader(data)), mime.TypeByExtension(path.Ext(norm)), nil
+	return resource.Bytes(data), mime.TypeByExtension(path.Ext(norm)), nil
 }

@@ -52,15 +52,16 @@ var _ dict.Searcher = (*Store)(nil)
 
 // Store is one opened .text.db. Safe for concurrent readers.
 type Store struct {
-	db         *sql.DB
-	meta       dict.Meta
-	ftsOK      bool   // article text indexed (ingest_level != "headwords")
-	srcPath    string // source_path recorded at ingest ("" if unknown)
-	hasTrigram bool   // entry_trigram present → "contains" substring search
-	staleFold  bool   // folded keys or trigram built by another dict.FoldVersion
-	hasFolded  bool   // prepared with indexed folded headwords and aliases
-	hasCaseKey bool   // prepared with indexed accent-preserving case keys
-	uuid       string // dict_uuid: what a sibling media.db must match
+	db               *sql.DB
+	meta             dict.Meta
+	ftsOK            bool   // article text indexed (ingest_level != "headwords")
+	srcPath          string // source_path recorded at ingest ("" if unknown)
+	hasTrigram       bool   // entry_trigram present → "contains" substring search
+	staleFold        bool   // folded keys or trigram built by another dict.FoldVersion
+	hasFolded        bool   // prepared with indexed folded headwords and aliases
+	hasCaseKey       bool   // prepared with indexed accent-preserving case keys
+	hasBrowseAnchors bool   // sparse key/ordinal points for bounded Browse jumps
+	uuid             string // dict_uuid: what a sibling media.db must match
 
 	// The sibling media.db is opened on the first resource that asks for one,
 	// not at open. Most opens never serve a resource at all - a search touches
@@ -182,6 +183,12 @@ func Open(path string) (*Store, error) {
 	s.ftsOK = PlanFromMeta(m).FullText
 	s.hasFolded = stampOf(m, "ingest_version", 1) >= 2
 	s.hasCaseKey = stampOf(m, "ingest_version", 1) >= 3
+	var anchors int
+	if err := db.QueryRow(`SELECT count(*) FROM sqlite_master WHERE type='table' AND name='browse_anchor'`).Scan(&anchors); err != nil {
+		db.Close()
+		return nil, err
+	}
+	s.hasBrowseAnchors = anchors > 0
 	s.srcPath = m["source_path"]
 	// feature-detect the trigram "contains" index rather than gating on
 	// schema version, so older .text.db (and standalone native dicts whose

@@ -7,7 +7,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
+	"net/url"
 )
 
 const setupWorkKey = "folder-setup"
@@ -99,4 +101,56 @@ func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+}
+
+// DesktopSetup exposes the setup page's migration actions to the Windows
+// WebView bridge, with the same host callbacks as the HTTP adapter.
+func (s *Server) DesktopSetup(argument string) (any, error) {
+	values, err := url.ParseQuery(argument)
+	if err != nil {
+		return nil, err
+	}
+	action := values.Get("migration")
+	if action == "status" {
+		if s.FirstRunMigrationStatus == nil {
+			return FirstRunMigration{}, nil
+		}
+		return s.FirstRunMigrationStatus(), nil
+	}
+	if action == "" || s.ApplyFirstRunMigration == nil {
+		return nil, errors.New("first-run migration is unavailable")
+	}
+	if err := s.ApplyFirstRunMigration(action); err != nil {
+		return nil, err
+	}
+	return map[string]bool{"saved": true}, nil
+}
+
+func (s *Server) DesktopFolderSetup(argument string) (any, error) {
+	if len(argument) > 1<<20 {
+		return nil, errors.New("folder request is too large")
+	}
+	values, err := url.ParseQuery(argument)
+	if err != nil {
+		return nil, err
+	}
+	if values.Get("save") != "1" {
+		values.Del("save")
+		result, _ := s.setupResult(values, true)
+		return result, nil
+	}
+	_, started := s.jobs.start(setupWorkKey, 0, jobStatus{Total: 1, Stage: "folders"}, func(j *job) {
+		result, _ := s.setupResult(values, true)
+		j.update(func(st *jobStatus) {
+			st.Result = result
+			st.Done = 1
+			if message, ok := result["error"].(string); ok {
+				st.Err = message
+			}
+		})
+	})
+	if !started {
+		return nil, errors.New("folder setup already running")
+	}
+	return s.indexWorkStatus(setupWorkKey), nil
 }

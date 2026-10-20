@@ -36,7 +36,7 @@ let looksPending = null;
 function looksEl(id) { return document.getElementById(id); }
 
 async function looksFetch(path, method, body) {
-  const r = await fetch(path, {
+  const r = await apiFetch(path, {
     method,
     headers: body ? { "Content-Type": "application/json" } : undefined,
     body: body ? JSON.stringify(body) : undefined,
@@ -203,6 +203,11 @@ async function looksApply(id) {
 
 async function looksApplied(answer) {
   LOOKS = answer.payload;
+  const appliedLook = LOOKS && LOOKS.looks.find((l) => l.id === answer.applied);
+  if (appliedLook && appliedLook.builtin) {
+    applyArticleFont("charis", true);
+    applyHideUnmarkedExamples(true, true);
+  }
   // The PAGE's own halves go back FIRST: the backdrop over the bridge, and the
   // size and the weight onto the element - the server's copy of those is a
   // file, and neither the stepper nor the article's custom property reads one.

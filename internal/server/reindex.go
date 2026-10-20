@@ -5,6 +5,8 @@
 package server
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"path/filepath"
@@ -28,11 +30,9 @@ import (
 // and the one case where it might - suspected damage the stamps cannot see -
 // is `wudict reindex -all`, from the command line.
 //
-// Shape: the background lane (indexLimit), one dictionary at a time, so it
-// yields to everything the user does in the meantime; HoldActiveProcs for the
-// whole job, because a person is watching a progress line and the Android
-// shell keeps its foreground service up only while that hold is taken.
-// Cancel takes effect between dictionaries: each rebuild is the usual atomic
+// Shape: independent dictionaries use the configured index worker limit;
+// each dictionary's own ingest lock serializes its database changes. Cancel
+// takes effect between dictionaries: each rebuild is the usual atomic
 // temp+rename, so stopping one halfway would only throw its work away.
 
 // ReindexStatus is the job as the page - and `wudict reindex`, handing off to
@@ -40,6 +40,10 @@ import (
 // and not Running.
 type ReindexStatus struct {
 	Running bool `json:"running"`
+	// Active dictionaries being processed now (bounded by INDEX_WORKERS).
+	Active       int                      `json:"active"`
+	ActiveDicts  []string                 `json:"activeDicts,omitempty"`
+	BusyProgress []dictionaryWorkProgress `json:"busyProgress,omitempty"`
 	// Done of Total dictionaries finished (failed ones included).
 	Done  int `json:"done"`
 	Total int `json:"total"`
@@ -60,11 +64,42 @@ const reindexKey = "reindex"
 func (s *Server) reindexStatus() ReindexStatus {
 	st, _ := s.jobs.status(reindexKey)
 	return ReindexStatus{
-		Running: st.Running, Done: int(st.Done), Total: int(st.Total),
+		Running: st.Running, Active: len(st.ActiveDicts), ActiveDicts: st.ActiveDicts, BusyProgress: st.ActiveProgress, Done: int(st.Done), Total: int(st.Total),
 		Current: st.Current, CurrentDone: int(st.CurrentDone), CurrentTotal: int(st.CurrentTotal),
 		Failed: st.Failed, Canceled: st.Canceled,
 	}
 }
+
+var errReindexConflict = errors.New("dictionary operations are running; wait for completion or stop them")
+
+func (s *Server) StartReindex() (ReindexStatus, bool, error) {
+	s.admission.mu.Lock()
+	defer s.admission.mu.Unlock()
+	if st, ok := s.jobs.status(reindexKey); ok && st.Running {
+		return s.reindexStatus(), false, nil
+	}
+	exclusive, ids := s.workLocks()
+	if exclusive || len(ids) > 0 {
+		return ReindexStatus{}, false, errReindexConflict
+	}
+	if s.admission.pending == nil {
+		s.admission.pending = map[string]int{}
+	}
+	s.admission.pending[reindexKey]++
+	defer func() { s.admission.pending[reindexKey]-- }()
+	var todo []*entry
+	for _, e := range s.reg.all() {
+		if entryOutdated(e.Path) {
+			todo = append(todo, e)
+		}
+	}
+	if len(todo) == 0 {
+		return s.reindexStatus(), false, nil
+	}
+	_, started := s.jobs.start(reindexKey, 0, jobStatus{Total: int64(len(todo))}, func(j *job) { s.runReindex(j, todo) })
+	return s.reindexStatus(), started, nil
+}
+func (s *Server) StopReindex() ReindexStatus { s.jobs.cancel(reindexKey); return s.reindexStatus() }
 
 // entryOutdated is the per-dictionary test the job selects by. It agrees with
 // dictInfo.Outdated by construction: a folder PreparedFor accepts is judged by
@@ -107,23 +142,15 @@ func preparedIndexesNeedRebuild(format string, _ store.Plan) bool {
 // status when it starts, 200 with the status when there was nothing to do or
 // a job is already running (the page then simply follows that one).
 func (s *Server) handleReindex(w http.ResponseWriter, r *http.Request) {
-	var todo []*entry
-	for _, e := range s.reg.all() {
-		if entryOutdated(e.Path) {
-			todo = append(todo, e)
-		}
-	}
-	if len(todo) == 0 {
-		writeJSON(w, s.reindexStatus())
+	status, started, err := s.StartReindex()
+	if err != nil {
+		httpErr(w, http.StatusConflict, "%v", err)
 		return
 	}
-	if _, started := s.jobs.start(reindexKey, 0, jobStatus{Total: int64(len(todo))},
-		func(j *job) { s.runReindex(j, todo) }); !started {
-		writeJSON(w, s.reindexStatus())
-		return
+	if started {
+		w.WriteHeader(http.StatusAccepted)
 	}
-	w.WriteHeader(http.StatusAccepted)
-	writeJSON(w, s.reindexStatus())
+	writeJSON(w, status)
 }
 
 // handleReindexStatus is the poll. Never fails, as the import poll never does.
@@ -142,31 +169,40 @@ func (s *Server) runReindex(j *job, todo []*entry) {
 	defer j.update(func(st *jobStatus) {
 		st.Current, st.CurrentDone, st.CurrentTotal = "", 0, 0
 	})
-	for _, e := range todo {
-		release := acquire(indexLimit)
-		// the lane is FIFO and a rebuild takes minutes: the cancel may have
-		// arrived while this slot was being waited for
-		if j.canceled() {
-			release()
-			j.update(func(st *jobStatus) { st.Canceled = true })
+	runIndexTasks(todo, j.canceled, func(e *entry) {
+		release := acquire(currentIndexLimit())
+		defer release()
+		ctx, cancel, ok := j.beginDictionary(e.ID)
+		if !ok {
 			return
 		}
+		defer func() {
+			j.finishDictionary(e.ID, cancel)
+			trackJobDictionary(j, e.ID, false)
+		}()
 		name := e.probeName()
+		trackJobDictionary(j, e.ID, true)
 		store.IndexDiagnostic("rebuild dictionary start source=%q dictionary=%q self_indexed=%v", e.Path, name, entryHasSelfIndex(e))
 		j.update(func(st *jobStatus) {
 			st.Current, st.CurrentDone, st.CurrentTotal = name, 0, 0
 		})
+		updateJobDictionaryProgress(j, e.ID, name, "", "update", 0, 0)
 		last := time.Time{}
 		progress := func(done, total int) {
 			if time.Since(last) < 200*time.Millisecond {
 				return
 			}
 			last = time.Now()
-			j.update(func(st *jobStatus) { st.CurrentDone, st.CurrentTotal = int64(done), int64(total) })
+			updateJobDictionaryProgress(j, e.ID, name, "", "update", int64(done), int64(total))
 		}
-		_, err := e.refresh(progress)
-		release()
+		_, err := e.refreshContext(ctx, progress)
 		store.IndexDiagnostic("rebuild dictionary finish source=%q dictionary=%q error=%q", e.Path, name, fmt.Sprint(err))
+		if errors.Is(err, context.Canceled) && ctx.Err() != nil && !j.canceled() && !errors.Is(err, store.ErrIngestTempCleanup) {
+			return
+		}
+		if errors.Is(err, context.Canceled) && j.canceled() && !errors.Is(err, store.ErrIngestTempCleanup) {
+			return
+		}
 		j.update(func(st *jobStatus) {
 			st.Done++
 			if err != nil {
@@ -176,6 +212,9 @@ func (s *Server) runReindex(j *job, todo []*entry) {
 		if err != nil {
 			logx.Warn("could not rebuild %s: %v", filepath.Base(e.Path), err)
 		}
+	})
+	if j.canceled() {
+		j.update(func(st *jobStatus) { st.Canceled = true })
 	}
 }
 
@@ -186,12 +225,19 @@ func (s *Server) runReindex(j *job, todo []*entry) {
 // repacked if the rebuild (or its own age) left it unpaired. A dictionary
 // never packed is not given media it did not have.
 func (e *entry) refresh(progress store.Progress) (bool, error) {
+	return e.refreshContext(context.Background(), progress)
+}
+
+func (e *entry) refreshContext(ctx context.Context, progress store.Progress) (bool, error) {
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
 	if !rebuildable(e.Path) {
 		return false, nil // no source: nothing to rebuild from
 	}
 	if _, ok := store.LookupDir(e.Path); !ok {
 		return false, nil // never prepared: nothing is outdated
 	}
-	out, err := e.reconcile(e.probeName(), store.Target{Rebuild: store.IfOutdated, Media: store.MediaKeep}, progress)
+	out, err := e.reconcileContext(ctx, e.probeName(), store.Target{Rebuild: store.IfOutdated, Media: store.MediaKeep}, progress)
 	return out.Changed(), err
 }

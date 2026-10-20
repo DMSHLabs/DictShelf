@@ -6,6 +6,7 @@ package server
 
 import (
 	"errors"
+	"fmt"
 	"io/fs"
 	"net/http"
 
@@ -21,46 +22,64 @@ import (
 // (howto.MarkRemoved): installed again, listed again, and kept from then on.
 func (s *Server) handleHowtoCopy(w http.ResponseWriter, r *http.Request) {
 	if restore, _ := queryFlag(r.URL.Query(), "restore"); restore {
-		s.restoreHowto(w)
+		value, err := s.howtoOperation(true)
+		s.writeHowtoResult(w, value, err)
 		return
 	}
-	dir := s.importDir()
-	if dir == "" {
-		httpErr(w, 409, "no dictionary folder is configured")
-		return
-	}
-	p, err := howto.CopyTo(dir)
-	switch {
-	case errors.Is(err, fs.ErrExist):
-		httpErr(w, 409, "%s is already in %s", howto.FileName, dir)
-		return
-	case err != nil:
-		httpErr(w, 500, "%v", err)
-		return
-	}
-	if err := s.reg.Rescan(); err != nil {
-		httpErr(w, 500, "%v", err)
-		return
-	}
-	s.reg.Warm()
-	writeJSON(w, map[string]string{"path": p})
+	value, err := s.howtoOperation(false)
+	s.writeHowtoResult(w, value, err)
 }
 
-func (s *Server) restoreHowto(w http.ResponseWriter) {
+type howtoOperationError struct {
+	status  int
+	message string
+}
+
+func (e *howtoOperationError) Error() string { return e.message }
+
+func (s *Server) howtoOperation(restore bool) (map[string]string, error) {
+	if !restore {
+		dir := s.importDir()
+		if dir == "" {
+			return nil, &howtoOperationError{status: http.StatusConflict, message: "no dictionary folder is configured"}
+		}
+		p, err := howto.CopyTo(dir)
+		if errors.Is(err, fs.ErrExist) {
+			return nil, &howtoOperationError{status: http.StatusConflict, message: fmt.Sprintf("%s is already in %s", howto.FileName, dir)}
+		}
+		if err != nil {
+			return nil, &howtoOperationError{status: http.StatusInternalServerError, message: err.Error()}
+		}
+		if err := s.reg.Rescan(); err != nil {
+			return nil, &howtoOperationError{status: http.StatusInternalServerError, message: err.Error()}
+		}
+		s.reg.Warm()
+		return map[string]string{"path": p}, nil
+	}
 	if s.User.Builtin() == "" {
-		httpErr(w, 409, "this wudict has no place to keep the wudict howto")
-		return
+		return nil, &howtoOperationError{status: http.StatusConflict, message: "this wudict has no place to keep the wudict howto"}
 	}
 	p, err := howto.Restore(s.User.Builtin())
 	if err != nil {
-		httpErr(w, 500, "%v", err)
-		return
+		return nil, &howtoOperationError{status: http.StatusInternalServerError, message: err.Error()}
 	}
 	s.reg.AddBuiltin(Builtin{ID: howto.ID, Path: p})
 	if err := s.reg.Rescan(); err != nil {
-		httpErr(w, 500, "%v", err)
-		return
+		return nil, &howtoOperationError{status: http.StatusInternalServerError, message: err.Error()}
 	}
 	s.reg.Warm()
-	writeJSON(w, map[string]string{"path": p})
+	return map[string]string{"path": p}, nil
+}
+
+func (s *Server) writeHowtoResult(w http.ResponseWriter, value map[string]string, err error) {
+	if err != nil {
+		var failure *howtoOperationError
+		if errors.As(err, &failure) {
+			httpErr(w, failure.status, "%s", failure.message)
+			return
+		}
+		httpErr(w, http.StatusInternalServerError, "%v", err)
+		return
+	}
+	writeJSON(w, value)
 }

@@ -1,0 +1,60 @@
+/**
+ * Copyright (C) 2026 DmShAl (Shepeta Dmitry)
+ *
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+dialog#filtersDialog.group-dialog.panel-card.workspace-dialog{position:fixed;inset:var(--wd-inset-top,0px) 0 var(--wd-inset-bottom,0px);
+  width:auto;height:auto;max-width:none;max-height:none;margin:0;padding:10px;border:0;border-radius:0;
+  background:var(--paper-bg,var(--bg));box-shadow:none;overflow:hidden}
+dialog#filtersDialog.group-dialog.panel-card.workspace-dialog:not([open]){display:none}
+dialog#filtersDialog.group-dialog.panel-card.workspace-dialog[open]{display:flex}
+.filters-dialog-card{box-sizing:border-box;display:flex;flex-direction:column;gap:calc(var(--ui-row-gap) * 1em);
+  width:100%;height:100%;min-height:0;padding:1em;border:1px solid var(--line);border-radius:12px;
+  background:var(--paper-bg,var(--bg));overflow:hidden}
+html[data-shell-image] dialog#filtersDialog.group-dialog.panel-card.workspace-dialog{background-color:var(--paper-bg);
+  background-image:linear-gradient(rgba(255,245,220,.18),rgba(255,245,220,.18)),var(--paper-bk-image,none);
+  background-size:100% 100%,100% 100%;background-position:center;background-repeat:no-repeat;background-attachment:fixed}
+html[data-shell-image] .filters-dialog-card{background-color:var(--paper-bg);
+  background-image:linear-gradient(rgba(255,245,220,.18),rgba(255,245,220,.18)),var(--paper-bk-image,none);
+  background-size:100% 100%,100% 100%;background-position:center;background-repeat:no-repeat;background-attachment:fixed}
+html:has(link[data-preset="sepia"]) dialog#filtersDialog.group-dialog.panel-card.workspace-dialog,
+html:has(link[data-preset="sepia"]) .filters-dialog-card{background:var(--bg)}
+.filters-dialog-top{display:flex;align-items:center;justify-content:space-between;gap:1em;flex:none}
+.filters-dialog-top h2{font-size:calc(var(--ui-font-title) * 1rem)}
+.filters-dialog-top .btn{box-sizing:border-box;display:grid;place-items:center;flex:none;width:calc(var(--ui-main-control-height) * 1em);
+  height:calc(var(--ui-main-control-height) * 1em);min-height:calc(var(--ui-main-control-height) * 1em);padding:0;
+  min-width:calc(var(--ui-main-control-height) * 1em);font-size:calc(var(--ui-main-control-font) * 1rem);line-height:1;overflow:hidden;position:relative}
+dialog#filtersDialog .filters-dialog-top .icon-close{display:block;position:absolute;left:50%;top:50%;flex:none;
+  width:1.1em!important;height:1.1em!important;transform:translate(-50%,-50%)}
+html[data-shell-image] .filters-dialog-top{background-color:var(--paper-bg);
+  background-image:linear-gradient(rgba(255,245,220,.25),rgba(255,245,220,.25)),var(--paper-bk-image,none);
+  background-size:100% 100%,100% 100%;background-position:center;background-repeat:no-repeat;background-attachment:fixed;
+  border-bottom:1px solid rgba(120,90,45,.22)}
+html:has(link[data-preset="sepia"]) .filters-dialog-top{background:var(--bg-card,var(--bg));border-bottom:1px solid var(--line)}
+html[data-shell-image] .filters-dialog-card textarea,html[data-shell-image] .filters-dialog-probs{scrollbar-color:rgba(120,90,45,.58) transparent}
+html[data-shell-image] .filters-dialog-card textarea::-webkit-scrollbar-track,
+html[data-shell-image] .filters-dialog-probs::-webkit-scrollbar-track{background:transparent}
+html[data-shell-image] .filters-dialog-card textarea::-webkit-scrollbar-thumb,
+html[data-shell-image] .filters-dialog-probs::-webkit-scrollbar-thumb{background:rgba(120,90,45,.58);border:2px solid transparent;background-clip:padding-box;border-radius:10px}
+html[data-shell-image] .filters-dialog-card textarea::-webkit-scrollbar-thumb:hover,
+html[data-shell-image] .filters-dialog-probs::-webkit-scrollbar-thumb:hover{background-color:rgba(90,65,35,.76)}
+.filters-dialog-card>p{flex:none;margin:0;font-size:calc(var(--ui-font-addition) * 1rem)}
+.filters-dialog-card .filters-dialog-quiet{color:var(--label)}
+.filters-dialog-quiet code{box-sizing:border-box;display:inline-flex;align-items:center;min-height:calc(var(--ui-hint-control-height) * 1em);
+  font-size:calc(var(--ui-hint-font-size) * 1rem);white-space:nowrap}
+.filters-dialog-card textarea{box-sizing:border-box;display:block;flex:1 1 auto;min-height:0;width:100%;margin:0;
+  font:calc(var(--ui-font-addition) * 1rem)/1.55 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:var(--fg);
+  background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:.618em .8em;resize:none;outline:none;tab-size:4}
+.filters-dialog-card textarea:focus{border-color:var(--focus);box-shadow:0 0 0 3px color-mix(in srgb,var(--focus) 25%,transparent)}
+html[data-shell-image] .filters-dialog-card textarea{background-color:rgba(255,255,255,.18)}
+.filters-dialog-probs{flex:none;max-height:25%;overflow:auto;margin:0;padding:0;list-style:none;color:var(--danger);font-size:calc(var(--ui-hint-font-size) * 1rem)}
+.filters-dialog-probs:empty{display:none}
+.filters-dialog-probs code{color:var(--fg);font-size:inherit;overflow-wrap:anywhere}
+.filters-dialog-actions{display:flex;flex-wrap:nowrap;align-items:center;gap:.5em;width:100%;box-sizing:border-box;flex:none}
+.filters-dialog-actions #filtersDialogMessage{flex:1 1 auto;min-width:0;margin:0;overflow-wrap:anywhere;font-size:calc(var(--ui-hint-font-size) * 1rem)}
+.filters-dialog-actions #filtersDialogSave,.filters-dialog-actions #filtersDialogReset{flex:none;min-height:calc(var(--ui-edit_control-height) * 1.5rem);font-size:calc(var(--ui-edit_control-font) * 1rem)}
+.filters-dialog-actions #filtersDialogMessage:empty{display:none}
+.filters-dialog-actions #filtersDialogMessage.err{color:var(--danger)}
+.filters-dialog-actions #filtersDialogMessage.ok{color:var(--safe)}
+.filters-dialog-note{flex:none;color:var(--label);font-size:calc(var(--ui-hint-font-size) * 1rem)!important;word-break:break-all}
+@media(max-width:600px){.filters-dialog.workspace-dialog{padding:10px}.filters-dialog-card{padding:1em .8em}}

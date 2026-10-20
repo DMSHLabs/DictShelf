@@ -1,0 +1,24 @@
+<!-- Copyright (C) 2026 DmShAl (Shepeta Dmitry)
+
+     SPDX-License-Identifier: GPL-3.0-or-later
+-->
+<dialog id="filtersDialog" lang="{{T:locale}}" class="group-dialog panel-card workspace-dialog filters-dialog" aria-labelledby="filtersDialogTitle">
+  <div class="filters-dialog-card">
+    <div class="filters-dialog-top">
+      <h2 id="filtersDialogTitle">{{T:filters.title}}</h2>
+      <button type="button" class="btn" id="filtersDialogClose" aria-label="{{T:pages.close}}"><svg class="icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+    </div>
+    <p>{{T:filters.hint}}</p>
+    <p class="filters-dialog-quiet"><code>Mine = oxford, collins</code> &nbsp; <code>Mine = `^regex$`</code></p>
+    <textarea id="filtersDialogText" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off" aria-label="groups.ini"></textarea>
+    <ul class="filters-dialog-probs" id="filtersDialogProblems"></ul>
+    <div class="filters-dialog-actions">
+      <div id="filtersDialogMessage" role="status" aria-live="polite"></div>
+      <button type="button" class="btn" id="filtersDialogSave">{{T:filters.save}}</button>
+      <button type="button" class="btn" id="filtersDialogReset">{{T:filters.reset}}</button>
+    </div>
+    <p class="filters-dialog-note" id="filtersDialogFile"></p>
+  </div>
+</dialog>
+<link rel="stylesheet" href="/assets/filters-dialog.css?v={{FILTERSDIALOGCSS}}">
+<script defer src="/assets/filters-dialog.js?v={{FILTERSDIALOGJS}}"></script>

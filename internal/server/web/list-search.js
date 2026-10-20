@@ -20,7 +20,8 @@
       root, itemSelector, dock, scrollContainer = root,
       getItems = () => [...root.querySelectorAll(itemSelector)],
       getText = item => item.innerText || item.textContent || "",
-      labels = {}, initiallyFiltering = false, highlightSelector = null, onUpdate = null, inputId = null
+      labels = {}, initiallyFiltering = false, storageKey = null,
+      highlightSelector = null, onUpdate = null, inputId = null
     } = options;
     if (!root || !dock || typeof getItems !== "function")
       throw new TypeError("list search needs a root, a dock and an item getter");
@@ -44,7 +45,16 @@
     next.setAttribute("aria-label", labels.next || "Next match");
     previous.title = previous.getAttribute("aria-label");
     next.title = next.getAttribute("aria-label");
-    let filtering = !!initiallyFiltering;
+    function readFiltering() {
+      if (!storageKey) return !!initiallyFiltering;
+      try {
+        const saved = localStorage.getItem(storageKey);
+        if (saved === "filter") return true;
+        if (saved === "search") return false;
+      } catch (_) {}
+      return !!initiallyFiltering;
+    }
+    let filtering = readFiltering();
     let activeIndex = -1;
     let items = [];
     let matches = [];
@@ -125,6 +135,9 @@
     }
     function toggleFilter() {
       filtering = !filtering;
+      if (storageKey) {
+        try { localStorage.setItem(storageKey, filtering ? "filter" : "search"); } catch (_) {}
+      }
       activeIndex = filtering ? -1 : (matches.length ? 0 : -1);
       paint();
       if (!filtering) scrollToCurrent();
@@ -188,6 +201,7 @@
     window.dictSettingsListSearch = create({
       root, itemSelector: ".pd", dock, highlightSelector: ".hd > b",
       scrollContainer: document.getElementById("dictSettingsScroll"),
+      initiallyFiltering: true, storageKey: "wudict_list_search_mode_dict_settings",
       labels: {
         placeholder: t("dictUI.listSearchPlaceholder"),
         filterPlaceholder: t("dictUI.listFilterPlaceholder"),

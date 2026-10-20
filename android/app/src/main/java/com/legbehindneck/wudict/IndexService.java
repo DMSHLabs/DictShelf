@@ -46,13 +46,12 @@ import android.util.Log;
  * shade - but the receipt would be invisible, so the ask happens at the one
  * moment it is meaningful ({@link Notif}).
  *
- * <p>Started and stopped from {@link ServerProcess}, off the server's own
- * "@wudict busy" markers: the server is an exec'd child (D52) and the only part
- * of this app that knows whether a person is waiting on an ingest right now.
+ * <p>Started and stopped from {@link GoRuntime}, using busy markers from the
+ * in-process Go runtime and local holds for work performed by Android itself.
  *
  * <h2>The three rules that make this safe</h2>
  *
- * <p><b>A start is debounced.</b> The server refcounts its markers around every
+ * <p><b>A start is debounced.</b> Go refcounts its markers around every
  * demanded ingest, including the ones that finish instantly - selecting an
  * already-prepared dictionary emits {@code busy 1} and {@code busy 0} 36 ms
  * apart. Arming a foreground service for that buys nothing and flashes a
@@ -110,15 +109,13 @@ public final class IndexService extends Service {
     // goes on regardless.
     //
     // The two are kept apart because they are cleared differently and answer
-    // different questions. `serverBusy` is a STATE the server publishes and the
-    // shell resets outright when the child dies (ServerProcess), so it can
+    // different questions. `runtimeBusy` is a state published by Go and the
+    // shell resets when the Go runtime stops, so it can
     // never be a counter. `holds` is balanced acquire/release taken by work
     // inside this process - an import copying gigabytes through the
-    // ContentResolver before the server has ever seen the files. The service
-    // arms on either; isBusy() reports only the first, because its caller is
-    // asking whether the SERVER is busy before offering to kill it, and a file
-    // copy is not an answer to that question.
-    private static volatile boolean serverBusy;
+    // ContentResolver before indexing can begin. The service
+    // arms on either.
+    private static volatile boolean runtimeBusy;
     private static int holds;
     private static volatile boolean inFlight;
 
@@ -133,11 +130,11 @@ public final class IndexService extends Service {
     private static boolean stopWanted;
 
     // What the notification SAYS. The service is shared by three jobs that
-    // take minutes - the server's ingest, an import copying files, a download
+    // take minutes - Go indexing, an import copying files, a download
     // - and only the job knows which one it is, so the job says so and this
     // class only repeats it. The default is the ingest's, because that is the
     // one arrival that has no holder to speak for it: it comes from the
-    // server's markers (D140).
+    // Go's markers (D140).
     //
     // labelPct is -1 for "no number available", which is not the same as 0:
     // a site that declared no length has no percentage to show, and a bar
@@ -147,19 +144,15 @@ public final class IndexService extends Service {
     private static int labelText = R.string.index_text;
     private static int labelPct = -1;
 
-    /** Whether the server is preparing a dictionary right now. */
+    /** Whether Go is preparing a dictionary right now. */
     static boolean hasWork() { return inFlight; }
 
-    static boolean isBusy() {
-        return serverBusy;
-    }
-
-    /** The server's marker: a state, set and cleared, never counted. Never throws. */
+    /** Go's busy marker: a state, set and cleared, never counted. Never throws. */
     static void busy(Context ctx, boolean busy) {
         Context app = ctx.getApplicationContext();
         boolean up;
         synchronized (LOCK) {
-            serverBusy = busy;
+            runtimeBusy = busy;
             up = recompute();
         }
         apply(app, up);
@@ -167,9 +160,9 @@ public final class IndexService extends Service {
 
     /**
      * Claims the service for long work running inside this process, which the
-     * server's markers cannot cover because the server is not doing it: an
-     * import copies its gigabytes here, before the files exist anywhere the
-     * server can see them, and that copy is the phase most likely to be killed.
+     * runtime markers cannot cover because Go is not doing it: an
+     * import copies its gigabytes here before the files are ready for
+     * indexing, and that copy is the phase most likely to be killed.
      * Balanced by {@link #release}, and safe to nest with a concurrent ingest.
      *
      * <p>The holder names its own work, because only it knows what the work is
@@ -270,7 +263,7 @@ public final class IndexService extends Service {
 
     /** LOCK held. Republishes the combined state and returns it. */
     private static boolean recompute() {
-        inFlight = serverBusy || holds > 0;
+        inFlight = runtimeBusy || holds > 0;
         return inFlight;
     }
 
@@ -279,7 +272,7 @@ public final class IndexService extends Service {
             arm(app);
         } else {
             disarm(app);
-            ServerProcess.workFinished();
+            GoRuntime.workFinished();
         }
     }
 
@@ -363,7 +356,7 @@ public final class IndexService extends Service {
     public int onStartCommand(Intent intent, int flags, int startId) {
         attempt(0);
         // NOT sticky: if the platform kills us anyway, the ingest died with the
-        // server process, and restarting an empty service would protect
+        // app process, and restarting an empty service would protect
         // nothing. The next demand starts a fresh one.
         return START_NOT_STICKY;
     }

@@ -103,6 +103,8 @@ func (s *Server) routes() []route {
 		{"POST", "/api/orphans", s.handleResolveOrphans, "/api/orphans", false},
 		{"GET", "/api/config", s.handleConfig, "/api/config", false},
 		{"GET", "/api/prefs", s.handlePrefs, "/api/prefs", false},
+		{"GET", "/api/user-storage", s.handleUserStorage, "/api/user-storage", false},
+		{"PUT", "/api/user-storage", s.handleUserStorage, "/api/user-storage", false},
 		{"GET", "/api/language", s.handleLanguage, "/api/language", false},
 		{"PUT", "/api/language", s.handleLanguage, "/api/language", false},
 		{"GET", "/assets/i18n.js", serveAsset("application/javascript; charset=utf-8", i18nJS), "", false},
@@ -148,6 +150,7 @@ func (s *Server) routes() []route {
 		{"GET", "/api/about", s.handleAbout, "/api/about", false},
 		// one page of the headword list (browse.go). Never CORS: the D69
 		// grant is lookup, and this dumps a dictionary a page at a time.
+		{"POST", "/api/headword-export", s.handleHeadwordExport, "/api/headword-export", false},
 		{"GET", "/api/browse", s.handleBrowse, "/api/browse", false},
 		{"GET", "/api/browse/find", s.handleBrowseFind, "/api/browse/find", false},
 		// what the platform is doing to us (D64) - the Android shell's channel
@@ -218,6 +221,7 @@ func (s *Server) routes() []route {
 		{"GET", "/files/", s.handleUserFile, "", false},
 		{"GET", "/assets/frame.js", serveAsset("application/javascript; charset=utf-8", frameJS), "", false},
 		{"GET", "/assets/app.css", serveAsset("text/css; charset=utf-8", appCSS), "", false},
+		{"GET", "/assets/fonts/", s.handleArticleFont, "", false},
 		// The preset layers' app halves, one file each (presets.go). Same
 		// immutable cache as the assets above - each URL carries its own
 		// content hash - but under their own prefix, because they are a SET
@@ -228,10 +232,17 @@ func (s *Server) routes() []route {
 		{"GET", "/assets/history.js", serveAsset("application/javascript; charset=utf-8", historyJS), "", false},
 		{"GET", "/assets/group-editor.css", serveAsset("text/css; charset=utf-8", groupEditorCSS), "", false},
 		{"GET", "/assets/group-editor.js", serveAsset("application/javascript; charset=utf-8", groupEditorJS), "", false},
+		{"GET", "/assets/filters-dialog.css", serveAsset("text/css; charset=utf-8", filtersDialogCSS), "", false},
+		{"GET", "/assets/filters-dialog.js", serveAsset("application/javascript; charset=utf-8", filtersDialogJS), "", false},
+		{"GET", "/assets/folders-dialog.css", serveAsset("text/css; charset=utf-8", foldersDialogCSS), "", false},
+		{"GET", "/assets/setup.js", serveAsset("application/javascript; charset=utf-8", setupJS), "", false},
+		{"GET", "/assets/lemma-dialog.css", serveAsset("text/css; charset=utf-8", lemmaDialogCSS), "", false},
+		{"GET", "/assets/lemmas.js", serveAsset("application/javascript; charset=utf-8", lemmasJS), "", false},
 		{"GET", "/assets/article-find.js", serveAsset("application/javascript; charset=utf-8", articleFindJS), "", false},
 		{"GET", "/assets/list-search.js", serveAsset("application/javascript; charset=utf-8", listSearchJS), "", false},
 		{"GET", "/assets/headword-control.js", serveAsset("application/javascript; charset=utf-8", headwordControlJS), "", false},
 		{"GET", "/assets/headword-control.css", serveAsset("text/css; charset=utf-8", headwordControlCSS), "", false},
+		{"GET", "/assets/headword-ribbon.js", serveAsset("application/javascript; charset=utf-8", headwordRibbonJS), "", false},
 		{"GET", "/assets/work-progress.js", serveAsset("application/javascript; charset=utf-8", workProgressJS), "", false},
 		{"GET", "/assets/examples.js", serveAsset("application/javascript; charset=utf-8", examplesJS), "", false},
 		{"GET", "/assets/looks.js", serveAsset("application/javascript; charset=utf-8", looksJS), "", false},

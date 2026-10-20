@@ -82,6 +82,9 @@ func ClassifyName(name string) Kind {
 	main := suffixLen(openers, base)
 	cand := suffixLen(sniffedFormats, base)
 	comp := suffixLen(inspectOpeners, base)
+	if n := zimPartSuffixLen(base); n > comp {
+		comp = n
+	}
 	if n := suffixLen(companionSuffixes, base); n > comp {
 		comp = n
 	}
@@ -180,6 +183,9 @@ func CompanionStem(name string) string {
 	if lower == stardictResZip {
 		return ""
 	}
+	if n := zimPartSuffixLen(lower); n > 0 && len(base) > n {
+		return base[:len(base)-n]
+	}
 	if n := abbrevSuffixLen(lower); n > 0 && len(base) > n {
 		return base[:len(base)-n]
 	}
@@ -195,6 +201,21 @@ func CompanionStem(name string) string {
 		rest = rest[:len(rest)-len(e)]
 	}
 	return rest
+}
+
+// zimPartSuffixLen recognizes split-ZIM parts after the first (.zimab through
+// .zimzz). The first part (.zimaa) is registered as the dictionary itself.
+func zimPartSuffixLen(lower string) int {
+	n := len(lower)
+	if n < 6 || lower[n-6:n-2] != ".zim" || lower[n-2:n] == "aa" {
+		return 0
+	}
+	for _, b := range lower[n-2:] {
+		if b < 'a' || b > 'z' {
+			return 0
+		}
+	}
+	return 6
 }
 
 // knownMainExt is MainExt without its filepath.Ext fallback: the empty string

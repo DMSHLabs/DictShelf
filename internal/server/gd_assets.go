@@ -16,16 +16,23 @@ var gdFonts embed.FS
 
 func (s *Server) handleGDFont(w http.ResponseWriter, r *http.Request) {
 	name := strings.TrimPrefix(r.URL.Path, "/assets/gd/fonts/")
-	if name != "Quivira.otf" {
-		http.NotFound(w, r)
-		return
-	}
-	body, err := gdFonts.ReadFile("web/fonts/" + name)
-	if err != nil {
+	body, ok := gdFontAsset(name)
+	if !ok {
 		http.NotFound(w, r)
 		return
 	}
 	w.Header().Set("Content-Type", "font/otf")
 	w.Header().Set("Cache-Control", "public, max-age=604800, immutable")
 	_, _ = w.Write(body)
+}
+
+func gdFontAsset(name string) ([]byte, bool) {
+	if name != "Quivira.otf" {
+		return nil, false
+	}
+	body, err := gdFonts.ReadFile("web/fonts/" + name)
+	if err != nil {
+		return nil, false
+	}
+	return body, true
 }

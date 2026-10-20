@@ -1,0 +1,1 @@
+<html><body><h1>Large Media Streaming Test</h1><p>This StarDict fixture is based on desktop-large-media.dsl.</p><h2>Large image (PNG, 55 MB)</h2><img src="large-image.png" alt="Large test image"><h2>Large video (MP4, 189 MiB)</h2><video controls preload="metadata" src="as.mp4">Video playback is not supported by this browser.</video></body></html>

@@ -7,13 +7,15 @@
 package tray
 
 import (
+	"debug/pe"
+	"os"
 	"syscall"
 	"unsafe"
 )
 
 // The desktop artifact is linked with the GUI PE subsystem, so Windows does
-// not allocate a console before Go starts. The companion wuDict2-cli.exe uses
-// the console subsystem for commands that need normal terminal I/O.
+// not allocate a console before Go starts. A console build of the same
+// executable remains available for commands that need normal terminal I/O.
 //
 // GetConsoleProcessList reports how many processes are attached to this
 // process's console. A terminal-launched CLI has its shell attached too (>=2);
@@ -72,7 +74,28 @@ func sessionZero() bool {
 func GUILaunched() bool {
 	var pids [8]uint32
 	n, _, _ := procGetConsoleProcessList.Call(uintptr(unsafe.Pointer(&pids[0])), uintptr(len(pids)))
-	return n < 2
+	return n == 1 || n == 0 && !sessionZero() && guiExecutable()
+}
+
+func guiExecutable() bool {
+	path, err := os.Executable()
+	if err != nil {
+		return false
+	}
+	f, err := pe.Open(path)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+	const windowsGUI = 2
+	switch header := f.OptionalHeader.(type) {
+	case *pe.OptionalHeader64:
+		return header.Subsystem == windowsGUI
+	case *pe.OptionalHeader32:
+		return header.Subsystem == windowsGUI
+	default:
+		return false
+	}
 }
 
 // DetachConsole closes the console Windows created for this process alone, so

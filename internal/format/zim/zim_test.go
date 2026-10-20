@@ -9,6 +9,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -57,6 +58,82 @@ func TestMeta(t *testing.T) {
 	if w := d.PreviewBytes(); w <= clusterCacheBytes {
 		t.Errorf("PreviewBytes = %d, want > cache size", w)
 	}
+}
+
+func TestOpenSplitZIMAcrossArbitraryBoundaries(t *testing.T) {
+	original := writeZIM(t, sample())
+	data, err := os.ReadFile(original)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	base := filepath.Join(dir, "sample")
+	cuts := []int{0, 47, 83, 311, len(data) - 2, len(data)}
+	suffixes := []string{".zimaa", ".zimab", ".zimac", ".zimad", ".zimae"}
+	for i := 0; i < len(cuts)-1; i++ {
+		if err := os.WriteFile(base+suffixes[i], data[cuts[i]:cuts[i+1]], 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	d, err := Open(base + ".zimaa")
+	if err != nil {
+		t.Fatalf("Open split ZIM: %v", err)
+	}
+	defer d.Close()
+	if got := d.Meta().Name; got != "Test ZIM" {
+		t.Errorf("Meta.Name = %q", got)
+	}
+	res, err := d.Exact("cat", 1)
+	if err != nil || len(res) != 1 || res[0].Headword != "cat" {
+		t.Fatalf("Exact across split source = %+v, %v", res, err)
+	}
+	rc, mime, err := d.Resource("f.png")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resource, readErr := io.ReadAll(rc)
+	closeErr := rc.Close()
+	if readErr != nil || closeErr != nil || string(resource) != "\x89PNG\r\n\x1a\n" || mime != "image/png" {
+		t.Fatalf("Resource across split source = %q, %q, read %v, close %v", resource, mime, readErr, closeErr)
+	}
+}
+
+func TestOpenSplitZIMRejectsGap(t *testing.T) {
+	original := writeZIM(t, sample())
+	data, err := os.ReadFile(original)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	base := filepath.Join(dir, "sample")
+	cut := len(data) / 2
+	if err := os.WriteFile(base+".zimaa", data[:cut], 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(base+".zimac", data[cut:], 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if d, err := Open(base + ".zimaa"); err == nil {
+		d.Close()
+		t.Fatal("opened split ZIM with missing .zimab")
+	}
+}
+
+func TestOpenSingleFileWithSplitZIMMainSuffix(t *testing.T) {
+	original := writeZIM(t, sample())
+	data, err := os.ReadFile(original)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "single.zimaa")
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	d, err := Open(path)
+	if err != nil {
+		t.Fatalf("Open single-file .zimaa: %v", err)
+	}
+	d.Close()
 }
 
 func TestOpenRejectsMissingPathPointerIndex(t *testing.T) {
