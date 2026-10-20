@@ -265,8 +265,8 @@ func TestWebOriginsConfig(t *testing.T) {
 	}
 }
 
-// AUTO_INDEX is ignored so older config files continue to load after the
-// search-triggered index setting has been removed.
+// AUTO_INDEX is a retired setting. Older config files still load, while index
+// preparation is driven by dictionary discovery rather than search requests.
 func TestLegacyAutoIndexSettingIgnored(t *testing.T) {
 	p := filepath.Join(t.TempDir(), Name)
 	if err := os.WriteFile(p, []byte("AUTO_INDEX = \"off\"\nSERVER_PORT = \"7788\"\n"), 0o644); err != nil {

@@ -6,7 +6,7 @@ package stardict
 
 import (
 	"encoding/xml"
-	"fmt"
+	"html"
 	"io"
 	"strings"
 
@@ -94,7 +94,7 @@ func xdxfOpen(e xml.StartElement) string {
 		if href == "" {
 			return `<a href="">` // filled by the text content; UI rewrites
 		}
-		return fmt.Sprintf(`<a href="%s">`, htmlEscape(href))
+		return `<a href="` + html.EscapeString(href) + `">`
 	case "rref":
 		return "" // resource reference: text content is the file name
 	case "blockquote", "def":

@@ -12,22 +12,9 @@ func (s *Server) DemandDictionary(id string, explicit bool) (bool, error) {
 	return s.demandDictionary(id, explicit)
 }
 
-// handleDemand prepares one dictionary because the user chose it, before there
-// is anything to search.
-//
-// Choosing a dictionary in the selector IS the demand (D92). Without this the
-// only thing carrying that signal to the server would be a search of one
-// dictionary (handleSearch's `demand`): a person who picks a dictionary and
-// then thinks about what to type would sit in front of an unprepared one, and
-// the first query they ran would pay the whole preview cost - on a 2.9 M-entry
-// dictionary, longer than any search budget. The selection alone is enough
-// evidence; there is no reason to make them type first.
-//
-// The work itself is entirely demandIndex's: one front-lane slot, no power
-// gate, cooldown on failure, idempotent under repeated selection. This handler
-// only translates a dictionary id into that call and returns immediately - the
-// ingest outlives the request, and the client learns it finished from
-// /api/dicts.
+// handleDemand supports explicit features that require a prepared headword
+// index, such as Browse. Ordinary search and article rendering never request
+// indexing; missing indexes are prepared when dictionaries are discovered.
 //
 // Same-origin only, deliberately absent from corsAllowed (D69): it starts work
 // and writes to the user's library folder, which is not what the read-only
@@ -47,12 +34,8 @@ func (s *Server) demandDictionary(id string, explicit bool) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	// AUTO_INDEX off means the user has said preparation is theirs to trigger,
-	// and a selection is not that trigger - the dictionary panel is. Same
-	// condition handleSearch applies before it demands. `explicit=1` is the
-	// other kind of demand: the user asked for something only the index can
-	// serve (browsing, which has no direct-backend path), so the request IS
-	// the trigger AUTO_INDEX off reserves for them.
+	// Only an explicit index-dependent action may request preparation here.
+	// Discovery queues missing indexes independently of this endpoint.
 	if explicit {
 		e.demandIndex()
 	}
