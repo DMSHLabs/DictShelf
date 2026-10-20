@@ -282,6 +282,13 @@ func TestXdxfToHTML(t *testing.T) {
 	}
 }
 
+func TestXDXFRefTargetIsAttributeEscaped(t *testing.T) {
+	got := xdxfToHTML(`<kref href='say "hi"'>x</kref>`)
+	if want := `<a href="say &#34;hi&#34;">x</a>`; got != want {
+		t.Errorf("xdxfToHTML = %s, want %s", got, want)
+	}
+}
+
 // Integration against a real StarDict; skips unless WUDICT_TEST_STARDICT set.
 func TestIntegrationRealStarDict(t *testing.T) {
 	p := os.Getenv("WUDICT_TEST_STARDICT")

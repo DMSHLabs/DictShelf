@@ -2,8 +2,8 @@
 
 ## Проверка
 
-Перед переходом к пункту 5 необходимо завершить ручную проверку уже перенесённых
-изменений на реальных словарях и в целевых вариантах приложения:
+Перед тем как считать перенос проверенным, нужно завершить ручную проверку уже
+перенесённых изменений на реальных словарях и в целевых вариантах приложения:
 
 - **Большой ZIM (пункт 3):** открыть реальный крупный ZIM, выполнить поиск и
   последовательный просмотр, затем загрузить большую картинку и проверить, что
@@ -20,10 +20,12 @@
 - **Оба режима хранения ресурсов:** проверить словарь с подготовленным
   `media.db` и словарь, ресурсы которого читаются напрямую из исходного файла.
 - После ручной проверки повторно выполнить Go-тесты и сборки Windows/Android;
-  при сбое остановить перенос и исправить его до пункта 5.
+  при сбое исправить его до завершения переноса.
 
-Пока эти проверки не пройдены, **P3 и P4 считаются ожидающими проверки, а P5
-начинать нельзя**. Ограничения и ожидаемое поведение описаны в разделе
+P3 и P4 пока ожидают ручной проверки; P5 начат по решению пользователя до её
+завершения. Это не мешает продолжать независимые пункты, но перенос нельзя
+считать полностью проверенным, а upstream review marker — обновлять, пока эти
+проверки не пройдены. Ограничения и ожидаемое поведение описаны в разделе
 «Обязательные инварианты» ниже.
 
 ## Scope
@@ -164,7 +166,7 @@ candidate. Android's loose-file suffix filter accepts split-part names while
 the Go/JNI intake path remains in-process. Synthetic tests split a valid ZIM
 at arbitrary byte offsets, including inside the header and entries; they verify
 lookup and resource reading across the joined source. Real multi-part ZIM
-runtime verification remains a gate before P5.
+runtime verification remains an open verification gate.
 
 Port the `c8b92dda` joined `ReaderAt` source and part discovery. Trace the full
 path from `.zimaa` selection through companion discovery, intake staging,
@@ -198,9 +200,17 @@ Do not lower current accepted import sizes accidentally.
 
 ### 7. Review other independent fixes individually
 
-Review MDX header encodings, StarDict resources and `.idx.gz` bounds, XDXF link
-escaping, dictzip handling, redirect resolution, and general intake bounds as
-separate candidates. Upstream wildcard changes remain excluded: this fork's
+**Partial: low-risk fixes implemented.** MDict header encoding recognition now
+accepts GB18030 and UTF-16LE spellings and trims surrounding whitespace. XDXF
+`href` values are escaped as HTML attributes. Concurrent dictzip reads no
+longer add a chunk to the FIFO cache more than once. Focused tests, the full Go
+test suite, `go build ./...`, and `git diff --check` pass. The race detector
+could not run because this Windows environment has no GCC/cgo toolchain.
+
+Still separate candidates: StarDict resource-list (`r`) rendering (requires
+checking generated media markup and Reader-version invalidation), configurable
+`.idx.gz` bounds (coordinate with P6), and ZIM title/redirect search behavior.
+Upstream wildcard changes remain excluded: this fork's
 mask behavior is deliberately implemented in `internal/store/dmsh_mask_ranges.go`
 and the dead-upstream rules in `AGENTS.md` say not to wire upstream wildcard
 search. The lemma manifest/UI change is also independent of the resource work
