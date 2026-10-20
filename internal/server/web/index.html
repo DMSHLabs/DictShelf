@@ -2424,7 +2424,8 @@ function livePickerRows(){
     const summary=det.querySelector(":scope > summary");
     const label=Array.from(summary.childNodes).filter(n=>n.nodeType===Node.TEXT_NODE)
       .map(n=>n.textContent).join("").trim();
-    rows.push({id:article.dataset.dict,label:label||article.dataset.dict});
+    const id=article.dataset.dict,d=dicts.find(item=>item.id===id);
+    rows.push({id,label:d?dictLabel(d):(label||id)});
   }
   return rows;
 }
@@ -4879,13 +4880,14 @@ $("panelList").addEventListener("click",e=>{
     if(!pd||!line||!d)return;
     const input=document.createElement("input");input.type="text";input.maxLength=200;input.className="dict-rename-input";input.value=dictLabel(d);input.setAttribute("aria-label",tx("dictUI.dictionaryName"));
     const reset=document.createElement("button");reset.type="button";reset.className="dict-rename-reset";reset.title=tx("dictUI.resetDictionaryName");reset.setAttribute("aria-label",reset.title);reset.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 2.64-6.36L3 8"/><path d="M3 3v5h5"/></svg>';
-    line.replaceChildren(input,reset);pd.classList.add("renaming");input.focus();input.select();
+    const save=document.createElement("button");save.type="button";save.className="dict-rename-save";save.title=tx("dictUI.saveDictionaryName");save.setAttribute("aria-label",save.title);save.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 3h13l4 4v14H3V3z"/><path d="M7 3v6h10V3M7 21v-8h10v8"/></svg>';
+    line.replaceChildren(input,reset,save);pd.classList.add("renaming");input.focus();input.select();
     let done=false;
-    const finish=(value,cancel=false)=>{if(done)return;done=true;const next=cancel?dictLabel(d):value.trim();const base=dictBaseLabel(d);if(!cancel){if(next&&next!==base)dictTitles.set(id,next);else dictTitles.delete(id);savePrefs(true)}renderPanel();};
+    const finish=(value,cancel=false)=>{if(done)return;done=true;const next=cancel?dictLabel(d):value.trim();const base=dictBaseLabel(d);if(!cancel){if(next&&next!==base)dictTitles.set(id,next);else dictTitles.delete(id);savePrefs(true)}refreshDictUI(true);};
     input.addEventListener("keydown",ev=>{ev.stopPropagation();if(ev.key==="Enter"){ev.preventDefault();finish(input.value)}else if(ev.key==="Escape"){ev.preventDefault();finish(input.value,true)}});
     input.addEventListener("blur",()=>setTimeout(()=>{if(!done&&!line.contains(document.activeElement))finish(input.value)},0));
-    reset.addEventListener("mousedown",ev=>ev.preventDefault());
-    reset.addEventListener("click",ev=>{ev.preventDefault();ev.stopPropagation();dictTitles.delete(id);savePrefs(true);renderPanel()});
+    reset.addEventListener("click",ev=>{ev.preventDefault();ev.stopPropagation();done=true;dictTitles.delete(id);savePrefs(true);refreshDictUI(true)});
+    save.addEventListener("click",ev=>{ev.preventDefault();ev.stopPropagation();finish(input.value)});
     return;
   }
   const feat=e.target.closest(".feat");
