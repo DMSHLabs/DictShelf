@@ -5,7 +5,6 @@
 package slob
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"path/filepath"
@@ -14,6 +13,7 @@ import (
 	"sync"
 
 	"github.com/wuweidict/wudict/internal/dict"
+	"github.com/wuweidict/wudict/internal/resource"
 )
 
 // ReaderVersion is the behaviour version of this format's Reader (see
@@ -263,7 +263,7 @@ func (d *Dict) Resource(name string) (io.ReadCloser, string, error) {
 	if err != nil {
 		return nil, "", err
 	}
-	return io.NopCloser(bytes.NewReader(data)), ctype, nil
+	return resource.Bytes(data), ctype, nil
 }
 
 // Resources lists ref keys whose content type is not article-like

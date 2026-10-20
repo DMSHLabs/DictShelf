@@ -8,7 +8,6 @@
 package server
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -253,7 +252,7 @@ func (u *upgraded) linked(name string) (io.ReadCloser, string, bool) {
 				if mime == "" {
 					mime = resource.MIME(name)
 				}
-				return io.NopCloser(bytes.NewReader(data)), mime, true
+				return resource.Bytes(data), mime, true
 			}
 		}
 	}

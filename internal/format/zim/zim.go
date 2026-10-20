@@ -17,6 +17,7 @@ import (
 
 	"github.com/wuweidict/wudict/internal/dict"
 	"github.com/wuweidict/wudict/internal/lang"
+	"github.com/wuweidict/wudict/internal/resource"
 )
 
 // ReaderVersion is the behaviour version of this format's Reader (see
@@ -472,7 +473,7 @@ func (d *Dict) Resource(name string) (io.ReadCloser, string, error) {
 		if err != nil {
 			return nil, "", err
 		}
-		return io.NopCloser(bytes.NewReader(b)), d.c.mimeOf(de), nil
+		return resource.Bytes(b), d.c.mimeOf(de), nil
 	}
 	return nil, "", dict.ErrNotFound
 }

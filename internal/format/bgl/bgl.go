@@ -5,7 +5,6 @@
 package bgl
 
 import (
-	"bytes"
 	"io"
 	"mime"
 	"path"
@@ -115,7 +114,7 @@ func (e *Embedded) Open(name string) (io.ReadCloser, error) {
 		return nil, dict.ErrNotFound
 	}
 	if b, ok := e.data[norm]; ok {
-		return io.NopCloser(bytes.NewReader(b)), nil
+		return resource.Bytes(b), nil
 	}
 	return nil, dict.ErrNotFound
 }

@@ -5,7 +5,6 @@
 package store
 
 import (
-	"bytes"
 	"database/sql"
 	"fmt"
 	"io"
@@ -116,15 +115,10 @@ func (m *Media) Resource(name string) (io.ReadCloser, string, error) {
 		// A *bytes.Reader, kept seekable. io.NopCloser hides Seek behind a
 		// plain io.Reader, and the resource handler tests for io.ReadSeeker to
 		// decide whether it can answer Range requests (server.handleResource).
-		return readSeekNopCloser{bytes.NewReader(data)}, mime, nil
+		return resource.Bytes(data), mime, nil
 	}
 	return nopCloser{&blobReader{db: m.db, where: where, arg: arg, size: size}}, mime, nil
 }
-
-// readSeekNopCloser is io.NopCloser that keeps the Seek method.
-type readSeekNopCloser struct{ *bytes.Reader }
-
-func (readSeekNopCloser) Close() error { return nil }
 
 // nopCloser keeps Seek visible through the io.ReadCloser Resource returns.
 type nopCloser struct{ io.ReadSeeker }
