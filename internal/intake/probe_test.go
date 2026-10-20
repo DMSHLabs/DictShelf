@@ -145,6 +145,22 @@ func TestProbeMDDSeriesStopsAtTheFirstGap(t *testing.T) {
 	}
 }
 
+func TestProbeSplitZIMPartsAsRequiredRun(t *testing.T) {
+	s, srv := serve(t, "wiki.zimab", "wiki.zimac", "wiki.zimae")
+	got := probeFor(t, srv, "wiki.zimaa", t.TempDir())
+	if !equal(extraNames(got), []string{"wiki.zimab", "wiki.zimac"}) {
+		t.Fatalf("extras = %v, want contiguous split parts", extraNames(got))
+	}
+	for _, e := range got {
+		if e.Need != NeedRequired {
+			t.Errorf("%s need = %q, want required", e.Name, e.Need)
+		}
+	}
+	if !s.asked("/dicts/wiki.zimad") || s.asked("/dicts/wiki.zimae") {
+		t.Error("probe must stop at .zimad and never ask past the gap")
+	}
+}
+
 // A host that refuses HEAD still has its files found: the one-byte ranged GET
 // is the fallback, and the total comes out of Content-Range.
 func TestProbeFallsBackToRangedGET(t *testing.T) {

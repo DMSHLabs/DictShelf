@@ -5,14 +5,17 @@
 package slob
 
 import (
+	"cmp"
 	"fmt"
 	"io"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
 
 	"github.com/wuweidict/wudict/internal/dict"
+	"github.com/wuweidict/wudict/internal/logx"
 	"github.com/wuweidict/wudict/internal/resource"
 )
 
@@ -28,8 +31,9 @@ func init() {
 }
 
 // Dict is one opened .slob dictionary (direct backend). Lookup runs over
-// an in-memory copy of the ref list with exact/fold maps - no ICU
-// collation needed (see docs/FORMATS.md). Safe for concurrent readers.
+// an in-memory copy of the ref list, decoded on the first lookup, with
+// exact/fold maps - no ICU collation needed (see docs/FORMATS.md). Safe for
+// concurrent readers.
 type Dict struct {
 	c         *container
 	meta      dict.Meta
@@ -44,11 +48,12 @@ func Open(path string) (*Dict, error) {
 	if err != nil {
 		return nil, err
 	}
-	// No headword index is built at open - neither exact nor folded. Both are
-	// built lazily on first use (see ensureExact/ensureFold), so opening a slob
-	// only for its resources (native path) or for the ingest scan never pays
-	// for a lookup index. The official aard2/GoldenDict readers keep no
-	// in-memory headword index at all; our ingested SQLite path is that index.
+	// No headword index is built at open - neither exact nor folded - and the
+	// ref list itself is not read. Both indexes are built lazily on the first
+	// lookup (see ensureExact/ensureFold), so opening a slob for the ingest
+	// scan, a browse or a media listing never pays for a lookup index. The
+	// official aard2/GoldenDict readers keep no in-memory headword index at
+	// all; our ingested SQLite path is that index.
 	d := &Dict{c: c}
 	name := strings.TrimSpace(c.tags["label"])
 	if name == "" {
@@ -60,7 +65,7 @@ func Open(path string) (*Dict, error) {
 		Format:      "slob",
 		Path:        path,
 		Description: strings.TrimSpace(c.tags["copyright"]),
-		EntryCount:  len(c.refs),
+		EntryCount:  c.refCount,
 		Header:      headerFields(c),
 	}
 	return d, nil
@@ -90,21 +95,25 @@ func (d *Dict) Tags() map[string]string { return d.c.tags }
 
 func (d *Dict) Exact(word string, limit int) ([]dict.Result, error) {
 	word = strings.TrimSpace(word)
-	d.ensureExact()
+	refs, err := d.c.allRefs()
+	if err != nil {
+		return nil, err
+	}
+	d.ensureExact(refs)
 	idxs := d.exactIdx[word]
 	if len(idxs) == 0 {
-		d.ensureFold()
+		d.ensureFold(refs)
 		idxs = d.foldIdx[fold(word)]
 	}
-	return d.results(idxs, limit)
+	return d.results(refs, idxs, limit)
 }
 
 // ensureExact builds the raw headword index on first lookup, so opens that only
-// serve resources or feed the ingest scan never build it.
-func (d *Dict) ensureExact() {
+// feed the ingest scan, a browse or a media listing never build it.
+func (d *Dict) ensureExact(refs []ref) {
 	d.exactOnce.Do(func() {
-		idx := make(map[string][]int, len(d.c.refs))
-		for i, r := range d.c.refs {
+		idx := make(map[string][]int, len(refs))
+		for i, r := range refs {
 			idx[r.key] = append(idx[r.key], i)
 		}
 		d.exactIdx = idx
@@ -113,10 +122,10 @@ func (d *Dict) ensureExact() {
 
 // ensureFold builds the accent/case-folded ref index on first use, deferring
 // the per-headword NFD fold that dominates open time and RAM.
-func (d *Dict) ensureFold() {
+func (d *Dict) ensureFold(refs []ref) {
 	d.foldOnce.Do(func() {
-		idx := make(map[string][]int, len(d.c.refs))
-		for i, r := range d.c.refs {
+		idx := make(map[string][]int, len(refs))
+		for i, r := range refs {
 			f := fold(r.key)
 			idx[f] = append(idx[f], i)
 		}
@@ -135,7 +144,11 @@ func (d *Dict) ensureFold() {
 // entries behind it, the word actually typed could be the one cut.
 func (d *Dict) Prefix(word string, limit int) ([]dict.Result, error) {
 	word = strings.TrimSpace(word)
-	d.ensureExact()
+	refs, err := d.c.allRefs()
+	if err != nil {
+		return nil, err
+	}
+	d.ensureExact(refs)
 	idxs := append([]int(nil), d.exactIdx[word]...)
 	seen := make(map[int]bool, len(idxs))
 	for _, i := range idxs {
@@ -146,7 +159,7 @@ func (d *Dict) Prefix(word string, limit int) ([]dict.Result, error) {
 		if useFold {
 			key = fold(word)
 		}
-		for i, r := range d.c.refs {
+		for i, r := range refs {
 			if seen[i] {
 				continue
 			}
@@ -167,23 +180,23 @@ func (d *Dict) Prefix(word string, limit int) ([]dict.Result, error) {
 		// The folded EXACT index first, and the folded scan only behind it:
 		// the index is built once and answers every later keystroke, while the
 		// scan re-folds every headword on each call.
-		d.ensureFold()
+		d.ensureFold(refs)
 		idxs = append(idxs, d.foldIdx[fold(word)]...)
 		for _, i := range idxs {
 			seen[i] = true
 		}
 		scan(true)
 	}
-	return d.results(idxs, limit)
+	return d.results(refs, idxs, limit)
 }
 
 // results renders the referenced blobs, keeping only article content
 // types (resources are reachable via Resource, not search).
-func (d *Dict) results(idxs []int, limit int) ([]dict.Result, error) {
+func (d *Dict) results(refs []ref, idxs []int, limit int) ([]dict.Result, error) {
 	var out []dict.Result
 	seen := map[[2]uint32]bool{} // dedupe alias refs to the same blob
 	for _, i := range idxs {
-		r := d.c.refs[i]
+		r := refs[i]
 		blobKey := [2]uint32{r.bin, uint32(r.item)}
 		if seen[blobKey] {
 			continue
@@ -221,20 +234,30 @@ func articleHTML(ctype string, data []byte) (string, bool) {
 // runs for the text item of every lookup.
 var htmlEscaper = strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;")
 
-func htmlEscape(s string) string {
-	return htmlEscaper.Replace(s)
-}
+func htmlEscape(s string) string { return htmlEscaper.Replace(s) }
 
 func fold(s string) string { return dict.Fold(s) }
 
+// Keywords reads the requested range of the ref list from the file; a browse
+// never decodes the whole list.
 func (d *Dict) Keywords(offset, n int) []string {
-	lo, hi, ok := dict.KeywordRange(len(d.c.refs), offset, n)
+	lo, hi, ok := dict.KeywordRange(d.c.refCount, offset, n)
 	if !ok {
 		return nil
 	}
-	out := make([]string, 0, hi-lo)
-	for _, r := range d.c.refs[lo:hi] {
-		out = append(out, r.key)
+	locs, err := d.c.locate(lo, hi)
+	out := make([]string, hi-lo)
+	if err == nil {
+		err = d.c.walk(locs, true, func(l *refLoc, r ref) error {
+			out[int(l.idx)-lo] = r.key
+			return nil
+		})
+	}
+	if err != nil {
+		// The signature cannot carry it, and a list with holes must not pass
+		// for the page: name the failure and return nothing.
+		logx.Warn("%skeywords: %v", logx.Dict(d.meta.Name), err)
+		return nil
 	}
 	return out
 }
@@ -249,16 +272,20 @@ func (d *Dict) Resource(name string) (io.ReadCloser, string, error) {
 	// dictionary: searches are answered from
 	// text.db, and the slob is reopened solely as the resource fallback
 	// (registry.go's upgraded.src), where no lookup ever runs.
-	d.ensureExact()
+	refs, err := d.c.allRefs()
+	if err != nil {
+		return nil, "", err
+	}
+	d.ensureExact(refs)
 	idxs := d.exactIdx[name]
 	if len(idxs) == 0 {
-		d.ensureFold()
+		d.ensureFold(refs)
 		idxs = d.foldIdx[fold(name)]
 	}
 	if len(idxs) == 0 {
 		return nil, "", dict.ErrNotFound
 	}
-	r := d.c.refs[idxs[0]]
+	r := refs[idxs[0]]
 	ctype, data, err := d.c.getItem(r.bin, r.item)
 	if err != nil {
 		return nil, "", err
@@ -267,18 +294,23 @@ func (d *Dict) Resource(name string) (io.ReadCloser, string, error) {
 }
 
 // Resources lists ref keys whose content type is not article-like
-// (images, audio, css, …), reading only bin headers.
+// (images, audio, css, …), reading the ref list from the file and only the
+// bin headers.
 func (d *Dict) Resources() []string {
 	var out []string
-	for _, r := range d.c.refs {
-		ctype, err := d.c.itemContentType(r.bin, r.item)
-		if err != nil {
-			continue
-		}
-		if strings.HasPrefix(ctype, "text/html") || strings.HasPrefix(ctype, "text/plain") {
-			continue
-		}
-		out = append(out, r.key)
+	locs, err := d.c.locate(0, d.c.refCount)
+	if err == nil {
+		err = d.c.walk(locs, true, func(_ *refLoc, r ref) error {
+			ctype, err := d.c.itemContentType(r.bin, r.item)
+			if err != nil || strings.HasPrefix(ctype, "text/html") || strings.HasPrefix(ctype, "text/plain") {
+				return nil
+			}
+			out = append(out, r.key)
+			return nil
+		})
+	}
+	if err != nil {
+		logx.Warn("%sresources: %v (listing the %d read so far)", logx.Dict(d.meta.Name), err, len(out))
 	}
 	sort.Strings(out)
 	return out
@@ -289,11 +321,15 @@ func (d *Dict) Resources() []string {
 // Reader scans blobs bin-by-bin (sequential decompression - refs order
 // would thrash bins) and attaches every ref key of a blob as headwords:
 // first key = display headword, the rest become aliases.
+//
+// It holds 24 bytes per ref - its place in the list, its blob, where its
+// record is - and reads a blob's keys from the file only when the blob is
+// emitted, so preparing a Wikipedia-scale slob never holds its keys at once.
 type Reader struct {
-	d          *Dict
-	keysByBlob map[[2]uint32][]string
-	blobs      [][2]uint32 // bin/item in ascending bin order
-	pos        int
+	d    *Dict
+	locs []refLoc // every ref, ordered by blob, then by place in the list
+	pos  int
+	keys refWindow
 }
 
 func NewReader(path string) (*Reader, error) {
@@ -301,50 +337,39 @@ func NewReader(path string) (*Reader, error) {
 	if err != nil {
 		return nil, err
 	}
-	r := &Reader{d: d, keysByBlob: map[[2]uint32][]string{}}
-	for _, rf := range d.c.refs {
-		k := [2]uint32{rf.bin, uint32(rf.item)}
-		if _, ok := r.keysByBlob[k]; !ok {
-			r.blobs = append(r.blobs, k)
-		}
-		keys := r.keysByBlob[k]
-		if len(keys) == 0 || keys[0] != rf.key { // skip fragment-only duplicates
-			if !contains(keys, rf.key) {
-				keys = append(keys, rf.key)
-			}
-		}
-		r.keysByBlob[k] = keys
+	locs, err := d.c.locate(0, d.c.refCount)
+	if err == nil {
+		err = d.c.walk(locs, false, func(l *refLoc, r ref) error {
+			l.blob = uint64(r.bin)<<16 | uint64(r.item)
+			return nil
+		})
 	}
-	sortBlobs(r.blobs)
-	return r, nil
-}
-
-func contains(ss []string, s string) bool {
-	for _, x := range ss {
-		if x == s {
-			return true
-		}
+	if err != nil {
+		d.Close()
+		return nil, err
 	}
-	return false
-}
-
-// sortBlobs orders by bin then item so bins decompress once each.
-func sortBlobs(b [][2]uint32) {
-	sort.Slice(b, func(i, j int) bool {
-		if b[i][0] != b[j][0] {
-			return b[i][0] < b[j][0]
+	// By blob, so bins decompress once each; within a blob in list order, so
+	// the first key - the display headword - is the one the list puts first.
+	slices.SortFunc(locs, func(a, b refLoc) int {
+		if c := cmp.Compare(a.blob, b.blob); c != 0 {
+			return c
 		}
-		return b[i][1] < b[j][1]
+		return cmp.Compare(a.idx, b.idx)
 	})
+	return &Reader{d: d, locs: locs, keys: refWindow{c: d.c, size: keyWindowBytes}}, nil
 }
 
 func (r *Reader) Meta() dict.Meta { return r.d.Meta() }
 
 func (r *Reader) Next() (dict.Entry, error) {
-	for r.pos < len(r.blobs) {
-		bk := r.blobs[r.pos]
-		r.pos++
-		ctype, data, err := r.d.c.getItem(bk[0], uint16(bk[1]))
+	for r.pos < len(r.locs) {
+		lo, blob := r.pos, r.locs[r.pos].blob
+		for r.pos < len(r.locs) && r.locs[r.pos].blob == blob {
+			r.pos++
+		}
+		bin, item := uint32(blob>>16), uint16(blob)
+		bk := [2]uint32{bin, uint32(item)}
+		ctype, data, err := r.d.c.getItem(bin, item)
 		if err != nil {
 			return dict.Entry{}, fmt.Errorf("slob ingest blob %v: %w", bk, err)
 		}
@@ -352,7 +377,18 @@ func (r *Reader) Next() (dict.Entry, error) {
 		if !ok {
 			continue // resource blob: stays lazy in the source file
 		}
-		return dict.Entry{Headwords: r.keysByBlob[bk], Body: body, Kind: dict.BodyHTML}, nil
+		keys := make([]string, 0, r.pos-lo)
+		for _, l := range r.locs[lo:r.pos] {
+			rf, err := r.keys.ref(l.pos, true)
+			if err != nil {
+				return dict.Entry{}, fmt.Errorf("slob ingest blob %v: %w", bk, err)
+			}
+			// Refs differing only by fragment name the blob once.
+			if !slices.Contains(keys, rf.key) {
+				keys = append(keys, rf.key)
+			}
+		}
+		return dict.Entry{Headwords: keys, Body: body, Kind: dict.BodyHTML}, nil
 	}
 	return dict.Entry{}, io.EOF
 }

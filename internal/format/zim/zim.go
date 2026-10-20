@@ -27,6 +27,9 @@ const ReaderVersion = 3
 func init() {
 	dict.RegisterFormat(".zim", func(path string) (dict.Dictionary, error) { return Open(path) })
 	dict.RegisterReader(".zim", func(path string) (dict.Reader, error) { return NewReader(path) })
+	dict.RegisterFormat(".zimaa", func(path string) (dict.Dictionary, error) { return Open(path) })
+	dict.RegisterReader(".zimaa", func(path string) (dict.Reader, error) { return NewReader(path) })
+	dict.RegisterSourceRevision(".zimaa", splitSourceRevision)
 	dict.RegisterReaderVersion("zim", ReaderVersion)
 }
 

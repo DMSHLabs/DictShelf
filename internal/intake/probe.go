@@ -138,6 +138,34 @@ func probeSiblings(ctx context.Context, f Fetcher, base *url.URL, fileName strin
 			}
 		}
 	}
+	if dict.MainExt(fileName) == ".zimaa" {
+		// ZIM parts are one required byte stream, not optional media. Probe the
+		// contiguous suffix run independently of the generic companion budget;
+		// every part can be close to the 4 GiB FAT32 limit.
+		// Probe one beyond the accepted count so an over-limit set is refused
+		// during re-sniff instead of appearing to end cleanly at the cap.
+		partSuffixes := dict.ZIMPartSuffixes()[:dict.MaxZIMParts]
+		if ext := fileName[len(fileName)-len(".zimaa"):]; ext == strings.ToUpper(ext) {
+			for i := range partSuffixes {
+				partSuffixes[i] = strings.ToUpper(partSuffixes[i])
+			}
+		}
+		for _, suffix := range partSuffixes {
+			name := stem + suffix
+			if known(name) {
+				continue
+			}
+			u, ok := sibling(f, base, name)
+			if !ok {
+				break
+			}
+			h := headInfo(ctx, f, u)
+			if !h.found {
+				break
+			}
+			out = append(out, Extra{Name: name, Size: h.size, Need: NeedRequired, url: u.String()})
+		}
+	}
 	if dict.MainExt(fileName) == ".mdx" {
 		// MDict's resources are one ".mdd", or a numbered run, or both: the
 		// stat-based CompanionMedia treats ".mdd" and ".1.mdd" alike as first

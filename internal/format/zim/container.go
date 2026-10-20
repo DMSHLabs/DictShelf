@@ -51,7 +51,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
-	"os"
 	"strings"
 	"sync"
 
@@ -142,9 +141,10 @@ func (cd *clusterData) size() uint64 {
 }
 
 type container struct {
-	f    *os.File
-	path string
-	size int64
+	f      io.ReaderAt
+	closer io.Closer
+	path   string
+	size   int64
 
 	major, minor uint16
 	entryCount   uint32
@@ -166,18 +166,17 @@ type container struct {
 }
 
 func openContainer(path string) (*container, error) {
-	f, err := os.Open(path)
+	paths, err := splitZIMSource(path)
 	if err != nil {
 		return nil, err
 	}
-	st, err := f.Stat()
+	f, closer, size, err := openJoined(paths)
 	if err != nil {
-		f.Close()
 		return nil, err
 	}
-	c := &container{f: f, path: path, size: st.Size(), cache: map[uint32]*clusterData{}}
+	c := &container{f: f, closer: closer, path: path, size: size, cache: map[uint32]*clusterData{}}
 	if err := c.parse(); err != nil {
-		f.Close()
+		_ = closer.Close()
 		return nil, fmt.Errorf("zim %s: %w", path, err)
 	}
 	return c, nil
@@ -196,7 +195,7 @@ func (c *container) Close() error {
 	if zr != nil {
 		zr.Close()
 	}
-	return c.f.Close()
+	return c.closer.Close()
 }
 
 func (c *container) parse() error {

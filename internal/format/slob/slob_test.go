@@ -202,6 +202,24 @@ func TestSyntheticSlob(t *testing.T) {
 	}
 }
 
+func TestOpenAndBrowseKeepRefsOnDisk(t *testing.T) {
+	d, err := Open(buildSlob(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	if d.c.refs != nil {
+		t.Fatal("Open decoded the complete ref list")
+	}
+	got := d.Keywords(1, 2)
+	if len(got) != 2 || got[0] != "Corazón" || got[1] != "img.png" {
+		t.Fatalf("Keywords page = %q", got)
+	}
+	if d.c.refs != nil {
+		t.Fatal("Keywords decoded the complete ref list")
+	}
+}
+
 func TestSyntheticSlobIngestReader(t *testing.T) {
 	r, err := NewReader(buildSlob(t))
 	if err != nil {
