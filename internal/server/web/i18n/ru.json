@@ -634,6 +634,7 @@
   "dictUI.renameDictionary": "Переименовать словарь",
   "dictUI.dictionaryName": "Название словаря",
   "dictUI.resetDictionaryName": "Восстановить исходное имя словаря",
+  "dictUI.saveDictionaryName": "Сохранить имя словаря",
   "dictUI.close": "Закрыть настройки словарей",
   "dictUI.ftsAll": "Полнотекстовый поиск во всех словарях…",
   "dictUI.indexNotPrepared": "Не проиндексирован",

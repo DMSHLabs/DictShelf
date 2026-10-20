@@ -1377,12 +1377,12 @@ dialog.panel-card:not([open]){display:none}
 .pd.drop-before{box-shadow:0 -2px 0 var(--accent)}
 .pd.drop-after{box-shadow:0 2px 0 var(--accent)}
 .pd .hd{display:flex;align-items:center;gap:calc(var(--ui-control-gap) * 1em)}
-.dict-name-line{display:flex;align-items:center;gap:.35em;min-width:0;flex:1}
+.dict-name-line{display:flex;align-items:center;gap:.5em;min-width:0;flex:1}
 .dict-name-line>b{min-width:0}
-.dict-rename,.dict-rename-reset{display:grid;place-items:center;flex:none;width:2em;height:2em;padding:.35em;border:0;border-radius:50%;background:transparent;color:var(--label-quiet);cursor:pointer}
-.dict-rename:hover,.dict-rename-reset:hover{background:var(--line-soft);color:var(--fg)}
-.dict-rename svg,.dict-rename-reset svg{width:1.15em;height:1.15em}
-.dict-rename:focus-visible,.dict-rename-reset:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.dict-rename,.dict-rename-reset,.dict-rename-save{display:grid;place-items:center;flex:none;width:44px;height:44px;padding:.65em;border:0;border-radius:50%;background:transparent;color:var(--label-quiet);cursor:pointer}
+.dict-rename:hover,.dict-rename-reset:hover,.dict-rename-save:hover{background:var(--line-soft);color:var(--fg)}
+.dict-rename svg,.dict-rename-reset svg,.dict-rename-save svg{width:1.25em;height:1.25em}
+.dict-rename:focus-visible,.dict-rename-reset:focus-visible,.dict-rename-save:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
 .dict-rename-input{box-sizing:border-box;min-width:0;flex:1;height:2.4em;padding:.35em .55em;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--fg);font:inherit}
 .dict-rename-input:focus{outline:2px solid var(--focus);outline-offset:1px}
 .dict-name-line:has(.dict-rename-input){width:100%}

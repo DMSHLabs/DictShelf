@@ -626,6 +626,7 @@
   "dictUI.renameDictionary": "Rename dictionary",
   "dictUI.dictionaryName": "Dictionary name",
   "dictUI.resetDictionaryName": "Restore original dictionary name",
+  "dictUI.saveDictionaryName": "Save dictionary name",
   "dictUI.close": "Close dictionary settings",
   "dictUI.ftsAll": "Full-text for every dictionary…",
   "dictUI.deleteIndex": "Delete index",
