@@ -57,6 +57,10 @@ import (
 // shim at the module root, is where the program is.
 var Version = "dev"
 
+// DefaultServe selects the no-argument behavior. Windows CLI builds set this
+// to "0" so starting the command-line tool never opens a TCP listener.
+var DefaultServe = "1"
+
 // Notices is THIRD-PARTY-NOTICES.md, handed over by the root package - the
 // only one that can embed a file at the module root. A release is a bare
 // executable with nothing beside it, and several of the licences in that file
@@ -497,7 +501,12 @@ func Main() {
 	}
 
 	if len(os.Args) < 2 {
-		// no arguments: start the server (documented default)
+		if DefaultServe == "0" {
+			fmt.Print(usage())
+			return
+		}
+		// The server is the default for server builds; the Windows GUI uses its
+		// in-process WebView and therefore does not open a TCP listener.
 		fail(cmdServe(nil))
 		return
 	}

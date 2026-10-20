@@ -9,9 +9,10 @@ them are in `docs/handoff-archive.md`.
 
 ## Windows verification recipes (this machine)
 
-- **2026-10-14 GUI builds:** `build-windows.cmd debug` and `release` use
-  `-H windowsgui` (PE subsystem 2). `build-windows.cmd debug console` builds
-  the same executable with the console subsystem (3) for terminal diagnostics. GUI launch detection reads
+- **2026-10-14 GUI builds:** `build-windows.cmd` with no argument uses
+  `-H windowsgui` (PE subsystem 2). `build-windows.cmd cli` and `server` use
+  the console subsystem (3). The CLI prints help without arguments; the server
+  starts HTTP by default. GUI launch detection reads
   the current executable's PE subsystem when there is no console, so the
   GUI artifact selects WebView2 even when started from cmd. Redirected
   `--version` remains usable by the build verification. Restart the app to
@@ -49,11 +50,12 @@ them are in `docs/handoff-archive.md`.
   process after a restart. The page also caches its CSS by the `?v=` hash, so
   the browser must be reloaded after the server is really new.
 - Go: `go build ./...`; targeted `go test ./internal/<pkg> -run '...' -count=1`.
-- **`build-windows.cmd [debug|release] [console]`** — the fork's desktop build
-  (added 2026-09-28, beside `build-android.cmd`): one `wuDict2.exe` in the repo root,
-  upstream's product (wuDict, port 6888, its own config and library), NOT the
-  Android app. **Every machine path it needs is in one block at the top of the
-  file** — `GCC_PATH` (pinned to Qt's mingw-w64 GCC; empty falls back to `%CC%`,
+- **`build-windows.cmd [cli|server|installer]`** — the fork's Windows builds:
+  the default command builds listenerless WebView `wuDict2.exe`, `cli` builds
+  console `wuDict2-cli.exe`, `server` builds console HTTP-server
+  `wuDict2-server.exe`, and `installer` packages the existing desktop exe.
+  Every machine path it needs is in one block at the top of the file —
+  `GCC_PATH` (pinned to Qt's mingw-w64 GCC; empty falls back to `%CC%`,
   then `gcc.exe` on PATH, then `GCC_ROOTS`), `GCC_ROOTS`, `ISCC_PATH` — and each
   of those respects a value inherited from the environment, the way
   build-android.cmd respects `ANDROID_HOME`. Windows desktop always requires
@@ -84,12 +86,12 @@ them are in `docs/handoff-archive.md`.
   build: the launch leaves the Explorer window count at 0 and opens the setup
   page in Edge (window title "Edit Folders"). The other platforms have the same
   defect with `xdg-open ""` / `open ""`, where the browser never opens at all.
-- **The Windows installer (`installer`, or `release` as an alias) builds — with Inno Setup 7, pinned at the
+- **The Windows installer (`installer`) packages the existing desktop exe — with Inno Setup 7, pinned at the
   top of the script.** Neither compiler on this machine is in the uninstall
   registry, so `tools\make-installer.ps1 -Locate` finds neither of them, and
   `ISCC_PATH` in `build-windows.cmd` is pinned to
   `D:\ProgSoft\InnoSetup7\ISCC.exe`. Verified 2026-09-28: `build-windows.cmd
-  release` builds the cgo `wuDict2.exe` and then the setup program,
+  installer` packages the cgo `wuDict2.exe` and builds the setup program,
   `dist\wudict2-windows-x64-setup-0.0.0.exe` (7.3 MB, ProductName wuDict2,
   FileDescription "wuDict Setup"); Inno Setup 7 still accepts the legacy
   `/D<name>=<value>` defines `make-installer.ps1` passes it. The **5** that is
