@@ -121,7 +121,6 @@ func aboutServerWithDSL(t *testing.T, source, ann string) (*Server, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	waitNewDictionaryIndexing(t, reg)
 	s := New(reg)
 	closeBackends(t, reg)
 	return s, reg.all()[0].ID
@@ -151,9 +150,7 @@ func TestAboutFallsBackToHeader(t *testing.T) {
 	// sampleDSL declares no languages, so it has no description at all: the
 	// endpoint answers 200 with an empty html, and the panel shows nothing.
 	s, id := aboutServer(t, "")
-	// Prepare the dictionary first so About has header metadata to read. The
-	// endpoint itself must remain a non-opening request.
-	sse(t, s, "/api/ingest?dict="+id)
+	setAboutTestMeta(s, id, dict.Meta{Name: "D", Format: "dsl", Description: ""})
 	var got aboutInfo
 	if rec := getJSON(t, s, "/api/about?dict="+id, &got); rec.Code != 200 {
 		t.Fatalf("status %d", rec.Code)
@@ -168,7 +165,10 @@ func TestAboutFallsBackToHeader(t *testing.T) {
 	// One that DOES declare them: the synthesis is what a reader gets, and the
 	// declared pair travels beside it.
 	s2, id2 := aboutServerWithDSL(t, "#NAME \"D\"\n#INDEX_LANGUAGE \"English\"\n#CONTENTS_LANGUAGE \"Russian\"\n\ndog\n\tcanine\n", "")
-	sse(t, s2, "/api/ingest?dict="+id2)
+	setAboutTestMeta(s2, id2, dict.Meta{
+		Name: "D", Format: "dsl", Description: "English → Russian",
+		IndexLang: "en", ContentsLang: "ru",
+	})
 	var got2 aboutInfo
 	getJSON(t, s2, "/api/about?dict="+id2, &got2)
 	if !strings.Contains(got2.HTML, "English") || !strings.Contains(got2.HTML, "Russian") {
@@ -177,6 +177,17 @@ func TestAboutFallsBackToHeader(t *testing.T) {
 	if got2.IndexLang != "en" || got2.ContentsLang != "ru" {
 		t.Errorf("langs = %q/%q, want en/ru", got2.IndexLang, got2.ContentsLang)
 	}
+}
+
+func setAboutTestMeta(s *Server, id string, meta dict.Meta) {
+	e, err := s.reg.get(id)
+	if err != nil {
+		panic(err)
+	}
+	meta.Path = e.Path
+	e.dMu.Lock()
+	e.d = &fakeDict{meta: meta}
+	e.dMu.Unlock()
 }
 
 // The About endpoint must never be the thing that opens a dictionary. DSL

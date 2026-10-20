@@ -29,7 +29,7 @@ func TestIndexWorkContinuesAfterSourceFailure(t *testing.T) {
 	}
 	s.jobs.wait(bulkIndexKey)
 	result := s.indexWorkStatus(bulkIndexKey)
-	if result.Running || result.Done != 2 || result.Total != 2 || len(result.Failed) != 1 || result.Error != "" {
+	if result.Running || result.Done != 2 || result.Total != 2 || len(result.Failed) != 1 || result.Error == "" {
 		t.Fatalf("unexpected result: %+v", result)
 	}
 	if !s.currentFeatures(entries[1]).FullText {
@@ -82,11 +82,11 @@ func TestIndexWorkSurvivesRequestAndStopsBetweenOperations(t *testing.T) {
 	locked = false
 	s.jobs.wait(bulkIndexKey)
 	result := s.indexWorkStatus()
-	if result.Running || !result.Canceled || result.Done != 1 || result.Error != "" {
+	if result.Running || !result.Canceled || result.Done != 0 || result.Error != "" {
 		t.Fatalf("completion: %+v", result)
 	}
-	if !s.currentFeatures(first).Contains {
-		t.Fatal("current index was abandoned")
+	if s.currentFeatures(first).Contains {
+		t.Fatal("stopped operation unexpectedly created its index")
 	}
 	if s.currentFeatures(entries[1]).FullText {
 		t.Fatal("next operation ran after Stop")

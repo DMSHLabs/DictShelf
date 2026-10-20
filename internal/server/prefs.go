@@ -367,7 +367,12 @@ func (p *Prefs) Off(id, path string) bool {
 // Snapshot returns the records and whether a state file exists.
 func (p *Prefs) Snapshot() (dicts []DictPref, exists bool) {
 	f, ok := p.data()
-	return append([]DictPref(nil), f.Dicts...), ok
+	// Internal index receipts may create state.json during first-run
+	// preparation. They are not collection preferences and must not prevent
+	// the browser from adopting its legacy localStorage order on first visit.
+	userState := f.Dicts != nil || f.UI != nil || f.Groups != nil || f.Language != "" ||
+		f.IndexDefaults != nil || f.DSLTitleRepairs != nil
+	return append([]DictPref(nil), f.Dicts...), ok && userState
 }
 
 // DisplayTitle returns a dictionary's optional user-facing label. Dictionary

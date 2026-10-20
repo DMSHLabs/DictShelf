@@ -35,6 +35,9 @@ func newPrefsServer(t *testing.T) (*Server, string) {
 		t.Fatal(err)
 	}
 	waitNewDictionaryIndexing(t, reg)
+	for _, e := range reg.all() {
+		e.closeNow()
+	}
 	closeBackends(t, reg)
 	return New(reg), state
 }

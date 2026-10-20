@@ -22,12 +22,7 @@ func unpreparedEntry(t *testing.T) (*Server, *entry) {
 		t.Fatal(err)
 	}
 	isolatedDBDir(t)
-	reg, err := NewRegistry([]string{dir}, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	waitNewDictionaryIndexing(t, reg)
-	closeBackends(t, reg)
+	reg := unpreparedRegistry(t, []string{dir})
 	return New(reg), reg.all()[0]
 }
 

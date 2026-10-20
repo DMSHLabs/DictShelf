@@ -12,6 +12,17 @@ import (
 	"testing"
 )
 
+func collectLookupHits(t *testing.T, s *Server, request SearchRequest) []SearchEvent {
+	t.Helper()
+	var hits []SearchEvent
+	for _, event := range collectLookup(t, s, request) {
+		if event.T == "hit" {
+			hits = append(hits, event)
+		}
+	}
+	return hits
+}
+
 // The budget is spent in two steps - a reservation from what is already known,
 // then a correction once the open has happened - and the interesting property
 // is what a refusal does NOT do: a dictionary too big for the remainder is
@@ -81,10 +92,7 @@ func TestSearchBudgetRefusesUnpreparedDictionariesOnceSpent(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	reg, err := NewRegistry([]string{dir}, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	reg := unpreparedRegistry(t, []string{dir})
 	if reg.fanout() != nil {
 		t.Fatal("setup: no budget is configured, so a search must be uncapped")
 	}
@@ -137,7 +145,7 @@ func TestSearchBudgetRefusesUnpreparedDictionariesOnceSpent(t *testing.T) {
 	f3 := &fanout{}
 	f3.left.Store(price - 1)
 	before := reg.previewBytes()
-	_, err = first.openWithin(f3)
+	_, err := first.openWithin(f3)
 	var th tooHeavy
 	if !errors.As(err, &th) {
 		t.Fatalf("a dictionary priced above the remaining budget must be refused, got %v", err)
@@ -167,10 +175,7 @@ func TestCappedSearchReportsWhatItDeclined(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	reg, err := NewRegistry([]string{dir}, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	reg := unpreparedRegistry(t, []string{dir})
 	s := New(reg)
 
 	// Warm the prices first, then shed the backends. A fan-out is parallel, so
@@ -179,12 +184,12 @@ func TestCappedSearchReportsWhatItDeclined(t *testing.T) {
 	// admitted. That is by design (§8.2: a price has to be paid once to be
 	// learned); the cap bites from the second search on, which is the state this
 	// test needs.
-	if hits := searchStream(t, s, "/api/search?q=beta&mode=prefix&dict=all"); len(hits) != 4 {
+	if hits := collectLookupHits(t, s, SearchRequest{Query: "beta", Mode: "prefix", Dictionary: "all"}); len(hits) != 4 {
 		t.Fatalf("setup: uncapped search answered %d of 4", len(hits))
 	}
 	price := reg.all()[0].lastWeight.Load()
 	if price <= 0 {
-		t.Fatalf("setup: no price was learned, got %d", price)
+		t.Fatalf("setup: no price was learned, got %d; blocked=%v d=%T entries=%d", price, reg.all()[0].indexBlocked(), reg.all()[0].d, len(reg.all()))
 	}
 	for _, e := range reg.all() {
 		e.evict()
@@ -193,7 +198,7 @@ func TestCappedSearchReportsWhatItDeclined(t *testing.T) {
 	// dictionaries precisely one wins the whole budget and the rest are refused.
 	reg.SetSearchBudget(price)
 
-	hits := searchStream(t, s, "/api/search?q=beta&mode=prefix&dict=all")
+	hits := collectLookupHits(t, s, SearchRequest{Query: "beta", Mode: "prefix", Dictionary: "all"})
 	if len(hits) != 4 {
 		t.Fatalf("every dictionary must be accounted for: got %d hits of 4", len(hits))
 	}
@@ -230,7 +235,7 @@ func TestCappedSearchReportsWhatItDeclined(t *testing.T) {
 	// dictionary. It must answer under the same budget that just deferred it -
 	// otherwise the offer is a lie and the dictionary is unreachable by every
 	// path the app has.
-	one := searchStream(t, s, "/api/search?q=beta&mode=prefix&dict="+deferredID)
+	one := collectLookupHits(t, s, SearchRequest{Query: "beta", Mode: "prefix", Dictionary: deferredID})
 	if len(one) != 1 {
 		t.Fatalf("a single-dictionary search returned %d slots", len(one))
 	}
@@ -248,7 +253,7 @@ func TestCappedSearchReportsWhatItDeclined(t *testing.T) {
 	for _, e := range reg.all() {
 		e.evict()
 	}
-	hits = searchStream(t, s, "/api/search?q=beta&mode=prefix&dict=all")
+	hits = collectLookupHits(t, s, SearchRequest{Query: "beta", Mode: "prefix", Dictionary: "all"})
 	for _, h := range hits {
 		if h.Error != "" || h.Deferred {
 			t.Errorf("uncapped search still declined %s: %s", h.Name, h.Error)
@@ -270,6 +275,8 @@ func TestSearchBudgetNeverCapsPreparedDictionaries(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	waitNewDictionaryIndexing(t, reg)
+	closeBackends(t, reg)
 	e := reg.all()[0]
 	if _, err := e.open(); err != nil { // the queued headword index is ready
 		t.Fatal(err)

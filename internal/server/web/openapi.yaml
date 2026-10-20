@@ -2856,6 +2856,34 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
 
+  /api/headword-export:
+    post:
+      tags: [internal]
+      operationId: headwordExport
+      x-internal: true
+      summary: Export indexed headwords
+      description: Start, inspect, or stop a headword export job. The request body uses action `start`, `status`, or `stop`; starting requires selected dictionary IDs and an existing output folder.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action]
+              properties:
+                action: { type: string, enum: [start, status, stop] }
+                dictionaries: { type: array, items: { type: string } }
+                path: { type: string }
+                separate: { type: boolean }
+      responses:
+        '200':
+          description: Current export job status, or a start error.
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
 components:
   responses:
     BadRequest:

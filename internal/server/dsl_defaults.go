@@ -170,7 +170,16 @@ func (r *Registry) queueNewDictionaries() error {
 				continue
 			}
 			f.DSLRemoved[key] = true
-			f.DSLPending[key] = defaults
+			wanted := defaults
+			// FindPrepared intentionally rejects a database made from an older
+			// source revision. Its recorded feature plan is still useful here:
+			// rebuilding after an edit should retain the user's optional indexes.
+			if dir, ok := store.LookupDir(other.Path); ok {
+				have := store.KeptPlan(store.TextDBPath(dir))
+				wanted.Contains = wanted.Contains || have.Contains
+				wanted.FullText = wanted.FullText || have.FullText
+			}
+			f.DSLPending[key] = wanted
 			changed = true
 		}
 	}
@@ -305,7 +314,7 @@ func (r *Registry) prepareNewDictionaries(parent ...*job) {
 			updateJobDictionaryProgress(queueJob, e.ID, e.probeName(), feature, action, int64(done), int64(total))
 		}
 		var err error
-		if item.prepared {
+		if item.prepared && !e.indexBlocked() {
 			media := false
 			if prepared, ok := preparedInfo(e.Path); ok {
 				media = prepared.MediaPaired()
@@ -313,6 +322,12 @@ func (r *Registry) prepareNewDictionaries(parent ...*job) {
 			err = e.setFeaturesContext(ctx, features{Contains: item.plan.Contains, FullText: item.plan.FullText, Media: media}, progress)
 		} else {
 			err = e.restoreIndexContext(ctx, store.Plan{Contains: item.plan.Contains, FullText: item.plan.FullText}, progress, currentIndexLimit())
+		}
+		if err == nil && e.indexBlocked() {
+			// A successfully restored or rebuilt index makes a deliberately
+			// removed receipt available again. Reusing a prepared base can leave
+			// that marker set even though the index is now ready.
+			err = e.setIndexRemoved(false)
 		}
 		if err != nil {
 			canceled := errors.Is(err, context.Canceled) && ctx.Err() != nil

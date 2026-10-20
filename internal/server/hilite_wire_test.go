@@ -34,6 +34,7 @@ func newHLServer(t *testing.T) (*Server, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	waitNewDictionaryIndexing(t, reg)
 	s := New(reg)
 	dicts := getDicts(t, s, "/api/dicts")
 	if len(dicts) != 1 {

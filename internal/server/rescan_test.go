@@ -87,6 +87,7 @@ func TestRescanClearsMemoizedOpenError(t *testing.T) {
 	if err := s.reg.Rescan(); err != nil {
 		t.Fatal(err)
 	}
+	waitNewDictionaryIndexing(t, s.reg)
 	if _, err, _ := entryState(e); err != nil {
 		t.Fatalf("rescan kept the memoized error: %v", err)
 	}
@@ -111,6 +112,7 @@ func TestRescanClosesVanishedDictionary(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	waitNewDictionaryIndexing(t, reg)
 	var vanishing *entry
 	for _, e := range reg.all() {
 		if _, err := e.open(); err != nil {

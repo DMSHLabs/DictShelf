@@ -406,7 +406,7 @@ html[data-shell-image] .mask-head #maskDict{background-color:var(--paper-bg,var(
 .mask-dictionary-band[data-tone="2"]{background-color:color-mix(in srgb,#38946f 10%,var(--paper-bg,var(--bg-card,var(--bg))))}
 .mask-dictionary-band[data-tone="3"]{background-color:color-mix(in srgb,#9b62a8 10%,var(--paper-bg,var(--bg-card,var(--bg))))}
 .mask-letter-group{display:inline-flex;align-items:center;gap:.25em;flex:none}
-.mask-letter-separator{padding:0 .2em;color:var(--fg-faint)}
+.mask-letter-separator{padding:0 .2em;color:var(--label-quiet)}
 .mask-letter-pending{color:var(--label)}
 .mask-letters button{min-width:1.85rem;padding:.36em .5em}
 .wudict-ribbon-chip{box-sizing:border-box;max-width:12em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

@@ -218,6 +218,7 @@ func TestRegistryDedupesFolders(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	waitNewDictionaryIndexing(t, reg)
 	if roots := reg.Roots(); len(roots) != 1 {
 		t.Fatalf("four spellings of one folder gave %d rows: %+v", len(roots), roots)
 	}
@@ -255,6 +256,7 @@ func TestUseCachedIsTwoWay(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	waitNewDictionaryIndexing(t, reg)
 	s := New(reg)
 	s.ConfigPath = filepath.Join(t.TempDir(), "wudict.toml")
 
@@ -320,10 +322,7 @@ func TestFeatureTogglesBothWays(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "x.dsl"), []byte(sampleDSL), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	reg, err := NewRegistry([]string{dir}, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	reg := unpreparedRegistry(t, []string{dir})
 	s := New(reg)
 	dicts := getDicts(t, s, "/api/dicts")
 	id := dicts[0].ID
@@ -391,10 +390,7 @@ func TestPreviewEviction(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	reg, err := NewRegistry([]string{dir}, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	reg := unpreparedRegistry(t, []string{dir})
 	// open all four as preview backends
 	for _, e := range reg.all() {
 		if _, err := e.open(); err != nil {
@@ -441,6 +437,7 @@ func TestPreviewEviction(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	waitNewDictionaryIndexing(t, reg2)
 	e2 := reg2.all()[0]
 	if _, err := e2.open(); err != nil {
 		t.Fatal(err)
@@ -468,10 +465,7 @@ func TestResourceHandleIsEvictable(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "r.fake"), []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	reg, err := NewRegistry([]string{dir}, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	reg := unpreparedRegistry(t, []string{dir})
 	e := reg.all()[0]
 	// prepare it, so it is served through `upgraded` with a lazy source handle
 	if err := e.setFeatures(features{}, nil); err != nil {
@@ -536,6 +530,7 @@ func TestStaleFoldIsReportedAndRebuildable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	waitNewDictionaryIndexing(t, reg)
 	s := New(reg)
 	id := getDicts(t, s, "/api/dicts")[0].ID
 	sse(t, s, "/api/ingest?dict="+id+"&contains=1")

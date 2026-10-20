@@ -141,6 +141,9 @@ func TestSharedSearchValidationMatchesHTTP(t *testing.T) {
 func TestSharedSearchCancellationAndEmitterFailure(t *testing.T) {
 	s, _ := newPrefsServer(t)
 	for _, e := range s.reg.all() {
+		e.closeNow()
+	}
+	for _, e := range s.reg.all() {
 		if e.d != nil {
 			t.Fatal("fixture already opened a dictionary")
 		}
@@ -185,6 +188,9 @@ func TestSharedSearchCancellationAndEmitterFailure(t *testing.T) {
 
 func TestSharedSearchMorphology(t *testing.T) {
 	s := morphServer(t, map[string]string{"words.dsl": dslFile("Unlabelled", "know")})
+	for _, e := range s.reg.all() {
+		e.closeNow()
+	}
 	events := collectLookup(t, s, SearchRequest{Query: "knew", Mode: "exact"})
 	var morphs []SearchEvent
 	for _, event := range events {

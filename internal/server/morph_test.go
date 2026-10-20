@@ -33,6 +33,7 @@ func morphServer(t *testing.T, files map[string]string) *Server {
 	if err != nil {
 		t.Fatal(err)
 	}
+	waitNewDictionaryIndexing(t, reg)
 	s := New(reg)
 	// Only English is built in (D87), so Russian arrives the way a user's
 	// Russian arrives: as a file in LEMMA_DIR. Keyed on the ё spellings, as
