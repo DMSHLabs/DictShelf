@@ -18,7 +18,7 @@ import (
 func registerRealFormats(t *testing.T) {
 	t.Helper()
 	open := func(path string) (Dictionary, error) { return fakeDict{}, nil }
-	for _, ext := range []string{".mdx", ".ifo", ".dsl", ".dsl.dz", ".slob", ".bgl", ".zim"} {
+	for _, ext := range []string{".mdx", ".ifo", ".dsl", ".dsl.dz", ".slob", ".bgl", ".zim", ".zimaa"} {
 		RegisterFormat(ext, open)
 	}
 	RegisterInspectable(".mdd", open)
@@ -40,6 +40,11 @@ func TestClassifyName(t *testing.T) {
 		{"x.slob", KindMain},
 		{"x.bgl", KindMain},
 		{"wiki.zim", KindMain},
+		{"wiki.zimaa", KindMain},
+		{"wiki.zimab", KindCompanion},
+		{"wiki.ZIMAC", KindCompanion},
+		{"wiki.zimzz", KindCompanion},
+		{"wiki.zimAa", KindMain},
 		{"ru-en.dsl", KindMain},
 		{"ru-en.dsl.dz", KindMain},
 

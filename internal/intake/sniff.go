@@ -6,7 +6,9 @@ package intake
 
 import (
 	"errors"
+	"fmt"
 	"io"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -17,6 +19,10 @@ import (
 // has cause to be. Reported rather than truncated: a partial answer to "what
 // is in here" would be a list the user is invited to trust.
 var ErrTooManyEntries = errors.New("archive holds too many files")
+
+// ErrCandidateTooLarge refuses an import whose combined files exceed the
+// intake's per-dictionary size ceiling.
+var ErrCandidateTooLarge = errors.New("dictionary exceeds the import size limit")
 
 // Sniff lists an archive and reports the dictionaries in it. No byte is
 // written, and the answer comes from names and the directory's declared sizes
@@ -124,7 +130,7 @@ func Sniff(a Archive) ([]Candidate, error) {
 			for _, e := range shared[g.main.Dir] {
 				c.Files = append(c.Files, e.Name)
 				c.sizes = append(c.sizes, e.Size)
-				c.Size += e.Size
+				c.Size = addCandidateSize(c.Size, e.Size)
 			}
 		}
 		if c.Size > maxCandidateBytes {
@@ -151,7 +157,7 @@ func buildCandidate(main Entry, companions []Entry) Candidate {
 		Main:   main.Name,
 		Files:  []string{main.Name},
 		sizes:  []int64{main.Size},
-		Size:   main.Size,
+		Size:   addCandidateSize(0, main.Size),
 	}
 	// Archive order, so the same archive extracts in the same order twice.
 	sort.SliceStable(companions, func(i, j int) bool { return companions[i].Name < companions[j].Name })
@@ -162,7 +168,7 @@ func buildCandidate(main Entry, companions []Entry) Candidate {
 		}
 		c.Files = append(c.Files, e.Name)
 		c.sizes = append(c.sizes, e.Size)
-		c.Size += e.Size
+		c.Size = addCandidateSize(c.Size, e.Size)
 		have = append(have, strings.ToLower(e.Base))
 	}
 	for _, group := range dict.RequiredCompanions(ext) {
@@ -172,7 +178,43 @@ func buildCandidate(main Entry, companions []Entry) Candidate {
 			c.Missing = append(c.Missing, group[0])
 		}
 	}
+	if ext == ".zimaa" {
+		present := make(map[string]bool, len(have))
+		for _, name := range have {
+			present[name] = true
+		}
+		stem := strings.ToLower(dict.Stem(main.Base))
+		parts, gap := 1, false
+		firstGap := ""
+		for _, suffix := range dict.ZIMPartSuffixes() {
+			partName := stem + suffix
+			if present[partName] {
+				if gap {
+					missing := filepath.Join(main.Dir, stem+firstGap)
+					c.Missing = append(c.Missing, filepath.ToSlash(missing))
+					break
+				}
+				parts++
+				if parts > dict.MaxZIMParts {
+					c.Missing = append(c.Missing, fmt.Sprintf("split ZIM exceeds %d parts", dict.MaxZIMParts))
+					break
+				}
+			} else {
+				gap = true
+				if firstGap == "" {
+					firstGap = suffix
+				}
+			}
+		}
+	}
 	return c
+}
+
+func addCandidateSize(total, size int64) int64 {
+	if size < 0 || total < 0 || size > maxCandidateBytes-total {
+		return maxCandidateBytes + 1
+	}
+	return total + size
 }
 
 // satisfied reports whether any spelling in group appears among the companion

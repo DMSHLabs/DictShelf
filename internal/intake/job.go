@@ -348,6 +348,7 @@ func (m *Manager) download(ctx context.Context, j *jobState, f Fetcher, raw stri
 		// name the server had not yet confirmed.
 		if u, cerr := f.Check(raw); cerr == nil {
 			extras = probeCompanions(ctx, f, u, filepath.Base(src.Path), filepath.Dir(src.Path))
+			markSplitCandidatesIncomplete(cands, extras)
 		}
 	}
 
@@ -542,6 +543,20 @@ func (m *Manager) Confirm(dest string, pick []int, opts Options) (Job, error) {
 			return Job{}, errors.New("no such dictionary in this archive")
 		}
 		c := j.pub.Candidates[i]
+		if c.Format == ".zimaa" && !allSplitExtrasPicked(c, j.extras, extras) {
+			return Job{}, ErrNotInstallable
+		}
+		if c.Format == ".zimaa" {
+			size := c.Size
+			for _, extra := range extras {
+				if partStem := dict.CompanionStem(extra.Name); partStem != "" && strings.EqualFold(partStem, dict.Stem(c.Main)) {
+					size = addCandidateSize(size, extra.Size)
+				}
+			}
+			if size > maxCandidateBytes {
+				return Job{}, ErrCandidateTooLarge
+			}
+		}
 		if !c.Complete() && !fetching {
 			// With a required companion on its way, "incomplete" is a
 			// statement about the files that have arrived SO FAR. The check
@@ -579,6 +594,35 @@ func (m *Manager) Confirm(dest string, pick []int, opts Options) (Job, error) {
 	// and the worker writes pub only through m.mu - so this snapshot cannot
 	// race, unlike BeginURL's.
 	return j.pub.copy(), nil
+}
+
+func markSplitCandidatesIncomplete(candidates []Candidate, extras []Extra) {
+	for i := range candidates {
+		c := &candidates[i]
+		if c.Format != ".zimaa" {
+			continue
+		}
+		for _, extra := range extras {
+			if dict.CompanionStem(extra.Name) != "" && strings.EqualFold(dict.CompanionStem(extra.Name), dict.Stem(c.Main)) {
+				c.Missing = append(c.Missing, extra.Name)
+				break
+			}
+		}
+	}
+}
+
+func allSplitExtrasPicked(c Candidate, found, picked []Extra) bool {
+	stem := dict.Stem(c.Main)
+	selected := make(map[string]bool, len(picked))
+	for _, e := range picked {
+		selected[strings.ToLower(e.Name)] = true
+	}
+	for _, e := range found {
+		if partStem := dict.CompanionStem(e.Name); partStem != "" && strings.EqualFold(partStem, stem) && !selected[strings.ToLower(e.Name)] {
+			return false
+		}
+	}
+	return true
 }
 
 // pickExtras resolves the indexes the user ticked against the companions this
@@ -691,6 +735,9 @@ func remap(chosen, fresh []Candidate) []Candidate {
 		if f, ok := by[c.Name]; ok {
 			out = append(out, f)
 			continue
+		}
+		if c.Format == ".zimaa" {
+			c.Missing = append(c.Missing, "split ZIM could not be verified after download")
 		}
 		out = append(out, c)
 	}

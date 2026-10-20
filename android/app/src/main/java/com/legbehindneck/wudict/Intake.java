@@ -131,6 +131,8 @@ final class Intake {
             // (`wudict: 1`) and declines the rest.
             ".md", ".wudict.md.gz", ".wudict.md.dz",
     };
+    private static final java.util.regex.Pattern ZIM_PART =
+            java.util.regex.Pattern.compile(".*\\.zim[a-z][a-z]", java.util.regex.Pattern.CASE_INSENSITIVE);
 
     /**
      * What the page's own "Add dictionaries" picker offers. DocumentsUI
@@ -297,7 +299,7 @@ final class Intake {
         for (String ext : DICT_EXTS) {
             if (n.endsWith(ext)) return true;
         }
-        return false;
+        return ZIM_PART.matcher(n).matches();
     }
 
     /**

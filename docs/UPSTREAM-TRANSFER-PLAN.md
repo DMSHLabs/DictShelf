@@ -1,5 +1,31 @@
 # Plan for transferring upstream format and resource changes
 
+## Проверка
+
+Перед переходом к пункту 5 необходимо завершить ручную проверку уже перенесённых
+изменений на реальных словарях и в целевых вариантах приложения:
+
+- **Большой ZIM (пункт 3):** открыть реальный крупный ZIM, выполнить поиск и
+  последовательный просмотр, затем загрузить большую картинку и проверить, что
+  ресурсы из несжатого кластера читаются напрямую, а сжатый кластер остаётся в
+  установленном ограничении распаковки.
+- **Разделённый ZIM (пункт 4):** открыть реальный архив из нескольких частей,
+  проверить поиск и ресурсы, в том числе когда граница частей попадает внутрь
+  данных; убедиться, что архив с отсутствующей частью и одиночная часть после
+  первой отвергаются с понятной ошибкой.
+- **Windows и Android без сервера:** повторить загрузку картинки и аудио из
+  исходного словаря через существующие in-process/WebView и Go/JNI пути; для
+  большого ресурса проверить Range/перемотку и убедиться, что адаптер не читает
+  весь ответ в память.
+- **Оба режима хранения ресурсов:** проверить словарь с подготовленным
+  `media.db` и словарь, ресурсы которого читаются напрямую из исходного файла.
+- После ручной проверки повторно выполнить Go-тесты и сборки Windows/Android;
+  при сбое остановить перенос и исправить его до пункта 5.
+
+Пока эти проверки не пройдены, **P3 и P4 считаются ожидающими проверки, а P5
+начинать нельзя**. Ограничения и ожидаемое поведение описаны в разделе
+«Обязательные инварианты» ниже.
+
 ## Scope
 
 Transfer selected behavior from upstream commits `f1c5fb27` and `c8b92dda` into
@@ -50,8 +76,24 @@ or discard user changes silently.
   media skip behavior remain intact. `go build ./...` and `git diff --check`
   pass; tests were not run.
 - **P3 — ZIM on-demand indexing and direct resources:** implementation complete;
-  build and diff checks pass. Runtime verification with real large ZIM files is
-  still pending; keep the transfer at P3 until that check is confirmed.
+  runtime verification with real large ZIM files is still pending. The full Go
+  test suite and Go build pass on the current worktree.
+
+- **P4 — split-ZIM support:** implementation complete; runtime verification with
+  a real multi-part ZIM is pending. The joined `ReaderAt`, `.zimaa` discovery,
+  intake staging, required URL-part selection, source revision, cleanup listing,
+  64-part cap, and 64 GiB per-dictionary cap are implemented. Gaps are rejected,
+  uppercase suffix runs are preserved, and a later part alone is never offered
+  as a dictionary. Synthetic split-boundary and intake tests, the full Go test
+  suite, Go build, Android FOSS Java compilation, and `git diff --check` pass.
+
+- **P5 — SLOB lazy reference access:** implementation complete; package tests
+  pass. Open now validates the ref-list bounds without decoding every key;
+  browse, resource listing, and ingest read references from disk in bounded
+  windows. Direct lookup lazily caches the decoded refs because its exact and
+  folded indexes need the complete key set. The full Go test suite, Go build,
+  and `git diff --check` pass. Large real-SLOB runtime verification remains
+  pending.
 
 ## Required invariants
 
@@ -111,6 +153,19 @@ served.
 
 ### 4. Add split-ZIM support
 
+**Status: implementation complete; real-file runtime verification pending.**
+The fork joins at most 64 consecutive parts through `io.ReaderAt`, retains
+seekable direct resource reads, and records all part sizes and modification
+times in the source revision used by reconciliation. Intake recognizes
+`.zimaa`, groups later parts as companions, refuses gaps and oversized sets,
+stages and disposes every part with the main file, and makes discovered URL
+parts required as one selection. A later part cannot become a standalone
+candidate. Android's loose-file suffix filter accepts split-part names while
+the Go/JNI intake path remains in-process. Synthetic tests split a valid ZIM
+at arbitrary byte offsets, including inside the header and entries; they verify
+lookup and resource reading across the joined source. Real multi-part ZIM
+runtime verification remains a gate before P5.
+
 Port the `c8b92dda` joined `ReaderAt` source and part discovery. Trace the full
 path from `.zimaa` selection through companion discovery, intake staging,
 reconciliation, opening, and cleanup. Preserve gaps/case behavior and put a
@@ -119,6 +174,11 @@ extension filter to accept split parts while retaining the in-process runtime.
 Do not treat a later part as a complete archive by itself.
 
 ### 5. Reduce SLOB open and scan memory
+
+**Status: implementation complete; Go tests and build pass, real-file
+verification pending.** `Open` no longer loads the complete ref table. Browse pages, resource
+listing, and ingest scanning read bounded windows from disk; direct lookup still
+caches all decoded refs lazily when building its indexes.
 
 Port the lazy reference-list reads from `f1c5fb27` and `c8b92dda` into the
 current SLOB container. Preserve direct lookup semantics, resource naming,
