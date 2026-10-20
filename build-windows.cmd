@@ -33,9 +33,9 @@ rem ============================================================
 
 cd /d "%~dp0"
 
-rem Machine-specific tool paths belong in this ignored local file, never here:
-rem CI checks out the repository without it and configures its own toolchain.
-if exist "%~dp0build-windows.local.bat" (
+rem Machine-specific tool paths belong in this ignored local file, never here.
+rem GitHub Actions configures its own compiler and must not load local settings.
+if not defined GITHUB_ACTIONS if exist "%~dp0build-windows.local.bat" (
     call "%~dp0build-windows.local.bat"
     if errorlevel 1 (
         echo ERROR: Could not load build-windows.local.bat.
