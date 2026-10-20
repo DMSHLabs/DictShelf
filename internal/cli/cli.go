@@ -15,6 +15,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	neturl "net/url"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -1296,7 +1297,7 @@ func cmdServe(args []string) (err error) {
 				// With the key, when this launch has one: the instance
 				// already running was started from the same configuration,
 				// so the key that would have been ours is the key it wants.
-				browserCmd(keyURL(url, token))
+				browserCmd(browserURL(cfg.Addr(), token))
 			}
 			return nil
 		}
@@ -1480,8 +1481,9 @@ Hint: pick another port with --port, e.g.:  wudict --port %s
 		speex:  speexSummary(useExternalSpeex, sxPath, sxSource),
 		keyURL: keyURL(url, token),
 	})
+	browse := browserURL(cfg.Addr(), token)
 	if !cfg.NoBrowser {
-		go openBrowser(keyURL(url, token))
+		go openBrowser(browse)
 	}
 
 	// No WriteTimeout: /api/search (NDJSON) and /api/ingest (SSE) stream for
@@ -1551,7 +1553,10 @@ Hint: pick another port with --port, e.g.:  wudict --port %s
 		GUI:      gui,
 		Version:  Version,
 		URL:      url,
-		Open:     func() { browserCmd(url) },
+		// The key too: the cookie lives only as long as the browser session,
+		// and a sign-in launch (--no-browser) leaves this item as the only
+		// way in, from a GUI with no console to read the key from.
+		Open:     func() { browserCmd(browse) },
 		Rescan:   trayRescan(reg),
 		OpenDir:  trayOpenDir(reg.Dirs()),
 		Shutdown: stop,
@@ -1918,15 +1923,33 @@ func (m *multiFlag) Set(v string) error {
 // string a user can act on: a link that works. Empty in, empty out - no key
 // required means there is nothing to show, and a banner line that says
 // "access key: (none)" is an invitation to go looking for one.
-func keyURL(url, token string) string {
+//
+// The key is query-escaped: a generated one is base64url and passes through
+// unchanged, but an AUTH_TOKEN is whatever the user typed, and the server
+// reads k decoded - a raw '+' would arrive as a space, '&' or '#' would cut
+// it short.
+func keyURL(base, token string) string {
 	if token == "" {
 		return ""
 	}
 	sep := "?"
-	if strings.Contains(url, "?") {
+	if strings.Contains(base, "?") {
 		sep = "&"
 	}
-	return url + sep + "k=" + token
+	return base + sep + "k=" + neturl.QueryEscape(token)
+}
+
+// browserURL is the link this machine's own browser is sent to: the address
+// probeHost would ask - a wildcard bind becomes loopback, because Windows
+// cannot connect to 0.0.0.0 or [::] at all and browsers refuse them - with
+// the key when one is required. Never empty, unlike keyURL: no key means
+// the plain address, not nothing.
+func browserURL(addr, token string) string {
+	u := "http://" + probeHost(addr) + "/"
+	if token == "" {
+		return u
+	}
+	return keyURL(u, token)
 }
 
 // webOriginsNote renders WEB_ORIGINS for the startup block. A wildcard is
@@ -1981,6 +2004,11 @@ func openBrowser(url string) {
 }
 
 func browserCmd(url string) {
+	// Refused, not passed on: FileProtocolHandler hands an empty target to
+	// ShellExecute, which opens an Explorer window instead of failing.
+	if url == "" {
+		return
+	}
 	var cmd *exec.Cmd
 	switch runtime.GOOS {
 	case "darwin":
@@ -1990,7 +2018,14 @@ func browserCmd(url string) {
 	default:
 		cmd = exec.Command("xdg-open", url)
 	}
-	_ = cmd.Start()
+	if err := cmd.Start(); err != nil {
+		// A headless Linux box has no xdg-open; the banner carries the link.
+		logx.V("open browser: %v", err)
+		return
+	}
+	// Reaped: open(1) and xdg-open exit at once, and an unwaited child stays
+	// a zombie for the life of the server - one per tray "Open" click.
+	go cmd.Wait()
 }
 
 func cmdSearchAll(args []string) error {
