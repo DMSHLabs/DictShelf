@@ -3,7 +3,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
-# Asserts the two properties that make the flavour split worth having (D62),
+# Asserts the flavour permissions and the Android no-listener boundary (D62),
 # on APKs that already exist — build them first with `make apk-foss-release` /
 # `make apk-play-release` (or the -debug targets).
 #
@@ -11,13 +11,10 @@
 #      (three install-time, plus POST_NOTIFICATIONS, the single runtime one),
 #      and NO storage permission (that is the whole point); the FOSS APK still
 #      declares All-files access (the split did not leak);
-#   2. the Play APK carries no listen-address control at all: the string the
-#      switch needs lives in src/foss/res, so its absence here is proof the
-#      flavour split (Net, D62) held and the switch cannot be drawn;
-#   3. both still ship libwudict.so with extractNativeLibs=true, because the
-#      server is EXEC'd from nativeLibraryDir and a compressed lib is not a
-#      file (D52) — a packaging change is exactly what would break this
-#      silently.
+#   2. neither APK flavour carries the listen-address control: Android always
+#      uses the in-process Go/JNI bridge and never opens a TCP listener;
+#   3. both still ship the Go/JNI bridge with extractNativeLibs=true, because
+#      System.loadLibrary needs the native library extracted to a file (D52).
 #
 # Read-only. Exits non-zero on the first violation.
 set -eu
@@ -57,7 +54,8 @@ if [ -n "$PLAY" ]; then
         # — a feature added to the shell is exactly how it would arrive. Adding
         # a name here is a deliberate act.
         #
-        #   INTERNET                     the WebView reaches the loopback server
+        #   INTERNET                     dictionary import, lemma downloads and
+        #                                other network requests
         #   FOREGROUND_SERVICE           IndexService survives the freezer and
         #   FOREGROUND_SERVICE_DATA_SYNC the LMK while preparing (API 34+ needs
         #                                the typed grant as well)
@@ -76,15 +74,6 @@ if [ -n "$PLAY" ]; then
             fail "$apk declares permissions outside the allowed set: $extra"
         fi
         echo "ok: $apk declares only the allowed permissions"
-        # The LAN switch is FOSS-only. Its label is a foss-flavour resource,
-        # so a Play APK that contains the name has had the control put back -
-        # by a string moved into src/main, or by a Net.java that grew a row.
-        # Asserted on the resource table rather than on the source tree,
-        # because the source tree is not what gets uploaded.
-        if "$AAPT2" dump resources "$apk" | grep -q 'settings_server_ip'; then
-            fail "$apk carries the LAN switch resources: the flavour split leaked"
-        fi
-        echo "ok: $apk has no listen-address control"
     done
 else
     echo "skip: no play APK built (make apk-play)"
@@ -95,28 +84,29 @@ if [ -n "$FOSS" ]; then
         if ! "$AAPT2" dump permissions "$apk" | grep -q 'MANAGE_EXTERNAL_STORAGE'; then
             fail "$apk LOST MANAGE_EXTERNAL_STORAGE"
         fi
-        # The mirror of the Play assertion above: the switch must still BE
-        # here. A row lost by an edit to the wrong flavour's Net.java takes
-        # nothing with it - the build succeeds, the setting simply stops
-        # existing - so absence has to be an error, not a silence.
-        if ! "$AAPT2" dump resources "$apk" | grep -q 'settings_server_ip'; then
-            fail "$apk LOST the listen-address control"
-        fi
-        echo "ok: $apk keeps All-files access and the LAN switch"
+        echo "ok: $apk keeps All-files access"
     done
 else
     echo "skip: no foss APK built (make apk)"
 fi
 
 for apk in $FOSS $PLAY; do
+    # Check the packaged resources, not just source files: neither Android
+    # flavour may offer a listen-address setting because neither starts a
+    # network server. INTERNET remains for dictionary and lemma downloads.
+    if "$AAPT2" dump resources "$apk" | grep -q 'settings_server_ip'; then
+        fail "$apk carries listen-address controls; Android builds must not offer server mode"
+    fi
+    echo "ok: $apk has no TCP-server control"
+
     "$AAPT2" dump badging "$apk" | grep -q "native-code: 'arm64-v8a'" \
         || fail "$apk ships no arm64-v8a native code"
     # AGP 9's aapt2 prints the resolved boolean; older ones print the raw
     # typed value. Accept both rather than pin to the current toolchain.
     "$AAPT2" dump xmltree --file AndroidManifest.xml "$apk" \
         | grep -Eq 'extractNativeLibs[^=]*=(true|\(type 0x12\)0xffffffff)' \
-        || fail "$apk has extractNativeLibs=false: the server could not be exec'd"
-    echo "ok: $apk extracts libwudict.so"
+        || fail "$apk has extractNativeLibs=false: the Go/JNI bridge could not be loaded"
+    echo "ok: $apk extracts the Go/JNI bridge"
 
     # Selection lookup (D67) is declared in src/main, so BOTH flavours must
     # carry it — a filter that quietly lands in one flavour's manifest is the
