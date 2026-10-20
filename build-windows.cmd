@@ -4,16 +4,15 @@ rem SPDX-License-Identifier: GPL-3.0-or-later
 setlocal EnableExtensions DisableDelayedExpansion
 
 rem ============================================================
-rem wuDict2 Windows desktop build: [debug|release] [console]
+rem wuDict2 Windows builds: [cli|server|installer]
 rem
-rem   debug    (default)  build wuDict2.exe in the repository root
-rem   release             the same wuDict2.exe plus the per-user installer,
-rem                       compiled into dist\ (needs Inno Setup 6.3+)
-rem   console             console subsystem for CLI use and diagnostics;
-rem                       default builds use the Windows GUI subsystem
+rem   (no args)             listenerless Windows WebView app: wuDict2.exe
+rem   cli                  console CLI: wuDict2-cli.exe (does not start a server)
+rem   server               console HTTP server: wuDict2-server.exe
+rem   installer            package the existing wuDict2.exe from the default build
+rem                        under dist\ (needs Inno Setup 6.3+)
 rem
-rem Tokens may be written in either order, the way build-android.cmd takes
-rem `debug intel` and `intel debug`.
+rem The installer mode packages the exact GUI executable built by the default mode.
 rem
 rem FLAVOUR. Windows desktop builds always use cgo - mattn SQLite with FTS5
 rem (D4) and the built-in speex .spx decoder. A compatible 64-bit mingw-w64
@@ -66,26 +65,55 @@ rem ------------------------------------------------------------
 rem Arguments
 rem ------------------------------------------------------------
 
-set "BUILD_TYPE="
+set "BUILD_TYPE=exe"
 set "WINDOW_MODE=gui"
 set "WINDOW_LDFLAGS=-H windowsgui"
+set "OUTPUT_EXE=wuDict2.exe"
+set "DEFAULT_SERVE=1"
 
 if not "%~1"=="" for %%A in (%*) do (
-    if /i "%%A"=="debug" (
-        set "BUILD_TYPE=debug"
-    ) else if /i "%%A"=="release" (
-        set "BUILD_TYPE=release"
-    ) else if /i "%%A"=="console" (
+    if /i "%%A"=="installer" (
+        set "BUILD_TYPE=installer"
+    ) else if /i "%%A"=="cli" (
+        set "BUILD_TYPE=cli"
         set "WINDOW_MODE=console"
         set "WINDOW_LDFLAGS="
+        set "OUTPUT_EXE=wuDict2-cli.exe"
+        set "DEFAULT_SERVE=0"
+    ) else if /i "%%A"=="server" (
+        set "BUILD_TYPE=server"
+        set "WINDOW_MODE=console"
+        set "WINDOW_LDFLAGS="
+        set "OUTPUT_EXE=wuDict2-server.exe"
+        set "DEFAULT_SERVE=1"
     ) else (
         echo ERROR: unknown option "%%A".
-        echo Usage: build-windows.cmd [debug^|release] [console]
+        echo Usage: build-windows.cmd [cli^|server^|installer]
         exit /b 1
     )
 )
 
-if not defined BUILD_TYPE set "BUILD_TYPE=debug"
+rem Packaging reuses the desktop binary built by the default invocation. This
+rem keeps the installer's version and executable identical to release artifact 1.
+if /i "%BUILD_TYPE%"=="installer" (
+    if not exist "wuDict2.exe" (
+        echo ERROR: wuDict2.exe is missing. Build the desktop executable first:
+        echo   build-windows.cmd
+        exit /b 1
+    )
+    set "VERSION="
+    for /f "tokens=2" %%V in ('wuDict2.exe --version') do if not defined VERSION set "VERSION=%%V"
+    call :find_iscc
+    if errorlevel 1 exit /b 1
+    call :make_installer
+    if errorlevel 1 exit /b 1
+    echo.
+    echo BUILD SUCCESSFUL
+    echo Installer:
+    echo   %SETUP%
+    endlocal
+    exit /b 0
+)
 
 rem ------------------------------------------------------------
 rem Check required tools
@@ -152,17 +180,6 @@ set "GO_TAGS=sqlite_fts5"
 set "CGO=1"
 
 rem ------------------------------------------------------------
-rem Installer: Inno Setup is only needed by `release`, and tools\make-installer.ps1
-rem is the one place that knows where it lives - `-Locate` is the installer
-rem script's own search. Asked BEFORE the Go build, so a missing compiler costs
-rem two seconds instead of the length of a full build.
-rem ------------------------------------------------------------
-
-if /i "%BUILD_TYPE%"=="release" (
-    call :find_iscc
-    if errorlevel 1 exit /b 1
-)
-
 rem ------------------------------------------------------------
 rem Build
 rem ------------------------------------------------------------
@@ -183,24 +200,24 @@ echo   %CC_PATH%
 
 echo.
 echo Output:
-echo   %CD%\wuDict2.exe
+echo   %CD%\%OUTPUT_EXE%
 echo.
 
 rem A running server holds wuDict2.exe open, and Windows then refuses to let the
 rem linker replace it - the "Access is denied" trap docs\WINDOWS-VERIFY.md
 rem records for preview servers. Said here, where it can still be acted on.
-tasklist /FI "IMAGENAME eq wuDict2.exe" 2>nul | findstr /i /c:"wuDict2.exe" >nul
+tasklist /FI "IMAGENAME eq %OUTPUT_EXE%" 2>nul | findstr /i /c:"%OUTPUT_EXE%" >nul
 if not errorlevel 1 (
-    echo WARNING: wuDict2.exe is running. The build will try to stop it before
+    echo WARNING: %OUTPUT_EXE% is running. The build will try to stop it before
     echo   replacing the file; if that fails, close it and run the build again:
-    echo     taskkill /F /IM wuDict2.exe
+    echo     taskkill /F /IM %OUTPUT_EXE%
     echo.
 )
 
 rem Only replace the current executable after all prerequisites are present.
-taskkill /IM "wuDict2.exe" /F >nul 2>&1
-del /F /Q "wuDict2.exe"
-del /F /Q "wuDict2.exe~"
+taskkill /IM "%OUTPUT_EXE%" /F >nul 2>&1
+del /F /Q "%OUTPUT_EXE%"
+del /F /Q "%OUTPUT_EXE%~"
 
 rem A compiler found by path is passed as an absolute CC because it is not on
 rem PATH, and CXX is derived beside it only when that g++.exe is really there -
@@ -215,8 +232,8 @@ set "CGO_ENABLED=%CGO%"
 go build ^
   -trimpath ^
   -tags %GO_TAGS% ^
-  -ldflags "%WINDOW_LDFLAGS% -s -w -X github.com/wuweidict/wudict/internal/cli.Version=%VERSION%" ^
-  -o wuDict2.exe ^
+  -ldflags "%WINDOW_LDFLAGS% -s -w -X github.com/wuweidict/wudict/internal/cli.Version=%VERSION% -X github.com/wuweidict/wudict/internal/cli.DefaultServe=%DEFAULT_SERVE%" ^
+  -o "%OUTPUT_EXE%" ^
   .
 
 if errorlevel 1 (
@@ -233,12 +250,12 @@ rem ------------------------------------------------------------
 
 echo.
 echo ============================================================
-echo Verifying wuDict2.exe
+echo Verifying %OUTPUT_EXE%
 echo ============================================================
 echo.
 
-if not exist "wuDict2.exe" (
-    echo ERROR: go build finished but wuDict2.exe was not found.
+if not exist "%OUTPUT_EXE%" (
+    echo ERROR: go build finished but %OUTPUT_EXE% was not found.
     exit /b 1
 )
 
@@ -248,16 +265,16 @@ rem or libgcc_s_seh-1.dll yields a build that reports success and a binary
 rem that dies before main. --version is the cheapest run there is: no port,
 rem no dictionary, no tray.
 set "RAN="
-for /f "delims=" %%V in ('wuDict2.exe --version') do if not defined RAN set "RAN=%%V"
+for /f "delims=" %%V in ('"%OUTPUT_EXE%" --version') do if not defined RAN set "RAN=%%V"
 
 if not defined RAN (
-    echo ERROR: wuDict2.exe was built but does not run.
+    echo ERROR: %OUTPUT_EXE% was built but does not run.
     echo   Check that the mingw runtime DLLs ^(libwinpthread-1.dll,
     echo   libgcc_s_seh-1.dll^) are beside the exe or on PATH.
     exit /b 1
 )
 
-echo OK: wuDict2.exe runs
+echo OK: %OUTPUT_EXE% runs
 echo   %RAN%
 echo.
 
@@ -267,35 +284,26 @@ rem of trusted from the flags above. This is what catches a stale file left by
 rem an earlier run or a build cache hit answering with the wrong tags.
 set "WANT_DEP=github.com/mattn/go-sqlite3"
 
-go version -m wuDict2.exe | findstr /i /c:"-tags=%GO_TAGS%" >nul
+go version -m "%OUTPUT_EXE%" | findstr /i /c:"-tags=%GO_TAGS%" >nul
 if errorlevel 1 (
-    echo ERROR: wuDict2.exe was not built with -tags %GO_TAGS%.
+    echo ERROR: %OUTPUT_EXE% was not built with -tags %GO_TAGS%.
     exit /b 1
 )
 
-go version -m wuDict2.exe | findstr /i /c:"CGO_ENABLED=%CGO%" >nul
+go version -m "%OUTPUT_EXE%" | findstr /i /c:"CGO_ENABLED=%CGO%" >nul
 if errorlevel 1 (
-    echo ERROR: wuDict2.exe was not built with CGO_ENABLED=%CGO%.
+    echo ERROR: %OUTPUT_EXE% was not built with CGO_ENABLED=%CGO%.
     exit /b 1
 )
 
-go version -m wuDict2.exe | findstr /i /c:"%WANT_DEP%" >nul
+go version -m "%OUTPUT_EXE%" | findstr /i /c:"%WANT_DEP%" >nul
 if errorlevel 1 (
-    echo ERROR: wuDict2.exe does not carry %WANT_DEP%.
+    echo ERROR: %OUTPUT_EXE% does not carry %WANT_DEP%.
     exit /b 1
 )
 
 echo OK: built as asked - -tags %GO_TAGS%, CGO_ENABLED=%CGO%, %WANT_DEP%
 echo.
-
-rem ------------------------------------------------------------
-rem Installer (release only)
-rem ------------------------------------------------------------
-
-if /i "%BUILD_TYPE%"=="release" (
-    call :make_installer
-    if errorlevel 1 exit /b 1
-)
 
 echo.
 echo ============================================================
@@ -304,7 +312,7 @@ echo ============================================================
 echo.
 
 echo Binary:
-echo   %CD%\wuDict2.exe
+echo   %CD%\%OUTPUT_EXE%
 echo.
 
 if defined SETUP (
@@ -316,11 +324,12 @@ if defined SETUP (
 echo Run it:
 if /i "%WINDOW_MODE%"=="gui" (
     echo   wuDict2.exe                   open the app without a console window
-    echo   build-windows.cmd debug console    build a console executable for CLI use
+) else if /i "%BUILD_TYPE%"=="cli" (
+    echo   %OUTPUT_EXE%                   run CLI commands; without arguments shows help
 ) else (
-    echo   wuDict2.exe                   open the app from Explorer, browser from cmd
+    echo   %OUTPUT_EXE%                   run the HTTP server
 )
-echo   wuDict2.exe --help            every command and flag
+echo   %OUTPUT_EXE% --help            every command and flag
 echo.
 
 endlocal
@@ -410,8 +419,8 @@ if not defined ISCC (
 )
 
 if not defined ISCC (
-    echo ERROR: no Inno Setup 6.3 or newer was found, and `release` builds the
-    echo   installer. Install it, then run this script again:
+    echo ERROR: no Inno Setup 6.3 or newer was found, and `installer` packages
+    echo   the desktop executable. Install it, then run this script again:
     echo     winget install JRSoftware.InnoSetup
     echo   A plain `build-windows.cmd` still produces wuDict2.exe.
     exit /b 1

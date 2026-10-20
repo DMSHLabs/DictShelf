@@ -196,9 +196,21 @@ jobs:
           echo "WUDICT_VERSION=$VERSION" >> "$GITHUB_ENV"
           echo "building $VERSION"
 
-      - name: Build WebView2 desktop executable and installer
+      - name: Build WebView2 desktop executable
         shell: cmd
-        run: build-windows.cmd release
+        run: build-windows.cmd
+
+      - name: Build command-line executable
+        shell: cmd
+        run: build-windows.cmd cli
+
+      - name: Build HTTP server executable
+        shell: cmd
+        run: build-windows.cmd server
+
+      - name: Build installer from desktop executable
+        shell: cmd
+        run: build-windows.cmd installer
 
       - name: Upload desktop executable
         uses: actions/upload-artifact@v7
@@ -211,6 +223,13 @@ jobs:
         with:
           name: wudict2-windows-cli-x64
           path: wuDict2-cli.exe
+          if-no-files-found: error
+
+      - name: Upload HTTP server executable
+        uses: actions/upload-artifact@v7
+        with:
+          name: wudict2-windows-server-x64
+          path: wuDict2-server.exe
           if-no-files-found: error
 
       - name: Upload installer

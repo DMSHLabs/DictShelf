@@ -74,13 +74,24 @@ jobs:
               VERSION="$(sh tools/next-tag.sh --release)"
             fi
           fi
-          # build-windows.cmd reads the tag out of the clone for the setup
-          # file's name and its VersionInfo. The number that matters is the
-          # one the release will carry, so it is handed to the build instead.
+          # Stamp the desktop executable with the tag that this release will
+          # carry. The installer later reads its identity and version from it.
           echo "WUDICT_VERSION=$VERSION" >> "$GITHUB_ENV"
           echo "building $VERSION"
 
-      - name: Build executable and installer
+      - name: Build desktop executable
+        shell: cmd
+        run: build-windows.cmd
+
+      - name: Build command-line executable
+        shell: cmd
+        run: build-windows.cmd cli
+
+      - name: Build HTTP server executable
+        shell: cmd
+        run: build-windows.cmd server
+
+      - name: Build installer from desktop executable
         shell: cmd
         run: build-windows.cmd installer
 
@@ -96,6 +107,13 @@ jobs:
         with:
           name: wudict2-windows-cli-x64
           path: wuDict2-cli.exe
+          if-no-files-found: error
+
+      - name: Upload HTTP server executable
+        uses: actions/upload-artifact@v7
+        with:
+          name: wudict2-windows-server-x64
+          path: wuDict2-server.exe
           if-no-files-found: error
 
       - name: Upload installer

@@ -1,5 +1,13 @@
 # Agent handoff — current state
 
+Windows builds now use `build-windows.cmd` for the listenerless WebView app,
+`cli` for the console CLI (no-argument help, no TCP listener), `server` for
+the console HTTP server, and `installer` to package the already-built desktop
+exe. Both Windows GitHub workflows build in that order and upload all four
+artifacts. Workflow, script, CLI and build guide edits are uncommitted on
+branch `codex/windows-build-modes` at
+`0ef63178`; no Windows build or CI run was performed in this session.
+
 Create portable progress: the job first counts planned source bytes using the same traversal and exclusions as copying, then reports total bytes and copied bytes. The dialog shows an indeterminate counting phase, a percentage bar/current file while copying, and 100% plus the created-path confirmation only after successful publication and job completion. The Create button stays visible and disabled after success for the completed path; manual edits and the folder picker enable it for a different path. Reopening the dialog preserves that distinction. Portable controls initialize only in the Windows shell; Android and other non-Windows shells remove the command and dialog from the document. Mocked completion/path-edit and Android-exclusion checks pass. Prior GUI-log changes and audit files remain uncommitted. Focused portable/catalog tests, inline JS syntax, mocked progress/completion/cancellation states, Windows cgo GUI build and git diff --check pass; Windows visual verification remains pending.
 
 Current audit snapshot: `dev2` at `722daad4` (`Portable`), initially clean. Static Windows portable write-path audit fails confinement: WebView spill files, markdown decoding, external Speex and native SQLite temporaries can use system temp. External dictionary roots are swept at startup and the first root receives imports. WUDICT_HOME precedence, invalid-Data fallback, post-validation CLI library overrides and lexical-only path checks also prevent a strict guarantee. See [docs/PORTABLE-WRITES-AUDIT.md](docs/PORTABLE-WRITES-AUDIT.md) for evidence and the remediation scope. The subsequent GUI-log fix directs wudict.log into the active data root/db.logs (Data for portable, WUDICT_HOME or ~/.wuDict2 otherwise), independently of a custom library path. Go build, Windows cgo GUI build and git diff --check pass; no installation or commit. Other audit findings remain unresolved and filesystem tracing remains unperformed.

@@ -179,7 +179,7 @@ merge merely to resume this work.
 | Legacy WebView origin for settings import | `android/app/src/main/java/com/legbehindneck/wudict/Shell.java`: `legacyOrigin`, `prepareOrigin`; `ShellPrefs.legacyOriginPort()` reads the former SERVER_PORT preference only while `settings.json` is absent |
 | In-process Go startup and readiness | `android/app/src/main/java/com/legbehindneck/wudict/GoRuntime.java`: `run`, `runtimeReady`; `AppDirs.java` provides the app-specific library directory |
 | In-process resource dispatch | `android/app/src/main/java/com/legbehindneck/wudict/GoAppResource.java`; both Android WebViews use Go/JNI and no server mode is supported |
-| Build entry points | `build-android.cmd` (Windows, rebuilds Go and FOSS APK), `build-windows.cmd` (Windows desktop `wuDict2.exe` and Inno Setup installer under `release`; `console` builds the same executable with terminal output), `Makefile`, `.github/workflows/build-android.yml`, `fastlane/Appfile` |
+| Build entry points | `build-android.cmd` (Windows, rebuilds Go and FOSS APK), `build-windows.cmd` (no argument builds the listenerless WebView app; `cli` builds `wuDict2-cli.exe` without starting a server by default; `server` builds `wuDict2-server.exe`; `installer` packages the already-built `wuDict2.exe`), `Makefile`, `.github/workflows/build-android.yml`, `fastlane/Appfile` |
 
 The old Android build used a loopback listener. The current build starts Go
 inside the app process and opens no TCP socket. A58 uses the former URL only
