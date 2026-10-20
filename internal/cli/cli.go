@@ -1556,9 +1556,8 @@ func trayOpenDir(dirs []string) func() {
 	}
 }
 
-// openHeadlessLog is where logx goes when there is no console to write to. The
-// destinations are the ones the service templates already chose, so a user who
-// switches between a GUI launch and a launchd agent finds one log, not two.
+// openHeadlessLog is where logx goes when there is no console to write to.
+// Windows keeps it in db.logs under the active application data root.
 func openHeadlessLog() (*os.File, error) {
 	var path string
 	switch runtime.GOOS {
@@ -1569,11 +1568,18 @@ func openHeadlessLog() (*os.File, error) {
 		}
 		path = filepath.Join(home, "Library", "Logs", "wudict.log")
 	case "windows":
-		dir := os.Getenv("LOCALAPPDATA")
+		dir := os.Getenv("WUDICT_PORTABLE_HOME")
 		if dir == "" {
-			return nil, errors.New("LOCALAPPDATA is not set")
+			dir = os.Getenv("WUDICT_HOME")
 		}
-		path = filepath.Join(dir, "wudict", "wudict.log")
+		if dir == "" {
+			home, err := os.UserHomeDir()
+			if err != nil {
+				return nil, err
+			}
+			dir = filepath.Join(home, ".wuDict2")
+		}
+		path = filepath.Join(dir, "db.logs", "wudict.log")
 	default:
 		home, err := os.UserHomeDir()
 		if err != nil {

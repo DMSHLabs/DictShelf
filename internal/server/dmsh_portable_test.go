@@ -38,7 +38,9 @@ func TestPortableCopiesResourcesAndSettings(t *testing.T) {
 	source := filepath.Join(base, "profile")
 	root := filepath.Join(base, "dicts")
 	target := filepath.Join(base, "portable")
+	var totalBytes int64
 	for p, text := range map[string]string{filepath.Join(source, config.Name): "DICT_DIR = []\n", filepath.Join(source, "settings.json"): "{}", filepath.Join(root, "book.mdx"): "dictionary", filepath.Join(root, "book.mdd"): "resources", filepath.Join(root, "images", "picture.png"): "image", filepath.Join(base, "app.exe"): "executable"} {
+		totalBytes += int64(len(text))
 		if err := os.MkdirAll(filepath.Dir(p), 0755); err != nil {
 			t.Fatal(err)
 		}
@@ -53,6 +55,9 @@ func TestPortableCopiesResourcesAndSettings(t *testing.T) {
 	j := &job{ctx: context.Background(), t: &jobTable{}, changed: make(chan struct{})}
 	if err := s.buildPortable(j, source, filepath.Join(base, "app.exe"), target, []string{root}); err != nil {
 		t.Fatal(err)
+	}
+	if j.st.Total != totalBytes || j.st.Done != totalBytes || j.st.Result != target {
+		t.Fatalf("incorrect completion progress: %+v; want %d bytes", j.st, totalBytes)
 	}
 	for _, p := range []string{"app.exe", "Data/settings.json", "Data/Dictionaries/book.mdx", "Data/Dictionaries/book.mdd", "Data/Dictionaries/images/picture.png"} {
 		if _, err := os.Stat(filepath.Join(target, p)); err != nil {

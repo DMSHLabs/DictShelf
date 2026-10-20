@@ -196,7 +196,7 @@ Category localization: targeted `Test(I18n|AppearanceContract)` server tests, `g
 
 Windows transport stage (2026-10-15): Settings saves the manually selected interface language through the native bridge, which calls the same `Prefs.setLanguage` operation as the HTTP adapter. `go build ./...`, `git diff --check`, and the GUI `build-windows.cmd` build pass. Verify English/Russian selection and persistence after reload in the Windows app; catalogs and language-selection behavior were not changed.
 
-Create portable (2026-10-20): Windows Tools command, dialog, hints and progress have EN/RU catalog entries. Catalog tests and inline JavaScript syntax pass. Verify dialog layout, folder picking, Stop, and completion/error messages in both languages in the desktop app.
+Create portable (2026-10-20): Windows Tools command, dialog, hints, file-counting phase, percentage progress and created-path confirmation have EN/RU catalog entries. Catalog tests and inline JavaScript syntax pass. Verify dialog layout, folder picking, Stop, and completion/error messages in both languages in the desktop app.
 
 ## 7. Maintaining this file
 
