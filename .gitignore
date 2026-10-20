@@ -29,6 +29,7 @@ android/app/src/main/jniLibs/
 android/app/src/emuX86/jniLibs/
 android/local.properties
 /build-android.local.bat
+/build-windows.local.bat
 /CLAUDE.local.md
 code-review/
 # Local corpus for manual checks (real dictionaries: too big to ship, and not

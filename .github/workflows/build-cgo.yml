@@ -177,6 +177,20 @@ jobs:
           ref: releases
           fetch-depth: 0
 
+      - name: Setup MinGW-w64 GCC
+        id: msys2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: mingw-w64-x86_64-gcc
+
+      - name: Configure GCC for the build script
+        shell: pwsh
+        run: |
+          $gcc = Join-Path '${{ steps.msys2.outputs.msys2-location }}' 'mingw64\bin\gcc.exe'
+          "GCC_PATH=$gcc" >> $env:GITHUB_ENV
+
       - name: Compute version
         shell: bash
         run: |

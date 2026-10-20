@@ -1,12 +1,24 @@
 # Agent handoff — current state
 
-Windows builds now use `build-windows.cmd` for the listenerless WebView app,
-`cli` for the console CLI (no-argument help, no TCP listener), `server` for
-the console HTTP server, and `installer` to package the already-built desktop
-exe. Both Windows GitHub workflows build in that order and upload all four
-artifacts. Workflow, script, CLI and build guide edits are uncommitted on
-branch `codex/windows-build-modes` at
-`0ef63178`; no Windows build or CI run was performed in this session.
+Current branch: `codex/android-no-server-check` at `206d4028`, based on
+`3a2f970a`. The commit changes `tools/verify-apk.sh` to require both Android
+flavours to omit the listen-address control. The local FOSS debug/release and
+Play debug APK resource tables passed that assertion. The workflow has not
+been rerun, and this commit is not pushed or merged; GitHub still checks out
+the old verifier from `releases` until the change is integrated there.
+
+Android uses the in-process Go/JNI bridge and opens no TCP listener. The
+remaining Android workflow/build-script comments and version stamping changes
+are uncommitted; `build-android.cmd release` succeeded with
+`WUDICT_VERSION=wudict2-v0.13.0`, and the APK manifest reports that version.
+Windows builds use `build-windows.cmd` for the listenerless WebView app, `cli`
+for the console CLI (no-argument help, no TCP listener), `server` for the
+console HTTP server, and `installer` to package the already-built desktop exe.
+Both Windows workflows build and upload all four artifacts. Windows-only GCC
+and Inno Setup paths now live in ignored `build-windows.local.bat`; both
+workflows install MinGW-w64 GCC and pass its runner-local path to the shared
+build script. Windows CI has not been rerun; these Windows edits remain
+uncommitted.
 
 Create portable progress: the job first counts planned source bytes using the same traversal and exclusions as copying, then reports total bytes and copied bytes. The dialog shows an indeterminate counting phase, a percentage bar/current file while copying, and 100% plus the created-path confirmation only after successful publication and job completion. The Create button stays visible and disabled after success for the completed path; manual edits and the folder picker enable it for a different path. Reopening the dialog preserves that distinction. Portable controls initialize only in the Windows shell; Android and other non-Windows shells remove the command and dialog from the document. Mocked completion/path-edit and Android-exclusion checks pass. Prior GUI-log changes and audit files remain uncommitted. Focused portable/catalog tests, inline JS syntax, mocked progress/completion/cancellation states, Windows cgo GUI build and git diff --check pass; Windows visual verification remains pending.
 

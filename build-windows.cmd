@@ -18,9 +18,9 @@ rem FLAVOUR. Windows desktop builds always use cgo - mattn SQLite with FTS5
 rem (D4) and the built-in speex .spx decoder. A compatible 64-bit mingw-w64
 rem GCC is required; this script never falls back to purego.
 rem
-rem THE PATHS this script depends on are at the top, in the block below this
-rem one: the C compiler and the Inno Setup compiler. Everything else it needs
-rem is either on PATH or derived from the repository.
+rem Machine-specific compiler overrides belong in the ignored
+rem build-windows.local.bat. Otherwise the C compiler is found from CC, PATH or
+rem GCC_ROOTS, and Inno Setup is found from the registry or PATH.
 rem
 rem A C COMPILER need not be on PATH, and cl.exe can never be used - Go's cgo
 rem drives a gcc-style compiler, not MSVC. With GCC_PATH left empty, the search
@@ -33,33 +33,33 @@ rem ============================================================
 
 cd /d "%~dp0"
 
+rem Machine-specific tool paths belong in this ignored local file, never here:
+rem CI checks out the repository without it and configures its own toolchain.
+if exist "%~dp0build-windows.local.bat" (
+    call "%~dp0build-windows.local.bat"
+    if errorlevel 1 (
+        echo ERROR: Could not load build-windows.local.bat.
+        exit /b 1
+    )
+)
+
 rem ============================================================
-rem PATHS - what this machine has to provide. Edit here, not below.
+rem TOOL PATHS - local overrides load from build-windows.local.bat above.
 rem ============================================================
 
 rem The C compiler behind the cgo flavour: a 64-bit mingw-w64 GCC (cl.exe
-rem cannot be driven by Go's cgo). This machine's comes from Qt, and is the one
-rem the search below would land on anyway. An inherited GCC_PATH is respected,
-rem the way build-android.cmd respects an inherited ANDROID_HOME.
-if not defined GCC_PATH set "GCC_PATH=C:\Qt\Tools\mingw1310_64\bin\gcc.exe"
+rem cannot be driven by Go's cgo). Set GCC_PATH or CC in the environment or in
+rem build-windows.local.bat to pin a machine-specific compiler.
 
 rem Where a mingw-w64 GCC is looked for when GCC_PATH is empty or stale and
 rem gcc.exe is not on PATH. Quoted, wildcards allowed; the last directory that
 rem matches and really holds bin\gcc.exe wins.
 set "GCC_ROOTS="%SystemDrive%\Qt\Tools\mingw*_64" "%SystemDrive%\msys64\mingw64" "%SystemDrive%\mingw64" "%ProgramFiles%\mingw64" "%ProgramFiles%\WinLibs*\mingw64" "%LOCALAPPDATA%\Programs\mingw64""
 
-rem ISCC.exe, the Inno Setup compiler, and it must be 6.3 or newer:
-rem packaging\windows\wudict.iss uses x64compatible and
-rem PrivilegesRequiredOverridesAllowed, which nothing older reads. This
-rem machine's Inno Setup is 7, installed outside the uninstall registry, so the
-rem installer script cannot find it on its own - `make-installer.ps1 -Locate`
-rem prints nothing - and the path is pinned here. (Inno Setup 5, a copy of
-rem which also sits on this machine, cannot read the script at all: it emits no
-rem error text a redirect can carry, and either fails or reports a success that
-rem wrote no file.) Empty = ask tools\make-installer.ps1, whose own search
-rem covers the uninstall registry and PATH. An inherited ISCC_PATH is
-rem respected, the way an inherited GCC_PATH is.
-if not defined ISCC_PATH set "ISCC_PATH=D:\ProgSoft\InnoSetup7\ISCC.exe"
+rem ISCC.exe must be Inno Setup 6.3 or newer: packaging\windows\wudict.iss
+rem uses directives older releases do not support. The installer script
+rem searches the uninstall registry and PATH; set ISCC_PATH in the environment
+rem or build-windows.local.bat when it cannot locate the compiler.
 
 rem ------------------------------------------------------------
 rem Arguments
@@ -162,8 +162,7 @@ set "CC_PATH="
 call :find_gcc
 if not defined CC_PATH (
     echo ERROR: a 64-bit mingw-w64 GCC is required for the Windows cgo build.
-    echo   Install one, or point GCC_PATH or CC at gcc.exe. For example:
-    echo     set "GCC_PATH=C:\Qt\Tools\mingw1310_64\bin\gcc.exe"
+    echo   Install one, or set GCC_PATH in build-windows.local.bat or CC in the environment.
     echo   This script does not build the pure-Go flavour.
     exit /b 1
 )
@@ -460,8 +459,8 @@ if errorlevel 1 (
     echo   fails or reports a success that produced no file - both seen here.
     echo   This installer needs 6.3 or newer:
     echo     winget install JRSoftware.InnoSetup
-    echo   then either clear ISCC_PATH at the top of this file, so the installer
-    echo   script finds the new compiler itself, or point ISCC_PATH at it.
+    echo   then clear ISCC_PATH from the environment and build-windows.local.bat
+    echo   so the installer script finds the new compiler itself, or update it.
     exit /b 1
 )
 
