@@ -1,26 +1,22 @@
 # Agent handoff — current state
 
-Current branch: `codex/android-no-server-check` at `206d4028`, based on
-`3a2f970a`. The commit changes `tools/verify-apk.sh` to require both Android
-flavours to omit the listen-address control. The local FOSS debug/release and
-Play debug APK resource tables passed that assertion. The workflow has not
-been rerun, and this commit is not pushed or merged; GitHub still checks out
-the old verifier from `releases` until the change is integrated there.
+Current branch: `dev`. The Windows CI fix is committed locally; remote branches remain unchanged until pushed. Android's no-server APK verifier change is integrated. The
+local FOSS debug/release and Play debug APK resource tables passed the check
+for absent listen-address controls. Android uses the in-process Go/JNI bridge
+and opens no TCP listener. A local `build-android.cmd release` with
+`WUDICT_VERSION=wudict2-v0.13.0` succeeded and stamped that version in the APK.
 
-Android uses the in-process Go/JNI bridge and opens no TCP listener. The
-remaining Android workflow/build-script comments and version stamping changes
-are uncommitted; `build-android.cmd release` succeeded with
-`WUDICT_VERSION=wudict2-v0.13.0`, and the APK manifest reports that version.
+Windows CI failed because `build-windows.local.bat` was committed in
+`96024208`; its Qt `GCC_PATH` overwrote the MinGW path set by the workflow. The fix prevents GitHub Actions from loading local settings and removes the machine-specific file from Git while preserving it in this checkout. `.gitignore` already excludes the file. Both
+Windows workflows install MinGW-w64 and pass its runner-local path. The Windows
+CI build has not been rerun.
+
 Windows builds use `build-windows.cmd` for the listenerless WebView app, `cli`
 for the console CLI (no-argument help, no TCP listener), `server` for the
 console HTTP server, and `installer` to package the already-built desktop exe.
-Both Windows workflows build and upload all four artifacts. Windows-only GCC
-and Inno Setup paths now live in ignored `build-windows.local.bat`; both
-workflows install MinGW-w64 GCC and pass its runner-local path to the shared
-build script. Windows CI has not been rerun; these Windows edits remain
-uncommitted.
+Both Windows workflows build and upload all four artifacts.
 
-Create portable progress: the job first counts planned source bytes using the same traversal and exclusions as copying, then reports total bytes and copied bytes. The dialog shows an indeterminate counting phase, a percentage bar/current file while copying, and 100% plus the created-path confirmation only after successful publication and job completion. The Create button stays visible and disabled after success for the completed path; manual edits and the folder picker enable it for a different path. Reopening the dialog preserves that distinction. Portable controls initialize only in the Windows shell; Android and other non-Windows shells remove the command and dialog from the document. Mocked completion/path-edit and Android-exclusion checks pass. Prior GUI-log changes and audit files remain uncommitted. Focused portable/catalog tests, inline JS syntax, mocked progress/completion/cancellation states, Windows cgo GUI build and git diff --check pass; Windows visual verification remains pending.
+Create portable progress: the job first counts planned source bytes using the same traversal and exclusions as copying, then reports total bytes and copied bytes. The dialog shows an indeterminate counting phase, a percentage bar/current file while copying, and 100% plus the created-path confirmation only after successful publication and job completion. The Create button stays visible and disabled after success for the completed path; manual edits and the folder picker enable it for a different path. Reopening the dialog preserves that distinction. Portable controls initialize only in the Windows shell; Android and other non-Windows shells remove the command and dialog from the document. Mocked completion/path-edit and Android-exclusion checks pass. Focused portable/catalog tests, inline JS syntax, mocked progress/completion/cancellation states, Windows cgo GUI build and git diff --check pass; Windows visual verification remains pending.
 
 Current audit snapshot: `dev2` at `722daad4` (`Portable`), initially clean. Static Windows portable write-path audit fails confinement: WebView spill files, markdown decoding, external Speex and native SQLite temporaries can use system temp. External dictionary roots are swept at startup and the first root receives imports. WUDICT_HOME precedence, invalid-Data fallback, post-validation CLI library overrides and lexical-only path checks also prevent a strict guarantee. See [docs/PORTABLE-WRITES-AUDIT.md](docs/PORTABLE-WRITES-AUDIT.md) for evidence and the remediation scope. The subsequent GUI-log fix directs wudict.log into the active data root/db.logs (Data for portable, WUDICT_HOME or ~/.wuDict2 otherwise), independently of a custom library path. Go build, Windows cgo GUI build and git diff --check pass; no installation or commit. Other audit findings remain unresolved and filesystem tracing remains unperformed.
 
