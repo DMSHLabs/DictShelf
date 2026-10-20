@@ -2344,9 +2344,8 @@ function setPhase(p){
    (ShellPrefs.INFO_MESSAGES, delivered as shell_quiet and read in the head
    block). What is turned off is everything that PASSES: the art and its
    counter, and the shell's own start-up lines. A failure is not a passing note
-   and keeps its sentence in full (bootFailed below), the search-time uses of
-   readyCount() answer a question the reader has just asked, and the morph note
-   says the answer is for a different word than the one typed — it is read, not
+   and keeps its sentence in full (bootFailed below), and the morph note says
+   the answer is for a different word than the one typed — it is read, not
    skimmed, so the switch leaves it alone (see the morph branch in doSearch).
    With the messages off the screen simply stays empty until results arrive,
    which is the point: a message nobody can finish reading is noise. */
@@ -2367,17 +2366,6 @@ function startBootScreen(){
 function stopBootScreen(){
   if(bootTimer){clearInterval(bootTimer);bootTimer=null}
   if($("out").querySelector(".boot"))$("out").innerHTML="";
-}
-/* the honest progress line: a count, never a percentage */
-function readyCount(){
-  return dictTotal?tx("search.ready",{number:dicts.length,total:dictTotal})
-                  :tx("search.looking");
-}
-/* The counter is the other half of the art above it, so it goes with it: the
-   same switch, the same silence. Only the FIRST load's line - the three calls
-   in loadDicts that are gated on `blocking` - goes through here. */
-function syncBootStatus(){
-  if(!quietMessages)setStatus(esc(readyCount()),"load");
 }
 function bootFailed(msg){
   setPhase("failed");
@@ -3035,15 +3023,14 @@ async function loadDicts(rescan){
   const stopBoot=blocking?()=>controller.abort():null;
   if(blocking){
     setGlobalStop(stopBoot,tx("dictUI.stop"));
-    updateIndexingTask('<span class="spin"></span>'+esc(readyCount()));
+    updateIndexingTask(tx("search.loading"));
   }
   // A first load has no groups to show until the last row has resolved. A
   // RESCAN keeps the ones it has: the list on screen is already the previous
   // one being replaced row by row, and blanking the groups under it would
   // drop a group the user currently has selected.
   if(blocking)dictsSettled=false;
-  if(blocking){setPhase("boot");startBootScreen();dictTotal=0;syncBootStatus()}
-  else setStatus('<span class="spin"></span>'+esc(tx("search.loading")),"load");
+  if(blocking){setPhase("boot");startBootScreen();dictTotal=0}
   const rows=[];
   const listDiagnostics=dictionaryListDiagnosticsEnabled();
   const listStarted=performance.now();
@@ -3066,7 +3053,6 @@ async function loadDicts(rescan){
       if(msg.t==="begin"){
         if(beginMs<0)beginMs=Math.round(performance.now()-listStarted);
         sawBegin=true;dictTotal=msg.total||0;
-        if(blocking){syncBootStatus();updateIndexingTask('<span class="spin"></span>'+esc(readyCount()))}
       }else if(msg.t==="dict"&&msg.dict){
         if(firstRowMs<0)firstRowMs=Math.round(performance.now()-listStarted);
         rows.push(msg.dict);
@@ -3077,7 +3063,6 @@ async function loadDicts(rescan){
           if(phase==="failed")$("out").innerHTML=""; // a slow stream beat the watchdog
           setPhase("partial");
         }
-        if(blocking){syncBootStatus();updateIndexingTask('<span class="spin"></span>'+esc(readyCount()))}
         refreshDictUI();
         if(blocking&&rows.length===1)logBrowseArticleTransition("first_dictionary_row");
         // A Browse headword link names one dictionary in `from`. Start that
@@ -7355,11 +7340,10 @@ async function doSearch(ev){
       $("out").replaceChildren();liveSearchBoxes=null;refreshLivePicker();
       livePickerSearching=false;
       setBusy(false); // nothing was ever sent; both branches below are statements
-      setStatus(settled
-        ?(groupHasMembers?esc(tx("search.groupUnavailable",{name:lbl}))
-             :lbl?esc(tx("search.groupEmpty",{name:lbl}))
-             :esc(tx("search.noDicts")))
-        :'<span class="spin"></span>'+esc(readyCount()));
+       if(settled)setStatus(groupHasMembers?esc(tx("search.groupUnavailable",{name:lbl}))
+              :lbl?esc(tx("search.groupEmpty",{name:lbl}))
+              :esc(tx("search.noDicts")));
+       else clearStatusForResults(); // startup progress is shown only by the task manager
       if(!settled&&phase!=="failed")staleSearch=true;
       return;
     }

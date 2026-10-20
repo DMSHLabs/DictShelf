@@ -22,7 +22,10 @@ load could throw during the ready event and prevent progress rendering. Android
 debug APK rebuilt and installed alongside release on the connected phone. The
 WebView reaches phase `ready` with 21/21 dictionaries, an empty status row, no
 visible server-work notice and zero active UI tasks; the dialog initialization
-exception no longer appears. Release app remains installed and untouched.
+exception no longer appears. A follow-up removes the legacy startup status
+counter entirely, including its unused EN/RU catalog entries: the task manager
+is the only loading indicator, with a plain task label. Release app remains
+installed and untouched.
 
 Windows CI run `39398437050` passed toolchain setup but failed in `runtime/cgo`
 with `cgo.exe: exit status 2`. The checked-in fix for the old local GCC path is
