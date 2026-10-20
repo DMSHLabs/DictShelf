@@ -1,17 +1,13 @@
 # Agent handoff — current state
 
-Current checkout: branch `releases` at `a0e4269b`; uncommitted Android System
-Settings changes make the Dictionary task workers selector use the shared
-dropdown styling and count online CPUs from sysfs, falling back to the JVM
-count. The Android Go runtime uses the same CPU limit for worker parsing and
-JNI updates instead of clamping to its smaller `runtime.NumCPU()` result. The
-FOSS debug APK builds for arm64 and x86_64; on the connected eight-core phone,
-the selector offers 1–8, selecting 7 succeeds, and effective workers 8 survive
-an app restart. Debug preferences were restored to their original default.
-No release APK was installed or committed. Android uses
-the in-process Go/JNI bridge and opens no TCP listener. A local
-`build-android.cmd release` with `WUDICT_VERSION=wudict2-v0.13.0` succeeded and
-stamped that version in the APK.
+Current checkout: branch `dev` at `bb2a4b17`. Uncommitted Android changes keep
+the Browse A–Z heading and Find/Filter dock fixed while its dictionary list
+scrolls, with a divider under its heading and filter mode selected by default.
+Android versionCode now uses 941 as a baseline at commit `bb2a4b17` and
+increments for each later commit; all flavours and build types share it. The
+FOSS debug APK for arm64/x86_64 built successfully with manifest versionCode
+941. Preserve all other working-tree changes. Android uses the in-process
+Go/JNI bridge and opens no TCP listener.
 
 Startup progress cleanup: successful initial dictionary-list loading now clears
 its status immediately and removes only its transient loading task even when

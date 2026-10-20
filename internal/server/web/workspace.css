@@ -25,8 +25,9 @@ html:is([data-shell-image],[data-desktop-image]) .workspace-browser>footer{backg
 .workspace-browser>header,.workspace-browser>footer{position:static;flex:none}
 .workspace-browser>main{flex:1 1 auto;min-height:0;overflow:auto;padding-bottom:0}
 .workspace-browser>main:has(.msg:not([hidden])){display:flex;flex-direction:column}
+.workspace-browser>main:has(.msg.chooser-list){overflow:hidden}
 .workspace-browser .msg:not([hidden]){box-sizing:border-box;flex:1 1 auto;width:100%;max-width:none;margin:0;border:0;border-radius:0;background:transparent}
-.workspace-browser .msg.chooser-list{max-height:none}
+.workspace-browser .msg.chooser-list{min-height:0;max-height:none}
 .workspace-browser>footer{display:flex;max-height:35%;overflow:auto}
 .workspace-browser>footer[hidden]{display:none}
 @media(max-width:600px){:root{--workspace-inset:0px;--workspace-radius:0px}}

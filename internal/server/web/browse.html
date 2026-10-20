@@ -279,6 +279,7 @@ footer .browse-search-dock{width:100%;max-width:54rem}
 .picks a:hover{background:var(--line-soft);color:var(--fg)}
 .picks span{color:var(--label-quiet)}
 .chooser-head{display:flex;align-items:center;gap:.5em}
+.chooser-list .chooser-head{padding-bottom:.65em;margin-bottom:.5em;border-bottom:1px solid var(--line)}
 .msg .chooser-head b{flex:1;min-width:0;margin:0;font-size:calc(var(--ui-font-title) * 1rem)}
 .chooser-head button{box-sizing:border-box;display:grid;place-items:center;flex:none;
   width:calc(var(--ui-main-control-height) * 1em);
@@ -290,13 +291,15 @@ footer .browse-search-dock{width:100%;max-width:54rem}
 .picks span{flex:none;margin-left:auto;font-size:calc(var(--ui-hint-font-size) * 1rem)}
 .picks .pick-name{flex:1;min-width:0;margin:0;font-size:inherit;overflow-wrap:anywhere}
 .msg.chooser-list{box-sizing:border-box;display:flex;flex-direction:column;
-  margin:1rem auto;max-height:calc(100dvh - 2rem)}
-.chooser-list .picks{min-height:0;overflow-y:auto;overscroll-behavior:contain}
+  min-height:0;margin:1rem auto;max-height:calc(100dvh - 2rem)}
+.chooser-list .chooser-head,.chooser-list .chooser-hint{flex:none}
+.chooser-list .picks{flex:1 1 0;min-height:0;overflow-y:auto;overscroll-behavior:contain;
+  -webkit-overflow-scrolling:touch;touch-action:pan-y}
 .chooser-list .list-search-dock{box-sizing:border-box;display:flex;align-items:center;
   gap:.25em;flex:none;margin-top:.5em;padding:.5em 0 0;border-top:1px solid var(--line);
   font-size:calc(var(--ui-edit_control-font) * 1rem)}
-html[data-desktop-image] .chooser-list .chooser-hint{
-  padding-bottom:.75em;border-bottom:1px solid color-mix(in srgb,var(--fg) 28%,transparent)}
+html[data-desktop-image] .chooser-list .chooser-head{
+  border-bottom-color:color-mix(in srgb,var(--fg) 28%,transparent)}
 html[data-desktop-image] .chooser-list .list-search-dock{
   border-top-color:color-mix(in srgb,var(--fg) 28%,transparent)}
 .chooser-list .list-search-input{box-sizing:border-box;flex:1 1 auto;min-width:0;width:0;
@@ -1677,7 +1680,7 @@ async function chooser(){
   chooserSearch=window.wudictListSearch.create({
     root:picks,itemSelector:"a",dock:$("msg").querySelector(".list-search-dock"),
     scrollContainer:picks,getText:item=>item.querySelector(".pick-name")?.textContent||"",
-    highlightSelector:".pick-name",labels:{
+    highlightSelector:".pick-name",initiallyFiltering:true,labels:{
       placeholder:t("dictUI.listSearchPlaceholder"),filterPlaceholder:t("dictUI.listFilterPlaceholder"),
       search:t("dictUI.listSearchLabel"),
       previous:t("dictUI.listSearchPrevious"),next:t("dictUI.listSearchNext"),

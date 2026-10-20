@@ -176,7 +176,7 @@ ANDROID_BRIDGE := android/app/src/main/jniLibs/arm64-v8a/libwudictbridge.so
 # Gradle names the file from exactly that. (Letting Gradle re-run git describe
 # was not enough: android-go runs after this file is parsed, and a tree that
 # turns -dirty in between would give the APK a name nothing here expects.)
-# versionCode is still derived inside build.gradle, from the commit count.
+# versionCode is derived inside build.gradle from commits after its baseline.
 # CI overrides VERSION with the release tag: make -s print-APK_FOSS VERSION=v3.7.5
 # APK_VERSION is build.gradle's apkVersion: leading "v" dropped, "/" -> "_".
 GRADLE_VERSION := -PversionName="$(VERSION)"
