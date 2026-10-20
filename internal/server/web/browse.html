@@ -216,13 +216,12 @@ function render(){
   $("name").textContent=d.name;
   const a=unesc(d.words[0]||""),z=unesc(d.words[d.words.length-1]||"");
   $("sub").textContent=d.total?a+" — "+z+"  ·  "+num(d.total)+" words":"no headwords";
-  /* `from`, not `dict`: a headword picked here is a link followed inside this
-     dictionary, so the app answers it from this dictionary alone, says so,
-     and offers the rest - while the reader's own choice in the dictionary
-     picker stays theirs. */
+  /* `dict`, not `from`: the reader chose this dictionary by opening its Browse,
+     so the picker shows it and the words they type next are read from it too.
+     `from` is a link's provenance (D40), a scope the picker does not show. */
   $("list").innerHTML=d.words.map(w=>{
     const e=esc(unesc(w));
-    return '<a href="/?q='+encodeURIComponent(w)+"&from="+encodeURIComponent(d.dict)+
+    return '<a href="/?q='+encodeURIComponent(w)+"&dict="+encodeURIComponent(d.dict)+
       '&mode=exact" title="'+e+'">'+e+"</a>";
   }).join("");
 

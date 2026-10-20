@@ -5152,8 +5152,8 @@ function namePending(h){
   if(o&&o.dataset.pending&&o.value===h.dict&&h.name){o.textContent=h.name;syncChips()}
 }
 /* One dictionary named by the link, answerable before the list is in: `from`
-   (a link followed inside a dictionary, or a headword picked in Browse), else
-   a `dict` that is one id. */
+   (a link followed inside a dictionary), else a `dict` that is one id (a
+   headword picked in Browse). */
 function linkNamesOne(){
   const p=new URLSearchParams(location.search);
   const one=v=>!!v&&v!=="all"&&!v.startsWith("g:")&&!v.includes(",");
