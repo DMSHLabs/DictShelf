@@ -2,8 +2,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-# Android APK (D52, D53): cross-compile the cgo android/arm64 server (mattn
-# FTS5 + built-in speex) into the APK's jniLibs, then let Gradle package it.
+# Android APK (D52, D53): cross-compile the cgo android/arm64 Go/JNI bridge
+# (mattn FTS5 + built-in speex) into the APK's jniLibs, then let Gradle package it.
 # The NDK version is pinned here; the Makefile auto-detects it locally.
 #
 # Secrets required for a signed release build.
@@ -117,12 +117,10 @@ jobs:
           echo "TAG=$VERSION" >> "$GITHUB_ENV"
           echo "building $VERSION (versionCode = $(git rev-list --count HEAD))"
 
-      - name: Build the Go server as libwudict.so (cgo - FTS5 + speex)
-        # VERSION reaches the .so through the Makefile's -X stamp, so the
-        # server reports the version the APK is labelled with. Left to the
-        # Makefile it would report the clone's last tag instead, which is a
-        # different number the moment the field above was blank or new.
-        run: make android-go VERSION="$TAG"
+      - name: Build the Go/JNI bridge (cgo - FTS5 + speex)
+        # Assemble below stamps the selected release tag into BuildConfig and
+        # the APK manifest; the Android shell passes it to Go/JNI at runtime.
+        run: make android-go
 
       - name: Configure signing
         id: signing
@@ -157,15 +155,14 @@ jobs:
           else
             TASK=assembleFossDebug
           fi
-          # versionName is overridden with the release TAG; without it the
-          # build would stamp `git describe --dirty`, which is right for a
-          # working tree and wrong for a release.
+          # Stamp the selected release TAG into BuildConfig and the APK
+          # manifest. Go/JNI receives this same value when the runtime starts.
           ./gradlew --no-daemon "$TASK" assemblePlayDebug \
             -PversionName="${{ steps.ver.outputs.version }}"
 
-      - name: Assert the flavour split held
-        # The Play APK must declare no storage permission and the FOSS one
-        # must declare All-files access.
+      - name: Assert Android APK permissions and no-server boundary
+        # Play must omit storage access, FOSS must retain All-files access,
+        # and neither APK may carry the listen-address control.
         run: sh tools/verify-apk.sh
 
       - name: Locate the APK

@@ -54,14 +54,13 @@ them are in `docs/handoff-archive.md`.
   the default command builds listenerless WebView `wuDict2.exe`, `cli` builds
   console `wuDict2-cli.exe`, `server` builds console HTTP-server
   `wuDict2-server.exe`, and `installer` packages the existing desktop exe.
-  Every machine path it needs is in one block at the top of the file —
-  `GCC_PATH` (pinned to Qt's mingw-w64 GCC; empty falls back to `%CC%`,
-  then `gcc.exe` on PATH, then `GCC_ROOTS`), `GCC_ROOTS`, `ISCC_PATH` — and each
-  of those respects a value inherited from the environment, the way
-  build-android.cmd respects `ANDROID_HOME`. Windows desktop always requires
-  cgo (`-tags sqlite_fts5`, CGO_ENABLED=1); there is no purego option or
+  Machine-specific overrides belong in the ignored `build-windows.local.bat`
+  or the environment: `GCC_PATH` (empty falls back to `%CC%`, then `gcc.exe`
+  on PATH, then `GCC_ROOTS`) and `ISCC_PATH`. GitHub Actions installs its own
+  MinGW-w64 GCC and passes that runner-local path to the script. Windows
+  desktop always requires cgo (`-tags sqlite_fts5`, CGO_ENABLED=1); there is no purego option or
   fallback. If no compatible GCC is found, the script exits before replacing
-  the existing executable. On this machine the Qt GCC 13.1.0 is found, which
+  the existing executable. This machine's ignored local settings select Qt GCC 13.1.0, which
   produces what `make build` and the CI cgo job ship. `cl.exe` is unusable: Go's
   cgo drives a gcc-style compiler, not MSVC. Verified 2026-09-28: the cgo exe
   builds, runs, ingests a `test_data` `.dsl.dz` and answers `fts` (mattn +

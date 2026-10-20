@@ -6,7 +6,7 @@ setlocal EnableExtensions DisableDelayedExpansion
 rem ============================================================
 rem wuDict2 Android FOSS build: [debug|release] [intel]
 rem
-rem   intel  also ship the x86_64 server, so the same APK runs on the
+rem   intel  also ship the x86_64 Go/JNI bridge, so the same APK runs on the
 rem          x86_64 emulator as well as on arm64 hardware. Debug only:
 rem          a release APK is arm64 and nothing else (D52).
 rem ============================================================
@@ -183,6 +183,11 @@ if not defined VERSION (
     set "VERSION=dev"
 )
 
+rem Set WUDICT_VERSION to build the same named release as CI, for example:
+rem   set WUDICT_VERSION=wudict2-v3.8.0
+rem Without an override, use the version derived from this checkout's Git history.
+if defined WUDICT_VERSION set "VERSION=%WUDICT_VERSION%"
+
 echo wuDict version:
 echo   %VERSION%
 echo.
@@ -220,7 +225,7 @@ if defined EMU_X86 (
 )
 
 rem ------------------------------------------------------------
-rem Build native server
+rem Build native Go/JNI bridge
 rem
 rem Equivalent to Makefile android-go:
 rem
@@ -229,8 +234,9 @@ rem   -tags sqlite_fts5 -trimpath
 rem
 rem LDFLAGS:
 rem   -s -w
-rem   -X github.com/wuweidict/wudict/internal/cli.Version=...
 rem   -extldflags '-Wl,-z,max-page-size=16384'
+rem The app version is passed to Gradle below and reaches Go/JNI through
+rem BuildConfig.VERSION_NAME when the native runtime starts.
 rem ------------------------------------------------------------
 
 call :build_bridge arm64 aarch64 "%ANDROID_BRIDGE%"
@@ -253,7 +259,8 @@ echo.
 rem -PemuX86=1 is what makes build.gradle look at src/emuX86/jniLibs; without
 rem it that directory is invisible to every variant.
 set "GRADLE_EXTRA="
-if defined EMU_X86 set "GRADLE_EXTRA=-PemuX86=1"
+set "GRADLE_EXTRA=-PversionName=%VERSION%"
+if defined EMU_X86 set "GRADLE_EXTRA=%GRADLE_EXTRA% -PemuX86=1"
 
 pushd android
 

@@ -4,6 +4,10 @@ This document covers UI behavior. For the current wuDict2 Android identity,
 server startup, build commands, and coexistence checks, see
 [ANDROID-FORK.md](ANDROID-FORK.md).
 
+Current Android boundary: both FOSS and Play builds run Go in-process through
+JNI and never open a TCP listener. Neither flavour has a listen-address row;
+the APK verifier checks the packaged resources for that control.
+
 Work directly in `D:\Projects\Android\wudict`, as the user requested. Recheck branch/status before editing; old stashes exist and must be inspected before use.
 
 ## Existing documentation
@@ -27,8 +31,8 @@ General architecture/conventions: `CLAUDE.md`, `docs/SPEC.md`. Android usage: `p
 ## Build and checks
 
 Use the current Windows commands in [ANDROID-FORK.md](ANDROID-FORK.md). The
-script rebuilds the embedded Go server, including HTML/CSS; Gradle alone may
-package an older `libwudict.so`.
+script rebuilds the embedded Go/JNI bridge, including HTML/CSS; Gradle alone
+may package an older native library.
 
 - Prerequisites checked by the script: Go, Git, Java; SDK defaults to `%LOCALAPPDATA%\Android\Sdk`, NDK pinned in script to `30.0.16248370`. `adb` is optional for building.
 - Optional ignored `build-android.local.bat` provides local environment/signing. Without a keystore, release is unsigned. Do not read or print that file or private signing settings.
@@ -121,7 +125,13 @@ The query is re-issued when the WINDOW closes if the preference order moved; the
 
 Verified in the desktop browser against a throwaway server (`127.0.0.1:6899`, temp config, two stub `.dsl` files): the panel shows the two buttons, the reading strip, the drawer (History length/Clear, Browse A–Z…, Appearance…, paths, About) and none of the four machine actions; the window opens modal at 560×650 with the toolbar above the cards and no checkbox anywhere (`#dictSettings input` count 0); moving a card reorders it, persists, and `searchSeq` stays put while the window is open; after closing the window and the panel the query is re-issued exactly once and the sections come back in the new order; reopening restores the scroll offset; `Rescan folders` runs from the toolbar and redraws the cards; `Full-text for every dictionary…` opens its box inside the window and the card list shrinks under it (540px → 410px at 1100×820); an empty user group searches to the new message above; the file list, `Remove…` + Cancel, `About this dictionary` and the group editor's own checkboxes are unchanged; 380×700 and 320×640 both fit, with the toolbar wrapping to two rows. NOT verified on a phone, and not in the dark/paper themes.
 
-### The System Settings window: current work (2026-09-28)
+### The System Settings window (2026-09-28; historical implementation notes)
+
+This section predates A59/A60. Android now runs Go in-process through JNI and
+has no TCP listener or server child. Neither FOSS nor Play exposes address or
+port controls; the current boundary and APK check are documented above and in
+[ANDROID-FORK.md](ANDROID-FORK.md). References to `ServerProcess` and the old
+FOSS listen-address row below describe the earlier implementation.
 
 **2026-10-12 log controls and Browse timing capture:** The Android log controls
 (`Enable log file`, base events, WebView actions) now live in this window; the
