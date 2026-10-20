@@ -1158,22 +1158,32 @@ func ParseHostList(v string) []string {
 // or "all"/"max"/"0"/"-1" for every core. Auto leaves one core free for the
 // rest of the app and other work. The result is clamped to [1, NumCPU].
 func ParseWorkers(v string) int {
+	return ParseWorkersMax(v, runtime.NumCPU())
+}
+
+// ParseWorkersMax reads INDEX_WORKERS using the caller's processor limit.
+// Platform shells that can report a more accurate device count can use this
+// while other callers keep ParseWorkers' runtime.NumCPU bound.
+func ParseWorkersMax(v string, maxCores int) int {
+	if maxCores < 1 {
+		maxCores = 1
+	}
 	v = strings.ToLower(strings.TrimSpace(v))
 	switch v {
 	case "auto":
-		return max(1, runtime.NumCPU()-1)
+		return max(1, maxCores-1)
 	case "all", "max", "cpu", "0", "-1":
-		return runtime.NumCPU()
+		return maxCores
 	}
 	n, err := strconv.Atoi(v)
 	if err != nil {
 		return 1
 	}
 	if n < 1 {
-		return runtime.NumCPU()
+		return maxCores
 	}
-	if n > runtime.NumCPU() {
-		return runtime.NumCPU()
+	if n > maxCores {
+		return maxCores
 	}
 	return n
 }

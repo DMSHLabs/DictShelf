@@ -1,15 +1,35 @@
 # Agent handoff — current state
 
-Current branch: `dev`. The Windows CI fix is committed locally; remote branches remain unchanged until pushed. Android's no-server APK verifier change is integrated. The
-local FOSS debug/release and Play debug APK resource tables passed the check
-for absent listen-address controls. Android uses the in-process Go/JNI bridge
-and opens no TCP listener. A local `build-android.cmd release` with
-`WUDICT_VERSION=wudict2-v0.13.0` succeeded and stamped that version in the APK.
+Current checkout: branch `releases` at `a0e4269b`; uncommitted Android System
+Settings changes make the Dictionary task workers selector use the shared
+dropdown styling and count online CPUs from sysfs, falling back to the JVM
+count. The Android Go runtime uses the same CPU limit for worker parsing and
+JNI updates instead of clamping to its smaller `runtime.NumCPU()` result. The
+FOSS debug APK builds for arm64 and x86_64; on the connected eight-core phone,
+the selector offers 1–8, selecting 7 succeeds, and effective workers 8 survive
+an app restart. Debug preferences were restored to their original default.
+No release APK was installed or committed. Android uses
+the in-process Go/JNI bridge and opens no TCP listener. A local
+`build-android.cmd release` with `WUDICT_VERSION=wudict2-v0.13.0` succeeded and
+stamped that version in the APK.
 
-Windows CI failed because `build-windows.local.bat` was committed in
-`96024208`; its Qt `GCC_PATH` overwrote the MinGW path set by the workflow. The fix prevents GitHub Actions from loading local settings and removes the machine-specific file from Git while preserving it in this checkout. `.gitignore` already excludes the file. Both
-Windows workflows install MinGW-w64 and pass its runner-local path. The Windows
-CI build has not been rerun.
+Startup progress cleanup: successful initial dictionary-list loading now clears
+its status immediately and removes only its transient loading task even when
+indexing is also active. The independent indexing task remains visible with its
+own progress. The deferred progress asset also initializes its modal-dialog
+tracking before publishing its task API; otherwise an already-running startup
+load could throw during the ready event and prevent progress rendering. Android
+debug APK rebuilt and installed alongside release on the connected phone. The
+WebView reaches phase `ready` with 21/21 dictionaries, an empty status row, no
+visible server-work notice and zero active UI tasks; the dialog initialization
+exception no longer appears. Release app remains installed and untouched.
+
+Windows CI run `39398437050` passed toolchain setup but failed in `runtime/cgo`
+with `cgo.exe: exit status 2`. The checked-in fix for the old local GCC path is
+present. A local Go 1.26.5 cgo Windows build succeeds with Qt GCC 13.1. Both
+Windows workflows now use the `windows-2022` image's `C:\mingw64\bin\gcc.exe`
+instead of installing a rolling MSYS2 toolchain, and print its version/target.
+The runner image documents GCC 14.2.0 and binutils 2.44. CI rerun is pending.
 
 Windows builds use `build-windows.cmd` for the listenerless WebView app, `cli`
 for the console CLI (no-argument help, no TCP listener), `server` for the

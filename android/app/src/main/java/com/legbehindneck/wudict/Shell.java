@@ -856,7 +856,7 @@ final class Shell {
                                 if ("INDEX_WORKERS".equals(o.key)) {
                                     int workers = value == null ? 1
                                             : "auto".equalsIgnoreCase(value)
-                                                    ? Math.max(1, Runtime.getRuntime().availableProcessors() - 1)
+                                                    ? Math.max(1, ShellPrefs.availableCpuCores() - 1)
                                                     : Integer.parseInt(value);
                                     GoBridge.configureIndexWorkers(workers);
                                 }

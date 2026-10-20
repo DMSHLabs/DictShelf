@@ -47,6 +47,10 @@
   pulseRow.append(pulse,stopAll);summary.append(toggle,summaryText,pulseRow);box.append(spinner,text,button,singleProgress,summary,taskList);document.body.append(backing,box);
   let status = null, pending = false, starting = false, refreshSequence = 0, waiting = 0;
   const tasks=new Map(),renderedProgress=new Map();let nextTaskID=0,expanded=false,indexTaskID=0,renderQueued=false;
+  // The main page may already have a startup loading task when this deferred
+  // asset announces its API. A taskStart then renders immediately, so place()
+  // must have its dialog list initialized before the ready event is dispatched.
+  const dialogs=[];
   function taskProgress(task){
     const values=[];
     if(task.total>0)values.push(Math.max(0,Math.min(100,task.done*100/task.total)));
@@ -215,7 +219,6 @@
   new MutationObserver(()=>{if(status)lockControls(status);}).observe(document.body,{childList:true,subtree:true});
   // A modal dialog lives above ordinary z-index layers. Keep the footer inside
   // the most recently opened modal so it remains visible and its Stop is usable.
-  const dialogs = [];
   function place() {
     const browse = document.body.classList.contains('workspace-browse') ? document.querySelector('.workspace-browser') : null;
     const maskControls = document.body.classList.contains('mask-view-active') ? document.getElementById('maskSearchControls') : null;

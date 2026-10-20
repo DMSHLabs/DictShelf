@@ -3108,7 +3108,7 @@ async function loadDicts(rescan){
     // A reindex can finish while its follow-up dictionary refresh is still
     // settling. Re-render the shared notice after that refresh so a completed
     // load cannot leave its last "N of M ready" line or Stop button behind.
-    if(!globalStopAction)finishIndexingTask()
+    if(blocking)finishIndexingTask()
   }
   dicts=rows;dictTotal=rows.length;
   resolvePrefOrderMode();
@@ -3128,7 +3128,8 @@ async function loadDicts(rescan){
   setPhase("ready");
   if(blocking)logBrowseArticleTransition("dictionary_list_ready");
   finishDesktopStartup();
-  clearStatus("load");
+  if(blocking)clearStatusForResults();
+  else clearStatus("load");
   // a search run against a half-loaded list is now answerable in full
   if(staleSearch&&lastQuery){staleSearch=false;if($("mode").value==="wildcards")maskSubmitRequested=true;doSearch()}
   return true;
@@ -3981,10 +3982,15 @@ function sysRowBuild(row){
     span.textContent=row.label;
     const field=document.createElement(row.key==="INDEX_WORKERS"?"select":"input");
     if(row.key==="INDEX_WORKERS"){
+      const selectWrap=document.createElement("div");
+      selectWrap.className="panel-select-wrap panel-dropdown sys-workers-select";
       field.add(new Option(tx("system.desktop.workersAuto"),"auto"));
       for(let n=1;n<=row.max;n++)field.add(new Option(String(n),String(n)));
       field.value=row.stored==null?"1":String(row.stored);
       field.addEventListener("change",()=>sysCommitWorkers(row,field));
+      selectWrap.append(field);
+      line.appendChild(span);
+      line.appendChild(selectWrap);
     }else{
       field.type="number";
       field.inputMode="numeric";
@@ -3993,12 +3999,12 @@ function sysRowBuild(row){
       field.max=row.max;
       field.value=row.stored==null?"":row.stored;
       field.addEventListener("change",()=>sysCommitNumber(row,field));
+      line.appendChild(span);
+      line.appendChild(field);
     }
     field.setAttribute("aria-label",row.label);
     // Committed on change, which is a blur or Enter: "1" on the way to "128"
     // is an unfinished value, not an invalid one.
-    line.appendChild(span);
-    line.appendChild(field);
     // The unit, beside the box: a number field holds a number and nothing
     // else, so "244" in a box whose subject is memory says nothing about what
     // it is 244 OF - and the box already means megabytes (the hint says so in
