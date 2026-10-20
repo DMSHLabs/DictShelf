@@ -121,6 +121,7 @@ func aboutServerWithDSL(t *testing.T, source, ann string) (*Server, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	waitNewDictionaryIndexing(t, reg)
 	s := New(reg)
 	closeBackends(t, reg)
 	return s, reg.all()[0].ID
@@ -150,10 +151,9 @@ func TestAboutFallsBackToHeader(t *testing.T) {
 	// sampleDSL declares no languages, so it has no description at all: the
 	// endpoint answers 200 with an empty html, and the panel shows nothing.
 	s, id := aboutServer(t, "")
-	// The list is what draws the panel the disclosure lives in, so it is what
-	// opens the dictionary - and this endpoint reads what that left behind
-	// rather than opening anything itself (see below).
-	getJSON(t, s, "/api/dicts", nil)
+	// Prepare the dictionary first so About has header metadata to read. The
+	// endpoint itself must remain a non-opening request.
+	sse(t, s, "/api/ingest?dict="+id)
 	var got aboutInfo
 	if rec := getJSON(t, s, "/api/about?dict="+id, &got); rec.Code != 200 {
 		t.Fatalf("status %d", rec.Code)
@@ -168,7 +168,7 @@ func TestAboutFallsBackToHeader(t *testing.T) {
 	// One that DOES declare them: the synthesis is what a reader gets, and the
 	// declared pair travels beside it.
 	s2, id2 := aboutServerWithDSL(t, "#NAME \"D\"\n#INDEX_LANGUAGE \"English\"\n#CONTENTS_LANGUAGE \"Russian\"\n\ndog\n\tcanine\n", "")
-	getJSON(t, s2, "/api/dicts", nil)
+	sse(t, s2, "/api/ingest?dict="+id2)
 	var got2 aboutInfo
 	getJSON(t, s2, "/api/about?dict="+id2, &got2)
 	if !strings.Contains(got2.HTML, "English") || !strings.Contains(got2.HTML, "Russian") {

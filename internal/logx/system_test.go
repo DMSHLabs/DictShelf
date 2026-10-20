@@ -25,7 +25,7 @@ func isolatedSystemLog(t *testing.T) string {
 }
 
 func TestSystemLogConcurrentWritesRotationAndSnapshots(t *testing.T) {
-	root := isolatedSystemLog(t)
+	isolatedSystemLog(t)
 	const workers, records = 12, 50
 	var wg sync.WaitGroup
 	start := make(chan struct{})
@@ -120,7 +120,7 @@ func TestSystemLogKeepsFiveSessionsAcrossRestart(t *testing.T) {
 		}
 	}
 	if len(sessions) != SystemLogFiles {
-		t.Fatalf("retained %d sessions, want %d", len(sessions), SystemLogFiles)
+		t.Fatalf("retained %d sessions, want %d: %v", len(sessions), SystemLogFiles, sessions)
 	}
 	snapshot, err := SystemSnapshot()
 	if err != nil {

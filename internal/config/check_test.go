@@ -43,12 +43,16 @@ func TestCheckTOML(t *testing.T) {
 // knownKeys is the template's keys: so every key Load reads must be in the
 // template, or a correct setting would be reported as a typo.
 func TestEveryKeyReadIsKnown(t *testing.T) {
+	// These legacy tuning knobs remain readable from the environment for
+	// compatibility, but are removed from config files and omitted from the
+	// generated template.
+	envOnly := map[string]bool{"PREVIEW_MEMORY": true, "SEARCH_MEMORY": true}
 	src, err := os.ReadFile("config.go")
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, m := range regexp.MustCompile(`(?:get|getList)\("([A-Z_]+)"\)`).FindAllStringSubmatch(string(src), -1) {
-		if !knownKeys[m[1]] {
+		if !knownKeys[m[1]] && !envOnly[m[1]] {
 			t.Errorf("Load reads %s, which the template does not document: it would be reported as unknown", m[1])
 		}
 	}
