@@ -9,6 +9,7 @@ package tray
 import (
 	_ "embed"
 	"runtime"
+	"time"
 
 	"github.com/gogpu/systray"
 )
@@ -61,6 +62,21 @@ func (p *systrayPlatform) Start(cfg Config, items []Item) error {
 		t.SetTemplateIcon(iconTemplatePNG)
 	} else {
 		t.SetIcon(iconPNG)
+	}
+	// The icon itself opens the UI where the platform has a gesture for it:
+	// a double-click on Windows; on Linux the StatusNotifierItem Activate and
+	// SecondaryActivate calls, which a host makes on the primary click (when
+	// it ignores ItemIsMenu) or a middle click. Not OnClick on Windows - a
+	// double-click delivers two button-ups first, and each would open a tab.
+	// macOS has no such gesture: a status item with a menu opens the menu.
+	// One gesture, one tab: a host that sends Activate per click turns a
+	// double-click into two calls.
+	if cfg.Open != nil {
+		open := debounced(cfg.Open, time.Second)
+		t.OnDoubleClick(open)
+		if runtime.GOOS == "linux" {
+			t.OnClick(open)
+		}
 	}
 	t.SetTooltip(cfg.tooltip()).SetMenu(menu).Show()
 	p.t = t

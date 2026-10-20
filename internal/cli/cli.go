@@ -324,8 +324,9 @@ SETTINGS
                           env: WEB_ORIGINS    toml: WEB_ORIGINS
                           default: none
 
-  TRUSTED_HOSTS           Host names the server answers to besides "localhost";
-                          IP addresses are always accepted. Needed behind a
+  TRUSTED_HOSTS           Host names the server answers to besides "localhost"
+                          and a SERVER_IP that is a name; IP addresses are
+                          always accepted. Needed behind a
                           reverse proxy or for a host name you gave the machine:
                             TRUSTED_HOSTS = ["wudict.lan"]
                           Other names are refused, which blocks DNS rebinding.
@@ -1280,7 +1281,7 @@ func cmdServe(args []string) (err error) {
 	// scanning dictionaries, auto-preparing a DSL index - costs time and
 	// writes to the library, and a launch that turns out to be a duplicate
 	// must do none of it.
-	url := "http://" + cfg.Addr() + "/"
+	url, moreURLs := serveURLs(cfg.IP, cfg.Port)
 	ln, lerr := net.Listen("tcp", cfg.Addr())
 	if lerr != nil {
 		// Ask who is there rather than classify the error. The test this
@@ -1297,7 +1298,7 @@ func cmdServe(args []string) (err error) {
 				// With the key, when this launch has one: the instance
 				// already running was started from the same configuration,
 				// so the key that would have been ours is the key it wants.
-				browserCmd(browserURL(cfg.Addr(), token))
+				server.OpenURL(browserURL(cfg.Addr(), token))
 			}
 			return nil
 		}
@@ -1338,6 +1339,13 @@ Hint: pick another port with --port, e.g.:  wudict --port %s
 			// First: from here on this is the essential listener, and the
 			// address that can vanish is the expendable one.
 			lns = []net.Listener{lbLn, ln}
+		}
+	}
+	// A wildcard bind accepts on loopback already, so it opens no companion;
+	// the banner still names loopback once its address line names the LAN.
+	if isWildcard(cfg.IP) {
+		if lb := "http://" + probeHost(cfg.Addr()) + "/"; lb != url {
+			alsoURL = lb
 		}
 	}
 
@@ -1469,7 +1477,7 @@ Hint: pick another port with --port, e.g.:  wudict --port %s
 	srv.AllowRemoteDelete = cfg.AllowRemoteDelete
 	srv.BrowserExtensions = cfg.BrowserExtensions
 	srv.WebOrigins = cfg.WebOrigins
-	srv.TrustedHosts = cfg.TrustedHosts
+	srv.TrustedHosts = trustedHosts(cfg.TrustedHosts, cfg.IP)
 	srv.AuthToken = token
 
 	lib, _ := store.Library()
@@ -1477,13 +1485,15 @@ Hint: pick another port with --port, e.g.:  wudict --port %s
 	printStartup(cfg, startupInfo{
 		roots:    reg.Roots(),
 		inFolder: inFolder, fromLibrary: fromLib, prepared: len(lib),
-		total: reg.Count(), libDir: libDir, url: url, alsoURL: alsoURL,
+		total: reg.Count(), libDir: libDir, url: url, moreURLs: moreURLs, alsoURL: alsoURL,
 		speex:  speexSummary(useExternalSpeex, sxPath, sxSource),
 		keyURL: keyURL(url, token),
 	})
+	// No wait for the server: every listener is bound above, so the kernel
+	// queues the browser's connection until Serve accepts it.
 	browse := browserURL(cfg.Addr(), token)
 	if !cfg.NoBrowser {
-		go openBrowser(browse)
+		server.OpenURL(browse)
 	}
 
 	// No WriteTimeout: /api/search (NDJSON) and /api/ingest (SSE) stream for
@@ -1556,7 +1566,7 @@ Hint: pick another port with --port, e.g.:  wudict --port %s
 		// The key too: the cookie lives only as long as the browser session,
 		// and a sign-in launch (--no-browser) leaves this item as the only
 		// way in, from a GUI with no console to read the key from.
-		Open:     func() { browserCmd(browse) },
+		Open:     func() { server.OpenURL(browse) },
 		Rescan:   trayRescan(reg),
 		OpenDir:  trayOpenDir(reg.Dirs()),
 		Shutdown: stop,
@@ -1761,7 +1771,8 @@ type startupInfo struct {
 	total       int           // what is being served
 	libDir      string
 	url         string
-	alsoURL     string // the loopback companion, "" when the main bind covers it
+	moreURLs    []string // a wildcard bind's other LAN addresses, after url
+	alsoURL     string   // loopback, "" when url is already loopback
 	speex       string
 	keyURL      string // url carrying the access key, "" when none is required
 }
@@ -1840,6 +1851,16 @@ func printStartup(cfg config.Config, in startupInfo) {
 		fmt.Fprintf(out, "                ⚠ %s\n", p)
 	}
 	fmt.Fprintf(out, "  address       %s\n", in.url)
+	// Capped: a machine running containers or VMs has a bridge per network,
+	// and the address a person wants is the first one, the default route's.
+	const moreShown = 3
+	for i, u := range in.moreURLs {
+		if i == moreShown {
+			fmt.Fprintf(out, "                (+%d more)\n", len(in.moreURLs)-moreShown)
+			break
+		}
+		fmt.Fprintf(out, "                %s\n", u)
+	}
 	// The second address is not a detail: it is the one that keeps working
 	// when the machine changes networks, and the only one a bookmark can name.
 	if in.alsoURL != "" {
@@ -1996,36 +2017,6 @@ func indexingSummary(autoIndex string) string {
 		return "off - dictionaries are searched through their own format (AUTO_INDEX=off)"
 	}
 	return "on - a headword index is prepared on first search; full-text and media on request"
-}
-
-func openBrowser(url string) {
-	time.Sleep(300 * time.Millisecond) // let our own server finish binding
-	browserCmd(url)
-}
-
-func browserCmd(url string) {
-	// Refused, not passed on: FileProtocolHandler hands an empty target to
-	// ShellExecute, which opens an Explorer window instead of failing.
-	if url == "" {
-		return
-	}
-	var cmd *exec.Cmd
-	switch runtime.GOOS {
-	case "darwin":
-		cmd = exec.Command("open", url)
-	case "windows":
-		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
-	default:
-		cmd = exec.Command("xdg-open", url)
-	}
-	if err := cmd.Start(); err != nil {
-		// A headless Linux box has no xdg-open; the banner carries the link.
-		logx.V("open browser: %v", err)
-		return
-	}
-	// Reaped: open(1) and xdg-open exit at once, and an unwaited child stays
-	// a zombie for the life of the server - one per tray "Open" click.
-	go cmd.Wait()
 }
 
 func cmdSearchAll(args []string) error {

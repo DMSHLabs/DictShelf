@@ -313,3 +313,20 @@ func TestTooltip(t *testing.T) {
 		t.Errorf("tooltip without a URL = %q", got)
 	}
 }
+
+// A burst inside the gap is one call; the first call after it is let through.
+func TestDebounced(t *testing.T) {
+	var n atomic.Int32
+	f := debounced(func() { n.Add(1) }, 50*time.Millisecond)
+	f()
+	f()
+	f()
+	if got := n.Load(); got != 1 {
+		t.Fatalf("burst made %d calls, want 1", got)
+	}
+	time.Sleep(60 * time.Millisecond)
+	f()
+	if got := n.Load(); got != 2 {
+		t.Fatalf("after the gap: %d calls, want 2", got)
+	}
+}

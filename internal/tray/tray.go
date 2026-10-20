@@ -367,3 +367,21 @@ func degrade(cfg Config, why string) {
 		go warnUser(cfg, why)
 	}
 }
+
+// debounced drops calls that arrive within gap of the last one it let through.
+// time.Since reads the monotonic clock, so a wall-clock step cannot hold the
+// next call back.
+func debounced(fn func(), gap time.Duration) func() {
+	var mu sync.Mutex
+	var last time.Time
+	return func() {
+		mu.Lock()
+		if !last.IsZero() && time.Since(last) < gap {
+			mu.Unlock()
+			return
+		}
+		last = time.Now()
+		mu.Unlock()
+		fn()
+	}
+}

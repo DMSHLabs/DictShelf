@@ -332,16 +332,14 @@ func reveal(path string) error {
 	switch runtime.GOOS {
 	case "darwin":
 		// -R reveals the item in its parent folder, selected
-		return exec.Command("open", "-R", path).Start()
+		return startDetached(exec.Command("open", "-R", path))
 	case "windows":
 		// Hand over the foreground right first, so the window that appears is
 		// focused instead of merely flashing in the taskbar. Only effective
 		// when this process holds that right - the tray menu, not the web
 		// panel; see allowForeground in foreground_windows.go.
 		allowForeground()
-		// explorer exits with a non-zero status even on success, so Start()
-		// (which does not wait) is both correct and simpler here
-		return explorerSelect(filepath.Clean(path)).Start()
+		return startDetached(explorerSelect(filepath.Clean(path)))
 	default:
 		dir := path
 		if fi, err := os.Stat(path); err == nil && !fi.IsDir() {
@@ -350,6 +348,6 @@ func reveal(path string) error {
 		if _, err := exec.LookPath("xdg-open"); err != nil {
 			return fmt.Errorf("no file manager available (xdg-open not found)")
 		}
-		return exec.Command("xdg-open", dir).Start()
+		return startDetached(exec.Command("xdg-open", dir))
 	}
 }

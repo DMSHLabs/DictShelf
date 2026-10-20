@@ -110,8 +110,8 @@ type Config struct {
 	// page is whatever they happened to open. "*" allows any origin. See D69.
 	WebOrigins []string
 
-	// TrustedHosts (TRUSTED_HOSTS) lists DNS names, beyond "localhost", that
-	// may appear in a request's Host header. Empty - the default - means
+	// TrustedHosts (TRUSTED_HOSTS) lists DNS names, beyond "localhost" and a
+	// SERVER_IP name (D104 Am. 1), that may appear in a request's Host header. Empty - the default - means
 	// none, and nothing legitimate notices: browsers, the Android shell and
 	// extensions all address the server by IP. A name is only needed in front
 	// of a reverse proxy, and is otherwise the ingredient DNS rebinding
@@ -609,9 +609,10 @@ const configTemplate = `# wudict configuration  (~/.wudict/wudict.toml)
 #                                     # "*" allows every site you visit; convenient while
 #                                     # developing, a standing invitation otherwise.
 # TRUSTED_HOSTS = []                  # which HOST NAMES this server answers to, on top of
-#                                     # "localhost". An address always works, so you need this
-#                                     # only when something reaches wudict through a name -
-#                                     # a reverse proxy, a hostname you gave the machine:
+#                                     # "localhost" and a SERVER_IP that is a name. An address
+#                                     # always works, so you need this only when something
+#                                     # reaches wudict through a name - a reverse proxy, a
+#                                     # hostname you gave the machine:
 #                                     # ["wudict.lan"]
 #                                     # A request naming anything else is refused, which is what
 #                                     # stops a web page from re-pointing its own domain at your

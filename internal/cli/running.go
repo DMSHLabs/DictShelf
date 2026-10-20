@@ -85,7 +85,7 @@ func probeHost(addr string) string {
 	// CONCRETE non-loopback bind is left alone on purpose: nothing is
 	// listening on loopback then.
 	if h, port, err := net.SplitHostPort(addr); err == nil {
-		if ip := net.ParseIP(h); h == "" || (ip != nil && ip.IsUnspecified()) {
+		if isWildcard(h) {
 			host = net.JoinHostPort("127.0.0.1", port)
 		}
 	}

@@ -32,7 +32,9 @@ import (
 //
 //	an IP literal is fine, whatever the address;
 //	"localhost" is fine, because no public resolver may answer for it;
-//	any other name must be named in TRUSTED_HOSTS.
+//	any other name must be named in TRUSTED_HOSTS - which the CLI extends
+//	with SERVER_IP when that is a name (D104 Am. 1): a rebinder sends its own
+//	name, never the one the user configured.
 //
 // That is uniform across 127.0.0.1, a LAN bind and 0.0.0.0, needs no knowledge
 // of the interfaces, and costs a legitimate user nothing: browsers, the

@@ -41,7 +41,8 @@ supplies it from elsewhere.
 
 ## Host names
 
-Requests to an IP address and to `localhost` are accepted. To reach the server
+Requests to an IP address, to `localhost` and to a host name set as
+[`SERVER_IP`](reference/configuration.md#server_ip-and-server_port) are accepted. To reach the server
 through a host name, e.g. behind a reverse proxy, list the name in
 [`TRUSTED_HOSTS`](reference/configuration.md#trusted_hosts):
 

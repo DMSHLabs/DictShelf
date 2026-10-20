@@ -200,7 +200,8 @@ type Server struct {
 	WebOrigins []string
 
 	// TrustedHosts lists DNS names, beyond "localhost", that may appear in a
-	// request's Host header (config TRUSTED_HOSTS). Empty - the default -
+	// request's Host header (config TRUSTED_HOSTS, plus SERVER_IP when that is
+	// a name - D104 Am. 1, added by the caller). Empty - the default -
 	// means none: every legitimate client addresses this server by IP, so the
 	// only thing a name buys is DNS rebinding. See host.go. A single "*"
 	// disables the check, for a reverse proxy whose name we cannot know.

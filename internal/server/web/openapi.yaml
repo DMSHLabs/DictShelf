@@ -45,7 +45,7 @@ info:
 
     **Address it by address.** Every request must carry a `Host` of an IP
     literal or `localhost`; any other name is answered `421 Misdirected
-    Request` unless `TRUSTED_HOSTS` lists it. This is what stops a web page
+    Request` unless `TRUSTED_HOSTS` lists it or it is the name in `SERVER_IP`. This is what stops a web page
     from re-pointing its own domain at your machine (DNS rebinding) and
     reading the API as same-origin, which no CORS rule can prevent.
 
