@@ -2235,4 +2235,5 @@ html:is([data-shell-sepia],[data-shell-image]) .list-search-input{background-col
 .portable-check{margin-top:1em}
 .portable-actions{flex-wrap:wrap}
 #portableStatus{overflow-wrap:anywhere}
+#portableProgress{width:100%;margin-top:1em}
 #portableTool[hidden]{display:none}

@@ -181,7 +181,15 @@ func (s *Server) buildPortable(j *job, source, exe, target string, roots []strin
 	}
 	defer os.RemoveAll(stage) // stage is the unique directory created above.
 	data := filepath.Join(stage, "Data")
-	copyPath := func(src, dst string) error { return portableCopy(j, src, dst, map[string]bool{}) }
+	type copyTask struct {
+		src, dst string
+		excluded map[string]bool
+		replace  bool
+	}
+	var tasks []copyTask
+	planCopy := func(src, dst string) {
+		tasks = append(tasks, copyTask{src: src, dst: dst})
+	}
 	// Dictionary roots inside the profile follow the checkbox too. Their
 	// destination is established by the same layout as external roots.
 	excluded := map[string]bool{}
@@ -192,12 +200,8 @@ func (s *Server) buildPortable(j *job, source, exe, target string, roots []strin
 			}
 		}
 	}
-	if err = portableCopyExcept(j, source, data, map[string]bool{}, excluded); err != nil {
-		return err
-	}
-	if err = copyPath(exe, filepath.Join(stage, filepath.Base(exe))); err != nil {
-		return err
-	}
+	tasks = append(tasks, copyTask{src: source, dst: data, excluded: excluded})
+	planCopy(exe, filepath.Join(stage, filepath.Base(exe)))
 	// These paths can be configured outside the normal user-data directory.
 	for _, item := range []struct{ src, name string }{{store.DefaultDBDir(), "db"}, {s.LemmaDir, "lemmas"}} {
 		if item.src == "" {
@@ -213,12 +217,7 @@ func (s *Server) buildPortable(j *job, source, exe, target string, roots []strin
 		if !portableWithin(stage, dst) {
 			return errors.New("invalid staging path")
 		}
-		if err = os.RemoveAll(dst); err != nil {
-			return err
-		}
-		if err = copyPath(item.src, dst); err != nil {
-			return err
-		}
+		tasks = append(tasks, copyTask{src: item.src, dst: dst, replace: true})
 	}
 	dictionaries := filepath.Join(data, "Dictionaries")
 	if err = os.MkdirAll(dictionaries, 0755); err != nil {
@@ -226,14 +225,27 @@ func (s *Server) buildPortable(j *job, source, exe, target string, roots []strin
 	}
 	layout := portableLayout(roots)
 	for i, root := range roots {
-		if err = copyPath(root, filepath.Join(dictionaries, layout[i])); err != nil {
-			return err
-		}
+		planCopy(root, filepath.Join(dictionaries, layout[i]))
 	}
 	cfg := filepath.Join(data, config.Name)
 	// The active configuration may have a custom file name.
 	if s.ConfigPath != "" && !strings.EqualFold(s.ConfigPath, filepath.Join(source, config.Name)) {
-		if err = copyPath(s.ConfigPath, cfg); err != nil {
+		planCopy(s.ConfigPath, cfg)
+	}
+	j.update(func(st *jobStatus) { st.Stage = "counting"; st.Done = 0; st.Total = 0 })
+	for _, task := range tasks {
+		if err = portableCopyExcept(j, task.src, task.dst, map[string]bool{}, task.excluded, true); err != nil {
+			return err
+		}
+	}
+	j.update(func(st *jobStatus) { st.Stage = "copying"; st.Current = "" })
+	for _, task := range tasks {
+		if task.replace {
+			if err = os.RemoveAll(task.dst); err != nil {
+				return err
+			}
+		}
+		if err = portableCopyExcept(j, task.src, task.dst, map[string]bool{}, task.excluded, false); err != nil {
 			return err
 		}
 	}
@@ -261,15 +273,15 @@ func (s *Server) buildPortable(j *job, source, exe, target string, roots []strin
 	if err = os.Rename(stage, target); err != nil {
 		return err
 	}
-	j.update(func(st *jobStatus) { st.Result = target })
+	j.update(func(st *jobStatus) { st.Done = st.Total; st.Result = target })
 	return nil
 }
 
 func portableCopy(j *job, src, dst string, ancestors map[string]bool) error {
-	return portableCopyExcept(j, src, dst, ancestors, nil)
+	return portableCopyExcept(j, src, dst, ancestors, nil, false)
 }
 
-func portableCopyExcept(j *job, src, dst string, ancestors, excluded map[string]bool) error {
+func portableCopyExcept(j *job, src, dst string, ancestors, excluded map[string]bool, measure bool) error {
 	if err := j.ctx.Err(); err != nil {
 		return err
 	}
@@ -294,8 +306,10 @@ func portableCopyExcept(j *job, src, dst string, ancestors, excluded map[string]
 		}
 		ancestors[key] = true
 		defer delete(ancestors, key)
-		if err = os.MkdirAll(dst, 0755); err != nil {
-			return err
+		if !measure {
+			if err = os.MkdirAll(dst, 0755); err != nil {
+				return err
+			}
 		}
 		rows, err := os.ReadDir(real)
 		if err != nil {
@@ -307,7 +321,7 @@ func portableCopyExcept(j *job, src, dst string, ancestors, excluded map[string]
 			if home := os.Getenv("WUDICT_PORTABLE_HOME"); home != "" && strings.EqualFold(real, home) && strings.EqualFold(row.Name(), "WebView2") {
 				continue
 			}
-			if err = portableCopyExcept(j, filepath.Join(real, row.Name()), filepath.Join(dst, row.Name()), ancestors, excluded); err != nil {
+			if err = portableCopyExcept(j, filepath.Join(real, row.Name()), filepath.Join(dst, row.Name()), ancestors, excluded, measure); err != nil {
 				return fmt.Errorf("%s: %w", filepath.Join(src, row.Name()), err)
 			}
 		}
@@ -322,15 +336,24 @@ func portableCopyExcept(j *job, src, dst string, ancestors, excluded map[string]
 			return nil
 		}
 	}
+	if measure {
+		j.update(func(st *jobStatus) { st.Total += info.Size(); st.Current = src })
+		return nil
+	}
 	if err = os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
 		return err
 	}
 	j.update(func(st *jobStatus) { st.Current = src })
 	if portableSQLite(real) {
 		if _, err = os.Stat(dst); err == nil {
+			j.update(func(st *jobStatus) { st.Done += info.Size() })
 			return nil
 		}
-		return store.SnapshotFile(j.ctx, real, dst)
+		err = store.SnapshotFile(j.ctx, real, dst)
+		if err == nil {
+			j.update(func(st *jobStatus) { st.Done += info.Size() })
+		}
+		return err
 	}
 	in, err := os.Open(real)
 	if err != nil {
