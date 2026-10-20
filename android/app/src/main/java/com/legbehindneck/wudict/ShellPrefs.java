@@ -59,6 +59,8 @@ import android.content.SharedPreferences;
 import android.content.res.Configuration;
 import android.graphics.Color;
 
+import java.io.BufferedReader;
+import java.io.FileReader;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -677,8 +679,33 @@ final class ShellPrefs {
      */
     static int maxOf(Context c, Override o) {
         if (o.max == MAX_RAM_MB) return (int) Math.max(64, deviceRamMb(c));
-        if (o.max == MAX_CORES) return Math.max(1, Runtime.getRuntime().availableProcessors());
+        if (o.max == MAX_CORES) return availableCpuCores();
         return o.max;
+    }
+
+    /** Android's process quota can make the JVM report fewer CPUs than the device has online. */
+    static int availableCpuCores() {
+        try (BufferedReader reader = new BufferedReader(new FileReader("/sys/devices/system/cpu/online"))) {
+            String value = reader.readLine();
+            if (value != null) {
+                int count = 0;
+                for (String range : value.trim().split(",")) {
+                    String[] ends = range.split("-", -1);
+                    int first = Integer.parseInt(ends[0]);
+                    int last = ends.length == 1 ? first : Integer.parseInt(ends[1]);
+                    if (ends.length > 2 || first < 0 || last < first || last > 4095) return runtimeCpuCores();
+                    count += last - first + 1;
+                }
+                if (count > 0) return count;
+            }
+        } catch (Exception ignored) {
+            // Some Android builds restrict sysfs reads; the JVM count is the fallback.
+        }
+        return runtimeCpuCores();
+    }
+
+    private static int runtimeCpuCores() {
+        return Math.max(1, Runtime.getRuntime().availableProcessors());
     }
 
     static long deviceRamMb(Context c) {

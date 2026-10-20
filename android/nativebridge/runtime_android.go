@@ -17,6 +17,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -714,12 +715,45 @@ func WudictGoBridgeIndexWorkers(workers C.int) C.int {
 		return 0
 	}
 	if workers == 0 {
-		workers = C.int(config.ParseWorkers(app.Server.IndexWorkersValue))
-	} else if workers < 1 || int(workers) > config.ParseWorkers("all") {
+		workers = C.int(androidParseWorkers(app.Server.IndexWorkersValue))
+	} else if workers < 1 || int(workers) > androidCPUCores() {
 		return 0
 	}
 	server.SetIndexWorkers(int(workers))
 	return 1
+}
+
+func androidParseWorkers(value string) int {
+	return config.ParseWorkersMax(value, androidCPUCores())
+}
+
+func androidCPUCores() int {
+	data, err := os.ReadFile("/sys/devices/system/cpu/online")
+	if err != nil {
+		return config.ParseWorkers("all")
+	}
+	count := 0
+	for _, value := range strings.Split(strings.TrimSpace(string(data)), ",") {
+		ends := strings.Split(value, "-")
+		first, err := strconv.Atoi(ends[0])
+		if err != nil || first < 0 {
+			return config.ParseWorkers("all")
+		}
+		last := first
+		if len(ends) == 2 {
+			last, err = strconv.Atoi(ends[1])
+			if err != nil || last < first || last > 4095 {
+				return config.ParseWorkers("all")
+			}
+		} else if len(ends) != 1 || first > 4095 {
+			return config.ParseWorkers("all")
+		}
+		count += last - first + 1
+	}
+	if count < 1 {
+		return config.ParseWorkers("all")
+	}
+	return count
 }
 
 //export WudictGoBridgeWebResource
@@ -863,6 +897,15 @@ func WudictGoBridgeRuntimeStart(path, flagsJSON, version *C.char) C.int {
 	cfg, err := config.Load(configPath, flags)
 	if err != nil {
 		return -2
+	}
+	if workers, ok := flags["INDEX_WORKERS"]; ok && strings.TrimSpace(workers) != "" {
+		workers = strings.ToLower(strings.TrimSpace(workers))
+		cfg.IndexWorkers = config.ParseWorkersMax(workers, androidCPUCores())
+		if workers == "auto" {
+			cfg.IndexWorkersValue = workers
+		} else {
+			cfg.IndexWorkersValue = strconv.Itoa(cfg.IndexWorkers)
+		}
 	}
 	if _, err = server.ConfigureLibrary(cfg); err != nil {
 		return -3
