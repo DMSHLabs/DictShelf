@@ -1277,7 +1277,7 @@ const SEARCH_DEBOUNCE_MS={{SEARCH_DEBOUNCE_MS}};
 const $=id=>document.getElementById(id);
 if(window.wudictAndroidGo){
   document.documentElement.setAttribute('data-android-go','');
-  $('androidBridgeStage').hidden=false;
+  if(window.wudictAndroidGo.isDebugBuild?.())$('androidBridgeStage').hidden=false;
   $('sbarPrev').before($('sbarBackWords'));
 }
 // Initialized before async startup and native callbacks can create a picker menu.
