@@ -1991,7 +1991,6 @@ func (e *entry) setFeaturesContext(ctx context.Context, want features, progress 
 		// progress unit. This is a fallback; a non-zero source total wins below.
 		knownTotal := preparedIngestCount(e.Path)
 		if knownTotal > 0 {
-			progress(0, knownTotal)
 			callerProgress := progress
 			progress = func(done, total int) {
 				if total <= 0 {

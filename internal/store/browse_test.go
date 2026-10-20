@@ -92,7 +92,7 @@ func TestBrowseAlphabet(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []dict.Letter{{Letter: "#", Offset: 0, Count: 13}}
+	want := []dict.Letter{{Letter: "1", Offset: 0, Count: 13}}
 	if len(got) != len(want) {
 		t.Fatalf("alphabet = %+v, want %+v", got, want)
 	}
@@ -153,7 +153,7 @@ func TestBrowsePageInitials(t *testing.T) {
 			t.Errorf("page label %d = %+v, want offset %d count %d", i, l, wantOffset, wantCount)
 		}
 	}
-	if got[0].Letter != "A-B" || got[1].Letter != "B00-C" || got[2].Letter != "C00" {
-		t.Errorf("page labels = %q, %q, %q; want A-B, B00-C, C00", got[0].Letter, got[1].Letter, got[2].Letter)
+	if got[0].Letter != "A-B" || got[1].Letter != "B001-C" || got[2].Letter != "C001" {
+		t.Errorf("page labels = %q, %q, %q; want A-B, B001-C, C001", got[0].Letter, got[1].Letter, got[2].Letter)
 	}
 }

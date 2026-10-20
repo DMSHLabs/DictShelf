@@ -271,8 +271,37 @@ func ensureSystemLogSession(root string) error {
 		return nil
 	}
 	stamp := time.Now().Format("2006_01_02__15_04_05")
-	for suffix := 0; suffix < 1000; suffix++ {
-		name := "system_" + stamp
+	// A pruned session may leave a hole at the beginning of this second's
+	// suffix sequence. Reusing that lexically oldest name would make the next
+	// prune delete the session we just opened. Continue after the highest
+	// existing suffix so lexical order remains chronological within a second.
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		return err
+	}
+	maxSuffix := -1
+	base := "system_" + stamp
+	for _, entry := range entries {
+		name := entry.Name()
+		if name == base+".log" {
+			maxSuffix = max(maxSuffix, 0)
+			continue
+		}
+		if !strings.HasPrefix(name, base+"_") || !strings.HasSuffix(name, ".log") {
+			continue
+		}
+		suffixText := strings.TrimSuffix(strings.TrimPrefix(name, base+"_"), ".log")
+		var suffix int
+		if _, err := fmt.Sscanf(suffixText, "%d", &suffix); err == nil && suffix > maxSuffix {
+			maxSuffix = suffix
+		}
+	}
+	start := maxSuffix + 1
+	if maxSuffix < 0 {
+		start = 0
+	}
+	for suffix := start; suffix < 1000; suffix++ {
+		name := base
 		if suffix > 0 {
 			name += fmt.Sprintf("_%02d", suffix)
 		}
