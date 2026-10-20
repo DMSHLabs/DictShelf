@@ -49,7 +49,9 @@ or discard user changes silently.
   and small `media.db` resources. The large SQLite `blobReader` and oversized
   media skip behavior remain intact. `go build ./...` and `git diff --check`
   pass; tests were not run.
-- **Next: P3 — ZIM on-demand indexing and direct resources.**
+- **P3 — ZIM on-demand indexing and direct resources:** implementation complete;
+  build and diff checks pass. Runtime verification with real large ZIM files is
+  still pending; keep the transfer at P3 until that check is confirmed.
 
 ## Required invariants
 
@@ -90,6 +92,13 @@ resource backend that currently wraps a reader with `io.NopCloser`; change only
 the paths where seek support is correct and useful.
 
 ### 3. Port ZIM on-demand indexing and direct resources
+
+**Status: implementation complete; runtime verification pending.** The full
+path-pointer list remains on disk, sequential scans use a bounded pointer page,
+and stored resources in uncompressed clusters use bounded direct reads. A
+compressed cluster is still decompressed as a whole under the existing bound.
+The fork's Browse/A-Z and headword-only reader paths are retained. `go build
+./...` and `git diff --check` pass; tests were not run.
 
 Port the `f1c5fb27` ZIM pointer paging and stored-cluster direct reads into the
 fork's current ZIM code. Preserve fork-specific lookup, indexing, and resource

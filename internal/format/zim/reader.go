@@ -25,6 +25,7 @@ type Reader struct {
 	d             *Dict
 	headwordsOnly bool
 	scanPos       int
+	walk          *ptrWalk
 
 	articles  []articleRef
 	pos       int
@@ -60,10 +61,12 @@ func newReader(path string, headwordsOnly bool) (*Reader, error) {
 		// cluster reads. Walk it in place instead of retaining millions of
 		// article references or sorting them in memory.
 		r.scanPos = d.lo
+		r.walk = d.c.walk()
 		return r, nil
 	}
+	w := d.c.walk()
 	for i := d.lo; i < d.hi; i++ {
-		de, err := d.c.entry(i)
+		de, err := w.entry(i)
 		if err != nil {
 			d.Close()
 			return nil, err
@@ -102,7 +105,7 @@ func (r *Reader) Next() (dict.Entry, error) {
 		for r.scanPos < r.d.hi {
 			i := r.scanPos
 			r.scanPos++
-			de, err := r.d.c.entry(i)
+			de, err := r.walk.entry(i)
 			if err != nil {
 				return dict.Entry{}, err
 			}

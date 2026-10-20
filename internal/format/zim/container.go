@@ -57,6 +57,7 @@ import (
 
 	"github.com/klauspost/compress/zstd"
 	"github.com/ulikunitz/xz"
+	"github.com/wuweidict/wudict/internal/resource"
 )
 
 const (
@@ -88,6 +89,10 @@ const (
 	// than the whole budget is still cached (alone), because evicting the
 	// entry just inserted would make every blob read decompress again.
 	clusterCacheBytes = 16 << 20
+
+	// A sequential path-pointer walk reads 4 KiB at a time instead of keeping
+	// the full pointer list in memory.
+	ptrPageLen = 512
 )
 
 // dirent is one directory entry: an article, a resource, or a redirect.
@@ -122,8 +127,18 @@ func (d dirent) key() string { return string([]byte{d.namespace}) + d.path }
 func searchKey(ns byte, path string) string { return string([]byte{ns}) + path }
 
 type clusterData struct {
-	data     []byte
+	data     []byte // decompressed body; nil when the cluster is read directly
 	extended bool
+	direct   bool
+	body     int64
+	n        uint64
+}
+
+func (cd *clusterData) size() uint64 {
+	if cd.direct {
+		return cd.n
+	}
+	return uint64(len(cd.data))
 }
 
 type container struct {
@@ -139,7 +154,7 @@ type container struct {
 	mimes    []string
 	htmlMIME map[uint16]bool
 
-	urlPtr     []uint64 // entryCount file offsets, sorted by (namespace, path)
+	pathPtrPos int64    // entryCount u64 file offsets, sorted by (namespace, path)
 	clusterPtr []uint64 // clusterCount+1: the tail is synthesised (see parse)
 
 	zr *zstd.Decoder
@@ -225,13 +240,12 @@ func (c *container) parse() error {
 		return err
 	}
 
-	c.urlPtr = make([]uint64, c.entryCount)
-	if err := c.readU64s(c.urlPtr, int64(pathPtrPos)); err != nil {
-		return fmt.Errorf("reading path pointer list: %w", err)
-	}
-	for i, off := range c.urlPtr {
-		if off < headerSize || off >= uint64(c.size) {
-			return fmt.Errorf("path pointer %d out of range (%d)", i, off)
+	c.pathPtrPos = int64(pathPtrPos)
+	// Validate representative pointers at open; all others are checked when
+	// their entries are accessed.
+	for _, i := range []int{0, int(c.entryCount) - 1} {
+		if _, err := c.ptrAt(i); err != nil {
+			return fmt.Errorf("reading path pointer list: %w", err)
 		}
 	}
 
@@ -275,6 +289,58 @@ func (c *container) readU64s(dst []uint64, off int64) error {
 		dst[i] = binary.LittleEndian.Uint64(buf[i*8:])
 	}
 	return nil
+}
+
+func (c *container) entries() int { return int(c.entryCount) }
+
+func (c *container) ptrAt(i int) (uint64, error) {
+	if i < 0 || i >= c.entries() {
+		return 0, fmt.Errorf("entry %d out of range (%d entries)", i, c.entries())
+	}
+	var b [8]byte
+	if _, err := c.f.ReadAt(b[:], c.pathPtrPos+int64(i)*8); err != nil {
+		return 0, err
+	}
+	return c.checkPtr(i, binary.LittleEndian.Uint64(b[:]))
+}
+
+func (c *container) checkPtr(i int, off uint64) (uint64, error) {
+	if off < headerSize || off >= uint64(c.size) {
+		return 0, fmt.Errorf("path pointer %d out of range (%d)", i, off)
+	}
+	return off, nil
+}
+
+type ptrWalk struct {
+	c    *container
+	base int
+	page [ptrPageLen]uint64
+}
+
+func (c *container) walk() *ptrWalk { return &ptrWalk{c: c, base: -1} }
+
+func (w *ptrWalk) entry(i int) (dirent, error) {
+	c := w.c
+	if i < 0 || i >= c.entries() {
+		return dirent{}, fmt.Errorf("entry %d out of range (%d entries)", i, c.entries())
+	}
+	if base := i - i%ptrPageLen; base != w.base {
+		var buf [ptrPageLen * 8]byte
+		n := min(ptrPageLen, c.entries()-base)
+		if _, err := c.f.ReadAt(buf[:n*8], c.pathPtrPos+int64(base)*8); err != nil {
+			w.base = -1
+			return dirent{}, err
+		}
+		for k := 0; k < n; k++ {
+			w.page[k] = binary.LittleEndian.Uint64(buf[k*8:])
+		}
+		w.base = base
+	}
+	off, err := c.checkPtr(i, w.page[i-w.base])
+	if err != nil {
+		return dirent{}, err
+	}
+	return c.direntAt(int64(off))
 }
 
 // parseMIMEList reads the whole string region at once and splits it, rather
@@ -431,10 +497,11 @@ func parseDirent(b []byte) (dirent, bool) {
 
 // entry decodes the i-th entry of the path pointer list.
 func (c *container) entry(i int) (dirent, error) {
-	if i < 0 || i >= len(c.urlPtr) {
-		return dirent{}, fmt.Errorf("entry %d out of range (%d entries)", i, len(c.urlPtr))
+	off, err := c.ptrAt(i)
+	if err != nil {
+		return dirent{}, err
 	}
-	return c.direntAt(int64(c.urlPtr[i]))
+	return c.direntAt(int64(off))
 }
 
 // resolve follows a redirect chain to the entry that actually holds content.
@@ -450,7 +517,7 @@ func (c *container) resolve(i int) (int, dirent, error) {
 			return i, d, nil
 		}
 		next := int(d.redirect)
-		if next == i || next < 0 || next >= len(c.urlPtr) {
+		if next == i || next < 0 || next >= c.entries() {
 			return 0, dirent{}, fmt.Errorf("entry %d: bad redirect to %d", i, next)
 		}
 		i = next
@@ -476,17 +543,26 @@ func (c *container) cluster(i uint32) (*clusterData, error) {
 	if end <= start || end > uint64(c.size) {
 		return nil, fmt.Errorf("cluster %d: bad extent %d..%d", i, start, end)
 	}
-	raw := make([]byte, end-start)
-	if _, err := c.f.ReadAt(raw, int64(start)); err != nil {
+	var info [1]byte
+	if _, err := c.f.ReadAt(info[:], int64(start)); err != nil {
 		return nil, fmt.Errorf("cluster %d: %w", i, err)
 	}
-	info := raw[0]
-	cd := &clusterData{extended: info&0x10 != 0}
-	data, err := c.decompress(info&0x0F, raw[1:])
+	extended, codec := info[0]&0x10 != 0, info[0]&0x0F
+	if codec <= 1 {
+		return &clusterData{extended: extended, direct: true, body: int64(start) + 1, n: end - start - 1}, nil
+	}
+	if end-start-1 > 2*maxClusterBytes {
+		return nil, fmt.Errorf("cluster %d: %d compressed bytes exceeds %d", i, end-start-1, 2*maxClusterBytes)
+	}
+	raw := make([]byte, end-start-1)
+	if _, err := c.f.ReadAt(raw, int64(start)+1); err != nil {
+		return nil, fmt.Errorf("cluster %d: %w", i, err)
+	}
+	data, err := c.decompress(codec, raw)
 	if err != nil {
 		return nil, fmt.Errorf("cluster %d: %w", i, err)
 	}
-	cd.data = data
+	cd := &clusterData{data: data, extended: extended}
 
 	c.mu.Lock()
 	if _, ok := c.cache[i]; !ok {
@@ -522,8 +598,6 @@ func (c *container) touch(i uint32) {
 
 func (c *container) decompress(codec byte, data []byte) ([]byte, error) {
 	switch codec {
-	case 0, 1:
-		return data, nil
 	case 2:
 		r, err := zlib.NewReader(bytes.NewReader(data))
 		if err != nil {
@@ -586,40 +660,72 @@ func readAllBounded(r io.Reader) ([]byte, error) {
 // INSIDE the compressed stream: W-byte offsets, and offset[0] is both the
 // first blob's position and the table's own length, so it is what says how
 // many blobs there are.
-func (c *container) blob(cl, bl uint32) ([]byte, error) {
-	cd, err := c.cluster(cl)
-	if err != nil {
-		return nil, err
+func (c *container) blobSpan(cl, bl uint32) (cd *clusterData, lo, hi uint64, err error) {
+	if cd, err = c.cluster(cl); err != nil {
+		return nil, 0, 0, err
 	}
-	w := 4
+	w := uint64(4)
 	if cd.extended {
 		w = 8
 	}
-	data := cd.data
-	if len(data) < w {
-		return nil, fmt.Errorf("cluster %d: no offset table", cl)
+	size := cd.size()
+	if size < w {
+		return nil, 0, 0, fmt.Errorf("cluster %d: no offset table", cl)
 	}
-	first := readUint(data, 0, w)
-	if first < uint64(w) || first%uint64(w) != 0 || first > uint64(len(data)) {
-		return nil, fmt.Errorf("cluster %d: bad offset table header %d", cl, first)
+	first, err := c.tableAt(cd, 0, w)
+	if err != nil {
+		return nil, 0, 0, fmt.Errorf("cluster %d: %w", cl, err)
 	}
-	count := first/uint64(w) - 1
+	if first < w || first%w != 0 || first > size {
+		return nil, 0, 0, fmt.Errorf("cluster %d: bad offset table header %d", cl, first)
+	}
+	count := first/w - 1
 	if uint64(bl) >= count {
-		return nil, fmt.Errorf("cluster %d: blob %d out of range (%d blobs)", cl, bl, count)
+		return nil, 0, 0, fmt.Errorf("cluster %d: blob %d out of range (%d blobs)", cl, bl, count)
 	}
-	lo := readUint(data, int(bl)*w, w)
-	hi := readUint(data, (int(bl)+1)*w, w)
-	if lo > hi || hi > uint64(len(data)) {
-		return nil, fmt.Errorf("cluster %d blob %d: bad extent %d..%d", cl, bl, lo, hi)
+	if lo, err = c.tableAt(cd, uint64(bl)*w, w); err == nil {
+		hi, err = c.tableAt(cd, (uint64(bl)+1)*w, w)
 	}
-	return data[lo:hi], nil
+	if err != nil {
+		return nil, 0, 0, fmt.Errorf("cluster %d: %w", cl, err)
+	}
+	if lo > hi || hi > size {
+		return nil, 0, 0, fmt.Errorf("cluster %d blob %d: bad extent %d..%d", cl, bl, lo, hi)
+	}
+	return cd, lo, hi, nil
 }
 
-func readUint(b []byte, off, w int) uint64 {
-	if w == 8 {
-		return binary.LittleEndian.Uint64(b[off:])
+func (c *container) tableAt(cd *clusterData, off, w uint64) (uint64, error) {
+	b := cd.data
+	if cd.direct {
+		var buf [8]byte
+		if _, err := c.f.ReadAt(buf[:w], cd.body+int64(off)); err != nil {
+			return 0, err
+		}
+		b, off = buf[:w], 0
 	}
-	return uint64(binary.LittleEndian.Uint32(b[off:]))
+	if w == 8 {
+		return binary.LittleEndian.Uint64(b[off:]), nil
+	}
+	return uint64(binary.LittleEndian.Uint32(b[off:])), nil
+}
+
+func (c *container) blob(cl, bl uint32) ([]byte, error) {
+	cd, lo, hi, err := c.blobSpan(cl, bl)
+	if err != nil {
+		return nil, err
+	}
+	if !cd.direct {
+		return cd.data[lo:hi], nil
+	}
+	if hi-lo > maxClusterBytes {
+		return nil, fmt.Errorf("cluster %d blob %d: %d bytes exceeds %d", cl, bl, hi-lo, maxClusterBytes)
+	}
+	out := make([]byte, hi-lo)
+	if _, err := c.f.ReadAt(out, cd.body+int64(lo)); err != nil {
+		return nil, fmt.Errorf("cluster %d: %w", cl, err)
+	}
+	return out, nil
 }
 
 // content returns the bytes of a non-redirect entry.
@@ -629,3 +735,23 @@ func (c *container) content(d dirent) ([]byte, error) {
 	}
 	return c.blob(d.cluster, d.blob)
 }
+
+// contentReader exposes a stored cluster blob as a seekable window onto the
+// source file. Compressed clusters still use their bounded in-memory cache.
+func (c *container) contentReader(d dirent) (io.ReadCloser, error) {
+	if d.isRedirect() {
+		return nil, fmt.Errorf("entry is a redirect")
+	}
+	cd, lo, hi, err := c.blobSpan(d.cluster, d.blob)
+	if err != nil {
+		return nil, err
+	}
+	if cd.direct {
+		return sectionCloser{io.NewSectionReader(c.f, cd.body+int64(lo), int64(hi-lo))}, nil
+	}
+	return resource.Bytes(cd.data[lo:hi]), nil
+}
+
+type sectionCloser struct{ *io.SectionReader }
+
+func (sectionCloser) Close() error { return nil }
