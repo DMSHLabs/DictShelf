@@ -2227,3 +2227,12 @@ html:is([data-shell-sepia],[data-shell-image]) .list-search-input{background-col
 @font-face{font-family:"wudict-Gentium";font-weight:700;font-style:normal;src:url("/assets/fonts/Gentium-Bold.woff2?v=7.000") format("woff2")}
 @font-face{font-family:"wudict-Gentium";font-weight:700;font-style:italic;src:url("/assets/fonts/Gentium-BoldItalic.woff2?v=7.000") format("woff2")}
 @font-face{font-family:"wudict-Quivira";src:url("/assets/fonts/Quivira.otf?v=1") format("opentype")}
+
+#portableDialog{width:min(560px,calc(100vw - 32px));box-sizing:border-box;max-height:calc(100dvh - 32px);overflow:auto}
+#portableDialog h2{margin-top:0}
+.portable-path,.portable-actions,.portable-check{display:flex;gap:.6em;align-items:center}
+.portable-path input{min-width:0;flex:1}
+.portable-check{margin-top:1em}
+.portable-actions{flex-wrap:wrap}
+#portableStatus{overflow-wrap:anywhere}
+#portableTool[hidden]{display:none}

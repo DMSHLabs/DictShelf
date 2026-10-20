@@ -1074,10 +1074,16 @@ func (r *Registry) rescan(prepare bool) error {
 	// prepares the file again from scratch.
 	relinked := store.Relink(paths)
 	relinked = append(relinked, store.RelinkUnlisted(paths)...)
-	if os.Getenv("WUDICT_PORTABLE_HOME") != "" {
+	if home := os.Getenv("WUDICT_PORTABLE_HOME"); home != "" {
 		// A portable Data folder is copied, so the original source may still
 		// exist. Reuse its prepared library when a copied dictionary matches.
-		relinked = append(relinked, store.RelinkCopies(paths)...)
+		var internal []string
+		for _, path := range paths {
+			if portableWithin(filepath.Join(home, "Dictionaries"), path) {
+				internal = append(internal, path)
+			}
+		}
+		relinked = append(relinked, store.RelinkCopies(internal)...)
 	}
 	for _, rl := range relinked {
 		logx.V("rescan: prepared data now follows source %s -> %s", rl.From, rl.To)
