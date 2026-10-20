@@ -131,6 +131,11 @@ The APKs are named
 `wudict2-android-arm64-v8a-<flavour>[-debug|-unsigned].apk`.
 The Play bundle is `wudict2-play-release.aab`. Release builds without a
 configured keystore produce an unsigned APK; do not treat that as installable.
+By default, the Windows command stamps the version from `git describe` into
+both the APK and its Go/JNI library. GitHub release builds use the selected or
+next release tag instead. To reproduce that exact version locally, set it
+before building, for example `set WUDICT_VERSION=wudict2-v0.13.0` and then run
+`build-android.cmd release`.
 
 `build-android.cmd debug intel` cross-compiles the in-process Go library
 for x86_64 as well, and ships both ABIs in one debug APK
@@ -221,6 +226,8 @@ x86_64. Gradle assembled both `:app:assembleFossDebug` and
 `:app:assemblePlayDebug` after the Android listener controls were removed. The
 user has not yet verified the A59 settings screen on the emulator. The A60
 FOSS debug build for arm64 and x86_64 passed; emulator checks are pending.
+The GitHub APK verifier checks that neither FOSS nor Play resources contain a
+listen-address control; Android always uses the in-process Go/JNI bridge.
 
 ## Unfinished work
 
