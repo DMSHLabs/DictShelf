@@ -55,7 +55,10 @@ func rescanTargetNeedsWork(e *entry, fresh, selfIndexed bool, options indexOptio
 	}
 	dir, ok := store.LookupDir(e.Path)
 	if !ok {
-		return false
+		// An explicit recreate is also the recovery path for a deliberately
+		// removed or missing base index. There is no current plan to inspect,
+		// but the user has asked us to create one from the source.
+		return req.Existing.Index == "recreate"
 	}
 	have := store.KeptPlan(store.TextDBPath(dir))
 	return req.Existing.Index == "recreate" || have.Contains && req.Existing.Contains != "keep" ||

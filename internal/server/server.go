@@ -894,22 +894,25 @@ func (s *Server) setupResult(q url.Values, canRemove bool) (map[string]any, int)
 		default:
 			out["dirs"] = dirs
 			out["found"] = total
-			if err := s.reg.SetDirs(dirs); err != nil {
+			// Apply new roots without starting preparation yet. Hosts that can
+			// clean the library remove stale data first and rescan once after;
+			// SetDirs followed by Rescan queued two competing initial jobs.
+			if err := s.reg.SetDirsDeferred(dirs); err != nil {
 				traceStage("update-registry-failed", total)
 				out["error"] = err.Error()
 				break
 			}
-			traceStage("update-registry-and-queue-indexes", total)
 			if canRemove {
 				if err := s.reg.cleanupLibrary(); err != nil {
 					out["error"] = err.Error()
 					break
 				}
-				if err := s.reg.Rescan(); err != nil {
-					out["error"] = err.Error()
-					break
-				}
 			}
+			if err := s.reg.Rescan(); err != nil {
+				out["error"] = err.Error()
+				break
+			}
+			traceStage("update-registry-and-queue-indexes", total)
 			out["saved"] = true
 			if s.ConfigPath != "" {
 				if err := config.SaveKeyRaw(s.ConfigPath, "DICT_DIR", config.FormatList(dirs)); err != nil {

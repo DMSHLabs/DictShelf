@@ -48,12 +48,9 @@ func previewRegistry(t *testing.T) (*Server, *Registry) {
 		t.Fatal(err)
 	}
 	isolatedDBDir(t)
-	reg, err := NewRegistry([]string{dir}, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	reg := unpreparedRegistry(t, []string{dir})
 	s := New(reg) // Search does not start an index job.
-	searchStream(t, s, "/api/search?q=beta&mode=prefix&dict=all")
+	collectLookupHits(t, s, SearchRequest{Query: "beta", Mode: "prefix", Dictionary: "all"})
 	if len(reg.reclaimables()) != 1 {
 		t.Fatalf("expected one open preview backend, got %d", len(reg.reclaimables()))
 	}
@@ -145,7 +142,7 @@ func TestPowerShedsOnBackground(t *testing.T) {
 	// and the dictionary still answers: eviction is a memory decision, never
 	// a functional one - the next query reopens the file.
 	reg.SetPower(PowerActive)
-	hits := searchStream(t, s, "/api/search?q=beta&mode=prefix&dict=all")
+	hits := collectLookupHits(t, s, SearchRequest{Query: "beta", Mode: "prefix", Dictionary: "all"})
 	if len(hits) != 1 || len(hits[0].Results) != 1 {
 		t.Fatalf("dictionary stopped answering after a shed: %+v", hits)
 	}
@@ -166,16 +163,13 @@ func TestJanitorIdlesWithNothingToReclaim(t *testing.T) {
 		t.Fatal(err)
 	}
 	isolatedDBDir(t)
-	reg, err := NewRegistry([]string{dir}, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	reg := unpreparedRegistry(t, []string{dir})
 	reg.SetPreviewBudget(1) // absurdly small: anything open exceeds it
 	if reg.needsSweep() {
 		t.Fatal("nothing is open yet - there is nothing to sweep")
 	}
 	s := New(reg)
-	searchStream(t, s, "/api/search?q=beta&mode=prefix&dict=all")
+	collectLookupHits(t, s, SearchRequest{Query: "beta", Mode: "prefix", Dictionary: "all"})
 	if !reg.needsSweep() {
 		t.Fatal("an open backend over budget must wake the janitor")
 	}

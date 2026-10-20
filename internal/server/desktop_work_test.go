@@ -12,6 +12,7 @@ func TestDesktopIndexWorkStartAndStop(t *testing.T) {
 	for _, method := range []string{"startIndexWork", "startSingleIndexWork"} {
 		t.Run(method, func(t *testing.T) {
 			s, _ := newPrefsServer(t)
+			waitNewDictionaryIndexing(t, s.reg)
 			e := s.reg.all()[0]
 			e.ingestMu.Lock()
 			defer func() { e.ingestMu.Unlock(); s.jobs.wg.Wait() }()

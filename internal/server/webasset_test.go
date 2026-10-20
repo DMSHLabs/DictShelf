@@ -51,7 +51,7 @@ func TestStripComments(t *testing.T) {
 	}
 }
 
-var placeholderRE = regexp.MustCompile(`\{\{[A-Z]+\}\}`)
+var placeholderRE = regexp.MustCompile(`\{\{[A-Z0-9_]+\}\}`)
 
 // What is served is what the sources say, less their comments: every
 // placeholder still there, every script still a script, the Custom styles

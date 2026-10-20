@@ -23,6 +23,7 @@ func TestSingleDSLSearchAndResources(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	waitNewDictionaryIndexing(t, r)
 	closeBackends(t, r)
 	if r.Count() != 1 || r.UserCount() != 1 {
 		t.Fatal("duplicated DSL")
