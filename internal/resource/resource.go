@@ -27,6 +27,7 @@
 package resource
 
 import (
+	"bytes"
 	"io"
 	"mime"
 	"path"
@@ -39,6 +40,15 @@ import (
 	"golang.org/x/text/encoding/charmap"
 	"golang.org/x/text/unicode/norm"
 )
+
+// Bytes returns a seekable, no-op-close reader over data. Resource handlers
+// use io.ReadSeeker to decide whether they can serve byte ranges; wrapping a
+// bytes.Reader in io.NopCloser would hide its Seek method.
+func Bytes(data []byte) io.ReadCloser { return bytesReadCloser{bytes.NewReader(data)} }
+
+type bytesReadCloser struct{ *bytes.Reader }
+
+func (bytesReadCloser) Close() error { return nil }
 
 // Source is one place a dictionary's resources live: an archive, a folder.
 type Source interface {

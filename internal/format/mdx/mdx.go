@@ -13,7 +13,6 @@
 package mdx
 
 import (
-	"bytes"
 	"fmt"
 	"html"
 	"io"
@@ -35,6 +34,7 @@ import (
 	"github.com/wuweidict/wudict/internal/fsx"
 	gomdict "github.com/wuweidict/wudict/internal/gomdict"
 	"github.com/wuweidict/wudict/internal/logx"
+	"github.com/wuweidict/wudict/internal/resource"
 )
 
 func init() {
@@ -491,7 +491,7 @@ func (d *Dict) Resource(name string) (io.ReadCloser, string, error) {
 	if err != nil {
 		return nil, "", fmt.Errorf("mdx: locate resource %q: %w", name, err)
 	}
-	return io.NopCloser(bytes.NewReader(data)), mime.TypeByExtension(path.Ext(norm)), nil
+	return resource.Bytes(data), mime.TypeByExtension(path.Ext(norm)), nil
 }
 
 // The allowlist of what may be served from beside the .mdx lives in

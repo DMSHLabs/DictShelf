@@ -774,8 +774,9 @@ reported stale the same way. `[V]`
 
 Seekability matters end to end: `resource.Dir` returns an `*os.File` (seekable), a zip
 entry is **not** seekable, and `store.Media.Resource` returns
-`readSeekNopCloser{*bytes.Reader}` — `io.NopCloser` would hide `Seek` and silently
-disable ranges for every packed dictionary. `[V]`
+`resource.Bytes` returns a seekable reader for in-memory resources, while large
+`media.db` blobs use a chunked seekable reader — `io.NopCloser` would hide `Seek`
+and silently disable ranges for packed dictionaries. `[V]`
 
 ## 10. Resource-name matching (`internal/resource`)
 
