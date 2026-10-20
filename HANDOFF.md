@@ -6,6 +6,8 @@ scrolls; the Reading it word by word hint stays with the heading above its
 divider, and filter mode is selected by default.
 The Android-only `A60` header marker is now shown only by debug builds. The
 wildcards results now use a full-width unboxed surface with compact top controls.
+Browse and wildcard headword searches reveal their first matching word as soon
+as the stream provides it, including searches started by Apply.
 Android versionCode now uses 941 as a baseline at commit `bb2a4b17` and
 increments for each later commit; all flavours and build types share it. The
 FOSS debug APK for arm64/x86_64 built successfully with manifest versionCode

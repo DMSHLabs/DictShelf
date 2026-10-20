@@ -6880,10 +6880,14 @@ async function maskFetchWithinStream(row,generation,navToken,findGeneration){
           }else if(row.within&&row.streamWords.length<=20000)window.wudictHeadwordControl.cacheWrite(maskCacheKey(row,"filter",row.within,row.withinMask),{
             total:row.total,alphabet:row.alphabet,positions:row.streamPositions,words:row.streamWords,size:blockSize});}
         else row.state="ready";
+        const firstVisibleMatches=row.within&&maskFindFilter&&maskRows[maskCurrent]===row&&
+          !row.firstVisibleMatchesPainted&&!!row.data?.words?.length;
+        if(row.within&&!maskFindFilter&&maskFindIndex<0)maskFindTurn(1);
         // Search mode keeps the original strip. Rebuilding its thousands of
         // chips for every streamed progress event exhausts the WebView heap.
         if(publishProgress&&progressTrace)progressTrace.published++;
-        if(publishProgress&&(event.words?.length||event.done)){
+        if((publishProgress||firstVisibleMatches)&&(event.words?.length||event.done)){
+          if(firstVisibleMatches)row.firstVisibleMatchesPainted=true;
           if(maskRows===maskFindRows||event.done){maskStripVersion++;maskStripRendered=-1}
           let renderStarted=performance.now();
           if(maskRows[maskCurrent]===row)maskRender();else maskMenu();
@@ -7171,7 +7175,11 @@ function maskFindStart(){
   }
   maskPrefetchFindPages();
   const generation=maskGeneration,rows=maskFindRows,findGeneration=maskFindGeneration,job={kind:"find",generation:findGeneration};let next=0;
-  if(rows.every(row=>row.state==="ready")){maskFindControls();maskRender();return}
+  if(rows.every(row=>row.state==="ready")){
+    maskFindControls();maskRender();
+    if(!maskFindFilter)maskFindTurn(1);
+    return;
+  }
   maskBusyStart(job);
   let active=0;
   if(dictionaryCacheDiagnosticsEnabled()){

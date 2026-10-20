@@ -84,6 +84,7 @@ func streamBrowseRows(ctx context.Context, rows *sql.Rows, matches func(string) 
 type browseRowStream struct {
 	words        []string
 	total        int
+	firstMatch   bool
 	scanned      int
 	scanTotal    int
 	previous     string
@@ -116,7 +117,14 @@ func (s *browseRowStream) rows(ctx context.Context, rows *sql.Rows, matches func
 			s.total++
 		}
 		now := time.Now()
-		if len(s.words) >= dict.MaskPageSize || (len(s.words) > 0 && !now.Before(s.nextProgress)) {
+		if len(s.words) > 0 && !s.firstMatch {
+			if err := s.emit(s.words, s.total, false, s.scanned, s.scanTotal); err != nil {
+				return err
+			}
+			s.words = make([]string, 0, dict.MaskPageSize)
+			s.firstMatch = true
+			s.nextProgress = now.Add(time.Second)
+		} else if len(s.words) >= dict.MaskPageSize || (len(s.words) > 0 && !now.Before(s.nextProgress)) {
 			if err := s.emit(s.words, s.total, false, s.scanned, s.scanTotal); err != nil {
 				return err
 			}
