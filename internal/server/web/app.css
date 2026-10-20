@@ -1377,6 +1377,15 @@ dialog.panel-card:not([open]){display:none}
 .pd.drop-before{box-shadow:0 -2px 0 var(--accent)}
 .pd.drop-after{box-shadow:0 2px 0 var(--accent)}
 .pd .hd{display:flex;align-items:center;gap:calc(var(--ui-control-gap) * 1em)}
+.dict-name-line{display:flex;align-items:center;gap:.35em;min-width:0;flex:1}
+.dict-name-line>b{min-width:0}
+.dict-rename,.dict-rename-reset{display:grid;place-items:center;flex:none;width:2em;height:2em;padding:.35em;border:0;border-radius:50%;background:transparent;color:var(--label-quiet);cursor:pointer}
+.dict-rename:hover,.dict-rename-reset:hover{background:var(--line-soft);color:var(--fg)}
+.dict-rename svg,.dict-rename-reset svg{width:1.15em;height:1.15em}
+.dict-rename:focus-visible,.dict-rename-reset:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.dict-rename-input{box-sizing:border-box;min-width:0;flex:1;height:2.4em;padding:.35em .55em;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--fg);font:inherit}
+.dict-rename-input:focus{outline:2px solid var(--focus);outline-offset:1px}
+.dict-name-line:has(.dict-rename-input){width:100%}
 .pd .grip{cursor:grab;color:var(--label-quiet);user-select:none;font-size:calc(var(--ui-font-base) * 1rem);
   line-height:1;letter-spacing:-.15em;padding-right:.15em}
 .pd .grip:active{cursor:grabbing}
@@ -1393,7 +1402,8 @@ dialog.panel-card:not([open]){display:none}
 .pd .ord button:hover{color:var(--fg);background:var(--line-soft)}
 #dictSettings .pd .hd{display:grid;grid-template-columns:auto minmax(0,1fr);gap:calc(var(--ui-control-gap) * 1em)}
 #dictSettings .pd .hd{box-sizing:border-box;padding:0;border-radius:0;background:transparent}
-#dictSettings .pd .hd>b{grid-column:1 / -1;grid-row:1}
+#dictSettings .pd .hd>.dict-name-line{grid-column:1 / -1;grid-row:1}
+#dictSettings .pd .hd>.dict-name-line>b{font-size:calc(var(--ui-font-section) * 1rem)}
 #dictSettings .pd .grip{grid-column:1;grid-row:2;padding:.4em;align-self:center}
 #dictSettings .pd .ord{grid-column:2;grid-row:2;gap:calc(var(--ui-control-gap) * 2.5em);margin-left:0;justify-content:flex-end}
 #dictSettings .pd .ord button{box-sizing:border-box;min-width:calc(var(--ui-control-height) * 1em);width:calc(var(--ui-control-height) * 1em);height:calc(var(--ui-control-height) * 1em);min-height:calc(var(--ui-control-height) * 1em);padding:0}

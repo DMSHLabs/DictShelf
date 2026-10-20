@@ -1443,9 +1443,10 @@ function render(){
   const d=state;
   if(!d)return;
   const renderStarted=performance.now();
-  document.title=t("browse.pageTitle",{name:d.name});
+  const displayName=d.title||d.name;
+  document.title=t("browse.pageTitle",{name:displayName});
   $("top").hidden=false;$("foot").hidden=false;
-  $("name").textContent=d.name;
+  $("name").textContent=displayName;
   fitTitle();
   const filtering=findFilter&&!!$("findInput").value.trim()&&findResult;
   const filterPage=filtering?(findResult.stream?findFilterPage:findResult.page):d.page;
@@ -1644,7 +1645,8 @@ async function chooser(){
   const byId=new Map(ds.map(d=>[d.id,d]));
   const saved=(prefs.dicts||[]).map(d=>d.id).filter(id=>byId.has(id));
   const pinned=new Set((prefs.dicts||[]).filter(d=>d.pinned).map(d=>d.id));
-  const label=d=>d.name||d.path?.split(/[\\/]/).pop()||d.id;
+  const customTitles=new Map((prefs.dicts||[]).filter(d=>d.title).map(d=>[d.id,d.title]));
+  const label=d=>customTitles.get(d.id)||d.name||d.path?.split(/[\\/]/).pop()||d.id;
   const collator=new Intl.Collator(window.wudictI18n.language,{sensitivity:"base",numeric:true});
   const alpha=ids=>{
     const fixed=ids.filter(id=>pinned.has(id)),tail=ids.filter(id=>!pinned.has(id));
@@ -1667,7 +1669,7 @@ async function chooser(){
   if(!ds.length)return card(heading+"<b>"+tx("browse.empty")+"</b><p>"+tx("browse.emptyBody")+
     '</p><p><a href="/">'+tx("browse.openApp")+"</a></p>");
   card(heading+"<div class='picks'>"+
-    ds.map(d=>'<a href="?dict='+encodeURIComponent(d.id)+'&chooser=1"><span class="pick-name">'+esc(d.name||d.id)+'</span>'+
+    ds.map(d=>'<a href="?dict='+encodeURIComponent(d.id)+'&chooser=1"><span class="pick-name">'+esc(label(d))+'</span>'+
       (d.entries?'<span class="pick-count">'+tx("browse.entries",{count:d.entries,number:num(d.entries)})+"</span>":"")+"</a>").join("")+"</div>"+
     '<div class="list-search-dock" role="search"></div>',true);
   requestAnimationFrame(()=>requestAnimationFrame(()=>logBrowseNavigation("chooser_ready",performance.now()-chooserStarted,{words:ds.length})));

@@ -51,6 +51,7 @@ type DictPref struct {
 	ID     string   `json:"id"`
 	Path   string   `json:"path"`
 	Name   string   `json:"name,omitempty"`   // display name, for a readable file
+	Title  *string  `json:"title,omitempty"`  // optional user-facing label; nil restores the dictionary's own name
 	Off    bool     `json:"off,omitempty"`    // excluded from "All dictionaries"
 	Pinned *bool    `json:"pinned,omitempty"` // fixed at the top when All Dictionaries is sorted
 }
@@ -369,6 +370,18 @@ func (p *Prefs) Snapshot() (dicts []DictPref, exists bool) {
 	return append([]DictPref(nil), f.Dicts...), ok
 }
 
+// DisplayTitle returns a dictionary's optional user-facing label. Dictionary
+// identity and its own metadata name remain unchanged.
+func (p *Prefs) DisplayTitle(id string) string {
+	dicts, _ := p.Snapshot()
+	for _, d := range dicts {
+		if d.ID == id && d.Title != nil {
+			return *d.Title
+		}
+	}
+	return ""
+}
+
 // Replace stores a new list and writes it, atomically (fsx.WriteAtomic): a
 // crash mid-save leaves the previous state intact rather than a truncated
 // file that reads as "nothing was ever configured".
@@ -588,10 +601,21 @@ func (p *Prefs) merge(r *Registry, want []DictPref) []DictPref {
 		for _, old := range stored {
 			if old.ID == d.ID || fsx.SamePath(old.Path, d.Path) {
 				d.Groups = append([]string(nil), old.Groups...)
+				if d.Title == nil {
+					d.Title = old.Title
+				}
 				if d.Pinned == nil {
 					d.Pinned = old.Pinned
 				}
 				break
+			}
+		}
+		if d.Title != nil {
+			title := strings.TrimSpace(*d.Title)
+			if title == "" {
+				d.Title = nil
+			} else {
+				d.Title = &title
 			}
 		}
 		seenID[d.ID] = true
