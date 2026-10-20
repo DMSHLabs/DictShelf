@@ -3,6 +3,7 @@
 Current checkout: branch `dev` at `bb2a4b17`. Uncommitted Android changes keep
 the Browse A–Z heading and Find/Filter dock fixed while its dictionary list
 scrolls, with a divider under its heading and filter mode selected by default.
+The Android-only `A60` header marker is now shown only by debug builds.
 Android versionCode now uses 941 as a baseline at commit `bb2a4b17` and
 increments for each later commit; all flavours and build types share it. The
 FOSS debug APK for arm64/x86_64 built successfully with manifest versionCode

@@ -396,6 +396,10 @@ final class Shell {
     }
 
     private static final class GoPageBridge {
+        @JavascriptInterface public boolean isDebugBuild() {
+            return BuildConfig.DEBUG;
+        }
+
         @JavascriptInterface public int startDictStream() {
             return GoBridge.startDictStream();
         }
