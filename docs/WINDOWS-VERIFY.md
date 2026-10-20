@@ -56,8 +56,9 @@ them are in `docs/handoff-archive.md`.
   `wuDict2-server.exe`, and `installer` packages the existing desktop exe.
   Machine-specific overrides belong in the ignored `build-windows.local.bat`
   or the environment: `GCC_PATH` (empty falls back to `%CC%`, then `gcc.exe`
-  on PATH, then `GCC_ROOTS`) and `ISCC_PATH`. GitHub Actions installs its own
-  MinGW-w64 GCC and passes that runner-local path to the script. Windows
+  on PATH, then `GCC_ROOTS`) and `ISCC_PATH`. GitHub Actions uses the
+  `windows-2022` image's MinGW-w64 GCC from `C:\mingw64\bin` and passes its
+  absolute path to the script. Windows
   desktop always requires cgo (`-tags sqlite_fts5`, CGO_ENABLED=1); there is no purego option or
   fallback. If no compatible GCC is found, the script exits before replacing
   the existing executable. This machine's ignored local settings select Qt GCC 13.1.0, which
