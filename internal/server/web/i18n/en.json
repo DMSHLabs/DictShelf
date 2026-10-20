@@ -1,4 +1,14 @@
 {
+  "portable.open": "Create portable…",
+  "portable.title": "Create portable",
+  "portable.hint": "Choose an empty folder for the portable version. You can copy this folder to another location or Windows computer and run wuDict2 there.",
+  "portable.dictionaries": "Copy dictionaries",
+  "portable.create": "Create",
+  "portable.progress": "Copying: {name}",
+  "portable.saved": "Portable version created: {path}",
+  "portable.failed": "Could not create portable version: {error}",
+  "portable.stopped": "Stopped. No portable version was created.",
+
   "export.selectGroup": "Select all dictionaries in this group",
   "export.tools": "Tools",
   "export.open": "Export headwords to file…",

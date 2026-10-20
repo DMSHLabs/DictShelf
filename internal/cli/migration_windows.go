@@ -151,8 +151,10 @@ func normalizeWindowsPortableConfig(configPath string) error {
 	if _, err := config.Load(configPath, nil); err != nil {
 		return fmt.Errorf("cannot read portable settings: %w", err)
 	}
+	if err := config.RelativizePortableDictionaries(configPath); err != nil {
+		return fmt.Errorf("cannot update portable dictionary paths: %w", err)
+	}
 	paths := []struct{ key, value string }{
-		{"DICT_DIR", config.FormatList([]string{"Dictionaries"})},
 		{"DB_DIR", config.QuoteTOML("db")},
 		{"LEMMA_DIR", config.QuoteTOML("lemmas")},
 	}
@@ -210,10 +212,6 @@ func validateWindowsPortableConfig(root, configPath string) error {
 	}
 	if len(cfg.Problems) > 0 {
 		return fmt.Errorf("portable settings contain errors: %s", strings.Join(cfg.Problems, "; "))
-	}
-	dictRoot := filepath.Join(root, "Dictionaries")
-	if len(cfg.DictDirs) != 1 || !sameWindowsPath(cfg.DictDirs[0], dictRoot) {
-		return fmt.Errorf("DICT_DIR must point to %s", dictRoot)
 	}
 	if cfg.DBDir != "" && !windowsPathWithin(root, cfg.DBDir) {
 		return fmt.Errorf("DB_DIR points outside the portable data folder: %s", cfg.DBDir)

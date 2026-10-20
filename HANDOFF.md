@@ -1,6 +1,10 @@
 # Agent handoff — current state
 
-Current checkout for the upstream resource-transfer session: branch `dev2` at
+Current checkout: `dev2` at `0bca0bc9`. Uncommitted Create portable work adds a Windows Settings → Tools dialog with output folder, native picker, optional dictionary copying, progress and Stop. It copies the running executable and active user data into a staged portable folder, snapshots live SQLite databases, includes external library/lemma paths, and copies complete dictionary roots (resources included), stripping their common ancestor or adding volume directories across drives. Output must be new/empty and separate from data sources. Source files retain timestamps; originals are untouched. Portable WebView profiles now live under Data/WebView2; this regenerable live cache is excluded when cloning an already portable installation. Focused portable, WAL snapshot and catalog tests pass with both SQLite drivers; Go and Windows cgo GUI builds and inline JavaScript syntax pass. Manual dialog and relocated-startup checks remain pending. Existing large-media fixture changes were preserved; no commit or installation was made.
+
+Portable path correction: startup converts only absolute dictionary roots within the current Data/Dictionaries to relative paths. External roots remain unchanged and pass portable validation; special copied-index relinking is limited to internal dictionaries. Create portable without dictionary copying preserves the copied DICT_DIR settings. Focused config/CLI/server tests cover mixed internal/external roots, prefix lookalikes and idempotence; relocated startup remains a manual check.
+
+Previous checkout snapshot for the upstream resource-transfer session: branch `dev2` at
 `6fefaa87`, with uncommitted SLOB and upstream P7 candidate changes. P1–P5 are
 implemented; three low-risk P7 fixes are also implemented: MDict encoding
 recognition, XDXF attribute escaping, and duplicate dictzip FIFO insertion

@@ -863,6 +863,7 @@ window.wudictFontScale=(function(){
 
 <details class="sect" data-panel-section="tools" open>
 <summary class="sect-h">{{T:export.tools}}</summary>
+<div class="facts" id="portableTool" hidden><button type="button" class="mrow" id="openPortable">{{T:portable.open}}</button></div>
 <div class="facts"><button type="button" class="mrow" id="openHeadwordExport">{{T:export.open}}</button></div>
 </details>
 <details class="sect" id="sysSection" hidden data-panel-section="system" open>
@@ -971,6 +972,14 @@ window.wudictFontScale=(function(){
 {{FILTERSDIALOG}}
 {{FOLDERSDIALOG}}
 {{LEMMADIALOG}}
+<dialog id="portableDialog" lang="{{T:locale}}" class="group-dialog panel-card" aria-labelledby="portableTitle">
+<h2 id="portableTitle">{{T:portable.title}}</h2>
+<p>{{T:portable.hint}}</p>
+<div class="portable-path"><label for="portablePath">{{T:export.folder}}</label><input type="text" id="portablePath" autocomplete="off" spellcheck="false"><button type="button" class="btn" id="portableFolder" aria-label="{{T:pages.chooseFolder}}" hidden>📁</button></div>
+<label class="portable-check"><input type="checkbox" id="portableDictionaries"> {{T:portable.dictionaries}}</label>
+<p id="portableStatus" role="status" aria-live="polite"></p>
+<div class="portable-actions"><button type="button" class="btn" id="portableCreate">{{T:portable.create}}</button><button type="button" class="btn" id="portableStop" hidden>{{T:dictUI.stop}}</button><button type="button" class="btn" id="portableClose">{{T:panel.close}}</button></div>
+</dialog>
 <dialog id="headwordExport" lang="{{T:locale}}" class="group-dialog panel-card" aria-labelledby="headwordExportTitle">
 <h2 id="headwordExportTitle">{{T:export.title}} <button type="button" class="btn" id="exportClose" aria-label="{{T:panel.close}}">✕</button></h2>
 <div class="export-group"><input type="checkbox" id="exportGroupCheck" aria-label="{{T:export.selectGroup}}"><select id="exportGroup" aria-label="{{T:panel.groups}}"></select></div>
@@ -2713,6 +2722,31 @@ async function exportFollow(){
  catch(error){$('exportStatus').textContent=tx('export.failed',{error:error.message});$('exportStop').hidden=false}
  finally{exportPolling=false}
 }
+let portablePolling=false;
+const portableCall=(action,options={})=>window.wudictNativeCall('createPortable',JSON.stringify({action,...options}));
+function portableBusy(busy){
+ for(const id of ['portablePath','portableFolder','portableDictionaries','portableCreate'])$(id).disabled=busy;
+ $('portableStop').hidden=!busy;
+}
+async function portableFollow(){
+ if(portablePolling)return;portablePolling=true;
+ try{while(true){
+  const st=await portableCall('status');portableBusy(!!st.Running);
+  $('portableStatus').textContent=st.Err?tx('portable.failed',{error:st.Err}):st.Canceled?tx('portable.stopped'):st.Running?tx('portable.progress',{name:st.Current||''}):st.Result?tx('portable.saved',{path:st.Result}):'';
+  if(!st.Running)break;await new Promise(resolve=>setTimeout(resolve,300));
+ }}catch(error){$('portableStatus').textContent=tx('portable.failed',{error:error.message})}
+ finally{portablePolling=false}
+}
+$('portableTool').hidden=!window.wudictWindowsShell;
+$('openPortable').onclick=()=>{hidePanel();$('portableFolder').hidden=typeof window.wudictPickFolder!=='function';portableBusy(true);$('portableDialog').showModal();portableFollow()};
+$('portableFolder').onclick=()=>window.wudictPickFolder(path=>{if(path)$('portablePath').value=path});
+$('portableClose').onclick=()=>$('portableDialog').close();
+$('portableCreate').onclick=async()=>{
+ portableBusy(true);$('portableStatus').textContent=tx('portable.progress',{name:''});
+ try{await portableCall('start',{path:$('portablePath').value.trim(),dictionaries:$('portableDictionaries').checked});portableFollow()}
+ catch(error){portableBusy(false);$('portableStatus').textContent=tx('portable.failed',{error:error.message})}
+};
+$('portableStop').onclick=async()=>{try{await portableCall('stop');portableFollow()}catch(error){$('portableStatus').textContent=tx('portable.failed',{error:error.message})}};
 $('openHeadwordExport').onclick=async()=>{
  try{
   userGroups=await groupRequest('/api/user-groups','GET');

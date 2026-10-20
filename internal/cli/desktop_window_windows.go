@@ -69,6 +69,9 @@ func openDesktopWindow(address, appAddress string, onClose func(), desktopReques
 		}
 	}
 	profile = filepath.Join(profile, "wuDict", "WebView2")
+	if root := os.Getenv(windowsPortableHomeEnv); root != "" {
+		profile = filepath.Join(root, "WebView2")
+	}
 	if err := os.MkdirAll(profile, 0700); err != nil {
 		logx.Warn("WebView2 profile unavailable: %v", err)
 		return false

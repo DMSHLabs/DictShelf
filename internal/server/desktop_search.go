@@ -485,6 +485,8 @@ func (s *Server) DesktopJSONContext(ctx context.Context, baseURL, method, argume
 		return map[string]string{"language": s.reg.prefs.Language()}, nil
 	case "headwordExport":
 		return s.headwordExport(argument)
+	case "createPortable":
+		return s.createPortable(argument)
 	case "systemLog":
 		content, filename, err := s.systemLogSnapshot()
 		if err != nil {
