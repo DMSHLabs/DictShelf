@@ -669,7 +669,8 @@ function lowerStripIndex(value,byEnd=false){
 }
 function revealStripIndex(index,edge=false){
   const strip=$("strip"),next=window.wudictHeadwordControl.ribbon.reveal(stripOffsets,stripWidths,index,
-    strip.scrollLeft,strip.clientWidth,Math.max(0,stripTotalWidth-strip.clientWidth),activeStripItems(),edge);
+    strip.scrollLeft,strip.clientWidth,Math.max(0,stripTotalWidth-strip.clientWidth),activeStripItems(),edge,
+    edge?window.wudictHeadwordControl.ribbon.singleHeadingWidth($("stripMeasure")):0);
   if(next!==strip.scrollLeft)strip.scrollLeft=next;
   stripCurrentPositionedIndex=index;
 }

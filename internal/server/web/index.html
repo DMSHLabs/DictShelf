@@ -7613,7 +7613,8 @@ $("maskLetters").addEventListener("click",e=>{
   const index=maskRows.findIndex(row=>row.id===button.dataset.dict);
   const stripIndex=Number(button.dataset.stripIndex),viewport=$("maskLetters").clientWidth;
   maskStripScrollX=window.wudictHeadwordControl.ribbon.reveal(maskStripOffsets,maskStripWidths,stripIndex,
-    maskStripScrollX,viewport,Math.max(0,maskStripTotalWidth-viewport),maskStripItems,true);
+    maskStripScrollX,viewport,Math.max(0,maskStripTotalWidth-viewport),maskStripItems,true,
+    window.wudictHeadwordControl.ribbon.singleHeadingWidth(maskStripMeasureNode));
   maskSelect(index,Number(button.dataset.page));
 });
 $("maskWords").addEventListener("click",e=>{
