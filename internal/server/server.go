@@ -133,6 +133,7 @@ type Server struct {
 
 	groups ownedFile[*facet.Rules]         // groups.ini (groups.go)
 	styles map[string]*ownedFile[styleCSS] // app.css, article.css (style.go)
+	words  wordLists                       // history.txt, favourites.txt (words.go)
 
 	// DictDirOrigin / DictDirEditable describe where the dictionary folders
 	// came from (config layering), so the UI can warn that a flag or an
@@ -265,6 +266,7 @@ func New(reg *Registry) *Server {
 	s := &Server{reg: reg, mux: http.NewServeMux(), AllowRemoteDelete: false}
 	s.initGroups()
 	s.initStyles()
+	s.initWords()
 	// The surface is a table (routes.go), so it can be asserted about: the
 	// CORS boundary and the OpenAPI document are both checked against it.
 	for _, rt := range s.routes() {

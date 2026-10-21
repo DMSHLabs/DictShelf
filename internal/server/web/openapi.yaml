@@ -1353,6 +1353,91 @@ paths:
         '500':
           description: The state file could not be written.
 
+  /api/words:
+    get:
+      tags: [internal]
+      operationId: getWords
+      x-internal: true
+      summary: The reader's favourites and history
+      description: >
+        Both lists, most recent first: history.txt and favourites.txt beside
+        wudict.toml, one headword per line. A word is a headword, not one
+        dictionary's article.
+      x-codeSamples:
+        - lang: Shell
+          label: curl
+          source: |
+            curl -s 'http://127.0.0.1:6888/api/words' | jq '.favourites'
+      responses:
+        '200':
+          description: Both lists.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Words' }
+    post:
+      tags: [internal]
+      operationId: saveWord
+      x-internal: true
+      summary: Put a word first in a list, or take it out
+      description: >
+        `on` moves the word to the front (adding it if new), otherwise removes
+        it. History keeps the latest 500 words; while `historyOff` is set in
+        the preferences, adding to history does nothing. Line breaks and tabs
+        become spaces and the ends are trimmed. Body is capped at 4 KiB.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [list, word]
+              properties:
+                list: { type: string, enum: [history, favourites] }
+                word: { type: string, description: 'A headword, at most 256 characters.' }
+                on: { type: boolean, description: 'true adds or moves to the front; false removes.' }
+      x-codeSamples:
+        - lang: Shell
+          label: curl
+          source: |
+            curl -s -X POST 'http://127.0.0.1:6888/api/words' \
+              -H 'content-type: application/json' \
+              -d '{"list":"favourites","word":"serendipity","on":true}'
+      responses:
+        '200':
+          description: Both lists as they now stand.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Words' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '413':
+          description: The body is larger than 4 KiB.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '500': { $ref: '#/components/responses/ServerError' }
+    delete:
+      tags: [internal]
+      operationId: clearWords
+      x-internal: true
+      summary: Empty a list
+      parameters:
+        - name: list
+          in: query
+          required: true
+          schema: { type: string, enum: [history, favourites] }
+      x-codeSamples:
+        - lang: Shell
+          label: curl
+          source: |
+            curl -s -X DELETE 'http://127.0.0.1:6888/api/words?list=history'
+      responses:
+        '200':
+          description: Both lists as they now stand.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Words' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '500': { $ref: '#/components/responses/ServerError' }
   /api/style:
     get:
       tags: [internal]
@@ -2674,6 +2759,19 @@ components:
             default; prefix and unknown values are stored as absent.
             Remembered state for wudict's own UI - the search endpoint never
             reads it, and a `mode=` in the page's address wins over it.
+        historyOff:
+          type: boolean
+          description: >
+            Stops recording looked-up words in history.txt. Absent keeps
+            history. The server reads it too: while it is set, adding to
+            history through /api/words does nothing.
+
+    Words:
+      type: object
+      required: [favourites, history]
+      properties:
+        favourites: { type: array, items: { type: string }, description: 'Most recent first.' }
+        history: { type: array, items: { type: string }, description: 'Most recent first; at most 500.' }
 
     Groups:
       type: object

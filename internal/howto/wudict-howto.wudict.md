@@ -171,6 +171,7 @@ In <kbd>☰</kbd> → ![](cog.svg):
 
 - ![](highlight.svg) <kbd>Highlight matches</kbd>: mark the words a [full-text](<entry://wudict full-text>) search found.
 - ![](speak.svg) <kbd>Read aloud</kbd>: select text in an article to speak it using the OS's Text-to-speech engine. You can pick your preferred voice via the chevron next to the speaker icon (when the OS provides multiple voices for the detected language), see more details under [wudict Text-to-speech](<entry://wudict Text-to-speech>)
+- <kbd>Keep history</kbd>, <kbd>Clear history</kbd>: see [wudict history](<entry://wudict history>).
 - **Open**: see [wudict welcome](<entry://wudict welcome>).
 - **Group by**: which groups the dictionary picker offers (language, language pair, content, publisher). [Edit groups](/groups) changes them or adds your own: one line per group, `MyGroup = text, other text`, and a dictionary joins it when one of the texts is anywhere in its title or file name. Between backticks, a regular expression: `` MyGroup = `^the\b` ``.
 
@@ -285,6 +286,20 @@ Tap a letter to jump; type the start of a word to go there; tap a headword to re
 **Click a link in an article to follow it; double-click any word (📱 double-tap) to look it up**. A link is looked up in the dictionary you are reading first, then in all of them. Back returns to where you were.
 
 Every search has its own address, so you can bookmark it: `/?q=word&mode=exact`. 📱 `wudict://lookup?q=word` opens a lookup from other apps and scripts.
+
+***
+
+- [index](/browse?dict=wudict-howto)
+
+## wudict history
+## wudict favourites
+## wudict star
+
+**Click the empty search box (💻 or press <kbd>↓</kbd>) to see your favourites and the words you looked up**, latest first; pick one to look it up again. **Press ☆ at the end of the search box to add the word to your favourites**; press ★ to remove it. 💻 <kbd>Ctrl</kbd>+<kbd>D</kbd> (<kbd>⌘</kbd>+<kbd>D</kbd> on a Mac) does the same, and <kbd>Shift</kbd>+<kbd>Delete</kbd> removes the selected word from your history. 📱 Touch and hold a word in the list to remove it from your history.
+
+A word goes into your history when you press Enter, follow a link to it, pick it from a list, or keep it in the box with its article open. History keeps the latest 500 words. With <kbd>Keep history</kbd> off, no words are added and your history is not shown; it is not deleted, and it shows again when you turn the switch back on. <kbd>Clear history</kbd> deletes it. Both are in <kbd>☰</kbd> → ![](cog.svg).
+
+Both lists are text files next to `wudict.toml`, one word per line: `history.txt` and `favourites.txt`. Every device that uses this wudict sees the same lists.
 
 ***
 
