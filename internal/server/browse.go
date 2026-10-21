@@ -55,6 +55,9 @@ func (s *Server) handleBrowseFind(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) browseFindPage(ctx context.Context, q url.Values) (browseFindResp, error) {
+	if q.Get("merged") == "1" {
+		return s.mergedBrowseFindPage(ctx, q)
+	}
 	query := strings.TrimSpace(q.Get("q"))
 	if len(query) > 256 {
 		return browseFindResp{}, &browseFindSetupError{status: http.StatusBadRequest, message: "search text is too long"}
@@ -77,6 +80,26 @@ func (s *Server) browseFindPage(ctx context.Context, q url.Values) (browseFindRe
 		cacheOrder, orderErr := strconv.Atoi(q.Get("wildorder"))
 		cacheCount, countErr := strconv.Atoi(q.Get("wildcount"))
 		if orderErr == nil && countErr == nil {
+			if rawPosition := q.Get("findpos"); rawPosition != "" {
+				position, parseErr := strconv.Atoi(rawPosition)
+				direction, directionErr := strconv.Atoi(q.Get("finddir"))
+				if parseErr != nil || within == "" {
+					return browseFindResp{}, &browseFindSetupError{status: http.StatusBadRequest, message: "invalid wildcard match position"}
+				}
+				if directionErr != nil || direction < -1 || direction > 1 {
+					return browseFindResp{}, &browseFindSetupError{status: http.StatusBadRequest, message: "invalid wildcard match direction"}
+				}
+				matchIndex, found, findErr := s.wildcardPages.findPosition(cacheID, wildcardCacheSignature{
+					query: query, group: q.Get("wildgroup"), wildcards: mask,
+				}, q.Get("dict"), within, withinMask, position, direction, cacheOrder, cacheCount)
+				if findErr != nil {
+					return browseFindResp{}, &browseFindSetupError{status: http.StatusInternalServerError, message: "reading cached wildcard match: " + findErr.Error()}
+				}
+				if !found {
+					return browseFindResp{}, &browseFindSetupError{status: http.StatusNotFound, message: "matching headword is not available yet"}
+				}
+				page = matchIndex/browsePageSize + 1
+			}
 			cached, ok, err := s.wildcardPages.page(cacheID, wildcardCacheSignature{
 				query: query, group: q.Get("wildgroup"), wildcards: mask,
 			}, q.Get("dict"), within, withinMask, page, cacheOrder, cacheCount)
@@ -297,6 +320,16 @@ func (s *Server) prepareBrowseFindStream(q url.Values) (browseFindStreamRequest,
 }
 
 func (s *Server) handleBrowseFindStream(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Query().Get("merged") == "1" {
+		st, ok := newStream(w, "application/x-ndjson")
+		if !ok {
+			return
+		}
+		if err := s.streamMergedBrowseFind(r.Context(), r.URL.Query(), func(event browseFindStreamEvent) error { st.line(event); return r.Context().Err() }); err != nil && r.Context().Err() == nil {
+			st.line(browseFindStreamEvent{Type: "error", Error: err.Error()})
+		}
+		return
+	}
 	request, err := s.prepareBrowseFindStream(r.URL.Query())
 	if err != nil {
 		var failure *browseFindSetupError
@@ -506,6 +539,15 @@ func (s *Server) desktopBrowseFindStream(ctx context.Context, query string, emit
 	values, err := url.ParseQuery(query)
 	if err != nil {
 		return s.emitBrowseFindError(ctx, emit, "invalid browse search request")
+	}
+	if values.Get("merged") == "1" {
+		return s.streamMergedBrowseFind(ctx, values, func(event browseFindStreamEvent) error {
+			data, err := json.Marshal(event)
+			if err == nil && emit != nil {
+				emit(data)
+			}
+			return err
+		})
 	}
 	request, err := s.prepareBrowseFindStream(values)
 	if err != nil {
@@ -732,9 +774,10 @@ type browseResp struct {
 	// at: a jump snaps down to the page grid, so a page reached by asking for
 	// K usually opens in the tail of J. The client highlights the strip by
 	// this, or clicking K lights up J.
-	At       int           `json:"at"`
-	Words    []string      `json:"words"`
-	Alphabet []dict.Letter `json:"alphabet"`
+	At            int           `json:"at"`
+	Words         []string      `json:"words"`
+	Alphabet      []dict.Letter `json:"alphabet"`
+	mergedCacheID string
 }
 
 type browsePageFailure struct {

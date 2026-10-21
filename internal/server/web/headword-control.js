@@ -41,7 +41,7 @@
     return true;
   }
 
-  function create({dock, ids, labels, maxRows = 2, onQuery, onMode, onMask, onThreshold, onApply, onStep}) {
+  function create({dock, ids, labels, maxRows = 2, countAction = false, onQuery, onMode, onMask, onThreshold, onApply, onStep, onCount}) {
     if (!dock || !ids) throw new TypeError("headword control needs a dock and element ids");
     const id = name => ids[name];
     dock.classList.add("headword-control");
@@ -50,7 +50,8 @@
       `<input class="headword-control-input" id="${id("input")}" type="search" placeholder="${labels.search}" ` +
       `spellcheck="false" autocomplete="off" autocapitalize="off" enterkeyhint="search" aria-label="${labels.search}">` +
       `<button type="button" class="headword-control-apply" id="${id("apply")}" aria-label="${labels.apply}" title="${labels.apply}" hidden>✓</button>` +
-      `<output class="headword-control-count" id="${id("count")}" aria-live="polite">0/0</output>` +
+      (countAction ? `<button type="button" class="headword-control-count headword-control-count-button" id="${id("count")}" aria-live="polite">0/0</button>` :
+        `<output class="headword-control-count" id="${id("count")}" aria-live="polite">0/0</output>`) +
       `<button type="button" class="headword-control-step headword-control-previous" id="${id("previous")}" aria-label="${labels.previous}" title="${labels.previous}">▲</button>` +
       `<button type="button" class="headword-control-step headword-control-next" id="${id("next")}" aria-label="${labels.next}" title="${labels.next}">▼</button>`;
 
@@ -92,7 +93,12 @@
       el.apply.hidden = !state.applyRequired;
       el.apply.disabled = el.apply.hidden || !state.applyEnabled || !!state.busy;
       el.count.textContent = state.count ?? "0/0";
-      el.count.value = el.count.textContent;
+      if (countAction) {
+        el.count.disabled = !!state.countDisabled;
+        el.count.setAttribute("aria-label", state.countLabel || el.count.textContent);
+        el.count.title = state.countLabel || "";
+      }
+      else el.count.value = el.count.textContent;
       el.previous.disabled = !!state.previousDisabled;
       el.next.disabled = !!state.nextDisabled;
       for (const control of [el.mode, el.mask]) control.disabled = !!state.busy;
@@ -107,12 +113,14 @@
     function onApplyClick() { onApply?.(); }
     function onPreviousClick() { onStep?.(-1); }
     function onNextClick() { onStep?.(1); }
+    function onCountClick() { onCount?.(); }
     el.input.addEventListener("input", onInput);
     el.mode.addEventListener("click", onModeClick);
     el.mask.addEventListener("click", onMaskClick);
     el.apply.addEventListener("click", onApplyClick);
     el.previous.addEventListener("click", onPreviousClick);
     el.next.addEventListener("click", onNextClick);
+    if (countAction) el.count.addEventListener("click", onCountClick);
     const observer = new ResizeObserver(fit);
     observer.observe(dock);
     if (dock.id === "maskDock") observer.observe(dock.parentElement);
@@ -139,6 +147,7 @@
         el.apply.removeEventListener("click", onApplyClick);
         el.previous.removeEventListener("click", onPreviousClick);
         el.next.removeEventListener("click", onNextClick);
+        if (countAction) el.count.removeEventListener("click", onCountClick);
         dock.replaceChildren();
         dock.classList.remove("headword-control");
       }

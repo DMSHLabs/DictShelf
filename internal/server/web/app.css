@@ -418,8 +418,15 @@ html[data-shell-image] .mask-head #maskDict{background-color:var(--paper-bg,var(
 .mask-letters button[aria-current="true"]{border-color:var(--accent);color:var(--accent)}
 .mask-words{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:.7em}
 .mask-word-columns{columns:12em;column-gap:1em}
-.mask-words button{display:block;width:100%;break-inside:avoid;text-align:left;color:var(--link);background:transparent;border:0;border-radius:4px;padding:.3em .4em;font:inherit;cursor:pointer;overflow-wrap:anywhere}
-.mask-words button:hover,.mask-words button:focus-visible{background:var(--line-soft)}
+.mask-word-item{display:flex;align-items:start;break-inside:avoid}
+.mask-words button.mask-word-open{display:block;flex:1 1 auto;min-width:0;width:100%;text-align:left;color:var(--link);background:transparent;border:0;border-radius:4px;padding:.3em .4em;font:inherit;cursor:pointer;overflow-wrap:anywhere}
+.mask-words button.mask-word-open:hover,.mask-words button.mask-word-open:focus-visible{background:var(--line-soft)}
+.mask-word-context-menu{position:fixed;z-index:1200;min-width:12em;padding:.25em;background:var(--bg);border:1px solid var(--line);border-radius:8px;box-shadow:0 4px 18px #0003}
+.mask-word-context-menu[hidden]{display:none}
+.mask-word-context-menu button{display:block;width:100%;padding:.55em .8em;border:0;border-radius:5px;background:transparent;color:var(--fg);font:inherit;text-align:left;cursor:pointer}
+.mask-word-context-menu button:hover,.mask-word-context-menu button:focus-visible{background:var(--line-soft)}
+.mask-word-context-menu button:disabled{opacity:.5;cursor:default}
+.mask-words button.mask-find-anchor{background:var(--line-soft);outline:2px solid var(--accent);outline-offset:-2px}
 .mask-words mark{background:var(--accent);color:var(--bg);border-radius:.15em}
 body.mask-computing #maskLetters button{cursor:pointer}
 body.mask-computing #maskWords{pointer-events:none;opacity:.72}
@@ -532,6 +539,7 @@ select{box-sizing:border-box;font-size:calc(var(--ui-font-base) * 1rem);min-heig
 #pinBtn svg{display:block;transition:transform .2s ease;width:16px;height:18px}
 #pinBtn[aria-pressed="true"] svg{transform:rotate(-45deg)}
 #pinBtn[aria-pressed="true"]{color:var(--accent)}
+#mergedAZ[aria-pressed="true"]{color:var(--accent);border-color:var(--accent)}
 
 /* ── results ───────────────────────────────────────────────────────── */
 /* Costs nothing until it has something to say. The old rule reserved
@@ -983,6 +991,8 @@ body.styling{padding-bottom:var(--styler-shown,var(--styler-h))}
 #desktopSysBody .sys-row{display:flex;align-items:center;gap:calc(var(--ui-control-gap) * 1em);min-height:calc(var(--ui-control-height) * 1em);cursor:pointer}
 #desktopSysBody .sys-label{flex:1 1 auto;color:var(--label);min-width:0;font-size:calc(var(--ui-font-base) * 1rem);overflow-wrap:anywhere}
 #sysSettings .sys-row.sys-num{cursor:default}
+#sysSettings .sys-result-cache-limit,#desktopSysBody .sys-result-cache-limit{justify-content:flex-start;gap:.45em;padding-left:calc(1em + var(--ui-control-gap) * 1em)}
+#sysSettings .sys-result-cache-limit input,#desktopSysBody .sys-result-cache-limit input{width:7em;min-height:calc(var(--ui-control-height) * 1em);font:inherit;text-align:right}
 #sysSettings .sys-label{flex:1 1 auto;color:var(--label);min-width:0;font-size:calc(var(--ui-font-base) * 1rem);overflow-wrap:anywhere}
 #sysSettings .sys-num input{box-sizing:border-box;flex:none;width:6.5em;min-height:calc(var(--ui-control-height) * 1em);font:inherit;font-size:calc(var(--ui-font-base) * 1rem);text-align:right;
   color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:.5em .6em}

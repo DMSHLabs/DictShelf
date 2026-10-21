@@ -1,13 +1,56 @@
 # Agent handoff — current state
 
-Current checkout: branch `dev` at `bb2a4b17`. Uncommitted Android changes keep
+Current checkout: branch `dev` at `e29922ca`. Uncommitted Browse/Wildcards,
+Android UI, and task-progress changes were present before this cache task and
+remain preserved. Browse and Wildcards SQL result caches now use indexed
+300-headword blocks, retain files across idle periods/restarts, and share a
+five-file/age/disk-size cleanup policy. Settings → System controls the combined
+cache disk cap (2 GiB default on Android, 8 GiB on desktop, or No Limit).
+Old cache schemas are prepared on first open. `go build ./...`, inline JavaScript
+syntax checks, catalog JSON parsing, and `git diff --check` pass; the FOSS debug
+APK also builds successfully. No tests were run, and the APK was not installed.
+Windows/Android UI and long-running cache behavior need runtime verification.
+Android UI changes keep
 the Browse A–Z heading and Find/Filter dock fixed while its dictionary list
 scrolls; the Reading it word by word hint stays with the heading above its
 divider, and filter mode is selected by default.
+The Wildcards merge button describes the next transition: “Several → one” or
+“One → several” (localized in English and Russian). The normal per-dictionary
+and merged views use separate SQLite caches; after the initial merged cache is
+built, toggling back and forth reuses each view. The merged list is deduplicated
+and globally sorted, applies the active mask and filter, and retains source
+positions for paging and “Find from here”. The selected view is kept in the
+search URL and article-return link. `go build ./...`, inline JavaScript parsing,
+catalog JSON parsing and `git diff --check` pass; the FOSS arm64 debug APK builds
+successfully and was not installed. Windows/Android runtime behavior remains
+unverified.
 The Android-only `A60` header marker is now shown only by debug builds. The
 wildcards results now use a full-width unboxed surface with compact top controls.
 Browse and wildcard headword searches reveal their first matching word as soon
-as the stream provides it, including searches started by Apply.
+as the stream provides it, including searches started by Apply. Wildcard SQL
+cache pages reassemble variable-sized stream events into fixed-size pages
+within each dictionary, preserving the group's dictionary order during parallel
+search. The wildcard search match counter opens a localized Go to match dialog
+and navigates to the selected result. In Wildcards search mode, right-clicking
+or long-pressing a headword opens “Find from here”; the chosen headword receives
+a rectangular outline and subsequent match navigation starts beside it. Opening
+an article stores the clicked word and restores it to view on return via ← Word.
+The ordered SQL wildcard cache supports seeking to matches before or after a
+headword position across dictionary boundaries.
+The live Wildcards pane now assembles visible 300-word pages by cumulative
+result offset, since stream events can be shorter than a page; treating one
+event as a page shifted the outlined match onto unrelated words. A completed
+visible page is reread from the SQL cache.
+“Find from here” treats the outlined word as a cursor between matches: if 100
+matches precede it, the counter shows 100 and the first Next/Previous goes to
+match 101/100. Explicit Go to match clears that cursor. A single dictionary
+also wraps match navigation at its ends.
+Position lookup now uses indexed first/last positions and the starting match
+ordinal of each SQL cache block; SQLite selects one block via its B-tree and Go
+binary-searches that block's positions. The unreleased cache has no schema
+migration; remove existing Wildcards cache files before using this change.
+In-memory search positions use binary search too. Focused position,
+page-boundary, and SQLite query-plan checks passed before migration removal.
 Android versionCode now uses 941 as a baseline at commit `bb2a4b17` and
 increments for each later commit; all flavours and build types share it. The
 FOSS debug APK for arm64/x86_64 built successfully with manifest versionCode

@@ -13,6 +13,16 @@ const (
 	BrowsePageLastOffset = BrowsePageSize - 1
 	// BrowseAnchorStride stores one ordinal seek point per this many headword rows.
 	BrowseAnchorStride = 100
+	// WildcardCacheBlockSize keeps SQL result blocks aligned with Browse pages.
+	WildcardCacheBlockSize = BrowsePageSize
+	// ResultCacheLimit is the maximum number of recent SQL result caches on disk.
+	ResultCacheLimit = 5
+	// ResultCacheMaxAgeDays is the startup cleanup age for unused SQL result caches.
+	ResultCacheMaxAgeDays = 30
+	// ResultCacheAndroidDefaultGB is the default disk-cache limit on Android.
+	ResultCacheAndroidDefaultGB = 2
+	// ResultCacheDesktopDefaultGB is the default disk-cache limit on desktop platforms.
+	ResultCacheDesktopDefaultGB = 8
 	// BrowseStripExactWidthCount is the number of Browse strip labels measured exactly.
 	BrowseStripExactWidthCount = 200
 	// IngestBatchSize is the number of entries written per ingest batch.

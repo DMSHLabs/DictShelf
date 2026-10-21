@@ -63,6 +63,9 @@ type DictPref struct {
 // phone that reaches this same server too, and localStorage — keyed by origin
 // — would hand them 15px there, and again the first time SERVER_PORT changes.
 type UIPrefs struct {
+	ResultCacheLimitGB int  `json:"resultCacheLimitGB,omitempty"`
+	ResultCacheNoLimit bool `json:"resultCacheNoLimit,omitempty"`
+
 	FontSize int `json:"fontSize,omitempty"` // article text, px; 0 = the default
 
 	// FontWeight is the article text's weight, in CSS units. 0 is the zero
@@ -659,7 +662,7 @@ func cleanAbs(p string) string {
 func (s *Server) PrefsSnapshot() map[string]any {
 	dicts := s.reg.prefs.heal(s.reg)
 	_, exists := s.reg.prefs.Snapshot()
-	return map[string]any{"exists": exists, "dicts": dicts, "ui": s.reg.prefs.UI()}
+	return map[string]any{"exists": exists, "dicts": dicts, "ui": s.uiPrefsSnapshot()}
 }
 
 // GET /api/prefs
@@ -728,9 +731,12 @@ func (s *Server) SavePrefs(body io.Reader) (map[string]any, error) {
 	if err := s.reg.prefs.update(merged, req.UI); err != nil {
 		return nil, err
 	}
+	if mentioned(req.UI) {
+		s.applyResultCachePrefs()
+	}
 	dicts, _ := s.reg.prefs.Snapshot()
 	if dicts == nil {
 		dicts = []DictPref{} // [] on the wire, as before, never null
 	}
-	return map[string]any{"exists": true, "dicts": dicts, "ui": s.reg.prefs.UI()}, nil
+	return map[string]any{"exists": true, "dicts": dicts, "ui": s.uiPrefsSnapshot()}, nil
 }
