@@ -1033,6 +1033,12 @@ window.wudictFontScale=(function(){
   </div>
 </dialog>
 
+<dialog id="systemLogSavedDialog" lang="{{T:locale}}" class="group-dialog panel-card" aria-labelledby="systemLogSavedTitle">
+  <h2 id="systemLogSavedTitle">{{T:panel.systemLogSavedTitle}}</h2>
+  <p id="systemLogSavedText"></p>
+  <div class="system-log-saved-actions"><button type="button" class="btn" id="systemLogShowFolder">{{T:panel.showInFolder}}</button><button type="button" class="btn" id="systemLogSavedClose">{{T:panel.close}}</button></div>
+</dialog>
+
 <!-- System: the shell's own settings, drawn by the page. It is the second view
      of one set of values the SHELL owns - the screen the launcher icon's
      long-press menu opens is the other - so nothing here is stored twice: the
@@ -1324,7 +1330,13 @@ function systemLogClick(event){
   if(!window.wudictNativeShell)return;
   event.preventDefault();
   if(typeof window.wudictNativeCall==="function"){
-    window.wudictNativeCall("systemLog").then(({content,filename})=>{
+    window.wudictNativeCall("systemLog").then(({content,filename,path})=>{
+      if(window.wudictWindowsShell===true){
+        $("systemLogSavedDialog").dataset.filename=filename;
+        $("systemLogSavedText").textContent=tx("panel.systemLogSavedPath",{path});
+        $("systemLogSavedDialog").showModal();
+        return;
+      }
       const url=URL.createObjectURL(new Blob([content],{type:"text/plain;charset=utf-8"}));
       const link=document.createElement("a");link.href=url;link.download=filename;
       document.body.appendChild(link);link.click();link.remove();
@@ -1335,6 +1347,12 @@ function systemLogClick(event){
   const result=prompt("wudict:system-log","");
   if(result&&result!=="ok")alert(result);
 }
+$("systemLogSavedClose").addEventListener("click",()=>$("systemLogSavedDialog").close());
+$("systemLogShowFolder").addEventListener("click",()=>{
+  const filename=$("systemLogSavedDialog").dataset.filename;
+  window.wudictNativeCall("revealSystemLog",filename).then(()=>$("systemLogSavedDialog").close())
+    .catch(error=>alert(window.wudictI18n.errorText(error.message)));
+});
 $("saveSystemLog").addEventListener("click",systemLogClick);
 $("sysSaveLog").addEventListener("click",systemLogClick);
 window.wuSearchHistory.setSearch(word=>{ if($("mode").value==="wildcards"){ $("q").value=word;window.wuSearchHistory.hide();maskSubmitRequested=true;commitOnce=true;doSearch(); } else searchFor(word); });
@@ -6462,8 +6480,10 @@ function maskStripPaintNow(){
   if(targetKey&&(targetKey!==maskActiveKey||maskStripWantedKey)){
     const itemIndex=maskStripKeyIndex.get(targetKey),section=maskStripTargetIndex(targetKey,isAllWildcardMask(maskPattern));
     const x=section>=0?maskStripSectionOffsets[section]:undefined;
-    if(x!==undefined){const w=itemIndex===undefined?0:maskStripNavWidths[itemIndex],left=maskStripScrollX;
-      if(x<left||x+w>left+track.clientWidth)maskStripScrollX=Math.max(0,x-track.clientWidth/2+w/2);
+    if(x!==undefined){
+      if(itemIndex!==undefined)maskStripScrollX=window.wudictHeadwordControl.ribbon.reveal(maskStripNavOffsets,maskStripNavWidths,itemIndex,
+        maskStripScrollX,track.clientWidth,Math.max(0,maskStripTotalWidth-track.clientWidth),maskStripItems);
+      else if(x<maskStripScrollX||x>maskStripScrollX+track.clientWidth)maskStripScrollX=Math.max(0,x-track.clientWidth/2);
       maskStripWantedKey=""}
   }
   const viewport=track.clientWidth,maxLogicalScroll=Math.max(0,maskStripTotalWidth-viewport);
@@ -7591,6 +7611,9 @@ $("maskGotoInput").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventD
 $("maskLetters").addEventListener("click",e=>{
   const button=e.target.closest("button[data-dict][data-page]");if(!button)return;
   const index=maskRows.findIndex(row=>row.id===button.dataset.dict);
+  const stripIndex=Number(button.dataset.stripIndex),viewport=$("maskLetters").clientWidth;
+  maskStripScrollX=window.wudictHeadwordControl.ribbon.reveal(maskStripOffsets,maskStripWidths,stripIndex,
+    maskStripScrollX,viewport,Math.max(0,maskStripTotalWidth-viewport),maskStripItems,true);
   maskSelect(index,Number(button.dataset.page));
 });
 $("maskWords").addEventListener("click",e=>{

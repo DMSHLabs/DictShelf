@@ -667,6 +667,12 @@ function updateStripArrows(){stripNavigator?.update()}
 function lowerStripIndex(value,byEnd=false){
   return window.wudictHeadwordControl.ribbon.lower(stripOffsets,stripWidths,value,byEnd);
 }
+function revealStripIndex(index,edge=false){
+  const strip=$("strip"),next=window.wudictHeadwordControl.ribbon.reveal(stripOffsets,stripWidths,index,
+    strip.scrollLeft,strip.clientWidth,Math.max(0,stripTotalWidth-strip.clientWidth),activeStripItems(),edge);
+  if(next!==strip.scrollLeft)strip.scrollLeft=next;
+  stripCurrentPositionedIndex=index;
+}
 function measureStripItems(items){
   const strip=$("strip"),track=$("stripTrack"),sample=$("stripMeasure"),style=getComputedStyle(sample);
   const font=[style.fontStyle,style.fontVariant,style.fontWeight,style.fontSize,style.fontFamily].join(" ");
@@ -718,9 +724,7 @@ function measureStripItems(items){
     });
   }
   if(browseAlphabetCache.has(stripFor)&&stripCurrentIndex>=0&&stripCurrentIndex<stripOffsets.length&&stripCurrentPositionedIndex!==stripCurrentIndex){
-    const center=stripOffsets[stripCurrentIndex]+stripWidths[stripCurrentIndex]/2;
-    strip.scrollLeft=Math.max(0,Math.min(stripTotalWidth-strip.clientWidth,center-strip.clientWidth/2));
-    stripCurrentPositionedIndex=stripCurrentIndex;
+    revealStripIndex(stripCurrentIndex);
   }
   return complete;
 }
@@ -773,7 +777,8 @@ function activeStripItems(){
   }
   return filteredStripItems;
 }
-function selectStripOffset(offset){
+function selectStripOffset(offset,clickedIndex=-1){
+  if(clickedIndex>=0)revealStripIndex(clickedIndex,true);
   if(filteredStripActive()){
     const page=Math.floor(offset/300)+1;
     if(findResult.stream){findFilterPage=page;render();$("list").parentElement.scrollTop=0}
@@ -1568,9 +1573,7 @@ function render(){
     const currentChanged=currentIndex!==stripCurrentIndex;
     if(currentChanged)stripCurrentIndex=currentIndex;
     if((filtering||browseAlphabetCache.has(d.dict))&&currentIndex>=0&&currentIndex<stripOffsets.length&&stripCurrentPositionedIndex!==currentIndex){
-      const center=stripOffsets[currentIndex]+stripWidths[currentIndex]/2;
-      strip.scrollLeft=Math.max(0,Math.min(stripTotalWidth-strip.clientWidth,center-strip.clientWidth/2));
-      stripCurrentPositionedIndex=currentIndex;
+      revealStripIndex(currentIndex);
     }
     renderVirtualStrip(currentChanged);
     stripReady=performance.now();
@@ -1873,7 +1876,7 @@ document.addEventListener("click",e=>{
   const g=e.target.closest("[data-go]");
   if(g)return turn(g.dataset.go);
   const c=e.target.closest(".strip button[data-o]");
-  if(c&&state)selectStripOffset(Number(c.dataset.o));
+  if(c&&state)selectStripOffset(Number(c.dataset.o),Number(c.dataset.stripIndex));
 });
 
 $("findInput").addEventListener("keydown",e=>{
