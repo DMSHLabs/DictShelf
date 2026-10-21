@@ -17,6 +17,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/wuweidict/wudict/internal/config"
 	"github.com/wuweidict/wudict/internal/logx"
@@ -610,7 +611,19 @@ func (s *Server) DesktopJSONContext(ctx context.Context, baseURL, method, argume
 		if err != nil {
 			return nil, fmt.Errorf("invalid browse request: %w", err)
 		}
+		started := time.Now()
 		page, err := s.browsePage(values)
+		if values.Get("diagnostics") == "1" {
+			status := http.StatusOK
+			if err != nil {
+				status = http.StatusInternalServerError
+				var failure *browsePageFailure
+				if errors.As(err, &failure) {
+					status = failure.status
+				}
+			}
+			logx.System("browse_page_dispatch status=%d elapsed_us=%d", status, time.Since(started).Microseconds())
+		}
 		if err != nil {
 			var failure *browsePageFailure
 			if errors.As(err, &failure) {

@@ -21,6 +21,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 	"unsafe"
 
 	"github.com/wuweidict/wudict/internal/config"
@@ -71,20 +72,30 @@ func WudictGoBridgeBrowsePage(query *C.char) *C.char {
 	if query == nil {
 		return nil
 	}
+	queryText := C.GoString(query)
+	diagnostics := strings.Contains(queryText, "diagnostics=1")
+	started := time.Now()
 	nativeRuntime.Lock()
 	app := nativeRuntime.app
 	nativeRuntime.Unlock()
 	if app == nil {
 		return C.CString(`{"status":503,"body":{"error":"Go runtime is unavailable"}}`)
 	}
-	value, err := app.Server.DesktopJSON("", "browsePage", C.GoString(query))
+	dispatchStarted := time.Now()
+	value, err := app.Server.DesktopJSON("", "browsePage", queryText)
+	dispatchTime := time.Since(dispatchStarted)
 	if err != nil {
 		data, _ := json.Marshal(map[string]any{"status": 500, "body": map[string]string{"error": err.Error()}})
 		return C.CString(string(data))
 	}
+	marshalStarted := time.Now()
 	data, err := json.Marshal(value)
 	if err != nil {
 		return C.CString(`{"status":500,"body":{"error":"could not encode browse page"}}`)
+	}
+	if diagnostics {
+		logx.System("browse_page_bridge dispatch_us=%d marshal_us=%d total_us=%d response_bytes=%d",
+			dispatchTime.Microseconds(), time.Since(marshalStarted).Microseconds(), time.Since(started).Microseconds(), len(data))
 	}
 	return C.CString(string(data))
 }

@@ -80,6 +80,18 @@ func logBrowseMemory(event string, active, completed, dictionaries int) {
 }
 
 type browseDiagnostic struct {
+	SwitchID               int    `json:"switchId"`
+	RunID                  int    `json:"runId"`
+	Query                  string `json:"query"`
+	Group                  string `json:"group"`
+	FTS                    bool   `json:"fts"`
+	Trigram                bool   `json:"trigram"`
+	Detail                 string `json:"detail"`
+	SpinnerVisible         bool   `json:"spinnerVisible"`
+	NoticeVisible          bool   `json:"noticeVisible"`
+	BusyWanted             bool   `json:"busyWanted"`
+	MergedView             bool   `json:"mergedView"`
+	NoticeText             string `json:"noticeText"`
 	Event                  string `json:"event"`
 	Stage                  string `json:"stage"`
 	Resource               string `json:"resource"`
@@ -174,6 +186,16 @@ func (s *Server) handleBrowseDiagnostic(w http.ResponseWriter, r *http.Request) 
 }
 
 func recordBrowseDiagnostic(d browseDiagnostic) error {
+	if d.Event == "wildcard_view" {
+		if !bounded(d.SwitchID, 1_000_000_000) || !bounded(d.RunID, 1_000_000_000) || !bounded(d.ElapsedMS, 86_400_000) ||
+			!bounded(d.Active, 100_000) || !bounded(d.Completed, 100_000) || !bounded(d.Dictionaries, 100_000) ||
+			len(d.NoticeText) > 1024 || strings.ContainsAny(d.NoticeText, "\r\n") || len(d.Stage) > 64 || strings.ContainsAny(d.Stage, "\r\n") || len(d.Resource) > 256 || strings.ContainsAny(d.Resource, "\r\n") || len(d.Dict) > 256 || strings.ContainsAny(d.Dict, "\r\n") ||
+			len(d.Query) > 1024 || strings.ContainsAny(d.Query, "\r\n") || len(d.Group) > 256 || strings.ContainsAny(d.Group, "\r\n") || len(d.Detail) > 1024 || strings.ContainsAny(d.Detail, "\r\n") {
+			return errors.New("invalid diagnostic")
+		}
+		logx.System("wildcard_view switch=%d run=%d stage=%q source=%q dict=%q query=%q group=%q fts=%t trigram=%t detail=%q elapsed_ms=%d merged=%t spinner=%t notice=%t busy_wanted=%t tasks=%d ready=%d dictionaries=%d notice_text=%q", d.SwitchID, d.RunID, d.Stage, d.Resource, d.Dict, d.Query, d.Group, d.FTS, d.Trigram, d.Detail, d.ElapsedMS, d.MergedView, d.SpinnerVisible, d.NoticeVisible, d.BusyWanted, d.Active, d.Completed, d.Dictionaries, d.NoticeText)
+		return nil
+	}
 	switch d.Event {
 	case "alphabet_cache_miss", "alphabet_cache_invalid", "alphabet_cache_read_failed", "alphabet_cache_restore", "alphabet_cache_saved", "alphabet_cache_save_failed", "alphabet_progress", "alphabet_done", "alphabet_measure_done", "alphabet_aborted", "alphabet_error", "alphabet_task", "page_request", "page_response", "page_ready", "page_fetch_failed", "render", "page_cache_saved", "page_cache_restored", "wildcard_cache_checkpoint", "wildcard_cache_complete", "wildcard_cache_restored", "wildcard_memory_start", "wildcard_memory_sample", "wildcard_memory_end", "wildcard_progress", "wildcard_ribbon", "dictionary_picker_open", "dictionary_list_client", "article_transition", "browse_navigation", "navigation_resource", "storage_bootstrap", "work_resize", "ribbon_guard":
 	default:

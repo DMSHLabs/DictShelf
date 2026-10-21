@@ -21,8 +21,11 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/wuweidict/wudict/internal/dict"
+	"github.com/wuweidict/wudict/internal/logx"
 	"github.com/wuweidict/wudict/internal/search"
 	"github.com/wuweidict/wudict/internal/store"
 )
@@ -30,6 +33,8 @@ import (
 const mergedBrowseAnchorStep = 100
 
 var mergedBrowseLocks sync.Map
+
+const mergedBrowseSignatureVersion = "merged-browse-sql-index-v5-configurable"
 
 func lockMergedCache(path string) func() {
 	value, _ := mergedBrowseLocks.LoadOrStore(path, &sync.Mutex{})
@@ -84,6 +89,7 @@ func sqliteNoCaseLess(a, b string) bool {
 func sqliteNoCaseEqual(a, b string) bool { return !sqliteNoCaseLess(a, b) && !sqliteNoCaseLess(b, a) }
 
 func (s *Server) mergedBrowsePage(ctx context.Context, q url.Values, progress func(int, int) error) (browseResp, error) {
+	useFTS, useTrigram := q.Get("mergedfts") == "1", q.Get("mergedtrigram") == "1"
 	ids := strings.Split(q.Get("ids"), ",")
 	if len(ids) == 0 || len(ids) > 256 || q.Get("ids") == "" {
 		return browseResp{}, errors.New("no dictionaries selected for the combined A–Z list")
@@ -99,6 +105,8 @@ func (s *Server) mergedBrowsePage(ctx context.Context, q url.Values, progress fu
 	sort.Strings(ids)
 	sources := make([]mergedBrowseSource, 0, len(ids))
 	var signature strings.Builder
+	signature.WriteString(mergedBrowseSignatureVersion + "\n")
+	fmt.Fprintf(&signature, "fts=%t\ntrigram=%t\n", useFTS, useTrigram)
 	for _, id := range ids {
 		if err := ctx.Err(); err != nil {
 			return browseResp{}, err
@@ -155,18 +163,44 @@ func (s *Server) mergedBrowsePage(ctx context.Context, q url.Values, progress fu
 	defer unlock()
 	s.wildcardPages.beginExternal(path)
 	defer s.wildcardPages.endExternal(path)
-	if err := ensureMergedBrowseCache(ctx, path, signature.String(), sources, progress); err != nil {
+	if err := ensureMergedBrowseCache(ctx, path, signature.String(), sources, useFTS, useTrigram, progress); err != nil {
+		return browseResp{}, err
+	}
+	if err := rememberMergedCacheGroup(path, q.Get("wildgroup"), useFTS, useTrigram); err != nil {
 		return browseResp{}, err
 	}
 	return readMergedBrowsePage(path, q, cacheID)
 }
 
-func ensureMergedBrowseCache(ctx context.Context, path, signature string, sources []mergedBrowseSource, progress func(int, int) error) error {
+// One merged base can serve several groups and masks. Keep every group using it
+// so cache eviction can remove both Browse layouts together.
+func rememberMergedCacheGroup(path, group string, fts, trigram bool) error {
+	if group == "" || len(group) > 256 {
+		return nil
+	}
+	db, err := store.OpenWildcardCacheDB(path)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS merged_cache_group(group_id TEXT PRIMARY KEY)`); err != nil {
+		return err
+	}
+	_, err = db.Exec(`INSERT OR IGNORE INTO merged_cache_group(group_id) VALUES(?)`, wildcardCacheGroupKey(group, fts, trigram))
+	return err
+}
+
+func ensureMergedBrowseCache(ctx context.Context, path, signature string, sources []mergedBrowseSource, useFTS, useTrigram bool, progress func(int, int) error) error {
+	started := time.Now()
+	diagnostic := browseFindDiagnosticEnabled(ctx)
 	if db, err := store.OpenWildcardCacheDB(path); err == nil {
 		var saved string
 		err = db.QueryRow(`SELECT signature FROM merged_meta LIMIT 1`).Scan(&saved)
 		_ = db.Close()
 		if err == nil && saved == signature {
+			if diagnostic {
+				logx.System("headword_merged_browse cache=hit fts=%t trigram=%t elapsed_ms=%d", useFTS, useTrigram, time.Since(started).Milliseconds())
+			}
 			return nil
 		}
 	}
@@ -183,6 +217,18 @@ func ensureMergedBrowseCache(ctx context.Context, path, signature string, source
 		`CREATE TABLE merged_anchor(offset INTEGER PRIMARY KEY,word TEXT NOT NULL COLLATE NOCASE)`,
 	} {
 		if _, err := db.Exec(statement); err != nil {
+			removeWildcardCacheFiles(path)
+			return err
+		}
+	}
+	if useFTS {
+		if _, err := db.Exec(`CREATE VIRTUAL TABLE merged_word_fts USING fts5(word, content='', columnsize=0, tokenize='unicode61 remove_diacritics 2')`); err != nil {
+			removeWildcardCacheFiles(path)
+			return err
+		}
+	}
+	if useTrigram {
+		if _, err := db.Exec(`CREATE VIRTUAL TABLE merged_word_trigram USING fts5(word, content='', columnsize=0, tokenize='trigram')`); err != nil {
 			removeWildcardCacheFiles(path)
 			return err
 		}
@@ -235,12 +281,29 @@ func ensureMergedBrowseCache(ctx context.Context, path, signature string, source
 		return err
 	}
 	defer tx.Rollback()
-	insertWord, err := tx.Prepare(`INSERT OR IGNORE INTO merged_word(word) VALUES(?)`)
+	insertWord, err := tx.Prepare(`INSERT OR IGNORE INTO merged_word(rowid,word) VALUES(?,?)`)
 	if err != nil {
 		removeWildcardCacheFiles(path)
 		return err
 	}
 	defer insertWord.Close()
+	var insertFTS, insertTrigram *sql.Stmt
+	if useFTS {
+		insertFTS, err = tx.Prepare(`INSERT INTO merged_word_fts(rowid,word) VALUES(?,?)`)
+		if err != nil {
+			removeWildcardCacheFiles(path)
+			return err
+		}
+		defer insertFTS.Close()
+	}
+	if useTrigram {
+		insertTrigram, err = tx.Prepare(`INSERT INTO merged_word_trigram(rowid,word) VALUES(?,?)`)
+		if err != nil {
+			removeWildcardCacheFiles(path)
+			return err
+		}
+		defer insertTrigram.Close()
+	}
 	insertAnchor, err := tx.Prepare(`INSERT INTO merged_anchor(offset,word) VALUES(?,?)`)
 	if err != nil {
 		removeWildcardCacheFiles(path)
@@ -257,9 +320,22 @@ func ensureMergedBrowseCache(ctx context.Context, path, signature string, source
 		}
 		head := heap.Pop(&heads).(mergedBrowseHead)
 		if unique == 0 || !sqliteNoCaseEqual(last, head.word) {
-			if _, err := insertWord.Exec(head.word); err != nil {
+			rowID := unique + 1
+			if _, err := insertWord.Exec(rowID, head.word); err != nil {
 				removeWildcardCacheFiles(path)
 				return err
+			}
+			if insertTrigram != nil {
+				if _, err := insertTrigram.Exec(rowID, dict.Fold(head.word)); err != nil {
+					removeWildcardCacheFiles(path)
+					return err
+				}
+			}
+			if insertFTS != nil {
+				if _, err := insertFTS.Exec(rowID, head.word); err != nil {
+					removeWildcardCacheFiles(path)
+					return err
+				}
 			}
 			if unique%mergedBrowseAnchorStep == 0 {
 				if _, err := insertAnchor.Exec(unique, head.word); err != nil {
@@ -313,6 +389,9 @@ func ensureMergedBrowseCache(ctx context.Context, path, signature string, source
 		return err
 	}
 	_ = os.Chtimes(path, time.Now(), time.Now())
+	if diagnostic {
+		logx.System("headword_merged_browse cache=built fts=%t trigram=%t source_words=%d unique_words=%d elapsed_ms=%d", useFTS, useTrigram, scanned, unique, time.Since(started).Milliseconds())
+	}
 	return nil
 }
 
@@ -405,7 +484,17 @@ func readMergedBrowsePage(path string, q url.Values, cacheID string) (browseResp
 }
 
 func mergedFindSignature(baseID, query, within string, mask, withinMask bool) string {
-	return strings.Join([]string{baseID, query, within, strconv.FormatBool(mask), strconv.FormatBool(withinMask)}, "\x00")
+	if mask && search.IsSimpleMask(query) {
+		query = search.NormalizeSimpleMask(query)
+	}
+	if withinMask && search.IsSimpleMask(within) {
+		within = search.NormalizeSimpleMask(within)
+	}
+	parts := []string{baseID, query, within, strconv.FormatBool(mask), strconv.FormatBool(withinMask)}
+	if within != "" {
+		parts = append(parts, "base-position-v3")
+	}
+	return strings.Join(parts, "\x00")
 }
 
 func mergedFindCachePath(dir, signature string) string {
@@ -416,6 +505,12 @@ func mergedFindCachePath(dir, signature string) string {
 func mergedFindMatchers(query, within string, mask, withinMask bool) (func(string) bool, error) {
 	query = strings.TrimSpace(query)
 	within = strings.TrimSpace(within)
+	if mask && search.IsSimpleMask(query) {
+		query = search.NormalizeSimpleMask(query)
+	}
+	if withinMask && search.IsSimpleMask(within) {
+		within = search.NormalizeSimpleMask(within)
+	}
 	if len(query) > 256 || len(within) > 256 {
 		return nil, errors.New("search text is too long")
 	}
@@ -444,7 +539,101 @@ func mergedFindMatchers(query, within string, mask, withinMask bool) (func(strin
 	return func(word string) bool { return base(word) && (filter == nil || filter(word)) }, nil
 }
 
-func ensureMergedFindCache(ctx context.Context, basePath, path, signature string, query, within string, mask, withinMask bool, progress func(int, int, int) error) error {
+type mergedFindCandidate struct {
+	table string
+	match string
+}
+
+func mergedHeadwordFTSMatch(input string) string {
+	var tokens []string
+	var token strings.Builder
+	flush := func() {
+		if token.Len() == 0 {
+			return
+		}
+		value := strings.ReplaceAll(token.String(), `"`, `""`)
+		tokens = append(tokens, `word:"`+value+`"*`)
+		token.Reset()
+	}
+	for _, r := range input {
+		if unicode.IsLetter(r) || unicode.IsNumber(r) || unicode.IsMark(r) {
+			token.WriteRune(r)
+		} else {
+			flush()
+		}
+	}
+	flush()
+	return strings.Join(tokens, " ")
+}
+
+func mergedMaskTrigramLiteral(pattern string) string {
+	best := ""
+	var run strings.Builder
+	flush := func() {
+		folded := dict.Fold(run.String())
+		run.Reset()
+		if utf8.RuneCountInString(folded) >= 3 && utf8.RuneCountInString(folded) > utf8.RuneCountInString(best) {
+			best = folded
+		}
+	}
+	for _, r := range pattern {
+		if r == '*' || r == '?' {
+			flush()
+			continue
+		}
+		folded := dict.Fold(string(r))
+		stable := true
+		for f := unicode.SimpleFold(r); f != r; f = unicode.SimpleFold(f) {
+			if dict.Fold(string(f)) != folded {
+				stable = false
+				break
+			}
+		}
+		if !stable {
+			flush()
+			continue
+		}
+		run.WriteRune(r)
+	}
+	flush()
+	return best
+}
+
+func mergedFindCandidates(query, within string, mask, withinMask, hasFTS, hasTrigram bool) []mergedFindCandidate {
+	var out []mergedFindCandidate
+	addText := func(value string) {
+		if strings.ContainsFunc(value, func(r rune) bool { return unicode.IsLetter(r) || unicode.IsNumber(r) }) {
+			if hasFTS {
+				if match := mergedHeadwordFTSMatch(value); match != "" {
+					out = append(out, mergedFindCandidate{table: "merged_word_fts", match: match})
+				}
+			}
+		}
+	}
+	addMask := func(value string) {
+		if literal := mergedMaskTrigramLiteral(value); hasTrigram && literal != "" {
+			phrase := `"` + strings.ReplaceAll(literal, `"`, `""`) + `"`
+			out = append(out, mergedFindCandidate{table: "merged_word_trigram", match: phrase})
+		}
+	}
+	if mask {
+		addMask(query)
+	} else {
+		addText(query)
+	}
+	if within != "" {
+		if withinMask {
+			addMask(within)
+		} else {
+			addText(within)
+		}
+	}
+	return out
+}
+
+func ensureMergedFindCache(ctx context.Context, basePath, baseID, path, signature string, query, within string, mask, withinMask bool, progress func(int, int, int) error) error {
+	traceStarted := time.Now()
+	diagnostic := browseFindDiagnosticEnabled(ctx)
 	if db, err := store.OpenWildcardCacheDB(path); err == nil {
 		var saved string
 		err = db.QueryRow(`SELECT signature FROM merged_find_meta LIMIT 1`).Scan(&saved)
@@ -454,6 +643,9 @@ func ensureMergedFindCache(ctx context.Context, basePath, path, signature string
 		}
 		_ = db.Close()
 		if err == nil && saved == signature {
+			if diagnostic {
+				logx.System("headword_find_merged cache=hit total_ms=%d", time.Since(traceStarted).Milliseconds())
+			}
 			_ = os.Chtimes(path, time.Now(), time.Now())
 			return nil
 		}
@@ -470,6 +662,26 @@ func ensureMergedFindCache(ctx context.Context, basePath, path, signature string
 	if err != nil {
 		return err
 	}
+	var baseFindDB *sql.DB
+	baseFindTotal := 0
+	if within != "" {
+		baseSignature := mergedFindSignature(baseID, query, "", mask, false)
+		baseFindPath := mergedFindCachePath(filepath.Dir(path), baseSignature)
+		unlockBase := lockMergedCache(baseFindPath)
+		if err := ensureMergedFindCache(ctx, basePath, baseID, baseFindPath, baseSignature, query, "", mask, false, nil); err != nil {
+			unlockBase()
+			return err
+		}
+		baseFindDB, err = store.OpenWildcardCacheDB(baseFindPath)
+		unlockBase()
+		if err != nil {
+			return err
+		}
+		defer baseFindDB.Close()
+		if err := baseFindDB.QueryRowContext(ctx, `SELECT total FROM merged_find_meta LIMIT 1`).Scan(&baseFindTotal); err != nil {
+			return err
+		}
+	}
 	baseDB, err := store.OpenWildcardCacheDB(basePath)
 	if err != nil {
 		return err
@@ -479,11 +691,57 @@ func ensureMergedFindCache(ctx context.Context, basePath, path, signature string
 	if err := baseDB.QueryRow(`SELECT total FROM merged_meta LIMIT 1`).Scan(&scanTotal); err != nil {
 		return err
 	}
+	var hasFTS, hasTrigram bool
+	if err := baseDB.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='merged_word_fts')`).Scan(&hasFTS); err != nil {
+		return err
+	}
+	if err := baseDB.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='merged_word_trigram')`).Scan(&hasTrigram); err != nil {
+		return err
+	}
+	candidates := mergedFindCandidates(query, within, mask, withinMask, hasFTS, hasTrigram)
+	candidateTable, candidateMatch, candidateTotal := "", "", scanTotal
+	if baseFindDB != nil {
+		candidateTable = "merged_find_base"
+		candidateTotal = baseFindTotal
+	}
+	for _, candidate := range candidates {
+		var count int
+		sqlQuery := `SELECT COUNT(*) FROM ` + candidate.table + ` WHERE ` + candidate.table + ` MATCH ?`
+		if err := baseDB.QueryRowContext(ctx, sqlQuery, candidate.match).Scan(&count); err != nil {
+			return err
+		}
+		if candidateTable == "" || count < candidateTotal {
+			candidateTable, candidateMatch, candidateTotal = candidate.table, candidate.match, count
+		}
+	}
+	indexName := candidateTable
+	if indexName == "" {
+		indexName = "full_merged_scan"
+	}
+	if diagnostic {
+		logx.System("headword_find_merged cache=miss index=%s candidates=%d base_total=%d candidate_ms=%d", indexName, candidateTotal, scanTotal, time.Since(traceStarted).Milliseconds())
+	}
+	var candidateRows *sql.Rows
+	if candidateTable == "merged_find_base" {
+		candidateRows, err = baseFindDB.QueryContext(ctx, `SELECT ordinal,source_position,word FROM merged_find_word ORDER BY ordinal`)
+	} else if candidateTable == "" {
+		candidateRows, err = baseDB.QueryContext(ctx, `SELECT -1,rowid-1,word FROM merged_word ORDER BY rowid`)
+	} else {
+		sqlQuery := `SELECT -1,m.rowid-1,m.word FROM ` + candidateTable + ` f
+			JOIN merged_word m ON m.rowid=f.rowid WHERE ` + candidateTable + ` MATCH ? ORDER BY m.rowid`
+		candidateRows, err = baseDB.QueryContext(ctx, sqlQuery, candidateMatch)
+	}
+	if err != nil {
+		return err
+	}
+	defer candidateRows.Close()
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		_ = candidateRows.Close()
 		return err
 	}
 	db, err := store.OpenWildcardCacheDB(path)
 	if err != nil {
+		_ = candidateRows.Close()
 		return err
 	}
 	defer db.Close()
@@ -491,11 +749,14 @@ func ensureMergedFindCache(ctx context.Context, basePath, path, signature string
 		CREATE TABLE merged_find_meta(signature TEXT PRIMARY KEY,total INTEGER NOT NULL,alphabet_json TEXT NOT NULL);
 		CREATE TABLE merged_find_word(ordinal INTEGER PRIMARY KEY,word TEXT NOT NULL COLLATE NOCASE UNIQUE,source_position INTEGER NOT NULL,base_position INTEGER NOT NULL);
 		CREATE INDEX merged_find_source_position ON merged_find_word(source_position);
+		CREATE INDEX merged_find_base_position ON merged_find_word(base_position);
 		CREATE TABLE merged_find_anchor(ordinal INTEGER PRIMARY KEY,word TEXT NOT NULL,source_position INTEGER NOT NULL)`); err != nil {
+		_ = candidateRows.Close()
 		return err
 	}
 	tx, err := db.Begin()
 	if err != nil {
+		_ = candidateRows.Close()
 		return err
 	}
 	insertWord, err := tx.Prepare(`INSERT INTO merged_find_word(ordinal,word,source_position,base_position) VALUES(?,?,?,?)`)
@@ -509,28 +770,23 @@ func ensureMergedFindCache(ctx context.Context, basePath, path, signature string
 		_ = tx.Rollback()
 		return err
 	}
-	rows, err := baseDB.Query(`SELECT rowid-1,word FROM merged_word ORDER BY word COLLATE NOCASE`)
-	if err != nil {
-		_ = insertWord.Close()
-		_ = insertAnchor.Close()
-		_ = tx.Rollback()
-		return err
-	}
 	var sections dict.MaskSections
 	ordinal, scanned, basePosition := 0, 0, 0
 	lastProgress := time.Now()
-	for rows.Next() {
+	scanStarted := time.Now()
+	nextDiagnosticPercent := 10
+	for candidateRows.Next() {
 		if err := ctx.Err(); err != nil {
-			_ = rows.Close()
+			_ = candidateRows.Close()
 			_ = insertWord.Close()
 			_ = insertAnchor.Close()
 			_ = tx.Rollback()
 			return err
 		}
-		var sourcePosition int
+		var sourcePosition, candidateBasePosition int
 		var word string
-		if err := rows.Scan(&sourcePosition, &word); err != nil {
-			_ = rows.Close()
+		if err := candidateRows.Scan(&candidateBasePosition, &sourcePosition, &word); err != nil {
+			_ = candidateRows.Close()
 			_ = insertWord.Close()
 			_ = insertAnchor.Close()
 			_ = tx.Rollback()
@@ -539,8 +795,19 @@ func ensureMergedFindCache(ctx context.Context, basePath, path, signature string
 		scanned++
 		if baseMatcher(word) {
 			if matcher(word) {
+				if candidateBasePosition >= 0 {
+					basePosition = candidateBasePosition
+				} else if baseFindDB != nil {
+					if err := baseFindDB.QueryRowContext(ctx, `SELECT ordinal FROM merged_find_word WHERE source_position=?`, sourcePosition).Scan(&basePosition); err != nil {
+						_ = candidateRows.Close()
+						_ = insertWord.Close()
+						_ = insertAnchor.Close()
+						_ = tx.Rollback()
+						return err
+					}
+				}
 				if _, err := insertWord.Exec(ordinal, word, sourcePosition, basePosition); err != nil {
-					_ = rows.Close()
+					_ = candidateRows.Close()
 					_ = insertWord.Close()
 					_ = insertAnchor.Close()
 					_ = tx.Rollback()
@@ -549,7 +816,7 @@ func ensureMergedFindCache(ctx context.Context, basePath, path, signature string
 				sections.Add(word)
 				if ordinal%mergedBrowseAnchorStep == 0 {
 					if _, err := insertAnchor.Exec(ordinal, word, sourcePosition); err != nil {
-						_ = rows.Close()
+						_ = candidateRows.Close()
 						_ = insertWord.Close()
 						_ = insertAnchor.Close()
 						_ = tx.Rollback()
@@ -558,11 +825,13 @@ func ensureMergedFindCache(ctx context.Context, basePath, path, signature string
 				}
 				ordinal++
 			}
-			basePosition++
+			if baseFindDB == nil {
+				basePosition++
+			}
 		}
 		if progress != nil && (scanned%10000 == 0 || time.Since(lastProgress) >= 250*time.Millisecond) {
-			if err := progress(scanned, scanTotal, ordinal); err != nil {
-				_ = rows.Close()
+			if err := progress(scanned, candidateTotal, ordinal); err != nil {
+				_ = candidateRows.Close()
 				_ = insertWord.Close()
 				_ = insertAnchor.Close()
 				_ = tx.Rollback()
@@ -570,15 +839,26 @@ func ensureMergedFindCache(ctx context.Context, basePath, path, signature string
 			}
 			lastProgress = time.Now()
 		}
+		if diagnostic && candidateTotal > 0 && scanned*100/candidateTotal >= nextDiagnosticPercent {
+			elapsed := time.Since(scanStarted)
+			rate := int64(0)
+			if elapsed > 0 {
+				rate = int64(scanned) * int64(time.Second) / int64(elapsed)
+			}
+			logx.System("headword_find_merged stage=scan index=%s percent=%d scanned=%d candidates=%d found=%d elapsed_ms=%d rows_per_sec=%d",
+				indexName, nextDiagnosticPercent, scanned, candidateTotal, ordinal, elapsed.Milliseconds(), rate)
+			nextDiagnosticPercent += 10
+		}
 	}
-	if err := rows.Err(); err != nil {
-		_ = rows.Close()
+	scanFinished := time.Now()
+	if err := candidateRows.Err(); err != nil {
+		_ = candidateRows.Close()
 		_ = insertWord.Close()
 		_ = insertAnchor.Close()
 		_ = tx.Rollback()
 		return err
 	}
-	if err := rows.Close(); err != nil {
+	if err := candidateRows.Close(); err != nil {
 		_ = insertWord.Close()
 		_ = insertAnchor.Close()
 		_ = tx.Rollback()
@@ -602,19 +882,26 @@ func ensureMergedFindCache(ctx context.Context, basePath, path, signature string
 		_ = tx.Rollback()
 		return err
 	}
+	commitStarted := time.Now()
 	if err := tx.Commit(); err != nil {
 		return err
 	}
+	commitFinished := time.Now()
 	if progress != nil {
-		if err := progress(scanned, scanTotal, ordinal); err != nil {
+		if err := progress(scanned, candidateTotal, ordinal); err != nil {
 			return err
 		}
+	}
+	if diagnostic {
+		logx.System("headword_find_merged cache=built index=%s candidates_scanned=%d found=%d scan_ms=%d finalize_ms=%d commit_ms=%d total_ms=%d",
+			indexName, scanned, ordinal, scanFinished.Sub(scanStarted).Milliseconds(), commitFinished.Sub(scanFinished).Milliseconds(),
+			commitFinished.Sub(commitStarted).Milliseconds(), time.Since(traceStarted).Milliseconds())
 	}
 	return nil
 }
 
 func (s *Server) mergedBrowseFindPage(ctx context.Context, q url.Values) (browseFindResp, error) {
-	base, err := s.mergedBrowsePage(ctx, q, nil)
+	base, err := s.mergedBrowseFindBase(ctx, q, nil)
 	if err != nil {
 		return browseFindResp{}, err
 	}
@@ -627,7 +914,7 @@ func (s *Server) mergedBrowseFindPage(ctx context.Context, q url.Values) (browse
 	defer unlock()
 	s.wildcardPages.beginExternal(path)
 	defer s.wildcardPages.endExternal(path)
-	if err := ensureMergedFindCache(ctx, filepath.Join(s.wildcardCacheDir(), "wildcard_merged_"+base.mergedCacheID+".db"), path, signature, query, within, mask, withinMask, nil); err != nil {
+	if err := ensureMergedFindCache(ctx, filepath.Join(s.wildcardCacheDir(), "wildcard_merged_"+base.mergedCacheID+".db"), base.mergedCacheID, path, signature, query, within, mask, withinMask, nil); err != nil {
 		return browseFindResp{}, err
 	}
 	db, err := store.OpenWildcardCacheDB(path)
@@ -657,13 +944,8 @@ func (s *Server) mergedBrowseFindPage(ctx context.Context, q url.Values) (browse
 		if err != nil || direction < -1 || direction > 1 {
 			return browseFindResp{}, errors.New("invalid merged match direction")
 		}
-		condition, order := "source_position>?", "ASC"
-		if direction < 0 {
-			condition, order = "source_position<?", "DESC"
-		} else if direction == 0 {
-			condition, order = "source_position=?", "ASC"
-		}
-		if err := db.QueryRow(`SELECT ordinal FROM merged_find_word WHERE `+condition+` ORDER BY source_position `+order+` LIMIT 1`, position).Scan(&position); err != nil {
+		position, err = mergedFindOrdinalAtBasePosition(db, position, direction)
+		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				return browseFindResp{}, nil
 			}
@@ -701,9 +983,22 @@ func (s *Server) mergedBrowseFindPage(ctx context.Context, q url.Values) (browse
 	return browseFindResp{Words: words, Positions: positions, BasePositions: basePositions, Alphabet: alphabet, Total: total, Page: page, Pages: pages, Size: browsePageSize}, nil
 }
 
+func mergedFindOrdinalAtBasePosition(db *sql.DB, position, direction int) (int, error) {
+	condition, order := "base_position>?", "ASC"
+	if direction < 0 {
+		condition, order = "base_position<?", "DESC"
+	} else if direction == 0 {
+		condition, order = "base_position=?", "ASC"
+	}
+	var ordinal int
+	err := db.QueryRow(`SELECT ordinal FROM merged_find_word WHERE `+condition+` ORDER BY base_position `+order+` LIMIT 1`, position).Scan(&ordinal)
+	return ordinal, err
+}
+
 func (s *Server) streamMergedBrowseFind(ctx context.Context, q url.Values, send func(browseFindStreamEvent) error) error {
-	base, err := s.mergedBrowsePage(ctx, q, func(done, total int) error {
-		return send(browseFindStreamEvent{Type: "progress", Scanned: done, ScanTotal: total})
+	const progressScale = 10_000
+	base, err := s.mergedBrowseFindBase(ctx, q, func(done, total int) error {
+		return send(browseFindStreamEvent{Type: "progress", Scanned: scaleMergedFindProgress(done, total, 5_000), ScanTotal: progressScale})
 	})
 	if err != nil {
 		return err
@@ -718,9 +1013,9 @@ func (s *Server) streamMergedBrowseFind(ctx context.Context, q url.Values, send 
 	s.wildcardPages.beginExternal(path)
 	defer s.wildcardPages.endExternal(path)
 	progress := func(scanned, total, found int) error {
-		return send(browseFindStreamEvent{Type: "progress", Scanned: scanned, ScanTotal: total, Total: found})
+		return send(browseFindStreamEvent{Type: "progress", Scanned: 5_000 + scaleMergedFindProgress(scanned, total, 4_900), ScanTotal: progressScale, Total: found})
 	}
-	if err := ensureMergedFindCache(ctx, filepath.Join(s.wildcardCacheDir(), "wildcard_merged_"+base.mergedCacheID+".db"), path, signature, query, within, mask, withinMask, progress); err != nil {
+	if err := ensureMergedFindCache(ctx, filepath.Join(s.wildcardCacheDir(), "wildcard_merged_"+base.mergedCacheID+".db"), base.mergedCacheID, path, signature, query, within, mask, withinMask, progress); err != nil {
 		return err
 	}
 	db, err := store.OpenWildcardCacheDB(path)
@@ -737,5 +1032,76 @@ func (s *Server) streamMergedBrowseFind(ctx context.Context, q url.Values, send 
 	if err := json.Unmarshal([]byte(alphabetJSON), &alphabet); err != nil {
 		return err
 	}
-	return send(browseFindStreamEvent{Type: "done", Total: total, Scanned: base.Total, ScanTotal: base.Total, Size: browsePageSize, Alphabet: alphabet, DiskCache: true, Done: true})
+	return send(browseFindStreamEvent{Type: "done", Total: total, Scanned: progressScale, ScanTotal: progressScale,
+		Size: browsePageSize, Alphabet: alphabet, DiskCache: true, MergedCacheID: base.mergedCacheID, Done: true})
+}
+
+// scaleMergedFindProgress keeps the combined-list build and mask-filter phases
+// on one progress scale. The final completion event is the only one that reports 100%.
+func scaleMergedFindProgress(done, total, limit int) int {
+	if total <= 0 || done <= 0 {
+		return 0
+	}
+	if done >= total {
+		return limit
+	}
+	return int(int64(done) * int64(limit) / int64(total))
+}
+
+// mergedBrowseFindBase lets the upper search build the combined database, but
+// requires every lower search to name and read the database already produced
+// by that upper search. It never opens a dictionary on the lower-search path.
+func (s *Server) mergedBrowseFindBase(ctx context.Context, q url.Values, progress func(int, int) error) (browseResp, error) {
+	if strings.TrimSpace(q.Get("within")) == "" {
+		return s.mergedBrowsePage(ctx, q, progress)
+	}
+	cacheID := q.Get("mergedcache")
+	if !wildcardCacheIDPattern.MatchString(cacheID) {
+		return browseResp{}, errors.New("combined Wildcards lower search requires a prepared SQL database")
+	}
+	path := filepath.Join(s.wildcardCacheDir(), "wildcard_merged_"+cacheID+".db")
+	if _, err := os.Stat(path); err != nil {
+		return browseResp{}, errors.New("combined Wildcards SQL database is not available")
+	}
+	unlock := lockMergedCache(path)
+	defer unlock()
+	s.wildcardPages.beginExternal(path)
+	defer s.wildcardPages.endExternal(path)
+	db, err := store.OpenWildcardCacheDB(path)
+	if err != nil {
+		return browseResp{}, errors.New("combined Wildcards SQL database is not available")
+	}
+	var signature string
+	err = db.QueryRowContext(ctx, `SELECT signature FROM merged_meta LIMIT 1`).Scan(&signature)
+	_ = db.Close()
+	if err != nil || !mergedSignatureMatchesIDs(signature, q.Get("ids")) {
+		return browseResp{}, errors.New("combined Wildcards SQL database does not match the selected dictionaries")
+	}
+	return readMergedBrowsePage(path, q, cacheID)
+}
+
+func mergedSignatureMatchesIDs(signature, rawIDs string) bool {
+	ids := strings.Split(rawIDs, ",")
+	if rawIDs == "" || len(ids) == 0 || len(ids) > 256 {
+		return false
+	}
+	sort.Strings(ids)
+	lines := strings.Split(signature, "\n")
+	if len(lines) != len(ids)+4 || lines[0] != mergedBrowseSignatureVersion || lines[len(lines)-1] != "" {
+		return false
+	}
+	if (lines[1] != "fts=true" && lines[1] != "fts=false") ||
+		(lines[2] != "trigram=true" && lines[2] != "trigram=false") {
+		return false
+	}
+	for i, id := range ids {
+		if id == "" || (i > 0 && ids[i-1] == id) {
+			return false
+		}
+		parts := strings.Split(lines[i+3], "\x00")
+		if len(parts) != 3 || parts[0] != id {
+			return false
+		}
+	}
+	return true
 }

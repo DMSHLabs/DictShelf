@@ -120,6 +120,38 @@ func CompileMask(pattern string) (*regexp.Regexp, error) {
 	return regexp.Compile(b.String())
 }
 
+// NormalizeSimpleMask reduces masks made only of '*' and '?' to a minimum
+// headword length. Repeated stars carry no additional meaning.
+func NormalizeSimpleMask(pattern string) string {
+	questions := 0
+	for _, r := range pattern {
+		switch r {
+		case '*':
+		case '?':
+			questions++
+		default:
+			return pattern
+		}
+	}
+	if questions == 0 {
+		return "*"
+	}
+	return "*" + strings.Repeat("?", questions) + "*"
+}
+
+// IsSimpleMask reports whether a mask contains only '*' and '?'.
+func IsSimpleMask(pattern string) bool {
+	if pattern == "" {
+		return false
+	}
+	for _, r := range pattern {
+		if r != '*' && r != '?' {
+			return false
+		}
+	}
+	return true
+}
+
 // MatchMask reports whether a headword matches the mask.
 func MatchMask(pattern, word string) (bool, error) {
 	re, err := CompileMask(pattern)

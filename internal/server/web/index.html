@@ -308,9 +308,9 @@ window.wudictFontScale=(function(){
           </svg>
         </button>
         <span class="mask-total"><span>{{T:search.wildcardsTotalLabel}}</span><span id="maskCount" role="status" aria-label="{{T:search.wildcardsTotal}}"></span></span>
-        <button type="button" id="maskPrev" aria-label="{{T:browse.previousTitle}}">‹</button>
         <button type="button" id="maskPage" aria-label="{{T:browse.gotoBlock}}" title="{{T:browse.gotoBlock}}">1/1</button>
-        <button type="button" id="maskNext" aria-label="{{T:browse.nextTitle}}">›</button>
+        <button type="button" id="maskNext" aria-label="{{T:browse.nextTitle}}"><span class="mask-pager-label">{{T:browse.nextPage}}</span><span class="mask-pager-icon" aria-hidden="true">›</span></button>
+        <button type="button" id="maskPrev" aria-label="{{T:browse.previousTitle}}"><span class="mask-pager-label">{{T:browse.previousPage}}</span><span class="mask-pager-icon" aria-hidden="true">‹</span></button>
       </span>
     </header>
     <div class="mask-strip-wrap">
@@ -1083,6 +1083,11 @@ window.wudictFontScale=(function(){
     <div class="sys-row sys-result-cache-limit"><input type="text" id="sysResultCacheValue" inputmode="numeric" aria-label="{{T:system.resultCacheLimit}}" disabled><span id="sysResultCacheUnit">{{T:system.gb}}</span></div>
     <div class="group-toolbar sys-action-spaced"><button type="button" class="btn" id="sysClearCache">{{T:system.clearCache}}</button></div>
 
+    <h3 class="sys-head">{{T:system.search}}</h3>
+    <p class="sys-hint">{{T:system.mergedSearchHint}}</p>
+    <label class="sys-row"><input type="checkbox" id="sysMergedFTS"><span class="sys-label">{{T:system.mergedFTS}}</span></label>
+    <label class="sys-row"><input type="checkbox" id="sysMergedTrigram"><span class="sys-label">{{T:system.mergedTrigram}}</span></label>
+
     <h3 class="sys-head">{{T:system.logFile}}</h3>
     <p class="sys-hint">{{T:system.logHint}}</p>
     <label class="sys-row"><input type="checkbox" id="sysLogEnabled"><span class="sys-label">{{T:system.logEnable}}</span></label>
@@ -1740,11 +1745,12 @@ function groupIds(sel){
 function updateMergedAZ(){const selection=$("dict").value||"all";const ids=selection==="all"?activeUserGroupIds():selection.startsWith("g:")?groupIds(selection):[selection];const entering=!maskMergeAZ,label=tx(entering?"search.mergeBooksToOne":"search.mergeBooksToMany");$("mergedAZ").disabled=!dictsSettled||ids.length===0;$("mergedAZ").title=label;$("mergedAZ").setAttribute("aria-label",label);$("mergedAZ").setAttribute("aria-pressed",String(!!maskMergeAZ))}
 $("mergedAZ").addEventListener("click",()=>{
   if(!dictsSettled)return;
+  maskViewTraceID++;maskViewTraceStarted=performance.now();maskViewTrace("switch_click");
   maskMergeAZ=!maskMergeAZ;
   if($("mode").value!=="wildcards")setSearchMode("wildcards");
   updateMergedAZ();
   const query=$("q").value.trim();
-  if(query){maskRun(query);const params=new URLSearchParams({q:query,mode:"wildcards",dict:$("dict").value||"all"});if(maskMergeAZ)params.set("maskmerge","1");history.replaceState(null,"","?"+params.toString())}
+  if(query){maskRun(query,"switch");const params=new URLSearchParams({q:query,mode:"wildcards",dict:$("dict").value||"all"});if(maskMergeAZ)params.set("maskmerge","1");history.replaceState(null,"","?"+params.toString())}
 });
 /* The label a group is shown under, for a message that has to name it. */
 function groupLabel(sel){
@@ -3211,7 +3217,14 @@ $("dict").onchange=e=>{const v=e.target.value;localStorage.setItem("wudict_dict"
 /* Mode re-runs the search on change, symmetric with #dict: the narrow bar has
    no submit button, so a mode that waited for the next submit would appear to
    do nothing at all. */
-$("mode").onchange=()=>{setSearchMode($("mode").value);syncChips();if($("mode").value==="wildcards"){window.wuSearchHistory.hide();maskInvalidate();return}if($("q").value.trim())doSearch()};
+$("mode").onchange=()=>{
+  setSearchMode($("mode").value);syncChips();
+  if($("mode").value==="wildcards"){
+    maskMergeAZ=false;updateMergedAZ();
+    window.wuSearchHistory.hide();maskInvalidate();return;
+  }
+  if($("q").value.trim())doSearch();
+};
 syncChips(); // the markup ships empty chips; JS stays the single authority
 
 /* provenance: the collapsed line says where the dictionary came from (its
@@ -3964,6 +3977,8 @@ function sysPaint(state){
   $("sysLogBase").disabled=!state.logEnabled;
   $("sysLogWeb").disabled=!state.logEnabled;
   $("sysBrowseDiagnostics").checked=browseDiagnosticsEnabled();
+  $("sysMergedFTS").checked=wildcardSearchIndexEnabled("fts");
+  $("sysMergedTrigram").checked=wildcardSearchIndexEnabled("trigram");
   $("sysBrowseArticleDiagnostics").checked=browseArticleDiagnosticsEnabled();
   $("sysDictionaryListDiagnostics").checked=dictionaryListDiagnosticsEnabled();
   $("sysDictionaryCacheDiagnostics").checked=dictionaryCacheDiagnosticsEnabled();
@@ -4255,6 +4270,10 @@ async function showDesktopSysSettings(){
     resultCacheHint:$("sysResultCacheHint"),
     resultCacheLimited:$("sysResultCacheLimited").parentElement,
     resultCacheValue:$("sysResultCacheValue").parentElement,
+    searchHeading:$("sysMergedFTS").closest(".sys-row").previousElementSibling.previousElementSibling,
+    searchHint:$("sysMergedFTS").closest(".sys-row").previousElementSibling,
+    searchFTS:$("sysMergedFTS").parentElement,
+    searchTrigram:$("sysMergedTrigram").parentElement,
     logEnabled:$("sysLogEnabled").parentElement,
     logBase:$("sysLogBase").parentElement,
     logWeb:$("sysLogWeb").parentElement,
@@ -4287,6 +4306,10 @@ async function showDesktopSysSettings(){
     catch(error){sysNote(tx("system.cacheFailed")+" "+window.wudictI18n.errorText(error.message));clearCache.disabled=false}
   };
   body.append(clearCache);
+  body.append(desktopSystemNodes.searchHeading,desktopSystemNodes.searchHint,
+    desktopSystemNodes.searchFTS,desktopSystemNodes.searchTrigram);
+  $("sysMergedFTS").checked=wildcardSearchIndexEnabled("fts");
+  $("sysMergedTrigram").checked=wildcardSearchIndexEnabled("trigram");
   const logHeading=document.createElement("h3");logHeading.className="sys-head";
   logHeading.textContent=tx("system.logFile");body.append(logHeading);
   const logHint=document.createElement("p");logHint.className="sys-hint";
@@ -4378,6 +4401,18 @@ $("sysInfo").addEventListener("change",e=>{
 $("sysKey").addEventListener("change",e=>sysSwitch("key",e.target.checked));
 function browseDiagnosticsEnabled(){try{return localStorage.getItem("wudict_browse_diagnostics")==="1"}catch(_){return false}}
 function setBrowseDiagnostics(on){try{if(on)localStorage.setItem("wudict_browse_diagnostics","1");else localStorage.removeItem("wudict_browse_diagnostics")}catch(_){}}
+function wildcardSearchIndexEnabled(kind){try{return localStorage.getItem("wudict_merged_search_"+kind)==="1"}catch(_){return false}}
+function setWildcardSearchIndexEnabled(kind,on){try{if(on)localStorage.setItem("wudict_merged_search_"+kind,"1");else localStorage.removeItem("wudict_merged_search_"+kind)}catch(_){}}
+function wildcardSearchIndexParams(params,row){
+	if(!row)return;
+	if(row.merged){
+	  params.set("mergedfts",row.mergedFTS?"1":"0");
+	  params.set("mergedtrigram",row.mergedTrigram?"1":"0");
+	}else{
+	  params.set("wildfts",row.mergedFTS?"1":"0");
+	  params.set("wildtrigram",row.mergedTrigram?"1":"0");
+	}
+}
 function browseArticleDiagnosticsEnabled(){try{return localStorage.getItem("wudict_browse_article_diagnostics")==="1"}catch(_){return false}}
 function setBrowseArticleDiagnostics(on){try{if(on)localStorage.setItem("wudict_browse_article_diagnostics","1");else localStorage.removeItem("wudict_browse_article_diagnostics")}catch(_){}}
 let browseArticleDiagContext=(()=>{
@@ -4484,6 +4519,8 @@ $("sysLogEnabled").addEventListener("change",sysLogChange);
 $("sysLogBase").addEventListener("change",sysLogChange);
 $("sysLogWeb").addEventListener("change",sysLogChange);
 $("sysBrowseDiagnostics").addEventListener("change",e=>setBrowseDiagnostics(e.target.checked));
+$("sysMergedFTS").addEventListener("change",e=>setWildcardSearchIndexEnabled("fts",e.target.checked));
+$("sysMergedTrigram").addEventListener("change",e=>setWildcardSearchIndexEnabled("trigram",e.target.checked));
 $("sysBrowseArticleDiagnostics").addEventListener("change",e=>setBrowseArticleDiagnostics(e.target.checked));
 $("sysDictionaryListDiagnostics").addEventListener("change",e=>setDictionaryListDiagnostics(e.target.checked));
 $("sysDictionaryCacheDiagnostics").addEventListener("change",e=>setDictionaryCacheDiagnostics(e.target.checked));
@@ -5716,9 +5753,35 @@ function clearStatusForResults(){
    go the instant the results are there, because it never arrived hard enough
    to owe the user a departure. */
 const BUSY_DELAY=236;
+var maskViewTraceID=0,maskViewTraceStarted=0,maskViewRunID=0;
+function maskViewTrace(stage,source="",row=null,detail=""){
+  if(!browseDiagnosticsEnabled())return;
+  const notice=$("serverWorkNotice");
+  sendBrowseDiagnostic({event:"wildcard_view",switchId:maskViewTraceID,runId:maskViewRunID,stage,resource:source,dict:row?.id||"",detail,
+    query:maskPattern,group:maskSelection,fts:row?!!row.mergedFTS:wildcardSearchIndexEnabled("fts"),trigram:row?!!row.mergedTrigram:wildcardSearchIndexEnabled("trigram"),
+    elapsedMs:maskViewTraceStarted?Math.min(86400000,Math.round(performance.now()-maskViewTraceStarted)):0,
+    mergedView:!!maskMergeAZ,spinnerVisible:$("qbox").classList.contains("busy"),noticeVisible:!!notice&&!notice.hidden,
+    noticeText:notice&&!notice.hidden?(notice.textContent||"").replace(/\s+/g," ").slice(0,256):"",
+    busyWanted,active:window.wudictTasks?.activeCount?.()||0,completed:maskBaseRows.filter(row=>row.state==="ready"&&!row.partial).length,dictionaries:maskBaseRows.length});
+}
+let maskViewObservedNotice=null,maskViewVisualState="";
+const maskViewObserver=new MutationObserver(()=>{
+  if(!browseDiagnosticsEnabled())return;
+  const state=[$("qbox").classList.contains("busy"),$("serverWorkNotice")?.hidden,window.wudictTasks?.activeCount?.()||0].join("|");
+  if(state!==maskViewVisualState){maskViewVisualState=state;maskViewTrace("visible_state")}
+});
+maskViewObserver.observe($("qbox"),{attributes:true,attributeFilter:["class"]});
+maskViewObserver.observe(document.documentElement,{attributes:true,attributeFilter:["class"]});
+function maskViewObserveNotice(){
+  const notice=$("serverWorkNotice");
+  if(notice&&notice!==maskViewObservedNotice){maskViewObservedNotice=notice;maskViewObserver.observe(notice,{attributes:true,attributeFilter:["hidden"]})}
+}
+window.addEventListener("wudict-tasks-ready",maskViewObserveNotice);
+maskViewObserveNotice();
 let busyTimer=null,busyWanted=false;
 function setBusy(on){
   busyWanted=on;
+  if(maskViewTraceID)maskViewTrace(on?"spinner_requested":"spinner_cleared");
   clearTimeout(busyTimer);
   const box=$("qbox");
   if(!on){box.classList.remove("busy");return}
@@ -6184,6 +6247,17 @@ function noIndexRow(el,out,info){
 let maskGeneration=0,maskControllers=new Set(),maskRows=[],maskCurrent=0,maskMergeAZ=false;
 let maskPattern="",maskSelection="",maskSubmitRequested=false,maskNavToken=0,maskRestoreScroll=null,maskRestoreWord="",maskRestoreWordDict="";
 let maskWordsPageKey="";
+const maskBaseMemory=new Map(),maskPageMemory=new Map();
+function maskMemoryCachePut(cache,key,value){
+  cache.delete(key);cache.set(key,{value,savedAt:Date.now()});
+  while(cache.size>128)cache.delete(cache.keys().next().value);
+}
+function maskMemoryCacheGet(cache,key){
+  const saved=cache.get(key);
+  if(!saved)return null;
+  if(Date.now()-saved.savedAt>30*60*1000){cache.delete(key);return null}
+  return saved.value;
+}
 let maskStripVersion=0,maskStripRendered=-1,maskChipMap=new Map(),maskActiveKey="",maskStripWantedKey="";
 let maskStripItems=[],maskStripOffsets=[],maskStripWidths=[],maskStripNavOffsets=[],maskStripNavWidths=[],maskStripBands=[],maskStripSectionOffsets=[],maskStripSectionTargets=[],maskStripTotalWidth=0,maskStripSectionTotal=0,maskStripStart=-1,maskStripEnd=-1,maskStripRenderAnchor=-1,maskStripDisplayStart=-1,maskStripDisplayEnd=-1,maskStripKeyIndex=new Map(),maskStripMeasureNode=null,maskStripMeasureWidth=null,maskStripWidthCache=new Map(),maskStripNavWidthCache=new Map(),maskStripWidthFloor=0,maskStripWidthCap=0,maskStripGap=0;
 let maskStripPaintAt=0,maskStripPaintTimer=0,maskStripResizeFrame=0,maskStripMetricKey="",maskStripScrollX=0,maskStripScrubTarget=null,maskRibbonNavigator=null;
@@ -6599,17 +6673,20 @@ function maskRender(){
   }
 }
 async function maskFetch(row,page,generation,navToken){
+  maskViewTrace("page_request",row.diskCache?"sql_cache":"search",row);
   const controller=new AbortController();maskControllers.add(controller);
   row.abort=controller;
   try{
     const params=new URLSearchParams({dict:row.id,q:maskPattern,p:String(page),wildcards:"1"});
-    if(row.merged){params.set("merged","1");params.set("ids",row.mergedIds)}
+    if(row.merged){params.set("merged","1");params.set("ids",row.mergedIds);params.set("wildgroup",row.cacheGroup||maskSelection);if(row.mergedCacheID)params.set("mergedcache",row.mergedCacheID)}
+    wildcardSearchIndexParams(params,row);
     if(row.within){params.set("within",row.within);params.set("withinWildcards",row.withinMask?"1":"0")}
     if(row.diskCache&&row.cacheID){params.set("wildgroup",row.cacheGroup||maskSelection);params.set("wildcache",row.cacheID);
       params.set("wildorder",String(row.cacheOrder||0));params.set("wildcount",String(row.cacheCount||maskFindRows.length))}
     const response=await apiFetch("/api/browse/find?"+params,{signal:controller.signal});
     if(!response.ok){const body=await response.json().catch(()=>({}));throw new Error(window.wudictI18n.errorText(body.error||tx("search.failedDict")))}
     const data=await response.json();if(generation!==maskGeneration)return;
+    maskViewTrace("page_received",row.diskCache?"sql_cache":"search",row);
     if(row.state!=="ready")maskStripVersion++;
     row.state="ready";row.total=data.total;row.alphabet=data.alphabet||row.alphabet||[];row.size=data.size||row.size||300;row.partial=!!data.partial;
     if(!row.within)maskSaveBase(row,data);
@@ -6640,7 +6717,9 @@ async function maskFetch(row,page,generation,navToken){
   }finally{maskControllers.delete(controller);if(row.abort===controller)row.abort=null}
 }
 function maskCacheKey(row,kind,query="",wildcard=false){
-  return "wudict_mask_"+kind+":"+[maskSelection,maskPattern,row.id,query,wildcard?1:0].join("|");
+  const cacheVersion="sql-only-lower-v2-row-index-settings"+(/^[*?]+$/.test(maskPattern)?":simple-mask-blocks-v2":"");
+  const indexVariant="|fts="+(row.mergedFTS?1:0)+"|trigram="+(row.mergedTrigram?1:0);
+  return "wudict_mask_"+kind+":"+[maskSelection,maskPattern,row.id,query,wildcard?1:0,cacheVersion].join("|")+indexVariant;
 }
 function maskNewCacheID(){
   const bytes=new Uint8Array(24);
@@ -6649,7 +6728,9 @@ function maskNewCacheID(){
 }
 async function maskReadResultPage(row,page,findPosition,findDirection){
   const params=new URLSearchParams({dict:row.id,q:maskPattern,p:String(page),wildcards:"1"});
-  if(row.merged){params.set("merged","1");params.set("ids",row.mergedIds)}
+  if(row.merged){params.set("merged","1");params.set("ids",row.mergedIds);params.set("wildgroup",row.cacheGroup||maskSelection);if(row.mergedCacheID)params.set("mergedcache",row.mergedCacheID)}
+  wildcardSearchIndexParams(params,row);
+  if(browseDiagnosticsEnabled())params.set("diagnostics","1");
   if(row.within){params.set("within",row.within);params.set("withinWildcards",row.withinMask?"1":"0")}
   if(row.cacheID){params.set("wildcache",row.cacheID);params.set("wildgroup",row.cacheGroup||maskSelection);
     params.set("wildorder",String(row.cacheOrder||0));params.set("wildcount",String(row.cacheCount||maskFindRows.length))}
@@ -6700,7 +6781,7 @@ async function maskFindSetAnchor(rowId,position){
       if(found<0)return null;return {rank:found,position:positions[found]};
     }
     try{
-      const data=await maskReadResultPage(row,1,cursor,direction),positions=data.positions||[];
+      const data=await maskReadResultPage(row,1,cursor,direction),positions=(row.merged?data.basePositions:data.positions)||[];
       const local=direction>0?maskPositionBound(positions,cursor,true):maskPositionBound(positions,cursor,false)-1;
       if(local<0||local>=positions.length)return null;
       return {rank:(data.page-1)*(data.size||300)+local,position:positions[local]};
@@ -6736,21 +6817,49 @@ async function maskFindSetAnchor(rowId,position){
 }
 function maskSaveBase(row,data=row.data){
   if(row.state!=="ready")return;
-  window.wudictHeadwordControl.cacheWrite(maskCacheKey(row,"base-sqlite"),{cacheID:row.cacheID,diskCache:!!row.diskCache,
-    cacheGroup:row.cacheGroup||maskSelection,cacheOrder:row.cacheOrder||0,cacheCount:row.cacheCount||maskBaseRows.length,
-    total:row.total,alphabet:row.alphabet,size:row.size,partial:!!row.partial});
-  if(!row.diskCache&&data){
+  const saved=maskRememberBase(row,data);
+  const stored=window.wudictHeadwordControl.cacheWrite(maskCacheKey(row,"base-sqlite"),saved);
+  if(browseDiagnosticsEnabled())maskViewTrace("save_base",stored?"session":"session_failed",row,
+    `key=${maskCacheKey(row,"base-sqlite")} cache=${row.cacheID} disk=${!!row.diskCache} partial=${!!row.partial}`);
+  if(data&&!row.diskCache){
     window.wudictHeadwordControl.cacheWrite(maskCacheKey(row,"base"),{total:row.total,alphabet:row.alphabet,size:row.size});
     window.wudictHeadwordControl.cacheWrite(maskCacheKey(row,"page"+data.page),data);
   }
 }
+function maskRememberBase(row,data=row.data){
+  const saved={cacheID:row.cacheID,diskCache:!!row.diskCache,
+    cacheGroup:row.cacheGroup||maskSelection,cacheOrder:row.cacheOrder||0,cacheCount:row.cacheCount||maskBaseRows.length,
+    mergedCacheID:row.mergedCacheID||"",total:row.total,alphabet:row.alphabet,size:row.size,partial:!!row.partial};
+  maskMemoryCachePut(maskBaseMemory,maskCacheKey(row,"base-sqlite"),saved);
+  if(data){
+    const page=row.diskCache?{...data,alphabet:undefined}:data;
+    maskMemoryCachePut(maskPageMemory,maskCacheKey(row,"page"+data.page),page);
+  }
+  return saved;
+}
 function maskRestoreBase(row){
-  const disk=window.wudictHeadwordControl.cacheRead(maskCacheKey(row,"base-sqlite"));
+  const key=maskCacheKey(row,"base-sqlite");
+  const memory=maskMemoryCacheGet(maskBaseMemory,key);
+  const disk=memory||window.wudictHeadwordControl.cacheRead(key);
+  if(browseDiagnosticsEnabled()){
+    const alternatives=[];
+    if(!disk)for(const fts of [false,true])for(const trigram of [false,true]){
+      if(fts===!!row.mergedFTS&&trigram===!!row.mergedTrigram)continue;
+      const altKey=maskCacheKey({...row,mergedFTS:fts,mergedTrigram:trigram},"base-sqlite");
+      const altMemory=maskMemoryCacheGet(maskBaseMemory,altKey);
+      const altSession=altMemory?null:window.wudictHeadwordControl.cacheRead(altKey);
+      if(altMemory||altSession)alternatives.push(`${+fts}${+trigram}:${altMemory?"memory":"session"}`);
+    }
+    maskViewTrace("restore_base",memory?"memory":disk?"session":"miss",row,
+      `key=${key} saved=${disk?.cacheID||""} disk=${!!disk?.diskCache} partial=${!!disk?.partial} alternates=${alternatives.join(",")||"none"}`);
+  }
   if(disk&&typeof disk.cacheID==="string"&&Number.isSafeInteger(disk.total)){
     row.total=disk.total;row.alphabet=disk.alphabet||[];row.size=disk.size||300;row.diskCache=!!disk.diskCache;
-    row.cacheID=disk.cacheID;row.cacheGroup=disk.cacheGroup||maskSelection;row.partial=!!disk.partial;
+    row.cacheID=disk.cacheID;row.mergedCacheID=disk.mergedCacheID||"";row.cacheGroup=disk.cacheGroup||maskSelection;row.partial=!!disk.partial;
     row.cacheOrder=row.cacheOrder??0;row.cacheCount=row.cacheCount||maskBaseRows.length;
-    row.state="pending";row.restoreStream=row.partial;return true;
+    row.state=!row.partial&&row.diskCache?"ready":"pending";row.restoreStream=row.partial;
+    if(!row.partial)maskRestoreBasePage(row,row.wantedPage||1);
+    return true;
   }
   const saved=window.wudictHeadwordControl.cacheRead(maskCacheKey(row,"base"));
   if(!saved||!Number.isSafeInteger(saved.total))return false;
@@ -6760,8 +6869,8 @@ function maskRestoreBase(row){
   return true;
 }
 function maskRestoreBasePage(row,page){
-  if(row.diskCache)return false;
-  const data=window.wudictHeadwordControl.cacheRead(maskCacheKey(row,"page"+page));
+  const key=maskCacheKey(row,"page"+page);
+  const data=maskMemoryCacheGet(maskPageMemory,key)||(!row.diskCache?window.wudictHeadwordControl.cacheRead(key):null);
   if(!data||data.page!==page||!Array.isArray(data.words))return false;
   row.state="ready";row.data=data;return true;
 }
@@ -6772,6 +6881,7 @@ function maskPrefetchBasePage(row,page,generation=maskGeneration){
   if(!row.prefetching)row.prefetching=new Map();
   const controller=new AbortController();maskControllers.add(controller);
   const params=new URLSearchParams({dict:row.id,q:maskPattern,p:String(page),wildcards:"1"});
+  wildcardSearchIndexParams(params,row);
   const request=apiFetch("/api/browse/find?"+params,{signal:controller.signal}).then(async response=>{
     if(!response.ok) return null;
     const data=await response.json();
@@ -6863,9 +6973,14 @@ function maskPrefetchFindPages(){
   }
 }
 function maskFindProgress(row){
-  const done=maskFindRows.filter(item=>item.state==="error"||item.state==="ready"&&!item.partial).length;
+  const scanTotal=(item,index)=>Math.max(0,Number(item.scanTotal)||Number(maskBaseRows[index]?.total)||0);
+  const total=maskFindRows.reduce((sum,item,index)=>sum+scanTotal(item,index),0);
+  const done=maskFindRows.reduce((sum,item,index)=>{
+    const itemTotal=scanTotal(item,index);
+    return sum+(item.state==="ready"&&!item.partial?itemTotal:Math.min(item.scanDone||0,itemTotal));
+  },0);
   maskTaskUpdate("browse",row.name+" · "+window.wudictI18n.number(done)+"/"+
-    window.wudictI18n.number(maskFindRows.length),done,maskFindRows.length);
+    window.wudictI18n.number(total),done,total);
 }
 function maskStopFind(job){
   maskMemoryStop();
@@ -6956,7 +7071,9 @@ async function maskFetchWithinStream(row,generation,navToken,findGeneration){
   row.streamCacheStoredBytes=0;row.streamCacheStorageFull=false;row.partial=true;
   const params=new URLSearchParams({dict:row.id,q:maskPattern,p:String(row.wantedPage||1),wildcards:"1",stream:"1",wildcache:row.cacheID,
     wildgroup:row.cacheGroup||maskSelection,wildorder:String(row.cacheOrder||0),wildcount:String(row.cacheCount||maskFindRows.length)});
-  if(row.merged){params.set("merged","1");params.set("ids",row.mergedIds)}
+  if(row.merged){params.set("merged","1");params.set("ids",row.mergedIds);if(row.mergedCacheID)params.set("mergedcache",row.mergedCacheID)}
+  wildcardSearchIndexParams(params,row);
+  if(browseDiagnosticsEnabled())params.set("diagnostics","1");
   if(row.within){params.set("within",row.within);params.set("withinWildcards",row.withinMask?"1":"0")}
   const ownerRows=row.within?maskFindRows:maskBaseRows;
   const current=()=>generation===maskGeneration&&(findGeneration<0||findGeneration===maskFindGeneration)&&ownerRows.includes(row);
@@ -6978,9 +7095,17 @@ async function maskFetchWithinStream(row,generation,navToken,findGeneration){
         const event=JSON.parse(line);if(!current())return;
         if(event.type==="error")throw new Error(event.error||tx("search.failedDict"));
         if(Number.isFinite(event.scanTotal)&&event.scanTotal>0)row.scanTotal=event.scanTotal;
-        if(Number.isFinite(event.scanned))row.scanDone=Math.max(0,event.scanned);
+        let progressReset=false;
+        if(Number.isFinite(event.scanned)){
+          const scanned=Math.max(0,event.scanned);
+          if(scanned<(Number(row.scanDone)||0)){
+            row.progressPublishedPercent=0;
+            progressReset=true;
+          }
+          row.scanDone=scanned;
+        }
         if(event.done&&row.scanTotal>0)row.scanDone=row.scanTotal;
-        const publishProgress=maskProgressShouldPublish(row,!!event.done);
+        const publishProgress=maskProgressShouldPublish(row,!!event.done||progressReset);
         if(progressTrace)progressTrace.events++;
         const blockSize=event.size||row.size||300;
         row.size=blockSize;
@@ -7025,6 +7150,7 @@ async function maskFetchWithinStream(row,generation,navToken,findGeneration){
               positions:row.streamPositions.slice((page-1)*blockSize,page*blockSize)};
         }
         if(event.done){row.partial=false;row.state="ready";row.total=event.total||0;row.alphabet=event.alphabet||[];
+          if(event.mergedCacheID)row.mergedCacheID=event.mergedCacheID;
           if(row.diskCache&&maskRows[maskCurrent]===row&&row.total>0){
             try{row.data=await maskReadResultPage(row,row.wantedPage||1)}catch(_){/* Page navigation will retry. */}
           }
@@ -7085,8 +7211,8 @@ function maskSelect(index,page=1){
   maskStripWantedKey=row.id+":"+page;
   row.wantedPage=page;
   if(row.data?.page===page){maskRender();maskPrefetchBasePage(row,page+1);return}
-  if(row.diskCache){row.data=null;maskRender();maskFetch(row,page,maskGeneration,navToken);return}
   if(!row.within&&maskRestoreBasePage(row,page)){maskRender();maskMenu();maskPrefetchBasePage(row,page+1);return}
+  if(row.diskCache){row.data=null;maskRender();maskFetch(row,page,maskGeneration,navToken);return}
   const prefetched=row.prefetching?.get(page);
   if(!row.within&&prefetched){
     const generation=maskGeneration;
@@ -7155,33 +7281,36 @@ function maskGotoApply(){
     if(first&&page>=first&&page<=last){$("maskGotoDialog").close();maskSelect(i,page-first+1);return}
   }
 }
-function isAllWildcardMask(pattern){return pattern.length>0&&/^\*+$/.test(pattern)}
-async function maskRun(pattern){
+function isSimpleWildcardMask(pattern){return pattern.length>0&&/^[*?]+$/.test(pattern)}
+function normalizeSimpleWildcardMask(pattern){
+  if(!isSimpleWildcardMask(pattern))return pattern;
+  const questions=(pattern.match(/\?/g)||[]).length;
+  return questions?"*"+"?".repeat(questions)+"*":"*";
+}
+function isAllWildcardMask(pattern){return normalizeSimpleWildcardMask(pattern)==="*"}
+async function maskRun(pattern,reason="submit"){
+  maskViewRunID++;maskViewTraceStarted=performance.now();
+  pattern=normalizeSimpleWildcardMask(pattern);
+  for(const row of maskBaseRows)if(row.state==="ready"&&!row.partial)maskRememberBase(row);
   maskAbort();maskStripScrollX=0;maskPattern=pattern;lastQuery=pattern;maskReturn="";
-  maskStripNavWidthCache.clear();
   clearTimeout(maskFindTimer);maskFindRows=[];maskFindQuery="";maskFindIndex=-1;maskFindMatch=null;maskFindAnchor=null;
   maskFindFilter=false;maskFindApproved=false;maskFindAwaitingApply=false;$("maskFindInput").value="";
   if(searchAC)searchAC.abort();hideSearchProgress();searchSeq++;$("out").replaceChildren();setStatus("");
   const selection=$("dict").value||"all";
   maskSelection=selection;
+  maskViewTrace("run_start",reason,null,`requested=${pattern}`);
   const ids=selection==="all"?activeUserGroupIds():selection.startsWith("g:")?groupIds(selection):[selection];
   const byId=new Map(dicts.map(d=>[d.id,d]));
   const baseCacheID=maskNewCacheID(),groupRows=ids.filter(id=>byId.has(id));
-  maskRows=maskMergeAZ?[{id:"__merged__",name:tx("search.mergeBooksToOne"),merged:true,mergedIds:groupRows.join(","),state:"pending",total:0,data:null,alphabet:[],size:300,
+  maskRows=maskMergeAZ?[{id:"__merged__",name:tx("search.mergeBooksToOne"),merged:true,mergedFTS:wildcardSearchIndexEnabled("fts"),mergedTrigram:wildcardSearchIndexEnabled("trigram"),mergedIds:groupRows.join(","),state:"pending",total:0,data:null,alphabet:[],size:300,
     expectedBlocks:Math.ceil(groupRows.reduce((sum,id)=>sum+Math.max(0,Number(byId.get(id)?.entries)||0),0)/300),scanDone:0,
     scanTotal:groupRows.reduce((sum,id)=>sum+Math.max(0,Number(byId.get(id)?.entries)||0),0),active:false,wantedPage:1,error:"",diskCache:false,
-    cacheID:baseCacheID,cacheGroup:selection,cacheOrder:0,cacheCount:1}]:groupRows.map((id,index)=>({id,name:dictLabel(byId.get(id)),state:"pending",total:0,data:null,alphabet:[],size:300,
+    cacheID:baseCacheID,cacheGroup:selection,cacheOrder:0,cacheCount:1}]:groupRows.map((id,index)=>({id,name:dictLabel(byId.get(id)),mergedFTS:wildcardSearchIndexEnabled("fts"),mergedTrigram:wildcardSearchIndexEnabled("trigram"),state:"pending",total:0,data:null,alphabet:[],size:300,
     expectedBlocks:Math.ceil(Math.max(0,Number(byId.get(id)?.entries)||0)/300),
     scanDone:0,scanTotal:Math.max(0,Number(byId.get(id)?.entries)||0),active:false,
     wantedPage:1,error:"",diskCache:false,cacheID:baseCacheID,cacheGroup:selection,cacheOrder:index,cacheCount:groupRows.length}));
   for(const row of maskRows)maskRestoreBase(row);
-  if(isAllWildcardMask(pattern))for(const row of maskRows){row.diskCache=true;row.restoreStream=false;row.scanTotal=1}
-  if(isAllWildcardMask(pattern))for(const row of maskRows){
-    const blocks=Math.ceil(row.total/(row.size||300));
-    if(row.state==="ready"&&blocks>0&&row.alphabet.length<blocks*.75){
-      row.state="pending";row.partial=true;row.data=null;row.alphabet=[];
-    }
-  }
+  if(isSimpleWildcardMask(pattern))for(const row of maskRows){row.scanTotal=Math.max(0,Number(byId.get(row.id)?.entries)||0)}
   for(const row of maskRows)if(row.state==="ready"){row.scanDone=row.scanTotal;row.active=false}
   maskBaseRows=maskRows;maskBaseCurrent=0;maskFindControls();
   maskStripVersion++;
@@ -7193,28 +7322,35 @@ async function maskRun(pattern){
     maskRows[index].wantedPage=Math.min(10000000,Math.max(1,Number.parseInt(saved.get("maskpage"),10)||1));
     if(maskRows[index].data?.page!==maskRows[index].wantedPage&&
        !maskRestoreBasePage(maskRows[index],maskRows[index].wantedPage)){
-      maskRows[index].state="pending";maskRows[index].data=null;
+      if(!maskRows[index].diskCache)maskRows[index].state="pending";
+      maskRows[index].data=null;
     }
     maskRestoreScroll=Math.min(10000000,Math.max(0,Number.parseInt(saved.get("maskscroll"),10)||0));
     maskRestoreWord=saved.get("maskword")||"";maskRestoreWordDict=saved.get("maskdict")||"";
   }else{maskRestoreScroll=null;maskRestoreWord="";maskRestoreWordDict=""}
   maskRender();
   if(!maskRows.length){if(!dictsSettled){staleSearch=true;maskSubmitRequested=true}return}
-  const generation=maskGeneration,rows=maskBaseRows,job={kind:"base",generation};maskBusyStart(job);setBusy(true);
+  const visible=maskRows[maskCurrent];
+  if(visible?.state==="ready"&&!visible.data)maskSelect(maskCurrent,visible.wantedPage||1);
+  const generation=maskGeneration,rows=maskBaseRows,job={kind:"base",generation};
   const cached=rows.filter(row=>row.state==="ready").length;
-  if(cached===rows.length){maskBusyFinish(job);setBusy(false);maskTaskFinish("wildcards");return}
+  maskViewTrace("restore_complete",cached===rows.length?"all_ready":"pending_rows");
+  if(cached===rows.length){setBusy(false);maskTaskFinish("wildcards");maskViewTrace("run_complete","cache");return}
   let next=0;
-  maskTaskStart("wildcards",tx("search.wildcardsRun")+" · "+cached+"/"+rows.length,()=>{
-    maskAbort();setBusy(false);maskTaskFinish("wildcards");
-    for(const row of rows)if(row.state==="pending"){row.state="error";row.error=tx("dictUI.stop")}
-    maskRender();
-  },{done:cached,total:rows.length,children:maskWildcardTaskRows(rows)});
+  const needsBuild=rows.some(row=>row.state!=="ready"&&(!row.diskCache||row.restoreStream));
+  maskViewTrace("work_start",needsBuild?"build_or_resume":"sql_pages");
+  maskBusyStart(job);setBusy(needsBuild);
+  if(needsBuild)maskTaskStart("wildcards",tx("search.wildcardsRun")+" · "+cached+"/"+rows.length,()=>{
+      maskAbort();setBusy(false);maskTaskFinish("wildcards");
+      for(const row of rows)if(row.state==="pending"){row.state="error";row.error=tx("dictUI.stop")}
+      maskRender();
+    },{done:cached,total:rows.length,children:maskWildcardTaskRows(rows)});
   const worker=async()=>{while(generation===maskGeneration&&next<rows.length){
     const row=rows[next++];if(row.state==="ready")continue;
     row.active=true;
     maskTaskUpdate("wildcards",tx("search.wildcardsRun"),rows.filter(item=>item.state==="ready"&&!item.partial).length,rows.length,maskWildcardTaskRows(rows));
     try{
-      if(row.diskCache&&!row.restoreStream&&!isAllWildcardMask(pattern))await maskFetch(row,row.wantedPage,generation,row===maskRows[maskCurrent]?maskNavToken:-1);
+      if(row.diskCache&&!row.restoreStream)await maskFetch(row,row.wantedPage,generation,row===maskRows[maskCurrent]?maskNavToken:-1);
       else await maskFetchWithinStream(row,generation,row===maskRows[maskCurrent]?maskNavToken:-1,-1);
     }finally{row.active=false}
     const done=rows.filter(item=>item.state==="ready").length;
@@ -7224,6 +7360,7 @@ async function maskRun(pattern){
   await Promise.all(Array.from({length:maskWorkerCount(rows.length)},worker));
   if(generation!==maskGeneration)return;
   maskBusyFinish(job);setBusy(false);maskTaskFinish("wildcards");
+  maskViewTrace("run_complete",needsBuild?"build_or_resume":"sql_pages");
   if(rows.every(row=>row.state==="ready"&&row.total===0)&&maskRows===rows)maskRender();
 }
 function maskRestoreCached(url){
@@ -7295,7 +7432,8 @@ function maskFindSwitch(filter){
 }
 function maskFindStart(){
   maskMemoryStop();
-  const query=$("maskFindInput").value.trim();
+  let query=$("maskFindInput").value.trim();
+  if(maskFindWildcard)query=normalizeSimpleWildcardMask(query);
   if(maskFindRows.some(row=>row.partial))for(const row of maskFindRows){
     try{
       sessionStorage.removeItem(maskCacheKey(row,"filter",row.within,row.withinMask));
@@ -7319,7 +7457,7 @@ function maskFindStart(){
   maskStripVersion++;maskStripRendered=-1;
   if(!query||!maskPattern||!maskBaseRows.length){maskRender();maskFindControls();return}
   const groupCacheID=maskBaseRows[0]?.cacheID||maskNewCacheID(),groupCacheGroup=maskBaseRows[0]?.cacheGroup||maskSelection;
-  maskFindRows=maskBaseRows.map((row,index)=>({id:row.id,name:row.name,merged:!!row.merged,mergedIds:row.mergedIds||"",state:"pending",total:0,data:null,
+  maskFindRows=maskBaseRows.map((row,index)=>({id:row.id,name:row.name,merged:!!row.merged,mergedFTS:!!row.mergedFTS,mergedTrigram:!!row.mergedTrigram,mergedIds:row.mergedIds||"",mergedCacheID:row.mergedCacheID||"",state:"pending",total:0,data:null,
     alphabet:[],size:row.size||300,wantedPage:1,error:"",within:query,withinMask:maskFindWildcard,
     cacheID:groupCacheID,cacheGroup:groupCacheGroup,cacheOrder:index,cacheCount:maskBaseRows.length}));
   for(const row of maskFindRows){
@@ -7368,16 +7506,19 @@ function maskFindStart(){
       dictionaries:rows.length});
     maskMemorySnapshot=snapshot;snapshot("wildcard_memory_start");
   }
-  const cached=rows.filter(row=>row.state==="ready"&&!row.partial).length;
-  maskTaskStart("browse",tx("browse.filteringWords")+" · "+window.wudictI18n.number(cached)+"/"+
-    window.wudictI18n.number(rows.length),()=>maskStopFind(job),{done:cached,total:rows.length});
-  const worker=async()=>{while(generation===maskGeneration&&rows===maskFindRows&&next<rows.length){
+  const baseTotal=maskBaseRows.reduce((sum,row)=>sum+(row.state==="ready"?row.total||0:0),0);
+  maskTaskStart("browse",tx("browse.filteringWords")+" · 0/"+window.wudictI18n.number(baseTotal),
+    ()=>maskStopFind(job),{done:0,total:baseTotal});
+  const worker=async()=>{
+    while(generation===maskGeneration&&rows===maskFindRows&&maskBaseRows.some(row=>row.state==="pending"||row.partial))
+      await new Promise(resolve=>setTimeout(resolve,100));
+    while(generation===maskGeneration&&rows===maskFindRows&&next<rows.length){
     const row=rows[next++];if(row.state==="ready")continue;
     active++;
     try{await maskFetchWithinStream(row,generation,row===maskRows[maskCurrent]?maskNavToken:-1,findGeneration)}
     finally{active--}
   }};
-  Promise.all(Array.from({length:maskWorkerCount(rows.length)},worker)).then(()=>{
+  Promise.all([worker()]).then(()=>{
     if(findGeneration===maskFindGeneration){maskMemoryStop();maskBusyFinish(job);maskTaskFinish("browse");maskFindControls()}
   });
 }
@@ -7411,7 +7552,7 @@ async function maskFindTurn(step){
   }else position=row.streamPositions?.[at];
   if(position===undefined)return;
   if(!Number.isInteger(basePosition))basePosition=position;
-  maskFindMatch={id:row.id,position};
+  maskFindMatch={id:row.id,position:basePosition};
   maskPrefetchFindPages();
   const base=maskBaseRows.findIndex(candidate=>candidate.id===row.id);
   if(base>=0){maskSelect(base,Math.floor(basePosition/(maskBaseRows[base].size||300))+1);maskFindControls()}
