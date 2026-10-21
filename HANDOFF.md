@@ -1,5 +1,17 @@
 # Agent handoff — current state
 
+Current checkout: `dev` at `8390471d`. Upstream `master` was reviewed through
+`fb56b096` on 2026-10-22; `upstream-reviewed-2026-10-22` is the review cursor,
+not a claim that every upstream change was adopted. The large-ZIM and split-ZIM
+runtime checks in `docs/UPSTREAM-TRANSFER-PLAN.md` remain pending. The ZIM MIME
+compatibility change from `34541b56` and Browse dictionary-selection change
+from `2ffb0088` are now selectively ported on `dev`: MIME parsing is bounded by
+validated structures and invalid MIME values retain their index as an empty
+slot; Browse headword links use `dict=`. Unrelated upstream favorites/history
+backend files were not copied. These changes have not been built or runtime
+checked yet. The upstream wildcard implementation remains unwired by the
+dead-upstream policy.
+
 Browse and Wildcards ribbon clicks reveal a partly clipped heading and, when it fits, one neighboring heading. Clicking the first or last heading aligns to that strip edge; Browse no longer centers each selected heading or scrolls when it is already fully visible. Shared ribbon geometry checks and inline JavaScript syntax pass; Windows/Android interaction remains to be checked. Wildcards toolbar: the merge-books control is fixed to 3.2em with a larger icon; page controls show “Next page” / “Previous page” when the row has room, fall back to arrows, then hide before the page counter on narrow rows.
 
 Browse's “Loading headwords” page indicator now waits 500 ms for both ordinary page reads and in-flight page prefetches, avoiding a flash on quick Next transitions. Runtime verification is pending.

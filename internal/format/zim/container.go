@@ -217,6 +217,7 @@ func (c *container) parse() error {
 	c.entryCount = binary.LittleEndian.Uint32(h[24:])
 	c.clusterCount = binary.LittleEndian.Uint32(h[28:])
 	pathPtrPos := binary.LittleEndian.Uint64(h[32:])
+	titlePtrPos := binary.LittleEndian.Uint64(h[40:])
 	clusterPtrPos := binary.LittleEndian.Uint64(h[48:])
 	mimeListPos := binary.LittleEndian.Uint64(h[56:])
 	c.mainPage = binary.LittleEndian.Uint32(h[64:])
@@ -232,10 +233,6 @@ func (c *container) parse() error {
 		return err
 	}
 	if err := c.checkSpan(mimeListPos, 1, "MIME list"); err != nil {
-		return err
-	}
-
-	if err := c.parseMIMEList(mimeListPos, pathPtrPos); err != nil {
 		return err
 	}
 
@@ -269,7 +266,23 @@ func (c *container) parse() error {
 			return fmt.Errorf("cluster pointer %d out of range (%d)", i, c.clusterPtr[i])
 		}
 	}
-	return nil
+
+	// The MIME list ends before the first structure the file points to. Bound
+	// it by validated pointer lists, the first dirent and the first cluster so
+	// a missing terminator cannot make parsing consume unrelated file data.
+	mimeEnd := min(pathPtrPos, clusterPtrPos)
+	if titlePtrPos != ^uint64(0) && c.checkSpan(titlePtrPos, uint64(c.entryCount)*4, "title pointer list") == nil {
+		mimeEnd = min(mimeEnd, titlePtrPos)
+	}
+	first, err := c.ptrAt(0) // validated above
+	if err != nil {
+		return fmt.Errorf("reading first path pointer: %w", err)
+	}
+	mimeEnd = min(mimeEnd, first)
+	if c.clusterCount > 0 {
+		mimeEnd = min(mimeEnd, c.clusterPtr[0])
+	}
+	return c.parseMIMEList(mimeListPos, mimeEnd)
 }
 
 func (c *container) checkSpan(off, n uint64, what string) error {
@@ -342,7 +355,7 @@ func (w *ptrWalk) entry(i int) (dirent, error) {
 	return c.direntAt(int64(off))
 }
 
-// parseMIMEList reads the whole string region at once and splits it, rather
+// parseMIMEList reads the bounded string region at once and splits it, rather
 // than walking it one fixed-size buffer at a time: a string longer than the
 // buffer would truncate, and every following offset would then be wrong.
 //
@@ -350,10 +363,9 @@ func (w *ptrWalk) entry(i int) (dirent, error) {
 // corpus) and is resolved by STRING, never hardcoded. A parameterised type
 // ("text/html; charset=iso-8859-1", which real wiktionaries contain) is
 // matched on its type/subtype alone.
-func (c *container) parseMIMEList(start, next uint64) error {
-	end := next
-	if end <= start || end > uint64(c.size) {
-		end = uint64(c.size)
+func (c *container) parseMIMEList(start, end uint64) error {
+	if end <= start {
+		return fmt.Errorf("MIME list at %d overlaps the structure at %d", start, end)
 	}
 	if end-start > maxMimeListSpan {
 		end = start + maxMimeListSpan
@@ -366,7 +378,7 @@ func (c *container) parseMIMEList(start, next uint64) error {
 	buf = buf[:n]
 
 	c.htmlMIME = map[uint16]bool{}
-	for pos := 0; pos < len(buf); {
+	for pos := 0; ; {
 		i := bytes.IndexByte(buf[pos:], 0)
 		if i < 0 {
 			return fmt.Errorf("unterminated MIME list")
@@ -375,6 +387,12 @@ func (c *container) parseMIMEList(start, next uint64) error {
 			break // the empty string terminates the list
 		}
 		s := string(buf[pos : pos+i])
+		if len(c.mimes) == mimeDeleted {
+			return fmt.Errorf("MIME list longer than %d entries", mimeDeleted)
+		}
+		if !plausibleMIME(s) {
+			s = "" // preserve this MIME index for subsequent dirents
+		}
 		if isHTMLMIME(s) {
 			c.htmlMIME[uint16(len(c.mimes))] = true
 		}
@@ -385,6 +403,20 @@ func (c *container) parseMIMEList(start, next uint64) error {
 		return fmt.Errorf("empty MIME list")
 	}
 	return nil
+}
+
+// plausibleMIME accepts a type/subtype in printable ASCII, parameters
+// included. Invalid values have no declared type, but keep their index slot.
+func plausibleMIME(s string) bool {
+	if strings.IndexByte(s, '/') <= 0 {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		if s[i] < 0x20 || s[i] > 0x7E {
+			return false
+		}
+	}
+	return true
 }
 
 func mimeBase(s string) string {
