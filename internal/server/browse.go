@@ -64,11 +64,21 @@ func (s *Server) browseFindPage(ctx context.Context, q url.Values) (browseFindRe
 		return browseFindResp{}, &browseFindSetupError{status: http.StatusBadRequest, message: "search text is too long"}
 	}
 	mask := q.Get("wildcards") == "1" || q.Get("mask") == "1"
+	if mask && search.IsSimpleMask(query) {
+		query = search.NormalizeSimpleMask(query)
+	}
 	within := strings.TrimSpace(q.Get("within"))
 	if len(within) > 256 {
 		return browseFindResp{}, &browseFindSetupError{status: http.StatusBadRequest, message: "filter text is too long"}
 	}
 	withinMask := q.Get("withinWildcards") == "1" || q.Get("withinMask") == "1"
+	if withinMask && search.IsSimpleMask(within) {
+		within = search.NormalizeSimpleMask(within)
+	}
+	cacheID := q.Get("wildcache")
+	if mask && within != "" && cacheID == "" {
+		return browseFindResp{}, &browseFindSetupError{status: http.StatusConflict, message: "wildcards lower search requires a completed SQL result cache"}
+	}
 	page, _ := strconv.Atoi(q.Get("p"))
 	if page < 1 {
 		page = 1
@@ -77,40 +87,47 @@ func (s *Server) browseFindPage(ctx context.Context, q url.Values) (browseFindRe
 	if page > 10000000 {
 		page = 10000000
 	}
-	if cacheID := q.Get("wildcache"); cacheID != "" && mask {
+	if cacheID != "" && mask {
 		cacheOrder, orderErr := strconv.Atoi(q.Get("wildorder"))
 		cacheCount, countErr := strconv.Atoi(q.Get("wildcount"))
-		if orderErr == nil && countErr == nil {
-			if rawPosition := q.Get("findpos"); rawPosition != "" {
-				position, parseErr := strconv.Atoi(rawPosition)
-				direction, directionErr := strconv.Atoi(q.Get("finddir"))
-				if parseErr != nil || within == "" {
-					return browseFindResp{}, &browseFindSetupError{status: http.StatusBadRequest, message: "invalid wildcard match position"}
-				}
-				if directionErr != nil || direction < -1 || direction > 1 {
-					return browseFindResp{}, &browseFindSetupError{status: http.StatusBadRequest, message: "invalid wildcard match direction"}
-				}
-				matchIndex, found, findErr := s.wildcardPages.findPosition(cacheID, wildcardCacheSignature{
-					query: query, group: q.Get("wildgroup"), wildcards: mask,
-				}, q.Get("dict"), within, withinMask, position, direction, cacheOrder, cacheCount)
-				if findErr != nil {
-					return browseFindResp{}, &browseFindSetupError{status: http.StatusInternalServerError, message: "reading cached wildcard match: " + findErr.Error()}
-				}
-				if !found {
-					return browseFindResp{}, &browseFindSetupError{status: http.StatusNotFound, message: "matching headword is not available yet"}
-				}
-				page = matchIndex/browsePageSize + 1
-			}
-			cached, ok, err := s.wildcardPages.page(cacheID, wildcardCacheSignature{
-				query: query, group: q.Get("wildgroup"), wildcards: mask,
-			}, q.Get("dict"), within, withinMask, page, cacheOrder, cacheCount)
-			if err != nil {
-				return browseFindResp{}, &browseFindSetupError{status: http.StatusInternalServerError, message: "reading cached wildcard block: " + err.Error()}
-			}
-			if ok && !(mask && within == "" && isAllWildcardMask(query) && cached.Partial) {
-				return cached, nil
-			}
+		if !wildcardCacheIDPattern.MatchString(cacheID) || q.Get("wildgroup") == "" || len(q.Get("wildgroup")) > 256 ||
+			orderErr != nil || countErr != nil || cacheCount < 1 || cacheCount > 10000 || cacheOrder < 0 || cacheOrder >= cacheCount {
+			return browseFindResp{}, &browseFindSetupError{status: http.StatusBadRequest, message: "invalid wildcard SQL cache"}
 		}
+		if rawPosition := q.Get("findpos"); rawPosition != "" {
+			position, parseErr := strconv.Atoi(rawPosition)
+			direction, directionErr := strconv.Atoi(q.Get("finddir"))
+			if parseErr != nil || within == "" {
+				return browseFindResp{}, &browseFindSetupError{status: http.StatusBadRequest, message: "invalid wildcard match position"}
+			}
+			if directionErr != nil || direction < -1 || direction > 1 {
+				return browseFindResp{}, &browseFindSetupError{status: http.StatusBadRequest, message: "invalid wildcard match direction"}
+			}
+			matchIndex, found, findErr := s.wildcardPages.findPosition(cacheID, wildcardCacheSignature{
+				query: query, group: q.Get("wildgroup"), wildcards: mask,
+				fts: q.Get("wildfts") == "1", trigram: q.Get("wildtrigram") == "1",
+			}, q.Get("dict"), within, withinMask, position, direction, cacheOrder, cacheCount)
+			if findErr != nil {
+				return browseFindResp{}, &browseFindSetupError{status: http.StatusInternalServerError, message: "reading cached wildcard match: " + findErr.Error()}
+			}
+			if !found {
+				return browseFindResp{}, &browseFindSetupError{status: http.StatusNotFound, message: "matching headword is not available yet"}
+			}
+			page = matchIndex/browsePageSize + 1
+		}
+		cached, ok, err := s.wildcardPages.page(cacheID, wildcardCacheSignature{
+			query: query, group: q.Get("wildgroup"), wildcards: mask,
+			fts: q.Get("wildfts") == "1", trigram: q.Get("wildtrigram") == "1",
+		}, q.Get("dict"), within, withinMask, page, cacheOrder, cacheCount)
+		if err != nil {
+			return browseFindResp{}, &browseFindSetupError{status: http.StatusInternalServerError, message: "reading cached wildcard block: " + err.Error()}
+		}
+		if ok {
+			return cached, nil
+		}
+	}
+	if cacheID != "" && mask && (within != "" || search.IsSimpleMask(query)) {
+		return browseFindResp{}, &browseFindSetupError{status: http.StatusNotFound, message: "wildcard result block is not available in the SQL cache"}
 	}
 	e, err := s.reg.get(q.Get("dict"))
 	if err != nil {
@@ -198,6 +215,7 @@ func (s *Server) browseFindPage(ctx context.Context, q url.Values) (browseFindRe
 		if cacheID != "" && q.Get("wildgroup") != "" && orderErr == nil && countErr == nil {
 			if err := s.wildcardPages.storePage(cacheID, wildcardCacheSignature{
 				query: query, group: q.Get("wildgroup"), wildcards: true,
+				fts: q.Get("wildfts") == "1", trigram: q.Get("wildtrigram") == "1",
 			}, browsePageSize, cacheCount, e.ID, d.Meta().Name, cacheOrder, page, result, s.wildcardCacheDir()); err != nil {
 				logx.System("wildcard cache page save failed dict=%q page=%d error=%q", e.ID, page, err)
 			}
@@ -207,21 +225,22 @@ func (s *Server) browseFindPage(ctx context.Context, q url.Values) (browseFindRe
 }
 
 func isAllWildcardMask(query string) bool {
-	return query != "" && strings.Trim(query, "*") == ""
+	return query != "" && search.IsSimpleMask(query) && search.NormalizeSimpleMask(query) == "*"
 }
 
 type browseFindStreamEvent struct {
-	Type      string        `json:"type"`
-	Words     []string      `json:"words,omitempty"`
-	Positions []int         `json:"positions,omitempty"`
-	Alphabet  []dict.Letter `json:"alphabet,omitempty"`
-	Total     int           `json:"total"`
-	Scanned   int           `json:"scanned,omitempty"`
-	ScanTotal int           `json:"scanTotal,omitempty"`
-	Size      int           `json:"size,omitempty"`
-	DiskCache bool          `json:"diskCache,omitempty"`
-	Done      bool          `json:"done,omitempty"`
-	Error     string        `json:"error,omitempty"`
+	Type          string        `json:"type"`
+	Words         []string      `json:"words,omitempty"`
+	Positions     []int         `json:"positions,omitempty"`
+	Alphabet      []dict.Letter `json:"alphabet,omitempty"`
+	Total         int           `json:"total"`
+	Scanned       int           `json:"scanned,omitempty"`
+	ScanTotal     int           `json:"scanTotal,omitempty"`
+	Size          int           `json:"size,omitempty"`
+	DiskCache     bool          `json:"diskCache,omitempty"`
+	MergedCacheID string        `json:"mergedCacheID,omitempty"`
+	Done          bool          `json:"done,omitempty"`
+	Error         string        `json:"error,omitempty"`
 }
 
 type browseHeadwordStreamer interface {
@@ -229,18 +248,20 @@ type browseHeadwordStreamer interface {
 }
 
 type browseFindStreamRequest struct {
-	entry      *entry
-	dict       dict.Dictionary
-	query      string
-	mask       bool
-	within     string
-	withinMask bool
-	withinRE   *regexp.Regexp
-	cacheID    string
-	cacheGroup string
-	cacheOrder int
-	cacheCount int
-	page       int
+	entry        *entry
+	dict         dict.Dictionary
+	query        string
+	mask         bool
+	within       string
+	withinMask   bool
+	withinRE     *regexp.Regexp
+	cacheID      string
+	cacheGroup   string
+	cacheOrder   int
+	cacheCount   int
+	cacheFTS     bool
+	cacheTrigram bool
+	page         int
 }
 
 type browseFindSetupError struct {
@@ -270,17 +291,26 @@ func (s *Server) prepareBrowseFindStream(q url.Values) (browseFindStreamRequest,
 		return browseFindStreamRequest{}, &browseFindSetupError{status: http.StatusBadRequest, message: "search text is too long"}
 	}
 	mask := q.Get("wildcards") == "1" || q.Get("mask") == "1"
+	if mask && search.IsSimpleMask(query) {
+		query = search.NormalizeSimpleMask(query)
+	}
 	within := strings.TrimSpace(q.Get("within"))
 	if len(within) > 256 {
 		return browseFindStreamRequest{}, &browseFindSetupError{status: http.StatusBadRequest, message: "filter text is too long"}
 	}
 	withinMask := q.Get("withinWildcards") == "1" || q.Get("withinMask") == "1"
+	if withinMask && search.IsSimpleMask(within) {
+		within = search.NormalizeSimpleMask(within)
+	}
 	cacheID := q.Get("wildcache")
 	cacheGroup := q.Get("wildgroup")
 	cacheOrder, orderErr := strconv.Atoi(q.Get("wildorder"))
 	cacheCount, countErr := strconv.Atoi(q.Get("wildcount"))
 	if cacheID != "" && !mask {
 		return browseFindStreamRequest{}, &browseFindSetupError{status: http.StatusBadRequest, message: "wildcard cache requires wildcard search"}
+	}
+	if mask && within != "" && cacheID == "" {
+		return browseFindStreamRequest{}, &browseFindSetupError{status: http.StatusConflict, message: "wildcards lower search requires a completed SQL result cache"}
 	}
 	if cacheID != "" && !wildcardCacheIDPattern.MatchString(cacheID) {
 		return browseFindStreamRequest{}, &browseFindSetupError{status: http.StatusBadRequest, message: "invalid wildcard cache id"}
@@ -292,6 +322,17 @@ func (s *Server) prepareBrowseFindStream(q url.Values) (browseFindStreamRequest,
 	e, err := s.reg.get(q.Get("dict"))
 	if err != nil {
 		return browseFindStreamRequest{}, &browseFindSetupError{status: http.StatusNotFound, message: err.Error()}
+	}
+	if cacheID != "" && within != "" && mask {
+		if withinMask {
+			if _, err := search.CompileMask(within); err != nil {
+				return browseFindStreamRequest{}, &browseFindSetupError{status: http.StatusBadRequest, message: "invalid filter: " + err.Error(), entry: e}
+			}
+		}
+		return browseFindStreamRequest{entry: e, query: query, mask: mask, within: within,
+			withinMask: withinMask, cacheID: cacheID, cacheGroup: cacheGroup,
+			cacheOrder: cacheOrder, cacheCount: cacheCount,
+			cacheFTS: q.Get("wildfts") == "1", cacheTrigram: q.Get("wildtrigram") == "1"}, nil
 	}
 	if !hasBrowseIndex(e.Path) {
 		return browseFindStreamRequest{}, &browseFindSetupError{status: http.StatusConflict,
@@ -317,7 +358,8 @@ func (s *Server) prepareBrowseFindStream(q url.Values) (browseFindStreamRequest,
 	}
 	return browseFindStreamRequest{entry: e, dict: d, query: query, mask: mask, within: within,
 		withinMask: withinMask, withinRE: withinRE, cacheID: cacheID, cacheGroup: cacheGroup,
-		cacheOrder: cacheOrder, cacheCount: cacheCount, page: page}, nil
+		cacheOrder: cacheOrder, cacheCount: cacheCount, page: page,
+		cacheFTS: q.Get("wildfts") == "1", cacheTrigram: q.Get("wildtrigram") == "1"}, nil
 }
 
 func (s *Server) handleBrowseFindStream(w http.ResponseWriter, r *http.Request) {
@@ -326,7 +368,9 @@ func (s *Server) handleBrowseFindStream(w http.ResponseWriter, r *http.Request) 
 		if !ok {
 			return
 		}
-		if err := s.streamMergedBrowseFind(r.Context(), r.URL.Query(), func(event browseFindStreamEvent) error { st.line(event); return r.Context().Err() }); err != nil && r.Context().Err() == nil {
+		if err := traceBrowseFind(r.Context(), r.URL.Query(), func(event browseFindStreamEvent) error { st.line(event); return r.Context().Err() }, func(ctx context.Context, send func(browseFindStreamEvent) error) error {
+			return s.streamMergedBrowseFind(ctx, r.URL.Query(), send)
+		}); err != nil && r.Context().Err() == nil {
 			st.line(browseFindStreamEvent{Type: "error", Error: err.Error()})
 		}
 		return
@@ -347,9 +391,11 @@ func (s *Server) handleBrowseFindStream(w http.ResponseWriter, r *http.Request) 
 	if !ok {
 		return
 	}
-	err = s.streamBrowseFindCached(r.Context(), request, func(event browseFindStreamEvent) error {
+	err = traceBrowseFind(r.Context(), r.URL.Query(), func(event browseFindStreamEvent) error {
 		st.line(event)
 		return r.Context().Err()
+	}, func(ctx context.Context, send func(browseFindStreamEvent) error) error {
+		return s.streamBrowseFindCached(ctx, request, send)
 	})
 	if err != nil && r.Context().Err() == nil {
 		logx.System("browse find stream failed dict=%q mask=%v error=%q", request.entry.ID, request.mask, err)
@@ -358,6 +404,15 @@ func (s *Server) handleBrowseFindStream(w http.ResponseWriter, r *http.Request) 
 }
 
 func (s *Server) streamBrowseFindCached(ctx context.Context, request browseFindStreamRequest, send func(browseFindStreamEvent) error) error {
+	if request.within != "" && request.mask {
+		if request.cacheID == "" {
+			return errors.New("wildcards lower search requires a completed SQL result cache")
+		}
+		return s.streamCachedWildcardWithin(ctx, request, send)
+	}
+	if request.cacheID != "" && request.within == "" && request.mask && search.IsSimpleMask(request.query) {
+		return s.streamSimpleWildcardCache(ctx, request, send)
+	}
 	// An all-asterisk mask is Browse paging, not a scan of every headword.
 	// Stream Browse's alphabet sampling progress while the first page is prepared.
 	if request.mask && request.within == "" && isAllWildcardMask(request.query) {
@@ -371,6 +426,7 @@ func (s *Server) streamBrowseFindCached(ctx context.Context, request browseFindS
 	}
 	entry, token, err := s.wildcardPages.begin(request.cacheID, wildcardCacheSignature{
 		query: request.query, group: request.cacheGroup, wildcards: request.mask,
+		fts: request.cacheFTS, trigram: request.cacheTrigram,
 	}, browsePageSize, request.cacheCount, request.entry.ID, request.dict.Meta().Name, request.cacheOrder,
 		request.within, request.withinMask, s.wildcardCacheDir())
 	if err != nil {
@@ -444,6 +500,7 @@ func (s *Server) streamAllWordsPage(ctx context.Context, request browseFindStrea
 		cacheOrder, count := request.cacheOrder, request.cacheCount
 		if err := s.wildcardPages.storePage(request.cacheID, wildcardCacheSignature{
 			query: request.query, group: request.cacheGroup, wildcards: true,
+			fts: request.cacheFTS, trigram: request.cacheTrigram,
 		}, browsePageSize, count, request.entry.ID, meta.Name, cacheOrder, page,
 			browseFindResp{Words: words, Positions: positions, Alphabet: alphabet, Total: total, Page: page,
 				Pages: pages, Size: browsePageSize}, s.wildcardCacheDir()); err != nil {
@@ -542,12 +599,14 @@ func (s *Server) desktopBrowseFindStream(ctx context.Context, query string, emit
 		return s.emitBrowseFindError(ctx, emit, "invalid browse search request")
 	}
 	if values.Get("merged") == "1" {
-		return s.streamMergedBrowseFind(ctx, values, func(event browseFindStreamEvent) error {
+		return traceBrowseFind(ctx, values, func(event browseFindStreamEvent) error {
 			data, err := json.Marshal(event)
 			if err == nil && emit != nil {
 				emit(data)
 			}
 			return err
+		}, func(ctx context.Context, send func(browseFindStreamEvent) error) error {
+			return s.streamMergedBrowseFind(ctx, values, send)
 		})
 	}
 	request, err := s.prepareBrowseFindStream(values)
@@ -564,7 +623,9 @@ func (s *Server) desktopBrowseFindStream(ctx context.Context, query string, emit
 		}
 		return ctx.Err()
 	}
-	err = s.streamBrowseFindCached(ctx, request, encode)
+	err = traceBrowseFind(ctx, values, encode, func(ctx context.Context, send func(browseFindStreamEvent) error) error {
+		return s.streamBrowseFindCached(ctx, request, send)
+	})
 	if err != nil && ctx.Err() == nil {
 		logx.System("browse find stream failed dict=%q mask=%v error=%q", request.entry.ID, request.mask, err)
 		return s.emitBrowseFindError(ctx, emit, err.Error())
@@ -805,7 +866,10 @@ func (s *Server) handleBrowse(w http.ResponseWriter, r *http.Request) {
 		s.handleBrowseStream(w, r)
 		return
 	}
+	started := time.Now()
+	diagnostics := r.URL.Query().Get("diagnostics") == "1"
 	result, err := s.browsePage(r.URL.Query())
+	pageDone := time.Now()
 	if err != nil {
 		var failure *browsePageFailure
 		if errors.As(err, &failure) {
@@ -817,24 +881,70 @@ func (s *Server) handleBrowse(w http.ResponseWriter, r *http.Request) {
 		} else {
 			httpErr(w, http.StatusInternalServerError, "%s", err)
 		}
+		if diagnostics {
+			logx.System("browse_http_page status=error page_us=%d total_us=%d", pageDone.Sub(started).Microseconds(), time.Since(started).Microseconds())
+		}
 		return
 	}
+	writeStarted := time.Now()
 	writeJSON(w, result)
+	if diagnostics {
+		logx.System("browse_http_page status=200 page_us=%d write_us=%d total_us=%d words=%d letters=%d",
+			pageDone.Sub(started).Microseconds(), time.Since(writeStarted).Microseconds(), time.Since(started).Microseconds(), len(result.Words), len(result.Alphabet))
+	}
 }
 
-func (s *Server) browsePage(q url.Values) (browseResp, error) {
+func (s *Server) browsePage(q url.Values) (result browseResp, retErr error) {
+	started := time.Now()
+	diagnostics := q.Get("diagnostics") == "1"
+	requestedPage, _ := strconv.Atoi(q.Get("p"))
+	stage := "dictionary_lookup"
+	var dictID string
+	resolvedPage, effectiveOffset := 0, -1
+	var lookupTime, indexCheck, openTime, alphabetTime, locateTime, pageRead time.Duration
+	var locateAnchorTime, locateCountTime time.Duration
+	var locateAnchorOrdinal, locateCountRows int
+	pageSource := "page"
+	atLength := 0
+	alphabetComputed := 0
+	defer func() {
+		if !diagnostics {
+			return
+		}
+		status := http.StatusOK
+		if retErr != nil {
+			status = http.StatusInternalServerError
+			var failure *browsePageFailure
+			if errors.As(retErr, &failure) {
+				status = failure.status
+			}
+		}
+		logx.System("browse_page_detail dict=%q source=%s at_len=%d requested_page=%d page=%d offset=%d stage=%s status=%d lookup_us=%d index_check_us=%d open_us=%d alphabet_us=%d locate_us=%d locate_anchor_us=%d locate_count_us=%d locate_anchor_ordinal=%d locate_count_rows=%d page_read_us=%d total_us=%d words=%d alphabet_computed=%d response_letters=%d",
+			dictID, pageSource, atLength, requestedPage, resolvedPage, effectiveOffset, stage, status,
+			lookupTime.Microseconds(), indexCheck.Microseconds(), openTime.Microseconds(), alphabetTime.Microseconds(), locateTime.Microseconds(), locateAnchorTime.Microseconds(), locateCountTime.Microseconds(), locateAnchorOrdinal, locateCountRows, pageRead.Microseconds(), time.Since(started).Microseconds(), len(result.Words), alphabetComputed, len(result.Alphabet))
+	}()
+	stageStarted := time.Now()
 	e, err := s.reg.get(q.Get("dict"))
+	lookupTime = time.Since(stageStarted)
 	if err != nil {
 		return browseResp{}, &browsePageFailure{status: http.StatusNotFound, message: err.Error()}
 	}
+	dictID = e.ID
+	stage = "index_check"
+	stageStarted = time.Now()
 	// Checked BEFORE the open: Browse pages the prepared headword index. ZIM's
 	// native path list remains available for search, but does not support this
 	// paged token-search and filtering view.
 	if !hasBrowseIndex(e.Path) {
+		indexCheck = time.Since(stageStarted)
 		return browseResp{}, &browsePageFailure{status: http.StatusConflict,
 			message: "This dictionary has no index. Create one in Dictionary Settings.", entry: e, unprepared: true}
 	}
+	indexCheck = time.Since(stageStarted)
+	stage = "dictionary_open"
+	stageStarted = time.Now()
 	d, err := e.open()
+	openTime = time.Since(stageStarted)
 	if err != nil {
 		return browseResp{}, &browsePageFailure{status: http.StatusInternalServerError, message: err.Error()}
 	}
@@ -846,14 +956,20 @@ func (s *Server) browsePage(q url.Values) (browseResp, error) {
 	// The client already has the completed strip on a strip=0 request. For
 	// ZIM, building it walks the native index and can take minutes, so a page
 	// return must not wait for Alphabet merely to discard its answer.
-	zimNative := entryHasSelfIndex(e) && !d.Meta().HeadwordsOnly
+	meta := d.Meta()
+	zimNative := entryHasSelfIndex(e) && !meta.HeadwordsOnly
 	var alphabet []dict.Letter
+	stage = "alphabet"
+	stageStarted = time.Now()
 	if !(zimNative && q.Get("strip") == "0") {
 		alphabet, err = b.Alphabet()
 		if err != nil {
+			alphabetTime = time.Since(stageStarted)
 			return browseResp{}, &browsePageFailure{status: http.StatusInternalServerError, message: fmt.Sprintf("browsing %s: %v", e.ID, err)}
 		}
 	}
+	alphabetTime = time.Since(stageStarted)
+	alphabetComputed = len(alphabet)
 	// The strip partitions the whole list, so its counts ARE the total - no
 	// COUNT(*) of its own, and no way for the two to disagree.
 	//
@@ -869,21 +985,37 @@ func (s *Server) browsePage(q url.Values) (browseResp, error) {
 	if zimNative {
 		// ZIM's strip samples the first visible headword in each native page;
 		// its offsets and total therefore use native index slots.
-		total = d.Meta().EntryCount
+		total = meta.EntryCount
 	}
 
 	offset, mark := 0, -1
+	stage = "locate_page"
+	stageStarted = time.Now()
 	if at := q.Get("at"); at != "" {
+		pageSource = "at"
+		atLength = len(at)
 		// A jump lands on the PAGE holding the word, not on the word: the
 		// reader asked to be put down in the list there, and a page that
 		// started mid-letter every time would have no stable address.
-		if mark, err = b.Locate(at); err != nil {
+		if measured, ok := b.(interface {
+			LocateWithStats(string) (int, store.LocateStats, error)
+		}); ok {
+			var stats store.LocateStats
+			mark, stats, err = measured.LocateWithStats(at)
+			locateAnchorTime, locateCountTime = stats.AnchorLookup, stats.Count
+			locateAnchorOrdinal, locateCountRows = stats.AnchorOrdinal, stats.CountedRows
+		} else {
+			mark, err = b.Locate(at)
+		}
+		if err != nil {
+			locateTime = time.Since(stageStarted)
 			return browseResp{}, &browsePageFailure{status: http.StatusInternalServerError, message: fmt.Sprintf("browsing %s: %v", e.ID, err)}
 		}
 		offset = mark - mark%browsePageSize
 	} else if p, _ := strconv.Atoi(q.Get("p")); p > 1 {
 		offset = (p - 1) * browsePageSize
 	}
+	locateTime = time.Since(stageStarted)
 	// Past the end - a stale bookmark, or a jump past the last headword -
 	// shows the last page rather than an empty one or an error.
 	if total > 0 && offset >= total {
@@ -894,7 +1026,12 @@ func (s *Server) browsePage(q url.Values) (browseResp, error) {
 	if mark < offset || mark >= offset+browsePageSize {
 		mark = offset
 	}
-	words, err := readBrowsePage(b, offset, browsePageSize, q.Get("diagnostics") == "1", "page", e.ID, d.Meta().Name)
+	locateTime = time.Since(stageStarted)
+	effectiveOffset, resolvedPage = offset, offset/browsePageSize+1
+	stage = "read_page"
+	stageStarted = time.Now()
+	words, err := readBrowsePage(b, offset, browsePageSize, diagnostics, "page", e.ID, meta.Name)
+	pageRead = time.Since(stageStarted)
 	if err != nil {
 		return browseResp{}, &browsePageFailure{status: http.StatusInternalServerError, message: fmt.Sprintf("browsing %s: %v", e.ID, err)}
 	}
@@ -908,9 +1045,10 @@ func (s *Server) browsePage(q url.Values) (browseResp, error) {
 	if q.Get("strip") == "0" {
 		responseAlphabet = nil
 	}
+	stage = "build_response"
 	return browseResp{
 		Dict:     e.ID,
-		Name:     d.Meta().Name,
+		Name:     meta.Name,
 		Title:    s.reg.prefs.DisplayTitle(e.ID),
 		Total:    total,
 		Page:     offset/browsePageSize + 1,
@@ -1260,6 +1398,7 @@ func (s *Server) browsePageHTMLFor(acceptLanguage string) []byte {
 	page := bytes.ReplaceAll(browseHTML, []byte("{{PRESETS}}"), []byte(s.pagePresetLinks()))
 	page = bytes.ReplaceAll(page, []byte("{{BROWSE_STRIP_EXACT_WIDTHS}}"), []byte(strconv.Itoa(indexconst.BrowseStripExactWidthCount)))
 	page = bytes.ReplaceAll(page, []byte("{{SEARCH_DEBOUNCE_MS}}"), []byte(strconv.Itoa(indexconst.SearchDebounceMS)))
+	page = bytes.ReplaceAll(page, []byte("{{BROWSE_PROGRESS_DELAY_MS}}"), []byte(strconv.Itoa(indexconst.BrowsePageProgressDelayMS)))
 	page = bytes.ReplaceAll(page, []byte("{{WORKSPACECSS}}"), []byte(assetTag(workspaceCSS)))
 	page = bytes.ReplaceAll(page, []byte("{{LISTSEARCHJS}}"), []byte(assetTag(listSearchJS)))
 	page = bytes.ReplaceAll(page, []byte("{{HEADWORDJS}}"), []byte(assetTag(headwordControlJS)))

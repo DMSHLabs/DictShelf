@@ -77,6 +77,31 @@ func browseStore(t *testing.T, words []string) *Store {
 	return s
 }
 
+func TestBrowseLocateUsesAnchorRange(t *testing.T) {
+	words := make([]string, 700)
+	for i := range words {
+		words[i] = fmt.Sprintf("word%04d", i)
+	}
+	s := browseStore(t, words)
+	for _, target := range []int{100, 101, 299, 300, 653} {
+		got, stats, err := s.LocateWithStats(words[target])
+		if err != nil || got != target || !stats.AnchorFound || stats.CountedRows >= 100 {
+			t.Errorf("LocateWithStats(%q) = %d, %+v, %v; want ordinal %d within one anchor stride", words[target], got, stats, err, target)
+		}
+	}
+	var plan string
+	err := s.db.QueryRow(`EXPLAIN QUERY PLAN SELECT COUNT(*) FROM entry WHERE `+browseWhere+
+		` AND w >= ? COLLATE NOCASE`+
+		` AND (w > ? COLLATE NOCASE OR (w = ? COLLATE NOCASE AND id > ?))`+
+		` AND w < ? COLLATE NOCASE`, "word0600", "word0600", "word0600", 1, "word0653").Scan(new(int), new(int), new(int), &plan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(plan, "idx_entry_w") || !strings.Contains(plan, "w>?") {
+		t.Errorf("Locate count does not seek from its anchor: %s", plan)
+	}
+}
+
 // TestBrowseAlphabet checks one page's new initials, including folded accents
 // and the existing compact labels for non-Latin scripts.
 func TestBrowseAlphabet(t *testing.T) {

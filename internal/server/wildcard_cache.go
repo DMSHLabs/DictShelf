@@ -19,6 +19,7 @@ import (
 
 	"github.com/wuweidict/wudict/internal/dict"
 	"github.com/wuweidict/wudict/internal/indexconst"
+	"github.com/wuweidict/wudict/internal/logx"
 	"github.com/wuweidict/wudict/internal/store"
 )
 
@@ -35,6 +36,8 @@ type wildcardCacheSignature struct {
 	query     string
 	group     string
 	wildcards bool
+	fts       bool
+	trigram   bool
 }
 
 type wildcardCacheEntry struct {
@@ -123,6 +126,17 @@ func (c *wildcardPageCache) begin(id string, signature wildcardCacheSignature, p
 	if err == nil {
 		_, err = entry.db.Exec(`DELETE FROM wildcard_block WHERE within_text=? AND within_wildcards=? AND dict_id=?`, within, boolInt(withinMask), dictID)
 	}
+	if err == nil && within == "" && (entry.signature.fts || entry.signature.trigram) {
+		if entry.signature.fts {
+			_, err = entry.db.Exec(`DELETE FROM wildcard_word_fts WHERE rowid IN (SELECT id FROM wildcard_word WHERE dict_id=?)`, dictID)
+		}
+		if err == nil && entry.signature.trigram {
+			_, err = entry.db.Exec(`DELETE FROM wildcard_word_trigram WHERE rowid IN (SELECT id FROM wildcard_word WHERE dict_id=?)`, dictID)
+		}
+		if err == nil {
+			_, err = entry.db.Exec(`DELETE FROM wildcard_word WHERE dict_id=?`, dictID)
+		}
+	}
 	if err == nil {
 		_, err = entry.db.Exec(`UPDATE wildcard_cache_meta SET accessed_ms=?`, now.UnixMilli())
 	}
@@ -164,16 +178,18 @@ func openWildcardCache(id string, signature wildcardCacheSignature, pageSize, di
 			entry.closeAndRemoveLocked()
 			return nil, err
 		}
+		logx.System("wildcard_cache_open status=create id=%q query=%q group=%q fts=%t trigram=%t dicts=%d", id, signature.query, signature.group, signature.fts, signature.trigram, dictCount)
 		return entry, nil
 	}
 	var saved wildcardCacheSignature
 	var savedID string
 	var savedPageSize, savedDictCount int
-	err = db.QueryRow(`SELECT cache_id,query_text,group_id,wildcards,page_size,dict_count
-		FROM wildcard_cache_meta LIMIT 1`).Scan(&savedID, &saved.query, &saved.group, &saved.wildcards,
+	err = db.QueryRow(`SELECT cache_id,query_text,group_id,wildcards,fts,trigram,page_size,dict_count
+		FROM wildcard_cache_meta LIMIT 1`).Scan(&savedID, &saved.query, &saved.group, &saved.wildcards, &saved.fts, &saved.trigram,
 		&savedPageSize, &savedDictCount)
 	if err != nil || savedID != id || saved != signature || savedPageSize != pageSize || savedDictCount != dictCount {
 		if err != nil {
+			metadataErr := err
 			_ = db.Close()
 			removeWildcardCacheFiles(path)
 			db, err = store.OpenWildcardCacheDB(path)
@@ -185,9 +201,11 @@ func openWildcardCache(id string, signature wildcardCacheSignature, pageSize, di
 				entry.closeAndRemoveLocked()
 				return nil, err
 			}
+			logx.System("wildcard_cache_open status=recreate id=%q query=%q group=%q fts=%t trigram=%t dicts=%d metadata_error=%q", id, signature.query, signature.group, signature.fts, signature.trigram, dictCount, metadataErr)
 			return entry, nil
 		}
 		_ = db.Close()
+		logx.System("wildcard_cache_open status=mismatch id=%q query=%q group=%q fts=%t trigram=%t dicts=%d saved_id=%q saved_query=%q saved_group=%q saved_fts=%t saved_trigram=%t saved_dicts=%d", id, signature.query, signature.group, signature.fts, signature.trigram, dictCount, savedID, saved.query, saved.group, saved.fts, saved.trigram, savedDictCount)
 		return nil, errors.New("wildcard cache metadata mismatch")
 	}
 	if err := prepareWildcardCacheDB(db, pageSize); err != nil {
@@ -198,15 +216,17 @@ func openWildcardCache(id string, signature wildcardCacheSignature, pageSize, di
 	if err := db.QueryRow(`SELECT accessed_ms FROM wildcard_cache_meta LIMIT 1`).Scan(&accessed); err == nil {
 		entry.updated = time.UnixMilli(accessed)
 	}
+	logx.System("wildcard_cache_open status=reuse id=%q query=%q group=%q fts=%t trigram=%t dicts=%d", id, signature.query, signature.group, signature.fts, signature.trigram, dictCount)
 	return entry, nil
 }
 
 func (e *wildcardCacheEntry) createSchema(id string) error {
 	statements := []string{
-		`PRAGMA user_version=3`,
+		`PRAGMA user_version=4`,
 		`CREATE TABLE wildcard_cache_meta(
 			cache_id TEXT PRIMARY KEY, query_text TEXT NOT NULL,
 			group_id TEXT NOT NULL, wildcards INTEGER NOT NULL,
+			fts INTEGER NOT NULL, trigram INTEGER NOT NULL,
 			page_size INTEGER NOT NULL, dict_count INTEGER NOT NULL,
 			created_ms INTEGER NOT NULL, accessed_ms INTEGER NOT NULL
 		)`,
@@ -228,15 +248,23 @@ func (e *wildcardCacheEntry) createSchema(id string) error {
 		`CREATE INDEX wildcard_block_start_offset ON wildcard_block(within_text,within_wildcards,dict_id,start_offset)`,
 		`CREATE INDEX wildcard_block_first_position ON wildcard_block(within_text,within_wildcards,dict_id,first_position)`,
 		`CREATE INDEX wildcard_block_last_position ON wildcard_block(within_text,within_wildcards,dict_id,last_position)`,
+		`CREATE TABLE wildcard_word(id INTEGER PRIMARY KEY,dict_id TEXT NOT NULL,base_position INTEGER NOT NULL,word TEXT NOT NULL,UNIQUE(dict_id,base_position))`,
+		`CREATE INDEX wildcard_word_dictionary ON wildcard_word(dict_id,base_position)`,
+	}
+	if e.signature.fts {
+		statements = append(statements, `CREATE VIRTUAL TABLE wildcard_word_fts USING fts5(word, columnsize=0, tokenize='unicode61 remove_diacritics 2')`)
+	}
+	if e.signature.trigram {
+		statements = append(statements, `CREATE VIRTUAL TABLE wildcard_word_trigram USING fts5(word, columnsize=0, tokenize='trigram')`)
 	}
 	for _, statement := range statements {
 		if _, err := e.db.Exec(statement); err != nil {
 			return fmt.Errorf("create wildcard cache schema: %w", err)
 		}
 	}
-	_, err := e.db.Exec(`INSERT INTO wildcard_cache_meta(cache_id,query_text,group_id,wildcards,
-		page_size,dict_count,created_ms,accessed_ms) VALUES(?,?,?,?,?,?,?,?)`,
-		id, e.signature.query, e.signature.group, boolInt(e.signature.wildcards),
+	_, err := e.db.Exec(`INSERT INTO wildcard_cache_meta(cache_id,query_text,group_id,wildcards,fts,trigram,
+		page_size,dict_count,created_ms,accessed_ms) VALUES(?,?,?,?,?,?,?,?,?,?)`,
+		id, e.signature.query, e.signature.group, boolInt(e.signature.wildcards), boolInt(e.signature.fts), boolInt(e.signature.trigram),
 		e.pageSize, e.dictCount, e.updated.UnixMilli(), e.updated.UnixMilli())
 	if err != nil {
 		return fmt.Errorf("create wildcard cache schema: %w", err)
@@ -511,9 +539,9 @@ func openExistingWildcardCache(id string, signature wildcardCacheSignature, dir 
 	var savedID string
 	var pageSize, dictCount int
 	var accessed int64
-	err = db.QueryRow(`SELECT cache_id,query_text,group_id,wildcards,page_size,dict_count,accessed_ms
+	err = db.QueryRow(`SELECT cache_id,query_text,group_id,wildcards,fts,trigram,page_size,dict_count,accessed_ms
 		FROM wildcard_cache_meta LIMIT 1`).Scan(&savedID, &saved.query, &saved.group,
-		&saved.wildcards, &pageSize, &dictCount, &accessed)
+		&saved.wildcards, &saved.fts, &saved.trigram, &pageSize, &dictCount, &accessed)
 	if err != nil || savedID != id || saved != signature {
 		_ = db.Close()
 		if err != nil {
@@ -719,6 +747,26 @@ func (e *wildcardCacheEntry) append(dictID, within string, withinMask bool, toke
 				_ = tx.Rollback()
 				return err
 			}
+			if within == "" && (e.signature.fts || e.signature.trigram) {
+				for i, word := range wordsPart {
+					result, insertErr := tx.Exec(`INSERT INTO wildcard_word(dict_id,base_position,word) VALUES(?,?,?)`, dictID, absolute+i, word)
+					if insertErr != nil {
+						_ = tx.Rollback()
+						return insertErr
+					}
+					rowID, insertErr := result.LastInsertId()
+					if insertErr == nil && e.signature.fts {
+						_, insertErr = tx.Exec(`INSERT INTO wildcard_word_fts(rowid,word) VALUES(?,?)`, rowID, word)
+					}
+					if insertErr == nil && e.signature.trigram {
+						_, insertErr = tx.Exec(`INSERT INTO wildcard_word_trigram(rowid,word) VALUES(?,?)`, rowID, dict.Fold(word))
+					}
+					if insertErr != nil {
+						_ = tx.Rollback()
+						return insertErr
+					}
+				}
+			}
 			consumed += take
 		}
 		if err := tx.Commit(); err != nil {
@@ -804,6 +852,49 @@ type resultCacheFile struct {
 	path     string
 	modified time.Time
 	size     int64
+	groups   []string
+	baseID   string
+}
+
+func wildcardCacheGroupKey(group string, fts, trigram bool) string {
+	return fmt.Sprintf("%s\x00%t\x00%t", group, fts, trigram)
+}
+
+func resultCacheLinks(path string) ([]string, string) {
+	db, err := store.OpenWildcardCacheDB(path)
+	if err != nil {
+		return nil, ""
+	}
+	defer db.Close()
+	name := filepath.Base(path)
+	if strings.HasPrefix(name, "wildcard_merged_find_") {
+		var signature string
+		if db.QueryRow(`SELECT signature FROM merged_find_meta LIMIT 1`).Scan(&signature) == nil {
+			return nil, strings.SplitN(signature, "\x00", 2)[0]
+		}
+		return nil, ""
+	}
+	if strings.HasPrefix(name, "wildcard_merged_") {
+		rows, err := db.Query(`SELECT group_id FROM merged_cache_group`)
+		if err != nil {
+			return nil, ""
+		}
+		defer rows.Close()
+		var groups []string
+		for rows.Next() {
+			var group string
+			if rows.Scan(&group) == nil {
+				groups = append(groups, group)
+			}
+		}
+		return groups, ""
+	}
+	var group string
+	var fts, trigram bool
+	if db.QueryRow(`SELECT group_id,fts,trigram FROM wildcard_cache_meta LIMIT 1`).Scan(&group, &fts, &trigram) == nil && group != "" {
+		return []string{wildcardCacheGroupKey(group, fts, trigram)}, ""
+	}
+	return nil, ""
 }
 
 func wildcardCacheFileSize(path string) int64 {
@@ -843,38 +934,97 @@ func (c *wildcardPageCache) pruneLocked(now time.Time, keep string, startup bool
 		if err != nil {
 			continue
 		}
-		if startup && now.Sub(info.ModTime()) > wildcardCacheMaxAge && path != keep && !active[path] {
-			removeWildcardCacheFiles(path)
-			continue
-		}
-		files = append(files, resultCacheFile{path: path, modified: info.ModTime(), size: wildcardCacheFileSize(path)})
+		groups, baseID := resultCacheLinks(path)
+		files = append(files, resultCacheFile{path: path, modified: info.ModTime(), size: wildcardCacheFileSize(path), groups: groups, baseID: baseID})
 	}
-	sort.Slice(files, func(i, j int) bool { return files[i].modified.After(files[j].modified) })
+	// A merged search result depends on its merged base, and both layouts
+	// belong to the same selected group. Evict connected files atomically.
+	parent := make([]int, len(files))
+	byPath := make(map[string]int, len(files))
+	for i := range files {
+		parent[i] = i
+		byPath[files[i].path] = i
+	}
+	var root func(int) int
+	root = func(i int) int {
+		if parent[i] != i {
+			parent[i] = root(parent[i])
+		}
+		return parent[i]
+	}
+	join := func(a, b int) { parent[root(a)] = root(b) }
+	byGroup := make(map[string]int)
+	for i, file := range files {
+		for _, group := range file.groups {
+			if previous, ok := byGroup[group]; ok {
+				join(i, previous)
+			} else {
+				byGroup[group] = i
+			}
+		}
+		if file.baseID != "" {
+			basePath := filepath.Join(c.dir, "wildcard_merged_"+file.baseID+".db")
+			if base, ok := byPath[basePath]; ok {
+				join(i, base)
+			}
+		}
+	}
+	components := make(map[int][]int)
+	for i := range files {
+		components[root(i)] = append(components[root(i)], i)
+	}
+	type cacheComponent struct {
+		members []resultCacheFile
+		latest  time.Time
+	}
+	groups := make([]cacheComponent, 0, len(components))
+	for _, indexes := range components {
+		group := cacheComponent{members: make([]resultCacheFile, 0, len(indexes))}
+		for _, index := range indexes {
+			file := files[index]
+			group.members = append(group.members, file)
+			if file.modified.After(group.latest) {
+				group.latest = file.modified
+			}
+		}
+		groups = append(groups, group)
+	}
+	sort.Slice(groups, func(i, j int) bool { return groups[i].latest.Before(groups[j].latest) })
 	var total int64
-	count := 0
+	count := len(groups)
 	for _, f := range files {
 		total += f.size
-		count++
 	}
-	for i := len(files) - 1; i >= 0 && (count > indexconst.ResultCacheLimit || c.maxBytes > 0 && total > c.maxBytes); i-- {
-		f := files[i]
-		if f.path == keep || active[f.path] {
+	for _, group := range groups {
+		protected := false
+		for _, member := range group.members {
+			if member.path == keep || active[member.path] {
+				protected = true
+			}
+			id := strings.TrimSuffix(strings.TrimPrefix(filepath.Base(member.path), "wildcard_"), ".db")
+			if entry := c.entries[id]; entry != nil && entry.active > 0 {
+				protected = true
+			}
+		}
+		outdated := startup && now.Sub(group.latest) > wildcardCacheMaxAge
+		if !outdated && count <= indexconst.ResultCacheLimit && (c.maxBytes <= 0 || total <= c.maxBytes) {
+			break
+		}
+		if protected {
 			continue
 		}
-		id := strings.TrimSuffix(strings.TrimPrefix(filepath.Base(f.path), "wildcard_"), ".db")
-		if entry := c.entries[id]; entry != nil {
-			entry.mu.Lock()
-			if entry.active > 0 {
+		for _, member := range group.members {
+			id := strings.TrimSuffix(strings.TrimPrefix(filepath.Base(member.path), "wildcard_"), ".db")
+			if entry := c.entries[id]; entry != nil {
+				entry.mu.Lock()
+				entry.closeAndRemoveLocked()
 				entry.mu.Unlock()
-				continue
+				delete(c.entries, id)
+			} else {
+				removeWildcardCacheFiles(member.path)
 			}
-			entry.closeAndRemoveLocked()
-			entry.mu.Unlock()
-			delete(c.entries, id)
-		} else {
-			removeWildcardCacheFiles(f.path)
+			total -= member.size
 		}
-		total -= f.size
 		count--
 	}
 }

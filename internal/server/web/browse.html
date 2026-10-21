@@ -462,6 +462,7 @@ const BROWSE_PAGE_CACHE_LIMIT=12,BROWSE_PAGE_SESSION_LIMIT=8;
 const BROWSE_ALPHABET_SESSION_KEY="wudict_browse_alphabet_v2";
 const BROWSE_STRIP_EXACT_WIDTHS={{BROWSE_STRIP_EXACT_WIDTHS}};
 const SEARCH_DEBOUNCE_MS={{SEARCH_DEBOUNCE_MS}};
+const BROWSE_PROGRESS_DELAY_MS={{BROWSE_PROGRESS_DELAY_MS}};
 const BROWSE_FIND_SESSION_KEY="wudict_browse_find_v1";
 const BROWSE_PAGE_SESSION_KEY="wudict_browse_page_v1";
 let browseHeadwordControl=null;
@@ -866,8 +867,9 @@ async function show(opts,record){
   if(!cached&&opts.p){
     const pending=browsePagePrefetches.get(browsePageKey(requestDictId,opts.p));
     if(pending){
-      const endProgress=browseProgress(t("browse.loadingWords"),null,"page");
-      cached=await pending;endProgress();
+      let endProgress=()=>{};
+      const progressTimer=setTimeout(()=>{endProgress=browseProgress(t("browse.loadingWords"),null,"page")},BROWSE_PROGRESS_DELAY_MS);
+      cached=await pending;clearTimeout(progressTimer);endProgress();
       if(seq!==browseSeq)return;
     }
   }
@@ -922,7 +924,7 @@ async function show(opts,record){
     const message=streamAlphabet?t("browse.loadingAlphabet"):t("browse.loadingWords");
     endProgress=browseProgress(message,()=>controller.abort(),streamAlphabet?"alphabet":"page",requestDictId);
   };
-  if(streamAlphabet)startProgress();else progressTimer=setTimeout(startProgress,220);
+  if(streamAlphabet)startProgress();else progressTimer=setTimeout(startProgress,BROWSE_PROGRESS_DELAY_MS);
   last=opts;
   const u=new URLSearchParams({dict:dictId});
   if(opts.at)u.set("at",opts.at);else u.set("p",String(opts.p||1));
@@ -1223,6 +1225,7 @@ async function fetchFound(page,target=0,record="replace"){
   // This closure owns only this request's task, including after a newer query starts.
   const finish=()=>endProgress();
   const u=new URLSearchParams({dict:dictId,q:query,wildcards:mask?"1":"0",stream:"1"});
+  if(browseDiagnosticsEnabled())u.set("diagnostics","1");
   try{
     const r=await browseFetch("/api/browse/find?"+u,{signal:controller.signal});
     if(!r.ok){const body=await r.json().catch(()=>({}));throw new Error(body.error||`HTTP ${r.status}`)}

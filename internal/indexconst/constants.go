@@ -7,6 +7,8 @@ package indexconst
 const (
 	// SearchDebounceMS is the idle interval after typing before Browse and result-filter searches.
 	SearchDebounceMS = 500
+	// BrowsePageProgressDelayMS delays the page-loading indicator to avoid flashes on quick reads.
+	BrowsePageProgressDelayMS = 500
 	// BrowsePageSize is the default number of headwords shown on a Browse page.
 	BrowsePageSize = 300
 	// BrowsePageLastOffset is the last row of a Browse page relative to its start.

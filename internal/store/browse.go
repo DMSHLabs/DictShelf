@@ -37,8 +37,8 @@ func (s *Store) StreamBrowseHeadwords(ctx context.Context, query string, mask bo
 		if literal := maskTrigramLiteral(query); s.hasTrigram && !s.staleFold && literal != "" && !maskHasASCIILead(query) {
 			phrase := `"` + strings.ReplaceAll(literal, `"`, `""`) + `"`
 			rows, queryErr := s.db.QueryContext(ctx, `SELECT DISTINCT e.w FROM entry_trigram t
-				JOIN entry e ON e.id=t.rowid WHERE entry_trigram MATCH ? AND `+browseWhere+
-				` ORDER BY e.w COLLATE NOCASE`, phrase)
+				JOIN entry e ON e.id=t.rowid WHERE entry_trigram MATCH ? AND e.w NOT LIKE '@_%'
+				ORDER BY e.w COLLATE NOCASE`, phrase)
 			if queryErr != nil {
 				return queryErr
 			}
@@ -250,8 +250,8 @@ func (s *Store) FindHeadwordsMaskWithin(ctx context.Context, query, within strin
 	if literal := maskTrigramLiteral(query); s.hasTrigram && !s.staleFold && literal != "" && !maskHasASCIILead(query) {
 		phrase := `"` + strings.ReplaceAll(literal, `"`, `""`) + `"`
 		rows, err := s.db.QueryContext(ctx, `SELECT DISTINCT e.w FROM entry_trigram t
-			JOIN entry e ON e.id=t.rowid WHERE entry_trigram MATCH ? AND `+browseWhere+
-			` ORDER BY e.w COLLATE NOCASE`, phrase)
+			JOIN entry e ON e.id=t.rowid WHERE entry_trigram MATCH ? AND e.w NOT LIKE '@_%'
+			ORDER BY e.w COLLATE NOCASE`, phrase)
 		if err != nil {
 			return nil, 0, nil, nil, err
 		}
@@ -430,28 +430,58 @@ func (s *Store) StreamBrowseMaskAlphabet(ctx context.Context, progress func(scan
 	return sections.Finish(), scanned, nil
 }
 
+// LocateStats describes the indexed work used to resolve a headword position.
+type LocateStats struct {
+	AnchorLookup  time.Duration
+	Count         time.Duration
+	AnchorFound   bool
+	AnchorOrdinal int
+	CountedRows   int
+	Ordinal       int
+}
+
 // Locate implements dict.Browser.
 func (s *Store) Locate(word string) (int, error) {
+	ordinal, _, err := s.LocateWithStats(word)
+	return ordinal, err
+}
+
+// LocateWithStats resolves a headword ordinal and measures its indexed steps.
+func (s *Store) LocateWithStats(word string) (int, LocateStats, error) {
+	stats := LocateStats{}
 	if s.hasBrowseAnchors {
 		var ordinal, entryID int
 		var anchorWord string
+		anchorStarted := time.Now()
 		err := s.db.QueryRow(`SELECT ordinal, entry_id, w FROM browse_anchor
 			WHERE w < ? COLLATE NOCASE ORDER BY w COLLATE NOCASE DESC, entry_id DESC LIMIT 1`, word).
 			Scan(&ordinal, &entryID, &anchorWord)
+		stats.AnchorLookup = time.Since(anchorStarted)
 		if err == nil {
+			stats.AnchorFound = true
+			stats.AnchorOrdinal = ordinal
 			var count int
+			countStarted := time.Now()
 			err = s.db.QueryRow(`SELECT COUNT(*) FROM entry WHERE `+browseWhere+
-				` AND (w COLLATE NOCASE, id) > (? COLLATE NOCASE, ?)`+
-				` AND w < ? COLLATE NOCASE`, anchorWord, entryID, word).Scan(&count)
-			return ordinal + count, err
+				` AND w >= ? COLLATE NOCASE`+
+				` AND (w > ? COLLATE NOCASE OR (w = ? COLLATE NOCASE AND id > ?))`+
+				` AND w < ? COLLATE NOCASE`, anchorWord, anchorWord, anchorWord, entryID, word).Scan(&count)
+			stats.Count = time.Since(countStarted)
+			stats.CountedRows = count
+			stats.Ordinal = ordinal + 1 + count
+			return stats.Ordinal, stats, err
 		}
 		if err != sql.ErrNoRows {
-			return 0, err
+			return 0, stats, err
 		}
 	}
 	var n int
+	countStarted := time.Now()
 	err := s.db.QueryRow("SELECT COUNT(*) FROM entry WHERE "+browseWhere+" AND w < ? COLLATE NOCASE", word).Scan(&n)
-	return n, err
+	stats.Count = time.Since(countStarted)
+	stats.CountedRows = n
+	stats.Ordinal = n
+	return n, stats, err
 }
 
 // Alphabet implements dict.Browser, once per open. A text.db is immutable

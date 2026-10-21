@@ -1,9 +1,51 @@
 # Agent handoff — current state
 
-Current checkout: branch `dev` at `accd33b7`. The current uncommitted change is
-Browse's match-count button and “Find from here” action; earlier Browse/Wildcards,
-Android UI, and task-progress work is included in the checkout. Browse and
-Wildcards SQL result caches now use indexed 300-headword blocks, retain files
+Wildcards toolbar: the merge-books control is fixed to 3.2em with a larger icon; page controls show “Next page” / “Previous page” when the row has room, fall back to arrows, then hide before the page counter on narrow rows.
+
+Browse's “Loading headwords” page indicator now waits 500 ms for both ordinary page reads and in-flight page prefetches, avoiding a flash on quick Next transitions. Runtime verification is pending.
+
+Browse deep headword jumps spent about 450 ms in `Locate`'s SQL count even when fewer than 100 rows were counted. The query now gives SQLite an explicit lower bound at the closest 100-row anchor, and the anchor ordinal includes the anchor row; focused position/query-plan checks pass. Wildcards per-dictionary lower search retains base offsets. Combined lower search carries both source and upper-mask base positions; navigation, highlighting and Find from here now use the latter, with a new indexed cache signature. Runtime checks remain pending. Browse diagnostics split anchor lookup, bounded count, page read, HTTP response, and Android bridge timings.
+
+Browse `*home*` with trigram enabled failed because the candidate SQL joined two tables that both expose `w`, while the shared internal-entry filter used unqualified `w`. The two joined mask-candidate queries now qualify the filter as `e.w`; runtime verification is pending.
+
+Selecting Wildcards resets its view to separate dictionaries; explicit URL/history/article-return restoration keeps its saved view. View switches restore completed metadata and visited pages from bounded memory caches (128 entries, 30-minute TTL). The 17:58 log shows repeated cached switches in 63–77 ms without spinner; initial SQL builds remain long.
+
+Browse/Wildcards diagnostics correlate switch and run IDs, requested query/group, FTS/trigram variant, exact browser cache key, saved cache ID, alternative index variants, session-write result, SQL page reads, build/resume, spinner and task-panel visibility. This distinguishes a new submit from a view switch and a settings-key miss from a lost cache entry. Wildcards rows snapshot FTS/trigram settings for cache identity; lower rows inherit them. Returning to completed caches reads only a missing visible page and keeps the spinner off. The merged signature validator accepts both index flags and the selected dictionary IDs; runtime lower `dog` searches succeed.
+
+System Settings → Search now applies optional FTS/trigram indexes to both Wildcards SQL result databases. In the separate-dictionaries database, upper-mask words are indexed with their dictionary and base positions; the lower search selects FTS candidates for plain token queries, trigram candidates for masks with a 3+ literal, and scans blocks otherwise. The index combination is part of server and browser cache identity. Focused four-combination tests, index rebuild tests, Go build, JavaScript parse and diff checks pass. Runtime timing on Windows/Android is pending.
+
+Current checkout: branch `dev` at `8b8f8856`. Current uncommitted changes add
+Browse's match-count button and “Find from here” action, plus indexed candidate
+search in the merged Wildcards database. Opt-in Browse diagnostics now logs
+per-request headword search mode/source, first event/word and total timings,
+found/scanned counts; merged search additionally logs cache hit/miss, selected
+index, candidate count, and cache-build time. The existing Settings → System
+Browse/Wildcards diagnostics checkbox enables it in both views. The 2026-10-21
+System Log includes an earlier Wildcards run that scanned dictionary indexes
+(up to 61 s) and a later run using the upper-mask SQLite cache. That cache run
+still took 16.6 s on 197k rows because it emitted one event per match; batching
+now emits the first result immediately and subsequent results in batches. Go
+build passes; runtime timing after this fix is pending. Plain Browse `dog` in a
+9.1M-entry dictionary took 11 ms; merged Wildcards narrowed `dog` to 6382 FTS
+candidates and built 6249 results in 115 ms. Merged filter caches now resolve each match's base position through
+the unfiltered mask's indexed result cache; their signature changed so old
+incorrect positions rebuild. This addresses “Find from here” after jumping to
+the middle of the combined list. Ordinary Wildcards' lower search for selective
+top masks now scans completed result blocks in the wildcard SQLite cache, not
+dictionary indexes, and records the same base offsets. Streaming search and
+later page/position reads now require a valid wildcard SQL cache; missing,
+malformed or unavailable cache data returns an error instead of falling back
+to a dictionary index. Combined mode passes its prepared merged-database ID to
+the lower search, validates the selected dictionary IDs from SQL metadata, and
+does not reopen dictionaries on that path. The Wildcards UI cache-key version
+changed so an older session cannot restore a combined row without that ID. The UI waits for upper
+mask completion and shows one aggregate word-count progress with the currently
+scanned block's dictionary name. Masks made only of `*` and `?` normalize to a
+minimum-length mask and build the same complete 300-word SQL cache; all-star
+queries no longer use lazy page-only storage. Runtime UI confirmation remains.
+Earlier Browse/Wildcards, Android UI,
+and task-progress work is included in the checkout. Browse and Wildcards SQL
+result caches now use indexed 300-headword blocks, retain files
 across idle periods/restarts, and share a five-file/age/disk-size cleanup policy.
 Settings → System controls the combined cache disk cap (2 GiB default on Android,
 8 GiB on desktop, or No Limit).
@@ -11,6 +53,12 @@ Old cache schemas are prepared on first open. `go build ./...`, inline JavaScrip
 syntax checks, catalog JSON parsing, and `git diff --check` pass; the FOSS debug
 APK also builds successfully. No tests were run, and the APK was not installed.
 Windows/Android UI and long-running cache behavior need runtime verification.
+Merged Wildcards progress now uses one scale across building the combined SQL list
+and applying its mask, reserving 100% until both caches are committed. Switching
+back to per-dictionary mode reads completed SQL-cache pages without showing a
+full-search task; runtime verification remains pending.
+Combined Wildcards diagnostics record index combination, cache hit/build, row counts and elapsed time. Each combination stays isolated.
+The Wildcards merge-books button now grows into the open space before Total, with its book icon centered; the previous fake spacing offset was removed.
 Android UI changes keep
 the Browse A–Z heading and Find/Filter dock fixed while its dictionary list
 scrolls; the Reading it word by word hint stays with the heading above its
@@ -26,6 +74,7 @@ positions for paging and “Find from here”. The selected view is kept in the
 search URL and article-return link. The previous/next-match buttons now retain
 the merged flag and source dictionary IDs when creating filter rows; without
 those fields, merged-match requests silently queried a nonexistent dictionary.
+Cache eviction links both views by dictionary group and FTS/trigram setting, including merged find caches; an active member protects the whole group.
 Match pages now also carry a separate ordinal within the masked merged list:
 the source position is still used to highlight the exact headword, while the
 masked ordinal selects the correct base page. Older merged-find SQL caches are
@@ -51,6 +100,17 @@ a headword opens “Find from here”; it outlines the selected word and uses SQ
 NOCASE-compatible binary bounds so Next starts after the word and Previous before
 it. `go build ./...`, inline JavaScript parsing, and `git diff --check` pass;
 Windows/Android interaction still needs runtime verification.
+
+Merged Wildcards search previously scanned every row in the combined SQL table
+in Go and rebuilt the query result cache. The merged database now builds FTS5
+and (when supported by SQLite) trigram indexes; plain headword queries and masks
+with a literal run of at least three characters use SQL index candidates before
+the existing exact matcher. A full scan remains for masks without a 3+ character
+literal or any indexed bottom-search term. The base cache signature version
+changed to rebuild older merged databases. Go build and `git diff --check` pass;
+runtime speed and SQLite index behavior are not yet measured on Windows or
+Android.
+Windows log 2026-10-21 19:35:28 exposed a slow Wildcards lower `dog` search inside `*d*g*`: SQLite ordered the dictionary table before FTS, taking 31 s for 2,045 candidates and over a minute for 2,771. The candidate query now forces FTS first with `CROSS JOIN`; the latter query takes ~10 ms against the saved cache, but app runtime remains unverified.
 The ordered SQL wildcard cache supports seeking to matches before or after a
 headword position across dictionary boundaries.
 The live Wildcards pane now assembles visible 300-word pages by cumulative
@@ -139,8 +199,6 @@ All 13 font assets in web/fonts are registered for the document and scripted art
 
 Hide examples without [*] is indented by 4ch and disabled while the Examples layer is off. Settings dropdown controls use Language's shared control height/font tokens. Search as you type and Fonts selects now use a drawn triangle and zero vertical padding to align the text. Browse A-Z now ends the Dictionaries section with row spacing. Build passed; visual confirmation pending.
 
-Copied Charis 7 and Gentium 7 Regular/Italic/Bold/BoldItalic WOFF2 files and each family's OFL.txt into web/fonts; font hashes match the local source packages. Existing Charis-Regular.ttf and Quivira.otf were preserved. Font registration and article styling were not changed.
-
 Export output-folder label, path input and folder button now share one non-wrapping row; the path field takes the remaining width. Runtime layout confirmation remains pending.
 
 Export group checkbox now inherits the same 20px box and checkmark geometry as dictionary rows; only its mixed-state square has a dedicated centered mark. Removed the em-sized override that shrank the box without moving the shared checkmark. Runtime visual confirmation remains pending.
@@ -162,8 +220,6 @@ Results toggles keep their independently measured label width when the section c
 Browse input search uses the shared `indexconst.SearchDebounceMS` (500 ms after the last edit). The input stays enabled during search streams and page/alphabet loading, and page-loading keyboard guards allow typing in it. Runtime focus/continued-typing verification is pending.
 
 Settings places the Search as you type label before its dropdown. Language, Groups, Search as you type, Presets and Fonts dropdowns now use the same physical height as Edit dictionary settings: their height follows the base control size instead of shrinking with the smaller dropdown text. Runtime layout verification is pending.
-
-Language, Groups, Presets and the native Search as you type / Fonts selects now share the `.panel-dropdown` sizing and caret style. Runtime visual verification is pending.
 
 Search as you type options now explicitly read Never, Below 10k/50k/100k/500k/1m, Always (localized in EN/RU); saved values and threshold behavior are unchanged. Runtime layout verification is pending.
 
@@ -320,6 +376,8 @@ User-file resource resolution now opens and validates the file through a Go oper
 System Settings now exposes the same info-message, cache-clear and log controls on Windows as Android; both log panels put the description above their shared controls. Windows cache clearing uses the WebView2 DevTools cache API. `INDEX_WORKERS` has an Auto selector (CPU cores minus one, minimum one) and numbered choices; Auto is preserved in `wudict2.toml`, and the running index limiter updates immediately. Android Restore defaults clears only the saved `INDEX_WORKERS` override and now restores the running limiter to the value loaded from `wudict.toml`; it does not touch logs, reader preferences, dictionaries or indexes. The Windows System panel no longer repeats the config path/reveal action or exposes `SERVER_IP`/`SERVER_PORT`; its log export button has no underline. The uncompressed-body writer option and its config/CLI/UI switches are removed; the reader keeps compatibility with existing literal article bodies. The unindexed-dictionary memory tuning fields are hidden from both System panels. Store tests assert that `coraz` matches both `corazón` and `corazonada`, and that `razon` matches `corazón` when `WithIgnoreDiacritics` is set. The app checkbox now defaults on for new profiles while preserving an explicitly saved off state; the Store API default remains accent-preserving. `go test ./internal/store`, `go test ./internal/config`, `go test ./internal/server -run '^TestI18nCatalogs$'`, `go build ./...`, `git diff --check`, Android FOSS debug builds for arm64/x86_64, and `build-windows.cmd debug` pass. A full `internal/server` test run still fails across multiple integration tests and was not isolated in this session; the standalone Node translation check also fails before catalog checks because its `impRender` pattern no longer matches. Windows GUI runtime confirmation remains pending.
 
 On startup, `config.CleanObsoleteConfig` removes obsolete memory/index/compression keys and their adjacent help comments from the active config. A listenerless Windows GUI launch also removes the HTTP listener-only keys; HTTP server launches keep them. It writes atomically only when the file changes, then reloads the config. First-run templates omit listener-only settings for listenerless launches and no longer include obsolete unindexed-dictionary memory fields. `go build ./internal/config ./internal/cli` and `git diff --check` pass; startup cleanup against an existing Windows config remains to be verified by the user.
+
+The October 21 14:35 log confirms sequential lower Wildcards search reads only each dictionary's prepared SQL result rows. It also exposed combined-list lower search opening the upper-result database but still scanning all 11,434,669 rows of the master merged database for a short mask. Candidate selection now starts from the upper result database (284,868 rows in that trace) and only substitutes a smaller master FTS/trigram candidate set when available; progress uses the selected candidate count. Opt-in Browse diagnostics log each 10% scan milestone with elapsed time/rate/found count and split final timing into scan, finalize and commit phases. A rebuilt runtime check is pending.
 
 ## Remaining manual check
 On Windows, verify direct GET resource delivery: Settings/editor assets, preset switching and GD fonts, user styles, and background images in the picker. The user has confirmed dictionary images, multi-gigabyte video, seeking and background-image thumbnails through the latest direct resource path. The user confirmed successful settings migration and that the next launch skips it; only the stalled-export timeout branch remains unverified. The user confirmed the three dialogs and startup splash on Windows. Also confirm browser and console mode still bind and serve HTTP. Remaining checks: dialog appearance with Background Image and Sepia on/off; browser and Android paths for all three dialogs; Edit Filters load/save/reset, close prompt, and translations; Edit Folders' layout, current paths, validation, index defaults, picker, archive intake, shared progress, save and list refresh; Lemmatization list/install/removal, progress polling, directory note and attribution; chunked browser archive upload; URL and native-path import; System/English/Русский selection and persistence on Windows and Android; System locale behavior on EN/RU devices; orphan actions/removal; About; Browse streams/search/filter/Stop/chooser; Wildcards filtering/page turns/prefetch; article CSS; explicit index rescan and reindex progress/Stop. Browser file input/drop uploads retain HTTP; verify browser upload remains functional and test Android WebView and Java archive imports. Then verify portable startup with prepared dictionaries and confirm indexes are reused after copying `Data`. Check the shared dictionary picker on Android.

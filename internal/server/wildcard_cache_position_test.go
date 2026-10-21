@@ -15,7 +15,7 @@ func TestWildcardCachePositionSeek(t *testing.T) {
 	cache.init(dir)
 	id := "0123456789abcdef"
 	signature := wildcardCacheSignature{query: "*d*g*", group: "all", wildcards: true}
-	entry, token, err := cache.begin(id, signature, 2, 1, "dict", "Dictionary", 0, "dog", false, dir)
+	entry, token, err := cache.begin(id, signature, browsePageSize, 1, "dict", "Dictionary", 0, "dog", false, dir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -33,9 +33,9 @@ func TestWildcardCachePositionSeek(t *testing.T) {
 	cache.finish(entry, &key, token)
 	assertWildcardPositionSeeks(t, cache, id, signature)
 
-	page, ok, err := cache.page(id, signature, "dict", "dog", false, 2, 0, 1)
-	if err != nil || !ok || len(page.Positions) != 2 || page.Positions[0] != 9 || page.Positions[1] != 20 {
-		t.Fatalf("logical page 2 = %+v, available=%v, error=%v", page, ok, err)
+	page, ok, err := cache.page(id, signature, "dict", "dog", false, 1, 0, 1)
+	if err != nil || !ok || len(page.Positions) != 4 || page.Positions[0] != 2 || page.Positions[1] != 5 || page.Positions[2] != 9 || page.Positions[3] != 20 {
+		t.Fatalf("logical page 1 = %+v, available=%v, error=%v", page, ok, err)
 	}
 	var plan string
 	rows, err := entry.db.Query(`EXPLAIN QUERY PLAN SELECT positions_json,start_offset,word_count
