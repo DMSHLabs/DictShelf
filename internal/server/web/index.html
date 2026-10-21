@@ -264,7 +264,6 @@ window.wudictFontScale=(function(){
 <button type="button" class="choice-btn themed-select-btn" id="modeMenuBtn" aria-haspopup="listbox" aria-expanded="false" aria-label="{{T:search.mode}}" disabled></button>
 <span class="choice-menu menu-card themed-select-menu" id="modeMenu" role="listbox" aria-label="{{T:search.mode}}" data-w="anchor" hidden></span>
 </span>
-<button type="button" class="btn" id="mergedAZ" title="{{T:search.mergeBooksToOne}}" aria-label="{{T:search.mergeBooksToOne}}" disabled>{{T:search.mergeBooksToOneShort}}</button>
 <!-- The dictionary scope's seg is NOT here in the markup: it lives in the
      status bar while that bar is on screen and is moved back to this exact spot
      (right after the mode seg) when the bar is hidden — before the first search,
@@ -302,6 +301,12 @@ window.wudictFontScale=(function(){
     <header class="mask-head">
       <button type="button" class="choice-btn mask-dictionary-picker" id="maskDict" aria-label="{{T:search.wildcardsDictionary}}" aria-haspopup="dialog"><span id="maskDictName"></span><span id="maskDictMeta"></span></button>
       <span id="maskProgress" aria-label="{{T:search.wildcardsResults}}" hidden>
+        <button type="button" class="btn" id="mergedAZ" title="{{T:search.mergeBooksToOne}}" aria-label="{{T:search.mergeBooksToOne}}" aria-pressed="false" disabled>
+          <svg viewBox="0 0 64 36" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+            <g class="merge-books-to-one"><path d="M3 9h12v17H3zM6 6h12v17M9 3h12v17M4 13h8M7 10h8M10 7h8"/><path d="M26 18h13m-5-5 5 5-5 5"/><path d="M46 8h15v20H46zM51 8v20M54 13h5"/></g>
+            <g class="merge-book-to-many"><path d="M3 8h15v20H3zM8 8v20M11 13h5"/><path d="M25 18h13m-5-5 5 5-5 5"/><path d="M44 9h12v17H44zM47 6h12v17M50 3h12v17M45 13h8M48 10h8M51 7h8"/></g>
+          </svg>
+        </button>
         <span class="mask-total"><span>{{T:search.wildcardsTotalLabel}}</span><span id="maskCount" role="status" aria-label="{{T:search.wildcardsTotal}}"></span></span>
         <button type="button" id="maskPrev" aria-label="{{T:browse.previousTitle}}">‹</button>
         <button type="button" id="maskPage" aria-label="{{T:browse.gotoBlock}}" title="{{T:browse.gotoBlock}}">1/1</button>
@@ -1732,7 +1737,7 @@ function groupIds(sel){
   // groups.ini (D162), and a name may contain ":" itself.
   return orderedDicts().filter(d=>!d.unavailable&&(d.groups||[]).some(g=>"g:"+g.f+":"+g.v===sel)).map(d=>d.id);
 }
-function updateMergedAZ(){const selection=$("dict").value||"all";const ids=selection==="all"?activeUserGroupIds():selection.startsWith("g:")?groupIds(selection):[selection];const entering=!maskMergeAZ,label=tx(entering?"search.mergeBooksToOne":"search.mergeBooksToMany");$("mergedAZ").disabled=!dictsSettled||ids.length===0;$("mergedAZ").textContent=tx(entering?"search.mergeBooksToOneShort":"search.mergeBooksToManyShort");$("mergedAZ").title=label;$("mergedAZ").setAttribute("aria-label",label);$("mergedAZ").setAttribute("aria-pressed",String(!!maskMergeAZ))}
+function updateMergedAZ(){const selection=$("dict").value||"all";const ids=selection==="all"?activeUserGroupIds():selection.startsWith("g:")?groupIds(selection):[selection];const entering=!maskMergeAZ,label=tx(entering?"search.mergeBooksToOne":"search.mergeBooksToMany");$("mergedAZ").disabled=!dictsSettled||ids.length===0;$("mergedAZ").title=label;$("mergedAZ").setAttribute("aria-label",label);$("mergedAZ").setAttribute("aria-pressed",String(!!maskMergeAZ))}
 $("mergedAZ").addEventListener("click",()=>{
   if(!dictsSettled)return;
   maskMergeAZ=!maskMergeAZ;
@@ -7314,7 +7319,7 @@ function maskFindStart(){
   maskStripVersion++;maskStripRendered=-1;
   if(!query||!maskPattern||!maskBaseRows.length){maskRender();maskFindControls();return}
   const groupCacheID=maskBaseRows[0]?.cacheID||maskNewCacheID(),groupCacheGroup=maskBaseRows[0]?.cacheGroup||maskSelection;
-  maskFindRows=maskBaseRows.map((row,index)=>({id:row.id,name:row.name,state:"pending",total:0,data:null,
+  maskFindRows=maskBaseRows.map((row,index)=>({id:row.id,name:row.name,merged:!!row.merged,mergedIds:row.mergedIds||"",state:"pending",total:0,data:null,
     alphabet:[],size:row.size||300,wantedPage:1,error:"",within:query,withinMask:maskFindWildcard,
     cacheID:groupCacheID,cacheGroup:groupCacheGroup,cacheOrder:index,cacheCount:maskBaseRows.length}));
   for(const row of maskFindRows){
@@ -7396,19 +7401,20 @@ async function maskFindTurn(step){
   if(!row)return;
   const token=++maskNavToken;
   if(token!==maskNavToken||maskFindFilter)return;
-  let position;
+  let position,basePosition;
   if(row.diskCache){
     try{
       const page=await maskReadResultPage(row,Math.floor(at/(row.size||300))+1);
       if(token!==maskNavToken||maskFindFilter)return;
-      position=page.positions?.[at%(row.size||300)];
+      const local=at%(row.size||300);position=page.positions?.[local];basePosition=page.basePositions?.[local];
     }catch(error){row.error=error.message;return}
   }else position=row.streamPositions?.[at];
   if(position===undefined)return;
+  if(!Number.isInteger(basePosition))basePosition=position;
   maskFindMatch={id:row.id,position};
   maskPrefetchFindPages();
   const base=maskBaseRows.findIndex(candidate=>candidate.id===row.id);
-  if(base>=0){maskSelect(base,Math.floor(position/(maskBaseRows[base].size||300))+1);maskFindControls()}
+  if(base>=0){maskSelect(base,Math.floor(basePosition/(maskBaseRows[base].size||300))+1);maskFindControls()}
 }
 function maskFindInputChanged(){
   if(maskBusyJobs.size)return;

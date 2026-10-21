@@ -26,14 +26,15 @@ import (
 )
 
 type browseFindResp struct {
-	Words     []string      `json:"words"`
-	Alphabet  []dict.Letter `json:"alphabet,omitempty"`
-	Positions []int         `json:"positions,omitempty"`
-	Total     int           `json:"total"`
-	Page      int           `json:"page"`
-	Pages     int           `json:"pages"`
-	Size      int           `json:"size"`
-	Partial   bool          `json:"partial,omitempty"`
+	Words         []string      `json:"words"`
+	Alphabet      []dict.Letter `json:"alphabet,omitempty"`
+	Positions     []int         `json:"positions,omitempty"`
+	BasePositions []int         `json:"basePositions,omitempty"`
+	Total         int           `json:"total"`
+	Page          int           `json:"page"`
+	Pages         int           `json:"pages"`
+	Size          int           `json:"size"`
+	Partial       bool          `json:"partial,omitempty"`
 }
 
 // handleBrowseFind searches the complete headword index, then pages the
