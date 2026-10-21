@@ -3853,7 +3853,7 @@ async function fetchStream(url,onMsg,signal,etag){
 const hitNames=new Map();
 function dictName(id){
   const d=dicts.find(x=>x.id===id);
-  return d?dictLabel(d):hitNames.get(id)||id;
+  return d?dictLabel(d):titles.get(id)||hitNames.get(id)||id;
 }
 /* Says what was searched and offers the way out, placed under the results
    rather than in the status line: the scope is a property of what is on
@@ -3887,7 +3887,7 @@ $("out").addEventListener("click",e=>{
    the real name from a cheap header probe; nothing has to be opened to use it. */
 function hitName(h){
   const d=dicts.find(x=>x.id===h.dict);
-  return (d&&dictLabel(d))||h.name||h.dict;
+  return d?dictLabel(d):titles.get(h.dict)||h.name||h.dict;
 }
 /* Whether this device is touched or pointed at, which is the difference
    between "tap" and "click" and nothing else. Read once: it does not change
@@ -4059,8 +4059,8 @@ function renderSlot(box,h,mode,q,perDict,group){
          is no wall to build, and nothing above it to bury. That is also why a
          link-scoped search keeps its own `shown`, and with it the guard that
          stops a scoped miss from silently widening. */
-      if(group)return{shown:true,noIndex:{dict:h.dict,name:h.name,feat}};
-      box.innerHTML=`<details class="dict"><summary>${esc(h.name)}`+
+      if(group)return{shown:true,noIndex:{dict:h.dict,name:hitName(h),feat}};
+      box.innerHTML=`<details class="dict"><summary>${esc(hitName(h))}`+
         `<span class="upgrade" data-id="${h.dict}" data-feat="${feat}">add the ${FEAT_NAME[feat]} to this dictionary</span></summary></details>`;
       return{shown:true};
     }
@@ -4073,7 +4073,7 @@ function renderSlot(box,h,mode,q,perDict,group){
   // at, and every other mode has no ladder at all.
   const rung=mode==="fts"&&/\s/.test(q||"")&&(h.rung==="near"||h.rung==="words")
     ?`<span class="rung">phrase not found · ${h.rung==="near"?"words proximity":"words anywhere"} · </span>`:"";
-  det.innerHTML=`<summary>${esc(h.name)}<span class="count">${rung}${h.results.length}${more?"+":""} result${h.results.length===1?"":"s"}</span>${more}</summary>`;
+  det.innerHTML=`<summary>${esc(hitName(h))}<span class="count">${rung}${h.results.length}${more?"+":""} result${h.results.length===1?"":"s"}</span>${more}</summary>`;
   const anchor=anchorOnce&&anchorOnce.dict===h.dict?anchorOnce:null;
   if(anchor)anchorOnce=null;
   det.wuFill=()=>{
@@ -5149,7 +5149,7 @@ function selectDict(v){
 }
 function namePending(h){
   const o=$("dict").selectedOptions[0];
-  if(o&&o.dataset.pending&&o.value===h.dict&&h.name){o.textContent=h.name;syncChips()}
+  if(o&&o.dataset.pending&&o.value===h.dict&&h.name){o.textContent=hitName(h);syncChips()}
 }
 /* One dictionary named by the link, answerable before the list is in: `from`
    (a link followed inside a dictionary), else a `dict` that is one id (a
