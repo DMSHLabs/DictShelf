@@ -26,6 +26,10 @@ func (d UserDir) Groups() string { return d.join(GroupsFileName) }
 // (openfail.go).
 func (d UserDir) Failures() string { return d.join("open-failures.json") }
 
+// History and Favourites are the reader's word lists (words.go).
+func (d UserDir) History() string   { return d.join(HistoryFileName) }
+func (d UserDir) Favourites() string { return d.join(FavouritesFileName) }
+
 // Builtin is where the wudict howto is written (internal/howto).
 func (d UserDir) Builtin() string { return d.join("builtin") }
 

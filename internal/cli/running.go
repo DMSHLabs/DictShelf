@@ -80,11 +80,12 @@ func probeHost(addr string) string {
 	// interface guaranteed to be up - so ask there. Both spellings of
 	// "wildcard" have to be recognised - "0.0.0.0", "::" and "[::]" - or a
 	// second launch gets a bind error it cannot explain instead of the
-	// running instance. A
+	// running instance. An empty host (":6888") is the same wildcard
+	// unspelled. A
 	// CONCRETE non-loopback bind is left alone on purpose: nothing is
 	// listening on loopback then.
 	if h, port, err := net.SplitHostPort(addr); err == nil {
-		if ip := net.ParseIP(h); ip != nil && ip.IsUnspecified() {
+		if isWildcard(h) {
 			host = net.JoinHostPort("127.0.0.1", port)
 		}
 	}

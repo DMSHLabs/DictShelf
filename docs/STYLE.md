@@ -57,6 +57,8 @@ it is a different thing.
 | **group** | a set of dictionaries the picker offers, defined in `groups.ini` | facet, category, tag |
 | **enabled** | included in *All dictionaries* searches | active, on, selected |
 | **pinned** | placed at the top of the dictionary list, in the user's order; the others are listed A–Z | favourite, starred, my order |
+| **favourite** | a word the user starred with ☆ next to the search box; never a dictionary | bookmark, saved word, starred |
+| **history** | the words the user looked up, latest first | recent, recents, log |
 | **import** | installing dictionary files from a file or a link | download (for the whole act), add |
 | **outdated** | indexed by an older version of wudict, or from dictionary files that have changed since | stale, old |
 | **reindex** | rebuild an outdated index | refresh, rebuild (as the name of the act) |

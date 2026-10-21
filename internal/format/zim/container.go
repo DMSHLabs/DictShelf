@@ -265,10 +265,6 @@ func (c *container) parse() error {
 		return err
 	}
 
-	if err := c.parseMIMEList(mimeListPos, pathPtrPos); err != nil {
-		return err
-	}
-
 	c.pathPtrPos = int64(pathPtrPos)
 	// ZIM 6.3 writes no title pointer list (all ones). One that does not fit
 	// in the file is left unused rather than refusing the file: lookup by
@@ -306,7 +302,21 @@ func (c *container) parse() error {
 			return fmt.Errorf("cluster pointer %d out of range (%d)", i, c.clusterPtr[i])
 		}
 	}
-	return nil
+
+	// The MIME list ends before the first structure the file points to,
+	// libzim's getMimeListEndUpperLimit: the pointer lists, the first dirent
+	// and the first cluster, each validated above. A list that is not
+	// terminated inside that bound is damaged, whatever its bytes say.
+	mimeEnd := min(pathPtrPos, clusterPtrPos)
+	if c.titlePtrPos != 0 {
+		mimeEnd = min(mimeEnd, titlePtrPos)
+	}
+	first, _ := c.ptrAt(0) // checked above
+	mimeEnd = min(mimeEnd, first)
+	if c.clusterCount > 0 {
+		mimeEnd = min(mimeEnd, c.clusterPtr[0])
+	}
+	return c.parseMIMEList(mimeListPos, mimeEnd)
 }
 
 func (c *container) checkSpan(off, n uint64, what string) error {
@@ -395,10 +405,14 @@ func (w *ptrWalk) entry(i int) (dirent, error) {
 // corpus) and is resolved by STRING, never hardcoded. A parameterised type
 // ("text/html; charset=iso-8859-1", which real wiktionaries contain) is
 // matched on its type/subtype alone.
-func (c *container) parseMIMEList(start, next uint64) error {
-	end := next
-	if end <= start || end > uint64(c.size) {
-		end = uint64(c.size)
+//
+// libzim validates no entry's text, and neither does this: an entry that is
+// not a type/subtype ("undefined" for the images of mwoffliner's 2021 files)
+// declares no type and is kept as "", in its slot, or every later index would
+// shift.
+func (c *container) parseMIMEList(start, end uint64) error {
+	if end <= start {
+		return fmt.Errorf("MIME list at %d overlaps the structure at %d", start, end)
 	}
 	if end-start > maxMimeListSpan {
 		end = start + maxMimeListSpan
@@ -411,7 +425,7 @@ func (c *container) parseMIMEList(start, next uint64) error {
 	buf = buf[:n]
 
 	c.htmlMIME = map[uint16]bool{}
-	for pos := 0; pos < len(buf); {
+	for pos := 0; ; {
 		i := bytes.IndexByte(buf[pos:], 0)
 		if i < 0 {
 			return fmt.Errorf("unterminated MIME list")
@@ -419,9 +433,13 @@ func (c *container) parseMIMEList(start, next uint64) error {
 		if i == 0 {
 			break // the empty string terminates the list
 		}
+		if len(c.mimes) == mimeDeleted {
+			// 0xFFFD and up are dirent markers, not indices.
+			return fmt.Errorf("MIME list longer than %d entries", mimeDeleted)
+		}
 		s := string(buf[pos : pos+i])
 		if !plausibleMIME(s) {
-			return fmt.Errorf("MIME list entry %d is not a MIME type: %.40q", len(c.mimes), s)
+			s = ""
 		}
 		if isHTMLMIME(s) {
 			c.htmlMIME[uint16(len(c.mimes))] = true
@@ -436,9 +454,7 @@ func (c *container) parseMIMEList(start, next uint64) error {
 }
 
 // plausibleMIME accepts a type/subtype in printable ASCII, parameters
-// included. Without it, a MIME list overwritten by other bytes still splits at
-// its NULs and opens as a dictionary with no articles; with it, the file is
-// refused at open (zim-testing-suite invalid.bad_mimetype_list).
+// included: what may go out as a Content-Type header.
 func plausibleMIME(s string) bool {
 	if strings.IndexByte(s, '/') <= 0 {
 		return false

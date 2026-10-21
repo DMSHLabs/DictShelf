@@ -156,6 +156,7 @@ func browseUnprepared(w http.ResponseWriter, e *entry) {
 	enc.SetEscapeHTML(false)
 	_ = enc.Encode(map[string]any{
 		"error":    "this dictionary has no index yet",
+		"name":     e.probeName(), // probe only: opening is the price this answer avoids
 		"prepared": false,
 		"indexing": e.indexing(),
 	})

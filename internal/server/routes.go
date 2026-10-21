@@ -93,6 +93,11 @@ func (s *Server) routes() []route {
 		{"GET", "/api/config", s.handleConfig, "/api/config", false},
 		{"GET", "/api/prefs", s.handlePrefs, "/api/prefs", false},
 		{"PUT", "/api/prefs", s.handleSavePrefs, "/api/prefs", false},
+		// the reader's history and favorites (words.go). Never CORS: what a
+		// person looked up is theirs, and an extension reads dictionaries only.
+		{"GET", "/api/words", s.handleWords, "/api/words", false},
+		{"POST", "/api/words", s.handleSaveWord, "/api/words", false},
+		{"DELETE", "/api/words", s.handleClearWords, "/api/words", false},
 		{"GET", "/api/reveal", s.handleReveal, "/api/reveal", false},
 		// the user's own global stylesheets (style.go). Never CORS: the GET
 		// reports a path on the user's disk and the PUT writes to it.

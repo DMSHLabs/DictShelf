@@ -133,6 +133,7 @@ type Server struct {
 
 	groups ownedFile[*facet.Rules]         // groups.ini (groups.go)
 	styles map[string]*ownedFile[styleCSS] // app.css, article.css (style.go)
+	words  wordLists                       // history.txt, favourites.txt (words.go)
 
 	// DictDirOrigin / DictDirEditable describe where the dictionary folders
 	// came from (config layering), so the UI can warn that a flag or an
@@ -200,7 +201,8 @@ type Server struct {
 	WebOrigins []string
 
 	// TrustedHosts lists DNS names, beyond "localhost", that may appear in a
-	// request's Host header (config TRUSTED_HOSTS). Empty - the default -
+	// request's Host header (config TRUSTED_HOSTS, plus SERVER_IP when that is
+	// a name - D104 Am. 1, added by the caller). Empty - the default -
 	// means none: every legitimate client addresses this server by IP, so the
 	// only thing a name buys is DNS rebinding. See host.go. A single "*"
 	// disables the check, for a reverse proxy whose name we cannot know.
@@ -264,6 +266,7 @@ func New(reg *Registry) *Server {
 	s := &Server{reg: reg, mux: http.NewServeMux(), AllowRemoteDelete: false}
 	s.initGroups()
 	s.initStyles()
+	s.initWords()
 	// The surface is a table (routes.go), so it can be asserted about: the
 	// CORS boundary and the OpenAPI document are both checked against it.
 	for _, rt := range s.routes() {

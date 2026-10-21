@@ -174,6 +174,12 @@ type UIPrefs struct {
 	// writes it only when the reader picks a mode, never when a link or the
 	// history sets one; the server never reads it.
 	Mode string `json:"mode,omitempty"`
+
+	// HistoryOff stops recording looked-up words in history.txt (words.go).
+	// Negated like HLOff: keeping history is the default. Unlike the flags
+	// above the server reads it too, so a page loaded before it was set
+	// cannot go on recording.
+	HistoryOff bool `json:"historyOff,omitempty"`
 }
 
 // Article text-size bounds. The ceiling is deliberately past what the layout

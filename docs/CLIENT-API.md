@@ -22,7 +22,8 @@ base URL as configuration, never a constant.
 
 The **host** in that base URL must be an IP literal or `localhost`. Any other
 name (`http://mymac.local:6888`) is answered `421 Misdirected Request` unless
-the user lists it in `TRUSTED_HOSTS`. This is the server's DNS-rebinding guard.
+the user lists it in `TRUSTED_HOSTS` or it is the name the server listens on
+(`SERVER_IP`). This is the server's DNS-rebinding guard.
 
 **No access key is needed for the public routes.** When the server listens on a
 non-loopback address, `AUTH` makes every other route require the access key
@@ -66,7 +67,7 @@ Content-Type: application/json; charset=utf-8
 |---|---|
 | `400` | `q` blank; `mode` unknown (`contains` included); `format` unknown; a `wildcard` pattern over 64 characters |
 | `404` | no id in `dict` resolves |
-| `421` | the `Host` is not an IP literal, `localhost` or a `TRUSTED_HOSTS` name |
+| `421` | the `Host` is not an IP literal, `localhost`, a `TRUSTED_HOSTS` name or the `SERVER_IP` name |
 
 **After it starts** the status is already `200`, so a per-dictionary failure
 rides on that dictionary's own frame as an `error` field (§3). There is **no

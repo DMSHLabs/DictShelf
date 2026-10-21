@@ -450,8 +450,8 @@ container secret. Overrides `~/.wudict/token` and is never written to it.
 
 ### TRUSTED_HOSTS
 
-Host names the server answers to, in addition to `localhost`. Requests to an IP
-address are always accepted.
+Host names the server answers to, in addition to `localhost` and a host name set
+as `SERVER_IP`. Requests to an IP address are always accepted.
 
 | | |
 | --- | --- |

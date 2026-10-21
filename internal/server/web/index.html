@@ -185,6 +185,34 @@ input[type=search]::placeholder{color:var(--fg-soft);opacity:1}
   border-top-color:var(--fg-soft);animation-duration:var(--t-6);opacity:0}
 .qbox.busy .mag{opacity:0}
 .qbox.busy .spin{opacity:1}
+/* The favourite star (words.go): one, for the word in the box, at the field's
+   trailing edge - the place a browser puts its bookmark star. Always laid out
+   and only shown while there is a word, so typing, starring and clearing are
+   paint changes, never layout. The field keeps the room for it at all times;
+   the native ✕ sits just inside it. */
+#q{padding-right:1.9em}
+.qstar{position:absolute;right:.3em;top:50%;margin-top:-11px;width:22px;height:22px;
+  padding:4px;border:0;background:none;color:var(--fg-faint);cursor:pointer;
+  visibility:hidden}
+.qstar svg{display:block;width:14px;height:14px}
+.qbox.hasq .qstar{visibility:visible}
+.qstar:hover,.qstar[aria-pressed="true"]{color:var(--accent)}
+.qstar[aria-pressed="true"] path{fill:currentColor}
+/* Favourites, then history, under the EMPTY box, on a click or ↓ - never by
+   itself, never while typing (live search is already the completion). An
+   overlay: opening it moves nothing below. */
+#recall{position:absolute;top:calc(100% + 4px);left:0;right:0;min-width:12em;
+  max-height:min(60vh,24em);overflow-y:auto;margin:0;padding:.25em 0;list-style:none;
+  background:var(--bg-card);border:1px solid var(--line);border-radius:8px;
+  box-shadow:0 6px 20px color-mix(in srgb,var(--fg) 16%,transparent);z-index:3;
+  /* a held row is a gesture (long-press forgets it), not a text selection */
+  user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+#recall li{padding:.3em .8em;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#recall li.fav::before{content:"★";color:var(--accent);margin-right:.45em;font-size:.85em}
+/* the line between the two lists is the first history row's border: a
+   listbox may hold options only */
+#recall li.fav+li:not(.fav){border-top:1px solid var(--line);margin-top:.25em;padding-top:.45em}
+#recall li[aria-selected="true"],#recall li[data-w]:hover{background:color-mix(in srgb,var(--accent) 12%,transparent)}
 /* φ² seconds per revolution is 360°/φ² = 137.5° per second — the GOLDEN ANGLE
    per second, the divergence angle phyllotaxis advances a sunflower's seeds
    by. It is also 3.7× slower than the .7s the shared .spin uses elsewhere,
@@ -1035,6 +1063,7 @@ html:has(#panel.show) .bar{padding-right:var(--wd-sbw,0px)}
   /* flush with the pill's own left padding: inside the pill the field has no
      border of its own for the glyph to sit within */
   .pill .qled{left:0}
+  .pill .qstar{right:0}
 
   /* A scope control is a chip with its real <select> laid transparently over
      it. The select keeps the native full-screen picker, the keyboard, the
@@ -1123,7 +1152,9 @@ html:has(#panel.show) .bar{padding-right:var(--wd-sbw,0px)}
 <!-- enterkeyhint is declared, not inferred: type=search happens to label the
      soft key "Search" on most Android builds, but that is a browser default
      and not a contract. -->
-<input type="search" id="q" placeholder="→ start…" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="search" autofocus aria-label="Search term" disabled>
+<input type="search" id="q" placeholder="→ start…" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="search" autofocus aria-label="Search term" aria-autocomplete="list" aria-controls="recall" aria-expanded="false" disabled>
+<button type="button" class="qstar" id="qstar" aria-pressed="false" aria-label="Favourite"><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M8 1.6l1.95 4 4.35.63-3.15 3.07.74 4.33L8 11.58l-3.89 2.05.74-4.33L1.7 6.23l4.35-.63z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg></button>
+<ul id="recall" role="listbox" aria-label="Favourites and history" hidden></ul>
 </span>
 <span class="seg">
 <span class="chip" id="modeChip" aria-hidden="true"></span>
@@ -1210,6 +1241,11 @@ html:has(#panel.show) .bar{padding-right:var(--wd-sbw,0px)}
          selects something, and a reader who never wants it should be able to
          make the offer stop appearing. Hidden where the browser cannot speak. -->
     <button type="button" class="act" id="speakBtn" aria-pressed="true" title="Offer to read selected article text aloud"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M2.5 6h2.5l3.5-3v10l-3.5-3H2.5z"/><path class="wave" d="M11 5.8a3 3 0 0 1 0 4.4"/><path class="wave" d="M12.9 3.9a5.8 5.8 0 0 1 0 8.2"/></svg>Read aloud</button>
+    <!-- History is kept unless the reader says otherwise (words.go); the
+         words are theirs, so stopping it and deleting it are both one press
+         away, next to the other reading habits. -->
+    <button type="button" class="act" id="histBtn" aria-pressed="true" title="Keep the words you look up and show them under the empty search box"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="8" cy="8" r="6.2"/><path d="M8 4.6V8l2.3 1.6"/></svg>Keep history</button>
+    <button type="button" class="act" id="histClear" title="Delete all the words in your history">Clear history</button>
     <!-- Which sections unfold themselves once the answers start arriving
          (D142). One question - what opens? - so one control. The count is of
          dictionaries that HAVE a result, taken from the top of the list the
@@ -1430,7 +1466,7 @@ async function loadPrefs(){
     const st=await r.json(),rows=st.dicts||[];
     // Read before the exists branch below returns: on a first run there is no
     // ui record, but there is also nothing here that can go wrong.
-    if(st.ui){applyFS(st.ui.fontSize,false);applyHL(!st.ui.hlOff,false);applySpeak(!st.ui.speakOff,false);applyOpen(st.ui.fastFirst?"fast":st.ui.openAll?"all":String(st.ui.openN||1),false);applyGroupsOff(st.ui.groupsOff,false);fullOn=!!st.ui.full;modePref=st.ui.mode||"prefix";setMode(modePref)}
+    if(st.ui){applyFS(st.ui.fontSize,false);applyHL(!st.ui.hlOff,false);applySpeak(!st.ui.speakOff,false);applyOpen(st.ui.fastFirst?"fast":st.ui.openAll?"all":String(st.ui.openN||1),false);applyGroupsOff(st.ui.groupsOff,false);fullOn=!!st.ui.full;modePref=st.ui.mode||"prefix";setMode(modePref);applyHist(!st.ui.historyOff,false)}
     uiBase=uiNow();
     dictsBase=rows.map(prefRow);
     // Last, so that a page whose baselines are not both in hand never saves:
@@ -1462,7 +1498,7 @@ let uiBase=null;
    drive) and this page cannot speak for them. */
 let dictsBase=null;
 function uiNow(){
-  return{fontSize:articleFS,hlOff:!hlOn,speakOff:!speakOn,fastFirst:!orderFirst,openN:openN>1?openN:0,openAll,groupsOff:[...groupsOff].sort(),full:fullOn,mode:modePref==="prefix"?"":modePref};
+  return{fontSize:articleFS,hlOff:!hlOn,speakOff:!speakOn,fastFirst:!orderFirst,openN:openN>1?openN:0,openAll,groupsOff:[...groupsOff].sort(),full:fullOn,mode:modePref==="prefix"?"":modePref,historyOff:!histOn};
 }
 /* One dictionary's record as it is sent and compared: pin only when set, as
    the server stores it. The title always, "" for none: a record without the
@@ -3853,7 +3889,7 @@ async function fetchStream(url,onMsg,signal,etag){
 const hitNames=new Map();
 function dictName(id){
   const d=dicts.find(x=>x.id===id);
-  return d?dictLabel(d):hitNames.get(id)||id;
+  return d?dictLabel(d):titles.get(id)||hitNames.get(id)||id;
 }
 /* Says what was searched and offers the way out, placed under the results
    rather than in the status line: the scope is a property of what is on
@@ -3887,7 +3923,7 @@ $("out").addEventListener("click",e=>{
    the real name from a cheap header probe; nothing has to be opened to use it. */
 function hitName(h){
   const d=dicts.find(x=>x.id===h.dict);
-  return (d&&dictLabel(d))||h.name||h.dict;
+  return d?dictLabel(d):titles.get(h.dict)||h.name||h.dict;
 }
 /* Whether this device is touched or pointed at, which is the difference
    between "tap" and "click" and nothing else. Read once: it does not change
@@ -4059,8 +4095,8 @@ function renderSlot(box,h,mode,q,perDict,group){
          is no wall to build, and nothing above it to bury. That is also why a
          link-scoped search keeps its own `shown`, and with it the guard that
          stops a scoped miss from silently widening. */
-      if(group)return{shown:true,noIndex:{dict:h.dict,name:h.name,feat}};
-      box.innerHTML=`<details class="dict"><summary>${esc(h.name)}`+
+      if(group)return{shown:true,noIndex:{dict:h.dict,name:hitName(h),feat}};
+      box.innerHTML=`<details class="dict"><summary>${esc(hitName(h))}`+
         `<span class="upgrade" data-id="${h.dict}" data-feat="${feat}">add the ${FEAT_NAME[feat]} to this dictionary</span></summary></details>`;
       return{shown:true};
     }
@@ -4073,7 +4109,7 @@ function renderSlot(box,h,mode,q,perDict,group){
   // at, and every other mode has no ladder at all.
   const rung=mode==="fts"&&/\s/.test(q||"")&&(h.rung==="near"||h.rung==="words")
     ?`<span class="rung">phrase not found · ${h.rung==="near"?"words proximity":"words anywhere"} · </span>`:"";
-  det.innerHTML=`<summary>${esc(h.name)}<span class="count">${rung}${h.results.length}${more?"+":""} result${h.results.length===1?"":"s"}</span>${more}</summary>`;
+  det.innerHTML=`<summary>${esc(hitName(h))}<span class="count">${rung}${h.results.length}${more?"+":""} result${h.results.length===1?"":"s"}</span>${more}</summary>`;
   const anchor=anchorOnce&&anchorOnce.dict===h.dict?anchorOnce:null;
   if(anchor)anchorOnce=null;
   det.wuFill=()=>{
@@ -5092,11 +5128,21 @@ addEventListener("scroll",()=>{
      from where they LANDED, not from where the jump began (which would spend
      that gesture on a spurious hide). */
   if(barFrozen){prevScroll=cur;return}
-  const hide=cur>80&&cur>prevScroll;
-  $("bar").classList.toggle("hidden",hide);
-  document.body.classList.toggle("barhidden",hide);
+  setBarHidden(cur>80&&cur>prevScroll);
   prevScroll=cur;
 });
+function setBarHidden(hide){
+  $("bar").classList.toggle("hidden",hide);
+  document.body.classList.toggle("barhidden",hide);
+}
+/* The box is never worked in while out of sight. .bar.hidden only translates
+   the bar, so focus() — from "/", a stray printable key, a key forwarded out
+   of an article, Escape — lands in an invisible field and scrolls nothing
+   that would bring it back. Showing it on `focus` covers every one of those
+   routes at once; `input` covers the box that already had focus when a
+   scroll hid it, where the keystroke never reaches the document listener. */
+$("q").addEventListener("focus",()=>setBarHidden(false));
+$("q").addEventListener("input",()=>setBarHidden(false));
 
 /* Shareable links AND working browser navigation: ?q=…&mode=…&dict=…
    Typing and navigating must record history differently. `doSearch` runs on a
@@ -5149,11 +5195,11 @@ function selectDict(v){
 }
 function namePending(h){
   const o=$("dict").selectedOptions[0];
-  if(o&&o.dataset.pending&&o.value===h.dict&&h.name){o.textContent=h.name;syncChips()}
+  if(o&&o.dataset.pending&&o.value===h.dict&&h.name){o.textContent=hitName(h);syncChips()}
 }
 /* One dictionary named by the link, answerable before the list is in: `from`
-   (a link followed inside a dictionary, or a headword picked in Browse), else
-   a `dict` that is one id. */
+   (a link followed inside a dictionary), else a `dict` that is one id (a
+   headword picked in Browse). */
 function linkNamesOne(){
   const p=new URLSearchParams(location.search);
   const one=v=>!!v&&v!=="all"&&!v.startsWith("g:")&&!v.includes(",");
@@ -5173,10 +5219,11 @@ function applyURL(){
 }
 const _doSearch=doSearch;
 doSearch=function(ev){
-  const record=navRecord;
+  const record=navRecord,commit=commitOnce;
   navRecord="replace"; // one-shot: only the action that asked for it pushes
   const r=_doSearch(ev);
   const q=$("q").value.trim();
+  noteLookup(q,record,commit);
   if(q&&record!=="none"){
     const params={q,mode:$("mode").value};
     // The picker, once it is known. Before the list (bootEarly) it holds only
@@ -5208,6 +5255,7 @@ window.addEventListener("popstate",()=>{
     $("out").innerHTML="";
     lastQuery="";
     setStatus("");
+    syncStar();
     return;
   }
   navRecord="none";
@@ -5243,6 +5291,239 @@ $("frm").addEventListener("submit",e=>{
   commitOnce=true; // the one moment the query is finished: this search may scroll
   return doSearch(e);
 });
+
+/* Favourites and history (words.go): headwords the reader starred, and the
+   ones they looked up, latest first. The server keeps both, so they follow the
+   reader to another device; this page holds a copy, changes it at once, and
+   sends the server one word per change. */
+let favs=[],hist=[],favSet=new Set(),histOn=true,wordsSeq=0,histTimer=0;
+/* Words compare without case, as the search they open does and as the server
+   does (words.go, sameWord): "CASA" is the entry "casa", in its new spelling. */
+const wordKey=w=>w.toLowerCase();
+const without=(list,w)=>list.filter(x=>wordKey(x)!==wordKey(w));
+const HIST_DWELL=2000,RECALL_MAX=50;
+const MAC=/Mac|iP(hone|ad|od)/.test(navigator.platform);
+function adoptWords(r){
+  favs=r.favourites||[];hist=r.history||[];favSet=new Set(favs.map(wordKey));
+  $("histClear").disabled=!hist.length;
+  syncStar();
+}
+/* Every answer carries both lists as they stand; only the answer to the
+   latest request is adopted, so a slow older one cannot undo a newer change. */
+async function wordsCall(method,url,body){
+  const seq=++wordsSeq;
+  try{
+    const r=await fetch(url,body?{method,headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}:{method});
+    if(!r.ok)throw new Error("HTTP "+r.status);
+    const j=await r.json();
+    if(seq===wordsSeq)adoptWords(j);
+  }catch(e){console.warn("could not update favourites/history:",e)}
+}
+const loadWords=()=>wordsCall("GET","/api/words");
+/* The word in the box as the server stores it, or "" for none it would take. */
+function boxWord(){
+  const w=$("q").value.trim();
+  return [...w].length>256?"":w;
+}
+function syncStar(){
+  const w=boxWord(),on=!!w&&favSet.has(wordKey(w)),b=$("qstar");
+  $("qbox").classList.toggle("hasq",!!w);
+  b.setAttribute("aria-pressed",on?"true":"false");
+  b.setAttribute("aria-label",on?"Remove from favourites":"Add to favourites");
+  b.title=`${on?"Remove the word from":"Add the word to"} your favourites (${MAC?"⌘D":"Ctrl+D"})`;
+}
+function toggleFav(){
+  const w=boxWord();
+  if(!w)return;
+  const on=!favSet.has(wordKey(w));
+  favs=on?[w,...without(favs,w)]:without(favs,w);
+  favSet=new Set(favs.map(wordKey));
+  syncStar();
+  wordsCall("POST","/api/words",{list:"favourites",word:w,on});
+}
+function recordWord(w){
+  if(!histOn||hist[0]===w)return; // already first, same spelling: nothing would change
+  hist=[w,...without(hist,w)];
+  $("histClear").disabled=false;
+  wordsCall("POST","/api/words",{list:"history",word:w,on:true});
+}
+/* A lookup is history when the word was READ, not when it was typed past.
+   Submitting it, following a link to it, opening a link that names it or
+   picking it from this list is an act, and counts at once. A typed word
+   counts only once it has stayed in the box for HIST_DWELL with an open
+   section whose headword IS the word: prefix search answers "seren" too,
+   and the reader who paused there was not looking it up. Back/Forward
+   records nothing, as it records nothing in the browser's own history;
+   full-text and wildcard queries are not words. */
+function noteLookup(q,record,commit){
+  clearTimeout(histTimer);
+  syncStar();
+  if(!q||!histOn||record==="none"||notForWords($("mode").value)||!boxWord())return;
+  if(commit||record==="push"){recordWord(q);return}
+  histTimer=setTimeout(()=>{
+    if($("q").value.trim()!==q)return;
+    const k=wordKey(q);
+    for(const dt of $("out").querySelectorAll("details.dict[open] dt"))
+      if(wordKey(dt.textContent.trim())===k){recordWord(q);return}
+  },HIST_DWELL);
+}
+function applyHist(on,save){
+  const v=!!on,moved=v!==histOn;
+  histOn=v;
+  const b=$("histBtn");
+  b.setAttribute("aria-pressed",v?"true":"false");
+  b.style.color=v?"var(--accent)":"";
+  if(!v)clearTimeout(histTimer);
+  if(moved&&!$("recall").hidden){closeRecall();openRecall()}
+  if(save&&moved)savePrefs();
+}
+$("histBtn").addEventListener("click",()=>applyHist(!histOn,true));
+applyHist(true,false); // drawn on: a library with no stored ui record keeps history
+$("histClear").addEventListener("click",()=>{
+  if(!hist.length)return;
+  const n=hist.length;
+  if(!confirm(`Delete all ${n} word${n===1?"":"s"} in your history? You cannot undo this.`))return;
+  hist=[];$("histClear").disabled=true;
+  wordsCall("DELETE","/api/words?list=history");
+});
+$("qstar").addEventListener("click",toggleFav);
+
+/* The list under the empty box. Built when it opens - at most 2×RECALL_MAX
+   rows - and thrown away when it closes; nothing about it runs while it is
+   shut. */
+const recall=$("recall");
+let recallSel=-1;
+const recallRows=()=>recall.querySelectorAll("li[data-w]");
+function openRecall(){
+  if($("q").value.trim()||$("q").disabled)return;
+  // "Keep history" off hides the list too: a switch drawn off that still
+  // shows yesterday's words reads as broken. Hidden, not deleted - turning
+  // it back on brings them back; Clear history is the deletion.
+  const rest=histOn?hist.filter(w=>!favSet.has(wordKey(w))).slice(0,RECALL_MAX):[];
+  if(!favs.length&&!rest.length)return;
+  const f=document.createDocumentFragment();
+  let n=0;
+  const row=(w,cls)=>{
+    const li=document.createElement("li");
+    li.id="rc"+n++;li.dataset.w=w;li.textContent=w;
+    li.setAttribute("role","option");
+    if(cls)li.className=cls;
+    f.appendChild(li);
+  };
+  for(const w of favs.slice(0,RECALL_MAX))row(w,"fav");
+  for(const w of rest)row(w);
+  recall.replaceChildren(f);
+  recallSel=-1;
+  recall.hidden=false;
+  $("q").setAttribute("aria-expanded","true");
+}
+function closeRecall(){
+  if(recall.hidden)return;
+  recall.hidden=true;
+  recall.replaceChildren();
+  recallSel=-1;
+  $("q").setAttribute("aria-expanded","false");
+  $("q").removeAttribute("aria-activedescendant");
+}
+function moveRecall(d){
+  const rows=recallRows();
+  if(!rows.length)return;
+  if(recallSel>=0)rows[recallSel].removeAttribute("aria-selected");
+  recallSel=(recallSel+1+d+rows.length+1)%(rows.length+1)-1; // -1 is the box itself
+  if(recallSel<0){$("q").removeAttribute("aria-activedescendant");return}
+  const li=rows[recallSel];
+  li.setAttribute("aria-selected","true");
+  li.scrollIntoView({block:"nearest"});
+  $("q").setAttribute("aria-activedescendant",li.id);
+}
+/* A pick is a submit: on a touch device the soft keyboard is standing over the
+   answer, so the box lets go of it, as the form's submit does. */
+function pickRecall(w){
+  closeRecall();
+  if(!matchMedia("(hover:hover)").matches)$("q").blur();
+  searchFor(w);
+}
+$("q").addEventListener("click",()=>{if(recall.hidden)openRecall()});
+$("q").addEventListener("blur",closeRecall);
+$("q").addEventListener("input",()=>{if($("q").value)closeRecall();syncStar()});
+$("q").addEventListener("keydown",e=>{
+  if(e.isComposing||e.ctrlKey||e.metaKey||e.altKey)return;
+  if(recall.hidden){
+    if(e.key==="ArrowDown"&&!$("q").value){e.preventDefault();openRecall()}
+    return;
+  }
+  const rows=recallRows();
+  switch(e.key){
+  case "ArrowDown":case "ArrowUp":
+    e.preventDefault();moveRecall(e.key==="ArrowDown"?1:-1);break;
+  case "Enter":
+    if(recallSel>=0){e.preventDefault();pickRecall(rows[recallSel].dataset.w)}
+    break;
+  case "Escape":
+    e.preventDefault();e.stopPropagation();closeRecall();break;
+  case "Delete":
+    // Shift+Delete forgets the selected history word, as a browser's own
+    // address-bar suggestions do; a favourite is unstarred with the star.
+    if(e.shiftKey&&recallSel>=0&&!rows[recallSel].classList.contains("fav")){
+      e.preventDefault();
+      const w=rows[recallSel].dataset.w;
+      const at=recallSel;
+      // the row after it takes its place, so a run of deletions is a run of
+      // key presses
+      forgetHistory(w);
+      const n=recallRows().length;
+      if(n)moveRecall(Math.min(at,n-1)+1);
+    }
+  }
+});
+function forgetHistory(w){
+  hist=without(hist,w);
+  wordsCall("POST","/api/words",{list:"history",word:w,on:false});
+  closeRecall();openRecall();
+}
+/* Touch and hold a history row to forget it: Shift+Delete for a hand with no
+   keyboard. Touch and pen only - a mouse has the key. A finger that moves
+   further than a tap's wobble is scrolling the list, and the browser's
+   pointercancel says the same; either drops the hold. The click that ends a
+   completed hold is swallowed, so it does not also look the word up. */
+const HOLD_MS=550,HOLD_SLOP=10;
+let holdTimer=0,holdAt=null,held=false;
+const dropHold=()=>{clearTimeout(holdTimer);holdAt=null};
+// pointerdown, not click: the box keeps the focus, so its blur cannot close
+// the list before the pick lands
+recall.addEventListener("pointerdown",e=>{
+  e.preventDefault();
+  held=false;
+  dropHold();
+  const li=e.pointerType!=="mouse"&&e.target.closest("li[data-w]:not(.fav)");
+  if(!li)return;
+  holdAt={x:e.clientX,y:e.clientY};
+  holdTimer=setTimeout(()=>{
+    holdAt=null;held=true;
+    if(navigator.vibrate)navigator.vibrate(15);
+    forgetHistory(li.dataset.w);
+  },HOLD_MS);
+});
+recall.addEventListener("pointermove",e=>{
+  if(holdAt&&Math.hypot(e.clientX-holdAt.x,e.clientY-holdAt.y)>HOLD_SLOP)dropHold();
+});
+for(const t of ["pointerup","pointercancel","pointerleave"])recall.addEventListener(t,dropHold);
+recall.addEventListener("contextmenu",e=>e.preventDefault());
+recall.addEventListener("click",e=>{
+  if(held){held=false;return}
+  const li=e.target.closest("li[data-w]");
+  if(li)pickRecall(li.dataset.w);
+});
+document.addEventListener("keydown",e=>{
+  if(e.altKey||e.shiftKey||!(MAC?e.metaKey:e.ctrlKey)||(e.key!=="d"&&e.key!=="D"))return;
+  const a=document.activeElement;
+  if(a!==$("q")&&editable(a))return;
+  if(!boxWord()||$("styler").classList.contains("show"))return;
+  e.preventDefault();toggleFav();
+});
+// another tab or device may have changed them while this one was away
+document.addEventListener("visibilitychange",()=>{if(!document.hidden)loadWords()});
+loadWords();
 
 /* ── the custom-styles editor ────────────────────────────────────────
    Two boxes over one textarea. The split is not bureaucracy: `body{}`,

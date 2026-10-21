@@ -5,10 +5,12 @@
 package zim
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -338,6 +340,112 @@ func TestOldNamespaces(t *testing.T) {
 	}
 	if list := d.Resources(); strings.Join(list, "|") != "p.png" {
 		t.Errorf("Resources = %v", list)
+	}
+}
+
+// An entry that is not a type/subtype (bitcoin_en_all_maxi_2021-03.zim lists
+// "undefined" for its images) opens, declares no type, and leaves the indices
+// after it in place: in the sorted sample the two take slots 1 and 2, ahead of
+// text/html.
+func TestUntypedMIME(t *testing.T) {
+	f := sample()
+	f.entries = append(f.entries,
+		bEntry{ns: 'C', path: "blob", mime: "undefined", body: []byte("raw"), cluster: 0},
+		bEntry{ns: 'C', path: "blob2", mime: "not a type\r\n", body: []byte("raw2"), cluster: 0})
+	d, err := Open(writeZIM(t, f))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	for name, want := range map[string]string{"blob": "raw", "blob2": "raw2"} {
+		rc, mime, err := d.Resource(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		b, _ := io.ReadAll(rc)
+		rc.Close()
+		if string(b) != want || mime != "" {
+			t.Errorf("Resource(%s) = %q, %q", name, b, mime)
+		}
+	}
+	if res, err := d.Exact("cat", 1); err != nil || len(res) != 1 {
+		t.Errorf("Exact(cat) = %v, %+v", err, res)
+	}
+	if list := d.Resources(); strings.Join(list, "|") != "_res_/a.css|blob|blob2|f.png" {
+		t.Errorf("Resources = %v", list)
+	}
+}
+
+type memSource struct{ *bytes.Reader }
+
+func (memSource) Close() error { return nil }
+
+// The list is judged by structure alone, as libzim judges it: terminated by an
+// empty string inside its bound, whatever the text of the entries.
+func TestParseMIMEList(t *testing.T) {
+	many := bytes.Repeat([]byte("a/b\x00"), mimeDeleted+1)
+	most := slices.Repeat([]string{"a/b"}, mimeDeleted)
+	for _, tc := range []struct {
+		name  string
+		list  string
+		bound int // bytes of list inside the bound; -1 = all
+		want  []string
+		html  []uint16
+	}{
+		{"typed", "text/html; charset=UTF-8\x00image/png\x00\x00", -1, []string{"text/html; charset=UTF-8", "image/png"}, []uint16{0}},
+		{"untyped keeps its slot", "undefined\x00\x01\x7f\xff\x00text/html\x00\x00", -1, []string{"", "", "text/html"}, []uint16{2}},
+		{"terminator past the bound", "text/html\x00\x00", 10, nil, nil},
+		{"no NUL in the bound", "This is a bad mimetype value\x00\x00", 20, nil, nil},
+		{"empty", "\x00", -1, nil, nil},
+		{"zero-length region", "\x00", 0, nil, nil},
+		{"too many entries", string(many) + "\x00", -1, nil, nil},
+		{"every index below the markers", string(many[4:]) + "\x00", -1, most, nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			bound := len(tc.list)
+			if tc.bound >= 0 {
+				bound = tc.bound
+			}
+			b := append(make([]byte, headerSize), tc.list...)
+			c := &container{f: memSource{bytes.NewReader(b)}, size: int64(len(b))}
+			err := c.parseMIMEList(headerSize, uint64(headerSize+bound))
+			if tc.want == nil {
+				if err == nil {
+					t.Errorf("accepted: %q", c.mimes)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !slices.Equal(c.mimes, tc.want) {
+				t.Errorf("mimes = %q, want %q", c.mimes, tc.want)
+			}
+			var html []uint16
+			for i := range c.mimes {
+				if c.htmlMIME[uint16(i)] {
+					html = append(html, uint16(i))
+				}
+			}
+			if !slices.Equal(html, tc.html) {
+				t.Errorf("html = %v, want %v", html, tc.html)
+			}
+		})
+	}
+}
+
+// zim-testing-suite's invalid.bad_mimetype_list, rebuilt: the list region
+// overwritten up to the first structure with no NUL in it. Read up to the path
+// pointer list instead, it would split at the NULs of the dirents behind it.
+func TestOverwrittenMIMEListRefused(t *testing.T) {
+	b := buildZIM(t, sample())
+	end := headerSize + bytes.Index(b[headerSize:], []byte{0, 0}) + 2
+	for i := headerSize; i < end; i++ {
+		b[i] = 'x'
+	}
+	if d, err := Open(writeTruncated(t, b)); err == nil {
+		d.Close()
+		t.Fatal("opened with an overwritten MIME list")
 	}
 }
 

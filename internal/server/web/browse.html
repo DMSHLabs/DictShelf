@@ -103,6 +103,11 @@ footer .nav button{height:2.3rem;padding:0 1rem}
 .msg b{display:block;font-size:16px;margin-bottom:.3rem}
 .msg p{margin:.3rem 0;color:var(--soft);font-size:14px}
 .msg a{color:var(--accent)}
+.msg progress{display:block;width:100%;height:.45rem;margin:.8rem 0 .25rem;accent-color:var(--accent)}
+.msg .pc{font-size:12.5px;color:var(--faint);font-variant-numeric:tabular-nums;min-height:1.2em}
+.msg button{font:inherit;font-size:13px;background:none;border:1px solid var(--line);color:var(--fg);
+  border-radius:8px;padding:.2rem .8rem;cursor:pointer}
+.msg button:hover{border-color:var(--accent);color:var(--accent)}
 .picks{display:flex;flex-direction:column;gap:.1rem;margin-top:.8rem}
 .picks a{color:var(--link);text-decoration:none;padding:.3rem .4rem;border-radius:6px}
 .picks a:hover{background:var(--line-soft);color:var(--fg)}
@@ -171,7 +176,7 @@ function unesc(s){
 try{const t=localStorage.getItem("wudict_theme");
   if(t&&t!=="auto")document.documentElement.setAttribute("data-theme",t)}catch(e){}
 
-let dictId="",state=null,last={p:1},poll=0,stripFor="",demanded=false;
+let dictId="",state=null,last={p:1},stripFor="",watch=null,grace=0,indexed=false;
 
 /* A card keeps the header's way back to search, in the place it has on a
    page of words; only what belongs to a page of words is hidden. */
@@ -183,7 +188,7 @@ function card(html){$("msg").innerHTML=html;$("msg").hidden=false;
    needs (name, total, strip) so there is never a second round trip to
    sequence against the first. */
 async function show(opts,record){
-  clearTimeout(poll);
+  unwatch();
   last=opts;
   const u=new URLSearchParams({dict:dictId});
   if(opts.at)u.set("at",opts.at);else u.set("p",String(opts.p||1));
@@ -216,13 +221,12 @@ function render(){
   $("name").textContent=d.name;
   const a=unesc(d.words[0]||""),z=unesc(d.words[d.words.length-1]||"");
   $("sub").textContent=d.total?a+" — "+z+"  ·  "+num(d.total)+" words":"no headwords";
-  /* `from`, not `dict`: a headword picked here is a link followed inside this
-     dictionary, so the app answers it from this dictionary alone, says so,
-     and offers the rest - while the reader's own choice in the dictionary
-     picker stays theirs. */
+  /* `dict`, not `from`: the reader chose this dictionary by opening its Browse,
+     so the picker shows it and the words they type next are read from it too.
+     `from` is a link's provenance (D40), a scope the picker does not show. */
   $("list").innerHTML=d.words.map(w=>{
     const e=esc(unesc(w));
-    return '<a href="/?q='+encodeURIComponent(w)+"&from="+encodeURIComponent(d.dict)+
+    return '<a href="/?q='+encodeURIComponent(w)+"&dict="+encodeURIComponent(d.dict)+
       '&mode=exact" title="'+e+'">'+e+"</a>";
   }).join("");
 
@@ -265,27 +269,74 @@ function turn(where){
 
 /* The one state with no list to draw. Asking to browse IS asking for the
    index - there is no other way to serve it - so the page asks for it itself
-   (explicit: even with AUTO_INDEX off, this is the user's own trigger) and
-   waits. Once per page: a dictionary that stops indexing without becoming
-   browsable failed, and asking again would only meet the server's cooldown. */
-const building="<p>Building the index…⌛️</p>";
-async function unprepared(j){
-  if(!j.indexing&&!demanded){
-    demanded=true;
-    card(building);
-    try{
-      const r=await fetch("/api/demand?explicit=1&dict="+encodeURIComponent(dictId),{method:"POST"});
-      j=r.ok?await r.json():{};
-    }catch(e){j={}}
-  }
-  if(j.indexing){
-    card(building);
-    poll=setTimeout(()=>show(last,"none"),2500);
-  }else{
-    card("<b>Could not index</b><p>Indexing this dictionary failed. "+
-      'Reload this page to try again, or <a href="/browse">choose another…</a></p>');
-  }
+   through /api/ingest, the panel's own index control: not gated by AUTO_INDEX
+   (this is the user's trigger), and it follows a job already running for the
+   dictionary instead of starting a second one. The stream reports progress
+   and ends the moment the index is ready - no polling, no dead time after.
+
+   Nothing is drawn for the first 400 ms: below that the wait reads as
+   instant, and a card that flashes up for a small dictionary is noise.
+   `indexed` bounds the loop: a dictionary that finished indexing and still
+   cannot be browsed is a failure, not a reason to index it again. */
+function unwatch(){clearTimeout(grace);grace=0;if(watch){watch.close();watch=null}}
+
+function unprepared(j){
+  const name=j.name||dictId;
+  if(indexed)return failed(name,"");
+  unwatch();
+  let p=null,phase="";
+  const draw=()=>{
+    const pg=$("pg");if(!pg)return;
+    let ph="Indexing…",pc="";
+    if(p&&p.total>0&&p.done<p.total){
+      pg.max=p.total;pg.value=p.done;
+      pc=num(p.done)+" of "+num(p.total)+" words";
+      document.title=Math.floor(p.done/p.total*100)+"% · "+name;
+    }else{
+      /* No count yet, or the counted work is over and the uncountable tail
+         (indexes, commit, ANALYZE) runs: a bar parked at 100 would lie. */
+      pg.removeAttribute("value");
+      if(p&&p.total>0){ph="Finishing…";pc=num(p.total)+" words"}
+      else if(p&&p.done>0)pc=num(p.done)+" words";
+      document.title=name;
+    }
+    $("pc").textContent=pc;
+    if(ph!==phase)$("ph").textContent=phase=ph; // announced only when it changes
+  };
+  grace=setTimeout(()=>{
+    grace=0;
+    card("<b>Indexing "+esc(name)+"</b>"+
+      '<progress id="pg" aria-label="Indexing"></progress>'+
+      '<p class="pc" id="pc"></p><p id="ph" aria-live="polite"></p>'+
+      '<p>You can leave this page: indexing goes on. <a href="/?dict='+
+      encodeURIComponent(dictId)+'">Search meanwhile</a></p>');
+    draw();
+  },400);
+  watch=new EventSource("/api/ingest?dict="+encodeURIComponent(dictId));
+  watch.addEventListener("progress",ev=>{try{p=JSON.parse(ev.data)}catch(_){}draw()});
+  watch.addEventListener("done",()=>{unwatch();indexed=true;show(last,"none")});
+  /* Two events share the name: EventSource's own transport error (no data;
+     left open it would reconnect and retry forever) and the server's
+     `event: error`, which carries the reason. */
+  watch.addEventListener("error",ev=>{
+    unwatch();
+    let why="";
+    try{if(ev&&ev.data){const d=JSON.parse(ev.data);if(d&&d.error)why=String(d.error)}}catch(_){}
+    failed(name,why||"The wudict server does not respond.");
+  });
 }
+
+function failed(name,why){
+  document.title=name;
+  card("<b>Could not index "+esc(name)+"</b>"+(why?"<p>"+esc(why)+"</p>":"")+
+    '<p><button type="button" id="retry">Try again</button> or <a href="/browse">choose another…</a></p>');
+  $("retry").onclick=()=>{indexed=false;show(last,"none")};
+}
+
+/* The job outlives the page; only the stream is this page's to close. A page
+   restored from the back-forward cache picks the wait up again. */
+addEventListener("pagehide",unwatch);
+addEventListener("pageshow",e=>{if(e.persisted&&dictId&&!state)show(last,"none")});
 
 /* No ?dict= is not an error: it is the question "which one?", and a page that
    can be reached from a bookmark bar has to be able to answer it. Every
@@ -343,7 +394,9 @@ addEventListener("keydown",e=>{
 
 addEventListener("popstate",()=>{
   const p=new URLSearchParams(location.search);
+  unwatch();
   if(!p.get("dict"))return chooser();
+  if(p.get("dict")!==dictId)indexed=false;
   dictId=p.get("dict");
   show({p:Number(p.get("p"))||1},"none");
 });
