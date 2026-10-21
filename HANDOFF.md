@@ -1,11 +1,12 @@
 # Agent handoff — current state
 
-Current checkout: branch `dev` at `0d97645d`. Uncommitted Browse/Wildcards,
-Android UI, and task-progress changes were present before this cache task and
-remain preserved. Browse and Wildcards SQL result caches now use indexed
-300-headword blocks, retain files across idle periods/restarts, and share a
-five-file/age/disk-size cleanup policy. Settings → System controls the combined
-cache disk cap (2 GiB default on Android, 8 GiB on desktop, or No Limit).
+Current checkout: branch `dev` at `accd33b7`. The current uncommitted change is
+Browse's match-count button and “Find from here” action; earlier Browse/Wildcards,
+Android UI, and task-progress work is included in the checkout. Browse and
+Wildcards SQL result caches now use indexed 300-headword blocks, retain files
+across idle periods/restarts, and share a five-file/age/disk-size cleanup policy.
+Settings → System controls the combined cache disk cap (2 GiB default on Android,
+8 GiB on desktop, or No Limit).
 Old cache schemas are prepared on first open. `go build ./...`, inline JavaScript
 syntax checks, catalog JSON parsing, and `git diff --check` pass; the FOSS debug
 APK also builds successfully. No tests were run, and the APK was not installed.
@@ -43,6 +44,13 @@ and navigates to the selected result. In Wildcards search mode, right-clicking
 or long-pressing a headword opens “Find from here”; the chosen headword receives
 a rectangular outline and subsequent match navigation starts beside it. Opening
 an article stores the clicked word and restores it to view on return via ← Word.
+
+Browse's bottom match count is now a button that opens the existing customized
+Go to match dialog. In Browse search mode, long-pressing on touch or right-clicking
+a headword opens “Find from here”; it outlines the selected word and uses SQLite
+NOCASE-compatible binary bounds so Next starts after the word and Previous before
+it. `go build ./...`, inline JavaScript parsing, and `git diff --check` pass;
+Windows/Android interaction still needs runtime verification.
 The ordered SQL wildcard cache supports seeking to matches before or after a
 headword position across dictionary boundaries.
 The live Wildcards pane now assembles visible 300-word pages by cumulative
