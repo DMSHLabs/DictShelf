@@ -5128,11 +5128,21 @@ addEventListener("scroll",()=>{
      from where they LANDED, not from where the jump began (which would spend
      that gesture on a spurious hide). */
   if(barFrozen){prevScroll=cur;return}
-  const hide=cur>80&&cur>prevScroll;
-  $("bar").classList.toggle("hidden",hide);
-  document.body.classList.toggle("barhidden",hide);
+  setBarHidden(cur>80&&cur>prevScroll);
   prevScroll=cur;
 });
+function setBarHidden(hide){
+  $("bar").classList.toggle("hidden",hide);
+  document.body.classList.toggle("barhidden",hide);
+}
+/* The box is never worked in while out of sight. .bar.hidden only translates
+   the bar, so focus() — from "/", a stray printable key, a key forwarded out
+   of an article, Escape — lands in an invisible field and scrolls nothing
+   that would bring it back. Showing it on `focus` covers every one of those
+   routes at once; `input` covers the box that already had focus when a
+   scroll hid it, where the keystroke never reaches the document listener. */
+$("q").addEventListener("focus",()=>setBarHidden(false));
+$("q").addEventListener("input",()=>setBarHidden(false));
 
 /* Shareable links AND working browser navigation: ?q=…&mode=…&dict=…
    Typing and navigating must record history differently. `doSearch` runs on a
