@@ -26,6 +26,7 @@
 .headword-control .headword-control-apply[hidden]{display:none}
 .headword-control .headword-control-count{flex:none;min-width:2.5em;text-align:center;white-space:nowrap;
   font-size:calc(var(--ui-font-addition) * 1rem);font-variant-numeric:tabular-nums}
+.headword-control .headword-control-count-button{padding:0;border:0;background:transparent;color:inherit;font:inherit;cursor:pointer}
 .headword-control button:disabled{opacity:.45;cursor:default}
 .headword-control .headword-control-mode{grid-area:mode}
 .headword-control .headword-control-mask{grid-area:mask}

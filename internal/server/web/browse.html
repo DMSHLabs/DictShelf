@@ -1390,7 +1390,8 @@ function prefetchBrowsePage(dict,pageNumber,lastPage){
   const key=browsePageKey(dict,pageNumber),running=browsePagePrefetches.get(key);
   if(running)return running;
   const controller=new AbortController();
-  const request=browseFetch("/api/browse?"+new URLSearchParams({dict,p:String(pageNumber),strip:"0"}),{signal:controller.signal})
+  const params=new URLSearchParams({dict,p:String(pageNumber),strip:"0"});
+  const request=browseFetch("/api/browse?"+params,{signal:controller.signal})
     .then(response=>response.ok?response.json():null)
     .then(page=>{
       const alphabet=browseAlphabetCache.get(dict);
