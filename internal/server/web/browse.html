@@ -1520,7 +1520,8 @@ function render(){
   /* `from`, not `dict`: a headword picked here is a link followed inside this
      dictionary, so the app answers it from this dictionary alone, says so,
      and offers the rest - while the reader's own choice in the dictionary
-     picker stays theirs. */
+     picker reflects the dictionary the reader opened Browse for. `from` is
+     reserved for article-link provenance and one-shot cross-reference scope. */
   const countText=t("browse.words",{count:total,number:num(total)})+(filtering&&findResult.stream&&!findStreamDone?"+":"");
   $("sub").textContent=total?a+" — "+z+"  ·  "+countText:t(filtering?"browse.noMatches":"browse.emptyWords");
   const returnTo=encodeURIComponent(browseReturnURL());
@@ -1530,7 +1531,7 @@ function render(){
     const current=!filtering&&!!ranges&&w===currentFoundWord();
     const anchored=!filtering&&!!findAnchorWord&&w===findAnchorWord;
     const classes=[current?"browse-current":"",anchored?"browse-find-anchor":""].filter(Boolean).join(" ");
-    return '<a class="'+classes+'" href="/?q='+encodeURIComponent(w)+"&from="+encodeURIComponent(d.dict)+
+    return '<a class="'+classes+'" href="/?q='+encodeURIComponent(w)+"&dict="+encodeURIComponent(d.dict)+
       '&mode=exact&browse='+returnTo+'" title="'+e+'">'+highlightedWord(title,ranges)+"</a>";
   }).join("")||(filtering?(findResult.stream&&!findStreamDone?"":'<p class="browse-empty">'+tx("browse.noMatches")+'</p>'):"");
   const wordsReady=performance.now();
