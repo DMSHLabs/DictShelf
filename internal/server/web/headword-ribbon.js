@@ -28,7 +28,16 @@
     const fraction=maxFirst?Math.max(0,Math.min(1,first/maxFirst)):0;
     return {width,left:Math.max(0,trackWidth-width)*fraction,maxFirst};
   };
-  const reveal=(offsets,widths,index,position,viewport,maxScroll,items,edge=false)=>{
+  const singleHeadingWidth=sample=>{
+    if(!sample)return 0;
+    const style=getComputedStyle(sample),font=[style.fontStyle,style.fontVariant,style.fontWeight,style.fontSize,style.fontFamily].join(" ");
+    const canvas=measure.canvas||(measure.canvas=document.createElement("canvas")),ctx=canvas.getContext("2d");ctx.font=font;
+    const spacing=Number.parseFloat(style.letterSpacing)||0;
+    const box=[style.paddingLeft,style.paddingRight,style.borderLeftWidth,style.borderRightWidth]
+      .reduce((sum,value)=>sum+(Number.parseFloat(value)||0),0);
+    return Math.max(Number.parseFloat(style.minWidth)||0,ctx.measureText("n").width+spacing+box);
+  };
+  const reveal=(offsets,widths,index,position,viewport,maxScroll,items,edge=false,singleWidth=0)=>{
     if(!Number.isInteger(index)||index<0||index>=offsets.length||index>=widths.length||viewport<=0)return position;
     const clamp=value=>Math.max(0,Math.min(Math.max(0,maxScroll),value));
     const heading=i=>i>=0&&i<offsets.length&&i<widths.length&&(!items||items[i]?.kind===undefined||items[i]?.kind==="chip");
@@ -39,11 +48,26 @@
       if(next()<0)return clamp(maxScroll);
     }
     const left=offsets[index],right=left+widths[index],visibleRight=position+viewport;
-    if(left<position-1){
+    if(edge&&singleWidth>0){
+      const leftGap=left-position,rightGap=visibleRight-right;
+      const before=previous(),after=next();
+      const revealBefore=()=>before>=0&&right-offsets[before]<=viewport?clamp(offsets[before]):-1;
+      const revealAfter=()=>{
+        const afterRight=after>=0?offsets[after]+widths[after]:0;
+        return after>=0&&afterRight-left<=viewport?clamp(afterRight-viewport):-1;
+      };
+      if(leftGap<singleWidth&&leftGap<=rightGap){
+        const target=revealBefore();if(target>=0)return target;
+      }
+      if(rightGap<singleWidth){
+        const target=revealAfter();if(target>=0)return target;
+      }
+      if(left<position-1)return clamp(left);
+      if(right>visibleRight+1)return clamp(right-viewport);
+    }else if(left<position-1){
       const neighbor=previous();
       return clamp(neighbor>=0&&right-offsets[neighbor]<=viewport?offsets[neighbor]:left);
-    }
-    if(right>visibleRight+1){
+    }else if(right>visibleRight+1){
       const neighbor=next(),neighborRight=neighbor>=0?offsets[neighbor]+widths[neighbor]:right;
       return clamp(neighbor>=0&&neighborRight-left<=viewport?neighborRight-viewport:right-viewport);
     }
@@ -273,7 +297,7 @@
       viewport.removeEventListener("scroll",refresh);previous?.removeEventListener("click",onPrevious);next?.removeEventListener("click",onNext);
     }});
   }
-  const api={buffer,lower,measure,paint,thumbLayout,reveal,fromBrowseIndex,fromWildcardSQL,createScroller,
+  const api={buffer,lower,measure,paint,thumbLayout,singleHeadingWidth,reveal,fromBrowseIndex,fromWildcardSQL,createScroller,
     setExactCount:value=>{const n=Number(value);if(Number.isInteger(n)&&n>0)exactCount=n}};
   // One public control surface owns both the search/mask dock and ribbon.
   window.wudictHeadwordControl?.registerRibbon(api);
