@@ -1,6 +1,6 @@
 # Agent handoff — current state
 
-Wildcards toolbar: the merge-books control is fixed to 3.2em with a larger icon; page controls show “Next page” / “Previous page” when the row has room, fall back to arrows, then hide before the page counter on narrow rows.
+Browse and Wildcards ribbon clicks reveal a partly clipped heading and, when it fits, one neighboring heading. Clicking the first or last heading aligns to that strip edge; Browse no longer centers each selected heading or scrolls when it is already fully visible. Shared ribbon geometry checks and inline JavaScript syntax pass; Windows/Android interaction remains to be checked. Wildcards toolbar: the merge-books control is fixed to 3.2em with a larger icon; page controls show “Next page” / “Previous page” when the row has room, fall back to arrows, then hide before the page counter on narrow rows.
 
 Browse's “Loading headwords” page indicator now waits 500 ms for both ordinary page reads and in-flight page prefetches, avoiding a flash on quick Next transitions. Runtime verification is pending.
 
@@ -14,9 +14,9 @@ Browse/Wildcards diagnostics correlate switch and run IDs, requested query/group
 
 System Settings → Search now applies optional FTS/trigram indexes to both Wildcards SQL result databases. In the separate-dictionaries database, upper-mask words are indexed with their dictionary and base positions; the lower search selects FTS candidates for plain token queries, trigram candidates for masks with a 3+ literal, and scans blocks otherwise. The index combination is part of server and browser cache identity. Focused four-combination tests, index rebuild tests, Go build, JavaScript parse and diff checks pass. Runtime timing on Windows/Android is pending.
 
-Current checkout: branch `dev` at `8b8f8856`. Current uncommitted changes add
-Browse's match-count button and “Find from here” action, plus indexed candidate
-search in the merged Wildcards database. Opt-in Browse diagnostics now logs
+Current checkout: branch `dev` at `5bdb31cf`. Browse's match-count button,
+“Find from here” action and indexed candidate search in the merged Wildcards
+database are committed. Opt-in Browse diagnostics now logs
 per-request headword search mode/source, first event/word and total timings,
 found/scanned counts; merged search additionally logs cache hit/miss, selected
 index, candidate count, and cache-build time. The existing Settings → System
@@ -58,7 +58,6 @@ and applying its mask, reserving 100% until both caches are committed. Switching
 back to per-dictionary mode reads completed SQL-cache pages without showing a
 full-search task; runtime verification remains pending.
 Combined Wildcards diagnostics record index combination, cache hit/build, row counts and elapsed time. Each combination stays isolated.
-The Wildcards merge-books button now grows into the open space before Total, with its book icon centered; the previous fake spacing offset was removed.
 Android UI changes keep
 the Browse A–Z heading and Find/Filter dock fixed while its dictionary list
 scrolls; the Reading it word by word hint stays with the heading above its
@@ -380,6 +379,8 @@ On startup, `config.CleanObsoleteConfig` removes obsolete memory/index/compressi
 The October 21 14:35 log confirms sequential lower Wildcards search reads only each dictionary's prepared SQL result rows. It also exposed combined-list lower search opening the upper-result database but still scanning all 11,434,669 rows of the master merged database for a short mask. Candidate selection now starts from the upper result database (284,868 rows in that trace) and only substitutes a smaller master FTS/trigram candidate set when available; progress uses the selected candidate count. Opt-in Browse diagnostics log each 10% scan milestone with elapsed time/rate/found count and split final timing into scan, finalize and commit phases. A rebuilt runtime check is pending.
 
 ## Remaining manual check
+Windows System Log export saves directly into the user's Downloads folder and opens a localized, compact in-app confirmation showing the full saved-file path, with a Show in folder action. Browser and Android export flows retain their existing behavior. Runtime verification is pending.
+
 On Windows, verify direct GET resource delivery: Settings/editor assets, preset switching and GD fonts, user styles, and background images in the picker. The user has confirmed dictionary images, multi-gigabyte video, seeking and background-image thumbnails through the latest direct resource path. The user confirmed successful settings migration and that the next launch skips it; only the stalled-export timeout branch remains unverified. The user confirmed the three dialogs and startup splash on Windows. Also confirm browser and console mode still bind and serve HTTP. Remaining checks: dialog appearance with Background Image and Sepia on/off; browser and Android paths for all three dialogs; Edit Filters load/save/reset, close prompt, and translations; Edit Folders' layout, current paths, validation, index defaults, picker, archive intake, shared progress, save and list refresh; Lemmatization list/install/removal, progress polling, directory note and attribution; chunked browser archive upload; URL and native-path import; System/English/Русский selection and persistence on Windows and Android; System locale behavior on EN/RU devices; orphan actions/removal; About; Browse streams/search/filter/Stop/chooser; Wildcards filtering/page turns/prefetch; article CSS; explicit index rescan and reindex progress/Stop. Browser file input/drop uploads retain HTTP; verify browser upload remains functional and test Android WebView and Java archive imports. Then verify portable startup with prepared dictionaries and confirm indexes are reused after copying `Data`. Check the shared dictionary picker on Android.
 
 ## Server-removal estimate

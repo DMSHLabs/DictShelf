@@ -26,6 +26,9 @@
   "export.saved": "Экспортировано: {done} из {total}",
 
   "panel.saveSystemLog": "Сохранить System Log…",
+  "panel.systemLogSavedTitle": "System Log сохранён",
+  "panel.systemLogSavedPath": "Сохранено в: {path}",
+  "panel.showInFolder": "Показать в папке",
   "panel.editFilters": "Редактировать фильтры",
   "filters.title": "Редактировать фильтры",
   "filters.hint": "Каждая строка задаёт фильтр по тексту в названии словаря или имени файла, без учёта регистра. [Section] задаёт категорию. Фильтры помогают находить доступные словари в редакторе ваших групп.",

@@ -14,6 +14,8 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -22,6 +24,17 @@ import (
 	"github.com/wuweidict/wudict/internal/config"
 	"github.com/wuweidict/wudict/internal/logx"
 )
+
+func systemLogDownloadPath(filename string) (string, error) {
+	if filepath.Base(filename) != filename || !strings.HasPrefix(filename, "wuDict2_SystemLog_") || !strings.HasSuffix(filename, ".log") {
+		return "", errors.New("invalid system log filename")
+	}
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		return "", errors.New("could not locate user folder")
+	}
+	return filepath.Join(home, "Downloads", filename), nil
+}
 
 func desktopOrigin(raw string) (*url.URL, bool) {
 	base, err := url.Parse(raw)
@@ -493,7 +506,33 @@ func (s *Server) DesktopJSONContext(ctx context.Context, baseURL, method, argume
 		if err != nil {
 			return nil, fmt.Errorf("could not read system log: %w", err)
 		}
+		if runtime.GOOS == "windows" {
+			path, err := systemLogDownloadPath(filename)
+			if err != nil {
+				return nil, fmt.Errorf("could not save system log: %w", err)
+			}
+			if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+				return nil, fmt.Errorf("could not create Downloads folder: %w", err)
+			}
+			if err := os.WriteFile(path, content, 0600); err != nil {
+				return nil, fmt.Errorf("could not save system log: %w", err)
+			}
+			return map[string]string{"filename": filename, "path": path}, nil
+		}
 		return map[string]string{"content": string(content), "filename": filename}, nil
+	case "revealSystemLog":
+		path, err := systemLogDownloadPath(argument)
+		if err != nil {
+			return nil, err
+		}
+		info, err := os.Stat(path)
+		if err != nil || !info.Mode().IsRegular() {
+			return nil, errors.New("system log file not found")
+		}
+		if err := Reveal(path); err != nil {
+			return nil, fmt.Errorf("could not show system log in folder: %w", err)
+		}
+		return map[string]bool{"revealed": true}, nil
 	case "userFiles":
 		return s.userFilesPayload(), nil
 	case "saveUserFile":

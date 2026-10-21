@@ -26,6 +26,9 @@
   "export.saved": "{done} of {total} exported",
 
   "panel.saveSystemLog": "Save System Log…",
+  "panel.systemLogSavedTitle": "System Log saved",
+  "panel.systemLogSavedPath": "Saved to {path}",
+  "panel.showInFolder": "Show in folder",
   "panel.editFilters": "Edit filters",
   "filters.title": "Edit filters",
   "filters.hint": "Each line defines a filter matching text in dictionary titles or file names, ignoring case. [Section] creates a category. These filters help find available dictionaries in your group editor.",
