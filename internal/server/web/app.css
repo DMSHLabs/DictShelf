@@ -357,6 +357,8 @@ body.mask-view-active .qbox input{padding-right:2.8em}
 #maskPage{font:inherit;font-variant-numeric:tabular-nums;white-space:nowrap}
 #maskProgress button{box-sizing:border-box;flex:none;height:calc(var(--ui-control-height) * 1em);margin:0;padding:0 .5em;color:var(--fg);background:var(--bg-card);border:1px solid var(--line);border-radius:6px;font:inherit;cursor:pointer}
 #maskProgress :is(#maskPrev,#maskNext){width:calc(var(--ui-control-height) * 1em);padding:0}
+#maskProgress #mergedAZ{display:grid;place-items:center;width:calc(var(--ui-control-height) * 1em);padding:0}
+#maskProgress #mergedAZ svg{display:block;width:1.8em;height:1.05em}
 #maskProgress button:disabled{opacity:.4;cursor:default}
 /* Keep the search controls visible while moving through a long mask list. */
 body.mask-view-active{--stick:var(--barh)}
@@ -540,6 +542,9 @@ select{box-sizing:border-box;font-size:calc(var(--ui-font-base) * 1rem);min-heig
 #pinBtn[aria-pressed="true"] svg{transform:rotate(-45deg)}
 #pinBtn[aria-pressed="true"]{color:var(--accent)}
 #mergedAZ[aria-pressed="true"]{color:var(--accent);border-color:var(--accent)}
+#mergedAZ .merge-book-to-many{display:none}
+#mergedAZ[aria-pressed="true"] .merge-books-to-one{display:none}
+#mergedAZ[aria-pressed="true"] .merge-book-to-many{display:inline}
 
 /* ── results ───────────────────────────────────────────────────────── */
 /* Costs nothing until it has something to say. The old rule reserved

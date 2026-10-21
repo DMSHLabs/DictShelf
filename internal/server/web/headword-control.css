@@ -26,7 +26,9 @@
 .headword-control .headword-control-apply[hidden]{display:none}
 .headword-control .headword-control-count{flex:none;min-width:2.5em;text-align:center;white-space:nowrap;
   font-size:calc(var(--ui-font-addition) * 1rem);font-variant-numeric:tabular-nums}
-.headword-control .headword-control-count-button{padding:0;border:0;background:transparent;color:inherit;font:inherit;cursor:pointer}
+.headword-control .headword-control-count-button{box-sizing:border-box;display:grid;place-items:center;height:calc(var(--ui-edit_control-height) * 1.5rem);padding:0 .55em;
+  border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--fg);font:inherit;cursor:pointer}
+.headword-control .headword-control-count-button:not(:disabled):hover{border-color:var(--accent);color:var(--accent)}
 .headword-control button:disabled{opacity:.45;cursor:default}
 .headword-control .headword-control-mode{grid-area:mode}
 .headword-control .headword-control-mask{grid-area:mask}

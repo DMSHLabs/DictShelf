@@ -1,6 +1,6 @@
 # Agent handoff — current state
 
-Current checkout: branch `dev` at `e29922ca`. Uncommitted Browse/Wildcards,
+Current checkout: branch `dev` at `0d97645d`. Uncommitted Browse/Wildcards,
 Android UI, and task-progress changes were present before this cache task and
 remain preserved. Browse and Wildcards SQL result caches now use indexed
 300-headword blocks, retain files across idle periods/restarts, and share a
@@ -14,16 +14,24 @@ Android UI changes keep
 the Browse A–Z heading and Find/Filter dock fixed while its dictionary list
 scrolls; the Reading it word by word hint stays with the heading above its
 divider, and filter mode is selected by default.
-The Wildcards merge button describes the next transition: “Several → one” or
-“One → several” (localized in English and Russian). The normal per-dictionary
-and merged views use separate SQLite caches; after the initial merged cache is
+The Wildcards merge button uses a two-state SVG: several books → one book, or
+one book → several books. Its title and accessible name describe the next
+transition in English and Russian; it sits beside Total and block paging in
+the Wildcards header. The result-count control is visibly button-shaped. The
+normal per-dictionary and merged views use separate SQLite caches; after the initial merged cache is
 built, toggling back and forth reuses each view. The merged list is deduplicated
 and globally sorted, applies the active mask and filter, and retains source
 positions for paging and “Find from here”. The selected view is kept in the
-search URL and article-return link. `go build ./...`, inline JavaScript parsing,
-catalog JSON parsing and `git diff --check` pass; the FOSS arm64 debug APK builds
-successfully and was not installed. Windows/Android runtime behavior remains
-unverified.
+search URL and article-return link. The previous/next-match buttons now retain
+the merged flag and source dictionary IDs when creating filter rows; without
+those fields, merged-match requests silently queried a nonexistent dictionary.
+Match pages now also carry a separate ordinal within the masked merged list:
+the source position is still used to highlight the exact headword, while the
+masked ordinal selects the correct base page. Older merged-find SQL caches are
+rebuilt automatically if they lack this ordinal column.
+`go build ./...`, inline JavaScript parsing, catalog JSON parsing and
+`git diff --check` pass; the FOSS arm64 debug APK builds successfully and was
+not installed. Windows/Android runtime behavior remains unverified.
 The Android-only `A60` header marker is now shown only by debug builds. The
 wildcards results now use a full-width unboxed surface with compact top controls.
 Browse and wildcard headword searches reveal their first matching word as soon
