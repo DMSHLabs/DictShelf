@@ -74,28 +74,25 @@ func configureNativeCrashCapture(root, sessionPath string) error {
 	return nil
 }
 
-func windowsUnhandledException(exceptionInfo uintptr) uintptr {
+func windowsUnhandledException(pointers *windowsExceptionPointers) uintptr {
 	var code uint32
 	var address uintptr
-	if exceptionInfo != 0 {
-		pointers := (*windowsExceptionPointers)(unsafe.Pointer(exceptionInfo))
-		if pointers.Record != nil {
-			code = pointers.Record.Code
-			address = pointers.Record.Address
-		}
+	if pointers != nil && pointers.Record != nil {
+		code = pointers.Record.Code
+		address = pointers.Record.Address
 	}
 	threadID, _, _ := getCurrentThreadID.Call()
 	metadata := fmt.Sprintf("Windows unhandled exception\r\nprocess_id=%d\r\nthread_id=%d\r\nexception_code=0x%08X\r\nexception_address=0x%X\r\ndump_file=%s\r\n",
 		currentProcessID(), threadID, code, address, nativeCrashDumpPath)
 	writeWindowsCrashText(nativeCrashLogPath, []byte(metadata))
-	dumpErr := writeWindowsMiniDump(exceptionInfo, uint32(threadID))
+	dumpErr := writeWindowsMiniDump(pointers, uint32(threadID))
 	if dumpErr != nil {
 		writeWindowsCrashText(nativeCrashLogPath, []byte("minidump_error="+dumpErr.Error()+"\r\n"))
 	} else {
 		writeWindowsCrashText(nativeCrashLogPath, []byte("minidump_written=true\r\n"))
 	}
 	if previousCrashFilter != 0 {
-		result, _, _ := syscall.SyscallN(previousCrashFilter, exceptionInfo)
+		result, _, _ := syscall.SyscallN(previousCrashFilter, uintptr(unsafe.Pointer(pointers)))
 		return result
 	}
 	return 0 // EXCEPTION_CONTINUE_SEARCH leaves Windows Error Reporting enabled.
@@ -123,7 +120,7 @@ func writeWindowsCrashText(path string, content []byte) {
 	writeFileCrash.Call(handle, uintptr(unsafe.Pointer(&content[0])), uintptr(len(content)), uintptr(unsafe.Pointer(&written)), 0)
 }
 
-func writeWindowsMiniDump(exceptionInfo uintptr, threadID uint32) error {
+func writeWindowsMiniDump(pointers *windowsExceptionPointers, threadID uint32) error {
 	name, err := syscall.UTF16PtrFromString(nativeCrashDumpPath)
 	if err != nil {
 		return err
@@ -139,10 +136,10 @@ func writeWindowsMiniDump(exceptionInfo uintptr, threadID uint32) error {
 	process, _, _ := getCurrentProcess.Call()
 	var exceptionInfoArg uintptr
 	var exception miniDumpExceptionInformation
-	if exceptionInfo != 0 {
+	if pointers != nil {
 		exception = miniDumpExceptionInformation{
 			ThreadID:          threadID,
-			ExceptionPointers: (*windowsExceptionPointers)(unsafe.Pointer(exceptionInfo)),
+			ExceptionPointers: pointers,
 		}
 		exceptionInfoArg = uintptr(unsafe.Pointer(&exception))
 	}
