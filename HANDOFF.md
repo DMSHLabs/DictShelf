@@ -1,12 +1,13 @@
 # Agent handoff — current state
 
-Current checkout: branch `lsd`, based on `dev` at `95dac8f9`, followed by seven
+Current checkout: branch `lsd`, based on `dev` at `95dac8f9`, followed by eight
 local LSD commits; no upstream is configured. The isolated package has MIT
 fixtures, fixed-header validation, MSB bit reading, Huffman tables, and user
 decoder-table parsing, all passing focused tests. The registered sequential
 reader handles user-dictionary fixtures for versions 12, X3 and X5. It normalizes
 DSL article markup, preserves title syntax and aliases, and reads annotations
-and overlay resources from fixtures. X3/X5 system and abbreviation layouts have
+and overlay resources from fixtures; media packing and resource retrieval are
+verified through the prepared store. X3/X5 system and abbreviation layouts have
 synthetic primitive tests; X6 system XOR remains. Upstream `master` review
 status and pending ZIM checks remain as recorded below.
 
