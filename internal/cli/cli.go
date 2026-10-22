@@ -44,6 +44,7 @@ import (
 
 	_ "github.com/wuweidict/wudict/internal/format/bgl"      // register .bgl
 	_ "github.com/wuweidict/wudict/internal/format/dsl"      // register .dsl(.dz)
+	_ "github.com/wuweidict/wudict/internal/format/lsd"      // register .lsd
 	_ "github.com/wuweidict/wudict/internal/format/mdx"      // register .mdx
 	_ "github.com/wuweidict/wudict/internal/format/slob"     // register .slob
 	_ "github.com/wuweidict/wudict/internal/format/stardict" // register .ifo
