@@ -1,6 +1,7 @@
 # Agent handoff — current state
 
-Current checkout: branch `lsd`, based on `dev` at `95dac8f9`. Latest\nimplementation commit is `862405d` (typed Windows exception pointers).
+Current checkout: branch `lsd`, based on `dev` at `95dac8f9`. Latest
+implementation commit is `862405d` (typed Windows exception pointers).
 Latest LSD changes are `1c6a9a3` (LSD abbreviation
 companions) and `1feddbc` (X6 system XOR). No upstream is configured. The
 isolated package has
