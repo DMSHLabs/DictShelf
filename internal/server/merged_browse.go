@@ -25,6 +25,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/wuweidict/wudict/internal/dict"
+	"github.com/wuweidict/wudict/internal/indexconst"
 	"github.com/wuweidict/wudict/internal/logx"
 	"github.com/wuweidict/wudict/internal/search"
 	"github.com/wuweidict/wudict/internal/store"
@@ -90,9 +91,14 @@ func sqliteNoCaseEqual(a, b string) bool { return !sqliteNoCaseLess(a, b) && !sq
 
 func (s *Server) mergedBrowsePage(ctx context.Context, q url.Values, progress func(int, int) error) (browseResp, error) {
 	useFTS, useTrigram := q.Get("mergedfts") == "1", q.Get("mergedtrigram") == "1"
-	ids := strings.Split(q.Get("ids"), ",")
-	if len(ids) == 0 || len(ids) > 256 || q.Get("ids") == "" {
+	rawIDs := q.Get("ids")
+	if rawIDs == "" {
 		return browseResp{}, errors.New("no dictionaries selected for the combined A–Z list")
+	}
+	ids := strings.Split(rawIDs, ",")
+	limit := s.uiPrefsSnapshot().CombinedDictionaryLimit
+	if len(ids) > limit {
+		return browseResp{}, fmt.Errorf("combined A–Z list limit is %d dictionaries; %d selected", limit, len(ids))
 	}
 	seen := make(map[string]bool, len(ids))
 	for _, id := range ids {
@@ -1053,6 +1059,14 @@ func (s *Server) mergedBrowseFindBase(ctx context.Context, q url.Values, progres
 	if strings.TrimSpace(q.Get("within")) == "" {
 		return s.mergedBrowsePage(ctx, q, progress)
 	}
+	ids := strings.Split(q.Get("ids"), ",")
+	if q.Get("ids") == "" {
+		return browseResp{}, errors.New("no dictionaries selected for the combined A–Z list")
+	}
+	limit := s.uiPrefsSnapshot().CombinedDictionaryLimit
+	if len(ids) > limit {
+		return browseResp{}, fmt.Errorf("combined A–Z list limit is %d dictionaries; %d selected", limit, len(ids))
+	}
 	cacheID := q.Get("mergedcache")
 	if !wildcardCacheIDPattern.MatchString(cacheID) {
 		return browseResp{}, errors.New("combined Wildcards lower search requires a prepared SQL database")
@@ -1080,7 +1094,7 @@ func (s *Server) mergedBrowseFindBase(ctx context.Context, q url.Values, progres
 
 func mergedSignatureMatchesIDs(signature, rawIDs string) bool {
 	ids := strings.Split(rawIDs, ",")
-	if rawIDs == "" || len(ids) == 0 || len(ids) > 256 {
+	if rawIDs == "" || len(ids) == 0 || len(ids) > indexconst.CombinedDictionaryLimitMax {
 		return false
 	}
 	sort.Strings(ids)

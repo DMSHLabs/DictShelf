@@ -1083,11 +1083,13 @@ window.wudictFontScale=(function(){
 
     <h3 class="sys-head">{{T:system.cache}}</h3>
     <p class="sys-hint">{{T:system.cacheHint}}</p>
+    <div class="group-toolbar sys-action-spaced"><button type="button" class="btn" id="sysClearCache">{{T:system.clearCache}}</button></div>
     <h3 class="sys-head" id="sysResultCacheHeading">{{T:system.resultCache}}</h3>
     <p class="sys-hint" id="sysResultCacheHint">{{T:system.resultCacheHint}}</p>
     <label class="sys-row"><input type="checkbox" id="sysResultCacheLimited"><span class="sys-label">{{T:system.resultCacheLimit}}</span></label>
     <div class="sys-row sys-result-cache-limit"><input type="text" id="sysResultCacheValue" inputmode="numeric" aria-label="{{T:system.resultCacheLimit}}" disabled><span id="sysResultCacheUnit">{{T:system.gb}}</span></div>
-    <div class="group-toolbar sys-action-spaced"><button type="button" class="btn" id="sysClearCache">{{T:system.clearCache}}</button></div>
+    <div class="sys-row sys-num sys-combined-limit"><span class="sys-label" id="sysCombinedLimitLabel">{{T:system.combinedDictionaryLimit}}</span><input type="number" id="sysCombinedLimit" min="1" max="{{COMBINED_DICTIONARY_LIMIT_MAX}}" step="1" inputmode="numeric" aria-labelledby="sysCombinedLimitLabel"></div>
+    <p class="sys-hint" id="sysCombinedLimitHint">{{T:system.combinedDictionaryLimitHint}}</p>
 
     <h3 class="sys-head">{{T:system.search}}</h3>
     <p class="sys-hint">{{T:system.mergedSearchHint}}</p>
@@ -1639,7 +1641,8 @@ async function loadPrefs(){
        the same call the removed `sortMine` got. The field is still WRITTEN
        (below, always false), because it is upstream's. */
     if(st.ui){applyFS(st.ui.fontSize,false);applyFW(st.ui.fontWeight,false);applyArticleFont(st.ui.fontFamily||"charis",false);applyHL(!st.ui.hlOff,false);applySpeak(!st.ui.speakOff,false);applyHideUnmarkedExamples(!!st.ui.hideUnmarkedExamples,false);openN=st.ui.openN||1;openAll=!!st.ui.openAll;prefOrderModeKnown=typeof st.ui.customOrder==="boolean";prefCustomOrder=!!st.ui.customOrder;
-      resultCacheLimitGB=Number(st.ui.resultCacheLimitGB)||defaultResultCacheLimitGB();resultCacheNoLimit=!!st.ui.resultCacheNoLimit;syncResultCacheLimitUI()}
+      resultCacheLimitGB=Number(st.ui.resultCacheLimitGB)||defaultResultCacheLimitGB();resultCacheNoLimit=!!st.ui.resultCacheNoLimit;syncResultCacheLimitUI();
+      combinedDictionaryLimit=Math.max(1,Math.min(Number(st.ui.combinedDictionaryLimit)||defaultCombinedDictionaryLimit,maxCombinedDictionaryLimit));syncCombinedDictionaryLimitUI()}
     if(!st.exists){adoptLocalPrefs();return} // first run: keep whatever we had
     prefOrder=rows.map(d=>d.id);prefPinned=rows.filter(d=>d.pinned).map(d=>d.id);
     dictTitles=new Map(rows.filter(d=>d.title).map(d=>[d.id,d.title]));
@@ -1655,6 +1658,13 @@ async function loadPrefs(){
 let prefsTimer=null,prefsSent=null;
 function defaultResultCacheLimitGB(){return window.wudictAndroidShell?2:8}
 let resultCacheLimitGB=defaultResultCacheLimitGB(),resultCacheNoLimit=false;
+const defaultCombinedDictionaryLimit={{COMBINED_DICTIONARY_LIMIT_DEFAULT}},maxCombinedDictionaryLimit={{COMBINED_DICTIONARY_LIMIT_MAX}};
+let combinedDictionaryLimit=defaultCombinedDictionaryLimit;
+function syncCombinedDictionaryLimitUI(){const field=$("sysCombinedLimit");if(field)field.value=String(combinedDictionaryLimit)}
+function combinedLimitErrorText(message){
+  const match=/^combined A–Z list limit is (\d+) dictionaries; (\d+) selected$/.exec(String(message||""));
+  return match?tx("search.combinedLimitExceeded",{limit:match[1],selected:match[2]}):message;
+}
 function syncResultCacheLimitUI(){
   const box=$("sysResultCacheLimited"),value=$("sysResultCacheValue"),unit=$("sysResultCacheUnit");
   if(!box||!value||!unit)return;
@@ -1666,6 +1676,12 @@ function bindResultCacheLimit(){
   syncResultCacheLimitUI();
 }
 bindResultCacheLimit();
+$("sysCombinedLimit").addEventListener("change",e=>{
+  const n=Math.floor(Number(e.target.value));
+  if(!Number.isFinite(n)||n<1){syncCombinedDictionaryLimitUI();return}
+  combinedDictionaryLimit=Math.min(n,maxCombinedDictionaryLimit);syncCombinedDictionaryLimitUI();savePrefs(true);
+});
+syncCombinedDictionaryLimitUI();
 function savePrefs(now){
   clearTimeout(prefsTimer);
   // Never write a baseline we could not read: if the load failed, "no order"
@@ -1678,7 +1694,7 @@ function savePrefs(now){
   // that no longer exist.
   const body=JSON.stringify({dicts:orderedDicts().map(d=>({id:d.id,name:d.name||d.path.split("/").pop(),title:dictTitles.get(d.id)||"",pinned:prefPinned.includes(d.id)})),
     ui:{fontSize:articleFS,fontWeight:articleFW,fontFamily:articleFont,hlOff:!hlOn,speakOff:!speakOn,fastFirst:!orderFirst,hideUnmarkedExamples,customOrder:prefCustomOrder,
-      resultCacheLimitGB,resultCacheNoLimit}});
+      resultCacheLimitGB,resultCacheNoLimit,combinedDictionaryLimit}});
   if(body===prefsSent)return;
   prefsSent=body;
   apiFetch("/api/prefs",{method:"PUT",headers:{"Content-Type":"application/json"},body})
@@ -2710,21 +2726,32 @@ function paintWebDictionaryPicker(){
   webPickerSearch?.refresh();
   return rows.length;
 }
+let webPickerOpening=false;
 async function openWebDictionaryPicker(context="search"){
   const dialog=$('webDictionaryPicker');
-  if(dialog.open)return;
+  if(dialog.open||webPickerOpening)return;
+  webPickerOpening=true;
   webPickerContext=context;
   const started=performance.now();
-  const groupsStarted=started;
+  const diagnostic=dictionaryListDiagnosticsEnabled();
+  const trace=(stage,duration=0,rows=0)=>{
+    if(diagnostic)sendBrowseDiagnostic({event:'dictionary_picker_stage',stage,resource:context,
+      elapsedMs:Math.round(performance.now()-started),durationMs:Math.round(duration),words:rows});
+  };
+  trace('input');
   try{
-    userGroups=await groupRequest('/api/user-groups','GET');
+    const groupsStarted=performance.now();
+    trace('groups_start');
+    userGroups=await groupRequest('/api/user-groups','GET',undefined,diagnostic);
     const groupsMs=Math.round(performance.now()-groupsStarted);
+    trace('groups_done',groupsMs,userGroups.length);
     if(!userGroups.some(g=>g.id===pickerGroup))pickerGroup='all';
     const paintStarted=performance.now();
     const rows=paintWebDictionaryPicker();
     const paintMs=Math.round(performance.now()-paintStarted);
-    if(dictionaryListDiagnosticsEnabled())sendBrowseDiagnostic({event:'dictionary_picker_open',words:rows,fetchMs:groupsMs,wordsMs:paintMs,totalMs:Math.round(performance.now()-started)});
+    trace('rows_done',paintMs,rows);
     dialog.showModal();
+    trace('dialog_shown',0,rows);
     if(!webPickerSearch){
       webPickerSearch=window.wudictListSearch.create({
         root:$('webPickerRows'),itemSelector:'.web-picker-row',dock:$('webPickerSearch'),
@@ -2737,7 +2764,9 @@ async function openWebDictionaryPicker(context="search"){
       });
     }
     webPickerSearch.clear();
-  }catch(e){setStatus(esc(tx('search.groupFailed',{error:window.wudictI18n.errorText(e.message)})))}
+    requestAnimationFrame(()=>trace('first_frame',0,rows));
+  }catch(e){trace('error');setStatus(esc(tx('search.groupFailed',{error:window.wudictI18n.errorText(e.message)})))}
+  finally{webPickerOpening=false}
 }
 let exportSearch=null,exportRunning=false,exportPolling=false;
 const exportSelected=new Set();
@@ -4308,6 +4337,9 @@ async function showDesktopSysSettings(){
     resultCacheHint:$("sysResultCacheHint"),
     resultCacheLimited:$("sysResultCacheLimited").parentElement,
     resultCacheValue:$("sysResultCacheValue").parentElement,
+    clearCache:$("sysClearCache").parentElement,
+    combinedLimit:$("sysCombinedLimit").parentElement,
+    combinedLimitHint:$("sysCombinedLimitHint"),
     searchHeading:$("sysMergedFTS").closest(".sys-row").previousElementSibling.previousElementSibling,
     searchHint:$("sysMergedFTS").closest(".sys-row").previousElementSibling,
     searchFTS:$("sysMergedFTS").parentElement,
@@ -4334,16 +4366,10 @@ async function showDesktopSysSettings(){
   cacheHeading.textContent=tx("system.cache");body.append(cacheHeading);
   const cacheHint=document.createElement("p");cacheHint.className="sys-hint";
   cacheHint.textContent=tx("system.cacheHint");body.append(cacheHint);
-  body.append(desktopSystemNodes.resultCacheHeading,desktopSystemNodes.resultCacheHint,desktopSystemNodes.resultCacheLimited,desktopSystemNodes.resultCacheValue);
+  body.append(desktopSystemNodes.clearCache,desktopSystemNodes.resultCacheHeading,desktopSystemNodes.resultCacheHint,
+    desktopSystemNodes.resultCacheLimited,desktopSystemNodes.resultCacheValue,desktopSystemNodes.combinedLimit,desktopSystemNodes.combinedLimitHint);
   syncResultCacheLimitUI();
-  const clearCache=document.createElement("button");clearCache.type="button";clearCache.className="btn sys-action-spaced";
-  clearCache.textContent=tx("system.clearCache");
-  clearCache.onclick=async()=>{
-    clearCache.disabled=true;
-    try{await window.wudictNativeCall("clearBrowserCache");location.reload()}
-    catch(error){sysNote(tx("system.cacheFailed")+" "+window.wudictI18n.errorText(error.message));clearCache.disabled=false}
-  };
-  body.append(clearCache);
+  syncCombinedDictionaryLimitUI();
   body.append(desktopSystemNodes.searchHeading,desktopSystemNodes.searchHint,
     desktopSystemNodes.searchFTS,desktopSystemNodes.searchTrigram);
   $("sysMergedFTS").checked=wildcardSearchIndexEnabled("fts");
@@ -4391,11 +4417,10 @@ async function showDesktopSysSettings(){
     if(key==="SEARCH_MEMORY"||key==="PREVIEW_MEMORY"||key==="SERVER_IP"||key==="SERVER_PORT")continue;
     const row=document.createElement("div");row.className="sys-desktop-row";
     const name=document.createElement("div"),value=document.createElement("span");
-    const label=document.createElement("span"),configKey=document.createElement("code");
+    const label=document.createElement("span");
     label.className="sys-desktop-label";
     label.textContent=tx("system.desktop."+key);
-    configKey.textContent=key;
-    name.append(label,configKey);
+    name.append(label);
     value.className="sys-desktop-value";
     const raw=String(setting.value);
     if(key==="INDEX_WORKERS"){
@@ -6748,7 +6773,7 @@ async function maskFetch(row,page,generation,navToken){
     else if(!row.within&&maskRows[maskCurrent]===row)maskPrefetchBasePage(row,page+1,generation);
   }catch(error){
     if(controller.signal.aborted||generation!==maskGeneration)return;
-    row.state="error";row.error=error.message;maskStripVersion++;maskMenu();
+    row.state="error";row.error=combinedLimitErrorText(error.message);maskStripVersion++;maskMenu();
     maskFindControls();
     if(maskRows[maskCurrent]===row)maskRender();
   }finally{maskControllers.delete(controller);if(row.abort===controller)row.abort=null}
@@ -7241,7 +7266,7 @@ async function maskFetchWithinStream(row,generation,navToken,findGeneration){
       await maskFetch(row,visiblePage,generation,maskNavToken);
   }catch(error){
     if(!controller.signal.aborted&&generation===maskGeneration&&(findGeneration<0||findGeneration===maskFindGeneration)){
-      row.state="error";row.error=error.message;row.partial=false;maskStripVersion++;maskRender();
+      row.state="error";row.error=combinedLimitErrorText(error.message);row.partial=false;maskStripVersion++;maskRender();
     }
   }finally{maskProgressTraceFinish(row,progressTrace,controller.signal.aborted?"cancelled":row.state==="error"?"error":"ended");
     maskControllers.delete(controller);if(row.abort===controller)row.abort=null;

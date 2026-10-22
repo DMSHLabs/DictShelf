@@ -14,6 +14,7 @@ import (
 
 	"github.com/wuweidict/wudict/internal/facet"
 	"github.com/wuweidict/wudict/internal/fsx"
+	"github.com/wuweidict/wudict/internal/indexconst"
 	"github.com/wuweidict/wudict/internal/logx"
 )
 
@@ -63,8 +64,9 @@ type DictPref struct {
 // phone that reaches this same server too, and localStorage — keyed by origin
 // — would hand them 15px there, and again the first time SERVER_PORT changes.
 type UIPrefs struct {
-	ResultCacheLimitGB int  `json:"resultCacheLimitGB,omitempty"`
-	ResultCacheNoLimit bool `json:"resultCacheNoLimit,omitempty"`
+	ResultCacheLimitGB      int  `json:"resultCacheLimitGB,omitempty"`
+	ResultCacheNoLimit      bool `json:"resultCacheNoLimit,omitempty"`
+	CombinedDictionaryLimit int  `json:"combinedDictionaryLimit,omitempty"`
 
 	FontSize int `json:"fontSize,omitempty"` // article text, px; 0 = the default
 
@@ -176,6 +178,11 @@ const (
 func (u *UIPrefs) normalize() {
 	if u == nil {
 		return
+	}
+	if u.CombinedDictionaryLimit < 1 {
+		u.CombinedDictionaryLimit = indexconst.CombinedDictionaryLimitDefault
+	} else {
+		u.CombinedDictionaryLimit = min(u.CombinedDictionaryLimit, indexconst.CombinedDictionaryLimitMax)
 	}
 	if u.FontSize != 0 {
 		u.FontSize = max(FontSizeMin, min(FontSizeMax, u.FontSize))
