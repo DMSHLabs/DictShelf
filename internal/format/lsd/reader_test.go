@@ -118,6 +118,23 @@ func TestReaderHeadingFixtureContents(t *testing.T) {
 	}
 }
 
+func TestReaderExtendedTitleKeys(t *testing.T) {
+	r, err := NewReader("testdata/simple_testdict1/testext.lsd")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+	for i, want := range [][]string{{"Abc e"}, {"bipolar affective disorder"}} {
+		entry, err := r.Next()
+		if err != nil {
+			t.Fatalf("entry %d: %v", i, err)
+		}
+		if !reflect.DeepEqual(entry.Headwords, want) {
+			t.Errorf("entry %d headwords = %q; want %q", i, entry.Headwords, want)
+		}
+	}
+}
+
 func TestOverlayResources(t *testing.T) {
 	for _, file := range []string{"overlay_12.lsd", "overlay_x3.lsd", "overlay_x5.lsd"} {
 		t.Run(file, func(t *testing.T) {
