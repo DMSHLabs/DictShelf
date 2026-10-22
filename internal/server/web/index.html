@@ -301,7 +301,7 @@ window.wudictFontScale=(function(){
     <header class="mask-head">
       <button type="button" class="choice-btn mask-dictionary-picker" id="maskDict" aria-label="{{T:search.wildcardsDictionary}}" aria-haspopup="dialog"><span id="maskDictName"></span><span id="maskDictMeta"></span></button>
       <span id="maskProgress" aria-label="{{T:search.wildcardsResults}}" hidden>
-        <button type="button" class="btn" id="mergedAZ" title="{{T:search.mergeBooksToOne}}" aria-label="{{T:search.mergeBooksToOne}}" aria-pressed="false" disabled>
+        <button type="button" class="btn" id="mergedAZ" title="{{T:search.combineDictionaries}}" aria-label="{{T:search.combineDictionaries}}" aria-pressed="false" disabled>
           <svg viewBox="0 0 64 36" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
             <g class="merge-books-to-one"><path d="M3 9h12v17H3zM6 6h12v17M9 3h12v17M4 13h8M7 10h8M10 7h8"/><path d="M26 18h13m-5-5 5 5-5 5"/><path d="M46 8h15v20H46zM51 8v20M54 13h5"/></g>
             <g class="merge-book-to-many"><path d="M3 8h15v20H3zM8 8v20M11 13h5"/><path d="M25 18h13m-5-5 5 5-5 5"/><path d="M44 9h12v17H44zM47 6h12v17M50 3h12v17M45 13h8M48 10h8M51 7h8"/></g>
@@ -1760,7 +1760,27 @@ function groupIds(sel){
   // groups.ini (D162), and a name may contain ":" itself.
   return orderedDicts().filter(d=>!d.unavailable&&(d.groups||[]).some(g=>"g:"+g.f+":"+g.v===sel)).map(d=>d.id);
 }
-function updateMergedAZ(){const selection=$("dict").value||"all";const ids=selection==="all"?activeUserGroupIds():selection.startsWith("g:")?groupIds(selection):[selection];const entering=!maskMergeAZ,label=tx(entering?"search.mergeBooksToOne":"search.mergeBooksToMany");$("mergedAZ").disabled=!dictsSettled||ids.length===0;$("mergedAZ").title=label;$("mergedAZ").setAttribute("aria-label",label);$("mergedAZ").setAttribute("aria-pressed",String(!!maskMergeAZ))}
+function updateMergedAZ(){const selection=$("dict").value||"all";const ids=selection==="all"?activeUserGroupIds():selection.startsWith("g:")?groupIds(selection):[selection];const label=tx(maskMergeAZ?"search.showDictionariesSeparately":"search.combineDictionaries");$("mergedAZ").disabled=!dictsSettled||ids.length===0;$("mergedAZ").title=label;$("mergedAZ").setAttribute("aria-label",label);$("mergedAZ").setAttribute("aria-pressed",String(!!maskMergeAZ));syncMaskDictionaryPicker()}
+function syncMaskDictionaryPicker(){
+  const picker=$("maskDict"),selected=maskRows[maskCurrent],combined=!!maskMergeAZ;
+  picker.classList.toggle("mask-dictionary-picker-static",combined);
+  picker.setAttribute("aria-label",tx(combined?"search.combinedList":"search.wildcardsDictionary"));
+  if(combined){
+    picker.removeAttribute("aria-haspopup");
+    $("maskDictName").textContent=tx("search.combinedList");
+    $("maskDictMeta").textContent="";
+    picker.title=tx("search.combinedList");
+    picker.disabled=true;
+    return;
+  }
+  picker.setAttribute("aria-haspopup","dialog");
+  $("maskDictName").textContent=selected?.name||"";
+  $("maskDictMeta").textContent=selected?maskRowMeta(selected):"";
+  picker.title=selected?selected.name+maskRowMeta(selected):"";
+  const settled=maskRows.length>0&&maskRows.every(row=>row.state==="error"||row.state==="ready"&&!row.partial);
+  const total=maskRows.reduce((sum,row)=>sum+(row.state==="ready"?row.total:0),0);
+  picker.disabled=!maskPattern||!settled||total===0;
+}
 $("mergedAZ").addEventListener("click",()=>{
   if(!dictsSettled)return;
   maskViewTraceID++;maskViewTraceStarted=performance.now();maskViewTrace("switch_click");
@@ -2852,7 +2872,7 @@ $('exportSave').onclick=async()=>{
 $('exportStop').onclick=async()=>{try{exportShowStatus(await exportCall('stop'));exportFollow()}catch(error){$('exportStatus').textContent=tx('export.failed',{error:error.message})}};
 $('webPickerClose').onclick=()=>$('webDictionaryPicker').close();
 $('webPickerGroup').onchange=e=>{wudictPickerGroupChanged(e.target.value);paintWebDictionaryPicker()};
-$('maskDict').onclick=()=>openWebDictionaryPicker("wildcards");
+$('maskDict').onclick=()=>{if(!maskMergeAZ)openWebDictionaryPicker("wildcards")};
 $('dict').addEventListener('pointerdown',e=>{
   if($('dict').disabled)return;
   e.preventDefault();openWebDictionaryPicker();
@@ -6329,7 +6349,7 @@ function maskBusyApply(){
   body.setAttribute("aria-busy",String(busy));
   for(const id of ["q","mode","modeMenuBtn","dict","pinBtn","wideBtn","expandBtn","panelBtn","maskDict","webPickerGroup",
     "maskFindMode","maskFindWildcard","maskFindInput","maskFindApply"]){
-    const el=$(id);if(el)el.disabled=busy;
+    const el=$(id);if(el)el.disabled=busy||(id==="maskDict"&&maskMergeAZ);
   }
   for(const el of document.querySelectorAll("#searchHistory button, #maskWords button, #webPickerRows .web-picker-row"))el.disabled=busy;
 }
@@ -6361,6 +6381,7 @@ function maskInvalidate(){
   $("maskCount").textContent="";$("maskPage").textContent="";
   $("maskPrev").disabled=$("maskPage").disabled=$("maskNext").disabled=true;
   $("maskDict").disabled=true;
+  syncMaskDictionaryPicker();
   $("maskWords").replaceChildren();
   maskStripPaint();
 }
@@ -6601,9 +6622,7 @@ new ResizeObserver(()=>{
   });
 }).observe($("maskLetters"));
 function maskMenu(){
-  const selected=maskRows[maskCurrent];
   let total=0,pages=0,prefixKnown=true,complete=true;
-  const settled=maskRows.length>0&&maskRows.every(row=>row.state==="error"||row.state==="ready"&&!row.partial);
   for(const row of maskRows){
     row.firstPage=null;row.pages=0;
     if(row.state==="ready"){
@@ -6616,10 +6635,7 @@ function maskMenu(){
     }
     if(row.partial)complete=false;
   }
-  $("maskDictName").textContent=selected?.name||"";
-  $("maskDictMeta").textContent=selected?maskRowMeta(selected):"";
-  $("maskDict").title=selected?selected.name+maskRowMeta(selected):"";
-  $("maskDict").disabled=!maskPattern||!settled||total===0;
+  syncMaskDictionaryPicker();
   $("maskCount").textContent=window.wudictI18n.number(total)+(complete?"":"+");
   const row=maskRows[maskCurrent],result=row?.data;
   const currentPage=result?.page||row?.wantedPage;
@@ -7219,6 +7235,10 @@ async function maskFetchWithinStream(row,generation,navToken,findGeneration){
     while(true){const {value,done}=await reader.read();if(done){buffer+=decoder.decode();await consume(true);break}
       if(progressTrace)progressTrace.bytes+=value?.byteLength||0;
       buffer+=decoder.decode(value,{stream:true});await consume()}
+    const visiblePage=row.wantedPage||1;
+    if(current()&&row.diskCache&&row.state==="ready"&&row===maskRows[maskCurrent]&&row.abort===controller&&
+       (row.data?.page!==visiblePage||!row.data?.words?.length))
+      await maskFetch(row,visiblePage,generation,maskNavToken);
   }catch(error){
     if(!controller.signal.aborted&&generation===maskGeneration&&(findGeneration<0||findGeneration===maskFindGeneration)){
       row.state="error";row.error=error.message;row.partial=false;maskStripVersion++;maskRender();
@@ -7324,7 +7344,7 @@ async function maskRun(pattern,reason="submit"){
   const ids=selection==="all"?activeUserGroupIds():selection.startsWith("g:")?groupIds(selection):[selection];
   const byId=new Map(dicts.map(d=>[d.id,d]));
   const baseCacheID=maskNewCacheID(),groupRows=ids.filter(id=>byId.has(id));
-  maskRows=maskMergeAZ?[{id:"__merged__",name:tx("search.mergeBooksToOne"),merged:true,mergedFTS:wildcardSearchIndexEnabled("fts"),mergedTrigram:wildcardSearchIndexEnabled("trigram"),mergedIds:groupRows.join(","),state:"pending",total:0,data:null,alphabet:[],size:300,
+  maskRows=maskMergeAZ?[{id:"__merged__",name:tx("search.combinedList"),merged:true,mergedFTS:wildcardSearchIndexEnabled("fts"),mergedTrigram:wildcardSearchIndexEnabled("trigram"),mergedIds:groupRows.join(","),state:"pending",total:0,data:null,alphabet:[],size:300,
     expectedBlocks:Math.ceil(groupRows.reduce((sum,id)=>sum+Math.max(0,Number(byId.get(id)?.entries)||0),0)/300),scanDone:0,
     scanTotal:groupRows.reduce((sum,id)=>sum+Math.max(0,Number(byId.get(id)?.entries)||0),0),active:false,wantedPage:1,error:"",diskCache:false,
     cacheID:baseCacheID,cacheGroup:selection,cacheOrder:0,cacheCount:1}]:groupRows.map((id,index)=>({id,name:dictLabel(byId.get(id)),mergedFTS:wildcardSearchIndexEnabled("fts"),mergedTrigram:wildcardSearchIndexEnabled("trigram"),state:"pending",total:0,data:null,alphabet:[],size:300,
