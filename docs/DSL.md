@@ -46,7 +46,7 @@ authored against Lingvo's compiler, so its acceptance is the specification.
 | `<name>.ann` | annotation/about text, `#LANGUAGE`-partitioned | `[V]` **read live** for the About surface (§1.2); never ingested |
 | `<name>_abrv.dsl` | abbreviations shown on hover | `[V]` **absorbed** into the parent at ingest (§1.1) and hidden from discovery |
 | `<name>.bmp` | dictionary icon | `[V]` **ignored** (`#ICON_FILE` likewise parsed into the header map and unused) |
-| `<name>.lsd` | Lingvo's compiled binary form | `[V]` not supported yet; native reader contract is being developed in `docs/LSD.md` |
+| `<name>.lsd` | Lingvo's compiled binary form | `[V]` native reader is under development in `internal/format/lsd`; see `docs/LSD.md` for current version and feature coverage |
 
 Resolution order is `MediaSources(srcPath)` in `internal/format/dsl/dsl.go`, and it
 is the O8 provider registered for the format, so a *prepared* dictionary reaches its

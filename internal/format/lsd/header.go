@@ -21,6 +21,7 @@ type fileHeader struct {
 	decoderOffset      uint32
 	articlesOffset     uint32
 	pagesOffset        uint32
+	lastPage           uint16
 	sourceLanguageID   uint16
 	contentsLanguageID uint16
 }
@@ -48,6 +49,7 @@ func readHeader(r io.ReaderAt, fileSize int64) (fileHeader, error) {
 		decoderOffset:      binary.LittleEndian.Uint32(buf[28:32]),
 		articlesOffset:     binary.LittleEndian.Uint32(buf[32:36]),
 		pagesOffset:        binary.LittleEndian.Uint32(buf[36:40]),
+		lastPage:           binary.LittleEndian.Uint16(buf[44:46]),
 		sourceLanguageID:   binary.LittleEndian.Uint16(buf[48:50]),
 		contentsLanguageID: binary.LittleEndian.Uint16(buf[50:52]),
 	}

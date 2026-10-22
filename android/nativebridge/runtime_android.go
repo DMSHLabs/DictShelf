@@ -27,6 +27,7 @@ import (
 	"github.com/wuweidict/wudict/internal/config"
 	_ "github.com/wuweidict/wudict/internal/format/bgl"
 	_ "github.com/wuweidict/wudict/internal/format/dsl"
+	_ "github.com/wuweidict/wudict/internal/format/lsd"
 	_ "github.com/wuweidict/wudict/internal/format/mdx"
 	_ "github.com/wuweidict/wudict/internal/format/slob"
 	_ "github.com/wuweidict/wudict/internal/format/stardict"
