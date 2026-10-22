@@ -6,8 +6,11 @@ package lsd
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 )
+
+var errTruncatedBits = errors.New("lsd: truncated bit stream")
 
 // bitReader consumes the MSB-first bit stream used by the decoder and page
 // records. It never reads past the supplied section.
@@ -22,7 +25,7 @@ func (r *bitReader) read(n uint8) (uint32, error) {
 	}
 	limit := uint64(len(r.data)) * 8
 	if r.bit > limit || uint64(n) > limit-r.bit {
-		return 0, fmt.Errorf("lsd: truncated bit stream at bit %d", r.bit)
+		return 0, fmt.Errorf("%w at bit %d", errTruncatedBits, r.bit)
 	}
 	var v uint32
 	for i := uint8(0); i < n; i++ {

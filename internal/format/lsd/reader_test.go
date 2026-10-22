@@ -5,7 +5,10 @@
 package lsd
 
 import (
+	"bytes"
 	"io"
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 
@@ -37,6 +40,29 @@ func TestReaderSimpleFixture(t *testing.T) {
 	}
 	if _, err := r.Next(); err != io.EOF {
 		t.Fatalf("end = %v; want EOF", err)
+	}
+}
+
+func TestFormatRegistration(t *testing.T) {
+	path := "testdata/simple_testdict1/test.lsd"
+	r, err := dict.OpenReader(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+	if r.Meta().Format != "lsd" {
+		t.Fatalf("registered reader format = %q", r.Meta().Format)
+	}
+	if got := dict.ReaderVersion("lsd"); got != ReaderVersion {
+		t.Fatalf("reader version = %d; want %d", got, ReaderVersion)
+	}
+	d, err := dict.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	if d.Meta().Format != "lsd" {
+		t.Fatalf("registered dictionary format = %q", d.Meta().Format)
 	}
 }
 
@@ -87,6 +113,87 @@ func TestReaderHeadingFixtureContents(t *testing.T) {
 				if !reflect.DeepEqual(entry.Headwords, []string{wantWords[i]}) || entry.Body != tc.bodies[i] || entry.Kind != dict.BodyDSL {
 					t.Errorf("entry %d = %#v", i, entry)
 				}
+			}
+		})
+	}
+}
+
+func TestOverlayResources(t *testing.T) {
+	for _, file := range []string{"overlay_12.lsd", "overlay_x3.lsd", "overlay_x5.lsd"} {
+		t.Run(file, func(t *testing.T) {
+			path := filepath.Join("testdata", "simple_testdict1", file)
+			d, err := Open(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer d.Close()
+			names := d.Resources()
+			if !reflect.DeepEqual(names, []string{"image1.bmp", "image2.bmp"}) {
+				t.Fatalf("resource names = %q", names)
+			}
+			for _, name := range names {
+				got, _, err := d.Resource(name)
+				if err != nil {
+					t.Fatalf("read %s: %v", name, err)
+				}
+				gotBytes, readErr := io.ReadAll(got)
+				closeErr := got.Close()
+				if readErr != nil || closeErr != nil {
+					t.Fatalf("read/close %s: %v / %v", name, readErr, closeErr)
+				}
+				wantBytes, err := os.ReadFile(filepath.Join("testdata", "simple_testdict1", name))
+				if err != nil {
+					t.Fatal(err)
+				}
+				if !bytes.Equal(gotBytes, wantBytes) {
+					t.Errorf("%s bytes differ: got %d, want %d", name, len(gotBytes), len(wantBytes))
+				}
+			}
+		})
+	}
+}
+
+func TestEmbeddedAnnotation(t *testing.T) {
+	about, ok := dict.AboutFor("lsd", "testdata/simple_testdict1/test.lsd")
+	if !ok {
+		t.Fatal("embedded annotation not found")
+	}
+	if len(about.Sections) != 1 || about.Sections[0].Text != "yjsakfabcdaskdhabbdfjkgh1jkh33jkhj331ddj" {
+		t.Fatalf("unexpected annotation: %#v", about)
+	}
+}
+
+func TestReaderVariantFixtures(t *testing.T) {
+	for _, tc := range []struct {
+		file  string
+		count int
+	}{
+		{"variants_testdict.lsd", 6},
+		{"variants_testdict2.lsd", 4},
+		{"unsorted_testdict.lsd", 10},
+	} {
+		t.Run(tc.file, func(t *testing.T) {
+			r, err := NewReader("testdata/simple_testdict1/" + tc.file)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer r.Close()
+			count := 0
+			for {
+				entry, err := r.Next()
+				if err == io.EOF {
+					break
+				}
+				if err != nil {
+					t.Fatalf("entry %d: %v", count, err)
+				}
+				if entry.LinkTo != "" && (len(entry.Headwords) != 1 || entry.Body != "") {
+					t.Errorf("redirect entry is malformed: %#v", entry)
+				}
+				count++
+			}
+			if count != tc.count {
+				t.Fatalf("entries = %d; want %d", count, tc.count)
 			}
 		})
 	}

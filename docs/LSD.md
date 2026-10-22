@@ -29,12 +29,14 @@ without a measured implementation and contract.
 
 The LSD container keeps its header, encoded dictionary alphabet/decoder data,
 fixed-size index pages, article payloads, optional annotation, optional icon,
-and an optional resource overlay in one file. `lsd2dsl` writes overlay entries
+and an optional resource overlay in one file. The current Go reader decodes
+user-dictionary articles, embedded annotations, and lazy overlay resources for
+the 12/X3/X5 fixtures. `lsd2dsl` writes overlay entries
 to a sibling `.dsl.files.zip`, writes the annotation as `.ann`, and writes the
 icon as `.bmp`; those are outputs of its converter, not separate inputs that
 the native wuDict2 reader should require.
 
-The Go implementation should keep these reads behind a small set of private
+The Go implementation keeps these reads behind a small set of private
 operations: open/validate header; read or initialize version-specific decoder
 tables; traverse index pages to produce headword groups and article offsets;
 decode one article body; enumerate and decode one overlay resource on demand;
@@ -56,6 +58,8 @@ package at `internal/format/lsd/testdata/simple_testdict1`; its upstream MIT
 license and provenance note stay alongside it. Cases cover header/article/
 annotation decoding (`test.lsd`), headings for versions 12/X3/X5, overlay
 resource extraction for 12/X3/X5, extended and unsorted headings, and variant
-collapse. Lingvo 11 and X6, real-world large files, malformed-file handling,
-and wuDict2-specific resource-name behavior still need coverage before
-support is marked complete.
+collapse. Heading extension pairs are converted back to DSL title syntax, and
+the text DSL title parser supplies searchable keys. Lingvo 11 and X6,
+system/abbreviation decoders, real-world large files, malformed-file handling,
+title display rendering and wuDict2-specific resource-name behavior still
+need coverage before support is marked complete.

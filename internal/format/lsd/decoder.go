@@ -7,6 +7,7 @@ package lsd
 import (
 	"encoding/binary"
 	"fmt"
+	"strings"
 	"unicode/utf16"
 )
 
@@ -19,6 +20,17 @@ type decoder struct {
 	prefixLengths  *lengthTable
 	postfixLengths *lengthTable
 	ref1, ref2     uint32
+}
+
+type headingChar struct {
+	value   uint16
+	sorted  bool
+	escaped bool
+}
+
+type extChar struct {
+	index uint8
+	value uint16
 }
 
 func readDecoder(data []byte, version uint32) (*decoder, error) {
@@ -110,10 +122,7 @@ func (d *decoder) readRef(r *bitReader) (uint32, error) {
 		return 0, err
 	}
 	if code == 3 {
-		if _, err := r.read(32); err != nil {
-			return 0, err
-		}
-		return 0, nil
+		return r.read(32)
 	}
 	n := bitWidth(d.ref2)
 	if n < 2 {
@@ -126,52 +135,113 @@ func (d *decoder) readRef(r *bitReader) (uint32, error) {
 	return code<<(n-2) | low, nil
 }
 
-func (d *decoder) readHeading(r *bitReader, knownPrefix []uint16) ([]uint16, uint32, error) {
+func (d *decoder) readHeading(r *bitReader, knownPrefix []uint16) (string, []uint16, uint32, error) {
 	pl, err := d.prefixLengths.decode(r)
 	if err != nil {
-		return nil, 0, fmt.Errorf("prefix length: %w", err)
+		return "", nil, 0, fmt.Errorf("prefix length: %w", err)
 	}
 	ql, err := d.postfixLengths.decode(r)
 	if err != nil {
-		return nil, 0, fmt.Errorf("postfix length: %w", err)
+		return "", nil, 0, fmt.Errorf("postfix length: %w", err)
 	}
 	if pl > uint32(len(knownPrefix)) || ql > 1<<16 {
-		return nil, 0, fmt.Errorf("lsd: invalid heading lengths %d + %d", pl, ql)
+		return "", nil, 0, fmt.Errorf("lsd: invalid heading lengths %d + %d", pl, ql)
 	}
 	out := append([]uint16(nil), knownPrefix[:pl]...)
 	for i := uint32(0); i < ql; i++ {
 		idx, err := d.headings.decode(r)
 		if err != nil {
-			return nil, 0, fmt.Errorf("heading symbol: %w", err)
+			return "", nil, 0, fmt.Errorf("heading symbol: %w", err)
 		}
 		if idx >= uint32(len(d.headingSymbols)) || d.headingSymbols[idx] > 0xffff {
-			return nil, 0, fmt.Errorf("lsd: invalid heading symbol index/value %d", idx)
+			return "", nil, 0, fmt.Errorf("lsd: invalid heading symbol index/value %d", idx)
 		}
 		out = append(out, uint16(d.headingSymbols[idx]))
 	}
 	ref, err := d.readRef(r)
 	if err != nil {
-		return nil, 0, fmt.Errorf("article reference: %w", err)
+		return "", nil, 0, fmt.Errorf("article reference: %w", err)
 	}
 	unsorted, err := r.read(1)
 	if err != nil {
-		return nil, 0, err
+		return "", nil, 0, err
 	}
+	var extensions []extChar
 	if unsorted != 0 {
 		n, err := r.read(8)
 		if err != nil {
-			return nil, 0, err
+			return "", nil, 0, err
 		}
+		extensions = make([]extChar, 0, n)
 		for i := uint32(0); i < n; i++ {
-			if _, err := r.read(8); err != nil {
-				return nil, 0, err
+			index, err := r.read(8)
+			if err != nil {
+				return "", nil, 0, err
 			}
-			if _, err := r.read(16); err != nil {
-				return nil, 0, err
+			value, err := r.read(16)
+			if err != nil {
+				return "", nil, 0, err
 			}
+			extensions = append(extensions, extChar{index: uint8(index), value: uint16(value)})
 		}
 	}
-	return out, ref, nil
+	return dslHeading(out, extensions), out, ref, nil
+}
+
+func dslHeading(sorted []uint16, extensions []extChar) string {
+	var chars []headingChar
+	textPos, extPos, index := 0, 0, uint16(0)
+	nextChar := func() (headingChar, bool) {
+		if extPos < len(extensions) && uint16(extensions[extPos].index) == index {
+			c := headingChar{value: extensions[extPos].value, sorted: false}
+			extPos++
+			return c, true
+		}
+		if textPos >= len(sorted) {
+			return headingChar{}, false
+		}
+		c := headingChar{value: sorted[textPos], sorted: true}
+		textPos++
+		return c, true
+	}
+	for textPos < len(sorted) || extPos < len(extensions) {
+		c, ok := nextChar()
+		if !ok {
+			break
+		}
+		if c.value == '\\' {
+			index++
+			next, ok := nextChar()
+			if !ok {
+				chars = append(chars, c)
+				break
+			}
+			next.escaped = true
+			chars = append(chars, next)
+		} else {
+			chars = append(chars, c)
+		}
+		index++
+	}
+	var b strings.Builder
+	unsorted := false
+	for _, c := range chars {
+		if !c.sorted && !unsorted {
+			b.WriteByte('{')
+			unsorted = true
+		} else if c.sorted && unsorted {
+			b.WriteByte('}')
+			unsorted = false
+		}
+		if c.escaped {
+			b.WriteByte('\\')
+		}
+		b.WriteString(string(utf16.Decode([]uint16{c.value})))
+	}
+	if unsorted {
+		b.WriteByte('}')
+	}
+	return b.String()
 }
 
 func (d *decoder) decodeArticle(data []byte, size uint32) (string, error) {

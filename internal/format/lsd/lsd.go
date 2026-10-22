@@ -11,31 +11,68 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"unicode/utf16"
 
 	"github.com/wuweidict/wudict/internal/dict"
 	"github.com/wuweidict/wudict/internal/lang"
+	"github.com/wuweidict/wudict/internal/logx"
 )
 
 const pageSize = 512
 
 // ReaderVersion tracks the behavior of the sequential ingest reader.
-const ReaderVersion = 1
+const ReaderVersion = 2
 
 func init() {
 	dict.RegisterFormat(".lsd", func(path string) (dict.Dictionary, error) { return Open(path) })
 	dict.RegisterReader(".lsd", func(path string) (dict.Reader, error) { return NewReader(path) })
 	dict.RegisterReaderVersion("lsd", ReaderVersion)
+	dict.RegisterAbout("lsd", loadAnnotation)
+}
+
+func loadAnnotation(path string) (dict.About, bool) {
+	s, err := openSource(path)
+	if err != nil {
+		return dict.About{}, false
+	}
+	defer s.f.Close()
+	start, end := int64(s.header.annotationOffset), int64(s.header.decoderOffset)
+	if end-start < 2 || end-start > 256<<10 {
+		return dict.About{}, false
+	}
+	data := make([]byte, end-start)
+	if _, err := s.f.ReadAt(data, start); err != nil {
+		logx.V("lsd annotation read %s: %v", filepath.Base(path), err)
+		return dict.About{}, false
+	}
+	if len(data) < 2 {
+		return dict.About{}, false
+	}
+	size := uint32(binary.BigEndian.Uint16(data[:2]))
+	text, err := s.decoder.decodeArticle(data[2:], size)
+	if err != nil || strings.TrimSpace(text) == "" {
+		if err != nil {
+			logx.V("lsd annotation decode %s: %v", filepath.Base(path), err)
+		}
+		return dict.About{}, false
+	}
+	return dict.About{Sections: []dict.Section{{Text: strings.TrimSpace(text)}}, Source: path}, true
 }
 
 type source struct {
-	f        *os.File
-	path     string
-	fileSize int64
-	header   fileHeader
-	decoder  *decoder
-	meta     dict.Meta
-	pagesEnd uint32
+	f           *os.File
+	path        string
+	fileSize    int64
+	header      fileHeader
+	decoder     *decoder
+	meta        dict.Meta
+	pagesEnd    uint32
+	overlayData uint32
+	overlayEnd  uint32
+	overlayOnce sync.Once
+	overlay     []overlayEntry
+	overlayErr  error
 }
 
 func openSource(path string) (*source, error) {
@@ -58,7 +95,7 @@ func openSource(path string) (*source, error) {
 	if !supportedVersion(h.version) {
 		return fail(fmt.Errorf("lsd: unsupported dictionary version %#x", h.version))
 	}
-	name, pagesEnd, err := readVariableHeader(f, h, st.Size())
+	name, pagesEnd, overlayEnd, err := readVariableHeader(f, h, st.Size())
 	if err != nil {
 		return fail(err)
 	}
@@ -79,8 +116,13 @@ func openSource(path string) (*source, error) {
 	}
 	indexLang := strings.SplitN(lang.FromLCID(int(h.sourceLanguageID)), "-", 2)[0]
 	contentsLang := strings.SplitN(lang.FromLCID(int(h.contentsLanguageID)), "-", 2)[0]
+	overlayData := overlayEnd
+	if h.version < 0x140000 {
+		// In Lingvo 12 and X3, resource offsets are absolute file offsets.
+		overlayData = 0
+	}
 	return &source{
-		f: f, path: path, fileSize: st.Size(), header: h, decoder: d, pagesEnd: pagesEnd,
+		f: f, path: path, fileSize: st.Size(), header: h, decoder: d, pagesEnd: pagesEnd, overlayData: overlayData, overlayEnd: overlayEnd,
 		meta: dict.Meta{Name: name, Format: "lsd", Path: path, EntryCount: int(h.entryCount), IndexLang: indexLang, ContentsLang: contentsLang},
 	}, nil
 }
@@ -94,10 +136,10 @@ func supportedVersion(version uint32) bool {
 	}
 }
 
-func readVariableHeader(f io.ReaderAt, h fileHeader, fileSize int64) (string, uint32, error) {
+func readVariableHeader(f io.ReaderAt, h fileHeader, fileSize int64) (string, uint32, uint32, error) {
 	limit := int64(h.decoderOffset)
 	if limit > fileSize || limit < fixedHeaderSize {
-		return "", 0, fmt.Errorf("lsd: invalid variable header boundary")
+		return "", 0, 0, fmt.Errorf("lsd: invalid variable header boundary")
 	}
 	r := io.NewSectionReader(f, fixedHeaderSize, limit-fixedHeaderSize)
 	readByte := func() (byte, error) {
@@ -131,63 +173,67 @@ func readVariableHeader(f io.ReaderAt, h fileHeader, fileSize int64) (string, ui
 	}
 	nameLen, err := readByte()
 	if err != nil {
-		return "", 0, fmt.Errorf("lsd: read dictionary name length: %w", err)
+		return "", 0, 0, fmt.Errorf("lsd: read dictionary name length: %w", err)
 	}
 	name, err := readText(uint32(nameLen))
 	if err != nil {
-		return "", 0, fmt.Errorf("lsd: read dictionary name: %w", err)
+		return "", 0, 0, fmt.Errorf("lsd: read dictionary name: %w", err)
 	}
 	for _, label := range []string{"first heading", "last heading"} {
 		n, err := readByte()
 		if err != nil {
-			return "", 0, fmt.Errorf("lsd: read %s length: %w", label, err)
+			return "", 0, 0, fmt.Errorf("lsd: read %s length: %w", label, err)
 		}
 		if _, err := readText(uint32(n)); err != nil {
-			return "", 0, fmt.Errorf("lsd: read %s: %w", label, err)
+			return "", 0, 0, fmt.Errorf("lsd: read %s: %w", label, err)
 		}
 	}
 	capitalsLen, err := readU32LE()
 	if err != nil {
-		return "", 0, fmt.Errorf("lsd: read capitals length: %w", err)
+		return "", 0, 0, fmt.Errorf("lsd: read capitals length: %w", err)
 	}
 	if _, err := readText(capitalsLen); err != nil {
-		return "", 0, fmt.Errorf("lsd: read capitals: %w", err)
+		return "", 0, 0, fmt.Errorf("lsd: read capitals: %w", err)
 	}
 	if h.version > 0x120000 {
 		iconLen, err := readU16LE()
 		if err != nil {
-			return "", 0, fmt.Errorf("lsd: read icon length: %w", err)
+			return "", 0, 0, fmt.Errorf("lsd: read icon length: %w", err)
 		}
 		if _, err := io.CopyN(io.Discard, r, int64(iconLen)); err != nil {
-			return "", 0, fmt.Errorf("lsd: read icon: %w", err)
+			return "", 0, 0, fmt.Errorf("lsd: read icon: %w", err)
 		}
 	}
 	if h.version > 0x140000 {
 		var ignored [4]byte
 		if _, err := io.ReadFull(r, ignored[:]); err != nil {
-			return "", 0, fmt.Errorf("lsd: read header checksum: %w", err)
+			return "", 0, 0, fmt.Errorf("lsd: read header checksum: %w", err)
 		}
 	}
 	pagesEnd := uint32(fileSize)
+	overlayData := uint32(fileSize)
 	if h.version > 0x120000 {
 		pagesEnd, err = readU32LE()
 		if err != nil {
-			return "", 0, fmt.Errorf("lsd: read end of index pages: %w", err)
+			return "", 0, 0, fmt.Errorf("lsd: read end of index pages: %w", err)
 		}
-		// Overlay data offset follows pagesEnd. Resource decoding is a later stage.
-		if _, err := readU32LE(); err != nil {
-			return "", 0, fmt.Errorf("lsd: read resource data offset: %w", err)
+		overlayData, err = readU32LE()
+		if err != nil {
+			return "", 0, 0, fmt.Errorf("lsd: read resource data offset: %w", err)
 		}
 	}
 	if h.version > 0x140000 {
 		for i := 0; i < 2; i++ {
 			if _, err := readU32LE(); err != nil {
-				return "", 0, fmt.Errorf("lsd: read reserved header value: %w", err)
+				return "", 0, 0, fmt.Errorf("lsd: read reserved header value: %w", err)
 			}
 		}
 	}
 	if pagesEnd < h.pagesOffset || int64(pagesEnd) > fileSize || (pagesEnd-h.pagesOffset)%pageSize != 0 {
-		return "", 0, fmt.Errorf("lsd: invalid index page boundary %#x", pagesEnd)
+		return "", 0, 0, fmt.Errorf("lsd: invalid index page boundary %#x", pagesEnd)
 	}
-	return strings.TrimSpace(name), pagesEnd, nil
+	if overlayData < pagesEnd || int64(overlayData) > fileSize {
+		return "", 0, 0, fmt.Errorf("lsd: invalid resource data boundary %#x", overlayData)
+	}
+	return strings.TrimSpace(name), pagesEnd, overlayData, nil
 }
