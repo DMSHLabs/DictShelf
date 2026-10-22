@@ -499,6 +499,20 @@ func (rw Rewriter) rewriteAttrs(t *html.Token) bool {
 	return changed
 }
 
+// MayRef reports whether doc can hold a reference at all. It tests for the
+// bare names of every reference site - srcset contains src, style is both the
+// attribute and the element, and each attribute in urlAttr - so it is a
+// superset: false means Rewrite would find nothing, and the tokenizer can be
+// skipped.
+func MayRef(doc string) bool {
+	for _, s := range [...]string{"src", "href", "data", "poster", "style", "background", "longdesc", "usemap"} {
+		if strings.Contains(doc, s) {
+			return true
+		}
+	}
+	return false
+}
+
 // urlAttr is every attribute whose value is a single URL. The `data-`/`xlink:`
 // forms matter: repacked dictionaries habitually stash the real reference in
 // data-src or data-original and swap it in with their own script.

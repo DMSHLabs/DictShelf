@@ -33,7 +33,7 @@ type suiteCase int
 const (
 	valid      suiteCase = iota
 	refused              // Open fails
-	badBlobs             // opens; cluster 1's offset table is broken: those blobs error, nothing reads differently
+	badBlobs             // opens; one cluster is broken - its offset table, its pointer: those blobs error, nothing reads differently
 	unread               // damage outside the content (title order, checksum): content reads like small.zim
 	tolerated            // opens and reads without a panic; what it returns is not specified
 	notOneFile           // a later split part or an embedded copy: not a .zim on its own
@@ -48,14 +48,13 @@ var suiteCases = map[string]suiteCase{
 	"wikibooks_be_all_nopic_2017-02.zim":           valid,
 	"wikipedia_en_climate_change_mini_2024-06.zim": valid,
 
-	"invalid.smaller_than_header.zim":          refused,
-	"invalid.outofbounds_urlptrpos.zim":        refused,
-	"invalid.outofbounds_clusterptrpos.zim":    refused,
-	"invalid.invalid_mimelistpos.zim":          refused,
-	"invalid.outofbounds_first_direntptr.zim":  refused,
-	"invalid.outofbounds_last_direntptr.zim":   refused,
-	"invalid.outofbounds_first_clusterptr.zim": refused,
-	"invalid.bad_mimetype_list.zim":            refused,
+	"invalid.smaller_than_header.zim":         refused,
+	"invalid.outofbounds_urlptrpos.zim":       refused,
+	"invalid.outofbounds_clusterptrpos.zim":   refused,
+	"invalid.invalid_mimelistpos.zim":         refused,
+	"invalid.outofbounds_first_direntptr.zim": refused,
+	"invalid.outofbounds_last_direntptr.zim":  refused,
+	"invalid.bad_mimetype_list.zim":           refused,
 
 	"invalid.too_small_offset_of_first_blob_in_cluster_0.zim":   badBlobs,
 	"invalid.too_small_offset_of_first_blob_in_cluster_4.zim":   badBlobs,
@@ -65,6 +64,9 @@ var suiteCases = map[string]suiteCase{
 	"invalid.misaligned_offset_of_first_blob_in_cluster_11.zim": badBlobs,
 	"invalid.too_large_offset_of_first_blob_in_cluster.zim":     badBlobs,
 	"invalid.offset_in_cluster.zim":                             badBlobs,
+	// A cluster pointer past the file's end costs that cluster's entries:
+	// libzim opens the file and reads the rest, as this does.
+	"invalid.outofbounds_first_clusterptr.zim": badBlobs,
 
 	"invalid.invalid_checksumpos.zim":           unread,
 	"invalid.nonsorted_title_index.zim":         unread,
@@ -227,7 +229,7 @@ func readAll(t *testing.T, d *Dict) (map[string][]byte, []error) {
 			errs = append(errs, err)
 			continue
 		}
-		if de.isRedirect() || de.mimetype == mimeLinkTarget || de.mimetype == mimeDeleted {
+		if !de.isContent() {
 			continue
 		}
 		rc, err := d.c.contentReader(de)
@@ -384,9 +386,7 @@ func TestSuitePrefixClusters(t *testing.T) {
 	d := openRef(t, filepath.Join(dir, "nons", "wikipedia_en_climate_change_mini_2024-06.zim"))
 	defer d.Close()
 	for _, q := range []string{"C", "Climate", "G"} {
-		d.c.mu.Lock()
-		d.c.cache, d.c.order, d.c.cacheBytes = map[uint32]*clusterData{}, nil, 0
-		d.c.mu.Unlock()
+		d.c.dropCache()
 		var res []string
 		clusters := map[uint32]bool{}
 		var biggest uint64
@@ -405,9 +405,7 @@ func TestSuitePrefixClusters(t *testing.T) {
 				biggest = max(biggest, cd.size())
 			}
 		}
-		d.c.mu.Lock()
-		d.c.cache, d.c.order, d.c.cacheBytes = map[uint32]*clusterData{}, nil, 0
-		d.c.mu.Unlock()
+		d.c.dropCache()
 		got := allocated(func() {
 			if r, err := d.Prefix(q, 20); err != nil || len(r) == 0 {
 				t.Fatalf("Prefix(%q) = %d results, %v", q, len(r), err)

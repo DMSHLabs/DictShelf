@@ -6,6 +6,7 @@ package zim
 
 import (
 	"bytes"
+	"cmp"
 	"io"
 	"path/filepath"
 	"sort"
@@ -19,7 +20,7 @@ import (
 // ReaderVersion is the behaviour version of this format's Reader (see
 // dict.RegisterReaderVersion). Bump it in the same commit as any change to
 // what the Reader yields, and update the golden in reader_golden_test.go.
-const ReaderVersion = 3
+const ReaderVersion = 4
 
 func init() {
 	// ".zimaa" is the first part of a split archive; the parts after it are
@@ -112,7 +113,9 @@ func (d *Dict) Caps() dict.Caps { return dict.Caps{Exact: true, Prefix: true} }
 // server's headword-count estimate (previewWeight) does not charge it for an
 // in-memory index it never builds.
 func (d *Dict) PreviewBytes() int64 {
-	return int64(len(d.c.clusterPtr))*8 + ptrPageLen*8 + clusterCacheBytes
+	// each keyCache: its slots, and a key of a few dozen bytes in each
+	const keyCacheBytes = int64(len(keyCache{})) * (8 + 64)
+	return int64(len(d.c.clusterPtr)+len(d.c.nextStart))*8 + ptrPageLen*8 + clusterCacheBytes + 2*keyCacheBytes
 }
 
 // SelfIndexed marks a backend whose own file answers exact and prefix lookup
@@ -126,12 +129,41 @@ func (d *Dict) PreviewBytes() int64 {
 // path declines.
 func (d *Dict) SelfIndexed() bool { return true }
 
-// metadata reads one M/ namespace value. Metadata blobs are small and each
-// costs one binary search plus a cluster read; only a handful are read, all at
-// open.
+// loadMeta reads the M/ namespace once, by name: Open asks for a dozen keys,
+// and each was a binary search of its own. Two binary searches bound the
+// namespace and one walk reads it, typically 15-30 entries. A namespace past
+// maxMetaEntries, or one that cannot be read whole, is left to metadata's
+// search.
+func (c *container) loadMeta() {
+	lo, hi := c.nsRange('M')
+	if hi-lo > maxMetaEntries {
+		return
+	}
+	meta := make(map[string]int, hi-lo)
+	w := c.walk()
+	for i := lo; i < hi; i++ {
+		d, err := w.entry(i)
+		if err != nil {
+			return
+		}
+		meta[d.path] = i
+	}
+	c.meta = meta
+}
+
+// metadata reads one M/ namespace value, following a redirect as libzim
+// does (FileImpl::findxMetadata). Metadata blobs are small; only a handful
+// are read, all at open.
 func (c *container) metadata(name string) string {
-	_, d, ok := c.find('M', name)
-	if !ok || d.isRedirect() {
+	i, ok := c.meta[name]
+	if c.meta == nil {
+		i, _, ok = c.find('M', name)
+	}
+	if !ok {
+		return ""
+	}
+	_, d, err := c.resolve(i)
+	if err != nil {
 		return ""
 	}
 	b, err := c.content(d)
@@ -167,6 +199,14 @@ func (d *Dict) Exact(word string, limit int) ([]dict.Result, error) {
 		if ok && d.c.isArticle(i, de) {
 			idxs = append(idxs, i)
 			break
+		}
+	}
+	// A path that misses may carry a namespace - "A/Foo" from a pre-6.1 link
+	// carried into a later file - and is looked up once more without it, as
+	// libzim's Archive::getEntryByPath does.
+	if len(idxs) == 0 && len(word) > 2 && word[1] == '/' {
+		if i, de, ok := d.c.find(d.c.contentNS(), word[2:]); ok && d.c.isArticle(i, de) {
+			idxs = append(idxs, i)
 		}
 	}
 	if len(idxs) == 0 && d.titles != nil {
@@ -258,18 +298,24 @@ func (d *Dict) results(idxs []int, limit int) ([]dict.Result, error) {
 		de       dirent
 		body     string
 	}
+	// A broken entry, redirect or cluster is one lost result, not a failed
+	// search; the first error is reported only when it leaves nothing.
 	var hits []hit
+	var failed error
 	seen := map[int]bool{}
 	for _, i := range idxs {
 		src, err := d.c.entry(i)
 		if err != nil {
-			return nil, err
+			failed = cmp.Or(failed, err)
+			continue
 		}
-		tgt, de, err := d.c.resolve(i)
-		if err != nil {
-			continue // a broken redirect is one bad entry, not a failed search
+		tgt, de := i, src
+		if src.isRedirect() {
+			if tgt, de, err = d.c.resolve(i); err != nil {
+				continue
+			}
 		}
-		if seen[tgt] || !d.c.htmlMIME[de.mimetype] {
+		if seen[tgt] || !de.isContent() || !d.c.htmlMIME[de.mimetype] {
 			continue
 		}
 		seen[tgt] = true
@@ -289,10 +335,11 @@ func (d *Dict) results(idxs []int, limit int) ([]dict.Result, error) {
 	for _, k := range order {
 		body, err := d.c.content(hits[k].de)
 		if err != nil {
-			return nil, err
+			failed = cmp.Or(failed, err)
+			continue
 		}
 		if len(body) > 0 {
-			hits[k].body = d.articleHTML(body)
+			hits[k].body = d.articleHTML(hits[k].de, body)
 		}
 	}
 	var out []dict.Result
@@ -304,6 +351,9 @@ func (d *Dict) results(idxs []int, limit int) ([]dict.Result, error) {
 		if limit > 0 && len(out) >= limit {
 			break
 		}
+	}
+	if len(out) == 0 && failed != nil {
+		return nil, failed
 	}
 	return out, nil
 }
@@ -368,6 +418,9 @@ func (d *Dict) Resource(name string) (io.ReadCloser, string, error) {
 				return nil, "", err
 			}
 		}
+		if !de.isContent() {
+			return nil, "", dict.ErrNotFound
+		}
 		rc, err := d.c.contentReader(de)
 		if err != nil {
 			return nil, "", err
@@ -380,6 +433,11 @@ func (d *Dict) Resource(name string) (io.ReadCloser, string, error) {
 // Resources lists the non-article blobs, for media packing. This walks the
 // content namespace's dirents - one pread each, no decompression - which is
 // the same shape of scan the other formats' Resources does.
+//
+// A name is the entry's path as an article references it once resolved
+// (resolveRef): in a pre-6.1 file the namespace is part of it, "I/pic.png",
+// so the packed name is the one the article asks for. Resource also takes
+// the bare path, which an older library may hold.
 func (d *Dict) Resources() []string {
 	var out []string
 	w := d.c.walk()
@@ -388,13 +446,13 @@ func (d *Dict) Resources() []string {
 		if err != nil {
 			break
 		}
-		if de.isRedirect() || d.c.htmlMIME[de.mimetype] {
+		if !de.isContent() || d.c.htmlMIME[de.mimetype] {
 			continue
 		}
 		if strings.HasPrefix(mimeBase(d.c.mimeOf(de)), "text/plain") {
 			continue
 		}
-		out = append(out, de.path)
+		out = append(out, d.c.longPath(de))
 	}
 	if !d.c.newNamespaces() {
 		for _, ns := range []byte{'I', '-', 'J'} {
@@ -404,8 +462,8 @@ func (d *Dict) Resources() []string {
 				if err != nil {
 					break
 				}
-				if !de.isRedirect() {
-					out = append(out, de.path)
+				if de.isContent() {
+					out = append(out, d.c.longPath(de))
 				}
 			}
 		}
