@@ -74,6 +74,8 @@ func configureNativeCrashCapture(root, sessionPath string) error {
 	return nil
 }
 
+// pointers is borrowed from Windows and consumed synchronously; it must not be
+// retained after this callback returns.
 func windowsUnhandledException(pointers *windowsExceptionPointers) uintptr {
 	var code uint32
 	var address uintptr
