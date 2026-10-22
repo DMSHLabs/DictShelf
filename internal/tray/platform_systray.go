@@ -13,7 +13,7 @@ import (
 	"github.com/gogpu/systray"
 )
 
-// The mark, generated from internal/server/web/favicon.svg by
+// The mark, generated from packaging/brand/dictshelf.svg by
 // tools/make-icons.sh (`make icons`) and committed, so `make build` needs no
 // image toolchain. D70: the mark is never redrawn, only rendered.
 //

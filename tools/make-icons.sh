@@ -8,7 +8,7 @@
 # Outputs are COMMITTED, so `make build` needs no image toolchain. Run
 # `make icons` by hand when the mark changes.
 #
-#   internal/tray/icons/tray.png           32x32 colour  — Linux (upstream mark)
+#   internal/tray/icons/tray.png           32x32 colour  — Linux (DictShelf)
 #   internal/tray/icons/tray-windows.png   32x32 colour  — Windows (DictShelf)
 #   internal/tray/icons/tray-template.png  44x44 mono    — macOS (DictShelf @2x)
 #
@@ -27,11 +27,9 @@
 set -eu
 
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-src="$root/internal/server/web/favicon.svg"
 brand="$root/packaging/brand/dictshelf.svg"
 out="$root/internal/tray/icons"
 
-[ -f "$src" ] || { echo "make-icons: missing $src" >&2; exit 1; }
 [ -f "$brand" ] || { echo "make-icons: missing $brand" >&2; exit 1; }
 
 mkdir -p "$out"
@@ -81,17 +79,16 @@ run_python3() {
 }
 
 # ---- DictShelf brand mark --------------------------------------------------
-# This source is the product mark for Android, Windows, macOS and the Play
-# listing. Keep the upstream favicon and Linux tray image independent.
+# This source is the product mark for Android, Windows, macOS, Linux and the
+# Play listing. Keep the upstream browser favicon independent.
 tile=$(sed -n 's/.*<rect[^>]*fill="\(#[0-9a-fA-F]*\)".*/\1/p' "$brand")
 [ -n "$tile" ] || { echo "make-icons: no tile colour in $brand" >&2; exit 1; }
 fork="$brand"
 mark=$(sed -e '/<rect /d' "$brand")
 
-# Windows and macOS are fork-specific products. Keep Linux's shared image
-# untouched; render the digit-bearing mark into the platform assets instead.
+# Render the shared Linux mark and the platform-specific desktop variants.
 sed -e '/<rect /d' -e 's/#fff4df/#000000/g' -e 's/#f2a93b/#000000/g' "$fork" > "$tmp/template.svg"
-render 32 32 "$src" "$out/tray.png"
+render 32 32 "$fork" "$out/tray.png"
 render 32 32 "$fork" "$out/tray-windows.png"
 render 44 44 "$tmp/template.svg" "$out/tray-template.png"
 for f in tray.png tray-windows.png tray-template.png; do
@@ -125,7 +122,7 @@ for f in icon.png featureGraphic.png; do
 done
 
 # ---- the macOS app icon (P85) -------------------------------------------
-# Same wuDict2 mark, same rule: rendered, never redrawn. Full-bleed, keeping the tile's
+# Same DictShelf mark, same rule: rendered, never redrawn. Full-bleed, keeping the tile's
 # own rx=7/32 corner — Apple's squircle-with-margins grid would mean moving
 # coordinates, which D70 forbids, and the tile already reads as an app icon at
 # every size.
@@ -167,7 +164,7 @@ printf 'wudict.icns  '
 ls -l "$icns" | awk '{print $5 " bytes"}'
 
 # ---- the Windows app icon (P86) -----------------------------------------
-# Same wuDict2 mark, same rule. An .ico is a directory of images; since Vista each
+# Same DictShelf mark, same rule. An .ico is a directory of images; since Vista each
 # entry may be a PNG verbatim, so the container is a 6-byte header plus one
 # 16-byte record per size and needs no image library to assemble — python3
 # (already required by nothing else here, but present on every dev machine
