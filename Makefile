@@ -86,7 +86,7 @@ serve: build ## Run the HTTP server (DICT_DIR/PORT/ARGS overridable), e.g. make 
 # reads that from the running process rather than from a second artifact.
 
 .PHONY: icons
-icons: ## Regenerate the committed tray PNGs, macOS .icns + the Play listing images from internal/server/web/favicon.svg (needs rsvg-convert)
+icons: ## Regenerate platform icons and Play listing images from packaging/brand/dictshelf.svg (needs librsvg or ImageMagick)
 	@sh tools/make-icons.sh
 
 # ---- macOS .app bundle (D75) --------------------------------------------

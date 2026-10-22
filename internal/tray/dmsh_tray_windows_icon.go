@@ -11,7 +11,6 @@ import _ "embed"
 var windowsIconPNG []byte
 
 func init() {
-	// The shared tray image remains the upstream mark for Linux. Windows is the
-	// DictShelf desktop product and uses its book-on-shelf mark.
+	// Windows uses the DictShelf book-on-shelf mark.
 	iconPNG = windowsIconPNG
 }

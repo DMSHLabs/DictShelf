@@ -11,9 +11,12 @@
     android:viewportHeight="108">
     <group android:scaleX="2.25" android:scaleY="2.25" android:translateX="18" android:translateY="18">
         <path
+            android:pathData="M16,2.8 L17.15,5 L19.6,5.35 L17.8,7.1 L18.23,9.57 L16,8.4 L13.77,9.57 L14.2,7.1 L12.4,5.35 L14.85,5 Z"
+            android:fillColor="#F2A93B" />
+        <path
             android:pathData="M5,8.5 C9.1,7.2 12.8,8.2 16,10.9 L16,23.1 C12.9,20.8 9.2,20 5,20.8 Z M16,10.9 C19.2,8.2 22.9,7.2 27,8.5 L27,20.8 C22.8,20 19.1,20.8 16,23.1 Z"
-            android:fillColor="#FFF4DF" />
-        <path android:pathData="M16,11 L16,22.5" android:strokeColor="#071C33" android:strokeWidth="1.1" />
+            android:fillColor="#071C33" />
+        <path android:pathData="M16,11 L16,22.5" android:strokeColor="#FFF4DF" android:strokeWidth="1.1" />
         <path android:pathData="M4,24.7 L28,24.7 M7,25.2 L7,27.3 M25,25.2 L25,27.3"
             android:strokeColor="#F2A93B" android:strokeWidth="2.4"
             android:strokeLineCap="round" android:strokeLineJoin="round" />

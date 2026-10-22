@@ -3,7 +3,7 @@
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 <resources>
     <!-- DictShelf launcher tile, matched to the app mark. -->
-    <color name="ic_launcher_background">#071C33</color>
+    <color name="ic_launcher_background">#FFF4DF</color>
     <!-- The page's own background token (web/index.html). It paints the
          window, the inset padding under the system bars and the WebView
          before its first frame, so none of those flash a foreign colour. -->

@@ -1,12 +1,12 @@
 # Agent handoff — current state
 
-Current checkout: local branch `DictShelf` at `959cd0b3`, based on the `lsd`
-merge commit, with local uncommitted branding changes for Android and Windows.
-The visible product name is DictShelf; the Android application ID, Windows
-executable name, data folders and registry ProgID remain stable. Android and
-Windows app icons use the new open-book-on-a-shelf mark in navy, ivory and amber.
-No commit or push has been made. The branch includes the LSD decoder and reader
-work already present at its base. No upstream is configured.
+Current checkout: branch `DictShelf` at `0654299f` (`origin/DictShelf`), clean
+before this icon update. The visible product name is DictShelf; technical IDs
+and existing Windows data/install identities remain stable. This session is
+updating the shared open-book/shelf icon to an ivory tile with a centered amber
+star, and propagating it to Android, Windows, macOS and Linux. The icon changes
+are uncommitted; no commit or push has been made. The branch includes prior
+DictShelf and LSD decoder/reader work. `origin` points to `DmShAl/wudict2`.
 
 Wildcards' combined mode keeps the dictionary field's geometry, displays
 “Combined list” / «Общий список», and removes the dropdown affordance while
