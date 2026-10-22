@@ -63,6 +63,8 @@ collapse. Heading extension pairs are converted back to DSL title syntax, and
 the text DSL title parser supplies searchable keys. User dictionaries, X3
 system tables, X5 system tables and abbreviation table layouts are implemented;
 system and abbreviation paths have synthetic primitive tests but no full
-fixture dictionaries. Lingvo X6 system XOR decoding, real-world large files,
-malformed-file handling, title display rendering and wuDict2-specific
-resource-name behavior still need coverage before support is marked complete.
+fixture dictionaries. Fixture tests cover formatted title display, end-to-end
+alias indexing, and resource packing/retrieval through the prepared store.
+Lingvo X6 system XOR decoding, real-world large files, malformed-file handling
+and wuDict2-specific resource-name edge cases still need coverage before
+support is marked complete.
