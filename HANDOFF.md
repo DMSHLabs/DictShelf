@@ -1,6 +1,6 @@
 # Agent handoff — current state
 
-Current checkout: branch `dev` at `64e47124`, aligned with `origin/dev`. No
+Current checkout: branch `dev` at `af424f80`. No
 upstream is configured. The LSD decoder and reader work is present in this
 branch; upstream review and pending ZIM checks remain as recorded below. The
 user-owned untracked `DictShelf.exe` was preserved. This session adds a saved
@@ -17,6 +17,13 @@ linked-group sync, preferences read and view assembly. A synchronous opening
 guard prevents pointerdown and click from launching overlapping picker loads.
 `go build ./internal/server` and `git diff --check` pass; a fresh Windows log
 is needed to locate the intermittent delay.
+
+The existing Browse/article navigation diagnostics checkbox failed to record
+direct Browse headword clicks because those links carry `dict`, while the main
+page diagnostic gate required `from`. The gate now accepts `dict` and uses it
+as the article dictionary ID; the next Windows log should contain
+`article_transition` stages from the click through first article paint.
+`git diff --check` passes; runtime confirmation is pending.
 
 Wildcards' combined mode keeps the dictionary field's geometry, displays
 “Combined list” / «Общий список», and removes the dropdown affordance while
