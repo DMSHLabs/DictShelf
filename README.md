@@ -66,7 +66,7 @@ Windows and Android.
 |---|---|---|
 | **exact** | the headword, ignoring case and accents | |
 | **prefix** | headwords that start with the query | |
-| **wildcard** | headwords that fit a pattern: `?` is one character, `*` any number of characters; `*rain*` finds headwords that contain *rain*; a capital letter makes it case-sensitive | headword index |
+| **wildcard** | headwords that fit a pattern: `?` is one character, `*` any number of characters; `*rain*` finds headwords that contain *rain*; a capital letter or an accent puts the headwords that have it first | headword index |
 | **full-text** | words in the article text, ranked by relevance; phrases, `AND`, `OR`, `NOT`, `NEAR` | full-text index |
 
 Each dictionary's headwords are indexed in the background on its first search.

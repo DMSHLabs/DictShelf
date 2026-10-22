@@ -1968,9 +1968,9 @@ paths:
                 required: [error, name, prepared, indexing]
                 properties:
                   error: { type: string }
-                  name: { type: string, description: The dictionary's own title, read without opening it. }
-                  prepared: { type: boolean, description: Always false here. }
-                  indexing: { type: boolean, description: Preparation is running right now. }
+                  name: { type: string, description: "The dictionary's own title, read without opening it." }
+                  prepared: { type: boolean, description: "Always false here." }
+                  indexing: { type: boolean, description: "Preparation is running right now." }
         '500':
           $ref: '#/components/responses/ServerError'
   /api/reveal:
