@@ -394,6 +394,9 @@ html:is([data-shell-sepia],[data-shell-image],[data-desktop-image]) .mask-search
 .mask-chrome{flex:none;z-index:4;background:transparent;border-bottom:1px solid var(--line)}
 .mask-head{position:static;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,23ch),1fr));align-items:center;gap:.5em 1em;padding:.45em .35rem;background:transparent;border-bottom:1px solid var(--line);font-size:calc(var(--ui-edit_control-font) * 1rem)}
 .mask-head #maskDict{container:mask-dictionary/inline-size;min-width:0;width:100%;height:calc(var(--ui-control-height) * 1em);max-width:none;justify-content:space-between;overflow:hidden;text-align:left;font:inherit}
+.mask-head #maskDict.mask-dictionary-picker-static{cursor:default;opacity:1}
+.mask-head #maskDict.mask-dictionary-picker-static::after{display:none}
+.mask-head #maskDict.mask-dictionary-picker-static:hover{border-color:var(--line)}
 .mask-head #maskDictName{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .mask-head #maskDictMeta{flex:none;white-space:nowrap}
 .mask-head #maskProgress{width:100%;padding-left:0}
