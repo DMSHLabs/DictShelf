@@ -1404,6 +1404,7 @@ dialog.panel-card:not([open]){display:none}
 .pd.drop-after{box-shadow:0 2px 0 var(--accent)}
 .pd .hd{display:flex;align-items:center;gap:calc(var(--ui-control-gap) * 1em)}
 .dict-name-line{display:flex;align-items:center;gap:.5em;min-width:0;flex:1}
+.dict-icon{width:1.25em;height:1.25em;flex:0 0 auto;object-fit:contain;vertical-align:middle}
 .dict-name-line>b{min-width:0}
 .dict-rename,.dict-rename-reset,.dict-rename-save{display:grid;place-items:center;flex:none;width:44px;height:44px;padding:.65em;border:0;border-radius:50%;background:transparent;color:var(--label-quiet);cursor:pointer}
 .dict-rename:hover,.dict-rename-reset:hover,.dict-rename-save:hover{background:var(--line-soft);color:var(--fg)}
