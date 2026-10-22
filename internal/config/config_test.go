@@ -98,7 +98,7 @@ func TestExpandHome(t *testing.T) {
 	if got := ExpandHome("/abs"); got != "/abs" {
 		t.Errorf("abs untouched: %q", got)
 	}
-	if got := ExpandHome("~"); got != home {
+	if got := ExpandHome("~"); got != filepath.Clean(home) {
 		t.Errorf("bare ~: %q", got)
 	}
 	if got := ExpandHome("~user/x"); got != "~user/x" {

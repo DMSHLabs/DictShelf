@@ -148,8 +148,8 @@ func TestConfigEndpointAndSetupPage(t *testing.T) {
 			t.Fatalf("pathAliases = %v, want the home directory as ~", info["pathAliases"])
 		}
 		first, _ := al[0].([]any)
-		if len(first) != 2 || first[0] != home || first[1] != "~" {
-			t.Errorf("pathAliases[0] = %v, want [%q ~]", first, home)
+		if len(first) != 2 || first[0] != filepath.Clean(home) || first[1] != "~" {
+			t.Errorf("pathAliases[0] = %v, want [%q ~]", first, filepath.Clean(home))
 		}
 	}
 	// httptest requests come from a TEST-NET address, so this one is remote:

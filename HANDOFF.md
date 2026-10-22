@@ -19,10 +19,10 @@ block encoding decoded every key, article and annotation identically; no real
 system sample is stored as a fixture. Windows `go vet -tags sqlite_fts5
 -trimpath ./...` and `go build ./...` pass; the full cgo suite passes when run
 directly from PowerShell. The two vet diagnostics were fixed by receiving the
-OS exception structure as a typed pointer in the Windows callback. BusyBox
-`make check` now passes vet but its Git Bash test step reports home-path
-separator mismatches in `TestExpandHome` and `TestConfigEndpointAndSetupPage`;
-those tests pass in the PowerShell full-suite run. Upstream `master` review
+OS exception structure as a typed pointer in the Windows callback. The home-
+path test expectations compare `filepath.Clean` values, matching normalization
+in `ExpandHome` and `pathAliases`; BusyBox `make check` from Git Bash passes
+vet and the full cgo suite with local dictionary fixtures. Upstream `master` review
 status and pending ZIM checks remain as recorded below.
 
 Combined Wildcards top-level result rows now store their own result ordinal as
