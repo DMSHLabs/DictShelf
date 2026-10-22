@@ -21,7 +21,7 @@
     <string name="settings_workers_auto">Auto</string>
     <string name="settings_close">Закрыть</string>
     <string name="settings_restore">Восстановить настройки</string>
-    <string name="settings_restore_confirm">Убрать переопределение индексации и использовать значение из wudict.toml?</string>
+    <string name="settings_restore_confirm">Убрать переопределение индексации и использовать значение из dictshelf.toml?</string>
     <string name="settings_restore_done">Параметр индексации восстановлен.</string>
     <string name="settings_cancel">Отмена</string>
     <string name="intake_title">Добавить словари</string>

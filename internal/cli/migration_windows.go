@@ -30,8 +30,8 @@ const windowsPortableHomeEnv = "WUDICT_PORTABLE_HOME"
 
 var legacyForkItems = []string{"db", "db.logs", "state.json", "style", "groups.ini"}
 
-// prepareWindowsDataRoot selects DictShelf's Windows data folder. Migration
-// discovery and choices are handled after the first interface is shown.
+// prepareWindowsDataRoot selects DictShelf's separate Windows data folder.
+// Legacy wuDict2 data is left untouched for explicit import/export instead.
 func prepareWindowsDataRoot() error {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -40,7 +40,7 @@ func prepareWindowsDataRoot() error {
 	if home == "" {
 		return fmt.Errorf("cannot identify the Windows user folder")
 	}
-	newRoot := filepath.Join(home, ".wuDict2")
+	newRoot := filepath.Join(home, ".dmshlabs", "dictshelf")
 	if existing := os.Getenv("WUDICT_HOME"); existing != "" {
 		windowsFreshDataRoot = false
 		return ensureWindowsConfigName(existing)
@@ -101,7 +101,7 @@ func prepareWindowsDataRoot() error {
 func windowsPortableDataRoot() (string, bool, error) {
 	exe, err := os.Executable()
 	if err != nil {
-		return "", false, fmt.Errorf("cannot find wuDict2.exe: %w", err)
+		return "", false, fmt.Errorf("cannot find DictShelf.exe: %w", err)
 	}
 	root := filepath.Join(filepath.Dir(exe), "Data")
 	info, err := os.Stat(root)

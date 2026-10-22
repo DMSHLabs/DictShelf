@@ -1,4 +1,4 @@
-# Copyright (C) 2026 glowinthedark
+﻿# Copyright (C) 2026 glowinthedark
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
@@ -20,7 +20,7 @@
 # "C:\Program Files\Git\DAppName=wuDict" before ISCC ever sees it.
 #
 # Everything that decides what the installer DOES lives in
-# packaging\windows\wudict.iss. This only locates the compiler and derives the
+# packaging\windows\dictshelf.iss. This only locates the compiler and derives the
 # product identity from the binary.
 #
 # Run it with no arguments from the repository root, which is what
@@ -30,10 +30,10 @@
 #
 # Every path it needs is derived from $PSScriptRoot, so it is always a native
 # Windows path — the one thing a caller cannot be relied on to supply. -Exe and
-# -OutDir override the defaults (repo root \ wuDict2.exe, repo root \ dist).
+# -OutDir override the defaults (repo root \ DictShelf.exe, repo root \ dist).
 [CmdletBinding()]
 param(
-    # The wuDict2.exe to package.
+    # The DictShelf.exe to package.
     [string] $Exe,
     # Where the setup .exe is written.
     [string] $OutDir,
@@ -49,10 +49,10 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $root = Split-Path -Parent $PSScriptRoot
-if (-not $Exe)    { $Exe    = Join-Path $root 'wuDict2.exe' }
+if (-not $Exe)    { $Exe    = Join-Path $root 'DictShelf.exe' }
 if (-not $OutDir) { $OutDir = Join-Path $root 'dist' }
-$iss = Join-Path $root 'packaging\windows\wudict.iss'
-$ico = Join-Path $root 'packaging\windows\wudict.ico'
+$iss = Join-Path $root 'packaging\windows\dictshelf.iss'
+$ico = Join-Path $root 'packaging\windows\dictshelf.ico'
 
 # Version strings, padded to exactly three fields: "v1.2" -> "1.2.0". Used for
 # the installer's numeric VersionInfoVersion and to rank the Inno Setup
@@ -113,7 +113,7 @@ if (-not (Test-Path -LiteralPath $Exe -PathType Leaf)) {
     throw @"
 make-installer: no binary at $Exe
   Build it first, from the repository root:
-    go build -tags sqlite_fts5 -ldflags "-H windowsgui -s -w" -o wuDict2.exe .
+    go build -tags sqlite_fts5 -ldflags "-H windowsgui -s -w" -o DictShelf.exe .
   (make build is a POSIX recipe and does not run on Windows; it would also
   write an extension-less "wudict", which Windows cannot execute.)
 "@
@@ -132,7 +132,7 @@ make-installer: Inno Setup 6 not found.
   windows-installer job of .github\workflows\build-cgo.yml
 '@
     }
-    # wudict.iss uses PrivilegesRequiredOverridesAllowed and the x64compatible
+    # dictshelf.iss uses PrivilegesRequiredOverridesAllowed and the x64compatible
     # architecture identifier, which is 6.3 and later. An older compiler fails
     # on them with an error about a line number, which is a worse thing to be
     # told than this. Version 0 means "found on PATH, unknown" — let it try.
@@ -146,7 +146,7 @@ make-installer: Inno Setup 6 not found.
 # internal/cli — rather than being copied into the build system. Same source as
 # tools/version.sh feeds the macOS bundle; only the four lines that parse
 # "<ProductName> <Version>" are stated twice, once per host shell.
-$name = 'wuDict'
+$name = 'DictShelf'
 $version = 'dev'
 try {
     $line = (& $Exe '--version' 2>$null | Select-Object -First 1)
@@ -188,4 +188,4 @@ if (-not (Test-Path -LiteralPath $setup -PathType Leaf)) {
 Write-Host "built $setup"
 Write-Host "  name    $name $version (version $num)"
 Write-Host "  installs for all users by default (Program Files); the wizard's"
-Write-Host "  first page offers per-user instead: %LOCALAPPDATA%\Programs\$name"
+Write-Host "  first page offers per-user instead: %LOCALAPPDATA%\Programs\DMSH Labs\$name"

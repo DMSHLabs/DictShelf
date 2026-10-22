@@ -6,5 +6,5 @@
 
 package config
 
-// Name separates wuDict2's Windows settings from wuDict's settings.
-const Name = "wudict2.toml"
+// Name is DictShelf's per-user configuration filename.
+const Name = "dictshelf.toml"

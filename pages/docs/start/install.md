@@ -33,7 +33,7 @@ install. macOS also has an app bundle, Windows an installer, Android an APK.
     quarantine attribute: `xattr -d com.apple.quarantine /usr/local/bin/wudict`.
 
     The app bundle `wudict-macos-universal-app-<version>.zip` contains
-    **wuDict.app**: the same program, universal, with a menu-bar icon instead
+    **DictShelf.app**: the same program, universal, with a menu-bar icon instead
     of a terminal. See [macOS app](../apps/macos.md).
 
 === "Linux"
@@ -56,11 +56,11 @@ install. macOS also has an app bundle, Windows an installer, Android an APK.
 === "Windows"
 
     ``` cmd title="cmd"
-    wuDict2.exe
+    DictShelf.exe
     ```
 
     ``` pwsh title="PowerShell"
-    .\wuDict2.exe
+    .\DictShelf.exe
     ```
 
     On Arm64 Windows use `wudict-windows-arm64-purego.exe` where available.
@@ -68,10 +68,10 @@ install. macOS also has an app bundle, Windows an installer, Android an APK.
     The file is not code-signed, so Windows Defender SmartScreen stops its
     first run: choose **More info**, then **Run anyway**.
 
-    `wuDict2.exe` is a Windows app and opens without a console window. The same
-    executable handles terminal commands; run `wuDict2.exe --help` from
+    `DictShelf.exe` is a Windows app and opens without a console window. The same
+    executable handles terminal commands; run `DictShelf.exe --help` from
     PowerShell or `cmd`. Desktop launches show a tray icon and log to
-    `%LOCALAPPDATA%\wudict\wudict.log`.
+    `%USERPROFILE%\.dmshlabs\dictshelf\db.logs\dictshelf.log`.
 
     The installer `dictshelf-windows-x64-setup-<version>.exe` adds a Start menu
     entry, an uninstaller, `PATH` and *Open with*. See
@@ -116,12 +116,12 @@ The config file, the library and the dictionary files are kept, and the new
 version reads them. Indexes built by an older version are reported as
 [outdated](../dictionaries/library.md#outdated-indexes).
 
-The installer, `wuDict.app` and the APK are updated by installing the new
+The installer, `DictShelf.app` and the APK are updated by installing the new
 version over the old one.
 
 ## Uninstall
 
-Delete the executable. `~/.wudict` holds the settings and the library; delete
+Delete the executable. `~/.dmshlabs/dictshelf` holds the settings and the library; delete
 it as well to remove everything.
 
 ## Next

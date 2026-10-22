@@ -89,7 +89,7 @@
 	<string name="settings_workers_auto">Auto</string>
 	<string name="settings_close">Close</string>
 	<string name="settings_restore">Restore defaults</string>
-	<string name="settings_restore_confirm">Clear the indexing override and use the value in wudict.toml?</string>
+	<string name="settings_restore_confirm">Clear the indexing override and use the value in dictshelf.toml?</string>
 	<string name="settings_restore_done">Indexing setting restored.</string>
 	<string name="settings_cancel">Cancel</string>
 	<!--

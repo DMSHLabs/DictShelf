@@ -1,16 +1,16 @@
 ---
 title: Configuration
-description: Every wudict setting - flag, environment variable, wudict.toml key, values and default.
+description: Every wudict setting - flag, environment variable, dictshelf.toml key, values and default.
 ---
 
 # Configuration
 
 Each setting can be given as a command-line flag, an environment variable or a
-key in `wudict.toml`. The variable and the key have the same name.
+key in `dictshelf.toml`. The variable and the key have the same name.
 
 ## Priority
 
-Highest first: command-line flag, environment variable, `wudict.toml`, built-in
+Highest first: command-line flag, environment variable, `dictshelf.toml`, built-in
 default. The setup page shows which values a flag or variable overrides.
 
 ## Config file
@@ -18,9 +18,9 @@ default. The setup page shows which values a flag or variable overrides.
 wudict reads the first of:
 
 1. `--config` or `CONFIG_PATH`
-2. `wudict.toml` next to the executable ([portable mode](#portable-mode))
-3. `~/.wudict/wudict.toml` on macOS and Linux; `~/.wuDict2/wudict.toml` on Windows
-4. `/etc/wudict/wudict.toml`
+2. `dictshelf.toml` next to the executable ([portable mode](#portable-mode))
+3. `~/.dmshlabs/dictshelf/dictshelf.toml` on macOS and Linux; `~/.dmshlabs/dictshelf/dictshelf.toml` on Windows
+4. `/etc/dictshelf/dictshelf.toml`
 
 The first `wudict serve` creates the platform config file with every setting
 commented out. Each start prints the file in effect. An unknown key is reported
@@ -28,21 +28,21 @@ at startup and on the setup page.
 
 ### Portable mode
 
-A `wudict.toml` next to the executable takes precedence over
-`~/.wudict/wudict.toml` and receives the settings saved from the setup page.
+A `dictshelf.toml` next to the executable takes precedence over
+`~/.dmshlabs/dictshelf/dictshelf.toml` and receives the settings saved from the setup page.
 wudict never creates it.
 
 ## Files
 
 | Platform | Config folder |
 | --- | --- |
-| macOS, Linux | `~/.wudict` |
-| Windows | `%USERPROFILE%\.wuDict2` |
-| Android | `Android/data/com.dmshepeta.wudict2/files` |
+| macOS, Linux | `~/.dmshlabs/dictshelf` |
+| Windows | `%USERPROFILE%\.dmshlabs\dictshelf` |
+| Android | `Android/data/com.dmshlabs.dictshelf/files/.dmshlabs/dictshelf` |
 
 | In the config folder | Contents |
 | --- | --- |
-| `wudict.toml` | settings |
+| `dictshelf.toml` | settings |
 | `state.json` | dictionary order, enabled dictionaries, display preferences; written by wudict |
 | `groups.ini` | picker groups, once edited |
 | `style/` | custom styles |
@@ -50,8 +50,8 @@ wudict never creates it.
 | `lemmas/` | installed lemma data ([`LEMMA_DIR`](#lemma_dir)) |
 | `db/` | the library ([`DB_DIR`](#db_dir)) |
 
-Log when there is no console: macOS `~/Library/Logs/wudict.log`, Linux
-`~/.wudict/wudict.log`, Windows `%LOCALAPPDATA%\wudict\wudict.log`, Android
+Log when there is no console: macOS `~/Library/Logs/DMSH Labs/DictShelf/dictshelf.log`, Linux
+`~/.dmshlabs/dictshelf/dictshelf.log`, Windows `%USERPROFILE%\.dmshlabs\dictshelf\db.logs\dictshelf.log`, Android
 logcat.
 
 wudict does not modify dictionary files. Only <kbd>🗑 Remove…</kbd> and
@@ -73,11 +73,11 @@ wudict --dict-dir ~/Dictionaries --dict-dir /Volumes/Ext/Dicts
 DICT_DIR="~/Dictionaries:/Volumes/Ext/Dicts" wudict     # ";" on Windows
 ```
 
-``` toml title="~/.wudict/wudict.toml"
+``` toml title="~/.dmshlabs/dictshelf/dictshelf.toml"
 DICT_DIR = ["~/Dictionaries", "/Volumes/Ext/Dicts"]
 ```
 
-In `wudict.toml` several folders are an array; in the environment they are
+In `dictshelf.toml` several folders are an array; in the environment they are
 separated by `:` (`;` on Windows). A dictionary found in two folders is listed
 once, from the first. A missing folder is reported; the others are still read.
 
@@ -88,7 +88,7 @@ The library: one library folder per indexed dictionary.
 | | |
 | --- | --- |
 | Flag | `--db-dir <path>` |
-| Default | `~/.wudict/db` |
+| Default | `~/.dmshlabs/dictshelf/db` |
 
 Must not be a `DICT_DIR` folder; wudict does not start if it is.
 
@@ -292,7 +292,7 @@ The folder of installed lemma data. English is built in.
 | --- | --- |
 | Flag | none, environment and file only |
 | Values | a folder |
-| Default | `~/.wudict/lemmas` |
+| Default | `~/.dmshlabs/dictshelf/lemmas` |
 
 Install languages with <kbd>Lemmatization…</kbd> (dictionary panel → folder
 summary) or [`wudict lemmas download`](cli.md#lemmas). The folder is read at
@@ -397,7 +397,7 @@ Whether a request must carry the access key.
 | Values | `auto`, `on`, `off` |
 | Default | `auto`: required when [`SERVER_IP`](#server_ip-and-server_port) is not `127.0.0.1` |
 
-The key is a random string stored in `~/.wudict/token`, readable only by your
+The key is a random string stored in `~/.dmshlabs/dictshelf/token`, readable only by your
 user. `wudict token` prints a link that carries it
 (`http://<address>:<port>/?k=<key>`); opening the link once stores the key in
 that browser as a cookie. Scripts send `Authorization: Bearer <key>`.
@@ -413,12 +413,12 @@ your settings and your folder names.
 ### AUTH_TOKEN
 
 The access key itself, when it comes from elsewhere: a password manager, a
-container secret. Overrides `~/.wudict/token` and is never written to it.
+container secret. Overrides `~/.dmshlabs/dictshelf/token` and is never written to it.
 
 | | |
 | --- | --- |
 | Flag | none, environment and file only |
-| Default | the contents of `~/.wudict/token` |
+| Default | the contents of `~/.dmshlabs/dictshelf/token` |
 
 ### TRUSTED_HOSTS
 
@@ -497,11 +497,11 @@ The config file to read, instead of the search order under
 | Flag | `--config <path>` |
 | Default | unset |
 
-A flag and an environment variable only; not a key in `wudict.toml`.
+A flag and an environment variable only; not a key in `dictshelf.toml`.
 
 ## Example
 
-``` toml title="~/.wudict/wudict.toml"
+``` toml title="~/.dmshlabs/dictshelf/dictshelf.toml"
 DICT_DIR      = ["~/Dictionaries", "/data/dicts"]
 SERVER_IP     = "0.0.0.0"          # listen on the network: AUTH applies
 SERVER_PORT   = "9000"

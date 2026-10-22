@@ -6,10 +6,10 @@ setlocal EnableExtensions DisableDelayedExpansion
 rem ============================================================
 rem DictShelf Windows builds: [cli|server|installer]
 rem
-rem   (no args)             listenerless Windows WebView app: wuDict2.exe
-rem   cli                  console CLI: wuDict2-cli.exe (does not start a server)
-rem   server               console HTTP server: wuDict2-server.exe
-rem   installer            package the existing wuDict2.exe from the default build
+rem   (no args)             listenerless Windows WebView app: DictShelf.exe
+rem   cli                  console CLI: DictShelf-cli.exe (does not start a server)
+rem   server               console HTTP server: DictShelf-server.exe
+rem   installer            package the existing DictShelf.exe from the default build
 rem                        under dist\ (needs Inno Setup 6.3+)
 rem
 rem The installer mode packages the exact GUI executable built by the default mode.
@@ -56,7 +56,7 @@ rem gcc.exe is not on PATH. Quoted, wildcards allowed; the last directory that
 rem matches and really holds bin\gcc.exe wins.
 set "GCC_ROOTS="%SystemDrive%\Qt\Tools\mingw*_64" "%SystemDrive%\msys64\mingw64" "%SystemDrive%\mingw64" "%ProgramFiles%\mingw64" "%ProgramFiles%\WinLibs*\mingw64" "%LOCALAPPDATA%\Programs\mingw64""
 
-rem ISCC.exe must be Inno Setup 6.3 or newer: packaging\windows\wudict.iss
+rem ISCC.exe must be Inno Setup 6.3 or newer: packaging\windows\dictshelf.iss
 rem uses directives older releases do not support. The installer script
 rem searches the uninstall registry and PATH; set ISCC_PATH in the environment
 rem or build-windows.local.bat when it cannot locate the compiler.
@@ -68,7 +68,7 @@ rem ------------------------------------------------------------
 set "BUILD_TYPE=exe"
 set "WINDOW_MODE=gui"
 set "WINDOW_LDFLAGS=-H windowsgui"
-set "OUTPUT_EXE=wuDict2.exe"
+set "OUTPUT_EXE=DictShelf.exe"
 set "DEFAULT_SERVE=1"
 
 if not "%~1"=="" for %%A in (%*) do (
@@ -78,13 +78,13 @@ if not "%~1"=="" for %%A in (%*) do (
         set "BUILD_TYPE=cli"
         set "WINDOW_MODE=console"
         set "WINDOW_LDFLAGS="
-        set "OUTPUT_EXE=wuDict2-cli.exe"
+        set "OUTPUT_EXE=DictShelf-cli.exe"
         set "DEFAULT_SERVE=0"
     ) else if /i "%%A"=="server" (
         set "BUILD_TYPE=server"
         set "WINDOW_MODE=console"
         set "WINDOW_LDFLAGS="
-        set "OUTPUT_EXE=wuDict2-server.exe"
+        set "OUTPUT_EXE=DictShelf-server.exe"
         set "DEFAULT_SERVE=1"
     ) else (
         echo ERROR: unknown option "%%A".
@@ -96,13 +96,13 @@ if not "%~1"=="" for %%A in (%*) do (
 rem Packaging reuses the desktop binary built by the default invocation. This
 rem keeps the installer's version and executable identical to release artifact 1.
 if /i "%BUILD_TYPE%"=="installer" (
-    if not exist "wuDict2.exe" (
-        echo ERROR: wuDict2.exe is missing. Build the desktop executable first:
+    if not exist "DictShelf.exe" (
+        echo ERROR: DictShelf.exe is missing. Build the desktop executable first:
         echo   build-windows.cmd
         exit /b 1
     )
     set "VERSION="
-    for /f "tokens=2" %%V in ('wuDict2.exe --version') do if not defined VERSION set "VERSION=%%V"
+    for /f "tokens=2" %%V in ('DictShelf.exe --version') do if not defined VERSION set "VERSION=%%V"
     call :find_iscc
     if errorlevel 1 exit /b 1
     call :make_installer
@@ -132,7 +132,7 @@ if errorlevel 1 (
 )
 
 rem ------------------------------------------------------------
-rem wuDict version
+rem DictShelf version
 rem Same idea as the Makefile and build-android.cmd:
 rem   git describe --tags --always --dirty
 rem ------------------------------------------------------------
@@ -150,7 +150,7 @@ if not defined VERSION (
 rem CI supplies the release tag so installer metadata matches the published artifact.
 if defined WUDICT_VERSION set "VERSION=%WUDICT_VERSION%"
 
-echo wuDict version:
+echo DictShelf version:
 echo   %VERSION%
 echo.
 
@@ -185,7 +185,7 @@ rem ------------------------------------------------------------
 
 echo.
 echo ============================================================
-echo wuDict Windows %FLAVOUR% build
+echo DictShelf Windows %FLAVOUR% build
 echo ============================================================
 echo.
 
@@ -202,7 +202,7 @@ echo Output:
 echo   %CD%\%OUTPUT_EXE%
 echo.
 
-rem A running server holds wuDict2.exe open, and Windows then refuses to let the
+rem A running server holds DictShelf.exe open, and Windows then refuses to let the
 rem linker replace it - the "Access is denied" trap docs\WINDOWS-VERIFY.md
 rem records for preview servers. Said here, where it can still be acted on.
 tasklist /FI "IMAGENAME eq %OUTPUT_EXE%" 2>nul | findstr /i /c:"%OUTPUT_EXE%" >nul
@@ -322,7 +322,7 @@ if defined SETUP (
 
 echo Run it:
 if /i "%WINDOW_MODE%"=="gui" (
-    echo   wuDict2.exe                   open the app without a console window
+    echo   DictShelf.exe                   open the app without a console window
 ) else if /i "%BUILD_TYPE%"=="cli" (
     echo   %OUTPUT_EXE%                   run CLI commands; without arguments shows help
 ) else (
@@ -389,7 +389,7 @@ where powershell >nul 2>&1
 if errorlevel 1 (
     echo ERROR: powershell.exe was not found, and the installer is compiled by
     echo   tools\make-installer.ps1 - the script that knows where Inno Setup is.
-    echo   A plain `build-windows.cmd` still produces wuDict2.exe.
+    echo   A plain `build-windows.cmd` still produces DictShelf.exe.
     exit /b 1
 )
 
@@ -421,7 +421,7 @@ if not defined ISCC (
     echo ERROR: no Inno Setup 6.3 or newer was found, and `installer` packages
     echo   the desktop executable. Install it, then run this script again:
     echo     winget install JRSoftware.InnoSetup
-    echo   A plain `build-windows.cmd` still produces wuDict2.exe.
+    echo   A plain `build-windows.cmd` still produces DictShelf.exe.
     exit /b 1
 )
 
@@ -433,10 +433,10 @@ exit /b 0
 rem ============================================================
 rem :make_installer - compiles the per-user installer
 rem
-rem Called with no arguments: wuDict2.exe and dist\ in the repository root are
+rem Called with no arguments: DictShelf.exe and dist\ in the repository root are
 rem the installer script's own defaults, which is the invocation
 rem `make win-installer` and CI both use - one less thing that can drift. It
-rem reads the product name and version out of the binary (`wuDict2.exe
+rem reads the product name and version out of the binary (`DictShelf.exe
 rem --version`), so nothing about the identity is restated here.
 rem ============================================================
 
@@ -446,14 +446,14 @@ echo Building the per-user installer
 echo ============================================================
 echo.
 
-powershell -NoProfile -ExecutionPolicy Bypass -File tools\make-installer.ps1 -Exe .\wuDict2.exe %ISCC_ARG%
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\make-installer.ps1 -Exe .\DictShelf.exe %ISCC_ARG%
 
 if errorlevel 1 (
     echo.
     echo ============================================================
     echo ERROR: Inno Setup failed.
     echo ============================================================
-    echo   A compiler older than 6.3 cannot read packaging\windows\wudict.iss
+    echo   A compiler older than 6.3 cannot read packaging\windows\dictshelf.iss
     echo   ^(x64compatible, PrivilegesRequiredOverridesAllowed^). Inno Setup 5
     echo   is one: it writes no error text a redirect can carry, and it either
     echo   fails or reports a success that produced no file - both seen here.

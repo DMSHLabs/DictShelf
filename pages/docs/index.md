@@ -103,7 +103,7 @@ languages are installed from <kbd>☰</kbd> → folder summary →
 
 | Platform | |
 | --- | --- |
-| **macOS** | command line, and [wuDict.app](apps/macos.md) with a menu-bar icon |
+| **macOS** | command line, and [DictShelf.app](apps/macos.md) with a menu-bar icon |
 | **Windows** | command line, and an [installer](apps/windows.md); tray icon |
 | **Linux** | command line, with an optional systemd user unit ([Run at startup](running.md)) |
 | **Android** | [app](apps/android.md), with lookup from the text selection and share menus and from reading apps |

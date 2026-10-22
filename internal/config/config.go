@@ -33,7 +33,7 @@ type Config struct {
 
 	// Tray is tri-state, so it is a pointer rather than a bool: unset means
 	// "decide from how the app was launched" - a GUI launch (a macOS .app, the
-	// double-clicked wuDict2.exe) gets an icon, a terminal or a service does not.
+	// double-clicked DictShelf.exe) gets an icon, a terminal or a service does not.
 	// TRAY=1 or TRAY=0 overrides that decision in either direction (D74).
 	Tray         *bool  // TRAY
 	Verbose      bool   // VERBOSE=1: verbose logging
@@ -348,13 +348,13 @@ func Load(configPath string, flags map[string]string) (Config, error) {
 	return cfg, nil
 }
 
-// LegacyName is the original configuration filename. Windows wuDict2 keeps it
-// as a one-time migration source; other platforms still use it as Name.
+// LegacyName remains available for explicitly importing settings from older
+// wuDict installations; DictShelf never reads it automatically.
 const LegacyName = "wudict.toml"
 
 // systemDir is the machine-wide location; a variable so tests can point it
 // somewhere harmless rather than depend on what is really in /etc.
-var systemDir = filepath.Join("/etc", "wudict")
+var systemDir = filepath.Join("/etc", "dictshelf")
 
 // Seams for the two directories the search is anchored to. Tests replace them;
 // both return "" when the OS cannot say, which simply drops that candidate.
@@ -383,13 +383,12 @@ func HomeConfig() string {
 	return ""
 }
 
-// userDataDir is the per-user data root. Windows wuDict2 sets WUDICT_HOME to
-// keep its files separate from the upstream wuDict installation.
+// userDataDir is DictShelf's per-user data root.
 func userDataDir(home string) string {
 	if root := os.Getenv("WUDICT_HOME"); root != "" {
 		return root
 	}
-	return filepath.Join(home, ".wudict")
+	return filepath.Join(home, ".dmshlabs", "dictshelf")
 }
 
 // candidates returns the search order: a selected portable Data folder, next
@@ -472,7 +471,7 @@ func loadFile(explicit string) (resolved, error) {
 	return r, nil
 }
 
-const configTemplate = `# wudict configuration  (~/.wudict/wudict.toml)
+const configTemplate = `# DictShelf configuration  (~/.dmshlabs/dictshelf/dictshelf.toml)
 # Priority: CLI flag > environment variable > this file > built-in default.
 # All keys are optional - uncomment a line to override its default.
 
@@ -480,7 +479,7 @@ const configTemplate = `# wudict configuration  (~/.wudict/wudict.toml)
 #                                     # several folders: ["~/Dictionaries", "/Volumes/Ext/Dicts"]
 #                                     # (in the environment separate them with ":", ";" on Windows)
 #                                     # none of them may be the DB_DIR folder
-# DB_DIR      = "~/.wudict/db"    # library of prepared dictionaries (one folder each)
+# DB_DIR      = "~/.dmshlabs/dictshelf/db"    # library of prepared dictionaries (one folder each)
 # SERVER_IP   = "127.0.0.1"           # listen address (0.0.0.0 = all interfaces)
 # SERVER_PORT = "6888"
 # NO_BROWSER  = "0"                   # "1" = do not open a browser tab on startup
@@ -510,7 +509,7 @@ const configTemplate = `# wudict configuration  (~/.wudict/wudict.toml)
 #                                     # dropped when another needs the slot.
 #                                     # "0" = never lemmatize, load nothing.
 #                                     # Android defaults to 1.
-# LEMMA_DIR   = "~/.wudict/lemmas"    # folder of installed lemma files. Every language but English
+# LEMMA_DIR   = "~/.dmshlabs/dictshelf/lemmas"    # folder of installed lemma files. Every language but English
 #                                     # comes from here - one file per language, named after it
 #                                     # ("pl.txt", "polish.tsv.gz"; .txt/.tsv, optionally .gz).
 #                                     # Each line is a lemma and its forms, tab-separated, lower
@@ -559,13 +558,13 @@ const configTemplate = `# wudict configuration  (~/.wudict/wudict.toml)
 # AUTH        = "auto"                # must a request carry the access key?  "auto" = only when this
 #                                     # server listens on the network (SERVER_IP is not 127.0.0.1),
 #                                     # "on" = always, "off" = never. The key is a random string in
-#                                     # ~/.wudict/token: "wudict token" prints the link that carries
+#                                     # ~/.dmshlabs/dictshelf/token: "wudict token" prints the link that carries
 #                                     # it, "wudict token --rotate" replaces it.
 `
 
 // EnsureConfigFile makes sure a config file exists, generating the fully
 // commented template on first run. It writes exactly one place -
-// ~/.wudict/wudict.toml - and never beside the executable.
+// ~/.dmshlabs/dictshelf/dictshelf.toml - and never beside the executable.
 //
 // Not the executable's directory, even when it is writable: writability does
 // not mean "this directory is ours". `go install` lands in ~/go/bin and
@@ -598,10 +597,8 @@ func EnsureConfigFileForNetwork(network bool) (path string, created bool, err er
 		return "", false, err
 	}
 	template := firstRunConfigTemplate(network)
-	if Name != LegacyName {
-		template = strings.ReplaceAll(template, "~/.wudict/", "~/.wuDict2/")
-		template = strings.ReplaceAll(template, LegacyName, Name)
-	}
+	template = strings.ReplaceAll(template, "~/.wudict/", "~/.dmshlabs/dictshelf/")
+	template = strings.ReplaceAll(template, LegacyName, Name)
 	if err := fsx.WriteAtomic(p, []byte(template), 0o644); err != nil {
 		return "", false, err
 	}

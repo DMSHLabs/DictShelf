@@ -168,7 +168,7 @@ echo   %NDK_BIN%
 echo.
 
 rem ------------------------------------------------------------
-rem wuDict version
+rem DictShelf version
 rem Same idea as Makefile:
 rem   git describe --tags --always --dirty
 rem ------------------------------------------------------------
@@ -188,7 +188,7 @@ rem   set WUDICT_VERSION=wudict2-v3.8.0
 rem Without an override, use the version derived from this checkout's Git history.
 if defined WUDICT_VERSION set "VERSION=%WUDICT_VERSION%"
 
-echo wuDict version:
+echo DictShelf version:
 echo   %VERSION%
 echo.
 

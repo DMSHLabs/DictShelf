@@ -80,7 +80,7 @@ const (
 )
 
 func usage() string {
-	help := fmt.Sprintf(`WuWeiDict %s - dictionary server for the browser
+	help := fmt.Sprintf(`DictShelf %s - dictionary server for the browser
 MDict (.mdx/.mdd) · StarDict (.ifo) · Aard 2 (.slob) · Lingvo DSL (.dsl/.dsl.dz) · Babylon (.bgl) · ZIM (.zim) · wudict markdown (.wudict.md) · wudict library (text.db)
 
 USAGE
@@ -382,7 +382,7 @@ CONFIG FILE
      and receives the settings saved from the setup page; never created by
      wudict)
   3. ~/.wudict/wudict.toml (created, commented out, by the first "serve")
-  4. /etc/wudict/wudict.toml
+  4. /etc/dictshelf/dictshelf.toml
   Each start prints the file in effect.
 
   Priority, highest first: flag, environment variable, wudict.toml, default.
@@ -443,9 +443,7 @@ ABOUT
   %s - %s
   %s
 `, Version, ProductName, Tagline, RepoURL)
-	if config.Name == "wudict2.toml" {
-		help = strings.ReplaceAll(help, "~/.wudict/", "~/.wuDict2/")
-	}
+	help = strings.ReplaceAll(help, "~/.wudict/", "~/.dmshlabs/dictshelf/")
 	return strings.ReplaceAll(help, "wudict.toml", config.Name)
 }
 
@@ -1371,12 +1369,6 @@ Hint: pick another port with --port, e.g.:  wudict --port %s
 	if cfg.SearchMemory > 0 {
 		logx.V("search memory budget: %d MB per query", cfg.SearchMemory>>20)
 	}
-	if runtime.GOOS == "windows" {
-		srv.FirstRunMigrationStatus = legacyMigrationStatus
-		srv.ApplyFirstRunMigration = func(action string) error {
-			return applyLegacyMigration(action, reg, srv.RefreshMigratedUserFiles, cfgFile)
-		}
-	}
 	useExternalSpeex := cfg.SpeexBackend == "external"
 	srv.UseExternalSpeex = useExternalSpeex
 	// Only look for the external speexdec binary when it will actually be used:
@@ -1506,8 +1498,7 @@ Hint: pick another port with --port, e.g.:  wudict --port %s
 	// The tray wraps the server rather than the other way round: serve() runs
 	// to completion whatever the tray does, and with the tray off (every
 	// terminal launch, every service unit, Android) Wrap is a pass-through.
-	// Name is left empty so the menu uses the package default, WuWeiDict -
-	// ProductName still reads "wuDict", which predates D27.
+	// Name is left empty so the menu uses the package default, DictShelf.
 	return tray.Wrap(tray.Config{
 		Enabled:   trayWanted,
 		Explicit:  cfg.Tray != nil,
@@ -1576,7 +1567,7 @@ func openHeadlessLog() (*os.File, error) {
 		if err != nil {
 			return nil, err
 		}
-		path = filepath.Join(home, "Library", "Logs", "wudict.log")
+		path = filepath.Join(home, "Library", "Logs", "DMSH Labs", "DictShelf", "dictshelf.log")
 	case "windows":
 		dir := os.Getenv("WUDICT_PORTABLE_HOME")
 		if dir == "" {
@@ -1587,15 +1578,15 @@ func openHeadlessLog() (*os.File, error) {
 			if err != nil {
 				return nil, err
 			}
-			dir = filepath.Join(home, ".wuDict2")
+			dir = filepath.Join(home, ".dmshlabs", "dictshelf")
 		}
-		path = filepath.Join(dir, "db.logs", "wudict.log")
+		path = filepath.Join(dir, "db.logs", "dictshelf.log")
 	default:
 		home, err := os.UserHomeDir()
 		if err != nil {
 			return nil, err
 		}
-		path = filepath.Join(home, ".wudict", "wudict.log")
+		path = filepath.Join(home, ".dmshlabs", "dictshelf", "dictshelf.log")
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return nil, err
@@ -1979,10 +1970,10 @@ func openUI(address string, gui bool, onWindowClose func(), desktopRequest func(
 }
 
 func desktopWebViewURL() string {
-	return "https://wudict2.localhost/?wudict_webview2=1"
+	return "https://dictshelf.localhost/?wudict_webview2=1"
 }
 
-const legacyDesktopWebViewOrigin = "https://wudict2.local"
+const legacyDesktopWebViewOrigin = "https://dictshelf.local"
 
 func desktopWindowURL(address string) (string, error) {
 	u, err := url.Parse(address)

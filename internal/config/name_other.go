@@ -7,4 +7,4 @@
 package config
 
 // Name is the configuration filename used by non-Windows builds.
-const Name = LegacyName
+const Name = "dictshelf.toml"

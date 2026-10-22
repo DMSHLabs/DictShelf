@@ -10,7 +10,7 @@ second database for its media pack, `media.db`. This page specifies both, for
 programs that read or write them.
 
 ``` text title="one library folder"
-~/.wudict/db/Webster/
+~/.dmshlabs/dictshelf/db/Webster/
   text.db          articles and indexes
   media.db         media pack: images and audio (optional)
   media.link.db    a cache; can be deleted      (optional)
@@ -182,7 +182,7 @@ is derived, need not be copied, and can be deleted.
 Without SQL:
 
 ``` sh title="whole dictionary as CSV, pyglossary layout"
-wudict dump -o out ~/.wudict/db/Webster
+wudict dump -o out ~/.dmshlabs/dictshelf/db/Webster
 ```
 
 This writes `out/Webster.csv`: `"#key","value"` metadata rows, then one row

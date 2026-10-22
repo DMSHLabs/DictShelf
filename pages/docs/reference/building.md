@@ -83,7 +83,7 @@ make cross
 Builds the `-purego` binaries for macOS, Linux and Windows into `dist/`.
 
 ``` sh
-make mac-app          # wuDict.app into dist/
+make mac-app          # DictShelf.app into dist/
 make mac-app-install  # and into ~/Applications
 make win-installer    # the Windows installer (needs Inno Setup 6.3 or newer)
 ```

@@ -5,13 +5,13 @@ Scope: Windows desktop startup, application-owned persistent state, temporary fi
 
 ## Result
 
-The reviewed portable application does **not** write exclusively inside its executable directory. The GUI log finding was fixed after this audit: it now writes `wudict.log` under the active data root's `db.logs` (portable Data, otherwise WUDICT_HOME or `~/.wuDict2`). Several active code paths still use the system temporary directory. Allowing external dictionary roots also permits automatic cleanup and imports outside the portable tree.
+The reviewed portable application does **not** write exclusively inside its executable directory. The GUI log finding was fixed after this audit: it now writes `wudict.log` under the active data root's `db.logs` (portable Data, otherwise WUDICT_HOME or `~/.dmshlabs/dictshelf`). Several active code paths still use the system temporary directory. Allowing external dictionary roots also permits automatic cleanup and imports outside the portable tree.
 
 ## Confirmed automatic or feature-triggered writes outside the portable tree
 
 | Trigger | Destination | Evidence |
 | --- | --- | --- |
-| Normal GUI startup — fixed | `<active data root>/db.logs/wudict.log` | `internal/cli/cli.go`, `openHeadlessLog` now selects WUDICT_PORTABLE_HOME, WUDICT_HOME, then `~/.wuDict2`. LOCALAPPDATA is no longer used for this log. |
+| Normal GUI startup — fixed | `<active data root>/db.logs/wudict.log` | `internal/cli/cli.go`, `openHeadlessLog` now selects WUDICT_PORTABLE_HOME, WUDICT_HOME, then `~/.dmshlabs/dictshelf`. LOCALAPPDATA is no longer used for this log. |
 | A Windows WebView response exceeding 8 MiB | System temp, `wudict2-webview-<pid>-*.tmp` | `internal/server/desktop_resource.go`, `desktopMemoryThreshold` and `desktopResourceResponse.Write`; `third_party/go-webview2/webview.go`, response spill callback; `third_party/go-webview2/pkg/edge/filestream_windows.go`, `NewFileStream` uses `os.CreateTemp("", ...)`. Normal release removes the file; creation still occurs outside. |
 | Opening compressed or repaired wudict markdown | System temp, `wudict-md-*.txt` | `internal/format/wmd/source.go`, `openSource` decoding path calls `os.CreateTemp("", ...)`. Ordinary unchanged plain files are read in place. |
 | External Speex decoding | System temp, `wudict-spx*` | `internal/server/server.go`, `externalSpxToWav` calls `os.MkdirTemp("", ...)`. Conditional: the normal cgo build uses the in-process decoder unless external decoding is selected. |
@@ -21,7 +21,7 @@ The reviewed portable application does **not** write exclusively inside its exec
 
 ## Paths already directed inside Data in the normal validated launch
 
-- Configuration: `Data/wudict2.toml`; startup selects `WUDICT_HOME` and `CONFIG_PATH` there.
+- Configuration: `Data/dictshelf.toml`; startup selects `WUDICT_HOME` and `CONFIG_PATH` there.
 - State, groups, interface settings, search history, styles, appearance presets, looks and uploaded style assets: derived from `Server.User`, the active configuration directory (`internal/server/runtime.go`, `userdir.go`, `userstorage.go`, `style.go`, `userfiles.go`, `prefs.go`, `dmsh_groups.go`, `looks.go`, `presets.go`).
 - Prepared dictionary library: `Data/db`; lemma installs and their partial downloads: `Data/lemmas`. Startup normalization sets these paths and validates their lexical containment.
 - System logs and Go/native crash reports/dumps: `Data/db.logs`, derived from the selected library (`internal/logx/system.go`, `crash.go`, `crash_native_windows.go`, `internal/store/indexlog.go`). The separate GUI log now also lives in the active data root's db.logs.
@@ -33,7 +33,7 @@ The reviewed portable application does **not** write exclusively inside its exec
 ## Additional ways containment can be lost
 
 1. `prepareWindowsDataRoot` handles an existing `WUDICT_HOME` before portable detection. An inherited external override can select ordinary data despite Data beside the executable.
-2. Invalid portable data produces a warning and falls back to `~/.wuDict2`; startup does not fail closed. The app can then write normal per-user data.
+2. Invalid portable data produces a warning and falls back to `~/.dmshlabs/dictshelf`; startup does not fail closed. The app can then write normal per-user data.
 3. `validateWindowsPortableConfig` loads without CLI flag values; `cmdServe` subsequently applies `-db-dir`. The effective library path is not rechecked for portable containment after that override.
 4. `windowsPathWithin` checks lexical paths, without resolving junctions/symlinks. A Data/db or other writable subdirectory redirected outside can pass lexical checks and write elsewhere.
 5. Explicit operations may write outside: exporting headwords, creating another portable copy, CLI dump/resource output and deleting original dictionary files. These must have a defined exception policy if “only inside” is intended as a strict rule. Legacy `.dslgd` removal also writes a `.disabled` marker beside the source.

@@ -4,16 +4,16 @@ DictShelf is an Android fork of [WuWeiDict](https://github.com/wuweidict/wudict)
 The upstream copyright notices and GPL-3.0-or-later license remain in place.
 The fork's repository on GitHub is [DmShAl/wudict2](https://github.com/DmShAl/wudict2)
 (renamed from `DmShAl/wudict` on 2026-09-20; the old URL redirects).
-The Android brand and application ID are distinct. The Java package and Gradle
-namespace stay `com.legbehindneck.wudict` to reduce merge conflicts with
-upstream; a small activity in `com.dmshepeta.wudict2` provides a distinct lookup
-component. The Go module path, server API, and internal `wudict` configuration
-names remain compatible with upstream.
+DictShelf is a separate Android application. Its application ID, Java package,
+and Gradle namespace are `com.dmshlabs.dictshelf`; a small activity in the
+`com.dmshlabs.dictshelf.lookup` package provides the external-reader lookup
+component. The Go module path and internal `wudict` APIs remain compatible with
+upstream.
 
 | Build | Application ID | Launcher name | Lookup activity |
 | --- | --- | --- | --- |
-| FOSS/Play release | `com.dmshepeta.wudict2` | DictShelf | `com.dmshepeta.wudict2.LookupActivity` |
-| FOSS/Play debug | `com.dmshepeta.wudict2.debug` | DictShelf Debug | `com.dmshepeta.wudict2.LookupActivity` |
+| FOSS/Play release | `com.dmshlabs.dictshelf` | DictShelf | `com.dmshlabs.dictshelf.lookup.LookupActivity` |
+| FOSS/Play debug | `com.dmshlabs.dictshelf.debug` | DictShelf Debug | `com.dmshlabs.dictshelf.lookup.LookupActivity` |
 
 The DictShelf launcher mark is an open book resting on an amber shelf, with a
 small centered star on an ivory tile. Its vector source is
@@ -23,13 +23,15 @@ is `android/app/src/main/res/drawable/ic_launcher_foreground.xml`. Run
 tray icons, Windows `.ico`, and macOS `.icns`. The upstream favicon remains
 `internal/server/web/favicon.svg` for browser and in-app pages.
 
-Android uses `https://wudict2.localhost` as its stable WebView origin once
+Android uses `https://dictshelf.localhost` as its stable WebView origin once
 `settings.json` marks migration complete. Before that file exists, it temporarily
 uses the previous `http://127.0.0.1:<port>` origin so the in-process Go bridge
 can import that WebView profile's localStorage. Android never opens a TCP
 listener and does not support server mode. The old port preference is consulted
 only for that one-time profile import. Android shell preferences and app-owned
-files remain in the DictShelf app's own storage. The shared HTTP API remains
+files remain in the DictShelf app's own storage. Existing wuDict/wuDict2 installs
+keep their own identity and data; settings will transfer only through an
+explicit import/export flow. The shared HTTP API remains
 available to browser and explicit server launch modes on other platforms.
 
 On `dev2`, Android starts the shared Go runtime from the JNI library inside
@@ -88,7 +90,7 @@ same-origin localStorage values, then reads and writes `settings.json` and
 `history.json` through Go. The user confirmed settings/history migration and
 persistence work on the emulator. A58 selects the old origin only while
 `settings.json` is absent; after that it uses
-`https://wudict2.localhost` without a port. A shared resource adapter serves
+`https://dictshelf.localhost` without a port. A shared resource adapter serves
 pages and ranged media from Go in both the main and lookup WebViews. The FOSS
 debug APK builds for arm64 and x86_64; the user confirmed it works on the
 emulator. A59 removes listener-specific controls and the FOSS network-listening
@@ -182,7 +184,7 @@ merge merely to resume this work.
 | Legacy WebView origin for settings import | `android/app/src/main/java/com/legbehindneck/wudict/Shell.java`: `legacyOrigin`, `prepareOrigin`; `ShellPrefs.legacyOriginPort()` reads the former SERVER_PORT preference only while `settings.json` is absent |
 | In-process Go startup and readiness | `android/app/src/main/java/com/legbehindneck/wudict/GoRuntime.java`: `run`, `runtimeReady`; `AppDirs.java` provides the app-specific library directory |
 | In-process resource dispatch | `android/app/src/main/java/com/legbehindneck/wudict/GoAppResource.java`; both Android WebViews use Go/JNI and no server mode is supported |
-| Build entry points | `build-android.cmd` (Windows, rebuilds Go and FOSS APK), `build-windows.cmd` (no argument builds the listenerless WebView app; `cli` builds `wuDict2-cli.exe` without starting a server by default; `server` builds `wuDict2-server.exe`; `installer` packages the already-built `wuDict2.exe`), `Makefile`, `.github/workflows/build-android.yml`, `fastlane/Appfile` |
+| Build entry points | `build-android.cmd` (Windows, rebuilds Go and FOSS APK), `build-windows.cmd` (no argument builds the listenerless WebView app; `cli` builds `DictShelf-cli.exe` without starting a server by default; `server` builds `DictShelf-server.exe`; `installer` packages the already-built `DictShelf.exe`), `Makefile`, `.github/workflows/build-android.yml`, `fastlane/Appfile` |
 
 The old Android build used a loopback listener. The current build starts Go
 inside the app process and opens no TCP socket. A58 uses the former URL only
@@ -214,7 +216,7 @@ signature verified locally. The APK is under
 `android/app/build/outputs/bundle/playRelease/`, but it predates the port fix
 and needs rebuilding before use. `git diff --check` passed for the port edit.
 For artifact identity, inspect the merged manifest or APK with SDK `aapt2`:
-release package `com.dmshepeta.wudict2`, upstream-package `MainActivity`, and
+release package `com.dmshlabs.dictshelf`, upstream-package `MainActivity`, and
 fork-package exported `LookupActivity`; inspect the debug shortcut target
 package separately. These source and artifact checks do not establish device
 behavior.
@@ -234,7 +236,7 @@ listen-address control; Android always uses the in-process Go/JNI bridge.
   library and that closing one does not stop the other. No device test has been
   run for the port fix.
 - Test external-reader selection of
-  `com.dmshepeta.wudict2.LookupActivity`, including the case where both apps
+  `com.dmshlabs.dictshelf.LookupActivity`, including the case where both apps
   are installed. The component exists in the built manifest, but reader choice
   has not been exercised.
 - Rebuild and inspect the Play release AAB after the port change if Play work

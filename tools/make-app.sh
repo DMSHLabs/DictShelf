@@ -14,13 +14,13 @@
 #
 # Everything else is already wired: a bare `wudict` with no arguments serves,
 # a second launch finds the port taken, opens the browser and exits, and a GUI
-# launch redirects logx to ~/Library/Logs/wudict.log. This script adds no
+# launch redirects logx to ~/Library/Logs/DMSH Labs/DictShelf/dictshelf.log. This script adds no
 # behaviour to the product; it only produces the directory layout and the
 # Info.plist that make macOS treat the binary as an app.
 #
 # Env (all optional, set by the Makefile):
 #   APP_BIN    binary to embed        default ./wudict
-#   APP_ID     CFBundleIdentifier     default com.wuweidict.wudict
+#   APP_ID     CFBundleIdentifier     default com.dmshlabs.dictshelf
 #   MACOS_MIN  LSMinimumSystemVersion default 12.0
 #   BUILD_DIR  output directory       default dist
 #   CODESIGN_ID  signing identity     default "-" (ad-hoc)
@@ -28,13 +28,13 @@ set -eu
 
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 bin=${APP_BIN:-$root/wudict}
-id=${APP_ID:-com.wuweidict.wudict}
+id=${APP_ID:-com.dmshlabs.dictshelf}
 minos=${MACOS_MIN:-12.0}
 out=${BUILD_DIR:-dist}
 case $out in /*) ;; *) out=$root/$out ;; esac
 sign=${CODESIGN_ID:--}
 tmpl=$root/packaging/darwin/Info.plist.in
-icns=$root/packaging/darwin/wudict.icns
+icns=$root/packaging/darwin/dictshelf.icns
 
 [ "$(uname -s)" = Darwin ] || { echo "make-app: macOS only (needs plutil/codesign)" >&2; exit 1; }
 for t in plutil codesign vtool; do
@@ -71,7 +71,7 @@ mkdir -p "$contents/MacOS" "$contents/Resources"
 # ad-hoc signature the Go linker already put on the arm64 binary.
 cp -p "$bin" "$contents/MacOS/wudict"
 chmod 755 "$contents/MacOS/wudict"
-cp "$icns" "$contents/Resources/wudict.icns"
+cp "$icns" "$contents/Resources/dictshelf.icns"
 printf 'APPL????' > "$contents/PkgInfo"
 
 sed -e '/<!-- TEMPLATE/,/^-->$/d' \
@@ -81,7 +81,7 @@ sed -e '/<!-- TEMPLATE/,/^-->$/d' \
     -e "s|@SHORT@|$short|g" \
     -e "s|@BUILD@|$short|g" \
     -e "s|@GITVER@|$gitver|g" \
-    -e "s|@ICON@|wudict|g" \
+    -e "s|@ICON@|dictshelf|g" \
     -e "s|@MINOS@|$minos|g" \
     -e "s|@COPYRIGHT@|Copyright (C) 2026 glowinthedark. GPL-3.0-or-later.|g" \
     "$tmpl" > "$contents/Info.plist"
@@ -112,5 +112,5 @@ printf '%s\n' "$app" > "$out/.app-path"
 echo "built $app"
 echo "  id      $id  (version $short, from $gitver)"
 echo "  run     open \"$app\""
-echo "  log     ~/Library/Logs/wudict.log"
+echo "  log     ~/Library/Logs/DMSH Labs/DictShelf/dictshelf.log"
 echo "  install make mac-app-install"

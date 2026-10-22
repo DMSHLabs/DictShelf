@@ -71,8 +71,8 @@ def appVersion = project.hasProperty('versionName') ? project.property('versionN
 def apkVersion = appVersion.replaceFirst(/^v/, '').replace('/', '_')
 
 android {
-    // Keep the upstream Java namespace so its Android changes merge cleanly.
-    namespace = 'com.legbehindneck.wudict'
+    // DictShelf has its own Android application and Java identity.
+    namespace = 'com.dmshlabs.dictshelf'
     compileSdk = 36
 
     // The AAB name only; the APK name is set below in androidComponents.
@@ -93,7 +93,7 @@ android {
     }
 
     defaultConfig {
-        applicationId 'com.dmshepeta.wudict2'
+        applicationId 'com.dmshlabs.dictshelf'
         // arm64-v8a only (D52): every arm64 device ships API 26+, and the
         // vector adaptive icon needs no PNG fallbacks at 26+.
         minSdk 26

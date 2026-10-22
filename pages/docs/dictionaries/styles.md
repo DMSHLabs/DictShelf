@@ -12,8 +12,8 @@ Two optional CSS files:
 | `app.css` | wudict's own page: colours, layout |
 | `article.css` | every dictionary article |
 
-They are in the `style/` folder beside the `wudict.toml` in effect, usually
-`~/.wudict/style/`, created on the first save, up to 256 KiB each.
+They are in the `style/` folder beside the `dictshelf.toml` in effect, usually
+`~/.dmshlabs/dictshelf/style/`, created on the first save, up to 256 KiB each.
 
 ## Editor
 

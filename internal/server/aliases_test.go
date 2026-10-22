@@ -13,7 +13,7 @@ import (
 // with no card is never told about one, and the app's own directory is shown
 // under the volume that holds it - which is where the Files app shows it too.
 func TestAndroidAliases(t *testing.T) {
-	pkg := "/storage/emulated/0/Android/data/com.legbehindneck.wudict/files"
+	pkg := "/storage/emulated/0/Android/data/com.dmshlabs.dictshelf/files"
 	for _, c := range []struct {
 		name  string
 		paths []string
@@ -26,9 +26,9 @@ func TestAndroidAliases(t *testing.T) {
 		},
 		{
 			"the FOSS flavour: a shared folder plus internal flash",
-			[]string{"/data/user/0/com.legbehindneck.wudict/files/db", "/storage/emulated/0/Dictionaries"},
+			[]string{"/data/user/0/com.dmshlabs.dictshelf/files/db", "/storage/emulated/0/Dictionaries"},
 			[][2]string{
-				{"/data/user/0/com.legbehindneck.wudict", "App storage"},
+				{"/data/user/0/com.dmshlabs.dictshelf", "App storage"},
 				{"/storage/emulated/0", "Internal storage"},
 			},
 		},

@@ -1,4 +1,4 @@
-# Translating the wuDict2 interface
+# Translating the DictShelf interface
 
 This is a working guide for an agent continuing localization or fixing related bugs. Read it **before changing translations**. Current status and unfinished tasks are in [translation_todo.md](translation_todo.md).
 
@@ -31,7 +31,7 @@ Project rules remain in [AGENTS.md](AGENTS.md), [CLAUDE.md](CLAUDE.md), [HANDOFF
 | Groups and looks | `web/group-editor.js`, `looks.js`; display names separate from stored names |
 | Read aloud | `web/speak.js`: labels and displayed language names; the pronunciation selection algorithm is separate |
 | Articles in iframes | `frameDoc` in `index.html`, `web/frame.js`: three interface labels passed through bridge-script attributes |
-| Android | `android/app/src/main/java/com/legbehindneck/wudict/UiLanguage.java` resolves saved System choice from device configuration; `values-ru/strings.xml` resources in main and flavor sets |
+| Android | `android/app/src/main/java/com/dmshlabs/dictshelf/UiLanguage.java` resolves saved System choice from device configuration; `values-ru/strings.xml` resources in main and flavor sets |
 | Checks | `internal/server/i18n_test.go`, `tools/i18n-test.cjs`, Makefile: `i18n-check`, `i18n-check-js` |
 
 The `web/...` paths in the table are relative to `internal/server/web/`.
@@ -197,7 +197,7 @@ If another label is needed, extend this small contract. Check quotation-mark and
 ## 7. Android: resources and an already fixed crash
 
 - Android strings stay in resources. Main and flavor translations must match their own base resources: FOSS and Play have different capabilities.
-- `UiLanguage.selected()` reads `.wudict/state.json` relative to `AppDirs.home(context)`. Go owns writes to that file. Unsupported or absent values mean English.
+- `UiLanguage.selected()` reads `.dmshlabs/dictshelf/state.json` relative to `AppDirs.home(context)`. Go owns writes to that file. Unsupported or absent values mean English.
 - Existing activities/the service use `UiLanguage.resources()` for application resources. Check `%1$s`, `%1$d`, plurals, XML escaping, and intentional inheritance of the `app_name` brand.
 - Do not use `Locale.setDefault`: it affects pronunciation and other mechanisms outside the interface.
 - Native windows that are already open may need to be closed and reopened. Reloading the web page alone does not promise to recreate every Android window.

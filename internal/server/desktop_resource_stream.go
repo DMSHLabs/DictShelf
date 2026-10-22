@@ -47,7 +47,7 @@ func (w *desktopStreamResponse) Write(p []byte) (int, error) {
 // range can start playing without first materializing the entire response.
 func (s *Server) DesktopMediaStream(rawURL string, requestHeaders map[string]string) (io.ReadCloser, int, string, bool) {
 	u, err := url.Parse(rawURL)
-	if err != nil || u.Scheme != "https" || !strings.EqualFold(u.Host, "wudict2.localhost") || u.User != nil ||
+	if err != nil || u.Scheme != "https" || !strings.EqualFold(u.Host, "dictshelf.localhost") || u.User != nil ||
 		!strings.HasPrefix(u.Path, "/res/") && !strings.HasPrefix(u.Path, "/files/") {
 		return nil, 0, "", false
 	}

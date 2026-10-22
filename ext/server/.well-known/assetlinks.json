@@ -3,7 +3,7 @@
     "relation": ["delegate_permission/common.handle_all_urls"],
     "target": {
       "namespace": "android_app",
-      "package_name": "com.legbehindneck.wudict",
+      "package_name": "com.dmshlabs.dictshelf",
       "sha256_cert_fingerprints": [
         "0A:29:37:AB:BA:F3:5B:8A:34:DB:71:98:87:74:6C:CD:22:B1:1E:02:A0:5F:DA:42:71:C4:F3:2C:3D:E1:B9:E1",
         "4C:E9:CC:57:2F:C3:2E:07:2D:6E:1B:F0:B4:FA:A6:23:2A:5C:3D:2E:02:1E:31:8A:C5:29:AE:62:88:0D:99:93",
@@ -16,7 +16,7 @@
     "relation": ["delegate_permission/common.handle_all_urls"],
     "target": {
       "namespace": "android_app",
-      "package_name": "com.legbehindneck.wudict.debug",
+      "package_name": "com.dmshlabs.dictshelf.debug",
       "sha256_cert_fingerprints": [
         "78:A9:2B:BD:3C:C1:B0:F3:BD:ED:12:C0:5F:94:6E:79:DB:29:9E:B1:21:48:CF:64:80:20:AC:EB:5A:EC:D7:06"
       ]

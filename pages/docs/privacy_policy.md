@@ -7,7 +7,7 @@ description: DictShelf collects no data about you and has no account. It connect
 
 **Effective 3 October 2026.**
 
-This policy covers the **DictShelf** Android app (`com.dmshepeta.wudict2`) and
+This policy covers the **DictShelf** Android app (`com.dmshlabs.dictshelf`) and
 the `wudict` program it is built from, on every platform.
 
 ## Summary

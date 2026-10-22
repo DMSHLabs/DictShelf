@@ -56,9 +56,27 @@ render() { # width height source output
 		if case "$magick_bin" in *.exe) true ;; *) false ;; esac && command -v cygpath >/dev/null 2>&1; then
 			source_path=$(cygpath -w "$3")
 			output_path=$(cygpath -w "$4")
-			"$magick_bin" -background none "$source_path" -resize "${1}x${2}!" "PNG32:$output_path"
+			if case "$3" in *.svg) true ;; *) false ;; esac; then
+				svg_width=$(sed -n 's/.*<svg[^>]*width="\([0-9][0-9]*\)".*/\1/p' "$3" | head -n 1)
+				[ -n "$svg_width" ] || { echo "make-icons: cannot read SVG width from $3" >&2; exit 1; }
+				target=$1
+				[ "$2" -le "$target" ] || target=$2
+				density=$(( (72 * target + svg_width - 1) / svg_width ))
+				"$magick_bin" -background none -density "$density" "$source_path" -resize "${1}x${2}!" "PNG32:$output_path"
+			else
+				"$magick_bin" -background none "$source_path" -resize "${1}x${2}!" "PNG32:$output_path"
+			fi
 		else
-			"$magick_bin" -background none "$3" -resize "${1}x${2}!" "PNG32:$4"
+			if case "$3" in *.svg) true ;; *) false ;; esac; then
+				svg_width=$(sed -n 's/.*<svg[^>]*width="\([0-9][0-9]*\)".*/\1/p' "$3" | head -n 1)
+				[ -n "$svg_width" ] || { echo "make-icons: cannot read SVG width from $3" >&2; exit 1; }
+				target=$1
+				[ "$2" -le "$target" ] || target=$2
+				density=$(( (72 * target + svg_width - 1) / svg_width ))
+				"$magick_bin" -background none -density "$density" "$3" -resize "${1}x${2}!" "PNG32:$4"
+			else
+				"$magick_bin" -background none "$3" -resize "${1}x${2}!" "PNG32:$4"
+			fi
 		fi
 	fi
 }
@@ -130,20 +148,20 @@ done
 # Prefer Apple's iconutil where available. Else pack the same PNG iconset into
 # the standard ICNS container; this lets Windows/Linux maintainers regenerate
 # the committed app icon from the shared mark too.
-icns="$root/packaging/darwin/wudict.icns"
+icns="$root/packaging/darwin/dictshelf.icns"
 set -- 16 icon_16x16 32 icon_16x16@2x 32 icon_32x32 64 icon_32x32@2x \
        128 icon_128x128 256 icon_128x128@2x 256 icon_256x256 512 icon_256x256@2x \
        512 icon_512x512 1024 icon_512x512@2x
-mkdir -p "$tmp/wudict.iconset" "$(dirname "$icns")"
+mkdir -p "$tmp/dictshelf.iconset" "$(dirname "$icns")"
 while [ $# -gt 0 ]; do
-	render "$1" "$1" "$fork" "$tmp/wudict.iconset/$2.png"
+	render "$1" "$1" "$fork" "$tmp/dictshelf.iconset/$2.png"
 	shift 2
 done
 
 if command -v iconutil >/dev/null 2>&1; then
-	iconutil -c icns -o "$icns" "$tmp/wudict.iconset"
+	iconutil -c icns -o "$icns" "$tmp/dictshelf.iconset"
 else
-	run_python3 - "$tmp/wudict.iconset" "$icns" <<'PY'
+	run_python3 - "$tmp/dictshelf.iconset" "$icns" <<'PY'
 import os, struct, sys
 src, out = sys.argv[1:]
 images = [("icon_16x16.png", b"icp4"), ("icon_16x16@2x.png", b"icp5"),
@@ -159,8 +177,8 @@ with open(out, "wb") as f:
     f.write(b"icns" + struct.pack(">I", len(body) + 8) + body)
 PY
 fi
-[ -s "$icns" ] || { echo "make-icons: wudict.icns is empty" >&2; exit 1; }
-printf 'wudict.icns  '
+[ -s "$icns" ] || { echo "make-icons: dictshelf.icns is empty" >&2; exit 1; }
+printf 'dictshelf.icns  '
 ls -l "$icns" | awk '{print $5 " bytes"}'
 
 # ---- the Windows app icon (P86) -----------------------------------------
@@ -171,18 +189,20 @@ ls -l "$icns" | awk '{print $5 " bytes"}'
 # that has the Xcode tools) packs it in a dozen lines.
 #
 # The installer uses this for Setup, shortcuts and dictionary files. The same
-# ICO is embedded into the Windows/amd64 executable by packaging/windows/wudict.rc.
-ico="$root/packaging/windows/wudict.ico"
+# ICO is embedded into the Windows/amd64 executable by packaging/windows/dictshelf.rc.
+ico="$root/packaging/windows/dictshelf.ico"
 
 mkdir -p "$tmp/ico" "$(dirname "$ico")"
-for s in 16 32 48 64 128 256; do
+# Include common Windows shell and DPI sizes; the 256-pixel image remains the
+# high-resolution Vista+ entry. Render each size from SVG, never from a bitmap.
+for s in 16 20 24 32 40 48 64 96 128 256; do
 	render "$s" "$s" "$fork" "$tmp/ico/$s.png"
 done
 
 run_python3 - "$tmp/ico" "$ico" <<'PY'
 import struct, sys, os
 srcdir, out = sys.argv[1], sys.argv[2]
-sizes = [16, 32, 48, 64, 128, 256]
+sizes = [16, 20, 24, 32, 40, 48, 64, 96, 128, 256]
 blobs = [open(os.path.join(srcdir, "%d.png" % s), "rb").read() for s in sizes]
 # ICONDIR: reserved, type=1 (icon), count. Then one 16-byte ICONDIRENTRY each.
 head = struct.pack("<HHH", 0, 1, len(sizes))
@@ -195,8 +215,8 @@ for s, b in zip(sizes, blobs):
 with open(out, "wb") as f:
     f.write(head + entries + b"".join(blobs))
 PY
-[ -s "$ico" ] || { echo "make-icons: wudict.ico is empty" >&2; exit 1; }
-printf 'wudict.ico   '
+[ -s "$ico" ] || { echo "make-icons: dictshelf.ico is empty" >&2; exit 1; }
+printf 'dictshelf.ico   '
 ls -l "$ico" | awk '{print $5 " bytes"}'
 
 # Keep the app/window PE icon in sync with the ICO. The resource compiler is
@@ -213,8 +233,8 @@ if [ -z "$windres_bin" ] && [ -n "${GCC_PATH:-}" ]; then
 	done
 fi
 if [ -n "$windres_bin" ]; then
-	(cd "$root" && "$windres_bin" -F pe-x86-64 -i packaging/windows/wudict.rc -o wudict_windows_amd64.syso)
-	echo "wudict_windows_amd64.syso regenerated"
+	(cd "$root" && "$windres_bin" -F pe-x86-64 -i packaging/windows/dictshelf.rc -o dictshelf_windows_amd64.syso)
+	echo "dictshelf_windows_amd64.syso regenerated"
 else
-	echo "make-icons: windres not found — run the resource command in packaging/windows/wudict.rc to refresh the Windows executable icon" >&2
+	echo "make-icons: windres not found — run the resource command in packaging/windows/dictshelf.rc to refresh the Windows executable icon" >&2
 fi

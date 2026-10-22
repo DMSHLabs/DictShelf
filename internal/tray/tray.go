@@ -144,7 +144,7 @@ type Config struct {
 	Explicit  bool   // --tray was passed, as opposed to inferred from a GUI launch
 	GUI       bool   // launched from a desktop, so there is no console to fall back on
 	InProcess bool   // UI is an in-process desktop window, not a browser served over HTTP
-	Name      string // product name, user-visible (default "WuWeiDict")
+	Name      string // product name, user-visible (default "DictShelf")
 	Version   string
 	URL       string
 
@@ -156,7 +156,7 @@ type Config struct {
 
 func (cfg Config) name() string {
 	if cfg.Name == "" {
-		return "wuDict"
+		return "DictShelf"
 	}
 	return cfg.Name
 }

@@ -42,7 +42,7 @@ func desktopOrigin(raw string) (*url.URL, bool) {
 		return nil, false
 	}
 	if base.Scheme == "http" || base.Scheme == "https" &&
-		(strings.EqualFold(base.Host, "wudict2.local") || strings.EqualFold(base.Host, "wudict2.localhost")) {
+		(strings.EqualFold(base.Host, "dictshelf.local") || strings.EqualFold(base.Host, "dictshelf.localhost")) {
 		return base, true
 	}
 	return nil, false

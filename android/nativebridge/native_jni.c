@@ -54,19 +54,19 @@ extern char *WudictGoBridgeDictStreamPoll(int id);
 extern void WudictGoBridgeDictStreamCancel(int id);
 
 JNIEXPORT jint JNICALL
-Java_com_legbehindneck_wudict_GoBridge_nativeDictStreamStart(JNIEnv *env, jclass owner) {
+Java_com_dmshlabs_dictshelf_GoBridge_nativeDictStreamStart(JNIEnv *env, jclass owner) {
     (void)env; (void)owner;
     return (jint)WudictGoBridgeDictStreamStart();
 }
 
 JNIEXPORT jint JNICALL
-Java_com_legbehindneck_wudict_GoBridge_nativeRescanStreamStart(JNIEnv *env, jclass owner) {
+Java_com_dmshlabs_dictshelf_GoBridge_nativeRescanStreamStart(JNIEnv *env, jclass owner) {
     (void)env; (void)owner;
     return (jint)WudictGoBridgeRescanStreamStart();
 }
 
 JNIEXPORT jint JNICALL
-Java_com_legbehindneck_wudict_GoBridge_nativeRescanIndexesStart(JNIEnv *env, jclass owner,
+Java_com_dmshlabs_dictshelf_GoBridge_nativeRescanIndexesStart(JNIEnv *env, jclass owner,
     jstring origin, jstring request) {
     (void)owner;
     if (origin == NULL || request == NULL) return -1;
@@ -84,7 +84,7 @@ Java_com_legbehindneck_wudict_GoBridge_nativeRescanIndexesStart(JNIEnv *env, jcl
 }
 
 JNIEXPORT jint JNICALL
-Java_com_legbehindneck_wudict_GoBridge_nativeIngestStart(JNIEnv *env, jclass owner,
+Java_com_dmshlabs_dictshelf_GoBridge_nativeIngestStart(JNIEnv *env, jclass owner,
     jstring origin, jstring query) {
     (void)owner;
     if (origin == NULL || query == NULL) return -1;
@@ -102,7 +102,7 @@ Java_com_legbehindneck_wudict_GoBridge_nativeIngestStart(JNIEnv *env, jclass own
 }
 
 JNIEXPORT jint JNICALL
-Java_com_legbehindneck_wudict_GoBridge_nativeSearchStreamStart(JNIEnv *env, jclass owner,
+Java_com_dmshlabs_dictshelf_GoBridge_nativeSearchStreamStart(JNIEnv *env, jclass owner,
     jstring origin, jstring request) {
     (void)owner;
     if (origin == NULL || request == NULL) return -1;
@@ -120,7 +120,7 @@ Java_com_legbehindneck_wudict_GoBridge_nativeSearchStreamStart(JNIEnv *env, jcla
 }
 
 JNIEXPORT jint JNICALL
-Java_com_legbehindneck_wudict_GoBridge_nativeBrowseStreamStart(JNIEnv *env, jclass owner,
+Java_com_dmshlabs_dictshelf_GoBridge_nativeBrowseStreamStart(JNIEnv *env, jclass owner,
     jstring method, jstring request) {
     (void)owner;
     if (method == NULL || request == NULL) return -1;
@@ -138,7 +138,7 @@ Java_com_legbehindneck_wudict_GoBridge_nativeBrowseStreamStart(JNIEnv *env, jcla
 }
 
 JNIEXPORT jstring JNICALL
-Java_com_legbehindneck_wudict_GoBridge_nativeDictStreamPoll(JNIEnv *env, jclass owner, jint id) {
+Java_com_dmshlabs_dictshelf_GoBridge_nativeDictStreamPoll(JNIEnv *env, jclass owner, jint id) {
     (void)owner;
     char *result = WudictGoBridgeDictStreamPoll((int)id);
     if (result == NULL) return NULL;
@@ -148,13 +148,13 @@ Java_com_legbehindneck_wudict_GoBridge_nativeDictStreamPoll(JNIEnv *env, jclass 
 }
 
 JNIEXPORT void JNICALL
-Java_com_legbehindneck_wudict_GoBridge_nativeDictStreamCancel(JNIEnv *env, jclass owner, jint id) {
+Java_com_dmshlabs_dictshelf_GoBridge_nativeDictStreamCancel(JNIEnv *env, jclass owner, jint id) {
     (void)env; (void)owner;
     WudictGoBridgeDictStreamCancel((int)id);
 }
 
 JNIEXPORT jstring JNICALL
-Java_com_legbehindneck_wudict_GoBridge_nativeBrowsePage(JNIEnv *env, jclass owner, jstring query) {
+Java_com_dmshlabs_dictshelf_GoBridge_nativeBrowsePage(JNIEnv *env, jclass owner, jstring query) {
     (void)owner;
     if (query == NULL) return NULL;
     const char *text = (*env)->GetStringUTFChars(env, query, NULL);
@@ -168,7 +168,7 @@ Java_com_legbehindneck_wudict_GoBridge_nativeBrowsePage(JNIEnv *env, jclass owne
 }
 
 JNIEXPORT jstring JNICALL
-Java_com_legbehindneck_wudict_GoBridge_nativeBrowseFindPage(JNIEnv *env, jclass owner, jstring query) {
+Java_com_dmshlabs_dictshelf_GoBridge_nativeBrowseFindPage(JNIEnv *env, jclass owner, jstring query) {
     (void)owner;
     if (query == NULL) return NULL;
     const char *text = (*env)->GetStringUTFChars(env, query, NULL);
@@ -182,7 +182,7 @@ Java_com_legbehindneck_wudict_GoBridge_nativeBrowseFindPage(JNIEnv *env, jclass 
 }
 
 JNIEXPORT jstring JNICALL
-Java_com_legbehindneck_wudict_GoBridge_nativeBrowseDiagnostic(JNIEnv *env, jclass owner, jstring payload) {
+Java_com_dmshlabs_dictshelf_GoBridge_nativeBrowseDiagnostic(JNIEnv *env, jclass owner, jstring payload) {
     (void)owner;
     if (payload == NULL) return NULL;
     const char *text = (*env)->GetStringUTFChars(env, payload, NULL);
@@ -196,7 +196,7 @@ Java_com_legbehindneck_wudict_GoBridge_nativeBrowseDiagnostic(JNIEnv *env, jclas
 }
 
 JNIEXPORT jstring JNICALL
-Java_com_legbehindneck_wudict_GoBridge_nativeAbout(JNIEnv *env, jclass owner,
+Java_com_dmshlabs_dictshelf_GoBridge_nativeAbout(JNIEnv *env, jclass owner,
     jstring origin, jstring dictionary) {
     (void)owner;
     if (origin == NULL || dictionary == NULL) return NULL;
@@ -217,7 +217,7 @@ Java_com_legbehindneck_wudict_GoBridge_nativeAbout(JNIEnv *env, jclass owner,
 }
 
 JNIEXPORT jstring JNICALL
-Java_com_legbehindneck_wudict_GoBridge_nativeOrphans(JNIEnv *env, jclass owner,
+Java_com_dmshlabs_dictshelf_GoBridge_nativeOrphans(JNIEnv *env, jclass owner,
     jstring action, jstring body) {
     (void)owner;
     if (action == NULL || body == NULL) return NULL;
@@ -238,7 +238,7 @@ Java_com_legbehindneck_wudict_GoBridge_nativeOrphans(JNIEnv *env, jclass owner,
 }
 
 JNIEXPORT jstring JNICALL
-Java_com_legbehindneck_wudict_GoBridge_nativeRemoveLibrary(JNIEnv *env, jclass owner, jstring query) {
+Java_com_dmshlabs_dictshelf_GoBridge_nativeRemoveLibrary(JNIEnv *env, jclass owner, jstring query) {
     (void)owner;
     if (query == NULL) return NULL;
     const char *text = (*env)->GetStringUTFChars(env, query, NULL);
@@ -252,7 +252,7 @@ Java_com_legbehindneck_wudict_GoBridge_nativeRemoveLibrary(JNIEnv *env, jclass o
 }
 
 JNIEXPORT jstring JNICALL
-Java_com_legbehindneck_wudict_GoBridge_nativeLooks(JNIEnv *env, jclass owner, jstring argument) {
+Java_com_dmshlabs_dictshelf_GoBridge_nativeLooks(JNIEnv *env, jclass owner, jstring argument) {
     (void)owner;
     if (argument == NULL) return NULL;
     const char *text = (*env)->GetStringUTFChars(env, argument, NULL);
@@ -266,7 +266,7 @@ Java_com_legbehindneck_wudict_GoBridge_nativeLooks(JNIEnv *env, jclass owner, js
 }
 
 JNIEXPORT jstring JNICALL
-Java_com_legbehindneck_wudict_GoBridge_nativeGroups(JNIEnv *env, jclass owner,
+Java_com_dmshlabs_dictshelf_GoBridge_nativeGroups(JNIEnv *env, jclass owner,
     jstring action, jstring argument) {
     (void)owner;
     if (action == NULL || argument == NULL) return NULL;
@@ -287,7 +287,7 @@ Java_com_legbehindneck_wudict_GoBridge_nativeGroups(JNIEnv *env, jclass owner,
 }
 
 JNIEXPORT jstring JNICALL
-Java_com_legbehindneck_wudict_GoBridge_nativeLemmas(JNIEnv *env, jclass owner,
+Java_com_dmshlabs_dictshelf_GoBridge_nativeLemmas(JNIEnv *env, jclass owner,
     jstring action, jstring code) {
     (void)owner;
     if (action == NULL || code == NULL) return NULL;
@@ -308,7 +308,7 @@ Java_com_legbehindneck_wudict_GoBridge_nativeLemmas(JNIEnv *env, jclass owner,
 }
 
 JNIEXPORT jstring JNICALL
-Java_com_legbehindneck_wudict_GoBridge_nativeSetup(JNIEnv *env, jclass owner,
+Java_com_dmshlabs_dictshelf_GoBridge_nativeSetup(JNIEnv *env, jclass owner,
     jstring action, jstring argument) {
     (void)owner;
     if (action == NULL || argument == NULL) return NULL;
@@ -329,7 +329,7 @@ Java_com_legbehindneck_wudict_GoBridge_nativeSetup(JNIEnv *env, jclass owner,
 }
 
 JNIEXPORT jstring JNICALL
-Java_com_legbehindneck_wudict_GoBridge_nativeHeadwordExport(JNIEnv *env, jclass owner,
+Java_com_dmshlabs_dictshelf_GoBridge_nativeHeadwordExport(JNIEnv *env, jclass owner,
     jstring action, jstring argument) {
     (void)owner;
     if (action == NULL || argument == NULL) return NULL;
@@ -350,7 +350,7 @@ Java_com_legbehindneck_wudict_GoBridge_nativeHeadwordExport(JNIEnv *env, jclass 
 }
 
 JNIEXPORT jstring JNICALL
-Java_com_legbehindneck_wudict_GoBridge_nativeIntake(JNIEnv *env, jclass owner,
+Java_com_dmshlabs_dictshelf_GoBridge_nativeIntake(JNIEnv *env, jclass owner,
     jstring action, jstring argument) {
     (void)owner;
     if (action == NULL || argument == NULL) return NULL;
@@ -371,7 +371,7 @@ Java_com_legbehindneck_wudict_GoBridge_nativeIntake(JNIEnv *env, jclass owner,
 }
 
 JNIEXPORT jboolean JNICALL
-Java_com_legbehindneck_wudict_GoBridge_nativePower(JNIEnv *env, jclass owner,
+Java_com_dmshlabs_dictshelf_GoBridge_nativePower(JNIEnv *env, jclass owner,
     jstring state) {
     (void)owner;
     if (state == NULL) return JNI_FALSE;
@@ -383,7 +383,7 @@ Java_com_legbehindneck_wudict_GoBridge_nativePower(JNIEnv *env, jclass owner,
 }
 
 JNIEXPORT jstring JNICALL
-Java_com_legbehindneck_wudict_GoBridge_nativeReindex(JNIEnv *env, jclass owner, jstring action) {
+Java_com_dmshlabs_dictshelf_GoBridge_nativeReindex(JNIEnv *env, jclass owner, jstring action) {
     (void)owner;
     if (action == NULL) return NULL;
     const char *text = (*env)->GetStringUTFChars(env, action, NULL);
@@ -397,7 +397,7 @@ Java_com_legbehindneck_wudict_GoBridge_nativeReindex(JNIEnv *env, jclass owner, 
 }
 
 JNIEXPORT jstring JNICALL
-Java_com_legbehindneck_wudict_GoBridge_nativeIndexWork(JNIEnv *env, jclass owner,
+Java_com_dmshlabs_dictshelf_GoBridge_nativeIndexWork(JNIEnv *env, jclass owner,
     jstring action, jstring id, jstring body) {
     (void)owner;
     if (action == NULL || id == NULL || body == NULL) return NULL;
@@ -426,7 +426,7 @@ static jclass busyClass;
 static jmethodID busyMethod;
 
 JNIEXPORT jboolean JNICALL
-Java_com_legbehindneck_wudict_GoBridge_nativeInstallBusyObserver(JNIEnv *env, jclass owner) {
+Java_com_dmshlabs_dictshelf_GoBridge_nativeInstallBusyObserver(JNIEnv *env, jclass owner) {
     if ((*env)->GetJavaVM(env, &busyVM) != JNI_OK) return JNI_FALSE;
     if (busyClass == NULL) {
         busyClass = (*env)->NewGlobalRef(env, owner);
@@ -458,14 +458,14 @@ void wudictNotifyBusy(int busy) {
 }
 
 JNIEXPORT jint JNICALL
-Java_com_legbehindneck_wudict_GoBridge_nativeProtocol(JNIEnv *env, jclass owner) {
+Java_com_dmshlabs_dictshelf_GoBridge_nativeProtocol(JNIEnv *env, jclass owner) {
     (void)env;
     (void)owner;
     return (jint)WudictGoBridgeProtocol();
 }
 
 JNIEXPORT jint JNICALL
-Java_com_legbehindneck_wudict_GoBridge_nativeRuntimeStart(JNIEnv *env, jclass owner,
+Java_com_dmshlabs_dictshelf_GoBridge_nativeRuntimeStart(JNIEnv *env, jclass owner,
     jstring path, jstring flagsJSON, jstring version) {
     (void)owner;
     if (path == NULL || flagsJSON == NULL || version == NULL) return -1;
@@ -487,14 +487,14 @@ Java_com_legbehindneck_wudict_GoBridge_nativeRuntimeStart(JNIEnv *env, jclass ow
 }
 
 JNIEXPORT jint JNICALL
-Java_com_legbehindneck_wudict_GoBridge_nativeRuntimeStop(JNIEnv *env, jclass owner) {
+Java_com_dmshlabs_dictshelf_GoBridge_nativeRuntimeStop(JNIEnv *env, jclass owner) {
     (void)env;
     (void)owner;
     return (jint)WudictGoBridgeRuntimeStop();
 }
 
 JNIEXPORT jstring JNICALL
-Java_com_legbehindneck_wudict_GoBridge_nativeConfigSnapshot(JNIEnv *env, jclass owner) {
+Java_com_dmshlabs_dictshelf_GoBridge_nativeConfigSnapshot(JNIEnv *env, jclass owner) {
     (void)owner;
     char *result = WudictGoBridgeConfigSnapshot();
     if (result == NULL) return NULL;
@@ -504,7 +504,7 @@ Java_com_legbehindneck_wudict_GoBridge_nativeConfigSnapshot(JNIEnv *env, jclass 
 }
 
 JNIEXPORT jstring JNICALL
-Java_com_legbehindneck_wudict_GoBridge_nativePrefsSnapshot(JNIEnv *env, jclass owner) {
+Java_com_dmshlabs_dictshelf_GoBridge_nativePrefsSnapshot(JNIEnv *env, jclass owner) {
     (void)owner;
     char *result = WudictGoBridgePrefsSnapshot();
     if (result == NULL) return NULL;
@@ -514,7 +514,7 @@ Java_com_legbehindneck_wudict_GoBridge_nativePrefsSnapshot(JNIEnv *env, jclass o
 }
 
 JNIEXPORT jstring JNICALL
-Java_com_legbehindneck_wudict_GoBridge_nativePresetsSnapshot(JNIEnv *env, jclass owner) {
+Java_com_dmshlabs_dictshelf_GoBridge_nativePresetsSnapshot(JNIEnv *env, jclass owner) {
     (void)owner;
     char *result = WudictGoBridgePresetsSnapshot();
     if (result == NULL) return NULL;
@@ -524,7 +524,7 @@ Java_com_legbehindneck_wudict_GoBridge_nativePresetsSnapshot(JNIEnv *env, jclass
 }
 
 JNIEXPORT jstring JNICALL
-Java_com_legbehindneck_wudict_GoBridge_nativeSavePreset(JNIEnv *env, jclass owner, jstring body) {
+Java_com_dmshlabs_dictshelf_GoBridge_nativeSavePreset(JNIEnv *env, jclass owner, jstring body) {
     (void)owner;
     if (body == NULL) return NULL;
     const char *text = (*env)->GetStringUTFChars(env, body, NULL);
@@ -538,7 +538,7 @@ Java_com_legbehindneck_wudict_GoBridge_nativeSavePreset(JNIEnv *env, jclass owne
 }
 
 JNIEXPORT jstring JNICALL
-Java_com_legbehindneck_wudict_GoBridge_nativeStyleSnapshot(JNIEnv *env, jclass owner) {
+Java_com_dmshlabs_dictshelf_GoBridge_nativeStyleSnapshot(JNIEnv *env, jclass owner) {
     (void)owner;
     char *result = WudictGoBridgeStyleSnapshot();
     if (result == NULL) return NULL;
@@ -548,7 +548,7 @@ Java_com_legbehindneck_wudict_GoBridge_nativeStyleSnapshot(JNIEnv *env, jclass o
 }
 
 JNIEXPORT jstring JNICALL
-Java_com_legbehindneck_wudict_GoBridge_nativeSaveStyle(JNIEnv *env, jclass owner, jstring argument) {
+Java_com_dmshlabs_dictshelf_GoBridge_nativeSaveStyle(JNIEnv *env, jclass owner, jstring argument) {
     (void)owner;
     if (argument == NULL) return NULL;
     const char *text = (*env)->GetStringUTFChars(env, argument, NULL);
@@ -562,7 +562,7 @@ Java_com_legbehindneck_wudict_GoBridge_nativeSaveStyle(JNIEnv *env, jclass owner
 }
 
 JNIEXPORT jstring JNICALL
-Java_com_legbehindneck_wudict_GoBridge_nativeUserFilesSnapshot(JNIEnv *env, jclass owner) {
+Java_com_dmshlabs_dictshelf_GoBridge_nativeUserFilesSnapshot(JNIEnv *env, jclass owner) {
     (void)owner;
     char *result = WudictGoBridgeUserFilesSnapshot();
     if (result == NULL) return NULL;
@@ -572,7 +572,7 @@ Java_com_legbehindneck_wudict_GoBridge_nativeUserFilesSnapshot(JNIEnv *env, jcla
 }
 
 JNIEXPORT jstring JNICALL
-Java_com_legbehindneck_wudict_GoBridge_nativeUserFileOperation(JNIEnv *env, jclass owner,
+Java_com_dmshlabs_dictshelf_GoBridge_nativeUserFileOperation(JNIEnv *env, jclass owner,
     jstring method, jstring argument) {
     (void)owner;
     if (method == NULL || argument == NULL) return NULL;
@@ -593,7 +593,7 @@ Java_com_legbehindneck_wudict_GoBridge_nativeUserFileOperation(JNIEnv *env, jcla
 }
 
 JNIEXPORT jstring JNICALL
-Java_com_legbehindneck_wudict_GoBridge_nativeUserStorage(JNIEnv *env, jclass owner,
+Java_com_dmshlabs_dictshelf_GoBridge_nativeUserStorage(JNIEnv *env, jclass owner,
     jstring method, jstring argument) {
     (void)owner;
     if (method == NULL || argument == NULL) return NULL;
@@ -614,7 +614,7 @@ Java_com_legbehindneck_wudict_GoBridge_nativeUserStorage(JNIEnv *env, jclass own
 }
 
 JNIEXPORT jstring JNICALL
-Java_com_legbehindneck_wudict_GoBridge_nativeSavePrefs(JNIEnv *env, jclass owner, jstring body) {
+Java_com_dmshlabs_dictshelf_GoBridge_nativeSavePrefs(JNIEnv *env, jclass owner, jstring body) {
     (void)owner;
     if (body == NULL) return NULL;
     const char *text = (*env)->GetStringUTFChars(env, body, NULL);
@@ -628,7 +628,7 @@ Java_com_legbehindneck_wudict_GoBridge_nativeSavePrefs(JNIEnv *env, jclass owner
 }
 
 JNIEXPORT jstring JNICALL
-Java_com_legbehindneck_wudict_GoBridge_nativeSaveLanguage(JNIEnv *env, jclass owner, jstring body) {
+Java_com_dmshlabs_dictshelf_GoBridge_nativeSaveLanguage(JNIEnv *env, jclass owner, jstring body) {
     (void)owner;
     if (body == NULL) return NULL;
     const char *text = (*env)->GetStringUTFChars(env, body, NULL);
@@ -642,7 +642,7 @@ Java_com_legbehindneck_wudict_GoBridge_nativeSaveLanguage(JNIEnv *env, jclass ow
 }
 
 JNIEXPORT jstring JNICALL
-Java_com_legbehindneck_wudict_GoBridge_nativeSystemLogSnapshot(JNIEnv *env, jclass owner) {
+Java_com_dmshlabs_dictshelf_GoBridge_nativeSystemLogSnapshot(JNIEnv *env, jclass owner) {
     (void)owner;
     char *result = WudictGoBridgeSystemLogSnapshot();
     if (result == NULL) return NULL;
@@ -652,7 +652,7 @@ Java_com_legbehindneck_wudict_GoBridge_nativeSystemLogSnapshot(JNIEnv *env, jcla
 }
 
 JNIEXPORT jint JNICALL
-Java_com_legbehindneck_wudict_GoBridge_nativeSystemLogOptions(JNIEnv *env, jclass owner,
+Java_com_dmshlabs_dictshelf_GoBridge_nativeSystemLogOptions(JNIEnv *env, jclass owner,
     jboolean enabled, jboolean baseEvents, jboolean webEvents) {
     (void)env;
     (void)owner;
@@ -660,14 +660,14 @@ Java_com_legbehindneck_wudict_GoBridge_nativeSystemLogOptions(JNIEnv *env, jclas
 }
 
 JNIEXPORT jint JNICALL
-Java_com_legbehindneck_wudict_GoBridge_nativeIndexWorkers(JNIEnv *env, jclass owner, jint workers) {
+Java_com_dmshlabs_dictshelf_GoBridge_nativeIndexWorkers(JNIEnv *env, jclass owner, jint workers) {
     (void)env;
     (void)owner;
     return (jint)WudictGoBridgeIndexWorkers(workers);
 }
 
 JNIEXPORT jstring JNICALL
-Java_com_legbehindneck_wudict_GoBridge_nativeWebResource(JNIEnv *env, jclass owner,
+Java_com_dmshlabs_dictshelf_GoBridge_nativeWebResource(JNIEnv *env, jclass owner,
     jstring rawURL, jstring headers) {
     (void)owner;
     if (rawURL == NULL || headers == NULL) return NULL;
@@ -688,7 +688,7 @@ Java_com_legbehindneck_wudict_GoBridge_nativeWebResource(JNIEnv *env, jclass own
 }
 
 JNIEXPORT jstring JNICALL
-Java_com_legbehindneck_wudict_GoBridge_nativeMediaOpen(JNIEnv *env, jclass owner,
+Java_com_dmshlabs_dictshelf_GoBridge_nativeMediaOpen(JNIEnv *env, jclass owner,
     jstring rawURL, jstring headers) {
     (void)owner;
     if (rawURL == NULL || headers == NULL) return NULL;
@@ -709,7 +709,7 @@ Java_com_legbehindneck_wudict_GoBridge_nativeMediaOpen(JNIEnv *env, jclass owner
 }
 
 JNIEXPORT jint JNICALL
-Java_com_legbehindneck_wudict_GoBridge_nativeMediaRead(JNIEnv *env, jclass owner,
+Java_com_dmshlabs_dictshelf_GoBridge_nativeMediaRead(JNIEnv *env, jclass owner,
     jlong handle, jbyteArray dst, jint offset, jint length) {
     (void)owner;
     if (dst == NULL || offset < 0 || length < 0 ||
@@ -725,14 +725,14 @@ Java_com_legbehindneck_wudict_GoBridge_nativeMediaRead(JNIEnv *env, jclass owner
 }
 
 JNIEXPORT void JNICALL
-Java_com_legbehindneck_wudict_GoBridge_nativeMediaClose(JNIEnv *env, jclass owner,
+Java_com_dmshlabs_dictshelf_GoBridge_nativeMediaClose(JNIEnv *env, jclass owner,
     jlong handle) {
     (void)env; (void)owner;
     WudictGoBridgeMediaClose((long long)handle);
 }
 
 JNIEXPORT jstring JNICALL
-Java_com_legbehindneck_wudict_GoBridge_nativeConfigSummary(JNIEnv *env, jclass owner,
+Java_com_dmshlabs_dictshelf_GoBridge_nativeConfigSummary(JNIEnv *env, jclass owner,
                                                              jstring path, jstring flagsJSON) {
     (void)owner;
     if (path == NULL || flagsJSON == NULL) return NULL;

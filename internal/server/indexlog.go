@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"runtime"
 	"runtime/debug"
+	"strings"
 	"time"
 
 	"github.com/wuweidict/wudict/internal/store"
@@ -52,6 +53,10 @@ func buildIdentity(version string) (string, string, string) {
 	}
 	if version == "" {
 		version = "unknown"
+	}
+	version = strings.TrimPrefix(version, "wudict2-")
+	if version != "unknown" && !strings.HasPrefix(version, "DictShelf-") {
+		version = "DictShelf-" + version
 	}
 	return version, revision, modified
 }

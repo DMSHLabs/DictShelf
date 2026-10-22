@@ -20,7 +20,7 @@ dictionary's own resource.
 2. Create `res/` inside it.
 3. Put the file at the path the article requests.
 
-``` text title="~/.wudict/db/Cambridge English Dictionary Online/"
+``` text title="~/.dmshlabs/dictshelf/db/Cambridge English Dictionary Online/"
 text.db
 res/
   jquery.js      replaces the dictionary's copy

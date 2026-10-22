@@ -24,7 +24,7 @@ var (
 	closeHandle         = processLockKernel32.NewProc("CloseHandle")
 )
 
-// acquireProcessLock allows only one wuDict2 Windows process per user session.
+// acquireProcessLock allows only one DictShelf Windows process per user session.
 // The GUI and CLI builds share configuration and library files, so a different
 // port or executable name must not let both processes work at the same time.
 func acquireProcessLock() (func(), error) {
@@ -33,7 +33,7 @@ func acquireProcessLock() (func(), error) {
 		return nil, fmt.Errorf("cannot identify the Windows user: %w", err)
 	}
 	identity := sha256.Sum256([]byte(strings.ToLower(filepath.Clean(home))))
-	name, err := syscall.UTF16PtrFromString(fmt.Sprintf(`Local\wuDict2-%x`, identity[:12]))
+	name, err := syscall.UTF16PtrFromString(fmt.Sprintf(`Local\DictShelf-%x`, identity[:12]))
 	if err != nil {
 		return nil, fmt.Errorf("cannot create the DictShelf process lock: %w", err)
 	}

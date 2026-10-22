@@ -47,27 +47,27 @@ Runs natively on [android](https://wuweidict.github.io/wudict/apps/android/), [m
 1. Download the standalone binary for your OS from
    [releases](https://github.com/wuweidict/wudict/releases), rename to `wudict`, 
    `chmod +x wudict` (macOS/Linux) and move to a folder in `$PATH`, e.g. `/usr/local/bin`.
-2. Run `wudict` or `./wudict` if the file is in the current folder. For Windows, use the `dictshelf-windows-x64-setup-<version>.exe` installer or the `wuDict2.exe` desktop build. For macOS an app bundle is provided (it is not signed with a commercial Apple Developer Certificate, macOS flags it as unverified, and extra steps are needed to de-quarantine the app as described in the [manual](https://wuweidict.github.io/wudict/apps/macos/)).
+2. Run `wudict` or `./wudict` if the file is in the current folder. For Windows, use the `dictshelf-windows-x64-setup-<version>.exe` installer or the `DictShelf.exe` desktop build. For macOS an app bundle is provided (it is not signed with a commercial Apple Developer Certificate, macOS flags it as unverified, and extra steps are needed to de-quarantine the app as described in the [manual](https://wuweidict.github.io/wudict/apps/macos/)).
 3. By default `wudict` searches for dictionaries under `~/Dictionaries` (including subfolders); 
    if the dictionary folder is missing or empty, a setup page opens where you can configure your dictionary folders.
 
 ## Adding dictionaries 
-With wuDict running, dictionary folders can be configured from [http://localhost:6888/setup](http://localhost:6888/setup). The browser setup page is a convenience 
-for writing `DICT_DIR` in the configuration file at `~/.wudict/wudict.toml` and other actions, such as configuring lemmatization (morphology), installing dictionaries from a URL via drag-n-drop from the system file manager.
+With DictShelf running, dictionary folders can be configured from [http://localhost:6888/setup](http://localhost:6888/setup). The browser setup page is a convenience
+for writing `DICT_DIR` in the configuration file at `~/.dmshlabs/dictshelf/dictshelf.toml` and other actions, such as configuring lemmatization (morphology), installing dictionaries from a URL via drag-n-drop from the system file manager.
 
 ### Multiple dictionary folders
 
 You can configure the dictionary folders from
-the console via cli args, env vars or by directly editing the config file at `~/.wudict/wudict.toml` (recommended):
+the console via cli args, env vars or by directly editing the config file at `~/.dmshlabs/dictshelf/dictshelf.toml` (recommended):
 ```sh
-# as one or more CLI args (for example, as a temporary override of the current `wudict.toml`):
+# as one or more CLI args (for example, as a temporary override of the current `dictshelf.toml`):
 wudict --dict-dir ~/Dictionaries --dict-dir /Volumes/Data/Dicts   # repeat the flag
 
 # or via an env var:
 DICT_DIR="~/Dictionaries:/Volumes/Data/Dicts" wudict              # separate multiple folders with ":" on linux/mac and ";" on Windows
 ```
 
-in `wudict.toml` (the recommended way):
+in `dictshelf.toml` (the recommended way):
 ```toml
 DICT_DIR = ["~/Dictionaries", "/Volumes/Data/Dicts"]
 ```
@@ -115,7 +115,7 @@ be searched by selecting it in the dictionary dropdown.
 For macOS you can either run the `wudict` binary from a terminal, or use the **`wudict-macos-universal-app-<version>.zip`** from [releases](https://github.com/wuweidict/wudict/releases) which wraps `wudict` into a macOS app bundle.
 
 > [!WARNING]
-> The macOS bundle is signed with an ad-hoc certificate therefore on first run the bundle has be de-quarantined with `/usr/bin/xattr -cr /Applications/wuDict.app` and then launched via righ-click → <kbd>**Open**</kbd>.
+> The macOS bundle is signed with an ad-hoc certificate therefore on first run the bundle has be de-quarantined with `/usr/bin/xattr -cr /Applications/DictShelf.app` and then launched via righ-click → <kbd>**Open**</kbd>.
 
 ## Run wudict as a service (macOS)
 
@@ -125,7 +125,7 @@ For macOS you can either run the `wudict` binary from a terminal, or use the **`
 # run from project root
 make mac-agent-install   # generate the plist from launchctl/*.plist.in, then:
 make mac-agent-start     # launchctl bootstrap gui/$UID <plist>
-make mac-agent-stop      # launchctl bootout   gui/$UID/com.legbehindneck.wudict
+make mac-agent-stop      # launchctl bootout   gui/$UID/com.dmshlabs.dictshelf
 make mac-agent-restart   # rebuild, then launchctl kickstart -k gui/$UID/<label>
 make mac-agent-status    # launchctl print    gui/$UID/<label>
 make mac-agent-uninstall # stop it and delete the plist
@@ -133,13 +133,13 @@ make mac-agent-uninstall # stop it and delete the plist
 
 ## Run as an app (Windows)
 
-On Windows, `wuDict2.exe` opens the WebView2 desktop window without a console
+On Windows, `DictShelf.exe` opens the WebView2 desktop window without a console
 window. The same executable handles terminal commands, for example
-`wuDict2.exe --help`; run it from PowerShell or `cmd` to see command output.
+`DictShelf.exe --help`; run it from PowerShell or `cmd` to see command output.
 It also shows a tray icon; closing the window leaves the server running
 in the tray. **Exit** in Settings or **Quit** in the tray stops the server. If
 the WebView2 Runtime is absent, it opens the default browser instead. Logs go to
-`%LOCALAPPDATA%\wudict\wudict.log`. See also [running on Windows](https://wuweidict.github.io/wudict/apps/windows/).
+`%USERPROFILE%\.dmshlabs\dictshelf\db.logs\dictshelf.log`. See also [running on Windows](https://wuweidict.github.io/wudict/apps/windows/).
 
 
 ## Run as a service (Linux)
@@ -172,14 +172,14 @@ sudo loginctl enable-linger "$(id -un)"
 
 ## Configuration
 
-Priority: **CLI flag > environment variable > wudict.toml > default**.
-A commented `~/.wudict/wudict.toml` is generated on first run, and the
+Priority: **CLI flag > environment variable > dictshelf.toml > default**.
+A commented `~/.dmshlabs/dictshelf/dictshelf.toml` is generated on first run, and the
 config file path is printed on startup.
 
 | Flag | env / toml key | Default                       |
 |---|---|-------------------------------|
 | `--dict-dir` | `DICT_DIR` | `~/Dictionaries`              |
-| `--db-dir` | `DB_DIR` | `~/.wudict/db`                |
+| `--db-dir` | `DB_DIR` | `~/.dmshlabs/dictshelf/db`                |
 | `--ip` | `SERVER_IP` | `127.0.0.1`                   |
 | `--port` | `SERVER_PORT` | `6888`                        |
 | `--config` | `CONFIG_PATH` | auto-detect                   |
@@ -205,12 +205,12 @@ there is no stable origin to pin there.)
 See also: [chrome/firefox browser extension](https://wuweidict.github.io/wudict/extension/)
 
 Config file search order: `--config` / `CONFIG_PATH`, then
-`<exe-dir>/wudict.toml`, `~/.wudict/wudict.toml`,
-`/etc/wudict/wudict.toml`.
+`<exe-dir>/dictshelf.toml`, `~/.dmshlabs/dictshelf/dictshelf.toml`,
+`/etc/dictshelf/dictshelf.toml`.
 
-**Portable mode.** A `wudict.toml` can also be placed in the same folder as the `wudict` (or `wuDict2.exe`) executable.
+**Portable mode.** A `dictshelf.toml` can also be placed in the same folder as the `wudict` (or `DictShelf.exe`) executable.
 
-**`~/.wudict/state.json`** stores dictionary search order and enabled/disable state. 
+**`~/.dmshlabs/dictshelf/state.json`** stores dictionary search order and enabled/disable state.
 
 ## Command line
 
@@ -260,10 +260,10 @@ For more on command line usage see the manual:
 ## Sharing dictionaries (one folder each)
 
 Indexing a dictionary creates a corresponding folder under
-`~/.wudict/db/` — the **library**:
+`~/.dmshlabs/dictshelf/db/` — the **library**:
 
 ```
-~/.wudict/db/
+~/.dmshlabs/dictshelf/db/
   Oxford/
     text.db     articles + search indexes
     media.db    audio/images (only after "pack media")
@@ -284,7 +284,7 @@ Click a path to copy it to clipboard.
 
 At the foot of the panel, **Folders & configuration** shows which folders
 are being scanned (with per-folder counts), where indexed dictionaries
-are located, and which `wudict.toml` is in effect — with *Reveal in Finder* /
+are located, and which `dictshelf.toml` is in effect — with *Reveal in Finder* /
 *Show in File Explorer* / *Open Containing Folder*, depending on your
 system. <kbd>**Edit folders…**</kbd> opens the dictionary folders editor.
 
@@ -293,11 +293,11 @@ system. <kbd>**Edit folders…**</kbd> opens the dictionary folders editor.
 Dictionaries can include their own stylesheets, scripts, images and audio. 
 You can provide your own 'patched' versions 
 by placing files in the `res/` subfolder in 
-wudict's DB folder at `~/.wudict/db/<some-dict-name/res`. Files from `./res` 
+wudict's DB folder at `~/.dmshlabs/dictshelf/db/<some-dict-name/res`. Files from `./res`
 take precedence over the original files from `.mdd`, `.slob`, `.dsl.files.zip` etc.
 
 ```
-~/.wudict/db/Cambridge English Dictionary Online/
+~/.dmshlabs/dictshelf/db/Cambridge English Dictionary Online/
   text.db
   res/
     jquery.js          ← replaces the dictionary's own (damaged) copy
@@ -315,10 +315,10 @@ One exception: a `.spx` audio file placed in `res/` is served as-is,
 
 `res/` patches one file of one dictionary. To restyle **everything** — wudict
 itself and every article — put your own CSS in two optional files beside the
-`wudict.toml` in effect, usually `~/.wudict/style/`:
+`dictshelf.toml` in effect, usually `~/.dmshlabs/dictshelf/style/`:
 
 ```
-~/.wudict/style/
+~/.dmshlabs/dictshelf/style/
   app.css       wudict itself — its colours, its own layout
   article.css   what dictionaries render, in every article
 ```
@@ -417,11 +417,11 @@ More details: https://wudict.legbehindneck.com/reference/building/
 
 > 💡A golang environment is required. See [Build from source](#build-from-source) above.
 
-Run `make mac-app-install` from project root to build **wuDict.app** and install it to
+Run `make mac-app-install` from project root to build **DictShelf.app** and install it to
 `~/Applications` (no sudo, no admin prompt):
 
 ```sh
-make mac-app            # dist/wuDict.app — universal-ready, ad-hoc signed
+make mac-app            # dist/DictShelf.app — universal-ready, ad-hoc signed
 make mac-app-install    # copy it to ~/Applications (APP_DEST= to relocate)
 ```
 

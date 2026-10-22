@@ -197,7 +197,7 @@
   "errors.noIndex": "This dictionary has no index. Create one in Dictionary Settings.",
   "errors.nothingRemove": "nothing to remove",
   "errors.enablePrepared": "turn on indexed dictionaries first, or this one would vanish from the list with its files",
-  "errors.remoteDelete": "deleting from another machine is off: set ALLOW_REMOTE_DELETE = \"1\" in wudict.toml, or do it on the machine running wudict",
+  "errors.remoteDelete": "deleting from another machine is off: set ALLOW_REMOTE_DELETE = \"1\" in dictshelf.toml, or do it on the machine running DictShelf",
   "errors.localOnly": "only available from the machine running wudict",
   "errors.notAppFolder": "not a wudict folder",
   "errors.lookFolder": "no configuration folder: there is nowhere to save a look",

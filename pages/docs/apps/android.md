@@ -6,7 +6,7 @@ description: DictShelf for Android - the two builds, adding dictionaries, lookin
 # Android app
 
 DictShelf is an Android fork of [WuWeiDict](https://github.com/wuweidict/wudict)
-with a separate application ID, `com.dmshepeta.wudict2`.
+with a separate application ID, `com.dmshlabs.dictshelf`.
 
 DictShelf searches `.mdx`, `.ifo`, `.slob`, `.dsl`, `.bgl`, `.zim` and `.wudict.md`
 dictionaries on the phone. The app runs the wudict server on the phone's
@@ -61,7 +61,7 @@ dictionaries in it, which lemmatization needs when a dictionary declares none
 
 On first start, <kbd>Import dictionaries</kbd> → <kbd>Choose folder</kbd>
 copies a folder's dictionaries into the app, then offers to delete the
-originals. Dictionaries in `Android/data/com.dmshepeta.wudict2/files/Dictionaries`
+originals. Dictionaries in `Android/data/com.dmshlabs.dictshelf/files/Dictionaries`
 on a microSD card are read without importing.
 
 ### Both builds
@@ -116,7 +116,7 @@ replace. Create `koreader/dictionaries.lua` in internal storage:
 
 ``` lua title="koreader/dictionaries.lua"
 return {
-    { "wudict", "DictShelf", false, "com.dmshepeta.wudict2", "search" },
+    { "wudict", "DictShelf", false, "com.dmshlabs.dictshelf", "search" },
 }
 ```
 
@@ -140,13 +140,13 @@ Long-press the app icon → **Settings**.
 | File types                                           | Location                                      |
 |------------------------------------------------------|-----------------------------------------------|
 | Dictionaries, FOSS build                             | *Internal storage → Dictionaries*             |
-| Imported dictionaries, settings, library, lemma data | `Android/data/com.dmshepeta.wudict2/files` |
+| Imported dictionaries, settings, library, lemma data | `Android/data/com.dmshlabs.dictshelf/files` |
 
-Uninstalling the app deletes `Android/data/com.dmshepeta.wudict2`;
+Uninstalling the app deletes `Android/data/com.dmshlabs.dictshelf`;
 *Internal storage → Dictionaries* remains. Android 11 and later hide
 `Android/data` from other file managers: reach it over USB (*File transfer*)
 or with `adb pull` and `adb push`. The dictionary panel and Settings cover the
-usual settings, so `wudict.toml` rarely needs editing; all keys are in
+usual settings, so `dictshelf.toml` rarely needs editing; all keys are in
 [Configuration](../reference/configuration.md).
 
 ## Remove dictionaries

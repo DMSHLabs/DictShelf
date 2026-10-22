@@ -10,7 +10,7 @@ reach it.
 
 ## Listen on the network
 
-``` toml title="~/.wudict/wudict.toml"
+``` toml title="~/.dmshlabs/dictshelf/dictshelf.toml"
 SERVER_IP = "0.0.0.0"
 ```
 
@@ -30,7 +30,7 @@ read-only endpoints for browser extensions (`/api/dicts`, `/api/search`,
 
 A program sends `Authorization: Bearer <key>`. `wudict token -rotate` replaces
 the key; every device then needs the new link. The key is stored in
-`~/.wudict/token`; [`AUTH_TOKEN`](reference/configuration.md#auth_token)
+`~/.dmshlabs/dictshelf/token`; [`AUTH_TOKEN`](reference/configuration.md#auth_token)
 supplies it from elsewhere.
 
 !!! warning "AUTH = off"

@@ -31,9 +31,9 @@ them are in `docs/handoff-archive.md`.
   git-ignored). Point a throwaway `DICT_DIR` at it to see the UI with real
   sizes, chips and index estimates instead of stub dictionaries.
 - **Isolate the LIBRARY too, not just the config: pass `-db-dir` (or set an
-  isolated `USERPROFILE`).** `-config /tmp/foo/wudict.toml` moves only the
+  isolated `USERPROFILE`).** `-config /tmp/foo/dictshelf.toml` moves only the
   config and `style/` — `DB_DIR` still defaults to the REAL
-  `~/.wudict/db`, so the first search in that preview PREPARES the `test_data`
+  `~/.dmshlabs/dictshelf/db`, so the first search in that preview PREPARES the `test_data`
   dictionaries into the user's own library. Measured 2026-09-28: one preview
   session added five entries and ~150 MB (`Webster's Unabridged 3 … (dsl)`
   alone is 100 MB), and they stay in this machine's "Previously imported
@@ -41,19 +41,19 @@ them are in `docs/handoff-archive.md`.
   `-db-dir /tmp/foo/db` (or export a throwaway `USERPROFILE`) and nothing of
   the user's is touched; a run that forgot is cleaned up from the setup page's
   library list, not by hand.
-- **Kill EVERY `wuDict2.exe` before starting a preview server** —
-  `taskkill /F /IM wuDict2.exe`. A stale instance keeps port 6899 and the new one
+- **Kill EVERY `DictShelf.exe` before starting a preview server** —
+  `taskkill /F /IM DictShelf.exe`. A stale instance keeps port 6899 and the new one
   exits with "stop the running instance first", so the browser goes on being
   served by the OLD binary's embedded assets (the log looks fine: the config
   summary is printed before the bind). Cost an hour of chasing a CSS change that
-  was never served; `tasklist //FI "IMAGENAME eq wuDict2.exe"` should show one
+  was never served; `tasklist //FI "IMAGENAME eq DictShelf.exe"` should show one
   process after a restart. The page also caches its CSS by the `?v=` hash, so
   the browser must be reloaded after the server is really new.
 - Go: `go build ./...`; targeted `go test ./internal/<pkg> -run '...' -count=1`.
 - **`build-windows.cmd [cli|server|installer]`** — the fork's Windows builds:
-  the default command builds listenerless WebView `wuDict2.exe`, `cli` builds
-  console `wuDict2-cli.exe`, `server` builds console HTTP-server
-  `wuDict2-server.exe`, and `installer` packages the existing desktop exe.
+  the default command builds listenerless WebView `DictShelf.exe`, `cli` builds
+  console `DictShelf-cli.exe`, `server` builds console HTTP-server
+  `DictShelf-server.exe`, and `installer` packages the existing desktop exe.
   Machine-specific overrides belong in the ignored `build-windows.local.bat`
   or the environment: `GCC_PATH` (empty falls back to `%CC%`, then `gcc.exe`
   on PATH, then `GCC_ROOTS`) and `ISCC_PATH`. GitHub Actions uses the
@@ -68,7 +68,7 @@ them are in `docs/handoff-archive.md`.
   FTS5 inside the artifact; tags, CGO flag and driver are read back out of it
   with `go version -m`); its imports are KERNEL32 and msvcrt only, so no mingw
   DLL has to sit beside it.
-- `wuDict2.exe` now hosts its WebView2 window on a locked Windows UI
+- `DictShelf.exe` now hosts its WebView2 window on a locked Windows UI
   thread when launched from Explorer or Start; terminal launches retain the
   browser. It keeps a separate profile under `%LOCALAPPDATA%\wuDict\WebView2`
   and falls back to the browser when the Runtime is missing. Closing the
@@ -91,7 +91,7 @@ them are in `docs/handoff-archive.md`.
   registry, so `tools\make-installer.ps1 -Locate` finds neither of them, and
   `ISCC_PATH` in `build-windows.cmd` is pinned to
   `D:\ProgSoft\InnoSetup7\ISCC.exe`. Verified 2026-09-28: `build-windows.cmd
-  installer` packages the cgo `wuDict2.exe` and builds the setup program,
+  installer` packages the cgo `DictShelf.exe` and builds the setup program,
   `dist\dictshelf-windows-x64-setup-0.0.0.exe` (7.3 MB, ProductName DictShelf,
   FileDescription "wuDict Setup"); Inno Setup 7 still accepts the legacy
   `/D<name>=<value>` defines `make-installer.ps1` passes it. The **5** that is
@@ -108,9 +108,9 @@ them are in `docs/handoff-archive.md`.
 - No `node` in this shell: JS syntax checks by hand/`vm`, and — since
   2026-10-07 — the ZCode in-app browser (the `browser-use` skill's
   `control-browser`) against a local preview, which is the way to check the
-  page actually runs: build the server with `go build -o <tmp>/wuDict2.exe .`,
+  page actually runs: build the server with `go build -o <tmp>/DictShelf.exe .`,
   start it with isolated dirs and no auth —
-  `wuDict2.exe serve -dict-dir <test_data> -db-dir <tmp>/lib -config <tmp>/wudict.toml
+  `DictShelf.exe serve -dict-dir <test_data> -db-dir <tmp>/lib -config <tmp>/dictshelf.toml
   -port 6925 -auth off -no-browser -no-tray` (the `-config` file must EXIST,
   even empty) — then load `http://127.0.0.1:6925/` in the browser and read the
   page's own state with `evaluate` (tokens, `localStorage`, element `hidden`
@@ -179,10 +179,10 @@ them are in `docs/handoff-archive.md`.
     and the page rightly refused `70027001`. Clear with
     `adb shell input keyevent 123` (MOVE_END) then `67` (DEL) per digit.
   - The app's own preferences are readable on a debug build:
-    `adb shell run-as com.dmshepeta.wudict2.debug cat shared_prefs/shell.xml`
+    `adb shell run-as com.dmshlabs.dictshelf.debug cat shared_prefs/shell.xml`
     — that is how a write from the page was confirmed, and how the dead
     `effective_*` keys were seen leaving the file.
-  - `am start -n <appId>/com.legbehindneck.wudict.SettingsActivity` opens the
+  - `am start -n <appId>/com.dmshlabs.dictshelf.SettingsActivity` opens the
     shell settings screen (exported, floating, `taskAffinity=""`), which is the
     only practical way to reach it without the launcher's long-press menu.
 - Known Windows test failures: **none, in a checkout made after the 2026-10-02
@@ -206,7 +206,7 @@ them are in `docs/handoff-archive.md`.
     working directory fails across volumes, so the test `t.Chdir`s first — this
     machine's checkout is on D: and TempDir on C:). Trap that bit twice here: a
     smoke server started with only `--dict-dir` prepares the test dictionary
-    into the REAL `~/.wudict/db`; isolate with `--db-dir` **and** `--config`
+    into the REAL `~/.dmshlabs/dictshelf/db`; isolate with `--db-dir` **and** `--config`
     (or a throwaway `USERPROFILE`), or clean the leftovers out of the library
     afterwards.
   - The third upstream sync (2026-10-04) rechecked the whole suite in its fresh

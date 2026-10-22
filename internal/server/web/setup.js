@@ -678,7 +678,7 @@ async function start(){
   // setting that silently does not exist.
   if(cfg&&cfg.configProblems&&cfg.configProblems.length){
     const p=$("cfgProblems");
-    const configName=cfg.configPath?cfg.configPath.replace(/^.*[\\/]/,""):"wudict.toml";
+    const configName=cfg.configPath?cfg.configPath.replace(/^.*[\\/]/,""):"dictshelf.toml";
     p.textContent="⚠ "+configName+(cfg.configPath?" ("+cfg.configPath+")":"")+": "+cfg.configProblems.join("; ");
     p.classList.remove("hidden");
   }

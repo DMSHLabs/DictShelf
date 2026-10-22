@@ -108,22 +108,22 @@ jobs:
       - name: Upload WebView2 executable
         uses: actions/upload-artifact@v7
         with:
-          name: wudict2-windows-x64
-          path: wuDict2.exe
+          name: dictshelf-windows-x64
+          path: DictShelf.exe
           if-no-files-found: error
 
       - name: Upload command-line executable
         uses: actions/upload-artifact@v7
         with:
-          name: wudict2-windows-cli-x64
-          path: wuDict2-cli.exe
+          name: dictshelf-windows-cli-x64
+          path: DictShelf-cli.exe
           if-no-files-found: error
 
       - name: Upload HTTP server executable
         uses: actions/upload-artifact@v7
         with:
-          name: wudict2-windows-server-x64
-          path: wuDict2-server.exe
+          name: dictshelf-windows-server-x64
+          path: DictShelf-server.exe
           if-no-files-found: error
 
       - name: Upload installer

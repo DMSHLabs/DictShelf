@@ -70,7 +70,7 @@ public class Activity {
 }
 '@
     'com/legbehindneck/wudict/Doubles.java' = @'
-package com.legbehindneck.wudict;
+package com.dmshlabs.dictshelf;
 import android.app.*;
 class MainActivity extends Activity {}
 class SystemLog { static void initialize(Application a) {} static void record(String s) {} }
@@ -98,7 +98,7 @@ class BackgroundDialogBuilder {
 }
 '@
     'com/legbehindneck/wudict/ExitTest.java' = @'
-package com.legbehindneck.wudict;
+package com.dmshlabs.dictshelf;
 import android.app.*;
 import android.os.Handler;
 public class ExitTest {
@@ -222,7 +222,7 @@ try {
     $javaFiles = @(Get-ChildItem -LiteralPath $testRoot -Filter '*.java' -Recurse | ForEach-Object FullName)
     & javac -d $testRoot @javaFiles
     if ($LASTEXITCODE -ne 0) { throw 'Exit test compilation failed' }
-    & java -cp $testRoot com.legbehindneck.wudict.ExitTest
+    & java -cp $testRoot com.dmshlabs.dictshelf.ExitTest
     if ($LASTEXITCODE -ne 0) { throw 'Exit lifecycle regression failed' }
 } finally {
     $resolvedTestRoot = [IO.Path]::GetFullPath($testRoot)
