@@ -743,7 +743,7 @@ func SetDBDir(dir string) {
 }
 
 // DefaultDBDir is the library folder for prepared dictionaries (D7): the
-// configured one (SetDBDir), else $WUDICT_DB_DIR, else ~/.wudict/db.
+// configured one (SetDBDir), else $WUDICT_DB_DIR, else ~/.dmshlabs/dictshelf/db.
 func DefaultDBDir() string {
 	if dir := dbDir.Load(); dir != nil {
 		return *dir
@@ -756,11 +756,11 @@ func DefaultDBDir() string {
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return ".wudict/db"
+		return filepath.Join(".dmshlabs", "dictshelf", "db")
 	}
 	root := os.Getenv("WUDICT_HOME")
 	if root == "" {
-		root = filepath.Join(home, ".wudict")
+		root = filepath.Join(home, ".dmshlabs", "dictshelf")
 	}
 	return filepath.Join(root, "db")
 }

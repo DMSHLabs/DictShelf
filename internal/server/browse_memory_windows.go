@@ -27,7 +27,7 @@ var appWebviewPIDs struct {
 }
 
 // WebView2's browser process can be broker-launched rather than parented by
-// wuDict2.exe. Its command line carries the owning executable name.
+// DictShelf.exe. Its command line carries the owning executable name.
 func appWebviewProcessIDs() map[uint32]bool {
 	appWebviewPIDs.Lock()
 	defer appWebviewPIDs.Unlock()
@@ -38,7 +38,7 @@ func appWebviewProcessIDs() map[uint32]bool {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "powershell.exe", "-NoProfile", "-NonInteractive", "-Command",
-		`Get-CimInstance Win32_Process -Filter "Name='msedgewebview2.exe'" | Where-Object { $_.CommandLine -like '*--webview-exe-name=wuDict2.exe*' } | ForEach-Object { $_.ProcessId }`)
+		`Get-CimInstance Win32_Process -Filter "Name='msedgewebview2.exe'" | Where-Object { $_.CommandLine -like '*--webview-exe-name=DictShelf.exe*' } | ForEach-Object { $_.ProcessId }`)
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 	out, err := cmd.Output()
 	if err != nil {

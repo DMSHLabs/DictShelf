@@ -68,7 +68,7 @@ func openDesktopWindow(address, appAddress string, onClose func(), desktopReques
 			return false
 		}
 	}
-	profile = filepath.Join(profile, "wuDict", "WebView2")
+	profile = filepath.Join(profile, "DMSH Labs", "DictShelf", "WebView2")
 	if root := os.Getenv(windowsPortableHomeEnv); root != "" {
 		profile = filepath.Join(root, "WebView2")
 	}

@@ -67,7 +67,7 @@ func withPlatform(t *testing.T, f *fakePlatform, why string) {
 
 func baseConfig(shutdown func()) Config {
 	return Config{
-		Enabled: true, Name: "wuDict", Version: "1.2.3",
+		Enabled: true, Name: "DictShelf", Version: "1.2.3",
 		URL:      "http://127.0.0.1:8080/",
 		Open:     func() {},
 		Rescan:   func() {},
@@ -289,8 +289,8 @@ func TestMenuShape(t *testing.T) {
 	}
 	full := baseConfig(func() {})
 	want := []string{
-		"[wuDict 1.2.3]", "Open wuDict", "---",
-		"Rescan dictionaries", "Open dictionary folder", "---", "Quit wuDict",
+		"[DictShelf 1.2.3]", "Open DictShelf", "---",
+		"Rescan dictionaries", "Open dictionary folder", "---", "Quit DictShelf",
 	}
 	if got := labels(full); strings.Join(got, "|") != strings.Join(want, "|") {
 		t.Errorf("full menu = %v, want %v", got, want)
@@ -299,17 +299,17 @@ func TestMenuShape(t *testing.T) {
 	// Optional entries drop out with their separator, so an empty middle
 	// section cannot produce two adjacent rules.
 	bare := Config{Enabled: true, Shutdown: func() {}}
-	wantBare := []string{"[wuDict]", "---", "Quit wuDict"}
+	wantBare := []string{"[DictShelf]", "---", "Quit DictShelf"}
 	if got := labels(bare); strings.Join(got, "|") != strings.Join(wantBare, "|") {
 		t.Errorf("bare menu = %v, want %v", got, wantBare)
 	}
 }
 
 func TestTooltip(t *testing.T) {
-	if got := baseConfig(nil).tooltip(); got != "wuDict - serving on http://127.0.0.1:8080/" {
+	if got := baseConfig(nil).tooltip(); got != "DictShelf - serving on http://127.0.0.1:8080/" {
 		t.Errorf("tooltip = %q", got)
 	}
-	if got := (Config{}).tooltip(); got != "wuDict" {
+	if got := (Config{}).tooltip(); got != "DictShelf" {
 		t.Errorf("tooltip without a URL = %q", got)
 	}
 }

@@ -263,7 +263,7 @@ const siteName = u => isDrive(u) ? "Google Drive" : u.hostname;
 // already reads (Intake.EXTRA_URL), not as the intent's data, because the
 // fragment it lives in is where intent: links keep their own syntax. Without
 // the app installed, the browser goes to the fallback: its store page.
-const APP_ID = "com.legbehindneck.wudict";
+const APP_ID = "com.dmshlabs.dictshelf";
 const APP_STORE = "https://play.google.com/store/apps/details?id=" + APP_ID;
 const intentLink = share => "intent://legbehindneck.com/wudict#Intent;scheme=https;package=" + APP_ID +
   ";S." + APP_ID + ".extra.INTAKE_URL=" + encodeURIComponent(share) +

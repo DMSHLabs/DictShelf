@@ -151,7 +151,7 @@ func Alert(title, body string) {
 }
 
 // stopHint completes "To stop it, ..." for this platform.
-const stopHint = "end wuDict2.exe in Task Manager"
+const stopHint = "end DictShelf.exe in Task Manager"
 
 // killCmd is the command that stops process %d from a terminal here. /F is not
 // optional: without it taskkill only posts WM_CLOSE, and a wudict whose tray

@@ -5,7 +5,7 @@ description: The DictShelf installer for Windows - install modes, optional tasks
 
 # Windows installer
 
-The installer is optional. It installs `wuDict2.exe` for the desktop and
+The installer is optional. It installs `DictShelf.exe` for the desktop and
 terminal commands, alongside a Start menu entry, an uninstaller and four
 optional actions.
 It runs on 64-bit Windows on x64, and on Arm64 Windows 11 (x64 emulation). On
@@ -35,7 +35,7 @@ icon appears in the notification area.
 | Task                        | Default | Effect                                                        |
 |-----------------------------| --- |---------------------------------------------------------------|
 | Create a desktop shortcut   | off | a desktop shortcut                                            |
-| Start DictShelf at sign-in    | off | a Startup folder shortcut that runs `wuDict2.exe --no-browser` |
+| Start DictShelf at sign-in    | off | a Startup folder shortcut that runs `DictShelf.exe --no-browser` |
 | Add DictShelf to `%PATH%`     | on | makes the `wuDict2` command available in PowerShell and `cmd` |
 | Offer DictShelf in *Open with*| on | for `.mdx`, `.dsl`, `.slob`, `.bgl` and `.zim` files |
 
@@ -45,14 +45,14 @@ the two.
 
 ## Console or tray
 
-`wuDict2.exe` opens the app without a console window and shows a **tray
-icon**. The same executable accepts commands such as `wuDict2.exe --help` from
+`DictShelf.exe` opens the app without a console window and shows a **tray
+icon**. The same executable accepts commands such as `DictShelf.exe --help` from
 PowerShell or `cmd`. The log is written to
-`%LOCALAPPDATA%\wudict\wudict.log`.
+`%USERPROFILE%\.dmshlabs\dictshelf\db.logs\dictshelf.log`.
 
 If the app is already active, a second operational launch displays a warning and exits.
 
-DictShelf keeps its files in `%USERPROFILE%\.wuDict2`. On first launch, if
+DictShelf keeps its files in `%USERPROFILE%\.dmshlabs\dictshelf`. On first launch, if
 `%USERPROFILE%\.wudict` exists, DictShelf checks its `state.json` for DictShelf-only
 settings. If it finds them, it asks whether to copy or move DictShelf settings,
 styles and lemma files into the new folder. Otherwise, it offers to import only
@@ -72,7 +72,7 @@ instance.
 
 [Download](https://github.com/wuweidict/wudict/releases/latest) and run the latest installer.
 It keeps the install mode, closes a running
-`wuDict2.exe`, and does not restart unless asked. Existing dictionary files, `wudict.toml` and the
+`DictShelf.exe`, and does not restart unless asked. Existing dictionary files, `dictshelf.toml` and the
 library are not changed.
 
 ## Silent install
@@ -92,7 +92,7 @@ does not start the server.
 
 <kbd>Settings</kbd> → <kbd>Apps</kbd> → <kbd>Installed apps</kbd> → <kbd>DictShelf</kbd> → <kbd>Uninstall</kbd> removes the program,
 the shortcuts, the `PATH` entry and the *Open with* entries. Dictionary files,
-`%USERPROFILE%\.wuDict2` (settings and library) and the log remain; delete them
+`%USERPROFILE%\.dmshlabs\dictshelf` (settings and library) and the log remain; delete them
 by hand if you no longer need them.
 
 ## Next

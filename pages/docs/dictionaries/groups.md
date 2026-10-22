@@ -22,7 +22,7 @@ lemmatization. A group that contains every dictionary is not offered.
 ## groups.ini
 
 <kbd>☰</kbd> → folder summary → <kbd>Edit groups…</kbd> opens the editor.
-<kbd>Save</kbd> writes `groups.ini` beside the `wudict.toml` in effect;
+<kbd>Save</kbd> writes `groups.ini` beside the `dictshelf.toml` in effect;
 <kbd>Reset to default</kbd> deletes it, and the built-in default applies again.
 
 ``` ini title="groups.ini"

@@ -53,7 +53,7 @@ A share link carries a link to a dictionary, an archive or a collection after
 https://legbehindneck.com/wudict#https://example.org/dicts/oxford.zip
 ```
 
-On Android with wuDict installed, opening a share link starts the import in the
+On Android with DictShelf installed, opening a share link starts the import in the
 app. Elsewhere, paste it on the setup page.
 
 ## Android

@@ -34,7 +34,7 @@ affected by it.
 
 List the page's origin and restart wudict:
 
-``` toml title="~/.wudict/wudict.toml"
+``` toml title="~/.dmshlabs/dictshelf/dictshelf.toml"
 WEB_ORIGINS = ["http://localhost:3000"]
 ```
 

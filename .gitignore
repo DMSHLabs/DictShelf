@@ -4,7 +4,11 @@
 /wudict.exe
 # Windows builds produced by build-windows.cmd. These are local build products;
 # the installer and CI artifacts are handled separately.
+/DictShelf.exe
+# Ignore pre-rename local binaries without deleting an existing build.
 /wuDict2.exe
+/wuDict2-cli.exe
+/wuDict2-server.exe
 dist/**
 docs.local/
 *_NOTRACK.md
@@ -64,7 +68,7 @@ __pycache__/
 # Agent tooling: plans and scratch written by coding sessions, never part of
 # the product (HANDOFF.md leaves it alone for the same reason).
 /.zcode/
-/wuDict2-cli.exe
+/DictShelf-cli.exe
 tools/testdata/desktop-large-media/desktop-large-media.dsl.files/as.mp4
 tools/testdata/desktop-large-media/desktop-large-media.dsl.files/large-image.jpg
 tools/testdata/desktop-large-media/desktop-large-media.dsl.files/large-image.png

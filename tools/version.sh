@@ -8,7 +8,7 @@
 # the name and version that can drift from cli.ProductName / cli.Version:
 #
 #   eval "$(sh tools/version.sh ./wudict)"
-#   WUDICT_NAME='wuDict'         # CFBundleName
+#   WUDICT_NAME='DictShelf'       # CFBundleName
 #   WUDICT_VERSION='v0.9-4-gabc' # what a human is shown
 #   WUDICT_NUM='0.9.0'           # what Info.plist and VERSIONINFO demand: x.y.z
 #
@@ -26,7 +26,7 @@ bin=${1:?usage: version.sh <binary>}
 line=$("$bin" --version 2>/dev/null | head -1 || true)
 name=$(printf '%s\n' "$line" | awk '{print $1}')
 ver=$(printf '%s\n' "$line" | awk '{print $2}')
-case $name in ''|*/*|*[!A-Za-z0-9._-]*) name=wuDict ;; esac
+case $name in ''|*/*|*[!A-Za-z0-9._-]*) name=DictShelf ;; esac
 [ -n "$ver" ] || ver=dev
 
 # The numeric form: take the tag part of `git describe`

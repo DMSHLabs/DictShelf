@@ -207,8 +207,8 @@ wudict searchall -format clean phubbing                # HTML without scripts an
 ``` sh title="one dictionary"
 wudict lookup   ~/Dictionaries/Oxford.mdx phubbing
 wudict prefix   ~/Dictionaries/Oxford.mdx phubb
-wudict contains ~/.wudict/db/Oxford phub
-wudict fts      ~/.wudict/db/Oxford "sudden fear"
+wudict contains ~/.dmshlabs/dictshelf/db/Oxford phub
+wudict fts      ~/.dmshlabs/dictshelf/db/Oxford "sudden fear"
 ```
 
 `contains` and `fts` need an indexed dictionary: pass its library folder.

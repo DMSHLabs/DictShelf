@@ -84,10 +84,10 @@ func (s *Server) DesktopResource(method, rawURL string, requestHeaders map[strin
 		return nil, 0, "", false, false
 	}
 	u, err := url.Parse(rawURL)
-	legacyVirtualOrigin := err == nil && u.Scheme == "https" && strings.EqualFold(u.Host, "wudict2.local")
-	appVirtualOrigin := err == nil && u.Scheme == "https" && strings.EqualFold(u.Host, "wudict2.localhost")
+	legacyVirtualOrigin := err == nil && u.Scheme == "https" && strings.EqualFold(u.Host, "dictshelf.local")
+	appVirtualOrigin := err == nil && u.Scheme == "https" && strings.EqualFold(u.Host, "dictshelf.localhost")
 	virtualOrigin := appVirtualOrigin ||
-		err == nil && u.Scheme == "http" && strings.EqualFold(u.Host, "wudict2.localhost") ||
+		err == nil && u.Scheme == "http" && strings.EqualFold(u.Host, "dictshelf.localhost") ||
 		legacyVirtualOrigin
 	if err != nil || u.Host == "" || u.User != nil ||
 		u.Scheme != "http" && !legacyVirtualOrigin && !appVirtualOrigin {

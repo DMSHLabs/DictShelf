@@ -101,7 +101,7 @@ icons: ## Regenerate platform icons and Play listing images from packaging/brand
 # The script reports the path it built in $(BUILD_DIR)/.app-path, which is how
 # the install target addresses a name Make does not know.
 APP_BIN     ?= $(abspath $(BINARY))
-APP_ID      ?= com.legbehindneck.wudict
+APP_ID      ?= com.dmshlabs.dictshelf
 APP_DEST    ?= $(HOME)/Applications
 MACOS_MIN   ?= 12.0
 CODESIGN_ID ?= -
@@ -140,7 +140,7 @@ mac-app-install: mac-app ## Install that .app into ~/Applications (per-user, no 
 # path flavour that make believes in - C:/... from GnuWin32 make, /c/... from
 # an MSYS one, and PowerShell can resolve only the first. The script derives
 # every path from its own location instead, which is native by construction.
-# Pass overrides through ARGS: make win-installer ARGS="-Exe C:\src\wuDict2.exe"
+# Pass overrides through ARGS: make win-installer ARGS="-Exe C:\src\DictShelf.exe"
 #
 # powershell.exe (Windows PowerShell 5.1) is on every Windows; pwsh is an
 # optional install, so it is not the default. PWSH=pwsh works if you have it.
@@ -511,11 +511,11 @@ docs-clean: ## Remove the built site, the Zensical cache and the copied explorer
 # literal absolute path - a checked-in plist is only correct on the machine
 # that wrote it. launchctl/*.plist.in is the template.
 
-LABEL    := com.legbehindneck.wudict
+LABEL    := com.dmshlabs.dictshelf
 PLIST_IN := launchctl/$(LABEL).plist.in
 PLIST    := $(HOME)/Library/LaunchAgents/$(LABEL).plist
 GUI      := gui/$(shell id -u)
-LOGDIR   := $(HOME)/Library/Logs
+LOGDIR   := $(HOME)/Library/Logs/DMSH Labs/DictShelf
 # Which binary the agent runs. Defaults to THIS checkout's build, so that
 # `make mac-agent-restart` (rebuild + kickstart) is coherent. Point it at the
 # installed copy to survive moving/renaming the checkout:
@@ -524,14 +524,14 @@ AGENT_BIN ?= $(abspath $(BINARY))
 
 .PHONY: mac-agent-install
 mac-agent-install: build ## Generate + install the LaunchAgent plist (override AGENT_BIN=<path>)
-	@mkdir -p $(dir $(PLIST)) $(LOGDIR)
+	@mkdir -p "$(dir $(PLIST))" "$(LOGDIR)"
 	@sed -e '/<!-- TEMPLATE/,/^-->$$/d' \
 	     -e 's|@LABEL@|$(LABEL)|g' -e 's|@BIN@|$(AGENT_BIN)|g' -e 's|@LOGDIR@|$(LOGDIR)|g' \
 	   $(PLIST_IN) > $(PLIST)
 	@plutil -lint $(PLIST) >/dev/null || { rm -f $(PLIST); echo "generated plist is invalid"; exit 1; }
 	@echo "installed $(PLIST)"
 	@echo "       -> $(AGENT_BIN) serve --no-browser"
-	@echo "       -> log: $(LOGDIR)/wudict.log"
+	@echo "       -> log: $(LOGDIR)/dictshelf.log"
 	@echo "next: make mac-agent-start"
 
 .PHONY: mac-agent-uninstall
@@ -558,7 +558,7 @@ mac-agent-status: ## Show the agent's launchd state (pid, exit status, ...)
 
 # ---- systemd service (Linux) --------------------------------------------
 # A USER unit (systemctl --user): WuWeiDict reads ~/Dictionaries, writes
-# ~/.wudict and binds 127.0.0.1, so it belongs to the user's session, not to
+# ~/.dmshlabs/dictshelf and binds 127.0.0.1, so it belongs to the user's session, not to
 # root. Only copying the binary into $(PREFIX)/bin needs sudo.
 #
 # The unit file *must* be generated - ExecStart must be an absolute
@@ -566,7 +566,7 @@ mac-agent-status: ## Show the agent's launchd state (pid, exit status, ...)
 
 PREFIX      ?= /usr/local
 SERVICE_BIN := $(PREFIX)/bin/$(BINARY)
-UNIT_NAME   := wudict.service
+UNIT_NAME   := dictshelf.service
 UNIT_IN     := systemd/$(UNIT_NAME).in
 UNIT_DIR    := $(if $(XDG_CONFIG_HOME),$(XDG_CONFIG_HOME),$(HOME)/.config)/systemd/user
 UNIT        := $(UNIT_DIR)/$(UNIT_NAME)
@@ -609,7 +609,7 @@ linux-service-restart: linux-install ## Rebuild, reinstall the binary, then rest
 	systemctl --user restart $(UNIT_NAME)
 
 .PHONY: linux-service-status
-linux-service-status: ## Show service state (add 'journalctl --user -u wudict -f' for logs)
+linux-service-status: ## Show service state (add 'journalctl --user -u dictshelf -f' for logs)
 	systemctl --user status $(UNIT_NAME) --no-pager
 
 # ---- housekeeping -------------------------------------------------------
@@ -619,8 +619,8 @@ clean: ## Remove binaries, dist/, coverage artifacts
 	rm -rf $(BINARY) $(BUILD_DIR) coverage.out
 
 .PHONY: purge
-purge: ## zap all local cached dictionaries in ~/.wudict/db
-	rm -rfv ~/.wudict/db
+purge: ## zap all local cached dictionaries in ~/.dmshlabs/dictshelf/db
+	rm -rfv ~/.dmshlabs/dictshelf/db
 
 .PHONY: version
 version: ## Print the version stamp used for builds

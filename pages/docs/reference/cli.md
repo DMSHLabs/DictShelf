@@ -34,7 +34,7 @@ or two dashes.
 | [`licenses`](#licenses) | print the licence and third-party notices |
 
 A command that takes a dictionary path also accepts a library folder:
-`wudict info ~/.wudict/db/Oxford` and `wudict info ~/.wudict/db/Oxford/text.db`
+`wudict info ~/.dmshlabs/dictshelf/db/Oxford` and `wudict info ~/.dmshlabs/dictshelf/db/Oxford/text.db`
 are equivalent.
 
 ## serve
@@ -61,7 +61,7 @@ wudict ~/Dictionaries/Oxford.mdx     # serve that file's folder and open it
 | `--verbose` | [`VERBOSE`](configuration.md#verbose) |
 
 The other settings have no flag; they are set in the environment or in
-`wudict.toml`. [Configuration](configuration.md) lists them all.
+`dictshelf.toml`. [Configuration](configuration.md) lists them all.
 
 ## list
 
@@ -85,7 +85,7 @@ the library folder.
 files:
   original  ~/Dictionaries/Oxford.mdx    41.2 MB
   original  ~/Dictionaries/Oxford.mdd   301.7 MB
-  prepared  ~/.wudict/db/Oxford          63.4 MB
+  prepared  ~/.dmshlabs/dictshelf/db/Oxford          63.4 MB
   total                                 406.3 MB
 ```
 
@@ -130,7 +130,7 @@ for the search and closed when it has answered.
 | `-format` | `text` (default), `clean`, `raw` as for `lookup`; `list`: headwords only |
 | `-base <url>` | as for `lookup` |
 | `-dict-dir <dir>` | folder to search, repeatable; or a `<dir>` argument, which may be a `:`-separated list. Default: `DICT_DIR` |
-| `-config <file>` | the `wudict.toml` to read `DICT_DIR` from |
+| `-config <file>` | the `dictshelf.toml` to read `DICT_DIR` from |
 
 `searchall` opens each dictionary through its own format. Contains and
 full-text therefore return results only for dictionaries that index themselves
@@ -243,7 +243,7 @@ Dictionaries already indexed are skipped.
 | `-fulltext=false`, `-headwords` | remove the full-text index |
 | `-full` | also add the media pack (`media.db`) |
 | `-o <file>` | write one dictionary's `text.db` to this path instead of the library |
-| `-config <file>` | the `wudict.toml` to read `DICT_DIR` from |
+| `-config <file>` | the `dictshelf.toml` to read `DICT_DIR` from |
 
 A flag left out keeps what each dictionary has.
 
@@ -269,7 +269,7 @@ wudict lemmas remove ru             # delete
 ```
 
 ```
-Lemma files in ~/.wudict/lemmas
+Lemma files in ~/.dmshlabs/dictshelf/lemmas
 1 installed, 24 available
 
   [x]  en   English          187 kB  ~7 MB RAM  built in

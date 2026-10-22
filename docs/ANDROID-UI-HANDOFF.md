@@ -399,7 +399,7 @@ running with the previous settings… next time the app is opened" and offers no
 button — correct, because the app window behind it holds the server.
 
 **THE EMULATOR PASS HAPPENED (2026-09-28, AVD `Small`, `build-android.cmd debug
-intel`, `com.dmshepeta.wudict2.debug`), and it turned the paragraph above into
+intel`, `com.dmshlabs.dictshelf.debug`), and it turned the paragraph above into
 what follows — including four fixes, three of them bugs the page-side stub
 could not have caught.**
 

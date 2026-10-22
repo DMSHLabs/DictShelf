@@ -30,7 +30,7 @@ page, [localhost:6888/setup](http://localhost:6888/setup).
 
 On the setup page, enter the path of a folder with dictionary files (`~` is
 allowed). The page checks the path as you type and shows how many dictionaries
-it contains. <kbd>Use this folder</kbd> saves it to `~/.wudict/wudict.toml`;
+it contains. <kbd>Use this folder</kbd> saves it to `~/.dmshlabs/dictshelf/dictshelf.toml`;
 no restart is needed.
 
 To open the setup page later: <kbd>☰</kbd> → folder summary →
@@ -40,7 +40,7 @@ The folders can also be set without the setup page:
 
 === "Config file"
 
-    ``` toml title="~/.wudict/wudict.toml"
+    ``` toml title="~/.dmshlabs/dictshelf/dictshelf.toml"
     DICT_DIR = ["~/Dictionaries", "/Volumes/Data/Dicts"]
     ```
 
@@ -57,7 +57,7 @@ The folders can also be set without the setup page:
     ```
 
 A command-line flag overrides the environment variable, which overrides
-`wudict.toml`. The setup page shows when a folder list is overridden.
+`dictshelf.toml`. The setup page shows when a folder list is overridden.
 
 [All settings](../reference/configuration.md){ .md-button }
 
@@ -77,7 +77,7 @@ Each line is one dictionary wudict can read.
 ## Indexing
 
 When wudict finds a dictionary, it queues its headword index in the background
-and saves it in the library (`~/.wudict/db`). Until indexing finishes, exact
+and saves it in the library (`~/.dmshlabs/dictshelf/db`). Until indexing finishes, exact
 and prefix searches use the dictionary's own format. The library index makes
 search faster and uses less memory.
 

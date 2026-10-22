@@ -5,7 +5,7 @@ description: Indexing, library folders, moving a dictionary, outdated indexes, a
 
 # The library
 
-The **library** (`~/.wudict/db`, [`DB_DIR`](../reference/configuration.md#db_dir))
+The **library** (`~/.dmshlabs/dictshelf/db`, [`DB_DIR`](../reference/configuration.md#db_dir))
 holds wudict's indexed copy of each dictionary: one library folder per
 dictionary.
 
@@ -34,7 +34,7 @@ dictionary with its switches in the dictionary panel, or with
 
 ## Library folder
 
-``` text title="~/.wudict/db/Oxford/"
+``` text title="~/.dmshlabs/dictshelf/db/Oxford/"
 text.db     articles and indexes
 media.db    media pack, if added
 info.txt    source and build details
@@ -50,7 +50,7 @@ dictionary is usually smaller than its dictionary files.
 
 ## Move a dictionary to another machine
 
-1. Copy the library folder, e.g. `~/.wudict/db/Oxford`.
+1. Copy the library folder, e.g. `~/.dmshlabs/dictshelf/db/Oxford`.
 2. Put it in the other machine's library, or in one of its dictionary folders.
 3. Search. The dictionary files are not needed; without `media.db` there are no
    images or audio.

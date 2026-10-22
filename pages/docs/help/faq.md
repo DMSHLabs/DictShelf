@@ -61,8 +61,8 @@ For problems, see [Troubleshooting](troubleshooting.md).
 ??? question "Where are wudict's files?"
 
     ``` text title="macOS and Linux"
-    ~/.wudict/
-      wudict.toml     settings
+    ~/.dmshlabs/dictshelf/
+      dictshelf.toml     settings
       state.json      dictionary order, enabled dictionaries, display preferences
       groups.ini      picker groups, only created after manually edited
       style/          custom styles
@@ -75,7 +75,7 @@ For problems, see [Troubleshooting](troubleshooting.md).
 
 ??? question "How do I update wudict?"
 
-    Replace the executable, or run the new installer, `wuDict.app` or APK over
+    Replace the executable, or run the new installer, `DictShelf.app` or APK over
     the old one. Settings and the library are kept. Indexes built by an older
     version are reported as [outdated](../dictionaries/library.md#outdated-indexes)
     and rebuilt with <kbd>Rebuild</kbd> or `wudict reindex`. 
@@ -121,7 +121,7 @@ For problems, see [Troubleshooting](troubleshooting.md).
     
     The Google Play build stores its app-managed dictionary data in:
     
-    `/sdcard/Android/data/com.legbehindneck.wudict/files/Dictionaries`
+    `/sdcard/Android/data/com.dmshlabs.dictshelf/files/Dictionaries`
     
     On recent Android versions, this directory is generally inaccessible through standard file managers. This can make it more difficult to manage or transfer dictionary files manually.
 
@@ -130,7 +130,7 @@ For problems, see [Troubleshooting](troubleshooting.md).
     | | FOSS build | Google Play build |
     | --- | --- | --- |
     | Source | GitHub, Obtainium | Google Play |
-    | Dictionary files | *Internal storage → Dictionaries*, a folder you manage | `Android/data/com.legbehindneck.wudict/files/Dictionaries`; you import the files |
+    | Dictionary files | *Internal storage → Dictionaries*, a folder you manage | `Android/data/com.dmshlabs.dictshelf/files/Dictionaries`; you import the files |
     | Storage permission | *All files access* | none |
     | Updates | Obtainium, or a download from GitHub | Google Play |
     | Signing certificate | the wudict developers | Google |
@@ -148,12 +148,12 @@ For problems, see [Troubleshooting](troubleshooting.md).
         originals. If you keep them, the dictionaries use two times the disk
         space.
     -   Google Play build: dictionary files in
-        `Android/data/com.legbehindneck.wudict/files/Dictionaries` on a microSD
+        `Android/data/com.dmshlabs.dictshelf/files/Dictionaries` on a microSD
         card are read there. They use no internal storage and need no import.
     -   Both builds: the library adds the indexes and the media packs. It is in
-        `Android/data/com.legbehindneck.wudict/files/db`.
+        `Android/data/com.dmshlabs.dictshelf/files/db`.
 
-    **Uninstall.** Android deletes `Android/data/com.legbehindneck.wudict`:
+    **Uninstall.** Android deletes `Android/data/com.dmshlabs.dictshelf`:
     the library, the settings and the lemma data.
 
     -   FOSS build: *Internal storage → Dictionaries* stays. After a new
@@ -188,7 +188,7 @@ For problems, see [Troubleshooting](troubleshooting.md).
     permission, and Google Play installs the updates.
 
     **Signing certificate collision.** The two builds have the same package
-    name, `com.legbehindneck.wudict`, and different signing certificates.
+    name, `com.dmshlabs.dictshelf`, and different signing certificates.
     Android does not install an update with a different certificate:
 
     -   You cannot install the two builds on one device at the same time.
@@ -199,7 +199,7 @@ For problems, see [Troubleshooting](troubleshooting.md).
     To change to the other build:
 
     1.  From Google Play to FOSS only: copy
-        `Android/data/com.legbehindneck.wudict/files/Dictionaries` to a
+        `Android/data/com.dmshlabs.dictshelf/files/Dictionaries` to a
         computer, over USB or with `adb pull`.
     2.  Uninstall the current build. Android deletes the library, the settings
         and the lemma data.
@@ -303,8 +303,8 @@ For problems, see [Troubleshooting](troubleshooting.md).
     5.  Write the settings:
 
         ``` sh
-        mkdir -p ~/.wudict
-        cat >> ~/.wudict/wudict.toml <<'EOF'
+        mkdir -p ~/.dmshlabs/dictshelf
+        cat >> ~/.dmshlabs/dictshelf/dictshelf.toml <<'EOF'
         DICT_DIR    = "~/storage/shared/Dictionaries"
         SERVER_PORT = "6889"
         NO_BROWSER  = "1"
@@ -384,7 +384,7 @@ For problems, see [Troubleshooting](troubleshooting.md).
 
 ??? question "How do I stop the browser tab opening at startup?"
 
-    `wudict --no-browser`, or `NO_BROWSER = "1"` in `~/.wudict/wudict.toml`.
+    `wudict --no-browser`, or `NO_BROWSER = "1"` in `~/.dmshlabs/dictshelf/dictshelf.toml`.
 
 ??? question "How do I build this documentation site?"
 

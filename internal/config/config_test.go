@@ -452,7 +452,7 @@ func TestConfigLocation(t *testing.T) {
 		if err != nil || !created {
 			t.Fatalf("EnsureConfigFile() = %q, %v, %v", p, created, err)
 		}
-		if want := filepath.Join(home, ".wudict", Name); p != want {
+		if want := filepath.Join(home, ".dmshlabs", "dictshelf", Name); p != want {
 			t.Errorf("created %q, want %q", p, want)
 		}
 		// the executable's directory belongs to whoever installed us
@@ -479,7 +479,7 @@ func TestConfigLocation(t *testing.T) {
 	t.Run("portable beats home, and says so", func(t *testing.T) {
 		exe, home := isolate(t)
 		write(t, filepath.Join(exe, Name), `SERVER_PORT = "1111"`)
-		write(t, filepath.Join(home, ".wudict", Name), `SERVER_PORT = "2222"`)
+		write(t, filepath.Join(home, ".dmshlabs", "dictshelf", Name), `SERVER_PORT = "2222"`)
 		cfg, err := Load("", nil)
 		if err != nil {
 			t.Fatal(err)
@@ -490,14 +490,14 @@ func TestConfigLocation(t *testing.T) {
 		if !cfg.Portable {
 			t.Error("Portable not reported for a file beside the executable")
 		}
-		if len(cfg.Shadowed) != 1 || cfg.Shadowed[0] != filepath.Join(home, ".wudict", Name) {
+		if len(cfg.Shadowed) != 1 || cfg.Shadowed[0] != filepath.Join(home, ".dmshlabs", "dictshelf", Name) {
 			t.Errorf("Shadowed = %q, want the home file", cfg.Shadowed)
 		}
 	})
 
 	t.Run("home beats system and is not portable", func(t *testing.T) {
 		_, home := isolate(t)
-		write(t, filepath.Join(home, ".wudict", Name), `SERVER_PORT = "2222"`)
+		write(t, filepath.Join(home, ".dmshlabs", "dictshelf", Name), `SERVER_PORT = "2222"`)
 		write(t, filepath.Join(systemDir, Name), `SERVER_PORT = "3333"`)
 		cfg, err := Load("", nil)
 		if err != nil {

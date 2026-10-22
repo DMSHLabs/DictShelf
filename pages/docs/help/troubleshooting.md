@@ -22,7 +22,7 @@ wudict list ~/Dictionaries
 
 The library ([`DB_DIR`](../reference/configuration.md#db_dir)) must be a
 different folder from every dictionary folder. Usually only `DICT_DIR` needs
-setting; the library defaults to `~/.wudict/db`.
+setting; the library defaults to `~/.dmshlabs/dictshelf/db`.
 
 ## Port 6888 is in use { #port-taken }
 
@@ -32,7 +32,7 @@ Another program uses the port; startup reports it. Choose another port:
 wudict --port 9090
 ```
 
-``` toml title="~/.wudict/wudict.toml"
+``` toml title="~/.dmshlabs/dictshelf/dictshelf.toml"
 SERVER_PORT = "9090"
 ```
 
@@ -44,8 +44,8 @@ Open [localhost:6888](http://localhost:6888). A tab is not opened when
 [`NO_BROWSER`](../reference/configuration.md#no_browser) is set.
 
 Started without a console, wudict shows an icon instead of output: on Windows
-in the notification area (log: `%LOCALAPPDATA%\wudict\wudict.log`), on macOS in
-the menu bar (log: `~/Library/Logs/wudict.log`).
+in the notification area (log: `%USERPROFILE%\.dmshlabs\dictshelf\db.logs\dictshelf.log`), on macOS in
+the menu bar (log: `~/Library/Logs/DMSH Labs/DictShelf/dictshelf.log`).
 
 ## No sound { #audio }
 
@@ -133,7 +133,7 @@ dictionaries it can reopen. Indexed dictionaries stay open. Indexing,
 downloads and rebuilds already running continue in a foreground service, with
 a progress notification. See [Android app](../apps/android.md#battery-and-memory).
 
-## A change to wudict.toml has no effect
+## A change to dictshelf.toml has no effect
 
 A command-line flag or an environment variable sets the same key and takes
 precedence. The setup page and `/api/config` show where each value comes from.

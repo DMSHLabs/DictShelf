@@ -15,7 +15,7 @@
         android:shortcutShortLabel="@string/settings_short_label">
         <intent
             android:action="android.intent.action.VIEW"
-            android:targetClass="com.legbehindneck.wudict.SettingsActivity"
-            android:targetPackage="com.dmshepeta.wudict2.debug" />
+            android:targetClass="com.dmshlabs.dictshelf.SettingsActivity"
+            android:targetPackage="com.dmshlabs.dictshelf.debug" />
     </shortcut>
 </shortcuts>

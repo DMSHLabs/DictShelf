@@ -166,7 +166,7 @@ jobs:
   windows-installer:
     name: Windows desktop and installer
     # Build on the native Windows runner through the same entry point used
-    # locally. That embeds the fork's WebView2 window in wuDict2.exe before the
+    # locally. That embeds the fork's WebView2 window in DictShelf.exe before the
     # installer packages it; packaging the upstream-style CLI artifact from
     # the matrix build would omit the desktop shell.
     runs-on: windows-2022
@@ -225,21 +225,21 @@ jobs:
       - name: Upload desktop executable
         uses: actions/upload-artifact@v7
         with:
-          name: wudict2-windows-x64
-          path: wuDict2.exe
+          name: dictshelf-windows-x64
+          path: DictShelf.exe
 
       - name: Upload command-line executable
         uses: actions/upload-artifact@v7
         with:
-          name: wudict2-windows-cli-x64
-          path: wuDict2-cli.exe
+          name: dictshelf-windows-cli-x64
+          path: DictShelf-cli.exe
           if-no-files-found: error
 
       - name: Upload HTTP server executable
         uses: actions/upload-artifact@v7
         with:
-          name: wudict2-windows-server-x64
-          path: wuDict2-server.exe
+          name: dictshelf-windows-server-x64
+          path: DictShelf-server.exe
           if-no-files-found: error
 
       - name: Upload installer

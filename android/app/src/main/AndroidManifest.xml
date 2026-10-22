@@ -53,7 +53,7 @@
     </queries>
 
     <application
-        android:name="com.legbehindneck.wudict.AppExit"
+        android:name="com.dmshlabs.dictshelf.AppExit"
         android:allowBackup="false"
         android:hasFragileUserData="true"
         android:icon="@mipmap/ic_launcher"
@@ -242,7 +242,7 @@
              live in src/main, so foss and play get them identically - nothing here
              touches storage. -->
         <activity
-            android:name="com.dmshepeta.wudict2.LookupActivity"
+            android:name="com.dmshlabs.dictshelf.lookup.LookupActivity"
             android:configChanges="keyboardHidden|orientation|screenSize|screenLayout|smallestScreenSize"
             android:excludeFromRecents="true"
             android:exported="true"
