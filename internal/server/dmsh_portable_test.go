@@ -48,9 +48,8 @@ func TestPortableCopiesResourcesAndSettings(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	old := store.DefaultDBDir()
 	store.SetDBDir(filepath.Join(source, "db"))
-	defer store.SetDBDir(old)
+	defer store.SetDBDir("")
 	s := &Server{User: UserDir(source), ConfigPath: filepath.Join(source, config.Name)}
 	j := &job{ctx: context.Background(), t: &jobTable{}, changed: make(chan struct{})}
 	if err := s.buildPortable(j, source, filepath.Join(base, "app.exe"), target, []string{root}); err != nil {
@@ -131,9 +130,8 @@ func TestPortableDictionaryCheckboxInsideProfile(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	old := store.DefaultDBDir()
 	store.SetDBDir(filepath.Join(source, "db"))
-	defer store.SetDBDir(old)
+	defer store.SetDBDir("")
 	s := &Server{User: UserDir(source), ConfigPath: filepath.Join(source, config.Name), reg: &Registry{roots: []Root{{Path: root}}}}
 	for _, checked := range []bool{false, true} {
 		name := "without"

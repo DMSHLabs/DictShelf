@@ -147,6 +147,7 @@ func TestLinkedGroupRescanInsertsAlphabeticallyBelowPins(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	waitNewDictionaryIndexing(t, reg)
 	closeBackends(t, reg)
 	s := New(reg)
 	s.UseUserGroups()
@@ -174,6 +175,7 @@ func TestLinkedGroupRescanInsertsAlphabeticallyBelowPins(t *testing.T) {
 	if err := s.reg.Rescan(); err != nil {
 		t.Fatal(err)
 	}
+	waitNewDictionaryIndexing(t, s.reg)
 	var groups []groupView
 	getJSON(t, s, "/api/user-groups", &groups)
 	if got := nameOrder(groups[1].Members); !slices.Equal(got, []string{"Bravo", "Alpha", "Delta"}) || groups[1].CustomOrder == nil || *groups[1].CustomOrder {
@@ -186,6 +188,7 @@ func TestLinkedGroupRescanInsertsAlphabeticallyBelowPins(t *testing.T) {
 	if err := s.reg.Rescan(); err != nil {
 		t.Fatal(err)
 	}
+	waitNewDictionaryIndexing(t, s.reg)
 	getJSON(t, s, "/api/user-groups", &groups)
 	if got := nameOrder(groups[1].Members); !slices.Equal(got, []string{"Bravo", "Delta", "Alpha", "Charlie"}) || groups[1].CustomOrder == nil || !*groups[1].CustomOrder {
 		t.Fatalf("new linked member did not append after manual order: %v, mode=%v", got, groups[1].CustomOrder)
@@ -224,6 +227,7 @@ func TestGroupsPersistenceAndCollection(t *testing.T) {
 	if err := s.reg.Rescan(); err != nil {
 		t.Fatal(err)
 	}
+	waitNewDictionaryIndexing(t, s.reg)
 	getJSON(t, s, "/api/user-groups", &groups)
 	if len(groups[0].Members) != 3 {
 		t.Fatal("new dictionary missing from All")
@@ -237,6 +241,7 @@ func TestGroupsPersistenceAndCollection(t *testing.T) {
 	if err := s.reg.Rescan(); err != nil {
 		t.Fatal(err)
 	}
+	waitNewDictionaryIndexing(t, s.reg)
 	getJSON(t, s, "/api/user-groups", &groups)
 	if len(groups[0].Members) != 1 || len(groups[2].Members) != 0 {
 		t.Fatalf("removed dictionaries still visible: %+v", groups)
