@@ -1,29 +1,16 @@
 # Agent handoff — current state
 
-Current checkout: branch `lsd`, based on `dev` at `95dac8f9`. Latest
-implementation commit is `862405d` (typed Windows exception pointers).
-Latest LSD changes are `1c6a9a3` (LSD abbreviation
-companions) and `1feddbc` (X6 system XOR). No upstream is configured. The
-isolated package has
-MIT fixtures, fixed-header validation, MSB bit reading, Huffman tables, user
-decoder-table parsing and X6 system decoding. The registered sequential reader
-handles user-dictionary fixtures for versions 12, X3 and X5, normalizes DSL
-article markup, preserves title syntax and aliases, and reads annotations and
-overlay resources; media packing and resource retrieval are verified through
-the prepared store. `_abrv.lsd` files are hidden as companions, contribute
-abbreviation tooltips and are included in source/staleness accounting. Focused
-package tests and `go build ./...` pass. All 79 local X6 files were read to EOF:
-67 are X6 user (`0x152001`) and 12 are X6 abbreviation (`0x155001`); none is X6
-system (`0x151005`). A temporary conversion of a local X5 system sample to X6
-block encoding decoded every key, article and annotation identically; no real
-system sample is stored as a fixture. Windows `go vet -tags sqlite_fts5
--trimpath ./...` and `go build ./...` pass; the full cgo suite passes when run
-directly from PowerShell. The two vet diagnostics were fixed by receiving the
-OS exception structure as a typed pointer in the Windows callback. The home-
-path test expectations compare `filepath.Clean` values, matching normalization
-in `ExpandHome` and `pathAliases`; BusyBox `make check` from Git Bash passes
-vet and the full cgo suite with local dictionary fixtures. Upstream `master` review
-status and pending ZIM checks remain as recorded below.
+Current checkout: branch `dev` at `4ce5a7f8`, aligned with `origin/dev`, with
+uncommitted Wildcards presentation changes. No upstream is configured. The
+LSD decoder and reader work is present in this branch; upstream review and
+pending ZIM checks remain as recorded below.
+
+Wildcards' combined mode keeps the dictionary field's geometry, displays
+“Combined list” / «Общий список», and removes the dropdown affordance while
+disabling selection. The merge icon's tooltip describes its next action in
+English and Russian. After a combined SQL-cache stream completes, a missing
+visible page is read again after the stream closes, so the lookup can see the
+completed cache. Android runtime verification remains pending.
 
 Combined Wildcards top-level result rows now store their own result ordinal as
 the base position, and the renderer uses that ordinal when highlighting and
@@ -46,7 +33,7 @@ Browse/Wildcards diagnostics correlate switch and run IDs, requested query/group
 
 System Settings → Search now applies optional FTS/trigram indexes to both Wildcards SQL result databases. In the separate-dictionaries database, upper-mask words are indexed with their dictionary and base positions; the lower search selects FTS candidates for plain token queries, trigram candidates for masks with a 3+ literal, and scans blocks otherwise. The index combination is part of server and browser cache identity. Focused four-combination tests, index rebuild tests, Go build, JavaScript parse and diff checks pass. Runtime timing on Windows/Android is pending.
 
-Current checkout: branch `dev` at `5bdb31cf`. Browse's match-count button,
+At the 2026-10-21 stage, branch `dev` was at `5bdb31cf`. Browse's match-count button,
 “Find from here” action and indexed candidate search in the merged Wildcards
 database are committed. Opt-in Browse diagnostics now logs
 per-request headword search mode/source, first event/word and total timings,
