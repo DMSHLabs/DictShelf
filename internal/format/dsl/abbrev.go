@@ -56,6 +56,55 @@ type abbrevMap struct {
 	count int
 }
 
+// Abbreviations is an immutable abbreviation lookup built from glossary
+// entries. Binary dictionary readers use it to share DSL's [p] expansion
+// behavior without depending on DSL file parsing.
+type Abbreviations struct{ values *abbrevMap }
+
+// NewAbbreviations builds the [p] expansion lookup from already-read entries.
+func NewAbbreviations(entries []dict.Entry) *Abbreviations {
+	a := &abbrevMap{exact: map[string]string{}, fold: map[string]string{}}
+	for _, e := range entries {
+		addAbbrevEntry(a, e)
+		if len(a.exact) >= maxAbbrevKeys {
+			break
+		}
+	}
+	if len(a.exact) == 0 {
+		return nil
+	}
+	return &Abbreviations{values: a}
+}
+
+// Count returns the number of distinct glossary labels with an expansion.
+func (a *Abbreviations) Count() int {
+	if a == nil || a.values == nil {
+		return 0
+	}
+	return a.values.count
+}
+
+func addAbbrevEntry(a *abbrevMap, e dict.Entry) {
+	exp := abbrevText(e.Body)
+	if exp == "" {
+		return
+	}
+	for _, hw := range e.Headwords {
+		k := collapseSpace(hw)
+		if k == "" || strings.EqualFold(k, exp) {
+			continue
+		}
+		if _, seen := a.exact[k]; !seen {
+			a.exact[k] = exp
+			a.count++
+		}
+		f := strings.ToLower(k)
+		if _, seen := a.fold[f]; !seen {
+			a.fold[f] = exp
+		}
+	}
+}
+
 func (a *abbrevMap) lookup(label string) (string, bool) {
 	if a == nil || label == "" {
 		return "", false
@@ -106,29 +155,7 @@ func loadAbbrev(mainPath string) *abbrevMap {
 			}
 			break
 		}
-		exp := abbrevText(e.Body)
-		if exp == "" {
-			continue
-		}
-		for _, hw := range e.Headwords {
-			k := collapseSpace(hw)
-			// An entry that expands to its own headword says nothing, and a
-			// tooltip repeating the word under the cursor is noise.
-			if k == "" || strings.EqualFold(k, exp) {
-				continue
-			}
-			if _, seen := a.exact[k]; !seen {
-				a.exact[k] = exp
-				a.count++
-			}
-			// Presence, not emptiness: empty expansions are filtered three
-			// functions away, and the first-wins rule should not depend on
-			// that filter still being there.
-			f := strings.ToLower(k)
-			if _, seen := a.fold[f]; !seen {
-				a.fold[f] = exp
-			}
-		}
+		addAbbrevEntry(a, e)
 	}
 	if a.count == 0 {
 		logx.V("dsl abbreviations: %s held no usable entries", path)

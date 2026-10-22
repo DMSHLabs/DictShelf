@@ -18,7 +18,7 @@ import (
 func registerRealFormats(t *testing.T) {
 	t.Helper()
 	open := func(path string) (Dictionary, error) { return fakeDict{}, nil }
-	for _, ext := range []string{".mdx", ".ifo", ".dsl", ".dsl.dz", ".slob", ".bgl", ".zim", ".zimaa"} {
+	for _, ext := range []string{".mdx", ".ifo", ".dsl", ".dsl.dz", ".lsd", ".slob", ".bgl", ".zim", ".zimaa"} {
 		RegisterFormat(ext, open)
 	}
 	RegisterInspectable(".mdd", open)
@@ -47,6 +47,7 @@ func TestClassifyName(t *testing.T) {
 		{"wiki.zimAa", KindMain},
 		{"ru-en.dsl", KindMain},
 		{"ru-en.dsl.dz", KindMain},
+		{"ru-en.lsd", KindMain},
 
 		// MDX resources: openable by name, never a dictionary
 		{"Oxford.mdd", KindCompanion},
@@ -70,6 +71,7 @@ func TestClassifyName(t *testing.T) {
 		// zip must not read as the ordinary archive it technically is
 		{"ru-en_abrv.dsl", KindCompanion},
 		{"ru-en_abrv.dsl.dz", KindCompanion},
+		{"ru-en_abrv.lsd", KindCompanion},
 		{"ru-en.dsl.files.zip", KindCompanion},
 		{"ru-en.files.zip", KindCompanion},
 		{"ru-en.dsl.ann", KindCompanion},

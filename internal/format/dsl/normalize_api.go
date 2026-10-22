@@ -11,3 +11,14 @@ func NormalizeArticle(text, key string) (string, error) {
 	body, _, err := transformArticleBody(text, key, nil)
 	return body, err
 }
+
+// NormalizeArticleWithAbbreviations converts DSL markup using a glossary read
+// from another format, such as an LSD _abrv.lsd companion.
+func NormalizeArticleWithAbbreviations(text, key string, glossary *Abbreviations) (string, error) {
+	var ab *abbrevMap
+	if glossary != nil {
+		ab = glossary.values
+	}
+	body, _, err := transformArticleBody(text, key, ab)
+	return body, err
+}

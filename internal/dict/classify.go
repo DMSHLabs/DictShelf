@@ -88,7 +88,7 @@ func ClassifyName(name string) Kind {
 	if n := suffixLen(companionSuffixes, base); n > comp {
 		comp = n
 	}
-	// "_abrv.dsl" with nothing in front of it names no parent, so it is
+	// "_abrv.dsl" or "_abrv.lsd" with nothing in front names no parent, so it is
 	// somebody's own abbreviation dictionary rather than a companion - the
 	// name-only half of the check IsAbbrevCompanion makes with a stat.
 	if comp > main && abbrevSuffixLen(base) > 0 && abbrevParentStem(base) == "" {
@@ -121,6 +121,9 @@ var companionSuffixes = func() map[string]bool {
 			m[s] = true
 		}
 	}
+	for _, s := range abbrevSuffixes {
+		m[s] = true
+	}
 	return m
 }()
 
@@ -138,7 +141,7 @@ func suffixLen[T any](m map[string]T, lower string) int {
 	return best
 }
 
-// abbrevSuffixLen reports whether lower is spelled like a DSL abbreviation
+// abbrevSuffixLen reports whether lower is spelled like a Lingvo abbreviation
 // glossary, and how long that spelling was.
 func abbrevSuffixLen(lower string) int {
 	for _, suf := range abbrevSuffixes {

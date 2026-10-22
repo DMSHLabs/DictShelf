@@ -9,10 +9,15 @@ import (
 	"fmt"
 	"html"
 	"io"
+	"os"
+	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/wuweidict/wudict/internal/dict"
 	"github.com/wuweidict/wudict/internal/format/dsl"
+	"github.com/wuweidict/wudict/internal/logx"
 )
 
 type pageCursor struct {
@@ -34,13 +39,15 @@ type heading struct {
 // It keeps only the current 512-byte page, adjacent aliases and one lookahead
 // heading in memory.
 type Reader struct {
-	source  *source
-	page    pageCursor
-	seen    uint32
-	look    *heading
-	refs    map[uint32]string
-	pending []dict.Entry
-	done    bool
+	source     *source
+	page       pageCursor
+	seen       uint32
+	look       *heading
+	refs       map[uint32]string
+	pending    []dict.Entry
+	done       bool
+	abbrevOnce sync.Once
+	abbrevs    *dsl.Abbreviations
 }
 
 func NewReader(path string) (*Reader, error) {
@@ -52,6 +59,63 @@ func NewReader(path string) (*Reader, error) {
 }
 
 func (r *Reader) Meta() dict.Meta { return r.source.meta }
+
+func (r *Reader) abbreviations() *dsl.Abbreviations {
+	r.abbrevOnce.Do(func() {
+		path, ok := dict.AbbrevCompanion(r.source.path)
+		if !ok {
+			return
+		}
+		st, err := os.Stat(path)
+		if err != nil || st.Size() > 8<<20 {
+			if err == nil {
+				logx.V("lsd abbreviations: %s is %d bytes - too large for a glossary, ignored", path, st.Size())
+			}
+			return
+		}
+		glossary, err := NewReader(path)
+		if err != nil {
+			logx.V("lsd abbreviations: %s: %v", path, err)
+			return
+		}
+		defer glossary.Close()
+		entries := make([]dict.Entry, 0, min(int(st.Size()/64), 20000))
+		for len(entries) < 20000 {
+			e, err := glossary.Next()
+			if err != nil {
+				if err != io.EOF {
+					logx.V("lsd abbreviations: %s: %v", path, err)
+				}
+				break
+			}
+			entries = append(entries, e)
+		}
+		r.abbrevs = dsl.NewAbbreviations(entries)
+	})
+	return r.abbrevs
+}
+
+// ExtraMeta records the companion stamp used when article markup was prepared.
+func (r *Reader) ExtraMeta() map[string]string {
+	path, ok := dict.AbbrevCompanion(r.source.path)
+	if !ok {
+		return nil
+	}
+	st, err := os.Stat(path)
+	if err != nil {
+		return nil
+	}
+	meta := map[string]string{
+		"abbrev_path":  path,
+		"abbrev_size":  strconv.FormatInt(st.Size(), 10),
+		"abbrev_mtime": st.ModTime().UTC().Truncate(time.Second).Format(time.RFC3339),
+		"abbrev_count": "0",
+	}
+	if a := r.abbreviations(); a != nil {
+		meta["abbrev_count"] = strconv.Itoa(a.Count())
+	}
+	return meta
+}
 
 func (r *Reader) nextHeading() (*heading, error) {
 	for uint64(r.page.page)*pageSize < uint64(r.source.pagesEnd-r.source.header.pagesOffset) {
@@ -211,7 +275,7 @@ func (r *Reader) Next() (dict.Entry, error) {
 			}
 			body, err = r.source.decoder.decodeArticle(payload, size)
 			if err == nil {
-				body, err = dsl.NormalizeArticle(body, group[0])
+				body, err = dsl.NormalizeArticleWithAbbreviations(body, group[0], r.abbreviations())
 				if err != nil {
 					return dict.Entry{}, fmt.Errorf("lsd: normalize article %q: %w", group[0], err)
 				}
