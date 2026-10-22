@@ -7,7 +7,6 @@ package lsd
 import (
 	"encoding/binary"
 	"fmt"
-	"strings"
 	"unicode/utf16"
 )
 
@@ -244,25 +243,28 @@ func dslHeading(sorted []uint16, extensions []extChar) string {
 		}
 		index++
 	}
-	var b strings.Builder
 	unsorted := false
+	units := make([]uint16, 0, len(chars)+2)
 	for _, c := range chars {
 		if !c.sorted && !unsorted {
-			b.WriteByte('{')
+			units = append(units, '{')
 			unsorted = true
 		} else if c.sorted && unsorted {
-			b.WriteByte('}')
+			units = append(units, '}')
 			unsorted = false
 		}
 		if c.escaped {
-			b.WriteByte('\\')
+			units = append(units, '\\')
 		}
-		b.WriteString(string(utf16.Decode([]uint16{c.value})))
+		units = append(units, c.value)
 	}
 	if unsorted {
-		b.WriteByte('}')
+		units = append(units, '}')
 	}
-	return b.String()
+	// Decode the complete UTF-16 sequence at once: supplementary characters
+	// such as emoji are encoded as a surrogate pair, and decoding each unit
+	// separately turns both halves into U+FFFD.
+	return string(utf16.Decode(units))
 }
 
 func (d *decoder) decodeArticle(data []byte, size uint32) (string, error) {

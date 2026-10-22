@@ -12,11 +12,39 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"unicode/utf16"
 
 	"github.com/wuweidict/wudict/internal/dict"
 	"github.com/wuweidict/wudict/internal/format/dsl"
 	"github.com/wuweidict/wudict/internal/store"
 )
+
+func TestDSLHeadingPreservesSupplementaryUnicode(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		sorted     []uint16
+		extensions []extChar
+		want       string
+	}{
+		{
+			name:   "sorted surrogate pair",
+			sorted: utf16.Encode([]rune("Baby Jae💖")),
+			want:   "Baby Jae💖",
+		},
+		{
+			name:       "unsorted surrogate pair",
+			sorted:     []uint16{'A'},
+			extensions: []extChar{{index: 0, value: 0xd83d}, {index: 1, value: 0xdc96}},
+			want:       "{💖}A",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := dslHeading(tc.sorted, tc.extensions); got != tc.want {
+				t.Fatalf("dslHeading = %q; want %q", got, tc.want)
+			}
+		})
+	}
+}
 
 func TestReaderSimpleFixture(t *testing.T) {
 	r, err := NewReader("testdata/simple_testdict1/test.lsd")
