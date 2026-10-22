@@ -15,6 +15,7 @@ import (
 
 	"github.com/wuweidict/wudict/internal/dict"
 	"github.com/wuweidict/wudict/internal/format/dsl"
+	"github.com/wuweidict/wudict/internal/store"
 )
 
 func TestReaderSimpleFixture(t *testing.T) {
@@ -65,6 +66,34 @@ func TestFormatRegistration(t *testing.T) {
 	defer d.Close()
 	if d.Meta().Format != "lsd" {
 		t.Fatalf("registered dictionary format = %q", d.Meta().Format)
+	}
+}
+
+func TestNonAdjacentAliasSurvivesIngest(t *testing.T) {
+	path := "testdata/simple_testdict1/variants_testdict.lsd"
+	r, err := dict.OpenReader(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dbPath := filepath.Join(t.TempDir(), "text.db")
+	report, err := store.IngestPlan(r, dbPath, store.Plan{}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.UnresolvedLinks != 0 {
+		t.Fatalf("unresolved aliases = %d", report.UnresolvedLinks)
+	}
+	d, err := store.Open(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	results, err := d.Exact("z", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("lookup for nonadjacent alias returned %d rows: %#v", len(results), results)
 	}
 }
 
@@ -176,6 +205,57 @@ func TestOverlayResources(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestOverlayResourcesSurviveMediaPacking(t *testing.T) {
+	dir := t.TempDir()
+	textDB := filepath.Join(dir, store.TextDBName)
+	r, err := NewReader(filepath.Join("testdata", "simple_testdict1", "test.lsd"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.IngestPlan(r, textDB, store.Plan{}, nil); err != nil {
+		r.Close()
+		t.Fatal(err)
+	}
+	if err := r.Close(); err != nil {
+		t.Fatal(err)
+	}
+	uuid, err := store.ReadMetaValue(textDB, "dict_uuid")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	d, err := Open(filepath.Join("testdata", "simple_testdict1", "overlay_x5.lsd"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	mediaDB := filepath.Join(dir, store.MediaDBName)
+	if err := store.IngestMedia(d, d.Resources(), mediaDB, uuid, nil); err != nil {
+		t.Fatal(err)
+	}
+
+	prepared, err := store.Open(textDB)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer prepared.Close()
+	for _, name := range d.Resources() {
+		got, _, err := prepared.Resource(name)
+		if err != nil {
+			t.Fatalf("packed resource %q: %v", name, err)
+		}
+		gotBytes, readErr := io.ReadAll(got)
+		closeErr := got.Close()
+		wantBytes, fileErr := os.ReadFile(filepath.Join("testdata", "simple_testdict1", name))
+		if readErr != nil || closeErr != nil || fileErr != nil {
+			t.Fatalf("read/close/fixture %q: %v / %v / %v", name, readErr, closeErr, fileErr)
+		}
+		if !bytes.Equal(gotBytes, wantBytes) {
+			t.Errorf("packed resource %q differs: got %d bytes, want %d", name, len(gotBytes), len(wantBytes))
+		}
 	}
 }
 
