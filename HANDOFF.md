@@ -1,6 +1,8 @@
 # Agent handoff — current state
 
-Current checkout: branch `lsd`, based on `dev` at `95dac8f9`, with 19 local\ncommits; latest implementation commit is `2019ab5` (Windows test DB isolation). latest LSD changes are `1c6a9a3` (LSD abbreviation
+Current checkout: branch `lsd`, based on `dev` at `95dac8f9`, with 20 local
+commits; latest implementation commit is `2019ab5` (Windows test DB isolation).
+Latest LSD changes are `1c6a9a3` (LSD abbreviation
 companions) and `1feddbc` (X6 system XOR). No upstream is configured. The
 isolated package has
 MIT fixtures, fixed-header validation, MSB bit reading, Huffman tables, user
