@@ -1,8 +1,9 @@
 # Agent handoff — current state
 
-Current checkout: branch `lsd`, based on `dev` at `95dac8f9`, with 16 local
-commits; latest LSD changes are `1c6a9a3` (LSD abbreviation companions) and
-`1feddbc` (X6 system XOR). No upstream is configured. The isolated package has
+Current checkout: branch `lsd` at `be55f67e`, based on `dev` at `95dac8f9`,
+with 16 local commits; latest LSD changes are `1c6a9a3` (LSD abbreviation
+companions) and `1feddbc` (X6 system XOR). No upstream is configured. The
+isolated package has
 MIT fixtures, fixed-header validation, MSB bit reading, Huffman tables, user
 decoder-table parsing and X6 system decoding. The registered sequential reader
 handles user-dictionary fixtures for versions 12, X3 and X5, normalizes DSL
@@ -20,6 +21,13 @@ The standalone `make test` also reaches the LSD tests successfully, then fails
 in Windows config/server tests with path-normalization and shared-library
 rename/access errors. Upstream `master` review status and pending ZIM checks
 remain as recorded below.
+
+Combined Wildcards top-level result rows now store their own result ordinal as
+the base position, and the renderer uses that ordinal when highlighting and
+scrolling. This fixes match navigation when all dictionaries are merged; the
+merged SQL signature changed to v4 so stale position rows rebuild. `go build
+./...`, inline JavaScript syntax and `git diff --check` pass; Android runtime
+verification remains pending.
 
 Browse and Wildcards ribbon clicks reveal a partly clipped heading and, when it fits, one neighboring heading. Clicking the first or last heading aligns to that strip edge; Browse no longer centers each selected heading or scrolls when it is already fully visible. Shared ribbon geometry checks and inline JavaScript syntax pass; Windows/Android interaction remains to be checked. Wildcards toolbar: the merge-books control is fixed to 3.2em with a larger icon; page controls show “Next page” / “Previous page” when the row has room, fall back to arrows, then hide before the page counter on narrow rows.
 

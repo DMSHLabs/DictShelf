@@ -6664,7 +6664,8 @@ function maskRender(){
     const lower=maskFindQuery;
     const ranges=lower?(maskFindWildcard?maskRanges(word,lower):maskFindRanges(word,lower)):null;
     button.innerHTML=lower?highlightMaskRanges(word,ranges):highlightMaskHeadword(word,maskPattern);
-    const basePosition=Number.isInteger(result.positions?.[i])?result.positions[i]:(result.page-1)*(result.size||300)+i;
+    const basePosition=Number.isInteger(result.basePositions?.[i])?result.basePositions[i]:
+      Number.isInteger(result.positions?.[i])?result.positions[i]:(result.page-1)*(result.size||300)+i;
     if(!maskFindFilter&&maskFindAnchor?.id===row.id&&maskFindAnchor.position===basePosition)
       button.classList.add("mask-find-anchor");
     if(!maskFindFilter&&maskFindMatch?.id===row.id&&maskFindMatch.position===basePosition)
@@ -6763,7 +6764,8 @@ async function maskReadResultPage(row,page,findPosition,findDirection){
 function maskWordPosition(row,button){
   const visibleIndex=[...$("maskWords").querySelectorAll("button[data-word]")].indexOf(button);
   const blockSize=row.size||300,filteredOffset=Math.max(0,(row.data?.page||1)-1)*blockSize+visibleIndex;
-  return Number.isInteger(row.data?.positions?.[visibleIndex])?row.data.positions[visibleIndex]:
+  return Number.isInteger(row.data?.basePositions?.[visibleIndex])?row.data.basePositions[visibleIndex]:
+    Number.isInteger(row.data?.positions?.[visibleIndex])?row.data.positions[visibleIndex]:
     Number.isInteger(row.streamPositions?.[filteredOffset])?row.streamPositions[filteredOffset]:filteredOffset;
 }
 function maskWordContextHide(){const menu=$("maskWordContextMenu");menu.hidden=true;menu.style.left="";menu.style.top="";maskWordContextTarget=null}
