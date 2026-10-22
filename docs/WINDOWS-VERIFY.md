@@ -193,6 +193,12 @@ them are in `docs/handoff-archive.md`.
     tests. Portable tests now clear the override after use, and group-rescan
     tests wait for queued dictionary indexing before deleting fixtures. The
     full cgo suite passes with `go test -tags sqlite_fts5 -trimpath ./... -count=1`.
+  - `go vet -tags sqlite_fts5 -trimpath ./...` passes after the Windows crash
+    callback began accepting `*windowsExceptionPointers` directly instead of
+    converting its `uintptr` argument back into a pointer. Running `make check`
+    through BusyBox make from Git Bash then exposes home-path separator failures
+    in `TestExpandHome` and `TestConfigEndpointAndSetupPage`; both pass when the
+    full cgo suite is run directly from PowerShell.
   - The fourth upstream sync (2026-10-04) rechecked the whole suite in its fresh
     LF worktree: `go build`, `go vet`, `gofmt -l` clean and `go test -count=1
     ./...` green, 0 failures. Its one Windows-relevant change is upstream's
