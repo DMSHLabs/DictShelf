@@ -7,6 +7,7 @@ package lsd
 import (
 	"errors"
 	"fmt"
+	"html"
 	"io"
 	"strings"
 
@@ -142,6 +143,14 @@ func (r *Reader) Next() (dict.Entry, error) {
 		for _, word := range group {
 			groupSeen[word] = true
 		}
+		var displayTitles []string
+		addDisplayTitle := func(title string) {
+			display := dsl.HeadwordDisplay(title)
+			if display != "" && display != html.EscapeString(group[0]) {
+				displayTitles = append(displayTitles, "<b>"+display+"</b>")
+			}
+		}
+		addDisplayTitle(first.title)
 		for {
 			next, err := r.nextHeading()
 			if err == io.EOF {
@@ -154,6 +163,7 @@ func (r *Reader) Next() (dict.Entry, error) {
 				r.look = next
 				break
 			}
+			addDisplayTitle(next.title)
 			for _, word := range dsl.HeadwordKeys(next.title) {
 				if word != "" && !groupSeen[word] {
 					group = append(group, word)
@@ -201,6 +211,13 @@ func (r *Reader) Next() (dict.Entry, error) {
 			}
 			body, err = r.source.decoder.decodeArticle(payload, size)
 			if err == nil {
+				body, err = dsl.NormalizeArticle(body, group[0])
+				if err != nil {
+					return dict.Entry{}, fmt.Errorf("lsd: normalize article %q: %w", group[0], err)
+				}
+				if len(displayTitles) > 0 {
+					body = strings.Join(displayTitles, "<br/>") + "<br/>" + body
+				}
 				break
 			}
 			if !errors.Is(err, errTruncatedBits) || readSize >= available {
@@ -208,7 +225,7 @@ func (r *Reader) Next() (dict.Entry, error) {
 			}
 			readSize = min(readSize*2, available)
 		}
-		return dict.Entry{Headwords: group, Body: body, Kind: dict.BodyDSL}, nil
+		return dict.Entry{Headwords: group, Body: body, Kind: dict.BodyHTML}, nil
 	}
 }
 

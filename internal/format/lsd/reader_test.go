@@ -10,9 +10,11 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/wuweidict/wudict/internal/dict"
+	"github.com/wuweidict/wudict/internal/format/dsl"
 )
 
 func TestReaderSimpleFixture(t *testing.T) {
@@ -25,9 +27,9 @@ func TestReaderSimpleFixture(t *testing.T) {
 		t.Fatalf("unexpected metadata: %+v", got)
 	}
 	want := []dict.Entry{
-		{Headwords: []string{"A"}, Body: "abcd", Kind: dict.BodyDSL},
-		{Headwords: []string{"B"}, Body: "aabb33", Kind: dict.BodyDSL},
-		{Headwords: []string{"C"}, Body: "1234", Kind: dict.BodyDSL},
+		{Headwords: []string{"A"}, Body: "abcd", Kind: dict.BodyHTML},
+		{Headwords: []string{"B"}, Body: "aabb33", Kind: dict.BodyHTML},
+		{Headwords: []string{"C"}, Body: "1234", Kind: dict.BodyHTML},
 	}
 	for i, expected := range want {
 		got, err := r.Next()
@@ -110,7 +112,11 @@ func TestReaderHeadingFixtureContents(t *testing.T) {
 				if err != nil {
 					t.Fatalf("entry %d: %v", i, err)
 				}
-				if !reflect.DeepEqual(entry.Headwords, []string{wantWords[i]}) || entry.Body != tc.bodies[i] || entry.Kind != dict.BodyDSL {
+				body, err := dsl.NormalizeArticle(tc.bodies[i], wantWords[i])
+				if err != nil {
+					t.Fatal(err)
+				}
+				if !reflect.DeepEqual(entry.Headwords, []string{wantWords[i]}) || entry.Body != body || entry.Kind != dict.BodyHTML {
 					t.Errorf("entry %d = %#v", i, entry)
 				}
 			}
@@ -131,6 +137,9 @@ func TestReaderExtendedTitleKeys(t *testing.T) {
 		}
 		if !reflect.DeepEqual(entry.Headwords, want) {
 			t.Errorf("entry %d headwords = %q; want %q", i, entry.Headwords, want)
+		}
+		if !strings.Contains(entry.Body, "<b>") {
+			t.Errorf("entry %d lost its formatted display title: %q", i, entry.Body)
 		}
 	}
 }
