@@ -213,6 +213,11 @@ func hasSystemErrorRecord(contents []byte) bool {
 
 func isSystemError(message string) bool {
 	message = strings.ToLower(message)
+	// Successful jobs include error="<nil>" in their diagnostic records.
+	// Remove that value before looking for error markers so it does not make
+	// the Info panel report a false positive.
+	message = strings.ReplaceAll(message, `error="<nil>"`, "")
+	message = strings.ReplaceAll(message, "error=<nil>", "")
 	return strings.Contains(message, " error:") || strings.Contains(message, " error=") ||
 		strings.Contains(message, "event=error") || strings.Contains(message, "panic:") ||
 		strings.Contains(message, "fatal error:") || strings.Contains(message, "unhandled exception") ||
