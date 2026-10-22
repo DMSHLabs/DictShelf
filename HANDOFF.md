@@ -1,7 +1,6 @@
 # Agent handoff — current state
 
-Current checkout: branch `lsd` at `be55f67e`, based on `dev` at `95dac8f9`,
-with 16 local commits; latest LSD changes are `1c6a9a3` (LSD abbreviation
+Current checkout: branch `lsd`, based on `dev` at `95dac8f9`, with 19 local\ncommits; latest implementation commit is `2019ab5` (Windows test DB isolation). latest LSD changes are `1c6a9a3` (LSD abbreviation
 companions) and `1feddbc` (X6 system XOR). No upstream is configured. The
 isolated package has
 MIT fixtures, fixed-header validation, MSB bit reading, Huffman tables, user
@@ -15,12 +14,15 @@ package tests and `go build ./...` pass. All 79 local X6 files were read to EOF:
 67 are X6 user (`0x152001`) and 12 are X6 abbreviation (`0x155001`); none is X6
 system (`0x151005`). A temporary conversion of a local X5 system sample to X6
 block encoding decoded every key, article and annotation identically; no real
-system sample is stored as a fixture. `make check` reaches vet but stops on two
-existing unsafe-pointer diagnostics in `internal/logx/crash_native_windows.go`.
-The standalone `make test` also reaches the LSD tests successfully, then fails
-in Windows config/server tests with path-normalization and shared-library
-rename/access errors. Upstream `master` review status and pending ZIM checks
-remain as recorded below.
+system sample is stored as a fixture. The full cgo test suite now passes on
+Windows (`go test -tags sqlite_fts5 -trimpath ./... -count=1`); `go build ./...`
+also passes. The recent server failures came from portable tests restoring a
+resolved temporary DB path as a persistent global override, which made later
+tests share prepared databases. The tests now clear that override and wait for
+background dictionary indexing after rescans. `go vet` still reports two
+unsafe-pointer diagnostics in `internal/logx/crash_native_windows.go`, so
+`make check` stops at vet. Upstream `master` review status and pending ZIM
+checks remain as recorded below.
 
 Combined Wildcards top-level result rows now store their own result ordinal as
 the base position, and the renderer uses that ordinal when highlighting and

@@ -187,6 +187,12 @@ them are in `docs/handoff-archive.md`.
     only practical way to reach it without the launcher's long-press menu.
 - Known Windows test failures: **none, in a checkout made after the 2026-10-02
   merge.** What used to be listed here is accounted for:
+  - A later `sqlite_fts5` full-suite run on the LSD branch exposed a test-only
+    global-state leak: `dmsh_portable_test.go` restored `store.DefaultDBDir()`
+    as a persistent override, freezing one test's temporary path for later
+    tests. Portable tests now clear the override after use, and group-rescan
+    tests wait for queued dictionary indexing before deleting fixtures. The
+    full cgo suite passes with `go test -tags sqlite_fts5 -trimpath ./... -count=1`.
   - The fourth upstream sync (2026-10-04) rechecked the whole suite in its fresh
     LF worktree: `go build`, `go vet`, `gofmt -l` clean and `go test -count=1
     ./...` green, 0 failures. Its one Windows-relevant change is upstream's
