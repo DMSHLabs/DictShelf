@@ -1,16 +1,11 @@
 # Agent handoff — current state
 
-Current checkout: `dev` at `8390471d`. Upstream `master` was reviewed through
-`fb56b096` on 2026-10-22; `upstream-reviewed-2026-10-22` is the review cursor,
-not a claim that every upstream change was adopted. The large-ZIM and split-ZIM
-runtime checks in `docs/UPSTREAM-TRANSFER-PLAN.md` remain pending. The ZIM MIME
-compatibility change from `34541b56` and Browse dictionary-selection change
-from `2ffb0088` are now selectively ported on `dev`: MIME parsing is bounded by
-validated structures and invalid MIME values retain their index as an empty
-slot; Browse headword links use `dict=`. Unrelated upstream favorites/history
-backend files were not copied. These changes have not been built or runtime
-checked yet. The upstream wildcard implementation remains unwired by the
-dead-upstream policy.
+Current checkout: branch `lsd`, based on `dev` at `95dac8f9`, followed by two
+local LSD commits; no upstream is configured. The latest commit adds an
+isolated backend package, MIT-noticed reference fixtures, and a bounds-checked
+fixed-header reader that passes its fixture tests. Entry decoding and format
+registration remain. Upstream `master` review status and the pending ZIM checks
+remain as recorded below.
 
 Browse and Wildcards ribbon clicks reveal a partly clipped heading and, when it fits, one neighboring heading. Clicking the first or last heading aligns to that strip edge; Browse no longer centers each selected heading or scrolls when it is already fully visible. Shared ribbon geometry checks and inline JavaScript syntax pass; Windows/Android interaction remains to be checked. Wildcards toolbar: the merge-books control is fixed to 3.2em with a larger icon; page controls show “Next page” / “Previous page” when the row has room, fall back to arrows, then hide before the page counter on narrow rows.
 
@@ -357,6 +352,8 @@ Newly added dictionaries and previously known dictionaries with a missing index 
 
 Fork-specific dictionary groups, mask search, migration and Android identity remain enabled. Upstream how-to and wildcard features remain unwired as recorded in `AGENTS.md`.
 
+LSD support is underway on branch `lsd`: `internal/format/lsd` owns the decoder and reference fixtures, separate from the text DSL scanner. A bounds-checked fixed-header reader passes a fixture test; the format is not registered and article decoding is not implemented yet. `docs/LSD.md` records the application contract. Small `lsd2dsl` fixtures for versions 12/X3/X5, headings, annotations and overlays are isolated under the package with their MIT notice; no real-world samples are included.
+
 ## Verification
 The Windows listenerless GUI path is implemented and the user confirmed it runs without the configured TCP listener. It now also avoids constructing an `http.Server`; close and Exit signal the app lifecycle directly. `go build ./...`, `git diff --check` and GUI `build-windows.cmd` pass. The tray status and startup summary identify in-process mode without advertising a network URL. The user confirmed dictionary images, multi-gigabyte video and seeking on the latest direct source-resolution path. Embedded pages, `/assets/*`, `/favicon.ico`, `/style/*` and `/files/*` now dispatch to Go operations without the general router; the user confirmed that a background image loads and now appears as a thumbnail in the picker. Direct user stylesheet and GD font loading still need runtime verification. User confirmed pages and navigation work after page dispatch. The stream bridge's dead HTTP fallback has been removed; Browse diagnostics now use the same direct validation/logging function as HTTP. The dictionary list bridge now also handles `/api/dicts` and `/api/rescan` when `diagnostics=1` is present; the query does not change server behavior, and previously caused a 404 by bypassing the bridge. Build checks pass; Windows runtime verification is pending. The secure WebView origin rejects unmapped GETs. The lifecycle change still needs a Windows runtime check, especially startup/list loading, Exit, tray Quit and ordinary window close; browser and Android HTTP modes must also be checked.
 An audit of API calls in the main page, Browse, Groups, Setup, Lemmatization and article frames found no remaining required Windows UI operation that falls through to HTTP; remaining `fetch` calls are browser/Android adapters or explicit direct-bridge branches. Durable `wudict_*` localStorage values now load from `settings.json` and `history.json`, and writes persist to those files through the Windows native bridge or the shared HTTP adapter. Search and wildcard histories are stored separately; diagnostics and sessionStorage caches are omitted. On first release startup, if `settings.json` is absent, Windows exports the previous WebView origin, saves the split files, then opens the app. The settings file is written last and marks a completed import; if only `history.json` remains after an interrupted import, the old profile can be imported again. An existing settings file skips export and takes precedence over profile storage.
@@ -396,17 +393,4 @@ Windows System Log export saves directly into the user's Downloads folder and op
 On Windows, verify direct GET resource delivery: Settings/editor assets, preset switching and GD fonts, user styles, and background images in the picker. The user has confirmed dictionary images, multi-gigabyte video, seeking and background-image thumbnails through the latest direct resource path. The user confirmed successful settings migration and that the next launch skips it; only the stalled-export timeout branch remains unverified. The user confirmed the three dialogs and startup splash on Windows. Also confirm browser and console mode still bind and serve HTTP. Remaining checks: dialog appearance with Background Image and Sepia on/off; browser and Android paths for all three dialogs; Edit Filters load/save/reset, close prompt, and translations; Edit Folders' layout, current paths, validation, index defaults, picker, archive intake, shared progress, save and list refresh; Lemmatization list/install/removal, progress polling, directory note and attribution; chunked browser archive upload; URL and native-path import; System/English/Русский selection and persistence on Windows and Android; System locale behavior on EN/RU devices; orphan actions/removal; About; Browse streams/search/filter/Stop/chooser; Wildcards filtering/page turns/prefetch; article CSS; explicit index rescan and reindex progress/Stop. Browser file input/drop uploads retain HTTP; verify browser upload remains functional and test Android WebView and Java archive imports. Then verify portable startup with prepared dictionaries and confirm indexes are reused after copying `Data`. Check the shared dictionary picker on Android.
 
 ## Server-removal estimate
-The current UI task is the workspace-dialog refactor in [`docs/DIALOG-REFACTOR.md`](docs/DIALOG-REFACTOR.md): all three editors now open in-document dialogs and are confirmed on Windows. Verify all three on Android and retained browser modes, then remove the unused iframe routes.
-
-Approximate progress, based on current Windows work:
-
-| Stage | Done | Remaining |
-|---|---:|---:|
-| Direct Go bridge for existing app operations | 92% | 8% |
-| Route all Windows UI requests through the bridge | 96% | 4% |
-| Replace local HTTP delivery for pages and embedded assets | 96% | 4% |
-| Replace HTTP delivery for dictionary articles and media | 100% | 0% |
-| Remove Windows server startup, listener and port | 100% | 0% |
-| Regression checks for Windows and retained browser/Android modes | 60% | 40% |
-
-Overall: roughly 89–91% complete, 9–11% remaining. Windows GUI startup without a TCP listener, direct page navigation and `/res/` media delivery are confirmed. The secure WebView origin no longer falls back to the router for unknown GETs; verify all Windows screens to catch any still-unmapped API request. Embedded asset and user style/file loading also need runtime checks. Browser, console and Android HTTP behavior still needs regression checks.
+The workspace-dialog refactor in [`docs/DIALOG-REFACTOR.md`](docs/DIALOG-REFACTOR.md) is confirmed on Windows; Android/browser checks and unused iframe-route removal remain. The earlier estimate was 89–91% complete, with regression checks the largest remaining stage. Windows startup without a listener, direct page navigation and `/res/` media delivery are confirmed; remaining Windows screens, assets/styles, browser and Android HTTP paths still need verification.
