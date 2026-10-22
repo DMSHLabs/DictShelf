@@ -1,11 +1,11 @@
 # Agent handoff — current state
 
-Current checkout: branch `lsd`, based on `dev` at `95dac8f9`, followed by two
-local LSD commits; no upstream is configured. The latest commit adds an
-isolated backend package, MIT-noticed reference fixtures, and a bounds-checked
-fixed-header reader that passes its fixture tests. Entry decoding and format
-registration remain. Upstream `master` review status and the pending ZIM checks
-remain as recorded below.
+Current checkout: branch `lsd`, based on `dev` at `95dac8f9`, followed by three
+local LSD commits; no upstream is configured. The isolated package has MIT
+fixtures, fixed-header validation, MSB bit reading, Huffman tables, and user
+decoder-table parsing, all passing focused tests. Index/article streaming and
+format registration remain. Upstream `master` review status and pending ZIM
+checks remain as recorded below.
 
 Browse and Wildcards ribbon clicks reveal a partly clipped heading and, when it fits, one neighboring heading. Clicking the first or last heading aligns to that strip edge; Browse no longer centers each selected heading or scrolls when it is already fully visible. Shared ribbon geometry checks and inline JavaScript syntax pass; Windows/Android interaction remains to be checked. Wildcards toolbar: the merge-books control is fixed to 3.2em with a larger icon; page controls show “Next page” / “Previous page” when the row has room, fall back to arrows, then hide before the page counter on narrow rows.
 

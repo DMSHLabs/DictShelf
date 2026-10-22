@@ -1,0 +1,238 @@
+// Copyright (C) 2026 DmShAl (Shepeta Dmitry)
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+package lsd
+
+import (
+	"encoding/binary"
+	"fmt"
+	"unicode/utf16"
+)
+
+type decoder struct {
+	prefix         []uint16
+	articleSymbols []uint32
+	headingSymbols []uint32
+	articles       *lengthTable
+	headings       *lengthTable
+	prefixLengths  *lengthTable
+	postfixLengths *lengthTable
+	ref1, ref2     uint32
+}
+
+func readDecoder(data []byte, version uint32) (*decoder, error) {
+	// The user dictionary decoder is shared by Lingvo 11/12, user X3/X5 and
+	// user X6 files. System and abbreviation variants have distinct tables and
+	// are rejected until their own layouts are implemented.
+	switch version {
+	case 0x110001, 0x120001, 0x131001, 0x132001, 0x142001, 0x152001:
+	default:
+		return nil, fmt.Errorf("lsd: decoder version %#x is not supported yet", version)
+	}
+	r := &bitReader{data: data}
+	prefixLen, err := r.readU32BE()
+	if err != nil {
+		return nil, fmt.Errorf("lsd: read dictionary prefix length: %w", err)
+	}
+	if prefixLen > 1<<20 {
+		return nil, fmt.Errorf("lsd: dictionary prefix is too large (%d UTF-16 units)", prefixLen)
+	}
+	prefix := make([]uint16, prefixLen)
+	for i := range prefix {
+		v, err := r.read(16)
+		if err != nil {
+			return nil, fmt.Errorf("lsd: read dictionary prefix: %w", err)
+		}
+		prefix[i] = uint16(v)
+	}
+	a, err := readSymbols(r)
+	if err != nil {
+		return nil, fmt.Errorf("lsd: read article symbols: %w", err)
+	}
+	h, err := readSymbols(r)
+	if err != nil {
+		return nil, fmt.Errorf("lsd: read heading symbols: %w", err)
+	}
+	at, err := readLengthTable(r)
+	if err != nil {
+		return nil, fmt.Errorf("lsd: read article Huffman table: %w", err)
+	}
+	ht, err := readLengthTable(r)
+	if err != nil {
+		return nil, fmt.Errorf("lsd: read heading Huffman table: %w", err)
+	}
+	pt, err := readLengthTable(r)
+	if err != nil {
+		return nil, fmt.Errorf("lsd: read prefix-length table: %w", err)
+	}
+	qt, err := readLengthTable(r)
+	if err != nil {
+		return nil, fmt.Errorf("lsd: read postfix-length table: %w", err)
+	}
+	r1, err := r.read(32)
+	if err != nil {
+		return nil, fmt.Errorf("lsd: read first reference number: %w", err)
+	}
+	r2, err := r.read(32)
+	if err != nil {
+		return nil, fmt.Errorf("lsd: read second reference number: %w", err)
+	}
+	return &decoder{prefix: prefix, articleSymbols: a, headingSymbols: h, articles: at, headings: ht, prefixLengths: pt, postfixLengths: qt, ref1: r1, ref2: r2}, nil
+}
+
+func readSymbols(r *bitReader) ([]uint32, error) {
+	n, err := r.read(32)
+	if err != nil {
+		return nil, err
+	}
+	w, err := r.read(8)
+	if err != nil {
+		return nil, err
+	}
+	if n == 0 || n > 1<<20 || w == 0 || w > 32 {
+		return nil, fmt.Errorf("invalid symbol table dimensions (%d symbols, %d bits)", n, w)
+	}
+	symbols := make([]uint32, n)
+	for i := range symbols {
+		v, err := r.read(uint8(w))
+		if err != nil {
+			return nil, err
+		}
+		symbols[i] = v
+	}
+	return symbols, nil
+}
+
+func (d *decoder) readRef(r *bitReader) (uint32, error) {
+	code, err := r.read(2)
+	if err != nil {
+		return 0, err
+	}
+	if code == 3 {
+		if _, err := r.read(32); err != nil {
+			return 0, err
+		}
+		return 0, nil
+	}
+	n := bitWidth(d.ref2)
+	if n < 2 {
+		return 0, fmt.Errorf("lsd: invalid reference width %d", n)
+	}
+	low, err := r.read(n - 2)
+	if err != nil {
+		return 0, err
+	}
+	return code<<(n-2) | low, nil
+}
+
+func (d *decoder) readHeading(r *bitReader, knownPrefix []uint16) ([]uint16, uint32, error) {
+	pl, err := d.prefixLengths.decode(r)
+	if err != nil {
+		return nil, 0, fmt.Errorf("prefix length: %w", err)
+	}
+	ql, err := d.postfixLengths.decode(r)
+	if err != nil {
+		return nil, 0, fmt.Errorf("postfix length: %w", err)
+	}
+	if pl > uint32(len(knownPrefix)) || ql > 1<<16 {
+		return nil, 0, fmt.Errorf("lsd: invalid heading lengths %d + %d", pl, ql)
+	}
+	out := append([]uint16(nil), knownPrefix[:pl]...)
+	for i := uint32(0); i < ql; i++ {
+		idx, err := d.headings.decode(r)
+		if err != nil {
+			return nil, 0, fmt.Errorf("heading symbol: %w", err)
+		}
+		if idx >= uint32(len(d.headingSymbols)) || d.headingSymbols[idx] > 0xffff {
+			return nil, 0, fmt.Errorf("lsd: invalid heading symbol index/value %d", idx)
+		}
+		out = append(out, uint16(d.headingSymbols[idx]))
+	}
+	ref, err := d.readRef(r)
+	if err != nil {
+		return nil, 0, fmt.Errorf("article reference: %w", err)
+	}
+	unsorted, err := r.read(1)
+	if err != nil {
+		return nil, 0, err
+	}
+	if unsorted != 0 {
+		n, err := r.read(8)
+		if err != nil {
+			return nil, 0, err
+		}
+		for i := uint32(0); i < n; i++ {
+			if _, err := r.read(8); err != nil {
+				return nil, 0, err
+			}
+			if _, err := r.read(16); err != nil {
+				return nil, 0, err
+			}
+		}
+	}
+	return out, ref, nil
+}
+
+func (d *decoder) decodeArticle(data []byte, size uint32) (string, error) {
+	if size > 64<<20 {
+		return "", fmt.Errorf("lsd: article is too large (%d UTF-16 units)", size)
+	}
+	r := &bitReader{data: data}
+	out := make([]uint16, 0, size)
+	for uint32(len(out)) < size {
+		idx, err := d.articles.decode(r)
+		if err != nil {
+			return "", fmt.Errorf("article symbol: %w", err)
+		}
+		if idx >= uint32(len(d.articleSymbols)) {
+			return "", fmt.Errorf("lsd: invalid article symbol index %d", idx)
+		}
+		sym := d.articleSymbols[idx]
+		switch {
+		case sym < 0x10000:
+			out = append(out, uint16(sym))
+		case sym < 0x10040:
+			length := sym - 0xfffd
+			start, err := r.read(bitWidth(uint32(len(d.prefix))))
+			if err != nil {
+				return "", err
+			}
+			if uint64(start)+uint64(length) > uint64(len(d.prefix)) {
+				return "", fmt.Errorf("lsd: article prefix copy is out of range")
+			}
+			out = append(out, d.prefix[start:start+length]...)
+		default:
+			length := sym - 0x1003d
+			start, err := r.read(bitWidth(size))
+			if err != nil {
+				return "", err
+			}
+			if uint64(start)+uint64(length) > uint64(len(out)) {
+				return "", fmt.Errorf("lsd: article back-reference is out of range")
+			}
+			for i := uint32(0); i < length; i++ {
+				out = append(out, out[start+i])
+			}
+		}
+		if uint32(len(out)) > size {
+			return "", fmt.Errorf("lsd: decoded article exceeds declared length")
+		}
+	}
+	return string(utf16.Decode(out)), nil
+}
+
+func articleSize(data []byte) (uint32, []byte, error) {
+	if len(data) < 2 {
+		return 0, nil, fmt.Errorf("lsd: truncated article length")
+	}
+	n := uint32(binary.BigEndian.Uint16(data[:2]))
+	if n == 0xffff {
+		if len(data) < 6 {
+			return 0, nil, fmt.Errorf("lsd: truncated extended article length")
+		}
+		n = binary.BigEndian.Uint32(data[2:6])
+		return n, data[6:], nil
+	}
+	return n, data[2:], nil
+}
