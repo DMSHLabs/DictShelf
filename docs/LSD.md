@@ -77,5 +77,11 @@ overlay. These local files are not included in the repository. Broader
 independent dictionaries, malformed-file handling and resource-name edge cases
 still need coverage before support is marked complete. `_abrv.lsd` companion
 lookup is covered by dictionary-layer tests; real glossary files remain local
-validation inputs, not repository fixtures. The XOR substitution table carries
-its MIT attribution in `internal/format/lsd/NOTICE.md`.
+validation inputs, not repository fixtures. All 79 files in the local X6 test
+folder were read to EOF without errors: 67 use `0x152001` (X6 user) and 12 use
+`0x155001` (X6 abbreviation); none is an X6 system dictionary (`0x151005`).
+X6 system XOR was additionally checked by temporarily converting a local X5
+system dictionary into X6 block encoding and comparing every decoded entry and
+annotation. That source file was not added to the repository. The XOR
+substitution table carries its MIT attribution in
+`internal/format/lsd/NOTICE.md`.
