@@ -92,7 +92,7 @@ them are in `docs/handoff-archive.md`.
   `ISCC_PATH` in `build-windows.cmd` is pinned to
   `D:\ProgSoft\InnoSetup7\ISCC.exe`. Verified 2026-09-28: `build-windows.cmd
   installer` packages the cgo `wuDict2.exe` and builds the setup program,
-  `dist\wudict2-windows-x64-setup-0.0.0.exe` (7.3 MB, ProductName wuDict2,
+  `dist\dictshelf-windows-x64-setup-0.0.0.exe` (7.3 MB, ProductName DictShelf,
   FileDescription "wuDict Setup"); Inno Setup 7 still accepts the legacy
   `/D<name>=<value>` defines `make-installer.ps1` passes it. The **5** that is
   also on this machine (`D:\ProgSoft\InnoSetup5\`) cannot read the script at all
@@ -142,7 +142,7 @@ them are in `docs/handoff-archive.md`.
   they would replace.
 - **`build-android.cmd debug intel` builds for the emulator.** It cross-builds
   the server for `GOARCH=amd64` too and ships both ABIs in
-  `wudict2-android-arm64-v8a-x86_64-foss-debug.apk`. The token may be written in
+  `dictshelf-android-arm64-v8a-x86_64-foss-debug.apk`. The token may be written in
   either position (`intel debug` too, a bare `intel` means debug) and `release
   intel` is refused. The x86_64 lib lands in `android/app/src/emuX86/jniLibs/`
   — a default source dir for NO source set — and only `-PemuX86=1` (which

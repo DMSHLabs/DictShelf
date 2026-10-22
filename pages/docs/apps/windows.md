@@ -1,6 +1,6 @@
 ---
 title: Windows installer
-description: The wuDict2 installer for Windows - install modes, optional tasks, the tray icon, upgrades, silent install and uninstall.
+description: The DictShelf installer for Windows - install modes, optional tasks, the tray icon, upgrades, silent install and uninstall.
 ---
 
 # Windows installer
@@ -13,7 +13,7 @@ other Arm64 systems use `wudict-windows-arm64-purego.exe`.
 
 ## Install
 
-1.  Download **`wudict2-windows-x64-setup-<version>.exe`** from
+1.  Download **`dictshelf-windows-x64-setup-<version>.exe`** from
     [the releases page](https://github.com/wuweidict/wudict/releases).
 2.  Run it. The file is not code-signed, so Windows shows *Windows protected
     your PC*: choose **More info**, then **Run anyway**.
@@ -25,9 +25,9 @@ other Arm64 systems use `wudict-windows-arm64-purego.exe`.
     | **For me only** | | `%LOCALAPPDATA%\Programs\wuDict2` |
 
 4.  Select the options.
-5.  Finish. **Start wuDict2 now** starts the server.
+5.  Finish. **Start DictShelf now** starts the server.
 
-The browser opens [localhost:6888](http://localhost:6888), and the **wuDict2**
+The browser opens [localhost:6888](http://localhost:6888), and the **DictShelf**
 icon appears in the notification area.
 
 ## Options
@@ -35,11 +35,11 @@ icon appears in the notification area.
 | Task                        | Default | Effect                                                        |
 |-----------------------------| --- |---------------------------------------------------------------|
 | Create a desktop shortcut   | off | a desktop shortcut                                            |
-| Start wuDict2 at sign-in    | off | a Startup folder shortcut that runs `wuDict2.exe --no-browser` |
-| Add wuDict2 to `%PATH%`     | on | makes `wuDict2` command available in PowerShell and `cmd` |
-| Offer wuDict2 in *Open with*| on | for `.mdx`, `.dsl`, `.slob`, `.bgl` and `.zim` files |
+| Start DictShelf at sign-in    | off | a Startup folder shortcut that runs `wuDict2.exe --no-browser` |
+| Add DictShelf to `%PATH%`     | on | makes the `wuDict2` command available in PowerShell and `cmd` |
+| Offer DictShelf in *Open with*| on | for `.mdx`, `.dsl`, `.slob`, `.bgl` and `.zim` files |
 
-The uninstaller removes all four. *Start wuDict2 at sign-in* is the same as the
+The uninstaller removes all four. *Start DictShelf at sign-in* is the same as the
 manual Startup folder shortcut in [Run at startup](../running.md); use one of
 the two.
 
@@ -52,21 +52,21 @@ PowerShell or `cmd`. The log is written to
 
 If the app is already active, a second operational launch displays a warning and exits.
 
-wuDict2 keeps its files in `%USERPROFILE%\.wuDict2`. On first launch, if
-`%USERPROFILE%\.wudict` exists, wuDict2 checks its `state.json` for wuDict2-only
-settings. If it finds them, it asks whether to copy or move wuDict2 settings,
+DictShelf keeps its files in `%USERPROFILE%\.wuDict2`. On first launch, if
+`%USERPROFILE%\.wudict` exists, DictShelf checks its `state.json` for DictShelf-only
+settings. If it finds them, it asks whether to copy or move DictShelf settings,
 styles and lemma files into the new folder. Otherwise, it offers to import only
 the dictionary folders and lemmas, or start with **Edit Folders**. Dictionary
-indexes are not copied; wuDict2 rebuilds them in its own format. The old wuDict
+indexes are not copied; DictShelf rebuilds them in its own format. The old wuDict
 server is stopped before files are copied when its settings identify a running
 instance.
 
 | Tray menu | Action |
 | --- | --- |
-| **Open wuDict2** | open the page in the browser |
+| **Open DictShelf** | open the page in the browser |
 | **Rescan dictionaries** | re-read the dictionary folders |
 | **Open dictionary folder** | show the dictionary folder in Explorer |
-| **Quit wuDict2** | stop the server |
+| **Quit DictShelf** | stop the server |
 
 ## Upgrade
 
@@ -78,11 +78,11 @@ library are not changed.
 ## Silent install
 
 ``` pwsh title="all users"
-.\wudict2-windows-x64-setup-<version>.exe /ALLUSERS /VERYSILENT /NORESTART
+.\dictshelf-windows-x64-setup-<version>.exe /ALLUSERS /VERYSILENT /NORESTART
 ```
 
 ``` pwsh title="current user"
-.\wudict2-windows-x64-setup-<version>.exe /CURRENTUSER /VERYSILENT /NORESTART
+.\dictshelf-windows-x64-setup-<version>.exe /CURRENTUSER /VERYSILENT /NORESTART
 ```
 
 `/ALLUSERS` and `/CURRENTUSER` skip the install mode page. A silent install
@@ -90,7 +90,7 @@ does not start the server.
 
 ## Uninstall
 
-<kbd>Settings</kbd> → <kbd>Apps</kbd> → <kbd>Installed apps</kbd> → <kbd>wuDict2</kbd> → <kbd>Uninstall</kbd> removes the program,
+<kbd>Settings</kbd> → <kbd>Apps</kbd> → <kbd>Installed apps</kbd> → <kbd>DictShelf</kbd> → <kbd>Uninstall</kbd> removes the program,
 the shortcuts, the `PATH` entry and the *Open with* entries. Dictionary files,
 `%USERPROFILE%\.wuDict2` (settings and library) and the log remain; delete them
 by hand if you no longer need them.

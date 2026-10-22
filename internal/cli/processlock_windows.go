@@ -35,7 +35,7 @@ func acquireProcessLock() (func(), error) {
 	identity := sha256.Sum256([]byte(strings.ToLower(filepath.Clean(home))))
 	name, err := syscall.UTF16PtrFromString(fmt.Sprintf(`Local\wuDict2-%x`, identity[:12]))
 	if err != nil {
-		return nil, fmt.Errorf("cannot create the wuDict2 process lock: %w", err)
+		return nil, fmt.Errorf("cannot create the DictShelf process lock: %w", err)
 	}
 	handle, _, callErr := createMutexW.Call(0, 0, uintptr(unsafe.Pointer(name)))
 	runtime.KeepAlive(name)
@@ -43,7 +43,7 @@ func acquireProcessLock() (func(), error) {
 		if callErr == nil {
 			callErr = syscall.EINVAL
 		}
-		return nil, fmt.Errorf("cannot create the wuDict2 process lock: %w", callErr)
+		return nil, fmt.Errorf("cannot create the DictShelf process lock: %w", callErr)
 	}
 	const errorAlreadyExists syscall.Errno = 183
 	if errno, ok := callErr.(syscall.Errno); ok && errno == errorAlreadyExists {
@@ -52,7 +52,7 @@ func acquireProcessLock() (func(), error) {
 			activateRunningDesktopWindow()
 			return nil, errExistingDesktopInstance
 		}
-		return nil, fmt.Errorf("wuDict2 is already running. Close it before starting another copy")
+		return nil, fmt.Errorf("DictShelf is already running. Close it before starting another copy")
 	}
 	return func() { closeHandle.Call(handle) }, nil
 }
@@ -62,7 +62,7 @@ var processLockUser32 = syscall.NewLazyDLL("user32.dll")
 // activateRunningDesktopWindow waits briefly because the first process can
 // own the mutex while WebView2 is still creating its top-level window.
 func activateRunningDesktopWindow() {
-	title, err := syscall.UTF16PtrFromString("wuDict2")
+	title, err := syscall.UTF16PtrFromString("DictShelf")
 	if err != nil {
 		return
 	}

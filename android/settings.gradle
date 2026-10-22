@@ -15,5 +15,5 @@ dependencyResolutionManagement {
         mavenCentral()
     }
 }
-rootProject.name = 'wudict2-android'
+rootProject.name = 'dictshelf-android'
 include ':app'

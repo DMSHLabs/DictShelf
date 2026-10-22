@@ -59,7 +59,7 @@ The macOS and Linux setups use `make` targets in a clone of the
 
     ## Installer
 
-    The installer's *Start wuDict2 at sign-in* task puts a shortcut to
+    The installer's *Start DictShelf at sign-in* task puts a shortcut to
     `wuDict2.exe --no-browser` in the Startup folder. See
     [Windows installer](apps/windows.md).
 

@@ -31,7 +31,7 @@ func TestIndexLogDownload(t *testing.T) {
 	if w.Header().Get("Cache-Control") != "no-store" || !strings.Contains(w.Header().Get("Content-Disposition"), "attachment;") {
 		t.Fatal("log must download without caching")
 	}
-	if !regexp.MustCompile(`filename="wuDict2_SystemLog_\d{4}_\d{2}_\d{2}-\d{2}-\d{2}\.log"`).MatchString(w.Header().Get("Content-Disposition")) {
+	if !regexp.MustCompile(`filename="DictShelf_SystemLog_\d{4}_\d{2}_\d{2}-\d{2}-\d{2}\.log"`).MatchString(w.Header().Get("Content-Disposition")) {
 		t.Fatal("missing dated filename")
 	}
 }

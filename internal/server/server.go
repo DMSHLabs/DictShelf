@@ -212,7 +212,7 @@ type Server struct {
 	DesktopExit func()
 
 	// AutoIndex is retained for compatibility with the shared UI API; the
-	// wuDict2 host leaves it disabled and prepares indexes only on explicit action.
+	// DictShelf host leaves it disabled and prepares indexes only on explicit action.
 	AutoIndex bool
 
 	// First-run Windows data migration is offered on the setup page after it

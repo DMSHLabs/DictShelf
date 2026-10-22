@@ -1,24 +1,24 @@
 ---
 title: Privacy Policy
-description: wuDict2 collects no data about you and has no account. It connects to the internet only to download what you ask for.
+description: DictShelf collects no data about you and has no account. It connects to the internet only to download what you ask for.
 ---
 
 # Privacy Policy
 
 **Effective 3 October 2026.**
 
-This policy covers the **wuDict2** Android app (`com.dmshepeta.wudict2`) and
+This policy covers the **DictShelf** Android app (`com.dmshepeta.wudict2`) and
 the `wudict` program it is built from, on every platform.
 
 ## Summary
 
-**wuDict2 collects no data about you.**
+**DictShelf collects no data about you.**
 
 There is no account, no sign-in, no cloud service, no analytics, no advertising,
 no crash reporting and no third-party SDK. Your dictionaries, your searches and
 your settings stay on your device.
 
-wuDict2 runs a web server inside the app, bound to `127.0.0.1`, and shows its
+DictShelf runs a web server inside the app, bound to `127.0.0.1`, and shows its
 pages in a WebView. The app connects to the internet only to download something
 you asked for: lemma data, or a dictionary from a link you provide. See
 [Network requests](#network-requests).
@@ -36,7 +36,7 @@ Nothing is uploaded.
 
 The app declares `allowBackup="false"`, so none of it is copied into Google's
 Auto Backup. **Uninstalling the app deletes everything in its own directory.**
-You can also clear it at any time from Android's *Settings → Apps → wuDict2 →
+You can also clear it at any time from Android's *Settings → Apps → DictShelf →
 Storage → Clear storage*. In the FOSS build, *Internal storage → Dictionaries*
 is yours and is not deleted.
 
@@ -44,7 +44,7 @@ is yours and is not deleted.
 
 Both builds declare:
 
-- **`INTERNET`**: to connect to the wuDict2 server inside the app on
+- **`INTERNET`**: to connect to the DictShelf server inside the app on
   `127.0.0.1`, and for the downloads listed under
   [Network requests](#network-requests).
 - **`FOREGROUND_SERVICE`** and **`FOREGROUND_SERVICE_DATA_SYNC`**: granted at
@@ -72,7 +72,7 @@ Advertising ID.
 
 ## Network requests { #network-requests }
 
-wuDict2 makes a network request only in these cases:
+DictShelf makes a network request only in these cases:
 
 - **Lemma data.** The Lemmatization page reads the language catalogue from
   `raw.githubusercontent.com/wuweidict/lemmas`, and installing a language
@@ -86,10 +86,10 @@ wuDict2 makes a network request only in these cases:
   article is displayed. This is uncommon: most dictionary files bundle their
   media.
 
-A tapped external link opens in your browser; wuDict2 does not follow it.
+A tapped external link opens in your browser; DictShelf does not follow it.
 
 The server at the other end of each request sees your IP address, as with any
-web request. wuDict2's own requests identify themselves as `wudict` and carry
+web request. DictShelf's own requests identify themselves as `wudict` and carry
 nothing else about you or your device.
 
 With the network turned off, everything except these downloads works.
@@ -107,7 +107,7 @@ None of this applies to the FOSS build from GitHub.
 
 ## Children
 
-wuDict2 is a dictionary reader. It collects no data from anyone, of any age,
+DictShelf is a dictionary reader. It collects no data from anyone, of any age,
 and contains no advertising and no in-app purchases.
 
 ## Your rights
@@ -119,7 +119,7 @@ Everything the app produces is on your device.
 
 ## Open source
 
-wuDict2 is free software under the GPL-3.0-or-later. The source is public, so
+DictShelf is free software under the GPL-3.0-or-later. The source is public, so
 every statement on this page can be checked.
 
 - Source: [github.com/wuweidict/wudict](https://github.com/wuweidict/wudict)

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="import_title">Импорт словарей</string>
-    <string name="import_message">Выберите папку со словарями. wuDict2 скопирует её в своё хранилище, сохранив структуру: .mdx нужен файл .mdd рядом, StarDict — файлы .idx и .dict, DSL — папка res. Затем приложение предложит удалить исходные файлы, чтобы коллекция не занимала место дважды.</string>
+    <string name="import_message">Выберите папку со словарями. DictShelf скопирует её в своё хранилище, сохранив структуру: .mdx нужен файл .mdd рядом, StarDict — файлы .idx и .dict, DSL — папка res. Затем приложение предложит удалить исходные файлы, чтобы коллекция не занимала место дважды.</string>
     <string name="import_choose">Выбрать папку</string>
     <string name="import_later">Позже</string>
     <string name="import_cancel">Отмена</string>
@@ -11,8 +11,8 @@
     <string name="import_nothing">В этой папке нет файлов.</string>
     <string name="import_no_space">Недостаточно места: требуется %1$s, свободно %2$s.</string>
     <string name="import_done">Импортировано файлов: %1$d.</string>
-    <string name="import_done_offer_delete">Импортировано файлов: %1$d.\n\nwuDict2 хранит собственную копию. Исходные файлы в %2$s больше не нужны: их удаление освободит %3$s. Словари будут работать в любом случае.</string>
-    <string name="import_done_offer_delete_nosize">Импортировано файлов: %1$d.\n\nwuDict2 хранит собственную копию. Исходные файлы в %2$s больше не нужны. Словари будут работать в любом случае.</string>
+    <string name="import_done_offer_delete">Импортировано файлов: %1$d.\n\nDictShelf хранит собственную копию. Исходные файлы в %2$s больше не нужны: их удаление освободит %3$s. Словари будут работать в любом случае.</string>
+    <string name="import_done_offer_delete_nosize">Импортировано файлов: %1$d.\n\nDictShelf хранит собственную копию. Исходные файлы в %2$s больше не нужны. Словари будут работать в любом случае.</string>
     <string name="import_source_fallback">выбранной папке</string>
     <string name="import_delete_files">Удалить</string>
     <string name="import_keep_files">Оставить</string>

@@ -147,7 +147,7 @@ jobs:
           APP_BIN="$PWD/wudict" BUILD_DIR="$PWD/dist" sh tools/make-app.sh
           # ditto, not zip: it is the only archiver Apple guarantees keeps the
           # bundle's symlinks, xattrs and code signature intact.
-          # Versioned like every other asset (wudict2-windows-x64-setup-3.7.5.exe),
+          # Versioned like every other asset (dictshelf-windows-x64-setup-3.7.5.exe),
           # from the binary's own --version via the same helper make-app.sh
           # used, so the zip and the bundle inside it cannot disagree. Same
           # file-name rules as the APK: leading "v" dropped, "/" -> "_".
@@ -246,7 +246,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: wudict2-windows-installer
-          path: dist/wudict2-windows-x64-setup*.exe
+          path: dist/dictshelf-windows-x64-setup*.exe
           if-no-files-found: error
 
   release:

@@ -12,6 +12,6 @@ var windowsIconPNG []byte
 
 func init() {
 	// The shared tray image remains the upstream mark for Linux. Windows is the
-	// wuDict2 desktop product and uses the fork's digit-bearing mark.
+	// DictShelf desktop product and uses its book-on-shelf mark.
 	iconPNG = windowsIconPNG
 }

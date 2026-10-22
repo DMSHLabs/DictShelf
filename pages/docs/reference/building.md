@@ -107,7 +107,7 @@ The two APKs differ only in how dictionaries reach the device.
 | `foss` | *All files access*; reads *Internal storage → Dictionaries* | `make apk-foss-debug`, `make apk-foss-release` |
 | `play` | no storage permission; dictionaries are imported into the app's folder | `make apk-play-debug`, `make apk-play-release` |
 
-The GitHub release `wudict2-android-arm64-v8a-foss.apk` is the `foss`
+The GitHub release `dictshelf-android-arm64-v8a-foss.apk` is the `foss`
 build. `make apk-verify` checks that the `play` build declares no storage
 permission. See [Android app](../apps/android.md).
 

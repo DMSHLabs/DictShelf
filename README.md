@@ -1,12 +1,12 @@
-# wuDict2 — an Android fork of WuWeiDict
+# DictShelf — an Android fork of WuWeiDict
 
-**wuDict2** is an Android fork of [WuWeiDict](https://github.com/wuweidict/wudict)
+**DictShelf** is an Android fork of [WuWeiDict](https://github.com/wuweidict/wudict)
 ("wuDict"): a fast, _native_, self-contained, multi-format dictionary server that
 runs in your browser at [http://localhost:6888](http://localhost:6888).
 
 What differs from upstream:
 
-- Its own Android identity — launcher name **wuDict2** — so it installs and
+- Its own Android identity — launcher name **DictShelf** — so it installs and
   runs **beside** the upstream wuDict app.
 - A different default server port, **6889** (upstream uses 6888), so both apps
   can run at the same time on one device.
@@ -47,7 +47,7 @@ Runs natively on [android](https://wuweidict.github.io/wudict/apps/android/), [m
 1. Download the standalone binary for your OS from
    [releases](https://github.com/wuweidict/wudict/releases), rename to `wudict`, 
    `chmod +x wudict` (macOS/Linux) and move to a folder in `$PATH`, e.g. `/usr/local/bin`.
-2. Run `wudict` or `./wudict` if the file is in the current folder. For Windows, use the `wudict2-windows-x64-setup-<version>.exe` installer or the `wuDict2.exe` desktop build. For macOS an app bundle is provided (it is not signed with a commercial Apple Developer Certificate, macOS flags it as unverified, and extra steps are needed to de-quarantine the app as described in the [manual](https://wuweidict.github.io/wudict/apps/macos/)).
+2. Run `wudict` or `./wudict` if the file is in the current folder. For Windows, use the `dictshelf-windows-x64-setup-<version>.exe` installer or the `wuDict2.exe` desktop build. For macOS an app bundle is provided (it is not signed with a commercial Apple Developer Certificate, macOS flags it as unverified, and extra steps are needed to de-quarantine the app as described in the [manual](https://wuweidict.github.io/wudict/apps/macos/)).
 3. By default `wudict` searches for dictionaries under `~/Dictionaries` (including subfolders); 
    if the dictionary folder is missing or empty, a setup page opens where you can configure your dictionary folders.
 

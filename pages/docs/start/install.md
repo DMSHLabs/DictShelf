@@ -73,13 +73,13 @@ install. macOS also has an app bundle, Windows an installer, Android an APK.
     PowerShell or `cmd`. Desktop launches show a tray icon and log to
     `%LOCALAPPDATA%\wudict\wudict.log`.
 
-    The installer `wudict2-windows-x64-setup-<version>.exe` adds a Start menu
+    The installer `dictshelf-windows-x64-setup-<version>.exe` adds a Start menu
     entry, an uninstaller, `PATH` and *Open with*. See
     [Windows installer](../apps/windows.md).
 
 === "Android"
 
-    Build **`wudict2-android-arm64-v8a-foss.apk`** with
+    Build **`dictshelf-android-arm64-v8a-foss.apk`** with
     `build-android.cmd release` on Windows, then install the signed APK with
     your file manager; Android asks once to allow *Install unknown apps*. The
     Google Play build is on Google Play. See [Android app](../apps/android.md).

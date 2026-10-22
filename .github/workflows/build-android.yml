@@ -170,7 +170,7 @@ jobs:
           # No renaming here any more. app/build.gradle names the APK
           # (androidComponents.onVariants) and the Makefile exports the path,
           # so the published asset, `make apk-foss-release` and dist/ all carry
-          # ONE name: wudict2-android-arm64-v8a-foss.apk. The old copy step
+          # ONE name: dictshelf-android-arm64-v8a-foss.apk. The old copy step
           # invented a second name (wudict-android-arm64.apk) that said nothing
           # about the flavour and existed nowhere else in the project.
           if [ "${{ steps.signing.outputs.enabled }}" = "true" ]; then
@@ -195,7 +195,7 @@ jobs:
       - name: Upload APK for testing
         uses: actions/upload-artifact@v7
         with:
-          name: ${{ steps.signing.outputs.enabled == 'true' && 'wudict2-android-signed-test' || 'wudict2-android-debug-test' }}
+          name: ${{ steps.signing.outputs.enabled == 'true' && 'dictshelf-android-signed-test' || 'dictshelf-android-debug-test' }}
           path: ${{ env.APK }}
 
       - name: Create git tag if missing

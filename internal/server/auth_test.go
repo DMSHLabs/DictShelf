@@ -132,7 +132,7 @@ func TestSystemLogRequiresBearer(t *testing.T) {
 	s := authServer(t)
 	req := newRequest("GET", "/api/system-log", nil)
 	req.Header.Set("Authorization", "Bearer "+s.AuthToken)
-	if rec := serve(s, req); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "wuDict2 System Log") {
+	if rec := serve(s, req); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "DictShelf System Log") {
 		t.Fatalf("authorized system-log request: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 }

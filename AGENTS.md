@@ -6,7 +6,7 @@
 - For translation/localization tasks or bugs (including language switching, untranslated UI, or locale-related crashes), read [translation.md](translation.md) and [translation_todo.md](translation_todo.md) before changing code. Keep reusable translation rules in the former and current remaining work/verification in the latter.
 - Check branch/status before editing; preserve uncommitted work and user changes. Branch names in handoff snapshots are historical context, not instructions to switch branches. Work directly in this checkout unless the user asks otherwise; do not apply old stashes or patches without inspecting them.
 - The user builds from Windows cmd with `build-android.cmd`. Do not commit, publish, or install APKs unless requested. Do not read or print private signing settings/passwords.
-- Current user-approved labels (`wuDict2` for this Android fork, `Background color`, etc.) take precedence over older naming notes in general documentation.
+- Current user-approved labels (`DictShelf` for this Android and Windows product, `Background color`, etc.) take precedence over older naming notes in general documentation.
 
 ## Git branch policy
 

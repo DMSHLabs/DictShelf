@@ -201,7 +201,7 @@ final class ShellPrefs {
     // ── the information messages (2026-09-27) ────────────────────────────────
     //
     // The transient text this app draws while it is starting and while it is
-    // loading dictionaries: "Starting wuDict2…", the page's waiting art, its
+    // loading dictionaries: "Starting DictShelf…", the page's waiting art, its
     // "N of M ready" counter, the lookup window's "Looking up …". They are
     // honest and they are also unreadable - the first ones are on screen for a
     // few hundred milliseconds - so the row exists to turn them off. What it

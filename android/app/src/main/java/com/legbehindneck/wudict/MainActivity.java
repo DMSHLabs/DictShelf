@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-// wuDict2's Android shell: a WebView over the shared Go runtime loaded from
+// DictShelf's Android shell: a WebView over the shared Go runtime loaded from
 // the APK's JNI library. App operations and resources are dispatched in-process.
 package com.legbehindneck.wudict;
 

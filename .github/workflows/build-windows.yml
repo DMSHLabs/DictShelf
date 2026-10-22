@@ -130,7 +130,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: wudict2-windows-installer
-          path: dist/wudict2-windows-x64-setup*.exe
+          path: dist/dictshelf-windows-x64-setup*.exe
           if-no-files-found: error
 
   release:

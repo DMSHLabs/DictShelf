@@ -1,6 +1,6 @@
-# wuDict2 Android identity
+# DictShelf Android identity
 
-wuDict2 is an Android fork of [WuWeiDict](https://github.com/wuweidict/wudict).
+DictShelf is an Android fork of [WuWeiDict](https://github.com/wuweidict/wudict).
 The upstream copyright notices and GPL-3.0-or-later license remain in place.
 The fork's repository on GitHub is [DmShAl/wudict2](https://github.com/DmShAl/wudict2)
 (renamed from `DmShAl/wudict` on 2026-09-20; the old URL redirects).
@@ -12,18 +12,16 @@ names remain compatible with upstream.
 
 | Build | Application ID | Launcher name | Lookup activity |
 | --- | --- | --- | --- |
-| FOSS/Play release | `com.dmshepeta.wudict2` | wuDict2 | `com.dmshepeta.wudict2.LookupActivity` |
-| FOSS/Play debug | `com.dmshepeta.wudict2.debug` | wuDict2 Debug | `com.dmshepeta.wudict2.LookupActivity` |
+| FOSS/Play release | `com.dmshepeta.wudict2` | DictShelf | `com.dmshepeta.wudict2.LookupActivity` |
+| FOSS/Play debug | `com.dmshepeta.wudict2.debug` | DictShelf Debug | `com.dmshepeta.wudict2.LookupActivity` |
 
-The launcher icon is the fork's own too: upstream's mark with a "2" drawn in it,
-so the two apps are told apart on a home screen. The phone's copy is
-`android/app/src/main/res/drawable/ic_launcher_foreground.xml` (adaptive and
-monochrome), and `tools/make-icons.sh` renders the Play listing's `icon.png` and
-`featureGraphic.png` from that same mark with that same digit. The mark itself
-stays upstream's `internal/server/web/favicon.svg`, untouched, and so do the
-renditions that are only ever a few pixels tall — the tray PNGs, the served
-favicon, the `.icns`/`.ico`: a digit at 16px is a smudge, and no desktop build
-ships from this fork.
+The DictShelf launcher mark is an open book resting on an amber shelf, on a
+midnight-blue tile. Its vector source is `packaging/brand/dictshelf.svg`; the
+Android adaptive and monochrome foreground is
+`android/app/src/main/res/drawable/ic_launcher_foreground.xml`. Run
+`tools/make-icons.sh` to render the Play listing images, Windows and macOS app
+icons, and Windows/macOS tray icons. The upstream favicon remains
+`internal/server/web/favicon.svg`; the Linux tray icon continues to use it.
 
 Android uses `https://wudict2.localhost` as its stable WebView origin once
 `settings.json` marks migration complete. Before that file exists, it temporarily
@@ -31,7 +29,7 @@ uses the previous `http://127.0.0.1:<port>` origin so the in-process Go bridge
 can import that WebView profile's localStorage. Android never opens a TCP
 listener and does not support server mode. The old port preference is consulted
 only for that one-time profile import. Android shell preferences and app-owned
-files remain in the wuDict2 app's own storage. The shared HTTP API remains
+files remain in the DictShelf app's own storage. The shared HTTP API remains
 available to browser and explicit server launch modes on other platforms.
 
 On `dev2`, Android starts the shared Go runtime from the JNI library inside
@@ -128,8 +126,8 @@ From Windows cmd, `build-android.cmd release` makes the FOSS release APK and
 (`original` or `sh`) is retired and produces an error. Gradle's FOSS and Play
 tasks still work, including `assemblePlayRelease` and `bundlePlayRelease`.
 The APKs are named
-`wudict2-android-arm64-v8a-<flavour>[-debug|-unsigned].apk`.
-The Play bundle is `wudict2-play-release.aab`. Release builds without a
+`dictshelf-android-arm64-v8a-<flavour>[-debug|-unsigned].apk`.
+The Play bundle is `dictshelf-play-release.aab`. Release builds without a
 configured keystore produce an unsigned APK; do not treat that as installable.
 By default, the Windows command stamps the version from `git describe` into
 both the APK and its Go/JNI library. GitHub release builds use the selected or
@@ -139,7 +137,7 @@ before building, for example `set WUDICT_VERSION=wudict2-v0.13.0` and then run
 
 `build-android.cmd debug intel` cross-compiles the in-process Go library
 for x86_64 as well, and ships both ABIs in one debug APK
-(`wudict2-android-arm64-v8a-x86_64-foss-debug.apk`), so it installs on an x86_64
+(`dictshelf-android-arm64-v8a-x86_64-foss-debug.apk`), so it installs on an x86_64
 emulator and on arm64 hardware alike. This is not a convenience: the emulator's
 ARM translation runs ordinary arm64 binaries but crashes every Go binary, a
 hello-world included, so without an x86_64 server there is no way to run the
@@ -231,8 +229,8 @@ listen-address control; Android always uses the in-process Go/JNI bridge.
 
 ## Unfinished work
 
-- Install the current wuDict2 release on a device and test simultaneous wuDict
-  and wuDict2 operation in both launch orders. Confirm each displays its own
+- Install the current DictShelf release on a device and test simultaneous wuDict
+  and DictShelf operation in both launch orders. Confirm each displays its own
   library and that closing one does not stop the other. No device test has been
   run for the port fix.
 - Test external-reader selection of

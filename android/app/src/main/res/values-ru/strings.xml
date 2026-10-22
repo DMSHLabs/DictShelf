@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="starting">Запуск wuDict2…</string>
-    <string name="runtime_failed">Не удалось запустить wuDict2: %1$s</string>
-    <string name="lookup_label">wuDict2</string>
+    <string name="starting">Запуск DictShelf…</string>
+    <string name="runtime_failed">Не удалось запустить DictShelf: %1$s</string>
+    <string name="lookup_label">DictShelf</string>
     <string name="lookup_starting">Поиск «%1$s»…</string>
     <string name="lookup_empty">Нет текста для поиска</string>
-    <string name="lookup_open_app">Открыть в wuDict2</string>
+    <string name="lookup_open_app">Открыть в DictShelf</string>
     <string name="index_channel">Индексация словарей</string>
     <string name="index_title">Индексация словаря</string>
     <string name="index_text">Создаётся поисковый индекс. Работа продолжится, пока вы пользуетесь другими приложениями.</string>
@@ -14,7 +14,7 @@
     <string name="index_download_title">Загрузка словаря</string>
     <string name="index_download_text">Загрузка продолжится, пока вы пользуетесь другими приложениями.</string>
     <string name="settings_short_label">Настройки</string>
-    <string name="settings_title">Настройки wuDict2</string>
+    <string name="settings_title">Настройки DictShelf</string>
     <string name="settings_moved_hint">Большинство настроек находится в приложении: нажмите ☰ и откройте «Системные настройки». Здесь можно сохранить системный журнал или сбросить параметры приложения.</string>
     <string name="settings_index_workers">Словарей индексируется одновременно</string>
     <string name="settings_index_workers_hint">Выберите Auto или число от 1 до количества ядер процессора. Auto использует на одно ядро меньше, но не меньше одного. Больше потоков могут ускорить индексацию, но увеличивают расход энергии и нагрев.</string>
@@ -51,12 +51,12 @@
     <string name="intake_done">Добавлено: %1$s.</string>
     <string name="intake_done_partial">Добавлено: %1$s.\n\nНе удалось получить: %2$s</string>
     <string name="intake_none">Ничего не добавлено.</string>
-    <string name="intake_nothing">В %1$s нет словарей, которые может прочитать wuDict2.</string>
-    <string name="intake_unsupported">wuDict2 не может прочитать %1$s.</string>
+    <string name="intake_nothing">В %1$s нет словарей, которые может прочитать DictShelf.</string>
+    <string name="intake_unsupported">DictShelf не может прочитать %1$s.</string>
     <string name="intake_cancelled">Отменено.</string>
     <string name="intake_busy">Импорт уже выполняется.</string>
     <string name="intake_failed">Не удалось добавить словари: %1$s</string>
-    <string name="intake_no_runtime">wuDict2 не запустился. Ничего не добавлено.</string>
+    <string name="intake_no_runtime">DictShelf не запустился. Ничего не добавлено.</string>
     <string name="intake_no_picker">На устройстве нет приложения для выбора файлов.</string>
 	<string name="intake_same_elsewhere">%1$s — уже установлен в %2$s</string>
 	<string name="intake_other_elsewhere">%1$s — заменит вашу копию в %2$s</string>

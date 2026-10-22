@@ -73,7 +73,7 @@ var Notices string
 // read is WuWeiDict. Anything user-facing - CLI banner, web UI
 // About box, setup page - sources its wording from here or mirrors it.
 const (
-	ProductName = "wuDict2"
+	ProductName = "DictShelf"
 	Tagline     = "Search every dictionary you own, from one browser tab."
 	SiteURL     = "https://wudict.legbehindneck.com"
 	RepoURL     = "https://github.com/wuweidict/wudict"
@@ -474,7 +474,7 @@ func fail(err error) {
 		}
 		title := ProductName
 		if runtime.GOOS == "windows" {
-			title = "wuDict2"
+			title = "DictShelf"
 		}
 		tray.Alert(title, msg)
 	}
@@ -1280,7 +1280,7 @@ func cmdServe(args []string) (err error) {
 			if inst, ok := probeRunning(cfg.Addr()); ok {
 				announceRunning(inst, url, cfg.DictDirs, !cfg.NoBrowser)
 				if gui {
-					tray.Alert("wuDict2", "wuDict2 is already running. Close it before starting another copy.")
+					tray.Alert("DictShelf", "DictShelf is already running. Close it before starting another copy.")
 					return nil
 				}
 				if !cfg.NoBrowser {
@@ -1969,7 +1969,7 @@ func openUI(address string, gui bool, onWindowClose func(), desktopRequest func(
 		}
 	}
 	if desktopOnly {
-		tray.Alert("wuDict2", "WebView2 could not start, so the desktop app cannot open.")
+		tray.Alert("DictShelf", "WebView2 could not start, so the desktop app cannot open.")
 		if onWindowClose != nil {
 			onWindowClose()
 		}

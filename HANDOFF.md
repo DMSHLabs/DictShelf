@@ -1,9 +1,12 @@
 # Agent handoff — current state
 
-Current checkout: branch `dev` at `4ce5a7f8`, aligned with `origin/dev`, with
-uncommitted Wildcards presentation changes. This checkout also contains the LSD
-decoder and reader work. No upstream is configured. Upstream review and pending
-ZIM checks remain as recorded below.
+Current checkout: local branch `DictShelf` at `959cd0b3`, based on the `lsd`
+merge commit, with local uncommitted branding changes for Android and Windows.
+The visible product name is DictShelf; the Android application ID, Windows
+executable name, data folders and registry ProgID remain stable. Android and
+Windows app icons use the new open-book-on-a-shelf mark in navy, ivory and amber.
+No commit or push has been made. The branch includes the LSD decoder and reader
+work already present at its base. No upstream is configured.
 
 Wildcards' combined mode keeps the dictionary field's geometry, displays
 “Combined list” / «Общий список», and removes the dropdown affordance while
