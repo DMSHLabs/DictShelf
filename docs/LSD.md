@@ -11,7 +11,7 @@ reader must not be added as a mode inside the text DSL scanner.
 | Application operation | Existing contract | Data the LSD backend must provide |
 | --- | --- | --- |
 | Format discovery and probing | `dict.RegisterFormat`, optional `dict.RegisterProber`; `dict.Probe` falls back to `Open` | Recognize `.lsd`; validate the signature, supported version and bounded header fields; report `Meta` without decoding every article when feasible |
-| Initial index preparation / rebuild | `dict.RegisterReader`; `dict.OpenReader`; sequential `dict.Reader` (`Meta`, `Next`, `Close`) consumed by `store.Reconcile` | Stream entries in source order. `Next` returns headwords/aliases, DSL article markup as `dict.BodyDSL`, and `io.EOF` at the end. Keep the file and decoding state open only for the reader lifetime |
+| Initial index preparation / rebuild | `dict.RegisterReader`; `dict.OpenReader`; sequential `dict.Reader` (`Meta`, `Next`, `Close`) consumed by `store.Reconcile` | Stream entries in source order. The LSD reader decodes article markup and sends it through the existing DSL article converter, returning normalized HTML and `io.EOF` at the end. Keep the file and decoding state open only for the reader lifetime |
 | Metadata shown in the app and CLI | `dict.Meta` | Name, declared index/content languages, entry count, and useful remaining header fields; format id is `lsd` and path is the source `.lsd` |
 | Optional media packing | `dict.ResourceLister` plus `Dictionary.Resource`; `store.MediaNames` and `store.IngestMedia` | Enumerate embedded overlay/resource names and open their bytes by name. Preserve lazy reads; do not extract files beside the source |
 | Runtime media after preparation | `resource.Provider` (`Sources` and, if needed, `Open`); `server.upgraded` tries packed media, then the source provider | Reopen the LSD resource area from the recorded source path without scanning article bodies. Use the same resource-name matching rules as other formats |
@@ -30,7 +30,8 @@ without a measured implementation and contract.
 The LSD container keeps its header, encoded dictionary alphabet/decoder data,
 fixed-size index pages, article payloads, optional annotation, optional icon,
 and an optional resource overlay in one file. The current Go reader decodes
-user-dictionary articles, embedded annotations, and lazy overlay resources for
+user-dictionary articles, converts DSL markup through the existing DSL
+normalizer, reads embedded annotations, and lazily reads overlay resources for
 the 12/X3/X5 fixtures. `lsd2dsl` writes overlay entries
 to a sibling `.dsl.files.zip`, writes the annotation as `.ann`, and writes the
 icon as `.bmp`; those are outputs of its converter, not separate inputs that

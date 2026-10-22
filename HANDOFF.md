@@ -1,14 +1,14 @@
 # Agent handoff — current state
 
-Current checkout: branch `lsd`, based on `dev` at `95dac8f9`, followed by six
+Current checkout: branch `lsd`, based on `dev` at `95dac8f9`, followed by seven
 local LSD commits; no upstream is configured. The isolated package has MIT
 fixtures, fixed-header validation, MSB bit reading, Huffman tables, and user
 decoder-table parsing, all passing focused tests. The registered sequential
-reader handles user-dictionary fixtures for versions 12, X3 and X5. It preserves
-title syntax and aliases, reads annotations and overlay resources from fixtures.
-X3/X5 system and abbreviation layouts have synthetic primitive tests; X6 system
-XOR and title display rendering remain. Upstream `master` review status and
-pending ZIM checks remain as recorded below.
+reader handles user-dictionary fixtures for versions 12, X3 and X5. It normalizes
+DSL article markup, preserves title syntax and aliases, and reads annotations
+and overlay resources from fixtures. X3/X5 system and abbreviation layouts have
+synthetic primitive tests; X6 system XOR remains. Upstream `master` review
+status and pending ZIM checks remain as recorded below.
 
 Browse and Wildcards ribbon clicks reveal a partly clipped heading and, when it fits, one neighboring heading. Clicking the first or last heading aligns to that strip edge; Browse no longer centers each selected heading or scrolls when it is already fully visible. Shared ribbon geometry checks and inline JavaScript syntax pass; Windows/Android interaction remains to be checked. Wildcards toolbar: the merge-books control is fixed to 3.2em with a larger icon; page controls show “Next page” / “Previous page” when the row has room, fall back to arrows, then hide before the page counter on narrow rows.
 
@@ -355,7 +355,7 @@ Newly added dictionaries and previously known dictionaries with a missing index 
 
 Fork-specific dictionary groups, mask search, migration and Android identity remain enabled. Upstream how-to and wildcard features remain unwired as recorded in `AGENTS.md`.
 
-LSD support is underway on branch `lsd`: `internal/format/lsd` owns the decoder and reference fixtures, separate from the text DSL scanner. The format is registered for CLI and Android; its sequential reader decodes user-dictionary fixtures for versions 12, X3 and X5 as `BodyDSL`, preserves title syntax and resolves nonadjacent aliases as links. Embedded annotations and lazy overlay resources pass fixture checks. System/abbreviation layouts have synthetic primitive tests but no full dictionary fixtures; X6 system XOR and title display rendering remain. `docs/LSD.md` records the application contract. Small `lsd2dsl` fixtures for versions 12/X3/X5, headings, annotations and overlays are isolated under the package with their MIT notice; no real-world samples are included.
+LSD support is underway on branch `lsd`: `internal/format/lsd` owns the decoder and reference fixtures, separate from the text DSL scanner. The format is registered for CLI and Android; its sequential reader normalizes user-dictionary article markup for versions 12, X3 and X5, preserves title syntax and resolves nonadjacent aliases as links. Embedded annotations and lazy overlay resources pass fixture checks. System/abbreviation layouts have synthetic primitive tests but no full dictionary fixtures; X6 system XOR remains. `docs/LSD.md` records the application contract. Small `lsd2dsl` fixtures for versions 12/X3/X5, headings, annotations and overlays are isolated under the package with their MIT notice; no real-world samples are included.
 
 ## Verification
 The Windows listenerless GUI path is implemented and the user confirmed it runs without the configured TCP listener. It now also avoids constructing an `http.Server`; close and Exit signal the app lifecycle directly. `go build ./...`, `git diff --check` and GUI `build-windows.cmd` pass. The tray status and startup summary identify in-process mode without advertising a network URL. The user confirmed dictionary images, multi-gigabyte video and seeking on the latest direct source-resolution path. Embedded pages, `/assets/*`, `/favicon.ico`, `/style/*` and `/files/*` now dispatch to Go operations without the general router; the user confirmed that a background image loads and now appears as a thumbnail in the picker. Direct user stylesheet and GD font loading still need runtime verification. User confirmed pages and navigation work after page dispatch. The stream bridge's dead HTTP fallback has been removed; Browse diagnostics now use the same direct validation/logging function as HTTP. The dictionary list bridge now also handles `/api/dicts` and `/api/rescan` when `diagnostics=1` is present; the query does not change server behavior, and previously caused a 404 by bypassing the bridge. Build checks pass; Windows runtime verification is pending. The secure WebView origin rejects unmapped GETs. The lifecycle change still needs a Windows runtime check, especially startup/list loading, Exit, tray Quit and ordinary window close; browser and Android HTTP modes must also be checked.
