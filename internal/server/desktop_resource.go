@@ -211,13 +211,13 @@ func (s *Server) DesktopResource(method, rawURL string, requestHeaders map[strin
 
 const desktopStorageMigrationPage = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Starting wuDict2</title><style>
+<title>Starting DictShelf</title><style>
 *{box-sizing:border-box}html,body{width:100%;height:100%;margin:0}body{display:grid;place-items:center;background:#f4ecd9;color:#332c20;font:16px "Segoe UI",sans-serif}
 main{width:min(440px,calc(100% - 40px));padding:30px;border:1px solid #d3c5a7;border-radius:12px;background:#fffaf0;box-shadow:0 8px 28px #332c201a}
 h1{margin:0 0 10px;font-size:22px}p{min-height:48px;margin:0 0 22px;color:#615746;line-height:1.5}
 .track{height:12px;overflow:hidden;border-radius:8px;background:#e5dac2}.bar{width:38%;height:100%;border-radius:8px;background:#d99000;animation:move 1.4s ease-in-out infinite alternate}
 @keyframes move{from{transform:translateX(-5%)}to{transform:translateX(165%)}}@media(prefers-reduced-motion:reduce){.bar{animation:none;width:100%}}
-</style></head><body><main><h1>Starting wuDict2</h1><p id="status" role="status" aria-live="polite">Checking your saved settings…</p><div class="track" role="progressbar" aria-label="Transferring settings"><div class="bar"></div></div></main>
+</style></head><body><main><h1>Starting DictShelf</h1><p id="status" role="status" aria-live="polite">Checking your saved settings…</p><div class="track" role="progressbar" aria-label="Transferring settings"><div class="bar"></div></div></main>
 <script>window.wudictMigrationStatus=function(message){var node=document.getElementById("status");if(node)node.textContent=message}</script></body></html>`
 
 func (s *Server) desktopDictionaryResource(w http.ResponseWriter, r *http.Request) {

@@ -30,7 +30,7 @@ const windowsPortableHomeEnv = "WUDICT_PORTABLE_HOME"
 
 var legacyForkItems = []string{"db", "db.logs", "state.json", "style", "groups.ini"}
 
-// prepareWindowsDataRoot selects wuDict2's Windows data folder. Migration
+// prepareWindowsDataRoot selects DictShelf's Windows data folder. Migration
 // discovery and choices are handled after the first interface is shown.
 func prepareWindowsDataRoot() error {
 	home, err := os.UserHomeDir()
@@ -67,13 +67,13 @@ func prepareWindowsDataRoot() error {
 	}
 	if info, err := os.Stat(newRoot); err == nil {
 		if !info.IsDir() {
-			return fmt.Errorf("wuDict2 data path exists but is not a folder: %s", newRoot)
+			return fmt.Errorf("DictShelf data path exists but is not a folder: %s", newRoot)
 		}
 		windowsFreshDataRoot = false
 	} else if os.IsNotExist(err) {
 		windowsFreshDataRoot = true
 	} else {
-		return fmt.Errorf("cannot inspect wuDict2 data folder: %w", err)
+		return fmt.Errorf("cannot inspect DictShelf data folder: %w", err)
 	}
 	if err := os.Setenv("WUDICT_HOME", newRoot); err != nil {
 		return err
@@ -83,16 +83,16 @@ func prepareWindowsDataRoot() error {
 	}
 	if windowsFreshDataRoot {
 		if err := os.MkdirAll(newRoot, 0o755); err != nil {
-			return fmt.Errorf("cannot create wuDict2 data folder: %w", err)
+			return fmt.Errorf("cannot create DictShelf data folder: %w", err)
 		}
 		cfg := filepath.Join(newRoot, config.Name)
 		if _, err := os.Stat(cfg); os.IsNotExist(err) {
 			dir := filepath.Join(newRoot, "Dictionaries")
 			if err := config.SaveKeyRaw(cfg, "DICT_DIR", config.FormatList([]string{dir})); err != nil {
-				return fmt.Errorf("cannot prepare wuDict2's first-run folder: %w", err)
+				return fmt.Errorf("cannot prepare DictShelf's first-run folder: %w", err)
 			}
 		} else if err != nil {
-			return fmt.Errorf("cannot inspect wuDict2 settings: %w", err)
+			return fmt.Errorf("cannot inspect DictShelf settings: %w", err)
 		}
 	}
 	return nil
@@ -295,7 +295,7 @@ func windowsCommandConfigPath() string {
 func warnPortableFallback(err error) {
 	message := fmt.Sprintf("Portable mode is unavailable: %v\nStarting with the normal user data folder.", err)
 	if guiLaunch {
-		tray.Alert("wuDict2", message)
+		tray.Alert("DictShelf", message)
 		return
 	}
 	fmt.Fprintln(os.Stderr, message)
@@ -462,13 +462,13 @@ func importLegacyData(oldRoot, newRoot string, forked bool) error {
 		return fmt.Errorf("cannot inspect lemma folder %s: %w", lemmaSource, err)
 	}
 	if len(configData) > 0 {
-		// Keep every setting from the old config while moving wuDict2's data
+		// Keep every setting from the old config while moving DictShelf's data
 		// paths into its new home. Fork indexes use the same format and are
 		// copied above; upstream indexes are intentionally left behind.
 		configData = rewriteMigrationConfigPaths(configData, oldRoot, newRoot)
 		if err := installMigratedConfig(config.HomeConfig(), newRoot, configData, dirs); err != nil {
 			rollback()
-			return fmt.Errorf("cannot save wuDict2 settings: %w", err)
+			return fmt.Errorf("cannot save DictShelf settings: %w", err)
 		}
 	}
 	return nil
@@ -530,7 +530,7 @@ func renameMigrationCommentWords(comment string) string {
 				i += len("wudict.toml")
 				continue
 			} else {
-				out.WriteString("wuDict2")
+				out.WriteString("DictShelf")
 				i += 6
 				continue
 			}
@@ -667,7 +667,7 @@ func stopLegacyWindowsServer(oldRoot, currentConfig string) error {
 		return fmt.Errorf("cannot inspect old wuDict settings: %w", err)
 	}
 	// Resolve the listener from the old file itself, not environment values
-	// that may belong to this wuDict2 launch.
+	// that may belong to this DictShelf launch.
 	type savedEnv struct {
 		key, value string
 		present    bool
@@ -699,7 +699,7 @@ func stopLegacyWindowsServer(oldRoot, currentConfig string) error {
 	if !ok {
 		return nil
 	}
-	// The just-started wuDict2 may use the same default port as wuDict. Never
+	// The just-started DictShelf may use the same default port as wuDict. Never
 	// send Exit to the server handling the migration request itself.
 	if sameWindowsPath(inst.ConfigPath, currentConfig) {
 		return nil

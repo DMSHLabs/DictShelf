@@ -4,7 +4,7 @@
 ;
 ; The Windows installer (P86 / D76). Compiled by tools\make-installer.ps1,
 ; which locates ISCC.exe and fills the defines below in from the built binary
-; (`wuDict2 --version`), so nothing here carries a second copy of the product
+; (`DictShelf --version`), so nothing here carries a second copy of the product
 ; name or the version:
 ;
 ;   .\tools\make-installer.ps1 -Exe .\wuDict2.exe -OutDir .\dist
@@ -16,7 +16,7 @@
 ; WebView2 window when launched from the desktop.
 
 #ifndef AppName
-#define AppName "wuDict2"
+#define AppName "DictShelf"
 #endif
 #ifndef AppVersion
   #define AppVersion "dev"
@@ -64,7 +64,7 @@ AppUpdatesURL=https://github.com/legbehindneck/wudict/releases
 PrivilegesRequired=admin
 PrivilegesRequiredOverridesAllowed=dialog
 UsePreviousPrivileges=no
-DefaultDirName={autopf}\{#AppName}
+DefaultDirName={autopf}\wuDict2
 
 ; Both directives, as Examples\64Bit.iss sets them for exactly this case: one
 ; payload, built x64. Allowed keeps Setup off machines where that binary cannot
@@ -118,7 +118,7 @@ WizardStyle=modern
 Compression=lzma2/max
 SolidCompression=yes
 OutputDir={#OutputDir}
-OutputBaseFilename=wudict2-windows-x64-setup-{#NumVersion}
+OutputBaseFilename=dictshelf-windows-x64-setup-{#NumVersion}
 LicenseFile=..\..\LICENSE
 
 [Languages]
@@ -133,7 +133,7 @@ Name: "associate";    Description: "Offer {#AppName} in ""Open with"" for dictio
 [Files]
 Source: "{#SourceExe}"; DestDir: "{app}"; DestName: "wuDict2.exe"; Flags: ignoreversion
 Source: "wudict.ico";   DestDir: "{app}"; Flags: ignoreversion
-; The third-party notices, beside the exe as well as inside it (`wuDict2
+; The third-party notices, beside the exe as well as inside it (`DictShelf
 ; licenses`): several of them require their text to accompany a binary.
 Source: "..\..\THIRD-PARTY-NOTICES.md"; DestDir: "{app}"; Flags: ignoreversion
 

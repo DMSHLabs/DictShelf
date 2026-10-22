@@ -26,7 +26,7 @@ import (
 )
 
 func systemLogDownloadPath(filename string) (string, error) {
-	if filepath.Base(filename) != filename || !strings.HasPrefix(filename, "wuDict2_SystemLog_") || !strings.HasSuffix(filename, ".log") {
+	if filepath.Base(filename) != filename || !strings.HasPrefix(filename, "DictShelf_SystemLog_") || !strings.HasSuffix(filename, ".log") {
 		return "", errors.New("invalid system log filename")
 	}
 	home, err := os.UserHomeDir()

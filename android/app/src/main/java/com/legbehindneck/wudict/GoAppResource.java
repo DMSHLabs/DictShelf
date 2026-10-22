@@ -83,7 +83,7 @@ final class GoAppResource {
                         ? contentRangeStart(responseHeaders.get("Content-Range")) : 0;
                 if (rangePrefix > 0 && isSingleByteRange(request.getRequestHeaders().get("Range")))
                     body = new RangePrefixInputStream(body, rangePrefix);
-                Log.i("wuDict2", "Media bridge " + path + " Range=" + request.getRequestHeaders().get("Range") +
+                Log.i("DictShelf", "Media bridge " + path + " Range=" + request.getRequestHeaders().get("Range") +
                         " -> " + status + " Content-Length=" + contentLength +
                         " Content-Range=" + responseHeaders.get("Content-Range") +
                         " WebViewRangePrefix=" + rangePrefix);
@@ -93,7 +93,7 @@ final class GoAppResource {
             return new WebResourceResponse(mime, streamResource && !textResource ? null : encoding,
                     status, reason, responseHeaders, body);
         } catch (Exception error) {
-            Log.w("wuDict2", "Could not load app resource " + path, error);
+            Log.w("DictShelf", "Could not load app resource " + path, error);
             return null;
         }
     }

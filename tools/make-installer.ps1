@@ -1,4 +1,4 @@
-﻿# Copyright (C) 2026 glowinthedark
+# Copyright (C) 2026 glowinthedark
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
@@ -180,7 +180,7 @@ $isccArgs = @(
 & $Iscc @isccArgs
 if ($LASTEXITCODE -ne 0) { throw "make-installer: iscc exited $LASTEXITCODE" }
 
-$setup = Join-Path $OutDir "wudict2-windows-x64-setup-$num.exe"
+$setup = Join-Path $OutDir "dictshelf-windows-x64-setup-$num.exe"
 if (-not (Test-Path -LiteralPath $setup -PathType Leaf)) {
     throw "make-installer: iscc reported success but $setup is missing"
 }

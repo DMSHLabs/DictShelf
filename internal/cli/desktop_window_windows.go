@@ -114,7 +114,7 @@ func runDesktopWindow(address, appAddress, profile string, onClose func(), deskt
 	w := webview.NewWithOptions(webview.WebViewOptions{
 		DataPath:  profile,
 		AutoFocus: true,
-		WindowOptions: webview.WindowOptions{Title: "wuDict2", Width: 1120, Height: 820, IconId: 101, Center: true,
+		WindowOptions: webview.WindowOptions{Title: "DictShelf", Width: 1120, Height: 820, IconId: 101, Center: true,
 			BackgroundColor: initialColor, CaptionColor: customCaptionColor, StartupSplash: true},
 	})
 	if w == nil {
@@ -124,7 +124,7 @@ func runDesktopWindow(address, appAddress, profile string, onClose func(), deskt
 		desktopWindowMu.Unlock()
 		if desktopOnly {
 			logx.Warn("WebView2 window failed in listenerless desktop mode")
-			tray.Alert("wuDict2", "WebView2 could not create the application window.")
+			tray.Alert("DictShelf", "WebView2 could not create the application window.")
 			if onClose != nil {
 				onClose()
 			}
@@ -173,7 +173,7 @@ func runDesktopWindow(address, appAddress, profile string, onClose func(), deskt
 		desktopWindowMu.Lock()
 		desktopWindowStarting = false
 		desktopWindowMu.Unlock()
-		tray.Alert("wuDict2", "The in-app WebView cannot serve application pages directly.")
+		tray.Alert("DictShelf", "The in-app WebView cannot serve application pages directly.")
 		if onClose != nil {
 			onClose()
 		}
@@ -268,7 +268,7 @@ func runDesktopWindow(address, appAddress, profile string, onClose func(), deskt
 				}
 				if reason != "" {
 					logx.Warn("settings migration %s; continuing with the application", reason)
-					tray.Alert("wuDict2", "Saved settings could not be transferred. The app will start with default settings; you can change them later.")
+					tray.Alert("DictShelf", "Saved settings could not be transferred. The app will start with default settings; you can change them later.")
 				}
 				w.Dispatch(func() {
 					if imported {

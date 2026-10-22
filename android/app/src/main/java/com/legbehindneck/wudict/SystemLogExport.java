@@ -25,7 +25,7 @@ final class SystemLogExport {
 
     static void start(Activity a) {
         SystemLog.record("System Log export picker opened");
-        String name = "wuDict2_SystemLog_" + new SimpleDateFormat("yyyy_MM_dd-HH-mm", Locale.ROOT).format(new Date()) + ".log";
+        String name = "DictShelf_SystemLog_" + new SimpleDateFormat("yyyy_MM_dd-HH-mm", Locale.ROOT).format(new Date()) + ".log";
         Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT)
                 .addCategory(Intent.CATEGORY_OPENABLE)
                 .setType("text/plain")
@@ -51,7 +51,7 @@ final class SystemLogExport {
                         snapshot.write(goSnapshot());
                     } catch (Exception e) {
                         SystemLog.warn("wudict", "Go system log unavailable during export", e);
-                        snapshot.write(("wuDict2 System Log\nGo system log unavailable: " + e.getClass().getSimpleName() + "\n").getBytes(StandardCharsets.UTF_8));
+                        snapshot.write(("DictShelf System Log\nGo system log unavailable: " + e.getClass().getSimpleName() + "\n").getBytes(StandardCharsets.UTF_8));
                     }
                     snapshot.write(("\n--- Android environment ---\n"
                             + "App: " + BuildConfig.VERSION_NAME + "\n"

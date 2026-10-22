@@ -6,19 +6,19 @@
      to a flavour's own values/ instead (D62). 
 	-->
 <resources>
-	<string name="app_name">wuDict2</string>
-	<string name="starting">Starting wuDict2…</string>
-	<string name="runtime_failed">wuDict2 could not start: %1$s</string>
+	<string name="app_name">DictShelf</string>
+	<string name="starting">Starting DictShelf…</string>
+	<string name="runtime_failed">DictShelf could not start: %1$s</string>
 	<!--
  The selection-toolbar entry (D67). It labels the PROCESS_TEXT filter
          only, where the toolbar is a row of verbs among other apps' verbs
          ("Read aloud", "Translate") and a product name would read as the odd
          one out. The share sheet keeps app_name. 
 	-->
-	<string name="lookup_label">wuDict2</string>
+	<string name="lookup_label">DictShelf</string>
 	<string name="lookup_starting">Looking up “%1$s”…</string>
 	<string name="lookup_empty">Nothing to look up</string>
-	<string name="lookup_open_app">Open in wuDict2</string>
+	<string name="lookup_open_app">Open in DictShelf</string>
 	<!--
  The foreground service that keeps a demanded ingest alive
           (IndexService). The channel name is what appears in the system's
@@ -52,7 +52,7 @@
           Shell.systemState sends each row's label and hint to the page with it.
 	-->
 	<string name="settings_short_label">Settings</string>
-	<string name="settings_title">wuDict2 settings</string>
+	<string name="settings_title">DictShelf settings</string>
 	<!--
  The signpost, and the reason the screen is not simply empty: it is on the
           launcher's long-press menu, so a reader who remembers the full screen
@@ -198,21 +198,21 @@
 	<string name="intake_done">Added %1$s.</string>
 	<string name="intake_done_partial">Added %1$s.\n\nThe rest did not arrive: %2$s</string>
 	<string name="intake_none">Nothing was added.</string>
-	<string name="intake_nothing">%1$s holds no dictionaries wuDict2 can read.</string>
+	<string name="intake_nothing">%1$s holds no dictionaries DictShelf can read.</string>
 	<!--
  A file TAPPED in a file manager that turns out not to be one this
           app reads. It exists because the open-with filter can only match on
           MIME and every dictionary format arrives as application/octet-stream,
-          so wuDict2 is offered for untyped files in general - and an app that
+          so DictShelf is offered for untyped files in general - and an app that
           was chosen and then did nothing visible reads as broken. Names the
           app, because in a sheet full of other apps' verbs "not supported" on
           its own does not say WHO could not read it (D138). 
 	-->
-	<string name="intake_unsupported">wuDict2 cannot read %1$s.</string>
+	<string name="intake_unsupported">DictShelf cannot read %1$s.</string>
 	<string name="intake_cancelled">Cancelled.</string>
 	<string name="intake_busy">An import is already running.</string>
 	<string name="intake_failed">Could not add dictionaries: %1$s</string>
-	<string name="intake_no_runtime">wuDict2 could not start, so nothing could be added.</string>
+	<string name="intake_no_runtime">DictShelf could not start, so nothing could be added.</string>
 	<string name="intake_no_picker">This device has no file picker.</string>
 	<!-- The server's import slot is held by an import nothing on this phone is
 	     showing - one started before the app was last closed, or from the setup

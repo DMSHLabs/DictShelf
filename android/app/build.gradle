@@ -10,7 +10,7 @@ plugins {
 }
 
 if (providers.gradleProperty('appVariant').isPresent()) {
-    throw new GradleException('appVariant is retired; build wuDict2 with the normal foss/play Gradle tasks')
+    throw new GradleException('appVariant is retired; build DictShelf with the normal foss/play Gradle tasks')
 }
 
 // -PemuX86=1 (build-android.cmd `intel`) adds a SECOND ABI to the debug build,
@@ -78,7 +78,7 @@ android {
     // The AAB name only; the APK name is set below in androidComponents.
     // Play ingests a bundle by content, not by file name, so wudict-play-
     // release.aab is fine and needs no abi or flavour token.
-    base { archivesName = 'wudict2' }
+    base { archivesName = 'dictshelf' }
 
     signingConfigs {
         release {
@@ -185,11 +185,11 @@ configurations.matching { it.name.contains('unified-test-platform') }.configureE
 // build-android.yml - which is why the workflow no longer copies the file to a
 // second name of its own. Two names for one artifact is the whole bug class.
 //
-//   wudict2-android-arm64-v8a-foss.apk                signed release
-//   wudict2-android-arm64-v8a-foss-unsigned.apk       release built without a keystore
-//   wudict2-android-arm64-v8a-foss-debug.apk          debug
-//   wudict2-android-arm64-v8a-play-*.apk              the same, Play flavour
-//   wudict2-android-arm64-v8a-x86_64-foss-debug.apk   debug built with -PemuX86=1
+//   dictshelf-android-arm64-v8a-foss.apk                signed release
+//   dictshelf-android-arm64-v8a-foss-unsigned.apk       release built without a keystore
+//   dictshelf-android-arm64-v8a-foss-debug.apk          debug
+//   dictshelf-android-arm64-v8a-play-*.apk              the same, Play flavour
+//   dictshelf-android-arm64-v8a-x86_64-foss-debug.apk   debug built with -PemuX86=1
 //
 // The flavour token is not editorial: it is `variant.flavorName` verbatim, so a
 // third flavour names itself and nobody has to decide what to call it. The abi
@@ -221,7 +221,7 @@ androidComponents {
                 ? (apkSigned ? '' : '-unsigned')
                 : "-${variant.buildType}"
         variant.outputs.each { output ->
-            output.outputFileName.set("wudict2-android-${abi}-${variant.flavorName}${suffix}.apk")
+            output.outputFileName.set("dictshelf-android-${abi}-${variant.flavorName}${suffix}.apk")
         }
     }
 }

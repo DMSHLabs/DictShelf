@@ -4,7 +4,7 @@ rem SPDX-License-Identifier: GPL-3.0-or-later
 setlocal EnableExtensions DisableDelayedExpansion
 
 rem ============================================================
-rem wuDict2 Windows builds: [cli|server|installer]
+rem DictShelf Windows builds: [cli|server|installer]
 rem
 rem   (no args)             listenerless Windows WebView app: wuDict2.exe
 rem   cli                  console CLI: wuDict2-cli.exe (does not start a server)
@@ -28,7 +28,7 @@ rem is: %CC%, then gcc.exe on PATH, then GCC_ROOTS. One found by path is handed
 rem to Go as an absolute CC, with CXX beside it; gcc locates its own cc1, ld and
 rem runtime DLLs relative to itself, so PATH is untouched.
 rem
-rem This builds the wuDict2 desktop product, separate from upstream's wuDict.
+rem This builds the DictShelf desktop product, separate from upstream's wuDict.
 rem ============================================================
 
 cd /d "%~dp0"
@@ -466,13 +466,13 @@ if errorlevel 1 (
 
 set "SETUP="
 
-for %%F in ("dist\wudict2-windows-x64-setup-*.exe") do (
+for %%F in ("dist\dictshelf-windows-x64-setup-*.exe") do (
     if exist "%%~fF" set "SETUP=%%~fF"
 )
 
 if not defined SETUP (
     echo ERROR: iscc reported success but no setup executable was found:
-    echo   dist\wudict2-windows-x64-setup-*.exe
+    echo   dist\dictshelf-windows-x64-setup-*.exe
     exit /b 1
 )
 

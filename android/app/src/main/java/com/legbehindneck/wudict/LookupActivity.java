@@ -186,7 +186,7 @@ public class LookupActivity extends Activity {
         status = new TextView(this);
 		status.setTextColor(ShellPrefs.darkIcons(pageBg) ? 0xDE000000 : 0xFFFFFFFF);
         // The popup's half of the same switch as the app window's "Starting
-        // wuDict2…" (ShellPrefs.INFO_MESSAGES): this line is a placeholder for
+        // DictShelf…" (ShellPrefs.INFO_MESSAGES): this line is a placeholder for
         // an article that is on its way, and it is the one drawn most often -
         // every tap on a word brings it up for as long as the lookup takes.
         // Left empty, the popup wears its window until the page has something

@@ -4,7 +4,7 @@ rem SPDX-License-Identifier: GPL-3.0-or-later
 setlocal EnableExtensions DisableDelayedExpansion
 
 rem ============================================================
-rem wuDict2 Android FOSS build: [debug|release] [intel]
+rem DictShelf Android FOSS build: [debug|release] [intel]
 rem
 rem   intel  also ship the x86_64 Go/JNI bridge, so the same APK runs on the
 rem          x86_64 emulator as well as on arm64 hardware. Debug only:
@@ -77,7 +77,7 @@ if defined EMU_X86 set "APK_ABI=arm64-v8a-x86_64"
 
 echo.
 echo ============================================================
-echo wuDict2 Android %APK_ABI% build
+echo DictShelf Android %APK_ABI% build
 echo ============================================================
 echo.
 
@@ -252,7 +252,7 @@ rem Build Android APK
 rem ------------------------------------------------------------
 
 echo ============================================================
-echo Building wuDict2 FOSS %BUILD_TYPE% APK
+echo Building DictShelf FOSS %BUILD_TYPE% APK
 echo ============================================================
 echo.
 
@@ -281,7 +281,7 @@ rem ------------------------------------------------------------
 rem Expected APK
 rem ------------------------------------------------------------
 
-set "APK=android\app\build\outputs\apk\foss\%BUILD_TYPE%\wudict2-android-%APK_ABI%-foss%APK_SUFFIX%.apk"
+set "APK=android\app\build\outputs\apk\foss\%BUILD_TYPE%\dictshelf-android-%APK_ABI%-foss%APK_SUFFIX%.apk"
 
 if not exist "%APK%" (
     echo ERROR: Gradle finished but APK was not found:

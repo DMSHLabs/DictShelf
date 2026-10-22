@@ -31,9 +31,9 @@ func (s *Server) systemLogSnapshot() ([]byte, string, error) {
 		return nil, "", err
 	}
 	version, revision, modified := buildIdentity(s.Version)
-	header := fmt.Sprintf("wuDict2 System Log\nBuild: %s\nCommit: %s\nVCS modified: %s\nSystem: %s\nRuntime: %s %s/%s\nTimestamps: UTC\n\n--- Server ---\n",
+	header := fmt.Sprintf("DictShelf System Log\nBuild: %s\nCommit: %s\nVCS modified: %s\nSystem: %s\nRuntime: %s %s/%s\nTimestamps: UTC\n\n--- Server ---\n",
 		version, revision, modified, systemVersion(), runtime.Version(), runtime.GOOS, runtime.GOARCH)
-	filename := fmt.Sprintf("wuDict2_SystemLog_%s.log", time.Now().Format("2006_01_02-15-04"))
+	filename := fmt.Sprintf("DictShelf_SystemLog_%s.log", time.Now().Format("2006_01_02-15-04"))
 	return append([]byte(header), b...), filename, nil
 }
 

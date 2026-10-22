@@ -1,14 +1,14 @@
 ---
 title: Android app
-description: wuDict2 for Android - the two builds, adding dictionaries, looking up a word from another app, settings, battery and memory.
+description: DictShelf for Android - the two builds, adding dictionaries, looking up a word from another app, settings, battery and memory.
 ---
 
 # Android app
 
-wuDict2 is an Android fork of [WuWeiDict](https://github.com/wuweidict/wudict)
+DictShelf is an Android fork of [WuWeiDict](https://github.com/wuweidict/wudict)
 with a separate application ID, `com.dmshepeta.wudict2`.
 
-wuDict2 searches `.mdx`, `.ifo`, `.slob`, `.dsl`, `.bgl`, `.zim` and `.wudict.md`
+DictShelf searches `.mdx`, `.ifo`, `.slob`, `.dsl`, `.bgl`, `.zim` and `.wudict.md`
 dictionaries on the phone. The app runs the wudict server on the phone's
 loopback address and shows its pages; network use is listed in the
 [Privacy Policy](../privacy_policy.md#network-requests).
@@ -25,7 +25,7 @@ Requires Android 8.0 or later on a 64-bit ARM (`arm64`) device.
 
 ## Install the FOSS build
 
-1.  Build **`wudict2-android-arm64-v8a-foss.apk`** with
+1.  Build **`dictshelf-android-arm64-v8a-foss.apk`** with
     `build-android.cmd release` on Windows. Sign an unsigned APK before
     installing.
 2.  Open it from the file manager or the download notification. Android asks
@@ -66,16 +66,16 @@ on a microSD card are read without importing.
 
 ### Both builds
 
-Share a dictionary file, an archive or a link to wuDict2, or open one with
-wuDict2: the **Add dictionaries** dialog lists what it contains and installs the
+Share a dictionary file, an archive or a link to DictShelf, or open one with
+DictShelf: the **Add dictionaries** dialog lists what it contains and installs the
 ones you tick. The setup page's **Add dictionaries** does the same for a file
 or a pasted link.
 
 ## Look up a word from another app
 
--   **Text selection menu**: select a word; the menu shows **wuDict2** next to
+-   **Text selection menu**: select a word; the menu shows **DictShelf** next to
     *Copy*.
--   **Share menu**: <kbd>Share</kbd> → <kbd>wuDict2</kbd>, for apps without the
+-   **Share menu**: <kbd>Share</kbd> → <kbd>DictShelf</kbd>, for apps without the
     selection menu entry or for a longer passage.
 -   **A reading app's dictionary button**: see the table below.
 -   **A `wudict://lookup?q=word` link**: from automation apps, note apps and
@@ -96,33 +96,33 @@ The link also takes `mode=exact|prefix|contains|fts`, `dict=<name>`, and
 
 | Reader | What to choose |
 | --- | --- |
-| **Moon+ Reader** | *ColorDict3* (listed as ColorDict/BlueDict/GoldenDict), *Lingvo*, *Fora* or *YunCi*; or *Customized*, with the URL `wudict://lookup?q=%s`; or wuDict2 from its list of installed apps |
-| **ReadEra** | wuDict2, from its list of dictionary and translator apps |
-| **Librera Reader** | wuDict2, from its dictionary list; it is listed more than once, and any of the entries works |
+| **Moon+ Reader** | *ColorDict3* (listed as ColorDict/BlueDict/GoldenDict), *Lingvo*, *Fora* or *YunCi*; or *Customized*, with the URL `wudict://lookup?q=%s`; or DictShelf from its list of installed apps |
+| **ReadEra** | DictShelf, from its list of dictionary and translator apps |
+| **Librera Reader** | DictShelf, from its dictionary list; it is listed more than once, and any of the entries works |
 | **FBReader** | *ColorDict 3*, *ABBYY Lingvo* or *Dictan* |
 | **KnownReader** | *ColorDict new / GoldenDict (minicard)* for the popup, *ColorDict new / GoldenDict* for the full app; *Aard 2* and *Dictan* also work, even when listed as not installed |
-| **Prestigio eReader** | *ColorDict* or *ABBYY Lingvo*, then wuDict2 |
-| **Readest, Book's Story, Lithium, Aldiko** | wuDict2; these list the apps of the selection menu |
+| **Prestigio eReader** | *ColorDict* or *ABBYY Lingvo*, then DictShelf |
+| **Readest, Book's Story, Lithium, Aldiko** | DictShelf; these list the apps of the selection menu |
 | **KOReader** | see below |
 | **CoolReader** | *ColorDict new / GoldenDict*, *Aard 2 Dictionary* or *Dictan* |
 | **Kindle, Google Play Books, Kobo** | none: they offer no outside dictionary |
 
 If the app a reader names (GoldenDict, Aard2, Lingvo, Fora, QuickDic, YunCi,
 Dictan) is also installed, Android asks which app to use the first time;
-choose wuDict2 and *Always*.
+choose DictShelf and *Always*.
 
 **KOReader** reads its list of outside dictionaries from a file you can
 replace. Create `koreader/dictionaries.lua` in internal storage:
 
 ``` lua title="koreader/dictionaries.lua"
 return {
-    { "wudict", "wuDict2", false, "com.dmshepeta.wudict2", "search" },
+    { "wudict", "DictShelf", false, "com.dmshepeta.wudict2", "search" },
 }
 ```
 
 The file replaces KOReader's built-in list, so add back any dictionary app you
 still use. Then, in KOReader: *Dictionary settings* → check *Use external
-dictionary* → *Dictionary: wuDict2*.
+dictionary* → *Dictionary: DictShelf*.
 
 ## Settings
 
