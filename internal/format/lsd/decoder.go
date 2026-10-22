@@ -20,6 +20,7 @@ type decoder struct {
 	postfixLengths *lengthTable
 	ref1, ref2     uint32
 	systemArticles bool
+	xorArticles    bool
 }
 
 type headingChar struct {
@@ -37,7 +38,7 @@ func readDecoder(data []byte, version uint32) (*decoder, error) {
 	// User, system and abbreviation dictionaries share the bit/Huffman
 	// machinery but differ in their symbol alphabets and table ordering.
 	switch version {
-	case 0x110001, 0x120001, 0x131001, 0x132001, 0x141004, 0x142001, 0x145001, 0x152001, 0x155001:
+	case 0x110001, 0x120001, 0x131001, 0x132001, 0x141004, 0x142001, 0x145001, 0x151005, 0x152001, 0x155001:
 	default:
 		return nil, fmt.Errorf("lsd: decoder version %#x is not supported yet", version)
 	}
@@ -78,7 +79,7 @@ func readDecoder(data []byte, version uint32) (*decoder, error) {
 		return nil, fmt.Errorf("lsd: read heading Huffman table: %w", err)
 	}
 	var pt, qt *lengthTable
-	if version == 0x141004 {
+	if version == 0x141004 || version == 0x151005 {
 		qt, err = readLengthTable(r)
 		if err == nil {
 			_, err = r.read(32) // system decoder's reserved word
@@ -106,7 +107,8 @@ func readDecoder(data []byte, version uint32) (*decoder, error) {
 	return &decoder{
 		prefix: prefix, articleSymbols: a, headingSymbols: h,
 		articles: at, headings: ht, prefixLengths: pt, postfixLengths: qt,
-		ref1: r1, ref2: r2, systemArticles: version == 0x131001 || version == 0x141004,
+		ref1: r1, ref2: r2, systemArticles: version == 0x131001 || version == 0x141004 || version == 0x151005,
+		xorArticles: version == 0x151005,
 	}, nil
 }
 

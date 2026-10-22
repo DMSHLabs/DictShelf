@@ -269,6 +269,11 @@ func (r *Reader) Next() (dict.Entry, error) {
 			if _, err := r.source.f.ReadAt(data, int64(start)); err != nil && err != io.EOF {
 				return dict.Entry{}, fmt.Errorf("lsd: read article at %d: %w", start, err)
 			}
+			if r.source.decoder.xorArticles {
+				// Each X6 system article starts a fresh XOR block, including its
+				// encoded length prefix.
+				x6XOR(data)
+			}
 			size, payload, err := articleSize(data)
 			if err != nil {
 				return dict.Entry{}, err

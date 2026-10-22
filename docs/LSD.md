@@ -1,7 +1,7 @@
 # Lingvo LSD — reader contract
 
 This document records the application-facing contract for a native `.lsd`
-reader. The reader is being developed in `internal/format/lsd`; the existing
+reader. The reader lives in `internal/format/lsd`; the existing
 `internal/format/dsl` remains the text DSL backend. The two formats can share
 the ingest pipeline and its `BodyDSL` normalization, but the binary container
 reader must not be added as a mode inside the text DSL scanner.
@@ -11,7 +11,7 @@ reader must not be added as a mode inside the text DSL scanner.
 | Application operation | Existing contract | Data the LSD backend must provide |
 | --- | --- | --- |
 | Format discovery and probing | `dict.RegisterFormat`, optional `dict.RegisterProber`; `dict.Probe` falls back to `Open` | Recognize `.lsd`; validate the signature, supported version and bounded header fields; report `Meta` without decoding every article when feasible |
-| Initial index preparation / rebuild | `dict.RegisterReader`; `dict.OpenReader`; sequential `dict.Reader` (`Meta`, `Next`, `Close`) consumed by `store.Reconcile` | Stream entries in source order. The LSD reader decodes article markup and sends it through the existing DSL article converter, returning normalized HTML and `io.EOF` at the end. Keep the file and decoding state open only for the reader lifetime |
+| Initial index preparation / rebuild | `dict.RegisterReader`; `dict.OpenReader`; sequential `dict.Reader` (`Meta`, `Next`, `Close`) consumed by `store.Reconcile` | Stream entries in source order. The LSD reader decodes article markup and sends it through the existing DSL article converter, returning normalized HTML and `io.EOF` at the end. A sibling `<stem>_abrv.lsd` supplies abbreviation tooltips and its path, size and modification time are stored for staleness checks. Keep the file and decoding state open only for the reader lifetime |
 | Metadata shown in the app and CLI | `dict.Meta` | Name, declared index/content languages, entry count, and useful remaining header fields; format id is `lsd` and path is the source `.lsd` |
 | Optional media packing | `dict.ResourceLister` plus `Dictionary.Resource`; `store.MediaNames` and `store.IngestMedia` | Enumerate embedded overlay/resource names and open their bytes by name. Preserve lazy reads; do not extract files beside the source |
 | Runtime media after preparation | `resource.Provider` (`Sources` and, if needed, `Open`); `server.upgraded` tries packed media, then the source provider | Reopen the LSD resource area from the recorded source path without scanning article bodies. Use the same resource-name matching rules as other formats |
@@ -37,7 +37,9 @@ to a sibling `.dsl.files.zip`, writes the annotation as `.ann`, and writes the
 icon as `.bmp`; those are outputs of its converter, not separate inputs that
 the native wuDict2 reader should require.
 
-The Go implementation keeps these reads behind a small set of private
+The X6 system version (`0x151005`) XOR-decodes its decoder tables, each article
+block and the optional annotation with a block-local rolling key. The Go
+implementation keeps these reads behind a small set of private
 operations: open/validate header; read or initialize version-specific decoder
 tables; traverse index pages to produce headword groups and article offsets;
 decode one article body; enumerate and decode one overlay resource on demand;
@@ -61,9 +63,9 @@ annotation decoding (`test.lsd`), headings for versions 12/X3/X5, overlay
 resource extraction for 12/X3/X5, extended and unsorted headings, and variant
 collapse. Heading extension pairs are converted back to DSL title syntax, and
 the text DSL title parser supplies searchable keys. User dictionaries, X3
-system tables, X5 system tables and abbreviation table layouts are implemented;
-system and abbreviation paths have synthetic primitive tests but no full
-fixture dictionaries. Fixture tests cover formatted title display, end-to-end
+system tables, X5 system tables, X6 system XOR and abbreviation table layouts
+are implemented; system and abbreviation paths have synthetic primitive tests
+but no full X6 system fixture dictionary. Fixture tests cover formatted title display, end-to-end
 alias indexing, and resource packing/retrieval through the prepared store. A
 local Windows comparison of all parsed headwords in 79 same-name LSD/DSL pairs
 found identical key sets, including aliases. It exposed and fixed supplementary
@@ -71,6 +73,9 @@ Unicode decoding in LSD headings: UTF-16 surrogate pairs must be decoded
 together or emoji headwords become replacement characters. Three LSD files had
 no same-name DSL pair. Eleven of fourteen sampled `.dsl.files.zip` resources
 matched the paired LSD resource bytes; three names were absent from the LSD
-overlay. These local files are not included in the repository. Lingvo X6 system
-XOR decoding, broader independent dictionaries, malformed-file handling and
-resource-name edge cases still need coverage before support is marked complete.
+overlay. These local files are not included in the repository. Broader
+independent dictionaries, malformed-file handling and resource-name edge cases
+still need coverage before support is marked complete. `_abrv.lsd` companion
+lookup is covered by dictionary-layer tests; real glossary files remain local
+validation inputs, not repository fixtures. The XOR substitution table carries
+its MIT attribution in `internal/format/lsd/NOTICE.md`.

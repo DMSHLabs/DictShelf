@@ -46,6 +46,9 @@ func loadAnnotation(path string) (dict.About, bool) {
 		logx.V("lsd annotation read %s: %v", filepath.Base(path), err)
 		return dict.About{}, false
 	}
+	if s.header.version == 0x151005 {
+		x6XOR(data)
+	}
 	if len(data) < 2 {
 		return dict.About{}, false
 	}
@@ -107,6 +110,9 @@ func openSource(path string) (*source, error) {
 	if _, err := f.ReadAt(decoderBytes, int64(h.decoderOffset)); err != nil {
 		return fail(fmt.Errorf("lsd: read decoder section: %w", err))
 	}
+	if h.version == 0x151005 {
+		x6XOR(decoderBytes)
+	}
 	d, err := readDecoder(decoderBytes, h.version)
 	if err != nil {
 		return fail(err)
@@ -129,7 +135,7 @@ func openSource(path string) (*source, error) {
 
 func supportedVersion(version uint32) bool {
 	switch version {
-	case 0x110001, 0x120001, 0x131001, 0x132001, 0x141004, 0x142001, 0x145001, 0x152001, 0x155001:
+	case 0x110001, 0x120001, 0x131001, 0x132001, 0x141004, 0x142001, 0x145001, 0x151005, 0x152001, 0x155001:
 		return true
 	default:
 		return false
