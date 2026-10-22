@@ -239,7 +239,7 @@ func CompanionMedia(src string) []string {
 }
 
 // CompanionSuffixes are the non-media files a format needs beside its main
-// file: StarDict's index and article blob, DSL's abbreviations. Suffixes are
+// file: StarDict's index and article blob, Lingvo abbreviations. Suffixes are
 // appended to the STEM, and a candidate equal to the main file is skipped.
 //
 // Takes the extension rather than the path because the two callers hold
@@ -259,6 +259,8 @@ func CompanionSuffixes(mainExt string) []string {
 		}
 	case ".dsl", ".dsl.dz":
 		return []string{"_abrv.dsl", "_abrv.dsl.dz", ".ann", ".dsl.ann"}
+	case ".lsd":
+		return []string{"_abrv.lsd"}
 	case ".mdx":
 		// A repacked MDX ships its stylesheet and scripts LOOSE beside the
 		// .mdx rather than packed in the .mdd - LDOCE6.css and entry.js are
@@ -310,18 +312,22 @@ func RequiredCompanions(mainExt string) [][]string {
 	return nil
 }
 
-// abbrevSuffixes are the spellings of DSL's abbreviation glossary, longest
+// abbrevSuffixes are the spellings of Lingvo's abbreviation glossary, longest
 // first so a ".dsl.dz" companion is recognised before the ".dsl" inside its
 // name. Appended to the STEM, exactly like every other companion here.
-var abbrevSuffixes = []string{"_abrv.dsl.dz", "_abrv.dsl"}
+var abbrevSuffixes = []string{"_abrv.dsl.dz", "_abrv.lsd", "_abrv.dsl"}
 
-// AbbrevCompanion returns the abbreviation glossary belonging to the DSL main
-// file src, if one exists beside it. A `_abrv.dsl` is not a dictionary: Lingvo
-// writes it as the expansion map for the [p] labels of its parent, which is why
-// the parent absorbs it at ingest and it is not discovered on its own.
+// AbbrevCompanion returns the abbreviation glossary belonging to a DSL or LSD
+// main file src, if one exists beside it. Lingvo writes it as the expansion map
+// for the [p] labels of its parent, so the parent absorbs it at ingest and it
+// is not discovered on its own.
 func AbbrevCompanion(src string) (string, bool) {
+	var suffixes []string
 	switch MainExt(src) {
 	case ".dsl", ".dsl.dz":
+		suffixes = []string{"_abrv.dsl.dz", "_abrv.dsl"}
+	case ".lsd":
+		suffixes = []string{"_abrv.lsd"}
 	default:
 		return "", false
 	}
@@ -329,7 +335,7 @@ func AbbrevCompanion(src string) (string, bool) {
 		return "", false // a companion has no companion of its own
 	}
 	base := Stem(src)
-	for _, suf := range abbrevSuffixes {
+	for _, suf := range suffixes {
 		if p := base + suf; !strings.EqualFold(p, src) && fsx.FileExists(p) {
 			return p, true
 		}
@@ -346,7 +352,7 @@ func IsAbbrevCompanion(path string) bool {
 	if base == "" {
 		return false
 	}
-	return fsx.FileExists(base+".dsl") || fsx.FileExists(base+".dsl.dz")
+	return fsx.FileExists(base+".dsl") || fsx.FileExists(base+".dsl.dz") || fsx.FileExists(base+".lsd")
 }
 
 // abbrevParentStem strips the companion suffix, yielding the path its parent

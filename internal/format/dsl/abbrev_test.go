@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/wuweidict/wudict/internal/dict"
 	"github.com/wuweidict/wudict/internal/store"
 )
 
@@ -31,6 +32,17 @@ func writePair(t *testing.T, main, abrv string) (string, string) {
 		}
 	}
 	return mainPath, abrvPath
+}
+
+func TestNormalizeArticleWithExternalAbbreviations(t *testing.T) {
+	glossary := NewAbbreviations([]dict.Entry{{Headwords: []string{"pl"}, Body: "plural"}})
+	got, err := NormalizeArticleWithAbbreviations("[p]pl[/p]", "word", glossary)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(got, `title="plural"`) {
+		t.Fatalf("external abbreviation was not expanded: %q", got)
+	}
 }
 
 const abbrevDSL = "#NAME \"Mini abbreviations\"\n" +

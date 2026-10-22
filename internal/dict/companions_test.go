@@ -161,6 +161,13 @@ func TestSourceFilesDSLCompressed(t *testing.T) {
 	eqPaths(t, got, want)
 }
 
+func TestSourceFilesLSDAbbreviationCompanion(t *testing.T) {
+	dir := t.TempDir()
+	main := touch(t, filepath.Join(dir, "main.lsd"))
+	abrv := touch(t, filepath.Join(dir, "main_abrv.lsd"))
+	eqPaths(t, SourceFiles(main), []string{main, abrv})
+}
+
 func TestSourceFilesSingleFileFormats(t *testing.T) {
 	dir := t.TempDir()
 	for _, name := range []string{"x.slob", "x.bgl"} {
@@ -227,6 +234,16 @@ func TestAbbrevCompanion(t *testing.T) {
 	if got, ok := AbbrevCompanion(dzMain); !ok || got != dzAbrv {
 		t.Errorf("AbbrevCompanion(.dz) = %q, %v; want %q, true", got, ok, dzAbrv)
 	}
+	// LSD abbreviation dictionaries pair only with an LSD parent.
+	lsdDir := t.TempDir()
+	lsdMain := touch(t, filepath.Join(lsdDir, "Oxford.lsd"))
+	lsdAbrv := touch(t, filepath.Join(lsdDir, "Oxford_abrv.lsd"))
+	if got, ok := AbbrevCompanion(lsdMain); !ok || got != lsdAbrv {
+		t.Errorf("AbbrevCompanion(.lsd) = %q, %v; want %q, true", got, ok, lsdAbrv)
+	}
+	if !IsAbbrevCompanion(lsdAbrv) {
+		t.Error("the LSD abbreviation companion beside its parent must be recognized")
+	}
 	// the suffix test is case-insensitive: a Windows-made "_ABRV.DSL" is the
 	// same companion. Only the SUFFIX - the parent must exist as spelled, so
 	// this stays correct on a case-sensitive filesystem.
@@ -244,6 +261,9 @@ func TestAbbrevCompanion(t *testing.T) {
 	// a file literally named "_abrv.dsl" names no parent stem at all
 	if IsAbbrevCompanion(touch(t, filepath.Join(t.TempDir(), "_abrv.dsl"))) {
 		t.Error("bare _abrv.dsl has no parent")
+	}
+	if IsAbbrevCompanion(touch(t, filepath.Join(t.TempDir(), "_abrv.lsd"))) {
+		t.Error("bare _abrv.lsd has no parent")
 	}
 	// a non-DSL main file has no abbreviation companion
 	mdx := touch(t, filepath.Join(dir, "Oxford.mdx"))

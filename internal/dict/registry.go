@@ -607,7 +607,7 @@ func Discover(root string) ([]string, error) {
 			}
 			return nil
 		}
-		// A DSL abbreviation glossary is part of its parent, not a dictionary
+		// A Lingvo abbreviation glossary is part of its parent, not a dictionary
 		// of its own: it is absorbed at the parent's ingest and must never be
 		// listed beside it. Only when it HAS a parent - see IsAbbrevCompanion.
 		if _, ok := discoverableFor(p); ok && !IsAbbrevCompanion(p) {
