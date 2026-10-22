@@ -4481,8 +4481,8 @@ function setBrowseArticleDiagnostics(on){try{if(on)localStorage.setItem("wudict_
 let browseArticleDiagContext=(()=>{
   if(!browseArticleDiagnosticsEnabled())return null;
   const params=new URLSearchParams(location.search),startedAt=Number(params.get("browseDiagStart"));
-  if(!params.has("browse")||!params.has("from")||!Number.isSafeInteger(startedAt)||startedAt<=0)return null;
-  return {startedAt,dict:params.get("from")||"",page:Number(params.get("browsePage"))||0,
+  if(!params.has("browse")||!(params.has("from")||params.has("dict"))||!Number.isSafeInteger(startedAt)||startedAt<=0)return null;
+  return {startedAt,dict:params.get("dict")||params.get("from")||"",page:Number(params.get("browsePage"))||0,
     searchStartedAt:0,firstResponse:false,firstArticle:false};
 })();
 function logBrowseArticleTransition(stage,durationMs=0){
