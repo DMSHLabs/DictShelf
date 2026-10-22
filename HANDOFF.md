@@ -1,6 +1,6 @@
 # Agent handoff — current state
 
-Current checkout: branch `lsd`, based on `dev` at `95dac8f9`, with 23 local
+Current checkout: branch `lsd`, based on `dev` at `95dac8f9`, with 22 local
 commits; latest implementation commit is `862405d` (typed Windows exception
 pointers).
 Latest LSD changes are `1c6a9a3` (LSD abbreviation
