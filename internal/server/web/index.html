@@ -2356,6 +2356,7 @@ presetsLoad();
 /* ── dictionaries ──────────────────────────────────────────────────── */
 function dictBaseLabel(d){return d.name||d.path.split("/").pop()}
 function dictLabel(d){return dictTitles.get(d.id)||dictBaseLabel(d)}
+function dictIconHTML(id){return `<img class="dict-icon" src="/dict-icon/${encodeURIComponent(id)}" alt="" aria-hidden="true" loading="lazy" decoding="async">`}
 /* A DSL [ref dict="..."] names another dictionary by its #NAME, which is what
    dictBaseLabel shows, so the name is matched against the label as well as the
    stored name - a dictionary whose file carries no #NAME is known here by its
@@ -3596,7 +3597,7 @@ function renderPanel(){
     else if(indexed||selfIndexed)acts=`<a class="browse btn" href="/browse?dict=${encodeURIComponent(d.id)}" title="${escAttr(tx("dictUI.browseHint"))}"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M2.4 3.4a1.2 1.2 0 0 1 1.2-1.2h6.2a1.2 1.2 0 0 1 1.2 1.2v9.2a1.2 1.2 0 0 1-1.2 1.2H3.6a1.2 1.2 0 0 1-1.2-1.2z"/><path d="M11 5h2.6"/><path d="M11 8h2.6"/><path d="M11 11h2.6"/></svg>${esc(tx("dictUI.browse"))}</a>`;
     if(d.unavailable||d.dsl&&!d.error)acts="";
     div.innerHTML=`<div class="hd">
-        <span class="dict-name-line"><b tabindex="${d.unavailable?-1:0}" role="button" aria-disabled="${!!d.unavailable}" title="${escAttr(tx(d.unavailable?"dictUI.dslUnavailable":"dictUI.searchOnly"))}">${esc(dictLabel(d))}</b><button type="button" class="dict-rename" aria-label="${escAttr(tx("dictUI.renameDictionary"))}" title="${escAttr(tx("dictUI.renameDictionary"))}" data-rename="${escAttr(d.id)}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L8 18l-4 1 1-4Z"/></svg></button></span>
+        <span class="dict-name-line">${dictIconHTML(d.id)}<b tabindex="${d.unavailable?-1:0}" role="button" aria-disabled="${!!d.unavailable}" title="${escAttr(tx(d.unavailable?"dictUI.dslUnavailable":"dictUI.searchOnly"))}">${esc(dictLabel(d))}</b><button type="button" class="dict-rename" aria-label="${escAttr(tx("dictUI.renameDictionary"))}" title="${escAttr(tx("dictUI.renameDictionary"))}" data-rename="${escAttr(d.id)}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L8 18l-4 1 1-4Z"/></svg></button></span>
       </div>
       <div class="meta">${esc(d.format||"?")}${d.entries?" · "+esc(tx("dictUI.entries",{number:window.wudictI18n.number(d.entries)})):""}${d.dbSize||selfIndexed?tx("dictUI.indexed"):""}</div>
       ${dslIndexControls(d)}
@@ -6062,7 +6063,7 @@ function loadDeferred(det,box,h,mode,q){
     // Answered, and the answer is "not in this one". Saying so is the whole
     // point — a section that vanished under the finger it was tapped with
     // would read as a bug.
-    box.innerHTML=`<details class="dict" open><summary>${esc(hitName(h))}`+
+    box.innerHTML=`<details class="dict" open><summary>${dictIconHTML(h.dict)}${esc(hitName(h))}`+
       `<span class="count">${esc(tx("search.noResults"))}</span></summary></details>`;
   }).catch(err=>{
     if(!box.isConnected)return; // superseded and already off screen
@@ -6153,7 +6154,7 @@ function renderSlot(box,h,mode,q,perDict,group){
     const det=document.createElement("details");
     det.className="dict";
     det.dataset.deferred=h.dict; // also what excludes it from expand-all
-    det.innerHTML=`<summary>${esc(hitName(h))}`+
+    det.innerHTML=`<summary>${dictIconHTML(h.dict)}${esc(hitName(h))}`+
       `<span class="count hint">${esc(deferLabel())}</span></summary>`;
     // `toggle` does not bubble, so this is bound to the element rather than
     // delegated on #out. It is not `once`: a failed load re-arms itself.
@@ -6166,7 +6167,7 @@ function renderSlot(box,h,mode,q,perDict,group){
     return{shown:true};
   }
   if(h.error){
-    box.innerHTML=`<details class="dict"><summary>${esc(hitName(h))}<span class="count">⚠ ${esc(window.wudictI18n.errorText(h.error))}</span></summary></details>`;
+    box.innerHTML=`<details class="dict"><summary>${dictIconHTML(h.dict)}${esc(hitName(h))}<span class="count">⚠ ${esc(window.wudictI18n.errorText(h.error))}</span></summary></details>`;
     return{shown:true};
   }
   if(h.skipped){
@@ -6190,7 +6191,7 @@ function renderSlot(box,h,mode,q,perDict,group){
          stops a scoped miss from silently widening. */
       if(group)return{shown:true,noIndex:{dict:h.dict,name:h.name,feat}};
       const what=FEAT_NAME[feat];
-      box.innerHTML=`<details class="dict"><summary>${esc(h.name)}`+
+      box.innerHTML=`<details class="dict"><summary>${dictIconHTML(h.dict)}${esc(h.name)}`+
         `<span class="upgrade" data-id="${h.dict}" data-feat="${feat}">${esc(tx("search.enableMode",{what}))}</span></summary></details>`;
       return{shown:true};
     }
@@ -6203,7 +6204,7 @@ function renderSlot(box,h,mode,q,perDict,group){
   // at, and every other mode has no ladder at all.
   const rung=mode==="fts"&&/\s/.test(q||"")&&(h.rung==="near"||h.rung==="words")
     ?`<span class="rung">${esc(tx(h.rung==="near"?"search.phraseNear":"search.phraseWords"))} · </span>`:"";
-  det.innerHTML=`<summary>${esc(h.name)}<span class="count">${rung}${esc(tx("search.results",{count:h.results.length,number:window.wudictI18n.number(h.results.length)+(more?"+":"")}))}</span>${more}</summary>`;
+  det.innerHTML=`<summary>${dictIconHTML(h.dict)}${esc(h.name)}<span class="count">${rung}${esc(tx("search.results",{count:h.results.length,number:window.wudictI18n.number(h.results.length)+(more?"+":"")}))}</span>${more}</summary>`;
   const dl=document.createElement("dl"),roots=[];
   for(const r of h.results){
     const dt=document.createElement("dt");

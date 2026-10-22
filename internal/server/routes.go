@@ -74,6 +74,7 @@ func (s *Server) routes() []route {
 		{"GET", "/api/dicts", s.handleDicts, "/api/dicts", true},
 		{"GET", "/api/search", s.handleSearch, "/api/search", true},
 		{"GET", "/res/", s.handleResource, "/res/{dict}/{path}", true},
+		{"GET", "/dict-icon/", s.handleDictionaryIcon, "", false},
 		{"OPTIONS", "/api/dicts", s.handlePreflight, "/api/dicts", false},
 		{"OPTIONS", "/api/search", s.handlePreflight, "/api/search", false},
 		{"OPTIONS", "/res/", s.handlePreflight, "/res/{dict}/{path}", false},

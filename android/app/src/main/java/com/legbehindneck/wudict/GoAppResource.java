@@ -35,7 +35,8 @@ final class GoAppResource {
                 "/double-tap-probe".equals(path);
         boolean appResource = path != null && (path.startsWith("/assets/") ||
                 path.equals("/favicon.ico") || path.startsWith("/style/") ||
-                path.startsWith("/files/") || path.startsWith("/res/"));
+                path.startsWith("/files/") || path.startsWith("/res/") ||
+                path.startsWith("/dict-icon/"));
         if ((!legacy && !current) || path == null || !"GET".equalsIgnoreCase(method) ||
                 !(appPage || appResource)) return null;
 

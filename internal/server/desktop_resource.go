@@ -273,6 +273,6 @@ func desktopWebResourceRoute(path string) bool {
 		if strings.HasPrefix(path, "/assets/") || strings.HasPrefix(path, "/style/") || strings.HasPrefix(path, "/files/") {
 			return true
 		}
-		return strings.HasPrefix(path, "/res/")
+		return strings.HasPrefix(path, "/res/") || strings.HasPrefix(path, "/dict-icon/")
 	}
 }

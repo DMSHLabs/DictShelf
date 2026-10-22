@@ -1,7 +1,10 @@
 # Agent handoff — current state
 
-Current checkout: branch `dev` at `af424f80`. No
-upstream is configured. The LSD decoder and reader work is present in this
+Current checkout: branch `dev` at `baa5ed43`. No
+upstream is configured. The application uses one DSL reader with GoldenDict-
+compatible repair and article preparation; there is no Original/GD selection
+or duplicate DSL index. `docs/DSL.md` and `tools/dslcompare/README.md` describe
+that current architecture. The LSD decoder and reader work is present in this
 branch; upstream review and pending ZIM checks remain as recorded below. The
 user-owned untracked `DictShelf.exe` was preserved. This session adds a saved
 Combined list dictionary limit (default 500, maximum 5,000), a specific
@@ -9,6 +12,13 @@ over-limit message, and moves Clear browser cache beneath its Browser cache
 description. Desktop System settings no longer show internal config key names.
 `go build ./...`, `git diff --check`, and translation JSON parsing pass; tests
 were not run, and Windows/Android settings UI verification remains pending.
+
+Dictionary names now have a shared icon route: a supported adjacent image file
+wins, then a format icon (including OpenZIM Illustration metadata), then the
+built-in book glyph. Search result headings and Dictionary settings show it;
+browser, Windows WebView and Android WebView serve it through their local Go
+resource path. `go build ./...` and `git diff --check` pass; UI runtime checks
+remain pending.
 
 Dictionary picker diagnostics now record input, group fetch, row rendering,
 dialog display and first frame when Dictionary list diagnostics is enabled.

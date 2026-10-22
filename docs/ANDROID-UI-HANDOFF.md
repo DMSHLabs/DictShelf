@@ -4,6 +4,12 @@ This document covers UI behavior. For the current wuDict2 Android identity,
 server startup, build commands, and coexistence checks, see
 [ANDROID-FORK.md](ANDROID-FORK.md).
 
+**Current DSL architecture:** native DSL uses one reader and one prepared
+index, with GoldenDict-compatible repairs enabled in the application path.
+There is no parser selector, duplicate GD dictionary, or separate GD index.
+The Original/GD selector and per-variant controls described in dated notes below
+are historical UI states, superseded by the single-reader cleanup on 2026-10-06.
+
 Current Android boundary: both FOSS and Play builds run Go in-process through
 JNI and never open a TCP listener. Neither flavour has a listen-address row;
 the APK verifier checks the packaged resources for that control.
