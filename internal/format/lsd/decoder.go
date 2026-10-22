@@ -20,6 +20,7 @@ type decoder struct {
 	prefixLengths  *lengthTable
 	postfixLengths *lengthTable
 	ref1, ref2     uint32
+	systemArticles bool
 }
 
 type headingChar struct {
@@ -34,11 +35,10 @@ type extChar struct {
 }
 
 func readDecoder(data []byte, version uint32) (*decoder, error) {
-	// The user dictionary decoder is shared by Lingvo 11/12, user X3/X5 and
-	// user X6 files. System and abbreviation variants have distinct tables and
-	// are rejected until their own layouts are implemented.
+	// User, system and abbreviation dictionaries share the bit/Huffman
+	// machinery but differ in their symbol alphabets and table ordering.
 	switch version {
-	case 0x110001, 0x120001, 0x131001, 0x132001, 0x142001, 0x152001:
+	case 0x110001, 0x120001, 0x131001, 0x132001, 0x141004, 0x142001, 0x145001, 0x152001, 0x155001:
 	default:
 		return nil, fmt.Errorf("lsd: decoder version %#x is not supported yet", version)
 	}
@@ -56,13 +56,17 @@ func readDecoder(data []byte, version uint32) (*decoder, error) {
 		if err != nil {
 			return nil, fmt.Errorf("lsd: read dictionary prefix: %w", err)
 		}
+		if version == 0x145001 || version == 0x155001 {
+			v ^= 0x879a
+		}
 		prefix[i] = uint16(v)
 	}
-	a, err := readSymbols(r)
+	xoredSymbols := version == 0x145001 || version == 0x155001
+	a, err := readSymbols(r, xoredSymbols)
 	if err != nil {
 		return nil, fmt.Errorf("lsd: read article symbols: %w", err)
 	}
-	h, err := readSymbols(r)
+	h, err := readSymbols(r, xoredSymbols)
 	if err != nil {
 		return nil, fmt.Errorf("lsd: read heading symbols: %w", err)
 	}
@@ -74,13 +78,23 @@ func readDecoder(data []byte, version uint32) (*decoder, error) {
 	if err != nil {
 		return nil, fmt.Errorf("lsd: read heading Huffman table: %w", err)
 	}
-	pt, err := readLengthTable(r)
-	if err != nil {
-		return nil, fmt.Errorf("lsd: read prefix-length table: %w", err)
+	var pt, qt *lengthTable
+	if version == 0x141004 {
+		qt, err = readLengthTable(r)
+		if err == nil {
+			_, err = r.read(32) // system decoder's reserved word
+		}
+		if err == nil {
+			pt, err = readLengthTable(r)
+		}
+	} else {
+		pt, err = readLengthTable(r)
+		if err == nil {
+			qt, err = readLengthTable(r)
+		}
 	}
-	qt, err := readLengthTable(r)
 	if err != nil {
-		return nil, fmt.Errorf("lsd: read postfix-length table: %w", err)
+		return nil, fmt.Errorf("lsd: read heading length tables: %w", err)
 	}
 	r1, err := r.read(32)
 	if err != nil {
@@ -90,10 +104,14 @@ func readDecoder(data []byte, version uint32) (*decoder, error) {
 	if err != nil {
 		return nil, fmt.Errorf("lsd: read second reference number: %w", err)
 	}
-	return &decoder{prefix: prefix, articleSymbols: a, headingSymbols: h, articles: at, headings: ht, prefixLengths: pt, postfixLengths: qt, ref1: r1, ref2: r2}, nil
+	return &decoder{
+		prefix: prefix, articleSymbols: a, headingSymbols: h,
+		articles: at, headings: ht, prefixLengths: pt, postfixLengths: qt,
+		ref1: r1, ref2: r2, systemArticles: version == 0x131001 || version == 0x141004,
+	}, nil
 }
 
-func readSymbols(r *bitReader) ([]uint32, error) {
+func readSymbols(r *bitReader, xor bool) ([]uint32, error) {
 	n, err := r.read(32)
 	if err != nil {
 		return nil, err
@@ -110,6 +128,9 @@ func readSymbols(r *bitReader) ([]uint32, error) {
 		v, err := r.read(uint8(w))
 		if err != nil {
 			return nil, err
+		}
+		if xor {
+			v ^= 0x1325
 		}
 		symbols[i] = v
 	}
@@ -259,6 +280,38 @@ func (d *decoder) decodeArticle(data []byte, size uint32) (string, error) {
 			return "", fmt.Errorf("lsd: invalid article symbol index %d", idx)
 		}
 		sym := d.articleSymbols[idx]
+		if d.systemArticles {
+			switch {
+			case sym <= 0x3f:
+				length := sym + 3
+				start, err := r.read(bitWidth(uint32(len(d.prefix))))
+				if err != nil {
+					return "", err
+				}
+				if uint64(start)+uint64(length) > uint64(len(d.prefix)) {
+					return "", fmt.Errorf("lsd: system article prefix copy is out of range")
+				}
+				out = append(out, d.prefix[start:start+length]...)
+			case sym <= 0x80:
+				length := sym - 0x3d
+				start, err := r.read(bitWidth(size))
+				if err != nil {
+					return "", err
+				}
+				if uint64(start)+uint64(length) > uint64(len(out)) {
+					return "", fmt.Errorf("lsd: system article back-reference is out of range")
+				}
+				for i := uint32(0); i < length; i++ {
+					out = append(out, out[start+i])
+				}
+			default:
+				out = append(out, uint16(sym-0x80))
+			}
+			if uint32(len(out)) > size {
+				return "", fmt.Errorf("lsd: decoded article exceeds declared length")
+			}
+			continue
+		}
 		switch {
 		case sym < 0x10000:
 			out = append(out, uint16(sym))

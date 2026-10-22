@@ -59,7 +59,9 @@ license and provenance note stay alongside it. Cases cover header/article/
 annotation decoding (`test.lsd`), headings for versions 12/X3/X5, overlay
 resource extraction for 12/X3/X5, extended and unsorted headings, and variant
 collapse. Heading extension pairs are converted back to DSL title syntax, and
-the text DSL title parser supplies searchable keys. Lingvo 11 and X6,
-system/abbreviation decoders, real-world large files, malformed-file handling,
-title display rendering and wuDict2-specific resource-name behavior still
-need coverage before support is marked complete.
+the text DSL title parser supplies searchable keys. User dictionaries, X3
+system tables, X5 system tables and abbreviation table layouts are implemented;
+system and abbreviation paths have synthetic primitive tests but no full
+fixture dictionaries. Lingvo X6 system XOR decoding, real-world large files,
+malformed-file handling, title display rendering and wuDict2-specific
+resource-name behavior still need coverage before support is marked complete.
