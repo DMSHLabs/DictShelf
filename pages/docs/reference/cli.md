@@ -93,8 +93,8 @@ files:
 ## lookup, prefix, fts, wildcard
 
 ``` sh
-wudict lookup   [-n max] <dictfile> <word>    # exact; accent-folded if nothing matches
-wudict prefix   [-n max] <dictfile> <word>    # exact, then prefix; accents ignored
+wudict lookup   [-n max] <dictfile> <word>    # exact; case and accents ignored, the word as typed first
+wudict prefix   [-n max] <dictfile> <word>    # the word, then headwords it starts; case and accents ignored
 wudict fts      [-n max] <dictfile> <query>   # full-text query, as in the app
 wudict wildcard [-n max] <dictfile> <pattern> # headwords that fit <pattern>
 ```

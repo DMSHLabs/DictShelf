@@ -5,6 +5,7 @@
 package wildcard
 
 import (
+	"math/rand"
 	"slices"
 	"testing"
 	"unicode"
@@ -77,4 +78,41 @@ func TestMarks(t *testing.T) {
 		}
 	}
 	t.Logf("%d ranges", len(ms))
+}
+
+// MinFold is a lower bound of Fold over every mark-free span it can be asked
+// about, and InMarks agrees with Marks.
+func TestMinFold(t *testing.T) {
+	rng := rand.New(rand.NewSource(3))
+	for range 4000 {
+		lo := rune(0x80 + rng.Intn(0x2FFFF))
+		if rng.Intn(3) == 0 {
+			lo = rune(0x80 + rng.Intn(0x700))
+		}
+		if InMarks(lo) {
+			continue
+		}
+		_, e := Unmarked(lo)
+		hi := min(e, lo+rune(rng.Intn(3000)))
+		b := MinFold(lo, hi)
+		for r := lo; r <= hi; r++ {
+			if r >= 0xD800 && r <= 0xDFFF {
+				continue
+			}
+			if f := Fold(r); f >= 0 && f < b {
+				t.Fatalf("MinFold(%U, %U) = %U, but Fold(%U) = %U", lo, hi, b, r, f)
+			}
+		}
+	}
+	if got := MinFold(0xC0, 0x2FF); got != 'a' {
+		t.Errorf("MinFold over Latin-1 and Latin Extended = %U, want 'a'", got)
+	}
+	for r := rune(0x80); r <= unicode.MaxRune; r++ {
+		if unicode.Is(unicode.Mn, r) && !InMarks(r) {
+			t.Fatalf("InMarks(%U) is false for a mark", r)
+		}
+		if lo, hi := Unmarked(r); InMarks(r) != (lo == r && hi == r && InMarks(r)) {
+			t.Fatalf("InMarks(%U) disagrees with Unmarked: %U..%U", r, lo, hi)
+		}
+	}
 }

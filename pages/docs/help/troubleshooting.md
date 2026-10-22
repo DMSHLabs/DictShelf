@@ -97,8 +97,10 @@ desktop and on by default on Android.
 
 - A pattern matches the whole headword: `rain` finds only *rain*, `*rain*`
   finds every headword that contains *rain*.
-- A pattern with a capital letter matches case and accents as typed: `Cafe`
-  does not find *café*. Write it in lowercase to ignore them.
+- A capital letter or an accent in the pattern does not exclude a headword;
+  it puts the headwords that have it first. With up to 5 results per
+  dictionary, the other spellings can be past the last one: click
+  <kbd>more…</kbd> in the section header.
 - Wildcard matches the headword an entry is filed under, not the other
   spellings the dictionary lists for it. Exact and prefix find those.
 - A dictionary that is not indexed yet is not searched; its result section

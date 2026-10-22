@@ -94,14 +94,16 @@ COMMANDS
   list   <dir> [dir…]                     List the dictionaries in the folders
   info   <dictfile>                       Show a dictionary's metadata, search modes,
                                           language, and its files with their sizes
-  lookup   [-n max] <dictfile> <word>     Exact search; accent-folded if nothing matches
-  prefix   [-n max] <dictfile> <word>     Exact, then prefix; case and accents ignored
+  lookup   [-n max] <dictfile> <word>     Exact search; case and accents ignored,
+                                          the word as typed first
+  prefix   [-n max] <dictfile> <word>     The word, then the headwords it starts;
+                                          case and accents ignored
   fts      [-n max] <dictfile> <query>    Full-text query, read as in the app
                                           (full-text index)
   wildcard [-n max] <dictfile> <pattern>  Headwords that fit <pattern>: ? is one
                                           character, * any number; a capital letter
-                                          makes it case-sensitive. Quote the pattern:
-                                          'b???d'
+                                          or an accent puts the headwords that have
+                                          it first. Quote the pattern: 'b???d'
                                           All four print to standard output and take
                                           -format raw (the dictionary's HTML; default),
                                           clean (no scripts, stylesheets or

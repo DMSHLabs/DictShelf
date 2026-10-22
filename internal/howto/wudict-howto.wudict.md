@@ -75,7 +75,7 @@ More: [search](<entry://wudict search>) · [full-text](<entry://wudict full-text
 ## wudict search modes
 ## wudict modes
 
-**Pick a mode in the bar; accents and case do not matter**: `corazon` finds *corazón*, `OXFORD` finds *Oxford*. The one exception is a [wildcard](<entry://wudict wildcard>) pattern with a capital letter. Exact and prefix work at once, wildcard as soon as the dictionary is indexed; full-text needs an optional [index](<entry://wudict index>).
+**Pick a mode in the bar; accents and case do not matter**: `corazon` finds *corazón*, `OXFORD` finds *Oxford*. In exact, prefix and [wildcard](<entry://wudict wildcard>) search they set the order: the word as typed comes first, and a capital letter or an accent puts the headwords that have it first. Exact and prefix work at once, wildcard as soon as the dictionary is indexed; full-text needs an optional [index](<entry://wudict index>).
 
 | Mode | Finds | Use it when |
 | --- | --- | --- |
@@ -128,7 +128,7 @@ Operators count only in capitals: `wage not minimum` is three words. A query nev
 | `by the *` | phrases that start with *by the* |
 | `apple` | *apple* and *Apple*, not *apples* |
 
-A pattern without a capital letter ignores case and accents: `cafe` finds *Café*. A pattern with a capital letter is matched as typed: `March` finds *March*, not *march*. There are no other special characters: to find a `*` or a `?` in a headword, use exact or prefix. A pattern has at most 64 characters.
+Case and accents do not exclude a headword: `cafe` and `Cafe` both find *Café*. They set the order: `March` lists *March* before *march*, `café*` lists *café* before *cafe*, and `nacion*` lists *nación* first. There are no other special characters: to find a `*` or a `?` in a headword, use exact or prefix. A pattern has at most 64 characters.
 
 - [index](/browse?dict=wudict-howto)
 

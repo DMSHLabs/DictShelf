@@ -1,6 +1,6 @@
 ---
 title: Wildcard syntax
-description: How a wildcard query is read - ? and *, the whole headword, case and accents, what is searched, and limits.
+description: How a wildcard query is read - ? and *, the whole headword, case and accents, what is searched, result order, and limits.
 ---
 
 # Wildcard syntax
@@ -33,19 +33,27 @@ A pattern without `*` or `?` finds only the headword it spells.
 
 ## Case and accents
 
-A pattern without a capital letter ignores case and accents:
+Case and accents do not exclude a headword. `cafe`, `Cafe` and `café` all
+find *cafe*, *café*, *Café* and *CAFÉ*. `koln` finds *Köln*, `елка` finds
+*ёлка*.
 
--   `cafe` finds *cafe*, *café*, *Café* and *CAFÉ*.
--   `koln` finds *Köln*.
+A capital letter or an accent in the pattern sets the order of the results
+([Result order](#result-order)):
 
-A pattern with a capital letter matches as typed. Case and accents both count:
-
--   `March` finds *March*, not *march*.
--   `Cafe` does not find *Café*.
--   `Café` finds *Café*, not *café*.
+-   A capital letter puts the headwords with that case first: `March` lists
+    *March* before *march*.
+-   An accent puts the headwords with that accent first: `café*` lists
+    *café* and *Café* before *cafe*, and `äh*` lists *Ähnlichkeit* before
+    *ah*.
+-   With both, case comes first: `Café*` lists *Café*, then *café*, then
+    *cafe*.
 
 A capital letter is an uppercase or titlecase letter in any script: `M`, `É`,
-`Ж`, `ǅ`.
+`Ж`, `ǅ`. An accent is a mark that a letter loses when accents are ignored:
+`é`, `ü`, `ñ`, `ё`, `й`.
+
+`ß`, `ł`, `ø` and `đ` are letters of their own, not accented letters:
+`strasse` does not find *Straße*.
 
 ## Examples
 
@@ -76,9 +84,36 @@ lemmatized as in the other modes
 A followed link, a double-clicked word and a word from another app are looked
 up in prefix mode, not as a pattern.
 
-Results are in the order of <kbd>Browse A–Z…</kbd>: case is ignored, and a
-headword that starts with an accented or non-Latin letter comes after *Z*. The
-number of results per dictionary is the same as in the other modes
+## Result order
+
+1.  The headword the pattern spells, exactly as typed. A pattern spells a
+    headword when it has no `?`: the pattern with every `*` matching
+    nothing. `nacion*` spells *nacion*, `un*able` spells *unable*.
+2.  The other results, by case and accents
+    ([Case and accents](#case-and-accents)).
+3.  Within the same case and accents: the headword the pattern spells, then
+    the others in alphabetical order, as in a printed dictionary:
+    -   Letters count first, without accents and case: *kohlen*, *Kohler*,
+        *Köhler*.
+    -   Between headwords that are otherwise the same, the one without an
+        accent comes first: *Kohler* before *Köhler*.
+    -   Then lowercase before capital: *über* before *Über*.
+
+This is the order of DIN 5007-1 and of the Duden, and of the Unicode
+Collation Algorithm. `ß` sorts as a letter after `z`, not as `ss`.
+
+| Pattern | Results, in order |
+| --- | --- |
+| `nacion*` | *nación*, *nacional*… |
+| `march` | *march*, *March* |
+| `March` | *March*, *march* |
+| `über*` | *über*, *über-*, *Über-*, *Über-Ich*, *überaktiv*, *Überaktivität*, *überall*… |
+| `äh*` | *äh*, *Ähnlichkeit*, *Ähre*…, then *ah*, *Ah*… |
+
+<kbd>Browse A–Z…</kbd> uses a different order: case is ignored, and a
+headword that starts with an accented or non-Latin letter comes after *Z*.
+
+The number of results per dictionary is the same as in the other modes
 ([Result order](../start/search.md#result-order)).
 
 ## Limits

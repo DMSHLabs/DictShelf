@@ -4536,8 +4536,7 @@ document.addEventListener("keydown",e=>{
    regex. */
 /* The modes a followed link or a handed-over word does not use. Both read the
    text as something other than a headword: full-text as words in articles,
-   wildcard as a pattern, where `Who?` would match "Whom" and a capital
-   letter would make the lookup case-sensitive. */
+   wildcard as a pattern, where `Who?` would match "Whom" and `*` any run. */
 function notForWords(mode){return mode==="fts"||mode==="wildcard"}
 function searchFor(term,opts){
   const t=String(term||"").trim();

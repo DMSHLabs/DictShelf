@@ -7,6 +7,7 @@ package wildcard
 import (
 	"errors"
 	"math/rand"
+	"slices"
 	"strings"
 	"testing"
 	"unicode"
@@ -15,38 +16,187 @@ import (
 	"golang.org/x/text/unicode/norm"
 )
 
+// show renders tokens with the wildcards as `*` and `?`.
+func show(toks []rune) string {
+	var b strings.Builder
+	for _, r := range toks {
+		switch r {
+		case anyRun:
+			b.WriteByte('*')
+		case anyOne:
+			b.WriteByte('?')
+		default:
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
 func TestParse(t *testing.T) {
 	for _, tc := range []struct {
-		in        string
-		sensitive bool
-		runes     string
-		glob      string
+		in      string
+		tiers   []Reading
+		folded  string
+		glob    string
+		run     string
+		end     bool
+		head    string
+		literal bool
 	}{
-		{"apple", false, "apple", "apple"},
-		{"a**b***", false, "a*b*", "a*b*"},
-		{"Café", true, "Café", "Café"},
-		{"café", false, "cafe", "café"},
-		{"CAFÉ*", true, "CAFÉ*", "CAFÉ*"},
-		{"ǅemal", true, "ǅemal", "ǅemal"}, // titlecase counts as a capital
-		{"Жук", true, "Жук", "Жук"},       // so does a non-Latin capital
-		{"жук", false, "жук", "жук"},
-		{"йод", false, "иод", "йод"},  // й decomposes to и + a mark
-		{"한국?", false, "한국?", "한국?"},  // a Hangul syllable stays whole
-		{"*́*x", false, "*x", "*́*x"}, // a dropped mark joins two stars
-		{"[a]", false, "[a]", "[[]a]"},
-		{"Ab[", true, "Ab[", "Ab[[]"},
-		{"1990s", false, "1990s", "1990s"},
+		{"apple", []Reading{Folded}, "apple", "apple", "apple", true, "apple", true},
+		{"a**b***", []Reading{Folded}, "a*b*", "a*b*", "a", false, "a", false},
+		{"Café", []Reading{AsTyped, CaseIgnored, Folded}, "cafe", "Café", "cafe", true, "Café", true},
+		{"café", []Reading{CaseIgnored, Folded}, "cafe", "café", "cafe", true, "café", true},
+		{"March", []Reading{AsTyped, Folded}, "march", "March", "march", true, "March", true},
+		{"CAFÉ*", []Reading{AsTyped, CaseIgnored, Folded}, "cafe*", "CAFÉ*", "cafe", false, "CAFÉ", false},
+		{"ǅemal", []Reading{AsTyped, Folded}, "ǆemal", "ǅemal", "ǆemal", true, "ǅemal", true}, // titlecase counts as a capital
+		{"Жук", []Reading{AsTyped, Folded}, "жук", "Жук", "жук", true, "Жук", true},           // so does a non-Latin capital
+		{"жук", []Reading{Folded}, "жук", "жук", "жук", true, "жук", true},
+		{"йод", []Reading{CaseIgnored, Folded}, "иод", "йод", "иод", true, "йод", true}, // й decomposes to и + a mark
+		{"한국?", []Reading{Folded}, "한국?", "한국?", "한국", false, "한국", false},              // a Hangul syllable stays whole
+		{"*́*x", []Reading{CaseIgnored, Folded}, "*x", "*́*x", "", false, "", false},    // a dropped mark joins two stars
+		{"[a]", []Reading{Folded}, "[a]", "[[]a]", "[a]", true, "[a]", true},
+		{"Ab[", []Reading{AsTyped, Folded}, "ab[", "Ab[[]", "ab[", true, "Ab[", true},
+		{"1990s", []Reading{Folded}, "1990s", "1990s", "1990s", true, "1990s", true},
+		{"İst", []Reading{AsTyped, Folded}, "ist", "İst", "ist", true, "İst", true}, // İ lowercases to i: a capital, no accent
 	} {
 		p, err := Parse(tc.in)
 		if err != nil {
 			t.Fatalf("Parse(%q): %v", tc.in, err)
 		}
-		if p.Sensitive != tc.sensitive || string(p.runes) != tc.runes {
-			t.Errorf("Parse(%q) = sensitive %v, %q; want %v, %q", tc.in, p.Sensitive, string(p.runes), tc.sensitive, tc.runes)
+		if got := p.Tiers(); !slices.Equal(got, tc.tiers) {
+			t.Errorf("Parse(%q).Tiers() = %v, want %v", tc.in, got, tc.tiers)
 		}
-		if p.Sensitive {
-			if g := p.Glob(); g != tc.glob {
-				t.Errorf("Parse(%q).Glob() = %q, want %q", tc.in, g, tc.glob)
+		if got := show(p.under(Folded)); got != tc.folded {
+			t.Errorf("Parse(%q) folded = %q, want %q", tc.in, got, tc.folded)
+		}
+		if g := p.Glob(); g != tc.glob {
+			t.Errorf("Parse(%q).Glob() = %q, want %q", tc.in, g, tc.glob)
+		}
+		if run, end := p.Run(); string(run) != tc.run || end != tc.end {
+			t.Errorf("Parse(%q).Run() = %q, %v; want %q, %v", tc.in, string(run), end, tc.run, tc.end)
+		}
+		if h := p.Head(); h != tc.head {
+			t.Errorf("Parse(%q).Head() = %q, want %q", tc.in, h, tc.head)
+		}
+		if l := p.Literal(); l != tc.literal {
+			t.Errorf("Parse(%q).Literal() = %v, want %v", tc.in, l, tc.literal)
+		}
+	}
+}
+
+// Tail: the ASCII character every match ends with, folded, in any reading.
+func TestTail(t *testing.T) {
+	for in, want := range map[string]int{
+		"*tion": 'n', "*ción": 'n', "*CIÓN": 'n', "*cafÉ": 'e', "c?t": 't', "a\u0301": 'a',
+		"*ción*": -1, "*n?": -1, "*жук": -1, "*\u0301": -1, "*": -1,
+	} {
+		p, _ := Parse(in)
+		c, ok := p.Tail()
+		if got := map[bool]int{true: int(c), false: -1}[ok]; got != want {
+			t.Errorf("Parse(%q).Tail() = %d, want %d", in, got, want)
+		}
+	}
+}
+
+// Exact and prefix queries are literal: `*`, `?` and `[` are themselves.
+func TestLiteral(t *testing.T) {
+	for _, tc := range []struct {
+		in     string
+		prefix bool
+		glob   string
+		yes    []string
+		no     []string
+	}{
+		{"what?", false, "what[?]", []string{"what?", "What?"}, []string{"whatx", "what"}},
+		{"a*b", true, "a[*]b*", []string{"a*b", "a*bc"}, []string{"axb", "ab"}},
+		{"[x", true, "[[]x*", []string{"[x", "[xy"}, []string{"x"}},
+		{"100%", true, "100%*", []string{"100% sure"}, []string{"100 sure"}},
+		{"corazon", true, "corazon*", []string{"corazón", "Corazonada"}, []string{"coraz"}},
+	} {
+		p := Literal(tc.in, tc.prefix)
+		if g := p.Glob(); g != tc.glob {
+			t.Errorf("Literal(%q, %v).Glob() = %q, want %q", tc.in, tc.prefix, g, tc.glob)
+		}
+		if p.Literal() == tc.prefix {
+			t.Errorf("Literal(%q, %v).Literal() = %v", tc.in, tc.prefix, p.Literal())
+		}
+		m := p.Matcher()
+		for _, w := range tc.yes {
+			if !m.Match([]byte(w)) {
+				t.Errorf("Literal(%q, %v) does not match %q", tc.in, tc.prefix, w)
+			}
+		}
+		for _, w := range tc.no {
+			if m.Match([]byte(w)) {
+				t.Errorf("Literal(%q, %v) matches %q", tc.in, tc.prefix, w)
+			}
+		}
+	}
+}
+
+// The word a pattern spells: every star empty, only without `?`.
+func TestSpelled(t *testing.T) {
+	for _, tc := range []struct {
+		in, want string
+		ok       bool
+	}{
+		{"nacion*", "nacion", true},
+		{"un*able", "unable", true},
+		{"*tion", "tion", true},
+		{"Nación*", "Nación", true},
+		{"c?t*", "", false},
+		{"*", "", false},
+		{"apple", "", false}, // no star: the pattern is the word already
+	} {
+		p, _ := Parse(tc.in)
+		sp, ok := p.Spelled()
+		if ok != tc.ok || (ok && show(sp.toks) != tc.want) {
+			t.Errorf("Parse(%q).Spelled() = %q, %v; want %q, %v", tc.in, show(sp.toks), ok, tc.want, tc.ok)
+		}
+		if ok && (sp.capital != p.capital || sp.accent != p.accent) {
+			t.Errorf("Parse(%q).Spelled() changed the flags", tc.in)
+		}
+	}
+	p := Literal("nacion", true)
+	if sp, ok := p.Spelled(); !ok || show(sp.toks) != "nacion" {
+		t.Errorf("a prefix query spells its word: %q, %v", show(sp.toks), ok)
+	}
+	for in, want := range map[string][]Reading{
+		"march": {AsTyped, Folded},
+		"café":  {AsTyped, CaseIgnored, Folded},
+		"March": {AsTyped, Folded},
+		"Café":  {AsTyped, CaseIgnored, Folded},
+	} {
+		if got := Literal(in, false).SpelledTiers(); !slices.Equal(got, want) {
+			t.Errorf("Literal(%q).SpelledTiers() = %v, want %v", in, got, want)
+		}
+	}
+}
+
+// Tier is the first reading a headword fits in.
+func TestTier(t *testing.T) {
+	for _, tc := range []struct {
+		pattern string
+		tiers   map[string]int // headword → tier; -1 no match
+	}{
+		{"March", map[string]int{"March": 0, "march": 1, "MARCH": 1, "Märch": 1, "Marchx": -1}},
+		{"Café*", map[string]int{"Café": 0, "Cafés": 0, "café": 1, "CAFÉ": 1, "cafe": 2, "Cafe": 2, "kafe": -1}},
+		{"café", map[string]int{"café": 0, "Café": 0, "CAFÉ": 0, "cafe": 1, "Cafe": 1}},
+		{"cafe", map[string]int{"cafe": 0, "Café": 0, "café": 0}},
+		{"бой", map[string]int{"бой": 0, "Бой": 0, "бои": 1}},
+		// `?` is one character as typed: it takes a stored combining mark,
+		// which the folded reading drops
+		{"A?", map[string]int{"A\u0301": 0, "Ab": 0, "ab": 1, "a\u0301": -1, "\u00c1": -1, "A": -1}},
+	} {
+		p, err := Parse(tc.pattern)
+		if err != nil {
+			t.Fatal(err)
+		}
+		m := p.Matcher()
+		for w, want := range tc.tiers {
+			if got := m.Tier([]byte(w)); got != want {
+				t.Errorf("%q: Tier(%q) = %d, want %d", tc.pattern, w, got, want)
 			}
 		}
 	}
@@ -62,31 +212,6 @@ func TestParseLength(t *testing.T) {
 	// Collapsed stars are not counted: the limit is on what is matched.
 	if _, err := Parse("a" + strings.Repeat("*", 500) + "b"); err != nil {
 		t.Errorf("a + 500 stars + b: %v", err)
-	}
-}
-
-func TestLead(t *testing.T) {
-	for _, tc := range []struct {
-		in   string
-		lead rune
-		ok   bool
-	}{
-		{"cat", 'c', true},
-		{"Cat", 'C', true},
-		{"écu", 'e', true},
-		{"Écu", 'É', true},
-		{"́ab", 'a', true},
-		{"*ab", 0, false},
-		{"?ab", 0, false},
-	} {
-		p, _ := Parse(tc.in)
-		if r, ok := p.Lead(); r != tc.lead || ok != tc.ok {
-			t.Errorf("Parse(%q).Lead() = %q, %v; want %q, %v", tc.in, r, ok, tc.lead, tc.ok)
-		}
-	}
-	var zero Pattern
-	if _, ok := zero.Lead(); ok {
-		t.Error("the empty pattern has a lead")
 	}
 }
 
@@ -111,11 +236,11 @@ func TestMatch(t *testing.T) {
 		{"cafe", []string{"café", "Café", "CAFÉ", "café"}, []string{"cafes"}},
 		{"иод", []string{"йод", "Йод"}, nil},
 		{"한?", []string{"한국"}, []string{"한"}},
-		// Case-sensitive: as typed, accents included.
-		{"March", []string{"March"}, []string{"march", "MARCH"}},
-		{"Cafe", []string{"Cafe"}, []string{"Café", "cafe"}},
-		{"Café", []string{"Café"}, []string{"café", "Cafe"}},
-		{"Ж?к", []string{"Жук"}, []string{"жук"}},
+		// A capital or an accent ranks; it never excludes (TestTier).
+		{"March", []string{"March", "march", "MARCH"}, []string{"Marc"}},
+		{"Cafe", []string{"Cafe", "Café", "cafe"}, []string{"Caf"}},
+		{"Café", []string{"Café", "café", "Cafe"}, []string{"Cafés"}},
+		{"Ж?к", []string{"Жук", "жук"}, []string{"Жу"}},
 		// `[` and `]` are ordinary characters.
 		{"[a]*", []string{"[a]", "[a]b"}, []string{"a"}},
 		{"*\\*", []string{`a\b`}, []string{"ab"}},
@@ -174,7 +299,16 @@ func TestMatchAgainstReference(t *testing.T) {
 		for j := range s {
 			s[j] = text[rng.Intn(len(text))]
 		}
-		if got, want := match(collapse(append([]rune(nil), p...)), s), reference(p, s); got != want {
+		toks := []rune(string(p))
+		for j, r := range toks {
+			switch r {
+			case '*':
+				toks[j] = anyRun
+			case '?':
+				toks[j] = anyOne
+			}
+		}
+		if got, want := match(collapse(toks), s), reference(p, s); got != want {
 			t.Fatalf("match(%q, %q) = %v, want %v", string(p), string(s), got, want)
 		}
 	}
@@ -201,16 +335,58 @@ func TestFold(t *testing.T) {
 	}
 }
 
-// TestFoldNeverMakesAWildcard is what lets a pattern's `*` and `?` stay
-// wildcards after folding: no other character folds to one.
-func TestFoldNeverMakesAWildcard(t *testing.T) {
+// TestReadingsNest pins what lets one seek serve all three readings
+// (Pattern.Run): two characters equal as typed or lowercased are equal
+// folded, because Fold(c) == Fold(ToLower(c)); an ASCII character folds to
+// its lowercase, so NOCASE ranges hold its folds; Fold and ToLower are
+// idempotent; a mark lowercases to itself.
+func TestReadingsNest(t *testing.T) {
 	for r := rune(0); r <= unicode.MaxRune; r++ {
-		if r == '*' || r == '?' || (r >= 0xD800 && r <= 0xDFFF) {
+		if r >= 0xD800 && r <= 0xDFFF {
 			continue
 		}
-		if f := Fold(r); f == '*' || f == '?' {
-			t.Fatalf("Fold(%U) = %q", r, f)
+		l, f := unicode.ToLower(r), Fold(r)
+		switch {
+		case Fold(l) != f:
+			t.Fatalf("Fold(%U) = %U, Fold(ToLower) = %U", r, f, Fold(l))
+		case f >= 0 && Fold(f) != f:
+			t.Fatalf("Fold(Fold(%U)) = %U, not %U", r, Fold(f), f)
+		case unicode.ToLower(l) != l:
+			t.Fatalf("ToLower is not idempotent at %U", r)
+		case unicode.Is(unicode.Mn, r) && l != r:
+			t.Fatalf("mark %U lowercases to %U", r, l)
+		case r < utf8.RuneSelf && f != l:
+			t.Fatalf("ASCII %q folds to %U", r, f)
 		}
+	}
+}
+
+// Unmarked spans hold no nonspacing mark, checked against every code point.
+func TestUnmarked(t *testing.T) {
+	marks := make([]int32, unicode.MaxRune+2) // marks[r] = number of Mn below r
+	for r := rune(0); r <= unicode.MaxRune; r++ {
+		marks[r+1] = marks[r]
+		if unicode.Is(unicode.Mn, r) {
+			marks[r+1]++
+		}
+	}
+	for r := rune(utf8.RuneSelf); r <= unicode.MaxRune; r++ {
+		lo, hi := Unmarked(r)
+		if lo > r || hi < r || lo < utf8.RuneSelf {
+			t.Fatalf("Unmarked(%U) = %U..%U", r, lo, hi)
+		}
+		if unicode.Is(unicode.Mn, r) {
+			if lo != r || hi != r {
+				t.Fatalf("Unmarked of the mark %U = %U..%U", r, lo, hi)
+			}
+			continue
+		}
+		if n := marks[hi+1] - marks[lo]; n != 0 {
+			t.Fatalf("Unmarked(%U) = %U..%U holds %d marks", r, lo, hi, n)
+		}
+	}
+	if lo, hi := Unmarked('е'); lo > 'Ѐ' || hi < 'џ' {
+		t.Errorf("Unmarked(е) = %U..%U: the basic Cyrillic letters are not one span", lo, hi)
 	}
 }
 
@@ -253,7 +429,7 @@ func TestMatchInvalidUTF8(t *testing.T) {
 	if !m.Match([]byte("ab\xff")) {
 		t.Error(`"ab?" does not match "ab\xff": one invalid byte is one character`)
 	}
-	if !utf8.ValidString(string(p.runes)) {
+	if !utf8.ValidString(p.Glob()) {
 		t.Error("parsed pattern is not valid UTF-8")
 	}
 }

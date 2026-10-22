@@ -39,6 +39,99 @@ func Marks() [][2]rune {
 	return marks
 }
 
+// Unmarked returns the widest range of code points around r, inclusive, that
+// holds no nonspacing mark - none of Marks - and r alone when r is inside
+// Marks. It starts at U+0080 at the lowest. A character in the range other
+// than r is therefore never dropped by Fold: what lets a search skip the
+// headwords that continue with one.
+func Unmarked(r rune) (lo, hi rune) {
+	ms := Marks()
+	i, _ := slices.BinarySearchFunc(ms, r, func(m [2]rune, r rune) int {
+		if m[1] < r {
+			return -1
+		}
+		return 1
+	})
+	// ms[i] is the first range that does not end before r.
+	if i < len(ms) && ms[i][0] <= r {
+		return r, r
+	}
+	lo, hi = utf8.RuneSelf, unicode.MaxRune
+	if i > 0 {
+		lo = ms[i-1][1] + 1
+	}
+	if i < len(ms) {
+		hi = ms[i][0] - 1
+	}
+	return max(lo, utf8.RuneSelf), hi
+}
+
+// InMarks reports whether r is inside one of the Marks ranges.
+func InMarks(r rune) bool {
+	ms := Marks()
+	i, _ := slices.BinarySearchFunc(ms, r, func(m [2]rune, r rune) int {
+		if m[1] < r {
+			return -1
+		}
+		return 1
+	})
+	return i < len(ms) && ms[i][0] <= r
+}
+
+// MinFold returns a lower bound of Fold over the characters lo..hi, none of
+// them a nonspacing mark: lo, or the least value a character of lo..hi that
+// Fold lowers below lo folds to. A character that folds to a value under lo
+// folds below itself, so it is one of those Folds records.
+func MinFold(lo, hi rune) rune {
+	downOnce.Do(buildDown)
+	i, _ := slices.BinarySearchFunc(down, lo, func(d [2]rune, r rune) int { return int(d[0] - r) })
+	j, _ := slices.BinarySearchFunc(down, hi+1, func(d [2]rune, r rune) int { return int(d[0] - r) })
+	if i >= j {
+		return lo
+	}
+	return min(lo, downMin(i, j))
+}
+
+var (
+	downOnce sync.Once
+	down     [][2]rune // {r, Fold(r)} for every r that Fold lowers, ascending by r
+	downRMQ  [][]rune  // downRMQ[k][i]: the least Fold(r) of down[i : i+2^k]
+)
+
+func buildDown() {
+	foldsOnce.Do(buildFolds)
+	for f, rs := range folds {
+		for _, r := range rs {
+			if f < r {
+				down = append(down, [2]rune{r, f})
+			}
+		}
+	}
+	slices.SortFunc(down, func(a, b [2]rune) int { return int(a[0] - b[0]) })
+	level := make([]rune, len(down))
+	for i, d := range down {
+		level[i] = d[1]
+	}
+	downRMQ = [][]rune{level}
+	for w := 1; 2*w <= len(down); w *= 2 {
+		prev := downRMQ[len(downRMQ)-1]
+		next := make([]rune, len(prev)-w)
+		for i := range next {
+			next[i] = min(prev[i], prev[i+w])
+		}
+		downRMQ = append(downRMQ, next)
+	}
+}
+
+// downMin is the least Fold of down[i:j], j > i.
+func downMin(i, j int) rune {
+	k := 0
+	for 2<<k <= j-i {
+		k++
+	}
+	return min(downRMQ[k][i], downRMQ[k][j-1<<k])
+}
+
 var (
 	foldsOnce sync.Once
 	folds     map[rune][]rune // Fold(r) → every r != Fold(r) folding to it, ascending
