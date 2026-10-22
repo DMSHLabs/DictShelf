@@ -77,3 +77,22 @@ func TestXoredSymbols(t *testing.T) {
 		t.Fatalf("decoded symbols = %v; want ['x']", symbols)
 	}
 }
+
+func TestX6XORBlock(t *testing.T) {
+	data := []byte{0x00, 0x7f, 0xc2}
+	x6XOR(data)
+	want := []byte{0x7f, 0xe3, 0x30}
+	for i := range want {
+		if data[i] != want[i] {
+			t.Fatalf("decoded byte %d = %#02x; want %#02x", i, data[i], want[i])
+		}
+	}
+	// Independent blocks always restart from 0x7f.
+	one := []byte{0x00}
+	two := []byte{0x00}
+	x6XOR(one)
+	x6XOR(two)
+	if one[0] != two[0] || one[0] != 0x7f {
+		t.Fatalf("block start keys differ: %x, %x", one, two)
+	}
+}
