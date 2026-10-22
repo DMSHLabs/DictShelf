@@ -1,9 +1,22 @@
 # Agent handoff — current state
 
-Current checkout: branch `dev` at `4ce5a7f8`, aligned with `origin/dev`, with
-uncommitted Wildcards presentation changes. No upstream is configured. The
-LSD decoder and reader work is present in this branch; upstream review and
-pending ZIM checks remain as recorded below.
+Current checkout: branch `dev` at `64e47124`, aligned with `origin/dev`. No
+upstream is configured. The LSD decoder and reader work is present in this
+branch; upstream review and pending ZIM checks remain as recorded below. The
+user-owned untracked `DictShelf.exe` was preserved. This session adds a saved
+Combined list dictionary limit (default 500, maximum 5,000), a specific
+over-limit message, and moves Clear browser cache beneath its Browser cache
+description. Desktop System settings no longer show internal config key names.
+`go build ./...`, `git diff --check`, and translation JSON parsing pass; tests
+were not run, and Windows/Android settings UI verification remains pending.
+
+Dictionary picker diagnostics now record input, group fetch, row rendering,
+dialog display and first frame when Dictionary list diagnostics is enabled.
+The Windows native group snapshot also logs preference healing, registry read,
+linked-group sync, preferences read and view assembly. A synchronous opening
+guard prevents pointerdown and click from launching overlapping picker loads.
+`go build ./internal/server` and `git diff --check` pass; a fresh Windows log
+is needed to locate the intermittent delay.
 
 Wildcards' combined mode keeps the dictionary field's geometry, displays
 “Combined list” / «Общий список», and removes the dropdown affordance while

@@ -123,7 +123,7 @@ function groupErrorText(message){
   const keys=new Map([["Invalid group name","dictUI.invalidName"],["Enter a group name (1–100 characters, without control characters).","dictUI.nameLength"],["All Dictionaries is a reserved group name.","dictUI.reservedName"],["A group with this name already exists.","dictUI.duplicateName"],["Could not create group","dictUI.createFailed"],["Invalid membership","dictUI.invalidMember"],["All Dictionaries always contains every dictionary.","dictUI.allMembers"],["Dictionary no longer available","dictUI.dictMissing"],["Group not found","dictUI.groupMissing"],["Invalid group order","dictUI.invalidOrder"],["Group membership changed; reload the list","dictUI.reloadGroup"]]);
   return keys.has(message)?tx(keys.get(message)):message;
 }
-async function groupRequest(path,method,body){
+async function groupRequest(path,method,body,pickerTrace=false){
   if(window.wudictAndroidGo){
     const action={
       'GET /api/user-groups':'userGroups', 'GET /api/groups':'get',
@@ -149,7 +149,7 @@ async function groupRequest(path,method,body){
       'PUT /api/user-groups/link':'linkGroup', 'PUT /api/user-groups/order':'saveGroupOrder'
     }[method+' '+path];
     if(action){
-      try{return await window.wudictNativeCall(action,body===undefined?'':JSON.stringify(body))}
+      try{return await window.wudictNativeCall(action,pickerTrace&&action==='userGroups'?'picker':body===undefined?'':JSON.stringify(body))}
       catch(error){throw new Error(groupErrorText(error.message))}
     }
   }

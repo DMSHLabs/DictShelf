@@ -197,7 +197,7 @@ func recordBrowseDiagnostic(d browseDiagnostic) error {
 		return nil
 	}
 	switch d.Event {
-	case "alphabet_cache_miss", "alphabet_cache_invalid", "alphabet_cache_read_failed", "alphabet_cache_restore", "alphabet_cache_saved", "alphabet_cache_save_failed", "alphabet_progress", "alphabet_done", "alphabet_measure_done", "alphabet_aborted", "alphabet_error", "alphabet_task", "page_request", "page_response", "page_ready", "page_fetch_failed", "render", "page_cache_saved", "page_cache_restored", "wildcard_cache_checkpoint", "wildcard_cache_complete", "wildcard_cache_restored", "wildcard_memory_start", "wildcard_memory_sample", "wildcard_memory_end", "wildcard_progress", "wildcard_ribbon", "dictionary_picker_open", "dictionary_list_client", "article_transition", "browse_navigation", "navigation_resource", "storage_bootstrap", "work_resize", "ribbon_guard":
+	case "alphabet_cache_miss", "alphabet_cache_invalid", "alphabet_cache_read_failed", "alphabet_cache_restore", "alphabet_cache_saved", "alphabet_cache_save_failed", "alphabet_progress", "alphabet_done", "alphabet_measure_done", "alphabet_aborted", "alphabet_error", "alphabet_task", "page_request", "page_response", "page_ready", "page_fetch_failed", "render", "page_cache_saved", "page_cache_restored", "wildcard_cache_checkpoint", "wildcard_cache_complete", "wildcard_cache_restored", "wildcard_memory_start", "wildcard_memory_sample", "wildcard_memory_end", "wildcard_progress", "wildcard_ribbon", "dictionary_picker_open", "dictionary_picker_stage", "dictionary_list_client", "article_transition", "browse_navigation", "navigation_resource", "storage_bootstrap", "work_resize", "ribbon_guard":
 	default:
 		return errors.New("invalid diagnostic")
 	}
@@ -291,6 +291,10 @@ func recordBrowseDiagnostic(d browseDiagnostic) error {
 	if d.Event == "dictionary_picker_open" {
 		logx.System("dictionary_picker_diag group_fetch_ms=%d rows_render_ms=%d rows=%d total_ms=%d",
 			d.FetchMS, d.WordsMS, d.Words, d.TotalMS)
+		return nil
+	}
+	if d.Event == "dictionary_picker_stage" {
+		logx.System("dictionary_picker_stage stage=%s context=%q elapsed_ms=%d duration_ms=%d rows=%d", d.Stage, d.Resource, d.ElapsedMS, d.DurationMS, d.Words)
 		return nil
 	}
 	if d.Event == "alphabet_task" {

@@ -25,6 +25,10 @@ const (
 	ResultCacheAndroidDefaultGB = 2
 	// ResultCacheDesktopDefaultGB is the default disk-cache limit on desktop platforms.
 	ResultCacheDesktopDefaultGB = 8
+	// CombinedDictionaryLimitDefault is the default number of dictionaries allowed in a combined list.
+	CombinedDictionaryLimitDefault = 500
+	// CombinedDictionaryLimitMax bounds the configurable combined-list size.
+	CombinedDictionaryLimitMax = 5000
 	// BrowseStripExactWidthCount is the number of Browse strip labels measured exactly.
 	BrowseStripExactWidthCount = 200
 	// IngestBatchSize is the number of entries written per ingest batch.
