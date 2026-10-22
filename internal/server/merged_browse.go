@@ -490,10 +490,7 @@ func mergedFindSignature(baseID, query, within string, mask, withinMask bool) st
 	if withinMask && search.IsSimpleMask(within) {
 		within = search.NormalizeSimpleMask(within)
 	}
-	parts := []string{baseID, query, within, strconv.FormatBool(mask), strconv.FormatBool(withinMask)}
-	if within != "" {
-		parts = append(parts, "base-position-v3")
-	}
+	parts := []string{baseID, query, within, strconv.FormatBool(mask), strconv.FormatBool(withinMask), "base-position-v4"}
 	return strings.Join(parts, "\x00")
 }
 
@@ -795,6 +792,7 @@ func ensureMergedFindCache(ctx context.Context, basePath, baseID, path, signatur
 		scanned++
 		if baseMatcher(word) {
 			if matcher(word) {
+				basePosition = ordinal
 				if candidateBasePosition >= 0 {
 					basePosition = candidateBasePosition
 				} else if baseFindDB != nil {
