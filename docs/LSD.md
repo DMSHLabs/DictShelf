@@ -65,11 +65,12 @@ system tables, X5 system tables and abbreviation table layouts are implemented;
 system and abbreviation paths have synthetic primitive tests but no full
 fixture dictionaries. Fixture tests cover formatted title display, end-to-end
 alias indexing, and resource packing/retrieval through the prepared store. A
-local Windows smoke run fully ingested 82 LSD files and 78 same-name DSL
-pairs; all 78 pair counts matched, though 23 exact headword sets and 38 of 78
-sampled plain-text articles differed. Eleven of fourteen sampled
-`.dsl.files.zip` resources matched the paired LSD resource bytes; three names
-were absent from the LSD overlay. These local files are not included in the
-repository. Lingvo X6 system XOR decoding, broader independent dictionaries,
-malformed-file handling and resource-name edge cases still need coverage
-before support is marked complete.
+local Windows comparison of all parsed headwords in 79 same-name LSD/DSL pairs
+found identical key sets, including aliases. It exposed and fixed supplementary
+Unicode decoding in LSD headings: UTF-16 surrogate pairs must be decoded
+together or emoji headwords become replacement characters. Three LSD files had
+no same-name DSL pair. Eleven of fourteen sampled `.dsl.files.zip` resources
+matched the paired LSD resource bytes; three names were absent from the LSD
+overlay. These local files are not included in the repository. Lingvo X6 system
+XOR decoding, broader independent dictionaries, malformed-file handling and
+resource-name edge cases still need coverage before support is marked complete.
