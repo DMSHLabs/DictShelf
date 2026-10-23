@@ -19,6 +19,8 @@ import (
 
 const maxDictionaryIconBytes = 2 << 20
 
+const defaultDictionaryIcon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect x="4" y="5" width="22" height="23" rx="3" fill="#eee7d8" stroke="#806f52" stroke-width="1.5"/><path d="M9 5v23m17-18h3v18H9" fill="none" stroke="#806f52" stroke-width="1.5"/><path d="M13 12h8m-8 4h8m-8 4h6" stroke="#806f52" stroke-linecap="round" stroke-width="1.5"/></svg>`
+
 var dictionaryIconExtensions = map[string]string{
 	".bmp": "image/bmp", ".gif": "image/gif", ".ico": "image/vnd.microsoft.icon",
 	".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".jfif": "image/jpeg", ".jpe": "image/jpeg", ".pjpeg": "image/jpeg",
@@ -40,8 +42,7 @@ func (s *Server) handleDictionaryIcon(w http.ResponseWriter, r *http.Request) {
 	}
 	body, mime := s.dictionaryIcon(e)
 	if len(body) == 0 {
-		http.NotFound(w, r)
-		return
+		body, mime = []byte(defaultDictionaryIcon), "image/svg+xml"
 	}
 	w.Header().Set("Content-Type", mime)
 	w.Header().Set("X-Content-Type-Options", "nosniff")

@@ -6,10 +6,32 @@ package server
 
 import (
 	"encoding/binary"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
 )
+
+func TestDictionaryIconUsesFallbackWhenDictionaryHasNoIcon(t *testing.T) {
+	source := filepath.Join(t.TempDir(), "plain.dsl")
+	if err := os.WriteFile(source, []byte("plain text dictionary"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	e := &entry{ID: "plain", Path: source}
+	s := &Server{reg: &Registry{byID: map[string]*entry{"plain": e}}}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/dict-icon/plain", nil)
+	s.handleDictionaryIcon(w, r)
+	if w.Code != 200 {
+		t.Fatalf("status = %d, want 200", w.Code)
+	}
+	if got := w.Header().Get("Content-Type"); got != "image/svg+xml" {
+		t.Fatalf("Content-Type = %q, want image/svg+xml", got)
+	}
+	if w.Body.String() != defaultDictionaryIcon {
+		t.Fatal("fallback dictionary icon was not returned")
+	}
+}
 
 func TestDictionaryIconPrefersSiblingThenUsesEmbeddedLSDIcon(t *testing.T) {
 	dir := t.TempDir()
