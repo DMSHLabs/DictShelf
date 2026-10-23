@@ -363,6 +363,30 @@ func TestDiscoverHidesAbbrevCompanion(t *testing.T) {
 	}
 }
 
+func TestDiscoverHidesLSDAbrevCompanion(t *testing.T) {
+	RegisterFormat(".lsd", func(path string) (Dictionary, error) { return fakeDict{}, nil })
+	dir := t.TempDir()
+	for _, f := range []string{"X.lsd", "X_abrev.lsd", "Y_abrev.lsd"} {
+		if err := os.WriteFile(filepath.Join(dir, f), nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := Discover(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	seen := map[string]bool{}
+	for _, p := range got {
+		seen[filepath.Base(p)] = true
+	}
+	if len(got) != 2 || !seen["X.lsd"] || !seen["Y_abrev.lsd"] {
+		t.Fatalf("Discover = %v, want X.lsd and orphan Y_abrev.lsd only", got)
+	}
+	if !IsDictionaryFile(filepath.Join(dir, "X_abrev.lsd")) {
+		t.Error("an explicit companion path must remain openable")
+	}
+}
+
 type fakeReader struct{ Reader }
 
 // TestSniffedFormat: a suffix registered with RegisterSniffed is a dictionary

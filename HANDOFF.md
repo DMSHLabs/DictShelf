@@ -1,6 +1,6 @@
 # Agent handoff — current state
 
-Current checkout: branch `DictShelf` at `c29ef6e6`, merging `dev` at `e0e033dd`. Conflict resolutions are staged; the merge is not committed. DictShelf identity and icon changes are preserved. DSL companion handling accepts `_abrv` and `_abrev`, and retains LSD companion support. `go test ./internal/dict ./internal/format/dsl ./internal/format/lsd`, focused logx/server tests, `go build ./...`, and `git diff --check` pass.
+Current checkout: branch `DictShelf` at `3ca66071`; the merge of `dev` is committed. The remote `DictShelf` branch was deleted at the user's request, so this local branch has no tracking remote. Uncommitted changes add LSD embedded-icon lookup and `_abrev.lsd` companion handling. Same-name sibling images take precedence over an LSD header icon. On local samples, American Heritage Dictionary 4th Ed. has a 978-byte embedded BMP icon and Urban Dictionary 2015 has a 980-byte embedded BMP; neither has a same-name sibling image. The sampled X6 `AmIdiomsEE_v15_new.lsd` has no embedded icon. `go test ./...`, `go vet ./...`, `go build ./...`, and `git diff --check` pass.
 
 ## Product identity
 

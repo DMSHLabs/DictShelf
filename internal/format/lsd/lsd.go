@@ -8,6 +8,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -70,6 +71,7 @@ type source struct {
 	header      fileHeader
 	decoder     *decoder
 	meta        dict.Meta
+	icon        []byte
 	pagesEnd    uint32
 	overlayData uint32
 	overlayEnd  uint32
@@ -98,7 +100,7 @@ func openSource(path string) (*source, error) {
 	if !supportedVersion(h.version) {
 		return fail(fmt.Errorf("lsd: unsupported dictionary version %#x", h.version))
 	}
-	name, pagesEnd, overlayEnd, err := readVariableHeader(f, h, st.Size())
+	name, pagesEnd, overlayEnd, icon, err := readVariableHeader(f, h, st.Size())
 	if err != nil {
 		return fail(err)
 	}
@@ -128,7 +130,7 @@ func openSource(path string) (*source, error) {
 		overlayData = 0
 	}
 	return &source{
-		f: f, path: path, fileSize: st.Size(), header: h, decoder: d, pagesEnd: pagesEnd, overlayData: overlayData, overlayEnd: overlayEnd,
+		f: f, path: path, fileSize: st.Size(), header: h, decoder: d, icon: icon, pagesEnd: pagesEnd, overlayData: overlayData, overlayEnd: overlayEnd,
 		meta: dict.Meta{Name: name, Format: "lsd", Path: path, EntryCount: int(h.entryCount), IndexLang: indexLang, ContentsLang: contentsLang},
 	}, nil
 }
@@ -142,10 +144,10 @@ func supportedVersion(version uint32) bool {
 	}
 }
 
-func readVariableHeader(f io.ReaderAt, h fileHeader, fileSize int64) (string, uint32, uint32, error) {
+func readVariableHeader(f io.ReaderAt, h fileHeader, fileSize int64) (string, uint32, uint32, []byte, error) {
 	limit := int64(h.decoderOffset)
 	if limit > fileSize || limit < fixedHeaderSize {
-		return "", 0, 0, fmt.Errorf("lsd: invalid variable header boundary")
+		return "", 0, 0, nil, fmt.Errorf("lsd: invalid variable header boundary")
 	}
 	r := io.NewSectionReader(f, fixedHeaderSize, limit-fixedHeaderSize)
 	readByte := func() (byte, error) {
@@ -179,41 +181,45 @@ func readVariableHeader(f io.ReaderAt, h fileHeader, fileSize int64) (string, ui
 	}
 	nameLen, err := readByte()
 	if err != nil {
-		return "", 0, 0, fmt.Errorf("lsd: read dictionary name length: %w", err)
+		return "", 0, 0, nil, fmt.Errorf("lsd: read dictionary name length: %w", err)
 	}
 	name, err := readText(uint32(nameLen))
 	if err != nil {
-		return "", 0, 0, fmt.Errorf("lsd: read dictionary name: %w", err)
+		return "", 0, 0, nil, fmt.Errorf("lsd: read dictionary name: %w", err)
 	}
 	for _, label := range []string{"first heading", "last heading"} {
 		n, err := readByte()
 		if err != nil {
-			return "", 0, 0, fmt.Errorf("lsd: read %s length: %w", label, err)
+			return "", 0, 0, nil, fmt.Errorf("lsd: read %s length: %w", label, err)
 		}
 		if _, err := readText(uint32(n)); err != nil {
-			return "", 0, 0, fmt.Errorf("lsd: read %s: %w", label, err)
+			return "", 0, 0, nil, fmt.Errorf("lsd: read %s: %w", label, err)
 		}
 	}
 	capitalsLen, err := readU32LE()
 	if err != nil {
-		return "", 0, 0, fmt.Errorf("lsd: read capitals length: %w", err)
+		return "", 0, 0, nil, fmt.Errorf("lsd: read capitals length: %w", err)
 	}
 	if _, err := readText(capitalsLen); err != nil {
-		return "", 0, 0, fmt.Errorf("lsd: read capitals: %w", err)
+		return "", 0, 0, nil, fmt.Errorf("lsd: read capitals: %w", err)
 	}
+	var icon []byte
 	if h.version > 0x120000 {
 		iconLen, err := readU16LE()
 		if err != nil {
-			return "", 0, 0, fmt.Errorf("lsd: read icon length: %w", err)
+			return "", 0, 0, nil, fmt.Errorf("lsd: read icon length: %w", err)
 		}
-		if _, err := io.CopyN(io.Discard, r, int64(iconLen)); err != nil {
-			return "", 0, 0, fmt.Errorf("lsd: read icon: %w", err)
+		if iconLen > 0 {
+			icon = make([]byte, int(iconLen))
+			if _, err := io.ReadFull(r, icon); err != nil {
+				return "", 0, 0, nil, fmt.Errorf("lsd: read icon: %w", err)
+			}
 		}
 	}
 	if h.version > 0x140000 {
 		var ignored [4]byte
 		if _, err := io.ReadFull(r, ignored[:]); err != nil {
-			return "", 0, 0, fmt.Errorf("lsd: read header checksum: %w", err)
+			return "", 0, 0, nil, fmt.Errorf("lsd: read header checksum: %w", err)
 		}
 	}
 	pagesEnd := uint32(fileSize)
@@ -221,25 +227,59 @@ func readVariableHeader(f io.ReaderAt, h fileHeader, fileSize int64) (string, ui
 	if h.version > 0x120000 {
 		pagesEnd, err = readU32LE()
 		if err != nil {
-			return "", 0, 0, fmt.Errorf("lsd: read end of index pages: %w", err)
+			return "", 0, 0, nil, fmt.Errorf("lsd: read end of index pages: %w", err)
 		}
 		overlayData, err = readU32LE()
 		if err != nil {
-			return "", 0, 0, fmt.Errorf("lsd: read resource data offset: %w", err)
+			return "", 0, 0, nil, fmt.Errorf("lsd: read resource data offset: %w", err)
 		}
 	}
 	if h.version > 0x140000 {
 		for i := 0; i < 2; i++ {
 			if _, err := readU32LE(); err != nil {
-				return "", 0, 0, fmt.Errorf("lsd: read reserved header value: %w", err)
+				return "", 0, 0, nil, fmt.Errorf("lsd: read reserved header value: %w", err)
 			}
 		}
 	}
 	if pagesEnd < h.pagesOffset || int64(pagesEnd) > fileSize || (pagesEnd-h.pagesOffset)%pageSize != 0 {
-		return "", 0, 0, fmt.Errorf("lsd: invalid index page boundary %#x", pagesEnd)
+		return "", 0, 0, nil, fmt.Errorf("lsd: invalid index page boundary %#x", pagesEnd)
 	}
 	if overlayData < pagesEnd || int64(overlayData) > fileSize {
-		return "", 0, 0, fmt.Errorf("lsd: invalid resource data boundary %#x", overlayData)
+		return "", 0, 0, nil, fmt.Errorf("lsd: invalid resource data boundary %#x", overlayData)
 	}
-	return strings.TrimSpace(name), pagesEnd, overlayData, nil
+	return strings.TrimSpace(name), pagesEnd, overlayData, icon, nil
+}
+
+// ReadIcon reads only the LSD headers, without decoding the dictionary's
+// article decoder tables. This keeps dictionary-list rendering cheap even for
+// large dictionaries.
+func ReadIcon(path string) ([]byte, string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, "", err
+	}
+	defer f.Close()
+	st, err := f.Stat()
+	if err != nil {
+		return nil, "", err
+	}
+	h, err := readHeader(f, st.Size())
+	if err != nil {
+		return nil, "", err
+	}
+	if !supportedVersion(h.version) || h.version <= 0x120000 {
+		return nil, "", dict.ErrNotFound
+	}
+	_, _, _, icon, err := readVariableHeader(f, h, st.Size())
+	if err != nil {
+		return nil, "", err
+	}
+	if len(icon) == 0 {
+		return nil, "", dict.ErrNotFound
+	}
+	mime := http.DetectContentType(icon)
+	if !strings.HasPrefix(mime, "image/") {
+		return nil, "", fmt.Errorf("lsd: embedded icon is not an image (%s)", mime)
+	}
+	return icon, mime, nil
 }

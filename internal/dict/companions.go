@@ -260,7 +260,7 @@ func CompanionSuffixes(mainExt string) []string {
 	case ".dsl", ".dsl.dz":
 		return []string{"_abrv.dsl.dz", "_abrev.dsl.dz", "_abrv.dsl", "_abrev.dsl", ".ann", ".dsl.ann"}
 	case ".lsd":
-		return []string{"_abrv.lsd"}
+		return []string{"_abrv.lsd", "_abrev.lsd"}
 	case ".mdx":
 		// A repacked MDX ships its stylesheet and scripts LOOSE beside the
 		// .mdx rather than packed in the .mdd - LDOCE6.css and entry.js are
@@ -315,7 +315,7 @@ func RequiredCompanions(mainExt string) [][]string {
 // abbrevSuffixes are the spellings of Lingvo's abbreviation glossary, longest
 // first so a ".dsl.dz" companion is recognised before the ".dsl" inside its
 // name. Appended to the STEM, exactly like every other companion here.
-var abbrevSuffixes = []string{"_abrv.dsl.dz", "_abrev.dsl.dz", "_abrv.lsd", "_abrv.dsl", "_abrev.dsl"}
+var abbrevSuffixes = []string{"_abrv.dsl.dz", "_abrev.dsl.dz", "_abrv.lsd", "_abrev.lsd", "_abrv.dsl", "_abrev.dsl"}
 
 // AbbrevCompanion returns the abbreviation glossary belonging to a DSL or LSD
 // main file src, if one exists beside it. Lingvo writes it as the expansion map
@@ -327,7 +327,7 @@ func AbbrevCompanion(src string) (string, bool) {
 	case ".dsl", ".dsl.dz":
 		suffixes = []string{"_abrv.dsl.dz", "_abrev.dsl.dz", "_abrv.dsl", "_abrev.dsl"}
 	case ".lsd":
-		suffixes = []string{"_abrv.lsd"}
+		suffixes = []string{"_abrv.lsd", "_abrev.lsd"}
 	default:
 		return "", false
 	}
