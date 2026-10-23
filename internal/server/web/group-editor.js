@@ -51,7 +51,7 @@ function updateAvailableSearch(){groupAvailableListSearch.refresh()}
 const groupMemberListSearch=window.wudictListSearch.create({
   root:$('groupRows'),itemSelector:'.group-row',dock:$('groupMembersSearchDock'),
   scrollContainer:$('groupRows'),inputId:'groupMembersSearch',
-  highlightSelector:'.group-dictionary-name',initiallyFiltering:true,
+  highlightSelector:'.group-dictionary-title',initiallyFiltering:true,
   storageKey:'wudict_list_search_mode_group_members',labels:groupSearchLabels,
   onUpdate:({query,filtering,visible})=>{
     const rows=$('groupRows');rows.querySelector('.group-filter-empty')?.remove();
@@ -65,7 +65,7 @@ const groupMemberListSearch=window.wudictListSearch.create({
 const groupAvailableListSearch=window.wudictListSearch.create({
   root:$('groupOtherRows'),itemSelector:'.group-row',dock:$('groupAvailableSearchDock'),
   scrollContainer:$('groupOtherRows'),inputId:'groupAvailableSearch',
-  highlightSelector:'.group-dictionary-name',initiallyFiltering:true,
+  highlightSelector:'.group-dictionary-title',initiallyFiltering:true,
   storageKey:'wudict_list_search_mode_group_available',labels:groupSearchLabels,
   onUpdate:({query,filtering,visible})=>{
     const rows=$('groupOtherRows');rows.querySelector('.group-filter-empty')?.remove();
@@ -109,7 +109,9 @@ function remainingGroupDicts(){
 }
 let pickerGroup=localStorage.getItem("wudict_picker_group")||"all";
 async function loadPickerGroups(){
-  try{userGroups=await groupRequest("/api/user-groups","GET");
+  try{userGroups=await groupRequest("/api/user-groups","GET",undefined,
+    (typeof dictionaryListDiagnosticsEnabled==="function"&&dictionaryListDiagnosticsEnabled())||
+    (typeof browseArticleDiagnosticsEnabled==="function"&&browseArticleDiagnosticsEnabled()));
     if(!userGroups.some(g=>g.id===pickerGroup))pickerGroup="all";
   }catch(e){console.warn("could not load dictionary groups:",e);pickerGroup="all"}
   // The panel's drop-down and the status bar's chip both name the group in
@@ -123,7 +125,7 @@ function groupErrorText(message){
   const keys=new Map([["Invalid group name","dictUI.invalidName"],["Enter a group name (1–100 characters, without control characters).","dictUI.nameLength"],["All Dictionaries is a reserved group name.","dictUI.reservedName"],["A group with this name already exists.","dictUI.duplicateName"],["Could not create group","dictUI.createFailed"],["Invalid membership","dictUI.invalidMember"],["All Dictionaries always contains every dictionary.","dictUI.allMembers"],["Dictionary no longer available","dictUI.dictMissing"],["Group not found","dictUI.groupMissing"],["Invalid group order","dictUI.invalidOrder"],["Group membership changed; reload the list","dictUI.reloadGroup"]]);
   return keys.has(message)?tx(keys.get(message)):message;
 }
-async function groupRequest(path,method,body){
+async function groupRequest(path,method,body,pickerTrace=false){
   if(window.wudictAndroidGo){
     const action={
       'GET /api/user-groups':'userGroups', 'GET /api/groups':'get',
@@ -134,7 +136,7 @@ async function groupRequest(path,method,body){
     }[method+' '+path];
     if(action){
       try{
-        const result=JSON.parse(window.wudictAndroidGo.groups(action,body===undefined?'':JSON.stringify(body)));
+        const result=JSON.parse(window.wudictAndroidGo.groups(action,pickerTrace&&action==='userGroups'?'picker':body===undefined?'':JSON.stringify(body)));
         if(!result.ok)throw new Error(result.error||'Dictionary Groups operation failed');
         return result.value;
       }catch(error){throw new Error(groupErrorText(error.message))}
@@ -149,7 +151,7 @@ async function groupRequest(path,method,body){
       'PUT /api/user-groups/link':'linkGroup', 'PUT /api/user-groups/order':'saveGroupOrder'
     }[method+' '+path];
     if(action){
-      try{return await window.wudictNativeCall(action,body===undefined?'':JSON.stringify(body))}
+      try{return await window.wudictNativeCall(action,pickerTrace&&action==='userGroups'?'picker':body===undefined?'':JSON.stringify(body))}
       catch(error){throw new Error(groupErrorText(error.message))}
     }
   }
@@ -473,7 +475,11 @@ function renderGroupRows(){
   for(const d of filtering?inside.concat(filteredOutside):inside){
     const label=document.createElement(selecting||(!locked&&showAll.checked)?"label":"div");label.className="group-row";
     label.dataset.dict=d.id;label.dataset.search=dictLabel(d).toLocaleLowerCase();
-    const name=document.createElement("span");name.className='group-dictionary-name';name.textContent=dictLabel(d);
+    const name=document.createElement("span");name.className='group-dictionary-name';
+    const title=document.createElement('span');title.className='group-dictionary-title';title.textContent=dictLabel(d);
+    const icon=document.createElement('img');icon.className='dict-icon';icon.src='/dict-icon/'+encodeURIComponent(d.id);icon.alt='';icon.setAttribute('aria-hidden','true');icon.loading='lazy';icon.decoding='async';
+    icon.addEventListener('error',()=>icon.remove(),{once:true});
+    name.append(icon,title);
     if(d.unavailable)name.append(" — ",tx("dictUI.dslUnavailable"));
     const pinned=groupPinnedIds(group).includes(d.id);
     const previewPinned=!!groupPinEditing&&groupPinEditing.groupId===group.id&&groupPinCutoff&&visibleGroupOrder(group).indexOf(d.id)<=visibleGroupOrder(group).indexOf(groupPinCutoff);
@@ -940,7 +946,11 @@ function groupSelectChanged(){
   groupAvailableListSearch.clear();groupMemberListSearch.clear();$('groupError').textContent='';renderGroupRows();
 }// Promise.all resolves to an array: passing it to loadDicts would enable
 // rescan and wait for index maintenance instead of listing dictionaries.
-Promise.all([loadPrefs(),loadConfig(),loadUserCSS(),loadPickerGroups()])
+const initialLocation=new URLSearchParams(location.search);
+const initialScopedBrowseArticle=initialLocation.has("q")&&initialLocation.has("from")&&initialLocation.has("browse");
+const startupTasks=[loadPrefs(),loadConfig(),loadUserCSS()];
+if(!initialScopedBrowseArticle)startupTasks.push(loadPickerGroups());
+Promise.all(startupTasks)
   .then(()=>{logBrowseArticleTransition("startup_dependencies_ready");return loadDicts()})
   .then(ok=>{if(ok&&!initialURLApplied)applyURL()}).catch(error=>bootFailed(error.message));
 // The preset layers are independent of the boot chain: their app halves are

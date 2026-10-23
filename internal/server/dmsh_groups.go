@@ -27,10 +27,12 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 	"unicode"
 
 	"github.com/wuweidict/wudict/internal/facet"
 	"github.com/wuweidict/wudict/internal/fsx"
+	"github.com/wuweidict/wudict/internal/logx"
 	"golang.org/x/text/collate"
 	"golang.org/x/text/language"
 )
@@ -273,13 +275,25 @@ func (s *Server) handleUserGroups(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, views)
 }
 
-func (s *Server) userGroupsSnapshot() ([]groupView, error) {
+func (s *Server) userGroupsSnapshot(trace bool) ([]groupView, error) {
+	started := time.Now()
+	stage := func(name string, count int) {
+		if trace {
+			logx.System("dictionary_picker_go stage=%s elapsed_ms=%d count=%d", name, time.Since(started).Milliseconds(), count)
+		}
+	}
+	stage("start", 0)
 	s.reg.prefs.heal(s.reg)
+	stage("prefs_heal", 0)
 	entries := s.reg.all()
+	stage("registry_read", len(entries))
 	if err := s.syncLinkedGroups(entries); err != nil {
+		stage("linked_groups_error", len(entries))
 		return nil, fmt.Errorf("Could not update linked groups: %w", err)
 	}
+	stage("linked_groups", len(entries))
 	f, _ := s.reg.prefs.data()
+	stage("prefs_read", len(f.Groups))
 	all := DictionaryGroup{ID: allDictionariesGroup, Name: "All Dictionaries"}
 	if f.UI != nil {
 		all.CustomOrder = f.UI.CustomOrder
@@ -321,6 +335,7 @@ func (s *Server) userGroupsSnapshot() ([]groupView, error) {
 			return 0
 		})
 	}
+	stage("views_ready", len(views))
 	return views, nil
 }
 

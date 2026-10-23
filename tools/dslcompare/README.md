@@ -1,6 +1,6 @@
 # DSL differential comparison
 
-This is a development-only GoldenDict reference comparison tool, not part of the Android build. Production uses one enhanced Go DSL reader for native DSL sources; the upstream Go implementation and GoldenDict oracle remain available for regression checks.
+This is a development-only GoldenDict reference comparison tool, not part of the Android build. Production uses one enhanced Go DSL pipeline for native sources. This directory keeps the C++ GoldenDict oracle and comparison harness for regression checks.
 
 ## Application Integration
 
@@ -36,15 +36,15 @@ literal spaces are kept distinct until the IPA conversion is done. Closed empty
 tags are now removed in the Go tree as in GoldenDict. The report does not claim
 visual or full-index parity; complex media payloads still need dedicated cases.
 
-## Optional Enhancer (2026-10-02)
+## Production article preparation and reference comparisons
 
-The production article reader enables a separate HTML preparation pass after the base
-parser. `GDOptions{}` / `NewGDReaderWithOptions` disables it for direct reading;
-Native DSL uses the same enhanced pipeline. `compare.py` and every corpus/reference comparison
-default to OFF regardless of inherited environment. Add `--enhance` to compare
-the optional Go output; the original C++ oracle never runs the Enhancer.
-Both the selected mode and raw outputs are recorded. `--enhance` does not add
-the bundled stylesheet to test dumps; styling is a separate reader option.
+The application has one DSL reader path. `NewArticleReader` enables article
+repair, conservative HTML cleanup and the scoped presentation for every native
+DSL source. There is no production Original/GD switch. The comparison harness
+can disable cleanup or styling when it needs to compare an intermediate parser
+stage with GoldenDict's C++ oracle; `--enhance` selects the cleanup stage for
+that comparison only. The oracle itself is never modified, and styling remains
+separate from text dumps.
 
 The user's `GoldenDictEnhancer/GoldenDict Enhancer src v2.3.js` supplies the
 reference behaviour: remove empty paragraph separators before blocks/end, unwrap
@@ -54,20 +54,21 @@ attributes/roles stay nested, and links, titles, languages, media and block
 semantics are retained. GoldenDict-specific audio scripts, buttons, article
 folding, lazy loading, scrolling and image click handlers are not ported.
 
-GD HTML also marks example-only paragraphs with `wu-xonly` during generation,
+Generated DSL HTML marks example-only paragraphs with `wu-xonly` during preparation,
 including paragraphs whose example role was moved onto the paragraph by cleanup.
 Mixed example/translation lines are not marked. `Examples Show|Hide` remains the
 existing CSS-layer command; no control or script is embedded in an article.
 The browser marker stays as an idempotent fallback for ordinary/older articles.
 
-Bundled GD presentation uses scoped `wu-gd` selectors and unique font families,
+Bundled presentation uses scoped `wu-gd` selectors and unique font families,
 with Quivira and optional user-supplied wugd font faces.
 The original CSS's Android `file://` paths are replaced by application URLs.
-The main document registers font faces for Shadow DOM; generated GD HTML imports
+The main document registers font faces for Shadow DOM; prepared DSL HTML imports
 the scoped stylesheet. Its application URL is exempt from dictionary resource
-rewriting. Presentation asset URLs are pinned to GD reader v4: change their
-version with a future bundled style/font update. Existing GD indexes need a
-rebuild; ordinary indexes do not. Disable both options for byte-stable oracle
+rewriting. Presentation asset URLs are pinned to style version 4: change their
+version with a future bundled style/font update. Production DSL indexes use the
+single reader behavior version and are rebuilt through the normal stale-index
+flow when emitted content changes. Disable cleanup/styles only in reference
 tests, not by changing the production index configuration.
 
 Verified: GD and ordinary DSL package tests, targeted server asset/resource/style

@@ -65,8 +65,10 @@
       const name = item.querySelector(highlightSelector);
       if (!name) return;
       const title = name.textContent;
+      // Remove marks from the previous query before applying the current one.
+      name.textContent = title;
       const needle = query.trim().toLowerCase();
-      if (!needle) { name.textContent = title; return; }
+      if (!needle) return;
       const folded = title.toLowerCase();
       const parts = [];
       let from = 0, at;
@@ -78,7 +80,7 @@
         parts.push(mark);
         from = at + needle.length;
       }
-      if (!parts.length) { name.textContent = title; return; }
+      if (!parts.length) return;
       if (from < title.length) parts.push(document.createTextNode(title.slice(from)));
       name.replaceChildren(...parts);
     }
@@ -165,6 +167,7 @@
     }
     function onStep(event) { navigate(Number(event.currentTarget.dataset.step)); }
     input.addEventListener("input", onInput);
+    input.addEventListener("search", onInput);
     input.addEventListener("keydown", onKeyDown);
     previous.addEventListener("click", onStep);
     next.addEventListener("click", onStep);
@@ -179,6 +182,7 @@
       clear() { input.value = ""; onInput(); },
       destroy() {
         input.removeEventListener("input", onInput);
+        input.removeEventListener("search", onInput);
         input.removeEventListener("keydown", onKeyDown);
         previous.removeEventListener("click", onStep);
         next.removeEventListener("click", onStep);

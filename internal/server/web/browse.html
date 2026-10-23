@@ -1532,7 +1532,7 @@ function render(){
     const anchored=!filtering&&!!findAnchorWord&&w===findAnchorWord;
     const classes=[current?"browse-current":"",anchored?"browse-find-anchor":""].filter(Boolean).join(" ");
     return '<a class="'+classes+'" href="/?q='+encodeURIComponent(w)+"&dict="+encodeURIComponent(d.dict)+
-      '&mode=exact&browse='+returnTo+'" title="'+e+'">'+highlightedWord(title,ranges)+"</a>";
+      '&from='+encodeURIComponent(d.dict)+'&mode=exact&browse='+returnTo+'" title="'+e+'">'+highlightedWord(title,ranges)+"</a>";
   }).join("")||(filtering?(findResult.stream&&!findStreamDone?"":'<p class="browse-empty">'+tx("browse.noMatches")+'</p>'):"");
   const wordsReady=performance.now();
 
