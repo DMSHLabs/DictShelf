@@ -2365,7 +2365,20 @@ presetsLoad();
 /* ── dictionaries ──────────────────────────────────────────────────── */
 function dictBaseLabel(d){return d.name||d.path.split("/").pop()}
 function dictLabel(d){return dictTitles.get(d.id)||dictBaseLabel(d)}
-function dictIconHTML(id){return `<img class="dict-icon" src="/dict-icon/${encodeURIComponent(id)}" alt="" aria-hidden="true" loading="lazy" decoding="async" onerror="this.remove()">`}
+function dictIconReady(img){img.style.visibility="";img.dataset.iconRetry="0"}
+function dictIconRetry(img){
+  img.style.visibility="hidden";
+  if(!img.isConnected)return;
+  const attempt=(Number(img.dataset.iconRetry)||0)+1;
+  img.dataset.iconRetry=String(attempt);
+  if(attempt>60){img.remove();return}
+  const delay=Math.min(5000,250*Math.pow(1.5,Math.min(attempt,10)));
+  setTimeout(()=>{if(img.isConnected)img.src=img.dataset.iconSrc+"?retry="+attempt},delay);
+}
+function dictIconHTML(id){
+  const src="/dict-icon/"+encodeURIComponent(id);
+  return `<img class="dict-icon" src="${src}" data-icon-src="${src}" alt="" aria-hidden="true" loading="lazy" decoding="async" style="visibility:hidden" onload="dictIconReady(this)" onerror="dictIconRetry(this)">`;
+}
 function applyDictIcons(on,save){
   const changed=dictIconsOn!==!!on;
   dictIconsOn=!!on;
@@ -4380,6 +4393,7 @@ async function showDesktopSysSettings(){
     logEnabled:$("sysLogEnabled").parentElement,
     logBase:$("sysLogBase").parentElement,
     logWeb:$("sysLogWeb").parentElement,
+    searchArticleDiagnostics:$("sysSearchArticleDiagnostics").parentElement,
     save:$("sysSaveLog").parentElement
   };
   dialog.showModal();
@@ -4411,13 +4425,15 @@ async function showDesktopSysSettings(){
   logHeading.textContent=tx("system.logFile");body.append(logHeading);
   const logHint=document.createElement("p");logHint.className="sys-hint";
   logHint.textContent=tx("system.logHint");body.append(logHint);
-  body.append(desktopSystemNodes.logEnabled,desktopSystemNodes.logBase,desktopSystemNodes.logWeb);
+  body.append(desktopSystemNodes.logEnabled,desktopSystemNodes.logBase,desktopSystemNodes.logWeb,
+    desktopSystemNodes.searchArticleDiagnostics);
   const desktopLog=desktopSystemLogOptions();
   $("sysLogEnabled").checked=desktopLog.enabled;
   $("sysLogBase").checked=desktopLog.baseEvents;
   $("sysLogWeb").checked=desktopLog.webEvents;
   $("sysLogBase").disabled=!desktopLog.enabled;
   $("sysLogWeb").disabled=!desktopLog.enabled;
+  $("sysSearchArticleDiagnostics").checked=searchArticleDiagnosticsEnabled();
   const diagnosticsLabel=document.createElement("label");diagnosticsLabel.className="sys-row";
   const diagnostics=document.createElement("input");diagnostics.type="checkbox";diagnostics.checked=browseDiagnosticsEnabled();
   diagnostics.addEventListener("change",()=>setBrowseDiagnostics(diagnostics.checked));

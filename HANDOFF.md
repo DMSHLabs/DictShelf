@@ -1,5 +1,21 @@
 # Agent handoff — current state
 
+Current checkout is branch `dev` at `fe5d7d50`. The 2026-10-23 Windows log
+confirms Dictionary settings blocked WebView2's UI thread while serving the
+English Wiktionary ZIM icon: its `/dict-icon/fb1c556f5740` request took about
+105 seconds, then the queued article resources resumed. Dictionary icon
+discovery now starts in the background, returns HTTP 202 while pending, and
+the UI retries without blocking. Found and absent results are atomically
+persisted in the prepared folder's `icon.cache`, keyed to its text database
+UUID and the neighboring image's size/modification time. Decodable raster
+icons larger than 128 px are reduced before saving. Rescan and successful
+reindex queue background refreshes; lookup is skipped unless a usable prepared
+index exists. The Windows desktop System Settings window also includes the
+Search and article diagnostics checkbox; its row existed in the main dialog
+but was omitted from the desktop dialog's manually assembled list.
+`go build ./internal/server` and `git diff --check` pass; Windows/Android
+runtime checks remain pending.
+
 System Log now has an independent Search and article diagnostics checkbox. When
 enabled, it records the selected query/mode/scope, ordered dictionary slots,
 each dictionary's response and result count, the opened result, first article
@@ -12,7 +28,7 @@ MDX prepared indexes now remove empty elements with known advertising-slot IDs (
 
 The Oxford Advanced Learner's Dictionary 10th source MDX now has `Title="Oxford Advanced Learner's Dictionary 10th"` instead of `OALDWU`; its UTF-16 header length and Adler-32 were updated, and the reader reopened it and looked up `dog`. The original is preserved beside it as `.mdx.title-backup.bak`; prepared data will be stale from the source size/mtime change and needs Rebuild.
 
-Current checkout: branch `dev` at `841687ad`; linked-group synchronization now caches its last completed input snapshot and skips dictionary metadata reads while state.json, groups.ini, dictionary entries/generations and root folders are unchanged. The cache version advances only after a successful refresh; the diagnostic reports its version and hit/miss. Focused linked-group rescan/edit checks, `go build ./internal/server`, and `git diff --check` pass. Android runtime timing is pending. No
+Current checkout: branch `dev` at `fe5d7d50`; linked-group synchronization now caches its last completed input snapshot and skips dictionary metadata reads while state.json, groups.ini, dictionary entries/generations and root folders are unchanged. The cache version advances only after a successful refresh; the diagnostic reports its version and hit/miss. Focused linked-group rescan/edit checks, `go build ./internal/server`, and `git diff --check` pass. Android runtime timing is pending. No
 upstream is configured. The application uses one DSL reader with GoldenDict-
 compatible repair and article preparation; there is no Original/GD selection
 or duplicate DSL index. `docs/DSL.md` and `tools/dslcompare/README.md` describe
