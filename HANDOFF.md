@@ -6,7 +6,7 @@ MDX prepared indexes now remove empty elements with known advertising-slot IDs (
 
 The Oxford Advanced Learner's Dictionary 10th source MDX now has `Title="Oxford Advanced Learner's Dictionary 10th"` instead of `OALDWU`; its UTF-16 header length and Adler-32 were updated, and the reader reopened it and looked up `dog`. The original is preserved beside it as `.mdx.title-backup.bak`; prepared data will be stale from the source size/mtime change and needs Rebuild.
 
-Current checkout: branch `dev` at `3fc8eaff`. No
+Current checkout: branch `codex/safe-stop-cancel-log-detection` at `f7bda1e3` (based on `dev`); Safe Stop's `context canceled` job records are now excluded from Info's error detection while other errors remain visible. `go test ./internal/logx -count=1`, `go build ./...`, and `git diff --check` pass. Changes are uncommitted. No
 upstream is configured. The application uses one DSL reader with GoldenDict-
 compatible repair and article preparation; there is no Original/GD selection
 or duplicate DSL index. `docs/DSL.md` and `tools/dslcompare/README.md` describe
