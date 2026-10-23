@@ -16,6 +16,22 @@
 - When a task is ready, its integration target is `dev`; committing, merging, publishing, and upstream synchronization still require the user request specified above.
 - **Upstream review markers:** after reviewing `master`, record the last upstream commit considered with an annotated tag named `upstream-reviewed-YYYY-MM-DD` on that exact upstream commit (not on a fork merge commit). To review the next update, compare the marker with `master`, for example `git log --oneline upstream-reviewed-YYYY-MM-DD..master`; classify changes against the dead-upstream registry before adopting them. The tag is a review cursor, not a claim that every upstream change was merged. Do not move an existing marker; create a newer dated marker.
 
+## Dictzip v2
+
+- `D:\Projects\Android\dictzip-win64` is the separate Windows dictzip project.
+  Its `build-windows.local.bat` contains the configured GCC path; inspect only
+  the `GCC_PATH` setting when locating the compiler.
+- The dictzip utility must retain two explicit output formats: v1 is the
+  existing format and remains the default unless the user selects otherwise;
+  v2 is a distinct, intentionally incompatible format. Old readers are not
+  required to recognize v2.
+- V2 has a private `DZV2` preamble with 64-bit uncompressed length and a
+  32-bit per-block compressed-length table; its compressed payload follows.
+  Keep v1's block size exactly unchanged in v2. Do not enlarge blocks to fit
+  an index or adapt v2 to gzip header limits.
+- The wudict DSL reader must accept both v1 and v2. Keep v1 behavior intact and
+  verify both formats with generated fixtures and the Windows GCC build.
+
 ## Dead upstream code
 
 Upstream features this fork deliberately keeps but does not wire are dead code:
