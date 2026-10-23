@@ -83,6 +83,9 @@ type browseDiagnostic struct {
 	SwitchID               int    `json:"switchId"`
 	RunID                  int    `json:"runId"`
 	Query                  string `json:"query"`
+	Mode                   string `json:"mode"`
+	Name                   string `json:"name"`
+	ResultCount            int    `json:"resultCount"`
 	Group                  string `json:"group"`
 	FTS                    bool   `json:"fts"`
 	Trigram                bool   `json:"trigram"`
@@ -97,6 +100,7 @@ type browseDiagnostic struct {
 	Resource               string `json:"resource"`
 	Dict                   string `json:"dict"`
 	Page                   int    `json:"page"`
+	Total                  int    `json:"total"`
 	StartedAt              int64  `json:"startedAt"`
 	ElapsedMS              int    `json:"elapsedMs"`
 	DurationMS             int    `json:"durationMs"`
@@ -186,6 +190,22 @@ func (s *Server) handleBrowseDiagnostic(w http.ResponseWriter, r *http.Request) 
 }
 
 func recordBrowseDiagnostic(d browseDiagnostic) error {
+	if d.Event == "search_article" {
+		switch d.Stage {
+		case "search_start", "search_empty_group", "search_stream_begin", "dictionary_response", "article_open", "first_article_painted", "search_end", "search_aborted", "search_error":
+		default:
+			return errors.New("invalid diagnostic")
+		}
+		if !bounded(d.RunID, 1_000_000_000) || !bounded(d.ElapsedMS, 86_400_000) || !bounded(d.Page, 100_000) || !bounded(d.Completed, 100_000) || !bounded(d.Total, 100_000) || !bounded(d.ResultCount, 1_000_000) ||
+			len(d.Query) > 1024 || strings.ContainsAny(d.Query, "\r\n") || len(d.Mode) > 32 || strings.ContainsAny(d.Mode, "\r\n") ||
+			len(d.Group) > 256 || strings.ContainsAny(d.Group, "\r\n") || len(d.Dict) > 256 || strings.ContainsAny(d.Dict, "\r\n") ||
+			len(d.Name) > 256 || strings.ContainsAny(d.Name, "\r\n") || len(d.Detail) > 1024 || strings.ContainsAny(d.Detail, "\r\n") {
+			return errors.New("invalid diagnostic")
+		}
+		logx.System("search_article run=%d stage=%s query=%q mode=%q group=%q slot=%d dict=%q name=%q elapsed_ms=%d completed=%d total=%d results=%d detail=%q",
+			d.RunID, d.Stage, d.Query, d.Mode, d.Group, d.Page, d.Dict, d.Name, d.ElapsedMS, d.Completed, d.Total, d.ResultCount, d.Detail)
+		return nil
+	}
 	if d.Event == "wildcard_view" {
 		if !bounded(d.SwitchID, 1_000_000_000) || !bounded(d.RunID, 1_000_000_000) || !bounded(d.ElapsedMS, 86_400_000) ||
 			!bounded(d.Active, 100_000) || !bounded(d.Completed, 100_000) || !bounded(d.Dictionaries, 100_000) ||

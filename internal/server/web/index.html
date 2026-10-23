@@ -1108,6 +1108,7 @@ window.wudictFontScale=(function(){
     <label class="sys-row"><input type="checkbox" id="sysLogEnabled"><span class="sys-label">{{T:system.logEnable}}</span></label>
     <label class="sys-row"><input type="checkbox" id="sysLogBase"><span class="sys-label">{{T:system.logBase}}</span></label>
     <label class="sys-row"><input type="checkbox" id="sysLogWeb"><span class="sys-label">{{T:system.logWeb}}</span></label>
+    <label class="sys-row"><input type="checkbox" id="sysSearchArticleDiagnostics"><span class="sys-label">{{T:system.searchArticleDiagnostics}}</span></label>
     <label class="sys-row"><input type="checkbox" id="sysBrowseArticleDiagnostics"><span class="sys-label">{{T:system.browseArticleDiagnostics}}</span></label>
     <label class="sys-row"><input type="checkbox" id="sysBrowseDiagnostics"><span class="sys-label">{{T:system.browseDiagnostics}}</span></label>
     <label class="sys-row"><input type="checkbox" id="sysDictionaryListDiagnostics"><span class="sys-label">{{T:system.dictionaryListDiagnostics}}</span></label>
@@ -4078,6 +4079,7 @@ function sysPaint(state){
   $("sysMergedFTS").checked=wildcardSearchIndexEnabled("fts");
   $("sysMergedTrigram").checked=wildcardSearchIndexEnabled("trigram");
   $("sysBrowseArticleDiagnostics").checked=browseArticleDiagnosticsEnabled();
+  $("sysSearchArticleDiagnostics").checked=searchArticleDiagnosticsEnabled();
   $("sysDictionaryListDiagnostics").checked=dictionaryListDiagnosticsEnabled();
   $("sysDictionaryCacheDiagnostics").checked=dictionaryCacheDiagnosticsEnabled();
   $("sysFolderDiagnostics").checked=folderDiagnosticsEnabled();
@@ -4509,6 +4511,8 @@ function wildcardSearchIndexParams(params,row){
 }
 function browseArticleDiagnosticsEnabled(){try{return localStorage.getItem("wudict_browse_article_diagnostics")==="1"}catch(_){return false}}
 function setBrowseArticleDiagnostics(on){try{if(on)localStorage.setItem("wudict_browse_article_diagnostics","1");else localStorage.removeItem("wudict_browse_article_diagnostics")}catch(_){}}
+function searchArticleDiagnosticsEnabled(){try{return localStorage.getItem("wudict_search_article_diagnostics")==="1"}catch(_){return false}}
+function setSearchArticleDiagnostics(on){try{if(on)localStorage.setItem("wudict_search_article_diagnostics","1");else localStorage.removeItem("wudict_search_article_diagnostics")}catch(_){}}
 let browseArticleDiagContext=(()=>{
   if(!browseArticleDiagnosticsEnabled())return null;
   const params=new URLSearchParams(location.search),startedAt=Number(params.get("browseDiagStart"));
@@ -4616,6 +4620,7 @@ $("sysBrowseDiagnostics").addEventListener("change",e=>setBrowseDiagnostics(e.ta
 $("sysMergedFTS").addEventListener("change",e=>setWildcardSearchIndexEnabled("fts",e.target.checked));
 $("sysMergedTrigram").addEventListener("change",e=>setWildcardSearchIndexEnabled("trigram",e.target.checked));
 $("sysBrowseArticleDiagnostics").addEventListener("change",e=>setBrowseArticleDiagnostics(e.target.checked));
+$("sysSearchArticleDiagnostics").addEventListener("change",e=>setSearchArticleDiagnostics(e.target.checked));
 $("sysDictionaryListDiagnostics").addEventListener("change",e=>setDictionaryListDiagnostics(e.target.checked));
 $("sysDictionaryCacheDiagnostics").addEventListener("change",e=>setDictionaryCacheDiagnostics(e.target.checked));
 $("sysFolderDiagnostics").addEventListener("change",e=>setFolderDiagnostics(e.target.checked));
@@ -7770,6 +7775,16 @@ async function doSearch(ev){
   // an id the <select> does not have leaves .value empty, and a saved id or a
   // ?dict= from an older library can do exactly that.
   const mode=$("mode").value,dictSel=scope||$("dict").value||"all",seq=++searchSeq;
+  const searchDiag=searchArticleDiagnosticsEnabled();
+  const searchDiagStarted=performance.now();
+  let searchDiagSlots=[];
+  let searchDiagFirstPaint=false;
+  const searchDiagLog=(stage,fields={})=>{
+    if(!searchDiag)return;
+    const safeFields={...fields};
+    if(typeof safeFields.detail==="string")safeFields.detail=safeFields.detail.replace(/[\r\n]/g," ").slice(0,1000);
+    sendBrowseDiagnostic({event:"search_article",stage,runId:seq,query:q.replace(/[\r\n]/g," ").slice(0,1024),mode,elapsedMs:Math.max(0,Math.round(performance.now()-searchDiagStarted)),...safeFields});
+  };
   // abort the previous in-flight search so the server stops streaming
   // results nobody will render (superseded typing / mode change).
   if(searchAC)searchAC.abort();
@@ -7791,8 +7806,10 @@ async function doSearch(ev){
   // "all": the server has no notion of a group, and giving it one would mean
   // versioning a taxonomy across two processes to save a join over 105 rows.
   const ids=dictSel==="all"?activeUserGroupIds():dictSel.startsWith("g:")?groupIds(dictSel):null;
+  searchDiagLog("search_start",{group:dictSel,total:ids?ids.length:1,detail:`order=${orderFirst?"reader":"fastest"};open=${expandAll?"all":openN}`});
   if(ids){
     if(!ids.length){
+      searchDiagLog("search_empty_group",{group:dictSel,total:0});
       // An empty list means an empty GROUP — the only way left to arrive at
       // none. Which group is empty is only knowable once the list is complete:
       // mid-stream, the dictionaries that arrived may not include its members
@@ -7844,6 +7861,8 @@ async function doSearch(ev){
     const det=ready[i];
     if(!det||det.open)return false;
     det.open=true;openedIdx=i;promote(boxes,i);
+    const slot=searchDiagSlots[i];
+    searchDiagLog("article_open",{dict:slot?.dict||"",name:slot?.name||"",page:i,completed:searchProgressDone,total:searchProgressTotal,resultCount:slot?.results??0});
     // The hold ends when the count is reached, not at the first open: until
     // then the frontier keeps the later sections in the reader's order.
     if(++opened>=limit){clearTimeout(barrier);barrier=null}
@@ -7883,6 +7902,8 @@ async function doSearch(ev){
       if(seq!==searchSeq)return; // superseded by a newer search
       if(msg.t==="begin"){
         beginSearchProgress(seq,(msg.slots||[]).length);
+        searchDiagSlots=(msg.slots||[]).map(slot=>({dict:slot.dict,name:slot.name,results:0}));
+        searchDiagLog("search_stream_begin",{total:searchDiagSlots.length,detail:`slots=${searchDiagSlots.length}`});
         if(browseArticleDiagContext&&browseArticleDiagContext.searchStartedAt)
           logBrowseArticleTransition("search_stream_begin",performance.now()-browseArticleDiagContext.searchStartedAt);
         navDetach(); // the section it was walking is about to be replaced
@@ -7902,6 +7923,9 @@ async function doSearch(ev){
         refreshLivePicker();
       }else if(msg.t==="hit"){
         advanceSearchProgress(seq);
+        const diagSlot=searchDiagSlots[msg.i];
+        if(diagSlot)diagSlot.results=(msg.results||[]).length;
+        searchDiagLog("dictionary_response",{dict:msg.dict||diagSlot?.dict||"",name:msg.name||diagSlot?.name||"",page:msg.i,completed:searchProgressDone,total:searchProgressTotal,resultCount:(msg.results||[]).length,detail:[msg.skipped?"skipped":"",msg.deferred?"deferred":"",msg.error?`error=${msg.error}`:""].filter(Boolean).join(";")});
         if(browseArticleDiagContext&&!browseArticleDiagContext.firstResponse){
           browseArticleDiagContext.firstResponse=true;
           logBrowseArticleTransition("first_search_response",performance.now()-browseArticleDiagContext.searchStartedAt);
@@ -7911,6 +7935,11 @@ async function doSearch(ev){
         // dictionaries and mode. Full-text hits are articles matched by body.
         if(!anyShown)clearStatusForResults();
         const res=renderSlot(box,msg,mode,q,perDict,boxes.length>1);
+        if(res.results&&searchDiag&&!searchDiagFirstPaint){
+          searchDiagFirstPaint=true;
+          const paintedDict=msg.dict||diagSlot?.dict||"",paintedName=msg.name||diagSlot?.name||"",paintedCount=(msg.results||[]).length;
+          requestAnimationFrame(()=>requestAnimationFrame(()=>searchDiagLog("first_article_painted",{dict:paintedDict,name:paintedName,resultCount:paintedCount})));
+        }
         if(browseArticleDiagContext&&res.results&&!browseArticleDiagContext.firstArticle){
           browseArticleDiagContext.firstArticle=true;
           const sinceSearch=browseArticleDiagContext.searchStartedAt?performance.now()-browseArticleDiagContext.searchStartedAt:0;
@@ -7974,6 +8003,7 @@ async function doSearch(ev){
         const forms=[...morphSeen].join(", ");
         morphNote.textContent=tx(morphAll?"search.morphAll":"search.morphSome",{query:msg.from||q,forms});
       }else if(msg.t==="end"){
+        searchDiagLog("search_end",{completed:searchProgressDone,total:searchProgressTotal});
         finishSearchProgress(seq);
         if(browseArticleDiagContext&&browseArticleDiagContext.searchStartedAt)
           logBrowseArticleTransition("search_end",performance.now()-browseArticleDiagContext.searchStartedAt);
@@ -8015,7 +8045,11 @@ async function doSearch(ev){
         }
       }
     },signal);
-  }catch(err){if(err.name==="AbortError")return;if(seq===searchSeq)setStatus("⚠ "+esc(err.message))}
+  }catch(err){
+    if(err.name==="AbortError"){searchDiagLog("search_aborted",{completed:searchProgressDone,total:searchProgressTotal});return}
+    searchDiagLog("search_error",{completed:searchProgressDone,total:searchProgressTotal,detail:err.message});
+    if(seq===searchSeq)setStatus("⚠ "+esc(err.message))
+  }
   finally{
     // Only the newest search may stop the glyph. An aborted one has already
     // been superseded by a search that is still running, and clearing here

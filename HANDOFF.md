@@ -1,5 +1,11 @@
 # Agent handoff — current state
 
+System Log now has an independent Search and article diagnostics checkbox. When
+enabled, it records the selected query/mode/scope, ordered dictionary slots,
+each dictionary's response and result count, the opened result, first article
+paint, and stream completion/cancellation/errors. English and Russian labels
+are added; build and Windows/Android runtime verification remain pending.
+
 Edit Folders in the embedded main-window dialog now uses the main window cached folder configuration immediately, reveals the import section as soon as the configured destination is known, and no longer writes index defaults on open. Folder validation no longer appears as a global indexing task. `node --check internal/server/web/setup.js` and `git diff --check` pass; Windows runtime confirmation is pending.
 Settings → Appearance has a saved On/Off control for dictionary icons. It defaults on; the shared icon style hides current and future icons without rebuilding result lists. Go build and Windows UI verification remain pending.
 MDX prepared indexes now remove empty elements with known advertising-slot IDs (including numbered `ad_contentslot_N` slots); nonempty and media-bearing slots remain. MDX Reader version is 2, so old prepared indexes are offered for Rebuild. `go build ./internal/format/mdx` and `git diff --check` pass; end-to-end Windows reindex/display verification is pending.
