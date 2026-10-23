@@ -668,6 +668,9 @@ func writeInfo(dir, source string) error {
 	}
 	fmt.Fprintf(&b, "\n# origin: %s\n", src)
 	fmt.Fprintf(&b, "# files: %s (articles + search index)", TextDBName)
+	if _, err := os.Stat(filepath.Join(dir, "icon.cache")); err == nil {
+		fmt.Fprintf(&b, ", icon.cache (dictionary icon)")
+	}
 	if _, err := os.Stat(MediaDBPath(dir)); err == nil {
 		fmt.Fprintf(&b, ", %s (images/audio)", MediaDBName)
 	}

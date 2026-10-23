@@ -570,5 +570,6 @@ func (r *Registry) updateDictionaryIndexesContext(ctx context.Context, req resca
 	if err := r.rescan(false); err != nil {
 		failures = append(failures, err.Error())
 	}
+	go r.refreshDictionaryIcons()
 	return failures
 }
