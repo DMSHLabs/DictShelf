@@ -1364,7 +1364,7 @@ func libraryPaths(discovered []string) []string {
 			// content now belongs to its parent, so the folder is retired from
 			// the list rather than shown; the folder itself is left on disk for
 			// the user to remove through the panel like any other.
-			if dict.IsAbbrevCompanion(e.Source) {
+			if dict.IsAbbrevCompanion(e.Source) || dict.IsAbbrevCompanionSource(e.Source, discovered) {
 				continue
 			}
 		}

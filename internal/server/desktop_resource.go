@@ -167,6 +167,8 @@ func (s *Server) DesktopResource(method, rawURL string, requestHeaders map[strin
 		// to its resource operation directly; do not route through the HTTP
 		// handler or its middleware chain.
 		s.callDesktopOperation(response, req, func() { s.desktopDictionaryResource(response, req) })
+	} else if strings.HasPrefix(u.Path, "/dict-icon/") {
+		s.callDesktopOperation(response, req, func() { s.handleDictionaryIcon(response, req) })
 	} else if strings.HasPrefix(u.Path, "/assets/") || u.Path == "/favicon.ico" {
 		if asset, ok := desktopAsset(u.Path); ok {
 			response.header.Set("Content-Type", asset.contentType)

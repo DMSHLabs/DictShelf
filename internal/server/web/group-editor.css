@@ -54,6 +54,8 @@ html[data-shell-image] .workspace-dialog{background-image:var(--paper-bk-image);
 .wildcards-picker .web-picker-row{box-sizing:border-box;display:flex;align-items:center;gap:calc(var(--ui-control-gap) * 1em);min-width:0}
 .wildcards-picker .web-picker-row[aria-current="true"]::before{content:"✓";flex:none;width:1em;color:var(--accent)}
 .wildcards-picker .web-picker-name{display:block;flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.web-picker-row>.dict-icon{margin-right:.35em;vertical-align:middle}
+.wildcards-picker .web-picker-row>.dict-icon{margin:0}
 .wildcards-picker .web-picker-meta{flex:none;white-space:nowrap}
 .web-picker-row:hover,.web-picker-row:focus-visible{background:var(--bg-card);outline:2px solid var(--accent);outline-offset:-2px}
 .web-picker-rows>p{margin:.7em .5em;color:var(--label)}
@@ -337,7 +339,7 @@ html[data-shell-image] dialog#groupEditor.group-dialog.panel-card{background-ima
 #groupEditor .list-search-input{height:calc(var(--ui-edit_control-height) * 1.5rem);min-height:0;font:inherit}
 #groupAvailableSearch::placeholder,#groupMembersSearch::placeholder{color:var(--label)}
 .group-row{display:flex;align-items:center;gap:.7em;min-height:44px;padding:.25em 0;overflow-wrap:anywhere}
-.group-dictionary-name{font-size:calc(var(--ui-font-base) * 1rem)}
+.group-dictionary-name{font-size:calc(var(--ui-font-base) * 1rem);display:inline-flex;align-items:center;gap:.35em}
 .group-row.list-search-match{position:relative;outline:none}
 .group-row.list-search-match::before{content:"";position:absolute;inset:1px 0;border:2px solid var(--accent);border-radius:16px;pointer-events:none}
 .group-row.list-search-current{border-radius:16px}

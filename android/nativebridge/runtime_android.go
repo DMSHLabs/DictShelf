@@ -262,13 +262,25 @@ func WudictGoBridgeGroups(action, argument *C.char) *C.char {
 			return nil
 		}
 	}
+	argumentText := C.GoString(argument)
+	tracePicker := method == "userGroups" && argumentText == "picker"
+	started := time.Now()
+	if tracePicker {
+		logx.System("android_group_bridge stage=start elapsed_ms=0")
+	}
 	nativeRuntime.Lock()
 	app := nativeRuntime.app
 	nativeRuntime.Unlock()
+	if tracePicker {
+		logx.System("android_group_bridge stage=runtime_ready elapsed_ms=%d", time.Since(started).Milliseconds())
+	}
 	if app == nil {
 		return C.CString(`{"ok":false,"error":"Go runtime is unavailable"}`)
 	}
-	value, err := app.Server.DesktopJSON("", method, C.GoString(argument))
+	value, err := app.Server.DesktopJSON("", method, argumentText)
+	if tracePicker {
+		logx.System("android_group_bridge stage=snapshot_ready elapsed_ms=%d", time.Since(started).Milliseconds())
+	}
 	if err != nil {
 		data, _ := json.Marshal(map[string]any{"ok": false, "error": err.Error()})
 		return C.CString(string(data))
@@ -276,6 +288,9 @@ func WudictGoBridgeGroups(action, argument *C.char) *C.char {
 	data, err := json.Marshal(map[string]any{"ok": true, "value": value})
 	if err != nil {
 		return nil
+	}
+	if tracePicker {
+		logx.System("android_group_bridge stage=json_ready elapsed_ms=%d bytes=%d", time.Since(started).Milliseconds(), len(data))
 	}
 	return C.CString(string(data))
 }

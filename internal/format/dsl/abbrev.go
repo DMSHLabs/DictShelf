@@ -16,8 +16,9 @@ import (
 	"github.com/wuweidict/wudict/internal/store"
 )
 
-// A DSL dictionary is often shipped with a "<name>_abrv.dsl" beside it. That
-// file is not a dictionary: it is the expansion map ABBYY Lingvo shows on hover
+// A DSL dictionary is often shipped with a "<name>_abrv.dsl" or
+// "<name>_abrev.dsl" beside it. That file is not a dictionary: it is the
+// expansion map ABBYY Lingvo shows on hover
 // over a [p] label - "pl" over which the reader sees "plural". The parent
 // absorbs it here, at ingest, and the [p] zone (balance.go) bakes the
 // expansion into the article as a title= attribute; discovery hides the

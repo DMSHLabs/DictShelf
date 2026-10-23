@@ -258,7 +258,7 @@ func CompanionSuffixes(mainExt string) []string {
 			".ann",
 		}
 	case ".dsl", ".dsl.dz":
-		return []string{"_abrv.dsl", "_abrv.dsl.dz", ".ann", ".dsl.ann"}
+		return []string{"_abrv.dsl.dz", "_abrev.dsl.dz", "_abrv.dsl", "_abrev.dsl", ".ann", ".dsl.ann"}
 	case ".mdx":
 		// A repacked MDX ships its stylesheet and scripts LOOSE beside the
 		// .mdx rather than packed in the .mdd - LDOCE6.css and entry.js are
@@ -313,12 +313,13 @@ func RequiredCompanions(mainExt string) [][]string {
 // abbrevSuffixes are the spellings of DSL's abbreviation glossary, longest
 // first so a ".dsl.dz" companion is recognised before the ".dsl" inside its
 // name. Appended to the STEM, exactly like every other companion here.
-var abbrevSuffixes = []string{"_abrv.dsl.dz", "_abrv.dsl"}
+var abbrevSuffixes = []string{"_abrv.dsl.dz", "_abrev.dsl.dz", "_abrv.dsl", "_abrev.dsl"}
 
 // AbbrevCompanion returns the abbreviation glossary belonging to the DSL main
-// file src, if one exists beside it. A `_abrv.dsl` is not a dictionary: Lingvo
-// writes it as the expansion map for the [p] labels of its parent, which is why
-// the parent absorbs it at ingest and it is not discovered on its own.
+// file src, if one exists beside it. Lingvo glossaries commonly use `_abrv.dsl`;
+// `_abrev.dsl` is also used by dictionary sets. Both are expansion maps for the
+// [p] labels of their parent, so the parent absorbs them at ingest and they are
+// not discovered on their own.
 func AbbrevCompanion(src string) (string, bool) {
 	switch MainExt(src) {
 	case ".dsl", ".dsl.dz":
@@ -347,6 +348,26 @@ func IsAbbrevCompanion(path string) bool {
 		return false
 	}
 	return fsx.FileExists(base+".dsl") || fsx.FileExists(base+".dsl.dz")
+}
+
+// IsAbbrevCompanionSource reports whether path names an abbreviation glossary
+// whose parent DSL is present in discovered. Registry callers use this when a
+// prepared copy's recorded source path is no longer directly accessible, but
+// the parent source was discovered under its current compressed spelling.
+func IsAbbrevCompanionSource(path string, discovered []string) bool {
+	base := abbrevParentStem(path)
+	if base == "" {
+		return false
+	}
+	for _, ext := range []string{".dsl", ".dsl.dz"} {
+		want := CanonPath(base + ext)
+		for _, candidate := range discovered {
+			if CanonPath(candidate) == want {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // abbrevParentStem strips the companion suffix, yielding the path its parent
