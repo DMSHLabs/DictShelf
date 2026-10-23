@@ -348,6 +348,7 @@
   "panel.off": "Off",
   "panel.speak": "Read aloud",
   "panel.browse": "Browse A-Z",
+  "panel.dictionaryIcons": "Dictionary icons",
   "panel.appearance": "Appearance",
   "panel.fonts": "Fonts",
   "panel.fontsUnits": "All values are unitless multipliers. Font sizes are calculated against rem; heights and spacing use em or rem where applied. Enter numbers only.",
