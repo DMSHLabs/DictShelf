@@ -219,6 +219,9 @@ func TestAbbrevCompanion(t *testing.T) {
 	if !IsAbbrevCompanion(abrv) {
 		t.Error("the companion beside its parent must be recognized")
 	}
+	if !IsAbbrevCompanionSource(abrv, []string{main}) {
+		t.Error("the companion must be recognized when its parent was discovered")
+	}
 	if IsAbbrevCompanion(main) {
 		t.Error("the parent is not a companion")
 	}
@@ -243,6 +246,27 @@ func TestAbbrevCompanion(t *testing.T) {
 	}
 	if !IsAbbrevCompanion(lsdAbrv) {
 		t.Error("the LSD abbreviation companion beside its parent must be recognized")
+	}
+	if !IsAbbrevCompanionSource(dzAbrv, []string{dzMain}) {
+		t.Error("compressed parent discovered by the registry must keep its companion hidden")
+	}
+
+	// Dictionary sets also use the alternate _abrev spelling, including the
+	// compressed companion form.
+	aliasDir := t.TempDir()
+	aliasMain := touch(t, filepath.Join(aliasDir, "Oxford.dsl"))
+	alias := touch(t, filepath.Join(aliasDir, "Oxford_abrev.dsl"))
+	if got, ok := AbbrevCompanion(aliasMain); !ok || got != alias {
+		t.Errorf("AbbrevCompanion(_abrev.dsl) = %q, %v; want %q, true", got, ok, alias)
+	}
+	if !IsAbbrevCompanion(alias) || !IsAbbrevCompanionSource(alias, []string{aliasMain}) {
+		t.Error("_abrev.dsl beside its DSL parent must be recognized as a companion")
+	}
+	compressedAliasDir := t.TempDir()
+	compressedAliasMain := touch(t, filepath.Join(compressedAliasDir, "Oxford.dsl.dz"))
+	compressedAlias := touch(t, filepath.Join(compressedAliasDir, "Oxford_abrev.dsl.dz"))
+	if got, ok := AbbrevCompanion(compressedAliasMain); !ok || got != compressedAlias {
+		t.Errorf("AbbrevCompanion(_abrev.dsl.dz) = %q, %v; want %q, true", got, ok, compressedAlias)
 	}
 	// the suffix test is case-insensitive: a Windows-made "_ABRV.DSL" is the
 	// same companion. Only the SUFFIX - the parent must exist as spelled, so

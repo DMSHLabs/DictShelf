@@ -24,6 +24,48 @@ func isolatedSystemLog(t *testing.T) string {
 	return root + ".logs"
 }
 
+func TestSystemLogErrorDetection(t *testing.T) {
+	tests := []struct {
+		name string
+		line string
+		want bool
+	}{
+		{name: "successful index job", line: `job=42 finish stage="save database" error="<nil>"`, want: false},
+		{name: "successful import", line: `text result source="dict.lsd" error="<nil>"`, want: false},
+		{name: "actual error field", line: `job=42 error="permission denied"`, want: true},
+		{name: "error event", line: `browse_stream event=error error="connection reset"`, want: true},
+		{name: "panic", line: `panic: unexpected state`, want: true},
+		{name: "Windows exception", line: `unhandled exception code=0xc0000005`, want: true},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := hasSystemErrorRecord([]byte(test.line)); got != test.want {
+				t.Fatalf("hasSystemErrorRecord(%q) = %t, want %t", test.line, got, test.want)
+			}
+		})
+	}
+}
+
+func TestSystemHasErrorsIgnoresSuccessfulJobRecords(t *testing.T) {
+	root := isolatedSystemLog(t)
+	if err := os.MkdirAll(root, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(root, "system_2026_10_22__17_58_28.log")
+	records := "2026-10-22T14:58:28Z job=42 finish stage=\"save database\" error=\"<nil>\"\n" +
+		"2026-10-22T14:58:28Z text result source=\"dict.lsd\" error=\"<nil>\"\n"
+	if err := os.WriteFile(path, []byte(records), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if SystemHasErrors() {
+		t.Fatal("successful job records were reported as errors")
+	}
+	SystemError("database write failed")
+	if !SystemHasErrors() {
+		t.Fatal("actual system error was not reported")
+	}
+}
+
 func TestSystemLogConcurrentWritesRotationAndSnapshots(t *testing.T) {
 	isolatedSystemLog(t)
 	const workers, records = 12, 50

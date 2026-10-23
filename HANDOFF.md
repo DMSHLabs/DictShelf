@@ -1,6 +1,6 @@
 # Agent handoff — current state
 
-Current checkout: branch `DictShelf` at `c29ef6e6`; `origin/DictShelf` has been deleted and this branch is local-only. The working tree contains uncommitted DictShelf identity and icon changes. Do not commit, push, install, or switch branches unless asked. The selected app icon is the ivory tile with an open book, amber shelf, and centered star; the artwork is propagated to Android, Windows, macOS and Linux. Windows ICO sizes are rendered directly from SVG at 16, 20, 24, 32, 40, 48, 64, 96, 128 and 256 pixels.
+Current checkout: branch `DictShelf` at `c29ef6e6`, merging `dev` at `e0e033dd`. Conflict resolutions are staged; the merge is not committed. DictShelf identity and icon changes are preserved. DSL companion handling accepts `_abrv` and `_abrev`, and retains LSD companion support. `go test ./internal/dict ./internal/format/dsl ./internal/format/lsd`, focused logx/server tests, `go build ./...`, and `git diff --check` pass.
 
 ## Product identity
 

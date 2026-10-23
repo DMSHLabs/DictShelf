@@ -36,6 +36,11 @@ func (s *Server) uiPrefsSnapshot() *UIPrefs {
 	if ui.ResultCacheLimitGB < 1 {
 		ui.ResultCacheLimitGB = defaultResultCacheLimitGB()
 	}
+	if ui.CombinedDictionaryLimit < 1 {
+		ui.CombinedDictionaryLimit = indexconst.CombinedDictionaryLimitDefault
+	} else {
+		ui.CombinedDictionaryLimit = min(ui.CombinedDictionaryLimit, indexconst.CombinedDictionaryLimitMax)
+	}
 	return ui
 }
 

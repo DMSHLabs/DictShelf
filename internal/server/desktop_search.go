@@ -580,7 +580,7 @@ func (s *Server) DesktopJSONContext(ctx context.Context, baseURL, method, argume
 	case "groups":
 		return s.groupsSnapshot(), nil
 	case "userGroups":
-		return s.userGroupsSnapshot()
+		return s.userGroupsSnapshot(argument == "picker")
 	case "about":
 		base, ok := desktopOrigin(baseURL)
 		if !ok {
