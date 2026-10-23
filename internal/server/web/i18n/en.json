@@ -1035,6 +1035,7 @@
   "system.logBase": "Log basic events",
   "system.logWeb": "Log WebView actions",
   "system.logHint": "Enable only the timings you need, reproduce the delay, then save the log file. Each checkbox controls its own diagnostics.",
+  "system.searchArticleDiagnostics": "Record search results and article opening",
   "system.browseArticleDiagnostics": "Record Browse and article navigation timings",
   "system.browseDiagnostics": "Record Browse and Wildcards progress timings",
   "system.dictionaryListDiagnostics": "Record dictionary list and picker timings",
