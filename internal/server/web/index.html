@@ -619,6 +619,13 @@ window.wudictFontScale=(function(){
       </select>
     </div>
   </div>
+  <div class="facts">
+    <span class="rowlabel">{{T:panel.dictionaryIcons}}</span>
+    <span class="seg" role="group" aria-label="{{T:panel.dictionaryIcons}}">
+      <button type="button" class="act" id="dictIconsOn" aria-pressed="true">{{T:panel.on}}</button>
+      <button type="button" class="act" id="dictIconsOff" aria-pressed="false">{{T:panel.off}}</button>
+    </span>
+  </div>
   <!-- The size stepper is adjusted WHILE reading, so it stays on the panel
        rather than behind the Appearance door — the promise the old layout made
        by keeping it in the summary. Now that it owns a line instead of sharing
@@ -1375,6 +1382,7 @@ const esc=s=>String(s??"").replace(/&/g,"&amp;").replace(/</g,"&lt;");
    attribute and turns the rest of the path into markup. */
 const escAttr=s=>esc(s).replace(/"/g,"&quot;");
 let dicts=[],lastQuery=null,searchSeq=0,searchAC=null;
+let dictIconsOn=true;
 let scopeOnce=null,anchorOnce=null,lastScope=null,widenedFrom=null;
 let PRESETS=null;
 const PRESET_ROWS=[
@@ -1640,7 +1648,7 @@ async function loadPrefs(){
        reader in a strategy with nothing on screen to explain or change it -
        the same call the removed `sortMine` got. The field is still WRITTEN
        (below, always false), because it is upstream's. */
-    if(st.ui){applyFS(st.ui.fontSize,false);applyFW(st.ui.fontWeight,false);applyArticleFont(st.ui.fontFamily||"charis",false);applyHL(!st.ui.hlOff,false);applySpeak(!st.ui.speakOff,false);applyHideUnmarkedExamples(!!st.ui.hideUnmarkedExamples,false);openN=st.ui.openN||1;openAll=!!st.ui.openAll;prefOrderModeKnown=typeof st.ui.customOrder==="boolean";prefCustomOrder=!!st.ui.customOrder;
+    if(st.ui){applyFS(st.ui.fontSize,false);applyFW(st.ui.fontWeight,false);applyArticleFont(st.ui.fontFamily||"charis",false);applyHL(!st.ui.hlOff,false);applySpeak(!st.ui.speakOff,false);applyHideUnmarkedExamples(!!st.ui.hideUnmarkedExamples,false);applyDictIcons(!st.ui.dictIconsOff,false);openN=st.ui.openN||1;openAll=!!st.ui.openAll;prefOrderModeKnown=typeof st.ui.customOrder==="boolean";prefCustomOrder=!!st.ui.customOrder;
       resultCacheLimitGB=Number(st.ui.resultCacheLimitGB)||defaultResultCacheLimitGB();resultCacheNoLimit=!!st.ui.resultCacheNoLimit;syncResultCacheLimitUI();
       combinedDictionaryLimit=Math.max(1,Math.min(Number(st.ui.combinedDictionaryLimit)||defaultCombinedDictionaryLimit,maxCombinedDictionaryLimit));syncCombinedDictionaryLimitUI()}
     if(!st.exists){adoptLocalPrefs();return} // first run: keep whatever we had
@@ -1693,7 +1701,7 @@ function savePrefs(now){
   // omitempty zero value), which is what retires a flag set by the switches
   // that no longer exist.
   const body=JSON.stringify({dicts:orderedDicts().map(d=>({id:d.id,name:d.name||d.path.split("/").pop(),title:dictTitles.get(d.id)||"",pinned:prefPinned.includes(d.id)})),
-    ui:{fontSize:articleFS,fontWeight:articleFW,fontFamily:articleFont,hlOff:!hlOn,speakOff:!speakOn,fastFirst:!orderFirst,hideUnmarkedExamples,customOrder:prefCustomOrder,
+    ui:{fontSize:articleFS,fontWeight:articleFW,fontFamily:articleFont,hlOff:!hlOn,speakOff:!speakOn,dictIconsOff:!dictIconsOn,fastFirst:!orderFirst,hideUnmarkedExamples,customOrder:prefCustomOrder,
       resultCacheLimitGB,resultCacheNoLimit,combinedDictionaryLimit}});
   if(body===prefsSent)return;
   prefsSent=body;
@@ -2357,6 +2365,16 @@ presetsLoad();
 function dictBaseLabel(d){return d.name||d.path.split("/").pop()}
 function dictLabel(d){return dictTitles.get(d.id)||dictBaseLabel(d)}
 function dictIconHTML(id){return `<img class="dict-icon" src="/dict-icon/${encodeURIComponent(id)}" alt="" aria-hidden="true" loading="lazy" decoding="async" onerror="this.remove()">`}
+function applyDictIcons(on,save){
+  const changed=dictIconsOn!==!!on;
+  dictIconsOn=!!on;
+  for(const [id,want] of [["dictIconsOff",false],["dictIconsOn",true]])
+    $(id).setAttribute("aria-pressed",String(dictIconsOn===want));
+  document.documentElement.toggleAttribute("data-dict-icons-off",!dictIconsOn);
+  if(save&&changed)savePrefs(true);
+}
+for(const [id,want] of [["dictIconsOff",false],["dictIconsOn",true]])
+  $(id).addEventListener("click",()=>applyDictIcons(want,true));
 /* A DSL [ref dict="..."] names another dictionary by its #NAME, which is what
    dictBaseLabel shows, so the name is matched against the label as well as the
    stored name - a dictionary whose file carries no #NAME is known here by its
@@ -3232,7 +3250,15 @@ async function loadDicts(rescan){
   if(blocking)clearStatusForResults();
   else clearStatus("load");
   // a search run against a half-loaded list is now answerable in full
-  if(staleSearch&&lastQuery){staleSearch=false;if($("mode").value==="wildcards")maskSubmitRequested=true;doSearch()}
+  if(staleSearch&&lastQuery){
+    staleSearch=false;
+    // A Browse article link's one-dictionary scope is complete even while the
+    // rest of the selector list is still streaming. If another incomplete
+    // search does need a retry, preserve its one-shot scope across that retry.
+    if(lastScope)scopeOnce=lastScope;
+    if($("mode").value==="wildcards")maskSubmitRequested=true;
+    doSearch()
+  }
   return true;
 }
 /* The narrow-viewport chips. They render the two <select>s and nothing more:
@@ -7983,7 +8009,7 @@ async function doSearch(ev){
         else if(widened)out.appendChild(widenNote(widened,q));
         // Searched a list that is still filling up: say so rather than let an
         // incomplete answer look complete, and re-run when the rest lands.
-        if(phase==="partial"){
+        if(phase==="partial"&&!scope){
           staleSearch=true;
           setStatus(esc(tx("search.partial",{number:dicts.length,total:dictTotal||dicts.length})));
         }

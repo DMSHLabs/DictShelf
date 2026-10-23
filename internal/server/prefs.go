@@ -67,6 +67,7 @@ type UIPrefs struct {
 	ResultCacheLimitGB      int  `json:"resultCacheLimitGB,omitempty"`
 	ResultCacheNoLimit      bool `json:"resultCacheNoLimit,omitempty"`
 	CombinedDictionaryLimit int  `json:"combinedDictionaryLimit,omitempty"`
+	DictIconsOff            bool `json:"dictIconsOff,omitempty"`
 
 	FontSize int `json:"fontSize,omitempty"` // article text, px; 0 = the default
 

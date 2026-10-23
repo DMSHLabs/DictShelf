@@ -17,7 +17,7 @@ import (
 // what the Reader yields. Unlike the other formats there is no golden test to
 // catch a forgotten bump: MDX has no in-code writer to build a fixture with,
 // so the tests that exercise this Reader need a real file (WUDICT_TEST_MDX).
-const ReaderVersion = 1
+const ReaderVersion = 2
 
 func init() {
 	dict.RegisterReader(".mdx", func(path string) (dict.Reader, error) { return NewReader(path) })
@@ -58,6 +58,7 @@ func (r *Reader) Next() (dict.Entry, error) {
 			}
 			return dict.Entry{Headwords: []string{e.KeyWord}, LinkTo: target}, nil
 		}
+		body = stripEmptyAdSlots(body)
 		if len(r.d.stylesheet) > 0 {
 			body = substituteStylesheet(body, r.d.stylesheet)
 		}
