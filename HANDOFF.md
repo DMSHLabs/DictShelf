@@ -1,6 +1,7 @@
 # Agent handoff — current state
 
-Current checkout: branch `DictShelf` at `3ca66071`; the merge of `dev` is committed. The remote `DictShelf` branch was deleted at the user's request, so this local branch has no tracking remote. Uncommitted changes add LSD embedded-icon lookup and `_abrev.lsd` companion handling. Same-name sibling images take precedence over an LSD header icon. On local samples, American Heritage Dictionary 4th Ed. has a 978-byte embedded BMP icon and Urban Dictionary 2015 has a 980-byte embedded BMP; neither has a same-name sibling image. The sampled X6 `AmIdiomsEE_v15_new.lsd` has no embedded icon. `go test ./...`, `go vet ./...`, `go build ./...`, and `git diff --check` pass.
+Current checkout: branch `DictShelf` at `9ebe8c34`, merging `dev` at `f7bda1e3` (`show/hide icons`). The `DictShelf` remote was deleted at the user request. The merge is in progress and is not committed. DictShelf identity and icon assets remain in this branch; LSD embedded-icon lookup and `_abrev.lsd` companion handling are part of the current implementation.
+The incoming changes add saved dictionary-icon visibility, safer Edit Folders startup behavior, and removal of empty known MDX ad placeholders during prepared indexing (Reader version 2). Go tests/build pass; Windows UI and MDX reindex behavior still need runtime confirmation.
 
 ## Product identity
 

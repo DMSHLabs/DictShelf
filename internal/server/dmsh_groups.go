@@ -224,7 +224,7 @@ func viewGroup(group DictionaryGroup, members []string, readonly bool) groupView
 func (s *Server) handleUserGroups(w http.ResponseWriter, r *http.Request) {
 	s.reg.prefs.heal(s.reg)
 	entries := s.reg.all()
-	if err := s.syncLinkedGroups(entries); err != nil {
+	if err := s.syncLinkedGroups(entries, false); err != nil {
 		http.Error(w, "Could not update linked groups: "+err.Error(), 500)
 		return
 	}
@@ -287,7 +287,7 @@ func (s *Server) userGroupsSnapshot(trace bool) ([]groupView, error) {
 	stage("prefs_heal", 0)
 	entries := s.reg.all()
 	stage("registry_read", len(entries))
-	if err := s.syncLinkedGroups(entries); err != nil {
+	if err := s.syncLinkedGroups(entries, trace); err != nil {
 		stage("linked_groups_error", len(entries))
 		return nil, fmt.Errorf("Could not update linked groups: %w", err)
 	}
@@ -371,7 +371,15 @@ func (s *Server) filterMembers(ref groupFilter, entries []*entry, names map[stri
 	return ids
 }
 
-func (s *Server) syncLinkedGroups(entries []*entry) error {
+func (s *Server) syncLinkedGroups(entries []*entry, trace bool) error {
+	started := time.Now()
+	var metadataTime, matchTime, updateTime time.Duration
+	metadataReads, linkedGroups := 0, 0
+	defer func() {
+		if trace {
+			logx.System("dictionary_picker_groups linked=%d dictionaries=%d metadata_reads=%d metadata_ms=%d match_ms=%d update_ms=%d total_ms=%d", linkedGroups, len(entries), metadataReads, metadataTime.Milliseconds(), matchTime.Milliseconds(), updateTime.Milliseconds(), time.Since(started).Milliseconds())
+		}
+	}()
 	p := s.reg.prefs
 	p.editMu.Lock()
 	defer p.editMu.Unlock()
@@ -381,6 +389,7 @@ func (s *Server) syncLinkedGroups(entries []*entry) error {
 	dicts := slices.Clone(f.Dicts)
 	names := groupOrderNames(dicts, entries)
 	compare := groupOrderCompare(names, f.Language)
+	infoCache := make(map[string]dictInfo, len(entries))
 	for i, g := range groups {
 		if g.CustomOrder == nil {
 			resolveGroupOrderMode(&g, compare)
@@ -390,6 +399,7 @@ func (s *Server) syncLinkedGroups(entries []*entry) error {
 		if g.Filter == nil {
 			continue
 		}
+		linkedGroups++
 		if !s.filterExists(*g.Filter) {
 			if g.SelectedFilter == nil {
 				g.SelectedFilter = g.Filter
@@ -399,7 +409,30 @@ func (s *Server) syncLinkedGroups(entries []*entry) error {
 			changed = true
 			continue
 		}
-		members := s.filterMembers(*g.Filter, entries, names)
+		matchStarted := time.Now()
+		metadataBefore := metadataTime
+		var members []string
+		for _, e := range entries {
+			info, ok := infoCache[e.ID]
+			if !ok {
+				metadataStarted := time.Now()
+				info = s.baseDictInfo(e)
+				metadataTime += time.Since(metadataStarted)
+				metadataReads++
+				infoCache[e.ID] = info
+				if info.Name != "" {
+					names[e.ID] = info.Name
+				}
+			}
+			for _, filter := range info.Filters {
+				if filter.F == g.Filter.Facet && filter.V == g.Filter.Value {
+					members = append(members, e.ID)
+					break
+				}
+			}
+		}
+		matchTime += time.Since(matchStarted) - (metadataTime - metadataBefore)
+		updateStarted := time.Now()
 		want := make(map[string]bool, len(members))
 		for _, id := range members {
 			want[id] = true
@@ -428,6 +461,7 @@ func (s *Server) syncLinkedGroups(entries []*entry) error {
 			groups[i] = g
 			changed = true
 		}
+		updateTime += time.Since(updateStarted)
 	}
 	if changed {
 		return p.mutate(func(dst *prefsFile) { dst.Groups = groups; dst.Dicts = dicts })

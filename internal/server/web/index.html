@@ -223,7 +223,7 @@ window.wudictFontScale=(function(){
      with an empty dictionary list. -->
 <form id="frm" class="col" role="search" aria-busy="true">
 <a class="btn" id="barBackWords" href="/browse" aria-label="{{T:search.backToWords}}" title="{{T:search.backToWords}}" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M19 12H5m6-6-6 6 6 6"/></svg><span>{{T:search.words}}</span></a>
-<span class="brand">wu<small>Dict2</small></span>
+<span class="brand">Dict<small>Shelf</small></span>
 <span id="androidBridgeStage" hidden style="font-size:.65em;white-space:nowrap;opacity:.7">A60</span>
 <!-- The search pill. Above 600px it is display:contents, so the field and the
      two selects are direct flex children of the form. Below it the pill
@@ -687,6 +687,13 @@ window.wudictFontScale=(function(){
     </span>
   </div>
   <label id="examplesExtraRow" class="examples-extra" hidden><input class="panel-checkbox" type="checkbox" id="hideUnmarkedExamples"> {{T:panel.hideUnmarkedExamples}}</label>
+  <div class="facts">
+    <span class="rowlabel">{{T:panel.dictionaryIcons}}</span>
+    <span class="seg" role="group" aria-label="{{T:panel.dictionaryIcons}}">
+      <button type="button" class="act" id="dictIconsOn" aria-pressed="true">{{T:panel.show}}</button>
+      <button type="button" class="act" id="dictIconsOff" aria-pressed="false">{{T:panel.hide}}</button>
+    </span>
+  </div>
   <!-- Whether the status bar is there at all. It is the bar's only door, so it
        has to be findable by someone who has just hidden it - hence a row here,
        in the drawer, beside the controls the bar duplicates, rather than in the
@@ -911,7 +918,7 @@ window.wudictFontScale=(function(){
   <div id="folderBody"></div>
   <!-- The app's identity, last. -->
   <div class="about">
-    <span class="brand">wu<small>Dict2</small></span> <span class="ver">{{VERSION}}</span>
+    <span class="brand">Dict<small>Shelf</small></span> <span class="ver">{{VERSION}}</span>
     <p>{{T:panel.about}}</p>
     <p><a href="https://github.com/DmShAl/wudict2/" target="_blank" rel="noopener">DictShelf</a></p>
   </div>
@@ -1375,6 +1382,7 @@ const esc=s=>String(s??"").replace(/&/g,"&amp;").replace(/</g,"&lt;");
    attribute and turns the rest of the path into markup. */
 const escAttr=s=>esc(s).replace(/"/g,"&quot;");
 let dicts=[],lastQuery=null,searchSeq=0,searchAC=null;
+let dictIconsOn=true;
 let scopeOnce=null,anchorOnce=null,lastScope=null,widenedFrom=null;
 let PRESETS=null;
 const PRESET_ROWS=[
@@ -1640,7 +1648,7 @@ async function loadPrefs(){
        reader in a strategy with nothing on screen to explain or change it -
        the same call the removed `sortMine` got. The field is still WRITTEN
        (below, always false), because it is upstream's. */
-    if(st.ui){applyFS(st.ui.fontSize,false);applyFW(st.ui.fontWeight,false);applyArticleFont(st.ui.fontFamily||"charis",false);applyHL(!st.ui.hlOff,false);applySpeak(!st.ui.speakOff,false);applyHideUnmarkedExamples(!!st.ui.hideUnmarkedExamples,false);openN=st.ui.openN||1;openAll=!!st.ui.openAll;prefOrderModeKnown=typeof st.ui.customOrder==="boolean";prefCustomOrder=!!st.ui.customOrder;
+    if(st.ui){applyFS(st.ui.fontSize,false);applyFW(st.ui.fontWeight,false);applyArticleFont(st.ui.fontFamily||"charis",false);applyHL(!st.ui.hlOff,false);applySpeak(!st.ui.speakOff,false);applyHideUnmarkedExamples(!!st.ui.hideUnmarkedExamples,false);applyDictIcons(!st.ui.dictIconsOff,false);openN=st.ui.openN||1;openAll=!!st.ui.openAll;prefOrderModeKnown=typeof st.ui.customOrder==="boolean";prefCustomOrder=!!st.ui.customOrder;
       resultCacheLimitGB=Number(st.ui.resultCacheLimitGB)||defaultResultCacheLimitGB();resultCacheNoLimit=!!st.ui.resultCacheNoLimit;syncResultCacheLimitUI();
       combinedDictionaryLimit=Math.max(1,Math.min(Number(st.ui.combinedDictionaryLimit)||defaultCombinedDictionaryLimit,maxCombinedDictionaryLimit));syncCombinedDictionaryLimitUI()}
     if(!st.exists){adoptLocalPrefs();return} // first run: keep whatever we had
@@ -1693,7 +1701,7 @@ function savePrefs(now){
   // omitempty zero value), which is what retires a flag set by the switches
   // that no longer exist.
   const body=JSON.stringify({dicts:orderedDicts().map(d=>({id:d.id,name:d.name||d.path.split("/").pop(),title:dictTitles.get(d.id)||"",pinned:prefPinned.includes(d.id)})),
-    ui:{fontSize:articleFS,fontWeight:articleFW,fontFamily:articleFont,hlOff:!hlOn,speakOff:!speakOn,fastFirst:!orderFirst,hideUnmarkedExamples,customOrder:prefCustomOrder,
+    ui:{fontSize:articleFS,fontWeight:articleFW,fontFamily:articleFont,hlOff:!hlOn,speakOff:!speakOn,dictIconsOff:!dictIconsOn,fastFirst:!orderFirst,hideUnmarkedExamples,customOrder:prefCustomOrder,
       resultCacheLimitGB,resultCacheNoLimit,combinedDictionaryLimit}});
   if(body===prefsSent)return;
   prefsSent=body;
@@ -2357,6 +2365,16 @@ presetsLoad();
 function dictBaseLabel(d){return d.name||d.path.split("/").pop()}
 function dictLabel(d){return dictTitles.get(d.id)||dictBaseLabel(d)}
 function dictIconHTML(id){return `<img class="dict-icon" src="/dict-icon/${encodeURIComponent(id)}" alt="" aria-hidden="true" loading="lazy" decoding="async" onerror="this.remove()">`}
+function applyDictIcons(on,save){
+  const changed=dictIconsOn!==!!on;
+  dictIconsOn=!!on;
+  for(const [id,want] of [["dictIconsOff",false],["dictIconsOn",true]])
+    $(id).setAttribute("aria-pressed",String(dictIconsOn===want));
+  document.documentElement.toggleAttribute("data-dict-icons-off",!dictIconsOn);
+  if(save&&changed)savePrefs(true);
+}
+for(const [id,want] of [["dictIconsOff",false],["dictIconsOn",true]])
+  $(id).addEventListener("click",()=>applyDictIcons(want,true));
 /* A DSL [ref dict="..."] names another dictionary by its #NAME, which is what
    dictBaseLabel shows, so the name is matched against the label as well as the
    stored name - a dictionary whose file carries no #NAME is known here by its
@@ -3232,7 +3250,15 @@ async function loadDicts(rescan){
   if(blocking)clearStatusForResults();
   else clearStatus("load");
   // a search run against a half-loaded list is now answerable in full
-  if(staleSearch&&lastQuery){staleSearch=false;if($("mode").value==="wildcards")maskSubmitRequested=true;doSearch()}
+  if(staleSearch&&lastQuery){
+    staleSearch=false;
+    // A Browse article link's one-dictionary scope is complete even while the
+    // rest of the selector list is still streaming. If another incomplete
+    // search does need a retry, preserve its one-shot scope across that retry.
+    if(lastScope)scopeOnce=lastScope;
+    if($("mode").value==="wildcards")maskSubmitRequested=true;
+    doSearch()
+  }
   return true;
 }
 /* The narrow-viewport chips. They render the two <select>s and nothing more:
@@ -3852,7 +3878,7 @@ function showWorkspaceWindow(link){
 }
 $("lemmaLink").addEventListener("click",event=>{event.preventDefault();window.openLemmaDialog?.(event.currentTarget)});
 $("editFilters").addEventListener("click",event=>{event.preventDefault();window.openFiltersDialog?.(event.currentTarget)});
-$("editFolders").addEventListener("click",event=>{event.preventDefault();window.openFoldersDialog?.(event.currentTarget)});
+$("editFolders").addEventListener("click",event=>{event.preventDefault();window.openFoldersDialog?.(event.currentTarget,cfgInfo)});
 window.addEventListener("wudict-folders-saved",()=>loadDicts().then(ok=>{if(ok){loadFolders();reissueIfCorpusMoved()}}));
 $("workspaceFrame").addEventListener("load",event=>{
   const frame=event.currentTarget;
@@ -7983,7 +8009,7 @@ async function doSearch(ev){
         else if(widened)out.appendChild(widenNote(widened,q));
         // Searched a list that is still filling up: say so rather than let an
         // incomplete answer look complete, and re-run when the rest lands.
-        if(phase==="partial"){
+        if(phase==="partial"&&!scope){
           staleSearch=true;
           setStatus(esc(tx("search.partial",{number:dicts.length,total:dictTotal||dicts.length})));
         }
