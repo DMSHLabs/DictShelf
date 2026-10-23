@@ -366,6 +366,93 @@ func TestReaderDz(t *testing.T) {
 	checkEntries(t, readAllEntries(t, writeDSL(t, "mini.dsl.dz", b.Bytes())))
 }
 
+func TestDictzipV2(t *testing.T) {
+	plain := []byte("#NAME \"Dictzip v2\"\n#INDEX_LANGUAGE \"English\"\n#CONTENTS_LANGUAGE \"English\"\n\nword\n\tdefinition\n")
+	var compressed bytes.Buffer
+	gw := gzip.NewWriter(&compressed)
+	if _, err := gw.Write(plain); err != nil {
+		t.Fatal(err)
+	}
+	if err := gw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	var file bytes.Buffer
+	file.Write([]byte("DZV2"))
+	var version [2]byte
+	binary.LittleEndian.PutUint16(version[:], 2)
+	file.Write(version[:])
+	var chunkSize [4]byte
+	binary.LittleEndian.PutUint32(chunkSize[:], 58368)
+	file.Write(chunkSize[:])
+	var count [8]byte
+	binary.LittleEndian.PutUint64(count[:], 1)
+	file.Write(count[:])
+	var fullSize [8]byte
+	binary.LittleEndian.PutUint64(fullSize[:], uint64(len(plain)))
+	file.Write(fullSize[:])
+	var compressedLen [4]byte
+	binary.LittleEndian.PutUint32(compressedLen[:], uint32(compressed.Len()))
+	file.Write(compressedLen[:])
+	file.Write(compressed.Bytes())
+	p := writeDSL(t, "mini.dsl.dz", file.Bytes())
+	r, err := NewReader(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+	var entries []dict.Entry
+	for {
+		entry, err := r.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		entries = append(entries, entry)
+	}
+	if len(entries) != 1 || entries[0].Headwords[0] != "word" || !strings.Contains(entries[0].Body, "definition") {
+		t.Fatalf("dictzip v2 entries: %#v", entries)
+	}
+}
+
+func TestDictzipV1(t *testing.T) {
+	plain := []byte("#NAME \"Mini Diccionario\"\n#INDEX_LANGUAGE \"Spanish\"\n#CONTENTS_LANGUAGE \"Spanish\"\n\nword\n\tdefinition\n")
+	var compressed bytes.Buffer
+	gw := gzip.NewWriter(&compressed)
+	if _, err := gw.Write(plain); err != nil {
+		t.Fatal(err)
+	}
+	if err := gw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	gz := compressed.Bytes()
+	chunkBytes := len(gz) - 18 // raw DEFLATE payload, excluding gzip header and trailer
+	var file bytes.Buffer
+	header := append([]byte(nil), gz[:10]...)
+	header[3] |= 4
+	file.Write(header)
+	file.Write([]byte{12, 0, 'R', 'A', 8, 0, 1, 0})
+	file.Write([]byte{0x00, 0xe4, 1, 0, byte(chunkBytes), byte(chunkBytes >> 8)})
+	file.Write(gz[10:])
+	p := writeDSL(t, "mini.dsl.dz", file.Bytes())
+	r, err := NewReader(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+	if got := r.Meta().Name; got != "Mini Diccionario" {
+		t.Fatalf("v1 meta name=%q", got)
+	}
+	entry, err := r.Next()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if entry.Headwords[0] != "word" || !strings.Contains(entry.Body, "definition") {
+		t.Fatalf("v1 entry=%+v", entry)
+	}
+}
+
 func TestResourceZip(t *testing.T) {
 	dir := t.TempDir()
 	dslPath := filepath.Join(dir, "mini.dsl")
