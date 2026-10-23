@@ -2356,7 +2356,7 @@ presetsLoad();
 /* ── dictionaries ──────────────────────────────────────────────────── */
 function dictBaseLabel(d){return d.name||d.path.split("/").pop()}
 function dictLabel(d){return dictTitles.get(d.id)||dictBaseLabel(d)}
-function dictIconHTML(id){return `<img class="dict-icon" src="/dict-icon/${encodeURIComponent(id)}" alt="" aria-hidden="true" loading="lazy" decoding="async">`}
+function dictIconHTML(id){return `<img class="dict-icon" src="/dict-icon/${encodeURIComponent(id)}" alt="" aria-hidden="true" loading="lazy" decoding="async" onerror="this.remove()">`}
 /* A DSL [ref dict="..."] names another dictionary by its #NAME, which is what
    dictBaseLabel shows, so the name is matched against the label as well as the
    stored name - a dictionary whose file carries no #NAME is known here by its
@@ -2707,7 +2707,7 @@ function paintWebDictionaryPicker(){
     const button=document.createElement('button');
     button.type='button';button.className='web-picker-row';button.dataset.dict=row.id;
     const name=document.createElement('span');name.className='web-picker-name';name.textContent=row.name||row.label;
-    button.append(name);
+    button.append(document.createRange().createContextualFragment(dictIconHTML(row.id)),name);
     if(row.meta){const meta=document.createElement('span');meta.className='web-picker-meta';meta.textContent=row.meta;button.append(meta)}
     if(maskContext)button.setAttribute('aria-current',String(row.id===maskRows[maskCurrent]?.id));
     button.title=row.label;
@@ -2741,11 +2741,12 @@ async function openWebDictionaryPicker(context="search"){
   };
   trace('input');
   try{
-    const groupsStarted=performance.now();
-    trace('groups_start');
-    userGroups=await groupRequest('/api/user-groups','GET',undefined,diagnostic);
-    const groupsMs=Math.round(performance.now()-groupsStarted);
-    trace('groups_done',groupsMs,userGroups.length);
+    if(!userGroups.length){
+      const groupsStarted=performance.now();
+      trace('groups_start');
+      userGroups=await groupRequest('/api/user-groups','GET',undefined,diagnostic);
+      trace('groups_done',performance.now()-groupsStarted,userGroups.length);
+    }else trace('groups_cached',0,userGroups.length);
     if(!userGroups.some(g=>g.id===pickerGroup))pickerGroup='all';
     const paintStarted=performance.now();
     const rows=paintWebDictionaryPicker();
@@ -2797,7 +2798,7 @@ function paintExportRows(){
   const check=document.createElement('input');check.type='checkbox';check.value=d.id;check.checked=exportSelected.has(d.id);check.disabled=exportRunning;
   check.onchange=()=>{if(check.checked)exportSelected.add(d.id);else exportSelected.delete(d.id);exportSelectionChanged()};
   const name=document.createElement('span');name.className='web-picker-name';name.textContent=dictLabel(d);row.title=name.textContent;
-  row.append(check,name);return row;
+  row.append(check,document.createRange().createContextualFragment(dictIconHTML(d.id)),name);return row;
  }));exportSearch?.refresh();exportSelectionChanged();
 }
 function exportBusy(busy){
@@ -3131,6 +3132,8 @@ async function loadDicts(rescan){
   // A rescan happens in an app that already works — it must not black the UI
   // out. Only the first load (or a retry after a failure) blocks.
   const blocking=phase==="boot"||phase==="failed";
+  const initialParams=new URLSearchParams(location.search);
+  const scopedBrowseArticle=blocking&&initialParams.has("q")&&initialParams.has("from")&&initialParams.has("browse");
   const controller=blocking?new AbortController():null;
   const stopBoot=blocking?()=>controller.abort():null;
   if(blocking){
@@ -3181,7 +3184,6 @@ async function loadDicts(rescan){
         // article as soon as the selector has its first row; waiting for the
         // entire collection to stream in adds no information to a scoped
         // search, and made every Browse → article transition pay for all rows.
-        const initialParams=new URLSearchParams(location.search);
         if(blocking&&!initialURLApplied&&initialParams.has("q")&&initialParams.has("from")){
           initialURLApplied=true;
           applyURL();
@@ -3209,7 +3211,9 @@ async function loadDicts(rescan){
   }
   dicts=rows;dictTotal=rows.length;
   resolvePrefOrderMode();
-  await loadPickerGroups();
+  if(scopedBrowseArticle&&!userGroups.length){
+    requestAnimationFrame(()=>requestAnimationFrame(()=>loadPickerGroups()));
+  }else await loadPickerGroups();
   const allGroup=userGroups.find(group=>group.id==="all");if(allGroup)allGroup.customOrder=prefCustomOrder;
   // Remember new dictionaries only after the full stream. Missing IDs stay in
   // their old slots so a temporarily unavailable pinned dictionary keeps its

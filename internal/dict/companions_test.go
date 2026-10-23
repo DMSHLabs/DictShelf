@@ -212,6 +212,9 @@ func TestAbbrevCompanion(t *testing.T) {
 	if !IsAbbrevCompanion(abrv) {
 		t.Error("the companion beside its parent must be recognized")
 	}
+	if !IsAbbrevCompanionSource(abrv, []string{main}) {
+		t.Error("the companion must be recognized when its parent was discovered")
+	}
 	if IsAbbrevCompanion(main) {
 		t.Error("the parent is not a companion")
 	}
@@ -226,6 +229,9 @@ func TestAbbrevCompanion(t *testing.T) {
 	dzAbrv := touch(t, filepath.Join(dz, "ru-en_abrv.dsl.dz"))
 	if got, ok := AbbrevCompanion(dzMain); !ok || got != dzAbrv {
 		t.Errorf("AbbrevCompanion(.dz) = %q, %v; want %q, true", got, ok, dzAbrv)
+	}
+	if !IsAbbrevCompanionSource(dzAbrv, []string{dzMain}) {
+		t.Error("compressed parent discovered by the registry must keep its companion hidden")
 	}
 	// the suffix test is case-insensitive: a Windows-made "_ABRV.DSL" is the
 	// same companion. Only the SUFFIX - the parent must exist as spelled, so

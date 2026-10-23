@@ -28,7 +28,7 @@ The reference projects cited below (`pyglossary/…`, `mdict-go-web/…`, `draeg
 - Hybrid plan: importer walks refs sequentially (no collation needed), decompresses bins once (`ulikunitz/xz` for LZMA2). Resource resolver: keep slob open, direct item fetch by stored bin/item ids (store them in `alias`/aux table or resource name map at import).
 
 ## Lingvo DSL
-- Plain text, UTF-8/UTF-16(+BOM)/UTF-32; optional `.dsl.dz` (dictzip); optional `.ann`, `.bmp`, and `_abrv.dsl`; resources in `<name>.dsl.files.zip` (plain zip). NO index of any kind ⇒ always fully ingested.
+- Plain text, UTF-8/UTF-16(+BOM)/UTF-32; optional `.dsl.dz` (dictzip); optional `.ann`, `.bmp`, and `_abrv.dsl` / `_abrev.dsl` (also `.dz` compressed); resources in `<name>.dsl.files.zip` (plain zip). NO index of any kind ⇒ always fully ingested.
 - Syntax: headword line(s) at col 0 (multiple consecutive = same card; `{...}` unsorted parts; `(...)` optional-variant expansion; `~` = headword ref; `<<link>>`), body lines indented; tags `[b][i][c][p][m1..9][s]media[/s][ref][url]...`.
 - Reference: `pyglossary/pyglossary/plugins/dsl/` — `lex.py` (tag lexer), `transform.py` (→HTML), `title.py` (headword variant expansion), `reader.py` (encoding detect, .dz handling).
 - Go: write lexer/transformer fresh, port rules from the above. dictzip read = sequential gunzip (stdlib `compress/gzip` handles dictzip files sequentially). Resource resolver: `archive/zip` over `.files.zip`.

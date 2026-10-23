@@ -1,6 +1,6 @@
 # Agent handoff — current state
 
-Current checkout: branch `dev` at `baa5ed43`. No
+Current checkout: branch `dev` at `e0e033dd`. No
 upstream is configured. The application uses one DSL reader with GoldenDict-
 compatible repair and article preparation; there is no Original/GD selection
 or duplicate DSL index. `docs/DSL.md` and `tools/dslcompare/README.md` describe
@@ -14,26 +14,45 @@ description. Desktop System settings no longer show internal config key names.
 were not run, and Windows/Android settings UI verification remains pending.
 
 Dictionary names now have a shared icon route: a supported adjacent image file
-wins, then a format icon (including OpenZIM Illustration metadata), then the
-built-in book glyph. Search result headings and Dictionary settings show it;
-browser, Windows WebView and Android WebView serve it through their local Go
-resource path. `go build ./...` and `git diff --check` pass; UI runtime checks
-remain pending.
+wins, then a format icon (including OpenZIM Illustration metadata). When no
+icon is found the UI leaves the name unadorned. Search result headings and
+Dictionary settings show available icons; browser, Windows WebView and Android
+WebView serve them through their local Go resource path. `go build ./...` and
+`git diff --check` pass; UI runtime checks remain pending.
 
-Dictionary picker diagnostics now record input, group fetch, row rendering,
-dialog display and first frame when Dictionary list diagnostics is enabled.
-The Windows native group snapshot also logs preference healing, registry read,
-linked-group sync, preferences read and view assembly. A synchronous opening
-guard prevents pointerdown and click from launching overlapping picker loads.
-`go build ./internal/server` and `git diff --check` pass; a fresh Windows log
-is needed to locate the intermittent delay.
+Dictionary icons also appear in dictionary search, export and group lists. A
+prepared legacy abbreviation glossary is excluded from the library list when
+its discovered parent DSL is compressed (`.dsl.dz`) as well as when it is
+plain. The `TestAbbrevCompanion` check and `go build ./...` pass; UI runtime
+verification remains pending.
+Dictionary Groups renders each name in its own text span beside the icon; the
+list-search highlighter targets only that span. Its marks therefore remain
+inline and cannot become separate flex items with gaps between letters.
+The shared list search now removes old marks before applying each current
+query and repaints on both input and search events (including search-field
+clear actions); runtime confirmation remains pending.
+
+The icon request is now dispatched by the Windows WebView resource adapter as
+well as the HTTP and Android paths. DSL abbreviation companions accept both
+`_abrv` and `_abrev` spellings (plain or dictzip): they are absorbed by the
+parent glossary and excluded from discovery when that parent exists.
+
+Android log 2026-10-23 05:35–05:37 shows the picker repeatedly spending
+1.9–3.3 s in its native user-groups call, while Browse article paint takes
+4.4–5.4 s: startup dependencies wait about 1.6–2.5 s, then the 383-dictionary
+list takes about 2.5 s, while scoped search itself takes under 50 ms. Android
+now passes the existing diagnostic flag into the Go group snapshot and logs
+native-bridge stages. The picker reuses the loaded group snapshot instead of
+fetching it on every open. Browse headword links carry `from` as well as `dict`;
+startup skips the group read for scoped article links and defers it until after
+the list/search has had two animation frames to paint. Rebuilt Android runtime
+timing is pending.
 
 The existing Browse/article navigation diagnostics checkbox failed to record
 direct Browse headword clicks because those links carry `dict`, while the main
 page diagnostic gate required `from`. The gate now accepts `dict` and uses it
-as the article dictionary ID; the next Windows log should contain
-`article_transition` stages from the click through first article paint.
-`git diff --check` passes; runtime confirmation is pending.
+as the article dictionary ID; the Android log confirmed `article_transition`
+stages from the click through first article paint.
 
 Wildcards' combined mode keeps the dictionary field's geometry, displays
 “Combined list” / «Общий список», and removes the dropdown affordance while
