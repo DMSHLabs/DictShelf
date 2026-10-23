@@ -3852,7 +3852,7 @@ function showWorkspaceWindow(link){
 }
 $("lemmaLink").addEventListener("click",event=>{event.preventDefault();window.openLemmaDialog?.(event.currentTarget)});
 $("editFilters").addEventListener("click",event=>{event.preventDefault();window.openFiltersDialog?.(event.currentTarget)});
-$("editFolders").addEventListener("click",event=>{event.preventDefault();window.openFoldersDialog?.(event.currentTarget)});
+$("editFolders").addEventListener("click",event=>{event.preventDefault();window.openFoldersDialog?.(event.currentTarget,cfgInfo)});
 window.addEventListener("wudict-folders-saved",()=>loadDicts().then(ok=>{if(ok){loadFolders();reissueIfCorpusMoved()}}));
 $("workspaceFrame").addEventListener("load",event=>{
   const frame=event.currentTarget;

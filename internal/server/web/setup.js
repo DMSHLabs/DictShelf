@@ -134,22 +134,8 @@ async function validateAll(){
   if(validationController)validationController.abort();
   const controller=new AbortController();
   validationController=controller;
-  const stop=()=>{
-    controller.abort();
-    if(validationRun!==run)return;
-    validationRun++;
-    validationController=null;
-    setSetupNotice("");
-  };
   const inputs=rowInputs();
   let total=0,bad=0,checked=0;
-  const folderTotal=inputs.filter(input=>input.value.trim()).length;
-  let folderDone=0;
-  const reportFolder=()=>{
-    folderDone++;
-    setSetupNotice(tx("pages.checkingFoldersProgress",{number:folderDone,total:folderTotal}),stop);
-  };
-  if(folderTotal)setSetupNotice(tx("pages.checkingFoldersProgress",{number:0,total:folderTotal}),stop);
   await Promise.all(inputs.map(async input=>{
     const st=input.parentElement.querySelector(".st");
     const p=input.value.trim();
@@ -161,13 +147,12 @@ async function validateAll(){
       : typeof nativeSetupCall==="function"
       ? await nativeSetupCall("folderSetup","path="+encodeURIComponent(p),undefined,controller.signal)
       : await (await browserHTTP("/api/setup?path="+encodeURIComponent(p),{signal:controller.signal})).json() }
-    catch(e){ if(controller.signal.aborted||run!==validationRun)return;st.className="st err";st.textContent=tx("pages.unreachable");bad++;reportFolder();return }
+    catch(e){ if(controller.signal.aborted||run!==validationRun)return;st.className="st err";st.textContent=tx("pages.unreachable");bad++;return }
     if(run!==validationRun)return;
-    if(j.error){st.className="st err";st.textContent="✕ "+window.wudictI18n.errorText(j.error);bad++;reportFolder();return}
-    if(!j.found){st.className="st err";st.textContent=tx("pages.noneFound");bad++;reportFolder();return}
+    if(j.error){st.className="st err";st.textContent="✕ "+window.wudictI18n.errorText(j.error);bad++;return}
+    if(!j.found){st.className="st err";st.textContent=tx("pages.noneFound");bad++;return}
     st.className="st ok";st.textContent=tx("pages.found",{number:fmtN(j.found)});
     total+=j.found;
-    reportFolder();
   }));
   if(run!==validationRun)return;
   // folders may overlap, so the honest total is the server's deduplicated
@@ -630,27 +615,30 @@ $("save").addEventListener("click",save);
    only the first-run chooser, so it must show what is configured now. When a
    flag or an environment variable set DICT_DIR, saving to wudict.toml cannot
    take effect — say so instead of silently doing nothing next launch. */
-async function start(){
+async function start(cachedConfig=null){
   $("rows").replaceChildren();
   $("origin").classList.add("hidden");
   $("cfgProblems").classList.add("hidden");
   $("howtoBackRow").classList.add("hidden");
-  let cfg=null,migration=null;
+  let cfg=cachedConfig,migration=null;
   try{
-    if(window.wudictAndroidGo){
-      [cfg,migration]=await Promise.all([
-        Promise.resolve().then(()=>JSON.parse(window.wudictAndroidGo.config())),
-        Promise.resolve().then(()=>androidSetupCall("setup","migration=status"))
-      ]);
+    if(cfg){
+      // The main window already fetched this snapshot while opening its
+      // dictionary list; use it to paint the folder rows without another trip.
+    }else if(window.wudictAndroidGo){
+      cfg=JSON.parse(window.wudictAndroidGo.config());
+      if(!foldersDialogEmbedded)migration=androidSetupCall("setup","migration=status");
     }else if(typeof nativeSetupCall==="function"){
-      [cfg,migration]=await Promise.all([
-        nativeSetupCall("config"),nativeSetupCall("setup","migration=status")
-      ]);
+      if(foldersDialogEmbedded)cfg=await nativeSetupCall("config");
+      else [cfg,migration]=await Promise.all([nativeSetupCall("config"),nativeSetupCall("setup","migration=status")]);
     }else{
-      const [configResponse,migrationResponse]=await Promise.all([
-        browserHTTP("/api/config"),browserHTTP("/api/setup?migration=status")
-      ]);
-      cfg=await configResponse.json();migration=await migrationResponse.json();
+      if(foldersDialogEmbedded){
+        const configResponse=await browserHTTP("/api/config");
+        cfg=await configResponse.json();
+      }else{
+        const [configResponse,migrationResponse]=await Promise.all([browserHTTP("/api/config"),browserHTTP("/api/setup?migration=status")]);
+        [cfg,migration]=await Promise.all([configResponse.json(),migrationResponse.json()]);
+      }
     }
   }catch(e){try{cfg=window.wudictAndroidGo?JSON.parse(window.wudictAndroidGo.config()):typeof nativeSetupCall==="function"
     ? await nativeSetupCall("config") : await (await browserHTTP("/api/config")).json()}catch(_){}}
@@ -659,7 +647,6 @@ async function start(){
     $("newIndex"+suffix).checked=!!cfg?.indexDefaults?.[feature];
   }
   syncIndexDefaults();
-  await saveIndexDefaults();
   const dirs=(cfg&&cfg.roots||[]).map(r=>r.path);
   if(dirs.length)dirs.forEach(d=>addRow(d)); else addRow("");
   /* howtoRemoved is a fact about the host: it stays false while the builtin
@@ -685,10 +672,12 @@ async function start(){
   if(dirs.length)validateAll(); else rowInputs()[0].focus();
   // The importer needs somewhere to install into, and a job may already be
   // running from before this page was loaded.
-  const st=await impGET();
-  wireIntake(st&&st.dir||dirs[0]||"");
-  if(st&&st.state){impRender(st);
-    if(st.state==="installing"||st.state==="downloading")impPoll()}
+  wireIntake(dirs[0]||"");
+  impGET().then(st=>{
+    wireIntake(st&&st.dir||dirs[0]||"");
+    if(st&&st.state){impRender(st);
+      if(st.state==="installing"||st.state==="downloading")impPoll()}
+  });
 }
 
 function showMigrationDialog(forked){
@@ -744,7 +733,7 @@ if(foldersDialogEmbedded){
   $("closePage").onclick=()=>foldersDialogRoot.close();
   foldersDialogRoot.addEventListener("close",()=>{if(validationController){validationController.abort();validationController=null;validationRun++}foldersDialogReturnFocus?.focus()});
   foldersDialogRoot.addEventListener("cancel",()=>{if(validationController){validationController.abort();validationController=null;validationRun++}});
-  window.openFoldersDialog=link=>{foldersDialogReturnFocus=link;foldersDialogRoot.showModal();start()};
+  window.openFoldersDialog=(link,cfg)=>{foldersDialogReturnFocus=link;foldersDialogRoot.showModal();start(cfg||null)};
 }
 else if(wudictDialogMode){
   $("closePage").onclick=()=>parent.postMessage({type:"wudict-workspace-close"},location.origin);
