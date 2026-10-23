@@ -109,6 +109,9 @@ func (s *Server) mergedBrowsePage(ctx context.Context, q url.Values, progress fu
 	}
 	ids = append([]string(nil), ids...)
 	sort.Strings(ids)
+	if q.Get("sourcecache") != "" {
+		return s.mergedBrowseFromWildcard(ctx, q, ids, progress)
+	}
 	sources := make([]mergedBrowseSource, 0, len(ids))
 	var signature strings.Builder
 	signature.WriteString(mergedBrowseSignatureVersion + "\n")
@@ -1036,8 +1039,11 @@ func (s *Server) streamMergedBrowseFind(ctx context.Context, q url.Values, send 
 	if err := json.Unmarshal([]byte(alphabetJSON), &alphabet); err != nil {
 		return err
 	}
+	var matchedDictionaries int
+	_ = db.QueryRowContext(ctx, `SELECT matched_dictionaries FROM merged_source_meta LIMIT 1`).Scan(&matchedDictionaries)
 	return send(browseFindStreamEvent{Type: "done", Total: total, Scanned: progressScale, ScanTotal: progressScale,
-		Size: browsePageSize, Alphabet: alphabet, DiskCache: true, MergedCacheID: base.mergedCacheID, Done: true})
+		Size: browsePageSize, Alphabet: alphabet, DiskCache: true, MergedCacheID: base.mergedCacheID,
+		MatchedDictionaries: matchedDictionaries, Done: true})
 }
 
 // scaleMergedFindProgress keeps the combined-list build and mask-filter phases

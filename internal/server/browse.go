@@ -229,18 +229,19 @@ func isAllWildcardMask(query string) bool {
 }
 
 type browseFindStreamEvent struct {
-	Type          string        `json:"type"`
-	Words         []string      `json:"words,omitempty"`
-	Positions     []int         `json:"positions,omitempty"`
-	Alphabet      []dict.Letter `json:"alphabet,omitempty"`
-	Total         int           `json:"total"`
-	Scanned       int           `json:"scanned,omitempty"`
-	ScanTotal     int           `json:"scanTotal,omitempty"`
-	Size          int           `json:"size,omitempty"`
-	DiskCache     bool          `json:"diskCache,omitempty"`
-	MergedCacheID string        `json:"mergedCacheID,omitempty"`
-	Done          bool          `json:"done,omitempty"`
-	Error         string        `json:"error,omitempty"`
+	Type                string        `json:"type"`
+	Words               []string      `json:"words,omitempty"`
+	Positions           []int         `json:"positions,omitempty"`
+	Alphabet            []dict.Letter `json:"alphabet,omitempty"`
+	Total               int           `json:"total"`
+	Scanned             int           `json:"scanned,omitempty"`
+	ScanTotal           int           `json:"scanTotal,omitempty"`
+	Size                int           `json:"size,omitempty"`
+	DiskCache           bool          `json:"diskCache,omitempty"`
+	MergedCacheID       string        `json:"mergedCacheID,omitempty"`
+	MatchedDictionaries int           `json:"matchedDictionaries,omitempty"`
+	Done                bool          `json:"done,omitempty"`
+	Error               string        `json:"error,omitempty"`
 }
 
 type browseHeadwordStreamer interface {

@@ -299,7 +299,7 @@ window.wudictFontScale=(function(){
 <section id="maskView" aria-label="{{T:search.wildcardsResults}}" hidden>
   <div class="mask-chrome">
     <header class="mask-head">
-      <button type="button" class="choice-btn mask-dictionary-picker" id="maskDict" aria-label="{{T:search.wildcardsDictionary}}" aria-haspopup="dialog"><span id="maskDictName"></span><span id="maskDictMeta"></span></button>
+      <button type="button" class="choice-btn mask-dictionary-picker" id="maskDict" aria-label="{{T:search.wildcardsDictionary}}" aria-haspopup="dialog"><img id="maskDictIcon" class="dict-icon" alt="" aria-hidden="true" hidden><span id="maskDictName"></span><span id="maskDictMeta"></span></button>
       <span id="maskProgress" aria-label="{{T:search.wildcardsResults}}" hidden>
         <button type="button" class="btn" id="mergedAZ" title="{{T:search.combineDictionaries}}" aria-label="{{T:search.combineDictionaries}}" aria-pressed="false" disabled>
           <svg viewBox="0 0 64 36" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
@@ -1792,6 +1792,7 @@ function syncMaskDictionaryPicker(){
   picker.setAttribute("aria-label",tx(combined?"search.combinedList":"search.wildcardsDictionary"));
   if(combined){
     picker.removeAttribute("aria-haspopup");
+    setDictIcon($("maskDictIcon"),"");
     $("maskDictName").textContent=tx("search.combinedList");
     $("maskDictMeta").textContent="";
     picker.title=tx("search.combinedList");
@@ -1799,6 +1800,8 @@ function syncMaskDictionaryPicker(){
     return;
   }
   picker.setAttribute("aria-haspopup","dialog");
+  setDictIcon($("maskDictIcon"),selected?.id||"");
+  $("maskDictIcon").style.marginRight=".45em";
   $("maskDictName").textContent=selected?.name||"";
   $("maskDictMeta").textContent=selected?maskRowMeta(selected):"";
   picker.title=selected?selected.name+maskRowMeta(selected):"";
@@ -2368,16 +2371,24 @@ function dictLabel(d){return dictTitles.get(d.id)||dictBaseLabel(d)}
 function dictIconReady(img){img.style.visibility="";img.dataset.iconRetry="0"}
 function dictIconRetry(img){
   img.style.visibility="hidden";
-  if(!img.isConnected)return;
+  if(!img.isConnected||img.hidden||!img.dataset.iconSrc)return;
   const attempt=(Number(img.dataset.iconRetry)||0)+1;
   img.dataset.iconRetry=String(attempt);
   if(attempt>60){img.remove();return}
   const delay=Math.min(5000,250*Math.pow(1.5,Math.min(attempt,10)));
-  setTimeout(()=>{if(img.isConnected)img.src=img.dataset.iconSrc+"?retry="+attempt},delay);
+  setTimeout(()=>{if(img.isConnected&&!img.hidden&&img.dataset.iconSrc)img.src=img.dataset.iconSrc+"?retry="+attempt},delay);
 }
 function dictIconHTML(id){
   const src="/dict-icon/"+encodeURIComponent(id);
   return `<img class="dict-icon" src="${src}" data-icon-src="${src}" alt="" aria-hidden="true" loading="lazy" decoding="async" style="visibility:hidden" onload="dictIconReady(this)" onerror="dictIconRetry(this)">`;
+}
+function setDictIcon(img,id){
+  const src=id?"/dict-icon/"+encodeURIComponent(id):"";
+  img.hidden=!src;
+  if(!src){img.dataset.iconSrc="";img.removeAttribute("src");img.style.visibility="hidden";return}
+  if(img.dataset.iconSrc===src)return;
+  img.dataset.iconSrc=src;img.dataset.iconRetry="0";img.style.visibility="hidden";
+  img.onload=()=>dictIconReady(img);img.onerror=()=>dictIconRetry(img);img.src=src;
 }
 function applyDictIcons(on,save){
   const changed=dictIconsOn!==!!on;
@@ -6360,6 +6371,7 @@ function noIndexRow(el,out,info){
 // Mask results are headwords only. Each dictionary keeps its slot in the
 // selected group's order even when requests finish out of order.
 let maskGeneration=0,maskControllers=new Set(),maskRows=[],maskCurrent=0,maskMergeAZ=false;
+const maskMatchedDictionaryCounts=new Map();
 let maskPattern="",maskSelection="",maskSubmitRequested=false,maskNavToken=0,maskRestoreScroll=null,maskRestoreWord="",maskRestoreWordDict="";
 let maskWordsPageKey="";
 const maskBaseMemory=new Map(),maskPageMemory=new Map();
@@ -6698,6 +6710,10 @@ new ResizeObserver(()=>{
     if(diagnose){maskStripResizePaintMS+=performance.now()-paintStarted;maskStripResizePaintDeferred=maskStripResizePaintDeferred||!!maskStripPaintTimer}
   });
 }).observe($("maskLetters"));
+function maskDictionaryCountKey(){
+  const ids=maskMergeAZ?maskBaseRows[0]?.mergedIds||"":maskBaseRows.map(row=>row.id).join(",");
+  return maskSelection+"\0"+maskPattern+"\0"+ids;
+}
 function maskMenu(){
   let total=0,pages=0,prefixKnown=true,complete=true;
   for(const row of maskRows){
@@ -6713,7 +6729,15 @@ function maskMenu(){
     if(row.partial)complete=false;
   }
   syncMaskDictionaryPicker();
-  $("maskCount").textContent=window.wudictI18n.number(total)+(complete?"":"+");
+  const countKey=maskDictionaryCountKey();
+  if(!maskMergeAZ&&complete&&maskRows===maskBaseRows){
+    maskMatchedDictionaryCounts.set(countKey,maskRows.filter(row=>row.state==="ready"&&row.total>0).length);
+    if(maskMatchedDictionaryCounts.size>32)maskMatchedDictionaryCounts.delete(maskMatchedDictionaryCounts.keys().next().value);
+  }
+  const dictionaries=maskMergeAZ?(maskRows===maskBaseRows?(maskRows[0]?.matchedDictionaries??maskMatchedDictionaryCounts.get(countKey)):undefined):
+    maskRows.filter(row=>row.state==="ready"&&row.total>0).length;
+  $("maskCount").textContent=window.wudictI18n.number(total)+(complete?"":"+")+
+    (dictionaries===undefined?"":" ("+window.wudictI18n.number(dictionaries)+(complete?"":"+")+")");
   const row=maskRows[maskCurrent],result=row?.data;
   const currentPage=result?.page||row?.wantedPage;
   const current=currentPage&&row?.firstPage!==null?String(row.firstPage+currentPage-1):"…";
@@ -6944,7 +6968,8 @@ function maskSaveBase(row,data=row.data){
 function maskRememberBase(row,data=row.data){
   const saved={cacheID:row.cacheID,diskCache:!!row.diskCache,
     cacheGroup:row.cacheGroup||maskSelection,cacheOrder:row.cacheOrder||0,cacheCount:row.cacheCount||maskBaseRows.length,
-    mergedCacheID:row.mergedCacheID||"",total:row.total,alphabet:row.alphabet,size:row.size,partial:!!row.partial};
+    mergedCacheID:row.mergedCacheID||"",sourceCacheID:row.sourceCacheID||"",matchedDictionaries:row.matchedDictionaries,
+    total:row.total,alphabet:row.alphabet,size:row.size,partial:!!row.partial};
   maskMemoryCachePut(maskBaseMemory,maskCacheKey(row,"base-sqlite"),saved);
   if(data){
     const page=row.diskCache?{...data,alphabet:undefined}:data;
@@ -6968,9 +6993,12 @@ function maskRestoreBase(row){
     maskViewTrace("restore_base",memory?"memory":disk?"session":"miss",row,
       `key=${key} saved=${disk?.cacheID||""} disk=${!!disk?.diskCache} partial=${!!disk?.partial} alternates=${alternatives.join(",")||"none"}`);
   }
-  if(disk&&typeof disk.cacheID==="string"&&Number.isSafeInteger(disk.total)){
+  if(disk&&typeof disk.cacheID==="string"&&Number.isSafeInteger(disk.total)&&
+     (!row.sourceCacheID||disk.sourceCacheID===row.sourceCacheID)){
     row.total=disk.total;row.alphabet=disk.alphabet||[];row.size=disk.size||300;row.diskCache=!!disk.diskCache;
-    row.cacheID=disk.cacheID;row.mergedCacheID=disk.mergedCacheID||"";row.cacheGroup=disk.cacheGroup||maskSelection;row.partial=!!disk.partial;
+    row.cacheID=disk.cacheID;row.mergedCacheID=disk.mergedCacheID||"";row.sourceCacheID=disk.sourceCacheID||"";
+    row.matchedDictionaries=Number.isInteger(disk.matchedDictionaries)?disk.matchedDictionaries:undefined;
+    row.cacheGroup=disk.cacheGroup||maskSelection;row.partial=!!disk.partial;
     row.cacheOrder=row.cacheOrder??0;row.cacheCount=row.cacheCount||maskBaseRows.length;
     row.state=!row.partial&&row.diskCache?"ready":"pending";row.restoreStream=row.partial;
     if(!row.partial)maskRestoreBasePage(row,row.wantedPage||1);
@@ -7186,7 +7214,7 @@ async function maskFetchWithinStream(row,generation,navToken,findGeneration){
   row.streamCacheStoredBytes=0;row.streamCacheStorageFull=false;row.partial=true;
   const params=new URLSearchParams({dict:row.id,q:maskPattern,p:String(row.wantedPage||1),wildcards:"1",stream:"1",wildcache:row.cacheID,
     wildgroup:row.cacheGroup||maskSelection,wildorder:String(row.cacheOrder||0),wildcount:String(row.cacheCount||maskFindRows.length)});
-  if(row.merged){params.set("merged","1");params.set("ids",row.mergedIds);if(row.mergedCacheID)params.set("mergedcache",row.mergedCacheID)}
+  if(row.merged){params.set("merged","1");params.set("ids",row.mergedIds);if(row.mergedCacheID)params.set("mergedcache",row.mergedCacheID);if(row.sourceCacheID)params.set("sourcecache",row.sourceCacheID)}
   wildcardSearchIndexParams(params,row);
   if(browseDiagnosticsEnabled())params.set("diagnostics","1");
   if(row.within){params.set("within",row.within);params.set("withinWildcards",row.withinMask?"1":"0")}
@@ -7266,6 +7294,10 @@ async function maskFetchWithinStream(row,generation,navToken,findGeneration){
         }
         if(event.done){row.partial=false;row.state="ready";row.total=event.total||0;row.alphabet=event.alphabet||[];
           if(event.mergedCacheID)row.mergedCacheID=event.mergedCacheID;
+          if(row.merged&&Number.isInteger(event.matchedDictionaries)&&event.matchedDictionaries>0){
+            row.matchedDictionaries=event.matchedDictionaries;
+            maskMatchedDictionaryCounts.set(maskDictionaryCountKey(),event.matchedDictionaries);
+          }
           if(row.diskCache&&maskRows[maskCurrent]===row&&row.total>0){
             try{row.data=await maskReadResultPage(row,row.wantedPage||1)}catch(_){/* Page navigation will retry. */}
           }
@@ -7410,6 +7442,7 @@ function isAllWildcardMask(pattern){return normalizeSimpleWildcardMask(pattern)=
 async function maskRun(pattern,reason="submit"){
   maskViewRunID++;maskViewTraceStarted=performance.now();
   pattern=normalizeSimpleWildcardMask(pattern);
+  const previousRows=maskBaseRows,previousPattern=maskPattern,previousSelection=maskSelection;
   for(const row of maskBaseRows)if(row.state==="ready"&&!row.partial)maskRememberBase(row);
   maskAbort();maskStripScrollX=0;maskPattern=pattern;lastQuery=pattern;maskReturn="";
   clearTimeout(maskFindTimer);maskFindRows=[];maskFindQuery="";maskFindIndex=-1;maskFindMatch=null;maskFindAnchor=null;
@@ -7421,10 +7454,17 @@ async function maskRun(pattern,reason="submit"){
   const ids=selection==="all"?activeUserGroupIds():selection.startsWith("g:")?groupIds(selection):[selection];
   const byId=new Map(dicts.map(d=>[d.id,d]));
   const baseCacheID=maskNewCacheID(),groupRows=ids.filter(id=>byId.has(id));
+  const sourceRows=reason==="switch"&&maskMergeAZ&&groupRows.length>0&&previousPattern===pattern&&previousSelection===selection&&
+    previousRows.length===groupRows.length&&previousRows.every((row,index)=>
+      !row.merged&&row.id===groupRows[index]&&row.state==="ready"&&!row.partial&&row.diskCache&&
+      row.cacheID===previousRows[0]?.cacheID&&row.mergedFTS===wildcardSearchIndexEnabled("fts")&&
+      row.mergedTrigram===wildcardSearchIndexEnabled("trigram"));
+  const sourceCacheID=sourceRows?previousRows[0].cacheID:"";
   maskRows=maskMergeAZ?[{id:"__merged__",name:tx("search.combinedList"),merged:true,mergedFTS:wildcardSearchIndexEnabled("fts"),mergedTrigram:wildcardSearchIndexEnabled("trigram"),mergedIds:groupRows.join(","),state:"pending",total:0,data:null,alphabet:[],size:300,
     expectedBlocks:Math.ceil(groupRows.reduce((sum,id)=>sum+Math.max(0,Number(byId.get(id)?.entries)||0),0)/300),scanDone:0,
     scanTotal:groupRows.reduce((sum,id)=>sum+Math.max(0,Number(byId.get(id)?.entries)||0),0),active:false,wantedPage:1,error:"",diskCache:false,
-    cacheID:baseCacheID,cacheGroup:selection,cacheOrder:0,cacheCount:1}]:groupRows.map((id,index)=>({id,name:dictLabel(byId.get(id)),mergedFTS:wildcardSearchIndexEnabled("fts"),mergedTrigram:wildcardSearchIndexEnabled("trigram"),state:"pending",total:0,data:null,alphabet:[],size:300,
+    cacheID:baseCacheID,sourceCacheID,matchedDictionaries:sourceRows?previousRows.filter(row=>row.total>0).length:undefined,
+    cacheGroup:selection,cacheOrder:0,cacheCount:1}]:groupRows.map((id,index)=>({id,name:dictLabel(byId.get(id)),mergedFTS:wildcardSearchIndexEnabled("fts"),mergedTrigram:wildcardSearchIndexEnabled("trigram"),state:"pending",total:0,data:null,alphabet:[],size:300,
     expectedBlocks:Math.ceil(Math.max(0,Number(byId.get(id)?.entries)||0)/300),
     scanDone:0,scanTotal:Math.max(0,Number(byId.get(id)?.entries)||0),active:false,
     wantedPage:1,error:"",diskCache:false,cacheID:baseCacheID,cacheGroup:selection,cacheOrder:index,cacheCount:groupRows.length}));

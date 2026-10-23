@@ -1,5 +1,13 @@
 # Agent handoff — current state
 
+Wildcards now shows the number of dictionaries with matches beside the result
+total in separate mode. Switching a completed separate result to Combined list
+builds its sorted, deduplicated SQLite list from the saved result blocks instead
+of scanning all dictionary indexes. The existing combined list path is retained
+for a search started directly in that mode. `go build ./internal/server` passes;
+that direct path has no per-dictionary match count until a separate result is
+available. Windows/Android runtime checks remain pending.
+
 Current checkout is branch `dev` at `fe5d7d50`. The 2026-10-23 Windows log
 confirms Dictionary settings blocked WebView2's UI thread while serving the
 English Wiktionary ZIM icon: its `/dict-icon/fb1c556f5740` request took about
@@ -15,6 +23,11 @@ Search and article diagnostics checkbox; its row existed in the main dialog
 but was omitted from the desktop dialog's manually assembled list.
 `go build ./internal/server` and `git diff --check` pass; Windows/Android
 runtime checks remain pending.
+
+Browse A–Z now shows dictionary icons in its chooser and active dictionary
+header, and Wildcards shows the selected dictionary icon in its dropdown.
+These surfaces use the async icon route and honor the saved icon visibility
+setting; Windows/Android visual confirmation is pending.
 
 System Log now has an independent Search and article diagnostics checkbox. When
 enabled, it records the selected query/mode/scope, ordered dictionary slots,

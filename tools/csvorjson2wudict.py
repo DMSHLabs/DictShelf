@@ -611,7 +611,7 @@ def write_info(outdir, meta, source, media_bytes):
     media = ("not packed - resources come from the original files"
              if media_bytes is None else f"media.db ({human_size(media_bytes)})")
     lines = [
-        "# wudict - prepared dictionary",
+        "# wudict2 - prepared dictionary",
         "# This folder is one dictionary. Copy, move or zip it as a unit;",
         "# drop it into your dictionary folder to use it on another machine.",
         "# Regenerated automatically - edits are overwritten.",

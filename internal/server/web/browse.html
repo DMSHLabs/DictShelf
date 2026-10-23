@@ -175,6 +175,9 @@ header{position:sticky;top:0;z-index:5;background:var(--bar);
    one: flex-wrap does the whole responsive job, with no media query to keep
    in step with the column count below. */
 .title{display:flex;align-items:center;gap:.5rem;flex:1 1 13rem;min-width:0}
+.dict-icon{width:1.25em;height:1.25em;flex:0 0 auto;object-fit:contain;vertical-align:middle}
+html[data-dict-icons-off] .dict-icon{display:none}
+.title .dict-icon{font-size:calc(var(--ui-font-title) * 1rem)}
 .title-copy{flex:1;min-width:0}
 .title b{display:block;font-size:calc(var(--ui-font-title) * 1rem);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .title b.two-line{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;
@@ -295,7 +298,7 @@ footer .browse-search-dock{width:100%;max-width:54rem}
   font-size:calc(var(--ui-main-control-font) * 1rem);line-height:1;
   color:var(--fg);background:transparent;border:1px solid var(--line);border-radius:7px;cursor:pointer}
 .msg .chooser-hint{font-size:calc(var(--ui-hint-font-size) * 1rem)}
-.picks a{display:flex;align-items:baseline;gap:.4em;font-size:calc(var(--ui-font-base) * 1rem)}
+.picks a{display:flex;align-items:center;gap:.4em;font-size:calc(var(--ui-font-base) * 1rem)}
 .picks span{flex:none;margin-left:auto;font-size:calc(var(--ui-hint-font-size) * 1rem)}
 .picks .pick-name{flex:1;min-width:0;margin:0;font-size:inherit;overflow-wrap:anywhere}
 .msg.chooser-list{box-sizing:border-box;display:flex;flex-direction:column;
@@ -364,7 +367,7 @@ html[data-desktop-image] .chooser-list :is(.list-search-dock,.list-search-input,
 <header id="top" hidden>
   <div class="bar">
     <a class="back" href="/" title="{{T:browse.back}}" aria-label="{{T:browse.back}}"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="7" cy="7" r="4.3"/><path d="M10.2 10.2 14 14"/></svg></a>
-    <div class="title"><div class="title-copy"><b id="name"></b><span id="sub"></span></div><button type="button" id="closeBrowse" aria-label="{{T:pages.close}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div>
+    <div class="title"><img id="browseDictIcon" class="dict-icon" alt="" aria-hidden="true" hidden><div class="title-copy"><b id="name"></b><span id="sub"></span></div><button type="button" id="closeBrowse" aria-label="{{T:pages.close}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div>
     <div class="nav">
       <button type="button" data-go="prev" title="{{T:browse.previousTitle}}">{{T:browse.previousPage}}</button>
       <button type="button" data-pos aria-label="{{T:browse.gotoBlock}}" title="{{T:browse.gotoBlock}}"></button>
@@ -408,6 +411,39 @@ html[data-desktop-image] .chooser-list :is(.list-search-dock,.list-search-input,
 <script>
 "use strict";
 const $=id=>document.getElementById(id);
+function browseDictIconReady(img){img.style.visibility="";img.dataset.iconRetry="0"}
+function browseDictIconRetry(img){
+  img.style.visibility="hidden";
+  if(!img.isConnected||img.hidden||!img.dataset.iconSrc)return;
+  const attempt=(Number(img.dataset.iconRetry)||0)+1;
+  img.dataset.iconRetry=String(attempt);
+  if(attempt>60){img.remove();return}
+  const delay=Math.min(5000,250*Math.pow(1.5,Math.min(attempt,10)));
+  setTimeout(()=>{if(img.isConnected&&!img.hidden&&img.dataset.iconSrc)img.src=img.dataset.iconSrc+"?retry="+attempt},delay);
+}
+function browseDictIconHTML(id){
+  const src="/dict-icon/"+encodeURIComponent(id);
+  return '<img class="dict-icon" src="'+src+'" data-icon-src="'+src+'" alt="" aria-hidden="true" loading="lazy" decoding="async" style="visibility:hidden" onload="browseDictIconReady(this)" onerror="browseDictIconRetry(this)">';
+}
+function setBrowseDictIcon(id){
+  const img=$("browseDictIcon"),src=id?"/dict-icon/"+encodeURIComponent(id):"";
+  img.hidden=!src;
+  if(!src){img.dataset.iconSrc="";img.removeAttribute("src");img.style.visibility="hidden";return}
+  if(img.dataset.iconSrc===src)return;
+  img.dataset.iconSrc=src;img.dataset.iconRetry="0";img.style.visibility="hidden";
+  img.onload=()=>browseDictIconReady(img);img.onerror=()=>browseDictIconRetry(img);img.src=src;
+}
+function applyBrowseIconPreference(prefs){document.documentElement.toggleAttribute("data-dict-icons-off",!!prefs?.ui?.dictIconsOff)}
+async function loadBrowseIconPreference(){
+  try{
+    let prefs;
+    if(window.wudictAndroidGo?.prefs)prefs=JSON.parse(window.wudictAndroidGo.prefs());
+    else if(typeof window.wudictNativeCall==="function")prefs=await window.wudictNativeCall("prefs","");
+    else{const response=await fetch("/api/prefs");if(!response.ok)return;prefs=await response.json()}
+    applyBrowseIconPreference(prefs);
+  }catch(_){}
+}
+const browseIconPreference=loadBrowseIconPreference();
 // The title and alphabet strip are fixed siblings of the scrolling word list.
 // Route vertical wheel input to that list from anywhere in the workspace;
 // keep the chooser's independently scrollable dictionary list native.
@@ -1509,6 +1545,7 @@ function render(){
   const displayName=d.title||d.name;
   document.title=t("browse.pageTitle",{name:displayName});
   $("top").hidden=false;$("foot").hidden=false;
+  setBrowseDictIcon(d.dict);
   $("name").textContent=displayName;
   fitTitle();
   const filtering=findFilter&&!!$("findInput").value.trim()&&findResult;
@@ -1774,6 +1811,7 @@ async function chooser(){
       [text,prefs]=await Promise.all([response.text(),prefsResponse.json()]);
     }
   }catch(e){browseTrace("chooser failed",{totalMs:Math.round(performance.now()-chooserStarted)});logBrowseNavigation("load_failed",performance.now()-chooserStarted);endProgress();clearBrowseProgress();window.wudictTasks?.finishMatching?.("browse",t("browse.loadingDictionaries"));return card(heading+"<b>"+tx("browse.noAnswer")+"</b><p>"+tx("browse.loadFailed")+"</p>")}
+  applyBrowseIconPreference(prefs);
   endProgress();
   if(!window.wudictAndroidGo&&typeof window.wudictNativeCall!=="function"){
     for(const line of text.split("\n")){
@@ -1811,7 +1849,7 @@ async function chooser(){
   if(!ds.length)return card(heading+"<b>"+tx("browse.empty")+"</b><p>"+tx("browse.emptyBody")+
     '</p><p><a href="/">'+tx("browse.openApp")+"</a></p>");
   card(heading+"<div class='picks'>"+
-    ds.map(d=>'<a href="?dict='+encodeURIComponent(d.id)+'&chooser=1"><span class="pick-name">'+esc(label(d))+'</span>'+
+    ds.map(d=>'<a href="?dict='+encodeURIComponent(d.id)+'&chooser=1">'+browseDictIconHTML(d.id)+'<span class="pick-name">'+esc(label(d))+'</span>'+
       (d.entries?'<span class="pick-count">'+tx("browse.entries",{count:d.entries,number:num(d.entries)})+"</span>":"")+"</a>").join("")+"</div>"+
     '<div class="list-search-dock" role="search"></div>',true);
   requestAnimationFrame(()=>requestAnimationFrame(()=>logBrowseNavigation("chooser_ready",performance.now()-chooserStarted,{words:ds.length})));

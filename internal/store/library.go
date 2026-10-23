@@ -344,7 +344,7 @@ func olderThan(dir string, d time.Duration) bool {
 // writeClaim stamps a minimal receipt so the folder's owner is knowable before
 // its text.db exists. WriteInfo replaces it with the full receipt after ingest.
 func writeClaim(dir, srcPath string) error {
-	body := fmt.Sprintf("# wudict - preparing this dictionary…\nsource = %s\nclaimed = %s\n",
+	body := fmt.Sprintf("# wudict2 - preparing this dictionary…\nsource = %s\nclaimed = %s\n",
 		srcPath, time.Now().UTC().Format(time.RFC3339))
 	return os.WriteFile(InfoPath(dir), []byte(body), 0o644)
 }
@@ -632,7 +632,7 @@ func writeInfo(dir, source string) error {
 		src += "  [no longer on disk - this folder is now the only copy]"
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "# wudict - prepared dictionary\n")
+	fmt.Fprintf(&b, "# wudict2 - prepared dictionary\n")
 	fmt.Fprintf(&b, "# This folder is one dictionary. Copy, move or zip it as a unit;\n")
 	fmt.Fprintf(&b, "# drop it into your dictionary folder to use it on another machine.\n")
 	fmt.Fprintf(&b, "# Regenerated automatically - edits are overwritten.\n\n")
