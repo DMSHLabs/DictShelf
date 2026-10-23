@@ -1,6 +1,7 @@
 # Agent handoff — current state
 
-Current checkout: branch `dev` at `e0e033dd`. No
+Edit Folders in the embedded main-window dialog now uses the main window cached folder configuration immediately, reveals the import section as soon as the configured destination is known, and no longer writes index defaults on open. Folder validation no longer appears as a global indexing task. `node --check internal/server/web/setup.js` and `git diff --check` pass; Windows runtime confirmation is pending.
+Current checkout: branch `dev` at `79a383d0`. No
 upstream is configured. The application uses one DSL reader with GoldenDict-
 compatible repair and article preparation; there is no Original/GD selection
 or duplicate DSL index. `docs/DSL.md` and `tools/dslcompare/README.md` describe
