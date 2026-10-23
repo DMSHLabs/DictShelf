@@ -11,7 +11,7 @@ reader must not be added as a mode inside the text DSL scanner.
 | Application operation | Existing contract | Data the LSD backend must provide |
 | --- | --- | --- |
 | Format discovery and probing | `dict.RegisterFormat`, optional `dict.RegisterProber`; `dict.Probe` falls back to `Open` | Recognize `.lsd`; validate the signature, supported version and bounded header fields; report `Meta` without decoding every article when feasible |
-| Initial index preparation / rebuild | `dict.RegisterReader`; `dict.OpenReader`; sequential `dict.Reader` (`Meta`, `Next`, `Close`) consumed by `store.Reconcile` | Stream entries in source order. The LSD reader decodes article markup and sends it through the existing DSL article converter, returning normalized HTML and `io.EOF` at the end. A sibling `<stem>_abrv.lsd` supplies abbreviation tooltips and its path, size and modification time are stored for staleness checks. Keep the file and decoding state open only for the reader lifetime |
+| Initial index preparation / rebuild | `dict.RegisterReader`; `dict.OpenReader`; sequential `dict.Reader` (`Meta`, `Next`, `Close`) consumed by `store.Reconcile` | Stream entries in source order. The LSD reader decodes article markup and sends it through the existing DSL article converter, returning normalized HTML and `io.EOF` at the end. A sibling `<stem>_abrv.lsd` or `<stem>_abrev.lsd` supplies abbreviation tooltips and its path, size and modification time are stored for staleness checks. Keep the file and decoding state open only for the reader lifetime |
 | Metadata shown in the app and CLI | `dict.Meta` | Name, declared index/content languages, entry count, and useful remaining header fields; format id is `lsd` and path is the source `.lsd` |
 | Optional media packing | `dict.ResourceLister` plus `Dictionary.Resource`; `store.MediaNames` and `store.IngestMedia` | Enumerate embedded overlay/resource names and open their bytes by name. Preserve lazy reads; do not extract files beside the source |
 | Runtime media after preparation | `resource.Provider` (`Sources` and, if needed, `Open`); `server.upgraded` tries packed media, then the source provider | Reopen the LSD resource area from the recorded source path without scanning article bodies. Use the same resource-name matching rules as other formats |
@@ -31,11 +31,12 @@ The LSD container keeps its header, encoded dictionary alphabet/decoder data,
 fixed-size index pages, article payloads, optional annotation, optional icon,
 and an optional resource overlay in one file. The current Go reader decodes
 user-dictionary articles, converts DSL markup through the existing DSL
-normalizer, reads embedded annotations, and lazily reads overlay resources for
-the 12/X3/X5 fixtures. `lsd2dsl` writes overlay entries
-to a sibling `.dsl.files.zip`, writes the annotation as `.ann`, and writes the
-icon as `.bmp`; those are outputs of its converter, not separate inputs that
-the native wuDict2 reader should require.
+normalizer, reads embedded annotations and header icons, and lazily reads
+overlay resources for the 12/X3/X5 fixtures. Dictionary-list icon lookup reads
+only the LSD headers, so it does not decode article tables. `lsd2dsl` writes
+overlay entries to a sibling `.dsl.files.zip`, writes the annotation as `.ann`,
+and writes the icon as `.bmp`; those are outputs of its converter, not separate
+inputs that the native reader should require.
 
 The X6 system version (`0x151005`) XOR-decodes its decoder tables, each article
 block and the optional annotation with a block-local rolling key. The Go
@@ -75,10 +76,11 @@ no same-name DSL pair. Eleven of fourteen sampled `.dsl.files.zip` resources
 matched the paired LSD resource bytes; three names were absent from the LSD
 overlay. These local files are not included in the repository. Broader
 independent dictionaries, malformed-file handling and resource-name edge cases
-still need coverage before support is marked complete. `_abrv.lsd` companion
-lookup is covered by dictionary-layer tests; real glossary files remain local
-validation inputs, not repository fixtures. All 79 files in the local X6 test
-folder were read to EOF without errors: 67 use `0x152001` (X6 user) and 12 use
+still need coverage before support is marked complete. `_abrv.lsd` and
+`_abrev.lsd` companion lookup is covered by dictionary-layer tests; real
+glossary files remain local validation inputs, not repository fixtures. All 79
+files in the local X6 test folder were read to EOF without errors: 67 use
+`0x152001` (X6 user) and 12 use
 `0x155001` (X6 abbreviation); none is an X6 system dictionary (`0x151005`).
 X6 system XOR was additionally checked by temporarily converting a local X5
 system dictionary into X6 block encoding and comparing every decoded entry and

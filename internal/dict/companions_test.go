@@ -166,6 +166,14 @@ func TestSourceFilesLSDAbbreviationCompanion(t *testing.T) {
 	main := touch(t, filepath.Join(dir, "main.lsd"))
 	abrv := touch(t, filepath.Join(dir, "main_abrv.lsd"))
 	eqPaths(t, SourceFiles(main), []string{main, abrv})
+	alias := touch(t, filepath.Join(dir, "main_abrev.lsd"))
+	if got, ok := AbbrevCompanion(main); !ok || got != abrv {
+		t.Errorf("AbbrevCompanion prefers %q, %v; want _abrv.lsd %q", got, ok, abrv)
+	}
+	if !IsAbbrevCompanion(alias) {
+		t.Error("_abrev.lsd beside its parent must be recognized as a companion")
+	}
+	eqPaths(t, SourceFiles(main), []string{main, abrv, alias})
 }
 
 func TestSourceFilesSingleFileFormats(t *testing.T) {
@@ -246,6 +254,13 @@ func TestAbbrevCompanion(t *testing.T) {
 	}
 	if !IsAbbrevCompanion(lsdAbrv) {
 		t.Error("the LSD abbreviation companion beside its parent must be recognized")
+	}
+	lsdAlias := touch(t, filepath.Join(lsdDir, "Oxford_abrev.lsd"))
+	if got, ok := AbbrevCompanion(lsdMain); !ok || got != lsdAbrv {
+		t.Errorf("AbbrevCompanion prefers %q, %v; want _abrv.lsd %q", got, ok, lsdAbrv)
+	}
+	if !IsAbbrevCompanion(lsdAlias) || !IsAbbrevCompanionSource(lsdAlias, []string{lsdMain}) {
+		t.Error("_abrev.lsd beside an LSD parent must be recognized as a companion")
 	}
 	if !IsAbbrevCompanionSource(dzAbrv, []string{dzMain}) {
 		t.Error("compressed parent discovered by the registry must keep its companion hidden")

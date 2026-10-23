@@ -72,12 +72,14 @@ func TestClassifyName(t *testing.T) {
 		{"ru-en_abrv.dsl", KindCompanion},
 		{"ru-en_abrv.dsl.dz", KindCompanion},
 		{"ru-en_abrv.lsd", KindCompanion},
+		{"ru-en_abrev.lsd", KindCompanion},
 		{"ru-en.dsl.files.zip", KindCompanion},
 		{"ru-en.files.zip", KindCompanion},
 		{"ru-en.dsl.ann", KindCompanion},
 		// ...but one with nothing in front of it names no parent, so it is
 		// somebody's own abbreviation dictionary (cf. IsAbbrevCompanion)
 		{"_abrv.dsl", KindMain},
+		{"_abrev.lsd", KindMain},
 		{"_abrv.dsl.dz", KindMain},
 		{"d/_abrv.dsl", KindMain},
 

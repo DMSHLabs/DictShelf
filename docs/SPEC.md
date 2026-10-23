@@ -232,8 +232,8 @@ the reader pooled for it.
   archive directory*, with a StarDict `res/` subtree handed to the sole dictionary in its
   folder (the archive reading of `soleIfoInDir`). A candidate missing a required companion
   — a lone `.ifo` without its `.idx`/`.dict` — is reported **incomplete and not
-  installable**, never imported into a broken state. `.mdd` and `_abrv.dsl` travel as
-  payload and are never offered as dictionaries of their own.
+  installable**, never imported into a broken state. `.mdd` and `_abrv` / `_abrev`
+  glossary companions travel as payload and are never offered as dictionaries of their own.
 - **A loose dictionary file is an archive with no compression** (D135). These formats are
   not always *handed over* as bundles: a link points at `oxford.mdx`, a share sheet carries
   one file, a download folder holds the `.mdx` and the `.mdd` because the site offered them

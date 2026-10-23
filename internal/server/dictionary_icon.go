@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/wuweidict/wudict/internal/dict"
+	lsdformat "github.com/wuweidict/wudict/internal/format/lsd"
 	"github.com/wuweidict/wudict/internal/store"
 )
 
@@ -56,6 +57,11 @@ func (s *Server) dictionaryIcon(e *entry) ([]byte, string) {
 	if path := dictionaryIconFile(source); path != "" {
 		if body, mime, err := readDictionaryIcon(path); err == nil {
 			return body, mime
+		}
+	}
+	if strings.EqualFold(filepath.Ext(source), ".lsd") {
+		if body, mime, err := lsdformat.ReadIcon(source); err == nil {
+			return body, normalizedIconMIME(mime, "")
 		}
 	}
 

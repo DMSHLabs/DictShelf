@@ -5,10 +5,12 @@
 package lsd
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"html"
 	"io"
+	"net/http"
 	"os"
 	"strconv"
 	"strings"
@@ -326,6 +328,16 @@ func (d *Dict) Exact(string, int) ([]dict.Result, error)            { return nil
 func (d *Dict) Prefix(string, int) ([]dict.Result, error)           { return nil, dict.ErrUnsupported }
 func (d *Dict) Keywords(int, int) []string                          { return nil }
 func (d *Dict) Resource(name string) (io.ReadCloser, string, error) { return d.source.resource(name) }
+func (d *Dict) Icon() (io.ReadCloser, string, error) {
+	if len(d.source.icon) == 0 {
+		return nil, "", dict.ErrNotFound
+	}
+	mime := http.DetectContentType(d.source.icon)
+	if !strings.HasPrefix(mime, "image/") {
+		return nil, "", dict.ErrNotFound
+	}
+	return io.NopCloser(bytes.NewReader(d.source.icon)), mime, nil
+}
 func (d *Dict) Close() error {
 	if d.source == nil || d.source.f == nil {
 		return nil
@@ -338,3 +350,4 @@ func (d *Dict) Close() error {
 var _ dict.Reader = (*Reader)(nil)
 var _ dict.Dictionary = (*Dict)(nil)
 var _ dict.ResourceLister = (*Dict)(nil)
+var _ dict.IconProvider = (*Dict)(nil)
