@@ -32,6 +32,9 @@ func TestSystemLogErrorDetection(t *testing.T) {
 	}{
 		{name: "successful index job", line: `job=42 finish stage="save database" error="<nil>"`, want: false},
 		{name: "successful import", line: `text result source="dict.lsd" error="<nil>"`, want: false},
+		{name: "Safe Stop canceled job", line: `job=42 finish stage="index" error="context canceled"`, want: false},
+		{name: "Safe Stop canceled text result", line: `text result source="dict.lsd" error="context canceled"`, want: false},
+		{name: "Safe Stop canceled index with wrapped error", line: `new dictionary index failed error="preparing \"dict.dsl\": context canceled"`, want: false},
 		{name: "actual error field", line: `job=42 error="permission denied"`, want: true},
 		{name: "error event", line: `browse_stream event=error error="connection reset"`, want: true},
 		{name: "panic", line: `panic: unexpected state`, want: true},
@@ -53,12 +56,15 @@ func TestSystemHasErrorsIgnoresSuccessfulJobRecords(t *testing.T) {
 	}
 	path := filepath.Join(root, "system_2026_10_22__17_58_28.log")
 	records := "2026-10-22T14:58:28Z job=42 finish stage=\"save database\" error=\"<nil>\"\n" +
-		"2026-10-22T14:58:28Z text result source=\"dict.lsd\" error=\"<nil>\"\n"
+		"2026-10-22T14:58:28Z text result source=\"dict.lsd\" error=\"<nil>\"\n" +
+		"2026-10-22T14:58:29Z safe stop requested job=\"initial-index-queue\"\n" +
+		"2026-10-22T14:58:29Z job=42 finish stage=\"index\" error=\"context canceled\"\n" +
+		"2026-10-22T14:58:29Z new dictionary index failed error=\"preparing \\\"dict.dsl\\\": context canceled\"\n"
 	if err := os.WriteFile(path, []byte(records), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if SystemHasErrors() {
-		t.Fatal("successful job records were reported as errors")
+		t.Fatal("successful and Safe Stop cancellation records were reported as errors")
 	}
 	SystemError("database write failed")
 	if !SystemHasErrors() {

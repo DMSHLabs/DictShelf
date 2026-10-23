@@ -22,6 +22,7 @@ var systemMu sync.Mutex
 var systemRoot func() string
 var systemSessionPath string
 var diagnosticURL = regexp.MustCompile(`https?://[^\s"<>]+`)
+var canceledSystemErrorField = regexp.MustCompile(`(?i)\berror=(?:"(?:\\.|[^"\\])*context canceled"|context canceled)(?:$|[\s,;])`)
 var systemLogEnabled = true
 var systemLogBaseEvents = true
 var systemLogWebEvents = true
@@ -218,6 +219,9 @@ func isSystemError(message string) bool {
 	// the Info panel report a false positive.
 	message = strings.ReplaceAll(message, `error="<nil>"`, "")
 	message = strings.ReplaceAll(message, "error=<nil>", "")
+	// Safe Stop cancels in-flight indexing jobs. Their context-canceled error
+	// fields are expected and should not make the Info panel report a failure.
+	message = canceledSystemErrorField.ReplaceAllString(message, "")
 	return strings.Contains(message, " error:") || strings.Contains(message, " error=") ||
 		strings.Contains(message, "event=error") || strings.Contains(message, "panic:") ||
 		strings.Contains(message, "fatal error:") || strings.Contains(message, "unhandled exception") ||
