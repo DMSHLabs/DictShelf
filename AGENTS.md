@@ -1,3 +1,5 @@
+# Model capability: If you determine during a task that the selected model or reasoning level is not sufficient to complete it reliably, stop work immediately and tell the user which stronger model and level you recommend, and why. Do not continue the task with the current model; resume only after the user switches or explicitly asks you to proceed anyway.
+
 # Working in this checkout
 
 - Read `CLAUDE.md` for the existing project map and conventions; consult the relevant sections of `docs/SPEC.md` before implementation. Do not duplicate those documents here.
