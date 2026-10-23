@@ -242,7 +242,8 @@ type Server struct {
 	styledPage []byte
 	styledETag string
 
-	groups         ownedFile[*facet.Rules]         // groups.ini (groups.go)
+	groups         ownedFile[*facet.Rules] // groups.ini (groups.go)
+	linkedGroups   linkedGroupState
 	userGroupsOnly bool                            // fork picker uses curated membership, not upstream facets
 	styles         map[string]*ownedFile[styleCSS] // app.css, article.css (style.go)
 

@@ -209,6 +209,45 @@ type groupFilter struct {
 	Value string `json:"value"`
 }
 
+// linkedGroupState is guarded by Prefs.editMu, which also serializes the
+// read/decide/write sequence of linked-group synchronization.
+type linkedGroupState struct {
+	version                  uint64
+	prefs                    string
+	rules                    string
+	prefsExists, rulesExists bool
+	prefsWhy, rulesWhy       string
+	roots                    string
+	entries                  []linkedGroupEntry
+}
+
+type linkedGroupEntry struct {
+	entry    *entry
+	id, path string
+	gen      uint64
+}
+
+func (state *linkedGroupState) current(prefs fileState[prefsFile], rules fileState[*facet.Rules], roots string, entries []*entry) bool {
+	if state.version == 0 || state.prefs != prefs.text || state.rules != rules.text || state.prefsExists != prefs.exists || state.rulesExists != rules.exists || state.prefsWhy != prefs.why || state.rulesWhy != rules.why || state.roots != roots || len(state.entries) != len(entries) {
+		return false
+	}
+	for i, e := range entries {
+		if state.entries[i] != (linkedGroupEntry{e, e.ID, e.Path, e.gen.Load()}) {
+			return false
+		}
+	}
+	return true
+}
+
+func (state *linkedGroupState) update(prefs fileState[prefsFile], rules fileState[*facet.Rules], roots string, entries []linkedGroupEntry) {
+	state.version++
+	state.prefs, state.rules = prefs.text, rules.text
+	state.prefsExists, state.rulesExists = prefs.exists, rules.exists
+	state.prefsWhy, state.rulesWhy = prefs.why, rules.why
+	state.roots = roots
+	state.entries = entries
+}
+
 type groupView struct {
 	DictionaryGroup
 	Order    []string `json:"order,omitempty"`
@@ -375,14 +414,26 @@ func (s *Server) syncLinkedGroups(entries []*entry, trace bool) error {
 	started := time.Now()
 	var metadataTime, matchTime, updateTime time.Duration
 	metadataReads, linkedGroups := 0, 0
-	defer func() {
-		if trace {
-			logx.System("dictionary_picker_groups linked=%d dictionaries=%d metadata_reads=%d metadata_ms=%d match_ms=%d update_ms=%d total_ms=%d", linkedGroups, len(entries), metadataReads, metadataTime.Milliseconds(), matchTime.Milliseconds(), updateTime.Milliseconds(), time.Since(started).Milliseconds())
-		}
-	}()
+	cached := false
 	p := s.reg.prefs
 	p.editMu.Lock()
 	defer p.editMu.Unlock()
+	defer func() {
+		if trace {
+			logx.System("dictionary_picker_groups version=%d cached=%t linked=%d dictionaries=%d metadata_reads=%d metadata_ms=%d match_ms=%d update_ms=%d total_ms=%d", s.linkedGroups.version, cached, linkedGroups, len(entries), metadataReads, metadataTime.Milliseconds(), matchTime.Milliseconds(), updateTime.Milliseconds(), time.Since(started).Milliseconds())
+		}
+	}()
+	state := p.file.fresh()
+	rules := s.groupsNow()
+	roots := strings.Join(s.reg.Dirs(), "\x00")
+	if s.linkedGroups.current(state, rules, roots, entries) {
+		cached = true
+		return nil
+	}
+	inputEntries := make([]linkedGroupEntry, len(entries))
+	for i, e := range entries {
+		inputEntries[i] = linkedGroupEntry{e, e.ID, e.Path, e.gen.Load()}
+	}
 	f, _ := p.data()
 	changed := false
 	groups := slices.Clone(f.Groups)
@@ -464,8 +515,11 @@ func (s *Server) syncLinkedGroups(entries []*entry, trace bool) error {
 		updateTime += time.Since(updateStarted)
 	}
 	if changed {
-		return p.mutate(func(dst *prefsFile) { dst.Groups = groups; dst.Dicts = dicts })
+		if err := p.mutate(func(dst *prefsFile) { dst.Groups = groups; dst.Dicts = dicts }); err != nil {
+			return err
+		}
 	}
+	s.linkedGroups.update(p.file.now(), rules, roots, inputEntries)
 	return nil
 }
 
