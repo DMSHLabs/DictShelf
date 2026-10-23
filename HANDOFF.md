@@ -6,7 +6,7 @@ MDX prepared indexes now remove empty elements with known advertising-slot IDs (
 
 The Oxford Advanced Learner's Dictionary 10th source MDX now has `Title="Oxford Advanced Learner's Dictionary 10th"` instead of `OALDWU`; its UTF-16 header length and Adler-32 were updated, and the reader reopened it and looked up `dog`. The original is preserved beside it as `.mdx.title-backup.bak`; prepared data will be stale from the source size/mtime change and needs Rebuild.
 
-Current checkout: branch `codex/safe-stop-cancel-log-detection` at `f7bda1e3` (based on `dev`); Safe Stop's `context canceled` job records are now excluded from Info's error detection while other errors remain visible. `go test ./internal/logx -count=1`, `go build ./...`, and `git diff --check` pass. Changes are uncommitted. No
+Current checkout: branch `dev` at `841687ad`; linked-group synchronization now caches its last completed input snapshot and skips dictionary metadata reads while state.json, groups.ini, dictionary entries/generations and root folders are unchanged. The cache version advances only after a successful refresh; the diagnostic reports its version and hit/miss. Focused linked-group rescan/edit checks, `go build ./internal/server`, and `git diff --check` pass. Android runtime timing is pending. No
 upstream is configured. The application uses one DSL reader with GoldenDict-
 compatible repair and article preparation; there is no Original/GD selection
 or duplicate DSL index. `docs/DSL.md` and `tools/dslcompare/README.md` describe
@@ -58,10 +58,12 @@ all-dictionary results. Scoped searches no longer mark themselves stale just
 because the full dictionary list is still loading, and any necessary retry
 preserves its scope. Latest log still shows group linking at 3.4–3.6 s for 383
 dictionaries; optimizing that native snapshot is separate follow-up work.
-Linked-group synchronization now reads each dictionary's metadata at most
-once per snapshot, even with several linked groups. With Browse/article
-diagnostics enabled, `dictionary_picker_groups` splits metadata, matching,
-membership updates and total time; Android runtime timing remains pending.
+Linked-group synchronization reads each dictionary's metadata at most once
+per refresh, even with several linked groups. With Browse/article diagnostics
+enabled, `dictionary_picker_groups` splits metadata, matching, membership
+updates and total time. The 2026-10-23 21:01 Android log showed 0.41–0.86 s
+per refresh, almost entirely metadata reads, before the completed-snapshot
+cache was added.
 
 The existing Browse/article navigation diagnostics checkbox failed to record
 direct Browse headword clicks because those links carry `dict`, while the main
