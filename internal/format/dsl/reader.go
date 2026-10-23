@@ -8,6 +8,7 @@ import (
 	"bufio"
 	"bytes"
 	"compress/gzip"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -147,13 +148,15 @@ func (r *Reader) ExtraMeta() map[string]string {
 // already decompressed in place. Two magic bytes settle it, and the file is
 // rewound whatever they say, so every caller may hand over a fresh handle.
 func decodedScanner(f *os.File, path string) (*bufio.Scanner, error) {
-	var magic [2]byte
+	var magic [4]byte
 	n, _ := io.ReadFull(f, magic[:])
 	if _, err := f.Seek(0, io.SeekStart); err != nil {
 		return nil, fmt.Errorf("dsl %s: %w", path, err)
 	}
 	var src io.Reader = f
-	if n == 2 && magic[0] == 0x1f && magic[1] == 0x8b {
+	if n == 4 && string(magic[:]) == "DZV2" {
+		src = newDictzipV2Reader(f)
+	} else if n >= 2 && magic[0] == 0x1f && magic[1] == 0x8b {
 		gz, err := gzip.NewReader(f)
 		if err != nil {
 			return nil, fmt.Errorf("dsl %s: %w", path, err)
@@ -169,6 +172,49 @@ func decodedScanner(f *os.File, path string) (*bufio.Scanner, error) {
 	sc.Buffer(make([]byte, 0, 1<<20), 1<<24)
 	return sc, nil
 }
+
+func newDictzipV2Reader(f *os.File) io.Reader {
+	var h [26]byte
+	if _, err := io.ReadFull(f, h[:]); err != nil {
+		return errorReader{err}
+	}
+	count := binary.LittleEndian.Uint64(h[10:18])
+	expectedSize := binary.LittleEndian.Uint64(h[18:26])
+	if string(h[:4]) != "DZV2" || binary.LittleEndian.Uint16(h[4:6]) != 2 || count > 10000000 {
+		return errorReader{fmt.Errorf("invalid dictzip v2 header")}
+	}
+	if _, err := io.CopyN(io.Discard, f, int64(count*4)); err != nil {
+		return errorReader{err}
+	}
+	gz, err := gzip.NewReader(f)
+	if err != nil {
+		return errorReader{err}
+	}
+	return &dictzipV2Reader{reader: gz, expectedSize: expectedSize}
+}
+
+type dictzipV2Reader struct {
+	reader       io.Reader
+	expectedSize uint64
+	readSize     uint64
+	verified     bool
+}
+
+func (r *dictzipV2Reader) Read(p []byte) (int, error) {
+	n, err := r.reader.Read(p)
+	r.readSize += uint64(n)
+	if err == io.EOF && !r.verified {
+		r.verified = true
+		if r.readSize != r.expectedSize {
+			return n, fmt.Errorf("dictzip v2 length mismatch: header=%d, stream=%d", r.expectedSize, r.readSize)
+		}
+	}
+	return n, err
+}
+
+type errorReader struct{ err error }
+
+func (r errorReader) Read([]byte) (int, error) { return 0, r.err }
 
 func (r *Reader) init(path string) error {
 	sc, err := decodedScanner(r.f, path)
