@@ -619,13 +619,6 @@ window.wudictFontScale=(function(){
       </select>
     </div>
   </div>
-  <div class="facts">
-    <span class="rowlabel">{{T:panel.dictionaryIcons}}</span>
-    <span class="seg" role="group" aria-label="{{T:panel.dictionaryIcons}}">
-      <button type="button" class="act" id="dictIconsOn" aria-pressed="true">{{T:panel.on}}</button>
-      <button type="button" class="act" id="dictIconsOff" aria-pressed="false">{{T:panel.off}}</button>
-    </span>
-  </div>
   <!-- The size stepper is adjusted WHILE reading, so it stays on the panel
        rather than behind the Appearance door — the promise the old layout made
        by keeping it in the summary. Now that it owns a line instead of sharing
@@ -694,6 +687,13 @@ window.wudictFontScale=(function(){
     </span>
   </div>
   <label id="examplesExtraRow" class="examples-extra" hidden><input class="panel-checkbox" type="checkbox" id="hideUnmarkedExamples"> {{T:panel.hideUnmarkedExamples}}</label>
+  <div class="facts">
+    <span class="rowlabel">{{T:panel.dictionaryIcons}}</span>
+    <span class="seg" role="group" aria-label="{{T:panel.dictionaryIcons}}">
+      <button type="button" class="act" id="dictIconsOn" aria-pressed="true">{{T:panel.show}}</button>
+      <button type="button" class="act" id="dictIconsOff" aria-pressed="false">{{T:panel.hide}}</button>
+    </span>
+  </div>
   <!-- Whether the status bar is there at all. It is the bar's only door, so it
        has to be findable by someone who has just hidden it - hence a row here,
        in the drawer, beside the controls the bar duplicates, rather than in the
