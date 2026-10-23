@@ -47,3 +47,7 @@ func dsnIngest(path string) string {
 func dsnWildcardCache(path string) string {
 	return "file:" + uriPath(path) + "?mode=rwc&_pragma=journal_mode(DELETE)&_pragma=synchronous(NORMAL)&_pragma=busy_timeout(5000)"
 }
+
+func dsnWildcardCacheWAL(path string) string {
+	return "file:" + uriPath(path) + "?mode=rwc&_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)&_pragma=busy_timeout(5000)"
+}

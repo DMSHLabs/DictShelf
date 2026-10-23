@@ -229,7 +229,7 @@ func (s *Server) mergedBrowseFromWildcard(ctx context.Context, q url.Values, ids
 	}
 	// The cache DB uses one connection. Read sorted rows through a second
 	// connection so the writer transaction cannot wait on its own cursor.
-	orderedDB, err := store.OpenWildcardCacheDB(path)
+	orderedDB, err := store.OpenWildcardCacheDBWAL(path)
 	if err != nil {
 		return browseResp{}, err
 	}

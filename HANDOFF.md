@@ -8,6 +8,12 @@ for a search started directly in that mode. `go build ./internal/server` passes;
 that direct path has no per-dictionary match count until a separate result is
 available. Windows/Android runtime checks remain pending.
 
+The first separate-to-combined switch exposed a SQLite lock: its sorted-result
+reader reopened the WAL database using the default DELETE journal mode. Added a
+WAL-specific cache opener for that reader so both connections keep the same
+journal mode. `go build ./internal/server` and `git diff --check` pass; runtime
+recheck is pending.
+
 Current checkout is branch `dev` at `fe5d7d50`. The 2026-10-23 Windows log
 confirms Dictionary settings blocked WebView2's UI thread while serving the
 English Wiktionary ZIM icon: its `/dict-icon/fb1c556f5740` request took about
