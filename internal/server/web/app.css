@@ -1075,10 +1075,13 @@ html[data-shell-image] .menu-card{
   background-image:linear-gradient(#ffffff24,#ffffff24),var(--paper-bk-image);
   background-size:100% 100%}
 .menu-card[hidden]{display:none}
-.menu-card button{box-sizing:border-box;display:flex;align-items:center;gap:calc(var(--ui-control-gap) * 1em);width:100%;min-height:calc(var(--ui-control-height) * 1em);
+/* The mode menu's rows are the headword-control find options; the card's own
+   button rule would flatten their two-column grid, so it steps aside and
+   headword-control.css owns those rows wholesale. */
+.menu-card button:not(.headword-control-find-option){box-sizing:border-box;display:flex;align-items:center;gap:calc(var(--ui-control-gap) * 1em);width:100%;min-height:calc(var(--ui-control-height) * 1em);
   padding:.45em .7em;border:0;background:none;color:var(--fg);
   text-align:left;font:inherit;font-size:calc(var(--ui-font-base) * 1rem);cursor:pointer}
-.menu-card button:hover,.menu-card button:focus-visible{
+.menu-card button:not(.headword-control-find-option):hover,.menu-card button:not(.headword-control-find-option):focus-visible{
   background:var(--line-soft);outline:none}
 /* The recent colors: the swatch IS the label's subject, so it leads. */
 .color-history{min-width:10em;max-height:min(50vh,320px)}
@@ -1125,9 +1128,17 @@ html[data-styled-selects] #webPickerGroup{display:none}
 html[data-styled-selects] #webPickerGroupBtn{display:flex}
 @media (min-width:601px){
   html[data-styled-selects] #mode{display:none}
-  html[data-styled-selects] #modeMenuBtn{display:flex;width:auto;min-width:7em}
+  html[data-styled-selects] #modeMenuBtn{display:flex;width:auto;min-width:5em}
 }
 .themed-select-menu{min-width:0}
+/* The mode button and the narrow-width mode chip wear the same mark the menu's
+   left column shows, and the article-text mode's mark is drawn, not typed: it is
+   sized here because their own font-size does not reach it. The chip types its
+   label smaller than the button does, so its drawn mark is stepped up to stay
+   readable inside the chip. */
+.themed-select-btn svg{display:block;flex:none;width:1.15em;height:1.15em}
+#modeChip svg{display:block;flex:none;width:1.5em;height:1.5em}
+#modeMenu{max-height:calc(100vh - 12px);overflow:auto;padding:.2em;font-size:calc(var(--ui-edit_control-font) * 1rem)}
 #appearanceBackground small,.screen-row small{display:block;font-size:calc(var(--ui-hint-font-size) * 1rem);
   line-height:1.4;color:var(--label-quiet)}
 .screen-row small{margin-top:.25em}
@@ -1372,23 +1383,23 @@ dialog.panel-card:not([open]){display:none}
   -webkit-overflow-scrolling:touch}
 .panel-card h2{margin:0 0 var(--sp-2);font-size:16px;color:var(--fg);
   display:flex;align-items:center}
-#panel .panel-head h2{font-size:calc(var(--ui-font-title) * 1rem)}
+#panel .panel-head h2{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);column-gap:calc(var(--ui-control-gap) * 1em);font-size:calc(var(--ui-font-title) * 1rem)}
 #panel .panel-head h2 .btn{font-size:100%}
-#panel .panel-head .headacts .btn{width:calc(var(--ui-main-control-height) * 1em);height:calc(var(--ui-main-control-height) * 1em);min-width:calc(var(--ui-main-control-height) * 1em);min-height:calc(var(--ui-main-control-height) * 1em);box-sizing:border-box;display:grid;place-items:center;padding:0;
+#panel .panel-head .panel-title{grid-column:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#panel .panel-head .themeSwitch{grid-column:2;grid-row:1;justify-self:center}
+#panel .panel-head #closePanel{grid-column:3;grid-row:1;justify-self:end;width:calc(var(--ui-main-control-height) * 1em);height:calc(var(--ui-main-control-height) * 1em);min-width:calc(var(--ui-main-control-height) * 1em);min-height:calc(var(--ui-main-control-height) * 1em);box-sizing:border-box;display:grid;place-items:center;padding:0;
   font-size:calc(var(--ui-main-control-font) * 1rem);line-height:1}
-#panel .panel-head .headacts .themeAuto{width:auto;height:auto;min-width:0;padding:.3em .55em;display:inline-block;
+#panel .panel-head .themeFlip{width:calc(var(--ui-main-control-height) * 1em);height:calc(var(--ui-main-control-height) * 1em);min-width:calc(var(--ui-main-control-height) * 1em);min-height:calc(var(--ui-main-control-height) * 1em);box-sizing:border-box;display:grid;place-items:center;padding:0;
+  font-size:calc(var(--ui-main-control-font) * 1rem);line-height:1}
+#panel .panel-head .themeAuto{width:auto;height:auto;min-width:0;min-height:0;padding:.3em .55em;display:inline-block;
   font-size:calc(var(--ui-font-title) * 1rem);line-height:1.2}
 #panel .panel-head #closePanel .icon-close{width:1.4em;height:1.4em}
 .panel-card h2 .headacts{margin-left:auto;display:flex;gap:calc(var(--ui-control-gap) * 1em)}
-/* The theme control is TWO buttons - Auto, and the state it resolves to - and
-   it has two mount points: the bar's pair above 600px, the panel's below it,
-   where the bar has no room. This is the wide-screen half of that rule; the
-   responsive block flips both.
+/* The theme control is TWO buttons - Auto, and the state it resolves to.
    The RING marks which of the two is in force, and that is the one thing a
    single cycling button could not say: following the phone and pinning a theme
    are different KINDS of answer, and only the accent tells them apart. */
 .themeSwitch{display:inline-flex;align-items:center;gap:calc(var(--ui-control-gap) * 1em)}
-#panel .themeSwitch{display:none}
 .themeSwitch .themeAuto[aria-pressed="true"],
 .themeSwitch .themeFlip[aria-pressed="true"]{color:var(--accent);border-color:var(--accent)}
 /* Identity and the close button, and nothing else (D143). With 55 dictionaries
@@ -2081,11 +2092,9 @@ html[data-dict-icons-off] .dict-icon{display:none}
   /* Dropped rather than shrunk, because each is a big-screen affordance.
      ⇔: below 600 .col is already auto, so wide mode has nothing left to
      widen. ⊞: putting a hundred articles on screen at once is not a phone
-  act. The theme control keeps working from the panel, where its pair takes the
-  place the bar's has just given up. (🔍 is not here: it is gone at every width,
-  see the form markup.) */
-  #wideBtn,#expandBtn,#frm .themeSwitch{display:none}
-  #panel .themeSwitch{display:inline-flex}
+     act. Theme controls live in the Settings heading at every width. (🔍 is not
+     here: it is gone at every width, see the form markup.) */
+  #wideBtn,#expandBtn{display:none}
 
   .pill{display:flex;flex:1;min-width:0;align-items:center;gap:.25em;
     background:var(--bg-card);border:1px solid var(--line);border-radius:10px;

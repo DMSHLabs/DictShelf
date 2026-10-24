@@ -198,6 +198,11 @@ func (u *upgraded) FullTextMatch(ctx context.Context, match string, limit int) (
 	return u.titleResults(ctx, r, err)
 }
 
+func (u *upgraded) SearchHeadwordsMode(ctx context.Context, query, mode string, limit int) ([]dict.Result, error) {
+	r, err := u.Store.SearchHeadwordsMode(ctx, query, mode, limit)
+	return u.titleResults(ctx, r, err)
+}
+
 // Resource resolves in three rungs, cheapest first (D2, extended by O8):
 //
 //  1. the packed media.db the Store attaches - portable, and always right when

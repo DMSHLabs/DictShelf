@@ -994,9 +994,9 @@ func TestSearchWithCompressedBodies(t *testing.T) {
 	}
 	defer s.Close()
 	for name, q := range map[string]func() ([]dict.Result, error){
-		"exact": func() ([]dict.Result, error) { return s.Exact("corazón", 10) },
-		"prefix": func() ([]dict.Result, error) { return s.Prefix("cora", 10) },
-		"contains": func() ([]dict.Result, error) { return s.ContainsContext(bg, "razon", 10) },
+		"exact":     func() ([]dict.Result, error) { return s.Exact("corazón", 10) },
+		"prefix":    func() ([]dict.Result, error) { return s.Prefix("cora", 10) },
+		"contains":  func() ([]dict.Result, error) { return s.ContainsContext(bg, "razon", 10) },
 		"full-text": func() ([]dict.Result, error) { return s.FullTextContext(bg, "definición", 10) },
 	} {
 		results, err := q()
@@ -1055,6 +1055,119 @@ func TestDefaultPlanOmitsTrigram(t *testing.T) {
 	small := mk(Plan{Contains: true})
 	if !small.Caps().Contains || small.Caps().FTS {
 		t.Errorf("contains-only plan: %+v", small.Caps())
+	}
+}
+
+func TestOptionalHeadwordAndArticleIndexes(t *testing.T) {
+	for _, tc := range []struct {
+		name                       string
+		plan                       Plan
+		headword, trigram, article bool
+	}{
+		{"base", Plan{}, false, false, false},
+		{"contains", Plan{Contains: true}, true, true, false},
+		{"full-text", Plan{FullText: true}, false, false, true},
+		{"both", Plan{Contains: true, FullText: true}, true, true, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "text.db")
+			r := &fakeReader{meta: dict.Meta{Name: "modes", Format: "test", Path: "/x"}, entries: []dict.Entry{
+				h("Blue heart", "<p>cardiac tissue</p>"),
+				h("heartbroken", "<p>sad</p>"),
+				h("work", "<p>labor</p>"),
+				h("café", "<p>coffee</p>"),
+			}}
+			if _, err := IngestPlan(r, path, tc.plan, nil); err != nil {
+				t.Fatal(err)
+			}
+			s, err := Open(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer s.Close()
+			for table, want := range map[string]bool{"entry_fts": tc.headword, "entry_trigram": tc.trigram, "article_fts": tc.article} {
+				var count int
+				if err := s.db.QueryRow("SELECT count(*) FROM sqlite_master WHERE type='table' AND name=?", table).Scan(&count); err != nil {
+					t.Fatal(err)
+				}
+				if (count > 0) != want {
+					t.Errorf("%s present=%v, want %v", table, count > 0, want)
+				}
+			}
+			for _, mode := range []struct{ name, query, want string }{
+				{"prefix", "hea", "Blue heart"},
+				{"suffix", "art", "Blue heart"},
+				{"contains", "ear", "Blue heart"},
+				{"word", "heart", "Blue heart"},
+				{"wordLemma", "worked\x1fwork", "work"},
+				{"exactLemma", "worked\x1fwork", "work"},
+			} {
+				results, err := s.SearchHeadwordsMode(bg, mode.query, mode.name, 10)
+				if err != nil {
+					t.Errorf("%s: %v", mode.name, err)
+					continue
+				}
+				if len(results) == 0 || results[0].Headword != mode.want {
+					t.Errorf("%s: %v; want %s", mode.name, results, mode.want)
+				}
+			}
+			for _, mode := range []string{"prefix", "contains", "word", "exactLemma"} {
+				if results, err := s.SearchHeadwordsMode(bg, "cafe", mode, 10); err != nil || len(results) != 0 {
+					t.Errorf("%s preserved accent: %v %v", mode, results, err)
+				}
+				if results, err := s.SearchHeadwordsMode(WithIgnoreDiacritics(bg), "cafe", mode, 10); err != nil || len(results) != 1 || results[0].Headword != "café" {
+					t.Errorf("%s ignored accent: %v %v", mode, results, err)
+				}
+			}
+			results, err := s.FullTextContext(bg, "cardiac", 10)
+			if tc.article && (err != nil || len(results) == 0) {
+				t.Errorf("full-text: %v %v", results, err)
+			}
+			if !tc.article && err != dict.ErrUnsupported {
+				t.Errorf("full-text absent: %v", err)
+			}
+		})
+	}
+}
+
+func TestOptionalIndexMaintenanceKeepsFeaturesIndependent(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "text.db")
+	r := &fakeReader{meta: dict.Meta{Name: "maintenance", Format: "test", Path: "/x"}, entries: []dict.Entry{
+		h("Blue heart", "<p>cardiac tissue</p>"),
+	}}
+	if _, err := IngestPlan(r, path, Plan{Contains: true, FullText: true}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := ClearSearchIndexes(path, true, false); err != nil {
+		t.Fatal(err)
+	}
+	s, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.hasHeadwordFTS || s.hasTrigram || !s.ftsOK {
+		t.Errorf("after contains removal: headword=%v trigram=%v article=%v", s.hasHeadwordFTS, s.hasTrigram, s.ftsOK)
+	}
+	if results, err := s.FullTextContext(bg, "cardiac", 5); err != nil || len(results) != 1 {
+		t.Errorf("article FTS after contains removal: %v %v", results, err)
+	}
+	s.Close()
+	if err := ClearSearchIndexes(path, false, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := RebuildContainsIndex(path, nil); err != nil {
+		t.Fatal(err)
+	}
+	s, err = Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if !s.hasHeadwordFTS || !s.hasTrigram || s.ftsOK {
+		t.Errorf("after contains rebuild: headword=%v trigram=%v article=%v", s.hasHeadwordFTS, s.hasTrigram, s.ftsOK)
+	}
+	if results, err := s.SearchHeadwordsMode(bg, "heart", "word", 5); err != nil || len(results) != 1 {
+		t.Errorf("headword FTS after rebuild: %v %v", results, err)
 	}
 }
 

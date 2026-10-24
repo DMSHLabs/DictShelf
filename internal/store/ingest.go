@@ -55,8 +55,8 @@ type Report struct {
 // 2 MB on a 40k-entry dictionary - so it has no switch. The two indexes that
 // do cost something are opt-in per dictionary.
 type Plan struct {
-	FullText bool // index article text as well as headwords (the largest index)
-	Contains bool // trigram over folded headwords, for substring search
+	FullText bool // index article text (the largest index)
+	Contains bool // trigram and token FTS over headwords
 }
 
 // IngestPlan scans r into a new text database at dbPath (atomically: written
@@ -150,15 +150,20 @@ func IngestPlanContext(ctx context.Context, r dict.Reader, dbPath string, plan P
 		CREATE TABLE entry(id INTEGER PRIMARY KEY, w TEXT NOT NULL, wf TEXT NOT NULL, wc TEXT NOT NULL, m TEXT NOT NULL);
 		CREATE TABLE browse_anchor(ordinal INTEGER PRIMARY KEY, entry_id INTEGER NOT NULL, w TEXT NOT NULL);
 		CREATE TABLE alias(w TEXT NOT NULL, wf TEXT NOT NULL, wc TEXT NOT NULL, entry_id INTEGER NOT NULL REFERENCES entry(id));
-		CREATE VIRTUAL TABLE entry_fts USING fts5(
-			w, txt, content='', columnsize=0,
-			tokenize='unicode61 remove_diacritics 2');
 	`, schemaVersion)); err != nil {
 		return rep, err
 	}
 	if plan.Contains {
 		if _, err = db.ExecContext(ctx, `CREATE VIRTUAL TABLE entry_trigram USING fts5(
-			w, content='', columnsize=0, tokenize='trigram')`); err != nil {
+			w, content='', columnsize=0, tokenize='trigram');
+			CREATE VIRTUAL TABLE entry_fts USING fts5(
+				w, content='', columnsize=0, tokenize='unicode61 remove_diacritics 2');`); err != nil {
+			return rep, err
+		}
+	}
+	if plan.FullText {
+		if _, err = db.ExecContext(ctx, `CREATE VIRTUAL TABLE article_fts USING fts5(
+			w, txt, content='', columnsize=0, tokenize='unicode61 remove_diacritics 2')`); err != nil {
 			return rep, err
 		}
 	}
@@ -173,9 +178,16 @@ func IngestPlanContext(ctx context.Context, r dict.Reader, dbPath string, plan P
 	if err != nil {
 		return rep, err
 	}
-	insFts, err := tx.Prepare("INSERT INTO entry_fts(rowid, w, txt) VALUES(?, ?, ?)")
-	if err != nil {
-		return rep, err
+	var insFts, insArticle *sql.Stmt
+	if plan.Contains {
+		if insFts, err = tx.Prepare("INSERT INTO entry_fts(rowid, w) VALUES(?, ?)"); err != nil {
+			return rep, err
+		}
+	}
+	if plan.FullText {
+		if insArticle, err = tx.Prepare("INSERT INTO article_fts(rowid, w, txt) VALUES(?, ?, ?)"); err != nil {
+			return rep, err
+		}
 	}
 	var insTrig *sql.Stmt
 	if plan.Contains {
@@ -253,12 +265,15 @@ func IngestPlanContext(ctx context.Context, r dict.Reader, dbPath string, plan P
 		if _, err = insEntry.ExecContext(ctx, id, hw, dict.Fold(hw), dict.CaseKey(hw), encodeBody(body)); err != nil {
 			return rep, err
 		}
-		txt := ""
-		if plan.FullText {
-			txt = StripHTML(body)
+		if insFts != nil {
+			if _, err = insFts.ExecContext(ctx, id, hw); err != nil {
+				return rep, err
+			}
 		}
-		if _, err = insFts.ExecContext(ctx, id, hw, txt); err != nil {
-			return rep, err
+		if insArticle != nil {
+			if _, err = insArticle.ExecContext(ctx, id, hw, StripHTML(body)); err != nil {
+				return rep, err
+			}
 		}
 		// trigram index over the accent/case-folded headword powers the
 		// "contains" substring mode (built only when asked for).
@@ -423,12 +438,17 @@ func IngestPlanContext(ctx context.Context, r dict.Reader, dbPath string, plan P
 	if err = tx.Commit(); err != nil {
 		return rep, err
 	}
-	trace.phase("optimize fulltext index")
-	if _, err = db.ExecContext(ctx, "INSERT INTO entry_fts(entry_fts) VALUES('optimize')"); err != nil {
-		return rep, err
+	if plan.FullText {
+		trace.phase("optimize fulltext index")
+		if _, err = db.ExecContext(ctx, "INSERT INTO article_fts(article_fts) VALUES('optimize')"); err != nil {
+			return rep, err
+		}
 	}
 	if plan.Contains {
 		trace.phase("optimize contains index")
+		if _, err = db.ExecContext(ctx, "INSERT INTO entry_fts(entry_fts) VALUES('optimize')"); err != nil {
+			return rep, err
+		}
 		if _, err = db.ExecContext(ctx, "INSERT INTO entry_trigram(entry_trigram) VALUES('optimize')"); err != nil {
 			return rep, err
 		}

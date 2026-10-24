@@ -2,36 +2,20 @@
 
 ## Product identity
 
-- Product: DictShelf; publisher: DMSH Labs.
-- Android application ID, Java package and Gradle namespace: `com.dmshlabs.dictshelf`. The external lookup component is `com.dmshlabs.dictshelf.lookup.LookupActivity`. JNI exports use the new Java package.
-- Windows desktop, CLI and server artifacts: `DictShelf.exe`, `DictShelf-cli.exe`, `DictShelf-server.exe`. The installer has its own GUID, install directory, ProgID, shortcuts and WebView2 profile, so the prior app can remain installed.
-- macOS bundle ID and launchd label: `com.dmshlabs.dictshelf`; Linux user unit: `dictshelf.service`.
-- Desktop settings, cache and library default root: `~/.dmshlabs/dictshelf`; config file: `dictshelf.toml`. macOS GUI logs are under `~/Library/Logs/DMSH Labs/DictShelf/`.
-- Startup no longer offers the old Windows automatic data migration. Old installations and their files remain untouched. Explicit settings import/export is the agreed transfer method but is not implemented yet.
-- Go module path, Go package names, environment prefix, DB-format prefix and Android native library names remain technical `wudict` identifiers.
+- Product: DictShelf; publisher: DMSH Labs. Android ID, Java package and Gradle namespace: `com.dmshlabs.dictshelf`; Windows artifacts: `DictShelf.exe`, `DictShelf-cli.exe`, `DictShelf-server.exe`; macOS bundle ID and launchd label: `com.dmshlabs.dictshelf`; Linux user unit: `dictshelf.service`.
+- Desktop data root: `~/.dmshlabs/dictshelf`; config: `dictshelf.toml`. The prior wuDict2 installation remains separate. Settings import/export is the agreed transfer path and is not implemented yet. Go module/package names and other internal identifiers remain `wudict`.
 
-## Verification in this identity change
+## Search and menu state
 
-- `go test ./...` passed after the final path and localization changes.
-- `build-android.cmd debug intel` built the FOSS debug APK with arm64 and x86_64. The APK reports `com.dmshlabs.dictshelf.debug`; FOSS and Play Java compilation passed. No APK was installed.
-- `build-windows.cmd` built and ran `DictShelf.exe`; `build-windows.cmd installer` compiled `dist/dictshelf-windows-x64-setup-1.01.0.exe`. The installer offers `%LOCALAPPDATA%\Programs\DMSH Labs\DictShelf` for per-user installation.
-- `git diff --check` passed. Linux/macOS artifacts were reviewed statically but cannot be built on this Windows host.
-- System Log export `Build:` versions replace the legacy `wudict2-` tag prefix with `DictShelf-`; targeted `internal/server` tests pass.
-- Linux/macOS artifacts were reviewed statically but cannot be built on this Windows host.
+- Contains builds headword token FTS and trigram indexes together; FullText builds separate article FTS. `IngestVersion=6` offers existing indexes for rebuild, while old databases remain readable. Main headword search and Browse fall back to the base index when optional indexes are absent. Search modes include suffix, whole-word and explicit lemma variants; article full-text stays separate.
+- Main search mode menu now follows Browse/Wildcards grouping and styling. Its Articles mark is a page with a highlighted text band; the page outline is `.8px` and horizontal strokes are `1.2px`.
+- Search diagnostics record query, mode, dictionary scope, chosen backend/database/index and per-dictionary results in both HTTP and desktop bridge paths.
 
-## Architecture and open checks
+## Verification and remaining checks
 
-- Android runs the Go server in-process through JNI and opens no HTTP listener. On this machine, the x86_64 emulator cannot run translated arm64 Go binaries; use `build-android.cmd debug intel` for device/emulator builds.
-- Windows listenerless desktop uses WebView2 and a direct native Go bridge. The browser and explicit server modes still use HTTP. The current secure desktop origin is `https://dictshelf.localhost`.
-- Browse and Wildcards retain SQLite-backed paged result caches; merged Wildcards maintains source positions and per-view cache identities. Rebuilt runtime behavior on Windows/Android still needs manual checks.
-- Remaining broad UI checks are listed in the old session notes; prioritize Windows startup/list/Exit/tray, System Log export, settings and resource loading, and Android smoke testing after rebuilding.
-- The portable Windows write-path audit still has unresolved confinement gaps; see `docs/PORTABLE-WRITES-AUDIT.md`.
-- Manual runtime checks remain: install and launch on Windows and Android, verify fresh separate data roots and resource loading, and confirm previous wuDict2 installations/data remain untouched. Do not install APKs or commit unless the user asks.
-- Use `build-windows.cmd` for Windows, `build-android.cmd debug intel` for Android, and the recipes in `docs/WINDOWS-VERIFY.md`. Read the relevant `docs/SPEC.md` section before implementation.
-
-Edit Folders in the embedded main-window dialog now uses the main window cached folder configuration immediately, reveals the import section as soon as the configured destination is known, and no longer writes index defaults on open. Folder validation no longer appears as a global indexing task. `node --check internal/server/web/setup.js` and `git diff --check` pass; Windows runtime confirmation is pending.
-Settings → Appearance has a saved On/Off control for dictionary icons. It defaults on; the shared icon style hides current and future icons without rebuilding result lists. Go build and Windows UI verification remain pending.
-MDX prepared indexes now remove empty elements with known advertising-slot IDs (including numbered `ad_contentslot_N` slots); nonempty and media-bearing slots remain. MDX Reader version is 2, so old prepared indexes are offered for Rebuild. `go build ./internal/format/mdx` and `git diff --check` pass; end-to-end Windows reindex/display verification is pending.
+- Search/index changes passed focused store, server and golden tests; previous full server runs had two async dictionary-icon expectation failures (HTTP 202 vs 200). Inline scripts and translations were checked. Windows/Android interactive search and index maintenance remain to be verified.
+- Android runs the Go server through JNI without an HTTP listener; Windows listenerless desktop uses WebView2 and a native bridge. Build recipes are in `docs/WINDOWS-VERIFY.md`; Android uses `build-android.cmd debug intel`. Do not install APKs or commit unless requested.
+- Separate open items: Windows/Android identity smoke checks; portable Windows write-path gaps (`docs/PORTABLE-WRITES-AUDIT.md`); Edit Folders dialog verification; icon visibility setting verification; MDX ad-slot reindex/display verification.
 The Wildcards lower search in separate-dictionary mode now sends one grouped stream request for all
 dictionaries when a saved complete filter is unavailable. Go searches the shared result SQLite cache
 globally, distributes hits by dictionary ID and original position, and writes the existing per-dictionary
@@ -44,7 +28,7 @@ Browse now receives the effective typed and lemma forms from its single-dictiona
 softer theme accent for lemma-only highlights. Completed find sessions retain those forms. Build and
 browser runtime checks are pending.
 
-Current checkout: branch `DictShelf` at `34f2d3d2`; the merge from `dev` is complete. Safe Stop cancellation detection is included, and dictionary icon loading combines asynchronous caching with embedded LSD icons. `go test ./...` and `git diff --check` pass. No
+Previous checkpoint: branch `DictShelf` at `34f2d3d2`, after an earlier merge from `dev`. Current merge in progress: `DictShelf` at `63b4585b` with `dev` at `65b99341`; conflicts are resolved and the merge is not committed. Safe Stop cancellation detection is included, and dictionary icon loading combines asynchronous caching with embedded LSD icons. The earlier checkpoint's `go test ./...` and `git diff --check` passed. No
 upstream is configured. The application uses one DSL reader with GoldenDict-
 compatible repair and article preparation; there is no Original/GD selection
 or duplicate DSL index. `docs/DSL.md` and `tools/dslcompare/README.md` describe

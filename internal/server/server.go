@@ -1611,6 +1611,7 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 404, "dictionary variant unavailable")
 		return
 	}
+	logx.System("search start query=%q mode=%q scope=%q dictionaries=%d", q, mode, dictParam, len(entries))
 
 	st, ok := newStream(w, "application/x-ndjson; charset=utf-8")
 	if !ok {
@@ -1645,7 +1646,13 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 					return nil, errors.New("dictionary index is not ready")
 				}
 			}
-			return e.openWithin(fan)
+			d, err := e.openWithin(fan)
+			if err != nil {
+				return d, err
+			}
+			backend, database, index := searchLocationForLog(e, d, mode)
+			logx.System("search database query=%q mode=%q dictionary=%q backend=%q database=%q index=%q", q, mode, e.probeName(), backend, database, index)
+			return d, nil
 		}
 	}
 	writeLine(streamMsg{T: "begin", Slots: begin})
@@ -1684,6 +1691,7 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 			h.Results[j].Body = applyFormat(h.Results[j].Body, format, origin, st)
 		}
 		m := streamMsg{T: "hit", I: i, Dict: id, Name: name, Results: h.Results, Skipped: h.Skipped, Rung: h.Rung}
+		logx.System("search result query=%q mode=%q dictionary=%q results=%d skipped=%t", q, mode, name, len(h.Results), h.Skipped)
 		var heavy tooHeavy
 		switch {
 		case errors.As(h.Err, &heavy):
@@ -1747,7 +1755,24 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 	// nothing.
 	missed := make([]bool, len(entries))
 	empty := 0
-	search.StreamOpen(ctx, openers, mode, q, n, func(i int, h search.Hit) {
+	var termFor func(int, dict.Meta, string) string
+	if (mode == search.WholeWordLemma || mode == search.ExactLemma) && s.Morph.Enabled() && !strings.ContainsAny(q, " \t\r\n") {
+		termFor = func(i int, meta dict.Meta, typed string) string {
+			code := lang.Resolve(meta.IndexLang, langPath(entries[i].Path), s.reg.Dirs(), meta.Name)
+			if code == "" {
+				code = "en"
+			}
+			if !s.Morph.Supports(code) {
+				return typed
+			}
+			lemma, ok := s.Morph.Lemma(code, typed)
+			if !ok || lemma == typed {
+				return typed
+			}
+			return typed + "\x1f" + lemma
+		}
+	}
+	search.StreamOpenWithTerms(ctx, openers, mode, q, n, termFor, func(i int, h search.Hit) {
 		metas[i] = h.Meta
 		// Callbacks are serialised by StreamOpen, so this needs no lock.
 		if h.Err == nil && !h.Skipped && len(h.Results) == 0 {
@@ -1755,10 +1780,37 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 		}
 		writeLine(renderHit(i, h))
 	})
-	if empty > 0 && !search.HasMask(q) {
+	if empty > 0 && !search.HasMask(q) && mode != search.WholeWordLemma && mode != search.ExactLemma {
 		s.lemmaWave(ctx, writeLine, renderHit, entries, metas, missed, openers, mode, q, n)
 	}
 	writeLine(streamMsg{T: "end"})
+}
+
+// searchLocationForLog identifies the database and index surface behind one
+// dictionary search. Prepared stores search text.db; native readers search the
+// dictionary file's built-in index.
+func searchLocationForLog(e *entry, d dict.Dictionary, mode search.Mode) (backend, database, index string) {
+	if _, prepared := d.(interface{ SourcePath() string }); prepared {
+		backend = "prepared"
+		database, _ = validPrepared(e.Path)
+		if database == "" {
+			database = e.Path
+		}
+		switch mode {
+		case search.FullText:
+			index = "article FTS"
+		case search.Contains, search.Suffix:
+			index = "headword trigram when available, base headword index fallback"
+		case search.Prefix, search.WholeWord, search.WholeWordLemma:
+			index = "headword FTS when available, base headword index fallback"
+		case search.Exact, search.ExactLemma:
+			index = "folded headword index"
+		case search.Wildcards:
+			index = "headword index with optional exact-key or trigram candidates"
+		}
+		return backend, database, index
+	}
+	return "native", e.Path, "dictionary's built-in headword index"
 }
 
 // lemmaWave is the second and last pass: for each dictionary that searched and
