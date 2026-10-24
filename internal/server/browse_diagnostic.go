@@ -97,6 +97,18 @@ type browseDiagnostic struct {
 	NoticeText             string `json:"noticeText"`
 	Event                  string `json:"event"`
 	Stage                  string `json:"stage"`
+	URL                    string `json:"url"`
+	Referrer               string `json:"referrer"`
+	ReturnParam            string `json:"returnParam"`
+	OriginURL              string `json:"originURL"`
+	TargetURL              string `json:"targetURL"`
+	HasOrigin              bool   `json:"hasOrigin"`
+	HasFrom                bool   `json:"hasFrom"`
+	Chooser                bool   `json:"chooser"`
+	Slots                  int    `json:"slots"`
+	Error                  string `json:"error"`
+	Skipped                bool   `json:"skipped"`
+	AnyResults             bool   `json:"anyResults"`
 	Resource               string `json:"resource"`
 	Dict                   string `json:"dict"`
 	Page                   int    `json:"page"`
@@ -166,7 +178,7 @@ func (s *Server) handleBrowseDiagnostic(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, 2048)
+	r.Body = http.MaxBytesReader(w, r.Body, 8192)
 	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()
 	var d browseDiagnostic
@@ -190,9 +202,36 @@ func (s *Server) handleBrowseDiagnostic(w http.ResponseWriter, r *http.Request) 
 }
 
 func recordBrowseDiagnostic(d browseDiagnostic) error {
+	if d.Event == "browse_return_route" {
+		switch d.Stage {
+		case "browse_page_loaded", "close_clicked", "main_page_loaded", "apply_url_has_query", "apply_url_no_query",
+			"first_dictionary_apply_url", "dictionary_list_ready_apply_url", "search_skipped_empty_query", "search_started",
+			"search_stream_begin", "first_search_hit", "search_stream_end":
+		default:
+			return errors.New("invalid diagnostic")
+		}
+		if d.StartedAt < 0 || d.StartedAt > 10_000_000_000_000 || !bounded(d.ElapsedMS, 86_400_000) ||
+			len(d.URL) > 4096 || strings.ContainsAny(d.URL, "\r\n") ||
+			len(d.Referrer) > 4096 || strings.ContainsAny(d.Referrer, "\r\n") ||
+			len(d.ReturnParam) > 4096 || strings.ContainsAny(d.ReturnParam, "\r\n") ||
+			len(d.OriginURL) > 4096 || strings.ContainsAny(d.OriginURL, "\r\n") ||
+			len(d.TargetURL) > 4096 || strings.ContainsAny(d.TargetURL, "\r\n") ||
+			len(d.Query) > 1024 || strings.ContainsAny(d.Query, "\r\n") ||
+			len(d.Mode) > 32 || strings.ContainsAny(d.Mode, "\r\n") ||
+			len(d.Dict) > 256 || strings.ContainsAny(d.Dict, "\r\n") ||
+			len(d.Error) > 1024 || strings.ContainsAny(d.Error, "\r\n") ||
+			!bounded(d.Total, 100_000) || !bounded(d.Slots, 100_000) || !bounded(d.ResultCount, 1_000_000) {
+			return errors.New("invalid diagnostic")
+		}
+		logx.System("browse_return_route stage=%s elapsed_ms=%d url=%q referrer=%q return_param=%q origin_url=%q target_url=%q query=%q mode=%q dict=%q has_origin=%t has_from=%t chooser=%t slots=%d result_count=%d any_results=%t error=%q skipped=%t",
+			d.Stage, d.ElapsedMS, d.URL, d.Referrer, d.ReturnParam, d.OriginURL, d.TargetURL,
+			d.Query, d.Mode, d.Dict, d.HasOrigin, d.HasFrom, d.Chooser,
+			max(d.Slots, d.Total), d.ResultCount, d.AnyResults, d.Error, d.Skipped)
+		return nil
+	}
 	if d.Event == "search_article" {
 		switch d.Stage {
-		case "search_start", "search_empty_group", "search_stream_begin", "dictionary_response", "article_open", "first_article_painted", "search_end", "search_aborted", "search_error":
+		case "search_start", "search_empty_group", "search_stream_begin", "dictionary_response", "article_open", "return_target_open", "return_target_after_paint", "return_target_search_end", "return_target_after_search_paint", "first_article_painted", "search_end", "search_aborted", "search_error":
 		default:
 			return errors.New("invalid diagnostic")
 		}
