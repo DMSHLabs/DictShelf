@@ -157,8 +157,8 @@ func (s *Server) Search(parent context.Context, request SearchRequest, emit func
 	if n <= 0 {
 		n = 20
 	}
-	if n > 500 {
-		n = 500
+	if n > 501 {
+		n = 501
 	}
 
 	dictParam := request.Dictionary

@@ -43,8 +43,9 @@ func init() {
 	dict.RegisterFormat(".text.db", open)
 }
 
-// maxLimit clamps any caller-supplied result limit (FTS-audit #7).
-const maxLimit = 500
+// maxLimit bounds a search page and its one extra row, which tells the UI
+// whether another page exists without mistaking a full page for the last one.
+const maxLimit = 501
 
 const schemaVersion = 1
 

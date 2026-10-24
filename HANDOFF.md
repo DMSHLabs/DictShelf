@@ -1,10 +1,16 @@
 # Agent handoff — current state
 
-Current checkout: branch `codex/search` at `426ea83c`. Uncommitted `app.css`
-changes keep dictionary result headers at a fixed height while opening, use
-`--ui-font-section` bold for dictionary names, and `--ui-font-addition` for
-counts and `more…` links. `go build ./...` and `git diff --check` pass; visual
-verification remains pending.
+Current checkout: branch `codex/search` at `09439c57`. The working tree adds
+main-search result portions: Settings → Results saves a 100-article default,
+the sticky dictionary header navigates portions and opens a matching Browse
+filter where supported, and Browse-compatible headword modes fill in the exact
+total from the prepared index. Initial search still renders 5 results per dictionary in a
+group or 25 for one dictionary. The API allows one sentinel result beyond the
+500 visible-result ceiling so a full last page is distinguishable from more
+results; counts above that ceiling remain marked as lower bounds. `go build ./...`,
+`git diff --check`, and EN/RU catalog JSON parsing pass. Windows and Android
+interaction, including Browse handoff and narrow-screen header layout, remain
+unverified.
 
 The branch was created from clean `dev` at `a9ae9a93`; the changes described
 below were committed as `79059bd6` ("dictionary search"). Contains now builds both the

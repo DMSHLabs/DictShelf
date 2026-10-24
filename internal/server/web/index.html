@@ -876,6 +876,16 @@ window.wudictFontScale=(function(){
   </div>
 </details>
 
+<details class="sect" data-panel-section="results" open>
+  <summary class="sect-h">{{T:panel.results}}</summary>
+  <div class="facts">
+    <label class="history-setting" for="searchPageSize">{{T:panel.resultPageSize}}
+      <input id="searchPageSize" type="number" min="5" max="500" step="5" inputmode="numeric" value="100" aria-label="{{T:panel.resultPageSize}}">
+    </label>
+  </div>
+  <p class="font-scale-hint">{{T:panel.resultPageSizeHint}}</p>
+</details>
+
 <details class="sect" data-panel-section="tools" open>
 <summary class="sect-h">{{T:export.tools}}</summary>
 <div class="facts" id="portableTool" hidden><button type="button" class="mrow" id="openPortable">{{T:portable.open}}</button></div>
@@ -1307,6 +1317,41 @@ window.wudictFontScale=(function(){
 "use strict";
 const SEARCH_DEBOUNCE_MS={{SEARCH_DEBOUNCE_MS}};
 const $=id=>document.getElementById(id);
+const SEARCH_PORTION_SIZE_KEY="wudict_search_portion_size";
+const SEARCH_RESULT_LIMIT=501;
+const searchHeadwordTotals=new Map();
+function normalizedSearchPortionSize(value){
+  const n=Math.floor(Number(value));
+  return Number.isFinite(n)?Math.max(5,Math.min(500,Math.round(n/5)*5)):100;
+}
+function searchPortionSize(){
+  try{return normalizedSearchPortionSize(localStorage.getItem(SEARCH_PORTION_SIZE_KEY)||100)}catch(_){return 100}
+}
+function headwordSearchMode(mode){return ["prefix","suffix","contains","word","wordLemma"].includes(mode)}
+function requestHeadwordSearchTotal(dict,query,mode){
+  // Browse's prepared headword index always folds accents. Main search can
+  // preserve them, so only reuse its total when both paths have same semantics.
+  if(!ignoreDiacritics)return Promise.resolve(null);
+  const key=JSON.stringify([dict,query,mode]);
+  if(searchHeadwordTotals.has(key))return searchHeadwordTotals.get(key);
+  const params=new URLSearchParams({dict,q:query,matchmode:mode,p:"1"});
+  const pending=(async()=>{
+    const response=await apiFetch("/api/browse/find?"+params);
+    if(!response.ok)throw new Error("headword count unavailable");
+    const body=await response.json();
+    return Number.isFinite(body.total)?body.total:Number.isFinite(body.Total)?body.Total:null;
+  })().catch(()=>{searchHeadwordTotals.delete(key);return null});
+  searchHeadwordTotals.set(key,pending);return pending;
+}
+const searchPortionInput=$("searchPageSize");
+if(searchPortionInput){
+  searchPortionInput.value=String(searchPortionSize());
+  searchPortionInput.addEventListener("change",()=>{
+    const size=normalizedSearchPortionSize(searchPortionInput.value);
+    searchPortionInput.value=String(size);
+    try{localStorage.setItem(SEARCH_PORTION_SIZE_KEY,String(size))}catch(_){}
+  });
+}
 if(window.wudictAndroidGo){
   document.documentElement.setAttribute('data-android-go','');
   if(window.wudictAndroidGo.isDebugBuild?.())$('androidBridgeStage').hidden=false;
@@ -3054,7 +3099,7 @@ $("out").addEventListener("click",e=>{
   if(!sum)return; // the no-index group is not an answer: opening it decides nothing
   // these live inside the summary, run their own handlers and preventDefault
   // the toggle — but not before this listener, which is nearer the target
-  if(e.target.closest(".more,.upgrade,.mnav"))return;
+  if(e.target.closest(".more,.upgrade,.mnav,.result-page-action,.search-browse"))return;
   const det=sum.parentElement,opening=!det.open; // the toggle lands after us
   // The walk follows attention: it belongs to the section being read, and one
   // section at a time is also why nothing is counted for the other 154.
@@ -6224,7 +6269,7 @@ function promote(boxes,i){
     ref.after(b);ref=b;       // in order, so preference survives among them
   }
 }
-function renderSlot(box,h,mode,q,perDict,group){
+function renderSlot(box,h,mode,q,perDict,group,paging=null){
   box.innerHTML="";
   if(h.deferred){
     const det=document.createElement("details");
@@ -6275,12 +6320,27 @@ function renderSlot(box,h,mode,q,perDict,group){
   }
   if(!h.results?.length)return{};
   const det=document.createElement("details");det.className="dict";
-  const more=h.results.length>=perDict?`<span class="more" data-id="${h.dict}">${esc(tx("search.more"))}</span>`:"";
+  const pageSize=paging?.size||searchPortionSize();
+  const more=!paging&&h.results.length>=perDict?`<button type="button" class="more" data-id="${escAttr(h.dict)}">${esc(tx("search.more"))}</button>`:"";
+  const browseURL=["prefix","suffix","contains","word","wordLemma","wildcards"].includes(mode)
+    ?("/browse?"+new URLSearchParams({dict:h.dict,find:q,filter:"1",findmode:mode})):"";
+  const browse=browseURL?`<a class="search-browse" href="${escAttr(browseURL)}">${esc(tx("search.browseAllHeadwords"))}</a>`:"";
+  const pageControls=paging?(()=>{
+    const start=paging.start||0,end=start+h.results.length,total=paging.total;
+    const totalText=paging.exact?window.wudictI18n.number(total):window.wudictI18n.number(Math.max(end,paging.lowerBound||end))+"+";
+    return `<span class="search-pages"><button type="button" class="result-page-action" data-dir="prev" aria-label="${escAttr(tx("search.previousPortion"))}" title="${escAttr(tx("search.previousPortion"))}" ${start<=0?"disabled":""}>‹</button>`+
+      `<span class="result-page-range" aria-live="polite">${window.wudictI18n.number(start+1)}–${window.wudictI18n.number(end)} (${totalText})</span>`+
+      `<button type="button" class="result-page-action" data-dir="next" aria-label="${escAttr(tx("search.nextPortion"))}" title="${escAttr(tx("search.nextPortion"))}" ${paging.hasNext?"":"disabled"}>›</button></span>`;
+  })():"";
+  det.dataset.searchMode=mode;det.dataset.searchQuery=q;det.dataset.searchDict=h.dict;
+  det.dataset.searchInitial=String(perDict);det.dataset.searchPageSize=String(pageSize);det.dataset.searchGroup=String(!!group);
+  if(paging){det.dataset.searchPageStart=String(paging.start||0);det.dataset.searchPageCount=String(h.results.length);det.dataset.searchHasNext=String(!!paging.hasNext);det.dataset.searchExact=String(!!paging.exact);det.dataset.searchTotal=String(paging.total||0);det.dataset.searchLowerBound=String(paging.lowerBound||0)}
   // Only for a multi-word full-text query: a single word has no phrase to fail
   // at, and every other mode has no ladder at all.
   const rung=mode==="fts"&&/\s/.test(q||"")&&(h.rung==="near"||h.rung==="words")
     ?`<span class="rung">${esc(tx(h.rung==="near"?"search.phraseNear":"search.phraseWords"))} · </span>`:"";
-  det.innerHTML=`<summary>${dictIconHTML(h.dict)}${esc(h.name)}<span class="count">${rung}${esc(tx("search.results",{count:h.results.length,number:window.wudictI18n.number(h.results.length)+(more?"+":"")}))}</span>${more}</summary>`;
+  const countLabel=paging?(rung?`<span class="count">${rung}</span>`:``):`<span class="count">${rung}${esc(tx("search.results",{count:h.results.length,number:window.wudictI18n.number(h.results.length)+(more?"+":"")}))}</span>`;
+  det.innerHTML=`<summary>${dictIconHTML(h.dict)}${esc(h.name)}${pageControls}${countLabel}${more}${browse}</summary>`;
   const dl=document.createElement("dl"),roots=[];
   for(const r of h.results){
     const dt=document.createElement("dt");
@@ -8038,6 +8098,7 @@ async function doSearch(ev){
     maskSubmitRequested=false;scopeOnce=null;lastScope=null;commitOnce=false;
     return maskRun(q);
   }
+  searchHeadwordTotals.clear();
   maskSubmitRequested=false;maskAbort();
   // consumed before the first await, so the history wrapper below can still
   // read which scope was used
@@ -8336,16 +8397,64 @@ async function doSearch(ev){
   }
 }
 $("frm").addEventListener("submit",doSearch);
-/* "more…": re-query a single dictionary at a higher limit, in place */
+function applyHeadwordSearchTotal(box,dict,query,mode,total){
+  if(!Number.isInteger(total)||total<0)return;
+  const det=box.querySelector(":scope>details.dict");
+  if(!det||det.dataset.searchDict!==dict||det.dataset.searchQuery!==query||det.dataset.searchMode!==mode||!det.dataset.searchPageStart)return;
+  const start=Number(det.dataset.searchPageStart),end=start+(Number(det.dataset.searchPageCount)||0);
+  det.dataset.searchExact="true";det.dataset.searchTotal=String(total);det.dataset.searchLowerBound=String(total);det.dataset.searchHasNext=String(end<total);
+  const range=det.querySelector(":scope>summary .result-page-range");
+  if(range)range.textContent=window.wudictI18n.number(start+1)+"–"+window.wudictI18n.number(end)+" ("+window.wudictI18n.number(total)+")";
+  const next=det.querySelector(':scope>summary .result-page-action[data-dir="next"]');
+  if(next)next.disabled=end>=total||end>=SEARCH_RESULT_LIMIT-1;
+}
+async function fetchSearchPortion(det,start){
+  if(!det?.isConnected)return;
+  const box=det.parentElement,mode=det.dataset.searchMode||"prefix",query=det.dataset.searchQuery||"",id=det.dataset.searchDict||"";
+  const initial=Number(det.dataset.searchInitial)||5,size=normalizedSearchPortionSize(det.dataset.searchPageSize||searchPortionSize());
+  const end=start+size,requested=Math.min(end+1,SEARCH_RESULT_LIMIT);
+  const more=det.querySelector(":scope>summary .more"),actions=[...det.querySelectorAll(":scope>summary .result-page-action")];
+  if(more)more.disabled=true;
+  actions.forEach(button=>button.disabled=true);
+  const url="/api/search?q="+encodeURIComponent(query)+"&mode="+encodeURIComponent(mode)+"&hl="+(hlOn?1:0)+diacriticsSearchParam()+"&dict="+encodeURIComponent(id)+"&n="+requested;
+  if(headwordSearchMode(mode))requestHeadwordSearchTotal(id,query,mode).then(total=>{if(total!==null)applyHeadwordSearchTotal(box,id,query,mode,total)});
+  let received=false;
+  try{
+    await fetchStream(url,msg=>{
+      if(msg.t!=="hit"||msg.dict!==id)return;
+      received=true;
+      const all=msg.results||[],visibleEnd=Math.min(end,SEARCH_RESULT_LIMIT-1),visible=all.slice(start,visibleEnd),knownTotal=det.dataset.searchExact==="true"?Number(det.dataset.searchTotal):NaN;
+      const exact=Number.isFinite(knownTotal)||all.length<requested;
+      const total=Number.isFinite(knownTotal)?knownTotal:all.length;
+      const hasNext=Number.isFinite(knownTotal)?visibleEnd<knownTotal:all.length>visibleEnd;
+      const lowerBound=Math.max(visibleEnd+(hasNext?1:0),requested===SEARCH_RESULT_LIMIT&&all.length>=SEARCH_RESULT_LIMIT?SEARCH_RESULT_LIMIT:0);
+      const capped=requested===SEARCH_RESULT_LIMIT&&visibleEnd>=SEARCH_RESULT_LIMIT-1&&all.length>=SEARCH_RESULT_LIMIT;
+      const page={start,size,total:exact?total:lowerBound,lowerBound,exact,hasNext:hasNext&&!capped};
+      if(!visible.length){
+        if(all.length<=start){
+          const fallbackStart=Math.max(0,all.length-size),fallback=all.slice(fallbackStart);
+          renderSlot(box,{...msg,results:fallback},mode,query,initial,det.dataset.searchGroup==="true",{...page,start:fallbackStart});
+          const replacement=box.querySelector(":scope>details.dict");if(replacement)replacement.open=true;
+          if(replacement&&headwordSearchMode(mode))requestHeadwordSearchTotal(id,query,mode).then(total=>{if(total!==null)applyHeadwordSearchTotal(box,id,query,mode,total)});
+        }
+        return;
+      }
+      renderSlot(box,{...msg,results:visible},mode,query,initial,det.dataset.searchGroup==="true",page);
+      const replacement=box.querySelector(":scope>details.dict");if(replacement)replacement.open=true;
+      if(replacement&&headwordSearchMode(mode))requestHeadwordSearchTotal(id,query,mode).then(total=>{if(total!==null)applyHeadwordSearchTotal(box,id,query,mode,total)});
+    });
+    if(!received&&det.isConnected){if(more)more.disabled=false;actions.forEach(button=>button.disabled=false)}
+  }catch(_){
+    if(det.isConnected){if(more)more.disabled=false;actions.forEach(button=>button.disabled=false)}
+  }
+}
 document.addEventListener("click",e=>{
-  const more=e.target.closest("summary .more");
-  if(!more)return;
-  e.preventDefault();
-  const det=more.closest("details.dict"),box=det.parentElement,id=more.dataset.id,mode=$("mode").value;
-  more.textContent="…";
-  fetchStream("/api/search?q="+encodeURIComponent(lastQuery)+"&mode="+mode+"&hl="+(hlOn?1:0)+diacriticsSearchParam()+"&dict="+id+"&n=100",msg=>{
-    if(msg.t==="hit"){renderSlot(box,msg,mode,lastQuery,1e9);const nd=box.querySelector("details.dict");if(nd)nd.open=true}
-  }).catch(()=>{more.textContent=tx("search.more")});
+  const action=e.target.closest("summary .more,summary .result-page-action");
+  if(!action)return;
+  e.preventDefault();e.stopPropagation();
+  const det=action.closest("details.dict"),size=normalizedSearchPortionSize(det.dataset.searchPageSize||searchPortionSize());
+  const current=Math.max(0,Number(det.dataset.searchPageStart)||0);
+  fetchSearchPortion(det,action.classList.contains("more")?0:Math.max(0,current+(action.dataset.dir==="next"?size:-size)));
 });
 
 /* Typing updates suggestions; committing the field updates articles. */

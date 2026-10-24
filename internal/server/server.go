@@ -1574,14 +1574,14 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 	// word they are already looking at, on every line it appears (D102).
 	hl, _ := queryFlag(r.URL.Query(), "hl")
 	marks := marker(mode == search.FullText && hl)
-	// Capped like the store's own maxLimit: the store clamps at its boundary,
+	// Capped like the store's own maxLimit (one page plus a sentinel): the store clamps at its boundary,
 	// but a direct backend treats the limit as a stop sign only, and would
 	// materialize every match - article bodies included - before stopping.
 	n := 20
 	if v := r.URL.Query().Get("n"); v != "" {
 		if p, err := strconv.Atoi(v); err == nil && p > 0 {
-			if p > 500 {
-				p = 500
+			if p > 501 {
+				p = 501
 			}
 			n = p
 		}
