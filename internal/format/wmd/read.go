@@ -18,6 +18,7 @@ import (
 	"github.com/yuin/goldmark/v2/parser"
 	gmhtml "github.com/yuin/goldmark/v2/renderer/html"
 	"github.com/yuin/goldmark/v2/text"
+	"github.com/yuin/goldmark/v2/util"
 
 	"github.com/wuweidict/wudict/internal/dict"
 	"github.com/wuweidict/wudict/internal/htmlref"
@@ -31,31 +32,70 @@ import (
 // line-level reading is lines 1-2 (R3.1), and the header and `see:` lines,
 // which the spec defines as literal text.
 //
-// The file is parsed in CHUNKS, because a syntax tree costs about forty times
-// the text it came from. A chunk ends where a heading group starts, and every
-// cut is CONFIRMED by the parser rather than guessed: the window up to a
-// candidate `## ` line is parsed, and the candidate stands only when that
-// parse ends in a top-level ATX heading starting on it. The cut is then made
-// at the start of the heading group that heading belongs to. A top-level
-// heading closes every open block, so parsing onwards from it gives the same
-// blocks as parsing the whole file - by induction from the file's start. A
-// candidate the parser rejects (a `## ` line inside a code block or an HTML
-// block) doubles the window, so the work stays linear however many such lines
-// a block holds.
+// The file is read in two phases (D182), each parsing every byte once.
+//
+// Phase 1, inside NewReader, reads the structure: the heading groups, their
+// `see:` lines, the swallowed-heading warnings, the reference definitions.
+// It parses in CHUNKS, because a syntax tree costs about forty times the text
+// it came from, with goldmark's block parsers alone: CommonMark builds the
+// block structure before any inline parsing and independently of it and of
+// which definitions exist, so the top-level blocks are the full parser's, at a
+// fraction of the cost. A chunk ends where a heading group starts, and every
+// cut is CONFIRMED by the parser rather than guessed: a chunk's window runs to
+// the end of the next chunk's first line, and the cut stands only when that
+// parse ends in a top-level ATX heading starting on it that begins its group.
+// A top-level heading closes every open block, so parsing onwards from it
+// gives the same blocks as parsing the whole file - by induction from the
+// file's start. The cuts are chosen ahead (every chunkSize, at a `## ` line
+// that does not continue a group), so the chunks are parsed in parallel and
+// confirmed in order; a cut the parser rejects (a `## ` line inside a code
+// block or an HTML block) is replaced by doubling the window over the cuts
+// chosen ahead, so the work stays linear however many such lines a block
+// holds. Once every definition is known, heading text is read: most headings
+// hold no inline syntax and are their text; the rest are parsed again, their
+// lines alone. Then the title, the header and the description.
+//
+// Phase 2, in Next, renders the bodies, a UNIT of whole heading groups at a
+// time - any group start is a valid cut once phase 1 has confirmed the
+// structure - on worker goroutines while a person waits on the preparation
+// (dict.Urgent), inline otherwise, and always in file order.
 //
 // Only link reference definitions cross a cut, since CommonMark makes them
-// document-wide. When the file can hold any, they are collected first, and
-// every chunk is parsed knowing all of them, the first definition of a label
-// winning - exactly how a whole-file parse resolves them.
+// document-wide: every inline parse is given the definitions its text can
+// reference, the first definition of a label winning - exactly how a
+// whole-file parse resolves them.
 
 var (
-	mdParser   = parser.New(parser.WithExtensions(extension.TableParser))
+	mdParser = parser.New(parser.WithExtensions(extension.TableParser))
+	// blockParser is mdParser without its inline parsers: the same block
+	// parsers at their stock priorities, the stock definition and table
+	// paragraph transformers.
+	blockParser = parser.New(parser.WithDefaultParsers(false),
+		parser.WithBlockParsers(
+			util.Prioritized(parser.NewSetextHeadingParser(), 100),
+			util.Prioritized(parser.NewThematicBreakParser(), 200),
+			util.Prioritized(parser.NewListParser(), 300),
+			util.Prioritized(parser.NewListItemParser(), 400),
+			util.Prioritized(parser.NewCodeBlockParser(), 500),
+			util.Prioritized(parser.NewATXHeadingParser(), 600),
+			util.Prioritized(parser.NewFencedCodeBlockParser(), 700),
+			util.Prioritized(parser.NewBlockquoteParser(), 800),
+			util.Prioritized(parser.NewHTMLBlockParser(), 900),
+			util.Prioritized(parser.NewParagraphParser(), 1000),
+		),
+		parser.WithParagraphTransformers(util.Prioritized(parser.LinkReferenceParagraphTransformer, 100)),
+		parser.WithExtensions(extension.TableParser))
 	mdRenderer = gmhtml.New(gmhtml.WithUnsafe(), gmhtml.WithExtensions(extension.TableHTMLRenderer))
 )
 
-// chunkSize is the text a chunk aims for; a variable so tests can make
-// chunks small.
-var chunkSize = 1 << 20
+// chunkSize is the text a phase-1 chunk aims for, unitSize a phase-2 unit's,
+// workersMax the most goroutines either phase runs; variables so tests can
+// make them small.
+var (
+	chunkSize  = 1 << 20
+	unitSize   = 256 << 10
+	workersMax = 8
+)
 
 // maxWarnings bounds what one file keeps; the count past it is kept.
 const maxWarnings = 1000
@@ -63,31 +103,34 @@ const maxWarnings = 1000
 type chunk struct {
 	start, end int // byte range in the text
 	line       int // line number of start
-	first      int // index of its first entry in Reader.entries
 }
 
 type entry struct {
 	names  []string
-	chunk  int
+	unit   int    // the unit its body is rendered in
+	slot   int    // its place among that unit's rendered bodies
 	see    string // redirect target (R3.6)
 	folded bool   // a redirect whose names became aliases of its targets
 }
 
-// Reader is the ingest scan. The file is read at open for its names; each
-// body is rendered when Next reaches it, from one chunk's parse at a time.
+// Reader is the ingest scan. NewReader reads the file's structure, names and
+// definitions; Next renders each body from its unit's parse.
 type Reader struct {
 	src     *source
+	path    string // the source the preparation is for: its urgency chooses the lane
 	meta    dict.Meta
-	defs    []parser.LinkDefinition // every reference definition, file order
+	defs    map[string]parser.LinkDefinition // every reference definition, the first of each normalized label
 	chunks  []chunk
+	units   []unit
 	entries []entry
 	i       int
 	warns   []string
 	dropped int
 
-	cur    int           // the chunk Next renders from, -1 before the first
-	curSrc []byte        // its text
-	bodies [][2]ast.Node // first, stop of each of its kept groups
+	cur    int      // the unit whose bodies are held, -1 before the first
+	bodies []string // its rendered bodies, by slot
+	rend   *renderer
+	ended  bool // the terminal Next released what phase 2 held
 }
 
 // NewReader opens a `.wudict.md`, a qualifying `.md`, or their `.gz`/`.dz`.
@@ -97,7 +140,7 @@ func NewReader(path string) (*Reader, error) {
 	if err != nil {
 		return nil, err
 	}
-	r, err := readSource(src)
+	r, err := readSource(src, path)
 	if err != nil {
 		src.close()
 		return nil, err
@@ -107,7 +150,7 @@ func NewReader(path string) (*Reader, error) {
 }
 
 // read reads decoded text held in memory.
-func read(text []byte) (*Reader, error) { return readSource(sourceFromBytes(text)) }
+func read(text []byte) (*Reader, error) { return readSource(sourceFromBytes(text), "") }
 
 func cutLine(b []byte) (line, rest []byte) {
 	if i := bytes.IndexByte(b, '\n'); i >= 0 {
@@ -244,18 +287,9 @@ func lineAt(text []byte, off, first int) int {
 	return first + bytes.Count(text[:min(max(off, 0), len(text))], []byte{'\n'})
 }
 
-// parse reads text[lo:hi] and parses it, knowing every reference definition
-// of the file.
-func (r *Reader) parse(lo, hi int) (ast.Node, parser.Context, []byte, error) {
-	text, err := r.src.read(lo, hi)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	pc := parser.NewContext()
-	for _, d := range r.defs {
-		pc.AddLinkDefinition(d)
-	}
-	return mdParser.Parse(text, parser.WithContext(pc)), pc, text, nil
+// lineStart is the offset of the start of the line holding off.
+func lineStart(text []byte, off int) int {
+	return bytes.LastIndexByte(text[:min(max(off, 0), len(text))], '\n') + 1
 }
 
 // candidateFrom is the index of the first candidate line starting at or
@@ -276,137 +310,6 @@ func groupStart(n ast.Node) ast.Node {
 	return g
 }
 
-// nextChunk finds where the chunk starting at start ends (see the package
-// comment). It returns the end; the parse it was confirmed with, which may run
-// past the end into the next chunk's first heading group; the text of that
-// parse; and the node the chunk stops at in it, nil for the last chunk.
-func (r *Reader) nextChunk(start int) (end int, doc ast.Node, pc parser.Context, text []byte, stop ast.Node, err error) {
-	from := start + chunkSize
-	for k := r.candidateFrom(max(from, start+1)); k < len(r.src.cands); {
-		c := r.src.cands[k]
-		if doc, pc, text, err = r.parse(start, c.end); err != nil {
-			return 0, nil, nil, nil, nil, err
-		}
-		last := doc.LastChild()
-		if h, ok := last.(*ast.Heading); ok && h.Level == 2 && h.HeadingKind == ast.HeadingKindATX && last.Pos() == c.at-start {
-			g := groupStart(last)
-			cut := start + bytes.LastIndexByte(text[:max(g.Pos(), 0)], '\n') + 1
-			if g != doc.FirstChild() && cut > start {
-				return cut, doc, pc, text, g, nil
-			}
-		}
-		// Not a cut: inside a block, or the second heading of a group. The
-		// window doubles, so the work stays linear.
-		k = r.candidateFrom(max(c.at+1, start+2*(c.at-start)))
-	}
-	if doc, pc, text, err = r.parse(start, r.src.size); err != nil {
-		return 0, nil, nil, nil, nil, err
-	}
-	return r.src.size, doc, pc, text, nil, nil
-}
-
-// readSource applies §3 to a decoded text.
-func readSource(src *source) (r *Reader, err error) {
-	line1, rest := cutLine(src.head)
-	line2, _ := cutLine(rest)
-	if !titleLine(line1) {
-		return nil, formatErr("line 1 must be `# ` and the dictionary title")
-	}
-	if err := checkVersion(string(line2)); err != nil {
-		return nil, err
-	}
-	defer func() {
-		// The parser is third-party code on hostile input: a panic costs the
-		// file, never the process.
-		if p := recover(); p != nil {
-			r, err = nil, formatErr("the file could not be parsed: %v", p)
-		}
-	}()
-
-	r = &Reader{src: src, cur: -1}
-	// A reference definition always holds "]:"; a file without one has none,
-	// and its chunks are scanned from the parse that cut them.
-	withDefs := src.defs
-	line := 1
-	for start := 0; start < src.size; {
-		end, doc, pc, text, stop, err := r.nextChunk(start)
-		if err != nil {
-			return nil, err
-		}
-		r.chunks = append(r.chunks, chunk{start: start, end: end, line: line, first: len(r.entries)})
-		line = lineAt(text, end-start, line)
-		if withDefs {
-			for _, d := range pc.LinkDefinitions() {
-				// Detached from its node: the stock link parser reads a
-				// definition through its node's positions, which refer to
-				// the chunk it was parsed from; without one it reads the
-				// bytes, through the same decoder.
-				r.defs = append(r.defs, parser.NewLinkDefinition(
-					bytes.Clone(d.Label()), bytes.Clone(d.Destination()), bytes.Clone(d.Title())))
-			}
-		} else if err := r.scan(len(r.chunks)-1, doc, stop, text); err != nil {
-			return nil, err
-		}
-		start = end
-	}
-	if withDefs {
-		// The cuts stand, since definitions change no block; the names are
-		// read again, with every definition known.
-		for i := range r.chunks {
-			r.chunks[i].first = len(r.entries)
-			doc, _, text, err := r.parse(r.chunks[i].start, r.chunks[i].end)
-			if err != nil {
-				return nil, err
-			}
-			if err := r.scan(i, doc, nil, text); err != nil {
-				return nil, err
-			}
-		}
-	}
-	r.foldRedirects()
-	return r, nil
-}
-
-// group is one heading group and its body, in one chunk's parse.
-type group struct {
-	names       []string
-	at          ast.Node // the group's first heading
-	first, stop ast.Node // body: first up to, not including, stop
-	blocks      int      // body blocks, reference definitions not counted
-	only        ast.Node // the body's block when blocks == 1
-}
-
-func (g group) kept() bool { return g.blocks > 0 && len(g.names) > 0 }
-
-// groups walks the top-level blocks from n up to stop (R3.5).
-func groups(n, stop ast.Node, src []byte) []group {
-	var out []group
-	for n != nil && n != stop {
-		g := group{at: n}
-		seen := map[string]bool{}
-		for n != nil && n != stop && (isH2(n) || isRefDef(n)) {
-			if isH2(n) {
-				if t := headingText(n, src); t != "" && !seen[t] {
-					seen[t] = true
-					g.names = append(g.names, t)
-				}
-			}
-			n = n.NextSibling()
-		}
-		g.first = n
-		for n != nil && n != stop && !isH2(n) {
-			if !isRefDef(n) {
-				g.blocks++
-				g.only = n
-			}
-			n = n.NextSibling()
-		}
-		g.stop = n
-		out = append(out, g)
-	}
-	return out
-}
-
 // entriesFrom is where a chunk's heading groups begin: after the title, the
 // header and the description in the first chunk.
 func entriesFrom(doc ast.Node, first bool) ast.Node {
@@ -420,68 +323,42 @@ func entriesFrom(doc ast.Node, first bool) ast.Node {
 	return n
 }
 
-// scan reads one chunk's header (the first chunk only) and heading groups;
-// src is the text doc was parsed from.
-func (r *Reader) scan(ci int, doc, stop ast.Node, src []byte) error {
-	c := r.chunks[ci]
-	if ci == 0 {
-		if err := r.header(doc, stop, src); err != nil {
-			return err
+// span is one heading group and its body, in a parse: from its first heading
+// at; the body from first up to, not including, stop.
+type span struct{ at, first, stop ast.Node }
+
+// spans walks the top-level blocks from n up to stop (R3.5): a run of
+// headings and reference definitions, then everything up to the next heading.
+func spans(n, stop ast.Node) []span {
+	var out []span
+	for n != nil && n != stop {
+		s := span{at: n}
+		for n != nil && n != stop && (isH2(n) || isRefDef(n)) {
+			n = n.NextSibling()
 		}
+		s.first = n
+		for n != nil && n != stop && !isH2(n) {
+			n = n.NextSibling()
+		}
+		s.stop = n
+		out = append(out, s)
 	}
-	r.swallowed(ci, doc, stop, src)
-	for _, g := range groups(entriesFrom(doc, ci == 0), stop, src) {
-		switch {
-		case g.blocks == 0:
-			r.warn(lineAt(src, g.at.Pos(), c.line), "heading group without a body; skipped")
-			continue
-		case len(g.names) == 0:
-			r.warn(lineAt(src, g.at.Pos(), c.line), "entry without a headword; skipped")
-			continue
-		}
-		e := entry{names: g.names, chunk: ci}
-		if g.blocks == 1 {
-			if _, ok := g.only.(*ast.Paragraph); ok {
-				if ls := sourceLines(g.only, src); len(ls) == 1 {
-					if t, ok := strings.CutPrefix(ls[0], "see:"); ok && t != "" && (t[0] == ' ' || t[0] == '\t') && trimWS(t) != "" {
-						e.see = trimWS(t)
-					}
-				}
-			}
-		}
-		r.entries = append(r.entries, e)
-	}
-	return nil
+	return out
 }
 
-// swallowed warns about every line that looks like an entry heading - `##`
-// and WS at column 0, the lines the chunk cutter collects - but lies inside an
-// HTML block. Markdown makes such a line part of the block, so the entry it
-// meant to start is silently not there: the block opened earlier and has not
-// ended, because a type 6-7 block runs to the next blank line and a <pre>,
-// <script>, <style> or <textarea> block to its closing tag. The reader stays
-// a stock CommonMark reader (D154); what it adds is saying so, on the line
-// where an entry went missing and the line that took it.
-func (r *Reader) swallowed(ci int, doc, stop ast.Node, src []byte) {
-	c := r.chunks[ci]
-	for n := doc.FirstChild(); n != nil && n != stop; n = n.NextSibling() {
-		hb, ok := n.(*ast.HTMLBlock)
-		if !ok {
-			continue
-		}
-		lo, hi := blockSpan(hb)
-		if hi <= lo {
-			continue
-		}
-		// A candidate is a whole line, so one that starts after the block's
-		// first byte and before its last is one of its lines.
-		for k := r.candidateFrom(c.start + lo + 1); k < len(r.src.cands) && r.src.cands[k].at < c.start+hi; k++ {
-			at := r.src.cands[k].at - c.start
-			line, _ := cutLine(src[at:])
-			r.warn(lineAt(src, at, c.line), "%q is inside the HTML block that starts on line %d, so it is not an entry; "+
-				"end that block before it (a blank line, or its closing tag)", clip(string(line)), lineAt(src, lo, c.line))
-		}
+// seeTarget is R3.6's redirect target of a body of one block, or "".
+func seeTarget(only ast.Node, src []byte) string {
+	if _, ok := only.(*ast.Paragraph); !ok {
+		return ""
 	}
+	ls := sourceLines(only, src)
+	if len(ls) != 1 {
+		return ""
+	}
+	if t, ok := strings.CutPrefix(ls[0], "see:"); ok && t != "" && (t[0] == ' ' || t[0] == '\t') && trimWS(t) != "" {
+		return trimWS(t)
+	}
+	return ""
 }
 
 // blockSpan is the byte range an HTML block covers in its chunk's text: the
@@ -508,9 +385,28 @@ func clip(s string) string {
 	return s
 }
 
-// header reads the title, the header fields and the description (R3.1-R3.3).
-func (r *Reader) header(doc, stop ast.Node, src []byte) error {
+// headBlocks checks the block shape R3.1-R3.2 give lines 1-2 - the title an
+// ATX level-1 heading, the header paragraph right under it - and returns the
+// header paragraph.
+func headBlocks(doc ast.Node, src []byte) (ast.Node, error) {
 	line1, _ := cutLine(src)
+	title, ok := doc.FirstChild().(*ast.Heading)
+	if !ok || title.Level != 1 {
+		return nil, formatErr("line 1 must be `# ` and the dictionary title")
+	}
+	head := title.NextSibling()
+	if h, ok := head.(*ast.Heading); ok && h.HeadingKind == ast.HeadingKindSetext {
+		return nil, formatErr("the header must end at a blank line: the `---` or `===` line under it makes it a heading")
+	}
+	if _, ok := head.(*ast.Paragraph); !ok || head.Pos() != len(line1)+1 {
+		return nil, formatErr("line 2 must be `wudict: 1`, directly under the title")
+	}
+	return head, nil
+}
+
+// header reads the title, the header fields and the description (R3.1-R3.3)
+// from a full parse of the text before the first heading group.
+func (r *Reader) header(doc ast.Node, src []byte) error {
 	title, ok := doc.FirstChild().(*ast.Heading)
 	if !ok || title.Level != 1 {
 		return formatErr("line 1 must be `# ` and the dictionary title")
@@ -519,12 +415,9 @@ func (r *Reader) header(doc, stop ast.Node, src []byte) error {
 	if name == "" {
 		return formatErr("the title on line 1 is empty")
 	}
-	head := title.NextSibling()
-	if h, ok := head.(*ast.Heading); ok && h.HeadingKind == ast.HeadingKindSetext {
-		return formatErr("the header must end at a blank line: the `---` or `===` line under it makes it a heading")
-	}
-	if _, ok := head.(*ast.Paragraph); !ok || head.Pos() != len(line1)+1 {
-		return formatErr("line 2 must be `wudict: 1`, directly under the title")
+	head, err := headBlocks(doc, src)
+	if err != nil {
+		return err
 	}
 	r.meta = dict.Meta{Name: name, Format: Format}
 	fromSeen, toSeen := false, false
@@ -547,7 +440,7 @@ func (r *Reader) header(doc, stop ast.Node, src []byte) error {
 	}
 	n := head.NextSibling()
 	desc := n
-	for n != nil && n != stop && !isH2(n) {
+	for n != nil && !isH2(n) {
 		n = n.NextSibling()
 	}
 	r.meta.Description = r.render(src, desc, n)
@@ -624,11 +517,12 @@ func primaryLang(tag string) string {
 	return lang.Normalize(p)
 }
 
-// render renders the top-level blocks first up to stop with the stock
-// renderer. A renderer panic keeps the body as escaped source text.
-func (r *Reader) render(src []byte, first, stop ast.Node) (out string) {
+// renderBody renders the top-level blocks first up to stop with the stock
+// renderer. A renderer panic keeps the body as escaped source text, and the
+// warning that says so is returned.
+func renderBody(src []byte, first, stop ast.Node) (out, warning string) {
 	if first == nil || first == stop {
-		return ""
+		return "", ""
 	}
 	defer func() {
 		if p := recover(); p != nil {
@@ -637,7 +531,7 @@ func (r *Reader) render(src []byte, first, stop ast.Node) (out string) {
 				end = stop.Pos()
 			}
 			start := min(max(first.Pos(), 0), end)
-			r.warn(0, "a body could not be rendered (%v); kept as text", p)
+			warning = fmt.Sprintf("a body could not be rendered (%v); kept as text", p)
 			out = "<pre>" + html.EscapeString(string(src[start:end])) + "</pre>"
 		}
 	}()
@@ -647,43 +541,25 @@ func (r *Reader) render(src []byte, first, stop ast.Node) (out string) {
 			panic(err)
 		}
 	}
-	return b.String()
+	return b.String(), ""
 }
 
-// loadChunk parses chunk ci again for its bodies; one chunk's text and tree
-// are held at a time.
-func (r *Reader) loadChunk(ci int) error {
-	c := r.chunks[ci]
-	doc, _, text, err := r.parse(c.start, c.end)
-	if err != nil {
-		return err
+// render is renderBody, its warning recorded.
+func (r *Reader) render(src []byte, first, stop ast.Node) string {
+	out, w := renderBody(src, first, stop)
+	if w != "" {
+		r.warn(0, "%s", w)
 	}
-	// A fresh slice: reusing the old one's array would keep the previous
-	// chunk's tree reachable through its tail.
-	r.cur, r.curSrc, r.bodies = ci, text, nil
-	for _, g := range groups(entriesFrom(doc, ci == 0), nil, r.curSrc) {
-		if g.kept() {
-			r.bodies = append(r.bodies, [2]ast.Node{g.first, g.stop})
-		}
-	}
-	return nil
+	return out
 }
 
 func (r *Reader) Meta() dict.Meta { return r.meta }
 
 // Next yields the articles in file order, redirects already folded into them
-// (foldRedirects).
-func (r *Reader) Next() (e dict.Entry, err error) {
-	defer func() {
-		// A chunk is parsed again here; the parser is third-party code on
-		// hostile input, and a panic costs the file, never the process.
-		if p := recover(); p != nil {
-			e, err = dict.Entry{}, formatErr("the file could not be parsed: %v", p)
-		}
-	}()
+// (foldRedirects). After the last, or an error, what phase 2 held is let go.
+func (r *Reader) Next() (dict.Entry, error) {
 	for r.i < len(r.entries) {
-		i := r.i
-		e := &r.entries[i]
+		e := &r.entries[r.i]
 		r.i++
 		switch {
 		case e.folded:
@@ -691,19 +567,14 @@ func (r *Reader) Next() (e dict.Entry, err error) {
 		case e.see != "":
 			return dict.Entry{Headwords: e.names, Body: lookupLink(e.see), Kind: dict.BodyHTML}, nil
 		}
-		if e.chunk != r.cur {
-			if err := r.loadChunk(e.chunk); err != nil {
-				return dict.Entry{}, err
-			}
+		if err := r.want(e.unit); err != nil {
+			r.i = len(r.entries)
+			r.end()
+			return dict.Entry{}, err
 		}
-		k := i - r.chunks[e.chunk].first
-		if k >= len(r.bodies) {
-			return dict.Entry{}, fmt.Errorf("wudict markdown: chunk %d reads differently on its second parse", e.chunk)
-		}
-		body := r.render(r.curSrc, r.bodies[k][0], r.bodies[k][1])
-		return dict.Entry{Headwords: e.names, Body: body, Kind: dict.BodyHTML}, nil
+		return dict.Entry{Headwords: e.names, Body: r.bodies[e.slot], Kind: dict.BodyHTML}, nil
 	}
-	r.bodies, r.curSrc = nil, nil
+	r.end()
 	return dict.Entry{}, io.EOF
 }
 
@@ -714,6 +585,7 @@ func (r *Reader) Warnings() ([]string, int) { return r.warns, r.dropped }
 // Close releases the text (a temporary file, if one was made) and reports
 // the warnings: each in verbose mode, a count otherwise.
 func (r *Reader) Close() error {
+	r.end()
 	var err error
 	if r.src != nil {
 		err = r.src.close()

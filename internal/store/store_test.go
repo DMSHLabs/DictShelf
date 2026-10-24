@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -505,13 +506,12 @@ func TestPrefixDoesNotStopAtExact(t *testing.T) {
 	}
 }
 
-// P-E: an accent/case-stripped prefix that the raw LIKE pass cannot match
-// must still resolve via the folded FTS fallback, matching the direct
-// backends (so "coraz" typed without the ó still finds corazón/corazonada).
+// An accent typed that no headword has ranks; it excludes nothing: the
+// folded reading still finds corazón and corazonada (D181).
 func TestPrefixFoldedFallback(t *testing.T) {
 	s := testStore(t)
-	// "córaz" (extra accent) does not LIKE-prefix any headword, but folds
-	// to the same key as corazón/corazonada.
+	// "córaz" (extra accent) starts no headword as typed, but folds to the
+	// same key as corazón/corazonada.
 	res, err := s.Prefix("córaz", 10)
 	if err != nil {
 		t.Fatal(err)
@@ -525,11 +525,19 @@ func TestPrefixFoldedFallback(t *testing.T) {
 	}
 }
 
-func TestFuzzyAccentInsensitive(t *testing.T) {
+// Accents are ignored by prefix search always, not only when nothing
+// matches as typed, and the word typed in full comes first (D181).
+func TestPrefixAccentInsensitive(t *testing.T) {
 	s := testStore(t)
-	res, err := s.fuzzy(bg, "corazon", 10) // no accent
-	if err != nil || len(res) < 2 {
-		t.Fatalf("Fuzzy corazon: %d results, err=%v", len(res), err)
+	res, err := s.Prefix("corazon", 10) // no accent
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := headwords(res); !slices.Equal(got, []string{"corazón", "corazonada"}) {
+		t.Fatalf("Prefix(corazon) = %q, want the word itself first", got)
+	}
+	if res, err := s.Exact("corazon", 10); err != nil || len(res) != 1 || res[0].Headword != "corazón" {
+		t.Fatalf("Exact(corazon) = %v, %v", res, err)
 	}
 }
 
@@ -584,8 +592,11 @@ func TestHostileFtsInput(t *testing.T) {
 		`"quoted"`, `""`, `co"ra`, "back\\slash", `emoji💡word`, `-`, `*`, `   `,
 	}
 	for _, q := range hostile {
-		if _, err := s.fuzzy(bg, q, 5); err != nil {
-			t.Errorf("Fuzzy(%q) errored: %v", q, err)
+		if _, err := s.PrefixContext(bg, q, 5); err != nil {
+			t.Errorf("Prefix(%q) errored: %v", q, err)
+		}
+		if _, err := s.ExactContext(bg, q, 5); err != nil {
+			t.Errorf("Exact(%q) errored: %v", q, err)
 		}
 		if _, err := s.WildcardContext(bg, q, 5); err != nil {
 			t.Errorf("Wildcard(%q) errored: %v", q, err)
@@ -705,8 +716,8 @@ func TestHeadwordsOnlyLevel(t *testing.T) {
 	if c.FTS || !c.Wildcard {
 		t.Errorf("headwords level: want fts=false wildcard=true, got %+v", c)
 	}
-	// accent-insensitive prefix (the internal fuzzy engine) works
-	res, err := s.fuzzy(bg, "corazon", 5)
+	// accent-insensitive prefix works without the full-text index
+	res, err := s.PrefixContext(bg, "corazon", 5)
 	if err != nil || len(res) != 1 {
 		t.Fatalf("prefix-fold: %v %v", res, err)
 	}
@@ -714,9 +725,9 @@ func TestHeadwordsOnlyLevel(t *testing.T) {
 	if _, err := s.FullTextContext(bg, "muscular", 5); err != dict.ErrUnsupported {
 		t.Errorf("fulltext: want ErrUnsupported, got %v", err)
 	}
-	// article body must NOT be indexed even via fuzzy w: prefix trickery
-	if res, _ := s.fuzzy(bg, "muscular", 5); len(res) != 0 {
-		t.Errorf("body leaked into headwords index: %v", res)
+	// the article body is not a headword
+	if res, _ := s.PrefixContext(bg, "muscular", 5); len(res) != 0 {
+		t.Errorf("body leaked into headword search: %v", res)
 	}
 }
 
@@ -1328,54 +1339,8 @@ func TestIngestProgressCoversRedirects(t *testing.T) {
 	}
 }
 
-// Exact is the hottest query in the app: it runs on every lookup, including
-// every miss. The `entry` table stores article bodies inline, so a scan of it
-// reads the whole dictionary; the only indexes on these columns are NOCASE
-// (ingest.go), which a case-SENSITIVE comparison cannot use. This asserts the
-// plan, not the rows - the rows are covered by the tests above and would stay
-// green through the regression this guards.
-func TestExactUsesTheHeadwordIndexes(t *testing.T) {
-	s := testStore(t)
-	const q = `
-		SELECT e.w, e.m FROM entry e WHERE e.w = ?1 COLLATE NOCASE AND e.w = ?1
-		UNION ALL
-		SELECT e.w, e.m FROM alias a JOIN entry e ON e.id = a.entry_id WHERE a.w = ?1 COLLATE NOCASE AND a.w = ?1
-		LIMIT ?2`
-	rows, err := s.db.Query("EXPLAIN QUERY PLAN "+q, "corazón", 10)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer rows.Close()
-	var plan strings.Builder
-	for rows.Next() {
-		var id, parent, notused int
-		var detail string
-		if err := rows.Scan(&id, &parent, &notused, &detail); err != nil {
-			t.Fatal(err)
-		}
-		plan.WriteString(detail)
-		plan.WriteByte('\n')
-	}
-	if err := rows.Err(); err != nil {
-		t.Fatal(err)
-	}
-	got := plan.String()
-	// The entry side is the one that matters and the one this asserts: its
-	// rows carry the article bodies, so scanning it reads the dictionary. The
-	// alias side is (w, entry_id) and this fixture holds two rows of it, which
-	// ANALYZE (ingest.go) correctly tells the planner to scan - asserting an
-	// index there would be asserting the fixture's size, not the query.
-	if !strings.Contains(got, "idx_entry_w") {
-		t.Errorf("Exact does not use idx_entry_w; plan:\n%s", got)
-	}
-	if strings.Contains(got, "SCAN e\n") || strings.Contains(got, "SCAN entry") {
-		t.Errorf("Exact full-scans entry; plan:\n%s", got)
-	}
-}
-
-// The case-sensitive pass must still be case-SENSITIVE after being rewritten
-// to reach the NOCASE index: the index only narrows, the second comparison
-// decides.
+// Exact search ranks the spelling typed first and finds the others after it:
+// a capital that no headword has still finds the lowercase one (D181).
 func TestExactStillPrefersTheExactCase(t *testing.T) {
 	s := testStore(t)
 	res, err := s.Exact("Corazón", 10)

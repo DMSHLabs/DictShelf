@@ -37,23 +37,21 @@ func Versions(format string) string {
 // Check prepares src (full text on, so every index is hashed) into a
 // temporary text.db and compares its fingerprint and the current versions
 // with want. The fixture must be built in code, byte for byte the same on
-// every run.
+// every run. It prepares twice, on one core and in parallel (D182): the two
+// must write the same content.
 func Check(t *testing.T, format, src string, want Golden) {
 	t.Helper()
 	t.Setenv("WUDICT_DB_DIR", t.TempDir())
-	r, err := dict.OpenReader(src)
-	if err != nil {
-		t.Fatalf("OpenReader(%s): %v", src, err)
-	}
-	dbPath := filepath.Join(t.TempDir(), store.TextDBName)
-	_, err = store.IngestPlan(r, dbPath, store.Plan{FullText: true}, nil)
-	r.Close()
-	if err != nil {
-		t.Fatalf("IngestPlan: %v", err)
-	}
-	hash, err := store.Fingerprint(dbPath)
-	if err != nil {
-		t.Fatalf("Fingerprint: %v", err)
+	was := dict.SetUrgentDefault(false)
+	defer dict.SetUrgentDefault(was)
+	var hash string
+	for _, urgent := range []bool{false, true} {
+		dict.SetUrgentDefault(urgent)
+		h := prepare(t, src)
+		if hash != "" && h != hash {
+			t.Fatalf("%s: preparing in parallel wrote other content than on one core: %s vs %s", format, h, hash)
+		}
+		hash = h
 	}
 	got := Golden{Versions: Versions(format), Hash: hash}
 	if got == want {
@@ -76,4 +74,24 @@ func Check(t *testing.T, format, src string, want Golden) {
 			"(if nothing of %s's output was meant to change, the bump is unnecessary and "+
 			"will ask every library to rebuild for nothing)", format, want.Versions, got.Versions, update, format)
 	}
+}
+
+// prepare ingests src into a temporary text.db and returns its fingerprint.
+func prepare(t *testing.T, src string) string {
+	t.Helper()
+	r, err := dict.OpenReader(src)
+	if err != nil {
+		t.Fatalf("OpenReader(%s): %v", src, err)
+	}
+	dbPath := filepath.Join(t.TempDir(), store.TextDBName)
+	_, err = store.IngestPlan(r, dbPath, store.Plan{FullText: true}, nil)
+	r.Close()
+	if err != nil {
+		t.Fatalf("IngestPlan: %v", err)
+	}
+	hash, err := store.Fingerprint(dbPath)
+	if err != nil {
+		t.Fatalf("Fingerprint: %v", err)
+	}
+	return hash
 }

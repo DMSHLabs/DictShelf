@@ -40,6 +40,14 @@ following all work correctly today:
 The pattern: **NFD covers canonical equivalence.** The gaps are where equivalence is
 *compatibility*-only, or is not Unicode's business at all.
 
+On a prepared dictionary, exact, prefix and wildcard fold through `wildcard.Fold`, the
+per-character form of the same rule (D181): the table holds there too, except the Korean row —
+`wildcard.Fold` keeps a precomposed syllable whole, so it does not meet its conjoining jamo.
+A typed character the fold changes ranks rather than excludes, which softens gap 5 without
+closing it: `だ` lists the だ-words before the た-words. Full-text search folds through
+SQLite's `unicode61` tokenizer, which removes the marks of Latin letters only: `ё`/`е` and
+`й`/`и` stay apart there.
+
 ### The five real gaps
 
 | # | Class | Concrete miss | Why NFD does not help |

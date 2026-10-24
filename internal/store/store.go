@@ -9,7 +9,7 @@
 //
 // Query modes are ported from draego/drae.go with the fixes catalogued in
 // docs/SPEC.md §FTS-audit (stripped-text indexing, quoted-phrase MATCH
-// building, escaped LIKE, clamped limits, ingest-time index build).
+// building, clamped limits, ingest-time index build).
 package store
 
 import (
@@ -27,6 +27,7 @@ import (
 
 	"github.com/wuweidict/wudict/internal/dict"
 	"github.com/wuweidict/wudict/internal/logx"
+	"github.com/wuweidict/wudict/internal/wildcard"
 )
 
 func init() {
@@ -76,14 +77,15 @@ type Store struct {
 	alpha     []dict.Letter
 	alphaErr  error
 
-	// The wildcard statements (wildcard.go), prepared on the first wildcard
-	// search of this handle and kept for its life; db.Close releases them.
-	// marksStmt is nil when no headword starts with a nonspacing mark, which a
-	// text.db that does not change under an open reader answers once.
+	// The statements of exact, prefix and wildcard search (wildcard.go),
+	// prepared on the first search of this handle and kept for its life;
+	// db.Close releases them. marksStmt is nil when no headword starts with a
+	// nonspacing mark, which a text.db that does not change under an open
+	// reader answers once.
 	marksOnce sync.Once
 	marksStmt *sql.Stmt
 	marksErr  error
-	scanStmts sync.Map // wildcardScan text → *sql.Stmt
+	scanStmts sync.Map // query text → *sql.Stmt
 }
 
 // markupVersionOf reads the article-markup version a database records. Absent
@@ -306,64 +308,18 @@ func (s *Store) Prefix(word string, limit int) ([]dict.Result, error) {
 	return s.PrefixContext(context.Background(), word, limit)
 }
 
-// ExactContext returns entries (and alias targets) whose headword equals word;
-// when the case-sensitive pass is empty it retries COLLATE NOCASE.
+// ExactContext returns the entries whose headword, or one of whose aliases,
+// is word, ranked (rank, D181): spelled as typed first, then with case
+// ignored, then with accents ignored too - `corazon` finds corazón, `елка`
+// finds ёлка. The folded reading covers headwords only; an alias matches as
+// typed or with ASCII case ignored (SQLite NOCASE). `@_` sub-entries are
+// found too: an article's link fetches one by exact lookup.
 func (s *Store) ExactContext(ctx context.Context, word string, limit int) ([]dict.Result, error) {
 	word = strings.TrimSpace(word)
 	if word == "" {
 		return nil, nil
 	}
-	n := clamp(limit)
-	// Both passes compare COLLATE NOCASE because that is the collation the
-	// only indexes on these columns are built with (ingest.go): a bare
-	// case-sensitive `w = ?1` matches no index and full-scans a table whose
-	// rows carry the article bodies inline. The case-sensitive pass gets its
-	// exactness from the second, uncollated comparison, applied to the handful
-	// of rows the index already narrowed to.
-	const q = `
-		SELECT e.w, e.m FROM entry e WHERE e.w = ?1 COLLATE NOCASE %[1]s
-		UNION ALL
-		SELECT e.w, e.m FROM alias a JOIN entry e ON e.id = a.entry_id WHERE a.w = ?1 COLLATE NOCASE %[2]s
-		LIMIT ?2`
-	res, err := s.collect(s.db.QueryContext(ctx, fmt.Sprintf(q, "AND e.w = ?1", "AND a.w = ?1"), word, n))
-	if err != nil || len(res) > 0 {
-		return res, err
-	}
-	res, err = s.collect(s.db.QueryContext(ctx, fmt.Sprintf(q, "", ""), word, n))
-	if err != nil || len(res) > 0 {
-		return res, err
-	}
-	// accent-fold fallback, APPROXIMATING the direct backends: exact phrase
-	// over the diacritic-stripping tokenizer, then keep only whole-headword
-	// folded matches.
-	//
-	// Not parity. Stroke letters are not the difference: dict.Fold is
-	// ToLower + NFD + drop-Mn (dict/fold.go), and đ has no canonical
-	// decomposition - so Fold("đansk") is "đansk", and neither this path nor
-	// the direct backends, which call the same Fold, find it from "dansk".
-	//
-	// What differs is narrower: FTS5 tokenizes and folds with its own
-	// unicode61 rules, this filter re-checks with dict.Fold, and the two agree
-	// on combining marks but need not agree on every token boundary. Closing
-	// even that would mean a second folded column in the schema. Not worth it.
-	match := buildExactMatch(word, "w")
-	if match == "" {
-		return nil, nil
-	}
-	res, err = s.collect(s.db.QueryContext(ctx, `
-		SELECT e.w, e.m FROM entry_fts f JOIN entry e ON e.id = f.rowid
-		WHERE entry_fts MATCH ?1 ORDER BY e.w LIMIT ?2`, match, n))
-	if err != nil {
-		return nil, err
-	}
-	key := dict.Fold(word)
-	var out []dict.Result
-	for _, r := range res {
-		if dict.Fold(r.Headword) == key {
-			out = append(out, r)
-		}
-	}
-	return out, nil
+	return s.ranked(ctx, wildcard.Literal(word, false), limit, scope{aliases: true, subs: true})
 }
 
 // notSubEntry excludes MDict-style sub-entries from browsing results.
@@ -382,91 +338,33 @@ const notSubEntry = ` AND %s NOT LIKE '@_%%' `
 
 func subEntryFilter(col string) string { return fmt.Sprintf(notSubEntry, col) }
 
-// buildExactMatch is buildMatch without the prefix star: whole-token
-// phrase matching.
-func buildExactMatch(input, column string) string {
-	var parts []string
-	for _, tok := range strings.Fields(strings.TrimSpace(input)) {
-		tok = strings.ReplaceAll(tok, `"`, `""`)
-		p := `"` + tok + `"`
-		if column != "" {
-			p = column + ":" + p
-		}
-		parts = append(parts, p)
-	}
-	return strings.Join(parts, " ")
-}
-
-// PrefixContext returns every headword starting with word, ordered by headword, the
-// exact match first (LIKE input escaped - FTS-audit #5).
+// PrefixContext returns the entries whose headword, or one of whose aliases,
+// starts with word, ranked (rank, D181): the word itself first, spelled as
+// typed before its other spellings, then the keys it starts, in browse
+// order - with a capital or an accent typed, the ones that keep it first.
+// Accents are always ignored as well, not only when nothing matches as
+// typed: `nacion` finds nación ahead of nacional, `über` the Über- nouns.
 //
-// The exact match is NOT a short-circuit: "starts with" must not answer a
-// complete headword with that one article and drop every longer key under it.
-// The LIKE pattern already contains the exact row - a string is a prefix of
-// itself - and ORDER BY w puts it first, because a proper prefix sorts before
-// everything it prefixes. Exact survives one step lower, as the fallback whose
-// NOCASE and folded passes reach what a LIKE that is case-sensitive outside
-// ASCII cannot.
+// The word itself leads because it is a match of its own (Spelled), not by
+// the limit's luck: a headword typed in full must not hide the keys it is a
+// prefix of, nor be cut by them.
 //
 // Ordering is by the key that MATCHED, not by the headword it belongs to: an
 // alias is a way of typing its entry, so `a…` typed into a dictionary of
 // phrases must not open with "(Administration of) All the Talents" - reached
 // through the alias "all the talents", sorted under a bracket the user never
-// typed - and must not spend the LIMIT there either. NOCASE first, then binary
-// as the tiebreak, so a capitalized headword and its lowercase twin stay
-// adjacent and the word typed in full still sorts ahead of the keys it
-// prefixes.
+// typed - and must not spend the limit there either. An entry its headword
+// and an alias both match is one article, filed under the better of the two.
 //
-// The sort runs over (id, key) and the bodies are joined back onto the LIMIT
-// rows that survive it. Selecting `m` into the sorted subquery instead pulls
-// every matching article into the temp b-tree: measured on the 879k-entry OED
-// (docs.local/PERF.md), a one-letter prefix cost 1.1 s ("a") and 2.4 s ("s")
-// that way against 95 ms and 120 ms this way - and one-letter prefixes are not
-// a rare path but every first keystroke.
+// Measured on the 879k-entry OED (docs.local/PHASES.md 2026-10-22): a
+// one-letter prefix reads the first n keys of its range and stops, where a
+// LIKE sorted over every match cost 95-120 ms.
 func (s *Store) PrefixContext(ctx context.Context, word string, limit int) ([]dict.Result, error) {
 	word = strings.TrimSpace(word)
 	if word == "" {
 		return nil, nil
 	}
-	n := clamp(limit)
-	pat := escapeLike(word) + "%"
-	// GROUP BY id, not UNION: an entry its own headword AND an alias match is
-	// one article, filed under the earlier of the two keys.
-	res, err := s.collect(s.db.QueryContext(ctx, `
-		SELECT e.w, e.m FROM entry e JOIN (
-			SELECT id, min(k) AS k FROM (
-				SELECT e2.id AS id, e2.w AS k FROM entry e2
-					WHERE e2.w LIKE ?1 ESCAPE '\'`+subEntryFilter("e2.w")+`
-				UNION ALL
-				SELECT e3.id AS id, a.w AS k FROM alias a JOIN entry e3 ON e3.id = a.entry_id
-					WHERE a.w LIKE ?1 ESCAPE '\'`+subEntryFilter("a.w")+`
-			) GROUP BY id ORDER BY k COLLATE NOCASE, k LIMIT ?2
-		) m ON e.id = m.id ORDER BY m.k COLLATE NOCASE, m.k`, pat, n))
-	if err != nil || len(res) > 0 {
-		return res, err
-	}
-	// Nothing starts with the word as typed: fall back to the exact passes
-	// (NOCASE over entry and alias, then folded), and finally to a
-	// diacritic-insensitive prefix over the FTS `w` column, so `corazon`
-	// typed without the ó still prefix-matches `corazón…`.
-	// entry_fts always indexes `w`, even at headwords level.
-	if res, err := s.ExactContext(ctx, word, limit); err != nil || len(res) > 0 {
-		return res, err
-	}
-	return s.fuzzy(ctx, word, n)
-}
-
-// fuzzy is the accent/case-insensitive prefix-phrase engine (FTS5 unicode61
-// remove_diacritics tokenizer, ordered by headword): Prefix's last fallback
-// (FTS-audit #4).
-func (s *Store) fuzzy(ctx context.Context, word string, limit int) ([]dict.Result, error) {
-	match := buildMatch(word, "w")
-	if match == "" {
-		return nil, nil
-	}
-	return s.collect(s.db.QueryContext(ctx, `
-		SELECT e.w, e.m FROM entry_fts f JOIN entry e ON e.id = f.rowid
-		WHERE entry_fts MATCH ?1`+subEntryFilter("e.w")+`ORDER BY e.w LIMIT ?2`, match, clamp(limit)))
+	return s.ranked(ctx, wildcard.Literal(word, true), limit, scope{aliases: true})
 }
 
 // FullTextContext searches headwords and article text, ordered by BM25 rank,
@@ -543,11 +441,4 @@ func buildMatch(input, column string) string {
 		parts = append(parts, p)
 	}
 	return strings.Join(parts, " ")
-}
-
-// escapeLike escapes LIKE wildcards in user input for use with ESCAPE '\'.
-func escapeLike(s string) string {
-	s = strings.ReplaceAll(s, `\`, `\\`)
-	s = strings.ReplaceAll(s, `%`, `\%`)
-	return strings.ReplaceAll(s, `_`, `\_`)
 }

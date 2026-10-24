@@ -89,6 +89,7 @@ type Config struct {
 	// network address and the LAN is trusted with deletions.
 	AllowRemoteDelete bool   // ALLOW_REMOTE_DELETE
 	NoCompress        bool   // NO_COMPRESS=1: store article text verbatim (bigger databases)
+	Compression       string // COMPRESSION: fast (default) or small - how hard article text is compressed
 	IndexWorkers      int    // INDEX_WORKERS: how many dictionaries may be indexed at once
 	MemoryLimit       int64  // MEMORY_LIMIT: soft heap ceiling in bytes (0 = none)
 	PreviewMemory     int64  // PREVIEW_MEMORY: cap on RAM held by unprepared dictionaries (0 = unlimited)
@@ -193,6 +194,7 @@ func defaults() Config {
 		AllowRemoteDelete: false,
 		LemmaURL:          DefaultLemmaURL,
 		Limits:            limits.Default,
+		Compression:       CompressionFast,
 	}
 }
 
@@ -346,6 +348,9 @@ func Load(configPath string, flags map[string]string) (Config, error) {
 	}
 	if v := get("NO_COMPRESS"); v != "" {
 		cfg.NoCompress = !isOff(v)
+	}
+	if v := get("COMPRESSION"); v != "" {
+		cfg.Compression = normalizeCompression(v)
 	}
 	if v := get("INDEX_WORKERS"); v != "" {
 		cfg.IndexWorkers = ParseWorkers(v)
@@ -587,6 +592,11 @@ const configTemplate = `# wudict configuration  (~/.wudict/wudict.toml)
 #                                     # Android defaults to a fraction of the device's RAM.
 # NO_COMPRESS = "0"                   # "1" = store article text uncompressed (databases roughly 3x larger,
 #                                     #       marginally faster reads; only worth it with disk to spare)
+# COMPRESSION = "fast"                # how hard article text is compressed when a dictionary is indexed.
+#                                     # "fast" = the quickest indexing. "small" = a library 1-2% smaller;
+#                                     # indexing takes up to 1.5 times as long. It applies to dictionaries
+#                                     # indexed after the change. On Android "fast" compresses less, to use
+#                                     # less battery. NO_COMPRESS = "1" turns compression off altogether.
 # ALLOW_REMOTE_DELETE = "0"           # may a browser on ANOTHER machine delete a dictionary?
 #                                     # Deleting from this machine is always allowed. "1" = a browser
 #                                     # on the LAN may too; only meaningful when SERVER_IP is not
@@ -1080,6 +1090,22 @@ const (
 	AutoIndexOn  = "on"
 	AutoIndexOff = "off"
 )
+
+// COMPRESSION values: how hard article text is compressed when a dictionary
+// is indexed (D182).
+const (
+	CompressionFast  = "fast"
+	CompressionSmall = "small"
+)
+
+// normalizeCompression reads COMPRESSION. Anything but "small" means the
+// default, "fast".
+func normalizeCompression(v string) string {
+	if strings.EqualFold(strings.TrimSpace(v), CompressionSmall) {
+		return CompressionSmall
+	}
+	return CompressionFast
+}
 
 // IMPORT_KEEP values: what becomes of the archive an import came from.
 const (

@@ -49,7 +49,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
         with:
-          fetch-depth: 0 # versionName and versionCode both come from git history
+          fetch-depth: 0 # git describe names builds between releases
 
       - name: Setup Go
         uses: actions/setup-go@v7
@@ -89,13 +89,29 @@ jobs:
             VERSION="$(git describe --tags --always --abbrev=0 2>/dev/null || echo dev)"
           fi
 
-          # versionCode is NOT passed: app/build.gradle derives it from the
-          # commit count itself, so a local `make apk-foss-release` and this
-          # workflow agree on it. Passing it here too would be a second source
-          # of truth, which is how they came to disagree in the first place.
+          # versionCode follows from the tag (tools/release.sh, D183), the
+          # same number `make release` writes into app/build.gradle. A RELEASE
+          # tag must find its version there - F-Droid reads that file at the
+          # tag - so a release is cut with `make release VERSION=...` and this
+          # dispatch only builds it. A pre-release (alpha, beta, rc) may be
+          # tagged right here: F-Droid skips those, and the code is passed.
+          NAME=$(sed -n 's/^ *versionName "\([^"]*\)"$/\1/p' android/app/build.gradle)
+          if CODE=$(sh tools/release.sh --code "$VERSION" 2>/dev/null); then
+            case $VERSION in
+            *-*) [ "v$NAME" = "$VERSION" ] || echo "::notice::pre-release $VERSION: versionCode $CODE from the tag (app/build.gradle says $NAME)" ;;
+            *) if [ "v$NAME" != "$VERSION" ]; then
+                 echo "::error::release $VERSION, but android/app/build.gradle says versionName $NAME: cut it with make release VERSION=$VERSION, push, then run this workflow"
+                 exit 1
+               fi ;;
+            esac
+          else
+            CODE=$(sed -n 's/^ *versionCode \([0-9][0-9]*\)$/\1/p' android/app/build.gradle)
+            echo "::notice::$VERSION is not a release tag: versionCode $CODE from app/build.gradle"
+          fi
+          echo "code=$CODE" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "TAG=$VERSION" >> "$GITHUB_ENV"
-          echo "building $VERSION (versionCode = $(git rev-list --count HEAD))"
+          echo "building $VERSION (versionCode = $CODE)"
 
       - name: Configure signing
         id: signing
@@ -134,7 +150,8 @@ jobs:
           # build would stamp `git describe --dirty`, which is right for a
           # working tree and wrong for a release.
           ./gradlew --no-daemon "$TASK" assemblePlayDebug \
-            -PversionName="${{ steps.ver.outputs.version }}"
+            -PversionName="${{ steps.ver.outputs.version }}" \
+            -PversionCode="${{ steps.ver.outputs.code }}"
 
       - name: Assert the flavour split held
         # The Play APK must declare no storage permission and the FOSS one

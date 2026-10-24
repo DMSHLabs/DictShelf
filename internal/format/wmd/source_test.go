@@ -7,6 +7,8 @@ package wmd
 import (
 	"bytes"
 	"errors"
+	"fmt"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -56,11 +58,48 @@ func TestScannerCandidates(t *testing.T) {
 	if !reflect.DeepEqual(s.cands, want) {
 		t.Errorf("cands = %v, want %v", s.cands, want)
 	}
-	if s.size != len(text) || string(s.head) != "# T\nwudict: 1\n" || s.defs {
-		t.Errorf("size %d head %q defs %v", s.size, s.head, s.defs)
+	if s.size != len(text) || string(s.head) != "# T\nwudict: 1\n" {
+		t.Errorf("size %d head %q", s.size, s.head)
 	}
-	if !sourceFromBytes([]byte("# T\nwudict: 1\n\n[x]: y\n")).defs {
-		t.Error("a reference definition was not noticed")
+}
+
+// TestScannerBlocks: the candidates and the head are the same however the
+// text is cut into blocks - a `#` run, its WS and its line end falling on
+// every boundary.
+func TestScannerBlocks(t *testing.T) {
+	rnd := rand.New(rand.NewSource(1))
+	const alphabet = "##\n\n \ta"
+	for n := 0; n < 5000; n++ {
+		b := make([]byte, rnd.Intn(40))
+		for i := range b {
+			b[i] = alphabet[rnd.Intn(len(alphabet))]
+		}
+		var want []cand
+		off := 0
+		for _, l := range strings.SplitAfter(string(b), "\n") {
+			body := strings.TrimSuffix(l, "\n")
+			if strings.HasPrefix(body, "##") && (len(body) == 2 || body[2] == ' ' || body[2] == '\t') {
+				want = append(want, cand{at: off, end: off + len(l)})
+			}
+			off += len(l)
+		}
+		wantHead := b
+		if i := bytes.IndexByte(b, '\n'); i >= 0 {
+			if j := bytes.IndexByte(b[i+1:], '\n'); j >= 0 {
+				wantHead = b[:i+1+j+1]
+			}
+		}
+		s := &source{}
+		sc := newScanner(s)
+		for rest := b; len(rest) > 0; {
+			k := min(len(rest), 1+rnd.Intn(5))
+			sc.Write(rest[:k])
+			rest = rest[k:]
+		}
+		sc.finish()
+		if !reflect.DeepEqual(s.cands, want) || s.size != len(b) || !bytes.Equal(s.head, wantHead) {
+			t.Fatalf("%q: cands %v head %q, want %v %q", b, s.cands, s.head, want, wantHead)
+		}
 	}
 }
 
@@ -71,8 +110,11 @@ func tempFiles(t *testing.T, dir string) []string {
 }
 
 // TestSourceFiles: a clean plain file is read where it is; a file that needs
-// repair, or a compressed one, through a temporary file that Close removes.
+// repair, or a compressed one, is decoded into memory while the budget
+// allows, else through a temporary file that Close removes.
 func TestSourceFiles(t *testing.T) {
+	saved := textRoom
+	defer func() { textRoom = saved }()
 	tmp := t.TempDir()
 	// os.TempDir reads TMPDIR on Unix and TMP/TEMP on Windows; set all three,
 	// or on Windows the file lands in the system temp folder and is not seen.
@@ -90,28 +132,31 @@ func TestSourceFiles(t *testing.T) {
 		{"bom" + Ext, append([]byte("\xEF\xBB\xBF"), doc...), true},
 		{"gz" + ExtGz, gz(t, doc), true},
 	} {
-		t.Run(tc.name, func(t *testing.T) {
-			p := filepath.Join(t.TempDir(), tc.name)
-			if err := os.WriteFile(p, tc.data, 0o644); err != nil {
-				t.Fatal(err)
-			}
-			r, err := NewReader(p)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if got := len(tempFiles(t, tmp)) > 0; got != tc.temp {
-				t.Errorf("temporary file: %v, want %v", got, tc.temp)
-			}
-			if e, err := r.Next(); err != nil || e.Headwords[0] != "w" || e.Body != "<p>body</p>\n" {
-				t.Errorf("entry: %+v, %v", e, err)
-			}
-			if err := r.Close(); err != nil {
-				t.Error(err)
-			}
-			if left := tempFiles(t, tmp); len(left) != 0 {
-				t.Errorf("left behind: %v", left)
-			}
-		})
+		for _, room := range []int64{0, 1 << 30} {
+			t.Run(fmt.Sprintf("%s room %d", tc.name, room), func(t *testing.T) {
+				textRoom = func() int64 { return room }
+				p := filepath.Join(t.TempDir(), tc.name)
+				if err := os.WriteFile(p, tc.data, 0o644); err != nil {
+					t.Fatal(err)
+				}
+				r, err := NewReader(p)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if got, want := len(tempFiles(t, tmp)) > 0, tc.temp && room == 0; got != want {
+					t.Errorf("temporary file: %v, want %v", got, want)
+				}
+				if e, err := r.Next(); err != nil || e.Headwords[0] != "w" || e.Body != "<p>body</p>\n" {
+					t.Errorf("entry: %+v, %v", e, err)
+				}
+				if err := r.Close(); err != nil {
+					t.Error(err)
+				}
+				if left := tempFiles(t, tmp); len(left) != 0 {
+					t.Errorf("left behind: %v", left)
+				}
+			})
+		}
 	}
 }
 

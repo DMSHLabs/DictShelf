@@ -15,6 +15,7 @@
 //	cluster ptrs:  u64 file offset x clusterCount
 //	dirent:        mimetype u16, parameterLen u8, namespace u8, revision u32,
 //	               then u32 redirectIndex           (mimetype == 0xFFFF)
+//	               or   nothing                     (0xFFFE, 0xFFFD)
 //	               or   u32 cluster, u32 blob       (otherwise),
 //	               then NUL path, NUL title, then parameterLen extra bytes
 //	cluster:       info u8 (codec = b&0x0F, extended = b&0x10), then a
@@ -53,6 +54,8 @@ import (
 	"fmt"
 	"hash/crc32"
 	"io"
+	"math"
+	"slices"
 	"strings"
 	"sync"
 
@@ -76,10 +79,18 @@ const (
 	mimeDeleted    = 0xFFFD
 
 	// maxDirentSpan bounds one dirent read. Paths are normally short, but a
-	// zimit web capture keys entries by full captured URL and reaches a few
-	// kilobytes, so the window grows rather than truncating (czim's bug, in
-	// the other list).
-	maxDirentSpan = 1 << 16
+	// zimit web capture keys entries by full captured URL, query included, so
+	// the window grows rather than truncating (czim's bug, in the other list).
+	// libzim sets no bound at all, and one entry this cannot read fails every
+	// binary search that probes it, so the bound is far past any real path.
+	maxDirentSpan = 1 << 20
+
+	// redirectHops bounds a redirect chain, as libzim's watchdog does
+	// (Entry::getRedirect): real files contain cycles.
+	redirectHops = 50
+
+	// maxMetaEntries bounds the M namespace read whole at open (loadMeta).
+	maxMetaEntries = 1024
 
 	// maxMimeListSpan bounds the MIME string region.
 	maxMimeListSpan = 1 << 20
@@ -98,6 +109,11 @@ const (
 	// entry just inserted would make every blob read decompress again.
 	clusterCacheBytes = 16 << 20
 
+	// maxCachedClusters bounds the clusters cached by count: a stored
+	// cluster costs the cache only its offset table, so the byte budget
+	// alone would let thousands of them in, and touch is linear.
+	maxCachedClusters = 64
+
 	// ptrPageLen is how many path pointers a walk reads at a time (4 KiB).
 	// The list is 8 bytes per entry - 160 MB for a 20M-entry Wikipedia - so it
 	// is read on demand rather than held resident: a binary search probe reads
@@ -106,12 +122,13 @@ const (
 	ptrPageLen = 512
 )
 
-// dirent is one directory entry: an article, a resource, or a redirect.
 // maxCluster bounds one DECOMPRESSED cluster (MAX_ZIM_CLUSTER). Every codec
 // here can be made to expand a bounded input without limit, and a cluster's
 // compressed extent is attacker-controlled in a downloaded file.
 func maxCluster() int64 { return limits.Get().ZIMCluster }
 
+// dirent is one directory entry: an article, a resource, a redirect, or one
+// of the deprecated linktarget/deleted markers, which hold nothing.
 type dirent struct {
 	mimetype  uint16
 	namespace byte
@@ -124,6 +141,10 @@ type dirent struct {
 }
 
 func (d dirent) isRedirect() bool { return d.mimetype == mimeRedirect }
+
+// isContent reports an entry that stores a blob: neither a redirect nor a
+// linktarget/deleted marker, whose dirent names no cluster at all.
+func (d dirent) isContent() bool { return d.mimetype < mimeDeleted }
 
 // headword is the title when the file records one, else the path. An empty
 // title means "same as the path" and is how ZIM avoids storing it twice - so
@@ -145,14 +166,17 @@ func searchKey(ns byte, path string) string { return string([]byte{ns}) + path }
 type clusterData struct {
 	data     []byte // the decompressed body; nil when direct
 	extended bool
-	blobs    uint64 // offset-table entries minus one; set and checked at load when not direct
+	blobs    uint64 // offset-table entries minus one, checked at load
 
 	// An uncompressed cluster is never loaded: its blobs are read in place,
 	// so serving one image or video out of a multi-megabyte media cluster
-	// costs that blob, and a large blob can be streamed (contentReader).
+	// costs that blob, and a large blob can be streamed (contentReader). Its
+	// offset table is read and checked once, at load, and kept: reading it
+	// per blob made packing a cluster of n images read n tables.
 	direct bool
 	body   int64  // file offset of the body, just past the info byte
 	n      uint64 // body length
+	table  []byte // the offset table, when direct
 }
 
 func (cd *clusterData) size() uint64 {
@@ -160,6 +184,18 @@ func (cd *clusterData) size() uint64 {
 		return cd.n
 	}
 	return uint64(len(cd.data))
+}
+
+// resident is what the cluster cache holds of cd.
+func (cd *clusterData) resident() int64 { return int64(len(cd.data) + len(cd.table)) }
+
+// clusterLoad is one cluster being read, which a second reader of the same
+// cluster waits for instead of decompressing it again: the blobs of one page
+// - its stylesheets, its scripts - are requested together and share clusters.
+type clusterLoad struct {
+	done chan struct{}
+	cd   *clusterData
+	err  error
 }
 
 type container struct {
@@ -175,9 +211,19 @@ type container struct {
 	mimes    []string
 	htmlMIME map[uint16]bool
 
-	pathPtrPos  int64    // entryCount u64 file offsets, sorted by (namespace, path)
-	titlePtrPos int64    // entryCount u32 entry indices, sorted by (namespace, title); 0 when absent (see titles)
-	clusterPtr  []uint64 // clusterCount+1: the tail is synthesised (see parse)
+	pathPtrPos    int64    // entryCount u64 file offsets, sorted by (namespace, path)
+	titlePtrPos   int64    // entryCount u32 entry indices, sorted by (namespace, title); 0 when absent (see titles)
+	clusterPtrPos uint64   // the cluster pointer list
+	clusterPtr    []uint64 // clusterCount file offsets
+	checksumPos   uint64   // the MD5 at the file's end; 0 when the header names none that is (see parse)
+	firstDirent   uint64   // file offset of the first entry in path order
+
+	// nextStart is, per cluster, the next cluster start in the FILE; nil when
+	// the pointer list is in file order, as every writer leaves it (extent).
+	nextStart []uint64
+
+	probes keyCache       // the top of the path binary search (lowerBound)
+	meta   map[string]int // the M namespace by name; nil when not held (loadMeta)
 
 	zr *zstd.Decoder
 
@@ -185,6 +231,7 @@ type container struct {
 	cache      map[uint32]*clusterData
 	order      []uint32
 	cacheBytes int64
+	loading    map[uint32]*clusterLoad
 }
 
 // source is the archive's bytes: one file, or the parts of a split archive
@@ -203,11 +250,12 @@ func openContainer(path string) (*container, error) {
 	if err != nil {
 		return nil, err
 	}
-	c := &container{f: f, path: path, size: size, cache: map[uint32]*clusterData{}}
+	c := &container{f: f, path: path, size: size, cache: map[uint32]*clusterData{}, loading: map[uint32]*clusterLoad{}}
 	if err := c.parse(); err != nil {
 		f.Close()
 		return nil, fmt.Errorf("zim %s: %w", path, err)
 	}
+	c.loadMeta()
 	return c, nil
 }
 
@@ -261,11 +309,23 @@ func (c *container) parse() error {
 	if err := c.checkSpan(clusterPtrPos, uint64(c.clusterCount)*8, "cluster pointer list"); err != nil {
 		return err
 	}
-	if err := c.checkSpan(mimeListPos, 1, "MIME list"); err != nil {
+	// The first headers were 72 bytes, from before the checksum: their MIME
+	// list starts where the checksum position is now, so those 8 bytes are
+	// MIME text (libzim's Fileheader::hasChecksum).
+	if mimeListPos == 72 {
+		checksumPos = 0
+	} else if err := c.checkSpan(mimeListPos, 1, "MIME list"); err != nil {
 		return err
+	}
+	// A checksum position is believed where libzim believes it, 16 bytes
+	// before the end; libzim refuses the file otherwise, and here it is only
+	// ignored. It has to be right because it bounds the last cluster (after).
+	if checksumPos != 0 && checksumPos == uint64(c.size)-16 {
+		c.checksumPos = checksumPos
 	}
 
 	c.pathPtrPos = int64(pathPtrPos)
+	c.clusterPtrPos = clusterPtrPos
 	// ZIM 6.3 writes no title pointer list (all ones). One that does not fit
 	// in the file is left unused rather than refusing the file: lookup by
 	// path does not need it.
@@ -280,43 +340,93 @@ func (c *container) parse() error {
 			return fmt.Errorf("reading path pointer list: %w", err)
 		}
 	}
+	c.firstDirent, _ = c.ptrAt(0) // checked above
 
-	// The format records no cluster SIZE, only a start offset; a cluster ends
-	// where the next one begins. The last one therefore needs a synthetic
-	// bound, and the checksum block is what follows it. A file whose header
-	// checksum offset is missing or nonsense falls back to the file end,
-	// which over-reads by 16 bytes at worst and never truncates a blob.
-	end := checksumPos
-	if end == 0 || end > uint64(c.size) {
-		end = uint64(c.size)
-	}
-	c.clusterPtr = make([]uint64, c.clusterCount+1)
+	c.clusterPtr = make([]uint64, c.clusterCount)
 	if c.clusterCount > 0 {
-		if err := c.readU64s(c.clusterPtr[:c.clusterCount], int64(clusterPtrPos)); err != nil {
+		if err := c.readU64s(c.clusterPtr, int64(clusterPtrPos)); err != nil {
 			return fmt.Errorf("reading cluster pointer list: %w", err)
 		}
 	}
-	c.clusterPtr[c.clusterCount] = end
-	for i := 0; i < int(c.clusterCount); i++ {
-		if c.clusterPtr[i] < headerSize || c.clusterPtr[i] >= uint64(c.size) {
-			return fmt.Errorf("cluster pointer %d out of range (%d)", i, c.clusterPtr[i])
-		}
+	// A last cluster past the file's end is a download cut short, and refused
+	// as libzim refuses it (quickCheckForCorruptFile). Any other bad pointer
+	// costs the entries of its own cluster, found when that cluster is read
+	// (load) - not the file, as it did when every pointer was checked here.
+	if n := len(c.clusterPtr); n > 0 && c.clusterPtr[n-1] > uint64(c.size) {
+		return fmt.Errorf("last cluster pointer %d past the file's end (%d): the file is cut short", c.clusterPtr[n-1], c.size)
 	}
+	c.orderClusters()
 
 	// The MIME list ends before the first structure the file points to,
 	// libzim's getMimeListEndUpperLimit: the pointer lists, the first dirent
 	// and the first cluster, each validated above. A list that is not
 	// terminated inside that bound is damaged, whatever its bytes say.
-	mimeEnd := min(pathPtrPos, clusterPtrPos)
+	mimeEnd := min(pathPtrPos, clusterPtrPos, c.firstDirent)
 	if c.titlePtrPos != 0 {
 		mimeEnd = min(mimeEnd, titlePtrPos)
 	}
-	first, _ := c.ptrAt(0) // checked above
-	mimeEnd = min(mimeEnd, first)
 	if c.clusterCount > 0 {
 		mimeEnd = min(mimeEnd, c.clusterPtr[0])
 	}
 	return c.parseMIMEList(mimeListPos, mimeEnd)
+}
+
+// orderClusters prepares extent for a cluster pointer list that is not in
+// file order. No writer leaves one, but libzim reads a cluster as a stream
+// from its start and never asks where it ends, so such a file reads there and
+// must read here.
+func (c *container) orderClusters() {
+	ordered := true
+	for i := 1; i < len(c.clusterPtr); i++ {
+		if c.clusterPtr[i] <= c.clusterPtr[i-1] {
+			ordered = false
+			break
+		}
+	}
+	if ordered {
+		return
+	}
+	starts := slices.Compact(slices.Sorted(slices.Values(c.clusterPtr)))
+	c.nextStart = make([]uint64, len(c.clusterPtr))
+	for i, s := range c.clusterPtr {
+		j, _ := slices.BinarySearch(starts, s)
+		c.nextStart[i] = math.MaxUint64
+		if j+1 < len(starts) {
+			c.nextStart[i] = starts[j+1]
+		}
+	}
+}
+
+// extent is where cluster i lies: from its pointer to the next thing the file
+// holds, the next cluster or else the first structure after it (after). The
+// format records no cluster size, and after the last cluster of a 6.1+ file
+// comes the dirent table, not the checksum: bounded by the checksum, that
+// cluster took in every dirent and both pointer lists - read by xz and zstd as
+// a damaged second stream, and on a large file gigabytes.
+func (c *container) extent(i uint32) (start, end uint64) {
+	start = c.clusterPtr[i]
+	end = c.after(start)
+	switch {
+	case c.nextStart != nil:
+		end = min(end, c.nextStart[i])
+	case i+1 < c.clusterCount:
+		end = min(end, c.clusterPtr[i+1])
+	}
+	return start, end
+}
+
+// after is the offset of the first structure the file holds past off - the
+// path and cluster pointer lists, the first dirent, the checksum - or the
+// file's size. The title pointer list is not one of them: in a 6.1 or 6.2
+// file it points INTO a stored cluster, at the title listing blob there.
+func (c *container) after(off uint64) uint64 {
+	end := uint64(c.size)
+	for _, s := range [...]uint64{uint64(c.pathPtrPos), c.clusterPtrPos, c.checksumPos, c.firstDirent} {
+		if s > off && s < end {
+			end = s
+		}
+	}
+	return end
 }
 
 func (c *container) checkSpan(off, n uint64, what string) error {
@@ -487,15 +597,26 @@ func (c *container) mimeOf(d dirent) string {
 // per-kind namespaces (A articles, I images, - layout) with a single content
 // namespace C; the metadata namespace M is unchanged across both. This one
 // function is the whole compatibility story, and every content lookup routes
-// through it.
+// through it. The scheme follows the minor version alone, under either
+// major, as libzim decides it (Fileheader::useNewNamespaceScheme).
 func (c *container) contentNS() byte {
-	if c.major > 6 || (c.major == 6 && c.minor >= 1) {
+	if c.minor >= 1 {
 		return 'C'
 	}
 	return 'A'
 }
 
 func (c *container) newNamespaces() bool { return c.contentNS() == 'C' }
+
+// longPath is an entry's path as the URL Kiwix serves it under: the path in
+// a 6.1+ file, the namespace and the path before that ("A/Foo"). It is what
+// a reference in a stored article is relative to (resolveRef).
+func (c *container) longPath(d dirent) string {
+	if c.newNamespaces() {
+		return d.path
+	}
+	return string([]byte{d.namespace}) + "/" + d.path
+}
 
 // direntAt decodes the entry at a file offset, growing its read window until
 // both NUL-terminated strings are inside it.
@@ -509,18 +630,18 @@ func (c *container) direntAt(off int64) (dirent, error) {
 		if int64(len(buf)) > c.size-off {
 			buf = buf[:c.size-off]
 		}
-		n, err := c.f.ReadAt(buf, off)
-		if n < 12 {
-			if err == nil {
+		// buf ends inside the file, so a short read is a failure, never its end
+		if n, err := c.f.ReadAt(buf, off); n < len(buf) {
+			if err == nil || err == io.EOF {
 				err = io.ErrUnexpectedEOF
 			}
 			return dirent{}, err
 		}
-		d, ok := parseDirent(buf[:n])
+		d, ok := parseDirent(buf)
 		if ok {
 			return d, nil
 		}
-		if int64(n) >= c.size-off {
+		if int64(len(buf)) >= c.size-off {
 			return dirent{}, fmt.Errorf("truncated dirent at %d", off)
 		}
 		if len(buf) >= maxDirentSpan {
@@ -533,7 +654,7 @@ func (c *container) direntAt(off int64) (dirent, error) {
 // parseDirent decodes one entry from a window. ok=false means the window ends
 // before both strings do and must be grown - it is never an error by itself.
 func parseDirent(b []byte) (dirent, bool) {
-	if len(b) < 12 {
+	if len(b) < 8 {
 		return dirent{}, false
 	}
 	var d dirent
@@ -541,19 +662,27 @@ func parseDirent(b []byte) (dirent, bool) {
 	paramLen := int(b[2])
 	d.namespace = b[3]
 	d.revision = binary.LittleEndian.Uint32(b[4:])
-	off := 16
-	if d.isRedirect() {
+	var off int
+	switch {
+	case d.isRedirect():
+		if len(b) < 12 {
+			return dirent{}, false
+		}
 		d.redirect = binary.LittleEndian.Uint32(b[8:])
 		off = 12
-	} else {
+	case !d.isContent():
+		// linktarget and deleted name no target of any kind: their path
+		// starts at byte 8 (libzim's DirentReader::initDirent). Read with
+		// a blob's 16, the path came out garbled, and a binary search that
+		// probed it could be sent the wrong way for any word.
+		off = 8
+	default:
 		if len(b) < 16 {
 			return dirent{}, false
 		}
 		d.cluster = binary.LittleEndian.Uint32(b[8:])
 		d.blob = binary.LittleEndian.Uint32(b[12:])
-	}
-	if off > len(b) {
-		return dirent{}, false
+		off = 16
 	}
 	i := bytes.IndexByte(b[off:], 0)
 	if i < 0 {
@@ -583,11 +712,11 @@ func (c *container) entry(i int) (dirent, error) {
 	return c.direntAt(int64(off))
 }
 
-// resolve follows a redirect chain to the entry that actually holds content.
-// Real files contain cycles, so the walk is depth-bounded rather than trusting
-// termination.
+// resolve follows a redirect chain to the entry it ends at - content, or a
+// marker that holds none, which callers check (isContent). Real files contain
+// cycles, so the walk is depth-bounded rather than trusting termination.
 func (c *container) resolve(i int) (int, dirent, error) {
-	for hop := 0; hop < 8; hop++ {
+	for hop := 0; ; hop++ {
 		d, err := c.entry(i)
 		if err != nil {
 			return 0, dirent{}, err
@@ -595,18 +724,20 @@ func (c *container) resolve(i int) (int, dirent, error) {
 		if !d.isRedirect() {
 			return i, d, nil
 		}
+		if hop == redirectHops {
+			return 0, dirent{}, fmt.Errorf("redirect chain too long")
+		}
 		next := int(d.redirect)
 		if next == i || next < 0 || next >= c.entries() {
 			return 0, dirent{}, fmt.Errorf("entry %d: bad redirect to %d", i, next)
 		}
 		i = next
 	}
-	return 0, dirent{}, fmt.Errorf("redirect chain too long")
 }
 
-// cluster returns one decompressed cluster body (everything after the info
-// byte), through a byte-bounded LRU. An uncompressed cluster comes back
-// direct: located, not read, and not cached.
+// cluster returns one cluster - decompressed, or for a stored one located,
+// its offset table read - through a byte-bounded LRU. Readers of a cluster
+// that is being loaded wait for that load rather than starting their own.
 func (c *container) cluster(i uint32) (*clusterData, error) {
 	c.mu.Lock()
 	if cd, ok := c.cache[i]; ok {
@@ -614,64 +745,46 @@ func (c *container) cluster(i uint32) (*clusterData, error) {
 		c.mu.Unlock()
 		return cd, nil
 	}
+	if l, ok := c.loading[i]; ok {
+		c.mu.Unlock()
+		<-l.done
+		return l.cd, l.err
+	}
+	// The placeholder error is what the waiters see if load panics.
+	l := &clusterLoad{done: make(chan struct{}), err: errors.New("cluster load did not finish")}
+	c.loading[i] = l
 	c.mu.Unlock()
+	defer func() {
+		c.mu.Lock()
+		delete(c.loading, i)
+		if l.err == nil {
+			c.keep(i, l.cd)
+		}
+		c.mu.Unlock()
+		close(l.done)
+	}()
+	l.cd, l.err = c.load(i)
+	return l.cd, l.err
+}
 
-	if i >= c.clusterCount {
-		return nil, fmt.Errorf("cluster %d out of range (%d clusters)", i, c.clusterCount)
+// keep caches cd, evicting oldest first but never the entry just added: one
+// cluster can exceed the whole budget, and dropping it would make every blob
+// read of that cluster decompress it again. Called under c.mu.
+func (c *container) keep(i uint32, cd *clusterData) {
+	if _, ok := c.cache[i]; ok {
+		return
 	}
-	start, end := c.clusterPtr[i], c.clusterPtr[i+1]
-	if end <= start || end > uint64(c.size) {
-		return nil, fmt.Errorf("cluster %d: bad extent %d..%d", i, start, end)
-	}
-	var info [1]byte
-	if _, err := c.f.ReadAt(info[:], int64(start)); err != nil {
-		return nil, fmt.Errorf("cluster %d: %w", i, err)
-	}
-	extended, codec := info[0]&0x10 != 0, info[0]&0x0F
-	if codec <= 1 { // 0 and 1 both mean "stored"
-		return &clusterData{extended: extended, direct: true, body: int64(start) + 1, n: end - start - 1}, nil
-	}
-	// No codec here inflates a stream past its input by more than a sliver,
-	// so a compressed extent beyond twice the decompressed bound is a bad
-	// pointer - refused before it becomes an allocation of that size.
-	if end-start-1 > 2*uint64(maxCluster()) {
-		return nil, fmt.Errorf("cluster %d: %d compressed bytes, more than twice the MAX_ZIM_CLUSTER limit of %s", i, end-start-1, limits.Format(maxCluster()))
-	}
-	raw := make([]byte, end-start-1)
-	if _, err := c.f.ReadAt(raw, int64(start)+1); err != nil {
-		return nil, fmt.Errorf("cluster %d: %w", i, err)
-	}
-	data, err := c.decompress(codec, raw)
-	if errors.Is(err, inflate.ErrTooLarge) || errors.Is(err, zstd.ErrDecoderSizeExceeded) || errors.Is(err, zstd.ErrWindowSizeExceeded) {
-		err = limits.Exceeded("the unpacked cluster", "MAX_ZIM_CLUSTER", maxCluster())
-	}
-	if err != nil {
-		return nil, fmt.Errorf("cluster %d: %w", i, err)
-	}
-	cd := &clusterData{data: data, extended: extended}
-	if cd.blobs, err = checkTable(data, offsetWidth(extended), uint64(len(data))); err != nil {
-		return nil, fmt.Errorf("cluster %d: %w", i, err)
-	}
-
-	c.mu.Lock()
-	if _, ok := c.cache[i]; !ok {
-		c.cache[i] = cd
-		c.order = append(c.order, i)
-		c.cacheBytes += int64(len(cd.data))
-		// Evict oldest first, but never the entry just inserted: one cluster
-		// can exceed the whole budget, and dropping it would make every blob
-		// read of that cluster decompress it again.
-		for c.cacheBytes > clusterCacheBytes && len(c.order) > 1 {
-			old := c.order[0]
-			c.order = c.order[1:]
-			if prev, ok := c.cache[old]; ok {
-				c.cacheBytes -= int64(len(prev.data))
-				delete(c.cache, old)
-			}
+	c.cache[i] = cd
+	c.order = append(c.order, i)
+	c.cacheBytes += cd.resident()
+	for (c.cacheBytes > clusterCacheBytes || len(c.order) > maxCachedClusters) && len(c.order) > 1 {
+		old := c.order[0]
+		c.order = c.order[1:]
+		if prev, ok := c.cache[old]; ok {
+			c.cacheBytes -= prev.resident()
+			delete(c.cache, old)
 		}
 	}
-	c.mu.Unlock()
-	return cd, nil
 }
 
 // touch moves i to the back of the LRU order. Called under c.mu.
@@ -685,15 +798,128 @@ func (c *container) touch(i uint32) {
 	}
 }
 
+// dropCache empties the cluster cache.
+func (c *container) dropCache() {
+	c.mu.Lock()
+	c.cache, c.order, c.cacheBytes = map[uint32]*clusterData{}, nil, 0
+	c.mu.Unlock()
+}
+
+// load reads cluster i from the file.
+func (c *container) load(i uint32) (*clusterData, error) {
+	if i >= c.clusterCount {
+		return nil, fmt.Errorf("cluster %d out of range (%d clusters)", i, c.clusterCount)
+	}
+	if p := c.clusterPtr[i]; p < headerSize || p >= uint64(c.size) {
+		return nil, fmt.Errorf("cluster %d: pointer out of range (%d)", i, p)
+	}
+	start, end := c.extent(i)
+	if end <= start {
+		return nil, fmt.Errorf("cluster %d: bad extent %d..%d", i, start, end)
+	}
+	var info [1]byte
+	if _, err := c.f.ReadAt(info[:], int64(start)); err != nil {
+		return nil, fmt.Errorf("cluster %d: %w", i, err)
+	}
+	extended, codec := info[0]&0x10 != 0, info[0]&0x0F
+	w := offsetWidth(extended)
+	if codec <= 1 { // 0 and 1 both mean "stored"
+		cd := &clusterData{extended: extended, direct: true, body: int64(start) + 1, n: end - start - 1}
+		if err := c.readTableAt(cd, w); err != nil {
+			return nil, fmt.Errorf("cluster %d: %w", i, err)
+		}
+		return cd, nil
+	}
+	// No codec here inflates a stream past its input by more than a sliver,
+	// so a compressed body within the decompressed bound lies within twice
+	// it: an extent beyond that is read only that far, and what it cuts off
+	// is nothing a cluster within the bound can use.
+	n := min(end-start-1, 2*uint64(maxCluster()))
+	raw := make([]byte, n)
+	if _, err := c.f.ReadAt(raw, int64(start)+1); err != nil {
+		return nil, fmt.Errorf("cluster %d: %w", i, err)
+	}
+	data, err := c.decompress(codec, raw, w)
+	if errors.Is(err, inflate.ErrTooLarge) || errors.Is(err, zstd.ErrDecoderSizeExceeded) || errors.Is(err, zstd.ErrWindowSizeExceeded) {
+		err = limits.Exceeded("the unpacked cluster", "MAX_ZIM_CLUSTER", maxCluster())
+	}
+	if err != nil {
+		return nil, fmt.Errorf("cluster %d: %w", i, err)
+	}
+	cd := &clusterData{data: data, extended: extended}
+	if cd.blobs, err = checkTable(data, w, uint64(len(data))); err != nil {
+		return nil, fmt.Errorf("cluster %d: %w", i, err)
+	}
+	return cd, nil
+}
+
+// readTableAt reads a stored cluster's offset table in place and checks it.
+func (c *container) readTableAt(cd *clusterData, w uint64) error {
+	if cd.n < w {
+		return fmt.Errorf("no offset table")
+	}
+	var head [8]byte
+	if _, err := c.f.ReadAt(head[:w], cd.body); err != nil {
+		return err
+	}
+	first := offsetAt(head[:], w, 0)
+	if first > cd.n || first > maxTableBytes {
+		return fmt.Errorf("bad offset table header %d", first)
+	}
+	table := make([]byte, max(first, w))
+	if _, err := c.f.ReadAt(table, cd.body); err != nil {
+		return err
+	}
+	blobs, err := checkTable(table, w, cd.n)
+	if err != nil {
+		return err
+	}
+	cd.table, cd.blobs = table, blobs
+	return nil
+}
+
 // decompress decodes one cluster body into a reused buffer (internal/inflate:
 // libzim's zstd frames carry no content size, and DecodeAll without a
 // destination allocates 4.6x the 2 MB it produces).
-func (c *container) decompress(codec byte, data []byte) ([]byte, error) {
-	return inflate.Into(func(dst []byte) ([]byte, error) { return c.decode(codec, data, dst) })
+func (c *container) decompress(codec byte, data []byte, w uint64) ([]byte, error) {
+	return inflate.Into(func(dst []byte) ([]byte, error) { return c.decode(codec, data, dst, w) })
 }
 
 // decode appends one decompressed cluster body to dst.
-func (c *container) decode(codec byte, data, dst []byte) ([]byte, error) {
+//
+// data runs to the next structure in the file, and that is not always where
+// the stream ends: the extent is exact for every writer known, but libzim
+// itself decodes a cluster only as far as its offset table says and never
+// reads past the stream, so a file with anything else after a cluster reads
+// there and must read here. A zstd stream is cut to its frames (zstdFrames);
+// one the other codecs cannot read to its end is read again by its offset
+// table (readTable), where what follows the stream is never reached.
+func (c *container) decode(codec byte, data, dst []byte, w uint64) ([]byte, error) {
+	if codec == 5 {
+		if n := zstdFrames(data); n > 0 {
+			data = data[:n]
+		}
+		zr, err := c.zstd()
+		if err != nil {
+			return dst, err
+		}
+		return zr.DecodeAll(data, dst)
+	}
+	toEnd := func(r io.Reader, dst []byte) ([]byte, error) { return inflate.AppendAll(dst, r, maxCluster()) }
+	out, err := decodeStream(codec, data, dst, toEnd)
+	if err == nil || errors.Is(err, inflate.ErrTooLarge) {
+		return out, err
+	}
+	byTable := func(r io.Reader, dst []byte) ([]byte, error) { return readTable(r, w, dst) }
+	out, err2 := decodeStream(codec, data, out[:0], byTable)
+	if err2 != nil {
+		return out[:0], err
+	}
+	return out, nil
+}
+
+// decodeStream decodes data with a streaming codec, read taking the stream.
+func decodeStream(codec byte, data, dst []byte, read func(io.Reader, []byte) ([]byte, error)) ([]byte, error) {
 	switch codec {
 	case 2:
 		r, err := zlib.NewReader(bytes.NewReader(data))
@@ -701,20 +927,127 @@ func (c *container) decode(codec byte, data, dst []byte) ([]byte, error) {
 			return dst, err
 		}
 		defer r.Close()
-		return inflate.AppendAll(dst, r, maxCluster())
+		return read(r, dst)
 	case 3:
-		return inflate.AppendAll(dst, bzip2.NewReader(bytes.NewReader(data)), maxCluster())
+		return read(bzip2.NewReader(bytes.NewReader(data)), dst)
 	case 4:
-		return decodeXZ(data, dst)
-	case 5:
-		zr, err := c.zstd()
-		if err != nil {
-			return dst, err
-		}
-		return zr.DecodeAll(data, dst)
+		return decodeXZ(data, dst, read)
 	default:
 		return dst, fmt.Errorf("unsupported compression codec %d", codec)
 	}
+}
+
+// readTable reads one cluster body from a stream by its own offset table:
+// the table, then exactly the bytes its last offset ends at, and not a byte
+// further - libzim's reading (Cluster::read_header and its blob readers).
+func readTable(r io.Reader, w uint64, dst []byte) ([]byte, error) {
+	limit := uint64(min(maxCluster(), math.MaxInt))
+	dst = slices.Grow(dst[:0], int(w))[:w]
+	if _, err := io.ReadFull(r, dst); err != nil {
+		return dst[:0], err
+	}
+	first := offsetAt(dst, w, 0)
+	if first < w || first%w != 0 {
+		return dst[:0], fmt.Errorf("bad offset table header %d", first)
+	}
+	if first > limit {
+		return dst[:0], inflate.ErrTooLarge
+	}
+	dst = slices.Grow(dst, int(first-w))[:first]
+	if _, err := io.ReadFull(r, dst[w:]); err != nil {
+		return dst[:0], err
+	}
+	last := offsetAt(dst, w, first/w-1)
+	if last < first {
+		return dst[:0], fmt.Errorf("bad offset table: last offset %d before the table's end %d", last, first)
+	}
+	if last > limit {
+		return dst[:0], inflate.ErrTooLarge
+	}
+	dst = slices.Grow(dst, int(last-first))[:last]
+	if _, err := io.ReadFull(r, dst[first:]); err != nil {
+		return dst[:0], err
+	}
+	return dst, nil
+}
+
+// zstdFrames is the length of the run of zstd frames - skippable ones
+// included - that b starts with, or 0 when it does not start with a whole
+// one; DecodeAll then reports what is wrong. It walks the frame and block
+// headers only (RFC 8878 §3.1), without decoding.
+func zstdFrames(b []byte) int {
+	p := 0
+	for len(b)-p >= 8 {
+		switch magic := binary.LittleEndian.Uint32(b[p:]); {
+		case magic == 0xFD2FB528:
+			n := zstdFrame(b[p:])
+			if n == 0 {
+				return p
+			}
+			p += n
+		case magic&0xFFFFFFF0 == 0x184D2A50:
+			n := uint64(binary.LittleEndian.Uint32(b[p+4:])) + 8
+			if n > uint64(len(b)-p) {
+				return p
+			}
+			p += int(n)
+		default:
+			return p
+		}
+	}
+	return p
+}
+
+// zstdFrame is the length of the zstd frame b starts with, or 0 when b does
+// not hold a whole one.
+func zstdFrame(b []byte) int {
+	if len(b) < 5 {
+		return 0
+	}
+	fhd := b[4]
+	if fhd&0x08 != 0 { // reserved bit
+		return 0
+	}
+	single := fhd&0x20 != 0
+	p := 5
+	if !single {
+		p++ // window descriptor
+	}
+	p += [4]int{0, 1, 2, 4}[fhd&3] // dictionary ID
+	fcs := [4]int{0, 2, 4, 8}[fhd>>6]
+	if fcs == 0 && single {
+		fcs = 1
+	}
+	p += fcs
+	for {
+		if len(b)-p < 3 {
+			return 0
+		}
+		h := uint32(b[p]) | uint32(b[p+1])<<8 | uint32(b[p+2])<<16
+		p += 3
+		size := int(h >> 3)
+		switch (h >> 1) & 3 {
+		case 0, 2: // raw, compressed
+		case 1: // RLE: one byte, repeated size times
+			size = 1
+		default:
+			return 0
+		}
+		if len(b)-p < size {
+			return 0
+		}
+		p += size
+		if h&1 != 0 { // last block
+			break
+		}
+	}
+	if fhd&0x04 != 0 { // content checksum
+		p += 4
+	}
+	if p > len(b) {
+		return 0
+	}
+	return p
 }
 
 // decodeXZ decodes an xz cluster - xz, NOT LZMA_Alone: real clusters carry the
@@ -727,11 +1060,11 @@ func (c *container) decode(codec byte, data, dst []byte) ([]byte, error) {
 // to 4 MiB exactly. A stream that reaches further fails - the dictionary
 // rejects the distance, and the stream's check catches anything else - and is
 // decoded again with the dictionary it declares.
-func decodeXZ(data, dst []byte) ([]byte, error) {
+func decodeXZ(data, dst []byte, read func(io.Reader, []byte) ([]byte, error)) ([]byte, error) {
 	if small, ok := xzWithDict(data); ok {
 		r, err := xz.ReaderConfig{DictCap: xzDictCap}.NewReader(bytes.NewReader(small))
 		if err == nil {
-			out, err := inflate.AppendAll(dst, r, maxCluster())
+			out, err := read(r, dst)
 			if err == nil {
 				return out, nil
 			}
@@ -742,7 +1075,7 @@ func decodeXZ(data, dst []byte) ([]byte, error) {
 	if err != nil {
 		return dst, err
 	}
-	return inflate.AppendAll(dst, r, maxCluster())
+	return read(r, dst)
 }
 
 // xzWithDict returns a copy of an xz stream whose first block declares the
@@ -800,6 +1133,14 @@ func offsetWidth(extended bool) uint64 {
 	return 4
 }
 
+// offsetAt is the k-th w-byte offset of an offset table.
+func offsetAt(b []byte, w, k uint64) uint64 {
+	if w == 8 {
+		return binary.LittleEndian.Uint64(b[k*8:])
+	}
+	return uint64(binary.LittleEndian.Uint32(b[k*4:]))
+}
+
 // checkTable checks a cluster's whole blob offset table and returns its blob
 // count. The table lives INSIDE the (compressed) body: w-byte offsets, and
 // offset[0] is both the first blob's position and the table's own length, so
@@ -813,23 +1154,17 @@ func offsetWidth(extended bool) uint64 {
 // Read as a table, the overstated length takes in blob bytes as offsets,
 // which fail the bounds.
 func checkTable(b []byte, w, size uint64) (uint64, error) {
-	at := func(k uint64) uint64 {
-		if w == 8 {
-			return binary.LittleEndian.Uint64(b[k*8:])
-		}
-		return uint64(binary.LittleEndian.Uint32(b[k*4:]))
-	}
 	if uint64(len(b)) < w {
 		return 0, fmt.Errorf("no offset table")
 	}
-	first := at(0)
+	first := offsetAt(b, w, 0)
 	if first < w || first%w != 0 || first > size || first > uint64(len(b)) {
 		return 0, fmt.Errorf("bad offset table header %d", first)
 	}
 	n := first / w
 	prev := first
 	for k := uint64(1); k < n; k++ {
-		off := at(k)
+		off := offsetAt(b, w, k)
 		if off < prev || off > size {
 			return 0, fmt.Errorf("bad offset table entry %d: %d after %d, body %d", k, off, prev, size)
 		}
@@ -838,47 +1173,20 @@ func checkTable(b []byte, w, size uint64) (uint64, error) {
 	return n - 1, nil
 }
 
-// blobSpan locates one blob inside a cluster: [lo, hi) within the body. A
-// stored cluster is never loaded, so its table is read and checked here, in
-// one read; a compressed one was checked when it was decompressed.
+// blobSpan locates one blob inside a cluster: [lo, hi) within the body.
 func (c *container) blobSpan(cl, bl uint32) (cd *clusterData, lo, hi uint64, err error) {
 	if cd, err = c.cluster(cl); err != nil {
 		return nil, 0, 0, err
 	}
-	w := offsetWidth(cd.extended)
-	table, count := cd.data, cd.blobs
+	if uint64(bl) >= cd.blobs {
+		return nil, 0, 0, fmt.Errorf("cluster %d: blob %d out of range (%d blobs)", cl, bl, cd.blobs)
+	}
+	table := cd.data
 	if cd.direct {
-		var head [8]byte
-		if cd.n < w {
-			return nil, 0, 0, fmt.Errorf("cluster %d: no offset table", cl)
-		}
-		if _, err := c.f.ReadAt(head[:w], cd.body); err != nil {
-			return nil, 0, 0, fmt.Errorf("cluster %d: %w", cl, err)
-		}
-		first := uint64(binary.LittleEndian.Uint32(head[:4]))
-		if w == 8 {
-			first = binary.LittleEndian.Uint64(head[:8])
-		}
-		if first > cd.n || first > maxTableBytes {
-			return nil, 0, 0, fmt.Errorf("cluster %d: bad offset table header %d", cl, first)
-		}
-		table = make([]byte, max(first, w))
-		if _, err := c.f.ReadAt(table, cd.body); err != nil {
-			return nil, 0, 0, fmt.Errorf("cluster %d: %w", cl, err)
-		}
-		if count, err = checkTable(table, w, cd.n); err != nil {
-			return nil, 0, 0, fmt.Errorf("cluster %d: %w", cl, err)
-		}
+		table = cd.table
 	}
-	if uint64(bl) >= count {
-		return nil, 0, 0, fmt.Errorf("cluster %d: blob %d out of range (%d blobs)", cl, bl, count)
-	}
-	if w == 8 {
-		lo, hi = binary.LittleEndian.Uint64(table[uint64(bl)*8:]), binary.LittleEndian.Uint64(table[uint64(bl+1)*8:])
-	} else {
-		lo, hi = uint64(binary.LittleEndian.Uint32(table[bl*4:])), uint64(binary.LittleEndian.Uint32(table[(bl+1)*4:]))
-	}
-	return cd, lo, hi, nil
+	w := offsetWidth(cd.extended)
+	return cd, offsetAt(table, w, uint64(bl)), offsetAt(table, w, uint64(bl)+1), nil
 }
 
 // blob returns the bytes of one blob inside a cluster.
@@ -900,10 +1208,14 @@ func (c *container) blob(cl, bl uint32) ([]byte, error) {
 	return out, nil
 }
 
-// content returns the bytes of a non-redirect entry.
+// errNoContent is reading an entry that stores nothing: a redirect, or a
+// linktarget/deleted marker, whose dirent names no cluster at all.
+var errNoContent = errors.New("entry holds no content")
+
+// content returns the bytes of an entry that stores a blob.
 func (c *container) content(d dirent) ([]byte, error) {
-	if d.isRedirect() {
-		return nil, fmt.Errorf("entry is a redirect")
+	if !d.isContent() {
+		return nil, errNoContent
 	}
 	return c.blob(d.cluster, d.blob)
 }
@@ -912,8 +1224,8 @@ func (c *container) content(d dirent) ([]byte, error) {
 // is a window onto the file, so a video is served by range and never read
 // whole into memory.
 func (c *container) contentReader(d dirent) (io.ReadCloser, error) {
-	if d.isRedirect() {
-		return nil, fmt.Errorf("entry is a redirect")
+	if !d.isContent() {
+		return nil, errNoContent
 	}
 	cd, lo, hi, err := c.blobSpan(d.cluster, d.blob)
 	if err != nil {

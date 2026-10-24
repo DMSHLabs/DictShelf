@@ -167,13 +167,10 @@ func RewriteEntryHTMLMarked(html, dictID string, hl *hilite.Terms) string {
 	return entryRewriter(dictID, hl.Mark).Rewrite(html)
 }
 
-// hasRewritableRef reports whether the article can contain a reference at all.
+// hasRewritableRef reports whether the article can contain a reference at
+// all, or a <base> to drop.
 func hasRewritableRef(html string) bool {
-	return strings.Contains(html, "src") || strings.Contains(html, "href") ||
-		strings.Contains(html, "data") || strings.Contains(html, "poster") ||
-		strings.Contains(html, "style") || strings.Contains(html, "background") ||
-		strings.Contains(html, "longdesc") || strings.Contains(html, "usemap") ||
-		strings.Contains(html, "<base")
+	return htmlref.MayRef(html) || strings.Contains(html, "<base")
 }
 
 // entryRewriter builds the article rewriter for one dictionary, optionally

@@ -75,7 +75,7 @@ More: [search](<entry://wudict search>) · [full-text](<entry://wudict full-text
 ## wudict search modes
 ## wudict modes
 
-**Pick a mode in the bar; accents and case do not matter**: `corazon` finds *corazón*, `OXFORD` finds *Oxford*. The one exception is a [wildcard](<entry://wudict wildcard>) pattern with a capital letter. Exact and prefix work at once, wildcard as soon as the dictionary is indexed; full-text needs an optional [index](<entry://wudict index>).
+**Pick a mode in the bar; accents and case do not matter**: `corazon` finds *corazón*, `OXFORD` finds *Oxford*. In exact, prefix and [wildcard](<entry://wudict wildcard>) search they set the order: the word as typed comes first, and a capital letter or an accent puts the headwords that have it first. Exact and prefix work at once, wildcard as soon as the dictionary is indexed; full-text needs an optional [index](<entry://wudict index>).
 
 | Mode | Finds | Use it when |
 | --- | --- | --- |
@@ -128,7 +128,7 @@ Operators count only in capitals: `wage not minimum` is three words. A query nev
 | `by the *` | phrases that start with *by the* |
 | `apple` | *apple* and *Apple*, not *apples* |
 
-A pattern without a capital letter ignores case and accents: `cafe` finds *Café*. A pattern with a capital letter is matched as typed: `March` finds *March*, not *march*. There are no other special characters: to find a `*` or a `?` in a headword, use exact or prefix. A pattern has at most 64 characters.
+Case and accents do not exclude a headword: `cafe` and `Cafe` both find *Café*. They set the order: `March` lists *March* before *march*, `café*` lists *café* before *cafe*, and `nacion*` lists *nación* first. There are no other special characters: to find a `*` or a `?` in a headword, use exact or prefix. A pattern has at most 64 characters.
 
 - [index](/browse?dict=wudict-howto)
 
@@ -262,6 +262,8 @@ Speex `.spx` audio auto-converted for browser playback. A folder named after a l
 - DSL, Babylon and wudict markdown are indexed as soon as they are opened; ZIM only when you ask, since this format already has its own index and wudict can use it.
 
 An index usually takes less space than the dictionary file.
+
+To make the library 1 % to 2 % smaller, set `COMPRESSION = "small"` in `wudict.toml` ([settings](<entry://wudict command line>)). Indexing then takes up to 1.5 times as long, and the setting applies to dictionaries indexed after the change.
 
 ***
 

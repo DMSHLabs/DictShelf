@@ -117,8 +117,9 @@ func TestExactBodyIsRewritten(t *testing.T) {
 	if strings.Contains(body, "<html") || strings.Contains(body, "DOCTYPE") {
 		t.Errorf("document shell survived: %q", body)
 	}
-	// The head's stylesheet is hoisted; its icon link is not.
-	if !strings.Contains(body, `href="./_res_/a.css"`) {
+	// The head's stylesheet is hoisted, resolved from the archive's root; its
+	// icon link is not.
+	if !strings.Contains(body, `href="_res_/a.css"`) {
 		t.Errorf("stylesheet not hoisted: %q", body)
 	}
 	if strings.Contains(body, "f.png\"") && strings.Contains(body, `rel="icon"`) {
@@ -128,7 +129,7 @@ func TestExactBodyIsRewritten(t *testing.T) {
 	if !strings.Contains(body, `href="entry://odraslă"`) {
 		t.Errorf("anchor not rewritten: %q", body)
 	}
-	// The image reference stays a resource reference for htmlref.
+	// The image reference stays a resource reference, for the server to map.
 	if !strings.Contains(body, `src="f.png"`) {
 		t.Errorf("img src touched: %q", body)
 	}
@@ -318,8 +319,8 @@ func TestOldNamespaces(t *testing.T) {
 	if !strings.Contains(res[0].Body, `href="entry://wolf"`) {
 		t.Errorf("A/ reference not rewritten: %q", res[0].Body)
 	}
-	if !strings.Contains(res[0].Body, `href="../I/p.png"`) {
-		t.Errorf("I/ reference rewritten as a lookup: %q", res[0].Body)
+	if !strings.Contains(res[0].Body, `href="I/p.png"`) {
+		t.Errorf("I/ reference not resolved to the stored file: %q", res[0].Body)
 	}
 	// The image namespace is only reachable on old-scheme files.
 	if _, _, err := d.Resource("p.png"); err != nil {
@@ -338,7 +339,7 @@ func TestOldNamespaces(t *testing.T) {
 	if _, _, err := d.Resource("Z/p.png"); err == nil {
 		t.Errorf("Resource(Z/p.png) resolved")
 	}
-	if list := d.Resources(); strings.Join(list, "|") != "p.png" {
+	if list := d.Resources(); strings.Join(list, "|") != "I/p.png" {
 		t.Errorf("Resources = %v", list)
 	}
 }

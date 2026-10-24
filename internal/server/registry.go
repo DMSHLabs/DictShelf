@@ -566,6 +566,9 @@ func (e *entry) demandIndex() {
 		return
 	}
 	go func() {
+		// Marked before any wait: a background preparation of this very
+		// dictionary that holds its lock sees the mark and scales up (D182).
+		defer dict.MarkUrgent(e.Path)()
 		defer acquire(frontLimit)()
 		// Someone is waiting on this one, so it keeps every core it was
 		// started with even if the screen goes off mid-ingest (power.go
@@ -1897,7 +1900,8 @@ func (e *entry) mediaBackend() (dict.Dictionary, func(), error) {
 // dictionary whose source is gone carries the only copy of its own text, so
 // its features are locked rather than dangerous.
 func (e *entry) setFeatures(want features, progress store.Progress) error {
-	defer acquire(frontLimit)() // the user is waiting: never queue behind background work
+	defer dict.MarkUrgent(e.Path)() // before any wait, so a running preparation scales up (D182)
+	defer acquire(frontLimit)()     // the user is waiting: never queue behind background work
 	// The user ticked a box and is watching a progress bar: the longest
 	// user-visible operation the app has keeps every core it started with,
 	// and the Android shell keeps its foreground service up (power.go).

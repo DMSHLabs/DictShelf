@@ -94,14 +94,16 @@ COMMANDS
   list   <dir> [dir…]                     List the dictionaries in the folders
   info   <dictfile>                       Show a dictionary's metadata, search modes,
                                           language, and its files with their sizes
-  lookup   [-n max] <dictfile> <word>     Exact search; accent-folded if nothing matches
-  prefix   [-n max] <dictfile> <word>     Exact, then prefix; case and accents ignored
+  lookup   [-n max] <dictfile> <word>     Exact search; case and accents ignored,
+                                          the word as typed first
+  prefix   [-n max] <dictfile> <word>     The word, then the headwords it starts;
+                                          case and accents ignored
   fts      [-n max] <dictfile> <query>    Full-text query, read as in the app
                                           (full-text index)
   wildcard [-n max] <dictfile> <pattern>  Headwords that fit <pattern>: ? is one
                                           character, * any number; a capital letter
-                                          makes it case-sensitive. Quote the pattern:
-                                          'b???d'
+                                          or an accent puts the headwords that have
+                                          it first. Quote the pattern: 'b???d'
                                           All four print to standard output and take
                                           -format raw (the dictionary's HTML; default),
                                           clean (no scripts, stylesheets or
@@ -297,6 +299,14 @@ SETTINGS
                           3 times larger; reads are slightly faster.
                           env: NO_COMPRESS    toml: NO_COMPRESS
                           default: off (article text is DEFLATE-compressed)
+
+  COMPRESSION = "small"   How hard article text is compressed when a dictionary
+                          is indexed. "fast": the quickest indexing. "small": a
+                          library 1-2%% smaller; indexing takes up to 1.5 times
+                          as long. Applies to dictionaries indexed after the
+                          change. NO_COMPRESS takes precedence.
+                          env: COMPRESSION    toml: COMPRESSION
+                          default: fast
 
   --use-cached            Also list indexed dictionaries whose dictionary files
                           are gone. "Use these dictionaries" on the setup page
@@ -1413,9 +1423,24 @@ Hint: pick another port with --port, e.g.:  wudict --port %s
 		}
 		regOpts = append(regOpts, server.WithBuiltin(server.Builtin{ID: howto.ID, Path: filepath.Join(howtoDir, howto.FileName)}))
 	}
-	// Sized before the registry exists: NewRegistry can already start
-	// background work on this lane (the abbreviation sweep).
+	// Set before the registry exists: NewRegistry can already start
+	// background work on this lane (the abbreviation sweep), which prepares
+	// with these - the compression, the memory ceiling the preparation budget
+	// follows (D182), the lane. From here on a preparation is urgent only where
+	// the server marks it so.
 	server.SetIndexWorkers(cfg.IndexWorkers)
+	store.SetCompressBodies(!cfg.NoCompress)
+	store.SetSmallBodies(cfg.Compression == config.CompressionSmall)
+	if cfg.MemoryLimit > 0 {
+		// A soft ceiling: Go collects harder instead of growing past it. Set it
+		// through the server rather than debug directly, because a ceiling on
+		// its own only buys more GC - the registry needs the same number to
+		// know when to shed caches instead, which is what turns pressure into
+		// freed memory rather than a collector spinning on a live set (D64).
+		server.SetMemoryLimit(cfg.MemoryLimit)
+		logx.V("memory limit: %d MB", cfg.MemoryLimit>>20)
+	}
+	dict.SetUrgentDefault(false)
 	reg, err := server.NewRegistry(cfg.DictDirs, cfg.UseCached, regOpts...)
 	if err != nil {
 		return fmt.Errorf("scanning %s: %w", strings.Join(cfg.DictDirs, ", "), err)
@@ -1428,16 +1453,6 @@ Hint: pick another port with --port, e.g.:  wudict --port %s
 	srv := server.New(reg)
 	srv.ConfigPath = cfgFile
 	srv.User = user
-	store.SetCompressBodies(!cfg.NoCompress)
-	if cfg.MemoryLimit > 0 {
-		// A soft ceiling: Go collects harder instead of growing past it. Set it
-		// through the server rather than debug directly, because a ceiling on
-		// its own only buys more GC - the registry needs the same number to
-		// know when to shed caches instead, which is what turns pressure into
-		// freed memory rather than a collector spinning on a live set (D64).
-		server.SetMemoryLimit(cfg.MemoryLimit)
-		logx.V("memory limit: %d MB", cfg.MemoryLimit>>20)
-	}
 	srv.Version = Version
 	srv.DictDirOrigin = cfg.Origin("DICT_DIR")
 	srv.DictDirEditable = cfg.EditableInFile("DICT_DIR")
@@ -1652,6 +1667,7 @@ func applyLibrarySettings() {
 	}
 	store.SetDBDir(cfg.DBDir)
 	store.SetCompressBodies(!cfg.NoCompress)
+	store.SetSmallBodies(cfg.Compression == config.CompressionSmall)
 	if cfg.Verbose {
 		logx.Enabled = true
 	}

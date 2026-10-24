@@ -35,6 +35,10 @@ type bEntry struct {
 	// titleListing makes body the X/listing/titleOrdered/v1 of the file: the
 	// content namespace's HTML entries, in title order.
 	titleListing bool
+
+	// marker writes the 8-byte dirent of a deprecated linktarget (0xFFFE) or
+	// deleted (0xFFFD) entry, which names no target of any kind.
+	marker uint16
 }
 
 type bCluster struct {
@@ -48,6 +52,10 @@ type bFile struct {
 	clusters     []bCluster
 
 	titleList bool // write the header's title pointer list (files before 6.3)
+
+	gap             []byte // written after the last cluster, before the pointer lists
+	reverseClusters bool   // clusters written last first: the pointer list is out of file order
+	header72        bool   // the first files' 72-byte header: MIME list at 72, no checksum
 }
 
 func compressWith(t *testing.T, codec byte, in []byte) []byte {
@@ -81,7 +89,8 @@ func compressWith(t *testing.T, codec byte, in []byte) []byte {
 }
 
 // buildZIM serialises a file and returns its bytes. Order on disk: header,
-// MIME list, dirents, clusters, path pointers, cluster pointers, checksum.
+// MIME list, dirents, clusters, gap, path pointers, cluster pointers,
+// checksum.
 func buildZIM(t *testing.T, f bFile) []byte {
 	t.Helper()
 
@@ -169,7 +178,11 @@ func buildZIM(t *testing.T, f bFile) []byte {
 	}
 
 	var out bytes.Buffer
-	out.Write(make([]byte, headerSize))
+	if f.header72 {
+		out.Write(make([]byte, 72))
+	} else {
+		out.Write(make([]byte, headerSize))
+	}
 
 	mimeListPos := uint64(out.Len())
 	for _, m := range mimes {
@@ -183,7 +196,11 @@ func buildZIM(t *testing.T, f bFile) []byte {
 	for i, e := range ents {
 		direntPos[i] = uint64(out.Len())
 		var hdr [16]byte
-		if e.mime == "" {
+		if e.marker != 0 {
+			binary.LittleEndian.PutUint16(hdr[0:], e.marker)
+			hdr[3] = e.ns
+			out.Write(hdr[:8])
+		} else if e.mime == "" {
 			binary.LittleEndian.PutUint16(hdr[0:], mimeRedirect)
 			hdr[3] = e.ns
 			tgt, ok := index[e.target]
@@ -207,7 +224,12 @@ func buildZIM(t *testing.T, f bFile) []byte {
 
 	// Clusters: info byte, then compress(offset table || blobs).
 	clusterPos := make([]uint64, len(f.clusters))
-	for ci, c := range f.clusters {
+	for k := range f.clusters {
+		ci := k
+		if f.reverseClusters {
+			ci = len(f.clusters) - 1 - k
+		}
+		c := f.clusters[ci]
 		clusterPos[ci] = uint64(out.Len())
 		w := 4
 		if c.extended {
@@ -240,6 +262,8 @@ func buildZIM(t *testing.T, f bFile) []byte {
 		out.Write(compressWith(t, c.codec, body.Bytes()))
 	}
 
+	out.Write(f.gap)
+
 	pathPtrPos := uint64(out.Len())
 	for _, p := range direntPos {
 		var b [8]byte
@@ -258,7 +282,9 @@ func buildZIM(t *testing.T, f bFile) []byte {
 		out.Write(b[:])
 	}
 	checksumPos := uint64(out.Len())
-	out.Write(make([]byte, 16))
+	if !f.header72 {
+		out.Write(make([]byte, 16))
+	}
 
 	b := out.Bytes()
 	binary.LittleEndian.PutUint32(b[0:], zimMagic)
@@ -272,7 +298,9 @@ func buildZIM(t *testing.T, f bFile) []byte {
 	binary.LittleEndian.PutUint64(b[56:], mimeListPos)
 	binary.LittleEndian.PutUint32(b[64:], 0)
 	binary.LittleEndian.PutUint32(b[68:], ^uint32(0))
-	binary.LittleEndian.PutUint64(b[72:], checksumPos)
+	if !f.header72 {
+		binary.LittleEndian.PutUint64(b[72:], checksumPos)
+	}
 	return b
 }
 

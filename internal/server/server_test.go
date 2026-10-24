@@ -340,8 +340,8 @@ func TestSearchWildcard(t *testing.T) {
 		{"*sa", "casa"},
 		{"c*", "casa"}, // browse order: casa before corazón
 		{"casa", "casa"},
-		{"CASA", ""}, // a capital letter: matched as typed
-		{"cas", ""},  // the whole headword
+		{"CASA", "casa"}, // a capital letter ranks; it excludes nothing (D181)
+		{"cas", ""},      // the whole headword
 	} {
 		hits := searchStream(t, s, "/api/search?mode=wildcard&dict="+id+"&q="+url.QueryEscape(tc.q))
 		if len(hits) != 1 || hits[0].Skipped || hits[0].Error != "" {

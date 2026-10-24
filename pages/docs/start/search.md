@@ -14,7 +14,7 @@ Choose the mode in the drop-down next to the search box.
 
 | Mode | Matches | Needs |
 | --- | --- | --- |
-| **exact** | the headword; if there is none, the headword ignoring case and accents | |
+| **exact** | the headword, ignoring case and accents | |
 | **prefix** (default) | the headword, then headwords that start with the query; case and accents ignored | |
 | **wildcard** | headwords that fit a pattern: `?` is one character, `*` any number of characters; `*rain*` finds headwords that contain *rain* | headword index |
 | **full-text** | words in the article text, ranked by relevance | full-text index |
@@ -31,10 +31,32 @@ folder summary → <kbd>Full-text for every dictionary…</kbd>.
 
 ## Case, accents and spelling
 
-Exact, prefix and full-text ignore case and accents: `corazon` finds
-*corazón*, `OXFORD` finds *Oxford*. Wildcard ignores them too, except
-when the pattern contains a capital letter: then it matches as typed
-([Case and accents](../reference/wildcard-syntax.md#case-and-accents)).
+Every mode ignores case and accents: `corazon` finds *corazón*, `OXFORD`
+finds *Oxford*.
+
+In exact, prefix and wildcard search, a capital letter or an accent in the
+query sets the order of the results. It does not exclude a result:
+
+-   The headword spelled exactly as typed comes first: `march` lists *march*
+    before *March*, `March` lists *March* before *march*.
+-   A capital letter puts the headwords with that case first, an accent the
+    headwords with that accent: `über` lists *über* and the *Über-* words
+    before *uber*.
+-   The query spelled in full comes before the headwords it starts: `nacion`
+    lists *nación* before *nacional*.
+-   The rest is in alphabetical order, as in a printed dictionary: accents
+    and case count only between headwords that are otherwise the same.
+    `über` lists *über*, *über-*, *Über-*, *Über-Ich*, *überaktiv*,
+    *Überaktivität*…
+
+The rules in full:
+[Case and accents](../reference/wildcard-syntax.md#case-and-accents) and
+[Result order](../reference/wildcard-syntax.md#result-order). A dictionary
+that is not indexed yet ignores case and accents only when nothing matches
+as typed.
+
+Full-text search ignores accents on Latin letters only: `елка` finds *ёлка*
+in exact, prefix and wildcard search, not in full-text search.
 
 No mode corrects spelling: `*orre*` finds *correr*, `*corer*` finds nothing.
 

@@ -30,6 +30,8 @@ func init() {
 	// handle the gunzip. matchKey prefers this longest suffix.
 	dict.RegisterFormat(".dsl.dz", openFn)
 	dict.RegisterReader(".dsl.dz", readFn)
+	dict.RegisterSelfPrepared(".dsl")
+	dict.RegisterSelfPrepared(".dsl.dz")
 	dict.RegisterReaderVersion("dsl", ReaderVersion)
 	// O8: a prepared DSL reaches its media through the path alone. No Fetcher -
 	// DSL keeps nothing inside the .dsl itself, so there is no location to

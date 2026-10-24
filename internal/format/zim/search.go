@@ -5,8 +5,8 @@
 package zim
 
 import (
-	"sort"
 	"strings"
+	"sync/atomic"
 )
 
 // Lookup over the path pointer list, which is sorted in raw BYTE order over
@@ -18,27 +18,66 @@ import (
 // is written with, and it is verified against every entry of a real
 // wiktionary.
 
-// lowerBound returns the first entry index whose key is >= key, or entryCount
-// when none is. ~21 probes on a 1.5M-entry file, two preads each - the
-// pointer, then the dirent - and no resident index.
-func (c *container) lowerBound(key string) (int, error) {
-	var err error
-	n := c.entries()
-	i := sort.Search(n, func(m int) bool {
-		if err != nil {
-			return true // unwind: every probe reports "at or past", so lo stops moving
+// probeLevels is how many of the top levels of a binary search over the file
+// keep the keys they compared against. Every search starts at the same entry,
+// the middle one, then goes on to one of the same two, one of the same four:
+// the top of the tree is the same few entries for every word, read again on
+// every lookup. Kept, they cost no read - 11 of the ~20 levels of a
+// million-entry file, 2047 keys - and the rest of a search lands in a narrow
+// stretch of the file.
+const probeLevels = 11
+
+// keyCache holds the keys of the top probeLevels levels of the binary search
+// over one sorted list, filled in as searches reach them. A slot is a node of
+// the search tree, numbered breadth-first from 1, and a node identifies the
+// entry it probes: the midpoint depends only on the range, and the range only
+// on the path taken to it.
+type keyCache [1 << probeLevels]atomic.Pointer[string]
+
+// search is sort.Search over n ascending keys - the first m whose key is >=
+// target, or n - probing in the same order; key reads the m-th key, and an
+// error from it ends the search.
+func (kc *keyCache) search(n int, target string, key func(m int) (string, error)) (int, error) {
+	lo, hi, node := 0, n, 1
+	for lo < hi {
+		m := int(uint(lo+hi) >> 1)
+		var k string
+		if p := kc.at(node); p != nil {
+			k = *p
+		} else {
+			s, err := key(m)
+			if err != nil {
+				return 0, err
+			}
+			k = s
+			if node < len(kc) {
+				kc[node].Store(&s)
+			}
 		}
-		d, e := c.entry(m)
-		if e != nil {
-			err = e
-			return true
+		if k >= target {
+			hi, node = m, node<<1
+		} else {
+			lo, node = m+1, node<<1|1
 		}
-		return d.key() >= key
-	})
-	if err != nil {
-		return 0, err
 	}
-	return i, nil
+	return lo, nil
+}
+
+func (kc *keyCache) at(node int) *string {
+	if node < len(kc) {
+		return kc[node].Load()
+	}
+	return nil
+}
+
+// lowerBound returns the first entry index whose key is >= key, or entryCount
+// when none is. ~20 probes on a million-entry file, two preads each - the
+// pointer, then the dirent - of which the top levels are held (keyCache).
+func (c *container) lowerBound(key string) (int, error) {
+	return c.probes.search(c.entries(), key, func(m int) (string, error) {
+		d, err := c.entry(m)
+		return d.key(), err
+	})
 }
 
 // find locates an exact (namespace, path) entry.

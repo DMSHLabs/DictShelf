@@ -121,10 +121,12 @@ paths:
             `wildcard` needs it to be indexed; ask `/api/dicts` for `caps`
             first, and expect `skipped` if you do not.
 
-            A `wildcard` pattern with a capital letter is matched as typed,
-            case and accents included; any other pattern ignores them. A
-            pattern longer than 64 characters is a 400. A pattern containing
-            `*` or `?` is not lemmatized.
+            `exact`, `prefix` and `wildcard` ignore case and accents on an
+            indexed dictionary, and rank by them: the headword spelled as
+            typed first, then the headwords with the capitals and accents the
+            query has, then the others. A `wildcard` pattern longer than 64
+            characters is a 400. A pattern containing `*` or `?` is not
+            lemmatized.
 
             A multi-word `fts` query is a PHRASE first. It is retried as a
             proximity and then as separate words only when the stricter reading
@@ -1966,9 +1968,9 @@ paths:
                 required: [error, name, prepared, indexing]
                 properties:
                   error: { type: string }
-                  name: { type: string, description: The dictionary's own title, read without opening it. }
-                  prepared: { type: boolean, description: Always false here. }
-                  indexing: { type: boolean, description: Preparation is running right now. }
+                  name: { type: string, description: "The dictionary's own title, read without opening it." }
+                  prepared: { type: boolean, description: "Always false here." }
+                  indexing: { type: boolean, description: "Preparation is running right now." }
         '500':
           $ref: '#/components/responses/ServerError'
   /api/reveal:

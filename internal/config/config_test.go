@@ -692,3 +692,23 @@ func TestBooleanKeysUnset(t *testing.T) {
 		t.Errorf("TRAY unset must stay tri-state nil, got %v", *cfg.Tray)
 	}
 }
+
+// COMPRESSION is "small" only when it says so; anything else is the default.
+func TestCompression(t *testing.T) {
+	for v, want := range map[string]string{
+		"": CompressionFast, "fast": CompressionFast, "small": CompressionSmall,
+		"SMALL": CompressionSmall, " small ": CompressionSmall, "smallest": CompressionFast, "0": CompressionFast,
+	} {
+		t.Run(v, func(t *testing.T) {
+			isolate(t)
+			t.Setenv("COMPRESSION", v)
+			cfg, err := Load("", nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if cfg.Compression != want {
+				t.Errorf("COMPRESSION=%q -> %q, want %q", v, cfg.Compression, want)
+			}
+		})
+	}
+}

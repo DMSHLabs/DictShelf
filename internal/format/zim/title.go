@@ -8,7 +8,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"slices"
-	"sort"
 	"strings"
 )
 
@@ -27,7 +26,9 @@ import (
 //   - X/listing/titleOrdered/v1 (6.1+, the only one in 6.3): the front articles
 //     only, all in the content namespace, so its keys are titles alone. It
 //     leaves out redirects - wikibooks' "Main Page" -> "Галоўная старонка" -
-//     which is why it is the last resort, as it is for libzim's findByTitle.
+//     which is why it is the last resort here. libzim prefers it (FileImpl's
+//     constructor), because its findByTitle lists front articles; this
+//     fallback finds a headword, and a redirect is one.
 //
 // Every real file checked (wiktionary_ro 2026-07, the suite's Wikipedia,
 // wikibooks) stores the listing in an uncompressed cluster, so a probe is
@@ -41,6 +42,8 @@ type titleIndex struct {
 
 	off    int64 // file offset of a stored list; -1 when it is in a compressed cluster
 	cl, bl uint32
+
+	probes keyCache // the top of the title binary search (scan)
 }
 
 // titles finds the file's title order, or nil when it has none this reader
@@ -58,7 +61,7 @@ func (c *container) titles() *titleIndex {
 
 func (c *container) listing(name string, ns bool) *titleIndex {
 	_, de, ok := c.find('X', name)
-	if !ok || de.isRedirect() {
+	if !ok || !de.isContent() {
 		return nil
 	}
 	cd, lo, hi, err := c.blobSpan(de.cluster, de.blob)
@@ -118,19 +121,11 @@ func (t *titleIndex) keyFor(ns byte, title string) string {
 // fallback, and a damaged one is a miss rather than a failed search.
 func (t *titleIndex) scan(ns byte, prefix string, budget int, fn func(int, dirent) bool) {
 	key := t.keyFor(ns, prefix)
-	var failed bool
-	m := sort.Search(t.n, func(m int) bool {
-		if failed {
-			return true
-		}
+	m, err := t.probes.search(t.n, key, func(m int) (string, error) {
 		_, d, err := t.at(m)
-		if err != nil {
-			failed = true
-			return true
-		}
-		return t.key(d) >= key
+		return t.key(d), err
 	})
-	if failed {
+	if err != nil {
 		return
 	}
 	for ; m < t.n && budget > 0; m, budget = m+1, budget-1 {

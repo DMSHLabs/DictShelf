@@ -417,7 +417,9 @@ an ordered list starting at 2000, R6.7) or the `<div>` block (html).
 
 **Chunked reading.** A reader may parse the file in chunks cut before top-level `## ` lines: such a line ends every
 open block except a fenced code block or an HTML block that runs across it, so the cut is confirmed by the parse.
-Link reference definitions apply file-wide, so they are collected before bodies are rendered.
+Link reference definitions apply file-wide, so they are collected before bodies are rendered. The block structure
+does not depend on inline parsing or on which definitions exist, so the structure may be read with block parsing
+alone, the chunks in parallel, and heading text once every definition is known; wudict does both.
 
 **Go.**
 - goldmark with `extension.Table` and `html.WithUnsafe()`. There is no custom parser or renderer.
