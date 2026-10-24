@@ -1,0 +1,4 @@
+🚀 Features
+(panel) Set custom dictionary name via panel > About this dictionary > Rename
+(stardict) Show the images, sound, video and attachments listed in StarDict resource ('r') entries; prepared StarDict dictionaries are marked outdated, and refreshing one picks it up
+(intake) Install dictionaries up to 256 GB (full Wikipedia ZIMs); a download or install that would not fit is refused up front, saying how much space it needs
