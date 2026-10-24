@@ -1,10 +1,10 @@
 # Agent handoff — current state
 
-Current checkout: branch `dev` at `65b99341`. Uncommitted `app.css` changes keep
-dictionary result headings at `--ui-font-section` in both collapsed and expanded
-states, bold the dictionary name, and size result counts and `more…` links with
-`--ui-font-addition`. `go build ./...` and `git diff --check` pass; visual
-verification remains pending.
+Current checkout: branch `codex/dictionary-icon-tests`, based on `dev`.
+Embedded LSD icons are read from their bounded header data, and the async icon
+tests match the 2026-10-24 route behavior.
+`go test ./...`, `go vet ./...`, `go build ./...`, and `git diff --check` pass.
+Windows/Android icon display checks remain pending.
 
 The branch was created from clean `dev` at `a9ae9a93`; the changes described
 below were committed as `79059bd6` ("dictionary search"). Contains now builds both the
@@ -15,11 +15,9 @@ the base index when optional indexes are absent. The primary search adds
 suffix, whole-word and explicit lemma modes and shares Browse's token-prefix
 search; article full-text remains separate. Golden fingerprints for all
 format fixtures were refreshed. Focused store, server and golden tests pass;
-all inline main-page scripts parse and `git diff --check` passes. Full server
-tests still show the two pre-existing async dictionary-icon expectation
-failures (HTTP 202 versus 200). Windows/Android interactive search and index
-maintenance remain to be checked; no APK was built or installed.
-
+all inline main-page scripts parse and `git diff --check` passes. Windows/Android
+interactive search and index maintenance remain to be checked; no APK was built
+or installed.
 The Wildcards lower search in separate-dictionary mode now sends one grouped stream request for all
 dictionaries when a saved complete filter is unavailable. Go searches the shared result SQLite cache
 globally, distributes hits by dictionary ID and original position, and writes the existing per-dictionary

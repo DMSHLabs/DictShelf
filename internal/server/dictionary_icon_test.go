@@ -6,10 +6,14 @@ package server
 
 import (
 	"encoding/binary"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/wuweidict/wudict/internal/dict"
+	"github.com/wuweidict/wudict/internal/store"
 )
 
 func TestDictionaryIconUsesFallbackWhenDictionaryHasNoIcon(t *testing.T) {
@@ -21,6 +25,15 @@ func TestDictionaryIconUsesFallbackWhenDictionaryHasNoIcon(t *testing.T) {
 	s := &Server{reg: &Registry{byID: map[string]*entry{"plain": e}}}
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest("GET", "/dict-icon/plain", nil)
+	s.handleDictionaryIcon(w, r)
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("first status = %d, want %d while lookup starts", w.Code, http.StatusAccepted)
+	}
+	waitUntil(t, "dictionary icon lookup", func() bool {
+		_, _, ready := s.reg.cachedDictionaryIcon(e)
+		return ready
+	})
+	w = httptest.NewRecorder()
 	s.handleDictionaryIcon(w, r)
 	if w.Code != 200 {
 		t.Fatalf("status = %d, want 200", w.Code)
@@ -34,11 +47,20 @@ func TestDictionaryIconUsesFallbackWhenDictionaryHasNoIcon(t *testing.T) {
 }
 
 func TestDictionaryIconPrefersSiblingThenUsesEmbeddedLSDIcon(t *testing.T) {
+	isolatedDBDir(t)
 	dir := t.TempDir()
 	source := filepath.Join(dir, "sample.lsd")
 	embedded := []byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'}
 	writeIconOnlyLSDForServerTest(t, source, embedded)
-	s := &Server{}
+	preparedDir, err := store.ClaimDir(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reader := &stubReader{meta: dict.Meta{Name: "sample", Format: "lsd", Path: source}}
+	if _, err := store.IngestPlan(reader, store.TextDBPath(preparedDir), store.Plan{}, nil); err != nil {
+		t.Fatal(err)
+	}
+	s := &Server{reg: &Registry{}}
 	e := &entry{Path: source}
 
 	body, mime := s.dictionaryIcon(e)
