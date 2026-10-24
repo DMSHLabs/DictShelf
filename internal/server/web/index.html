@@ -1319,29 +1319,97 @@ const SEARCH_DEBOUNCE_MS={{SEARCH_DEBOUNCE_MS}};
 const $=id=>document.getElementById(id);
 const SEARCH_PORTION_SIZE_KEY="wudict_search_portion_size";
 const SEARCH_RESULT_LIMIT=501;
-const searchHeadwordTotals=new Map();
+const articleResultCaches=new Map();
+let articleCacheQueue=[],articleCacheActive=0,articleCacheAbort=null,articleCacheSeq=0,articleCacheFinished=0,articleCacheTotal=0;
+let articleCacheGroupID="",articleCacheGroupCount=1;
+function newArticleResultCacheID(){
+  const bytes=new Uint8Array(16);
+  try{crypto.getRandomValues(bytes)}catch(_){for(let i=0;i<bytes.length;i++)bytes[i]=Math.floor(Math.random()*256)}
+  return [...bytes].map(value=>value.toString(16).padStart(2,"0")).join("");
+}
+function stopArticleResultCaches(){
+  articleCacheSeq++;articleCacheAbort?.abort();articleCacheAbort=null;
+  articleCacheQueue=[];articleCacheActive=0;articleCacheFinished=0;articleCacheTotal=0;
+  articleCacheGroupID="";articleCacheGroupCount=1;
+  articleResultCaches.clear();maskTaskFinish("search-results");
+}
+function cancelArticleResultCaches(){
+  articleCacheSeq++;articleCacheAbort?.abort();articleCacheAbort=null;
+  articleCacheQueue=[];articleCacheActive=0;
+  for(const state of articleResultCaches.values())if(!state.done)state.error="stopped";
+  maskTaskFinish("search-results");
+}
+function articleCacheURL(state,action,start=0,size=0){
+  return "/api/search?"+new URLSearchParams({cacheAction:action,cacheID:state.id,dict:state.dict,
+    cacheCount:String(state.count),cacheOrder:String(state.order),
+    q:state.query,mode:state.mode,rung:state.rung,ignoreDiacritics:state.ignore?"1":"0",
+    hl:hlOn?"1":"0",start:String(start),size:String(size)});
+}
+function updateArticleCacheCard(state){
+  const det=[...document.querySelectorAll("details.dict")].find(node=>
+    node.dataset.searchDict===state.dict&&node.dataset.searchMode===state.mode&&
+    node.dataset.searchQuery===state.displayQuery);
+  if(!det)return;
+  det.dataset.searchCacheID=state.id;
+  det.dataset.searchTotal=String(state.total);
+  det.dataset.searchExact=String(state.done);
+  const start=Number(det.dataset.searchPageStart)||0,count=Number(det.dataset.searchPageCount)||0,end=start+count;
+  const range=det.querySelector(":scope>summary .result-page-range");
+  if(range)range.textContent=window.wudictI18n.number(start+1)+"–"+window.wudictI18n.number(end)+" ("+
+    window.wudictI18n.number(Math.max(end,state.total))+(state.done?"":"+")+")";
+  const next=det.querySelector(':scope>summary .result-page-action[data-dir="next"]');
+  if(next)next.disabled=state.done&&end>=state.total;
+  const more=det.querySelector(":scope>summary .more");
+  if(more&&state.done&&state.total<=count)more.remove();
+  const label=det.querySelector(":scope>summary .count");
+  if(label&&!range){
+    const rung=label.querySelector(".rung")?.textContent||"";
+    const shownTotal=Math.max(count,state.total);
+    label.textContent=rung+tx("search.results",{count:shownTotal,
+      number:window.wudictI18n.number(shownTotal)+(state.done?"":"+")})+
+      (state.error?" · "+tx("search.fullListUnavailable"):"");
+  }
+}
+function queueArticleResultCache(msg,mode,displayQuery,seq){
+  if(!msg.dict||!msg.results?.length||articleResultCaches.has(msg.dict))return;
+  const state={id:articleCacheGroupID||newArticleResultCacheID(),count:articleCacheGroupCount,order:msg.i||0,
+    dict:msg.dict,name:msg.name||msg.dict,query:msg.term||displayQuery,
+    displayQuery,mode,rung:msg.rung||"",ignore:ignoreDiacritics,total:msg.results.length,
+    done:false,error:"",started:false,seq,lastPaint:0};
+  articleResultCaches.set(msg.dict,state);articleCacheQueue.push(state);articleCacheTotal++;
+}
+function pumpArticleResultCaches(){
+  if(!articleCacheQueue.length&&articleCacheActive===0){maskTaskFinish("search-results");return}
+  if(!articleCacheAbort)articleCacheAbort=new AbortController();
+  if(!maskTaskIDs.has("search-results"))
+    maskTaskStart("search-results",tx("search.countingArticles"),cancelArticleResultCaches,
+      {done:articleCacheFinished,total:articleCacheTotal});
+  while(articleCacheActive<2&&articleCacheQueue.length){
+    const state=articleCacheQueue.shift(),generation=articleCacheSeq;
+    state.started=true;articleCacheActive++;
+    fetchStream(articleCacheURL(state,"build"),event=>{
+      if(generation!==articleCacheSeq||state.seq!==searchSeq)return;
+      if(event.t==="error")throw new Error(event.error||"result cache failed");
+      if(event.t!=="cache")return;
+      state.total=event.total||0;state.done=!!event.complete;
+      const now=performance.now();
+      if(state.done||now-state.lastPaint>250){state.lastPaint=now;updateArticleCacheCard(state)}
+    },articleCacheAbort.signal).catch(error=>{
+      if(generation===articleCacheSeq&&error.name!=="AbortError")state.error=error.message;
+    }).finally(()=>{
+      if(generation!==articleCacheSeq)return;
+      articleCacheActive--;articleCacheFinished++;
+      maskTaskUpdate("search-results",tx("search.countingArticles"),articleCacheFinished,articleCacheTotal);
+      updateArticleCacheCard(state);pumpArticleResultCaches();
+    });
+  }
+}
 function normalizedSearchPortionSize(value){
   const n=Math.floor(Number(value));
   return Number.isFinite(n)?Math.max(5,Math.min(500,Math.round(n/5)*5)):100;
 }
 function searchPortionSize(){
   try{return normalizedSearchPortionSize(localStorage.getItem(SEARCH_PORTION_SIZE_KEY)||100)}catch(_){return 100}
-}
-function headwordSearchMode(mode){return ["prefix","suffix","contains","word","wordLemma"].includes(mode)}
-function requestHeadwordSearchTotal(dict,query,mode){
-  // Browse's prepared headword index always folds accents. Main search can
-  // preserve them, so only reuse its total when both paths have same semantics.
-  if(!ignoreDiacritics)return Promise.resolve(null);
-  const key=JSON.stringify([dict,query,mode]);
-  if(searchHeadwordTotals.has(key))return searchHeadwordTotals.get(key);
-  const params=new URLSearchParams({dict,q:query,matchmode:mode,p:"1"});
-  const pending=(async()=>{
-    const response=await apiFetch("/api/browse/find?"+params);
-    if(!response.ok)throw new Error("headword count unavailable");
-    const body=await response.json();
-    return Number.isFinite(body.total)?body.total:Number.isFinite(body.Total)?body.Total:null;
-  })().catch(()=>{searchHeadwordTotals.delete(key);return null});
-  searchHeadwordTotals.set(key,pending);return pending;
 }
 const searchPortionInput=$("searchPageSize");
 if(searchPortionInput){
@@ -3251,6 +3319,7 @@ async function loadDicts(rescan){
     const listURL=listDiagnostics?endpoint+"?diagnostics=1":endpoint;
     await fetchStream(listURL,msg=>{
       if(msg.t==="begin"){
+        articleCacheGroupID=newArticleResultCacheID();articleCacheGroupCount=Math.max(1,(msg.slots||[]).length);
         if(beginMs<0)beginMs=Math.round(performance.now()-listStarted);
         sawBegin=true;dictTotal=msg.total||0;
       }else if(msg.t==="dict"&&msg.dict){
@@ -6053,7 +6122,7 @@ async function fetchStream(url,onMsg,signal,options){
        (options?.method||"GET").toUpperCase()==="GET"){
       const params=requestURL.searchParams,n=Number.parseInt(params.get("n"),10);
       const flag=(value)=>!!value&&!/^(0|false|no|off)$/i.test(value.trim());
-      const request={q:params.get("q")||"",mode:params.get("mode")||"",format:params.get("format")||"",dict:params.get("dict")||"",n:Number.isFinite(n)?n:0,hl:flag(params.get("hl")||""),ignoreDiacritics:flag(params.get("ignoreDiacritics")||"")};
+      const request={q:params.get("q")||"",mode:params.get("mode")||"",format:params.get("format")||"",dict:params.get("dict")||"",n:Number.isFinite(n)?n:0,hl:flag(params.get("hl")||""),ignoreDiacritics:flag(params.get("ignoreDiacritics")||""),cacheAction:params.get("cacheAction")||"",cacheID:params.get("cacheID")||"",cacheCount:Number(params.get("cacheCount"))||0,cacheOrder:Number(params.get("cacheOrder"))||0,start:Number(params.get("start"))||0,size:Number(params.get("size"))||0,rung:params.get("rung")||""};
       await androidGoStream(()=>window.wudictAndroidGo.startSearchStream(window.location.origin,JSON.stringify(request)),onMsg,signal);
       return;
     }
@@ -6065,7 +6134,7 @@ async function fetchStream(url,onMsg,signal,options){
       if(requestURL.pathname==="/api/search"&&method==="GET"){
         const params=requestURL.searchParams,n=Number.parseInt(params.get("n"),10);
         const flag=(value)=>!!value&&!/^(0|false|no|off)$/i.test(value.trim());
-        const request={q:params.get("q")||"",mode:params.get("mode")||"",format:params.get("format")||"",dict:params.get("dict")||"",n:Number.isFinite(n)?n:0,hl:flag(params.get("hl")||""),ignoreDiacritics:flag(params.get("ignoreDiacritics")||"")};
+        const request={q:params.get("q")||"",mode:params.get("mode")||"",format:params.get("format")||"",dict:params.get("dict")||"",n:Number.isFinite(n)?n:0,hl:flag(params.get("hl")||""),ignoreDiacritics:flag(params.get("ignoreDiacritics")||""),cacheAction:params.get("cacheAction")||"",cacheID:params.get("cacheID")||"",cacheCount:Number(params.get("cacheCount"))||0,cacheOrder:Number(params.get("cacheOrder"))||0,start:Number(params.get("start"))||0,size:Number(params.get("size"))||0,rung:params.get("rung")||""};
         await window.wudictNativeCall("search",JSON.stringify(request),onMsg,signal);
         return;
       }
@@ -8093,12 +8162,12 @@ async function doSearch(ev){
   if(maskBusyJobs.size)return;
   const q=$("q").value.trim();
   if(!q)return;
+  stopArticleResultCaches();
   if($("mode").value==="wildcards"){
     if(!maskSubmitRequested)return;
     maskSubmitRequested=false;scopeOnce=null;lastScope=null;commitOnce=false;
     return maskRun(q);
   }
-  searchHeadwordTotals.clear();
   maskSubmitRequested=false;maskAbort();
   // consumed before the first await, so the history wrapper below can still
   // read which scope was used
@@ -8171,10 +8240,8 @@ async function doSearch(ev){
       return;
     }
     dictParam=ids.join(",");
-    // One dictionary is one dictionary however it was arrived at: a group that
-    // narrows to a single member earns the deep answer, not the 5-hit summary.
-    perDict=ids.length===1?25:5;
-  }else{dictParam=dictSel;perDict=25}
+    perDict=5;
+  }else{dictParam=dictSel;perDict=5}
   const out=$("out");
   /* Never blank between two answers (D73/M2). Clearing on `begin` would make
      every keystroke-pause a full → empty → full flash: two motions where one
@@ -8274,6 +8341,7 @@ async function doSearch(ev){
         // dictionaries and mode. Full-text hits are articles matched by body.
         if(!anyShown)clearStatusForResults();
         const res=renderSlot(box,msg,mode,q,perDict,boxes.length>1);
+        if(res.results)queueArticleResultCache(msg,mode,q,seq);
         if(res.results&&searchDiag&&!searchDiagFirstPaint){
           searchDiagFirstPaint=true;
           const paintedDict=msg.dict||diagSlot?.dict||"",paintedName=msg.name||diagSlot?.name||"",paintedCount=(msg.results||[]).length;
@@ -8342,6 +8410,7 @@ async function doSearch(ev){
         const forms=[...morphSeen].join(", ");
         morphNote.textContent=tx(morphAll?"search.morphAll":"search.morphSome",{query:msg.from||q,forms});
       }else if(msg.t==="end"){
+        pumpArticleResultCaches();
         searchDiagLog("search_end",{completed:searchProgressDone,total:searchProgressTotal});
         finishSearchProgress(seq);
         if(browseArticleDiagContext&&browseArticleDiagContext.searchStartedAt)
@@ -8397,27 +8466,48 @@ async function doSearch(ev){
   }
 }
 $("frm").addEventListener("submit",doSearch);
-function applyHeadwordSearchTotal(box,dict,query,mode,total){
-  if(!Number.isInteger(total)||total<0)return;
-  const det=box.querySelector(":scope>details.dict");
-  if(!det||det.dataset.searchDict!==dict||det.dataset.searchQuery!==query||det.dataset.searchMode!==mode||!det.dataset.searchPageStart)return;
-  const start=Number(det.dataset.searchPageStart),end=start+(Number(det.dataset.searchPageCount)||0);
-  det.dataset.searchExact="true";det.dataset.searchTotal=String(total);det.dataset.searchLowerBound=String(total);det.dataset.searchHasNext=String(end<total);
-  const range=det.querySelector(":scope>summary .result-page-range");
-  if(range)range.textContent=window.wudictI18n.number(start+1)+"–"+window.wudictI18n.number(end)+" ("+window.wudictI18n.number(total)+")";
-  const next=det.querySelector(':scope>summary .result-page-action[data-dir="next"]');
-  if(next)next.disabled=end>=total||end>=SEARCH_RESULT_LIMIT-1;
-}
 async function fetchSearchPortion(det,start){
   if(!det?.isConnected)return;
   const box=det.parentElement,mode=det.dataset.searchMode||"prefix",query=det.dataset.searchQuery||"",id=det.dataset.searchDict||"";
   const initial=Number(det.dataset.searchInitial)||5,size=normalizedSearchPortionSize(det.dataset.searchPageSize||searchPortionSize());
+  const cached=articleResultCaches.get(id);
+  if(cached&&cached.displayQuery===query&&cached.mode===mode&&!cached.error){
+    const buttons=[...det.querySelectorAll(":scope>summary .more,:scope>summary .result-page-action")];
+    const restoreButtons=()=>{
+      for(const button of buttons){
+        if(button.dataset.dir==="prev")button.disabled=(Number(det.dataset.searchPageStart)||0)<=0;
+        else if(button.dataset.dir==="next")button.disabled=cached.done&&
+          (Number(det.dataset.searchPageStart)||0)+(Number(det.dataset.searchPageCount)||0)>=cached.total;
+        else button.disabled=false;
+      }
+    };
+    buttons.forEach(button=>button.disabled=true);
+    try{
+      if(!cached.started)pumpArticleResultCaches();
+      await fetchStream(articleCacheURL(cached,"page",start,size),msg=>{
+        if(msg.t==="error")throw new Error(msg.error||"result page unavailable");
+        if(msg.t!=="hit"||msg.dict!==id)return;
+        cached.total=msg.total||0;cached.done=!!msg.complete;
+        const visible=msg.results||[];
+        if(!visible.length){restoreButtons();updateArticleCacheCard(cached);return}
+        const page={start:msg.start||0,size,total:cached.total,lowerBound:cached.total,
+          exact:cached.done,hasNext:!!msg.hasNext};
+        renderSlot(box,{...msg,name:cached.name,results:visible},
+          mode,query,initial,det.dataset.searchGroup==="true",page);
+        const replacement=box.querySelector(":scope>details.dict");
+        if(replacement)replacement.open=true;
+      },articleCacheAbort?.signal);
+    }catch(error){
+      if(error.name!=="AbortError")setStatus("⚠ "+esc(error.message));
+      if(det.isConnected)restoreButtons();
+    }
+    return;
+  }
   const end=start+size,requested=Math.min(end+1,SEARCH_RESULT_LIMIT);
   const more=det.querySelector(":scope>summary .more"),actions=[...det.querySelectorAll(":scope>summary .result-page-action")];
   if(more)more.disabled=true;
   actions.forEach(button=>button.disabled=true);
   const url="/api/search?q="+encodeURIComponent(query)+"&mode="+encodeURIComponent(mode)+"&hl="+(hlOn?1:0)+diacriticsSearchParam()+"&dict="+encodeURIComponent(id)+"&n="+requested;
-  if(headwordSearchMode(mode))requestHeadwordSearchTotal(id,query,mode).then(total=>{if(total!==null)applyHeadwordSearchTotal(box,id,query,mode,total)});
   let received=false;
   try{
     await fetchStream(url,msg=>{
@@ -8435,13 +8525,11 @@ async function fetchSearchPortion(det,start){
           const fallbackStart=Math.max(0,all.length-size),fallback=all.slice(fallbackStart);
           renderSlot(box,{...msg,results:fallback},mode,query,initial,det.dataset.searchGroup==="true",{...page,start:fallbackStart});
           const replacement=box.querySelector(":scope>details.dict");if(replacement)replacement.open=true;
-          if(replacement&&headwordSearchMode(mode))requestHeadwordSearchTotal(id,query,mode).then(total=>{if(total!==null)applyHeadwordSearchTotal(box,id,query,mode,total)});
         }
         return;
       }
       renderSlot(box,{...msg,results:visible},mode,query,initial,det.dataset.searchGroup==="true",page);
       const replacement=box.querySelector(":scope>details.dict");if(replacement)replacement.open=true;
-      if(replacement&&headwordSearchMode(mode))requestHeadwordSearchTotal(id,query,mode).then(total=>{if(total!==null)applyHeadwordSearchTotal(box,id,query,mode,total)});
     });
     if(!received&&det.isConnected){if(more)more.disabled=false;actions.forEach(button=>button.disabled=false)}
   }catch(_){

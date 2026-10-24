@@ -1,59 +1,12 @@
 # Agent handoff — current state
 
-Current checkout: branch `codex/search` at `09439c57`. The working tree adds
-main-search result portions: Settings → Results saves a 100-article default,
-the sticky dictionary header navigates portions and opens a matching Browse
-filter where supported, and Browse-compatible headword modes fill in the exact
-total from the prepared index. Initial search still renders 5 results per dictionary in a
-group or 25 for one dictionary. The API allows one sentinel result beyond the
-500 visible-result ceiling so a full last page is distinguishable from more
-results; counts above that ceiling remain marked as lower bounds. `go build ./...`,
-`git diff --check`, and EN/RU catalog JSON parsing pass. Windows and Android
-interaction, including Browse handoff and narrow-screen header layout, remain
-unverified.
+Current checkout: branch `codex/search` at `2be43a4f`, with uncommitted Browse result-cache work. Integrate toward `dev` only when requested. No APK was built or installed in this session.
 
-The branch was created from clean `dev` at `a9ae9a93`; the changes described
-below were committed as `79059bd6` ("dictionary search"). Contains now builds both the
-headword token FTS and trigram indexes, while FullText builds an independent
-article FTS. `IngestVersion=6` offers existing databases for explicit rebuild;
-older databases remain readable. Browse and main headword search fall back to
-the base index when optional indexes are absent. The primary search adds
-suffix, whole-word and explicit lemma modes and shares Browse's token-prefix
-search; article full-text remains separate. Golden fingerprints for all
-format fixtures were refreshed. Focused store, server and golden tests pass;
-all inline main-page scripts parse and `git diff --check` passes. Full server
-tests still show the two pre-existing async dictionary-icon expectation
-failures (HTTP 202 versus 200). Windows/Android interactive search and index
-maintenance remain to be checked; no APK was built or installed.
+Main article search now returns five articles initially and builds one SQLite result file per search, with ordered matching entry IDs per dictionary in the background. Portion requests read only the selected IDs and bodies, with a partial then exact count. Sharing a file keeps a large search group within the five-cache retention rule; the path also uses the disk cap and native search bridge. Focused store/server tests (including two dictionaries and a portion crossing a 300-ID block), Go build and inline JavaScript syntax pass; Windows/Android runtime interaction and very large result timing are pending.
 
-The Wildcards lower search in separate-dictionary mode now sends one grouped stream request for all
-dictionaries when a saved complete filter is unavailable. Go searches the shared result SQLite cache
-globally, distributes hits by dictionary ID and original position, and writes the existing per-dictionary
-300-word filter pages for navigation. Selective FTS/trigram candidates use one group plan; large
-candidate sets are materialized once before bounded reads. The combined-list path is unchanged. `go build
-./...`, inline JavaScript syntax and `git diff --check` pass. Windows/Android interaction and timing
-remain to be checked, especially cancellation, lemma modes and large result sets.
+Browse find/filter now streams matches into 300-title SQLite blocks using the existing Wildcards result-cache manager and its disk limit. The WebView keeps one visible result block plus one ribbon marker per block. Page turns, result navigation and return from an article read the requested block by cache ID. A missing saved cache restarts the query. The server cache path and Android/Windows native page bridges are wired; a focused server test passes. Go build, inline JavaScript syntax and `git diff --check` pass. Windows/Android interaction and million-result performance remain unverified.
 
-Browse now receives the effective typed and lemma forms from its single-dictionary find stream and uses a
-softer theme accent for lemma-only highlights. Completed find sessions retain those forms. Build and
-browser runtime checks are pending.
-
-Wildcards separate/Combined list switches preserve the bottom query, match mode
-and Search/Filter choice, then reapply them after the target base list is ready.
-Returning to a cached view reuses its base result list. Runtime check is pending.
-
-The 2026-10-24 Windows log confirms grouped lower filtering completes in under 700 ms for 102 matches.
-Filter ribbon sections now remain available when a completed SQL result's page read errors; switching to
-Filter also selects a completed dictionary with matches. Runtime confirmation is pending.
-
-Wildcards Whole word + lemmatization and Exact + lemmatization now receive the effective query forms used
-per dictionary. Typed-form matches keep the accent highlight; lemma-only matches use the softer theme
-accent. Go build and static JS checks pass; Windows/Android visual confirmation is pending.
-
-Lemma-only Wildcards highlights use a stronger theme blend. Separate-mode lemma alternatives are
-aggregated and cached for the active group/query; the combined-list filter reuses them and returns its
-effective forms for matching highlights. Without a saved set, combined search derives forms from selected
-dictionary languages as before. Runtime verification is pending.
+The full `internal/server` test run still fails the two known dictionary-icon tests (HTTP 202 where 200 is expected and a missing embedded icon). No other test failures appeared. Main search result portions and the Wildcards lower-search changes from this branch remain as described by the code and SPEC; Windows/Android interaction is still pending.
 
 Filter mode now explicitly requests the visible dictionary's first result page when its SQL metadata is
 ready but no page is loaded; this avoids leaving the headword pane on its loading message after a ribbon

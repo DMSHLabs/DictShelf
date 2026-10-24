@@ -954,6 +954,8 @@
   "search.examplesHint": "Examples are shown — tap to fold the lines that hold nothing but examples",
   "search.searching": "Searching…",
   "search.progress": "Searched {done} of {total} dictionaries",
+  "search.countingArticles": "Counting matching articles…",
+  "search.fullListUnavailable": "Complete list unavailable",
   "search.stop": "Stop",
   "search.emptyDict": "No results in this dictionary",
   "search.emptyGroup": "No results in this group",
