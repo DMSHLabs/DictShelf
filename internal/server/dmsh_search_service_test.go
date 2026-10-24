@@ -7,9 +7,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -25,6 +28,169 @@ func collectLookup(t *testing.T, s *Server, request SearchRequest) []SearchEvent
 		t.Fatal(err)
 	}
 	return events
+}
+
+func TestArticleResultCacheBuildAndReadPortion(t *testing.T) {
+	s := newTestServer(t)
+	s.User = UserDir(t.TempDir())
+	s.wildcardPages.init(s.wildcardCacheDir())
+	t.Cleanup(func() {
+		s.wildcardPages.mu.Lock()
+		defer s.wildcardPages.mu.Unlock()
+		for _, entry := range s.wildcardPages.entries {
+			_ = entry.db.Close()
+		}
+	})
+	id := getDicts(t, s, "/api/dicts")[0].ID
+	request := SearchRequest{Query: "cor", Mode: "prefix", Dictionary: id, CacheAction: "build", CacheID: "article-result-test-0001"}
+	build := collectLookup(t, s, request)
+	if len(build) == 0 || !build[len(build)-1].Complete || build[len(build)-1].Total != 1 {
+		t.Fatalf("cache build events = %+v", build)
+	}
+	var cachedIDs string
+	if err := s.wildcardPages.entries[request.CacheID].db.QueryRow(
+		`SELECT words_json FROM wildcard_block WHERE dict_id=? AND block_no=1`, id).Scan(&cachedIDs); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(cachedIDs, "corazón") || strings.Contains(cachedIDs, "<p>") {
+		t.Fatalf("article result cache contains article text: %q", cachedIDs)
+	}
+	request.CacheAction = "page"
+	request.Start = 0
+	request.Size = 100
+	page := collectLookup(t, s, request)
+	if len(page) != 1 || page[0].T != "hit" || !page[0].Complete || page[0].Total != 1 ||
+		len(page[0].Results) != 1 || page[0].Results[0].Headword != "corazón" {
+		t.Fatalf("cached portion = %+v", page)
+	}
+	query := url.Values{"q": {"cor"}, "mode": {"prefix"}, "dict": {id}, "cacheAction": {"page"},
+		"cacheID": {request.CacheID}, "start": {"0"}, "size": {"100"}}
+	wire := stream(t, s, "/api/search?"+query.Encode())
+	if len(wire) != 1 || wire[0].Total != 1 || len(wire[0].Results) != 1 {
+		t.Fatalf("HTTP cached portion = %+v", wire)
+	}
+	request.Origin = "http://127.0.0.1:6888"
+	encoded, _ := json.Marshal(request)
+	var native []SearchEvent
+	if err := s.DesktopStream(context.Background(), request.Origin, "search", string(encoded), func(raw []byte) {
+		var event SearchEvent
+		if err := json.Unmarshal(raw, &event); err != nil {
+			t.Fatal(err)
+		}
+		native = append(native, event)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if len(native) != 1 || native[0].Total != 1 || len(native[0].Results) != 1 {
+		t.Fatalf("native cached portion = %+v", native)
+	}
+	request.Start = 100
+	pastEnd := collectLookup(t, s, request)
+	if len(pastEnd) != 1 || !pastEnd[0].Complete || pastEnd[0].Total != 1 || len(pastEnd[0].Results) != 0 {
+		t.Fatalf("past-end cached portion = %+v", pastEnd)
+	}
+}
+
+func TestArticleResultCacheSharesOneFileAcrossDictionaries(t *testing.T) {
+	dir := t.TempDir()
+	for _, name := range []string{"first.dsl", "second.dsl"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(sampleDSL), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	isolatedDBDir(t)
+	reg, err := NewRegistry([]string{dir}, false, WithComparisons(false))
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitNewDictionaryIndexing(t, reg)
+	closeBackends(t, reg)
+	s := New(reg)
+	s.User = UserDir(t.TempDir())
+	s.wildcardPages.init(s.wildcardCacheDir())
+	t.Cleanup(func() {
+		s.wildcardPages.mu.Lock()
+		defer s.wildcardPages.mu.Unlock()
+		for _, entry := range s.wildcardPages.entries {
+			_ = entry.db.Close()
+		}
+	})
+	dicts := getDicts(t, s, "/api/dicts")
+	if len(dicts) != 2 {
+		t.Fatalf("dictionaries = %d", len(dicts))
+	}
+	request := SearchRequest{Query: "cor", Mode: "prefix", CacheAction: "build",
+		CacheID: "article-result-group-0001", CacheCount: 2}
+	for order, dictionary := range dicts {
+		request.Dictionary, request.CacheOrder = dictionary.ID, order
+		events := collectLookup(t, s, request)
+		if len(events) == 0 || !events[len(events)-1].Complete || events[len(events)-1].Total != 1 {
+			t.Fatalf("dictionary %d cache build = %+v", order, events)
+		}
+	}
+	files, err := filepath.Glob(filepath.Join(s.wildcardCacheDir(), "wildcard_*.db"))
+	if err != nil || len(files) != 1 {
+		t.Fatalf("group cache files = %v, %v", files, err)
+	}
+	request.CacheAction, request.Size = "page", 100
+	for order, dictionary := range dicts {
+		request.Dictionary, request.CacheOrder = dictionary.ID, order
+		page := collectLookup(t, s, request)
+		if len(page) != 1 || page[0].Total != 1 || !page[0].Complete ||
+			len(page[0].Results) != 1 || page[0].Results[0].Headword != "corazón" {
+			t.Fatalf("dictionary %d cached page = %+v", order, page)
+		}
+	}
+}
+
+func TestArticleResultCachePortionCrossesStoredBlock(t *testing.T) {
+	dir := t.TempDir()
+	var source strings.Builder
+	for i := range 625 {
+		fmt.Fprintf(&source, "work%04d\n\tdefinition %d\n", i, i)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "many.dsl"), []byte(source.String()), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	isolatedDBDir(t)
+	reg, err := NewRegistry([]string{dir}, false, WithComparisons(false))
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitNewDictionaryIndexing(t, reg)
+	closeBackends(t, reg)
+	s := New(reg)
+	s.User = UserDir(t.TempDir())
+	s.wildcardPages.init(s.wildcardCacheDir())
+	t.Cleanup(func() {
+		s.wildcardPages.mu.Lock()
+		defer s.wildcardPages.mu.Unlock()
+		for _, entry := range s.wildcardPages.entries {
+			_ = entry.db.Close()
+		}
+	})
+	dicts := getDicts(t, s, "/api/dicts")
+	if len(dicts) != 1 {
+		t.Fatalf("dictionaries = %d", len(dicts))
+	}
+	request := SearchRequest{Query: "work", Mode: "prefix", Dictionary: dicts[0].ID,
+		CacheAction: "build", CacheID: "article-result-boundary-0001"}
+	build := collectLookup(t, s, request)
+	if len(build) == 0 || build[len(build)-1].Total != 625 || !build[len(build)-1].Complete {
+		t.Fatalf("cache count = %+v", build)
+	}
+	request.CacheAction, request.Start, request.Size = "page", 275, 100
+	page := collectLookup(t, s, request)
+	if len(page) != 1 || page[0].Total != 625 || len(page[0].Results) != 100 ||
+		page[0].Results[0].Headword != "work0275" || page[0].Results[99].Headword != "work0374" {
+		t.Fatalf("cross-block portion = %+v", page)
+	}
+	request.Start = 600
+	tail := collectLookup(t, s, request)
+	if len(tail) != 1 || len(tail[0].Results) != 25 || tail[0].HasNext ||
+		tail[0].Results[24].Headword != "work0624" {
+		t.Fatalf("tail portion = %+v", tail)
+	}
 }
 
 func TestSharedSearchMatchesHTTPAndNativeWithoutRouter(t *testing.T) {

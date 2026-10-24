@@ -11,7 +11,9 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
+
+	"github.com/wuweidict/wudict/internal/dict"
+	"github.com/wuweidict/wudict/internal/store"
 )
 
 func TestDictionaryIconUsesFallbackWhenDictionaryHasNoIcon(t *testing.T) {
@@ -21,17 +23,18 @@ func TestDictionaryIconUsesFallbackWhenDictionaryHasNoIcon(t *testing.T) {
 	}
 	e := &entry{ID: "plain", Path: source}
 	s := &Server{reg: &Registry{byID: map[string]*entry{"plain": e}}}
-	var w *httptest.ResponseRecorder
-	deadline := time.Now().Add(5 * time.Second)
-	for {
-		w = httptest.NewRecorder()
-		r := httptest.NewRequest("GET", "/dict-icon/plain", nil)
-		s.handleDictionaryIcon(w, r)
-		if w.Code != http.StatusAccepted || time.Now().After(deadline) {
-			break
-		}
-		time.Sleep(10 * time.Millisecond)
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/dict-icon/plain", nil)
+	s.handleDictionaryIcon(w, r)
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("first status = %d, want %d while lookup starts", w.Code, http.StatusAccepted)
 	}
+	waitUntil(t, "dictionary icon lookup", func() bool {
+		_, _, ready := s.reg.cachedDictionaryIcon(e)
+		return ready
+	})
+	w = httptest.NewRecorder()
+	s.handleDictionaryIcon(w, r)
 	if w.Code != 200 {
 		t.Fatalf("status = %d, want 200", w.Code)
 	}
@@ -44,11 +47,23 @@ func TestDictionaryIconUsesFallbackWhenDictionaryHasNoIcon(t *testing.T) {
 }
 
 func TestDictionaryIconPrefersSiblingThenUsesEmbeddedLSDIcon(t *testing.T) {
+	isolatedDBDir(t)
 	dir := t.TempDir()
 	source := filepath.Join(dir, "sample.lsd")
 	embedded := []byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'}
 	writeIconOnlyLSDForServerTest(t, source, embedded)
-	body, mime := sourceDictionaryIcon(source, "")
+	preparedDir, err := store.ClaimDir(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reader := &stubReader{meta: dict.Meta{Name: "sample", Format: "lsd", Path: source}}
+	if _, err := store.IngestPlan(reader, store.TextDBPath(preparedDir), store.Plan{}, nil); err != nil {
+		t.Fatal(err)
+	}
+	s := &Server{reg: &Registry{}}
+	e := &entry{Path: source}
+
+	body, mime := s.dictionaryIcon(e)
 	if string(body) != string(embedded) || mime != "image/png" {
 		t.Fatalf("embedded icon = %x, %q; want %x, image/png", body, mime, embedded)
 	}
@@ -57,7 +72,7 @@ func TestDictionaryIconPrefersSiblingThenUsesEmbeddedLSDIcon(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "sample.gif"), sibling, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	body, mime = sourceDictionaryIcon(source, filepath.Join(dir, "sample.gif"))
+	body, mime = s.dictionaryIcon(e)
 	if string(body) != string(sibling) || mime != "image/gif" {
 		t.Fatalf("sibling icon = %x, %q; want %x, image/gif", body, mime, sibling)
 	}

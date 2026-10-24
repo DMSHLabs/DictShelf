@@ -311,9 +311,9 @@ window.wudictFontScale=(function(){
           </svg>
         </button>
         <span class="mask-total"><span>{{T:search.wildcardsTotalLabel}}</span><span id="maskCount" role="status" aria-label="{{T:search.wildcardsTotal}}"></span></span>
+        <button type="button" id="maskPrev" aria-label="{{T:browse.previousTitle}}"><span class="mask-pager-label">{{T:browse.previousPage}}</span><span class="mask-pager-icon" aria-hidden="true">‹</span></button>
         <button type="button" id="maskPage" aria-label="{{T:browse.gotoBlock}}" title="{{T:browse.gotoBlock}}">1/1</button>
         <button type="button" id="maskNext" aria-label="{{T:browse.nextTitle}}"><span class="mask-pager-label">{{T:browse.nextPage}}</span><span class="mask-pager-icon" aria-hidden="true">›</span></button>
-        <button type="button" id="maskPrev" aria-label="{{T:browse.previousTitle}}"><span class="mask-pager-label">{{T:browse.previousPage}}</span><span class="mask-pager-icon" aria-hidden="true">‹</span></button>
       </span>
     </header>
     <div class="mask-strip-wrap">
@@ -876,6 +876,16 @@ window.wudictFontScale=(function(){
   </div>
 </details>
 
+<details class="sect" data-panel-section="results" open>
+  <summary class="sect-h">{{T:panel.results}}</summary>
+  <div class="facts">
+    <label class="history-setting" for="searchPageSize">{{T:panel.resultPageSize}}
+      <input id="searchPageSize" type="number" min="5" max="500" step="5" inputmode="numeric" value="100" aria-label="{{T:panel.resultPageSize}}">
+    </label>
+  </div>
+  <p class="font-scale-hint">{{T:panel.resultPageSizeHint}}</p>
+</details>
+
 <details class="sect" data-panel-section="tools" open>
 <summary class="sect-h">{{T:export.tools}}</summary>
 <div class="facts" id="portableTool" hidden><button type="button" class="mrow" id="openPortable">{{T:portable.open}}</button></div>
@@ -1094,6 +1104,8 @@ window.wudictFontScale=(function(){
     <p class="sys-hint" id="sysResultCacheHint">{{T:system.resultCacheHint}}</p>
     <label class="sys-row"><input type="checkbox" id="sysResultCacheLimited"><span class="sys-label">{{T:system.resultCacheLimit}}</span></label>
     <div class="sys-row sys-result-cache-limit"><input type="text" id="sysResultCacheValue" inputmode="numeric" aria-label="{{T:system.resultCacheLimit}}" disabled><span id="sysResultCacheUnit">{{T:system.gb}}</span></div>
+    <p class="sys-hint" id="sysReturnCacheHint">{{T:system.returnCacheHint}}</p>
+    <div class="sys-row sys-num"><label class="sys-label" for="sysReturnCacheStorage">{{T:system.returnCache}}</label><div class="panel-select-wrap panel-dropdown sys-return-cache-select"><select id="sysReturnCacheStorage"><option value="memory">{{T:system.memory}}</option><option value="disk">{{T:system.disk}}</option></select></div></div>
     <div class="sys-row sys-num sys-combined-limit"><span class="sys-label" id="sysCombinedLimitLabel">{{T:system.combinedDictionaryLimit}}</span><input type="number" id="sysCombinedLimit" min="1" max="{{COMBINED_DICTIONARY_LIMIT_MAX}}" step="1" inputmode="numeric" aria-labelledby="sysCombinedLimitLabel"></div>
     <p class="sys-hint" id="sysCombinedLimitHint">{{T:system.combinedDictionaryLimitHint}}</p>
 
@@ -1307,6 +1319,109 @@ window.wudictFontScale=(function(){
 "use strict";
 const SEARCH_DEBOUNCE_MS={{SEARCH_DEBOUNCE_MS}};
 const $=id=>document.getElementById(id);
+const SEARCH_PORTION_SIZE_KEY="wudict_search_portion_size";
+const SEARCH_RESULT_LIMIT=501;
+const articleResultCaches=new Map();
+let articleCacheQueue=[],articleCacheActive=0,articleCacheAbort=null,articleCacheSeq=0,articleCacheFinished=0,articleCacheTotal=0;
+let articleCacheGroupID="",articleCacheGroupCount=1;
+function newArticleResultCacheID(){
+  const bytes=new Uint8Array(16);
+  try{crypto.getRandomValues(bytes)}catch(_){for(let i=0;i<bytes.length;i++)bytes[i]=Math.floor(Math.random()*256)}
+  return [...bytes].map(value=>value.toString(16).padStart(2,"0")).join("");
+}
+function stopArticleResultCaches(){
+  articleCacheSeq++;articleCacheAbort?.abort();articleCacheAbort=null;
+  articleCacheQueue=[];articleCacheActive=0;articleCacheFinished=0;articleCacheTotal=0;
+  articleCacheGroupID="";articleCacheGroupCount=1;
+  articleResultCaches.clear();maskTaskFinish("search-results");
+}
+function cancelArticleResultCaches(){
+  articleCacheSeq++;articleCacheAbort?.abort();articleCacheAbort=null;
+  articleCacheQueue=[];articleCacheActive=0;
+  for(const state of articleResultCaches.values())if(!state.done)state.error="stopped";
+  maskTaskFinish("search-results");
+}
+function articleCacheURL(state,action,start=0,size=0){
+  return "/api/search?"+new URLSearchParams({cacheAction:action,cacheID:state.id,dict:state.dict,
+    cacheCount:String(state.count),cacheOrder:String(state.order),
+    q:state.query,mode:state.mode,rung:state.rung,ignoreDiacritics:state.ignore?"1":"0",
+    hl:hlOn?"1":"0",start:String(start),size:String(size)});
+}
+function updateArticleCacheCard(state){
+  const det=[...document.querySelectorAll("details.dict")].find(node=>
+    node.dataset.searchDict===state.dict&&node.dataset.searchMode===state.mode&&
+    node.dataset.searchQuery===state.displayQuery);
+  if(!det)return;
+  det.dataset.searchCacheID=state.id;
+  det.dataset.searchTotal=String(state.total);
+  det.dataset.searchExact=String(state.done);
+  const start=Number(det.dataset.searchPageStart)||0,count=Number(det.dataset.searchPageCount)||0,end=start+count;
+  const range=det.querySelector(":scope>summary .result-page-range");
+  if(range)range.textContent=window.wudictI18n.number(start+1)+"–"+window.wudictI18n.number(end)+" ("+
+    window.wudictI18n.number(Math.max(end,state.total))+(state.done?"":"+")+")";
+  const next=det.querySelector(':scope>summary .result-page-action[data-dir="next"]');
+  if(next)next.disabled=state.done&&end>=state.total;
+  const more=det.querySelector(":scope>summary .more");
+  if(more&&state.done&&state.total<=count)more.remove();
+  const label=det.querySelector(":scope>summary .count");
+  if(label&&!range){
+    const rung=label.querySelector(".rung")?.textContent||"";
+    const shownTotal=Math.max(count,state.total);
+    label.textContent=rung+tx("search.results",{count:shownTotal,
+      number:window.wudictI18n.number(shownTotal)+(state.done?"":"+")})+
+      (state.error?" · "+tx("search.fullListUnavailable"):"");
+  }
+}
+function queueArticleResultCache(msg,mode,displayQuery,seq){
+  if(!msg.dict||!msg.results?.length||articleResultCaches.has(msg.dict))return;
+  const state={id:articleCacheGroupID||newArticleResultCacheID(),count:articleCacheGroupCount,order:msg.i||0,
+    dict:msg.dict,name:msg.name||msg.dict,query:msg.term||displayQuery,
+    displayQuery,mode,rung:msg.rung||"",ignore:ignoreDiacritics,total:msg.results.length,
+    done:false,error:"",started:false,seq,lastPaint:0};
+  articleResultCaches.set(msg.dict,state);articleCacheQueue.push(state);articleCacheTotal++;
+}
+function pumpArticleResultCaches(){
+  if(!articleCacheQueue.length&&articleCacheActive===0){maskTaskFinish("search-results");return}
+  if(!articleCacheAbort)articleCacheAbort=new AbortController();
+  if(!maskTaskIDs.has("search-results"))
+    maskTaskStart("search-results",tx("search.countingArticles"),cancelArticleResultCaches,
+      {done:articleCacheFinished,total:articleCacheTotal});
+  while(articleCacheActive<2&&articleCacheQueue.length){
+    const state=articleCacheQueue.shift(),generation=articleCacheSeq;
+    state.started=true;articleCacheActive++;
+    fetchStream(articleCacheURL(state,"build"),event=>{
+      if(generation!==articleCacheSeq||state.seq!==searchSeq)return;
+      if(event.t==="error")throw new Error(event.error||"result cache failed");
+      if(event.t!=="cache")return;
+      state.total=event.total||0;state.done=!!event.complete;
+      const now=performance.now();
+      if(state.done||now-state.lastPaint>250){state.lastPaint=now;updateArticleCacheCard(state)}
+    },articleCacheAbort.signal).catch(error=>{
+      if(generation===articleCacheSeq&&error.name!=="AbortError")state.error=error.message;
+    }).finally(()=>{
+      if(generation!==articleCacheSeq)return;
+      articleCacheActive--;articleCacheFinished++;
+      maskTaskUpdate("search-results",tx("search.countingArticles"),articleCacheFinished,articleCacheTotal);
+      updateArticleCacheCard(state);pumpArticleResultCaches();
+    });
+  }
+}
+function normalizedSearchPortionSize(value){
+  const n=Math.floor(Number(value));
+  return Number.isFinite(n)?Math.max(5,Math.min(500,Math.round(n/5)*5)):100;
+}
+function searchPortionSize(){
+  try{return normalizedSearchPortionSize(localStorage.getItem(SEARCH_PORTION_SIZE_KEY)||100)}catch(_){return 100}
+}
+const searchPortionInput=$("searchPageSize");
+if(searchPortionInput){
+  searchPortionInput.value=String(searchPortionSize());
+  searchPortionInput.addEventListener("change",()=>{
+    const size=normalizedSearchPortionSize(searchPortionInput.value);
+    searchPortionInput.value=String(size);
+    try{localStorage.setItem(SEARCH_PORTION_SIZE_KEY,String(size))}catch(_){}
+  });
+}
 if(window.wudictAndroidGo){
   document.documentElement.setAttribute('data-android-go','');
   if(window.wudictAndroidGo.isDebugBuild?.())$('androidBridgeStage').hidden=false;
@@ -1334,6 +1449,23 @@ let stylerTab="app",
     appearanceState=null,
     stylerPickForBackground=false;
 const tx=window.wudictI18n.t;
+function browseOriginQuery(openDict=""){
+  const url=new URL(location.href);
+  url.pathname="/";
+  url.searchParams.delete("openDict");
+  const query=url.searchParams.get("q")||$("q")?.value.trim()||"";
+  if(query){
+    url.searchParams.set("q",query);
+    if(!url.searchParams.has("mode"))url.searchParams.set("mode",$("mode")?.value||"prefix");
+    if(!url.searchParams.has("dict"))url.searchParams.set("dict",$("dict")?.value||"all");
+    if(lastScope&&!url.searchParams.has("from"))url.searchParams.set("from",lastScope);
+    if(articleCacheGroupID)url.searchParams.set("returnCacheID",articleCacheGroupID);
+    if(url.searchParams.get("mode")==="wildcards"&&maskMergeAZ)url.searchParams.set("maskmerge","1");
+    if(openDict&&url.searchParams.get("mode")!=="wildcards")url.searchParams.set("openDict",openDict);
+  }
+  if(browseArticleDiagnosticsEnabled())url.searchParams.set("browseReturnDiag",String(Date.now()));
+  return new URLSearchParams({return:url.pathname+url.search+url.hash}).toString();
+}
 function systemLogClick(event){
   if(!window.wudictNativeShell)return;
   event.preventDefault();
@@ -1381,7 +1513,7 @@ const esc=s=>String(s??"").replace(/&/g,"&amp;").replace(/</g,"&lt;");
 const escAttr=s=>esc(s).replace(/"/g,"&quot;");
 let dicts=[],lastQuery=null,searchSeq=0,searchAC=null;
 let dictIconsOn=true;
-let scopeOnce=null,anchorOnce=null,lastScope=null,widenedFrom=null;
+let scopeOnce=null,anchorOnce=null,lastScope=null,widenedFrom=null,restoreArticleDict=null,restoreSearchReturnCacheID=null;
 let PRESETS=null;
 const PRESET_ROWS=[
   ["compactRow","compact"],
@@ -1648,6 +1780,7 @@ async function loadPrefs(){
        (below, always false), because it is upstream's. */
     if(st.ui){applyFS(st.ui.fontSize,false);applyFW(st.ui.fontWeight,false);applyArticleFont(st.ui.fontFamily||"charis",false);applyHL(!st.ui.hlOff,false);applySpeak(!st.ui.speakOff,false);applyHideUnmarkedExamples(!!st.ui.hideUnmarkedExamples,false);applyDictIcons(!st.ui.dictIconsOff,false);openN=st.ui.openN||1;openAll=!!st.ui.openAll;prefOrderModeKnown=typeof st.ui.customOrder==="boolean";prefCustomOrder=!!st.ui.customOrder;
       resultCacheLimitGB=Number(st.ui.resultCacheLimitGB)||defaultResultCacheLimitGB();resultCacheNoLimit=!!st.ui.resultCacheNoLimit;syncResultCacheLimitUI();
+      searchReturnCacheStorage=st.ui.searchReturnCache==="memory"?"memory":"disk";syncSearchReturnCacheUI();
       combinedDictionaryLimit=Math.max(1,Math.min(Number(st.ui.combinedDictionaryLimit)||defaultCombinedDictionaryLimit,maxCombinedDictionaryLimit));syncCombinedDictionaryLimitUI()}
     if(!st.exists){adoptLocalPrefs();return} // first run: keep whatever we had
     prefOrder=rows.map(d=>d.id);prefPinned=rows.filter(d=>d.pinned).map(d=>d.id);
@@ -1664,6 +1797,7 @@ async function loadPrefs(){
 let prefsTimer=null,prefsSent=null;
 function defaultResultCacheLimitGB(){return window.wudictAndroidShell?2:8}
 let resultCacheLimitGB=defaultResultCacheLimitGB(),resultCacheNoLimit=false;
+let searchReturnCacheStorage="disk";
 const defaultCombinedDictionaryLimit={{COMBINED_DICTIONARY_LIMIT_DEFAULT}},maxCombinedDictionaryLimit={{COMBINED_DICTIONARY_LIMIT_MAX}};
 let combinedDictionaryLimit=defaultCombinedDictionaryLimit;
 function syncCombinedDictionaryLimitUI(){const field=$("sysCombinedLimit");if(field)field.value=String(combinedDictionaryLimit)}
@@ -1681,6 +1815,9 @@ function bindResultCacheLimit(){
   $("sysResultCacheValue").addEventListener("change",e=>{const n=Math.floor(Number(e.target.value));if(!Number.isFinite(n)||n<1){syncResultCacheLimitUI();return}resultCacheLimitGB=Math.min(n,1048576);syncResultCacheLimitUI();savePrefs(true)});
   syncResultCacheLimitUI();
 }
+function syncSearchReturnCacheUI(){const select=$("sysReturnCacheStorage");if(select)select.value=searchReturnCacheStorage}
+$("sysReturnCacheStorage").addEventListener("change",e=>{searchReturnCacheStorage=e.target.value==="memory"?"memory":"disk";savePrefs(true)});
+syncSearchReturnCacheUI();
 bindResultCacheLimit();
 $("sysCombinedLimit").addEventListener("change",e=>{
   const n=Math.floor(Number(e.target.value));
@@ -1700,7 +1837,7 @@ function savePrefs(now){
   // that no longer exist.
   const body=JSON.stringify({dicts:orderedDicts().map(d=>({id:d.id,name:d.name||d.path.split("/").pop(),title:dictTitles.get(d.id)||"",pinned:prefPinned.includes(d.id)})),
     ui:{fontSize:articleFS,fontWeight:articleFW,fontFamily:articleFont,hlOff:!hlOn,speakOff:!speakOn,dictIconsOff:!dictIconsOn,fastFirst:!orderFirst,hideUnmarkedExamples,customOrder:prefCustomOrder,
-      resultCacheLimitGB,resultCacheNoLimit,combinedDictionaryLimit}});
+      resultCacheLimitGB,resultCacheNoLimit,combinedDictionaryLimit,searchReturnCache:searchReturnCacheStorage}});
   if(body===prefsSent)return;
   prefsSent=body;
   apiFetch("/api/prefs",{method:"PUT",headers:{"Content-Type":"application/json"},body})
@@ -3054,7 +3191,7 @@ $("out").addEventListener("click",e=>{
   if(!sum)return; // the no-index group is not an answer: opening it decides nothing
   // these live inside the summary, run their own handlers and preventDefault
   // the toggle — but not before this listener, which is nearer the target
-  if(e.target.closest(".more,.upgrade,.mnav"))return;
+  if(e.target.closest(".more,.upgrade,.mnav,.result-page-action,.search-browse"))return;
   const det=sum.parentElement,opening=!det.open; // the toggle lands after us
   // The walk follows attention: it belongs to the section being read, and one
   // section at a time is also why nothing is counted for the other 154.
@@ -3206,6 +3343,7 @@ async function loadDicts(rescan){
     const listURL=listDiagnostics?endpoint+"?diagnostics=1":endpoint;
     await fetchStream(listURL,msg=>{
       if(msg.t==="begin"){
+        articleCacheGroupID=newArticleResultCacheID();articleCacheGroupCount=Math.max(1,(msg.slots||[]).length);
         if(beginMs<0)beginMs=Math.round(performance.now()-listStarted);
         sawBegin=true;dictTotal=msg.total||0;
       }else if(msg.t==="dict"&&msg.dict){
@@ -3226,6 +3364,7 @@ async function loadDicts(rescan){
         // search, and made every Browse → article transition pay for all rows.
         if(blocking&&!initialURLApplied&&initialParams.has("q")&&initialParams.has("from")){
           initialURLApplied=true;
+          logBrowseReturnRoute("first_dictionary_apply_url",{hasFrom:initialParams.has("from"),query:initialParams.get("q")||""});
           applyURL();
         }
       }else if(msg.t==="end"){
@@ -3260,6 +3399,11 @@ async function loadDicts(rescan){
   // place if its folder returns during this session.
   rememberVisibleOrder();savePrefs(true);
   dictsSettled=true; // every row is in; the groups can be counted
+  if(blocking&&!initialURLApplied&&initialParams.has("q")){
+    initialURLApplied=true;
+    logBrowseReturnRoute("dictionary_list_ready_apply_url",{query:initialParams.get("q")||""});
+    applyURL();
+  }
   const streamMs=Math.round(performance.now()-listStarted);
   const renderStarted=performance.now();
   refreshDictUI(true);
@@ -3576,7 +3720,7 @@ function dslIndexControls(d){
     }
     const icon=`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.4 3.4a1.2 1.2 0 0 1 1.2-1.2h6.2a1.2 1.2 0 0 1 1.2 1.2v9.2a1.2 1.2 0 0 1-1.2 1.2H3.6a1.2 1.2 0 0 1-1.2-1.2z"/><path d="M11 5h2.6M11 8h2.6M11 11h2.6"/></svg>`;
     const browse=indexed
-      ? `<a class="browse btn" href="/browse?dict=${encodeURIComponent(target.id)}" title="${escAttr(tx("dictUI.browseHint"))}">${icon}${esc(tx("dictUI.browse"))}</a>`
+      ? `<a class="browse btn" href="/browse?dict=${encodeURIComponent(target.id)}&${browseOriginQuery(target.id)}" title="${escAttr(tx("dictUI.browseHint"))}">${icon}${esc(tx("dictUI.browse"))}</a>`
       : "";
     return `<div class="dsl-index-row"><div class="dsl-index-tools"><div class="dsl-feature-line">${controls}</div></div><div class="dsl-browse-line">${browse}</div></div>`;
   })()+(empty?`<div class="dsl-index-warning"><b aria-hidden="true">!</b> ${esc(tx("dictUI.dslNeedsIndex"))}</div>`:"")+"</div>";
@@ -3665,7 +3809,7 @@ function renderPanel(){
        list and never starts index creation. This is the card for one
        dictionary, so unlike the row above it carries
        the id. */
-    else if(indexed||selfIndexed)acts=`<a class="browse btn" href="/browse?dict=${encodeURIComponent(d.id)}" title="${escAttr(tx("dictUI.browseHint"))}"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M2.4 3.4a1.2 1.2 0 0 1 1.2-1.2h6.2a1.2 1.2 0 0 1 1.2 1.2v9.2a1.2 1.2 0 0 1-1.2 1.2H3.6a1.2 1.2 0 0 1-1.2-1.2z"/><path d="M11 5h2.6"/><path d="M11 8h2.6"/><path d="M11 11h2.6"/></svg>${esc(tx("dictUI.browse"))}</a>`;
+    else if(indexed||selfIndexed)acts=`<a class="browse btn" href="/browse?dict=${encodeURIComponent(d.id)}&${browseOriginQuery(d.id)}" title="${escAttr(tx("dictUI.browseHint"))}"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M2.4 3.4a1.2 1.2 0 0 1 1.2-1.2h6.2a1.2 1.2 0 0 1 1.2 1.2v9.2a1.2 1.2 0 0 1-1.2 1.2H3.6a1.2 1.2 0 0 1-1.2-1.2z"/><path d="M11 5h2.6"/><path d="M11 8h2.6"/><path d="M11 11h2.6"/></svg>${esc(tx("dictUI.browse"))}</a>`;
     if(d.unavailable||d.dsl&&!d.error)acts="";
     div.innerHTML=`<div class="hd">
         <span class="dict-name-line">${dictIconHTML(d.id)}<b tabindex="${d.unavailable?-1:0}" role="button" aria-disabled="${!!d.unavailable}" title="${escAttr(tx(d.unavailable?"dictUI.dslUnavailable":"dictUI.searchOnly"))}">${esc(dictLabel(d))}</b><button type="button" class="dict-rename" aria-label="${escAttr(tx("dictUI.renameDictionary"))}" title="${escAttr(tx("dictUI.renameDictionary"))}" data-rename="${escAttr(d.id)}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L8 18l-4 1 1-4Z"/></svg></button></span>
@@ -4410,6 +4554,8 @@ async function showDesktopSysSettings(){
     resultCacheHint:$("sysResultCacheHint"),
     resultCacheLimited:$("sysResultCacheLimited").parentElement,
     resultCacheValue:$("sysResultCacheValue").parentElement,
+    returnCacheHint:$("sysReturnCacheHint"),
+    returnCacheStorage:$("sysReturnCacheStorage").closest(".sys-row"),
     clearCache:$("sysClearCache").parentElement,
     combinedLimit:$("sysCombinedLimit").parentElement,
     combinedLimitHint:$("sysCombinedLimitHint"),
@@ -4440,7 +4586,9 @@ async function showDesktopSysSettings(){
   const cacheHint=document.createElement("p");cacheHint.className="sys-hint";
   cacheHint.textContent=tx("system.cacheHint");body.append(cacheHint);
   body.append(desktopSystemNodes.clearCache,desktopSystemNodes.resultCacheHeading,desktopSystemNodes.resultCacheHint,
-    desktopSystemNodes.resultCacheLimited,desktopSystemNodes.resultCacheValue,desktopSystemNodes.combinedLimit,desktopSystemNodes.combinedLimitHint);
+    desktopSystemNodes.resultCacheLimited,desktopSystemNodes.resultCacheValue,desktopSystemNodes.returnCacheHint,
+    desktopSystemNodes.returnCacheStorage,desktopSystemNodes.combinedLimit,desktopSystemNodes.combinedLimitHint);
+  syncSearchReturnCacheUI();
   syncResultCacheLimitUI();
   syncCombinedDictionaryLimitUI();
   body.append(desktopSystemNodes.searchHeading,desktopSystemNodes.searchHint,
@@ -4554,6 +4702,22 @@ function browseArticleDiagnosticsEnabled(){try{return localStorage.getItem("wudi
 function setBrowseArticleDiagnostics(on){try{if(on)localStorage.setItem("wudict_browse_article_diagnostics","1");else localStorage.removeItem("wudict_browse_article_diagnostics")}catch(_){}}
 function searchArticleDiagnosticsEnabled(){try{return localStorage.getItem("wudict_search_article_diagnostics")==="1"}catch(_){return false}}
 function setSearchArticleDiagnostics(on){try{if(on)localStorage.setItem("wudict_search_article_diagnostics","1");else localStorage.removeItem("wudict_search_article_diagnostics")}catch(_){}}
+const browseReturnRouteContext=(()=>{
+  if(!browseArticleDiagnosticsEnabled())return null;
+  const params=new URLSearchParams(location.search),startedAt=Number(params.get("browseReturnDiag"));
+  if(!Number.isSafeInteger(startedAt)||startedAt<=0)return null;
+  return {startedAt,firstHit:false};
+})();
+function logBrowseReturnRoute(stage,fields={}){
+  if(!browseArticleDiagnosticsEnabled())return;
+  const params=new URLSearchParams(location.search);
+  sendBrowseDiagnostic({event:"browse_return_route",stage,
+    startedAt:browseReturnRouteContext?.startedAt||Number(params.get("browseReturnDiag"))||Date.now(),
+    elapsedMs:browseReturnRouteContext?Math.max(0,Date.now()-browseReturnRouteContext.startedAt):0,
+    url:location.pathname+location.search,query:params.get("q")||"",mode:params.get("mode")||"",
+    dict:params.get("dict")||"",...fields});
+}
+if(browseReturnRouteContext)logBrowseReturnRoute("main_page_loaded",{referrer:document.referrer||""});
 let browseArticleDiagContext=(()=>{
   if(!browseArticleDiagnosticsEnabled())return null;
   const params=new URLSearchParams(location.search),startedAt=Number(params.get("browseDiagStart"));
@@ -6008,7 +6172,7 @@ async function fetchStream(url,onMsg,signal,options){
        (options?.method||"GET").toUpperCase()==="GET"){
       const params=requestURL.searchParams,n=Number.parseInt(params.get("n"),10);
       const flag=(value)=>!!value&&!/^(0|false|no|off)$/i.test(value.trim());
-      const request={q:params.get("q")||"",mode:params.get("mode")||"",format:params.get("format")||"",dict:params.get("dict")||"",n:Number.isFinite(n)?n:0,hl:flag(params.get("hl")||""),ignoreDiacritics:flag(params.get("ignoreDiacritics")||"")};
+      const request={q:params.get("q")||"",mode:params.get("mode")||"",format:params.get("format")||"",dict:params.get("dict")||"",n:Number.isFinite(n)?n:0,hl:flag(params.get("hl")||""),ignoreDiacritics:flag(params.get("ignoreDiacritics")||""),cacheAction:params.get("cacheAction")||"",cacheID:params.get("cacheID")||"",returnCacheID:params.get("returnCacheID")||"",returnCacheStorage:params.get("returnCacheStorage")||"",cacheCount:Number(params.get("cacheCount"))||0,cacheOrder:Number(params.get("cacheOrder"))||0,start:Number(params.get("start"))||0,size:Number(params.get("size"))||0,rung:params.get("rung")||""};
       await androidGoStream(()=>window.wudictAndroidGo.startSearchStream(window.location.origin,JSON.stringify(request)),onMsg,signal);
       return;
     }
@@ -6020,7 +6184,7 @@ async function fetchStream(url,onMsg,signal,options){
       if(requestURL.pathname==="/api/search"&&method==="GET"){
         const params=requestURL.searchParams,n=Number.parseInt(params.get("n"),10);
         const flag=(value)=>!!value&&!/^(0|false|no|off)$/i.test(value.trim());
-        const request={q:params.get("q")||"",mode:params.get("mode")||"",format:params.get("format")||"",dict:params.get("dict")||"",n:Number.isFinite(n)?n:0,hl:flag(params.get("hl")||""),ignoreDiacritics:flag(params.get("ignoreDiacritics")||"")};
+        const request={q:params.get("q")||"",mode:params.get("mode")||"",format:params.get("format")||"",dict:params.get("dict")||"",n:Number.isFinite(n)?n:0,hl:flag(params.get("hl")||""),ignoreDiacritics:flag(params.get("ignoreDiacritics")||""),cacheAction:params.get("cacheAction")||"",cacheID:params.get("cacheID")||"",returnCacheID:params.get("returnCacheID")||"",returnCacheStorage:params.get("returnCacheStorage")||"",cacheCount:Number(params.get("cacheCount"))||0,cacheOrder:Number(params.get("cacheOrder"))||0,start:Number(params.get("start"))||0,size:Number(params.get("size"))||0,rung:params.get("rung")||""};
         await window.wudictNativeCall("search",JSON.stringify(request),onMsg,signal);
         return;
       }
@@ -6224,7 +6388,7 @@ function promote(boxes,i){
     ref.after(b);ref=b;       // in order, so preference survives among them
   }
 }
-function renderSlot(box,h,mode,q,perDict,group){
+function renderSlot(box,h,mode,q,perDict,group,paging=null){
   box.innerHTML="";
   if(h.deferred){
     const det=document.createElement("details");
@@ -6275,12 +6439,30 @@ function renderSlot(box,h,mode,q,perDict,group){
   }
   if(!h.results?.length)return{};
   const det=document.createElement("details");det.className="dict";
-  const more=h.results.length>=perDict?`<span class="more" data-id="${h.dict}">${esc(tx("search.more"))}</span>`:"";
+  const pageSize=paging?.size||searchPortionSize();
+  const more=!paging&&h.results.length>=perDict?`<button type="button" class="more" data-id="${escAttr(h.dict)}">${esc(tx("search.more"))}</button>`:"";
+  const browseReturnURL=new URL(location.href);browseReturnURL.pathname="/";
+  browseReturnURL.searchParams.set("openDict",h.dict);
+  if(articleCacheGroupID)browseReturnURL.searchParams.set("returnCacheID",articleCacheGroupID);
+  const browseURL=["prefix","suffix","contains","word","wordLemma","wildcards"].includes(mode)
+    ?("/browse?"+new URLSearchParams({dict:h.dict,find:q,filter:"1",findmode:mode,return:browseReturnURL.pathname+browseReturnURL.search+browseReturnURL.hash})):"";
+  const browse=browseURL?`<a class="search-browse" href="${escAttr(browseURL)}">${esc(tx("search.browseAllHeadwords"))}</a>`:"";
+  const pageControls=paging?(()=>{
+    const start=paging.start||0,end=start+h.results.length,total=paging.total;
+    const totalText=paging.exact?window.wudictI18n.number(total):window.wudictI18n.number(Math.max(end,paging.lowerBound||end))+"+";
+    return `<span class="search-pages"><button type="button" class="result-page-action" data-dir="prev" aria-label="${escAttr(tx("search.previousArticleBlock"))}" title="${escAttr(tx("search.previousArticleBlock"))}" ${start<=0?"disabled":""}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 4-8 8 8 8" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>`+
+      `<button type="button" class="result-page-action result-page-range" data-dir="goto" aria-label="${escAttr(tx("search.gotoArticleBlock"))}" title="${escAttr(tx("search.gotoArticleBlock"))}" aria-haspopup="dialog" aria-controls="maskGotoDialog" aria-live="polite">${window.wudictI18n.number(start+1)}–${window.wudictI18n.number(end)} (${totalText})</button>`+
+      `<button type="button" class="result-page-action" data-dir="next" aria-label="${escAttr(tx("search.nextArticleBlock"))}" title="${escAttr(tx("search.nextArticleBlock"))}" ${paging.hasNext?"":"disabled"}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 4 8 8-8 8" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button></span>`;
+  })():"";
+  det.dataset.searchMode=mode;det.dataset.searchQuery=q;det.dataset.searchDict=h.dict;
+  det.dataset.searchInitial=String(perDict);det.dataset.searchPageSize=String(pageSize);det.dataset.searchGroup=String(!!group);
+  if(paging){det.dataset.searchPageStart=String(paging.start||0);det.dataset.searchPageCount=String(h.results.length);det.dataset.searchHasNext=String(!!paging.hasNext);det.dataset.searchExact=String(!!paging.exact);det.dataset.searchTotal=String(paging.total||0);det.dataset.searchLowerBound=String(paging.lowerBound||0)}
   // Only for a multi-word full-text query: a single word has no phrase to fail
   // at, and every other mode has no ladder at all.
   const rung=mode==="fts"&&/\s/.test(q||"")&&(h.rung==="near"||h.rung==="words")
     ?`<span class="rung">${esc(tx(h.rung==="near"?"search.phraseNear":"search.phraseWords"))} · </span>`:"";
-  det.innerHTML=`<summary>${dictIconHTML(h.dict)}${esc(h.name)}<span class="count">${rung}${esc(tx("search.results",{count:h.results.length,number:window.wudictI18n.number(h.results.length)+(more?"+":"")}))}</span>${more}</summary>`;
+  const countLabel=paging?(rung?`<span class="count">${rung}</span>`:``):`<span class="count">${rung}${esc(tx("search.results",{count:h.results.length,number:window.wudictI18n.number(h.results.length)+(more?"+":"")}))}</span>`;
+  det.innerHTML=`<summary class="search-result-summary"><span class="search-dict-identity">${dictIconHTML(h.dict)}<span class="search-dict-name">${esc(h.name)}</span></span><span class="search-dict-controls">${pageControls}${countLabel}${more}${browse}</span></summary>`;
   const dl=document.createElement("dl"),roots=[];
   for(const r of h.results){
     const dt=document.createElement("dt");
@@ -6292,6 +6474,7 @@ function renderSlot(box,h,mode,q,perDict,group){
   }
   det.open=expandAll;
   det.appendChild(dl);box.appendChild(det);
+  observeSearchDictName(det.querySelector(":scope>summary .search-dict-name"));
   // An `entry://Word#frag` link: now that the article is in the document, put
   // the fragment on screen. Shadow-DOM articles can be measured immediately
   // (next frame, once laid out); iframe ones jump themselves — frameDoc has
@@ -6429,7 +6612,49 @@ let maskStripResizeTimer=0,maskStripResizeCount=0,maskStripResizeStartedAt=0,mas
 let maskBaseRows=[],maskBaseCurrent=0,maskFindRows=[],maskFindFilter=false,maskFindMatchMode="prefix";
 let maskFindIndex=-1,maskFindMatch=null,maskFindAnchor=null,maskFindTimer=0,maskFindQuery="",maskFindApproved=false,maskFindAwaitingApply=false,maskBusyJobs=new Set(),maskFindGeneration=0;
 let maskWordContextTarget=null,maskWordLongPressTimer=0,maskWordLongPressPoint=null,maskWordSuppressClick=false;
-let maskGotoTarget="block";
+let maskGotoTarget="block",searchPortionGotoDetails=null;
+let searchDictNameObserver=null,searchDictHeaderWidths=new WeakMap();
+function fitSearchDictName(name,controlsWrapped){
+  if(!name?.isConnected)return;
+  if(!controlsWrapped){name.dataset.fit="section";return}
+  for(const level of ["section","addition","hint"]){
+    name.dataset.fit=level;
+    void name.offsetWidth;
+    if(name.scrollWidth<=name.clientWidth+1)return;
+  }
+}
+function layoutSearchDictHeader(summary){
+  if(!summary?.isConnected)return;
+  const identity=summary.querySelector(".search-dict-identity"),name=summary.querySelector(".search-dict-name"),controls=summary.querySelector(".search-dict-controls");
+  if(!identity||!name||!controls)return;
+  name.dataset.fit="section";
+  summary.removeAttribute("data-controls-wrapped");
+  const identityRect=identity.getBoundingClientRect(),controlsRect=controls.getBoundingClientRect();
+  const wrapped=controlsRect.top>identityRect.top+identityRect.height*.5;
+  if(wrapped)summary.dataset.controlsWrapped="true";
+  fitSearchDictName(name,wrapped);
+}
+function observeSearchDictName(name){
+  if(!name)return;
+  const summary=name.closest("summary");
+  if(typeof ResizeObserver==="undefined"){layoutSearchDictHeader(summary);return}
+  if(!searchDictNameObserver)searchDictNameObserver=new ResizeObserver(entries=>{
+    for(const entry of entries){
+      if(!entry.target.isConnected)searchDictNameObserver.unobserve(entry.target);
+      else{
+        const width=entry.contentRect.width,previous=searchDictHeaderWidths.get(entry.target);
+        if(previous===undefined||Math.abs(previous-width)>.5){
+          searchDictHeaderWidths.set(entry.target,width);
+          layoutSearchDictHeader(entry.target);
+        }
+      }
+    }
+  });
+  if(summary)searchDictNameObserver.observe(summary);
+  requestAnimationFrame(()=>{
+    if(summary?.isConnected){searchDictHeaderWidths.set(summary,summary.getBoundingClientRect().width);layoutSearchDictHeader(summary)}
+  });
+}
 let maskMemorySnapshot=null;
 function maskMemoryStop(){
   if(maskMemorySnapshot){maskMemorySnapshot("wildcard_memory_end");maskMemorySnapshot=null}
@@ -7593,8 +7818,27 @@ function maskFindGotoOpen(){
   $("maskGotoRange").textContent=tx("browse.gotoMatchRange",{total:window.wudictI18n.number(available)});
   $("maskGotoDialog").showModal();input.focus();input.select();
 }
+function searchPortionGotoOpen(det){
+  if(!det?.isConnected)return;
+  const total=Number(det.dataset.searchTotal)||0;
+  const size=normalizedSearchPortionSize(det.dataset.searchPageSize||searchPortionSize());
+  if(total<1||size<1)return;
+  const pages=Math.max(1,Math.ceil(total/size)),current=Math.floor((Number(det.dataset.searchPageStart)||0)/size)+1;
+  searchPortionGotoDetails=det;maskGotoTarget="searchPortion";
+  const exact=det.dataset.searchExact==="true";
+  const input=$("maskGotoInput");$("maskGotoHeading").textContent=tx("search.gotoArticleBlock");
+  $("maskGotoLabel").textContent=tx("search.gotoArticleBlockLabel");input.min="1";input.max=String(pages);input.value=String(Math.min(pages,Math.max(1,current)));
+  $("maskGotoRange").textContent=tx(exact?"search.gotoArticleBlockRange":"search.gotoArticleBlockRangeLowerBound",{total:window.wudictI18n.number(pages)});
+  $("maskGotoDialog").showModal();input.focus();input.select();
+}
 function maskGotoApply(){
   const input=$("maskGotoInput"),page=Number(input.value);
+  if(maskGotoTarget==="searchPortion"){
+    const det=searchPortionGotoDetails;
+    const total=Number(det?.dataset.searchTotal)||0,size=normalizedSearchPortionSize(det?.dataset.searchPageSize||searchPortionSize()),pages=Math.max(1,Math.ceil(total/size));
+    if(!det?.isConnected||!Number.isInteger(page)||page<1||page>pages){input.reportValidity();return}
+    $("maskGotoDialog").close();searchPortionGotoDetails=null;fetchSearchPortion(det,(page-1)*size);return;
+  }
   if(maskGotoTarget==="match"){
     const available=maskFindCommittedRows().reduce((sum,row)=>sum+(row.diskCache?row.total||0:row.streamPositions?.length||0),0);
     if(!Number.isInteger(page)||page<1||page>available){input.reportValidity();return}
@@ -7968,6 +8212,7 @@ $("maskPage").addEventListener("click",maskGotoOpen);
 $("maskGotoCancel").addEventListener("click",()=>$("maskGotoDialog").close());
 $("maskGotoGo").addEventListener("click",maskGotoApply);
 $("maskGotoClose").addEventListener("click",()=>$ ("maskGotoDialog").close());
+$("maskGotoDialog").addEventListener("close",()=>{if(maskGotoTarget==="searchPortion")searchPortionGotoDetails=null});
 $("maskGotoInput").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();maskGotoApply()}});
 $("maskLetters").addEventListener("click",e=>{
   const button=e.target.closest("button[data-dict][data-page]");if(!button)return;
@@ -8027,13 +8272,18 @@ window.addEventListener("resize",maskWordContextHide);
 if($("mode").value==="wildcards")maskInvalidate();
 
 async function doSearch(ev){
+  const preferredOpenDict=restoreArticleDict;restoreArticleDict=null;
+  const replayReturnCacheID=restoreSearchReturnCacheID;restoreSearchReturnCacheID=null;
   window.wudictArticleFind?.stop();
   hideSearchProgress();
   if(ev)ev.preventDefault();
   if(maskBusyJobs.size)return;
   const q=$("q").value.trim();
-  if(!q)return;
+  if(!q){if(browseReturnRouteContext)logBrowseReturnRoute("search_skipped_empty_query");return}
+  if(browseReturnRouteContext)logBrowseReturnRoute("search_started",{query:q,mode:$("mode").value,dict:$("dict").value||"all"});
+  stopArticleResultCaches();
   if($("mode").value==="wildcards"){
+    restoreSearchReturnCacheID=null;
     if(!maskSubmitRequested)return;
     maskSubmitRequested=false;scopeOnce=null;lastScope=null;commitOnce=false;
     return maskRun(q);
@@ -8062,6 +8312,14 @@ async function doSearch(ev){
     const safeFields={...fields};
     if(typeof safeFields.detail==="string")safeFields.detail=safeFields.detail.replace(/[\r\n]/g," ").slice(0,1000);
     sendBrowseDiagnostic({event:"search_article",stage,runId:seq,query:q.replace(/[\r\n]/g," ").slice(0,1024),mode,elapsedMs:Math.max(0,Math.round(performance.now()-searchDiagStarted)),...safeFields});
+  };
+  const logReturnTargetState=(stage,slot,det)=>{
+    if(!preferredOpenDict)return;
+    const rect=det?.getBoundingClientRect();
+    const summary=det?.querySelector(":scope > summary"),title=det?.querySelector(":scope > dl > dt");
+    const stickyLine=summary?(parseFloat(getComputedStyle(summary).top)||0)+summary.getBoundingClientRect().height:0;
+    searchDiagLog(stage,{page:Math.max(0,slot),dict:searchDiagSlots[slot]?.dict||preferredOpenDict,
+      detail:`requested=${preferredOpenDict} found=${!!det} connected=${!!det?.isConnected} open=${!!det?.open} box_connected=${!!boxes[slot]?.isConnected} height=${Math.round(rect?.height||0)} summary_top=${Math.round(summary?.getBoundingClientRect().top||0)} title_top=${Math.round(title?.getBoundingClientRect().top||0)} sticky_line=${Math.round(stickyLine)} scroll_y=${Math.round(scrollY)}`});
   };
   // abort the previous in-flight search so the server stops streaming
   // results nobody will render (superseded typing / mode change).
@@ -8110,10 +8368,10 @@ async function doSearch(ev){
       return;
     }
     dictParam=ids.join(",");
-    // One dictionary is one dictionary however it was arrived at: a group that
-    // narrows to a single member earns the deep answer, not the 5-hit summary.
-    perDict=ids.length===1?25:5;
-  }else{dictParam=dictSel;perDict=25}
+    perDict=5;
+  }else{dictParam=dictSel;perDict=5}
+  articleCacheGroupID=replayReturnCacheID||newArticleResultCacheID();
+  articleCacheGroupCount=Math.max(1,dictParam.split(",").length);
   const out=$("out");
   /* Never blank between two answers (D73/M2). Clearing on `begin` would make
      every keystroke-pause a full → empty → full flash: two motions where one
@@ -8134,13 +8392,17 @@ async function doSearch(ev){
      hit whatever it said; `ready[i]` holds its <details> only if it actually
      produced RESULTS, so a deferred, errored or skipped section can never be
      the one that opens. `frontier` is the lowest index still unheard from. */
-  let resolved=[],ready=[],frontier=0,limit=1,opened=0;
+  let resolved=[],ready=[],frontier=0,limit=1,opened=0,preferredSlot=-1,preferredDone=!preferredOpenDict;
   const openSlot=i=>{
     const det=ready[i];
     if(!det||det.open)return false;
     det.open=true;openedIdx=i;promote(boxes,i);
     const slot=searchDiagSlots[i];
     searchDiagLog("article_open",{dict:slot?.dict||"",name:slot?.name||"",page:i,completed:searchProgressDone,total:searchProgressTotal,resultCount:slot?.results??0});
+    if(slot?.dict===preferredOpenDict){
+      logReturnTargetState("return_target_open",i,det);
+      requestAnimationFrame(()=>requestAnimationFrame(()=>logReturnTargetState("return_target_after_paint",i,det)));
+    }
     // The hold ends when the count is reached, not at the first open: until
     // then the frontier keeps the later sections in the reader's order.
     if(++opened>=limit){clearTimeout(barrier);barrier=null}
@@ -8160,7 +8422,13 @@ async function doSearch(ev){
      (barrier===null) or the prefix is exhausted it falls through to the walk
      at the bottom and takes the best answers in hand, up to the count. */
   const settle=()=>{
-    if(expandAll||openedIdx===-1||opened>=limit)return; // the count, or the user decided (-1)
+    if(openedIdx===-1||opened>=limit)return; // the count, or the user decided (-1)
+    if(preferredSlot>=0&&!preferredDone)return;
+    if(preferredSlot>=0&&preferredDone){
+      const target=preferredSlot;preferredSlot=-1;
+      if(openSlot(target)&&opened>=limit)return;
+    }
+    if(expandAll)return;
     if(orderFirst&&barrier!==null&&frontier<boxes.length){
       while(frontier<boxes.length&&resolved[frontier]){
         if(openSlot(frontier)&&opened>=limit)return;
@@ -8176,11 +8444,16 @@ async function doSearch(ev){
   let morphNote=null,morphAll=null;const morphSeen=new Set();
   const swap=()=>{if(stale){for(const n of stale)n.remove();stale=null}};
   try{
-    await fetchStream("/api/search?q="+encodeURIComponent(q)+"&mode="+mode+"&hl="+(hlOn?1:0)+diacriticsSearchParam()+"&dict="+encodeURIComponent(dictParam)+"&n="+perDict,msg=>{
+    const searchParams=new URLSearchParams({q,mode,hl:hlOn?"1":"0",dict:dictParam,n:String(perDict),returnCacheID:articleCacheGroupID,returnCacheStorage:searchReturnCacheStorage,ignoreDiacritics:ignoreDiacritics?"1":"0"});
+    if(replayReturnCacheID){searchParams.set("cacheAction","returnReplay");searchParams.set("cacheID",replayReturnCacheID)}
+    await fetchStream("/api/search?"+searchParams.toString(),msg=>{
       if(seq!==searchSeq)return; // superseded by a newer search
       if(msg.t==="begin"){
+        if(browseReturnRouteContext)logBrowseReturnRoute("search_stream_begin",{slots:(msg.slots||[]).length});
         beginSearchProgress(seq,(msg.slots||[]).length);
         searchDiagSlots=(msg.slots||[]).map(slot=>({dict:slot.dict,name:slot.name,results:0}));
+        preferredSlot=preferredOpenDict?searchDiagSlots.findIndex(slot=>slot.dict===preferredOpenDict):-1;
+        preferredDone=preferredSlot<0;
         searchDiagLog("search_stream_begin",{total:searchDiagSlots.length,detail:`slots=${searchDiagSlots.length}`});
         if(browseArticleDiagContext&&browseArticleDiagContext.searchStartedAt)
           logBrowseArticleTransition("search_stream_begin",performance.now()-browseArticleDiagContext.searchStartedAt);
@@ -8200,6 +8473,10 @@ async function doSearch(ev){
         clearStatusForResults();
         refreshLivePicker();
       }else if(msg.t==="hit"){
+        if(browseReturnRouteContext&&!browseReturnRouteContext.firstHit){
+          browseReturnRouteContext.firstHit=true;
+          logBrowseReturnRoute("first_search_hit",{dict:msg.dict||"",resultCount:(msg.results||[]).length,error:msg.error||"",skipped:!!msg.skipped});
+        }
         advanceSearchProgress(seq);
         const diagSlot=searchDiagSlots[msg.i];
         if(diagSlot)diagSlot.results=(msg.results||[]).length;
@@ -8213,6 +8490,7 @@ async function doSearch(ev){
         // dictionaries and mode. Full-text hits are articles matched by body.
         if(!anyShown)clearStatusForResults();
         const res=renderSlot(box,msg,mode,q,perDict,boxes.length>1);
+        if(res.results)queueArticleResultCache(msg,mode,q,seq);
         if(res.results&&searchDiag&&!searchDiagFirstPaint){
           searchDiagFirstPaint=true;
           const paintedDict=msg.dict||diagSlot?.dict||"",paintedName=msg.name||diagSlot?.name||"",paintedCount=(msg.results||[]).length;
@@ -8249,6 +8527,7 @@ async function doSearch(ev){
            dead ends fall through instantly instead of holding the screen. */
         resolved[msg.i]=true;
         if(res.results&&!ready[msg.i])ready[msg.i]=box.querySelector("details.dict");
+        if(msg.i===preferredSlot)preferredDone=true;
         settle();
       }else if(msg.t==="morph"){
         /* The server lemmatizes the dictionaries that came back empty, and
@@ -8281,6 +8560,9 @@ async function doSearch(ev){
         const forms=[...morphSeen].join(", ");
         morphNote.textContent=tx(morphAll?"search.morphAll":"search.morphSome",{query:msg.from||q,forms});
       }else if(msg.t==="end"){
+        if(browseReturnRouteContext)logBrowseReturnRoute("search_stream_end",{
+          slots:searchDiagSlots.length,resultCount:searchDiagSlots.reduce((sum,slot)=>sum+(slot.results||0),0),anyResults});
+        pumpArticleResultCaches();
         searchDiagLog("search_end",{completed:searchProgressDone,total:searchProgressTotal});
         finishSearchProgress(seq);
         if(browseArticleDiagContext&&browseArticleDiagContext.searchStartedAt)
@@ -8290,6 +8572,18 @@ async function doSearch(ev){
         // let the best answer in hand take the slot (D142). A no-op in every
         // ordinary search: the last hit's settle() has already decided.
         clearTimeout(barrier);barrier=null;settle();
+        if(preferredOpenDict){
+          const targetSlot=searchDiagSlots.findIndex(slot=>slot.dict===preferredOpenDict);
+          logReturnTargetState("return_target_search_end",targetSlot,targetSlot>=0?ready[targetSlot]:null);
+          if(targetSlot>=0){
+            const target=ready[targetSlot];
+            requestAnimationFrame(()=>requestAnimationFrame(()=>{
+              if(seq!==searchSeq||!target?.isConnected)return;
+              jumpToSection(target);
+              setTimeout(()=>logReturnTargetState("return_target_after_search_paint",targetSlot,target),320);
+            }));
+          }
+        }
         // A cross-reference that its own dictionary cannot answer is not a
         // dead end — widen once, and say that is what happened. The re-run
         // carries no scope, so it cannot recurse.
@@ -8336,16 +8630,84 @@ async function doSearch(ev){
   }
 }
 $("frm").addEventListener("submit",doSearch);
-/* "more…": re-query a single dictionary at a higher limit, in place */
+async function fetchSearchPortion(det,start){
+  if(!det?.isConnected)return;
+  const box=det.parentElement,mode=det.dataset.searchMode||"prefix",query=det.dataset.searchQuery||"",id=det.dataset.searchDict||"";
+  const initial=Number(det.dataset.searchInitial)||5,size=normalizedSearchPortionSize(det.dataset.searchPageSize||searchPortionSize());
+  const cached=articleResultCaches.get(id);
+  if(cached&&cached.displayQuery===query&&cached.mode===mode&&!cached.error){
+    const buttons=[...det.querySelectorAll(":scope>summary .more,:scope>summary .result-page-action")];
+    const restoreButtons=()=>{
+      for(const button of buttons){
+        if(button.dataset.dir==="prev")button.disabled=(Number(det.dataset.searchPageStart)||0)<=0;
+        else if(button.dataset.dir==="next")button.disabled=cached.done&&
+          (Number(det.dataset.searchPageStart)||0)+(Number(det.dataset.searchPageCount)||0)>=cached.total;
+        else button.disabled=false;
+      }
+    };
+    buttons.forEach(button=>button.disabled=true);
+    try{
+      if(!cached.started)pumpArticleResultCaches();
+      await fetchStream(articleCacheURL(cached,"page",start,size),msg=>{
+        if(msg.t==="error")throw new Error(msg.error||"result page unavailable");
+        if(msg.t!=="hit"||msg.dict!==id)return;
+        cached.total=msg.total||0;cached.done=!!msg.complete;
+        const visible=msg.results||[];
+        if(!visible.length){restoreButtons();updateArticleCacheCard(cached);return}
+        const page={start:msg.start||0,size,total:cached.total,lowerBound:cached.total,
+          exact:cached.done,hasNext:!!msg.hasNext};
+        renderSlot(box,{...msg,name:cached.name,results:visible},
+          mode,query,initial,det.dataset.searchGroup==="true",page);
+        const replacement=box.querySelector(":scope>details.dict");
+        if(replacement)replacement.open=true;
+      },articleCacheAbort?.signal);
+    }catch(error){
+      if(error.name!=="AbortError")setStatus("⚠ "+esc(error.message));
+      if(det.isConnected)restoreButtons();
+    }
+    return;
+  }
+  const end=start+size,requested=Math.min(end+1,SEARCH_RESULT_LIMIT);
+  const more=det.querySelector(":scope>summary .more"),actions=[...det.querySelectorAll(":scope>summary .result-page-action")];
+  if(more)more.disabled=true;
+  actions.forEach(button=>button.disabled=true);
+  const url="/api/search?q="+encodeURIComponent(query)+"&mode="+encodeURIComponent(mode)+"&hl="+(hlOn?1:0)+diacriticsSearchParam()+"&dict="+encodeURIComponent(id)+"&n="+requested;
+  let received=false;
+  try{
+    await fetchStream(url,msg=>{
+      if(msg.t!=="hit"||msg.dict!==id)return;
+      received=true;
+      const all=msg.results||[],visibleEnd=Math.min(end,SEARCH_RESULT_LIMIT-1),visible=all.slice(start,visibleEnd),knownTotal=det.dataset.searchExact==="true"?Number(det.dataset.searchTotal):NaN;
+      const exact=Number.isFinite(knownTotal)||all.length<requested;
+      const total=Number.isFinite(knownTotal)?knownTotal:all.length;
+      const hasNext=Number.isFinite(knownTotal)?visibleEnd<knownTotal:all.length>visibleEnd;
+      const lowerBound=Math.max(visibleEnd+(hasNext?1:0),requested===SEARCH_RESULT_LIMIT&&all.length>=SEARCH_RESULT_LIMIT?SEARCH_RESULT_LIMIT:0);
+      const capped=requested===SEARCH_RESULT_LIMIT&&visibleEnd>=SEARCH_RESULT_LIMIT-1&&all.length>=SEARCH_RESULT_LIMIT;
+      const page={start,size,total:exact?total:lowerBound,lowerBound,exact,hasNext:hasNext&&!capped};
+      if(!visible.length){
+        if(all.length<=start){
+          const fallbackStart=Math.max(0,all.length-size),fallback=all.slice(fallbackStart);
+          renderSlot(box,{...msg,results:fallback},mode,query,initial,det.dataset.searchGroup==="true",{...page,start:fallbackStart});
+          const replacement=box.querySelector(":scope>details.dict");if(replacement)replacement.open=true;
+        }
+        return;
+      }
+      renderSlot(box,{...msg,results:visible},mode,query,initial,det.dataset.searchGroup==="true",page);
+      const replacement=box.querySelector(":scope>details.dict");if(replacement)replacement.open=true;
+    });
+    if(!received&&det.isConnected){if(more)more.disabled=false;actions.forEach(button=>button.disabled=false)}
+  }catch(_){
+    if(det.isConnected){if(more)more.disabled=false;actions.forEach(button=>button.disabled=false)}
+  }
+}
 document.addEventListener("click",e=>{
-  const more=e.target.closest("summary .more");
-  if(!more)return;
-  e.preventDefault();
-  const det=more.closest("details.dict"),box=det.parentElement,id=more.dataset.id,mode=$("mode").value;
-  more.textContent="…";
-  fetchStream("/api/search?q="+encodeURIComponent(lastQuery)+"&mode="+mode+"&hl="+(hlOn?1:0)+diacriticsSearchParam()+"&dict="+id+"&n=100",msg=>{
-    if(msg.t==="hit"){renderSlot(box,msg,mode,lastQuery,1e9);const nd=box.querySelector("details.dict");if(nd)nd.open=true}
-  }).catch(()=>{more.textContent=tx("search.more")});
+  const action=e.target.closest("summary .more,summary .result-page-action");
+  if(!action)return;
+  e.preventDefault();e.stopPropagation();
+  if(action.dataset.dir==="goto"){searchPortionGotoOpen(action.closest("details.dict"));return}
+  const det=action.closest("details.dict"),size=normalizedSearchPortionSize(det.dataset.searchPageSize||searchPortionSize());
+  const current=Math.max(0,Number(det.dataset.searchPageStart)||0);
+  fetchSearchPortion(det,action.classList.contains("more")?0:Math.max(0,current+(action.dataset.dir==="next"?size:-size)));
 });
 
 /* Typing updates suggestions; committing the field updates articles. */
@@ -9188,6 +9550,9 @@ let navRecord="replace"; // how the NEXT doSearch should record itself
 let commitOnce=false;
 function applyURL(){
   const p=new URLSearchParams(location.search);
+  restoreArticleDict=p.get("q")?p.get("openDict")||null:null;
+  restoreSearchReturnCacheID=p.get("q")?p.get("returnCacheID")||null:null;
+  if(browseReturnRouteContext)logBrowseReturnRoute(p.get("q")?"apply_url_has_query":"apply_url_no_query",{hasFrom:p.has("from")});
   maskMergeAZ=p.get("maskmerge")==="1";updateMergedAZ();
   if(p.get("theme")){localStorage.setItem("wudict_theme",p.get("theme"));applyTheme(p.get("theme"))}
   if(p.get("mode"))setSearchMode(p.get("mode"));
@@ -9198,6 +9563,7 @@ function applyURL(){
 const _doSearch=doSearch;
 doSearch=function(ev){
   const record=navRecord;
+  const openDict=restoreArticleDict;
   navRecord="replace"; // one-shot: only the action that asked for it pushes
   if(record==="push")browseHistoryReturn=false;
   const r=_doSearch(ev);
@@ -9207,6 +9573,8 @@ doSearch=function(ev){
     // `from` is the one-shot cross-reference scope; `dict` stays the user's
     // own selector, so restoring a link-followed view never rewrites it
     if(lastScope)params.from=lastScope;
+    if(openDict&&$("mode").value!=="wildcards")params.openDict=openDict;
+    if(articleCacheGroupID&&$("mode").value!=="wildcards")params.returnCacheID=articleCacheGroupID;
     if($("mode").value==="wildcards"&&maskMergeAZ)params.maskmerge="1";
     if(browseReturn)params.browse=browseReturn;
     if(maskReturn)params.wildcards=maskReturn;
@@ -9222,6 +9590,8 @@ doSearch=function(ev){
    recorded — the browser already moved the cursor within the stack. */
 window.addEventListener("popstate",()=>{
   const p=new URLSearchParams(location.search);
+  restoreArticleDict=p.get("q")?p.get("openDict")||null:null;
+  restoreSearchReturnCacheID=p.get("q")?p.get("returnCacheID")||null:null;
   maskMergeAZ=p.get("maskmerge")==="1";updateMergedAZ();
   browseReturn=browseReturnFromURL();maskReturn=maskReturnFromURL();sbarPaint();
   if(canonicalSearchMode(p.get("mode"))==="wildcards"&&maskRestoreCached(new URL(location.href)))return;

@@ -203,6 +203,15 @@ func (u *upgraded) SearchHeadwordsMode(ctx context.Context, query, mode string, 
 	return u.titleResults(ctx, r, err)
 }
 
+func (u *upgraded) StreamArticleIDs(ctx context.Context, query, mode, fullTextMatch string, emit func([]int64, int, bool) error) error {
+	return u.Store.StreamArticleIDs(ctx, query, mode, fullTextMatch, emit)
+}
+
+func (u *upgraded) ArticlesByIDs(ctx context.Context, ids []int64) ([]dict.Result, error) {
+	rows, err := u.Store.ArticlesByIDs(ctx, ids)
+	return u.titleResults(ctx, rows, err)
+}
+
 // Resource resolves in three rungs, cheapest first (D2, extended by O8):
 //
 //  1. the packed media.db the Store attaches - portable, and always right when

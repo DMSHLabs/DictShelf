@@ -363,7 +363,6 @@ body.mask-view-active .qbox input{padding-right:2.8em}
 #maskProgress #mergedAZ svg{display:block;width:2.1em;height:1.2em}
 #maskProgress button:disabled{opacity:.4;cursor:default}
 @container mask-progress (min-width:50rem){#maskProgress .mask-pager-label{display:inline}#maskProgress .mask-pager-icon{display:none}}
-@container mask-progress (max-width:26rem){#maskProgress :is(#maskPrev,#maskNext){display:none}}
 /* Keep the search controls visible while moving through a long mask list. */
 body.mask-view-active{--stick:var(--barh)}
 body.mask-view-active .bar{transform:none!important}
@@ -626,9 +625,9 @@ details.dict{margin-top:var(--sp-2);background:var(--bg-card);border:1px solid v
    only the header's height and never the name's left edge. */
 details.dict>summary{position:sticky;top:var(--stick);z-index:2;
   background:var(--bg-card);
-  cursor:pointer;padding:var(--sp-1) .62rem;font-weight:600;
+  cursor:pointer;padding:var(--sp-1) .62rem;font-size:calc(var(--ui-font-section) * 1rem);font-weight:700;
   outline:2px solid transparent;outline-offset:-2px;border-radius:9px 9px 0 0;
-  color:var(--label);list-style:none;display:flex;align-items:center;gap:var(--sp-1);
+  color:var(--label);list-style:none;display:flex;align-items:center;gap:var(--sp-1);flex-wrap:wrap;
   /* `top` is deliberately NOT in this list, and the reason is the reader's
      report that scrolling UP tucked the header a couple of pixels under the
      bar. The bar's height is not a constant this page may animate after: it is
@@ -652,22 +651,16 @@ details.dict>summary{position:sticky;top:var(--stick);z-index:2;
      first screenshot"), since a header that arrives late is a header that
      spends that time hidden.
 
-     The size and the padding still glide (the open/closed resize on a click,
-     where nothing else is moving). */
-  transition:font-size .16s ease,line-height .16s ease,padding .16s ease}
-/* Two jobs, two sizes. CLOSED, the header is a row in a list you scan across a
-   hundred dictionaries — it wants presence. OPEN, you are reading the section
-   and it has become a context label you consult occasionally — it wants to get
-   out of the way. `[open]` is a free CSS state, so this needs no sentinel, no
-   observer and no scroll handler, and the resize happens on a click the user
-   made rather than as a surprise in their peripheral vision. ~39px → ~25px. */
-details.dict[open]>summary{font-size:.8125rem;line-height:1.25;
-  padding-top:.25rem;padding-bottom:.25rem}
-details.dict[open]>summary .count{font-size:11px}
+     The header's type and height stay fixed as the section opens. */
+}
 details.dict>summary::-webkit-details-marker{display:none}
 details.dict>summary::before{content:"›";color:var(--label-quiet);
   transition:transform .18s ease;font-weight:400}
 details.dict[open]>summary::before{transform:rotate(90deg)}
+details.dict>summary.search-result-summary::before{display:none}
+summary.search-result-summary .search-dict-identity::before{content:"›";color:var(--label-quiet);
+  transition:transform .18s ease;font-weight:400;flex:none}
+details.dict[open]>summary.search-result-summary .search-dict-identity::before{transform:rotate(90deg)}
 details.dict[open]>summary{border-bottom:1px solid var(--line-soft)}
 details.dict>summary.sbar-target{outline-color:var(--accent)}
 details.dict>summary:focus-visible{outline-color:var(--focus)}
@@ -679,7 +672,7 @@ details.dict>summary:focus-visible{outline-color:var(--focus)}
 details.dict[open]>dl{content-visibility:auto;contain-intrinsic-size:0 400px}
 details.dict>dl>dt mark.wu-hl{background:var(--accent);color:var(--bg);border-radius:.15em}
 .mask-word-open mark.wu-hl-lemma{background:color-mix(in srgb,var(--accent) 42%,var(--bg));color:var(--fg);border-radius:.15em}
-summary .count{margin-left:auto;font-weight:400;color:var(--label-quiet);font-size:12px}
+summary .count{margin-left:auto;font-weight:400;color:var(--label-quiet);font-size:calc(var(--ui-font-addition) * 1rem)}
 /* The relaxation note (renderSlot, h.rung). A full-text search asks for the
    words as a phrase first; when no article had them adjacent the server answers
    a weaker question, and saying so is not an explanation of the machinery but
@@ -704,6 +697,31 @@ summary .mbtn:hover{color:var(--fg);background:var(--bg)}
 summary .mbtn:active{color:var(--accent)}
 summary .mpos{font-size:11px;color:var(--label-quiet);min-width:2.8em;text-align:center;
   font-variant-numeric:tabular-nums}
+summary .search-pages{display:flex;align-items:center;gap:2px;font-weight:400;
+  font-size:calc(var(--ui-font-addition) * 1rem);white-space:nowrap}
+summary .result-page-action{box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;flex:none;
+  width:calc(var(--ui-control-height) * 1rem);height:calc(var(--ui-control-height) * 1rem);min-width:calc(var(--ui-control-height) * 1rem);
+  padding:0 .25em;border:1px solid var(--line-soft);border-radius:7px;
+  background:color-mix(in srgb,var(--bg) 50%,transparent);color:var(--fg);font:inherit;font-size:calc(var(--ui-control-font) * 1rem);line-height:1;cursor:pointer;
+  -webkit-tap-highlight-color:transparent}
+summary .result-page-action svg{display:block;width:1.5em;height:1.5em;flex:none}
+summary .result-page-range{width:auto;min-width:0;padding:0 .55em;font-size:calc(var(--ui-control-font) * 1rem);font-variant-numeric:tabular-nums;color:var(--label-quiet);white-space:nowrap}
+summary .search-dict-identity{display:flex;align-items:center;gap:var(--sp-1);flex:1 1 max-content;min-width:8ch;white-space:nowrap}
+summary .search-dict-name{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+summary .search-dict-name[data-fit="addition"]{font-size:calc(var(--ui-font-addition) * 1rem)}
+summary .search-dict-name[data-fit="hint"]{font-size:calc(var(--ui-hint-font-size) * 1rem)}
+summary .search-dict-controls{display:flex;align-items:center;gap:var(--sp-1);flex:0 0 auto;min-width:0;margin-left:auto;font-weight:400}
+summary[data-controls-wrapped="true"] .search-dict-controls{box-sizing:border-box;flex:1 1 100%;justify-content:space-between;margin-left:0;padding-inline:calc(var(--ui-control-height) * 1rem)}
+summary[data-controls-wrapped="true"] .search-dict-controls .search-pages{display:contents}
+summary .search-dict-controls .count{margin:0}
+summary .search-dict-controls .more{margin:0}
+summary .search-dict-controls .search-browse{margin-left:0}
+summary .result-page-action:hover:not(:disabled){background:var(--bg);color:var(--fg);border-color:var(--line)}
+summary .result-page-action:active:not(:disabled){background:color-mix(in srgb,var(--accent) 14%,var(--bg))}
+summary .result-page-action:disabled{color:var(--label-quiet);opacity:.5;cursor:default}
+summary .result-page-action:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
+summary .search-browse{font-weight:400;font-size:calc(var(--ui-font-addition) * 1rem);color:var(--link);
+  white-space:nowrap;text-decoration:underline;text-underline-offset:2px;margin-left:var(--sp-1)}
 /* a dictionary's own script threw; the article is intact but inert */
 summary .jserr{margin-left:6px;font-weight:400;color:var(--accent);font-size:12px;cursor:help}
 /* A deferred dictionary's hint (renderSlot, h.deferred). Link-coloured because
@@ -712,9 +730,10 @@ summary .jserr{margin-left:6px;font-weight:400;color:var(--accent);font-size:12p
    dictionary name that already wraps, and a two-line hint beside a three-line
    name is the layout in the bug report this replaced. */
 summary .count.hint{color:var(--link);white-space:nowrap}
-summary .more{font-weight:400;font-size:12px;color:var(--link);cursor:pointer;
-  text-decoration:underline;text-underline-offset:2px;margin-left:var(--sp-2)}
-summary .upgrade{font-weight:400;font-size:12px;color:var(--link);cursor:pointer;
+summary .more{border:0;background:transparent;font-family:inherit;font-weight:400;font-size:calc(var(--ui-font-addition) * 1rem);color:var(--link);cursor:pointer;
+  text-decoration:underline;text-underline-offset:2px;margin-left:var(--sp-2);padding:0}
+summary .more:disabled{opacity:.55;cursor:progress}
+summary .upgrade{font-weight:400;font-size:calc(var(--ui-font-addition) * 1rem);color:var(--link);cursor:pointer;
   text-decoration:underline;text-underline-offset:2px;margin-left:auto}
 /* The dictionaries this mode could not search, as one line instead of one
    section each (renderSlot, h.skipped). The offer inside is per dictionary
@@ -725,7 +744,7 @@ summary .upgrade{font-weight:400;font-size:12px;color:var(--link);cursor:pointer
    .group-control-disabled, and the ⌕ in the field). Everything else reads at
    --fg — the reader's report of 2026-09-28 was that the whole panel looked
    switched off. */
-details.noindex>summary{font-weight:400;color:var(--fg-faint)}
+details.noindex>summary{font-weight:700;color:var(--fg-faint)}
 .noidx{padding:var(--sp-1) .62rem var(--sp-2)}
 .noidx>div{display:flex;align-items:baseline;gap:var(--sp-1);font-size:12px;
   color:var(--label);padding:.15rem 0}
@@ -1013,6 +1032,10 @@ body.styling{padding-bottom:var(--styler-shown,var(--styler-h))}
   color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:.5em .6em}
 #sysSettings .sys-num .sys-workers-select{flex:none;width:6.5em}
 #sysSettings .sys-num .sys-workers-select>select{display:block;width:100%;max-width:none;min-width:0;box-sizing:border-box;
+  height:100%;min-height:100%;font:inherit;font-size:calc(var(--ui-control-font) * 1rem);line-height:1;color:var(--fg);background:var(--bg);
+  border:1px solid var(--line);border-radius:5px;padding:0 1.8em 0 .55em;appearance:none;-webkit-appearance:none}
+#sysSettings .sys-num .sys-return-cache-select,#desktopSysBody .sys-num .sys-return-cache-select{flex:none;width:8em}
+#sysSettings .sys-num .sys-return-cache-select>select,#desktopSysBody .sys-num .sys-return-cache-select>select{display:block;width:100%;max-width:none;min-width:0;box-sizing:border-box;
   height:100%;min-height:100%;font:inherit;font-size:calc(var(--ui-control-font) * 1rem);line-height:1;color:var(--fg);background:var(--bg);
   border:1px solid var(--line);border-radius:5px;padding:0 1.8em 0 .55em;appearance:none;-webkit-appearance:none}
 #sysSettings .sys-action-spaced{margin-top:calc(var(--ui-control-height) * .5em)}

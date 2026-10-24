@@ -210,7 +210,7 @@ func TestExactBodyIsRewritten(t *testing.T) {
 		t.Errorf("document shell survived: %q", body)
 	}
 	// The head's stylesheet is hoisted; its icon link is not.
-	if !strings.Contains(body, `href="./_res_/a.css"`) {
+	if !strings.Contains(body, `href="_res_/a.css"`) {
 		t.Errorf("stylesheet not hoisted: %q", body)
 	}
 	if strings.Contains(body, "f.png\"") && strings.Contains(body, `rel="icon"`) {
@@ -406,7 +406,7 @@ func TestOldNamespaces(t *testing.T) {
 	if !strings.Contains(res[0].Body, `href="entry://wolf"`) {
 		t.Errorf("A/ reference not rewritten: %q", res[0].Body)
 	}
-	if !strings.Contains(res[0].Body, `href="../I/p.png"`) {
+	if !strings.Contains(res[0].Body, `href="I/p.png"`) {
 		t.Errorf("I/ reference rewritten as a lookup: %q", res[0].Body)
 	}
 	// The image namespace is only reachable on old-scheme files.

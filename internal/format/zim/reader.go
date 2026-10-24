@@ -142,7 +142,7 @@ func (r *Reader) Next() (dict.Entry, error) {
 		}
 		return dict.Entry{
 			Headwords: []string{de.headword()},
-			Body:      r.d.articleHTML(body),
+			Body:      r.d.articleHTML(de, body),
 			Kind:      dict.BodyHTML,
 		}, nil
 	}

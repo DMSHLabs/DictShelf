@@ -182,6 +182,7 @@ type Server struct {
 	mux *http.ServeMux
 
 	wildcardPages wildcardPageCache
+	searchReturns searchReturnCacheStore
 
 	// dictRows keeps /api/dicts rows between requests (dictrows.go).
 	dictRows rowCache
@@ -1427,7 +1428,13 @@ type streamMsg struct {
 	// tool that quietly answers a weaker question than the one asked is lying
 	// about its result. The UI says so only when the answer is NOT the phrase -
 	// the precise reading needs no announcement (D102).
-	Rung string `json:"rung,omitempty"`
+	Rung     string `json:"rung,omitempty"`
+	Term     string `json:"term,omitempty"`
+	CacheID  string `json:"cacheID,omitempty"`
+	Total    int    `json:"total,omitempty"`
+	Complete bool   `json:"complete,omitempty"`
+	Start    int    `json:"start,omitempty"`
+	HasNext  bool   `json:"hasNext,omitempty"`
 
 	// Deferred: this dictionary was not searched because the fan-out cap
 	// declined to materialise it (see fanout). It is NOT an error and must not
@@ -1456,7 +1463,7 @@ func searchEventToStream(event SearchEvent) streamMsg {
 	for i, slot := range event.Slots {
 		slots[i] = streamSlot{Dict: slot.Dict, Name: slot.Name}
 	}
-	return streamMsg{T: event.T, Slots: slots, I: event.I, Dict: event.Dict, Name: event.Name, Results: event.Results, Skipped: event.Skipped, Error: event.Error, Rung: event.Rung, Deferred: event.Deferred, Bytes: event.Bytes, Indexing: event.Indexing, From: event.From, To: event.To, Lang: event.Lang}
+	return streamMsg{T: event.T, Slots: slots, I: event.I, Dict: event.Dict, Name: event.Name, Results: event.Results, Skipped: event.Skipped, Error: event.Error, Rung: event.Rung, Term: event.Term, CacheID: event.CacheID, Total: event.Total, Complete: event.Complete, Start: event.Start, HasNext: event.HasNext, Deferred: event.Deferred, Bytes: event.Bytes, Indexing: event.Indexing, From: event.From, To: event.To, Lang: event.Lang}
 }
 
 func searchEventFromStream(event streamMsg) SearchEvent {
@@ -1467,7 +1474,7 @@ func searchEventFromStream(event streamMsg) SearchEvent {
 	for i, slot := range event.Slots {
 		slots[i] = SearchSlot{Dict: slot.Dict, Name: slot.Name}
 	}
-	return SearchEvent{T: event.T, Slots: slots, I: event.I, Dict: event.Dict, Name: event.Name, Results: event.Results, Skipped: event.Skipped, Error: event.Error, Rung: event.Rung, Deferred: event.Deferred, Bytes: event.Bytes, Indexing: event.Indexing, From: event.From, To: event.To, Lang: event.Lang}
+	return SearchEvent{T: event.T, Slots: slots, I: event.I, Dict: event.Dict, Name: event.Name, Results: event.Results, Skipped: event.Skipped, Error: event.Error, Rung: event.Rung, Term: event.Term, CacheID: event.CacheID, Total: event.Total, Complete: event.Complete, Start: event.Start, HasNext: event.HasNext, Deferred: event.Deferred, Bytes: event.Bytes, Indexing: event.Indexing, From: event.From, To: event.To, Lang: event.Lang}
 }
 
 // singleSearchBudget is how long a search of ONE named dictionary may take
@@ -1545,6 +1552,18 @@ func marker(on bool) func(term, rung string) *hilite.Terms {
 // result line carries its slot index `i` so the client fills the correct
 // preference-ordered position regardless of completion order.
 func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Query().Get("cacheAction") != "" {
+		st, ok := newStream(w, "application/x-ndjson; charset=utf-8")
+		if !ok {
+			return
+		}
+		request := searchRequestFromQuery(r.URL.Query())
+		request.Origin = originOf(r)
+		if err := s.Search(r.Context(), request, func(event SearchEvent) error { st.line(event); return r.Context().Err() }); err != nil {
+			st.line(SearchEvent{T: "error", Error: err.Error()})
+		}
+		return
+	}
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
 	if q == "" {
 		httpErr(w, 400, "missing q parameter")
@@ -1574,14 +1593,14 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 	// word they are already looking at, on every line it appears (D102).
 	hl, _ := queryFlag(r.URL.Query(), "hl")
 	marks := marker(mode == search.FullText && hl)
-	// Capped like the store's own maxLimit: the store clamps at its boundary,
+	// Capped like the store's own maxLimit (one page plus a sentinel): the store clamps at its boundary,
 	// but a direct backend treats the limit as a stop sign only, and would
 	// materialize every match - article bodies included - before stopping.
 	n := 20
 	if v := r.URL.Query().Get("n"); v != "" {
 		if p, err := strconv.Atoi(v); err == nil && p > 0 {
-			if p > 500 {
-				p = 500
+			if p > 501 {
+				p = 501
 			}
 			n = p
 		}
@@ -1690,7 +1709,7 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 		for j := range h.Results {
 			h.Results[j].Body = applyFormat(h.Results[j].Body, format, origin, st)
 		}
-		m := streamMsg{T: "hit", I: i, Dict: id, Name: name, Results: h.Results, Skipped: h.Skipped, Rung: h.Rung}
+		m := streamMsg{T: "hit", I: i, Dict: id, Name: name, Results: h.Results, Skipped: h.Skipped, Rung: h.Rung, Term: h.Term}
 		logx.System("search result query=%q mode=%q dictionary=%q results=%d skipped=%t", q, mode, name, len(h.Results), h.Skipped)
 		var heavy tooHeavy
 		switch {
