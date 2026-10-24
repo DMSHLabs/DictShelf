@@ -25,14 +25,23 @@ import (
 // retains its caller's slot order. Origin is supplied by the host for clean
 // article resource links, never read from the desktop JSON payload.
 type SearchRequest struct {
-	Query            string `json:"q"`
-	Mode             string `json:"mode,omitempty"`
-	Format           string `json:"format,omitempty"`
-	Dictionary       string `json:"dict,omitempty"`
-	Limit            int    `json:"n,omitempty"`
-	Highlight        bool   `json:"hl,omitempty"`
-	IgnoreDiacritics bool   `json:"ignoreDiacritics,omitempty"`
-	Origin           string `json:"-"`
+	Query              string `json:"q"`
+	Mode               string `json:"mode,omitempty"`
+	Format             string `json:"format,omitempty"`
+	Dictionary         string `json:"dict,omitempty"`
+	Limit              int    `json:"n,omitempty"`
+	Highlight          bool   `json:"hl,omitempty"`
+	IgnoreDiacritics   bool   `json:"ignoreDiacritics,omitempty"`
+	Origin             string `json:"-"`
+	CacheAction        string `json:"cacheAction,omitempty"`
+	CacheID            string `json:"cacheID,omitempty"`
+	ReturnCacheID      string `json:"returnCacheID,omitempty"`
+	ReturnCacheStorage string `json:"returnCacheStorage,omitempty"`
+	CacheCount         int    `json:"cacheCount,omitempty"`
+	CacheOrder         int    `json:"cacheOrder,omitempty"`
+	Start              int    `json:"start,omitempty"`
+	Size               int    `json:"size,omitempty"`
+	Rung               string `json:"rung,omitempty"`
 }
 
 type SearchErrorKind string
@@ -86,7 +95,13 @@ type SearchEvent struct {
 	// tool that quietly answers a weaker question than the one asked is lying
 	// about its result. The UI says so only when the answer is NOT the phrase -
 	// the precise reading needs no announcement (D102).
-	Rung string `json:"rung,omitempty"`
+	Rung     string `json:"rung,omitempty"`
+	Term     string `json:"term,omitempty"`
+	CacheID  string `json:"cacheID,omitempty"`
+	Total    int    `json:"total,omitempty"`
+	Complete bool   `json:"complete,omitempty"`
+	Start    int    `json:"start,omitempty"`
+	HasNext  bool   `json:"hasNext,omitempty"`
 
 	// Deferred: this dictionary was not searched because the fan-out cap
 	// declined to materialise it (see fanout). It is NOT an error and must not
@@ -124,6 +139,25 @@ func (s *Server) Search(parent context.Context, request SearchRequest, emit func
 	if emit == nil {
 		return searchRequestError(SearchInvalidRequest, "search event callback is required")
 	}
+	if request.CacheAction == "returnReplay" {
+		logx.System("search_return_cache stage=replay_start id=%q query=%q mode=%q scope=%q", request.CacheID, request.Query, request.Mode, request.Dictionary)
+		if err := s.replaySearchReturnCache(parent, request.CacheID, emit); err == nil {
+			logx.System("search_return_cache stage=replay_result id=%q result=hit", request.CacheID)
+			return nil
+		} else if parent.Err() != nil {
+			return parent.Err()
+		} else if !errors.Is(err, errSearchReturnCacheUnavailable) {
+			logx.System("search_return_cache stage=replay_result id=%q result=failed error=%q", request.CacheID, err)
+			return err
+		} else {
+			logx.System("search_return_cache stage=fallback id=%q reason=%q query=%q mode=%q scope=%q", request.CacheID, err, request.Query, request.Mode, request.Dictionary)
+			request.CacheAction = ""
+			request.ReturnCacheID = request.CacheID
+		}
+	}
+	if request.CacheAction != "" {
+		return s.searchArticleResultCache(parent, request, emit)
+	}
 	q := strings.TrimSpace(request.Query)
 	if q == "" {
 		return searchRequestError(SearchInvalidRequest, "missing q parameter")
@@ -157,8 +191,8 @@ func (s *Server) Search(parent context.Context, request SearchRequest, emit func
 	if n <= 0 {
 		n = 20
 	}
-	if n > 500 {
-		n = 500
+	if n > 501 {
+		n = 501
 	}
 
 	dictParam := request.Dictionary
@@ -190,10 +224,43 @@ func (s *Server) Search(parent context.Context, request SearchRequest, emit func
 	if request.IgnoreDiacritics {
 		ctx = store.WithIgnoreDiacritics(ctx)
 	}
+	var returnCache *searchReturnCacheEntry
+	if request.ReturnCacheID != "" {
+		returnCache, err = s.beginSearchReturnCache(request.ReturnCacheID, request.ReturnCacheStorage)
+		if err != nil {
+			logx.System("search_return_cache stage=create_failed id=%q requested_storage=%q query=%q mode=%q scope=%q dictionaries=%d error=%q",
+				request.ReturnCacheID, request.ReturnCacheStorage, q, mode, dictParam, len(entries), err)
+		} else {
+			logx.System("search_return_cache stage=search_attached id=%q query=%q mode=%q scope=%q dictionaries=%d storage=%s",
+				request.ReturnCacheID, q, mode, dictParam, len(entries), returnCache.storage)
+		}
+	}
+	defer func() {
+		if returnCache != nil && !returnCache.complete {
+			returnCache.close("stream_incomplete")
+		}
+	}()
 	var emitErr error
 	writeLine := func(m SearchEvent) {
 		if emitErr != nil {
+			// A disconnected page is still a valid return snapshot: finish the
+			// event sequence with what it received before navigation interrupted
+			// the live search.
+			if returnCache != nil && m.T == "end" {
+				if cacheErr := returnCache.append(m, true); cacheErr != nil {
+					logx.System("search_return_cache stage=write_failed id=%q error=%q", request.ReturnCacheID, cacheErr)
+					returnCache.close("write_failed")
+					returnCache = nil
+				}
+			}
 			return
+		}
+		if returnCache != nil {
+			if cacheErr := returnCache.append(m, m.T == "end" && parent.Err() != nil); cacheErr != nil {
+				logx.System("search_return_cache stage=write_failed id=%q error=%q", request.ReturnCacheID, cacheErr)
+				returnCache.close("write_failed")
+				returnCache = nil
+			}
 		}
 		if err := emit(m); err != nil {
 			emitErr = err
@@ -277,7 +344,7 @@ func (s *Server) Search(parent context.Context, request SearchRequest, emit func
 		for j := range h.Results {
 			h.Results[j].Body = applyFormat(h.Results[j].Body, format, origin, st)
 		}
-		m := SearchEvent{T: "hit", I: i, Dict: id, Name: name, Results: h.Results, Skipped: h.Skipped, Rung: h.Rung}
+		m := SearchEvent{T: "hit", I: i, Dict: id, Name: name, Results: h.Results, Skipped: h.Skipped, Rung: h.Rung, Term: h.Term}
 		logx.System("search result query=%q mode=%q dictionary=%q results=%d skipped=%t", q, mode, name, len(h.Results), h.Skipped)
 		var heavy tooHeavy
 		switch {

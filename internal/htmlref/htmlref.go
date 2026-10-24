@@ -451,6 +451,23 @@ func (rw Rewriter) rewriteAttrs(t *html.Token) bool {
 	return changed
 }
 
+// MayRef reports whether doc can hold a reference the rewriter recognizes.
+// A false result lets callers skip tokenizing an article with only prose.
+func MayRef(doc string) bool {
+	for i := 0; i < len(doc); i++ {
+		c := doc[i] | 0x20 // HTML attribute names are ASCII case-insensitive.
+		if c != 's' && c != 'h' && c != 'd' && c != 'p' && c != 'b' && c != 'l' && c != 'u' {
+			continue
+		}
+		for _, s := range [...]string{"src", "href", "data", "poster", "style", "background", "longdesc", "usemap"} {
+			if len(doc)-i >= len(s) && strings.EqualFold(doc[i:i+len(s)], s) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // urlAttr is every attribute whose value is a single URL. The `data-`/`xlink:`
 // forms matter: repacked dictionaries habitually stash the real reference in
 // data-src or data-original and swap it in with their own script.

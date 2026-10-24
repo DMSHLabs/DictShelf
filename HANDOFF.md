@@ -1,5 +1,7 @@
 # Agent handoff — current state
 
+Current checkout: branch `DictShelf` at `63b4585b`, merging `codex/search` at `411543bf`. The merge is not committed. The `search` changes add SQL-backed, paged article results and Browse find/filter caches; article results load in portions, Browse keeps bounded pages on disk, and Browse/article return preserves the originating query and dictionary. Search diagnostics cover cached result streams and replay. The article header and narrow-width paging controls were adjusted for small screens.
+
 ## Product identity
 
 - Product: DictShelf; publisher: DMSH Labs. Android ID, Java package and Gradle namespace: `com.dmshlabs.dictshelf`; Windows artifacts: `DictShelf.exe`, `DictShelf-cli.exe`, `DictShelf-server.exe`; macOS bundle ID and launchd label: `com.dmshlabs.dictshelf`; Linux user unit: `dictshelf.service`.
@@ -8,55 +10,15 @@
 ## Search and menu state
 
 - Contains builds headword token FTS and trigram indexes together; FullText builds separate article FTS. `IngestVersion=6` offers existing indexes for rebuild, while old databases remain readable. Main headword search and Browse fall back to the base index when optional indexes are absent. Search modes include suffix, whole-word and explicit lemma variants; article full-text stays separate.
-- Main search mode menu now follows Browse/Wildcards grouping and styling. Its Articles mark is a page with a highlighted text band; the page outline is `.8px` and horizontal strokes are `1.2px`.
-- Search diagnostics record query, mode, dictionary scope, chosen backend/database/index and per-dictionary results in both HTTP and desktop bridge paths.
+- Main search mode menu follows Browse/Wildcards grouping and styling. Search diagnostics record query, mode, dictionary scope, chosen backend/database/index and per-dictionary results in HTTP and desktop bridge paths.
+- Search-return snapshots and Browse find/filter results are bounded SQLite caches shared by the native and HTTP paths. Browse links retain the originating query and dictionary through article navigation.
 
 ## Verification and remaining checks
 
-- Search/index changes passed focused store, server and golden tests; previous full server runs had two async dictionary-icon expectation failures (HTTP 202 vs 200). Inline scripts and translations were checked. Windows/Android interactive search and index maintenance remain to be verified.
-- Android runs the Go server through JNI without an HTTP listener; Windows listenerless desktop uses WebView2 and a native bridge. Build recipes are in `docs/WINDOWS-VERIFY.md`; Android uses `build-android.cmd debug intel`. Do not install APKs or commit unless requested.
-- Separate open items: Windows/Android identity smoke checks; portable Windows write-path gaps (`docs/PORTABLE-WRITES-AUDIT.md`); Edit Folders dialog verification; icon visibility setting verification; MDX ad-slot reindex/display verification.
-The Wildcards lower search in separate-dictionary mode now sends one grouped stream request for all
-dictionaries when a saved complete filter is unavailable. Go searches the shared result SQLite cache
-globally, distributes hits by dictionary ID and original position, and writes the existing per-dictionary
-300-word filter pages for navigation. Selective FTS/trigram candidates use one group plan; large
-candidate sets are materialized once before bounded reads. The combined-list path is unchanged. `go build
-./...`, inline JavaScript syntax and `git diff --check` pass. Windows/Android interaction and timing
-remain to be checked, especially cancellation, lemma modes and large result sets.
-
-Browse now receives the effective typed and lemma forms from its single-dictionary find stream and uses a
-softer theme accent for lemma-only highlights. Completed find sessions retain those forms. Build and
-browser runtime checks are pending.
-
-Previous checkpoint: branch `DictShelf` at `34f2d3d2`, after an earlier merge from `dev`. Current merge in progress: `DictShelf` at `63b4585b` with `dev` at `65b99341`; conflicts are resolved and the merge is not committed. Safe Stop cancellation detection is included, and dictionary icon loading combines asynchronous caching with embedded LSD icons. The earlier checkpoint's `go test ./...` and `git diff --check` passed. No
-upstream is configured. The application uses one DSL reader with GoldenDict-
-compatible repair and article preparation; there is no Original/GD selection
-or duplicate DSL index. `docs/DSL.md` and `tools/dslcompare/README.md` describe
-that current architecture. The LSD decoder and reader work is present in this
-branch; upstream review and pending ZIM checks remain as recorded below. The
-user-owned untracked `DictShelf.exe` was preserved. This session adds a saved
-Combined list dictionary limit (default 500, maximum 5,000), a specific
-over-limit message, and moves Clear browser cache beneath its Browser cache
-description. Desktop System settings no longer show internal config key names.
-`go build ./...`, `git diff --check`, and translation JSON parsing pass; tests
-were not run, and Windows/Android settings UI verification remains pending.
-Wildcards separate/Combined list switches preserve the bottom query, match mode
-and Search/Filter choice, then reapply them after the target base list is ready.
-Returning to a cached view reuses its base result list. Runtime check is pending.
-
-The 2026-10-24 Windows log confirms grouped lower filtering completes in under 700 ms for 102 matches.
-Filter ribbon sections now remain available when a completed SQL result's page read errors; switching to
-Filter also selects a completed dictionary with matches. Runtime confirmation is pending.
-
-Wildcards Whole word + lemmatization and Exact + lemmatization now receive the effective query forms used
-per dictionary. Typed-form matches keep the accent highlight; lemma-only matches use the softer theme
-accent. Go build and static JS checks pass; Windows/Android visual confirmation is pending.
-
-Lemma-only Wildcards highlights use a stronger theme blend. Separate-mode lemma alternatives are
-aggregated and cached for the active group/query; the combined-list filter reuses them and returns its
-effective forms for matching highlights. Without a saved set, combined search derives forms from selected
-dictionary languages as before. Runtime verification is pending.
-
+- The merge conflicts in `HANDOFF.md`, `internal/format/lsd/header.go`, and `internal/server/dictionary_icon_test.go` have been resolved. The merged result has not been tested or built yet.
+- Android runs Go through JNI without an HTTP listener; Windows listenerless desktop uses WebView2 and a native bridge. Build recipes are in `docs/WINDOWS-VERIFY.md`; Android uses `build-android.cmd debug intel`. Do not install APKs or commit unless requested.
+- Windows/Android search, index maintenance and visual checks remain pending. Other open items include portable Windows write-path gaps (`docs/PORTABLE-WRITES-AUDIT.md`), Edit Folders verification, icon visibility and MDX ad-slot reindex/display.
+- No upstream is configured. DSL uses one GoldenDict-compatible reader and article preparation path. The LSD decoder and reader are in this branch; `docs/DSL.md` and `tools/dslcompare/README.md` describe the DSL architecture.
 Filter mode now explicitly requests the visible dictionary's first result page when its SQL metadata is
 ready but no page is loaded; this avoids leaving the headword pane on its loading message after a ribbon
 selection was skipped.
@@ -137,7 +99,7 @@ a full merged Browse index (14.6M source rows) after the 59-word Wildcards merge
 67 ms. That page request now validates and reuses the `mergedcache` produced by the Wildcards stream. `go
 build ./internal/server` and `git diff --check` pass; runtime confirmation is pending.
 
-Current checkout is branch `dev` at `f44e7127`. The 2026-10-23 Windows log confirms Dictionary settings
+At commit `f44e7127`, the 2026-10-23 Windows log confirmed Dictionary settings
 blocked WebView2's UI thread while serving the English Wiktionary ZIM icon: its `/dict-icon/fb1c556f5740`
 request took about 105 seconds, then the queued article resources resumed. Dictionary icon discovery now
 starts in the background, returns HTTP 202 while pending, and the UI retries without blocking. Found and
@@ -174,7 +136,7 @@ Dictionary 10th"` instead of `OALDWU`; its UTF-16 header length and Adler-32 wer
 reopened it and looked up `dog`. The original is preserved beside it as `.mdx.title-backup.bak`; prepared
 data will be stale from the source size/mtime change and needs Rebuild.
 
-Current checkout: branch `dev` at `f44e7127`; linked-group synchronization now caches its last completed
+At commit `f44e7127`, linked-group synchronization cached its last completed
 input snapshot and skips dictionary metadata reads while state.json, groups.ini, dictionary
 entries/generations and root folders are unchanged. The cache version advances only after a successful
 refresh; the diagnostic reports its version and hit/miss. Focused linked-group rescan/edit checks, `go

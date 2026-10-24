@@ -227,6 +227,9 @@ func (r *Registry) dictionaryIcon(e *entry, gen uint64) ([]byte, string) {
 	var mime string
 	body, mime = sourceDictionaryIcon(source, external)
 	probeComplete := true
+	if len(body) == 0 && strings.EqualFold(filepath.Ext(source), ".lsd") {
+		body, mime, _ = lsdformat.ReadIcon(source)
+	}
 	isZIM := strings.EqualFold(filepath.Ext(source), ".zim") || strings.EqualFold(filepath.Ext(source), ".zimaa")
 	if len(body) == 0 && isZIM && source != "" {
 		if d, err := dict.Open(source); err == nil {

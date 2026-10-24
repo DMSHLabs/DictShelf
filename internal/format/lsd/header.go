@@ -68,3 +68,12 @@ func readHeader(r io.ReaderAt, fileSize int64) (fileHeader, error) {
 	}
 	return h, nil
 }
+
+func supportedVersion(version uint32) bool {
+	switch version {
+	case 0x110001, 0x120001, 0x131001, 0x132001, 0x141004, 0x142001, 0x145001, 0x151005, 0x152001, 0x155001:
+		return true
+	default:
+		return false
+	}
+}
