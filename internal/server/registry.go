@@ -394,9 +394,15 @@ func acquire(sem chan struct{}) (release func()) {
 
 // entry is one discovered dictionary, opened lazily.
 type entry struct {
-	ID        string
-	Path      string
-	dslSource string
+	ID          string
+	Path        string
+	dslSource   string
+	iconMu      sync.Mutex
+	iconGen     uint64
+	iconLoading bool
+	iconReady   bool
+	iconBody    []byte
+	iconMIME    string
 	// builtin: a dictionary the app ships (Builtin), not one the user added.
 	builtin bool
 
@@ -1056,7 +1062,11 @@ func (r *Registry) SetDirsDeferred(dirs []string) error {
 
 // Rescan re-discovers dictionaries, keeping already-open entries.
 func (r *Registry) Rescan() error {
-	return r.rescan(true)
+	if err := r.rescan(true); err != nil {
+		return err
+	}
+	go r.refreshDictionaryIcons()
+	return nil
 }
 
 func (r *Registry) rescan(prepare bool) error {
@@ -1928,6 +1938,9 @@ func (e *entry) reconcileLockedContext(ctx context.Context, name string, t store
 	}
 	if err != nil {
 		return out, fmt.Errorf("preparing %q: %w", name, err)
+	}
+	if rerr == nil && (out.Changed() || stale) && e.reg != nil {
+		e.reg.queueDictionaryIconRefresh(e)
 	}
 	return out, rerr
 }

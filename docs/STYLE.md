@@ -36,7 +36,7 @@ it is a different thing.
 | **index** (verb), **indexed**, **indexing** | building the dictionary's copy in the library | prepare, ingest (except the `ingest` command), cache, import, build |
 | **not indexed** | searched through the dictionary's own format | preview, cached, raw |
 | **library** | the folder of all indexed dictionaries (`DB_DIR`, `~/.wudict/db`) | DB folder, DB dir, database, cache folder, internal databases |
-| **library folder** | one dictionary's folder in the library (`text.db`, `media.db`, `info.txt`, `res/`) | index folder, prepared folder, cache folder |
+| **library folder** | one dictionary's folder in the library (`text.db`, `media.db`, `info.txt`, optional `icon.cache`, `res/`) | index folder, prepared folder, cache folder |
 | **headword index** | the index every indexed dictionary has: exact and prefix search | regular index, base index |
 | **contains index** | the index behind contains search (FTS5 trigram) | substring index, trigram index, Contain |
 | **full-text index** | the index behind full-text search (FTS5) | FTS index (except in API and CLI reference), text index |

@@ -299,7 +299,7 @@ window.wudictFontScale=(function(){
 <section id="maskView" aria-label="{{T:search.wildcardsResults}}" hidden>
   <div class="mask-chrome">
     <header class="mask-head">
-      <button type="button" class="choice-btn mask-dictionary-picker" id="maskDict" aria-label="{{T:search.wildcardsDictionary}}" aria-haspopup="dialog"><span id="maskDictName"></span><span id="maskDictMeta"></span></button>
+      <button type="button" class="choice-btn mask-dictionary-picker" id="maskDict" aria-label="{{T:search.wildcardsDictionary}}" aria-haspopup="dialog"><img id="maskDictIcon" class="dict-icon" alt="" aria-hidden="true" hidden><span id="maskDictName"></span><span id="maskDictMeta"></span></button>
       <span id="maskProgress" aria-label="{{T:search.wildcardsResults}}" hidden>
         <button type="button" class="btn" id="mergedAZ" title="{{T:search.combineDictionaries}}" aria-label="{{T:search.combineDictionaries}}" aria-pressed="false" disabled>
           <svg viewBox="0 0 64 36" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
@@ -1108,12 +1108,12 @@ window.wudictFontScale=(function(){
     <label class="sys-row"><input type="checkbox" id="sysLogEnabled"><span class="sys-label">{{T:system.logEnable}}</span></label>
     <label class="sys-row"><input type="checkbox" id="sysLogBase"><span class="sys-label">{{T:system.logBase}}</span></label>
     <label class="sys-row"><input type="checkbox" id="sysLogWeb"><span class="sys-label">{{T:system.logWeb}}</span></label>
+    <label class="sys-row"><input type="checkbox" id="sysSearchArticleDiagnostics"><span class="sys-label">{{T:system.searchArticleDiagnostics}}</span></label>
     <label class="sys-row"><input type="checkbox" id="sysBrowseArticleDiagnostics"><span class="sys-label">{{T:system.browseArticleDiagnostics}}</span></label>
     <label class="sys-row"><input type="checkbox" id="sysBrowseDiagnostics"><span class="sys-label">{{T:system.browseDiagnostics}}</span></label>
     <label class="sys-row"><input type="checkbox" id="sysDictionaryListDiagnostics"><span class="sys-label">{{T:system.dictionaryListDiagnostics}}</span></label>
     <label class="sys-row"><input type="checkbox" id="sysDictionaryCacheDiagnostics"><span class="sys-label">{{T:system.dictionaryCacheDiagnostics}}</span></label>
     <label class="sys-row"><input type="checkbox" id="sysFolderDiagnostics"><span class="sys-label">{{T:system.folderDiagnostics}}</span></label>
-    <div class="group-toolbar sys-action-spaced"><a class="btn" id="sysSaveLog" href="/api/system-log" download>{{T:panel.saveSystemLog}}</a></div>
 
     <!-- Advanced FOLDS, and starts folded (the reader's ask, 2026-09-28). Two
          reasons it is the one group that does: its rows are the server's own
@@ -1363,7 +1363,6 @@ $("systemLogShowFolder").addEventListener("click",()=>{
     .catch(error=>alert(window.wudictI18n.errorText(error.message)));
 });
 $("saveSystemLog").addEventListener("click",systemLogClick);
-$("sysSaveLog").addEventListener("click",systemLogClick);
 window.wuSearchHistory.setSearch(word=>{ if($("mode").value==="wildcards"){ $("q").value=word;window.wuSearchHistory.hide();maskSubmitRequested=true;commitOnce=true;doSearch(); } else searchFor(word); });
 window.wuSearchHistory.setSuggest((q,onHit,signal)=>{
   const mode=$("mode").value,sel=$("dict").value||"all";
@@ -1791,6 +1790,7 @@ function syncMaskDictionaryPicker(){
   picker.setAttribute("aria-label",tx(combined?"search.combinedList":"search.wildcardsDictionary"));
   if(combined){
     picker.removeAttribute("aria-haspopup");
+    setDictIcon($("maskDictIcon"),"");
     $("maskDictName").textContent=tx("search.combinedList");
     $("maskDictMeta").textContent="";
     picker.title=tx("search.combinedList");
@@ -1798,6 +1798,8 @@ function syncMaskDictionaryPicker(){
     return;
   }
   picker.setAttribute("aria-haspopup","dialog");
+  setDictIcon($("maskDictIcon"),selected?.id||"");
+  $("maskDictIcon").style.marginRight=".45em";
   $("maskDictName").textContent=selected?.name||"";
   $("maskDictMeta").textContent=selected?maskRowMeta(selected):"";
   picker.title=selected?selected.name+maskRowMeta(selected):"";
@@ -2364,7 +2366,28 @@ presetsLoad();
 /* ── dictionaries ──────────────────────────────────────────────────── */
 function dictBaseLabel(d){return d.name||d.path.split("/").pop()}
 function dictLabel(d){return dictTitles.get(d.id)||dictBaseLabel(d)}
-function dictIconHTML(id){return `<img class="dict-icon" src="/dict-icon/${encodeURIComponent(id)}" alt="" aria-hidden="true" loading="lazy" decoding="async" onerror="this.remove()">`}
+function dictIconReady(img){img.style.visibility="";img.dataset.iconRetry="0"}
+function dictIconRetry(img){
+  img.style.visibility="hidden";
+  if(!img.isConnected||img.hidden||!img.dataset.iconSrc)return;
+  const attempt=(Number(img.dataset.iconRetry)||0)+1;
+  img.dataset.iconRetry=String(attempt);
+  if(attempt>60){img.remove();return}
+  const delay=Math.min(5000,250*Math.pow(1.5,Math.min(attempt,10)));
+  setTimeout(()=>{if(img.isConnected&&!img.hidden&&img.dataset.iconSrc)img.src=img.dataset.iconSrc+"?retry="+attempt},delay);
+}
+function dictIconHTML(id){
+  const src="/dict-icon/"+encodeURIComponent(id);
+  return `<img class="dict-icon" src="${src}" data-icon-src="${src}" alt="" aria-hidden="true" loading="lazy" decoding="async" style="visibility:hidden" onload="dictIconReady(this)" onerror="dictIconRetry(this)">`;
+}
+function setDictIcon(img,id){
+  const src=id?"/dict-icon/"+encodeURIComponent(id):"";
+  img.hidden=!src;
+  if(!src){img.dataset.iconSrc="";img.removeAttribute("src");img.style.visibility="hidden";return}
+  if(img.dataset.iconSrc===src)return;
+  img.dataset.iconSrc=src;img.dataset.iconRetry="0";img.style.visibility="hidden";
+  img.onload=()=>dictIconReady(img);img.onerror=()=>dictIconRetry(img);img.src=src;
+}
 function applyDictIcons(on,save){
   const changed=dictIconsOn!==!!on;
   dictIconsOn=!!on;
@@ -4078,6 +4101,7 @@ function sysPaint(state){
   $("sysMergedFTS").checked=wildcardSearchIndexEnabled("fts");
   $("sysMergedTrigram").checked=wildcardSearchIndexEnabled("trigram");
   $("sysBrowseArticleDiagnostics").checked=browseArticleDiagnosticsEnabled();
+  $("sysSearchArticleDiagnostics").checked=searchArticleDiagnosticsEnabled();
   $("sysDictionaryListDiagnostics").checked=dictionaryListDiagnosticsEnabled();
   $("sysDictionaryCacheDiagnostics").checked=dictionaryCacheDiagnosticsEnabled();
   $("sysFolderDiagnostics").checked=folderDiagnosticsEnabled();
@@ -4378,7 +4402,7 @@ async function showDesktopSysSettings(){
     logEnabled:$("sysLogEnabled").parentElement,
     logBase:$("sysLogBase").parentElement,
     logWeb:$("sysLogWeb").parentElement,
-    save:$("sysSaveLog").parentElement
+    searchArticleDiagnostics:$("sysSearchArticleDiagnostics").parentElement
   };
   dialog.showModal();
   body.replaceChildren();
@@ -4409,13 +4433,15 @@ async function showDesktopSysSettings(){
   logHeading.textContent=tx("system.logFile");body.append(logHeading);
   const logHint=document.createElement("p");logHint.className="sys-hint";
   logHint.textContent=tx("system.logHint");body.append(logHint);
-  body.append(desktopSystemNodes.logEnabled,desktopSystemNodes.logBase,desktopSystemNodes.logWeb);
+  body.append(desktopSystemNodes.logEnabled,desktopSystemNodes.logBase,desktopSystemNodes.logWeb,
+    desktopSystemNodes.searchArticleDiagnostics);
   const desktopLog=desktopSystemLogOptions();
   $("sysLogEnabled").checked=desktopLog.enabled;
   $("sysLogBase").checked=desktopLog.baseEvents;
   $("sysLogWeb").checked=desktopLog.webEvents;
   $("sysLogBase").disabled=!desktopLog.enabled;
   $("sysLogWeb").disabled=!desktopLog.enabled;
+  $("sysSearchArticleDiagnostics").checked=searchArticleDiagnosticsEnabled();
   const diagnosticsLabel=document.createElement("label");diagnosticsLabel.className="sys-row";
   const diagnostics=document.createElement("input");diagnostics.type="checkbox";diagnostics.checked=browseDiagnosticsEnabled();
   diagnostics.addEventListener("change",()=>setBrowseDiagnostics(diagnostics.checked));
@@ -4441,7 +4467,6 @@ async function showDesktopSysSettings(){
   folderDiagnostics.addEventListener("change",()=>setFolderDiagnostics(folderDiagnostics.checked));
   const folderText=document.createElement("span");folderText.className="sys-label";folderText.textContent=tx("system.folderDiagnostics");
   folderLabel.append(folderDiagnostics,folderText);body.append(folderLabel);
-  body.append(desktopSystemNodes.save);
   const desktopNote=document.createElement("p");desktopNote.className="sys-note";desktopNote.id="desktopSysNote";desktopNote.setAttribute("aria-live","polite");body.append(desktopNote);
   const table=document.createElement("div");table.className="sys-desktop-values";
   for(const [key,setting] of Object.entries(c.effective||{})){
@@ -4509,6 +4534,8 @@ function wildcardSearchIndexParams(params,row){
 }
 function browseArticleDiagnosticsEnabled(){try{return localStorage.getItem("wudict_browse_article_diagnostics")==="1"}catch(_){return false}}
 function setBrowseArticleDiagnostics(on){try{if(on)localStorage.setItem("wudict_browse_article_diagnostics","1");else localStorage.removeItem("wudict_browse_article_diagnostics")}catch(_){}}
+function searchArticleDiagnosticsEnabled(){try{return localStorage.getItem("wudict_search_article_diagnostics")==="1"}catch(_){return false}}
+function setSearchArticleDiagnostics(on){try{if(on)localStorage.setItem("wudict_search_article_diagnostics","1");else localStorage.removeItem("wudict_search_article_diagnostics")}catch(_){}}
 let browseArticleDiagContext=(()=>{
   if(!browseArticleDiagnosticsEnabled())return null;
   const params=new URLSearchParams(location.search),startedAt=Number(params.get("browseDiagStart"));
@@ -4616,6 +4643,7 @@ $("sysBrowseDiagnostics").addEventListener("change",e=>setBrowseDiagnostics(e.ta
 $("sysMergedFTS").addEventListener("change",e=>setWildcardSearchIndexEnabled("fts",e.target.checked));
 $("sysMergedTrigram").addEventListener("change",e=>setWildcardSearchIndexEnabled("trigram",e.target.checked));
 $("sysBrowseArticleDiagnostics").addEventListener("change",e=>setBrowseArticleDiagnostics(e.target.checked));
+$("sysSearchArticleDiagnostics").addEventListener("change",e=>setSearchArticleDiagnostics(e.target.checked));
 $("sysDictionaryListDiagnostics").addEventListener("change",e=>setDictionaryListDiagnostics(e.target.checked));
 $("sysDictionaryCacheDiagnostics").addEventListener("change",e=>setDictionaryCacheDiagnostics(e.target.checked));
 $("sysFolderDiagnostics").addEventListener("change",e=>setFolderDiagnostics(e.target.checked));
@@ -6266,10 +6294,10 @@ function highlightMaskHeadword(word,pattern){
 function highlightMaskRanges(word,ranges){
   if(!ranges)return esc(word);
   let from=0,html="";
-  for(const [start,end] of ranges){html+=esc(word.slice(from,start))+'<mark class="wu-hl">'+esc(word.slice(start,end))+'</mark>';from=end}
+  for(const [start,end,className] of ranges){html+=esc(word.slice(from,start))+'<mark class="'+(className||"wu-hl")+'">'+esc(word.slice(start,end))+'</mark>';from=end}
   return html+esc(word.slice(from));
 }
-function maskFindRanges(word,query){
+function maskFindRanges(word,query,mode="prefix"){
   const fold=s=>s.normalize("NFD").replace(/\p{M}/gu,"").toLowerCase();
   const parts=(query.match(/[\p{L}\p{N}\p{M}]+/gu)||[]).map(fold).filter(Boolean);
   if(!parts.length)return null;
@@ -6277,11 +6305,19 @@ function maskFindRanges(word,query){
   for(const token of word.matchAll(/[\p{L}\p{N}\p{M}]+/gu)){
     const raw=token[0],folded=fold(raw);
     for(const [i,part] of parts.entries()){
-      if(!folded.startsWith(part))continue;
-      seen.add(i);let used="",end=0;
-      for(const char of raw){used+=fold(char);end+=char.length;if(used.length>=part.length)break}
+      if(mode==="exact"||mode==="exactLemma"){
+        if(fold(word)!==fold(query))continue;
+        ranges.push([0,word.length]);seen.add(i);continue
+      }
+      let matchAt;
+      if(mode==="word"||mode==="wordLemma"){if(folded!==part)continue;matchAt=0}
+      else if(mode==="suffix"){if(!folded.endsWith(part))continue;matchAt=folded.length-part.length}
+      else if(mode==="contains"){matchAt=folded.indexOf(part);if(matchAt<0)continue}
+      else {if(!folded.startsWith(part))continue;matchAt=0}
+      seen.add(i);let used=0,start=0,end=0,started=false;
+      for(const char of raw){const next=used+fold(char).length;if(!started&&next>matchAt){start=end;started=true}end+=char.length;used=next;if(started&&used>=matchAt+part.length)break}
       while(end<raw.length&&/\p{M}/u.test(raw[end]))end++;
-      ranges.push([token.index,token.index+end]);
+      ranges.push([token.index+start,token.index+end]);
     }
   }
   if(seen.size!==parts.length)return null;
@@ -6292,6 +6328,21 @@ function maskFindRanges(word,query){
     else merged.push([start,end]);
   }
   return merged;
+}
+function maskFindHighlightRanges(word,row,query,mode){
+  const primary=maskFindRanges(word,query,mode)||[];
+  if(mode!=="wordLemma"&&mode!=="exactLemma")return primary.length?primary:null;
+  const fold=s=>s.normalize("NFD").replace(/\p{M}/gu,"").toLowerCase();
+  const secondary=[];
+  for(const alternative of row.effectiveQueries||[]){
+    if(!alternative||fold(alternative)===fold(query))continue;
+    for(const [start,end] of maskFindRanges(word,alternative,mode)||[]){
+      if(primary.some(([a,b])=>start<b&&end>a))continue;
+      secondary.push([start,end,"wu-hl-lemma"]);
+    }
+  }
+  return [...primary.map(([start,end])=>[start,end,"wu-hl"]),...secondary]
+    .sort((a,b)=>a[0]-b[0]||a[1]-b[1]);
 }
 function maskRanges(word,pattern){
 	const w=Array.from(word),p=Array.from(pattern),starts=[];let at=0;
@@ -6339,6 +6390,7 @@ function noIndexRow(el,out,info){
 // Mask results are headwords only. Each dictionary keeps its slot in the
 // selected group's order even when requests finish out of order.
 let maskGeneration=0,maskControllers=new Set(),maskRows=[],maskCurrent=0,maskMergeAZ=false;
+const maskMatchedDictionaryCounts=new Map();
 let maskPattern="",maskSelection="",maskSubmitRequested=false,maskNavToken=0,maskRestoreScroll=null,maskRestoreWord="",maskRestoreWordDict="";
 let maskWordsPageKey="";
 const maskBaseMemory=new Map(),maskPageMemory=new Map();
@@ -6356,7 +6408,7 @@ let maskStripVersion=0,maskStripRendered=-1,maskChipMap=new Map(),maskActiveKey=
 let maskStripItems=[],maskStripOffsets=[],maskStripWidths=[],maskStripNavOffsets=[],maskStripNavWidths=[],maskStripBands=[],maskStripSectionOffsets=[],maskStripSectionTargets=[],maskStripTotalWidth=0,maskStripSectionTotal=0,maskStripStart=-1,maskStripEnd=-1,maskStripRenderAnchor=-1,maskStripDisplayStart=-1,maskStripDisplayEnd=-1,maskStripKeyIndex=new Map(),maskStripMeasureNode=null,maskStripMeasureWidth=null,maskStripWidthCache=new Map(),maskStripNavWidthCache=new Map(),maskStripWidthFloor=0,maskStripWidthCap=0,maskStripGap=0;
 let maskStripPaintAt=0,maskStripPaintTimer=0,maskStripResizeFrame=0,maskStripMetricKey="",maskStripScrollX=0,maskStripScrubTarget=null,maskRibbonNavigator=null;
 let maskStripResizeTimer=0,maskStripResizeCount=0,maskStripResizeStartedAt=0,maskStripResizeStartWidth=0,maskStripResizeMetricsChanged=false,maskStripResizePaintMS=0,maskStripResizePaintDeferred=false;
-let maskBaseRows=[],maskBaseCurrent=0,maskFindRows=[],maskFindFilter=false,maskFindWildcard=false;
+let maskBaseRows=[],maskBaseCurrent=0,maskFindRows=[],maskFindFilter=false,maskFindMatchMode="prefix";
 let maskFindIndex=-1,maskFindMatch=null,maskFindAnchor=null,maskFindTimer=0,maskFindQuery="",maskFindApproved=false,maskFindAwaitingApply=false,maskBusyJobs=new Set(),maskFindGeneration=0;
 let maskWordContextTarget=null,maskWordLongPressTimer=0,maskWordLongPressPoint=null,maskWordSuppressClick=false;
 let maskGotoTarget="block";
@@ -6381,13 +6433,23 @@ maskHeadwordControl=window.wudictHeadwordControl.create({
   ids:{mode:"maskFindMode",mask:"maskFindWildcard",input:"maskFindInput",
     apply:"maskFindApply",count:"maskFindCount",previous:"maskFindPrev",next:"maskFindNext"},
   labels:{search:tx("browse.findWords"),filter:tx("browse.filterPlaceholder"),
-    filterMode:tx("browse.filterWords"),searchMode:tx("browse.searchWords"),wildcard:tx("browse.wildcardsSearch"),
+    history:tx("search.history"),
+    filterMode:tx("browse.filterWords"),searchMode:tx("browse.searchWords"),
+    findModeGroups:{eachWord:tx("browse.findModesEachWord"),wholeHeadword:tx("browse.findModesWholeHeadword")},
+    findModes:{prefix:{title:tx("browse.findModePrefix"),description:tx("browse.findModePrefix")},
+      suffix:{title:tx("browse.findModeSuffix"),description:tx("browse.findModeSuffix")},
+      contains:{title:tx("browse.findModeContains"),description:tx("browse.findModeContains")},
+      word:{title:tx("browse.findModeWordTitle"),description:tx("browse.findModeWord")},
+      wordLemma:{title:tx("browse.findModeWordLemmaTitle"),description:tx("browse.findModeWordLemma")},
+      exact:{title:tx("browse.findModeExactTitle"),description:tx("browse.findModeExact")},
+      exactLemma:{title:tx("browse.findModeExactLemmaTitle"),description:tx("browse.findModeExactLemma")},
+      wildcards:{title:tx("browse.findModeWildcards"),description:tx("browse.findModeWildcards")}},
     apply:tx("browse.runFind"),previous:tx("browse.previousMatch"),next:tx("browse.nextMatch")},
   maxRows:3,
   countAction:true,
   onQuery:maskFindInputChanged,
   onMode:()=>{if(!maskBusyJobs.size)maskFindSwitch(!maskFindFilter)},
-  onMask:()=>{if(maskBusyJobs.size)return;maskFindWildcard=!maskFindWildcard;maskFindApproved=false;maskFindStart();maskFindControls()},
+  onFindMode:mode=>{if(maskBusyJobs.size)return;maskFindMatchMode=mode;maskFindApproved=false;maskFindStart();maskFindControls()},
   onThreshold:maskFindThresholdChanged,onApply:maskFindApply,onStep:maskFindTurn,onCount:maskFindGotoOpen
 });
 const headwordApplyThreshold=$("headwordApplyThreshold");
@@ -6677,6 +6739,10 @@ new ResizeObserver(()=>{
     if(diagnose){maskStripResizePaintMS+=performance.now()-paintStarted;maskStripResizePaintDeferred=maskStripResizePaintDeferred||!!maskStripPaintTimer}
   });
 }).observe($("maskLetters"));
+function maskDictionaryCountKey(){
+  const ids=maskMergeAZ?maskBaseRows[0]?.mergedIds||"":maskBaseRows.map(row=>row.id).join(",");
+  return maskSelection+"\0"+maskPattern+"\0"+ids;
+}
 function maskMenu(){
   let total=0,pages=0,prefixKnown=true,complete=true;
   for(const row of maskRows){
@@ -6692,7 +6758,15 @@ function maskMenu(){
     if(row.partial)complete=false;
   }
   syncMaskDictionaryPicker();
-  $("maskCount").textContent=window.wudictI18n.number(total)+(complete?"":"+");
+  const countKey=maskDictionaryCountKey();
+  if(!maskMergeAZ&&complete&&maskRows===maskBaseRows){
+    maskMatchedDictionaryCounts.set(countKey,maskRows.filter(row=>row.state==="ready"&&row.total>0).length);
+    if(maskMatchedDictionaryCounts.size>32)maskMatchedDictionaryCounts.delete(maskMatchedDictionaryCounts.keys().next().value);
+  }
+  const dictionaries=maskMergeAZ?(maskRows===maskBaseRows?(maskRows[0]?.matchedDictionaries??maskMatchedDictionaryCounts.get(countKey)):undefined):
+    maskRows.filter(row=>row.state==="ready"&&row.total>0).length;
+  $("maskCount").textContent=window.wudictI18n.number(total)+(complete?"":"+")+
+    (dictionaries===undefined?"":" ("+window.wudictI18n.number(dictionaries)+(complete?"":"+")+")");
   const row=maskRows[maskCurrent],result=row?.data;
   const currentPage=result?.page||row?.wantedPage;
   const current=currentPage&&row?.firstPage!==null?String(row.firstPage+currentPage-1):"…";
@@ -6734,7 +6808,9 @@ function maskRender(){
     const item=document.createElement("div");item.className="mask-word-item";
     const button=document.createElement("button");button.type="button";button.className="mask-word-open";button.dataset.word=word;
     const lower=maskFindQuery;
-    const ranges=lower?(maskFindWildcard?maskRanges(word,lower):maskFindRanges(word,lower)):null;
+    const highlightRow=row.within?row:maskFindRows.find(candidate=>candidate.id===row.id&&
+      candidate.within===lower&&candidate.withinMode===maskFindMatchMode)||row;
+    const ranges=lower?(maskFindMatchMode==="wildcards"?maskRanges(word,lower):maskFindHighlightRanges(word,highlightRow,lower,maskFindMatchMode)):null;
     button.innerHTML=lower?highlightMaskRanges(word,ranges):highlightMaskHeadword(word,maskPattern);
     const basePosition=Number.isInteger(result.basePositions?.[i])?result.basePositions[i]:
       Number.isInteger(result.positions?.[i])?result.positions[i]:(result.page-1)*(result.size||300)+i;
@@ -6766,6 +6842,7 @@ function maskRender(){
   }
 }
 async function maskFetch(row,page,generation,navToken){
+  const fetchStarted=browseDiagnosticsEnabled()?performance.now():0;
   maskViewTrace("page_request",row.diskCache?"sql_cache":"search",row);
   const controller=new AbortController();maskControllers.add(controller);
   row.abort=controller;
@@ -6773,13 +6850,18 @@ async function maskFetch(row,page,generation,navToken){
     const params=new URLSearchParams({dict:row.id,q:maskPattern,p:String(page),wildcards:"1"});
     if(row.merged){params.set("merged","1");params.set("ids",row.mergedIds);params.set("wildgroup",row.cacheGroup||maskSelection);if(row.mergedCacheID)params.set("mergedcache",row.mergedCacheID)}
     wildcardSearchIndexParams(params,row);
-    if(row.within){params.set("within",row.within);params.set("withinWildcards",row.withinMask?"1":"0")}
+    if(row.within){params.set("within",row.within);params.set("withinMode",row.withinMode);params.set("withinWildcards",row.withinMask?"1":"0")}
+    if(row.merged&&row.within){
+      const lemmaQueries=maskLoadGroupLemmaQueries(row.within,row.withinMode);
+      if(lemmaQueries.length)params.set("lemmaQueries",JSON.stringify(lemmaQueries));
+    }
     if(row.diskCache&&row.cacheID){params.set("wildgroup",row.cacheGroup||maskSelection);params.set("wildcache",row.cacheID);
       params.set("wildorder",String(row.cacheOrder||0));params.set("wildcount",String(row.cacheCount||maskFindRows.length))}
     const response=await apiFetch("/api/browse/find?"+params,{signal:controller.signal});
     if(!response.ok){const body=await response.json().catch(()=>({}));throw new Error(window.wudictI18n.errorText(body.error||tx("search.failedDict")))}
     const data=await response.json();if(generation!==maskGeneration)return;
-    maskViewTrace("page_received",row.diskCache?"sql_cache":"search",row);
+    maskViewTrace("page_received",row.diskCache?"sql_cache":"search",row,
+      fetchStarted?`page=${page} words=${data.words?.length||0} elapsed_ms=${Math.round(performance.now()-fetchStarted)}`:"");
     if(row.state!=="ready")maskStripVersion++;
     row.state="ready";row.total=data.total;row.alphabet=data.alphabet||row.alphabet||[];row.size=data.size||row.size||300;row.partial=!!data.partial;
     if(!row.within)maskSaveBase(row,data);
@@ -6809,10 +6891,25 @@ async function maskFetch(row,page,generation,navToken){
     if(maskRows[maskCurrent]===row)maskRender();
   }finally{maskControllers.delete(controller);if(row.abort===controller)row.abort=null}
 }
-function maskCacheKey(row,kind,query="",wildcard=false){
-  const cacheVersion="sql-only-lower-v2-row-index-settings"+(/^[*?]+$/.test(maskPattern)?":simple-mask-blocks-v2":"");
+function maskCacheKey(row,kind,query="",mode="prefix"){
+  const cacheVersion="sql-only-lower-v4-lemma-both"+(/^[*?]+$/.test(maskPattern)?":simple-mask-blocks-v2":"");
   const indexVariant="|fts="+(row.mergedFTS?1:0)+"|trigram="+(row.mergedTrigram?1:0);
-  return "wudict_mask_"+kind+":"+[maskSelection,maskPattern,row.id,query,wildcard?1:0,cacheVersion].join("|")+indexVariant;
+  const lemmaHighlight=kind.startsWith("filter")&&(mode==="wordLemma"||mode==="exactLemma")?"|lemma-highlight-v1":"";
+  return "wudict_mask_"+kind+":"+[maskSelection,maskPattern,row.id,query,mode||"prefix",cacheVersion].join("|")+indexVariant+lemmaHighlight;
+}
+function maskLemmaGroupCacheRow(){
+  return {id:"__lemma_group__",mergedFTS:wildcardSearchIndexEnabled("fts"),mergedTrigram:wildcardSearchIndexEnabled("trigram")};
+}
+function maskSaveGroupLemmaQueries(rows,query,mode){
+  if(mode!=="wordLemma"&&mode!=="exactLemma")return;
+  const effectiveQueries=[...new Set(rows.flatMap(row=>row.effectiveQueries||[]).filter(Boolean))];
+  if(effectiveQueries.length)window.wudictHeadwordControl.cacheWrite(
+    maskCacheKey(maskLemmaGroupCacheRow(),"filter-lemma-group",query,mode),{effectiveQueries});
+}
+function maskLoadGroupLemmaQueries(query,mode){
+  if(mode!=="wordLemma"&&mode!=="exactLemma")return [];
+  const saved=window.wudictHeadwordControl.cacheRead(maskCacheKey(maskLemmaGroupCacheRow(),"filter-lemma-group",query,mode));
+  return Array.isArray(saved?.effectiveQueries)?saved.effectiveQueries:[];
 }
 function maskNewCacheID(){
   const bytes=new Uint8Array(24);
@@ -6820,18 +6917,27 @@ function maskNewCacheID(){
   catch(_){return Date.now().toString(36)+Math.random().toString(36).slice(2)+Math.random().toString(36).slice(2)}
 }
 async function maskReadResultPage(row,page,findPosition,findDirection){
+  const diagnostic=browseDiagnosticsEnabled(),readStarted=diagnostic?performance.now():0;
   const params=new URLSearchParams({dict:row.id,q:maskPattern,p:String(page),wildcards:"1"});
   if(row.merged){params.set("merged","1");params.set("ids",row.mergedIds);params.set("wildgroup",row.cacheGroup||maskSelection);if(row.mergedCacheID)params.set("mergedcache",row.mergedCacheID)}
   wildcardSearchIndexParams(params,row);
   if(browseDiagnosticsEnabled())params.set("diagnostics","1");
-  if(row.within){params.set("within",row.within);params.set("withinWildcards",row.withinMask?"1":"0")}
+  if(row.within){params.set("within",row.within);params.set("withinMode",row.withinMode);params.set("withinWildcards",row.withinMask?"1":"0")}
+  if(row.merged&&row.within){
+    const lemmaQueries=maskLoadGroupLemmaQueries(row.within,row.withinMode);
+    if(lemmaQueries.length)params.set("lemmaQueries",JSON.stringify(lemmaQueries));
+  }
   if(row.cacheID){params.set("wildcache",row.cacheID);params.set("wildgroup",row.cacheGroup||maskSelection);
     params.set("wildorder",String(row.cacheOrder||0));params.set("wildcount",String(row.cacheCount||maskFindRows.length))}
   if(Number.isInteger(findPosition))params.set("findpos",String(findPosition));
   if(Number.isInteger(findDirection))params.set("finddir",String(findDirection));
   const response=await apiFetch("/api/browse/find?"+params);
+  const responseMs=diagnostic?performance.now()-readStarted:0;
   if(!response.ok){const body=await response.json().catch(()=>({}));throw new Error(window.wudictI18n.errorText(body.error||tx("search.failedDict")))}
-  return response.json();
+  const data=await response.json();
+  if(diagnostic)maskViewTrace("page_read_complete",row.merged?"merged_sql":"sql_cache",row,
+    `page=${page} words=${data.words?.length||0} response_ms=${Math.round(responseMs)} total_ms=${Math.round(performance.now()-readStarted)} findpos=${Number.isInteger(findPosition)?findPosition:""}`);
+  return data;
 }
 function maskWordPosition(row,button){
   const visibleIndex=[...$("maskWords").querySelectorAll("button[data-word]")].indexOf(button);
@@ -6923,7 +7029,8 @@ function maskSaveBase(row,data=row.data){
 function maskRememberBase(row,data=row.data){
   const saved={cacheID:row.cacheID,diskCache:!!row.diskCache,
     cacheGroup:row.cacheGroup||maskSelection,cacheOrder:row.cacheOrder||0,cacheCount:row.cacheCount||maskBaseRows.length,
-    mergedCacheID:row.mergedCacheID||"",total:row.total,alphabet:row.alphabet,size:row.size,partial:!!row.partial};
+    mergedCacheID:row.mergedCacheID||"",sourceCacheID:row.sourceCacheID||"",matchedDictionaries:row.matchedDictionaries,
+    total:row.total,alphabet:row.alphabet,size:row.size,partial:!!row.partial};
   maskMemoryCachePut(maskBaseMemory,maskCacheKey(row,"base-sqlite"),saved);
   if(data){
     const page=row.diskCache?{...data,alphabet:undefined}:data;
@@ -6947,9 +7054,12 @@ function maskRestoreBase(row){
     maskViewTrace("restore_base",memory?"memory":disk?"session":"miss",row,
       `key=${key} saved=${disk?.cacheID||""} disk=${!!disk?.diskCache} partial=${!!disk?.partial} alternates=${alternatives.join(",")||"none"}`);
   }
-  if(disk&&typeof disk.cacheID==="string"&&Number.isSafeInteger(disk.total)){
+  if(disk&&typeof disk.cacheID==="string"&&Number.isSafeInteger(disk.total)&&
+     (!row.sourceCacheID||disk.sourceCacheID===row.sourceCacheID)){
     row.total=disk.total;row.alphabet=disk.alphabet||[];row.size=disk.size||300;row.diskCache=!!disk.diskCache;
-    row.cacheID=disk.cacheID;row.mergedCacheID=disk.mergedCacheID||"";row.cacheGroup=disk.cacheGroup||maskSelection;row.partial=!!disk.partial;
+    row.cacheID=disk.cacheID;row.mergedCacheID=disk.mergedCacheID||"";row.sourceCacheID=disk.sourceCacheID||"";
+    row.matchedDictionaries=Number.isInteger(disk.matchedDictionaries)?disk.matchedDictionaries:undefined;
+    row.cacheGroup=disk.cacheGroup||maskSelection;row.partial=!!disk.partial;
     row.cacheOrder=row.cacheOrder??0;row.cacheCount=row.cacheCount||maskBaseRows.length;
     row.state=!row.partial&&row.diskCache?"ready":"pending";row.restoreStream=row.partial;
     if(!row.partial)maskRestoreBasePage(row,row.wantedPage||1);
@@ -7080,9 +7190,9 @@ function maskStopFind(job){
   maskMemoryStop();
   for(const row of maskFindRows){
     row.abort?.abort();
-    if(row.diskCache&&row.cacheID)window.wudictHeadwordControl.cacheWrite(maskCacheKey(row,"filter-sqlite",row.within,row.withinMask),{
+    if(row.diskCache&&row.cacheID)window.wudictHeadwordControl.cacheWrite(maskCacheKey(row,"filter-sqlite",row.within,row.withinMode),{
       cacheID:row.cacheID,total:row.total,alphabet:row.alphabet||[],size:row.size||300,partial:true});
-    else if(row.streamWords)window.wudictHeadwordControl.cacheWrite(maskCacheKey(row,"filter",row.within,row.withinMask),{
+    else if(row.streamWords)window.wudictHeadwordControl.cacheWrite(maskCacheKey(row,"filter",row.within,row.withinMode),{
       total:row.total,alphabet:row.alphabet||[],positions:row.streamPositions||[],words:row.streamWords,partial:true});
   }
   if(job)maskBusyFinish(job);
@@ -7116,7 +7226,7 @@ function maskCacheStreamPages(row,complete=false){
     row.streamPages.set(page,data);lastMetrics=maskStreamPageMetrics(data);
     row.streamCachePages++;row.streamCacheHeapBytes+=lastMetrics.heapBytes;row.streamCacheJsonBytes+=lastMetrics.jsonBytes;
     if(!row.streamCacheStorageFull){
-      if(window.wudictHeadwordControl.cacheWrite(maskCacheKey(row,"filter-page"+page,row.within,row.withinMask),data)){
+      if(window.wudictHeadwordControl.cacheWrite(maskCacheKey(row,"filter-page"+page,row.within,row.withinMode),data)){
         row.streamCacheStoredPages++;row.streamCacheStoredBytes+=lastMetrics.jsonBytes;
       }else row.streamCacheStorageFull=true;
     }
@@ -7127,19 +7237,19 @@ function maskCacheStreamPages(row,complete=false){
     const totalPages=Math.ceil(row.total/blockSize);
     for(const data of row.streamPages.values()){data.total=row.total;data.pages=totalPages;data.partial=false}
     if(!row.streamCacheStorageFull&&row.streamCacheStoredPages===row.streamCachePages){
-      window.wudictHeadwordControl.cacheWrite(maskCacheKey(row,"filter-pages",row.within,row.withinMask),{
+      window.wudictHeadwordControl.cacheWrite(maskCacheKey(row,"filter-pages",row.within,row.withinMode),{
         total:row.total,pages:row.streamCachePages,storedPages:row.streamCacheStoredPages,alphabet:row.alphabet||[],size:blockSize});
     }
     maskStreamPageTrace(row,"wildcard_cache_complete",lastMetrics);
   }
 }
 function maskRestoreFilterPages(row){
-  const saved=window.wudictHeadwordControl.cacheRead(maskCacheKey(row,"filter-pages",row.within,row.withinMask));
+  const saved=window.wudictHeadwordControl.cacheRead(maskCacheKey(row,"filter-pages",row.within,row.withinMode));
   if(!saved||!Number.isSafeInteger(saved.pages)||saved.pages<1||saved.storedPages!==saved.pages)return false;
   const blockSize=saved.size||row.size||300;row.size=blockSize;
   const pages=[];let wordCount=0;
   for(let page=1;page<=saved.pages;page++){
-    const data=window.wudictHeadwordControl.cacheRead(maskCacheKey(row,"filter-page"+page,row.within,row.withinMask));
+    const data=window.wudictHeadwordControl.cacheRead(maskCacheKey(row,"filter-page"+page,row.within,row.withinMode));
     if(!data||data.page!==page||!Array.isArray(data.words)||!Array.isArray(data.positions)||data.words.length!==data.positions.length)return false;
     data.total=saved.total;data.pages=saved.pages;data.size=blockSize;data.partial=false;
     pages.push(data);wordCount+=data.words.length;
@@ -7155,7 +7265,90 @@ function maskRestoreFilterPages(row){
   maskStreamPageTrace(row,"wildcard_cache_restored",pages.length?maskStreamPageMetrics(pages[pages.length-1]):null);
   return true;
 }
+async function maskFetchGroupWithinStream(rows,generation,findGeneration){
+  const first=rows[0],controller=new AbortController();maskControllers.add(controller);
+  const baseCacheID=maskBaseRows[0]?.cacheID;
+  for(const [index,row] of rows.entries()){
+    row.cacheID=baseCacheID;row.cacheOrder=index;row.cacheCount=rows.length;
+    row.abort=controller;row.state="pending";row.partial=true;row.diskCache=true;
+    row.streamWords=[];row.streamPositions=[];row.streamPages=new Map();row.data=null;
+    row.total=0;row.scanDone=0;row.scanTotal=maskBaseRows[row.cacheOrder]?.total||0;
+  }
+  maskStripVersion++;maskStripRendered=-1;maskRender();maskFindControls();
+  const current=()=>generation===maskGeneration&&findGeneration===maskFindGeneration&&rows===maskFindRows;
+  const started=browseDiagnosticsEnabled()?performance.now():0;
+  const params=new URLSearchParams({dict:first.id,q:maskPattern,p:"1",wildcards:"1",stream:"1",groupwithin:"1",
+    wildcache:first.cacheID,wildgroup:first.cacheGroup||maskSelection,wildorder:"0",wildcount:String(rows.length),
+    within:first.within,withinMode:first.withinMode,withinWildcards:first.withinMask?"1":"0"});
+  wildcardSearchIndexParams(params,first);
+  if(browseDiagnosticsEnabled())params.set("diagnostics","1");
+  try{
+    const response=await browseFindStreamFetch("/api/browse/find?"+params,{signal:controller.signal});
+    if(!response.ok)throw new Error(tx("search.failedDict"));
+    if(started)maskViewTrace("group_stream_headers","sql_cache",first,
+      `status=${response.status} dictionaries=${rows.length} elapsed_ms=${Math.round(performance.now()-started)}`);
+    const reader=response.body.getReader(),decoder=new TextDecoder();let buffer="",lastPaint=performance.now();
+    const consume=async(final=false)=>{
+      let newline;
+      while((newline=buffer.indexOf("\n"))>=0||final&&buffer.length){
+        const line=newline>=0?buffer.slice(0,newline):buffer;buffer=newline>=0?buffer.slice(newline+1):"";
+        if(!line.trim())continue;
+        const event=JSON.parse(line);if(!current())return;
+        if(event.type==="error")throw new Error(event.error||tx("search.failedDict"));
+        if(event.type==="progress"){
+          maskTaskUpdate("browse",tx("browse.filteringWords")+" · "+window.wudictI18n.number(event.scanned||0)+"/"+
+            window.wudictI18n.number(event.scanTotal||0),event.scanned||0,event.scanTotal||0);
+        }else if(event.dict){
+          const row=rows.find(item=>item.id===event.dict);
+          if(!row)throw new Error("unknown wildcard result dictionary");
+          row.total=event.total||0;
+          if(event.done){
+            row.alphabet=event.alphabet||[];row.effectiveQueries=event.effectiveQueries||[row.within];row.state="ready";row.partial=false;row.size=event.size||row.size||300;
+            row.scanDone=row.scanTotal;
+            window.wudictHeadwordControl.cacheWrite(maskCacheKey(row,"filter-sqlite",row.within,row.withinMode),{
+              cacheID:row.cacheID,cacheGroup:row.cacheGroup||maskSelection,cacheOrder:row.cacheOrder,cacheCount:row.cacheCount,
+              total:row.total,alphabet:row.alphabet,effectiveQueries:row.effectiveQueries,size:row.size,partial:false});
+            if(maskRows===maskFindRows&&maskRows[maskCurrent]===row){
+              maskStripVersion++;maskStripRendered=-1;maskRender();
+            }
+            maskFindControls();
+          }
+        }
+        if(performance.now()-lastPaint>12){
+          await new Promise(resolve=>document.hidden?setTimeout(resolve,0):requestAnimationFrame(resolve));
+          lastPaint=performance.now();
+        }
+      }
+    };
+    while(true){const {value,done}=await reader.read();if(done){buffer+=decoder.decode();await consume(true);break}
+      buffer+=decoder.decode(value,{stream:true});await consume()}
+    if(!current())return;
+    if(rows.some(row=>row.state!=="ready"))throw new Error("wildcard group search ended before every dictionary completed");
+    if(maskRows===maskFindRows&&maskRows[maskCurrent]?.total===0){
+      const next=maskNeighbor(maskCurrent,1);if(next>=0)maskCurrent=next;
+    }
+    const visible=maskRows===maskFindRows?maskRows[maskCurrent]:null;
+    if(visible&&!visible.data){visible.data=visible.total?await maskReadResultPage(visible,visible.wantedPage||1):
+      {words:[],positions:[],total:0,page:1,pages:0,size:visible.size||300,alphabet:visible.alphabet};}
+    if(started)maskViewTrace("group_stream_done","sql_cache",first,
+      `dictionaries=${rows.length} matches=${rows.reduce((sum,row)=>sum+row.total,0)} elapsed_ms=${Math.round(performance.now()-started)}`);
+    maskSaveGroupLemmaQueries(rows,first.within,first.withinMode);
+    maskStripVersion++;maskStripRendered=-1;maskRender();maskFindControls();
+    if(!maskFindFilter)maskFindTurn(1);
+  }catch(error){
+    if(!controller.signal.aborted&&current()){
+      for(const row of rows)if(row.state==="pending"){
+        row.state="error";row.error=combinedLimitErrorText(error.message);row.partial=false;
+      }
+      maskStripVersion++;maskRender();maskFindControls();
+    }
+  }finally{
+    maskControllers.delete(controller);
+    for(const row of rows)if(row.abort===controller)row.abort=null;
+  }
+}
 async function maskFetchWithinStream(row,generation,navToken,findGeneration){
+  const requestStarted=browseDiagnosticsEnabled()?performance.now():0;
   const controller=new AbortController();maskControllers.add(controller);row.abort=controller;
   const progressTrace=maskProgressTraceStart(row);row.progressPublishedAt=performance.now();row.progressPublishedPercent=0;
   row.diskCache=false;row.size=row.size||300;
@@ -7165,16 +7358,23 @@ async function maskFetchWithinStream(row,generation,navToken,findGeneration){
   row.streamCacheStoredBytes=0;row.streamCacheStorageFull=false;row.partial=true;
   const params=new URLSearchParams({dict:row.id,q:maskPattern,p:String(row.wantedPage||1),wildcards:"1",stream:"1",wildcache:row.cacheID,
     wildgroup:row.cacheGroup||maskSelection,wildorder:String(row.cacheOrder||0),wildcount:String(row.cacheCount||maskFindRows.length)});
-  if(row.merged){params.set("merged","1");params.set("ids",row.mergedIds);if(row.mergedCacheID)params.set("mergedcache",row.mergedCacheID)}
+  if(row.merged){params.set("merged","1");params.set("ids",row.mergedIds);if(row.mergedCacheID)params.set("mergedcache",row.mergedCacheID);if(row.sourceCacheID)params.set("sourcecache",row.sourceCacheID)}
   wildcardSearchIndexParams(params,row);
   if(browseDiagnosticsEnabled())params.set("diagnostics","1");
-  if(row.within){params.set("within",row.within);params.set("withinWildcards",row.withinMask?"1":"0")}
+  if(row.within){params.set("within",row.within);params.set("withinMode",row.withinMode);params.set("withinWildcards",row.withinMask?"1":"0")}
+  if(row.merged&&row.within){
+    const lemmaQueries=maskLoadGroupLemmaQueries(row.within,row.withinMode);
+    if(lemmaQueries.length)params.set("lemmaQueries",JSON.stringify(lemmaQueries));
+  }
   const ownerRows=row.within?maskFindRows:maskBaseRows;
   const current=()=>generation===maskGeneration&&(findGeneration<0||findGeneration===maskFindGeneration)&&ownerRows.includes(row);
   try{
     const response=await browseFindStreamFetch("/api/browse/find?"+params,{signal:controller.signal});
     if(!response.ok)throw new Error(tx("search.failedDict"));
+    if(requestStarted)maskViewTrace("stream_headers",row.merged?"merged_sql":"sql_cache",row,
+      `status=${response.status} elapsed_ms=${Math.round(performance.now()-requestStarted)} source_cache=${row.sourceCacheID?"hit":"none"}`);
     const reader=response.body.getReader(),decoder=new TextDecoder();let buffer="";
+    let firstEventLogged=false;
     let lastPaintYield=performance.now();
     const allowWindowPaint=async()=>{
       if(performance.now()-lastPaintYield<12)return;
@@ -7187,6 +7387,8 @@ async function maskFetchWithinStream(row,generation,navToken,findGeneration){
         const line=newline>=0?buffer.slice(0,newline):buffer;buffer=newline>=0?buffer.slice(newline+1):"";
         if(!line.trim())continue;
         const event=JSON.parse(line);if(!current())return;
+        if(requestStarted&&!firstEventLogged){firstEventLogged=true;maskViewTrace("stream_first_event",row.merged?"merged_sql":"sql_cache",row,
+          `type=${event.type||""} elapsed_ms=${Math.round(performance.now()-requestStarted)}`)}
         if(event.type==="error")throw new Error(event.error||tx("search.failedDict"));
         if(Number.isFinite(event.scanTotal)&&event.scanTotal>0)row.scanTotal=event.scanTotal;
         let progressReset=false;
@@ -7206,10 +7408,10 @@ async function maskFetchWithinStream(row,generation,navToken,findGeneration){
         if(event.diskCache&&!row.diskCache){
           row.diskCache=true;
           try{
-            sessionStorage.removeItem(maskCacheKey(row,"filter",row.within,row.withinMask));
-            sessionStorage.removeItem(maskCacheKey(row,"filter-pages",row.within,row.withinMask));
+            sessionStorage.removeItem(maskCacheKey(row,"filter",row.within,row.withinMode));
+            sessionStorage.removeItem(maskCacheKey(row,"filter-pages",row.within,row.withinMode));
             for(let page=1;page<row.streamCacheNextPage;page++)
-              sessionStorage.removeItem(maskCacheKey(row,"filter-page"+page,row.within,row.withinMask));
+              sessionStorage.removeItem(maskCacheKey(row,"filter-page"+page,row.within,row.withinMode));
           }catch(_){}
           row.streamWords=[];row.streamPositions=[];row.streamPages=new Map();
         }
@@ -7244,15 +7446,23 @@ async function maskFetchWithinStream(row,generation,navToken,findGeneration){
               positions:row.streamPositions.slice((page-1)*blockSize,page*blockSize)};
         }
         if(event.done){row.partial=false;row.state="ready";row.total=event.total||0;row.alphabet=event.alphabet||[];
+          row.effectiveQueries=event.effectiveQueries||[row.within];
           if(event.mergedCacheID)row.mergedCacheID=event.mergedCacheID;
+          if(row.merged&&Number.isInteger(event.matchedDictionaries)&&event.matchedDictionaries>0){
+            row.matchedDictionaries=event.matchedDictionaries;
+            maskMatchedDictionaryCounts.set(maskDictionaryCountKey(),event.matchedDictionaries);
+          }
           if(row.diskCache&&maskRows[maskCurrent]===row&&row.total>0){
-            try{row.data=await maskReadResultPage(row,row.wantedPage||1)}catch(_){/* Page navigation will retry. */}
+            const firstPageStarted=performance.now();
+            try{row.data=await maskReadResultPage(row,row.wantedPage||1)}catch(error){if(requestStarted)maskViewTrace("first_page_error",row.merged?"merged_sql":"sql_cache",row,
+              `elapsed_ms=${Math.round(performance.now()-firstPageStarted)} error=${String(error?.message||error).slice(0,160)}`)}
+            if(requestStarted)maskViewTrace("first_page_ready",row.merged?"merged_sql":"sql_cache",row,`elapsed_ms=${Math.round(performance.now()-firstPageStarted)} words=${row.data?.words?.length||0}`);
           }
           if(row.diskCache){
-            if(row.within)window.wudictHeadwordControl.cacheWrite(maskCacheKey(row,"filter-sqlite",row.within,row.withinMask),{
+            if(row.within)window.wudictHeadwordControl.cacheWrite(maskCacheKey(row,"filter-sqlite",row.within,row.withinMode),{
               cacheID:row.cacheID,cacheGroup:row.cacheGroup||maskSelection,cacheOrder:row.cacheOrder,cacheCount:row.cacheCount,
-              total:row.total,alphabet:row.alphabet,size:blockSize,partial:false});
-          }else if(row.within&&row.streamWords.length<=20000)window.wudictHeadwordControl.cacheWrite(maskCacheKey(row,"filter",row.within,row.withinMask),{
+              total:row.total,alphabet:row.alphabet,effectiveQueries:row.effectiveQueries,size:blockSize,partial:false});
+          }else if(row.within&&row.streamWords.length<=20000)window.wudictHeadwordControl.cacheWrite(maskCacheKey(row,"filter",row.within,row.withinMode),{
             total:row.total,alphabet:row.alphabet,positions:row.streamPositions,words:row.streamWords,size:blockSize});}
         else row.state="ready";
         const firstVisibleMatches=row.within&&maskFindFilter&&maskRows[maskCurrent]===row&&
@@ -7387,12 +7597,24 @@ function normalizeSimpleWildcardMask(pattern){
 }
 function isAllWildcardMask(pattern){return normalizeSimpleWildcardMask(pattern)==="*"}
 async function maskRun(pattern,reason="submit"){
+  const switchFindState=reason==="switch"?{
+    query:$("maskFindInput").value.trim(),mode:maskFindMatchMode,filter:maskFindFilter
+  }:null;
+  const switchSetupStarted=reason==="switch"&&browseDiagnosticsEnabled()?performance.now():0;
+  const switchFrom=reason==="switch"?(maskMergeAZ?"separate":"combined"):"";
   maskViewRunID++;maskViewTraceStarted=performance.now();
   pattern=normalizeSimpleWildcardMask(pattern);
+  const previousRows=maskBaseRows,previousPattern=maskPattern,previousSelection=maskSelection;
   for(const row of maskBaseRows)if(row.state==="ready"&&!row.partial)maskRememberBase(row);
   maskAbort();maskStripScrollX=0;maskPattern=pattern;lastQuery=pattern;maskReturn="";
-  clearTimeout(maskFindTimer);maskFindRows=[];maskFindQuery="";maskFindIndex=-1;maskFindMatch=null;maskFindAnchor=null;
-  maskFindFilter=false;maskFindApproved=false;maskFindAwaitingApply=false;$("maskFindInput").value="";
+  clearTimeout(maskFindTimer);maskFindRows=[];maskFindQuery=switchFindState?.query||"";maskFindIndex=-1;maskFindMatch=null;maskFindAnchor=null;
+  if(switchFindState){
+    maskFindMatchMode=switchFindState.mode;maskFindFilter=switchFindState.filter;
+    $("maskFindInput").value=switchFindState.query;maskFindApproved=!!switchFindState.query;
+  }else{
+    maskFindFilter=false;maskFindApproved=false;$("maskFindInput").value="";
+  }
+  maskFindAwaitingApply=false;
   if(searchAC)searchAC.abort();hideSearchProgress();searchSeq++;$("out").replaceChildren();setStatus("");
   const selection=$("dict").value||"all";
   maskSelection=selection;
@@ -7400,14 +7622,25 @@ async function maskRun(pattern,reason="submit"){
   const ids=selection==="all"?activeUserGroupIds():selection.startsWith("g:")?groupIds(selection):[selection];
   const byId=new Map(dicts.map(d=>[d.id,d]));
   const baseCacheID=maskNewCacheID(),groupRows=ids.filter(id=>byId.has(id));
+  const sourceRows=reason==="switch"&&maskMergeAZ&&groupRows.length>0&&previousPattern===pattern&&previousSelection===selection&&
+    previousRows.length===groupRows.length&&previousRows.every((row,index)=>
+      !row.merged&&row.id===groupRows[index]&&row.state==="ready"&&!row.partial&&row.diskCache&&
+      row.cacheID===previousRows[0]?.cacheID&&row.mergedFTS===wildcardSearchIndexEnabled("fts")&&
+      row.mergedTrigram===wildcardSearchIndexEnabled("trigram"));
+  const sourceCacheID=sourceRows?previousRows[0].cacheID:"";
+  if(switchSetupStarted)maskViewTrace("switch_plan",sourceCacheID?"result_cache_reuse":"result_cache_build",null,
+    `from=${switchFrom} to=${maskMergeAZ?"combined":"separate"} dictionaries=${groupRows.length} previous_rows=${previousRows.length} source_rows=${sourceRows?previousRows.length:0} source_cache=${sourceCacheID?"hit":"miss"}`);
   maskRows=maskMergeAZ?[{id:"__merged__",name:tx("search.combinedList"),merged:true,mergedFTS:wildcardSearchIndexEnabled("fts"),mergedTrigram:wildcardSearchIndexEnabled("trigram"),mergedIds:groupRows.join(","),state:"pending",total:0,data:null,alphabet:[],size:300,
     expectedBlocks:Math.ceil(groupRows.reduce((sum,id)=>sum+Math.max(0,Number(byId.get(id)?.entries)||0),0)/300),scanDone:0,
     scanTotal:groupRows.reduce((sum,id)=>sum+Math.max(0,Number(byId.get(id)?.entries)||0),0),active:false,wantedPage:1,error:"",diskCache:false,
-    cacheID:baseCacheID,cacheGroup:selection,cacheOrder:0,cacheCount:1}]:groupRows.map((id,index)=>({id,name:dictLabel(byId.get(id)),mergedFTS:wildcardSearchIndexEnabled("fts"),mergedTrigram:wildcardSearchIndexEnabled("trigram"),state:"pending",total:0,data:null,alphabet:[],size:300,
+    cacheID:baseCacheID,sourceCacheID,matchedDictionaries:sourceRows?previousRows.filter(row=>row.total>0).length:undefined,
+    cacheGroup:selection,cacheOrder:0,cacheCount:1}]:groupRows.map((id,index)=>({id,name:dictLabel(byId.get(id)),mergedFTS:wildcardSearchIndexEnabled("fts"),mergedTrigram:wildcardSearchIndexEnabled("trigram"),state:"pending",total:0,data:null,alphabet:[],size:300,
     expectedBlocks:Math.ceil(Math.max(0,Number(byId.get(id)?.entries)||0)/300),
     scanDone:0,scanTotal:Math.max(0,Number(byId.get(id)?.entries)||0),active:false,
     wantedPage:1,error:"",diskCache:false,cacheID:baseCacheID,cacheGroup:selection,cacheOrder:index,cacheCount:groupRows.length}));
   for(const row of maskRows)maskRestoreBase(row);
+  if(switchSetupStarted)maskViewTrace("switch_restore",null,null,
+    `elapsed_ms=${Math.round(performance.now()-switchSetupStarted)} rows=${maskRows.length} ready=${maskRows.filter(row=>row.state==="ready").length} pending=${maskRows.filter(row=>row.state!=="ready").length}`);
   if(isSimpleWildcardMask(pattern))for(const row of maskRows){row.scanTotal=Math.max(0,Number(byId.get(row.id)?.entries)||0)}
   for(const row of maskRows)if(row.state==="ready"){row.scanDone=row.scanTotal;row.active=false}
   maskBaseRows=maskRows;maskBaseCurrent=0;maskFindControls();
@@ -7433,7 +7666,9 @@ async function maskRun(pattern,reason="submit"){
   const generation=maskGeneration,rows=maskBaseRows,job={kind:"base",generation};
   const cached=rows.filter(row=>row.state==="ready").length;
   maskViewTrace("restore_complete",cached===rows.length?"all_ready":"pending_rows");
-  if(cached===rows.length){setBusy(false);maskTaskFinish("wildcards");maskViewTrace("run_complete","cache");return}
+  if(cached===rows.length){setBusy(false);maskTaskFinish("wildcards");maskViewTrace("run_complete","cache");
+    if(switchFindState?.query){maskViewTrace("switch_lower_apply","restored_cache",null,`mode=${switchFindState.mode} filter=${switchFindState.filter}`);maskFindStart()}
+    return}
   let next=0;
   const needsBuild=rows.some(row=>row.state!=="ready"&&(!row.diskCache||row.restoreStream));
   maskViewTrace("work_start",needsBuild?"build_or_resume":"sql_pages");
@@ -7460,6 +7695,10 @@ async function maskRun(pattern,reason="submit"){
   maskBusyFinish(job);setBusy(false);maskTaskFinish("wildcards");
   maskViewTrace("run_complete",needsBuild?"build_or_resume":"sql_pages");
   if(rows.every(row=>row.state==="ready"&&row.total===0)&&maskRows===rows)maskRender();
+  if(switchFindState?.query&&generation===maskGeneration&&rows.every(row=>row.state==="ready"&&!row.partial)){
+    maskViewTrace("switch_lower_apply","base_ready",null,`mode=${switchFindState.mode} filter=${switchFindState.filter}`);
+    maskFindStart();
+  }
 }
 function maskRestoreCached(url){
   if(url.origin!==location.origin||url.pathname!=="/"||canonicalSearchMode(url.searchParams.get("mode"))!=="wildcards"||
@@ -7479,7 +7718,7 @@ function maskRestoreCached(url){
   maskSelect(index,page);
   const find=url.searchParams.get("find")||"";
   if(find){
-    maskFindWildcard=url.searchParams.get("findwildcards")==="1";
+    maskFindMatchMode=url.searchParams.get("findmode")||((url.searchParams.get("findwildcards")==="1")?"wildcards":"prefix");
     maskFindFilter=url.searchParams.get("filter")==="1";
     $("maskFindInput").value=find;maskFindQuery=find;
     maskFindApproved=true;maskFindStart();
@@ -7502,7 +7741,7 @@ function maskFindControls(){
   const available=maskFindCommittedRows().reduce((sum,row)=>sum+(row.diskCache?row.total||0:row.streamPositions?.length||0),0);
   const settled=rows.every(row=>row.state!=="pending"&&!row.partial);
   const shownCount=maskFindAnchor?maskFindAnchor.countBefore:Math.max(0,maskFindIndex+1);
-  maskHeadwordControl.paint({filtering:maskFindFilter,mask:maskFindWildcard,
+  maskHeadwordControl.paint({filtering:maskFindFilter,findMode:maskFindMatchMode,
     applyRequired:maskFindNeedsApply(),applyEnabled:!!query&&settled,busy:maskBusyJobs.size>0,
     count:(maskFindFilter?total:shownCount)+"/"+total+(settled?"":"+"),
     countDisabled:maskFindFilter||!query||!available,
@@ -7521,24 +7760,36 @@ function maskFindSwitch(filter){
   if(filter&&maskFindQuery&&maskFindRows.length){
     const id=maskBaseRows[maskBaseCurrent]?.id;
     maskRows=maskFindRows;
-    maskCurrent=Math.max(0,maskRows.findIndex(row=>row.id===id));
+    const currentIndex=maskRows.findIndex(row=>row.id===id&&row.total>0&&row.state==="ready");
+    // The selected dictionary may have no matches in filter mode. Keep its
+    // selection only when it can display a page; otherwise show the first
+    // completed dictionary that actually has results.
+    const firstResult=maskRows.findIndex(row=>row.total>0&&row.state==="ready");
+    maskCurrent=currentIndex>=0?currentIndex:Math.max(0,firstResult);
   }else{
     maskRows=maskBaseRows;maskCurrent=maskBaseCurrent;
   }
   maskStripVersion++;maskStripRendered=-1;maskRender();maskFindControls();
+  if(filter)maskFindEnsureVisiblePage();
   if(!filter)maskPrefetchFindPages();
+}
+function maskFindEnsureVisiblePage(){
+  if(!maskFindFilter||maskRows!==maskFindRows)return;
+  const row=maskRows[maskCurrent];
+  if(!row||row.state!=="ready"||row.total<=0||row.data||row.findPageLoading||row.abort)return;
+  maskSelect(maskCurrent,row.wantedPage||1);
 }
 function maskFindStart(){
   maskMemoryStop();
   let query=$("maskFindInput").value.trim();
-  if(maskFindWildcard)query=normalizeSimpleWildcardMask(query);
+  if(maskFindMatchMode==="wildcards")query=normalizeSimpleWildcardMask(query);
   if(maskFindRows.some(row=>row.partial))for(const row of maskFindRows){
     try{
-      sessionStorage.removeItem(maskCacheKey(row,"filter",row.within,row.withinMask));
-      sessionStorage.removeItem(maskCacheKey(row,"filter-sqlite",row.within,row.withinMask));
-      sessionStorage.removeItem(maskCacheKey(row,"filter-pages",row.within,row.withinMask));
+      sessionStorage.removeItem(maskCacheKey(row,"filter",row.within,row.withinMode));
+      sessionStorage.removeItem(maskCacheKey(row,"filter-sqlite",row.within,row.withinMode));
+      sessionStorage.removeItem(maskCacheKey(row,"filter-pages",row.within,row.withinMode));
       for(let page=1;page<=(row.streamCachePages||0);page++)
-        sessionStorage.removeItem(maskCacheKey(row,"filter-page"+page,row.within,row.withinMask));
+        sessionStorage.removeItem(maskCacheKey(row,"filter-page"+page,row.within,row.withinMode));
     }catch(_){}
   }
   if(maskFindNeedsApply()&&!maskFindApproved){
@@ -7556,17 +7807,18 @@ function maskFindStart(){
   if(!query||!maskPattern||!maskBaseRows.length){maskRender();maskFindControls();return}
   const groupCacheID=maskBaseRows[0]?.cacheID||maskNewCacheID(),groupCacheGroup=maskBaseRows[0]?.cacheGroup||maskSelection;
   maskFindRows=maskBaseRows.map((row,index)=>({id:row.id,name:row.name,merged:!!row.merged,mergedFTS:!!row.mergedFTS,mergedTrigram:!!row.mergedTrigram,mergedIds:row.mergedIds||"",mergedCacheID:row.mergedCacheID||"",state:"pending",total:0,data:null,
-    alphabet:[],size:row.size||300,wantedPage:1,error:"",within:query,withinMask:maskFindWildcard,
+    alphabet:[],size:row.size||300,wantedPage:1,error:"",within:query,withinMode:maskFindMatchMode,withinMask:maskFindMatchMode==="wildcards",
     cacheID:groupCacheID,cacheGroup:groupCacheGroup,cacheOrder:index,cacheCount:maskBaseRows.length}));
   for(const row of maskFindRows){
-    const fileSaved=window.wudictHeadwordControl.cacheRead(maskCacheKey(row,"filter-sqlite",query,maskFindWildcard));
+    const fileSaved=window.wudictHeadwordControl.cacheRead(maskCacheKey(row,"filter-sqlite",query,maskFindMatchMode));
     if(fileSaved&&typeof fileSaved.cacheID==="string"&&Number.isSafeInteger(fileSaved.total)){
       row.state=fileSaved.partial?"pending":"ready";row.diskCache=!fileSaved.partial;row.cacheID=fileSaved.cacheID;row.total=fileSaved.total;
+      row.effectiveQueries=Array.isArray(fileSaved.effectiveQueries)?fileSaved.effectiveQueries:[query];
       row.alphabet=fileSaved.alphabet||[];row.size=fileSaved.size||row.size;row.partial=!!fileSaved.partial;
       row.streamWords=[];row.streamPositions=[];
       if(!fileSaved.partial)continue;
     }
-    const saved=window.wudictHeadwordControl.cacheRead(maskCacheKey(row,"filter",query,maskFindWildcard));
+    const saved=window.wudictHeadwordControl.cacheRead(maskCacheKey(row,"filter",query,maskFindMatchMode));
     if(saved&&Array.isArray(saved.words)&&Array.isArray(saved.positions)){
       row.state="ready";row.total=saved.total;row.alphabet=saved.alphabet||[];row.partial=!!saved.partial;row.size=saved.size||row.size;
       row.streamWords=saved.words;row.streamPositions=saved.positions;row.streamPages=new Map();
@@ -7578,21 +7830,30 @@ function maskFindStart(){
     }else maskRestoreFilterPages(row);
   }
   if(maskFindFilter){
-    maskRows=maskFindRows;maskCurrent=maskBaseCurrent;
+    maskRows=maskFindRows;
+    const baseId=maskBaseRows[maskBaseCurrent]?.id;
+    const currentIndex=maskRows.findIndex(row=>row.id===baseId&&row.total>0&&row.state==="ready");
+    const firstResult=maskRows.findIndex(row=>row.total>0&&row.state==="ready");
+    maskCurrent=currentIndex>=0?currentIndex:Math.max(0,firstResult);
   }
   maskRender();maskFindControls();
-  for(const row of maskFindRows){
-    if(!row.diskCache||row.data)continue;
+  const groupedFind=!maskFindRows.some(row=>row.merged)&&maskFindRows.some(row=>row.state!=="ready");
+  for(const row of groupedFind?[]:maskFindRows){
+    if(!row.diskCache||row.data||row.findPageLoading)continue;
+    row.findPageLoading=true;
     maskReadResultPage(row,row.wantedPage||1).then(data=>{
       if(!maskFindRows.includes(row))return;
       row.data=data;row.state="ready";row.total=data.total;row.alphabet=data.alphabet||row.alphabet;
       row.size=data.size||row.size;row.partial=!!data.partial;
       if(maskRows===maskFindRows)maskRender();maskFindControls();
-    }).catch(error=>{if(maskFindRows.includes(row)){row.error=error.message;row.state="error";maskRender()}});
+    }).catch(error=>{if(maskFindRows.includes(row)){row.error=error.message;row.state="error";maskRender()}})
+      .finally(()=>{row.findPageLoading=false});
   }
   maskPrefetchFindPages();
   const generation=maskGeneration,rows=maskFindRows,findGeneration=maskFindGeneration,job={kind:"find",generation:findGeneration};let next=0;
   if(rows.every(row=>row.state==="ready")){
+    if(!rows.some(row=>row.merged))maskSaveGroupLemmaQueries(rows,query,maskFindMatchMode);
+    if(maskFindFilter)maskFindEnsureVisiblePage();
     maskFindControls();maskRender();
     if(!maskFindFilter)maskFindTurn(1);
     return;
@@ -7610,6 +7871,10 @@ function maskFindStart(){
   const worker=async()=>{
     while(generation===maskGeneration&&rows===maskFindRows&&maskBaseRows.some(row=>row.state==="pending"||row.partial))
       await new Promise(resolve=>setTimeout(resolve,100));
+    if(generation===maskGeneration&&rows===maskFindRows&&groupedFind){
+      await maskFetchGroupWithinStream(rows,generation,findGeneration);
+      return;
+    }
     while(generation===maskGeneration&&rows===maskFindRows&&next<rows.length){
     const row=rows[next++];if(row.state==="ready")continue;
     active++;
@@ -7708,7 +7973,7 @@ $("maskWords").addEventListener("click",e=>{
   params.set("maskword",button.dataset.word);
   const find=$("maskFindInput").value.trim();
   if(find){params.set("find",find);if(maskFindFilter)params.set("filter","1");
-    if(maskFindWildcard)params.set("findwildcards","1");
+    if(maskFindMatchMode!=="prefix")params.set("findmode",maskFindMatchMode);
     params.set("findindex",String(maskFindIndex));}
   maskReturn="/?"+params.toString();
   history.replaceState(null,"",maskReturn);
@@ -7770,6 +8035,16 @@ async function doSearch(ev){
   // an id the <select> does not have leaves .value empty, and a saved id or a
   // ?dict= from an older library can do exactly that.
   const mode=$("mode").value,dictSel=scope||$("dict").value||"all",seq=++searchSeq;
+  const searchDiag=searchArticleDiagnosticsEnabled();
+  const searchDiagStarted=performance.now();
+  let searchDiagSlots=[];
+  let searchDiagFirstPaint=false;
+  const searchDiagLog=(stage,fields={})=>{
+    if(!searchDiag)return;
+    const safeFields={...fields};
+    if(typeof safeFields.detail==="string")safeFields.detail=safeFields.detail.replace(/[\r\n]/g," ").slice(0,1000);
+    sendBrowseDiagnostic({event:"search_article",stage,runId:seq,query:q.replace(/[\r\n]/g," ").slice(0,1024),mode,elapsedMs:Math.max(0,Math.round(performance.now()-searchDiagStarted)),...safeFields});
+  };
   // abort the previous in-flight search so the server stops streaming
   // results nobody will render (superseded typing / mode change).
   if(searchAC)searchAC.abort();
@@ -7791,8 +8066,10 @@ async function doSearch(ev){
   // "all": the server has no notion of a group, and giving it one would mean
   // versioning a taxonomy across two processes to save a join over 105 rows.
   const ids=dictSel==="all"?activeUserGroupIds():dictSel.startsWith("g:")?groupIds(dictSel):null;
+  searchDiagLog("search_start",{group:dictSel,total:ids?ids.length:1,detail:`order=${orderFirst?"reader":"fastest"};open=${expandAll?"all":openN}`});
   if(ids){
     if(!ids.length){
+      searchDiagLog("search_empty_group",{group:dictSel,total:0});
       // An empty list means an empty GROUP — the only way left to arrive at
       // none. Which group is empty is only knowable once the list is complete:
       // mid-stream, the dictionaries that arrived may not include its members
@@ -7844,6 +8121,8 @@ async function doSearch(ev){
     const det=ready[i];
     if(!det||det.open)return false;
     det.open=true;openedIdx=i;promote(boxes,i);
+    const slot=searchDiagSlots[i];
+    searchDiagLog("article_open",{dict:slot?.dict||"",name:slot?.name||"",page:i,completed:searchProgressDone,total:searchProgressTotal,resultCount:slot?.results??0});
     // The hold ends when the count is reached, not at the first open: until
     // then the frontier keeps the later sections in the reader's order.
     if(++opened>=limit){clearTimeout(barrier);barrier=null}
@@ -7883,6 +8162,8 @@ async function doSearch(ev){
       if(seq!==searchSeq)return; // superseded by a newer search
       if(msg.t==="begin"){
         beginSearchProgress(seq,(msg.slots||[]).length);
+        searchDiagSlots=(msg.slots||[]).map(slot=>({dict:slot.dict,name:slot.name,results:0}));
+        searchDiagLog("search_stream_begin",{total:searchDiagSlots.length,detail:`slots=${searchDiagSlots.length}`});
         if(browseArticleDiagContext&&browseArticleDiagContext.searchStartedAt)
           logBrowseArticleTransition("search_stream_begin",performance.now()-browseArticleDiagContext.searchStartedAt);
         navDetach(); // the section it was walking is about to be replaced
@@ -7902,6 +8183,9 @@ async function doSearch(ev){
         refreshLivePicker();
       }else if(msg.t==="hit"){
         advanceSearchProgress(seq);
+        const diagSlot=searchDiagSlots[msg.i];
+        if(diagSlot)diagSlot.results=(msg.results||[]).length;
+        searchDiagLog("dictionary_response",{dict:msg.dict||diagSlot?.dict||"",name:msg.name||diagSlot?.name||"",page:msg.i,completed:searchProgressDone,total:searchProgressTotal,resultCount:(msg.results||[]).length,detail:[msg.skipped?"skipped":"",msg.deferred?"deferred":"",msg.error?`error=${msg.error}`:""].filter(Boolean).join(";")});
         if(browseArticleDiagContext&&!browseArticleDiagContext.firstResponse){
           browseArticleDiagContext.firstResponse=true;
           logBrowseArticleTransition("first_search_response",performance.now()-browseArticleDiagContext.searchStartedAt);
@@ -7911,6 +8195,11 @@ async function doSearch(ev){
         // dictionaries and mode. Full-text hits are articles matched by body.
         if(!anyShown)clearStatusForResults();
         const res=renderSlot(box,msg,mode,q,perDict,boxes.length>1);
+        if(res.results&&searchDiag&&!searchDiagFirstPaint){
+          searchDiagFirstPaint=true;
+          const paintedDict=msg.dict||diagSlot?.dict||"",paintedName=msg.name||diagSlot?.name||"",paintedCount=(msg.results||[]).length;
+          requestAnimationFrame(()=>requestAnimationFrame(()=>searchDiagLog("first_article_painted",{dict:paintedDict,name:paintedName,resultCount:paintedCount})));
+        }
         if(browseArticleDiagContext&&res.results&&!browseArticleDiagContext.firstArticle){
           browseArticleDiagContext.firstArticle=true;
           const sinceSearch=browseArticleDiagContext.searchStartedAt?performance.now()-browseArticleDiagContext.searchStartedAt:0;
@@ -7974,6 +8263,7 @@ async function doSearch(ev){
         const forms=[...morphSeen].join(", ");
         morphNote.textContent=tx(morphAll?"search.morphAll":"search.morphSome",{query:msg.from||q,forms});
       }else if(msg.t==="end"){
+        searchDiagLog("search_end",{completed:searchProgressDone,total:searchProgressTotal});
         finishSearchProgress(seq);
         if(browseArticleDiagContext&&browseArticleDiagContext.searchStartedAt)
           logBrowseArticleTransition("search_end",performance.now()-browseArticleDiagContext.searchStartedAt);
@@ -8015,7 +8305,11 @@ async function doSearch(ev){
         }
       }
     },signal);
-  }catch(err){if(err.name==="AbortError")return;if(seq===searchSeq)setStatus("⚠ "+esc(err.message))}
+  }catch(err){
+    if(err.name==="AbortError"){searchDiagLog("search_aborted",{completed:searchProgressDone,total:searchProgressTotal});return}
+    searchDiagLog("search_error",{completed:searchProgressDone,total:searchProgressTotal,detail:err.message});
+    if(seq===searchSeq)setStatus("⚠ "+esc(err.message))
+  }
   finally{
     // Only the newest search may stop the glyph. An aborted one has already
     // been superseded by a search that is still running, and clearing here

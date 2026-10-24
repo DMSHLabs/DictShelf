@@ -678,6 +678,7 @@ details.dict>summary:focus-visible{outline-color:var(--focus)}
    The size hint keeps the scrollbar from jumping as they are rendered. */
 details.dict[open]>dl{content-visibility:auto;contain-intrinsic-size:0 400px}
 details.dict>dl>dt mark.wu-hl{background:var(--accent);color:var(--bg);border-radius:.15em}
+.mask-word-open mark.wu-hl-lemma{background:color-mix(in srgb,var(--accent) 42%,var(--bg));color:var(--fg);border-radius:.15em}
 summary .count{margin-left:auto;font-weight:400;color:var(--label-quiet);font-size:12px}
 /* The relaxation note (renderSlot, h.rung). A full-text search asks for the
    words as a phrase first; when no article had them adjacent the server answers
@@ -1006,6 +1007,7 @@ body.styling{padding-bottom:var(--styler-shown,var(--styler-h))}
 #sysSettings .sys-row.sys-num{cursor:default}
 #sysSettings .sys-result-cache-limit,#desktopSysBody .sys-result-cache-limit{justify-content:flex-start;gap:.45em;padding-left:calc(1em + var(--ui-control-gap) * 1em)}
 #sysSettings .sys-result-cache-limit input,#desktopSysBody .sys-result-cache-limit input{width:7em;min-height:calc(var(--ui-control-height) * 1em);font:inherit;text-align:right}
+#sysSettings .sys-result-cache-limit input:disabled,#desktopSysBody .sys-result-cache-limit input:disabled{box-sizing:border-box;width:12em;max-width:calc(100% - 1em);text-align:left}
 #sysSettings .sys-label{flex:1 1 auto;color:var(--label);min-width:0;font-size:calc(var(--ui-font-base) * 1rem);overflow-wrap:anywhere}
 #sysSettings .sys-num input,#desktopSysBody .sys-num input{box-sizing:border-box;flex:none;width:6.5em;min-height:calc(var(--ui-control-height) * 1em);font:inherit;font-size:calc(var(--ui-font-base) * 1rem);text-align:right;
   color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:.5em .6em}

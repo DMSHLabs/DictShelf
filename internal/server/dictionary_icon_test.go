@@ -38,10 +38,7 @@ func TestDictionaryIconPrefersSiblingThenUsesEmbeddedLSDIcon(t *testing.T) {
 	source := filepath.Join(dir, "sample.lsd")
 	embedded := []byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'}
 	writeIconOnlyLSDForServerTest(t, source, embedded)
-	s := &Server{}
-	e := &entry{Path: source}
-
-	body, mime := s.dictionaryIcon(e)
+	body, mime := sourceDictionaryIcon(source, "")
 	if string(body) != string(embedded) || mime != "image/png" {
 		t.Fatalf("embedded icon = %x, %q; want %x, image/png", body, mime, embedded)
 	}
@@ -50,7 +47,7 @@ func TestDictionaryIconPrefersSiblingThenUsesEmbeddedLSDIcon(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "sample.gif"), sibling, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	body, mime = s.dictionaryIcon(e)
+	body, mime = sourceDictionaryIcon(source, filepath.Join(dir, "sample.gif"))
 	if string(body) != string(sibling) || mime != "image/gif" {
 		t.Fatalf("sibling icon = %x, %q; want %x, image/gif", body, mime, sibling)
 	}

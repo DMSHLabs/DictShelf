@@ -1,6 +1,7 @@
 # Localization: status and next tasks
 
 2026-10-22 DictShelf identity: Android reset and remote-delete prompts now name `dictshelf.toml`; catalog tests and `go test ./...` pass. Android FOSS debug APK built for arm64/x86_64; no device install or runtime wording check was performed.
+2026-10-23 System Log: added the EN/RU label for independent search and article-opening diagnostics. Catalog/runtime checks remain pending.
 
 2026-10-22 Wildcards combined mode keeps the dictionary field's size and position, displays “Combined list” / «Общий список», and hides its dropdown arrow while disabling selection. The ribbon icon tooltip names its next action: Combine dictionaries / Объединить словари, or Show dictionaries separately / Показывать словари отдельно. UI runtime verification remains pending.
 

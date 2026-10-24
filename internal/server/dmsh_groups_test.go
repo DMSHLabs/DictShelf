@@ -169,8 +169,20 @@ func TestLinkedGroupRescanInsertsAlphabeticallyBelowPins(t *testing.T) {
 	if got := nameOrder(group.Members); !slices.Equal(got, []string{"Bravo", "Delta"}) {
 		t.Fatalf("initial linked order: %v", got)
 	}
+	var cached []groupView
+	getJSON(t, s, "/api/user-groups", &cached)
+	version := s.linkedGroups.version
+	getJSON(t, s, "/api/user-groups", &cached)
+	if s.linkedGroups.version != version {
+		t.Fatal("unchanged linked groups were recomputed")
+	}
 	bravo := group.Members[0]
 	groupCall(t, s, "PUT", "/api/user-groups/order", map[string]any{"group": group.ID, "members": group.Members, "pinned": []string{bravo}, "customOrder": false}, 200)
+	getJSON(t, s, "/api/user-groups", &cached)
+	if s.linkedGroups.version == version {
+		t.Fatal("group edit did not invalidate linked groups")
+	}
+	version = s.linkedGroups.version
 	writeDSL("Alpha")
 	if err := s.reg.Rescan(); err != nil {
 		t.Fatal(err)
@@ -178,6 +190,9 @@ func TestLinkedGroupRescanInsertsAlphabeticallyBelowPins(t *testing.T) {
 	waitNewDictionaryIndexing(t, s.reg)
 	var groups []groupView
 	getJSON(t, s, "/api/user-groups", &groups)
+	if s.linkedGroups.version == version {
+		t.Fatal("registry rescan did not invalidate linked groups")
+	}
 	if got := nameOrder(groups[1].Members); !slices.Equal(got, []string{"Bravo", "Alpha", "Delta"}) || groups[1].CustomOrder == nil || *groups[1].CustomOrder {
 		t.Fatalf("new linked member was not inserted below pin: %v, mode=%v", got, groups[1].CustomOrder)
 	}

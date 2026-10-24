@@ -20,6 +20,7 @@ import (
 
 	"github.com/wuweidict/wudict/internal/dict"
 	"github.com/wuweidict/wudict/internal/indexconst"
+	"github.com/wuweidict/wudict/internal/lang"
 	"github.com/wuweidict/wudict/internal/logx"
 	"github.com/wuweidict/wudict/internal/search"
 	"github.com/wuweidict/wudict/internal/store"
@@ -63,7 +64,8 @@ func (s *Server) browseFindPage(ctx context.Context, q url.Values) (browseFindRe
 	if len(query) > 256 {
 		return browseFindResp{}, &browseFindSetupError{status: http.StatusBadRequest, message: "search text is too long"}
 	}
-	mask := q.Get("wildcards") == "1" || q.Get("mask") == "1"
+	matchMode := browseMatchMode(q.Get("matchmode"), q.Get("wildcards") == "1" || q.Get("mask") == "1")
+	mask := matchMode == "wildcards"
 	if mask && search.IsSimpleMask(query) {
 		query = search.NormalizeSimpleMask(query)
 	}
@@ -71,9 +73,21 @@ func (s *Server) browseFindPage(ctx context.Context, q url.Values) (browseFindRe
 	if len(within) > 256 {
 		return browseFindResp{}, &browseFindSetupError{status: http.StatusBadRequest, message: "filter text is too long"}
 	}
-	withinMask := q.Get("withinWildcards") == "1" || q.Get("withinMask") == "1"
+	withinMode := browseMatchMode(q.Get("withinMode"), q.Get("withinWildcards") == "1" || q.Get("withinMask") == "1")
+	withinMask := withinMode == "wildcards"
 	if withinMask && search.IsSimpleMask(within) {
 		within = search.NormalizeSimpleMask(within)
+	}
+	if cacheID := q.Get("wildcache"); cacheID != "" && mask && within != "" && isLemmaHeadwordMode(withinMode) {
+		e, entryErr := s.reg.get(q.Get("dict"))
+		if entryErr != nil {
+			return browseFindResp{}, &browseFindSetupError{status: http.StatusNotFound, message: entryErr.Error()}
+		}
+		resolved, fallbackErr := s.wildcardHeadwordLemmaQuery(e, within, withinMode)
+		if fallbackErr != nil {
+			return browseFindResp{}, fallbackErr
+		}
+		within = resolved
 	}
 	cacheID := q.Get("wildcache")
 	if mask && within != "" && cacheID == "" {
@@ -106,7 +120,7 @@ func (s *Server) browseFindPage(ctx context.Context, q url.Values) (browseFindRe
 			matchIndex, found, findErr := s.wildcardPages.findPosition(cacheID, wildcardCacheSignature{
 				query: query, group: q.Get("wildgroup"), wildcards: mask,
 				fts: q.Get("wildfts") == "1", trigram: q.Get("wildtrigram") == "1",
-			}, q.Get("dict"), within, withinMask, position, direction, cacheOrder, cacheCount)
+			}, q.Get("dict"), wildcardWithinCacheKey(within, withinMode), withinMask, position, direction, cacheOrder, cacheCount)
 			if findErr != nil {
 				return browseFindResp{}, &browseFindSetupError{status: http.StatusInternalServerError, message: "reading cached wildcard match: " + findErr.Error()}
 			}
@@ -118,7 +132,7 @@ func (s *Server) browseFindPage(ctx context.Context, q url.Values) (browseFindRe
 		cached, ok, err := s.wildcardPages.page(cacheID, wildcardCacheSignature{
 			query: query, group: q.Get("wildgroup"), wildcards: mask,
 			fts: q.Get("wildfts") == "1", trigram: q.Get("wildtrigram") == "1",
-		}, q.Get("dict"), within, withinMask, page, cacheOrder, cacheCount)
+		}, q.Get("dict"), wildcardWithinCacheKey(within, withinMode), withinMask, page, cacheOrder, cacheCount)
 		if err != nil {
 			return browseFindResp{}, &browseFindSetupError{status: http.StatusInternalServerError, message: "reading cached wildcard block: " + err.Error()}
 		}
@@ -142,6 +156,11 @@ func (s *Server) browseFindPage(ctx context.Context, q url.Values) (browseFindRe
 	}
 	finder, ok := d.(dict.BrowseFinder)
 	browser, browseOK := d.(dict.Browser)
+	if within == "" {
+		query = s.headwordLemmaQuery(e, d, query, matchMode)
+	} else if mask && !withinMask {
+		within = s.headwordLemmaQuery(e, d, within, withinMode)
+	}
 	allWords := mask && within == "" && isAllWildcardMask(query)
 	if !ok && !(allWords && browseOK) {
 		return browseFindResp{}, &browseFindSetupError{status: http.StatusConflict, message: "This dictionary has no index. Create one in Dictionary Settings.", entry: e}
@@ -171,22 +190,28 @@ func (s *Server) browseFindPage(ctx context.Context, q url.Values) (browseFindRe
 			if ok {
 				if within != "" {
 					if extended, yes := d.(interface {
-						FindHeadwordsMaskWithin(context.Context, string, string, bool, int, int) ([]string, int, []dict.Letter, []int, error)
+						FindHeadwordsMaskWithinMode(context.Context, string, string, string, int, int) ([]string, int, []dict.Letter, []int, error)
 					}); yes {
-						return extended.FindHeadwordsMaskWithin(ctx, query, within, withinMask, (page-1)*browsePageSize, browsePageSize)
+						return extended.FindHeadwordsMaskWithinMode(ctx, query, within, withinMode, (page-1)*browsePageSize, browsePageSize)
 					}
-					return findDirectHeadwords(ctx, d, query, true, within, withinMask, (page-1)*browsePageSize, browsePageSize)
+					return findDirectHeadwords(ctx, d, query, "wildcards", within, withinMode, (page-1)*browsePageSize, browsePageSize)
 				}
 				words, total, letters, err := finder.FindHeadwordsMask(ctx, query, (page-1)*browsePageSize, browsePageSize)
 				return words, total, letters, nil, err
 			}
-			return findDirectHeadwords(ctx, d, query, true, within, withinMask, (page-1)*browsePageSize, browsePageSize)
+			return findDirectHeadwords(ctx, d, query, "wildcards", within, withinMode, (page-1)*browsePageSize, browsePageSize)
 		}
-		if ok {
+		if extended, yes := d.(interface {
+			FindHeadwordsMode(context.Context, string, string, int, int) ([]string, int, []dict.Letter, error)
+		}); yes {
+			words, total, letters, err := extended.FindHeadwordsMode(ctx, query, matchMode, (page-1)*browsePageSize, browsePageSize)
+			return words, total, letters, nil, err
+		}
+		if ok && matchMode == "prefix" {
 			words, total, err := finder.FindHeadwords(ctx, query, (page-1)*browsePageSize, browsePageSize)
 			return words, total, nil, nil, err
 		}
-		return findDirectHeadwords(ctx, d, query, false, within, withinMask, (page-1)*browsePageSize, browsePageSize)
+		return findDirectHeadwords(ctx, d, query, matchMode, within, withinMode, (page-1)*browsePageSize, browsePageSize)
 	}
 	words, total, letters, positions, err := find(page)
 	if err != nil {
@@ -228,31 +253,59 @@ func isAllWildcardMask(query string) bool {
 	return query != "" && search.IsSimpleMask(query) && search.NormalizeSimpleMask(query) == "*"
 }
 
-type browseFindStreamEvent struct {
-	Type          string        `json:"type"`
-	Words         []string      `json:"words,omitempty"`
-	Positions     []int         `json:"positions,omitempty"`
-	Alphabet      []dict.Letter `json:"alphabet,omitempty"`
-	Total         int           `json:"total"`
-	Scanned       int           `json:"scanned,omitempty"`
-	ScanTotal     int           `json:"scanTotal,omitempty"`
-	Size          int           `json:"size,omitempty"`
-	DiskCache     bool          `json:"diskCache,omitempty"`
-	MergedCacheID string        `json:"mergedCacheID,omitempty"`
-	Done          bool          `json:"done,omitempty"`
-	Error         string        `json:"error,omitempty"`
+func browseMatchMode(value string, legacyWildcards bool) string {
+	switch value {
+	case "prefix", "suffix", "contains", "word", "wordLemma", "exact", "exactLemma", "wildcards":
+		return value
+	default:
+		if legacyWildcards {
+			return "wildcards"
+		}
+		return "prefix"
+	}
 }
 
-type browseHeadwordStreamer interface {
-	StreamBrowseHeadwords(context.Context, string, bool, func([]string, int, bool, int, int) error) error
+func wildcardWithinCacheKey(query, mode string) string {
+	if query == "" || mode == "" || mode == "prefix" {
+		return query
+	}
+	return "\u241fmode-v3\u241f" + mode + "\u241f" + query
+}
+
+type browseFindStreamEvent struct {
+	Type                string        `json:"type"`
+	DictID              string        `json:"dict,omitempty"`
+	Strategy            string        `json:"-"`
+	CandidateLiteral    string        `json:"-"`
+	Words               []string      `json:"words,omitempty"`
+	Positions           []int         `json:"positions,omitempty"`
+	Alphabet            []dict.Letter `json:"alphabet,omitempty"`
+	Total               int           `json:"total"`
+	Scanned             int           `json:"scanned,omitempty"`
+	ScanTotal           int           `json:"scanTotal,omitempty"`
+	Size                int           `json:"size,omitempty"`
+	DiskCache           bool          `json:"diskCache,omitempty"`
+	MergedCacheID       string        `json:"mergedCacheID,omitempty"`
+	MatchedDictionaries int           `json:"matchedDictionaries,omitempty"`
+	EffectiveQueries    []string      `json:"effectiveQueries,omitempty"`
+	Done                bool          `json:"done,omitempty"`
+	Error               string        `json:"error,omitempty"`
+}
+
+type browseHeadwordModeStreamer interface {
+	StreamBrowseHeadwordsMode(context.Context, string, string, func([]string, int, bool, int, int) error) error
 }
 
 type browseFindStreamRequest struct {
 	entry        *entry
 	dict         dict.Dictionary
 	query        string
+	typedQuery   string
+	matchMode    string
 	mask         bool
 	within       string
+	typedWithin  string
+	withinMode   string
 	withinMask   bool
 	withinRE     *regexp.Regexp
 	cacheID      string
@@ -285,12 +338,13 @@ func writeBrowseFindFailure(w http.ResponseWriter, err error) {
 	httpErr(w, http.StatusInternalServerError, "%s", err.Error())
 }
 
-func (s *Server) prepareBrowseFindStream(q url.Values) (browseFindStreamRequest, error) {
+func (s *Server) prepareBrowseFindStream(ctx context.Context, q url.Values) (browseFindStreamRequest, error) {
 	query := strings.TrimSpace(q.Get("q"))
 	if len(query) > 256 {
 		return browseFindStreamRequest{}, &browseFindSetupError{status: http.StatusBadRequest, message: "search text is too long"}
 	}
-	mask := q.Get("wildcards") == "1" || q.Get("mask") == "1"
+	matchMode := browseMatchMode(q.Get("matchmode"), q.Get("wildcards") == "1" || q.Get("mask") == "1")
+	mask := matchMode == "wildcards"
 	if mask && search.IsSimpleMask(query) {
 		query = search.NormalizeSimpleMask(query)
 	}
@@ -298,10 +352,12 @@ func (s *Server) prepareBrowseFindStream(q url.Values) (browseFindStreamRequest,
 	if len(within) > 256 {
 		return browseFindStreamRequest{}, &browseFindSetupError{status: http.StatusBadRequest, message: "filter text is too long"}
 	}
-	withinMask := q.Get("withinWildcards") == "1" || q.Get("withinMask") == "1"
+	withinMode := browseMatchMode(q.Get("withinMode"), q.Get("withinWildcards") == "1" || q.Get("withinMask") == "1")
+	withinMask := withinMode == "wildcards"
 	if withinMask && search.IsSimpleMask(within) {
 		within = search.NormalizeSimpleMask(within)
 	}
+	typedQuery, typedWithin := query, within
 	cacheID := q.Get("wildcache")
 	cacheGroup := q.Get("wildgroup")
 	cacheOrder, orderErr := strconv.Atoi(q.Get("wildorder"))
@@ -329,7 +385,7 @@ func (s *Server) prepareBrowseFindStream(q url.Values) (browseFindStreamRequest,
 				return browseFindStreamRequest{}, &browseFindSetupError{status: http.StatusBadRequest, message: "invalid filter: " + err.Error(), entry: e}
 			}
 		}
-		return browseFindStreamRequest{entry: e, query: query, mask: mask, within: within,
+		return browseFindStreamRequest{entry: e, query: query, typedQuery: typedQuery, matchMode: matchMode, mask: mask, within: within, typedWithin: typedWithin, withinMode: withinMode,
 			withinMask: withinMask, cacheID: cacheID, cacheGroup: cacheGroup,
 			cacheOrder: cacheOrder, cacheCount: cacheCount,
 			cacheFTS: q.Get("wildfts") == "1", cacheTrigram: q.Get("wildtrigram") == "1"}, nil
@@ -349,6 +405,11 @@ func (s *Server) prepareBrowseFindStream(q url.Values) (browseFindStreamRequest,
 			return browseFindStreamRequest{}, &browseFindSetupError{status: http.StatusBadRequest, message: "invalid filter: " + err.Error(), entry: e}
 		}
 	}
+	if within == "" {
+		query = s.headwordLemmaQuery(e, d, query, matchMode)
+	} else if mask && !withinMask {
+		within = s.headwordLemmaQuery(e, d, within, withinMode)
+	}
 	page, _ := strconv.Atoi(q.Get("p"))
 	if page < 1 {
 		page = 1
@@ -356,7 +417,7 @@ func (s *Server) prepareBrowseFindStream(q url.Values) (browseFindStreamRequest,
 	if page > 10000000 {
 		page = 10000000
 	}
-	return browseFindStreamRequest{entry: e, dict: d, query: query, mask: mask, within: within,
+	return browseFindStreamRequest{entry: e, dict: d, query: query, typedQuery: typedQuery, matchMode: matchMode, mask: mask, within: within, typedWithin: typedWithin, withinMode: withinMode,
 		withinMask: withinMask, withinRE: withinRE, cacheID: cacheID, cacheGroup: cacheGroup,
 		cacheOrder: cacheOrder, cacheCount: cacheCount, page: page,
 		cacheFTS: q.Get("wildfts") == "1", cacheTrigram: q.Get("wildtrigram") == "1"}, nil
@@ -375,7 +436,7 @@ func (s *Server) handleBrowseFindStream(w http.ResponseWriter, r *http.Request) 
 		}
 		return
 	}
-	request, err := s.prepareBrowseFindStream(r.URL.Query())
+	request, err := s.prepareBrowseFindStream(r.Context(), r.URL.Query())
 	if err != nil {
 		var failure *browseFindSetupError
 		if errors.As(err, &failure) {
@@ -389,6 +450,17 @@ func (s *Server) handleBrowseFindStream(w http.ResponseWriter, r *http.Request) 
 	}
 	st, ok := newStream(w, "application/x-ndjson")
 	if !ok {
+		return
+	}
+	if r.URL.Query().Get("groupwithin") == "1" {
+		err = s.streamCachedWildcardGroupWithin(r.Context(), request, func(event browseFindStreamEvent) error {
+			st.line(event)
+			return r.Context().Err()
+		})
+		if err != nil && r.Context().Err() == nil {
+			logx.System("wildcard_group_find failed cache=%q query=%q error=%q", request.cacheID, request.within, err)
+			st.line(browseFindStreamEvent{Type: "error", Error: err.Error()})
+		}
 		return
 	}
 	err = traceBrowseFind(r.Context(), r.URL.Query(), func(event browseFindStreamEvent) error {
@@ -419,6 +491,22 @@ func (s *Server) streamBrowseFindCached(ctx context.Context, request browseFindS
 		return s.streamAllWordsPage(ctx, request, send)
 	}
 	if request.cacheID == "" {
+		if browseFindDiagnosticEnabled(ctx) {
+			strategy := browseFindStrategy(request.matchMode, false, request.within != "")
+			candidateLiteral := ""
+			if request.matchMode == "wildcards" && request.within == "" {
+				if planner, ok := request.dict.(interface {
+					MaskCandidatePlan(string) (string, string)
+				}); ok {
+					strategy, candidateLiteral = planner.MaskCandidatePlan(request.query)
+				}
+			}
+			logx.System("headword_find_plan dict=%q mode=%s typed_query=%q effective_queries=%q within_mode=%s typed_within=%q effective_within=%q strategy=%s candidate_literal=%q",
+				request.entry.ID, request.matchMode, request.typedQuery,
+				strings.Split(request.query, mergedHeadwordAlternativeSeparator), request.withinMode,
+				request.typedWithin, strings.Split(request.within, mergedHeadwordAlternativeSeparator),
+				strategy, candidateLiteral)
+		}
 		return s.streamBrowseFind(ctx, request, func(event browseFindStreamEvent) error {
 			event.Size = browsePageSize
 			return send(event)
@@ -428,14 +516,15 @@ func (s *Server) streamBrowseFindCached(ctx context.Context, request browseFindS
 		query: request.query, group: request.cacheGroup, wildcards: request.mask,
 		fts: request.cacheFTS, trigram: request.cacheTrigram,
 	}, browsePageSize, request.cacheCount, request.entry.ID, request.dict.Meta().Name, request.cacheOrder,
-		request.within, request.withinMask, s.wildcardCacheDir())
+		wildcardWithinCacheKey(request.within, request.withinMode), request.withinMask, s.wildcardCacheDir())
 	if err != nil {
 		return err
 	}
-	streamKey := wildcardStreamKey{dictID: request.entry.ID, within: request.within, withinMask: request.withinMask}
+	cacheWithin := wildcardWithinCacheKey(request.within, request.withinMode)
+	streamKey := wildcardStreamKey{dictID: request.entry.ID, within: cacheWithin, withinMask: request.withinMask}
 	defer s.wildcardPages.finish(entry, &streamKey, token)
 	err = s.streamBrowseFind(ctx, request, func(event browseFindStreamEvent) error {
-		if err := entry.append(request.entry.ID, request.within, request.withinMask, token, event); err != nil {
+		if err := entry.append(request.entry.ID, cacheWithin, request.withinMask, token, event); err != nil {
 			return err
 		}
 		event.Size = browsePageSize
@@ -446,6 +535,26 @@ func (s *Server) streamBrowseFindCached(ctx context.Context, request browseFindS
 		return nil
 	}
 	return err
+}
+
+func browseFindStrategy(mode string, cachedWildcard, filtered bool) string {
+	if cachedWildcard && filtered {
+		return "wildcard_sql_result_filter"
+	}
+	switch mode {
+	case "prefix":
+		return "dictionary_fts_prefix"
+	case "suffix", "contains":
+		return "dictionary_trigram_candidates_or_scan"
+	case "word", "wordLemma":
+		return "dictionary_fts_token_candidates"
+	case "exact", "exactLemma":
+		return "dictionary_folded_exact_key"
+	case "wildcards":
+		return "dictionary_mask_range_trigram_or_scan"
+	default:
+		return "dictionary_search"
+	}
 }
 
 func (s *Server) streamAllWordsPage(ctx context.Context, request browseFindStreamRequest, send func(browseFindStreamEvent) error) error {
@@ -512,6 +621,14 @@ func (s *Server) streamAllWordsPage(ctx context.Context, request browseFindStrea
 
 func (s *Server) streamBrowseFind(ctx context.Context, request browseFindStreamRequest, send func(browseFindStreamEvent) error) error {
 	var baseMaskSections dict.MaskSections
+	strategy, candidateLiteral := "", ""
+	if request.matchMode == "wildcards" {
+		if planner, ok := request.dict.(interface {
+			MaskCandidatePlan(string) (string, string)
+		}); ok {
+			strategy, candidateLiteral = planner.MaskCandidatePlan(request.query)
+		}
+	}
 	emit := func(words []string, total int, done bool, scanned, scanTotal int) error {
 		typ := "progress"
 		if len(words) > 0 {
@@ -521,7 +638,10 @@ func (s *Server) streamBrowseFind(ctx context.Context, request browseFindStreamR
 			typ = "done"
 		}
 		event := browseFindStreamEvent{Type: typ, Words: words, Total: total, Done: done,
-			Scanned: scanned, ScanTotal: scanTotal}
+			Scanned: scanned, ScanTotal: scanTotal, Strategy: strategy, CandidateLiteral: candidateLiteral}
+		if done && request.within == "" && isLemmaHeadwordMode(request.matchMode) {
+			event.EffectiveQueries = splitMergedHeadwordAlternatives(request.query)
+		}
 		if request.mask && request.within == "" {
 			for _, word := range words {
 				baseMaskSections.Add(word)
@@ -534,15 +654,15 @@ func (s *Server) streamBrowseFind(ctx context.Context, request browseFindStreamR
 	}
 	var err error
 	if request.within == "" {
-		if streamer, ok := request.dict.(browseHeadwordStreamer); ok {
-			err = streamer.StreamBrowseHeadwords(ctx, request.query, request.mask, emit)
+		if streamer, ok := request.dict.(browseHeadwordModeStreamer); ok {
+			err = streamer.StreamBrowseHeadwordsMode(ctx, request.query, request.matchMode, emit)
 		} else {
-			err = streamDirectBrowseHeadwords(ctx, request.dict, request.query, request.mask, emit)
+			err = streamDirectBrowseHeadwords(ctx, request.dict, request.query, request.matchMode, emit)
 		}
 	} else {
 		browseFindStreamsActive.Add(1)
 		defer browseFindStreamsActive.Add(-1)
-		terms := dict.HeadwordTermMatcher(request.within)
+		terms := headwordModeMatcher(request.within, request.withinMode)
 		baseOffset, filteredTotal := 0, 0
 		filteredWords := make([]string, 0, browsePageSize)
 		filteredPositions := make([]int, 0, browsePageSize)
@@ -584,10 +704,10 @@ func (s *Server) streamBrowseFind(ctx context.Context, request browseFindStreamR
 			}
 			return ctx.Err()
 		}
-		if streamer, ok := request.dict.(browseHeadwordStreamer); ok {
-			err = streamer.StreamBrowseHeadwords(ctx, request.query, request.mask, filteredEmit)
+		if streamer, ok := request.dict.(browseHeadwordModeStreamer); ok {
+			err = streamer.StreamBrowseHeadwordsMode(ctx, request.query, request.matchMode, filteredEmit)
 		} else {
-			err = streamDirectBrowseHeadwords(ctx, request.dict, request.query, request.mask, filteredEmit)
+			err = streamDirectBrowseHeadwords(ctx, request.dict, request.query, request.matchMode, filteredEmit)
 		}
 	}
 	return err
@@ -609,7 +729,7 @@ func (s *Server) desktopBrowseFindStream(ctx context.Context, query string, emit
 			return s.streamMergedBrowseFind(ctx, values, send)
 		})
 	}
-	request, err := s.prepareBrowseFindStream(values)
+	request, err := s.prepareBrowseFindStream(ctx, values)
 	if err != nil {
 		return s.emitBrowseFindError(ctx, emit, err.Error())
 	}
@@ -622,6 +742,14 @@ func (s *Server) desktopBrowseFindStream(ctx context.Context, query string, emit
 			emit(message)
 		}
 		return ctx.Err()
+	}
+	if values.Get("groupwithin") == "1" {
+		err = s.streamCachedWildcardGroupWithin(ctx, request, encode)
+		if err != nil && ctx.Err() == nil {
+			logx.System("wildcard_group_find failed cache=%q query=%q error=%q", request.cacheID, request.within, err)
+			return s.emitBrowseFindError(ctx, emit, err.Error())
+		}
+		return err
 	}
 	err = traceBrowseFind(ctx, values, encode, func(ctx context.Context, send func(browseFindStreamEvent) error) error {
 		return s.streamBrowseFindCached(ctx, request, send)
@@ -647,7 +775,71 @@ func (s *Server) emitBrowseFindError(ctx context.Context, emit func([]byte), mes
 	return nil
 }
 
-func streamDirectBrowseHeadwords(ctx context.Context, d dict.Dictionary, query string, mask bool, emit func([]string, int, bool, int, int) error) error {
+func headwordModeMatcher(query, mode string) func(string) bool {
+	switch mode {
+	case "suffix":
+		return dict.HeadwordSuffixMatcher(query)
+	case "contains":
+		return dict.HeadwordContainsMatcher(query)
+	case "word", "wordLemma":
+		return dict.HeadwordWordMatcher(query)
+	case "exact", "exactLemma":
+		return dict.HeadwordExactMatcher(query)
+	default:
+		return dict.HeadwordTermMatcher(query)
+	}
+}
+
+func isLemmaHeadwordMode(mode string) bool { return mode == "wordLemma" || mode == "exactLemma" }
+
+func addHeadwordAlternative(query, alternative string) string {
+	if alternative == "" || alternative == query {
+		return query
+	}
+	for _, existing := range splitMergedHeadwordAlternatives(query) {
+		if existing == alternative {
+			return query
+		}
+	}
+	return query + mergedHeadwordAlternativeSeparator + alternative
+}
+
+// headwordLemmaQuery searches both the typed form and its dictionary-language
+// lemma for either lemmatization mode.
+func (s *Server) headwordLemmaQuery(e *entry, d dict.Dictionary, query, mode string) string {
+	if !isLemmaHeadwordMode(mode) || strings.ContainsAny(query, " \t\r\n") || strings.TrimSpace(query) == "" || !s.Morph.Enabled() {
+		return query
+	}
+	lemma := s.headwordLemmaFor(e, d, query)
+	return addHeadwordAlternative(query, lemma)
+}
+
+func (s *Server) headwordLemmaFor(e *entry, d dict.Dictionary, query string) string {
+	meta := d.Meta()
+	code := lang.Resolve(meta.IndexLang, langPath(e.Path), s.reg.Dirs(), meta.Name)
+	if code == "" {
+		code = "en"
+	}
+	if lemma, ok := s.Morph.Lemma(code, query); ok {
+		return lemma
+	}
+	return query
+}
+
+func (s *Server) wildcardHeadwordLemmaQuery(e *entry, query, mode string) (string, error) {
+	if !isLemmaHeadwordMode(mode) || strings.ContainsAny(query, " \t\r\n") || strings.TrimSpace(query) == "" || !s.Morph.Enabled() {
+		return query, nil
+	}
+	d, err := e.open()
+	if err != nil {
+		return query, err
+	}
+	lemma := s.headwordLemmaFor(e, d, query)
+	return addHeadwordAlternative(query, lemma), nil
+}
+
+func streamDirectBrowseHeadwords(ctx context.Context, d dict.Dictionary, query, mode string, emit func([]string, int, bool, int, int) error) error {
+	mask := mode == "wildcards"
 	var re *regexp.Regexp
 	var err error
 	if mask {
@@ -656,7 +848,7 @@ func streamDirectBrowseHeadwords(ctx context.Context, d dict.Dictionary, query s
 			return err
 		}
 	}
-	terms := dict.HeadwordTermMatcher(query)
+	terms := headwordModeMatcher(query, mode)
 	words := make([]string, 0, browsePageSize)
 	total, previous := 0, ""
 	scanned := 0
@@ -720,7 +912,9 @@ func streamDirectBrowseHeadwords(ctx context.Context, d dict.Dictionary, query s
 
 // Direct dictionaries expose headwords in pages. Browse search scans those
 // pages without opening article bodies and checks cancellation between them.
-func findDirectHeadwords(ctx context.Context, d dict.Dictionary, query string, mask bool, within string, withinMask bool, offset, limit int) ([]string, int, []dict.Letter, []int, error) {
+func findDirectHeadwords(ctx context.Context, d dict.Dictionary, query, mode, within, withinMode string, offset, limit int) ([]string, int, []dict.Letter, []int, error) {
+	mask := mode == "wildcards"
+	withinMask := withinMode == "wildcards"
 	var re *regexp.Regexp
 	var err error
 	if mask {
@@ -736,8 +930,8 @@ func findDirectHeadwords(ctx context.Context, d dict.Dictionary, query string, m
 			return nil, 0, nil, nil, err
 		}
 	}
-	matchTerms := dict.HeadwordTermMatcher(query)
-	withinTerms := dict.HeadwordTermMatcher(within)
+	matchTerms := headwordModeMatcher(query, mode)
+	withinTerms := headwordModeMatcher(within, withinMode)
 	words := make([]string, 0, limit)
 	positions := make([]int, 0, limit)
 	var sections dict.MaskSections
