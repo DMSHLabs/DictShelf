@@ -67,3 +67,6 @@ __pycache__/
 tools/testdata/desktop-large-media/desktop-large-media.dsl.files/as.mp4
 tools/testdata/desktop-large-media/desktop-large-media.dsl.files/large-image.jpg
 tools/testdata/desktop-large-media/desktop-large-media.dsl.files/large-image.png
+build-windows.local.bat
+tools/testdata/desktop-large-media/stardict/res/as.mp4
+tools/testdata/desktop-large-media/stardict/res/large-image.png
