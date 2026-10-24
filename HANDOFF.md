@@ -1,7 +1,46 @@
 # Agent handoff — current state
 
-Current checkout is `codex/headword-search-indexes`, created from clean `dev` at
-`a9ae9a93`; the changes below are uncommitted. Contains now builds both the
+Current checkout is branch `codex/headword-search-indexes_z` at `79059bd6`. The
+main page's search-mode menu (`#modeMenu`, built by `themedSelect` in
+index.html) now renders exactly like the Browse/Wildcards find-mode menu:
+sections are wrapped in `.headword-control-find-group` divs (dividers between
+Each word / Whole headword / Articles), the menu keeps its Articles section,
+`.menu-card button` in app.css steps aside with
+`:not(.headword-control-find-option)` so headword-control.css owns the option
+rows (two-column grid, option typography, accent hover/selected), and
+`#modeMenu` carries the find menu's `.2em` padding and `--ui-edit_control-font`
+scale. A mode's mark (`MODE_GLYPHS` / `MODE_SVG_ICONS` and `modeMark` in
+index.html) is the menu's left column itself, and the mode button and the
+narrow-width mode chip wear it too — the control names the mode the way the menu
+does, and the mode's word moves to the button's tooltip and accessible name. The
+Articles mark is a drawn page with a marked word rather than the old pilcrow:
+accent band with page text inside it and an underline below, matching the app's
+own highlight, with the page's ink fixed at `--fg` so a selected
+(accent-coloured) row does not merge the band into its outline. The mark needs
+no room the word did not, so `#modeMenuBtn`'s min-width drops from 7em to 5em
+(measured marks: 42–67px); the chip types smaller than the button, so its drawn
+mark is stepped up to 1.5em. Both find-mode menus now head their groups by what
+is searched — <kbd>Each word of the headword</kbd>, <kbd>The whole headword</kbd>,
+<kbd>The article text</kbd> — and each row states only the relation
+(<kbd>Starts with the query</kbd>, <kbd>Is the query, or its lemma</kbd>,
+<kbd>Matches the pattern (* and ?)</kbd>), so the repeated "in a headword" is
+gone; the lemma example stays in the whole-word row alone, and the Russian rows
+say "запрос" where they said "введённое". Prefix, suffix, contains and wildcards
+used one string as both a row's description and Browse's mask-button name, so
+those titles now point at the existing mode-name strings (`search.prefix`,
+`search.suffix`, `dictUI.contains`, `search.wildcards`). Verified with static
+harnesses at both widths: computed grid columns, paddings, dividers and font
+sizes match Browse's menu exactly, and the mark reads at menu size, in the
+button, in the chip (a 17px page), in light and dark themes and in the selected
+state. Appearance, assets and parseref server tests, `go build ./...`, inline
+JavaScript parse and `git diff --check` pass (run before the wording change); the
+wording and the four titles were checked only by catalog integrity — both
+catalogs parse, 1098 keys each with identical key sets — because the user builds
+and looks at the result himself. Windows/Android visual check of the real page
+remains open.
+
+The branch was created from clean `dev` at `a9ae9a93`; the changes described
+below were committed as `79059bd6` ("dictionary search"). Contains now builds both the
 headword token FTS and trigram indexes, while FullText builds an independent
 article FTS. `IngestVersion=6` offers existing databases for explicit rebuild;
 older databases remain readable. Browse and main headword search fall back to
