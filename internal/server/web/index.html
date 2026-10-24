@@ -1448,7 +1448,18 @@ let stylerTab="app",
     stylerPickForBackground=false;
 const tx=window.wudictI18n.t;
 function browseOriginQuery(){
-  return new URLSearchParams({return:location.pathname+location.search+location.hash}).toString();
+  const url=new URL(location.href);
+  url.pathname="/";
+  const query=url.searchParams.get("q")||$("q")?.value.trim()||"";
+  if(query){
+    url.searchParams.set("q",query);
+    if(!url.searchParams.has("mode"))url.searchParams.set("mode",$("mode")?.value||"prefix");
+    if(!url.searchParams.has("dict"))url.searchParams.set("dict",$("dict")?.value||"all");
+    if(lastScope&&!url.searchParams.has("from"))url.searchParams.set("from",lastScope);
+    if(url.searchParams.get("mode")==="wildcards"&&maskMergeAZ)url.searchParams.set("maskmerge","1");
+  }
+  if(browseArticleDiagnosticsEnabled())url.searchParams.set("browseReturnDiag",String(Date.now()));
+  return new URLSearchParams({return:url.pathname+url.search+url.hash}).toString();
 }
 function systemLogClick(event){
   if(!window.wudictNativeShell)return;
@@ -3343,6 +3354,7 @@ async function loadDicts(rescan){
         // search, and made every Browse → article transition pay for all rows.
         if(blocking&&!initialURLApplied&&initialParams.has("q")&&initialParams.has("from")){
           initialURLApplied=true;
+          logBrowseReturnRoute("first_dictionary_apply_url",{hasFrom:initialParams.has("from"),query:initialParams.get("q")||""});
           applyURL();
         }
       }else if(msg.t==="end"){
@@ -3377,6 +3389,11 @@ async function loadDicts(rescan){
   // place if its folder returns during this session.
   rememberVisibleOrder();savePrefs(true);
   dictsSettled=true; // every row is in; the groups can be counted
+  if(blocking&&!initialURLApplied&&initialParams.has("q")){
+    initialURLApplied=true;
+    logBrowseReturnRoute("dictionary_list_ready_apply_url",{query:initialParams.get("q")||""});
+    applyURL();
+  }
   const streamMs=Math.round(performance.now()-listStarted);
   const renderStarted=performance.now();
   refreshDictUI(true);
@@ -4671,6 +4688,22 @@ function browseArticleDiagnosticsEnabled(){try{return localStorage.getItem("wudi
 function setBrowseArticleDiagnostics(on){try{if(on)localStorage.setItem("wudict_browse_article_diagnostics","1");else localStorage.removeItem("wudict_browse_article_diagnostics")}catch(_){}}
 function searchArticleDiagnosticsEnabled(){try{return localStorage.getItem("wudict_search_article_diagnostics")==="1"}catch(_){return false}}
 function setSearchArticleDiagnostics(on){try{if(on)localStorage.setItem("wudict_search_article_diagnostics","1");else localStorage.removeItem("wudict_search_article_diagnostics")}catch(_){}}
+const browseReturnRouteContext=(()=>{
+  if(!browseArticleDiagnosticsEnabled())return null;
+  const params=new URLSearchParams(location.search),startedAt=Number(params.get("browseReturnDiag"));
+  if(!Number.isSafeInteger(startedAt)||startedAt<=0)return null;
+  return {startedAt,firstHit:false};
+})();
+function logBrowseReturnRoute(stage,fields={}){
+  if(!browseArticleDiagnosticsEnabled())return;
+  const params=new URLSearchParams(location.search);
+  sendBrowseDiagnostic({event:"browse_return_route",stage,
+    startedAt:browseReturnRouteContext?.startedAt||Number(params.get("browseReturnDiag"))||Date.now(),
+    elapsedMs:browseReturnRouteContext?Math.max(0,Date.now()-browseReturnRouteContext.startedAt):0,
+    url:location.pathname+location.search,query:params.get("q")||"",mode:params.get("mode")||"",
+    dict:params.get("dict")||"",...fields});
+}
+if(browseReturnRouteContext)logBrowseReturnRoute("main_page_loaded",{referrer:document.referrer||""});
 let browseArticleDiagContext=(()=>{
   if(!browseArticleDiagnosticsEnabled())return null;
   const params=new URLSearchParams(location.search),startedAt=Number(params.get("browseDiagStart"));
@@ -8164,7 +8197,8 @@ async function doSearch(ev){
   if(ev)ev.preventDefault();
   if(maskBusyJobs.size)return;
   const q=$("q").value.trim();
-  if(!q)return;
+  if(!q){if(browseReturnRouteContext)logBrowseReturnRoute("search_skipped_empty_query");return}
+  if(browseReturnRouteContext)logBrowseReturnRoute("search_started",{query:q,mode:$("mode").value,dict:$("dict").value||"all"});
   stopArticleResultCaches();
   if($("mode").value==="wildcards"){
     if(!maskSubmitRequested)return;
@@ -8310,6 +8344,7 @@ async function doSearch(ev){
     await fetchStream("/api/search?q="+encodeURIComponent(q)+"&mode="+mode+"&hl="+(hlOn?1:0)+diacriticsSearchParam()+"&dict="+encodeURIComponent(dictParam)+"&n="+perDict,msg=>{
       if(seq!==searchSeq)return; // superseded by a newer search
       if(msg.t==="begin"){
+        if(browseReturnRouteContext)logBrowseReturnRoute("search_stream_begin",{slots:(msg.slots||[]).length});
         beginSearchProgress(seq,(msg.slots||[]).length);
         searchDiagSlots=(msg.slots||[]).map(slot=>({dict:slot.dict,name:slot.name,results:0}));
         searchDiagLog("search_stream_begin",{total:searchDiagSlots.length,detail:`slots=${searchDiagSlots.length}`});
@@ -8331,6 +8366,10 @@ async function doSearch(ev){
         clearStatusForResults();
         refreshLivePicker();
       }else if(msg.t==="hit"){
+        if(browseReturnRouteContext&&!browseReturnRouteContext.firstHit){
+          browseReturnRouteContext.firstHit=true;
+          logBrowseReturnRoute("first_search_hit",{dict:msg.dict||"",resultCount:(msg.results||[]).length,error:msg.error||"",skipped:!!msg.skipped});
+        }
         advanceSearchProgress(seq);
         const diagSlot=searchDiagSlots[msg.i];
         if(diagSlot)diagSlot.results=(msg.results||[]).length;
@@ -8413,6 +8452,8 @@ async function doSearch(ev){
         const forms=[...morphSeen].join(", ");
         morphNote.textContent=tx(morphAll?"search.morphAll":"search.morphSome",{query:msg.from||q,forms});
       }else if(msg.t==="end"){
+        if(browseReturnRouteContext)logBrowseReturnRoute("search_stream_end",{
+          slots:searchDiagSlots.length,resultCount:searchDiagSlots.reduce((sum,slot)=>sum+(slot.results||0),0),anyResults});
         pumpArticleResultCaches();
         searchDiagLog("search_end",{completed:searchProgressDone,total:searchProgressTotal});
         finishSearchProgress(seq);
@@ -9388,6 +9429,7 @@ let navRecord="replace"; // how the NEXT doSearch should record itself
 let commitOnce=false;
 function applyURL(){
   const p=new URLSearchParams(location.search);
+  if(browseReturnRouteContext)logBrowseReturnRoute(p.get("q")?"apply_url_has_query":"apply_url_no_query",{hasFrom:p.has("from")});
   maskMergeAZ=p.get("maskmerge")==="1";updateMergedAZ();
   if(p.get("theme")){localStorage.setItem("wudict_theme",p.get("theme"));applyTheme(p.get("theme"))}
   if(p.get("mode"))setSearchMode(p.get("mode"));

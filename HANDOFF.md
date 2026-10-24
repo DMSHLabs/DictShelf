@@ -6,7 +6,9 @@ Main article search now returns five articles initially and builds one SQLite re
 
 Browse find/filter now streams matches into 300-title SQLite blocks using the existing Wildcards result-cache manager and its disk limit. The WebView keeps one visible result block plus one ribbon marker per block. Page turns, result navigation and return from an article read the requested block by cache ID. A missing saved cache restarts the query. The server cache path and Android/Windows native page bridges are wired; a focused server test passes. Go build, inline JavaScript syntax and `git diff --check` pass. Windows/Android interaction and million-result performance remain unverified.
 
-Browse links from the main screen carry the entry URL across Browse → article → ← Words navigation. Closing Browse returns to that original screen, using browser history when it still points to the entry and the saved URL otherwise. Runtime interaction remains to be checked.
+Browse links from the main screen carry the query, mode and dictionary from the active controls across Browse → article → ← Words navigation. Closing Browse opens that original search URL and reruns the query, avoiding a WebView history entry that can point to the empty start screen. Runtime interaction remains to be checked.
+
+The empty screen after closing Browse came from startup restoring `?q=` only when the URL also had `from=`. Unscoped Browse returns now wait for the full dictionary list, then apply the saved query; scoped article links keep their first-dictionary fast path. With Browse/article navigation diagnostics enabled, `browse_return_route` records the Browse origin, close target, main-page URL restore, search start, first hit and stream end. Runtime confirmation remains pending.
 
 The merged `dev` work adds bounded-header reads for embedded LSD icons and updates async icon tests for the current routes. It also includes the dictionary search mode/index updates and grouped SQL-backed Wildcards lower search. On `dev`, `go test ./...`, `go vet ./...`, `go build ./...`, and `git diff --check` passed. Windows/Android display and interaction checks remain pending.
 
