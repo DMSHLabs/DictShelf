@@ -25,21 +25,23 @@ import (
 // retains its caller's slot order. Origin is supplied by the host for clean
 // article resource links, never read from the desktop JSON payload.
 type SearchRequest struct {
-	Query            string `json:"q"`
-	Mode             string `json:"mode,omitempty"`
-	Format           string `json:"format,omitempty"`
-	Dictionary       string `json:"dict,omitempty"`
-	Limit            int    `json:"n,omitempty"`
-	Highlight        bool   `json:"hl,omitempty"`
-	IgnoreDiacritics bool   `json:"ignoreDiacritics,omitempty"`
-	Origin           string `json:"-"`
-	CacheAction      string `json:"cacheAction,omitempty"`
-	CacheID          string `json:"cacheID,omitempty"`
-	CacheCount       int    `json:"cacheCount,omitempty"`
-	CacheOrder       int    `json:"cacheOrder,omitempty"`
-	Start            int    `json:"start,omitempty"`
-	Size             int    `json:"size,omitempty"`
-	Rung             string `json:"rung,omitempty"`
+	Query              string `json:"q"`
+	Mode               string `json:"mode,omitempty"`
+	Format             string `json:"format,omitempty"`
+	Dictionary         string `json:"dict,omitempty"`
+	Limit              int    `json:"n,omitempty"`
+	Highlight          bool   `json:"hl,omitempty"`
+	IgnoreDiacritics   bool   `json:"ignoreDiacritics,omitempty"`
+	Origin             string `json:"-"`
+	CacheAction        string `json:"cacheAction,omitempty"`
+	CacheID            string `json:"cacheID,omitempty"`
+	ReturnCacheID      string `json:"returnCacheID,omitempty"`
+	ReturnCacheStorage string `json:"returnCacheStorage,omitempty"`
+	CacheCount         int    `json:"cacheCount,omitempty"`
+	CacheOrder         int    `json:"cacheOrder,omitempty"`
+	Start              int    `json:"start,omitempty"`
+	Size               int    `json:"size,omitempty"`
+	Rung               string `json:"rung,omitempty"`
 }
 
 type SearchErrorKind string
@@ -137,6 +139,20 @@ func (s *Server) Search(parent context.Context, request SearchRequest, emit func
 	if emit == nil {
 		return searchRequestError(SearchInvalidRequest, "search event callback is required")
 	}
+	if request.CacheAction == "returnReplay" {
+		if err := s.replaySearchReturnCache(parent, request.CacheID, emit); err == nil {
+			logx.System("search_return_cache stage=replay id=%q result=hit", request.CacheID)
+			return nil
+		} else if parent.Err() != nil {
+			return parent.Err()
+		} else if !errors.Is(err, errSearchReturnCacheUnavailable) {
+			return err
+		} else {
+			logx.System("search_return_cache stage=miss id=%q error=%q; searching again", request.CacheID, err)
+			request.CacheAction = ""
+			request.ReturnCacheID = request.CacheID
+		}
+	}
 	if request.CacheAction != "" {
 		return s.searchArticleResultCache(parent, request, emit)
 	}
@@ -206,10 +222,39 @@ func (s *Server) Search(parent context.Context, request SearchRequest, emit func
 	if request.IgnoreDiacritics {
 		ctx = store.WithIgnoreDiacritics(ctx)
 	}
+	var returnCache *searchReturnCacheEntry
+	if request.ReturnCacheID != "" {
+		returnCache, err = s.beginSearchReturnCache(request.ReturnCacheID, request.ReturnCacheStorage)
+		if err != nil {
+			logx.System("search_return_cache stage=create_failed id=%q error=%q", request.ReturnCacheID, err)
+		}
+	}
+	defer func() {
+		if returnCache != nil && !returnCache.complete {
+			returnCache.close()
+		}
+	}()
 	var emitErr error
 	writeLine := func(m SearchEvent) {
 		if emitErr != nil {
+			// A disconnected page is still a valid return snapshot: finish the
+			// event sequence with what it received before navigation interrupted
+			// the live search.
+			if returnCache != nil && m.T == "end" {
+				if cacheErr := returnCache.append(m); cacheErr != nil {
+					logx.System("search_return_cache stage=write_failed id=%q error=%q", request.ReturnCacheID, cacheErr)
+					returnCache.close()
+					returnCache = nil
+				}
+			}
 			return
+		}
+		if returnCache != nil {
+			if cacheErr := returnCache.append(m); cacheErr != nil {
+				logx.System("search_return_cache stage=write_failed id=%q error=%q", request.ReturnCacheID, cacheErr)
+				returnCache.close()
+				returnCache = nil
+			}
 		}
 		if err := emit(m); err != nil {
 			emitErr = err

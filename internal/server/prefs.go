@@ -64,10 +64,11 @@ type DictPref struct {
 // phone that reaches this same server too, and localStorage — keyed by origin
 // — would hand them 15px there, and again the first time SERVER_PORT changes.
 type UIPrefs struct {
-	ResultCacheLimitGB      int  `json:"resultCacheLimitGB,omitempty"`
-	ResultCacheNoLimit      bool `json:"resultCacheNoLimit,omitempty"`
-	CombinedDictionaryLimit int  `json:"combinedDictionaryLimit,omitempty"`
-	DictIconsOff            bool `json:"dictIconsOff,omitempty"`
+	ResultCacheLimitGB      int    `json:"resultCacheLimitGB,omitempty"`
+	ResultCacheNoLimit      bool   `json:"resultCacheNoLimit,omitempty"`
+	SearchReturnCache       string `json:"searchReturnCache,omitempty"`
+	CombinedDictionaryLimit int    `json:"combinedDictionaryLimit,omitempty"`
+	DictIconsOff            bool   `json:"dictIconsOff,omitempty"`
 
 	FontSize int `json:"fontSize,omitempty"` // article text, px; 0 = the default
 
@@ -184,6 +185,13 @@ func (u *UIPrefs) normalize() {
 		u.CombinedDictionaryLimit = indexconst.CombinedDictionaryLimitDefault
 	} else {
 		u.CombinedDictionaryLimit = min(u.CombinedDictionaryLimit, indexconst.CombinedDictionaryLimitMax)
+	}
+	switch u.SearchReturnCache {
+	case "memory", "disk":
+	case "":
+		u.SearchReturnCache = "disk"
+	default:
+		u.SearchReturnCache = "disk"
 	}
 	if u.FontSize != 0 {
 		u.FontSize = max(FontSizeMin, min(FontSizeMax, u.FontSize))

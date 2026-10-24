@@ -26,6 +26,8 @@ func searchRequestFromQuery(q url.Values) SearchRequest {
 		Dictionary: q.Get("dict"), Limit: n, Highlight: highlight,
 		IgnoreDiacritics: ignoreDiacritics,
 		CacheAction:      q.Get("cacheAction"), CacheID: q.Get("cacheID"), CacheCount: cacheCount,
-		CacheOrder: cacheOrder, Start: start, Size: size, Rung: q.Get("rung"),
+		ReturnCacheID:      q.Get("returnCacheID"),
+		ReturnCacheStorage: q.Get("returnCacheStorage"),
+		CacheOrder:         cacheOrder, Start: start, Size: size, Rung: q.Get("rung"),
 	}
 }

@@ -239,6 +239,19 @@ paths:
           schema:
             type: boolean
             default: false
+        - name: returnCacheID
+          in: query
+          description: |
+            Optional UI navigation snapshot id. Normal searches with this value
+            retain their completed event stream in a temporary SQLite database;
+            `cacheAction=returnReplay&cacheID=<id>` replays it when returning
+            from Browse. Snapshots are process-local and are not an API result
+            cache for clients that need persistence across restarts.
+          schema: { type: string }
+        - name: returnCacheStorage
+          in: query
+          description: Snapshot storage selected by the UI (`memory` or `disk`); omitted requests use the saved System Settings value.
+          schema: { type: string, enum: [memory, disk] }
         - name: format
           in: query
           description: |
