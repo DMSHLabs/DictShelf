@@ -203,7 +203,7 @@ ANDROID_LIB  := android/app/src/main/jniLibs/arm64-v8a/libwudict.so
 # Gradle names the file from exactly that. (Letting Gradle re-run git describe
 # was not enough: android-go runs after this file is parsed, and a tree that
 # turns -dirty in between would give the APK a name nothing here expects.)
-# versionCode is still derived inside build.gradle, from the commit count.
+# versionCode is a literal in build.gradle, written by `make release`.
 # CI overrides VERSION with the release tag: make -s print-APK_FOSS VERSION=v3.7.5
 # APK_VERSION is build.gradle's apkVersion: leading "v" dropped, "/" -> "_".
 GRADLE_VERSION := -PversionName="$(VERSION)"
@@ -693,6 +693,11 @@ version: ## Print the version stamp used for builds
 .PHONY: release-notes
 release-notes: ## Preview the release notes CI will publish (TAG=v3.8.0; default: latest tag)
 	@sh tools/release-notes.sh $(TAG)
+
+.PHONY: release
+release: ## cut a release: version into android/app/build.gradle + fastlane changelog, commit, tag (VERSION=v3.7.9; DRY_RUN=1 to preview)
+	@case "$(origin VERSION)" in command\ line|environment) ;; *) echo "usage: make release VERSION=v3.7.9" >&2; exit 2 ;; esac
+	@sh tools/release.sh $(VERSION)
 
 
 .PHONY: remotes

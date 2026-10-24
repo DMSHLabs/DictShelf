@@ -5,12 +5,9 @@
 package config
 
 import (
-	"bufio"
-	"os"
 	"runtime"
-	"strconv"
-	"strings"
-	"sync"
+
+	"github.com/wuweidict/wudict/internal/sysmem"
 )
 
 // The defaults in this file are the ones that differ on Android (D64). They are
@@ -150,34 +147,5 @@ func memoryLimitDefault() int64 {
 	return n
 }
 
-// memTotal reads physical RAM from /proc/meminfo, 0 when it cannot be read.
-// Linux-only by construction, which is exactly the platform that asks for it.
-// Read once: three defaults derive from it and the answer cannot change while
-// the process runs.
-var memTotal = sync.OnceValue(readMemTotal)
-
-func readMemTotal() int64 {
-	f, err := os.Open("/proc/meminfo")
-	if err != nil {
-		return 0
-	}
-	defer f.Close()
-	sc := bufio.NewScanner(f)
-	for sc.Scan() {
-		line := sc.Text()
-		if !strings.HasPrefix(line, "MemTotal:") {
-			continue
-		}
-		// "MemTotal:       3908352 kB"
-		fields := strings.Fields(line)
-		if len(fields) < 2 {
-			return 0
-		}
-		kb, err := strconv.ParseInt(fields[1], 10, 64)
-		if err != nil {
-			return 0
-		}
-		return kb << 10
-	}
-	return 0
-}
+// memTotal is physical RAM, 0 when it cannot be read.
+var memTotal = sysmem.Total

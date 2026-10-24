@@ -10,7 +10,6 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -23,6 +22,7 @@ import (
 	"github.com/wuweidict/wudict/internal/htmlref"
 
 	"github.com/wuweidict/wudict/internal/dict"
+	"github.com/wuweidict/wudict/internal/sysmem"
 )
 
 // Progress is called during ingest with entries processed so far and the
@@ -57,8 +57,16 @@ type Plan struct {
 
 // IngestPlan scans r into a new text database at dbPath (atomically: written
 // to a temp file, renamed on success). The FTS index is built inside the same
-// transaction as the data (FTS-audit #3).
+// transaction as the data (FTS-audit #3). It returns only once nothing it
+// started still reads r.
 func IngestPlan(r dict.Reader, dbPath string, plan Plan, progress Progress) (rep Report, err error) {
+	return ingestPlan(r, dbPath, r.Meta().Path, plan, progress)
+}
+
+// ingestPlan is IngestPlan for the source a preparation was asked for, src:
+// the path whose urgency chooses the lane (D182) - Reconcile's, which for a
+// folder is not the file the reader names.
+func ingestPlan(r dict.Reader, dbPath, src string, plan Plan, progress Progress) (rep Report, err error) {
 	srcMeta := r.Meta()
 	// Decided before anything is written, while the database being replaced
 	// is still the one at dbPath (keptUUID, stale.go).
@@ -108,6 +116,16 @@ func IngestPlan(r dict.Reader, dbPath string, plan Plan, progress Progress) (rep
 		return rep, err
 	}
 
+	var acct sysmem.Account
+	defer acct.Close()
+	indexed := false
+	if kib := indexFirstKiB(srcMeta, &acct); kib > 0 {
+		if _, err = db.Exec(fmt.Sprintf("PRAGMA cache_size = -%d", kib)); err != nil {
+			return rep, err
+		}
+		indexed = true
+	}
+
 	tx, err := db.Begin()
 	if err != nil {
 		return rep, err
@@ -117,18 +135,10 @@ func IngestPlan(r dict.Reader, dbPath string, plan Plan, progress Progress) (rep
 			_ = tx.Rollback()
 		}
 	}()
-
-	insEntry, err := tx.Prepare("INSERT INTO entry(id, w, m) VALUES(?, ?, ?)")
-	if err != nil {
-		return rep, err
-	}
-	insFts, err := tx.Prepare("INSERT INTO entry_fts(rowid, w, txt) VALUES(?, ?, ?)")
-	if err != nil {
-		return rep, err
-	}
-	insAlias, err := tx.Prepare("INSERT INTO alias(w, entry_id) VALUES(?, ?)")
-	if err != nil {
-		return rep, err
+	if indexed {
+		if _, err = tx.Exec("CREATE INDEX idx_entry_w ON entry(w COLLATE NOCASE)"); err != nil {
+			return rep, err
+		}
 	}
 
 	// Redirect resolution, on disk rather than on the heap.
@@ -139,91 +149,45 @@ func IngestPlan(r dict.Reader, dbPath string, plan Plan, progress Progress) (rep
 	// free, a kill by the low-memory killer rather than a slow ingest.
 	//
 	// So both are scratch tables. wref is (headword, folded headword, id) per
-	// entry; plink is one row per unresolved redirect, its target folded the
-	// same way. TEMP means SQLite keeps them in its own temp file and discards
-	// them when the connection closes, so nothing here reaches the text.db
-	// that ships.
+	// entry, written only when a redirect needs it (fillWref); plink is one
+	// row per unresolved redirect, its target folded the same way. TEMP means
+	// SQLite keeps them in its own temp file and discards them when the
+	// connection closes, so nothing here reaches the text.db that ships.
 	if _, err = tx.Exec(`
 		CREATE TEMP TABLE wref(w TEXT NOT NULL, lw TEXT NOT NULL, id INTEGER NOT NULL);
 		CREATE TEMP TABLE plink(w TEXT NOT NULL, target TEXT NOT NULL, lt TEXT NOT NULL);
 	`); err != nil {
 		return rep, err
 	}
-	insWref, err := tx.Prepare("INSERT INTO wref(w, lw, id) VALUES(?, ?, ?)")
-	if err != nil {
-		return rep, err
-	}
-	insLink, err := tx.Prepare("INSERT INTO plink(w, target, lt) VALUES(?, ?, ?)")
-	if err != nil {
-		return rep, err
-	}
-	var id, subEntries, linkCount int64
 	total := srcMeta.EntryCount
-
-	for {
-		e, rerr := r.Next()
-		if errors.Is(rerr, io.EOF) {
-			break
-		}
-		if rerr != nil {
-			return rep, rerr
-		}
-		if len(e.Headwords) == 0 {
-			continue
-		}
-		hw := strings.TrimSpace(e.Headwords[0])
-		if hw == "" {
-			continue
-		}
-		if e.LinkTo != "" {
-			if _, err = insLink.Exec(hw, e.LinkTo, strings.ToLower(e.LinkTo)); err != nil {
-				return rep, err
-			}
-			linkCount++
-			continue
-		}
-		body, err2 := NormalizeBody(e)
-		if err2 != nil {
-			return rep, err2
-		}
-		id++
-		if _, err = insEntry.Exec(id, hw, encodeBody(body)); err != nil {
-			return rep, err
-		}
-		txt := ""
-		if plan.FullText {
-			txt = StripHTML(body)
-		}
-		if _, err = insFts.Exec(id, hw, txt); err != nil {
-			return rep, err
-		}
-		if isSubEntry(hw) {
-			subEntries++
-		}
-		if _, err = insWref.Exec(hw, strings.ToLower(hw), id); err != nil {
-			return rep, err
-		}
-		for _, extra := range e.Headwords[1:] {
-			extra = strings.TrimSpace(extra)
-			if extra != "" && extra != hw {
-				if _, err = insAlias.Exec(extra, id); err != nil {
-					return rep, err
-				}
-			}
-		}
-		if progress != nil && id%batchSize == 0 {
-			progress(clampDone(int(id), total), total)
-		}
+	w := newWriter(tx, progress, total)
+	defer w.close()
+	if err = fill(r, src, srcMeta.Path, plan, w); err != nil {
+		return rep, err
 	}
+	if err = w.flush(); err != nil {
+		return rep, err
+	}
+	id, subEntries, linkCount := w.id, w.subEntries, w.linkCount
 
 	unresolved := 0
 	// records whose row has landed, in the unit `total` counts (see below).
 	donerec := clampDone(int(id), total)
 	if linkCount > 0 {
-		// A redirect's row is written HERE, not in the loop above, and on a
-		// dictionary that is mostly inflections that is most of the work: this
-		// one is 69,002 articles against 2,812,317 @@@LINKs, so the scan tops
-		// out at 2% of EntryCount and this pass carries the other 98%. Reported
+		if !indexed {
+			if _, err = tx.Exec("CREATE INDEX idx_entry_w ON entry(w COLLATE NOCASE)"); err != nil {
+				return rep, err
+			}
+			indexed = true
+		}
+		if err = fillWref(tx); err != nil {
+			return rep, err
+		}
+		// A redirect's row is written HERE, not while the entries are read
+		// (fill), and on a dictionary that is mostly inflections that is most
+		// of the work: this one is 69,002 articles against 2,812,317 @@@LINKs,
+		// so the scan tops out at 2% of EntryCount and this pass carries the
+		// other 98%. Reported
 		// in the same unit as the scan - one record, whenever its row lands -
 		// so the count is monotone and, when the source header told the truth,
 		// ends exactly at total.
@@ -304,8 +268,10 @@ func IngestPlan(r dict.Reader, dbPath string, plan Plan, progress Progress) (rep
 		}
 	}
 
-	if _, err = tx.Exec("CREATE INDEX idx_entry_w ON entry(w COLLATE NOCASE)"); err != nil {
-		return rep, err
+	if !indexed {
+		if _, err = tx.Exec("CREATE INDEX idx_entry_w ON entry(w COLLATE NOCASE)"); err != nil {
+			return rep, err
+		}
 	}
 	if _, err = tx.Exec("CREATE INDEX idx_alias_w ON alias(w COLLATE NOCASE)"); err != nil {
 		return rep, err
@@ -442,6 +408,31 @@ func tempDBName(dbPath string) string {
 	b := make([]byte, 6)
 	_, _ = rand.Read(b)
 	return dbPath + ".ingest." + hex.EncodeToString(b)
+}
+
+// defaultCacheKiB is SQLite's default page cache (cache_size -2000).
+const defaultCacheKiB = 2000
+
+// indexFirstKiB decides whether the headword index is built before the rows
+// (D182, 8A): when the source averages more than 2 KiB per entry its articles
+// are large, and an index built after the rows reads all of them again (3.5
+// GB on a 17 GB OED) - but built during the inserts it needs a page cache that
+// holds it, about 64 bytes an entry with room to spare, and only a budget that
+// fits that pays for it. It returns the page cache in KiB, or 0 to build the
+// index after the rows.
+func indexFirstKiB(m dict.Meta, acct *sysmem.Account) int {
+	if m.EntryCount <= 0 {
+		return 0
+	}
+	fi, err := os.Stat(m.Path)
+	if err != nil || fi.IsDir() || fi.Size()/int64(m.EntryCount) <= 2048 {
+		return 0
+	}
+	need := 2 * int64(m.EntryCount) * 64
+	if need>>10 <= defaultCacheKiB || need > sysmem.Budget()/4 || !acct.TryAcquire(need) {
+		return 0 // an index the default cache holds is built after the rows as cheaply
+	}
+	return int(need >> 10)
 }
 
 // NormalizeBody converts an ingest Entry body to HTML. Exported because

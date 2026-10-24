@@ -9,49 +9,18 @@ plugins {
     id 'com.android.application'
 }
 
-// Same stamp the Makefile puts into the Go binary: git describe, or "dev".
-// build-android.yml overrides versionName with the release TAG; versionCode is
-// computed here and nowhere else, so a local build and a CI build of the same
-// commit cannot disagree about it (they used to: CI passed the commit count,
-// the Makefile passed nothing and got the literal 1, and every locally built
-// APK was then a DOWNGRADE of any released one - uninstall-or-nothing).
-def gitVersion = {
-    try {
-        def p = ['git', '-C', rootDir.parent, 'describe', '--tags', '--always', '--dirty'].execute()
-        // read the stream to EOF, THEN wait: exitValue() on a process that has
-        // not been reaped throws IllegalThreadStateException, and the catch
-        // below would silently turn a perfectly good tag into "dev".
-        def out = p.text.trim()
-        return p.waitFor() == 0 && !out.isEmpty() ? out : 'dev'
-    } catch (Exception ignored) {
-        return 'dev'
-    }
-}
-
-// versionCode = commits on HEAD. Monotonic, needs no stored state, and is what
-// the released APKs already carry (v3.7.3 shipped as 202). A shallow clone
-// yields a wrong count, so CI checks out with fetch-depth: 0.
-def gitCount = {
-    try {
-        def p = ['git', '-C', rootDir.parent, 'rev-list', '--count', 'HEAD'].execute()
-        def out = p.text.trim()
-        if (p.waitFor() != 0 || !out.isInteger()) return 1
-        def n = out as int
-        return n > 0 ? n : 1
-    } catch (Exception ignored) {
-        return 1
-    }
-}
-
-// The one versionName, computed once: defaultConfig stamps it and the APK file
-// name carries it (below), so the two cannot disagree. The Makefile passes it
-// as -PversionName=$(VERSION) and CI as the release tag; gitVersion() is only
-// the fallback for a bare `./gradlew`.
-def appVersion = project.hasProperty('versionName') ? project.property('versionName') as String : gitVersion()
+// The version of the app as released: written by `make release` (tools/
+// release.sh) in the commit the release tag points to, as literals in
+// defaultConfig below, so F-Droid and anything else reading this file at the
+// tag finds them. versionCode follows from the version, never from git history:
+// major*1000000 + minor*10000 + patch*100 + 1-19 alpha.N, 21-39 beta.N, 41-59
+// rc.N, 90 the release (3.7.9 -> 3070990). -PversionName / -PversionCode
+// override them for a local build; the Makefile passes git describe as the
+// name, so a build between releases says what it is.
 // File-name form: no leading "v" (v3.7.5 -> 3.7.5, as the Windows installer
 // already does) and no "/" (legal in a tag, a directory in a path). The
 // Makefile's APK_VERSION applies the same two rules - change both or neither.
-def apkVersion = appVersion.replaceFirst(/^v/, '').replace('/', '_')
+def apkVersion = { (project.findProperty('versionName') ?: android.defaultConfig.versionName).toString().replaceFirst(/^v/, '').replace('/', '_') }
 
 android {
     namespace = 'com.legbehindneck.wudict'
@@ -80,8 +49,10 @@ android {
         // vector adaptive icon needs no PNG fallbacks at 26+.
         minSdk 26
         targetSdk 36
-        versionCode(project.hasProperty('versionCode') ? project.property('versionCode') as int : gitCount())
-        versionName(appVersion)
+        versionCode 3070921
+        versionName "3.7.9-beta.1"
+        if (project.hasProperty('versionCode')) versionCode = project.property('versionCode') as int
+        if (project.hasProperty('versionName')) versionName = project.property('versionName') as String
     }
 
     // Two distributions, one source tree (D62). `foss` is the GitHub/F-Droid
@@ -184,7 +155,7 @@ androidComponents {
                 ? (apkSigned ? '' : '-unsigned')
                 : "-${variant.buildType}"
         variant.outputs.each { output ->
-            output.outputFileName.set("wudict-android-${apkAbi}-${variant.flavorName}${suffix}-${apkVersion}.apk")
+            output.outputFileName.set("wudict-android-${apkAbi}-${variant.flavorName}${suffix}-${apkVersion()}.apk")
         }
     }
 }

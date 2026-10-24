@@ -5,6 +5,7 @@
 package wmd
 
 import (
+	"bytes"
 	"fmt"
 	"math"
 	"strings"
@@ -71,11 +72,7 @@ func decode(b []byte) []byte {
 // decodeBlock is decode without the BOM: what applies anywhere in a text. It
 // reports whether anything changed; unchanged input is returned as is.
 func decodeBlock(b []byte) ([]byte, bool) {
-	clean := utf8.Valid(b)
-	for i := 0; clean && i < len(b); i++ {
-		clean = b[i] != '\r' && b[i] != 0
-	}
-	if clean {
+	if bytes.IndexByte(b, '\r') < 0 && bytes.IndexByte(b, 0) < 0 && utf8.Valid(b) {
 		return b, false
 	}
 	out := make([]byte, 0, len(b))

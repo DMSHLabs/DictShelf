@@ -79,8 +79,9 @@ func TestUnpackRatio(t *testing.T) {
 // TestNoRoom: unpacking stops above the disk's reserve, and that is not a
 // verdict on the file.
 func TestNoRoom(t *testing.T) {
-	saved := freeSpace
-	defer func() { freeSpace = saved }()
+	saved, savedRoom := freeSpace, textRoom
+	defer func() { freeSpace, textRoom = saved, savedRoom }()
+	textRoom = func() int64 { return 0 } // the temporary file is what is tested
 	tmp := t.TempDir()
 	t.Setenv("TMPDIR", tmp) // where os.CreateTemp("") writes, on unix
 	p := bigGz(t)

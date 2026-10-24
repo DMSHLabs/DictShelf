@@ -10,6 +10,8 @@ import (
 	"io"
 	"runtime"
 	"sync"
+
+	kflate "github.com/klauspost/compress/flate"
 )
 
 // Article bodies dominate a prepared dictionary: measured on a 40k-entry
@@ -56,17 +58,45 @@ func CompressBodies() bool { return compressBodies }
 //
 // Read-side is unaffected: DEFLATE decoding does not depend on the level a
 // stream was written at, so databases stay interchangeable between platforms.
-var compressLevel = func() int {
+var compressLevel = defaultLevel()
+
+func defaultLevel() int {
 	if runtime.GOOS == "android" {
 		return 1
 	}
 	return 6
-}()
+}
 
-var flateWriters = sync.Pool{New: func() any {
-	w, _ := flate.NewWriter(io.Discard, compressLevel)
-	return w
-}}
+// smallLevel is the level COMPRESSION = "small" asks for, on every platform:
+// measured on article HTML, it writes about 3 % less than level 6 (17.35 vs
+// 17.87 % of the OED's HTML, 31.39 vs 31.99 % of OALD's) at about half the
+// speed (108 vs 200 MB/s on one core) - no larger than the standard library's
+// level 6 wrote. Whole indexes: OALD 124.0 vs 126.2 MB, Wiktionary es 768.8 vs
+// 776.3 MB; indexing 1.25-1.5 times as long (D182).
+const smallLevel = 8
+
+// flateWriters compress with klauspost/compress, about twice as fast as the
+// standard library at level 6. Its output is standard DEFLATE: decodeBody and
+// every database written before read it unchanged (D182).
+var flateWriters = writerPool(compressLevel)
+
+func writerPool(level int) *sync.Pool {
+	return &sync.Pool{New: func() any {
+		w, _ := kflate.NewWriter(io.Discard, level)
+		return w
+	}}
+}
+
+// SetSmallBodies sets whether new ingests compress article bodies at
+// smallLevel (config COMPRESSION = "small") instead of the platform's default
+// level. Set at start-up, before anything is ingested.
+func SetSmallBodies(on bool) {
+	compressLevel = defaultLevel()
+	if on {
+		compressLevel = smallLevel
+	}
+	flateWriters = writerPool(compressLevel)
+}
 
 // encodeBody returns what to store for one article body.
 func encodeBody(s string) []byte {
@@ -75,7 +105,7 @@ func encodeBody(s string) []byte {
 	}
 	var buf bytes.Buffer
 	buf.WriteByte(compressedMark)
-	w := flateWriters.Get().(*flate.Writer)
+	w := flateWriters.Get().(*kflate.Writer)
 	defer flateWriters.Put(w)
 	w.Reset(&buf)
 	if _, err := io.WriteString(w, s); err != nil {

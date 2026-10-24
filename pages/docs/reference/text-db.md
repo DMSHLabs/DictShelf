@@ -78,8 +78,10 @@ for w, m in db.execute("SELECT w, m FROM entry ORDER BY id"):
 without it will fail.
 
 Each row is compressed on its own, without a shared dictionary, so any row can
-be read alone. [`NO_COMPRESS`](configuration.md#no_compress) turns compression
-off for dictionaries indexed afterwards; reading handles both forms.
+be read alone. [`COMPRESSION`](configuration.md#compression) sets how hard
+(level 6, level 1 on Android; `small`: level 8), and
+[`NO_COMPRESS`](configuration.md#no_compress) turns compression off, for
+dictionaries indexed afterwards; reading handles every level and both forms.
 
 ### Headwords, aliases and sub-entries
 

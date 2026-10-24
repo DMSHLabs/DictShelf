@@ -274,7 +274,7 @@ func ingest(src, textDB string, plan Plan, h Hooks, out *Outcome) error {
 		}
 	}
 	start := time.Now()
-	rep, err := IngestPlan(r, textDB, plan, progress)
+	rep, err := ingestPlan(r, textDB, src, plan, progress)
 	if err != nil {
 		return err
 	}

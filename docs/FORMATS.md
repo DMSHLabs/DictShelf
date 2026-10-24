@@ -71,16 +71,27 @@ The reference projects cited below (`pyglossary/…`, `mdict-go-web/…`, `draeg
   Verified on the Espasa-Calpe dump in both modes: stock markdown-it-py (`commonmark` + `table`) finds the same
   38,521 entries with the same names.
 - `internal/format/wmd`:
-  - `read.go` — the reader. It parses in ~1 MB chunks cut at heading groups, every cut confirmed by the parser
-    (a syntax tree costs ≈43× its text). Link definitions are collected file-wide and prefilled, detached from
-    their nodes. Redirects (`see:`) are folded into every matching article (exact, then case-folded); a dangling
-    one becomes a lookup-link article.
+  - `read.go`, `index.go`, `units.go` — the reader (D182), in two phases that each parse every byte once. Phase 1
+    (inside `NewReader`) reads the structure with goldmark's block parsers alone — the same top-level blocks as the
+    full parser (a syntax tree costs ≈43× its text, a block-only one far less) — in ~1 MB chunks cut at heading
+    groups. The cuts are chosen ahead and parsed in parallel; each is confirmed by its own chunk's parse, and a
+    rejected one (a `## ` line inside a code or HTML block) is repaired by doubling the window over the cuts chosen
+    ahead. Each chunk contributes its own link definitions (first label wins, file order); a parse is given only the
+    definitions its bracket spans can reference (`labels.go`). Heading text is read once every definition is known:
+    a heading without inline syntax is its content, the others are parsed again from their lines alone; then the
+    title, header and description from a full parse of the text before the first group. Redirects (`see:`) are
+    folded into every matching article (exact, then case-folded); a dangling one becomes a lookup-link article.
+    Phase 2 (`Next`) renders units of whole heading groups (~256 KiB), on worker goroutines while the preparation is
+    urgent (`dict.Urgent`), inline otherwise, always in file order, with a drift guard against phase 1. Warnings come
+    in the order the file read whole gives them.
   - `source.go` — the text a Reader reads a range at a time (`ReaderAt`), so it never holds a whole file: a clean
     plain file in place; a compressed file, or one needing R2.1 repair, decoded once (streaming, across block
-    boundaries) into a temporary file removed on Close, or into memory where no temporary file can be made. The
-    same pass collects the candidate entry lines, `]:` presence and lines 1-2. Measured: reading back a 1.18 GB
-    file peaks at 113 MB. The temporary file stops before the disk holding it falls under 1 GiB free, the memory
-    copy at half the Go memory limit (else 1 GiB): `*dict.NoRoomError`, which is `dict.ErrTooLarge`.
+    boundaries) into 4 MiB blocks in memory while the preparation budget grants them (`sysmem`, twice their size,
+    at most a quarter of the budget), past that into a temporary file removed on Close, and into memory where no
+    temporary file can be made. The same pass collects the candidate entry lines and lines 1-2, with
+    `bytes.Index`/`IndexByte`/`utf8.Valid` (≈0.3–0.9 ns a byte; a 17 GB file reads at the disk's speed). The
+    temporary file stops before the disk holding it falls under 1 GiB free, the memory copy at half the configured
+    Go memory limit (else 1 GiB): `*dict.NoRoomError`, which is `dict.ErrTooLarge`.
   - `load.go` — R2.1 decoding of a block; `.gz`/`.dz` suffixes. The R2.4 bound on a compressed file is 1 GiB or
     32 times the file's size, whichever is more (`unpackBound`; a 166 MB Wiktionary unpacks 7.0 times, a gzip
     bomb 100 and more), capped at what the build addresses (2 GiB on 32-bit). Past it: E-format, which is
@@ -119,7 +130,7 @@ The reference projects cited below (`pyglossary/…`, `mdict-go-web/…`, `draeg
   (punctuation outside); `<kbd>` for controls.
 - **Known limit (R9.3, accepted 2026-09-28):** stock goldmark is quadratic on list markers nested on one line
   (`- - - … x`: 40k deep = 2.3 s) and on tens of thousands of reference definitions in one entry (40k = 0.5 s);
-  the reader parses each chunk about twice. No guard: a crafted file in a dictionary folder can hold its first
+  the reader parses every byte twice (a block parse, then a full one). No guard: a crafted file in a dictionary folder can hold its first
   open (the auto-prepare) for minutes. Every other shape measured (brackets, emphasis, backticks, `<`, quotes,
   ordered lists, headings, `##` inside code or HTML) scales linearly.
 - Tests: examples ≡ spec, written and read; header and entry rules; chunking invisible (test + differential fuzz); clean fixed-point fuzz; names round trip; folding; idempotence in both modes; CLI round trip, gzip determinism, resources; reader golden; `-race`.

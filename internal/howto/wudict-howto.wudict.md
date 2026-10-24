@@ -263,6 +263,8 @@ Speex `.spx` audio auto-converted for browser playback. A folder named after a l
 
 An index usually takes less space than the dictionary file.
 
+To make the library 1 % to 2 % smaller, set `COMPRESSION = "small"` in `wudict.toml` ([settings](<entry://wudict command line>)). Indexing then takes up to 1.5 times as long, and the setting applies to dictionaries indexed after the change.
+
 ***
 
 - [index](/browse?dict=wudict-howto)

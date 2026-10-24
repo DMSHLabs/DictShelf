@@ -603,13 +603,15 @@ func FuzzRead(f *testing.F) {
 		"# D\nwudict: 1\n\n## a\n\n| x |\n| - |\n| y |\n",
 		"# D\r\nwudict: 1.0\r\n\r\n##\t\\#\r\n\r\n[r]: <entry://x>\r\n",
 		"# D\nwudict: 1\n\n## a\n[x]\n## b\n\n[x]: y\n",
+		"# D\nwudict: 1\n\n## a\n\n> [foo\n> bar]\n\n## b\n\n> x [y][foo\n> bar]\n\n[foo bar]: /u\n",
+		"# D\nwudict: 1\n\n## a\n\n| c |\n| - |\n| [p\\|q] |\n\n[p|q]: /u\n[p\\|q]: /v\n",
 	} {
 		f.Add([]byte(s))
 	}
-	saved := chunkSize
-	defer func() { chunkSize = saved }()
-	readAll := func(t *testing.T, data []byte, size int) ([]dict.Entry, dict.Meta, error) {
-		chunkSize = size
+	saved, savedAll := chunkSize, prefillAll
+	defer func() { chunkSize, prefillAll = saved, savedAll }()
+	readAll := func(t *testing.T, data []byte, size, all int) ([]dict.Entry, dict.Meta, error) {
+		chunkSize, prefillAll = size, all
 		r, err := read(decode(data))
 		if err != nil {
 			return nil, dict.Meta{}, err
@@ -627,10 +629,16 @@ func FuzzRead(f *testing.F) {
 		}
 	}
 	f.Fuzz(func(t *testing.T, data []byte) {
-		e1, m1, err1 := readAll(t, data, 1<<30)
-		e2, m2, err2 := readAll(t, data, 1)
+		e1, m1, err1 := readAll(t, data, 1<<30, 1<<30)
+		e2, m2, err2 := readAll(t, data, 1, 1<<30)
 		if (err1 == nil) != (err2 == nil) || !reflect.DeepEqual(e1, e2) || !reflect.DeepEqual(m1, m2) {
 			t.Fatalf("chunked read differs:\nwhole %v %+v %+v\nchunk %v %+v %+v", err1, m1, e1, err2, m2, e2)
+		}
+		// The definitions a parse is given are found from its text: the
+		// lookup must give what giving it all of them gives.
+		e3, m3, err3 := readAll(t, data, 1, 0)
+		if (err1 == nil) != (err3 == nil) || !reflect.DeepEqual(e1, e3) || !reflect.DeepEqual(m1, m3) {
+			t.Fatalf("referenced definitions read differently:\nall  %v %+v %+v\nref  %v %+v %+v", err1, m1, e1, err3, m3, e3)
 		}
 	})
 }
@@ -684,6 +692,9 @@ x
 
 [later]: entry://later "defined last"
 `,
+	"labels across lines and in containers": "# D\nwudict: 1\n\n## quote\n\n> [foo\n> bar] and x [y][foo\n>   bar]\n\n" +
+		"## list\n\n- [foo\n  bar] \\[not] \\\\[esc]\n\n## cell\n\n| c |\n| - |\n| [p\\|q] [Foo  Bar] |\n\n" +
+		"## heading [foo bar]\n\nbody [ESC]\n\n[foo bar]: entry://fb\n[p|q]: entry://pq\n[p\\|q]: entry://pq2\n[esc]: entry://esc\n",
 	"unclosed fence swallows the rest": "# D\nwudict: 1\n\n## a\n\n```\n## b\n\n## c\n",
 	"deep containers":                  "# D\nwudict: 1\n\n## a\n\n> - > - x\n>\n> ## inside\n## b\n\ny\n",
 	"redirects across cuts":            "# D\nwudict: 1\n\n## x\nsee: y\n\n## y\n\nbody\n\n## z\n## Z2\nsee: Y\n",
@@ -700,11 +711,11 @@ func TestChunkingIsInvisible(t *testing.T) {
 		chunkDocs["spec example "+mode] = string(b)
 	}
 	delete(chunkDocs, "spec examples")
-	saved := chunkSize
-	defer func() { chunkSize = saved }()
-	readAll := func(t *testing.T, text string, size int) (dict.Meta, []dict.Entry, []string, int) {
+	saved, savedAll := chunkSize, prefillAll
+	defer func() { chunkSize, prefillAll = saved, savedAll }()
+	readAll := func(t *testing.T, text string, size, all int) (dict.Meta, []dict.Entry, []string, int) {
 		t.Helper()
-		chunkSize = size
+		chunkSize, prefillAll = size, all
 		r, err := read(decode([]byte(text)))
 		if err != nil {
 			t.Fatal(err)
@@ -725,8 +736,11 @@ func TestChunkingIsInvisible(t *testing.T) {
 	}
 	for name, text := range chunkDocs {
 		t.Run(name, func(t *testing.T) {
-			m1, e1, w1, n1 := readAll(t, text, 1<<30)
-			m2, e2, w2, n2 := readAll(t, text, 1)
+			m1, e1, w1, n1 := readAll(t, text, 1<<30, 1<<30)
+			m2, e2, w2, n2 := readAll(t, text, 1, 1<<30)
+			if m3, e3, w3, _ := readAll(t, text, 1, 0); !reflect.DeepEqual(m1, m3) || !reflect.DeepEqual(e1, e3) || !reflect.DeepEqual(w1, w3) {
+				t.Errorf("referenced definitions read differently:\nall %+v\n    %+v\nref %+v\n    %+v", m1, e1, m3, e3)
+			}
 			if n1 != 1 {
 				t.Errorf("whole-file read used %d chunks", n1)
 			}

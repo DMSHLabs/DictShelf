@@ -1,0 +1,176 @@
+
+
+v3.7.9
+
+🚀 Features
+(panel) Set custom dictionary name via panel > About this dictionary > Rename
+(stardict) Show the images, sound, video and attachments listed in StarDict resource ('r') entries; prepared StarDict dictionaries are marked outdated, and refreshing one picks it up
+(intake) Install dictionaries up to 256 GB (full Wikipedia ZIMs); a download or install that would not fit is refused up front, saying how much space it needs
+(history) Favourites and history: star words with ☆ next to the search box; your history and favourites show under the empty search box
+(search) Case and accents rank results instead of excluding them: corazon finds corazón, March finds march and March, in exact, prefix and wildcard search; results in dictionary order
+(desktop) The tray icon opens wudict; a server bound to every address shows its LAN addresses
+(browse) Indexing progress shown while a new dictionary is prepared for browsing
+(config) COMPRESSION = "small" in wudict.toml: a library 1-2% smaller, indexing up to 1.5× as long; "fast" stays the default
+
+⚡ Performance
+(zim) Wikipedia-scale ZIM files open without loading their index into memory; images and video are served straight from the file
+(slob) Large .slob files open instantly and use about half the memory (6.2 GB OED: 530 → 279 MB)
+(prepare) Dictionaries made mostly of redirects (@@@LINK) prepare up to 2× faster
+(wildcard) Patterns that start with a non-Latin letter (Cyrillic, Hebrew, CJK…) run up to 80× faster on large dictionaries
+(slob) The first search in a large .slob that is not prepared yet is about 1.5× faster
+(prepare) Large dictionaries index 6-9× faster while you wait on them, 2× faster in the background (17 GB wudict markdown OED: 4:44 → 35 s; 1.1 GB Spanish Wiktionary: 2:03 → 19 s), with the same content
+(prepare) Article text is compressed in parallel with a faster compressor; rows are written 256 at a time
+(wudict markdown) Two parses instead of three, in parallel; a reference-style file with many link definitions no longer slows down quadratically
+(memory) Indexing uses free RAM within a budget (half of what is free, at most 1/8 of the machine; on Android half of the app's memory limit) and falls back to one core when it runs out; background indexing stays on one core
+(zim) ZIM optimizations
+
+🐛 Bug Fixes
+(media) Audio and video from MDict, slob, ZIM and Babylon dictionaries, and from prepared ones without a media pack, now support seeking (browsers such as Safari need it to play video); Speex audio converted to WAV too
+(mdx) Chinese MDict dictionaries declaring GB18030 no longer show garbled text; prepared MDict dictionaries are marked outdated, and refreshing one picks it up
+(stardict) Wikipedia-scale compressed indexes (.idx.gz over 256 MB) are no longer refused
+(stardict) A quote in an XDXF cross-reference no longer breaks the link
+(media) A media pack no longer fails as a whole because one file is over 1 GB
+(ui) Theme, layout and dictionary choices apply even when the browser cannot store preferences
+(build) Release workflows: blank-tag purego release, one version stamp for all assets, Actions on Node 24; make run/open/purge and apk-play-release fixes
+(zim) Some ZIM files failed to open
+(config) NO_COMPRESS and the Android memory limit now apply to the indexing that starts with the server
+(browse) Clicking a headword in Browse selects its dictionary in the dictionary picker
+(title) A custom dictionary title is used in the article sections too
+(windows) Explorer no longer opens on launch
+(ui) Typing / to focus the search box shows it if it is hidden
+(ci) macOS builds on macos-15
+
+v3.7.8
+
+🚀 Features
+(panel) Hybrid A-Z + pinned sorting; pin icon appends to the pin list, ⬆️ makes it first
+(wildcard) Add wildcard search type: *matter finds antimatter; p?t finds put,pot,pet,pat etc.
+(init) Verbose message for long operations
+(wildcard) Wildcard stabilize, retire of contains search
+(ui) Dynamic hints in search placeholder
+🐛 Bug Fixes
+(url-share) Fix Import busy during URL share installation in some scenarios
+(svg) Optimize sorting; add svg for move to top
+(pinned) Migration from previous version with no pins only keep top 5 dictionaries pinned
+(macos) Macos tray library crash fix
+(macos) Macos deployment target 12.0
+
+v3.7.7
+🚀 Features
+(groups) Editable dictionary groups
+(dsl) DSL secondary zones collapsed on open; expandable via icon tap or Ctrl+* on desktop
+(dump) Show progress stats during export
+(ui) Set max open dictionaries ☰ → Open: 1/5/All in the panel
+(ui) Dictionary panel ☰ → : search by dictionary title or group
+(ui) remember last search type (prefix, exact..)
+🐛 Bug Fixes
+(url-share) Fix wudict howto links
+(windows) fix Windows file lock handling
+(dsl) Lenient DSL parser: do best effort to render incorrect DSL markup
+(reindex) Fix stuck reindexing DSL with _abrv.dsl companions
+(dicts) Use HTTP 304 for caching unchanged data
+(windows) Fix windows-specific paths and folders correctness
+
+v3.7.6
+🚀 Features
+(url-sharing) Install dictionary collections via share URLs with install proxy at https://legbehindneck.com/wudict/ -- accepts URL of folder or files to install e.g. with https://legbehindneck.com/wudict/#https://dumps.wikimedia.org/kiwix/zim/wikipedia/
+(index) Rescan folders offers to delete orphan indexes
+🐛 Bug Fixes
+(url-share) Review and bugfix collection sharing
+(url-sharing) Code review fixes for dictionary collections URL sharing
+
+
+v3.7.5
+🚀 Features
+(ui) Double-tap a word to search it
+(fts) Full-text search queries
+(browse) List all headwords in a dictionary
+(ui) Group dictionaries by language, publisher, type, etc.
+(mdict) Python scripts to export a wudict library to MDict .mdx/.mdd, and to import CSV/JSON
+🐛 Bug Fixes
+(cli) `wudict info` is more informative
+(browse) Navigation chip position
+(android) No accordion header clipping in edge-to-edge mode; no screen flicker on cold launch
+
+
+v3.7.4
+🚀 Features
+(android) Install dictionaries from shared URLs and file managers: share a dictionary URL from any browser or app to wuDict; companion files such as .mdd and .files.zip are downloaded too; .zip and .7z archives open from file managers
+(ui) Open first: ☰ → ⚙️ → Fastest (default) or My order
+(android) Settings → Immersive Mode: cutout colours following the OS or wudict theme, or edge-to-edge
+(android) Styler: insert custom font CSS via Custom styles… → Files → Insert
+🐛 Bug Fixes
+(dsl) Better decoding of DSL files that are neither UTF-16 nor UTF-8; headword escaping
+(stardict) dictzip .dz FEXTRA panic (#13)
+(styler) Toolbar no longer clipped in narrow windows
+(go) Stability fixes
+
+
+v3.7.3
+🚀 Features
+(fts) Full-text search highlights occurrences, with a pager and keyboard navigation
+(files) Styler supports user files
+(ui) Improved auto-focus on Android and desktop
+🐛 Bug Fixes
+(styler) Show the changed indicator
+(api) OpenAPI schema update
+
+
+v3.7.2
+- artmark for semantic Lingvo DSL engine
+
+
+v3.7.1
+(perf) (ui)
+closes #9 #11
+
+- android: add Settings screen via long tap on app icon
+- font size adjustable via +/− under ⚙️
+- add/edit custom CSS styles via ☰ → ⚙️ → ✏️ [Custom Styles] with presets and live editor (android + desktop); e.g try `Compact view`
+- android: setting to open in popup or full app when triggered via Share or text selection menu in other apps
+- android perf optimizations, offload indexing to service to prevent the OS form killing the process (must show notification)
+- dictionary panel improvements: add About, Remove, Progress, and more
+- add DSL abbreviations support
+- allow delete index and original dictionaries from the dictionary panel - loopback only, for remote LAN users ALLOW_REMOTE_DELETE=1 is required (off by default)
+- CPU and memory optimizations
+- android access hardening
+- MDX v1/v2: fixed articles that returned trailing bytes from the next entry (every last entry of a key block). Dictionaries prepared with an earlier version keep the old text — remove and re-prepare them to pick up the fix
+- MDX v3: a corrupt or truncated file could hang the scan instead of reporting an error
+- Lingvo DSL: fixed non-Latin text being read as mojibake when the file has no BOM — BOM-less UTF-16 is now recognised in both byte orders, including Cyrillic exports, which were previously read as if they were UTF-8
+- StarDict: removing one dictionary no longer deletes a res/ folder shared with its neighbours in the same directory
+- full-text index no longer stops at a self-closing <script/>
+- Lingvo DSL: [/m2] and friends now close the indented paragraph they open — the indent no longer runs to the end of the article
+- ZIM: images and other resources in pre-6.1 files no longer fail to load
+- Babylon BGL: the reported entry count was roughly double the real one
+- a failed prepare now says why (disk full, unreadable file) instead of just "failed"
+- Android: a server that starts but never opens its port is now stopped instead of left running
+- exact lookups in prepared dictionaries no longer scan the whole dictionary
+- config: TRAY, VERBOSE, NO_BROWSER and USE_CACHED now read "no"/"off"/"false" as off (they meant on)
+- SERVER_IP now accepts an IPv6 address
+- reject cross-site requests to everything but the read-only extension API
+- the access key never appears in the log
+- fix format parsing bugs
+- correctness
+- android: enforce access control token; desktop: via `TRUSTED_HOSTS`, `AUTH`, `AUTH_TOKEN` config keys
+- multiple invisible 🥷 backend performance tweaks and hardening
+- fix pronunciation audio echo
+
+
+v3.7.0
+- About section for each dictionary1
+- Lingvo DSL: _abrv.dsl, .ann handling
+
+
+v3.6
+(lemmas) (cli)
+
+fixes #6 #3 #7 #5
+
+- ZIM dictionaries support - get yours at https://library.kiwix.org/
+- `aaaton/golem/v4` lemmatization
+- file name, parent dir name, and title-based language detection for lemmatization
+- language detection for lemmatization from dictionary metadata if present, filename, or subdir name
+- lemmas.html page for web ui downloading and new CLI commands: `wudict lemmas list` and `wudict lemmas download es fr de it`
+- CLI only: `wudict dump -o somedir /path/dict.mdx` to export as pyglossary-compatible .CSV
+- CORS whitelisting
+- DSL attachments and video support

@@ -275,6 +275,29 @@ Store article text uncompressed.
 
 The library becomes about 3 times larger; reads are slightly faster.
 
+### COMPRESSION
+
+How hard article text is compressed when a dictionary is indexed.
+
+| | |
+| --- | --- |
+| Flag | none, environment and file only |
+| Values | `fast`, `small` |
+| Default | `fast` |
+
+- `fast`: the quickest indexing.
+- `small`: the library is 1 % to 2 % smaller, and indexing takes up to 1.5 times
+  as long.
+
+The setting applies to dictionaries indexed after the change; dictionaries
+already indexed keep their size. On Android, `fast` compresses less than on a
+desktop, to use less battery. With [`NO_COMPRESS`](#no_compress) set to `1`,
+article text is not compressed and `COMPRESSION` has no effect.
+
+```toml
+COMPRESSION = "small"
+```
+
 ## Lemmatization
 
 With lemma data for a language, a search for an inflected form finds the lemma:

@@ -300,6 +300,14 @@ SETTINGS
                           env: NO_COMPRESS    toml: NO_COMPRESS
                           default: off (article text is DEFLATE-compressed)
 
+  COMPRESSION = "small"   How hard article text is compressed when a dictionary
+                          is indexed. "fast": the quickest indexing. "small": a
+                          library 1-2%% smaller; indexing takes up to 1.5 times
+                          as long. Applies to dictionaries indexed after the
+                          change. NO_COMPRESS takes precedence.
+                          env: COMPRESSION    toml: COMPRESSION
+                          default: fast
+
   --use-cached            Also list indexed dictionaries whose dictionary files
                           are gone. "Use these dictionaries" on the setup page
                           sets it.
@@ -1415,9 +1423,24 @@ Hint: pick another port with --port, e.g.:  wudict --port %s
 		}
 		regOpts = append(regOpts, server.WithBuiltin(server.Builtin{ID: howto.ID, Path: filepath.Join(howtoDir, howto.FileName)}))
 	}
-	// Sized before the registry exists: NewRegistry can already start
-	// background work on this lane (the abbreviation sweep).
+	// Set before the registry exists: NewRegistry can already start
+	// background work on this lane (the abbreviation sweep), which prepares
+	// with these - the compression, the memory ceiling the preparation budget
+	// follows (D182), the lane. From here on a preparation is urgent only where
+	// the server marks it so.
 	server.SetIndexWorkers(cfg.IndexWorkers)
+	store.SetCompressBodies(!cfg.NoCompress)
+	store.SetSmallBodies(cfg.Compression == config.CompressionSmall)
+	if cfg.MemoryLimit > 0 {
+		// A soft ceiling: Go collects harder instead of growing past it. Set it
+		// through the server rather than debug directly, because a ceiling on
+		// its own only buys more GC - the registry needs the same number to
+		// know when to shed caches instead, which is what turns pressure into
+		// freed memory rather than a collector spinning on a live set (D64).
+		server.SetMemoryLimit(cfg.MemoryLimit)
+		logx.V("memory limit: %d MB", cfg.MemoryLimit>>20)
+	}
+	dict.SetUrgentDefault(false)
 	reg, err := server.NewRegistry(cfg.DictDirs, cfg.UseCached, regOpts...)
 	if err != nil {
 		return fmt.Errorf("scanning %s: %w", strings.Join(cfg.DictDirs, ", "), err)
@@ -1430,16 +1453,6 @@ Hint: pick another port with --port, e.g.:  wudict --port %s
 	srv := server.New(reg)
 	srv.ConfigPath = cfgFile
 	srv.User = user
-	store.SetCompressBodies(!cfg.NoCompress)
-	if cfg.MemoryLimit > 0 {
-		// A soft ceiling: Go collects harder instead of growing past it. Set it
-		// through the server rather than debug directly, because a ceiling on
-		// its own only buys more GC - the registry needs the same number to
-		// know when to shed caches instead, which is what turns pressure into
-		// freed memory rather than a collector spinning on a live set (D64).
-		server.SetMemoryLimit(cfg.MemoryLimit)
-		logx.V("memory limit: %d MB", cfg.MemoryLimit>>20)
-	}
 	srv.Version = Version
 	srv.DictDirOrigin = cfg.Origin("DICT_DIR")
 	srv.DictDirEditable = cfg.EditableInFile("DICT_DIR")
@@ -1654,6 +1667,7 @@ func applyLibrarySettings() {
 	}
 	store.SetDBDir(cfg.DBDir)
 	store.SetCompressBodies(!cfg.NoCompress)
+	store.SetSmallBodies(cfg.Compression == config.CompressionSmall)
 	if cfg.Verbose {
 		logx.Enabled = true
 	}

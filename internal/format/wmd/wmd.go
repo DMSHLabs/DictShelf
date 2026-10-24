@@ -34,6 +34,7 @@ func init() {
 	// 2 is the gate, whatever the file is called (R2.2).
 	for _, ext := range []string{Ext, ExtGz, ExtDz, ExtPlain} {
 		dict.RegisterSniffed(ext, Claim, open, read)
+		dict.RegisterSelfPrepared(ext)
 	}
 	dict.RegisterReaderVersion(Format, ReaderVersion)
 	resource.Register(Format, resource.Provider{Sources: MediaSources})

@@ -24,6 +24,7 @@ const ReaderVersion = 1
 func init() {
 	dict.RegisterFormat(".bgl", func(path string) (dict.Dictionary, error) { return Open(path) })
 	dict.RegisterReader(".bgl", func(path string) (dict.Reader, error) { return NewReader(path) })
+	dict.RegisterSelfPrepared(".bgl")
 	dict.RegisterReaderVersion("bgl", ReaderVersion)
 }
 

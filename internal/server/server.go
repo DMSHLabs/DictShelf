@@ -998,6 +998,12 @@ func (s *Server) baseDictInfo(e *entry) dictInfo {
 	}
 	// fall back to a full open (non-probeable formats, or probe errors).
 	info := dictInfo{ID: e.ID, Path: e.Path}
+	if dict.SelfPrepares(e.Path) {
+		// The list waits on this open, which may be the dictionary's
+		// preparation - the loading line a person watches, and how a freshly
+		// imported one is first prepared (D182).
+		defer dict.MarkUrgent(e.Path)()
+	}
 	d, err := e.open()
 	if err != nil {
 		info.Error = err.Error()
@@ -1371,6 +1377,11 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 		e := e
 		begin[i] = streamSlot{Dict: e.ID, Name: e.ID}
 		openers[i] = func() (dict.Dictionary, error) {
+			if demand && dict.SelfPrepares(e.Path) {
+				// A search of this one dictionary waits on its open, which
+				// for this format may be its preparation (D182).
+				defer dict.MarkUrgent(e.Path)()
+			}
 			d, err := e.openWithin(fan)
 			if err == nil && s.AutoIndex {
 				// A search of one dictionary is a demand for that dictionary,
