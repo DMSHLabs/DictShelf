@@ -44,7 +44,7 @@ Browse now receives the effective typed and lemma forms from its single-dictiona
 softer theme accent for lemma-only highlights. Completed find sessions retain those forms. Build and
 browser runtime checks are pending.
 
-Current checkout: branch `DictShelf` at `ce8b19c9`, merging `dev` at `a9ae9a93`; merge remains uncommitted. Safe Stop cancellation detection is staged and its focused tests and full Go build pass. No
+Current checkout: branch `DictShelf` at `34f2d3d2`; the merge from `dev` is complete. Safe Stop cancellation detection is included, and dictionary icon loading combines asynchronous caching with embedded LSD icons. `go test ./...` and `git diff --check` pass. No
 upstream is configured. The application uses one DSL reader with GoldenDict-
 compatible repair and article preparation; there is no Original/GD selection
 or duplicate DSL index. `docs/DSL.md` and `tools/dslcompare/README.md` describe
