@@ -26,6 +26,7 @@ import (
 
 	"github.com/wuweidict/wudict/internal/dict"
 	"github.com/wuweidict/wudict/internal/indexconst"
+	"github.com/wuweidict/wudict/internal/lang"
 	"github.com/wuweidict/wudict/internal/logx"
 	"github.com/wuweidict/wudict/internal/search"
 	"github.com/wuweidict/wudict/internal/store"
@@ -178,7 +179,7 @@ func (s *Server) mergedBrowsePage(ctx context.Context, q url.Values, progress fu
 	if err := rememberMergedCacheGroup(path, q.Get("wildgroup"), useFTS, useTrigram); err != nil {
 		return browseResp{}, err
 	}
-	return readMergedBrowsePage(path, q, cacheID)
+	return readMergedBrowsePage(ctx, path, q, cacheID)
 }
 
 // One merged base can serve several groups and masks. Keep every group using it
@@ -187,7 +188,7 @@ func rememberMergedCacheGroup(path, group string, fts, trigram bool) error {
 	if group == "" || len(group) > 256 {
 		return nil
 	}
-	db, err := store.OpenWildcardCacheDB(path)
+	db, err := store.OpenWildcardCacheDBWAL(path)
 	if err != nil {
 		return err
 	}
@@ -202,7 +203,7 @@ func rememberMergedCacheGroup(path, group string, fts, trigram bool) error {
 func ensureMergedBrowseCache(ctx context.Context, path, signature string, sources []mergedBrowseSource, useFTS, useTrigram bool, progress func(int, int) error) error {
 	started := time.Now()
 	diagnostic := browseFindDiagnosticEnabled(ctx)
-	if db, err := store.OpenWildcardCacheDB(path); err == nil {
+	if db, err := store.OpenWildcardCacheDBWAL(path); err == nil {
 		var saved string
 		err = db.QueryRow(`SELECT signature FROM merged_meta LIMIT 1`).Scan(&saved)
 		_ = db.Close()
@@ -214,7 +215,7 @@ func ensureMergedBrowseCache(ctx context.Context, path, signature string, source
 		}
 	}
 	removeWildcardCacheFiles(path)
-	db, err := store.OpenWildcardCacheDB(path)
+	db, err := store.OpenWildcardCacheDBWAL(path)
 	if err != nil {
 		return err
 	}
@@ -404,12 +405,17 @@ func ensureMergedBrowseCache(ctx context.Context, path, signature string, source
 	return nil
 }
 
-func readMergedBrowsePage(path string, q url.Values, cacheID string) (browseResp, error) {
-	db, err := store.OpenWildcardCacheDB(path)
+func readMergedBrowsePage(ctx context.Context, path string, q url.Values, cacheID string) (browseResp, error) {
+	started := time.Now()
+	diagnostic := browseFindDiagnosticEnabled(ctx)
+	openStarted := time.Now()
+	db, err := store.OpenWildcardCacheDBWAL(path)
 	if err != nil {
 		return browseResp{}, err
 	}
 	defer db.Close()
+	openMS := time.Since(openStarted).Milliseconds()
+	metadataStarted := time.Now()
 	var total int
 	var encoded string
 	if err := db.QueryRow(`SELECT total,alphabet_json FROM merged_meta LIMIT 1`).Scan(&total, &encoded); err != nil {
@@ -419,6 +425,7 @@ func readMergedBrowsePage(path string, q url.Values, cacheID string) (browseResp
 	if err := json.Unmarshal([]byte(encoded), &alphabet); err != nil {
 		return browseResp{}, err
 	}
+	metadataMS := time.Since(metadataStarted).Milliseconds()
 	page, _ := strconv.Atoi(q.Get("p"))
 	if page < 1 {
 		page = 1
@@ -429,10 +436,13 @@ func readMergedBrowsePage(path string, q url.Values, cacheID string) (browseResp
 	}
 	offset := (page - 1) * browsePageSize
 	mark := offset
+	locateMS := int64(0)
 	if raw := q.Get("at"); raw != "" {
+		locateStarted := time.Now()
 		if err := db.QueryRow(`SELECT COUNT(*) FROM merged_word WHERE word<? COLLATE NOCASE`, raw).Scan(&mark); err != nil {
 			return browseResp{}, err
 		}
+		locateMS = time.Since(locateStarted).Milliseconds()
 		offset = max(0, mark-mark%browsePageSize)
 		page = offset/browsePageSize + 1
 	}
@@ -450,6 +460,7 @@ func readMergedBrowsePage(path string, q url.Values, cacheID string) (browseResp
 		return browseResp{}, err
 	}
 	words := make([]string, 0, browsePageSize)
+	pageStarted := time.Now()
 	if anchorWord != "" {
 		rows, err := db.Query(`SELECT word FROM merged_word WHERE word>=? COLLATE NOCASE ORDER BY word COLLATE NOCASE LIMIT ?`, anchorWord, offset-anchorOffset+browsePageSize)
 		if err != nil {
@@ -488,18 +499,22 @@ func readMergedBrowsePage(path string, q url.Values, cacheID string) (browseResp
 			return browseResp{}, err
 		}
 	}
+	pageMS := time.Since(pageStarted).Milliseconds()
 	_ = os.Chtimes(path, time.Now(), time.Now())
+	if diagnostic {
+		logx.System("headword_merged_page page=%d offset=%d total=%d words=%d open_ms=%d metadata_ms=%d locate_ms=%d read_ms=%d total_ms=%d", page, offset, total, len(words), openMS, metadataMS, locateMS, pageMS, time.Since(started).Milliseconds())
+	}
 	return browseResp{Dict: q.Get("dict"), Total: total, Page: page, Pages: pages, Size: browsePageSize, At: mark, Words: words, Alphabet: alphabet, mergedCacheID: cacheID}, nil
 }
 
-func mergedFindSignature(baseID, query, within string, mask, withinMask bool) string {
+func mergedFindSignature(baseID, query, within, withinMode string, mask, withinMask bool) string {
 	if mask && search.IsSimpleMask(query) {
 		query = search.NormalizeSimpleMask(query)
 	}
 	if withinMask && search.IsSimpleMask(within) {
 		within = search.NormalizeSimpleMask(within)
 	}
-	parts := []string{baseID, query, within, strconv.FormatBool(mask), strconv.FormatBool(withinMask), "base-position-v4"}
+	parts := []string{baseID, query, within, withinMode, strconv.FormatBool(mask), strconv.FormatBool(withinMask), "base-position-v7-lemma-both"}
 	return strings.Join(parts, "\x00")
 }
 
@@ -508,7 +523,7 @@ func mergedFindCachePath(dir, signature string) string {
 	return filepath.Join(dir, "wildcard_merged_find_"+hex.EncodeToString(hash[:16])+".db")
 }
 
-func mergedFindMatchers(query, within string, mask, withinMask bool) (func(string) bool, error) {
+func mergedFindMatchers(query, within, withinMode string, mask, withinMask bool) (func(string) bool, error) {
 	query = strings.TrimSpace(query)
 	within = strings.TrimSpace(within)
 	if mask && search.IsSimpleMask(query) {
@@ -539,10 +554,32 @@ func mergedFindMatchers(query, within string, mask, withinMask bool) (func(strin
 			}
 			filter = re.MatchString
 		} else {
-			filter = dict.HeadwordTermMatcher(within)
+			queries := splitMergedHeadwordAlternatives(within)
+			matchers := make([]func(string) bool, 0, len(queries))
+			for _, value := range queries {
+				matchers = append(matchers, headwordModeMatcher(value, withinMode))
+			}
+			filter = func(word string) bool {
+				for _, matches := range matchers {
+					if matches(word) {
+						return true
+					}
+				}
+				return false
+			}
 		}
 	}
 	return func(word string) bool { return base(word) && (filter == nil || filter(word)) }, nil
+}
+
+const mergedHeadwordAlternativeSeparator = "\x1f"
+
+func splitMergedHeadwordAlternatives(query string) []string {
+	parts := strings.Split(query, mergedHeadwordAlternativeSeparator)
+	if len(parts) == 0 {
+		return []string{query}
+	}
+	return parts
 }
 
 type mergedFindCandidate struct {
@@ -551,6 +588,23 @@ type mergedFindCandidate struct {
 }
 
 func mergedHeadwordFTSMatch(input string) string {
+	return mergedHeadwordFTSMatchMode(input, "prefix")
+}
+
+func mergedHeadwordFTSMatchMode(input, mode string) string {
+	if strings.Contains(input, mergedHeadwordAlternativeSeparator) {
+		var alternatives []string
+		for _, value := range splitMergedHeadwordAlternatives(input) {
+			if match := mergedHeadwordFTSMatchSingle(value, mode); match != "" {
+				alternatives = append(alternatives, "("+match+")")
+			}
+		}
+		return strings.Join(alternatives, " OR ")
+	}
+	return mergedHeadwordFTSMatchSingle(input, mode)
+}
+
+func mergedHeadwordFTSMatchSingle(input, mode string) string {
 	var tokens []string
 	var token strings.Builder
 	flush := func() {
@@ -558,7 +612,11 @@ func mergedHeadwordFTSMatch(input string) string {
 			return
 		}
 		value := strings.ReplaceAll(token.String(), `"`, `""`)
-		tokens = append(tokens, `word:"`+value+`"*`)
+		term := `word:"` + value + `"`
+		if mode == "prefix" || mode == "" {
+			term += `*`
+		}
+		tokens = append(tokens, term)
 		token.Reset()
 	}
 	for _, r := range input {
@@ -605,12 +663,28 @@ func mergedMaskTrigramLiteral(pattern string) string {
 	return best
 }
 
-func mergedFindCandidates(query, within string, mask, withinMask, hasFTS, hasTrigram bool) []mergedFindCandidate {
+func mergedTextTrigramLiteral(query string) string {
+	best := ""
+	for _, token := range strings.FieldsFunc(query, func(r rune) bool {
+		return !unicode.IsLetter(r) && !unicode.IsNumber(r) && !unicode.IsMark(r)
+	}) {
+		folded := dict.Fold(token)
+		if utf8.RuneCountInString(folded) > utf8.RuneCountInString(best) {
+			best = folded
+		}
+	}
+	if utf8.RuneCountInString(best) < 3 {
+		return ""
+	}
+	return best
+}
+
+func mergedFindCandidates(query, within, withinMode string, mask, withinMask, hasFTS, hasTrigram bool) []mergedFindCandidate {
 	var out []mergedFindCandidate
-	addText := func(value string) {
+	addText := func(value, mode string) {
 		if strings.ContainsFunc(value, func(r rune) bool { return unicode.IsLetter(r) || unicode.IsNumber(r) }) {
 			if hasFTS {
-				if match := mergedHeadwordFTSMatch(value); match != "" {
+				if match := mergedHeadwordFTSMatchMode(value, mode); match != "" {
 					out = append(out, mergedFindCandidate{table: "merged_word_fts", match: match})
 				}
 			}
@@ -625,21 +699,77 @@ func mergedFindCandidates(query, within string, mask, withinMask, hasFTS, hasTri
 	if mask {
 		addMask(query)
 	} else {
-		addText(query)
+		addText(query, "prefix")
 	}
 	if within != "" {
 		if withinMask {
 			addMask(within)
+		} else if withinMode == "suffix" || withinMode == "contains" {
+			if literal := mergedTextTrigramLiteral(within); hasTrigram && literal != "" {
+				phrase := `"` + strings.ReplaceAll(literal, `"`, `""`) + `"`
+				out = append(out, mergedFindCandidate{table: "merged_word_trigram", match: phrase})
+			}
+		} else if withinMode == "word" || withinMode == "wordLemma" || withinMode == "exact" || withinMode == "exactLemma" {
+			var alternatives []string
+			for _, value := range splitMergedHeadwordAlternatives(within) {
+				if match := mergedHeadwordFTSMatchMode(value, withinMode); hasFTS && match != "" {
+					alternatives = append(alternatives, "("+match+")")
+				}
+			}
+			if len(alternatives) > 0 {
+				out = append(out, mergedFindCandidate{table: "merged_word_fts", match: strings.Join(alternatives, " OR ")})
+			}
 		} else {
-			addText(within)
+			addText(within, withinMode)
 		}
 	}
 	return out
 }
 
-func ensureMergedFindCache(ctx context.Context, basePath, baseID, path, signature string, query, within string, mask, withinMask bool, progress func(int, int, int) error) error {
+// mergedHeadwordLemmaQuery searches the typed form and every selected
+// dictionary language's lemma in either lemmatization mode.
+func (s *Server) mergedHeadwordLemmaQuery(q url.Values, within, withinMode string) (string, error) {
+	if within == "" || !isLemmaHeadwordMode(withinMode) ||
+		strings.ContainsAny(within, " \t\r\n") || !s.Morph.Enabled() {
+		return within, nil
+	}
+	codes := map[string]bool{}
+	for _, id := range strings.Split(q.Get("ids"), ",") {
+		if id == "" {
+			continue
+		}
+		e, err := s.reg.get(id)
+		if err != nil {
+			continue
+		}
+		d, err := e.open()
+		if err != nil {
+			continue
+		}
+		meta := d.Meta()
+		code := lang.Resolve(meta.IndexLang, langPath(e.Path), s.reg.Dirs(), meta.Name)
+		if code == "" {
+			code = "en"
+		}
+		codes[code] = true
+	}
+	result := within
+	for code := range codes {
+		if lemma, ok := s.Morph.Lemma(code, within); ok {
+			result = addHeadwordAlternative(result, lemma)
+		}
+	}
+	return result, nil
+}
+
+func ensureMergedFindCache(ctx context.Context, basePath, baseID, path, signature string, query, within, withinMode string, mask, withinMask bool, progress func(int, int, int) error) error {
 	traceStarted := time.Now()
 	diagnostic := browseFindDiagnosticEnabled(ctx)
+	filterQueries := splitMergedHeadwordAlternatives(within)
+	typedFilterQuery := within
+	if len(filterQueries) > 0 {
+		typedFilterQuery = filterQueries[0]
+	}
 	if db, err := store.OpenWildcardCacheDB(path); err == nil {
 		var saved string
 		err = db.QueryRow(`SELECT signature FROM merged_find_meta LIMIT 1`).Scan(&saved)
@@ -650,7 +780,8 @@ func ensureMergedFindCache(ctx context.Context, basePath, baseID, path, signatur
 		_ = db.Close()
 		if err == nil && saved == signature {
 			if diagnostic {
-				logx.System("headword_find_merged cache=hit total_ms=%d", time.Since(traceStarted).Milliseconds())
+				logx.System("headword_find_merged cache=hit query=%q filter_mode=%s filter_typed_query=%q filter_effective_queries=%q total_ms=%d",
+					query, withinMode, typedFilterQuery, filterQueries, time.Since(traceStarted).Milliseconds())
 			}
 			_ = os.Chtimes(path, time.Now(), time.Now())
 			return nil
@@ -660,21 +791,21 @@ func ensureMergedFindCache(ctx context.Context, basePath, baseID, path, signatur
 		return err
 	}
 	removeWildcardCacheFiles(path)
-	matcher, err := mergedFindMatchers(query, within, mask, withinMask)
+	matcher, err := mergedFindMatchers(query, within, withinMode, mask, withinMask)
 	if err != nil {
 		return err
 	}
-	baseMatcher, err := mergedFindMatchers(query, "", mask, false)
+	baseMatcher, err := mergedFindMatchers(query, "", "prefix", mask, false)
 	if err != nil {
 		return err
 	}
 	var baseFindDB *sql.DB
 	baseFindTotal := 0
 	if within != "" {
-		baseSignature := mergedFindSignature(baseID, query, "", mask, false)
+		baseSignature := mergedFindSignature(baseID, query, "", "prefix", mask, false)
 		baseFindPath := mergedFindCachePath(filepath.Dir(path), baseSignature)
 		unlockBase := lockMergedCache(baseFindPath)
-		if err := ensureMergedFindCache(ctx, basePath, baseID, baseFindPath, baseSignature, query, "", mask, false, nil); err != nil {
+		if err := ensureMergedFindCache(ctx, basePath, baseID, baseFindPath, baseSignature, query, "", "prefix", mask, false, nil); err != nil {
 			unlockBase()
 			return err
 		}
@@ -688,7 +819,7 @@ func ensureMergedFindCache(ctx context.Context, basePath, baseID, path, signatur
 			return err
 		}
 	}
-	baseDB, err := store.OpenWildcardCacheDB(basePath)
+	baseDB, err := store.OpenWildcardCacheDBWAL(basePath)
 	if err != nil {
 		return err
 	}
@@ -704,7 +835,7 @@ func ensureMergedFindCache(ctx context.Context, basePath, baseID, path, signatur
 	if err := baseDB.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='merged_word_trigram')`).Scan(&hasTrigram); err != nil {
 		return err
 	}
-	candidates := mergedFindCandidates(query, within, mask, withinMask, hasFTS, hasTrigram)
+	candidates := mergedFindCandidates(query, within, withinMode, mask, withinMask, hasFTS, hasTrigram)
 	candidateTable, candidateMatch, candidateTotal := "", "", scanTotal
 	if baseFindDB != nil {
 		candidateTable = "merged_find_base"
@@ -725,7 +856,8 @@ func ensureMergedFindCache(ctx context.Context, basePath, baseID, path, signatur
 		indexName = "full_merged_scan"
 	}
 	if diagnostic {
-		logx.System("headword_find_merged cache=miss index=%s candidates=%d base_total=%d candidate_ms=%d", indexName, candidateTotal, scanTotal, time.Since(traceStarted).Milliseconds())
+		logx.System("headword_find_merged cache=miss query=%q filter_mode=%s filter_typed_query=%q filter_effective_queries=%q index=%s index_query=%q candidates=%d base_total=%d candidate_ms=%d",
+			query, withinMode, typedFilterQuery, filterQueries, indexName, candidateMatch, candidateTotal, scanTotal, time.Since(traceStarted).Milliseconds())
 	}
 	var candidateRows *sql.Rows
 	if candidateTable == "merged_find_base" {
@@ -852,8 +984,8 @@ func ensureMergedFindCache(ctx context.Context, basePath, baseID, path, signatur
 			if elapsed > 0 {
 				rate = int64(scanned) * int64(time.Second) / int64(elapsed)
 			}
-			logx.System("headword_find_merged stage=scan index=%s percent=%d scanned=%d candidates=%d found=%d elapsed_ms=%d rows_per_sec=%d",
-				indexName, nextDiagnosticPercent, scanned, candidateTotal, ordinal, elapsed.Milliseconds(), rate)
+			logx.System("headword_find_merged stage=scan query=%q filter_mode=%s filter_queries=%q index=%s percent=%d scanned=%d candidates=%d found=%d elapsed_ms=%d rows_per_sec=%d",
+				query, withinMode, strings.Split(within, mergedHeadwordAlternativeSeparator), indexName, nextDiagnosticPercent, scanned, candidateTotal, ordinal, elapsed.Milliseconds(), rate)
 			nextDiagnosticPercent += 10
 		}
 	}
@@ -900,35 +1032,54 @@ func ensureMergedFindCache(ctx context.Context, basePath, baseID, path, signatur
 		}
 	}
 	if diagnostic {
-		logx.System("headword_find_merged cache=built index=%s candidates_scanned=%d found=%d scan_ms=%d finalize_ms=%d commit_ms=%d total_ms=%d",
-			indexName, scanned, ordinal, scanFinished.Sub(scanStarted).Milliseconds(), commitFinished.Sub(scanFinished).Milliseconds(),
+		logx.System("headword_find_merged cache=built query=%q filter_mode=%s filter_typed_query=%q filter_effective_queries=%q index=%s candidates_scanned=%d found=%d scan_ms=%d finalize_ms=%d commit_ms=%d total_ms=%d",
+			query, withinMode, typedFilterQuery, filterQueries, indexName, scanned, ordinal, scanFinished.Sub(scanStarted).Milliseconds(), commitFinished.Sub(scanFinished).Milliseconds(),
 			commitFinished.Sub(commitStarted).Milliseconds(), time.Since(traceStarted).Milliseconds())
 	}
 	return nil
 }
 
 func (s *Server) mergedBrowseFindPage(ctx context.Context, q url.Values) (browseFindResp, error) {
+	if q.Get("diagnostics") == "1" {
+		ctx = context.WithValue(ctx, browseFindDiagnosticKey{}, true)
+	}
+	started := time.Now()
+	baseStarted := time.Now()
 	base, err := s.mergedBrowseFindBase(ctx, q, nil)
 	if err != nil {
 		return browseFindResp{}, err
 	}
+	baseMS := time.Since(baseStarted).Milliseconds()
 	query, within := q.Get("q"), q.Get("within")
 	mask := q.Get("wildcards") == "1" || q.Get("mask") == "1"
-	withinMask := q.Get("withinWildcards") == "1" || q.Get("withinMask") == "1"
-	signature := mergedFindSignature(base.mergedCacheID, query, within, mask, withinMask)
-	path := mergedFindCachePath(s.wildcardCacheDir(), signature)
-	unlock := lockMergedCache(path)
-	defer unlock()
-	s.wildcardPages.beginExternal(path)
-	defer s.wildcardPages.endExternal(path)
-	if err := ensureMergedFindCache(ctx, filepath.Join(s.wildcardCacheDir(), "wildcard_merged_"+base.mergedCacheID+".db"), base.mergedCacheID, path, signature, query, within, mask, withinMask, nil); err != nil {
+	withinMode := browseMatchMode(q.Get("withinMode"), q.Get("withinWildcards") == "1" || q.Get("withinMask") == "1")
+	withinMask := withinMode == "wildcards"
+	basePath := filepath.Join(s.wildcardCacheDir(), "wildcard_merged_"+base.mergedCacheID+".db")
+	within, err = s.mergedHeadwordLemmaQuery(q, within, withinMode)
+	if err != nil {
 		return browseFindResp{}, err
 	}
+	signature := mergedFindSignature(base.mergedCacheID, query, within, withinMode, mask, withinMask)
+	path := mergedFindCachePath(s.wildcardCacheDir(), signature)
+	lockStarted := time.Now()
+	unlock := lockMergedCache(path)
+	defer unlock()
+	lockMS := time.Since(lockStarted).Milliseconds()
+	s.wildcardPages.beginExternal(path)
+	defer s.wildcardPages.endExternal(path)
+	ensureStarted := time.Now()
+	if err := ensureMergedFindCache(ctx, basePath, base.mergedCacheID, path, signature, query, within, withinMode, mask, withinMask, nil); err != nil {
+		return browseFindResp{}, err
+	}
+	ensureMS := time.Since(ensureStarted).Milliseconds()
+	openStarted := time.Now()
 	db, err := store.OpenWildcardCacheDB(path)
 	if err != nil {
 		return browseFindResp{}, err
 	}
 	defer db.Close()
+	openMS := time.Since(openStarted).Milliseconds()
+	metadataStarted := time.Now()
 	var total int
 	var alphabetJSON string
 	if err := db.QueryRow(`SELECT total,alphabet_json FROM merged_find_meta LIMIT 1`).Scan(&total, &alphabetJSON); err != nil {
@@ -938,11 +1089,13 @@ func (s *Server) mergedBrowseFindPage(ctx context.Context, q url.Values) (browse
 	if err := json.Unmarshal([]byte(alphabetJSON), &alphabet); err != nil {
 		return browseFindResp{}, err
 	}
+	metadataMS := time.Since(metadataStarted).Milliseconds()
 	page, _ := strconv.Atoi(q.Get("p"))
 	if page < 1 {
 		page = 1
 	}
 	if raw := q.Get("findpos"); raw != "" {
+		locateStarted := time.Now()
 		position, err := strconv.Atoi(raw)
 		if err != nil {
 			return browseFindResp{}, errors.New("invalid merged match position")
@@ -959,12 +1112,16 @@ func (s *Server) mergedBrowseFindPage(ctx context.Context, q url.Values) (browse
 			return browseFindResp{}, err
 		}
 		page = position/browsePageSize + 1
+		if browseFindDiagnosticEnabled(ctx) {
+			logx.System("headword_merged_find_page stage=locate position=%d direction=%s elapsed_ms=%d", position, q.Get("finddir"), time.Since(locateStarted).Milliseconds())
+		}
 	}
 	pages := (total + browsePageSize - 1) / browsePageSize
 	if pages > 0 && page > pages {
 		page = pages
 	}
 	offset := (page - 1) * browsePageSize
+	pageStarted := time.Now()
 	rows, err := db.Query(`SELECT word,source_position,base_position FROM merged_find_word WHERE ordinal>=? ORDER BY ordinal LIMIT ?`, offset, browsePageSize)
 	if err != nil {
 		return browseFindResp{}, err
@@ -986,7 +1143,11 @@ func (s *Server) mergedBrowseFindPage(ctx context.Context, q url.Values) (browse
 	if err := rows.Err(); err != nil {
 		return browseFindResp{}, err
 	}
+	pageMS := time.Since(pageStarted).Milliseconds()
 	_ = os.Chtimes(path, time.Now(), time.Now())
+	if browseFindDiagnosticEnabled(ctx) {
+		logx.System("headword_merged_find_page stage=served page=%d offset=%d words=%d total=%d base_ms=%d lock_ms=%d ensure_ms=%d open_ms=%d metadata_ms=%d read_ms=%d total_ms=%d", page, offset, len(words), total, baseMS, lockMS, ensureMS, openMS, metadataMS, pageMS, time.Since(started).Milliseconds())
+	}
 	return browseFindResp{Words: words, Positions: positions, BasePositions: basePositions, Alphabet: alphabet, Total: total, Page: page, Pages: pages, Size: browsePageSize}, nil
 }
 
@@ -1012,8 +1173,14 @@ func (s *Server) streamMergedBrowseFind(ctx context.Context, q url.Values, send 
 	}
 	query, within := q.Get("q"), q.Get("within")
 	mask := q.Get("wildcards") == "1" || q.Get("mask") == "1"
-	withinMask := q.Get("withinWildcards") == "1" || q.Get("withinMask") == "1"
-	signature := mergedFindSignature(base.mergedCacheID, query, within, mask, withinMask)
+	withinMode := browseMatchMode(q.Get("withinMode"), q.Get("withinWildcards") == "1" || q.Get("withinMask") == "1")
+	withinMask := withinMode == "wildcards"
+	basePath := filepath.Join(s.wildcardCacheDir(), "wildcard_merged_"+base.mergedCacheID+".db")
+	within, err = s.mergedHeadwordLemmaQuery(q, within, withinMode)
+	if err != nil {
+		return err
+	}
+	signature := mergedFindSignature(base.mergedCacheID, query, within, withinMode, mask, withinMask)
 	path := mergedFindCachePath(s.wildcardCacheDir(), signature)
 	unlock := lockMergedCache(path)
 	defer unlock()
@@ -1022,7 +1189,7 @@ func (s *Server) streamMergedBrowseFind(ctx context.Context, q url.Values, send 
 	progress := func(scanned, total, found int) error {
 		return send(browseFindStreamEvent{Type: "progress", Scanned: 5_000 + scaleMergedFindProgress(scanned, total, 4_900), ScanTotal: progressScale, Total: found})
 	}
-	if err := ensureMergedFindCache(ctx, filepath.Join(s.wildcardCacheDir(), "wildcard_merged_"+base.mergedCacheID+".db"), base.mergedCacheID, path, signature, query, within, mask, withinMask, progress); err != nil {
+	if err := ensureMergedFindCache(ctx, basePath, base.mergedCacheID, path, signature, query, within, withinMode, mask, withinMask, progress); err != nil {
 		return err
 	}
 	db, err := store.OpenWildcardCacheDB(path)
@@ -1063,6 +1230,12 @@ func scaleMergedFindProgress(done, total, limit int) int {
 // by that upper search. It never opens a dictionary on the lower-search path.
 func (s *Server) mergedBrowseFindBase(ctx context.Context, q url.Values, progress func(int, int) error) (browseResp, error) {
 	if strings.TrimSpace(q.Get("within")) == "" {
+		// The first stream request supplies sourcecache and builds a merged base
+		// from Wildcards results. Once it returns mergedcache, page reads must
+		// reuse that exact base instead of rebuilding Browse across all indexes.
+		if q.Get("mergedcache") != "" {
+			return s.mergedWildcardBrowseBase(ctx, q)
+		}
 		return s.mergedBrowsePage(ctx, q, progress)
 	}
 	ids := strings.Split(q.Get("ids"), ",")
@@ -1085,7 +1258,7 @@ func (s *Server) mergedBrowseFindBase(ctx context.Context, q url.Values, progres
 	defer unlock()
 	s.wildcardPages.beginExternal(path)
 	defer s.wildcardPages.endExternal(path)
-	db, err := store.OpenWildcardCacheDB(path)
+	db, err := store.OpenWildcardCacheDBWAL(path)
 	if err != nil {
 		return browseResp{}, errors.New("combined Wildcards SQL database is not available")
 	}
@@ -1095,7 +1268,65 @@ func (s *Server) mergedBrowseFindBase(ctx context.Context, q url.Values, progres
 	if err != nil || !mergedSignatureMatchesIDs(signature, q.Get("ids")) {
 		return browseResp{}, errors.New("combined Wildcards SQL database does not match the selected dictionaries")
 	}
-	return readMergedBrowsePage(path, q, cacheID)
+	return readMergedBrowsePage(ctx, path, q, cacheID)
+}
+
+func (s *Server) mergedWildcardBrowseBase(ctx context.Context, q url.Values) (browseResp, error) {
+	ids := strings.Split(q.Get("ids"), ",")
+	if q.Get("ids") == "" {
+		return browseResp{}, errors.New("no dictionaries selected for the combined A–Z list")
+	}
+	limit := s.uiPrefsSnapshot().CombinedDictionaryLimit
+	if len(ids) > limit {
+		return browseResp{}, fmt.Errorf("combined A–Z list limit is %d dictionaries; %d selected", limit, len(ids))
+	}
+	cacheID := q.Get("mergedcache")
+	if !wildcardCacheIDPattern.MatchString(cacheID) {
+		return browseResp{}, errors.New("combined Wildcards SQL database is not available")
+	}
+	path := filepath.Join(s.wildcardCacheDir(), "wildcard_merged_"+cacheID+".db")
+	if _, err := os.Stat(path); err != nil {
+		return browseResp{}, errors.New("combined Wildcards SQL database is not available")
+	}
+	unlock := lockMergedCache(path)
+	defer unlock()
+	s.wildcardPages.beginExternal(path)
+	defer s.wildcardPages.endExternal(path)
+	db, err := store.OpenWildcardCacheDBWAL(path)
+	if err != nil {
+		return browseResp{}, errors.New("combined Wildcards SQL database is not available")
+	}
+	var signature string
+	err = db.QueryRowContext(ctx, `SELECT signature FROM merged_meta LIMIT 1`).Scan(&signature)
+	_ = db.Close()
+	if err != nil || !mergedWildcardSignatureMatches(signature, q.Get("ids"), q.Get("q"),
+		q.Get("mergedfts") == "1", q.Get("mergedtrigram") == "1") {
+		return browseResp{}, errors.New("combined Wildcards SQL database does not match the selected search")
+	}
+	return readMergedBrowsePage(ctx, path, q, cacheID)
+}
+
+func mergedWildcardSignatureMatches(signature, rawIDs, query string, useFTS, useTrigram bool) bool {
+	if !mergedSignatureMatchesIDs(signature, rawIDs) {
+		return false
+	}
+	lines := strings.Split(signature, "\n")
+	if lines[1] != fmt.Sprintf("fts=%t", useFTS) || lines[2] != fmt.Sprintf("trigram=%t", useTrigram) {
+		return false
+	}
+	var sourceID string
+	for _, line := range lines[3 : len(lines)-1] {
+		parts := strings.Split(line, "\x00")
+		if len(parts) != 3 || !wildcardCacheIDPattern.MatchString(parts[1]) || parts[2] != query {
+			return false
+		}
+		if sourceID == "" {
+			sourceID = parts[1]
+		} else if sourceID != parts[1] {
+			return false
+		}
+	}
+	return sourceID != ""
 }
 
 func mergedSignatureMatchesIDs(signature, rawIDs string) bool {

@@ -22,6 +22,29 @@ type maskIndexSpan struct {
 	args  []any
 }
 
+// MaskCandidateStrategy reports the indexed candidate source used by prepared
+// headword-mask searches. The complete mask is still checked after candidates
+// are read.
+func (s *Store) MaskCandidateStrategy(pattern string) string {
+	strategy, _ := s.MaskCandidatePlan(pattern)
+	return strategy
+}
+
+// MaskCandidatePlan reports the candidate source and literal passed to that
+// index. The complete mask is still checked after candidates are read.
+func (s *Store) MaskCandidatePlan(pattern string) (string, string) {
+	if !strings.ContainsAny(pattern, "*?") {
+		return "exact_key", ""
+	}
+	if literal := maskTrigramLiteral(pattern); s.hasTrigram && !s.staleFold && literal != "" {
+		return "trigram", literal
+	}
+	if maskHasASCIILead(pattern) {
+		return "headword_range", ""
+	}
+	return "headword_scan", ""
+}
+
 func maskIndexSpans(pattern string) []maskIndexSpan {
 	if !maskHasASCIILead(pattern) {
 		return []maskIndexSpan{{}}

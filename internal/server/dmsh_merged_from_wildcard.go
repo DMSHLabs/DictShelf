@@ -50,32 +50,39 @@ func (s *Server) mergedBrowseFromWildcard(ctx context.Context, q url.Values, ids
 		return browseResp{}, err
 	}
 	path := filepath.Join(dir, "wildcard_merged_"+cacheID+".db")
+	lockStarted := time.Now()
 	unlock := lockMergedCache(path)
 	defer unlock()
+	lockMS := time.Since(lockStarted).Milliseconds()
 	s.wildcardPages.beginExternal(path)
 	defer s.wildcardPages.endExternal(path)
-	if db, err := store.OpenWildcardCacheDB(path); err == nil {
+	probeStarted := time.Now()
+	if db, err := store.OpenWildcardCacheDBWAL(path); err == nil {
 		var saved string
 		err = db.QueryRowContext(ctx, `SELECT signature FROM merged_meta LIMIT 1`).Scan(&saved)
 		_ = db.Close()
 		if err == nil && saved == signature.String() {
 			if browseFindDiagnosticEnabled(ctx) {
-				logx.System("headword_merged_browse cache=wildcard_results_hit elapsed_ms=%d", time.Since(started).Milliseconds())
+				logx.System("headword_merged_browse stage=cache_hit lock_ms=%d probe_ms=%d total_ms=%d", lockMS, time.Since(probeStarted).Milliseconds(), time.Since(started).Milliseconds())
 			}
-			return readMergedBrowsePage(path, q, cacheID)
+			return readMergedBrowsePage(ctx, path, q, cacheID)
 		}
 	}
+	probeMS := time.Since(probeStarted).Milliseconds()
 	sourcePath := filepath.Join(dir, "wildcard_"+sourceID+".db")
 	if _, err := os.Stat(sourcePath); err != nil {
 		return browseResp{}, fmt.Errorf("Wildcards result cache is unavailable: %w", err)
 	}
 	s.wildcardPages.beginExternal(sourcePath)
 	defer s.wildcardPages.endExternal(sourcePath)
+	sourceOpenStarted := time.Now()
 	source, err := store.OpenWildcardCacheDB(sourcePath)
 	if err != nil {
 		return browseResp{}, fmt.Errorf("opening Wildcards result cache: %w", err)
 	}
 	defer source.Close()
+	sourceOpenMS := time.Since(sourceOpenStarted).Milliseconds()
+	metaStarted := time.Now()
 	var savedID, query, group string
 	var wildcards, fts, trigram, pageSize, dictCount int
 	err = source.QueryRowContext(ctx, `SELECT cache_id,query_text,group_id,wildcards,fts,trigram,page_size,dict_count
@@ -84,6 +91,8 @@ func (s *Server) mergedBrowseFromWildcard(ctx context.Context, q url.Values, ids
 		fts != boolInt(useFTS) || trigram != boolInt(useTrigram) || pageSize != indexconst.WildcardCacheBlockSize || dictCount != len(ids) {
 		return browseResp{}, errors.New("Wildcards result cache does not match the selected search")
 	}
+	metaMS := time.Since(metaStarted).Milliseconds()
+	countsStarted := time.Now()
 	rows, err := source.QueryContext(ctx, `SELECT dict_id,total,complete FROM wildcard_dictionary
 		WHERE within_text='' AND within_wildcards=0`)
 	if err != nil {
@@ -123,6 +132,7 @@ func (s *Server) mergedBrowseFromWildcard(ctx context.Context, q url.Values, ids
 		}
 		all += total
 	}
+	countsMS := time.Since(countsStarted).Milliseconds()
 	removeWildcardCacheFiles(path)
 	db, err := store.OpenWildcardCacheDB(path)
 	if err != nil {
@@ -135,6 +145,7 @@ func (s *Server) mergedBrowseFromWildcard(ctx context.Context, q url.Values, ids
 			removeWildcardCacheFiles(path)
 		}
 	}()
+	setupStarted := time.Now()
 	statements := []string{
 		`PRAGMA journal_mode=WAL`,
 		`CREATE TABLE merged_meta(signature TEXT NOT NULL,total INTEGER NOT NULL,alphabet_json TEXT NOT NULL)`,
@@ -154,6 +165,7 @@ func (s *Server) mergedBrowseFromWildcard(ctx context.Context, q url.Values, ids
 			return browseResp{}, err
 		}
 	}
+	setupMS := time.Since(setupStarted).Milliseconds()
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return browseResp{}, err
@@ -163,6 +175,7 @@ func (s *Server) mergedBrowseFromWildcard(ctx context.Context, q url.Values, ids
 		_ = tx.Rollback()
 		return browseResp{}, err
 	}
+	stageInsertStarted := time.Now()
 	blocks, err := source.QueryContext(ctx, `SELECT dict_id,words_json,word_count FROM wildcard_block
 		WHERE within_text='' AND within_wildcards=0 ORDER BY dict_order,block_no`)
 	if err != nil {
@@ -227,6 +240,7 @@ func (s *Server) mergedBrowseFromWildcard(ctx context.Context, q url.Values, ids
 	if err := tx.Commit(); err != nil {
 		return browseResp{}, err
 	}
+	stageInsertMS := time.Since(stageInsertStarted).Milliseconds()
 	// The cache DB uses one connection. Read sorted rows through a second
 	// connection so the writer transaction cannot wait on its own cursor.
 	orderedDB, err := store.OpenWildcardCacheDBWAL(path)
@@ -234,6 +248,7 @@ func (s *Server) mergedBrowseFromWildcard(ctx context.Context, q url.Values, ids
 		return browseResp{}, err
 	}
 	defer orderedDB.Close()
+	sortStarted := time.Now()
 	ordered, err := orderedDB.QueryContext(ctx, `SELECT word FROM merged_stage ORDER BY word COLLATE NOCASE`)
 	if err != nil {
 		return browseResp{}, err
@@ -310,6 +325,8 @@ func (s *Server) mergedBrowseFromWildcard(ctx context.Context, q url.Values, ids
 	if err := tx.Commit(); err != nil {
 		return browseResp{}, err
 	}
+	sortInsertMS := time.Since(sortStarted).Milliseconds()
+	finalizeStarted := time.Now()
 	if _, err := db.ExecContext(ctx, `DROP TABLE merged_stage`); err != nil {
 		return browseResp{}, err
 	}
@@ -324,8 +341,8 @@ func (s *Server) mergedBrowseFromWildcard(ctx context.Context, q url.Values, ids
 		return browseResp{}, err
 	}
 	if browseFindDiagnosticEnabled(ctx) {
-		logx.System("headword_merged_browse cache=wildcard_results_built source_words=%d unique_words=%d dictionaries=%d elapsed_ms=%d",
-			all, unique, matched, time.Since(started).Milliseconds())
+		logx.System("headword_merged_browse stage=built cache=wildcard_results source_words=%d unique_words=%d dictionaries=%d lock_ms=%d probe_ms=%d source_open_ms=%d source_meta_ms=%d source_counts_ms=%d setup_ms=%d stage_insert_ms=%d sort_insert_ms=%d finalize_ms=%d total_ms=%d",
+			all, unique, matched, lockMS, probeMS, sourceOpenMS, metaMS, countsMS, setupMS, stageInsertMS, sortInsertMS, time.Since(finalizeStarted).Milliseconds(), time.Since(started).Milliseconds())
 	}
-	return readMergedBrowsePage(path, q, cacheID)
+	return readMergedBrowsePage(ctx, path, q, cacheID)
 }

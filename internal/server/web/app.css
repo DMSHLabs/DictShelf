@@ -1006,6 +1006,7 @@ body.styling{padding-bottom:var(--styler-shown,var(--styler-h))}
 #sysSettings .sys-row.sys-num{cursor:default}
 #sysSettings .sys-result-cache-limit,#desktopSysBody .sys-result-cache-limit{justify-content:flex-start;gap:.45em;padding-left:calc(1em + var(--ui-control-gap) * 1em)}
 #sysSettings .sys-result-cache-limit input,#desktopSysBody .sys-result-cache-limit input{width:7em;min-height:calc(var(--ui-control-height) * 1em);font:inherit;text-align:right}
+#sysSettings .sys-result-cache-limit input:disabled,#desktopSysBody .sys-result-cache-limit input:disabled{box-sizing:border-box;width:12em;max-width:calc(100% - 1em);text-align:left}
 #sysSettings .sys-label{flex:1 1 auto;color:var(--label);min-width:0;font-size:calc(var(--ui-font-base) * 1rem);overflow-wrap:anywhere}
 #sysSettings .sys-num input,#desktopSysBody .sys-num input{box-sizing:border-box;flex:none;width:6.5em;min-height:calc(var(--ui-control-height) * 1em);font:inherit;font-size:calc(var(--ui-font-base) * 1rem);text-align:right;
   color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:.5em .6em}
