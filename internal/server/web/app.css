@@ -694,6 +694,16 @@ summary .mbtn:hover{color:var(--fg);background:var(--bg)}
 summary .mbtn:active{color:var(--accent)}
 summary .mpos{font-size:11px;color:var(--label-quiet);min-width:2.8em;text-align:center;
   font-variant-numeric:tabular-nums}
+summary .search-pages{display:flex;align-items:center;gap:2px;margin-left:auto;font-weight:400;
+  font-size:calc(var(--ui-font-addition) * 1rem);white-space:nowrap}
+summary .search-pages~.count{margin-left:var(--sp-1)}
+summary .result-page-range{font-variant-numeric:tabular-nums;color:var(--label-quiet)}
+summary .result-page-action{border:0;background:transparent;color:var(--label);font:inherit;line-height:1;
+  padding:8px 6px;margin:-8px 0;border-radius:5px;cursor:pointer}
+summary .result-page-action:hover:not(:disabled){background:var(--bg);color:var(--fg)}
+summary .result-page-action:disabled{color:var(--label-quiet);opacity:.5;cursor:default}
+summary .search-browse{font-weight:400;font-size:calc(var(--ui-font-addition) * 1rem);color:var(--link);
+  white-space:nowrap;text-decoration:underline;text-underline-offset:2px;margin-left:var(--sp-1)}
 /* a dictionary's own script threw; the article is intact but inert */
 summary .jserr{margin-left:6px;font-weight:400;color:var(--accent);font-size:12px;cursor:help}
 /* A deferred dictionary's hint (renderSlot, h.deferred). Link-coloured because
@@ -702,8 +712,9 @@ summary .jserr{margin-left:6px;font-weight:400;color:var(--accent);font-size:12p
    dictionary name that already wraps, and a two-line hint beside a three-line
    name is the layout in the bug report this replaced. */
 summary .count.hint{color:var(--link);white-space:nowrap}
-summary .more{font-weight:400;font-size:calc(var(--ui-font-addition) * 1rem);color:var(--link);cursor:pointer;
-  text-decoration:underline;text-underline-offset:2px;margin-left:var(--sp-2)}
+summary .more{border:0;background:transparent;font-family:inherit;font-weight:400;font-size:calc(var(--ui-font-addition) * 1rem);color:var(--link);cursor:pointer;
+  text-decoration:underline;text-underline-offset:2px;margin-left:var(--sp-2);padding:0}
+summary .more:disabled{opacity:.55;cursor:progress}
 summary .upgrade{font-weight:400;font-size:calc(var(--ui-font-addition) * 1rem);color:var(--link);cursor:pointer;
   text-decoration:underline;text-underline-offset:2px;margin-left:auto}
 /* The dictionaries this mode could not search, as one line instead of one
