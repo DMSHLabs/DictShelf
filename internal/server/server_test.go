@@ -12,6 +12,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -298,11 +299,21 @@ func TestDictsAndSearch(t *testing.T) {
 	}
 	id := dicts[0].ID
 
-	// contains is opt-in: skipped until asked for, then it works. (A trigram
-	// index costs about as much as the whole rest of the index.)
+	// Contains works from the base headword index; enabling its optional
+	// trigram and token indexes accelerates the same query.
 	hits := searchStream(t, s, "/api/search?q=corazón&mode=contains&dict="+id)
-	if len(hits) != 1 || !hits[0].Skipped {
-		t.Fatalf("contains should be unavailable until enabled: %+v", hits)
+	if len(hits) != 1 || len(hits[0].Results) != 1 || hits[0].Results[0].Headword != "corazón" {
+		t.Fatalf("contains with base index: %+v", hits)
+	}
+	for _, mode := range []string{"suffix", "word", "wordLemma", "exactLemma"} {
+		query := "corazón"
+		if mode == "suffix" {
+			query = "azón"
+		}
+		hits = searchStream(t, s, "/api/search?q="+url.QueryEscape(query)+"&mode="+mode+"&dict="+id)
+		if len(hits) != 1 || len(hits[0].Results) != 1 || hits[0].Results[0].Headword != "corazón" {
+			t.Errorf("%s with base index: %+v", mode, hits)
+		}
 	}
 	sse(t, s, "/api/ingest?dict="+id+"&contains=1")
 	hits = searchStream(t, s, "/api/search?q=corazón&mode=contains&dict="+id)

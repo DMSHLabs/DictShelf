@@ -29,13 +29,17 @@ const (
 	Contains
 	FullText
 	Wildcards
+	Suffix
+	WholeWord
+	WholeWordLemma
+	ExactLemma
 )
 
 func (m Mode) String() string {
 	if m == Wildcards {
 		return "wildcards"
 	}
-	return [...]string{"exact", "prefix", "contains", "fts"}[m]
+	return [...]string{"exact", "prefix", "contains", "fts", "wildcards", "suffix", "word", "wordLemma", "exactLemma"}[m]
 }
 
 // ParseMode reads a mode by its API name. "" is prefix, the default; "fuzzy"
@@ -52,6 +56,14 @@ func ParseMode(s string) (Mode, error) {
 		return FullText, nil
 	case "wildcards", "mask":
 		return Wildcards, nil
+	case "suffix":
+		return Suffix, nil
+	case "word":
+		return WholeWord, nil
+	case "wordLemma":
+		return WholeWordLemma, nil
+	case "exactLemma":
+		return ExactLemma, nil
 	}
 	return 0, fmt.Errorf("unknown mode %q", s)
 }
@@ -228,6 +240,12 @@ type Opener func() (dict.Dictionary, error)
 // serialized (safe for a shared response) but arrive in completion order; i
 // is the input index, so the caller places each result in its slot.
 func StreamOpen(ctx context.Context, openers []Opener, mode Mode, term string, perDict int, emit func(i int, h Hit)) {
+	StreamOpenWithTerms(ctx, openers, mode, term, perDict, nil, emit)
+}
+
+// StreamOpenWithTerms allows a caller to add per-dictionary lemma alternatives
+// after the dictionary's language metadata is available in the worker.
+func StreamOpenWithTerms(ctx context.Context, openers []Opener, mode Mode, term string, perDict int, termFor func(int, dict.Meta, string) string, emit func(i int, h Hit)) {
 	plan := planFor(mode, term)
 	sem := make(chan struct{}, Workers())
 	var wg sync.WaitGroup
@@ -299,10 +317,29 @@ func StreamOpen(ctx context.Context, openers []Opener, mode Mode, term string, p
 				send(i, Hit{Err: err})
 				return
 			}
-			send(i, runQuery(ctx, d, mode, term, plan, perDict))
+			queryTerm := term
+			if termFor != nil {
+				var meta dict.Meta
+				queryTerm, meta, err = safeTermFor(termFor, i, d, term)
+				if err != nil {
+					send(i, Hit{Meta: meta, Term: term, Err: err})
+					return
+				}
+			}
+			send(i, runQuery(ctx, d, mode, queryTerm, plan, perDict))
 		}(i, open)
 	}
 	wg.Wait()
+}
+
+func safeTermFor(resolve func(int, dict.Meta, string) string, i int, d dict.Dictionary, term string) (value string, meta dict.Meta, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = dict.PanicError(meta.Path, r)
+		}
+	}()
+	meta = d.Meta()
+	return resolve(i, meta, term), meta, nil
 }
 
 // runQuery runs one dictionary's query and waits for it, unless the context
@@ -381,6 +418,9 @@ func query(ctx context.Context, d dict.Dictionary, mode Mode, term string, plan 
 	// A prepared database answers every mode through its context-aware
 	// surface; a direct backend has only Exact and Prefix, and no way to stop.
 	s, indexed := d.(dict.Searcher)
+	headwords, hasHeadwords := d.(interface {
+		SearchHeadwordsMode(context.Context, string, string, int) ([]dict.Result, error)
+	})
 	switch mode {
 	case Exact:
 		if !caps.Exact {
@@ -397,17 +437,29 @@ func query(ctx context.Context, d dict.Dictionary, mode Mode, term string, plan 
 			h.Skipped = true
 			return h
 		}
-		if indexed {
+		if hasHeadwords {
+			h.Results, h.Err = headwords.SearchHeadwordsMode(ctx, term, "prefix", perDict)
+		} else if indexed {
 			h.Results, h.Err = s.PrefixContext(ctx, term, perDict)
 		} else {
 			h.Results, h.Err = d.Prefix(term, perDict)
 		}
 	case Contains:
+		if hasHeadwords {
+			h.Results, h.Err = headwords.SearchHeadwordsMode(ctx, term, "contains", perDict)
+			return h
+		}
 		if !indexed || !caps.Contains {
 			h.Skipped = true
 			return h
 		}
 		h.Results, h.Err = s.ContainsContext(ctx, term, perDict)
+	case Suffix, WholeWord, WholeWordLemma, ExactLemma:
+		if !hasHeadwords {
+			h.Skipped = true
+			return h
+		}
+		h.Results, h.Err = headwords.SearchHeadwordsMode(ctx, term, mode.String(), perDict)
 	case FullText:
 		if !indexed || !caps.FTS {
 			h.Skipped = true

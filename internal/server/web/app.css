@@ -1128,6 +1128,7 @@ html[data-styled-selects] #webPickerGroupBtn{display:flex}
   html[data-styled-selects] #modeMenuBtn{display:flex;width:auto;min-width:7em}
 }
 .themed-select-menu{min-width:0}
+#modeMenu{max-height:calc(100vh - 12px);overflow:auto}
 #appearanceBackground small,.screen-row small{display:block;font-size:calc(var(--ui-hint-font-size) * 1rem);
   line-height:1.4;color:var(--label-quiet)}
 .screen-row small{margin-top:.25em}

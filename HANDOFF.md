@@ -1,5 +1,19 @@
 # Agent handoff — current state
 
+Current checkout is `codex/headword-search-indexes`, created from clean `dev` at
+`a9ae9a93`; the changes below are uncommitted. Contains now builds both the
+headword token FTS and trigram indexes, while FullText builds an independent
+article FTS. `IngestVersion=6` offers existing databases for explicit rebuild;
+older databases remain readable. Browse and main headword search fall back to
+the base index when optional indexes are absent. The primary search adds
+suffix, whole-word and explicit lemma modes and shares Browse's token-prefix
+search; article full-text remains separate. Golden fingerprints for all
+format fixtures were refreshed. Focused store, server and golden tests pass;
+all inline main-page scripts parse and `git diff --check` passes. Full server
+tests still show the two pre-existing async dictionary-icon expectation
+failures (HTTP 202 versus 200). Windows/Android interactive search and index
+maintenance remain to be checked; no APK was built or installed.
+
 The Wildcards lower search in separate-dictionary mode now sends one grouped stream request for all
 dictionaries when a saved complete filter is unavailable. Go searches the shared result SQLite cache
 globally, distributes hits by dictionary ID and original position, and writes the existing per-dictionary
