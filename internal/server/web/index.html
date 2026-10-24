@@ -311,9 +311,9 @@ window.wudictFontScale=(function(){
           </svg>
         </button>
         <span class="mask-total"><span>{{T:search.wildcardsTotalLabel}}</span><span id="maskCount" role="status" aria-label="{{T:search.wildcardsTotal}}"></span></span>
+        <button type="button" id="maskPrev" aria-label="{{T:browse.previousTitle}}"><span class="mask-pager-label">{{T:browse.previousPage}}</span><span class="mask-pager-icon" aria-hidden="true">‹</span></button>
         <button type="button" id="maskPage" aria-label="{{T:browse.gotoBlock}}" title="{{T:browse.gotoBlock}}">1/1</button>
         <button type="button" id="maskNext" aria-label="{{T:browse.nextTitle}}"><span class="mask-pager-label">{{T:browse.nextPage}}</span><span class="mask-pager-icon" aria-hidden="true">›</span></button>
-        <button type="button" id="maskPrev" aria-label="{{T:browse.previousTitle}}"><span class="mask-pager-label">{{T:browse.previousPage}}</span><span class="mask-pager-icon" aria-hidden="true">‹</span></button>
       </span>
     </header>
     <div class="mask-strip-wrap">
@@ -6450,9 +6450,9 @@ function renderSlot(box,h,mode,q,perDict,group,paging=null){
   const pageControls=paging?(()=>{
     const start=paging.start||0,end=start+h.results.length,total=paging.total;
     const totalText=paging.exact?window.wudictI18n.number(total):window.wudictI18n.number(Math.max(end,paging.lowerBound||end))+"+";
-    return `<span class="search-pages"><button type="button" class="result-page-action" data-dir="prev" aria-label="${escAttr(tx("search.previousPortion"))}" title="${escAttr(tx("search.previousPortion"))}" ${start<=0?"disabled":""}>‹</button>`+
-      `<span class="result-page-range" aria-live="polite">${window.wudictI18n.number(start+1)}–${window.wudictI18n.number(end)} (${totalText})</span>`+
-      `<button type="button" class="result-page-action" data-dir="next" aria-label="${escAttr(tx("search.nextPortion"))}" title="${escAttr(tx("search.nextPortion"))}" ${paging.hasNext?"":"disabled"}>›</button></span>`;
+    return `<span class="search-pages"><button type="button" class="result-page-action" data-dir="prev" aria-label="${escAttr(tx("search.previousArticleBlock"))}" title="${escAttr(tx("search.previousArticleBlock"))}" ${start<=0?"disabled":""}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 4-8 8 8 8" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>`+
+      `<button type="button" class="result-page-action result-page-range" data-dir="goto" aria-label="${escAttr(tx("search.gotoArticleBlock"))}" title="${escAttr(tx("search.gotoArticleBlock"))}" aria-haspopup="dialog" aria-controls="maskGotoDialog" aria-live="polite">${window.wudictI18n.number(start+1)}–${window.wudictI18n.number(end)} (${totalText})</button>`+
+      `<button type="button" class="result-page-action" data-dir="next" aria-label="${escAttr(tx("search.nextArticleBlock"))}" title="${escAttr(tx("search.nextArticleBlock"))}" ${paging.hasNext?"":"disabled"}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 4 8 8-8 8" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button></span>`;
   })():"";
   det.dataset.searchMode=mode;det.dataset.searchQuery=q;det.dataset.searchDict=h.dict;
   det.dataset.searchInitial=String(perDict);det.dataset.searchPageSize=String(pageSize);det.dataset.searchGroup=String(!!group);
@@ -6462,7 +6462,7 @@ function renderSlot(box,h,mode,q,perDict,group,paging=null){
   const rung=mode==="fts"&&/\s/.test(q||"")&&(h.rung==="near"||h.rung==="words")
     ?`<span class="rung">${esc(tx(h.rung==="near"?"search.phraseNear":"search.phraseWords"))} · </span>`:"";
   const countLabel=paging?(rung?`<span class="count">${rung}</span>`:``):`<span class="count">${rung}${esc(tx("search.results",{count:h.results.length,number:window.wudictI18n.number(h.results.length)+(more?"+":"")}))}</span>`;
-  det.innerHTML=`<summary>${dictIconHTML(h.dict)}${esc(h.name)}${pageControls}${countLabel}${more}${browse}</summary>`;
+  det.innerHTML=`<summary class="search-result-summary"><span class="search-dict-identity">${dictIconHTML(h.dict)}<span class="search-dict-name">${esc(h.name)}</span></span><span class="search-dict-controls">${pageControls}${countLabel}${more}${browse}</span></summary>`;
   const dl=document.createElement("dl"),roots=[];
   for(const r of h.results){
     const dt=document.createElement("dt");
@@ -6474,6 +6474,7 @@ function renderSlot(box,h,mode,q,perDict,group,paging=null){
   }
   det.open=expandAll;
   det.appendChild(dl);box.appendChild(det);
+  observeSearchDictName(det.querySelector(":scope>summary .search-dict-name"));
   // An `entry://Word#frag` link: now that the article is in the document, put
   // the fragment on screen. Shadow-DOM articles can be measured immediately
   // (next frame, once laid out); iframe ones jump themselves — frameDoc has
@@ -6611,7 +6612,49 @@ let maskStripResizeTimer=0,maskStripResizeCount=0,maskStripResizeStartedAt=0,mas
 let maskBaseRows=[],maskBaseCurrent=0,maskFindRows=[],maskFindFilter=false,maskFindMatchMode="prefix";
 let maskFindIndex=-1,maskFindMatch=null,maskFindAnchor=null,maskFindTimer=0,maskFindQuery="",maskFindApproved=false,maskFindAwaitingApply=false,maskBusyJobs=new Set(),maskFindGeneration=0;
 let maskWordContextTarget=null,maskWordLongPressTimer=0,maskWordLongPressPoint=null,maskWordSuppressClick=false;
-let maskGotoTarget="block";
+let maskGotoTarget="block",searchPortionGotoDetails=null;
+let searchDictNameObserver=null,searchDictHeaderWidths=new WeakMap();
+function fitSearchDictName(name,controlsWrapped){
+  if(!name?.isConnected)return;
+  if(!controlsWrapped){name.dataset.fit="section";return}
+  for(const level of ["section","addition","hint"]){
+    name.dataset.fit=level;
+    void name.offsetWidth;
+    if(name.scrollWidth<=name.clientWidth+1)return;
+  }
+}
+function layoutSearchDictHeader(summary){
+  if(!summary?.isConnected)return;
+  const identity=summary.querySelector(".search-dict-identity"),name=summary.querySelector(".search-dict-name"),controls=summary.querySelector(".search-dict-controls");
+  if(!identity||!name||!controls)return;
+  name.dataset.fit="section";
+  summary.removeAttribute("data-controls-wrapped");
+  const identityRect=identity.getBoundingClientRect(),controlsRect=controls.getBoundingClientRect();
+  const wrapped=controlsRect.top>identityRect.top+identityRect.height*.5;
+  if(wrapped)summary.dataset.controlsWrapped="true";
+  fitSearchDictName(name,wrapped);
+}
+function observeSearchDictName(name){
+  if(!name)return;
+  const summary=name.closest("summary");
+  if(typeof ResizeObserver==="undefined"){layoutSearchDictHeader(summary);return}
+  if(!searchDictNameObserver)searchDictNameObserver=new ResizeObserver(entries=>{
+    for(const entry of entries){
+      if(!entry.target.isConnected)searchDictNameObserver.unobserve(entry.target);
+      else{
+        const width=entry.contentRect.width,previous=searchDictHeaderWidths.get(entry.target);
+        if(previous===undefined||Math.abs(previous-width)>.5){
+          searchDictHeaderWidths.set(entry.target,width);
+          layoutSearchDictHeader(entry.target);
+        }
+      }
+    }
+  });
+  if(summary)searchDictNameObserver.observe(summary);
+  requestAnimationFrame(()=>{
+    if(summary?.isConnected){searchDictHeaderWidths.set(summary,summary.getBoundingClientRect().width);layoutSearchDictHeader(summary)}
+  });
+}
 let maskMemorySnapshot=null;
 function maskMemoryStop(){
   if(maskMemorySnapshot){maskMemorySnapshot("wildcard_memory_end");maskMemorySnapshot=null}
@@ -7775,8 +7818,27 @@ function maskFindGotoOpen(){
   $("maskGotoRange").textContent=tx("browse.gotoMatchRange",{total:window.wudictI18n.number(available)});
   $("maskGotoDialog").showModal();input.focus();input.select();
 }
+function searchPortionGotoOpen(det){
+  if(!det?.isConnected)return;
+  const total=Number(det.dataset.searchTotal)||0;
+  const size=normalizedSearchPortionSize(det.dataset.searchPageSize||searchPortionSize());
+  if(total<1||size<1)return;
+  const pages=Math.max(1,Math.ceil(total/size)),current=Math.floor((Number(det.dataset.searchPageStart)||0)/size)+1;
+  searchPortionGotoDetails=det;maskGotoTarget="searchPortion";
+  const exact=det.dataset.searchExact==="true";
+  const input=$("maskGotoInput");$("maskGotoHeading").textContent=tx("search.gotoArticleBlock");
+  $("maskGotoLabel").textContent=tx("search.gotoArticleBlockLabel");input.min="1";input.max=String(pages);input.value=String(Math.min(pages,Math.max(1,current)));
+  $("maskGotoRange").textContent=tx(exact?"search.gotoArticleBlockRange":"search.gotoArticleBlockRangeLowerBound",{total:window.wudictI18n.number(pages)});
+  $("maskGotoDialog").showModal();input.focus();input.select();
+}
 function maskGotoApply(){
   const input=$("maskGotoInput"),page=Number(input.value);
+  if(maskGotoTarget==="searchPortion"){
+    const det=searchPortionGotoDetails;
+    const total=Number(det?.dataset.searchTotal)||0,size=normalizedSearchPortionSize(det?.dataset.searchPageSize||searchPortionSize()),pages=Math.max(1,Math.ceil(total/size));
+    if(!det?.isConnected||!Number.isInteger(page)||page<1||page>pages){input.reportValidity();return}
+    $("maskGotoDialog").close();searchPortionGotoDetails=null;fetchSearchPortion(det,(page-1)*size);return;
+  }
   if(maskGotoTarget==="match"){
     const available=maskFindCommittedRows().reduce((sum,row)=>sum+(row.diskCache?row.total||0:row.streamPositions?.length||0),0);
     if(!Number.isInteger(page)||page<1||page>available){input.reportValidity();return}
@@ -8150,6 +8212,7 @@ $("maskPage").addEventListener("click",maskGotoOpen);
 $("maskGotoCancel").addEventListener("click",()=>$("maskGotoDialog").close());
 $("maskGotoGo").addEventListener("click",maskGotoApply);
 $("maskGotoClose").addEventListener("click",()=>$ ("maskGotoDialog").close());
+$("maskGotoDialog").addEventListener("close",()=>{if(maskGotoTarget==="searchPortion")searchPortionGotoDetails=null});
 $("maskGotoInput").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();maskGotoApply()}});
 $("maskLetters").addEventListener("click",e=>{
   const button=e.target.closest("button[data-dict][data-page]");if(!button)return;
@@ -8641,6 +8704,7 @@ document.addEventListener("click",e=>{
   const action=e.target.closest("summary .more,summary .result-page-action");
   if(!action)return;
   e.preventDefault();e.stopPropagation();
+  if(action.dataset.dir==="goto"){searchPortionGotoOpen(action.closest("details.dict"));return}
   const det=action.closest("details.dict"),size=normalizedSearchPortionSize(det.dataset.searchPageSize||searchPortionSize());
   const current=Math.max(0,Number(det.dataset.searchPageStart)||0);
   fetchSearchPortion(det,action.classList.contains("more")?0:Math.max(0,current+(action.dataset.dir==="next"?size:-size)));

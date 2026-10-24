@@ -140,15 +140,17 @@ func (s *Server) Search(parent context.Context, request SearchRequest, emit func
 		return searchRequestError(SearchInvalidRequest, "search event callback is required")
 	}
 	if request.CacheAction == "returnReplay" {
+		logx.System("search_return_cache stage=replay_start id=%q query=%q mode=%q scope=%q", request.CacheID, request.Query, request.Mode, request.Dictionary)
 		if err := s.replaySearchReturnCache(parent, request.CacheID, emit); err == nil {
-			logx.System("search_return_cache stage=replay id=%q result=hit", request.CacheID)
+			logx.System("search_return_cache stage=replay_result id=%q result=hit", request.CacheID)
 			return nil
 		} else if parent.Err() != nil {
 			return parent.Err()
 		} else if !errors.Is(err, errSearchReturnCacheUnavailable) {
+			logx.System("search_return_cache stage=replay_result id=%q result=failed error=%q", request.CacheID, err)
 			return err
 		} else {
-			logx.System("search_return_cache stage=miss id=%q error=%q; searching again", request.CacheID, err)
+			logx.System("search_return_cache stage=fallback id=%q reason=%q query=%q mode=%q scope=%q", request.CacheID, err, request.Query, request.Mode, request.Dictionary)
 			request.CacheAction = ""
 			request.ReturnCacheID = request.CacheID
 		}
@@ -226,12 +228,16 @@ func (s *Server) Search(parent context.Context, request SearchRequest, emit func
 	if request.ReturnCacheID != "" {
 		returnCache, err = s.beginSearchReturnCache(request.ReturnCacheID, request.ReturnCacheStorage)
 		if err != nil {
-			logx.System("search_return_cache stage=create_failed id=%q error=%q", request.ReturnCacheID, err)
+			logx.System("search_return_cache stage=create_failed id=%q requested_storage=%q query=%q mode=%q scope=%q dictionaries=%d error=%q",
+				request.ReturnCacheID, request.ReturnCacheStorage, q, mode, dictParam, len(entries), err)
+		} else {
+			logx.System("search_return_cache stage=search_attached id=%q query=%q mode=%q scope=%q dictionaries=%d storage=%s",
+				request.ReturnCacheID, q, mode, dictParam, len(entries), returnCache.storage)
 		}
 	}
 	defer func() {
 		if returnCache != nil && !returnCache.complete {
-			returnCache.close()
+			returnCache.close("stream_incomplete")
 		}
 	}()
 	var emitErr error
@@ -241,18 +247,18 @@ func (s *Server) Search(parent context.Context, request SearchRequest, emit func
 			// event sequence with what it received before navigation interrupted
 			// the live search.
 			if returnCache != nil && m.T == "end" {
-				if cacheErr := returnCache.append(m); cacheErr != nil {
+				if cacheErr := returnCache.append(m, true); cacheErr != nil {
 					logx.System("search_return_cache stage=write_failed id=%q error=%q", request.ReturnCacheID, cacheErr)
-					returnCache.close()
+					returnCache.close("write_failed")
 					returnCache = nil
 				}
 			}
 			return
 		}
 		if returnCache != nil {
-			if cacheErr := returnCache.append(m); cacheErr != nil {
+			if cacheErr := returnCache.append(m, m.T == "end" && parent.Err() != nil); cacheErr != nil {
 				logx.System("search_return_cache stage=write_failed id=%q error=%q", request.ReturnCacheID, cacheErr)
-				returnCache.close()
+				returnCache.close("write_failed")
 				returnCache = nil
 			}
 		}
