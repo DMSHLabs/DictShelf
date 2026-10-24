@@ -2692,12 +2692,17 @@ paths:
           in: query
           description: How within matches wildcard results. Defaults to prefix.
           schema: { type: string, enum: [prefix, suffix, contains, word, wordLemma, exact, exactLemma, wildcards], default: prefix }
+        - name: lemmaQueries
+          in: query
+          description: Optional JSON array of lemma forms collected from the separate-dictionary search for a combined-list lemmatization search.
+          schema: { type: string, maxLength: 16384 }
         - name: groupwithin
           in: query
           description: >
             With stream=1 and a complete separate-dictionary wildcard cache,
             search all cached dictionaries in one stream. Completion events
-            include dict; matching pages remain addressable per dictionary.
+        include dict and the effectiveQueries used for per-dictionary
+        lemmatization; matching pages remain addressable per dictionary.
           schema: { type: string, enum: ['1'] }
         - name: wildcache
           in: query

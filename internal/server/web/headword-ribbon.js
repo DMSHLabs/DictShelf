@@ -150,7 +150,10 @@
     const groups=[];
     for(const row of rows){
       const groupIndex=groups.length;
-      const complete=row.state==="ready"&&(!allWords||!row.partial),entries=[];
+      // A page read can fail after the completed filter metadata was cached.
+      // Keep its known section labels usable; the next click can retry the page.
+      const hasCompletedMetadata=Number(row.total)>0&&Array.isArray(row.alphabet)&&!row.partial;
+      const complete=(row.state==="ready"||row.state==="error"&&hasCompletedMetadata)&&(!allWords||!row.partial),entries=[];
       if(complete){
         if(!row.total)continue;
         for(const letter of row.alphabet||[]){
