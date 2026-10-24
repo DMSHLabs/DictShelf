@@ -161,6 +161,23 @@ func (s *Server) browseFindPage(ctx context.Context, q url.Values) (browseFindRe
 	} else if mask && !withinMask {
 		within = s.headwordLemmaQuery(e, d, within, withinMode)
 	}
+	if resultID := q.Get("browsecache"); resultID != "" {
+		if !wildcardCacheIDPattern.MatchString(resultID) || cacheID != "" || within != "" {
+			return browseFindResp{}, &browseFindSetupError{status: http.StatusBadRequest, message: "invalid Browse result cache"}
+		}
+		signature, signatureErr := browseResultSignature(e, query, matchMode)
+		if signatureErr != nil {
+			return browseFindResp{}, signatureErr
+		}
+		cached, found, cacheErr := s.wildcardPages.page(resultID, signature, e.ID, "", false, page, 0, 1)
+		if cacheErr != nil {
+			return browseFindResp{}, cacheErr
+		}
+		if !found {
+			return browseFindResp{}, &browseFindSetupError{status: http.StatusNotFound, message: "Browse result block is not ready"}
+		}
+		return cached, nil
+	}
 	allWords := mask && within == "" && isAllWildcardMask(query)
 	if !ok && !(allWords && browseOK) {
 		return browseFindResp{}, &browseFindSetupError{status: http.StatusConflict, message: "This dictionary has no index. Create one in Dictionary Settings.", entry: e}
@@ -297,24 +314,25 @@ type browseHeadwordModeStreamer interface {
 }
 
 type browseFindStreamRequest struct {
-	entry        *entry
-	dict         dict.Dictionary
-	query        string
-	typedQuery   string
-	matchMode    string
-	mask         bool
-	within       string
-	typedWithin  string
-	withinMode   string
-	withinMask   bool
-	withinRE     *regexp.Regexp
-	cacheID      string
-	cacheGroup   string
-	cacheOrder   int
-	cacheCount   int
-	cacheFTS     bool
-	cacheTrigram bool
-	page         int
+	entry         *entry
+	dict          dict.Dictionary
+	query         string
+	typedQuery    string
+	matchMode     string
+	mask          bool
+	within        string
+	typedWithin   string
+	withinMode    string
+	withinMask    bool
+	withinRE      *regexp.Regexp
+	cacheID       string
+	browseCacheID string
+	cacheGroup    string
+	cacheOrder    int
+	cacheCount    int
+	cacheFTS      bool
+	cacheTrigram  bool
+	page          int
 }
 
 type browseFindSetupError struct {
@@ -359,6 +377,10 @@ func (s *Server) prepareBrowseFindStream(ctx context.Context, q url.Values) (bro
 	}
 	typedQuery, typedWithin := query, within
 	cacheID := q.Get("wildcache")
+	browseCacheID := q.Get("browsecache")
+	if browseCacheID != "" && (!wildcardCacheIDPattern.MatchString(browseCacheID) || cacheID != "" || within != "") {
+		return browseFindStreamRequest{}, &browseFindSetupError{status: http.StatusBadRequest, message: "invalid Browse result cache"}
+	}
 	cacheGroup := q.Get("wildgroup")
 	cacheOrder, orderErr := strconv.Atoi(q.Get("wildorder"))
 	cacheCount, countErr := strconv.Atoi(q.Get("wildcount"))
@@ -419,7 +441,8 @@ func (s *Server) prepareBrowseFindStream(ctx context.Context, q url.Values) (bro
 	}
 	return browseFindStreamRequest{entry: e, dict: d, query: query, typedQuery: typedQuery, matchMode: matchMode, mask: mask, within: within, typedWithin: typedWithin, withinMode: withinMode,
 		withinMask: withinMask, withinRE: withinRE, cacheID: cacheID, cacheGroup: cacheGroup,
-		cacheOrder: cacheOrder, cacheCount: cacheCount, page: page,
+		browseCacheID: browseCacheID,
+		cacheOrder:    cacheOrder, cacheCount: cacheCount, page: page,
 		cacheFTS: q.Get("wildfts") == "1", cacheTrigram: q.Get("wildtrigram") == "1"}, nil
 }
 
@@ -476,6 +499,9 @@ func (s *Server) handleBrowseFindStream(w http.ResponseWriter, r *http.Request) 
 }
 
 func (s *Server) streamBrowseFindCached(ctx context.Context, request browseFindStreamRequest, send func(browseFindStreamEvent) error) error {
+	if request.browseCacheID != "" {
+		return s.streamBrowseResultCache(ctx, request, send)
+	}
 	if request.within != "" && request.mask {
 		if request.cacheID == "" {
 			return errors.New("wildcards lower search requires a completed SQL result cache")

@@ -603,6 +603,10 @@ async function browseFetch(url,options={}){
       }
       if(requestURL.pathname==="/api/browse/find"&&params.get("stream")==="1")
         return androidBrowseStream("browseFind",params.toString(),options.signal);
+      if(requestURL.pathname==="/api/browse/find"){
+        const result=JSON.parse(window.wudictAndroidGo.browseFindPage(params.toString()));
+        return {status:result.status||200,ok:(result.status||200)<300,json:async()=>result.body||result};
+      }
     }
     throw new Error("Browse operation is not connected to the Go bridge");
   }
@@ -617,6 +621,10 @@ async function browseFetch(url,options={}){
   }
   if(requestURL.pathname==="/api/browse/find"&&method==="GET"&&params.get("stream")==="1")
     return nativeBrowseStream("browseFind",params.toString(),options.signal);
+  if(requestURL.pathname==="/api/browse/find"&&method==="GET"){
+    const result=await window.wudictNativeCall("browseFindPage",params.toString(),undefined,options.signal);
+    return {status:result.status||200,ok:(result.status||200)<300,json:async()=>result};
+  }
   return fetch(url,options);
 }
 function androidBrowseStream(method,query,signal){
@@ -801,6 +809,7 @@ let baseStripGeometry=null;
 function filteredStripActive(){return !!(findFilter&&$("findInput").value.trim()&&findResult)}
 function activeStripItems(){
   if(!filteredStripActive())return state?.alphabet||[];
+  if(findCacheID)return findCacheLabels;
   const words=findResult.words||[];
   if(filteredStripResult!==findResult||filteredStripWords!==words||words.length<filteredStripLength){
     filteredStripResult=findResult;filteredStripWords=words;filteredStripItems=[];filteredStripLength=-1;
@@ -820,7 +829,8 @@ function selectStripOffset(offset,clickedIndex=-1){
   if(clickedIndex>=0)revealStripIndex(clickedIndex,true);
   if(filteredStripActive()){
     const page=Math.floor(offset/300)+1;
-    if(findResult.stream){findFilterPage=page;render();$("list").parentElement.scrollTop=0}
+    if(findCacheID)loadCachedFindPage(page);
+    else if(findResult.stream){findFilterPage=page;render();$("list").parentElement.scrollTop=0}
     else fetchFound(page,0,"push");
   }else show({p:Math.floor(offset/state.size)+1,o:offset},"push");
 }
@@ -835,6 +845,7 @@ stripNavigator=window.wudictHeadwordControl.ribbon.createScroller({
 });
 let appliedFindMode="prefix",findApproved=false,findApplyPending=false,browseProgressSeq=0,browseProgressJobs=new Map(),findStreamDone=true,findPendingMove=0,findPendingPage=0,findFilterPage=1;
 let findStreamWords=[];
+let findCacheID="",findCacheLabels=[],findPageLoadSeq=0,findPageWanted=1,findAnchorOrdinal=null,findCacheComplete=false;
 function browseMaskThreshold(){
   return browseHeadwordControl?.threshold()??100000;
 }
@@ -1261,9 +1272,9 @@ function updateFindControls(){
   const filtering=findFilter;
   const total=findResult?.total||(filtering&&!$("findInput").value.trim()?state?.total||0:0);
   const suffix=findResult&&!findStreamDone?"+":"";
-  const locked=!!findResult?.stream&&!findStreamDone;
-  const anchorLower=findAnchorWord?browseFindLowerBound(findAnchorWord):-1;
-  const anchorUpper=findAnchorWord?browseFindUpperBound(findAnchorWord):-1;
+  const locked=!!findResult&&!findStreamDone;
+  const anchorLower=findAnchorWord?(findCacheID?findAnchorOrdinal??-1:browseFindLowerBound(findAnchorWord)):-1;
+  const anchorUpper=findAnchorWord?(findCacheID?findAnchorOrdinal??-1:browseFindUpperBound(findAnchorWord)):-1;
   const count=findAnchorWord?anchorLower:findIndex+1;
   browseHeadwordControl.paint({filtering,findMode,applyRequired:browseNeedsApply(),
     applyEnabled:!!$("findInput").value.trim(),busy:locked,allowInputWhileBusy:true,
@@ -1271,7 +1282,7 @@ function updateFindControls(){
     countDisabled:filtering||!$("findInput").value.trim()||!findStreamDone||!total,
     countLabel:t("browse.gotoMatch"),
     previousDisabled:filtering||(!findAnchorWord&&findIndex<0)||(findAnchorWord&&findStreamDone&&anchorLower===0)||(findStreamDone&&!findAnchorWord&&findIndex<=0),
-    nextDisabled:filtering||(!findAnchorWord&&findIndex<0)||(findAnchorWord&&findStreamDone&&anchorUpper>=findStreamWords.length)||(findStreamDone&&!findAnchorWord&&findIndex>=total-1)});
+    nextDisabled:filtering||(!findAnchorWord&&findIndex<0)||(findAnchorWord&&findStreamDone&&anchorUpper>=total)||(findStreamDone&&!findAnchorWord&&findIndex>=total-1)});
 }
 function browseCompareWords(a,b){
   const left=new TextEncoder().encode(String(a).replace(/[A-Z]/g,c=>c.toLowerCase()));
@@ -1290,20 +1301,71 @@ function browseFindUpperBound(word){
   while(lo<hi){const mid=(lo+hi)>>>1;if(browseCompareWords(findStreamWords[mid],word)<=0)lo=mid+1;else hi=mid}
   return lo;
 }
+async function loadCachedFindPage(page,target=-1,record="replace"){
+  if(!findCacheID||!findResult||page<1||page>Math.max(1,findResult.pages))return false;
+  findPageWanted=page;
+  const seq=++findPageLoadSeq,cacheID=findCacheID;
+  const params=new URLSearchParams({dict:dictId,q:$("findInput").value.trim(),matchmode:appliedFindMode,
+    browsecache:cacheID,p:String(page)});
+  try{
+    const response=await browseFetch("/api/browse/find?"+params);
+    if(!response.ok)throw new Error(`HTTP ${response.status}`);
+    const result=await response.json();
+    if(seq!==findPageLoadSeq||cacheID!==findCacheID)return false;
+    findResult.words=result.words||[];findResult.page=page;
+    findResult.total=Math.max(findResult.total,result.total||0);
+    findResult.pages=Math.ceil(findResult.total/300);
+    findFilterPage=page;
+    if(target>=0){
+      findIndex=target;
+      if(!findFilter&&currentFoundWord())show({at:currentFoundWord()},record);
+    }
+    updateFindControls();render();
+    if(findFilter)$("list").parentElement.scrollTop=0;
+    return true;
+  }catch(error){
+    if(seq===findPageLoadSeq)browseTrace("find cache page failed",{dict:dictId,page,error:error.message});
+    return false;
+  }
+}
+async function cachedAnchorPosition(word,after){
+  let lo=0,hi=findResult?.total||0;
+  const cacheID=findCacheID;
+  while(lo<hi&&cacheID===findCacheID){
+    const mid=Math.floor((lo+hi)/2),page=Math.floor(mid/300)+1;
+    const params=new URLSearchParams({dict:dictId,q:$("findInput").value.trim(),matchmode:appliedFindMode,
+      browsecache:cacheID,p:String(page)});
+    const response=await browseFetch("/api/browse/find?"+params);
+    if(!response.ok)throw new Error(`HTTP ${response.status}`);
+    const data=await response.json();
+    const candidate=data.words?.[mid-(page-1)*300];
+    if(candidate===undefined)break;
+    if(browseCompareWords(candidate,word)<(after?1:0))lo=mid+1;else hi=mid;
+  }
+  return lo;
+}
+function newBrowseFindCacheID(){
+  const bytes=new Uint8Array(16);
+  try{crypto.getRandomValues(bytes)}
+  catch(_){for(let i=0;i<bytes.length;i++)bytes[i]=Math.floor(Math.random()*256)}
+  return [...bytes].map(value=>value.toString(16).padStart(2,"0")).join("");
+}
 async function fetchFound(page,target=0,record="replace"){
   // A delayed input callback or navigation must not bypass Apply in any mode.
   if(findAwaitingApply())return;
   findAbort?.abort();
   const controller=new AbortController();findAbort=controller;
   const seq=++findSeq,query=$("findInput").value.trim(),mode=appliedFindMode;
+  findCacheID=newBrowseFindCacheID();
+  findCacheLabels=[];findPageLoadSeq++;findPageWanted=page;findAnchorOrdinal=null;findCacheComplete=false;
   findStreamDone=false;findStreamWords=[];findFilterPage=1;findPendingMove=0;findPendingPage=page>1?page:0;
   findEffectiveQueries=[];
-  findResult={words:findStreamWords,total:0,page:1,pages:0,size:300,stream:true};
+  findResult={words:[],total:0,page:1,pages:0,size:300,stream:false};
   updateFindControls();render();
   const endProgress=browseProgress(t(findFilter?"browse.filteringWords":"browse.searchingWords"),()=>controller.abort(),"find");
   // This closure owns only this request's task, including after a newer query starts.
   const finish=()=>endProgress();
-  const u=new URLSearchParams({dict:dictId,q:query,matchmode:mode,stream:"1"});
+  const u=new URLSearchParams({dict:dictId,q:query,matchmode:mode,stream:"1",browsecache:findCacheID});
   if(browseDiagnosticsEnabled())u.set("diagnostics","1");
   try{
     const r=await browseFetch("/api/browse/find?"+u,{signal:controller.signal});
@@ -1319,33 +1381,30 @@ async function fetchFound(page,target=0,record="replace"){
         const event=JSON.parse(line);
         if(seq!==findSeq)return;
         if(event.type==="error")throw new Error(event.error||"find");
-        if(event.words?.length)findStreamWords.push(...event.words);
+        if(event.alphabet?.length)findCacheLabels.push(...event.alphabet.map(item=>({
+          l:item.l??item.letter,o:item.o??item.offset,n:300
+        })));
         if(event.done&&Array.isArray(event.effectiveQueries))findEffectiveQueries=event.effectiveQueries;
         findResult.total=event.total||0;
         findResult.pages=Math.ceil(findResult.total/300);
-        if(event.done){findStreamDone=true;findResult.total=event.total||0;findResult.pages=Math.ceil(findResult.total/300);finish()}
-        updateBrowseProgress(t(findFilter?"browse.filteringWords":"browse.searchingWords")+" · "+num(event.total||findStreamWords.length));
-        if(findFilter){
-          if(findPendingPage&&findPendingPage<=Math.ceil(findStreamWords.length/300)){findFilterPage=findPendingPage;findPendingPage=0}
-          render();
-        }else if(findPendingAnchorMove&&event.done){
-          const lower=browseFindLowerBound(findAnchorWord),upper=browseFindUpperBound(findAnchorWord);
-          findIndex=findPendingAnchorMove>0?upper:lower-1;findPendingAnchorMove=0;
-          if(findIndex>=0&&findIndex<findStreamWords.length){findAnchorWord="";updateFindControls();show({at:currentFoundWord()},"replace")}
-          else{findIndex=-1;updateFindControls()}
-        }else if(findIndex<0&&findStreamWords.length&&!findAnchorWord){
-          findIndex=0;updateFindControls();show({at:findStreamWords[0]},record);
-        }else if(findPendingMove&&findIndex+findPendingMove<findStreamWords.length){
-          findIndex+=findPendingMove;findPendingMove=0;updateFindControls();show({at:currentFoundWord()},"replace");
-        }else updateFindControls();
-        if(event.done){
-          if(findPendingMove){
-            if(findStreamWords.length)findIndex=Math.max(0,Math.min(findStreamWords.length-1,findIndex+findPendingMove));
-            findPendingMove=0;updateFindControls();if(!findFilter&&findIndex>=0)show({at:currentFoundWord()},"replace")
-          }
-          if(findPendingPage){findFilterPage=Math.max(1,Math.min(findPendingPage,Math.max(1,findResult.pages)));findPendingPage=0;render()}
-          if(!findFilter)render();
-        }
+        if(event.done){findStreamDone=true;findCacheComplete=true;findResult.total=event.total||0;findResult.pages=Math.ceil(findResult.total/300);finish()}
+        if(event.done&&findCacheLabels.length)
+          findCacheLabels.at(-1).n=findResult.total-findCacheLabels.at(-1).o;
+        updateBrowseProgress(t(findFilter?"browse.filteringWords":"browse.searchingWords")+" · "+num(findResult.total));
+        const pending=findPendingPage&&findPendingPage<=findResult.pages?findPendingPage:0;
+        if(pending)findPendingPage=0;
+        const first=!findResult.words.length&&findResult.total>0;
+        const refresh=event.done&&findResult.total>0;
+        const partial=findResult.words.length>0&&findResult.words.length<300&&
+          findResult.total>(findResult.page-1)*300+findResult.words.length;
+        if(pending||first||refresh||partial){
+          const requested=pending||(first&&target>0?Math.floor(target/300)+1:findPageWanted);
+          const ready=Math.min(Math.max(1,requested),Math.max(1,findResult.pages));
+          if(first&&target>=findResult.total)findPendingPage=Math.floor(target/300)+1;
+          await loadCachedFindPage(ready,!findFilter?(first?Math.min(target,findResult.total-1):findIndex):-1,record);
+        }else{updateFindControls();render()}
+        if(event.done&&findPendingMove){const delta=findPendingMove;findPendingMove=0;findMove(delta)}
+        if(event.done&&findPendingAnchorMove){const delta=findPendingAnchorMove;findPendingAnchorMove=0;findMove(delta)}
       }
     };
     while(true){
@@ -1359,11 +1418,11 @@ async function fetchFound(page,target=0,record="replace"){
     if(seq!==findSeq)return;
     if(e.name==="AbortError"){
       findStreamDone=true;findPendingMove=0;findPendingPage=0;
-      if(findResult){findResult.total=findStreamWords.length;findResult.pages=Math.ceil(findResult.total/300)}
       finish();updateFindControls();render();return;
     }
     finish();
     findStreamDone=true;
+    findCacheID="";findCacheLabels=[];
     findResult=null;findIndex=-1;
     $("findCount").textContent="!";$("findCount").title=window.wudictI18n.errorText(e.message);
     browseTrace("find failed",{dict:dictId,error:e.message});
@@ -1374,6 +1433,7 @@ async function fetchFound(page,target=0,record="replace"){
 }
 function findChanged(){
   clearTimeout(findTimer);findAbort?.abort();findSeq++;
+  findCacheID="";findCacheLabels=[];findPageLoadSeq++;findAnchorOrdinal=null;findCacheComplete=false;
   browseSeq++;
   clearBrowseProgress();
   findApplyPending=browseNeedsApply();findApproved=!findApplyPending;
@@ -1391,6 +1451,7 @@ function findChanged(){
 function applyFind(){
   if(!browseNeedsApply())return;
   clearTimeout(findTimer);
+  findCacheID="";findCacheLabels=[];findPageLoadSeq++;findAnchorOrdinal=null;findCacheComplete=false;
   findApplyPending=false;findApproved=true;appliedFindMode=findMode;
   findResult=null;findIndex=-1;findStreamDone=true;findStreamWords=[];findPendingMove=0;findAnchorWord="";findPendingAnchorMove=0;
   if(!$('findInput').value.trim()){updateFindControls();render();return}
@@ -1399,6 +1460,30 @@ function applyFind(){
 }
 function findMove(delta){
   if(findFilter||!findResult)return;
+  if(findCacheID){
+    if(findAnchorWord){
+      if(!findStreamDone){findPendingAnchorMove=delta;return}
+      const cacheID=findCacheID,word=findAnchorWord;
+      cachedAnchorPosition(word,delta>0).then(position=>{
+        if(cacheID!==findCacheID||word!==findAnchorWord)return;
+        findAnchorOrdinal=position;
+        const target=delta>0?position:position-1;
+        if(target<0||target>=findResult.total){findIndex=-1;updateFindControls();return}
+        findAnchorWord="";loadCachedFindPage(Math.floor(target/300)+1,target,"push");
+      }).catch(error=>browseTrace("find anchor failed",{error:error.message}));
+      return;
+    }
+    if(findIndex<0)return;
+    const requested=findIndex+(findPendingMove||0)+delta;
+    if(!findStreamDone&&requested>=findResult.total){findPendingMove=requested-findIndex;return}
+    if(!findResult.total)return;
+    const target=(requested%findResult.total+findResult.total)%findResult.total;
+    findPendingMove=0;
+    if(Math.floor(target/300)+1!==findResult.page||!findResult.words[target-(findResult.page-1)*300])
+      loadCachedFindPage(Math.floor(target/300)+1,target,"push");
+    else{findIndex=target;updateFindControls();show({at:currentFoundWord()},"push")}
+    return;
+  }
   if(findResult.stream){
     if(findAnchorWord){
       if(!findStreamWords.length)return;
@@ -1434,6 +1519,10 @@ function toggleFindFilter(){
   updateFindControls();
   if(findAwaitingApply()){render();return}
   if(findFilter&&$("findInput").value.trim()&&!findResult){fetchFound(1,0,"replace");return}
+  if(!findFilter&&findCacheID&&findResult?.total&&findIndex<0){
+    findIndex=(findResult.page-1)*300;
+    if(currentFoundWord())show({at:currentFoundWord()},"replace");
+  }
   render();
 }
 
@@ -1551,8 +1640,16 @@ function recordBrowsePage(page,record){
 }
 
 function saveBrowseFind(){
-  if(!state||!findResult?.stream||!findStreamDone||!$("findInput").value.trim())return;
+  if(!state||!findResult||!findStreamDone||!$("findInput").value.trim())return;
   try{
+    if(findCacheID){
+      if(!findCacheComplete)return;
+      window.wudictHeadwordControl.cacheWrite(BROWSE_FIND_SESSION_KEY,{dict:dictId,dictTotal:state.total,
+        query:$("findInput").value.trim(),mode:appliedFindMode,cacheID:findCacheID,
+        labels:findCacheLabels,total:findResult.total,effectiveQueries:findEffectiveQueries,
+        page:findResult.page});
+      return;
+    }
     const full=findStreamWords.length<=50000;
     if(!full&&!findFilter)return;
     const words=full?findStreamWords:findStreamWords.slice((findFilterPage-1)*300,findFilterPage*300);
@@ -1561,9 +1658,21 @@ function saveBrowseFind(){
       effectiveQueries:findEffectiveQueries,full,page:findFilterPage});
   }catch(_){}
 }
-function restoreBrowseFind(query,page,index){
+async function restoreBrowseFind(query,page,index){
   try{
     const saved=window.wudictHeadwordControl.cacheRead(BROWSE_FIND_SESSION_KEY);
+    if(saved?.dict===dictId&&saved.dictTotal===state.total&&saved.query===query&&saved.mode===appliedFindMode&&
+      typeof saved.cacheID==="string"&&/^[a-f0-9]{32}$/.test(saved.cacheID)&&Array.isArray(saved.labels)){
+      findCacheID=saved.cacheID;findCacheLabels=saved.labels;findStreamDone=true;findCacheComplete=true;
+      findEffectiveQueries=Array.isArray(saved.effectiveQueries)?saved.effectiveQueries:[];
+      findResult={words:[],total:saved.total||0,page:1,pages:Math.ceil((saved.total||0)/300),size:300,stream:false};
+      findIndex=findFilter?-1:Math.max(0,Math.min(index,saved.total-1));
+      findFilterPage=page;
+      if(!saved.total){updateFindControls();render();return true}
+      if(await loadCachedFindPage(Math.max(1,Math.min(page,findResult.pages)),findFilter?-1:findIndex,"none"))return true;
+      findCacheID="";findCacheLabels=[];findResult=null;findIndex=-1;
+      return false;
+    }
     if(saved?.dict!==dictId||saved.dictTotal!==state.total||saved.query!==query||saved.mode!==appliedFindMode||
       !Array.isArray(saved.words)||saved.full&&saved.words.length!==saved.total||
       !saved.full&&(!findFilter||saved.page!==page)||
@@ -1599,7 +1708,7 @@ function render(){
      and offers the rest - while the reader's own choice in the dictionary
      picker reflects the dictionary the reader opened Browse for. `from` is
      reserved for article-link provenance and one-shot cross-reference scope. */
-  const countText=t("browse.words",{count:total,number:num(total)})+(filtering&&findResult.stream&&!findStreamDone?"+":"");
+  const countText=t("browse.words",{count:total,number:num(total)})+(filtering&&!findStreamDone?"+":"");
   $("sub").textContent=total?a+" — "+z+"  ·  "+countText:t(filtering?"browse.noMatches":"browse.emptyWords");
   const returnTo=encodeURIComponent(browseReturnURL());
   $("list").innerHTML=words.map(w=>{
@@ -1611,7 +1720,7 @@ function render(){
     const displayRanges=ranges;
     return '<a class="'+classes+'" href="/?q='+encodeURIComponent(w)+"&dict="+encodeURIComponent(d.dict)+
       '&from='+encodeURIComponent(d.dict)+'&mode=exact&browse='+returnTo+'" title="'+e+'">'+highlightedWord(title,displayRanges)+"</a>";
-  }).join("")||(filtering?(findResult.stream&&!findStreamDone?"":'<p class="browse-empty">'+tx("browse.noMatches")+'</p>'):"");
+  }).join("")||(filtering?(!findStreamDone?"":'<p class="browse-empty">'+tx("browse.noMatches")+'</p>'):"");
   const wordsReady=performance.now();
 
   /* The strip belongs to the dictionary, not to the page, so it is built once
@@ -1660,10 +1769,10 @@ function render(){
   }
   requestAnimationFrame(updateStripArrows);
 
-  const pages=filtering?(findResult.stream?Math.ceil(findStreamWords.length/300):findResult.pages):d.pages;
+  const pages=filtering?findResult.pages:d.pages;
   const page=filtering?filterPage:d.page;
-  document.querySelectorAll("[data-pos]").forEach(el=>{el.textContent=page+"/"+(pages||1)+(filtering&&findResult.stream&&!findStreamDone?"+":"");el.disabled=!!(filtering&&findResult.stream&&!findStreamDone)});
-  const hasMore=filtering&&findResult.stream&&!findStreamDone;
+  document.querySelectorAll("[data-pos]").forEach(el=>{el.textContent=page+"/"+(pages||1)+(filtering&&!findStreamDone?"+":"");el.disabled=!!(filtering&&!findStreamDone)});
+  const hasMore=filtering&&!findStreamDone;
   const ends={first:page<=1,prev:page<=1,next:hasMore?false:page>=pages,last:hasMore?false:page>=pages};
   document.querySelectorAll("[data-go]").forEach(b=>{b.disabled=!!ends[b.dataset.go]});
   browseTrace("render",{dict:d.dict,page:d.page,words:words.length,letters:d.alphabet.length,
@@ -1683,6 +1792,14 @@ function render(){
 function turn(where){
   if(!state)return;
   const filtered=findFilter&&findResult&&$("findInput").value.trim();
+  if(filtered&&findCacheID){
+    const pages=findResult.pages,current=findResult.page;
+    const target=where==="prev"?current-1:where==="next"?current+1:where==="first"?1:findStreamDone?pages:pages+1;
+    if(target<1)return;
+    if(target<=pages)loadCachedFindPage(target);
+    else if(!findStreamDone)findPendingPage=target;
+    return;
+  }
   if(filtered&&findResult.stream){
     const pages=Math.ceil(findStreamWords.length/300),current=findFilterPage;
     const target=where==="prev"?current-1:where==="next"?current+1:where==="first"?1:findStreamDone?pages:pages+1;
@@ -1702,7 +1819,7 @@ function browseGotoOpen(){
   if(!state||browsePageBusy)return;
   const filtering=findFilter&&!!$("findInput").value.trim()&&findResult;
   if(filtering&&findResult.stream&&!findStreamDone)return;
-  const pages=filtering?(findResult.stream?Math.ceil(findStreamWords.length/300):findResult.pages):state.pages;
+  const pages=filtering?findResult.pages:state.pages;
   const page=filtering?findFilterPage:state.page;
   const total=Math.max(1,pages||1);
   const input=$("browseGotoInput");
@@ -1714,11 +1831,11 @@ function browseGotoOpen(){
   $("browseGotoDialog").showModal();input.focus();input.select();
 }
 function browseFindGotoOpen(){
-  if(findFilter||!$("findInput").value.trim()||!findResult||!findStreamDone||!findStreamWords.length)return;
-  const total=findStreamWords.length;browseGotoTarget="match";
+  if(findFilter||!$("findInput").value.trim()||!findResult||!findStreamDone||!findResult.total)return;
+  const total=findResult.total;browseGotoTarget="match";
   const input=$("browseGotoInput");$("browseGotoHeading").textContent=t("browse.gotoMatch");
   $("browseGotoLabel").textContent=t("browse.gotoMatchLabel");input.min="1";input.max=String(total);
-  input.value=String(Math.max(1,Math.min(total,findAnchorWord?browseFindLowerBound(findAnchorWord)+1:findIndex+1)));
+  input.value=String(Math.max(1,Math.min(total,findAnchorWord?(findAnchorOrdinal??0)+1:findIndex+1)));
   $("browseGotoRange").textContent=t("browse.gotoMatchRange",{total:num(total)});
   $("browseGotoDialog").showModal();input.focus();input.select();
 }
@@ -1726,20 +1843,23 @@ function browseGotoApply(event){
   event?.preventDefault();
   if(!state||browsePageBusy)return;
   if(browseGotoTarget==="match"){
-    const target=Number($("browseGotoInput").value),total=findStreamWords.length;
+    const target=Number($("browseGotoInput").value),total=findResult?.total||0;
     if(!Number.isInteger(target)||target<1||target>total){$("browseGotoInput").reportValidity();return}
     $("browseGotoDialog").close();findAnchorWord="";findPendingAnchorMove=0;findIndex=target-1;
-    updateFindControls();show({at:currentFoundWord()},"push");return;
+    if(findCacheID)loadCachedFindPage(Math.floor(findIndex/300)+1,findIndex,"push");
+    else{updateFindControls();show({at:currentFoundWord()},"push")}
+    return;
   }
   const filtering=findFilter&&!!$("findInput").value.trim()&&findResult;
   if(filtering&&findResult.stream&&!findStreamDone)return;
-  const pages=filtering?(findResult.stream?Math.ceil(findStreamWords.length/300):findResult.pages):state.pages;
+  const pages=filtering?findResult.pages:state.pages;
   const target=Number($("browseGotoInput").value);
   const total=Math.max(1,pages||1);
   if(!Number.isInteger(target)||target<1||target>total){$("browseGotoInput").reportValidity();return}
   $("browseGotoDialog").close();
   if(target===(filtering?findFilterPage:state.page))return;
   if(filtering&&findResult.stream){findFilterPage=target;render();scrollTo(0,0)}
+  else if(filtering&&findCacheID)loadCachedFindPage(target);
   else if(filtering)fetchFound(target,0,"replace");
   else show({p:target},"push");
 }
@@ -1796,7 +1916,7 @@ for(const type of ["pointerup","pointercancel","pointerleave"])$("list").addEven
 });
 $("browseWordFindFrom").addEventListener("click",()=>{
   const word=browseWordContextTarget;browseHideWordContextMenu();if(!word)return;
-  findAnchorWord=word;findPendingAnchorMove=0;updateFindControls();render();
+  findAnchorWord=word;findAnchorOrdinal=null;findPendingAnchorMove=0;updateFindControls();render();
 });
 document.addEventListener("click",event=>{
   const wordLink=event.target.closest(".words a");
@@ -2010,7 +2130,7 @@ addEventListener("popstate",()=>{
       appliedFindMode=findMode;
       findApproved=true;findApplyPending=false;
       const page=Math.max(1,Number(p.get("fp"))||1),index=Math.max(0,Number(p.get("fi"))||0);
-      if(!restoreBrowseFind(query,page,index))await fetchFound(page,index,"none");
+      if(!(await restoreBrowseFind(query,page,index)))await fetchFound(page,index,"none");
     }
     if(p.has("y")||p.has("word"))restoreBrowsePosition(p.get("word")||"",Math.max(0,Number(p.get("y"))||0));
   });

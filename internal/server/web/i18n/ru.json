@@ -962,6 +962,8 @@
   "search.examplesHint": "Примеры показаны — нажмите, чтобы скрыть строки, содержащие только примеры",
   "search.searching": "Поиск…",
   "search.progress": "Проверено словарей: {done} из {total}",
+  "search.countingArticles": "Подсчёт найденных статей…",
+  "search.fullListUnavailable": "Полный список недоступен",
   "search.stop": "Остановить",
   "search.emptyDict": "В этом словаре ничего не найдено",
   "search.emptyGroup": "В этой группе ничего не найдено",
