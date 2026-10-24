@@ -1196,8 +1196,8 @@ function maskRanges(word,pattern){
 function highlightedWord(word,ranges){
   if(!ranges)return esc(word);
   let from=0,html="";
-  for(const [start,end] of ranges){
-    html+=esc(word.slice(from,start))+'<mark class="browse-letter-match">'+esc(word.slice(start,end))+"</mark>";
+  for(const [start,end,className="browse-letter-match"] of ranges){
+    html+=esc(word.slice(from,start))+'<mark class="'+className+'">'+esc(word.slice(start,end))+"</mark>";
     from=end;
   }
   return html+esc(word.slice(from));

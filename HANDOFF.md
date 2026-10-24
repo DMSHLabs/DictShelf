@@ -12,6 +12,10 @@ Browse now receives the effective typed and lemma forms from its single-dictiona
 softer theme accent for lemma-only highlights. Completed find sessions retain those forms. Build and
 browser runtime checks are pending.
 
+Wildcards separate/Combined list switches preserve the bottom query, match mode
+and Search/Filter choice, then reapply them after the target base list is ready.
+Returning to a cached view reuses its base result list. Runtime check is pending.
+
 The 2026-10-24 Windows log confirms grouped lower filtering completes in under 700 ms for 102 matches.
 Filter ribbon sections now remain available when a completed SQL result's page read errors; switching to
 Filter also selects a completed dictionary with matches. Runtime confirmation is pending.
