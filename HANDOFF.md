@@ -1,9 +1,9 @@
 # Agent handoff — current state
 
-Current checkout: branch `dev` at `65b99341`. Uncommitted `app.css` changes keep
-dictionary result headings at `--ui-font-section` in both collapsed and expanded
-states, bold the dictionary name, and size result counts and `more…` links with
-`--ui-font-addition`. `go build ./...` and `git diff --check` pass; visual
+Current checkout: branch `codex/search` at `426ea83c`. Uncommitted `app.css`
+changes keep dictionary result headers at a fixed height while opening, use
+`--ui-font-section` bold for dictionary names, and `--ui-font-addition` for
+counts and `more…` links. `go build ./...` and `git diff --check` pass; visual
 verification remains pending.
 
 The branch was created from clean `dev` at `a9ae9a93`; the changes described
