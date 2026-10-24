@@ -1,12 +1,14 @@
 # Agent handoff — current state
 
-Current checkout: branch `codex/search` at `2be43a4f`, with uncommitted Browse result-cache work. Integrate toward `dev` only when requested. No APK was built or installed in this session.
+Current checkout: branch `codex/search` at `8a5caaf5`, resolving the merge from `dev` at `cbda5441`. Preserve the existing uncommitted search and Browse result-cache changes. No APK was built or installed in this session.
 
 Main article search now returns five articles initially and builds one SQLite result file per search, with ordered matching entry IDs per dictionary in the background. Portion requests read only the selected IDs and bodies, with a partial then exact count. Sharing a file keeps a large search group within the five-cache retention rule; the path also uses the disk cap and native search bridge. Focused store/server tests (including two dictionaries and a portion crossing a 300-ID block), Go build and inline JavaScript syntax pass; Windows/Android runtime interaction and very large result timing are pending.
 
 Browse find/filter now streams matches into 300-title SQLite blocks using the existing Wildcards result-cache manager and its disk limit. The WebView keeps one visible result block plus one ribbon marker per block. Page turns, result navigation and return from an article read the requested block by cache ID. A missing saved cache restarts the query. The server cache path and Android/Windows native page bridges are wired; a focused server test passes. Go build, inline JavaScript syntax and `git diff --check` pass. Windows/Android interaction and million-result performance remain unverified.
 
-The full `internal/server` test run still fails the two known dictionary-icon tests (HTTP 202 where 200 is expected and a missing embedded icon). No other test failures appeared. Main search result portions and the Wildcards lower-search changes from this branch remain as described by the code and SPEC; Windows/Android interaction is still pending.
+Browse links from the main screen carry the entry URL across Browse → article → ← Words navigation. Closing Browse returns to that original screen, using browser history when it still points to the entry and the saved URL otherwise. Runtime interaction remains to be checked.
+
+The merged `dev` work adds bounded-header reads for embedded LSD icons and updates async icon tests for the current routes. It also includes the dictionary search mode/index updates and grouped SQL-backed Wildcards lower search. On `dev`, `go test ./...`, `go vet ./...`, `go build ./...`, and `git diff --check` passed. Windows/Android display and interaction checks remain pending.
 
 Filter mode now explicitly requests the visible dictionary's first result page when its SQL metadata is
 ready but no page is loaded; this avoids leaving the headword pane on its loading message after a ribbon
