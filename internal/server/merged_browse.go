@@ -733,6 +733,23 @@ func (s *Server) mergedHeadwordLemmaQuery(q url.Values, within, withinMode strin
 		strings.ContainsAny(within, " \t\r\n") || !s.Morph.Enabled() {
 		return within, nil
 	}
+	if raw := q.Get("lemmaQueries"); raw != "" {
+		if len(raw) > 16*1024 {
+			return "", errors.New("lemma query list is too long")
+		}
+		var alternatives []string
+		if err := json.Unmarshal([]byte(raw), &alternatives); err != nil || len(alternatives) > 128 {
+			return "", errors.New("invalid lemma query list")
+		}
+		result := within
+		for _, alternative := range alternatives {
+			if alternative == "" || len(alternative) > 256 || strings.ContainsAny(alternative, " \t\r\n\x1f") {
+				return "", errors.New("invalid lemma query")
+			}
+			result = addHeadwordAlternative(result, alternative)
+		}
+		return result, nil
+	}
 	codes := map[string]bool{}
 	for _, id := range strings.Split(q.Get("ids"), ",") {
 		if id == "" {
@@ -1210,7 +1227,7 @@ func (s *Server) streamMergedBrowseFind(ctx context.Context, q url.Values, send 
 	_ = db.QueryRowContext(ctx, `SELECT matched_dictionaries FROM merged_source_meta LIMIT 1`).Scan(&matchedDictionaries)
 	return send(browseFindStreamEvent{Type: "done", Total: total, Scanned: progressScale, ScanTotal: progressScale,
 		Size: browsePageSize, Alphabet: alphabet, DiskCache: true, MergedCacheID: base.mergedCacheID,
-		MatchedDictionaries: matchedDictionaries, Done: true})
+		MatchedDictionaries: matchedDictionaries, EffectiveQueries: splitMergedHeadwordAlternatives(within), Done: true})
 }
 
 // scaleMergedFindProgress keeps the combined-list build and mask-filter phases

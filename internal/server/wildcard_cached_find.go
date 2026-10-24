@@ -80,6 +80,7 @@ func (s *Server) streamCachedWildcardWithin(ctx context.Context, request browseF
 		if done {
 			event.Type = "done"
 			event.Alphabet = sections.Finish()
+			event.EffectiveQueries = splitMergedHeadwordAlternatives(request.within)
 		}
 		if err := entry.append(request.entry.ID, cacheWithin, request.withinMask, token, event); err != nil {
 			return err

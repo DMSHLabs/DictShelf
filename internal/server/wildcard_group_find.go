@@ -453,7 +453,7 @@ func (s *Server) streamCachedWildcardGroupWithin(ctx context.Context, request br
 	for _, item := range completed {
 		if err := send(browseFindStreamEvent{Type: "done", DictID: item.row.id, Total: item.row.found,
 			Scanned: item.row.scanned, ScanTotal: item.row.baseTotal, Size: browsePageSize, DiskCache: true,
-			Done: true, Alphabet: item.alphabet}); err != nil {
+			Done: true, Alphabet: item.alphabet, EffectiveQueries: splitMergedHeadwordAlternatives(item.row.within)}); err != nil {
 			return err
 		}
 	}

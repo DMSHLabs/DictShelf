@@ -287,6 +287,7 @@ type browseFindStreamEvent struct {
 	DiskCache           bool          `json:"diskCache,omitempty"`
 	MergedCacheID       string        `json:"mergedCacheID,omitempty"`
 	MatchedDictionaries int           `json:"matchedDictionaries,omitempty"`
+	EffectiveQueries    []string      `json:"effectiveQueries,omitempty"`
 	Done                bool          `json:"done,omitempty"`
 	Error               string        `json:"error,omitempty"`
 }
@@ -638,6 +639,9 @@ func (s *Server) streamBrowseFind(ctx context.Context, request browseFindStreamR
 		}
 		event := browseFindStreamEvent{Type: typ, Words: words, Total: total, Done: done,
 			Scanned: scanned, ScanTotal: scanTotal, Strategy: strategy, CandidateLiteral: candidateLiteral}
+		if done && request.within == "" && isLemmaHeadwordMode(request.matchMode) {
+			event.EffectiveQueries = splitMergedHeadwordAlternatives(request.query)
+		}
 		if request.mask && request.within == "" {
 			for _, word := range words {
 				baseMaskSections.Add(word)
