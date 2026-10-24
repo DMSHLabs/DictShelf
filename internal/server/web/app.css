@@ -363,7 +363,6 @@ body.mask-view-active .qbox input{padding-right:2.8em}
 #maskProgress #mergedAZ svg{display:block;width:2.1em;height:1.2em}
 #maskProgress button:disabled{opacity:.4;cursor:default}
 @container mask-progress (min-width:50rem){#maskProgress .mask-pager-label{display:inline}#maskProgress .mask-pager-icon{display:none}}
-@container mask-progress (max-width:26rem){#maskProgress :is(#maskPrev,#maskNext){display:none}}
 /* Keep the search controls visible while moving through a long mask list. */
 body.mask-view-active{--stick:var(--barh)}
 body.mask-view-active .bar{transform:none!important}
@@ -628,7 +627,7 @@ details.dict>summary{position:sticky;top:var(--stick);z-index:2;
   background:var(--bg-card);
   cursor:pointer;padding:var(--sp-1) .62rem;font-size:calc(var(--ui-font-section) * 1rem);font-weight:700;
   outline:2px solid transparent;outline-offset:-2px;border-radius:9px 9px 0 0;
-  color:var(--label);list-style:none;display:flex;align-items:center;gap:var(--sp-1);
+  color:var(--label);list-style:none;display:flex;align-items:center;gap:var(--sp-1);flex-wrap:wrap;
   /* `top` is deliberately NOT in this list, and the reason is the reader's
      report that scrolling UP tucked the header a couple of pixels under the
      bar. The bar's height is not a constant this page may animate after: it is
@@ -658,6 +657,10 @@ details.dict>summary::-webkit-details-marker{display:none}
 details.dict>summary::before{content:"›";color:var(--label-quiet);
   transition:transform .18s ease;font-weight:400}
 details.dict[open]>summary::before{transform:rotate(90deg)}
+details.dict>summary.search-result-summary::before{display:none}
+summary.search-result-summary .search-dict-identity::before{content:"›";color:var(--label-quiet);
+  transition:transform .18s ease;font-weight:400;flex:none}
+details.dict[open]>summary.search-result-summary .search-dict-identity::before{transform:rotate(90deg)}
 details.dict[open]>summary{border-bottom:1px solid var(--line-soft)}
 details.dict>summary.sbar-target{outline-color:var(--accent)}
 details.dict>summary:focus-visible{outline-color:var(--focus)}
@@ -694,14 +697,29 @@ summary .mbtn:hover{color:var(--fg);background:var(--bg)}
 summary .mbtn:active{color:var(--accent)}
 summary .mpos{font-size:11px;color:var(--label-quiet);min-width:2.8em;text-align:center;
   font-variant-numeric:tabular-nums}
-summary .search-pages{display:flex;align-items:center;gap:2px;margin-left:auto;font-weight:400;
+summary .search-pages{display:flex;align-items:center;gap:2px;font-weight:400;
   font-size:calc(var(--ui-font-addition) * 1rem);white-space:nowrap}
-summary .search-pages~.count{margin-left:var(--sp-1)}
-summary .result-page-range{font-variant-numeric:tabular-nums;color:var(--label-quiet)}
-summary .result-page-action{border:0;background:transparent;color:var(--label);font:inherit;line-height:1;
-  padding:8px 6px;margin:-8px 0;border-radius:5px;cursor:pointer}
-summary .result-page-action:hover:not(:disabled){background:var(--bg);color:var(--fg)}
+summary .result-page-action{box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;flex:none;
+  width:calc(var(--ui-control-height) * 1rem);height:calc(var(--ui-control-height) * 1rem);min-width:calc(var(--ui-control-height) * 1rem);
+  padding:0 .25em;border:1px solid var(--line-soft);border-radius:7px;
+  background:color-mix(in srgb,var(--bg) 50%,transparent);color:var(--fg);font:inherit;font-size:calc(var(--ui-control-font) * 1rem);line-height:1;cursor:pointer;
+  -webkit-tap-highlight-color:transparent}
+summary .result-page-action svg{display:block;width:1.5em;height:1.5em;flex:none}
+summary .result-page-range{width:auto;min-width:0;padding:0 .55em;font-size:calc(var(--ui-control-font) * 1rem);font-variant-numeric:tabular-nums;color:var(--label-quiet);white-space:nowrap}
+summary .search-dict-identity{display:flex;align-items:center;gap:var(--sp-1);flex:1 1 max-content;min-width:8ch;white-space:nowrap}
+summary .search-dict-name{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+summary .search-dict-name[data-fit="addition"]{font-size:calc(var(--ui-font-addition) * 1rem)}
+summary .search-dict-name[data-fit="hint"]{font-size:calc(var(--ui-hint-font-size) * 1rem)}
+summary .search-dict-controls{display:flex;align-items:center;gap:var(--sp-1);flex:0 0 auto;min-width:0;margin-left:auto;font-weight:400}
+summary[data-controls-wrapped="true"] .search-dict-controls{box-sizing:border-box;flex:1 1 100%;justify-content:space-between;margin-left:0;padding-inline:calc(var(--ui-control-height) * 1rem)}
+summary[data-controls-wrapped="true"] .search-dict-controls .search-pages{display:contents}
+summary .search-dict-controls .count{margin:0}
+summary .search-dict-controls .more{margin:0}
+summary .search-dict-controls .search-browse{margin-left:0}
+summary .result-page-action:hover:not(:disabled){background:var(--bg);color:var(--fg);border-color:var(--line)}
+summary .result-page-action:active:not(:disabled){background:color-mix(in srgb,var(--accent) 14%,var(--bg))}
 summary .result-page-action:disabled{color:var(--label-quiet);opacity:.5;cursor:default}
+summary .result-page-action:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
 summary .search-browse{font-weight:400;font-size:calc(var(--ui-font-addition) * 1rem);color:var(--link);
   white-space:nowrap;text-decoration:underline;text-underline-offset:2px;margin-left:var(--sp-1)}
 /* a dictionary's own script threw; the article is intact but inert */
