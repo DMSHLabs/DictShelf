@@ -1,43 +1,10 @@
 # Agent handoff — current state
 
-Current checkout is branch `codex/headword-search-indexes_z` at `79059bd6`. The
-main page's search-mode menu (`#modeMenu`, built by `themedSelect` in
-index.html) now renders exactly like the Browse/Wildcards find-mode menu:
-sections are wrapped in `.headword-control-find-group` divs (dividers between
-Each word / Whole headword / Articles), the menu keeps its Articles section,
-`.menu-card button` in app.css steps aside with
-`:not(.headword-control-find-option)` so headword-control.css owns the option
-rows (two-column grid, option typography, accent hover/selected), and
-`#modeMenu` carries the find menu's `.2em` padding and `--ui-edit_control-font`
-scale. A mode's mark (`MODE_GLYPHS` / `MODE_SVG_ICONS` and `modeMark` in
-index.html) is the menu's left column itself, and the mode button and the
-narrow-width mode chip wear it too — the control names the mode the way the menu
-does, and the mode's word moves to the button's tooltip and accessible name. The
-Articles mark is a drawn page with a marked word rather than the old pilcrow:
-accent band with page text inside it and an underline below, matching the app's
-own highlight, with the page's ink fixed at `--fg` so a selected
-(accent-coloured) row does not merge the band into its outline. The mark needs
-no room the word did not, so `#modeMenuBtn`'s min-width drops from 7em to 5em
-(measured marks: 42–67px); the chip types smaller than the button, so its drawn
-mark is stepped up to 1.5em. Both find-mode menus now head their groups by what
-is searched — <kbd>Each word of the headword</kbd>, <kbd>The whole headword</kbd>,
-<kbd>The article text</kbd> — and each row states only the relation
-(<kbd>Starts with the query</kbd>, <kbd>Is the query, or its lemma</kbd>,
-<kbd>Matches the pattern (* and ?)</kbd>), so the repeated "in a headword" is
-gone; the lemma example stays in the whole-word row alone, and the Russian rows
-say "запрос" where they said "введённое". Prefix, suffix, contains and wildcards
-used one string as both a row's description and Browse's mask-button name, so
-those titles now point at the existing mode-name strings (`search.prefix`,
-`search.suffix`, `dictUI.contains`, `search.wildcards`). Verified with static
-harnesses at both widths: computed grid columns, paddings, dividers and font
-sizes match Browse's menu exactly, and the mark reads at menu size, in the
-button, in the chip (a 17px page), in light and dark themes and in the selected
-state. Appearance, assets and parseref server tests, `go build ./...`, inline
-JavaScript parse and `git diff --check` pass (run before the wording change); the
-wording and the four titles were checked only by catalog integrity — both
-catalogs parse, 1098 keys each with identical key sets — because the user builds
-and looks at the result himself. Windows/Android visual check of the real page
-remains open.
+Current checkout: branch `dev` at `65b99341`. Uncommitted `app.css` changes keep
+dictionary result headings at `--ui-font-section` in both collapsed and expanded
+states, bold the dictionary name, and size result counts and `more…` links with
+`--ui-font-addition`. `go build ./...` and `git diff --check` pass; visual
+verification remains pending.
 
 The branch was created from clean `dev` at `a9ae9a93`; the changes described
 below were committed as `79059bd6` ("dictionary search"). Contains now builds both the
@@ -162,7 +129,7 @@ a full merged Browse index (14.6M source rows) after the 59-word Wildcards merge
 67 ms. That page request now validates and reuses the `mergedcache` produced by the Wildcards stream. `go
 build ./internal/server` and `git diff --check` pass; runtime confirmation is pending.
 
-Current checkout is branch `dev` at `f44e7127`. The 2026-10-23 Windows log confirms Dictionary settings
+At commit `f44e7127`, the 2026-10-23 Windows log confirmed Dictionary settings
 blocked WebView2's UI thread while serving the English Wiktionary ZIM icon: its `/dict-icon/fb1c556f5740`
 request took about 105 seconds, then the queued article resources resumed. Dictionary icon discovery now
 starts in the background, returns HTTP 202 while pending, and the UI retries without blocking. Found and
@@ -199,7 +166,7 @@ Dictionary 10th"` instead of `OALDWU`; its UTF-16 header length and Adler-32 wer
 reopened it and looked up `dog`. The original is preserved beside it as `.mdx.title-backup.bak`; prepared
 data will be stale from the source size/mtime change and needs Rebuild.
 
-Current checkout: branch `dev` at `f44e7127`; linked-group synchronization now caches its last completed
+At commit `f44e7127`, linked-group synchronization cached its last completed
 input snapshot and skips dictionary metadata reads while state.json, groups.ini, dictionary
 entries/generations and root folders are unchanged. The cache version advances only after a successful
 refresh; the diagnostic reports its version and hit/miss. Focused linked-group rescan/edit checks, `go
