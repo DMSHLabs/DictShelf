@@ -183,6 +183,7 @@ func (s *Server) Search(parent context.Context, request SearchRequest, emit func
 	if len(entries) == 0 && dictParam != "" && dictParam != "all" {
 		return searchRequestError(SearchDictionaryNotFound, "dictionary variant unavailable")
 	}
+	logx.System("search start query=%q mode=%q scope=%q dictionaries=%d", q, mode, dictParam, len(entries))
 
 	ctx, stop := context.WithCancel(parent)
 	defer stop()
@@ -229,7 +230,13 @@ func (s *Server) Search(parent context.Context, request SearchRequest, emit func
 		e := e
 		begin[i] = SearchSlot{Dict: e.ID, Name: e.ID}
 		openers[i] = func() (dict.Dictionary, error) {
-			return e.openWithin(fan)
+			d, err := e.openWithin(fan)
+			if err != nil {
+				return d, err
+			}
+			backend, database, index := searchLocationForLog(e, d, mode)
+			logx.System("search database query=%q mode=%q dictionary=%q backend=%q database=%q index=%q", q, mode, e.probeName(), backend, database, index)
+			return d, nil
 		}
 	}
 	writeLine(SearchEvent{T: "begin", Slots: begin})
@@ -271,6 +278,7 @@ func (s *Server) Search(parent context.Context, request SearchRequest, emit func
 			h.Results[j].Body = applyFormat(h.Results[j].Body, format, origin, st)
 		}
 		m := SearchEvent{T: "hit", I: i, Dict: id, Name: name, Results: h.Results, Skipped: h.Skipped, Rung: h.Rung}
+		logx.System("search result query=%q mode=%q dictionary=%q results=%d skipped=%t", q, mode, name, len(h.Results), h.Skipped)
 		var heavy tooHeavy
 		switch {
 		case errors.As(h.Err, &heavy):
@@ -339,7 +347,7 @@ func (s *Server) Search(parent context.Context, request SearchRequest, emit func
 		}
 		writeLine(renderHit(i, h))
 	})
-	if empty > 0 {
+	if empty > 0 && !search.HasMask(q) && mode != search.WholeWordLemma && mode != search.ExactLemma {
 		s.lemmaWave(ctx, func(event streamMsg) { writeLine(searchEventFromStream(event)) }, func(i int, hit search.Hit) streamMsg { return searchEventToStream(renderHit(i, hit)) }, entries, metas, missed, openers, mode, q, n)
 	}
 	writeLine(SearchEvent{T: "end"})

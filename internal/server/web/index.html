@@ -281,7 +281,6 @@ window.wudictFontScale=(function(){
      never waits for a keypress at all, because the input handler searches
      as you type. The button's only remaining ground was a magnifier next
      to a magnifier. -->
-<span class="themeSwitch tools"><button type="button" class="btn themeAuto" aria-pressed="false" title="{{T:panel.themeAuto}}">{{T:panel.auto}}</button><button type="button" class="btn themeFlip" aria-pressed="true" title="{{T:panel.themeNight}}">☀☾</button></span>
 <button type="button" class="btn tools" id="wideBtn" title="{{T:search.wide}}" aria-label="{{T:search.wide}}">⇔</button>
 <button type="button" class="btn tools" id="expandBtn" title="{{T:search.expand}}" aria-label="{{T:search.expand}}" aria-pressed="false">⊞</button>
 <button type="button" class="btn tools" id="panelBtn" title="{{T:panel.settings}}" aria-label="{{T:panel.settings}}">☰</button>
@@ -414,13 +413,9 @@ window.wudictFontScale=(function(){
 
 <div id="panel" lang="{{T:locale}}" role="dialog" aria-label="{{T:panel.settings}}">
 <div class="panel-card">
-<div class="panel-head"><h2>{{T:panel.settings}}
-<span class="headacts">
-<!-- The theme control's narrow-viewport home. Not a second control: both
-     mounts hold the same two buttons, and one pair of handlers drives them the
-     way the wordmark has two mount points selected by media query. -->
+<div class="panel-head"><h2><span class="panel-title">{{T:panel.settings}}</span>
 <span class="themeSwitch"><button type="button" class="btn themeAuto" aria-pressed="false" title="{{T:panel.themeAuto}}">{{T:panel.auto}}</button><button type="button" class="btn themeFlip" aria-pressed="true" title="{{T:panel.themeNight}}">☀☾</button></span>
-<button class="btn" id="closePanel" aria-label="{{T:panel.close}}"><svg class="icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></span></h2></div>
+<button class="btn" id="closePanel" aria-label="{{T:panel.close}}"><svg class="icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></h2></div>
 <div class="panel-scroll">
 <!-- Five sections, one subject each, in the order a reader arrives: what the
      collection is and the doors that change it, how an answer is shown, how it
@@ -3296,6 +3291,25 @@ async function loadDicts(rescan){
    per-dictionary switch and the result summaries all use, so a chip never
    names a mode differently from the rest of the page. */
 const MODE_SHORT={prefix:tx("search.prefixShort"),suffix:tx("search.suffix"),contains:tx("dictUI.contains"),word:tx("search.wholeWord"),wordLemma:tx("search.wholeWordLemma"),exact:tx("search.exact"),exactLemma:tx("search.exactLemma"),wildcards:tx("search.wildcards"),fts:tx("dictUI.fts")};
+/* A mode's mark: the pattern the mode menu's left column shows. The mode button
+   and the narrow-width chip wear it too, so the control names the mode the way
+   the menu does. The article-text mode is the one mode that searches article
+   bodies instead of matching a headword, so it wears a page with a marked word
+   rather than a headword pattern - the app's own highlight: accent band, page
+   text inside it, underline below. The page's ink stays --fg rather than
+   following the row, because a selected row is accent-coloured and the band
+   would merge into its own outline. */
+const MODE_GLYPHS={prefix:"ab→",suffix:"→ab",contains:"*ab*",word:"·ab·",wordLemma:"·ab·+",exact:"=",exactLemma:"=+",wildcards:"*?"};
+const MODE_SVG_ICONS={
+  fts:'<svg viewBox="0 0 24 24" fill="none" stroke="var(--fg)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 2.5h7.5l5 5v14H6z" stroke-width=".8"/><path d="M9.2 9.4h6" stroke-width="1.2"/><rect x="8.3" y="12.2" width="7.9" height="4.6" rx=".6" fill="var(--accent)" stroke="none"/><path d="M9.7 14.5h5.1" stroke="var(--bg)" stroke-width="1.2"/><path d="M8.6 18.8h7.3" stroke-width="1.2"/></svg>'
+};
+function modeMark(el,mode){
+  const glyph=MODE_GLYPHS[mode];
+  if(glyph){el.textContent=glyph;return true}
+  const svg=MODE_SVG_ICONS[mode];
+  if(!svg)return false;
+  el.innerHTML=svg;return true;
+}
 const SEARCH_MODE_KEY="wudict_search_mode";
 const canonicalSearchMode=mode=>mode==="mask"?"wildcards":mode;
 function setSearchMode(mode){
@@ -3324,7 +3338,7 @@ const FEAT_NAME={contains:tx("dictUI.containsIndex"),fts:tx("dictUI.ftsIndex"),m
    also the name the native window's spinner shows. See scopeLabel. */
 function syncChips(){
   const m=$("mode");
-  $("modeChip").textContent=MODE_SHORT[m.value]||m.value;
+  if(!modeMark($("modeChip"),m.value))$("modeChip").textContent=MODE_SHORT[m.value]||m.value;
   window.wudictThemedSelects?.mode.sync();
   // The scope chip's label is its own function now (scopeLabel): the all-scope
   // is no longer the shorthand "All" but the name of the group it resolves to -
@@ -6440,14 +6454,14 @@ maskHeadwordControl=window.wudictHeadwordControl.create({
     history:tx("search.history"),
     filterMode:tx("browse.filterWords"),searchMode:tx("browse.searchWords"),
     findModeGroups:{eachWord:tx("browse.findModesEachWord"),wholeHeadword:tx("browse.findModesWholeHeadword")},
-    findModes:{prefix:{title:tx("browse.findModePrefix"),description:tx("browse.findModePrefix")},
-      suffix:{title:tx("browse.findModeSuffix"),description:tx("browse.findModeSuffix")},
-      contains:{title:tx("browse.findModeContains"),description:tx("browse.findModeContains")},
+    findModes:{prefix:{title:tx("search.prefix"),description:tx("browse.findModePrefix")},
+      suffix:{title:tx("search.suffix"),description:tx("browse.findModeSuffix")},
+      contains:{title:tx("dictUI.contains"),description:tx("browse.findModeContains")},
       word:{title:tx("browse.findModeWordTitle"),description:tx("browse.findModeWord")},
       wordLemma:{title:tx("browse.findModeWordLemmaTitle"),description:tx("browse.findModeWordLemma")},
       exact:{title:tx("browse.findModeExactTitle"),description:tx("browse.findModeExact")},
       exactLemma:{title:tx("browse.findModeExactLemmaTitle"),description:tx("browse.findModeExactLemma")},
-      wildcards:{title:tx("browse.findModeWildcards"),description:tx("browse.findModeWildcards")}},
+      wildcards:{title:tx("search.wildcards"),description:tx("browse.findModeWildcards")}},
     apply:tx("browse.runFind"),previous:tx("browse.previousMatch"),next:tx("browse.nextMatch")},
   maxRows:3,
   countAction:true,
@@ -10333,17 +10347,20 @@ languageMenu.onkeydown=e=>{
     e.preventDefault();options[(index+(e.key==="ArrowDown"?1:options.length-1))%options.length]?.focus();
   }
 };
+/* A mode's mark: the pattern the menu's left column shows, worn by the mode
+   button too, so the control names the mode the same way the menu does. */
 function themedSelect(select,button,menu){
   const ctl=sheetMenuNew(button,menu,()=>{
-    const nodes=[];
+    const nodes=[];let group=null;
     const modeDescriptions={prefix:tx("browse.findModePrefix"),suffix:tx("browse.findModeSuffix"),contains:tx("browse.findModeContains"),
       word:tx("browse.findModeWord"),wordLemma:tx("browse.findModeWordLemma"),exact:tx("browse.findModeExact"),
       exactLemma:tx("browse.findModeExactLemma"),wildcards:tx("browse.findModeWildcards"),fts:tx("search.fullTextDescription")};
     for(const option of select.options){
       if(select.id==="mode"&&["prefix","exact","fts"].includes(option.value)){
+        group=document.createElement("div");group.className="headword-control-find-group";
         const heading=document.createElement("div");heading.className="headword-control-find-group-title";
         heading.textContent=tx(option.value==="prefix"?"browse.findModesEachWord":option.value==="exact"?"browse.findModesWholeHeadword":"search.articles");
-        nodes.push(heading);
+        group.append(heading);nodes.push(group);
       }
       const item=document.createElement("button");
       item.type="button";item.className=select.id==="mode"?"headword-control-find-option":"choice-item";item.role="option";
@@ -10352,7 +10369,7 @@ function themedSelect(select,button,menu){
       if(select.id==="mode"){
         if(option.selected)item.classList.add("is-selected");
         const icon=document.createElement("span");icon.className="headword-control-find-option-icon";
-        icon.textContent=({prefix:"ab→",suffix:"→ab",contains:"*ab*",word:"·ab·",wordLemma:"·ab·+",exact:"=",exactLemma:"=+",wildcards:"*?",fts:"¶"})[option.value]||"";
+        modeMark(icon,option.value);
         const description=document.createElement("span");description.className="headword-control-find-option-description";
         description.textContent=modeDescriptions[option.value]||option.textContent;
         item.append(icon,description);
@@ -10362,7 +10379,7 @@ function themedSelect(select,button,menu){
         ctl.hide();select.dispatchEvent(new Event("change",{bubbles:true}));
         sync();button.focus();
       };
-      nodes.push(item);
+      if(select.id==="mode")group.append(item);else nodes.push(item);
     }
     menu.replaceChildren(...nodes);
     return !!menu.children.length;
@@ -10370,8 +10387,17 @@ function themedSelect(select,button,menu){
   const show=ctl.show,hide=ctl.hide;
   ctl.show=()=>{if(button.disabled)return;show();button.setAttribute("aria-expanded",String(ctl.isOpen()))};
   ctl.hide=()=>{hide();button.setAttribute("aria-expanded","false")};
+  /* The mode button wears the mode's mark, so the mode's own name moves to the
+     tooltip and the accessible name - without it the control would announce a
+     pattern. Every other menu button keeps its option's text. */
+  const markedButton=select.id==="mode",controlName=select.getAttribute("aria-label")||"";
   function sync(){
-    button.textContent=select.selectedOptions[0]?.textContent||"";
+    const option=select.selectedOptions[0];
+    if(markedButton&&option){
+      if(!modeMark(button,option.value))button.textContent=option.textContent;
+      button.title=option.textContent;
+      button.setAttribute("aria-label",controlName?controlName+": "+option.textContent:option.textContent);
+    }else button.textContent=option?.textContent||"";
     button.disabled=select.disabled;
     button.hidden=select.hidden;
     if(button.disabled||button.hidden)ctl.hide();
