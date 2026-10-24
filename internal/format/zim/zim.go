@@ -22,7 +22,7 @@ import (
 // ReaderVersion is the behaviour version of this format's Reader (see
 // dict.RegisterReaderVersion). Bump it in the same commit as any change to
 // what the Reader yields, and update the golden in reader_golden_test.go.
-const ReaderVersion = 3
+const ReaderVersion = 4
 
 func init() {
 	dict.RegisterFormat(".zim", func(path string) (dict.Dictionary, error) { return Open(path) })
@@ -247,7 +247,7 @@ func (d *Dict) results(idxs []int, limit int) ([]dict.Result, error) {
 		if len(body) == 0 {
 			continue
 		}
-		out = append(out, dict.Result{Headword: src.headword(), Body: d.articleHTML(body)})
+		out = append(out, dict.Result{Headword: src.headword(), Body: d.articleHTML(de, body)})
 		if limit > 0 && len(out) >= limit {
 			break
 		}

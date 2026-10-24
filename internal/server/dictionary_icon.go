@@ -20,6 +20,7 @@ import (
 	"sync"
 
 	"github.com/wuweidict/wudict/internal/dict"
+	lsdformat "github.com/wuweidict/wudict/internal/format/lsd"
 	"github.com/wuweidict/wudict/internal/fsx"
 	"github.com/wuweidict/wudict/internal/logx"
 	"github.com/wuweidict/wudict/internal/store"
@@ -228,6 +229,9 @@ func (r *Registry) dictionaryIcon(e *entry, gen uint64) ([]byte, string) {
 		body, mime, _ = readDictionaryIcon(external)
 	}
 	probeComplete := true
+	if len(body) == 0 && strings.EqualFold(filepath.Ext(source), ".lsd") {
+		body, mime, _ = lsdformat.ReadIcon(source)
+	}
 	isZIM := strings.EqualFold(filepath.Ext(source), ".zim") || strings.EqualFold(filepath.Ext(source), ".zimaa")
 	if len(body) == 0 && isZIM && source != "" {
 		if d, err := dict.Open(source); err == nil {
