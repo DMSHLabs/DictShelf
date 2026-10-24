@@ -1549,14 +1549,6 @@ function browseOriginFromURL(){
   }catch(_){return ""}
 }
 
-function browseOriginIsPrevious(origin){
-  if(!origin||!document.referrer)return false;
-  try{
-    const previous=new URL(document.referrer);
-    return previous.origin===location.origin&&previous.pathname+previous.search===origin;
-  }catch(_){return false}
-}
-
 function restoreBrowsePosition(targetWord,scrollTop){
   const restoreStarted=performance.now();
   requestAnimationFrame(()=>{
@@ -1805,6 +1797,14 @@ function render(){
     }));
   }
 }
+function logBrowseReturnRoute(stage,fields={}){
+  if(!browseArticleDiagnosticsEnabled())return;
+  const params=new URLSearchParams(location.search),raw=params.get("return")||"";
+  sendBrowseDiagnostic({event:"browse_return_route",stage,url:location.pathname+location.search,
+    referrer:document.referrer||"",returnParam:raw,originURL:browseOriginFromURL(),
+    query:params.get("find")||"",mode:params.get("findmode")||"",dict:params.get("dict")||"",...fields});
+}
+logBrowseReturnRoute("browse_page_loaded");
 
 function turn(where){
   if(!state)return;
@@ -2087,11 +2087,12 @@ document.addEventListener("click",e=>{
     const params=new URLSearchParams(location.search);
     if(params.get("chooser")==="1"){location.href=keepWebView2Mode("/browse");return}
     const origin=browseOriginFromURL();
+    const target=origin?keepWebView2Mode(origin):keepWebView2Mode("/");
+    logBrowseReturnRoute("close_clicked",{targetURL:target,hasOrigin:!!origin,chooser:params.get("chooser")==="1"});
     if(origin){
-      if(browseOriginIsPrevious(origin)){history.back();return}
-      location.href=keepWebView2Mode(origin);return;
+      location.href=target;return;
     }
-    location.href=keepWebView2Mode("/");
+    location.href=target;
     return;
   }
   if(e.target.closest("#closeBrowseChooser")){
