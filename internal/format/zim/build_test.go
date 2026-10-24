@@ -39,9 +39,11 @@ type bCluster struct {
 }
 
 type bFile struct {
-	major, minor uint16
-	entries      []bEntry
-	clusters     []bCluster
+	major, minor    uint16
+	entries         []bEntry
+	clusters        []bCluster
+	gap             []byte
+	reverseClusters bool
 }
 
 func compressWith(t *testing.T, codec byte, in []byte) []byte {
@@ -163,7 +165,12 @@ func buildZIM(t *testing.T, f bFile) []byte {
 
 	// Clusters: info byte, then compress(offset table || blobs).
 	clusterPos := make([]uint64, len(f.clusters))
-	for ci, c := range f.clusters {
+	for k := range f.clusters {
+		ci := k
+		if f.reverseClusters {
+			ci = len(f.clusters) - 1 - k
+		}
+		c := f.clusters[ci]
 		clusterPos[ci] = uint64(out.Len())
 		w := 4
 		if c.extended {
@@ -195,6 +202,8 @@ func buildZIM(t *testing.T, f bFile) []byte {
 		out.WriteByte(info)
 		out.Write(compressWith(t, c.codec, body.Bytes()))
 	}
+
+	out.Write(f.gap)
 
 	pathPtrPos := uint64(out.Len())
 	for _, p := range direntPos {
