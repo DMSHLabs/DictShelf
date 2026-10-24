@@ -1637,10 +1637,12 @@ function prefetchNextBrowsePage(page){
   if(page&&page.page<page.pages)setTimeout(()=>prefetchBrowsePage(page.dict,page.page+1,page.pages),120);
 }
 function browsePageURL(page){
-  return "?dict="+encodeURIComponent(dictId)+"&p="+page+
-    (new URLSearchParams(location.search).get("chooser")==="1"?"&chooser=1":"")+
-    (BROWSE_DEBUG?"&browse_debug=1":"")+
-    (new URLSearchParams(location.search).get("wudict_webview2")==="1"?"&wudict_webview2=1":"");
+  const current=new URLSearchParams(location.search),params=new URLSearchParams({dict:dictId,p:String(page)});
+  for(const key of ["return","chooser","browse_debug","wudict_webview2"]){
+    if(current.has(key))params.set(key,current.get(key)||"");
+  }
+  if(BROWSE_DEBUG)params.set("browse_debug","1");
+  return "?"+params.toString();
 }
 function recordBrowsePage(page,record){
   const url=browsePageURL(page);

@@ -1447,9 +1447,10 @@ let stylerTab="app",
     appearanceState=null,
     stylerPickForBackground=false;
 const tx=window.wudictI18n.t;
-function browseOriginQuery(){
+function browseOriginQuery(openDict=""){
   const url=new URL(location.href);
   url.pathname="/";
+  url.searchParams.delete("openDict");
   const query=url.searchParams.get("q")||$("q")?.value.trim()||"";
   if(query){
     url.searchParams.set("q",query);
@@ -1457,6 +1458,7 @@ function browseOriginQuery(){
     if(!url.searchParams.has("dict"))url.searchParams.set("dict",$("dict")?.value||"all");
     if(lastScope&&!url.searchParams.has("from"))url.searchParams.set("from",lastScope);
     if(url.searchParams.get("mode")==="wildcards"&&maskMergeAZ)url.searchParams.set("maskmerge","1");
+    if(openDict&&url.searchParams.get("mode")!=="wildcards")url.searchParams.set("openDict",openDict);
   }
   if(browseArticleDiagnosticsEnabled())url.searchParams.set("browseReturnDiag",String(Date.now()));
   return new URLSearchParams({return:url.pathname+url.search+url.hash}).toString();
@@ -1508,7 +1510,7 @@ const esc=s=>String(s??"").replace(/&/g,"&amp;").replace(/</g,"&lt;");
 const escAttr=s=>esc(s).replace(/"/g,"&quot;");
 let dicts=[],lastQuery=null,searchSeq=0,searchAC=null;
 let dictIconsOn=true;
-let scopeOnce=null,anchorOnce=null,lastScope=null,widenedFrom=null;
+let scopeOnce=null,anchorOnce=null,lastScope=null,widenedFrom=null,restoreArticleDict=null;
 let PRESETS=null;
 const PRESET_ROWS=[
   ["compactRow","compact"],
@@ -3710,7 +3712,7 @@ function dslIndexControls(d){
     }
     const icon=`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.4 3.4a1.2 1.2 0 0 1 1.2-1.2h6.2a1.2 1.2 0 0 1 1.2 1.2v9.2a1.2 1.2 0 0 1-1.2 1.2H3.6a1.2 1.2 0 0 1-1.2-1.2z"/><path d="M11 5h2.6M11 8h2.6M11 11h2.6"/></svg>`;
     const browse=indexed
-      ? `<a class="browse btn" href="/browse?dict=${encodeURIComponent(target.id)}&${browseOriginQuery()}" title="${escAttr(tx("dictUI.browseHint"))}">${icon}${esc(tx("dictUI.browse"))}</a>`
+      ? `<a class="browse btn" href="/browse?dict=${encodeURIComponent(target.id)}&${browseOriginQuery(target.id)}" title="${escAttr(tx("dictUI.browseHint"))}">${icon}${esc(tx("dictUI.browse"))}</a>`
       : "";
     return `<div class="dsl-index-row"><div class="dsl-index-tools"><div class="dsl-feature-line">${controls}</div></div><div class="dsl-browse-line">${browse}</div></div>`;
   })()+(empty?`<div class="dsl-index-warning"><b aria-hidden="true">!</b> ${esc(tx("dictUI.dslNeedsIndex"))}</div>`:"")+"</div>";
@@ -3799,7 +3801,7 @@ function renderPanel(){
        list and never starts index creation. This is the card for one
        dictionary, so unlike the row above it carries
        the id. */
-    else if(indexed||selfIndexed)acts=`<a class="browse btn" href="/browse?dict=${encodeURIComponent(d.id)}&${browseOriginQuery()}" title="${escAttr(tx("dictUI.browseHint"))}"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M2.4 3.4a1.2 1.2 0 0 1 1.2-1.2h6.2a1.2 1.2 0 0 1 1.2 1.2v9.2a1.2 1.2 0 0 1-1.2 1.2H3.6a1.2 1.2 0 0 1-1.2-1.2z"/><path d="M11 5h2.6"/><path d="M11 8h2.6"/><path d="M11 11h2.6"/></svg>${esc(tx("dictUI.browse"))}</a>`;
+    else if(indexed||selfIndexed)acts=`<a class="browse btn" href="/browse?dict=${encodeURIComponent(d.id)}&${browseOriginQuery(d.id)}" title="${escAttr(tx("dictUI.browseHint"))}"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M2.4 3.4a1.2 1.2 0 0 1 1.2-1.2h6.2a1.2 1.2 0 0 1 1.2 1.2v9.2a1.2 1.2 0 0 1-1.2 1.2H3.6a1.2 1.2 0 0 1-1.2-1.2z"/><path d="M11 5h2.6"/><path d="M11 8h2.6"/><path d="M11 11h2.6"/></svg>${esc(tx("dictUI.browse"))}</a>`;
     if(d.unavailable||d.dsl&&!d.error)acts="";
     div.innerHTML=`<div class="hd">
         <span class="dict-name-line">${dictIconHTML(d.id)}<b tabindex="${d.unavailable?-1:0}" role="button" aria-disabled="${!!d.unavailable}" title="${escAttr(tx(d.unavailable?"dictUI.dslUnavailable":"dictUI.searchOnly"))}">${esc(dictLabel(d))}</b><button type="button" class="dict-rename" aria-label="${escAttr(tx("dictUI.renameDictionary"))}" title="${escAttr(tx("dictUI.renameDictionary"))}" data-rename="${escAttr(d.id)}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L8 18l-4 1 1-4Z"/></svg></button></span>
@@ -6427,8 +6429,10 @@ function renderSlot(box,h,mode,q,perDict,group,paging=null){
   const det=document.createElement("details");det.className="dict";
   const pageSize=paging?.size||searchPortionSize();
   const more=!paging&&h.results.length>=perDict?`<button type="button" class="more" data-id="${escAttr(h.dict)}">${esc(tx("search.more"))}</button>`:"";
+  const browseReturnURL=new URL(location.href);browseReturnURL.pathname="/";
+  browseReturnURL.searchParams.set("openDict",h.dict);
   const browseURL=["prefix","suffix","contains","word","wordLemma","wildcards"].includes(mode)
-    ?("/browse?"+new URLSearchParams({dict:h.dict,find:q,filter:"1",findmode:mode,return:location.pathname+location.search+location.hash})):"";
+    ?("/browse?"+new URLSearchParams({dict:h.dict,find:q,filter:"1",findmode:mode,return:browseReturnURL.pathname+browseReturnURL.search+browseReturnURL.hash})):"";
   const browse=browseURL?`<a class="search-browse" href="${escAttr(browseURL)}">${esc(tx("search.browseAllHeadwords"))}</a>`:"";
   const pageControls=paging?(()=>{
     const start=paging.start||0,end=start+h.results.length,total=paging.total;
@@ -8192,6 +8196,7 @@ window.addEventListener("resize",maskWordContextHide);
 if($("mode").value==="wildcards")maskInvalidate();
 
 async function doSearch(ev){
+  const preferredOpenDict=restoreArticleDict;restoreArticleDict=null;
   window.wudictArticleFind?.stop();
   hideSearchProgress();
   if(ev)ev.preventDefault();
@@ -8229,6 +8234,14 @@ async function doSearch(ev){
     const safeFields={...fields};
     if(typeof safeFields.detail==="string")safeFields.detail=safeFields.detail.replace(/[\r\n]/g," ").slice(0,1000);
     sendBrowseDiagnostic({event:"search_article",stage,runId:seq,query:q.replace(/[\r\n]/g," ").slice(0,1024),mode,elapsedMs:Math.max(0,Math.round(performance.now()-searchDiagStarted)),...safeFields});
+  };
+  const logReturnTargetState=(stage,slot,det)=>{
+    if(!preferredOpenDict)return;
+    const rect=det?.getBoundingClientRect();
+    const summary=det?.querySelector(":scope > summary"),title=det?.querySelector(":scope > dl > dt");
+    const stickyLine=summary?(parseFloat(getComputedStyle(summary).top)||0)+summary.getBoundingClientRect().height:0;
+    searchDiagLog(stage,{page:Math.max(0,slot),dict:searchDiagSlots[slot]?.dict||preferredOpenDict,
+      detail:`requested=${preferredOpenDict} found=${!!det} connected=${!!det?.isConnected} open=${!!det?.open} box_connected=${!!boxes[slot]?.isConnected} height=${Math.round(rect?.height||0)} summary_top=${Math.round(summary?.getBoundingClientRect().top||0)} title_top=${Math.round(title?.getBoundingClientRect().top||0)} sticky_line=${Math.round(stickyLine)} scroll_y=${Math.round(scrollY)}`});
   };
   // abort the previous in-flight search so the server stops streaming
   // results nobody will render (superseded typing / mode change).
@@ -8299,13 +8312,17 @@ async function doSearch(ev){
      hit whatever it said; `ready[i]` holds its <details> only if it actually
      produced RESULTS, so a deferred, errored or skipped section can never be
      the one that opens. `frontier` is the lowest index still unheard from. */
-  let resolved=[],ready=[],frontier=0,limit=1,opened=0;
+  let resolved=[],ready=[],frontier=0,limit=1,opened=0,preferredSlot=-1,preferredDone=!preferredOpenDict;
   const openSlot=i=>{
     const det=ready[i];
     if(!det||det.open)return false;
     det.open=true;openedIdx=i;promote(boxes,i);
     const slot=searchDiagSlots[i];
     searchDiagLog("article_open",{dict:slot?.dict||"",name:slot?.name||"",page:i,completed:searchProgressDone,total:searchProgressTotal,resultCount:slot?.results??0});
+    if(slot?.dict===preferredOpenDict){
+      logReturnTargetState("return_target_open",i,det);
+      requestAnimationFrame(()=>requestAnimationFrame(()=>logReturnTargetState("return_target_after_paint",i,det)));
+    }
     // The hold ends when the count is reached, not at the first open: until
     // then the frontier keeps the later sections in the reader's order.
     if(++opened>=limit){clearTimeout(barrier);barrier=null}
@@ -8325,7 +8342,13 @@ async function doSearch(ev){
      (barrier===null) or the prefix is exhausted it falls through to the walk
      at the bottom and takes the best answers in hand, up to the count. */
   const settle=()=>{
-    if(expandAll||openedIdx===-1||opened>=limit)return; // the count, or the user decided (-1)
+    if(openedIdx===-1||opened>=limit)return; // the count, or the user decided (-1)
+    if(preferredSlot>=0&&!preferredDone)return;
+    if(preferredSlot>=0&&preferredDone){
+      const target=preferredSlot;preferredSlot=-1;
+      if(openSlot(target)&&opened>=limit)return;
+    }
+    if(expandAll)return;
     if(orderFirst&&barrier!==null&&frontier<boxes.length){
       while(frontier<boxes.length&&resolved[frontier]){
         if(openSlot(frontier)&&opened>=limit)return;
@@ -8347,6 +8370,8 @@ async function doSearch(ev){
         if(browseReturnRouteContext)logBrowseReturnRoute("search_stream_begin",{slots:(msg.slots||[]).length});
         beginSearchProgress(seq,(msg.slots||[]).length);
         searchDiagSlots=(msg.slots||[]).map(slot=>({dict:slot.dict,name:slot.name,results:0}));
+        preferredSlot=preferredOpenDict?searchDiagSlots.findIndex(slot=>slot.dict===preferredOpenDict):-1;
+        preferredDone=preferredSlot<0;
         searchDiagLog("search_stream_begin",{total:searchDiagSlots.length,detail:`slots=${searchDiagSlots.length}`});
         if(browseArticleDiagContext&&browseArticleDiagContext.searchStartedAt)
           logBrowseArticleTransition("search_stream_begin",performance.now()-browseArticleDiagContext.searchStartedAt);
@@ -8420,6 +8445,7 @@ async function doSearch(ev){
            dead ends fall through instantly instead of holding the screen. */
         resolved[msg.i]=true;
         if(res.results&&!ready[msg.i])ready[msg.i]=box.querySelector("details.dict");
+        if(msg.i===preferredSlot)preferredDone=true;
         settle();
       }else if(msg.t==="morph"){
         /* The server lemmatizes the dictionaries that came back empty, and
@@ -8464,6 +8490,18 @@ async function doSearch(ev){
         // let the best answer in hand take the slot (D142). A no-op in every
         // ordinary search: the last hit's settle() has already decided.
         clearTimeout(barrier);barrier=null;settle();
+        if(preferredOpenDict){
+          const targetSlot=searchDiagSlots.findIndex(slot=>slot.dict===preferredOpenDict);
+          logReturnTargetState("return_target_search_end",targetSlot,targetSlot>=0?ready[targetSlot]:null);
+          if(targetSlot>=0){
+            const target=ready[targetSlot];
+            requestAnimationFrame(()=>requestAnimationFrame(()=>{
+              if(seq!==searchSeq||!target?.isConnected)return;
+              jumpToSection(target);
+              setTimeout(()=>logReturnTargetState("return_target_after_search_paint",targetSlot,target),320);
+            }));
+          }
+        }
         // A cross-reference that its own dictionary cannot answer is not a
         // dead end — widen once, and say that is what happened. The re-run
         // carries no scope, so it cannot recurse.
@@ -9429,6 +9467,7 @@ let navRecord="replace"; // how the NEXT doSearch should record itself
 let commitOnce=false;
 function applyURL(){
   const p=new URLSearchParams(location.search);
+  restoreArticleDict=p.get("q")?p.get("openDict")||null:null;
   if(browseReturnRouteContext)logBrowseReturnRoute(p.get("q")?"apply_url_has_query":"apply_url_no_query",{hasFrom:p.has("from")});
   maskMergeAZ=p.get("maskmerge")==="1";updateMergedAZ();
   if(p.get("theme")){localStorage.setItem("wudict_theme",p.get("theme"));applyTheme(p.get("theme"))}
@@ -9440,6 +9479,7 @@ function applyURL(){
 const _doSearch=doSearch;
 doSearch=function(ev){
   const record=navRecord;
+  const openDict=restoreArticleDict;
   navRecord="replace"; // one-shot: only the action that asked for it pushes
   if(record==="push")browseHistoryReturn=false;
   const r=_doSearch(ev);
@@ -9449,6 +9489,7 @@ doSearch=function(ev){
     // `from` is the one-shot cross-reference scope; `dict` stays the user's
     // own selector, so restoring a link-followed view never rewrites it
     if(lastScope)params.from=lastScope;
+    if(openDict&&$("mode").value!=="wildcards")params.openDict=openDict;
     if($("mode").value==="wildcards"&&maskMergeAZ)params.maskmerge="1";
     if(browseReturn)params.browse=browseReturn;
     if(maskReturn)params.wildcards=maskReturn;
@@ -9464,6 +9505,7 @@ doSearch=function(ev){
    recorded — the browser already moved the cursor within the stack. */
 window.addEventListener("popstate",()=>{
   const p=new URLSearchParams(location.search);
+  restoreArticleDict=p.get("q")?p.get("openDict")||null:null;
   maskMergeAZ=p.get("maskmerge")==="1";updateMergedAZ();
   browseReturn=browseReturnFromURL();maskReturn=maskReturnFromURL();sbarPaint();
   if(canonicalSearchMode(p.get("mode"))==="wildcards"&&maskRestoreCached(new URL(location.href)))return;
