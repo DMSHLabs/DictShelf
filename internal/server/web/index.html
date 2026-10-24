@@ -6808,7 +6808,9 @@ function maskRender(){
     const item=document.createElement("div");item.className="mask-word-item";
     const button=document.createElement("button");button.type="button";button.className="mask-word-open";button.dataset.word=word;
     const lower=maskFindQuery;
-    const ranges=lower?(maskFindMatchMode==="wildcards"?maskRanges(word,lower):maskFindHighlightRanges(word,row,lower,maskFindMatchMode)):null;
+    const highlightRow=row.within?row:maskFindRows.find(candidate=>candidate.id===row.id&&
+      candidate.within===lower&&candidate.withinMode===maskFindMatchMode)||row;
+    const ranges=lower?(maskFindMatchMode==="wildcards"?maskRanges(word,lower):maskFindHighlightRanges(word,highlightRow,lower,maskFindMatchMode)):null;
     button.innerHTML=lower?highlightMaskRanges(word,ranges):highlightMaskHeadword(word,maskPattern);
     const basePosition=Number.isInteger(result.basePositions?.[i])?result.basePositions[i]:
       Number.isInteger(result.positions?.[i])?result.positions[i]:(result.page-1)*(result.size||300)+i;
