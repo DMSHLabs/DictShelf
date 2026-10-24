@@ -6,10 +6,12 @@ package server
 
 import (
 	"encoding/binary"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestDictionaryIconUsesFallbackWhenDictionaryHasNoIcon(t *testing.T) {
@@ -19,9 +21,17 @@ func TestDictionaryIconUsesFallbackWhenDictionaryHasNoIcon(t *testing.T) {
 	}
 	e := &entry{ID: "plain", Path: source}
 	s := &Server{reg: &Registry{byID: map[string]*entry{"plain": e}}}
-	w := httptest.NewRecorder()
-	r := httptest.NewRequest("GET", "/dict-icon/plain", nil)
-	s.handleDictionaryIcon(w, r)
+	var w *httptest.ResponseRecorder
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		w = httptest.NewRecorder()
+		r := httptest.NewRequest("GET", "/dict-icon/plain", nil)
+		s.handleDictionaryIcon(w, r)
+		if w.Code != http.StatusAccepted || time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 	if w.Code != 200 {
 		t.Fatalf("status = %d, want 200", w.Code)
 	}
