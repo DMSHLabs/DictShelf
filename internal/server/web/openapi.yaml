@@ -2643,15 +2643,21 @@ paths:
       x-internal: true
       summary: Search all headwords in one dictionary
       description: >
-        Matches the prefix of a headword or any word in a multiword headword
-        through the always-present prepared headword index. Returns distinct
+        By default, matches the prefix of any word in a multiword headword.
+        matchmode selects prefix, suffix, contains, complete-token word,
+        complete-token word with lemmatization, whole-headword exact, exact
+        with lemmatization, or whole-headword wildcards matching. Prefix,
+        suffix, contains, and word modes match query words against tokens in the headword. Word
+        with lemmatization also matches the dictionary-language lemma. Exact
+        with lemmatization matches both the typed form and its dictionary-language
+        lemma as complete headwords. Returns distinct
         matching headwords in browse order, in fixed-size result pages.
         Search is over the entire dictionary, not the current browse page.
-        With wildcards=1, q is a whole-headword wildcard pattern (? for one Unicode character,
-        * for any number); this path can scan a prepared or direct dictionary
-        and also returns alphabet sections for matching headwords.
-        With wildcards=1, within further limits those matches to the bottom list
-        control's token-prefix search or whole-headword wildcard pattern. Positions then
+        With matchmode=wildcards (or legacy wildcards=1), q is a whole-headword
+        wildcard pattern (? for one Unicode character, * for any number); this path
+        can scan a prepared or direct dictionary and also returns alphabet sections.
+        In wildcard results, within filters by withinMode (default prefix), which
+        supports prefix, suffix, contains, whole-word, exact, and wildcard matching. Positions then
         address each returned word in the unfiltered wildcard result.
         Same-origin only.
       parameters:
@@ -2670,6 +2676,10 @@ paths:
           in: query
           description: Set to 1 to interpret q as a whole-headword wildcard pattern.
           schema: { type: string, enum: ['1'] }
+        - name: matchmode
+          in: query
+          description: How q matches headwords. Defaults to prefix.
+          schema: { type: string, enum: [prefix, suffix, contains, word, wordLemma, exact, exactLemma, wildcards], default: prefix }
         - name: within
           in: query
           description: Additional headword search inside q's wildcard results.
@@ -2677,6 +2687,22 @@ paths:
         - name: withinWildcards
           in: query
           description: Set to 1 to interpret within as a whole-headword wildcard pattern.
+          schema: { type: string, enum: ['1'] }
+        - name: withinMode
+          in: query
+          description: How within matches wildcard results. Defaults to prefix.
+          schema: { type: string, enum: [prefix, suffix, contains, word, wordLemma, exact, exactLemma, wildcards], default: prefix }
+        - name: lemmaQueries
+          in: query
+          description: Optional JSON array of lemma forms collected from the separate-dictionary search for a combined-list lemmatization search.
+          schema: { type: string, maxLength: 16384 }
+        - name: groupwithin
+          in: query
+          description: >
+            With stream=1 and a complete separate-dictionary wildcard cache,
+            search all cached dictionaries in one stream. Completion events
+        include dict and the effectiveQueries used for per-dictionary
+        lemmatization; matching pages remain addressable per dictionary.
           schema: { type: string, enum: ['1'] }
         - name: wildcache
           in: query
