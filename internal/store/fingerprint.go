@@ -157,8 +157,10 @@ func Fingerprint(textDB string) (string, error) {
 		}
 	}
 
-	for _, fts := range []string{"entry_fts", "entry_trigram"} {
-		if fts == "entry_trigram" && !s.hasTrigram {
+	for _, fts := range []string{"entry_fts", "entry_trigram", "article_fts"} {
+		if fts == "entry_trigram" && !s.hasTrigram ||
+			fts == "entry_fts" && !s.hasHeadwordFTS ||
+			fts == "article_fts" && (!s.ftsOK || s.articleFTSTable != "article_fts") {
 			continue
 		}
 		field(fts)

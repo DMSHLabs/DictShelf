@@ -7,6 +7,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -18,6 +19,119 @@ import (
 	"github.com/wuweidict/wudict/internal/indexconst"
 	"github.com/wuweidict/wudict/internal/logx"
 )
+
+var errHeadwordSearchComplete = errors.New("headword search limit reached")
+
+// SearchHeadwordsMode returns articles for the first matching Browse headwords.
+// It uses the same optional FTS/trigram candidates and base-index fallback as
+// Browse, but stops once the main search has enough results.
+func (s *Store) SearchHeadwordsMode(ctx context.Context, query, mode string, limit int) ([]dict.Result, error) {
+	limit = clamp(limit)
+	words := make([]string, 0, limit)
+	matches := headwordSearchMatcher(ctx, query, mode)
+	err := s.StreamBrowseHeadwordsMode(ctx, query, mode, func(batch []string, _ int, _ bool, _, _ int) error {
+		for _, word := range batch {
+			if !matches(word) {
+				continue
+			}
+			words = append(words, word)
+			if len(words) >= limit {
+				return errHeadwordSearchComplete
+			}
+		}
+		return nil
+	})
+	if err != nil && !errors.Is(err, errHeadwordSearchComplete) {
+		return nil, err
+	}
+	out := make([]dict.Result, 0, len(words))
+	for _, word := range words {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		results, err := s.collect(s.db.QueryContext(ctx, `SELECT w,m FROM entry WHERE w=? COLLATE NOCASE AND w=? ORDER BY id LIMIT ?`, word, word, limit-len(out)))
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, results...)
+		if len(out) >= limit {
+			break
+		}
+	}
+	return out, nil
+}
+
+func headwordSearchMatcher(ctx context.Context, query, mode string) func(string) bool {
+	if ctx.Value(ignoreDiacriticsKey{}) == true || mode == "wildcards" {
+		return func(string) bool { return true }
+	}
+	alternatives := []string{query}
+	if mode == "wordLemma" || mode == "exactLemma" {
+		alternatives = strings.Split(query, "\x1f")
+	}
+	return func(headword string) bool {
+		for _, alternative := range alternatives {
+			if mode == "exact" || mode == "exactLemma" {
+				if dict.CaseKey(strings.TrimSpace(alternative)) == dict.CaseKey(headword) {
+					return true
+				}
+				continue
+			}
+			terms := headwordCaseTokens(alternative)
+			if len(terms) == 0 {
+				continue
+			}
+			words := headwordCaseTokens(headword)
+			all := true
+			for _, term := range terms {
+				found := false
+				for _, word := range words {
+					switch mode {
+					case "prefix":
+						found = strings.HasPrefix(word, term)
+					case "suffix":
+						found = strings.HasSuffix(word, term)
+					case "contains":
+						found = strings.Contains(word, term)
+					case "word", "wordLemma":
+						found = word == term
+					}
+					if found {
+						break
+					}
+				}
+				if !found {
+					all = false
+					break
+				}
+			}
+			if all {
+				return true
+			}
+		}
+		return false
+	}
+}
+
+func headwordCaseTokens(value string) []string {
+	var tokens []string
+	var token strings.Builder
+	flush := func() {
+		if token.Len() > 0 {
+			tokens = append(tokens, dict.CaseKey(token.String()))
+			token.Reset()
+		}
+	}
+	for _, r := range value {
+		if unicode.IsLetter(r) || unicode.IsNumber(r) || unicode.IsMark(r) {
+			token.WriteRune(r)
+		} else {
+			flush()
+		}
+	}
+	flush()
+	return tokens
+}
 
 // StreamBrowseHeadwords emits matched headwords as soon as a result block is
 // ready. total is the number found so far; done marks the final exact count.
@@ -75,9 +189,13 @@ func (s *Store) StreamBrowseHeadwords(ctx context.Context, query string, mask bo
 		return emit(nil, 0, true, 0, s.meta.EntryCount)
 	}
 	match := buildMatch(query, "w")
-	rows, err = s.db.QueryContext(ctx, `SELECT e.w FROM entry_fts f
-		JOIN entry e ON e.id=f.rowid WHERE entry_fts MATCH ? AND e.w NOT LIKE '@_%'
-		ORDER BY e.w COLLATE NOCASE`, match)
+	if s.hasHeadwordFTS {
+		rows, err = s.db.QueryContext(ctx, `SELECT e.w FROM entry_fts f
+			JOIN entry e ON e.id=f.rowid WHERE entry_fts MATCH ? AND e.w NOT LIKE '@_%'
+			ORDER BY e.w COLLATE NOCASE`, match)
+	} else {
+		rows, err = s.db.QueryContext(ctx, `SELECT w FROM entry WHERE `+browseWhere+browseOrder)
+	}
 	if err != nil {
 		return err
 	}
@@ -162,7 +280,7 @@ func (s *browseRowStream) finish() error {
 	return s.emit(nil, s.total, true, s.scanTotal, s.scanTotal)
 }
 
-// FindHeadwords uses the always-present FTS headword index. A token-prefix
+// FindHeadwords uses the optional FTS headword index when present. A token-prefix
 // match finds a word at the start or after a separator, wherever it occurs in
 // a multiword title; article text is excluded by the w: column filter.
 func (s *Store) FindHeadwords(ctx context.Context, query string, offset, limit int) ([]string, int, error) {
@@ -174,6 +292,35 @@ func (s *Store) FindHeadwords(ctx context.Context, query string, offset, limit i
 		offset = 0
 	}
 	match := buildMatch(query, "w")
+	if !s.hasHeadwordFTS {
+		rows, err := s.db.QueryContext(ctx, `SELECT w FROM entry WHERE `+browseWhere+browseOrder)
+		if err != nil {
+			return nil, 0, err
+		}
+		defer rows.Close()
+		matcher := dict.HeadwordTermMatcher(query)
+		words := make([]string, 0, limit)
+		total := 0
+		previous := ""
+		for rows.Next() {
+			if err := ctx.Err(); err != nil {
+				return nil, 0, err
+			}
+			var word string
+			if err := rows.Scan(&word); err != nil {
+				return nil, 0, err
+			}
+			if word == previous || !matcher(word) {
+				continue
+			}
+			previous = word
+			if total >= offset && len(words) < limit {
+				words = append(words, word)
+			}
+			total++
+		}
+		return words, total, rows.Err()
+	}
 	var total int
 	err := s.db.QueryRowContext(ctx, `SELECT COUNT(DISTINCT e.w) FROM entry_fts f
 		JOIN entry e ON e.id=f.rowid WHERE entry_fts MATCH ? AND e.w NOT LIKE '@_%'`, match).Scan(&total)
@@ -240,9 +387,13 @@ func (s *Store) FindHeadwordsMode(ctx context.Context, query, mode string, offse
 			return []string{}, 0, nil, nil
 		}
 		matcher = dict.HeadwordWordMatcher(query)
-		rows, err = s.db.QueryContext(ctx, `SELECT DISTINCT e.w FROM entry_fts f
-			JOIN entry e ON e.id=f.rowid WHERE entry_fts MATCH ? AND e.w NOT LIKE '@_%'
-			ORDER BY e.w COLLATE NOCASE`, match)
+		if s.hasHeadwordFTS {
+			rows, err = s.db.QueryContext(ctx, `SELECT DISTINCT e.w FROM entry_fts f
+				JOIN entry e ON e.id=f.rowid WHERE entry_fts MATCH ? AND e.w NOT LIKE '@_%'
+				ORDER BY e.w COLLATE NOCASE`, match)
+		} else {
+			rows, err = s.db.QueryContext(ctx, `SELECT w FROM entry WHERE `+browseWhere+browseOrder)
+		}
 	case "exact", "exactLemma":
 		matcher = dict.HeadwordExactMatcher(query)
 		values := strings.Split(query, "\x1f")
@@ -319,9 +470,13 @@ func (s *Store) StreamBrowseHeadwordsMode(ctx context.Context, query, mode strin
 			return emit(nil, 0, true, 0, s.meta.EntryCount)
 		}
 		matcher = dict.HeadwordWordMatcher(query)
-		rows, err = s.db.QueryContext(ctx, `SELECT DISTINCT e.w FROM entry_fts f
-			JOIN entry e ON e.id=f.rowid WHERE entry_fts MATCH ? AND e.w NOT LIKE '@_%'
-			ORDER BY e.w COLLATE NOCASE`, match)
+		if s.hasHeadwordFTS {
+			rows, err = s.db.QueryContext(ctx, `SELECT DISTINCT e.w FROM entry_fts f
+				JOIN entry e ON e.id=f.rowid WHERE entry_fts MATCH ? AND e.w NOT LIKE '@_%'
+				ORDER BY e.w COLLATE NOCASE`, match)
+		} else {
+			rows, err = s.db.QueryContext(ctx, `SELECT w FROM entry WHERE `+browseWhere+browseOrder)
+		}
 	case "exact", "exactLemma":
 		matcher = dict.HeadwordExactMatcher(query)
 		values := strings.Split(query, "\x1f")
