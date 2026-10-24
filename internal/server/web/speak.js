@@ -24,6 +24,7 @@ const MAX = 4000;
 // immediate everywhere.
 const CHUNK = 160;
 const VOICE_KEY = "wudict_voice_";
+const LANG_KEY = "wudict_speaklang_";
 
 // ------------------------------------------------------------- language
 // The article language alone is the wrong key: an en→ru article is Russian
@@ -102,9 +103,17 @@ function userLang() { return norm(navigator.language) || "en" }
 // Article language first: it is what the reader is reading, and for a
 // Latin/Latin pair (en→fr) script cannot tell the two apart, so the target
 // wins and the other one is one tap away in the menu.
-function decide(sc, a, h) {
-  if (!sc) return a || h || userLang();
+//
+// t is the language of the platform's default voice: the one the reader set in
+// the system's speech settings. It replaces the guesses - the script's likeliest
+// language, the reader's interface language, English - and never a language
+// the dictionary is known to have: an English dictionary read by a learner
+// with a native-language default voice is still read in English (D148 Am. 1).
+function decide(sc, a, h, t) {
+  const tts = t && (!sc || fits(t, sc)) ? t : "";
+  if (!sc) return a || h || tts || userLang();
   for (const l of [a, h]) if (l && fits(l, sc)) return l;
+  if (tts) return tts;
   if (sc === "Latn") { const u = userLang(); return fits(u, "Latn") ? u : "en" }
   return SCRIPT_LANG[sc] || userLang();
 }
@@ -126,8 +135,11 @@ let voices = [], voicesDone = false, voicesStarted = false;
 function readVoices() {
   try { voices = (S() && S().getVoices()) || [] } catch (_) { voices = [] }
   if (voices.length) voicesDone = true;
+  indexVoices();
+  if (stash) relang(stash); // the default voice may have arrived after the selection
   if (ui && !ui.hidden) syncMore();
   if (menu && !menu.hidden) openMenu(menuNote);
+  if (waiting && voicesDone) { waiting = false; setBusy(false); if (stash) go(stash.lang, null) }
 }
 // Voices load asynchronously in Chrome and on Android, synchronously in Safari
 // and Firefox; none of them fires `voiceschanged` when there are none at all.
@@ -137,6 +149,28 @@ function startVoices() {
   try { S().addEventListener("voiceschanged", readVoices) } catch (_) { }
   readVoices();
   setTimeout(() => { voicesDone = true; readVoices() }, 3500);
+}
+
+// The voice list's languages, and the language of the platform's default
+// voice: "" when no voice is marked default, or several are and none of them
+// is in the reader's own language. A browser's `default` is taken only in a
+// language the browser is set to prefer: what a desktop engine marks default
+// can be its first voice in any language. The Android shell's is the speech
+// settings' own. Built once per voice list, never per selection.
+let voiceLangs = [], ttsLang = "";
+function indexVoices() {
+  const all = new Set(), defs = new Set();
+  for (const v of voices) {
+    const l = norm(v.lang);
+    if (!l) continue;
+    all.add(l);
+    if (v.default) defs.add(l);
+  }
+  voiceLangs = [...all];
+  const u = userLang();
+  let t = defs.size === 1 ? defs.values().next().value : defs.has(u) ? u : "";
+  if (t && !settings() && !(navigator.languages || [navigator.language]).some(x => norm(x) === t)) t = "";
+  ttsLang = t;
 }
 
 // macOS ships joke voices, and the robotic Eloquence set in every language;
@@ -172,7 +206,7 @@ function pickVoice(L) {
 }
 
 // ---------------------------------------------------------------- speech
-let sess = 0, busy = false, poll = 0;
+let sess = 0, busy = false, poll = 0, waiting = false;
 const live = new Set(); // Chrome collects an unreferenced utterance and its `end` never comes
 
 function chunks(text, L) {
@@ -200,6 +234,7 @@ function chunks(text, L) {
 
 function stop() {
   sess++;
+  waiting = false;
   clearInterval(poll);
   live.clear();
   try { S() && S().cancel() } catch (_) { }
@@ -278,16 +313,57 @@ const noVoice = L => "No voice for " + langName(L) + " on this device";
 let stash = null, selLive = false, ctx = null;
 
 function setStash(st) {
-  const L = ctx && ctx.langs ? ctx.langs(st.dict) : { a: "", h: "" };
-  const a = norm(L.a), h = norm(L.h);
+  const L = ctx && ctx.langs ? ctx.langs(st.dict) : {};
+  st.a = norm(L.a);
+  st.h = norm(L.h);
   st.text = st.text.replace(/\s+/g, " ").trim().slice(0, MAX);
   st.sc = scriptOf(st.text);
-  st.lang = decide(st.sc, a, h);
-  st.alts = [...new Set([a, h])].filter(l => l && l !== st.lang && (!st.sc || fits(l, st.sc)));
+  relang(st);
   stash = st;
   selLive = true;
   startVoices();
   show();
+}
+
+// The language a selection is read in: picked in the menu for this
+// selection, else picked for this dictionary and script, else decided. The
+// alternatives "Read as" offers: the decided language, the one decided without
+// the default voice (the guess it replaced), and the dictionary's two.
+function relang(st) {
+  st.auto = decide(st.sc, st.a, st.h, ttsLang);
+  st.lang = st.pick || storedLang(st) || st.auto;
+  const plain = decide(st.sc, st.a, st.h, "");
+  st.alts = [...new Set([st.auto, plain, st.a, st.h])]
+    .filter(l => l && l !== st.lang && (!st.sc || fits(l, st.sc)));
+}
+
+// A language picked in the menu is kept per dictionary and script: an en→ru
+// dictionary may want German for its Latin text and still Russian for its
+// Cyrillic. Picking the decided language forgets the pick.
+const langKey = st => st.dict && st.sc ? LANG_KEY + st.sc + "_" + st.dict : "";
+
+function storedLang(st) {
+  const k = langKey(st);
+  let v = null;
+  if (k) try { v = localStorage.getItem(k) } catch (_) { }
+  return v && /^[a-z]{2,3}$/.test(v) && fits(v, st.sc) ? v : "";
+}
+
+function choose(L) {
+  const k = langKey(stash);
+  if (k) try { L === stash.auto ? localStorage.removeItem(k) : localStorage.setItem(k, L) } catch (_) { }
+  stash.pick = L;
+  relang(stash);
+  syncMore();
+  go(L, null);
+}
+
+// Languages with a voice that the menu does not offer already, in the
+// selection's script. A walk over the voice list's languages (tens), not its
+// voices.
+function others() {
+  const shown = new Set([stash.lang, ...stash.alts]);
+  return voiceLangs.filter(l => !shown.has(l) && (!stash.sc || fits(l, stash.sc)));
 }
 
 // ------------------------------------------------------------------ UI
@@ -321,7 +397,7 @@ const CSS =
   ".wd-sp-menu .note{padding:9px 12px;color:var(--fg-soft,#666)}" +
   ".wd-sp-menu hr{border:0;border-top:1px solid var(--line-soft,#eee);margin:4px 0}";
 
-let ui = null, mainBtn = null, moreBtn = null, menu = null, menuNote = "";
+let ui = null, mainBtn = null, moreBtn = null, menu = null, menuNote = "", menuOther = false;
 let touch = false, raf = 0;
 
 function build() {
@@ -368,7 +444,11 @@ function setBusy(v) {
   mainBtn.title = label;
 }
 
+// Until the voice list has arrived the language is not final: the default
+// voice can still change it (relang). A tap in that window shows Stop and
+// waits for the list, or for startVoices' 3.5 s limit, then reads.
 function go(L, voice) {
+  if (!voicesDone) { waiting = true; setBusy(true); return }
   const v = voice || pickVoice(L);
   if (!v && voicesDone) { openMenu(noVoice(L)); return }
   say(stash.text, L, v);
@@ -378,7 +458,7 @@ function go(L, voice) {
 function syncMore() {
   if (!moreBtn || !stash) return;
   moreBtn.hidden = !(stash.alts.length || voicesFor(stash.lang).length > 1 ||
-    (voicesDone && !voicesFor(stash.lang).length) || settings());
+    (voicesDone && !voicesFor(stash.lang).length) || settings() || others().length);
 }
 
 const settings = () => window.__wdSpeech && typeof window.__wdSpeech.settings === "function";
@@ -444,6 +524,7 @@ function openMenu(note, focusFirst) {
   if (!stash) return;
   build();
   menuNote = note || "";
+  const keep = menu.hidden ? 0 : menu.scrollTop; // a voice list arriving must not scroll the open menu
   menu.textContent = "";
   const add = (label, tag, fn, checked) => {
     const b = document.createElement("button");
@@ -452,7 +533,7 @@ function openMenu(note, focusFirst) {
     if (checked != null) b.setAttribute("aria-checked", checked ? "true" : "false");
     b.append((checked ? "✓ " : "") + label);
     if (tag) { const s = document.createElement("small"); s.textContent = tag; b.append(s) }
-    b.addEventListener("click", () => { closeMenu(); fn() });
+    b.addEventListener("click", e => { closeMenu(); fn(e) });
     menu.append(b);
   };
   const rule = () => { if (menu.childNodes.length) menu.append(document.createElement("hr")) };
@@ -464,7 +545,10 @@ function openMenu(note, focusFirst) {
   }
   if (stash.alts.length) {
     rule();
-    for (const l of stash.alts) add("Read as " + langName(l), "", () => go(l, null));
+    // the language being read, checked: a remembered pick shows itself here
+    const cur = stash.lang;
+    add("Read as " + langName(cur), "", () => choose(cur), true);
+    for (const l of stash.alts) add("Read as " + langName(l), "", () => choose(l), false);
   }
   const L = stash.lang, vs = voicesFor(L);
   if (vs.length) {
@@ -476,12 +560,36 @@ function openMenu(note, focusFirst) {
         say(stash.text, L, v); // choosing IS the preview
       }, v === cur);
   }
+  // Built only when asked for: a device can have voices in sixty languages.
+  const more = others();
+  if (more.length) {
+    rule();
+    if (!menuOther) {
+      const note = menuNote;
+      add("Other languages…", "", e => {
+        menuOther = true;
+        openMenu(note);
+        const h = menu.querySelector(".wd-sp-other");
+        if (!h) return;
+        menu.scrollTop = h.offsetTop - 4;
+        if (e.detail === 0 && h.nextElementSibling) h.nextElementSibling.focus();
+      });
+    } else {
+      const h = document.createElement("div");
+      h.className = "note wd-sp-other";
+      h.textContent = "Other languages";
+      menu.append(h);
+      for (const [name, l] of more.map(l => [langName(l), l]).sort((x, y) => x[0].localeCompare(y[0])))
+        add(name, "", () => choose(l));
+    }
+  }
   if (settings()) { rule(); add("Speech settings…", "", () => window.__wdSpeech.settings()) }
   if (!menu.childNodes.length) return;
   menu.hidden = false;
   moreBtn.setAttribute("aria-expanded", "true");
   if (ui.hidden) { ui.hidden = false; place() }
   placeMenu();
+  if (keep) menu.scrollTop = keep;
   if (focusFirst) { const b = menu.querySelector("button"); if (b) b.focus() }
 }
 
@@ -498,6 +606,7 @@ function closeMenu() {
   if (!menu || menu.hidden) return;
   menu.hidden = true;
   menuNote = "";
+  menuOther = false;
   moreBtn.setAttribute("aria-expanded", "false");
 }
 

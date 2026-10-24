@@ -1,6 +1,6 @@
 ---
 title: FAQ
-description: Privacy, working offline, licence, getting dictionaries, files on disk, moving the library, updating, disk space, the terminal, Android builds and requirements, export, Termux, searching several dictionaries, custom styles, network access, lemmatization.
+description: Privacy, working offline, licence, getting dictionaries, files on disk, moving the library, updating, disk space, the terminal, Android builds and requirements, export, Termux, searching several dictionaries, custom styles, network access, lemmatization, read aloud.
 ---
 
 # FAQ
@@ -375,6 +375,52 @@ For problems, see [Troubleshooting](troubleshooting.md).
     file with a language code first (`es-en-collins.mdx`), or put it in a folder
     named by the code (`es/`). English is assumed when nothing else is found.
     See [language detection](../reference/configuration.md#lemmatization).
+
+??? question "Why is selected text read aloud in the wrong language?"
+
+    wudict reads a selection in one of the dictionary's two languages: the
+    language of its headwords or the language of its articles. The script of
+    the selection selects between them. If both languages use the same script,
+    as German and English do, wudict reads the article language.
+
+    If wudict finds no language of the dictionary in the script of the
+    selection, it uses the language of the default voice. You set the default
+    voice in the text-to-speech settings of the system. Most `.mdx` and
+    `.slob` dictionaries do not declare their languages.
+
+    -   The default voice must use the script of the selection.
+    -   In a browser, its language must also be one of the languages that the
+        browser prefers.
+
+    If not, wudict reads Latin-script text in the language of the browser or
+    of the phone, or in English.
+
+    The <kbd>▾</kbd> button next to the speaker opens a menu with:
+
+    -   <kbd>Read as German</kbd>: the other language of the dictionary, or
+        the language that the default voice replaced.
+    -   The voices installed for the language that wudict reads. wudict keeps
+        your choice for that language.
+    -   <kbd>Other languages…</kbd>: all the other languages that have a voice
+        on the device and use the script of the selection.
+    -   <kbd>Speech settings…</kbd>: Android app only. It opens the
+        text-to-speech settings of the system, where you install voices.
+
+    wudict keeps the language you select for that dictionary and that script.
+    To go back, select the original language with <kbd>Read as</kbd>.
+    <kbd>▾</kbd> is shown only when the menu has a choice.
+
+    The menu shows only the languages that use the script of the selection.
+    If a language is not in the menu, the device has no voice for it. Install
+    one in the speech settings of the operating system.
+
+    To give a dictionary its languages:
+
+    1.  Rename the file. Put the language pair first, headword language
+        first: `de-en-collins.mdx`. For a dictionary in one language, put one
+        code: `de-duden.mdx`. You can also put the file in a folder named by
+        the code: `de/`.
+    2.  <kbd>☰</kbd> → folder summary → <kbd>Rescan folders</kbd>.
 
 ??? question "What's the difference between -cgo and -purego flavours and which should I choose?"
 
