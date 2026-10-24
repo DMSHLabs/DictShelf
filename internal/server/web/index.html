@@ -1104,6 +1104,8 @@ window.wudictFontScale=(function(){
     <p class="sys-hint" id="sysResultCacheHint">{{T:system.resultCacheHint}}</p>
     <label class="sys-row"><input type="checkbox" id="sysResultCacheLimited"><span class="sys-label">{{T:system.resultCacheLimit}}</span></label>
     <div class="sys-row sys-result-cache-limit"><input type="text" id="sysResultCacheValue" inputmode="numeric" aria-label="{{T:system.resultCacheLimit}}" disabled><span id="sysResultCacheUnit">{{T:system.gb}}</span></div>
+    <p class="sys-hint" id="sysReturnCacheHint">{{T:system.returnCacheHint}}</p>
+    <div class="sys-row sys-num"><label class="sys-label" for="sysReturnCacheStorage">{{T:system.returnCache}}</label><div class="panel-select-wrap panel-dropdown sys-return-cache-select"><select id="sysReturnCacheStorage"><option value="memory">{{T:system.memory}}</option><option value="disk">{{T:system.disk}}</option></select></div></div>
     <div class="sys-row sys-num sys-combined-limit"><span class="sys-label" id="sysCombinedLimitLabel">{{T:system.combinedDictionaryLimit}}</span><input type="number" id="sysCombinedLimit" min="1" max="{{COMBINED_DICTIONARY_LIMIT_MAX}}" step="1" inputmode="numeric" aria-labelledby="sysCombinedLimitLabel"></div>
     <p class="sys-hint" id="sysCombinedLimitHint">{{T:system.combinedDictionaryLimitHint}}</p>
 
@@ -1457,6 +1459,7 @@ function browseOriginQuery(openDict=""){
     if(!url.searchParams.has("mode"))url.searchParams.set("mode",$("mode")?.value||"prefix");
     if(!url.searchParams.has("dict"))url.searchParams.set("dict",$("dict")?.value||"all");
     if(lastScope&&!url.searchParams.has("from"))url.searchParams.set("from",lastScope);
+    if(articleCacheGroupID)url.searchParams.set("returnCacheID",articleCacheGroupID);
     if(url.searchParams.get("mode")==="wildcards"&&maskMergeAZ)url.searchParams.set("maskmerge","1");
     if(openDict&&url.searchParams.get("mode")!=="wildcards")url.searchParams.set("openDict",openDict);
   }
@@ -1510,7 +1513,7 @@ const esc=s=>String(s??"").replace(/&/g,"&amp;").replace(/</g,"&lt;");
 const escAttr=s=>esc(s).replace(/"/g,"&quot;");
 let dicts=[],lastQuery=null,searchSeq=0,searchAC=null;
 let dictIconsOn=true;
-let scopeOnce=null,anchorOnce=null,lastScope=null,widenedFrom=null,restoreArticleDict=null;
+let scopeOnce=null,anchorOnce=null,lastScope=null,widenedFrom=null,restoreArticleDict=null,restoreSearchReturnCacheID=null;
 let PRESETS=null;
 const PRESET_ROWS=[
   ["compactRow","compact"],
@@ -1777,6 +1780,7 @@ async function loadPrefs(){
        (below, always false), because it is upstream's. */
     if(st.ui){applyFS(st.ui.fontSize,false);applyFW(st.ui.fontWeight,false);applyArticleFont(st.ui.fontFamily||"charis",false);applyHL(!st.ui.hlOff,false);applySpeak(!st.ui.speakOff,false);applyHideUnmarkedExamples(!!st.ui.hideUnmarkedExamples,false);applyDictIcons(!st.ui.dictIconsOff,false);openN=st.ui.openN||1;openAll=!!st.ui.openAll;prefOrderModeKnown=typeof st.ui.customOrder==="boolean";prefCustomOrder=!!st.ui.customOrder;
       resultCacheLimitGB=Number(st.ui.resultCacheLimitGB)||defaultResultCacheLimitGB();resultCacheNoLimit=!!st.ui.resultCacheNoLimit;syncResultCacheLimitUI();
+      searchReturnCacheStorage=st.ui.searchReturnCache==="memory"?"memory":"disk";syncSearchReturnCacheUI();
       combinedDictionaryLimit=Math.max(1,Math.min(Number(st.ui.combinedDictionaryLimit)||defaultCombinedDictionaryLimit,maxCombinedDictionaryLimit));syncCombinedDictionaryLimitUI()}
     if(!st.exists){adoptLocalPrefs();return} // first run: keep whatever we had
     prefOrder=rows.map(d=>d.id);prefPinned=rows.filter(d=>d.pinned).map(d=>d.id);
@@ -1793,6 +1797,7 @@ async function loadPrefs(){
 let prefsTimer=null,prefsSent=null;
 function defaultResultCacheLimitGB(){return window.wudictAndroidShell?2:8}
 let resultCacheLimitGB=defaultResultCacheLimitGB(),resultCacheNoLimit=false;
+let searchReturnCacheStorage="disk";
 const defaultCombinedDictionaryLimit={{COMBINED_DICTIONARY_LIMIT_DEFAULT}},maxCombinedDictionaryLimit={{COMBINED_DICTIONARY_LIMIT_MAX}};
 let combinedDictionaryLimit=defaultCombinedDictionaryLimit;
 function syncCombinedDictionaryLimitUI(){const field=$("sysCombinedLimit");if(field)field.value=String(combinedDictionaryLimit)}
@@ -1810,6 +1815,9 @@ function bindResultCacheLimit(){
   $("sysResultCacheValue").addEventListener("change",e=>{const n=Math.floor(Number(e.target.value));if(!Number.isFinite(n)||n<1){syncResultCacheLimitUI();return}resultCacheLimitGB=Math.min(n,1048576);syncResultCacheLimitUI();savePrefs(true)});
   syncResultCacheLimitUI();
 }
+function syncSearchReturnCacheUI(){const select=$("sysReturnCacheStorage");if(select)select.value=searchReturnCacheStorage}
+$("sysReturnCacheStorage").addEventListener("change",e=>{searchReturnCacheStorage=e.target.value==="memory"?"memory":"disk";savePrefs(true)});
+syncSearchReturnCacheUI();
 bindResultCacheLimit();
 $("sysCombinedLimit").addEventListener("change",e=>{
   const n=Math.floor(Number(e.target.value));
@@ -1829,7 +1837,7 @@ function savePrefs(now){
   // that no longer exist.
   const body=JSON.stringify({dicts:orderedDicts().map(d=>({id:d.id,name:d.name||d.path.split("/").pop(),title:dictTitles.get(d.id)||"",pinned:prefPinned.includes(d.id)})),
     ui:{fontSize:articleFS,fontWeight:articleFW,fontFamily:articleFont,hlOff:!hlOn,speakOff:!speakOn,dictIconsOff:!dictIconsOn,fastFirst:!orderFirst,hideUnmarkedExamples,customOrder:prefCustomOrder,
-      resultCacheLimitGB,resultCacheNoLimit,combinedDictionaryLimit}});
+      resultCacheLimitGB,resultCacheNoLimit,combinedDictionaryLimit,searchReturnCache:searchReturnCacheStorage}});
   if(body===prefsSent)return;
   prefsSent=body;
   apiFetch("/api/prefs",{method:"PUT",headers:{"Content-Type":"application/json"},body})
@@ -4546,6 +4554,8 @@ async function showDesktopSysSettings(){
     resultCacheHint:$("sysResultCacheHint"),
     resultCacheLimited:$("sysResultCacheLimited").parentElement,
     resultCacheValue:$("sysResultCacheValue").parentElement,
+    returnCacheHint:$("sysReturnCacheHint"),
+    returnCacheStorage:$("sysReturnCacheStorage").closest(".sys-row"),
     clearCache:$("sysClearCache").parentElement,
     combinedLimit:$("sysCombinedLimit").parentElement,
     combinedLimitHint:$("sysCombinedLimitHint"),
@@ -4576,7 +4586,9 @@ async function showDesktopSysSettings(){
   const cacheHint=document.createElement("p");cacheHint.className="sys-hint";
   cacheHint.textContent=tx("system.cacheHint");body.append(cacheHint);
   body.append(desktopSystemNodes.clearCache,desktopSystemNodes.resultCacheHeading,desktopSystemNodes.resultCacheHint,
-    desktopSystemNodes.resultCacheLimited,desktopSystemNodes.resultCacheValue,desktopSystemNodes.combinedLimit,desktopSystemNodes.combinedLimitHint);
+    desktopSystemNodes.resultCacheLimited,desktopSystemNodes.resultCacheValue,desktopSystemNodes.returnCacheHint,
+    desktopSystemNodes.returnCacheStorage,desktopSystemNodes.combinedLimit,desktopSystemNodes.combinedLimitHint);
+  syncSearchReturnCacheUI();
   syncResultCacheLimitUI();
   syncCombinedDictionaryLimitUI();
   body.append(desktopSystemNodes.searchHeading,desktopSystemNodes.searchHint,
@@ -6160,7 +6172,7 @@ async function fetchStream(url,onMsg,signal,options){
        (options?.method||"GET").toUpperCase()==="GET"){
       const params=requestURL.searchParams,n=Number.parseInt(params.get("n"),10);
       const flag=(value)=>!!value&&!/^(0|false|no|off)$/i.test(value.trim());
-      const request={q:params.get("q")||"",mode:params.get("mode")||"",format:params.get("format")||"",dict:params.get("dict")||"",n:Number.isFinite(n)?n:0,hl:flag(params.get("hl")||""),ignoreDiacritics:flag(params.get("ignoreDiacritics")||""),cacheAction:params.get("cacheAction")||"",cacheID:params.get("cacheID")||"",cacheCount:Number(params.get("cacheCount"))||0,cacheOrder:Number(params.get("cacheOrder"))||0,start:Number(params.get("start"))||0,size:Number(params.get("size"))||0,rung:params.get("rung")||""};
+      const request={q:params.get("q")||"",mode:params.get("mode")||"",format:params.get("format")||"",dict:params.get("dict")||"",n:Number.isFinite(n)?n:0,hl:flag(params.get("hl")||""),ignoreDiacritics:flag(params.get("ignoreDiacritics")||""),cacheAction:params.get("cacheAction")||"",cacheID:params.get("cacheID")||"",returnCacheID:params.get("returnCacheID")||"",returnCacheStorage:params.get("returnCacheStorage")||"",cacheCount:Number(params.get("cacheCount"))||0,cacheOrder:Number(params.get("cacheOrder"))||0,start:Number(params.get("start"))||0,size:Number(params.get("size"))||0,rung:params.get("rung")||""};
       await androidGoStream(()=>window.wudictAndroidGo.startSearchStream(window.location.origin,JSON.stringify(request)),onMsg,signal);
       return;
     }
@@ -6172,7 +6184,7 @@ async function fetchStream(url,onMsg,signal,options){
       if(requestURL.pathname==="/api/search"&&method==="GET"){
         const params=requestURL.searchParams,n=Number.parseInt(params.get("n"),10);
         const flag=(value)=>!!value&&!/^(0|false|no|off)$/i.test(value.trim());
-        const request={q:params.get("q")||"",mode:params.get("mode")||"",format:params.get("format")||"",dict:params.get("dict")||"",n:Number.isFinite(n)?n:0,hl:flag(params.get("hl")||""),ignoreDiacritics:flag(params.get("ignoreDiacritics")||""),cacheAction:params.get("cacheAction")||"",cacheID:params.get("cacheID")||"",cacheCount:Number(params.get("cacheCount"))||0,cacheOrder:Number(params.get("cacheOrder"))||0,start:Number(params.get("start"))||0,size:Number(params.get("size"))||0,rung:params.get("rung")||""};
+        const request={q:params.get("q")||"",mode:params.get("mode")||"",format:params.get("format")||"",dict:params.get("dict")||"",n:Number.isFinite(n)?n:0,hl:flag(params.get("hl")||""),ignoreDiacritics:flag(params.get("ignoreDiacritics")||""),cacheAction:params.get("cacheAction")||"",cacheID:params.get("cacheID")||"",returnCacheID:params.get("returnCacheID")||"",returnCacheStorage:params.get("returnCacheStorage")||"",cacheCount:Number(params.get("cacheCount"))||0,cacheOrder:Number(params.get("cacheOrder"))||0,start:Number(params.get("start"))||0,size:Number(params.get("size"))||0,rung:params.get("rung")||""};
         await window.wudictNativeCall("search",JSON.stringify(request),onMsg,signal);
         return;
       }
@@ -6431,6 +6443,7 @@ function renderSlot(box,h,mode,q,perDict,group,paging=null){
   const more=!paging&&h.results.length>=perDict?`<button type="button" class="more" data-id="${escAttr(h.dict)}">${esc(tx("search.more"))}</button>`:"";
   const browseReturnURL=new URL(location.href);browseReturnURL.pathname="/";
   browseReturnURL.searchParams.set("openDict",h.dict);
+  if(articleCacheGroupID)browseReturnURL.searchParams.set("returnCacheID",articleCacheGroupID);
   const browseURL=["prefix","suffix","contains","word","wordLemma","wildcards"].includes(mode)
     ?("/browse?"+new URLSearchParams({dict:h.dict,find:q,filter:"1",findmode:mode,return:browseReturnURL.pathname+browseReturnURL.search+browseReturnURL.hash})):"";
   const browse=browseURL?`<a class="search-browse" href="${escAttr(browseURL)}">${esc(tx("search.browseAllHeadwords"))}</a>`:"";
@@ -8197,6 +8210,7 @@ if($("mode").value==="wildcards")maskInvalidate();
 
 async function doSearch(ev){
   const preferredOpenDict=restoreArticleDict;restoreArticleDict=null;
+  const replayReturnCacheID=restoreSearchReturnCacheID;restoreSearchReturnCacheID=null;
   window.wudictArticleFind?.stop();
   hideSearchProgress();
   if(ev)ev.preventDefault();
@@ -8206,6 +8220,7 @@ async function doSearch(ev){
   if(browseReturnRouteContext)logBrowseReturnRoute("search_started",{query:q,mode:$("mode").value,dict:$("dict").value||"all"});
   stopArticleResultCaches();
   if($("mode").value==="wildcards"){
+    restoreSearchReturnCacheID=null;
     if(!maskSubmitRequested)return;
     maskSubmitRequested=false;scopeOnce=null;lastScope=null;commitOnce=false;
     return maskRun(q);
@@ -8292,6 +8307,8 @@ async function doSearch(ev){
     dictParam=ids.join(",");
     perDict=5;
   }else{dictParam=dictSel;perDict=5}
+  articleCacheGroupID=replayReturnCacheID||newArticleResultCacheID();
+  articleCacheGroupCount=Math.max(1,dictParam.split(",").length);
   const out=$("out");
   /* Never blank between two answers (D73/M2). Clearing on `begin` would make
      every keystroke-pause a full → empty → full flash: two motions where one
@@ -8364,7 +8381,9 @@ async function doSearch(ev){
   let morphNote=null,morphAll=null;const morphSeen=new Set();
   const swap=()=>{if(stale){for(const n of stale)n.remove();stale=null}};
   try{
-    await fetchStream("/api/search?q="+encodeURIComponent(q)+"&mode="+mode+"&hl="+(hlOn?1:0)+diacriticsSearchParam()+"&dict="+encodeURIComponent(dictParam)+"&n="+perDict,msg=>{
+    const searchParams=new URLSearchParams({q,mode,hl:hlOn?"1":"0",dict:dictParam,n:String(perDict),returnCacheID:articleCacheGroupID,returnCacheStorage:searchReturnCacheStorage,ignoreDiacritics:ignoreDiacritics?"1":"0"});
+    if(replayReturnCacheID){searchParams.set("cacheAction","returnReplay");searchParams.set("cacheID",replayReturnCacheID)}
+    await fetchStream("/api/search?"+searchParams.toString(),msg=>{
       if(seq!==searchSeq)return; // superseded by a newer search
       if(msg.t==="begin"){
         if(browseReturnRouteContext)logBrowseReturnRoute("search_stream_begin",{slots:(msg.slots||[]).length});
@@ -9468,6 +9487,7 @@ let commitOnce=false;
 function applyURL(){
   const p=new URLSearchParams(location.search);
   restoreArticleDict=p.get("q")?p.get("openDict")||null:null;
+  restoreSearchReturnCacheID=p.get("q")?p.get("returnCacheID")||null:null;
   if(browseReturnRouteContext)logBrowseReturnRoute(p.get("q")?"apply_url_has_query":"apply_url_no_query",{hasFrom:p.has("from")});
   maskMergeAZ=p.get("maskmerge")==="1";updateMergedAZ();
   if(p.get("theme")){localStorage.setItem("wudict_theme",p.get("theme"));applyTheme(p.get("theme"))}
@@ -9490,6 +9510,7 @@ doSearch=function(ev){
     // own selector, so restoring a link-followed view never rewrites it
     if(lastScope)params.from=lastScope;
     if(openDict&&$("mode").value!=="wildcards")params.openDict=openDict;
+    if(articleCacheGroupID&&$("mode").value!=="wildcards")params.returnCacheID=articleCacheGroupID;
     if($("mode").value==="wildcards"&&maskMergeAZ)params.maskmerge="1";
     if(browseReturn)params.browse=browseReturn;
     if(maskReturn)params.wildcards=maskReturn;
@@ -9506,6 +9527,7 @@ doSearch=function(ev){
 window.addEventListener("popstate",()=>{
   const p=new URLSearchParams(location.search);
   restoreArticleDict=p.get("q")?p.get("openDict")||null:null;
+  restoreSearchReturnCacheID=p.get("q")?p.get("returnCacheID")||null:null;
   maskMergeAZ=p.get("maskmerge")==="1";updateMergedAZ();
   browseReturn=browseReturnFromURL();maskReturn=maskReturnFromURL();sbarPaint();
   if(canonicalSearchMode(p.get("mode"))==="wildcards"&&maskRestoreCached(new URL(location.href)))return;

@@ -1016,6 +1016,10 @@ body.styling{padding-bottom:var(--styler-shown,var(--styler-h))}
 #sysSettings .sys-num .sys-workers-select>select{display:block;width:100%;max-width:none;min-width:0;box-sizing:border-box;
   height:100%;min-height:100%;font:inherit;font-size:calc(var(--ui-control-font) * 1rem);line-height:1;color:var(--fg);background:var(--bg);
   border:1px solid var(--line);border-radius:5px;padding:0 1.8em 0 .55em;appearance:none;-webkit-appearance:none}
+#sysSettings .sys-num .sys-return-cache-select,#desktopSysBody .sys-num .sys-return-cache-select{flex:none;width:8em}
+#sysSettings .sys-num .sys-return-cache-select>select,#desktopSysBody .sys-num .sys-return-cache-select>select{display:block;width:100%;max-width:none;min-width:0;box-sizing:border-box;
+  height:100%;min-height:100%;font:inherit;font-size:calc(var(--ui-control-font) * 1rem);line-height:1;color:var(--fg);background:var(--bg);
+  border:1px solid var(--line);border-radius:5px;padding:0 1.8em 0 .55em;appearance:none;-webkit-appearance:none}
 #sysSettings .sys-action-spaced{margin-top:calc(var(--ui-control-height) * .5em)}
 #sysSettings .sys-num input:focus,#desktopSysBody .sys-num input:focus{outline:none;border-color:var(--focus);
   box-shadow:0 0 0 3px color-mix(in srgb,var(--focus) 25%,transparent)}

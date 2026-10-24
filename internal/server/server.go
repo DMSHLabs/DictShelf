@@ -182,6 +182,7 @@ type Server struct {
 	mux *http.ServeMux
 
 	wildcardPages wildcardPageCache
+	searchReturns searchReturnCacheStore
 
 	// dictRows keeps /api/dicts rows between requests (dictrows.go).
 	dictRows rowCache
