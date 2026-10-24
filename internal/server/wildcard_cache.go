@@ -861,12 +861,18 @@ func wildcardCacheGroupKey(group string, fts, trigram bool) string {
 }
 
 func resultCacheLinks(path string) ([]string, string) {
-	db, err := store.OpenWildcardCacheDB(path)
+	var db *sql.DB
+	var err error
+	name := filepath.Base(path)
+	if strings.HasPrefix(name, "wildcard_merged_") && !strings.HasPrefix(name, "wildcard_merged_find_") {
+		db, err = store.OpenWildcardCacheDBWAL(path)
+	} else {
+		db, err = store.OpenWildcardCacheDB(path)
+	}
 	if err != nil {
 		return nil, ""
 	}
 	defer db.Close()
-	name := filepath.Base(path)
 	if strings.HasPrefix(name, "wildcard_merged_find_") {
 		var signature string
 		if db.QueryRow(`SELECT signature FROM merged_find_meta LIMIT 1`).Scan(&signature) == nil {

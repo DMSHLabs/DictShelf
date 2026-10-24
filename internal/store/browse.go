@@ -34,7 +34,20 @@ func (s *Store) StreamBrowseHeadwords(ctx context.Context, query string, mask bo
 			return compileErr
 		}
 		stream := newBrowseRowStream(s.meta.EntryCount, emit)
-		if literal := maskTrigramLiteral(query); s.hasTrigram && !s.staleFold && literal != "" && !maskHasASCIILead(query) {
+		strategy := s.MaskCandidateStrategy(query)
+		if strategy == "exact_key" {
+			folded := dict.Fold(query)
+			rows, queryErr := s.db.QueryContext(ctx, `SELECT DISTINCT w FROM entry
+				WHERE wf COLLATE NOCASE IN (?) AND w NOT LIKE '@_%' ORDER BY w COLLATE NOCASE`, folded)
+			if queryErr != nil {
+				return queryErr
+			}
+			if err := stream.rows(ctx, rows, re.MatchString); err != nil {
+				return err
+			}
+			return stream.finish()
+		}
+		if literal := maskTrigramLiteral(query); strategy == "trigram" && literal != "" {
 			phrase := `"` + strings.ReplaceAll(literal, `"`, `""`) + `"`
 			rows, queryErr := s.db.QueryContext(ctx, `SELECT DISTINCT e.w FROM entry_trigram t
 				JOIN entry e ON e.id=t.rowid WHERE entry_trigram MATCH ? AND e.w NOT LIKE '@_%'
@@ -185,6 +198,184 @@ func (s *Store) FindHeadwords(ctx context.Context, query string, offset, limit i
 	return words, total, rows.Err()
 }
 
+// FindHeadwordsMode searches prepared headwords with one of Browse's matching
+// rules. Lemma modes accept unit-separated alternatives from the server.
+func (s *Store) FindHeadwordsMode(ctx context.Context, query, mode string, offset, limit int) ([]string, int, []dict.Letter, error) {
+	query = strings.TrimSpace(query)
+	if mode == "prefix" || mode == "" {
+		words, total, err := s.FindHeadwords(ctx, query, offset, limit)
+		return words, total, nil, err
+	}
+	if mode == "wildcards" {
+		return s.FindHeadwordsMask(ctx, query, offset, limit)
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	if limit <= 0 || query == "" {
+		return []string{}, 0, nil, nil
+	}
+	var rows *sql.Rows
+	var err error
+	var matcher func(string) bool
+	switch mode {
+	case "suffix", "contains":
+		matcher = dict.HeadwordSuffixMatcher(query)
+		if mode == "contains" {
+			matcher = dict.HeadwordContainsMatcher(query)
+		}
+		if s.hasTrigram && !s.staleFold {
+			if literal := headwordTrigramLiteral(query); literal != "" {
+				phrase := `"` + strings.ReplaceAll(literal, `"`, `""`) + `"`
+				rows, err = s.db.QueryContext(ctx, `SELECT DISTINCT e.w FROM entry_trigram t
+					JOIN entry e ON e.id=t.rowid WHERE entry_trigram MATCH ? AND e.w NOT LIKE '@_%'
+					ORDER BY e.w COLLATE NOCASE`, phrase)
+				break
+			}
+		}
+		rows, err = s.db.QueryContext(ctx, `SELECT w FROM entry WHERE `+browseWhere+browseOrder)
+	case "word", "wordLemma":
+		match := buildWholeWordMatch(query, "w")
+		if match == "" {
+			return []string{}, 0, nil, nil
+		}
+		matcher = dict.HeadwordWordMatcher(query)
+		rows, err = s.db.QueryContext(ctx, `SELECT DISTINCT e.w FROM entry_fts f
+			JOIN entry e ON e.id=f.rowid WHERE entry_fts MATCH ? AND e.w NOT LIKE '@_%'
+			ORDER BY e.w COLLATE NOCASE`, match)
+	case "exact", "exactLemma":
+		matcher = dict.HeadwordExactMatcher(query)
+		values := strings.Split(query, "\x1f")
+		placeholders := strings.TrimSuffix(strings.Repeat("?,", len(values)), ",")
+		args := make([]any, len(values))
+		for i, value := range values {
+			args[i] = dict.Fold(value)
+		}
+		rows, err = s.db.QueryContext(ctx, `SELECT DISTINCT w FROM entry
+			WHERE wf COLLATE NOCASE IN (`+placeholders+`) AND w NOT LIKE '@_%' ORDER BY w COLLATE NOCASE`, args...)
+	default:
+		return nil, 0, nil, fmt.Errorf("unknown headword match mode %q", mode)
+	}
+	if err != nil {
+		return nil, 0, nil, err
+	}
+	defer rows.Close()
+	words := make([]string, 0, limit)
+	total := 0
+	for rows.Next() {
+		if err := ctx.Err(); err != nil {
+			return nil, 0, nil, err
+		}
+		var word string
+		if err := rows.Scan(&word); err != nil {
+			return nil, 0, nil, err
+		}
+		if !matcher(word) {
+			continue
+		}
+		if total >= offset && len(words) < limit {
+			words = append(words, word)
+		}
+		total++
+	}
+	return words, total, nil, rows.Err()
+}
+
+// StreamBrowseHeadwordsMode uses the prepared FTS or exact-key index where
+// possible, then emits bounded result batches in headword order.
+func (s *Store) StreamBrowseHeadwordsMode(ctx context.Context, query, mode string, emit func([]string, int, bool, int, int) error) error {
+	query = strings.TrimSpace(query)
+	if query == "" {
+		return emit(nil, 0, true, 0, s.meta.EntryCount)
+	}
+	if mode == "prefix" || mode == "" {
+		return s.StreamBrowseHeadwords(ctx, query, false, emit)
+	}
+	if mode == "wildcards" {
+		return s.StreamBrowseHeadwords(ctx, query, true, emit)
+	}
+	var rows *sql.Rows
+	var err error
+	var matcher func(string) bool
+	switch mode {
+	case "suffix", "contains":
+		matcher = dict.HeadwordSuffixMatcher(query)
+		if mode == "contains" {
+			matcher = dict.HeadwordContainsMatcher(query)
+		}
+		if s.hasTrigram && !s.staleFold {
+			if literal := headwordTrigramLiteral(query); literal != "" {
+				phrase := `"` + strings.ReplaceAll(literal, `"`, `""`) + `"`
+				rows, err = s.db.QueryContext(ctx, `SELECT DISTINCT e.w FROM entry_trigram t
+					JOIN entry e ON e.id=t.rowid WHERE entry_trigram MATCH ? AND e.w NOT LIKE '@_%'
+					ORDER BY e.w COLLATE NOCASE`, phrase)
+				break
+			}
+		}
+		rows, err = s.db.QueryContext(ctx, `SELECT w FROM entry WHERE `+browseWhere+browseOrder)
+	case "word", "wordLemma":
+		match := buildWholeWordMatch(query, "w")
+		if match == "" {
+			return emit(nil, 0, true, 0, s.meta.EntryCount)
+		}
+		matcher = dict.HeadwordWordMatcher(query)
+		rows, err = s.db.QueryContext(ctx, `SELECT DISTINCT e.w FROM entry_fts f
+			JOIN entry e ON e.id=f.rowid WHERE entry_fts MATCH ? AND e.w NOT LIKE '@_%'
+			ORDER BY e.w COLLATE NOCASE`, match)
+	case "exact", "exactLemma":
+		matcher = dict.HeadwordExactMatcher(query)
+		values := strings.Split(query, "\x1f")
+		placeholders := strings.TrimSuffix(strings.Repeat("?,", len(values)), ",")
+		args := make([]any, len(values))
+		for i, value := range values {
+			args[i] = dict.Fold(value)
+		}
+		rows, err = s.db.QueryContext(ctx, `SELECT DISTINCT w FROM entry
+			WHERE wf COLLATE NOCASE IN (`+placeholders+`) AND w NOT LIKE '@_%' ORDER BY w COLLATE NOCASE`, args...)
+	default:
+		return fmt.Errorf("unknown headword match mode %q", mode)
+	}
+	if err != nil {
+		return err
+	}
+	return streamBrowseRows(ctx, rows, matcher, s.meta.EntryCount, emit)
+}
+
+func buildWholeWordMatch(input, column string) string {
+	if strings.Contains(input, "\x1f") {
+		var alternatives []string
+		for _, value := range strings.Split(input, "\x1f") {
+			if match := buildWholeWordMatch(value, column); match != "" {
+				alternatives = append(alternatives, "("+match+")")
+			}
+		}
+		return strings.Join(alternatives, " OR ")
+	}
+	var parts []string
+	var token strings.Builder
+	flush := func() {
+		if token.Len() == 0 {
+			return
+		}
+		value := strings.ReplaceAll(token.String(), `"`, `""`)
+		part := `"` + value + `"`
+		if column != "" {
+			part = column + ":" + part
+		}
+		parts = append(parts, part)
+		token.Reset()
+	}
+	for _, r := range input {
+		if unicode.IsLetter(r) || unicode.IsNumber(r) || unicode.IsMark(r) {
+			token.WriteRune(r)
+		} else {
+			flush()
+		}
+	}
+	flush()
+	return strings.Join(parts, " ")
+}
+
 // FindHeadwordsMask scans the existing headword index and pages mask matches.
 func (s *Store) FindHeadwordsMask(ctx context.Context, query string, offset, limit int) ([]string, int, []dict.Letter, error) {
 	words, total, letters, _, err := s.FindHeadwordsMaskWithin(ctx, query, "", false, offset, limit)
@@ -194,6 +385,17 @@ func (s *Store) FindHeadwordsMask(ctx context.Context, query string, offset, lim
 // FindHeadwordsMaskWithin intersects the main mask with the bottom Browse
 // control. Positions address the unfiltered mask list for match navigation.
 func (s *Store) FindHeadwordsMaskWithin(ctx context.Context, query, within string, withinMask bool, offset, limit int) ([]string, int, []dict.Letter, []int, error) {
+	mode := "prefix"
+	if withinMask {
+		mode = "wildcards"
+	}
+	return s.FindHeadwordsMaskWithinMode(ctx, query, within, mode, offset, limit)
+}
+
+// FindHeadwordsMaskWithinMode intersects the main mask with a Browse match mode.
+// Positions address the unfiltered mask list for match navigation.
+func (s *Store) FindHeadwordsMaskWithinMode(ctx context.Context, query, within, withinMode string, offset, limit int) ([]string, int, []dict.Letter, []int, error) {
+	withinMask := withinMode == "wildcards"
 	if offset < 0 {
 		offset = 0
 	}
@@ -212,6 +414,16 @@ func (s *Store) FindHeadwordsMaskWithin(ctx context.Context, query, within strin
 		}
 	}
 	matchTerms := dict.HeadwordTermMatcher(within)
+	switch withinMode {
+	case "suffix":
+		matchTerms = dict.HeadwordSuffixMatcher(within)
+	case "contains":
+		matchTerms = dict.HeadwordContainsMatcher(within)
+	case "word", "wordLemma":
+		matchTerms = dict.HeadwordWordMatcher(within)
+	case "exact", "exactLemma":
+		matchTerms = dict.HeadwordExactMatcher(within)
+	}
 	words := make([]string, 0, limit)
 	positions := make([]int, 0, limit)
 	total, basePosition := 0, 0
@@ -244,10 +456,21 @@ func (s *Store) FindHeadwordsMaskWithin(ctx context.Context, query, within strin
 		return rows.Err()
 	}
 
-	// Use the optional trigram index as a candidate source when the mask has
-	// a sufficiently long literal run. The complete mask still verifies every
-	// candidate. Otherwise, retain the regular headword-index scan.
-	if literal := maskTrigramLiteral(query); s.hasTrigram && !s.staleFold && literal != "" && !maskHasASCIILead(query) {
+	// Narrow a literal-only mask through the exact key. For wildcard patterns,
+	// the longest stable literal run is a trigram candidate when it has at least
+	// three runes; the complete mask still verifies every candidate.
+	strategy := s.MaskCandidateStrategy(query)
+	if strategy == "exact_key" {
+		folded := dict.Fold(query)
+		rows, err := s.db.QueryContext(ctx, `SELECT DISTINCT w FROM entry
+			WHERE wf COLLATE NOCASE IN (?) AND w NOT LIKE '@_%' ORDER BY w COLLATE NOCASE`, folded)
+		if err != nil {
+			return nil, 0, nil, nil, err
+		}
+		if err := visit(rows); err != nil {
+			return nil, 0, nil, nil, err
+		}
+	} else if literal := maskTrigramLiteral(query); strategy == "trigram" && literal != "" {
 		phrase := `"` + strings.ReplaceAll(literal, `"`, `""`) + `"`
 		rows, err := s.db.QueryContext(ctx, `SELECT DISTINCT e.w FROM entry_trigram t
 			JOIN entry e ON e.id=t.rowid WHERE entry_trigram MATCH ? AND e.w NOT LIKE '@_%'
@@ -270,6 +493,23 @@ func (s *Store) FindHeadwordsMaskWithin(ctx context.Context, query, within strin
 		}
 	}
 	return words, total, sections.Finish(), positions, nil
+}
+
+func headwordTrigramLiteral(query string) string {
+	terms := strings.FieldsFunc(query, func(r rune) bool {
+		return !unicode.IsLetter(r) && !unicode.IsNumber(r) && !unicode.IsMark(r)
+	})
+	best := ""
+	for _, term := range terms {
+		folded := dict.Fold(term)
+		if utf8.RuneCountInString(folded) > utf8.RuneCountInString(best) {
+			best = folded
+		}
+	}
+	if utf8.RuneCountInString(best) < 3 {
+		return ""
+	}
+	return best
 }
 
 // browseWhere hides the internal entries from every browse read. `@_%` is an

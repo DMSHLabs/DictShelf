@@ -11,6 +11,8 @@
   "use strict";
   const $ = id => document.getElementById(id);
   const MAX = 100;
+  const searchStorageKey = "wudict_search_history_v2";
+  const wildcardsStorageKey = "wudict_wildcards_history_v2";
   const key = s => s.normalize("NFC").toLocaleLowerCase();
   const limit = () => {
     const raw = localStorage.getItem("wudict_history_length");
@@ -37,9 +39,10 @@
     return rows.slice(0, limit());
   }
   const previousSaved = load("wudict_search_history");
-  let saved = previousSaved.filter(word => !/[?*]/.test(word));
-  let wildcardsSaved = [...load("wudict_wildcards_history"),
-    ...previousSaved.filter(word => /[?*]/.test(word))];
+  const hasStored = storageKey => { try { return localStorage.getItem(storageKey) !== null; } catch (_) { return false; } };
+  let saved = hasStored(searchStorageKey) ? load(searchStorageKey) : previousSaved.filter(word => !/[?*]/.test(word));
+  let wildcardsSaved = hasStored(wildcardsStorageKey) ? load(wildcardsStorageKey) :
+    [...load("wudict_wildcards_history"), ...previousSaved.filter(word => /[?*]/.test(word))];
   wildcardsSaved = wildcardsSaved.filter((word, i, rows) =>
     rows.findIndex(other => key(other) === key(word)) === i).slice(0, MAX);
   const activeHistory = () => $("mode").value === "wildcards" ? wildcardsSaved : saved;
@@ -58,16 +61,21 @@
 
   function persist() {
     try {
-      localStorage.setItem("wudict_search_history", JSON.stringify(saved));
-      localStorage.setItem("wudict_wildcards_history", JSON.stringify(wildcardsSaved));
+      localStorage.setItem(searchStorageKey, JSON.stringify(saved));
+      localStorage.setItem(wildcardsStorageKey, JSON.stringify(wildcardsSaved));
     } catch (_) {}
     $("clearHistory").disabled = !activeHistory().length;
   }
   function record(term) {
+    recordFor($("mode").value === "wildcards" ? "wildcards" : "search", term);
+  }
+  function recordFor(kind, term) {
     draft = false;
     const word = String(term || "").trim(), max = limit();
     if (!word || !max) return;
-    saveActiveHistory([word, ...activeHistory().filter(x => key(x) !== key(word))].slice(0, max));
+    const rows = kind === "wildcards" ? wildcardsSaved : saved;
+    const next = [word, ...rows.filter(x => key(x) !== key(word))].slice(0, max);
+    if (kind === "wildcards") wildcardsSaved = next; else saved = next;
     persist();
   }
   function hide() { stopSuggest(); open = false; $("searchHistory").hidden = true; }
@@ -183,5 +191,7 @@
   sizer.observe(document.querySelector("#frm>.pill"));
   sizer.observe($("qbox"));
 
-  window.wuSearchHistory = { setSearch(fn) { search = fn; }, setSuggest(fn) { suggest = fn; }, record, hide, onInput, refreshSuggestions, modeChanged, isPicking() { return picking; } };
+  window.wuSearchHistory = { setSearch(fn) { search = fn; }, setSuggest(fn) { suggest = fn; }, record, recordFor,
+    getFor(kind) { return [...(kind === "wildcards" ? wildcardsSaved : saved)]; },
+    hide, onInput, refreshSuggestions, modeChanged, isPicking() { return picking; } };
 })();

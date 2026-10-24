@@ -20,6 +20,21 @@ import (
 // streamCachedWildcardWithin filters the completed upper-mask result blocks.
 // Positions refer to that result list; no dictionary index is opened here.
 func (s *Server) streamCachedWildcardWithin(ctx context.Context, request browseFindStreamRequest, send func(browseFindStreamEvent) error) error {
+	diagnostic := browseFindDiagnosticEnabled(ctx)
+	started := time.Now()
+	typedWithin := request.within
+	if isLemmaHeadwordMode(request.withinMode) {
+		resolved, err := s.wildcardHeadwordLemmaQuery(request.entry, request.within, request.withinMode)
+		if err != nil {
+			return err
+		}
+		request.within = resolved
+	}
+	if diagnostic {
+		logx.System("headword_find_wildcard_filter stage=start dict=%q dict_name=%q cache=%q upper_query=%q mode=%s typed_query=%q effective_queries=%q base_total_pending=true",
+			request.entry.ID, request.entry.probeName(), request.cacheID, request.query, request.withinMode,
+			typedWithin, strings.Split(request.within, mergedHeadwordAlternativeSeparator))
+	}
 	var matches func(string) bool
 	if request.withinMask {
 		re, err := search.CompileMask(request.within)
@@ -28,17 +43,18 @@ func (s *Server) streamCachedWildcardWithin(ctx context.Context, request browseF
 		}
 		matches = re.MatchString
 	} else {
-		matches = dict.HeadwordTermMatcher(request.within)
+		matches = headwordModeMatcher(request.within, request.withinMode)
 	}
+	cacheWithin := wildcardWithinCacheKey(request.within, request.withinMode)
 	entry, token, err := s.wildcardPages.begin(request.cacheID, wildcardCacheSignature{
 		query: request.query, group: request.cacheGroup, wildcards: request.mask,
 		fts: request.cacheFTS, trigram: request.cacheTrigram,
 	}, browsePageSize, request.cacheCount, request.entry.ID, request.entry.probeName(), request.cacheOrder,
-		request.within, request.withinMask, s.wildcardCacheDir())
+		cacheWithin, request.withinMask, s.wildcardCacheDir())
 	if err != nil {
 		return err
 	}
-	key := wildcardStreamKey{dictID: request.entry.ID, within: request.within, withinMask: request.withinMask}
+	key := wildcardStreamKey{dictID: request.entry.ID, within: cacheWithin, withinMask: request.withinMask}
 	defer s.wildcardPages.finish(entry, &key, token)
 	var baseTotal, complete int
 	err = entry.db.QueryRowContext(ctx, `SELECT total,complete FROM wildcard_dictionary
@@ -65,7 +81,7 @@ func (s *Server) streamCachedWildcardWithin(ctx context.Context, request browseF
 			event.Type = "done"
 			event.Alphabet = sections.Finish()
 		}
-		if err := entry.append(request.entry.ID, request.within, request.withinMask, token, event); err != nil {
+		if err := entry.append(request.entry.ID, cacheWithin, request.withinMask, token, event); err != nil {
 			return err
 		}
 		words = make([]string, 0, browsePageSize)
@@ -77,8 +93,12 @@ func (s *Server) streamCachedWildcardWithin(ctx context.Context, request browseF
 		if literal := mergedMaskTrigramLiteral(request.within); literal != "" {
 			index, match = "wildcard_word_trigram", `"`+strings.ReplaceAll(literal, `"`, `""`)+`"`
 		}
-	} else if !request.withinMask && entry.signature.fts {
-		if expression := mergedHeadwordFTSMatch(request.within); expression != "" {
+	} else if !request.withinMask && entry.signature.trigram && (request.withinMode == "suffix" || request.withinMode == "contains") {
+		if literal := mergedTextTrigramLiteral(request.within); literal != "" {
+			index, match = "wildcard_word_trigram", `"`+strings.ReplaceAll(literal, `"`, `""`)+`"`
+		}
+	} else if !request.withinMask && entry.signature.fts && request.withinMode != "suffix" && request.withinMode != "contains" {
+		if expression := mergedHeadwordFTSMatchMode(request.within, request.withinMode); expression != "" {
 			index, match = "wildcard_word_fts", expression
 		}
 	}
@@ -93,8 +113,10 @@ func (s *Server) streamCachedWildcardWithin(ctx context.Context, request browseF
 				return err
 			}
 			if candidateTotal < baseTotal {
-				if browseFindDiagnosticEnabled(ctx) {
-					logx.System("headword_find_dictionary index=%s candidates=%d base_total=%d", index, candidateTotal, baseTotal)
+				if diagnostic {
+					logx.System("headword_find_wildcard_filter stage=plan dict=%q mode=%s typed_query=%q effective_queries=%q index=%s index_query=%q candidates=%d base_total=%d strategy=index_candidates",
+						request.entry.ID, request.withinMode, typedWithin,
+						strings.Split(request.within, mergedHeadwordAlternativeSeparator), index, match, candidateTotal, baseTotal)
 				}
 				scanTotal = candidateTotal
 				// The cache has one SQLite connection. Read a bounded batch, close
@@ -158,12 +180,31 @@ func (s *Server) streamCachedWildcardWithin(ctx context.Context, request browseF
 						}
 					}
 				}
-				return emit(true)
+				if err := emit(true); err != nil {
+					return err
+				}
+				if diagnostic {
+					logx.System("headword_find_wildcard_filter stage=done dict=%q mode=%s typed_query=%q effective_queries=%q strategy=index_candidates scanned=%d candidates=%d found=%d elapsed_ms=%d",
+						request.entry.ID, request.withinMode, typedWithin,
+						strings.Split(request.within, mergedHeadwordAlternativeSeparator), scanned, candidateTotal, found, time.Since(started).Milliseconds())
+				}
+				return nil
 			}
+			if diagnostic {
+				logx.System("headword_find_wildcard_filter stage=plan dict=%q mode=%s typed_query=%q effective_queries=%q index=%s index_query=%q candidates=%d base_total=%d strategy=full_block_scan reason=index_not_selective",
+					request.entry.ID, request.withinMode, typedWithin,
+					strings.Split(request.within, mergedHeadwordAlternativeSeparator), index, match, candidateTotal, baseTotal)
+			}
+		} else if diagnostic {
+			logx.System("headword_find_wildcard_filter stage=plan dict=%q mode=%s typed_query=%q effective_queries=%q index=%s strategy=full_block_scan reason=index_word_count_mismatch indexed_words=%d base_total=%d",
+				request.entry.ID, request.withinMode, typedWithin,
+				strings.Split(request.within, mergedHeadwordAlternativeSeparator), index, indexedTotal, baseTotal)
 		}
 	}
-	if browseFindDiagnosticEnabled(ctx) {
-		logx.System("headword_find_dictionary index=wildcard_block_scan candidates=%d base_total=%d", baseTotal, baseTotal)
+	if diagnostic && index == "" {
+		logx.System("headword_find_wildcard_filter stage=plan dict=%q mode=%s typed_query=%q effective_queries=%q strategy=full_block_scan reason=no_usable_index base_total=%d",
+			request.entry.ID, request.withinMode, typedWithin,
+			strings.Split(request.within, mergedHeadwordAlternativeSeparator), baseTotal)
 	}
 	for block := 1; scanned < baseTotal; block++ {
 		if err := ctx.Err(); err != nil {
@@ -209,5 +250,13 @@ func (s *Server) streamCachedWildcardWithin(ctx context.Context, request browseF
 			nextProgress = time.Now().Add(250 * time.Millisecond)
 		}
 	}
-	return emit(true)
+	if err := emit(true); err != nil {
+		return err
+	}
+	if diagnostic {
+		logx.System("headword_find_wildcard_filter stage=done dict=%q mode=%s typed_query=%q effective_queries=%q strategy=full_block_scan scanned=%d base_total=%d found=%d elapsed_ms=%d",
+			request.entry.ID, request.withinMode, typedWithin,
+			strings.Split(request.within, mergedHeadwordAlternativeSeparator), scanned, baseTotal, found, time.Since(started).Milliseconds())
+	}
+	return nil
 }
