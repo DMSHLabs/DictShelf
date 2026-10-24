@@ -1540,6 +1540,23 @@ function browseReturnURL(targetWord=""){
   return url.pathname+url.search;
 }
 
+function browseOriginFromURL(){
+  const raw=new URLSearchParams(location.search).get("return");
+  if(!raw)return "";
+  try{
+    const url=new URL(raw,location.origin);
+    return url.origin===location.origin&&url.pathname==="/"?url.pathname+url.search+url.hash:"";
+  }catch(_){return ""}
+}
+
+function browseOriginIsPrevious(origin){
+  if(!origin||!document.referrer)return false;
+  try{
+    const previous=new URL(document.referrer);
+    return previous.origin===location.origin&&previous.pathname+previous.search===origin;
+  }catch(_){return false}
+}
+
 function restoreBrowsePosition(targetWord,scrollTop){
   const restoreStarted=performance.now();
   requestAnimationFrame(()=>{
@@ -2067,7 +2084,14 @@ document.addEventListener("click",e=>{
     return;
   }
   if(e.target.closest("#closeBrowse")){
-    location.href=keepWebView2Mode(new URLSearchParams(location.search).get("chooser")==="1"?"/browse":"/");
+    const params=new URLSearchParams(location.search);
+    if(params.get("chooser")==="1"){location.href=keepWebView2Mode("/browse");return}
+    const origin=browseOriginFromURL();
+    if(origin){
+      if(browseOriginIsPrevious(origin)){history.back();return}
+      location.href=keepWebView2Mode(origin);return;
+    }
+    location.href=keepWebView2Mode("/");
     return;
   }
   if(e.target.closest("#closeBrowseChooser")){
