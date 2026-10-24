@@ -7595,6 +7595,9 @@ function normalizeSimpleWildcardMask(pattern){
 }
 function isAllWildcardMask(pattern){return normalizeSimpleWildcardMask(pattern)==="*"}
 async function maskRun(pattern,reason="submit"){
+  const switchFindState=reason==="switch"?{
+    query:$("maskFindInput").value.trim(),mode:maskFindMatchMode,filter:maskFindFilter
+  }:null;
   const switchSetupStarted=reason==="switch"&&browseDiagnosticsEnabled()?performance.now():0;
   const switchFrom=reason==="switch"?(maskMergeAZ?"separate":"combined"):"";
   maskViewRunID++;maskViewTraceStarted=performance.now();
@@ -7602,8 +7605,14 @@ async function maskRun(pattern,reason="submit"){
   const previousRows=maskBaseRows,previousPattern=maskPattern,previousSelection=maskSelection;
   for(const row of maskBaseRows)if(row.state==="ready"&&!row.partial)maskRememberBase(row);
   maskAbort();maskStripScrollX=0;maskPattern=pattern;lastQuery=pattern;maskReturn="";
-  clearTimeout(maskFindTimer);maskFindRows=[];maskFindQuery="";maskFindIndex=-1;maskFindMatch=null;maskFindAnchor=null;
-  maskFindFilter=false;maskFindApproved=false;maskFindAwaitingApply=false;$("maskFindInput").value="";
+  clearTimeout(maskFindTimer);maskFindRows=[];maskFindQuery=switchFindState?.query||"";maskFindIndex=-1;maskFindMatch=null;maskFindAnchor=null;
+  if(switchFindState){
+    maskFindMatchMode=switchFindState.mode;maskFindFilter=switchFindState.filter;
+    $("maskFindInput").value=switchFindState.query;maskFindApproved=!!switchFindState.query;
+  }else{
+    maskFindFilter=false;maskFindApproved=false;$("maskFindInput").value="";
+  }
+  maskFindAwaitingApply=false;
   if(searchAC)searchAC.abort();hideSearchProgress();searchSeq++;$("out").replaceChildren();setStatus("");
   const selection=$("dict").value||"all";
   maskSelection=selection;
@@ -7655,7 +7664,9 @@ async function maskRun(pattern,reason="submit"){
   const generation=maskGeneration,rows=maskBaseRows,job={kind:"base",generation};
   const cached=rows.filter(row=>row.state==="ready").length;
   maskViewTrace("restore_complete",cached===rows.length?"all_ready":"pending_rows");
-  if(cached===rows.length){setBusy(false);maskTaskFinish("wildcards");maskViewTrace("run_complete","cache");return}
+  if(cached===rows.length){setBusy(false);maskTaskFinish("wildcards");maskViewTrace("run_complete","cache");
+    if(switchFindState?.query){maskViewTrace("switch_lower_apply","restored_cache",null,`mode=${switchFindState.mode} filter=${switchFindState.filter}`);maskFindStart()}
+    return}
   let next=0;
   const needsBuild=rows.some(row=>row.state!=="ready"&&(!row.diskCache||row.restoreStream));
   maskViewTrace("work_start",needsBuild?"build_or_resume":"sql_pages");
@@ -7682,6 +7693,10 @@ async function maskRun(pattern,reason="submit"){
   maskBusyFinish(job);setBusy(false);maskTaskFinish("wildcards");
   maskViewTrace("run_complete",needsBuild?"build_or_resume":"sql_pages");
   if(rows.every(row=>row.state==="ready"&&row.total===0)&&maskRows===rows)maskRender();
+  if(switchFindState?.query&&generation===maskGeneration&&rows.every(row=>row.state==="ready"&&!row.partial)){
+    maskViewTrace("switch_lower_apply","base_ready",null,`mode=${switchFindState.mode} filter=${switchFindState.filter}`);
+    maskFindStart();
+  }
 }
 function maskRestoreCached(url){
   if(url.origin!==location.origin||url.pathname!=="/"||canonicalSearchMode(url.searchParams.get("mode"))!=="wildcards"||
