@@ -652,13 +652,8 @@ details.dict>summary{position:sticky;top:var(--stick);z-index:2;
      first screenshot"), since a header that arrives late is a header that
      spends that time hidden.
 
-     The size and the padding still glide (the open/closed resize on a click,
-     where nothing else is moving). */
-  transition:line-height .16s ease,padding .16s ease}
-/* Keep the dictionary title at the same size while its header stays compact
-   inside an open section. */
-details.dict[open]>summary{line-height:1.25;
-  padding-top:.25rem;padding-bottom:.25rem}
+     The header's type and height stay fixed as the section opens. */
+}
 details.dict>summary::-webkit-details-marker{display:none}
 details.dict>summary::before{content:"›";color:var(--label-quiet);
   transition:transform .18s ease;font-weight:400}
