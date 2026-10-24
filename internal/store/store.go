@@ -55,6 +55,8 @@ type Store struct {
 	db               *sql.DB
 	meta             dict.Meta
 	ftsOK            bool   // article text indexed (ingest_level != "headwords")
+	hasHeadwordFTS   bool   // optional token index for headword word/prefix search
+	articleFTSTable  string // legacy entry_fts or current article_fts
 	srcPath          string // source_path recorded at ingest ("" if unknown)
 	hasTrigram       bool   // entry_trigram present → "contains" substring search
 	staleFold        bool   // folded keys or trigram built by another dict.FoldVersion
@@ -181,6 +183,14 @@ func Open(path string) (*Store, error) {
 		Header:        headerOf(m),
 	}
 	s.ftsOK = PlanFromMeta(m).FullText
+	if stampOf(m, "ingest_version", 1) >= 6 {
+		s.articleFTSTable = "article_fts"
+	} else {
+		s.articleFTSTable = "entry_fts"
+	}
+	var headFTS int
+	db.QueryRow(`SELECT count(*) FROM sqlite_master WHERE type='table' AND name='entry_fts'`).Scan(&headFTS)
+	s.hasHeadwordFTS = headFTS > 0
 	s.hasFolded = stampOf(m, "ingest_version", 1) >= 2
 	s.hasCaseKey = stampOf(m, "ingest_version", 1) >= 3
 	var anchors int
@@ -420,6 +430,9 @@ func (s *Store) ExactContext(ctx context.Context, word string, limit int) ([]dic
 	if match == "" {
 		return nil, nil
 	}
+	if !s.hasHeadwordFTS {
+		return nil, nil
+	}
 	res, err = s.collect(s.db.QueryContext(ctx, `
 		SELECT e.w, e.m FROM entry_fts f JOIN entry e ON e.id = f.rowid
 		WHERE entry_fts MATCH ?1 ORDER BY e.w LIMIT ?2`, match, n))
@@ -523,7 +536,7 @@ func (s *Store) PrefixContext(ctx context.Context, word string, limit int) ([]di
 	// (NOCASE over entry and alias, then folded), and finally to a
 	// diacritic-insensitive prefix over the FTS `w` column, so `corazon`
 	// typed without the ó still prefix-matches `corazón…`.
-	// entry_fts always indexes `w`, even at headwords level.
+	// The optional headword FTS index adds a token-prefix fallback when present.
 	if res, err := s.ExactContext(ctx, word, limit); err != nil || len(res) > 0 {
 		return res, err
 	}
@@ -557,6 +570,12 @@ func (s *Store) headwordSearchKey(ctx context.Context, word string) (column, key
 // remove_diacritics tokenizer, ordered by headword): Prefix's last fallback
 // (FTS-audit #4).
 func (s *Store) fuzzy(ctx context.Context, word string, limit int) ([]dict.Result, error) {
+	if !s.hasHeadwordFTS {
+		if s.hasFolded {
+			return s.indexedPrefix(WithIgnoreDiacritics(ctx), word, clamp(limit))
+		}
+		return nil, nil
+	}
 	match := buildMatch(word, "w")
 	if match == "" {
 		return nil, nil
@@ -681,9 +700,9 @@ func (s *Store) FullTextMatch(ctx context.Context, match string, limit int) ([]d
 	if match == "" {
 		return nil, nil
 	}
-	return s.collect(s.db.QueryContext(ctx, `
-		SELECT e.w, e.m FROM entry_fts f JOIN entry e ON e.id = f.rowid
-		WHERE entry_fts MATCH ?1`+subEntryFilter("e.w")+`ORDER BY f.rank LIMIT ?2`, match, clamp(limit)))
+	query := `SELECT e.w, e.m FROM ` + s.articleFTSTable + ` f JOIN entry e ON e.id = f.rowid
+		WHERE ` + s.articleFTSTable + ` MATCH ?1` + subEntryFilter("e.w") + `ORDER BY f.rank LIMIT ?2`
+	return s.collect(s.db.QueryContext(ctx, query, match, clamp(limit)))
 }
 
 func (s *Store) Keywords(offset, n int) []string {

@@ -256,13 +256,17 @@ window.wudictFontScale=(function(){
 <span class="chip" id="modeChip" aria-hidden="true"></span>
 <select id="mode" aria-label="{{T:search.mode}}" disabled>
 <option value="prefix">{{T:search.prefix}}</option>
-<option value="exact">{{T:search.exact}}</option>
+<option value="suffix">{{T:search.suffix}}</option>
 <option value="contains">{{T:dictUI.contains}}</option>
-<option value="fts">{{T:dictUI.fts}}</option>
+<option value="word">{{T:search.wholeWord}}</option>
+<option value="wordLemma">{{T:search.wholeWordLemma}}</option>
+<option value="exact">{{T:search.exact}}</option>
+<option value="exactLemma">{{T:search.exactLemma}}</option>
 <option value="wildcards">{{T:search.wildcards}}</option>
+<option value="fts">{{T:dictUI.fts}}</option>
 </select>
 <button type="button" class="choice-btn themed-select-btn" id="modeMenuBtn" aria-haspopup="listbox" aria-expanded="false" aria-label="{{T:search.mode}}" disabled></button>
-<span class="choice-menu menu-card themed-select-menu" id="modeMenu" role="listbox" aria-label="{{T:search.mode}}" data-w="anchor" hidden></span>
+<span class="choice-menu menu-card themed-select-menu" id="modeMenu" role="listbox" aria-label="{{T:search.mode}}" data-w="wide" hidden></span>
 </span>
 <!-- The dictionary scope's seg is NOT here in the markup: it lives in the
      status bar while that bar is on screen and is moved back to this exact spot
@@ -3291,7 +3295,7 @@ async function loadDicts(rescan){
    Every chip keeps its mode's word: the words the mode dropdown, the
    per-dictionary switch and the result summaries all use, so a chip never
    names a mode differently from the rest of the page. */
-const MODE_SHORT={prefix:tx("search.prefixShort"),exact:tx("search.exact"),contains:tx("dictUI.contains"),fts:tx("dictUI.fts"),wildcards:tx("search.wildcards")};
+const MODE_SHORT={prefix:tx("search.prefixShort"),suffix:tx("search.suffix"),contains:tx("dictUI.contains"),word:tx("search.wholeWord"),wordLemma:tx("search.wholeWordLemma"),exact:tx("search.exact"),exactLemma:tx("search.exactLemma"),wildcards:tx("search.wildcards"),fts:tx("dictUI.fts")};
 const SEARCH_MODE_KEY="wudict_search_mode";
 const canonicalSearchMode=mode=>mode==="mask"?"wildcards":mode;
 function setSearchMode(mode){
@@ -8425,7 +8429,7 @@ document.addEventListener("keydown",e=>{
 function searchFor(term,opts){
   const t=String(term||"").trim();
   if(!t)return;
-  if($("mode").value==="fts"||$("mode").value==="wildcards")setSearchMode("prefix");
+  if(["fts","wildcards","suffix","word","wordLemma","exactLemma"].includes($("mode").value))setSearchMode("prefix");
   window.wuSearchHistory.record(t);
   window.wuSearchHistory.hide();
   $("q").value=t;                       // verbatim: no trimming, ever
@@ -10265,7 +10269,9 @@ function sheetMenuNew(anchor,menu,fill){
       const r=anchor.getBoundingClientRect();
       // A menu that speaks for a control is exactly as wide as it is.
       if(menu.dataset.w==="anchor")menu.style.width=Math.round(r.width)+"px";
-      menu.style.left=Math.round(r.left)+"px";
+      if(menu.dataset.w==="wide")menu.style.width=Math.min(416,window.innerWidth-12)+"px";
+      const width=menu.dataset.w==="wide"?menu.getBoundingClientRect().width:r.width;
+      menu.style.left=Math.round(Math.max(6,Math.min(r.left,window.innerWidth-6-width)))+"px";
       // Measured while visible and inside this same task, so nothing is ever
       // painted in between; it opens on whichever side of the anchor it fits.
       const h=menu.offsetHeight;
@@ -10329,18 +10335,36 @@ languageMenu.onkeydown=e=>{
 };
 function themedSelect(select,button,menu){
   const ctl=sheetMenuNew(button,menu,()=>{
-    menu.replaceChildren(...Array.from(select.options,option=>{
+    const nodes=[];
+    const modeDescriptions={prefix:tx("browse.findModePrefix"),suffix:tx("browse.findModeSuffix"),contains:tx("browse.findModeContains"),
+      word:tx("browse.findModeWord"),wordLemma:tx("browse.findModeWordLemma"),exact:tx("browse.findModeExact"),
+      exactLemma:tx("browse.findModeExactLemma"),wildcards:tx("browse.findModeWildcards"),fts:tx("search.fullTextDescription")};
+    for(const option of select.options){
+      if(select.id==="mode"&&["prefix","exact","fts"].includes(option.value)){
+        const heading=document.createElement("div");heading.className="headword-control-find-group-title";
+        heading.textContent=tx(option.value==="prefix"?"browse.findModesEachWord":option.value==="exact"?"browse.findModesWholeHeadword":"search.articles");
+        nodes.push(heading);
+      }
       const item=document.createElement("button");
-      item.type="button";item.className="choice-item";item.role="option";
+      item.type="button";item.className=select.id==="mode"?"headword-control-find-option":"choice-item";item.role="option";
       item.setAttribute("aria-selected",String(option.selected));
-      item.disabled=option.disabled;item.textContent=option.textContent;
+      item.disabled=option.disabled;
+      if(select.id==="mode"){
+        if(option.selected)item.classList.add("is-selected");
+        const icon=document.createElement("span");icon.className="headword-control-find-option-icon";
+        icon.textContent=({prefix:"ab→",suffix:"→ab",contains:"*ab*",word:"·ab·",wordLemma:"·ab·+",exact:"=",exactLemma:"=+",wildcards:"*?",fts:"¶"})[option.value]||"";
+        const description=document.createElement("span");description.className="headword-control-find-option-description";
+        description.textContent=modeDescriptions[option.value]||option.textContent;
+        item.append(icon,description);
+      }else item.textContent=option.textContent;
       item.onclick=()=>{
         select.value=option.value;
         ctl.hide();select.dispatchEvent(new Event("change",{bubbles:true}));
         sync();button.focus();
       };
-      return item;
-    }));
+      nodes.push(item);
+    }
+    menu.replaceChildren(...nodes);
     return !!menu.children.length;
   });
   const show=ctl.show,hide=ctl.hide;

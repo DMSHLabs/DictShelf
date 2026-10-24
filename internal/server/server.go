@@ -1747,7 +1747,24 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 	// nothing.
 	missed := make([]bool, len(entries))
 	empty := 0
-	search.StreamOpen(ctx, openers, mode, q, n, func(i int, h search.Hit) {
+	var termFor func(int, dict.Meta, string) string
+	if (mode == search.WholeWordLemma || mode == search.ExactLemma) && s.Morph.Enabled() && !strings.ContainsAny(q, " \t\r\n") {
+		termFor = func(i int, meta dict.Meta, typed string) string {
+			code := lang.Resolve(meta.IndexLang, langPath(entries[i].Path), s.reg.Dirs(), meta.Name)
+			if code == "" {
+				code = "en"
+			}
+			if !s.Morph.Supports(code) {
+				return typed
+			}
+			lemma, ok := s.Morph.Lemma(code, typed)
+			if !ok || lemma == typed {
+				return typed
+			}
+			return typed + "\x1f" + lemma
+		}
+	}
+	search.StreamOpenWithTerms(ctx, openers, mode, q, n, termFor, func(i int, h search.Hit) {
 		metas[i] = h.Meta
 		// Callbacks are serialised by StreamOpen, so this needs no lock.
 		if h.Err == nil && !h.Skipped && len(h.Results) == 0 {
@@ -1755,7 +1772,7 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 		}
 		writeLine(renderHit(i, h))
 	})
-	if empty > 0 && !search.HasMask(q) {
+	if empty > 0 && !search.HasMask(q) && mode != search.WholeWordLemma && mode != search.ExactLemma {
 		s.lemmaWave(ctx, writeLine, renderHit, entries, metas, missed, openers, mode, q, n)
 	}
 	writeLine(streamMsg{T: "end"})
