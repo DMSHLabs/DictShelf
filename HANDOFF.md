@@ -1,6 +1,6 @@
 # Agent handoff — current state
 
-Current checkout: branch `DictShelf` at merge commit `0fec8c11`, including `codex/search` (`c79732e4`). Search adds SQL-backed, paged article results and Browse find/filter caches; article results load in portions, Browse keeps bounded pages on disk, and Browse/article return preserves the originating query and dictionary. Search diagnostics cover cached result streams and replay. The article header and narrow-width paging controls were adjusted for small screens. Review found that the merge added a second LSD `ReadIcon`/version checker although DictShelf already has them in `lsd.go`; the uncommitted working tree removes that duplicate and keeps the existing reader implementation.
+Current checkout: branch `DictShelf2`; indexing pipeline from `8b3ee97e` merged. The bounded preparation pool and batched SQLite writer keep one sequential Reader and one writer per dictionary; `INDEX_WORKERS` still limits simultaneous dictionaries. Stored rows are unchanged, so schema and ingest version stay unchanged. `go test -tags sqlite_fts5 ./... -count=1` passes after the merge. Longman DOCE 5 `.lsd` indexed 54,819 entries in 3.3 s; read-only SQLite verification confirms the row count, `format=lsd`, and a nonempty `Apple` article. Test DB: `D:\Dictionaries\wuDict\Test\index-samples-2026-10-25\dictshelf2-lsd-longman5.db`.
 
 ## Product identity
 
