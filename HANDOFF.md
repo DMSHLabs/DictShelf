@@ -1,102 +1,33 @@
 # Agent handoff — current state
 
-Current checkout: branch `codex/dictionary-icon-tests`, based on `dev`.
-Embedded LSD icons are read from their bounded header data, and the async icon
-tests match the 2026-10-24 route behavior.
-`go test ./...`, `go vet ./...`, `go build ./...`, and `git diff --check` pass.
-Windows/Android icon display checks remain pending.
+Current checkout: `codex/dictionary-icon-tests` at `cbda5441`, based on `dev`.
+The working tree contains an uncommitted shared ingest-preparation pool and
+bounded SQLite batch writer. Each dictionary keeps one sequential Reader and
+one SQLite writer; prepared articles retain source IDs, redirect order and
+cancellation. `INDEX_WORKERS` still limits concurrent dictionaries. No index
+schema or ingest-version change is needed because stored rows are unchanged.
+`make check` (tidy, vet, full FTS5 test suite) passes with Windows GCC;
+targeted race tests pass three times. Tagless `go build ./...` and
+`git diff --check` pass. Tidy's unrelated go.sum deletion was restored.
+On 2026-10-25, a title-only ingest of `wiktionary_en_all_nopic_2026-08.zim`
+(9.13M source records) took 87.5 s: scan/write 68.7 s, redirect resolution
+3.2 s, headword index 3.2 s, Browse anchors 10.5 s and database optimize 1.7 s.
+The reported ~8.6M progress is in the scan/write phase, not redirect resolution.
+For comparison, upstream `master` (`887868a7`) indexed the same ZIM in 1377.7 s
+and produced a 19.75 GB database. This is not an apples-to-apples pipeline
+benchmark: upstream's ordinary ZIM Reader loads and stores article bodies,
+while this fork's explicit ZIM index contains titles only. Both generated
+databases remain under `D:\Dictionaries\wuDict\Test` because automatic file
+policy rejected deletion after the user authorized cleanup; the fork phase log
+is also retained. Windows/Android interactive checks remain unverified.
+Embedded LSD icon tests passed before this change; icon display on
+Windows/Android remains to be checked.
 
-The branch was created from clean `dev` at `a9ae9a93`; the changes described
-below were committed as `79059bd6` ("dictionary search"). Contains now builds both the
-headword token FTS and trigram indexes, while FullText builds an independent
-article FTS. `IngestVersion=6` offers existing databases for explicit rebuild;
-older databases remain readable. Browse and main headword search fall back to
-the base index when optional indexes are absent. The primary search adds
-suffix, whole-word and explicit lemma modes and shares Browse's token-prefix
-search; article full-text remains separate. Golden fingerprints for all
-format fixtures were refreshed. Focused store, server and golden tests pass;
-all inline main-page scripts parse and `git diff --check` passes. Windows/Android
-interactive search and index maintenance remain to be checked; no APK was built
-or installed.
-The Wildcards lower search in separate-dictionary mode now sends one grouped stream request for all
-dictionaries when a saved complete filter is unavailable. Go searches the shared result SQLite cache
-globally, distributes hits by dictionary ID and original position, and writes the existing per-dictionary
-300-word filter pages for navigation. Selective FTS/trigram candidates use one group plan; large
-candidate sets are materialized once before bounded reads. The combined-list path is unchanged. `go build
-./...`, inline JavaScript syntax and `git diff --check` pass. Windows/Android interaction and timing
-remain to be checked, especially cancellation, lemma modes and large result sets.
-
-Browse now receives the effective typed and lemma forms from its single-dictionary find stream and uses a
-softer theme accent for lemma-only highlights. Completed find sessions retain those forms. Build and
-browser runtime checks are pending.
-
-Wildcards separate/Combined list switches preserve the bottom query, match mode
-and Search/Filter choice, then reapply them after the target base list is ready.
-Returning to a cached view reuses its base result list. Runtime check is pending.
-
-The 2026-10-24 Windows log confirms grouped lower filtering completes in under 700 ms for 102 matches.
-Filter ribbon sections now remain available when a completed SQL result's page read errors; switching to
-Filter also selects a completed dictionary with matches. Runtime confirmation is pending.
-
-Wildcards Whole word + lemmatization and Exact + lemmatization now receive the effective query forms used
-per dictionary. Typed-form matches keep the accent highlight; lemma-only matches use the softer theme
-accent. Go build and static JS checks pass; Windows/Android visual confirmation is pending.
-
-Lemma-only Wildcards highlights use a stronger theme blend. Separate-mode lemma alternatives are
-aggregated and cached for the active group/query; the combined-list filter reuses them and returns its
-effective forms for matching highlights. Without a saved set, combined search derives forms from selected
-dictionary languages as before. Runtime verification is pending.
-
-Filter mode now explicitly requests the visible dictionary's first result page when its SQL metadata is
-ready but no page is loaded; this avoids leaving the headword pane on its loading message after a ribbon
-selection was skipped.
-
-The shared Browse/Wildcards bottom search now shows recent queries on focus. Wildcards mode has a
-separate list; all other match modes share the regular list. The lists use the main search's persisted
-history and length setting, and Clear history clears the active list. `node --check` on both history
-scripts and `git diff --check` pass; UI verification remains pending.
-
-The shared Browse/Wildcards match-mode menu now expands to all available vertical space, scrolling only
-when the complete menu cannot fit. Prefix, suffix and contains descriptions now state that the single
-query is compared with each word in a headword. Whole word and Exact now also explain what part of the
-headword they match. Section headings use `--ui-font-section`, and options use `--ui-font-addition`. JSON
-parsing, JavaScript syntax and `git diff --check` pass; visual verification remains pending.
-
-Wildcards dictionary searches now use the folded exact-key index for masks without `*` or `?`. Masks
-containing wildcards use the optional trigram index when the longest safe literal run is at least three
-characters; for example, `asd*rtyu?rgfhfb*` uses `rgfhfb`. The full mask still validates every candidate.
-Both the plan and final diagnostic record the selected path and trigram literal. `go build ./...` and
-`git diff --check` pass; runtime timing is pending.
-
-The shared headword-mode menu now moves to the document layer while open, so scrolling containers around
-the Browse and Wildcards controls cannot cover or clip it. Its fixed position follows the button on
-resize and scroll. The menu is width-limited and aligns each mode icon and its wrapping description in
-two columns. JS syntax and `git diff --check` pass; Windows/Android visual verification is pending.
-
-Browse now marks and scrolls to the current `Whole word + lemmatization` match even when the matched
-headword is the lemma and does not contain the typed form. Inline script syntax and runtime verification
-remain pending.
-
-Exact and Exact + lemmatization highlighting now checks the full folded headword against the typed query,
-instead of highlighting every headword with letters. A selected lemma match remains marked as the current
-match.
-
-Wildcards now shows the number of dictionaries with matches beside the result total in separate mode.
-Switching a completed separate result to Combined list builds its sorted, deduplicated SQLite list from
-the saved result blocks instead of scanning all dictionary indexes. The existing combined list path is
-retained for a search started directly in that mode. `go build ./internal/server` passes; that direct
-path has no per-dictionary match count until a separate result is available. Windows/Android runtime
-checks remain pending.
-
-Browse and the Wildcards lower search share an eight-mode headword picker: prefix, suffix, contains,
-Whole word, Whole word + lemmatization, Exact, Exact + lemmatization, and wildcards. Whole word +
-lemmatization includes the typed form and its lemma; Exact + lemmatization matches both the typed
-headword and its lemma as exact headwords. Prefix, suffix, contains and both Whole word modes accept one
-word; paste keeps the first whitespace-delimited word without changing modes. The menu explains lemma
-search. Cache identities were advanced to avoid reusing results from the previous lemma fallback
-behavior. `go build ./...`, JS syntax, translation JSON parsing and `git diff --check` pass; UI
-verification on Windows and Android is pending.
-
+Recent search work adds separate Contains/FullText indexes, the eight headword
+modes, and cached Browse/Wildcards results. Grouped lower Wildcards filtering
+searches the shared SQLite cache. Lemma-only matches have distinct highlighting,
+and the query and view survive separate/Combined switching. Windows/Android
+interaction checks remain, especially cancellation and large result sets.
 Wildcards lower-search diagnostics now include the typed term, expanded lemma alternatives, match mode,
 selected index query, candidate count and whether the SQL result used indexed candidates or scanned
 cached blocks. Combined-list filter diagnostics log the same query and candidate plan. Build verification
@@ -415,3 +346,14 @@ prepared dictionaries and confirm indexes are reused after copying `Data`. Check
 picker on Android.
 
 ## Server-removal estimate The workspace-dialog refactor in [`docs/DIALOG-REFACTOR.md`](docs/DIALOG-REFACTOR.md) is confirmed on Windows; Android/browser checks and unused iframe-route removal remain. The earlier estimate was 89–91% complete, with regression checks the largest remaining stage. Windows startup without a listener, direct page navigation and `/res/` media delivery are confirmed; remaining Windows screens, assets/styles, browser and Android HTTP paths still need verification.
+
+## ZIM full-ingest timing (2026-10-25) Same source `wiktionary_en_all_nopic_2026-08.zim`
+(9.16 GB; 9,087,944 usable entries), same Windows host and `Plan{}` headword-only search settings.
+Upstream master `887868a7` ingested article bodies in 1,377.7 s and produced a 19,754,504,192-byte
+DB. Fork full-reader path (direct `dict.OpenReader` + `IngestPlanContext`, bypassing CLI's ZIM
+title-only optimization) took 1,478.7 s and produced 20,291,035,136 bytes: about 7.3% slower and
+2.7% larger. Fork's scan+redirects took 1,430.4 s; headword index 14 s; browse anchors 32 s;
+commit/optimize/save ~2 s. This is closer to full-vs-full than the fork CLI's title-only run
+(87.5 s, 1,006,718,976 bytes), but reader implementations differ by revision, so it is not a
+strict isolated measurement of the new indexing pipeline. Benchmark DBs/logs remain under
+`D:\Dictionaries\wuDict\Test\{index,master-index,fork-full}-timing-2026-10-25`.
