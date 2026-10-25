@@ -39,7 +39,6 @@ extern char *WudictGoBridgeSavePrefs(char *body);
 extern char *WudictGoBridgeSaveLanguage(char *body);
 extern char *WudictGoBridgeSystemLogSnapshot(void);
 extern int WudictGoBridgeSystemLogOptions(int enabled, int baseEvents, int webEvents);
-extern int WudictGoBridgeIndexWorkers(int workers);
 extern char *WudictGoBridgeWebResource(char *rawURL, char *headers);
 extern char *WudictGoBridgeMediaOpen(char *rawURL, char *headers);
 extern int WudictGoBridgeMediaRead(long long handle, char *dst, int size);
@@ -657,13 +656,6 @@ Java_com_dmshlabs_dictshelf_GoBridge_nativeSystemLogOptions(JNIEnv *env, jclass 
     (void)env;
     (void)owner;
     return (jint)WudictGoBridgeSystemLogOptions(enabled, baseEvents, webEvents);
-}
-
-JNIEXPORT jint JNICALL
-Java_com_dmshlabs_dictshelf_GoBridge_nativeIndexWorkers(JNIEnv *env, jclass owner, jint workers) {
-    (void)env;
-    (void)owner;
-    return (jint)WudictGoBridgeIndexWorkers(workers);
 }
 
 JNIEXPORT jstring JNICALL

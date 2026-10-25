@@ -201,9 +201,35 @@ func hashVocab(s *Store, table string, field func(string)) error {
 		return err
 	}
 	vocab := "temp.wudict_vocab_" + table
+	vocabMode := "instance"
+	if table == "entry_trigram" {
+		// detail=none omits token positions; the row vocabulary exposes the
+		// available logical terms and documents without NULL col/offset fields.
+		vocabMode = "row"
+	}
 	if _, err := conn.ExecContext(ctx, fmt.Sprintf(
-		"CREATE VIRTUAL TABLE IF NOT EXISTS %s USING fts5vocab(main, %s, instance)", vocab, table)); err != nil {
+		"CREATE VIRTUAL TABLE IF NOT EXISTS %s USING fts5vocab(main, %s, %s)", vocab, table, vocabMode)); err != nil {
 		return err
+	}
+	if table == "entry_trigram" {
+		// detail=none does not expose per-token positions or counts.
+		rows, err := conn.QueryContext(ctx, fmt.Sprintf(
+			"SELECT term, doc, COALESCE(cnt, 0) FROM %s ORDER BY term", vocab))
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var term string
+			var doc, count int64
+			if err := rows.Scan(&term, &doc, &count); err != nil {
+				return err
+			}
+			field(term)
+			field(fmt.Sprint(doc))
+			field(fmt.Sprint(count))
+		}
+		return rows.Err()
 	}
 	rows, err := conn.QueryContext(ctx, fmt.Sprintf(
 		"SELECT term, doc, col, offset FROM %s ORDER BY term, doc, col, offset", vocab))

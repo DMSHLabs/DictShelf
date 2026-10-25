@@ -857,18 +857,8 @@ final class Shell {
                                 String value = request.isNull("value") ? null
                                         : request.optString("value", "");
                                 ShellPrefs.setOverrideChecked(a, o, value);
-                                if ("INDEX_WORKERS".equals(o.key)) {
-                                    int workers = value == null ? 1
-                                            : "auto".equalsIgnoreCase(value)
-                                                    ? Math.max(1, ShellPrefs.availableCpuCores() - 1)
-                                                    : Integer.parseInt(value);
-                                    GoBridge.configureIndexWorkers(workers);
-                                }
                             } else throw new IllegalArgumentException("Unknown field");
                         } else if ("restore".equals(action)) {
-                            if (!GoBridge.restoreIndexWorkersIfRunning()) {
-                                throw new IllegalStateException("Go runtime is unavailable");
-                            }
                             ShellPrefs.clearOverrides(a);
                         } else if ("clearCache".equals(action)) {
                             clearWebCache(a);

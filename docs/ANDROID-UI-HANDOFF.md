@@ -4,6 +4,11 @@ This document covers UI behavior. For the current wuDict2 Android identity,
 server startup, build commands, and coexistence checks, see
 [ANDROID-FORK.md](ANDROID-FORK.md).
 
+Current indexing concurrency is calculated from logical processors. The old
+`INDEX_WORKERS` Android override and its System row are removed; dated notes
+below describing that control are historical. Android Java compilation and
+arm64 Go bridge build pass; visual/runtime checks for this removal remain.
+
 **Current DSL architecture:** native DSL uses one reader and one prepared
 index, with GoldenDict-compatible repairs enabled in the application path.
 There is no parser selector, duplicate GD dictionary, or separate GD index.

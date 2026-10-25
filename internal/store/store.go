@@ -605,10 +605,10 @@ func (s *Store) ContainsContext(ctx context.Context, word string, limit int) ([]
 	n := clamp(limit)
 	if !s.hasCaseKey {
 		if len([]rune(folded)) >= 3 {
-			phrase := `"` + strings.ReplaceAll(folded, `"`, `""`) + `"`
+			match := trigramMatch(folded)
 			res, err := s.collect(s.db.QueryContext(ctx, `
 				SELECT e.w, e.m FROM entry_trigram t JOIN entry e ON e.id = t.rowid
-				WHERE entry_trigram MATCH ?1`+subEntryFilter("e.w")+`ORDER BY e.w LIMIT ?2`, phrase, n))
+				WHERE entry_trigram MATCH ?1 AND instr(e.wf, ?2) > 0`+subEntryFilter("e.w")+`ORDER BY e.w LIMIT ?3`, match, folded, n))
 			if err != nil || len(res) > 0 {
 				return res, err
 			}
@@ -618,11 +618,11 @@ func (s *Store) ContainsContext(ctx context.Context, word string, limit int) ([]
 	}
 	column, key := s.headwordSearchKey(ctx, word)
 	if len([]rune(folded)) >= 3 {
-		phrase := `"` + strings.ReplaceAll(folded, `"`, `""`) + `"`
+		match := trigramMatch(folded)
 		query := strings.ReplaceAll(`
 			SELECT e.w, e.m FROM entry_trigram t JOIN entry e ON e.id = t.rowid
 			WHERE entry_trigram MATCH ?1 AND instr(e.@KEY@, ?2) > 0`+subEntryFilter("e.w")+`ORDER BY e.w LIMIT ?3`, "@KEY@", column)
-		return s.collect(s.db.QueryContext(ctx, query, phrase, key, n))
+		return s.collect(s.db.QueryContext(ctx, query, match, key, n))
 	}
 	// Short queries have no usable trigrams and scan the selected key.
 	query := strings.ReplaceAll(`SELECT e.w, e.m FROM entry e WHERE instr(e.@KEY@, ?1) > 0`+

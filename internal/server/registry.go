@@ -16,6 +16,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"runtime/debug"
 	"slices"
 	"sort"
@@ -29,6 +30,7 @@ import (
 	zimformat "github.com/wuweidict/wudict/internal/format/zim"
 	"github.com/wuweidict/wudict/internal/fsx"
 	"github.com/wuweidict/wudict/internal/htmlref"
+	"github.com/wuweidict/wudict/internal/indexconst"
 	"github.com/wuweidict/wudict/internal/logx"
 	"github.com/wuweidict/wudict/internal/resource"
 	"github.com/wuweidict/wudict/internal/store"
@@ -373,34 +375,16 @@ func (u *upgraded) Close() error {
 }
 
 // Every operation that prepares or changes a dictionary index shares one
-// limiter. Per-entry ingestMu keeps operations for the same dictionary in
-// sequence; this limiter lets INDEX_WORKERS dictionaries run at once.
-var (
-	indexLimitMu sync.RWMutex
-	indexLimit   = make(chan struct{}, 1)
-)
+// limiter sized from the machine's logical processors. Per-entry ingestMu
+// keeps operations for the same dictionary in sequence.
+var indexLimit = make(chan struct{}, indexconst.IndexDictionaryLimit(runtime.NumCPU()))
 
 func currentIndexLimit() chan struct{} {
-	indexLimitMu.RLock()
-	defer indexLimitMu.RUnlock()
 	return indexLimit
 }
 
-// SetIndexWorkers sizes the background indexing limiter (config INDEX_WORKERS).
-func SetIndexWorkers(n int) {
-	if n < 1 {
-		n = 1
-	}
-	indexLimitMu.Lock()
-	indexLimit = make(chan struct{}, n)
-	indexLimitMu.Unlock()
-}
-
 // acquire blocks until a slot of sem is free and returns what frees it. The
-// release is bound to the channel the slot was taken from, never re-read from
-// the variable: SetIndexWorkers replaces indexLimit, and a slot handed back to
-// a lane it did not come from takes another holder's slot, whose own release
-// then waits forever.
+// release is bound to the channel the slot was taken from.
 func acquire(sem chan struct{}) (release func()) {
 	sem <- struct{}{}
 	return func() { <-sem }
@@ -2199,7 +2183,7 @@ func (e *entry) reopen() error {
 		// preparing is the memory high-water mark; the close hands the pages
 		// back rather than sitting on them until the next natural GC -
 		// coalesced with any other close landing at the same moment, since
-		// INDEX_WORKERS>1 makes that the normal case
+		// concurrent dictionary preparation makes that the normal case
 		e.retired.retire(old)
 	}
 	return nil

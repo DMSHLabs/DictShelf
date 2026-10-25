@@ -12,15 +12,19 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
+	"time"
 
 	"github.com/wuweidict/wudict/internal/dict"
+	"github.com/wuweidict/wudict/internal/indexconst"
+	"github.com/wuweidict/wudict/internal/sysmem"
 )
 
 const (
-	ingestQueueEntries         = 16
-	ingestQueueBytes           = 64 << 20
-	ingestMinWeight            = 16 << 10
-	ingestWorkersPerDictionary = 8
+	ingestQueueEntries = 16
+	ingestMinWeight    = 16 << 10
+	ingestWorkEntries  = 256
+	ingestWorkBytes    = 4 << 20
 )
 
 type ingestAlias struct {
@@ -28,7 +32,6 @@ type ingestAlias struct {
 }
 
 type preparedIngestEntry struct {
-	sequence, weight                 int64
 	headword, folded, caseKey, lower string
 	body                             []byte
 	text                             string
@@ -40,16 +43,22 @@ type preparedIngestEntry struct {
 
 type ingestWork struct {
 	sequence, weight int64
-	entry            dict.Entry
+	entries          []dict.Entry
 	plan             Plan
 	ctx              context.Context
 }
 
+type preparedIngestBatch struct {
+	sequence, weight int64
+	entries          []preparedIngestEntry
+}
+
 type ingestSession struct {
+	mu                    sync.Mutex
 	ctx                   context.Context
 	cancel                context.CancelFunc
 	queue                 []*ingestWork
-	results               chan preparedIngestEntry
+	results               chan preparedIngestBatch
 	changed               chan struct{}
 	outstanding, inFlight int
 	active                bool
@@ -58,64 +67,93 @@ type ingestSession struct {
 // The pool owns only CPU preparation. Each session keeps its own source reader
 // and SQLite writer. Workers select dictionary queues in round-robin order.
 type ingestPool struct {
-	mu               sync.Mutex
-	sessions         []*ingestSession
-	cursor           int
-	running, workers int
-	usedBytes        int64
-	changed          chan struct{}
-	started          bool
+	registryMu  sync.Mutex                       // begins and ends publish immutable session snapshots
+	sessions    atomic.Pointer[[]*ingestSession] // readers never hold the registry lock
+	cursor      atomic.Uint64
+	running     atomic.Int32
+	workers     atomic.Int32
+	wakeMu      sync.Mutex
+	wake        chan struct{}
+	usedBytes   atomic.Int64
+	memCapacity atomic.Int64
 }
 
-var sharedIngestPool ingestPool
+var sharedIngestPool = ingestPool{wake: make(chan struct{})}
 
 func (p *ingestPool) begin(parent context.Context) *ingestSession {
 	ctx, cancel := context.WithCancel(parent)
 	s := &ingestSession{
 		ctx: ctx, cancel: cancel, active: true,
-		results: make(chan preparedIngestEntry, ingestQueueEntries),
+		results: make(chan preparedIngestBatch, ingestQueueEntries),
 		changed: make(chan struct{}),
 	}
-	p.mu.Lock()
-	if !p.started {
-		p.changed = make(chan struct{})
-		p.started = true
-	}
-	wanted := min(8, max(0, runtime.GOMAXPROCS(0)-1))
-	for p.workers < wanted {
-		p.workers++
+	budget := sysmem.Budget()
+	p.memCapacity.Store(budget)
+	p.registryMu.Lock()
+	// Spawn for the machine, even if Android is backgrounded at start. The
+	// active limit below follows GOMAXPROCS when the app returns to foreground.
+	wanted := indexconst.IngestWorkerLimit(runtime.NumCPU(), 1)
+	for int(p.workers.Load()) < wanted {
+		p.workers.Add(1)
 		go p.worker()
 	}
-	p.sessions = append(p.sessions, s)
-	p.signalLocked(s)
-	p.mu.Unlock()
+	current := p.sessions.Load()
+	var next []*ingestSession
+	if current != nil {
+		next = append(next, (*current)...)
+	}
+	next = append(next, s)
+	p.sessions.Store(&next)
+	p.registryMu.Unlock()
+	p.signalWorkers()
 	return s
 }
 
 func (p *ingestPool) submit(s *ingestSession, item *ingestWork) error {
 	for {
-		p.mu.Lock()
+		s.mu.Lock()
 		if err := s.ctx.Err(); err != nil {
-			p.mu.Unlock()
+			s.mu.Unlock()
 			return err
 		}
-		// One article larger than the budget may run alone. Otherwise both
-		// the dictionary queue and the shared working set remain bounded.
-		fits := p.usedBytes == 0 || item.weight <= ingestQueueBytes-p.usedBytes
-		if s.outstanding < ingestQueueEntries && fits {
+		// One oversized batch may run alone; all other reservations fit the
+		// process-wide budget measured when preparation begins.
+		if s.outstanding < ingestQueueEntries && p.reserve(item.weight) {
 			s.queue = append(s.queue, item)
 			s.outstanding++
-			p.usedBytes += item.weight
-			p.signalLocked(s)
-			p.mu.Unlock()
+			p.signalSessionLocked(s)
+			s.mu.Unlock()
+			p.signalWorkers()
 			return nil
 		}
-		changed := p.changed
-		p.mu.Unlock()
-		select {
-		case <-s.ctx.Done():
-			return s.ctx.Err()
-		case <-changed:
+		queueChanged := s.changed
+		queueFull := s.outstanding >= ingestQueueEntries
+		s.mu.Unlock()
+		if queueFull {
+			select {
+			case <-s.ctx.Done():
+				return s.ctx.Err()
+			case <-queueChanged:
+			}
+		} else {
+			select {
+			case <-s.ctx.Done():
+				return s.ctx.Err()
+			case <-time.After(2 * time.Millisecond):
+			}
+		}
+	}
+}
+
+func (p *ingestPool) reserve(weight int64) bool {
+	// Reserving a whole batch by CAS keeps other dictionary queues independent.
+	for {
+		used := p.usedBytes.Load()
+		if used != 0 && weight > p.memCapacity.Load()-used {
+			return false
+		}
+		if p.usedBytes.CompareAndSwap(used, used+weight) {
+			return true
 		}
 	}
 }
@@ -123,12 +161,12 @@ func (p *ingestPool) submit(s *ingestSession, item *ingestWork) error {
 func (p *ingestPool) worker() {
 	for {
 		s, item := p.next()
-		result := prepareIngestEntry(item)
-		p.mu.Lock()
+		result := prepareIngestBatch(item)
+		s.mu.Lock()
 		s.inFlight--
-		p.running--
-		p.signalLocked(s)
-		p.mu.Unlock()
+		s.mu.Unlock()
+		p.running.Add(-1)
+		p.signalWorkers()
 		// At most ingestQueueEntries results can be outstanding per session.
 		s.results <- result
 	}
@@ -136,125 +174,183 @@ func (p *ingestPool) worker() {
 
 func (p *ingestPool) next() (*ingestSession, *ingestWork) {
 	for {
-		p.mu.Lock()
-		if p.running < p.workerLimitLocked() {
-			for offset := 0; offset < len(p.sessions); offset++ {
-				index := (p.cursor + offset) % len(p.sessions)
-				s := p.sessions[index]
-				if len(s.queue) == 0 || s.inFlight >= ingestWorkersPerDictionary {
+		wake := p.workerWake()
+		sessions := p.sessions.Load()
+		contended := false
+		if sessions != nil && len(*sessions) > 0 && p.reserveWorker(len(*sessions)) {
+			start := int(p.cursor.Add(1)-1) % len(*sessions)
+			for offset := 0; offset < len(*sessions); offset++ {
+				index := (start + offset) % len(*sessions)
+				s := (*sessions)[index]
+				if !s.mu.TryLock() {
+					contended = true
+					continue
+				}
+				if len(s.queue) == 0 {
+					s.mu.Unlock()
 					continue
 				}
 				item := s.queue[0]
 				s.queue[0] = nil
 				s.queue = s.queue[1:]
 				s.inFlight++
-				p.running++
-				p.cursor = (index + 1) % len(p.sessions)
-				p.signalLocked(s)
-				p.mu.Unlock()
+				s.mu.Unlock()
 				return s, item
 			}
+			p.running.Add(-1)
 		}
-		changed := p.changed
-		p.mu.Unlock()
-		<-changed
+		if contended {
+			select {
+			case <-wake:
+			case <-time.After(time.Millisecond):
+			}
+		} else {
+			<-wake
+		}
 	}
 }
 
-// Existing INDEX_WORKERS controls how many dictionaries index concurrently.
-// Reserve a reader and writer lane for each active ingest before adding CPU
-// workers; a saturated pool lets the writer prepare its own queued entries.
-func (p *ingestPool) workerLimitLocked() int {
-	return min(p.workers, max(0, runtime.GOMAXPROCS(0)-2*len(p.sessions)))
+func (p *ingestPool) reserveWorker(sessions int) bool {
+	limit := p.workerLimit(sessions)
+	for {
+		running := p.running.Load()
+		if int(running) >= limit {
+			return false
+		}
+		if p.running.CompareAndSwap(running, running+1) {
+			return true
+		}
+	}
+}
+
+// Reserve one logical processor for the rest of the app and a reader and
+// writer lane for each active ingest. The remaining processors are shared.
+func (p *ingestPool) workerLimit(sessions int) int {
+	logical := min(runtime.NumCPU(), runtime.GOMAXPROCS(0))
+	return min(int(p.workers.Load()), indexconst.IngestWorkerLimit(logical, sessions))
 }
 
 func (p *ingestPool) takeInline(s *ingestSession) *ingestWork {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	if len(s.queue) == 0 || p.running < p.workerLimitLocked() && s.inFlight < ingestWorkersPerDictionary {
+	sessions := p.sessions.Load()
+	processorsAvailable := sessions != nil && int(p.running.Load()) < p.workerLimit(len(*sessions))
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(s.queue) == 0 || processorsAvailable {
 		return nil
 	}
 	item := s.queue[0]
 	s.queue[0] = nil
 	s.queue = s.queue[1:]
-	p.signalLocked(s)
 	return item
 }
 
-func (p *ingestPool) release(s *ingestSession, result preparedIngestEntry) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	if s.outstanding == 0 || result.weight > p.usedBytes {
+func (p *ingestPool) takeReadyOrInline(s *ingestSession) (preparedIngestBatch, bool) {
+	// A ready batch keeps the SQLite writer writing. Inline preparation is
+	// needed only when the shared processors cannot take more queued work.
+	select {
+	case result := <-s.results:
+		return result, true
+	default:
+	}
+	if item := p.takeInline(s); item != nil {
+		return prepareIngestBatch(item), true
+	}
+	return preparedIngestBatch{}, false
+}
+
+func (p *ingestPool) release(s *ingestSession, result preparedIngestBatch) {
+	s.mu.Lock()
+	if s.outstanding == 0 {
 		panic("store: invalid ingest reservation")
 	}
 	s.outstanding--
-	p.usedBytes -= result.weight
-	p.signalLocked(s)
+	p.signalSessionLocked(s)
+	s.mu.Unlock()
+	if p.usedBytes.Add(-result.weight) < 0 {
+		panic("store: invalid ingest reservation weight")
+	}
+	p.signalWorkers()
 }
 
 func (p *ingestPool) state(s *ingestSession) (int, <-chan struct{}) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	return s.outstanding, s.changed
 }
 
 func (p *ingestPool) abortQueued(s *ingestSession) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
+	s.mu.Lock()
+	var released int64
 	for _, item := range s.queue {
-		p.usedBytes -= item.weight
+		released += item.weight
 		s.outstanding--
 	}
 	s.queue = nil
-	p.signalLocked(s)
+	p.signalSessionLocked(s)
+	s.mu.Unlock()
+	if p.usedBytes.Add(-released) < 0 {
+		panic("store: invalid queued ingest reservation")
+	}
 }
 
 func (p *ingestPool) end(s *ingestSession) {
 	s.cancel()
-	p.mu.Lock()
-	defer p.mu.Unlock()
+	s.mu.Lock()
 	if s.outstanding != 0 || s.inFlight != 0 || len(s.queue) != 0 {
 		panic("store: ingest session still owns work")
 	}
 	s.active = false
-	for i, existing := range p.sessions {
+	s.mu.Unlock()
+	p.registryMu.Lock()
+	defer p.registryMu.Unlock()
+	current := p.sessions.Load()
+	next := make([]*ingestSession, 0, len(*current)-1)
+	for _, existing := range *current {
 		if existing != s {
-			continue
+			next = append(next, existing)
 		}
-		p.sessions = append(p.sessions[:i], p.sessions[i+1:]...)
-		if len(p.sessions) == 0 {
-			p.cursor = 0
-		} else if i < p.cursor {
-			p.cursor--
-		} else if p.cursor >= len(p.sessions) {
-			p.cursor = 0
-		}
-		break
 	}
-	p.signalLocked(nil)
+	p.sessions.Store(&next)
+	p.signalWorkers()
 }
 
-func (p *ingestPool) signalLocked(s *ingestSession) {
-	close(p.changed)
-	p.changed = make(chan struct{})
-	if s != nil {
-		close(s.changed)
-		s.changed = make(chan struct{})
-	}
+func (p *ingestPool) signalSessionLocked(s *ingestSession) {
+	close(s.changed)
+	s.changed = make(chan struct{})
 }
 
-func prepareIngestEntry(item *ingestWork) (result preparedIngestEntry) {
-	result.sequence, result.weight = item.sequence, item.weight
+func (p *ingestPool) signalWorkers() {
+	p.wakeMu.Lock()
+	close(p.wake)
+	p.wake = make(chan struct{})
+	p.wakeMu.Unlock()
+}
+
+func (p *ingestPool) workerWake() <-chan struct{} {
+	p.wakeMu.Lock()
+	wake := p.wake
+	p.wakeMu.Unlock()
+	return wake
+}
+
+func prepareIngestBatch(item *ingestWork) preparedIngestBatch {
+	result := preparedIngestBatch{sequence: item.sequence, weight: item.weight, entries: make([]preparedIngestEntry, 0, len(item.entries))}
+	for _, entry := range item.entries {
+		result.entries = append(result.entries, prepareIngestEntry(entry, item.plan, item.ctx))
+	}
+	return result
+}
+
+func prepareIngestEntry(e dict.Entry, plan Plan, ctx context.Context) (result preparedIngestEntry) {
 	defer func() {
 		if value := recover(); value != nil {
 			result.panicValue = value
 		}
 	}()
-	if err := item.ctx.Err(); err != nil {
+	if err := ctx.Err(); err != nil {
 		result.err = err
 		return result
 	}
-	e := item.entry
 	result.headword = strings.TrimSpace(e.Headwords[0])
 	body, err := NormalizeBody(e)
 	if err != nil {
@@ -265,7 +361,7 @@ func prepareIngestEntry(item *ingestWork) (result preparedIngestEntry) {
 	result.caseKey = dict.CaseKey(result.headword)
 	result.lower = strings.ToLower(result.headword)
 	result.body = encodeBody(body)
-	if item.plan.FullText {
+	if plan.FullText {
 		result.text = StripHTML(body)
 	}
 	result.subEntry = isSubEntry(result.headword)
@@ -315,6 +411,20 @@ func readIngestEntries(s *ingestSession, r dict.Reader, plan Plan, redirects cha
 		done <- outcome
 	}()
 	var sequence int64
+	var entries []dict.Entry
+	var weight, sourceBytes int64
+	submit := func() error {
+		if len(entries) == 0 {
+			return nil
+		}
+		item := &ingestWork{sequence: sequence - int64(len(entries)) + 1, weight: weight, entries: entries, plan: plan, ctx: s.ctx}
+		if err := sharedIngestPool.submit(s, item); err != nil {
+			return err
+		}
+		entries = nil
+		weight, sourceBytes = 0, 0
+		return nil
+	}
 	for {
 		if err := s.ctx.Err(); err != nil {
 			outcome.err = err
@@ -322,6 +432,7 @@ func readIngestEntries(s *ingestSession, r dict.Reader, plan Plan, redirects cha
 		}
 		e, err := r.Next()
 		if errors.Is(err, io.EOF) {
+			outcome.err = submit()
 			return
 		}
 		if err != nil {
@@ -355,11 +466,26 @@ func readIngestEntries(s *ingestSession, r dict.Reader, plan Plan, redirects cha
 		for i := range e.Headwords {
 			e.Headwords[i] = strings.Clone(e.Headwords[i])
 		}
+		if len(entries) == ingestWorkEntries || len(entries) > 0 && int64(len(e.Body)) > ingestWorkBytes-sourceBytes {
+			if err := submit(); err != nil {
+				outcome.err = err
+				return
+			}
+		}
 		sequence++
-		item := &ingestWork{sequence: sequence, weight: ingestWeight(e, plan), entry: e, plan: plan, ctx: s.ctx}
-		if err := sharedIngestPool.submit(s, item); err != nil {
-			outcome.err = err
-			return
+		entries = append(entries, e)
+		entryWeight := ingestWeight(e, plan)
+		if entryWeight > math.MaxInt64-weight {
+			weight = math.MaxInt64
+		} else {
+			weight += entryWeight
+		}
+		sourceBytes += int64(len(e.Body))
+		if len(entries) == ingestWorkEntries || sourceBytes >= ingestWorkBytes {
+			if err := submit(); err != nil {
+				outcome.err = err
+				return
+			}
 		}
 	}
 }
@@ -371,7 +497,7 @@ func scanIngestEntries(ctx context.Context, r dict.Reader, plan Plan, total int,
 	redirects := make(chan ingestRedirect, ingestQueueEntries)
 	done := make(chan ingestReaderResult, 1)
 	go readIngestEntries(s, r, plan, redirects, done)
-	pending := make(map[int64]preparedIngestEntry)
+	pending := make(map[int64]preparedIngestBatch)
 	readerDone := false
 	defer func() {
 		s.cancel()
@@ -403,15 +529,10 @@ func scanIngestEntries(ctx context.Context, r dict.Reader, plan Plan, total int,
 		if err := ctx.Err(); err != nil {
 			return id, subEntries, linkCount, err
 		}
-		var result preparedIngestEntry
-		gotResult := false
-		if item := sharedIngestPool.takeInline(s); item != nil {
-			result = prepareIngestEntry(item)
-			gotResult = true
-		} else {
+		result, ready := sharedIngestPool.takeReadyOrInline(s)
+		if !ready {
 			select {
 			case result = <-s.results:
-				gotResult = true
 			case redirect, ok := <-redirects:
 				if !ok {
 					redirects = nil
@@ -438,37 +559,36 @@ func scanIngestEntries(ctx context.Context, r dict.Reader, plan Plan, total int,
 				return id, subEntries, linkCount, ctx.Err()
 			}
 		}
-		if !gotResult {
-			continue
-		}
 		pending[result.sequence] = result
 		for {
 			ready, ok := pending[next]
 			if !ok {
 				break
 			}
-			if ready.panicValue != nil {
-				panic(ready.panicValue)
-			}
-			if ready.err != nil {
-				return id, subEntries, linkCount, ready.err
-			}
-			if err := rows.write(next, ready); err != nil {
-				return id, subEntries, linkCount, err
-			}
-			id = next
-			if ready.subEntry {
-				subEntries++
-			}
-			delete(pending, next)
-			sharedIngestPool.release(s, ready)
-			if progress != nil && id%batchSize == 0 {
-				if err := rows.flush(); err != nil {
+			for _, entry := range ready.entries {
+				if entry.panicValue != nil {
+					panic(entry.panicValue)
+				}
+				if entry.err != nil {
+					return id, subEntries, linkCount, entry.err
+				}
+				if err := rows.write(next, entry); err != nil {
 					return id, subEntries, linkCount, err
 				}
-				progress(clampDone(int(id), total), total)
+				id = next
+				if entry.subEntry {
+					subEntries++
+				}
+				if progress != nil && id%batchSize == 0 {
+					if err := rows.flush(); err != nil {
+						return id, subEntries, linkCount, err
+					}
+					progress(clampDone(int(id), total), total)
+				}
+				next++
 			}
-			next++
+			delete(pending, ready.sequence)
+			sharedIngestPool.release(s, ready)
 		}
 	}
 }

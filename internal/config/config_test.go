@@ -7,7 +7,6 @@ package config
 import (
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 )
@@ -370,16 +369,7 @@ func TestImportKeepValues(t *testing.T) {
 	}
 }
 
-func TestParseWorkersAndSize(t *testing.T) {
-	cpu := runtime.NumCPU()
-	for in, want := range map[string]int{
-		"1": 1, "2": 2, "auto": max(1, cpu-1), "all": cpu, "max": cpu, "0": cpu, "-1": cpu,
-		"": 1, "nonsense": 1, "99999": cpu,
-	} {
-		if got := ParseWorkers(in); got != want {
-			t.Errorf("ParseWorkers(%q) = %d, want %d", in, got, want)
-		}
-	}
+func TestParseSize(t *testing.T) {
 	for in, want := range map[string]int64{
 		"4GB": 4 << 30, "512M": 512 << 20, "1500MB": 1500 << 20, "2048": 2048,
 		"1.5GB": int64(1.5 * float64(int64(1)<<30)), "0": 0, "off": 0, "": 0, "junk": 0,
@@ -388,29 +378,23 @@ func TestParseWorkersAndSize(t *testing.T) {
 			t.Errorf("ParseSize(%q) = %d, want %d", in, got, want)
 		}
 	}
-	// default is one dictionary at a time: background work must not take the machine
-	cfg, err := Load(filepath.Join(t.TempDir(), "none.toml"), nil)
-	if err == nil && cfg.IndexWorkers != 1 {
-		t.Errorf("default INDEX_WORKERS = %d, want 1", cfg.IndexWorkers)
-	}
-	if err == nil && cfg.IndexWorkersValue != "1" {
-		t.Errorf("default INDEX_WORKERS value = %q, want 1", cfg.IndexWorkersValue)
-	}
+}
 
-	t.Run("auto selection is retained separately from its resolved count", func(t *testing.T) {
-		path := filepath.Join(t.TempDir(), Name)
-		if err := os.WriteFile(path, []byte("INDEX_WORKERS = \"auto\"\n"), 0o600); err != nil {
-			t.Fatal(err)
-		}
-		got, err := Load(path, nil)
-		if err != nil {
-			t.Fatal(err)
-		}
-		want := max(1, runtime.NumCPU()-1)
-		if got.IndexWorkers != want || got.IndexWorkersValue != "auto" {
-			t.Errorf("INDEX_WORKERS = %d (%q), want %d (auto)", got.IndexWorkers, got.IndexWorkersValue, want)
-		}
-	})
+func TestLegacyIndexWorkersIgnored(t *testing.T) {
+	path := filepath.Join(t.TempDir(), Name)
+	if err := os.WriteFile(path, []byte("INDEX_WORKERS = \"auto\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(path, map[string]string{"INDEX_WORKERS": "1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.Problems) != 0 {
+		t.Fatalf("obsolete setting reported as a config problem: %v", cfg.Problems)
+	}
+	if _, ok := cfg.Effective()["INDEX_WORKERS"]; ok {
+		t.Fatal("obsolete setting is still exposed as an effective runtime control")
+	}
 }
 
 // isolate points the three search anchors at empty temporary directories, so a
@@ -556,7 +540,6 @@ func TestEffective(t *testing.T) {
 		t.Fatalf("Effective() has %d keys, want %d", len(eff), len(Tunables))
 	}
 	for _, tc := range []struct{ key, value, origin string }{
-		{"INDEX_WORKERS", "1", OriginFile},
 		{"SERVER_PORT", "7000", OriginFlag},
 		{"SERVER_IP", cfg.IP, OriginDefault},
 	} {

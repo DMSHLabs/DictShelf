@@ -80,10 +80,10 @@ In the browser's network panel, find the failing request to
 
 ## The CPU is busy indexing dictionaries
 
-wudict indexes new dictionaries in the background. Indexing one dictionary
-uses one CPU core. [`INDEX_WORKERS`](../reference/configuration.md#index_workers)
-sets how many dictionaries can be indexed at once. Search does not start an
-index job.
+wudict indexes new dictionaries in the background. The number of concurrent
+dictionaries is calculated from the machine's logical processors, leaving one
+processor for other work when possible and sharing preparation workers across dictionaries.
+Search does not start an index job.
 
 ## Some dictionaries are reported as not searched
 

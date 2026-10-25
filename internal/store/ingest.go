@@ -155,7 +155,7 @@ func IngestPlanContext(ctx context.Context, r dict.Reader, dbPath string, plan P
 	}
 	if plan.Contains {
 		if _, err = db.ExecContext(ctx, `CREATE VIRTUAL TABLE entry_trigram USING fts5(
-			w, content='', columnsize=0, tokenize='trigram');
+			w, content='', detail=none, columnsize=0, tokenize='trigram');
 			CREATE VIRTUAL TABLE entry_fts USING fts5(
 				w, content='', columnsize=0, tokenize='unicode61 remove_diacritics 2');`); err != nil {
 			return rep, err

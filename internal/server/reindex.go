@@ -40,7 +40,7 @@ import (
 // and not Running.
 type ReindexStatus struct {
 	Running bool `json:"running"`
-	// Active dictionaries being processed now (bounded by INDEX_WORKERS).
+	// Active dictionaries being processed now (bounded by logical processors).
 	Active       int                      `json:"active"`
 	ActiveDicts  []string                 `json:"activeDicts,omitempty"`
 	BusyProgress []dictionaryWorkProgress `json:"busyProgress,omitempty"`

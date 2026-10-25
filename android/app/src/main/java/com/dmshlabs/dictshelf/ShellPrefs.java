@@ -551,15 +551,7 @@ final class ShellPrefs {
 
     // This table contains application tuning only. Android has no listener;
     // SERVER_PORT is read separately only for the one-time old-origin import.
-    static final Override[] OVERRIDES = table();
-
-    private static Override[] table() {
-        Override[] head = {
-                new Override("INDEX_WORKERS", null, COUNT, null, null, 1, MAX_CORES,
-                        R.string.settings_index_workers, R.string.settings_index_workers_hint),
-        };
-        return head;
-    }
+    static final Override[] OVERRIDES = {};
 
     /** The stored override, or null when the key is left to the config. */
     static String override(Context c, Override o) {
@@ -606,10 +598,6 @@ final class ShellPrefs {
             setOverride(c, o, o.onValue);
             return;
         }
-        if ("INDEX_WORKERS".equals(o.key) && "auto".equalsIgnoreCase(v)) {
-            setOverride(c, o, "auto");
-            return;
-        }
         long n;
         try {
             n = Long.parseLong(v);
@@ -624,6 +612,7 @@ final class ShellPrefs {
     static void clearOverrides(Context c) {
         SharedPreferences.Editor e = of(c).edit();
         for (Override o : OVERRIDES) e.remove(o.pref());
+        e.remove("override_INDEX_WORKERS"); // obsolete setting from earlier versions
         e.apply();
     }
 
