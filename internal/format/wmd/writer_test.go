@@ -94,6 +94,10 @@ var cleanCases = []struct{ name, html, md, back string }{
 		`<a href="cooking apple#e67_cooking">c</a> <a href="apple%20pie">p</a> <a href="a.MP3?v=2">s</a> <a href="#top">t</a> <a href="%20#x">w</a> <a href="/browse?dict=x">b</a> <a href="Res/y">r</a>`,
 		"[c](<entry://cooking apple#e67_cooking>) [p](<entry://apple pie>) [s](a.MP3?v=2) [t](#top) [w](< #x>) [b](/browse?dict=x) [r](Res/y)",
 		"<p><a href=\"entry://cooking%20apple#e67_cooking\">c</a> <a href=\"entry://apple%20pie\">p</a> <a href=\"a.MP3?v=2\">s</a> <a href=\"#top\">t</a> <a href=\"%20#x\">w</a> <a href=\"/browse?dict=x\">b</a> <a href=\"Res/y\">r</a></p>\n"},
+	{"layout spaces at a line's start or end are layout, dropped (R6.7)",
+		"water&nbsp;<br>&nbsp;<b>1.</b><br>&nbsp;&nbsp;water (n.1) a&nbsp;b&#x2003; <br>&#x2003; 1. x<br><b>&ensp;2.</b> y<b>z&nbsp;</b>w&nbsp;",
+		"water\\\n<strong>1.</strong>\\\nwater (n.1) a\u00a0b\\\n1\\. x\\\n<strong>2.</strong> y<strong>z\u00a0</strong>w",
+		"<p>water<br>\n<strong>1.</strong><br>\nwater (n.1) a\u00a0b<br>\n1. x<br>\n<strong>2.</strong> y<strong>z\u00a0</strong>w</p>\n"},
 }
 
 // styledCases convert with a display table (R6.6): what the dictionary's

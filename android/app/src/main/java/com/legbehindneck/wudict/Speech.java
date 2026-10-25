@@ -118,7 +118,7 @@ final class Speech {
     private CountDownLatch init;      // guarded by lock; set once, on first use
     private boolean configured;       // guarded by lock
     private long stopGen;             // guarded by lock
-    private JSONArray probed;         // guarded by lock; see fallbackVoices
+    private List<Locale> probed;      // guarded by lock; see fallbackVoices
     private volatile boolean ok;      // onInit reported SUCCESS
     private volatile boolean dead;    // shutdown() ran
 
@@ -303,7 +303,9 @@ final class Speech {
         if (vs != null) sorted.addAll(vs);
         sorted.sort(Comparator.comparing(Voice::getName));
         JSONArray arr = new JSONArray();
+        List<Locale> locs = new ArrayList<>();
         Map<String, Integer> seen = new HashMap<>();
+        boolean marked = false;
         for (Voice v : sorted) {
             Set<String> f = v.getFeatures();
             if (f != null && f.contains(TextToSpeech.Engine.KEY_FEATURE_NOT_INSTALLED)) continue;
@@ -318,23 +320,56 @@ final class Speech {
             o.put("name", v.getName());
             o.put("lang", l.toLanguageTag());
             o.put("localService", !online);
-            o.put("default", v.getName().equals(def));
+            boolean isDef = v.getName().equals(def);
+            marked |= isDef;
+            o.put("default", isDef);
             o.put("label", disp + (n > 1 ? " " + n : "") + (online ? " · online" : ""));
             arr.put(o);
+            locs.add(l);
         }
-        return arr.length() > 0 ? arr : fallbackVoices(t);
+        if (arr.length() == 0) return fallbackVoices(t);
+        // no default voice, or one that is not listed (not installed, an
+        // unmappable locale): its language still marks one
+        if (!marked) markDefault(arr, locs, defaultLocale(t));
+        return arr;
     }
 
     /**
      * An engine that predates the Voice API (older eSpeak and RHVoice builds
      * still ship) lists no voices and speaks anyway. Report its languages as
      * one voice each, or the page would tell the reader there is none. The
-     * probe is up to one binder call per ISO language, so it is made once.
+     * probe is up to one binder call per ISO language, so it is made once;
+     * the default is marked on every call, because the reader may change it
+     * in the speech settings and come back.
      */
     private JSONArray fallbackVoices(TextToSpeech t) throws JSONException {
+        List<Locale> found;
         synchronized (lock) {
-            if (probed != null) return probed;
+            found = probed;
         }
+        if (found == null) {
+            found = probeLanguages(t);
+            synchronized (lock) {
+                probed = found;
+            }
+        }
+        JSONArray arr = new JSONArray();
+        for (Locale l : found) {
+            JSONObject o = new JSONObject();
+            // not a real voice name: speak() finds no such voice and falls
+            // back to setLanguage, which is all such an engine understands
+            o.put("name", "lang:" + l.toLanguageTag());
+            o.put("lang", l.toLanguageTag());
+            o.put("localService", true);
+            o.put("default", false);
+            o.put("label", l.getDisplayName());
+            arr.put(o);
+        }
+        markDefault(arr, found, defaultLocale(t));
+        return arr;
+    }
+
+    private static List<Locale> probeLanguages(TextToSpeech t) {
         Set<Locale> ls = null;
         try { ls = t.getAvailableLanguages(); } catch (RuntimeException ignored) { }
         if (ls == null || ls.isEmpty()) {
@@ -346,25 +381,40 @@ final class Speech {
                 } catch (RuntimeException ignored) { }
             }
         }
-        JSONArray arr = new JSONArray();
+        List<Locale> out = new ArrayList<>();
         Set<String> tags = new HashSet<>();
         for (Locale raw : ls) {
             Locale l = Iso.two(raw);
-            if (l == null || !tags.add(l.toLanguageTag())) continue;
-            JSONObject o = new JSONObject();
-            // not a real voice name: speak() finds no such voice and falls
-            // back to setLanguage, which is all such an engine understands
-            o.put("name", "lang:" + l.toLanguageTag());
-            o.put("lang", l.toLanguageTag());
-            o.put("localService", true);
-            o.put("default", false);
-            o.put("label", l.getDisplayName());
-            arr.put(o);
+            if (l != null && tags.add(l.toLanguageTag())) out.add(l);
         }
-        synchronized (lock) {
-            probed = arr;
-        }
-        return arr;
+        return out;
+    }
+
+    /**
+     * The language set in the system's speech settings, for an engine that
+     * names no default voice: speak.js reads a selection in that language
+     * when the dictionary does not decide it.
+     */
+    @SuppressWarnings("deprecation")
+    private static Locale defaultLocale(TextToSpeech t) {
+        try {
+            Voice v = t.getDefaultVoice();
+            if (v != null) return Iso.two(v.getLocale());
+        } catch (RuntimeException ignored) { }
+        try {
+            return Iso.two(t.getDefaultLanguage());
+        } catch (RuntimeException ignored) { }
+        return null;
+    }
+
+    /** Marks the first entry in `d`'s exact locale, else in its language, as the default. */
+    private static void markDefault(JSONArray arr, List<Locale> locs, Locale d) throws JSONException {
+        if (d == null) return;
+        int at = -1;
+        for (int i = 0; i < locs.size() && at < 0; i++) if (locs.get(i).equals(d)) at = i;
+        for (int i = 0; i < locs.size() && at < 0; i++)
+            if (locs.get(i).getLanguage().equals(d.getLanguage())) at = i;
+        if (at >= 0) arr.getJSONObject(at).put("default", true);
     }
 
     private void speak(Uri u) {

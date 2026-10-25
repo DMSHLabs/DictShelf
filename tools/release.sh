@@ -72,12 +72,23 @@ notes=$(awk -v h="v$core" '
 	on && /^v[0-9]/ { exit }
 	on { print }' "$log" | sed -e '/^[[:space:]]*$/d')
 [ -n "$notes" ] || die "$log: no section v$core"
+# A file already written for this code is kept: it is the notes someone
+# wrote by hand, which the cut below would replace with a fragment.
+full=$(printf '%s\n' "$notes" | LC_ALL=C wc -c | tr -d ' ')
 notes=$(printf '%s\n' "$notes" | LC_ALL=C awk '{ if (n + length($0) + 1 > 500) exit; n += length($0) + 1; print }')
+keep=
+[ -s "$changes/$code.txt" ] && keep=1
 
 if [ "${DRY_RUN:-}" = 1 ]; then
 	echo "tag $tag  versionName $ver  versionCode $code (was $cur)"
-	echo "--- $changes/$code.txt"
-	printf '%s\n' "$notes"
+	if [ -n "$keep" ]; then
+		echo "--- $changes/$code.txt (kept as written)"
+		cat "$changes/$code.txt"
+	else
+		echo "--- $changes/$code.txt"
+		printf '%s\n' "$notes"
+		[ "$full" -le 500 ] || echo "(cut from $full bytes: write a summary in that file before releasing)"
+	fi
 	exit 0
 fi
 
@@ -88,7 +99,12 @@ sed -i.bak -e "s/^\( *versionCode \)[0-9][0-9]*$/\1$code/" -e "s/^\( *versionNam
 rm -f "$gradle.bak"
 grep -q "^ *versionCode $code$" "$gradle" && grep -q "^ *versionName \"$ver\"$" "$gradle" || die "$gradle: the version lines were not rewritten"
 mkdir -p "$changes"
-printf '%s\n' "$notes" >"$changes/$code.txt"
+if [ -n "$keep" ]; then
+	echo "release: keeping $changes/$code.txt as written"
+else
+	printf '%s\n' "$notes" >"$changes/$code.txt"
+	[ "$full" -le 500 ] || echo "release: warning: v$core's notes are $full bytes; stores show 500, so $changes/$code.txt holds the first lines only - write a summary there (FORCE=1 make release reruns keep it)" >&2
+fi
 
 git add "$gradle" "$changes/$code.txt"
 git commit -q -m "chore(release): $tag"

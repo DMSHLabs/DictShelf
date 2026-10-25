@@ -271,6 +271,9 @@ resulting document. It does no line scanning of its own beyond R3.1.
   A dictionary without a stylesheet, or a writer that reads none, converts by tags alone.
 - **R6.7 Conversion.**
   - Text whitespace runs become one SP; lines break only at hard breaks and block boundaries.
+  - Layout spaces - U+00A0, U+2000-U+200B, U+202F, U+205F, U+3000 and U+FEFF - are dropped at the start and
+    the end of a line: of a paragraph, heading or cell, and on either side of a hard break. Elsewhere they are
+    text and are kept (`a&nbsp;b` → `a`U+00A0`b`).
   - WS at the start or end of an element's content that is written as markup (emphasis, the inline tags, a link)
     is written outside it: `a<b> x </b>y` → `a **x** y`, `cart<a href="…"> at upset</a>` → `cart [at upset](…)`.
   - Text backslash-escapes `` \ ` * _ [ ] < > & ~ | ``, and a `!` right before a link's `[`.
