@@ -174,27 +174,6 @@ func IngestPlanContext(ctx context.Context, r dict.Reader, dbPath string, plan P
 	}
 	defer tx.Rollback() // also release the connection if a reader panics
 
-	insEntry, err := tx.Prepare("INSERT INTO entry(id, w, wf, wc, m) VALUES(?, ?, ?, ?, ?)")
-	if err != nil {
-		return rep, err
-	}
-	var insFts, insArticle *sql.Stmt
-	if plan.Contains {
-		if insFts, err = tx.Prepare("INSERT INTO entry_fts(rowid, w) VALUES(?, ?)"); err != nil {
-			return rep, err
-		}
-	}
-	if plan.FullText {
-		if insArticle, err = tx.Prepare("INSERT INTO article_fts(rowid, w, txt) VALUES(?, ?, ?)"); err != nil {
-			return rep, err
-		}
-	}
-	var insTrig *sql.Stmt
-	if plan.Contains {
-		if insTrig, err = tx.Prepare("INSERT INTO entry_trigram(rowid, w) VALUES(?, ?)"); err != nil {
-			return rep, err
-		}
-	}
 	insAlias, err := tx.Prepare("INSERT INTO alias(w, wf, wc, entry_id) VALUES(?, ?, ?, ?)")
 	if err != nil {
 		return rep, err
@@ -217,88 +196,17 @@ func IngestPlanContext(ctx context.Context, r dict.Reader, dbPath string, plan P
 	`); err != nil {
 		return rep, err
 	}
-	insWref, err := tx.Prepare("INSERT INTO wref(w, lw, id) VALUES(?, ?, ?)")
-	if err != nil {
-		return rep, err
-	}
-	insLink, err := tx.Prepare("INSERT INTO plink(w, target) VALUES(?, ?)")
-	if err != nil {
-		return rep, err
-	}
-	var id, subEntries, linkCount int64
+	rows := newIngestRowWriter(ctx, tx, plan)
+	defer rows.close()
 	total := srcMeta.EntryCount
 
 	trace.phase("scan articles: headwords, fulltext and contains per plan")
-	for {
-		if err = ctx.Err(); err != nil {
-			return rep, err
-		}
-		e, rerr := r.Next()
-		if errors.Is(rerr, io.EOF) {
-			break
-		}
-		if rerr != nil {
-			return rep, rerr
-		}
-		if err = ctx.Err(); err != nil {
-			return rep, err
-		}
-		if len(e.Headwords) == 0 {
-			continue
-		}
-		hw := strings.TrimSpace(e.Headwords[0])
-		if hw == "" {
-			continue
-		}
-		if e.LinkTo != "" {
-			if _, err = insLink.ExecContext(ctx, hw, e.LinkTo); err != nil {
-				return rep, err
-			}
-			linkCount++
-			continue
-		}
-		body, err2 := NormalizeBody(e)
-		if err2 != nil {
-			return rep, err2
-		}
-		id++
-		if _, err = insEntry.ExecContext(ctx, id, hw, dict.Fold(hw), dict.CaseKey(hw), encodeBody(body)); err != nil {
-			return rep, err
-		}
-		if insFts != nil {
-			if _, err = insFts.ExecContext(ctx, id, hw); err != nil {
-				return rep, err
-			}
-		}
-		if insArticle != nil {
-			if _, err = insArticle.ExecContext(ctx, id, hw, StripHTML(body)); err != nil {
-				return rep, err
-			}
-		}
-		// trigram index over the accent/case-folded headword powers the
-		// "contains" substring mode (built only when asked for).
-		if insTrig != nil {
-			if _, err = insTrig.ExecContext(ctx, id, dict.Fold(hw)); err != nil {
-				return rep, err
-			}
-		}
-		if isSubEntry(hw) {
-			subEntries++
-		}
-		if _, err = insWref.ExecContext(ctx, hw, strings.ToLower(hw), id); err != nil {
-			return rep, err
-		}
-		for _, extra := range e.Headwords[1:] {
-			extra = strings.TrimSpace(extra)
-			if extra != "" && extra != hw {
-				if _, err = insAlias.ExecContext(ctx, extra, dict.Fold(extra), dict.CaseKey(extra), id); err != nil {
-					return rep, err
-				}
-			}
-		}
-		if progress != nil && id%batchSize == 0 {
-			progress(clampDone(int(id), total), total)
-		}
+	id, subEntries, linkCount, err := scanIngestEntries(ctx, r, plan, total, progress, rows)
+	if err != nil {
+		return rep, err
+	}
+	if err = rows.flush(); err != nil {
+		return rep, err
 	}
 
 	unresolved := 0
