@@ -92,7 +92,7 @@ paths:
   /api/index-work:
     get:
       summary: Read the active dictionary indexing progress across pages.
-      description: '`done` counts attempted operations, including failures. `failed` lists per-operation errors; other queued operations continue. `error` describes a fatal job error.'
+      description: '`done` counts attempted operations, including failures. `dictionaryDone` and `dictionaryTotal` count completed dictionaries out of the queue, and `elapsedMs` reports total job time. Each `busyProgress` row includes that dictionary’s elapsed time. `failed` lists per-operation errors; other queued operations continue. `error` describes a fatal job error.'
       responses:
         '200':
           description: Current job snapshot.
@@ -327,9 +327,9 @@ paths:
       operationId: listDicts
       summary: List every dictionary, streaming
       description: >
-        `begin` carries the total immediately, from registry ids alone, so a
-        client can show "0 of 105" before any dictionary is opened. Rows follow
-        in completion order.
+        With `progress=1`, `checking` events report how many dictionary files
+        have been checked before row resolution begins. Then `begin` carries
+        the total from registry ids, and `dict` rows follow in completion order.
 
 
         `end` carries `etag` when the answer may be kept. Send it back as
@@ -349,6 +349,11 @@ paths:
             curl -s -o /dev/null -w '%{http_code}\n' -H 'If-None-Match: "ac4fd9fecabd8ec4cf544212"' \
               'http://127.0.0.1:6888/api/dicts'
       parameters:
+        - name: progress
+          in: query
+          required: false
+          description: Emit file-check progress before the dictionary rows when no If-None-Match validator is supplied.
+          schema: { type: boolean, default: false }
         - name: If-None-Match
           in: header
           required: false

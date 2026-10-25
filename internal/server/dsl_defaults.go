@@ -243,6 +243,7 @@ func (r *Registry) prepareNewDictionaries(parent ...*job) {
 	if queueJob != nil {
 		queueJob.update(func(st *jobStatus) {
 			st.Total = int64(len(pending))
+			st.DictionaryTotal = int64(len(pending))
 			st.QueuedDicts = make([]string, 0, len(pending))
 			for _, item := range pending {
 				st.QueuedDicts = append(st.QueuedDicts, item.entry.ID)
@@ -329,6 +330,7 @@ func (r *Registry) prepareNewDictionaries(parent ...*job) {
 			// that marker set even though the index is now ready.
 			err = e.setIndexRemoved(false)
 		}
+		dictionaryFinished := err == nil
 		if err != nil {
 			canceled := errors.Is(err, context.Canceled) && ctx.Err() != nil
 			if queueJob != nil {
@@ -360,7 +362,12 @@ func (r *Registry) prepareNewDictionaries(parent ...*job) {
 			}
 		}
 		if queueJob != nil {
-			queueJob.update(func(st *jobStatus) { st.Done++ })
+			queueJob.update(func(st *jobStatus) {
+				st.Done++
+				if dictionaryFinished {
+					st.DictionaryDone++
+				}
+			})
 		}
 	}
 	runIndexTasks(pending, func() bool { return queueJob != nil && queueJob.canceled() }, process)

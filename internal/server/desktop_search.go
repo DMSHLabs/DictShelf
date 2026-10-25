@@ -58,7 +58,7 @@ func (s *Server) DesktopStream(ctx context.Context, baseURL, method, query strin
 		return s.desktopSearchRequest(ctx, baseURL, request, emit)
 	}
 	if method == "dicts" {
-		return s.desktopDictionaryList(ctx, emit)
+		return s.desktopDictionaryList(ctx, emit, query == "progress=1")
 	}
 	if method == "rescan" {
 		return s.desktopRescan(ctx, emit)
@@ -157,7 +157,7 @@ func (s *Server) desktopSearchRequest(ctx context.Context, baseURL string, reque
 	})
 }
 
-func (s *Server) desktopDictionaryList(ctx context.Context, emit func([]byte)) (resultErr error) {
+func (s *Server) desktopDictionaryList(ctx context.Context, emit func([]byte), showProgress bool) (resultErr error) {
 	defer func() {
 		if p := recover(); p != nil {
 			logx.Warn("panic in native dictionary list: %v", p)
@@ -176,7 +176,7 @@ func (s *Server) desktopDictionaryList(ctx context.Context, emit func([]byte)) (
 			emit(bytes.Clone(bytes.TrimSpace(buffer.Bytes())))
 		}
 		return nil
-	})
+	}, showProgress)
 	return err
 }
 
@@ -202,7 +202,7 @@ func (s *Server) desktopRescan(ctx context.Context, emit func([]byte)) error {
 	}
 	s.reg.Warm()
 	s.dictRows.flush()
-	return s.desktopDictionaryList(ctx, emit)
+	return s.desktopDictionaryList(ctx, emit, false)
 }
 
 // DesktopJSON dispatches explicitly supported JSON operations for the desktop

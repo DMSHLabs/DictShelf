@@ -21,7 +21,7 @@ type dictionaryListResult struct {
 // listDictionaries resolves and emits the current list without depending on
 // HTTP. Both the HTTP adapter and the Windows bridge use this operation.
 // A matching validator returns before emitting any events.
-func (s *Server) listDictionaries(parent context.Context, ifNoneMatch string, emit func(dictMsg) error) (dictionaryListResult, error) {
+func (s *Server) listDictionaries(parent context.Context, ifNoneMatch string, emit func(dictMsg) error, showProgress ...bool) (dictionaryListResult, error) {
 	if emit == nil {
 		return dictionaryListResult{}, errors.New("dictionary list event callback is required")
 	}
@@ -29,7 +29,22 @@ func (s *Server) listDictionaries(parent context.Context, ifNoneMatch string, em
 	groups := s.groupsNow()
 	problems := facet.CountProblems(groups.problems)
 	global := s.rowsGlobal(groups)
-	keys := rowKeys(entries, global)
+	wantProgress := len(showProgress) > 0 && showProgress[0] && ifNoneMatch == ""
+	var progressErr error
+	progress := func(done, total int) {
+		if wantProgress && progressErr == nil {
+			progressErr = emit(dictMsg{T: "checking", Done: done, Total: total})
+		}
+	}
+	var keys []string
+	if wantProgress {
+		keys = rowKeysWithProgress(entries, global, progress)
+	} else {
+		keys = rowKeys(entries, global)
+	}
+	if progressErr != nil {
+		return dictionaryListResult{}, progressErr
+	}
 	ids := make(map[string]bool, len(entries))
 	for _, e := range entries {
 		ids[e.ID] = true

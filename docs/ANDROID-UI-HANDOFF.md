@@ -19,6 +19,11 @@ Current Android boundary: both FOSS and Play builds run Go in-process through
 JNI and never open a TCP listener. Neither flavour has a listen-address row;
 the APK verifier checks the packaged resources for that control.
 
+The main screen's first dictionary-list request can report file-check progress
+through JNI before its first dictionary row arrives. Shared index tasks include
+per-dictionary and overall elapsed time; build and device verification remain
+pending.
+
 Work directly in `D:\Projects\Android\wudict`, as the user requested. Recheck branch/status before editing; old stashes exist and must be inspected before use.
 
 ## Existing documentation

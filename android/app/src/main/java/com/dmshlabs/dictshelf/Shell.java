@@ -400,8 +400,8 @@ final class Shell {
             return BuildConfig.DEBUG;
         }
 
-        @JavascriptInterface public int startDictStream() {
-            return GoBridge.startDictStream();
+        @JavascriptInterface public int startDictStream(boolean progress) {
+            return GoBridge.startDictStream(progress);
         }
 
         @JavascriptInterface public int startRescanStream() {

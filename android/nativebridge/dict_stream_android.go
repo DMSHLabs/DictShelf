@@ -32,9 +32,13 @@ var dictionaryStreams = struct {
 }{active: make(map[int]*dictionaryStream)}
 
 //export WudictGoBridgeDictStreamStart
-func WudictGoBridgeDictStreamStart() C.int {
+func WudictGoBridgeDictStreamStart(progress C.int) C.int {
+	query := ""
+	if progress != 0 {
+		query = "progress=1"
+	}
 	return startAndroidStream(func(ctx context.Context, app *server.Runtime, emit func([]byte)) error {
-		return app.Server.DesktopStream(ctx, "", "dicts", "", emit)
+		return app.Server.DesktopStream(ctx, "", "dicts", query, emit)
 	})
 }
 

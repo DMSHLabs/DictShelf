@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/wuweidict/wudict/internal/dict"
 	"github.com/wuweidict/wudict/internal/facet"
@@ -151,9 +152,33 @@ func rowKey(e *entry, global string) string {
 // decided before any byte of the body, and on a slow filesystem (Android
 // FUSE) a thousand stat calls in a row would hold the first frame back.
 func rowKeys(entries []*entry, global string) []string {
+	return rowKeysWithProgress(entries, global, nil)
+}
+
+func rowKeysWithProgress(entries []*entry, global string, progress func(done, total int)) []string {
 	keys := make([]string, len(entries))
 	sem := make(chan struct{}, search.Workers())
 	var wg sync.WaitGroup
+	done := 0
+	var progressMu sync.Mutex
+	lastProgress := time.Time{}
+	report := func() {
+		if progress == nil {
+			return
+		}
+		progressMu.Lock()
+		done++
+		at := done
+		now := time.Now()
+		if at == len(entries) || now.Sub(lastProgress) >= 200*time.Millisecond {
+			lastProgress = now
+			progress(at, len(entries))
+		}
+		progressMu.Unlock()
+	}
+	if progress != nil {
+		progress(0, len(entries))
+	}
 	for i, e := range entries {
 		wg.Add(1)
 		sem <- struct{}{}
@@ -161,6 +186,7 @@ func rowKeys(entries []*entry, global string) []string {
 			defer wg.Done()
 			defer func() { <-sem }()
 			keys[i] = rowKey(e, global)
+			report()
 		}(i, e)
 	}
 	wg.Wait()

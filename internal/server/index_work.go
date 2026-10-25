@@ -116,27 +116,30 @@ type indexOperation struct {
 }
 
 type indexWorkStatus struct {
-	ID            string                   `json:"id"`
-	Running       bool                     `json:"running"`
-	Done          int64                    `json:"done"`
-	Total         int64                    `json:"total"`
-	Current       string                   `json:"current"`
-	Dict          string                   `json:"dict"`
-	Stage         string                   `json:"stage"`
-	CurrentDone   int64                    `json:"currentDone"`
-	CurrentTotal  int64                    `json:"currentTotal"`
-	Action        string                   `json:"action"`
-	Indexes       []string                 `json:"indexes"`
-	StopRequested bool                     `json:"stopRequested"`
-	Canceled      bool                     `json:"canceled"`
-	Error         string                   `json:"error"`
-	Failed        []string                 `json:"failed,omitempty"`
-	Damaged       []string                 `json:"damaged,omitempty"`
-	Result        any                      `json:"result,omitempty"`
-	Exclusive     bool                     `json:"exclusive"`
-	BusyDicts     []string                 `json:"busyDicts"`
-	BusyProgress  []dictionaryWorkProgress `json:"busyProgress,omitempty"`
-	PendingDicts  []string                 `json:"pendingDicts,omitempty"`
+	ID              string                   `json:"id"`
+	Running         bool                     `json:"running"`
+	Done            int64                    `json:"done"`
+	Total           int64                    `json:"total"`
+	DictionaryDone  int64                    `json:"dictionaryDone"`
+	DictionaryTotal int64                    `json:"dictionaryTotal"`
+	ElapsedMS       int64                    `json:"elapsedMs"`
+	Current         string                   `json:"current"`
+	Dict            string                   `json:"dict"`
+	Stage           string                   `json:"stage"`
+	CurrentDone     int64                    `json:"currentDone"`
+	CurrentTotal    int64                    `json:"currentTotal"`
+	Action          string                   `json:"action"`
+	Indexes         []string                 `json:"indexes"`
+	StopRequested   bool                     `json:"stopRequested"`
+	Canceled        bool                     `json:"canceled"`
+	Error           string                   `json:"error"`
+	Failed          []string                 `json:"failed,omitempty"`
+	Damaged         []string                 `json:"damaged,omitempty"`
+	Result          any                      `json:"result,omitempty"`
+	Exclusive       bool                     `json:"exclusive"`
+	BusyDicts       []string                 `json:"busyDicts"`
+	BusyProgress    []dictionaryWorkProgress `json:"busyProgress,omitempty"`
+	PendingDicts    []string                 `json:"pendingDicts,omitempty"`
 }
 
 func (s *Server) indexWorkStatus(requested ...string) indexWorkStatus {
@@ -169,10 +172,19 @@ func (s *Server) indexWorkStatus(requested ...string) indexWorkStatus {
 			}
 		}
 	}
-	out := indexWorkStatus{ID: key, Running: st.Running, Done: st.Done, Total: st.Total, Current: st.Current,
+	out := indexWorkStatus{ID: key, Running: st.Running, Done: st.Done, Total: st.Total,
+		DictionaryDone: st.DictionaryDone, DictionaryTotal: st.DictionaryTotal, ElapsedMS: st.ElapsedMS, Current: st.Current,
 		CurrentDone: st.CurrentDone, CurrentTotal: st.CurrentTotal, Action: st.Action, Indexes: st.Indexes,
 		StopRequested: st.StopRequested, Canceled: st.Canceled, Error: st.Err}
 	out.BusyProgress = st.ActiveProgress
+	if st.Running && !st.StartedAt.IsZero() {
+		out.ElapsedMS = time.Since(st.StartedAt).Milliseconds()
+	}
+	for i := range out.BusyProgress {
+		if out.BusyProgress[i].Active && !out.BusyProgress[i].StartedAt.IsZero() {
+			out.BusyProgress[i].ElapsedMS = time.Since(out.BusyProgress[i].StartedAt).Milliseconds()
+		}
+	}
 	if key == "initial-index-queue" {
 		out.PendingDicts = append([]string(nil), st.QueuedDicts...)
 	}
@@ -209,6 +221,10 @@ func (s *Server) indexWorkStatus(requested ...string) indexWorkStatus {
 	if strings.HasPrefix(key, "ingest:") {
 		out.CurrentDone, out.CurrentTotal = st.Done, st.Total
 		out.Done, out.Total = 0, 1
+		out.DictionaryTotal = 1
+		if !st.Running && st.Err == "" && len(st.Failed) == 0 {
+			out.DictionaryDone = 1
+		}
 		if e, err := s.reg.get(strings.TrimPrefix(key, "ingest:")); err == nil {
 			out.Current = e.probeName()
 		}
@@ -216,7 +232,16 @@ func (s *Server) indexWorkStatus(requested ...string) indexWorkStatus {
 	if key == "rescan-indexes" {
 		if p, ok := st.Result.(rescanIndexProgress); ok {
 			out.Done, out.Total, out.Current = int64(max(0, p.At-1)), int64(p.Total), p.Name
+			out.DictionaryDone, out.DictionaryTotal = max(int64(0), out.Done-int64(len(st.Failed))), out.Total
 			out.CurrentDone, out.CurrentTotal, out.Action, out.Indexes = int64(p.Done), int64(p.Entries), p.Action, p.Indexes
+		}
+	}
+	if out.DictionaryTotal == 0 {
+		switch key {
+		case "initial-index-queue", reindexKey:
+			out.DictionaryDone, out.DictionaryTotal = max(int64(0), st.Done-int64(len(st.Failed))), st.Total
+		case setupWorkKey:
+			out.DictionaryDone, out.DictionaryTotal = st.DictionaryDone, st.DictionaryTotal
 		}
 	}
 	return out
@@ -302,13 +327,13 @@ func (s *Server) startIndexWork(raw []byte, single, allowBaseDelete bool) (index
 	if single && len(operations) == 1 {
 		key = "single-index:" + operations[0].Dict
 	}
+	groups := groupIndexOperations(operations)
 	release, admitted := s.admitWork(key)
 	if !admitted {
 		return indexWorkStatus{}, indexWorkError{http.StatusConflict, "dictionary operations are running; wait for completion or stop them"}
 	}
 	defer release()
-	if _, started := s.jobs.start(key, 0, jobStatus{Total: int64(len(operations))}, func(j *job) {
-		groups := groupIndexOperations(operations)
+	if _, started := s.jobs.start(key, 0, jobStatus{Total: int64(len(operations)), DictionaryTotal: int64(len(groups))}, func(j *job) {
 		runIndexDictionaryGroups(groups, j.canceled, func(group []indexOperation) {
 			if len(group) == 0 {
 				return
@@ -323,6 +348,13 @@ func (s *Server) startIndexWork(raw []byte, single, allowBaseDelete bool) (index
 				j.finishDictionary(dictID, cancel)
 				trackJobDictionary(j, dictID, false)
 			}()
+			dictionaryFinished := false
+			dictionarySucceeded := true
+			defer func() {
+				if dictionaryFinished && dictionarySucceeded {
+					j.update(func(st *jobStatus) { st.DictionaryDone++ })
+				}
+			}()
 			for _, op := range group {
 				if ctx.Err() != nil || j.canceled() {
 					return
@@ -330,6 +362,8 @@ func (s *Server) startIndexWork(raw []byte, single, allowBaseDelete bool) (index
 				e, err := s.reg.get(op.Dict)
 				if err != nil {
 					j.update(func(st *jobStatus) { st.Failed = append(st.Failed, fmt.Sprintf("%s: %v", op.Dict, err)); st.Done++ })
+					dictionarySucceeded = false
+					dictionaryFinished = true
 					return
 				}
 				action := "create"
@@ -352,6 +386,7 @@ func (s *Server) startIndexWork(raw []byte, single, allowBaseDelete bool) (index
 				if entryHasSelfIndex(e) && !isZIMPath(e.Path) {
 					store.IndexDiagnostic("skip index operation source=%q dictionary=%q feature=%q action=%q reason=native-index", e.Path, e.probeName(), op.Feature, op.Action)
 					j.update(func(st *jobStatus) { st.Done++ })
+					dictionaryFinished = true
 					return
 				}
 				lastProgress := time.Time{}
@@ -389,6 +424,7 @@ func (s *Server) startIndexWork(raw []byte, single, allowBaseDelete bool) (index
 				}
 				store.IndexDiagnostic("bulk operation finish dictionary=%q feature=%q action=%q error=%v", e.probeName(), op.Feature, op.Action, err)
 				if err != nil {
+					dictionarySucceeded = false
 					if errors.Is(err, context.Canceled) && ctx.Err() != nil && !j.canceled() && !errors.Is(err, store.ErrIngestTempCleanup) {
 						return
 					}
@@ -409,6 +445,7 @@ func (s *Server) startIndexWork(raw []byte, single, allowBaseDelete bool) (index
 					j.update(func(st *jobStatus) { st.Done++ })
 				}
 			}
+			dictionaryFinished = true
 		})
 		if j.canceled() {
 			j.update(func(st *jobStatus) { st.Canceled = true })

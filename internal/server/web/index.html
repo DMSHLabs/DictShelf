@@ -2629,9 +2629,12 @@ if(!window.wudictAndroidShell){try{quietMessages=localStorage.getItem("wudict_sh
 const BOOT_MSGS=[tx("search.boot1"),tx("search.boot2"),
   tx("search.boot3"),tx("search.boot4"),
   tx("search.boot5")];
-let bootTimer=null,bootIdx=0;
+let bootTimer=null,bootIdx=0,bootProgress=null;
 function paintBoot(){
-  $("out").innerHTML=`<div class="empty boot"><span class="spin big"></span><p>${esc(BOOT_MSGS[bootIdx])}</p></div>`;
+	const progress=bootProgress;
+	const message=progress?tx(progress.stage==="reading"?"search.readingDictProgress":"search.checkingDictsProgress",{done:window.wudictI18n.number(progress.done),total:window.wudictI18n.number(progress.total)}):BOOT_MSGS[bootIdx];
+	const bar=progress&&progress.total>0?`<progress class="boot-progress" max="${progress.total}" value="${progress.done}" aria-label="${esc(message)}"></progress>`:"";
+	$("out").innerHTML=`<div class="empty boot"><span class="spin big"></span><p>${esc(message)}</p>${bar}</div>`;
 }
 function startBootScreen(){
   if(quietMessages||bootTimer)return;
@@ -2640,7 +2643,13 @@ function startBootScreen(){
 }
 function stopBootScreen(){
   if(bootTimer){clearInterval(bootTimer);bootTimer=null}
+	bootProgress=null;
   if($("out").querySelector(".boot"))$("out").innerHTML="";
+}
+function setBootProgress(done,total,stage="checking"){
+	bootProgress={done:Math.max(0,Number(done)||0),total:Math.max(0,Number(total)||0),stage};
+	if(bootTimer){clearInterval(bootTimer);bootTimer=null}
+	if(phase==="boot"&&!quietMessages)paintBoot();
 }
 function bootFailed(msg){
   setPhase("failed");
@@ -3340,15 +3349,23 @@ async function loadDicts(rescan){
   },20000):null;
   try{
     const endpoint=rescan?"/api/rescan":"/api/dicts";
-    const listURL=listDiagnostics?endpoint+"?diagnostics=1":endpoint;
+    const listParams=new URLSearchParams();
+    if(listDiagnostics)listParams.set("diagnostics","1");
+    if(blocking)listParams.set("progress","1");
+    const listURL=endpoint+(listParams.size?"?"+listParams.toString():"");
     await fetchStream(listURL,msg=>{
-      if(msg.t==="begin"){
+      if(msg.t==="checking"){
+        dictTotal=msg.total||0;
+        setBootProgress(msg.done||0,dictTotal);
+      }else if(msg.t==="begin"){
         articleCacheGroupID=newArticleResultCacheID();articleCacheGroupCount=Math.max(1,(msg.slots||[]).length);
         if(beginMs<0)beginMs=Math.round(performance.now()-listStarted);
         sawBegin=true;dictTotal=msg.total||0;
+        if(blocking)setBootProgress(0,dictTotal,"reading");
       }else if(msg.t==="dict"&&msg.dict){
         if(firstRowMs<0)firstRowMs=Math.round(performance.now()-listStarted);
         rows.push(msg.dict);
+        if(blocking)setBootProgress(rows.length,dictTotal,"reading");
         if(!published){
           // swap the old list out only now: a rescan keeps showing the
           // previous dictionaries until replacements start arriving
@@ -5888,8 +5905,13 @@ function setIndexStatus(html,mirror=true){
 }
 let globalStopAction=null,globalStopLabel="",indexingTaskID=0,indexingTaskMessage="",indexWorkTaskActive=false;
 function activeDictionaryRows(ids,progress=[],workID=""){
-  const byID=new Map((progress||[]).map(item=>[item.id,item]));
-  return (ids||[]).map(id=>{const d=dicts.find(item=>item.id===id),p=byID.get(id);return {label:d?dictLabel(d):(p?.name||String(id)),done:p?.done||0,total:p?.total||0,active:!!p?.active,stop:p?.active&&workID?()=>window.wudictWork?.stopDictionary(workID,id):null,stopRequested:!!p?.stopRequested}});
+  const byID=new Map((progress||[]).map(item=>[item.id,item])),ordered=[],seen=new Set();
+  // ActiveProgress is appended as dictionaries start. Keep active rows in that
+  // order above other busy dictionaries so a newly started dictionary joins
+  // the bottom of the active section instead of reshuffling the panel.
+  for(const item of progress||[])if(item.active&&!seen.has(item.id)){ordered.push(item.id);seen.add(item.id)}
+  for(const id of ids||[])if(!seen.has(id)){ordered.push(id);seen.add(id)}
+  return ordered.map(id=>{const d=dicts.find(item=>item.id===id),p=byID.get(id);return {label:d?dictLabel(d):(p?.name||String(id)),done:p?.done||0,total:p?.total||0,elapsedMs:p?.elapsedMs||0,active:!!p?.active,stop:p?.active&&workID?()=>window.wudictWork?.stopDictionary(workID,id):null,stopRequested:!!p?.stopRequested}});
 }
 function updateIndexingTask(html,activeDicts){
   if(html!==undefined)indexingTaskMessage=html;
@@ -6103,7 +6125,7 @@ async function fetchStream(url,onMsg,signal,options){
     const requestURL=new URL(url,window.location.href);
     if(requestURL.origin===window.location.origin&&requestURL.pathname==="/api/dicts"&&
        (options?.method||"GET").toUpperCase()==="GET"){
-      await androidGoStream(()=>window.wudictAndroidGo.startDictStream(),onMsg,signal);
+      await androidGoStream(()=>window.wudictAndroidGo.startDictStream(requestURL.searchParams.get("progress")==="1"),onMsg,signal);
       return;
     }
     if(requestURL.origin===window.location.origin&&requestURL.pathname==="/api/rescan"&&
@@ -6137,7 +6159,7 @@ async function fetchStream(url,onMsg,signal,options){
         return;
       }
       if(requestURL.pathname==="/api/dicts"&&method==="GET"){
-        await window.wudictNativeCall("dicts","",onMsg,signal);
+        await window.wudictNativeCall("dicts",requestURL.searchParams.get("progress")==="1"?"progress=1":"",onMsg,signal);
         return;
       }
       if(requestURL.pathname==="/api/rescan"&&method==="GET"){
