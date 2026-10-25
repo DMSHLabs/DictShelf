@@ -140,13 +140,15 @@ type Item struct {
 // the HTTP layer - and Quit runs in-process, which keeps a remotely reachable
 // kill switch out of the mux entirely.
 type Config struct {
-	Enabled   bool   // false → Wrap is a pass-through
-	Explicit  bool   // --tray was passed, as opposed to inferred from a GUI launch
-	GUI       bool   // launched from a desktop, so there is no console to fall back on
-	InProcess bool   // UI is an in-process desktop window, not a browser served over HTTP
-	Name      string // product name, user-visible (default "DictShelf")
-	Version   string
-	URL       string
+	Enabled       bool          // false → Wrap is a pass-through
+	Explicit      bool          // --tray was passed, as opposed to inferred from a GUI launch
+	GUI           bool          // launched from a desktop, so there is no console to fall back on
+	InProcess     bool          // UI is an in-process desktop window, not a browser served over HTTP
+	WindowsWindow bool          // this app owns a native Windows window that can be restored
+	Language      func() string // saved interface language: en, ru or system
+	Name          string        // product name, user-visible (default "DictShelf")
+	Version       string
+	URL           string
 
 	Open     func() // open the UI in a browser; omitted from the menu when nil
 	Rescan   func() // rescan the dictionary folders; omitted when nil
@@ -178,26 +180,64 @@ func (cfg Config) tooltip() string {
 	return cfg.name() + " - serving on " + cfg.URL
 }
 
+func (cfg Config) russian() bool {
+	if cfg.Language == nil {
+		return false
+	}
+	if choice := cfg.Language(); choice == "ru" {
+		return true
+	} else if choice == "en" {
+		return false
+	}
+	return defaultRussian()
+}
+
 // items builds the menu. Optional entries are dropped rather than greyed when
 // their callback is absent, and the separator around them is dropped with them
 // so an empty middle section cannot produce two adjacent rules.
 func (cfg Config) items(quit func()) []Item {
 	items := []Item{{Label: cfg.header(), Disabled: true}}
 	if cfg.Open != nil {
-		items = append(items, Item{Label: "Open " + cfg.name(), Do: cfg.Open})
+		label := "Open " + cfg.name()
+		if cfg.WindowsWindow {
+			label = "Open window"
+		}
+		if cfg.russian() {
+			if cfg.WindowsWindow {
+				label = "Открыть окно"
+			} else {
+				label = "Открыть " + cfg.name()
+			}
+		}
+		items = append(items, Item{Label: label, Do: cfg.Open})
 	}
 	var mid []Item
-	if cfg.Rescan != nil {
-		mid = append(mid, Item{Label: "Rescan dictionaries", Do: cfg.Rescan})
+	if cfg.Rescan != nil && !cfg.WindowsWindow {
+		label := "Rescan dictionaries"
+		if cfg.russian() {
+			label = "Обновить список словарей"
+		}
+		mid = append(mid, Item{Label: label, Do: cfg.Rescan})
 	}
-	if cfg.OpenDir != nil {
-		mid = append(mid, Item{Label: "Open dictionary folder", Do: cfg.OpenDir})
+	if cfg.OpenDir != nil && !cfg.WindowsWindow {
+		label := "Open dictionary folder"
+		if cfg.russian() {
+			label = "Открыть папку словарей"
+		}
+		mid = append(mid, Item{Label: label, Do: cfg.OpenDir})
 	}
 	if len(mid) > 0 {
 		items = append(items, Item{Sep: true})
 		items = append(items, mid...)
 	}
-	items = append(items, Item{Sep: true}, Item{Label: "Quit " + cfg.name(), Do: quit})
+	quitLabel := "Quit " + cfg.name()
+	if cfg.WindowsWindow {
+		quitLabel = "Quit " + cfg.name()
+	}
+	if cfg.russian() {
+		quitLabel = "Выйти из " + cfg.name()
+	}
+	items = append(items, Item{Sep: true}, Item{Label: quitLabel, Do: quit})
 	return items
 }
 

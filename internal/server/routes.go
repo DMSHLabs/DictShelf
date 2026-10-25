@@ -93,6 +93,7 @@ func (s *Server) routes() []route {
 		{"GET", "/api/index-work", s.handleIndexWork, "/api/index-work", false},
 		{"POST", "/api/index-work", s.handleIndexWork, "/api/index-work", false},
 		{"DELETE", "/api/index-work", s.handleIndexWork, "/api/index-work", false},
+		{"POST", "/api/demand", s.handleDemand, "/api/demand", false},
 		{"GET", "/api/setup", s.handleSetup, "/api/setup", false},
 		{"POST", "/api/setup", s.handleSetup, "/api/setup", false},
 		{"GET", "/api/library", s.handleLibrary, "/api/library", false},

@@ -107,6 +107,29 @@ paths:
       responses:
         '200':
           description: Stop requested.
+  /api/demand:
+    post:
+      tags: [internal]
+      operationId: demandDictionaryIndex
+      x-internal: true
+      summary: Start or prioritize a dictionary's required headword index
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [dict, explicit]
+              properties:
+                dict: {type: string}
+                explicit: {type: boolean}
+                priority: {type: boolean}
+      responses:
+        '200':
+          description: Indexing state for the requested dictionary.
+        '404':
+          description: Dictionary not found.
   /api/system-log:
     get:
       summary: Download persistent server diagnostics, including the previous rotation

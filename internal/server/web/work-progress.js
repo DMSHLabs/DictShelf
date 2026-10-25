@@ -160,9 +160,11 @@
       const activeCount=trackedChildren?activeChildren:detailCount;
       if(active.length===1&&['indexing','rescan'].includes(active[0].type)){
         const task=active[0],progress=task.children.filter(child=>child.active&&child.total>0);
-        const done=progress.reduce((sum,child)=>sum+child.done,0),total=progress.reduce((sum,child)=>sum+child.total,0),parts=[taskName(task.type)];
-        if(total)parts.push(`${window.wudictI18n.number(done)} ${t('dictUI.progressOf',{total:window.wudictI18n.number(total)})}`);
-        if(task.dictionaryTotal)parts.push(t('dictUI.dictionariesProgress',{done:window.wudictI18n.number(task.dictionaryDone),total:window.wudictI18n.number(task.dictionaryTotal)}));
+        const done=progress.reduce((sum,child)=>sum+child.done,0),total=progress.reduce((sum,child)=>sum+child.total,0),parts=[];
+        if(task.dictionaryTotal){
+          const values={done:window.wudictI18n.number(task.dictionaryDone),total:window.wudictI18n.number(task.dictionaryTotal)};
+          parts.push(total?t('dictUI.indexedProgress',{...values,progressDone:window.wudictI18n.number(done),progressTotal:window.wudictI18n.number(total)}):t('dictUI.indexedDictionaries',values));
+        }else parts.push(taskName(task.type));
         if(task.elapsedMs)parts.push(t('dictUI.elapsed',{time:elapsedTime(task.elapsedMs)}));
         summaryText.textContent=parts.join(' · ');
       }else summaryText.textContent=active.length===1?`${taskName(active[0].type)} · ${window.wudictI18n.number(activeCount)}`:[...counts].map(([type,count])=>`${taskName(type)} (${window.wudictI18n.number(count)})`).join(', ');
@@ -181,7 +183,7 @@
         const label=document.createElement('span');label.className='work-task-label';
         const name=document.createElement('span');name.className='work-task-name';name.textContent=task.label||taskText(task.parent);label.append(name);
         if(Number.isFinite(task.percent)){const count=document.createElement('span');count.className='work-task-count';count.textContent=`${Math.round(task.percent)}%`;label.append(count)}
-        else if(task.total>0||task.done>0||task.elapsedMs>0){const count=document.createElement('span');count.className='work-task-count';const progressText=task.total>0?`${window.wudictI18n.number(task.done)} ${t('dictUI.progressOf',{total:window.wudictI18n.number(task.total)})}`:task.done?window.wudictI18n.number(task.done):'';count.textContent=[progressText,task.elapsedMs?t('dictUI.dictionaryElapsed',{time:elapsedTime(task.elapsedMs)}):''].filter(Boolean).join(' · ');label.append(count)}
+        else if(task.total>0||task.done>0||task.elapsedMs>0){const count=document.createElement('span');count.className='work-task-count';const progressText=task.total>0?`${window.wudictI18n.number(task.done)} ${t('dictUI.progressOf',{total:window.wudictI18n.number(task.total)})}`:task.done?window.wudictI18n.number(task.done):'';count.textContent=[progressText,task.elapsedMs?t('dictUI.elapsed',{time:elapsedTime(task.elapsedMs)}):''].filter(Boolean).join(' · ');label.append(count)}
         row.append(label);
         const track=document.createElement('div');track.className='work-task-progress';
         const bar=document.createElement('span');bar.style.width=Number.isFinite(task.percent)?`${task.percent}%`:task.total>0?`${Math.max(0,Math.min(100,task.done*100/task.total))}%`:'100%';
@@ -270,7 +272,7 @@
       if(s.dictionaryTotal)message+=' · '+t('dictUI.dictionariesProgress',{done:window.wudictI18n.number(s.dictionaryDone||0),total:window.wudictI18n.number(s.dictionaryTotal)});
       if(s.elapsedMs)message+=' · '+t('dictUI.elapsed',{time:elapsedTime(s.elapsedMs)});
       const activeDictionaries=(s.busyProgress||[]).filter(item=>item.active);
-      if(activeDictionaries.length===1&&activeDictionaries[0].elapsedMs)message+=' · '+t('dictUI.dictionaryElapsed',{time:elapsedTime(activeDictionaries[0].elapsedMs)});
+      if(activeDictionaries.length===1&&activeDictionaries[0].elapsedMs)message+=' · '+t('dictUI.elapsed',{time:elapsedTime(activeDictionaries[0].elapsedMs)});
       if(s.id==='rescan-indexes' && s.stage!=='dictionary')message=t(s.stage==='cleanup'?'database.cleaning':'database.working');
       if((s.busyDicts||[]).length>1)message=t('dictUI.activeJobs',{number:s.busyDicts.length})+' · '+message;
       const taskType=s.id==='folder-setup'?'setup':s.id==='rescan-indexes'?'rescan':'indexing';

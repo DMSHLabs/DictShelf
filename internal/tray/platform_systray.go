@@ -62,7 +62,11 @@ func (p *systrayPlatform) Start(cfg Config, items []Item) error {
 	} else {
 		t.SetIcon(iconPNG)
 	}
-	t.SetTooltip(cfg.tooltip()).SetMenu(menu).Show()
+	t.SetTooltip(cfg.tooltip()).SetMenu(menu)
+	if cfg.WindowsWindow {
+		t.OnClick(cfg.Open)
+	}
+	t.Show()
 	p.t = t
 	return nil
 }

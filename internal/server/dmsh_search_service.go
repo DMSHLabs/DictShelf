@@ -15,6 +15,7 @@ import (
 
 	"github.com/wuweidict/wudict/internal/dict"
 	"github.com/wuweidict/wudict/internal/htmlref"
+	"github.com/wuweidict/wudict/internal/lang"
 	"github.com/wuweidict/wudict/internal/logx"
 	"github.com/wuweidict/wudict/internal/search"
 	"github.com/wuweidict/wudict/internal/store"
@@ -72,10 +73,6 @@ type SearchSlot struct {
 //
 //	{"t":"begin","slots":[{dict,name}…]}   ordered slot layout
 //	{"t":"hit","i":N,dict,name,results…}   one dictionary's results
-//	{"t":"morph","from":…,"to":…,"lang":…} the hits that follow are for a
-//	                                       DIFFERENT word: nothing matched
-//	                                       what was typed, so its dictionary
-//	                                       form was searched instead (O3)
 //	{"t":"end"}                            all dictionaries done
 type SearchEvent struct {
 	T       string        `json:"t"`
@@ -119,10 +116,7 @@ type SearchEvent struct {
 	// reads as nothing having happened the first time.
 	Indexing bool `json:"indexing,omitempty"`
 
-	// The "morph" line: From is what the user typed, To the dictionary form
-	// actually searched, Lang the language that produced it. Every "hit" after
-	// it belongs to To - which is why it is a line of its own and not a flag on
-	// the hits: the client has to be able to SAY so.
+	// Legacy morphology event fields retained for decoding older streams.
 	From string `json:"from,omitempty"`
 	To   string `json:"to,omitempty"`
 	Lang string `json:"lang,omitempty"`
@@ -311,10 +305,7 @@ func (s *Server) Search(parent context.Context, request SearchRequest, emit func
 		return emitErr
 	}
 
-	// renderHit turns one dictionary's answer into its result event. Extracted
-	// because the morphology wave below emits the same shape for the same
-	// slots - a second copy of the rewrite/format pipeline would be a second
-	// place for it to drift.
+	// renderHit turns one dictionary's answer into its result event.
 	renderHit := func(i int, h search.Hit) SearchEvent {
 		id := entries[i].ID
 		name := h.Meta.Name
@@ -382,41 +373,31 @@ func (s *Server) Search(parent context.Context, request SearchRequest, emit func
 	budget := 30 * time.Second
 	ctx, cancel := context.WithTimeout(ctx, budget)
 	defer cancel()
-	// Metas are kept because each carries the dictionary's declared language,
-	// and the morphology wave needs it. Nothing is opened to obtain them: the
-	// search callback is invoked for EVERY dictionary, hit or miss.
-	metas := make([]dict.Meta, len(entries))
-	// missed marks the dictionaries that actually searched and came back
-	// EMPTY - the only ones the second wave has anything to ask. One that hit
-	// has answered the question; one that was deferred (too heavy), errored,
-	// or does not support this mode has said nothing about the word, and
-	// asking it the same question again with a lemma gets the same refusal.
-	// If nothing missed there is no second wave at all, and no lemma pack is
-	// loaded to serve a search that never happened.
-	//
-	// Per dictionary, not per search (D89): a gate on the WHOLE collection
-	// coming back empty would make lemmatization depend on what unrelated
-	// dictionaries are installed beside the one being read. One Babylon
-	// glossary carrying "estuviera" as a hand-listed alias of "estar" would
-	// suppress the lemma probe for every proper Spanish dictionary in the same
-	// search - each of which indexes lemmas only, and each of which would
-	// answer. The cost of the wider gate is that a language's pack can load on
-	// a search that already partly succeeded; it is still bounded by
-	// MORPH_CACHE, and the retry still goes only to dictionaries that returned
-	// nothing.
-	missed := make([]bool, len(entries))
-	empty := 0
-	search.StreamOpen(ctx, openers, mode, q, n, func(i int, h search.Hit) {
-		metas[i] = h.Meta
-		// Callbacks are serialised by StreamOpen, so this needs no lock.
-		if h.Err == nil && !h.Skipped && len(h.Results) == 0 {
-			missed[i], empty = true, empty+1
-		}
+	search.StreamOpenWithTerms(ctx, openers, mode, q, n, s.searchTermFor(entries, mode, q), func(i int, h search.Hit) {
 		writeLine(renderHit(i, h))
 	})
-	if empty > 0 && !search.HasMask(q) && mode != search.WholeWordLemma && mode != search.ExactLemma {
-		s.lemmaWave(ctx, func(event streamMsg) { writeLine(searchEventFromStream(event)) }, func(i int, hit search.Hit) streamMsg { return searchEventToStream(renderHit(i, hit)) }, entries, metas, missed, openers, mode, q, n)
-	}
 	writeLine(SearchEvent{T: "end"})
 	return emitErr
+}
+
+// searchTermFor adds the lemma to the same dictionary query only in the two
+// explicit lemma modes. The store searches both alternatives together.
+func (s *Server) searchTermFor(entries []*entry, mode search.Mode, q string) func(int, dict.Meta, string) string {
+	if (mode != search.WholeWordLemma && mode != search.ExactLemma) || !s.Morph.Enabled() || strings.ContainsAny(q, " \t\r\n") {
+		return nil
+	}
+	return func(i int, meta dict.Meta, typed string) string {
+		code := lang.Resolve(meta.IndexLang, langPath(entries[i].Path), s.reg.Dirs(), meta.Name)
+		if code == "" {
+			code = "en"
+		}
+		if !s.Morph.Supports(code) {
+			return typed
+		}
+		lemma, ok := s.Morph.Lemma(code, typed)
+		if !ok || lemma == typed {
+			return typed
+		}
+		return typed + "\x1f" + lemma
+	}
 }

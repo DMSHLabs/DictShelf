@@ -75,7 +75,6 @@ var Notices string
 // About box, setup page - sources its wording from here or mirrors it.
 const (
 	ProductName = "DictShelf"
-	Tagline     = "Search every dictionary you own, from one browser tab."
 	SiteURL     = "https://wudict.legbehindneck.com"
 	RepoURL     = "https://github.com/wuweidict/wudict"
 )
@@ -435,9 +434,9 @@ MANUAL
   https://wudict.legbehindneck.com
 
 ABOUT
-  %s - %s
+  %s %s
   %s
-`, Version, ProductName, Tagline, RepoURL)
+`, ProductName, Version, RepoURL)
 	help = strings.ReplaceAll(help, "~/.wudict/", "~/.dmshlabs/dictshelf/")
 	return strings.ReplaceAll(help, "wudict.toml", config.Name)
 }
@@ -1492,11 +1491,13 @@ Hint: pick another port with --port, e.g.:  wudict --port %s
 	// terminal launch, every service unit, Android) Wrap is a pass-through.
 	// Name is left empty so the menu uses the package default, DictShelf.
 	return tray.Wrap(tray.Config{
-		Enabled:   trayWanted,
-		Explicit:  cfg.Tray != nil,
-		GUI:       gui,
-		InProcess: listenerlessDesktop,
-		Version:   Version,
+		Enabled:       trayWanted,
+		Explicit:      cfg.Tray != nil,
+		GUI:           gui,
+		InProcess:     listenerlessDesktop,
+		WindowsWindow: runtime.GOOS == "windows" && listenerlessDesktop,
+		Language:      reg.UILanguageChoice,
+		Version:       Version,
 		URL: func() string {
 			if listenerlessDesktop {
 				return ""

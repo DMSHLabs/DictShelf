@@ -1,6 +1,8 @@
 # Localization: status and next tasks
 
-2026-10-25 Startup dictionary-list progress now names file checks and metadata reads; indexing progress adds completed dictionaries and elapsed time overall and per dictionary. EN/RU entries added; catalog and runtime checks remain pending.
+2026-10-26 Main search now labels the initial five-result action `5+` with localized indexing-priority tooltip text; the count is replaced by paged totals after indexing/counting. EN/RU catalog entries were added; catalog/runtime wording checks remain pending.
+
+2026-10-25 Startup dictionary-list progress names file checks and metadata reads, and continues the metadata count in a non-blocking status line after the first row; indexing progress adds completed dictionaries and elapsed time overall and per dictionary. EN/RU entries added; catalog and runtime checks remain pending.
 
 2026-10-22 DictShelf identity: Android reset and remote-delete prompts now name `dictshelf.toml`; catalog tests and `go test ./...` pass. Android FOSS debug APK built for arm64/x86_64; no device install or runtime wording check was performed.
 2026-10-23 System Log: added the EN/RU label for independent search and article-opening diagnostics. Catalog/runtime checks remain pending.

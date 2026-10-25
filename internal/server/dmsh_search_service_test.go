@@ -357,14 +357,24 @@ func TestSharedSearchMorphology(t *testing.T) {
 	for _, e := range s.reg.all() {
 		e.closeNow()
 	}
-	events := collectLookup(t, s, SearchRequest{Query: "knew", Mode: "exact"})
-	var morphs []SearchEvent
-	for _, event := range events {
-		if event.T == "morph" {
-			morphs = append(morphs, event)
+	for _, tc := range []struct {
+		mode string
+		want int
+	}{
+		{"exact", 0}, {"word", 0}, {"wordLemma", 1}, {"exactLemma", 1},
+	} {
+		events := collectLookup(t, s, SearchRequest{Query: "knew", Mode: tc.mode})
+		found := 0
+		for _, event := range events {
+			if event.T == "morph" {
+				t.Fatalf("%s emitted a second-wave event: %+v", tc.mode, events)
+			}
+			if event.T == "hit" {
+				found += len(event.Results)
+			}
 		}
-	}
-	if len(morphs) != 1 || morphs[0].To != "know" || events[len(events)-1].T != "end" {
-		t.Fatalf("shared lookup lost morphology: %+v", events)
+		if found != tc.want || events[len(events)-1].T != "end" {
+			t.Fatalf("%s: got %d results, want %d: %+v", tc.mode, found, tc.want, events)
+		}
 	}
 }

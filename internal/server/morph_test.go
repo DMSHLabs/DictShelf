@@ -92,164 +92,75 @@ func dslFile(name string, words ...string) string {
 	return b.String()
 }
 
-// The governing rule: a DICTIONARY that found something is never
-// second-guessed. The only dictionary here holds "casa", so "casa" must
-// produce no morphology message at all - not one that is ignored, none
-// written.
-func TestNoLemmaWhenTheSearchHit(t *testing.T) {
-	s := morphServer(t, map[string]string{"es-es-x.dsl": dslFile("Spanish", "casa", "ser")})
-	getDicts(t, s, "/api/dicts")
-
-	msgs := stream(t, s, "/api/search?q=casa&mode=exact&dict=all")
-	if len(morphMsgs(msgs)) != 0 {
-		t.Fatalf("a search with results must not lemmatize: %+v", msgs)
-	}
-	var hits int
-	for _, m := range msgs {
-		if m.T == "hit" {
-			hits += len(m.Results)
+func searchHitsByName(msgs []streamMsg) map[string][]string {
+	out := make(map[string][]string)
+	for _, msg := range msgs {
+		if msg.T != "hit" {
+			continue
+		}
+		for _, result := range msg.Results {
+			out[msg.Name] = append(out[msg.Name], result.Headword)
 		}
 	}
-	if hits == 0 {
-		t.Fatal("setup: the query was supposed to hit")
-	}
+	return out
 }
 
-// The wave is per dictionary, not per search. One dictionary lists the
-// inflected form itself - as a Babylon glossary with hand-written aliases
-// does - and the other indexes lemmas only. The first hits; the second must
-// still be asked "know", instead of being silenced by its neighbour's hit.
-func TestLemmaReachesDictionariesThatMissed(t *testing.T) {
-	s := morphServer(t, map[string]string{
-		"en-en-a.dsl": dslFile("Inflected", "knew"),
-		"en-en-b.dsl": dslFile("Lemmas", "know"),
-	})
-	rows := getDicts(t, s, "/api/dicts")
-	if len(rows) != 2 {
-		t.Fatalf("setup: %d dictionaries, want 2", len(rows))
-	}
-	byName := map[string]string{}
-	for _, d := range rows {
-		byName[d.Name] = d.ID
-	}
-
-	msgs := stream(t, s, "/api/search?q=knew&mode=exact&dict=all")
-	mm := morphMsgs(msgs)
-	if len(mm) != 1 {
-		t.Fatalf("want exactly one morph message, got %+v", msgs)
-	}
-	if mm[0].From != "knew" || mm[0].To != "know" {
-		t.Fatalf("morph message = %+v, want knew -> know", mm[0])
-	}
-	// Before the notice: the dictionary that holds "knew" answered. After it:
-	// the one that does not, and only that one - a dictionary that already hit
-	// must never be sent a second set of results for the same query.
-	before, after := map[string]int{}, map[string]int{}
-	seen := false
-	for _, m := range msgs {
-		switch {
-		case m.T == "morph":
-			seen = true
-		case m.T == "hit" && len(m.Results) > 0:
-			if seen {
-				after[m.Dict] += len(m.Results)
-			} else {
-				before[m.Dict] += len(m.Results)
-			}
-		}
-	}
-	if before[byName["Inflected"]] != 1 || len(before) != 1 {
-		t.Fatalf("first wave = %v, want one result from the inflected dictionary", before)
-	}
-	if after[byName["Lemmas"]] != 1 || len(after) != 1 {
-		t.Fatalf("lemma wave = %v, want one result from the lemma dictionary", after)
-	}
-}
-
-// A dictionary whose name and folder say nothing is searched with the ENGLISH
-// lemma - the one language assumed without evidence.
-func TestLemmaFallsBackToEnglish(t *testing.T) {
+func TestLemmaOnlyInExplicitModes(t *testing.T) {
 	s := morphServer(t, map[string]string{"words.dsl": dslFile("Unlabelled", "know")})
 	getDicts(t, s, "/api/dicts")
-
-	msgs := stream(t, s, "/api/search?q=knew&mode=exact&dict=all")
-	mm := morphMsgs(msgs)
-	if len(mm) != 1 {
-		t.Fatalf("want exactly one morph message, got %+v", msgs)
-	}
-	if mm[0].From != "knew" || mm[0].To != "know" || mm[0].Lang != "en" {
-		t.Fatalf("morph message = %+v, want knew -> know (en)", mm[0])
-	}
-	// The notice may never stand over an empty list: results follow it.
-	var after int
-	seen := false
-	for _, m := range msgs {
-		switch {
-		case m.T == "morph":
-			seen = true
-		case seen && m.T == "hit":
-			after += len(m.Results)
+	for _, mode := range []string{"exact", "word", "prefix", "suffix", "contains", "fts"} {
+		msgs := stream(t, s, "/api/search?q=knew&mode="+mode+"&dict=all")
+		if len(morphMsgs(msgs)) != 0 || len(searchHitsByName(msgs)) != 0 {
+			t.Fatalf("%s searched a lemma without an explicit lemma mode: %+v", mode, msgs)
 		}
 	}
-	if after != 1 {
-		t.Fatalf("want one result after the morph message, got %d", after)
+	for _, mode := range []string{"wordLemma", "exactLemma"} {
+		msgs := stream(t, s, "/api/search?q=knew&mode="+mode+"&dict=all")
+		if got := searchHitsByName(msgs)["Unlabelled"]; len(got) != 1 || got[0] != "know" {
+			t.Fatalf("%s did not find the lemma: %+v", mode, msgs)
+		}
+		if len(morphMsgs(msgs)) != 0 {
+			t.Fatalf("%s emitted a second-wave event: %+v", mode, msgs)
+		}
 	}
 }
 
-// Candidates are offered only to dictionaries of the matching language. Both
-// dictionaries are searched in the first wave and both miss; the second wave
-// asks each language its own question, and each answer reaches only the slots
-// of that language.
-func TestLemmaIsRestrictedToTheMatchingLanguage(t *testing.T) {
+func TestExplicitLemmaModesIncludeBothForms(t *testing.T) {
+	s := morphServer(t, map[string]string{"en-en-a.dsl": dslFile("English", "knew", "know")})
+	getDicts(t, s, "/api/dicts")
+	for _, mode := range []string{"wordLemma", "exactLemma"} {
+		msgs := stream(t, s, "/api/search?q=knew&mode="+mode+"&dict=all")
+		got := searchHitsByName(msgs)["English"]
+		if len(got) != 2 || !(got[0] == "knew" && got[1] == "know" || got[0] == "know" && got[1] == "knew") {
+			t.Fatalf("%s should return typed word and lemma together, got %v", mode, got)
+		}
+	}
+}
+
+func TestExplicitLemmaUsesDictionaryLanguage(t *testing.T) {
 	s := morphServer(t, map[string]string{
 		"en-en-a.dsl": dslFile("English", "know"),
 		"ru-ru-b.dsl": dslFile("Russian", "идти"),
 	})
-	rows := getDicts(t, s, "/api/dicts")
-	if len(rows) != 2 {
-		t.Fatalf("setup: %d dictionaries, want 2", len(rows))
-	}
-	byName := map[string]string{}
-	for _, d := range rows {
-		byName[d.Name] = d.ID
-	}
-
-	for _, tc := range []struct {
-		q, to, code, dict string
-	}{
-		{"knew", "know", "en", byName["English"]},
-		{"идет", "идти", "ru", byName["Russian"]}, // via the ё retry
+	getDicts(t, s, "/api/dicts")
+	for _, tc := range []struct{ query, want, other string }{
+		{"knew", "English", "Russian"},
+		{"идет", "Russian", "English"},
 	} {
-		msgs := stream(t, s, "/api/search?q="+tc.q+"&mode=exact&dict=all")
-		mm := morphMsgs(msgs)
-		if len(mm) != 1 {
-			t.Fatalf("%s: want exactly one morph message, got %+v", tc.q, msgs)
-		}
-		if mm[0].To != tc.to || mm[0].Lang != tc.code {
-			t.Fatalf("%s: morph = %+v, want %s (%s)", tc.q, mm[0], tc.to, tc.code)
-		}
-		seen := false
-		for _, m := range msgs {
-			if m.T == "morph" {
-				seen = true
-				continue
-			}
-			if seen && m.T == "hit" && len(m.Results) > 0 && m.Dict != tc.dict {
-				t.Fatalf("%s: the other language's dictionary answered: %+v", tc.q, m)
-			}
+		msgs := stream(t, s, "/api/search?q="+tc.query+"&mode=exactLemma&dict=all")
+		hits := searchHitsByName(msgs)
+		if len(hits[tc.want]) != 1 || len(hits[tc.other]) != 0 {
+			t.Fatalf("%q searched the wrong language: %+v", tc.query, hits)
 		}
 	}
 }
 
-// MORPH_CACHE=0 is off, and off means no pack is ever linked in: the query
-// that would have been lemmatized simply returns nothing.
-func TestLemmaDisabled(t *testing.T) {
+func TestExplicitLemmaDisabled(t *testing.T) {
 	s := morphServer(t, map[string]string{"en-en-a.dsl": dslFile("English", "know")})
 	s.Morph = morph.New(0, "")
 	getDicts(t, s, "/api/dicts")
-
-	msgs := stream(t, s, "/api/search?q=knew&mode=exact&dict=all")
-	if len(morphMsgs(msgs)) != 0 {
-		t.Fatalf("MORPH_CACHE=0 must not lemmatize: %+v", msgs)
+	msgs := stream(t, s, "/api/search?q=knew&mode=exactLemma&dict=all")
+	if len(searchHitsByName(msgs)) != 0 {
+		t.Fatalf("disabled lemma pack must not add a form: %+v", msgs)
 	}
 }

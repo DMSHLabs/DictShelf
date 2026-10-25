@@ -9,6 +9,7 @@ import (
 	"errors"
 	"maps"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/wuweidict/wudict/internal/logx"
@@ -19,6 +20,95 @@ type indexOptions struct {
 	Index    bool `json:"index"`
 	Contains bool `json:"contains"`
 	FullText bool `json:"fullText"`
+}
+
+type pendingDictionaryIndex struct {
+	entry    *entry
+	key      string
+	plan     indexOptions
+	prepared bool
+}
+
+type priorityDictionaryQueue struct {
+	mu      sync.Mutex
+	items   []pendingDictionaryIndex
+	active  map[string]bool
+	changed func([]string)
+}
+
+func newPriorityDictionaryQueue(items []pendingDictionaryIndex, changed func([]string)) *priorityDictionaryQueue {
+	q := &priorityDictionaryQueue{items: append([]pendingDictionaryIndex(nil), items...), active: make(map[string]bool), changed: changed}
+	return q
+}
+
+func (q *priorityDictionaryQueue) prioritize(id string) bool {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	for i, item := range q.items {
+		if item.entry.ID != id {
+			continue
+		}
+		if i > 0 {
+			item = q.items[i]
+			copy(q.items[1:i+1], q.items[:i])
+			q.items[0] = item
+			if q.changed != nil {
+				q.changed(q.idsLocked())
+			}
+		}
+		return true
+	}
+	return q.active[id]
+}
+
+func (q *priorityDictionaryQueue) idsLocked() []string {
+	ids := make([]string, len(q.items))
+	for i, item := range q.items {
+		ids[i] = item.entry.ID
+	}
+	return ids
+}
+
+func (q *priorityDictionaryQueue) next() (pendingDictionaryIndex, bool) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	if len(q.items) == 0 {
+		return pendingDictionaryIndex{}, false
+	}
+	item := q.items[0]
+	q.items = q.items[1:]
+	q.active[item.entry.ID] = true
+	return item, true
+}
+
+func (q *priorityDictionaryQueue) finish(id string) {
+	q.mu.Lock()
+	delete(q.active, id)
+	q.mu.Unlock()
+}
+
+func runPriorityDictionaryQueue(q *priorityDictionaryQueue, workers int, stopped func() bool, run func(pendingDictionaryIndex)) {
+	if workers < 1 {
+		workers = 1
+	}
+	var wg sync.WaitGroup
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for {
+				item, ok := q.next()
+				if !ok {
+					return
+				}
+				if stopped == nil || !stopped() {
+					run(item)
+				}
+				q.finish(item.entry.ID)
+			}
+		}()
+	}
+	wg.Wait()
 }
 
 func (p *Prefs) newIndexDefaults() indexOptions {
@@ -204,18 +294,12 @@ func preparedHasIndexes(path string, wanted indexOptions) bool {
 func (r *Registry) prepareNewDictionaries(parent ...*job) {
 	r.indexQueueMu.Lock()
 	defer r.indexQueueMu.Unlock()
-	type pendingIndex struct {
-		entry    *entry
-		key      string
-		plan     indexOptions
-		prepared bool
-	}
 	var queueJob *job
 	if len(parent) > 0 {
 		queueJob = parent[0]
 	}
 	entries := r.all()
-	var pending []pendingIndex
+	var pending []pendingDictionaryIndex
 	for _, e := range entries {
 		key := e.indexRemovalKey()
 		p := r.prefs
@@ -238,7 +322,7 @@ func (r *Registry) prepareNewDictionaries(parent ...*job) {
 			e.gen.Add(1)
 			continue
 		}
-		pending = append(pending, pendingIndex{entry: e, key: key, plan: v, prepared: hasBrowseIndex(e.Path)})
+		pending = append(pending, pendingDictionaryIndex{entry: e, key: key, plan: v, prepared: hasBrowseIndex(e.Path)})
 	}
 	if queueJob != nil {
 		queueJob.update(func(st *jobStatus) {
@@ -253,7 +337,7 @@ func (r *Registry) prepareNewDictionaries(parent ...*job) {
 	if len(pending) == 0 {
 		return
 	}
-	process := func(item pendingIndex) {
+	process := func(item pendingDictionaryIndex) {
 		e := item.entry
 		ctx := context.Background()
 		cancel := func() {}
@@ -370,7 +454,26 @@ func (r *Registry) prepareNewDictionaries(parent ...*job) {
 			})
 		}
 	}
-	runIndexTasks(pending, func() bool { return queueJob != nil && queueJob.canceled() }, process)
+	queue := newPriorityDictionaryQueue(pending, func(ids []string) {
+		if queueJob != nil {
+			queueJob.update(func(st *jobStatus) { st.QueuedDicts = ids })
+		}
+	})
+	r.priorityMu.Lock()
+	r.priorityQueue = queue
+	r.priorityMu.Unlock()
+	defer func() {
+		r.priorityMu.Lock()
+		if r.priorityQueue == queue {
+			r.priorityQueue = nil
+		}
+		r.priorityMu.Unlock()
+	}()
+	workers := cap(currentIndexLimit())
+	if workers > len(pending) {
+		workers = len(pending)
+	}
+	runPriorityDictionaryQueue(queue, workers, func() bool { return queueJob != nil && queueJob.canceled() }, process)
 	if queueJob != nil && queueJob.canceled() {
 		queueJob.update(func(st *jobStatus) { st.Canceled = true })
 	}
