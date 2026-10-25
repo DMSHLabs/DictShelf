@@ -1,25 +1,25 @@
 # Agent handoff — current state
 
-Current checkout: `codex/dictionary-icon-tests` at `cbda5441`, based on `dev`.
-The working tree contains an uncommitted shared ingest-preparation pool and
-bounded SQLite batch writer. Each dictionary keeps one sequential Reader and
-one SQLite writer; prepared articles retain source IDs, redirect order and
-cancellation. `INDEX_WORKERS` still limits concurrent dictionaries. No index
-schema or ingest-version change is needed because stored rows are unchanged.
-`make check` (tidy, vet, full FTS5 test suite) passes with Windows GCC;
-targeted race tests pass three times. Tagless `go build ./...` and
-`git diff --check` pass. Tidy's unrelated go.sum deletion was restored.
-On 2026-10-25, a title-only ingest of `wiktionary_en_all_nopic_2026-08.zim`
-(9.13M source records) took 87.5 s: scan/write 68.7 s, redirect resolution
-3.2 s, headword index 3.2 s, Browse anchors 10.5 s and database optimize 1.7 s.
-The reported ~8.6M progress is in the scan/write phase, not redirect resolution.
-For comparison, upstream `master` (`887868a7`) indexed the same ZIM in 1377.7 s
-and produced a 19.75 GB database. This is not an apples-to-apples pipeline
-benchmark: upstream's ordinary ZIM Reader loads and stores article bodies,
-while this fork's explicit ZIM index contains titles only. Both generated
-databases remain under `D:\Dictionaries\wuDict\Test` because automatic file
-policy rejected deletion after the user authorized cleanup; the fork phase log
-is also retained. Windows/Android interactive checks remain unverified.
+Current checkout: `codex/dictionary-icon-tests` at `8b3ee97e`, based on `dev`;
+working tree clean. The shared ingest-preparation pool and bounded SQLite batch
+writer are committed. Each dictionary keeps one sequential Reader and one
+SQLite writer; prepared articles retain source IDs, redirect order and
+cancellation. `INDEX_WORKERS` still limits concurrent dictionaries. Stored rows
+are unchanged, so there is no schema or ingest-version change.
+`make check` (tidy, vet, full FTS5 test suite) passed with Windows GCC; targeted
+race tests passed three times. Tagless `go build ./...` and `git diff --check`
+passed. Tidy's unrelated go.sum deletion was restored.
+
+2026-10-25 headword-ingest samples on Windows, all optional FTS/contains/media
+plans off: DSL Oxford 8/9, 71,293 entries in 7.1 s (60 MB DB); DSL Urban 2015,
+1,418,551 in 71.2 s (983 MB DB); MDX Longman 6, 69,172 in 7.1 s (107 MB DB);
+Russian Wiktionary ZIM, 1,528,188 in 33.4 s (386 MB DB). These are per-format
+smoke/performance samples, not directly comparable rates: ZIM uses the
+title-only reader, other formats store article bodies. `.lsd` Slob files have no
+ingest Reader in this build, so the CLI reports `no ingest reader for format`.
+Outputs remain under `D:\Dictionaries\wuDict\Test\index-samples-2026-10-25`.
+The separate Wiktionary EN upstream/full-reader timing comparison is recorded
+below. Windows/Android interactive checks remain unverified.
 Embedded LSD icon tests passed before this change; icon display on
 Windows/Android remains to be checked.
 
