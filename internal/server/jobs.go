@@ -30,10 +30,13 @@ import (
 // jobStatus is a job as a poll or a stream reports it. Which fields mean
 // something depends on the kind of job; the rest stay zero.
 type jobStatus struct {
-	Running bool
+	Running   bool
+	StartedAt time.Time `json:"-"`
+	ElapsedMS int64
 	// Done of Total: dictionaries for a rebuild, bytes for a download,
 	// entries for an index change.
-	Done, Total int64
+	Done, Total                     int64
+	DictionaryDone, DictionaryTotal int64
 	// Current is the item in hand, with its own progress.
 	Current                   string
 	CurrentDone, CurrentTotal int64
@@ -55,14 +58,16 @@ type jobStatus struct {
 }
 
 type dictionaryWorkProgress struct {
-	ID            string `json:"id"`
-	Name          string `json:"name,omitempty"`
-	Feature       string `json:"feature,omitempty"`
-	Action        string `json:"action,omitempty"`
-	Active        bool   `json:"active"`
-	Done          int64  `json:"done"`
-	Total         int64  `json:"total"`
-	StopRequested bool   `json:"stopRequested,omitempty"`
+	ID            string    `json:"id"`
+	Name          string    `json:"name,omitempty"`
+	Feature       string    `json:"feature,omitempty"`
+	Action        string    `json:"action,omitempty"`
+	Active        bool      `json:"active"`
+	Done          int64     `json:"done"`
+	Total         int64     `json:"total"`
+	StopRequested bool      `json:"stopRequested,omitempty"`
+	ElapsedMS     int64     `json:"elapsedMs"`
+	StartedAt     time.Time `json:"-"`
 }
 
 // jobTable is every job, running or last run, by key. The zero value is
@@ -109,6 +114,7 @@ func (t *jobTable) start(key string, timeout time.Duration, init jobStatus, fn f
 		ctx, cancel = context.WithCancel(context.Background())
 	}
 	init.Running = true
+	init.StartedAt = time.Now()
 	j := &job{t: t, st: init, ctx: ctx, cancel: cancel, changed: make(chan struct{})}
 	t.jobs[key] = j
 	t.wg.Add(1)
@@ -134,6 +140,9 @@ func (t *jobTable) start(key string, timeout time.Duration, init jobStatus, fn f
 func (j *job) end(key string) {
 	j.cancel()
 	j.t.mu.Lock()
+	if !j.st.StartedAt.IsZero() {
+		j.st.ElapsedMS = time.Since(j.st.StartedAt).Milliseconds()
+	}
 	j.st.Running = false
 	j.signalLocked()
 	errText := j.st.Err
@@ -315,12 +324,14 @@ func trackJobDictionary(j *job, id string, active bool) {
 			for i := range st.ActiveProgress {
 				if st.ActiveProgress[i].ID == id {
 					st.ActiveProgress[i].Active = true
+					st.ActiveProgress[i].StartedAt = time.Now()
+					st.ActiveProgress[i].ElapsedMS = 0
 					found = true
 					break
 				}
 			}
 			if !found {
-				st.ActiveProgress = append(st.ActiveProgress, dictionaryWorkProgress{ID: id, Active: true})
+				st.ActiveProgress = append(st.ActiveProgress, dictionaryWorkProgress{ID: id, Active: true, StartedAt: time.Now()})
 			}
 			return
 		}
@@ -330,6 +341,9 @@ func trackJobDictionary(j *job, id string, active bool) {
 				for p := range st.ActiveProgress {
 					if st.ActiveProgress[p].ID == id {
 						st.ActiveProgress[p].Active = false
+						if !st.ActiveProgress[p].StartedAt.IsZero() {
+							st.ActiveProgress[p].ElapsedMS = time.Since(st.ActiveProgress[p].StartedAt).Milliseconds()
+						}
 						break
 					}
 				}

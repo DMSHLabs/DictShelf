@@ -1077,6 +1077,7 @@ type dictInfo struct {
 type dictMsg struct {
 	T     string    `json:"t"`
 	Total int       `json:"total,omitempty"`
+	Done  int       `json:"done,omitempty"`
 	Dict  *dictInfo `json:"dict,omitempty"`
 	// GroupsProblems counts what groups.ini skipped (groups.go), on "begin":
 	// a hand edit with a broken regex is otherwise invisible until someone
@@ -1122,7 +1123,7 @@ func (s *Server) handleDicts(w http.ResponseWriter, r *http.Request) {
 		}
 		stream.line(message)
 		return nil
-	})
+	}, r.URL.Query().Get("progress") == "1")
 	if result.notModified {
 		w.Header().Set("Cache-Control", "no-cache")
 		w.WriteHeader(http.StatusNotModified)

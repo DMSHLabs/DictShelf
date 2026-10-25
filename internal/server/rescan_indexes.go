@@ -166,7 +166,7 @@ func (s *Server) startRescanIndexes(body rescanIndexesRequest) {
 					}
 					if !found {
 						st.ActiveDicts = append(st.ActiveDicts, id)
-						st.ActiveProgress = append(st.ActiveProgress, dictionaryWorkProgress{ID: id, Active: true})
+						st.ActiveProgress = append(st.ActiveProgress, dictionaryWorkProgress{ID: id, Active: true, StartedAt: time.Now()})
 					}
 				} else {
 					for i, id := range st.ActiveDicts {
@@ -178,6 +178,9 @@ func (s *Server) startRescanIndexes(body rescanIndexesRequest) {
 					for i, item := range st.ActiveProgress {
 						if item.ID == id {
 							st.ActiveProgress[i].Active = false
+							if !st.ActiveProgress[i].StartedAt.IsZero() {
+								st.ActiveProgress[i].ElapsedMS = time.Since(st.ActiveProgress[i].StartedAt).Milliseconds()
+							}
 							break
 						}
 					}

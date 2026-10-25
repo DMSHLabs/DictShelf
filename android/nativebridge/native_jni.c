@@ -43,7 +43,7 @@ extern char *WudictGoBridgeWebResource(char *rawURL, char *headers);
 extern char *WudictGoBridgeMediaOpen(char *rawURL, char *headers);
 extern int WudictGoBridgeMediaRead(long long handle, char *dst, int size);
 extern void WudictGoBridgeMediaClose(long long handle);
-extern int WudictGoBridgeDictStreamStart(void);
+extern int WudictGoBridgeDictStreamStart(int progress);
 extern int WudictGoBridgeRescanStreamStart(void);
 extern int WudictGoBridgeRescanIndexesStart(char *origin, char *request);
 extern int WudictGoBridgeIngestStart(char *origin, char *query);
@@ -53,9 +53,9 @@ extern char *WudictGoBridgeDictStreamPoll(int id);
 extern void WudictGoBridgeDictStreamCancel(int id);
 
 JNIEXPORT jint JNICALL
-Java_com_dmshlabs_dictshelf_GoBridge_nativeDictStreamStart(JNIEnv *env, jclass owner) {
+Java_com_dmshlabs_dictshelf_GoBridge_nativeDictStreamStart(JNIEnv *env, jclass owner, jboolean progress) {
     (void)env; (void)owner;
-    return (jint)WudictGoBridgeDictStreamStart();
+    return (jint)WudictGoBridgeDictStreamStart(progress ? 1 : 0);
 }
 
 JNIEXPORT jint JNICALL

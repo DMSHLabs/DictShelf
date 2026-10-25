@@ -789,6 +789,7 @@ iframe.article{width:100%;border:0;display:block;background:var(--wd-article-bg,
    searched for, and that has to be read BEFORE the articles it explains. */
 .morphnote{margin-top:0;margin-bottom:var(--sp-1)}
 .empty{padding-top:var(--sp-5);text-align:center;color:var(--label-quiet)}
+.empty.boot .boot-progress{display:block;width:min(28rem,80vw);height:.75em;margin:.75em auto 0;accent-color:var(--accent)}
 .empty svg path{fill:var(--line)}
 /* the search bar is inert until at least one dictionary is usable */
 input:disabled,select:disabled{opacity:.55;cursor:not-allowed}

@@ -69,7 +69,7 @@ final class GoBridge {
     private static native String nativeUserFilesSnapshot();
     private static native String nativeUserFileOperation(String method, String argument);
     private static native String nativeUserStorage(String method, String argument);
-    private static native int nativeDictStreamStart();
+    private static native int nativeDictStreamStart(boolean progress);
     private static native int nativeRescanStreamStart();
     private static native int nativeRescanIndexesStart(String origin, String request);
     private static native int nativeIngestStart(String origin, String query);
@@ -78,9 +78,9 @@ final class GoBridge {
     private static native String nativeDictStreamPoll(int id);
     private static native void nativeDictStreamCancel(int id);
 
-    static int startDictStream() {
+    static int startDictStream(boolean progress) {
         if (!loaded) throw new IllegalStateException("Go bridge is unavailable");
-        return nativeDictStreamStart();
+        return nativeDictStreamStart(progress);
     }
 
     static int startRescanStream() {

@@ -60,11 +60,12 @@
     }
     return values;
   }
-  function taskProgressKey(task){return taskProgress(task).length+':'+(task.children||[]).map(child=>child.label+':'+(child.active??'')).join('\u0000')}
+  function taskProgressKey(task){return taskProgress(task).length+':'+(task.children||[]).map(child=>child.label+':'+(child.active??'')+':'+Math.floor((child.elapsedMs||0)/1000)).join('\u0000')}
   function shouldRenderTaskProgress(task){
     const now=performance.now(),values=taskProgress(task),key=taskProgressKey(task);
     const previous=renderedProgress.get(task.id);
     if(!previous||previous.key!==key)return true;
+    if((task.elapsedMs||task.children?.some(child=>child.elapsedMs>0))&&now-previous.at>=1000)return true;
     if(values.length)return values.some((value,index)=>value-previous.values[index]>=1||value>=100&&previous.values[index]<100);
     return now-previous.at>=200;
   }
@@ -80,14 +81,20 @@
     let id;
     do{id=(nextTaskID+1)>>>0;nextTaskID=id}while(id===0||tasks.has(id));
     tasks.set(id,{id,type,label:String(label||''),message:'',done:Math.max(0,Number(options.done)||0),total:Math.max(0,Number(options.total)||0),children:Array.isArray(options.children)?options.children.map(child=>typeof child==='string'?{label:child}:child).filter(child=>child&&child.label).map(child=>({label:String(child.label),done:Math.max(0,Number(child.done)||0),total:Math.max(0,Number(child.total)||0),percent:Number.isFinite(child.percent)?Math.max(0,Math.min(100,Number(child.percent))):null,active:typeof child.active==='boolean'?child.active:undefined,stop:typeof child.stop==='function'?child.stop:null,stopRequested:!!child.stopRequested})):[],stop:options.stop||null,stopRequested:!!options.stopRequested});
-    rememberTaskProgress(tasks.get(id));renderTasks();return id;
+    const task=tasks.get(id);task.dictionaryDone=Math.max(0,Number(options.dictionaryDone)||0);task.dictionaryTotal=Math.max(0,Number(options.dictionaryTotal)||0);task.elapsedMs=Math.max(0,Number(options.elapsedMs)||0);
+    if(Array.isArray(options.children))task.children=task.children.map((child,index)=>({...child,elapsedMs:Math.max(0,Number(options.children[index]?.elapsedMs)||0)}));
+    rememberTaskProgress(task);renderTasks();return id;
   }
   function taskUpdate(id,patch={}){
     const task=tasks.get(Number(id));if(!task||!patch||typeof patch!=='object')return false;
     for(const key of ['type','label','message'])if(Object.hasOwn(patch,key))task[key]=String(patch[key]||'');
     if(Object.hasOwn(patch,'children'))task.children=Array.isArray(patch.children)?patch.children.map(child=>typeof child==='string'?{label:child}:child).filter(child=>child&&child.label).map(child=>({label:String(child.label),done:Math.max(0,Number(child.done)||0),total:Math.max(0,Number(child.total)||0),percent:Number.isFinite(child.percent)?Math.max(0,Math.min(100,Number(child.percent))):null,active:typeof child.active==='boolean'?child.active:undefined,stop:typeof child.stop==='function'?child.stop:null,stopRequested:!!child.stopRequested})):[];
+    if(Object.hasOwn(patch,'children')&&Array.isArray(patch.children))task.children=task.children.map((child,index)=>({...child,elapsedMs:Math.max(0,Number(patch.children[index]?.elapsedMs)||0)}));
     if(Object.hasOwn(patch,'done'))task.done=Math.max(0,Number(patch.done)||0);
     if(Object.hasOwn(patch,'total'))task.total=Math.max(0,Number(patch.total)||0);
+    if(Object.hasOwn(patch,'dictionaryDone'))task.dictionaryDone=Math.max(0,Number(patch.dictionaryDone)||0);
+    if(Object.hasOwn(patch,'dictionaryTotal'))task.dictionaryTotal=Math.max(0,Number(patch.dictionaryTotal)||0);
+    if(Object.hasOwn(patch,'elapsedMs'))task.elapsedMs=Math.max(0,Number(patch.elapsedMs)||0);
     if(Object.hasOwn(patch,'stopRequested'))task.stopRequested=!!patch.stopRequested;
     if(Object.hasOwn(patch,'stop'))task.stop=typeof patch.stop==='function'?patch.stop:null;
     if(shouldRenderTaskProgress(task)){rememberTaskProgress(task);scheduleTaskRender()}return true;
@@ -101,6 +108,7 @@
   }
   function taskName(type){const key=taskTypeKeys[type];return key?t(key):type}
   function taskText(task){return task.message||task.label||taskName(task.type)}
+  function elapsedTime(ms){const seconds=Math.max(0,Math.floor(ms/1000)),h=Math.floor(seconds/3600),m=Math.floor(seconds%3600/60),s=seconds%60;return h?`${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`:`${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`}
   async function taskStop(id){
     const task=tasks.get(id);if(!task?.stop||task.stopRequested)return;
     task.stopRequested=true;renderTasks();
@@ -150,7 +158,14 @@
     }else if(multiple){
       const counts=new Map();for(const task of active)counts.set(task.type,(counts.get(task.type)||0)+1);
       const activeCount=trackedChildren?activeChildren:detailCount;
-      summaryText.textContent=active.length===1?`${taskName(active[0].type)} · ${window.wudictI18n.number(activeCount)}`:[...counts].map(([type,count])=>`${taskName(type)} (${window.wudictI18n.number(count)})`).join(', ');
+      if(active.length===1&&['indexing','rescan'].includes(active[0].type)){
+        const task=active[0],progress=task.children.filter(child=>child.active&&child.total>0);
+        const done=progress.reduce((sum,child)=>sum+child.done,0),total=progress.reduce((sum,child)=>sum+child.total,0),parts=[taskName(task.type)];
+        if(total)parts.push(`${window.wudictI18n.number(done)} ${t('dictUI.progressOf',{total:window.wudictI18n.number(total)})}`);
+        if(task.dictionaryTotal)parts.push(t('dictUI.dictionariesProgress',{done:window.wudictI18n.number(task.dictionaryDone),total:window.wudictI18n.number(task.dictionaryTotal)}));
+        if(task.elapsedMs)parts.push(t('dictUI.elapsed',{time:elapsedTime(task.elapsedMs)}));
+        summaryText.textContent=parts.join(' · ');
+      }else summaryText.textContent=active.length===1?`${taskName(active[0].type)} · ${window.wudictI18n.number(activeCount)}`:[...counts].map(([type,count])=>`${taskName(type)} (${window.wudictI18n.number(count)})`).join(', ');
       toggle.hidden=false;toggle.textContent=(expanded?'▾ ':'▸ ')+t(expanded?'work.collapse':'work.expand');toggle.setAttribute('aria-expanded',String(expanded));
       toggle.setAttribute('aria-label',t(expanded?'work.collapse':'work.expand'));
       const stoppable=active.filter(task=>task.stop);
@@ -166,7 +181,7 @@
         const label=document.createElement('span');label.className='work-task-label';
         const name=document.createElement('span');name.className='work-task-name';name.textContent=task.label||taskText(task.parent);label.append(name);
         if(Number.isFinite(task.percent)){const count=document.createElement('span');count.className='work-task-count';count.textContent=`${Math.round(task.percent)}%`;label.append(count)}
-        else if(task.total>0||task.done>0){const count=document.createElement('span');count.className='work-task-count';count.textContent=task.total>0?`${window.wudictI18n.number(task.done)} ${t('dictUI.progressOf',{total:window.wudictI18n.number(task.total)})}`:window.wudictI18n.number(task.done);label.append(count)}
+        else if(task.total>0||task.done>0||task.elapsedMs>0){const count=document.createElement('span');count.className='work-task-count';const progressText=task.total>0?`${window.wudictI18n.number(task.done)} ${t('dictUI.progressOf',{total:window.wudictI18n.number(task.total)})}`:task.done?window.wudictI18n.number(task.done):'';count.textContent=[progressText,task.elapsedMs?t('dictUI.dictionaryElapsed',{time:elapsedTime(task.elapsedMs)}):''].filter(Boolean).join(' · ');label.append(count)}
         row.append(label);
         const track=document.createElement('div');track.className='work-task-progress';
         const bar=document.createElement('span');bar.style.width=Number.isFinite(task.percent)?`${task.percent}%`:task.total>0?`${Math.max(0,Math.min(100,task.done*100/task.total))}%`:'100%';
@@ -252,11 +267,15 @@
       const queueCount = s.id==='bulk-indexes' || s.id==='initial-index-queue' || s.id==='rescan-indexes' || s.id==='reindex' || s.id==='setup-work';
       const position = queueCount && s.total > 1 ? `${Math.min(s.done+1,s.total)}/${s.total} · ` : '';
       let message = s.id==='starting' ? t('database.working') : s.id==='folder-setup' ? t('pages.savingFolders') : `${position}${s.current || ''} — ${action} ${indexes}${count}`;
+      if(s.dictionaryTotal)message+=' · '+t('dictUI.dictionariesProgress',{done:window.wudictI18n.number(s.dictionaryDone||0),total:window.wudictI18n.number(s.dictionaryTotal)});
+      if(s.elapsedMs)message+=' · '+t('dictUI.elapsed',{time:elapsedTime(s.elapsedMs)});
+      const activeDictionaries=(s.busyProgress||[]).filter(item=>item.active);
+      if(activeDictionaries.length===1&&activeDictionaries[0].elapsedMs)message+=' · '+t('dictUI.dictionaryElapsed',{time:elapsedTime(activeDictionaries[0].elapsedMs)});
       if(s.id==='rescan-indexes' && s.stage!=='dictionary')message=t(s.stage==='cleanup'?'database.cleaning':'database.working');
       if((s.busyDicts||[]).length>1)message=t('dictUI.activeJobs',{number:s.busyDicts.length})+' · '+message;
       const taskType=s.id==='folder-setup'?'setup':s.id==='rescan-indexes'?'rescan':'indexing';
       if(!indexTaskID)indexTaskID=taskStart(taskType,message,{stop});
-      taskUpdate(indexTaskID,{type:taskType,message,done:s.currentDone||0,total:s.currentTotal||0,stopRequested:!!s.stopRequested,stop:s.id==='starting'?null:stop});
+      taskUpdate(indexTaskID,{type:taskType,message,done:s.currentDone||0,total:s.currentTotal||0,dictionaryDone:s.dictionaryDone||0,dictionaryTotal:s.dictionaryTotal||0,elapsedMs:s.elapsedMs||0,stopRequested:!!s.stopRequested,stop:s.id==='starting'?null:stop});
     } else if(indexTaskID) {
       taskFinish(indexTaskID);indexTaskID=0;
     }
