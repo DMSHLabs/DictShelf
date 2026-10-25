@@ -625,6 +625,23 @@ func TestContains(t *testing.T) {
 	}
 }
 
+func TestTrigramMatch(t *testing.T) {
+	for _, tc := range []struct {
+		input, want string
+	}{
+		{"abc", `"abc"`},
+		{"abcdef", `"abc"`},
+		{"a\"bcdef", `"a""b"`},
+		{"ab", ""},
+		{"", ""},
+		{"💡xy", `"💡xy"`},
+	} {
+		if got := trigramMatch(tc.input); got != tc.want {
+			t.Errorf("trigramMatch(%q) = %q, want %q", tc.input, got, tc.want)
+		}
+	}
+}
+
 func TestFullText(t *testing.T) {
 	s := testStore(t)
 	res, err := s.FullTextContext(bg, "muscular", 10)

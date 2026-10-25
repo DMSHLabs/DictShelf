@@ -52,7 +52,7 @@ func RebuildContainsIndexContext(ctx context.Context, path string, progress Prog
 		}
 	}
 	if _, err = tx.ExecContext(ctx, `CREATE VIRTUAL TABLE entry_trigram USING fts5(
-		w, content='', columnsize=0, tokenize='trigram')`); err != nil {
+		w, content='', detail=none, columnsize=0, tokenize='trigram')`); err != nil {
 		return err
 	}
 	if ingestVersion >= 6 {

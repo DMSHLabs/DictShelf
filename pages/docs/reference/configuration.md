@@ -196,18 +196,12 @@ Given both flags, `--no-tray` applies.
 These settings change speed and memory use. Only `SEARCH_MEMORY` changes search
 results.
 
-### INDEX_WORKERS
-
-How many dictionaries are indexed at the same time.
-
-| | |
-| --- | --- |
-| Flag | `--index-workers <n>` |
-| Values | a number; `auto`: one fewer than the CPU core count, at least one; `0` or `all`: one per core |
-| Default | `1` |
-
-Indexing one dictionary fully uses one CPU core and a few hundred bytes of
-memory per headword.
+Dictionary indexing concurrency is calculated from the machine's logical
+processor count. One processor is left for other work when possible. Every active dictionary
+has a reader and a SQLite writer; the remaining processors are shared by
+preparation workers. At 24 logical processors, up to five dictionaries index
+at once and 13 preparation workers can run across them. Old `INDEX_WORKERS`
+entries and the `--index-workers` CLI flag are accepted but ignored.
 
 ### PREVIEW_MEMORY
 

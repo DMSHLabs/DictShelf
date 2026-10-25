@@ -38,7 +38,6 @@ func NewRuntime(cfg config.Config, configPath, token, version string) (*Runtime,
 		search.SetWorkers(n)
 		logx.V("parallelism: GOMAXPROCS=%d, search fan-out=%d", n, n)
 	}
-	SetIndexWorkers(cfg.IndexWorkers)
 	userPath := configPath
 	if userPath == "" {
 		userPath = config.HomeConfig()
@@ -78,7 +77,6 @@ func NewRuntime(cfg config.Config, configPath, token, version string) (*Runtime,
 	s.DictDirEditable = cfg.EditableInFile("DICT_DIR")
 	s.ConfigProblems = cfg.Problems
 	s.Effective = cfg.Effective()
-	s.IndexWorkersValue = cfg.IndexWorkersValue
 	s.LemmaDir, s.LemmaURL = cfg.LemmaDir, cfg.LemmaURL
 	s.ImportKeep = cfg.ImportKeep
 	s.ImportURLHosts = cfg.ImportURLHosts

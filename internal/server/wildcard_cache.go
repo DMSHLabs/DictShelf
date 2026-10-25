@@ -15,6 +15,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/wuweidict/wudict/internal/dict"
@@ -41,16 +42,34 @@ type wildcardCacheSignature struct {
 }
 
 type wildcardCacheEntry struct {
-	mu        sync.Mutex
-	db        *sql.DB
-	path      string
-	signature wildcardCacheSignature
-	pageSize  int
-	dictCount int
-	active    int
-	updated   time.Time
-	nextToken uint64
-	streams   map[wildcardStreamKey]uint64
+	mu                sync.Mutex
+	db                *sql.DB
+	path              string
+	signature         wildcardCacheSignature
+	pageSize          int
+	dictCount         int
+	active            int
+	updated           time.Time
+	nextToken         uint64
+	streams           map[wildcardStreamKey]uint64
+	collectWriteStats atomic.Bool
+	writeStats        wildcardCacheWriteStats
+}
+
+// wildcardCacheWriteStats stays in memory while a result-cache operation runs.
+// The opt-in server test takes and reports a snapshot only between operations,
+// so the hot path never writes diagnostic records to disk.
+type wildcardCacheWriteStats struct {
+	AppendCalls        int64
+	Words              int64
+	Transactions       int64
+	BlockStatements    int64
+	IndexStatements    int64
+	MetadataStatements int64
+	LockWait           time.Duration
+	TransactionTime    time.Duration
+	AppendElapsed      time.Duration
+	MetadataTime       time.Duration
 }
 
 type wildcardStreamKey struct {
@@ -60,11 +79,12 @@ type wildcardStreamKey struct {
 }
 
 type wildcardPageCache struct {
-	mu          sync.Mutex
-	dir         string
-	entries     map[string]*wildcardCacheEntry
-	activePaths map[string]int
-	maxBytes    int64 // zero means unlimited
+	mu                sync.Mutex
+	dir               string
+	entries           map[string]*wildcardCacheEntry
+	activePaths       map[string]int
+	maxBytes          int64 // zero means unlimited
+	collectWriteStats bool  // enabled only by the opt-in Wildcards performance test
 }
 
 func (s *Server) wildcardCacheDir() string {
@@ -112,6 +132,9 @@ func (c *wildcardPageCache) begin(id string, signature wildcardCacheSignature, p
 		c.pruneLocked(now, entry.path, false)
 	}
 	entry.mu.Lock()
+	if c.collectWriteStats {
+		entry.collectWriteStats.Store(true)
+	}
 	if entry.signature != signature || entry.pageSize != pageSize || entry.dictCount != dictCount {
 		entry.mu.Unlock()
 		c.mu.Unlock()
@@ -658,8 +681,32 @@ func (c *wildcardPageCache) storePage(id string, signature wildcardCacheSignatur
 }
 
 func (e *wildcardCacheEntry) append(dictID, within string, withinMask bool, token uint64, event browseFindStreamEvent) error {
+	collectStats := e.collectWriteStats.Load()
+	var waitStarted time.Time
+	if collectStats {
+		waitStarted = time.Now()
+	}
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	var appendStarted time.Time
+	var lockWait, transactionTime, metadataTime time.Duration
+	var transactions, blockStatements, indexStatements, metadataStatements int64
+	if collectStats {
+		appendStarted = waitStarted
+		lockWait = time.Since(waitStarted)
+		defer func() {
+			e.writeStats.AppendCalls++
+			e.writeStats.Words += int64(len(event.Words))
+			e.writeStats.Transactions += transactions
+			e.writeStats.BlockStatements += blockStatements
+			e.writeStats.IndexStatements += indexStatements
+			e.writeStats.MetadataStatements += metadataStatements
+			e.writeStats.LockWait += lockWait
+			e.writeStats.TransactionTime += transactionTime
+			e.writeStats.AppendElapsed += time.Since(appendStarted)
+			e.writeStats.MetadataTime += metadataTime
+		}()
+	}
 	key := wildcardStreamKey{dictID: dictID, within: within, withinMask: withinMask}
 	if e.streams[key] != token {
 		return errWildcardCacheStreamReplaced
@@ -682,6 +729,7 @@ func (e *wildcardCacheEntry) append(dictID, within string, withinMask bool, toke
 		if err != nil {
 			return err
 		}
+		txStarted := time.Now()
 		for consumed := 0; consumed < len(event.Words); {
 			absolute := eventStart + consumed
 			blockNo := absolute/e.pageSize + 1
@@ -747,30 +795,30 @@ func (e *wildcardCacheEntry) append(dictID, within string, withinMask bool, toke
 				_ = tx.Rollback()
 				return err
 			}
-			if within == "" && (e.signature.fts || e.signature.trigram) {
-				for i, word := range wordsPart {
-					result, insertErr := tx.Exec(`INSERT INTO wildcard_word(dict_id,base_position,word) VALUES(?,?,?)`, dictID, absolute+i, word)
-					if insertErr != nil {
-						_ = tx.Rollback()
-						return insertErr
-					}
-					rowID, insertErr := result.LastInsertId()
-					if insertErr == nil && e.signature.fts {
-						_, insertErr = tx.Exec(`INSERT INTO wildcard_word_fts(rowid,word) VALUES(?,?)`, rowID, word)
-					}
-					if insertErr == nil && e.signature.trigram {
-						_, insertErr = tx.Exec(`INSERT INTO wildcard_word_trigram(rowid,word) VALUES(?,?)`, rowID, dict.Fold(word))
-					}
-					if insertErr != nil {
-						_ = tx.Rollback()
-						return insertErr
-					}
-				}
+			if collectStats {
+				blockStatements++
 			}
 			consumed += take
 		}
+		if within == "" && (e.signature.fts || e.signature.trigram) {
+			written, insertErr := insertWildcardIndexedWords(tx, dictID, eventStart, event.Words, e.signature)
+			if insertErr != nil {
+				_ = tx.Rollback()
+				return insertErr
+			}
+			if collectStats {
+				indexStatements += written
+			}
+		}
 		if err := tx.Commit(); err != nil {
+			if collectStats {
+				transactionTime += time.Since(txStarted)
+			}
 			return err
+		}
+		if collectStats {
+			transactionTime += time.Since(txStarted)
+			transactions++
 		}
 	}
 	alphabet, err := json.Marshal(event.Alphabet)
@@ -778,15 +826,76 @@ func (e *wildcardCacheEntry) append(dictID, within string, withinMask bool, toke
 		return err
 	}
 	complete := boolInt(event.Done)
+	metadataStarted := time.Now()
 	if _, err := e.db.Exec(`UPDATE wildcard_dictionary SET total=?,complete=?,alphabet_json=?
 		WHERE within_text=? AND within_wildcards=? AND dict_id=?`,
 		event.Total, complete, string(alphabet), within, boolInt(withinMask), dictID); err != nil {
 		return err
 	}
+	if collectStats {
+		metadataStatements++
+	}
 	if _, err := e.db.Exec(`UPDATE wildcard_cache_meta SET accessed_ms=?`, e.updated.UnixMilli()); err != nil {
+		if collectStats {
+			metadataTime += time.Since(metadataStarted)
+		}
 		return err
 	}
+	if collectStats {
+		metadataStatements++
+		metadataTime += time.Since(metadataStarted)
+	}
 	return nil
+}
+
+// An index batch uses explicit rowids so the same words keep their identity in
+// the ordinary, FTS and trigram tables. The entry mutex serializes all writers
+// to this cache; 128 rows also fit SQLite builds limited to 999 parameters.
+func insertWildcardIndexedWords(tx *sql.Tx, dictID string, basePosition int, words []string, signature wildcardCacheSignature) (int64, error) {
+	const batchSize = 128
+	var lastID int64
+	if err := tx.QueryRow(`SELECT COALESCE(MAX(id),0) FROM wildcard_word`).Scan(&lastID); err != nil {
+		return 0, err
+	}
+	if lastID < 0 || lastID > int64(^uint64(0)>>1)-int64(len(words)) {
+		return 0, errors.New("wildcard result cache rowid exhausted")
+	}
+	var statements int64
+	for from := 0; from < len(words); from += batchSize {
+		batch := words[from:min(from+batchSize, len(words))]
+		wordArgs := make([]any, 0, len(batch)*4)
+		ftsArgs := make([]any, 0, len(batch)*2)
+		trigramArgs := make([]any, 0, len(batch)*2)
+		for i, word := range batch {
+			rowID := lastID + int64(from+i+1)
+			wordArgs = append(wordArgs, rowID, dictID, basePosition+from+i, word)
+			if signature.fts {
+				ftsArgs = append(ftsArgs, rowID, word)
+			}
+			if signature.trigram {
+				trigramArgs = append(trigramArgs, rowID, dict.Fold(word))
+			}
+		}
+		wordValues := strings.TrimSuffix(strings.Repeat("(?,?,?,?),", len(batch)), ",")
+		if _, err := tx.Exec(`INSERT INTO wildcard_word(id,dict_id,base_position,word) VALUES `+wordValues, wordArgs...); err != nil {
+			return statements, err
+		}
+		statements++
+		indexValues := strings.TrimSuffix(strings.Repeat("(?,?),", len(batch)), ",")
+		if signature.fts {
+			if _, err := tx.Exec(`INSERT INTO wildcard_word_fts(rowid,word) VALUES `+indexValues, ftsArgs...); err != nil {
+				return statements, err
+			}
+			statements++
+		}
+		if signature.trigram {
+			if _, err := tx.Exec(`INSERT INTO wildcard_word_trigram(rowid,word) VALUES `+indexValues, trigramArgs...); err != nil {
+				return statements, err
+			}
+			statements++
+		}
+	}
+	return statements, nil
 }
 
 func (e *wildcardCacheEntry) closeAndRemoveLocked() {

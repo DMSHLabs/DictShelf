@@ -4271,6 +4271,8 @@ function sysPaint(state){
   box.replaceChildren();
   sysRows.length=0;
   for(const row of state.rows||[])box.appendChild(sysRowBuild(row));
+  $("sysAdvBar").hidden=sysRows.length===0;
+  if(sysRows.length===0)$("sysAdvBody").hidden=true;
   sysEffectPaint();
 }
 function sysRowBuild(row){
@@ -4302,28 +4304,16 @@ function sysRowBuild(row){
     const span=document.createElement("span");
     span.className="sys-label";
     span.textContent=row.label;
-    const field=document.createElement(row.key==="INDEX_WORKERS"?"select":"input");
-    if(row.key==="INDEX_WORKERS"){
-      const selectWrap=document.createElement("div");
-      selectWrap.className="panel-select-wrap panel-dropdown sys-workers-select";
-      field.add(new Option(tx("system.desktop.workersAuto"),"auto"));
-      for(let n=1;n<=row.max;n++)field.add(new Option(String(n),String(n)));
-      field.value=row.stored==null?"1":String(row.stored);
-      field.addEventListener("change",()=>sysCommitWorkers(row,field));
-      selectWrap.append(field);
-      line.appendChild(span);
-      line.appendChild(selectWrap);
-    }else{
-      field.type="number";
-      field.inputMode="numeric";
-      field.step="1";
-      field.min=row.min;
-      field.max=row.max;
-      field.value=row.stored==null?"":row.stored;
-      field.addEventListener("change",()=>sysCommitNumber(row,field));
-      line.appendChild(span);
-      line.appendChild(field);
-    }
+    const field=document.createElement("input");
+    field.type="number";
+    field.inputMode="numeric";
+    field.step="1";
+    field.min=row.min;
+    field.max=row.max;
+    field.value=row.stored==null?"":row.stored;
+    field.addEventListener("change",()=>sysCommitNumber(row,field));
+    line.appendChild(span);
+    line.appendChild(field);
     field.setAttribute("aria-label",row.label);
     // Committed on change, which is a blur or Enter: "1" on the way to "128"
     // is an unfinished value, not an invalid one.
@@ -4366,14 +4356,8 @@ function sysEffectPaint(){
     const row=entry.row,seen=sysSeen(row,eff);
     let text=row.hint;
     if(row.kind!=="bool"){
-      if(row.key==="INDEX_WORKERS"){
-        const current=Number(seen)||1;
-        if(row.stored==null)entry.field.value=String(current);
-        text+=" "+tx("system.desktop.INDEX_WORKERS_HINT");
-      }else{
-        text+=" "+tx("system.range",{min:row.min,max:row.max,unit:row.kind==="mb"?" "+tx("system.mb"):""});
-        entry.field.placeholder=seen==null?"":sysBare(row.kind,seen);
-      }
+      text+=" "+tx("system.range",{min:row.min,max:row.max,unit:row.kind==="mb"?" "+tx("system.mb"):""});
+      entry.field.placeholder=seen==null?"":sysBare(row.kind,seen);
     }
     if(seen!=null)text+=" "+tx("system.effective",{value:sysSeenText(row,seen)});
     if(row.lan&&entry.field.checked){
@@ -4462,7 +4446,6 @@ function sysIsStale(){
 }
 /* Value equality in the row's own terms: sizes by bytes, the rest literally. */
 function sysSame(row,a,b){
-  if(row.key==="INDEX_WORKERS"&&a==="auto")return Number(b)===Math.max(1,Number(row.maxIndexWorkers||row.max)-1);
   if(row.kind!=="mb")return a===b;
   const x=sysMb(a),y=sysMb(b);
   return x!=null&&x===y;
@@ -4511,15 +4494,6 @@ function sysCommitNumber(row,field){
   }
   if(String(n)===String(stored))return;
   sysSet({action:"set",field:"override",key:row.key,value:String(n)});
-}
-function sysCommitWorkers(row,field){
-  const value=field.value;
-  if(value==="auto"||(/^\d+$/.test(value)&&Number(value)>=1&&Number(value)<=row.max)){
-    sysSet({action:"set",field:"override",key:row.key,value});
-  }else{
-    sysNote(tx("system.invalid",{value,min:1,max:row.max}));
-    field.value=row.stored==null?"auto":String(row.stored);
-  }
 }
 function sysNote(text){
   const note=$("desktopSysSettings")?.open?$("desktopSysNote"):$("sysNote");
@@ -4645,22 +4619,8 @@ async function showDesktopSysSettings(){
     name.append(label);
     value.className="sys-desktop-value";
     const raw=String(setting.value);
-    if(key==="INDEX_WORKERS"){
-      const select=document.createElement("select");select.className="sys-desktop-worker-select";
-      select.add(new Option(tx("system.desktop.workersAuto"),"auto"));
-      const maximum=Math.max(1,Number(c.maxIndexWorkers)||1),current=Number(raw)||1;
-      for(let n=1;n<=maximum;n++)select.add(new Option(String(n),String(n)));
-      const stored=String(c.indexWorkersValue||raw);
-      select.value=stored==="auto"||(/^\d+$/.test(stored)&&Number(stored)>=1&&Number(stored)<=maximum)?stored:String(current);
-      select.dataset.previous=select.value;
-      select.addEventListener("change",()=>sysCommitDesktopWorkers(select));
-      value.append(select);
-    }else value.textContent=["MEMORY_LIMIT"].includes(key)&&raw==="0"
+    value.textContent=["MEMORY_LIMIT"].includes(key)&&raw==="0"
       ?tx("system.desktop.unlimited"):raw;
-    if(key==="INDEX_WORKERS"){
-      const description=document.createElement("p");description.className="sys-hint";
-      description.textContent=tx("system.desktop."+key+"_HINT");name.append(description);
-    }
     row.append(name,value);
     table.append(row);
   }
@@ -4687,7 +4647,7 @@ $("sysKey").addEventListener("change",e=>sysSwitch("key",e.target.checked));
 function browseDiagnosticsEnabled(){try{return localStorage.getItem("wudict_browse_diagnostics")==="1"}catch(_){return false}}
 function setBrowseDiagnostics(on){try{if(on)localStorage.setItem("wudict_browse_diagnostics","1");else localStorage.removeItem("wudict_browse_diagnostics")}catch(_){}}
 function wildcardSearchIndexEnabled(kind){try{return localStorage.getItem("wudict_merged_search_"+kind)==="1"}catch(_){return false}}
-function setWildcardSearchIndexEnabled(kind,on){try{if(on)localStorage.setItem("wudict_merged_search_"+kind,"1");else localStorage.removeItem("wudict_merged_search_"+kind)}catch(_){}}
+function setWildcardSearchIndexEnabled(kind,on){try{localStorage.setItem("wudict_merged_search_"+kind,on?"1":"0")}catch(_){}}
 function wildcardSearchIndexParams(params,row){
 	if(!row)return;
 	if(row.merged){
@@ -4801,18 +4761,6 @@ function desktopSystemLogOptions(){
     };
   }catch(_){}
   return {enabled:true,baseEvents:true,webEvents:false};
-}
-function sysCommitDesktopWorkers(field){
-  const value=field.value,previous=field.dataset.previous||value;
-  window.wudictNativeCall("saveIndexWorkers",JSON.stringify({value})).then(result=>{
-    if(cfgInfo?.effective?.INDEX_WORKERS&&Number(result?.workers)>0)
-      cfgInfo.effective.INDEX_WORKERS.value=String(result.workers);
-    field.dataset.previous=value;
-    sysNote(tx("system.desktop.workersSaved"));
-  }).catch(error=>{
-    field.value=previous;
-    sysNote(tx("system.desktop.workersSaveFailed",{error:window.wudictI18n.errorText(error.message)}));
-  });
 }
 if(window.wudictWindowsShell&&typeof window.wudictNativeCall==="function"){
   const options=desktopSystemLogOptions();
@@ -6717,9 +6665,9 @@ function maskBusyApply(){
 function maskBusyStart(key){maskBusyJobs.add(key);maskBusyApply()}
 function maskBusyFinish(key){maskBusyJobs.delete(key);maskBusyApply()}
 function maskWorkerCount(count){
-  const configured=Number(cfgInfo?.effective?.INDEX_WORKERS?.value);
   const cores=Math.max(1,Number(navigator.hardwareConcurrency)||1);
-  const limit=Number.isSafeInteger(configured)&&configured>0?configured:Math.min(4,Math.max(1,cores-1));
+  const reported=Number(cfgInfo?.indexConcurrency);
+  const limit=Number.isSafeInteger(reported)&&reported>0?reported:Math.max(1,Math.floor(Math.max(1,cores-1)/4));
   return Math.min(count,limit);
 }
 function maskAbort(){

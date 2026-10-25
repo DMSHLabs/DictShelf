@@ -60,7 +60,6 @@ final class GoBridge {
     private static native String nativeSaveLanguage(String body);
     private static native String nativeSystemLogSnapshot();
     private static native int nativeSystemLogOptions(boolean enabled, boolean baseEvents, boolean webEvents);
-    private static native int nativeIndexWorkers(int workers);
     private static native String nativeWebResource(String rawURL, String headers);
     private static native String nativeMediaOpen(String rawURL, String headers);
     private static native int nativeMediaRead(long handle, byte[] dst, int offset, int length);
@@ -275,17 +274,6 @@ final class GoBridge {
         if (nativeSystemLogOptions(enabled, baseEvents, webEvents) == 0) {
             throw new IllegalStateException("Could not configure Go system log");
         }
-    }
-
-    static void configureIndexWorkers(int workers) {
-        if (!loaded) throw new IllegalStateException("Go bridge is unavailable");
-        if (nativeIndexWorkers(workers) == 0) {
-            throw new IllegalStateException("Could not configure indexing concurrency");
-        }
-    }
-
-    static boolean restoreIndexWorkersIfRunning() {
-        return loaded && nativeIndexWorkers(0) != 0;
     }
 
     static String webResource(String rawURL, String headers) {

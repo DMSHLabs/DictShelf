@@ -15,7 +15,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -85,8 +84,6 @@ type Config struct {
 	// wrong place to be generous. Set it to "1" when the server is bound to a
 	// network address and the LAN is trusted with deletions.
 	AllowRemoteDelete bool   // ALLOW_REMOTE_DELETE
-	IndexWorkers      int    // INDEX_WORKERS: how many dictionaries may be indexed at once
-	IndexWorkersValue string // INDEX_WORKERS as selected: a count or "auto"
 	MemoryLimit       int64  // MEMORY_LIMIT: soft heap ceiling in bytes (0 = none)
 	PreviewMemory     int64  // PREVIEW_MEMORY: cap on RAM held by unprepared dictionaries (0 = unlimited)
 	SearchMemory      int64  // SEARCH_MEMORY: cap on RAM ONE search may materialise (0 = uncapped)
@@ -177,8 +174,6 @@ func defaults() Config {
 		// Nil: any site (D139). Dictionaries come from wherever the user
 		// found them, and the link is one they handed over deliberately.
 		ImportURLHosts:    nil,
-		IndexWorkers:      1, // one dictionary at a time: the machine has other work to do
-		IndexWorkersValue: "1",
 		// both are platform-dependent, and for reasons that are about the
 		// platform's opinion of us rather than its capability - see tuning.go
 		PreviewMemory: previewMemoryDefault(),
@@ -302,15 +297,6 @@ func Load(configPath string, flags map[string]string) (Config, error) {
 	}
 	if v := get("ALLOW_REMOTE_DELETE"); v != "" {
 		cfg.AllowRemoteDelete = !isOff(v)
-	}
-	if v := get("INDEX_WORKERS"); v != "" {
-		v = strings.ToLower(strings.TrimSpace(v))
-		cfg.IndexWorkers = ParseWorkers(v)
-		if v == "auto" {
-			cfg.IndexWorkersValue = v
-		} else {
-			cfg.IndexWorkersValue = strconv.Itoa(cfg.IndexWorkers)
-		}
 	}
 	if v := get("MEMORY_LIMIT"); v != "" {
 		cfg.MemoryLimit = ParseSize(v)
@@ -497,11 +483,6 @@ const configTemplate = `# DictShelf configuration  (~/.dmshlabs/dictshelf/dictsh
 #                                     # otherwise aim a download anywhere this machine can reach.
 # IMPORT_INSECURE = "0"               # "1" = also allow plain http, and hosts on the local network.
 #                                     # Only meaningful if you trust the address you are pointing at.
-# INDEX_WORKERS = "1"                 # how many dictionaries are processed at once by indexing
-#                                     # and multi-dictionary search. Each index preparation
-#                                     # saturates a core and holds a few hundred bytes per headword,
-#                                     # so the default is one - the machine stays usable.
-#                                     # "auto" = all but one core, at least one; "all" (or 0) = every core.
 # MORPH_CACHE = "2"                   # how many LEMMA packs stay in memory. When a search finds
 #                                     # nothing at all, wudict tries the word's dictionary form and
 #                                     # searches again. English is built in; other languages come
@@ -904,10 +885,10 @@ func decodeArray(s string) ([]string, bool) {
 // already split, so no caller has to reconstruct one from text. An array whose
 // bracket closes on a later line is gathered rather than ignored.
 // knownKeys are the settings wudict reads: every key configTemplate
-// documents (a test holds Load to that), and AUTH_TOKEN, which is meant for
-// the environment and so is kept out of the template.
+// documents, AUTH_TOKEN (environment-only), and the obsolete INDEX_WORKERS
+// key so existing configuration files do not show a false unknown-key error.
 var knownKeys = func() map[string]bool {
-	keys := map[string]bool{"AUTH_TOKEN": true}
+	keys := map[string]bool{"AUTH_TOKEN": true, "INDEX_WORKERS": true}
 	for _, line := range strings.Split(configTemplate, "\n") {
 		k, _, ok := strings.Cut(strings.TrimLeft(line, "# "), "=")
 		if k = strings.TrimSpace(k); ok && k != "" && strings.ToUpper(k) == k && !strings.ContainsAny(k, " ()") {
@@ -1151,40 +1132,6 @@ func ParseHostList(v string) []string {
 	return out
 }
 
-// ParseWorkers reads INDEX_WORKERS: a count, "auto" for all but one core,
-// or "all"/"max"/"0"/"-1" for every core. Auto leaves one core free for the
-// rest of the app and other work. The result is clamped to [1, NumCPU].
-func ParseWorkers(v string) int {
-	return ParseWorkersMax(v, runtime.NumCPU())
-}
-
-// ParseWorkersMax reads INDEX_WORKERS using the caller's processor limit.
-// Platform shells that can report a more accurate device count can use this
-// while other callers keep ParseWorkers' runtime.NumCPU bound.
-func ParseWorkersMax(v string, maxCores int) int {
-	if maxCores < 1 {
-		maxCores = 1
-	}
-	v = strings.ToLower(strings.TrimSpace(v))
-	switch v {
-	case "auto":
-		return max(1, maxCores-1)
-	case "all", "max", "cpu", "0", "-1":
-		return maxCores
-	}
-	n, err := strconv.Atoi(v)
-	if err != nil {
-		return 1
-	}
-	if n < 1 {
-		return maxCores
-	}
-	if n > maxCores {
-		return maxCores
-	}
-	return n
-}
-
 // ParseCount reads a small non-negative count. Anything unreadable is 0, which
 // for MORPH_CACHE means "off" - a typo in a config file disables a feature
 // rather than silently choosing a size nobody asked for.
@@ -1234,7 +1181,6 @@ type Setting struct {
 // device itself (tuning.go), which nothing outside Go should ever recompute.
 var Tunables = []string{
 	"MEMORY_LIMIT",
-	"INDEX_WORKERS",
 	"SERVER_IP",
 	"SERVER_PORT",
 }
@@ -1253,8 +1199,6 @@ func (c Config) Effective() map[string]Setting {
 			return FormatSize(c.PreviewMemory)
 		case "MEMORY_LIMIT":
 			return FormatSize(c.MemoryLimit)
-		case "INDEX_WORKERS":
-			return strconv.Itoa(c.IndexWorkers)
 		case "SERVER_IP":
 			return c.IP
 		case "SERVER_PORT":

@@ -4,7 +4,7 @@
 
 // Launcher shortcut for app-wide system settings and diagnostics. The app's
 // settings page is the only place that edits runtime tuning; this screen keeps
-// the recovery actions available before the Go runtime has started.
+// the log export available before the Go runtime has started.
 //
 // Views are built in code, like every other view in this app - there is no
 // androidx and no res/layout, by design. The theme is the popup's own
@@ -73,13 +73,6 @@ public class SettingsActivity extends Activity {
         saveLog.setText(R.string.system_log_save);
         saveLog.setOnClickListener(v -> SystemLogExport.start(this));
         col.addView(saveLog, wide(SP_6));
-
-        // Restore defaults, duplicated on the reader's word: it is the one bulk
-        // action, and it is worth having when the app page is not reachable
-        // (see the class comment). Both copies confirm and both clear the same
-        // overrides.
-        col.addView(restoreButton(), wide(SP_4));
-
 
         // The way out. Kept although the screen is short, because this window
         // wears no ✕ in a corner: tapping outside and Back both close it, and
@@ -152,24 +145,6 @@ public class SettingsActivity extends Activity {
         };
         backgroundButtonUpdates.add(update);
         update.run();
-    }
-
-    private View restoreButton() {
-        Button b = new Button(this);
-        styleBackgroundButton(b);
-        b.setText(R.string.settings_restore);
-        // Confirmed, because one tap clears several tuned fields at once.
-        // Clearing restores inheritance - it writes nothing anywhere.
-        b.setOnClickListener(v -> new BackgroundDialogBuilder(this)
-                .setMessage(R.string.settings_restore_confirm)
-                .setNegativeButton(R.string.settings_cancel, null)
-                .setPositiveButton(R.string.settings_restore, (d, w) -> {
-                    ShellPrefs.clearOverrides(this);
-                    GoBridge.restoreIndexWorkersIfRunning();
-                    toast(getString(R.string.settings_restore_done));
-                })
-                .show());
-        return b;
     }
 
     // ── the ladder ───────────────────────────────────────────────────────

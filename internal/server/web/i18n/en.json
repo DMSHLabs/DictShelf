@@ -1063,7 +1063,7 @@
   "system.gb": "GB",
   "system.clearCache": "Clear browser cache",
   "system.search": "Search indexes",
-  "system.mergedSearchHint": "Used the next time you build a Wildcards list, with dictionaries separate or combined. Each index combination gets its own SQL cache.",
+  "system.mergedSearchHint": "Both indexes are off by default. Changes apply to the next Wildcards list, separate or combined; each index combination gets its own SQL cache.",
   "system.mergedFTS": "Use full-text index (FTS)",
   "system.mergedTrigram": "Use trigram index",
   "system.logFile": "Log file",

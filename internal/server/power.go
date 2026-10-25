@@ -16,6 +16,7 @@ import (
 	"sync/atomic"
 
 	"github.com/wuweidict/wudict/internal/logx"
+	"github.com/wuweidict/wudict/internal/sysmem"
 )
 
 // Power is how much this process may spend right now. It exists because a
@@ -197,6 +198,7 @@ func SetMemoryLimit(n int64) {
 	memLimitConfigured.Store(n)
 	memLimit.Store(n)
 	debug.SetMemoryLimit(n)
+	sysmem.SetConfiguredLimit(n)
 }
 
 // pressureRatio is how close to the ceiling counts as pressure. Below it the

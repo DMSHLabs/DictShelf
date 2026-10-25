@@ -9,7 +9,51 @@ import (
 	"fmt"
 	"reflect"
 	"testing"
+
+	"github.com/wuweidict/wudict/internal/dict"
 )
+
+func TestWildcardIndexedWordBatchesKeepRowIDs(t *testing.T) {
+	s := &Server{User: UserDir(t.TempDir())}
+	dir := s.wildcardCacheDir()
+	s.wildcardPages.init(dir)
+	id := "batchrowids123456"
+	signature := wildcardCacheSignature{query: "*", group: "all", wildcards: true, fts: true, trigram: true}
+	for order, dictID := range []string{"first", "second"} {
+		entry, token, err := s.wildcardPages.begin(id, signature, browsePageSize, 2, dictID, dictID, order, "", false, dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer entry.db.Close()
+		words := make([]string, 330)
+		for i := range words {
+			words[i] = fmt.Sprintf("%s café %03d", dictID, i)
+		}
+		for _, end := range []int{151, len(words)} {
+			from := 0
+			if end == len(words) {
+				from = 151
+			}
+			if err := entry.append(dictID, "", false, token, browseFindStreamEvent{
+				Words: words[from:end], Total: end, Done: end == len(words),
+			}); err != nil {
+				t.Fatal(err)
+			}
+		}
+		key := wildcardStreamKey{dictID: dictID}
+		s.wildcardPages.finish(entry, &key, token)
+		for _, position := range []int{0, 127, 128, 150, 151, 255, 256, 299, 300, 329} {
+			var ftsWord, trigramWord string
+			err := entry.db.QueryRow(`SELECT f.word,t.word FROM wildcard_word w
+				JOIN wildcard_word_fts f ON f.rowid=w.id
+				JOIN wildcard_word_trigram t ON t.rowid=w.id
+				WHERE w.dict_id=? AND w.base_position=?`, dictID, position).Scan(&ftsWord, &trigramWord)
+			if err != nil || ftsWord != words[position] || trigramWord != dict.Fold(words[position]) {
+				t.Fatalf("%s position %d: FTS=%q trigram=%q error=%v", dictID, position, ftsWord, trigramWord, err)
+			}
+		}
+	}
+}
 
 func TestWildcardDictionaryCacheIndexesFilterTheSameWords(t *testing.T) {
 	words := []string{"dog", "dogma", "dig", "a dog", "hmm", "café"}

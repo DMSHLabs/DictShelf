@@ -19,8 +19,8 @@ dictionary.
 | + full-text index | the same `text.db`         | + full-text |
 
 A dictionary is searchable as soon as wudict finds it. wudict queues its
-headword index when the dictionary is added or found by Rescan. The queue uses
-[`INDEX_WORKERS`](../reference/configuration.md#index_workers). Until the index
+headword index when the dictionary is added or found by Rescan. The queue's
+concurrency is calculated from the machine's logical processors. Until the index
 is ready, exact and prefix searches use the dictionary's own format. Search
 does not start indexing.
 

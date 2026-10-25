@@ -35,6 +35,7 @@ import (
 	"github.com/wuweidict/wudict/internal/fsx"
 	"github.com/wuweidict/wudict/internal/howto"
 	"github.com/wuweidict/wudict/internal/htmlref"
+	"github.com/wuweidict/wudict/internal/indexconst"
 	"github.com/wuweidict/wudict/internal/logx"
 	"github.com/wuweidict/wudict/internal/search"
 	"github.com/wuweidict/wudict/internal/server"
@@ -228,12 +229,6 @@ SETTINGS
   IMPORT_INSECURE = "0"   "1": also plain http:// links and local-network hosts.
                           env: IMPORT_INSECURE  toml: IMPORT_INSECURE
                           default: 0 (https only, public hosts only)
-
-  --index-workers <n>     How many dictionaries are indexed at once. Each uses
-                          a CPU core and a few hundred bytes per headword.
-                          "auto" (or 0): one per CPU core.
-                          env: INDEX_WORKERS  toml: INDEX_WORKERS
-                          default: 1
 
   (env/toml only)
   PREVIEW_MEMORY = "1GB"  Memory that dictionaries not yet indexed may hold open,
@@ -1117,7 +1112,7 @@ func cmdServe(args []string) (err error) {
 	fs.Var(&dictDirs, "dict-dir", "folder with dictionaries; repeat for several (env/toml: DICT_DIR)")
 	dbDir := fs.String("db-dir", "", "library dir for cached dictionaries (env/toml: DB_DIR)")
 	useCached := fs.Bool("use-cached", false, "also serve previously imported dictionaries from the library (env/toml: USE_CACHED)")
-	indexWorkers := fs.String("index-workers", "", "dictionaries to prepare at once; \"auto\" = all but one core, at least one (env/toml: INDEX_WORKERS)")
+	_ = fs.String("index-workers", "", "obsolete; accepted but ignored because indexing concurrency is automatic")
 	// A string, not a Bool: "" has to mean "unset, defer to env and toml",
 	// which a bool flag cannot express - it would override a file that says
 	// "1" with its own false on every run.
@@ -1151,9 +1146,6 @@ func cmdServe(args []string) (err error) {
 	}
 	if *useCached {
 		flagVals["USE_CACHED"] = "1"
-	}
-	if *indexWorkers != "" {
-		flagVals["INDEX_WORKERS"] = *indexWorkers
 	}
 	// --no-tray is checked second so it wins if both are given: between two
 	// contradictory flags, the one that changes nothing about the process is
@@ -1829,8 +1821,8 @@ func printStartup(cfg config.Config, in startupInfo) {
 	if in.speex != "" {
 		fmt.Fprintf(out, "  .spx audio    %s\n", in.speex)
 	}
-	fmt.Fprintf(out, "  index workers %s%s\n",
-		logx.Plural(cfg.IndexWorkers, "dictionary at a time", "dictionaries at a time"),
+	fmt.Fprintf(out, "  indexing      %s%s\n",
+		logx.Plural(indexconst.IndexDictionaryLimit(runtime.NumCPU()), "dictionary at a time", "dictionaries at a time"),
 		memLimitNote(cfg.MemoryLimit))
 	fmt.Fprintf(out, "  preview memory %s%s\n", budgetNote(cfg.PreviewMemory), searchBudgetNote(cfg.SearchMemory))
 	fmt.Fprintf(out, "  serving       %s\n", logx.Plural(in.total, "dictionary", "dictionaries"))

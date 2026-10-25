@@ -19,6 +19,7 @@ import (
 	"github.com/wuweidict/wudict/internal/config"
 	"github.com/wuweidict/wudict/internal/dict"
 	"github.com/wuweidict/wudict/internal/howto"
+	"github.com/wuweidict/wudict/internal/indexconst"
 	"github.com/wuweidict/wudict/internal/logx"
 	"github.com/wuweidict/wudict/internal/store"
 )
@@ -29,15 +30,14 @@ import (
 // otherwise visible only on the terminal at startup, which a user who opened
 // the app in a browser never sees.
 type ConfigInfo struct {
-	IndexDefaults     indexOptions `json:"indexDefaults"`
-	MaxIndexWorkers   int          `json:"maxIndexWorkers"`
-	IndexWorkersValue string       `json:"indexWorkersValue"`
-	Roots             []Root       `json:"roots"`
-	LibDir            string       `json:"libDir"`
-	Prepared          int          `json:"prepared"`
-	UseCached         bool         `json:"useCached"`
-	ConfigPath        string       `json:"configPath"`
-	Total             int          `json:"total"`
+	IndexDefaults    indexOptions `json:"indexDefaults"`
+	IndexConcurrency int          `json:"indexConcurrency"`
+	Roots            []Root       `json:"roots"`
+	LibDir           string       `json:"libDir"`
+	Prepared         int          `json:"prepared"`
+	UseCached        bool         `json:"useCached"`
+	ConfigPath       string       `json:"configPath"`
+	Total            int          `json:"total"`
 	// HowtoRemoved: the user removed the built-in wudict howto; the setup
 	// page offers it back.
 	HowtoRemoved bool `json:"howtoRemoved,omitempty"`
@@ -216,22 +216,21 @@ func (s *Server) ConfigSnapshot(local bool, host string) ConfigInfo {
 		shown = append(shown, r.Path)
 	}
 	info := ConfigInfo{
-		IndexDefaults:     s.reg.prefs.newIndexDefaults(),
-		MaxIndexWorkers:   runtime.NumCPU(),
-		IndexWorkersValue: s.IndexWorkersValue,
-		PathAliases:       pathAliases(shown),
-		Roots:             roots,
-		LibDir:            store.DefaultDBDir(),
-		Prepared:          len(lib),
-		UseCached:         s.reg.UseCached(),
-		ConfigPath:        s.ConfigPath,
-		Total:             s.reg.UserCount(),
-		HowtoRemoved:      s.User.Builtin() != "" && howto.IsRemoved(s.User.Builtin()),
-		DictDirOrigin:     s.DictDirOrigin,
-		DictDirEditable:   s.DictDirEditable,
-		ConfigProblems:    s.ConfigProblems,
-		Effective:         s.Effective,
-		RevealLabel:       revealLabel(),
+		IndexDefaults:    s.reg.prefs.newIndexDefaults(),
+		IndexConcurrency: indexconst.IndexDictionaryLimit(runtime.NumCPU()),
+		PathAliases:      pathAliases(shown),
+		Roots:            roots,
+		LibDir:           store.DefaultDBDir(),
+		Prepared:         len(lib),
+		UseCached:        s.reg.UseCached(),
+		ConfigPath:       s.ConfigPath,
+		Total:            s.reg.UserCount(),
+		HowtoRemoved:     s.User.Builtin() != "" && howto.IsRemoved(s.User.Builtin()),
+		DictDirOrigin:    s.DictDirOrigin,
+		DictDirEditable:  s.DictDirEditable,
+		ConfigProblems:   s.ConfigProblems,
+		Effective:        s.Effective,
+		RevealLabel:      revealLabel(),
 		// revealing opens a window on the machine running the server, which is
 		// only useful when that is also the machine at the keyboard - and only
 		// works where there is something to open it with. Offering a control

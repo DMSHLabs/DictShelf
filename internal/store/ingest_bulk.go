@@ -11,12 +11,12 @@ import (
 )
 
 const (
-	ingestBulkRows  = 128 // five-column entry rows fit SQLite's older 999-variable limit
+	ingestBulkRows  = 256 // five-column rows use 1280 bind variables on both supported SQLite drivers
 	ingestBulkBytes = 4 << 20
 )
 
 // ingestBulk retains at most one writer batch. Flush decomposes the remainder
-// into power-of-two statements, so only eight statement shapes are prepared.
+// into power-of-two statements, so only nine statement shapes are prepared.
 type ingestBulk struct {
 	ctx   context.Context
 	tx    *sql.Tx
@@ -37,7 +37,7 @@ func (b *ingestBulk) add(args ...any) {
 }
 
 func (b *ingestBulk) flush() error {
-	for _, n := range [...]int{128, 64, 32, 16, 8, 4, 2, 1} {
+	for _, n := range [...]int{256, 128, 64, 32, 16, 8, 4, 2, 1} {
 		for b.rows >= n {
 			if err := b.exec(n, b.args[:n*b.cols]); err != nil {
 				return err
