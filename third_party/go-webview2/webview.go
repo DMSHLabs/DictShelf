@@ -126,6 +126,7 @@ type startupSplashState struct {
 	background uint32
 	foreground uint32
 	phase      float64
+	text       string
 }
 
 func parseWindowColor(value string) (r, g, b uint8, ok bool) {
@@ -512,7 +513,7 @@ func createStartupSplash(parent uintptr, background string) uintptr {
 	if hwnd == 0 {
 		return 0
 	}
-	startupSplashes[hwnd] = &startupSplashState{background: color, foreground: foreground}
+	startupSplashes[hwnd] = &startupSplashState{background: color, foreground: foreground, text: "DictShelf"}
 	setTimer.Call(hwnd, 1, 70, 0)
 	_, _, _ = w32.User32ShowWindow.Call(hwnd, w32.SWShow)
 	return hwnd
@@ -540,7 +541,11 @@ func startupSplashWndProc(hwnd, msg, wp, lp uintptr) uintptr {
 			oldFont, _, _ := selectObject.Call(buffer, font)
 			setTextColor.Call(buffer, uintptr(state.foreground))
 			setBkMode.Call(buffer, 1) // TRANSPARENT
-			text, _ := windows.UTF16PtrFromString("Starting wuDict2…")
+			label := state.text
+			if label == "" {
+				label = "DictShelf"
+			}
+			text, _ := windows.UTF16PtrFromString(label)
 			textRect := w32.Rect{Left: 16, Top: rect.Bottom/2 + 68, Right: rect.Right - 16, Bottom: rect.Bottom/2 + 124}
 			drawText.Call(buffer, uintptr(unsafe.Pointer(text)), ^uintptr(0), uintptr(unsafe.Pointer(&textRect)), 0x00000001|0x00000004)
 			bitBlt.Call(hdc, 0, 0, uintptr(width), uintptr(height), buffer, 0, 0, 0x00CC0020)
@@ -716,6 +721,17 @@ func (w *webview) hideStartupSplash() {
 func HideStartupSplash(view WebView) {
 	if w, ok := view.(*webview); ok {
 		w.hideStartupSplash()
+	}
+}
+
+// SetStartupSplashText updates the message on a WebView's native startup splash.
+// Call it on the UI thread, normally through WebView.Dispatch.
+func SetStartupSplashText(view WebView, text string) {
+	if w, ok := view.(*webview); ok && w.startupSplash != 0 {
+		if state := startupSplashes[w.startupSplash]; state != nil {
+			state.text = text
+			_, _, _ = invalidateRect.Call(w.startupSplash, 0, 0)
+		}
 	}
 }
 
