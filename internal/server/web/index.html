@@ -2689,14 +2689,12 @@ function stopBootScreen(){
 	bootProgress=null;
   if($("out").querySelector(".boot"))$("out").innerHTML="";
 }
-function setBootProgress(done,total,stage="checking",showPartial=false){
+function setBootProgress(done,total,stage="checking"){
 	bootProgress={done:Math.max(0,Number(done)||0),total:Math.max(0,Number(total)||0),stage};
 	if(bootTimer){clearInterval(bootTimer);bootTimer=null}
+	if(!quietMessages)updateDesktopStartupStatus(tx(stage==="reading"?"search.readingDictProgress":"search.checkingDictsProgress",{
+		done:window.wudictI18n.number(bootProgress.done),total:window.wudictI18n.number(bootProgress.total)}));
 	if(phase==="boot"&&!quietMessages)paintBoot();
-	else if(showPartial&&phase==="partial"&&!quietMessages){
-		const message=tx("search.readingDictProgress",{done:window.wudictI18n.number(bootProgress.done),total:window.wudictI18n.number(bootProgress.total)});
-		setStatus(`<span class="spin"></span>${esc(message)}`,"load");
-	}
 }
 function bootFailed(msg){
   setPhase("failed");
@@ -3357,6 +3355,10 @@ function refreshDictUI(now){
 function finishDesktopStartup(){
   if(window.wudictWindowsShell&&typeof window.wudictStartupReady==="function")window.wudictStartupReady().catch(()=>{});
 }
+function updateDesktopStartupStatus(message){
+  if(window.wudictWindowsShell&&typeof window.wudictStartupStatus==="function")
+    window.wudictStartupStatus(String(message||"")).catch(()=>{});
+}
 
 /* Consumes the /api/dicts NDJSON stream, so search unblocks on the FIRST
    dictionary rather than the last one. Returns whether the full list arrived;
@@ -3378,7 +3380,9 @@ async function loadDicts(rescan){
   // one being replaced row by row, and blanking the groups under it would
   // drop a group the user currently has selected.
   if(blocking)dictsSettled=false;
-  if(blocking){setPhase("boot");startBootScreen();dictTotal=0}
+  if(blocking){
+    setPhase("boot");startBootScreen();dictTotal=0;
+  }
   const rows=[];
   const listDiagnostics=dictionaryListDiagnosticsEnabled();
   const listStarted=performance.now();
@@ -3419,7 +3423,7 @@ async function loadDicts(rescan){
           if(phase==="failed")$("out").innerHTML=""; // a slow stream beat the watchdog
           setPhase("partial");
         }
-        setBootProgress(rows.length,dictTotal,"reading",blocking);
+        setBootProgress(rows.length,dictTotal,"reading");
         refreshDictUI();
         if(blocking&&rows.length===1)logBrowseArticleTransition("first_dictionary_row");
         // A Browse headword link names one dictionary in `from`. Start that

@@ -185,7 +185,13 @@ func runDesktopWindow(address, appAddress, profile string, onClose func(), deskt
 	}); err != nil {
 		log.Printf("WebView2 startup: could not bind splash transition: %v", err)
 	}
-	time.AfterFunc(30*time.Second, func() {
+	if err := w.Bind("wudictStartupStatus", func(message string) error {
+		w.Dispatch(func() { webview.SetStartupSplashText(w, message) })
+		return nil
+	}); err != nil {
+		log.Printf("WebView2 startup: could not bind splash status: %v", err)
+	}
+	time.AfterFunc(2*time.Minute, func() {
 		w.Dispatch(func() { webview.HideStartupSplash(w) })
 	})
 	local, _ := url.Parse(address)
