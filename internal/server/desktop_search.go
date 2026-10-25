@@ -438,12 +438,21 @@ func (s *Server) DesktopJSONContext(ctx context.Context, baseURL, method, argume
 		}
 		return map[string]bool{"saved": true}, nil
 	case "demand":
-		values, err := url.ParseQuery(argument)
-		if err != nil {
-			return nil, fmt.Errorf("invalid demand request: %w", err)
+		var request struct {
+			Dict     string `json:"dict"`
+			Explicit bool   `json:"explicit"`
+			Priority bool   `json:"priority"`
 		}
-		explicit, _ := queryFlag(values, "explicit")
-		indexing, err := s.DemandDictionary(values.Get("dict"), explicit)
+		if err := json.Unmarshal([]byte(argument), &request); err != nil {
+			values, queryErr := url.ParseQuery(argument)
+			if queryErr != nil {
+				return nil, fmt.Errorf("invalid demand request: %w", err)
+			}
+			request.Dict = values.Get("dict")
+			request.Explicit, _ = queryFlag(values, "explicit")
+			request.Priority, _ = queryFlag(values, "priority")
+		}
+		indexing, err := s.DemandDictionary(request.Dict, request.Explicit, request.Priority)
 		if err != nil {
 			return nil, err
 		}

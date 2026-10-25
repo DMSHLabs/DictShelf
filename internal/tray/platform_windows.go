@@ -62,6 +62,11 @@ func preflight(Config) string {
 	return ""
 }
 
+func defaultRussian() bool {
+	lang, _, _ := kernel32.NewProc("GetUserDefaultUILanguage").Call()
+	return uint16(lang)&0x03ff == 0x0019
+}
+
 func sessionZero() bool {
 	pid, _, _ := procGetCurrentProcessId.Call()
 	var session uint32

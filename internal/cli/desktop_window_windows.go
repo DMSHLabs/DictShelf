@@ -38,7 +38,10 @@ var (
 	desktopWindow           webview.WebView
 	desktopWindowAddress    string
 	desktopWindowStarting   bool
+	desktopWindowHidden     atomic.Bool
 	windowDwmapi            = syscall.NewLazyDLL("dwmapi.dll")
+	windowUser32            = syscall.NewLazyDLL("user32.dll")
+	procShowWindow          = windowUser32.NewProc("ShowWindow")
 	windowDwmSetAttribute   = windowDwmapi.NewProc("DwmSetWindowAttribute")
 	windowShell32           = syscall.NewLazyDLL("shell32.dll")
 	windowBrowseForFolder   = windowShell32.NewProc("SHBrowseForFolderW")
@@ -48,6 +51,8 @@ var (
 	windowOle32             = syscall.NewLazyDLL("ole32.dll")
 	windowCoTaskMemFree     = windowOle32.NewProc("CoTaskMemFree")
 )
+
+var desktopCloseToTray atomic.Bool
 
 // openDesktopWindow opens the local reader on a dedicated Windows UI thread.
 // The tray keeps the main thread; WebView2 owns the locked thread below.
@@ -86,6 +91,7 @@ func openDesktopWindow(address, appAddress string, onClose func(), desktopReques
 				w.Navigate(navigationAddress)
 			}
 			restoreAndFocusWindow(uintptr(w.Window()))
+			desktopWindowHidden.Store(false)
 		})
 		return true
 	}
@@ -93,6 +99,16 @@ func openDesktopWindow(address, appAddress string, onClose func(), desktopReques
 		desktopWindowMu.Unlock()
 		return true
 	}
+	desktopCloseToTray.Store(true)
+	webview.SetCloseToTrayHook(func(hwnd uintptr) bool {
+		if desktopWindowHidden.Load() || !desktopCloseToTray.Load() {
+			return desktopWindowHidden.Load()
+		}
+		const swHide = 0
+		procShowWindow.Call(hwnd, swHide)
+		desktopWindowHidden.Store(true)
+		return true
+	})
 	desktopWindowStarting = true
 	desktopWindowMu.Unlock()
 	go runDesktopWindow(address, appAddress, profile, onClose, desktopRequest, desktopStream, desktopResource, desktopOnly)
@@ -136,6 +152,32 @@ func runDesktopWindow(address, appAddress, profile string, onClose func(), deskt
 	}
 	log.Printf("WebView2 startup: window and runtime initialized in %s", time.Since(webviewStarted).Round(time.Millisecond))
 	w.Init(`window.__wudictDocumentFirstScriptMs=performance.now()`)
+	_ = w.Bind("wudictGetCloseToTray", func() bool {
+		if desktopRequest == nil {
+			return true
+		}
+		value, err := desktopRequest(context.Background(), "storageRead", "")
+		if err != nil {
+			return true
+		}
+		values, ok := value.(map[string]string)
+		enabled := !ok || values["wudict_close_to_tray"] != "0"
+		desktopCloseToTray.Store(enabled)
+		return enabled
+	})
+	_ = w.Bind("wudictSetCloseToTray", func(enabled bool) error {
+		desktopCloseToTray.Store(enabled)
+		return nil
+	})
+	_ = w.Bind("wudictHideWindow", func() error {
+		w.Dispatch(func() {
+			const swHide = 0
+			procShowWindow.Call(uintptr(w.Window()), swHide)
+			desktopWindowHidden.Store(true)
+		})
+		return nil
+	})
+	w.Init(`(function(){function setup(){if(window.chrome&&window.chrome.webview){window.chrome.webview.addEventListener('windowclose',function(event){if(window.wudictGetCloseToTray&&window.wudictGetCloseToTray()){event.preventDefault();window.wudictHideWindow()}})}}if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',setup,{once:true});else setup()})();`)
 	if err := w.Bind("wudictStartupReady", func() error {
 		log.Printf("WebView2 startup: application ready")
 		w.Dispatch(func() { webview.HideStartupSplash(w) })

@@ -862,16 +862,18 @@ func openUpgradedOrDirect(path string) (dict.Dictionary, error) {
 // non-empty registry. Opting in is a deliberate, remembered choice made on the
 // setup page ("Use these dictionaries").
 type Registry struct {
-	jobs         jobTable
-	indexQueueMu sync.Mutex
-	mu           sync.RWMutex
-	dictDirs     []string // dictionary folders containing supported source formats
-	useCached    bool     // include prepared dictionaries from the library (USE_CACHED)
-	entries      []*entry
-	byID         map[string]*entry
-	fromLib      int    // how many entries came from the library, not a dict folder
-	roots        []Root // per-folder status, for the startup summary and setup page
-	builtin      []Builtin
+	jobs          jobTable
+	indexQueueMu  sync.Mutex
+	priorityMu    sync.Mutex
+	priorityQueue *priorityDictionaryQueue
+	mu            sync.RWMutex
+	dictDirs      []string // dictionary folders containing supported source formats
+	useCached     bool     // include prepared dictionaries from the library (USE_CACHED)
+	entries       []*entry
+	byID          map[string]*entry
+	fromLib       int    // how many entries came from the library, not a dict folder
+	roots         []Root // per-folder status, for the startup summary and setup page
+	builtin       []Builtin
 
 	// previewBudget caps the memory unprepared dictionaries may hold open
 	// (PREVIEW_MEMORY; 0 = unlimited). Prepared ones answer from disk and are
@@ -999,6 +1001,9 @@ func (r *Registry) Dirs() []string {
 // RefreshPrefs invalidates the cached state after a host migration copies it
 // into the active user folder.
 func (r *Registry) RefreshPrefs() { r.prefs.refresh() }
+
+// UILanguageChoice returns the saved interface-language choice for native UI.
+func (r *Registry) UILanguageChoice() string { return r.prefs.Language() }
 
 // Roots reports each dictionary folder with its status and contribution.
 func (r *Registry) Roots() []Root {

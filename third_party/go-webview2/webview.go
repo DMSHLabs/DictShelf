@@ -25,7 +25,12 @@ import (
 var (
 	windowContext     = map[uintptr]interface{}{}
 	windowContextSync sync.RWMutex
+	closeToTrayHook   func(uintptr) bool
 )
+
+// SetCloseToTrayHook lets a Windows host consume WM_CLOSE without destroying
+// the WebView window. Returning true means the hook handled the close.
+func SetCloseToTrayHook(hook func(uintptr) bool) { closeToTrayHook = hook }
 
 func getWindowContext(wnd uintptr) interface{} {
 	windowContextSync.RLock()
@@ -449,6 +454,9 @@ func wndproc(hwnd, msg, wp, lp uintptr) uintptr {
 				w.browser.Focus()
 			}
 		case w32.WMClose:
+			if closeToTrayHook != nil && closeToTrayHook(hwnd) {
+				return 0
+			}
 			_, _, _ = w32.User32DestroyWindow.Call(hwnd)
 		case w32.WMDestroy:
 			w.Terminate()

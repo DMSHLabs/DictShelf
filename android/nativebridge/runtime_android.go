@@ -493,6 +493,8 @@ func WudictGoBridgeIndexWork(action, id, body *C.char) *C.char {
 		method, argument = "startIndexWork", C.GoString(body)
 	case "startSingle":
 		method, argument = "startSingleIndexWork", C.GoString(body)
+	case "priority":
+		method, argument = "demand", C.GoString(body)
 	case "stop":
 		method = "stopIndexWork"
 	case "stopDictionary":

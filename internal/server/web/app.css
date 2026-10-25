@@ -714,7 +714,7 @@ summary .search-dict-controls{display:flex;align-items:center;gap:var(--sp-1);fl
 summary[data-controls-wrapped="true"] .search-dict-controls{box-sizing:border-box;flex:1 1 100%;justify-content:space-between;margin-left:0;padding-inline:calc(var(--ui-control-height) * 1rem)}
 summary[data-controls-wrapped="true"] .search-dict-controls .search-pages{display:contents}
 summary .search-dict-controls .count{margin:0}
-summary .search-dict-controls .more{margin:0}
+summary .search-dict-controls .priority-index{margin:0}
 summary .search-dict-controls .search-browse{margin-left:0}
 summary .result-page-action:hover:not(:disabled){background:var(--bg);color:var(--fg);border-color:var(--line)}
 summary .result-page-action:active:not(:disabled){background:color-mix(in srgb,var(--accent) 14%,var(--bg))}
@@ -730,9 +730,9 @@ summary .jserr{margin-left:6px;font-weight:400;color:var(--accent);font-size:12p
    dictionary name that already wraps, and a two-line hint beside a three-line
    name is the layout in the bug report this replaced. */
 summary .count.hint{color:var(--link);white-space:nowrap}
-summary .more{border:0;background:transparent;font-family:inherit;font-weight:400;font-size:calc(var(--ui-font-addition) * 1rem);color:var(--link);cursor:pointer;
+summary .priority-index{border:0;background:transparent;font-family:inherit;font-weight:400;font-size:calc(var(--ui-font-addition) * 1rem);color:var(--link);cursor:pointer;
   text-decoration:underline;text-underline-offset:2px;margin-left:var(--sp-2);padding:0}
-summary .more:disabled{opacity:.55;cursor:progress}
+summary .priority-index:disabled{opacity:.55;cursor:progress}
 summary .upgrade{font-weight:400;font-size:calc(var(--ui-font-addition) * 1rem);color:var(--link);cursor:pointer;
   text-decoration:underline;text-underline-offset:2px;margin-left:auto}
 /* The dictionaries this mode could not search, as one line instead of one
@@ -789,6 +789,7 @@ iframe.article{width:100%;border:0;display:block;background:var(--wd-article-bg,
    searched for, and that has to be read BEFORE the articles it explains. */
 .morphnote{margin-top:0;margin-bottom:var(--sp-1)}
 .empty{padding-top:var(--sp-5);text-align:center;color:var(--label-quiet)}
+.empty.boot .boot-title{display:block;margin-bottom:.35em;color:var(--fg);font-size:1.25em}
 .empty.boot .boot-progress{display:block;width:min(28rem,80vw);height:.75em;margin:.75em auto 0;accent-color:var(--accent)}
 .empty svg path{fill:var(--line)}
 /* the search bar is inert until at least one dictionary is usable */
@@ -982,9 +983,8 @@ body.styling{padding-bottom:var(--styler-shown,var(--styler-h))}
    four of them, which made it grey in BOTH looks, the one thing the register
    exists to prevent). The greys are LEFT to things the reader cannot act on,
    which in this window is nothing: no row here can be disabled. */
-#sysSettings h3.sys-head{margin:1.2em 0 .2em;font-size:calc(var(--ui-font-section) * 1rem);font-weight:600;color:var(--label)}
-#desktopSysBody h3.sys-head{margin:1.2em 0 .2em;font-size:calc(var(--ui-font-section) * 1rem);font-weight:600;color:var(--label)}
-#sysSettings h3.sys-head:first-child{margin-top:0}
+#sysSettings h3.sys-head,#desktopSysBody h3.sys-head{margin:calc(var(--ui-section-space-before) * 1em) 0 calc(var(--ui-section-space-after) * 1em);font-size:calc(var(--ui-font-section) * 1rem);font-weight:600;color:var(--label)}
+#sysSettings h3.sys-head:first-child,#desktopSysBody h3.sys-head:first-of-type{margin-top:0}
 /* The one group that folds, wearing the heading it replaces: same type, same
    spacing, plus the ▸/▾ this app uses everywhere it means "there is more
    behind this word" (.act.disc, .prov, .pd .about). A button and not a
@@ -1021,25 +1021,45 @@ body.styling{padding-bottom:var(--styler-shown,var(--styler-h))}
 #sysSettings .sys-hint{margin:0;font-size:calc(var(--ui-hint-font-size) * 1rem);line-height:1.618;color:var(--label)}
 #desktopSysBody .sys-hint{margin:0;font-size:calc(var(--ui-hint-font-size) * 1rem);line-height:1.618;color:var(--label)}
 #sysSettings .sys-item{margin:.5em 0 .2em}
-#sysSettings .sys-row{display:flex;align-items:center;gap:calc(var(--ui-control-gap) * 1em);min-height:calc(var(--ui-control-height) * 1em);cursor:pointer}
-#desktopSysBody .sys-row{display:flex;align-items:center;gap:calc(var(--ui-control-gap) * 1em);min-height:calc(var(--ui-control-height) * 1em);cursor:pointer}
-#desktopSysBody .sys-label{flex:1 1 auto;color:var(--label);min-width:0;font-size:calc(var(--ui-font-base) * 1rem);overflow-wrap:anywhere}
+#sysSettings .sys-row,#desktopSysBody .sys-row{display:flex;align-items:center;gap:calc(var(--ui-control-gap) * 1em);min-height:calc(var(--ui-main-control-height) * 1em);margin:calc(var(--ui-row-gap) * .5em) 0;font-size:calc(var(--ui-main-control-font) * 1rem);cursor:pointer}
+#sysSettings .sys-row input[type="checkbox"],#desktopSysBody .sys-row input[type="checkbox"]{appearance:none;-webkit-appearance:none;box-sizing:border-box;position:relative;flex:none;width:20px;height:20px;margin:0 .5em 0 0;border:1.5px solid var(--fg);border-radius:4px;background-color:var(--paper-bg,var(--bg));vertical-align:middle;cursor:pointer}
+#sysSettings .sys-row input[type="checkbox"]:checked::after,#desktopSysBody .sys-row input[type="checkbox"]:checked::after{content:"";position:absolute;left:5px;top:1px;width:5px;height:10px;border:solid var(--fg);border-width:0 2px 2px 0;transform:rotate(45deg)}
+#sysSettings .sys-row input[type="checkbox"]:focus-visible,#desktopSysBody .sys-row input[type="checkbox"]:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+#sysSettings .sys-row input[type="checkbox"]:disabled,#desktopSysBody .sys-row input[type="checkbox"]:disabled{background-color:var(--fg-soft);border-color:var(--fg-soft);opacity:.8;cursor:default}
+#sysSettings .sys-row input[type="checkbox"]:disabled:checked::after,#desktopSysBody .sys-row input[type="checkbox"]:disabled:checked::after{border-color:var(--bg)}
+#sysSettings .sys-hint+.sys-row,#desktopSysBody .sys-hint+.sys-row{margin-top:calc(var(--ui-addition-gap) * 1em)}
+#sysSettings .sys-row+.sys-row,#desktopSysBody .sys-row+.sys-row{margin-top:calc(var(--ui-row-gap) * 1em)}
+#sysSettings .sys-row+.sys-hint,#desktopSysBody .sys-row+.sys-hint{margin-top:calc(var(--ui-addition-gap) * 1em)}
+#sysSettings .sys-head+.sys-hint,#desktopSysBody .sys-head+.sys-hint{margin-top:0}
+#sysSettings .sys-hint+.sys-head,#desktopSysBody .sys-hint+.sys-head{margin-top:calc(var(--ui-section-space-before) * 1em)}
+#desktopSysBody .sys-label{flex:1 1 auto;color:var(--label);min-width:0;font-size:inherit;overflow-wrap:anywhere}
 #sysSettings .sys-row.sys-num{cursor:default}
-#sysSettings .sys-result-cache-limit,#desktopSysBody .sys-result-cache-limit{justify-content:flex-start;gap:.45em;padding-left:calc(1em + var(--ui-control-gap) * 1em)}
-#sysSettings .sys-result-cache-limit input,#desktopSysBody .sys-result-cache-limit input{width:7em;min-height:calc(var(--ui-control-height) * 1em);font:inherit;text-align:right}
+#sysSettings .sys-result-cache-limit,#desktopSysBody .sys-result-cache-limit{justify-content:flex-start;gap:.45em;padding-left:0;font-size:calc(var(--ui-main-control-font) * 1rem)}
+#sysSettings .sys-result-cache-limit .sys-label,#desktopSysBody .sys-result-cache-limit .sys-label{display:flex;align-items:center;gap:calc(var(--ui-control-gap) * 1em);flex:0 1 auto}
+#sysSettings .sys-result-cache-limit .sys-label input[type="checkbox"],#desktopSysBody .sys-result-cache-limit .sys-label input[type="checkbox"]{margin:0}
+#sysSettings .sys-result-cache-limit .sys-label input[type="checkbox"],#desktopSysBody .sys-result-cache-limit .sys-label input[type="checkbox"]{width:calc(var(--ui-main-control-height) * 1em);height:calc(var(--ui-main-control-height) * 1em);border-radius:5px}
+#sysSettings .sys-result-cache-limit .sys-label input[type="checkbox"]:checked::after,#desktopSysBody .sys-result-cache-limit .sys-label input[type="checkbox"]:checked::after{left:25%;top:8%;width:28%;height:52%;border-width:0 2px 2px 0}
+#sysSettings .sys-result-cache-limit .sys-label{flex:0 1 auto}
+#sysSettings .sys-result-cache-limit .sys-label input[type="checkbox"]{margin-right:0}
+#sysSettings .sys-result-cache-limit input,#desktopSysBody .sys-result-cache-limit input{width:7em;height:calc(var(--ui-control-height) * 1em);min-height:0;font:inherit;font-size:calc(var(--ui-control-font) * 1rem);line-height:1;padding:0 .6em;text-align:right}
 #sysSettings .sys-result-cache-limit input:disabled,#desktopSysBody .sys-result-cache-limit input:disabled{box-sizing:border-box;width:12em;max-width:calc(100% - 1em);text-align:left}
-#sysSettings .sys-label{flex:1 1 auto;color:var(--label);min-width:0;font-size:calc(var(--ui-font-base) * 1rem);overflow-wrap:anywhere}
-#sysSettings .sys-num input,#desktopSysBody .sys-num input{box-sizing:border-box;flex:none;width:6.5em;min-height:calc(var(--ui-control-height) * 1em);font:inherit;font-size:calc(var(--ui-font-base) * 1rem);text-align:right;
-  color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:.5em .6em}
+#sysSettings .sys-label{flex:1 1 auto;color:var(--label);min-width:0;font-size:inherit;overflow-wrap:anywhere}
+#sysSettings .sys-num input,#desktopSysBody .sys-num input{box-sizing:border-box;flex:none;width:6.5em;height:calc(var(--ui-control-height) * 1em);min-height:0;font:inherit;font-size:calc(var(--ui-control-font) * 1rem);line-height:1;text-align:right;
+  color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:0 .6em}
+#sysSettings .sys-num:not(.sys-result-cache-limit) .sys-label,#desktopSysBody .sys-num:not(.sys-result-cache-limit) .sys-label{font-size:calc(var(--ui-main-control-font) * 1rem)}
 #sysSettings .sys-num .sys-workers-select{flex:none;width:6.5em}
 #sysSettings .sys-num .sys-workers-select>select{display:block;width:100%;max-width:none;min-width:0;box-sizing:border-box;
-  height:100%;min-height:100%;font:inherit;font-size:calc(var(--ui-control-font) * 1rem);line-height:1;color:var(--fg);background:var(--bg);
+  height:calc(var(--ui-control-height) * 1em);min-height:0;font:inherit;font-size:calc(var(--ui-control-font) * 1rem);line-height:1;color:var(--fg);background:var(--bg);
   border:1px solid var(--line);border-radius:5px;padding:0 1.8em 0 .55em;appearance:none;-webkit-appearance:none}
 #sysSettings .sys-num .sys-return-cache-select,#desktopSysBody .sys-num .sys-return-cache-select{flex:none;width:8em}
+#sysSettings .sys-row:has(>.sys-return-cache-select)>.sys-label,#desktopSysBody .sys-row:has(>.sys-return-cache-select)>.sys-label{flex:0 1 auto}
+#sysSettings .sys-combined-limit>.sys-label,#desktopSysBody .sys-combined-limit>.sys-label{flex:0 1 auto}
+#sysSettings .sys-combined-limit>input,#desktopSysBody .sys-combined-limit>input{height:calc(var(--ui-control-height) * 1em);min-height:0;padding:0 .6em;line-height:1}
 #sysSettings .sys-num .sys-return-cache-select>select,#desktopSysBody .sys-num .sys-return-cache-select>select{display:block;width:100%;max-width:none;min-width:0;box-sizing:border-box;
-  height:100%;min-height:100%;font:inherit;font-size:calc(var(--ui-control-font) * 1rem);line-height:1;color:var(--fg);background:var(--bg);
+  height:calc(var(--ui-control-height) * 1em);min-height:0;font:inherit;font-size:calc(var(--ui-control-font) * 1rem);line-height:1;color:var(--fg);background:var(--bg);
   border:1px solid var(--line);border-radius:5px;padding:0 1.8em 0 .55em;appearance:none;-webkit-appearance:none}
-#sysSettings .sys-action-spaced{margin-top:calc(var(--ui-control-height) * .5em)}
+#sysSettings .sys-action-spaced{margin-top:calc(var(--ui-row-gap) * 1em)}
+#sysSettings .sys-action-spaced+.sys-head,#desktopSysBody .sys-action-spaced+.sys-head{margin-top:calc(var(--ui-section-space-before) * 1em + var(--ui-row-gap) * 1em)}
 #sysSettings .sys-num input:focus,#desktopSysBody .sys-num input:focus{outline:none;border-color:var(--focus);
   box-shadow:0 0 0 3px color-mix(in srgb,var(--focus) 25%,transparent)}
 /* The unit beside a megabytes field. The box holds a bare number - a number
