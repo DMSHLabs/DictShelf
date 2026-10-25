@@ -1,3 +1,5 @@
+On this Windows machine, Go cgo uses MinGW GCC configured as `GCC_PATH` in `build-windows.local.bat`; check it before treating GCC as unavailable.
+
 # Model capability: If you determine during a task that the selected model or reasoning level is not sufficient to complete it reliably, stop work immediately and tell the user which stronger model and level you recommend, and why. Do not continue the task with the current model; resume only after the user switches or explicitly asks you to proceed anyway.
 
 # Working in this checkout

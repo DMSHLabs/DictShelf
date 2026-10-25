@@ -1,6 +1,6 @@
 # Agent handoff — current state
 
-Current checkout: branch `DictShelf` at `63b4585b`, merging `codex/search` at `411543bf`. The merge is not committed. The `search` changes add SQL-backed, paged article results and Browse find/filter caches; article results load in portions, Browse keeps bounded pages on disk, and Browse/article return preserves the originating query and dictionary. Search diagnostics cover cached result streams and replay. The article header and narrow-width paging controls were adjusted for small screens.
+Current checkout: branch `DictShelf` at merge commit `0fec8c11`, including `codex/search` (`c79732e4`). Search adds SQL-backed, paged article results and Browse find/filter caches; article results load in portions, Browse keeps bounded pages on disk, and Browse/article return preserves the originating query and dictionary. Search diagnostics cover cached result streams and replay. The article header and narrow-width paging controls were adjusted for small screens. Review found that the merge added a second LSD `ReadIcon`/version checker although DictShelf already has them in `lsd.go`; the uncommitted working tree removes that duplicate and keeps the existing reader implementation.
 
 ## Product identity
 
@@ -15,7 +15,7 @@ Current checkout: branch `DictShelf` at `63b4585b`, merging `codex/search` at `4
 
 ## Verification and remaining checks
 
-- The merge conflicts in `HANDOFF.md`, `internal/format/lsd/header.go`, and `internal/server/dictionary_icon_test.go` have been resolved. The merged result has not been tested or built yet.
+- With the local MinGW GCC 13.1.0, `go test -tags sqlite_fts5 -trimpath ./... -count=1`, `go vet -tags sqlite_fts5 -trimpath ./...`, and `go build -tags sqlite_fts5 -trimpath ./...` pass after removing the duplicate LSD implementation. Real-dictionary integration and Windows/Android UI checks remain unverified.
 - Android runs Go through JNI without an HTTP listener; Windows listenerless desktop uses WebView2 and a native bridge. Build recipes are in `docs/WINDOWS-VERIFY.md`; Android uses `build-android.cmd debug intel`. Do not install APKs or commit unless requested.
 - Windows/Android search, index maintenance and visual checks remain pending. Other open items include portable Windows write-path gaps (`docs/PORTABLE-WRITES-AUDIT.md`), Edit Folders verification, icon visibility and MDX ad-slot reindex/display.
 - No upstream is configured. DSL uses one GoldenDict-compatible reader and article preparation path. The LSD decoder and reader are in this branch; `docs/DSL.md` and `tools/dslcompare/README.md` describe the DSL architecture.
