@@ -47,6 +47,9 @@ var (
 	User32SetWindowPos       = user32.NewProc("SetWindowPos")
 	User32IsDialogMessage    = user32.NewProc("IsDialogMessage")
 	User32GetAncestor        = user32.NewProc("GetAncestor")
+	User32RegisterHotKey     = user32.NewProc("RegisterHotKey")
+	User32UnregisterHotKey   = user32.NewProc("UnregisterHotKey")
+	User32SendInput          = user32.NewProc("SendInput")
 )
 
 const (
@@ -97,6 +100,7 @@ const (
 	WMNCLButtonDown = 0x00A1
 	WMMoving        = 0x0216
 	WMApp           = 0x8000
+	WMHotkey        = 0x0312
 )
 
 const (

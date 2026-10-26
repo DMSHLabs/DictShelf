@@ -4,6 +4,7 @@
 package indexconst
 
 import (
+	"context"
 	"sync"
 	"sync/atomic"
 )
@@ -13,20 +14,46 @@ type Mode uint32
 const (
 	ModePipeline Mode = iota
 	ModeParallelDictionariesSingleWorker
+	ModeAuto
 )
 
 var activeMode atomic.Uint32
 var modeMu sync.Mutex
 var activeIngestScans int
+var activeAutoSingles atomic.Int32
+
+type ingestModeKey struct{}
+
+func WithIngestMode(ctx context.Context, mode Mode) context.Context {
+	return context.WithValue(ctx, ingestModeKey{}, mode)
+}
+
+func IngestMode(ctx context.Context) Mode {
+	if ctx != nil {
+		if mode, ok := ctx.Value(ingestModeKey{}).(Mode); ok && mode != ModeAuto {
+			return mode
+		}
+	}
+	if mode := CurrentMode(); mode != ModeAuto {
+		return mode
+	}
+	return ModePipeline
+}
+
+func ModeString(mode Mode) string {
+	switch mode {
+	case ModeParallelDictionariesSingleWorker:
+		return "parallel-dictionaries-single-worker"
+	case ModeAuto:
+		return "auto"
+	default:
+		return "pipeline"
+	}
+}
 
 func CurrentMode() Mode { return Mode(activeMode.Load()) }
 
-func ModeName() string {
-	if CurrentMode() == ModeParallelDictionariesSingleWorker {
-		return "parallel-dictionaries-single-worker"
-	}
-	return "pipeline"
-}
+func ModeName() string { return ModeString(CurrentMode()) }
 
 func BeginIngest() Mode {
 	modeMu.Lock()
@@ -34,6 +61,27 @@ func BeginIngest() Mode {
 	mode := CurrentMode()
 	modeMu.Unlock()
 	return mode
+}
+
+func BeginIngestContext(ctx context.Context) (Mode, bool) {
+	modeMu.Lock()
+	activeIngestScans++
+	mode := IngestMode(ctx)
+	autoSingle := CurrentMode() == ModeAuto && mode == ModeParallelDictionariesSingleWorker
+	if autoSingle {
+		activeAutoSingles.Add(1)
+	}
+	modeMu.Unlock()
+	return mode, autoSingle
+}
+
+func EndIngestContext(autoSingle bool) {
+	modeMu.Lock()
+	if autoSingle {
+		activeAutoSingles.Add(-1)
+	}
+	activeIngestScans--
+	modeMu.Unlock()
 }
 
 func EndIngest() {
@@ -54,6 +102,9 @@ func SetMode(name string) (changed, busy bool) {
 		return true, false
 	case "parallel-dictionaries-single-worker":
 		activeMode.Store(uint32(ModeParallelDictionariesSingleWorker))
+		return true, false
+	case "auto":
+		activeMode.Store(uint32(ModeAuto))
 		return true, false
 	default:
 		return false, false
@@ -90,6 +141,9 @@ func IngestWorkerLimit(logical, activeDictionaries int) int {
 func IngestWorkerLimitForMode(logical, activeDictionaries int) int {
 	if CurrentMode() == ModeParallelDictionariesSingleWorker {
 		return 0
+	}
+	if CurrentMode() == ModeAuto {
+		return max(0, IngestWorkerLimit(logical, activeDictionaries)-int(activeAutoSingles.Load()))
 	}
 	return IngestWorkerLimit(logical, activeDictionaries)
 }

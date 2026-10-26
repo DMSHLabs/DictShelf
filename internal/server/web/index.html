@@ -887,6 +887,13 @@ window.wudictFontScale=(function(){
 <div class="facts" id="portableTool" hidden><button type="button" class="mrow" id="openPortable">{{T:portable.open}}</button></div>
 <div class="facts"><button type="button" class="mrow" id="openHeadwordExport">{{T:export.open}}</button></div>
 </details>
+<details class="sect" id="hotkeysSection" hidden data-panel-section="hotkeys" open>
+  <summary class="sect-h">{{T:hotkeys.title}}</summary>
+  <div class="facts hotkey-row"><label class="sys-row"><span class="sys-label">{{T:hotkeys.showWindow}}</span><input type="text" id="hotkeyShowWindow" autocomplete="off" spellcheck="false"></label></div>
+  <div class="facts hotkey-row"><label class="sys-row"><span class="sys-label">{{T:hotkeys.translateClipboard}}</span><input type="text" id="hotkeyTranslateClipboard" autocomplete="off" spellcheck="false"></label></div>
+  <p class="sys-hint">{{T:hotkeys.hint}}</p>
+</details>
+
 <details class="sect" id="sysSection" hidden data-panel-section="system" open>
   <summary class="sect-h">{{T:panel.system}}</summary>
   <!-- The shell's own settings, which until now lived only on the screen the
@@ -1119,7 +1126,7 @@ window.wudictFontScale=(function(){
     <label class="sys-row"><input type="checkbox" id="sysDictionaryListDiagnostics"><span class="sys-label">{{T:system.dictionaryListDiagnostics}}</span></label>
     <label class="sys-row"><input type="checkbox" id="sysDictionaryCacheDiagnostics"><span class="sys-label">{{T:system.dictionaryCacheDiagnostics}}</span></label>
     <label class="sys-row"><input type="checkbox" id="sysIndexParallelismDiagnostics"><span class="sys-label">{{T:system.indexParallelismDiagnostics}}</span></label>
-    <label class="sys-row sys-num sys-indexing-mode"><span class="sys-label">{{T:system.indexingMode}}</span><span class="sys-indexing-mode-select"><select id="sysIndexingMode"><option value="pipeline">{{T:system.indexingModePipeline}}</option><option value="parallel-dictionaries-single-worker">{{T:system.indexingModeParallel}}</option></select></span></label>
+    <label class="sys-row sys-num sys-indexing-mode"><span class="sys-label">{{T:system.indexingMode}}</span><span class="sys-indexing-mode-select"><select id="sysIndexingMode"><option value="pipeline">{{T:system.indexingModePipeline}}</option><option value="parallel-dictionaries-single-worker">{{T:system.indexingModeParallel}}</option><option value="auto">{{T:system.indexingModeAuto}}</option></select></span></label>
     <p class="sys-hint">{{T:system.indexingModeHint}}</p>
     <label class="sys-row"><input type="checkbox" id="sysFolderDiagnostics"><span class="sys-label">{{T:system.folderDiagnostics}}</span></label>
 
@@ -4081,8 +4088,10 @@ $("speakSeg").hidden=!speakCan();$("panel").classList.add("show");
   // known before the reader sees them: measured here, in the same frame the
   // drawer is opened in, so nothing paints between the two.
   panelRowColumns();loadFolders();
+  if(window.wudictWindowsShell===true)desktopHotkeysLoad();
   // Android injects its shell flag after this script runs. The Windows server
   // reports its local Exit capability in /api/config, read by loadFolders.
+  if(window.wudictWindowsShell){$("hotkeysSection").hidden=false;}
   if(window.wudictNativeShell){$("sysSection").hidden=false;$("exitSection").hidden=false;}
   // Another window can switch a layer; the panel's layer rows are repainted
   // from the registry in hand whenever the drawer opens, the way the Presets
@@ -4593,6 +4602,51 @@ $("sysAdvBar").onclick=()=>{
   $("sysAdvBar").setAttribute("aria-expanded",open?"true":"false");
 };
 let desktopSystemNodes=null;
+async function desktopHotkeysLoad(){
+  const show=$("hotkeyShowWindow"),translate=$("hotkeyTranslateClipboard");
+  if(!show||!translate)return;
+  let stored={show:"Ctrl+Shift+F11",translate:"Ctrl+Shift+F12"};
+  try{stored=await window.wudictGetHotkeys()}catch(_){}
+  show.value=stored.show||"Ctrl+Shift+F11";
+  translate.value=stored.translate||"Ctrl+Shift+F12";
+  show.dataset.previous=show.value;translate.dataset.previous=translate.value;
+  show.onkeydown=desktopHotkeyCapture;translate.onkeydown=desktopHotkeyCapture;
+  show.onfocus=()=>show.dataset.previous=show.value;translate.onfocus=()=>translate.dataset.previous=translate.value;
+  show.onblur=()=>desktopHotkeySave(show,"show");
+  translate.onblur=()=>desktopHotkeySave(translate,"translate");
+}
+function desktopHotkeyCapture(event){
+  if(["Tab","Escape","Enter"].includes(event.key))return;
+  event.preventDefault();
+  const modifier=[];
+  if(event.ctrlKey)modifier.push("Ctrl");if(event.altKey)modifier.push("Alt");
+  if(event.shiftKey)modifier.push("Shift");if(event.metaKey)modifier.push("Win");
+  const key={" ":"Space","ArrowUp":"Up","ArrowDown":"Down","ArrowLeft":"Left","ArrowRight":"Right"}[event.key]||event.key;
+  if((modifier.length>0||["Tab","Escape","Enter"].includes(key))&&(key.length===1||/^F([1-9]|1[0-9]|2[0-4])$/.test(key)||["Space","Tab","Escape","Enter","Insert","Delete","Home","End","Up","Down","Left","Right","PageUp","PageDown","Backspace"].includes(key))){
+    const input=event.currentTarget,combo=modifier.concat(key).join("+");
+    input.value=combo;desktopHotkeySave(input,input.id==="hotkeyShowWindow"?"show":"translate");
+  }
+}
+function desktopHotkeySave(input,kind){
+  if(!input.value.trim())return;
+  const value=input.value.trim();
+  if(typeof window.wudictSetHotkeys==="function"&&!window.wudictSetHotkeys(kind,value)){
+    input.setCustomValidity(tx("hotkeys.invalid"));input.reportValidity();
+    input.value=input.dataset.previous||(kind==="show"?"Ctrl+Shift+F11":"Ctrl+Shift+F12");return;
+  }
+  input.setCustomValidity("");input.value=value;input.dataset.previous=value;
+}
+window.wudictHotkeyLookup=function(text){
+  const word=String(text||"").trim().split(/[\r\n\t ]+/)[0];
+  if(!word)return;
+  $("panel").classList.remove("show");
+  setSearchMode("exactLemma");
+  $("q").value=word;
+  window.wuSearchHistory.record(word);window.wuSearchHistory.hide();
+  scopeOnce=null;anchorOnce=null;navRecord="push";commitOnce=true;
+  $("q").focus();
+  doSearch();
+};
 async function showDesktopSysSettings(){
   const dialog=$("desktopSysSettings"),body=$("desktopSysBody");
   if(!desktopSystemNodes)desktopSystemNodes={
@@ -4682,7 +4736,7 @@ async function showDesktopSysSettings(){
   const indexingModeText=document.createElement("span");indexingModeText.className="sys-label";indexingModeText.textContent=tx("system.indexingMode");
   const indexingModeSelectWrap=document.createElement("span");indexingModeSelectWrap.className="sys-indexing-mode-select";
   const indexingModeSelect=document.createElement("select");indexingModeSelect.id="desktopSysIndexingMode";
-  for(const [value,key] of [["pipeline","system.indexingModePipeline"],["parallel-dictionaries-single-worker","system.indexingModeParallel"]]){
+  for(const [value,key] of [["pipeline","system.indexingModePipeline"],["parallel-dictionaries-single-worker","system.indexingModeParallel"],["auto","system.indexingModeAuto"]]){
     const option=document.createElement("option");option.value=value;option.textContent=tx(key);indexingModeSelect.append(option);
   }
   indexingModeSelect.value=indexingModePreference();indexingModeSelect.addEventListener("change",()=>setIndexingMode(indexingModeSelect.value,indexingModeSelect));
@@ -4817,7 +4871,7 @@ function dictionaryCacheDiagnosticsEnabled(){try{return localStorage.getItem("wu
 function setDictionaryCacheDiagnostics(on){try{if(on)localStorage.setItem("wudict_dictionary_cache_diagnostics","1");else localStorage.removeItem("wudict_dictionary_cache_diagnostics")}catch(_){}}
 function indexParallelismDiagnosticsEnabled(){try{return localStorage.getItem("wudict_index_parallelism_diagnostics")==="1"}catch(_){return false}}
 function setIndexParallelismDiagnostics(on){try{if(on)localStorage.setItem("wudict_index_parallelism_diagnostics","1");else localStorage.removeItem("wudict_index_parallelism_diagnostics")}catch(_){}sendBrowseDiagnostic({event:"index_parallelism_diagnostics",enabled:!!on})}
-function indexingModePreference(){try{return localStorage.getItem("wudict_indexing_mode")==="parallel-dictionaries-single-worker"?"parallel-dictionaries-single-worker":"pipeline"}catch(_){return "pipeline"}}
+function indexingModePreference(){try{const mode=localStorage.getItem("wudict_indexing_mode");return ["pipeline","parallel-dictionaries-single-worker","auto"].includes(mode)?mode:"pipeline"}catch(_){return "pipeline"}}
 async function setIndexingMode(mode,select){
   const previous=indexingModePreference();
   if(!await sendBrowseDiagnostic({event:"indexing_mode",mode})){

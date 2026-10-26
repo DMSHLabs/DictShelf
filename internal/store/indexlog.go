@@ -4,6 +4,7 @@
 package store
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -29,6 +30,7 @@ type indexTrace struct {
 	dictionary  string
 	format      string
 	plan        Plan
+	mode        indexconst.Mode
 	entries     int
 	stage       string
 	start, last time.Time
@@ -36,7 +38,11 @@ type indexTrace struct {
 }
 
 func newIndexTrace(src, target string, plan Plan) *indexTrace {
-	x := &indexTrace{id: fmt.Sprintf("%d-%d", os.Getpid(), indexLogID.Add(1)), start: time.Now(), plan: plan}
+	return newIndexTraceContext(context.Background(), src, target, plan)
+}
+
+func newIndexTraceContext(ctx context.Context, src, target string, plan Plan) *indexTrace {
+	x := &indexTrace{id: fmt.Sprintf("%d-%d", os.Getpid(), indexLogID.Add(1)), start: time.Now(), plan: plan, mode: indexconst.IngestMode(ctx)}
 	IndexDiagnostic("job=%s start source=%q target=%q headwords=true contains=%v fulltext=%v runtime=%s platform=%s/%s ingest_version=%d", x.id, src, target, plan.Contains, plan.FullText, runtime.Version(), runtime.GOOS, runtime.GOARCH, IngestVersion)
 	x.phase("open database")
 	return x
@@ -65,6 +71,6 @@ func (x *indexTrace) finish(err error) {
 	}
 	IndexDiagnostic("job=%s finish stage=%q progress=%d/%d elapsed=%s elapsed_ms=%d dictionary=%q format=%q mode=%s status=%s entries=%d contains=%v fulltext=%v error=%q",
 		x.id, x.stage, x.done, x.total, elapsed.Round(time.Millisecond), elapsed.Milliseconds(),
-		x.dictionary, x.format, indexconst.ModeName(), status, x.entries, x.plan.Contains, x.plan.FullText, fmt.Sprint(err))
+		x.dictionary, x.format, indexconst.ModeString(x.mode), status, x.entries, x.plan.Contains, x.plan.FullText, fmt.Sprint(err))
 	logIngestParallelism("finish", x.dictionary, x.id)
 }
