@@ -5965,6 +5965,16 @@ function activeDictionaryRows(ids,progress=[],workID=""){
   for(const id of ids||[])if(!seen.has(id)){ordered.push(id);seen.add(id)}
   return ordered.map(id=>{const d=dicts.find(item=>item.id===id),p=byID.get(id);return {label:d?dictLabel(d):(p?.name||String(id)),done:p?.done||0,total:p?.total||0,elapsedMs:p?.elapsedMs||0,active:!!p?.active,stop:p?.active&&workID?()=>window.wudictWork?.stopDictionary(workID,id):null,stopRequested:!!p?.stopRequested}});
 }
+function workDictionaryOrder(status){
+  const ordered=[],seen=new Set(),add=id=>{if(id&&!seen.has(id)){seen.add(id);ordered.push(id)}};
+  for(const item of status.busyProgress||[])if(item.active)add(item.id);
+  for(const id of status.pendingDicts||[])add(id);
+  const positions=new Map(dicts.map((dict,index)=>[dict.id,index]));
+  const remaining=(status.busyDicts||[]).filter(id=>!seen.has(id));
+  remaining.sort((a,b)=>(positions.get(a)??Number.MAX_SAFE_INTEGER)-(positions.get(b)??Number.MAX_SAFE_INTEGER)||String(a).localeCompare(String(b)));
+  for(const id of remaining)add(id);
+  return ordered;
+}
 function updateIndexingTask(html,activeDicts){
   if(html!==undefined)indexingTaskMessage=html;
   if(!window.wudictTasks)return;
@@ -5993,7 +6003,7 @@ window.addEventListener("wudict-work",event=>{
   indexWorkTaskActive=!!event.detail?.running;
   if(indexWorkTaskActive)finishIndexingTask();
   const s=event.detail;
-  if(s?.running&&s.taskID&&Array.isArray(s.busyProgress))window.wudictTasks?.update(s.taskID,{children:activeDictionaryRows(s.busyDicts,s.busyProgress,s.id)});
+  if(s?.running&&s.taskID&&Array.isArray(s.busyProgress))window.wudictTasks?.update(s.taskID,{children:activeDictionaryRows(workDictionaryOrder(s),s.busyProgress,s.id)});
 });
 window.addEventListener("wudict-tasks-ready",()=>{if(indexingTaskMessage&&!indexWorkTaskActive)updateIndexingTask()});
 let serverBulkWasRunning=false;
@@ -6006,7 +6016,7 @@ window.addEventListener("wudict-work",event=>{
     $("bulkIndexStop").hidden=false;$("bulkIndexStop").disabled=s.stopRequested;
     $("bulkIndexStop").textContent=tx(s.stopRequested?"dictUI.bulkStopping":"dictUI.stop");
     setIndexStatus(esc(s.text),false);
-    if(s.taskID&&Array.isArray(s.busyProgress))window.wudictTasks?.update(s.taskID,{children:activeDictionaryRows(s.busyDicts,s.busyProgress,s.id)});
+    if(s.taskID&&Array.isArray(s.busyProgress))window.wudictTasks?.update(s.taskID,{children:activeDictionaryRows(workDictionaryOrder(s),s.busyProgress,s.id)});
     const perDictionary=s.busyProgress||[];
     for(const item of perDictionary){
       const current=dicts.find(d=>d.id===item.id);
