@@ -94,7 +94,7 @@ func (p *ingestPool) begin(parent context.Context) *ingestSession {
 	// Spawn for the machine, even if Android is backgrounded at start. The
 	// active limit below follows GOMAXPROCS when the app returns to foreground.
 	wanted := indexconst.IngestWorkerLimitForMode(runtime.NumCPU(), 1)
-	if indexconst.CurrentMode() == indexconst.ModeAuto {
+	if indexconst.IsAutomaticMode(indexconst.CurrentMode()) {
 		// Small dictionary scans leave this pool later; create the lanes once
 		// and let workerLimit account for their changing CPU use.
 		wanted = indexconst.IngestWorkerLimit(runtime.NumCPU(), 1)

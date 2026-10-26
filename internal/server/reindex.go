@@ -173,7 +173,7 @@ func (s *Server) runReindex(j *job, todo []*entry) {
 	})
 	process := func(e *entry, mode indexconst.Mode) {
 		lane := currentIndexLimit()
-		if indexconst.CurrentMode() == indexconst.ModeAuto {
+		if indexconst.IsAutomaticMode(indexconst.CurrentMode()) {
 			lane = parallelDictionaryIndexLimit
 		}
 		release := acquire(lane)
@@ -182,7 +182,7 @@ func (s *Server) runReindex(j *job, todo []*entry) {
 		if !ok {
 			return
 		}
-		if indexconst.CurrentMode() == indexconst.ModeAuto {
+		if indexconst.IsAutomaticMode(indexconst.CurrentMode()) {
 			ctx = indexconst.WithIngestMode(ctx, mode)
 		}
 		defer func() {
@@ -222,7 +222,7 @@ func (s *Server) runReindex(j *job, todo []*entry) {
 			logx.Warn("could not rebuild %s: %v", filepath.Base(e.Path), err)
 		}
 	}
-	if indexconst.CurrentMode() == indexconst.ModeAuto {
+	if indexconst.IsAutomaticMode(indexconst.CurrentMode()) {
 		indexModeMu.Lock()
 		indexTaskQueuesActive.Add(1)
 		indexModeMu.Unlock()
@@ -232,12 +232,13 @@ func (s *Server) runReindex(j *job, todo []*entry) {
 		for i, e := range todo {
 			items[i] = pendingDictionaryIndex{entry: e}
 		}
-		small, heavy := orderAutomaticIndexes(items, budget)
-		logx.System("automatic rebuild queue started dictionaries=%d small=%d pipeline=%d processor_budget=%d", len(items), small, heavy, budget)
+		mode := indexconst.CurrentMode()
+		small, heavy := orderAutomaticIndexes(items, budget, mode)
+		logx.System("automatic rebuild queue started strategy=%s dictionaries=%d small=%d pipeline=%d processor_budget=%d", indexconst.ModeString(mode), len(items), small, heavy, budget)
 		queue := newPriorityDictionaryQueue(items, nil)
 		started := time.Now()
 		runHybridPriorityDictionaryQueue(queue, budget, j.canceled, func(item pendingDictionaryIndex) { process(item.entry, item.mode) })
-		logx.System("automatic rebuild queue finished dictionaries=%d elapsed_ms=%d", len(items), time.Since(started).Milliseconds())
+		logx.System("automatic rebuild queue finished strategy=%s dictionaries=%d elapsed_ms=%d", indexconst.ModeString(mode), len(items), time.Since(started).Milliseconds())
 	} else {
 		runIndexTasks(todo, j.canceled, func(e *entry) { process(e, indexconst.CurrentMode()) })
 	}

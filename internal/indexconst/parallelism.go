@@ -15,6 +15,7 @@ const (
 	ModePipeline Mode = iota
 	ModeParallelDictionariesSingleWorker
 	ModeAuto
+	ModeAuto2
 )
 
 var activeMode atomic.Uint32
@@ -30,14 +31,18 @@ func WithIngestMode(ctx context.Context, mode Mode) context.Context {
 
 func IngestMode(ctx context.Context) Mode {
 	if ctx != nil {
-		if mode, ok := ctx.Value(ingestModeKey{}).(Mode); ok && mode != ModeAuto {
+		if mode, ok := ctx.Value(ingestModeKey{}).(Mode); ok && !IsAutomaticMode(mode) {
 			return mode
 		}
 	}
-	if mode := CurrentMode(); mode != ModeAuto {
+	if mode := CurrentMode(); !IsAutomaticMode(mode) {
 		return mode
 	}
 	return ModePipeline
+}
+
+func IsAutomaticMode(mode Mode) bool {
+	return mode == ModeAuto || mode == ModeAuto2
 }
 
 func ModeString(mode Mode) string {
@@ -46,6 +51,8 @@ func ModeString(mode Mode) string {
 		return "parallel-dictionaries-single-worker"
 	case ModeAuto:
 		return "auto"
+	case ModeAuto2:
+		return "auto2"
 	default:
 		return "pipeline"
 	}
@@ -67,7 +74,7 @@ func BeginIngestContext(ctx context.Context) (Mode, bool) {
 	modeMu.Lock()
 	activeIngestScans++
 	mode := IngestMode(ctx)
-	autoSingle := CurrentMode() == ModeAuto && mode == ModeParallelDictionariesSingleWorker
+	autoSingle := IsAutomaticMode(CurrentMode()) && mode == ModeParallelDictionariesSingleWorker
 	if autoSingle {
 		activeAutoSingles.Add(1)
 	}
@@ -106,6 +113,9 @@ func SetMode(name string) (changed, busy bool) {
 	case "auto":
 		activeMode.Store(uint32(ModeAuto))
 		return true, false
+	case "auto2":
+		activeMode.Store(uint32(ModeAuto2))
+		return true, false
 	default:
 		return false, false
 	}
@@ -142,7 +152,7 @@ func IngestWorkerLimitForMode(logical, activeDictionaries int) int {
 	if CurrentMode() == ModeParallelDictionariesSingleWorker {
 		return 0
 	}
-	if CurrentMode() == ModeAuto {
+	if IsAutomaticMode(CurrentMode()) {
 		return max(0, IngestWorkerLimit(logical, activeDictionaries)-int(activeAutoSingles.Load()))
 	}
 	return IngestWorkerLimit(logical, activeDictionaries)
