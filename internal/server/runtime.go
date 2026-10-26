@@ -53,7 +53,7 @@ func NewRuntime(cfg config.Config, configPath, token, version string) (*Runtime,
 	mode, modeSaved := prefs.indexingMode()
 	modeSource := "state"
 	if !modeSaved {
-		mode = "pipeline"
+		mode = "auto"
 		modeSource = "default"
 		if userDir != "" {
 			legacySettings, readErr := readUserStorage(filepath.Join(userDir, SettingsFile))

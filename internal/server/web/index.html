@@ -4871,7 +4871,7 @@ function dictionaryCacheDiagnosticsEnabled(){try{return localStorage.getItem("wu
 function setDictionaryCacheDiagnostics(on){try{if(on)localStorage.setItem("wudict_dictionary_cache_diagnostics","1");else localStorage.removeItem("wudict_dictionary_cache_diagnostics")}catch(_){}}
 function indexParallelismDiagnosticsEnabled(){try{return localStorage.getItem("wudict_index_parallelism_diagnostics")==="1"}catch(_){return false}}
 function setIndexParallelismDiagnostics(on){try{if(on)localStorage.setItem("wudict_index_parallelism_diagnostics","1");else localStorage.removeItem("wudict_index_parallelism_diagnostics")}catch(_){}sendBrowseDiagnostic({event:"index_parallelism_diagnostics",enabled:!!on})}
-function indexingModePreference(){try{const mode=localStorage.getItem("wudict_indexing_mode");return ["pipeline","parallel-dictionaries-single-worker","auto"].includes(mode)?mode:"pipeline"}catch(_){return "pipeline"}}
+function indexingModePreference(){try{const mode=localStorage.getItem("wudict_indexing_mode");return ["pipeline","parallel-dictionaries-single-worker","auto"].includes(mode)?mode:"auto"}catch(_){return "auto"}}
 async function setIndexingMode(mode,select){
   const previous=indexingModePreference();
   if(!await sendBrowseDiagnostic({event:"indexing_mode",mode})){
